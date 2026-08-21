@@ -1,0 +1,213 @@
+# FreeGantt — Vertical Slices
+
+Each slice cuts through the whole stack and ends with something visible and pokeable in the dev harness (`harness/`). No slice is pure infrastructure; no slice's value depends on a later slice landing. Gates from `00-overview.md` §4 apply between slices.
+
+Slices are scope, not calendar estimates. Within a slice, tasks are ordered so the visible result appears as early as possible.
+
+---
+
+## S0 — Walking skeleton
+
+**Goal:** the entire pipeline — model → time → layout → render → API — exists end-to-end at minimum depth, with the guardrails that keep it honest. A fixture project renders as static bars on a timeline in the harness.
+
+**Scope**
+
+- Repo: TS strict, Vite, Vitest, ESLint + import-boundary rules (invariant I1) wired into CI from the first commit.
+- `model/`: `Task`, `Dependency` types, ids, `Instant` brand, `TimeSpan`, `Duration`.
+- `time/` (minimal): `instant()`, `toISO()`, zone-aware `startOfDay`/`addDays`/`diff` for one project zone; magic-constant lint (I10).
+- `layout/` (minimal): row resolution (`source: 'tasks'`, flat list), one item per task, fixed row height, `computeFrame()` returning rows + bars; deterministic `Item.id` (I8).
+- `render/dom` (minimal): mount, `sync(frame)` rendering absolutely-positioned row and bar elements; the keyed reconciler in its hard-bounded scope (`01` §8.1); `render/null` for tests.
+- `api/` (minimal): `new Project({ tasks })`, `new Gantt({ host, project })`, `destroy()`.
+- Harness: a Vite page that mounts the chart on a fixture; this page lives forever and every slice adds to it.
+- Fixtures: one realistic sample project (~50 tasks).
+
+**Explicitly out:** scrolling, headers, grid pane, interactivity, scheduling, mutation.
+
+**Acceptance**
+
+- [ ] Harness shows fixture tasks as bars positioned correctly against time.
+- [ ] `computeFrame()` snapshot-tested headlessly; `Item.id` determinism asserted.
+- [ ] Import-boundary lint fails the build on a violation (proven by a deliberate red test in CI setup).
+- [ ] `render/null` consumes a frame in Node with no DOM.
+- [ ] Two charts mount on one page without shared state (I2 test exists from day one).
+
+---
+
+## S1 — Timeline, viewport, split pane
+
+**Goal:** it looks and scrolls like a Gantt. Time axis with headers and presets, virtualized scrolling, grid pane with a label column — and the shareable scale/scroll objects that make future multi-chart sync free (D9).
+
+**Scope**
+
+- `time/`: `TimeScale` (instants ⇄ pixels), `ViewPreset` as data, tick generation, shipped presets hour→year; header band rendering.
+- `TimeScaleModel` and `ScrollModel` as standalone observable objects; charts bind to them, constructing private ones by default (`01` §8.2). The I12 rule (no pixels-from-time or scroll access outside these objects) is in force now.
+- `view/`: chart shell — grid pane (label column), splitter, timeline pane; single scroll owner; vertical + horizontal virtualization windows; row-height index behind an interface (simple prefix-sum implementation).
+- Shared row geometry: grid and timeline both position rows from `frame.rows` (I9 pixel test).
+- Zoom: preset switching + `range: 'fitProject'`; anchored zoom (the instant under the cursor stays put).
+- Theming foundation: CSS custom properties + parts vocabulary (`--fg-*`, `data-flag`); light/dark.
+- A11y foundation: the chart is focusable, rows/bars have roles and labels, focus visible.
+
+**Acceptance**
+
+- [ ] Scroll a 5,000-task fixture smoothly; only windowed rows exist in the DOM.
+- [ ] Grid and timeline row tops are pixel-identical under fractional zoom (I9).
+- [ ] Preset switch and zoom are live reconfigurations — no remount, anchor preserved.
+- [ ] Two harness charts given the same `ScrollModel` scroll together (a 5-line harness demo — the D9 seam proven now, cheaply).
+- [ ] Axis headers correct across a DST transition in the project zone (unit-tested in `time/`).
+
+---
+
+## S2 — Data core: transactions, undo, changesets, JSON
+
+**Goal:** the data layer that everything else rides on (D10 first half, D7). Programmatic mutation with transactions, exact undo/redo, changeset events, versioned serialization — all visible live in the harness.
+
+**Scope**
+
+- `data/`: normalized stores + indexes; instance-scoped reactivity façade (one small dep, swappable); `ProjectData` owning stores + zone.
+- Transactions: batching, auto-wrap of single mutations, one changeset per transaction (`origin` tagged).
+- Undo/redo: transaction = atomic unit; recorded changesets replayed exactly; history API (`canUndo`, capacity).
+- Changesets: `{ added, removed, updated: {field, from, to} }` (`01` §6); `project.on('change')`; `project.apply(changeSet)` with validation + rejection reporting.
+- Serialization: `toJSON()`/`fromJSON()` with `schema: 1`, ISO instants, opaque `meta` round-trip.
+- Public mutation API: `project.tasks.add/update/remove`, `project.dependencies.*`, typed, validating.
+- View binding: committed changesets invalidate layout incrementally (changed rows only), not globally.
+- Harness: mutation playground — edit fixture via console/buttons, watch the chart update; undo/redo buttons; changeset log panel; export/import JSON.
+
+**Acceptance**
+
+- [ ] Property test: random mutation sequences + undo-all restores byte-identical `toJSON()` (I7 groundwork — engine patches join in S3).
+- [ ] `fromJSON(toJSON(p))` round-trips byte-stable.
+- [ ] A 500-task bulk update inside one transaction produces one changeset, one layout pass, one frame.
+- [ ] Changeset log in harness shows `from`/`to` per field for every edit.
+
+---
+
+## S3 — Dependencies & the scheduling engine
+
+**Goal:** links drawn, and the pure scheduling engine (D3, D4) with its policy seam: propagation with lag, cycle detection with named members, diagnostics, pinned tasks. Cascades visible live in the harness.
+
+**Scope**
+
+- `scheduling/`: `schedule(request) → { patch, diagnostics }` — pure, deterministic; worklist-loop propagation (I3) with the 5,000-link chain fixture; lag per dependency type (FS/SS/FF/SF, negative legal); cycle diagnostics naming members; `pinned` semantics (report, never move); parent rollup as a second pass (tree exists in data from S2; visual tree lands in S5).
+- `SchedulingPolicy` seam + `defaultPolicy` (`01` §7): `resolveEdit` (proposed fields decide what moves), precedence (`pinned > dependency`), dev-assert that a proposed field is never overwritten (I4).
+- `data/` integration: transactions run `schedule()` with `proposed` built from the transaction's edits; engine patch merges into the same changeset (`origin: 'engine'`) — undo now reverts user + engine effects atomically (I7 complete).
+- `layout/`: link routing — orthogonal paths from bar edges, rendered as SVG; link flags (inactive, in-cycle).
+- Diagnostics surface: `scheduleDiagnostics` event; bars flagged via `data-flag` (level-2 theming shows conflicts with pure CSS).
+- Golden fixtures: hand-built scenario files with expected `ScheduleResult` JSON — lag combinations, all four types, pinned conflicts, cycles, deep chains. These define correctness from here on.
+- Harness: link fixture; edit a predecessor date, watch successors cascade; a cycle fixture showing named diagnostics.
+
+**Acceptance**
+
+- [ ] All golden fixtures pass; 5,000-link chain completes without recursion-depth failure (gate S3→S4).
+- [ ] Cycle diagnostic lists the exact member tasks; harness renders them flagged.
+- [ ] Moving a pinned task's predecessor produces a diagnostic and moves nothing.
+- [ ] Undo of a cascading edit restores every affected task (I7 property test now includes engine patches).
+- [ ] `scheduling/` has zero imports from view/render/interaction (lint-proven), >90% coverage — it's pure; no excuse.
+
+---
+
+## S4 — Direct manipulation
+
+**Goal:** editing with the pointer (D10 second half): drag-move, resize, link-create, selection — each gesture cancelable, transactional, undoable, with live cascade preview.
+
+**Scope**
+
+- `interaction/`: controller base with the pointer invariants (`01` §9 — arm threshold, nothing written on pointerdown, escape-cancel, pointer capture, touch); `Drag`, `Resize`, `LinkCreate`, `Select` controllers.
+- Hot path: `InteractionState` + `backend.applyState()` — hover, selection, drag ghost as class toggles and transforms; zero allocation (I5).
+- Snapping via the preset's `snap` spec; modifier key for fine placement.
+- Cancelable events: `beforeTaskMove/Resize`, `beforeLinkCreate`, `beforeSelectionChange` + after-events; async veto suspends with pending state (`02` §3).
+- Speculative cascade preview: throttled pure `schedule()` call per frame with draft `proposed`; ghost positions for affected successors; discard on cancel (`01` §7).
+- One transaction per gesture at commit (I6); undo reverts the whole gesture.
+- Keyboard parity begins: selected bar nudges by snap with arrow keys; Enter/Escape semantics.
+- Harness: full editing playground; a veto demo (drop before a boundary date is rejected with a toast).
+
+**Acceptance**
+
+- [ ] Every gesture: cancelable before-event → exactly one transaction → after-event (event-order test).
+- [ ] Escape mid-drag restores exactly the pre-gesture state, including preview ghosts.
+- [ ] Hover across 1,000 visible bars allocates nothing and rebuilds no frame (I5 perf test).
+- [ ] Dragging a predecessor shows successors' ghost positions live; cancel discards them.
+- [ ] A gesture undone by Ctrl+Z reverts user + cascade in one step.
+
+---
+
+## S5 — Hierarchy, grouping, multi-item rows
+
+**Goal:** the Row ≠ Task payoff (principle 1). Tree view with collapse/expand, grouped row sources, task segments as multiple bars on one row, lane packing with variable row heights.
+
+**Scope**
+
+- Tree UI: indent + expand/collapse in the grid's name column; collapse state is view state (per chart, not in project data); summary bars for parents (rollup from S3).
+- Row sources: `{ source: 'group', groupBy }` and `{ source: 'custom', resolve }` (`01` §2.3); group header rows.
+- Sort and filter as store-level view specs with tree-aware policies (filter keeps ancestors by default; sort stays within parent).
+- Item emission: `task.segments` → multiple items on one row; overlap auto-packing into sub-lanes; `heightMode: 'pack'` variable row heights through the height index.
+- Dependency endpoint rule for multi-item tasks: links attach to the earliest item by default, configurable per view (`links.endpoints: 'first' | 'all' | 'none'`).
+- Interaction with lanes: drag/resize on packed items; collapse/expand by keyboard.
+- Harness: tree fixture; a grouped view of the same project side-by-side with the tree view (two charts, one project — the D9/D2 architecture visibly paying off).
+
+**Acceptance**
+
+- [ ] Same project renders as tree and as grouped rows simultaneously in two charts; edits in one appear in both.
+- [ ] A segmented task renders N bars on one row; drag of one segment behaves sanely and transactionally.
+- [ ] Pack-mode rows change height correctly as overlaps come and go; scroll position stays stable (height index invalidation test).
+- [ ] Collapse state survives data edits and is independent per chart.
+- [ ] Filter with keep-ancestors shows a matching deep child under its chain of parents.
+
+---
+
+## S6 — Extensibility, editing surfaces, a11y completion
+
+**Goal:** the library's extension story is real and dogfooded (gate: a non-trivial built-in feature uses only the public plugin API), the grid grows into a proper editable table, and accessibility reaches its full committed level (D11).
+
+**Scope**
+
+- `extensions/`: plugin host implementing the full `PluginContext` (`01` §10) — decorations, columns, renderers, overlay host, controllers, keybindings, commands, disposables.
+- Built-in features **as plugins**: tooltips (shared `Popup` primitive: anchoring, flipping, clamping, focus trap), context menu (command-registry-driven), row highlight decorations, today line.
+- Grid maturation: column types (name, start, end, duration, custom value/renderer), inline editors (text, date via a pluggable date-input seam — no bundled date-picker dependency), column resize/reorder; `beforeTaskEdit` veto/replace flow.
+- Renderer callbacks at every declared point (`bar`, `cell`, `header`, `tooltip`), text-safe by default (I13).
+- A11y completion: grid pattern with roving tabindex, full keyboard reach for every interaction (link creation included), screen-reader labels with dates/progress, focus management in popups; axe checks in CI on harness pages.
+- Docs seed: harness pages get explanatory text and become the example gallery; public API reference generated from types.
+
+**Acceptance**
+
+- [ ] Context menu and tooltips are plugins with zero private imports (lint-proven — the dogfood gate).
+- [ ] A harness-only third-party-style plugin (e.g., a "weekend shading + jump-to-today command" plugin) is written against the public contract only.
+- [ ] Every pointer capability has a keyboard path; axe reports no violations on harness pages.
+- [ ] Host replaces the task editor via `beforeTaskEdit` (demo in harness).
+- [ ] Unused features are absent from a consumer bundle (tree-shaking test in CI).
+
+---
+
+## S7 — Scale validation, hardening, linked charts
+
+**Goal:** the D2 posture is settled by measurement, budgets become CI-enforced, and the D9 multi-chart story ships as a real demo. Ends with a 1.0-able library.
+
+**Scope**
+
+- **Measured spike against the growth targets** (the numbers that decide, not guess): 10k tasks / 5k rows scroll p95 frame time; pack-heavy rows layout cost; prefix-sum vs. log-time height index crossover; reconciler cost on 20k-bar sync + 200-bar commit; SVG link cost at 2k paths; zone arithmetic per-tick cost.
+- Act on the spike: swap in the log-time height index if warranted (interface already in place); worker seam for `schedule()` above a measured threshold (resident mirror + changeset shipping — only if the numbers demand it); any reconciler fixes.
+- Performance budgets in CI on reference hardware; regressions fail the build.
+- Linked-chart demo: task chart + a second chart bound to the same `TimeScaleModel`/`ScrollModel` (x, y, and both variants) — the D9 acceptance demo.
+- Hardening: error-path audit (typed errors everywhere), memory-leak pass (mount/destroy cycles), `exports` map sealing internals, semver/API-report tooling (I11 automated), bundle-size budget in CI.
+- Release: versioned docs from the harness gallery, CHANGELOG, publishing pipeline.
+
+**Acceptance**
+
+- [ ] All §12-style budgets defined numerically from the spike and enforced in CI.
+- [ ] 10k-task fixture: smooth scroll, sub-frame hover, bulk edit in one transaction without jank on reference hardware.
+- [ ] Linked-scroll demo works in x, y, and both modes with zero chart-side special-casing.
+- [ ] 100 mount/destroy cycles leak no nodes, listeners, or observables.
+- [ ] `npm pack` output audited: internals unreachable, types complete, bundle within budget.
+
+---
+
+## After S7 — the reserved seams (in likely order)
+
+Each of these was designed-for above; none requires a core change:
+
+1. **Working-time calendars** — richer `SchedulingPolicy` + `time/` calendar arithmetic; non-working shading via a decoration.
+2. **Date constraints & analyses** — policy vocabulary + analyses (slack, critical highlighting) as policy output consumed by flags/decorations.
+3. **Resources & workload views** — `Resource`/`Assignment` stores + a `resources` row source; the second chart in the D9 demo becomes a real workload view.
+4. **Sync adapter** — an extension consuming the changeset contract (`02` §6).
+5. **Export** — image via the null/static render path; paginated print costed honestly as its own project.
+6. **Framework wrappers** — thin adapters (`02` §8).
+7. **Non-linear time scale** — a second `TimeScale` implementation.
