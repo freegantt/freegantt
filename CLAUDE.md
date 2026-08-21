@@ -5,7 +5,7 @@ Framework-free TypeScript Gantt library, library-first. The spec is `plans/00`�
 ## Hard rules
 
 **Layers** (`plans/01` §1 — enforced by dependency-cruiser):
-- `model/ → time/ → data/ → scheduling/ → layout/` are pure: no DOM, must run in Node.
+- `model/`, `time/`, `data/`, `scheduling/`, `layout/` are DOM-free: plain data + functions, no `document`/`window`/browser globals. (They ship to and run in the browser like everything else — but because they never touch the DOM they also run in plain Node, which is how they're unit-tested and how the future worker seam stays possible.) Only `render/`, `view/`, `interaction/`, `extensions/` may touch the DOM.
 - `scheduling/` and `render/view/interaction` never import each other — they meet only through `data/`. Never put scheduling imports in render or view code.
 - Only `api/` and `model/` types are public. Internals stay unreachable (sealed `exports` map).
 - `model/` is types only: zero runtime beyond id/brand helpers, zero dependencies.
