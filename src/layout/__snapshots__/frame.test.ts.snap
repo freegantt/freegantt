@@ -1,0 +1,42 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`computeFrame > matches the golden snapshot for the fixture project 1`] = `
+[
+  {
+    "flags": {},
+    "height": 32,
+    "id": "task-1:0",
+    "kind": "task",
+    "lane": 0,
+    "rowId": "row:task-1",
+    "taskId": "task-1",
+    "width": 432000,
+    "x": 1788220800,
+    "y": 0,
+  },
+  {
+    "flags": {},
+    "height": 32,
+    "id": "task-2:0",
+    "kind": "task",
+    "lane": 0,
+    "rowId": "row:task-2",
+    "taskId": "task-2",
+    "width": 259200,
+    "x": 1788220800,
+    "y": 32,
+  },
+  {
+    "flags": {},
+    "height": 32,
+    "id": "task-3:0",
+    "kind": "task",
+    "lane": 0,
+    "rowId": "row:task-3",
+    "taskId": "task-3",
+    "width": 345600,
+    "x": 1788480000,
+    "y": 64,
+  },
+]
+`;

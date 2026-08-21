@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# docs/04-hooks-and-ci.md §3: the full gate before it becomes anyone else's problem.
+
+set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
+
+echo "pre-push: pnpm verify"
+pnpm verify

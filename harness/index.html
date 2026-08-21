@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>FreeGantt harness — S0 walking skeleton</title>
+    <style>
+      body {
+        font-family: system-ui, sans-serif;
+        margin: 2rem;
+      }
+      #chart {
+        position: relative;
+        border: 1px solid #ccc;
+        overflow: auto;
+        height: 70vh;
+      }
+      .fg-bar {
+        background: #4a7a58;
+        color: white;
+        font-size: 11px;
+        line-height: 32px;
+        padding: 0 6px;
+        box-sizing: border-box;
+        border-radius: 3px;
+        white-space: nowrap;
+        overflow: hidden;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>FreeGantt — S0 walking skeleton</h1>
+    <p>Fixture project rendered as static bars on a timeline. Every slice adds to this page.</p>
+    <div id="chart"></div>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

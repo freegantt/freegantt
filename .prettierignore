@@ -1,0 +1,13 @@
+dist
+dist-harness
+node_modules
+pnpm-lock.yaml
+
+# plans/ is the spec; docs/ predates this bootstrap. Neither is ours to reformat as a side effect
+# of running `pnpm format` (docs/04-hooks-and-ci.md §2.2 — protect-spec.sh blocks agent edits to
+# plans/ via the Edit/Write tools, but a blanket `prettier --write .` bypasses that; excluding them
+# here closes the gap).
+plans
+docs
+CLAUDE.md
+
