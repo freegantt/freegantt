@@ -8,10 +8,12 @@ cd "$(git rev-parse --show-toplevel)"
 staged_ts="$(git diff --cached --name-only --diff-filter=ACM -- '*.ts')"
 
 if [[ -n "$staged_ts" ]]; then
-  echo "pre-commit: format + lint --fix on staged *.ts"
+  echo "pre-commit: format (auto-fix) on staged *.ts"
   pnpm exec prettier --write $staged_ts
-  pnpm exec eslint --fix --max-warnings 0 --no-warn-ignored $staged_ts
   git add -- $staged_ts
+
+  echo "pre-commit: lint (check only — fails on any warning) on staged *.ts"
+  pnpm exec eslint --max-warnings 0 --no-warn-ignored $staged_ts
 fi
 
 echo "pre-commit: vendor-names"
