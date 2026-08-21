@@ -26,8 +26,9 @@ import { Project, Gantt } from 'freegantt';
 const project = new Project<{ team: string }>({
   timeZone: 'America/Chicago',            // explicit; 'local' is opt-in
   tasks: [
-    { id: 't1', name: 'Groundwork', start: instant('2026-09-01'), end: instant('2026-09-12') },
-    { id: 't2', name: 'Framing',    start: instant('2026-09-12'), end: instant('2026-10-01'),
+    { id: 'p1', name: 'Sitework', kind: 'group' },     // span derives from children (default policy)
+    { id: 't1', parentId: 'p1', name: 'Groundwork', start: instant('2026-09-01'), end: instant('2026-09-12') },
+    { id: 't2', parentId: 'p1', name: 'Framing',    start: instant('2026-09-12'), end: instant('2026-10-01'),
       meta: { team: 'A' } },
   ],
   dependencies: [
@@ -50,6 +51,12 @@ const gantt = new Gantt({
     { type: 'duration' },
     { id: 'team', header: 'Team', value: t => t.meta.team },
   ],
+
+  interactions: {
+    move: true,
+    resize: t => t.kind !== 'group',      // boolean or per-task predicate — see §4.1
+    linkCreate: true,
+  },
 
   features: {
     links: { allowCreate: true },
@@ -142,6 +149,25 @@ barRenderer: ({ task, item }) => ({
   ],
 })
 ```
+
+### 4.1 Per-task looks and actions
+
+Both questions — *how does this task look?* and *what can you do to it?* — resolve **per task**, not per chart, and every mechanism sees the whole task (`kind`, fields, typed `meta`):
+
+**Look.** Every bar element carries `data-kind`, so per-kind styling is level-2 CSS with zero JS (`.fg-bar[data-kind="milestone"] { ... }`). At level 3, `barRenderer` is either one function that branches, or a per-kind map so the common case needs no branching — host-defined kinds slot in by name:
+
+```ts
+barRenderer: {
+  milestone: ({ task }) => diamond(task),
+  group:     ({ task }) => bracket(task),
+  buffer:    ({ task }) => hatched(task),   // host-defined kind
+  '*':       ({ task }) => defaultBar(task),
+}
+```
+
+**Actions.** The `interactions` config takes a boolean or a per-task predicate for each gesture (`move`, `resize`, `linkCreate`, `select`, `edit`), layered over per-kind defaults. One resolution both hides the affordance and refuses the gesture — pointer and keyboard alike (I14) — so a non-resizable task simply has no handles rather than handles that scold. Context-menu items and commands carry a `when(task)` clause, so a kind (or any predicate) ships its own action set.
+
+**Division of labor:** capabilities answer the *static* question ("groups don't resize"); `before*` events answer the *contextual* one ("not before mobilization"). Use the shallowest one that fits.
 
 ---
 

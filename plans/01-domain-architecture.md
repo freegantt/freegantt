@@ -124,10 +124,17 @@ interface TimeSpan { start: Instant; end: Instant }   // half-open [start, end)
 
 interface Duration { value: number; unit: TimeUnit }  // 'ms'|'m'|'h'|'d'|'w'|'M'|'y'
 
+/** Open classification — see §2.5. 'task' | 'group' | 'milestone' ship; hosts add their own. */
+type TaskKind = 'task' | 'group' | 'milestone' | (string & {});
+
 interface Task<TMeta = unknown> {
   id: TaskId;
   parentId?: TaskId;           // hierarchy; roots have none
+  /** What sort of thing this is. Authored, never derived — see §2.5. Default 'task'. */
+  kind?: TaskKind;
   name: string;
+  /** Always present in the store. For kinds whose span the policy derives (default `group`),
+   *  the rollup pass maintains these; input may omit them and they are initialized (§2.5). */
   start: Instant;
   end: Instant;                // exclusive — see §5
   /** 'auto': the engine may move it. 'pinned': the engine reports conflicts but never moves it. */
@@ -163,6 +170,7 @@ interface Item {
   id: ItemId;                  // deterministic — see §2.4
   rowId: RowId;
   taskId: TaskId;
+  kind: TaskKind;              // carried through so backends/renderers never refetch the task
   segmentIndex?: number;
   start: Instant; end: Instant;
   lane: number;                // sub-lane within the row
@@ -183,6 +191,7 @@ erDiagram
   ITEM }o--|| TASK : "derived from"
 
   TASK {
+    string kind "task | group | milestone | host-defined"
     Instant start
     Instant end_exclusive
     string scheduling "auto | pinned"
@@ -218,6 +227,23 @@ Item emission then places tasks (or task segments) onto rows; overlapping items 
 ### 2.4 Item identity is deterministic
 
 `Item.id = `${taskId}:${segmentIndex ?? 0}`` (extended if future sources add dimensions). Regenerated every layout pass, so it **must** be stable across passes or node recycling, CSS transitions, and in-flight drag state all break. Asserted by a layout test from slice S0.
+
+### 2.5 Task kinds — one authored field, per-layer meaning
+
+`Task.kind` answers "what sort of thing is this?" exactly once, in the model. Every other layer maps that answer to layer-local behavior through a registry or seam it already has — never `if (kind === ...)` chains scattered across the codebase:
+
+| Layer | What `kind` selects | Seam |
+|---|---|---|
+| `scheduling/` | schedule semantics — e.g. a `group` spans its children via rollup (default) vs. directly schedulable | `SchedulingPolicy` (§7) |
+| `layout/` | item emission — bar vs. summary bracket vs. milestone diamond; whether items are emitted at all | kind → item-emitter registration in the §2.3 pipeline |
+| `render/` | appearance — per-kind default renderer; `data-kind` on the element for CSS | renderer registry (`02` §4) |
+| `interaction/` | which gestures the task affords (move / resize / link / edit …) | capability resolver (§9) |
+
+Rules:
+
+- **Kind is authored, never derived.** A `group` is a group because the user said so — not because it currently has children. An empty group is legal and renders as one (that is how "add a phase, then fill it" works). For derived-span kinds, input may omit `start`/`end`: the store initializes a zero-length span (at the project's reference date) and the rollup pass owns it from then on — the *stored* model always has both fields, so no layer downstream handles absence. `parentId` (tree position) and `kind` (what it is) are orthogonal; "every parent is a group" is a convention a host can enforce with a `before*` veto, not a model rule.
+- **The set is open.** Shipped kinds: `'task'`, `'group'`, `'milestone'`. A host-defined kind (say `'buffer'`) gets full behavior by registering at the four seams above — no core edits. Anything not registered at a seam falls back to `'task'` behavior there, so partial registration degrades gracefully instead of erroring.
+- **Group *task* ≠ row *grouping*.** `rows: { source: 'group', groupBy }` is a view-side arrangement of any tasks and persists nothing; a `kind: 'group'` task is a model entity that persists, schedules, and syncs. They compose — a grouped view of a project containing group tasks is well-defined, because one is authored and the other is derived (principle 1).
 
 ---
 
@@ -273,8 +299,9 @@ interface GeometryFrame {
   contentHeight: number;       // across ALL rows, from the height index
   bars: Array<{
     id: ItemId; taskId: TaskId; rowId: RowId;
+    kind: TaskKind;              // backends stamp it as data-kind — per-kind CSS with zero JS
     x: number; y: number; width: number; height: number; lane: number;
-    /** Static classification only (milestone, summary, hasConflict) — never hover/selection. */
+    /** Static classification only (hasConflict, inCycle) — never hover/selection. */
     flags: BarFlags;
   }>;
   links: Array<{ id: DependencyId; path: PathCommand[]; flags: LinkFlags }>;
@@ -395,7 +422,9 @@ function schedule(request: ScheduleRequest): ScheduleResult;   // pure, determin
 - Lag applied per dependency `type`; negative lag (overlap) is legal.
 - **Cycle detection names the members**: if the worklist drains with tasks unvisited, those tasks are the cycle — `{ code: 'cycle', taskIds }`, never "a cycle exists somewhere."
 - `scheduling: 'pinned'` tasks are never moved; the engine reports what it *would* have done as a diagnostic.
-- Parent rollup (summary spans from children) is a separate bottom-up pass after propagation settles — pass ordering, not mutual recursion.
+- Parent/group rollup (summary spans from children) is a separate bottom-up pass after propagation settles — pass ordering, not mutual recursion. A dependency attached to a `group` task resolves against its rolled-up span by default.
+
+**Kind semantics live in the policy, not the engine.** The engine knows graphs and lag; what a `group` or `milestone` (or host-defined kind) *means* for scheduling is a policy decision. The default policy: `group` spans derive from children (direct edits to a derived span are reported as diagnostics, not applied); `milestone` keeps `start === end`; unknown kinds behave as `'task'`. A host methodology that wants directly schedulable groups ships a policy — the engine and contract do not change.
 
 **Policy (pluggable — where methodologies differ):**
 
@@ -479,6 +508,7 @@ Small, single-purpose controllers — `Drag`, `Resize`, `LinkCreate`, `Select`, 
 - Gesture lifecycle: `pointerdown → draft → (preview via hot path) → before* event (cancelable, may be async) → one transaction → after event`.
 - Escape cancels; pointer capture always; touch works.
 - Keyboard is a first-class controller, not an afterthought: arrow-key nudge by the preset's snap, full gesture parity (D11).
+- **Capabilities gate gestures and affordances from one resolution.** Before arming, every controller asks the chart's capability resolver — `canMove(task)`, `canResize(task)`, `canLink(task)`, … — built from the `interactions` config (`02` §4.1) over per-kind defaults (e.g. a `group` with a derived span doesn't resize). The **same** resolution drives visual affordances (resize handles, link ports, cursors), so nothing is shown that can't be done and nothing hidden can be triggered — pointer or keyboard (invariant I14). `before*` events remain the *contextual* veto (this drop, this target, this moment); capabilities are the *static* per-task answer.
 
 Controllers talk to `data/` only through drafts and transactions, and to the screen only through `InteractionState` — they import neither `render/` internals nor `scheduling/`.
 
@@ -539,3 +569,4 @@ Rules:
 | I11 | Public `.d.ts` contains nothing unimplemented | type-surface snapshot test |
 | I12 | All pixels-from-time via `TimeScale`; all scroll via `ScrollModel` | lint + review rule |
 | I13 | Renderer output is text-safe by default | reconciler unit test |
+| I14 | Gesture arming and visual affordances come from one capability resolution | shared resolver + interaction test |

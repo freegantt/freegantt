@@ -13,7 +13,7 @@ Slices are scope, not calendar estimates. Within a slice, tasks are ordered so t
 **Scope**
 
 - Repo: TS strict, Vite, Vitest, ESLint + import-boundary rules (invariant I1) wired into CI from the first commit.
-- `model/`: `Task`, `Dependency` types, ids, `Instant` brand, `TimeSpan`, `Duration`.
+- `model/`: `Task` (including `kind` — authored from day one, even while only `'task'` renders), `Dependency` types, ids, `Instant` brand, `TimeSpan`, `Duration`.
 - `time/` (minimal): `instant()`, `toISO()`, zone-aware `startOfDay`/`addDays`/`diff` for one project zone; magic-constant lint (I10).
 - `layout/` (minimal): row resolution (`source: 'tasks'`, flat list), one item per task, fixed row height, `computeFrame()` returning rows + bars; deterministic `Item.id` (I8).
 - `render/dom` (minimal): mount, `sync(frame)` rendering absolutely-positioned row and bar elements; the keyed reconciler in its hard-bounded scope (`01` §8.1); `render/null` for tests.
@@ -87,7 +87,7 @@ Slices are scope, not calendar estimates. Within a slice, tasks are ordered so t
 
 **Scope**
 
-- `scheduling/`: `schedule(request) → { patch, diagnostics }` — pure, deterministic; worklist-loop propagation (I3) with the 5,000-link chain fixture; lag per dependency type (FS/SS/FF/SF, negative legal); cycle diagnostics naming members; `pinned` semantics (report, never move); parent rollup as a second pass (tree exists in data from S2; visual tree lands in S5).
+- `scheduling/`: `schedule(request) → { patch, diagnostics }` — pure, deterministic; worklist-loop propagation (I3) with the 5,000-link chain fixture; lag per dependency type (FS/SS/FF/SF, negative legal); cycle diagnostics naming members; `pinned` semantics (report, never move); parent/`group` rollup as a second pass — kind semantics owned by the policy per `01` §2.5 (tree exists in data from S2; visual tree lands in S5).
 - `SchedulingPolicy` seam + `defaultPolicy` (`01` §7): `resolveEdit` (proposed fields decide what moves), precedence (`pinned > dependency`), dev-assert that a proposed field is never overwritten (I4).
 - `data/` integration: transactions run `schedule()` with `proposed` built from the transaction's edits; engine patch merges into the same changeset (`origin: 'engine'`) — undo now reverts user + engine effects atomically (I7 complete).
 - `layout/`: link routing — orthogonal paths from bar edges, rendered as SVG; link flags (inactive, in-cycle).
@@ -114,6 +114,7 @@ Slices are scope, not calendar estimates. Within a slice, tasks are ordered so t
 - `interaction/`: controller base with the pointer invariants (`01` §9 — arm threshold, nothing written on pointerdown, escape-cancel, pointer capture, touch); `Drag`, `Resize`, `LinkCreate`, `Select` controllers.
 - Hot path: `InteractionState` + `backend.applyState()` — hover, selection, drag ghost as class toggles and transforms; zero allocation (I5).
 - Snapping via the preset's `snap` spec; modifier key for fine placement.
+- Capabilities: the `interactions` config resolved per task over per-kind defaults (`02` §4.1); one resolution gates gesture arming *and* affordance rendering — handles, ports, cursors (I14).
 - Cancelable events: `beforeTaskMove/Resize`, `beforeLinkCreate`, `beforeSelectionChange` + after-events; async veto suspends with pending state (`02` §3).
 - Speculative cascade preview: throttled pure `schedule()` call per frame with draft `proposed`; ghost positions for affected successors; discard on cancel (`01` §7).
 - One transaction per gesture at commit (I6); undo reverts the whole gesture.
@@ -126,6 +127,7 @@ Slices are scope, not calendar estimates. Within a slice, tasks are ordered so t
 - [ ] Escape mid-drag restores exactly the pre-gesture state, including preview ghosts.
 - [ ] Hover across 1,000 visible bars allocates nothing and rebuilds no frame (I5 perf test).
 - [ ] Dragging a predecessor shows successors' ghost positions live; cancel discards them.
+- [ ] A task whose `resize` capability resolves false shows no handles and cannot be resized by pointer or keyboard (I14).
 - [ ] A gesture undone by Ctrl+Z reverts user + cascade in one step.
 
 ---
@@ -136,7 +138,8 @@ Slices are scope, not calendar estimates. Within a slice, tasks are ordered so t
 
 **Scope**
 
-- Tree UI: indent + expand/collapse in the grid's name column; collapse state is view state (per chart, not in project data); summary bars for parents (rollup from S3).
+- Tree UI: indent + expand/collapse in the grid's name column; collapse state is view state (per chart, not in project data).
+- Kind-driven item emission (`01` §2.5): `group` → summary bracket (rollup from S3), `milestone` → diamond, host-registered kinds via the emitter seam; empty groups render as groups.
 - Row sources: `{ source: 'group', groupBy }` and `{ source: 'custom', resolve }` (`01` §2.3); group header rows.
 - Sort and filter as store-level view specs with tree-aware policies (filter keeps ancestors by default; sort stays within parent).
 - Item emission: `task.segments` → multiple items on one row; overlap auto-packing into sub-lanes; `heightMode: 'pack'` variable row heights through the height index.
@@ -151,6 +154,7 @@ Slices are scope, not calendar estimates. Within a slice, tasks are ordered so t
 - [ ] Pack-mode rows change height correctly as overlaps come and go; scroll position stays stable (height index invalidation test).
 - [ ] Collapse state survives data edits and is independent per chart.
 - [ ] Filter with keep-ancestors shows a matching deep child under its chain of parents.
+- [ ] An empty `kind: 'group'` task renders as a group, accepts children, and its span appears once children exist — no special-casing.
 
 ---
 
@@ -171,6 +175,7 @@ Slices are scope, not calendar estimates. Within a slice, tasks are ordered so t
 
 - [ ] Context menu and tooltips are plugins with zero private imports (lint-proven — the dogfood gate).
 - [ ] A harness-only third-party-style plugin (e.g., a "weekend shading + jump-to-today command" plugin) is written against the public contract only.
+- [ ] A host-defined task kind (custom renderer + capabilities + context-menu `when` items, registered via config/plugin only) renders and behaves correctly with zero core edits — the §2.5 open-set claim, proven.
 - [ ] Every pointer capability has a keyboard path; axe reports no violations on harness pages.
 - [ ] Host replaces the task editor via `beforeTaskEdit` (demo in harness).
 - [ ] Unused features are absent from a consumer bundle (tree-shaking test in CI).

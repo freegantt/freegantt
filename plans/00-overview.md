@@ -47,6 +47,7 @@ These were decided explicitly and the rest of the spec depends on them. Changing
 6. **Diagnostics over silent fixes.** The scheduling engine never silently rewrites what the user asked for. It reports conflicts as machine-readable diagnostics; the view (or host) decides what to do.
 7. **Every slice ends on screen.** No slice is "pure infrastructure." Each cuts vertically (model → layout → render → API) and its acceptance criteria include something a human can see and poke in the dev harness.
 8. **Honest API.** Nothing appears in the public type surface that throws "not implemented." Every mutating interaction has a cancelable `before*` event. Every option is live-reconfigurable or it isn't an option.
+9. **One classification, many meanings.** `Task.kind` (task, group, milestone, host-defined) is authored data declared once; each layer maps kind to its own behavior — schedule semantics, item shape, renderer, interaction capabilities — through registries and seams (`01` §2.5). A new kind of task is configuration, never a core edit; per-task looks and actions are the same mechanism at per-task granularity (`02` §4.1).
 
 ## 4. Slice map
 
