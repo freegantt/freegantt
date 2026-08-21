@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# docs/04-hooks-and-ci.md §3: fast (<5s), catches the trivia. `--no-verify` exists and is not fought —
+# CI is the authority.
+
+set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
+
+staged_ts="$(git diff --cached --name-only --diff-filter=ACM -- '*.ts')"
+
+if [[ -n "$staged_ts" ]]; then
+  echo "pre-commit: format + lint --fix on staged *.ts"
+  pnpm exec prettier --write $staged_ts
+  pnpm exec eslint --fix --max-warnings 0 --no-warn-ignored $staged_ts
+  git add -- $staged_ts
+fi
+
+echo "pre-commit: vendor-names"
+pnpm run --silent vendor-names

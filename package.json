@@ -1,0 +1,57 @@
+{
+  "name": "freegantt",
+  "version": "0.0.0",
+  "type": "module",
+  "sideEffects": false,
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/api/index.d.ts",
+      "import": "./dist/api/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "prepare": "git config core.hooksPath .githooks",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "lint": "eslint .",
+    "lint:file": "eslint --max-warnings 0 --no-warn-ignored",
+    "typecheck": "tsc --noEmit",
+    "boundaries": "depcruise --config .dependency-cruiser.cjs src harness",
+    "test:node": "vitest run --project pure",
+    "test:dom": "vitest run --project dom",
+    "guards": "vitest run test/guards && node scripts/run-rule-tests.mjs && node scripts/guard-red-test.mjs",
+    "vendor-names": "node scripts/check-vendor-names.mjs",
+    "disables": "node scripts/audit-disables.mjs",
+    "gate": "node scripts/slice-gate.mjs",
+    "dev": "vite",
+    "build": "vite build",
+    "verify": "pnpm format:check && pnpm typecheck && pnpm lint && pnpm boundaries && pnpm guards && pnpm test:node && pnpm test:dom && pnpm vendor-names && pnpm disables"
+  },
+  "dependencies": {
+    "alien-signals": "^1.0.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.9.0",
+    "@types/node": "^22.5.0",
+    "@typescript-eslint/parser": "^8.3.0",
+    "@typescript-eslint/utils": "^8.3.0",
+    "@vitest/coverage-v8": "^2.0.0",
+    "dependency-cruiser": "^16.4.0",
+    "eslint": "^9.9.0",
+    "fast-check": "^3.21.0",
+    "globals": "^15.9.0",
+    "happy-dom": "^15.7.0",
+    "prettier": "^3.3.3",
+    "typescript": "^5.5.4",
+    "typescript-eslint": "^8.3.0",
+    "vite": "^5.4.2",
+    "vitest": "^2.0.5"
+  }
+}
