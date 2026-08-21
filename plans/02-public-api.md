@@ -25,6 +25,7 @@ import { Project, Gantt } from 'freegantt';
 // ── Data: headless, works in Node ───────────────────────────────
 const project = new Project<{ team: string }>({
   timeZone: 'America/Chicago',            // explicit; 'local' is opt-in
+  hierarchy: { autoGroup: true },         // first child promotes parent to kind 'group'; promote only
   tasks: [
     { id: 'p1', name: 'Sitework', kind: 'group' },     // span derives from children (default policy)
     { id: 't1', parentId: 'p1', name: 'Groundwork', start: instant('2026-09-01'), end: instant('2026-09-12') },
@@ -80,6 +81,8 @@ project.canUndo; project.canRedo;
 ```
 
 Single mutations outside an explicit transaction are auto-wrapped in one — convenience without a second code path.
+
+`autoGroup` is data behavior, so it lives on `Project` (not `Gantt`): the promotion runs inside the same transaction as the edit that caused it — one changeset, one undo step. It only promotes; turning a group back into a task is always an explicit edit (`01` §2.5).
 
 ### Reconfiguration is just assignment
 

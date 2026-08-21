@@ -9,6 +9,7 @@
 | `01-domain-architecture.md` | Layer map, domain model, module contracts, invariants, diagrams |
 | `02-public-api.md` | External API design: configuration, events, customization, serialization |
 | `03-slices.md` | The vertical slices: scope, acceptance criteria, and demo for each |
+| `04-implementation.md` | Dependency decisions, repo bootstrap order, tooling config, CI pipeline |
 
 ---
 

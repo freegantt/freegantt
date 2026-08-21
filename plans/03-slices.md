@@ -140,6 +140,7 @@ Slices are scope, not calendar estimates. Within a slice, tasks are ordered so t
 
 - Tree UI: indent + expand/collapse in the grid's name column; collapse state is view state (per chart, not in project data).
 - Kind-driven item emission (`01` §2.5): `group` → summary bracket (rollup from S3), `milestone` → diamond, host-registered kinds via the emitter seam; empty groups render as groups.
+- `hierarchy: { autoGroup: true }` on `Project`: first child promotes the parent to `group` within the triggering transaction; promote only, never demote (`02` §2).
 - Row sources: `{ source: 'group', groupBy }` and `{ source: 'custom', resolve }` (`01` §2.3); group header rows.
 - Sort and filter as store-level view specs with tree-aware policies (filter keeps ancestors by default; sort stays within parent).
 - Item emission: `task.segments` → multiple items on one row; overlap auto-packing into sub-lanes; `heightMode: 'pack'` variable row heights through the height index.
@@ -155,6 +156,7 @@ Slices are scope, not calendar estimates. Within a slice, tasks are ordered so t
 - [ ] Collapse state survives data edits and is independent per chart.
 - [ ] Filter with keep-ancestors shows a matching deep child under its chain of parents.
 - [ ] An empty `kind: 'group'` task renders as a group, accepts children, and its span appears once children exist — no special-casing.
+- [ ] With `autoGroup` on: reparenting a task under a plain task promotes that parent to `group` in the same undo step; removing all children demotes nothing.
 
 ---
 
