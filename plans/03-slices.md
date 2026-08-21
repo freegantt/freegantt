@@ -26,10 +26,10 @@ Slices are scope, not calendar estimates. Within a slice, tasks are ordered so t
 **Acceptance**
 
 - [ ] Harness shows fixture tasks as bars positioned correctly against time.
-- [ ] `computeFrame()` snapshot-tested headlessly; `Item.id` determinism asserted.
-- [ ] Import-boundary lint fails the build on a violation (proven by a deliberate red test in CI setup).
-- [ ] `render/null` consumes a frame in Node with no DOM.
-- [ ] Two charts mount on one page without shared state (I2 test exists from day one).
+- [x] `computeFrame()` snapshot-tested headlessly; `Item.id` determinism asserted.
+- [x] Import-boundary lint fails the build on a violation (proven by a deliberate red test in CI setup).
+- [x] `render/null` consumes a frame in Node with no DOM.
+- [x] Two charts mount on one page without shared state (I2 test exists from day one).
 
 ---
 

@@ -19,9 +19,17 @@ parsed="$(node -e '
         json.tool_input?.content ??
         json.tool_input?.new_string ??
         (json.tool_input?.edits ?? []).map((e) => e.new_string ?? "").join("\n");
-      process.stdout.write(JSON.stringify({ filePath, newContent }));
+      // Pairs of (old, new) strings for the edit(s) being made, when available.
+      // Write has no old_string (full-file rewrite); Edit/MultiEdit do.
+      let pairs = [];
+      if (Array.isArray(json.tool_input?.edits)) {
+        pairs = json.tool_input.edits.map((e) => [e.old_string ?? "", e.new_string ?? ""]);
+      } else if (typeof json.tool_input?.old_string === "string") {
+        pairs = [[json.tool_input.old_string, json.tool_input.new_string ?? ""]];
+      }
+      process.stdout.write(JSON.stringify({ filePath, newContent, pairs }));
     } catch {
-      process.stdout.write(JSON.stringify({ filePath: "", newContent: "" }));
+      process.stdout.write(JSON.stringify({ filePath: "", newContent: "", pairs: [] }));
     }
   });
 ' <<<"$payload")"
@@ -35,7 +43,22 @@ fi
 
 case "$file_path" in
   plans/* | */plans/*)
-    echo "plans/ is the spec. Locked decisions D1-D12 change by explicit human decision, not as a side effect of implementation. Ask first." >&2
+    # Narrow exception: an edit that only flips markdown checkbox state
+    # ("- [ ]" <-> "- [x]"/"- [X]") and changes nothing else is allowed —
+    # ticking an acceptance box once its gate is satisfied isn't a spec change.
+    # Anything else touching plans/ (including Write, which has no old_string
+    # to diff against) is still blocked.
+    checkbox_only="$(node -e '
+      const { pairs } = JSON.parse(process.argv[1]);
+      if (pairs.length === 0) { process.stdout.write("no"); process.exit(0); }
+      const normalize = (s) => s.replace(/\[[ xX]\]/g, "[ ]");
+      const ok = pairs.every(([oldS, newS]) => normalize(oldS) === normalize(newS) && oldS !== newS);
+      process.stdout.write(ok ? "yes" : "no");
+    ' "$parsed")"
+    if [[ "$checkbox_only" == "yes" ]]; then
+      exit 0
+    fi
+    echo "plans/ is the spec. Locked decisions D1-D12 change by explicit human decision, not as a side effect of implementation. Ask first. (Exception: toggling '- [ ]'/'- [x]' checkboxes with no other change is allowed.)" >&2
     exit 2
     ;;
 esac
