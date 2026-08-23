@@ -44,6 +44,7 @@ Framework-free TypeScript Gantt library, library-first. The spec is `plans/00`â€
 **API** (`plans/02`):
 - Nothing in the public surface throws "not implemented". Every mutating interaction gets a cancelable `before*` event. Every config key is live-reconfigurable. Naming: greppable pairs (`beforeTaskMove`/`taskMove`), one name per concept.
 - Vendor Gantt product names never appear in specs, docs, or code.
+- `harness/` is the library's first consumer: review `harness/main.ts` on every commit, changed or not. Code there that re-derives what the library already computes is an API gap even when no lint fires â€” record it against the current slice and close it in `src/`, since tidying the harness only hides the evidence.
 
 ## Workflow
 
