@@ -84,7 +84,7 @@ Enabled by `git config core.hooksPath .githooks`, set by a `prepare` script so i
 
 | Hook | Runs | Rationale |
 |---|---|---|
-| `pre-commit` | `format:check` + `lint` on staged `*.ts` + `vendor-names` | Fast (<5s), catches the trivia |
+| `pre-commit` | `format` (auto-fix) on all staged files + `lint` on staged `*.ts` + `vendor-names` | Fast (<5s), catches the trivia; auto-fixes formatting instead of blocking on something `pnpm verify` would just fix anyway |
 | `pre-push` | `pnpm verify` | The full gate before it becomes anyone else's problem |
 
 `--no-verify` exists and is not fought: CI is the authority. Hooks buy latency, not enforcement.

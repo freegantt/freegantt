@@ -1,9 +1,11 @@
 name: CI
 
 on:
-  push:
-    branches: [main]
-  pull_request:
+  workflow_dispatch:
+  # Disabled for now — push/pull_request triggers commented out.
+  # push:
+  #   branches: [main]
+  # pull_request:
 
 jobs:
   install:
