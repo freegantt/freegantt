@@ -1,4 +1,4 @@
-// api/ is the only layer a consumer imports (plans/01 §1). S0 scope: read-only project wrapper over fixture tasks.
+// api/ is the only layer a consumer imports (plans/01 §1). Read-only project wrapper: tasks + IANA zone (D6).
 
 import type { Task } from '../model/index.js';
 
