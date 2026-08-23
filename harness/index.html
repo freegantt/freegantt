@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <title>FreeGantt harness — S0 walking skeleton</title>
+    <title>FreeGantt harness — S1 timeline & viewport</title>
     <style>
       body {
         font-family: system-ui, sans-serif;
@@ -13,6 +13,21 @@
         border: 1px solid #ccc;
         overflow: auto;
         height: 70vh;
+      }
+      .fg-header {
+        height: 20px;
+        border-bottom: 1px solid #ddd;
+        background: #fafafa;
+      }
+      .fg-tick {
+        top: 0;
+        font-size: 10px;
+        color: #666;
+        padding-left: 2px;
+        white-space: nowrap;
+        border-left: 1px solid #eee;
+        height: 20px;
+        line-height: 20px;
       }
       .fg-bar {
         background: #4a7a58;
@@ -28,8 +43,8 @@
     </style>
   </head>
   <body>
-    <h1>FreeGantt — S0 walking skeleton</h1>
-    <p>Fixture project rendered as static bars on a timeline. Every slice adds to this page.</p>
+    <h1>FreeGantt — S1 timeline &amp; viewport</h1>
+    <p>Fixture project rendered as positioned bars under a day-tick header. Every slice adds to this page.</p>
     <div id="chart"></div>
     <script type="module" src="./main.ts"></script>
   </body>

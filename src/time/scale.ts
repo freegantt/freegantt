@@ -3,7 +3,7 @@
 // here (I10) — everything outside time/ must go through xForInstant/instantForX/widthForDuration.
 
 import type { Duration, Instant, TimeSpan, TimeUnit } from '../model/index.js';
-import { addDays } from './zone.js';
+import { addDays, toCivil } from './zone.js';
 import { addMs, instant, MS } from './instant.js';
 
 export interface Tick {
@@ -105,3 +105,22 @@ export function createTimeScale(options: TimeScaleOptions): TimeScale {
 
   return { range, zone, xForInstant, instantForX, widthForDuration, ticks };
 }
+
+function pad2(n: number): string {
+  return String(n).padStart(2, '0');
+}
+
+const civilDateFormat: HeaderFormat = (i, zone) => {
+  const c = toCivil(zone, i);
+  return `${c.year}-${pad2(c.month)}-${pad2(c.day)}`;
+};
+
+/** Shipped preset: one tick per civil day. Hour->year presets land incrementally (plans/01 §5.1) —
+ * presets are config objects, so growing the shipped set is additive, never a library edit. */
+export const dayPreset: ViewPreset = {
+  id: 'day',
+  tickUnit: 'd',
+  tickIncrement: 1,
+  headers: [{ unit: 'd', increment: 1, format: civilDateFormat }],
+  tickWidthPx: 24,
+};

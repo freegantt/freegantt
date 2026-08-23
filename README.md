@@ -53,16 +53,27 @@ const gantt = new Gantt({
   host: element, // HTMLElement
   project, // Project
   scale, // optional TimeScaleModel — omit for a private default
+  preset, // optional ViewPreset — omit for dayPreset (see below)
   rowHeight: 32, // optional, defaults to 32
 });
 
 gantt.destroy();
 ```
 
-Mounts a chart into `host` and renders `project.tasks` as positioned bars, one row per task
-(flat list; hierarchy/grouping land in S5). Two `Gantt` instances on one page are fully
-independent (no shared module state — I2); two given the same `scale` x-sync (D9, proven in
-`src/api/gantt.test.ts`).
+Mounts a chart into `host` and renders `project.tasks` as positioned bars under a header band of
+time ticks, one row per task (flat list; hierarchy/grouping land in S5). Two `Gantt` instances on
+one page are fully independent (no shared module state — I2); two given the same `scale` x-sync
+(D9, proven in `src/api/gantt.test.ts`).
+
+### `dayPreset` (S1)
+
+```ts
+import { dayPreset } from 'freegantt';
+```
+
+The shipped default `ViewPreset`: one header tick per civil day, labeled `YYYY-MM-DD` in the
+scale's zone. Presets are plain config objects, never a switch statement (`plans/01` §5.1) — more
+shipped presets (hour→year) and preset switching land later in S1.
 
 ## Internal building blocks (not yet public, documented here as they're built)
 
@@ -82,8 +93,8 @@ civil month arithmetic). A `ViewPreset` is plain config (`tickUnit`, `tickIncrem
 DOM-free layer both allowed to import `time/` and reachable from `view/`→`api/` through the
 layer-boundary rules (I1), so that's where the public wrapper is defined and re-exported through.
 
-Next up in S1: header band + rendered `ViewPreset` ticks in the harness, `ScrollModel` +
-virtualization, the grid pane, and anchored zoom — see `plans/03-slices.md` S1.
+Next up in S1: `ScrollModel` + virtualization, the grid pane with shared row geometry (I9), and
+anchored zoom/preset switching — see `plans/03-slices.md` S1.
 
 ## Development
 
