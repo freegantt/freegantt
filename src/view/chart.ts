@@ -19,10 +19,13 @@ export interface ChartOptions {
   rowHeight: number;
 }
 
-// Placeholder until Project carries a real IANA zone (D6) — every task renders on this scale's grid
-// regardless, since it's linear; zone only matters once civil (day/week) presets are in play.
+// PLACEHOLDER (resolve before S1 closes — plans/03 S1 acceptance gate): until Project carries a real
+// IANA zone (D6), every task renders on this scale's grid regardless, since it's linear; zone only
+// matters once civil (day/week) presets are in play.
 const DEFAULT_ZONE = 'UTC';
-const DEFAULT_PX_PER_MS = 1 / (1000 * 60 * 30); // 1px per 30min, S1 placeholder default
+// PLACEHOLDER (resolve before S1 closes — plans/03 S1 acceptance gate): 1px per 30min is an arbitrary
+// default pending S1's real default-scale derivation from project range + viewport width.
+const DEFAULT_PX_PER_MS = 1 / (1000 * 60 * 30);
 
 function defaultScale(tasks: readonly Task[]): TimeScaleModel {
   let start = Infinity as unknown as Instant;

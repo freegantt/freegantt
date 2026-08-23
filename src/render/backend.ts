@@ -1,15 +1,15 @@
 // render/ backend contract (plans/01 §8.1). Shared by dom and null backends; DOM types are structural only —
 // this file itself never touches document/window.
 
-import type { GeometryFrame } from '../layout/index.js';
+import type { GeometryFrame, ItemId } from '../layout/index.js';
 
 export interface InteractionState {
-  hoveredItemId?: string;
-  selectedItemIds?: readonly string[];
+  hoveredItemId?: ItemId;
+  selectedItemIds?: readonly ItemId[];
 }
 
 export interface HitResult {
-  itemId: string;
+  itemId: ItemId;
 }
 
 export interface RenderBackend {
