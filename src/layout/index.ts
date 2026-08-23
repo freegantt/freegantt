@@ -4,6 +4,8 @@ export type { GeometryFrame, FrameRow, FrameBar, BarFlags, LinkFlags, LayoutInpu
 // rather than a bare string — render already receives ItemId via GeometryFrame.FrameBar.id.
 export type { ItemId } from '../model/index.js';
 export { TimeScaleModel } from './time-scale-model.js';
+export { PrefixSumHeightIndex } from './row-height-index.js';
+export type { RowHeightIndex } from './row-height-index.js';
 export { dayPreset, instant } from '../time/index.js';
 export type {
   TimeScale,
