@@ -1,6 +1,6 @@
 // layout/ is headless geometry — no DOM, no drawing calls (plans/01 §4). DOM-free by construction.
 
-import type { RowId, ItemId, TaskId, TaskKind, Task } from '../model/index.js';
+import type { RowId, ItemId, TaskId, TaskKind, Task, Instant } from '../model/index.js';
 import { itemId } from '../model/index.js';
 
 export interface BarFlags {
@@ -47,8 +47,8 @@ export interface GeometryFrame {
 
 export interface LayoutInput {
   tasks: readonly Task[];
-  /** Pixels per millisecond — S0 stands in for the real TimeScale, which lands in S1. */
-  xForInstant: (instant: number) => number;
+  /** Typically `TimeScale.xForInstant` (time/scale.ts), bound via a TimeScaleModel (plans/01 §8.2). */
+  xForInstant: (instant: Instant) => number;
   rowHeight: number;
   revision: number;
 }

@@ -3,3 +3,5 @@
 // bound ScrollModel (I12).
 export { Chart } from './chart.js';
 export type { ChartOptions } from './chart.js';
+export { TimeScaleModel } from '../layout/index.js';
+export type { TimeScaleOptions } from '../layout/index.js';

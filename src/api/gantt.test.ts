@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { Gantt } from './gantt.js';
 import { Project } from './project.js';
+import { TimeScaleModel } from './index.js';
 import { sampleTasks } from '../../fixtures/sample-project.js';
 
 describe('Gantt', () => {
@@ -25,6 +26,34 @@ describe('Gantt', () => {
     expect(hostA.children.length).toBe(0);
     expect(hostB.querySelectorAll('.fg-bar').length).toBe(2);
 
+    ganttB.destroy();
+  });
+
+  it('two charts sharing one TimeScaleModel compute identical bar positions (D9 seam)', () => {
+    const scale = new TimeScaleModel({
+      zone: 'UTC',
+      range: { start: sampleTasks[0]!.start, end: sampleTasks[0]!.end },
+      pxPerMs: 1 / (1000 * 60 * 30),
+    });
+    const hostA = document.createElement('div');
+    const hostB = document.createElement('div');
+    const ganttA = new Gantt({
+      host: hostA,
+      project: new Project({ tasks: sampleTasks.slice(0, 3) }),
+      scale,
+    });
+    const ganttB = new Gantt({
+      host: hostB,
+      project: new Project({ tasks: sampleTasks.slice(0, 3) }),
+      scale,
+    });
+
+    const xOf = (host: HTMLElement): string[] =>
+      Array.from(host.querySelectorAll<HTMLElement>('.fg-bar')).map((el) => el.style.transform);
+
+    expect(xOf(hostA)).toEqual(xOf(hostB));
+
+    ganttA.destroy();
     ganttB.destroy();
   });
 });

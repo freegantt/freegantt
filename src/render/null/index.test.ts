@@ -8,7 +8,7 @@ describe('null render backend', () => {
     const backend = createNullBackend();
     const frame = computeFrame({
       tasks: sampleTasks,
-      xForInstant: (i) => i / 1000,
+      xForInstant: (i: number) => i / 1000,
       rowHeight: 32,
       revision: 0,
     });
