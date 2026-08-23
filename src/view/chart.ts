@@ -1,15 +1,18 @@
 // view/ — chart shell (plans/01 §8.2-8.3). The real grid/timeline/viewport split lands across S1;
 // this step adds the header band, rendering TimeScale.ticks() above the bars.
 
-import { computeFrame, dayPreset, TimeScaleModel } from '../layout/index.js';
+import { computeFrame, dayPreset, fitProjectScale, TimeScaleModel } from '../layout/index.js';
 import type { ViewPreset } from '../layout/index.js';
 import { createDomBackend } from '../render/dom/index.js';
 import type { RenderBackend } from '../render/backend.js';
-import type { Instant, Task } from '../model/index.js';
+import type { Task } from '../model/index.js';
 
 export interface ChartOptions {
   host: HTMLElement;
   tasks: readonly Task[];
+  /** Project's IANA zone (D6) — used to build the default scale (`range: 'fitProject'`) when `scale`
+   * is omitted; ignored otherwise, since an explicit scale carries its own zone. */
+  zone: string;
   /** Bound viewport object (D9) — pass the same instance to two charts to x-sync them. Constructs a
    * private default from the task range when omitted (plans/01 §8.2: "single-chart usage never sees
    * the concept"). */
@@ -17,28 +20,6 @@ export interface ChartOptions {
   /** Governs header ticks (plans/01 §5.1). Preset switching lands in S1 step 7; defaults to `dayPreset`. */
   preset?: ViewPreset;
   rowHeight: number;
-}
-
-// PLACEHOLDER (resolve before S1 closes — plans/03 S1 acceptance gate): until Project carries a real
-// IANA zone (D6), every task renders on this scale's grid regardless, since it's linear; zone only
-// matters once calendar (day/week) presets are in play.
-const DEFAULT_ZONE = 'UTC';
-// PLACEHOLDER (resolve before S1 closes — plans/03 S1 acceptance gate): 1px per 30min is an arbitrary
-// default pending S1's real default-scale derivation from project range + viewport width.
-const DEFAULT_PX_PER_MS = 1 / (1000 * 60 * 30);
-
-function defaultScale(tasks: readonly Task[]): TimeScaleModel {
-  let start = Infinity as unknown as Instant;
-  let end = -Infinity as unknown as Instant;
-  for (const task of tasks) {
-    if (task.start < start) start = task.start;
-    if (task.end > end) end = task.end;
-  }
-  if (!Number.isFinite(start)) {
-    start = 0 as Instant;
-    end = 0 as Instant;
-  }
-  return new TimeScaleModel({ zone: DEFAULT_ZONE, range: { start, end }, pxPerMs: DEFAULT_PX_PER_MS });
 }
 
 export class Chart {
@@ -50,7 +31,15 @@ export class Chart {
   #barsHost: HTMLElement;
 
   constructor(private options: ChartOptions) {
-    this.#scale = options.scale ?? defaultScale(options.tasks);
+    this.#scale =
+      options.scale ??
+      new TimeScaleModel(
+        fitProjectScale({
+          tasks: options.tasks,
+          zone: options.zone,
+          viewportWidth: options.host.clientWidth,
+        }),
+      );
     this.#preset = options.preset ?? dayPreset;
 
     this.#headerEl = document.createElement('div');

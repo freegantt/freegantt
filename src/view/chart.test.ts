@@ -26,7 +26,7 @@ describe('Chart header band', () => {
       range: { start: rangeStart, end: rangeEnd },
       pxPerMs: 1 / (1000 * 60 * 60),
     });
-    const chart = new Chart({ host, tasks, scale, rowHeight: 32 });
+    const chart = new Chart({ host, tasks, zone, scale, rowHeight: 32 });
 
     const ticks = host.querySelectorAll('.fg-header .fg-tick');
     expect(ticks).toHaveLength(5);
