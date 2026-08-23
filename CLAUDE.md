@@ -43,7 +43,7 @@ Framework-free TypeScript Gantt library, library-first. The spec is `plans/00`�
 **API** (`plans/02`):
 - Nothing in the public surface throws "not implemented". Every mutating interaction gets a cancelable `before*` event. Every config key is live-reconfigurable. Naming: greppable pairs (`beforeTaskMove`/`taskMove`), one name per concept.
 - Vendor Gantt product names never appear in specs, docs, or code.
-- `harness/` is the library's first consumer, and sits outside the `src/**` lint scope by design — consumer code, not library code. That is not an exemption to spend: review `harness/main.ts` on every commit, changed or not, because code there that breaks a library rule or re-derives what the library already computes is an API gap even when no lint fires. Record it against the current slice and close it in `src/` — tidying the harness only hides the evidence (see the `range: 'fitProject'` TODO there).
+- `harness/` is the library's first consumer, and sits outside the `src/**` lint scope by design — consumer code, not library code. That is not an exemption to spend: review `harness/main.ts` on every commit, changed or not, because code there that breaks a library rule or re-derives what the library already computes is an API gap even when no lint fires. Record it against the current slice and close it in `src/` — tidying the harness only hides the evidence. A clean `harness/main.ts` is the expected steady state, not a sign there is nothing to review: the last two gaps it exposed were `rowHeight: 32` restating `api/gantt.ts`'s default, and a hand-built `TimeScaleModel` standing in for `range: 'fitProject'`.
 
 ## Workflow
 
