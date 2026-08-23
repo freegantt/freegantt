@@ -48,11 +48,10 @@ export class PrefixSumHeightIndex implements RowHeightIndex {
   }
 
   indexAtY(y: number): number {
-    const lastIndex = Math.max(this.#count - 1, 0);
     if (this.#count === 0 || y <= 0) return 0;
     this.#ensure(this.#count);
     let lo = 0;
-    let hi = lastIndex;
+    let hi = this.#count - 1;
     while (lo < hi) {
       const mid = (lo + hi + 1) >> 1;
       if (this.#tops[mid]! <= y) lo = mid;

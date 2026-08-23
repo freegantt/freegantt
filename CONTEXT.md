@@ -91,8 +91,16 @@ The pure, DOM-free mapping between Instants and pixel positions, plus tick gener
 _Avoid_: Viewport (Viewport is the rendered/visible region; TimeScale is the coordinate mapping a Viewport uses)
 
 **TimeScaleModel**:
-The standalone, shareable object that owns a TimeScale and that a Chart binds to. Passing the same TimeScaleModel instance to two Gantt instances synchronizes their horizontal axis by construction — the mechanism behind multi-chart sync.
+The standalone, shareable object that owns a TimeScale and that a Chart binds to. Passing the same TimeScaleModel instance to two Gantt instances synchronizes their horizontal axis by construction — the mechanism behind multi-chart sync. It is constructed from Scale intent, never from resolved geometry.
 _Avoid_: Scale (Scale, unqualified, means the underlying `TimeScale` the model wraps — `TimeScaleModel.scale`)
+
+**Scale intent**:
+What a caller states about how time should be displayed — a ViewPreset and a range that is either `'fitProject'` or a pinned TimeSpan. Intent is all a caller ever supplies to a TimeScaleModel; the zone (which is the Project's, D6), the resolved span, and the pixels-per-millisecond factor are derived at bind time and are not a caller's to state.
+_Avoid_: Scale options, scale config (both read as the resolved geometry, which is the opposite of intent)
+
+**Scale binding**:
+One Chart's contribution to a TimeScaleModel's resolution: its Project's zone, its Tasks, and its measured viewport width. A Chart binds on construction and unbinds on destroy, and both re-resolve the shared TimeScale — which is how `'fitProject'` spans every bound Project rather than whichever one was passed to the constructor.
+_Avoid_: Attach, subscribe, register
 
 **ScrollModel**:
 The standalone, shareable object owning a chart's scroll position on both axes, and the only route by which any view or interaction code may read or write it. Shared between charts the same way a TimeScaleModel is, which is what makes one scroll owner drive both panes of a split view.

@@ -37,9 +37,7 @@ describe('Gantt', () => {
 
   it('two charts sharing one TimeScaleModel compute identical bar positions (D9 seam)', () => {
     const scale = new TimeScaleModel({
-      zone: 'UTC',
       range: { start: sampleTasks[0]!.start, end: sampleTasks[0]!.end },
-      pxPerMs: 1 / (1000 * 60 * 30),
     });
     const hostA = document.createElement('div');
     const hostB = document.createElement('div');
