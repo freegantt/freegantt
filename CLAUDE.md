@@ -12,7 +12,9 @@ Framework-free TypeScript Gantt library, library-first. The spec is `plans/00`�
 
 **Time** (`plans/01` §5):
 - Storage is half-open `[start, end)`; display is inclusive via one formatting helper — no inline `end - 1` arithmetic.
-- All civil arithmetic goes through `time/` in the project's IANA zone. No magic time constants (`86400000` etc.), no `new Date()`/`Date.now()`, no arithmetic on `Instant` outside `time/`.
+- All civil arithmetic goes through `time/` in the project's IANA zone. ("Civil" = a wall-clock reading with no zone attached; see `CONTEXT.md`.)
+- `time/` is the *only* place allowed to use `new Date()`/`Date.now()`, magic time constants (`86400000` etc.), or arithmetic on `Instant`. Everywhere else in `src/` these are forbidden — I10 lints this, scoped to `src/**`.
+- `harness/` is deliberately outside that lint scope: it is a consumer, not library code. But a harness that *needs* to break a library rule is evidence of a missing API, not an exemption to use — fix the API, then delete the workaround (see the `range: 'fitProject'` TODO in `harness/main.ts`).
 
 **Data** (`plans/01` §6):
 - Every mutation goes through a transaction → one scheduling pass → one changeset (`{from, to}` per field). No exceptions, gestures included (one transaction per gesture, at commit).
@@ -36,7 +38,8 @@ Framework-free TypeScript Gantt library, library-first. The spec is `plans/00`�
 - Capabilities gate gestures *and* affordances from one resolution (I14).
 
 **Dependencies** (`plans/04` §1):
-- Exactly one runtime dep: `alien-signals`, touched only by the `data/` reactivity façade. Do not add runtime dependencies; rejected candidates and reasons are in `plans/04` §1.1.
+- Two runtime deps, each confined to one façade file: `alien-signals` (the `data/` reactivity façade) and `temporal-polyfill` (`time/zone.ts`, `/fns/*` entry points only — see `docs/adr/0001`). No other file may import either.
+- Adding a third runtime dep needs a `plans/04` §1 table entry justifying it and a façade to confine it. Rejected candidates and reasons are in `plans/04` §1.1 — check there before proposing one.
 
 **API** (`plans/02`):
 - Nothing in the public surface throws "not implemented". Every mutating interaction gets a cancelable `before*` event. Every config key is live-reconfigurable. Naming: greppable pairs (`beforeTaskMove`/`taskMove`), one name per concept.
