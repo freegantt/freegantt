@@ -22,6 +22,7 @@ export class Gantt {
     this.#chart = new Chart({
       host: options.host,
       tasks: options.project.tasks,
+      zone: options.project.zone,
       ...(options.scale ? { scale: options.scale } : {}),
       rowHeight: options.rowHeight ?? DEFAULT_ROW_HEIGHT,
     });
