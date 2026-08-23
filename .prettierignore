@@ -11,3 +11,6 @@ plans
 docs
 CLAUDE.md
 
+# Vendored agent skills (installed via skills-lock.json) — not ours to reformat.
+.agents/skills
+
