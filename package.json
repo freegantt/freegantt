@@ -36,7 +36,8 @@
     "verify": "pnpm format:check && pnpm typecheck && pnpm lint && pnpm boundaries && pnpm guards && pnpm test:node && pnpm test:dom && pnpm vendor-names && pnpm disables"
   },
   "dependencies": {
-    "alien-signals": "^1.0.0"
+    "alien-signals": "^1.0.0",
+    "temporal-polyfill": "^1.0.4"
   },
   "devDependencies": {
     "@eslint/js": "^9.9.0",

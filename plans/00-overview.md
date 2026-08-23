@@ -36,7 +36,7 @@ These were decided explicitly and the rest of the spec depends on them. Changing
 | D9 | Multi-chart sync | Two or more charts must eventually **scroll together on x, y, or both** (e.g., task chart above a workforce chart) **without core changes**. Therefore the time scale and scroll state are standalone, shareable objects a chart *binds to*, never private internals. |
 | D10 | Editing | Programmatic mutation + **transactions + undo/redo live in the data core from slice one** (they shape everything). Pointer manipulation (drag/resize/link) arrives early but lives in its **own interaction module**. |
 | D11 | A11y / browsers | Evergreen browsers. **Solid accessibility built in as slices land** (keyboard nav, focusable bars, grid semantics) — never a retrofit pass. |
-| D12 | Stack | TypeScript strict, Vite (dev harness + build), Vitest, Playwright for E2E later. Module boundaries enforced by lint rules in CI, not convention. Core runtime dependencies: at most one (the reactive primitive, behind a façade). |
+| D12 | Stack | TypeScript strict, Vite (dev harness + build), Vitest, Playwright for E2E later. Module boundaries enforced by lint rules in CI, not convention. Core runtime dependencies: a small, explicitly budgeted set — currently two (the reactive primitive; zone-aware civil-time arithmetic), each behind a façade, each justified in writing in `plans/04` §1. |
 
 ## 3. Design principles
 

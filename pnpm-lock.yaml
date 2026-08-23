@@ -11,6 +11,9 @@ importers:
       alien-signals:
         specifier: ^1.0.0
         version: 1.0.13
+      temporal-polyfill:
+        specifier: ^1.0.4
+        version: 1.0.4
     devDependencies:
       '@eslint/js':
         specifier: ^9.9.0
@@ -1220,6 +1223,15 @@ packages:
 
   teamcity-service-messages@0.1.14:
     resolution: {integrity: sha512-29aQwaHqm8RMX74u2o/h1KbMLP89FjNiMxD9wbF2BbWOnbM+q+d1sCEC+MqCc4QW3NJykn77OMpTFw/xTHIc0w==}
+
+  temporal-polyfill@1.0.4:
+    resolution: {integrity: sha512-MLEU0qOD2uXlz24oINNtdLZQl8RgmMxSnRtKEGZGGetTJjlRwQJjk+VsJ4EREaUoiaTb8NJOcUiKtoAiWn9EBg==}
+
+  temporal-spec@1.0.1:
+    resolution: {integrity: sha512-wxVoanmDeavXie1vu2JaQ3WIc3JZnWAOYFBsJyATaVsXsycKYUflGsyBmrRSnoCpZJpwPyr38VpgSUlQ8CbFxg==}
+
+  temporal-utils@1.0.2:
+    resolution: {integrity: sha512-1B8Dl4KzrOvsNUlpoWGno2VLQlxroLjDgc5NBjVC9ax9ymdo+ezfyvhyjEMx+IVfhINr6CIG2gcnlP95iRrybQ==}
 
   test-exclude@7.0.2:
     resolution: {integrity: sha512-u9E6A+ZDYdp7a4WnarkXPZOx8Ilz46+kby6p1yZ8zsGTz9gYa6FIS7lj2oezzNKmtdyyJNNmmXDppga5GB7kSw==}
@@ -2452,6 +2464,15 @@ snapshots:
   tapable@2.3.3: {}
 
   teamcity-service-messages@0.1.14: {}
+
+  temporal-polyfill@1.0.4:
+    dependencies:
+      temporal-spec: 1.0.1
+      temporal-utils: 1.0.2
+
+  temporal-spec@1.0.1: {}
+
+  temporal-utils@1.0.2: {}
 
   test-exclude@7.0.2:
     dependencies:
