@@ -1,12 +1,12 @@
-// layout/ owns TimeScaleModel — the standalone, shareable viewport object a Chart binds to
+// layout/ owns TimeScaleModel — the standalone, shareable viewport object a Gantt binds to
 // (plans/01 §8.2, D9). It lives here rather than in time/ itself: it's the only DOM-free layer both
 // permitted to import time/ (layout -> time is an allowed edge) and reachable from view/ and api/
 // through allowed edges (view -> layout, api -> view) per the boundary lint (I1). Passing the same
-// instance to two charts syncs their x-axis by construction — no event plumbing, no link manager.
+// instance to two Gantt instances syncs their x-axis by construction — no event plumbing, no link manager.
 //
 // The constructor takes *intent*, not resolved geometry (plans/02 §5). Zone, span and pixel density
-// are resolved from the charts bound to the model, which is what lets one scale span a task chart and
-// a workforce chart: neither caller has to compute a cross-project span by hand.
+// are resolved from the Gantt instances bound to the model, which is what lets one scale span a task
+// Gantt and a workforce Gantt: neither caller has to compute a cross-project span by hand.
 
 import { createTimeScale, dayPreset, diffMs, instant, pxPerMsForPreset } from '../time/index.js';
 import type { TimeScale, TimeScaleOptions, ViewPreset } from '../time/index.js';
@@ -21,17 +21,17 @@ export interface TimeScaleIntent {
   range?: 'fitProject' | TimeSpan;
 }
 
-/** One chart's contribution to resolution, supplied when it binds. */
+/** One Gantt's contribution to resolution, supplied when it binds. */
 export interface ScaleBinding {
   /** The bound project's IANA zone (D6) — a scale is never told its zone by the caller. */
   zone: string;
   tasks: readonly Task[];
-  /** Measured width (px) of the element the chart renders into; `0` when unmeasured (detached host,
+  /** Measured width (px) of the element the Gantt renders into; `0` when unmeasured (detached host,
    * `display:none`, pre-paint). Unmeasured is not degenerate — see `pxPerMsForPreset`. */
   viewportWidth: number;
 }
 
-/** Zone used before any chart has bound, so `scale` is readable on a fresh model. */
+/** Zone used before any Gantt has bound, so `scale` is readable on a fresh model. */
 const UNBOUND_ZONE = 'UTC';
 
 export class TimeScaleModel {
@@ -49,9 +49,9 @@ export class TimeScaleModel {
     return this.#preset;
   }
 
-  /** Charts bind at construction and call the returned function on destroy. Binding and unbinding
-   * both invalidate the resolved scale, so every other bound chart follows a project joining or
-   * leaving the shared axis. */
+  /** Gantt instances bind at construction and call the returned function on destroy. Binding and
+   * unbinding both invalidate the resolved scale, so every other bound Gantt follows a project
+   * joining or leaving the shared axis. */
   bind(binding: ScaleBinding): () => void {
     this.#bindings.add(binding);
     this.#resolved = undefined;
@@ -66,7 +66,7 @@ export class TimeScaleModel {
 
   #resolve(): TimeScaleOptions {
     const bindings = [...this.#bindings];
-    // D6: the zone is the project's. Charts sharing an axis share a project zone in practice; the
+    // D6: the zone is the project's. Gantt instances sharing an axis share a project zone in practice; the
     // first binding decides, rather than the axis silently having two calendars.
     const zone = bindings[0]?.zone ?? UNBOUND_ZONE;
     const range = this.#range === 'fitProject' ? boundSpan(bindings) : this.#range;
@@ -79,7 +79,7 @@ export class TimeScaleModel {
   }
 }
 
-/** The narrowest measured viewport across the bound charts, so the span fits in all of them rather
+/** The narrowest measured viewport across the bound Gantt instances, so the span fits in all of them rather
  * than only the widest. `0` when nothing is measured yet. */
 function fitWidth(bindings: readonly ScaleBinding[]): number {
   let width = 0;

@@ -18,7 +18,7 @@ Framework-free TypeScript Gantt library, library-first. The spec is `plans/00`�
 **Data** (`plans/01` §6):
 - Every mutation goes through a transaction → one scheduling pass → one changeset (`{from, to}` per field). No exceptions, gestures included (one transaction per gesture, at commit).
 - Undo records user edits + engine cascades atomically.
-- No module-level singletons anywhere; two charts on one page must be fully independent.
+- No module-level singletons anywhere; two Gantt instances on one page must be fully independent.
 
 **Scheduling** (`plans/01` §7):
 - `schedule()` is pure and deterministic; never mutates input; policy never overwrites a user-proposed field.
@@ -41,7 +41,7 @@ Framework-free TypeScript Gantt library, library-first. The spec is `plans/00`�
 - Adding a third runtime dep needs a `plans/04` §1 table entry justifying it and a façade to confine it. Rejected candidates and reasons are in `plans/04` §1.1 — check there before proposing one.
 
 **API** (`plans/02`):
-- Nothing in the public surface throws "not implemented". Every mutating interaction gets a cancelable `before*` event. Every config key is live-reconfigurable. Naming: greppable pairs (`beforeTaskMove`/`taskMove`), one name per concept.
+- Nothing in the public surface throws "not implemented". Every mutating interaction gets a cancelable `before*` event. Every config key is live-reconfigurable. Naming: greppable pairs (`beforeTaskMove`/`taskMove`), one name per concept. Names must be specific enough to disambiguate at a glance (Uncle Bob's naming rules) — a generic word covering more than one concept in the codebase is a bug, not a style nit. Cautionary example (#7): "chart" meant both the public `Gantt` instance and an internal `view/` class; nothing said which, and it stalled a real review (#4). Fix was to retire "chart" entirely — the public concept is `Gantt`, the internal shell is `GanttShell` — not to pick a synonym and hope it reads clearly from context.
 - Vendor Gantt product names never appear in specs, docs, or code.
 - `harness/` is the library's first consumer, and sits outside the `src/**` lint scope by design — consumer code, not library code. That is not an exemption to spend: review `harness/main.ts` on every commit, changed or not, because code there that breaks a library rule or re-derives what the library already computes is an API gap even when no lint fires. Record it against the current slice and close it in `src/` — tidying the harness only hides the evidence. A clean `harness/main.ts` is the expected steady state, not a sign there is nothing to review: the last two gaps it exposed were `rowHeight: 32` restating `api/gantt.ts`'s default, and a hand-built `TimeScaleModel` standing in for `range: 'fitProject'`.
 

@@ -1,7 +1,7 @@
 // api/ is the only layer a consumer imports (plans/01 §1). No module-level singletons (I2) — every
-// instance owns its own chart and state so two charts on one page are fully independent.
+// instance owns its own shell and state so two Gantt instances on one page are fully independent.
 
-import { Chart, TimeScaleModel } from '../view/index.js';
+import { GanttShell, TimeScaleModel } from '../view/index.js';
 import type { Project } from './project.js';
 
 export interface GanttOptions {
@@ -15,11 +15,11 @@ export interface GanttOptions {
 const DEFAULT_ROW_HEIGHT = 32;
 
 export class Gantt {
-  #chart: Chart;
+  #shell: GanttShell;
   #destroyed = false;
 
   constructor(options: GanttOptions) {
-    this.#chart = new Chart({
+    this.#shell = new GanttShell({
       host: options.host,
       tasks: options.project.tasks,
       zone: options.project.zone,
@@ -30,7 +30,7 @@ export class Gantt {
 
   destroy(): void {
     if (this.#destroyed) return;
-    this.#chart.destroy();
+    this.#shell.destroy();
     this.#destroyed = true;
   }
 }

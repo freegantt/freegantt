@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { Chart } from './chart.js';
+import { GanttShell } from './gantt-shell.js';
 import { TimeScaleModel, instant } from '../layout/index.js';
 import { taskId } from '../model/index.js';
 import type { Task } from '../model/index.js';
@@ -18,17 +18,17 @@ const tasks: Task[] = [
   },
 ];
 
-describe('Chart header band', () => {
+describe('GanttShell header band', () => {
   it('renders one tick per day for the day preset', () => {
     const host = document.createElement('div');
     const scale = new TimeScaleModel({ range: { start: rangeStart, end: rangeEnd } });
-    const chart = new Chart({ host, tasks, zone, scale, rowHeight: 32 });
+    const shell = new GanttShell({ host, tasks, zone, scale, rowHeight: 32 });
 
     const ticks = host.querySelectorAll('.fg-header .fg-tick');
     expect(ticks).toHaveLength(5);
     expect(ticks[0]?.textContent).toBe('2026-09-01');
 
-    chart.destroy();
+    shell.destroy();
     expect(host.children.length).toBe(0);
   });
 });

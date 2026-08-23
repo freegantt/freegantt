@@ -13,7 +13,7 @@ describe('Gantt', () => {
     gantt.destroy();
   });
 
-  it('two charts on one page have fully independent state (I2)', () => {
+  it('two Gantt instances on one page have fully independent state (I2)', () => {
     const hostA = document.createElement('div');
     const hostB = document.createElement('div');
     const ganttA = new Gantt({
@@ -35,7 +35,7 @@ describe('Gantt', () => {
     ganttB.destroy();
   });
 
-  it('two charts sharing one TimeScaleModel compute identical bar positions (D9 seam)', () => {
+  it('two Gantt instances sharing one TimeScaleModel compute identical bar positions (D9 seam)', () => {
     const scale = new TimeScaleModel({
       range: { start: sampleTasks[0]!.start, end: sampleTasks[0]!.end },
     });

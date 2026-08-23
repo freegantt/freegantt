@@ -39,7 +39,7 @@ const scale = new TimeScaleModel({
 The standalone, shareable object a `Gantt` binds to for time↔pixel mapping (`plans/01` §8.2, D9).
 Pass the **same instance** to two `Gantt`s and their x-axis stays in sync by construction — no
 event plumbing, no link manager. Omit `scale` on `Gantt` and it builds a private default sized to
-the project's task range — single-chart usage never has to meet this concept.
+the project's task range — single-Gantt usage never has to meet this concept.
 
 Preset switching, zoom, and named presets (`'weekAndMonth'` etc.) land later in S1; today
 `TimeScaleModel` only takes an explicit `zone`/`range`/`pxPerMs`.
@@ -60,7 +60,7 @@ const gantt = new Gantt({
 gantt.destroy();
 ```
 
-Mounts a chart into `host` and renders `project.tasks` as positioned bars under a header band of
+Mounts a Gantt into `host` and renders `project.tasks` as positioned bars under a header band of
 time ticks, one row per task (flat list; hierarchy/grouping land in S5). Two `Gantt` instances on
 one page are fully independent (no shared module state — I2); two given the same `scale` x-sync
 (D9, proven in `src/api/gantt.test.ts`).
