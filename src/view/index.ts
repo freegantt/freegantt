@@ -4,4 +4,4 @@
 export { Chart } from './chart.js';
 export type { ChartOptions } from './chart.js';
 export { TimeScaleModel, dayPreset, instant } from '../layout/index.js';
-export type { TimeScaleOptions, ViewPreset } from '../layout/index.js';
+export type { TimeScaleIntent, ViewPreset } from '../layout/index.js';

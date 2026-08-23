@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createTimeScale } from './scale.js';
+import { createTimeScale, pxPerMsForPreset } from './scale.js';
 import { instant } from './instant.js';
 import type { ViewPreset } from './scale.js';
 
@@ -44,5 +44,22 @@ describe('createTimeScale', () => {
     const scale = createTimeScale({ zone, range: { start: rangeStart, end: rangeEnd }, pxPerMs });
     const badPreset: ViewPreset = { ...dayPreset, tickUnit: 'M', tickIncrement: 1 };
     expect(() => scale.ticks(badPreset)).toThrow(/unsupported unit/);
+  });
+});
+
+describe('pxPerMsForPreset', () => {
+  it('gives the zoom at which one tick occupies its tickWidthPx', () => {
+    const scale = createTimeScale({
+      zone,
+      range: { start: rangeStart, end: rangeEnd },
+      pxPerMs: pxPerMsForPreset(zone, dayPreset, rangeStart),
+    });
+    expect(scale.widthForDuration({ value: 1, unit: 'd' }, rangeStart)).toBeCloseTo(dayPreset.tickWidthPx, 5);
+  });
+
+  it('refuses a preset that does not advance rather than returning Infinity', () => {
+    expect(() => pxPerMsForPreset(zone, { ...dayPreset, tickIncrement: 0 }, rangeStart)).toThrow(
+      /does not advance/,
+    );
   });
 });

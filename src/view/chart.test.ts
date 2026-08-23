@@ -21,11 +21,7 @@ const tasks: Task[] = [
 describe('Chart header band', () => {
   it('renders one tick per day for the day preset', () => {
     const host = document.createElement('div');
-    const scale = new TimeScaleModel({
-      zone,
-      range: { start: rangeStart, end: rangeEnd },
-      pxPerMs: 1 / (1000 * 60 * 60),
-    });
+    const scale = new TimeScaleModel({ range: { start: rangeStart, end: rangeEnd } });
     const chart = new Chart({ host, tasks, zone, scale, rowHeight: 32 });
 
     const ticks = host.querySelectorAll('.fg-header .fg-tick');
