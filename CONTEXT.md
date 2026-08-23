@@ -75,12 +75,12 @@ _Avoid_: Scene, render tree, viewport model
 ### Mounted instances
 
 **Gantt**:
-The public entry point and a whole mounted instance: one `Gantt` wraps one `host` element, one Project, and everything needed to render and interact with it. This is the sense used everywhere the specs discuss the product as a whole — D9's "multi-Gantt sync", I2's "two Gantt instances coexist independently", a host page that mounts "two Gantts". A `Gantt` *is* the class; it is also the name of the concept, so `new Gantt(...)` and "a Gantt" mean the same thing.
+The public entry point and a whole mounted instance: one `Gantt` wraps one `host` element, one Project, and everything needed to render and interact with it. This is the sense used everywhere the specs discuss the product as a whole — D9's "multi-Gantt sync", I2's "two Gantt instances coexist independently", a host page that mounts "two Gantts". A `Gantt` _is_ the class; it is also the name of the concept, so `new Gantt(...)` and "a Gantt" mean the same thing.
 _Avoid_: Chart (see #7 — "chart" used to name both this and `GanttShell`, ambiguously, and is retired from the codebase entirely)
 
 **GanttShell**:
 The internal `view/` class a `Gantt` constructs and owns: the DOM shell that holds the header band and the bars host (plans/01 §8.2-8.3, "the chart shell" in older text). Never public — `exports` is sealed to `api/` and `model/`. A `Gantt` is a thin façade over one `GanttShell`; the shell is where the grid pane / timeline pane / splitter split (S1) actually lives.
-_Avoid_: Chart, ChartShell (rejected in #7 — "shell" alone doesn't say what it's a shell *of*; `GanttShell` reads correctly even far from its definition)
+_Avoid_: Chart, ChartShell (rejected in #7 — "shell" alone doesn't say what it's a shell _of_; `GanttShell` reads correctly even far from its definition)
 
 ### Time and viewport
 
