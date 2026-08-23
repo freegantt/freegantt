@@ -21,10 +21,13 @@ export class Gantt {
 
   constructor(options: GanttOptions) {
     const pxPerMs = options.pxPerMs ?? DEFAULT_PX_PER_MS;
+    // S0 placeholder: anchor pixel 0 at the project's earliest task start. The real
+    // TimeScale (S1) replaces this whole closure, origin included.
+    const origin = options.project.tasks.reduce((min, task) => Math.min(min, task.start), Infinity);
     this.#chart = new Chart({
       host: options.host,
       tasks: options.project.tasks,
-      xForInstant: (instant) => instant * pxPerMs,
+      xForInstant: (instant) => (instant - origin) * pxPerMs,
       rowHeight: options.rowHeight ?? DEFAULT_ROW_HEIGHT,
     });
   }

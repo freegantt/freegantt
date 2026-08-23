@@ -25,7 +25,7 @@ Slices are scope, not calendar estimates. Within a slice, tasks are ordered so t
 
 **Acceptance**
 
-- [ ] Harness shows fixture tasks as bars positioned correctly against time.
+- [x] Harness shows fixture tasks as bars positioned correctly against time.
 - [x] `computeFrame()` snapshot-tested headlessly; `Item.id` determinism asserted.
 - [x] Import-boundary lint fails the build on a violation (proven by a deliberate red test in CI setup).
 - [x] `render/null` consumes a frame in Node with no DOM.
