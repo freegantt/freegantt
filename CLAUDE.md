@@ -12,7 +12,7 @@ Framework-free TypeScript Gantt library, library-first. The spec is `plans/00`�
 
 **Time** (`plans/01` §5):
 - Storage is half-open `[start, end)`; display is inclusive via one formatting helper — no inline `end - 1` arithmetic.
-- All civil arithmetic goes through `time/` in the project's IANA zone. ("Civil" = a wall-clock reading with no zone attached; see `CONTEXT.md`.)
+- All zone-aware date arithmetic goes through `time/` in the project's IANA zone. (A *plain* time is a wall-clock reading with no zone attached — Temporal's term, and ours; see `CONTEXT.md`.)
 - `time/` is the *only* place allowed to use `new Date()`/`Date.now()`, magic time constants (`86400000` etc.), or arithmetic on `Instant`. Everywhere else in `src/` these are forbidden — I10 lints this, scoped to `src/**`.
 - `harness/` is deliberately outside that lint scope: it is a consumer, not library code. But a harness that *needs* to break a library rule is evidence of a missing API, not an exemption to use — fix the API, then delete the workaround (see the `range: 'fitProject'` TODO in `harness/main.ts`).
 

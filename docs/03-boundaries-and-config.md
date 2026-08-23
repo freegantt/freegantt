@@ -79,7 +79,7 @@ Per `plans/04` §3.1, plus what each flag buys us here specifically:
 
 **Two type-level guards worth calling out as design, not config:**
 
-- **The `Instant` brand** is what makes `no-instant-arithmetic` (`02` §3.1) possible at all. It is a type-only construct with zero runtime cost, and it is the reason `time/` can be the sole owner of civil math.
+- **The `Instant` brand** is what makes `no-instant-arithmetic` (`02` §3.1) possible at all. It is a type-only construct with zero runtime cost, and it is the reason `time/` can be the sole owner of zone-aware date math.
 - **The `TxToken`** (`02` §3.6) makes "mutation outside a transaction" a *type* error, not just a lint error. Same trick: a non-exported branded type minted by exactly one function.
 
 `typecheck` runs `tsc --noEmit` over `src/`, `harness/`, `fixtures/`, and the test files — tests are not excused from strictness, because a test that compiles under looser rules proves less than it claims.

@@ -30,13 +30,13 @@ These were decided explicitly and the rest of the spec depends on them. Changing
 | D3 | Initial scheduling depth | **Bars + dependencies**: hierarchy, dependency links with lag, cascade propagation, cycle detection. Calendars, constraints, and resources are later slices behind existing seams. |
 | D4 | Scheduling isolation | Scheduling is a **pure, DOM-free module**. It never imports rendering; rendering never imports it. They meet only through the data store. |
 | D5 | Host environment | **Framework-free TS core.** Wrappers (React etc.) are possible later as thin adapters; nothing in core may depend on one. |
-| D6 | Time model | **Absolute timestamps (epoch ms) + project-owned IANA timezone.** All civil arithmetic (day boundaries, snapping, week starts) resolves through the project zone via a dedicated time module. A helper API gives users civil-date ergonomics. |
+| D6 | Time model | **Absolute timestamps (epoch ms) + project-owned IANA timezone.** All zone-aware date arithmetic (day boundaries, snapping, week starts) resolves through the project zone via a dedicated time module. A helper API gives users plain-date ergonomics. |
 | D7 | Persistence | **Host-owned via changesets.** Versioned `toJSON`/`fromJSON` + well-defined changeset events in core. An official sync adapter can be layered on later as an extension — the changeset contract is designed so that requires no core change. |
 | D8 | Layout | **Split-pane: grid (task table) + timeline**, sharing one row-geometry source. Grid starts minimal (label column) and grows. |
 | D9 | Multi-chart sync | Two or more charts must eventually **scroll together on x, y, or both** (e.g., task chart above a workforce chart) **without core changes**. Therefore the time scale and scroll state are standalone, shareable objects a chart *binds to*, never private internals. |
 | D10 | Editing | Programmatic mutation + **transactions + undo/redo live in the data core from slice one** (they shape everything). Pointer manipulation (drag/resize/link) arrives early but lives in its **own interaction module**. |
 | D11 | A11y / browsers | Evergreen browsers. **Solid accessibility built in as slices land** (keyboard nav, focusable bars, grid semantics) — never a retrofit pass. |
-| D12 | Stack | TypeScript strict, Vite (dev harness + build), Vitest, Playwright for E2E later. Module boundaries enforced by lint rules in CI, not convention. Core runtime dependencies: a small, explicitly budgeted set — currently two (the reactive primitive; zone-aware civil-time arithmetic), each behind a façade, each justified in writing in `plans/04` §1. |
+| D12 | Stack | TypeScript strict, Vite (dev harness + build), Vitest, Playwright for E2E later. Module boundaries enforced by lint rules in CI, not convention. Core runtime dependencies: a small, explicitly budgeted set — currently two (the reactive primitive; zone-aware plain-time arithmetic), each behind a façade, each justified in writing in `plans/04` §1. |
 
 ## 3. Design principles
 

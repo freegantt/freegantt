@@ -7,7 +7,7 @@ A framework-free TypeScript Gantt library: scheduling, layout, and rendering of 
 ### Authored model
 
 **Project**:
-The body of authored data — its Tasks and Dependencies — together with the settings that give it meaning, above all the IANA zone in which all civil arithmetic is performed. "The project's zone" and "the project's reference date" are properties of this, not of the host environment.
+The body of authored data — its Tasks and Dependencies — together with the settings that give it meaning, above all the IANA zone in which all zone-aware date arithmetic is performed. "The project's zone" and "the project's reference date" are properties of this, not of the host environment.
 _Avoid_: Plan, schedule (a schedule is an output of scheduling a Project, not the Project itself), dataset
 
 **Task**:
@@ -74,12 +74,16 @@ _Avoid_: Scene, render tree, viewport model
 
 ### Time and viewport
 
-**Civil time**:
-A reading off a wall clock — year, month, day, hour, minute — with no zone attached and therefore no fixed position on the timeline. "Civil" is the standard term of art for this (it is what Temporal, C++'s `<chrono>`, and Abseil all call it) and it is deliberately not "local time": _local_ would suggest the machine's zone, which this project never consults. Civil arithmetic ("the next day", "the start of this week") is the arithmetic that needs a zone to mean anything, and all of it lives in `time/`.
-_Avoid_: Local time (means the machine's zone to most readers — the exact confusion this term exists to prevent), wall time (means elapsed duration in performance contexts), calendar time
+**Plain time**:
+A reading off a wall clock — year, month, day, hour, minute — with no zone attached, and therefore naming no single point on the timeline until a zone resolves it. The name is Temporal's (`PlainDate`, `PlainDateTime`), which is what `time/` is built on and what it becomes when native `Temporal` ships. Turning a Plain time into an Instant requires a zone and can be ambiguous (a DST fold) or impossible (a DST gap) — resolving those is exactly why `time/` exists.
+_Avoid_: Civil time (the standard term of art elsewhere, including Temporal's own spec text and C++'s `<chrono>` — expect to meet it in external docs, but don't use it here), local time (reads as "the machine's zone", which this project never consults), wall time (means elapsed duration in performance contexts)
+
+**Zone-aware date arithmetic**:
+Any operation whose answer depends on a zone — the start of a day, the next Monday, how many days lie between two Instants. It is the arithmetic that DST makes non-obvious (a "day" is not always 86,400,000 ms) and it lives exclusively in `time/`, resolved through the Project's zone.
+_Avoid_: Plain arithmetic (reads as "simple arithmetic" — say "zone-aware" for the operation and "plain" only for the value), date math, civil arithmetic
 
 **Instant**:
-An absolute point on the timeline, stored as epoch milliseconds and branded so it cannot be confused with a plain number. An Instant carries no zone; every civil interpretation of one (what day it falls on, what "add a day" means) resolves through the Project's zone.
+An absolute point on the timeline, stored as epoch milliseconds and branded so it cannot be confused with an ordinary number. An Instant carries no zone; every zone-dependent reading of one (what day it falls on, what "add a day" means) resolves through the Project's zone.
 _Avoid_: Date, timestamp, epoch
 
 **TimeScale**:

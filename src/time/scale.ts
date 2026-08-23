@@ -3,7 +3,7 @@
 // here (I10) — everything outside time/ must go through xForInstant/instantForX/widthForDuration.
 
 import type { Duration, Instant, TimeSpan, TimeUnit } from '../model/index.js';
-import { addDays, toCivil } from './zone.js';
+import { addDays, toPlain } from './zone.js';
 import { addMs, instant, MS } from './instant.js';
 
 export interface Tick {
@@ -39,13 +39,13 @@ export interface TimeScale {
 }
 
 export interface TimeScaleOptions {
-  /** Project's IANA zone — civil-unit stepping (day/week) resolves through it (D6). */
+  /** Project's IANA zone — calendar-unit stepping (day/week) resolves through it (D6). */
   zone: string;
   range: TimeSpan;
   pxPerMs: number;
 }
 
-/** Units this scale can step by today. Month/year presets land once time/ grows civil month math. */
+/** Units this scale can step by today. Month/year presets land once time/ grows calendar month math. */
 const SUPPORTED_UNITS = new Set<TimeUnit>(['ms', 'm', 'h', 'd', 'w']);
 
 function stepBy(zone: string, i: Instant, unit: TimeUnit, increment: number): Instant {
@@ -110,17 +110,17 @@ function pad2(n: number): string {
   return String(n).padStart(2, '0');
 }
 
-const civilDateFormat: HeaderFormat = (i, zone) => {
-  const c = toCivil(zone, i);
+const plainDateFormat: HeaderFormat = (i, zone) => {
+  const c = toPlain(zone, i);
   return `${c.year}-${pad2(c.month)}-${pad2(c.day)}`;
 };
 
-/** Shipped preset: one tick per civil day. Hour->year presets land incrementally (plans/01 §5.1) —
+/** Shipped preset: one tick per calendar day. Hour->year presets land incrementally (plans/01 §5.1) —
  * presets are config objects, so growing the shipped set is additive, never a library edit. */
 export const dayPreset: ViewPreset = {
   id: 'day',
   tickUnit: 'd',
   tickIncrement: 1,
-  headers: [{ unit: 'd', increment: 1, format: civilDateFormat }],
+  headers: [{ unit: 'd', increment: 1, format: plainDateFormat }],
   tickWidthPx: 24,
 };

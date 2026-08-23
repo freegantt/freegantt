@@ -1,4 +1,4 @@
-// time/ owns all civil arithmetic and is the only place Date/Date.now/magic time constants are allowed (I10).
+// time/ owns all zone-aware date arithmetic and is the only place Date/Date.now/magic time constants are allowed (I10).
 
 import type { Instant } from '../model/index.js';
 

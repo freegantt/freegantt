@@ -21,7 +21,7 @@ export interface ChartOptions {
 
 // PLACEHOLDER (resolve before S1 closes — plans/03 S1 acceptance gate): until Project carries a real
 // IANA zone (D6), every task renders on this scale's grid regardless, since it's linear; zone only
-// matters once civil (day/week) presets are in play.
+// matters once calendar (day/week) presets are in play.
 const DEFAULT_ZONE = 'UTC';
 // PLACEHOLDER (resolve before S1 closes — plans/03 S1 acceptance gate): 1px per 30min is an arbitrary
 // default pending S1's real default-scale derivation from project range + viewport width.

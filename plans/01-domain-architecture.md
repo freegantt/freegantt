@@ -23,7 +23,7 @@ flowchart TB
     LAY["<b>layout/</b><br/>row resolution · lane packing<br/>bar geometry · link routing · height index"]
     SCH["<b>scheduling/</b><br/>propagation · lag · cycle detection<br/>diagnostics · policy seam"]
     DATA["<b>data/</b><br/>stores · transactions · undo/redo<br/>changesets · serialization · reactivity façade"]
-    TIME["<b>time/</b><br/>Instant · civil arithmetic · zones<br/>TimeScale · view presets · ticks"]
+    TIME["<b>time/</b><br/>Instant · plain time · zones<br/>TimeScale · view presets · ticks"]
     MODEL["<b>model/</b><br/>entity types · ids · brands<br/>zero runtime, zero deps"]
   end
 
@@ -331,10 +331,10 @@ Rules that keep it honest:
 Three rules, in force from the first commit, because all three are retrofit-hostile:
 
 1. **Storage is half-open `[start, end)`; display is inclusive.** A task "ending Friday" stores `end` = Saturday 00:00 in project time. Exactly one formatting helper (`formatEndInclusive`) renders inclusive ends; code review rejects inline `end - 1` arithmetic.
-2. **The project owns an IANA timezone; viewer-local is opt-in.** All civil arithmetic — day floors, week starts, snapping, shading — resolves through the project zone, so two users in different zones see identical day boundaries. `Instant` stays absolute.
+2. **The project owns an IANA timezone; viewer-local is opt-in.** All zone-aware date arithmetic — day floors, week starts, snapping, shading — resolves through the project zone, so two users in different zones see identical day boundaries. `Instant` stays absolute.
 3. **No naked time arithmetic.** `time/` exposes `add`, `startOf`, `diff`, etc., all zone-aware and DST-correct. A lint rule bans magic time constants (`86400000` and friends) outside `time/`.
 
-Ergonomics: `time/` ships `instant(v: Date | number | string): Instant`, `toISO(i: Instant): string`, and a civil-date helper set so consumers work with "days" and "Mondays," not epoch math. Zone-aware arithmetic is memoized (offset table per zone/day) — budgeted for in the S7 spike.
+Ergonomics: `time/` ships `instant(v: Date | number | string): Instant`, `toISO(i: Instant): string`, and a plain-date helper set so consumers work with "days" and "Mondays," not epoch math. Zone-aware arithmetic is memoized (offset table per zone/day) — budgeted for in the S7 spike.
 
 ### 5.1 `TimeScale` — instants ⇄ pixels, shareable (D9)
 
