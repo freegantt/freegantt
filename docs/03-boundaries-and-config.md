@@ -141,7 +141,7 @@ These are guard tests, not feature tests; they belong to the guardrail system an
 
 | Test | Invariant | From |
 |---|---|---|
-| `test/guards/two-charts-isolation.test.ts` | I2 | S0 |
+| `test/guards/two-gantt-isolation.test.ts` | I2 | S0 |
 | `test/guards/item-identity.test.ts` | I8 | S0 |
 | `test/guards/package-shape.test.ts` | one runtime dep, exports sealed | S0 |
 | `test/guards/null-backend-in-node.test.ts` | pure pipeline runs headless | S0 |

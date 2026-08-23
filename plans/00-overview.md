@@ -33,7 +33,7 @@ These were decided explicitly and the rest of the spec depends on them. Changing
 | D6 | Time model | **Absolute timestamps (epoch ms) + project-owned IANA timezone.** All zone-aware date arithmetic (day boundaries, snapping, week starts) resolves through the project zone via a dedicated time module. A helper API gives users plain-date ergonomics. |
 | D7 | Persistence | **Host-owned via changesets.** Versioned `toJSON`/`fromJSON` + well-defined changeset events in core. An official sync adapter can be layered on later as an extension — the changeset contract is designed so that requires no core change. |
 | D8 | Layout | **Split-pane: grid (task table) + timeline**, sharing one row-geometry source. Grid starts minimal (label column) and grows. |
-| D9 | Multi-chart sync | Two or more charts must eventually **scroll together on x, y, or both** (e.g., task chart above a workforce chart) **without core changes**. Therefore the time scale and scroll state are standalone, shareable objects a chart *binds to*, never private internals. |
+| D9 | Multi-Gantt sync | Two or more Gantt instances must eventually **scroll together on x, y, or both** (e.g., a task Gantt above a workforce Gantt) **without core changes**. Therefore the time scale and scroll state are standalone, shareable objects a Gantt *binds to*, never private internals. |
 | D10 | Editing | Programmatic mutation + **transactions + undo/redo live in the data core from slice one** (they shape everything). Pointer manipulation (drag/resize/link) arrives early but lives in its **own interaction module**. |
 | D11 | A11y / browsers | Evergreen browsers. **Solid accessibility built in as slices land** (keyboard nav, focusable bars, grid semantics) — never a retrofit pass. |
 | D12 | Stack | TypeScript strict, Vite (dev harness + build), Vitest, Playwright for E2E later. Module boundaries enforced by lint rules in CI, not convention. Core runtime dependencies: a small, explicitly budgeted set — currently two (the reactive primitive; zone-aware plain-time arithmetic), each behind a façade, each justified in writing in `plans/04` §1. |
@@ -63,7 +63,7 @@ flowchart LR
   S4["<b>S4 Direct manipulation</b><br/>drag · resize · link-create<br/>select · before* events"]
   S5["<b>S5 Hierarchy & rows</b><br/>tree · collapse · grouping<br/>multi-item rows · lane packing"]
   S6["<b>S6 Extensibility & polish</b><br/>plugin API · renderers<br/>theming · keyboard/a11y complete"]
-  S7["<b>S7 Scale & sync</b><br/>perf validation · virtualization<br/>linked multi-chart demo"]
+  S7["<b>S7 Scale & sync</b><br/>perf validation · virtualization<br/>linked multi-Gantt demo"]
 
   S0 --> S1 --> S2 --> S3 --> S4 --> S5 --> S6 --> S7
 
@@ -80,7 +80,7 @@ flowchart LR
 | S2 → S3 | Undo round-trips are exact (property test); JSON round-trip is byte-stable; changesets carry `from` and `to`. |
 | S3 → S4 | Golden scheduling fixtures pass, including a 5,000-link chain with no recursion-depth failure; cycles reported with member ids. |
 | S4 → S5 | Every gesture = exactly one transaction; every gesture cancelable via `before*`; undo reverts a gesture completely (user + engine effects). |
-| S5 → S6 | Two charts on one page with independent state (isolation test); deterministic item identity asserted. |
+| S5 → S6 | Two Gantt instances on one page with independent state (isolation test); deterministic item identity asserted. |
 | S6 → S7 | A non-trivial feature exists as a plugin using only the public plugin API (dogfooding proof). |
 | S7 → 1.0 | Performance budgets met in CI on reference hardware; linked-scroll demo works x, y, and both. |
 

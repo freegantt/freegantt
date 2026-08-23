@@ -34,7 +34,7 @@ describe('TimeScaleModel', () => {
     expect(model.scale.xForInstant(tasks[1]!.end)).toBeCloseTo(800);
   });
 
-  it('spans every bound project, so one scale can carry two charts (D9)', () => {
+  it('spans every bound project, so one scale can carry two Gantt instances (D9)', () => {
     const model = new TimeScaleModel();
     model.bind({ zone: 'UTC', tasks: [tasks[0]!], viewportWidth: 800 });
     model.bind({
@@ -48,7 +48,7 @@ describe('TimeScaleModel', () => {
     expect(model.scale.range.end).toBe(instant('2026-09-10T00:00:00Z'));
   });
 
-  it('re-resolves when a chart binds or unbinds', () => {
+  it('re-resolves when a Gantt binds or unbinds', () => {
     const model = new TimeScaleModel();
     model.bind({ zone: 'UTC', tasks: [tasks[0]!], viewportWidth: 800 });
     const unbind = model.bind({
@@ -95,7 +95,7 @@ describe('TimeScaleModel', () => {
     expect(zeroSpan.scale.widthForDuration({ value: 1, unit: 'd' }, at)).toBeCloseTo(dayPreset.tickWidthPx);
   });
 
-  it('fits the narrowest bound viewport, so the span fits in every chart', () => {
+  it('fits the narrowest bound viewport, so the span fits in every Gantt', () => {
     const model = new TimeScaleModel();
     model.bind({ zone: 'UTC', tasks, viewportWidth: 800 });
     model.bind({ zone: 'UTC', tasks, viewportWidth: 500 });

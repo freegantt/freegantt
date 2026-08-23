@@ -1,5 +1,5 @@
-// time/ owns TimeScale — instants ⇄ pixels, pure and standalone (plans/01 §5.1, D9). Charts BIND to
-// one; two charts sharing one scale are x-synced by construction. Arithmetic on Instant is only legal
+// time/ owns TimeScale — instants ⇄ pixels, pure and standalone (plans/01 §5.1, D9). Gantt instances
+// BIND to one; two sharing one scale are x-synced by construction. Arithmetic on Instant is only legal
 // here (I10) — everything outside time/ must go through xForInstant/instantForX/widthForDuration.
 
 import type { Duration, Instant, TimeSpan, TimeUnit } from '../model/index.js';

@@ -14,7 +14,7 @@ flowchart TB
     direction TB
     EXT["<b>extensions/</b><br/>plugin host · built-in features<br/>(tooltips · context menu · editors · export)"]
     INT["<b>interaction/</b><br/>gesture controllers · drafts<br/>keyboard · selection"]
-    VIEW["<b>view/</b><br/>chart shell · grid pane · timeline pane<br/>viewport binding · virtualization window"]
+    VIEW["<b>view/</b><br/>Gantt shell · grid pane · timeline pane<br/>viewport binding · virtualization window"]
     REN["<b>render/</b><br/>dom backend (reconciler) · null backend (test/SSR)"]
   end
 
@@ -73,7 +73,7 @@ src/
   render/
     dom/         default backend + reconciler
     null/        headless backend (tests, SSR, export seam)
-  view/          chart shell, panes, viewport binding
+  view/          Gantt shell, panes, viewport binding
   interaction/   gesture controllers, keyboard, selection
   extensions/    plugin host + built-in features
   api/           public façade: Gantt, Project, events
@@ -339,7 +339,7 @@ Ergonomics: `time/` ships `instant(v: Date | number | string): Instant`, `toISO(
 ### 5.1 `TimeScale` — instants ⇄ pixels, shareable (D9)
 
 ```ts
-/** Pure and standalone. Charts BIND to one; two charts sharing one scale are x-synced by construction. */
+/** Pure and standalone. Gantt instances BIND to one; two sharing one scale are x-synced by construction. */
 interface TimeScale {
   readonly range: TimeSpan;                 // visible + buffered span
   xForInstant(i: Instant): number;
@@ -378,7 +378,7 @@ interface ChangeSet {
 ```
 
 - **Undo/redo**: the transaction is the atomic unit, and it records the **complete post-scheduling changeset — user edits and engine cascades together**. Undo that reverts only the user's edit while the cascade stays applied corrupts the project; this is the corruption class the design closes. Redo replays the recorded changeset (deterministic even if engine behavior changes between versions).
-- **Reactivity**: a thin internal `signal`/`computed`/`effect` façade in `data/`, backed by one small dependency, swappable in one file. Instance-scoped — **zero module-level singletons anywhere** (two charts on one page with independent state is a standing CI test).
+- **Reactivity**: a thin internal `signal`/`computed`/`effect` façade in `data/`, backed by one small dependency, swappable in one file. Instance-scoped — **zero module-level singletons anywhere** (two Gantt instances on one page with independent state is a standing CI test).
 - **Serialization**: versioned `toJSON()`/`fromJSON()` with a declared schema (`{ schema: 1, ... }`), brands stripped at the boundary. The JSON shape is public API and semver-governed. See `02-public-api.md` §6.
 
 ---
@@ -472,17 +472,17 @@ Backends: `dom` (default — absolutely-positioned virtualized rows, SVG for lin
 
 **Text is text.** Renderer output defaults to `textContent`; raw HTML requires an explicit opt-in flag. Task names come from databases; the default must not be an XSS hole.
 
-### 8.2 Viewport & multi-chart sync (D9)
+### 8.2 Viewport & multi-Gantt sync (D9)
 
 ```mermaid
 flowchart TB
   TS[("TimeScale<br/>shared x")]
   SM[("ScrollModel<br/>x + y observables")]
 
-  subgraph chartA["Chart A — tasks"]
+  subgraph ganttA["Gantt A — tasks"]
     VA["view binds to scale + scroll"]
   end
-  subgraph chartB["Chart B — workforce (future)"]
+  subgraph ganttB["Gantt B — workforce (future)"]
     VB["view binds to same scale,<br/>same or partial scroll"]
   end
 
@@ -497,11 +497,11 @@ flowchart TB
   class VA,VB ch
 ```
 
-`TimeScale` and `ScrollModel` are **standalone observable objects**. Every chart binds to one of each; by default the chart constructs its own privately, so single-chart usage never sees the concept. Passing the same instance to two charts syncs them on that axis — x, y, or both — with zero special-casing in either chart. **Rule:** no view or interaction code reads or writes scroll position except through the bound `ScrollModel`; no code converts time to pixels except through the bound `TimeScale`. That rule is what makes D9 free later, and it is lintable.
+`TimeScale` and `ScrollModel` are **standalone observable objects**. Every Gantt binds to one of each; by default the Gantt constructs its own privately, so single-Gantt usage never sees the concept. Passing the same instance to two Gantt instances syncs them on that axis — x, y, or both — with zero special-casing in either. **Rule:** no view or interaction code reads or writes scroll position except through the bound `ScrollModel`; no code converts time to pixels except through the bound `TimeScale`. That rule is what makes D9 free later, and it is lintable.
 
 ### 8.3 Split pane (D8)
 
-The chart shell owns: grid pane (columns over `frame.rows`) · splitter · timeline pane (header + bars + links + decorations). One scroll owner drives both panes' vertical position from the same row geometry (§4). The grid starts as a single label column (S1) and grows columns/editors in S6 without structural change.
+The Gantt shell owns: grid pane (columns over `frame.rows`) · splitter · timeline pane (header + bars + links + decorations). One scroll owner drives both panes' vertical position from the same row geometry (§4). The grid starts as a single label column (S1) and grows columns/editors in S6 without structural change.
 
 ---
 
@@ -514,7 +514,7 @@ Small, single-purpose controllers — `Drag`, `Resize`, `LinkCreate`, `Select`, 
 - Gesture lifecycle: `pointerdown → draft → (preview via hot path) → before* event (cancelable, may be async) → one transaction → after event`.
 - Escape cancels; pointer capture always; touch works.
 - Keyboard is a first-class controller, not an afterthought: arrow-key nudge by the preset's snap, full gesture parity (D11).
-- **Capabilities gate gestures and affordances from one resolution.** Before arming, every controller asks the chart's capability resolver — `canMove(task)`, `canResize(task)`, `canLink(task)`, … — built from the `interactions` config (`02` §4.1) over per-kind defaults (e.g. a `group` with a derived span doesn't resize). The **same** resolution drives visual affordances (resize handles, link ports, cursors), so nothing is shown that can't be done and nothing hidden can be triggered — pointer or keyboard (invariant I14). `before*` events remain the *contextual* veto (this drop, this target, this moment); capabilities are the *static* per-task answer.
+- **Capabilities gate gestures and affordances from one resolution.** Before arming, every controller asks the Gantt's capability resolver — `canMove(task)`, `canResize(task)`, `canLink(task)`, … — built from the `interactions` config (`02` §4.1) over per-kind defaults (e.g. a `group` with a derived span doesn't resize). The **same** resolution drives visual affordances (resize handles, link ports, cursors), so nothing is shown that can't be done and nothing hidden can be triggered — pointer or keyboard (invariant I14). `before*` events remain the *contextual* veto (this drop, this target, this moment); capabilities are the *static* per-task answer.
 
 Controllers talk to `data/` only through drafts and transactions, and to the screen only through `InteractionState` — they import neither `render/` internals nor `scheduling/`.
 
@@ -527,7 +527,7 @@ Controllers talk to `data/` only through drafts and transactions, and to the scr
 ```ts
 interface GanttPlugin {
   id: string;
-  /** Called once after the chart mounts. Returns a disposer. */
+  /** Called once after the Gantt mounts. Returns a disposer. */
   setup(ctx: PluginContext): () => void;
 }
 
@@ -566,7 +566,7 @@ Rules:
 | # | Invariant | Enforced by |
 |---|---|---|
 | I1 | Layer imports match §1 exactly | dependency lint in CI |
-| I2 | No module-level singletons; two charts coexist independently | isolation test (mounts two charts) |
+| I2 | No module-level singletons; two Gantt instances coexist independently | isolation test (mounts two Gantt instances) |
 | I3 | Scheduling contains no recursive propagation | 5,000-link chain fixture + review rule |
 | I4 | `schedule()` never mutates its input; policy never moves a proposed field | dev-mode asserts + property test |
 | I5 | Hot path allocates nothing and never rebuilds a frame | perf test on `applyState` |

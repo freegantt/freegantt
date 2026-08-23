@@ -39,7 +39,7 @@ const project = new Project<{ team: string }>({
 
 // ── View: binds project to DOM ──────────────────────────────────
 const gantt = new Gantt({
-  host: '#chart',                         // element or selector
+  host: '#gantt',                         // element or selector
   project,
 
   rows: { source: 'tasks', tree: true },
@@ -155,7 +155,7 @@ barRenderer: ({ task, item }) => ({
 
 ### 4.1 Per-task looks and actions
 
-Both questions — *how does this task look?* and *what can you do to it?* — resolve **per task**, not per chart, and every mechanism sees the whole task (`kind`, fields, typed `meta`):
+Both questions — *how does this task look?* and *what can you do to it?* — resolve **per task**, not per Gantt, and every mechanism sees the whole task (`kind`, fields, typed `meta`):
 
 **Look.** Every bar element carries `data-kind`, so per-kind styling is level-2 CSS with zero JS (`.fg-bar[data-kind="milestone"] { ... }`). At level 3, `barRenderer` is either one function that branches, or a per-kind map so the common case needs no branching — host-defined kinds slot in by name:
 
@@ -174,7 +174,7 @@ barRenderer: {
 
 ---
 
-## 5. Shared axes and scroll (multi-chart, D9)
+## 5. Shared axes and scroll (multi-Gantt, D9)
 
 ```ts
 import { TimeScaleModel, ScrollModel } from 'freegantt';
@@ -182,11 +182,11 @@ import { TimeScaleModel, ScrollModel } from 'freegantt';
 const scale  = new TimeScaleModel({ preset: 'weekAndMonth' });
 const scroll = new ScrollModel();
 
-const tasksChart = new Gantt({ host: '#top',    project, scale, scroll });
-const otherChart = new Gantt({ host: '#bottom', project, scale, scroll: scroll.xOnly() });
+const tasksGantt = new Gantt({ host: '#top',    project, scale, scroll });
+const otherGantt = new Gantt({ host: '#bottom', project, scale, scroll: scroll.xOnly() });
 ```
 
-Omit `scale`/`scroll` and the chart creates private ones — single-chart users never meet the concept. Passing shared instances is the *entire* sync API: no link manager, no event plumbing. `scroll.xOnly()` / `.yOnly()` derive partial bindings for mixed layouts.
+Omit `scale`/`scroll` and the Gantt creates private ones — single-Gantt users never meet the concept. Passing shared instances is the *entire* sync API: no link manager, no event plumbing. `scroll.xOnly()` / `.yOnly()` derive partial bindings for mixed layouts.
 
 ---
 
@@ -207,7 +207,7 @@ const p2  = Project.fromJSON(doc);
 ## 7. Developer experience commitments
 
 - **Dev-mode invariant warnings**: dependency cycle detected (with member ids), unknown preset id, config set on destroyed instance, non-deterministic item identity, renderer returned a live node.
-- **Stable test hooks**: `data-testid` on every part so consumers can write E2E tests against the chart without brittle selectors.
+- **Stable test hooks**: `data-testid` on every part so consumers can write E2E tests against the Gantt without brittle selectors.
 - **Errors are typed and actionable**: `FreeGanttError` subclasses with codes, never bare strings; validation failures name the entity and field.
 - **Docs site with live, editable examples** grows with the slices (the harness pages are its seed) — budgeted as a deliverable, not an afterthought.
 - **Semver honesty**: internal modules are not importable (enforced by the `exports` map), so semver only governs surfaces we actually promise.

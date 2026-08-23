@@ -49,11 +49,11 @@ _Avoid_: Error, warning
 ### Derived layout
 
 **Row**:
-A horizontal track of the chart — the unit of vertical layout, and what the grid pane and the timeline pane both position against. Rows are derived on every layout pass and never persisted. A Row is not a Task: one Row may carry the Items of many Tasks, and a row source may produce Rows that correspond to no Task at all.
+A horizontal track of a Gantt — the unit of vertical layout, and what the grid pane and the timeline pane both position against. Rows are derived on every layout pass and never persisted. A Row is not a Task: one Row may carry the Items of many Tasks, and a row source may produce Rows that correspond to no Task at all.
 _Avoid_: Line, track (a track is what a Lane is), record
 
 **Row source**:
-The configuration that decides what the Rows are for a given chart — the Tasks themselves (optionally as a tree), one Row per value of some grouping function, or a host-supplied resolver. Alternative views (workload, resources) are new row sources, not new rendering or interaction code.
+The configuration that decides what the Rows are for a given Gantt — the Tasks themselves (optionally as a tree), one Row per value of some grouping function, or a host-supplied resolver. Alternative views (workload, resources) are new row sources, not new rendering or interaction code.
 _Avoid_: Row provider, row model
 
 **Item**:
@@ -71,6 +71,16 @@ _Avoid_: Group (ambiguous with the `'group'` kind — say "row grouping" or "the
 **GeometryFrame**:
 The complete, backend-neutral description of one rendered state: the visible Rows, the Items' boxes, the Dependency paths, and decorations, all as plain numbers. It is what a render backend consumes and the only thing it consumes — no host render output, no hit-region index, no DOM.
 _Avoid_: Scene, render tree, viewport model
+
+### Mounted instances
+
+**Gantt**:
+The public entry point and a whole mounted instance: one `Gantt` wraps one `host` element, one Project, and everything needed to render and interact with it. This is the sense used everywhere the specs discuss the product as a whole — D9's "multi-Gantt sync", I2's "two Gantt instances coexist independently", a host page that mounts "two Gantts". A `Gantt` *is* the class; it is also the name of the concept, so `new Gantt(...)` and "a Gantt" mean the same thing.
+_Avoid_: Chart (see #7 — "chart" used to name both this and `GanttShell`, ambiguously, and is retired from the codebase entirely)
+
+**GanttShell**:
+The internal `view/` class a `Gantt` constructs and owns: the DOM shell that holds the header band and the bars host (plans/01 §8.2-8.3, "the chart shell" in older text). Never public — `exports` is sealed to `api/` and `model/`. A `Gantt` is a thin façade over one `GanttShell`; the shell is where the grid pane / timeline pane / splitter split (S1) actually lives.
+_Avoid_: Chart, ChartShell (rejected in #7 — "shell" alone doesn't say what it's a shell *of*; `GanttShell` reads correctly even far from its definition)
 
 ### Time and viewport
 
@@ -91,7 +101,7 @@ The pure, DOM-free mapping between Instants and pixel positions, plus tick gener
 _Avoid_: Viewport (Viewport is the rendered/visible region; TimeScale is the coordinate mapping a Viewport uses)
 
 **TimeScaleModel**:
-The standalone, shareable object that owns a TimeScale and that a Chart binds to. Passing the same TimeScaleModel instance to two Gantt instances synchronizes their horizontal axis by construction — the mechanism behind multi-chart sync. It is constructed from Scale intent, never from resolved geometry.
+The standalone, shareable object that owns a TimeScale and that a Gantt binds to. Passing the same TimeScaleModel instance to two Gantt instances synchronizes their horizontal axis by construction — the mechanism behind multi-Gantt sync. It is constructed from Scale intent, never from resolved geometry.
 _Avoid_: Scale (Scale, unqualified, means the underlying `TimeScale` the model wraps — `TimeScaleModel.scale`)
 
 **Scale intent**:
@@ -99,11 +109,11 @@ What a caller states about how time should be displayed — a ViewPreset and a r
 _Avoid_: Scale options, scale config (both read as the resolved geometry, which is the opposite of intent)
 
 **Scale binding**:
-One Chart's contribution to a TimeScaleModel's resolution: its Project's zone, its Tasks, and its measured viewport width. A Chart binds on construction and unbinds on destroy, and both re-resolve the shared TimeScale — which is how `'fitProject'` spans every bound Project rather than whichever one was passed to the constructor.
+One Gantt's contribution to a TimeScaleModel's resolution: its Project's zone, its Tasks, and its measured viewport width. A Gantt binds on construction and unbinds on destroy, and both re-resolve the shared TimeScale — which is how `'fitProject'` spans every bound Project rather than whichever one was passed to the constructor.
 _Avoid_: Attach, subscribe, register
 
 **ScrollModel**:
-The standalone, shareable object owning a chart's scroll position on both axes, and the only route by which any view or interaction code may read or write it. Shared between charts the same way a TimeScaleModel is, which is what makes one scroll owner drive both panes of a split view.
+The standalone, shareable object owning a Gantt's scroll position on both axes, and the only route by which any view or interaction code may read or write it. Shared between Gantt instances the same way a TimeScaleModel is, which is what makes one scroll owner drive both panes of a split view.
 _Avoid_: Scroll position, offset, viewport state
 
 **ViewPreset**:

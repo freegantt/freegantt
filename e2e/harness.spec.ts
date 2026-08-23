@@ -6,7 +6,7 @@ import { test, expect } from '@playwright/test';
 test('harness renders the fixture project as positioned bars', async ({ page }) => {
   await page.goto('/');
 
-  const bars = page.locator('#chart .fg-bar');
+  const bars = page.locator('#gantt .fg-bar');
   await expect(bars.first()).toBeVisible();
 
   const count = await bars.count();

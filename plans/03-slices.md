@@ -18,7 +18,7 @@ Slices are scope, not calendar estimates. Within a slice, tasks are ordered so t
 - `layout/` (minimal): row resolution (`source: 'tasks'`, flat list), one item per task, fixed row height, `computeFrame()` returning rows + bars; deterministic `Item.id` (I8).
 - `render/dom` (minimal): mount, `sync(frame)` rendering absolutely-positioned row and bar elements; the keyed reconciler in its hard-bounded scope (`01` §8.1); `render/null` for tests.
 - `api/` (minimal): `new Project({ tasks })`, `new Gantt({ host, project })`, `destroy()`.
-- Harness: a Vite page that mounts the chart on a fixture; this page lives forever and every slice adds to it.
+- Harness: a Vite page that mounts the Gantt on a fixture; this page lives forever and every slice adds to it.
 - Fixtures: one realistic sample project (~50 tasks).
 
 **Explicitly out:** scrolling, headers, grid pane, interactivity, scheduling, mutation.
@@ -29,30 +29,30 @@ Slices are scope, not calendar estimates. Within a slice, tasks are ordered so t
 - [x] `computeFrame()` snapshot-tested headlessly; `Item.id` determinism asserted.
 - [x] Import-boundary lint fails the build on a violation (proven by a deliberate red test in CI setup).
 - [x] `render/null` consumes a frame in Node with no DOM.
-- [x] Two charts mount on one page without shared state (I2 test exists from day one).
+- [x] Two Gantt instances mount on one page without shared state (I2 test exists from day one).
 
 ---
 
 ## S1 — Timeline, viewport, split pane
 
-**Goal:** it looks and scrolls like a Gantt. Time axis with headers and presets, virtualized scrolling, grid pane with a label column — and the shareable scale/scroll objects that make future multi-chart sync free (D9).
+**Goal:** it looks and scrolls like a Gantt. Time axis with headers and presets, virtualized scrolling, grid pane with a label column — and the shareable scale/scroll objects that make future multi-Gantt sync free (D9).
 
 **Scope**
 
 - `time/`: `TimeScale` (instants ⇄ pixels), `ViewPreset` as data, tick generation, shipped presets hour→year; header band rendering.
-- `TimeScaleModel` and `ScrollModel` as standalone observable objects; charts bind to them, constructing private ones by default (`01` §8.2). The I12 rule (no pixels-from-time or scroll access outside these objects) is in force now.
-- `view/`: chart shell — grid pane (label column), splitter, timeline pane; single scroll owner; vertical + horizontal virtualization windows; row-height index behind an interface (simple prefix-sum implementation).
+- `TimeScaleModel` and `ScrollModel` as standalone observable objects; Gantt instances bind to them, constructing private ones by default (`01` §8.2). The I12 rule (no pixels-from-time or scroll access outside these objects) is in force now.
+- `view/`: Gantt shell — grid pane (label column), splitter, timeline pane; single scroll owner; vertical + horizontal virtualization windows; row-height index behind an interface (simple prefix-sum implementation).
 - Shared row geometry: grid and timeline both position rows from `frame.rows` (I9 pixel test).
 - Zoom: preset switching + `range: 'fitProject'`; anchored zoom (the instant under the cursor stays put).
 - Theming foundation: CSS custom properties + parts vocabulary (`--fg-*`, `data-flag`); light/dark.
-- A11y foundation: the chart is focusable, rows/bars have roles and labels, focus visible.
+- A11y foundation: the Gantt is focusable, rows/bars have roles and labels, focus visible.
 
 **Acceptance**
 
 - [ ] Scroll a 5,000-task fixture smoothly; only windowed rows exist in the DOM.
 - [ ] Grid and timeline row tops are pixel-identical under fractional zoom (I9).
 - [ ] Preset switch and zoom are live reconfigurations — no remount, anchor preserved.
-- [ ] Two harness charts given the same `ScrollModel` scroll together (a 5-line harness demo — the D9 seam proven now, cheaply).
+- [ ] Two harness Gantt instances given the same `ScrollModel` scroll together (a 5-line harness demo — the D9 seam proven now, cheaply).
 - [ ] Axis headers correct across a DST transition in the project zone (unit-tested in `time/`).
 
 ---
@@ -70,7 +70,7 @@ Slices are scope, not calendar estimates. Within a slice, tasks are ordered so t
 - Serialization: `toJSON()`/`fromJSON()` with `schema: 1`, ISO instants, opaque `meta` round-trip.
 - Public mutation API: `project.tasks.add/update/remove`, `project.dependencies.*`, typed, validating.
 - View binding: committed changesets invalidate layout incrementally (changed rows only), not globally.
-- Harness: mutation playground — edit fixture via console/buttons, watch the chart update; undo/redo buttons; changeset log panel; export/import JSON.
+- Harness: mutation playground — edit fixture via console/buttons, watch the Gantt update; undo/redo buttons; changeset log panel; export/import JSON.
 
 **Acceptance**
 
@@ -138,7 +138,7 @@ Slices are scope, not calendar estimates. Within a slice, tasks are ordered so t
 
 **Scope**
 
-- Tree UI: indent + expand/collapse in the grid's name column; collapse state is view state (per chart, not in project data).
+- Tree UI: indent + expand/collapse in the grid's name column; collapse state is view state (per Gantt, not in project data).
 - Kind-driven item emission (`01` §2.5): `group` → summary bracket (rollup from S3), `milestone` → diamond, host-registered kinds via the emitter seam; empty groups render as groups.
 - `hierarchy: { autoGroup: true }` on `Project`: first child promotes the parent to `group` within the triggering transaction; promote only, never demote (`02` §2).
 - Row sources: `{ source: 'group', groupBy }` and `{ source: 'custom', resolve }` (`01` §2.3); group header rows.
@@ -146,14 +146,14 @@ Slices are scope, not calendar estimates. Within a slice, tasks are ordered so t
 - Item emission: `task.segments` → multiple items on one row; overlap auto-packing into sub-lanes; `heightMode: 'pack'` variable row heights through the height index.
 - Dependency endpoint rule for multi-item tasks: links attach to the earliest item by default, configurable per view (`links.endpoints: 'first' | 'all' | 'none'`).
 - Interaction with lanes: drag/resize on packed items; collapse/expand by keyboard.
-- Harness: tree fixture; a grouped view of the same project side-by-side with the tree view (two charts, one project — the D9/D2 architecture visibly paying off).
+- Harness: tree fixture; a grouped view of the same project side-by-side with the tree view (two Gantt instances, one project — the D9/D2 architecture visibly paying off).
 
 **Acceptance**
 
-- [ ] Same project renders as tree and as grouped rows simultaneously in two charts; edits in one appear in both.
+- [ ] Same project renders as tree and as grouped rows simultaneously in two Gantt instances; edits in one appear in both.
 - [ ] A segmented task renders N bars on one row; drag of one segment behaves sanely and transactionally.
 - [ ] Pack-mode rows change height correctly as overlaps come and go; scroll position stays stable (height index invalidation test).
-- [ ] Collapse state survives data edits and is independent per chart.
+- [ ] Collapse state survives data edits and is independent per Gantt.
 - [ ] Filter with keep-ancestors shows a matching deep child under its chain of parents.
 - [ ] An empty `kind: 'group'` task renders as a group, accepts children, and its span appears once children exist — no special-casing.
 - [ ] With `autoGroup` on: reparenting a task under a plain task promotes that parent to `group` in the same undo step; removing all children demotes nothing.
@@ -184,16 +184,16 @@ Slices are scope, not calendar estimates. Within a slice, tasks are ordered so t
 
 ---
 
-## S7 — Scale validation, hardening, linked charts
+## S7 — Scale validation, hardening, linked Gantt instances
 
-**Goal:** the D2 posture is settled by measurement, budgets become CI-enforced, and the D9 multi-chart story ships as a real demo. Ends with a 1.0-able library.
+**Goal:** the D2 posture is settled by measurement, budgets become CI-enforced, and the D9 multi-Gantt story ships as a real demo. Ends with a 1.0-able library.
 
 **Scope**
 
 - **Measured spike against the growth targets** (the numbers that decide, not guess): 10k tasks / 5k rows scroll p95 frame time; pack-heavy rows layout cost; prefix-sum vs. log-time height index crossover; reconciler cost on 20k-bar sync + 200-bar commit; SVG link cost at 2k paths; zone arithmetic per-tick cost.
 - Act on the spike: swap in the log-time height index if warranted (interface already in place); worker seam for `schedule()` above a measured threshold (resident mirror + changeset shipping — only if the numbers demand it); any reconciler fixes.
 - Performance budgets in CI on reference hardware; regressions fail the build.
-- Linked-chart demo: task chart + a second chart bound to the same `TimeScaleModel`/`ScrollModel` (x, y, and both variants) — the D9 acceptance demo.
+- Linked-Gantt demo: a task Gantt + a second Gantt bound to the same `TimeScaleModel`/`ScrollModel` (x, y, and both variants) — the D9 acceptance demo.
 - Hardening: error-path audit (typed errors everywhere), memory-leak pass (mount/destroy cycles), `exports` map sealing internals, semver/API-report tooling (I11 automated), bundle-size budget in CI.
 - Release: versioned docs from the harness gallery, CHANGELOG, publishing pipeline.
 
@@ -201,7 +201,7 @@ Slices are scope, not calendar estimates. Within a slice, tasks are ordered so t
 
 - [ ] All §12-style budgets defined numerically from the spike and enforced in CI.
 - [ ] 10k-task fixture: smooth scroll, sub-frame hover, bulk edit in one transaction without jank on reference hardware.
-- [ ] Linked-scroll demo works in x, y, and both modes with zero chart-side special-casing.
+- [ ] Linked-scroll demo works in x, y, and both modes with zero Gantt-side special-casing.
 - [ ] 100 mount/destroy cycles leak no nodes, listeners, or observables.
 - [ ] `npm pack` output audited: internals unreachable, types complete, bundle within budget.
 
@@ -213,7 +213,7 @@ Each of these was designed-for above; none requires a core change:
 
 1. **Working-time calendars** — richer `SchedulingPolicy` + `time/` calendar arithmetic; non-working shading via a decoration.
 2. **Date constraints & analyses** — policy vocabulary + analyses (slack, critical highlighting) as policy output consumed by flags/decorations.
-3. **Resources & workload views** — `Resource`/`Assignment` stores + a `resources` row source; the second chart in the D9 demo becomes a real workload view.
+3. **Resources & workload views** — `Resource`/`Assignment` stores + a `resources` row source; the second Gantt in the D9 demo becomes a real workload view.
 4. **Sync adapter** — an extension consuming the changeset contract (`02` §6).
 5. **Export** — image via the null/static render path; paginated print costed honestly as its own project.
 6. **Framework wrappers** — thin adapters (`02` §8).

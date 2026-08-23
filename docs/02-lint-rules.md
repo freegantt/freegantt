@@ -85,7 +85,7 @@ Every custom rule spec below is complete enough to implement without re-reading 
 
 **Known residue** (documented in `01-invariant-guard-matrix.md` §3): a conversion laundered through an untyped intermediate. Accepted.
 
-**Message:** `Time→pixel conversion outside TimeScale. Charts bind to a TimeScale; nothing else may know px-per-ms. (plans/01 §8.2, D9)`
+**Message:** `Time→pixel conversion outside TimeScale. Gantt instances bind to a TimeScale; nothing else may know px-per-ms. (plans/01 §8.2, D9)`
 
 ---
 
@@ -117,7 +117,7 @@ Every custom rule spec below is complete enough to implement without re-reading 
 
 **Allowed:** frozen lookup tables, `as const` literals, primitive constants, type-only declarations, class/function declarations.
 
-**Message:** `Module-level mutable state makes two charts share it. Own it on the instance. (plans/01 §6, I2)`
+**Message:** `Module-level mutable state makes two Gantt instances share it. Own it on the instance. (plans/01 §6, I2)`
 
 **Fixtures:** invalid — `let cache = new Map()`, `export const registry = new Map()`, `const presets = { … }` unfrozen. valid — `const PRESETS = Object.freeze({…})`, `const SNAP = 14`, `export type X = …`.
 
