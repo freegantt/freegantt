@@ -1,0 +1,659 @@
+<title>FreeGantt Module Map</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link
+  href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap"
+  rel="stylesheet"
+/>
+
+<style>
+  :root {
+    --bg: #f1eee3;
+    --bg-raised: #e9e5d6;
+    --ink: #211f19;
+    --muted: #726b59;
+    --border: #c9c1a9;
+    --border-strong: #a89f88;
+    --accent: #b8541f;
+    --accent-ink: #ffffff;
+    --core: #276a63;
+    --core-bg: rgba(39, 106, 99, 0.06);
+    --dom-bg: rgba(184, 84, 31, 0.05);
+    --stub-bg: repeating-linear-gradient(
+      135deg,
+      transparent,
+      transparent 7px,
+      rgba(114, 107, 89, 0.09) 7px,
+      rgba(114, 107, 89, 0.09) 8px
+    );
+    --forbid: #8a3b3b;
+    font-synthesis: none;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme='light']) {
+      --bg: #14171a;
+      --bg-raised: #1c2023;
+      --ink: #e9e4d6;
+      --muted: #9a927c;
+      --border: #363b3a;
+      --border-strong: #4b514e;
+      --accent: #e2874a;
+      --accent-ink: #1a1006;
+      --core: #5fb0a5;
+      --core-bg: rgba(95, 176, 165, 0.08);
+      --dom-bg: rgba(226, 135, 74, 0.07);
+      --stub-bg: repeating-linear-gradient(
+        135deg,
+        transparent,
+        transparent 7px,
+        rgba(154, 146, 124, 0.09) 7px,
+        rgba(154, 146, 124, 0.09) 8px
+      );
+      --forbid: #c67a7a;
+    }
+  }
+
+  :root[data-theme='dark'] {
+    --bg: #14171a;
+    --bg-raised: #1c2023;
+    --ink: #e9e4d6;
+    --muted: #9a927c;
+    --border: #363b3a;
+    --border-strong: #4b514e;
+    --accent: #e2874a;
+    --accent-ink: #1a1006;
+    --core: #5fb0a5;
+    --core-bg: rgba(95, 176, 165, 0.08);
+    --dom-bg: rgba(226, 135, 74, 0.07);
+    --stub-bg: repeating-linear-gradient(
+      135deg,
+      transparent,
+      transparent 7px,
+      rgba(154, 146, 124, 0.09) 7px,
+      rgba(154, 146, 124, 0.09) 8px
+    );
+    --forbid: #c67a7a;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
+    margin: 0;
+    padding: 2.5rem 1.5rem 4rem;
+  }
+
+  .page {
+    max-width: 1240px;
+    margin: 0 auto;
+  }
+
+  header {
+    max-width: 62ch;
+    margin-bottom: 2.25rem;
+  }
+
+  .eyebrow {
+    font-family: 'IBM Plex Mono', ui-monospace, monospace;
+    font-size: 0.72rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--core);
+    margin: 0 0 0.6rem;
+  }
+
+  h1 {
+    font-family: 'IBM Plex Mono', ui-monospace, monospace;
+    font-size: clamp(1.5rem, 1.1rem + 1.4vw, 2.1rem);
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    margin: 0 0 0.7rem;
+    text-wrap: balance;
+  }
+
+  header p {
+    font-size: 0.98rem;
+    line-height: 1.6;
+    color: var(--muted);
+    margin: 0;
+  }
+
+  header code {
+    font-family: 'IBM Plex Mono', monospace;
+    background: var(--bg-raised);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 0.05em 0.35em;
+    font-size: 0.88em;
+    color: var(--ink);
+  }
+
+  figure {
+    margin: 0;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--bg-raised);
+    padding: 1.25rem 1.25rem 1rem;
+    overflow-x: auto;
+  }
+
+  svg {
+    display: block;
+    min-width: 880px;
+  }
+
+  figcaption {
+    font-size: 0.84rem;
+    color: var(--muted);
+    margin-top: 0.9rem;
+    padding-top: 0.9rem;
+    border-top: 1px solid var(--border);
+    line-height: 1.6;
+  }
+
+  .box-name {
+    font-family: 'IBM Plex Mono', monospace;
+    font-weight: 600;
+  }
+  .box-sub {
+    font-family: 'IBM Plex Sans', sans-serif;
+  }
+
+  .legend {
+    margin-top: 1.75rem;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 0.9rem 1.5rem;
+    font-size: 0.83rem;
+    color: var(--muted);
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+  }
+
+  .swatch {
+    flex: none;
+    width: 26px;
+    height: 14px;
+    border-radius: 3px;
+    border: 1.5px solid var(--border-strong);
+  }
+  .swatch.solid-core {
+    background: var(--core-bg);
+    border-color: var(--core);
+  }
+  .swatch.solid-dom {
+    background: var(--dom-bg);
+    border-color: var(--accent);
+  }
+  .swatch.stub {
+    background: var(--stub-bg);
+    background-color: var(--bg-raised);
+    border-style: dashed;
+  }
+
+  .line-sample {
+    flex: none;
+    width: 26px;
+    height: 0;
+    border-top: 2px solid var(--ink);
+  }
+  .line-sample.dashed {
+    border-top-style: dashed;
+    border-color: var(--muted);
+  }
+  .line-sample.forbid {
+    border-top-style: dashed;
+    border-color: var(--forbid);
+  }
+
+  footer {
+    margin-top: 2rem;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.76rem;
+    color: var(--muted);
+    letter-spacing: 0.02em;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    figure {
+      animation: rise 0.5s ease-out;
+    }
+  }
+  @keyframes rise {
+    from {
+      opacity: 0;
+      transform: translateY(6px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+</style>
+
+<div class="page">
+  <header>
+    <p class="eyebrow">Architecture snapshot — S0/S1 in progress</p>
+    <h1>FreeGantt module map</h1>
+    <p>
+      The dependency graph as it actually stands in <code>src/</code> right now: solid boxes are built and
+      wired together by real imports; hatched boxes are stub modules (<code>index.ts</code> only, 3 lines)
+      that the slice plan reserves but hasn't filled in yet. The vertical split is the one boundary the linter
+      enforces — <code>model/</code>, <code>time/</code>, <code>data/</code>, <code>scheduling/</code>, and
+      <code>layout/</code> stay DOM-free; only the right-hand column may touch <code>document</code> or
+      <code>window</code>.
+    </p>
+  </header>
+
+  <figure>
+    <svg
+      viewBox="0 0 1240 900"
+      role="img"
+      aria-label="Layered dependency diagram of the FreeGantt src tree: model, time, layout, data and scheduling form a DOM-free core on the left, feeding a DOM-touching column of render, view, interaction and extensions on the right, both surfaced through a single api module on top. Data and scheduling stubs are the only sanctioned bridge between scheduling and the view layer; a direct link between them is marked forbidden."
+    >
+      <defs>
+        <marker
+          id="arrow"
+          viewBox="0 0 10 10"
+          refX="8"
+          refY="5"
+          markerWidth="7"
+          markerHeight="7"
+          orient="auto-start-reverse"
+        >
+          <path d="M0,0 L10,5 L0,10 z" fill="currentColor" />
+        </marker>
+        <marker
+          id="arrow-muted"
+          viewBox="0 0 10 10"
+          refX="8"
+          refY="5"
+          markerWidth="6"
+          markerHeight="6"
+          orient="auto-start-reverse"
+        >
+          <path d="M0,0 L10,5 L0,10 z" fill="var(--muted)" />
+        </marker>
+      </defs>
+
+      <!-- api/ : public surface -->
+      <rect
+        x="460"
+        y="18"
+        width="320"
+        height="66"
+        rx="8"
+        fill="var(--core-bg)"
+        stroke="var(--core)"
+        stroke-width="1.75"
+      />
+      <text x="620" y="44" text-anchor="middle" class="box-name" font-size="17" fill="var(--ink)">api/</text>
+      <text x="620" y="63" text-anchor="middle" class="box-sub" font-size="11.5" fill="var(--muted)">
+        Gantt, Project · 69 lines · the only public export surface, alongside model/ types
+      </text>
+
+      <!-- boundary zones -->
+      <rect
+        x="40"
+        y="118"
+        width="560"
+        height="590"
+        rx="10"
+        fill="var(--core-bg)"
+        stroke="var(--core)"
+        stroke-width="1.25"
+        stroke-dasharray="3 4"
+      />
+      <text x="60" y="142" class="box-name" font-size="11.5" fill="var(--core)" letter-spacing="0.06em">
+        DOM-FREE CORE — also runs headless in Node
+      </text>
+
+      <rect
+        x="660"
+        y="118"
+        width="540"
+        height="590"
+        rx="10"
+        fill="var(--dom-bg)"
+        stroke="var(--accent)"
+        stroke-width="1.25"
+        stroke-dasharray="3 4"
+      />
+      <text x="680" y="142" class="box-name" font-size="11.5" fill="var(--accent)" letter-spacing="0.06em">
+        BROWSER — document / window allowed
+      </text>
+
+      <!-- divider -->
+      <line
+        x1="628"
+        y1="118"
+        x2="628"
+        y2="708"
+        stroke="var(--border-strong)"
+        stroke-width="1.25"
+        stroke-dasharray="1 5"
+      />
+      <text
+        x="628"
+        y="410"
+        text-anchor="middle"
+        class="box-sub"
+        font-size="10.5"
+        fill="var(--muted)"
+        transform="rotate(90 628 410)"
+        letter-spacing="0.08em"
+      >
+        DOM BOUNDARY
+      </text>
+
+      <!-- model/ -->
+      <rect
+        x="80"
+        y="168"
+        width="210"
+        height="76"
+        rx="7"
+        fill="var(--bg)"
+        stroke="var(--ink)"
+        stroke-width="1.5"
+      />
+      <text x="185" y="196" text-anchor="middle" class="box-name" font-size="14.5" fill="var(--ink)">
+        model/
+      </text>
+      <text x="185" y="215" text-anchor="middle" class="box-sub" font-size="10.5" fill="var(--muted)">
+        Task, ids, time
+      </text>
+      <text x="185" y="230" text-anchor="middle" class="box-sub" font-size="10.5" fill="var(--muted)">
+        82 lines · types only, 0 deps
+      </text>
+
+      <!-- time/ -->
+      <rect
+        x="350"
+        y="168"
+        width="210"
+        height="76"
+        rx="7"
+        fill="var(--bg)"
+        stroke="var(--ink)"
+        stroke-width="1.5"
+      />
+      <text x="455" y="196" text-anchor="middle" class="box-name" font-size="14.5" fill="var(--ink)">
+        time/
+      </text>
+      <text x="455" y="215" text-anchor="middle" class="box-sub" font-size="10.5" fill="var(--muted)">
+        instant, zone, scale
+      </text>
+      <text x="455" y="230" text-anchor="middle" class="box-sub" font-size="10.5" fill="var(--muted)">
+        263 lines · only new Date() here
+      </text>
+
+      <!-- layout/ -->
+      <rect
+        x="80"
+        y="310"
+        width="480"
+        height="76"
+        rx="7"
+        fill="var(--bg)"
+        stroke="var(--ink)"
+        stroke-width="1.5"
+      />
+      <text x="320" y="338" text-anchor="middle" class="box-name" font-size="14.5" fill="var(--ink)">
+        layout/
+      </text>
+      <text x="320" y="357" text-anchor="middle" class="box-sub" font-size="10.5" fill="var(--muted)">
+        frame.ts, TimeScaleModel, row-height-index
+      </text>
+      <text x="320" y="372" text-anchor="middle" class="box-sub" font-size="10.5" fill="var(--muted)">
+        279 lines · computeFrame(), deterministic Item.id
+      </text>
+
+      <!-- data/ stub -->
+      <rect
+        x="80"
+        y="460"
+        width="210"
+        height="76"
+        rx="7"
+        fill="var(--stub-bg)"
+        fill-opacity="1"
+        stroke="var(--border-strong)"
+        stroke-width="1.5"
+        stroke-dasharray="5 4"
+      />
+      <text x="185" y="490" text-anchor="middle" class="box-name" font-size="14.5" fill="var(--muted)">
+        data/
+      </text>
+      <text x="185" y="509" text-anchor="middle" class="box-sub" font-size="10.5" fill="var(--muted)">
+        3 lines · stub — S2 (transactions, undo)
+      </text>
+
+      <!-- scheduling/ stub -->
+      <rect
+        x="350"
+        y="460"
+        width="210"
+        height="76"
+        rx="7"
+        fill="var(--stub-bg)"
+        stroke="var(--border-strong)"
+        stroke-width="1.5"
+        stroke-dasharray="5 4"
+      />
+      <text x="455" y="490" text-anchor="middle" class="box-name" font-size="14.5" fill="var(--muted)">
+        scheduling/
+      </text>
+      <text x="455" y="509" text-anchor="middle" class="box-sub" font-size="10.5" fill="var(--muted)">
+        3 lines · stub — later slice
+      </text>
+
+      <!-- render/ -->
+      <rect
+        x="700"
+        y="168"
+        width="210"
+        height="76"
+        rx="7"
+        fill="var(--bg)"
+        stroke="var(--ink)"
+        stroke-width="1.5"
+      />
+      <text x="805" y="196" text-anchor="middle" class="box-name" font-size="14.5" fill="var(--ink)">
+        render/
+      </text>
+      <text x="805" y="215" text-anchor="middle" class="box-sub" font-size="10.5" fill="var(--muted)">
+        backend, dom/, null/
+      </text>
+      <text x="805" y="230" text-anchor="middle" class="box-sub" font-size="10.5" fill="var(--muted)">
+        111 lines · keyed reconciler, headless twin
+      </text>
+
+      <!-- view/ -->
+      <rect
+        x="700"
+        y="310"
+        width="460"
+        height="76"
+        rx="7"
+        fill="var(--bg)"
+        stroke="var(--ink)"
+        stroke-width="1.5"
+      />
+      <text x="930" y="338" text-anchor="middle" class="box-name" font-size="14.5" fill="var(--ink)">
+        view/
+      </text>
+      <text x="930" y="357" text-anchor="middle" class="box-sub" font-size="10.5" fill="var(--muted)">
+        GanttShell
+      </text>
+      <text x="930" y="372" text-anchor="middle" class="box-sub" font-size="10.5" fill="var(--muted)">
+        92 lines · binds layout → render backend
+      </text>
+
+      <!-- interaction/ stub -->
+      <rect
+        x="700"
+        y="460"
+        width="210"
+        height="76"
+        rx="7"
+        fill="var(--stub-bg)"
+        stroke="var(--border-strong)"
+        stroke-width="1.5"
+        stroke-dasharray="5 4"
+      />
+      <text x="805" y="490" text-anchor="middle" class="box-name" font-size="14.5" fill="var(--muted)">
+        interaction/
+      </text>
+      <text x="805" y="509" text-anchor="middle" class="box-sub" font-size="10.5" fill="var(--muted)">
+        3 lines · stub — drag, select, edit
+      </text>
+
+      <!-- extensions/ stub -->
+      <rect
+        x="960"
+        y="460"
+        width="200"
+        height="76"
+        rx="7"
+        fill="var(--stub-bg)"
+        stroke="var(--border-strong)"
+        stroke-width="1.5"
+        stroke-dasharray="5 4"
+      />
+      <text x="1060" y="490" text-anchor="middle" class="box-name" font-size="14.5" fill="var(--muted)">
+        extensions/
+      </text>
+      <text x="1060" y="509" text-anchor="middle" class="box-sub" font-size="10.5" fill="var(--muted)">
+        3 lines · stub
+      </text>
+
+      <!-- harness note -->
+      <rect
+        x="700"
+        y="600"
+        width="460"
+        height="70"
+        rx="7"
+        fill="none"
+        stroke="var(--muted)"
+        stroke-width="1"
+        stroke-dasharray="2 4"
+      />
+      <text x="930" y="627" text-anchor="middle" class="box-name" font-size="12.5" fill="var(--muted)">
+        harness/main.ts
+      </text>
+      <text x="930" y="645" text-anchor="middle" class="box-sub" font-size="10" fill="var(--muted)">
+        9 lines · first consumer, sits outside src/ — reviewed every commit regardless
+      </text>
+
+      <!-- arrows: within DOM-free core -->
+      <g stroke="var(--ink)" stroke-width="1.5" fill="none" marker-end="url(#arrow)" color="var(--ink)">
+        <path d="M290,206 H350" />
+        <path d="M150,244 V310" />
+        <path d="M455,244 V310" />
+      </g>
+
+      <!-- arrows: within DOM column -->
+      <g stroke="var(--ink)" stroke-width="1.5" fill="none" marker-end="url(#arrow)" color="var(--ink)">
+        <path d="M805,244 V310" />
+      </g>
+
+      <!-- arrows crossing the boundary -->
+      <g stroke="var(--ink)" stroke-width="1.5" fill="none" marker-end="url(#arrow)" color="var(--ink)">
+        <path d="M560,335 L700,206" />
+        <path d="M560,348 H700" />
+      </g>
+
+      <!-- model -> view (long hop) -->
+      <path
+        d="M290,188 C 470,110 560,150 700,326"
+        stroke="var(--ink)"
+        stroke-width="1.25"
+        fill="none"
+        marker-end="url(#arrow)"
+        stroke-dasharray="1 4"
+        color="var(--ink)"
+      />
+      <text x="470" y="118" text-anchor="middle" class="box-sub" font-size="9.5" fill="var(--muted)">
+        Task type
+      </text>
+
+      <!-- view -> api, model -> api -->
+      <path
+        d="M840,310 C 760,190 700,110 660,70"
+        stroke="var(--ink)"
+        stroke-width="1.5"
+        fill="none"
+        marker-end="url(#arrow)"
+        color="var(--ink)"
+      />
+      <path
+        d="M230,168 C 260,120 340,90 460,66"
+        stroke="var(--ink)"
+        stroke-width="1.5"
+        fill="none"
+        marker-end="url(#arrow)"
+        color="var(--ink)"
+      />
+
+      <!-- data <-> scheduling -->
+      <path
+        d="M292,498 H348"
+        stroke="var(--muted)"
+        stroke-width="1.5"
+        fill="none"
+        marker-end="url(#arrow-muted)"
+        marker-start="url(#arrow-muted)"
+        stroke-dasharray="4 3"
+      />
+
+      <!-- forbidden link -->
+      <path d="M562,498 H698" stroke="var(--forbid)" stroke-width="1.5" fill="none" stroke-dasharray="5 4" />
+      <circle cx="630" cy="498" r="9" fill="var(--bg-raised)" stroke="var(--forbid)" stroke-width="1.5" />
+      <text
+        x="630"
+        y="502"
+        text-anchor="middle"
+        font-size="11"
+        fill="var(--forbid)"
+        font-family="IBM Plex Mono, monospace"
+      >
+        ×
+      </text>
+      <text x="630" y="522" text-anchor="middle" class="box-sub" font-size="9.5" fill="var(--forbid)">
+        never — meet only through data/
+      </text>
+    </svg>
+    <figcaption>
+      Boxes trace what <code>src/</code> contains today; arrows trace real <code>import</code> statements.
+      <code>model/</code> has zero dependencies and feeds nearly everything; <code>time/</code> and
+      <code>layout/</code> stay DOM-free so they run the same in Node as in a browser;
+      <code>render/</code> and <code>view/</code> are the only modules currently touching the DOM.
+      <code>data/</code>, <code>scheduling/</code>, <code>interaction/</code>, and
+      <code>extensions/</code> are reserved names with 3-line stub files — later slices, not missing imports.
+    </figcaption>
+  </figure>
+
+  <div class="legend">
+    <div class="legend-item"><span class="swatch solid-core"></span> DOM-free module, built</div>
+    <div class="legend-item"><span class="swatch solid-dom"></span> DOM-touching module, built</div>
+    <div class="legend-item"><span class="swatch stub"></span> stub — reserved, not yet implemented</div>
+    <div class="legend-item"><span class="line-sample"></span> live import (solid arrow)</div>
+    <div class="legend-item"><span class="line-sample dashed"></span> designed bridge, not yet wired</div>
+    <div class="legend-item">
+      <span class="line-sample forbid"></span> forbidden coupling, enforced by lint
+    </div>
+  </div>
+
+  <footer>src/ · 1,265 lines across 22 non-test files · plans/03-slices.md — currently mid S0/S1</footer>
+</div>
