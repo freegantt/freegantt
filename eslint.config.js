@@ -58,7 +58,15 @@ const boundaryBlocks = LAYERS.map((layer) => {
 
 export default tseslint.config(
   {
-    ignores: ['dist/**', 'node_modules/**', 'test/fixtures/violations/**', 'eslint/rules/fixtures/**'],
+    // .agents/skills/** is vendored third-party skill content (installed via skills-lock.json),
+    // not project source — it isn't ours to lint or reformat.
+    ignores: [
+      'dist/**',
+      'node_modules/**',
+      'test/fixtures/violations/**',
+      'eslint/rules/fixtures/**',
+      '.agents/skills/**',
+    ],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,
