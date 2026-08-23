@@ -224,6 +224,12 @@ rows: { source: 'custom', resolve: myRowResolver }           // host-defined row
 
 Item emission then places tasks (or task segments) onto rows; overlapping items on one row auto-pack into sub-lanes. Future workload/resource views are simply another row source — no new rendering or interaction code.
 
+Item emission is itself a per-kind seam, mirroring rendering (§10): the pipeline maps `Task.kind` to an `ItemEmitter` that turns one Task into its Item(s). Shipped kinds (`task`, `group`, `milestone`) ship a default emitter; a host-defined kind registers its own via `layout.registerItemEmitter` (§10) — unregistered kinds fall back to the `task` emitter (§2.5).
+
+```ts
+type ItemEmitter = (task: Task) => readonly Item[];
+```
+
 ### 2.4 Item identity is deterministic
 
 `Item.id = `${taskId}:${segmentIndex ?? 0}`` (extended if future sources add dimensions). Regenerated every layout pass, so it **must** be stable across passes or node recycling, CSS transitions, and in-flight drag state all break. Asserted by a layout test from slice S0.
@@ -533,6 +539,9 @@ interface PluginContext {
     registerColumn(col: ColumnSpec): void;
     registerRenderer(kind: 'bar' | 'cell' | 'header' | 'tooltip', r: Renderer): void;
     overlay: OverlayHost;           // positioned DOM (popups, tooltips) with anchoring/flipping
+  };
+  layout: {
+    registerItemEmitter(kind: string, emitter: ItemEmitter): void;
   };
   interaction: {
     registerController(c: InteractionControllerSpec): void;
