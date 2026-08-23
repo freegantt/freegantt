@@ -31,4 +31,31 @@ describe('GanttShell header band', () => {
     shell.destroy();
     expect(host.children.length).toBe(0);
   });
+
+  it('re-renders when a second Gantt binds to the same shared scale (#6, D9)', () => {
+    // No pinned range: the scale fits every bound project, so binding B widens the span A reads from.
+    const scale = new TimeScaleModel();
+    const hostA = document.createElement('div');
+    const shellA = new GanttShell({ host: hostA, tasks, zone, scale, rowHeight: 32 });
+
+    const initialTickCount = hostA.querySelectorAll('.fg-header .fg-tick').length;
+
+    const hostB = document.createElement('div');
+    const widerTasks: Task[] = [
+      {
+        id: taskId('w1'),
+        name: 'W1',
+        start: rangeStart,
+        end: instant('2026-09-20T00:00:00Z'),
+        scheduling: 'auto',
+      },
+    ];
+    const shellB = new GanttShell({ host: hostB, tasks: widerTasks, zone, scale, rowHeight: 32 });
+
+    // A never called render() itself after B bound — the notify from B's bind is what pushed this.
+    expect(hostA.querySelectorAll('.fg-header .fg-tick').length).toBeGreaterThan(initialTickCount);
+
+    shellA.destroy();
+    shellB.destroy();
+  });
 });

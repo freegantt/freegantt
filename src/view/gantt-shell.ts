@@ -24,17 +24,19 @@ export class GanttShell {
   #backend: RenderBackend;
   #revision = 0;
   #scale: TimeScaleModel;
-  #unbindScale: () => void;
+  #scaleHandle: { unbind: () => void };
+  #unsubscribeScale: () => void;
   #headerEl: HTMLElement;
   #barsHost: HTMLElement;
 
   constructor(private options: GanttShellOptions) {
     this.#scale = options.scale ?? new TimeScaleModel();
-    this.#unbindScale = this.#scale.bind({
+    this.#scaleHandle = this.#scale.bind({
       zone: options.zone,
       tasks: options.tasks,
       viewportWidth: options.host.clientWidth,
     });
+    this.#unsubscribeScale = this.#scale.subscribe(() => this.render());
 
     this.#headerEl = document.createElement('div');
     this.#headerEl.className = 'fg-header';
@@ -78,7 +80,8 @@ export class GanttShell {
   }
 
   destroy(): void {
-    this.#unbindScale();
+    this.#unsubscribeScale();
+    this.#scaleHandle.unbind();
     this.#backend.destroy();
     this.options.host.replaceChildren();
   }

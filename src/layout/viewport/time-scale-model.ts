@@ -8,9 +8,10 @@
 // are resolved from the Gantt instances bound to the model, which is what lets one scale span a task
 // Gantt and a workforce Gantt: neither caller has to compute a cross-project span by hand.
 
-import { createTimeScale, dayPreset, diffMs, instant, pxPerMsForPreset } from '../time/index.js';
-import type { TimeScale, TimeScaleOptions, ViewPreset } from '../time/index.js';
-import type { Task, TimeSpan } from '../model/index.js';
+import { createTimeScale, dayPreset, diffMs, instant, pxPerMsForPreset } from '../../time/index.js';
+import type { TimeScale, TimeScaleOptions, ViewPreset } from '../../time/index.js';
+import type { Task, TimeSpan } from '../../model/index.js';
+import { createObservable } from './observable.js';
 
 /** What a caller states about how time should be displayed (plans/02 §5). Everything else — the
  * project's zone (D6), the span, the pixels-per-millisecond factor — is derived at bind time. */
@@ -34,11 +35,19 @@ export interface ScaleBinding {
 /** Zone used before any Gantt has bound, so `scale` is readable on a fresh model. */
 const UNBOUND_ZONE = 'UTC';
 
+/** Returned by `bind()` (#6). `unbind` leaves the shared axis; `setViewportWidth` lets a bound Gantt
+ * push a re-measured width (e.g. from a `ResizeObserver`) without unbind+rebind churn. */
+export interface ScaleBindingHandle {
+  unbind(): void;
+  setViewportWidth(width: number): void;
+}
+
 export class TimeScaleModel {
   #preset: ViewPreset;
   #range: 'fitProject' | TimeSpan;
   #bindings = new Set<ScaleBinding>();
   #resolved: TimeScale | undefined;
+  #observable = createObservable();
 
   constructor(intent: TimeScaleIntent = {}) {
     this.#preset = intent.preset ?? dayPreset;
@@ -49,14 +58,32 @@ export class TimeScaleModel {
     return this.#preset;
   }
 
-  /** Gantt instances bind at construction and call the returned function on destroy. Binding and
-   * unbinding both invalidate the resolved scale, so every other bound Gantt follows a project
-   * joining or leaving the shared axis. */
-  bind(binding: ScaleBinding): () => void {
+  /** Registers `fn` to run whenever the resolved scale may have changed (bind, unbind, or a bound
+   * width changing). Returns a dispose function. */
+  subscribe(fn: () => void): () => void {
+    return this.#observable.subscribe(fn);
+  }
+
+  /** Gantt instances bind at construction and call the returned handle's `unbind` on destroy. Binding
+   * and unbinding both invalidate the resolved scale and notify subscribers, so every other bound
+   * Gantt follows a project joining or leaving the shared axis. */
+  bind(binding: ScaleBinding): ScaleBindingHandle {
     this.#bindings.add(binding);
     this.#resolved = undefined;
-    return () => {
-      if (this.#bindings.delete(binding)) this.#resolved = undefined;
+    this.#observable.notify();
+    return {
+      unbind: () => {
+        if (this.#bindings.delete(binding)) {
+          this.#resolved = undefined;
+          this.#observable.notify();
+        }
+      },
+      setViewportWidth: (width) => {
+        if (binding.viewportWidth === width) return;
+        binding.viewportWidth = width;
+        this.#resolved = undefined;
+        this.#observable.notify();
+      },
     };
   }
 

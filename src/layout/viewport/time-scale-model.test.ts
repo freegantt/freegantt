@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { TimeScaleModel } from './time-scale-model.js';
-import { dayPreset, instant, MS } from '../time/index.js';
-import { taskId } from '../model/index.js';
-import type { Task } from '../model/index.js';
+import { dayPreset, instant, MS } from '../../time/index.js';
+import { taskId } from '../../model/index.js';
+import type { Task } from '../../model/index.js';
 
 function task(id: string, start: string, end: string): Task {
   return {
@@ -51,14 +51,14 @@ describe('TimeScaleModel', () => {
   it('re-resolves when a Gantt binds or unbinds', () => {
     const model = new TimeScaleModel();
     model.bind({ zone: 'UTC', tasks: [tasks[0]!], viewportWidth: 800 });
-    const unbind = model.bind({
+    const handle = model.bind({
       zone: 'UTC',
       tasks: [task('w1', '2026-09-04T00:00:00Z', '2026-09-10T00:00:00Z')],
       viewportWidth: 800,
     });
     expect(model.scale.range.end).toBe(instant('2026-09-10T00:00:00Z'));
 
-    unbind();
+    handle.unbind();
     expect(model.scale.range.end).toBe(instant('2026-09-03T00:00:00Z'));
   });
 
@@ -107,5 +107,74 @@ describe('TimeScaleModel', () => {
     const model = new TimeScaleModel();
     expect(model.scale.zone).toBe('UTC');
     expect(model.scale.xForInstant(instant(MS.DAY))).toBeGreaterThan(0);
+  });
+
+  describe('notify (#6)', () => {
+    it('notifies subscribers on bind and on unbind', () => {
+      const model = new TimeScaleModel();
+      let calls = 0;
+      model.subscribe(() => calls++);
+
+      const handle = model.bind({ zone: 'UTC', tasks, viewportWidth: 800 });
+      expect(calls).toBe(1);
+
+      handle.unbind();
+      expect(calls).toBe(2);
+    });
+
+    it('stops notifying a disposed subscriber', () => {
+      const model = new TimeScaleModel();
+      let calls = 0;
+      const dispose = model.subscribe(() => calls++);
+      dispose();
+
+      model.bind({ zone: 'UTC', tasks, viewportWidth: 800 });
+      expect(calls).toBe(0);
+    });
+
+    it('a width change on one binding notifies every subscriber, so all bound instances follow (D9)', () => {
+      const model = new TimeScaleModel();
+      let callsA = 0;
+      let callsB = 0;
+      const handleA = model.bind({ zone: 'UTC', tasks, viewportWidth: 800 });
+      model.bind({ zone: 'UTC', tasks, viewportWidth: 500 });
+      model.subscribe(() => callsA++);
+      model.subscribe(() => callsB++);
+
+      handleA.setViewportWidth(600);
+      expect(callsA).toBe(1);
+      expect(callsB).toBe(1);
+    });
+
+    it('setViewportWidth invalidates and notifies when the width actually changes', () => {
+      const model = new TimeScaleModel();
+      const handle = model.bind({ zone: 'UTC', tasks, viewportWidth: 800 });
+      expect(model.scale.xForInstant(tasks[1]!.end)).toBeCloseTo(800);
+
+      handle.setViewportWidth(400);
+      expect(model.scale.xForInstant(tasks[1]!.end)).toBeCloseTo(400);
+    });
+
+    it('setViewportWidth is a no-op (no notify, no invalidation) when the width is unchanged', () => {
+      const model = new TimeScaleModel();
+      const handle = model.bind({ zone: 'UTC', tasks, viewportWidth: 800 });
+      let calls = 0;
+      model.subscribe(() => calls++);
+
+      handle.setViewportWidth(800);
+      expect(calls).toBe(0);
+    });
+
+    it('a binding driven to width 0 (display:none) is excluded from fitWidth, others keep theirs', () => {
+      const model = new TimeScaleModel();
+      const handleA = model.bind({ zone: 'UTC', tasks, viewportWidth: 300 });
+      model.bind({ zone: 'UTC', tasks, viewportWidth: 500 });
+      // Narrowest of {300, 500} is 300.
+      expect(model.scale.xForInstant(tasks[1]!.end)).toBeCloseTo(300);
+
+      handleA.setViewportWidth(0);
+      // A is unmeasured (display:none) and excluded from fitWidth; B's 500 is the only measured width left.
+      expect(model.scale.xForInstant(tasks[1]!.end)).toBeCloseTo(500);
+    });
   });
 });
