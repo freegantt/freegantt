@@ -3,52 +3,107 @@
 // permitted to import time/ (layout -> time is an allowed edge) and reachable from view/ and api/
 // through allowed edges (view -> layout, api -> view) per the boundary lint (I1). Passing the same
 // instance to two charts syncs their x-axis by construction — no event plumbing, no link manager.
+//
+// The constructor takes *intent*, not resolved geometry (plans/02 §5). Zone, span and pixel density
+// are resolved from the charts bound to the model, which is what lets one scale span a task chart and
+// a workforce chart: neither caller has to compute a cross-project span by hand.
 
-import { createTimeScale, diffMs, instant } from '../time/index.js';
-import type { TimeScale, TimeScaleOptions } from '../time/index.js';
+import { createTimeScale, dayPreset, diffMs, instant, pxPerMsForPreset } from '../time/index.js';
+import type { TimeScale, TimeScaleOptions, ViewPreset } from '../time/index.js';
 import type { Task, TimeSpan } from '../model/index.js';
 
-export class TimeScaleModel {
-  #scale: TimeScale;
-
-  constructor(options: TimeScaleOptions) {
-    this.#scale = createTimeScale(options);
-  }
-
-  get scale(): TimeScale {
-    return this.#scale;
-  }
+/** What a caller states about how time should be displayed (plans/02 §5). Everything else — the
+ * project's zone (D6), the span, the pixels-per-millisecond factor — is derived at bind time. */
+export interface TimeScaleIntent {
+  /** Governs header ticks and, with no viewport to fit, the resolved zoom. Defaults to `dayPreset`. */
+  preset?: ViewPreset;
+  /** `'fitProject'` (the default) spans the tasks of every bound project; a `TimeSpan` pins the axis. */
+  range?: 'fitProject' | TimeSpan;
 }
 
-export interface FitProjectOptions {
-  tasks: readonly Task[];
-  /** Project's IANA zone (D6) — flows straight through to the resulting `TimeScale.zone`. */
+/** One chart's contribution to resolution, supplied when it binds. */
+export interface ScaleBinding {
+  /** The bound project's IANA zone (D6) — a scale is never told its zone by the caller. */
   zone: string;
-  /** Measured width (px) of the element the scale will render into. */
+  tasks: readonly Task[];
+  /** Measured width (px) of the element the chart renders into; `0` when unmeasured (detached host,
+   * `display:none`, pre-paint). Unmeasured is not degenerate — see `pxPerMsForPreset`. */
   viewportWidth: number;
 }
 
-/** `range: 'fitProject'` (plans/03 S1): derives `pxPerMs` from the project's own task span divided by
- * the viewport width, rather than a guessed default. Node-testable — the caller supplies the measured
- * width instead of this reading the DOM itself. */
-export function fitProjectScale(options: FitProjectOptions): TimeScaleOptions {
-  const range = projectSpan(options.tasks);
-  // Math.max(..., 1) guards divide-by-zero for a zero-span project (empty, or every task a single instant).
-  const spanMs = Math.max(diffMs(range.end, range.start), 1);
-  const pxPerMs = Math.max(options.viewportWidth, 0) / spanMs;
-  return { zone: options.zone, range, pxPerMs };
+/** Zone used before any chart has bound, so `scale` is readable on a fresh model. */
+const UNBOUND_ZONE = 'UTC';
+
+export class TimeScaleModel {
+  #preset: ViewPreset;
+  #range: 'fitProject' | TimeSpan;
+  #bindings = new Set<ScaleBinding>();
+  #resolved: TimeScale | undefined;
+
+  constructor(intent: TimeScaleIntent = {}) {
+    this.#preset = intent.preset ?? dayPreset;
+    this.#range = intent.range ?? 'fitProject';
+  }
+
+  get preset(): ViewPreset {
+    return this.#preset;
+  }
+
+  /** Charts bind at construction and call the returned function on destroy. Binding and unbinding
+   * both invalidate the resolved scale, so every other bound chart follows a project joining or
+   * leaving the shared axis. */
+  bind(binding: ScaleBinding): () => void {
+    this.#bindings.add(binding);
+    this.#resolved = undefined;
+    return () => {
+      if (this.#bindings.delete(binding)) this.#resolved = undefined;
+    };
+  }
+
+  get scale(): TimeScale {
+    return (this.#resolved ??= createTimeScale(this.#resolve()));
+  }
+
+  #resolve(): TimeScaleOptions {
+    const bindings = [...this.#bindings];
+    // D6: the zone is the project's. Charts sharing an axis share a project zone in practice; the
+    // first binding decides, rather than the axis silently having two calendars.
+    const zone = bindings[0]?.zone ?? UNBOUND_ZONE;
+    const range = this.#range === 'fitProject' ? boundSpan(bindings) : this.#range;
+    const spanMs = diffMs(range.end, range.start);
+    const width = fitWidth(bindings);
+    // Fit-to-width is a refinement of the preset's own zoom, not a precondition for having one.
+    const pxPerMs =
+      width > 0 && spanMs > 0 ? width / spanMs : pxPerMsForPreset(zone, this.#preset, range.start);
+    return { zone, range, pxPerMs };
+  }
 }
 
-/** Min start / max end across the tasks; an empty project collapses to a zero span at the epoch. */
-function projectSpan(tasks: readonly Task[]): TimeSpan {
+/** The narrowest measured viewport across the bound charts, so the span fits in all of them rather
+ * than only the widest. `0` when nothing is measured yet. */
+function fitWidth(bindings: readonly ScaleBinding[]): number {
+  let width = 0;
+  for (const binding of bindings) {
+    if (binding.viewportWidth <= 0) continue;
+    if (width === 0 || binding.viewportWidth < width) width = binding.viewportWidth;
+  }
+  return width;
+}
+
+/** `range: 'fitProject'` (plans/02 §5): min start / max end across every bound project's tasks. With
+ * nothing bound — or nothing scheduled — this collapses to a zero span at the epoch, which resolves
+ * to the preset's own zoom rather than a divide-by-zero. */
+function boundSpan(bindings: readonly ScaleBinding[]): TimeSpan {
   let span: TimeSpan | undefined;
-  for (const task of tasks) {
-    if (!span) {
-      span = { start: task.start, end: task.end };
-      continue;
+  for (const binding of bindings) {
+    for (const task of binding.tasks) {
+      if (!span) {
+        span = { start: task.start, end: task.end };
+        continue;
+      }
+      if (task.start < span.start) span.start = task.start;
+      if (task.end > span.end) span.end = task.end;
     }
-    if (task.start < span.start) span.start = task.start;
-    if (task.end > span.end) span.end = task.end;
   }
   return span ?? { start: instant(0), end: instant(0) };
 }

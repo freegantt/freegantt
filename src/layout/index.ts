@@ -3,16 +3,9 @@ export type { GeometryFrame, FrameRow, FrameBar, BarFlags, LinkFlags, LayoutInpu
 // Re-exported so render/ (layout-only import per plans/01 §1) can type item identity as ItemId
 // rather than a bare string — render already receives ItemId via GeometryFrame.FrameBar.id.
 export type { ItemId } from '../model/index.js';
-export { TimeScaleModel, fitProjectScale } from './time-scale-model.js';
-export type { FitProjectOptions } from './time-scale-model.js';
+export { TimeScaleModel } from './time-scale-model.js';
+export type { TimeScaleIntent, ScaleBinding } from './time-scale-model.js';
 export { PrefixSumHeightIndex } from './row-height-index.js';
 export type { RowHeightIndex } from './row-height-index.js';
 export { dayPreset, instant } from '../time/index.js';
-export type {
-  TimeScale,
-  TimeScaleOptions,
-  ViewPreset,
-  ViewPresetHeader,
-  Tick,
-  HeaderFormat,
-} from '../time/index.js';
+export type { TimeScale, ViewPreset, ViewPresetHeader, Tick, HeaderFormat } from '../time/index.js';
