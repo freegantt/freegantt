@@ -128,7 +128,11 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
       barLayer = document.createElement('div');
       barLayer.className = 'fg-bars';
       barLayer.style.position = 'relative';
-      barLayer.style.left = `${rowLabelWidth}px`;
+      // `margin-left`, not `left`: an offset property shifts a relatively-positioned box without
+      // shrinking its (auto) width, so it would overflow `host` by `rowLabelWidth` on the right —
+      // exactly the phantom horizontal scroll range that showed up as a blank gap past real content.
+      // A margin shrinks the auto width to fit, so the layer's right edge stays flush with `host`'s.
+      barLayer.style.marginLeft = `${rowLabelWidth}px`;
       // Owns the native scrollable extent (S1.5 README D-S1.5-9): rows/bars are positioned absolutely,
       // so nothing else in this DOM makes `host` actually overflow — without this, ScrollModel's
       // `panTo` has nowhere real to write. Zero visual footprint; `sync()` moves it to the frame's
