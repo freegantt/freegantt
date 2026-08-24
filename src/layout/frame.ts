@@ -4,6 +4,7 @@ import type { RowId, ItemId, EntryId, EntryKind, Entry } from '../model/index.js
 import { itemId, rowId } from '../model/index.js';
 import type { TimeScale, ViewPreset } from '../time/index.js';
 import { PrefixSumHeightIndex } from './row-height-index.js';
+import type { RowHeightIndex } from './row-height-index.js';
 
 export interface BarFlags {
   hasConflict?: boolean;
@@ -101,22 +102,36 @@ export interface LayoutInput {
   viewport: { x: number; y: number; width: number; height: number };
   rowHeight: number;
   revision: number;
+  /** Row-top index to read from, and to size the culling window's start against `indexAtY` (#47).
+   * Optional so pure/test callers can omit it and get the S0/S1 default (a fresh index built and
+   * discarded within this call); a caller doing repeated `computeFrame` passes over the same
+   * entries/rowHeight (`GanttShell.render()`) should build one `PrefixSumHeightIndex` once, reuse it
+   * across calls, and call `invalidateFrom` itself when entries or rowHeight change — that's what
+   * turns "top of row i" back into the O(log n)-across-renders lookup the index exists for, instead
+   * of a fresh O(n) build-and-discard every render. */
+  heights?: RowHeightIndex;
 }
 
 /** S0/S1 scope: flat row-per-entry, one bar per entry, fixed row height (plans/03 S0-S1). */
 export function computeFrame(input: LayoutInput): GeometryFrame {
   const { entries, scale, preset, viewport, rowHeight, revision } = input;
 
-  const heights = new PrefixSumHeightIndex(entries.length, () => rowHeight);
+  const heights = input.heights ?? new PrefixSumHeightIndex(entries.length, () => rowHeight);
 
   const rows: FrameRow[] = [];
   const bars: FrameBar[] = [];
   const windowTop = viewport.y;
   const windowBottom = viewport.height > 0 ? viewport.y + viewport.height : Infinity;
 
-  entries.forEach((entry, index) => {
+  // Bound the scan with indexAtY instead of walking every entry from 0 (#47): start at the row that
+  // actually contains windowTop, then stop as soon as a row's top clears windowBottom rather than
+  // testing every remaining entry's bounds inline.
+  const startIndex = entries.length > 0 ? heights.indexAtY(windowTop) : 0;
+  for (let index = startIndex; index < entries.length; index++) {
+    const entry = entries[index]!;
     const top = heights.topAt(index);
-    if (top + rowHeight <= windowTop || top >= windowBottom) return;
+    if (top >= windowBottom) break;
+    if (top + rowHeight <= windowTop) continue;
 
     const id = rowId(`row:${entry.id}`);
     rows.push({ id, index, top, height: rowHeight, laneCount: 1, label: entry.name });
@@ -136,7 +151,7 @@ export function computeFrame(input: LayoutInput): GeometryFrame {
       lane: 0,
       flags: {},
     });
-  });
+  }
 
   const format = preset.headers[0]?.format;
   const ticks: FrameHeaderTick[] = scale.ticks(preset).map((tick) => ({

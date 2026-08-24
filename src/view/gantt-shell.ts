@@ -1,7 +1,7 @@
 // view/ — Gantt shell (plans/01 §8.2-8.3). The real grid/timeline/viewport split lands across S1.
 
-import { computeFrame, TimeScaleModel } from '../layout/index.js';
-import type { ScaleBindingHandle } from '../layout/index.js';
+import { computeFrame, PrefixSumHeightIndex, TimeScaleModel } from '../layout/index.js';
+import type { RowHeightIndex, ScaleBindingHandle } from '../layout/index.js';
 
 import { createDomBackend } from '../render/dom/index.js';
 import type { RenderBackend } from '../render/backend.js';
@@ -53,6 +53,14 @@ export class GanttShell {
   #scale: TimeScaleModel;
   #scaleHandle: ScaleBindingHandle;
   #destroyed = false;
+  /** Cached across renders (#47) — `PrefixSumHeightIndex` exists precisely so "top of row i" is
+   * O(log n) across repeated calls, which a fresh instance every `render()` would throw away. Rebuilt
+   * only when entry count or row height changes; current row heights are uniform, so those two are
+   * the whole invalidation surface (variable per-row heights, S5, will need finer-grained
+   * `invalidateFrom` calls here instead of a full rebuild). */
+  #heights: RowHeightIndex | undefined;
+  #heightsEntryCount = -1;
+  #heightsRowHeight = -1;
 
   constructor(private options: GanttShellOptions) {
     this.#host = resolveHost(options.host);
@@ -83,15 +91,28 @@ export class GanttShell {
     return Math.max(0, this.#host.clientWidth - this.#backend.rowLabelWidth);
   }
 
+  #heightsFor(entryCount: number, rowHeight: number): RowHeightIndex {
+    if (this.#heights && this.#heightsEntryCount === entryCount && this.#heightsRowHeight === rowHeight) {
+      return this.#heights;
+    }
+    this.#heights = new PrefixSumHeightIndex(entryCount, () => rowHeight);
+    this.#heightsEntryCount = entryCount;
+    this.#heightsRowHeight = rowHeight;
+    return this.#heights;
+  }
+
   render(): void {
     const scale = this.#scale.scale;
+    const entries = this.options.project.entries;
+    const rowHeight = readRowHeight(this.#host);
     const frame = computeFrame({
-      entries: this.options.project.entries,
+      entries,
       scale,
       preset: this.#scale.preset,
       viewport: { x: 0, y: 0, width: this.#drawableWidth(), height: this.#host.clientHeight },
-      rowHeight: readRowHeight(this.#host),
+      rowHeight,
       revision: this.#revision++,
+      heights: this.#heightsFor(entries.length, rowHeight),
     });
     this.#backend.sync(frame);
   }

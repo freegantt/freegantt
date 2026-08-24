@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { computeFrame } from './frame.js';
+import { PrefixSumHeightIndex } from './row-height-index.js';
 import { sampleEntries } from '../../fixtures/sample-project.js';
 import { createTimeScale, dayPreset } from '../time/index.js';
 
@@ -83,6 +84,24 @@ describe('computeFrame', () => {
     expect(frame.header.ticks.length).toBeGreaterThan(0);
     expect(frame.header.ticks[0]).toHaveProperty('x');
     expect(frame.header.ticks[0]).toHaveProperty('label');
+  });
+
+  it('accepts a caller-supplied RowHeightIndex and reads windowing off it (#47)', () => {
+    const heights = new PrefixSumHeightIndex(sampleEntries.length, () => 32);
+    const spy = vi.spyOn(heights, 'indexAtY');
+
+    const windowed = computeFrame({
+      entries: sampleEntries,
+      scale,
+      preset,
+      viewport: { x: 0, y: 32, width: 0, height: 32 },
+      rowHeight: 32,
+      revision: 0,
+      heights,
+    });
+
+    expect(windowed.rows.map((r) => r.index)).toEqual([1]);
+    expect(spy).toHaveBeenCalledWith(32);
   });
 
   it('matches the golden snapshot for the fixture project', () => {
