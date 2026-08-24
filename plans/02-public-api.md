@@ -183,10 +183,10 @@ const scale  = new TimeScaleModel({ preset: 'weekAndMonth' });
 const scroll = new ScrollModel();
 
 const mainGantt   = new Gantt({ host: '#top',    dataset, scale, scroll });
-const linkedGantt = new Gantt({ host: '#bottom', dataset, scale, scroll: scroll.xOnly() });
+const linkedGantt = new Gantt({ host: '#bottom', dataset, scale, scroll });
 ```
 
-Omit `scale`/`scroll` and the Gantt creates private ones — single-Gantt users never meet the concept. Passing shared instances is the *entire* sync API: no link manager, no event plumbing. `scroll.xOnly()` / `.yOnly()` derive partial bindings for mixed layouts.
+Omit `scale`/`scroll` and the Gantt creates private ones — single-Gantt users never meet the concept. Passing shared instances is the *entire* sync API: no link manager, no event plumbing. Sharing a `scroll` instance links both axes (S1.5, D-S1.5-3) — a shorter chart's own row count clamps the shared position locally, so it pins at its last row while a taller chart keeps going, with zero remembered state. `TimeScaleModel` is a class with no `Source` interface; `ScrollModel` gets no `xOnly()`/`yOnly()` either — partial sharing returns when a caller actually needs "share x, keep y private".
 
 ---
 
