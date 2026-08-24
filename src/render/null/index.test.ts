@@ -1,14 +1,29 @@
 import { describe, expect, it } from 'vitest';
 import { createNullBackend } from './index.js';
 import { computeFrame } from '../../layout/index.js';
+import type { TimeScale, ViewPreset } from '../../layout/index.js';
 import { sampleEntries } from '../../../fixtures/sample-project.js';
+
+// render/ only imports layout/ (plans/01 §1), which type-exports TimeScale/ViewPreset but not the
+// runtime time/ constructors — so this fake stands in rather than reaching past the boundary.
+const scale: TimeScale = {
+  range: sampleEntries[0]!,
+  timeZone: 'UTC',
+  xForInstant: () => 0,
+  instantForX: () => sampleEntries[0]!.start,
+  widthForDuration: () => 0,
+  ticks: () => [],
+};
+const preset: ViewPreset = { id: 'none', tickUnit: 'd', tickIncrement: 1, headers: [], tickWidthPx: 24 };
 
 describe('null render backend', () => {
   it('consumes a frame in Node with no DOM', () => {
     const backend = createNullBackend();
     const frame = computeFrame({
       entries: sampleEntries,
-      xForInstant: (i: number) => i / 1000,
+      scale,
+      preset,
+      viewport: { x: 0, y: 0, width: 0, height: 0 },
       rowHeight: 32,
       revision: 0,
     });

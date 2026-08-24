@@ -12,8 +12,11 @@ export interface HitResult {
   itemId: ItemId;
 }
 
-export interface RenderBackend {
-  mount(host: unknown): void;
+/** `THost` is the seam's only DOM-shaped type parameter — `backend.ts` itself still names no DOM
+ * type (#23). `createDomBackend(): RenderBackend<HTMLElement>`; a future canvas backend would be
+ * `RenderBackend<HTMLCanvasElement>`, checked at the call site instead of cast blind at `mount()`. */
+export interface RenderBackend<THost = unknown> {
+  mount(host: THost): void;
   sync(frame: GeometryFrame): void;
   applyState(state: InteractionState): void;
   hitTest(x: number, y: number): HitResult | null;

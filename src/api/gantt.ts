@@ -5,14 +5,13 @@ import { GanttShell, TimeScaleModel } from '../view/index.js';
 import type { Project } from './project.js';
 
 export interface GanttOptions {
-  host: HTMLElement;
+  /** Element or CSS selector (plans/02 §2) — resolved by GanttShell; a selector matching nothing
+   * throws (#38). */
+  host: HTMLElement | string;
   project: Project;
   /** Bound viewport object (D9, plans/02 §5) — omit for a private default sized to the project's entries. */
   scale?: TimeScaleModel;
-  rowHeight?: number;
 }
-
-const DEFAULT_ROW_HEIGHT = 32;
 
 export class Gantt {
   #shell: GanttShell;
@@ -21,10 +20,8 @@ export class Gantt {
   constructor(options: GanttOptions) {
     this.#shell = new GanttShell({
       host: options.host,
-      entries: options.project.entries,
-      zone: options.project.zone,
+      project: options.project,
       ...(options.scale ? { scale: options.scale } : {}),
-      rowHeight: options.rowHeight ?? DEFAULT_ROW_HEIGHT,
     });
   }
 

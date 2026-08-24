@@ -31,7 +31,8 @@ export interface ViewPreset {
 
 export interface TimeScale {
   readonly range: TimeSpan;
-  readonly zone: string;
+  /** Project's IANA timeZone (D6, #37 — one name for this concept, matching plans/02's ProjectOptions). */
+  readonly timeZone: string;
   xForInstant(i: Instant): number;
   instantForX(x: number): Instant;
   widthForDuration(d: Duration, at: Instant): number;
@@ -39,8 +40,8 @@ export interface TimeScale {
 }
 
 export interface TimeScaleOptions {
-  /** Project's IANA zone — calendar-unit stepping (day/week) resolves through it (D6). */
-  zone: string;
+  /** Project's IANA timeZone — calendar-unit stepping (day/week) resolves through it (D6). */
+  timeZone: string;
   range: TimeSpan;
   pxPerMs: number;
 }
@@ -76,7 +77,7 @@ function stepBy(zone: string, i: Instant, unit: TimeUnit, increment: number): In
 const MAX_TICKS = 100_000;
 
 export function createTimeScale(options: TimeScaleOptions): TimeScale {
-  const { zone, range, pxPerMs } = options;
+  const { timeZone, range, pxPerMs } = options;
 
   function xForInstant(i: Instant): number {
     return (i - range.start) * pxPerMs;
@@ -87,7 +88,7 @@ export function createTimeScale(options: TimeScaleOptions): TimeScale {
   }
 
   function widthForDuration(d: Duration, at: Instant): number {
-    const end = stepBy(zone, at, d.unit, d.value);
+    const end = stepBy(timeZone, at, d.unit, d.value);
     return xForInstant(end) - xForInstant(at);
   }
 
@@ -102,13 +103,13 @@ export function createTimeScale(options: TimeScaleOptions): TimeScale {
     let count = 0;
     while (cursor < range.end && count < MAX_TICKS) {
       out.push({ instant: cursor, x: xForInstant(cursor) });
-      cursor = stepBy(zone, cursor, preset.tickUnit, preset.tickIncrement);
+      cursor = stepBy(timeZone, cursor, preset.tickUnit, preset.tickIncrement);
       count++;
     }
     return out;
   }
 
-  return { range, zone, xForInstant, instantForX, widthForDuration, ticks };
+  return { range, timeZone, xForInstant, instantForX, widthForDuration, ticks };
 }
 
 function pad2(n: number): string {
