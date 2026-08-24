@@ -24,8 +24,8 @@ export interface TimeScaleIntent {
 
 /** One Gantt's contribution to resolution, supplied when it binds. */
 export interface ScaleBinding {
-  /** The bound project's IANA zone (D6) — a scale is never told its zone by the caller. */
-  zone: string;
+  /** The bound project's IANA timeZone (D6, #37) — a scale is never told its zone by the caller. */
+  timeZone: string;
   entries: readonly Entry[];
   /** Measured width (px) of the element the Gantt renders into; `0` when unmeasured (detached host,
    * `display:none`, pre-paint). Unmeasured is not degenerate — see `pxPerMsForPreset`. */
@@ -60,20 +60,16 @@ export class TimeScaleModel {
     return this.#preset;
   }
 
-  /** Gantt instances bind at construction and call the returned handle's `unbind` on destroy.
-   * `onChange` runs whenever the resolved scale may have changed on account of *another* bound
-   * Gantt — one joining, one leaving, or a width it pushed — so every other bound instance follows
-   * without wiring a subscription itself. It never runs for a binding's own `bind()` or `unbind()`:
-   * not on bind, because the caller is still constructing (e.g. `GanttShell` hasn't mounted its
-   * render target yet) and renders itself explicitly once construction finishes; not on unbind,
-   * because the caller is tearing itself down and has no reason to react to its own departure. A
-   * binding's own width push *does* run its own `onChange` (via `setViewportWidth`), since that's
-   * a live re-measure during normal operation, not construction or teardown. */
+  /** Gantt instances bind at construction (after mounting their render target — see `GanttShell`,
+   * #22) and call the returned handle's `unbind` on destroy. One rule, no exceptions: `onChange`
+   * runs whenever the resolved scale changes — including for a binding's own `bind()`, which is
+   * how a fresh binding gets its first render, and for its own width push via `setViewportWidth`.
+   * It does not run on a binding's own `unbind()`: the caller is tearing itself down and has no
+   * reason to react to its own departure; remaining bindings still get notified (`#invalidate`). */
   bind(binding: ScaleBinding, onChange: () => void): ScaleBindingHandle {
-    const priorReactions = [...this.#bindings.values()];
     this.#bindings.set(binding, onChange);
     this.#resolved = undefined;
-    for (const react of priorReactions) react();
+    for (const react of this.#bindings.values()) react();
     return {
       unbind: () => {
         if (this.#bindings.delete(binding)) this.#invalidate();
@@ -100,11 +96,11 @@ export class TimeScaleModel {
     // measured viewport (so the span fits every bound Gantt, not just the widest), and — for
     // `range: 'fitProject'` (plans/02 §5) — the min start / max end across every bound project's
     // entries, all accumulated together rather than three separate walks of the same binding set.
-    let zone: string | undefined;
+    let timeZone: string | undefined;
     let width = 0;
     let span: TimeSpan | undefined;
     for (const binding of this.#bindings.keys()) {
-      zone ??= binding.zone;
+      timeZone ??= binding.timeZone;
       if (binding.viewportWidth > 0 && (width === 0 || binding.viewportWidth < width)) {
         width = binding.viewportWidth;
       }
@@ -118,7 +114,7 @@ export class TimeScaleModel {
         if (entry.end > span.end) span.end = entry.end;
       }
     }
-    zone ??= UNBOUND_ZONE;
+    timeZone ??= UNBOUND_ZONE;
     // With nothing bound — or nothing scheduled — this collapses to a zero span at the epoch, which
     // resolves to the preset's own zoom rather than a divide-by-zero.
     const range =
@@ -126,7 +122,7 @@ export class TimeScaleModel {
     const spanMs = diffMs(range.end, range.start);
     // Fit-to-width is a refinement of the preset's own zoom, not a precondition for having one.
     const pxPerMs =
-      width > 0 && spanMs > 0 ? width / spanMs : pxPerMsForPreset(zone, this.#preset, range.start);
-    return { zone, range, pxPerMs };
+      width > 0 && spanMs > 0 ? width / spanMs : pxPerMsForPreset(timeZone, this.#preset, range.start);
+    return { timeZone, range, pxPerMs };
   }
 }

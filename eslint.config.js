@@ -30,9 +30,10 @@ const ALLOWED = {
   view: ['render', 'layout', 'data', 'model'],
   interaction: ['view', 'data'],
   extensions: ['view', 'interaction'],
-  // model is the type surface api/ re-exports (plans/01 §1: "api/ and model/ types are public");
-  // the layer diagram doesn't draw the arrow because it's a type-only re-export, not a behavioral one.
-  api: ['view', 'data', 'model'],
+  // model and time are the type/primitive surface api/ re-exports (plans/01 §1: "api/ and model/
+  // types are public", widened to time/'s public primitives and presets by #25); the layer diagram
+  // doesn't draw either arrow because they're type-only/primitive re-exports, not behavioral ones.
+  api: ['view', 'data', 'model', 'time'],
 };
 
 // I1 backstop for editor feedback; dependency-cruiser (`pnpm boundaries`) is the enforced source of truth.

@@ -3,7 +3,7 @@
 import type { GeometryFrame } from '../../layout/index.js';
 import type { RenderBackend, InteractionState, HitResult } from '../backend.js';
 
-export interface NullBackend extends RenderBackend {
+export interface NullBackend extends RenderBackend<void> {
   lastFrame(): GeometryFrame | undefined;
 }
 
@@ -25,5 +25,6 @@ export function createNullBackend(): NullBackend {
     lastFrame() {
       return lastFrame;
     },
+    rowLabelWidth: 0,
   };
 }
