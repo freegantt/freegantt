@@ -132,13 +132,36 @@ _Avoid_: Scale (Scale, unqualified, means the underlying `TimeScale` the model w
 What a caller states about how time should be displayed — a ViewPreset and a range that is either `'fitDataset'` or a pinned TimeSpan. Intent is all a caller ever supplies to a TimeScaleModel; the zone (which is the Dataset's, D6), the resolved span, and the pixels-per-millisecond factor are derived at bind time and are not a caller's to state.
 _Avoid_: Scale options, scale config (both read as the resolved geometry, which is the opposite of intent)
 
+**Binding**:
+One Gantt's _data_ contribution to a shared pure model, supplied when it joins — plus the reaction to run when that model's resolved value changes. A Gantt binds on construction and unbinds on destroy, and both re-resolve the shared model. Binding is the vocabulary of the DOM-free models in `layout/viewport/`; the DOM side of the same seam is an Attachment.
+_Avoid_: Attach (reserved for the DOM side), subscribe, register
+
 **Scale binding**:
-One Gantt's contribution to a TimeScaleModel's resolution: its Dataset's zone, its Entries, its measured viewport width, and the reaction to run when the resolved scale changes. A Gantt binds on construction and unbinds on destroy, and both re-resolve the shared TimeScale — which is how `'fitDataset'` spans every bound Dataset rather than whichever one was passed to the constructor.
-_Avoid_: Attach, subscribe, register
+One Gantt's Binding to a TimeScaleModel: its Dataset's zone, its Entries, and its measured Pane size. This is how `'fitDataset'` spans every bound Dataset rather than whichever one was passed to the constructor.
+
+**Attachment**:
+A wiring between a DOM element and a pure model, living in `view/` and returned by an `attach*` function with a `detach()` method. An Attachment is the only thing on either side of the seam allowed to touch the element: `attachScroll` owns element scroll (I12), `attachSize` owns measurement. Distinct from a Binding, which carries data and never sees the DOM.
+_Avoid_: Binding (that is the pure-model side), adapter, connector
+
+**Pane size**:
+The measured drawable box of a pane, pushed into the models by `view/` and never stated by a caller. It is a measurement of a rendered box — unrelated to the resize gesture, which drags an Entry's edge.
+_Avoid_: Viewport width/size (Viewport is the fan-in object, not a box)
 
 **ScrollModel**:
-The standalone, shareable object owning a Gantt's scroll position on both axes, and the only route by which any view or interaction code may read or write it. Shared between Gantt instances the same way a TimeScaleModel is, which is what makes one scroll owner drive both panes of a split view.
+The standalone, shareable object owning a scroll position on both axes, and the only route by which any view or interaction code may read or write it. It resolves two things: the **position** — where the caller asked to be — and **max**, the loosest bound any bound Gantt needs, which is what a Pan clamps against. Max is not a claim about any one Gantt's scroller: each bound Gantt clamps the shared position to its own content, so a shorter chart stops at its last row while a taller one keeps going, and picks up where it stopped on the way back. Shared between Gantt instances the same way a TimeScaleModel is.
 _Avoid_: Scroll position, offset, viewport state
+
+**Pan**:
+Moving the shared viewport — `ScrollModel.panTo`, and the drag gesture that will call into it. One concept at two layers, which is why they share the word. Distinct from **scroll**, which means one element's native offset and is confined to `view/scroll-attachment.ts` (I12): a Pan may result in no scroll at all when the chart is already at its end.
+_Avoid_: Scroll (an element's native offset), move (move is dragging an Entry — `entryMove`), seek
+
+**Reveal**:
+Bringing a named Entry into view — the intent-level verb a host uses (`gantt.reveal(entryId)`). The library resolves the pixel position from the row geometry it already computes; a host never converts an index or a row height into a scroll offset.
+_Avoid_: ScrollTo, scrollIntoView, goTo
+
+**Batch**:
+Several writes to a viewport model delivering at most one notification, and only if the resolved value actually changed. No observer ever sees an intermediate state. A Batch is _not_ a Transaction: it has no changeset, no undo entry, and no resolve hook — `layout/` has no edge to `data/`. The two words never substitute for each other.
+_Avoid_: Transaction (that is `data/`'s unit of mutation), commit, freeze
 
 **ViewPreset**:
 The data description of one zoom level: what unit the ticks step in, how wide a tick is, and what header bands sit above them. A preset is a config object, so a new zoom level is never a library edit.
