@@ -3,7 +3,7 @@
 // here (I10) — everything outside time/ must go through xForInstant/instantForX/widthForDuration.
 
 import type { Duration, Instant, TimeSpan, TimeUnit } from '../model/index.js';
-import { addDays, toPlain } from './zone.js';
+import { addDays, addMonths, addYears, toPlain } from './zone.js';
 import { addMs, instant, MS } from './instant.js';
 
 export interface Tick {
@@ -45,26 +45,31 @@ export interface TimeScaleOptions {
   pxPerMs: number;
 }
 
-/** Units this scale can step by today. Month/year presets land once time/ grows calendar month math. */
-const SUPPORTED_UNITS = new Set<TimeUnit>(['ms', 'm', 'h', 'd', 'w']);
+type Stepper = (zone: string, i: Instant, increment: number) => Instant;
+
+/** One source of truth for which units this scale can step by: a unit is supported exactly when it
+ * has an entry here. `stepBy` dispatches through it; `ticks()`/`pxPerMsForPreset` check membership —
+ * so the two can never disagree (was #32). */
+const STEPPERS: Record<TimeUnit, Stepper> = {
+  ms: (_zone, i, increment) => addMs(i, increment),
+  m: (_zone, i, increment) => addMs(i, increment * MS.MINUTE),
+  h: (_zone, i, increment) => addMs(i, increment * MS.HOUR),
+  d: (zone, i, increment) => addDays(zone, i, increment),
+  w: (zone, i, increment) => addDays(zone, i, increment * 7),
+  M: (zone, i, increment) => addMonths(zone, i, increment),
+  y: (zone, i, increment) => addYears(zone, i, increment),
+};
+
+const SUPPORTED_UNITS = new Set<TimeUnit>(Object.keys(STEPPERS) as TimeUnit[]);
 
 function stepBy(zone: string, i: Instant, unit: TimeUnit, increment: number): Instant {
-  switch (unit) {
-    case 'ms':
-      return addMs(i, increment);
-    case 'm':
-      return addMs(i, increment * MS.MINUTE);
-    case 'h':
-      return addMs(i, increment * MS.HOUR);
-    case 'd':
-      return addDays(zone, i, increment);
-    case 'w':
-      return addDays(zone, i, increment * 7);
-    default:
-      throw new RangeError(
-        `TimeScale: unsupported unit "${unit}" — only ${[...SUPPORTED_UNITS].join(', ')} step today`,
-      );
+  const step = STEPPERS[unit];
+  if (!step) {
+    throw new RangeError(
+      `TimeScale: unsupported unit "${unit}" — only ${[...SUPPORTED_UNITS].join(', ')} step today`,
+    );
   }
+  return step(zone, i, increment);
 }
 
 /** Guards ticks() against a misconfigured preset (e.g. zero increment) walking forever. */
@@ -115,15 +120,67 @@ const plainDateFormat: HeaderFormat = (i, zone) => {
   return `${c.year}-${pad2(c.month)}-${pad2(c.day)}`;
 };
 
-/** Shipped preset: one tick per calendar day. Hour->year presets land incrementally (plans/01 §5.1) —
- * presets are config objects, so growing the shipped set is additive, never a library edit. */
-export const dayPreset: ViewPreset = {
+const hourFormat: HeaderFormat = (i, zone) => {
+  const c = toPlain(zone, i);
+  return `${pad2(c.hour)}:00`;
+};
+
+const monthFormat: HeaderFormat = (i, zone) => {
+  const c = toPlain(zone, i);
+  return `${c.year}-${pad2(c.month)}`;
+};
+
+const yearFormat: HeaderFormat = (i, zone) => String(toPlain(zone, i).year);
+
+/** Deep-freezes a preset (and its `headers` array) so a shipped preset is a value, not a shared
+ * mutable singleton — one consumer's zoom cannot retune every Gantt on the page (I2). */
+function freezePreset(preset: ViewPreset): ViewPreset {
+  Object.freeze(preset.headers);
+  for (const header of preset.headers) Object.freeze(header);
+  return Object.freeze(preset);
+}
+
+/** Shipped presets, hour → year (plans/03 S1 scope). Every one is a plain config object — a new zoom
+ * level is never a library edit (CONTEXT.md, ViewPreset). */
+export const hourPreset: ViewPreset = freezePreset({
+  id: 'hour',
+  tickUnit: 'h',
+  tickIncrement: 1,
+  headers: [{ unit: 'h', increment: 1, format: hourFormat }],
+  tickWidthPx: 40,
+});
+
+export const dayPreset: ViewPreset = freezePreset({
   id: 'day',
   tickUnit: 'd',
   tickIncrement: 1,
   headers: [{ unit: 'd', increment: 1, format: plainDateFormat }],
   tickWidthPx: 24,
-};
+});
+
+export const weekPreset: ViewPreset = freezePreset({
+  id: 'week',
+  tickUnit: 'w',
+  tickIncrement: 1,
+  headers: [{ unit: 'w', increment: 1, format: plainDateFormat }],
+  tickWidthPx: 60,
+});
+
+export const monthPreset: ViewPreset = freezePreset({
+  id: 'month',
+  tickUnit: 'M',
+  tickIncrement: 1,
+  headers: [{ unit: 'M', increment: 1, format: monthFormat }],
+  tickWidthPx: 80,
+});
+
+export const yearPreset: ViewPreset = freezePreset({
+  id: 'year',
+  tickUnit: 'y',
+  tickIncrement: 1,
+  headers: [{ unit: 'y', increment: 1, format: yearFormat }],
+  tickWidthPx: 60,
+});
 
 /** The zoom a preset implies on its own: one tick occupies its `tickWidthPx`. This is what a scale
  * resolves to when there is no measured viewport to fit into (detached host, `display:none`,

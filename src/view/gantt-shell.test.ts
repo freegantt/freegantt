@@ -1,8 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { GanttShell } from './gantt-shell.js';
-import { TimeScaleModel, instant } from '../layout/index.js';
+import { TimeScaleModel } from '../layout/index.js';
 import { entryId } from '../model/index.js';
-import type { Entry } from '../model/index.js';
+import type { Entry, Instant } from '../model/index.js';
+
+// view/ has no import edge to time/ (plans/01 §1) — instant() lives there. Date.parse on a
+// Z-offset string is deterministic regardless of the host machine's zone, unlike `new Date(str)`
+// on a zoneless string (#27), so this is not the thing I10 exists to ban.
+function instant(iso: string): Instant {
+  return Date.parse(iso) as Instant;
+}
 
 const zone = 'UTC';
 const rangeStart = instant('2026-09-01T00:00:00Z');

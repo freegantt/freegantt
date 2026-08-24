@@ -58,6 +58,16 @@ export function addDays(zone: string, i: Instant, days: number): Instant {
   return toInstant(ZonedDateTimeFns.addDays(toZoned(zone, i), days));
 }
 
+/** Calendar-month stepping (e.g. Jan 31 + 1 month clamps to Feb 28/29, per Temporal's default 'constrain'). */
+export function addMonths(zone: string, i: Instant, months: number): Instant {
+  return toInstant(ZonedDateTimeFns.addMonths(toZoned(zone, i), months));
+}
+
+/** Calendar-year stepping (leap-day clamps the same way as addMonths). */
+export function addYears(zone: string, i: Instant, years: number): Instant {
+  return toInstant(ZonedDateTimeFns.addYears(toZoned(zone, i), years));
+}
+
 /**
  * Whole calendar days between two instants' day-starts (DST-correct: not `(b - a) / 86400000`).
  *

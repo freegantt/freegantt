@@ -37,10 +37,21 @@ describe('createTimeScale', () => {
     expect(ticks[1]?.x).toBeCloseTo(24, 5);
   });
 
-  it('rejects an unsupported preset unit rather than looping forever', () => {
+  it('rejects a preset unit no stepper is registered for, rather than looping forever', () => {
     const scale = createTimeScale({ zone, range: { start: rangeStart, end: rangeEnd }, pxPerMs });
-    const badPreset: ViewPreset = { ...dayPreset, tickUnit: 'M', tickIncrement: 1 };
+    // A preset is a plain config object (CONTEXT.md, ViewPreset), so a caller can hand it a unit
+    // outside TimeUnit's own closed set at runtime even though the type forbids it statically —
+    // hence the cast, exercising exactly that boundary.
+    const badPreset: ViewPreset = { ...dayPreset, tickUnit: 'q' as ViewPreset['tickUnit'], tickIncrement: 1 };
     expect(() => scale.ticks(badPreset)).toThrow(/unsupported unit/);
+  });
+
+  it('steps month and year units (#29 — a new zoom level is never a library edit)', () => {
+    const scale = createTimeScale({ zone, range: { start: rangeStart, end: rangeEnd }, pxPerMs });
+    const monthly: ViewPreset = { ...dayPreset, tickUnit: 'M', tickIncrement: 1 };
+    const yearly: ViewPreset = { ...dayPreset, tickUnit: 'y', tickIncrement: 1 };
+    expect(() => scale.ticks(monthly)).not.toThrow();
+    expect(() => scale.ticks(yearly)).not.toThrow();
   });
 });
 

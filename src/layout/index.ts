@@ -7,5 +7,4 @@ export { TimeScaleModel } from './viewport/time-scale-model.js';
 export type { TimeScaleIntent, ScaleBinding, ScaleBindingHandle } from './viewport/time-scale-model.js';
 export { PrefixSumHeightIndex } from './row-height-index.js';
 export type { RowHeightIndex } from './row-height-index.js';
-export { dayPreset, instant } from '../time/index.js';
 export type { TimeScale, ViewPreset, ViewPresetHeader, Tick, HeaderFormat } from '../time/index.js';
