@@ -1,16 +1,11 @@
 // model/ is types + brand/id helpers only — zero runtime beyond this, zero dependencies (plans/01 §1.1).
 
 export type TaskId = string & { readonly __brand: 'TaskId' };
-export type DependencyId = string & { readonly __brand: 'DependencyId' };
 export type RowId = string & { readonly __brand: 'RowId' };
 export type ItemId = string & { readonly __brand: 'ItemId' };
 
 export function taskId(value: string): TaskId {
   return value as TaskId;
-}
-
-export function dependencyId(value: string): DependencyId {
-  return value as DependencyId;
 }
 
 export function rowId(value: string): RowId {

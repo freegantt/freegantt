@@ -10,7 +10,6 @@ function task(id: string, start: string, end: string): Task {
     name: id,
     start: instant(start),
     end: instant(end),
-    scheduling: 'auto',
   };
 }
 
