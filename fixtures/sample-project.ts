@@ -68,5 +68,4 @@ export const sampleTasks: Task[] = PHASES.map((phase, index) => ({
   name: phase.name,
   start: day(phase.startDay) as Task['start'],
   end: day(phase.startDay + phase.durationDays) as Task['end'],
-  scheduling: 'auto',
 }));

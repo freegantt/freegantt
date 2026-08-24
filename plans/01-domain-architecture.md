@@ -21,7 +21,7 @@ flowchart TB
   subgraph pureside["Pure — no DOM, runs anywhere"]
     direction TB
     LAY["<b>layout/</b><br/>row resolution · lane packing<br/>bar geometry · link routing · height index"]
-    SCH["<b>scheduling/</b><br/>propagation · lag · cycle detection<br/>diagnostics · policy seam"]
+    SCH["<b>scheduling/</b><br/>first-party default plugin:<br/>propagation · lag · cycle detection<br/>diagnostics · policy seam"]
     DATA["<b>data/</b><br/>stores · transactions · undo/redo<br/>changesets · serialization · reactivity façade"]
     TIME["<b>time/</b><br/>Instant · plain time · zones<br/>TimeScale · view presets · ticks"]
     MODEL["<b>model/</b><br/>entity types · ids · brands<br/>zero runtime, zero deps"]
@@ -41,7 +41,6 @@ flowchart TB
   REN --> LAY
   LAY --> TIME
   LAY --> MODEL
-  DATA --> SCH
   DATA --> MODEL
   SCH --> TIME
   SCH --> MODEL
@@ -55,9 +54,11 @@ flowchart TB
   class API apic
 ```
 
+There is deliberately no `data/ --> scheduling/` edge: `data/` has no static dependency on scheduling at all. Instead, `data/` calls one generic, synchronous resolve hook — the identity function when nothing occupies it, decided once at setup — to turn a proposed edit into a committed one (exact contract tracked in issue #12). `scheduling/` stays a directory in `src/`: it's where the first-party default scheduling plugin's pure engine lives, still DOM-free and still isolated from `render/`/`view/`/`interaction/`, but it is no longer a privileged layer every Gantt is wired to by default — a Gantt with no scheduling plugin installed never loads it.
+
 **Enforcement (D12):** an import-boundary lint rule in CI (dependency-cruiser or `no-restricted-imports`). Any arrow not in this diagram fails the build. Notably:
 
-- `scheduling/` never imports `render/`, `view/`, or `interaction/` — and vice versa (D4). They meet only through `data/`.
+- `scheduling/` never imports `render/`, `view/`, or `interaction/` — and vice versa (D4). A scheduling plugin, when installed, meets `data/` only through the generic resolve hook (issue #12), never through a static import.
 - `model/` is types only: zero runtime exports beyond id/brand helpers, zero dependencies.
 - Only `api/` and the type surface of `model/` are public entry points; everything else is internal and free to change.
 
@@ -95,7 +96,7 @@ flowchart LR
   subgraph authored["AUTHORED — persisted, edited, synced"]
     direction TB
     T["Task"]
-    DEP["Dependency"]
+    DEP["Dependency<br/>(scheduling-plugin-owned, §7 — not model/)"]
     CAL["Calendar (later slice)"]
     RES["Resource / Assignment (later slice)"]
   end
@@ -137,24 +138,10 @@ interface Task<TMeta = unknown> {
    *  the rollup pass maintains these; input may omit them and they are initialized (§2.5). */
   start: Instant;
   end: Instant;                // exclusive — see §5
-  /** 'auto': the engine may move it. 'pinned': the engine reports conflicts but never moves it. */
-  scheduling: 'auto' | 'pinned';
   progress?: number;           // 0..1
   /** Interrupted work — renders as multiple bars on one row. */
   segments?: readonly TimeSpan[];
   meta?: TMeta;                // host-owned, typed via generic
-}
-
-/** First-class entity, never an array embedded on a task. */
-interface Dependency {
-  id: DependencyId;
-  fromId: TaskId;              // predecessor
-  toId: TaskId;                // successor
-  /** Which endpoints relate: finish→start (default), start→start, finish→finish, start→finish. */
-  type: 'FS' | 'SS' | 'FF' | 'SF';
-  /** Delay (or overlap, if negative) between the related endpoints. Zero-valued, never absent. */
-  lag: Duration;
-  active: boolean;             // soft-disable without deleting
 }
 
 /** DERIVED. One display lane. */
@@ -177,15 +164,14 @@ interface Item {
 }
 ```
 
+`Dependency` (predecessor/successor link, with `type`/`lag`/`active`) and the per-task pin flag formerly on `Task.scheduling` are **not** defined here. Both are scheduling-plugin-owned data now, not `model/` — pulling scheduling out of the mandatory core layers means `model/` stays scheduling-agnostic, and a host with no scheduling plugin installed never sees either type. They're still authored, persisted data in the sense of §2.1's separation — just owned by the plugin's storage rather than core's — and their shape is described alongside the engine in §7 (exact contract tracked in issue #12).
+
 Reserved for later slices, designed-for now (fields and stores exist as named seams, not dead code): `Calendar` (working time), `Constraint` (date restrictions, policy-defined vocabulary), `Resource` + `Assignment` (staffing), `Baseline` (snapshots).
 
 ```mermaid
 erDiagram
   PROJECT ||--o{ TASK : owns
-  PROJECT ||--o{ DEPENDENCY : owns
   TASK ||--o{ TASK : "parentId (tree)"
-  TASK ||--o{ DEPENDENCY : "fromId (predecessor)"
-  TASK ||--o{ DEPENDENCY : "toId (successor)"
 
   ROW ||--o{ ITEM : hosts
   ITEM }o--|| TASK : "derived from"
@@ -194,14 +180,8 @@ erDiagram
     string kind "task | group | milestone | host-defined"
     Instant start
     Instant end_exclusive
-    string scheduling "auto | pinned"
     number progress
     json meta "host-owned"
-  }
-  DEPENDENCY {
-    string type "FS | SS | FF | SF"
-    Duration lag
-    boolean active
   }
   ROW {
     string kind "task | group | custom"
@@ -211,6 +191,8 @@ erDiagram
     number lane
   }
 ```
+
+`Dependency` (predecessor/successor, `type`, `lag`, `active`) and the per-task pin flag live in scheduling-plugin-owned storage when a scheduling plugin is installed — not in this diagram, which covers `model/`'s entities. See §7.
 
 ### 2.3 Row sources — the flexibility mechanism
 
@@ -240,7 +222,7 @@ type ItemEmitter = (task: Task) => readonly Item[];
 
 | Layer | What `kind` selects | Seam |
 |---|---|---|
-| `scheduling/` | schedule semantics — e.g. a `group` spans its children via rollup (default) vs. directly schedulable | `SchedulingPolicy` (§7) |
+| `scheduling/` | schedule semantics, *when a scheduling plugin is installed* — e.g. a `group` spans its children via rollup (default) vs. directly schedulable | `SchedulingPolicy` (§7), plugin-owned |
 | `layout/` | item emission — bar vs. summary bracket vs. milestone diamond; whether items are emitted at all | kind → item-emitter registration in the §2.3 pipeline |
 | `render/` | appearance — per-kind default renderer; `data-kind` on the element for CSS | renderer registry (`02` §4) |
 | `interaction/` | which gestures the task affords (move / resize / link / edit …) | capability resolver (§9) |
@@ -260,7 +242,7 @@ flowchart TB
   subgraph cold["COLD PATH — data or viewport changed"]
     direction TB
     C1["mutation via transaction<br/>(API call or committed gesture)"]
-    C2["scheduling.schedule()<br/>pure — returns patch + diagnostics"]
+    C2["resolve hook<br/>identity, or installed plugin's schedule() — pure"]
     C3["changeset applied to stores<br/>one event, from/to per field"]
     C4["layout.computeFrame()<br/>memoized on (data rev, scale, window)"]
     C5["backend.sync(frame)<br/>keyed diff, node recycling"]
@@ -310,7 +292,11 @@ interface GeometryFrame {
     /** Static classification only (hasConflict, inCycle) — never hover/selection. */
     flags: BarFlags;
   }>;
-  links: Array<{ id: DependencyId; path: PathCommand[]; flags: LinkFlags }>;
+  /** `id` was `DependencyId` (a `model/` brand) pre-#13; `Dependency` is now scheduling-plugin-owned
+   *  (§7, #13), so link geometry needs a plugin-contributed emission seam mirroring `registerItemEmitter`
+   *  above — exact registration contract (a `registerLinkEmitter`-shaped seam) and `id`'s brand type are
+   *  tracked in #16, not yet settled here. */
+  links: Array<{ id: string; path: PathCommand[]; flags: LinkFlags }>;
   decorations: Array<TodayLine | RangeBand | RowStripe>;
 }
 
@@ -363,8 +349,8 @@ Shipped presets cover hour→year zoom levels; custom presets are config objects
 
 ## 6. `data/` — stores, transactions, changesets
 
-- **`ProjectData`** owns normalized stores (`tasks`, `dependencies`, plus reserved stores) with indexes (`byId`, `byParent`, `byPredecessor`, `bySuccessor`), the project timezone, and the scheduling binding. Fully headless (D4): constructible and usable in Node with no view.
-- **Transactions**: `project.transaction(() => { ...mutations })` batches mutations, runs scheduling once, emits **one changeset**. Every mutation path — API and gesture — goes through a transaction. No exceptions.
+- **`ProjectData`** owns normalized stores (`tasks`, plus reserved stores for scheduling-plugin-owned data such as `dependencies`) with indexes (`byId`, `byParent`, `byPredecessor`, `bySuccessor` — the latter two populated only when a plugin uses them), the project timezone, and the generic resolve-hook binding (identity when unoccupied; §1). Fully headless (D4): constructible and usable in Node with no view.
+- **Transactions**: `project.transaction(() => { ...mutations })` batches mutations, runs the resolve hook once, emits **one changeset**. Every mutation path — API and gesture — goes through a transaction. No exceptions.
 - **Changesets** are the universal delta (D7, principle 4):
 
 ```ts
@@ -384,6 +370,8 @@ interface ChangeSet {
 ---
 
 ## 7. `scheduling/` — pure engine, pluggable policy
+
+This section describes FreeGantt's **first-party default scheduling plugin** — the bars + dependencies engine bundled with the library (D3) — not a mandatory core layer (D4). It occupies core's one generic, synchronous resolve hook exclusively when installed; when no scheduling plugin is installed, that hook is the identity function and none of what follows runs. The hook's own contract (where per-task plugin data like the pin flag lives, how hot-path preview and commit-time resolution share one call) is separate, ongoing design work tracked in issue #12. The plugin's own public API and its re-spec against that hook are tracked in issue #14. What follows is still an accurate description of the engine's internals — propagation, cycle detection, the policy seam — just reframed as *this plugin's* internals rather than a core module's.
 
 ```mermaid
 flowchart LR
@@ -422,12 +410,12 @@ interface ScheduleResult {
 function schedule(request: ScheduleRequest): ScheduleResult;   // pure, deterministic
 ```
 
-**Engine (fixed, universal — slice S3):**
+**Engine (deterministic and pure — slice S3, as the default plugin's internals):**
 
 - Propagation over the dependency graph in topological order via an **explicit worklist loop, never recursion** — long chains blow the JS stack otherwise; a 5,000-link chain fixture forecloses it permanently. Module-header invariant: *this file contains no recursive call; chain depth is unbounded by design.*
 - Lag applied per dependency `type`; negative lag (overlap) is legal.
 - **Cycle detection names the members**: if the worklist drains with tasks unvisited, those tasks are the cycle — `{ code: 'cycle', taskIds }`, never "a cycle exists somewhere."
-- `scheduling: 'pinned'` tasks are never moved; the engine reports what it *would* have done as a diagnostic.
+- A task pinned in the plugin's own per-task storage (the pin flag is no longer `Task.scheduling` — that field is gone, see §2.2; where it lives instead is part of the #12 contract) is never moved; the engine reports what it *would* have done as a diagnostic.
 - Parent/group rollup (summary spans from children) is a separate bottom-up pass after propagation settles — pass ordering, not mutual recursion. A dependency attached to a `group` task resolves against its rolled-up span by default.
 
 **Kind semantics live in the policy, not the engine.** The engine knows graphs and lag; what a `group` or `milestone` (or host-defined kind) *means* for scheduling is a policy decision. The default policy: `group` spans derive from children (direct edits to a derived span are reported as diagnostics, not applied); `milestone` keeps `start === end`; unknown kinds behave as `'task'`. A host methodology that wants directly schedulable groups ships a policy — the engine and contract do not change.
@@ -448,7 +436,7 @@ interface SchedulingPolicy {
 
 The shipped `defaultPolicy` is deliberately minimal and neutral: dependencies push successors forward as early as their predecessors allow; pinned beats dependency; edits move the fields the user didn't touch. Calendars, constraint vocabularies, criticality definitions, and resource-driven durations all arrive later as richer policies/analyses — **the request/result contract does not change.**
 
-**Speculative evaluation is free by purity:** during a drag, call `schedule()` with a synthetic `proposed`, render the returned patch as a preview, discard on cancel. Throttled to one call per animation frame. This is a load-bearing reason `schedule()` must never mutate its input — write it in the module header.
+**Speculative evaluation is free by purity:** during a drag, call the resolve hook (the installed scheduling plugin's `schedule()`, or identity if none) with a synthetic `proposed`, render the returned patch as a preview, discard on cancel. Throttled to one call per animation frame. This is a load-bearing reason `schedule()` must never mutate its input — write it in the module header.
 
 ---
 
@@ -569,11 +557,11 @@ Rules:
 |---|---|---|
 | I1 | Layer imports match §1 exactly | dependency lint in CI |
 | I2 | No module-level singletons; two Gantt instances coexist independently | isolation test (mounts two Gantt instances) |
-| I3 | Scheduling contains no recursive propagation | 5,000-link chain fixture + review rule |
-| I4 | `schedule()` never mutates its input; policy never moves a proposed field | dev-mode asserts + property test |
+| I3 | The first-party scheduling plugin's propagation contains no recursion | 5,000-link chain fixture + review rule |
+| I4 | Its `schedule()` never mutates its input; policy never moves a proposed field | dev-mode asserts + property test |
 | I5 | Hot path allocates nothing and never rebuilds a frame | perf test on `applyState` |
 | I6 | One transaction per gesture, at commit | interaction tests |
-| I7 | Undo reverts user + engine effects atomically | round-trip property test |
+| I7 | Undo reverts user + engine effects atomically (when a scheduling plugin is installed) | round-trip property test |
 | I8 | `Item.id` deterministic across layout passes | layout snapshot test |
 | I9 | Grid and timeline share one row geometry | pixel-equality test on row tops |
 | I10 | No time math outside `time/`; no magic time constants | lint rule |

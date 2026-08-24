@@ -14,7 +14,6 @@ const tasks: Task[] = [
     name: 'Task 1',
     start: rangeStart,
     end: instant('2026-09-03T00:00:00Z'),
-    scheduling: 'auto',
   },
 ];
 
@@ -47,7 +46,6 @@ describe('GanttShell header band', () => {
         name: 'W1',
         start: rangeStart,
         end: instant('2026-09-20T00:00:00Z'),
-        scheduling: 'auto',
       },
     ];
     const shellB = new GanttShell({ host: hostB, tasks: widerTasks, zone, scale, rowHeight: 32 });
