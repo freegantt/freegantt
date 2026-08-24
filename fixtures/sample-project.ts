@@ -1,12 +1,16 @@
 // One realistic sample project (~50 entries), used by the harness and by layout tests (plans/03 S0).
 
+// entryId/Entry/Instant come from api/ — the public surface a host consumes (#24). addMs/instant/MS
+// are time/'s internal arithmetic, not part of the public surface (plans/02 names no date-math API),
+// so this fixture — playing the role of a host that already knows its own dates — reaches past api/
+// for them the way any host generating a dataset would reach for its own date library.
 import { addMs, instant, MS } from '../src/time/index.js';
-import { entryId } from '../src/model/index.js';
-import type { Entry } from '../src/model/index.js';
+import { entryId } from '../src/api/index.js';
+import type { Entry, Instant } from '../src/api/index.js';
 
 const DAY_START = instant('2026-09-01T00:00:00Z');
 
-function day(offset: number): number {
+function day(offset: number): Instant {
   return addMs(DAY_START, offset * MS.DAY);
 }
 
@@ -66,6 +70,6 @@ const PHASES: Array<{ name: string; startDay: number; durationDays: number }> = 
 export const sampleEntries: Entry[] = PHASES.map((phase, index) => ({
   id: entryId(`entry-${index + 1}`),
   name: phase.name,
-  start: day(phase.startDay) as Entry['start'],
-  end: day(phase.startDay + phase.durationDays) as Entry['end'],
+  start: day(phase.startDay),
+  end: day(phase.startDay + phase.durationDays),
 }));

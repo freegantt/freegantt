@@ -1,0 +1,698 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Architecture review — full codebase</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script type="module">
+      import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+      mermaid.initialize({ startOnLoad: true, theme: "neutral", securityLevel: "loose" });
+    </script>
+    <style>
+      .seam { stroke-dasharray: 4 4; }
+      .leak { stroke: #dc2626; }
+      .deep { background: linear-gradient(135deg, #0f172a, #1e293b); }
+      body { background: #fafaf9; color: #1c1917; }
+      .badge { display: inline-block; padding: 0.15rem 0.6rem; border-radius: 9999px; font-size: 0.7rem; font-weight: 600; letter-spacing: 0.03em; text-transform: uppercase; }
+      .badge-strong { background: #d1fae5; color: #065f46; }
+      .badge-explore { background: #fef3c7; color: #92400e; }
+      .badge-speculative { background: #e2e8f0; color: #334155; }
+      .tag { display: inline-block; padding: 0.1rem 0.5rem; border-radius: 4px; font-size: 0.68rem; background: #f1f5f9; color: #475569; font-family: ui-monospace, monospace; }
+      .lbl { font-size: 0.62rem; letter-spacing: 0.09em; text-transform: uppercase; color: #64748b; }
+      .box { border: 1px solid #94a3b8; background: #fff; border-radius: 4px; }
+      .box-deep { border: 3px solid #0f172a; background: linear-gradient(135deg, #0f172a, #1e293b); color: #f8fafc; border-radius: 4px; }
+      .box-ghost { border: 1px dashed #cbd5e1; background: #f8fafc; color: #94a3b8; border-radius: 4px; }
+      .box-leak { border: 2px solid #dc2626; background: #fef2f2; border-radius: 4px; }
+      table.findings td, table.findings th { border-bottom: 1px solid #e2e8f0; padding: 0.45rem 0.6rem; vertical-align: top; font-size: 0.82rem; }
+      table.findings th { font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.06em; color: #64748b; text-align: left; }
+    </style>
+  </head>
+  <body class="font-sans">
+    <main class="max-w-5xl mx-auto px-6 py-12 space-y-14">
+
+      <div class="border-l-4 border-amber-500 bg-amber-50 px-4 py-3 text-sm text-slate-700">
+        <strong class="font-semibold">Vocabulary note.</strong> This review was written against the tree at
+        <span class="font-mono">e5f5376</span> and says <span class="font-mono">Task</span>,
+        <span class="font-mono">TaskId</span>, <span class="font-mono">taskId</span>,
+        <span class="font-mono">tasks</span> throughout. That record was renamed to
+        <span class="font-mono">Entry</span> by ADR 0003 (<span class="font-mono">docs/adr/0003-the-authored-record-is-an-entry-not-a-task.md</span>),
+        and the default <span class="font-mono">kind</span> literal from <span class="font-mono">'task'</span>
+        to <span class="font-mono">'span'</span>. Read every <span class="font-mono">Task</span> below as
+        <span class="font-mono">Entry</span>; the findings themselves are unaffected. The text is left as
+        written because it is a dated record of a review, not a live spec.
+      </div>
+
+      <header class="space-y-3">
+        <p class="text-xs uppercase tracking-widest text-slate-500">FreeGantt — architecture review</p>
+        <h1 class="text-3xl font-serif font-semibold">Full codebase · S1 in flight</h1>
+        <p class="text-sm text-slate-500">2026-08-24 · <span class="font-mono">src/</span> (1,138 lines), <span class="font-mono">harness/</span>, <span class="font-mono">fixtures/</span> · fixed point <span class="font-mono">e5f5376</span></p>
+        <div class="flex flex-wrap gap-x-6 gap-y-2 text-xs text-slate-500 pt-2 border-t border-slate-200">
+          <span><span class="inline-block w-4 h-3 border border-slate-400 align-middle mr-1"></span>module</span>
+          <span><span class="inline-block w-4 h-0 border-t-2 border-dashed border-slate-400 align-middle mr-1"></span>seam</span>
+          <span><span class="inline-block w-4 h-0 border-t-2 border-red-500 align-middle mr-1"></span>leakage</span>
+          <span><span class="inline-block w-4 h-3 deep align-middle mr-1"></span>deep module</span>
+          <span><span class="inline-block w-4 h-3 box-ghost align-middle mr-1"></span>unreachable</span>
+        </div>
+        <nav class="text-sm text-slate-600 pt-3 flex flex-wrap gap-x-4 gap-y-1">
+          <a href="#c1" class="underline decoration-slate-300 hover:decoration-slate-900">1 · render seam</a>
+          <a href="#c2" class="underline decoration-slate-300 hover:decoration-slate-900">2 · computeFrame</a>
+          <a href="#c3" class="underline decoration-slate-300 hover:decoration-slate-900">3 · height index</a>
+          <a href="#c4" class="underline decoration-slate-300 hover:decoration-slate-900">4 · notify producer</a>
+          <a href="#c5" class="underline decoration-slate-300 hover:decoration-slate-900">5 · bind() exceptions</a>
+          <a href="#c6" class="underline decoration-slate-300 hover:decoration-slate-900">6 · host type</a>
+          <a href="#c7" class="underline decoration-slate-300 hover:decoration-slate-900">7 · public surface</a>
+          <a href="#top-recommendation" class="underline decoration-slate-300 hover:decoration-slate-900 font-semibold">top recommendation</a>
+          <a href="#review" class="underline decoration-slate-300 hover:decoration-slate-900 font-semibold">code review</a>
+        </nav>
+      </header>
+
+      <section id="candidates" class="space-y-14">
+
+        <!-- ============================= C1 ============================= -->
+        <article id="c1" class="space-y-4">
+          <div class="flex items-center gap-3 flex-wrap">
+            <h2 class="text-xl font-serif font-semibold">1 · Half the rendered state never crosses the render seam</h2>
+            <span class="badge badge-strong">Strong</span>
+            <span class="tag">ports &amp; adapters</span>
+          </div>
+          <p class="font-mono text-sm text-slate-600">src/view/gantt-shell.ts:72–86 · src/layout/frame.ts:38–46 · src/render/dom/index.ts · src/render/null/index.ts</p>
+
+          <div class="rounded-lg border border-slate-200 bg-white p-4">
+            <pre class="mermaid">
+flowchart LR
+  GS["GanttShell.render()"]
+  CF["computeFrame()"]
+  FR[["GeometryFrame<br/>rows · bars"]]
+  DOM["render/dom<br/>keyed reconciler"]
+  NUL["render/null<br/>export seam"]
+  DOC["document.createElement<br/>per tick, every render"]:::leak
+  HDR["header band DOM"]:::leak
+
+  GS --> CF --> FR --> DOM
+  FR -.-> NUL
+  GS ==>|"bypasses the seam"| DOC --> HDR
+  classDef leak fill:#fef2f2,stroke:#dc2626,stroke-width:2px,color:#7f1d1d;
+  linkStyle 5 stroke:#dc2626,stroke-width:2px;
+            </pre>
+            <p class="lbl mt-2">before — two paths out of view/, only one through the seam</p>
+          </div>
+
+          <div class="rounded-lg border border-slate-200 bg-white p-4">
+            <pre class="mermaid">
+flowchart LR
+  GS["GanttShell.render()"]
+  CF["computeFrame()"]
+  FR[["GeometryFrame<br/>rows · bars · header"]]:::deep
+  DOM["render/dom<br/>keyed reconciler<br/>(bars + ticks)"]
+  NUL["render/null<br/>export seam — sees everything"]
+  GS --> CF --> FR --> DOM
+  FR --> NUL
+  classDef deep fill:#0f172a,stroke:#0f172a,color:#f8fafc,stroke-width:3px;
+            </pre>
+            <p class="lbl mt-2">after — one path, one interface</p>
+          </div>
+
+          <div class="grid md:grid-cols-2 gap-6 pt-2">
+            <div>
+              <p class="lbl mb-1">Problem</p>
+              <p class="text-sm"><span class="font-mono">GanttShell#renderHeader</span> builds tick nodes itself, so the header is invisible to every render adapter — <span class="font-mono">render/null</span>, the declared export seam, can never emit one.</p>
+            </div>
+            <div>
+              <p class="lbl mb-1">Solution</p>
+              <p class="text-sm"><span class="font-mono">GeometryFrame</span> grows a <span class="font-mono">header</span> of tick boxes; <span class="font-mono">computeFrame</span> emits it; <span class="font-mono">render/dom</span> reconciles ticks with the reconciler it already runs for bars.</p>
+            </div>
+          </div>
+
+          <div class="rounded-md bg-amber-50 border border-amber-200 p-3 text-sm text-amber-900">
+            <span class="font-semibold">Two documented rules already say this.</span>
+            <span class="font-mono text-xs">CONTEXT.md</span> — GeometryFrame is “what a render backend consumes and <em>the only thing it consumes</em>.”
+            <span class="font-mono text-xs">CLAUDE.md</span> — “Hot path … zero allocation, never rebuilds a frame”; <span class="font-mono">replaceChildren(...ticks.map(...))</span> reallocates every tick node on every render.
+          </div>
+
+          <div>
+            <p class="lbl mb-1">Wins</p>
+            <ul class="text-sm list-disc pl-5 space-y-0.5">
+              <li>leverage: <span class="font-mono">sync(frame)</span> covers all rendered state</li>
+              <li>locality: tick geometry sits with bar geometry</li>
+              <li>header tests move from happy-dom to the pure project</li>
+              <li>export seam stops being decorative</li>
+              <li>tick nodes recycle instead of reallocating</li>
+            </ul>
+          </div>
+        </article>
+
+        <!-- ============================= C2 ============================= -->
+        <article id="c2" class="space-y-4">
+          <div class="flex items-center gap-3 flex-wrap">
+            <h2 class="text-xl font-serif font-semibold">2 · <span class="font-mono text-lg">computeFrame</span> is handed a function where a TimeScale belongs</h2>
+            <span class="badge badge-strong">Strong</span>
+            <span class="tag">in-process</span>
+          </div>
+          <p class="font-mono text-sm text-slate-600">src/layout/frame.ts:48–54, 85–87 · src/view/gantt-shell.ts:60–70 · src/layout/frame.test.ts:5 · src/render/null/index.test.ts:12</p>
+
+          <div class="grid md:grid-cols-2 gap-5">
+            <div class="rounded-lg border border-slate-200 bg-white p-4">
+              <p class="lbl mb-3">before — <span class="font-mono normal-case">LayoutInput</span> sees one method of five</p>
+              <svg viewBox="0 0 340 250" class="w-full" style="max-height:250px">
+                <rect x="10" y="10" width="150" height="230" rx="4" fill="#fff" stroke="#94a3b8"/>
+                <text x="85" y="28" text-anchor="middle" font-size="9" fill="#64748b" letter-spacing="1.2">TIMESCALE</text>
+                <rect x="22" y="38" width="126" height="26" rx="3" fill="#dbeafe" stroke="#3b82f6"/>
+                <text x="85" y="55" text-anchor="middle" font-size="10" font-family="monospace" fill="#1e3a8a">xForInstant</text>
+                <rect x="22" y="70" width="126" height="26" rx="3" fill="#f8fafc" stroke="#cbd5e1" stroke-dasharray="3 3"/>
+                <text x="85" y="87" text-anchor="middle" font-size="10" font-family="monospace" fill="#94a3b8">instantForX</text>
+                <rect x="22" y="102" width="126" height="26" rx="3" fill="#f8fafc" stroke="#cbd5e1" stroke-dasharray="3 3"/>
+                <text x="85" y="119" text-anchor="middle" font-size="10" font-family="monospace" fill="#94a3b8">widthForDuration</text>
+                <rect x="22" y="134" width="126" height="26" rx="3" fill="#f8fafc" stroke="#cbd5e1" stroke-dasharray="3 3"/>
+                <text x="85" y="151" text-anchor="middle" font-size="10" font-family="monospace" fill="#94a3b8">ticks(preset)</text>
+                <rect x="22" y="166" width="126" height="26" rx="3" fill="#f8fafc" stroke="#cbd5e1" stroke-dasharray="3 3"/>
+                <text x="85" y="183" text-anchor="middle" font-size="10" font-family="monospace" fill="#94a3b8">range</text>
+                <rect x="22" y="198" width="126" height="26" rx="3" fill="#f8fafc" stroke="#cbd5e1" stroke-dasharray="3 3"/>
+                <text x="85" y="215" text-anchor="middle" font-size="10" font-family="monospace" fill="#94a3b8">zone</text>
+                <path d="M160 51 L 230 51" stroke="#3b82f6" stroke-width="2" marker-end="url(#a1)"/>
+                <defs><marker id="a1" markerWidth="7" markerHeight="7" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#3b82f6"/></marker></defs>
+                <rect x="232" y="30" width="98" height="42" rx="4" fill="#fff" stroke="#94a3b8"/>
+                <text x="281" y="47" text-anchor="middle" font-size="9" fill="#64748b" letter-spacing="1">computeFrame</text>
+                <text x="281" y="62" text-anchor="middle" font-size="8" font-family="monospace" fill="#334155">(i)=&gt;number</text>
+                <rect x="232" y="100" width="98" height="90" rx="4" fill="#fef2f2" stroke="#dc2626" stroke-width="1.5"/>
+                <text x="281" y="118" text-anchor="middle" font-size="8" fill="#7f1d1d">cannot cull</text>
+                <text x="281" y="134" text-anchor="middle" font-size="8" fill="#7f1d1d">cannot emit ticks</text>
+                <text x="281" y="150" text-anchor="middle" font-size="8" fill="#7f1d1d">cannot size a window</text>
+                <text x="281" y="170" text-anchor="middle" font-size="8" font-family="monospace" fill="#7f1d1d">viewport.width = 0</text>
+              </svg>
+            </div>
+            <div class="rounded-lg border border-slate-200 bg-white p-4">
+              <p class="lbl mb-3">after — the whole scale crosses one parameter</p>
+              <svg viewBox="0 0 340 250" class="w-full" style="max-height:250px">
+                <rect x="10" y="10" width="150" height="230" rx="4" fill="#fff" stroke="#94a3b8"/>
+                <text x="85" y="28" text-anchor="middle" font-size="9" fill="#64748b" letter-spacing="1.2">TIMESCALE</text>
+                <rect x="22" y="38" width="126" height="26" rx="3" fill="#dbeafe" stroke="#3b82f6"/>
+                <text x="85" y="55" text-anchor="middle" font-size="10" font-family="monospace" fill="#1e3a8a">xForInstant</text>
+                <rect x="22" y="70" width="126" height="26" rx="3" fill="#dbeafe" stroke="#3b82f6"/>
+                <text x="85" y="87" text-anchor="middle" font-size="10" font-family="monospace" fill="#1e3a8a">instantForX</text>
+                <rect x="22" y="102" width="126" height="26" rx="3" fill="#dbeafe" stroke="#3b82f6"/>
+                <text x="85" y="119" text-anchor="middle" font-size="10" font-family="monospace" fill="#1e3a8a">widthForDuration</text>
+                <rect x="22" y="134" width="126" height="26" rx="3" fill="#dbeafe" stroke="#3b82f6"/>
+                <text x="85" y="151" text-anchor="middle" font-size="10" font-family="monospace" fill="#1e3a8a">ticks(preset)</text>
+                <rect x="22" y="166" width="126" height="26" rx="3" fill="#dbeafe" stroke="#3b82f6"/>
+                <text x="85" y="183" text-anchor="middle" font-size="10" font-family="monospace" fill="#1e3a8a">range</text>
+                <rect x="22" y="198" width="126" height="26" rx="3" fill="#dbeafe" stroke="#3b82f6"/>
+                <text x="85" y="215" text-anchor="middle" font-size="10" font-family="monospace" fill="#1e3a8a">zone</text>
+                <path d="M160 120 L 230 120" stroke="#0f172a" stroke-width="3" marker-end="url(#a2)"/>
+                <defs><marker id="a2" markerWidth="7" markerHeight="7" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#0f172a"/></marker></defs>
+                <rect x="232" y="52" width="98" height="140" rx="4" fill="#0f172a" stroke="#0f172a" stroke-width="3"/>
+                <text x="281" y="74" text-anchor="middle" font-size="9" fill="#f8fafc" letter-spacing="1">computeFrame</text>
+                <text x="281" y="98" text-anchor="middle" font-size="8" fill="#cbd5e1">rows + bars</text>
+                <text x="281" y="116" text-anchor="middle" font-size="8" fill="#cbd5e1">header ticks</text>
+                <text x="281" y="134" text-anchor="middle" font-size="8" fill="#cbd5e1">vertical window</text>
+                <text x="281" y="152" text-anchor="middle" font-size="8" fill="#cbd5e1">real viewport</text>
+                <text x="281" y="176" text-anchor="middle" font-size="8" font-family="monospace" fill="#94a3b8">scale + viewport</text>
+              </svg>
+            </div>
+          </div>
+
+          <div class="grid md:grid-cols-2 gap-6 pt-2">
+            <div>
+              <p class="lbl mb-1">Problem</p>
+              <p class="text-sm">A bare <span class="font-mono">(instant) =&gt; number</span> strips the scale down to one method — Primitive Obsession on a function type. Both tests pass <span class="font-mono">(i) =&gt; i / 1000</span>, so the test surface has drifted off the real interface entirely.</p>
+            </div>
+            <div>
+              <p class="lbl mb-1">Solution</p>
+              <p class="text-sm"><span class="font-mono">LayoutInput</span> takes <span class="font-mono">scale: TimeScale</span> plus the viewport window <span class="font-mono">plans/01</span> §4 already specifies. Parameter count drops; capability rises.</p>
+            </div>
+          </div>
+
+          <div class="rounded-md bg-amber-50 border border-amber-200 p-3 text-sm text-amber-900">
+            <span class="font-semibold">Prerequisite for candidate 1.</span> Layout cannot emit header ticks without the scale that generates them. Do this one first.
+          </div>
+
+          <div>
+            <p class="lbl mb-1">Wins</p>
+            <ul class="text-sm list-disc pl-5 space-y-0.5">
+              <li>interface shrinks: 4 params → 3</li>
+              <li>leverage: ticks and culling arrive free</li>
+              <li>tests exercise the real TimeScale</li>
+              <li><span class="font-mono">viewport.width</span> stops being a lie</li>
+            </ul>
+          </div>
+        </article>
+
+        <!-- ============================= C3 ============================= -->
+        <article id="c3" class="space-y-4">
+          <div class="flex items-center gap-3 flex-wrap">
+            <h2 class="text-xl font-serif font-semibold">3 · Row geometry has two owners, and the index is not one of them</h2>
+            <span class="badge badge-strong">Strong</span>
+            <span class="tag">in-process</span>
+          </div>
+          <p class="font-mono text-sm text-slate-600">src/layout/row-height-index.ts (67 lines, 0 callers) · src/layout/row-height-index.test.ts (83 lines) · src/layout/frame.ts:64, 87</p>
+
+          <div class="grid md:grid-cols-2 gap-5">
+            <div class="rounded-lg border border-slate-200 bg-white p-4">
+              <p class="lbl mb-3">before</p>
+              <div class="space-y-3">
+                <div class="box p-3">
+                  <p class="text-xs font-mono text-slate-500">computeFrame</p>
+                  <p class="text-sm font-mono mt-1">top = index * rowHeight</p>
+                  <p class="text-sm font-mono">contentHeight = rows.length * rowHeight</p>
+                  <p class="text-xs text-red-600 mt-1">← the real source of row geometry</p>
+                </div>
+                <div class="flex items-center justify-center text-slate-300 text-xs">no edge</div>
+                <div class="box-ghost p-3">
+                  <p class="text-xs font-mono">PrefixSumHeightIndex</p>
+                  <p class="text-xs mt-1">topAt · heightAt · indexAtY · totalHeight · invalidateFrom</p>
+                  <p class="text-xs mt-1">7 tests · 0 callers</p>
+                </div>
+              </div>
+            </div>
+            <div class="rounded-lg border border-slate-200 bg-white p-4">
+              <p class="lbl mb-3">after</p>
+              <div class="space-y-3">
+                <div class="box p-3">
+                  <p class="text-xs font-mono text-slate-500">computeFrame</p>
+                  <p class="text-sm font-mono mt-1">top = index.topAt(i)</p>
+                  <p class="text-sm font-mono">contentHeight = index.totalHeight</p>
+                </div>
+                <div class="flex items-center justify-center text-slate-500 text-xs">↓ one edge</div>
+                <div class="box-deep p-3">
+                  <p class="text-xs font-mono">RowHeightIndex</p>
+                  <p class="text-xs mt-1 text-slate-300">sole owner of “top of row i”</p>
+                  <p class="text-xs mt-1 text-slate-300">S5 variable heights land here alone</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="grid md:grid-cols-2 gap-6 pt-2">
+            <div>
+              <p class="lbl mb-1">Problem</p>
+              <p class="text-sm">The seam exists, is fully tested, and nothing calls it. The tests guard a module no behaviour depends on, while <span class="font-mono">computeFrame</span>’s inline arithmetic — the code that actually runs — has no variable-height test because it cannot have one.</p>
+            </div>
+            <div>
+              <p class="lbl mb-1">Solution</p>
+              <p class="text-sm">Wire it. <span class="font-mono">computeFrame</span> constructs the index and reads <span class="font-mono">topAt</span> / <span class="font-mono">totalHeight</span> from it. No new abstraction — the interface is already written.</p>
+            </div>
+          </div>
+
+          <div class="rounded-md bg-amber-50 border border-amber-200 p-3 text-sm text-amber-900">
+            <span class="font-semibold">The spec already says so.</span> <span class="font-mono text-xs">plans/01</span> §4: <em>“contentHeight — across ALL rows, <strong>from the height index</strong>.”</em> This is not speculative generality to delete; it is a specified seam left unconnected.
+          </div>
+
+          <div>
+            <p class="lbl mb-1">Wins</p>
+            <ul class="text-sm list-disc pl-5 space-y-0.5">
+              <li>locality: one answer to “top of row i”</li>
+              <li>7 existing tests start guarding real behaviour</li>
+              <li><span class="font-mono">invalidateFrom</span> becomes reachable for S2</li>
+              <li>S5 pack-mode heights change one module</li>
+            </ul>
+          </div>
+        </article>
+
+        <!-- ============================= C4 ============================= -->
+        <article id="c4" class="space-y-4">
+          <div class="flex items-center gap-3 flex-wrap">
+            <h2 class="text-xl font-serif font-semibold">4 · The notify primitive has no live producer</h2>
+            <span class="badge badge-strong">Strong</span>
+            <span class="tag">local-substitutable</span>
+          </div>
+          <p class="font-mono text-sm text-slate-600">src/view/gantt-shell.ts:40–58 · src/layout/viewport/time-scale-model.ts:80–84 (setViewportWidth, 0 callers)</p>
+
+          <div class="rounded-lg border border-slate-200 bg-white p-4">
+            <pre class="mermaid">
+sequenceDiagram
+  participant H as harness/main.ts
+  participant G as GanttShell
+  participant M as TimeScaleModel
+  H->>G: new Gantt({ host, project })
+  G->>M: bind({ viewportWidth: host.clientWidth })
+  Note over G,M: host not laid out yet → clientWidth = 0
+  M-->>G: fitProject falls back to preset zoom (24px/day)
+  Note over G,M: window resizes · pane splits · host revealed
+  rect rgb(254,242,242)
+  Note over G,M: nothing calls setViewportWidth — ever
+  end
+            </pre>
+            <p class="lbl mt-2">before — one measurement, taken at the worst possible moment</p>
+          </div>
+
+          <div class="grid md:grid-cols-2 gap-6 pt-2">
+            <div>
+              <p class="lbl mb-1">Problem</p>
+              <p class="text-sm"><span class="font-mono">viewportWidth</span> is read once, at construction, before layout. <span class="font-mono">setViewportWidth</span> — the model’s live re-measure path, covered by seven tests — has zero callers, so <span class="font-mono">range: 'fitProject'</span> never actually fits a viewport in a browser.</p>
+            </div>
+            <div>
+              <p class="lbl mb-1">Solution</p>
+              <p class="text-sm">The second adapter the seam needs: a thin <span class="font-mono">ResizeObserver</span> in <span class="font-mono">view/</span> pushing measured width into the handle. <span class="font-mono">plans/01</span> §8.2 D-A already names the file — <span class="font-mono">view/resize-binding.ts</span>, issue #8.</p>
+            </div>
+          </div>
+
+          <div class="rounded-md bg-slate-100 border border-slate-300 p-3 text-sm text-slate-700">
+            <span class="font-semibold">One adapter is a hypothetical seam; two make it real.</span> Today the only thing driving <span class="font-mono">setViewportWidth</span> is its own test. The <span class="font-mono">ResizeObserver</span> is the missing second adapter — and the reason the handle was returned instead of a bare unbind closure.
+          </div>
+
+          <div>
+            <p class="lbl mb-1">Wins</p>
+            <ul class="text-sm list-disc pl-5 space-y-0.5">
+              <li>the notify primitive gains a real producer</li>
+              <li><span class="font-mono">fitProject</span> starts fitting</li>
+              <li>seam justified by two adapters, not one</li>
+              <li>unblocks the S1 split-pane acceptance</li>
+            </ul>
+          </div>
+        </article>
+
+        <!-- ============================= C5 ============================= -->
+        <article id="c5" class="space-y-4">
+          <div class="flex items-center gap-3 flex-wrap">
+            <h2 class="text-xl font-serif font-semibold">5 · <span class="font-mono text-lg">bind()</span>’s exceptions are longer than its implementation</h2>
+            <span class="badge badge-explore">Worth exploring</span>
+            <span class="tag">in-process</span>
+          </div>
+          <p class="font-mono text-sm text-slate-600">src/layout/viewport/time-scale-model.ts:62–86 · src/view/gantt-shell.ts:40–58</p>
+
+          <div class="grid md:grid-cols-2 gap-5">
+            <div class="rounded-lg border border-slate-200 bg-white p-4">
+              <p class="lbl mb-3">before — shallow: interface ≈ implementation</p>
+              <svg viewBox="0 0 300 220" class="w-full" style="max-height:220px">
+                <rect x="30" y="15" width="240" height="120" rx="3" fill="#fef2f2" stroke="#dc2626" stroke-width="2"/>
+                <text x="150" y="33" text-anchor="middle" font-size="9" fill="#7f1d1d" letter-spacing="1.2">INTERFACE</text>
+                <text x="150" y="52" text-anchor="middle" font-size="9" fill="#7f1d1d">not on your own bind…</text>
+                <text x="150" y="68" text-anchor="middle" font-size="9" fill="#7f1d1d">…because you're still constructing</text>
+                <text x="150" y="84" text-anchor="middle" font-size="9" fill="#7f1d1d">not on your own unbind…</text>
+                <text x="150" y="100" text-anchor="middle" font-size="9" fill="#7f1d1d">…but yes on your own width push</text>
+                <text x="150" y="116" text-anchor="middle" font-size="9" fill="#7f1d1d">yes on anyone else's anything</text>
+                <text x="150" y="130" text-anchor="middle" font-size="8" fill="#b91c1c" font-family="monospace">9 lines of doc comment</text>
+                <rect x="30" y="145" width="240" height="60" rx="3" fill="#fff" stroke="#94a3b8"/>
+                <text x="150" y="163" text-anchor="middle" font-size="9" fill="#64748b" letter-spacing="1.2">IMPLEMENTATION</text>
+                <text x="150" y="182" text-anchor="middle" font-size="9" font-family="monospace" fill="#334155">priorReactions = [...values()]</text>
+                <text x="150" y="197" text-anchor="middle" font-size="8" fill="#64748b">8 lines of code</text>
+              </svg>
+            </div>
+            <div class="rounded-lg border border-slate-200 bg-white p-4">
+              <p class="lbl mb-3">after — deep: one rule, no exceptions</p>
+              <svg viewBox="0 0 300 220" class="w-full" style="max-height:220px">
+                <rect x="30" y="15" width="240" height="42" rx="3" fill="#d1fae5" stroke="#059669" stroke-width="2"/>
+                <text x="150" y="33" text-anchor="middle" font-size="9" fill="#065f46" letter-spacing="1.2">INTERFACE</text>
+                <text x="150" y="49" text-anchor="middle" font-size="9" fill="#065f46">onChange runs when the scale changes</text>
+                <rect x="30" y="67" width="240" height="138" rx="3" fill="#0f172a" stroke="#0f172a" stroke-width="3"/>
+                <text x="150" y="87" text-anchor="middle" font-size="9" fill="#f8fafc" letter-spacing="1.2">IMPLEMENTATION</text>
+                <text x="150" y="110" text-anchor="middle" font-size="9" fill="#cbd5e1">bindings.set(binding, onChange)</text>
+                <text x="150" y="128" text-anchor="middle" font-size="9" fill="#cbd5e1">invalidate()</text>
+                <text x="150" y="158" text-anchor="middle" font-size="8" fill="#64748b">GanttShell mounts its panes first,</text>
+                <text x="150" y="172" text-anchor="middle" font-size="8" fill="#64748b">binds last — so its own notify</text>
+                <text x="150" y="186" text-anchor="middle" font-size="8" fill="#64748b">is the first render, not an exception</text>
+              </svg>
+            </div>
+          </div>
+
+          <div class="grid md:grid-cols-2 gap-6 pt-2">
+            <div>
+              <p class="lbl mb-1">Problem</p>
+              <p class="text-sm">Every exception exists to serve one caller’s construction order. The caller is the thing to fix; the model absorbed the workaround instead. Callers must also know <span class="font-mono">bind()</span> retains and writes through the object they passed (<span class="font-mono">binding.viewportWidth = width</span> mutates a live Map key).</p>
+            </div>
+            <div>
+              <p class="lbl mb-1">Solution</p>
+              <p class="text-sm">Reorder <span class="font-mono">GanttShell</span>’s constructor: panes and backend first, <span class="font-mono">bind()</span> last. Then <span class="font-mono">bind()</span> notifies uniformly, <span class="font-mono">priorReactions</span> disappears, and the explicit trailing <span class="font-mono">this.render()</span> goes with it.</p>
+            </div>
+          </div>
+
+          <div class="rounded-md bg-amber-50 border border-amber-200 p-3 text-sm text-amber-900">
+            <span class="font-semibold">Stays inside D-A.</span> <span class="font-mono text-xs">plans/01</span> §8.2 locks <span class="font-mono">onChange</span> at bind time and rejects a separate <span class="font-mono">subscribe()</span> — this proposal keeps both, and only removes the exceptions.
+          </div>
+
+          <div>
+            <p class="lbl mb-1">Wins</p>
+            <ul class="text-sm list-disc pl-5 space-y-0.5">
+              <li>interface shrinks by 9 lines of caveat</li>
+              <li>locality: construction order owned by the constructor</li>
+              <li>three notify tests collapse into one rule</li>
+            </ul>
+          </div>
+        </article>
+
+        <!-- ============================= C6 ============================= -->
+        <article id="c6" class="space-y-4">
+          <div class="flex items-center gap-3 flex-wrap">
+            <h2 class="text-xl font-serif font-semibold">6 · The render seam launders its host type through <span class="font-mono text-lg">unknown</span></h2>
+            <span class="badge badge-explore">Worth exploring</span>
+            <span class="tag">ports &amp; adapters</span>
+          </div>
+          <p class="font-mono text-sm text-slate-600">src/render/backend.ts:16 · src/render/dom/index.ts:14–15 · src/render/null/index.ts:14</p>
+
+          <div class="rounded-lg border border-slate-200 bg-white p-4">
+            <pre class="mermaid">
+flowchart TB
+  subgraph B["before"]
+    direction TB
+    I1["RenderBackend.mount(host: unknown)"]
+    D1["render/dom<br/>host = el as HTMLElement"]:::leak
+    N1["render/null<br/>mount() — ignores it"]
+    C1["a canvas backend<br/>casts to something else, unchecked"]:::leak
+    I1 --> D1
+    I1 --> N1
+    I1 -.-> C1
+  end
+  subgraph A["after"]
+    direction TB
+    I2["RenderBackend&lt;THost&gt;.mount(host: THost)"]:::deep
+    D2["RenderBackend&lt;HTMLElement&gt;"]
+    N2["RenderBackend&lt;void&gt;"]
+    C2["RenderBackend&lt;HTMLCanvasElement&gt;"]
+    I2 --> D2
+    I2 --> N2
+    I2 -.-> C2
+  end
+  classDef leak fill:#fef2f2,stroke:#dc2626,stroke-width:2px,color:#7f1d1d;
+  classDef deep fill:#0f172a,stroke:#0f172a,color:#f8fafc,stroke-width:3px;
+            </pre>
+          </div>
+
+          <div class="grid md:grid-cols-2 gap-6 pt-2">
+            <div>
+              <p class="lbl mb-1">Problem</p>
+              <p class="text-sm">The seam types its host as <span class="font-mono">unknown</span> to stay DOM-free, then every adapter casts it back. The requirement lives in a comment instead of the type, and the cast is unchecked. <span class="font-mono">plans/01</span> §8.1 specifies <span class="font-mono">mount(host: HTMLElement)</span>.</p>
+            </div>
+            <div>
+              <p class="lbl mb-1">Solution</p>
+              <p class="text-sm">Make the seam generic in its host: <span class="font-mono">RenderBackend&lt;THost&gt;</span>. <span class="font-mono">backend.ts</span> then names no DOM type at all — strictly more DOM-free than today — and each adapter states what it needs.</p>
+            </div>
+          </div>
+
+          <div>
+            <p class="lbl mb-1">Wins</p>
+            <ul class="text-sm list-disc pl-5 space-y-0.5">
+              <li>deletes two unchecked casts</li>
+              <li>the type states the adapter’s requirement</li>
+              <li><span class="font-mono">backend.ts</span> stops mentioning the DOM entirely</li>
+              <li>a future canvas adapter is type-checked at the seam</li>
+            </ul>
+          </div>
+        </article>
+
+        <!-- ============================= C7 ============================= -->
+        <article id="c7" class="space-y-4">
+          <div class="flex items-center gap-3 flex-wrap">
+            <h2 class="text-xl font-serif font-semibold">7 · The public surface leaks upward and omits the model</h2>
+            <span class="badge badge-strong">Strong</span>
+            <span class="tag">in-process</span>
+          </div>
+          <p class="font-mono text-sm text-slate-600">src/api/index.ts:1–13 · src/layout/index.ts:10–11 · src/view/index.ts:6–7 · fixtures/sample-project.ts:3–5</p>
+
+          <div class="rounded-md bg-red-50 border border-red-300 p-3 text-sm text-red-900">
+            <span class="font-semibold">A consumer cannot author a Task.</span>
+            <span class="font-mono text-xs">api/index.ts</span> exports <span class="font-mono">Project</span>, <span class="font-mono">Gantt</span>, <span class="font-mono">TimeScaleModel</span>, <span class="font-mono">dayPreset</span>, <span class="font-mono">instant</span> — and no <span class="font-mono">Task</span>, <span class="font-mono">TaskId</span>, <span class="font-mono">taskId</span>, or <span class="font-mono">Instant</span>. With <span class="font-mono">package.json</span>’s <span class="font-mono">exports</span> map sealed to <span class="font-mono">.</span>, there is no legal way to build the array <span class="font-mono">new Project({ tasks })</span> requires. The fixture proves it: it imports from <span class="font-mono">../src/model</span> and <span class="font-mono">../src/time</span> directly, around the seam.
+          </div>
+
+          <div class="grid md:grid-cols-2 gap-5">
+            <div class="rounded-lg border border-slate-200 bg-white p-4">
+              <p class="lbl mb-3">before — cross-section: one symbol, four hops</p>
+              <div class="space-y-1">
+                <div class="box border-l-4 border-l-slate-400 px-3 py-2"><span class="font-mono text-xs">time/index.ts</span> <span class="text-xs text-slate-500">— defines <span class="font-mono">instant</span>, <span class="font-mono">dayPreset</span></span></div>
+                <div class="text-center text-slate-400 text-xs">↓ re-export</div>
+                <div class="box-leak border-l-4 px-3 py-2"><span class="font-mono text-xs">layout/index.ts</span> <span class="text-xs text-red-700">— pass-through, for the lint</span></div>
+                <div class="text-center text-slate-400 text-xs">↓ re-export</div>
+                <div class="box-leak border-l-4 px-3 py-2"><span class="font-mono text-xs">view/index.ts</span> <span class="text-xs text-red-700">— pass-through, for the lint</span></div>
+                <div class="text-center text-slate-400 text-xs">↓ re-export</div>
+                <div class="box border-l-4 border-l-slate-800 px-3 py-2"><span class="font-mono text-xs">api/index.ts</span> <span class="text-xs text-slate-500">— the sealed public surface</span></div>
+                <p class="text-xs text-red-700 pt-2">every new public primitive edits three files</p>
+              </div>
+            </div>
+            <div class="rounded-lg border border-slate-200 bg-white p-4">
+              <p class="lbl mb-3">after — one hop, one documented edge</p>
+              <div class="space-y-1">
+                <div class="box border-l-4 border-l-slate-400 px-3 py-2"><span class="font-mono text-xs">time/index.ts</span></div>
+                <div class="text-center text-slate-400 text-xs">↓ type-and-primitive edge</div>
+                <div class="box-deep border-l-4 px-3 py-2"><span class="font-mono text-xs">api/index.ts</span> <span class="text-xs text-slate-300">— names the whole public surface</span></div>
+                <div class="box-ghost px-3 py-2 mt-3"><span class="font-mono text-xs">layout/index.ts</span> · <span class="font-mono text-xs">view/index.ts</span> <span class="text-xs">— internal only again</span></div>
+                <p class="text-xs text-slate-500 pt-2">one grep answers “what is public”</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="grid md:grid-cols-2 gap-6 pt-2">
+            <div>
+              <p class="lbl mb-1">Problem</p>
+              <p class="text-sm">Two failures of one module. Downward: <span class="font-mono">model/</span>’s types never reach the surface, so nothing legal can construct a Task. Upward: <span class="font-mono">instant</span>, <span class="font-mono">dayPreset</span> and four types are laundered through two barrels with no interest in them, purely to satisfy the layer lint — Shotgun Surgery growing linearly with the surface.</p>
+            </div>
+            <div>
+              <p class="lbl mb-1">Solution</p>
+              <p class="text-sm">One module owns the public surface: <span class="font-mono">api/index.ts</span> re-exports <span class="font-mono">model/</span>’s types (the <span class="font-mono">api → model</span> edge both configs already allow) and takes the same type-and-primitive-only edge to <span class="font-mono">time/</span>. The intermediate barrels go back to being internal.</p>
+            </div>
+          </div>
+
+          <div class="rounded-md bg-amber-50 border border-amber-200 p-3 text-sm text-amber-900">
+            <span class="font-semibold">Touches a guard, so it is a spec change.</span> Widening the I1 allow-list needs the human decision the <span class="font-mono">protect-spec</span> hook asks for. The precedent is already in both configs: <em>“model is the type surface api/ re-exports … the layer diagram doesn’t draw the arrow because it’s a type-only re-export, not a behavioral one.”</em>
+          </div>
+
+          <div>
+            <p class="lbl mb-1">Wins</p>
+            <ul class="text-sm list-disc pl-5 space-y-0.5">
+              <li>locality: one file names the public surface</li>
+              <li>two barrels stop carrying foreign symbols</li>
+              <li>AI-navigability: one grep, not four</li>
+            </ul>
+          </div>
+        </article>
+
+      </section>
+
+      <!-- ============================= NOTED ============================= -->
+      <section class="space-y-4">
+        <h2 class="text-lg font-serif font-semibold">Noted, not proposed</h2>
+        <p class="text-sm text-slate-600">Real, small, and better fixed in passing than promoted to a deepening.</p>
+        <table class="findings w-full">
+          <thead><tr><th style="width:30%">Where</th><th>What</th></tr></thead>
+          <tbody>
+            <tr><td class="font-mono text-xs">render/dom/index.ts:33</td><td><span class="font-mono">node.textContent = bar.taskId</span> — bars render their id, not their name. <span class="font-mono">FrameBar</span> carries no label, though <span class="font-mono">FrameRow</span> does. The harness has been showing <span class="font-mono">task-1</span>, <span class="font-mono">task-2</span> … under a ticked S0 acceptance box.</td></tr>
+            <tr><td class="font-mono text-xs">time/instant.ts:13</td><td><span class="font-mono">instant('2026-09-01T00:00')</span> — a zoneless ISO string — parses through <span class="font-mono">new Date()</span> in the <em>machine’s</em> zone, in the one module that exists to keep the machine’s zone out.</td></tr>
+            <tr><td class="font-mono text-xs">fixtures/sample-project.ts:9,69</td><td><span class="font-mono">day()</span> declares <span class="font-mono">number</span>, discarding the <span class="font-mono">Instant</span> brand <span class="font-mono">addMs</span> returns, then launders it back with <span class="font-mono">as Task['start']</span>. Declare <span class="font-mono">Instant</span> and both casts vanish.</td></tr>
+            <tr><td class="font-mono text-xs">layout/frame.ts:44–45</td><td><span class="font-mono">links: []</span> and <span class="font-mono">decorations: []</span> are the empty-tuple type, not element types. Every future assignment is a signature change.</td></tr>
+            <tr><td class="font-mono text-xs">render/dom/index.ts:10–11</td><td><span class="font-mono">Map&lt;string, …&gt;</span> keyed by what is really an <span class="font-mono">ItemId</span> — the brand is dropped at the one place it would catch a mis-keyed lookup.</td></tr>
+            <tr><td class="font-mono text-xs">view/gantt-shell.ts:40</td><td><span class="font-mono">options.tasks</span> is captured by reference and never re-read on change; nothing re-renders when the task list changes.</td></tr>
+            <tr><td class="font-mono text-xs">api/gantt.ts:31 vs view/gantt-shell.ts:88</td><td><span class="font-mono">Gantt.destroy()</span> is idempotent; <span class="font-mono">GanttShell.destroy()</span> is not. The guard sits on the far side of the seam from the thing it guards.</td></tr>
+            <tr><td class="font-mono text-xs">render/dom/index.ts:64</td><td><span class="font-mono">hitTest()</span> returns <span class="font-mono">null</span> unconditionally — a silent wrong answer rather than a deferred one. <span class="font-mono">applyState()</span> is an honest no-op with a comment; <span class="font-mono">hitTest</span> should say the same.</td></tr>
+            <tr><td class="font-mono text-xs">time/scale.ts:49, 63</td><td><span class="font-mono">SUPPORTED_UNITS</span> and <span class="font-mono">stepBy</span>’s <span class="font-mono">default:</span> case are two sources of truth for the same fact.</td></tr>
+            <tr><td class="font-mono text-xs">time/scale.ts:120</td><td><span class="font-mono">dayPreset</span> is public, exported, and unfrozen. One consumer mutating <span class="font-mono">tickWidthPx</span> changes every Gantt on the page — the shape I2 exists to prevent.</td></tr>
+            <tr><td class="font-mono text-xs">api/project.ts:9</td><td><span class="font-mono">zone</span> vs <span class="font-mono">plans/02</span>:27’s <span class="font-mono">timeZone</span> — two names for one concept, which the API rule bans outright.</td></tr>
+            <tr><td class="font-mono text-xs">harness/main.ts:4–5</td><td>Hand-rolls <span class="font-mono">getElementById</span> + throw because <span class="font-mono">host</span> takes only an <span class="font-mono">HTMLElement</span>. <span class="font-mono">plans/02</span>:42 specifies <span class="font-mono">host: '#gantt' // element or selector</span> — an API gap the harness rule says to close in <span class="font-mono">src/</span>.</td></tr>
+            <tr><td class="font-mono text-xs">harness/index.html:14, 36</td><td>The other half of the harness. <span class="font-mono">line-height: 32px</span> restates <span class="font-mono">DEFAULT_ROW_HEIGHT</span> — the same gap class <span class="font-mono">CLAUDE.md</span> already names — and <span class="font-mono">#gantt { overflow: auto }</span> is scroll owned by CSS, which the <span class="font-mono">no-scroll-outside-scroll-model</span> rule cannot see. <span class="font-mono">main.ts</span> itself is clean.</td></tr>
+            <tr><td class="font-mono text-xs">.github/workflows/ci.yml:3–7</td><td><span class="font-mono">push</span> and <span class="font-mono">pull_request</span> are commented out; CI is <span class="font-mono">workflow_dispatch</span> only. Every invariant in the I1–I14 matrix maps to a job that no longer runs on its own. The S0 box “import-boundary lint fails the build” is ticked against a build that does not happen.</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <!-- ============================= CODE REVIEW ============================= -->
+      <section id="review" class="space-y-6">
+        <div class="border-t-2 border-slate-900 pt-6">
+          <p class="lbl">Appendix</p>
+          <h2 class="text-2xl font-serif font-semibold">Two-axis code review</h2>
+          <p class="text-sm text-slate-500 mt-1">Fixed point <span class="font-mono">e5f5376</span> (root) · both axes reviewed in parallel and reported separately, unmerged and unranked against each other.</p>
+        </div>
+
+        <div class="rounded-lg border border-slate-200 bg-white p-5 space-y-4">
+          <h3 class="text-lg font-serif font-semibold">Standards <span class="text-sm font-sans font-normal text-slate-500">— does the code follow the repo’s documented standards?</span></h3>
+
+          <p class="lbl">Hard violations</p>
+          <ul class="text-sm list-disc pl-5 space-y-1.5">
+            <li><span class="font-semibold">Public surface cannot author a Task.</span> <span class="font-mono text-xs">api/index.ts:1–13</span> exports no <span class="font-mono">Task</span>/<span class="font-mono">TaskId</span>/<span class="font-mono">taskId</span>/<span class="font-mono">Instant</span>; <span class="font-mono">package.json</span> seals <span class="font-mono">exports</span> to <span class="font-mono">.</span>, so <span class="font-mono text-xs">fixtures/sample-project.ts:3–5</span> reaches into <span class="font-mono">../src/model</span> and <span class="font-mono">../src/time</span>. Breaks <span class="font-mono">plans/01</span> §1 and <span class="font-mono">docs/03</span> §3.1–3.2.</li>
+            <li><span class="font-semibold"><span class="font-mono">instant()</span> consults the machine’s zone.</span> <span class="font-mono text-xs">time/instant.ts:13</span> — <span class="font-mono">new Date(value).getTime()</span> parses a zoneless ISO string in the host zone. <span class="font-mono">CONTEXT.md</span>, Plain time: <em>“local time … reads as ‘the machine’s zone’, which this project never consults.”</em></li>
+            <li><span class="font-semibold">Dishonest surface on presets.</span> <span class="font-mono text-xs">time/scale.ts:64,91</span> throw <span class="font-mono">RangeError: unsupported unit "M"</span>, against <span class="font-mono">CONTEXT.md</span> ViewPreset (<em>“a new zoom level is never a library edit”</em>) and <span class="font-mono">plans/02</span> §1.4 / I11. Escapes lint B8 only because it is a <span class="font-mono">RangeError</span>, not an <span class="font-mono">Error</span>.</li>
+            <li><span class="font-semibold">Module-level mutable state</span> (<span class="font-mono">docs/02</span> §3.4 — rule documented but not yet wired into <span class="font-mono">eslint.config.js</span>): <span class="font-mono text-xs">scale.ts:49</span> <span class="font-mono">new Set(...)</span>; <span class="font-mono text-xs">scale.ts:120</span> <span class="font-mono">dayPreset</span>, an unfrozen public object — one consumer mutating <span class="font-mono">tickWidthPx</span> changes every Gantt on the page (I2).</li>
+            <li><span class="font-semibold">Backend contract weakened.</span> <span class="font-mono text-xs">render/backend.ts:16</span> <span class="font-mono">mount(host: unknown)</span> + <span class="font-mono text-xs">render/dom/index.ts:15</span> <span class="font-mono">el as HTMLElement</span>. <span class="font-mono">plans/01</span> §8.1 states <span class="font-mono">mount(host: HTMLElement)</span>; <span class="font-mono">render/</span> is not a pure layer, so <span class="font-mono">unknown</span> only launders a cast. → <a href="#c6" class="underline">candidate 6</a></li>
+            <li><span class="font-semibold">Brand laundered twice.</span> <span class="font-mono text-xs">fixtures/sample-project.ts:9</span> <span class="font-mono">day(): number</span> widens <span class="font-mono">Instant</span>; <span class="font-mono text-xs">:69–70</span> re-brands with <span class="font-mono">as Task['start']</span>.</li>
+            <li><span class="font-semibold">Header renders outside the frame.</span> <span class="font-mono text-xs">view/gantt-shell.ts:72–86</span> builds tick DOM in <span class="font-mono">view/</span>, bypassing <span class="font-mono">GeometryFrame</span> and the backend — a second, unkeyed rendering path duplicating <span class="font-mono">render/dom</span>. Cold path, so not an I5 breach. → <a href="#c1" class="underline">candidate 1</a></li>
+            <li><span class="font-semibold"><span class="font-mono">links: []</span>, <span class="font-mono">decorations: []</span></span> (<span class="font-mono text-xs">layout/frame.ts:44–45</span>) are empty-tuple types: no backend can ever receive what the glossary says the frame carries.</li>
+            <li><span class="font-semibold">Harness gap.</span> <span class="font-mono text-xs">harness/index.html:36</span> <span class="font-mono">.fg-bar { line-height: 32px }</span> restates <span class="font-mono">DEFAULT_ROW_HEIGHT</span> — the gap class <span class="font-mono">CLAUDE.md</span> already names — and the harness hardcodes internal class names with no <span class="font-mono">--fg-*</span> parts vocabulary.</li>
+          </ul>
+
+          <p class="lbl pt-2">Judgement calls — smells</p>
+          <ul class="text-sm list-disc pl-5 space-y-1.5">
+            <li><span class="font-semibold">Data Clump.</span> <span class="font-mono text-xs">api/gantt.ts:23–24</span> unwraps <span class="font-mono">Project</span> into <span class="font-mono">tasks</span>+<span class="font-mono">zone</span>; <span class="font-mono text-xs">gantt-shell.ts:43–46</span> re-clumps them into <span class="font-mono">ScaleBinding</span>. Pass the Project.</li>
+            <li><span class="font-semibold">Middle Man / Message Chain.</span> <span class="font-mono">instant</span>/<span class="font-mono">dayPreset</span> tunnel <span class="font-mono">time→layout:10→view:6→api:12</span>, routing around the I1 graph rather than through an allowed edge. → <a href="#c7" class="underline">candidate 7</a></li>
+            <li><span class="font-semibold">Feature Envy / hidden mutation.</span> <span class="font-mono text-xs">time-scale-model.ts:82</span> writes <span class="font-mono">binding.viewportWidth</span> on the caller’s own object. → <a href="#c5" class="underline">candidate 5</a></li>
+            <li><span class="font-semibold">Duplicated Code.</span> <span class="font-mono text-xs">frame.ts:85,87</span> compute <span class="font-mono">rows.length * rowHeight</span> twice; <span class="font-mono">viewport.width</span> is permanently <span class="font-mono">0</span> and dead. Row tops via <span class="font-mono">index * rowHeight</span> duplicate <span class="font-mono">PrefixSumHeightIndex</span>’s job — an I9 divergence waiting to happen. → <a href="#c3" class="underline">candidate 3</a></li>
+            <li><span class="font-semibold">Primitive Obsession / weak seam.</span> <span class="font-mono">LayoutInput.xForInstant</span> as a bare function (<em>“Typically <span class="font-mono">TimeScale.xForInstant</span>”</em>) softens I12; <span class="font-mono text-xs">gantt-shell.ts:64</span> reallocates a wrapper closure per render instead of passing <span class="font-mono">scale.xForInstant</span>; <span class="font-mono text-xs">render/dom/index.ts:10–11</span> keys maps by <span class="font-mono">string</span>, not <span class="font-mono">ItemId</span>; <span class="font-mono">:32</span> <span class="font-mono">textContent = bar.taskId</span> because <span class="font-mono">FrameBar</span> has no label. → <a href="#c2" class="underline">candidate 2</a></li>
+            <li><span class="font-semibold">Two sources of truth.</span> <span class="font-mono">SUPPORTED_UNITS</span> (<span class="font-mono text-xs">scale.ts:49</span>) vs <span class="font-mono">stepBy</span>’s <span class="font-mono">default:</span> (<span class="font-mono text-xs">:63</span>).</li>
+            <li><span class="font-mono text-xs">gantt-shell.ts:40</span> <span class="font-mono">private options</span> parameter property amid <span class="font-mono">#private</span> fields — mixed convention.</li>
+          </ul>
+
+          <div class="rounded-md bg-emerald-50 border border-emerald-200 p-3 text-sm text-emerald-900">
+            <span class="font-semibold">Verified <em>not</em> speculative generality:</span> <span class="font-mono">setViewportWidth</span> (<span class="font-mono">plans/01</span> §8.2 D-A names the handle shape), <span class="font-mono">hitTest</span>/<span class="font-mono">applyState</span> (§8.1 contract), <span class="font-mono">PrefixSumHeightIndex</span> (S1 scope). All three are nonetheless unreferenced.
+          </div>
+        </div>
+
+        <div class="rounded-lg border border-slate-200 bg-white p-5 space-y-4">
+          <h3 class="text-lg font-serif font-semibold">Spec <span class="text-sm font-sans font-normal text-slate-500">— does the code implement what <span class="font-mono">plans/00–04</span> asked for?</span></h3>
+
+          <p class="lbl">(a) Missing or partial — two S0 acceptance boxes are falsely ticked</p>
+          <ul class="text-sm list-disc pl-5 space-y-1.5">
+            <li><span class="font-semibold">“Harness shows fixture tasks as bars.”</span> S0 scope says <span class="font-mono">render/dom</span> renders <em>“absolutely-positioned <strong>row and bar</strong> elements”</em>. <span class="font-mono text-xs">render/dom/index.ts:22–59</span> creates only bars; <span class="font-mono">frame.rows</span> has zero consumers repo-wide, so the computed <span class="font-mono">label</span> is dead. Bar text is <span class="font-mono">bar.taskId</span> — so the harness shows <span class="font-mono">task-1…task-50</span>, not task names.</li>
+            <li><span class="font-semibold">“Import-boundary lint fails the build.”</span> <span class="font-mono text-xs">.github/workflows/ci.yml:3–7</span> — <span class="font-mono">push</span>/<span class="font-mono">pull_request</span> are commented out; CI is <span class="font-mono">workflow_dispatch</span> only. Enforcement rests entirely on the local <span class="font-mono">.githooks/pre-push</span>.</li>
+          </ul>
+
+          <p class="lbl pt-2">S1 scope status</p>
+          <table class="findings w-full">
+            <thead><tr><th style="width:52%">Scope item</th><th>State</th></tr></thead>
+            <tbody>
+              <tr><td><span class="font-mono text-xs">TimeScaleModel</span> observable + bind/notify (#6/#10)</td><td class="text-emerald-700 font-semibold">landed</td></tr>
+              <tr><td>header band</td><td class="text-emerald-700 font-semibold">landed <span class="font-normal text-slate-500">(day preset only)</span></td></tr>
+              <tr><td>shipped presets hour→year</td><td class="text-red-700 font-semibold">absent <span class="font-normal text-slate-600">— only <span class="font-mono">dayPreset</span>; <span class="font-mono">SUPPORTED_UNITS</span> excludes <span class="font-mono">M</span>/<span class="font-mono">y</span></span></td></tr>
+              <tr><td>row-height index behind an interface</td><td class="text-amber-700 font-semibold">built, unwired <span class="font-normal text-slate-600">— zero callers; <span class="font-mono">frame.ts:64</span> inlines <span class="font-mono">index * rowHeight</span>, contradicting the module’s own header</span></td></tr>
+              <tr><td><span class="font-mono text-xs">ScrollModel</span>; “the I12 rule is in force now”</td><td class="text-red-700 font-semibold">absent <span class="font-normal text-slate-600">— exists only in comments; the harness scrolls via CSS <span class="font-mono">overflow:auto</span>, which the lint cannot see</span></td></tr>
+              <tr><td>grid pane · splitter · timeline pane · virtualization</td><td class="text-red-700 font-semibold">absent <span class="font-normal text-slate-600">— <span class="font-mono">LayoutInput</span> takes no viewport window, so §4’s “only rows in the vertical window” is unimplementable</span></td></tr>
+              <tr><td>shared row geometry / I9 pixel test</td><td class="text-red-700 font-semibold">absent <span class="font-normal text-slate-600">(no grid pane)</span></td></tr>
+              <tr><td>zoom · preset switching · anchored zoom</td><td class="text-red-700 font-semibold">absent <span class="font-normal text-slate-600">— no setters; <span class="font-mono">plans/02</span>:90 <span class="font-mono">gantt.preset = …</span> is unwritable</span></td></tr>
+              <tr><td>theming — <span class="font-mono text-xs">--fg-*</span> custom properties, light/dark</td><td class="text-red-700 font-semibold">absent <span class="font-normal text-slate-600">— no custom property anywhere</span></td></tr>
+              <tr><td>a11y — focusable, roles, labels</td><td class="text-red-700 font-semibold">absent <span class="font-normal text-slate-600">— no <span class="font-mono">role</span>/<span class="font-mono">tabindex</span>/<span class="font-mono">aria-</span> in <span class="font-mono">src/</span></span></td></tr>
+            </tbody>
+          </table>
+
+          <p class="lbl pt-2">(b) Scope creep / divergence</p>
+          <ul class="text-sm list-disc pl-5 space-y-1.5">
+            <li><span class="font-mono text-xs">GanttOptions.rowHeight</span> is not in <span class="font-mono">plans/02</span>; §4 says row height is level-1 CSS (<span class="font-mono">--fg-row-height</span>), and <span class="font-mono text-xs">harness/index.html:36</span> duly re-derives it.</li>
+            <li><span class="font-mono text-xs">layout/index.ts:10</span> re-exports <span class="font-mono">dayPreset</span>/<span class="font-mono">instant</span> from <span class="font-mono">time/</span>, laundering an <span class="font-mono">api → view → layout → time</span> path the §1 layer graph does not draw. → <a href="#c7" class="underline">candidate 7</a></li>
+          </ul>
+
+          <p class="lbl pt-2">(c) Implemented, but wrong</p>
+          <ul class="text-sm list-disc pl-5 space-y-1.5">
+            <li><span class="font-semibold"><span class="font-mono">viewport</span> is fabricated.</span> <span class="font-mono text-xs">frame.ts:85</span> returns <span class="font-mono">{x:0, y:0, width:0, height:contentHeight}</span>. §4 defines <span class="font-mono">viewport</span> as the window rows are culled against; width <span class="font-mono">0</span> and height = <em>total content</em> make it meaningless, and no consumer reads it.</li>
+            <li><span class="font-semibold"><span class="font-mono">LayoutInput.xForInstant</span>.</span> §4 says layout takes “model + <strong>time scale</strong> + viewport window”. A bare function defeats I12 at the layout seam — <span class="font-mono text-xs">frame.test.ts:4</span> duly passes <span class="font-mono">i / 1000</span> and no lint fires. → <a href="#c2" class="underline">candidate 2</a></li>
+            <li><span class="font-semibold"><span class="font-mono">Project({ zone })</span></span> vs <span class="font-mono">plans/02</span> §2/§6’s <span class="font-mono">timeZone</span> — a synonym for one concept, which §1 principle 5 bans; #5 cited <span class="font-mono">timeZone</span> as the settled name.</li>
+            <li><span class="font-semibold"><span class="font-mono">host</span> takes only an <span class="font-mono">HTMLElement</span></span>; <span class="font-mono">plans/02</span>:42 says “element or selector”, so <span class="font-mono text-xs">harness/main.ts:4–5</span> hand-rolls lookup and throw.</li>
+            <li><span class="font-semibold"><span class="font-mono">hitTest()</span> returns <span class="font-mono">null</span> unconditionally</span> (<span class="font-mono text-xs">dom/index.ts:64</span>) rather than being absent — a silent wrong answer, not a deferred one.</li>
+            <li><span class="font-semibold">Nothing re-renders on data change.</span> <span class="font-mono text-xs">project.ts:13</span> is a captured array with no change signal. Expected at S2, but it means the harness cannot demo mutation.</li>
+          </ul>
+        </div>
+
+        <div class="rounded-md bg-slate-100 border border-slate-300 p-4 text-sm text-slate-800">
+          <span class="font-semibold">Summary.</span>
+          Standards — 9 hard violations, 7 judgement calls; worst: the public surface exports no way to author a <span class="font-mono">Task</span>, so nothing can legally consume the library.
+          Spec — 2 falsely-ticked S0 acceptance boxes, 8 of 10 S1 scope items absent or unwired, 6 wrong implementations; worst: CI’s <span class="font-mono">push</span>/<span class="font-mono">pull_request</span> triggers are disabled, so every invariant in the I1–I14 matrix maps to a job that does not run — including the one the ticked S0 box claims.
+          The two axes are reported unmerged and unranked against each other by design.
+        </div>
+      </section>
+
+      <!-- ============================= TOP ============================= -->
+      <section id="top-recommendation">
+        <div class="rounded-xl border-2 border-slate-900 bg-white p-6 space-y-3">
+          <p class="lbl">Top recommendation</p>
+          <h2 class="text-2xl font-serif font-semibold">
+            <a href="#c2" class="underline decoration-slate-300 hover:decoration-slate-900">Give <span class="font-mono text-xl">computeFrame</span> the TimeScale</a>,
+            then <a href="#c1" class="underline decoration-slate-300 hover:decoration-slate-900">move the header band behind the render seam</a>.
+          </h2>
+          <p class="text-sm text-slate-600 max-w-3xl">
+            One deepening in two steps, and everything else in S1 waits behind it. Layout cannot emit ticks, cull rows, or fill
+            <span class="font-mono">viewport</span> while its only view of the scale is a single function; and until the frame carries the
+            header, <span class="font-mono">view/</span> keeps rebuilding tick DOM around the seam, where no adapter and no headless test can
+            reach it. Fix the input, and the output follows: <span class="font-mono">GeometryFrame</span> becomes what
+            <span class="font-mono">CONTEXT.md</span> already claims it is — the only thing a backend consumes.
+          </p>
+          <p class="text-sm text-slate-500">
+            Candidate 3 (wire the height index) is the natural third step: it lands in the same function, and
+            <span class="font-mono">plans/01</span> §4 already names the index as the source of <span class="font-mono">contentHeight</span>.
+          </p>
+        </div>
+      </section>
+
+    </main>
+  </body>
+</html>

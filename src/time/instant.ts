@@ -7,9 +7,18 @@ const MS_PER_MINUTE = MS_PER_SECOND * 60;
 const MS_PER_HOUR = MS_PER_MINUTE * 60;
 const MS_PER_DAY = MS_PER_HOUR * 24;
 
+/** Matches an ISO 8601 string carrying an explicit offset or `Z` — never a zoneless plain time. */
+const OFFSET_ISO = /(Z|[+-]\d{2}:?\d{2})$/;
+
 export function instant(value: Date | number | string): Instant {
   if (value instanceof Date) return value.getTime() as Instant;
   if (typeof value === 'number') return value as Instant;
+  if (!OFFSET_ISO.test(value)) {
+    throw new RangeError(
+      `instant(): "${value}" is a zoneless plain time — it names no instant until a zone resolves it. ` +
+        'Pass a string with an explicit offset or "Z", or use fromPlain(zone, parts).',
+    );
+  }
   return new Date(value).getTime() as Instant;
 }
 

@@ -43,8 +43,9 @@ module.exports = {
     forbid('view-boundary', 'view', ['render', 'layout', 'data', 'model']),
     forbid('interaction-boundary', 'interaction', ['view', 'data']),
     forbid('extensions-boundary', 'extensions', ['view', 'interaction']),
-    // model is the type surface api/ re-exports (plans/01 §1: "api/ and model/ types are public").
-    forbid('api-boundary', 'api', ['view', 'data', 'model']),
+    // model and time are the type/primitive surface api/ re-exports (plans/01 §1: "api/ and model/
+    // types are public", widened to time/'s public primitives and presets by #25).
+    forbid('api-boundary', 'api', ['view', 'data', 'model', 'time']),
     {
       name: 'no-circular',
       severity: 'error',

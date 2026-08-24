@@ -282,12 +282,17 @@ Takes model + time scale + viewport window; returns pure serializable geometry. 
 interface GeometryFrame {
   revision: number;            // monotonic; backends discard stale async work
   viewport: { x: number; y: number; width: number; height: number };
+  /** Header ticks, positioned and labelled from the resolved TimeScale + preset — the render seam's
+   *  only route for header state (#19); a backend never builds tick DOM itself. */
+  header: { ticks: Array<{ x: number; label: string }> };
   /** Only rows in the vertical window; `top` in absolute content coordinates. */
   rows: Array<{ id: RowId; index: number; top: number; height: number; laneCount: number; label: string }>;
   contentHeight: number;       // across ALL rows, from the height index
   bars: Array<{
     id: ItemId; entryId: EntryId; rowId: RowId;
     kind: EntryKind;              // backends stamp it as data-kind — per-kind CSS with zero JS
+    /** The entry's name — what a backend renders as the bar's label (#26). */
+    label: string;
     x: number; y: number; width: number; height: number; lane: number;
     /** Static classification only (hasConflict, inCycle) — never hover/selection. */
     flags: BarFlags;
@@ -295,9 +300,18 @@ interface GeometryFrame {
   /** `id` was `DependencyId` (a `model/` brand) pre-#13; `Dependency` is now scheduling-plugin-owned
    *  (§7, #13), so link geometry needs a plugin-contributed emission seam mirroring `registerItemEmitter`
    *  above — exact registration contract (a `registerLinkEmitter`-shaped seam) and `id`'s brand type are
-   *  tracked in #16, not yet settled here. */
-  links: Array<{ id: string; path: PathCommand[]; flags: LinkFlags }>;
-  decorations: Array<TodayLine | RangeBand | RowStripe>;
+   *  tracked in #16, not yet settled here. Shape lands in S1 (#30), contents in S3. */
+  links: readonly Array<{ id: string; path: PathCommand[]; flags: LinkFlags }>;
+  decorations: readonly Array<TodayLine | RangeBand | RowStripe>;
+}
+
+interface LayoutInput {
+  entries: readonly Entry[];
+  scale: TimeScale;              // #20 — the bound scale, not a bare xForInstant function
+  preset: ViewPreset;             // governs header ticks (#19)
+  viewport: { x: number; y: number; width: number; height: number };
+  rowHeight: number;
+  revision: number;
 }
 
 function computeFrame(input: LayoutInput): GeometryFrame;
