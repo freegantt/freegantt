@@ -1,6 +1,6 @@
 # FreeGantt
 
-Framework-free TypeScript Gantt library, library-first. The spec is `plans/00`–`04` — read the relevant doc before changing anything it governs; locked decisions D1–D12 are in `plans/00-overview.md` and are not revisited casually. Work lands in vertical slices S0–S7 (`plans/03-slices.md`), in order, each ending with something visible in `harness/`.
+Framework-free TypeScript Gantt library, library-first. The spec is `plans/00`–`04` — read the relevant doc before changing anything it governs; locked decisions D1–D12 are in `plans/00-overview.md` and are not revisited casually. Work lands in vertical slices S0–S7 (`plans/03-slices.md`), in order, each ending with something visible in `harness/`. Follow Unlce Bob's (Robert C. Martin) clean code, and use well defined TypeScript types wherever possible and strong module boundries. Design for a clean easy to use API internally and externally.
 
 ## Hard rules
 

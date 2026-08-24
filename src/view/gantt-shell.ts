@@ -2,6 +2,8 @@
 // this step adds the header band, rendering TimeScale.ticks() above the bars.
 
 import { computeFrame, TimeScaleModel } from '../layout/index.js';
+import type { ScaleBindingHandle } from '../layout/index.js';
+
 import { createDomBackend } from '../render/dom/index.js';
 import type { RenderBackend } from '../render/backend.js';
 import type { Task } from '../model/index.js';
@@ -24,17 +26,20 @@ export class GanttShell {
   #backend: RenderBackend;
   #revision = 0;
   #scale: TimeScaleModel;
-  #unbindScale: () => void;
+  #scaleHandle: ScaleBindingHandle;
   #headerEl: HTMLElement;
   #barsHost: HTMLElement;
 
   constructor(private options: GanttShellOptions) {
     this.#scale = options.scale ?? new TimeScaleModel();
-    this.#unbindScale = this.#scale.bind({
-      zone: options.zone,
-      tasks: options.tasks,
-      viewportWidth: options.host.clientWidth,
-    });
+    this.#scaleHandle = this.#scale.bind(
+      {
+        zone: options.zone,
+        tasks: options.tasks,
+        viewportWidth: options.host.clientWidth,
+      },
+      () => this.render(),
+    );
 
     this.#headerEl = document.createElement('div');
     this.#headerEl.className = 'fg-header';
@@ -78,7 +83,7 @@ export class GanttShell {
   }
 
   destroy(): void {
-    this.#unbindScale();
+    this.#scaleHandle.unbind();
     this.#backend.destroy();
     this.options.host.replaceChildren();
   }

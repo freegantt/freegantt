@@ -8,9 +8,9 @@
 // are resolved from the Gantt instances bound to the model, which is what lets one scale span a task
 // Gantt and a workforce Gantt: neither caller has to compute a cross-project span by hand.
 
-import { createTimeScale, dayPreset, diffMs, instant, pxPerMsForPreset } from '../time/index.js';
-import type { TimeScale, TimeScaleOptions, ViewPreset } from '../time/index.js';
-import type { Task, TimeSpan } from '../model/index.js';
+import { createTimeScale, dayPreset, diffMs, instant, pxPerMsForPreset } from '../../time/index.js';
+import type { TimeScale, TimeScaleOptions, ViewPreset } from '../../time/index.js';
+import type { Task, TimeSpan } from '../../model/index.js';
 
 /** What a caller states about how time should be displayed (plans/02 §5). Everything else — the
  * project's zone (D6), the span, the pixels-per-millisecond factor — is derived at bind time. */
@@ -34,10 +34,20 @@ export interface ScaleBinding {
 /** Zone used before any Gantt has bound, so `scale` is readable on a fresh model. */
 const UNBOUND_ZONE = 'UTC';
 
+/** Returned by `bind()` (#6). `unbind` leaves the shared axis; `setViewportWidth` lets a bound Gantt
+ * push a re-measured width (e.g. from a `ResizeObserver`) without unbind+rebind churn. */
+export interface ScaleBindingHandle {
+  unbind(): void;
+  setViewportWidth(width: number): void;
+}
+
 export class TimeScaleModel {
   #preset: ViewPreset;
   #range: 'fitProject' | TimeSpan;
-  #bindings = new Set<ScaleBinding>();
+  /** Each bound Gantt's data alongside the reaction it supplied at bind time — one collection serves
+   * both resolution (iterate keys) and change notification (iterate values), so there is no second,
+   * separately-fanned-out subscriber list to keep in sync with binding membership. */
+  #bindings = new Map<ScaleBinding, () => void>();
   #resolved: TimeScale | undefined;
 
   constructor(intent: TimeScaleIntent = {}) {
@@ -49,14 +59,29 @@ export class TimeScaleModel {
     return this.#preset;
   }
 
-  /** Gantt instances bind at construction and call the returned function on destroy. Binding and
-   * unbinding both invalidate the resolved scale, so every other bound Gantt follows a project
-   * joining or leaving the shared axis. */
-  bind(binding: ScaleBinding): () => void {
-    this.#bindings.add(binding);
+  /** Gantt instances bind at construction and call the returned handle's `unbind` on destroy.
+   * `onChange` runs whenever the resolved scale may have changed on account of *another* bound
+   * Gantt — one joining, one leaving, or a width it pushed — so every other bound instance follows
+   * without wiring a subscription itself. It never runs for a binding's own `bind()` or `unbind()`:
+   * not on bind, because the caller is still constructing (e.g. `GanttShell` hasn't mounted its
+   * render target yet) and renders itself explicitly once construction finishes; not on unbind,
+   * because the caller is tearing itself down and has no reason to react to its own departure. A
+   * binding's own width push *does* run its own `onChange` (via `setViewportWidth`), since that's
+   * a live re-measure during normal operation, not construction or teardown. */
+  bind(binding: ScaleBinding, onChange: () => void): ScaleBindingHandle {
+    const priorReactions = [...this.#bindings.values()];
+    this.#bindings.set(binding, onChange);
     this.#resolved = undefined;
-    return () => {
-      if (this.#bindings.delete(binding)) this.#resolved = undefined;
+    for (const react of priorReactions) react();
+    return {
+      unbind: () => {
+        if (this.#bindings.delete(binding)) this.#invalidate();
+      },
+      setViewportWidth: (width) => {
+        if (binding.viewportWidth === width) return;
+        binding.viewportWidth = width;
+        this.#invalidate();
+      },
     };
   }
 
@@ -64,14 +89,19 @@ export class TimeScaleModel {
     return (this.#resolved ??= createTimeScale(this.#resolve()));
   }
 
+  #invalidate(): void {
+    this.#resolved = undefined;
+    for (const onChange of this.#bindings.values()) onChange();
+  }
+
   #resolve(): TimeScaleOptions {
-    const bindings = [...this.#bindings];
+    const bindings = this.#bindings.keys();
     // D6: the zone is the project's. Gantt instances sharing an axis share a project zone in practice; the
     // first binding decides, rather than the axis silently having two calendars.
-    const zone = bindings[0]?.zone ?? UNBOUND_ZONE;
-    const range = this.#range === 'fitProject' ? boundSpan(bindings) : this.#range;
+    const zone = bindings.next().value?.zone ?? UNBOUND_ZONE;
+    const range = this.#range === 'fitProject' ? boundSpan(this.#bindings.keys()) : this.#range;
     const spanMs = diffMs(range.end, range.start);
-    const width = fitWidth(bindings);
+    const width = fitWidth(this.#bindings.keys());
     // Fit-to-width is a refinement of the preset's own zoom, not a precondition for having one.
     const pxPerMs =
       width > 0 && spanMs > 0 ? width / spanMs : pxPerMsForPreset(zone, this.#preset, range.start);
@@ -81,7 +111,7 @@ export class TimeScaleModel {
 
 /** The narrowest measured viewport across the bound Gantt instances, so the span fits in all of them rather
  * than only the widest. `0` when nothing is measured yet. */
-function fitWidth(bindings: readonly ScaleBinding[]): number {
+function fitWidth(bindings: IterableIterator<ScaleBinding>): number {
   let width = 0;
   for (const binding of bindings) {
     if (binding.viewportWidth <= 0) continue;
@@ -93,7 +123,7 @@ function fitWidth(bindings: readonly ScaleBinding[]): number {
 /** `range: 'fitProject'` (plans/02 §5): min start / max end across every bound project's tasks. With
  * nothing bound — or nothing scheduled — this collapses to a zero span at the epoch, which resolves
  * to the preset's own zoom rather than a divide-by-zero. */
-function boundSpan(bindings: readonly ScaleBinding[]): TimeSpan {
+function boundSpan(bindings: IterableIterator<ScaleBinding>): TimeSpan {
   let span: TimeSpan | undefined;
   for (const binding of bindings) {
     for (const task of binding.tasks) {

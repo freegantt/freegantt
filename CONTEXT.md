@@ -109,7 +109,7 @@ What a caller states about how time should be displayed — a ViewPreset and a r
 _Avoid_: Scale options, scale config (both read as the resolved geometry, which is the opposite of intent)
 
 **Scale binding**:
-One Gantt's contribution to a TimeScaleModel's resolution: its Project's zone, its Tasks, and its measured viewport width. A Gantt binds on construction and unbinds on destroy, and both re-resolve the shared TimeScale — which is how `'fitProject'` spans every bound Project rather than whichever one was passed to the constructor.
+One Gantt's contribution to a TimeScaleModel's resolution: its Project's zone, its Tasks, its measured viewport width, and the reaction to run when the resolved scale changes. A Gantt binds on construction and unbinds on destroy, and both re-resolve the shared TimeScale — which is how `'fitProject'` spans every bound Project rather than whichever one was passed to the constructor.
 _Avoid_: Attach, subscribe, register
 
 **ScrollModel**:
