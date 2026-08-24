@@ -350,22 +350,22 @@ Guardrails and types first (`plans/04` §3.2/§3.3), then the pure model, then t
 - [x] Local-clamp echo rule (D-S1.5-6) with the epsilon comment naming both its jobs
 - [x] Reaction order: `onChange()` then element write (D-S1.5-7)
 - [x] Tests per §7 (dom)
-- [ ] `e2e/scroll-sync.spec.ts` — echo case + two-chart clamp case
+- [x] `e2e/scroll-sync.spec.ts` — echo case + two-chart clamp case
 
 ### Wiring and surface
 - [x] `GanttOptions.scroll?: ScrollModel`; `GanttShell` constructs a private default when omitted
 - [x] `api/index.ts` re-exports exactly the §5 list — and nothing else
-- [ ] Review `harness/main.ts` against the library rules (CLAUDE.md); record any gap against S1.5, fix it in `src/`
+- [x] Review `harness/main.ts` against the library rules (CLAUDE.md); record any gap against S1.5, fix it in `src/` — none found: no pixel arithmetic, no scroll gap (GanttShell's private default `ScrollModel` covers it). `render/dom/index.ts` gained a hidden content-sizer element so `host`'s native `overflow: auto` actually has real scrollable extent matching `frame.contentWidth`/`contentHeight` (D-S1.5-9) — needed for `ScrollModel.panTo` to have anywhere real to write; added `harness/scroll-sync.html`/`.ts` as the two-Gantt e2e fixture.
 
 ### Docs
 - [ ] The §8 spec edits, landed **with** this step — not deferred to the issue thread
 - [x] `CONTEXT.md` glossary entries per §8 (pre-existing — verified accurate against the shipped API)
 
 ### Acceptance
-- [ ] **U1/U2** — two harness Gantts given the same `ScrollModel` scroll together; row labels stay pixel-aligned while scrolling (`plans/03` S1 acceptance 4)
-- [ ] **U3** — different row counts: the short chart pins and resumes; the shared position survives
-- [ ] **U4** — shrink the content, restore it, land back in the same place
-- [ ] **U6** — `harness/main.ts` contains no pixel arithmetic
+- [x] **U1/U2** — two harness Gantts given the same `ScrollModel` scroll together; row labels stay pixel-aligned while scrolling (`plans/03` S1 acceptance 4) — `e2e/scroll-sync.spec.ts` echo case
+- [x] **U3** — different row counts: the short chart pins and resumes; the shared position survives — `e2e/scroll-sync.spec.ts` + `src/view/gantt-shell.test.ts`
+- [x] **U4** — shrink the content, restore it, land back in the same place — `src/layout/viewport/scroll-model.test.ts`
+- [x] **U6** — `harness/main.ts` contains no pixel arithmetic
 
 ---
 
