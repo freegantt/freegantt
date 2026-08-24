@@ -6,11 +6,11 @@ import type { ScaleBindingHandle, TimeScale } from '../layout/index.js';
 
 import { createDomBackend } from '../render/dom/index.js';
 import type { RenderBackend } from '../render/backend.js';
-import type { Task } from '../model/index.js';
+import type { Entry } from '../model/index.js';
 
 export interface GanttShellOptions {
   host: HTMLElement;
-  tasks: readonly Task[];
+  entries: readonly Entry[];
   /** Project's IANA zone (D6) — contributed to the scale binding, which resolves calendar stepping
    * and header formatting through it. */
   zone: string;
@@ -42,7 +42,7 @@ export class GanttShell {
     this.#scaleHandle = this.#scale.bind(
       {
         zone: options.zone,
-        tasks: options.tasks,
+        entries: options.entries,
         viewportWidth: options.host.clientWidth,
       },
       () => this.render(),
@@ -60,7 +60,7 @@ export class GanttShell {
   render(): void {
     const scale = this.#scale.scale;
     const frame = computeFrame({
-      tasks: this.options.tasks,
+      entries: this.options.entries,
       xForInstant: (i) => scale.xForInstant(i),
       rowHeight: this.options.rowHeight,
       revision: this.#revision++,

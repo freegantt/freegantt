@@ -1,29 +1,29 @@
 # FreeGantt
 
-A framework-free TypeScript Gantt library: scheduling, layout, and rendering of tasks and their dependencies over time.
+A framework-free TypeScript Gantt library: layout and rendering of dated Entries over time. Scheduling — dependencies, propagation, constraints — is one optional first-party plugin (ADR 0002), not what the library is about. The core vocabulary is therefore domain-neutral (ADR 0003): a host charting shifts, bookings, machine uptime, or units sold per week is as much the intended user as one charting a project plan.
 
 ## Language
 
 ### Authored model
 
 **Project**:
-The body of authored data — its Tasks, plus whatever scheduling-plugin-owned data (e.g. Dependencies) an installed scheduling plugin contributes — together with the settings that give it meaning, above all the IANA zone in which all zone-aware date arithmetic is performed. "The project's zone" and "the project's reference date" are properties of this, not of the host environment. A Project with no scheduling plugin installed has Tasks and no Dependencies at all (ADR 0002).
+The body of authored data — its Entries, plus whatever scheduling-plugin-owned data (e.g. Dependencies) an installed scheduling plugin contributes — together with the settings that give it meaning, above all the IANA zone in which all zone-aware date arithmetic is performed. "The project's zone" and "the project's reference date" are properties of this, not of the host environment. A Project with no scheduling plugin installed has Entries and no Dependencies at all (ADR 0002).
 _Avoid_: Plan, schedule (a schedule is an output of scheduling a Project, not the Project itself), dataset
 
-**Task**:
-An authored unit of work with a start, an end, and a `kind`. Tasks are persisted; they are what a host creates, edits, and schedules.
-_Avoid_: Bar, activity
+**Entry**:
+One authored, dated record: a name, a start, an end, and a `kind`. Entries are persisted; they are what a host creates, edits, and hands to the library. What an Entry _means_ is the host's business — a task, a shift, a delivery, a day's sales — and core never assumes. The word is the accountant's: a dated line in a ledger.
+_Avoid_: **Task** (retired in ADR 0003 — it implies to-do work, and the whole point is that the record is domain-neutral), activity, event, bar (a bar is what an Item renders), record, row (a Row is a display track)
 
 **Kind**:
-The authored classification of a Task (`'task' | 'group' | 'milestone'`, open to host-defined values) that selects its behavior at four seams: scheduling policy, item emission, rendering, and interaction capability. Kind is never derived from structure (e.g. from having children) — it is always explicitly set by whoever authored the Task.
-_Avoid_: Type (reserved for `DependencyType`), category
+The authored classification of an Entry (`'span' | 'group' | 'milestone'`, open to host-defined values) that selects its behavior at four seams: scheduling policy, item emission, rendering, and interaction capability. Kind is never derived from structure (e.g. from having children) — it is always explicitly set by whoever authored the Entry. `'span'` is the default: an Entry that simply occupies its start-to-end stretch, with no further meaning attached.
+_Avoid_: Type (reserved for `DependencyType`), category; and `'task'` as the default kind's name (ADR 0003 — a kind literal is data, so leaving the old word there would have kept it in every authored Entry)
 
 **Dependency**:
-A first-class entity linking a predecessor Task to a successor Task with a type (`FS`/`SS`/`FF`/`SF`) and optional lag. Never embedded as an array on a Task. Scheduling-plugin-owned data, not `model/` (ADR 0002) — it exists only when a scheduling plugin is installed and lives in that plugin's reserved store, not on `Task` or in core.
+A first-class entity linking a predecessor Entry to a successor Entry with a type (`FS`/`SS`/`FF`/`SF`) and optional lag. Never embedded as an array on an Entry. Scheduling-plugin-owned data, not `model/` (ADR 0002) — it exists only when a scheduling plugin is installed and lives in that plugin's reserved store, not on `Entry` or in core.
 _Avoid_: Link (reserved for the rendered geometry of a dependency, i.e. what appears in `GeometryFrame.links`), Relationship
 
 **Segment**:
-One contiguous stretch of a Task's work, when that work is interrupted rather than continuous (`Task.segments`). Segments are authored — a Task without them is simply one span of work — and each one emits its own Item.
+One contiguous stretch of an Entry's span, when that span is interrupted rather than continuous (`Entry.segments`). Segments are authored — an Entry without them is simply one unbroken stretch — and each one emits its own Item.
 _Avoid_: Split, interval, piece
 
 ### Mutation
@@ -39,7 +39,7 @@ _Avoid_: Diff, patch (Patch is reserved for `ScheduleResult.patch`, the schedule
 ### Scheduling
 
 **Resolve hook**:
-The generic, synchronous hook `data/` calls once per transaction to turn a proposed edit into a committed one (D4, `plans/01` §1) — the identity function when no scheduling plugin is installed, or the installed plugin's `schedule()` otherwise. `data/` has no static, scheduling-specific dependency; this hook is the only seam. Exact contract (where per-plugin per-task data lives, how preview and commit-time calls share one resolution) is design work tracked in issue #12.
+The generic, synchronous hook `data/` calls once per transaction to turn a proposed edit into a committed one (D4, `plans/01` §1) — the identity function when no scheduling plugin is installed, or the installed plugin's `schedule()` otherwise. `data/` has no static, scheduling-specific dependency; this hook is the only seam. Exact contract (where per-plugin per-entry data lives, how preview and commit-time calls share one resolution) is design work tracked in issue #12.
 _Avoid_: Scheduling hook (the hook itself is scheduling-agnostic — it's generic, and a non-scheduling plugin could occupy it)
 
 **Scheduling plugin**:
@@ -47,25 +47,25 @@ Whatever plugin occupies the resolve hook, if any. FreeGantt ships an official b
 _Avoid_: The scheduling engine (ambiguous between "the seam" and "FreeGantt's default implementation of it" — say "the resolve hook" or "the default scheduling plugin" explicitly)
 
 **SchedulingPolicy**:
-The pluggable seam, within the default scheduling plugin, that resolves how a proposed edit interacts with a Task's kind and existing schedule (e.g. whether the engine may move it, how a `'group'` Task rolls up from children). Kind-specific scheduling semantics live in the policy, never in the engine itself.
+The pluggable seam, within the default scheduling plugin, that resolves how a proposed edit interacts with an Entry's kind and existing schedule (e.g. whether the engine may move it, how a `'group'` Entry rolls up from children). Kind-specific scheduling semantics live in the policy, never in the engine itself.
 _Avoid_: Rule, constraint (Diagnostics, not policy, is where constraint violations surface)
 
 **Diagnostic**:
-A non-authoritative report the scheduling engine attaches to a `ScheduleResult` when it cannot satisfy a request (e.g. a dependency cycle, naming the Task ids involved). The engine never silently rewrites what the user asked for — a conflict becomes a Diagnostic, not a mutation.
+A non-authoritative report the scheduling engine attaches to a `ScheduleResult` when it cannot satisfy a request (e.g. a dependency cycle, naming the Entry ids involved). The engine never silently rewrites what the user asked for — a conflict becomes a Diagnostic, not a mutation.
 _Avoid_: Error, warning
 
 ### Derived layout
 
 **Row**:
-A horizontal track of a Gantt — the unit of vertical layout, and what the grid pane and the timeline pane both position against. Rows are derived on every layout pass and never persisted. A Row is not a Task: one Row may carry the Items of many Tasks, and a row source may produce Rows that correspond to no Task at all.
+A horizontal track of a Gantt — the unit of vertical layout, and what the grid pane and the timeline pane both position against. Rows are derived on every layout pass and never persisted. A Row is not an Entry: one Row may carry the Items of many Entries, and a row source may produce Rows that correspond to no Entry at all.
 _Avoid_: Line, track (a track is what a Lane is), record
 
 **Row source**:
-The configuration that decides what the Rows are for a given Gantt — the Tasks themselves (optionally as a tree), one Row per value of some grouping function, or a host-supplied resolver. Alternative views (workload, resources) are new row sources, not new rendering or interaction code.
+The configuration that decides what the Rows are for a given Gantt — the Entries themselves (optionally as a tree), one Row per value of some grouping function, or a host-supplied resolver. Alternative views (workload, resources) are new row sources, not new rendering or interaction code.
 _Avoid_: Row provider, row model
 
 **Item**:
-A derived, renderable piece of geometry produced from a Task for one Segment of its work — most tasks produce exactly one Item, but a Task with Segments produces one Item per Segment. Items are recomputed on every layout pass and never persisted. `Item.id` is deterministic: `${taskId}:${segmentIndex}`.
+A derived, renderable piece of geometry produced from an Entry for one Segment of its span — most entries produce exactly one Item, but an Entry with Segments produces one Item per Segment. Items are recomputed on every layout pass and never persisted. `Item.id` is deterministic: `${entryId}:${segmentIndex}`.
 _Avoid_: Bar (an Item is what a bar renders; "bar" is a rendering detail, not the identity)
 
 **Lane**:
@@ -73,7 +73,7 @@ A sub-track within a Row, assigned by the layout pass so that Items whose spans 
 _Avoid_: Sub-row, level, stack
 
 **Grouping**:
-The row-level nesting of the timeline grid (parent/child rows via `parentId`). Distinct from Kind: a Task of kind `'group'` and a Task with children are different things — a `'group'` Task rolls up its schedule from children, while grouping is purely about row hierarchy in the grid and applies regardless of kind.
+The row-level nesting of the timeline grid (parent/child rows via `parentId`). Distinct from Kind: an Entry of kind `'group'` and an Entry with children are different things — a `'group'` Entry rolls up its schedule from children, while grouping is purely about row hierarchy in the grid and applies regardless of kind.
 _Avoid_: Group (ambiguous with the `'group'` kind — say "row grouping" or "the `'group'` kind" explicitly)
 
 **GeometryFrame**:
@@ -117,7 +117,7 @@ What a caller states about how time should be displayed — a ViewPreset and a r
 _Avoid_: Scale options, scale config (both read as the resolved geometry, which is the opposite of intent)
 
 **Scale binding**:
-One Gantt's contribution to a TimeScaleModel's resolution: its Project's zone, its Tasks, its measured viewport width, and the reaction to run when the resolved scale changes. A Gantt binds on construction and unbinds on destroy, and both re-resolve the shared TimeScale — which is how `'fitProject'` spans every bound Project rather than whichever one was passed to the constructor.
+One Gantt's contribution to a TimeScaleModel's resolution: its Project's zone, its Entries, its measured viewport width, and the reaction to run when the resolved scale changes. A Gantt binds on construction and unbinds on destroy, and both re-resolve the shared TimeScale — which is how `'fitProject'` spans every bound Project rather than whichever one was passed to the constructor.
 _Avoid_: Attach, subscribe, register
 
 **ScrollModel**:
@@ -135,7 +135,7 @@ _Avoid_: Gridline (a gridline is one way a Tick is drawn), step
 ### Extension
 
 **Capability**:
-Whether a specific gesture (move, resize, link) is permitted on a given Task, resolved once per Task from its Kind and gating both the gesture itself and any affordance that hints at it (e.g. a resize handle only renders if resize is capable).
+Whether a specific gesture (move, resize, link) is permitted on a given Entry, resolved once per Entry from its Kind and gating both the gesture itself and any affordance that hints at it (e.g. a resize handle only renders if resize is capable).
 _Avoid_: Permission, ability
 
 **GanttPlugin**:
@@ -143,5 +143,5 @@ The public extension contract: an `id` plus a `setup(ctx)` that returns a dispos
 _Avoid_: Extension (Extensions is the name of the source layer that hosts plugins; GanttPlugin is the unit within it)
 
 **ProjectPlugin**, **ProposalResolver**, **PluginStore**:
-Names from the resolve hook's contract design (ADR 0002's consequences, issue #15, built on #12): a `ProjectPlugin` occupies the resolve hook via a `ProposalResolver`, and per-plugin per-task data (e.g. the scheduling plugin's pin flag, `Dependency`) lives in a reserved `PluginStore` rather than on `Task` or in a host/plugin-shared field. Design proposals only — not yet implemented or landed in `src/`; do not treat as existing API until #15 lands.
+Names from the resolve hook's contract design (ADR 0002's consequences, issue #15, built on #12): a `ProjectPlugin` occupies the resolve hook via a `ProposalResolver`, and per-plugin per-entry data (e.g. the scheduling plugin's pin flag, `Dependency`) lives in a reserved `PluginStore` rather than on `Entry` or in a host/plugin-shared field. Design proposals only — not yet implemented or landed in `src/`; do not treat as existing API until #15 lands.
 _Avoid_: Treating these as settled — the exact shapes are still open design work

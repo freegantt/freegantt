@@ -39,7 +39,7 @@ module.exports = {
     // through the generic resolve hook, decided once at setup (plans/01 §1, issue #12).
     forbid('data-boundary', 'data', ['model']),
     forbid('render-boundary', 'render', ['layout']),
-    // model: Task types flow through view as type-only params (same rationale as api, above).
+    // model: Entry types flow through view as type-only params (same rationale as api, above).
     forbid('view-boundary', 'view', ['render', 'layout', 'data', 'model']),
     forbid('interaction-boundary', 'interaction', ['view', 'data']),
     forbid('extensions-boundary', 'extensions', ['view', 'interaction']),

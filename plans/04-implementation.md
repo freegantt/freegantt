@@ -80,7 +80,7 @@ Guardrails land **before** the code they guard — each step is a reviewable com
 
 ### 3.5 First vertical
 
-6. `model/` + `time/` minimal → `layout/computeFrame` minimal → `render/dom` + `render/null` → `api/` minimal → harness page with the 50-task fixture. Exactly the S0 scope list in `03-slices.md`; acceptance checklist there governs.
+6. `model/` + `time/` minimal → `layout/computeFrame` minimal → `render/dom` + `render/null` → `api/` minimal → harness page with the 50-entry fixture. Exactly the S0 scope list in `03-slices.md`; acceptance checklist there governs.
 
 ---
 

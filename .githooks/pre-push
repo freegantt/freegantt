@@ -1,8 +1,24 @@
 #!/usr/bin/env bash
 # docs/04-hooks-and-ci.md §3: the full gate before it becomes anyone else's problem.
+#
+# This hook IS the gate, not a latency optimisation ahead of one. `.github/workflows/ci.yml` is
+# `workflow_dispatch:` only — its push/pull_request triggers are commented out — so nothing runs
+# these checks on the server unless a human clicks the button. `pnpm verify` runs every job that
+# workflow defines (format, typecheck, lint, boundaries, guards, test:node, test:dom, vendor-names,
+# disables, build), in the same order, so a green push here means a green CI run if it were enabled.
+#
+# `--no-verify` still works and is still not fought. But while CI is dispatch-only it is the only
+# thing standing between a broken invariant and `main`, so skipping it is a decision, not a shortcut.
 
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
-echo "pre-push: pnpm verify"
+if [[ ! -d node_modules ]]; then
+  echo "pre-push: node_modules missing — run 'pnpm install' first." >&2
+  exit 1
+fi
+
+echo "pre-push: pnpm verify (full CI-parity gate)"
 pnpm verify
+
+echo "pre-push: OK — every I1-I14 guard passed."
