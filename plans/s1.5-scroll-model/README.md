@@ -324,42 +324,42 @@ export interface GanttOptions {
 Guardrails and types first (`plans/04` §3.2/§3.3), then the pure model, then the DOM edge.
 
 ### Foundations
-- [ ] `src/model/geometry.ts` — `Point`, `Size`, `PixelSpan`, `Rect`; re-export from `src/model/index.ts`
-- [ ] Retarget `eslint/rules/no-scroll-outside-scroll-model.cjs:26` to `view/scroll-attachment`; fix the stale header path (line 2)
-- [ ] Update `eslint/rules/no-scroll-outside-scroll-model.test.cjs`; confirm the red fixture still fails
+- [x] `src/model/geometry.ts` — `Point`, `Size`, `PixelSpan`, `Rect`; re-export from `src/model/index.ts`
+- [x] Retarget `eslint/rules/no-scroll-outside-scroll-model.cjs:26` to `view/scroll-attachment`; fix the stale header path (line 2)
+- [x] Update `eslint/rules/no-scroll-outside-scroll-model.test.cjs`; confirm the red fixture still fails
 
 ### `TimeScaleModel` (same seam, do it before `ScrollModel` so the contract exists to copy)
-- [ ] `ScaleBinding` → `readonly`, `viewportWidth` → `paneWidth`; model copies at bind time
-- [ ] `ScaleBindingHandle.setViewportWidth` → `setPaneWidth`
-- [ ] Add `batch(run)` — re-entrant, flush in `finally`
-- [ ] Notify-iff-changed on `{timeZone, range.start, range.end, pxPerMs}`; `bind` still always notifies the newcomer
-- [ ] Update call sites: `src/view/gantt-shell.ts`, `harness/main.ts`
-- [ ] Tests: `batch`; notify-iff-changed; post-`bind()` mutation cannot change resolution
+- [x] `ScaleBinding` → `readonly`, `viewportWidth` → `paneWidth`; model copies at bind time
+- [x] `ScaleBindingHandle.setViewportWidth` → `setPaneWidth`
+- [x] Add `batch(run)` — re-entrant, flush in `finally`
+- [x] Notify-iff-changed on `{timeZone, range.start, range.end, pxPerMs}`; `bind` still always notifies the newcomer
+- [x] Update call sites: `src/view/gantt-shell.ts`, `harness/main.ts`
+- [x] Tests: `batch`; notify-iff-changed; post-`bind()` mutation cannot change resolution
 
 ### `ScrollModel`
-- [ ] `src/layout/viewport/scroll-model.ts` — types per §3.2
-- [ ] `max` = loosest bound across measured bindings (D-S1.5-1)
-- [ ] `panTo` clamps at write time; nothing else rewrites `position` (D-S1.5-2)
-- [ ] Memoized `state`; notify per D-S1.5-4
-- [ ] `batch(run)` — re-entrant, flush in `finally`
-- [ ] `bind` marked `@internal` with the "use `GanttOptions.scroll`" note
-- [ ] Tests per §7 (pure)
+- [x] `src/layout/viewport/scroll-model.ts` — types per §3.2
+- [x] `max` = loosest bound across measured bindings (D-S1.5-1)
+- [x] `panTo` clamps at write time; nothing else rewrites `position` (D-S1.5-2)
+- [x] Memoized `state`; notify per D-S1.5-4
+- [x] `batch(run)` — re-entrant, flush in `finally`
+- [x] `bind` marked `@internal` with the "use `GanttOptions.scroll`" note
+- [x] Tests per §7 (pure)
 
 ### `view/scroll-attachment.ts`
-- [ ] `attachScroll(element, scroll, onChange)` — owns the binding, binds on attach, unbinds on `detach()`
-- [ ] Local-clamp echo rule (D-S1.5-6) with the epsilon comment naming both its jobs
-- [ ] Reaction order: `onChange()` then element write (D-S1.5-7)
-- [ ] Tests per §7 (dom)
+- [x] `attachScroll(element, scroll, onChange)` — owns the binding, binds on attach, unbinds on `detach()`
+- [x] Local-clamp echo rule (D-S1.5-6) with the epsilon comment naming both its jobs
+- [x] Reaction order: `onChange()` then element write (D-S1.5-7)
+- [x] Tests per §7 (dom)
 - [ ] `e2e/scroll-sync.spec.ts` — echo case + two-chart clamp case
 
 ### Wiring and surface
-- [ ] `GanttOptions.scroll?: ScrollModel`; `GanttShell` constructs a private default when omitted
-- [ ] `api/index.ts` re-exports exactly the §5 list — and nothing else
+- [x] `GanttOptions.scroll?: ScrollModel`; `GanttShell` constructs a private default when omitted
+- [x] `api/index.ts` re-exports exactly the §5 list — and nothing else
 - [ ] Review `harness/main.ts` against the library rules (CLAUDE.md); record any gap against S1.5, fix it in `src/`
 
 ### Docs
 - [ ] The §8 spec edits, landed **with** this step — not deferred to the issue thread
-- [ ] `CONTEXT.md` glossary entries per §8
+- [x] `CONTEXT.md` glossary entries per §8 (pre-existing — verified accurate against the shipped API)
 
 ### Acceptance
 - [ ] **U1/U2** — two harness Gantts given the same `ScrollModel` scroll together; row labels stay pixel-aligned while scrolling (`plans/03` S1 acceptance 4)

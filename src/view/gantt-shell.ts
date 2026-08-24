@@ -1,9 +1,11 @@
 // view/ — Gantt shell (plans/01 §8.2-8.3). The real grid/timeline/viewport split lands across S1.
 
-import { computeFrame, PrefixSumHeightIndex, TimeScaleModel } from '../layout/index.js';
+import { computeFrame, PrefixSumHeightIndex, ScrollModel, TimeScaleModel } from '../layout/index.js';
 import type { RowHeightIndex, ScaleBindingHandle } from '../layout/index.js';
 
 import { createDomBackend } from '../render/dom/index.js';
+import { attachScroll } from './scroll-attachment.js';
+import type { ScrollAttachment } from './scroll-attachment.js';
 import type { RenderBackend } from '../render/backend.js';
 import type { Entry } from '../model/index.js';
 
@@ -32,6 +34,10 @@ export interface GanttShellOptions {
    * concept"); the default resolves its zone, span and zoom from this shell's binding, so it needs
    * no arguments. */
   scale?: TimeScaleModel;
+  /** Bound scroll object (D9) — pass the same instance to two Gantt instances to scroll-sync them.
+   * Constructs a private default when omitted; sharing one instance links both axes (S1.5 README
+   * D-S1.5-3). */
+  scroll?: ScrollModel;
 }
 
 function resolveHost(host: HTMLElement | string): HTMLElement {
@@ -55,6 +61,12 @@ export class GanttShell {
   #revision = 0;
   #scale: TimeScaleModel;
   #scaleHandle: ScaleBindingHandle;
+  #scroll: ScrollModel;
+  /** Assigned once mounting and the scale binding's own first render have both happened (#22) —
+   * `undefined` only for the instant between `attachScroll`'s own bind-triggered render (D-S1.5-4:
+   * bind always notifies the newcomer) and this field's assignment, which `render()` guards against.
+   * The constructor pushes the real extents itself right after assignment, so no render is lost. */
+  #scrollAttachment: ScrollAttachment | undefined;
   #destroyed = false;
   /** Cached across renders (#47) — `PrefixSumHeightIndex` exists precisely so "top of row i" is
    * O(log n) across repeated calls, which a fresh instance every `render()` would throw away. Rebuilt
@@ -66,11 +78,16 @@ export class GanttShell {
   #heightsRowHeight = -1;
   #rowHeight: number;
   #options: GanttShellOptions;
+  /** Set by the most recent `render()` — the row-label gutter plus `frame.contentWidth`/
+   * `contentHeight` (S1.5 README §3.2, D-S1.5-9). `#pushScrollExtents` reads it rather than
+   * recomputing the same geometry a second time. */
+  #contentSize = { width: 0, height: 0 };
 
   constructor(options: GanttShellOptions) {
     this.#options = options;
     this.#host = resolveHost(options.host);
     this.#scale = options.scale ?? new TimeScaleModel();
+    this.#scroll = options.scroll ?? new ScrollModel();
     this.#rowHeight = readRowHeight(this.#host);
 
     // Mount before binding (#22): the render target exists by the time the binding's own onChange
@@ -83,10 +100,16 @@ export class GanttShell {
       {
         timeZone: options.dataset.timeZone,
         entries: options.dataset.entries,
-        viewportWidth: this.#drawableWidth(),
+        paneWidth: this.#drawableWidth(),
       },
       () => this.render(),
     );
+
+    // The host element is the timeline pane: today's backend positions rows, bars and header all
+    // absolutely inside it, so it is the single native scroller (D-D, S1.5 README §6) — there is no
+    // separate grid pane to keep in sync.
+    this.#scrollAttachment = attachScroll(this.#host, this.#scroll, () => this.render());
+    this.#pushScrollExtents();
   }
 
   /** Width available for the timeline itself — host width minus the backend's own row-label gutter
@@ -108,6 +131,14 @@ export class GanttShell {
     return this.#heights;
   }
 
+  /** Nothing measured is ever the host's job (S1.5 README D-S1.5-9): pushed after every render,
+   * from `#contentSize` — the same geometry the backend just drew, never stated by a `GanttOptions`
+   * caller. */
+  #pushScrollExtents(): void {
+    this.#scrollAttachment?.setContent(this.#contentSize);
+    this.#scrollAttachment?.setPane({ width: this.#host.clientWidth, height: this.#host.clientHeight });
+  }
+
   render(): void {
     const scale = this.#scale.scale;
     const entries = this.#options.dataset.entries;
@@ -122,10 +153,16 @@ export class GanttShell {
       heights: this.#heightsFor(entries.length, rowHeight),
     });
     this.#backend.sync(frame);
+    this.#contentSize = {
+      width: this.#backend.rowLabelWidth + frame.contentWidth,
+      height: frame.contentHeight,
+    };
+    this.#pushScrollExtents();
   }
 
   destroy(): void {
     if (this.#destroyed) return;
+    this.#scrollAttachment?.detach();
     this.#scaleHandle.unbind();
     this.#backend.destroy();
     this.#host.replaceChildren();
