@@ -25,5 +25,6 @@ export function createNullBackend(): NullBackend {
     lastFrame() {
       return lastFrame;
     },
+    rowLabelWidth: 0,
   };
 }

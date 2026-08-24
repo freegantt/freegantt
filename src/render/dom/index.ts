@@ -14,11 +14,26 @@ import type { RenderBackend, InteractionState, HitResult } from '../backend.js';
 type BarGeom = Pick<FrameBar, 'kind' | 'label' | 'x' | 'y' | 'width' | 'height'>;
 type RowGeom = Pick<FrameRow, 'top' | 'height' | 'label'>;
 
+/** CSS custom property that owns the row-label gutter width (plans/02 §4, level 1 of the
+ * customization ladder — same ladder rung as `--fg-row-height`). Read once at mount, not per-sync:
+ * this backend is the single owner of where the gutter sits, so header ticks (`headerLayer`) and bars
+ * (`barLayer`) are shifted by the same offset instead of a host stylesheet offsetting one but not the
+ * other (#46). */
+const ROW_LABEL_WIDTH_PROPERTY = '--fg-row-label-width';
+const DEFAULT_ROW_LABEL_WIDTH = 160;
+
+function readRowLabelWidth(host: HTMLElement): number {
+  const raw = getComputedStyle(host).getPropertyValue(ROW_LABEL_WIDTH_PROPERTY).trim();
+  const parsed = parseFloat(raw);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : DEFAULT_ROW_LABEL_WIDTH;
+}
+
 export function createDomBackend(): RenderBackend<HTMLElement> {
   let host: HTMLElement | undefined;
   let headerLayer: HTMLElement | undefined;
   let rowLayer: HTMLElement | undefined;
   let barLayer: HTMLElement | undefined;
+  let rowLabelWidth = 0;
 
   const rowNodes = new Map<RowId, HTMLElement>();
   const rowGeom = new Map<RowId, RowGeom>();
@@ -68,6 +83,7 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
       if (!prev || prev.top !== row.top || prev.height !== row.height || prev.label !== row.label) {
         node.style.transform = `translateY(${row.top}px)`;
         node.style.height = `${row.height}px`;
+        node.style.width = `${rowLabelWidth}px`;
         node.textContent = row.label;
         rowGeom.set(row.id, { top: row.top, height: row.height, label: row.label });
       }
@@ -133,15 +149,19 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
     mount(el: HTMLElement) {
       host = el;
       host.replaceChildren();
+      rowLabelWidth = readRowLabelWidth(el);
       headerLayer = document.createElement('div');
       headerLayer.className = 'fg-header';
       headerLayer.style.position = 'relative';
+      headerLayer.style.marginLeft = `${rowLabelWidth}px`;
       rowLayer = document.createElement('div');
       rowLayer.className = 'fg-rows';
       rowLayer.style.position = 'relative';
+      rowLayer.style.width = `${rowLabelWidth}px`;
       barLayer = document.createElement('div');
       barLayer.className = 'fg-bars';
       barLayer.style.position = 'relative';
+      barLayer.style.left = `${rowLabelWidth}px`;
       host.append(headerLayer, rowLayer, barLayer);
     },
     sync(frame: GeometryFrame) {
@@ -174,6 +194,10 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
       headerLayer = undefined;
       rowLayer = undefined;
       barLayer = undefined;
+      rowLabelWidth = 0;
+    },
+    get rowLabelWidth() {
+      return rowLabelWidth;
     },
   };
 }

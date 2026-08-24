@@ -68,10 +68,19 @@ export class GanttShell {
       {
         timeZone: options.project.timeZone,
         entries: options.project.entries,
-        viewportWidth: this.#host.clientWidth,
+        viewportWidth: this.#drawableWidth(),
       },
       () => this.render(),
     );
+  }
+
+  /** Width available for the timeline itself — host width minus the backend's own row-label gutter
+   * (#46). Everything that turns time into pixels (the bound `TimeScale`, `computeFrame`'s viewport)
+   * must agree on this narrower width, or bars get fit against a span wider than what's actually
+   * drawable and headers/bars, though both derived from `scale`, end up offset from one another by
+   * whatever the backend reserves for row labels. */
+  #drawableWidth(): number {
+    return Math.max(0, this.#host.clientWidth - this.#backend.rowLabelWidth);
   }
 
   render(): void {
@@ -80,7 +89,7 @@ export class GanttShell {
       entries: this.options.project.entries,
       scale,
       preset: this.#scale.preset,
-      viewport: { x: 0, y: 0, width: this.#host.clientWidth, height: this.#host.clientHeight },
+      viewport: { x: 0, y: 0, width: this.#drawableWidth(), height: this.#host.clientHeight },
       rowHeight: readRowHeight(this.#host),
       revision: this.#revision++,
     });

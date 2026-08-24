@@ -12,6 +12,9 @@
         /* Level-1 theming (plans/02 §4): row height is a CSS custom property the library reads,
            not a restated constructor default (#39). */
         --fg-row-height: 32px;
+        /* Row-label gutter width; render/dom owns applying this offset to header ticks and bars so
+           they share one coordinate frame (#46) — this harness no longer restates it as raw CSS. */
+        --fg-row-label-width: 220px;
         position: relative;
         border: 1px solid #ccc;
         /* overflow: auto makes the browser the scroll owner — ScrollModel (#9) doesn't exist yet, so
@@ -43,7 +46,6 @@
       .fg-row {
         position: absolute;
         left: 0;
-        width: 220px;
         font-size: 11px;
         line-height: var(--fg-row-height);
         padding: 0 6px;
@@ -57,7 +59,6 @@
         position: absolute;
         inset: 0;
         top: 20px;
-        left: 220px;
       }
       .fg-bar {
         background: #4a7a58;
