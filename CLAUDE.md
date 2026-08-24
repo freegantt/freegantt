@@ -5,10 +5,11 @@ Framework-free TypeScript Gantt library, library-first. The spec is `plans/00`�
 ## Hard rules
 
 **Layers** (`plans/01` §1 — enforced by dependency-cruiser):
-- `model/`, `time/`, `data/`, `scheduling/`, `layout/` are DOM-free: plain data + functions, no `document`/`window`/browser globals. (They ship to and run in the browser like everything else — but because they never touch the DOM they also run in plain Node, which is how they're unit-tested and how the future worker seam stays possible.) Only `render/`, `view/`, `interaction/`, `extensions/` may touch the DOM.
-- `scheduling/` and `render/view/interaction` never import each other — they meet only through `data/`. Never put scheduling imports in render or view code.
+- `model/`, `time/`, `data/`, `layout/` are the mandatory DOM-free core: plain data + functions, no `document`/`window`/browser globals. (They ship to and run in the browser like everything else — but because they never touch the DOM they also run in plain Node, which is how they're unit-tested and how the future worker seam stays possible.) Only `render/`, `view/`, `interaction/`, `extensions/` may touch the DOM.
+- `scheduling/` is DOM-free the same way, but it is **not** one of the mandatory core layers — it's where the first-party default scheduling plugin's pure engine lives (D3/D4, ADR 0002). `data/` has no static dependency on it: mutations resolve through a generic resolve hook (identity function when no plugin is installed, or the installed plugin's `schedule()`). A Gantt with no scheduling plugin never loads `scheduling/`.
+- `scheduling/` and `render/view/interaction` never import each other — they meet only through `data/`'s resolve hook. Never put scheduling imports in render or view code.
 - Only `api/` and `model/` types are public. Internals stay unreachable (sealed `exports` map).
-- `model/` is types only: zero runtime beyond id/brand helpers, zero dependencies.
+- `model/` is types only: zero runtime beyond id/brand helpers, zero dependencies. `Dependency`/`DependencyType`/`DependencyId` and the per-task pin flag are scheduling-plugin-owned data, not `model/` (ADR 0002).
 
 **Time** (`plans/01` §5):
 - Storage is half-open `[start, end)`; display is inclusive via one formatting helper — no inline `end - 1` arithmetic.
@@ -16,11 +17,12 @@ Framework-free TypeScript Gantt library, library-first. The spec is `plans/00`�
 - `time/` is the *only* place allowed to use `new Date()`/`Date.now()`, magic time constants (`86400000` etc.), or arithmetic on `Instant`. Everywhere else in `src/` these are forbidden — I10 lints this, scoped to `src/**`.
 
 **Data** (`plans/01` §6):
-- Every mutation goes through a transaction → one scheduling pass → one changeset (`{from, to}` per field). No exceptions, gestures included (one transaction per gesture, at commit).
-- Undo records user edits + engine cascades atomically.
+- Every mutation goes through a transaction → the resolve hook (once) → one changeset (`{from, to}` per field). No exceptions, gestures included (one transaction per gesture, at commit). The resolve hook is the identity function when no scheduling plugin is installed, so this is not conditioned on scheduling being present — the shape holds either way.
+- Undo records user edits + engine cascades atomically (when a scheduling plugin is installed and contributes cascades).
 - No module-level singletons anywhere; two Gantt instances on one page must be fully independent.
 
-**Scheduling** (`plans/01` §7):
+**Scheduling** (`plans/01` §7 — first-party default plugin, not mandatory core, see ADR 0002):
+- Occupies the resolve hook (D4) exclusively when installed; when nothing is installed, none of this runs.
 - `schedule()` is pure and deterministic; never mutates input; policy never overwrites a user-proposed field.
 - Propagation is a worklist loop — no recursion, ever (5,000-link chain fixture guards this).
 - Conflicts become diagnostics; the engine never silently rewrites what the user asked for.

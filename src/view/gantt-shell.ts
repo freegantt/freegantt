@@ -2,7 +2,7 @@
 // this step adds the header band, rendering TimeScale.ticks() above the bars.
 
 import { computeFrame, TimeScaleModel } from '../layout/index.js';
-import type { ScaleBindingHandle } from '../layout/index.js';
+import type { ScaleBindingHandle, TimeScale } from '../layout/index.js';
 
 import { createDomBackend } from '../render/dom/index.js';
 import type { RenderBackend } from '../render/backend.js';
@@ -20,6 +20,13 @@ export interface GanttShellOptions {
    * no arguments. */
   scale?: TimeScaleModel;
   rowHeight: number;
+}
+
+function createPane(className: string): HTMLElement {
+  const el = document.createElement('div');
+  el.className = className;
+  el.style.position = 'relative';
+  return el;
 }
 
 export class GanttShell {
@@ -41,12 +48,8 @@ export class GanttShell {
       () => this.render(),
     );
 
-    this.#headerEl = document.createElement('div');
-    this.#headerEl.className = 'fg-header';
-    this.#headerEl.style.position = 'relative';
-    this.#barsHost = document.createElement('div');
-    this.#barsHost.className = 'fg-bars-host';
-    this.#barsHost.style.position = 'relative';
+    this.#headerEl = createPane('fg-header');
+    this.#barsHost = createPane('fg-bars-host');
     options.host.replaceChildren(this.#headerEl, this.#barsHost);
 
     this.#backend = createDomBackend();
@@ -55,18 +58,18 @@ export class GanttShell {
   }
 
   render(): void {
+    const scale = this.#scale.scale;
     const frame = computeFrame({
       tasks: this.options.tasks,
-      xForInstant: (i) => this.#scale.scale.xForInstant(i),
+      xForInstant: (i) => scale.xForInstant(i),
       rowHeight: this.options.rowHeight,
       revision: this.#revision++,
     });
     this.#backend.sync(frame);
-    this.#renderHeader();
+    this.#renderHeader(scale);
   }
 
-  #renderHeader(): void {
-    const scale = this.#scale.scale;
+  #renderHeader(scale: TimeScale): void {
     const preset = this.#scale.preset;
     const ticks = scale.ticks(preset);
     const format = preset.headers[0]?.format;
