@@ -27,8 +27,8 @@ These were decided explicitly and the rest of the spec depends on them. Changing
 |---|---|---|
 | D1 | Consumer model | **Library-first.** Our app consumes it, but it is a real library: stable API, semver, docs. |
 | D2 | Scale posture | **Design for growth.** Architecture targets ~10k tasks smoothly, with named seams (height index, worker, dense rendering) for more. Validated by a measured spike, not assumed. |
-| D3 | Initial scheduling depth | **Bars + dependencies**: hierarchy, dependency links with lag, cascade propagation, cycle detection. Calendars, constraints, and resources are later slices behind existing seams. |
-| D4 | Scheduling isolation | Scheduling is a **pure, DOM-free module**. It never imports rendering; rendering never imports it. They meet only through the data store. |
+| D3 | Initial scheduling depth | FreeGantt ships an official **bars + dependencies** scheduler as its first-party default scheduling plugin: hierarchy, dependency links with lag, cascade propagation, cycle detection. Calendars, constraints, and resources are later slices behind existing seams. Core does not require this (or any) scheduling plugin to function — see D4. |
+| D4 | Scheduling isolation | Scheduling is a **pure, DOM-free plugin boundary**, not a mandatory core layer. Core exposes one generic, synchronous resolve hook that turns a proposed edit into a committed one — the identity function when no plugin occupies it, decided once at setup (exact contract tracked in issue #12). A scheduling plugin, when installed, occupies that hook exclusively: it never imports rendering, rendering never imports it, and the two meet only through the data store. |
 | D5 | Host environment | **Framework-free TS core.** Wrappers (React etc.) are possible later as thin adapters; nothing in core may depend on one. |
 | D6 | Time model | **Absolute timestamps (epoch ms) + project-owned IANA timezone.** All zone-aware date arithmetic (day boundaries, snapping, week starts) resolves through the project zone via a dedicated time module. A helper API gives users plain-date ergonomics. |
 | D7 | Persistence | **Host-owned via changesets.** Versioned `toJSON`/`fromJSON` + well-defined changeset events in core. An official sync adapter can be layered on later as an extension — the changeset contract is designed so that requires no core change. |
@@ -41,7 +41,7 @@ These were decided explicitly and the rest of the spec depends on them. Changing
 ## 3. Design principles
 
 1. **Authored vs. derived, and never confuse them.** Tasks, dependencies, calendars are authored and persisted. Rows, bars, lanes, geometry are derived every frame and never persisted. This one separation is what makes multiple bars per row, resource views, and grouping cheap later.
-2. **Pure layers below the DOM line.** Model, time, data, scheduling, and layout run in Node with no DOM. Every geometry or scheduling bug is a unit test against a plain object.
+2. **Pure layers below the DOM line.** Model, time, data, and layout run in Node with no DOM — and so does scheduling, whenever a scheduling plugin is installed: the plugin boundary is pure and DOM-free by construction (D4), the same guarantee the mandatory layers carry. Every geometry or scheduling bug is a unit test against a plain object.
 3. **Policies, not opinions.** Wherever planning methodologies disagree (conflict precedence, criticality, calendar semantics), the core exposes a policy seam with a sensible neutral default. The default is documented as *a* choice, not *the* truth.
 4. **The delta is the interface.** Every mutation flows through a transaction that produces a changeset (`{ from, to }` per field). Undo, persistence, animation, sync, and multi-view consistency all consume the same changesets.
 5. **Two channels for rendering.** Cold path: data/viewport changes rebuild memoized geometry. Hot path: hover/selection/drag apply as class toggles and transforms on existing nodes — zero allocation, no geometry rebuild.
@@ -59,7 +59,7 @@ flowchart LR
   S0["<b>S0 Walking skeleton</b><br/>repo · layers · harness<br/>static bars on screen"]
   S1["<b>S1 Timeline & viewport</b><br/>time axis · presets · scrolling<br/>split pane · shared viewport objects"]
   S2["<b>S2 Data core</b><br/>stores · transactions<br/>undo/redo · changesets · JSON"]
-  S3["<b>S3 Dependencies & scheduling</b><br/>links · lag · propagation<br/>cycles · diagnostics · arrows"]
+  S3["<b>S3 Dependencies & scheduling plugin</b><br/>links · lag · propagation<br/>cycles · diagnostics · arrows"]
   S4["<b>S4 Direct manipulation</b><br/>drag · resize · link-create<br/>select · before* events"]
   S5["<b>S5 Hierarchy & rows</b><br/>tree · collapse · grouping<br/>multi-item rows · lane packing"]
   S6["<b>S6 Extensibility & polish</b><br/>plugin API · renderers<br/>theming · keyboard/a11y complete"]
