@@ -30,7 +30,7 @@ export function createDomBackend(): RenderBackend {
           node.className = 'fg-bar';
           node.dataset['itemId'] = bar.id;
           node.style.position = 'absolute';
-          node.textContent = bar.taskId;
+          node.textContent = bar.entryId;
           barNodes.set(bar.id, node);
           barLayer.append(node);
         }

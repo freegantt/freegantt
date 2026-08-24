@@ -5,19 +5,20 @@
 // instance to two Gantt instances syncs their x-axis by construction — no event plumbing, no link manager.
 //
 // The constructor takes *intent*, not resolved geometry (plans/02 §5). Zone, span and pixel density
-// are resolved from the Gantt instances bound to the model, which is what lets one scale span a task
-// Gantt and a workforce Gantt: neither caller has to compute a cross-project span by hand.
+// are resolved from the Gantt instances bound to the model, which is what lets one scale span a
+// delivery-schedule Gantt and a workforce Gantt: neither caller has to compute a cross-project span
+// by hand.
 
 import { createTimeScale, dayPreset, diffMs, instant, pxPerMsForPreset } from '../../time/index.js';
 import type { TimeScale, TimeScaleOptions, ViewPreset } from '../../time/index.js';
-import type { Task, TimeSpan } from '../../model/index.js';
+import type { Entry, TimeSpan } from '../../model/index.js';
 
 /** What a caller states about how time should be displayed (plans/02 §5). Everything else — the
  * project's zone (D6), the span, the pixels-per-millisecond factor — is derived at bind time. */
 export interface TimeScaleIntent {
   /** Governs header ticks and, with no viewport to fit, the resolved zoom. Defaults to `dayPreset`. */
   preset?: ViewPreset;
-  /** `'fitProject'` (the default) spans the tasks of every bound project; a `TimeSpan` pins the axis. */
+  /** `'fitProject'` (the default) spans the entries of every bound project; a `TimeSpan` pins the axis. */
   range?: 'fitProject' | TimeSpan;
 }
 
@@ -25,7 +26,7 @@ export interface TimeScaleIntent {
 export interface ScaleBinding {
   /** The bound project's IANA zone (D6) — a scale is never told its zone by the caller. */
   zone: string;
-  tasks: readonly Task[];
+  entries: readonly Entry[];
   /** Measured width (px) of the element the Gantt renders into; `0` when unmeasured (detached host,
    * `display:none`, pre-paint). Unmeasured is not degenerate — see `pxPerMsForPreset`. */
   viewportWidth: number;
@@ -98,7 +99,7 @@ export class TimeScaleModel {
     // Single pass over the bound Gantt instances: zone (D6, first binding decides), the narrowest
     // measured viewport (so the span fits every bound Gantt, not just the widest), and — for
     // `range: 'fitProject'` (plans/02 §5) — the min start / max end across every bound project's
-    // tasks, all accumulated together rather than three separate walks of the same binding set.
+    // entries, all accumulated together rather than three separate walks of the same binding set.
     let zone: string | undefined;
     let width = 0;
     let span: TimeSpan | undefined;
@@ -108,13 +109,13 @@ export class TimeScaleModel {
         width = binding.viewportWidth;
       }
       if (this.#range !== 'fitProject') continue;
-      for (const task of binding.tasks) {
+      for (const entry of binding.entries) {
         if (!span) {
-          span = { start: task.start, end: task.end };
+          span = { start: entry.start, end: entry.end };
           continue;
         }
-        if (task.start < span.start) span.start = task.start;
-        if (task.end > span.end) span.end = task.end;
+        if (entry.start < span.start) span.start = entry.start;
+        if (entry.end > span.end) span.end = entry.end;
       }
     }
     zone ??= UNBOUND_ZONE;

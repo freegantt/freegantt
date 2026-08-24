@@ -67,13 +67,13 @@ Every custom rule spec below is complete enough to implement without re-reading 
 
 **Allowlist:** `src/time/**`.
 
-**Why type-aware:** the whole point of the brand is that `task.end - 1` and `someNumber - 1` look identical syntactically. Uses `parserServices.getTypeAtLocation` and checks for the `__brand: 'Instant'` property on the resolved type.
+**Why type-aware:** the whole point of the brand is that `entry.end - 1` and `someNumber - 1` look identical syntactically. Uses `parserServices.getTypeAtLocation` and checks for the `__brand: 'Instant'` property on the resolved type.
 
 **Message:** `Arithmetic on Instant/Duration outside time/. Use time/ helpers (add, diff, startOf); inclusive ends go through formatEndInclusive. (plans/01 §5)`
 
 **Subsumes** the "no inline `end - 1`" review rule from `CLAUDE.md`.
 
-**Fixtures:** valid — `a < b`, `time/add.ts` doing math, `plainNumber - 1`. invalid — `task.end - 1`, `start + DAY`, `end -= 1`, `+instant`.
+**Fixtures:** valid — `a < b`, `time/add.ts` doing math, `plainNumber - 1`. invalid — `entry.end - 1`, `start + DAY`, `end -= 1`, `+instant`.
 
 ---
 
@@ -104,7 +104,7 @@ Every custom rule spec below is complete enough to implement without re-reading 
 
 **Message:** `kind is dispatched through a registry, never compared inline. Register behavior at the seam for this layer. (plans/01 §2.5)`
 
-**Note:** the rule does *not* flag `task.kind ?? 'task'` or passing `kind` to a registry lookup — only branching on its value.
+**Note:** the rule does *not* flag `entry.kind ?? 'span'` or passing `kind` to a registry lookup — only branching on its value.
 
 ---
 
@@ -147,7 +147,7 @@ Every custom rule spec below is complete enough to implement without re-reading 
 
 ### 3.7 `freegantt/model-is-types-only` — syntactic · `01` §1
 
-**Flags:** in `src/model/**`, any value-producing declaration — function/class/variable — except an allowlist of id/brand helpers (`brand`, `unbrand`, `taskId`, `dependencyId`, `rowId`, `itemId`, `changeSetId`) which must additionally be one-line, dependency-free identity casts. Any `import` that is not `import type` is flagged.
+**Flags:** in `src/model/**`, any value-producing declaration — function/class/variable — except an allowlist of id/brand helpers (`brand`, `unbrand`, `entryId`, `dependencyId`, `rowId`, `itemId`, `changeSetId`) which must additionally be one-line, dependency-free identity casts. Any `import` that is not `import type` is flagged.
 
 **Message:** `model/ is types only: zero runtime beyond id/brand helpers, zero dependencies. (plans/01 §1)`
 

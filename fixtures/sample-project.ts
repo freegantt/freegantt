@@ -1,8 +1,8 @@
-// One realistic sample project (~50 tasks), used by the harness and by layout tests (plans/03 S0).
+// One realistic sample project (~50 entries), used by the harness and by layout tests (plans/03 S0).
 
 import { addMs, instant, MS } from '../src/time/index.js';
-import { taskId } from '../src/model/index.js';
-import type { Task } from '../src/model/index.js';
+import { entryId } from '../src/model/index.js';
+import type { Entry } from '../src/model/index.js';
 
 const DAY_START = instant('2026-09-01T00:00:00Z');
 
@@ -27,7 +27,7 @@ const PHASES: Array<{ name: string; startDay: number; durationDays: number }> = 
   { name: 'Build', startDay: 22, durationDays: 20 },
   { name: 'Core scaffolding', startDay: 22, durationDays: 3 },
   { name: 'Auth', startDay: 25, durationDays: 4 },
-  { name: 'Task model', startDay: 25, durationDays: 5 },
+  { name: 'Entry model', startDay: 25, durationDays: 5 },
   { name: 'Timeline rendering', startDay: 30, durationDays: 6 },
   { name: 'Scheduling engine', startDay: 30, durationDays: 8 },
   { name: 'Drag and resize', startDay: 36, durationDays: 5 },
@@ -63,9 +63,9 @@ const PHASES: Array<{ name: string; startDay: number; durationDays: number }> = 
   { name: 'Sprint 2', startDay: 73, durationDays: 10 },
 ];
 
-export const sampleTasks: Task[] = PHASES.map((phase, index) => ({
-  id: taskId(`task-${index + 1}`),
+export const sampleEntries: Entry[] = PHASES.map((phase, index) => ({
+  id: entryId(`entry-${index + 1}`),
   name: phase.name,
-  start: day(phase.startDay) as Task['start'],
-  end: day(phase.startDay + phase.durationDays) as Task['end'],
+  start: day(phase.startDay) as Entry['start'],
+  end: day(phase.startDay + phase.durationDays) as Entry['end'],
 }));

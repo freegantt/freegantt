@@ -18,11 +18,11 @@ surface.
 ```ts
 import { Project } from 'freegantt';
 
-const project = new Project({ tasks: [...] }); // readonly Task[], S0/S1 scope
+const project = new Project({ entries: [...] }); // readonly Entry[], S0/S1 scope
 ```
 
-`Project` is a headless, DOM-free wrapper around a task list. Transactions, undo/redo, and
-mutation (`project.tasks.add/update/remove`) land in S2 — see `plans/03-slices.md`.
+`Project` is a headless, DOM-free wrapper around an entry list. Transactions, undo/redo, and
+mutation (`project.entries.add/update/remove`) land in S2 — see `plans/03-slices.md`.
 
 ### `TimeScaleModel` (S1)
 
@@ -39,7 +39,7 @@ const scale = new TimeScaleModel({
 The standalone, shareable object a `Gantt` binds to for time↔pixel mapping (`plans/01` §8.2, D9).
 Pass the **same instance** to two `Gantt`s and their x-axis stays in sync by construction — no
 event plumbing, no link manager. Omit `scale` on `Gantt` and it builds a private default sized to
-the project's task range — single-Gantt usage never has to meet this concept.
+the project's entry range — single-Gantt usage never has to meet this concept.
 
 Preset switching, zoom, and named presets (`'weekAndMonth'` etc.) land later in S1; today
 `TimeScaleModel` only takes an explicit `zone`/`range`/`pxPerMs`.
@@ -60,8 +60,8 @@ const gantt = new Gantt({
 gantt.destroy();
 ```
 
-Mounts a Gantt into `host` and renders `project.tasks` as positioned bars under a header band of
-time ticks, one row per task (flat list; hierarchy/grouping land in S5). Two `Gantt` instances on
+Mounts a Gantt into `host` and renders `project.entries` as positioned bars under a header band of
+time ticks, one row per entry (flat list; hierarchy/grouping land in S5). Two `Gantt` instances on
 one page are fully independent (no shared module state — I2); two given the same `scale` x-sync
 (D9, proven in `src/api/gantt.test.ts`).
 

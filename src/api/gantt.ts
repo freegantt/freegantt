@@ -7,7 +7,7 @@ import type { Project } from './project.js';
 export interface GanttOptions {
   host: HTMLElement;
   project: Project;
-  /** Bound viewport object (D9, plans/02 §5) — omit for a private default sized to the project's tasks. */
+  /** Bound viewport object (D9, plans/02 §5) — omit for a private default sized to the project's entries. */
   scale?: TimeScaleModel;
   rowHeight?: number;
 }
@@ -21,7 +21,7 @@ export class Gantt {
   constructor(options: GanttOptions) {
     this.#shell = new GanttShell({
       host: options.host,
-      tasks: options.project.tasks,
+      entries: options.project.entries,
       zone: options.project.zone,
       ...(options.scale ? { scale: options.scale } : {}),
       rowHeight: options.rowHeight ?? DEFAULT_ROW_HEIGHT,
