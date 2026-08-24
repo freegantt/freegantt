@@ -54,11 +54,11 @@ flowchart TB
   class API apic
 ```
 
-There is deliberately no `data/ --> scheduling/` edge: `data/` has no static dependency on scheduling at all. Instead, `data/` calls one generic, synchronous resolve hook — the identity function when nothing occupies it, decided once at setup — to turn a proposed edit into a committed one (exact contract tracked in issue #12). `scheduling/` stays a directory in `src/`: it's where the first-party default scheduling plugin's pure engine lives, still DOM-free and still isolated from `render/`/`view/`/`interaction/`, but it is no longer a privileged layer every Gantt is wired to by default — a Gantt with no scheduling plugin installed never loads it.
+There is deliberately no `data/ --> scheduling/` edge: `data/` has no static dependency on scheduling at all. Instead, `data/` calls the generic resolve hook (D4; exact contract tracked in issue #12) to turn a proposed edit into a committed one. `scheduling/` stays a directory in `src/`: it's where the first-party default scheduling plugin's pure engine lives, still DOM-free and still isolated from `render/`/`view/`/`interaction/`, but it is no longer a privileged layer every Gantt is wired to by default — a Gantt with no scheduling plugin installed never loads it.
 
 **Enforcement (D12):** an import-boundary lint rule in CI (dependency-cruiser or `no-restricted-imports`). Any arrow not in this diagram fails the build. Notably:
 
-- `scheduling/` never imports `render/`, `view/`, or `interaction/` — and vice versa (D4). A scheduling plugin, when installed, meets `data/` only through the generic resolve hook (issue #12), never through a static import.
+- `scheduling/` never imports `render/`, `view/`, or `interaction/` — and vice versa (D4). A scheduling plugin, when installed, meets `data/` only through that hook, never a static import.
 - `model/` is types only: zero runtime exports beyond id/brand helpers, zero dependencies.
 - Only `api/` and the type surface of `model/` are public entry points; everything else is internal and free to change.
 
@@ -371,7 +371,7 @@ interface ChangeSet {
 
 ## 7. `scheduling/` — pure engine, pluggable policy
 
-This section describes FreeGantt's **first-party default scheduling plugin** — the bars + dependencies engine bundled with the library (D3) — not a mandatory core layer (D4). It occupies core's one generic, synchronous resolve hook exclusively when installed; when no scheduling plugin is installed, that hook is the identity function and none of what follows runs. The hook's own contract (where per-task plugin data like the pin flag lives, how hot-path preview and commit-time resolution share one call) is separate, ongoing design work tracked in issue #12. The plugin's own public API and its re-spec against that hook are tracked in issue #14. What follows is still an accurate description of the engine's internals — propagation, cycle detection, the policy seam — just reframed as *this plugin's* internals rather than a core module's.
+This section describes FreeGantt's **first-party default scheduling plugin** — the bars + dependencies engine bundled with the library (D3) — not a mandatory core layer (D4). It occupies the resolve hook (D4; §1) exclusively when installed; when nothing is installed, none of what follows runs. The hook's own contract (where per-task plugin data like the pin flag lives, how hot-path preview and commit-time resolution share one call) is separate, ongoing design work tracked in issue #12. The plugin's own public API and its re-spec against that hook are tracked in issue #14. What follows is still an accurate description of the engine's internals — propagation, cycle detection, the policy seam — just reframed as *this plugin's* internals rather than a core module's.
 
 ```mermaid
 flowchart LR

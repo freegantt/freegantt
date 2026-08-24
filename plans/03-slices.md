@@ -83,7 +83,7 @@ Slices are scope, not calendar estimates. Within a slice, tasks are ordered so t
 
 ## S3 — Dependencies & the scheduling plugin
 
-**Goal:** links drawn, and FreeGantt's first-party default scheduling plugin (D3) — occupying core's generic resolve hook exposed by `data/` (exact contract tracked in issue #12) — with its policy seam: propagation with lag, cycle detection with named members, diagnostics, pinned tasks. Cascades visible live in the harness. Core itself does not require this plugin (D4); S3 is where FreeGantt's own default happens to occupy the hook it ships with.
+**Goal:** links drawn, and FreeGantt's first-party default scheduling plugin (D3) — occupying the resolve hook `data/` exposes (D4; `01` §1; exact contract tracked in issue #12) — with its policy seam: propagation with lag, cycle detection with named members, diagnostics, pinned tasks. Cascades visible live in the harness. Core itself does not require this plugin (D4); S3 is where FreeGantt's own default happens to occupy the hook it ships with.
 
 **Scope**
 
