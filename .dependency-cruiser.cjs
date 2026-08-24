@@ -35,9 +35,11 @@ module.exports = {
     forbid('time-boundary', 'time', ['model']),
     forbid('layout-boundary', 'layout', ['time', 'model']),
     forbid('scheduling-boundary', 'scheduling', ['time', 'model']),
-    forbid('data-boundary', 'data', ['scheduling', 'model']),
+    // No 'scheduling' target: data/ has no static dependency on scheduling/ at all — they meet only
+    // through the generic resolve hook, decided once at setup (plans/01 §1, issue #12).
+    forbid('data-boundary', 'data', ['model']),
     forbid('render-boundary', 'render', ['layout']),
-    // model: Task/Dependency types flow through view as type-only params (same rationale as api, above).
+    // model: Task types flow through view as type-only params (same rationale as api, above).
     forbid('view-boundary', 'view', ['render', 'layout', 'data', 'model']),
     forbid('interaction-boundary', 'interaction', ['view', 'data']),
     forbid('extensions-boundary', 'extensions', ['view', 'interaction']),
