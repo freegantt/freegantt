@@ -143,11 +143,12 @@ export class GanttShell {
     const scale = this.#scale.scale;
     const entries = this.#options.dataset.entries;
     const rowHeight = this.#rowHeight;
+    const { x, y } = this.#scroll.state.position;
     const frame = computeFrame({
       entries,
       scale,
       preset: this.#scale.preset,
-      viewport: { x: 0, y: 0, width: this.#drawableWidth(), height: this.#host.clientHeight },
+      viewport: { x, y, width: this.#drawableWidth(), height: this.#host.clientHeight },
       rowHeight,
       revision: this.#revision++,
       heights: this.#heightsFor(entries.length, rowHeight),
