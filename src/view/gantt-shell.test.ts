@@ -141,6 +141,27 @@ describe('scroll (D9, #9)', () => {
     shellB.destroy();
   });
 
+  it('culls rows against the current scroll position, not always (0,0) (regression: render() hardcoded viewport.y to 0, so scrolling past the first screenful rendered nothing)', () => {
+    const scroll = new ScrollModel();
+    const host = document.createElement('div');
+    Object.defineProperty(host, 'clientHeight', { value: 320, configurable: true }); // 10 rows @ 32px
+
+    const shell = new GanttShell({ host, dataset: { entries: tallEntries(50), timeZone }, scroll });
+
+    const labelsAt = (): string[] =>
+      Array.from(host.querySelectorAll('.fg-row'), (row) => row.textContent ?? '');
+
+    expect(labelsAt()).toContain('Entry 0');
+    expect(labelsAt()).not.toContain('Entry 40');
+
+    scroll.panTo({ y: 40 * 32 }); // scroll 40 rows down
+
+    expect(labelsAt()).not.toContain('Entry 0');
+    expect(labelsAt()).toContain('Entry 40');
+
+    shell.destroy();
+  });
+
   it("a shorter chart's own max is the loosest bound it needs, not the taller chart's (U3)", () => {
     const scroll = new ScrollModel();
     const shortHost = document.createElement('div');
