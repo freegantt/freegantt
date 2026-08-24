@@ -10,9 +10,11 @@ import type {
   RowId,
 } from '../../layout/index.js';
 import type { RenderBackend, InteractionState, HitResult } from '../backend.js';
+import { syncKeyed } from './sync-keyed.js';
 
-type BarGeom = Pick<FrameBar, 'kind' | 'label' | 'x' | 'y' | 'width' | 'height'>;
+type TickGeom = Pick<FrameHeaderTick, 'x' | 'label'>;
 type RowGeom = Pick<FrameRow, 'top' | 'height' | 'label'>;
+type BarGeom = Pick<FrameBar, 'kind' | 'label' | 'x' | 'y' | 'width' | 'height'>;
 
 /** CSS custom property that owns the row-label gutter width (plans/02 §4, level 1 of the
  * customization ladder — same ladder rung as `--fg-row-height`). Read once at mount, not per-sync:
@@ -35,114 +37,78 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
   let barLayer: HTMLElement | undefined;
   let rowLabelWidth = 0;
 
+  const tickNodes = new Map<number, HTMLElement>();
+  const tickGeom = new Map<number, TickGeom>();
   const rowNodes = new Map<RowId, HTMLElement>();
   const rowGeom = new Map<RowId, RowGeom>();
   const barNodes = new Map<ItemId, HTMLElement>();
   const barGeom = new Map<ItemId, BarGeom>();
-  const tickNodes: HTMLElement[] = [];
-  const tickGeom: FrameHeaderTick[] = [];
 
   function syncHeader(ticks: GeometryFrame['header']['ticks']): void {
     if (!headerLayer) return;
-    ticks.forEach((tick, i) => {
-      let node = tickNodes[i];
-      if (!node) {
-        node = document.createElement('div');
+    syncKeyed(headerLayer, ticks, tickNodes, tickGeom, {
+      key: (_tick, i) => i,
+      create: () => {
+        const node = document.createElement('div');
         node.className = 'fg-tick';
         node.style.position = 'absolute';
-        headerLayer!.append(node);
-        tickNodes[i] = node;
-      }
-      const prev = tickGeom[i];
-      if (!prev || prev.x !== tick.x || prev.label !== tick.label) {
-        node.style.transform = `translateX(${tick.x}px)`;
-        node.textContent = tick.label;
-        tickGeom[i] = tick;
-      }
+        return node;
+      },
+      toGeom: (tick) => ({ x: tick.x, label: tick.label }),
+      patch: (node, geom) => {
+        node.style.transform = `translateX(${geom.x}px)`;
+        node.textContent = geom.label;
+      },
     });
-    while (tickNodes.length > ticks.length) {
-      tickNodes.pop()?.remove();
-      tickGeom.pop();
-    }
   }
 
   function syncRows(rows: readonly FrameRow[]): void {
     if (!rowLayer) return;
-    const seen = new Set<RowId>();
-    for (const row of rows) {
-      seen.add(row.id);
-      let node = rowNodes.get(row.id);
-      if (!node) {
-        node = document.createElement('div');
+    syncKeyed(rowLayer, rows, rowNodes, rowGeom, {
+      key: (row) => row.id,
+      create: () => {
+        const node = document.createElement('div');
         node.className = 'fg-row';
         node.style.position = 'absolute';
-        rowNodes.set(row.id, node);
-        rowLayer.append(node);
-      }
-      const prev = rowGeom.get(row.id);
-      if (!prev || prev.top !== row.top || prev.height !== row.height || prev.label !== row.label) {
-        node.style.transform = `translateY(${row.top}px)`;
-        node.style.height = `${row.height}px`;
+        return node;
+      },
+      toGeom: (row) => ({ top: row.top, height: row.height, label: row.label }),
+      patch: (node, geom) => {
+        node.style.transform = `translateY(${geom.top}px)`;
+        node.style.height = `${geom.height}px`;
         node.style.width = `${rowLabelWidth}px`;
-        node.textContent = row.label;
-        rowGeom.set(row.id, { top: row.top, height: row.height, label: row.label });
-      }
-    }
-    for (const [id, node] of rowNodes) {
-      if (!seen.has(id)) {
-        node.remove();
-        rowNodes.delete(id);
-        rowGeom.delete(id);
-      }
-    }
+        node.textContent = geom.label;
+      },
+    });
   }
 
   function syncBars(bars: readonly FrameBar[]): void {
     if (!barLayer) return;
-    const seen = new Set<ItemId>();
-    for (const bar of bars) {
-      seen.add(bar.id);
-      let node = barNodes.get(bar.id);
-      if (!node) {
-        node = document.createElement('div');
+    syncKeyed(barLayer, bars, barNodes, barGeom, {
+      key: (bar) => bar.id,
+      create: (bar) => {
+        const node = document.createElement('div');
         node.className = 'fg-bar';
         node.dataset['itemId'] = bar.id;
         node.style.position = 'absolute';
-        barNodes.set(bar.id, node);
-        barLayer.append(node);
-      }
-      const prev = barGeom.get(bar.id);
-      if (
-        !prev ||
-        prev.kind !== bar.kind ||
-        prev.label !== bar.label ||
-        prev.x !== bar.x ||
-        prev.y !== bar.y ||
-        prev.width !== bar.width ||
-        prev.height !== bar.height
-      ) {
-        node.dataset['kind'] = bar.kind;
-        node.textContent = bar.label;
-        node.style.transform = `translate(${bar.x}px, ${bar.y}px)`;
-        node.style.width = `${bar.width}px`;
-        node.style.height = `${bar.height}px`;
-        barGeom.set(bar.id, {
-          kind: bar.kind,
-          label: bar.label,
-          x: bar.x,
-          y: bar.y,
-          width: bar.width,
-          height: bar.height,
-        });
-      }
-    }
-    for (const [id, node] of barNodes) {
-      if (!seen.has(id)) {
-        node.remove();
-        barNodes.delete(id);
-        barGeom.delete(id);
-      }
-    }
+        return node;
+      },
+      toGeom: (bar) => ({
+        kind: bar.kind,
+        label: bar.label,
+        x: bar.x,
+        y: bar.y,
+        width: bar.width,
+        height: bar.height,
+      }),
+      patch: (node, geom) => {
+        node.dataset['kind'] = geom.kind;
+        node.textContent = geom.label;
+        node.style.transform = `translate(${geom.x}px, ${geom.y}px)`;
+        node.style.width = `${geom.width}px`;
+        node.style.height = `${geom.height}px`;
+      },
+    });
   }
 
   return {
@@ -184,12 +150,12 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
     },
     destroy() {
       host?.replaceChildren();
+      tickNodes.clear();
+      tickGeom.clear();
       rowNodes.clear();
       rowGeom.clear();
       barNodes.clear();
       barGeom.clear();
-      tickNodes.length = 0;
-      tickGeom.length = 0;
       host = undefined;
       headerLayer = undefined;
       rowLayer = undefined;
