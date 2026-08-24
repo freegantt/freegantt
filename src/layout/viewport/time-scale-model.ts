@@ -69,20 +69,15 @@ export class TimeScaleModel {
    * Gantt follows a project joining or leaving the shared axis. */
   bind(binding: ScaleBinding): ScaleBindingHandle {
     this.#bindings.add(binding);
-    this.#resolved = undefined;
-    this.#observable.notify();
+    this.#invalidate();
     return {
       unbind: () => {
-        if (this.#bindings.delete(binding)) {
-          this.#resolved = undefined;
-          this.#observable.notify();
-        }
+        if (this.#bindings.delete(binding)) this.#invalidate();
       },
       setViewportWidth: (width) => {
         if (binding.viewportWidth === width) return;
         binding.viewportWidth = width;
-        this.#resolved = undefined;
-        this.#observable.notify();
+        this.#invalidate();
       },
     };
   }
@@ -91,11 +86,16 @@ export class TimeScaleModel {
     return (this.#resolved ??= createTimeScale(this.#resolve()));
   }
 
+  #invalidate(): void {
+    this.#resolved = undefined;
+    this.#observable.notify();
+  }
+
   #resolve(): TimeScaleOptions {
-    const bindings = [...this.#bindings];
+    const bindings = this.#bindings;
     // D6: the zone is the project's. Gantt instances sharing an axis share a project zone in practice; the
     // first binding decides, rather than the axis silently having two calendars.
-    const zone = bindings[0]?.zone ?? UNBOUND_ZONE;
+    const zone = bindings.values().next().value?.zone ?? UNBOUND_ZONE;
     const range = this.#range === 'fitProject' ? boundSpan(bindings) : this.#range;
     const spanMs = diffMs(range.end, range.start);
     const width = fitWidth(bindings);
@@ -108,7 +108,7 @@ export class TimeScaleModel {
 
 /** The narrowest measured viewport across the bound Gantt instances, so the span fits in all of them rather
  * than only the widest. `0` when nothing is measured yet. */
-function fitWidth(bindings: readonly ScaleBinding[]): number {
+function fitWidth(bindings: ReadonlySet<ScaleBinding>): number {
   let width = 0;
   for (const binding of bindings) {
     if (binding.viewportWidth <= 0) continue;
@@ -120,7 +120,7 @@ function fitWidth(bindings: readonly ScaleBinding[]): number {
 /** `range: 'fitProject'` (plans/02 §5): min start / max end across every bound project's tasks. With
  * nothing bound — or nothing scheduled — this collapses to a zero span at the epoch, which resolves
  * to the preset's own zoom rather than a divide-by-zero. */
-function boundSpan(bindings: readonly ScaleBinding[]): TimeSpan {
+function boundSpan(bindings: ReadonlySet<ScaleBinding>): TimeSpan {
   let span: TimeSpan | undefined;
   for (const binding of bindings) {
     for (const task of binding.tasks) {

@@ -3,7 +3,7 @@
 // callbacks, not a reactivity system — the moment a third shareable model wants more than
 // subscribe/notify, that's the signal to consolidate under the data/ façade instead of growing this.
 
-export interface Observable {
+interface Observable {
   /** Registers `fn` to run on every `notify()` until the returned dispose is called. */
   subscribe(fn: () => void): () => void;
   /** Runs every current subscriber, in subscription order. */

@@ -2,6 +2,8 @@
 // this step adds the header band, rendering TimeScale.ticks() above the bars.
 
 import { computeFrame, TimeScaleModel } from '../layout/index.js';
+import type { ScaleBindingHandle } from '../layout/index.js';
+
 import { createDomBackend } from '../render/dom/index.js';
 import type { RenderBackend } from '../render/backend.js';
 import type { Task } from '../model/index.js';
@@ -24,7 +26,7 @@ export class GanttShell {
   #backend: RenderBackend;
   #revision = 0;
   #scale: TimeScaleModel;
-  #scaleHandle: { unbind: () => void };
+  #scaleHandle: ScaleBindingHandle;
   #unsubscribeScale: () => void;
   #headerEl: HTMLElement;
   #barsHost: HTMLElement;
