@@ -14,10 +14,10 @@ Slices are scope, not calendar estimates. Within a slice, entries are ordered so
 
 - Repo: TS strict, Vite, Vitest, ESLint + import-boundary rules (invariant I1) wired into CI from the first commit.
 - `model/`: `Entry` (including `kind` — authored from day one, even while only `'span'` renders), ids, `Instant` brand, `TimeSpan`, `Duration`.
-- `time/` (minimal): `instant()`, `toISO()`, zone-aware `startOfDay`/`addDays`/`diff` for one project zone; magic-constant lint (I10).
+- `time/` (minimal): `instant()`, `toISO()`, zone-aware `startOfDay`/`addDays`/`diff` for one dataset zone; magic-constant lint (I10).
 - `layout/` (minimal): row resolution (`source: 'entries'`, flat list), one item per entry, fixed row height, `computeFrame()` returning rows + bars; deterministic `Item.id` (I8).
 - `render/dom` (minimal): mount, `sync(frame)` rendering absolutely-positioned row and bar elements; the keyed reconciler in its hard-bounded scope (`01` §8.1); `render/null` for tests.
-- `api/` (minimal): `new Project({ entries })`, `new Gantt({ host, project })`, `destroy()`.
+- `api/` (minimal): `new Dataset({ entries })`, `new Gantt({ host, dataset })`, `destroy()`.
 - Harness: a Vite page that mounts the Gantt on a fixture; this page lives forever and every slice adds to it.
 - Fixtures: one realistic sample project (~50 entries).
 
@@ -43,7 +43,7 @@ Slices are scope, not calendar estimates. Within a slice, entries are ordered so
 - `TimeScaleModel` and `ScrollModel` as standalone observable objects; Gantt instances bind to them, constructing private ones by default (`01` §8.2). The I12 rule (no pixels-from-time or scroll access outside these objects) is in force now.
 - `view/`: Gantt shell — grid pane (label column), splitter, timeline pane; single scroll owner; vertical + horizontal virtualization windows; row-height index behind an interface (simple prefix-sum implementation).
 - Shared row geometry: grid and timeline both position rows from `frame.rows` (I9 pixel test).
-- Zoom: preset switching + `range: 'fitProject'`; anchored zoom (the instant under the cursor stays put).
+- Zoom: preset switching + `range: 'fitDataset'`; anchored zoom (the instant under the cursor stays put).
 - Theming foundation: CSS custom properties + parts vocabulary (`--fg-*`, `data-flag`); light/dark.
 - A11y foundation: the Gantt is focusable, rows/bars have roles and labels, focus visible.
 
@@ -53,7 +53,7 @@ Slices are scope, not calendar estimates. Within a slice, entries are ordered so
 - [ ] Grid and timeline row tops are pixel-identical under fractional zoom (I9).
 - [ ] Preset switch and zoom are live reconfigurations — no remount, anchor preserved.
 - [ ] Two harness Gantt instances given the same `ScrollModel` scroll together (a 5-line harness demo — the D9 seam proven now, cheaply).
-- [ ] Axis headers correct across a DST transition in the project zone (unit-tested in `time/`).
+- [ ] Axis headers correct across a DST transition in the dataset zone (unit-tested in `time/`).
 
 ---
 
@@ -63,12 +63,12 @@ Slices are scope, not calendar estimates. Within a slice, entries are ordered so
 
 **Scope**
 
-- `data/`: normalized stores + indexes; instance-scoped reactivity façade (one small dep, swappable); `ProjectData` owning stores + zone.
+- `data/`: normalized stores + indexes; instance-scoped reactivity façade (one small dep, swappable); `DatasetData` owning stores + zone.
 - Transactions: batching, auto-wrap of single mutations, one changeset per transaction (`origin` tagged).
 - Undo/redo: transaction = atomic unit; recorded changesets replayed exactly; history API (`canUndo`, capacity).
-- Changesets: `{ added, removed, updated: {field, from, to} }` (`01` §6); `project.on('change')`; `project.apply(changeSet)` with validation + rejection reporting.
+- Changesets: `{ added, removed, updated: {field, from, to} }` (`01` §6); `dataset.on('change')`; `dataset.apply(changeSet)` with validation + rejection reporting.
 - Serialization: `toJSON()`/`fromJSON()` with `schema: 1`, ISO instants, opaque `meta` round-trip.
-- Public mutation API: `project.entries.add/update/remove`, `project.dependencies.*`, typed, validating.
+- Public mutation API: `dataset.entries.add/update/remove`, `dataset.dependencies.*`, typed, validating.
 - View binding: committed changesets invalidate layout incrementally (changed rows only), not globally.
 - Harness: mutation playground — edit fixture via console/buttons, watch the Gantt update; undo/redo buttons; changeset log panel; export/import JSON.
 
@@ -139,19 +139,19 @@ Slices are scope, not calendar estimates. Within a slice, entries are ordered so
 
 **Scope**
 
-- Tree UI: indent + expand/collapse in the grid's name column; collapse state is view state (per Gantt, not in project data).
+- Tree UI: indent + expand/collapse in the grid's name column; collapse state is view state (per Gantt, not in dataset data).
 - Kind-driven item emission (`01` §2.5): `group` → summary bracket (rollup from S3), `milestone` → diamond, host-registered kinds via the emitter seam; empty groups render as groups.
-- `hierarchy: { autoGroup: true }` on `Project`: first child promotes the parent to `group` within the triggering transaction; promote only, never demote (`02` §2).
+- `hierarchy: { autoGroup: true }` on `Dataset`: first child promotes the parent to `group` within the triggering transaction; promote only, never demote (`02` §2).
 - Row sources: `{ source: 'group', groupBy }` and `{ source: 'custom', resolve }` (`01` §2.3); group header rows.
 - Sort and filter as store-level view specs with tree-aware policies (filter keeps ancestors by default; sort stays within parent).
 - Item emission: `entry.segments` → multiple items on one row; overlap auto-packing into sub-lanes; `heightMode: 'pack'` variable row heights through the height index.
 - Dependency endpoint rule for multi-item entries: links attach to the earliest item by default, configurable per view (`links.endpoints: 'first' | 'all' | 'none'`).
 - Interaction with lanes: drag/resize on packed items; collapse/expand by keyboard.
-- Harness: tree fixture; a grouped view of the same project side-by-side with the tree view (two Gantt instances, one project — the D9/D2 architecture visibly paying off).
+- Harness: tree fixture; a grouped view of the same dataset side-by-side with the tree view (two Gantt instances, one dataset — the D9/D2 architecture visibly paying off).
 
 **Acceptance**
 
-- [ ] Same project renders as tree and as grouped rows simultaneously in two Gantt instances; edits in one appear in both.
+- [ ] Same dataset renders as tree and as grouped rows simultaneously in two Gantt instances; edits in one appear in both.
 - [ ] A segmented entry renders N bars on one row; drag of one segment behaves sanely and transactionally.
 - [ ] Pack-mode rows change height correctly as overlaps come and go; scroll position stays stable (height index invalidation test).
 - [ ] Collapse state survives data edits and is independent per Gantt.

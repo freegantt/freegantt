@@ -6,9 +6,9 @@ A framework-free TypeScript Gantt library: layout and rendering of dated Entries
 
 ### Authored model
 
-**Project**:
-The body of authored data — its Entries, plus whatever scheduling-plugin-owned data (e.g. Dependencies) an installed scheduling plugin contributes — together with the settings that give it meaning, above all the IANA zone in which all zone-aware date arithmetic is performed. "The project's zone" and "the project's reference date" are properties of this, not of the host environment. A Project with no scheduling plugin installed has Entries and no Dependencies at all (ADR 0002).
-_Avoid_: Plan, schedule (a schedule is an output of scheduling a Project, not the Project itself), dataset
+**Dataset**:
+The body of authored data — its Entries, plus whatever scheduling-plugin-owned data (e.g. Dependencies) an installed scheduling plugin contributes — together with the settings that give it meaning, above all the IANA zone in which all zone-aware date arithmetic is performed. "The dataset's zone" and "the dataset's reference date" are properties of this, not of the host environment. A Dataset with no scheduling plugin installed has Entries and no Dependencies at all (ADR 0002). Renamed from Project in ADR 0004 — read every historical "Project" as "Dataset".
+_Avoid_: Project (retired in ADR 0004 — see that ADR for why; the word smuggled scheduling/PM assumptions into a domain-neutral concept the same way `Task` once did for `Entry`), Plan, schedule (a schedule is an output of scheduling a Dataset, not the Dataset itself)
 
 **Entry**:
 One authored, dated record: a name, a start, an end, and a `kind`. Entries are persisted; they are what a host creates, edits, and hands to the library. What an Entry _means_ is the host's business — a task, a shift, a delivery, a day's sales — and core never assumes. The word is the accountant's: a dated line in a ledger.
@@ -83,7 +83,7 @@ _Avoid_: Scene, render tree, viewport model
 ### Mounted instances
 
 **Gantt**:
-The public entry point and a whole mounted instance: one `Gantt` wraps one `host` element, one Project, and everything needed to render and interact with it. This is the sense used everywhere the specs discuss the product as a whole — D9's "multi-Gantt sync", I2's "two Gantt instances coexist independently", a host page that mounts "two Gantts". A `Gantt` _is_ the class; it is also the name of the concept, so `new Gantt(...)` and "a Gantt" mean the same thing.
+The public entry point and a whole mounted instance: one `Gantt` wraps one `host` element, one Dataset, and everything needed to render and interact with it. This is the sense used everywhere the specs discuss the product as a whole — D9's "multi-Gantt sync", I2's "two Gantt instances coexist independently", a host page that mounts "two Gantts". A `Gantt` _is_ the class; it is also the name of the concept, so `new Gantt(...)` and "a Gantt" mean the same thing.
 _Avoid_: Chart (see #7 — "chart" used to name both this and `GanttShell`, ambiguously, and is retired from the codebase entirely)
 
 **GanttShell**:
@@ -97,11 +97,11 @@ A reading off a wall clock — year, month, day, hour, minute — with no zone a
 _Avoid_: Civil time (the standard term of art elsewhere, including Temporal's own spec text and C++'s `<chrono>` — expect to meet it in external docs, but don't use it here), local time (reads as "the machine's zone", which this project never consults), wall time (means elapsed duration in performance contexts)
 
 **Zone-aware date arithmetic**:
-Any operation whose answer depends on a zone — the start of a day, the next Monday, how many days lie between two Instants. It is the arithmetic that DST makes non-obvious (a "day" is not always 86,400,000 ms) and it lives exclusively in `time/`, resolved through the Project's zone.
+Any operation whose answer depends on a zone — the start of a day, the next Monday, how many days lie between two Instants. It is the arithmetic that DST makes non-obvious (a "day" is not always 86,400,000 ms) and it lives exclusively in `time/`, resolved through the Dataset's zone.
 _Avoid_: Plain arithmetic (reads as "simple arithmetic" — say "zone-aware" for the operation and "plain" only for the value), date math, civil arithmetic
 
 **Instant**:
-An absolute point on the timeline, stored as epoch milliseconds and branded so it cannot be confused with an ordinary number. An Instant carries no zone; every zone-dependent reading of one (what day it falls on, what "add a day" means) resolves through the Project's zone.
+An absolute point on the timeline, stored as epoch milliseconds and branded so it cannot be confused with an ordinary number. An Instant carries no zone; every zone-dependent reading of one (what day it falls on, what "add a day" means) resolves through the Dataset's zone.
 _Avoid_: Date, timestamp, epoch
 
 **TimeScale**:
@@ -113,11 +113,11 @@ The standalone, shareable object that owns a TimeScale and that a Gantt binds to
 _Avoid_: Scale (Scale, unqualified, means the underlying `TimeScale` the model wraps — `TimeScaleModel.scale`)
 
 **Scale intent**:
-What a caller states about how time should be displayed — a ViewPreset and a range that is either `'fitProject'` or a pinned TimeSpan. Intent is all a caller ever supplies to a TimeScaleModel; the zone (which is the Project's, D6), the resolved span, and the pixels-per-millisecond factor are derived at bind time and are not a caller's to state.
+What a caller states about how time should be displayed — a ViewPreset and a range that is either `'fitDataset'` or a pinned TimeSpan. Intent is all a caller ever supplies to a TimeScaleModel; the zone (which is the Dataset's, D6), the resolved span, and the pixels-per-millisecond factor are derived at bind time and are not a caller's to state.
 _Avoid_: Scale options, scale config (both read as the resolved geometry, which is the opposite of intent)
 
 **Scale binding**:
-One Gantt's contribution to a TimeScaleModel's resolution: its Project's zone, its Entries, its measured viewport width, and the reaction to run when the resolved scale changes. A Gantt binds on construction and unbinds on destroy, and both re-resolve the shared TimeScale — which is how `'fitProject'` spans every bound Project rather than whichever one was passed to the constructor.
+One Gantt's contribution to a TimeScaleModel's resolution: its Dataset's zone, its Entries, its measured viewport width, and the reaction to run when the resolved scale changes. A Gantt binds on construction and unbinds on destroy, and both re-resolve the shared TimeScale — which is how `'fitDataset'` spans every bound Dataset rather than whichever one was passed to the constructor.
 _Avoid_: Attach, subscribe, register
 
 **ScrollModel**:
@@ -142,6 +142,6 @@ _Avoid_: Permission, ability
 The public extension contract: an `id` plus a `setup(ctx)` that returns a disposer. Built-in features (tooltips, context menu, editors) are themselves GanttPlugins using the same `PluginContext` a third party would use — no back-door capabilities reserved for first-party code.
 _Avoid_: Extension (Extensions is the name of the source layer that hosts plugins; GanttPlugin is the unit within it)
 
-**ProjectPlugin**, **ProposalResolver**, **PluginStore**:
-Names from the resolve hook's contract design (ADR 0002's consequences, issue #15, built on #12): a `ProjectPlugin` occupies the resolve hook via a `ProposalResolver`, and per-plugin per-entry data (e.g. the scheduling plugin's pin flag, `Dependency`) lives in a reserved `PluginStore` rather than on `Entry` or in a host/plugin-shared field. Design proposals only — not yet implemented or landed in `src/`; do not treat as existing API until #15 lands.
+**DatasetPlugin**, **ProposalResolver**, **PluginStore**:
+Names from the resolve hook's contract design (ADR 0002's consequences, issue #15, built on #12): a `DatasetPlugin` occupies the resolve hook via a `ProposalResolver`, and per-plugin per-entry data (e.g. the scheduling plugin's pin flag, `Dependency`) lives in a reserved `PluginStore` rather than on `Entry` or in a host/plugin-shared field. Design proposals only — not yet implemented or landed in `src/`; do not treat as existing API until #15 lands. Named `ProjectPlugin` before ADR 0004.
 _Avoid_: Treating these as settled — the exact shapes are still open design work
