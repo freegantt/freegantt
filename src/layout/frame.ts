@@ -1,7 +1,7 @@
 // layout/ is headless geometry — no DOM, no drawing calls (plans/01 §4). DOM-free by construction.
 
 import type { RowId, ItemId, TaskId, TaskKind, Task, Instant } from '../model/index.js';
-import { itemId } from '../model/index.js';
+import { itemId, rowId } from '../model/index.js';
 
 export interface BarFlags {
   hasConflict?: boolean;
@@ -60,7 +60,7 @@ export function computeFrame(input: LayoutInput): GeometryFrame {
   const bars: FrameBar[] = [];
 
   tasks.forEach((task, index) => {
-    const id = `row:${task.id}` as RowId;
+    const id = rowId(`row:${task.id}`);
     const top = index * rowHeight;
     rows.push({ id, index, top, height: rowHeight, laneCount: 1, label: task.name });
 

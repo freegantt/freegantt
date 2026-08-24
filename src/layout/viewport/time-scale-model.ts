@@ -95,45 +95,37 @@ export class TimeScaleModel {
   }
 
   #resolve(): TimeScaleOptions {
-    const bindings = this.#bindings.keys();
-    // D6: the zone is the project's. Gantt instances sharing an axis share a project zone in practice; the
-    // first binding decides, rather than the axis silently having two calendars.
-    const zone = bindings.next().value?.zone ?? UNBOUND_ZONE;
-    const range = this.#range === 'fitProject' ? boundSpan(this.#bindings.keys()) : this.#range;
+    // Single pass over the bound Gantt instances: zone (D6, first binding decides), the narrowest
+    // measured viewport (so the span fits every bound Gantt, not just the widest), and — for
+    // `range: 'fitProject'` (plans/02 §5) — the min start / max end across every bound project's
+    // tasks, all accumulated together rather than three separate walks of the same binding set.
+    let zone: string | undefined;
+    let width = 0;
+    let span: TimeSpan | undefined;
+    for (const binding of this.#bindings.keys()) {
+      zone ??= binding.zone;
+      if (binding.viewportWidth > 0 && (width === 0 || binding.viewportWidth < width)) {
+        width = binding.viewportWidth;
+      }
+      if (this.#range !== 'fitProject') continue;
+      for (const task of binding.tasks) {
+        if (!span) {
+          span = { start: task.start, end: task.end };
+          continue;
+        }
+        if (task.start < span.start) span.start = task.start;
+        if (task.end > span.end) span.end = task.end;
+      }
+    }
+    zone ??= UNBOUND_ZONE;
+    // With nothing bound — or nothing scheduled — this collapses to a zero span at the epoch, which
+    // resolves to the preset's own zoom rather than a divide-by-zero.
+    const range =
+      this.#range === 'fitProject' ? (span ?? { start: instant(0), end: instant(0) }) : this.#range;
     const spanMs = diffMs(range.end, range.start);
-    const width = fitWidth(this.#bindings.keys());
     // Fit-to-width is a refinement of the preset's own zoom, not a precondition for having one.
     const pxPerMs =
       width > 0 && spanMs > 0 ? width / spanMs : pxPerMsForPreset(zone, this.#preset, range.start);
     return { zone, range, pxPerMs };
   }
-}
-
-/** The narrowest measured viewport across the bound Gantt instances, so the span fits in all of them rather
- * than only the widest. `0` when nothing is measured yet. */
-function fitWidth(bindings: IterableIterator<ScaleBinding>): number {
-  let width = 0;
-  for (const binding of bindings) {
-    if (binding.viewportWidth <= 0) continue;
-    if (width === 0 || binding.viewportWidth < width) width = binding.viewportWidth;
-  }
-  return width;
-}
-
-/** `range: 'fitProject'` (plans/02 §5): min start / max end across every bound project's tasks. With
- * nothing bound — or nothing scheduled — this collapses to a zero span at the epoch, which resolves
- * to the preset's own zoom rather than a divide-by-zero. */
-function boundSpan(bindings: IterableIterator<ScaleBinding>): TimeSpan {
-  let span: TimeSpan | undefined;
-  for (const binding of bindings) {
-    for (const task of binding.tasks) {
-      if (!span) {
-        span = { start: task.start, end: task.end };
-        continue;
-      }
-      if (task.start < span.start) span.start = task.start;
-      if (task.end > span.end) span.end = task.end;
-    }
-  }
-  return span ?? { start: instant(0), end: instant(0) };
 }

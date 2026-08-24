@@ -7,7 +7,7 @@ A framework-free TypeScript Gantt library: scheduling, layout, and rendering of 
 ### Authored model
 
 **Project**:
-The body of authored data — its Tasks and Dependencies — together with the settings that give it meaning, above all the IANA zone in which all zone-aware date arithmetic is performed. "The project's zone" and "the project's reference date" are properties of this, not of the host environment.
+The body of authored data — its Tasks, plus whatever scheduling-plugin-owned data (e.g. Dependencies) an installed scheduling plugin contributes — together with the settings that give it meaning, above all the IANA zone in which all zone-aware date arithmetic is performed. "The project's zone" and "the project's reference date" are properties of this, not of the host environment. A Project with no scheduling plugin installed has Tasks and no Dependencies at all (ADR 0002).
 _Avoid_: Plan, schedule (a schedule is an output of scheduling a Project, not the Project itself), dataset
 
 **Task**:
@@ -19,7 +19,7 @@ The authored classification of a Task (`'task' | 'group' | 'milestone'`, open to
 _Avoid_: Type (reserved for `DependencyType`), category
 
 **Dependency**:
-A first-class entity linking a predecessor Task to a successor Task with a type (`FS`/`SS`/`FF`/`SF`) and optional lag. Never embedded as an array on a Task.
+A first-class entity linking a predecessor Task to a successor Task with a type (`FS`/`SS`/`FF`/`SF`) and optional lag. Never embedded as an array on a Task. Scheduling-plugin-owned data, not `model/` (ADR 0002) — it exists only when a scheduling plugin is installed and lives in that plugin's reserved store, not on `Task` or in core.
 _Avoid_: Link (reserved for the rendered geometry of a dependency, i.e. what appears in `GeometryFrame.links`), Relationship
 
 **Segment**:
@@ -29,17 +29,25 @@ _Avoid_: Split, interval, piece
 ### Mutation
 
 **Transaction**:
-The unit of mutation: a batch of proposed edits that runs one scheduling pass and commits as one ChangeSet. One transaction per user gesture, at commit — never per intermediate drag frame.
+The unit of mutation: a batch of proposed edits that runs the resolve hook once and commits as one ChangeSet. One transaction per user gesture, at commit — never per intermediate drag frame.
 _Avoid_: Batch, operation
 
 **ChangeSet**:
-The single, atomic record of everything one transaction changed — added/removed/updated entities across stores, tagged with an `origin` (`'user' | 'engine' | 'undo' | 'redo' | 'load'`). Every mutation produces exactly one ChangeSet, even when it triggers scheduling cascades.
+The single, atomic record of everything one transaction changed — added/removed/updated entities across stores, tagged with an `origin` (`'user' | 'engine' | 'undo' | 'redo' | 'load'`). Every mutation produces exactly one ChangeSet, even when the resolve hook's installed scheduling plugin triggers cascades.
 _Avoid_: Diff, patch (Patch is reserved for `ScheduleResult.patch`, the scheduler's proposed field changes before they're committed as a ChangeSet)
 
 ### Scheduling
 
+**Resolve hook**:
+The generic, synchronous hook `data/` calls once per transaction to turn a proposed edit into a committed one (D4, `plans/01` §1) — the identity function when no scheduling plugin is installed, or the installed plugin's `schedule()` otherwise. `data/` has no static, scheduling-specific dependency; this hook is the only seam. Exact contract (where per-plugin per-task data lives, how preview and commit-time calls share one resolution) is design work tracked in issue #12.
+_Avoid_: Scheduling hook (the hook itself is scheduling-agnostic — it's generic, and a non-scheduling plugin could occupy it)
+
+**Scheduling plugin**:
+Whatever plugin occupies the resolve hook, if any. FreeGantt ships an official bars + dependencies engine as its first-party default (D3) — described in §7 below — but core does not require it or any scheduling plugin to function (D4, ADR 0002).
+_Avoid_: The scheduling engine (ambiguous between "the seam" and "FreeGantt's default implementation of it" — say "the resolve hook" or "the default scheduling plugin" explicitly)
+
 **SchedulingPolicy**:
-The pluggable seam that resolves how a proposed edit interacts with a Task's kind and existing schedule (e.g. whether the engine may move it, how a `'group'` Task rolls up from children). Kind-specific scheduling semantics live in the policy, never in the scheduling engine itself.
+The pluggable seam, within the default scheduling plugin, that resolves how a proposed edit interacts with a Task's kind and existing schedule (e.g. whether the engine may move it, how a `'group'` Task rolls up from children). Kind-specific scheduling semantics live in the policy, never in the engine itself.
 _Avoid_: Rule, constraint (Diagnostics, not policy, is where constraint violations surface)
 
 **Diagnostic**:
@@ -133,3 +141,7 @@ _Avoid_: Permission, ability
 **GanttPlugin**:
 The public extension contract: an `id` plus a `setup(ctx)` that returns a disposer. Built-in features (tooltips, context menu, editors) are themselves GanttPlugins using the same `PluginContext` a third party would use — no back-door capabilities reserved for first-party code.
 _Avoid_: Extension (Extensions is the name of the source layer that hosts plugins; GanttPlugin is the unit within it)
+
+**ProjectPlugin**, **ProposalResolver**, **PluginStore**:
+Names from the resolve hook's contract design (ADR 0002's consequences, issue #15, built on #12): a `ProjectPlugin` occupies the resolve hook via a `ProposalResolver`, and per-plugin per-task data (e.g. the scheduling plugin's pin flag, `Dependency`) lives in a reserved `PluginStore` rather than on `Task` or in a host/plugin-shared field. Design proposals only — not yet implemented or landed in `src/`; do not treat as existing API until #15 lands.
+_Avoid_: Treating these as settled — the exact shapes are still open design work

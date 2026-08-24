@@ -1,13 +1,14 @@
 // render/dom — default backend: absolutely-positioned rows/bars, keyed reconciler (plans/01 §8.1).
 // Scope is hard-bounded: attr/class/style/text + keyed child recycling only (plans/01 §8.1).
 
-import type { GeometryFrame } from '../../layout/index.js';
+import type { FrameBar, GeometryFrame } from '../../layout/index.js';
 import type { RenderBackend, InteractionState, HitResult } from '../backend.js';
 
 export function createDomBackend(): RenderBackend {
   let host: HTMLElement | undefined;
   let barLayer: HTMLElement | undefined;
   const barNodes = new Map<string, HTMLElement>();
+  const barGeom = new Map<string, Pick<FrameBar, 'kind' | 'x' | 'y' | 'width' | 'height'>>();
 
   return {
     mount(el: unknown) {
@@ -28,20 +29,32 @@ export function createDomBackend(): RenderBackend {
           node = document.createElement('div');
           node.className = 'fg-bar';
           node.dataset['itemId'] = bar.id;
+          node.style.position = 'absolute';
+          node.textContent = bar.taskId;
           barNodes.set(bar.id, node);
           barLayer.append(node);
         }
-        node.dataset['kind'] = bar.kind;
-        node.style.position = 'absolute';
-        node.style.transform = `translate(${bar.x}px, ${bar.y}px)`;
-        node.style.width = `${bar.width}px`;
-        node.style.height = `${bar.height}px`;
-        node.textContent = bar.taskId;
+        const prev = barGeom.get(bar.id);
+        if (
+          !prev ||
+          prev.kind !== bar.kind ||
+          prev.x !== bar.x ||
+          prev.y !== bar.y ||
+          prev.width !== bar.width ||
+          prev.height !== bar.height
+        ) {
+          node.dataset['kind'] = bar.kind;
+          node.style.transform = `translate(${bar.x}px, ${bar.y}px)`;
+          node.style.width = `${bar.width}px`;
+          node.style.height = `${bar.height}px`;
+          barGeom.set(bar.id, { kind: bar.kind, x: bar.x, y: bar.y, width: bar.width, height: bar.height });
+        }
       }
       for (const [id, node] of barNodes) {
         if (!seen.has(id)) {
           node.remove();
           barNodes.delete(id);
+          barGeom.delete(id);
         }
       }
     },
@@ -54,6 +67,7 @@ export function createDomBackend(): RenderBackend {
     destroy() {
       host?.replaceChildren();
       barNodes.clear();
+      barGeom.clear();
       host = undefined;
       barLayer = undefined;
     },

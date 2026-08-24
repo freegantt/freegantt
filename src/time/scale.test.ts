@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createTimeScale, pxPerMsForPreset } from './scale.js';
+import { createTimeScale, dayPreset as realDayPreset, pxPerMsForPreset } from './scale.js';
 import { instant } from './instant.js';
 import type { ViewPreset } from './scale.js';
 
@@ -9,11 +9,8 @@ const rangeEnd = instant('2026-09-08T00:00:00Z'); // 7 days
 const pxPerMs = 1 / (1000 * 60 * 60); // 1px per hour
 
 const dayPreset: ViewPreset = {
-  id: 'day',
-  tickUnit: 'd',
-  tickIncrement: 1,
+  ...realDayPreset,
   headers: [{ unit: 'd', increment: 1, format: (i) => new Date(i).toISOString() }],
-  tickWidthPx: 24,
 };
 
 describe('createTimeScale', () => {

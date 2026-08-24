@@ -1,13 +1,13 @@
 // One realistic sample project (~50 tasks), used by the harness and by layout tests (plans/03 S0).
 
-import { instant } from '../src/time/index.js';
+import { addMs, instant, MS } from '../src/time/index.js';
 import { taskId } from '../src/model/index.js';
 import type { Task } from '../src/model/index.js';
 
 const DAY_START = instant('2026-09-01T00:00:00Z');
 
 function day(offset: number): number {
-  return DAY_START + offset * 24 * 60 * 60 * 1000;
+  return addMs(DAY_START, offset * MS.DAY);
 }
 
 const PHASES: Array<{ name: string; startDay: number; durationDays: number }> = [
