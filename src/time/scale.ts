@@ -31,7 +31,7 @@ export interface ViewPreset {
 
 export interface TimeScale {
   readonly range: TimeSpan;
-  /** Project's IANA timeZone (D6, #37 — one name for this concept, matching plans/02's ProjectOptions). */
+  /** Dataset's IANA timeZone (D6, #37 — one name for this concept, matching plans/02's DatasetOptions). */
   readonly timeZone: string;
   xForInstant(i: Instant): number;
   instantForX(x: number): Instant;
@@ -40,7 +40,7 @@ export interface TimeScale {
 }
 
 export interface TimeScaleOptions {
-  /** Project's IANA timeZone — calendar-unit stepping (day/week) resolves through it (D6). */
+  /** Dataset's IANA timeZone — calendar-unit stepping (day/week) resolves through it (D6). */
   timeZone: string;
   range: TimeSpan;
   pxPerMs: number;

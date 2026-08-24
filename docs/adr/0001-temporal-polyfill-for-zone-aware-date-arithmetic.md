@@ -1,6 +1,6 @@
 # Use `temporal-polyfill` for zone-aware date arithmetic
 
-D6 puts every day boundary, week start, and snap through the project's IANA zone, so `time/zone.ts` has to convert between Instants and plain (wall-clock) times correctly in any zone. The original hand-rolled implementation (`Intl.DateTimeFormat.formatToParts` plus fixed-point iteration) had no *documented* behavior for the two cases that matter — a DST fold, where a plain time is ambiguous (1:30 AM on the fall-back day happens twice), and a DST gap, where it does not exist at all (2:30 AM on the spring-forward day). It resolved them incidentally rather than deliberately, and nothing tested which way. We adopted `temporal-polyfill` because it implements Temporal's explicit disambiguation model (`compatible` / `earlier` / `later` / `reject`), which turns fold and gap from undefined behavior into a policy we chose and can test.
+D6 puts every day boundary, week start, and snap through the dataset's IANA zone, so `time/zone.ts` has to convert between Instants and plain (wall-clock) times correctly in any zone. The original hand-rolled implementation (`Intl.DateTimeFormat.formatToParts` plus fixed-point iteration) had no *documented* behavior for the two cases that matter — a DST fold, where a plain time is ambiguous (1:30 AM on the fall-back day happens twice), and a DST gap, where it does not exist at all (2:30 AM on the spring-forward day). It resolved them incidentally rather than deliberately, and nothing tested which way. We adopted `temporal-polyfill` because it implements Temporal's explicit disambiguation model (`compatible` / `earlier` / `later` / `reject`), which turns fold and gap from undefined behavior into a policy we chose and can test.
 
 This is a deliberate exception to the one-runtime-dependency budget, and the second dependency the project has ever taken.
 
@@ -9,7 +9,7 @@ This is a deliberate exception to the one-runtime-dependency budget, and the sec
 - **Keep the hand-rolled `formatToParts` implementation.** Zero dependencies, but we would have had to specify and implement fold/gap semantics ourselves — the genuinely hard part — and every future calendar unit (month, year) would repeat that work.
 - **`@js-temporal/polyfill`.** Right shape and the most conservative semantics, being the reference polyfill, but it does not tree-shake (single class hierarchy) and costs ~2.3–2.9x the gzipped size of `temporal-polyfill`'s `/fns/*` build for the same need.
 - **`luxon` / `date-fns` + `tz` / `dayjs`.** None expose explicit fold/gap disambiguation control, which was the whole reason for the change.
-- **`d3-time`.** Does its arithmetic in the environment's local zone or UTC only — structurally incapable of working in an arbitrary project-owned zone, which is exactly what D6 requires.
+- **`d3-time`.** Does its arithmetic in the environment's local zone or UTC only — structurally incapable of working in an arbitrary dataset-owned zone, which is exactly what D6 requires.
 
 ## Consequences
 

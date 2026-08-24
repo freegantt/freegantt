@@ -13,16 +13,16 @@ Everything importable by a consumer lives under `src/api/` and `src/model/` (typ
 layers (`time/`, `data/`, `scheduling/`, `layout/`, `render/`, `view/`) are not part of the public
 surface.
 
-### `Project`
+### `Dataset`
 
 ```ts
-import { Project } from 'freegantt';
+import { Dataset } from 'freegantt';
 
-const project = new Project({ entries: [...] }); // readonly Entry[], S0/S1 scope
+const dataset = new Dataset({ entries: [...] }); // readonly Entry[], S0/S1 scope
 ```
 
-`Project` is a headless, DOM-free wrapper around an entry list. Transactions, undo/redo, and
-mutation (`project.entries.add/update/remove`) land in S2 — see `plans/03-slices.md`.
+`Dataset` is a headless, DOM-free wrapper around an entry list. Transactions, undo/redo, and
+mutation (`dataset.entries.add/update/remove`) land in S2 — see `plans/03-slices.md`.
 
 ### `TimeScaleModel` (S1)
 
@@ -39,7 +39,7 @@ const scale = new TimeScaleModel({
 The standalone, shareable object a `Gantt` binds to for time↔pixel mapping (`plans/01` §8.2, D9).
 Pass the **same instance** to two `Gantt`s and their x-axis stays in sync by construction — no
 event plumbing, no link manager. Omit `scale` on `Gantt` and it builds a private default sized to
-the project's entry range — single-Gantt usage never has to meet this concept.
+the dataset's entry range — single-Gantt usage never has to meet this concept.
 
 Preset switching, zoom, and named presets (`'weekAndMonth'` etc.) land later in S1; today
 `TimeScaleModel` only takes an explicit `zone`/`range`/`pxPerMs`.
@@ -51,7 +51,7 @@ import { Gantt } from 'freegantt';
 
 const gantt = new Gantt({
   host: element, // HTMLElement
-  project, // Project
+  dataset, // Dataset
   scale, // optional TimeScaleModel — omit for a private default
   preset, // optional ViewPreset — omit for dayPreset (see below)
   rowHeight: 32, // optional, defaults to 32
@@ -60,7 +60,7 @@ const gantt = new Gantt({
 gantt.destroy();
 ```
 
-Mounts a Gantt into `host` and renders `project.entries` as positioned bars under a header band of
+Mounts a Gantt into `host` and renders `dataset.entries` as positioned bars under a header band of
 time ticks, one row per entry (flat list; hierarchy/grouping land in S5). Two `Gantt` instances on
 one page are fully independent (no shared module state — I2); two given the same `scale` x-sync
 (D9, proven in `src/api/gantt.test.ts`).

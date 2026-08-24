@@ -7,10 +7,10 @@ import { createDomBackend } from '../render/dom/index.js';
 import type { RenderBackend } from '../render/backend.js';
 import type { Entry } from '../model/index.js';
 
-/** Structurally compatible with api/Project, without importing api/ — view -> api is not an allowed
- * edge (api imports view, not the reverse; plans/01 §1). Lets GanttShell take a whole project instead
+/** Structurally compatible with api/Dataset, without importing api/ — view -> api is not an allowed
+ * edge (api imports view, not the reverse; plans/01 §1). Lets GanttShell take a whole dataset instead
  * of api/gantt.ts unwrapping it into entries+timeZone and this file re-clumping them (#40). */
-export interface ProjectLike {
+export interface DatasetLike {
   readonly entries: readonly Entry[];
   readonly timeZone: string;
 }
@@ -26,7 +26,7 @@ const DEFAULT_ROW_HEIGHT = 32;
 export interface GanttShellOptions {
   /** Element or CSS selector (plans/02 §2); a selector that matches nothing throws (#38). */
   host: HTMLElement | string;
-  project: ProjectLike;
+  dataset: DatasetLike;
   /** Bound viewport object (D9) — pass the same instance to two Gantt instances to x-sync them.
    * Constructs a private default when omitted (plans/01 §8.2: "single-Gantt usage never sees the
    * concept"); the default resolves its zone, span and zoom from this shell's binding, so it needs
@@ -81,8 +81,8 @@ export class GanttShell {
 
     this.#scaleHandle = this.#scale.bind(
       {
-        timeZone: options.project.timeZone,
-        entries: options.project.entries,
+        timeZone: options.dataset.timeZone,
+        entries: options.dataset.entries,
         viewportWidth: this.#drawableWidth(),
       },
       () => this.render(),
@@ -110,7 +110,7 @@ export class GanttShell {
 
   render(): void {
     const scale = this.#scale.scale;
-    const entries = this.#options.project.entries;
+    const entries = this.#options.dataset.entries;
     const rowHeight = this.#rowHeight;
     const frame = computeFrame({
       entries,

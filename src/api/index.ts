@@ -1,5 +1,5 @@
-export { Project } from './project.js';
-export type { ProjectOptions } from './project.js';
+export { Dataset } from './dataset.js';
+export type { DatasetOptions } from './dataset.js';
 export { Gantt } from './gantt.js';
 export type { GanttOptions } from './gantt.js';
 export { TimeScaleModel } from '../view/index.js';
@@ -8,7 +8,7 @@ export type { TimeScaleIntent } from '../view/index.js';
 // model/ is the type surface api/ re-exports (plans/01 §1: "Only api/ and model/ types are public").
 // The layer diagram doesn't draw the arrow because it's a type-only re-export, not a behavioral one —
 // the same shape as api -> model in .dependency-cruiser.cjs / eslint.config.js. Without this, a
-// consumer has no legal way to build the Entry[] that `new Project({ entries })` requires (#24).
+// consumer has no legal way to build the Entry[] that `new Dataset({ entries })` requires (#24).
 export { entryId, itemId } from '../model/index.js';
 export type { Entry, EntryKind, EntryId, ItemId, Instant, TimeSpan, Duration } from '../model/index.js';
 

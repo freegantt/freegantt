@@ -2,14 +2,14 @@
 // instance owns its own shell and state so two Gantt instances on one page are fully independent.
 
 import { GanttShell, TimeScaleModel } from '../view/index.js';
-import type { Project } from './project.js';
+import type { Dataset } from './dataset.js';
 
 export interface GanttOptions {
   /** Element or CSS selector (plans/02 §2) — resolved by GanttShell; a selector matching nothing
    * throws (#38). */
   host: HTMLElement | string;
-  project: Project;
-  /** Bound viewport object (D9, plans/02 §5) — omit for a private default sized to the project's entries. */
+  dataset: Dataset;
+  /** Bound viewport object (D9, plans/02 §5) — omit for a private default sized to the dataset's entries. */
   scale?: TimeScaleModel;
 }
 
@@ -20,7 +20,7 @@ export class Gantt {
   constructor(options: GanttOptions) {
     this.#shell = new GanttShell({
       host: options.host,
-      project: options.project,
+      dataset: options.dataset,
       ...(options.scale ? { scale: options.scale } : {}),
     });
   }

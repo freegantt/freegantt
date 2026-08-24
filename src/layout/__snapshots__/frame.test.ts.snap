@@ -1,6 +1,6 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
-exports[`computeFrame > matches the golden snapshot for the fixture project 1`] = `
+exports[`computeFrame > matches the golden snapshot for the fixture dataset 1`] = `
 [
   {
     "entryId": "entry-1",

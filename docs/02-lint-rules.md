@@ -141,7 +141,7 @@ Every custom rule spec below is complete enough to implement without re-reading 
 
 **Belt and braces:** the mutators additionally take a `TxToken` parameter that only `transaction.ts` can construct (private constructor + non-exported type), so `typecheck` catches it too. The lint rule exists for the clearer message and because the token can be threaded around by a determined caller.
 
-**Message:** `Every mutation goes through project.transaction(): one scheduling pass, one changeset. (plans/01 §6, D10)`
+**Message:** `Every mutation goes through dataset.transaction(): one scheduling pass, one changeset. (plans/01 §6, D10)`
 
 ---
 

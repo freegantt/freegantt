@@ -2,28 +2,28 @@
 
 The API is a product surface, designed once and defended. Everything here is what a consumer sees; everything else in the codebase is internal and free to change.
 
-**Public entry points:** `Project`, `Gantt`, the event vocabulary, the plugin contract, the JSON schema, and the model types. Nothing else.
+**Public entry points:** `Dataset`, `Gantt`, the event vocabulary, the plugin contract, the JSON schema, and the model types. Nothing else.
 
 ---
 
 ## 1. Principles
 
 1. **One config object, everything live.** No builder-vs-mount split, no "must be set before mount" options. If an option can't change at runtime, it's a constructor argument or it doesn't exist.
-2. **Data and view are separate objects.** A `Project` (headless, Node-safe) holds data and scheduling; a `Gantt` binds a project to a DOM host. Many views of one project is the normal case, not a trick.
+2. **Data and view are separate objects.** A `Dataset` (headless, Node-safe) holds data and scheduling; a `Gantt` binds a dataset to a DOM host. Many views of one dataset is the normal case, not a trick.
 3. **Every mutating interaction has a cancelable `before*` event.** Hosts can veto a drop, substitute their own editor, validate a link — before commit, not after.
 4. **Honest surface.** Nothing in the published types throws "not implemented" (invariant I11). Declared events fire; declared methods work.
 5. **Predictable naming.** One vocabulary, one bus, greppable pairs (`beforeEntryMove` / `entryMove`). No synonyms, no two names for one concept.
-6. **Typed extensibility.** `meta` generics flow end-to-end: `new Project<{ team: string }>` makes `entry.meta.team` typed in renderers, events, and queries.
+6. **Typed extensibility.** `meta` generics flow end-to-end: `new Dataset<{ team: string }>` makes `entry.meta.team` typed in renderers, events, and queries.
 
 ---
 
 ## 2. Shape
 
 ```ts
-import { Project, Gantt } from 'freegantt';
+import { Dataset, Gantt } from 'freegantt';
 
 // ── Data: headless, works in Node ───────────────────────────────
-const project = new Project<{ team: string }>({
+const dataset = new Dataset<{ team: string }>({
   timeZone: 'America/Chicago',            // explicit; 'local' is opt-in
   hierarchy: { autoGroup: true },         // first child promotes parent to kind 'group'; promote only
   entries: [
@@ -37,14 +37,14 @@ const project = new Project<{ team: string }>({
   ],
 });
 
-// ── View: binds project to DOM ──────────────────────────────────
+// ── View: binds dataset to DOM ──────────────────────────────────
 const gantt = new Gantt({
   host: '#gantt',                         // element or selector
-  project,
+  dataset,
 
   rows: { source: 'entries', tree: true },
   preset: 'weekAndMonth',                 // or a full ViewPreset object
-  range: 'fitProject',                    // or a TimeSpan
+  range: 'fitDataset',                    // or a TimeSpan
 
   columns: [
     { type: 'name', flex: 1, editable: true },
@@ -70,19 +70,19 @@ const gantt = new Gantt({
 ### Programmatic mutation — always transactional
 
 ```ts
-project.transaction(() => {
-  project.entries.update('t2', { name: 'Framing — north wing' });
-  project.dependencies.add({ id: 'd2', fromId: 't2', toId: 't3', type: 'FS', lag: days(2) });
+dataset.transaction(() => {
+  dataset.entries.update('t2', { name: 'Framing — north wing' });
+  dataset.dependencies.add({ id: 'd2', fromId: 't2', toId: 't3', type: 'FS', lag: days(2) });
 });
 // one scheduling pass, one changeset, one undo step, one render
 
-project.undo();  project.redo();
-project.canUndo; project.canRedo;
+dataset.undo();  dataset.redo();
+dataset.canUndo; dataset.canRedo;
 ```
 
 Single mutations outside an explicit transaction are auto-wrapped in one — convenience without a second code path.
 
-`autoGroup` is data behavior, so it lives on `Project` (not `Gantt`): the promotion runs inside the same transaction as the edit that caused it — one changeset, one undo step. It only promotes; turning a group back into an entry is always an explicit edit (`01` §2.5).
+`autoGroup` is data behavior, so it lives on `Dataset` (not `Gantt`): the promotion runs inside the same transaction as the edit that caused it — one changeset, one undo step. It only promotes; turning a group back into an entry is always an explicit edit (`01` §2.5).
 
 ### Reconfiguration is just assignment
 
@@ -118,13 +118,13 @@ gantt.on('beforeEntryEdit', async ({ entry }) => {
   return false;                // suppress built-in
 });
 
-project.on('change', ({ changeSet }) => save(changeSet));           // persistence hook (D7)
+dataset.on('change', ({ changeSet }) => save(changeSet));           // persistence hook (D7)
 ```
 
 Rules:
 
 - Cancelable handlers may return `false` or `Promise<false>`; an async veto suspends the gesture with a visible pending state — it never commits optimistically.
-- Pointer/gesture events fire on the `Gantt` (view concern); data events fire on the `Project` (data concern). Every event name exists exactly once.
+- Pointer/gesture events fire on the `Gantt` (view concern); data events fire on the `Dataset` (data concern). Every event name exists exactly once.
 - Payloads are typed, stable, and carry entities plus context — no "re-read everything" events.
 
 ---
@@ -182,8 +182,8 @@ import { TimeScaleModel, ScrollModel } from 'freegantt';
 const scale  = new TimeScaleModel({ preset: 'weekAndMonth' });
 const scroll = new ScrollModel();
 
-const mainGantt   = new Gantt({ host: '#top',    project, scale, scroll });
-const linkedGantt = new Gantt({ host: '#bottom', project, scale, scroll: scroll.xOnly() });
+const mainGantt   = new Gantt({ host: '#top',    dataset, scale, scroll });
+const linkedGantt = new Gantt({ host: '#bottom', dataset, scale, scroll: scroll.xOnly() });
 ```
 
 Omit `scale`/`scroll` and the Gantt creates private ones — single-Gantt users never meet the concept. Passing shared instances is the *entire* sync API: no link manager, no event plumbing. `scroll.xOnly()` / `.yOnly()` derive partial bindings for mixed layouts.
@@ -193,14 +193,14 @@ Omit `scale`/`scroll` and the Gantt creates private ones — single-Gantt users 
 ## 6. Serialization contract (D7)
 
 ```ts
-const doc = project.toJSON();     // { schema: 1, timeZone, entries, dependencies, ... }
-const p2  = Project.fromJSON(doc);
+const doc = dataset.toJSON();     // { schema: 1, timeZone, entries, dependencies, ... }
+const p2  = Dataset.fromJSON(doc);
 ```
 
 - The JSON shape is **public API**: documented, versioned by an integer `schema` field, semver-governed. `fromJSON` migrates older schemas forward; it never silently drops fields.
 - Instants serialize as ISO-8601 strings (readable, diffable, zone-explicit); brands exist only in TS types and never leak into JSON.
 - `meta` round-trips opaquely.
-- **Changesets are the incremental counterpart**: `project.on('change')` + `project.apply(changeSet)` are inverse-ish operations designed so a future sync adapter (or collaborative layer) is an extension, not a core change. `apply` validates and reports rejections rather than throwing mid-way.
+- **Changesets are the incremental counterpart**: `dataset.on('change')` + `dataset.apply(changeSet)` are inverse-ish operations designed so a future sync adapter (or collaborative layer) is an extension, not a core change. `apply` validates and reports rejections rather than throwing mid-way.
 
 ---
 

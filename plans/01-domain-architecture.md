@@ -27,7 +27,7 @@ flowchart TB
     MODEL["<b>model/</b><br/>entity types · ids · brands<br/>zero runtime, zero deps"]
   end
 
-  API["<b>api/</b> — Gantt · Project · events<br/>the only things a consumer imports"]
+  API["<b>api/</b> — Gantt · Dataset · events<br/>the only things a consumer imports"]
 
   API --> VIEW
   API --> DATA
@@ -77,7 +77,7 @@ src/
   view/          Gantt shell, panes, viewport binding
   interaction/   gesture controllers, keyboard, selection
   extensions/    plugin host + built-in features
-  api/           public façade: Gantt, Project, events
+  api/           public façade: Gantt, Dataset, events
 fixtures/        sample projects + golden scheduling fixtures
 harness/         Vite dev app — every slice demos here
 plans/           these documents
@@ -170,7 +170,7 @@ Reserved for later slices, designed-for now (fields and stores exist as named se
 
 ```mermaid
 erDiagram
-  PROJECT ||--o{ ENTRY : owns
+  DATASET ||--o{ ENTRY : owns
   ENTRY ||--o{ ENTRY : "parentId (tree)"
 
   ROW ||--o{ ITEM : hosts
@@ -229,9 +229,9 @@ type ItemEmitter = (entry: Entry) => readonly Item[];
 
 Rules:
 
-- **Kind is authored, never derived.** A `group` is a group because the user said so — not because it currently has children. An empty group is legal and renders as one (that is how "add a phase, then fill it" works). For derived-span kinds, input may omit `start`/`end`: the store initializes a zero-length span (at the project's reference date) and the rollup pass owns it from then on — the *stored* model always has both fields, so no layer downstream handles absence. `parentId` (tree position) and `kind` (what it is) are orthogonal; "every parent is a group" is a convention, not a model rule — and `hierarchy: { autoGroup: true }` (`02` §2) maintains that convention automatically: an entry gaining its first child is promoted to `group` in the same transaction. **Promote only, never demote** — demoting on losing the last child would reintroduce exactly the flickering identity this rule exists to prevent; demotion stays an explicit edit.
+- **Kind is authored, never derived.** A `group` is a group because the user said so — not because it currently has children. An empty group is legal and renders as one (that is how "add a phase, then fill it" works). For derived-span kinds, input may omit `start`/`end`: the store initializes a zero-length span (at the dataset's reference date) and the rollup pass owns it from then on — the *stored* model always has both fields, so no layer downstream handles absence. `parentId` (tree position) and `kind` (what it is) are orthogonal; "every parent is a group" is a convention, not a model rule — and `hierarchy: { autoGroup: true }` (`02` §2) maintains that convention automatically: an entry gaining its first child is promoted to `group` in the same transaction. **Promote only, never demote** — demoting on losing the last child would reintroduce exactly the flickering identity this rule exists to prevent; demotion stays an explicit edit.
 - **The set is open.** Shipped kinds: `'span'`, `'group'`, `'milestone'`. A host-defined kind (say `'buffer'`) gets full behavior by registering at the four seams above — no core edits. Anything not registered at a seam falls back to `'span'` behavior there, so partial registration degrades gracefully instead of erroring.
-- **Group *entry* ≠ row *grouping*.** `rows: { source: 'group', groupBy }` is a view-side arrangement of any entries and persists nothing; a `kind: 'group'` entry is a model entity that persists, schedules, and syncs. They compose — a grouped view of a project containing group entries is well-defined, because one is authored and the other is derived (principle 1).
+- **Group *entry* ≠ row *grouping*.** `rows: { source: 'group', groupBy }` is a view-side arrangement of any entries and persists nothing; a `kind: 'group'` entry is a model entity that persists, schedules, and syncs. They compose — a grouped view of a dataset containing group entries is well-defined, because one is authored and the other is derived (principle 1).
 
 ---
 
@@ -330,8 +330,8 @@ Rules that keep it honest:
 
 Three rules, in force from the first commit, because all three are retrofit-hostile:
 
-1. **Storage is half-open `[start, end)`; display is inclusive.** An entry "ending Friday" stores `end` = Saturday 00:00 in project time. Exactly one formatting helper (`formatEndInclusive`) renders inclusive ends; code review rejects inline `end - 1` arithmetic.
-2. **The project owns an IANA timezone; viewer-local is opt-in.** All zone-aware date arithmetic — day floors, week starts, snapping, shading — resolves through the project zone, so two users in different zones see identical day boundaries. `Instant` stays absolute.
+1. **Storage is half-open `[start, end)`; display is inclusive.** An entry "ending Friday" stores `end` = Saturday 00:00 in dataset time. Exactly one formatting helper (`formatEndInclusive`) renders inclusive ends; code review rejects inline `end - 1` arithmetic.
+2. **The dataset owns an IANA timezone; viewer-local is opt-in.** All zone-aware date arithmetic — day floors, week starts, snapping, shading — resolves through the dataset zone, so two users in different zones see identical day boundaries. `Instant` stays absolute.
 3. **No naked time arithmetic.** `time/` exposes `add`, `startOf`, `diff`, etc., all zone-aware and DST-correct. A lint rule bans magic time constants (`86400000` and friends) outside `time/`.
 
 Ergonomics: `time/` ships `instant(v: Date | number | string): Instant`, `toISO(i: Instant): string`, and a plain-date helper set so consumers work with "days" and "Mondays," not epoch math. Zone-aware arithmetic is memoized (offset table per zone/day) — budgeted for in the S7 spike.
@@ -363,8 +363,8 @@ Shipped presets cover hour→year zoom levels; custom presets are config objects
 
 ## 6. `data/` — stores, transactions, changesets
 
-- **`ProjectData`** owns normalized stores (`entries`, plus reserved stores for scheduling-plugin-owned data such as `dependencies`) with indexes (`byId`, `byParent`, `byPredecessor`, `bySuccessor` — the latter two populated only when a plugin uses them), the project timezone, and the generic resolve-hook binding (identity when unoccupied; §1). Fully headless (D4): constructible and usable in Node with no view.
-- **Transactions**: `project.transaction(() => { ...mutations })` batches mutations, runs the resolve hook once, emits **one changeset**. Every mutation path — API and gesture — goes through a transaction. No exceptions.
+- **`DatasetData`** owns normalized stores (`entries`, plus reserved stores for scheduling-plugin-owned data such as `dependencies`) with indexes (`byId`, `byParent`, `byPredecessor`, `bySuccessor` — the latter two populated only when a plugin uses them), the dataset timezone, and the generic resolve-hook binding (identity when unoccupied; §1). Fully headless (D4): constructible and usable in Node with no view.
+- **Transactions**: `dataset.transaction(() => { ...mutations })` batches mutations, runs the resolve hook once, emits **one changeset**. Every mutation path — API and gesture — goes through a transaction. No exceptions.
 - **Changesets** are the universal delta (D7, principle 4):
 
 ```ts
@@ -377,7 +377,7 @@ interface ChangeSet {
 }
 ```
 
-- **Undo/redo**: the transaction is the atomic unit, and it records the **complete post-scheduling changeset — user edits and engine cascades together**. Undo that reverts only the user's edit while the cascade stays applied corrupts the project; this is the corruption class the design closes. Redo replays the recorded changeset (deterministic even if engine behavior changes between versions).
+- **Undo/redo**: the transaction is the atomic unit, and it records the **complete post-scheduling changeset — user edits and engine cascades together**. Undo that reverts only the user's edit while the cascade stays applied corrupts the dataset; this is the corruption class the design closes. Redo replays the recorded changeset (deterministic even if engine behavior changes between versions).
 - **Reactivity**: a thin internal `signal`/`computed`/`effect` façade in `data/`, backed by one small dependency, swappable in one file. Instance-scoped — **zero module-level singletons anywhere** (two Gantt instances on one page with independent state is a standing CI test).
 - **Serialization**: versioned `toJSON()`/`fromJSON()` with a declared schema (`{ schema: 1, ... }`), brands stripped at the boundary. The JSON shape is public API and semver-governed. See `02-public-api.md` §6.
 
@@ -536,7 +536,7 @@ interface GanttPlugin {
 }
 
 interface PluginContext {
-  project: ProjectApi;              // full data access via public API (transactions, queries)
+  dataset: DatasetApi;               // full data access via public API (transactions, queries)
   events: EventBus;                 // subscribe to everything, including before* (may veto)
   view: {
     registerDecoration(layer: 'underBars' | 'overBars', d: DecorationProvider): void;

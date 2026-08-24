@@ -28,7 +28,7 @@ describe('GanttShell header band', () => {
   it('renders one tick per day for the day preset', () => {
     const host = document.createElement('div');
     const scale = new TimeScaleModel({ range: { start: rangeStart, end: rangeEnd } });
-    const shell = new GanttShell({ host, project: { entries, timeZone }, scale });
+    const shell = new GanttShell({ host, dataset: { entries, timeZone }, scale });
 
     const ticks = host.querySelectorAll('.fg-header .fg-tick');
     expect(ticks).toHaveLength(5);
@@ -39,10 +39,10 @@ describe('GanttShell header band', () => {
   });
 
   it('re-renders when a second Gantt binds to the same shared scale (#6, D9)', () => {
-    // No pinned range: the scale fits every bound project, so binding B widens the span A reads from.
+    // No pinned range: the scale fits every bound dataset, so binding B widens the span A reads from.
     const scale = new TimeScaleModel();
     const hostA = document.createElement('div');
-    const shellA = new GanttShell({ host: hostA, project: { entries, timeZone }, scale });
+    const shellA = new GanttShell({ host: hostA, dataset: { entries, timeZone }, scale });
 
     const initialTickCount = hostA.querySelectorAll('.fg-header .fg-tick').length;
 
@@ -55,7 +55,7 @@ describe('GanttShell header band', () => {
         end: instant('2026-09-20T00:00:00Z'),
       },
     ];
-    const shellB = new GanttShell({ host: hostB, project: { entries: widerEntries, timeZone }, scale });
+    const shellB = new GanttShell({ host: hostB, dataset: { entries: widerEntries, timeZone }, scale });
 
     // A never called render() itself after B bound — the notify from B's bind is what pushed this.
     expect(hostA.querySelectorAll('.fg-header .fg-tick').length).toBeGreaterThan(initialTickCount);
@@ -71,7 +71,7 @@ describe('row height (#39)', () => {
     document.body.append(host);
     host.style.setProperty('--fg-row-height', '48px');
 
-    const shell = new GanttShell({ host, project: { entries, timeZone } });
+    const shell = new GanttShell({ host, dataset: { entries, timeZone } });
     const bar = host.querySelector<HTMLElement>('.fg-bar')!;
     expect(bar.style.height).toBe('48px');
 
@@ -81,7 +81,7 @@ describe('row height (#39)', () => {
 
   it('falls back to a default when --fg-row-height is unset', () => {
     const host = document.createElement('div');
-    const shell = new GanttShell({ host, project: { entries, timeZone } });
+    const shell = new GanttShell({ host, dataset: { entries, timeZone } });
     const bar = host.querySelector<HTMLElement>('.fg-bar')!;
     expect(bar.style.height).toBe('32px');
     shell.destroy();
@@ -91,7 +91,7 @@ describe('row height (#39)', () => {
 describe('GanttShell.destroy()', () => {
   it('is idempotent — a second call does not throw or double-unbind (#34)', () => {
     const host = document.createElement('div');
-    const shell = new GanttShell({ host, project: { entries, timeZone } });
+    const shell = new GanttShell({ host, dataset: { entries, timeZone } });
 
     expect(() => {
       shell.destroy();
@@ -106,7 +106,7 @@ describe('GanttShell host resolution (#38)', () => {
     host.id = 'target';
     document.body.append(host);
 
-    const shell = new GanttShell({ host: '#target', project: { entries, timeZone } });
+    const shell = new GanttShell({ host: '#target', dataset: { entries, timeZone } });
     expect(host.querySelectorAll('.fg-bar').length).toBeGreaterThan(0);
 
     shell.destroy();
@@ -114,7 +114,7 @@ describe('GanttShell host resolution (#38)', () => {
   });
 
   it('throws naming the selector when nothing matches', () => {
-    expect(() => new GanttShell({ host: '#does-not-exist', project: { entries, timeZone } })).toThrow(
+    expect(() => new GanttShell({ host: '#does-not-exist', dataset: { entries, timeZone } })).toThrow(
       /does-not-exist/,
     );
   });

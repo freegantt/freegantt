@@ -6,7 +6,7 @@
 //
 // The constructor takes *intent*, not resolved geometry (plans/02 §5). Zone, span and pixel density
 // are resolved from the Gantt instances bound to the model, which is what lets one scale span a
-// delivery-schedule Gantt and a workforce Gantt: neither caller has to compute a cross-project span
+// delivery-schedule Gantt and a workforce Gantt: neither caller has to compute a cross-dataset span
 // by hand.
 
 import { createTimeScale, dayPreset, diffMs, instant, pxPerMsForPreset } from '../../time/index.js';
@@ -14,17 +14,17 @@ import type { TimeScale, TimeScaleOptions, ViewPreset } from '../../time/index.j
 import type { Entry, TimeSpan } from '../../model/index.js';
 
 /** What a caller states about how time should be displayed (plans/02 §5). Everything else — the
- * project's zone (D6), the span, the pixels-per-millisecond factor — is derived at bind time. */
+ * dataset's zone (D6), the span, the pixels-per-millisecond factor — is derived at bind time. */
 export interface TimeScaleIntent {
   /** Governs header ticks and, with no viewport to fit, the resolved zoom. Defaults to `dayPreset`. */
   preset?: ViewPreset;
-  /** `'fitProject'` (the default) spans the entries of every bound project; a `TimeSpan` pins the axis. */
-  range?: 'fitProject' | TimeSpan;
+  /** `'fitDataset'` (the default) spans the entries of every bound dataset; a `TimeSpan` pins the axis. */
+  range?: 'fitDataset' | TimeSpan;
 }
 
 /** One Gantt's contribution to resolution, supplied when it binds. */
 export interface ScaleBinding {
-  /** The bound project's IANA timeZone (D6, #37) — a scale is never told its zone by the caller. */
+  /** The bound dataset's IANA timeZone (D6, #37) — a scale is never told its zone by the caller. */
   timeZone: string;
   entries: readonly Entry[];
   /** Measured width (px) of the element the Gantt renders into; `0` when unmeasured (detached host,
@@ -44,7 +44,7 @@ export interface ScaleBindingHandle {
 
 export class TimeScaleModel {
   #preset: ViewPreset;
-  #range: 'fitProject' | TimeSpan;
+  #range: 'fitDataset' | TimeSpan;
   /** Each bound Gantt's data alongside the reaction it supplied at bind time — one collection serves
    * both resolution (iterate keys) and change notification (iterate values), so there is no second,
    * separately-fanned-out subscriber list to keep in sync with binding membership. */
@@ -53,7 +53,7 @@ export class TimeScaleModel {
 
   constructor(intent: TimeScaleIntent = {}) {
     this.#preset = intent.preset ?? dayPreset;
-    this.#range = intent.range ?? 'fitProject';
+    this.#range = intent.range ?? 'fitDataset';
   }
 
   get preset(): ViewPreset {
@@ -94,7 +94,7 @@ export class TimeScaleModel {
   #resolve(): TimeScaleOptions {
     // Single pass over the bound Gantt instances: zone (D6, first binding decides), the narrowest
     // measured viewport (so the span fits every bound Gantt, not just the widest), and — for
-    // `range: 'fitProject'` (plans/02 §5) — the min start / max end across every bound project's
+    // `range: 'fitDataset'` (plans/02 §5) — the min start / max end across every bound dataset's
     // entries, all accumulated together rather than three separate walks of the same binding set.
     let timeZone: string | undefined;
     let width = 0;
@@ -104,7 +104,7 @@ export class TimeScaleModel {
       if (binding.viewportWidth > 0 && (width === 0 || binding.viewportWidth < width)) {
         width = binding.viewportWidth;
       }
-      if (this.#range !== 'fitProject') continue;
+      if (this.#range !== 'fitDataset') continue;
       for (const entry of binding.entries) {
         if (!span) {
           span = { start: entry.start, end: entry.end };
@@ -118,7 +118,7 @@ export class TimeScaleModel {
     // With nothing bound — or nothing scheduled — this collapses to a zero span at the epoch, which
     // resolves to the preset's own zoom rather than a divide-by-zero.
     const range =
-      this.#range === 'fitProject' ? (span ?? { start: instant(0), end: instant(0) }) : this.#range;
+      this.#range === 'fitDataset' ? (span ?? { start: instant(0), end: instant(0) }) : this.#range;
     const spanMs = diffMs(range.end, range.start);
     // Fit-to-width is a refinement of the preset's own zoom, not a precondition for having one.
     const pxPerMs =
