@@ -38,8 +38,6 @@ describe('render/dom backend', () => {
     backend.sync(frame);
 
     const bar = host.querySelector<HTMLElement>('.fg-bar')!;
-    const rect = { left: 0, top: 0, width: 100, height: 32, right: 100, bottom: 32 } as DOMRect;
-    bar.getBoundingClientRect = () => rect;
     const original = document.elementFromPoint.bind(document);
     document.elementFromPoint = (x: number, y: number) => (x === 5 && y === 5 ? bar : original(x, y));
 

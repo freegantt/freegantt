@@ -65,8 +65,10 @@ export class GanttShell {
   #heightsEntryCount = -1;
   #heightsRowHeight = -1;
   #rowHeight: number;
+  #options: GanttShellOptions;
 
-  constructor(private options: GanttShellOptions) {
+  constructor(options: GanttShellOptions) {
+    this.#options = options;
     this.#host = resolveHost(options.host);
     this.#scale = options.scale ?? new TimeScaleModel();
     this.#rowHeight = readRowHeight(this.#host);
@@ -108,7 +110,7 @@ export class GanttShell {
 
   render(): void {
     const scale = this.#scale.scale;
-    const entries = this.options.project.entries;
+    const entries = this.#options.project.entries;
     const rowHeight = this.#rowHeight;
     const frame = computeFrame({
       entries,
