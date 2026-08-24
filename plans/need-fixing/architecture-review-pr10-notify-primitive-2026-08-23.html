@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Architecture review — PR #10</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script type="module">
+      import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+      mermaid.initialize({ startOnLoad: true, theme: "neutral", securityLevel: "loose" });
+    </script>
+    <style>
+      .seam { stroke-dasharray: 4 4; }
+      .leak { stroke: #dc2626; }
+      .deep { background: linear-gradient(135deg, #0f172a, #1e293b); }
+      body { background: #fafaf9; color: #1c1917; }
+      .badge { display: inline-block; padding: 0.15rem 0.6rem; border-radius: 9999px; font-size: 0.7rem; font-weight: 600; letter-spacing: 0.03em; text-transform: uppercase; }
+      .badge-strong { background: #d1fae5; color: #065f46; }
+      .badge-explore { background: #fef3c7; color: #92400e; }
+      .badge-speculative { background: #e2e8f0; color: #334155; }
+      .tag { display: inline-block; padding: 0.1rem 0.5rem; border-radius: 4px; font-size: 0.68rem; background: #f1f5f9; color: #475569; font-family: ui-monospace, monospace; }
+    </style>
+  </head>
+  <body class="font-sans">
+    <main class="max-w-5xl mx-auto px-6 py-12 space-y-14">
+      <header class="space-y-3">
+        <p class="text-xs uppercase tracking-widest text-slate-500">FreeGantt — architecture review</p>
+        <h1 class="text-3xl font-serif font-semibold">PR #10 — the notify primitive (S1.5a / #6)</h1>
+        <p class="text-sm text-slate-500">2026-08-23 · scoped to <span class="font-mono">observable.ts</span>, <span class="font-mono">time-scale-model.ts</span>, <span class="font-mono">gantt-shell.ts</span></p>
+        <div class="flex flex-wrap gap-x-6 gap-y-2 text-xs text-slate-500 pt-2 border-t border-slate-200">
+          <span><span class="inline-block w-4 h-3 border border-slate-400 align-middle mr-1"></span>module</span>
+          <span><span class="inline-block w-4 h-0 border-t-2 border-dashed border-slate-400 align-middle mr-1"></span>seam</span>
+          <span><span class="inline-block w-4 h-0 border-t-2 border-red-500 align-middle mr-1"></span>leakage</span>
+          <span><span class="inline-block w-4 h-3 deep align-middle mr-1"></span>deep module</span>
+        </div>
+      </header>
+
+      <section id="candidates" class="space-y-12">
+
+        <!-- Candidate 1 -->
+        <article id="c1" class="space-y-4">
+          <div class="flex items-center gap-3 flex-wrap">
+            <h2 class="text-xl font-serif font-semibold">"subscribe" collides with the Scale binding avoid-list</h2>
+            <span class="badge badge-strong">Strong</span>
+            <span class="tag">naming</span>
+          </div>
+          <p class="font-mono text-sm text-slate-600">src/layout/viewport/time-scale-model.ts:63</p>
+
+          <div class="rounded-lg border border-slate-200 bg-white p-4">
+            <pre class="mermaid">
+flowchart LR
+  subgraph CTX["CONTEXT.md — Scale binding"]
+    direction LR
+    B1["bind()"] --- B2["unbind()"]
+    AV["_Avoid_: Attach, subscribe, register"]
+  end
+  subgraph TSM["TimeScaleModel — as shipped"]
+    direction LR
+    S1["bind()"] --- S2["unbind()"]
+    S3["subscribe()"]:::leak
+  end
+  AV -.reserves the word.-> S3
+  classDef leak stroke:#dc2626,stroke-width:2px,color:#991b1b;
+            </pre>
+          </div>
+
+          <p><strong>Problem:</strong> CONTEXT.md's "Scale binding" entry explicitly reserves the word "subscribe" to warn readers off using it for <em>binding</em> — but the PR spends it on a different concept (change notification) that CONTEXT.md never names at all.</p>
+          <p><strong>Solution:</strong> Name the notification concept in CONTEXT.md, and pick a verb for it with no textual echo of "bind" — <span class="font-mono text-sm">onChange</span> or <span class="font-mono text-sm">whenResolved</span> reads unambiguously next to <span class="font-mono text-sm">bind</span>/<span class="font-mono text-sm">unbind</span>.</p>
+          <ul class="text-sm space-y-1 list-disc list-inside text-slate-700">
+            <li>Locality: one glossary entry answers "does subscribe mean bind?" everywhere, not per reader</li>
+            <li>Leverage: the interface's names stop needing tribal knowledge of an avoid-list to disambiguate</li>
+          </ul>
+          <div class="text-xs bg-amber-50 border border-amber-200 text-amber-800 rounded p-2">
+            Same friction the codebase already paid down once for "chart" vs. <span class="font-mono">GanttShell</span> (issue #7) — a generic-sounding word covering two concepts in one interface.
+          </div>
+        </article>
+
+        <!-- Candidate 2 -->
+        <article id="c2" class="space-y-4">
+          <div class="flex items-center gap-3 flex-wrap">
+            <h2 class="text-xl font-serif font-semibold">The re-render reaction is wired by the caller, not stated by the interface</h2>
+            <span class="badge badge-explore">Worth exploring</span>
+            <span class="tag">locality</span>
+          </div>
+          <p class="font-mono text-sm text-slate-600">src/view/gantt-shell.ts:38-39</p>
+
+          <div class="grid grid-cols-2 gap-4">
+            <div class="rounded-lg border border-slate-200 bg-white p-4 space-y-2">
+              <p class="text-xs uppercase tracking-wider text-slate-500 text-center">Before</p>
+              <pre class="mermaid">
+sequenceDiagram
+  participant GS as GanttShell
+  participant TSM as TimeScaleModel
+  GS->>TSM: bind(binding)
+  GS->>TSM: subscribe(() => this.render())
+  Note over GS: reaction is<br/>GanttShell's own code
+  TSM--)GS: notify()
+  GS->>GS: this.render()
+              </pre>
+            </div>
+            <div class="rounded-lg border border-slate-200 bg-white p-4 space-y-2">
+              <p class="text-xs uppercase tracking-wider text-slate-500 text-center">After (sketch)</p>
+              <pre class="mermaid">
+sequenceDiagram
+  participant GS as GanttShell
+  participant TSM as TimeScaleModel
+  GS->>TSM: bind(binding, onChange)
+  Note over TSM: reaction lives<br/>behind the seam
+  TSM--)GS: onChange() invoked internally
+              </pre>
+            </div>
+          </div>
+
+          <p><strong>Problem:</strong> plans/01 §8.2's D-A text frames the goal as every bound Gantt re-rendering "without anything external calling <span class="font-mono">render()</span> again" — but today the "subscribe → call render()" wiring is duplicated caller-side. The next thing that binds to a <span class="font-mono">TimeScaleModel</span> has to reimplement it.</p>
+          <p><strong>Solution:</strong> Fold the reaction into <span class="font-mono">bind()</span>'s parameters (or the handle it returns), so the contract — "tell me what changed on your model, I'll call it" — is stated once by the interface instead of assumed by every caller.</p>
+          <ul class="text-sm space-y-1 list-disc list-inside text-slate-700">
+            <li>Locality: "what happens on scale change" has one home instead of N call sites</li>
+            <li>Leverage: a future consumer gets correct behaviour for free instead of copying <span class="font-mono">gantt-shell.ts</span>'s wiring</li>
+          </ul>
+        </article>
+
+        <!-- Candidate 3 -->
+        <article id="c3" class="space-y-4">
+          <div class="flex items-center gap-3 flex-wrap">
+            <h2 class="text-xl font-serif font-semibold">TimeScaleModel's interface is outgrowing its ~40-line job</h2>
+            <span class="badge badge-explore">Worth exploring</span>
+            <span class="tag">depth</span>
+          </div>
+          <p class="font-mono text-sm text-slate-600">src/layout/viewport/time-scale-model.ts (whole class)</p>
+
+          <div class="grid grid-cols-2 gap-4 items-end">
+            <div class="rounded-lg border border-slate-200 bg-white p-4 flex flex-col items-center gap-2">
+              <p class="text-xs uppercase tracking-wider text-slate-500">Before this PR</p>
+              <div class="w-24 h-6 border-2 border-slate-400 flex items-center justify-center text-[10px] uppercase tracking-wider">interface</div>
+              <div class="w-24 h-20 bg-slate-800 rounded-b flex items-center justify-center text-[10px] text-white uppercase tracking-wider">implementation</div>
+              <p class="text-[11px] text-slate-500">bind, preset, scale</p>
+            </div>
+            <div class="rounded-lg border border-slate-200 bg-white p-4 flex flex-col items-center gap-2">
+              <p class="text-xs uppercase tracking-wider text-slate-500">As shipped</p>
+              <div class="w-24 h-14 border-2 border-red-400 flex items-center justify-center text-[10px] uppercase tracking-wider text-red-700">interface</div>
+              <div class="w-24 h-16 bg-slate-800 rounded-b flex items-center justify-center text-[10px] text-white uppercase tracking-wider">implementation</div>
+              <p class="text-[11px] text-slate-500">bind, subscribe, preset, scale,<br/>+ handle{unbind, setViewportWidth}</p>
+            </div>
+          </div>
+
+          <p><strong>Problem:</strong> two lifecycles — binding membership and change notification — now sit on one module, and the interface rectangle is growing faster than the ~40 lines of actual resolution logic (<span class="font-mono">#resolve</span>, <span class="font-mono">boundSpan</span>, <span class="font-mono">fitWidth</span>) that make it worth having a module at all.</p>
+          <p><strong>Solution:</strong> Not urgent alone — but if candidate 2's fix (folding the reaction into <span class="font-mono">bind()</span>) lands, revisit whether <span class="font-mono">subscribe()</span> should stay a separate public method afterward, or collapse into the bind-time contract entirely.</p>
+          <ul class="text-sm space-y-1 list-disc list-inside text-slate-700">
+            <li>Depth: watch this ratio if a third concern (e.g. preset live-reconfiguration) lands here next</li>
+          </ul>
+        </article>
+
+        <!-- Candidate 4 -->
+        <article id="c4" class="space-y-4">
+          <div class="flex items-center gap-3 flex-wrap">
+            <h2 class="text-xl font-serif font-semibold">observable.ts is a seam with one adapter so far</h2>
+            <span class="badge badge-speculative">Speculative</span>
+            <span class="tag">in-process</span>
+          </div>
+          <p class="font-mono text-sm text-slate-600">src/layout/viewport/observable.ts</p>
+
+          <div class="rounded-lg border border-slate-200 bg-white p-4">
+            <pre class="mermaid">
+flowchart LR
+  O[["createObservable()"]]
+  T["TimeScaleModel"]
+  S["ScrollModel (#9, not yet landed)"]
+  O --> T
+  O -.hypothetical.-> S
+  classDef pending stroke-dasharray: 4 4,stroke:#94a3b8,color:#64748b;
+  class S pending
+            </pre>
+          </div>
+
+          <p><strong>Problem:</strong> deletion test — inline <span class="font-mono">observable.ts</span> back into <span class="font-mono">TimeScaleModel</span> and complexity doesn't concentrate, it just moves one file over: today it's a <span class="font-mono">Set</span> field plus two one-line methods with exactly one caller. One adapter is a hypothetical seam, not yet a real one.</p>
+          <p><strong>Solution:</strong> No action now — the PR's own comment names the threshold ("the moment a third shareable model wants more... consolidate under the <span class="font-mono">data/</span> façade"), and <span class="font-mono">ScrollModel</span> (#9) is the promised second adapter. Track that #9 actually lands before treating this separation as settled rather than a bet.</p>
+          <div class="text-xs bg-slate-100 border border-slate-200 text-slate-600 rounded p-2">
+            Self-aware bet, not an oversight — flagging only so it isn't forgotten once #9 ships.
+          </div>
+        </article>
+
+      </section>
+
+      <section id="top-recommendation">
+        <div class="rounded-xl border-2 border-emerald-600 bg-emerald-50 p-6 space-y-2">
+          <p class="text-xs uppercase tracking-widest text-emerald-700 font-semibold">Top recommendation</p>
+          <p class="text-lg"><a href="#c1" class="underline decoration-emerald-600">Candidate 1 — rename <span class="font-mono">subscribe()</span></a></p>
+          <p class="text-sm text-emerald-900">Zero behavior change, fixes a naming collision CONTEXT.md already warned against, and is cheapest to do before more code is written against the current name. Candidate 2 (folding the reaction into <span class="font-mono">bind()</span>) is the next one worth grilling — it changes the seam's shape, so it deserves the decision-tree treatment rather than a quick fix.</p>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>
