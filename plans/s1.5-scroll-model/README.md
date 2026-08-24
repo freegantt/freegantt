@@ -358,7 +358,7 @@ Guardrails and types first (`plans/04` §3.2/§3.3), then the pure model, then t
 - [x] Review `harness/main.ts` against the library rules (CLAUDE.md); record any gap against S1.5, fix it in `src/` — none found: no pixel arithmetic, no scroll gap (GanttShell's private default `ScrollModel` covers it). `render/dom/index.ts` gained a hidden content-sizer element so `host`'s native `overflow: auto` actually has real scrollable extent matching `frame.contentWidth`/`contentHeight` (D-S1.5-9) — needed for `ScrollModel.panTo` to have anywhere real to write; added `harness/scroll-sync.html`/`.ts` as the two-Gantt e2e fixture.
 
 ### Docs
-- [ ] The §8 spec edits, landed **with** this step — not deferred to the issue thread
+- [x] The §8 spec edits, landed **with** this step — not deferred to the issue thread (`plans/00` D9, `plans/01` §1.1 + §8.2, `plans/02` §5, `docs/02` B4, `harness/index.html`)
 - [x] `CONTEXT.md` glossary entries per §8 (pre-existing — verified accurate against the shipped API)
 
 ### Acceptance
