@@ -2,7 +2,7 @@
 
 Each slice cuts through the whole stack and ends with something visible and pokeable in the dev harness (`harness/`). No slice is pure infrastructure; no slice's value depends on a later slice landing. Gates from `00-overview.md` §4 apply between slices.
 
-Slices are scope, not calendar estimates. Within a slice, tasks are ordered so the visible result appears as early as possible.
+Slices are scope, not calendar estimates. Within a slice, entries are ordered so the visible result appears as early as possible.
 
 ---
 
@@ -13,19 +13,19 @@ Slices are scope, not calendar estimates. Within a slice, tasks are ordered so t
 **Scope**
 
 - Repo: TS strict, Vite, Vitest, ESLint + import-boundary rules (invariant I1) wired into CI from the first commit.
-- `model/`: `Task` (including `kind` — authored from day one, even while only `'task'` renders), ids, `Instant` brand, `TimeSpan`, `Duration`.
+- `model/`: `Entry` (including `kind` — authored from day one, even while only `'span'` renders), ids, `Instant` brand, `TimeSpan`, `Duration`.
 - `time/` (minimal): `instant()`, `toISO()`, zone-aware `startOfDay`/`addDays`/`diff` for one project zone; magic-constant lint (I10).
-- `layout/` (minimal): row resolution (`source: 'tasks'`, flat list), one item per task, fixed row height, `computeFrame()` returning rows + bars; deterministic `Item.id` (I8).
+- `layout/` (minimal): row resolution (`source: 'entries'`, flat list), one item per entry, fixed row height, `computeFrame()` returning rows + bars; deterministic `Item.id` (I8).
 - `render/dom` (minimal): mount, `sync(frame)` rendering absolutely-positioned row and bar elements; the keyed reconciler in its hard-bounded scope (`01` §8.1); `render/null` for tests.
-- `api/` (minimal): `new Project({ tasks })`, `new Gantt({ host, project })`, `destroy()`.
+- `api/` (minimal): `new Project({ entries })`, `new Gantt({ host, project })`, `destroy()`.
 - Harness: a Vite page that mounts the Gantt on a fixture; this page lives forever and every slice adds to it.
-- Fixtures: one realistic sample project (~50 tasks).
+- Fixtures: one realistic sample project (~50 entries).
 
 **Explicitly out:** scrolling, headers, grid pane, interactivity, scheduling, mutation.
 
 **Acceptance**
 
-- [x] Harness shows fixture tasks as bars positioned correctly against time.
+- [x] Harness shows fixture entries as bars positioned correctly against time.
 - [x] `computeFrame()` snapshot-tested headlessly; `Item.id` determinism asserted.
 - [x] Import-boundary lint fails the build on a violation (proven by a deliberate red test in CI setup).
 - [x] `render/null` consumes a frame in Node with no DOM.
@@ -49,7 +49,7 @@ Slices are scope, not calendar estimates. Within a slice, tasks are ordered so t
 
 **Acceptance**
 
-- [ ] Scroll a 5,000-task fixture smoothly; only windowed rows exist in the DOM.
+- [ ] Scroll a 5,000-entry fixture smoothly; only windowed rows exist in the DOM.
 - [ ] Grid and timeline row tops are pixel-identical under fractional zoom (I9).
 - [ ] Preset switch and zoom are live reconfigurations — no remount, anchor preserved.
 - [ ] Two harness Gantt instances given the same `ScrollModel` scroll together (a 5-line harness demo — the D9 seam proven now, cheaply).
@@ -68,7 +68,7 @@ Slices are scope, not calendar estimates. Within a slice, tasks are ordered so t
 - Undo/redo: transaction = atomic unit; recorded changesets replayed exactly; history API (`canUndo`, capacity).
 - Changesets: `{ added, removed, updated: {field, from, to} }` (`01` §6); `project.on('change')`; `project.apply(changeSet)` with validation + rejection reporting.
 - Serialization: `toJSON()`/`fromJSON()` with `schema: 1`, ISO instants, opaque `meta` round-trip.
-- Public mutation API: `project.tasks.add/update/remove`, `project.dependencies.*`, typed, validating.
+- Public mutation API: `project.entries.add/update/remove`, `project.dependencies.*`, typed, validating.
 - View binding: committed changesets invalidate layout incrementally (changed rows only), not globally.
 - Harness: mutation playground — edit fixture via console/buttons, watch the Gantt update; undo/redo buttons; changeset log panel; export/import JSON.
 
@@ -76,18 +76,18 @@ Slices are scope, not calendar estimates. Within a slice, tasks are ordered so t
 
 - [ ] Property test: random mutation sequences + undo-all restores byte-identical `toJSON()` (I7 groundwork — engine patches join in S3).
 - [ ] `fromJSON(toJSON(p))` round-trips byte-stable.
-- [ ] A 500-task bulk update inside one transaction produces one changeset, one layout pass, one frame.
+- [ ] A 500-entry bulk update inside one transaction produces one changeset, one layout pass, one frame.
 - [ ] Changeset log in harness shows `from`/`to` per field for every edit.
 
 ---
 
 ## S3 — Dependencies & the scheduling plugin
 
-**Goal:** links drawn, and FreeGantt's first-party default scheduling plugin (D3) — occupying the resolve hook `data/` exposes (D4; `01` §1; exact contract tracked in issue #12) — with its policy seam: propagation with lag, cycle detection with named members, diagnostics, pinned tasks. Cascades visible live in the harness. Core itself does not require this plugin (D4); S3 is where FreeGantt's own default happens to occupy the hook it ships with.
+**Goal:** links drawn, and FreeGantt's first-party default scheduling plugin (D3) — occupying the resolve hook `data/` exposes (D4; `01` §1; exact contract tracked in issue #12) — with its policy seam: propagation with lag, cycle detection with named members, diagnostics, pinned entries. Cascades visible live in the harness. Core itself does not require this plugin (D4); S3 is where FreeGantt's own default happens to occupy the hook it ships with.
 
 **Scope**
 
-- `scheduling/`: `schedule(request) → { patch, diagnostics }` — pure, deterministic; worklist-loop propagation (I3) with the 5,000-link chain fixture; lag per dependency type (FS/SS/FF/SF, negative legal); cycle diagnostics naming members; pinned-task semantics (report, never move — the pin flag lives in the plugin's own per-task storage per the #12 contract, not on `Task`); parent/`group` rollup as a second pass — kind semantics owned by the policy per `01` §2.5 (tree exists in data from S2; visual tree lands in S5).
+- `scheduling/`: `schedule(request) → { patch, diagnostics }` — pure, deterministic; worklist-loop propagation (I3) with the 5,000-link chain fixture; lag per dependency type (FS/SS/FF/SF, negative legal); cycle diagnostics naming members; pinned-entry semantics (report, never move — the pin flag lives in the plugin's own per-entry storage per the #12 contract, not on `Entry`); parent/`group` rollup as a second pass — kind semantics owned by the policy per `01` §2.5 (tree exists in data from S2; visual tree lands in S5).
 - `SchedulingPolicy` seam + `defaultPolicy` (`01` §7): `resolveEdit` (proposed fields decide what moves), precedence (`pinned > dependency`), dev-assert that a proposed field is never overwritten (I4).
 - Plugin registration: this scheduling plugin occupies the core resolve hook exclusively via the `01` §1 mechanism (issue #12) — `data/` calls the hook generically and has no scheduling-specific code path.
 - `data/` integration: transactions run the resolve hook, which (with this plugin installed) builds a `schedule()` call from the transaction's `proposed` edits; the plugin's patch merges into the same changeset (`origin: 'engine'`) — undo now reverts user + engine effects atomically (I7 complete).
@@ -99,9 +99,9 @@ Slices are scope, not calendar estimates. Within a slice, tasks are ordered so t
 **Acceptance**
 
 - [ ] All golden fixtures pass; 5,000-link chain completes without recursion-depth failure (gate S3→S4).
-- [ ] Cycle diagnostic lists the exact member tasks; harness renders them flagged.
-- [ ] Moving a pinned task's predecessor produces a diagnostic and moves nothing.
-- [ ] Undo of a cascading edit restores every affected task (I7 property test now includes engine patches).
+- [ ] Cycle diagnostic lists the exact member entries; harness renders them flagged.
+- [ ] Moving a pinned entry's predecessor produces a diagnostic and moves nothing.
+- [ ] Undo of a cascading edit restores every affected entry (I7 property test now includes engine patches).
 - [ ] `scheduling/` has zero imports from view/render/interaction (lint-proven), >90% coverage — it's pure; no excuse.
 
 ---
@@ -115,8 +115,8 @@ Slices are scope, not calendar estimates. Within a slice, tasks are ordered so t
 - `interaction/`: controller base with the pointer invariants (`01` §9 — arm threshold, nothing written on pointerdown, escape-cancel, pointer capture, touch); `Drag`, `Resize`, `LinkCreate`, `Select` controllers.
 - Hot path: `InteractionState` + `backend.applyState()` — hover, selection, drag ghost as class toggles and transforms; zero allocation (I5).
 - Snapping via the preset's `snap` spec; modifier key for fine placement.
-- Capabilities: the `interactions` config resolved per task over per-kind defaults (`02` §4.1); one resolution gates gesture arming *and* affordance rendering — handles, ports, cursors (I14).
-- Cancelable events: `beforeTaskMove/Resize`, `beforeLinkCreate`, `beforeSelectionChange` + after-events; async veto suspends with pending state (`02` §3).
+- Capabilities: the `interactions` config resolved per entry over per-kind defaults (`02` §4.1); one resolution gates gesture arming *and* affordance rendering — handles, ports, cursors (I14).
+- Cancelable events: `beforeEntryMove/Resize`, `beforeLinkCreate`, `beforeSelectionChange` + after-events; async veto suspends with pending state (`02` §3).
 - Speculative cascade preview: throttled pure `schedule()` call per frame with draft `proposed`; ghost positions for affected successors; discard on cancel (`01` §7).
 - One transaction per gesture at commit (I6); undo reverts the whole gesture.
 - Keyboard parity begins: selected bar nudges by snap with arrow keys; Enter/Escape semantics.
@@ -128,14 +128,14 @@ Slices are scope, not calendar estimates. Within a slice, tasks are ordered so t
 - [ ] Escape mid-drag restores exactly the pre-gesture state, including preview ghosts.
 - [ ] Hover across 1,000 visible bars allocates nothing and rebuilds no frame (I5 perf test).
 - [ ] Dragging a predecessor shows successors' ghost positions live; cancel discards them.
-- [ ] A task whose `resize` capability resolves false shows no handles and cannot be resized by pointer or keyboard (I14).
+- [ ] An entry whose `resize` capability resolves false shows no handles and cannot be resized by pointer or keyboard (I14).
 - [ ] A gesture undone by Ctrl+Z reverts user + cascade in one step.
 
 ---
 
 ## S5 — Hierarchy, grouping, multi-item rows
 
-**Goal:** the Row ≠ Task payoff (principle 1). Tree view with collapse/expand, grouped row sources, task segments as multiple bars on one row, lane packing with variable row heights.
+**Goal:** the Row ≠ Entry payoff (principle 1). Tree view with collapse/expand, grouped row sources, entry segments as multiple bars on one row, lane packing with variable row heights.
 
 **Scope**
 
@@ -144,20 +144,20 @@ Slices are scope, not calendar estimates. Within a slice, tasks are ordered so t
 - `hierarchy: { autoGroup: true }` on `Project`: first child promotes the parent to `group` within the triggering transaction; promote only, never demote (`02` §2).
 - Row sources: `{ source: 'group', groupBy }` and `{ source: 'custom', resolve }` (`01` §2.3); group header rows.
 - Sort and filter as store-level view specs with tree-aware policies (filter keeps ancestors by default; sort stays within parent).
-- Item emission: `task.segments` → multiple items on one row; overlap auto-packing into sub-lanes; `heightMode: 'pack'` variable row heights through the height index.
-- Dependency endpoint rule for multi-item tasks: links attach to the earliest item by default, configurable per view (`links.endpoints: 'first' | 'all' | 'none'`).
+- Item emission: `entry.segments` → multiple items on one row; overlap auto-packing into sub-lanes; `heightMode: 'pack'` variable row heights through the height index.
+- Dependency endpoint rule for multi-item entries: links attach to the earliest item by default, configurable per view (`links.endpoints: 'first' | 'all' | 'none'`).
 - Interaction with lanes: drag/resize on packed items; collapse/expand by keyboard.
 - Harness: tree fixture; a grouped view of the same project side-by-side with the tree view (two Gantt instances, one project — the D9/D2 architecture visibly paying off).
 
 **Acceptance**
 
 - [ ] Same project renders as tree and as grouped rows simultaneously in two Gantt instances; edits in one appear in both.
-- [ ] A segmented task renders N bars on one row; drag of one segment behaves sanely and transactionally.
+- [ ] A segmented entry renders N bars on one row; drag of one segment behaves sanely and transactionally.
 - [ ] Pack-mode rows change height correctly as overlaps come and go; scroll position stays stable (height index invalidation test).
 - [ ] Collapse state survives data edits and is independent per Gantt.
 - [ ] Filter with keep-ancestors shows a matching deep child under its chain of parents.
-- [ ] An empty `kind: 'group'` task renders as a group, accepts children, and its span appears once children exist — no special-casing.
-- [ ] With `autoGroup` on: reparenting a task under a plain task promotes that parent to `group` in the same undo step; removing all children demotes nothing.
+- [ ] An empty `kind: 'group'` entry renders as a group, accepts children, and its span appears once children exist — no special-casing.
+- [ ] With `autoGroup` on: reparenting an entry under a plain entry promotes that parent to `group` in the same undo step; removing all children demotes nothing.
 
 ---
 
@@ -169,7 +169,7 @@ Slices are scope, not calendar estimates. Within a slice, tasks are ordered so t
 
 - `extensions/`: plugin host implementing the full `PluginContext` (`01` §10) — decorations, columns, renderers, overlay host, controllers, keybindings, commands, disposables.
 - Built-in features **as plugins**: tooltips (shared `Popup` primitive: anchoring, flipping, clamping, focus trap), context menu (command-registry-driven), row highlight decorations, today line.
-- Grid maturation: column types (name, start, end, duration, custom value/renderer), inline editors (text, date via a pluggable date-input seam — no bundled date-picker dependency), column resize/reorder; `beforeTaskEdit` veto/replace flow.
+- Grid maturation: column types (name, start, end, duration, custom value/renderer), inline editors (text, date via a pluggable date-input seam — no bundled date-picker dependency), column resize/reorder; `beforeEntryEdit` veto/replace flow.
 - Renderer callbacks at every declared point (`bar`, `cell`, `header`, `tooltip`), text-safe by default (I13).
 - A11y completion: grid pattern with roving tabindex, full keyboard reach for every interaction (link creation included), screen-reader labels with dates/progress, focus management in popups; axe checks in CI on harness pages.
 - Docs seed: harness pages get explanatory text and become the example gallery; public API reference generated from types.
@@ -178,9 +178,9 @@ Slices are scope, not calendar estimates. Within a slice, tasks are ordered so t
 
 - [ ] Context menu and tooltips are plugins with zero private imports (lint-proven — the dogfood gate).
 - [ ] A harness-only third-party-style plugin (e.g., a "weekend shading + jump-to-today command" plugin) is written against the public contract only.
-- [ ] A host-defined task kind (custom renderer + capabilities + context-menu `when` items, registered via config/plugin only) renders and behaves correctly with zero core edits — the §2.5 open-set claim, proven.
+- [ ] A host-defined entry kind (custom renderer + capabilities + context-menu `when` items, registered via config/plugin only) renders and behaves correctly with zero core edits — the §2.5 open-set claim, proven.
 - [ ] Every pointer capability has a keyboard path; axe reports no violations on harness pages.
-- [ ] Host replaces the task editor via `beforeTaskEdit` (demo in harness).
+- [ ] Host replaces the entry editor via `beforeEntryEdit` (demo in harness).
 - [ ] Unused features are absent from a consumer bundle (tree-shaking test in CI).
 
 ---
@@ -191,17 +191,17 @@ Slices are scope, not calendar estimates. Within a slice, tasks are ordered so t
 
 **Scope**
 
-- **Measured spike against the growth targets** (the numbers that decide, not guess): 10k tasks / 5k rows scroll p95 frame time; pack-heavy rows layout cost; prefix-sum vs. log-time height index crossover; reconciler cost on 20k-bar sync + 200-bar commit; SVG link cost at 2k paths; zone arithmetic per-tick cost.
+- **Measured spike against the growth targets** (the numbers that decide, not guess): 10k entries / 5k rows scroll p95 frame time; pack-heavy rows layout cost; prefix-sum vs. log-time height index crossover; reconciler cost on 20k-bar sync + 200-bar commit; SVG link cost at 2k paths; zone arithmetic per-tick cost.
 - Act on the spike: swap in the log-time height index if warranted (interface already in place); worker seam for `schedule()` above a measured threshold (resident mirror + changeset shipping — only if the numbers demand it); any reconciler fixes.
 - Performance budgets in CI on reference hardware; regressions fail the build.
-- Linked-Gantt demo: a task Gantt + a second Gantt bound to the same `TimeScaleModel`/`ScrollModel` (x, y, and both variants) — the D9 acceptance demo.
+- Linked-Gantt demo: a delivery-schedule Gantt + a workforce Gantt bound to the same `TimeScaleModel`/`ScrollModel` (x, y, and both variants) — the D9 acceptance demo.
 - Hardening: error-path audit (typed errors everywhere), memory-leak pass (mount/destroy cycles), `exports` map sealing internals, semver/API-report tooling (I11 automated), bundle-size budget in CI.
 - Release: versioned docs from the harness gallery, CHANGELOG, publishing pipeline.
 
 **Acceptance**
 
 - [ ] All §12-style budgets defined numerically from the spike and enforced in CI.
-- [ ] 10k-task fixture: smooth scroll, sub-frame hover, bulk edit in one transaction without jank on reference hardware.
+- [ ] 10k-entry fixture: smooth scroll, sub-frame hover, bulk edit in one transaction without jank on reference hardware.
 - [ ] Linked-scroll demo works in x, y, and both modes with zero Gantt-side special-casing.
 - [ ] 100 mount/destroy cycles leak no nodes, listeners, or observables.
 - [ ] `npm pack` output audited: internals unreachable, types complete, bundle within budget.

@@ -12,8 +12,8 @@ The API is a product surface, designed once and defended. Everything here is wha
 2. **Data and view are separate objects.** A `Project` (headless, Node-safe) holds data and scheduling; a `Gantt` binds a project to a DOM host. Many views of one project is the normal case, not a trick.
 3. **Every mutating interaction has a cancelable `before*` event.** Hosts can veto a drop, substitute their own editor, validate a link — before commit, not after.
 4. **Honest surface.** Nothing in the published types throws "not implemented" (invariant I11). Declared events fire; declared methods work.
-5. **Predictable naming.** One vocabulary, one bus, greppable pairs (`beforeTaskMove` / `taskMove`). No synonyms, no two names for one concept.
-6. **Typed extensibility.** `meta` generics flow end-to-end: `new Project<{ team: string }>` makes `task.meta.team` typed in renderers, events, and queries.
+5. **Predictable naming.** One vocabulary, one bus, greppable pairs (`beforeEntryMove` / `entryMove`). No synonyms, no two names for one concept.
+6. **Typed extensibility.** `meta` generics flow end-to-end: `new Project<{ team: string }>` makes `entry.meta.team` typed in renderers, events, and queries.
 
 ---
 
@@ -26,7 +26,7 @@ import { Project, Gantt } from 'freegantt';
 const project = new Project<{ team: string }>({
   timeZone: 'America/Chicago',            // explicit; 'local' is opt-in
   hierarchy: { autoGroup: true },         // first child promotes parent to kind 'group'; promote only
-  tasks: [
+  entries: [
     { id: 'p1', name: 'Sitework', kind: 'group' },     // span derives from children (default policy)
     { id: 't1', parentId: 'p1', name: 'Groundwork', start: instant('2026-09-01'), end: instant('2026-09-12') },
     { id: 't2', parentId: 'p1', name: 'Framing',    start: instant('2026-09-12'), end: instant('2026-10-01'),
@@ -42,7 +42,7 @@ const gantt = new Gantt({
   host: '#gantt',                         // element or selector
   project,
 
-  rows: { source: 'tasks', tree: true },
+  rows: { source: 'entries', tree: true },
   preset: 'weekAndMonth',                 // or a full ViewPreset object
   range: 'fitProject',                    // or a TimeSpan
 
@@ -55,14 +55,14 @@ const gantt = new Gantt({
 
   interactions: {
     move: true,
-    resize: t => t.kind !== 'group',      // boolean or per-task predicate — see §4.1
+    resize: t => t.kind !== 'group',      // boolean or per-entry predicate — see §4.1
     linkCreate: true,
   },
 
   features: {
     links: { allowCreate: true },
     tooltips: true,
-    contextMenu: { items: ({ task, defaults }) => [...defaults, myItem(task)] },
+    contextMenu: { items: ({ entry, defaults }) => [...defaults, myItem(entry)] },
   },
 });
 ```
@@ -71,7 +71,7 @@ const gantt = new Gantt({
 
 ```ts
 project.transaction(() => {
-  project.tasks.update('t2', { name: 'Framing — north wing' });
+  project.entries.update('t2', { name: 'Framing — north wing' });
   project.dependencies.add({ id: 'd2', fromId: 't2', toId: 't3', type: 'FS', lag: days(2) });
 });
 // one scheduling pass, one changeset, one undo step, one render
@@ -82,7 +82,7 @@ project.canUndo; project.canRedo;
 
 Single mutations outside an explicit transaction are auto-wrapped in one — convenience without a second code path.
 
-`autoGroup` is data behavior, so it lives on `Project` (not `Gantt`): the promotion runs inside the same transaction as the edit that caused it — one changeset, one undo step. It only promotes; turning a group back into a task is always an explicit edit (`01` §2.5).
+`autoGroup` is data behavior, so it lives on `Project` (not `Gantt`): the promotion runs inside the same transaction as the edit that caused it — one changeset, one undo step. It only promotes; turning a group back into an entry is always an explicit edit (`01` §2.5).
 
 ### Reconfiguration is just assignment
 
@@ -100,21 +100,21 @@ Every config key is a live property. Setting one triggers exactly the invalidati
 
 | Cancelable (pre-commit) | Notification (post-commit) |
 |---|---|
-| `beforeTaskMove` | `taskMove` |
-| `beforeTaskResize` | `taskResize` |
-| `beforeTaskEdit` | `taskEdit` |
+| `beforeEntryMove` | `entryMove` |
+| `beforeEntryResize` | `entryResize` |
+| `beforeEntryEdit` | `entryEdit` |
 | `beforeLinkCreate` | `linkCreate` |
 | `beforeSelectionChange` | `selectionChange` |
 | — | `change` (every committed `ChangeSet`) |
 | — | `scheduleDiagnostics` (engine findings) |
 
 ```ts
-gantt.on('beforeTaskMove', ({ task, start, end }) => {
+gantt.on('beforeEntryMove', ({ entry, start, end }) => {
   if (start < mobilization) { toast('Too early'); return false; }   // veto
 });
 
-gantt.on('beforeTaskEdit', async ({ task }) => {
-  await myDialog.open(task);   // bring-your-own editor
+gantt.on('beforeEntryEdit', async ({ entry }) => {
+  await myDialog.open(entry);   // bring-your-own editor
   return false;                // suppress built-in
 });
 
@@ -144,31 +144,31 @@ Documented in this order; each level solves what the previous can't, and consume
 Renderers return **plain serializable element descriptions** (tag/class/style/text/children), applied by the engine's reconciler — never live DOM nodes (nodes are recycled by virtualization) and never framework components in core (D5). Text by default; HTML by explicit opt-in only.
 
 ```ts
-barRenderer: ({ task, item }) => ({
-  class: { 'my-bar': true, 'my-bar--late': isLate(task) },
+barRenderer: ({ entry, item }) => ({
+  class: { 'my-bar': true, 'my-bar--late': isLate(entry) },
   children: [
-    { tag: 'span', class: 'my-bar__label', text: task.name },
-    { tag: 'span', class: 'my-bar__team',  text: task.meta.team },
+    { tag: 'span', class: 'my-bar__label', text: entry.name },
+    { tag: 'span', class: 'my-bar__team',  text: entry.meta.team },
   ],
 })
 ```
 
-### 4.1 Per-task looks and actions
+### 4.1 Per-entry looks and actions
 
-Both questions — *how does this task look?* and *what can you do to it?* — resolve **per task**, not per Gantt, and every mechanism sees the whole task (`kind`, fields, typed `meta`):
+Both questions — *how does this entry look?* and *what can you do to it?* — resolve **per entry**, not per Gantt, and every mechanism sees the whole entry (`kind`, fields, typed `meta`):
 
 **Look.** Every bar element carries `data-kind`, so per-kind styling is level-2 CSS with zero JS (`.fg-bar[data-kind="milestone"] { ... }`). At level 3, `barRenderer` is either one function that branches, or a per-kind map so the common case needs no branching — host-defined kinds slot in by name:
 
 ```ts
 barRenderer: {
-  milestone: ({ task }) => diamond(task),
-  group:     ({ task }) => bracket(task),
-  buffer:    ({ task }) => hatched(task),   // host-defined kind
-  '*':       ({ task }) => defaultBar(task),
+  milestone: ({ entry }) => diamond(entry),
+  group:     ({ entry }) => bracket(entry),
+  buffer:    ({ entry }) => hatched(entry),   // host-defined kind
+  '*':       ({ entry }) => defaultBar(entry),
 }
 ```
 
-**Actions.** The `interactions` config takes a boolean or a per-task predicate for each gesture (`move`, `resize`, `linkCreate`, `select`, `edit`), layered over per-kind defaults. One resolution both hides the affordance and refuses the gesture — pointer and keyboard alike (I14) — so a non-resizable task simply has no handles rather than handles that scold. Context-menu items and commands carry a `when(task)` clause, so a kind (or any predicate) ships its own action set.
+**Actions.** The `interactions` config takes a boolean or a per-entry predicate for each gesture (`move`, `resize`, `linkCreate`, `select`, `edit`), layered over per-kind defaults. One resolution both hides the affordance and refuses the gesture — pointer and keyboard alike (I14) — so a non-resizable entry simply has no handles rather than handles that scold. Context-menu items and commands carry a `when(entry)` clause, so a kind (or any predicate) ships its own action set.
 
 **Division of labor:** capabilities answer the *static* question ("groups don't resize"); `before*` events answer the *contextual* one ("not before mobilization"). Use the shallowest one that fits.
 
@@ -182,8 +182,8 @@ import { TimeScaleModel, ScrollModel } from 'freegantt';
 const scale  = new TimeScaleModel({ preset: 'weekAndMonth' });
 const scroll = new ScrollModel();
 
-const tasksGantt = new Gantt({ host: '#top',    project, scale, scroll });
-const otherGantt = new Gantt({ host: '#bottom', project, scale, scroll: scroll.xOnly() });
+const mainGantt   = new Gantt({ host: '#top',    project, scale, scroll });
+const linkedGantt = new Gantt({ host: '#bottom', project, scale, scroll: scroll.xOnly() });
 ```
 
 Omit `scale`/`scroll` and the Gantt creates private ones — single-Gantt users never meet the concept. Passing shared instances is the *entire* sync API: no link manager, no event plumbing. `scroll.xOnly()` / `.yOnly()` derive partial bindings for mixed layouts.
@@ -193,7 +193,7 @@ Omit `scale`/`scroll` and the Gantt creates private ones — single-Gantt users 
 ## 6. Serialization contract (D7)
 
 ```ts
-const doc = project.toJSON();     // { schema: 1, timeZone, tasks, dependencies, ... }
+const doc = project.toJSON();     // { schema: 1, timeZone, entries, dependencies, ... }
 const p2  = Project.fromJSON(doc);
 ```
 

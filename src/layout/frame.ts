@@ -1,6 +1,6 @@
 // layout/ is headless geometry — no DOM, no drawing calls (plans/01 §4). DOM-free by construction.
 
-import type { RowId, ItemId, TaskId, TaskKind, Task, Instant } from '../model/index.js';
+import type { RowId, ItemId, EntryId, EntryKind, Entry, Instant } from '../model/index.js';
 import { itemId, rowId } from '../model/index.js';
 
 export interface BarFlags {
@@ -24,9 +24,9 @@ export interface FrameRow {
 
 export interface FrameBar {
   id: ItemId;
-  taskId: TaskId;
+  entryId: EntryId;
   rowId: RowId;
-  kind: TaskKind;
+  kind: EntryKind;
   x: number;
   y: number;
   width: number;
@@ -46,31 +46,31 @@ export interface GeometryFrame {
 }
 
 export interface LayoutInput {
-  tasks: readonly Task[];
+  entries: readonly Entry[];
   /** Typically `TimeScale.xForInstant` (time/scale.ts), bound via a TimeScaleModel (plans/01 §8.2). */
   xForInstant: (instant: Instant) => number;
   rowHeight: number;
   revision: number;
 }
 
-/** S0 scope: flat row-per-task, one bar per task, fixed row height (plans/03 S0). */
+/** S0 scope: flat row-per-entry, one bar per entry, fixed row height (plans/03 S0). */
 export function computeFrame(input: LayoutInput): GeometryFrame {
-  const { tasks, xForInstant, rowHeight, revision } = input;
+  const { entries, xForInstant, rowHeight, revision } = input;
   const rows: FrameRow[] = [];
   const bars: FrameBar[] = [];
 
-  tasks.forEach((task, index) => {
-    const id = rowId(`row:${task.id}`);
+  entries.forEach((entry, index) => {
+    const id = rowId(`row:${entry.id}`);
     const top = index * rowHeight;
-    rows.push({ id, index, top, height: rowHeight, laneCount: 1, label: task.name });
+    rows.push({ id, index, top, height: rowHeight, laneCount: 1, label: entry.name });
 
-    const x = xForInstant(task.start);
-    const width = Math.max(0, xForInstant(task.end) - x);
+    const x = xForInstant(entry.start);
+    const width = Math.max(0, xForInstant(entry.end) - x);
     bars.push({
-      id: itemId(task.id),
-      taskId: task.id,
+      id: itemId(entry.id),
+      entryId: entry.id,
       rowId: id,
-      kind: task.kind ?? 'task',
+      kind: entry.kind ?? 'span',
       x,
       y: top,
       width,

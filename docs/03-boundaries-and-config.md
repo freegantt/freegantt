@@ -69,7 +69,7 @@ Per `plans/04` §3.1, plus what each flag buys us here specifically:
 | Setting | Why, for this codebase |
 |---|---|
 | `strict: true` | baseline |
-| `noUncheckedIndexedAccess` | `tasksById[id]` is `Task \| undefined`. The normalized stores are index-lookup-heavy; this is the flag that stops the "it was there a frame ago" class |
+| `noUncheckedIndexedAccess` | `entriesById[id]` is `Entry \| undefined`. The normalized stores are index-lookup-heavy; this is the flag that stops the "it was there a frame ago" class |
 | `exactOptionalPropertyTypes` | a changeset's `from: undefined` (field was absent) and an absent `from` key are different facts (`01` §6). Without this flag they collapse |
 | `verbatimModuleSyntax` | type imports never emit runtime imports — load-bearing for `model/` being types-only and for tree-shaking (S6) |
 | `isolatedModules` | keeps every file independently transpilable (Vite/esbuild parity) |

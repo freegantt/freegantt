@@ -33,7 +33,7 @@
     "dev": "vite",
     "build": "vite build",
     "test:e2e": "playwright test",
-    "verify": "pnpm format:check && pnpm typecheck && pnpm lint && pnpm boundaries && pnpm guards && pnpm test:node && pnpm test:dom && pnpm vendor-names && pnpm disables"
+    "verify": "pnpm format:check && pnpm typecheck && pnpm lint && pnpm boundaries && pnpm guards && pnpm test:node && pnpm test:dom && pnpm vendor-names && pnpm disables && pnpm build"
   },
   "dependencies": {
     "alien-signals": "^1.0.0",

@@ -95,7 +95,7 @@ One published package, multiple entry points via the `exports` map. Package spli
 flowchart LR
   subgraph authored["AUTHORED — persisted, edited, synced"]
     direction TB
-    T["Task"]
+    T["Entry"]
     DEP["Dependency<br/>(scheduling-plugin-owned, §7 — not model/)"]
     CAL["Calendar (later slice)"]
     RES["Resource / Assignment (later slice)"]
@@ -111,7 +111,7 @@ flowchart LR
   authored -->|"row source config +<br/>layout pipeline"| derived
 ```
 
-`Task` is a schedulable entity that has no idea it will ever be drawn. `Row` is a horizontal display lane. `Item` is one drawn bar on a row. **A row may host many items, and one task may produce items on several rows.** Today's classic Gantt (one row per task, one bar per row) is just the default configuration of that pipeline — not a structural assumption. This is what makes split bars, grouped views, and future workload views configuration rather than rewrites.
+`Entry` is an authored, dated record that has no idea it will ever be drawn. `Row` is a horizontal display lane. `Item` is one drawn bar on a row. **A row may host many items, and one entry may produce items on several rows.** Today's classic Gantt (one row per entry, one bar per row) is just the default configuration of that pipeline — not a structural assumption. This is what makes split bars, grouped views, and future workload views configuration rather than rewrites.
 
 ### 2.2 Entities
 
@@ -125,14 +125,14 @@ interface TimeSpan { start: Instant; end: Instant }   // half-open [start, end)
 
 interface Duration { value: number; unit: TimeUnit }  // 'ms'|'m'|'h'|'d'|'w'|'M'|'y'
 
-/** Open classification — see §2.5. 'task' | 'group' | 'milestone' ship; hosts add their own. */
-type TaskKind = 'task' | 'group' | 'milestone' | (string & {});
+/** Open classification — see §2.5. 'span' | 'group' | 'milestone' ship; hosts add their own. */
+type EntryKind = 'span' | 'group' | 'milestone' | (string & {});
 
-interface Task<TMeta = unknown> {
-  id: TaskId;
-  parentId?: TaskId;           // hierarchy; roots have none
-  /** What sort of thing this is. Authored, never derived — see §2.5. Default 'task'. */
-  kind?: TaskKind;
+interface Entry<TMeta = unknown> {
+  id: EntryId;
+  parentId?: EntryId;           // hierarchy; roots have none
+  /** What sort of thing this is. Authored, never derived — see §2.5. Default 'span'. */
+  kind?: EntryKind;
   name: string;
   /** Always present in the store. For kinds whose span the policy derives (default `group`),
    *  the rollup pass maintains these; input may omit them and they are initialized (§2.5). */
@@ -147,44 +147,44 @@ interface Task<TMeta = unknown> {
 /** DERIVED. One display lane. */
 interface Row {
   id: RowId;
-  kind: 'task' | 'group' | 'custom';
+  kind: 'entry' | 'group' | 'custom';
   label: string;
   heightMode: 'fixed' | 'pack';   // 'pack' grows to fit lanes
 }
 
-/** DERIVED. One drawn bar. Always traces back to a task. */
+/** DERIVED. One drawn bar. Always traces back to an entry. */
 interface Item {
   id: ItemId;                  // deterministic — see §2.4
   rowId: RowId;
-  taskId: TaskId;
-  kind: TaskKind;              // carried through so backends/renderers never refetch the task
+  entryId: EntryId;
+  kind: EntryKind;              // carried through so backends/renderers never refetch the entry
   segmentIndex?: number;
   start: Instant; end: Instant;
   lane: number;                // sub-lane within the row
 }
 ```
 
-`Dependency` (predecessor/successor link, with `type`/`lag`/`active`) and the per-task pin flag formerly on `Task.scheduling` are **not** defined here. Both are scheduling-plugin-owned data now, not `model/` — pulling scheduling out of the mandatory core layers means `model/` stays scheduling-agnostic, and a host with no scheduling plugin installed never sees either type. They're still authored, persisted data in the sense of §2.1's separation — just owned by the plugin's storage rather than core's — and their shape is described alongside the engine in §7 (exact contract tracked in issue #12).
+`Dependency` (predecessor/successor link, with `type`/`lag`/`active`) and the per-entry pin flag formerly on `Entry.scheduling` are **not** defined here. Both are scheduling-plugin-owned data now, not `model/` — pulling scheduling out of the mandatory core layers means `model/` stays scheduling-agnostic, and a host with no scheduling plugin installed never sees either type. They're still authored, persisted data in the sense of §2.1's separation — just owned by the plugin's storage rather than core's — and their shape is described alongside the engine in §7 (exact contract tracked in issue #12).
 
 Reserved for later slices, designed-for now (fields and stores exist as named seams, not dead code): `Calendar` (working time), `Constraint` (date restrictions, policy-defined vocabulary), `Resource` + `Assignment` (staffing), `Baseline` (snapshots).
 
 ```mermaid
 erDiagram
-  PROJECT ||--o{ TASK : owns
-  TASK ||--o{ TASK : "parentId (tree)"
+  PROJECT ||--o{ ENTRY : owns
+  ENTRY ||--o{ ENTRY : "parentId (tree)"
 
   ROW ||--o{ ITEM : hosts
-  ITEM }o--|| TASK : "derived from"
+  ITEM }o--|| ENTRY : "derived from"
 
-  TASK {
-    string kind "task | group | milestone | host-defined"
+  ENTRY {
+    string kind "span | group | milestone | host-defined"
     Instant start
     Instant end_exclusive
     number progress
     json meta "host-owned"
   }
   ROW {
-    string kind "task | group | custom"
+    string kind "entry | group | custom"
     string heightMode "fixed | pack"
   }
   ITEM {
@@ -192,46 +192,46 @@ erDiagram
   }
 ```
 
-`Dependency` (predecessor/successor, `type`, `lag`, `active`) and the per-task pin flag live in scheduling-plugin-owned storage when a scheduling plugin is installed — not in this diagram, which covers `model/`'s entities. See §7.
+`Dependency` (predecessor/successor, `type`, `lag`, `active`) and the per-entry pin flag live in scheduling-plugin-owned storage when a scheduling plugin is installed — not in this diagram, which covers `model/`'s entities. See §7.
 
 ### 2.3 Row sources — the flexibility mechanism
 
 The layout pipeline is `row resolution → item emission → lane packing → geometry`. The **row source** is configuration:
 
 ```ts
-rows: { source: 'tasks', tree: true }                        // classic Gantt (default)
+rows: { source: 'entries', tree: true }                        // classic Gantt (default)
 rows: { source: 'group', groupBy: t => t.meta.team }         // one row per group value
 rows: { source: 'custom', resolve: myRowResolver }           // host-defined rows entirely
 ```
 
-Item emission then places tasks (or task segments) onto rows; overlapping items on one row auto-pack into sub-lanes. Future workload/resource views are simply another row source — no new rendering or interaction code.
+Item emission then places entries (or entry segments) onto rows; overlapping items on one row auto-pack into sub-lanes. Future workload/resource views are simply another row source — no new rendering or interaction code.
 
-Item emission is itself a per-kind seam, mirroring rendering (§10): the pipeline maps `Task.kind` to an `ItemEmitter` that turns one Task into its Item(s). Shipped kinds (`task`, `group`, `milestone`) ship a default emitter; a host-defined kind registers its own via `layout.registerItemEmitter` (§10) — unregistered kinds fall back to the `task` emitter (§2.5).
+Item emission is itself a per-kind seam, mirroring rendering (§10): the pipeline maps `Entry.kind` to an `ItemEmitter` that turns one Entry into its Item(s). Shipped kinds (`span`, `group`, `milestone`) ship a default emitter; a host-defined kind registers its own via `layout.registerItemEmitter` (§10) — unregistered kinds fall back to the `span` emitter (§2.5).
 
 ```ts
-type ItemEmitter = (task: Task) => readonly Item[];
+type ItemEmitter = (entry: Entry) => readonly Item[];
 ```
 
 ### 2.4 Item identity is deterministic
 
-`Item.id = `${taskId}:${segmentIndex ?? 0}`` (extended if future sources add dimensions). Regenerated every layout pass, so it **must** be stable across passes or node recycling, CSS transitions, and in-flight drag state all break. Asserted by a layout test from slice S0.
+`Item.id = `${entryId}:${segmentIndex ?? 0}`` (extended if future sources add dimensions). Regenerated every layout pass, so it **must** be stable across passes or node recycling, CSS transitions, and in-flight drag state all break. Asserted by a layout test from slice S0.
 
-### 2.5 Task kinds — one authored field, per-layer meaning
+### 2.5 Entry kinds — one authored field, per-layer meaning
 
-`Task.kind` answers "what sort of thing is this?" exactly once, in the model. Every other layer maps that answer to layer-local behavior through a registry or seam it already has — never `if (kind === ...)` chains scattered across the codebase:
+`Entry.kind` answers "what sort of thing is this?" exactly once, in the model. Every other layer maps that answer to layer-local behavior through a registry or seam it already has — never `if (kind === ...)` chains scattered across the codebase:
 
 | Layer | What `kind` selects | Seam |
 |---|---|---|
 | `scheduling/` | schedule semantics, *when a scheduling plugin is installed* — e.g. a `group` spans its children via rollup (default) vs. directly schedulable | `SchedulingPolicy` (§7), plugin-owned |
 | `layout/` | item emission — bar vs. summary bracket vs. milestone diamond; whether items are emitted at all | kind → item-emitter registration in the §2.3 pipeline |
 | `render/` | appearance — per-kind default renderer; `data-kind` on the element for CSS | renderer registry (`02` §4) |
-| `interaction/` | which gestures the task affords (move / resize / link / edit …) | capability resolver (§9) |
+| `interaction/` | which gestures the entry affords (move / resize / link / edit …) | capability resolver (§9) |
 
 Rules:
 
-- **Kind is authored, never derived.** A `group` is a group because the user said so — not because it currently has children. An empty group is legal and renders as one (that is how "add a phase, then fill it" works). For derived-span kinds, input may omit `start`/`end`: the store initializes a zero-length span (at the project's reference date) and the rollup pass owns it from then on — the *stored* model always has both fields, so no layer downstream handles absence. `parentId` (tree position) and `kind` (what it is) are orthogonal; "every parent is a group" is a convention, not a model rule — and `hierarchy: { autoGroup: true }` (`02` §2) maintains that convention automatically: a task gaining its first child is promoted to `group` in the same transaction. **Promote only, never demote** — demoting on losing the last child would reintroduce exactly the flickering identity this rule exists to prevent; demotion stays an explicit edit.
-- **The set is open.** Shipped kinds: `'task'`, `'group'`, `'milestone'`. A host-defined kind (say `'buffer'`) gets full behavior by registering at the four seams above — no core edits. Anything not registered at a seam falls back to `'task'` behavior there, so partial registration degrades gracefully instead of erroring.
-- **Group *task* ≠ row *grouping*.** `rows: { source: 'group', groupBy }` is a view-side arrangement of any tasks and persists nothing; a `kind: 'group'` task is a model entity that persists, schedules, and syncs. They compose — a grouped view of a project containing group tasks is well-defined, because one is authored and the other is derived (principle 1).
+- **Kind is authored, never derived.** A `group` is a group because the user said so — not because it currently has children. An empty group is legal and renders as one (that is how "add a phase, then fill it" works). For derived-span kinds, input may omit `start`/`end`: the store initializes a zero-length span (at the project's reference date) and the rollup pass owns it from then on — the *stored* model always has both fields, so no layer downstream handles absence. `parentId` (tree position) and `kind` (what it is) are orthogonal; "every parent is a group" is a convention, not a model rule — and `hierarchy: { autoGroup: true }` (`02` §2) maintains that convention automatically: an entry gaining its first child is promoted to `group` in the same transaction. **Promote only, never demote** — demoting on losing the last child would reintroduce exactly the flickering identity this rule exists to prevent; demotion stays an explicit edit.
+- **The set is open.** Shipped kinds: `'span'`, `'group'`, `'milestone'`. A host-defined kind (say `'buffer'`) gets full behavior by registering at the four seams above — no core edits. Anything not registered at a seam falls back to `'span'` behavior there, so partial registration degrades gracefully instead of erroring.
+- **Group *entry* ≠ row *grouping*.** `rows: { source: 'group', groupBy }` is a view-side arrangement of any entries and persists nothing; a `kind: 'group'` entry is a model entity that persists, schedules, and syncs. They compose — a grouped view of a project containing group entries is well-defined, because one is authored and the other is derived (principle 1).
 
 ---
 
@@ -286,8 +286,8 @@ interface GeometryFrame {
   rows: Array<{ id: RowId; index: number; top: number; height: number; laneCount: number; label: string }>;
   contentHeight: number;       // across ALL rows, from the height index
   bars: Array<{
-    id: ItemId; taskId: TaskId; rowId: RowId;
-    kind: TaskKind;              // backends stamp it as data-kind — per-kind CSS with zero JS
+    id: ItemId; entryId: EntryId; rowId: RowId;
+    kind: EntryKind;              // backends stamp it as data-kind — per-kind CSS with zero JS
     x: number; y: number; width: number; height: number; lane: number;
     /** Static classification only (hasConflict, inCycle) — never hover/selection. */
     flags: BarFlags;
@@ -316,7 +316,7 @@ Rules that keep it honest:
 
 Three rules, in force from the first commit, because all three are retrofit-hostile:
 
-1. **Storage is half-open `[start, end)`; display is inclusive.** A task "ending Friday" stores `end` = Saturday 00:00 in project time. Exactly one formatting helper (`formatEndInclusive`) renders inclusive ends; code review rejects inline `end - 1` arithmetic.
+1. **Storage is half-open `[start, end)`; display is inclusive.** An entry "ending Friday" stores `end` = Saturday 00:00 in project time. Exactly one formatting helper (`formatEndInclusive`) renders inclusive ends; code review rejects inline `end - 1` arithmetic.
 2. **The project owns an IANA timezone; viewer-local is opt-in.** All zone-aware date arithmetic — day floors, week starts, snapping, shading — resolves through the project zone, so two users in different zones see identical day boundaries. `Instant` stays absolute.
 3. **No naked time arithmetic.** `time/` exposes `add`, `startOf`, `diff`, etc., all zone-aware and DST-correct. A lint rule bans magic time constants (`86400000` and friends) outside `time/`.
 
@@ -349,7 +349,7 @@ Shipped presets cover hour→year zoom levels; custom presets are config objects
 
 ## 6. `data/` — stores, transactions, changesets
 
-- **`ProjectData`** owns normalized stores (`tasks`, plus reserved stores for scheduling-plugin-owned data such as `dependencies`) with indexes (`byId`, `byParent`, `byPredecessor`, `bySuccessor` — the latter two populated only when a plugin uses them), the project timezone, and the generic resolve-hook binding (identity when unoccupied; §1). Fully headless (D4): constructible and usable in Node with no view.
+- **`ProjectData`** owns normalized stores (`entries`, plus reserved stores for scheduling-plugin-owned data such as `dependencies`) with indexes (`byId`, `byParent`, `byPredecessor`, `bySuccessor` — the latter two populated only when a plugin uses them), the project timezone, and the generic resolve-hook binding (identity when unoccupied; §1). Fully headless (D4): constructible and usable in Node with no view.
 - **Transactions**: `project.transaction(() => { ...mutations })` batches mutations, runs the resolve hook once, emits **one changeset**. Every mutation path — API and gesture — goes through a transaction. No exceptions.
 - **Changesets** are the universal delta (D7, principle 4):
 
@@ -371,11 +371,11 @@ interface ChangeSet {
 
 ## 7. `scheduling/` — pure engine, pluggable policy
 
-This section describes FreeGantt's **first-party default scheduling plugin** — the bars + dependencies engine bundled with the library (D3) — not a mandatory core layer (D4). It occupies the resolve hook (D4; §1) exclusively when installed; when nothing is installed, none of what follows runs. The hook's own contract (where per-task plugin data like the pin flag lives, how hot-path preview and commit-time resolution share one call) is separate, ongoing design work tracked in issue #12. The plugin's own public API and its re-spec against that hook are tracked in issue #14. What follows is still an accurate description of the engine's internals — propagation, cycle detection, the policy seam — just reframed as *this plugin's* internals rather than a core module's.
+This section describes FreeGantt's **first-party default scheduling plugin** — the bars + dependencies engine bundled with the library (D3) — not a mandatory core layer (D4). It occupies the resolve hook (D4; §1) exclusively when installed; when nothing is installed, none of what follows runs. The hook's own contract (where per-entry plugin data like the pin flag lives, how hot-path preview and commit-time resolution share one call) is separate, ongoing design work tracked in issue #12. The plugin's own public API and its re-spec against that hook are tracked in issue #14. What follows is still an accurate description of the engine's internals — propagation, cycle detection, the policy seam — just reframed as *this plugin's* internals rather than a core module's.
 
 ```mermaid
 flowchart LR
-  REQ["ScheduleRequest<br/>tasks · dependencies ·<br/><b>proposed field values</b> · policy"]
+  REQ["ScheduleRequest<br/>entries · dependencies ·<br/><b>proposed field values</b> · policy"]
   ENG["propagation engine<br/>worklist loop over the<br/>dependency graph — never recursion"]
   POL{{"SchedulingPolicy<br/>pluggable decisions"}}
   RES["ScheduleResult<br/>patch (from/to) + diagnostics"]
@@ -390,20 +390,20 @@ flowchart LR
 
 ```ts
 interface ScheduleRequest {
-  tasks: readonly Task[];
+  entries: readonly Entry[];
   dependencies: readonly Dependency[];
   /**
-   * WHAT THE USER JUST SET, per field — not merely which tasks are dirty.
+   * WHAT THE USER JUST SET, per field — not merely which entries are dirty.
    * A proposed start with no proposed end means the bar moved; proposing
    * start and end means it was resized. Empty ⇒ full recompute.
    */
-  proposed: ReadonlyMap<TaskId, Partial<TaskEditableFields>>;
+  proposed: ReadonlyMap<EntryId, Partial<EntryEditableFields>>;
   policy: SchedulingPolicy;
   options: ScheduleOptions;
 }
 
 interface ScheduleResult {
-  patch: Array<{ id: TaskId; field: string; from: unknown; to: unknown }>;
+  patch: Array<{ id: EntryId; field: string; from: unknown; to: unknown }>;
   diagnostics: Diagnostic[];          // conflicts, cycles — surfaced, never silently fixed
 }
 
@@ -414,19 +414,19 @@ function schedule(request: ScheduleRequest): ScheduleResult;   // pure, determin
 
 - Propagation over the dependency graph in topological order via an **explicit worklist loop, never recursion** — long chains blow the JS stack otherwise; a 5,000-link chain fixture forecloses it permanently. Module-header invariant: *this file contains no recursive call; chain depth is unbounded by design.*
 - Lag applied per dependency `type`; negative lag (overlap) is legal.
-- **Cycle detection names the members**: if the worklist drains with tasks unvisited, those tasks are the cycle — `{ code: 'cycle', taskIds }`, never "a cycle exists somewhere."
-- A task pinned in the plugin's own per-task storage (the pin flag is no longer `Task.scheduling` — that field is gone, see §2.2; where it lives instead is part of the #12 contract) is never moved; the engine reports what it *would* have done as a diagnostic.
-- Parent/group rollup (summary spans from children) is a separate bottom-up pass after propagation settles — pass ordering, not mutual recursion. A dependency attached to a `group` task resolves against its rolled-up span by default.
+- **Cycle detection names the members**: if the worklist drains with entries unvisited, those entries are the cycle — `{ code: 'cycle', entryIds }`, never "a cycle exists somewhere."
+- An entry pinned in the plugin's own per-entry storage (the pin flag is no longer `Entry.scheduling` — that field is gone, see §2.2; where it lives instead is part of the #12 contract) is never moved; the engine reports what it *would* have done as a diagnostic.
+- Parent/group rollup (summary spans from children) is a separate bottom-up pass after propagation settles — pass ordering, not mutual recursion. A dependency attached to a `group` entry resolves against its rolled-up span by default.
 
-**Kind semantics live in the policy, not the engine.** The engine knows graphs and lag; what a `group` or `milestone` (or host-defined kind) *means* for scheduling is a policy decision. The default policy: `group` spans derive from children (direct edits to a derived span are reported as diagnostics, not applied); `milestone` keeps `start === end`; unknown kinds behave as `'task'`. A host methodology that wants directly schedulable groups ships a policy — the engine and contract do not change.
+**Kind semantics live in the policy, not the engine.** The engine knows graphs and lag; what a `group` or `milestone` (or host-defined kind) *means* for scheduling is a policy decision. The default policy: `group` spans derive from children (direct edits to a derived span are reported as diagnostics, not applied); `milestone` keeps `start === end`; unknown kinds behave as `'span'`. A host methodology that wants directly schedulable groups ships a policy — the engine and contract do not change.
 
 **Policy (pluggable — where methodologies differ):**
 
 ```ts
 interface SchedulingPolicy {
-  /** Given what the user proposed on a task, decide which fields move.
+  /** Given what the user proposed on an entry, decide which fields move.
    *  MUST NOT move a proposed field — never overwrite user input (assert in dev). */
-  resolveEdit(proposed: ReadonlySet<Field>, task: Task): EditResolution;
+  resolveEdit(proposed: ReadonlySet<Field>, entry: Entry): EditResolution;
   /** Precedence when rules conflict (pin vs. dependency vs. future constraint). */
   precedence: readonly RuleKind[];
   /** Optional analyses (e.g., slack/critical computation) — later slices. */
@@ -458,7 +458,7 @@ Backends: `dom` (default — absolutely-positioned virtualized rows, SVG for lin
 
 **DOM rendering approach:** bars and rows are plain positioned elements — CSS-themeable (custom properties + parts), accessible (focusable bars, grid semantics — D11), framework-friendly. Updates go through a small keyed reconciler that diffs a plain-object element description against the config last applied to that same element (stored on the node) — no shadow tree, no per-frame vDOM allocation, because the changeset already says what changed. Hard scope boundary in the module header: attribute/class/style/text diffing and keyed child recycling only; anything needing lifecycle hooks or a component model means we are rebuilding a framework and should adopt one instead.
 
-**Text is text.** Renderer output defaults to `textContent`; raw HTML requires an explicit opt-in flag. Task names come from databases; the default must not be an XSS hole.
+**Text is text.** Renderer output defaults to `textContent`; raw HTML requires an explicit opt-in flag. Entry names come from databases; the default must not be an XSS hole.
 
 ### 8.2 Viewport & multi-Gantt sync (D9)
 
@@ -467,7 +467,7 @@ flowchart TB
   TS[("TimeScale<br/>shared x")]
   SM[("ScrollModel<br/>x + y observables")]
 
-  subgraph ganttA["Gantt A — tasks"]
+  subgraph ganttA["Gantt A — entries"]
     VA["view binds to scale + scroll"]
   end
   subgraph ganttB["Gantt B — workforce (future)"]
@@ -504,7 +504,7 @@ Small, single-purpose controllers — `Drag`, `Resize`, `LinkCreate`, `Select`, 
 - Gesture lifecycle: `pointerdown → draft → (preview via hot path) → before* event (cancelable, may be async) → one transaction → after event`.
 - Escape cancels; pointer capture always; touch works.
 - Keyboard is a first-class controller, not an afterthought: arrow-key nudge by the preset's snap, full gesture parity (D11).
-- **Capabilities gate gestures and affordances from one resolution.** Before arming, every controller asks the Gantt's capability resolver — `canMove(task)`, `canResize(task)`, `canLink(task)`, … — built from the `interactions` config (`02` §4.1) over per-kind defaults (e.g. a `group` with a derived span doesn't resize). The **same** resolution drives visual affordances (resize handles, link ports, cursors), so nothing is shown that can't be done and nothing hidden can be triggered — pointer or keyboard (invariant I14). `before*` events remain the *contextual* veto (this drop, this target, this moment); capabilities are the *static* per-task answer.
+- **Capabilities gate gestures and affordances from one resolution.** Before arming, every controller asks the Gantt's capability resolver — `canMove(entry)`, `canResize(entry)`, `canLink(entry)`, … — built from the `interactions` config (`02` §4.1) over per-kind defaults (e.g. a `group` with a derived span doesn't resize). The **same** resolution drives visual affordances (resize handles, link ports, cursors), so nothing is shown that can't be done and nothing hidden can be triggered — pointer or keyboard (invariant I14). `before*` events remain the *contextual* veto (this drop, this target, this moment); capabilities are the *static* per-entry answer.
 
 Controllers talk to `data/` only through drafts and transactions, and to the screen only through `InteractionState` — they import neither `render/` internals nor `scheduling/`.
 

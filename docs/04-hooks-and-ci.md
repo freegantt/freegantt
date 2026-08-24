@@ -85,9 +85,11 @@ Enabled by `git config core.hooksPath .githooks`, set by a `prepare` script so i
 | Hook | Runs | Rationale |
 |---|---|---|
 | `pre-commit` | `format` (auto-fix) on all staged files + `lint` on staged `*.ts` + `vendor-names` | Fast (<5s), catches the trivia; auto-fixes formatting instead of blocking on something `pnpm verify` would just fix anyway |
-| `pre-push` | `pnpm verify` | The full gate before it becomes anyone else's problem |
+| `pre-push` | `pnpm verify` | The full gate before it becomes anyone else's problem — and, while CI is dispatch-only, the *only* gate |
 
-`--no-verify` exists and is not fought: CI is the authority. Hooks buy latency, not enforcement.
+`--no-verify` exists and is not fought. But the old rationale for that ("CI is the authority; hooks buy latency, not enforcement") does not currently hold: `.github/workflows/ci.yml` is `workflow_dispatch:` only — its `push`/`pull_request` triggers are commented out — so no check runs on the server unless a human clicks the button. Until those triggers come back, `pre-push` *is* the enforcement, and skipping it is a decision rather than a shortcut.
+
+So `pnpm verify` is kept at **CI parity**: it runs every job `ci.yml` defines, in the same order, `build` included. That parity is itself guarded — `test/guards/verify-covers-ci.test.ts` (§4) asserts every `pnpm <script>` any CI job runs also appears in `verify`, and that `pre-push` invokes `verify`. Adding a job without extending `verify` fails the guards suite, so the hook cannot silently drift into reporting green over a check it no longer performs.
 
 ---
 
@@ -102,6 +104,7 @@ The rule that makes this system trustworthy rather than decorative: **a guard wi
 | dependency-cruiser graph | `scripts/guard-red-test.mjs` (`03-boundaries-and-config.md` §1.3) | the graph config is loosened or the tool is misconfigured |
 | Purity of the pure layers | `test/setup/assert-no-dom.ts` throwing | a pure module reaches for the DOM |
 | The matrix itself | `test/guards/matrix-coverage.test.ts` — parses `docs/01-invariant-guard-matrix.md`, asserts every I1–I14 row names a CI job that exists in the workflow file, and that no row's status is blank | an invariant loses its job, or a job is renamed |
+| Hook/CI parity | `test/guards/verify-covers-ci.test.ts` — asserts every `pnpm <script>` a CI job runs also appears in the `verify` script, and that `.githooks/pre-push` invokes `verify` | a CI job is added that the local gate does not run, so `pre-push` reports green over a check it no longer performs |
 
 That last one deserves emphasis: it closes the loop `plans/04` §4 opens ("an invariant without a job is a TODO, tracked in the table itself"). The table stops being prose and becomes a checked artifact.
 

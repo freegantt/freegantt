@@ -26,7 +26,7 @@ const ALLOWED = {
   scheduling: ['time', 'model'],
   data: ['scheduling', 'model'],
   render: ['layout'],
-  // model: Task/Dependency types flow through view as type-only params (same rationale as api, above).
+  // model: Entry/Dependency types flow through view as type-only params (same rationale as api, above).
   view: ['render', 'layout', 'data', 'model'],
   interaction: ['view', 'data'],
   extensions: ['view', 'interaction'],
@@ -60,8 +60,17 @@ export default tseslint.config(
   {
     // .agents/skills/** is vendored third-party skill content (installed via skills-lock.json),
     // not project source — it isn't ours to lint or reformat.
+    //
+    // dist-harness/** is `pnpm build`'s output (vite.config.ts). Build output is not source: linting
+    // minified bundles fails on `no-undef`/`no-unused-expressions`, and since `pnpm verify` now runs
+    // `build`, a second `verify` would otherwise lint the first one's output. `.gitignore` and
+    // `.prettierignore` already exclude it; this closes the same gap for lint.
+    //
+    // NOTE: these are ignore paths for non-source artifacts. No lint rule, layer allow-list, or
+    // severity is relaxed by this entry — the I1/I10/I12 rule set below is unchanged.
     ignores: [
       'dist/**',
+      'dist-harness/**',
       'node_modules/**',
       'test/fixtures/violations/**',
       'eslint/rules/fixtures/**',
