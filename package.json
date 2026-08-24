@@ -31,7 +31,7 @@
     "disables": "node scripts/audit-disables.mjs",
     "gate": "node scripts/slice-gate.mjs",
     "dev": "vite",
-    "build": "vite build --config vite.lib.config.ts && vite build && node scripts/check-lib-build.mjs",
+    "build": "node scripts/build.mjs",
     "test:e2e": "playwright test",
     "verify": "pnpm format:check && pnpm typecheck && pnpm lint && pnpm boundaries && pnpm guards && pnpm test:node && pnpm test:dom && pnpm vendor-names && pnpm disables && pnpm build"
   },
