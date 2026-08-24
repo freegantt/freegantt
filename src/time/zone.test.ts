@@ -6,7 +6,7 @@ import { startOfDay, addDays, diffDays, toPlain, fromPlain } from './zone.js';
 const ZONE = 'America/New_York';
 
 describe('zone-aware date arithmetic', () => {
-  it('startOfDay floors to local midnight in the project zone', () => {
+  it('startOfDay floors to local midnight in the dataset zone', () => {
     const i = instant('2026-06-15T18:30:00Z'); // 14:30 EDT
     const plain = toPlain(ZONE, startOfDay(ZONE, i));
     expect(plain).toMatchObject({ year: 2026, month: 6, day: 15, hour: 0, minute: 0 });

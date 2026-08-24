@@ -1,5 +1,7 @@
 # The authored record is an Entry, not a Task
 
+> **Vocabulary note.** The text below is preserved as written and says `Project` throughout (`new Project({ tasks })`, `Project.tasks` → `Project.entries`). That wrapper was renamed to `Dataset` by [ADR 0004](./0004-the-authored-body-of-data-is-a-dataset-not-a-project.md) — read every `Project` here as `Dataset`.
+
 ADR 0002 moved scheduling out of the mandatory core and behind a plugin seam, but the *vocabulary* of the core stayed where it was: the one authored, DOM-free record every layer is built on was called `Task`, and its default `kind` literal was the string `'task'`. That word carries a methodology whether or not a scheduling plugin is installed — a `Task` is to-do work, it belongs to somebody, it gets done. We renamed the record to `Entry` and the default kind to `'span'`, so that nothing in the mandatory core names an assumption about what the data means.
 
 ## Why the name was actually costing us

@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { Gantt } from './gantt.js';
-import { Project } from './project.js';
+import { Dataset } from './dataset.js';
 import { TimeScaleModel } from './index.js';
 import { sampleEntries } from '../../fixtures/sample-project.js';
 
 describe('Gantt', () => {
   it('mounts fixture entries as bars in the host element', () => {
     const host = document.createElement('div');
-    const gantt = new Gantt({ host, project: new Project({ entries: sampleEntries, timeZone: 'UTC' }) });
+    const gantt = new Gantt({ host, dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }) });
     const bars = host.querySelectorAll('.fg-bar');
     expect(bars.length).toBe(sampleEntries.length);
     gantt.destroy();
@@ -18,11 +18,11 @@ describe('Gantt', () => {
     const hostB = document.createElement('div');
     const ganttA = new Gantt({
       host: hostA,
-      project: new Project({ entries: sampleEntries.slice(0, 5), timeZone: 'UTC' }),
+      dataset: new Dataset({ entries: sampleEntries.slice(0, 5), timeZone: 'UTC' }),
     });
     const ganttB = new Gantt({
       host: hostB,
-      project: new Project({ entries: sampleEntries.slice(0, 2), timeZone: 'UTC' }),
+      dataset: new Dataset({ entries: sampleEntries.slice(0, 2), timeZone: 'UTC' }),
     });
 
     expect(hostA.querySelectorAll('.fg-bar').length).toBe(5);
@@ -43,12 +43,12 @@ describe('Gantt', () => {
     const hostB = document.createElement('div');
     const ganttA = new Gantt({
       host: hostA,
-      project: new Project({ entries: sampleEntries.slice(0, 3), timeZone: 'UTC' }),
+      dataset: new Dataset({ entries: sampleEntries.slice(0, 3), timeZone: 'UTC' }),
       scale,
     });
     const ganttB = new Gantt({
       host: hostB,
-      project: new Project({ entries: sampleEntries.slice(0, 3), timeZone: 'UTC' }),
+      dataset: new Dataset({ entries: sampleEntries.slice(0, 3), timeZone: 'UTC' }),
       scale,
     });
 

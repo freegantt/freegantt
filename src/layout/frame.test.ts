@@ -104,7 +104,7 @@ describe('computeFrame', () => {
     expect(spy).toHaveBeenCalledWith(32);
   });
 
-  it('matches the golden snapshot for the fixture project', () => {
+  it('matches the golden snapshot for the fixture dataset', () => {
     const frame = computeFrame({
       entries: sampleEntries.slice(0, 3),
       scale,

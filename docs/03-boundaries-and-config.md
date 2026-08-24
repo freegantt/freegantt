@@ -106,9 +106,9 @@ From day one (`plans/04` §3.1), only `.` resolves:
 |---|---|
 | Internals unreachable | `test:node` resolution test: `import('freegantt/data')`, `freegantt/dist/data/index.js`, `freegantt/src/*` — each must reject. Run against a `pnpm pack`ed tarball installed into a temp dir, not against the source tree (only the packed artifact tells the truth) |
 | Public surface unchanged without notice | `api-extractor` report (`etc/freegantt.api.md`) committed; CI regenerates and fails on diff. The diff **is** the semver conversation (I11) |
-| Nothing unimplemented in the surface | `no-not-implemented` lint (B8) + a smoke test constructing `Project`/`Gantt` and invoking every zero-arg public method |
+| Nothing unimplemented in the surface | `no-not-implemented` lint (B8) + a smoke test constructing `Dataset`/`Gantt` and invoking every zero-arg public method |
 | Runtime deps stay at one | Package-shape test: `dependencies` deep-equals `{ 'alien-signals': <range> }`; `peerDependencies`/`optionalDependencies` absent; `bundledDependencies` absent |
-| Tree-shakeability | `size-limit` entry importing only `Project` must not pull in `interaction/` or `extensions/` (S6) |
+| Tree-shakeability | `size-limit` entry importing only `Dataset` must not pull in `interaction/` or `extensions/` (S6) |
 
 ---
 

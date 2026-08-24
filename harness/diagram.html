@@ -343,7 +343,7 @@
       />
       <text x="620" y="44" text-anchor="middle" class="box-name" font-size="17" fill="var(--ink)">api/</text>
       <text x="620" y="63" text-anchor="middle" class="box-sub" font-size="11.5" fill="var(--muted)">
-        Gantt, Project · 78 lines · the only public export surface, alongside model/ types
+        Gantt, Dataset · 78 lines · the only public export surface, alongside model/ types
       </text>
 
       <!-- boundary zones -->
@@ -717,7 +717,7 @@
       <svg
         viewBox="0 0 1240 620"
         role="img"
-        aria-label="Diagram of what crosses the model/ module boundary: model/ exports Entry, EntryKind, the EntryId/RowId/ItemId brands with their entryId/rowId/itemId helpers, and Instant/TimeSpan/Duration. time/ imports Instant, TimeSpan and Duration type-only. layout/ imports Entry, EntryKind and the id types, and also calls itemId() and rowId() at runtime. api/index.ts re-exports entryId, itemId and the same type list as model/'s public allow-list. view/ imports only the Entry type, through GanttShell's structural ProjectLike interface, not through api/. render/ imports nothing from model/ directly; it only sees ItemId and RowId as types, re-exported by layout/index.ts."
+        aria-label="Diagram of what crosses the model/ module boundary: model/ exports Entry, EntryKind, the EntryId/RowId/ItemId brands with their entryId/rowId/itemId helpers, and Instant/TimeSpan/Duration. time/ imports Instant, TimeSpan and Duration type-only. layout/ imports Entry, EntryKind and the id types, and also calls itemId() and rowId() at runtime. api/index.ts re-exports entryId, itemId and the same type list as model/'s public allow-list. view/ imports only the Entry type, through GanttShell's structural DatasetLike interface, not through api/. render/ imports nothing from model/ directly; it only sees ItemId and RowId as types, re-exported by layout/index.ts."
       >
         <defs>
           <marker
@@ -868,7 +868,7 @@
           Entry type only
         </text>
         <text x="1065" y="278" text-anchor="middle" class="box-sub" font-size="9.5" fill="var(--muted)">
-          via GanttShell's structural ProjectLike —
+          via GanttShell's structural DatasetLike —
         </text>
         <text x="1065" y="292" text-anchor="middle" class="box-sub" font-size="9.5" fill="var(--muted)">
           not an api/ import (view -&gt; api is not allowed)
@@ -931,9 +931,9 @@
         (<code>entryId</code>, <code>itemId</code>, <code>Entry</code>, <code>EntryKind</code>,
         <code>EntryId</code>, <code>ItemId</code>, <code>Instant</code>, <code>TimeSpan</code>,
         <code>Duration</code>) exists because otherwise a consumer would have no legal way to build the
-        <code>Entry[]</code> that <code>new Project({ entries })</code> requires (#24).
+        <code>Entry[]</code> that <code>new Dataset({ entries })</code> requires (#24).
         <code>view/</code> never imports <code>api/</code> — <code>GanttShell</code> takes a
-        structurally-compatible <code>ProjectLike</code> instead, so <code>view -&gt; api</code> stays a
+        structurally-compatible <code>DatasetLike</code> instead, so <code>view -&gt; api</code> stays a
         non-edge (#40).
       </figcaption>
     </figure>
@@ -953,7 +953,7 @@
       <svg
         viewBox="0 0 1240 560"
         role="img"
-        aria-label="Diagram of api/index.ts's public export surface split into three groups — classes Gantt and Project with their options types, model/ re-exports (entryId, itemId, Entry, EntryKind, EntryId, ItemId, Instant, TimeSpan, Duration), and time/ re-exports (dayPreset, hourPreset, weekPreset, monthPreset, yearPreset, instant, ViewPreset) plus TimeScaleModel and TimeScaleIntent surfaced from view/ — and below it the construction call chain: new Gantt constructs a GanttShell, which resolves or binds a TimeScaleModel, which drives render() calling computeFrame() in layout/, whose GeometryFrame is handed to the DOM render backend's sync() using the shared syncKeyed reconciler."
+        aria-label="Diagram of api/index.ts's public export surface split into three groups — classes Gantt and Dataset with their options types, model/ re-exports (entryId, itemId, Entry, EntryKind, EntryId, ItemId, Instant, TimeSpan, Duration), and time/ re-exports (dayPreset, hourPreset, weekPreset, monthPreset, yearPreset, instant, ViewPreset) plus TimeScaleModel and TimeScaleIntent surfaced from view/ — and below it the construction call chain: new Gantt constructs a GanttShell, which resolves or binds a TimeScaleModel, which drives render() calling computeFrame() in layout/, whose GeometryFrame is handed to the DOM render backend's sync() using the shared syncKeyed reconciler."
       >
         <defs>
           <marker
@@ -997,19 +997,19 @@
           stroke-width="1.5"
         />
         <text x="205" y="84" text-anchor="middle" class="box-name" font-size="13.5" fill="var(--ink)">
-          Gantt, Project
+          Gantt, Dataset
         </text>
         <text x="205" y="102" text-anchor="middle" class="box-sub" font-size="10" fill="var(--muted)">
-          GanttOptions { host, project, scale? }
+          GanttOptions { host, dataset, scale? }
         </text>
         <text x="205" y="118" text-anchor="middle" class="box-sub" font-size="10" fill="var(--muted)">
-          ProjectOptions { entries, timeZone }
+          DatasetOptions { entries, timeZone }
         </text>
         <text x="205" y="136" text-anchor="middle" class="box-sub" font-size="10" fill="var(--muted)">
           Gantt.destroy()
         </text>
         <text x="205" y="158" text-anchor="middle" class="box-sub" font-size="9.5" fill="var(--muted)">
-          gantt.ts (33) + project.ts (22)
+          gantt.ts (33) + dataset.ts (22)
         </text>
         <text x="205" y="174" text-anchor="middle" class="box-sub" font-size="9.5" fill="var(--muted)">
           + index.ts barrel (23) = 78 lines
@@ -1042,7 +1042,7 @@
           the only route to build the Entry[]
         </text>
         <text x="520" y="174" text-anchor="middle" class="box-sub" font-size="9.5" fill="var(--muted)">
-          a Project constructor requires (#24)
+          a Dataset constructor requires (#24)
         </text>
 
         <!-- time/view re-exports -->

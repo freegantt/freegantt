@@ -27,7 +27,7 @@ describe('TimeScaleModel', () => {
     expect(model.scale.timeZone).toBe('America/Chicago');
   });
 
-  it("fits the bound project's span into the measured viewport by default", () => {
+  it("fits the bound dataset's span into the measured viewport by default", () => {
     const model = new TimeScaleModel();
     model.bind({ timeZone: 'UTC', entries, viewportWidth: 800 }, noop);
 
@@ -35,7 +35,7 @@ describe('TimeScaleModel', () => {
     expect(model.scale.xForInstant(entries[1]!.end)).toBeCloseTo(800);
   });
 
-  it('spans every bound project, so one scale can carry two Gantt instances (D9)', () => {
+  it('spans every bound dataset, so one scale can carry two Gantt instances (D9)', () => {
     const model = new TimeScaleModel();
     model.bind({ timeZone: 'UTC', entries: [entries[0]!], viewportWidth: 800 }, noop);
     model.bind(
@@ -69,7 +69,7 @@ describe('TimeScaleModel', () => {
     expect(model.scale.range.end).toBe(instant('2026-09-03T00:00:00Z'));
   });
 
-  it('honours a pinned TimeSpan range instead of fitting the project', () => {
+  it('honours a pinned TimeSpan range instead of fitting the dataset', () => {
     const range = { start: instant('2026-01-01T00:00:00Z'), end: instant('2026-01-08T00:00:00Z') };
     const model = new TimeScaleModel({ range });
     model.bind({ timeZone: 'UTC', entries, viewportWidth: 700 }, noop);
@@ -89,7 +89,7 @@ describe('TimeScaleModel', () => {
     );
   });
 
-  it('resolves a zero-span or empty project through the preset rather than dividing by zero', () => {
+  it('resolves a zero-span or empty dataset through the preset rather than dividing by zero', () => {
     const empty = new TimeScaleModel();
     empty.bind({ timeZone: 'UTC', entries: [], viewportWidth: 800 }, noop);
     expect(empty.scale.widthForDuration({ value: 1, unit: 'd' }, instant(0))).toBeCloseTo(

@@ -5,7 +5,7 @@ Framework-free TypeScript Gantt library, library-first. The spec is `plans/00`�
 ## Hard rules
 
 **Vocabulary** (`CONTEXT.md` is the glossary; ADR 0003):
-- The authored record is an `Entry` — `EntryId`, `EntryKind`, `entryId()`, `Project.entries`, `beforeEntryMove`/`entryMove`, default kind `'span'`. `Entry` in the ledger sense: a dated line whose meaning the host supplies.
+- The authored record is an `Entry` — `EntryId`, `EntryKind`, `entryId()`, `Dataset.entries`, `beforeEntryMove`/`entryMove`, default kind `'span'`. `Entry` in the ledger sense: a dated line whose meaning the host supplies.
 - Core names what the data *is* (dated, kinded, spanning); the host owns what it is *for*. A shift roster, units sold per week, and machine uptime are as much the intended use as a project plan, so scheduling vocabulary — dependency, predecessor, lag, deadline, "the schedule" — stays inside the scheduling plugin (`plans/01` §7) and its own docs.
 
 **Layers** (`plans/01` §1 — enforced by dependency-cruiser):
@@ -17,7 +17,7 @@ Framework-free TypeScript Gantt library, library-first. The spec is `plans/00`�
 
 **Time** (`plans/01` §5):
 - Storage is half-open `[start, end)`; display is inclusive via one formatting helper — no inline `end - 1` arithmetic.
-- All zone-aware date arithmetic goes through `time/` in the project's IANA zone. (A *plain* time is a wall-clock reading with no zone attached — Temporal's term, and ours; see `CONTEXT.md`.)
+- All zone-aware date arithmetic goes through `time/` in the dataset's IANA zone. (A *plain* time is a wall-clock reading with no zone attached — Temporal's term, and ours; see `CONTEXT.md`.)
 - `time/` is the *only* place allowed to use `new Date()`/`Date.now()`, magic time constants (`86400000` etc.), or arithmetic on `Instant`. Everywhere else in `src/` these are forbidden — I10 lints this, scoped to `src/**`.
 
 **Data** (`plans/01` §6):
@@ -49,7 +49,7 @@ Framework-free TypeScript Gantt library, library-first. The spec is `plans/00`�
 **API** (`plans/02`):
 - Nothing in the public surface throws "not implemented". Every mutating interaction gets a cancelable `before*` event. Every config key is live-reconfigurable. Naming: greppable pairs (`beforeEntryMove`/`entryMove`), one name per concept. Names must be specific enough to disambiguate at a glance (Uncle Bob's naming rules) — a generic word covering more than one concept in the codebase is a bug, not a style nit. Cautionary example (#7): "chart" meant both the public `Gantt` instance and an internal `view/` class; nothing said which, and it stalled a real review (#4). Fix was to retire "chart" entirely — the public concept is `Gantt`, the internal shell is `GanttShell` — not to pick a synonym and hope it reads clearly from context.
 - Vendor Gantt product names never appear in specs, docs, or code.
-- `harness/` is the library's first consumer, and sits outside the `src/**` lint scope by design — consumer code, not library code. That is not an exemption to spend: review `harness/main.ts` on every commit, changed or not, because code there that breaks a library rule or re-derives what the library already computes is an API gap even when no lint fires. Record it against the current slice and close it in `src/` — tidying the harness only hides the evidence. A clean `harness/main.ts` is the expected steady state, not a sign there is nothing to review: the last two gaps it exposed were `rowHeight: 32` restating `api/gantt.ts`'s default, and a hand-built `TimeScaleModel` standing in for `range: 'fitProject'`.
+- `harness/` is the library's first consumer, and sits outside the `src/**` lint scope by design — consumer code, not library code. That is not an exemption to spend: review `harness/main.ts` on every commit, changed or not, because code there that breaks a library rule or re-derives what the library already computes is an API gap even when no lint fires. Record it against the current slice and close it in `src/` — tidying the harness only hides the evidence. A clean `harness/main.ts` is the expected steady state, not a sign there is nothing to review: the last two gaps it exposed were `rowHeight: 32` restating `api/gantt.ts`'s default, and a hand-built `TimeScaleModel` standing in for `range: 'fitDataset'`.
 
 ## Workflow
 
