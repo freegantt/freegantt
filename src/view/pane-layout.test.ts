@@ -1,9 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import { PaneLayout } from './pane-layout.js';
 
+// getComputedStyle only resolves custom properties on elements connected to the document (jsdom).
+function el(): HTMLElement {
+  const node = document.createElement('div');
+  document.body.append(node);
+  return node;
+}
+
 describe('PaneLayout', () => {
   it('creates a grid pane, a splitter and a timeline pane inside the host', () => {
-    const host = document.createElement('div');
+    const host = el();
     const paneLayout = new PaneLayout({ host });
 
     expect(host.querySelector('.fg-grid-pane')).not.toBeNull();
@@ -17,7 +24,7 @@ describe('PaneLayout', () => {
   });
 
   it('the grid pane carries a header spacer sized from --fg-header-height', () => {
-    const host = document.createElement('div');
+    const host = el();
     host.style.setProperty('--fg-header-height', '30px');
     const paneLayout = new PaneLayout({ host });
 
@@ -28,20 +35,20 @@ describe('PaneLayout', () => {
   });
 
   it('the default grid width comes from --fg-grid-pane-width and falls back to 160', () => {
-    const withToken = document.createElement('div');
+    const withToken = el();
     withToken.style.setProperty('--fg-grid-pane-width', '240px');
     const paneLayoutA = new PaneLayout({ host: withToken });
     expect(paneLayoutA.gridWidth).toBe(240);
     paneLayoutA.destroy();
 
-    const withoutToken = document.createElement('div');
+    const withoutToken = el();
     const paneLayoutB = new PaneLayout({ host: withoutToken });
     expect(paneLayoutB.gridWidth).toBe(160);
     paneLayoutB.destroy();
   });
 
   it('a constructor gridWidth option overrides the CSS property', () => {
-    const host = document.createElement('div');
+    const host = el();
     host.style.setProperty('--fg-grid-pane-width', '240px');
     const paneLayout = new PaneLayout({ host, gridWidth: 300 });
     expect(paneLayout.gridWidth).toBe(300);
@@ -49,7 +56,7 @@ describe('PaneLayout', () => {
   });
 
   it('setting gridWidth moves the boundary and remounts no element', () => {
-    const host = document.createElement('div');
+    const host = el();
     const paneLayout = new PaneLayout({ host });
     const gridPaneBefore = host.querySelector('.fg-grid-pane');
 
@@ -64,7 +71,7 @@ describe('PaneLayout', () => {
   });
 
   it('gridWidth never goes below minGridWidth', () => {
-    const host = document.createElement('div');
+    const host = el();
     const paneLayout = new PaneLayout({ host, gridWidth: 200, minGridWidth: 120 });
 
     paneLayout.gridWidth = 40;
@@ -74,7 +81,7 @@ describe('PaneLayout', () => {
   });
 
   it('measureTimelinePane() reports the timeline pane, not the host', () => {
-    const host = document.createElement('div');
+    const host = el();
     const paneLayout = new PaneLayout({ host });
 
     Object.defineProperty(paneLayout.panes.timeline, 'clientWidth', { value: 500, configurable: true });
@@ -87,7 +94,7 @@ describe('PaneLayout', () => {
   });
 
   it('destroy() clears the host', () => {
-    const host = document.createElement('div');
+    const host = el();
     const paneLayout = new PaneLayout({ host });
     paneLayout.destroy();
     expect(host.children.length).toBe(0);

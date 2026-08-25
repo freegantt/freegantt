@@ -474,14 +474,21 @@ The shipped `defaultPolicy` is deliberately minimal and neutral: dependencies pu
 ### 8.1 Backend contract
 
 ```ts
+interface RenderSurfaces<THost> {
+  grid: THost;      // the grid pane's row layer
+  timeline: THost;  // the timeline pane's content layer: header bands, bars, links, decorations
+}
+
 interface RenderBackend {
-  mount(host: HTMLElement): void;
+  mount(surfaces: RenderSurfaces<HTMLElement>): void;
   sync(frame: GeometryFrame): void;           // cold: structure + geometry
   applyState(state: InteractionState): void;  // hot: classes/transforms only
   hitTest(x: number, y: number): HitResult | null;
   destroy(): void;
 }
 ```
+
+`mount` takes two surfaces, not one host (S1.8, D-S1.8-1/D-S1.8-2): the grid pane's row layer and the timeline pane's content layer are two elements `view/pane-layout.ts` builds, not one host this backend reserves a gutter inside. `render/dom` puts rows in `grid` and header/bar/sizer layers in `timeline`, at `x = 0` — no gutter offset; the grid pane's own width is the gutter now. `render/null` takes the same signature and ignores both.
 
 Backends: `dom` (default — absolutely-positioned virtualized rows, SVG for link paths), `null` (tests, SSR of data, future export path). A dense canvas backend is a *possible future implementation* of this interface, built only if measurement demands it (D2).
 
@@ -528,7 +535,7 @@ flowchart TB
 
 ### 8.3 Split pane (D8)
 
-The Gantt shell owns: grid pane (columns over `frame.rows`) · splitter · timeline pane (header + bars + links + decorations). One scroll owner drives both panes' vertical position from the same row geometry (§4). The grid starts as a single label column (S1) and grows columns/editors in S6 without structural change.
+`GanttShell` composes the split; `view/pane-layout.ts`'s `PaneLayout` holds it (S1.8): grid pane (columns over `frame.rows`) · splitter · timeline pane (header + bars + links + decorations). The timeline pane is the single native scroller for both axes (D-D, D-S1.8-1) — the grid pane has no scrollbar of its own. Its row layer follows the timeline pane's scroll position by one `translateY(-frame.visible.y)` transform per frame instead of a second real scroller; both panes read `top` from the same `frame.rows`/`frame.bars`, so pixel identity between them (I9) is structural rather than a property either side maintains by hand. The grid starts as a single label column (S1) and grows columns/editors in S6 without structural change.
 
 ---
 

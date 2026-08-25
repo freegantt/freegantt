@@ -183,9 +183,13 @@ Every custom rule spec below is complete enough to implement without re-reading 
 
 ---
 
-### 3.10 `freegantt/no-flow-layout-rows` — syntactic · I9 · `PLANNED (S1)`
+### 3.10 `freegantt/no-flow-layout-rows` — syntactic · I9 · `AUTO-PARTIAL`
 
-**Flags:** in `src/view/grid/**` and `src/view/timeline/**` — reads of `offsetHeight`/`clientHeight`/`getBoundingClientRect` and any assignment to `style.height` that is not sourced from a `frame.rows[i].height` expression.
+**Flags:** in `src/view/**` and `src/render/dom/**` (S1.8, D-S1.8-8 — the issue's original scope, `src/view/grid/**`/`src/view/timeline/**`, never existed) — reads of `offsetHeight`/`clientHeight` and calls to `getBoundingClientRect()`.
+
+**Exempt:** `pane-layout.ts` and `pane-size-attachment.ts`, by filename. Both legitimately read `clientWidth`/`clientHeight` to measure the *pane's own box* (CONTEXT.md's "Pane size") — a different concept from *row* height. Banning that would break the synchronous first measurement `PaneLayout.measureTimelinePane()` needs.
+
+**Residue:** this rule does not catch an assignment to `style.height` that is not sourced from a `frame.rows[i].height` expression — too fragile to express syntactically, the same AUTO-PARTIAL shape as `no-time-to-pixel-math` (§3.9). Mitigated the same way: the layer graph makes a laundered value useless (only `layout/` legitimately owns row height), so the residue is small and review-visible.
 
 **Message:** `Both panes position rows absolutely from frame.rows. Neither measures nor computes a height. (plans/01 §4, I9)`
 

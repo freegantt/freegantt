@@ -61,3 +61,88 @@ describe('Gantt', () => {
     ganttB.destroy();
   });
 });
+
+describe('Gantt gridWidth and events (S1.8, plans/02 §6)', () => {
+  it('beforeGridWidthChange returning false vetoes the change: gridWidth stays put', () => {
+    const host = document.createElement('div');
+    const gantt = new Gantt({
+      host,
+      dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }),
+      gridWidth: 160,
+    });
+
+    gantt.on('beforeGridWidthChange', () => false);
+    gantt.gridWidth = 220;
+
+    expect(gantt.gridWidth).toBe(160);
+    const gridPane = host.querySelector<HTMLElement>('.fg-grid-pane')!;
+    expect(gridPane.style.width).toBe('160px');
+
+    gantt.destroy();
+  });
+
+  it('a non-vetoed change fires gridWidthChange exactly once with {from, to}', () => {
+    const host = document.createElement('div');
+    const gantt = new Gantt({
+      host,
+      dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }),
+      gridWidth: 160,
+    });
+
+    const seen: Array<{ from: number; to: number }> = [];
+    gantt.on('gridWidthChange', (payload) => {
+      seen.push(payload);
+    });
+    gantt.gridWidth = 220;
+
+    expect(seen).toEqual([{ from: 160, to: 220 }]);
+    expect(gantt.gridWidth).toBe(220);
+
+    gantt.destroy();
+  });
+
+  it('off stops a handler from being called', () => {
+    const host = document.createElement('div');
+    const gantt = new Gantt({
+      host,
+      dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }),
+      gridWidth: 160,
+    });
+
+    const seen: Array<{ from: number; to: number }> = [];
+    const handler = (payload: { from: number; to: number }): void => {
+      seen.push(payload);
+    };
+    gantt.on('gridWidthChange', handler);
+    gantt.off('gridWidthChange', handler);
+    gantt.gridWidth = 220;
+
+    expect(seen).toEqual([]);
+
+    gantt.destroy();
+  });
+
+  it('setting gantt.gridWidth directly fires the same before/after pair a drag would', () => {
+    const host = document.createElement('div');
+    const gantt = new Gantt({
+      host,
+      dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }),
+      gridWidth: 160,
+    });
+
+    const before: Array<{ from: number; to: number }> = [];
+    const after: Array<{ from: number; to: number }> = [];
+    gantt.on('beforeGridWidthChange', (payload) => {
+      before.push(payload);
+    });
+    gantt.on('gridWidthChange', (payload) => {
+      after.push(payload);
+    });
+    gantt.gridWidth = 300;
+
+    expect(before).toEqual([{ from: 160, to: 300 }]);
+    expect(after).toEqual([{ from: 160, to: 300 }]);
+
+    gantt.destroy();
+  });
+});
