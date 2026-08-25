@@ -1,6 +1,6 @@
 // layout/ is headless geometry — no DOM, no drawing calls (plans/01 §4). DOM-free by construction.
 
-import type { RowId, ItemId, EntryId, EntryKind, Entry } from '../model/index.js';
+import type { RowId, ItemId, EntryId, EntryKind, Entry, Rect, TimeUnit } from '../model/index.js';
 import { itemId, rowId } from '../model/index.js';
 import type { TimeScale, ViewPreset } from '../time/index.js';
 import { PrefixSumHeightIndex } from './row-height-index.js';
@@ -73,22 +73,43 @@ export type FrameDecoration = TodayLine | RangeBand | RowStripe;
 /** One header tick, positioned and labelled — the render seam's only route for header state (#19). */
 export interface FrameHeaderTick {
   x: number;
+  /** To the next boundary at this band's step — what a band cell is drawn with (D-S1.7-4). */
+  width: number;
   label: string;
 }
 
-export interface FrameHeader {
+/** One row of the header, emitted per `preset.headers` entry, coarsest first (D-S1.7-6). */
+export interface FrameHeaderBand {
+  unit: TimeUnit;
+  increment: number;
   ticks: readonly FrameHeaderTick[];
 }
 
+export interface FrameHeader {
+  bands: readonly FrameHeaderBand[];
+}
+
+/** Live-reconfigurable culling buffer (plans/02 §1.1) — vertical in whole rows (culls through the
+ * height index, and must keep doing so when S5 makes row heights vary); horizontal in px (no rows to
+ * count). Default `{ verticalRows: 2, horizontalPx: 128 }`. */
+export interface Overscan {
+  verticalRows?: number;
+  horizontalPx?: number;
+}
+
+const DEFAULT_OVERSCAN: Required<Overscan> = { verticalRows: 2, horizontalPx: 128 };
+
 export interface GeometryFrame {
   revision: number;
-  viewport: { x: number; y: number; width: number; height: number };
+  /** The culled region, in timeline-content coordinates (conventions §1, D-S1.7-3). Was `viewport`. */
+  visible: Rect;
   header: FrameHeader;
   /** Only rows in the vertical window; `top` in absolute content coordinates. */
   rows: FrameRow[];
+  /** Always the full extent, never the window's. */
   contentHeight: number;
   /** Full horizontal extent of the bound `TimeScale`'s range, in px — what `ScrollModel` binds as
-   * its content width (S1.5 README §3.2). */
+   * its content width (S1.5 README §3.2). Always the full extent, never the window's. */
   contentWidth: number;
   bars: FrameBar[];
   links: readonly FrameLink[];
@@ -100,9 +121,11 @@ export interface LayoutInput {
   scale: TimeScale;
   /** Governs header ticks — the same preset the bound TimeScaleModel resolved (plans/01 §5.1). */
   preset: ViewPreset;
-  /** The vertical window rows are culled against; `x`/`width` describe the horizontal viewport a
-   * consumer measured (plans/01 §4) — not fabricated, unlike the pre-#20 `{x:0,y:0,width:0}`. */
-  viewport: { x: number; y: number; width: number; height: number };
+  /** The culling window, in timeline-content coordinates — not fabricated, unlike the pre-#20
+   * `{x:0,y:0,width:0}`. Was `viewport`. */
+  visible: Rect;
+  /** Default `{ verticalRows: 2, horizontalPx: 128 }`. Live — see `Viewport.overscan`. */
+  overscan?: Overscan;
   rowHeight: number;
   revision: number;
   /** Row-top index to read from, and to size the culling window's start against `indexAtY` (#47).
@@ -117,30 +140,52 @@ export interface LayoutInput {
 
 /** S0/S1 scope: flat row-per-entry, one bar per entry, fixed row height (plans/03 S0-S1). */
 export function computeFrame(input: LayoutInput): GeometryFrame {
-  const { entries, scale, preset, viewport, rowHeight, revision } = input;
+  const { entries, scale, preset, visible, rowHeight, revision } = input;
+  const verticalRows = input.overscan?.verticalRows ?? DEFAULT_OVERSCAN.verticalRows;
+  const horizontalPx = input.overscan?.horizontalPx ?? DEFAULT_OVERSCAN.horizontalPx;
 
   const heights = input.heights ?? new PrefixSumHeightIndex(entries.length, () => rowHeight);
 
   const rows: FrameRow[] = [];
   const bars: FrameBar[] = [];
-  const windowTop = viewport.y;
-  const windowBottom = viewport.height > 0 ? viewport.y + viewport.height : Infinity;
+  // A zero height disables vertical culling entirely (conventions §1, D-B) — not just an infinite
+  // bottom with the top still taken from `visible.y`, which would silently drop rows above it.
+  const cullVertically = visible.height > 0;
+  const windowTop = cullVertically ? visible.y : 0;
+  const windowBottom = cullVertically ? visible.y + visible.height : Infinity;
+
+  // Horizontal culling: a zero width disables it — everything renders (matches the shipped
+  // `viewport.height > 0 ? … : Infinity` rule for the vertical axis; conventions §1, D-B).
+  const cullHorizontally = visible.width > 0;
+  const hLeft = visible.x - horizontalPx;
+  const hRight = visible.x + visible.width + horizontalPx;
+  function intersectsHorizontally(x: number, width: number): boolean {
+    return !cullHorizontally || (x <= hRight && x + width >= hLeft);
+  }
 
   // Bound the scan with indexAtY instead of walking every entry from 0 (#47): start at the row that
-  // actually contains windowTop, then stop as soon as a row's top clears windowBottom rather than
-  // testing every remaining entry's bounds inline.
-  const startIndex = entries.length > 0 ? heights.indexAtY(windowTop) : 0;
+  // actually contains windowTop, expanded by verticalRows in INDEX space (#20's index-space fix) so
+  // the buffer stays correct once S5 makes row heights vary. Rows stay vertical-only (D-B): a row
+  // whose bar is off-screen horizontally is still emitted — the grid pane needs its label.
+  const baseStart = entries.length > 0 ? heights.indexAtY(windowTop) : 0;
+  const startIndex = Math.max(0, baseStart - verticalRows);
+  // Counts rows already emitted past windowBottom; stops once verticalRows of them have gone by, so
+  // verticalRows: 0 reduces to the pre-overscan "stop at the first row past the bottom" rule exactly.
+  let overflowCount = 0;
   for (let index = startIndex; index < entries.length; index++) {
     const entry = entries[index]!;
     const top = heights.topAt(index);
-    if (top >= windowBottom) break;
-    if (top + rowHeight <= windowTop) continue;
+    if (top >= windowBottom) {
+      if (overflowCount >= verticalRows) break;
+      overflowCount++;
+    }
 
     const id = rowId(`row:${entry.id}`);
     rows.push({ id, index, top, height: rowHeight, laneCount: 1, label: entry.name });
 
     const x = scale.xForInstant(entry.start);
     const width = Math.max(0, scale.xForInstant(entry.end) - x);
+    if (!intersectsHorizontally(x, width)) continue;
     bars.push({
       id: itemId(entry.id),
       entryId: entry.id,
@@ -156,21 +201,27 @@ export function computeFrame(input: LayoutInput): GeometryFrame {
     });
   }
 
-  const format = preset.headers[0]?.format;
-  const ticks: FrameHeaderTick[] = scale
-    .ticks({ unit: preset.tickUnit, increment: preset.tickIncrement }, { x: 0, width: scale.contentWidth })
-    .map((tick) => ({
+  const horizontalSpan = cullHorizontally
+    ? { x: hLeft, width: hRight - hLeft }
+    : { x: 0, width: scale.contentWidth };
+
+  const bands: FrameHeaderBand[] = preset.headers.map((header) => ({
+    unit: header.unit,
+    increment: header.increment,
+    ticks: scale.ticks({ unit: header.unit, increment: header.increment }, horizontalSpan).map((tick) => ({
       x: tick.x,
-      label: format ? format(tick.instant, scale.timeZone) : '',
-    }));
+      width: tick.width,
+      label: header.format(tick.instant, scale.timeZone),
+    })),
+  }));
 
   return {
     revision,
-    viewport,
-    header: { ticks },
+    visible,
+    header: { bands },
     rows,
     contentHeight: heights.totalHeight,
-    contentWidth: Math.max(0, scale.xForInstant(scale.range.end) - scale.xForInstant(scale.range.start)),
+    contentWidth: scale.contentWidth,
     bars,
     links: [],
     decorations: [],

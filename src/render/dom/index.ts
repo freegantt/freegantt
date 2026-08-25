@@ -12,7 +12,7 @@ import type {
 import type { RenderBackend, InteractionState, HitResult } from '../backend.js';
 import { syncKeyed } from './sync-keyed.js';
 
-type TickGeom = Pick<FrameHeaderTick, 'x' | 'label'>;
+type TickGeom = Pick<FrameHeaderTick, 'x' | 'width' | 'label'>;
 type RowGeom = Pick<FrameRow, 'top' | 'height' | 'label'>;
 type BarGeom = Pick<FrameBar, 'kind' | 'label' | 'x' | 'y' | 'width' | 'height'>;
 
@@ -45,8 +45,11 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
   const barNodes = new Map<ItemId, HTMLElement>();
   const barGeom = new Map<ItemId, BarGeom>();
 
-  function syncHeader(ticks: GeometryFrame['header']['ticks']): void {
+  // Single-band flattening (D-S1.7-6): today every shipped preset has exactly one header, so this
+  // reads bands[0] and renders unchanged, byte-identical output. N-band rendering is Phase 6.
+  function syncHeader(bands: GeometryFrame['header']['bands']): void {
     if (!headerLayer) return;
+    const ticks: readonly FrameHeaderTick[] = bands[0]?.ticks ?? [];
     syncKeyed(headerLayer, ticks, tickNodes, tickGeom, {
       key: (_tick, i) => i,
       create: () => {
@@ -55,9 +58,10 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
         node.style.position = 'absolute';
         return node;
       },
-      toGeom: (tick) => ({ x: tick.x, label: tick.label }),
+      toGeom: (tick) => ({ x: tick.x, width: tick.width, label: tick.label }),
       patch: (node, geom) => {
         node.style.transform = `translateX(${geom.x}px)`;
+        node.style.width = `${geom.width}px`;
         node.textContent = geom.label;
       },
     });
@@ -148,7 +152,7 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
       host.append(headerLayer, rowLayer, barLayer, contentSizer);
     },
     sync(frame: GeometryFrame) {
-      syncHeader(frame.header.ticks);
+      syncHeader(frame.header.bands);
       syncRows(frame.rows);
       syncBars(frame.bars);
       if (contentSizer) {

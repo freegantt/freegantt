@@ -80,12 +80,12 @@ Nine commits. Each ends green on `pnpm verify`. Guardrails and types land before
 - [x] Tests per §6, including the DST case where `Tick.width` sums to the range
 
 ### Phase 4 — `layout/frame.ts` (S1.7 §3.4, D-B)
-- [ ] `LayoutInput.viewport` / `GeometryFrame.viewport` → `visible: Rect`; add `Overscan` (`{ verticalRows?, horizontalPx? }`, default `{ 2, 128 }`)
-- [ ] `FrameHeaderBand`, `FrameHeaderTick.width`, `FrameHeader.bands` — one band per `preset.headers` entry, coarsest first
-- [ ] Vertical culling expanded in **index** space by `verticalRows`; horizontal culling of bars and band ticks by `horizontalPx`; **rows stay vertical-only**
-- [ ] A zero dimension disables that axis' culling; `contentWidth`/`contentHeight` stay the full extent
-- [ ] `contentWidth` read from `scale`, not re-derived from two `xForInstant` calls (`frame.ts:171`)
-- [ ] Tests per §6 **including I8 under scroll** — the id set for the overlapping region is identical before and after a window move
+- [x] `LayoutInput.viewport` / `GeometryFrame.viewport` → `visible: Rect`; add `Overscan` (`{ verticalRows?, horizontalPx? }`, default `{ 2, 128 }`)
+- [x] `FrameHeaderBand`, `FrameHeaderTick.width`, `FrameHeader.bands` — one band per `preset.headers` entry, coarsest first
+- [x] Vertical culling expanded in **index** space by `verticalRows`; horizontal culling of bars and band ticks by `horizontalPx`; **rows stay vertical-only**
+- [x] A zero dimension disables that axis' culling; `contentWidth`/`contentHeight` stay the full extent
+- [x] `contentWidth` read from `scale`, not re-derived from two `xForInstant` calls (`frame.ts:171`)
+- [x] Tests per §6 **including I8 under scroll** — the id set for the overlapping region is identical before and after a window move
 
 ### Phase 5 — `Viewport`, the fan-in (S1.7 §3.5, D-S1.7-1/2)
 - [ ] `src/layout/viewport/viewport.ts` — `ViewportOptions`, `ViewportHandle { unbind, setPaneSize, setContentSize }`, `bind(dataset, onChange)`, `timeScale`, `preset`, `overscan` (live), `visible`, `batch(run)`

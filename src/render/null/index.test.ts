@@ -24,7 +24,7 @@ describe('null render backend', () => {
       entries: sampleEntries,
       scale,
       preset,
-      viewport: { x: 0, y: 0, width: 0, height: 0 },
+      visible: { x: 0, y: 0, width: 0, height: 0 },
       rowHeight: 32,
       revision: 0,
     });
