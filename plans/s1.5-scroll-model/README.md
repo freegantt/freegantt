@@ -206,7 +206,7 @@ import type { ScrollModel } from '../layout/viewport/scroll-model.js';
 export interface ScrollAttachment {
   /** Post-render extents (`frame.contentWidth`/`contentHeight`). No-ops when unchanged. */
   setContent(size: Size): void;
-  /** Measured pane box — pushed by the size attachment (#8). */
+  /** Measured pane box — pushed by the pane-size attachment (#8). */
   setPane(size: Size): void;
   detach(): void;
 }
@@ -289,7 +289,7 @@ export interface GanttOptions {
 |---|---|
 | Host computes `rowIndex × rowHeight` to jump to an entry | `gantt.reveal(entryId)` (§4). `panTo(px)` is the primitive underneath. |
 | Host must call `setContent` after every render or rows go silently unreachable | Not public. Pushed by the render cycle inside `view/`. |
-| Host must call `setPane` on resize | Not public. Pushed by the size attachment's `ResizeObserver` (#8). |
+| Host must call `setPane` on resize | Not public. Pushed by the pane-size attachment's `ResizeObserver` (#8). |
 | Host calls `model.bind()` and leaks a binding nothing unbinds | `@internal`, absent from `plans/02`, and the only call sites in the repo are in `view/`. |
 | `batch(run)` throws, hold flag sticks, every later write is silently swallowed | Flush in `finally`. Tested. |
 | Two synced native scrollers drift a frame apart | There is only one native scroller (D-D). The grid pane follows by transform. |
@@ -309,7 +309,7 @@ export interface GanttOptions {
 ## 8. Spec edits implied
 
 - `plans/01` §1.1 + `CLAUDE.md` — `model/geometry.ts` named as the home of `Point`/`Size`/`PixelSpan`/`Rect`.
-- `plans/01` §8.2 — `ScrollModel` follows the same bind/notify contract as `TimeScaleModel`, resolving `{position, max}`; the one notification contract (D-S1.5-4) stated once for both models; `batch()`; `view/scroll-attachment.ts` as the DOM-facing counterpart (alongside `view/size-attachment.ts`, #8).
+- `plans/01` §8.2 — `ScrollModel` follows the same bind/notify contract as `TimeScaleModel`, resolving `{position, max}`; the one notification contract (D-S1.5-4) stated once for both models; `batch()`; `view/scroll-attachment.ts` as the DOM-facing counterpart (alongside `view/pane-size-attachment.ts`, #8).
 - `plans/02` §5 — `scroll.xOnly()` drops from the example; one sentence on why `scale` is a class and `scroll` will not get a `Source` interface.
 - `plans/00` D9 — "x, y, or both" becomes "both; partial views deferred until a caller needs one" (D-S1.5-3).
 - `CONTEXT.md` — **Pan** (move the shared viewport, at gesture and model layer) vs. **scroll** (an element's native offset), with the I12 reason; **Attachment**; **Pane size**; **Batch** (vs. Transaction); **Reveal**; the `ScrollModel` entry gains "resolves position *and* the loosest max; each chart clamps locally"; `Scale binding`'s "measured viewport width" → "measured pane width".

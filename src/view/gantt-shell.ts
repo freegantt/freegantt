@@ -21,7 +21,7 @@ export interface DatasetLike {
  * not a constructor option (#39). Read once at construction, not per render() (#49): getComputedStyle
  * is a synchronous style read that can force a style recalculation, and `--fg-row-height` essentially
  * never changes between renders in normal use. Re-read gets an explicit invalidation path alongside
- * the resize-binding work in #8, rather than an unconditional read on every render() in the meantime. */
+ * the pane-size attachment work in #8, rather than an unconditional read on every render() in the meantime. */
 const ROW_HEIGHT_PROPERTY = '--fg-row-height';
 const DEFAULT_ROW_HEIGHT = 32;
 
