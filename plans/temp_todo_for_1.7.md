@@ -65,11 +65,11 @@ Nine commits. Each ends green on `pnpm verify`. Guardrails and types land before
 - [x] T3 — `docs/02` §5 moves 3.2 from "active S0" to S1; `docs/01` §I12 names `no-scroll-outside-scroll-model`
 
 ### Phase 2 — Types and errors (S1.7 §3.1, §3.2)
-- [ ] `src/model/errors.ts` — `FreeGanttError` (with `code`), `UnsupportedUnitError`; re-export from `src/model/index.ts`
-- [ ] Widen `model/`'s stated runtime carve-out in `CLAUDE.md` and `plans/01` §1.1 — "id/brand helpers **and the `FreeGanttError` base**" (D-S1.7-8)
-- [ ] Move `DatasetLike` (`src/view/gantt-shell.ts:15`) → `src/model/dataset.ts`, renamed **`Dataset`**; `api/dataset.ts`'s class gains `implements DatasetContract` against the aliased import
-- [ ] `ScaleBinding = Dataset & { readonly paneWidth: number }` — the S1.5 claim that could not ship then (§3.8 E)
-- [ ] `docs/adr/0004:22` — `DatasetLike`'s home and new name
+- [x] `src/model/errors.ts` — `FreeGanttError` (with `code`), `UnsupportedUnitError`; re-export from `src/model/index.ts`
+- [x] Widen `model/`'s stated runtime carve-out in `CLAUDE.md` and `plans/01` §1.1 — "id/brand helpers **and the `FreeGanttError` base**" (D-S1.7-8)
+- [x] Move `DatasetLike` (`src/view/gantt-shell.ts:15`) → `src/model/dataset.ts`, renamed **`Dataset`**; `api/dataset.ts`'s class gains `implements DatasetContract` against the aliased import
+- [x] `ScaleBinding = Dataset & { readonly paneWidth: number }` — the S1.5 claim that could not ship then (§3.8 E)
+- [x] `docs/adr/0004:22` — `DatasetLike`'s home and new name
 
 ### Phase 3 — `time/` (S1.7 §3.3)
 - [ ] `startOf(zone, i, unit)` as a `floor` column on the existing `STEPPERS`/`UNITS` registry — one list of supported units, #32's fix kept
