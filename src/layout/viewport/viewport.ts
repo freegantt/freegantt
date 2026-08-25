@@ -104,12 +104,12 @@ export class Viewport {
         this.#paneSize = size;
         this.#coalesced(() => {
           scaleHandle.setPaneWidth(size.width);
-          scrollHandle.setPane(size);
+          scrollHandle.setPaneSize(size);
         });
       },
       setContentSize: (size) => {
         this.#contentSize = size;
-        this.#coalesced(() => scrollHandle.setContent(size));
+        this.#coalesced(() => scrollHandle.setContentSize(size));
       },
     };
   }

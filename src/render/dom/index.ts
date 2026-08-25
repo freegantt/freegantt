@@ -3,6 +3,7 @@
 
 import type {
   FrameBar,
+  FrameHeaderBand,
   FrameHeaderTick,
   FrameRow,
   GeometryFrame,
@@ -15,6 +16,10 @@ import { syncKeyed } from './sync-keyed.js';
 type TickGeom = Pick<FrameHeaderTick, 'x' | 'width' | 'label'>;
 type RowGeom = Pick<FrameRow, 'top' | 'height' | 'label'>;
 type BarGeom = Pick<FrameBar, 'kind' | 'label' | 'x' | 'y' | 'width' | 'height'>;
+/** Bands carry no per-frame geometry of their own yet (height/stacking is S1.9/S1.10) — an always-
+ * equal geom means `syncKeyed` patches a band node once, at creation, and never again. */
+type BandGeom = Record<string, never>;
+const EMPTY_BAND_GEOM: BandGeom = {};
 
 /** CSS custom property that owns the row-label gutter width (plans/02 §4, level 1 of the
  * customization ladder — same ladder rung as `--fg-row-height`). Read once at mount, not per-sync:
@@ -38,33 +43,69 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
   let contentSizer: HTMLElement | undefined;
   let rowLabelWidth = 0;
 
-  const tickNodes = new Map<number, HTMLElement>();
-  const tickGeom = new Map<number, TickGeom>();
+  const bandNodes = new Map<number, HTMLElement>();
+  const bandGeom = new Map<number, BandGeom>();
+  // One tick node/geom cache per band index — a nested keyed list is still a keyed list (plans/01
+  // §8.1's reconciler scope: attr/class/style/text + keyed children, nothing more).
+  const bandTickNodes = new Map<number, Map<number, HTMLElement>>();
+  const bandTickGeom = new Map<number, Map<number, TickGeom>>();
   const rowNodes = new Map<RowId, HTMLElement>();
   const rowGeom = new Map<RowId, RowGeom>();
   const barNodes = new Map<ItemId, HTMLElement>();
   const barGeom = new Map<ItemId, BarGeom>();
 
-  // Single-band flattening (D-S1.7-6): today every shipped preset has exactly one header, so this
-  // reads bands[0] and renders unchanged, byte-identical output. N-band rendering is Phase 6.
-  function syncHeader(bands: GeometryFrame['header']['bands']): void {
+  const tickSpec = {
+    key: (_tick: FrameHeaderTick, i: number) => i,
+    create: (): HTMLElement => {
+      const node = document.createElement('div');
+      node.className = 'fg-tick';
+      node.style.position = 'absolute';
+      return node;
+    },
+    toGeom: (tick: FrameHeaderTick): TickGeom => ({ x: tick.x, width: tick.width, label: tick.label }),
+    patch: (node: HTMLElement, geom: TickGeom): void => {
+      node.style.transform = `translateX(${geom.x}px)`;
+      node.style.width = `${geom.width}px`;
+      node.textContent = geom.label;
+    },
+  };
+
+  // Bands keyed by index, coarsest first (D-S1.7-6); ticks keyed within a band. Today every shipped
+  // preset has exactly one header, so this renders byte-identical output to the pre-S1.7 single list.
+  function syncHeader(bands: readonly FrameHeaderBand[]): void {
     if (!headerLayer) return;
-    const ticks: readonly FrameHeaderTick[] = bands[0]?.ticks ?? [];
-    syncKeyed(headerLayer, ticks, tickNodes, tickGeom, {
-      key: (_tick, i) => i,
+    syncKeyed(headerLayer, bands, bandNodes, bandGeom, {
+      key: (_band, i) => i,
       create: () => {
         const node = document.createElement('div');
-        node.className = 'fg-tick';
-        node.style.position = 'absolute';
+        node.className = 'fg-band';
+        node.style.position = 'relative';
         return node;
       },
-      toGeom: (tick) => ({ x: tick.x, width: tick.width, label: tick.label }),
-      patch: (node, geom) => {
-        node.style.transform = `translateX(${geom.x}px)`;
-        node.style.width = `${geom.width}px`;
-        node.textContent = geom.label;
-      },
+      toGeom: () => EMPTY_BAND_GEOM,
+      patch: () => {},
     });
+
+    bands.forEach((band, i) => {
+      const bandNode = bandNodes.get(i);
+      if (!bandNode) return;
+      let ticksForBand = bandTickNodes.get(i);
+      let geomForBand = bandTickGeom.get(i);
+      if (!ticksForBand || !geomForBand) {
+        ticksForBand = new Map<number, HTMLElement>();
+        geomForBand = new Map<number, TickGeom>();
+        bandTickNodes.set(i, ticksForBand);
+        bandTickGeom.set(i, geomForBand);
+      }
+      syncKeyed(bandNode, band.ticks, ticksForBand, geomForBand, tickSpec);
+    });
+
+    for (const i of bandTickNodes.keys()) {
+      if (i >= bands.length) {
+        bandTickNodes.delete(i);
+        bandTickGeom.delete(i);
+      }
+    }
   }
 
   function syncRows(rows: readonly FrameRow[]): void {
@@ -178,8 +219,10 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
     },
     destroy() {
       host?.replaceChildren();
-      tickNodes.clear();
-      tickGeom.clear();
+      bandNodes.clear();
+      bandGeom.clear();
+      bandTickNodes.clear();
+      bandTickGeom.clear();
       rowNodes.clear();
       rowGeom.clear();
       barNodes.clear();
