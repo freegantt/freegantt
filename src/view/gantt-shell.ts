@@ -12,14 +12,17 @@ import type { RowHeightIndex, ViewportHandle } from '../layout/index.js';
 import { createDomBackend } from '../render/dom/index.js';
 import { attachScroll } from './scroll-attachment.js';
 import type { ScrollAttachment } from './scroll-attachment.js';
+import { attachPaneSize } from './pane-size-attachment.js';
+import type { PaneSizeAttachment } from './pane-size-attachment.js';
 import type { RenderBackend } from '../render/backend.js';
-import type { Dataset } from '../model/index.js';
+import type { Dataset, Size } from '../model/index.js';
 
 /** CSS custom property that owns row height (plans/02 §4, level 1 of the customization ladder) —
- * not a constructor option (#39). Read once at construction, not per render() (#49): getComputedStyle
- * is a synchronous style read that can force a style recalculation, and `--fg-row-height` essentially
- * never changes between renders in normal use. Re-read gets an explicit invalidation path alongside
- * the pane-size attachment work in #8, rather than an unconditional read on every render() in the meantime. */
+ * not a constructor option (#39). Read on construction and again whenever the pane-size attachment
+ * fires (#49, #8): getComputedStyle is a synchronous style read that can force a style
+ * recalculation, and `--fg-row-height` essentially never changes between renders in normal use, so a
+ * resize is as good a signal as any to catch the rare case it does — never an unconditional read on
+ * every render(). */
 const ROW_HEIGHT_PROPERTY = '--fg-row-height';
 const DEFAULT_ROW_HEIGHT = 32;
 
@@ -69,7 +72,8 @@ export class GanttShell {
   #heights: RowHeightIndex | undefined;
   #heightsEntryCount = -1;
   #heightsRowHeight = -1;
-  #rowHeight: number;
+  #rowHeight: number = DEFAULT_ROW_HEIGHT;
+  #paneSizeAttachment: PaneSizeAttachment;
   #options: GanttShellOptions;
   /** Set by the most recent `render()` — `frame.contentWidth`/`contentHeight` (S1.5 README §3.2,
    * D-S1.5-9). No gutter added (D-S1.7-3): the row-label gutter is the backend's own offset, and the
@@ -83,7 +87,6 @@ export class GanttShell {
       ...(options.scale ? { scale: options.scale } : {}),
       ...(options.scroll ? { scroll: options.scroll } : {}),
     });
-    this.#rowHeight = readRowHeight(this.#host);
 
     // Mount before binding (#22): the render target exists by the time the binding's own onChange
     // — which IS this shell's first render — fires, so there is no construction-order exception to
@@ -105,20 +108,26 @@ export class GanttShell {
     this.#viewportHandle = this.#viewport.bind(options.dataset, () => {
       if (ready) this.render();
     });
-    // Measured once at construction, and not again until the pane-size attachment (S1.7b, #8) gives
-    // it an explicit re-measure path.
-    this.#viewportHandle.setPaneSize({ width: this.#drawableWidth(), height: this.#host.clientHeight });
+    // Synchronous first measurement: a real ResizeObserver's own first callback is queued, not
+    // immediate, so the first paint cannot wait for it. attachPaneSize below takes over from here —
+    // every measurement after this one, live, for as long as the shell lives (S1.7b, #8).
+    this.#readMetrics({ width: this.#host.clientWidth, height: this.#host.clientHeight });
+    this.#paneSizeAttachment = attachPaneSize(this.#host, (size) => this.#readMetrics(size));
     ready = true;
     this.render();
   }
 
-  /** Width available for the timeline itself — host width minus the backend's own row-label gutter
-   * (#46). Everything that turns time into pixels (the bound `TimeScale`, `computeFrame`'s `visible`)
-   * must agree on this narrower width, or bars get fit against a span wider than what's actually
-   * drawable and headers/bars, though both derived from `scale`, end up offset from one another by
-   * whatever the backend reserves for row labels. */
-  #drawableWidth(): number {
-    return Math.max(0, this.#host.clientWidth - this.#backend.rowLabelWidth);
+  /** One measurement, pushed to everything it feeds (#8, #49): `--fg-row-height` and the pane size
+   *  both change for the same reason — the host was just resized — so both are re-read on the same
+   *  signal instead of `--fg-row-height` being read once and going stale. `size` is the host's own
+   *  content-box box; the backend's row-label gutter (#46) is subtracted here so every consumer of
+   *  `paneWidth` agrees on the width that is actually drawable. */
+  #readMetrics(size: Size): void {
+    this.#rowHeight = readRowHeight(this.#host);
+    this.#viewportHandle.setPaneSize({
+      width: Math.max(0, size.width - this.#backend.rowLabelWidth),
+      height: size.height,
+    });
   }
 
   #heightsFor(entryCount: number, rowHeight: number): RowHeightIndex {
@@ -153,6 +162,7 @@ export class GanttShell {
   destroy(): void {
     if (this.#destroyed) return;
     this.#scrollAttachment.detach();
+    this.#paneSizeAttachment.detach();
     this.#viewportHandle.unbind();
     this.#backend.destroy();
     this.#host.replaceChildren();
