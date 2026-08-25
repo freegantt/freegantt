@@ -105,13 +105,13 @@ Nine commits. Each ends green on `pnpm verify`. Guardrails and types land before
 
 ### Phase 7 — S1.7b, pane-size attachment (#8)
 > Included because it is numbered 1.7b. It is a separate commit and can be cut without touching anything above — say so and Phase 8's acceptance drops U5's resize half.
-- [ ] `src/view/pane-size-attachment.ts` — `attachPaneSize(host, onPaneSize, ResizeObserverCtor = ResizeObserver): PaneSizeAttachment`
-- [ ] One observer per Gantt, content-box, coalescing several entries in one tick to the last box; **no deduping** — notify-iff-changed is the models' contract (D-S1.5-4)
-- [ ] Wire to `ViewportHandle.setPaneSize()` and nothing else; `GanttShell.destroy()` detaches
-- [ ] Give `#readMetrics`/`#rowHeight` the explicit invalidation path #49 deferred here
-- [ ] Test (dom, injected fake `ResizeObserver`): one resize reaches both models; no second observer; `detach()` unhooks
-- [ ] Test (e2e): resizing the window re-fits the axis — the literal #8 repro
-- [ ] Close #8
+- [x] `src/view/pane-size-attachment.ts` — `attachPaneSize(host, onPaneSize, ResizeObserverCtor = ResizeObserver): PaneSizeAttachment`
+- [x] One observer per Gantt, content-box, coalescing several entries in one tick to the last box; **no deduping** — notify-iff-changed is the models' contract (D-S1.5-4)
+- [x] Wire to `ViewportHandle.setPaneSize()` and nothing else; `GanttShell.destroy()` detaches
+- [x] Give `#readMetrics`/`#rowHeight` the explicit invalidation path #49 deferred here
+- [x] Test (dom, injected fake `ResizeObserver`): one resize reaches both models; no second observer; `detach()` unhooks
+- [x] Test (e2e): resizing the window re-fits the axis — the literal #8 repro
+- [x] Close #8
 
 ### Phase 8 — Ledger, spec edits, acceptance
 - [ ] Run each retired spelling as a grep, expect **zero**: `setContent(` · `setPane(` · `\.viewport\b` in `layout/`+`render/`+`view/` · `header.ticks` · `ticks(preset` · `DatasetLike`
