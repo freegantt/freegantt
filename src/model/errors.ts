@@ -20,6 +20,14 @@ export class UnsupportedUnitError extends FreeGanttError {
   }
 }
 
+/** `code: 'host-not-found'` — a `host` selector string that matches no element (#38). */
+export class HostNotFoundError extends FreeGanttError {
+  constructor(host: string) {
+    super('host-not-found', `Gantt: no element matches host selector "${host}"`);
+    this.name = 'HostNotFoundError';
+  }
+}
+
 /** `code: 'invalid-instant'` — a host wrote a value on an `InstantInput` field that names no instant
  * (an unparseable string, or a calendar date that does not exist such as `'2026-02-31'`). */
 export class InvalidInstantError extends FreeGanttError {

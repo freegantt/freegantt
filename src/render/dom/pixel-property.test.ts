@@ -31,15 +31,15 @@ describe('readPixelProperty', () => {
     expect(readPixelProperty(host, '--fg-row-height', POSITIVE)).toBe(32);
   });
 
-  it("a 'zeroOrMore' property keeps zero — a host turning the gutter off authored that", () => {
-    const host = hostWith('--fg-row-label-width', '0px');
-    expect(readPixelProperty(host, '--fg-row-label-width', ZERO_OR_MORE)).toBe(0);
+  it("a 'zeroOrMore' property keeps zero — a host turning the grid pane off authored that", () => {
+    const host = hostWith('--fg-grid-pane-width', '0px');
+    expect(readPixelProperty(host, '--fg-grid-pane-width', ZERO_OR_MORE)).toBe(0);
   });
 
   it('rejects a negative value under either policy', () => {
     expect(readPixelProperty(hostWith('--fg-row-height', '-4px'), '--fg-row-height', POSITIVE)).toBe(32);
     expect(
-      readPixelProperty(hostWith('--fg-row-label-width', '-4px'), '--fg-row-label-width', ZERO_OR_MORE),
+      readPixelProperty(hostWith('--fg-grid-pane-width', '-4px'), '--fg-grid-pane-width', ZERO_OR_MORE),
     ).toBe(160);
   });
 });

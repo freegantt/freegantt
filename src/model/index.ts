@@ -5,4 +5,4 @@ export type { InstantInput, TimeSpanInput, DateOnlyEndRule } from './time.js';
 export type { Entry, EntryKind, EntryInput } from './entry.js';
 export type { Point, Size, PixelSpan, Rect } from './geometry.js';
 export type { Dataset } from './dataset.js';
-export { FreeGanttError, UnsupportedUnitError, InvalidInstantError } from './errors.js';
+export { FreeGanttError, UnsupportedUnitError, HostNotFoundError, InvalidInstantError } from './errors.js';

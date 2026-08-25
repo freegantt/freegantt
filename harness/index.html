@@ -12,16 +12,15 @@
         /* Level-1 theming (plans/02 §4): row height is a CSS custom property the library reads,
            not a restated constructor default (#39). */
         --fg-row-height: 32px;
-        /* Row-label gutter width; render/dom owns applying this offset to header ticks and bars so
-           they share one coordinate frame (#46) — this harness no longer restates it as raw CSS. */
-        --fg-row-label-width: 220px;
-        position: relative;
+        /* Grid pane width; PaneLayout owns applying this to the grid pane and its row layer so
+           they share one coordinate frame with the timeline pane (S1.8, D-S1.8-1/D-S1.8-2) — this
+           harness no longer restates it as raw CSS. Renamed from --fg-row-label-width: the gutter
+           is a pane width now, not a backend reservation. */
+        --fg-grid-pane-width: 220px;
         border: 1px solid #ccc;
-        /* overflow: auto makes this element the native scroller GanttShell's private default
-           ScrollModel binds to (S1.5, #9) — the library owns the scroll *position*, but this host
-           still states its own CSS overflow rather than the library owning the pane split. That
-           split is S1.8's timeline pane, tracked in #41 until it lands. */
-        overflow: auto;
+        /* No overflow/position rule here any more (S1.8): PaneLayout builds the grid pane / splitter
+           / timeline pane structure inline, and the timeline pane is the library's own native
+           scroller (D-D, D-S1.8-1). This host only sizes the whole shell. */
         height: 70vh;
       }
       .fg-header {
@@ -39,14 +38,7 @@
         height: 20px;
         line-height: 20px;
       }
-      .fg-rows {
-        /* Row labels sit behind bars, both positioned from the same frame.rows/frame.bars geometry. */
-        position: absolute;
-        inset: 0;
-        top: 20px;
-      }
       .fg-row {
-        position: absolute;
         left: 0;
         font-size: 11px;
         line-height: var(--fg-row-height);
@@ -56,11 +48,6 @@
         overflow: hidden;
         text-overflow: ellipsis;
         color: #333;
-      }
-      .fg-bars {
-        position: absolute;
-        inset: 0;
-        top: 20px;
       }
       .fg-bar {
         background: #4a7a58;
