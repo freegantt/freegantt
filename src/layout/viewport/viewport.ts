@@ -8,6 +8,7 @@ import type { ScaleBinding, ScaleBindingHandle } from './time-scale-model.js';
 import { ScrollModel } from './scroll-model.js';
 import type { ScrollBindingHandle } from './scroll-model.js';
 import type { TimeScale, ViewPreset } from '../../time/index.js';
+import { BatchedNotifier } from './batched-notifier.js';
 import { FreeGanttError } from '../../model/index.js';
 import type { Dataset, Rect, Size } from '../../model/index.js';
 import { DEFAULT_OVERSCAN } from '../frame.js';
@@ -50,8 +51,9 @@ export class Viewport {
   // Coalesces notifications from BOTH sub-models into one host reaction (D-S1.7-1): scale and
   // scroll each already dedupe within themselves (D-S1.5-4), but a single setPaneSize touches both,
   // and without this layer each would flush its own notification for the same caller-visible change.
-  #coalesceDepth = 0;
-  #pendingNotify = false;
+  // The batching half only — a Viewport has one subscriber and no resolved value of its own to
+  // compare, so `BoundValue`'s bindings-and-comparison half would be a capability it must not have.
+  #notifications = new BatchedNotifier(() => this.#onChange?.());
 
   constructor(options: ViewportOptions = {}) {
     this.scale = options.scale ?? new TimeScaleModel();
@@ -60,25 +62,8 @@ export class Viewport {
   }
 
   #notify = (): void => {
-    if (this.#coalesceDepth > 0) {
-      this.#pendingNotify = true;
-      return;
-    }
-    this.#onChange?.();
+    this.#notifications.notify();
   };
-
-  #coalesced(run: () => void): void {
-    this.#coalesceDepth++;
-    try {
-      run();
-    } finally {
-      this.#coalesceDepth--;
-      if (this.#coalesceDepth === 0 && this.#pendingNotify) {
-        this.#pendingNotify = false;
-        this.#onChange?.();
-      }
-    }
-  }
 
   /** One subscription for both models: the shell reacts once, not twice (D-S1.7-1).
    *
@@ -114,14 +99,14 @@ export class Viewport {
       },
       setPaneSize: (size) => {
         this.#paneSize = size;
-        this.#coalesced(() => {
+        this.#notifications.batch(() => {
           scaleHandle.setPaneWidth(size.width);
           scrollHandle.setPaneSize(size);
         });
       },
       setContentSize: (size) => {
         this.#contentSize = size;
-        this.#coalesced(() => scrollHandle.setContentSize(size));
+        this.#notifications.batch(() => scrollHandle.setContentSize(size));
       },
     };
   }
@@ -166,6 +151,6 @@ export class Viewport {
   /** Several writes, one host reaction. Re-entrant, flushes in a `finally` (conventions §5).
    *  First caller is S1.9's `zoomTo` (D-S1.7-10). */
   batch(run: () => void): void {
-    this.#coalesced(() => this.scale.batch(() => this.scroll.batch(run)));
+    this.#notifications.batch(() => this.scale.batch(() => this.scroll.batch(run)));
   }
 }
