@@ -138,4 +138,19 @@ describe('Viewport', () => {
 
     expect(calls).toBe(1);
   });
+
+  it('a second bind is refused — one Viewport serves one Gantt (share the models instead)', () => {
+    const viewport = new Viewport();
+    viewport.bind(dataset, noop);
+
+    expect(() => viewport.bind(dataset, noop)).toThrow(/already bound/);
+  });
+
+  it('unbind releases the Viewport for a later bind', () => {
+    const viewport = new Viewport();
+    const handle = viewport.bind(dataset, noop);
+    handle.unbind();
+
+    expect(() => viewport.bind(dataset, noop)).not.toThrow();
+  });
 });

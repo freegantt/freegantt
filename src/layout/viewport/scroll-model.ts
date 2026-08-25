@@ -9,6 +9,7 @@
 // remembered state (S1.5 README U3).
 
 import type { Point, Size } from '../../model/index.js';
+import { BoundValue } from './bound-value.js';
 
 /** A scroll offset in content pixels. */
 export type ScrollPosition = Point;
@@ -57,122 +58,98 @@ interface MutableBinding {
   pane: Size;
 }
 
-const ZERO: ScrollPosition = { x: 0, y: 0 };
+const ZERO: ScrollPosition = Object.freeze({ x: 0, y: 0 });
+
+/** Frozen, not just `readonly`: `state` hands both halves out by reference, and `readonly` is a
+ * compile-time claim only — a host writing `state.position.x` would move the shared model without
+ * notifying anyone. Frozen, that write throws instead (every module here is an ES module, so it is
+ * strict-mode code). Freezing at the two assignment points costs nothing per read; copying on every
+ * `state` read would not. */
+function frozenPosition(x: number, y: number): ScrollPosition {
+  return Object.freeze({ x, y });
+}
+
+function sameScrollState(a: ScrollState, b: ScrollState): boolean {
+  return (
+    a.position.x === b.position.x &&
+    a.position.y === b.position.y &&
+    a.max.x === b.max.x &&
+    a.max.y === b.max.y
+  );
+}
 
 export class ScrollModel {
   #position: ScrollPosition;
-  #bindings = new Map<MutableBinding, () => void>();
-  #resolvedMax: ScrollPosition | undefined;
-  #lastNotified: ScrollState | undefined;
-  #batchDepth = 0;
-  #pendingNotify = false;
+  /** The bindings, the state resolved from them, and the D-S1.5-4 notification contract — the same
+   * object `TimeScaleModel` binds through (`bound-value.ts`). This model supplies only what is its
+   * own: how to resolve `{position, max}`, and what counts as a change. */
+  #state = new BoundValue<MutableBinding, ScrollState>({
+    resolve: (bindings) => this.#resolve(bindings),
+    equals: sameScrollState,
+  });
 
   constructor(intent: ScrollIntent = {}) {
-    this.#position = { x: intent.position?.x ?? 0, y: intent.position?.y ?? 0 };
+    this.#position = frozenPosition(intent.position?.x ?? 0, intent.position?.y ?? 0);
   }
 
-  /** Resolved + clamped, memoized like `TimeScaleModel.scale`. */
+  /** Resolved + clamped, memoized until an input changes. */
   get state(): ScrollState {
-    return { position: this.#position, max: this.#max() };
+    return this.#state.resolved;
   }
 
   /** Move the shared viewport. Clamps to `[0, max]` at write time (D-S1.5-2) — nothing else ever
    * rewrites `position`; a later shrink of `max` leaves it exactly where a caller last asked. */
   panTo(to: Partial<ScrollPosition>): void {
-    const max = this.#max();
+    const max = this.state.max;
     const x = clamp(to.x ?? this.#position.x, max.x);
     const y = clamp(to.y ?? this.#position.y, max.y);
     if (x === this.#position.x && y === this.#position.y) return;
-    this.#position = { x, y };
-    this.#invalidate();
+    this.#position = frozenPosition(x, y);
+    this.#state.invalidate();
   }
 
   /** Several writes, at most one notification. Re-entrant; flushes at the outermost exit,
    * in a `finally` so a throwing `run` cannot wedge the model (conventions §5). */
   batch(run: () => void): void {
-    this.#batchDepth++;
-    try {
-      run();
-    } finally {
-      this.#batchDepth--;
-      if (this.#batchDepth === 0 && this.#pendingNotify) {
-        this.#pendingNotify = false;
-        this.#notifyAll();
-      }
-    }
+    this.#state.batch(run);
   }
 
   /** @internal — called by `view/` only. A host that calls this creates a binding nothing
    * will ever unbind. Use `GanttOptions.scroll` instead. */
   bind(binding: ScrollBinding, onChange: () => void): ScrollBindingHandle {
+    // Copy-at-bind, as in `TimeScaleModel`: the handle is the only way to change what this binding
+    // contributes.
     const copy: MutableBinding = { content: binding.content, pane: binding.pane };
-    this.#bindings.set(copy, onChange);
-    this.#resolvedMax = undefined;
-    // The newcomer always hears about its own bind (D-S1.5-4) — that IS its first render — even when
-    // the resolved state did not move. Every other bound reaction only hears about it when the
-    // resolved state actually changed.
-    const changed = this.#recordAndCheckChange();
-    onChange();
-    if (changed) {
-      for (const [otherBinding, otherOnChange] of this.#bindings) {
-        if (otherBinding !== copy) otherOnChange();
-      }
-    }
+    const bound = this.#state.bind(copy, onChange);
     return {
-      unbind: () => {
-        if (this.#bindings.delete(copy)) this.#invalidate();
-      },
+      unbind: () => bound.unbind(),
       setContentSize: (size) => {
         if (copy.content.width === size.width && copy.content.height === size.height) return;
         copy.content = size;
-        this.#invalidate();
+        this.#state.invalidate();
       },
       setPaneSize: (size) => {
         if (copy.pane.width === size.width && copy.pane.height === size.height) return;
         copy.pane = size;
-        this.#invalidate();
+        this.#state.invalidate();
       },
     };
   }
 
-  #max(): ScrollPosition {
-    if (this.#resolvedMax) return this.#resolvedMax;
+  /** `max` is the loosest bound any bound Gantt needs (D-S1.5-1) — not a claim about any one
+   * chart's scroller. Frozen with `position`: `state` hands the model's own objects out. */
+  #resolve(bindings: Iterable<MutableBinding>): ScrollState {
     let maxX = 0;
     let maxY = 0;
-    for (const binding of this.#bindings.keys()) {
+    let bound = false;
+    for (const binding of bindings) {
+      bound = true;
       maxX = Math.max(maxX, Math.max(0, binding.content.width - binding.pane.width));
       maxY = Math.max(maxY, Math.max(0, binding.content.height - binding.pane.height));
     }
-    this.#resolvedMax = this.#bindings.size === 0 ? ZERO : { x: maxX, y: maxY };
-    return this.#resolvedMax;
-  }
-
-  #invalidate(): void {
-    this.#resolvedMax = undefined;
-    if (this.#batchDepth > 0) {
-      this.#pendingNotify = true;
-      return;
-    }
-    this.#notifyAll();
-  }
-
-  /** Used by `unbind`/`setContentSize`/`setPaneSize`/`panTo`/`batch` flush; `bind()` has its own pass
-   * because it must notify the newcomer unconditionally. */
-  #notifyAll(): void {
-    const changed = this.#recordAndCheckChange();
-    if (!changed) return;
-    for (const onChange of this.#bindings.values()) onChange();
-  }
-
-  #recordAndCheckChange(): boolean {
-    const next = this.state;
-    const changed =
-      !this.#lastNotified ||
-      this.#lastNotified.position.x !== next.position.x ||
-      this.#lastNotified.position.y !== next.position.y ||
-      this.#lastNotified.max.x !== next.max.x ||
-      this.#lastNotified.max.y !== next.max.y;
-    this.#lastNotified = next;
-    return changed;
+    return Object.freeze({
+      position: this.#position,
+      max: bound ? frozenPosition(maxX, maxY) : ZERO,
+    });
   }
 }

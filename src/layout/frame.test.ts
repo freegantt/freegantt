@@ -96,16 +96,18 @@ describe('computeFrame', () => {
     const entries = sampleEntries.slice(0, rowHeights.length);
     // Window covers row index 2 (top 110, height 10); verticalRows=1 buffers exactly one row of
     // whatever height it has on each side, not a fixed px amount.
-    const windowed = computeFrame({
-      entries,
-      scale,
-      preset,
-      visible: { x: 0, y: 110, width: 0, height: 10 },
-      overscan: { verticalRows: 1, horizontalPx: 0 },
-      rowHeight: 10,
-      revision: 0,
+    const windowed = computeFrame(
+      {
+        entries,
+        scale,
+        preset,
+        visible: { x: 0, y: 110, width: 0, height: 10 },
+        overscan: { verticalRows: 1, horizontalPx: 0 },
+        rowHeight: 10,
+        revision: 0,
+      },
       heights,
-    });
+    );
     expect(windowed.rows.map((r) => r.index)).toEqual([1, 2, 3]);
   });
 
@@ -181,16 +183,18 @@ describe('computeFrame', () => {
     const heights = new PrefixSumHeightIndex(sampleEntries.length, () => 32);
     const spy = vi.spyOn(heights, 'indexAtY');
 
-    const windowed = computeFrame({
-      entries: sampleEntries,
-      scale,
-      preset,
-      visible: { x: 0, y: 32, width: 0, height: 32 },
-      overscan: TIGHT,
-      rowHeight: 32,
-      revision: 0,
+    const windowed = computeFrame(
+      {
+        entries: sampleEntries,
+        scale,
+        preset,
+        visible: { x: 0, y: 32, width: 0, height: 32 },
+        overscan: TIGHT,
+        rowHeight: 32,
+        revision: 0,
+      },
       heights,
-    });
+    );
 
     expect(windowed.rows.map((r) => r.index)).toEqual([1]);
     expect(spy).toHaveBeenCalledWith(32);

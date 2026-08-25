@@ -97,7 +97,8 @@ export interface Overscan {
   horizontalPx?: number;
 }
 
-const DEFAULT_OVERSCAN: Required<Overscan> = { verticalRows: 2, horizontalPx: 128 };
+/** One home for the default, imported by `Viewport` rather than restated there. */
+export const DEFAULT_OVERSCAN: Required<Overscan> = { verticalRows: 2, horizontalPx: 128 };
 
 export interface GeometryFrame {
   revision: number;
@@ -128,23 +129,22 @@ export interface LayoutInput {
   overscan?: Overscan;
   rowHeight: number;
   revision: number;
-  /** Row-top index to read from, and to size the culling window's start against `indexAtY` (#47).
-   * Optional so pure/test callers can omit it and get the S0/S1 default (a fresh index built and
-   * discarded within this call); a caller doing repeated `computeFrame` passes over the same
-   * entries/rowHeight (`GanttShell.render()`) should build one `PrefixSumHeightIndex` once, reuse it
-   * across calls, and call `invalidateFrom` itself when entries or rowHeight change — that's what
-   * turns "top of row i" back into the O(log n)-across-renders lookup the index exists for, instead
-   * of a fresh O(n) build-and-discard every render. */
-  heights?: RowHeightIndex;
 }
 
-/** S0/S1 scope: flat row-per-entry, one bar per entry, fixed row height (plans/03 S0-S1). */
-export function computeFrame(input: LayoutInput): GeometryFrame {
+/** S0/S1 scope: flat row-per-entry, one bar per entry, fixed row height (plans/03 S0-S1).
+ *
+ * Pure and stateless: `heights` is the row-top index this pass reads from — and sizes the culling
+ * window's start against, via `indexAtY` (#47) — never one this call builds up for the next.
+ * `FrameLayout` is what keeps one index alive across a Gantt's renders and is the only production
+ * caller that passes it; a caller with nothing to remember (every test here, one-shot geometry)
+ * omits it and gets an index built and discarded within this call. */
+export function computeFrame(
+  input: LayoutInput,
+  heights: RowHeightIndex = new PrefixSumHeightIndex(input.entries.length, () => input.rowHeight),
+): GeometryFrame {
   const { entries, scale, preset, visible, rowHeight, revision } = input;
   const verticalRows = input.overscan?.verticalRows ?? DEFAULT_OVERSCAN.verticalRows;
   const horizontalPx = input.overscan?.horizontalPx ?? DEFAULT_OVERSCAN.horizontalPx;
-
-  const heights = input.heights ?? new PrefixSumHeightIndex(entries.length, () => rowHeight);
 
   const rows: FrameRow[] = [];
   const bars: FrameBar[] = [];

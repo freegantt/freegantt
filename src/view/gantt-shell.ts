@@ -1,15 +1,10 @@
 // view/ — Gantt shell (plans/01 §8.2-8.3). The real grid/timeline/viewport split lands across S1.
 
-import {
-  computeFrame,
-  PrefixSumHeightIndex,
-  ScrollModel,
-  TimeScaleModel,
-  Viewport,
-} from '../layout/index.js';
-import type { RowHeightIndex, ViewportHandle } from '../layout/index.js';
+import { FrameLayout, ScrollModel, TimeScaleModel, Viewport } from '../layout/index.js';
+import type { ViewportHandle } from '../layout/index.js';
 
 import { createDomBackend } from '../render/dom/index.js';
+import { readPixelProperty } from '../render/dom/pixel-property.js';
 import { attachScroll } from './scroll-attachment.js';
 import type { ScrollAttachment } from './scroll-attachment.js';
 import { attachPaneSize } from './pane-size-attachment.js';
@@ -25,6 +20,8 @@ import type { Dataset, Size } from '../model/index.js';
  * every render(). */
 const ROW_HEIGHT_PROPERTY = '--fg-row-height';
 const DEFAULT_ROW_HEIGHT = 32;
+/** A zero-height row is not a row: only a positive value is an authored row height. */
+const ROW_HEIGHT_POLICY = { fallback: DEFAULT_ROW_HEIGHT, accepts: 'positive' } as const;
 
 export interface GanttShellOptions {
   /** Element or CSS selector (plans/02 §2); a selector that matches nothing throws (#38). */
@@ -50,12 +47,6 @@ function resolveHost(host: HTMLElement | string): HTMLElement {
   return el;
 }
 
-function readRowHeight(host: HTMLElement): number {
-  const raw = getComputedStyle(host).getPropertyValue(ROW_HEIGHT_PROPERTY).trim();
-  const parsed = parseFloat(raw);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_ROW_HEIGHT;
-}
-
 export class GanttShell {
   #host: HTMLElement;
   #backend: RenderBackend<HTMLElement>;
@@ -64,14 +55,9 @@ export class GanttShell {
   #viewportHandle: ViewportHandle;
   #scrollAttachment: ScrollAttachment;
   #destroyed = false;
-  /** Cached across renders (#47) — `PrefixSumHeightIndex` exists precisely so "top of row i" is
-   * O(log n) across repeated calls, which a fresh instance every `render()` would throw away. Rebuilt
-   * only when entry count or row height changes; current row heights are uniform, so those two are
-   * the whole invalidation surface (variable per-row heights, S5, will need finer-grained
-   * `invalidateFrom` calls here instead of a full rebuild). */
-  #heights: RowHeightIndex | undefined;
-  #heightsEntryCount = -1;
-  #heightsRowHeight = -1;
+  /** This Gantt's layout pass. It keeps the row-height index alive across renders (#47) — the shell
+   * states what to draw and holds no layout bookkeeping of its own. */
+  #layout = new FrameLayout();
   #rowHeight: number = DEFAULT_ROW_HEIGHT;
   #paneSizeAttachment: PaneSizeAttachment;
   #options: GanttShellOptions;
@@ -111,8 +97,8 @@ export class GanttShell {
     // Synchronous first measurement: a real ResizeObserver's own first callback is queued, not
     // immediate, so the first paint cannot wait for it. attachPaneSize below takes over from here —
     // every measurement after this one, live, for as long as the shell lives (S1.7b, #8).
-    this.#readMetrics({ width: this.#host.clientWidth, height: this.#host.clientHeight });
-    this.#paneSizeAttachment = attachPaneSize(this.#host, (size) => this.#readMetrics(size));
+    this.#applyPaneMeasurement({ width: this.#host.clientWidth, height: this.#host.clientHeight });
+    this.#paneSizeAttachment = attachPaneSize(this.#host, (size) => this.#applyPaneMeasurement(size));
     ready = true;
     this.render();
   }
@@ -122,36 +108,23 @@ export class GanttShell {
    *  signal instead of `--fg-row-height` being read once and going stale. `size` is the host's own
    *  content-box box; the backend's row-label gutter (#46) is subtracted here so every consumer of
    *  `paneWidth` agrees on the width that is actually drawable. */
-  #readMetrics(size: Size): void {
-    this.#rowHeight = readRowHeight(this.#host);
+  #applyPaneMeasurement(size: Size): void {
+    this.#rowHeight = readPixelProperty(this.#host, ROW_HEIGHT_PROPERTY, ROW_HEIGHT_POLICY);
     this.#viewportHandle.setPaneSize({
       width: Math.max(0, size.width - this.#backend.rowLabelWidth),
       height: size.height,
     });
   }
 
-  #heightsFor(entryCount: number, rowHeight: number): RowHeightIndex {
-    if (this.#heights && this.#heightsEntryCount === entryCount && this.#heightsRowHeight === rowHeight) {
-      return this.#heights;
-    }
-    this.#heights = new PrefixSumHeightIndex(entryCount, () => rowHeight);
-    this.#heightsEntryCount = entryCount;
-    this.#heightsRowHeight = rowHeight;
-    return this.#heights;
-  }
-
   render(): void {
-    const entries = this.#options.dataset.entries;
-    const rowHeight = this.#rowHeight;
-    const frame = computeFrame({
-      entries,
+    const frame = this.#layout.computeFrame({
+      entries: this.#options.dataset.entries,
       scale: this.#viewport.timeScale,
       preset: this.#viewport.preset,
       visible: this.#viewport.visible,
       overscan: this.#viewport.overscan,
-      rowHeight,
+      rowHeight: this.#rowHeight,
       revision: this.#revision++,
-      heights: this.#heightsFor(entries.length, rowHeight),
     });
     this.#backend.sync(frame);
     this.#contentSize = { width: frame.contentWidth, height: frame.contentHeight };

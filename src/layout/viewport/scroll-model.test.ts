@@ -158,4 +158,22 @@ describe('ScrollModel', () => {
       expect(calls).toBe(1);
     });
   });
+
+  describe('state is not a way into the model', () => {
+    it('both halves are frozen — a write through state throws instead of moving the shared model', () => {
+      const model = new ScrollModel();
+      model.bind({ content: { width: 100, height: 1000 }, pane: { width: 100, height: 100 } }, () => {});
+      model.panTo({ y: 40 });
+      const state = model.state;
+
+      expect(() => {
+        (state.position as { x: number }).x = 999;
+      }).toThrow(TypeError);
+      expect(() => {
+        (state.max as { y: number }).y = 999;
+      }).toThrow(TypeError);
+      expect(model.state.position).toEqual({ x: 0, y: 40 });
+      expect(model.state.max).toEqual({ x: 0, y: 900 });
+    });
+  });
 });

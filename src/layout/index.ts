@@ -1,4 +1,5 @@
 export { computeFrame } from './frame.js';
+export { FrameLayout } from './frame-layout.js';
 export type {
   GeometryFrame,
   FrameRow,
