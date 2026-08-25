@@ -69,7 +69,9 @@ export function createTimeScale(options: TimeScaleOptions): TimeScale {
   }
 
   function instantForX(x: number): Instant {
-    return instant(range.start + x / pxPerMs);
+    // Pixels don't divide evenly into milliseconds, so this must round: an unrounded epoch ms is a
+    // fraction of a millisecond, which Temporal's Instant (whole ms) rejects outright.
+    return instant(Math.round(range.start + x / pxPerMs));
   }
 
   function widthForDuration(d: Duration, at: Instant): number {

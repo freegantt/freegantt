@@ -32,8 +32,8 @@ export interface ScrollBinding {
 /** @internal — `view/` only. Never re-exported from `api/`. */
 export interface ScrollBindingHandle {
   unbind(): void;
-  setContent(size: Size): void;
-  setPane(size: Size): void;
+  setContentSize(size: Size): void;
+  setPaneSize(size: Size): void;
 }
 
 /** The resolved state — both halves of it, so there is one path to the resolution and one thing
@@ -122,12 +122,12 @@ export class ScrollModel {
       unbind: () => {
         if (this.#bindings.delete(copy)) this.#invalidate();
       },
-      setContent: (size) => {
+      setContentSize: (size) => {
         if (copy.content.width === size.width && copy.content.height === size.height) return;
         copy.content = size;
         this.#invalidate();
       },
-      setPane: (size) => {
+      setPaneSize: (size) => {
         if (copy.pane.width === size.width && copy.pane.height === size.height) return;
         copy.pane = size;
         this.#invalidate();
@@ -156,7 +156,7 @@ export class ScrollModel {
     this.#notifyAll();
   }
 
-  /** Used by `unbind`/`setContent`/`setPane`/`panTo`/`batch` flush; `bind()` has its own pass
+  /** Used by `unbind`/`setContentSize`/`setPaneSize`/`panTo`/`batch` flush; `bind()` has its own pass
    * because it must notify the newcomer unconditionally. */
   #notifyAll(): void {
     const changed = this.#recordAndCheckChange();

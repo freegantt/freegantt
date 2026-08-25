@@ -1,7 +1,13 @@
 // view/ — Gantt shell (plans/01 §8.2-8.3). The real grid/timeline/viewport split lands across S1.
 
-import { computeFrame, PrefixSumHeightIndex, ScrollModel, TimeScaleModel } from '../layout/index.js';
-import type { RowHeightIndex, ScaleBindingHandle } from '../layout/index.js';
+import {
+  computeFrame,
+  PrefixSumHeightIndex,
+  ScrollModel,
+  TimeScaleModel,
+  Viewport,
+} from '../layout/index.js';
+import type { RowHeightIndex, ViewportHandle } from '../layout/index.js';
 
 import { createDomBackend } from '../render/dom/index.js';
 import { attachScroll } from './scroll-attachment.js';
@@ -51,14 +57,9 @@ export class GanttShell {
   #host: HTMLElement;
   #backend: RenderBackend<HTMLElement>;
   #revision = 0;
-  #scale: TimeScaleModel;
-  #scaleHandle: ScaleBindingHandle;
-  #scroll: ScrollModel;
-  /** Assigned once mounting and the scale binding's own first render have both happened (#22) —
-   * `undefined` only for the instant between `attachScroll`'s own bind-triggered render (D-S1.5-4:
-   * bind always notifies the newcomer) and this field's assignment, which `render()` guards against.
-   * The constructor pushes the real extents itself right after assignment, so no render is lost. */
-  #scrollAttachment: ScrollAttachment | undefined;
+  #viewport: Viewport;
+  #viewportHandle: ViewportHandle;
+  #scrollAttachment: ScrollAttachment;
   #destroyed = false;
   /** Cached across renders (#47) — `PrefixSumHeightIndex` exists precisely so "top of row i" is
    * O(log n) across repeated calls, which a fresh instance every `render()` would throw away. Rebuilt
@@ -70,16 +71,18 @@ export class GanttShell {
   #heightsRowHeight = -1;
   #rowHeight: number;
   #options: GanttShellOptions;
-  /** Set by the most recent `render()` — the row-label gutter plus `frame.contentWidth`/
-   * `contentHeight` (S1.5 README §3.2, D-S1.5-9). `#pushScrollExtents` reads it rather than
-   * recomputing the same geometry a second time. */
+  /** Set by the most recent `render()` — `frame.contentWidth`/`contentHeight` (S1.5 README §3.2,
+   * D-S1.5-9). No gutter added (D-S1.7-3): the row-label gutter is the backend's own offset, and the
+   * backend already sizes its own content sizer with it. */
   #contentSize = { width: 0, height: 0 };
 
   constructor(options: GanttShellOptions) {
     this.#options = options;
     this.#host = resolveHost(options.host);
-    this.#scale = options.scale ?? new TimeScaleModel();
-    this.#scroll = options.scroll ?? new ScrollModel();
+    this.#viewport = new Viewport({
+      ...(options.scale ? { scale: options.scale } : {}),
+      ...(options.scroll ? { scroll: options.scroll } : {}),
+    });
     this.#rowHeight = readRowHeight(this.#host);
 
     // Mount before binding (#22): the render target exists by the time the binding's own onChange
@@ -88,24 +91,29 @@ export class GanttShell {
     this.#backend = createDomBackend();
     this.#backend.mount(this.#host);
 
-    this.#scaleHandle = this.#scale.bind(
-      {
-        timeZone: options.dataset.timeZone,
-        entries: options.dataset.entries,
-        paneWidth: this.#drawableWidth(),
-      },
-      () => this.render(),
-    );
-
     // The host element is the timeline pane: today's backend positions rows, bars and header all
     // absolutely inside it, so it is the single native scroller (D-D, S1.5 README §6) — there is no
-    // separate grid pane to keep in sync.
-    this.#scrollAttachment = attachScroll(this.#host, this.#scroll, () => this.render());
-    this.#pushScrollExtents();
+    // separate grid pane to keep in sync. Constructed before either bind (Viewport's fan-in, D-S1.7-1),
+    // so this field is never undefined during a render.
+    this.#scrollAttachment = attachScroll(this.#host, this.#viewport);
+
+    // bind() fires its own onChange synchronously, once per sub-model (D-S1.5-4: bind always
+    // notifies the newcomer) — before this call returns and #viewportHandle is assigned. Those
+    // premature calls are dropped; the deliberate first render below runs once everything, including
+    // the initial pane-size measurement, is wired.
+    let ready = false;
+    this.#viewportHandle = this.#viewport.bind(options.dataset, () => {
+      if (ready) this.render();
+    });
+    // Measured once at construction, and not again until the pane-size attachment (S1.7b, #8) gives
+    // it an explicit re-measure path.
+    this.#viewportHandle.setPaneSize({ width: this.#drawableWidth(), height: this.#host.clientHeight });
+    ready = true;
+    this.render();
   }
 
   /** Width available for the timeline itself — host width minus the backend's own row-label gutter
-   * (#46). Everything that turns time into pixels (the bound `TimeScale`, `computeFrame`'s viewport)
+   * (#46). Everything that turns time into pixels (the bound `TimeScale`, `computeFrame`'s `visible`)
    * must agree on this narrower width, or bars get fit against a span wider than what's actually
    * drawable and headers/bars, though both derived from `scale`, end up offset from one another by
    * whatever the backend reserves for row labels. */
@@ -123,40 +131,29 @@ export class GanttShell {
     return this.#heights;
   }
 
-  /** Nothing measured is ever the host's job (S1.5 README D-S1.5-9): pushed after every render,
-   * from `#contentSize` — the same geometry the backend just drew, never stated by a `GanttOptions`
-   * caller. */
-  #pushScrollExtents(): void {
-    this.#scrollAttachment?.setContent(this.#contentSize);
-    this.#scrollAttachment?.setPane({ width: this.#host.clientWidth, height: this.#host.clientHeight });
-  }
-
   render(): void {
-    const scale = this.#scale.scale;
     const entries = this.#options.dataset.entries;
     const rowHeight = this.#rowHeight;
-    const { x, y } = this.#scroll.state.position;
     const frame = computeFrame({
       entries,
-      scale,
-      preset: this.#scale.preset,
-      visible: { x, y, width: this.#drawableWidth(), height: this.#host.clientHeight },
+      scale: this.#viewport.timeScale,
+      preset: this.#viewport.preset,
+      visible: this.#viewport.visible,
+      overscan: this.#viewport.overscan,
       rowHeight,
       revision: this.#revision++,
       heights: this.#heightsFor(entries.length, rowHeight),
     });
     this.#backend.sync(frame);
-    this.#contentSize = {
-      width: this.#backend.rowLabelWidth + frame.contentWidth,
-      height: frame.contentHeight,
-    };
-    this.#pushScrollExtents();
+    this.#contentSize = { width: frame.contentWidth, height: frame.contentHeight };
+    this.#viewportHandle.setContentSize(this.#contentSize);
+    this.#scrollAttachment.writePosition();
   }
 
   destroy(): void {
     if (this.#destroyed) return;
-    this.#scrollAttachment?.detach();
-    this.#scaleHandle.unbind();
+    this.#scrollAttachment.detach();
+    this.#viewportHandle.unbind();
     this.#backend.destroy();
     this.#host.replaceChildren();
     this.#destroyed = true;

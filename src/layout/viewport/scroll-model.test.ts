@@ -45,12 +45,12 @@ describe('ScrollModel', () => {
     expect(model.state.position.y).toBe(4200);
 
     // Filter collapses the content to 10 rows.
-    handle.setContent({ width: 100, height: 320 });
+    handle.setContentSize({ width: 100, height: 320 });
     expect(model.state.position.y).toBe(4200);
     expect(model.state.max.y).toBe(0);
 
     // Clear the filter: position was never touched, so the place comes right back.
-    handle.setContent({ width: 100, height: 5000 });
+    handle.setContentSize({ width: 100, height: 5000 });
     expect(model.state.position.y).toBe(4200);
     expect(model.state.max.y).toBe(4200);
   });
@@ -73,7 +73,7 @@ describe('ScrollModel', () => {
     expect(calls).toBe(0);
   });
 
-  it('setContent that grows content notifies once; the follow-up push with the same numbers notifies nobody', () => {
+  it('setContentSize that grows content notifies once; the follow-up push with the same numbers notifies nobody', () => {
     const model = new ScrollModel();
     let calls = 0;
     const handle = model.bind(
@@ -82,10 +82,10 @@ describe('ScrollModel', () => {
     );
     calls = 0;
 
-    handle.setContent({ width: 100, height: 900 });
+    handle.setContentSize({ width: 100, height: 900 });
     expect(calls).toBe(1);
 
-    handle.setContent({ width: 100, height: 900 });
+    handle.setContentSize({ width: 100, height: 900 });
     expect(calls).toBe(1);
   });
 
@@ -114,7 +114,7 @@ describe('ScrollModel', () => {
       calls = 0;
 
       model.batch(() => {
-        handle.setContent({ width: 100, height: 500 });
+        handle.setContentSize({ width: 100, height: 500 });
         model.panTo({ y: 400 });
       });
       expect(calls).toBe(1);
