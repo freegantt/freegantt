@@ -90,6 +90,7 @@ Single mutations outside an explicit transaction are auto-wrapped in one — con
 gantt.preset = 'dayAndWeek';
 gantt.rows = { source: 'group', groupBy: t => t.meta.team };
 gantt.columns = [...gantt.columns, extraColumn];
+gantt.gridWidth = 220;                  // S1.8 — same cancelable commit sequence a splitter drag runs
 ```
 
 Every config key is a live property. Setting one triggers exactly the invalidation it needs (a preset change rebuilds the axis; a row-source change re-resolves rows) — never a full remount.
@@ -105,8 +106,11 @@ Every config key is a live property. Setting one triggers exactly the invalidati
 | `beforeEntryEdit` | `entryEdit` |
 | `beforeLinkCreate` | `linkCreate` |
 | `beforeSelectionChange` | `selectionChange` |
+| `beforeGridWidthChange` | `gridWidthChange` |
 | — | `change` (every committed `ChangeSet`) |
 | — | `scheduleDiagnostics` (engine findings) |
+
+`beforeGridWidthChange`/`gridWidthChange` (S1.8) carry `{ from, to }` in px. Fired by both a Splitter drag's commit and a direct `gantt.gridWidth = px` assignment — one commit sequence, one place it lives (`GanttShell`). A veto restores the width the drag started from, so a rejected drag leaves nothing behind.
 
 ```ts
 gantt.on('beforeEntryMove', ({ entry, start, end }) => {
@@ -141,7 +145,7 @@ Documented in this order; each level solves what the previous can't, and consume
 | 4 | **Events + feature config** | veto a drop, custom context-menu items, replace the editor |
 | 5 | **Plugins** | full `GanttPlugin` (see `01` §10): decorations, columns, controllers, commands |
 
-Every level-1 property the library reads as a length goes through one reader (`render/dom/pixel-property.ts`): computed value → px → validated → library default. What counts as authored is stated per property rather than re-implemented per call site — `--fg-row-height` rejects zero (a zero-height row is not a row), `--fg-row-label-width` keeps it (a host turning the gutter off authored that). Re-read cadence stays the caller's and is stated at each call site: the row-label gutter is read once at mount, row height again on every pane measurement, neither per render.
+Every level-1 property the library reads as a length goes through one reader (`render/dom/pixel-property.ts`): computed value → px → validated → library default. What counts as authored is stated per property rather than re-implemented per call site — `--fg-row-height` rejects zero (a zero-height row is not a row), `--fg-grid-pane-width` keeps it (a host turning the grid pane off authored that). Re-read cadence stays the caller's and is stated at each call site: the grid pane's width is read once at construction (renamed from `--fg-row-label-width`, S1.8 — the gutter is a pane width now, not a backend reservation), row height again on every pane measurement, neither per render. Two more tokens joined at S1.8: `--fg-splitter-width` (fallback `4`) and `--fg-header-height` (fallback `20`) — the grid pane's own header spacer needs the same height the timeline pane's header band uses, or every label sits one header-height above its bar.
 
 Renderers return **plain serializable element descriptions** (tag/class/style/text/children), applied by the engine's reconciler — never live DOM nodes (nodes are recycled by virtualization) and never framework components in core (D5). Text by default; HTML by explicit opt-in only.
 
@@ -210,7 +214,7 @@ const p2  = Dataset.fromJSON(doc);
 
 - **Dev-mode invariant warnings**: dependency cycle detected (with member ids), unknown preset id, config set on destroyed instance, non-deterministic item identity, renderer returned a live node.
 - **Stable test hooks**: `data-testid` on every part so consumers can write E2E tests against the Gantt without brittle selectors.
-- **Errors are typed and actionable**: `FreeGanttError` subclasses with codes, never bare strings; validation failures name the entity and field.
+- **Errors are typed and actionable**: `FreeGanttError` subclasses with codes, never bare strings; validation failures name the entity and field. `HostNotFoundError` (`code: 'host-not-found'`, S1.8) is the first of these a consumer can actually catch — thrown when a string `host` selector matches nothing.
 - **Docs site with live, editable examples** grows with the slices (the harness pages are its seed) — budgeted as a deliverable, not an afterthought.
 - **Semver honesty**: internal modules are not importable (enforced by the `exports` map), so semver only governs surfaces we actually promise.
 

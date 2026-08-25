@@ -101,6 +101,7 @@ export default tseslint.config(
       'freegantt/no-scroll-outside-scroll-model': 'error',
       'freegantt/no-instant-arithmetic': 'error',
       'freegantt/no-time-to-pixel-math': 'error',
+      'freegantt/no-flow-layout-rows': 'error',
     },
   },
   ...boundaryBlocks,
