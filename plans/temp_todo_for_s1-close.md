@@ -25,17 +25,18 @@
 
 ---
 
-## 2. Settle these five contradictions before code starts
+## 2. Settle these six contradictions before code starts
 
-The API-design comments were written before S1.5 and S1.7 shipped. Five lines in them name things that do not exist. An agent that copies them will write dead code.
+The API-design comments were written before S1.5 and S1.7 shipped. Six lines in them name things that do not exist, or promise things a later step cut. An agent that copies them will write dead code.
 
 - **C1 — `ScrollSource` is cut.** The S1.8 comment writes `scroll?: ScrollSource` in `GanttShellOptions`. S1.5 cut `ScrollSource` (S1.5 README §10). Use `ScrollModel`, which is what `GanttShellOptions` uses today.
 - **C2 — `xOnly()` is cut.** The S1.11 comment's four-line demo calls `scroll.xOnly()`. S1.5 cut `xOnly()`/`yOnly()`. The D9 demo shares one `ScrollModel` on both axes, which is what `harness/scroll-sync.ts` already does. If the demo needs an x-only link, that is the caller that brings `xOnly()` back, and it needs its own decision record first.
 - **C3 — `no-flow-layout-rows` has no scope.** `docs/02` §3.10 scopes the rule to `src/view/grid/**` and `src/view/timeline/**`. Neither directory exists, and S1.8 puts the pane code in `src/view/pane-layout.ts`. Rescope the rule to `src/view/**` and `src/render/dom/**` when it lands, and correct `docs/02` §3.10 in the same commit.
 - **C4 — the token rename has one owner.** `--fg-row-label-width` becomes `--fg-grid-pane-width`. The S1.8 comment does it; the S1.10 table repeats it. S1.8 owns it. S1.10 only lists the finished name.
 - **C5 — the x-axis gutter defect closes at S1.8.** D-S1.7-11 records it: the row-label gutter sits inside the single scroller, so the last `gutter` px of the timeline is unreachable at a non-zero `max.x`. S1.8 must close it with a named test, not as a side effect of the pane split. S1.9 is the first step that can make `max.x` non-zero, so a silent regression here stays invisible until S1.9.
+- **C6 — S1.7 §9 promises `gantt.scale =` and `gantt.scroll =` at S1.8.** The S1.9 design cut both: `Gantt` never re-exposes `scale` or `scroll`, or one key gets two write paths (`plans/02` §1.1). They are cut, not deferred. `gantt.reveal(entryId)` and `gantt.overscan`, from the same ledger row, move to S1.9. Correct `plans/s1.7-windowed-frame/README.md` §9 in S1.8's spec edits.
 
-Write all five into the S1.8 README (C1, C3, C4, C5) and the S1.11 README (C2). Also correct the issue #1 comments, so the next reader does not re-derive them.
+C1, C3, C4, C5 and C6 are written into [`plans/s1.8-pane-layout/README.md`](s1.8-pane-layout/README.md). C2 goes into the S1.11 README. Also correct the issue #1 comments, so the next reader does not re-derive them.
 
 ---
 
@@ -56,9 +57,11 @@ One branch and one PR per step. Never push a step commit straight to `main`.
 
 **Branch:** `s1.8-pane-layout` · **Closes:** #41 · **Acceptance:** `[S1-A2]` (I9)
 
-### Phase 0 — the settled spec
+### Phase 0 — the settled spec · **written**
 
-Write `plans/s1.8-pane-layout/README.md` before any code, in the shape of `plans/s1.7-windowed-frame/README.md`: open questions with answers, decisions with ids (`D-S1.8-n`), the API, the tests, a TODO with boxes, and a "what this step does not do" section. Put C1, C3, C4 and C5 in it. The README, not the issue comment, becomes the spec.
+[`plans/s1.8-pane-layout/README.md`](s1.8-pane-layout/README.md) is the spec for this step, and it supersedes this section wherever the two disagree. Its §0 holds three open scope calls that need an answer before code starts: whether `gantt.reveal(entryId)` lands here, what happens to the three items S1.7 §9 handed to S1.8, and the `gridWidth` / `--fg-grid-pane-width` spelling.
+
+Two corrections it makes to this file: the gutter defect (C5) is proven by measuring `timelinePane.scrollWidth` against `frame.contentWidth`, **not** by an e2e test with a hand-set non-zero `max.x` — that test would fake a state the library cannot reach until S1.9. And S1.7 §9's promise of `gantt.scale =` / `gantt.scroll =` at S1.8 is a sixth contradiction (**C6**): the S1.9 design cut both, because `Gantt` re-exposing its models gives one key two write paths.
 
 ### Phase 1 — the guardrail, before the code it guards
 
@@ -74,7 +77,7 @@ The three panes and one number. No geometry, no scale, no data, no frame. Soft c
 
 ### Phase 4 — the event bus, with two events that work
 
-`beforeGridWidthChange` / `gridWidthChange`. Sync veto only. This is the first bus in the codebase, so its shape sets the precedent for S2's changeset events — keep it to `on(name, handler): () => void`, and declare nothing that does not fire (I11).
+`beforeGridWidthChange` / `gridWidthChange`. Sync veto only. This is the first bus in the codebase, so its shape sets the precedent for S2's changeset events — keep it to an `on` / `off` pair that returns no disposer (conventions §4 bans a bare `() => void` handle), and declare nothing that does not fire (I11).
 
 ### Phase 5 — `src/view/splitter.ts`
 
@@ -82,7 +85,7 @@ The three panes and one number. No geometry, no scale, no data, no frame. Soft c
 
 ### Phase 6 — `GanttShell` reduced to a wiring list
 
-`resolveHost` throws `HostNotFoundError` (a new subclass in `src/model/errors.ts`, beside `UnsupportedUnitError`). `#readMetrics()` reads `--fg-row-height` and `measureTimeline()` together, invalidated by the pane-size attachment.
+`resolveHost` throws `HostNotFoundError` (a new subclass in `src/model/errors.ts`, beside `UnsupportedUnitError`). `#readMetrics()` reads `--fg-row-height` and `measureTimelinePane()` together, invalidated by the pane-size attachment.
 
 ### Phase 7 — harness and docs
 
@@ -92,7 +95,7 @@ Spec edits: `plans/01` §8.1 (mount takes surfaces, `rowLabelWidth` removed), `p
 
 ### Tests
 
-`pane-layout.test.ts`, `splitter.test.ts`, the two event tests in `gantt.test.ts`, and **`[S1-A2]`** in `gantt-shell.test.ts` — grid row tops and timeline bar tops read from the live DOM, equal to the pixel, at a fractional zoom. Add one e2e test for C5: at a non-zero `max.x`, the timeline's right-most content is reachable.
+Per the S1.8 README §6. The load-bearing two: **`[S1-A2]`** in `gantt-shell.test.ts` — grid row tops and timeline bar tops read from the live DOM, equal to the pixel, at a fractional zoom; and the C5 check — `timelinePane.scrollWidth` equals `frame.contentWidth`, which fails today and passes after the pane split.
 
 ---
 
@@ -225,6 +228,6 @@ S1 is finished when all six are true:
 |---|---|
 | S1.8 grows into one large change: panes, surfaces, a bus, a splitter and a composition root together | Seven phases, each green on `pnpm verify`. The bus (phase 4) can land as its own PR if the diff gets large. |
 | The first event bus sets a precedent that S2 must live with | Keep it at two events and one subscribe shape. Review it against `plans/02` §3 before it merges, not after. |
-| `zoom: 'preset'` first makes `max.x` non-zero, so every latent x-axis bug appears at S1.9, not S1.8 | S1.8 lands the C5 e2e test with a hand-set non-zero `max.x`, so the defect is proven closed one step before anything depends on it. |
+| `zoom: 'preset'` first makes `max.x` non-zero, so every latent x-axis bug appears at S1.9, not S1.8 | S1.8 measures the timeline pane's scrollable width against `frame.contentWidth` (S1.8 README D-S1.8-10). The check holds at `max.x = 0`, so the defect is proven closed one step before anything depends on it. |
 | The three new READMEs repeat the issue comments and then drift from them | Each README states that it supersedes its comment, as `plans/s1.5-scroll-model/README.md` §0 already does. |
 | The ~150-line soft cap gets treated as a style rule | It is R1's countermeasure. A file that wants to grow past it is a missing seam. Say which seam, in the PR. |
