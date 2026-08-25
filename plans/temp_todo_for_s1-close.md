@@ -19,7 +19,7 @@
 | I9 is `PLANNED (S1)`; I12 is `AUTO-PARTIAL` | `docs/01-invariant-guard-matrix.md:28,31` |
 | There is no event bus | no `on(` / `emit(` anywhere in `src/`; `Gantt` has one method, `destroy()` |
 | `Gantt` exposes no live config key | `src/api/gantt.ts` |
-| CI runs no e2e job, and every CI trigger is off | `.github/workflows/ci.yml:5-8` — `push` and `pull_request` are commented out |
+| CI runs no e2e job, and every CI trigger is off | `.github/workflows/ci.yml:5-8` — `push` and `pull_request` are commented out. `.githooks/pre-push` runs `pnpm test:e2e` instead (§7 Phase 5, `docs/04` §3.1) |
 | `src/view/gantt-shell.ts` is 144 lines | close to the ~150-line soft cap (R1) |
 | Two harness pages own pane CSS | `harness/index.html` and `harness/scroll-sync.html` both set `overflow: auto` and hand-write `.fg-*` rules (#41) |
 
@@ -185,14 +185,16 @@ Put `[S1-A1]` … `[S1-A5]` in the titles of the tests that prove them. The conv
 
 Four lines, per `plans/02` §5, sharing one `TimeScaleModel` and one `ScrollModel`. Apply C2. If the demo needs a fifth line — a manual `render()`, a resize nudge, a subscription — that is a finding against the API, not something the harness may paper over.
 
-### Phase 5 — **CI must run e2e, or the gate is a promise**
+### Phase 5 — something must run e2e, or the gate is a promise · **closed early**
 
-This is the item the issue does not name, and it blocks the definition of done. `[S1-A1]` and `[S1-A4]` are Playwright tests. `.github/workflows/ci.yml` has no e2e job, and every trigger in it is commented out. CLAUDE.md says every invariant maps to a CI job. So:
+`[S1-A1]` and `[S1-A4]` are Playwright tests and `scripts/slice-gate.mjs` shells out to `pnpm test:e2e` for both, so an unrun e2e suite makes the S1 gate unprovable. `.github/workflows/ci.yml` has no e2e job and every trigger in it is commented out.
 
-1. Add an `e2e` job that runs `pnpm exec playwright install --with-deps chromium` and then `pnpm test:e2e`.
-2. Decide whether the `push` / `pull_request` triggers come back on. If they stay off, write the reason into `docs/04-hooks-and-ci.md`, because a reader today cannot tell "off on purpose" from "broken".
+**Settled: `pnpm test:e2e` runs in `.githooks/pre-push`, beside `pnpm verify`.** It is not folded into `verify`, because `verify` is kept at CI parity (`docs/04` §3) and e2e is not a CI job. Recorded in `docs/04` §3.1 with the reason, so a reader can tell "in the hook on purpose" from "missing from CI".
 
-Ask the repository owner before turning the triggers back on — it changes what every future push costs.
+Left for S1.11 itself:
+
+1. Confirm the gate's e2e checks pass through the hook path — the same `pnpm test:e2e` the gate calls.
+2. When the `push` / `pull_request` triggers come back on, e2e gets its own CI job (`pnpm exec playwright install --with-deps chromium`, then `pnpm test:e2e`) and the hook line stays as the local half. Turning the triggers on changes what every push costs, so it is the repository owner's call, not this step's.
 
 ### Phase 6 — the gate itself
 
@@ -216,7 +218,7 @@ S1 is finished when all six are true:
 1. The five acceptance boxes in `plans/03-slices.md` are ticked, each against a test that carries its id.
 2. `node scripts/slice-gate.mjs` prints an S1 gate and every check passes.
 3. `pnpm verify` is green.
-4. `pnpm test:e2e` is green, and a CI job runs it.
+4. `pnpm test:e2e` is green, and `.githooks/pre-push` runs it on every push.
 5. I9 and I12 are enforced by rules that exist, each with a red fixture.
 6. `harness/` restates no library default, owns no pane CSS, and re-derives nothing the library computes.
 
