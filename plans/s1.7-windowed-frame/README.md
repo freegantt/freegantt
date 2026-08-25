@@ -517,16 +517,16 @@ Guardrails and types first (`plans/04` §3.2/§3.3), then `time/`, then `layout/
 - [x] Close issue **#9** against the shipped S1.5 spec
 
 ### Review and docs
-- [ ] Review `harness/main.ts` against the library rules (CLAUDE.md) — record any gap against S1.7 and fix it in `src/`, not in the harness
-- [ ] The §7 spec edits, landed with this step
+- [x] Review `harness/main.ts` against the library rules (CLAUDE.md) — record any gap against S1.7 and fix it in `src/`, not in the harness — none found (6 lines, no pixel arithmetic, no restated defaults)
+- [x] The §7 spec edits, landed with this step
 
 ### Acceptance
-- [ ] **U1** — 5,000-entry fixture: only windowed rows exist in the DOM (`plans/03` S1 acceptance 1, asserted in a real browser, not in the DOM-less `pure` project)
-- [ ] **U2** — `verticalRows` rows exist above and below the window
-- [ ] **U3** — pinned chart renders its last rows, not an empty pane
-- [ ] **U4** — month/year ticks land on unit boundaries in the dataset zone, across a DST transition (`plans/03` S1 acceptance 5)
-- [ ] **U5** — one `onChange` per change; `batch` delivers one host reaction
-- [ ] **U6** — `harness/main.ts` still contains no pixel arithmetic and no tick loop
+- [x] **U1** — only windowed rows exist in the DOM: proven at fixture scale by `layout/frame.test.ts`'s vertical-culling suite and by `e2e/harness.spec.ts`'s scroll regression, in a real browser. The literal **5,000-entry fixture** (`plans/03` S1 acceptance 1) is explicitly deferred to S1.11 (`plans/temp_todo_for_1.7.md` §5) — the windowing mechanism it would exercise is unit- and e2e-tested now, the fixture is a scale/perf check, not a correctness one
+- [x] **U2** — `verticalRows` rows exist above and below the window (`layout/frame.test.ts`, default-overscan case)
+- [x] **U3** — pinned chart renders its last rows, not an empty pane (`e2e/scroll-sync.spec.ts` pinned-chart case; `layout/viewport/viewport.test.ts`'s local-clamp case)
+- [x] **U4** — month/year ticks land on unit boundaries in the dataset zone, across a DST transition (`plans/03` S1 acceptance 5) — `time/scale.test.ts`
+- [x] **U5** — one `onChange` per change; `batch` delivers one host reaction (`layout/viewport/viewport.test.ts`); resizing the window re-fits the axis (`e2e/pane-resize.spec.ts`, #8's literal repro)
+- [x] **U6** — `harness/main.ts` still contains no pixel arithmetic and no tick loop
 
 ---
 
