@@ -10,7 +10,8 @@ const scale: TimeScale = {
   xForInstant: () => 0,
   instantForX: () => sampleEntries[0]!.start,
   widthForDuration: () => 100,
-  ticks: () => [{ instant: sampleEntries[0]!.start, x: 0 }],
+  ticks: () => [{ instant: sampleEntries[0]!.start, x: 0, width: 24 }],
+  contentWidth: 100,
 };
 const preset: ViewPreset = {
   id: 'none',
