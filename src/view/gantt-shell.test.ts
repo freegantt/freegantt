@@ -177,7 +177,7 @@ describe('scroll (D9, #9)', () => {
     shellB.destroy();
   });
 
-  it('culls rows against the current scroll position, not always (0,0) (regression: render() hardcoded viewport.y to 0, so scrolling past the first screenful rendered nothing)', () => {
+  it("culls rows against the current scroll position, not always (0,0) (regression: render() hardcoded the culling window's y to 0, so scrolling past the first screenful rendered nothing)", () => {
     const scroll = new ScrollModel();
     const host = document.createElement('div');
     Object.defineProperty(host, 'clientHeight', { value: 320, configurable: true }); // 10 rows @ 32px
