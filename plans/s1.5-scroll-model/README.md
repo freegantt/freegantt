@@ -83,6 +83,8 @@ Sharing between charts with **different row counts** links y as well and behaves
 
 ### D-S1.5-6 — The no-feedback-loop rule compares against the **local** value
 
+**Superseded at S1.7** (`plans/s1.7-windowed-frame/README.md` §3.5, D-S1.7-2): `myMax`/`mine` below moved out of the attachment. `Viewport.visible` now resolves the same locally-clamped value from `Viewport`'s own pushed `{content, pane}` extents, and `view/scroll-attachment.ts` only reads `viewport.visible` — it derives nothing itself. The epsilon comparison and its two jobs (fractional `scrollTop`, redundant-write filtering) are unchanged.
+
 The S1.5b invariant — write to the element only when `|element.scrollTop − state.position.y| >= 1` — **is broken by D-S1.5-1, and not in an edge case.** On the pinned chart: model holds 4000, attachment writes 4000, the element clamps to 1000, fires `scroll` with 1000, the attachment sees 1000 ≠ 4000, calls `panTo(1000)`, and the shared position is destroyed. Every frame.
 
 The fix stays stateless — compare against **what this element should be showing**:
@@ -153,7 +155,9 @@ export interface ScrollBinding {
   readonly pane: Size;
 }
 
-/** @internal — `view/` only. Never re-exported from `api/`. */
+/** @internal — `view/` only. Never re-exported from `api/`.
+ *  Superseded at S1.7 (`plans/s1.7-windowed-frame/README.md` §3.8 A): `setContent`/`setPane`
+ *  are `setContentSize`/`setPaneSize` in the shipped code — the fields stay `content`/`pane`. */
 export interface ScrollBindingHandle {
   unbind(): void;
   setContent(size: Size): void;
@@ -198,6 +202,8 @@ export class ScrollModel {
 - No module-level state; two models on one page are independent (I2).
 
 ### 3.3 `src/view/scroll-attachment.ts` — the only file that touches element scroll (I12)
+
+**Superseded at S1.7** (`plans/s1.7-windowed-frame/README.md` §3.6): the shipped `attachScroll` takes `(element, viewport)`, not `(element, scroll, onChange)` — `Viewport.bind` now owns the binding, this file only reads `viewport.visible` and writes/reads the element. `ScrollAttachment` no longer has `setContent`/`setPane`; those became `Viewport`'s `setContentSize`/`setPaneSize`. The shape below is the S1.5-era design, kept for the D-S1.5-6/D-S1.5-7 rationale it still explains correctly.
 
 ```ts
 import type { Size } from '../model/index.js';
@@ -346,7 +352,7 @@ Guardrails and types first (`plans/04` §3.2/§3.3), then the pure model, then t
 - [x] Tests per §7 (pure)
 
 ### `view/scroll-attachment.ts`
-- [x] `attachScroll(element, scroll, onChange)` — owns the binding, binds on attach, unbinds on `detach()`
+- [x] `attachScroll(element, scroll, onChange)` — owns the binding, binds on attach, unbinds on `detach()`. **Superseded at S1.7:** the signature is now `attachScroll(element, viewport)` — `Viewport.bind` owns the binding, and this file owns only the DOM edge, reading `viewport.visible` (`plans/s1.7-windowed-frame/README.md` §3.6).
 - [x] Local-clamp echo rule (D-S1.5-6) with the epsilon comment naming both its jobs
 - [x] Reaction order: `onChange()` then element write (D-S1.5-7)
 - [x] Tests per §7 (dom)
