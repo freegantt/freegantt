@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>FreeGantt harness — S1.5 scroll sync</title>
+    <style>
+      body {
+        font-family: system-ui, sans-serif;
+        margin: 2rem;
+      }
+      .fg-gantt {
+        --fg-row-height: 32px;
+        --fg-row-label-width: 220px;
+        position: relative;
+        border: 1px solid #ccc;
+        overflow: auto;
+      }
+      #tall {
+        height: 240px;
+        margin-bottom: 1rem;
+      }
+      #short {
+        height: 240px;
+      }
+      .fg-header {
+        height: 20px;
+        border-bottom: 1px solid #ddd;
+        background: #fafafa;
+      }
+      .fg-tick {
+        top: 0;
+        font-size: 10px;
+        color: #666;
+        padding-left: 2px;
+        white-space: nowrap;
+        border-left: 1px solid #eee;
+        height: 20px;
+        line-height: 20px;
+      }
+      .fg-rows {
+        position: absolute;
+        inset: 0;
+        top: 20px;
+      }
+      .fg-row {
+        position: absolute;
+        left: 0;
+        font-size: 11px;
+        line-height: var(--fg-row-height);
+        padding: 0 6px;
+        box-sizing: border-box;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        color: #333;
+      }
+      .fg-bars {
+        position: absolute;
+        inset: 0;
+        top: 20px;
+      }
+      .fg-bar {
+        background: #4a7a58;
+        color: white;
+        font-size: 11px;
+        line-height: var(--fg-row-height);
+        padding: 0 6px;
+        box-sizing: border-box;
+        border-radius: 3px;
+        white-space: nowrap;
+        overflow: hidden;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>FreeGantt — S1.5 scroll sync</h1>
+    <p>Two Gantts sharing one ScrollModel. #tall has every fixture entry; #short has the first 20.</p>
+    <div id="tall" class="fg-gantt"></div>
+    <div id="short" class="fg-gantt"></div>
+    <script type="module" src="./scroll-sync.ts"></script>
+  </body>
+</html>

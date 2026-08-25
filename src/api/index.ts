@@ -2,8 +2,8 @@ export { Dataset } from './dataset.js';
 export type { DatasetOptions } from './dataset.js';
 export { Gantt } from './gantt.js';
 export type { GanttOptions } from './gantt.js';
-export { TimeScaleModel } from '../view/index.js';
-export type { TimeScaleIntent } from '../view/index.js';
+export { TimeScaleModel, ScrollModel } from '../view/index.js';
+export type { TimeScaleIntent, ScrollIntent, ScrollPosition, ScrollState } from '../view/index.js';
 
 // model/ is the type surface api/ re-exports (plans/01 §1: "Only api/ and model/ types are public").
 // The layer diagram doesn't draw the arrow because it's a type-only re-export, not a behavioral one —
@@ -11,6 +11,9 @@ export type { TimeScaleIntent } from '../view/index.js';
 // consumer has no legal way to build the Entry[] that `new Dataset({ entries })` requires (#24).
 export { entryId, itemId } from '../model/index.js';
 export type { Entry, EntryKind, EntryId, ItemId, Instant, TimeSpan, Duration } from '../model/index.js';
+// Point/Size are the S1.5 ScrollModel's own vocabulary (S1.5 README §5) — a consumer building
+// `ScrollIntent.position` or reading `ScrollState` needs the shape in the public surface too.
+export type { Point, Size } from '../model/index.js';
 
 // Same allow-list, extended to time/'s primitives and presets: dayPreset/instant are what
 // TimeScaleIntent needs to build a shared viewport (D9's x-sync requires a consumer to construct one

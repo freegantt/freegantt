@@ -87,6 +87,9 @@ export interface GeometryFrame {
   /** Only rows in the vertical window; `top` in absolute content coordinates. */
   rows: FrameRow[];
   contentHeight: number;
+  /** Full horizontal extent of the bound `TimeScale`'s range, in px — what `ScrollModel` binds as
+   * its content width (S1.5 README §3.2). */
+  contentWidth: number;
   bars: FrameBar[];
   links: readonly FrameLink[];
   decorations: readonly FrameDecoration[];
@@ -165,6 +168,7 @@ export function computeFrame(input: LayoutInput): GeometryFrame {
     header: { ticks },
     rows,
     contentHeight: heights.totalHeight,
+    contentWidth: Math.max(0, scale.xForInstant(scale.range.end) - scale.xForInstant(scale.range.start)),
     bars,
     links: [],
     decorations: [],

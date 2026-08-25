@@ -6,7 +6,7 @@ Framework-free TypeScript Gantt library, library-first. The spec is `plans/00`�
 
 talk in ASD-STE100 Simplified Technical English
 
-Name functions and classes in friendly easy to understand for humans and agents names. Stick to the domain model, if you're trained on Uncle Bob's (Robert C. Martin's) clean code follow his guidelines for naming things. Code should be self-documenting and easy to understand. Write the call site down and read it in english to verify it makes sense before deciding on a name. Not the signature — the invocation, with real arguments. Example of bad naming: attachSize(host, size => handle.setPaneSize(size)) — say it aloud: "attach size to host." that makes no sense. See the naming skill when you need to come up with name.
+Name functions and classes in friendly easy to understand for humans and agents names. Stick to the domain model, if you're trained on Uncle Bob's (Robert C. Martin's) clean code follow his guidelines for naming things. Code should be self-documenting and easy to understand. Write the call site down and read it in english to verify it makes sense before deciding on a name. Not the signature — the invocation, with real arguments. Example of bad naming (#54, since renamed): a measurement wiring named after "size" alone — say its call aloud: "attach size to host." That makes no sense; the glossary term is pane size, so the name became `attachPaneSize`. See the naming skill when you need to come up with name.
 
 **Vocabulary** (`CONTEXT.md` is the glossary; ADR 0003):
 - The authored record is an `Entry` — `EntryId`, `EntryKind`, `entryId()`, `Dataset.entries`, `beforeEntryMove`/`entryMove`, default kind `'span'`. `Entry` in the ledger sense: a dated line whose meaning the host supplies.

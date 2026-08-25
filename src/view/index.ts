@@ -3,5 +3,11 @@
 // bound ScrollModel (I12).
 export { GanttShell } from './gantt-shell.js';
 export type { GanttShellOptions } from './gantt-shell.js';
-export { TimeScaleModel } from '../layout/index.js';
-export type { TimeScaleIntent, ViewPreset } from '../layout/index.js';
+export { TimeScaleModel, ScrollModel } from '../layout/index.js';
+export type {
+  TimeScaleIntent,
+  ViewPreset,
+  ScrollIntent,
+  ScrollPosition,
+  ScrollState,
+} from '../layout/index.js';

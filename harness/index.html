@@ -17,8 +17,10 @@
         --fg-row-label-width: 220px;
         position: relative;
         border: 1px solid #ccc;
-        /* overflow: auto makes the browser the scroll owner — ScrollModel (#9) doesn't exist yet, so
-           there is no library-owned scroll to use instead. Tracked in #41 until #9 lands. */
+        /* overflow: auto makes this element the native scroller GanttShell's private default
+           ScrollModel binds to (S1.5, #9) — the library owns the scroll *position*, but this host
+           still states its own CSS overflow rather than the library owning the pane split. That
+           split is S1.8's timeline pane, tracked in #41 until it lands. */
         overflow: auto;
         height: 70vh;
       }

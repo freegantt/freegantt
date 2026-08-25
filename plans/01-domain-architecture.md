@@ -66,7 +66,7 @@ There is deliberately no `data/ --> scheduling/` edge: `data/` has no static dep
 
 ```
 src/
-  model/         entity types, ids, brands           (pure)
+  model/         entity types, ids, brands, geometry primitives (Point/Size/PixelSpan/Rect) (pure)
   time/          instants, zones, TimeScale, presets  (pure)
   data/          stores, transactions, undo, changesets, serialization (pure)
   scheduling/    propagation engine + policies        (pure)
@@ -491,7 +491,7 @@ flowchart TB
   TS --> VA
   TS --> VB
   SM -->|x, y| VA
-  SM -->|"x only (or both)"| VB
+  SM -->|"x, y (sharing links both — D-S1.5-3)"| VB
 
   classDef obj fill:#fdf1e7,stroke:#a8703c,color:#2e1f12
   classDef ch fill:#eef1f8,stroke:#5a6a9a,color:#1c2230
@@ -501,7 +501,11 @@ flowchart TB
 
 `TimeScale` and `ScrollModel` are **standalone observable objects**. Every Gantt binds to one of each; by default the Gantt constructs its own privately, so single-Gantt usage never sees the concept. Passing the same instance to two Gantt instances syncs them on that axis — x, y, or both — with zero special-casing in either. **Rule:** no view or interaction code reads or writes scroll position except through the bound `ScrollModel`; no code converts time to pixels except through the bound `TimeScale`. That rule is what makes D9 free later, and it is lintable.
 
-**D-A — viewport models are pure observables; the DOM binding is separate.** "Observable" above is literal, not aspirational: `TimeScaleModel.bind(binding, onChange)` (and, on `ScrollModel`, the equivalent scroll/extent setters) invalidate the memoized resolution *and* run every bound `onChange`, so every other Gantt sharing the model re-renders without anything external calling `render()` again (#6). `onChange` is supplied at bind time, not through a separate `subscribe()` — the reaction is part of what a Gantt states when it joins the shared axis, not a second lifecycle a caller wires up afterward. There is no standalone notify primitive: `TimeScaleModel` keeps one `Map<ScaleBinding, onChange>`, so binding membership and change notification are the same collection instead of two kept in sync by hand. This is a deliberately minimal mechanism, not `data/`'s `alien-signals` façade — `layout/` has no edge to `data/` (§1, I1); if a third shareable model needs more than "call my reaction when I might be stale," that is the signal to consolidate under the `data/` façade rather than growing a second one. `bind()` returns a small handle (`{ unbind(), setViewportWidth(width) }`) rather than a bare unbind closure, so a bound Gantt can push a re-measured viewport width without unbind+rebind churn — this is what lets the DOM-facing resize binding (`view/resize-binding.ts`, #8) stay a thin `ResizeObserver` wrapper with no knowledge of `layout/`'s internals.
+**D-A — viewport models are pure observables; the DOM binding is separate.** "Observable" above is literal, not aspirational: `TimeScaleModel.bind(binding, onChange)` and `ScrollModel.bind(binding, onChange)` invalidate the memoized resolution *and* run every bound `onChange`, so every other Gantt sharing the model re-renders without anything external calling `render()` again (#6). `onChange` is supplied at bind time, not through a separate `subscribe()` — the reaction is part of what a Gantt states when it joins the shared axis, not a second lifecycle a caller wires up afterward. There is no standalone notify primitive: each model keeps one `Map<Binding, onChange>`, so binding membership and change notification are the same collection instead of two kept in sync by hand. This is a deliberately minimal mechanism, not `data/`'s `alien-signals` façade — `layout/` has no edge to `data/` (§1, I1); if a third shareable model needs more than "call my reaction when I might be stale," that is the signal to consolidate under the `data/` façade rather than growing a second one. `bind()` returns a small handle (`{ unbind(), setPaneWidth(width) }` / `{ unbind(), setContent(size), setPane(size) }`) rather than a bare unbind closure, so a bound Gantt can push re-measured geometry without unbind+rebind churn — this is what lets the DOM-facing bindings (`view/scroll-attachment.ts`, shipped S1.5; `view/pane-size-attachment.ts`, #8) stay thin wrappers with no knowledge of `layout/`'s internals.
+
+**One notification contract for both models (S1.5, D-S1.5-4):** `bind` always notifies the newcomer — including when nothing measurably changed, since that call *is* the newcomer's first render. Every other notification (another binding's `bind`/`unbind`, a `setPaneWidth`/`setContent`/`setPane`) fires iff the resolved value actually changed. Both models also expose `batch(run)`: several writes inside `run` deliver at most one notification, flushed in a `finally` so a throwing `run` cannot wedge the model.
+
+`ScrollModel` resolves `{ position, max }` (`layout/viewport/scroll-model.ts`, shipped S1.5): **one shared `position`**, clamped to `[0, max]` only at `panTo` write time — a later shrink of `max` (a filter, a collapse) never rewrites `position`, so restoring the extent restores the place with zero remembered state. `max` is the **loosest** bound across every bound Gantt's measured `{content, pane}` — not a claim about any one chart's scroller. Each bound Gantt clamps the shared `position` to its own `content`/`pane` locally (in `view/scroll-attachment.ts`, comparing against what *that* element should show, never the raw shared value — the local clamp is what lets two Gantts with different row counts share one `ScrollModel` without the shorter one vetoing the taller one's range, or a pinned chart's native browser clamp destroying the shared position every frame).
 
 ### 8.3 Split pane (D8)
 

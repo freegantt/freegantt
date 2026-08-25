@@ -35,6 +35,7 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
   let headerLayer: HTMLElement | undefined;
   let rowLayer: HTMLElement | undefined;
   let barLayer: HTMLElement | undefined;
+  let contentSizer: HTMLElement | undefined;
   let rowLabelWidth = 0;
 
   const tickNodes = new Map<number, HTMLElement>();
@@ -127,13 +128,36 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
       barLayer = document.createElement('div');
       barLayer.className = 'fg-bars';
       barLayer.style.position = 'relative';
-      barLayer.style.left = `${rowLabelWidth}px`;
-      host.append(headerLayer, rowLayer, barLayer);
+      // `margin-left`, not `left`: an offset property shifts a relatively-positioned box without
+      // shrinking its (auto) width, so it would overflow `host` by `rowLabelWidth` on the right —
+      // exactly the phantom horizontal scroll range that showed up as a blank gap past real content.
+      // A margin shrinks the auto width to fit, so the layer's right edge stays flush with `host`'s.
+      barLayer.style.marginLeft = `${rowLabelWidth}px`;
+      // Owns the native scrollable extent (S1.5 README D-S1.5-9): rows/bars are positioned absolutely,
+      // so nothing else in this DOM makes `host` actually overflow — without this, ScrollModel's
+      // `panTo` has nowhere real to write. Zero visual footprint; `sync()` moves it to the frame's
+      // bottom-right corner every render.
+      contentSizer = document.createElement('div');
+      contentSizer.setAttribute('aria-hidden', 'true');
+      contentSizer.style.position = 'absolute';
+      contentSizer.style.top = '0';
+      contentSizer.style.left = '0';
+      contentSizer.style.width = '1px';
+      contentSizer.style.height = '1px';
+      contentSizer.style.visibility = 'hidden';
+      host.append(headerLayer, rowLayer, barLayer, contentSizer);
     },
     sync(frame: GeometryFrame) {
       syncHeader(frame.header.ticks);
       syncRows(frame.rows);
       syncBars(frame.bars);
+      if (contentSizer) {
+        // The sizer itself is 1x1px, so its far edge — not its origin — must land at the content
+        // extent, or the browser's native scrollable range ends up 1px past what ScrollModel computed.
+        const x = Math.max(0, rowLabelWidth + frame.contentWidth - 1);
+        const y = Math.max(0, frame.contentHeight - 1);
+        contentSizer.style.transform = `translate(${x}px, ${y}px)`;
+      }
     },
     applyState(_state: InteractionState) {
       // Hot path lands in S4: class toggles + transforms only, zero allocation (plans/01 §3).
@@ -160,6 +184,7 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
       headerLayer = undefined;
       rowLayer = undefined;
       barLayer = undefined;
+      contentSizer = undefined;
       rowLabelWidth = 0;
     },
     get rowLabelWidth() {

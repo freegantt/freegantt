@@ -1,6 +1,7 @@
 // I12 (plans/01 §8.2, §11): ban scrollLeft/scrollTop/scrollTo outside the ScrollModel binding.
-// ScrollModel itself lands in S1 (src/view/scroll-model.ts); this rule is in force from S0 per
-// plans/04 §3.3 so it's already red-tested before there's real code to violate it.
+// The DOM-facing binding is src/view/scroll-attachment.ts (S1.5, #9) — the only file allowed to
+// touch element scroll; this rule is in force from S0 per plans/04 §3.3 so it's already
+// red-tested before there's real code to violate it.
 
 'use strict';
 
@@ -23,7 +24,7 @@ module.exports = {
   },
   create(context) {
     const filename = context.filename ?? context.getFilename();
-    if (/[/\\]view[/\\]scroll-model/.test(filename)) return {};
+    if (/[/\\]view[/\\]scroll-attachment/.test(filename)) return {};
 
     return {
       MemberExpression(node) {
