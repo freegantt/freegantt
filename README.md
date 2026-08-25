@@ -14,30 +14,143 @@ stable across slices until S1 closes (`plans/03-slices.md`).
 Minimal example: put a small, fixed set of entries into a `Gantt`.
 
 ```ts
-import { Gantt, Dataset, entryId, instant } from 'freegantt';
+import { Gantt, Dataset } from 'freegantt';
 
 const dataset = new Dataset({
-  timeZone: 'America/Chicago', // IANA zone; required — resolves day boundaries for all entries (D6)
+  timeZone: 'America/Chicago', // IANA zone; required — every date below is read through it (D6)
   entries: [
-    { id: entryId('t1'), name: 'Design', start: instant('2026-09-01'), end: instant('2026-09-08') },
-    { id: entryId('t2'), name: 'Build', start: instant('2026-09-08'), end: instant('2026-09-22') },
-    { id: entryId('t3'), name: 'QA', start: instant('2026-09-22'), end: instant('2026-09-29') },
+    { id: 't1', name: 'Design', start: '2026-09-01', end: '2026-09-07' },
+    { id: 't2', name: 'Build', start: '2026-09-08', end: '2026-09-21' },
+    { id: 't3', name: 'QA', start: '2026-09-22', end: '2026-09-28' },
   ],
 });
 
 const gantt = new Gantt({
-  host: document.getElementById('gantt')!, // any HTMLElement
+  host: document.getElementById('gantt')!, // an HTMLElement or a CSS selector
   dataset,
 });
 ```
 
-That's the whole surface for a static chart today: build `Entry[]` with `entryId()` for ids and
-`instant()` for dates (it takes a `Date`, an epoch number, or an ISO string like `'2026-09-01'` —
-no bespoke date math needed), wrap them in a `Dataset` with the dataset's IANA `timeZone`, and
-mount a `Gantt` on a host element. `Entry.start`/`Entry.end` are typed as `Instant` — a branded
-value, not a raw `Date`/string — so `instant()` is required to build one; there's no coercion.
-`gantt.destroy()` tears it down. Editing entries after mount (`dataset.entries.add/update/remove`),
-undo/redo, and dependencies land in later slices — see `plans/03-slices.md`.
+That is the whole surface for a static chart today. Ids are plain strings and dates are plain
+strings; nothing has to be constructed first. Wrap the entries in a `Dataset` with the IANA
+`timeZone` they are written in, mount a `Gantt` on a host element, and `gantt.destroy()` tears it
+down. Editing entries after mount (`dataset.entries.add/update/remove`), undo/redo, and dependencies
+land in later slices — see `plans/03-slices.md`.
+
+## Dates and ids a host can write
+
+`Dataset` reads what a host writes (`EntryInput`) into what the library stores (`Entry`) once, at
+construction. Two things get looser at that boundary, and only there.
+
+**Ids** are plain `string`s. Internally an id is a branded `EntryId` so it cannot be mixed with an
+ordinary string, but the brand is applied on the way in — a host never calls `entryId()`. (It is
+still exported for a host that wants to hold branded ids of its own.)
+
+**Dates** are any `InstantInput`: a string, a `Date`, epoch milliseconds, or an already-branded
+`Instant`. Every form below is legal in the same entry list:
+
+```ts
+import { Dataset, instant } from 'freegantt';
+
+const dataset = new Dataset({
+  timeZone: 'America/Chicago', // CDT (UTC-5) on the dates below
+  entries: [
+    // A bare calendar date — that day's start, in the dataset's timeZone.
+    { id: 'a', name: 'Date only', start: '2026-09-08', end: '2026-09-10' },
+    //                                    -> 2026-09-08T05:00:00Z
+
+    // A wall-clock time with no zone — read in the dataset's timeZone.
+    { id: 'b', name: 'With a time', start: '2026-09-08T14:30', end: '2026-09-10' },
+    //                                     -> 2026-09-08T19:30:00Z
+    // Seconds and a fractional second are optional, and a space works instead of the `T`.
+    { id: 'c', name: 'To the ms', start: '2026-09-08 14:30:45.250', end: '2026-09-10' },
+    //                                   -> 2026-09-08T19:30:45.250Z
+
+    // A zone of its own — the offset wins and timeZone is not consulted.
+    { id: 'd', name: 'UTC', start: '2026-09-08T14:30:00Z', end: '2026-09-10' },
+    //                            -> 2026-09-08T14:30:00Z
+    { id: 'e', name: 'Offset', start: '2026-09-08T14:30:00+02:00', end: '2026-09-10' },
+    //                               -> 2026-09-08T12:30:00Z
+
+    // A Date object — absolute, as written. Its own timezone handling already happened.
+    { id: 'f', name: 'Date object', start: new Date('2026-09-08T14:30:00Z'), end: '2026-09-10' },
+    //                                    -> 2026-09-08T14:30:00Z
+
+    // Epoch milliseconds, and an Instant a host built with instant() — both pass straight through.
+    { id: 'g', name: 'Epoch ms', start: 1788000000000, end: '2026-09-10' },
+    { id: 'h', name: 'Instant', start: instant('2026-09-08T14:30:00Z'), end: '2026-09-10' },
+  ],
+});
+```
+
+As a table:
+
+| Written                                                    | Read as                                                 |
+| ---------------------------------------------------------- | ------------------------------------------------------- |
+| `'2026-09-08'`                                             | that day's start, in the dataset's `timeZone`           |
+| `'2026-09-08T14:30'` · `'2026-09-08 14:30'` · `'…:45.250'` | that wall-clock time, in the dataset's `timeZone`       |
+| `'2026-09-08T14:30:00Z'` · `'…+02:00'`                     | absolute — the offset wins, `timeZone` is not consulted |
+| `new Date(…)` · `1788000000000` · `instant(…)`             | absolute, as written                                    |
+
+### Which zone applies, and when
+
+A string with **no** offset is a _Plain_ time — a wall-clock reading that names no instant until a
+zone resolves it. The dataset's `timeZone` is that zone. This is why `timeZone` is required: it
+makes one entry list render identically for every viewer, rather than shifting with whatever machine
+opens the page.
+
+If you want an entry pinned to an absolute moment regardless of the dataset's zone, write the zone
+into the string (`'…Z'` or `'…+02:00'`) or pass a `Date`. Those never consult `timeZone`.
+
+```ts
+const entries = [{ id: 't1', name: 'Design', start: '2026-09-08', end: '2026-09-10' }];
+
+// One bare date, three zones, three different instants:
+new Dataset({ timeZone: 'America/Chicago', entries }); // start -> 2026-09-08T05:00:00Z
+new Dataset({ timeZone: 'Asia/Tokyo', entries }); //      start -> 2026-09-07T15:00:00Z
+new Dataset({ timeZone: 'UTC', entries }); //             start -> 2026-09-08T00:00:00Z
+
+// Write the zone into the string instead, and all three agree:
+const pinned = [{ id: 't1', name: 'Design', start: '2026-09-08T00:00:00Z', end: '2026-09-10' }];
+new Dataset({ timeZone: 'Asia/Tokyo', entries: pinned }); // start -> 2026-09-08T00:00:00Z
+```
+
+DST is resolved explicitly rather than left to chance: a Plain time inside a spring-forward gap
+shifts forward by the gap, and an ambiguous fall-back time takes the earlier offset.
+
+A value that names no instant — `'next tuesday'`, or a date the calendar does not have such as
+`'2026-02-31'` — throws `InvalidInstantError` rather than sliding to a nearby date.
+
+### `dateOnlyEnd` — what a bare date on `end` means
+
+Storage is half-open `[start, end)`, so `end` is the boundary _after_ the entry, not its last
+moment. A host writing a bare date on `end` normally means the last day it wants included, so that
+is the default reading:
+
+```ts
+new Dataset({
+  timeZone: 'America/Chicago',
+  dateOnlyEnd: 'inclusive', // the default
+  entries: [{ id: 't1', name: 'Design', start: '2026-09-01', end: '2026-09-07' }],
+});
+// covers Sept 1 through Sept 7 — the stored end is the start of Sept 8
+```
+
+Set `dateOnlyEnd: 'exclusive'` to read a bare date literally instead, matching stored geometry
+exactly:
+
+```ts
+new Dataset({
+  timeZone: 'America/Chicago',
+  dateOnlyEnd: 'exclusive',
+  entries: [{ id: 't1', name: 'Design', start: '2026-09-01', end: '2026-09-08' }],
+});
+// covers Sept 1 through Sept 7 — the stored end is the start of Sept 8
+```
+
+The rule applies **only to a date-only string on an `end` field** (entry ends and segment ends). An
+`end` that already carries a time of day, a `Date`, epoch milliseconds, or an `Instant` is a
+boundary already and is read literally under either setting. `start` is never adjusted.
 
 ## Public API
 
@@ -50,11 +163,18 @@ surface.
 ```ts
 import { Dataset } from 'freegantt';
 
-const dataset = new Dataset({ entries: [...] }); // readonly Entry[], S0/S1 scope
+const dataset = new Dataset({
+  entries, // readonly EntryInput[] — see "Dates and ids a host can write"
+  timeZone, // IANA zone, required (D6)
+  dateOnlyEnd, // optional, 'inclusive' (default) | 'exclusive'
+});
+
+dataset.entries; // readonly Entry[] — ids branded, dates resolved to Instant
 ```
 
-`Dataset` is a headless, DOM-free wrapper around an entry list. Transactions, undo/redo, and
-mutation (`dataset.entries.add/update/remove`) land in S2 — see `plans/03-slices.md`.
+`Dataset` is a headless, DOM-free wrapper around an entry list. It reads each `EntryInput` into an
+`Entry` once, at construction, and never mutates what the host handed it. Transactions, undo/redo,
+and mutation (`dataset.entries.add/update/remove`) land in S2 — see `plans/03-slices.md`.
 
 ### `TimeScaleModel` (S1)
 

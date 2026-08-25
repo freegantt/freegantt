@@ -19,3 +19,12 @@ export class UnsupportedUnitError extends FreeGanttError {
     this.name = 'UnsupportedUnitError';
   }
 }
+
+/** `code: 'invalid-instant'` — a host wrote a value on an `InstantInput` field that names no instant
+ * (an unparseable string, or a calendar date that does not exist such as `'2026-02-31'`). */
+export class InvalidInstantError extends FreeGanttError {
+  constructor(message: string) {
+    super('invalid-instant', message);
+    this.name = 'InvalidInstantError';
+  }
+}
