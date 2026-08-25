@@ -201,8 +201,8 @@ Rules land with the code they can govern. Rows below match the matrix statuses.
 
 | Slice | Rules active |
 |---|---|
-| S0 | B1, B2, B3, B5, B6, B7, B8, B10, B11, 3.1, 3.2, 3.3, 3.4, 3.5, 3.7, 3.8, 3.9 |
-| S1 | + B4, 3.10 |
+| S0 | B1, B2, B3, B5, B6, B7, B8, B10, B11, 3.1, 3.3, 3.4, 3.5, 3.7, 3.8, 3.9 |
+| S1 | + B4, 3.2, 3.10 |
 | S2 | + B9, 3.6 |
 | S4 | (no new rules — I6/I14 are tests) |
 

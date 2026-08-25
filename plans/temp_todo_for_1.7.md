@@ -43,13 +43,10 @@ Three items. Only T3 is engineering; T1 and T2 are tracker hygiene that an agent
 
 ---
 
-## 3. Two decisions to make before Phase 4 and Phase 6
+## 3. Two decisions settled, before Phase 4 and Phase 6
 
-Both come out of the S1.7 spec itself and both change what gets written.
-
-**Q-A — Does a single band render a wrapper element?** §3.7 says "each band is one `.fg-band` row"; D-S1.7-6 says the rendered output with one band is "byte-identical". Those disagree — a `.fg-band` wrapper between `.fg-header` and `.fg-tick` is new DOM, and `harness/index.html` styles `.fg-tick` as a direct child while `e2e/harness.spec.ts` locates `.fg-bar` / `.fg-row`. **Recommendation: ship the wrapper** (S1.9's multi-band presets then need no second seam change) and accept that "byte-identical" becomes "one wrapper deeper", updating the harness CSS and any affected selector in the same commit. Record the correction in the S1.7 README rather than leaving the two sentences to disagree.
-
-**Q-B — Does the §0 defect stay inside S1.7?** `gantt-shell.ts:146-151` feeds the raw *shared* `scroll.state.position` to `computeFrame` while `scroll-attachment.ts:40-48` writes the *locally clamped* position to the element — a short chart sharing a `ScrollModel` with a tall one culls rows that do not exist and renders an empty pane. **Recommendation: keep it here.** The fix is one line inside `Viewport.visible` (D-S1.7-2), the object this step introduces, and U3's e2e case is the test that proves it. Filing it separately means writing the same line twice.
+- **A single band renders a `.fg-band` wrapper element.** §3.7's "one `.fg-band` row" wins over D-S1.7-6's "byte-identical" — the wrapper ships now so S1.9's multi-band presets need no second seam change. "Byte-identical" becomes "one wrapper deeper"; `harness/index.html`'s CSS and any selector in `e2e/harness.spec.ts` that assumes `.fg-tick` is a direct child of `.fg-header` move to account for it, in the same commit as Phase 6. The S1.7 README is corrected to match (§8 D of that phase) rather than left with the two sentences disagreeing.
+- **The §0 defect (the local-clamp / culling-window mismatch) is fixed inside S1.7, not filed separately.** The fix is one line inside `Viewport.visible` (D-S1.7-2), the object Phase 5 introduces, and U3's e2e case is the test that proves it. Filing it separately would mean writing the same line twice.
 
 ---
 
@@ -58,14 +55,14 @@ Both come out of the S1.7 spec itself and both change what gets written.
 Nine commits. Each ends green on `pnpm verify`. Guardrails and types land before the code they guard (`plans/04` §3.2/§3.3), then `time/`, then `layout/`, then the DOM edge — the order the S1.7 README §8 sets.
 
 ### Phase 0 — Close out S1.5 (no code)
-- [ ] T1 — tick `S1.5` in issue #1's body, citing `plans/s1.5-scroll-model/README.md` §9
-- [ ] T2 — close #54; retitle #8 to "Pane-size attachment: …"
-- [ ] Edit #41 down to its remaining half (overflow → S1.8, parts vocabulary → S1.10)
+- [x] T1 — tick `S1.5` in issue #1's body, citing `plans/s1.5-scroll-model/README.md` §9
+- [x] T2 — close #54; retitle #8 to "Pane-size attachment: …"
+- [x] Edit #41 down to its remaining half (overflow → S1.8, parts vocabulary → S1.10)
 
 ### Phase 1 — Guardrail: `no-time-to-pixel-math` (S1.7 §8 "Guardrails")
-- [ ] `eslint/rules/no-time-to-pixel-math.cjs` — type-aware, allowlist `src/time/scale.ts`; register in `eslint/rules/index.cjs` and `eslint.config.js`
-- [ ] `eslint/rules/no-time-to-pixel-math.test.cjs` + red fixture under `eslint/rules/fixtures/`; confirm `scripts/guard-red-test.mjs` fails on it
-- [ ] T3 — `docs/02` §5 moves 3.2 from "active S0" to S1; `docs/01` §I12 names `no-scroll-outside-scroll-model`
+- [x] `eslint/rules/no-time-to-pixel-math.cjs` — type-aware, allowlist `src/time/scale.ts`; register in `eslint/rules/index.cjs` and `eslint.config.js`
+- [x] `eslint/rules/no-time-to-pixel-math.test.cjs` + red fixture under `eslint/rules/fixtures/`; confirm `scripts/guard-red-test.mjs` fails on it
+- [x] T3 — `docs/02` §5 moves 3.2 from "active S0" to S1; `docs/01` §I12 names `no-scroll-outside-scroll-model`
 
 ### Phase 2 — Types and errors (S1.7 §3.1, §3.2)
 - [ ] `src/model/errors.ts` — `FreeGanttError` (with `code`), `UnsupportedUnitError`; re-export from `src/model/index.ts`
