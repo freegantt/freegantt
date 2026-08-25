@@ -141,6 +141,8 @@ Documented in this order; each level solves what the previous can't, and consume
 | 4 | **Events + feature config** | veto a drop, custom context-menu items, replace the editor |
 | 5 | **Plugins** | full `GanttPlugin` (see `01` §10): decorations, columns, controllers, commands |
 
+Every level-1 property the library reads as a length goes through one reader (`render/dom/pixel-property.ts`): computed value → px → validated → library default. What counts as authored is stated per property rather than re-implemented per call site — `--fg-row-height` rejects zero (a zero-height row is not a row), `--fg-row-label-width` keeps it (a host turning the gutter off authored that). Re-read cadence stays the caller's and is stated at each call site: the row-label gutter is read once at mount, row height again on every pane measurement, neither per render.
+
 Renderers return **plain serializable element descriptions** (tag/class/style/text/children), applied by the engine's reconciler — never live DOM nodes (nodes are recycled by virtualization) and never framework components in core (D5). Text by default; HTML by explicit opt-in only.
 
 ```ts

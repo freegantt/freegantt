@@ -266,6 +266,14 @@ export interface LayoutInput {
 }
 ```
 
+**Refined by the 2026-08-25 review — `heights` left `LayoutInput` (`plans/01` §4).** The shipped shape
+was `heights?: RowHeightIndex` on the input, with a doc comment telling the caller to build one index,
+cache it by entry count and row height, and invalidate it itself — implementation knowledge pushed
+across the seam, and four bookkeeping fields in `GanttShell` to obey it. `computeFrame(input, heights?)`
+now takes the index as a second parameter, and `layout/frame-layout.ts`'s `FrameLayout` is the only
+production caller that passes one: it owns the index, its cache key, and (at S5) its invalidation.
+`computeFrame` stays pure and every test here still calls it directly.
+
 **Culling rules — all inside `computeFrame`.** The buffer belongs to the layer that owns culling; `view/` never filters a frame (D-B).
 
 - **Vertical, in index space.** `start = max(0, heights.indexAtY(visible.y) − verticalRows)`; the walk stops `verticalRows` rows after the first row whose `top >= visible.y + visible.height`. Expanding in indices, not pixels, is what keeps this correct when S5 makes row heights vary.
@@ -301,7 +309,10 @@ export class Viewport {
   readonly scale: TimeScaleModel;
   readonly scroll: ScrollModel;
 
-  /** One subscription for both models: the shell reacts once, not twice (D-S1.7-1). */
+  /** One subscription for both models: the shell reacts once, not twice (D-S1.7-1).
+   *  Refined by the 2026-08-25 review: single-subscriber on purpose — a Viewport holds ONE Gantt's
+   *  pane and content extents, so a second `bind()` throws (`code: 'viewport-already-bound'`)
+   *  rather than silently replacing the reaction. The shareable objects are the models (D9). */
   bind(dataset: Dataset, onChange: () => void): ViewportHandle;
 
   /** Resolved, ready for `LayoutInput` — the shell never reaches through to `scale.scale`. */

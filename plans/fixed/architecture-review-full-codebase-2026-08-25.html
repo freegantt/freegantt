@@ -1,0 +1,342 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Architecture review for FreeGantt — 2026-08-25</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script type="module">
+      import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+      mermaid.initialize({ startOnLoad: true, theme: "neutral", securityLevel: "loose" });
+    </script>
+    <style>
+      .seam { stroke-dasharray: 4 4; }
+      .leak { stroke: #dc2626; }
+      .deep { background: linear-gradient(135deg, #0f172a, #1e293b); }
+    </style>
+  </head>
+  <body class="bg-stone-50 text-slate-900 font-sans">
+    <main class="max-w-5xl mx-auto px-6 py-12 space-y-12">
+
+      <header class="space-y-4">
+        <h1 class="font-serif text-3xl">Architecture review — <span class="font-mono">FreeGantt</span></h1>
+        <p class="text-sm text-slate-500">2026-08-25 · full codebase (post S1.7 Phase 8, <span class="font-mono">2ae78e2</span>) · scope: naming rules, clean code, interface quality, fit with S1.8–S7</p>
+        <div class="flex flex-wrap gap-3 text-xs text-slate-600">
+          <span class="inline-flex items-center gap-1"><span class="inline-block w-4 h-3 border border-slate-500 bg-white"></span> module</span>
+          <span class="inline-flex items-center gap-1"><svg width="24" height="8"><line x1="0" y1="4" x2="24" y2="4" stroke="#475569" stroke-width="2" class="seam"/></svg> seam</span>
+          <span class="inline-flex items-center gap-1"><svg width="24" height="8"><line x1="0" y1="4" x2="24" y2="4" stroke="#dc2626" stroke-width="2"/></svg> leakage / drift risk</span>
+          <span class="inline-flex items-center gap-1"><span class="inline-block w-4 h-3 deep rounded-sm"></span> deep module</span>
+        </div>
+        <!-- health strip -->
+        <div class="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 flex flex-wrap gap-x-6 gap-y-1">
+          <span>typecheck ✓</span><span>eslint ✓</span><span>boundaries ✓ (54 modules, 157 deps, 0 violations)</span>
+          <span>tests ✓ (90 pure + 29 dom)</span><span><span class="font-mono">harness/main.ts</span> clean (6 lines, no restated defaults)</span>
+        </div>
+        <p class="text-sm text-slate-600 max-w-3xl">Layer discipline, the Entry/Dataset vocabulary, half-open time, and the two-dep façade rule all hold. The candidates below are deepenings, not repairs: every one concentrates complexity that today sits in more than one place. Numbers continue from the 2026-08-24 review (its four candidates are fixed and its file lives in <span class="font-mono">plans/fixed/</span>).</p>
+      </header>
+
+      <section id="candidates" class="space-y-10">
+
+        <!-- ============ Candidate 1 ============ -->
+        <article id="c1" class="rounded-xl border border-slate-200 bg-white p-6 space-y-5 shadow-sm">
+          <div class="flex items-start justify-between gap-4">
+            <h2 class="font-serif text-2xl">1 · One notify contract, three hand-rolled copies</h2>
+            <div class="flex gap-2 shrink-0">
+              <span class="rounded-full bg-emerald-100 text-emerald-800 text-xs px-3 py-1 font-medium">Strong</span>
+              <span class="rounded-full bg-slate-100 text-slate-600 text-xs px-3 py-1">in-process</span>
+            </div>
+          </div>
+          <p class="font-mono text-sm text-slate-600">src/layout/viewport/time-scale-model.ts · src/layout/viewport/scroll-model.ts · src/layout/viewport/viewport.ts</p>
+
+          <div class="grid md:grid-cols-2 gap-4">
+            <div class="rounded-lg border border-slate-200 bg-white p-4">
+              <p class="text-xs uppercase tracking-wider text-slate-400 mb-2">Before</p>
+              <pre class="mermaid">
+flowchart TB
+  subgraph TSM[TimeScaleModel]
+    a1[bindings Map + copy-at-bind]
+    a2[batchDepth / pendingNotify]
+    a3[notify newcomer, others iff changed]
+    a4[sameResolution]
+  end
+  subgraph SM[ScrollModel]
+    b1[bindings Map + copy-at-bind]
+    b2[batchDepth / pendingNotify]
+    b3[notify newcomer, others iff changed]
+    b4[recordAndCheckChange]
+  end
+  subgraph VP[Viewport]
+    c2[coalesceDepth / pendingNotify]
+    c3[sameOverscan]
+  end
+  a2 -. must stay aligned .- b2
+  b2 -. must stay aligned .- c2
+  a3 -. must stay aligned .- b3
+  classDef leak stroke:#dc2626,stroke-width:2px,color:#dc2626;
+  linkStyle 0,1,2 stroke:#dc2626,stroke-width:2px;
+              </pre>
+            </div>
+            <div class="rounded-lg border border-slate-200 bg-white p-4">
+              <p class="text-xs uppercase tracking-wider text-slate-400 mb-2">After</p>
+              <div class="space-y-3 pt-2">
+                <div class="flex gap-3">
+                  <div class="flex-1 border border-slate-300 rounded p-2 text-center">
+                    <p class="text-xs uppercase tracking-wider">TimeScaleModel</p>
+                    <p class="text-xs text-slate-500">resolution only: zone · span · pxPerMs</p>
+                  </div>
+                  <div class="flex-1 border border-slate-300 rounded p-2 text-center">
+                    <p class="text-xs uppercase tracking-wider">ScrollModel</p>
+                    <p class="text-xs text-slate-500">resolution only: position · max</p>
+                  </div>
+                  <div class="flex-1 border border-slate-300 rounded p-2 text-center">
+                    <p class="text-xs uppercase tracking-wider">Viewport</p>
+                    <p class="text-xs text-slate-500">fan-in only</p>
+                  </div>
+                </div>
+                <svg class="w-full h-6" viewBox="0 0 300 24" preserveAspectRatio="none">
+                  <line x1="50" y1="0" x2="150" y2="24" stroke="#475569" class="seam" stroke-width="1.5"/>
+                  <line x1="150" y1="0" x2="150" y2="24" stroke="#475569" class="seam" stroke-width="1.5"/>
+                  <line x1="250" y1="0" x2="150" y2="24" stroke="#475569" class="seam" stroke-width="1.5"/>
+                </svg>
+                <div class="deep text-white rounded-lg p-4 text-center">
+                  <p class="text-xs uppercase tracking-wider">BindingRegistry</p>
+                  <p class="text-xs text-slate-300 mt-1">bind → handle · copy-at-bind · batch (finally-safe) · notify newcomer always, others iff resolved value changed</p>
+                  <p class="text-[10px] text-slate-400 mt-2">interface: bind(binding, onChange) · invalidate() · batch(run) — given resolve() + equals()</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <p class="text-sm"><span class="font-semibold">Problem:</span> the D-S1.5-4 contract — bind always notifies the newcomer; every other notification fires iff the resolved value changed; batch coalesces re-entrantly and flushes in a <span class="font-mono">finally</span> — is implemented three times, kept aligned only by comments that cite each other.</p>
+          <p class="text-sm"><span class="font-semibold">Solution:</span> one BindingRegistry module in <span class="font-mono">layout/viewport/</span> parameterised by a resolve function and an equality function; the two models keep only their resolution logic, and Viewport's coalescer becomes a third caller of the same interface.</p>
+          <ul class="text-sm list-disc pl-5 space-y-1">
+            <li>Locality: D-S1.5-4 tested once, fixed once</li>
+            <li>Leverage: one interface, three call sites today</li>
+            <li>S1.9 <span class="font-mono">zoomTo</span> batches ride the same interface</li>
+            <li><span class="font-mono">Resolution</span> / <span class="font-mono">recordAndCheckChange</span> dual shapes deleted</li>
+            <li>~120 duplicated lines removed</li>
+          </ul>
+          <div class="rounded-md bg-amber-50 border border-amber-200 px-4 py-2 text-sm text-amber-900">
+            The 2026-08-23 review rejected a notify primitive when it had <em>one</em> consumer — one adapter, hypothetical seam. Three consumers exist now; the seam is real. Decide alongside: S2's <span class="font-mono">data/</span> reactivity façade (alien-signals) — the registry should either consume that façade or be explicitly scoped to viewport models so two notification systems don't grow side by side.
+          </div>
+        </article>
+
+        <!-- ============ Candidate 2 ============ -->
+        <article id="c2" class="rounded-xl border border-slate-200 bg-white p-6 space-y-5 shadow-sm">
+          <div class="flex items-start justify-between gap-4">
+            <h2 class="font-serif text-2xl">2 · <span class="font-mono text-xl align-middle">computeFrame</span>'s speed contract lives in a comment</h2>
+            <div class="flex gap-2 shrink-0">
+              <span class="rounded-full bg-emerald-100 text-emerald-800 text-xs px-3 py-1 font-medium">Strong</span>
+              <span class="rounded-full bg-slate-100 text-slate-600 text-xs px-3 py-1">in-process</span>
+            </div>
+          </div>
+          <p class="font-mono text-sm text-slate-600">src/layout/frame.ts (LayoutInput.heights) · src/view/gantt-shell.ts (#heightsFor + 3 cache fields) · src/layout/row-height-index.ts</p>
+
+          <div class="grid md:grid-cols-2 gap-4">
+            <!-- Before: cross-section, the interface is a paragraph -->
+            <div class="rounded-lg border border-slate-200 bg-white p-4">
+              <p class="text-xs uppercase tracking-wider text-slate-400 mb-3">Before — caching sits on the wrong side of the seam</p>
+              <div class="space-y-2">
+                <div class="border-l-4 border-red-400 bg-red-50 rounded-r p-2">
+                  <p class="text-xs uppercase tracking-wider">GanttShell (view/)</p>
+                  <p class="text-xs text-slate-600 font-mono">#heights · #heightsEntryCount · #heightsRowHeight · #heightsFor()</p>
+                  <p class="text-[11px] text-red-700 mt-1">re-implements the cache the index needs to be O(log n)</p>
+                </div>
+                <svg class="w-full h-5" viewBox="0 0 300 20" preserveAspectRatio="none"><line x1="150" y1="0" x2="150" y2="20" stroke="#475569" class="seam" stroke-width="1.5"/></svg>
+                <div class="border-l-4 border-slate-300 bg-white border rounded-r p-2">
+                  <p class="text-xs uppercase tracking-wider">computeFrame (layout/)</p>
+                  <p class="text-[11px] text-slate-600 mt-1">interface includes a 10-line doc comment: "build one index, reuse it across calls, call invalidateFrom yourself…"</p>
+                </div>
+              </div>
+            </div>
+            <!-- After -->
+            <div class="rounded-lg border border-slate-200 bg-white p-4">
+              <p class="text-xs uppercase tracking-wider text-slate-400 mb-3">After — the index never crosses the seam</p>
+              <div class="space-y-2">
+                <div class="border-l-4 border-slate-300 bg-white border rounded-r p-2">
+                  <p class="text-xs uppercase tracking-wider">GanttShell (view/)</p>
+                  <p class="text-xs text-slate-600 font-mono">frameLayout.frame({ entries, scale, preset, visible, overscan, rowHeight, revision })</p>
+                </div>
+                <svg class="w-full h-5" viewBox="0 0 300 20" preserveAspectRatio="none"><line x1="150" y1="0" x2="150" y2="20" stroke="#475569" class="seam" stroke-width="1.5"/></svg>
+                <div class="deep text-white rounded-lg p-3">
+                  <p class="text-xs uppercase tracking-wider">FrameLayout (layout/)</p>
+                  <p class="text-[11px] text-slate-300 mt-1">owns the height index, its cache keys, and invalidation · calls <span class="font-mono">computeFrame</span></p>
+                  <p class="text-[11px] text-slate-400 mt-1 opacity-70 font-mono">computeFrame · PrefixSumHeightIndex (internal seam, still pure-testable)</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <p class="text-sm"><span class="font-semibold">Problem:</span> <span class="font-mono">LayoutInput.heights</span> makes the caller responsible for building, keying, and invalidating the height index — implementation knowledge pushed across the seam as prose, and the shell dutifully carries four fields of bookkeeping for it.</p>
+          <p class="text-sm"><span class="font-semibold">Solution:</span> a small stateful FrameLayout module in <span class="font-mono">layout/</span> owns the index and its invalidation; <span class="font-mono">computeFrame</span> stays pure as an internal seam for tests; <span class="font-mono">heights</span> leaves the interface.</p>
+          <ul class="text-sm list-disc pl-5 space-y-1">
+            <li>Interface shrinks; implementation absorbs the cache</li>
+            <li>Locality: S5's <span class="font-mono">invalidateFrom</span> lands in one module</li>
+            <li>Shell drops four fields and one method</li>
+            <li>Test surface unchanged — <span class="font-mono">computeFrame</span> still pure</li>
+          </ul>
+          <div class="rounded-md bg-amber-50 border border-amber-200 px-4 py-2 text-sm text-amber-900">
+            The shell's own comment already concedes the shape: "variable per-row heights, S5, will need finer-grained invalidateFrom calls here instead of a full rebuild." Deepen before S5 lands that logic in <span class="font-mono">view/</span>, where <span class="font-mono">layout/</span> tests can't reach it.
+          </div>
+        </article>
+
+        <!-- ============ Candidate 3 ============ -->
+        <article id="c3" class="rounded-xl border border-slate-200 bg-white p-6 space-y-5 shadow-sm">
+          <div class="flex items-start justify-between gap-4">
+            <h2 class="font-serif text-2xl">3 · Two <span class="font-mono text-xl align-middle">--fg-*</span> token readers, two validity rules</h2>
+            <div class="flex gap-2 shrink-0">
+              <span class="rounded-full bg-amber-100 text-amber-800 text-xs px-3 py-1 font-medium">Worth exploring</span>
+              <span class="rounded-full bg-slate-100 text-slate-600 text-xs px-3 py-1">in-process</span>
+            </div>
+          </div>
+          <p class="font-mono text-sm text-slate-600">src/view/gantt-shell.ts (readRowHeight) · src/render/dom/index.ts (readRowLabelWidth)</p>
+
+          <div class="grid md:grid-cols-2 gap-4">
+            <div class="rounded-lg border border-slate-200 bg-white p-4 space-y-2">
+              <p class="text-xs uppercase tracking-wider text-slate-400 mb-1">Before — the same routine, drifting</p>
+              <div class="flex gap-3">
+                <div class="flex-1 border border-slate-300 rounded p-2">
+                  <p class="text-xs uppercase tracking-wider">readRowHeight</p>
+                  <p class="text-[11px] text-slate-500 font-mono">getComputedStyle → parseFloat → finite && <span class="text-red-600">&gt; 0</span> → 32</p>
+                  <p class="text-[11px] text-slate-500">re-read on every resize</p>
+                </div>
+                <div class="flex-1 border border-slate-300 rounded p-2">
+                  <p class="text-xs uppercase tracking-wider">readRowLabelWidth</p>
+                  <p class="text-[11px] text-slate-500 font-mono">getComputedStyle → parseFloat → finite && <span class="text-red-600">&gt;= 0</span> → 160</p>
+                  <p class="text-[11px] text-slate-500">read once at mount</p>
+                </div>
+              </div>
+              <svg class="w-full h-4" viewBox="0 0 300 16" preserveAspectRatio="none"><line x1="75" y1="8" x2="225" y2="8" stroke="#dc2626" stroke-width="2" class="seam"/></svg>
+              <p class="text-[11px] text-red-700 text-center">nothing states which differences are deliberate</p>
+            </div>
+            <div class="rounded-lg border border-slate-200 bg-white p-4 space-y-2">
+              <p class="text-xs uppercase tracking-wider text-slate-400 mb-1">After — one reader, stated policies</p>
+              <div class="deep text-white rounded-lg p-3 text-center">
+                <p class="text-xs uppercase tracking-wider">readPixelToken(el, property, fallback)</p>
+                <p class="text-[11px] text-slate-300 mt-1">one parse-and-validate; validity and re-read cadence declared per token, not per copy</p>
+              </div>
+              <div class="flex gap-3 pt-1">
+                <div class="flex-1 border border-slate-300 rounded p-2 text-center text-[11px] text-slate-500">--fg-row-height</div>
+                <div class="flex-1 border border-slate-300 rounded p-2 text-center text-[11px] text-slate-500">--fg-row-label-width</div>
+                <div class="flex-1 border border-dashed border-slate-300 rounded p-2 text-center text-[11px] text-slate-400">S1.10 tokens…</div>
+              </div>
+            </div>
+          </div>
+
+          <p class="text-sm"><span class="font-semibold">Problem:</span> the customization-ladder read (CSS custom property → validated px → default) is implemented twice with silently different validity rules and re-read cadences.</p>
+          <p class="text-sm"><span class="font-semibold">Solution:</span> one token-reader helper on the DOM side (<span class="font-mono">view/</span> already imports <span class="font-mono">render/</span>, so either home works) before S1.10's theming pass multiplies the token count.</p>
+          <ul class="text-sm list-disc pl-5 space-y-1">
+            <li>Leverage: one reader, every future token</li>
+            <li>Validity rules stop drifting</li>
+            <li>Re-read policy becomes part of the interface</li>
+          </ul>
+        </article>
+
+        <!-- ============ Candidate 4 ============ -->
+        <article id="c4" class="rounded-xl border border-slate-200 bg-white p-6 space-y-5 shadow-sm">
+          <div class="flex items-start justify-between gap-4">
+            <h2 class="font-serif text-2xl">4 · <span class="font-mono text-xl align-middle">GanttOptions</span> is declared twice</h2>
+            <div class="flex gap-2 shrink-0">
+              <span class="rounded-full bg-slate-200 text-slate-700 text-xs px-3 py-1 font-medium">Speculative</span>
+              <span class="rounded-full bg-slate-100 text-slate-600 text-xs px-3 py-1">in-process</span>
+            </div>
+          </div>
+          <p class="font-mono text-sm text-slate-600">src/api/gantt.ts · src/view/gantt-shell.ts</p>
+
+          <div class="grid md:grid-cols-2 gap-4">
+            <div class="rounded-lg border border-slate-200 bg-white p-4">
+              <p class="text-xs uppercase tracking-wider text-slate-400 mb-3">Before — three bands, two of them re-flattening</p>
+              <div class="space-y-1">
+                <div class="h-12 border-l-4 border-slate-400 bg-white border rounded-r px-3 flex flex-col justify-center">
+                  <p class="text-xs uppercase tracking-wider">Gantt (api/)</p>
+                  <p class="text-[11px] text-slate-500 font-mono">…(options.scale ? { scale } : {}) …(options.scroll ? { scroll } : {})</p>
+                </div>
+                <div class="h-12 border-l-4 border-red-400 bg-red-50 rounded-r px-3 flex flex-col justify-center">
+                  <p class="text-xs uppercase tracking-wider">GanttShell (view/)</p>
+                  <p class="text-[11px] text-red-700 font-mono">same option type, same conditional spread, again</p>
+                </div>
+                <div class="h-12 border-l-4 border-slate-400 bg-white border rounded-r px-3 flex flex-col justify-center">
+                  <p class="text-xs uppercase tracking-wider">Viewport (layout/)</p>
+                  <p class="text-[11px] text-slate-500">the object both bands were assembling</p>
+                </div>
+              </div>
+            </div>
+            <div class="rounded-lg border border-slate-200 bg-white p-4">
+              <p class="text-xs uppercase tracking-wider text-slate-400 mb-3">After — one assembly point</p>
+              <div class="space-y-1">
+                <div class="h-12 border-l-4 border-slate-400 bg-white border rounded-r px-3 flex flex-col justify-center">
+                  <p class="text-xs uppercase tracking-wider">Gantt (api/)</p>
+                  <p class="text-[11px] text-slate-500">public seam · builds the Viewport once from GanttOptions</p>
+                </div>
+                <div class="h-12 border-l-4 border-slate-700 deep text-white rounded-r px-3 flex flex-col justify-center">
+                  <p class="text-xs uppercase tracking-wider">GanttShell (view/)</p>
+                  <p class="text-[11px] text-slate-300 font-mono">{ host, dataset, viewport } — no re-declared options</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <p class="text-sm"><span class="font-semibold">Problem:</span> <span class="font-mono">GanttOptions</span> and <span class="font-mono">GanttShellOptions</span> are the same shape with the same doc comments, and both constructors repeat the <span class="font-mono">exactOptionalPropertyTypes</span> conditional-spread dance to build what is ultimately one Viewport.</p>
+          <p class="text-sm"><span class="font-semibold">Solution:</span> assemble the Viewport once (in <span class="font-mono">Gantt</span> or a small option-resolver) and hand the shell the object it actually wants; one options declaration survives.</p>
+          <ul class="text-sm list-disc pl-5 space-y-1">
+            <li>One options doc, one spread</li>
+            <li>Shell's interface names what it consumes</li>
+          </ul>
+          <div class="rounded-md bg-amber-50 border border-amber-200 px-4 py-2 text-sm text-amber-900">
+            Deliberately Speculative: the public <span class="font-mono">Gantt</span> / internal <span class="font-mono">GanttShell</span> split is a settled decision (#7), and S2–S6 grow <span class="font-mono">GanttOptions</span> (events, config, plugins) — the shapes may stop being identical on their own. Only worth doing if it falls out of other S1.8 shell work.
+          </div>
+        </article>
+
+      </section>
+
+      <!-- ============ Naming ============ -->
+      <section id="naming" class="rounded-xl border border-slate-200 bg-white p-6 space-y-4 shadow-sm">
+        <h2 class="font-serif text-2xl">Naming, against the house rules</h2>
+        <p class="text-sm text-slate-600 max-w-3xl">Verdict: strong. The glossary vocabulary (Entry, Dataset, Item, Row, Visible, Overscan, pane) is used consistently; greppable pairs hold; no vendor names; no "chart"-style double meanings found. Three names fail the read-the-call-site-aloud test:</p>
+        <div class="overflow-x-auto">
+          <table class="text-sm w-full">
+            <thead><tr class="text-left text-xs uppercase tracking-wider text-slate-400 border-b border-slate-200">
+              <th class="py-2 pr-4">Name</th><th class="py-2 pr-4">Read aloud</th><th class="py-2">Verdict</th>
+            </tr></thead>
+            <tbody class="divide-y divide-slate-100">
+              <tr>
+                <td class="py-2 pr-4 font-mono">GanttShell.#readMetrics(size)</td>
+                <td class="py-2 pr-4 text-slate-600">"read metrics of {width: 640…}" — but it doesn't read a measurement, it <em>applies</em> one: re-reads row height and pushes pane size into the viewport.</td>
+                <td class="py-2">Rename — e.g. <span class="font-mono">applyPaneMeasurement</span>. Same miss shape as #54.</td>
+              </tr>
+              <tr>
+                <td class="py-2 pr-4 font-mono">ScrollModel.#recordAndCheckChange()</td>
+                <td class="py-2 pr-4 text-slate-600">the "And" names two jobs — record the state <em>and</em> compare it.</td>
+                <td class="py-2">Dissolves with candidate 1 (the registry owns the comparison).</td>
+              </tr>
+              <tr>
+                <td class="py-2 pr-4 font-mono">LayoutInput.heights</td>
+                <td class="py-2 pr-4 text-slate-600">"compute frame with … heights" — a bare plural for a <span class="font-mono">RowHeightIndex</span>; "heights" could be an array of numbers.</td>
+                <td class="py-2">Dissolves with candidate 2 (the field leaves the interface).</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ============ Noted, not proposed ============ -->
+      <section id="noted" class="rounded-xl border border-slate-200 bg-stone-100 p-6 space-y-3">
+        <h2 class="font-serif text-xl">Noted, not proposed</h2>
+        <ul class="text-sm list-disc pl-5 space-y-2 text-slate-700">
+          <li><span class="font-mono">DEFAULT_OVERSCAN</span> is defined in both <span class="font-mono">layout/frame.ts</span> and <span class="font-mono">layout/viewport/viewport.ts</span> — one default, two homes; folds into candidate 1 or 2 for free.</li>
+          <li><span class="font-mono">ScrollModel.state</span> returns the live internal <span class="font-mono">#position</span> object — <span class="font-mono">readonly</span> guards compile time only; a caller mutating <span class="font-mono">state.position.x</span> writes model state without a notification. Freeze or copy before S4 hands state to host code.</li>
+          <li><span class="font-mono">Viewport.bind</span> is single-subscriber but reads like the multi-binding models it fans into; a second bind silently replaces <span class="font-mono">#onChange</span>. State the contract (assert or doc) — today only <span class="font-mono">GanttShell</span> calls it.</li>
+          <li>Fit with S2/S3 checked: <span class="font-mono">data/</span> and <span class="font-mono">scheduling/</span> are still empty seams, no scheduling vocabulary has leaked into core, and the shell's capture-entries-by-reference is the documented S2 design (#33). Nothing shipped blocks the resolve-hook shape.</li>
+        </ul>
+      </section>
+
+      <!-- ============ Top recommendation ============ -->
+      <section id="top-recommendation" class="rounded-xl border-2 border-emerald-300 bg-emerald-50 p-8 space-y-3">
+        <p class="text-xs uppercase tracking-wider text-emerald-700">Top recommendation</p>
+        <h2 class="font-serif text-2xl"><a href="#c1" class="underline decoration-emerald-400 underline-offset-4">1 · One notify contract, three hand-rolled copies</a></h2>
+        <p class="text-sm text-emerald-900 max-w-3xl">Three adapters already sit on this seam, S1.9's <span class="font-mono">zoomTo</span> is about to lean on the batching half of it, and S2 introduces a second notification system (<span class="font-mono">data/</span>'s reactivity façade) — settling one registry now decides where that meeting point goes before there are four copies instead of three.</p>
+      </section>
+
+      <footer class="text-xs text-slate-400 pt-4">Generated 2026-08-25 · vocabulary: /codebase-design · domain terms: CONTEXT.md · prior reviews: plans/fixed/ (2026-08-24, all fixed), plans/need-fixing/ (2026-08-23)</footer>
+    </main>
+  </body>
+</html>

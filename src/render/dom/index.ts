@@ -12,6 +12,7 @@ import type {
 } from '../../layout/index.js';
 import type { RenderBackend, InteractionState, HitResult } from '../backend.js';
 import { syncKeyed } from './sync-keyed.js';
+import { readPixelProperty } from './pixel-property.js';
 
 type TickGeom = Pick<FrameHeaderTick, 'x' | 'width' | 'label'>;
 type RowGeom = Pick<FrameRow, 'top' | 'height' | 'label'>;
@@ -27,13 +28,8 @@ const EMPTY_BAND_GEOM: BandGeom = {};
  * (`barLayer`) are shifted by the same offset instead of a host stylesheet offsetting one but not the
  * other (#46). */
 const ROW_LABEL_WIDTH_PROPERTY = '--fg-row-label-width';
-const DEFAULT_ROW_LABEL_WIDTH = 160;
-
-function readRowLabelWidth(host: HTMLElement): number {
-  const raw = getComputedStyle(host).getPropertyValue(ROW_LABEL_WIDTH_PROPERTY).trim();
-  const parsed = parseFloat(raw);
-  return Number.isFinite(parsed) && parsed >= 0 ? parsed : DEFAULT_ROW_LABEL_WIDTH;
-}
+/** Zero is authored, not nonsense: a host that wants no gutter sets `--fg-row-label-width: 0`. */
+const ROW_LABEL_WIDTH_POLICY = { fallback: 160, accepts: 'zeroOrMore' } as const;
 
 export function createDomBackend(): RenderBackend<HTMLElement> {
   let host: HTMLElement | undefined;
@@ -161,7 +157,7 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
     mount(el: HTMLElement) {
       host = el;
       host.replaceChildren();
-      rowLabelWidth = readRowLabelWidth(el);
+      rowLabelWidth = readPixelProperty(el, ROW_LABEL_WIDTH_PROPERTY, ROW_LABEL_WIDTH_POLICY);
       headerLayer = document.createElement('div');
       headerLayer.className = 'fg-header';
       headerLayer.style.position = 'relative';

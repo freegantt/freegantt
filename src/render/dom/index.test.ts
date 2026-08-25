@@ -77,7 +77,7 @@ describe('render/dom backend', () => {
     backend.mount(host);
 
     // happy-dom does not resolve custom properties through getComputedStyle, so this backend
-    // falls back to its default gutter width (readRowLabelWidth) — that fallback path is
+    // falls back to its default gutter width (ROW_LABEL_WIDTH_POLICY) — that fallback path is
     // exercised elsewhere; what matters here is which CSS property carries the offset.
     const barLayer = host.querySelector<HTMLElement>('.fg-bars')!;
     expect(barLayer.style.marginLeft).toBe(`${backend.rowLabelWidth}px`);

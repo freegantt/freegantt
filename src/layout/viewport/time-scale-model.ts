@@ -12,6 +12,7 @@
 import { createTimeScale, dayPreset, diffMs, instant, pxPerMsForPreset } from '../../time/index.js';
 import type { TimeScale, TimeScaleOptions, ViewPreset } from '../../time/index.js';
 import type { Dataset, TimeSpan } from '../../model/index.js';
+import { BoundValue } from './bound-value.js';
 
 /** What a caller states about how time should be displayed (plans/02 §5). Everything else — the
  * dataset's zone (D6), the span, the pixels-per-millisecond factor — is derived at bind time. */
@@ -41,32 +42,38 @@ export interface ScaleBindingHandle {
   setPaneWidth(width: number): void;
 }
 
-/** The fields `TimeScaleModel` compares to decide whether a resolve actually changed anything
- * (D-S1.5-4) — shared shape with `#resolve`'s return so the comparison can never drift from what
- * `scale` is actually built from. */
-interface Resolution {
+/** The model's own mutable copy of a binding — what `setPaneWidth` writes and what `#resolve` reads. */
+interface MutableScaleBinding {
   timeZone: string;
-  start: number;
-  end: number;
-  pxPerMs: number;
+  entries: Dataset['entries'];
+  paneWidth: number;
 }
 
-function sameResolution(a: Resolution, b: Resolution): boolean {
-  return a.timeZone === b.timeZone && a.start === b.start && a.end === b.end && a.pxPerMs === b.pxPerMs;
+/** Whether a resolve actually changed anything (D-S1.5-4). Compared on exactly the fields `scale` is
+ * built from, so the comparison can never drift from what a bound Gantt would see. */
+function sameScaleOptions(a: TimeScaleOptions, b: TimeScaleOptions): boolean {
+  return (
+    a.timeZone === b.timeZone &&
+    a.range.start === b.range.start &&
+    a.range.end === b.range.end &&
+    a.pxPerMs === b.pxPerMs
+  );
 }
 
 export class TimeScaleModel {
   #preset: ViewPreset;
   #range: 'fitDataset' | TimeSpan;
-  /** Each bound Gantt's data alongside the reaction it supplied at bind time — one collection serves
-   * both resolution (iterate keys) and change notification (iterate values), so there is no second,
-   * separately-fanned-out subscriber list to keep in sync with binding membership. Keyed by the
-   * handle's private mutable copy, not the caller's binding object (readonly, copied at bind time). */
-  #bindings = new Map<ScaleBinding, () => void>();
-  #resolved: TimeScale | undefined;
-  #lastResolution: Resolution | undefined;
-  #batchDepth = 0;
-  #pendingNotify = false;
+  /** The bindings, the options resolved from them, and the D-S1.5-4 notification contract — one
+   * object, shared with `ScrollModel` in implementation and with nothing else (`bound-value.ts`).
+   * This model supplies only what is its own: how to resolve, and what counts as a change. */
+  #scaleOptions = new BoundValue<MutableScaleBinding, TimeScaleOptions>({
+    resolve: (bindings) => this.#resolve(bindings),
+    equals: sameScaleOptions,
+  });
+  /** Memoized on the identity of the options it was built from — `BoundValue` hands back the same
+   * object until something invalidates it, so identity is the whole invalidation signal here. */
+  #scale: TimeScale | undefined;
+  #scaleBuiltFrom: TimeScaleOptions | undefined;
 
   constructor(intent: TimeScaleIntent = {}) {
     this.#preset = intent.preset ?? dayPreset;
@@ -83,86 +90,43 @@ export class TimeScaleModel {
    * render even when nothing measurably changed; every other notification (another binding's
    * `bind`/`unbind`, a `setPaneWidth`) fires iff the resolved scale actually changed. It does not run
    * on a binding's own `unbind()`: the caller is tearing itself down and has no reason to react to
-   * its own departure; remaining bindings still get notified (`#invalidate`). */
+   * its own departure; remaining bindings still get notified. */
   bind(binding: ScaleBinding, onChange: () => void): ScaleBindingHandle {
-    const copy = { timeZone: binding.timeZone, entries: binding.entries, paneWidth: binding.paneWidth };
-    this.#bindings.set(copy, onChange);
-    this.#resolved = undefined;
-    // The newcomer always hears about its own bind (D-S1.5-4) — that IS its first render — even when
-    // the resolved scale did not move (e.g. a second binding with identical content). Every other
-    // bound reaction only hears about it when the resolution actually changed.
-    const next = this.#resolveFields();
-    const changed = !this.#lastResolution || !sameResolution(this.#lastResolution, next);
-    this.#lastResolution = next;
-    onChange();
-    if (changed) {
-      for (const [otherBinding, otherOnChange] of this.#bindings) {
-        if (otherBinding !== copy) otherOnChange();
-      }
-    }
+    // Copy-at-bind (S1.5, #6/#22 follow-up): a caller holding a reference to its own binding object
+    // cannot change this model's inputs behind its back; re-measurement goes through the handle.
+    const copy: MutableScaleBinding = {
+      timeZone: binding.timeZone,
+      entries: binding.entries,
+      paneWidth: binding.paneWidth,
+    };
+    const bound = this.#scaleOptions.bind(copy, onChange);
     return {
-      unbind: () => {
-        if (this.#bindings.delete(copy)) this.#invalidate();
-      },
+      unbind: () => bound.unbind(),
       setPaneWidth: (width) => {
         if (copy.paneWidth === width) return;
         copy.paneWidth = width;
-        this.#invalidate();
+        this.#scaleOptions.invalidate();
       },
     };
   }
 
   get scale(): TimeScale {
-    return (this.#resolved ??= createTimeScale(this.#resolve()));
+    const options = this.#scaleOptions.resolved;
+    if (!this.#scale || this.#scaleBuiltFrom !== options) {
+      this.#scale = createTimeScale(options);
+      this.#scaleBuiltFrom = options;
+    }
+    return this.#scale;
   }
 
   /** Several writes, at most one notification, delivered iff the resolved scale actually changed
    * (D-S1.5-4). Re-entrant; flushes at the outermost exit, in a `finally` so a throwing `run` cannot
    * wedge the model (conventions §5). */
   batch(run: () => void): void {
-    this.#batchDepth++;
-    try {
-      run();
-    } finally {
-      this.#batchDepth--;
-      if (this.#batchDepth === 0 && this.#pendingNotify) {
-        this.#pendingNotify = false;
-        this.#notifyAll();
-      }
-    }
+    this.#scaleOptions.batch(run);
   }
 
-  #invalidate(): void {
-    this.#resolved = undefined;
-    if (this.#batchDepth > 0) {
-      this.#pendingNotify = true;
-      return;
-    }
-    this.#notifyAll();
-  }
-
-  /** Resolves once and compares against the last delivered resolution (D-S1.5-4): notifies every
-   * bound reaction iff the value changed. Used by `unbind`/`setPaneWidth`/`batch` flush; `bind()`
-   * has its own pass because it must notify the newcomer unconditionally. */
-  #notifyAll(): void {
-    const next = this.#resolveFields();
-    const changed = !this.#lastResolution || !sameResolution(this.#lastResolution, next);
-    this.#lastResolution = next;
-    if (!changed) return;
-    for (const onChange of this.#bindings.values()) onChange();
-  }
-
-  #resolveFields(): Resolution {
-    const options = this.#resolve();
-    return {
-      timeZone: options.timeZone,
-      start: options.range.start,
-      end: options.range.end,
-      pxPerMs: options.pxPerMs,
-    };
-  }
-
-  #resolve(): TimeScaleOptions {
+  #resolve(bindings: Iterable<MutableScaleBinding>): TimeScaleOptions {
     // Single pass over the bound Gantt instances: zone (D6, first binding decides), the narrowest
     // measured pane (so the span fits every bound Gantt, not just the widest), and — for
     // `range: 'fitDataset'` (plans/02 §5) — the min start / max end across every bound dataset's
@@ -170,7 +134,7 @@ export class TimeScaleModel {
     let timeZone: string | undefined;
     let width = 0;
     let span: TimeSpan | undefined;
-    for (const binding of this.#bindings.keys()) {
+    for (const binding of bindings) {
       timeZone ??= binding.timeZone;
       if (binding.paneWidth > 0 && (width === 0 || binding.paneWidth < width)) {
         width = binding.paneWidth;

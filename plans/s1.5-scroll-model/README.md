@@ -73,6 +73,8 @@ Sharing between charts with **different row counts** links y as well and behaves
 
 *Rejected:* two contracts at one seam, which is exactly what conventions §4 exists to prevent.
 
+**Refined by the 2026-08-25 review — one contract, implemented once.** Both models, and `Viewport`'s coalescer, had hand-rolled the same machinery. The contract above is unchanged; it now lives in `layout/viewport/bound-value.ts` (bindings map, copy-at-bind kept in each model where the shape is known, resolve, compare, notify) over `layout/viewport/batched-notifier.ts` (batch depth, `finally`-safe flush). Each model supplies its own `resolve` and `equals` — `{timeZone, range.start, range.end, pxPerMs}` and `{position.x, position.y, max.x, max.y}`, exactly as listed above. See `plans/01` §8.2 D-A for why the scope stops at `layout/viewport/`.
+
 ### D-S1.5-5 — `panTo`, and the reason is the concept, not the lint rule
 
 `panTo` is correct on its own terms: **pan** = move the viewport, **scroll** = an element's native offset. The clean I12 grep is a consequence, not the justification — the S1.5b comment argued it backwards and that paragraph is rewritten.
@@ -165,7 +167,10 @@ export interface ScrollBindingHandle {
 }
 
 /** The resolved state — both halves of it, so there is one path to the resolution and one thing
- *  to notify about. */
+ *  to notify about.
+ *  Refined by the 2026-08-25 review: both halves are handed out by reference and are now frozen at
+ *  their assignment points, so `readonly` is enforced at runtime too — a host writing
+ *  `state.position.x` throws instead of moving the shared position with nobody notified. */
 export interface ScrollState {
   /** Where the caller asked to be. May exceed `max` after a shrink — see D-S1.5-2. */
   readonly position: ScrollPosition;
