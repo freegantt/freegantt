@@ -23,7 +23,7 @@ Write the true call. Use the real arguments.
 
 Read the call as an English sentence. Keep the name only if the sentence is true.
 
-`attachSize(host, size => handle.setPaneSize(size))` reads "attach a size to the host". The function does not attach a size. The sentence is false, and the name is wrong.
+`attachPaneSize(panes.timeline, size => handle.setPaneSize(size))` reads "attach the pane size to the timeline pane". The sentence is true. Drop the domain word and the same call reads "attach a size to the host" — the function does not attach a size. The sentence goes false, and the name with it.
 
 ## 3. Do the search test
 
@@ -43,7 +43,7 @@ Select a different word if the word has more than one meaning in the project. Tw
 
 These words are categories: attachment, binding, handle, manager, model, service, helper, util.
 
-Put a domain term from step 1 before the category word. `PaneSizeAttachment` has a domain term. `SizeAttachment` has an adjective, and it tells the reader less.
+Put a domain term from step 1 before the category word. `PaneSizeAttachment` has a domain term. Take the term out of that name and only an adjective is left in front of the category word, which tells the reader less.
 
 ## When a check fails
 
@@ -56,11 +56,11 @@ Put a domain term from step 1 before the category word. `PaneSizeAttachment` has
 
 The concept is the measured drawable box of a pane. The glossary term is "pane size".
 
-| Name             | Result                                                                                                                                              |
-| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `resizeBinding`  | Check 4 fails. The word `resize` is the name of the gesture that drags the edge of an entry.                                                        |
-| `attachSize`     | Check 1 fails: the glossary term is "pane size". Check 2 fails: the sentence is false. Check 3 fails: a search for `size` gives many other results. |
-| `attachPaneSize` | All five checks pass. `attachPaneSize(panes.timeline, size => handle.setPaneSize(size))` reads "attach the pane size to the timeline pane".         |
+| Name                                  | Result                                                                                                                                                        |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `resizeBinding`                       | Check 4 fails. The word `resize` is the name of the gesture that drags the edge of an entry.                                                                  |
+| the name with the domain word dropped | Checks 1–3 fail: the glossary term is gone, the call reads "attach a size to the host" — a false sentence — and a search for `size` gives many other results. |
+| `attachPaneSize`                      | All five checks pass. `attachPaneSize(panes.timeline, size => handle.setPaneSize(size))` reads "attach the pane size to the timeline pane".                   |
 
 One term goes from the measurement to the model: `attachPaneSize`, then `setPaneSize`, then `paneWidth`.
 

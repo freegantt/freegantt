@@ -8,7 +8,7 @@ import { ScrollModel } from '../layout/index.js';
 export interface ScrollAttachment {
   /** Post-render extents (`frame.contentWidth`/`contentHeight`). No-ops when unchanged. */
   setContent(size: Size): void;
-  /** Measured pane box — pushed by the size attachment (#8). */
+  /** Measured pane box — pushed by the pane-size attachment (#8). */
   setPane(size: Size): void;
   detach(): void;
 }

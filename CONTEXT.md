@@ -140,11 +140,11 @@ _Avoid_: Attach (reserved for the DOM side), subscribe, register
 One Gantt's Binding to a TimeScaleModel: its Dataset's zone, its Entries, and its measured Pane size. This is how `'fitDataset'` spans every bound Dataset rather than whichever one was passed to the constructor.
 
 **Attachment**:
-A wiring between a DOM element and a pure model, living in `view/` and returned by an `attach*` function with a `detach()` method. An Attachment is the only thing on either side of the seam allowed to touch the element: `attachScroll` owns element scroll (I12), `attachSize` owns measurement. Distinct from a Binding, which carries data and never sees the DOM.
+A wiring between a DOM element and a pure model, living in `view/` and returned by an `attach*` function with a `detach()` method. An Attachment is the only thing on either side of the seam allowed to touch the element: `attachScroll` owns element scroll (I12), `attachPaneSize` owns measurement. Distinct from a Binding, which carries data and never sees the DOM.
 _Avoid_: Binding (that is the pure-model side), adapter, connector
 
 **Pane size**:
-The measured drawable box of a pane, pushed into the models by `view/` and never stated by a caller. It is a measurement of a rendered box — unrelated to the resize gesture, which drags an Entry's edge.
+The measured drawable box of a pane, measured by `attachPaneSize`, pushed into the models by `view/`, and never stated by a caller. It is a measurement of a rendered box — unrelated to the resize gesture, which drags an Entry's edge.
 _Avoid_: Viewport width/size (Viewport is the fan-in object, not a box)
 
 **ScrollModel**:
