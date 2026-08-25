@@ -28,7 +28,7 @@ function toZoned(zone: string, i: Instant): ZonedDateTimeFns.Record {
   return InstantFns.toZonedDateTimeISO(InstantFns.fromEpochMilliseconds(i), zone);
 }
 
-function toInstant(zdt: ZonedDateTimeFns.Record): Instant {
+function fromZoned(zdt: ZonedDateTimeFns.Record): Instant {
   return instant(ZonedDateTimeFns.toInstant(zdt).epochMilliseconds);
 }
 
@@ -48,25 +48,25 @@ export function toPlain(zone: string, i: Instant): PlainParts {
 /** The instant whose wall-clock reading in `zone` equals `plain` (DST fold/gap resolved via 'compatible'). */
 export function fromPlain(zone: string, plain: PlainParts): Instant {
   const zdt = ZonedDateTimeFns.fromFields({ ...plain, timeZone: zone }, { disambiguation: 'compatible' });
-  return toInstant(zdt);
+  return fromZoned(zdt);
 }
 
 export function startOfDay(zone: string, i: Instant): Instant {
-  return toInstant(ZonedDateTimeFns.startOfDay(toZoned(zone, i)));
+  return fromZoned(ZonedDateTimeFns.startOfDay(toZoned(zone, i)));
 }
 
 export function addDays(zone: string, i: Instant, days: number): Instant {
-  return toInstant(ZonedDateTimeFns.addDays(toZoned(zone, i), days));
+  return fromZoned(ZonedDateTimeFns.addDays(toZoned(zone, i), days));
 }
 
 /** Calendar-month stepping (e.g. Jan 31 + 1 month clamps to Feb 28/29, per Temporal's default 'constrain'). */
 export function addMonths(zone: string, i: Instant, months: number): Instant {
-  return toInstant(ZonedDateTimeFns.addMonths(toZoned(zone, i), months));
+  return fromZoned(ZonedDateTimeFns.addMonths(toZoned(zone, i), months));
 }
 
 /** Calendar-year stepping (leap-day clamps the same way as addMonths). */
 export function addYears(zone: string, i: Instant, years: number): Instant {
-  return toInstant(ZonedDateTimeFns.addYears(toZoned(zone, i), years));
+  return fromZoned(ZonedDateTimeFns.addYears(toZoned(zone, i), years));
 }
 
 /**
@@ -101,27 +101,27 @@ const UNITS: Record<TimeUnit, UnitOps> = {
   },
   m: {
     step: (_zone, i, increment) => addMs(i, increment * MS.MINUTE),
-    floor: (zone, i) => toInstant(ZonedDateTimeFns.startOfMinute(toZoned(zone, i))),
+    floor: (zone, i) => fromZoned(ZonedDateTimeFns.startOfMinute(toZoned(zone, i))),
   },
   h: {
     step: (_zone, i, increment) => addMs(i, increment * MS.HOUR),
-    floor: (zone, i) => toInstant(ZonedDateTimeFns.startOfHour(toZoned(zone, i))),
+    floor: (zone, i) => fromZoned(ZonedDateTimeFns.startOfHour(toZoned(zone, i))),
   },
   d: {
     step: (zone, i, increment) => addDays(zone, i, increment),
-    floor: (zone, i) => toInstant(ZonedDateTimeFns.startOfDay(toZoned(zone, i))),
+    floor: (zone, i) => fromZoned(ZonedDateTimeFns.startOfDay(toZoned(zone, i))),
   },
   w: {
     step: (zone, i, increment) => addDays(zone, i, increment * 7),
-    floor: (zone, i) => toInstant(ZonedDateTimeFns.startOfWeek(toZoned(zone, i))),
+    floor: (zone, i) => fromZoned(ZonedDateTimeFns.startOfWeek(toZoned(zone, i))),
   },
   M: {
     step: (zone, i, increment) => addMonths(zone, i, increment),
-    floor: (zone, i) => toInstant(ZonedDateTimeFns.startOfMonth(toZoned(zone, i))),
+    floor: (zone, i) => fromZoned(ZonedDateTimeFns.startOfMonth(toZoned(zone, i))),
   },
   y: {
     step: (zone, i, increment) => addYears(zone, i, increment),
-    floor: (zone, i) => toInstant(ZonedDateTimeFns.startOfYear(toZoned(zone, i))),
+    floor: (zone, i) => fromZoned(ZonedDateTimeFns.startOfYear(toZoned(zone, i))),
   },
 };
 

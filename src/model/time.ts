@@ -15,3 +15,30 @@ export interface Duration {
   value: number;
   unit: TimeUnit;
 }
+
+/**
+ * What a host may write anywhere the library stores an `Instant`.
+ *
+ * A `number` is epoch milliseconds, so an already-branded `Instant` is accepted unchanged. A string
+ * is either absolute (an explicit `Z` or numeric offset) or a Plain time — a wall-clock reading with
+ * no zone, which names no Instant until the Dataset's zone resolves it (CONTEXT.md). `time/toInstant`
+ * is the one place that reading happens.
+ */
+export type InstantInput = Instant | Date | number | string;
+
+/** The input twin of `TimeSpan` — still half-open [start, end). */
+export interface TimeSpanInput {
+  start: InstantInput;
+  end: InstantInput;
+}
+
+/**
+ * How a *date-only* `end` input (`'2026-09-08'`, no time of day) is read.
+ *
+ * Storage is half-open [start, end) (plans/01 §5), but a host writing a bare date on `end` means the
+ * last day it wants included. `'inclusive'` (the default) advances such an end to the next day's
+ * start, so `end: '2026-09-08'` covers through the 8th. `'exclusive'` reads it literally, as the
+ * start of the 8th. Only date-only strings are affected: an `Instant`, a `Date`, and a string
+ * carrying a time of day are always literal.
+ */
+export type DateOnlyEndRule = 'inclusive' | 'exclusive';
