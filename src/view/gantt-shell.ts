@@ -140,7 +140,7 @@ export class GanttShell {
       entries,
       scale,
       preset: this.#scale.preset,
-      viewport: { x, y, width: this.#drawableWidth(), height: this.#host.clientHeight },
+      visible: { x, y, width: this.#drawableWidth(), height: this.#host.clientHeight },
       rowHeight,
       revision: this.#revision++,
       heights: this.#heightsFor(entries.length, rowHeight),
