@@ -61,6 +61,10 @@ export class GanttShell {
   #rowHeight: number = DEFAULT_ROW_HEIGHT;
   #paneSizeAttachment: PaneSizeAttachment;
   #options: GanttShellOptions;
+  /** True until pane-size wiring completes. `Viewport.bind()` notifies the newcomer synchronously
+   * per D-S1.5-4 (once for scale, once for scroll) — those calls land before pane size is wired, so
+   * they are not real renders yet and are dropped while this is true. */
+  #wiring = true;
   /** Set by the most recent `render()` — `frame.contentWidth`/`contentHeight` (S1.5 README §3.2,
    * D-S1.5-9). No gutter added (D-S1.7-3): the row-label gutter is the backend's own offset, and the
    * backend already sizes its own content sizer with it. */
@@ -88,18 +92,17 @@ export class GanttShell {
 
     // bind() fires its own onChange synchronously, once per sub-model (D-S1.5-4: bind always
     // notifies the newcomer) — before this call returns and #viewportHandle is assigned. Those
-    // premature calls are dropped; the deliberate first render below runs once everything, including
-    // the initial pane-size measurement, is wired.
-    let ready = false;
+    // premature calls are dropped by #wiring; the deliberate first render below runs once
+    // everything, including the initial pane-size measurement, is wired.
     this.#viewportHandle = this.#viewport.bind(options.dataset, () => {
-      if (ready) this.render();
+      if (!this.#wiring) this.render();
     });
     // Synchronous first measurement: a real ResizeObserver's own first callback is queued, not
     // immediate, so the first paint cannot wait for it. attachPaneSize below takes over from here —
     // every measurement after this one, live, for as long as the shell lives (S1.7b, #8).
     this.#applyPaneMeasurement({ width: this.#host.clientWidth, height: this.#host.clientHeight });
     this.#paneSizeAttachment = attachPaneSize(this.#host, (size) => this.#applyPaneMeasurement(size));
-    ready = true;
+    this.#wiring = false;
     this.render();
   }
 
