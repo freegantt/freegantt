@@ -66,14 +66,14 @@ export class TimeScaleModel {
   /** The bindings, the options resolved from them, and the D-S1.5-4 notification contract — one
    * object, shared with `ScrollModel` in implementation and with nothing else (`bound-value.ts`).
    * This model supplies only what is its own: how to resolve, and what counts as a change. */
-  #options = new BoundValue<MutableScaleBinding, TimeScaleOptions>({
+  #scaleOptions = new BoundValue<MutableScaleBinding, TimeScaleOptions>({
     resolve: (bindings) => this.#resolve(bindings),
     equals: sameScaleOptions,
   });
-  /** Memoized on the identity of the resolved options — `BoundValue` hands back the same object
-   * until something invalidates it, so identity is the whole invalidation signal here. */
+  /** Memoized on the identity of the options it was built from — `BoundValue` hands back the same
+   * object until something invalidates it, so identity is the whole invalidation signal here. */
   #scale: TimeScale | undefined;
-  #scaleOf: TimeScaleOptions | undefined;
+  #scaleBuiltFrom: TimeScaleOptions | undefined;
 
   constructor(intent: TimeScaleIntent = {}) {
     this.#preset = intent.preset ?? dayPreset;
@@ -99,22 +99,22 @@ export class TimeScaleModel {
       entries: binding.entries,
       paneWidth: binding.paneWidth,
     };
-    const bound = this.#options.bind(copy, onChange);
+    const bound = this.#scaleOptions.bind(copy, onChange);
     return {
       unbind: () => bound.unbind(),
       setPaneWidth: (width) => {
         if (copy.paneWidth === width) return;
         copy.paneWidth = width;
-        this.#options.invalidate();
+        this.#scaleOptions.invalidate();
       },
     };
   }
 
   get scale(): TimeScale {
-    const options = this.#options.resolved;
-    if (!this.#scale || this.#scaleOf !== options) {
+    const options = this.#scaleOptions.resolved;
+    if (!this.#scale || this.#scaleBuiltFrom !== options) {
       this.#scale = createTimeScale(options);
-      this.#scaleOf = options;
+      this.#scaleBuiltFrom = options;
     }
     return this.#scale;
   }
@@ -123,7 +123,7 @@ export class TimeScaleModel {
    * (D-S1.5-4). Re-entrant; flushes at the outermost exit, in a `finally` so a throwing `run` cannot
    * wedge the model (conventions §5). */
   batch(run: () => void): void {
-    this.#options.batch(run);
+    this.#scaleOptions.batch(run);
   }
 
   #resolve(bindings: Iterable<MutableScaleBinding>): TimeScaleOptions {
