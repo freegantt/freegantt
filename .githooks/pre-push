@@ -7,6 +7,12 @@
 # workflow defines (format, typecheck, lint, boundaries, guards, test:node, test:dom, vendor-names,
 # disables, build), in the same order, so a green push here means a green CI run if it were enabled.
 #
+# `pnpm test:e2e` runs after it, and is the one check with NO CI job behind it. Playwright owns the
+# acceptance checks happy-dom cannot express — a real engine clamps `scrollTop`, fires `scroll`, and
+# lays out, and two of the five S1 acceptance boxes are e2e tests (`[S1-A1]`, `[S1-A4]`). It stays
+# out of `pnpm verify` on purpose: `verify` is kept at CI parity (docs/04 §3), and e2e is not a CI
+# job. When the CI triggers come back, e2e gets a job and this line stays as the local half.
+#
 # `--no-verify` still works and is still not fought. But while CI is dispatch-only it is the only
 # thing standing between a broken invariant and `main`, so skipping it is a decision, not a shortcut.
 
@@ -21,4 +27,10 @@ fi
 echo "pre-push: pnpm verify (full CI-parity gate)"
 pnpm verify
 
-echo "pre-push: OK — every I1-I14 guard passed."
+echo "pre-push: pnpm test:e2e (Playwright — the checks happy-dom cannot express)"
+if ! pnpm test:e2e; then
+  echo "pre-push: e2e failed. If the browser is missing, run 'pnpm exec playwright install chromium'." >&2
+  exit 1
+fi
+
+echo "pre-push: OK — every I1-I14 guard passed, and e2e is green."

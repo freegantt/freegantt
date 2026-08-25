@@ -46,6 +46,14 @@ describe('pre-push runs everything CI would', () => {
     expect(prePush).toMatch(/^\s*pnpm verify\s*$/m);
   });
 
+  // e2e is the one check with no CI job behind it (docs/04 §3.1), so the hook is the only thing
+  // running it. Two of the five S1 acceptance boxes are Playwright tests and `scripts/slice-gate.mjs`
+  // shells out to this same script for both — drop the line from the hook and the S1 gate becomes
+  // unprovable in silence.
+  it('pre-push invokes test:e2e', () => {
+    expect(prePush).toMatch(/pnpm test:e2e/);
+  });
+
   it('every script verify chains actually exists in package.json', () => {
     const chained = [...verify.matchAll(/pnpm ([\w:-]+)/g)].map((m) => m[1]!);
     expect(chained.length).toBeGreaterThan(0);
