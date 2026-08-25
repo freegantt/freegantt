@@ -59,7 +59,7 @@ There is deliberately no `data/ --> scheduling/` edge: `data/` has no static dep
 **Enforcement (D12):** an import-boundary lint rule in CI (dependency-cruiser or `no-restricted-imports`). Any arrow not in this diagram fails the build. Notably:
 
 - `scheduling/` never imports `render/`, `view/`, or `interaction/` — and vice versa (D4). A scheduling plugin, when installed, meets `data/` only through that hook, never a static import.
-- `model/` is types only: zero runtime exports beyond id/brand helpers, zero dependencies.
+- `model/` is types only: zero runtime exports beyond id/brand helpers and the `FreeGanttError` base, zero dependencies.
 - Only `api/` and the type surface of `model/` are public entry points; everything else is internal and free to change.
 
 ### 1.1 Directory shape

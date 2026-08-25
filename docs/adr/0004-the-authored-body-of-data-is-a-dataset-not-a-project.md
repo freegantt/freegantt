@@ -19,7 +19,7 @@ Second, the "passive" objection assumes the noun has to carry the "owns settings
 
 ## Consequences
 
-- `Project` → `Dataset`, `ProjectOptions` → `DatasetOptions`, `src/api/project.ts` → `src/api/dataset.ts`, `GanttOptions.project` → `GanttOptions.dataset`, `ProjectLike` (`view/gantt-shell.ts`) → `DatasetLike`. Design-only names not yet in `src/` follow the same rename: `ProjectData` → `DatasetData`, `ProjectApi` → `DatasetApi`, `ProjectPlugin` → `DatasetPlugin` (ADR 0002's consequences, issue #15).
+- `Project` → `Dataset`, `ProjectOptions` → `DatasetOptions`, `src/api/project.ts` → `src/api/dataset.ts`, `GanttOptions.project` → `GanttOptions.dataset`, `ProjectLike` (`view/gantt-shell.ts`) → `DatasetLike` → moved to `src/model/dataset.ts` and renamed `Dataset` (S1.7 §3.2 — `layout/` needs the shape for `Viewport.bind` and may not import `view/`). Design-only names not yet in `src/` follow the same rename: `ProjectData` → `DatasetData`, `ProjectApi` → `DatasetApi`, `ProjectPlugin` → `DatasetPlugin` (ADR 0002's consequences, issue #15).
 - `TimeScaleIntent.range`'s `'fitProject'` literal → `'fitDataset'` — it's data (a discriminant string), not just a type name, so it gets the same treatment ADR 0003 gave the `'task'` kind literal.
 - No deprecation alias: pre-1.0, no released consumers, same policy ADR 0003 set.
 - `docs/adr/0002` and `0003` keep their original wording as historical records (0003 illustrates the old `Project` API in passing) with a pointer note added at the top of each, rather than being rewritten in place.

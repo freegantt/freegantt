@@ -11,7 +11,7 @@
 
 import { createTimeScale, dayPreset, diffMs, instant, pxPerMsForPreset } from '../../time/index.js';
 import type { TimeScale, TimeScaleOptions, ViewPreset } from '../../time/index.js';
-import type { Entry, TimeSpan } from '../../model/index.js';
+import type { Dataset, TimeSpan } from '../../model/index.js';
 
 /** What a caller states about how time should be displayed (plans/02 §5). Everything else — the
  * dataset's zone (D6), the span, the pixels-per-millisecond factor — is derived at bind time. */
@@ -25,14 +25,11 @@ export interface TimeScaleIntent {
 /** One Gantt's contribution to resolution, supplied when it binds. `readonly`, and the model copies
  * it at bind time (S1.5, #6/#22 follow-up) — a caller holding a reference cannot change the model's
  * inputs behind its back; re-measurement goes through the returned handle's `setPaneWidth` instead. */
-export interface ScaleBinding {
-  /** The bound dataset's IANA timeZone (D6, #37) — a scale is never told its zone by the caller. */
-  readonly timeZone: string;
-  readonly entries: readonly Entry[];
+export type ScaleBinding = Dataset & {
   /** Measured width (px) of the pane the Gantt renders its timeline into; `0` when unmeasured
    * (detached host, `display:none`, pre-paint). Unmeasured is not degenerate — see `pxPerMsForPreset`. */
   readonly paneWidth: number;
-}
+};
 
 /** Zone used before any Gantt has bound, so `scale` is readable on a fresh model. */
 const UNBOUND_ZONE = 'UTC';
@@ -65,7 +62,7 @@ export class TimeScaleModel {
    * both resolution (iterate keys) and change notification (iterate values), so there is no second,
    * separately-fanned-out subscriber list to keep in sync with binding membership. Keyed by the
    * handle's private mutable copy, not the caller's binding object (readonly, copied at bind time). */
-  #bindings = new Map<{ timeZone: string; entries: readonly Entry[]; paneWidth: number }, () => void>();
+  #bindings = new Map<ScaleBinding, () => void>();
   #resolved: TimeScale | undefined;
   #lastResolution: Resolution | undefined;
   #batchDepth = 0;

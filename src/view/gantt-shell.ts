@@ -7,15 +7,7 @@ import { createDomBackend } from '../render/dom/index.js';
 import { attachScroll } from './scroll-attachment.js';
 import type { ScrollAttachment } from './scroll-attachment.js';
 import type { RenderBackend } from '../render/backend.js';
-import type { Entry } from '../model/index.js';
-
-/** Structurally compatible with api/Dataset, without importing api/ — view -> api is not an allowed
- * edge (api imports view, not the reverse; plans/01 §1). Lets GanttShell take a whole dataset instead
- * of api/gantt.ts unwrapping it into entries+timeZone and this file re-clumping them (#40). */
-export interface DatasetLike {
-  readonly entries: readonly Entry[];
-  readonly timeZone: string;
-}
+import type { Dataset } from '../model/index.js';
 
 /** CSS custom property that owns row height (plans/02 §4, level 1 of the customization ladder) —
  * not a constructor option (#39). Read once at construction, not per render() (#49): getComputedStyle
@@ -28,7 +20,7 @@ const DEFAULT_ROW_HEIGHT = 32;
 export interface GanttShellOptions {
   /** Element or CSS selector (plans/02 §2); a selector that matches nothing throws (#38). */
   host: HTMLElement | string;
-  dataset: DatasetLike;
+  dataset: Dataset;
   /** Bound viewport object (D9) — pass the same instance to two Gantt instances to x-sync them.
    * Constructs a private default when omitted (plans/01 §8.2: "single-Gantt usage never sees the
    * concept"); the default resolves its zone, span and zoom from this shell's binding, so it needs

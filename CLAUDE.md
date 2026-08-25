@@ -17,7 +17,7 @@ Name functions and classes in friendly easy to understand for humans and agents 
 - `scheduling/` is DOM-free the same way, but it is **not** one of the mandatory core layers — it's where the first-party default scheduling plugin's pure engine lives (D3/D4, ADR 0002). `data/` has no static dependency on it: mutations resolve through a generic resolve hook (identity function when no plugin is installed, or the installed plugin's `schedule()`). A Gantt with no scheduling plugin never loads `scheduling/`.
 - `scheduling/` and `render/view/interaction` never import each other — they meet only through `data/`'s resolve hook. Never put scheduling imports in render or view code.
 - Only `api/` and `model/` types are public. Internals stay unreachable (sealed `exports` map).
-- `model/` is types only: zero runtime beyond id/brand helpers, zero dependencies. `Dependency`/`DependencyType`/`DependencyId` and the per-entry pin flag are scheduling-plugin-owned data, not `model/` (ADR 0002).
+- `model/` is types only: zero runtime beyond id/brand helpers and the `FreeGanttError` base, zero dependencies. `Dependency`/`DependencyType`/`DependencyId` and the per-entry pin flag are scheduling-plugin-owned data, not `model/` (ADR 0002).
 
 **Time** (`plans/01` §5):
 - Storage is half-open `[start, end)`; display is inclusive via one formatting helper — no inline `end - 1` arithmetic.
