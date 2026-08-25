@@ -6,19 +6,19 @@
 
 This directory is the settled spec for S1.8, in the same form as [`plans/s1.7-windowed-frame/README.md`](../s1.7-windowed-frame/README.md).
 
-> **§0 is open.** Three scope calls need an answer before code starts. Each has a recommendation. Everything else in this document is settled.
+> **§0 is settled.** Three scope calls needed an answer before code started. All three are confirmed as recommended. Everything in this document is settled.
 
 ---
 
-## 0. Scope calls — open, with recommendations
+## 0. Scope calls — confirmed
 
 S1.7 §9 hands three items to S1.8. The S1.8 issue comment names none of them. Q1 and Q2 close that gap; Q3 is a naming call the conventions comment left half-made.
 
-| # | Question | Recommendation |
+| # | Question | Answer |
 |---|---|---|
-| **Q1** | **Does `gantt.reveal(entryId)` land here?** S1.7 §9 says S1.8, because `reveal` waited on a pane height that re-measures, and S1.7b shipped that. | **No — S1.9.** `reveal` must bring a bar into view on **both** axes. Horizontal is a no-op until `TimeScaleIntent.zoom` exists, because `contentWidth ≡ paneWidth` makes every bar already visible on x (D-S1.7-11). Shipping it now means a verb that passes its unit tests and is half-written the day zoom lands. It goes to S1.9, next to the key that makes its x half mean something. |
-| **Q2** | **Do `gantt.scale =`, `gantt.scroll =` and `gantt.overscan` land here?** S1.7 §9 and S1.7 §4 both say S1.8. | **Split, and correct the ledger.** `gantt.scale =` and `gantt.scroll =` are **cut**, not deferred: the S1.9 design settled that `Gantt` never re-exposes `scale`/`scroll`, because that would give one key two write paths (`plans/02` §1.1). A caller that shares models constructed them and holds the references. `gantt.overscan` moves to **S1.9**, with the rest of the live keys (`preset`, `range`, `zoom`), so the public-surface pass happens once. S1.8 adds one public key — `gridWidth` — because the splitter mutates it and cannot ship without it. |
-| **Q3** | **`gridWidth` or `gridPaneWidth`?** Conventions §1 settled the concept name as **grid width**. The same comment then named the CSS token `--fg-grid-pane-width`, because "grid width" alone reads as gridline spacing. Two spellings for one number. | **Keep both spellings, and write down why.** In `gantt.gridWidth` the object disambiguates and the pair `beforeGridWidthChange`/`gridWidthChange` stays readable. In a CSS token list there is no object to disambiguate, and `--fg-grid-width` sits beside tick and gridline tokens, so the token keeps the long form. The asymmetry goes in `CONTEXT.md` under **Grid width**, so a reader does not take it for an accident. |
+| **Q1** | **Does `gantt.reveal(entryId)` land here?** S1.7 §9 says S1.8, because `reveal` waited on a pane height that re-measures, and S1.7b shipped that. | **Confirmed: No — S1.9.** `reveal` must bring a bar into view on **both** axes. Horizontal is a no-op until `TimeScaleIntent.zoom` exists, because `contentWidth ≡ paneWidth` makes every bar already visible on x (D-S1.7-11). Shipping it now means a verb that passes its unit tests and is half-written the day zoom lands. It goes to S1.9, next to the key that makes its x half mean something. Carried into [`plans/s1.9-presets-and-zoom/README.md`](../s1.9-presets-and-zoom/README.md) §0. |
+| **Q2** | **Do `gantt.scale =`, `gantt.scroll =` and `gantt.overscan` land here?** S1.7 §9 and S1.7 §4 both say S1.8. | **Confirmed: split, and correct the ledger.** `gantt.scale =` and `gantt.scroll =` are **cut**, not deferred: the S1.9 design settled that `Gantt` never re-exposes `scale`/`scroll`, because that would give one key two write paths (`plans/02` §1.1). A caller that shares models constructed them and holds the references. `gantt.overscan` moves to **S1.9**, with the rest of the live keys (`preset`, `range`, `zoom`), so the public-surface pass happens once. S1.8 adds one public key — `gridWidth` — because the splitter mutates it and cannot ship without it. |
+| **Q3** | **`gridWidth` or `gridPaneWidth`?** Conventions §1 settled the concept name as **grid width**. The same comment then named the CSS token `--fg-grid-pane-width`, because "grid width" alone reads as gridline spacing. Two spellings for one number. | **Confirmed: keep both spellings, and write down why.** In `gantt.gridWidth` the object disambiguates and the pair `beforeGridWidthChange`/`gridWidthChange` stays readable. In a CSS token list there is no object to disambiguate, and `--fg-grid-width` sits beside tick and gridline tokens, so the token keeps the long form. The asymmetry goes in `CONTEXT.md` under **Grid width**, so a reader does not take it for an accident. |
 
 **Not a question: `RenderBackend.mount()` changes shape, and the ledger is written.** The backend takes one host today and reserves the row-label gutter inside it (#46). The pane split moves that gutter out of the paint layer, so `mount()` takes two surfaces and `rowLabelWidth` is deleted. A seam change is settled only when every site that spells the old name is listed, so **§3.7 is that list**.
 

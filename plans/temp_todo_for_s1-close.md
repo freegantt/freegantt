@@ -103,9 +103,9 @@ Per the S1.8 README §6. The load-bearing two: **`[S1-A2]`** in `gantt-shell.tes
 
 **Branch:** `s1.9-presets-and-zoom` · **Acceptance:** `[S1-A3]`, `[S1-A5]`
 
-### Phase 0 — `plans/s1.9-presets-and-zoom/README.md`
+### Phase 0 — `plans/s1.9-presets-and-zoom/README.md` · **started**
 
-Same shape. It must restate D-F′ as this step's governing decision, because this is the step that makes D-F′ observable.
+[The file exists as a stub](s1.9-presets-and-zoom/README.md). It holds only §0, the items S1.7 and S1.8 handed forward — `gantt.reveal`, `gantt.overscan`, the first non-zero horizontal scroll range, multi-band presets, and the record that `gantt.scale =` / `gantt.scroll =` are cut. Write the rest of it in the S1.7 form before code starts. It must restate D-F′ as this step's governing decision, because this is the step that makes D-F′ observable.
 
 ### Phase 1 — `src/time/presets.ts`
 
