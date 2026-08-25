@@ -23,7 +23,7 @@ export interface RenderBackend<THost = unknown> {
   destroy(): void;
   /** Px width the backend reserves for its row-label column, fixed for the life of a mount (#46) —
    * `0` before `mount()`. The one source of truth for the label-column gutter: callers that also feed
-   * a viewport width to `TimeScaleModel`/`computeFrame` must subtract this first, or header ticks and
+   * a pane width to `TimeScaleModel`/`computeFrame` must subtract this first, or header ticks and
    * bars end up computed against the wrong width while also sitting in different coordinate frames. */
   readonly rowLabelWidth: number;
 }

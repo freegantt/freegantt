@@ -18,7 +18,7 @@ test('harness renders the fixture project as positioned bars', async ({ page }) 
   expect(box!.height).toBeGreaterThan(0);
 });
 
-// Regression: GanttShell.render() hardcoded computeFrame's viewport to (0,0), so scrolling past
+// Regression: GanttShell.render() hardcoded computeFrame's culling window to (0,0), so scrolling past
 // the first screenful of rows culled everything to nothing — the pane went blank instead of
 // showing the rows actually scrolled into view.
 test('scrolling to the bottom of the frame shows rows, not a blank pane', async ({ page }) => {

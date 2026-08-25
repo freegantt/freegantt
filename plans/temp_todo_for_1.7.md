@@ -114,8 +114,8 @@ Nine commits. Each ends green on `pnpm verify`. Guardrails and types land before
 - [x] Close #8
 
 ### Phase 8 — Ledger, spec edits, acceptance
-- [ ] Run each retired spelling as a grep, expect **zero**: `setContent(` · `setPane(` · `\.viewport\b` in `layout/`+`render/`+`view/` · `header.ticks` · `ticks(preset` · `DatasetLike`
-- [ ] Prose sites that keep the word but change the term: `src/render/backend.ts:26` ("viewport width" → pane width), `src/view/gantt-shell.test.ts:144` and `e2e/harness.spec.ts:21` (regression titles naming history → "the culling window's `y`")
+- [x] Run each retired spelling as a grep, expect **zero**: `setContent(` · `setPane(` · `\.viewport\b` in `layout/`+`render/`+`view/` · `header.ticks` · `ticks(preset` · `DatasetLike` — all zero in `src/`; remaining hits are historical prose in `plans/`, `docs/adr/0004`, `harness/diagram.html` describing the rename, not live code
+- [x] Prose sites that keep the word but change the term: `src/render/backend.ts:26` ("viewport width" → pane width), `src/view/gantt-shell.test.ts:180` and `e2e/harness.spec.ts:21` (regression titles naming history → "the culling window's `y`")
 - [ ] The §7 spec edits, landed **with** the step: `plans/01` §4 and §8.2, `plans/01` §1.1 + `CLAUDE.md`, `plans/s1.5-scroll-model/README.md` (the S1.8→S1.7 `Viewport` pointers and the superseded blocks), `docs/adr/0004`, `docs/02` §5, `docs/01` §I12, `CONTEXT.md` (**Viewport**, **Visible**, **Overscan**, **Header band**; edit **TimeScale**'s _Avoid_ line and **Dataset**; **Tick** gains its cell width)
 - [ ] Review `harness/main.ts` against the library rules — every commit, changed or not (CLAUDE.md). Record any gap against S1.7 and fix it in `src/`
 - [ ] Acceptance U1–U6 per S1.7 §8
