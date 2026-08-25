@@ -8,8 +8,9 @@
 // it. The word is Temporal's own (PlainDate, PlainDateTime), which is what this module will become when
 // native Temporal ships. See CONTEXT.md.
 
-import type { Instant } from '../model/index.js';
-import { instant } from './instant.js';
+import type { Instant, TimeUnit } from '../model/index.js';
+import { UnsupportedUnitError } from '../model/index.js';
+import { instant, addMs, MS } from './instant.js';
 import * as InstantFns from 'temporal-polyfill/fns/Instant';
 import * as PlainDateFns from 'temporal-polyfill/fns/PlainDate';
 import * as ZonedDateTimeFns from 'temporal-polyfill/fns/ZonedDateTime';
@@ -80,4 +81,68 @@ export function diffDays(zone: string, a: Instant, b: Instant): number {
   const dateA = ZonedDateTimeFns.toPlainDate(ZonedDateTimeFns.startOfDay(toZoned(zone, a)));
   const dateB = ZonedDateTimeFns.toPlainDate(ZonedDateTimeFns.startOfDay(toZoned(zone, b)));
   return PlainDateFns.diffDays(dateA, dateB);
+}
+
+type Stepper = (zone: string, i: Instant, increment: number) => Instant;
+type Floor = (zone: string, i: Instant) => Instant;
+
+interface UnitOps {
+  readonly step: Stepper;
+  readonly floor: Floor;
+}
+
+/** One source of truth for which units time/ can step by and floor to: a unit is supported exactly
+ * when it has an entry here (S1.7 §3.3, #32's "one list" fix carried forward from time/scale.ts).
+ * `stepBy`/`startOf` both dispatch through it, so the two can never disagree on what's supported. */
+const UNITS: Record<TimeUnit, UnitOps> = {
+  ms: {
+    step: (_zone, i, increment) => addMs(i, increment),
+    floor: (_zone, i) => i,
+  },
+  m: {
+    step: (_zone, i, increment) => addMs(i, increment * MS.MINUTE),
+    floor: (zone, i) => toInstant(ZonedDateTimeFns.startOfMinute(toZoned(zone, i))),
+  },
+  h: {
+    step: (_zone, i, increment) => addMs(i, increment * MS.HOUR),
+    floor: (zone, i) => toInstant(ZonedDateTimeFns.startOfHour(toZoned(zone, i))),
+  },
+  d: {
+    step: (zone, i, increment) => addDays(zone, i, increment),
+    floor: (zone, i) => toInstant(ZonedDateTimeFns.startOfDay(toZoned(zone, i))),
+  },
+  w: {
+    step: (zone, i, increment) => addDays(zone, i, increment * 7),
+    floor: (zone, i) => toInstant(ZonedDateTimeFns.startOfWeek(toZoned(zone, i))),
+  },
+  M: {
+    step: (zone, i, increment) => addMonths(zone, i, increment),
+    floor: (zone, i) => toInstant(ZonedDateTimeFns.startOfMonth(toZoned(zone, i))),
+  },
+  y: {
+    step: (zone, i, increment) => addYears(zone, i, increment),
+    floor: (zone, i) => toInstant(ZonedDateTimeFns.startOfYear(toZoned(zone, i))),
+  },
+};
+
+export const SUPPORTED_TIME_UNITS = new Set<TimeUnit>(Object.keys(UNITS) as TimeUnit[]);
+
+function unsupportedUnit(unit: TimeUnit): UnsupportedUnitError {
+  return new UnsupportedUnitError(
+    `time: unsupported unit "${unit}" — only ${[...SUPPORTED_TIME_UNITS].join(', ')} step today`,
+  );
+}
+
+export function stepBy(zone: string, i: Instant, unit: TimeUnit, increment: number): Instant {
+  const ops = UNITS[unit];
+  if (!ops) throw unsupportedUnit(unit);
+  return ops.step(zone, i, increment);
+}
+
+/** Floors `i` to `unit`'s boundary in `zone` (S1.7 §3.3) — the boundary `TimeScale.ticks` aligns
+ * its cells to. */
+export function startOf(zone: string, i: Instant, unit: TimeUnit): Instant {
+  const ops = UNITS[unit];
+  if (!ops) throw unsupportedUnit(unit);
+  return ops.floor(zone, i);
 }

@@ -157,10 +157,12 @@ export function computeFrame(input: LayoutInput): GeometryFrame {
   }
 
   const format = preset.headers[0]?.format;
-  const ticks: FrameHeaderTick[] = scale.ticks(preset).map((tick) => ({
-    x: tick.x,
-    label: format ? format(tick.instant, scale.timeZone) : '',
-  }));
+  const ticks: FrameHeaderTick[] = scale
+    .ticks({ unit: preset.tickUnit, increment: preset.tickIncrement }, { x: 0, width: scale.contentWidth })
+    .map((tick) => ({
+      x: tick.x,
+      label: format ? format(tick.instant, scale.timeZone) : '',
+    }));
 
   return {
     revision,

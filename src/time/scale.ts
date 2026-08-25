@@ -2,20 +2,27 @@
 // BIND to one; two sharing one scale are x-synced by construction. Arithmetic on Instant is only legal
 // here (I10) — everything outside time/ must go through xForInstant/instantForX/widthForDuration.
 
-import type { Duration, Instant, TimeSpan, TimeUnit } from '../model/index.js';
-import { addDays, addMonths, addYears, toPlain } from './zone.js';
-import { addMs, instant, MS } from './instant.js';
+import type { Duration, Instant, PixelSpan, TimeSpan, TimeUnit } from '../model/index.js';
+import { stepBy, startOf, toPlain } from './zone.js';
+import { instant } from './instant.js';
+
+/** What a caller states about a stepping cadence — the shared shape `ViewPresetHeader` and
+ * `TimeScale.ticks` both key off (S1.7 §3.3). */
+export interface TickStep {
+  readonly unit: TimeUnit;
+  readonly increment: number;
+}
 
 export interface Tick {
   instant: Instant;
   x: number;
+  /** To the next boundary at this step — what a band cell is drawn with (D-S1.7-4). */
+  width: number;
 }
 
 export type HeaderFormat = (i: Instant, zone: string) => string;
 
-export interface ViewPresetHeader {
-  unit: TimeUnit;
-  increment: number;
+export interface ViewPresetHeader extends TickStep {
   format: HeaderFormat;
 }
 
@@ -36,7 +43,12 @@ export interface TimeScale {
   xForInstant(i: Instant): number;
   instantForX(x: number): Instant;
   widthForDuration(d: Duration, at: Instant): number;
-  ticks(preset: ViewPreset): readonly Tick[];
+  /** Ticks whose cell `[x, x + width)` intersects `span`, aligned to `step`'s boundary in the dataset
+   *  zone — the cell covering `span.x` is emitted even when its own `x` is left of `span`. Whole-range
+   *  callers pass `{ x: 0, width: contentWidth }` — and are greppable. */
+  ticks(step: TickStep, span: PixelSpan): readonly Tick[];
+  /** Px extent of the whole range at this zoom — what `ScrollModel` binds as its content width. */
+  readonly contentWidth: number;
 }
 
 export interface TimeScaleOptions {
@@ -46,34 +58,7 @@ export interface TimeScaleOptions {
   pxPerMs: number;
 }
 
-type Stepper = (zone: string, i: Instant, increment: number) => Instant;
-
-/** One source of truth for which units this scale can step by: a unit is supported exactly when it
- * has an entry here. `stepBy` dispatches through it; `ticks()`/`pxPerMsForPreset` check membership —
- * so the two can never disagree (was #32). */
-const STEPPERS: Record<TimeUnit, Stepper> = {
-  ms: (_zone, i, increment) => addMs(i, increment),
-  m: (_zone, i, increment) => addMs(i, increment * MS.MINUTE),
-  h: (_zone, i, increment) => addMs(i, increment * MS.HOUR),
-  d: (zone, i, increment) => addDays(zone, i, increment),
-  w: (zone, i, increment) => addDays(zone, i, increment * 7),
-  M: (zone, i, increment) => addMonths(zone, i, increment),
-  y: (zone, i, increment) => addYears(zone, i, increment),
-};
-
-const SUPPORTED_UNITS = new Set<TimeUnit>(Object.keys(STEPPERS) as TimeUnit[]);
-
-function stepBy(zone: string, i: Instant, unit: TimeUnit, increment: number): Instant {
-  const step = STEPPERS[unit];
-  if (!step) {
-    throw new RangeError(
-      `TimeScale: unsupported unit "${unit}" — only ${[...SUPPORTED_UNITS].join(', ')} step today`,
-    );
-  }
-  return step(zone, i, increment);
-}
-
-/** Guards ticks() against a misconfigured preset (e.g. zero increment) walking forever. */
+/** Guards ticks() against a misconfigured step (e.g. zero increment) walking forever. */
 const MAX_TICKS = 100_000;
 
 export function createTimeScale(options: TimeScaleOptions): TimeScale {
@@ -92,24 +77,25 @@ export function createTimeScale(options: TimeScaleOptions): TimeScale {
     return xForInstant(end) - xForInstant(at);
   }
 
-  function ticks(preset: ViewPreset): readonly Tick[] {
-    if (!SUPPORTED_UNITS.has(preset.tickUnit)) {
-      throw new RangeError(
-        `TimeScale.ticks: preset "${preset.id}" uses unsupported unit "${preset.tickUnit}"`,
-      );
-    }
+  function ticks(step: TickStep, span: PixelSpan): readonly Tick[] {
+    if (span.width <= 0) return [];
+    const spanEnd = instantForX(span.x + span.width);
+
     const out: Tick[] = [];
-    let cursor = range.start;
+    let cursor = startOf(timeZone, instantForX(span.x), step.unit);
     let count = 0;
-    while (cursor < range.end && count < MAX_TICKS) {
-      out.push({ instant: cursor, x: xForInstant(cursor) });
-      cursor = stepBy(timeZone, cursor, preset.tickUnit, preset.tickIncrement);
+    while (cursor < spanEnd && count < MAX_TICKS) {
+      const next = stepBy(timeZone, cursor, step.unit, step.increment);
+      out.push({ instant: cursor, x: xForInstant(cursor), width: xForInstant(next) - xForInstant(cursor) });
+      cursor = next;
       count++;
     }
     return out;
   }
 
-  return { range, timeZone, xForInstant, instantForX, widthForDuration, ticks };
+  const contentWidth = Math.max(0, xForInstant(range.end) - xForInstant(range.start));
+
+  return { range, timeZone, xForInstant, instantForX, widthForDuration, ticks, contentWidth };
 }
 
 function pad2(n: number): string {

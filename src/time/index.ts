@@ -1,5 +1,5 @@
 export { instant, now, toISO, addMs, diffMs, MS } from './instant.js';
-export { toPlain, fromPlain, startOfDay, addDays, diffDays } from './zone.js';
+export { toPlain, fromPlain, startOfDay, addDays, diffDays, startOf, stepBy } from './zone.js';
 export type { PlainParts } from './zone.js';
 export {
   createTimeScale,
@@ -15,6 +15,7 @@ export type {
   TimeScaleOptions,
   ViewPreset,
   ViewPresetHeader,
+  TickStep,
   Tick,
   HeaderFormat,
 } from './scale.js';
