@@ -95,13 +95,13 @@ Nine commits. Each ends green on `pnpm verify`. Guardrails and types land before
 - [x] Tests per §6: one `onChange` per change; local clamp; `unbind` detaches both; a throwing `run` still flushes
 
 ### Phase 6 — `view/` + `render/` wiring (S1.7 §3.6, §3.7)
-- [ ] `ScrollBindingHandle.setContent`/`setPane` → `setContentSize`/`setPaneSize` (§3.8 A — fields keep `content`/`pane`)
-- [ ] `attachScroll(element, viewport)` → `{ writePosition, detach }`; binding, reaction, `mine()` and both setters removed; the echo target becomes `viewport.visible`
-- [ ] `GanttShell` — construct `Viewport`, hold **one** handle and **one** reaction; `render()` ends `sync()` → `setContentSize()` → `writePosition()` (D-S1.5-7, now visible in the shell)
-- [ ] `GanttShell` — `#scrollAttachment` stops being `| undefined`; delete the five-line construction-order comment and the `?.` guards
-- [ ] `GanttShell` — drop **both** gutter adjustments (D-S1.7-3): `#contentSize` loses `rowLabelWidth`, `setPaneSize` takes `{ drawableWidth, clientHeight }`
-- [ ] `render/dom` — nested keyed sync for bands (bands keyed by index, ticks keyed within a band); ticks sized by `width`; harness CSS and any affected e2e selector follow (Q-A)
-- [ ] Tests per §6 (dom + the extended `e2e/scroll-sync.spec.ts` pinned-chart case)
+- [x] `ScrollBindingHandle.setContent`/`setPane` → `setContentSize`/`setPaneSize` (§3.8 A — fields keep `content`/`pane`)
+- [x] `attachScroll(element, viewport)` → `{ writePosition, detach }`; binding, reaction, `mine()` and both setters removed; the echo target becomes `viewport.visible`
+- [x] `GanttShell` — construct `Viewport`, hold **one** handle and **one** reaction; `render()` ends `sync()` → `setContentSize()` → `writePosition()` (D-S1.5-7, now visible in the shell)
+- [x] `GanttShell` — `#scrollAttachment` stops being `| undefined`; delete the five-line construction-order comment and the `?.` guards
+- [x] `GanttShell` — drop **both** gutter adjustments (D-S1.7-3): `#contentSize` loses `rowLabelWidth`, `setPaneSize` takes `{ drawableWidth, clientHeight }`
+- [x] `render/dom` — nested keyed sync for bands (bands keyed by index, ticks keyed within a band); ticks sized by `width`; harness CSS and any affected e2e selector follow (Q-A) — checked: no selector in `harness/index.html` or `e2e/*.spec.ts` assumed `.fg-tick` was a direct child of `.fg-header` (all use descendant combinators or class-only locators), so no edit was needed there
+- [x] Tests per §6 (dom + the extended `e2e/scroll-sync.spec.ts` pinned-chart case) — all dom suites and `pnpm test:e2e` (5/5, including the U3 pinned-chart case) pass
 
 ### Phase 7 — S1.7b, pane-size attachment (#8)
 > Included because it is numbered 1.7b. It is a separate commit and can be cut without touching anything above — say so and Phase 8's acceptance drops U5's resize half.
