@@ -21,12 +21,18 @@ const preset: ViewPreset = {
   tickWidthPx: 24,
 };
 
+function mountSurfaces(): { grid: HTMLElement; timeline: HTMLElement } {
+  const grid = document.createElement('div');
+  const timeline = document.createElement('div');
+  document.body.append(grid, timeline);
+  return { grid, timeline };
+}
+
 describe('render/dom backend', () => {
   it('finds the item under a point via event delegation, not a materialized hit index (#31)', () => {
-    const host = document.createElement('div');
-    document.body.append(host);
     const backend = createDomBackend();
-    backend.mount(host);
+    const { grid, timeline } = mountSurfaces();
+    backend.mount({ grid, timeline });
 
     const frame = computeFrame({
       entries: sampleEntries.slice(0, 1),
@@ -38,7 +44,7 @@ describe('render/dom backend', () => {
     });
     backend.sync(frame);
 
-    const bar = host.querySelector<HTMLElement>('.fg-bar')!;
+    const bar = timeline.querySelector<HTMLElement>('.fg-bar')!;
     const original = document.elementFromPoint.bind(document);
     document.elementFromPoint = (x: number, y: number) => (x === 5 && y === 5 ? bar : original(x, y));
 
@@ -47,13 +53,14 @@ describe('render/dom backend', () => {
 
     document.elementFromPoint = original;
     backend.destroy();
-    host.remove();
+    grid.remove();
+    timeline.remove();
   });
 
   it('renders rows and labels bars with the entry name, not its id (#26)', () => {
-    const host = document.createElement('div');
     const backend = createDomBackend();
-    backend.mount(host);
+    const { grid, timeline } = mountSurfaces();
+    backend.mount({ grid, timeline });
 
     const frame = computeFrame({
       entries: sampleEntries.slice(0, 2),
@@ -65,31 +72,63 @@ describe('render/dom backend', () => {
     });
     backend.sync(frame);
 
-    expect(host.querySelectorAll('.fg-row')).toHaveLength(2);
-    expect(host.querySelector('.fg-row')?.textContent).toBe(sampleEntries[0]?.name);
-    expect(host.querySelector('.fg-bar')?.textContent).toBe(sampleEntries[0]?.name);
+    expect(grid.querySelectorAll('.fg-row')).toHaveLength(2);
+    expect(grid.querySelector('.fg-row')?.textContent).toBe(sampleEntries[0]?.name);
+    expect(timeline.querySelector('.fg-bar')?.textContent).toBe(sampleEntries[0]?.name);
     backend.destroy();
   });
 
-  it('offsets the bar layer with a margin, not `left` (regression: `left` shifts the box without shrinking its auto width, overflowing the host by the row-label gutter — #9)', () => {
-    const host = document.createElement('div');
+  it('puts row labels in the grid surface and ticks/bars/the sizer in the timeline surface, with no gutter offset (S1.8, D-S1.8-2)', () => {
     const backend = createDomBackend();
-    backend.mount(host);
+    const { grid, timeline } = mountSurfaces();
+    backend.mount({ grid, timeline });
 
-    // happy-dom does not resolve custom properties through getComputedStyle, so this backend
-    // falls back to its default gutter width (ROW_LABEL_WIDTH_POLICY) — that fallback path is
-    // exercised elsewhere; what matters here is which CSS property carries the offset.
-    const barLayer = host.querySelector<HTMLElement>('.fg-bars')!;
-    expect(barLayer.style.marginLeft).toBe(`${backend.rowLabelWidth}px`);
-    expect(barLayer.style.left).toBe('');
+    backend.sync(
+      computeFrame({
+        entries: sampleEntries.slice(0, 1),
+        scale,
+        preset,
+        visible: { x: 0, y: 0, width: 0, height: 0 },
+        rowHeight: 32,
+        revision: 0,
+      }),
+    );
 
+    expect(grid.querySelector('.fg-row')).not.toBeNull();
+    expect(grid.querySelector('.fg-bar')).toBeNull();
+    expect(timeline.querySelector('.fg-bar')).not.toBeNull();
+    expect(timeline.querySelector('.fg-header')).not.toBeNull();
+    // No margin-left gutter anywhere — the gutter is the grid pane's own width now, not a backend offset.
+    const barLayer = timeline.querySelector<HTMLElement>('.fg-bars')!;
+    expect(barLayer.style.marginLeft).toBe('');
+
+    backend.destroy();
+  });
+
+  it("writes the grid row layer's own translateY(-visible.y) each frame (D-S1.8-1)", () => {
+    const backend = createDomBackend();
+    const { grid, timeline } = mountSurfaces();
+    backend.mount({ grid, timeline });
+
+    backend.sync(
+      computeFrame({
+        entries: sampleEntries.slice(0, 1),
+        scale,
+        preset,
+        visible: { x: 0, y: 40, width: 0, height: 0 },
+        rowHeight: 32,
+        revision: 0,
+      }),
+    );
+
+    expect(grid.style.transform).toBe('translateY(-40px)');
     backend.destroy();
   });
 
   it('reconciles header ticks through the same keyed pattern as bars (#19)', () => {
-    const host = document.createElement('div');
     const backend = createDomBackend();
-    backend.mount(host);
+    const { grid, timeline } = mountSurfaces();
+    backend.mount({ grid, timeline });
 
     backend.sync(
       computeFrame({
@@ -102,7 +141,7 @@ describe('render/dom backend', () => {
       }),
     );
 
-    const ticks = host.querySelectorAll('.fg-header .fg-tick');
+    const ticks = timeline.querySelectorAll('.fg-header .fg-tick');
     expect(ticks).toHaveLength(1);
     expect(ticks[0]?.textContent).toBe('tick');
     backend.destroy();

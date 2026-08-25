@@ -28,7 +28,7 @@ describe('null render backend', () => {
       rowHeight: 32,
       revision: 0,
     });
-    backend.mount(undefined);
+    backend.mount({ grid: undefined, timeline: undefined });
     backend.sync(frame);
     expect(backend.lastFrame()?.bars).toHaveLength(sampleEntries.length);
     backend.destroy();

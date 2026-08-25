@@ -11,3 +11,4 @@ export type {
   ScrollPosition,
   ScrollState,
 } from '../layout/index.js';
+export type { GanttEventMap, GridWidthChange } from './event-bus.js';

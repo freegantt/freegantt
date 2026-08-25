@@ -3,7 +3,17 @@ export type { DatasetOptions } from './dataset.js';
 export { Gantt } from './gantt.js';
 export type { GanttOptions } from './gantt.js';
 export { TimeScaleModel, ScrollModel } from '../view/index.js';
-export type { TimeScaleIntent, ScrollIntent, ScrollPosition, ScrollState } from '../view/index.js';
+export type {
+  TimeScaleIntent,
+  ScrollIntent,
+  ScrollPosition,
+  ScrollState,
+  GanttEventMap,
+  GridWidthChange,
+} from '../view/index.js';
+// The first catchable errors (plans/02 §7, D-S1.8-9): FreeGanttError is the base every subclass
+// extends, so a consumer can catch broadly or narrow on `.code`.
+export { FreeGanttError, HostNotFoundError } from '../model/index.js';
 
 // model/ is the type surface api/ re-exports (plans/01 §1: "Only api/ and model/ types are public").
 // The layer diagram doesn't draw the arrow because it's a type-only re-export, not a behavioral one —

@@ -19,3 +19,11 @@ export class UnsupportedUnitError extends FreeGanttError {
     this.name = 'UnsupportedUnitError';
   }
 }
+
+/** `code: 'host-not-found'` — a `host` selector string that matches no element (#38). */
+export class HostNotFoundError extends FreeGanttError {
+  constructor(host: string) {
+    super('host-not-found', `Gantt: no element matches host selector "${host}"`);
+    this.name = 'HostNotFoundError';
+  }
+}
