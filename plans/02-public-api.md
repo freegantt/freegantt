@@ -25,11 +25,12 @@ import { Dataset, Gantt } from 'freegantt';
 // ── Data: headless, works in Node ───────────────────────────────
 const dataset = new Dataset<{ team: string }>({
   timeZone: 'America/Chicago',            // explicit; 'local' is opt-in
+  dateOnlyEnd: 'inclusive',               // default; see §2.1
   hierarchy: { autoGroup: true },         // first child promotes parent to kind 'group'; promote only
   entries: [
     { id: 'p1', name: 'Sitework', kind: 'group' },     // span derives from children (default policy)
-    { id: 't1', parentId: 'p1', name: 'Groundwork', start: instant('2026-09-01'), end: instant('2026-09-12') },
-    { id: 't2', parentId: 'p1', name: 'Framing',    start: instant('2026-09-12'), end: instant('2026-10-01'),
+    { id: 't1', parentId: 'p1', name: 'Groundwork', start: '2026-09-01', end: '2026-09-11' },
+    { id: 't2', parentId: 'p1', name: 'Framing',    start: '2026-09-12', end: '2026-09-30',
       meta: { team: 'A' } },
   ],
   dependencies: [
@@ -94,6 +95,17 @@ gantt.gridWidth = 220;                  // S1.8 — same cancelable commit seque
 ```
 
 Every config key is a live property. Setting one triggers exactly the invalidation it needs (a preset change rebuilds the axis; a row-source change re-resolves rows) — never a full remount.
+
+
+### 2.1 What a host writes, and what the library stores
+
+Ids and dates are loose on the way in and strict everywhere behind the boundary. `Dataset` reads an `EntryInput` into an `Entry` once, at construction: ids are plain strings that gain the `EntryId` brand here, and dates are any `InstantInput` — an ISO string, a `Date`, epoch milliseconds, or an already-branded `Instant`. A host never has to call `entryId()` or `instant()`. An `Entry` is itself a valid `EntryInput`, so a host holding branded values passes them through unchanged.
+
+A string with an explicit `Z` or numeric offset is absolute. Every other string is a Plain time and resolves through the dataset's `timeZone`, so one entry list renders identically for every viewer. A value naming no instant — including a date the calendar does not have, such as `'2026-02-31'` — throws `InvalidInstantError`; it never slides to a nearby date.
+
+`dateOnlyEnd` names how a *date-only* `end` is read against half-open `[start, end)` storage. `'inclusive'` (the default) reads `end: '2026-09-08'` as "through the 8th" and stores the start of the 9th; `'exclusive'` reads it literally. It applies to nothing else: an `end` carrying a time of day, a `Date`, epoch milliseconds, or an `Instant` is a boundary already, and `start` is never adjusted.
+
+The reading itself lives in `time/` (`toInstant`, `toEndInstant`) — resolving a Plain time needs the zone and the DST fold/gap policy, and advancing a date-only end by one day is zone-aware arithmetic, which I10 confines to that layer. `api/` maps fields and does no date math of its own.
 
 ---
 
