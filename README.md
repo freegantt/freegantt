@@ -5,7 +5,39 @@ designed for external consumers from day one. See `plans/00-overview.md` for the
 `plans/03-slices.md` for the delivery roadmap; this file documents the public surface as it lands,
 slice by slice.
 
-**Status:** pre-release, slice `S1` in progress (`.slice`). Nothing here is published yet.
+**Status:** pre-release, slice `S1` in progress (`.slice`). Nothing here is published yet. The
+public API below is a work in progress and will change — names, options, and defaults are not
+stable across slices until S1 closes (`plans/03-slices.md`).
+
+## Quick start
+
+Minimal example: put a small, fixed set of entries into a `Gantt`.
+
+```ts
+import { Gantt, Dataset, entryId, instant } from 'freegantt';
+
+const dataset = new Dataset({
+  timeZone: 'America/Chicago', // IANA zone; required — resolves day boundaries for all entries (D6)
+  entries: [
+    { id: entryId('t1'), name: 'Design', start: instant('2026-09-01'), end: instant('2026-09-08') },
+    { id: entryId('t2'), name: 'Build', start: instant('2026-09-08'), end: instant('2026-09-22') },
+    { id: entryId('t3'), name: 'QA', start: instant('2026-09-22'), end: instant('2026-09-29') },
+  ],
+});
+
+const gantt = new Gantt({
+  host: document.getElementById('gantt')!, // any HTMLElement
+  dataset,
+});
+```
+
+That's the whole surface for a static chart today: build `Entry[]` with `entryId()` for ids and
+`instant()` for dates (it takes a `Date`, an epoch number, or an ISO string like `'2026-09-01'` —
+no bespoke date math needed), wrap them in a `Dataset` with the dataset's IANA `timeZone`, and
+mount a `Gantt` on a host element. `Entry.start`/`Entry.end` are typed as `Instant` — a branded
+value, not a raw `Date`/string — so `instant()` is required to build one; there's no coercion.
+`gantt.destroy()` tears it down. Editing entries after mount (`dataset.entries.add/update/remove`),
+undo/redo, and dependencies land in later slices — see `plans/03-slices.md`.
 
 ## Public API
 
