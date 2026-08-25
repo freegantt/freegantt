@@ -10,9 +10,8 @@ import type {
   ItemId,
   RowId,
 } from '../../layout/index.js';
-import type { RenderBackend, InteractionState, HitResult } from '../backend.js';
+import type { RenderBackend, RenderSurfaces, InteractionState, HitResult } from '../backend.js';
 import { syncKeyed } from './sync-keyed.js';
-import { readPixelProperty } from './pixel-property.js';
 
 type TickGeom = Pick<FrameHeaderTick, 'x' | 'width' | 'label'>;
 type RowGeom = Pick<FrameRow, 'top' | 'height' | 'label'>;
@@ -22,22 +21,17 @@ type BarGeom = Pick<FrameBar, 'kind' | 'label' | 'x' | 'y' | 'width' | 'height'>
 type BandGeom = Record<string, never>;
 const EMPTY_BAND_GEOM: BandGeom = {};
 
-/** CSS custom property that owns the row-label gutter width (plans/02 §4, level 1 of the
- * customization ladder — same ladder rung as `--fg-row-height`). Read once at mount, not per-sync:
- * this backend is the single owner of where the gutter sits, so header ticks (`headerLayer`) and bars
- * (`barLayer`) are shifted by the same offset instead of a host stylesheet offsetting one but not the
- * other (#46). */
-const ROW_LABEL_WIDTH_PROPERTY = '--fg-row-label-width';
-/** Zero is authored, not nonsense: a host that wants no gutter sets `--fg-row-label-width: 0`. */
-const ROW_LABEL_WIDTH_POLICY = { fallback: 160, accepts: 'zeroOrMore' } as const;
-
 export function createDomBackend(): RenderBackend<HTMLElement> {
-  let host: HTMLElement | undefined;
+  // The grid pane's row layer (RenderSurfaces.grid) — created by `view/pane-layout.ts`, not this
+  // backend (S1.8, D-S1.8-2). No scrollbar of its own: it follows the timeline pane's scroll
+  // position by one `translateY(-visible.y)` per frame (D-S1.8-1), written in `sync()` below.
+  let gridLayer: HTMLElement | undefined;
+  // The timeline pane's content layer (RenderSurfaces.timeline) — this backend's own header, bar
+  // and sizer layers mount inside it, at x=0: no gutter to offset by, the grid pane owns that width.
+  let timelineHost: HTMLElement | undefined;
   let headerLayer: HTMLElement | undefined;
-  let rowLayer: HTMLElement | undefined;
   let barLayer: HTMLElement | undefined;
   let contentSizer: HTMLElement | undefined;
-  let rowLabelWidth = 0;
 
   const bandNodes = new Map<number, HTMLElement>();
   const bandGeom = new Map<number, BandGeom>();
@@ -105,20 +99,22 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
   }
 
   function syncRows(rows: readonly FrameRow[]): void {
-    if (!rowLayer) return;
-    syncKeyed(rowLayer, rows, rowNodes, rowGeom, {
+    if (!gridLayer) return;
+    syncKeyed(gridLayer, rows, rowNodes, rowGeom, {
       key: (row) => row.id,
       create: () => {
         const node = document.createElement('div');
         node.className = 'fg-row';
         node.style.position = 'absolute';
+        // A constant, not per-frame geometry (S1.10 moves this to the shipped stylesheet): a label
+        // fills the grid pane now that the pane's own width IS the gutter (D-S1.8-2).
+        node.style.width = '100%';
         return node;
       },
       toGeom: (row) => ({ top: row.top, height: row.height, label: row.label }),
       patch: (node, geom) => {
         node.style.transform = `translateY(${geom.top}px)`;
         node.style.height = `${geom.height}px`;
-        node.style.width = `${rowLabelWidth}px`;
         node.textContent = geom.label;
       },
     });
@@ -154,28 +150,20 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
   }
 
   return {
-    mount(el: HTMLElement) {
-      host = el;
-      host.replaceChildren();
-      rowLabelWidth = readPixelProperty(el, ROW_LABEL_WIDTH_PROPERTY, ROW_LABEL_WIDTH_POLICY);
+    mount(surfaces: RenderSurfaces<HTMLElement>) {
+      gridLayer = surfaces.grid;
+      gridLayer.replaceChildren();
+      timelineHost = surfaces.timeline;
+      timelineHost.replaceChildren();
+
       headerLayer = document.createElement('div');
       headerLayer.className = 'fg-header';
       headerLayer.style.position = 'relative';
-      headerLayer.style.marginLeft = `${rowLabelWidth}px`;
-      rowLayer = document.createElement('div');
-      rowLayer.className = 'fg-rows';
-      rowLayer.style.position = 'relative';
-      rowLayer.style.width = `${rowLabelWidth}px`;
       barLayer = document.createElement('div');
       barLayer.className = 'fg-bars';
       barLayer.style.position = 'relative';
-      // `margin-left`, not `left`: an offset property shifts a relatively-positioned box without
-      // shrinking its (auto) width, so it would overflow `host` by `rowLabelWidth` on the right —
-      // exactly the phantom horizontal scroll range that showed up as a blank gap past real content.
-      // A margin shrinks the auto width to fit, so the layer's right edge stays flush with `host`'s.
-      barLayer.style.marginLeft = `${rowLabelWidth}px`;
       // Owns the native scrollable extent (S1.5 README D-S1.5-9): rows/bars are positioned absolutely,
-      // so nothing else in this DOM makes `host` actually overflow — without this, ScrollModel's
+      // so nothing else in this DOM makes `timelineHost` actually overflow — without this, ScrollModel's
       // `panTo` has nowhere real to write. Zero visual footprint; `sync()` moves it to the frame's
       // bottom-right corner every render.
       contentSizer = document.createElement('div');
@@ -186,16 +174,24 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
       contentSizer.style.width = '1px';
       contentSizer.style.height = '1px';
       contentSizer.style.visibility = 'hidden';
-      host.append(headerLayer, rowLayer, barLayer, contentSizer);
+      timelineHost.append(headerLayer, barLayer, contentSizer);
     },
     sync(frame: GeometryFrame) {
       syncHeader(frame.header.bands);
       syncRows(frame.rows);
       syncBars(frame.bars);
+      if (gridLayer) {
+        // The grid pane has no scrollbar of its own; its row layer follows the timeline pane's
+        // native scroll by one transform per frame instead of a second real scroller (D-S1.8-1).
+        // Both panes read `top` from the same `frame.rows` array, so pixel-identity (I9) is
+        // structural rather than a property this line has to maintain by hand.
+        gridLayer.style.transform = `translateY(${-frame.visible.y}px)`;
+      }
       if (contentSizer) {
         // The sizer itself is 1x1px, so its far edge — not its origin — must land at the content
         // extent, or the browser's native scrollable range ends up 1px past what ScrollModel computed.
-        const x = Math.max(0, rowLabelWidth + frame.contentWidth - 1);
+        // No gutter to add: the timeline pane's content is `contentWidth` wide, full stop (D-S1.8-1).
+        const x = Math.max(0, frame.contentWidth - 1);
         const y = Math.max(0, frame.contentHeight - 1);
         contentSizer.style.transform = `translate(${x}px, ${y}px)`;
       }
@@ -214,7 +210,8 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
       return id ? { itemId: id as ItemId } : null;
     },
     destroy() {
-      host?.replaceChildren();
+      gridLayer?.replaceChildren();
+      timelineHost?.replaceChildren();
       bandNodes.clear();
       bandGeom.clear();
       bandTickNodes.clear();
@@ -223,15 +220,11 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
       rowGeom.clear();
       barNodes.clear();
       barGeom.clear();
-      host = undefined;
+      gridLayer = undefined;
+      timelineHost = undefined;
       headerLayer = undefined;
-      rowLayer = undefined;
       barLayer = undefined;
       contentSizer = undefined;
-      rowLabelWidth = 0;
-    },
-    get rowLabelWidth() {
-      return rowLabelWidth;
     },
   };
 }
