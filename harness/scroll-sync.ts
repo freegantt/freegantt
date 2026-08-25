@@ -3,10 +3,10 @@
 // chart holding far fewer rows than the first — the U3 clamp/pin case happy-dom cannot express.
 
 import { Gantt, Dataset, ScrollModel, TimeScaleModel } from '../src/api/index.js';
-import { sampleEntries } from '../fixtures/sample-project.js';
+import { sampleEntryInputs } from '../fixtures/sample-project.js';
 
-const tallDataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
-const shortDataset = new Dataset({ entries: sampleEntries.slice(0, 20), timeZone: 'UTC' });
+const tallDataset = new Dataset({ entries: sampleEntryInputs, timeZone: 'UTC' });
+const shortDataset = new Dataset({ entries: sampleEntryInputs.slice(0, 20), timeZone: 'UTC' });
 
 const scale = new TimeScaleModel();
 const scroll = new ScrollModel();
