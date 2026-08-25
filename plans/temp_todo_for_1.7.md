@@ -88,11 +88,11 @@ Nine commits. Each ends green on `pnpm verify`. Guardrails and types land before
 - [x] Tests per §6 **including I8 under scroll** — the id set for the overlapping region is identical before and after a window move
 
 ### Phase 5 — `Viewport`, the fan-in (S1.7 §3.5, D-S1.7-1/2)
-- [ ] `src/layout/viewport/viewport.ts` — `ViewportOptions`, `ViewportHandle { unbind, setPaneSize, setContentSize }`, `bind(dataset, onChange)`, `timeScale`, `preset`, `overscan` (live), `visible`, `batch(run)`
-- [ ] `visible` uses the **locally clamped** position — `min(shared position, max(0, content − pane))` from this Gantt's own extents (Q-B)
-- [ ] `batch(run)` — re-entrant, flushes in `finally`; ships ahead of its S1.9 caller, deliberately (D-S1.7-10)
-- [ ] Not exported from `api/` (D-S1.7-10)
-- [ ] Tests per §6: one `onChange` per change; local clamp; `unbind` detaches both; a throwing `run` still flushes
+- [x] `src/layout/viewport/viewport.ts` — `ViewportOptions`, `ViewportHandle { unbind, setPaneSize, setContentSize }`, `bind(dataset, onChange)`, `timeScale`, `preset`, `overscan` (live), `visible`, `batch(run)`
+- [x] `visible` uses the **locally clamped** position — `min(shared position, max(0, content − pane))` from this Gantt's own extents (Q-B)
+- [x] `batch(run)` — re-entrant, flushes in `finally`; ships ahead of its S1.9 caller, deliberately (D-S1.7-10)
+- [x] Not exported from `api/` (D-S1.7-10)
+- [x] Tests per §6: one `onChange` per change; local clamp; `unbind` detaches both; a throwing `run` still flushes
 
 ### Phase 6 — `view/` + `render/` wiring (S1.7 §3.6, §3.7)
 - [ ] `ScrollBindingHandle.setContent`/`setPane` → `setContentSize`/`setPaneSize` (§3.8 A — fields keep `content`/`pane`)
