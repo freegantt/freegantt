@@ -71,13 +71,24 @@ export class PaneLayout {
     spacer.style.flexShrink = '0';
     spacer.style.height = `${headerHeight}px`;
 
+    const rowClip = document.createElement('div');
+    rowClip.className = 'fg-rows-clip';
+    rowClip.style.position = 'relative';
+    rowClip.style.flex = '1 1 auto';
+    rowClip.style.overflow = 'hidden';
+
+    // render/dom's sync() moves this element by `translateY(-visible.y)` every frame (D-S1.8-1).
+    // It must NOT also be the overflow:hidden clip boundary: transforming an element moves its own
+    // box along with it, so a clip on the transformed element itself would carry the clip window
+    // off-screen with the content instead of keeping it fixed over the pane. `rowClip` (above,
+    // never transformed) owns the clip; `rowLayer` (below) owns the transform.
     const rowLayer = document.createElement('div');
     rowLayer.className = 'fg-rows';
     rowLayer.style.position = 'relative';
-    rowLayer.style.flex = '1 1 auto';
-    rowLayer.style.overflow = 'hidden';
+    rowLayer.style.height = '100%';
 
-    this.#gridPane.append(spacer, rowLayer);
+    rowClip.append(rowLayer);
+    this.#gridPane.append(spacer, rowClip);
 
     const splitter = document.createElement('div');
     splitter.className = 'fg-splitter';
