@@ -72,12 +72,12 @@ Nine commits. Each ends green on `pnpm verify`. Guardrails and types land before
 - [x] `docs/adr/0004:22` — `DatasetLike`'s home and new name
 
 ### Phase 3 — `time/` (S1.7 §3.3)
-- [ ] `startOf(zone, i, unit)` as a `floor` column on the existing `STEPPERS`/`UNITS` registry — one list of supported units, #32's fix kept
-- [ ] `TickStep`; `ViewPresetHeader extends TickStep`
-- [ ] `ticks(step, span)` — required span, boundary-aligned, **cell** intersection (the cell covering `span.x` is emitted even when its own `x` is left of the span), `Tick.width` to the next boundary
-- [ ] `TimeScale.contentWidth`
-- [ ] `stepBy` / `ticks` throw `UnsupportedUnitError`; `pxPerMsForPreset` and `instant()` deliberately keep `RangeError` (§3.8 F)
-- [ ] Tests per §6, including the DST case where `Tick.width` sums to the range
+- [x] `startOf(zone, i, unit)` as a `floor` column on the existing `STEPPERS`/`UNITS` registry — one list of supported units, #32's fix kept
+- [x] `TickStep`; `ViewPresetHeader extends TickStep`
+- [x] `ticks(step, span)` — required span, boundary-aligned, **cell** intersection (the cell covering `span.x` is emitted even when its own `x` is left of the span), `Tick.width` to the next boundary
+- [x] `TimeScale.contentWidth`
+- [x] `stepBy` / `ticks` throw `UnsupportedUnitError`; `pxPerMsForPreset` and `instant()` deliberately keep `RangeError` (§3.8 F)
+- [x] Tests per §6, including the DST case where `Tick.width` sums to the range
 
 ### Phase 4 — `layout/frame.ts` (S1.7 §3.4, D-B)
 - [ ] `LayoutInput.viewport` / `GeometryFrame.viewport` → `visible: Rect`; add `Overscan` (`{ verticalRows?, horizontalPx? }`, default `{ 2, 128 }`)

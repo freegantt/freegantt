@@ -13,6 +13,7 @@ const scale: TimeScale = {
   instantForX: () => sampleEntries[0]!.start,
   widthForDuration: () => 0,
   ticks: () => [],
+  contentWidth: 0,
 };
 const preset: ViewPreset = { id: 'none', tickUnit: 'd', tickIncrement: 1, headers: [], tickWidthPx: 24 };
 

@@ -1,7 +1,18 @@
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 import { instant } from './instant.js';
-import { startOfDay, addDays, diffDays, toPlain, fromPlain } from './zone.js';
+import {
+  startOfDay,
+  addDays,
+  diffDays,
+  toPlain,
+  fromPlain,
+  startOf,
+  stepBy,
+  SUPPORTED_TIME_UNITS,
+} from './zone.js';
+import { UnsupportedUnitError } from '../model/index.js';
+import type { TimeUnit } from '../model/index.js';
 
 const ZONE = 'America/New_York';
 
@@ -60,5 +71,30 @@ describe('zone-aware date arithmetic', () => {
         },
       ),
     );
+  });
+
+  it('startOf is idempotent, never later than the input, and steps strictly forward per unit', () => {
+    const zones = ['America/New_York', 'Europe/London', 'Australia/Lord_Howe', 'Pacific/Chatham', 'UTC'];
+    const units: TimeUnit[] = [...SUPPORTED_TIME_UNITS];
+    fc.assert(
+      fc.property(
+        fc.constantFrom(...zones),
+        fc.constantFrom(...units),
+        fc.integer({ min: instant('2025-01-01T00:00:00Z'), max: instant('2027-01-01T00:00:00Z') }),
+        (zone, unit, xMs) => {
+          const x = instant(xMs);
+          const floored = startOf(zone, x, unit);
+          expect(floored).toBeLessThanOrEqual(x);
+          expect(startOf(zone, floored, unit)).toBe(floored);
+          expect(stepBy(zone, floored, unit, 1)).toBeGreaterThan(floored);
+        },
+      ),
+    );
+  });
+
+  it('startOf/stepBy reject a unit outside the shared registry with UnsupportedUnitError', () => {
+    const badUnit = 'q' as TimeUnit;
+    expect(() => startOf(ZONE, instant('2026-01-01T00:00:00Z'), badUnit)).toThrow(UnsupportedUnitError);
+    expect(() => stepBy(ZONE, instant('2026-01-01T00:00:00Z'), badUnit, 1)).toThrow(UnsupportedUnitError);
   });
 });
