@@ -124,6 +124,18 @@ _Avoid_: Plain arithmetic (reads as "simple arithmetic" — say "zone-aware" for
 An absolute point on the timeline, stored as epoch milliseconds and branded so it cannot be confused with an ordinary number. An Instant carries no zone; every zone-dependent reading of one (what day it falls on, what "add a day" means) resolves through the Dataset's zone.
 _Avoid_: Date, timestamp, epoch
 
+**Entry input**:
+What a host writes where the library stores an Entry: ids as plain strings, dates as any Instant input. `Dataset` reads an Entry input into an Entry once, at construction — branding the ids and resolving the dates through its own zone. The distinction is the whole reason the core can stay strict about branded values without making a host construct them: looseness lives at the api/ boundary and nowhere behind it. An Entry is itself a valid Entry input, so a host already holding branded values passes them straight through.
+_Avoid_: Raw entry, entry DTO, unvalidated entry (nothing here is a validation stage — it is a reading)
+
+**Instant input**:
+Any value a host may write where an Instant is stored: an Instant, a `Date`, epoch milliseconds, or a string. A string carrying an explicit `Z` or numeric offset is absolute; every other string is a Plain time and resolves through the Dataset's zone. `time/toInstant` is the single place that reading happens.
+_Avoid_: Date input, raw date, loose instant
+
+**Date-only end**:
+An `end` written as a bare calendar date — `'2026-09-08'`, no time of day. Storage is half-open `[start, end)`, so `end` is the boundary after the entry rather than its last moment, but a host writing a bare date means the last day it wants included. The `dateOnlyEnd` option names which of the two readings applies, and it applies to nothing else: an end that already carries a time of day is a boundary already.
+_Avoid_: Inclusive end, end date (an option named `endDate` should hold a date, not a rule)
+
 **TimeScale**:
 The pure, DOM-free mapping between Instants and pixel positions, plus tick generation for a given ViewPreset. All time→pixel conversion in the codebase goes through a TimeScale — no inline pixel math.
 _Avoid_: Viewport (Viewport is the fan-in object; the region is Visible)
