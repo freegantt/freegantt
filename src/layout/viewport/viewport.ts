@@ -8,7 +8,9 @@ import type { ScaleBinding, ScaleBindingHandle } from './time-scale-model.js';
 import { ScrollModel } from './scroll-model.js';
 import type { ScrollBindingHandle } from './scroll-model.js';
 import type { TimeScale, ViewPreset } from '../../time/index.js';
+import { FreeGanttError } from '../../model/index.js';
 import type { Dataset, Rect, Size } from '../../model/index.js';
+import { DEFAULT_OVERSCAN } from '../frame.js';
 import type { Overscan } from '../frame.js';
 
 export interface ViewportOptions {
@@ -27,8 +29,6 @@ export interface ViewportHandle {
   /** Post-render extents from the frame. Fans out to `ScrollBinding.content`. */
   setContentSize(size: Size): void;
 }
-
-const DEFAULT_OVERSCAN: Required<Overscan> = { verticalRows: 2, horizontalPx: 128 };
 
 function sameOverscan(a: Overscan, b: Overscan): boolean {
   const aRows = a.verticalRows ?? DEFAULT_OVERSCAN.verticalRows;
@@ -80,8 +80,20 @@ export class Viewport {
     }
   }
 
-  /** One subscription for both models: the shell reacts once, not twice (D-S1.7-1). */
+  /** One subscription for both models: the shell reacts once, not twice (D-S1.7-1).
+   *
+   *  Single-subscriber, unlike the two models it fans into — and it has to be: a `Viewport` holds
+   *  ONE Gantt's pane size and content size, so a second shell binding to it would resolve `visible`
+   *  from the other shell's box. Sharing is what `ViewportOptions.scale`/`scroll` are for: the
+   *  models are the shareable objects (D9), the fan-in is per Gantt. A second `bind` is a
+   *  programming error in `view/`, not a silently replaced reaction. */
   bind(dataset: Dataset, onChange: () => void): ViewportHandle {
+    if (this.#onChange) {
+      throw new FreeGanttError(
+        'viewport-already-bound',
+        'Viewport.bind: this Viewport is already bound. One Viewport serves one Gantt; share a TimeScaleModel or ScrollModel instead (D9).',
+      );
+    }
     this.#onChange = onChange;
     const scaleBinding: ScaleBinding = {
       entries: dataset.entries,

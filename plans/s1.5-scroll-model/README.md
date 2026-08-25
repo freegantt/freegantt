@@ -165,7 +165,10 @@ export interface ScrollBindingHandle {
 }
 
 /** The resolved state — both halves of it, so there is one path to the resolution and one thing
- *  to notify about. */
+ *  to notify about.
+ *  Refined by the 2026-08-25 review: both halves are handed out by reference and are now frozen at
+ *  their assignment points, so `readonly` is enforced at runtime too — a host writing
+ *  `state.position.x` throws instead of moving the shared position with nobody notified. */
 export interface ScrollState {
   /** Where the caller asked to be. May exceed `max` after a shrink — see D-S1.5-2. */
   readonly position: ScrollPosition;

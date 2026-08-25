@@ -57,7 +57,16 @@ interface MutableBinding {
   pane: Size;
 }
 
-const ZERO: ScrollPosition = { x: 0, y: 0 };
+const ZERO: ScrollPosition = Object.freeze({ x: 0, y: 0 });
+
+/** Frozen, not just `readonly`: `state` hands both halves out by reference, and `readonly` is a
+ * compile-time claim only — a host writing `state.position.x` would move the shared model without
+ * notifying anyone. Frozen, that write throws instead (every module here is an ES module, so it is
+ * strict-mode code). Freezing at the two assignment points costs nothing per read; copying on every
+ * `state` read would not. */
+function frozenPosition(x: number, y: number): ScrollPosition {
+  return Object.freeze({ x, y });
+}
 
 export class ScrollModel {
   #position: ScrollPosition;
@@ -68,7 +77,7 @@ export class ScrollModel {
   #pendingNotify = false;
 
   constructor(intent: ScrollIntent = {}) {
-    this.#position = { x: intent.position?.x ?? 0, y: intent.position?.y ?? 0 };
+    this.#position = frozenPosition(intent.position?.x ?? 0, intent.position?.y ?? 0);
   }
 
   /** Resolved + clamped, memoized like `TimeScaleModel.scale`. */
@@ -83,7 +92,7 @@ export class ScrollModel {
     const x = clamp(to.x ?? this.#position.x, max.x);
     const y = clamp(to.y ?? this.#position.y, max.y);
     if (x === this.#position.x && y === this.#position.y) return;
-    this.#position = { x, y };
+    this.#position = frozenPosition(x, y);
     this.#invalidate();
   }
 
@@ -143,7 +152,7 @@ export class ScrollModel {
       maxX = Math.max(maxX, Math.max(0, binding.content.width - binding.pane.width));
       maxY = Math.max(maxY, Math.max(0, binding.content.height - binding.pane.height));
     }
-    this.#resolvedMax = this.#bindings.size === 0 ? ZERO : { x: maxX, y: maxY };
+    this.#resolvedMax = this.#bindings.size === 0 ? ZERO : frozenPosition(maxX, maxY);
     return this.#resolvedMax;
   }
 
