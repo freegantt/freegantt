@@ -100,6 +100,7 @@ export default tseslint.config(
       'freegantt/no-date-outside-time': 'error',
       'freegantt/no-scroll-outside-scroll-model': 'error',
       'freegantt/no-instant-arithmetic': 'error',
+      'freegantt/no-time-to-pixel-math': 'error',
     },
   },
   ...boundaryBlocks,
