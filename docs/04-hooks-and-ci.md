@@ -85,9 +85,17 @@ Enabled by `git config core.hooksPath .githooks`, set by a `prepare` script so i
 | Hook | Runs | Rationale |
 |---|---|---|
 | `pre-commit` | `format` (auto-fix) on all staged files + `lint` on staged `*.ts` + `vendor-names` | Fast (<5s), catches the trivia; auto-fixes formatting instead of blocking on something `pnpm verify` would just fix anyway |
-| `pre-push` | `pnpm verify` | The full gate before it becomes anyone else's problem — and, while CI is dispatch-only, the *only* gate |
+| `pre-push` | `pnpm verify`, then `pnpm test:e2e` | The full gate before it becomes anyone else's problem — and, while CI is dispatch-only, the *only* gate |
 
 `--no-verify` exists and is not fought. But the old rationale for that ("CI is the authority; hooks buy latency, not enforcement") does not currently hold: `.github/workflows/ci.yml` is `workflow_dispatch:` only — its `push`/`pull_request` triggers are commented out — so no check runs on the server unless a human clicks the button. Until those triggers come back, `pre-push` *is* the enforcement, and skipping it is a decision rather than a shortcut.
+
+### 3.1 e2e runs in the hook, and only in the hook
+
+`pnpm test:e2e` is the one check with **no CI job behind it**. Playwright owns what happy-dom cannot express: a real engine clamps `scrollTop`, fires `scroll`, and lays out. Two of the five S1 acceptance boxes are e2e tests (`[S1-A1]`, `[S1-A4]`), and `scripts/slice-gate.mjs` shells out to `pnpm test:e2e` for both, so an unrun e2e suite makes the S1 gate unprovable.
+
+It sits **beside** `pnpm verify` in `pre-push`, not inside it. `verify` is kept at CI parity (below), and e2e is not a CI job — folding it in would make `verify` claim a parity it no longer has, and would demand a browser everywhere `verify` runs. When the `push`/`pull_request` triggers come back, e2e gets its own job and this line stays as the local half.
+
+The cost is small: the whole suite runs in about a second, and `playwright.config.ts` starts its own dev server. The failure mode that is *not* a real failure — a missing browser binary — gets its own message pointing at `pnpm exec playwright install chromium`.
 
 So `pnpm verify` is kept at **CI parity**: it runs every job `ci.yml` defines, in the same order, `build` included. That parity is itself guarded — `test/guards/verify-covers-ci.test.ts` (§4) asserts every `pnpm <script>` any CI job runs also appears in `verify`, and that `pre-push` invokes `verify`. Adding a job without extending `verify` fails the guards suite, so the hook cannot silently drift into reporting green over a check it no longer performs.
 
