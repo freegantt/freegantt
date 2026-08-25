@@ -33,3 +33,5 @@ export type {
 export { PrefixSumHeightIndex } from './row-height-index.js';
 export type { RowHeightIndex } from './row-height-index.js';
 export type { TimeScale, ViewPreset, ViewPresetHeader, Tick, HeaderFormat } from '../time/index.js';
+export { Viewport } from './viewport/viewport.js';
+export type { ViewportOptions, ViewportHandle } from './viewport/viewport.js';
