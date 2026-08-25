@@ -32,7 +32,7 @@ describe('render/dom backend', () => {
       entries: sampleEntries.slice(0, 1),
       scale,
       preset,
-      viewport: { x: 0, y: 0, width: 0, height: 0 },
+      visible: { x: 0, y: 0, width: 0, height: 0 },
       rowHeight: 32,
       revision: 0,
     });
@@ -59,7 +59,7 @@ describe('render/dom backend', () => {
       entries: sampleEntries.slice(0, 2),
       scale,
       preset,
-      viewport: { x: 0, y: 0, width: 0, height: 0 },
+      visible: { x: 0, y: 0, width: 0, height: 0 },
       rowHeight: 32,
       revision: 0,
     });
@@ -96,7 +96,7 @@ describe('render/dom backend', () => {
         entries: [],
         scale,
         preset,
-        viewport: { x: 0, y: 0, width: 0, height: 0 },
+        visible: { x: 0, y: 0, width: 0, height: 0 },
         rowHeight: 32,
         revision: 0,
       }),
