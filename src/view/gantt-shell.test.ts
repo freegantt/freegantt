@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { GanttShell } from './gantt-shell.js';
-import { TimeScaleModel } from '../layout/index.js';
+import { ScrollModel, TimeScaleModel } from '../layout/index.js';
 import { entryId } from '../model/index.js';
 import type { Entry, Instant } from '../model/index.js';
 
@@ -97,6 +97,95 @@ describe('GanttShell.destroy()', () => {
       shell.destroy();
       shell.destroy();
     }).not.toThrow();
+  });
+});
+
+describe('scroll (D9, #9)', () => {
+  function tallEntries(count: number): Entry[] {
+    return Array.from({ length: count }, (_, i) => ({
+      id: entryId(`e${i}`),
+      name: `Entry ${i}`,
+      start: rangeStart,
+      end: instant('2026-09-03T00:00:00Z'),
+    }));
+  }
+
+  it('constructs a private default ScrollModel when scroll is omitted', () => {
+    const host = document.createElement('div');
+    const shell = new GanttShell({ host, dataset: { entries, timeZone } });
+    // No shared model was passed; the shell still renders and destroys cleanly, proving a
+    // default was constructed rather than left unset.
+    expect(host.querySelectorAll('.fg-bar').length).toBeGreaterThan(0);
+    shell.destroy();
+  });
+
+  // Whether a model-driven position write actually lands on the element (I12's own concern) is
+  // covered by scroll-attachment.test.ts and, for the real-clamp case happy-dom cannot express,
+  // e2e/scroll-sync.spec.ts (S1.5 README §7) — this level proves GanttShell pushes the *right
+  // extents* into the shared model in the first place.
+
+  it('two shells sharing one ScrollModel both contribute to the shared max (U1/U2)', () => {
+    const scroll = new ScrollModel();
+    const hostA = document.createElement('div');
+    Object.defineProperty(hostA, 'clientHeight', { value: 100, configurable: true });
+    const hostB = document.createElement('div');
+    Object.defineProperty(hostB, 'clientHeight', { value: 100, configurable: true });
+
+    const shellA = new GanttShell({ host: hostA, dataset: { entries: tallEntries(50), timeZone }, scroll });
+    const shellB = new GanttShell({ host: hostB, dataset: { entries: tallEntries(50), timeZone }, scroll });
+
+    // 50 rows * 32px default row height = 1600, in a 100px pane -> max.y 1500 for either chart.
+    expect(scroll.state.max.y).toBe(1500);
+
+    shellA.destroy();
+    shellB.destroy();
+  });
+
+  it('culls rows against the current scroll position, not always (0,0) (regression: render() hardcoded viewport.y to 0, so scrolling past the first screenful rendered nothing)', () => {
+    const scroll = new ScrollModel();
+    const host = document.createElement('div');
+    Object.defineProperty(host, 'clientHeight', { value: 320, configurable: true }); // 10 rows @ 32px
+
+    const shell = new GanttShell({ host, dataset: { entries: tallEntries(50), timeZone }, scroll });
+
+    const labelsAt = (): string[] =>
+      Array.from(host.querySelectorAll('.fg-row'), (row) => row.textContent ?? '');
+
+    expect(labelsAt()).toContain('Entry 0');
+    expect(labelsAt()).not.toContain('Entry 40');
+
+    scroll.panTo({ y: 40 * 32 }); // scroll 40 rows down
+
+    expect(labelsAt()).not.toContain('Entry 0');
+    expect(labelsAt()).toContain('Entry 40');
+
+    shell.destroy();
+  });
+
+  it("a shorter chart's own max is the loosest bound it needs, not the taller chart's (U3)", () => {
+    const scroll = new ScrollModel();
+    const shortHost = document.createElement('div');
+    Object.defineProperty(shortHost, 'clientHeight', { value: 100, configurable: true });
+    const tallHost = document.createElement('div');
+    Object.defineProperty(tallHost, 'clientHeight', { value: 100, configurable: true });
+
+    const shortShell = new GanttShell({
+      host: shortHost,
+      dataset: { entries: tallEntries(5), timeZone },
+      scroll,
+    });
+    const tallShell = new GanttShell({
+      host: tallHost,
+      dataset: { entries: tallEntries(500), timeZone },
+      scroll,
+    });
+
+    // Loosest bound across both bindings: the tall chart's 500*32-100=15900 dwarfs the short
+    // chart's 5*32-100=60 (D-S1.5-1) — proving both extents actually reached the shared model.
+    expect(scroll.state.max.y).toBe(500 * 32 - 100);
+
+    shortShell.destroy();
+    tallShell.destroy();
   });
 });
 

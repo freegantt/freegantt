@@ -70,6 +70,21 @@ describe('render/dom backend', () => {
     backend.destroy();
   });
 
+  it('offsets the bar layer with a margin, not `left` (regression: `left` shifts the box without shrinking its auto width, overflowing the host by the row-label gutter — #9)', () => {
+    const host = document.createElement('div');
+    const backend = createDomBackend();
+    backend.mount(host);
+
+    // happy-dom does not resolve custom properties through getComputedStyle, so this backend
+    // falls back to its default gutter width (readRowLabelWidth) — that fallback path is
+    // exercised elsewhere; what matters here is which CSS property carries the offset.
+    const barLayer = host.querySelector<HTMLElement>('.fg-bars')!;
+    expect(barLayer.style.marginLeft).toBe(`${backend.rowLabelWidth}px`);
+    expect(barLayer.style.left).toBe('');
+
+    backend.destroy();
+  });
+
   it('reconciles header ticks through the same keyed pattern as bars (#19)', () => {
     const host = document.createElement('div');
     const backend = createDomBackend();

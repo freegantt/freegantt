@@ -2,27 +2,25 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <title>FreeGantt harness — S1 timeline & viewport</title>
+    <title>FreeGantt harness — S1.5 scroll sync</title>
     <style>
       body {
         font-family: system-ui, sans-serif;
         margin: 2rem;
       }
-      #gantt {
-        /* Level-1 theming (plans/02 §4): row height is a CSS custom property the library reads,
-           not a restated constructor default (#39). */
+      .fg-gantt {
         --fg-row-height: 32px;
-        /* Row-label gutter width; render/dom owns applying this offset to header ticks and bars so
-           they share one coordinate frame (#46) — this harness no longer restates it as raw CSS. */
         --fg-row-label-width: 220px;
         position: relative;
         border: 1px solid #ccc;
-        /* overflow: auto makes this element the native scroller GanttShell's private default
-           ScrollModel binds to (S1.5, #9) — the library owns the scroll *position*, but this host
-           still states its own CSS overflow rather than the library owning the pane split. That
-           split is S1.8's timeline pane, tracked in #41 until it lands. */
         overflow: auto;
-        height: 70vh;
+      }
+      #tall {
+        height: 240px;
+        margin-bottom: 1rem;
+      }
+      #short {
+        height: 240px;
       }
       .fg-header {
         height: 20px;
@@ -40,7 +38,6 @@
         line-height: 20px;
       }
       .fg-rows {
-        /* Row labels sit behind bars, both positioned from the same frame.rows/frame.bars geometry. */
         position: absolute;
         inset: 0;
         top: 20px;
@@ -76,9 +73,10 @@
     </style>
   </head>
   <body>
-    <h1>FreeGantt — S1 timeline &amp; viewport</h1>
-    <p>Fixture project rendered as positioned bars under a day-tick header. Every slice adds to this page.</p>
-    <div id="gantt"></div>
-    <script type="module" src="./main.ts"></script>
+    <h1>FreeGantt — S1.5 scroll sync</h1>
+    <p>Two Gantts sharing one ScrollModel. #tall has every fixture entry; #short has the first 20.</p>
+    <div id="tall" class="fg-gantt"></div>
+    <div id="short" class="fg-gantt"></div>
+    <script type="module" src="./scroll-sync.ts"></script>
   </body>
 </html>
