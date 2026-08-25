@@ -1,8 +1,44 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { GanttShell } from './gantt-shell.js';
 import { ScrollModel, TimeScaleModel } from '../layout/index.js';
 import { entryId } from '../model/index.js';
 import type { Entry, Instant } from '../model/index.js';
+
+// happy-dom does no layout, so a real ResizeObserver never fires (verified against pane-size-
+// attachment.test.ts's own fake) — this is the same test seam, stubbed globally because GanttShell
+// constructs `attachPaneSize` itself and takes no `ResizeObserverCtor` option of its own (#8: the
+// shell wires the attachment, it does not grow a second test seam to do it).
+type ResizeObserverCallback = ConstructorParameters<typeof ResizeObserver>[0];
+
+class FakeResizeObserver {
+  static instances: FakeResizeObserver[] = [];
+  observedCount = 0;
+  #callback: ResizeObserverCallback;
+
+  constructor(callback: ResizeObserverCallback) {
+    this.#callback = callback;
+    FakeResizeObserver.instances.push(this);
+  }
+
+  observe(): void {
+    this.observedCount++;
+  }
+
+  unobserve(): void {}
+
+  disconnect(): void {}
+
+  fire(size: { width: number; height: number }): void {
+    this.#callback(
+      [
+        {
+          contentBoxSize: [{ inlineSize: size.width, blockSize: size.height }],
+        } as unknown as ResizeObserverEntry,
+      ],
+      this,
+    );
+  }
+}
 
 // view/ has no import edge to time/ (plans/01 §1) — instant() lives there. Date.parse on a
 // Z-offset string is deterministic regardless of the host machine's zone, unlike `new Date(str)`
@@ -206,5 +242,55 @@ describe('GanttShell host resolution (#38)', () => {
     expect(() => new GanttShell({ host: '#does-not-exist', dataset: { entries, timeZone } })).toThrow(
       /does-not-exist/,
     );
+  });
+});
+
+describe('pane-size attachment (S1.7b, #8)', () => {
+  it('a live resize reaches both TimeScaleModel and ScrollModel, re-renders, and destroy() detaches', () => {
+    FakeResizeObserver.instances = [];
+    vi.stubGlobal('ResizeObserver', FakeResizeObserver);
+
+    try {
+      const scale = new TimeScaleModel(); // range: 'fitDataset' — pxPerMs depends on paneWidth
+      const scroll = new ScrollModel();
+      const host = document.createElement('div');
+      const tall = Array.from({ length: 50 }, (_, i) => ({
+        id: entryId(`e${i}`),
+        name: `Entry ${i}`,
+        start: rangeStart,
+        end: instant('2026-09-03T00:00:00Z'),
+      }));
+      const shell = new GanttShell({ host, dataset: { entries: tall, timeZone }, scale, scroll });
+
+      // Exactly one observer for this one Gantt.
+      expect(FakeResizeObserver.instances).toHaveLength(1);
+      expect(FakeResizeObserver.instances[0]!.observedCount).toBe(1);
+
+      // A stand-in for pxPerMs (not on the public TimeScale interface, plans/01 §1): the pixel
+      // distance the scale assigns to one fixed instant span. It moves iff pxPerMs moved.
+      const oneDayWidth = (): number => scale.scale.xForInstant(instant('2026-09-02T00:00:00Z'));
+      const widthBefore = oneDayWidth();
+      const maxYBefore = scroll.state.max.y;
+
+      FakeResizeObserver.instances[0]!.fire({ width: 900, height: 400 });
+
+      // TimeScaleModel: a new paneWidth re-fits pxPerMs.
+      expect(oneDayWidth()).not.toBe(widthBefore);
+      // ScrollModel: a new pane height moves max.y (50 * 32 - 400 = 1200).
+      expect(scroll.state.max.y).toBe(1200);
+      expect(scroll.state.max.y).not.toBe(maxYBefore);
+      // Re-rendered with the new geometry — no remount, the host keeps its band wrapper.
+      expect(host.querySelector('.fg-band')).not.toBeNull();
+
+      shell.destroy(); // unbind() also drops this shell's own contribution to the shared max.
+      const widthAfterDestroy = oneDayWidth();
+      const maxYAfterDestroy = scroll.state.max.y;
+      FakeResizeObserver.instances[0]!.fire({ width: 100, height: 50 });
+      // detach() unhooked the observer: a later fire reaches neither model.
+      expect(oneDayWidth()).toBe(widthAfterDestroy);
+      expect(scroll.state.max.y).toBe(maxYAfterDestroy);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });
