@@ -3,7 +3,22 @@ export type { DatasetOptions } from './dataset.js';
 export { Gantt } from './gantt.js';
 export type { GanttOptions } from './gantt.js';
 export { TimeScaleModel, ScrollModel } from '../view/index.js';
-export type { TimeScaleIntent, ScrollIntent, ScrollPosition, ScrollState } from '../view/index.js';
+export type {
+  TimeScaleIntent,
+  ScrollIntent,
+  ScrollPosition,
+  ScrollState,
+  GanttEventMap,
+  GridWidthChange,
+} from '../view/index.js';
+// The first catchable errors (plans/02 §7, D-S1.8-9): FreeGanttError is the base every subclass
+// extends, so a consumer can catch broadly or narrow on `.code`.
+export {
+  FreeGanttError,
+  UnsupportedUnitError,
+  HostNotFoundError,
+  InvalidInstantError,
+} from '../model/index.js';
 
 // model/ is the type surface api/ re-exports (plans/01 §1: "Only api/ and model/ types are public").
 // The layer diagram doesn't draw the arrow because it's a type-only re-export, not a behavioral one —
@@ -14,7 +29,6 @@ export type { Entry, EntryKind, EntryId, ItemId, Instant, TimeSpan, Duration } f
 // The input twins of the stored types: what a host writes, as opposed to what the library stores.
 // Public because a host that types its own entry builder needs to name them.
 export type { EntryInput, InstantInput, TimeSpanInput, DateOnlyEndRule } from '../model/index.js';
-export { FreeGanttError, UnsupportedUnitError, InvalidInstantError } from '../model/index.js';
 // Point/Size are the S1.5 ScrollModel's own vocabulary (S1.5 README §5) — a consumer building
 // `ScrollIntent.position` or reading `ScrollState` needs the shape in the public surface too.
 export type { Point, Size } from '../model/index.js';

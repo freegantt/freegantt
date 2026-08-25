@@ -4,11 +4,14 @@ import { test, expect } from '@playwright/test';
 // property that neither clamps nor fires an event — so both checks pass vacuously in
 // src/view/scroll-attachment.test.ts. harness/scroll-sync.html mounts two Gantts sharing one
 // ScrollModel: #tall has every fixture entry, #short has the first 20 (fewer rows -> a smaller max).
+//
+// The timeline pane is the native scroller (S1.8, D-D/D-S1.8-1) — `#tall`/`#short` themselves no
+// longer scroll, so every read/write below targets each host's `.fg-timeline-pane` child.
 
 async function scrollTops(page: import('@playwright/test').Page) {
   return page.evaluate(() => ({
-    tall: document.querySelector('#tall')!.scrollTop,
-    short: document.querySelector('#short')!.scrollTop,
+    tall: document.querySelector('#tall .fg-timeline-pane')!.scrollTop,
+    short: document.querySelector('#short .fg-timeline-pane')!.scrollTop,
   }));
 }
 
@@ -16,7 +19,7 @@ test('a model-driven write does not feed back into another panTo (echo case, D-S
   await page.goto('/scroll-sync.html');
 
   await page.evaluate(() => {
-    const el = document.querySelector('#tall')!;
+    const el = document.querySelector('#tall .fg-timeline-pane')!;
     el.scrollTop = 150;
     el.dispatchEvent(new Event('scroll'));
   });
@@ -39,14 +42,14 @@ test('a shorter chart pins at its own max while the taller one keeps going, and 
   await page.goto('/scroll-sync.html');
 
   const shortMax = await page.evaluate(() => {
-    const el = document.querySelector('#short')!;
+    const el = document.querySelector('#short .fg-timeline-pane')!;
     return el.scrollHeight - el.clientHeight;
   });
   expect(shortMax).toBeGreaterThan(0);
 
   // Scroll #tall far past #short's max.
   await page.evaluate(() => {
-    const el = document.querySelector('#tall')!;
+    const el = document.querySelector('#tall .fg-timeline-pane')!;
     el.scrollTop = 100_000;
     el.dispatchEvent(new Event('scroll'));
   });
@@ -58,7 +61,7 @@ test('a shorter chart pins at its own max while the taller one keeps going, and 
   // Scroll back to a point under #short's max: it resumes tracking with zero remembered state.
   const resumeAt = Math.floor(shortMax / 2);
   await page.evaluate((y) => {
-    const el = document.querySelector('#tall')!;
+    const el = document.querySelector('#tall .fg-timeline-pane')!;
     el.scrollTop = y;
     el.dispatchEvent(new Event('scroll'));
   }, resumeAt);

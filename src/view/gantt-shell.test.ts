@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { GanttShell } from './gantt-shell.js';
 import { ScrollModel, TimeScaleModel } from '../layout/index.js';
-import { entryId } from '../model/index.js';
+import { entryId, HostNotFoundError } from '../model/index.js';
 import type { Entry, Instant } from '../model/index.js';
 
 // happy-dom does no layout, so a real ResizeObserver never fires (verified against pane-size-
@@ -59,6 +59,15 @@ const entries: Entry[] = [
     end: instant('2026-09-03T00:00:00Z'),
   },
 ];
+
+function tallEntries(count: number): Entry[] {
+  return Array.from({ length: count }, (_, i) => ({
+    id: entryId(`e${i}`),
+    name: `Entry ${i}`,
+    start: rangeStart,
+    end: instant('2026-09-03T00:00:00Z'),
+  }));
+}
 
 describe('GanttShell header band', () => {
   it('renders one tick per day for the day preset', () => {
@@ -137,15 +146,6 @@ describe('GanttShell.destroy()', () => {
 });
 
 describe('scroll (D9, #9)', () => {
-  function tallEntries(count: number): Entry[] {
-    return Array.from({ length: count }, (_, i) => ({
-      id: entryId(`e${i}`),
-      name: `Entry ${i}`,
-      start: rangeStart,
-      end: instant('2026-09-03T00:00:00Z'),
-    }));
-  }
-
   it('constructs a private default ScrollModel when scroll is omitted', () => {
     const host = document.createElement('div');
     const shell = new GanttShell({ host, dataset: { entries, timeZone } });
@@ -160,68 +160,93 @@ describe('scroll (D9, #9)', () => {
   // e2e/scroll-sync.spec.ts (S1.5 README §7) — this level proves GanttShell pushes the *right
   // extents* into the shared model in the first place.
 
+  // The measured box is now the timeline pane's, not the host's (S1.8: PaneLayout owns a child
+  // element as the scroller). happy-dom does no layout, so these drive the same FakeResizeObserver
+  // seam pane-size-attachment.test.ts uses, feeding the pane height GanttShell reads on construction.
+
   it('two shells sharing one ScrollModel both contribute to the shared max (U1/U2)', () => {
-    const scroll = new ScrollModel();
-    const hostA = document.createElement('div');
-    Object.defineProperty(hostA, 'clientHeight', { value: 100, configurable: true });
-    const hostB = document.createElement('div');
-    Object.defineProperty(hostB, 'clientHeight', { value: 100, configurable: true });
+    FakeResizeObserver.instances = [];
+    vi.stubGlobal('ResizeObserver', FakeResizeObserver);
 
-    const shellA = new GanttShell({ host: hostA, dataset: { entries: tallEntries(50), timeZone }, scroll });
-    const shellB = new GanttShell({ host: hostB, dataset: { entries: tallEntries(50), timeZone }, scroll });
+    try {
+      const scroll = new ScrollModel();
+      const hostA = document.createElement('div');
+      const hostB = document.createElement('div');
 
-    // 50 rows * 32px default row height = 1600, in a 100px pane -> max.y 1500 for either chart.
-    expect(scroll.state.max.y).toBe(1500);
+      const shellA = new GanttShell({ host: hostA, dataset: { entries: tallEntries(50), timeZone }, scroll });
+      FakeResizeObserver.instances[0]!.fire({ width: 500, height: 100 });
+      const shellB = new GanttShell({ host: hostB, dataset: { entries: tallEntries(50), timeZone }, scroll });
+      FakeResizeObserver.instances[1]!.fire({ width: 500, height: 100 });
 
-    shellA.destroy();
-    shellB.destroy();
+      // 50 rows * 32px default row height = 1600, in a 100px pane -> max.y 1500 for either chart.
+      expect(scroll.state.max.y).toBe(1500);
+
+      shellA.destroy();
+      shellB.destroy();
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it("culls rows against the current scroll position, not always (0,0) (regression: render() hardcoded the culling window's y to 0, so scrolling past the first screenful rendered nothing)", () => {
-    const scroll = new ScrollModel();
-    const host = document.createElement('div');
-    Object.defineProperty(host, 'clientHeight', { value: 320, configurable: true }); // 10 rows @ 32px
+    FakeResizeObserver.instances = [];
+    vi.stubGlobal('ResizeObserver', FakeResizeObserver);
 
-    const shell = new GanttShell({ host, dataset: { entries: tallEntries(50), timeZone }, scroll });
+    try {
+      const scroll = new ScrollModel();
+      const host = document.createElement('div');
 
-    const labelsAt = (): string[] =>
-      Array.from(host.querySelectorAll('.fg-row'), (row) => row.textContent ?? '');
+      const shell = new GanttShell({ host, dataset: { entries: tallEntries(50), timeZone }, scroll });
+      FakeResizeObserver.instances[0]!.fire({ width: 500, height: 320 }); // 10 rows @ 32px
 
-    expect(labelsAt()).toContain('Entry 0');
-    expect(labelsAt()).not.toContain('Entry 40');
+      const labelsAt = (): string[] =>
+        Array.from(host.querySelectorAll('.fg-row'), (row) => row.textContent ?? '');
 
-    scroll.panTo({ y: 40 * 32 }); // scroll 40 rows down
+      expect(labelsAt()).toContain('Entry 0');
+      expect(labelsAt()).not.toContain('Entry 40');
 
-    expect(labelsAt()).not.toContain('Entry 0');
-    expect(labelsAt()).toContain('Entry 40');
+      scroll.panTo({ y: 40 * 32 }); // scroll 40 rows down
 
-    shell.destroy();
+      expect(labelsAt()).not.toContain('Entry 0');
+      expect(labelsAt()).toContain('Entry 40');
+
+      shell.destroy();
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it("a shorter chart's own max is the loosest bound it needs, not the taller chart's (U3)", () => {
-    const scroll = new ScrollModel();
-    const shortHost = document.createElement('div');
-    Object.defineProperty(shortHost, 'clientHeight', { value: 100, configurable: true });
-    const tallHost = document.createElement('div');
-    Object.defineProperty(tallHost, 'clientHeight', { value: 100, configurable: true });
+    FakeResizeObserver.instances = [];
+    vi.stubGlobal('ResizeObserver', FakeResizeObserver);
 
-    const shortShell = new GanttShell({
-      host: shortHost,
-      dataset: { entries: tallEntries(5), timeZone },
-      scroll,
-    });
-    const tallShell = new GanttShell({
-      host: tallHost,
-      dataset: { entries: tallEntries(500), timeZone },
-      scroll,
-    });
+    try {
+      const scroll = new ScrollModel();
+      const shortHost = document.createElement('div');
+      const tallHost = document.createElement('div');
 
-    // Loosest bound across both bindings: the tall chart's 500*32-100=15900 dwarfs the short
-    // chart's 5*32-100=60 (D-S1.5-1) — proving both extents actually reached the shared model.
-    expect(scroll.state.max.y).toBe(500 * 32 - 100);
+      const shortShell = new GanttShell({
+        host: shortHost,
+        dataset: { entries: tallEntries(5), timeZone },
+        scroll,
+      });
+      FakeResizeObserver.instances[0]!.fire({ width: 500, height: 100 });
+      const tallShell = new GanttShell({
+        host: tallHost,
+        dataset: { entries: tallEntries(500), timeZone },
+        scroll,
+      });
+      FakeResizeObserver.instances[1]!.fire({ width: 500, height: 100 });
 
-    shortShell.destroy();
-    tallShell.destroy();
+      // Loosest bound across both bindings: the tall chart's 500*32-100=15900 dwarfs the short
+      // chart's 5*32-100=60 (D-S1.5-1) — proving both extents actually reached the shared model.
+      expect(scroll.state.max.y).toBe(500 * 32 - 100);
+
+      shortShell.destroy();
+      tallShell.destroy();
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });
 
@@ -242,6 +267,82 @@ describe('GanttShell host resolution (#38)', () => {
     expect(() => new GanttShell({ host: '#does-not-exist', dataset: { entries, timeZone } })).toThrow(
       /does-not-exist/,
     );
+  });
+
+  it('throws a typed HostNotFoundError with code "host-not-found" (D-S1.8-9)', () => {
+    let caught: unknown;
+    try {
+      new GanttShell({ host: '#does-not-exist', dataset: { entries, timeZone } });
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(HostNotFoundError);
+    expect((caught as HostNotFoundError).code).toBe('host-not-found');
+  });
+});
+
+describe('pane split pixel identity (S1.8, D-S1.8-1)', () => {
+  it('[S1-A2] grid row tops and timeline bar tops agree to the pixel at a fractional zoom', () => {
+    const host = document.createElement('div');
+    document.body.append(host);
+    // A non-integer --fg-row-height stands in for the "fractional zoom" acceptance box (D-S1.8-12):
+    // it is what actually makes `row.top` land on a non-integer pixel for rows past the first, which
+    // is the case that would expose the two panes reading their `top` from different places.
+    host.style.setProperty('--fg-row-height', '31.5px');
+    const rowEntries = tallEntries(3);
+    const shell = new GanttShell({ host, dataset: { entries: rowEntries, timeZone } });
+
+    const rows = Array.from(host.querySelectorAll<HTMLElement>('.fg-grid-pane .fg-row'));
+    const bars = Array.from(host.querySelectorAll<HTMLElement>('.fg-timeline-pane .fg-bar'));
+    expect(rows).toHaveLength(3);
+    expect(bars).toHaveLength(3);
+
+    const translateY = (el: HTMLElement): number => {
+      const match = /translateY\(([-\d.]+)px\)/.exec(el.style.transform);
+      return match ? Number(match[1]) : NaN;
+    };
+    const translateBarY = (el: HTMLElement): number => {
+      const match = /translate\([-\d.]+px,\s*([-\d.]+)px\)/.exec(el.style.transform);
+      return match ? Number(match[1]) : NaN;
+    };
+
+    for (let i = 0; i < rows.length; i++) {
+      expect(translateY(rows[i]!)).toBe(translateBarY(bars[i]!));
+    }
+    // Confirms the case is not vacuous: at least one row sits at a non-integer top.
+    expect(rows.some((row) => !Number.isInteger(translateY(row)))).toBe(true);
+
+    shell.destroy();
+    host.remove();
+  });
+
+  it('(D1) the content sizer carries no row-label gutter — its far edge is contentWidth - 1, not gridWidth + contentWidth - 1', () => {
+    // happy-dom does no layout (`scrollWidth` is always 0 here), so this reads the same number the
+    // real DOM's `scrollWidth` would be driven by: the content sizer's own transform (render/dom's
+    // `sync()`), rather than the literal `timelinePane.scrollWidth` the spec names (that assertion
+    // belongs to e2e — plans/s1.8-pane-layout/README.md D-S1.8-10 — where a real layout engine runs).
+    FakeResizeObserver.instances = [];
+    vi.stubGlobal('ResizeObserver', FakeResizeObserver);
+
+    try {
+      const scale = new TimeScaleModel({ range: { start: rangeStart, end: rangeEnd } });
+      const host = document.createElement('div');
+      const shell = new GanttShell({ host, dataset: { entries, timeZone }, scale, gridWidth: 300 });
+      FakeResizeObserver.instances[0]!.fire({ width: 653, height: 400 });
+
+      const sizer = host.querySelector<HTMLElement>('.fg-timeline-pane [aria-hidden="true"]')!;
+      const match = /translate\(([-\d.]+)px,/.exec(sizer.style.transform);
+      const sizerX = match ? Number(match[1]) : NaN;
+
+      const expectedX = Math.max(0, scale.scale.contentWidth - 1);
+      expect(sizerX).toBe(expectedX);
+      // The old defect: the sizer's far edge included the grid pane's own width. Proves it is gone.
+      expect(sizerX).toBeLessThan(300 + expectedX);
+
+      shell.destroy();
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });
 

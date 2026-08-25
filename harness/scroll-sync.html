@@ -10,10 +10,8 @@
       }
       .fg-gantt {
         --fg-row-height: 32px;
-        --fg-row-label-width: 220px;
-        position: relative;
+        --fg-grid-pane-width: 220px;
         border: 1px solid #ccc;
-        overflow: auto;
       }
       #tall {
         height: 240px;
@@ -37,13 +35,7 @@
         height: 20px;
         line-height: 20px;
       }
-      .fg-rows {
-        position: absolute;
-        inset: 0;
-        top: 20px;
-      }
       .fg-row {
-        position: absolute;
         left: 0;
         font-size: 11px;
         line-height: var(--fg-row-height);
@@ -53,11 +45,6 @@
         overflow: hidden;
         text-overflow: ellipsis;
         color: #333;
-      }
-      .fg-bars {
-        position: absolute;
-        inset: 0;
-        top: 20px;
       }
       .fg-bar {
         background: #4a7a58;

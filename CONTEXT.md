@@ -107,8 +107,36 @@ The public entry point and a whole mounted instance: one `Gantt` wraps one `host
 _Avoid_: Chart (see #7 — "chart" used to name both this and `GanttShell`, ambiguously, and is retired from the codebase entirely)
 
 **GanttShell**:
-The internal `view/` class a `Gantt` constructs and owns: the DOM shell that holds the header band and the bars host (plans/01 §8.2-8.3, "the chart shell" in older text). Never public — `exports` is sealed to `api/` and `model/`. A `Gantt` is a thin façade over one `GanttShell`; the shell is where the grid pane / timeline pane / splitter split (S1) actually lives.
+The internal `view/` class a `Gantt` constructs and owns: the composition root that wires the Pane layout, the render backend, and the viewport attachments together (plans/01 §8.2-8.3, S1.8, "the chart shell" in older text). Never public — `exports` is sealed to `api/` and `model/`. A `Gantt` is a thin façade over one `GanttShell`; the shell _composes_ the Grid pane / Timeline pane / Splitter split, `PaneLayout` _holds_ it.
 _Avoid_: Chart, ChartShell (rejected in #7 — "shell" alone doesn't say what it's a shell _of_; `GanttShell` reads correctly even far from its definition)
+
+**Pane layout**:
+The DOM skeleton one Gantt's host is split into: a Grid pane, a Splitter, and a Timeline pane, built and owned by `view/pane-layout.ts`'s `PaneLayout` class (plans/01 §8.3, S1.8). Structure and one number only — Grid width — no geometry, no scale, no data, no frame, no events. `GanttShell` composes a Pane layout; it does not build panes itself.
+_Avoid_: Layout (Layout, unqualified, is the `layout/` source directory and its pure geometry types — a different concept)
+
+**Grid pane**:
+The left-hand pane of a Pane layout: row labels and, from S6, columns. It has no scrollbar of its own — its row layer follows the Timeline pane's native scroll by one `translateY` transform per frame instead of a second real scroller (D-S1.8-1), which is what keeps I9's pixel identity structural rather than something a caller maintains by hand.
+_Avoid_: Label column, gutter (gutter was the pre-S1.8 shape, where the row-label width lived inside the render backend's paint layer instead of being a pane in its own right — D-S1.8-2 retired it)
+
+**Timeline pane**:
+The right-hand pane of a Pane layout and the single native scroller for both axes (D-D, D-S1.8-1): header bands, bars, links, and decorations all mount inside it. `attachScroll` and `attachPaneSize` both bind to this element, never to the host or the Grid pane.
+_Avoid_: Chart area, canvas (canvas reads as the future canvas render backend, a different concept)
+
+**Splitter**:
+The draggable boundary between the Grid pane and the Timeline pane (`view/splitter.ts`'s `attachSplitter`). A pointer drag previews a candidate Grid width live and proposes the final value on release; it writes no state of its own; `GanttShell` decides whether a proposal becomes the committed Grid width.
+_Avoid_: Resizer, drag handle (both describe the affordance, not the domain concept a host or reviewer needs to name)
+
+**Grid width**:
+The Grid pane's width in px — the one number `PaneLayout` owns and the one thing a Splitter drag changes. Public as `gantt.gridWidth`, with the cancelable `beforeGridWidthChange`/`gridWidthChange` pair (S1.8). Spelled two ways on purpose: `gridWidth` in code, where the object it hangs off disambiguates, but `--fg-grid-pane-width` as a CSS custom property, where there is no object to disambiguate and "grid width" alone would read as gridline spacing among other tick/gridline tokens. Both spellings name the same number.
+_Avoid_: Grid pane width in code (too long once `gantt.` already says "grid pane"), gutter width (gutter is retired — see Grid pane)
+
+**Render surface**:
+One of the two DOM elements (`grid`, `timeline`) a `RenderBackend.mount()` receives (`render/backend.ts`'s `RenderSurfaces<THost>`, S1.8). `render/dom` puts the row layer in the grid surface and the header/bar/sizer layers in the timeline surface; `render/null` ignores both. Replaces the pre-S1.8 single-`host` `mount()`, which reserved the row-label gutter inside the paint layer itself.
+_Avoid_: Mount target, host (host is the Gantt's own DOM anchor — a different, higher-level concept)
+
+**Event bus**:
+The `view/event-bus.ts` class (`EventBus<TEvents>`) a `GanttShell` holds privately and `on`/`off` delegate to. Two events exist as of S1.8 — `beforeGridWidthChange` (cancelable) and `gridWidthChange` (notification) — and `GanttEventMap` is the map new event pairs join as later slices add gestures. Not exported from `api/`; a `Gantt`'s `on`/`off` are the only public surface onto it.
+_Avoid_: Emitter, dispatcher (both are implementation-neutral; Event bus is this project's term for the specific `GanttShell`-owned instance)
 
 ### Time and viewport
 

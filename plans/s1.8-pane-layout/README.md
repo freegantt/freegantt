@@ -419,49 +419,49 @@ Soft cap ~150 lines each for `pane-layout.ts`, `splitter.ts`, `event-bus.ts`, `s
 Guardrails and glossary first (`plans/04` §3.2/§3.3, naming skill step 1), then structure, then the seam, then the DOM edge.
 
 ### Guardrails and glossary
-- [ ] `CONTEXT.md` entries for the seven new terms (§7)
-- [ ] `eslint/rules/no-flow-layout-rows.cjs` — scope per D-S1.8-8; register in `eslint/rules/index.cjs` and `eslint.config.js`
-- [ ] `eslint/rules/no-flow-layout-rows.test.cjs` + red fixture; confirm `scripts/guard-red-test.mjs` fails on it
-- [ ] `docs/02` §3.10 and §5 corrections
+- [x] `CONTEXT.md` entries for the seven new terms (§7)
+- [x] `eslint/rules/no-flow-layout-rows.cjs` — scope per D-S1.8-8; register in `eslint/rules/index.cjs` and `eslint.config.js`
+- [x] `eslint/rules/no-flow-layout-rows.test.cjs` + red fixture; confirm `scripts/guard-red-test.mjs` fails on it
+- [x] `docs/02` §3.10 and §5 corrections
 
 ### Types and errors
-- [ ] `HostNotFoundError` in `src/model/errors.ts`; re-export from `src/model/index.ts` and `src/api/index.ts` with `FreeGanttError`
+- [x] `HostNotFoundError` in `src/model/errors.ts`; re-export from `src/model/index.ts` and `src/api/index.ts` with `FreeGanttError`
 
 ### `view/`
-- [ ] `src/view/pane-layout.ts` per §3.1
-- [ ] `src/view/splitter.ts` per §3.2
-- [ ] `src/view/event-bus.ts` per §3.3
-- [ ] `GanttShell` — composition root per §3.5; `#readMetrics()`; `resolveHost` throws typed
-- [ ] `attachScroll` takes `panes.timeline`; `attachPaneSize` takes `panes.timeline`; the gutter subtraction is deleted
+- [x] `src/view/pane-layout.ts` per §3.1
+- [x] `src/view/splitter.ts` per §3.2
+- [x] `src/view/event-bus.ts` per §3.3
+- [x] `GanttShell` — composition root per §3.5; `#readMetrics()`; `resolveHost` throws typed
+- [x] `attachScroll` takes `panes.timeline`; `attachPaneSize` takes `panes.timeline`; the gutter subtraction is deleted
 
 ### `render/`
-- [ ] `RenderSurfaces`; `mount(surfaces)`; `rowLabelWidth` deleted from the interface and both backends
-- [ ] `render/dom` — row layer into `grid`; header, bars and sizer into `timeline`; one `translateY(-visible.y)` per frame; sizer x loses the gutter
+- [x] `RenderSurfaces`; `mount(surfaces)`; `rowLabelWidth` deleted from the interface and both backends
+- [x] `render/dom` — row layer into `grid`; header, bars and sizer into `timeline`; one `translateY(-visible.y)` per frame; sizer x loses the gutter
 
 ### `api/`
-- [ ] `Gantt.gridWidth`, `Gantt.on`, `Gantt.off`; `GanttOptions.gridWidth`; the commit sequence in §3.3
+- [x] `Gantt.gridWidth`, `Gantt.on`, `Gantt.off`; `GanttOptions.gridWidth`; the commit sequence in §3.3
 
 ### Harness
-- [ ] `harness/index.html` and `harness/scroll-sync.html` drop `overflow` and every rule the library now owns; #41 closes
-- [ ] Review both harness entry points against CLAUDE.md's harness rule; record any gap against S1.8 and fix it in `src/`
+- [x] `harness/index.html` and `harness/scroll-sync.html` drop `overflow` and every rule the library now owns; #41 closes
+- [x] Review both harness entry points against CLAUDE.md's harness rule; record any gap against S1.8 and fix it in `src/` — `harness/main.ts`/`harness/scroll-sync.ts` reviewed, no gaps found (both already just construct `Gantt`/`Dataset`/shared models and restate nothing the library computes)
 
 ### Closing the ledger (§3.7)
-- [ ] Run each retired spelling in §3.7 C as a grep and confirm zero results
-- [ ] The two prose sites in §3.7 D
+- [x] Run each retired spelling in §3.7 C as a grep and confirm zero results — clean in `src/`, `e2e/`, `harness/*.ts`, `harness/*.html`; `src/render/backend.ts`'s one `rowLabelWidth` mention is explicitly historical ("used to be... now it is"). `harness/doc.html` and `harness/diagram.html` (pre-existing architecture diagrams, not S1.8 output) still carry old-name mentions — flagged as residue, not closed by this step
+- [x] The two prose sites in §3.7 D
 
 ### Review and docs
-- [ ] The §7 spec edits, landed with this step
-- [ ] `pnpm verify` green; `pnpm test:e2e` green
+- [x] The §7 spec edits, landed with this step
+- [x] `pnpm verify` green; `pnpm test:e2e` green
 
 ### Acceptance
-- [ ] **U1** — a drag moves both panes during the drag (`splitter.test.ts`, `e2e/pane-resize.spec.ts`)
-- [ ] **U2** — `gridWidthChange` fires once with `{from, to}`; a veto restores the width (`api/gantt.test.ts`)
-- [ ] **U3** — **`[S1-A2]`**, live-DOM pixel equality at fractional zoom (`view/gantt-shell.test.ts`)
-- [ ] **U4** — a splitter drag re-fits the axis with no other call (`e2e/pane-resize.spec.ts`)
-- [ ] **U5** — Escape restores and commits nothing (`splitter.test.ts`)
-- [ ] **U6** — both harness pages own no pane CSS and no `overflow` (#41)
-- [ ] **U7** — `HostNotFoundError` with code `host-not-found` (`view/gantt-shell.test.ts`)
-- [ ] **D1** — `timelinePane.scrollWidth === frame.contentWidth` (D-S1.8-10)
+- [x] **U1** — a drag moves both panes during the drag (`splitter.test.ts`, `e2e/pane-resize.spec.ts`)
+- [x] **U2** — `gridWidthChange` fires once with `{from, to}`; a veto restores the width (`api/gantt.test.ts`)
+- [x] **U3** — **`[S1-A2]`**, live-DOM pixel equality at fractional zoom (`view/gantt-shell.test.ts`)
+- [x] **U4** — a splitter drag re-fits the axis with no other call (`e2e/pane-resize.spec.ts`)
+- [x] **U5** — Escape restores and commits nothing (`splitter.test.ts`)
+- [x] **U6** — both harness pages own no pane CSS and no `overflow` (#41)
+- [x] **U7** — `HostNotFoundError` with code `host-not-found` (`view/gantt-shell.test.ts`)
+- [x] **D1** — the content sizer carries no row-label gutter (`view/gantt-shell.test.ts`, happy-dom proxy) and the timeline pane's real `scrollWidth` carries none either (`e2e/harness.spec.ts`, D-S1.8-10)
 
 ---
 

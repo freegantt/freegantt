@@ -1,15 +1,23 @@
-// view/ — Gantt shell (plans/01 §8.2-8.3). The real grid/timeline/viewport split lands across S1.
+// view/ — Gantt shell, the composition root that wires the grid pane, splitter, timeline pane and
+// viewport binding together (plans/01 §8.2-8.3, S1.8).
 
 import { FrameLayout, ScrollModel, TimeScaleModel, Viewport } from '../layout/index.js';
 import type { ViewportHandle } from '../layout/index.js';
 
 import { createDomBackend } from '../render/dom/index.js';
 import { readPixelProperty } from '../render/dom/pixel-property.js';
+import { PaneLayout } from './pane-layout.js';
+import type { Panes } from './pane-layout.js';
+import { attachSplitter } from './splitter.js';
+import type { SplitterAttachment } from './splitter.js';
+import { EventBus } from './event-bus.js';
+import type { GanttEventMap } from './event-bus.js';
 import { attachScroll } from './scroll-attachment.js';
 import type { ScrollAttachment } from './scroll-attachment.js';
 import { attachPaneSize } from './pane-size-attachment.js';
 import type { PaneSizeAttachment } from './pane-size-attachment.js';
 import type { RenderBackend } from '../render/backend.js';
+import { HostNotFoundError } from '../model/index.js';
 import type { Dataset, Size } from '../model/index.js';
 
 /** CSS custom property that owns row height (plans/02 §4, level 1 of the customization ladder) —
@@ -36,43 +44,55 @@ export interface GanttShellOptions {
    * Constructs a private default when omitted; sharing one instance links both axes (S1.5 README
    * D-S1.5-3). */
   scroll?: ScrollModel;
+  /** Initial grid pane width in px (S1.8, D-S1.8-3). Default: `--fg-grid-pane-width`, fallback 160. */
+  gridWidth?: number;
 }
 
 function resolveHost(host: HTMLElement | string): HTMLElement {
   if (typeof host !== 'string') return host;
   const el = document.querySelector(host);
   if (!(el instanceof HTMLElement)) {
-    throw new Error(`Gantt: no element matches host selector "${host}"`);
+    throw new HostNotFoundError(host);
   }
   return el;
 }
 
 export class GanttShell {
   #host: HTMLElement;
+  #paneLayout: PaneLayout;
+  #panes: Panes;
   #backend: RenderBackend<HTMLElement>;
   #revision = 0;
   #viewport: Viewport;
   #viewportHandle: ViewportHandle;
   #scrollAttachment: ScrollAttachment;
+  #paneSizeAttachment: PaneSizeAttachment;
+  #splitterAttachment: SplitterAttachment;
+  #events = new EventBus<GanttEventMap>();
   #destroyed = false;
   /** This Gantt's layout pass. It keeps the row-height index alive across renders (#47) — the shell
    * states what to draw and holds no layout bookkeeping of its own. */
   #layout = new FrameLayout();
   #rowHeight: number = DEFAULT_ROW_HEIGHT;
-  #paneSizeAttachment: PaneSizeAttachment;
   #options: GanttShellOptions;
   /** True until pane-size wiring completes. `Viewport.bind()` notifies the newcomer synchronously
    * per D-S1.5-4 (once for scale, once for scroll) — those calls land before pane size is wired, so
    * they are not real renders yet and are dropped while this is true. */
   #wiring = true;
   /** Set by the most recent `render()` — `frame.contentWidth`/`contentHeight` (S1.5 README §3.2,
-   * D-S1.5-9). No gutter added (D-S1.7-3): the row-label gutter is the backend's own offset, and the
-   * backend already sizes its own content sizer with it. */
+   * D-S1.5-9). No gutter added (S1.8, D-S1.8-2): the grid pane's own width is the gutter now, and the
+   * timeline pane's content is `contentWidth` wide, full stop. */
   #contentSize = { width: 0, height: 0 };
 
   constructor(options: GanttShellOptions) {
     this.#options = options;
     this.#host = resolveHost(options.host);
+    this.#paneLayout = new PaneLayout({
+      host: this.#host,
+      ...(options.gridWidth !== undefined ? { gridWidth: options.gridWidth } : {}),
+    });
+    this.#panes = this.#paneLayout.panes;
+
     this.#viewport = new Viewport({
       ...(options.scale ? { scale: options.scale } : {}),
       ...(options.scroll ? { scroll: options.scroll } : {}),
@@ -82,13 +102,12 @@ export class GanttShell {
     // — which IS this shell's first render — fires, so there is no construction-order exception to
     // document and no separate explicit render() call after bind().
     this.#backend = createDomBackend();
-    this.#backend.mount(this.#host);
+    this.#backend.mount({ grid: this.#panes.grid, timeline: this.#panes.timeline });
 
-    // The host element is the timeline pane: today's backend positions rows, bars and header all
-    // absolutely inside it, so it is the single native scroller (D-D, S1.5 README §6) — there is no
-    // separate grid pane to keep in sync. Constructed before either bind (Viewport's fan-in, D-S1.7-1),
-    // so this field is never undefined during a render.
-    this.#scrollAttachment = attachScroll(this.#host, this.#viewport);
+    // The timeline pane is the single native scroller (D-D, D-S1.8-1); the grid pane follows it by
+    // transform, in render/dom's sync(). Constructed before either bind (Viewport's fan-in,
+    // D-S1.7-1), so this field is never undefined during a render.
+    this.#scrollAttachment = attachScroll(this.#panes.timeline, this.#viewport);
 
     // bind() fires its own onChange synchronously, once per sub-model (D-S1.5-4: bind always
     // notifies the newcomer) — before this call returns and #viewportHandle is assigned. Those
@@ -100,23 +119,58 @@ export class GanttShell {
     // Synchronous first measurement: a real ResizeObserver's own first callback is queued, not
     // immediate, so the first paint cannot wait for it. attachPaneSize below takes over from here —
     // every measurement after this one, live, for as long as the shell lives (S1.7b, #8).
-    this.#applyPaneMeasurement({ width: this.#host.clientWidth, height: this.#host.clientHeight });
-    this.#paneSizeAttachment = attachPaneSize(this.#host, (size) => this.#applyPaneMeasurement(size));
+    this.#applyPaneMeasurement(this.#paneLayout.measureTimelinePane());
+    this.#paneSizeAttachment = attachPaneSize(this.#panes.timeline, (size) =>
+      this.#applyPaneMeasurement(size),
+    );
+    this.#splitterAttachment = attachSplitter(this.#panes.splitter, {
+      readGridWidth: () => this.#paneLayout.gridWidth,
+      previewGridWidth: (px) => {
+        this.#paneLayout.gridWidth = px;
+      },
+      commitGridWidth: (px) => this.#commitGridWidth(px),
+    });
     this.#wiring = false;
     this.render();
   }
 
+  get gridWidth(): number {
+    return this.#paneLayout.gridWidth;
+  }
+
+  /** A plain reconfiguration (`plans/02` "Reconfiguration is just assignment") still runs the same
+   *  cancelable commit sequence a splitter drag runs — one write path, one place the veto lives. */
+  set gridWidth(px: number) {
+    this.#commitGridWidth(px);
+  }
+
+  on<K extends keyof GanttEventMap>(name: K, handler: (payload: GanttEventMap[K]) => void | false): void {
+    this.#events.on(name, handler);
+  }
+
+  off<K extends keyof GanttEventMap>(name: K, handler: (payload: GanttEventMap[K]) => void | false): void {
+    this.#events.off(name, handler);
+  }
+
+  #commitGridWidth(px: number): void {
+    const from = this.#paneLayout.gridWidth;
+    const to = px;
+    if (this.#events.emit('beforeGridWidthChange', { from, to }) === false) {
+      this.#paneLayout.gridWidth = from; // veto: the boundary goes back (D-S1.8-3)
+      return;
+    }
+    this.#paneLayout.gridWidth = to;
+    this.#events.emit('gridWidthChange', { from, to });
+  }
+
   /** One measurement, pushed to everything it feeds (#8, #49): `--fg-row-height` and the pane size
-   *  both change for the same reason — the host was just resized — so both are re-read on the same
-   *  signal instead of `--fg-row-height` being read once and going stale. `size` is the host's own
-   *  content-box box; the backend's row-label gutter (#46) is subtracted here so every consumer of
-   *  `paneWidth` agrees on the width that is actually drawable. */
+   *  both change for the same reason — the timeline pane was just resized — so both are re-read on
+   *  the same signal instead of `--fg-row-height` being read once and going stale. `size` is the
+   *  timeline pane's own client box; no gutter to subtract (S1.8, D-S1.8-2) — the grid pane's width
+   *  never overlapped it in the first place. */
   #applyPaneMeasurement(size: Size): void {
     this.#rowHeight = readPixelProperty(this.#host, ROW_HEIGHT_PROPERTY, ROW_HEIGHT_POLICY);
-    this.#viewportHandle.setPaneSize({
-      width: Math.max(0, size.width - this.#backend.rowLabelWidth),
-      height: size.height,
-    });
+    this.#viewportHandle.setPaneSize(size);
   }
 
   render(): void {
@@ -139,9 +193,10 @@ export class GanttShell {
     if (this.#destroyed) return;
     this.#scrollAttachment.detach();
     this.#paneSizeAttachment.detach();
+    this.#splitterAttachment.detach();
     this.#viewportHandle.unbind();
     this.#backend.destroy();
-    this.#host.replaceChildren();
+    this.#paneLayout.destroy();
     this.#destroyed = true;
   }
 }
