@@ -237,7 +237,7 @@ Same seam, cheaper as one edit than three:
 2. **Notify-iff-changed** (D-S1.5-4), comparing `{timeZone, range.start, range.end, pxPerMs}`.
 3. **`ScaleBinding` becomes `readonly`**, `viewportWidth` → `paneWidth`, `setViewportWidth` → `setPaneWidth`, and the model copies the binding at bind time. Today the handle mutates the caller's object in place (`time-scale-model.ts:78-80`), so a caller holding a reference can change the model's inputs behind its back, bypassing invalidation entirely.
 
-`ScaleBinding` becomes `DatasetLike & { readonly paneWidth: number }`.
+**Superseded — this did not ship at S1.5.** `ScaleBinding` was meant to become `DatasetLike & { readonly paneWidth: number }`, but `DatasetLike` lived in `view/` and `layout/` may not import `view/` (I1) — the sentence asserted an edge the boundary lint forbids. `time-scale-model.ts:28-35` declares all three fields inline instead. Fixed at S1.7 (`plans/s1.7-windowed-frame/README.md` §3.2, §3.8 E), where the type moves to `model/` and is renamed `Dataset` off the naming skill's checks: `ScaleBinding` becomes `Dataset & { readonly paneWidth: number }`.
 
 ---
 
@@ -245,7 +245,7 @@ Same seam, cheaper as one edit than three:
 
 `panTo` takes pixels. A host wanting "show me the deadline entry" would compute `rowIndex × rowHeight` — **wrong the moment rows vary in height**, which `PrefixSumHeightIndex` (S1.6, shipped) exists to support (U5). The library knows every row's `y`; making the host re-derive it is the `harness/main.ts` smell CLAUDE.md names.
 
-So the intent-level verb is named here and built with `Viewport` at S1.8:
+So the intent-level verb is named here. `Viewport` itself is built at **S1.7** (`plans/s1.7-windowed-frame/README.md`), but `reveal` waits one more step, for a pane height that re-measures rather than one read once at construction (S1.7b, #8):
 
 ```ts
 gantt.reveal(entryId: EntryId, options?: { align?: 'start' | 'center' | 'nearest' }): void;
@@ -279,7 +279,7 @@ export interface GanttOptions {
 
 **`TimeScaleModel` gets no `TimeScaleSource` interface.** The asymmetry with `scroll` is real and gets one sentence in `plans/02` §5: scroll has separable axes, time has one.
 
-**Declared gap against "every config key is live-reconfigurable" (CLAUDE.md, `plans/02` §1.3):** `gantt.scale = …` and `gantt.scroll = …` setters land at **S1.8**, where `Viewport` owns the unbind → rebind → re-render sequence in one place. `scale` already has this gap today (`api/gantt.ts:12`); S1.5 does not close it and does not widen it silently. Tracked in §8.
+**Declared gap against "every config key is live-reconfigurable" (CLAUDE.md, `plans/02` §1.3):** `gantt.scale = …` and `gantt.scroll = …` setters land at **S1.8**, where the already-built `Viewport` (S1.7) owns the unbind → rebind → re-render sequence in one place. `scale` already has this gap today (`api/gantt.ts:12`); S1.5 does not close it and does not widen it silently. Tracked in §8.
 
 ---
 
@@ -373,8 +373,8 @@ Guardrails and types first (`plans/04` §3.2/§3.3), then the pure model, then t
 
 | Deferred | Returns at | Needs |
 |---|---|---|
-| `gantt.reveal(entryId)` | S1.8 | `Viewport` + `frame.rows` + `RowHeightIndex` |
-| `gantt.scale =` / `gantt.scroll =` setters | S1.8 | `Viewport` owning unbind → rebind → re-render |
+| `gantt.reveal(entryId)` | S1.8 | a pane height that re-measures (S1.7b, #8) — `Viewport`, `frame.rows` and `RowHeightIndex` all ship at S1.7 |
+| `gantt.scale =` / `gantt.scroll =` setters | S1.8 | the already-built `Viewport` (S1.7) owning unbind → rebind → re-render |
 | `panBy(delta)` | S4 | wheel / keyboard controllers producing deltas |
 | `xOnly()` / `yOnly()` | when a host needs "share x, private y" | a real caller (D-S1.5-3) |
 | One-scrollbar treatment for linked charts | its own issue against S1.8 | a linked-group concept in `view/` |
