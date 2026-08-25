@@ -1,0 +1,860 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>FreeGantt — Code Flow Walkthrough</title>
+    <style>
+      :root {
+        --bg: #f7f7f5;
+        --panel: #ffffff;
+        --ink: #1c1e26;
+        --sub: #55596b;
+        --line: #d8dae2;
+        --accent: #3a5a99;
+        --accent-ink: #1c2b4a;
+        --pure-bg: #e8f4ea;
+        --pure-line: #4a7a58;
+        --pure-ink: #1c2b20;
+        --dom-bg: #eef1f8;
+        --dom-line: #5a6a9a;
+        --dom-ink: #1c2230;
+        --api-bg: #fdf1e7;
+        --api-line: #a8703c;
+        --api-ink: #2e1f12;
+        --stub-bg: #f2f2f2;
+        --stub-line: #aaa;
+        --code-bg: #eef0f4;
+        --smell-bg: #fff4e5;
+        --smell-line: #c98a2a;
+        --smell-ink: #5c3d0d;
+        --mono: 'SF Mono', 'JetBrains Mono', Consolas, monospace;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #14151b;
+          --panel: #1c1e27;
+          --ink: #e7e8ee;
+          --sub: #9498ab;
+          --line: #33364a;
+          --accent: #7f9fd8;
+          --accent-ink: #dbe6ff;
+          --pure-bg: #17261c;
+          --pure-line: #4a7a58;
+          --pure-ink: #bfe6c8;
+          --dom-bg: #1a2036;
+          --dom-line: #6d7fc0;
+          --dom-ink: #cfd7ff;
+          --api-bg: #2e2113;
+          --api-line: #c98a4f;
+          --api-ink: #f5dcc0;
+          --stub-bg: #24262f;
+          --stub-line: #565a6e;
+          --code-bg: #14161e;
+          --smell-bg: #2e2410;
+          --smell-line: #c98a2a;
+          --smell-ink: #f2d29b;
+        }
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        background: var(--bg);
+        color: var(--ink);
+        font:
+          15px/1.55 -apple-system,
+          BlinkMacSystemFont,
+          'Segoe UI',
+          Helvetica,
+          Arial,
+          sans-serif;
+        margin: 0;
+        padding: 0 0 6rem;
+      }
+      header {
+        max-width: 920px;
+        margin: 0 auto;
+        padding: 3rem 1.5rem 1.5rem;
+      }
+      h1 {
+        font-size: 1.7rem;
+        margin: 0 0 0.4rem;
+        letter-spacing: -0.01em;
+      }
+      .kicker {
+        color: var(--sub);
+        font-size: 0.95rem;
+        margin: 0 0 1.2rem;
+      }
+      .banner {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-left: 4px solid var(--accent);
+        border-radius: 6px;
+        padding: 0.9rem 1.1rem;
+        font-size: 0.93rem;
+        color: var(--sub);
+      }
+      .banner strong {
+        color: var(--ink);
+      }
+      main {
+        max-width: 920px;
+        margin: 0 auto;
+        padding: 0 1.5rem;
+      }
+      section {
+        margin: 3rem 0;
+      }
+      h2 {
+        font-size: 1.25rem;
+        margin: 0 0 0.3rem;
+        padding-bottom: 0.5rem;
+        border-bottom: 1px solid var(--line);
+      }
+      h2 .num {
+        color: var(--accent);
+        font-variant-numeric: tabular-nums;
+        margin-right: 0.5rem;
+      }
+      .lede {
+        color: var(--sub);
+        margin: 0.6rem 0 1.4rem;
+        font-size: 0.95rem;
+      }
+      code,
+      .mono {
+        font-family: var(--mono);
+        font-size: 0.87em;
+      }
+      code {
+        background: var(--code-bg);
+        padding: 0.1em 0.35em;
+        border-radius: 4px;
+      }
+      pre {
+        background: var(--code-bg);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 1rem 1.1rem;
+        overflow-x: auto;
+        font-family: var(--mono);
+        font-size: 0.85rem;
+        line-height: 1.6;
+      }
+      pre code {
+        background: none;
+        padding: 0;
+      }
+
+      /* ---- diagram scaffolding ---- */
+      .diagram {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 1.5rem;
+        overflow-x: auto;
+      }
+      .flow-row {
+        display: flex;
+        align-items: stretch;
+        gap: 0;
+        min-width: max-content;
+      }
+      .flow-col {
+        display: flex;
+        flex-direction: column;
+      }
+      .box {
+        border-radius: 8px;
+        border: 1.5px solid var(--line);
+        padding: 0.7rem 0.9rem;
+        background: var(--panel);
+        min-width: 150px;
+      }
+      .box .name {
+        font-weight: 600;
+        font-size: 0.95rem;
+      }
+      .box .sub {
+        color: var(--sub);
+        font-size: 0.78rem;
+        margin-top: 0.15rem;
+      }
+      .box.api {
+        background: var(--api-bg);
+        border-color: var(--api-line);
+        color: var(--api-ink);
+      }
+      .box.dom {
+        background: var(--dom-bg);
+        border-color: var(--dom-line);
+        color: var(--dom-ink);
+      }
+      .box.pure {
+        background: var(--pure-bg);
+        border-color: var(--pure-line);
+        color: var(--pure-ink);
+      }
+      .box.stub {
+        background: var(--stub-bg);
+        border-color: var(--stub-line);
+        border-style: dashed;
+        color: var(--sub);
+      }
+      .arrow-h {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 46px;
+        color: var(--sub);
+        font-size: 1.1rem;
+      }
+      .arrow-v {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 30px;
+        color: var(--sub);
+        font-size: 1.1rem;
+      }
+      .stack {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
+
+      /* layer map */
+      .layermap {
+        display: flex;
+        flex-direction: column;
+        gap: 0.6rem;
+        align-items: center;
+      }
+      .layermap .tier {
+        display: flex;
+        gap: 0.7rem;
+        justify-content: center;
+        flex-wrap: wrap;
+        width: 100%;
+      }
+      .tier-label {
+        font-size: 0.72rem;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--sub);
+        text-align: center;
+        margin-top: -0.2rem;
+      }
+      .layermap .box {
+        flex: 1 1 150px;
+        max-width: 220px;
+      }
+
+      /* module cards */
+      .card {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 1.1rem 1.3rem;
+        margin-bottom: 1rem;
+      }
+      .card h3 {
+        margin: 0 0 0.2rem;
+        font-size: 1.02rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+      }
+      .tag {
+        font-size: 0.68rem;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        padding: 0.15rem 0.5rem;
+        border-radius: 100px;
+        font-weight: 600;
+      }
+      .tag.pure {
+        background: var(--pure-bg);
+        color: var(--pure-ink);
+        border: 1px solid var(--pure-line);
+      }
+      .tag.dom {
+        background: var(--dom-bg);
+        color: var(--dom-ink);
+        border: 1px solid var(--dom-line);
+      }
+      .tag.api {
+        background: var(--api-bg);
+        color: var(--api-ink);
+        border: 1px solid var(--api-line);
+      }
+      .tag.stub {
+        background: var(--stub-bg);
+        color: var(--sub);
+        border: 1px dashed var(--stub-line);
+      }
+      .card .path {
+        color: var(--sub);
+        font-size: 0.8rem;
+        margin-bottom: 0.6rem;
+      }
+      .card p {
+        margin: 0.4rem 0;
+      }
+      .card .interface-label {
+        font-size: 0.78rem;
+        color: var(--sub);
+        font-weight: 600;
+        margin-top: 0.7rem;
+      }
+
+      /* smell callouts */
+      .smell {
+        background: var(--smell-bg);
+        border: 1px solid var(--smell-line);
+        border-radius: 8px;
+        padding: 0.7rem 1rem;
+        margin: 0.8rem 0;
+        font-size: 0.9rem;
+      }
+      .smell .smell-tag {
+        display: inline-block;
+        background: var(--smell-line);
+        color: #1a1204;
+        font-size: 0.68rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        padding: 0.1rem 0.5rem;
+        border-radius: 100px;
+        margin-bottom: 0.4rem;
+      }
+      .smell p {
+        margin: 0.3rem 0 0;
+        color: var(--smell-ink);
+      }
+
+      ol.steps {
+        padding-left: 1.3rem;
+      }
+      ol.steps li {
+        margin: 0.5rem 0;
+      }
+      ol.steps .file {
+        color: var(--sub);
+      }
+
+      table.smell-index {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.88rem;
+      }
+      table.smell-index th,
+      table.smell-index td {
+        text-align: left;
+        padding: 0.5rem 0.7rem;
+        border-bottom: 1px solid var(--line);
+        vertical-align: top;
+      }
+      table.smell-index th {
+        color: var(--sub);
+        font-weight: 600;
+        font-size: 0.78rem;
+        text-transform: uppercase;
+      }
+      table.smell-index a {
+        color: var(--accent);
+        text-decoration: none;
+      }
+      table.smell-index a:hover {
+        text-decoration: underline;
+      }
+
+      footer {
+        max-width: 920px;
+        margin: 2rem auto 0;
+        padding: 0 1.5rem;
+        color: var(--sub);
+        font-size: 0.82rem;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>FreeGantt — Code Flow Walkthrough</h1>
+      <p class="kicker">
+        How <code>harness/main.ts</code> reaches the DOM: every module in the path, what it owns, and how it
+        connects to its neighbors.
+      </p>
+      <div class="banner">
+        <strong>This is a walkthrough, not a review.</strong> It exists to build a shared mental model of the
+        current call graph, drawn straight from the code on <code>review-2026-08-25-deepenings</code> as of
+        2026-08-25. A few things looked odd while tracing the flow — those are called out inline as
+        <span class="smell"><span class="smell-tag">smell</span></span> boxes and indexed at the end. None of
+        them are fixed here.
+      </div>
+    </header>
+
+    <main>
+      <section id="s1">
+        <h2><span class="num">1</span>The one-line version</h2>
+        <p class="lede">
+          Everything below the DOM line is plain data and functions — testable in Node, no browser needed.
+          Only <code>render/</code>, <code>view/</code>, <code>interaction/</code>,
+          <code>extensions/</code> touch <code>document</code>/<code>window</code>.
+        </p>
+
+        <div class="diagram">
+          <div class="layermap">
+            <div class="tier">
+              <div class="box api">
+                <div class="name">harness/main.ts</div>
+                <div class="sub">the library's first consumer</div>
+              </div>
+            </div>
+            <div class="arrow-v">&#8595;</div>
+            <div class="tier">
+              <div class="box api">
+                <div class="name">api/</div>
+                <div class="sub">Gantt · Dataset — the only import a consumer makes</div>
+              </div>
+            </div>
+            <div class="arrow-v">&#8595;</div>
+            <div class="tier">
+              <div class="box dom">
+                <div class="name">view/</div>
+                <div class="sub">GanttShell · scroll &amp; pane-size attachments</div>
+              </div>
+              <div class="box dom">
+                <div class="name">render/</div>
+                <div class="sub">dom backend (reconciler) · null backend</div>
+              </div>
+            </div>
+            <div class="tier-label">touches the DOM</div>
+            <div class="arrow-v">&#8595;</div>
+            <div class="tier">
+              <div class="box pure">
+                <div class="name">layout/</div>
+                <div class="sub">Viewport · FrameLayout · row-height index</div>
+              </div>
+              <div class="box stub">
+                <div class="name">data/</div>
+                <div class="sub">stub — lands S2</div>
+              </div>
+              <div class="box stub">
+                <div class="name">scheduling/</div>
+                <div class="sub">stub — lands S3</div>
+              </div>
+            </div>
+            <div class="arrow-v">&#8595;</div>
+            <div class="tier">
+              <div class="box pure">
+                <div class="name">time/</div>
+                <div class="sub">Instant · zones · TimeScale · presets</div>
+              </div>
+            </div>
+            <div class="arrow-v">&#8595;</div>
+            <div class="tier">
+              <div class="box pure">
+                <div class="name">model/</div>
+                <div class="sub">entity types, ids, brands — zero runtime, zero deps</div>
+              </div>
+            </div>
+            <div class="tier-label">pure — no DOM, runs anywhere</div>
+          </div>
+        </div>
+        <p class="lede">
+          <code>interaction/</code> and <code>extensions/</code> exist as directories (<code>plans/01</code>
+          §1, §9–10) but are still <code>export {}</code> stubs — S4 and S6 respectively. They don't appear in
+          the diagram above because nothing calls into them yet.
+        </p>
+      </section>
+
+      <section id="s2">
+        <h2><span class="num">2</span>Boot sequence: what <code>new Gantt(...)</code> actually does</h2>
+        <p class="lede">
+          Reading <code>harness/main.ts</code> top to bottom, then following each call one layer deeper.
+        </p>
+
+        <pre><code>import { Gantt, Dataset } from '../src/api/index.js';
+import { sampleEntries } from '../fixtures/sample-project.js';
+
+const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
+new Gantt({ host: '#gantt', dataset });</code></pre>
+
+        <div class="diagram">
+          <ol class="steps">
+            <li>
+              <code>new Dataset(...)</code> — <span class="file">api/dataset.ts</span> wraps
+              <code>entries</code> + IANA <code>timeZone</code> in a read-only class. It satisfies
+              <code>model/</code>'s structural <code>Dataset</code> contract; no computation happens here.
+            </li>
+            <li>
+              <code>new Gantt(...)</code> — <span class="file">api/gantt.ts</span> resolves nothing itself. It
+              constructs exactly one <code>GanttShell</code> and forwards
+              <code>host</code>/<code>dataset</code>/optional <code>scale</code>/<code>scroll</code>. This is
+              the entire public surface: one class, one constructor, one <code>destroy()</code>.
+            </li>
+            <li>
+              <code>GanttShell</code> constructor — <span class="file">view/gantt-shell.ts</span> — runs, in
+              this order:
+              <ol type="a">
+                <li>
+                  resolves <code>host</code> (element or selector) — throws if a selector matches nothing
+                </li>
+                <li>
+                  builds a <code>Viewport</code> (<span class="file">layout/viewport/viewport.ts</span>), the
+                  fan-in over <code>TimeScaleModel</code> + <code>ScrollModel</code>
+                </li>
+                <li>
+                  creates the DOM render backend and <strong>mounts it before binding</strong> — so the
+                  backend's render target exists before the viewport's first <code>onChange</code> fires
+                </li>
+                <li>
+                  attaches native scroll (<code>attachScroll</code>) to the host, which is the single native
+                  scroller
+                </li>
+                <li>
+                  <code>viewport.bind(dataset, onChange)</code> — binds <code>TimeScaleModel</code> and
+                  <code>ScrollModel</code> together; each fires its own binding callback synchronously, but a
+                  local <code>ready</code> flag swallows those premature calls
+                </li>
+                <li>
+                  takes one synchronous pane-size measurement (a real <code>ResizeObserver</code>'s first
+                  callback is <em>queued</em>, so the first paint can't wait for it), then hands off to
+                  <code>attachPaneSize</code> for every measurement after
+                </li>
+                <li>
+                  flips <code>ready = true</code> and calls <code>render()</code> once, deliberately, now that
+                  scale, scroll, and pane size are all wired
+                </li>
+              </ol>
+            </li>
+            <li><code>render()</code> — see §3.</li>
+          </ol>
+        </div>
+      </section>
+
+      <section id="s3">
+        <h2><span class="num">3</span>One render pass</h2>
+        <p class="lede">
+          <code>GanttShell.render()</code> is the one place all the pure modules meet the DOM-touching ones.
+        </p>
+
+        <div class="diagram">
+          <div class="flow-row">
+            <div class="box dom">
+              <div class="name">GanttShell.render()</div>
+              <div class="sub">view/gantt-shell.ts</div>
+            </div>
+            <div class="arrow-h">&#8594;</div>
+            <div class="box pure">
+              <div class="name">FrameLayout.computeFrame()</div>
+              <div class="sub">layout/frame-layout.ts</div>
+            </div>
+            <div class="arrow-h">&#8594;</div>
+            <div class="box pure">
+              <div class="name">computeFrame()</div>
+              <div class="sub">layout/frame.ts — pure geometry</div>
+            </div>
+            <div class="arrow-h">&#8594;</div>
+            <div class="box dom">
+              <div class="name">backend.sync(frame)</div>
+              <div class="sub">render/dom/index.ts</div>
+            </div>
+          </div>
+        </div>
+
+        <p class="lede">
+          Inputs to <code>computeFrame</code>: <code>dataset.entries</code>, the viewport's resolved
+          <code>TimeScale</code>, its <code>preset</code>, the locally-clamped <code>visible</code> rect,
+          <code>overscan</code>, and the current row height. It returns a <code>GeometryFrame</code> — rows,
+          bars, header ticks, links, decorations, content extents — and holds no state of its own;
+          <code>FrameLayout</code> is the one place that remembers the row-height index between passes, so no
+          caller upstream has to.
+        </p>
+
+        <p class="lede">
+          After <code>backend.sync()</code>, the shell pushes the frame's <code>contentWidth</code>/<code
+            >contentHeight</code
+          >
+          back into the <code>Viewport</code> (so <code>ScrollModel</code> knows its extents) and calls
+          <code>scrollAttachment.writePosition()</code> — deliberately last, because the content layer must
+          already be the new size before a scroll-position write means anything.
+        </p>
+      </section>
+
+      <section id="s4">
+        <h2><span class="num">4</span>The two reactive loops</h2>
+        <p class="lede">
+          Nothing polls. Two browser-driven signals feed back into the same <code>Viewport</code>, which
+          coalesces both into one <code>render()</code> call per tick.
+        </p>
+
+        <div class="diagram">
+          <div class="flow-row">
+            <div class="flow-col">
+              <div class="box dom">
+                <div class="name">native scroll</div>
+                <div class="sub">host element</div>
+              </div>
+              <div class="arrow-v">&#8595;</div>
+              <div class="box dom">
+                <div class="name">attachScroll</div>
+                <div class="sub">view/scroll-attachment.ts</div>
+              </div>
+              <div class="arrow-v">&#8595;</div>
+              <div class="box pure"><div class="name">viewport.scroll.panTo()</div></div>
+            </div>
+            <div class="arrow-h">&nbsp;</div>
+            <div class="flow-col">
+              <div class="box dom">
+                <div class="name">ResizeObserver</div>
+                <div class="sub">host content-box</div>
+              </div>
+              <div class="arrow-v">&#8595;</div>
+              <div class="box dom">
+                <div class="name">attachPaneSize</div>
+                <div class="sub">view/pane-size-attachment.ts</div>
+              </div>
+              <div class="arrow-v">&#8595;</div>
+              <div class="box dom">
+                <div class="name">applyPaneMeasurement</div>
+                <div class="sub">re-reads --fg-row-height too</div>
+              </div>
+              <div class="arrow-v">&#8595;</div>
+              <div class="box pure"><div class="name">viewportHandle.setPaneSize()</div></div>
+            </div>
+          </div>
+          <div class="arrow-v" style="margin: 0.6rem 0">&#8595;&#8595;</div>
+          <div class="flow-row" style="justify-content: center">
+            <div class="box pure">
+              <div class="name">BatchedNotifier</div>
+              <div class="sub">layout/viewport/batched-notifier.ts — one flush per tick</div>
+            </div>
+            <div class="arrow-h">&#8594;</div>
+            <div class="box dom"><div class="name">GanttShell.render()</div></div>
+          </div>
+        </div>
+
+        <p class="lede">
+          Both <code>TimeScaleModel</code> and <code>ScrollModel</code> already dedupe within themselves — a
+          setter only notifies if the resolved value actually changed (a documented contract,
+          <code>D-S1.5-4</code>). <code>Viewport</code> layers a second dedupe on top so a single
+          <code>setPaneSize</code> call, which touches both models, still reaches the shell as one reaction,
+          not two.
+        </p>
+
+        <div class="smell">
+          <span class="smell-tag">smell</span>
+          <p>
+            <strong
+              ><code>GanttShell</code>'s constructor uses a closure-scoped <code>ready</code> boolean</strong
+            >
+            to discard the premature <code>onChange</code> calls that <code>Viewport.bind()</code> fires
+            synchronously before the shell has finished wiring pane size. It's commented and intentional, but
+            it means the "first render" invariant lives as a side-effect of construction order rather than
+            something the type system or the binding contract enforces — a future refactor that reorders those
+            constructor steps would fail silently (extra empty renders, not a crash). Worth a named guard or
+            an explicit two-phase construction if this class gets touched again.
+          </p>
+        </div>
+      </section>
+
+      <section id="s5">
+        <h2><span class="num">5</span>Module by module</h2>
+        <p class="lede">
+          Same order as the layer map in §1, top to bottom. Interface = what a caller has to know to use it
+          correctly, not just its method list.
+        </p>
+
+        <div class="card">
+          <h3>api/ <span class="tag api">public</span></h3>
+          <div class="path">src/api/gantt.ts · src/api/dataset.ts</div>
+          <p>
+            The entire consumer-facing surface. <code>Gantt</code> is a thin, deliberately shallow adapter:
+            its whole job is constructing one <code>GanttShell</code> and forwarding options.
+            <code>Dataset</code> is a read-only wrapper satisfying <code>model/</code>'s structural contract.
+          </p>
+          <p class="interface-label">Interface</p>
+          <p>
+            <code>new Gantt({ host, dataset, scale?, scroll? })</code>, <code>.destroy()</code>. That's the
+            whole thing — no partial-mutation methods yet because <code>data/</code> (§6) isn't wired in.
+          </p>
+        </div>
+
+        <div class="card">
+          <h3>view/ <span class="tag dom">DOM</span></h3>
+          <div class="path">src/view/gantt-shell.ts · scroll-attachment.ts · pane-size-attachment.ts</div>
+          <p>
+            Owns the one <code>GanttShell</code> per Gantt instance: host resolution, mount ordering, the
+            render loop, and the two DOM attachments. This is the deepest module in the current codebase —
+            <code>GanttShell</code>'s constructor alone encodes the mount-before-bind ordering, the
+            synchronous-first-measurement workaround, and the render-after-sync-before-scroll-write ordering,
+            none of which a caller of <code>Gantt</code> ever has to think about.
+          </p>
+          <p>
+            <code>scroll-attachment.ts</code> is the <em>only</em> file allowed to touch element scroll (I12,
+            lint-enforced) — a real, narrow seam with exactly one adapter today.
+          </p>
+          <p class="interface-label">Interface</p>
+          <p><code>new GanttShell(options)</code>, <code>.render()</code>, <code>.destroy()</code>.</p>
+        </div>
+
+        <div class="card">
+          <h3>render/ <span class="tag dom">DOM</span></h3>
+          <div class="path">src/render/backend.ts · render/dom/index.ts · render/null/index.ts</div>
+          <p>
+            <code>RenderBackend&lt;THost&gt;</code> is the seam (<span class="file">backend.ts</span>):
+            <code>mount</code>, <code>sync(frame)</code>, <code>applyState</code>, <code>hitTest</code>,
+            <code>destroy</code>, <code>rowLabelWidth</code>. Two adapters exist —
+            <code>createDomBackend()</code> (keyed reconciler, absolutely-positioned rows/bars/header) and
+            <code>createNullBackend()</code> (headless, records the last frame for tests/SSR/export).
+            Reconciler scope is hard-bounded to attr/class/style/text + keyed children by design (<code
+              >plans/01</code
+            >
+            §8).
+          </p>
+          <p class="interface-label">Interface</p>
+          <p><code>RenderBackend&lt;THost&gt;</code> — five methods, one property.</p>
+        </div>
+
+        <div class="smell">
+          <span class="smell-tag">smell</span>
+          <p>
+            <strong><code>GanttShell</code> hardcodes <code>createDomBackend()</code></strong> (<span
+              class="file"
+              >gantt-shell.ts:6,80</span
+            >) with no injection point. Two adapters exist for <code>RenderBackend</code> — a real seam by the
+            "two adapters" test — but only one is reachable from the public constructor path;
+            <code>createNullBackend()</code> is presumably exercised directly by tests, not through
+            <code>Gantt</code>/<code>GanttShell</code>. That may be fine for S1 scope (the null backend's own
+            comment calls it "future export seam"), but it means the seam's flexibility isn't actually wired
+            up yet — worth flagging before an SSR or export feature tries to use it and discovers there's no
+            constructor option for it.
+          </p>
+        </div>
+
+        <div class="card">
+          <h3>layout/ <span class="tag pure">pure</span></h3>
+          <div class="path">src/layout/viewport/* · frame-layout.ts · frame.ts · row-height-index.ts</div>
+          <p>
+            Two deep modules live here. <strong><code>Viewport</code></strong> fans
+            <code>TimeScaleModel</code> and <code>ScrollModel</code> into one bind/one handle/one reaction —
+            explicitly built so <code>view/</code> never holds more than one live subscription, after an
+            earlier version (S1.5) held both models separately and paid for it with two reactions.
+            <strong><code>FrameLayout</code></strong> exists purely to keep a
+            <code>PrefixSumHeightIndex</code> alive across renders so "top of row i" stays O(log n) across
+            passes instead of being rebuilt each time; <code>computeFrame()</code> itself (<span class="file"
+              >frame.ts</span
+            >) is pure and stateless — same inputs, same <code>GeometryFrame</code>, every time.
+          </p>
+          <p>
+            <code>TimeScaleModel</code> and <code>ScrollModel</code> are the two shareable, bindable objects
+            (D9) — passing the same instance to two <code>Gantt</code>s syncs their x-axis or scroll position
+            by construction, no event plumbing.
+          </p>
+          <p class="interface-label">Interface</p>
+          <p>
+            <code>Viewport.bind(dataset, onChange)</code> → handle with
+            <code>setPaneSize</code>/<code>setContentSize</code>/<code>unbind</code>; <code>.timeScale</code>,
+            <code>.visible</code>, <code>.overscan</code> getters;
+            <code>FrameLayout.computeFrame(input)</code>.
+          </p>
+        </div>
+
+        <div class="card">
+          <h3>time/ <span class="tag pure">pure</span></h3>
+          <div class="path">src/time/instant.ts · zone.ts · scale.ts</div>
+          <p>
+            The only place in <code>src/</code> allowed to construct <code>new Date()</code>/use time
+            constants/do arithmetic on an <code>Instant</code> (I10, lint-enforced outside this directory).
+            Provides <code>TimeScale</code> (time↔pixel conversion) and view presets (day/week/etc. header
+            bands) that <code>layout/</code> consumes but never computes itself.
+          </p>
+          <p class="interface-label">Interface</p>
+          <p>
+            <code>createTimeScale()</code>, <code>Instant</code>/<code>TimeSpan</code> helpers,
+            <code>TimeScale.xForInstant()</code>/<code>.ticks()</code>, view presets.
+          </p>
+        </div>
+
+        <div class="card">
+          <h3>model/ <span class="tag pure">pure</span></h3>
+          <div class="path">src/model/entry.ts · dataset.ts · ids.ts · geometry.ts · errors.ts</div>
+          <p>
+            Types only, by rule: zero runtime beyond id/brand helpers and <code>FreeGanttError</code>. Every
+            other layer imports from here but nothing here imports anything. <code>model/Dataset</code> is the
+            structural contract; <code>api/Dataset</code> (above) is the concrete class that satisfies it —
+            the same concept at two altitudes, not a duplicate.
+          </p>
+          <p class="interface-label">Interface</p>
+          <p>
+            <code>Entry</code>, <code>EntryKind</code>, <code>EntryId</code>/<code>RowId</code>/<code
+              >ItemId</code
+            >
+            + their brand constructors, <code>Point</code>/<code>Size</code>/<code>Rect</code>,
+            <code>FreeGanttError</code>.
+          </p>
+        </div>
+
+        <div class="card">
+          <h3>data/, scheduling/, interaction/, extensions/ <span class="tag stub">not yet wired</span></h3>
+          <div class="path">
+            src/data/index.ts · scheduling/index.ts · interaction/index.ts · extensions/index.ts — each
+            currently <code>export {};</code>
+          </div>
+          <p>
+            Reserved seams, not missing pieces: <code>data/</code> is where every mutation will route through
+            a transaction → resolve hook → changeset (S2); <code>scheduling/</code> is the first-party
+            propagation engine that will occupy that resolve hook when installed (S3);
+            <code>interaction/</code> is gesture controllers (S4); <code>extensions/</code> is the plugin host
+            (S6). None of the current boot/render/scroll flow touches them because nothing upstream calls into
+            them yet — this walkthrough only traces what actually runs today.
+          </p>
+        </div>
+      </section>
+
+      <section id="s6">
+        <h2><span class="num">6</span>Smells noted while tracing</h2>
+        <p class="lede">
+          Two things stood out while following the call graph. Neither blocks anything today; both are worth a
+          look next time their area is touched.
+        </p>
+        <table class="smell-index">
+          <tr>
+            <th>Where</th>
+            <th>What</th>
+          </tr>
+          <tr>
+            <td><a href="#s4">§4</a><br /><span class="mono">view/gantt-shell.ts</span></td>
+            <td>
+              Boot-sequencing invariant ("first render happens once everything is wired") is held by a
+              closure-scoped <code>ready</code> flag rather than something structural — a future reorder of
+              constructor steps would fail silently.
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <a href="#s5">§5</a><br /><span class="mono">view/gantt-shell.ts</span>,
+              <span class="mono">render/</span>
+            </td>
+            <td>
+              <code>RenderBackend</code> has two real adapters (dom, null) but
+              <code>GanttShell</code> hardcodes <code>createDomBackend()</code> with no injection point — the
+              null-backend seam isn't reachable from the public constructor path yet.
+            </td>
+          </tr>
+        </table>
+      </section>
+    </main>
+
+    <footer>
+      Generated from a read-through of <code>harness/</code> and <code>src/</code> on branch
+      <code>review-2026-08-25-deepenings</code>, 2026-08-25. Not a substitute for
+      <code>plans/01-domain-architecture.md</code> — that document is the spec; this one is a map of what the
+      code currently does.
+    </footer>
+  </body>
+</html>
