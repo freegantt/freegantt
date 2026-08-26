@@ -410,6 +410,7 @@ Guardrails and glossary first, then engine, then the seam, then the public edge.
 - [ ] **`[S1-A5]`** — DST-correct axis headers, two-band presets included (`time/zone.test.ts`)
 
 ### Review, Verify, and Fix Issues from 1.8 Review
+Confirm these findings before fixing them.
 - [ ] plans/2026-08-25-s1.8-review.md
 ---
 
