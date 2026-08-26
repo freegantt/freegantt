@@ -545,10 +545,10 @@ Guardrails and types first (`plans/04` §3.2/§3.3), then `time/`, then `layout/
 
 | Deferred | Returns at | Needs |
 |---|---|---|
-| `gantt.reveal(entryId)` | S1.9 (corrected from S1.8, `plans/s1.8-pane-layout/README.md` §0 Q1) | `TimeScaleIntent.zoom` — horizontal is a no-op while `contentWidth ≡ paneWidth` makes every bar already visible on x |
+| `gantt.reveal(entryId)` | S1.9 (shipped — `Viewport.reveal`/`GanttShell.reveal`, D-S1.9-6) | `TimeScaleIntent.zoom` — horizontal is a no-op while `contentWidth ≡ paneWidth` makes every bar already visible on x |
 | `gantt.scale =` / `gantt.scroll =` setters | **Cut**, not deferred (`plans/s1.8-pane-layout/README.md` §0 Q2) | `Gantt` never re-exposes `scale`/`scroll` — one key, one write path (`plans/02` §1.1); a caller sharing models constructed them and holds the references |
-| `gantt.overscan` setter | S1.9 (corrected from S1.8) | lands with the rest of the live keys (`preset`, `range`, `zoom`), so the public-surface pass happens once |
+| `gantt.overscan` setter | S1.9 (shipped — `Gantt.overscan`/`GanttShell.overscan`, D-S1.9-7) | lands with the rest of the live keys (`preset`, `range`, `zoom`), so the public-surface pass happens once |
 | The row-label gutter leaving the scrollable content (the x-axis defect in D-S1.7-11) | S1.8 (shipped — `PaneLayout`, D-S1.8-1/D-S1.8-2) | the pane split — the timeline pane as its own scroller |
-| `TimeScaleIntent.zoom`, and with it a horizontal scroll range that is not 0 | S1.9 | D-F′, anchored zoom |
+| `TimeScaleIntent.zoom`, and with it a horizontal scroll range that is not 0 | S1.9 (shipped — `TimeScaleIntent.zoom`, D-S1.9-2) | D-F′, anchored zoom |
 | Multi-band presets, band heights, sticky header | S1.9 / S1.10 | presets as data; theming tokens |
 | Gridlines from `preset.tickUnit` | S1.10 | the decorations vocabulary |

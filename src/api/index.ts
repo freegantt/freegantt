@@ -5,6 +5,10 @@ export type { GanttOptions } from './gantt.js';
 export { TimeScaleModel, ScrollModel } from '../view/index.js';
 export type {
   TimeScaleIntent,
+  TimeScaleZoom,
+  PresetRef,
+  ShippedPresetId,
+  Overscan,
   ScrollIntent,
   ScrollPosition,
   ScrollState,
@@ -18,6 +22,8 @@ export {
   UnsupportedUnitError,
   HostNotFoundError,
   InvalidInstantError,
+  UnknownPresetError,
+  EntryNotFoundError,
 } from '../model/index.js';
 
 // model/ is the type surface api/ re-exports (plans/01 §1: "Only api/ and model/ types are public").
@@ -40,5 +46,17 @@ export type { Point, Size } from '../model/index.js';
 // no other interest in them — is the fix for #25. TimeScaleOptions stays internal: it carries the
 // *resolved* geometry (zone, span, pxPerMs) the model derives from its bindings, not a caller's to
 // state (#5).
-export { dayPreset, hourPreset, weekPreset, monthPreset, yearPreset, instant } from '../time/index.js';
+export {
+  dayPreset,
+  hourPreset,
+  weekPreset,
+  monthPreset,
+  yearPreset,
+  dayAndWeekPreset,
+  weekAndMonthPreset,
+  monthAndYearPreset,
+  presets,
+  resolvePreset,
+  instant,
+} from '../time/index.js';
 export type { ViewPreset } from '../time/index.js';

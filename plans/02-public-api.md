@@ -224,9 +224,9 @@ const p2  = Dataset.fromJSON(doc);
 
 ## 7. Developer experience commitments
 
-- **Dev-mode invariant warnings**: dependency cycle detected (with member ids), unknown preset id, config set on destroyed instance, non-deterministic item identity, renderer returned a live node.
+- **Dev-mode invariant warnings**: dependency cycle detected (with member ids), config set on destroyed instance, non-deterministic item identity, renderer returned a live node, and (S1.9) `GanttOptions.scale` supplied alongside any of `preset`/`range`/`zoom` — "FreeGantt: GanttOptions.preset/range/zoom are ignored when 'scale' is also supplied. The shared TimeScaleModel already carries its own intent — set preset/range/zoom on it directly." The shared `scale` always wins; the constructor keys are never merged into it (D-S1.9-9).
 - **Stable test hooks**: `data-testid` on every part so consumers can write E2E tests against the Gantt without brittle selectors.
-- **Errors are typed and actionable**: `FreeGanttError` subclasses with codes, never bare strings; validation failures name the entity and field. `HostNotFoundError` (`code: 'host-not-found'`, S1.8) is the first of these a consumer can actually catch — thrown when a string `host` selector matches nothing.
+- **Errors are typed and actionable**: `FreeGanttError` subclasses with codes, never bare strings; validation failures name the entity and field. `HostNotFoundError` (`code: 'host-not-found'`, S1.8) is the first of these a consumer can actually catch — thrown when a string `host` selector matches nothing. `UnknownPresetError` (`code: 'unknown-preset'`, S1.9) is thrown by `resolvePreset` for a `PresetRef` string outside the shipped set. `EntryNotFoundError` (`code: 'entry-not-found'`, S1.9) is thrown by `reveal(entryId)` for an id the bound Dataset has no entry for.
 - **Docs site with live, editable examples** grows with the slices (the harness pages are its seed) — budgeted as a deliverable, not an afterthought.
 - **Semver honesty**: internal modules are not importable (enforced by the `exports` map), so semver only governs surfaces we actually promise.
 

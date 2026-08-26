@@ -3,7 +3,7 @@
 // here (I10) — everything outside time/ must go through xForInstant/instantForX/widthForDuration.
 
 import type { Duration, Instant, PixelSpan, TimeSpan, TimeUnit } from '../model/index.js';
-import { stepBy, startOf, toPlain } from './zone.js';
+import { stepBy, startOf } from './zone.js';
 import { instant } from './instant.js';
 
 /** What a caller states about a stepping cadence — the shared shape `ViewPresetHeader` and
@@ -40,6 +40,10 @@ export interface TimeScale {
   readonly range: TimeSpan;
   /** Dataset's IANA timeZone (D6, #37 — one name for this concept, matching plans/02's DatasetOptions). */
   readonly timeZone: string;
+  /** Density: content px per ms, constant across the whole range at this zoom. What `Viewport.zoomBy`
+   *  reads before scaling it (S1.9, D-S1.9-5) — every other quantity `zoomTo`/`zoomBy` need already
+   *  existed. It's a Cartesian scale — constant by construction, not a per-point read. */
+  readonly pxPerMs: number;
   xForInstant(i: Instant): number;
   instantForX(x: number): Instant;
   widthForDuration(d: Duration, at: Instant): number;
@@ -97,79 +101,8 @@ export function createTimeScale(options: TimeScaleOptions): TimeScale {
 
   const contentWidth = Math.max(0, xForInstant(range.end) - xForInstant(range.start));
 
-  return { range, timeZone, xForInstant, instantForX, widthForDuration, ticks, contentWidth };
+  return { range, timeZone, pxPerMs, xForInstant, instantForX, widthForDuration, ticks, contentWidth };
 }
-
-function pad2(n: number): string {
-  return String(n).padStart(2, '0');
-}
-
-const plainDateFormat: HeaderFormat = (i, zone) => {
-  const c = toPlain(zone, i);
-  return `${c.year}-${pad2(c.month)}-${pad2(c.day)}`;
-};
-
-const hourFormat: HeaderFormat = (i, zone) => {
-  const c = toPlain(zone, i);
-  return `${pad2(c.hour)}:00`;
-};
-
-const monthFormat: HeaderFormat = (i, zone) => {
-  const c = toPlain(zone, i);
-  return `${c.year}-${pad2(c.month)}`;
-};
-
-const yearFormat: HeaderFormat = (i, zone) => String(toPlain(zone, i).year);
-
-/** Deep-freezes a preset (and its `headers` array) so a shipped preset is a value, not a shared
- * mutable singleton — one consumer's zoom cannot retune every Gantt on the page (I2). */
-function freezePreset(preset: ViewPreset): ViewPreset {
-  Object.freeze(preset.headers);
-  for (const header of preset.headers) Object.freeze(header);
-  return Object.freeze(preset);
-}
-
-/** Shipped presets, hour → year (plans/03 S1 scope). Every one is a plain config object — a new zoom
- * level is never a library edit (CONTEXT.md, ViewPreset). */
-export const hourPreset: ViewPreset = freezePreset({
-  id: 'hour',
-  tickUnit: 'h',
-  tickIncrement: 1,
-  headers: [{ unit: 'h', increment: 1, format: hourFormat }],
-  tickWidthPx: 40,
-});
-
-export const dayPreset: ViewPreset = freezePreset({
-  id: 'day',
-  tickUnit: 'd',
-  tickIncrement: 1,
-  headers: [{ unit: 'd', increment: 1, format: plainDateFormat }],
-  tickWidthPx: 24,
-});
-
-export const weekPreset: ViewPreset = freezePreset({
-  id: 'week',
-  tickUnit: 'w',
-  tickIncrement: 1,
-  headers: [{ unit: 'w', increment: 1, format: plainDateFormat }],
-  tickWidthPx: 60,
-});
-
-export const monthPreset: ViewPreset = freezePreset({
-  id: 'month',
-  tickUnit: 'M',
-  tickIncrement: 1,
-  headers: [{ unit: 'M', increment: 1, format: monthFormat }],
-  tickWidthPx: 80,
-});
-
-export const yearPreset: ViewPreset = freezePreset({
-  id: 'year',
-  tickUnit: 'y',
-  tickIncrement: 1,
-  headers: [{ unit: 'y', increment: 1, format: yearFormat }],
-  tickWidthPx: 60,
-});
 
 /** The zoom a preset implies on its own: one tick occupies its `tickWidthPx`. This is what a scale
  * resolves to when there is no measured viewport to fit into (detached host, `display:none`,

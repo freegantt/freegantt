@@ -4,13 +4,13 @@
 // measurement, #8) joins them. Viewport exists so `view/` never holds more than one.
 
 import { TimeScaleModel } from './time-scale-model.js';
-import type { ScaleBinding, ScaleBindingHandle } from './time-scale-model.js';
+import type { ScaleBinding, ScaleBindingHandle, TimeScaleZoom } from './time-scale-model.js';
 import { ScrollModel } from './scroll-model.js';
 import type { ScrollBindingHandle } from './scroll-model.js';
-import type { TimeScale, ViewPreset } from '../../time/index.js';
+import type { PresetRef, TimeScale, ViewPreset } from '../../time/index.js';
 import { BatchedNotifier } from './batched-notifier.js';
 import { FreeGanttError } from '../../model/index.js';
-import type { Dataset, Rect, Size } from '../../model/index.js';
+import type { Dataset, Rect, Size, TimeSpan } from '../../model/index.js';
 import { DEFAULT_OVERSCAN } from '../frame.js';
 import type { Overscan } from '../frame.js';
 
@@ -48,6 +48,10 @@ export class Viewport {
   #paneSize: Size = ZERO_SIZE;
   #contentSize: Size = ZERO_SIZE;
   #onChange: (() => void) | undefined;
+  /** The bound Gantt's own scroll handle, kept so `zoomTo` can push a re-measured content width
+   *  synchronously — before a render runs — rather than clamping `panTo` against a render-stale
+   *  `ScrollModel.max` (S1.9, D-S1.9-5). Assigned in `bind()`; undefined before then. */
+  #scrollHandle: ScrollBindingHandle | undefined;
   // Coalesces notifications from BOTH sub-models into one host reaction (D-S1.7-1): scale and
   // scroll each already dedupe within themselves (D-S1.5-4), but a single setPaneSize touches both,
   // and without this layer each would flush its own notification for the same caller-visible change.
@@ -90,12 +94,14 @@ export class Viewport {
       { content: this.#contentSize, pane: this.#paneSize },
       this.#notify,
     );
+    this.#scrollHandle = scrollHandle;
 
     return {
       unbind: () => {
         scaleHandle.unbind();
         scrollHandle.unbind();
         this.#onChange = undefined;
+        this.#scrollHandle = undefined;
       },
       setPaneSize: (size) => {
         this.#paneSize = size;
@@ -118,6 +124,30 @@ export class Viewport {
 
   get preset(): ViewPreset {
     return this.scale.preset;
+  }
+
+  /** Live — delegates straight to `TimeScaleModel.preset` (D-S1.9-9's "GanttShell delegates straight
+   *  to #viewport"). Resolved through `resolvePreset`; no-op, no notification, when unchanged. */
+  set preset(ref: PresetRef) {
+    this.scale.preset = ref;
+  }
+
+  get range(): 'fitDataset' | TimeSpan {
+    return this.scale.range;
+  }
+
+  /** Live — delegates straight to `TimeScaleModel.range`. */
+  set range(r: 'fitDataset' | TimeSpan) {
+    this.scale.range = r;
+  }
+
+  get zoom(): TimeScaleZoom {
+    return this.scale.zoom;
+  }
+
+  /** Live — delegates straight to `TimeScaleModel.zoom`. */
+  set zoom(z: TimeScaleZoom) {
+    this.scale.zoom = z;
   }
 
   get overscan(): Overscan {
@@ -152,5 +182,48 @@ export class Viewport {
    *  First caller is S1.9's `zoomTo` (D-S1.7-10). */
   batch(run: () => void): void {
     this.#notifications.batch(() => this.scale.batch(() => this.scroll.batch(run)));
+  }
+
+  /** Reads the instant currently under `anchorX` (default: pane center) BEFORE writing anything,
+   *  then writes `scale.zoom` and repositions `scroll.x` inside one batch so that instant is back
+   *  under `anchorX` after (S1.9, D-S1.9-5). Never touches `range.start` (D-F′). One notification.
+   *
+   *  `scroll.panTo` clamps against `ScrollModel.state.max`, resolved from the LAST PUSHED content
+   *  size — the one `GanttShell.render()` pushes after computing a frame. Writing `scale.zoom` and
+   *  immediately panning would clamp against the old, one-render-stale `contentWidth`. `contentWidth`
+   *  is a pure function of `range`/`pxPerMs` — no layout pass needed to know it changed — so this
+   *  pushes the new one itself, synchronously, between the scale write and the pan. */
+  zoomTo(pxPerMs: number, anchorX: number = this.#paneSize.width / 2): void {
+    const anchorInstant = this.timeScale.instantForX(this.scroll.state.position.x + anchorX);
+    this.batch(() => {
+      this.scale.zoom = { pxPerMs };
+      this.#scrollHandle?.setContentSize({
+        width: this.timeScale.contentWidth,
+        height: this.#contentSize.height,
+      });
+      this.scroll.panTo({ x: this.timeScale.xForInstant(anchorInstant) - anchorX });
+    });
+  }
+
+  /** `zoomTo(timeScale.pxPerMs * factor, anchorX)` (S1.9, D-S1.9-5). */
+  zoomBy(factor: number, anchorX?: number): void {
+    this.zoomTo(this.timeScale.pxPerMs * factor, anchorX ?? this.#paneSize.width / 2);
+  }
+
+  /** "Nearest edge," not "center" (S1.9, D-S1.9-6) — `view/`-only, not exported from `api/` (matches
+   *  `Viewport` itself, D-S1.7-10). If `target` is already inside `visible`, nothing moves; off an
+   *  edge, `panTo` moves exactly enough to align that edge — the same policy
+   *  `scrollIntoView({block: 'nearest'})` uses, on either axis or both. */
+  reveal(target: Rect): void {
+    const v = this.visible;
+    let x = v.x;
+    if (target.x < v.x) x = target.x;
+    else if (target.x + target.width > v.x + v.width) x = target.x + target.width - v.width;
+
+    let y = v.y;
+    if (target.y < v.y) y = target.y;
+    else if (target.y + target.height > v.y + v.height) y = target.y + target.height - v.height;
+
+    this.scroll.panTo({ x, y });
   }
 }
