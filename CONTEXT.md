@@ -220,16 +220,32 @@ Moving the shared viewport — `ScrollModel.panTo`, and the drag gesture that wi
 _Avoid_: Scroll (an element's native offset), move (move is dragging an Entry — `entryMove`), seek
 
 **Reveal**:
-Bringing a named Entry into view — the intent-level verb a host uses (`gantt.reveal(entryId)`). The library resolves the pixel position from the row geometry it already computes; a host never converts an index or a row height into a scroll offset.
-_Avoid_: ScrollTo, scrollIntoView, goTo
+Bringing a named Entry into view — the intent-level verb a host uses (`gantt.reveal(entryId)`). The library resolves the pixel position from the row geometry it already computes; a host never converts an index or a row height into a scroll offset. Nearest-edge, not center: a no-op if the Entry is already inside Visible, otherwise the Pan moves exactly enough to align the nearest off-screen edge. Landed on both axes at S1.9 (D-S1.9-6) — the x half was a no-op before Zoom existed, since content width equalled pane width.
+_Avoid_: ScrollTo, scrollIntoView, goTo, center (Reveal is nearest-edge; centering is a deferred, separate policy)
 
 **Batch**:
 Several writes to a viewport model delivering at most one notification, and only if the resolved value actually changed. No observer ever sees an intermediate state. A Batch is _not_ a Transaction: it has no changeset, no undo entry, and no resolve hook — `layout/` has no edge to `data/`. The two words never substitute for each other.
 _Avoid_: Transaction (that is `data/`'s unit of mutation), commit, freeze
 
 **ViewPreset**:
-The data description of one zoom level: what unit the ticks step in, how wide a tick is, and what header bands sit above them. A preset is a config object, so a new zoom level is never a library edit.
+The data description of one zoom level: what unit the ticks step in, how wide a tick is, and one or more header bands sitting above them, coarsest first. A preset is a config object, so a new zoom level is never a library edit. `tickUnit` is never coarser than the finest header — a label must not claim a boundary no gridline draws.
 _Avoid_: Zoom level (a zoom level is what a preset expresses), timescale header
+
+**Preset reference**:
+What a caller states to name a ViewPreset: a shipped preset id (autocompletes against the closed `ShippedPresetId` union) or a full custom ViewPreset object. `resolvePreset` is the one place a Preset reference turns into a ViewPreset — a shipped id resolves against the built-in table and throws `UnknownPresetError` for anything outside it; a ViewPreset object passes through unchanged, so a custom preset is never a library edit.
+_Avoid_: Preset id (that names only the shipped-id half), preset name
+
+**Range**:
+The full content span a TimeScale maps — `'fitDataset'`'s min/max over every bound Dataset, or a pinned TimeSpan. Distinct from Zoom: Range says how much time the content covers; Zoom says how many pixels each unit of that time gets. Never written by an anchored zoom (D-F′) — only a Dataset edit or a caller assigning `range` moves it.
+_Avoid_: Span (Range is the caller-facing intent; span is used loosely elsewhere for a resolved interval), window, extent
+
+**Zoom**:
+The density mode a TimeScale resolves `pxPerMs` from: `'fitViewport'` (the default — content fills the measured pane width), `'preset'` (the preset's own density, ignoring pane width — the first mode where content can exceed the pane), or an explicit `{ pxPerMs }`. Distinct from Range (what content is shown) and from Preset reference (which labels and tick unit are shown) — Zoom answers only "how many pixels per unit of time."
+_Avoid_: Scale (Scale is the resolved `TimeScale` object, not this mode), density (fine in prose, but the type and field name are `zoom`/`TimeScaleZoom`)
+
+**Anchored zoom**:
+The read-before-write contract behind `Viewport.zoomTo`/`zoomBy` (D-S1.9-5): the Instant currently under the anchor pixel is read before anything is written, then Scale and Pan are updated together inside one Batch so that same Instant is back under the anchor pixel afterward. The anchor is always derived from a stated pixel position, never supplied as an Instant — a caller states _where_, not _what the pixel currently means_.
+_Avoid_: Pinned zoom, cursor zoom (the mechanism is not specific to a pointer — a caller can anchor anywhere)
 
 **Tick**:
 One step of the time axis at the current ViewPreset's resolution — the unit the header bands label and the unit a gesture snaps to by default. Since S1.7 a Tick also carries its own cell `width` (px to the next boundary at its band's step), so a DST-shortened or -lengthened day draws at its true width instead of an assumed constant.

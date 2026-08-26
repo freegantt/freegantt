@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { createTimeScale, dayPreset, pxPerMsForPreset } from './scale.js';
+import { createTimeScale, pxPerMsForPreset } from './scale.js';
+import { dayPreset } from './presets.js';
 import { instant } from './instant.js';
 import type { TickStep, ViewPreset } from './scale.js';
 
