@@ -7,17 +7,21 @@ import { test, expect } from '@playwright/test';
 
 // `frame.contentWidth` is not exposed directly, but the content sizer (render/dom/index.ts) is
 // translated to `contentWidth - 1` (S1.8, D-S1.8-1/D-S1.8-2 — no gutter added to the timeline pane's
-// content any more) and is otherwise invisible — reading its transform is the least invasive way to
-// read the fitted content width from outside the library. It now lives inside `.fg-timeline-pane`,
-// not directly under `#gantt` (the grid pane is a sibling that carries no sizer of its own).
+// content any more) and is otherwise invisible — reading its actual painted right edge (via
+// `getBoundingClientRect`, relative to the pane's own left edge) is the least invasive way to read
+// the fitted content width from outside the library. This avoids parsing the `transform` string
+// directly, which breaks silently if the library ever changes how it expresses the same offset
+// (a second translate, `matrix()`, a different unit). It now lives inside `.fg-timeline-pane`, not
+// directly under `#gantt` (the grid pane is a sibling that carries no sizer of its own).
 async function contentSizerRight(page: import('@playwright/test').Page): Promise<number> {
   return page.evaluate(() => {
     const pane = document.querySelector('.fg-timeline-pane')!;
     const sizer = Array.from(pane.children).find(
       (el) => el instanceof HTMLElement && el.getAttribute('aria-hidden') === 'true',
     ) as HTMLElement;
-    const match = /translate\(([\d.]+)px/.exec(sizer.style.transform);
-    return match ? parseFloat(match[1]!) + 1 : NaN;
+    const paneRect = pane.getBoundingClientRect();
+    const sizerRect = sizer.getBoundingClientRect();
+    return sizerRect.right - paneRect.left;
   });
 }
 
