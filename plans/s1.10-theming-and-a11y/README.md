@@ -33,19 +33,19 @@ Not a question: `formatEndInclusive`/`formatDate`, the `theme` live setter, `a11
 Acceptance for each story is the checkbox under it — the only copy of this checklist (an earlier pass of this document also had one at the bottom of §8, duplicating this one; that copy is gone, not just unchecked elsewhere).
 
 - **U1.** I load the library with no CSS of my own. Rows, bars, header bands and the splitter already look like a Gantt chart — spacing, borders, a bar fill color — because the library ships a base stylesheet once per document.
-  - [ ] Base stylesheet + `data-flag` selector work with zero host CSS (`view/styles.test.ts`, `render/dom/index.test.ts`).
+  - [x] Base stylesheet + `data-flag` selector work with zero host CSS (`view/styles.test.ts`, `render/dom/index.test.ts`).
 - **U2.** I write `.fg-bar[data-flag~="conflict"] { outline: 2px solid var(--fg-warn); }` in my own stylesheet. No JS, no renderer callback — a scheduling-plugin conflict (S3) shows up the moment the flag is true.
-  - [ ] Same tests as U1 cover this — the selector exists and works even though nothing sets `conflict: true` until S3.
+  - [x] Same tests as U1 cover this — the selector exists and works even though nothing sets `conflict: true` until S3.
 - **U3.** I set `gantt.theme = 'dark'`. Every token flips in that document; a system in `prefers-color-scheme: dark` gets the same look with `theme` left at its default `'auto'`.
-  - [ ] `theme` setter is live (`api/gantt.test.ts`).
+  - [x] `theme` setter is live (`api/gantt.test.ts`).
 - **U4.** I set `--fg-row-height: 40px` and `--fg-bar-radius: 6px` on the host element. The library reads them once/on remeasure (existing `readPixelProperty` cadence) — no rebuild, no option.
-  - [ ] Token overrides read once/on remeasure, no rebuild (`api/gantt.test.ts`).
+  - [x] Token overrides read once/on remeasure, no rebuild (`api/gantt.test.ts`).
 - **U5.** I use a screen reader. Tabbing onto the Gantt announces it as a labelled group; arrowing (S4, not yet) will move a row cursor; today, every row and bar the reader can already reach (via the DOM tree, not a roving tabindex) is labelled with real dates, not raw pixel geometry.
-  - [ ] Roles, labels, one honest tab stop (`render/dom/index.test.ts`).
+  - [x] Roles, labels, one honest tab stop (`render/dom/index.test.ts`).
 - **U6.** (developer) I write `e2e` selectors against `[data-testid="fg-bar"][data-item-id="t42"]` instead of a CSS class that could change with a design tweak.
-  - [ ] `data-testid` hooks present (`render/dom/index.test.ts`); the `[S1-A1]`/`[S1-A4]` selectors S1.11's boxes will select on exist now, not invented at S1.11.
+  - [x] `data-testid` hooks present (`render/dom/index.test.ts`); the `[S1-A1]`/`[S1-A4]` selectors S1.11's boxes will select on exist now, not invented at S1.11.
 - **U7.** (developer) I add a new `BarFlags` key next month (say, `late`). I don't touch `render/dom` — the flag shows up as `data-flag~="late"` because the generator reads the object's keys, not a hand-written map.
-  - [ ] A new `BarFlags` key needs no `render/dom` edit (`render/dom/index.test.ts`, table-driven).
+  - [x] A new `BarFlags` key needs no `render/dom` edit (`render/dom/index.test.ts`, table-driven).
 
 ---
 
@@ -198,6 +198,12 @@ The new lint rule (`freegantt/no-inline-style-outside-geometry`, `src/render/**`
 Colour values above are D-S1.10-9's — this decision only owns which class gets which property (structure), not what the property defaults to (colour). `pane-layout.ts` keeps exactly the writes the rule already allows: `gridPane.style.width`/`splitter.style.width` (both driven by live numbers — `gridWidth`, `--fg-splitter-width`), `spacer.style.height` (`--fg-header-height`, a live number). `rowLayer.style.height = '100%'` also stays inline, on a narrower rationale than the others: `'100%'` isn't a live number, but it depends on `.fg-rows-clip`'s `flex: 1 1 auto` sizing its parent — moving it to a `.fg-rows { height: 100% }` CSS rule works exactly as well (nothing about it needs JS), so this is a judgement call kept inline for now for one reason only: `height` is already an allowed property under the lint rule, so leaving it doesn't need a rule exception, and it keeps `pane-layout.ts`'s few remaining writes visually grouped instead of splitting one element's sizing across two files. `render/dom/index.ts`'s `position: absolute`/`relative` and `contentSizer`'s `top`/`left`/`visibility` move the same way, onto `fg-row`, `fg-bar`, `fg-tick`, `fg-band`, and a new `fg-content-sizer` class; its `transform`/`width`/`height` per-frame writes are unchanged (they're exactly what the rule exists to protect).
 
 This is the concrete instance of what the comment's §3 called "R3's countermeasure, made concrete" — recorded here as a decision because the comment predates `pane-layout.ts` and could not have named these specific lines.
+
+### D-S1.10-1a — `fg-host` is a 13th class, added to close a gap D-S1.10-1's twelve-class list left open
+
+D-S1.10-1 enumerated the twelve `fg-*` part classes already in code as "the real vocabulary, unchanged" — but it was written before the guardrail lint rule (§3.3) existed, and none of the twelve targets the host element itself. `PaneLayout`'s host carries structural styles too (`display: flex; overflow: hidden`, D-S1.8-1's "the host is never the scroller") that have nowhere legal to live once inline non-`transform`/`width`/`height` writes are banned. `fg-host`, set once in `PaneLayout`'s constructor with a matching `.fg-host` rule in `view/styles.ts`, closes that gap.
+
+*Rejected:* targeting the host via `[role="group"]` instead of a class. Rejected because `role="group"` is an accessibility contract (D-S1.10-5), not a styling hook — overloading it as a CSS selector couples two concerns that should stay separable (a future step could need `role="group"` without `fg-host`'s layout, or vice versa), and every other structural element in this codebase is already styled by class, not by ARIA attribute.
 
 ### D-S1.10-7 — the grid row gains a label cell child; role structure is additive for S6
 
@@ -384,31 +390,31 @@ Per D-S1.10-6: every `display`/`overflow`/`flexDirection`/`flexShrink`/`flex`/`m
 Guardrail first, then the stylesheet it protects, then flags/roles, then the public edge.
 
 ### Guardrail
-- [ ] `eslint/rules/no-inline-style-outside-geometry.cjs` + rule test + red fixture (§3.3); add to `eslint/rules/index.cjs` and `eslint.config.js`; `docs/02-lint-rules.md` §3.11
+- [x] `eslint/rules/no-inline-style-outside-geometry.cjs` + rule test + red fixture (§3.3); add to `eslint/rules/index.cjs` and `eslint.config.js`; `docs/02-lint-rules.md` §3.11
 
 ### `time/`
-- [ ] `src/time/format.ts` — `formatEndInclusive`, `formatDate` (§3.2)
+- [x] `src/time/format.ts` — `formatEndInclusive`, `formatDate` (§3.2)
 
 ### `layout/`
-- [ ] `BarFlags`/`LinkFlags` key rename (§3.4); `FrameBar.a11yLabel` computed from `time/format.ts` + the dataset zone
+- [x] `BarFlags`/`LinkFlags` key rename (§3.4); `FrameBar.a11yLabel` computed from `time/format.ts` + the dataset zone
 
 ### `view/`
-- [ ] `src/view/styles.ts` — `ensureBaseStyles`, the full stylesheet (D-S1.10-1 class rules + D-S1.10-6's structural rules + colour rules + the `--fg-*` token defaults, light/dark values per D-S1.10-9's table)
-- [ ] `pane-layout.ts` — delete every non-`width`/`height`/`transform` inline write (§3.6); confirm `pane-layout.test.ts` still passes unmodified (proof that the visual result is unchanged, only the mechanism moved)
-- [ ] `GanttShell`/`GanttShellOptions` — `theme`, `a11yLabel` live accessors; call `ensureBaseStyles` at construction, before `PaneLayout`
+- [x] `src/view/styles.ts` — `ensureBaseStyles`, the full stylesheet (D-S1.10-1 class rules + D-S1.10-6's structural rules + colour rules + the `--fg-*` token defaults, light/dark values per D-S1.10-9's table)
+- [x] `pane-layout.ts` — delete every non-`width`/`height`/`transform` inline write (§3.6); confirm `pane-layout.test.ts` still passes unmodified (proof that the visual result is unchanged, only the mechanism moved)
+- [x] `GanttShell`/`GanttShellOptions` — `theme`, `a11yLabel` live accessors; call `ensureBaseStyles` at construction, before `PaneLayout`
 
 ### `render/dom`
-- [ ] `data-flag` generation from `BarFlags` (§3.5); role attributes (`group`/`listitem`/`img`, not `grid`/`row`/`gridcell` — D-S1.10-5 revised), `aria-posinset`/`aria-setsize`, host `tabindex="0"` + `aria-label`; `.fg-row-label` child; `data-testid` on `fg-row`/`fg-bar`; delete the position/visibility/top/left inline writes
+- [x] `data-flag` generation from `BarFlags` (§3.5); role attributes (`group`/`listitem`/`img`, not `grid`/`row`/`gridcell` — D-S1.10-5 revised), `aria-posinset`/`aria-setsize`, host `tabindex="0"` + `aria-label`; `.fg-row-label` child; `data-testid` on `fg-row`/`fg-bar`; delete the position/visibility/top/left inline writes
 
 ### `api/`
-- [ ] `Gantt.theme`, `Gantt.a11yLabel`; `GanttOptions` gains both; re-export `formatEndInclusive`/`formatDate` from `api/index.ts`
+- [x] `Gantt.theme`, `Gantt.a11yLabel`; `GanttOptions` gains both; re-export `formatEndInclusive`/`formatDate` from `api/index.ts`
 
 ### Harness
-- [ ] Review `harness/index.html` and `harness/scroll-sync.html` against CLAUDE.md's harness rule — both currently hand-write `.fg-*` rules the library will now ship (temp_todo §1 row 24); drop what's now redundant, record any gap that isn't in `src/`
+- [x] Review `harness/index.html` and `harness/scroll-sync.html` against CLAUDE.md's harness rule — both currently hand-write `.fg-*` rules the library will now ship (temp_todo §1 row 24); drop what's now redundant, record any gap that isn't in `src/`
 
 ### Review and docs
-- [ ] The §7 spec edits, landed with this step
-- [ ] `pnpm verify` green; `pnpm test:e2e` green
+- [x] The §7 spec edits, landed with this step
+- [x] `pnpm verify` green; `pnpm test:e2e` green
 
 ### Acceptance
 

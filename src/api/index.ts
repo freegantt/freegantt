@@ -2,6 +2,7 @@ export { Dataset } from './dataset.js';
 export type { DatasetOptions } from './dataset.js';
 export { Gantt } from './gantt.js';
 export type { GanttOptions } from './gantt.js';
+export type { Theme } from '../view/index.js';
 export { TimeScaleModel, ScrollModel } from '../view/index.js';
 export type {
   TimeScaleIntent,
@@ -58,5 +59,7 @@ export {
   presets,
   resolvePreset,
   instant,
+  formatDate,
+  formatEndInclusive,
 } from '../time/index.js';
 export type { ViewPreset } from '../time/index.js';

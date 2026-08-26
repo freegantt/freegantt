@@ -3,6 +3,7 @@
 exports[`computeFrame > matches the golden snapshot for the fixture dataset 1`] = `
 [
   {
+    "a11yLabel": "Discovery, Sep 1, 2026 – Sep 5, 2026",
     "entryId": "entry-1",
     "flags": {},
     "height": 32,
@@ -16,6 +17,7 @@ exports[`computeFrame > matches the golden snapshot for the fixture dataset 1`] 
     "y": 0,
   },
   {
+    "a11yLabel": "Stakeholder interviews, Sep 1, 2026 – Sep 3, 2026",
     "entryId": "entry-2",
     "flags": {},
     "height": 32,
@@ -29,6 +31,7 @@ exports[`computeFrame > matches the golden snapshot for the fixture dataset 1`] 
     "y": 32,
   },
   {
+    "a11yLabel": "Requirements draft, Sep 4, 2026 – Sep 7, 2026",
     "entryId": "entry-3",
     "flags": {},
     "height": 32,

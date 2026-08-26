@@ -147,4 +147,142 @@ describe('render/dom backend', () => {
     expect(ticks[0]?.textContent).toBe('tick');
     backend.destroy();
   });
+
+  it("renders data-flag from a bar's BarFlags keys, generated not hand-mapped (S1.10, D-S1.10-2, U7)", () => {
+    const backend = createDomBackend();
+    const { grid, timeline } = mountSurfaces();
+    backend.mount({ grid, timeline });
+
+    const frame = computeFrame({
+      entries: sampleEntries.slice(0, 1),
+      scale,
+      preset,
+      visible: { x: 0, y: 0, width: 0, height: 0 },
+      rowHeight: 32,
+      revision: 0,
+    });
+    // computeFrame never sets a flag true today (no scheduling plugin wired yet) — mutate the frame's
+    // own bar object, same shape a future scheduling plugin would produce, to prove the generator path.
+    (frame.bars[0]!.flags as Record<string, boolean>)['conflict'] = true;
+    backend.sync(frame);
+
+    const bar = timeline.querySelector<HTMLElement>('.fg-bar')!;
+    expect(bar.dataset['flag']).toBe('conflict');
+    backend.destroy();
+  });
+
+  it('renders a third, hypothetical BarFlags key with no render/dom change (drives the generated path, U7)', () => {
+    const backend = createDomBackend();
+    const { grid, timeline } = mountSurfaces();
+    backend.mount({ grid, timeline });
+
+    const frame = computeFrame({
+      entries: sampleEntries.slice(0, 1),
+      scale,
+      preset,
+      visible: { x: 0, y: 0, width: 0, height: 0 },
+      rowHeight: 32,
+      revision: 0,
+    });
+    (frame.bars[0]!.flags as Record<string, boolean>)['late'] = true;
+    backend.sync(frame);
+
+    const bar = timeline.querySelector<HTMLElement>('.fg-bar')!;
+    expect(bar.dataset['flag']).toBe('late');
+    backend.destroy();
+  });
+
+  it('gives .fg-row one .fg-row-label child carrying the row label text (D-S1.10-7)', () => {
+    const backend = createDomBackend();
+    const { grid, timeline } = mountSurfaces();
+    backend.mount({ grid, timeline });
+
+    backend.sync(
+      computeFrame({
+        entries: sampleEntries.slice(0, 1),
+        scale,
+        preset,
+        visible: { x: 0, y: 0, width: 0, height: 0 },
+        rowHeight: 32,
+        revision: 0,
+      }),
+    );
+
+    const row = grid.querySelector<HTMLElement>('.fg-row')!;
+    const labels = row.querySelectorAll('.fg-row-label');
+    expect(labels).toHaveLength(1);
+    expect(labels[0]?.textContent).toBe(sampleEntries[0]?.name);
+    backend.destroy();
+  });
+
+  it("stamps .fg-row's aria-posinset/aria-setsize from the frame's absolute row index and total row count, not the windowed count (D-S1.10-5)", () => {
+    const backend = createDomBackend();
+    const { grid, timeline } = mountSurfaces();
+    backend.mount({ grid, timeline });
+
+    // A dataset larger than the window: rowHeight * entries.length exceeds the visible slice, so
+    // rows[].index runs ahead of the windowed row count while frame.rowCount stays the full total.
+    backend.sync(
+      computeFrame({
+        entries: sampleEntries,
+        scale,
+        preset,
+        visible: { x: 0, y: 0, width: 0, height: 32 },
+        rowHeight: 32,
+        revision: 0,
+      }),
+    );
+
+    const row = grid.querySelector<HTMLElement>('.fg-row')!;
+    expect(row.getAttribute('aria-posinset')).toBe('1');
+    expect(row.getAttribute('aria-setsize')).toBe(String(sampleEntries.length));
+    backend.destroy();
+  });
+
+  it('gives .fg-bar role="img" and its a11yLabel, not role="gridcell" (D-S1.10-5, revised)', () => {
+    const backend = createDomBackend();
+    const { grid, timeline } = mountSurfaces();
+    backend.mount({ grid, timeline });
+
+    const frame = computeFrame({
+      entries: sampleEntries.slice(0, 1),
+      scale,
+      preset,
+      visible: { x: 0, y: 0, width: 0, height: 0 },
+      rowHeight: 32,
+      revision: 0,
+    });
+    backend.sync(frame);
+
+    const bar = timeline.querySelector<HTMLElement>('.fg-bar')!;
+    expect(bar.getAttribute('role')).toBe('img');
+    expect(bar.getAttribute('aria-label')).toBe(frame.bars[0]!.a11yLabel);
+    backend.destroy();
+  });
+
+  it('gives .fg-row role="listitem" and data-testid/data-row-id, .fg-bar data-testid alongside data-item-id (U6)', () => {
+    const backend = createDomBackend();
+    const { grid, timeline } = mountSurfaces();
+    backend.mount({ grid, timeline });
+
+    const frame = computeFrame({
+      entries: sampleEntries.slice(0, 1),
+      scale,
+      preset,
+      visible: { x: 0, y: 0, width: 0, height: 0 },
+      rowHeight: 32,
+      revision: 0,
+    });
+    backend.sync(frame);
+
+    const row = grid.querySelector<HTMLElement>('.fg-row')!;
+    expect(row.getAttribute('role')).toBe('listitem');
+    expect(row.dataset['testid']).toBe('fg-row');
+    expect(row.dataset['rowId']).toBe(frame.rows[0]!.id);
+
+    const bar = timeline.querySelector<HTMLElement>('.fg-bar')!;
+    expect(bar.dataset['testid']).toBe('fg-bar');
+    expect(bar.dataset['itemId']).toBe(frame.bars[0]!.id);
+    backend.destroy();
+  });
 });

@@ -3,6 +3,7 @@
 import type { RowId, ItemId, EntryId, EntryKind, Entry, Rect, TimeUnit } from '../model/index.js';
 import { itemId, rowId } from '../model/index.js';
 import type { TimeScale, ViewPreset } from '../time/index.js';
+import { formatDate, formatEndInclusive } from '../time/index.js';
 import { PrefixSumHeightIndex } from './row-height-index.js';
 import type { RowHeightIndex } from './row-height-index.js';
 
@@ -16,13 +17,13 @@ export function barSpan(entry: Pick<Entry, 'start' | 'end'>, scale: TimeScale): 
 }
 
 export interface BarFlags {
-  hasConflict?: boolean;
-  inCycle?: boolean;
+  conflict?: boolean;
+  cycle?: boolean;
 }
 
 export interface LinkFlags {
   inactive?: boolean;
-  inCycle?: boolean;
+  cycle?: boolean;
 }
 
 export interface FrameRow {
@@ -47,6 +48,11 @@ export interface FrameBar {
   height: number;
   lane: number;
   flags: BarFlags;
+  /** What a screen reader announces: `${entry.name}, ${formatDate(zone, start)} – ${formatEndInclusive(zone, end)}`.
+   * Library-derived text, not host render output — same precedent as `label` (plans/01 §4: "no user
+   * render output in the frame"). Composed here because it needs the dataset zone and inclusive-end
+   * formatting, both `time/`-only (S1.10, D-S1.10-5). */
+  a11yLabel: string;
 }
 
 /** One segment of an SVG-style path, used by link geometry (§4, #16 settles `FrameLink.id`'s brand). */
@@ -116,6 +122,10 @@ export interface GeometryFrame {
   header: FrameHeader;
   /** Only rows in the vertical window; `top` in absolute content coordinates. */
   rows: FrameRow[];
+  /** Total row count across the whole dataset, never the window's — what `aria-setsize` needs so
+   * virtualization doesn't announce "row 3" with no "of 30" (S1.10, D-S1.10-5/7). Same "always the
+   * full extent" shape as `contentHeight`/`contentWidth` below. */
+  rowCount: number;
   /** Always the full extent, never the window's. */
   contentHeight: number;
   /** Full horizontal extent of the bound `TimeScale`'s range, in px — what `ScrollModel` binds as
@@ -206,6 +216,7 @@ export function computeFrame(
       height: rowHeight,
       lane: 0,
       flags: {},
+      a11yLabel: `${entry.name}, ${formatDate(scale.timeZone, entry.start)} – ${formatEndInclusive(scale.timeZone, entry.end)}`,
     });
   }
 
@@ -228,6 +239,7 @@ export function computeFrame(
     visible,
     header: { bands },
     rows,
+    rowCount: entries.length,
     contentHeight: heights.totalHeight,
     contentWidth: scale.contentWidth,
     bars,

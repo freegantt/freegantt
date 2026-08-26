@@ -227,6 +227,52 @@ The shipped default `ViewPreset`: one header tick per civil day, labeled `YYYY-M
 scale's zone. Presets are plain config objects, never a switch statement (`plans/01` §5.1) — more
 shipped presets (hour→year) and preset switching land later in S1.
 
+## Styling and theming
+
+`Gantt` injects its own default stylesheet once per `document` (`<style data-freegantt-styles>`),
+so nothing renders unstyled. A host never edits that stylesheet — instead, override the CSS custom
+properties it defines, in the host app's own `.css`:
+
+```css
+/* host app's own stylesheet — no build step, no TypeScript */
+:root {
+  --fg-bar-fill: #2563eb;
+  --fg-header-bg: #ffffff;
+}
+```
+
+The full set of overridable tokens (`--fg-pane-bg`, `--fg-header-bg`, `--fg-bar-fill`,
+`--fg-warn`, and so on) is listed in `src/view/styles.ts`. Any selector the library renders
+(`.fg-bar`, `.fg-row`, `.fg-header`, …) can also be targeted directly for changes a token doesn't
+cover.
+
+### Light and dark mode
+
+The base stylesheet ships both a light token set (on `:root`) and a dark token set, applied two
+ways:
+
+- **Automatic:** a `prefers-color-scheme: dark` media query supplies the dark tokens whenever the
+  host page hasn't set `data-fg-theme`, so a `Gantt` follows the OS/browser preference with no
+  extra wiring.
+- **Explicit:** setting `data-fg-theme="dark"` (or `"light"`) on an ancestor element — typically
+  `<html>` or the `Gantt`'s `host` — pins the theme regardless of `prefers-color-scheme`.
+
+To customize dark mode instead of just light mode, scope the override to the dark selector(s):
+
+```css
+:root {
+  --fg-bar-fill: #2563eb; /* light mode */
+}
+[data-fg-theme='dark'] {
+  --fg-bar-fill: #60a5fa; /* explicit dark mode */
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-fg-theme]) {
+    --fg-bar-fill: #60a5fa; /* OS-preference dark mode */
+  }
+}
+```
+
 ## Internal building blocks (not yet public, documented here as they're built)
 
 ### `time/TimeScale`

@@ -251,6 +251,28 @@ _Avoid_: Pinned zoom, cursor zoom (the mechanism is not specific to a pointer �
 One step of the time axis at the current ViewPreset's resolution — the unit the header bands label and the unit a gesture snaps to by default. Since S1.7 a Tick also carries its own cell `width` (px to the next boundary at its band's step), so a DST-shortened or -lengthened day draws at its true width instead of an assumed constant.
 _Avoid_: Gridline (a gridline is one way a Tick is drawn), step
 
+### Theming and accessibility
+
+**Base stylesheet**:
+The one stylesheet the library ever writes, injected once per document by `ensureBaseStyles` (`view/styles.ts`, S1.10). Idempotent per document via a `<style data-freegantt-styles>` marker — the document holds that state, not a module variable, so two Gantt instances in one document share one injected sheet without this being I2's kind of shared mutable state (the second call is a no-op precisely because the marker makes it safe to call twice). Ships every Token default and every Part's structural rule; there is no host-facing way to opt out (D-S1.10-8) — a host restyles it, it does not disable it.
+_Avoid_: Default styles, styles.css (there is no separate package export — see D-S1.10-8)
+
+**Token**:
+A `--fg-*` CSS custom property — level 1 of the Customization ladder (`plans/02` §4). Metrics (`--fg-row-height`, `--fg-grid-pane-width`, …) are read once through `pixel-property.ts`; colour Tokens (`--fg-bar-fill`, `--fg-pane-bg`, …) are consumed directly by Base stylesheet rules with no JS in between. A host overrides any Token by setting the same property on the host element; the shipped default is always the fallback in `var(--fg-x, default)`, never the winner once a host has authored a value.
+_Avoid_: Variable, custom property (accurate but not this project's term of art — say Token), theme variable
+
+**Part**:
+One of the `fg-*` class names the library's DOM structure carries — level 2 of the Customization ladder. The vocabulary is closed and un-renamed (D-S1.10-1): `fg-host`, `fg-grid-pane`, `fg-grid-spacer`, `fg-rows-clip`, `fg-rows`, `fg-splitter`, `fg-timeline-pane`, `fg-header`, `fg-band`, `fg-tick`, `fg-row`, `fg-row-label`, `fg-bars`, `fg-bar`. A host writes level-2 CSS against a Part directly (`.fg-bar { ... }`) or against a Part plus a State attribute (`.fg-bar[data-flag~="conflict"] { ... }`).
+_Avoid_: Pane (Grid pane/Timeline pane/Splitter are specific Parts, already named in "Mounted instances" — Part is the general term for the whole class vocabulary), BEM block (rejected, Q2 — renaming shipped classes to a BEM shape was churn with no behavior change)
+
+**State attribute**:
+A `data-*` attribute a Part carries so a host can select on state without JS — `data-flag` (space-joined, generated from `BarFlags`'/`LinkFlags`' own keys, D-S1.10-2: `conflict`, `cycle`), `data-kind` (an Entry's Kind), `data-testid`/`data-row-id`/`data-item-id` (stable E2E hooks, U6). Distinct from a Token (a value) and a Part (a structural class): a State attribute is level 2's other half, the thing a host's selector matches against rather than reads.
+_Avoid_: Data attribute (too generic — say State attribute when it's part of the level-2 vocabulary), modifier class (there is no modifier-class convention here — state lives in `data-*`, never a second class)
+
+**a11y label**:
+`FrameBar.a11yLabel` — the library-computed string a screen reader announces for one bar (`${entry.name}, ${formatDate(...)} – ${formatEndInclusive(...)}`), composed in `layout/` from the dataset zone and set as `.fg-bar`'s `aria-label` at sync time (D-S1.10-5). Not the same thing as `Gantt.a11yLabel` — the live option that sets the _host's_ `aria-label` (default `'Gantt'`). Two different things sharing a root word: say "the bar's a11y label" or "`Gantt.a11yLabel`" explicitly, never "a11y label" unqualified where both are in scope (#7's "chart" lesson applies).
+_Avoid_: aria-label (that is the DOM attribute `render/dom` maps this to — `a11yLabel` is the backend-neutral field `layout/` produces, same relationship `kind` has to `data-kind`), accessible name (a browser/AT term of art, not this project's field name)
+
 ### Extension
 
 **Capability**:
