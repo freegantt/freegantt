@@ -8,7 +8,9 @@ import { sampleEntryInputs } from '../fixtures/sample-dataset.js';
 const tallDataset = new Dataset({ entries: sampleEntryInputs, timeZone: 'UTC' });
 const shortDataset = new Dataset({ entries: sampleEntryInputs.slice(0, 20), timeZone: 'UTC' });
 
-const scale = new TimeScaleModel();
+// `zoom: 'preset'` (D-S1.11-4): the default `'fitViewport'` makes content width equal pane width,
+// so `max.x` is 0 and D9's x half is unobservable on the one page that exists to prove D9.
+const scale = new TimeScaleModel({ zoom: 'preset' });
 const scroll = new ScrollModel();
 
 new Gantt({ container: '#tall', dataset: tallDataset, scale, scroll });

@@ -298,3 +298,9 @@ _Avoid_: Treating this as settled — the plugin system (`GanttPlugin`/`DatasetP
 **DatasetPlugin**, **ProposalResolver**, **PluginStore**:
 Names from the resolve hook's contract design (ADR 0002's consequences, issue #15, built on #12): a `DatasetPlugin` occupies the resolve hook via a `ProposalResolver`, and per-plugin per-entry data (e.g. the scheduling plugin's pin flag, `Dependency`) lives in a reserved `PluginStore` rather than on `Entry` or in a consumer/plugin-shared field. Design proposals only — not yet implemented or landed in `src/`; do not treat as existing API until #15 lands. Named `ProjectPlugin` before ADR 0004.
 _Avoid_: Treating these as settled — the exact shapes are still open design work
+
+### Process
+
+**Acceptance id**:
+A `[Sn-Ax]` tag (e.g. `[S1-A2]`) linking one `plans/03-slices.md` acceptance box to the test that proves it — carried in that test's own title, fixed-string-searchable, and driven by `scripts/slice-gate.mjs`'s `tagged()` helper (S1.11, D-S1.11-1). Fixed-string, not a regex: `[S1-A2]` read as a regex is a character class matching one of `S`, `1`, `-`, `A`, `2`, which is how the gate's first design silently ran the wrong tests. An id is declarative about which runner(s) it lives in — the gate never infers a runner from a file path, because that would let an id silently migrate to the wrong kind of test (e.g. from e2e to unit) without the gate noticing.
+_Avoid_: Test tag, test id (both read as generic testing infrastructure; Acceptance id is specifically the `plans/03` box <-> test link)

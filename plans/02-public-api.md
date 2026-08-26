@@ -224,7 +224,7 @@ barRenderer: {
 ```ts
 import { TimeScaleModel, ScrollModel } from 'freegantt';
 
-const scale  = new TimeScaleModel({ preset: 'weekAndMonth' });
+const scale  = new TimeScaleModel({ preset: 'weekAndMonth', zoom: 'preset' });
 const scroll = new ScrollModel();
 
 const mainGantt   = new Gantt({ container: '#top',    dataset, scale, scroll });

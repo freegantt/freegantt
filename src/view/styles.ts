@@ -71,12 +71,12 @@ const BASE_STYLESHEET = `
 .fg-timeline-pane { position: relative; flex: 1 1 auto; min-width: 0; overflow: auto; background: var(--fg-pane-bg); }
 .fg-header { background: var(--fg-header-bg); position: relative; }
 .fg-band { background: var(--fg-header-band-bg); color: var(--fg-header-text); border-bottom: 1px solid var(--fg-header-divider-color); position: relative; }
-.fg-tick { color: var(--fg-header-subtext); position: absolute; }
-.fg-row { background: var(--fg-row-even-bg); position: absolute; width: 100%; }
+.fg-tick { color: var(--fg-header-subtext); position: absolute; top: 0; left: 0; }
+.fg-row { background: var(--fg-row-even-bg); position: absolute; top: 0; left: 0; width: 100%; }
 .fg-row:nth-child(odd) { background: var(--fg-row-odd-bg); }
 .fg-row-label { color: var(--fg-row-label-color); }
 .fg-bars { position: relative; }
-.fg-bar { background: var(--fg-bar-fill); color: var(--fg-bar-label-color); border-radius: var(--fg-bar-radius, 3px); position: absolute; }
+.fg-bar { background: var(--fg-bar-fill); color: var(--fg-bar-label-color); border-radius: var(--fg-bar-radius, 3px); position: absolute; top: 0; left: 0; }
 .fg-bar[data-flag~="conflict"] { outline: 2px solid var(--fg-warn); }
 .fg-content-sizer { position: absolute; top: 0; left: 0; width: 1px; height: 1px; visibility: hidden; }
 `.trim();
