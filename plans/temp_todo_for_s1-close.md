@@ -169,6 +169,8 @@ Spec edits: `plans/02` §4, `plans/01` §4, `plans/01` §5, `docs/02`.
 
 ## 7. S1.11 — close the gate
 
+**Superseded.** This phase list is superseded by [`plans/s1.11-close-the-gate/README.md`](s1.11-close-the-gate/README.md), the settled spec — its §2 decisions supersede everything below. Three lines here are wrong as written and are corrected there: Phase 1's `fixtures/large-dataset.ts` / `seededEntries({ count, timeZone, start, seed })` becomes `fixtures/seeded-dataset.ts` / `seededEntryInputs` returning `EntryInput[]` with no `timeZone` (D-S1.11-2, D-S1.11-3); Phase 4's D9 demo is not written at S1.11 at all, because `harness/scroll-sync.ts` has shipped since S1.5 (D-S1.11-4); and Phase 6's gate checks pass acceptance ids to `-t`/`-g` unescaped, which makes them character classes that match most of the suite while a missing id exits 0 (D-S1.11-1). Kept only as a record of the phase this step was planned from.
+
 **Branch:** `s1.11-close-the-gate` · **Acceptance:** `[S1-A1]`, `[S1-A4]`, and the four boxes the earlier steps proved
 
 ### Phase 1 — `fixtures/large-dataset.ts`
