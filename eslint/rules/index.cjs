@@ -8,5 +8,6 @@ module.exports = {
     'no-instant-arithmetic': require('./no-instant-arithmetic.cjs'),
     'no-time-to-pixel-math': require('./no-time-to-pixel-math.cjs'),
     'no-flow-layout-rows': require('./no-flow-layout-rows.cjs'),
+    'no-inline-style-outside-geometry': require('./no-inline-style-outside-geometry.cjs'),
   },
 };

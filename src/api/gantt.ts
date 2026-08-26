@@ -2,7 +2,7 @@
 // instance owns its own shell and state so two Gantt instances on one page are fully independent.
 
 import { GanttShell, ScrollModel, TimeScaleModel } from '../view/index.js';
-import type { GanttEventMap, Overscan, PresetRef, TimeScaleZoom, ViewPreset } from '../view/index.js';
+import type { GanttEventMap, Overscan, PresetRef, Theme, TimeScaleZoom, ViewPreset } from '../view/index.js';
 import type { EntryId, TimeSpan } from '../model/index.js';
 import type { Dataset } from './dataset.js';
 
@@ -24,6 +24,10 @@ export interface GanttOptions {
   range?: 'fitDataset' | TimeSpan;
   zoom?: TimeScaleZoom;
   overscan?: Overscan;
+  /** Live (S1.10). Default `'auto'`: follows `prefers-color-scheme`. */
+  theme?: Theme;
+  /** Live (S1.10). Default `'Gantt'`; sets `aria-label` on the host. */
+  a11yLabel?: string;
 }
 
 export class Gantt {
@@ -41,7 +45,25 @@ export class Gantt {
       ...(options.range !== undefined ? { range: options.range } : {}),
       ...(options.zoom !== undefined ? { zoom: options.zoom } : {}),
       ...(options.overscan !== undefined ? { overscan: options.overscan } : {}),
+      ...(options.theme !== undefined ? { theme: options.theme } : {}),
+      ...(options.a11yLabel !== undefined ? { a11yLabel: options.a11yLabel } : {}),
     });
+  }
+
+  get theme(): Theme {
+    return this.#shell.theme;
+  }
+
+  set theme(value: Theme) {
+    this.#shell.theme = value;
+  }
+
+  get a11yLabel(): string {
+    return this.#shell.a11yLabel;
+  }
+
+  set a11yLabel(value: string) {
+    this.#shell.a11yLabel = value;
   }
 
   get gridWidth(): number {

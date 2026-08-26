@@ -159,6 +159,33 @@ Documented in this order; each level solves what the previous can't, and consume
 
 Every level-1 property the library reads as a length goes through one reader (`render/dom/pixel-property.ts`): computed value → px → validated → library default. What counts as authored is stated per property rather than re-implemented per call site — `--fg-row-height` rejects zero (a zero-height row is not a row), `--fg-grid-pane-width` keeps it (a host turning the grid pane off authored that). Re-read cadence stays the caller's and is stated at each call site: the grid pane's width is read once at construction (renamed from `--fg-row-label-width`, S1.8 — the gutter is a pane width now, not a backend reservation), row height again on every pane measurement, neither per render. Two more tokens joined at S1.8: `--fg-splitter-width` (fallback `4`) and `--fg-header-height` (fallback `20`) — the grid pane's own header spacer needs the same height the timeline pane's header band uses, or every label sits one header-height above its bar.
 
+**The complete level-1 `--fg-*` table (S1.10, D-S1.10-1/D-S1.10-9).** A host with no CSS of its own gets these defaults; every one is overridable by setting the same property on the host element, which `view/styles.ts`'s `var(--fg-x, default)` always prefers over its own fallback (U4). Metrics are read through `pixel-property.ts` (above); colour tokens are plain CSS custom properties consumed directly by the base stylesheet's class rules — no JS reads them.
+
+| Token | Default (light) | Default (dark) | Read by |
+|---|---|---|---|
+| `--fg-row-height` | `32px` | — (not theme-dependent) | `pixel-property.ts`, re-read on pane measurement |
+| `--fg-grid-pane-width` | `220px` | — | `pixel-property.ts`, read once at construction |
+| `--fg-splitter-width` | `4px` | — | `pixel-property.ts` |
+| `--fg-header-height` | `20px` | — | `pixel-property.ts` |
+| `--fg-bar-radius` | `3px` | — | `.fg-bar` CSS rule directly (not `pixel-property.ts` — a border-radius, not a layout number) |
+| `--fg-pane-bg` | `#FAFAF7` | `#15161A` | `.fg-grid-pane`, `.fg-timeline-pane` background |
+| `--fg-splitter-color` | `#E6E2D9` | `#2B2F36` | `.fg-splitter` background |
+| `--fg-header-bg` | `#F4F2EC` | `#22252B` | `.fg-header` background |
+| `--fg-header-band-bg` | `#FFFFFF` | `#1B1D22` | `.fg-band` background |
+| `--fg-header-text` | `#1A1815` | `#ECEAE3` | `.fg-band`/`.fg-tick` text |
+| `--fg-header-subtext` | `#9A958B` | `#6E6A62` | `.fg-tick` text |
+| `--fg-header-divider-color` | `#E6E2D9` | `#2B2F36` | rule between header bands |
+| `--fg-row-even-bg` | `transparent` | `transparent` | `.fg-row:nth-child(even)` |
+| `--fg-row-odd-bg` | `rgba(26,24,21,.028)` | `rgba(255,255,255,.032)` | `.fg-row:nth-child(odd)` |
+| `--fg-row-label-color` | `#1A1815` | `#ECEAE3` | `.fg-row-label` text |
+| `--fg-bar-fill` | `oklch(.55 .13 245)` | `oklch(.72 .13 245)` | `.fg-bar` background |
+| `--fg-bar-label-color` | `#FFFFFF` | `#ECEAE3` | `.fg-bar` text |
+| `--fg-warn` | `#D97706` | `#FBBF24` | `.fg-bar[data-flag~="conflict"]` outline (U2) |
+
+Colour defaults are sourced from an existing, unnamed palette this team maintains elsewhere (D-S1.10-9) — only the *values* cross over, never the palette's name (CLAUDE.md: vendor product names never appear in specs/docs/code). `theme: 'auto' | 'light' | 'dark'` (default `'auto'`) selects which block applies: `'auto'` writes no `data-fg-theme` attribute and follows `prefers-color-scheme`; `'light'`/`'dark'` write the attribute and always win over the media query on specificity. No named multi-preset picker beyond light/dark yet — that needs `extensions/`'s `PluginContext`, the only I2-safe place a `registerThemePreset`-shaped seam can live (deferred to S6, D-S1.10-9).
+
+**`data-flag` is real (S1.10, D-S1.10-2).** Generated from `BarFlags`'/`LinkFlags`' own keys, not hand-mapped — `.fg-bar[data-flag~="conflict"]`, `.fg-bar[data-flag~="cycle"]` are live selectors today (nothing sets them true until S3's scheduling plugin, but the mechanism and the vocabulary both ship now, U2). A new `BarFlags` key needs no `render/dom` edit to show up as a token (U7).
+
 Renderers return **plain serializable element descriptions** (tag/class/style/text/children), applied by the engine's reconciler — never live DOM nodes (nodes are recycled by virtualization) and never framework components in core (D5). Text by default; HTML by explicit opt-in only.
 
 ```ts
@@ -225,7 +252,7 @@ const p2  = Dataset.fromJSON(doc);
 ## 7. Developer experience commitments
 
 - **Dev-mode invariant warnings**: dependency cycle detected (with member ids), config set on destroyed instance, non-deterministic item identity, renderer returned a live node, and (S1.9) `GanttOptions.scale` supplied alongside any of `preset`/`range`/`zoom` — "FreeGantt: GanttOptions.preset/range/zoom are ignored when 'scale' is also supplied. The shared TimeScaleModel already carries its own intent — set preset/range/zoom on it directly." The shared `scale` always wins; the constructor keys are never merged into it (D-S1.9-9).
-- **Stable test hooks**: `data-testid` on every part so consumers can write E2E tests against the Gantt without brittle selectors.
+- **Stable test hooks**: `data-testid` on every part so consumers can write E2E tests against the Gantt without brittle selectors. Shipped at S1.10 (D-S1.10-5/§3.5, U6): `[data-testid="fg-row"]` (with `data-row-id`) and `[data-testid="fg-bar"]` (alongside the existing `data-item-id`) — the selectors S1.11's e2e boxes select on.
 - **Errors are typed and actionable**: `FreeGanttError` subclasses with codes, never bare strings; validation failures name the entity and field. `HostNotFoundError` (`code: 'host-not-found'`, S1.8) is the first of these a consumer can actually catch — thrown when a string `host` selector matches nothing. `UnknownPresetError` (`code: 'unknown-preset'`, S1.9) is thrown by `resolvePreset` for a `PresetRef` string outside the shipped set. `EntryNotFoundError` (`code: 'entry-not-found'`, S1.9) is thrown by `reveal(entryId)` for an id the bound Dataset has no entry for.
 - **Docs site with live, editable examples** grows with the slices (the harness pages are its seed) — budgeted as a deliverable, not an afterthought.
 - **Semver honesty**: internal modules are not importable (enforced by the `exports` map), so semver only governs surfaces we actually promise.

@@ -2,6 +2,7 @@
 // (plans/01 §8.1). Scope is hard-bounded: attr/class/style/text + keyed child recycling only.
 
 import type {
+  BarFlags,
   FrameBar,
   FrameHeaderBand,
   FrameHeaderTick,
@@ -14,12 +15,18 @@ import type { RenderBackend, RenderSurfaces, InteractionState, HitResult } from 
 import { syncKeyed } from './sync-keyed.js';
 
 type TickGeom = Pick<FrameHeaderTick, 'x' | 'width' | 'label'>;
-type RowGeom = Pick<FrameRow, 'top' | 'height' | 'label'>;
-type BarGeom = Pick<FrameBar, 'kind' | 'label' | 'x' | 'y' | 'width' | 'height'>;
+type RowGeom = Pick<FrameRow, 'top' | 'height' | 'label' | 'index'> & { rowCount: number };
+type BarGeom = Pick<FrameBar, 'kind' | 'label' | 'x' | 'y' | 'width' | 'height' | 'flags' | 'a11yLabel'>;
 /** Bands carry no per-frame geometry of their own yet (height/stacking is S1.9/S1.10) — an always-
  * equal geom means `syncKeyed` patches a band node once, at creation, and never again. */
 type BandGeom = Record<string, never>;
 const EMPTY_BAND_GEOM: BandGeom = {};
+
+/** `data-flag` is generated from `BarFlags`' own keys, not hand-mapped (S1.10, D-S1.10-2) — adding a
+ * new `BarFlags` key needs no edit here (U7). */
+function flagTokens(flags: BarFlags): string {
+  return (Object.keys(flags) as (keyof BarFlags)[]).filter((k) => flags[k]).join(' ');
+}
 
 export function createDomBackend(): RenderBackend<HTMLElement> {
   // The grid pane's row layer (RenderSurfaces.grid) — created by `view/pane-layout.ts`, not this
@@ -49,7 +56,6 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
     create: (): HTMLElement => {
       const node = document.createElement('div');
       node.className = 'fg-tick';
-      node.style.position = 'absolute';
       return node;
     },
     toGeom: (tick: FrameHeaderTick): TickGeom => ({ x: tick.x, width: tick.width, label: tick.label }),
@@ -69,7 +75,6 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
       create: () => {
         const node = document.createElement('div');
         node.className = 'fg-band';
-        node.style.position = 'relative';
         return node;
       },
       toGeom: () => EMPTY_BAND_GEOM,
@@ -98,24 +103,28 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
     }
   }
 
-  function syncRows(rows: readonly FrameRow[]): void {
+  function syncRows(rows: readonly FrameRow[], rowCount: number): void {
     if (!gridLayer) return;
     syncKeyed(gridLayer, rows, rowNodes, rowGeom, {
       key: (row) => row.id,
-      create: () => {
+      create: (row) => {
         const node = document.createElement('div');
         node.className = 'fg-row';
-        node.style.position = 'absolute';
-        // A constant, not per-frame geometry (S1.10 moves this to the shipped stylesheet): a label
-        // fills the grid pane now that the pane's own width IS the gutter (D-S1.8-2).
-        node.style.width = '100%';
+        node.setAttribute('role', 'listitem');
+        node.dataset['testid'] = 'fg-row';
+        node.dataset['rowId'] = row.id;
+        const label = document.createElement('div');
+        label.className = 'fg-row-label';
+        node.append(label);
         return node;
       },
-      toGeom: (row) => ({ top: row.top, height: row.height, label: row.label }),
+      toGeom: (row) => ({ top: row.top, height: row.height, label: row.label, index: row.index, rowCount }),
       patch: (node, geom) => {
         node.style.transform = `translateY(${geom.top}px)`;
         node.style.height = `${geom.height}px`;
-        node.textContent = geom.label;
+        node.setAttribute('aria-posinset', String(geom.index + 1));
+        node.setAttribute('aria-setsize', String(geom.rowCount));
+        node.querySelector('.fg-row-label')!.textContent = geom.label;
       },
     });
   }
@@ -128,7 +137,8 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
         const node = document.createElement('div');
         node.className = 'fg-bar';
         node.dataset['itemId'] = bar.id;
-        node.style.position = 'absolute';
+        node.dataset['testid'] = 'fg-bar';
+        node.setAttribute('role', 'img');
         return node;
       },
       toGeom: (bar) => ({
@@ -138,10 +148,14 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
         y: bar.y,
         width: bar.width,
         height: bar.height,
+        flags: bar.flags,
+        a11yLabel: bar.a11yLabel,
       }),
       patch: (node, geom) => {
         node.dataset['kind'] = geom.kind;
+        node.dataset['flag'] = flagTokens(geom.flags);
         node.textContent = geom.label;
+        node.setAttribute('aria-label', geom.a11yLabel);
         node.style.transform = `translate(${geom.x}px, ${geom.y}px)`;
         node.style.width = `${geom.width}px`;
         node.style.height = `${geom.height}px`;
@@ -158,27 +172,22 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
 
       headerLayer = document.createElement('div');
       headerLayer.className = 'fg-header';
-      headerLayer.style.position = 'relative';
       barLayer = document.createElement('div');
       barLayer.className = 'fg-bars';
-      barLayer.style.position = 'relative';
       // Owns the native scrollable extent (S1.5 README D-S1.5-9): rows/bars are positioned absolutely,
       // so nothing else in this DOM makes `timelineHost` actually overflow — without this, ScrollModel's
       // `panTo` has nowhere real to write. Zero visual footprint; `sync()` moves it to the frame's
       // bottom-right corner every render.
       contentSizer = document.createElement('div');
       contentSizer.setAttribute('aria-hidden', 'true');
-      contentSizer.style.position = 'absolute';
-      contentSizer.style.top = '0';
-      contentSizer.style.left = '0';
+      contentSizer.className = 'fg-content-sizer';
       contentSizer.style.width = '1px';
       contentSizer.style.height = '1px';
-      contentSizer.style.visibility = 'hidden';
       timelineHost.append(headerLayer, barLayer, contentSizer);
     },
     sync(frame: GeometryFrame) {
       syncHeader(frame.header.bands);
-      syncRows(frame.rows);
+      syncRows(frame.rows, frame.rowCount);
       syncBars(frame.bars);
       if (gridLayer) {
         // The grid pane has no scrollbar of its own; its row layer follows the timeline pane's

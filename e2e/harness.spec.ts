@@ -88,7 +88,11 @@ test('grid pane rows are actually painted after scrolling, not just correctly po
     const cx = rect.x + rect.width / 2;
     const cy = (top + bottom) / 2;
     const atPoint = document.elementFromPoint(cx, cy);
-    return { found: true as const, overlapsPane: true as const, isSameElement: atPoint === lastRow };
+    // S1.10, D-S1.10-7: .fg-row now wraps a .fg-row-label child, so the topmost painted element at
+    // the row's center is often that label, not .fg-row itself — still proof the row is painted,
+    // as long as the hit lands on the row or something the row itself contains.
+    const isSameElement = atPoint === lastRow || (atPoint !== null && lastRow.contains(atPoint));
+    return { found: true as const, overlapsPane: true as const, isSameElement };
   });
 
   expect(hit.found).toBe(true);

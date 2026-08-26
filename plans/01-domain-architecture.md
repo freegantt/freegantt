@@ -291,6 +291,10 @@ interface GeometryFrame {
   header: { bands: readonly { unit: TimeUnit; increment: number; ticks: readonly { x: number; width: number; label: string }[] }[] };
   /** Only rows in the vertical window; `top` in absolute content coordinates. */
   rows: Array<{ id: RowId; index: number; top: number; height: number; laneCount: number; label: string }>;
+  /** Total row count across the whole dataset (`entries.length`), not the windowed `rows.length` —
+   *  feeds `aria-setsize` (S1.10, D-S1.10-5): virtualization without it announces "row 3" with no
+   *  "of 30" over a large dataset. */
+  rowCount: number;
   contentHeight: number;       // across ALL rows, from the height index — always the full extent
   contentWidth: number;        // full horizontal extent of the bound TimeScale's range — always the full extent
   bars: Array<{
@@ -299,8 +303,13 @@ interface GeometryFrame {
     /** The entry's name — what a backend renders as the bar's label (#26). */
     label: string;
     x: number; y: number; width: number; height: number; lane: number;
-    /** Static classification only (hasConflict, inCycle) — never hover/selection. */
+    /** Static classification only (`conflict`, `cycle` — renamed from `hasConflict`/`inCycle` at
+     *  S1.10 so the field names double as the `data-flag` CSS vocabulary directly, D-S1.10-3) —
+     *  never hover/selection. */
     flags: BarFlags;
+    /** What a screen reader announces: `${entry.name}, ${formatDate(zone, start)} – ${formatEndInclusive(zone, end)}`
+     *  (S1.10, D-S1.10-5). Library-derived text, not host render output — same precedent as `label`. */
+    a11yLabel: string;
   }>;
   /** `id` was `DependencyId` (a `model/` brand) pre-#13; `Dependency` is now scheduling-plugin-owned
    *  (§7, #13), so link geometry needs a plugin-contributed emission seam mirroring `registerItemEmitter`
@@ -345,7 +354,7 @@ Rules that keep it honest:
 
 Three rules, in force from the first commit, because all three are retrofit-hostile:
 
-1. **Storage is half-open `[start, end)`; display is inclusive.** An entry "ending Friday" stores `end` = Saturday 00:00 in dataset time. Exactly one formatting helper (`formatEndInclusive`) renders inclusive ends; code review rejects inline `end - 1` arithmetic.
+1. **Storage is half-open `[start, end)`; display is inclusive.** An entry "ending Friday" stores `end` = Saturday 00:00 in dataset time. Exactly one formatting helper (`formatEndInclusive`) renders inclusive ends; code review rejects inline `end - 1` arithmetic. Shipped at S1.10 (`src/time/format.ts`) alongside `formatDate` (plain zone-aware display for a start, which needs no half-open→inclusive conversion — not a second instance of the "exactly one" rule, D-S1.10-4) — closes the promise this bullet made since S0.
 2. **The dataset owns an IANA timezone; viewer-local is opt-in.** All zone-aware date arithmetic — day floors, week starts, snapping, shading — resolves through the dataset zone, so two users in different zones see identical day boundaries. `Instant` stays absolute.
 3. **No naked time arithmetic.** `time/` exposes `add`, `startOf`, `diff`, etc., all zone-aware and DST-correct. A lint rule bans magic time constants (`86400000` and friends) outside `time/`.
 
@@ -499,6 +508,10 @@ Backends: `dom` (default — absolutely-positioned virtualized rows, SVG for lin
 **DOM rendering approach:** bars and rows are plain positioned elements — CSS-themeable (custom properties + parts), accessible (focusable bars, grid semantics — D11), framework-friendly. Updates go through a small keyed reconciler that diffs a plain-object element description against the config last applied to that same element (stored on the node) — no shadow tree, no per-frame vDOM allocation, because the changeset already says what changed. Hard scope boundary in the module header: attribute/class/style/text diffing and keyed child recycling only; anything needing lifecycle hooks or a component model means we are rebuilding a framework and should adopt one instead.
 
 **Text is text.** Renderer output defaults to `textContent`; raw HTML requires an explicit opt-in flag. Entry names come from databases; the default must not be an XSS hole.
+
+**Inline writes are geometry-only; everything else ships as a base stylesheet (S1.10, D-S1.10-6).** `render/dom`'s `node.style.*` writes are pruned to exactly `transform`/`width`/`height` — the per-frame/per-instance numbers nothing but this backend knows. Structure (`position`, `display`, `overflow`, colour, background, border) moves to class rules in `view/styles.ts`'s base stylesheet, injected once per document by `ensureBaseStyles` (idempotent via a `<style data-freegantt-styles>` document marker — not `data/`'s kind of shared mutable state, I2 unaffected). `freegantt/no-inline-style-outside-geometry` (`src/render/**`, `src/view/**`) lints the split so it can't regress.
+
+**`mount`/`sync` write ARIA roles, not just geometry (S1.10, D-S1.10-5).** The host gets `role="group"`, a live `aria-label` (from `Gantt.a11yLabel`), and the one honest `tabindex="0"` this step defines (no roving tabindex until S4's keyboard controller exists to move one). `.fg-row` gets `role="listitem"` plus `aria-posinset`/`aria-setsize` (the latter from `GeometryFrame.rowCount`, the *total* row count, not the windowed slice). `.fg-bar` gets `role="img"` and an `aria-label` from `FrameBar.a11yLabel` — not the ARIA `grid`/`row`/`gridcell` pattern, because `.fg-row` and `.fg-bar` render into different scroll surfaces under the split-pane architecture (§8.3) and are DOM cousins, never ancestor/descendant, so no placement of `grid`/`row`/`gridcell` roles across them is spec-conformant.
 
 ### 8.2 Viewport & multi-Gantt sync (D9)
 

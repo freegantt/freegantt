@@ -459,3 +459,24 @@ describe('preset/range/zoom/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () 
     }
   });
 });
+
+describe('a11y roles and the one honest tab stop (S1.10, D-S1.10-5)', () => {
+  it('gives the host role="group", a live aria-label, and the only tabindex="0" in the whole render tree', () => {
+    const host = document.createElement('div');
+    const scale = new TimeScaleModel({ range: { start: rangeStart, end: rangeEnd } });
+    const shell = new GanttShell({ host, dataset: { entries, timeZone }, scale, a11yLabel: 'Project plan' });
+
+    expect(host.getAttribute('role')).toBe('group');
+    expect(host.getAttribute('aria-label')).toBe('Project plan');
+    expect(host.getAttribute('tabindex')).toBe('0');
+
+    // querySelectorAll only matches descendants, not host itself — host's own tabindex is asserted
+    // above; this proves nothing *inside* it claims a second tab stop.
+    expect(host.querySelectorAll('[tabindex="0"]')).toHaveLength(0);
+
+    shell.a11yLabel = 'Renamed plan';
+    expect(host.getAttribute('aria-label')).toBe('Renamed plan');
+
+    shell.destroy();
+  });
+});
