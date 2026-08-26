@@ -17,88 +17,72 @@ full `pnpm verify` + `pnpm test:e2e` pre-push gate (it runs automatically on eve
    targeted `pnpm vitest run --project pure <path>` (or `--project dom` for `api/gantt.test.ts` /
    `view/gantt-shell.test.ts`) before committing.
 4. Flip the box to `- [x]` in the same commit as the code.
-5. `git add` **specific files only** — not `-A`. A stray untracked file
-   (`plans/2026-08-25-s1.8-review.md`, an old S1.8 review doc) got swept into an earlier commit this
-   way; harmless in that case, but check `git status --short` before staging regardless.
+5. `git add` **specific files only** — not `-A`. Check `git status --short` before staging.
 6. Commit, then `git push` — the pre-push hook runs the full gate and will block on any failure.
    Fix forward; don't `--no-verify`.
 
 ## Done so far (commits on `s1.9-implementation`, oldest first)
 
-1. **Types and errors** — `UnknownPresetError` (`code: 'unknown-preset'`), `EntryNotFoundError`
-   (`code: 'entry-not-found'`) added to `src/model/errors.ts`, re-exported from `src/model/index.ts`
-   and `src/api/index.ts`.
-2. **`time/presets.ts`** (new file) — the five single-band presets moved out of `src/time/scale.ts`
-   unchanged (`hourPreset`…`yearPreset`), three new two-band presets added (`dayAndWeekPreset`,
-   `weekAndMonthPreset`, `monthAndYearPreset`), plus `ShippedPresetId`, `presets`, `PresetRef`,
-   `resolvePreset`. `scale.ts` keeps the engine + `pxPerMsForPreset`, gained `TimeScale.pxPerMs`.
-   `time/index.ts` barrel updated. Added `time/presets.test.ts` and a DST-transition test for `'w'`/
-   `'M'` stepping in `time/zone.test.ts` (`[S1-A5]`).
-3. **`TimeScaleModel` zoom** — `TimeScaleZoom` type (`'fitViewport' | 'preset' | {pxPerMs}`),
-   `TimeScaleIntent.zoom`, live `preset`/`range`/`zoom` setters (each a no-op + no invalidation when
-   unchanged), `#resolvePxPerMs` three-way branch replacing the old hardcoded fit-to-width formula.
-   `preset` now takes a `PresetRef` and resolves through `resolvePreset` (throws
-   `UnknownPresetError`). Extended `time-scale-model.test.ts`; the *pre-existing* assertions pass
-   unmodified (that's the "free at the default" proof D-S1.9-2 requires).
-4. **`Viewport.zoomTo`/`zoomBy`/`reveal`** — `#scrollHandle` field retained from `bind()`; `zoomTo`
-   reads the anchored instant before writing, then writes `scale.zoom` and pushes the new
-   `contentWidth` itself (synchronously, via `#scrollHandle.setContentSize`) before panning, all
-   inside one `batch()` — never touches `range.start` (D-F′). `zoomBy` delegates by scaling
-   `timeScale.pxPerMs`. `reveal(target: Rect)` is nearest-edge on both axes. Extended
-   `viewport.test.ts` with notification-count tests, an anchor-fixed-under-pointer test, a
-   `zoomBy(2)` / `zoomBy(0.5)` round-trip test, a fast-check property test, and `reveal` tests. One
-   property-test subtlety worth knowing: the anchor-stays-fixed invariant only holds when the
-   resulting scroll position is strictly inside `(0, max.x)` — when zooming out clamps the pan to a
-   scroll bound, there is no reachable position that keeps the anchor under the pointer, so the test
-   skips the assertion on the two clamped boundary cases. This is a straightforward mechanical
-   consequence of `ScrollModel`'s existing clamp-at-write (D-S1.5-2), not a bug and not something
-   flagged in the spec's own foot-gun table — worth a mention if anyone re-derives this test.
+1. **Types and errors** — `UnknownPresetError`, `EntryNotFoundError` added to `src/model/errors.ts`,
+   re-exported from `src/model/index.ts` and `src/api/index.ts`.
+2. **`time/presets.ts`** (new file) — five single-band presets moved unchanged, three new two-band
+   presets added, plus `ShippedPresetId`, `presets`, `PresetRef`, `resolvePreset`. `scale.ts` gained
+   `TimeScale.pxPerMs`.
+3. **`TimeScaleModel` zoom** — `TimeScaleZoom` type, `TimeScaleIntent.zoom`, live `preset`/`range`/
+   `zoom` setters, `#resolvePxPerMs` three-way branch. `preset` resolves through `resolvePreset`
+   (throws `UnknownPresetError`).
+4. **`Viewport.zoomTo`/`zoomBy`/`reveal`** — anchored zoom inside one `batch()`, never touches
+   `range.start` (D-F′); `reveal(target: Rect)` is nearest-edge on both axes.
+5. **`FrameLayout.rowTop(index)`** (§3.5) — one-line delegate to the row-height index's `topAt`,
+   guarded for the unconstructed case. Test: `rowTop(index)` matches `computeFrame`'s reported
+   `row.top` for the same index.
+6. **`view/gantt-shell.ts` / `src/api/gantt.ts` public surface** (§3.6) — the big remaining piece is
+   now done:
+   - `Viewport` gained `preset`/`range`/`zoom` get/set (delegating to `TimeScaleModel`) — it only had
+     `zoomTo`/`zoomBy`/`reveal`/`#scrollHandle`/`preset` (read-only) before this step; `preset`
+     gained a setter too, alongside new `range`/`zoom` accessors, so `GanttShell` has one thing
+     to delegate to for all four keys.
+   - `GanttShell` gained `preset`/`range`/`zoom`/`overscan` get/set (straight to `#viewport`),
+     `zoomTo`/`zoomBy` (straight to `#viewport`), and `reveal(entryId)`: finds the entry's row via
+     `dataset.entries.findIndex`, asks `#layout.rowTop(index)` for `y` and `#viewport.timeScale` for
+     `x`/`width` the same way `computeFrame` does, builds a `Rect`, hands it to `#viewport.reveal`.
+     Throws `EntryNotFoundError` for an unknown id.
+   - `GanttShellOptions`/`GanttOptions` gained `preset?`/`range?`/`zoom?`/`overscan?`. They build the
+     *private* default `TimeScaleModel`/`Viewport` only when `options.scale` is omitted (D-S1.9-9).
+     When a caller passes both `scale` and any of `preset`/`range`/`zoom`, the shared scale wins and
+     one dev-mode warning fires — gated on `(import.meta as {env?:{DEV?:boolean}}).env?.DEV` (no
+     `vite/client` types in `tsconfig.json`, so a plain `import.meta.env.DEV` access doesn't
+     typecheck; this cast is the workaround, not a new dev-warning convention — there was no prior
+     `console.warn`/dev-mode-warning code in `src/` to match against, since `plans/02` §7's
+     dev-warning list was previously aspirational only).
+   - `view/index.ts` and `api/index.ts` barrels updated: `TimeScaleZoom`, `PresetRef`,
+     `ShippedPresetId`, `Overscan`, the three multi-band preset constants, `presets`, `resolvePreset`
+     re-exported. (`layout/index.ts` already had `TimeScaleZoom`/`PresetRef`/`ShippedPresetId`/
+     `Overscan` from earlier steps.)
+   - Tests: `api/gantt.test.ts` — preset switch keeps bar DOM identity (I8, `[S1-A3]`), `overscan`
+     live, `reveal` moves the bound `ScrollModel` (see note below on why it's not
+     `element.scrollLeft`), unknown id throws `EntryNotFoundError`, shared `scale`+`scroll` +
+     `zoomBy` on one `Gantt` observed on a second `Gantt`'s live DOM (U7), and the scale+preset
+     dev-mode warning (asserted via a `console.warn` spy). `view/gantt-shell.test.ts` — matching
+     non-DOM-identity coverage: the four accessors round-trip through `#viewport`, `zoomTo`/`zoomBy`
+     move `scale.scale.pxPerMs`, `reveal` moves the bound `ScrollModel` and throws for an unknown id.
+   - **One test-writing trap hit and fixed, worth knowing**: `DEFAULT_OVERSCAN.horizontalPx` (in
+     `layout/frame.ts`) is `128`. A test that sets `overscan = { horizontalPx: 128 }` looks like a
+     normal "change the value" assertion but is actually a no-op — `sameOverscan` resolves both the
+     unset default and `128` to the same number, so the live setter's "notify iff changed" (D-S1.5-4)
+     correctly does nothing. Use a value that isn't `128` (e.g. `256`) when testing that the setter
+     *does* propagate.
 
 ## Remaining TODO (in the order the spec's §8 lays out, top to bottom)
 
-- [ ] **`layout/frame-layout.ts`** — `FrameLayout.rowTop(index): number` (§3.5). Trivial: delegate to
-  the existing private `RowHeightIndex`'s `topAt(index)` — something like
-  `rowTop(index: number): number { return this.#heights?.topAt(index) ?? 0; }` (guard needed since
-  `#heights` is `undefined` until `computeFrame` has run at least once — the doc comment in §3.5
-  says this is fine, `reveal` is the only caller and it only runs after construction). Extend
-  `frame-layout.test.ts` per §6: `rowTop(index)` matches `topAt(index)` for the same index a
-  `computeFrame` call would report.
-
-- [ ] **`view/gantt-shell.ts` / `api/gantt.ts`** — the big remaining piece, §3.6:
-  - `GanttShell`: `preset`/`range`/`zoom`/`overscan` get/set (delegate straight to `#viewport`),
-    `zoomTo`/`zoomBy`/`reveal` methods. `reveal(entryId)` needs to: find the entry via
-    `this.#options.dataset.entries.findIndex(e => e.id === entryId)` (throw `EntryNotFoundError` if
-    `-1`), ask `this.#layout.rowTop(index)` for `y`, ask `this.#viewport.timeScale` for `x`/`width`
-    the same way `computeFrame` does (`scale.xForInstant(entry.start)` /
-    `scale.xForInstant(entry.end) - x`), build a `Rect` with `height: this.#rowHeight`, and call
-    `this.#viewport.reveal(rect)`.
-  - `GanttShellOptions` / `GanttOptions` gain `preset?`, `range?`, `zoom?`, `overscan?` — **but only
-    to build the private default TimeScaleModel/Viewport** when `options.scale` is omitted
-    (D-S1.9-9). When a caller supplies **both** `scale` and any of `preset`/`range`/`zoom`, skip
-    building intent from the construction-time keys and emit one dev-mode warning (check how
-    existing dev-mode warnings are emitted elsewhere in the codebase — grep for
-    `console.warn`/`import.meta.env.DEV` — to match the existing style; `plans/02` §7 has the
-    canonical list this warning joins). `overscan` has no such ambiguity (`Viewport` is
-    never shared, D-S1.7-10) and can always apply directly.
-  - `Gantt`: same surface, delegating straight to `#shell`, plus `GanttOptions` gaining the four
-    keys (forwarded to `GanttShellOptions` the same way `gridWidth` already is).
-  - Update `view/index.ts` and `api/index.ts` barrels to export the new types
-    (`TimeScaleZoom`, `PresetRef`, `ShippedPresetId`, `presets`, `resolvePreset`, the three new
-    preset constants, `Overscan`) per §4's "Public surface" list.
-  - Tests: extend `api/gantt.test.ts` (`dom` project) per §6 — bar DOM identity (`item.id`) unchanged
-    across `gantt.preset = 'weekAndMonth'` (I8, `[S1-A3]`), `gantt.reveal(id)` moves
-    `scrollLeft`/`scrollTop` correctly, unknown id throws `EntryNotFoundError`, shared
-    `scale`/`scroll` + `zoomBy` on one Gantt observed on the other's live DOM (U7). Also check
-    whether `gantt-shell.test.ts` needs matching non-DOM-identity-focused coverage for the new
-    accessors — look at how `gridWidth` is tested there as the template.
-
 - [ ] **Harness review** — re-read `harness/main.ts` and `harness/scroll-sync.ts` against
-  `CLAUDE.md`'s harness rule now that `preset`/`zoom`/`reveal` exist on the public API. The rule:
-  `harness/` is reviewed on every commit whether or not it changed; anything hand-rolled there that
-  the library now computes is an API gap to record against S1.9 and fix in `src/`, not to quietly
-  tidy in the harness. (CLAUDE.md cites two past examples of what this catches: a hardcoded
-  `rowHeight: 32` restating a default, and a hand-built `TimeScaleModel` standing in for
-  `range: 'fitDataset'`.)
+  `CLAUDE.md`'s harness rule now that `preset`/`zoom`/`reveal`/`overscan` exist on the public API.
+  The rule: `harness/` is reviewed on every commit whether or not it changed; anything hand-rolled
+  there that the library now computes is an API gap to record against S1.9 and fix in `src/`, not to
+  quietly tidy in the harness. This has **not been done yet** for this step — do it before the docs
+  pass below, since a harness gap might change what those docs need to say. (CLAUDE.md cites two
+  past examples of what this catches: a hardcoded `rowHeight: 32` restating a default, and a
+  hand-built `TimeScaleModel` standing in for `range: 'fitDataset'`.)
 
 - [ ] **Spec doc edits landed with this step** (§7 of the README — these are edits to *other* repo
   docs, not to the S1.9 README itself, and per the checklist should land in the same PR):
@@ -108,39 +92,39 @@ full `pnpm verify` + `pnpm test:e2e` pre-push gate (it runs automatically on eve
     and D-F′, next to the existing `Viewport` paragraph.
   - `plans/02-public-api.md` §7 — move "unknown preset id" from the dev-mode-warning list into
     "Errors are typed and actionable" (`UnknownPresetError`); add the D-S1.9-9 `scale` +
-    constructor-`preset`/`range`/`zoom` case to the warning list.
+    constructor-`preset`/`range`/`zoom` case to the warning list (this step's actual warning text
+    lives in `src/view/gantt-shell.ts`'s constructor — match wording, don't invent new copy).
   - `plans/s1.7-windowed-frame/README.md` §9 and `plans/s1.8-pane-layout/README.md` §9 — tick the
     `reveal`/`overscan` carried-item rows as landed here.
   - `CONTEXT.md` — new glossary entries: **Range**, **Zoom**, **Anchored zoom**, **Preset reference**;
     edit **ViewPreset** ("one or more header bands") and **Reveal** (mark the x half landed).
   - `plans/temp_todo_for_s1-close.md` §5 — no edit needed per the spec, just noting it's superseded.
 
-- [ ] **`pnpm verify` green; `pnpm test:e2e` green** — should already be true after every commit
-  given the pre-push hook, but re-run once explicitly after the `view/`/`api/` work lands since
-  that's the step touching the most surface area.
+- [ ] **`pnpm verify` green; `pnpm test:e2e` green** — true as of the last push (both commits on this
+  branch went through the full pre-push gate), but re-run once explicitly after the harness-review
+  and doc-edit steps above in case either touches `src/` or `harness/`.
 
 - [ ] **e2e** — new `e2e/zoom.spec.ts` per §6: a wheel-zoom-equivalent `zoomBy` call against the live
   harness keeps the pointer's instant visually fixed; a preset switch redraws header bands with no
   flash/remount (no new element created for an existing bar). Look at `e2e/pane-resize.spec.ts` or
   `e2e/scroll-sync.spec.ts` for the harness-driving pattern (they already exercise the live harness
-  via Playwright).
+  via Playwright). **Not started.**
 
-- [ ] **Acceptance checklist** (§8 bottom) — U1–U7, `[S1-A3]`, `[S1-A5]` are mostly closed by the
-  test work above; do a final pass matching each bullet to the test that actually covers it before
-  checking it off, per the spec's own cross-references.
+- [ ] **Acceptance checklist** (§8 bottom) — U1–U7, `[S1-A3]`, `[S1-A5]`. Most of the unit/dom-level
+  coverage exists now (see "Done so far" above and the already-checked `time/`, `layout/viewport/`
+  boxes), but the checklist itself is still unticked pending the e2e spec above (U1–U3's e2e half)
+  and a final pass matching each bullet to the test that actually covers it, per the spec's own
+  cross-references. Don't tick U1–U3/`[S1-A3]` until `e2e/zoom.spec.ts` exists.
+
+### Review, Verify, and Fix Issues from 1.8 Review
+Confirm these findings before fixing them.
+- [ ] `plans/2026-08-25-s1.8-review.md`
 
 ## Things to double check before calling S1.9 done
 
-- `layout/index.ts` and `view/index.ts` barrels: I added `TimeScaleZoom`/`PresetRef`/`ShippedPresetId`
-  to `layout/index.ts` already; `view/index.ts` still needs the equivalent pass once `GanttShell`
-  actually uses them.
-- `api/index.ts` still only re-exports the five old single-band presets plus `instant` from
-  `time/index.js` (see the block starting `export { dayPreset, hourPreset, ... }`). It needs the
-  three new preset constants, `presets`, `resolvePreset`, `PresetRef`, `ShippedPresetId`,
-  `TimeScaleZoom`, and `Overscan` added — §4's "Public surface" list is the authoritative checklist.
-- Don't forget `Overscan` is already exported as a type from `layout/index.ts` — it just isn't
-  re-exported from `api/index.ts` yet (§4 flags this explicitly: "already public from `layout/`'s
-  barrel, not yet re-exported from `api/`").
 - `S1.9's own README §9` ("Deferred") lists what's explicitly *not* in scope — don't accidentally
   implement `reveal(id, {align: 'center'})`, `zoom: 'preset'` as a shipped default, or a
   snap-to-tick gesture. Those belong to S1.11/S4 per that table.
+- The public surface (§4) should now be fully landed — `api/index.ts` re-exports everything the
+  section lists. Worth a final diff against §4's list once the doc edits above are done, since
+  that's the authoritative checklist and nothing should be re-derived from memory against it.
