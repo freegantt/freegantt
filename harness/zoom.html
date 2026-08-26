@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>FreeGantt harness — S1.9 zoom &amp; presets</title>
+    <style>
+      body {
+        font-family: system-ui, sans-serif;
+        margin: 2rem;
+      }
+      #gantt {
+        --fg-row-height: 32px;
+        --fg-grid-pane-width: 220px;
+        border: 1px solid #ccc;
+        height: 70vh;
+      }
+      .fg-header {
+        height: 20px;
+        border-bottom: 1px solid #ddd;
+        background: #fafafa;
+      }
+      .fg-band {
+        height: 20px;
+      }
+      .fg-tick {
+        top: 0;
+        font-size: 10px;
+        color: #666;
+        padding-left: 2px;
+        white-space: nowrap;
+        border-left: 1px solid #eee;
+        height: 20px;
+        line-height: 20px;
+      }
+      .fg-row {
+        left: 0;
+        font-size: 11px;
+        line-height: var(--fg-row-height);
+        padding: 0 6px;
+        box-sizing: border-box;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        color: #333;
+      }
+      .fg-bar {
+        background: #4a7a58;
+        color: white;
+        font-size: 11px;
+        line-height: var(--fg-row-height);
+        padding: 0 6px;
+        box-sizing: border-box;
+        border-radius: 3px;
+        white-space: nowrap;
+        overflow: hidden;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>FreeGantt — S1.9 zoom &amp; presets</h1>
+    <p>
+      e2e fixture for S1.9's acceptance checks (plans/s1.9-presets-and-zoom/README.md §6, §9): exposes the
+      constructed <code>Gantt</code> on <code>window.__gantt</code> so a test can call the imperative
+      <code>zoomBy</code>/<code>preset</code> surface directly — no wheel/gesture controller exists yet (that
+      lands at S4), so this is the wheel-zoom-equivalent the spec asks for.
+    </p>
+    <div id="gantt"></div>
+    <script type="module" src="./zoom.ts"></script>
+  </body>
+</html>

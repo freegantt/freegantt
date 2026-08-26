@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { TimeScaleModel } from './time-scale-model.js';
 import { dayPreset, instant, MS } from '../../time/index.js';
-import { entryId } from '../../model/index.js';
+import { entryId, UnknownPresetError } from '../../model/index.js';
 import type { Entry } from '../../model/index.js';
 
 function entry(id: string, start: string, end: string): Entry {
@@ -275,6 +275,94 @@ describe('TimeScaleModel', () => {
       calls = 0;
       a.setPaneWidth(600);
       expect(calls).toBe(1);
+    });
+  });
+
+  describe('zoom (S1.9, D-S1.9-2)', () => {
+    it("'preset' ignores a measured pane width and uses the preset's own zoom", () => {
+      const model = new TimeScaleModel({ zoom: 'preset' });
+      model.bind({ timeZone: 'UTC', entries, paneWidth: 800 }, noop);
+
+      expect(model.scale.widthForDuration({ value: 1, unit: 'd' }, entries[0]!.start)).toBeCloseTo(
+        dayPreset.tickWidthPx,
+      );
+    });
+
+    it('{ pxPerMs } is read back exactly, ignoring both the pane width and the preset', () => {
+      const model = new TimeScaleModel({ zoom: { pxPerMs: 0.5 } });
+      model.bind({ timeZone: 'UTC', entries, paneWidth: 800 }, noop);
+
+      expect(model.zoom).toEqual({ pxPerMs: 0.5 });
+      expect(model.scale.widthForDuration({ value: 1, unit: 'ms' }, entries[0]!.start)).toBeCloseTo(0.5);
+    });
+
+    it('a zoom write notifies iff the resolved scale changed', () => {
+      const model = new TimeScaleModel();
+      let calls = 0;
+      model.bind({ timeZone: 'UTC', entries, paneWidth: 800 }, () => calls++);
+      calls = 0;
+
+      model.zoom = { pxPerMs: 0.5 };
+      expect(calls).toBe(1);
+
+      calls = 0;
+      model.zoom = { pxPerMs: 0.5 };
+      expect(calls).toBe(0);
+    });
+  });
+
+  describe('preset/range live setters (S1.9)', () => {
+    it('preset = notifies iff the resolved scale changed, and is a no-op at the current value', () => {
+      const model = new TimeScaleModel();
+      let calls = 0;
+      model.bind({ timeZone: 'UTC', entries, paneWidth: 0 }, () => calls++);
+      calls = 0;
+
+      model.preset = 'week';
+      expect(calls).toBe(1);
+      expect(model.preset.id).toBe('week');
+
+      calls = 0;
+      model.preset = 'week';
+      expect(calls).toBe(0);
+    });
+
+    it('preset = notifies even when pxPerMs is unaffected — a measured pane under fitViewport zoom', () => {
+      // Regression: fitViewport's pxPerMs = paneWidth / spanMs does not depend on the preset, so a
+      // preset switch that leaves range/timeZone/pxPerMs all unchanged must still be visible to the
+      // D-S1.5-4 equality check — otherwise a bound Gantt never re-renders its header bands (U1).
+      const model = new TimeScaleModel();
+      let calls = 0;
+      model.bind({ timeZone: 'UTC', entries, paneWidth: 700 }, () => calls++);
+      calls = 0;
+
+      model.preset = 'weekAndMonth';
+      expect(calls).toBe(1);
+      expect(model.preset.id).toBe('weekAndMonth');
+    });
+
+    it('preset = throws UnknownPresetError for an id outside the shipped set', () => {
+      const model = new TimeScaleModel();
+      expect(() => {
+        model.preset = 'fortnight' as never;
+      }).toThrow(UnknownPresetError);
+    });
+
+    it('range = notifies iff the resolved scale changed, and is a no-op at the current value', () => {
+      const pinned = { start: instant('2026-01-01T00:00:00Z'), end: instant('2026-01-08T00:00:00Z') };
+      const model = new TimeScaleModel({ range: pinned });
+      let calls = 0;
+      model.bind({ timeZone: 'UTC', entries, paneWidth: 700 }, () => calls++);
+      calls = 0;
+
+      const next = { start: instant('2026-02-01T00:00:00Z'), end: instant('2026-02-08T00:00:00Z') };
+      model.range = next;
+      expect(calls).toBe(1);
+      expect(model.range).toEqual(next);
+
+      calls = 0;
+      model.range = next;
+      expect(calls).toBe(0);
     });
   });
 

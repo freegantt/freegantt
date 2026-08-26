@@ -24,6 +24,13 @@ export class FrameLayout {
     return computeFrame(input, this.#heightsFor(input.entries.length, input.rowHeight));
   }
 
+  /** The row-height index's own `topAt`, exposed so `reveal` can ask for a row's position without a
+   * full layout pass. Available once `computeFrame` has run at least once — true for any Gantt that
+   * has completed construction, which is the only caller. */
+  rowTop(index: number): number {
+    return this.#heights?.topAt(index) ?? 0;
+  }
+
   #heightsFor(rowCount: number, rowHeight: number): RowHeightIndex {
     if (this.#heights && this.#rowCount === rowCount && this.#rowHeight === rowHeight) {
       return this.#heights;

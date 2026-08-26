@@ -6,7 +6,11 @@ export type { GanttShellOptions } from './gantt-shell.js';
 export { TimeScaleModel, ScrollModel } from '../layout/index.js';
 export type {
   TimeScaleIntent,
+  TimeScaleZoom,
   ViewPreset,
+  PresetRef,
+  ShippedPresetId,
+  Overscan,
   ScrollIntent,
   ScrollPosition,
   ScrollState,
