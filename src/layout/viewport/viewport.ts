@@ -4,13 +4,13 @@
 // measurement, #8) joins them. Viewport exists so `view/` never holds more than one.
 
 import { TimeScaleModel } from './time-scale-model.js';
-import type { ScaleBinding, ScaleBindingHandle } from './time-scale-model.js';
+import type { ScaleBinding, ScaleBindingHandle, TimeScaleZoom } from './time-scale-model.js';
 import { ScrollModel } from './scroll-model.js';
 import type { ScrollBindingHandle } from './scroll-model.js';
-import type { TimeScale, ViewPreset } from '../../time/index.js';
+import type { PresetRef, TimeScale, ViewPreset } from '../../time/index.js';
 import { BatchedNotifier } from './batched-notifier.js';
 import { FreeGanttError } from '../../model/index.js';
-import type { Dataset, Rect, Size } from '../../model/index.js';
+import type { Dataset, Rect, Size, TimeSpan } from '../../model/index.js';
 import { DEFAULT_OVERSCAN } from '../frame.js';
 import type { Overscan } from '../frame.js';
 
@@ -124,6 +124,30 @@ export class Viewport {
 
   get preset(): ViewPreset {
     return this.scale.preset;
+  }
+
+  /** Live — delegates straight to `TimeScaleModel.preset` (D-S1.9-9's "GanttShell delegates straight
+   *  to #viewport"). Resolved through `resolvePreset`; no-op, no notification, when unchanged. */
+  set preset(ref: PresetRef) {
+    this.scale.preset = ref;
+  }
+
+  get range(): 'fitDataset' | TimeSpan {
+    return this.scale.range;
+  }
+
+  /** Live — delegates straight to `TimeScaleModel.range`. */
+  set range(r: 'fitDataset' | TimeSpan) {
+    this.scale.range = r;
+  }
+
+  get zoom(): TimeScaleZoom {
+    return this.scale.zoom;
+  }
+
+  /** Live — delegates straight to `TimeScaleModel.zoom`. */
+  set zoom(z: TimeScaleZoom) {
+    this.scale.zoom = z;
   }
 
   get overscan(): Overscan {

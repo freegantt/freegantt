@@ -387,11 +387,11 @@ Guardrails and glossary first, then engine, then the seam, then the public edge.
 - [x] `Viewport.#scrollHandle` field; `zoomTo`, `zoomBy`, `reveal` per D-S1.9-5/6
 
 ### `layout/`
-- [ ] `FrameLayout.rowTop(index)` per §3.5
+- [x] `FrameLayout.rowTop(index)` per §3.5
 
 ### `view/` and `api/`
-- [ ] `GanttShell` — `preset`/`range`/`zoom`/`overscan` accessors, `zoomTo`/`zoomBy`/`reveal`; D-S1.9-9's dev-mode warning when `scale` and any of `preset`/`range`/`zoom` are both supplied
-- [ ] `Gantt` — same surface, delegating; `GanttOptions` gains the four keys
+- [x] `GanttShell` — `preset`/`range`/`zoom`/`overscan` accessors, `zoomTo`/`zoomBy`/`reveal`; D-S1.9-9's dev-mode warning when `scale` and any of `preset`/`range`/`zoom` are both supplied
+- [x] `Gantt` — same surface, delegating; `GanttOptions` gains the four keys
 
 ### Harness
 - [ ] Review `harness/main.ts` and `harness/scroll-sync.ts` against CLAUDE.md's harness rule now that `preset`/`zoom`/`reveal` exist; record any gap against S1.9 and fix it in `src/`
