@@ -18,6 +18,8 @@ export {
   UnsupportedUnitError,
   HostNotFoundError,
   InvalidInstantError,
+  UnknownPresetError,
+  EntryNotFoundError,
 } from '../model/index.js';
 
 // model/ is the type surface api/ re-exports (plans/01 §1: "Only api/ and model/ types are public").
