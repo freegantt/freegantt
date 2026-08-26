@@ -4,7 +4,15 @@ Framework-free TypeScript Gantt library, library-first. The spec is `plans/00`�
 
 ## Hard rules
 
-talk in ASD-STE100 Simplified Technical English
+talk in ASD-STE100 Simplified Technical English:
+
+One meaning per word: Every approved word has only one definition to stop confusion.
+Active voice: Writers use active sentences instead of passive ones (for example, "The mechanic removes the panel" instead of "The panel should be removed").
+Simple tenses: Use simple past, simple present, and simple future tenses.
+Short sentences: Keep sentences to 20 words for instructions and 25 words for descriptions.
+One instruction per sentence: Each step gets its own sentence or bullet point.
+
+Functions should do one thing and do it well and should be clear on what they do from the name.
 
 Name functions and classes in friendly easy to understand for humans and agents names. Stick to the domain model, if you're trained on Uncle Bob's (Robert C. Martin's) clean code follow his guidelines for naming things. Code should be self-documenting and easy to understand. Write the call site down and read it in english to verify it makes sense before deciding on a name. Not the signature — the invocation, with real arguments. Example of bad naming (#54, since renamed): a measurement wiring named after "size" alone — say its call aloud: "attach size to container." That makes no sense; the glossary term is pane size, so the name became `attachPaneSize`. See the naming skill when you need to come up with name.
 
