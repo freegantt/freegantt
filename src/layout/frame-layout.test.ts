@@ -75,4 +75,13 @@ describe('FrameLayout', () => {
     const layout = new FrameLayout();
     expect(layout.computeFrame(input())).toEqual(computeFrame(input()));
   });
+
+  it('rowTop(index) matches the row top computeFrame reports for the same index', () => {
+    const layout = new FrameLayout();
+    const frame = layout.computeFrame(input());
+
+    for (const [index, row] of frame.rows.entries()) {
+      expect(layout.rowTop(index)).toBe(row.top);
+    }
+  });
 });

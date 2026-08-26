@@ -92,6 +92,22 @@ describe('zone-aware date arithmetic', () => {
     );
   });
 
+  it('startOf/stepBy step "w" and "M" correctly across a DST transition (S1.9, [S1-A5])', () => {
+    // America/Chicago spring-forward: 2026-03-08. A week and a month boundary each straddle it, so
+    // stepping by either must land on the correct wall-clock day, not drift by the 1h DST gap.
+    const zone = 'America/Chicago';
+    const beforeTransition = instant('2026-03-05T12:00:00Z'); // Thursday, before the transition
+    const weekStart = startOf(zone, beforeTransition, 'w');
+    const nextWeek = stepBy(zone, weekStart, 'w', 1);
+    expect(toPlain(zone, nextWeek).hour).toBe(0);
+    expect(diffDays(zone, weekStart, nextWeek)).toBe(7);
+
+    const monthStart = startOf(zone, instant('2026-03-01T12:00:00Z'), 'M');
+    const nextMonth = stepBy(zone, monthStart, 'M', 1);
+    expect(toPlain(zone, monthStart)).toMatchObject({ year: 2026, month: 3, day: 1, hour: 0 });
+    expect(toPlain(zone, nextMonth)).toMatchObject({ year: 2026, month: 4, day: 1, hour: 0 });
+  });
+
   it('startOf/stepBy reject a unit outside the shared registry with UnsupportedUnitError', () => {
     const badUnit = 'q' as TimeUnit;
     expect(() => startOf(ZONE, instant('2026-01-01T00:00:00Z'), badUnit)).toThrow(UnsupportedUnitError);

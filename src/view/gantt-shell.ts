@@ -1,8 +1,8 @@
 // view/ — Gantt shell, the composition root that wires the grid pane, splitter, timeline pane and
 // viewport binding together (plans/01 §8.2-8.3, S1.8).
 
-import { FrameLayout, ScrollModel, TimeScaleModel, Viewport } from '../layout/index.js';
-import type { ViewportHandle } from '../layout/index.js';
+import { barSpan, FrameLayout, ScrollModel, TimeScaleModel, Viewport } from '../layout/index.js';
+import type { Overscan, PresetRef, TimeScaleZoom, ViewportHandle, ViewPreset } from '../layout/index.js';
 
 import { createDomBackend } from '../render/dom/index.js';
 import { readPixelProperty } from '../render/dom/pixel-property.js';
@@ -17,8 +17,8 @@ import type { ScrollAttachment } from './scroll-attachment.js';
 import { attachPaneSize } from './pane-size-attachment.js';
 import type { PaneSizeAttachment } from './pane-size-attachment.js';
 import type { RenderBackend } from '../render/backend.js';
-import { HostNotFoundError } from '../model/index.js';
-import type { Dataset, Size } from '../model/index.js';
+import { EntryNotFoundError, HostNotFoundError } from '../model/index.js';
+import type { Dataset, EntryId, Size, TimeSpan } from '../model/index.js';
 
 /** CSS custom property that owns row height (plans/02 §4, level 1 of the customization ladder) —
  * not a constructor option (#39). Read on construction and again whenever the pane-size attachment
@@ -46,6 +46,13 @@ export interface GanttShellOptions {
   scroll?: ScrollModel;
   /** Initial grid pane width in px (S1.8, D-S1.8-3). Default: `--fg-grid-pane-width`, fallback 160. */
   gridWidth?: number;
+  /** Build the private default `TimeScaleModel` only (D-S1.9-9) — a no-op, with a dev-mode warning,
+   * when `scale` is also supplied: the shared model already carries its own intent. */
+  preset?: PresetRef;
+  range?: 'fitDataset' | TimeSpan;
+  zoom?: TimeScaleZoom;
+  /** `Viewport` is never shared (D-S1.7-10), so this always applies to this shell's own viewport. */
+  overscan?: Overscan;
 }
 
 function resolveHost(host: HTMLElement | string): HTMLElement {
@@ -93,9 +100,25 @@ export class GanttShell {
     });
     this.#panes = this.#paneLayout.panes;
 
+    const hasOwnIntent =
+      options.preset !== undefined || options.range !== undefined || options.zoom !== undefined;
+    const isDev = (import.meta as { env?: { DEV?: boolean } }).env?.DEV ?? false;
+    if (options.scale && hasOwnIntent && isDev) {
+      console.warn(
+        "FreeGantt: GanttOptions.preset/range/zoom are ignored when 'scale' is also supplied. " +
+          'The shared TimeScaleModel already carries its own intent — set preset/range/zoom on it directly.',
+      );
+    }
     this.#viewport = new Viewport({
-      ...(options.scale ? { scale: options.scale } : {}),
+      scale:
+        options.scale ??
+        new TimeScaleModel({
+          ...(options.preset !== undefined ? { preset: options.preset } : {}),
+          ...(options.range !== undefined ? { range: options.range } : {}),
+          ...(options.zoom !== undefined ? { zoom: options.zoom } : {}),
+        }),
       ...(options.scroll ? { scroll: options.scroll } : {}),
+      ...(options.overscan !== undefined ? { overscan: options.overscan } : {}),
     });
 
     // Mount before binding (#22): the render target exists by the time the binding's own onChange
@@ -142,6 +165,58 @@ export class GanttShell {
    *  cancelable commit sequence a splitter drag runs — one write path, one place the veto lives. */
   set gridWidth(px: number) {
     this.#commitGridWidth(px);
+  }
+
+  get preset(): ViewPreset {
+    return this.#viewport.preset;
+  }
+
+  set preset(ref: PresetRef) {
+    this.#viewport.preset = ref;
+  }
+
+  get range(): 'fitDataset' | TimeSpan {
+    return this.#viewport.range;
+  }
+
+  set range(r: 'fitDataset' | TimeSpan) {
+    this.#viewport.range = r;
+  }
+
+  get zoom(): TimeScaleZoom {
+    return this.#viewport.zoom;
+  }
+
+  set zoom(z: TimeScaleZoom) {
+    this.#viewport.zoom = z;
+  }
+
+  get overscan(): Overscan {
+    return this.#viewport.overscan;
+  }
+
+  set overscan(o: Overscan) {
+    this.#viewport.overscan = o;
+  }
+
+  zoomTo(pxPerMs: number, anchorX?: number): void {
+    this.#viewport.zoomTo(pxPerMs, anchorX);
+  }
+
+  zoomBy(factor: number, anchorX?: number): void {
+    this.#viewport.zoomBy(factor, anchorX);
+  }
+
+  /** Finds the entry's row via the bound dataset, asks `FrameLayout` for its top and `barSpan` for
+   * its x/width off the bound `TimeScale` — the same formula `computeFrame` builds bars from, so the
+   * two can never drift apart — and hands the resulting `Rect` to `Viewport.reveal` (S1.9, D-S1.9-6).
+   * Throws `EntryNotFoundError` for an id the dataset has no entry for. */
+  reveal(entryId: EntryId): void {
+    const index = this.#options.dataset.entries.findIndex((e) => e.id === entryId);
+    if (index === -1) throw new EntryNotFoundError(entryId);
+    const entry = this.#options.dataset.entries[index]!;
+    const { x, width } = barSpan(entry, this.#viewport.timeScale);
+    this.#viewport.reveal({ x, y: this.#layout.rowTop(index), width, height: this.#rowHeight });
   }
 
   on<K extends keyof GanttEventMap>(name: K, handler: (payload: GanttEventMap[K]) => void | false): void {
