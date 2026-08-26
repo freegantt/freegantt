@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { GanttShell } from './gantt-shell.js';
 import { ScrollModel, TimeScaleModel } from '../layout/index.js';
-import { entryId, HostNotFoundError } from '../model/index.js';
+import { entryId, EntryNotFoundError, HostNotFoundError } from '../model/index.js';
 import type { Entry, Instant } from '../model/index.js';
 
 // happy-dom does no layout, so a real ResizeObserver never fires (verified against pane-size-
@@ -390,6 +390,70 @@ describe('pane-size attachment (S1.7b, #8)', () => {
       // detach() unhooked the observer: a later fire reaches neither model.
       expect(oneDayWidth()).toBe(widthAfterDestroy);
       expect(scroll.state.max.y).toBe(maxYAfterDestroy);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+});
+
+describe('preset/range/zoom/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () => {
+  it('preset/range/zoom/overscan accessors delegate straight to the bound Viewport', () => {
+    const host = document.createElement('div');
+    const shell = new GanttShell({ host, dataset: { entries, timeZone } });
+
+    expect(shell.zoom).toBe('fitViewport');
+    shell.zoom = { pxPerMs: 2 };
+    expect(shell.zoom).toEqual({ pxPerMs: 2 });
+
+    expect(shell.range).toBe('fitDataset');
+    shell.range = { start: rangeStart, end: rangeEnd };
+    expect(shell.range).toEqual({ start: rangeStart, end: rangeEnd });
+
+    shell.preset = 'week';
+    expect(shell.preset.id).toBe('week');
+
+    expect(shell.overscan).toEqual({});
+    // 256, not 128: DEFAULT_OVERSCAN.horizontalPx is already 128 (frame.ts), so 128 would resolve
+    // to the same value and the live setter's "notify iff changed" (D-S1.5-4) would treat it as a
+    // no-op — not a bug, but not what this assertion means to prove.
+    shell.overscan = { horizontalPx: 256 };
+    expect(shell.overscan).toEqual({ horizontalPx: 256 });
+
+    shell.destroy();
+  });
+
+  it('zoomTo/zoomBy delegate to the bound Viewport and move pxPerMs', () => {
+    const host = document.createElement('div');
+    const scale = new TimeScaleModel({ range: { start: rangeStart, end: rangeEnd }, zoom: { pxPerMs: 1 } });
+    const shell = new GanttShell({ host, dataset: { entries, timeZone }, scale });
+
+    shell.zoomBy(2);
+    expect(scale.scale.pxPerMs).toBe(2);
+
+    shell.zoomTo(0.5);
+    expect(scale.scale.pxPerMs).toBe(0.5);
+
+    shell.destroy();
+  });
+
+  it('reveal(entryId) pans the bound ScrollModel to bring an off-screen row into view; unknown id throws', () => {
+    FakeResizeObserver.instances = [];
+    vi.stubGlobal('ResizeObserver', FakeResizeObserver);
+
+    try {
+      const host = document.createElement('div');
+      const scroll = new ScrollModel();
+      const rowEntries = tallEntries(50);
+      const shell = new GanttShell({ host, dataset: { entries: rowEntries, timeZone }, scroll });
+      FakeResizeObserver.instances[0]!.fire({ width: 500, height: 100 });
+
+      expect(scroll.state.position.y).toBe(0);
+      shell.reveal(entryId('e40'));
+      expect(scroll.state.position.y).toBeGreaterThan(0);
+
+      expect(() => shell.reveal(entryId('does-not-exist'))).toThrow(EntryNotFoundError);
+
+      shell.destroy();
     } finally {
       vi.unstubAllGlobals();
     }
