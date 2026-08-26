@@ -56,6 +56,7 @@ The single table a reviewer (human or agent) checks against. Every rule from `pl
 | No persisting derived data | dependency-cruiser: `data/serialization` may not import `layout/`; `freegantt/no-derived-in-json` bans `Row`/`Item`/`GeometryFrame` type references in `src/data/serialization/**` | `boundaries`, `lint` | `AUTO` |
 | One `sync(frame)` per animation frame | `freegantt/raf-single-owner` — `requestAnimationFrame` allowed in exactly one file; test asserts N mutations in one tick produce one `sync` | `lint`, `test:dom` | `PLANNED (S2)` |
 | Slice gates (`plans/00` §4) pass before next slice | `scripts/slice-gate.mjs <n>` runs the acceptance-linked jobs for slice *n* and prints a checklist; a `gate` CI job runs it for the slice named in `.slice` | `gate` | `AUTO-PARTIAL` (the "harness shows X" items stay human) |
+| Hot path / structure inline-style split (`01` §3, S1.10 D-S1.10-6) | `freegantt/no-inline-style-outside-geometry` (`02` §3.11) — bans `node.style.<prop> = …` for `prop` outside `{ transform, width, height }`, scoped to `src/render/**` + `src/view/**`; structure moves to `view/styles.ts`'s base stylesheet instead | `lint` | `AUTO` |
 
 ---
 

@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { computeFrame } from './frame.js';
 import { PrefixSumHeightIndex } from './row-height-index.js';
 import { sampleEntries } from '../../fixtures/sample-project.js';
-import { createTimeScale, dayPreset, instant } from '../time/index.js';
+import { createTimeScale, dayPreset, instant, formatDate, formatEndInclusive } from '../time/index.js';
 import { entryId } from '../model/index.js';
 import type { Entry } from '../model/index.js';
 
@@ -25,6 +25,36 @@ describe('computeFrame', () => {
     expect(frame.bars).toHaveLength(sampleEntries.length);
     expect(frame.rows[0]?.top).toBe(0);
     expect(frame.rows[1]?.top).toBe(32);
+  });
+
+  it('carries the total dataset row count, not the windowed one (D-S1.10-5/7)', () => {
+    const frame = computeFrame({
+      entries: sampleEntries,
+      scale,
+      preset,
+      visible: { x: 0, y: 0, width: 0, height: 64 }, // windows to two rows
+      overscan: { verticalRows: 0, horizontalPx: 0 },
+      rowHeight: 32,
+      revision: 0,
+    });
+    expect(frame.rows.length).toBeLessThan(sampleEntries.length);
+    expect(frame.rowCount).toBe(sampleEntries.length);
+  });
+
+  it("composes FrameBar.a11yLabel from the entry's name and formatted span (D-S1.10-5)", () => {
+    const frame = computeFrame({
+      entries: sampleEntries,
+      scale,
+      preset,
+      visible,
+      rowHeight: 32,
+      revision: 0,
+    });
+    const entry = sampleEntries[1]!; // Stakeholder interviews
+    const bar = frame.bars.find((b) => b.entryId === entry.id);
+    expect(bar?.a11yLabel).toBe(
+      `${entry.name}, ${formatDate(scale.timeZone, entry.start)} – ${formatEndInclusive(scale.timeZone, entry.end)}`,
+    );
   });
 
   it('produces deterministic Item.id across repeated passes (I8)', () => {

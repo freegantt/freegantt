@@ -47,9 +47,15 @@ export class PaneLayout {
   constructor(options: PaneLayoutOptions) {
     this.#host = options.host;
     this.#host.replaceChildren();
-    // D-S1.8-1: the host itself is never the scroller — no overflow, no scroll of its own.
-    this.#host.style.display = 'flex';
-    this.#host.style.overflow = 'hidden';
+    // D-S1.8-1: the host itself is never the scroller — no overflow, no scroll of its own. `fg-host`
+    // is a 13th class beyond D-S1.10-1's shipped twelve — needed because the host's own display/
+    // overflow are structural too, and nothing else identifies it for a stylesheet rule to target.
+    this.#host.classList.add('fg-host');
+    // S1.10, D-S1.10-5: the host is the one honest tab stop this step defines (no roving tabindex
+    // yet — that's S4's, once a keyboard controller exists to move it). `aria-label` is live
+    // (GanttShell.a11yLabel) and set separately, not here.
+    this.#host.setAttribute('role', 'group');
+    this.#host.setAttribute('tabindex', '0');
     this.#minGridWidth = options.minGridWidth ?? 0;
 
     const headerHeight = readPixelProperty(this.#host, HEADER_HEIGHT_PROPERTY, HEADER_HEIGHT_POLICY);
@@ -58,24 +64,20 @@ export class PaneLayout {
       options.gridWidth ?? readPixelProperty(this.#host, GRID_PANE_WIDTH_PROPERTY, GRID_PANE_WIDTH_POLICY);
     this.#gridWidth = Math.max(this.#minGridWidth, initialGridWidth);
 
+    // D-S1.10-6: display/flexDirection/flexShrink/overflow/position/flex/minWidth/cursor are all
+    // structural — the base stylesheet's class rules own them now (`view/styles.ts`). Only the live
+    // numbers (width/height) stay inline, which is what `freegantt/no-inline-style-outside-geometry`
+    // enforces.
     this.#gridPane = document.createElement('div');
     this.#gridPane.className = 'fg-grid-pane';
-    this.#gridPane.style.display = 'flex';
-    this.#gridPane.style.flexDirection = 'column';
-    this.#gridPane.style.flexShrink = '0';
-    this.#gridPane.style.overflow = 'hidden';
     this.#gridPane.style.width = `${this.#gridWidth}px`;
 
     const spacer = document.createElement('div');
     spacer.className = 'fg-grid-spacer';
-    spacer.style.flexShrink = '0';
     spacer.style.height = `${headerHeight}px`;
 
     const rowClip = document.createElement('div');
     rowClip.className = 'fg-rows-clip';
-    rowClip.style.position = 'relative';
-    rowClip.style.flex = '1 1 auto';
-    rowClip.style.overflow = 'hidden';
 
     // render/dom's sync() moves this element by `translateY(-visible.y)` every frame (D-S1.8-1).
     // It must NOT also be the overflow:hidden clip boundary: transforming an element moves its own
@@ -84,25 +86,16 @@ export class PaneLayout {
     // never transformed) owns the clip; `rowLayer` (below) owns the transform.
     const rowLayer = document.createElement('div');
     rowLayer.className = 'fg-rows';
-    rowLayer.style.position = 'relative';
-    rowLayer.style.height = '100%';
 
     rowClip.append(rowLayer);
     this.#gridPane.append(spacer, rowClip);
 
     const splitter = document.createElement('div');
     splitter.className = 'fg-splitter';
-    splitter.style.flexShrink = '0';
     splitter.style.width = `${splitterWidth}px`;
-    splitter.style.cursor = 'col-resize';
 
     const timelinePane = document.createElement('div');
     timelinePane.className = 'fg-timeline-pane';
-    timelinePane.style.position = 'relative';
-    timelinePane.style.flex = '1 1 auto';
-    timelinePane.style.minWidth = '0';
-    // The single native scroller (D-D, D-S1.8-1).
-    timelinePane.style.overflow = 'auto';
 
     this.#host.append(this.#gridPane, splitter, timelinePane);
 

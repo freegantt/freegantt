@@ -16,9 +16,16 @@ import { attachScroll } from './scroll-attachment.js';
 import type { ScrollAttachment } from './scroll-attachment.js';
 import { attachPaneSize } from './pane-size-attachment.js';
 import type { PaneSizeAttachment } from './pane-size-attachment.js';
+import { ensureBaseStyles } from './styles.js';
 import type { RenderBackend } from '../render/backend.js';
 import { EntryNotFoundError, HostNotFoundError } from '../model/index.js';
 import type { Dataset, EntryId, Size, TimeSpan } from '../model/index.js';
+
+/** S1.10, D-S1.10-4: theming's only preset axis for this step — `'auto'` follows
+ * `prefers-color-scheme` (no `data-fg-theme` attribute written), `'light'`/`'dark'` pin it. */
+export type Theme = 'auto' | 'light' | 'dark';
+const DEFAULT_THEME: Theme = 'auto';
+const DEFAULT_A11Y_LABEL = 'Gantt';
 
 /** CSS custom property that owns row height (plans/02 §4, level 1 of the customization ladder) —
  * not a constructor option (#39). Read on construction and again whenever the pane-size attachment
@@ -53,6 +60,10 @@ export interface GanttShellOptions {
   zoom?: TimeScaleZoom;
   /** `Viewport` is never shared (D-S1.7-10), so this always applies to this shell's own viewport. */
   overscan?: Overscan;
+  /** Live (S1.10, D-S1.10-4). Default `'auto'`: follows `prefers-color-scheme`. */
+  theme?: Theme;
+  /** Live (S1.10, D-S1.10-4). Default `'Gantt'`; sets `aria-label` on the host. */
+  a11yLabel?: string;
 }
 
 function resolveHost(host: HTMLElement | string): HTMLElement {
@@ -90,10 +101,15 @@ export class GanttShell {
    * D-S1.5-9). No gutter added (S1.8, D-S1.8-2): the grid pane's own width is the gutter now, and the
    * timeline pane's content is `contentWidth` wide, full stop. */
   #contentSize = { width: 0, height: 0 };
+  #theme: Theme = DEFAULT_THEME;
+  #a11yLabel: string = DEFAULT_A11Y_LABEL;
 
   constructor(options: GanttShellOptions) {
     this.#options = options;
     this.#host = resolveHost(options.host);
+    // S1.10, D-S1.10-8: must exist before PaneLayout builds the classed elements the stylesheet
+    // targets, or there's a one-frame flash of unstyled content.
+    ensureBaseStyles(this.#host.ownerDocument);
     this.#paneLayout = new PaneLayout({
       host: this.#host,
       ...(options.gridWidth !== undefined ? { gridWidth: options.gridWidth } : {}),
@@ -155,6 +171,38 @@ export class GanttShell {
     });
     this.#wiring = false;
     this.render();
+
+    if (options.theme !== undefined) this.theme = options.theme;
+    else this.#applyTheme();
+    this.a11yLabel = options.a11yLabel ?? DEFAULT_A11Y_LABEL;
+  }
+
+  get theme(): Theme {
+    return this.#theme;
+  }
+
+  /** Live (S1.10, D-S1.10-4): `'auto'` writes no attribute, letting `prefers-color-scheme` decide;
+   *  `'light'`/`'dark'` pin `data-fg-theme`, which always wins over the media query on selector
+   *  specificity + being attribute-scoped. */
+  set theme(value: Theme) {
+    this.#theme = value;
+    this.#applyTheme();
+  }
+
+  #applyTheme(): void {
+    if (this.#theme === 'auto') this.#host.removeAttribute('data-fg-theme');
+    else this.#host.setAttribute('data-fg-theme', this.#theme);
+  }
+
+  get a11yLabel(): string {
+    return this.#a11yLabel;
+  }
+
+  /** Live (S1.10, D-S1.10-4/5): sets `aria-label` on the host — the one honest tab stop this step
+   *  defines (`view/pane-layout.ts`'s `role="group"`/`tabindex="0"`). */
+  set a11yLabel(value: string) {
+    this.#a11yLabel = value;
+    this.#host.setAttribute('aria-label', value);
   }
 
   get gridWidth(): number {

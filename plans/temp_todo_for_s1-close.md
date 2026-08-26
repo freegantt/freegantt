@@ -137,6 +137,8 @@ Spec edits: issue #1 §2 (strike D-F, record D-F′), `plans/02` §7 (unknown pr
 
 ## 6. S1.10 — theming tokens, parts vocabulary, a11y foundation
 
+**Superseded.** This phase list is superseded by [`plans/s1.10-theming-and-a11y/README.md`](s1.10-theming-and-a11y/README.md), the settled spec — its §2 decisions (most notably D-S1.10-5, which ships `group`/`listitem`/`img` roles instead of the `grid`/`row`/`rowheader`/`gridcell` pattern this section's Phase 5 still names) supersede everything below. Kept only as a record of the phase this step was planned from.
+
 **Branch:** `s1.10-theming-and-a11y`
 
 ### Phase 0 — `plans/s1.10-theming-and-a11y/README.md`
