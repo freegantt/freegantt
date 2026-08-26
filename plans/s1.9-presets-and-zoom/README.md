@@ -383,7 +383,7 @@ Guardrails and glossary first, then engine, then the seam, then the public edge.
 - [x] Confirm `startOf`/`stepBy` DST correctness for `'M'`/`'w'` with a test per §6 (code likely already correct — `zone.ts`'s `UNITS` table; this is a test gap, not an implementation gap)
 
 ### `layout/viewport/`
-- [ ] `TimeScaleIntent.zoom`, `TimeScaleZoom`; live `preset`/`range`/`zoom` setters on `TimeScaleModel`; `#resolvePxPerMs` per D-S1.9-2
+- [x] `TimeScaleIntent.zoom`, `TimeScaleZoom`; live `preset`/`range`/`zoom` setters on `TimeScaleModel`; `#resolvePxPerMs` per D-S1.9-2
 - [ ] `Viewport.#scrollHandle` field; `zoomTo`, `zoomBy`, `reveal` per D-S1.9-5/6
 
 ### `layout/`
