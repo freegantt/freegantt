@@ -22,7 +22,12 @@ export type {
 // ItemId/RowId rather than a bare string — render already receives both via GeometryFrame (#35).
 export type { ItemId, RowId } from '../model/index.js';
 export { TimeScaleModel } from './viewport/time-scale-model.js';
-export type { TimeScaleIntent, ScaleBinding, ScaleBindingHandle } from './viewport/time-scale-model.js';
+export type {
+  TimeScaleIntent,
+  TimeScaleZoom,
+  ScaleBinding,
+  ScaleBindingHandle,
+} from './viewport/time-scale-model.js';
 export { ScrollModel } from './viewport/scroll-model.js';
 export type {
   ScrollIntent,
@@ -33,6 +38,14 @@ export type {
 } from './viewport/scroll-model.js';
 export { PrefixSumHeightIndex } from './row-height-index.js';
 export type { RowHeightIndex } from './row-height-index.js';
-export type { TimeScale, ViewPreset, ViewPresetHeader, Tick, HeaderFormat } from '../time/index.js';
+export type {
+  TimeScale,
+  ViewPreset,
+  ViewPresetHeader,
+  Tick,
+  HeaderFormat,
+  PresetRef,
+  ShippedPresetId,
+} from '../time/index.js';
 export { Viewport } from './viewport/viewport.js';
 export type { ViewportOptions, ViewportHandle } from './viewport/viewport.js';
