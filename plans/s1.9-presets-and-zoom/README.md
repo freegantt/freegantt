@@ -409,6 +409,8 @@ Guardrails and glossary first, then engine, then the seam, then the public edge.
 - [ ] **`[S1-A3]`** — one notification per zoom; bar DOM identity stable across a preset switch (`viewport.test.ts`, `api/gantt.test.ts`)
 - [ ] **`[S1-A5]`** — DST-correct axis headers, two-band presets included (`time/zone.test.ts`)
 
+### Review, Verify, and Fix Issues from 1.8 Review
+- [ ] plans/2026-08-25-s1.8-review.md
 ---
 
 ## 9. Deferred, with the caller that will bring it back
