@@ -1,7 +1,7 @@
 // view/ — Gantt shell, the composition root that wires the grid pane, splitter, timeline pane and
 // viewport binding together (plans/01 §8.2-8.3, S1.8).
 
-import { FrameLayout, ScrollModel, TimeScaleModel, Viewport } from '../layout/index.js';
+import { barSpan, FrameLayout, ScrollModel, TimeScaleModel, Viewport } from '../layout/index.js';
 import type { Overscan, PresetRef, TimeScaleZoom, ViewportHandle, ViewPreset } from '../layout/index.js';
 
 import { createDomBackend } from '../render/dom/index.js';
@@ -207,17 +207,15 @@ export class GanttShell {
     this.#viewport.zoomBy(factor, anchorX);
   }
 
-  /** Finds the entry's row via the bound dataset, asks `FrameLayout` for its top and the bound
-   * `TimeScale` for its x/width the same way `computeFrame` does, and hands the resulting `Rect` to
-   * `Viewport.reveal` (S1.9, D-S1.9-6). Throws `EntryNotFoundError` for an id the dataset has no
-   * entry for. */
+  /** Finds the entry's row via the bound dataset, asks `FrameLayout` for its top and `barSpan` for
+   * its x/width off the bound `TimeScale` — the same formula `computeFrame` builds bars from, so the
+   * two can never drift apart — and hands the resulting `Rect` to `Viewport.reveal` (S1.9, D-S1.9-6).
+   * Throws `EntryNotFoundError` for an id the dataset has no entry for. */
   reveal(entryId: EntryId): void {
     const index = this.#options.dataset.entries.findIndex((e) => e.id === entryId);
     if (index === -1) throw new EntryNotFoundError(entryId);
     const entry = this.#options.dataset.entries[index]!;
-    const scale = this.#viewport.timeScale;
-    const x = scale.xForInstant(entry.start);
-    const width = scale.xForInstant(entry.end) - x;
+    const { x, width } = barSpan(entry, this.#viewport.timeScale);
     this.#viewport.reveal({ x, y: this.#layout.rowTop(index), width, height: this.#rowHeight });
   }
 
