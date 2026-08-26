@@ -241,6 +241,38 @@ describe('Gantt preset/range/zoom/overscan/zoomTo/zoomBy/reveal (S1.9)', () => {
   });
 });
 
+describe('Gantt theme and a11yLabel (S1.10)', () => {
+  it('theme setter flips data-fg-theme on the host live; auto removes it', () => {
+    const host = document.createElement('div');
+    const gantt = new Gantt({ host, dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }) });
+
+    expect(host.getAttribute('data-fg-theme')).toBeNull();
+
+    gantt.theme = 'dark';
+    expect(host.getAttribute('data-fg-theme')).toBe('dark');
+
+    gantt.theme = 'light';
+    expect(host.getAttribute('data-fg-theme')).toBe('light');
+
+    gantt.theme = 'auto';
+    expect(host.getAttribute('data-fg-theme')).toBeNull();
+
+    gantt.destroy();
+  });
+
+  it('a11yLabel setter updates aria-label on the host live', () => {
+    const host = document.createElement('div');
+    const gantt = new Gantt({ host, dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }) });
+
+    expect(host.getAttribute('aria-label')).toBe('Gantt');
+
+    gantt.a11yLabel = 'Project plan';
+    expect(host.getAttribute('aria-label')).toBe('Project plan');
+
+    gantt.destroy();
+  });
+});
+
 describe('Gantt gridWidth and events (S1.8, plans/02 §6)', () => {
   it('beforeGridWidthChange returning false vetoes the change: gridWidth stays put', () => {
     const host = document.createElement('div');
