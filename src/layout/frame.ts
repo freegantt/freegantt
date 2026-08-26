@@ -6,6 +6,15 @@ import type { TimeScale, ViewPreset } from '../time/index.js';
 import { PrefixSumHeightIndex } from './row-height-index.js';
 import type { RowHeightIndex } from './row-height-index.js';
 
+/** An entry's horizontal extent in content pixels, at the bound `TimeScale` (S1.9). The one formula
+ * both `computeFrame` and `GanttShell.reveal` need — extracted so the two can never drift apart
+ * (they briefly did: `reveal` had its own copy missing the zero-duration/inverted-entry clamp). */
+export function barSpan(entry: Pick<Entry, 'start' | 'end'>, scale: TimeScale): { x: number; width: number } {
+  const x = scale.xForInstant(entry.start);
+  const width = Math.max(0, scale.xForInstant(entry.end) - x);
+  return { x, width };
+}
+
 export interface BarFlags {
   hasConflict?: boolean;
   inCycle?: boolean;
@@ -183,8 +192,7 @@ export function computeFrame(
     const id = rowId(`row:${entry.id}`);
     rows.push({ id, index, top, height: rowHeight, laneCount: 1, label: entry.name });
 
-    const x = scale.xForInstant(entry.start);
-    const width = Math.max(0, scale.xForInstant(entry.end) - x);
+    const { x, width } = barSpan(entry, scale);
     if (!intersectsHorizontally(x, width)) continue;
     bars.push({
       id: itemId(entry.id),
