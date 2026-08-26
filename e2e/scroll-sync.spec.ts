@@ -6,7 +6,7 @@ import { test, expect } from '@playwright/test';
 // ScrollModel: #tall has every fixture entry, #short has the first 20 (fewer rows -> a smaller max).
 //
 // The timeline pane is the native scroller (S1.8, D-D/D-S1.8-1) — `#tall`/`#short` themselves no
-// longer scroll, so every read/write below targets each host's `.fg-timeline-pane` child.
+// longer scroll, so every read/write below targets each container's `.fg-timeline-pane` child.
 
 async function scrollTops(page: import('@playwright/test').Page) {
   return page.evaluate(() => ({

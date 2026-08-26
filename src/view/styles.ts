@@ -62,7 +62,7 @@ const BASE_STYLESHEET = `
   }
 }
 
-.fg-host { display: flex; overflow: hidden; }
+.fg-container { display: flex; overflow: hidden; }
 .fg-grid-pane { display: flex; flex-direction: column; flex-shrink: 0; overflow: hidden; background: var(--fg-pane-bg); }
 .fg-grid-spacer { flex-shrink: 0; }
 .fg-rows-clip { position: relative; flex: 1 1 auto; overflow: hidden; }

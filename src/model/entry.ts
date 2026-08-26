@@ -3,7 +3,7 @@
 import type { EntryId } from './ids.js';
 import type { Instant, InstantInput, TimeSpan, TimeSpanInput } from './time.js';
 
-/** Open classification — see plans/01 §2.5. Shipped kinds ship; hosts add their own. */
+/** Open classification — see plans/01 §2.5. Shipped kinds ship; consumers add their own. */
 export type EntryKind = 'span' | 'group' | 'milestone' | (string & {});
 
 export interface Entry<TMeta = unknown> {
@@ -19,14 +19,14 @@ export interface Entry<TMeta = unknown> {
   progress?: number;
   /** Interrupted work — renders as multiple bars on one row. */
   segments?: readonly TimeSpan[];
-  /** Host-owned, typed via generic. */
+  /** Consumer-owned, typed via generic. */
   meta?: TMeta;
 }
 
 /**
- * What a host writes; `Entry` is what the library stores. The two differ only in how loose the input
+ * What a consumer writes; `Entry` is what the library stores. The two differ only in how loose the input
  * may be: ids are plain strings (the `EntryId` brand is applied on the way in) and dates are any
- * `InstantInput`. An `Entry` is itself a valid `EntryInput`, so a host that already holds branded
+ * `InstantInput`. An `Entry` is itself a valid `EntryInput`, so a consumer that already holds branded
  * values passes them through unchanged.
  *
  * `Dataset` reads this into `Entry` once, at construction, in the Dataset's own zone — see
@@ -45,6 +45,6 @@ export interface EntryInput<TMeta = unknown> {
   progress?: number;
   /** Interrupted work — renders as multiple bars on one row. */
   segments?: readonly TimeSpanInput[];
-  /** Host-owned, typed via generic. */
+  /** Consumer-owned, typed via generic. */
   meta?: TMeta;
 }

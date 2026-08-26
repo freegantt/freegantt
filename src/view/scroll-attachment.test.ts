@@ -5,7 +5,7 @@ import { entryId } from '../model/index.js';
 import type { Dataset, Entry, Instant } from '../model/index.js';
 
 // view/ has no import edge to time/ (plans/01 §1) — instant() lives there. Date.parse on a
-// Z-offset string is deterministic regardless of the host machine's zone, unlike `new Date(str)`
+// Z-offset string is deterministic regardless of the local machine's zone, unlike `new Date(str)`
 // on a zoneless string (#27), so this is not the thing I10 exists to ban.
 function instant(iso: string): Instant {
   return Date.parse(iso) as Instant;

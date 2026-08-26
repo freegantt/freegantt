@@ -5,11 +5,11 @@
 // `scroll-sync.ts` exposing shared models for e2e cases happy-dom cannot express.
 
 import { Gantt, Dataset } from '../src/api/index.js';
-import { sampleEntryInputs } from '../fixtures/sample-project.js';
+import { sampleEntryInputs } from '../fixtures/sample-dataset.js';
 
 const dataset = new Dataset({ entries: sampleEntryInputs, timeZone: 'UTC' });
 
-const gantt = new Gantt({ host: '#gantt', dataset });
+const gantt = new Gantt({ container: '#gantt', dataset });
 
 declare global {
   interface Window {

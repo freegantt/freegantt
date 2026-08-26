@@ -10,7 +10,7 @@ describe('instant()', () => {
     expect(instant('2026-09-01T00:00:00+02:00')).toBe(Date.parse('2026-09-01T00:00:00+02:00'));
   });
 
-  it('rejects a zoneless plain time regardless of the host machine zone', () => {
+  it('rejects a zoneless plain time regardless of the local machine zone', () => {
     // Not a snapshot of the resolved value (that depends on TZ by definition) — asserting the throw
     // itself, which must hold under any TZ, is the point of this test (see #27).
     expect(() => instant('2026-09-01T00:00:00')).toThrow(RangeError);

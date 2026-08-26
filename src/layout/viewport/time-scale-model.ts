@@ -42,7 +42,7 @@ export interface TimeScaleIntent {
  * inputs behind its back; re-measurement goes through the returned handle's `setPaneWidth` instead. */
 export type ScaleBinding = Dataset & {
   /** Measured width (px) of the pane the Gantt renders its timeline into; `0` when unmeasured
-   * (detached host, `display:none`, pre-paint). Unmeasured is not degenerate — see `pxPerMsForPreset`. */
+   * (detached container, `display:none`, pre-paint). Unmeasured is not degenerate — see `pxPerMsForPreset`. */
   readonly paneWidth: number;
 };
 

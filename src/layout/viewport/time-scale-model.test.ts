@@ -78,7 +78,7 @@ describe('TimeScaleModel', () => {
     expect(model.scale.xForInstant(range.end)).toBeCloseTo(700);
   });
 
-  it("falls back to the preset's own zoom when the host is unmeasured, not to a degenerate scale", () => {
+  it("falls back to the preset's own zoom when the container is unmeasured, not to a degenerate scale", () => {
     const model = new TimeScaleModel();
     model.bind({ timeZone: 'UTC', entries, paneWidth: 0 }, noop);
 

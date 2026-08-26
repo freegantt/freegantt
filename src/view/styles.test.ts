@@ -42,10 +42,10 @@ const COLOR_TOKENS = [
   '--fg-warn',
 ];
 
-function makeHost(): HTMLElement {
-  const host = document.createElement('div');
-  document.body.append(host);
-  return host;
+function makeContainer(): HTMLElement {
+  const container = document.createElement('div');
+  document.body.append(container);
+  return container;
 }
 
 function clearStyles(): void {
@@ -55,8 +55,8 @@ function clearStyles(): void {
 describe('ensureBaseStyles', () => {
   it('injects exactly one <style> for two Gantt instances constructed in one document', () => {
     clearStyles();
-    const a = new GanttShell({ host: makeHost(), dataset: { entries, timeZone } });
-    const b = new GanttShell({ host: makeHost(), dataset: { entries, timeZone } });
+    const a = new GanttShell({ container: makeContainer(), dataset: { entries, timeZone } });
+    const b = new GanttShell({ container: makeContainer(), dataset: { entries, timeZone } });
     expect(document.head.querySelectorAll('style[data-freegantt-styles]')).toHaveLength(1);
     a.destroy();
     b.destroy();
@@ -86,12 +86,12 @@ describe('ensureBaseStyles', () => {
     }
   });
 
-  it('setting --fg-bar-fill on the host before construction overrides the shipped default', () => {
+  it('setting --fg-bar-fill on the container before construction overrides the shipped default', () => {
     clearStyles();
-    const host = makeHost();
-    host.style.setProperty('--fg-bar-fill', 'rgb(1, 2, 3)');
-    const shell = new GanttShell({ host, dataset: { entries, timeZone } });
-    const bar = host.querySelector('.fg-bar');
+    const container = makeContainer();
+    container.style.setProperty('--fg-bar-fill', 'rgb(1, 2, 3)');
+    const shell = new GanttShell({ container, dataset: { entries, timeZone } });
+    const bar = container.querySelector('.fg-bar');
     expect(bar).not.toBeNull();
     expect(getComputedStyle(bar as Element).backgroundColor).toBe('rgb(1, 2, 3)');
     shell.destroy();

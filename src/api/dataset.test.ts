@@ -113,7 +113,7 @@ describe('new Dataset()', () => {
     );
   });
 
-  it('does not mutate the entries the host handed it', () => {
+  it('does not mutate the entries the consumer handed it', () => {
     const input = oneEntry();
     const dataset = new Dataset({ timeZone: 'UTC', entries: [input] });
     expect(input.start).toBe('2026-09-01');

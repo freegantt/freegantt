@@ -121,7 +121,7 @@ describe('Viewport', () => {
     expect(calls).toBe(0);
   });
 
-  it('batch delivers one host reaction and no observer sees an intermediate state', () => {
+  it('batch delivers one consumer reaction and no observer sees an intermediate state', () => {
     const viewport = new Viewport();
     let calls = 0;
     const seenWidths: number[] = [];

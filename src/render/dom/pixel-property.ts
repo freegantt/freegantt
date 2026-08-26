@@ -1,5 +1,5 @@
 // render/dom — level 1 of the customization ladder (plans/02 §4): a `--fg-*` CSS custom property,
-// read off the host element, parsed to px, and validated against what the library can actually draw
+// read off the container element, parsed to px, and validated against what the library can actually draw
 // with. One reader for every such property: `--fg-row-height` and `--fg-grid-pane-width` were the
 // same routine with silently different validity rules, and S1.10's theming pass multiplies the
 // count. `view/` reads through this too (view -> render is an allowed edge, plans/01 §1).
@@ -14,7 +14,7 @@ export interface PixelPropertyPolicy {
   /** The library default — used when the property is unset, unparseable, or outside `accepts`. */
   fallback: number;
   /** `'positive'`: zero is nonsense for this property (a zero-height row is not a row).
-   *  `'zeroOrMore'`: zero is a real choice (a host turning the row-label gutter off). */
+   *  `'zeroOrMore'`: zero is a real choice (a consumer turning the row-label gutter off). */
   accepts: 'positive' | 'zeroOrMore';
 }
 

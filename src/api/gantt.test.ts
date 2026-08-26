@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { Gantt } from './gantt.js';
 import { Dataset } from './dataset.js';
 import { EntryNotFoundError, ScrollModel, TimeScaleModel, entryId } from './index.js';
-import { sampleEntries } from '../../fixtures/sample-project.js';
+import { sampleEntries } from '../../fixtures/sample-dataset.js';
 
 // happy-dom does no layout, so a real ResizeObserver never fires (same seam gantt-shell.test.ts
 // stubs globally — Gantt/GanttShell wire attachPaneSize themselves and take no ResizeObserverCtor
@@ -35,32 +35,32 @@ class FakeResizeObserver {
 }
 
 describe('Gantt', () => {
-  it('mounts fixture entries as bars in the host element', () => {
-    const host = document.createElement('div');
-    const gantt = new Gantt({ host, dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }) });
-    const bars = host.querySelectorAll('.fg-bar');
+  it('mounts fixture entries as bars in the container element', () => {
+    const container = document.createElement('div');
+    const gantt = new Gantt({ container, dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }) });
+    const bars = container.querySelectorAll('.fg-bar');
     expect(bars.length).toBe(sampleEntries.length);
     gantt.destroy();
   });
 
   it('two Gantt instances on one page have fully independent state (I2)', () => {
-    const hostA = document.createElement('div');
-    const hostB = document.createElement('div');
+    const containerA = document.createElement('div');
+    const containerB = document.createElement('div');
     const ganttA = new Gantt({
-      host: hostA,
+      container: containerA,
       dataset: new Dataset({ entries: sampleEntries.slice(0, 5), timeZone: 'UTC' }),
     });
     const ganttB = new Gantt({
-      host: hostB,
+      container: containerB,
       dataset: new Dataset({ entries: sampleEntries.slice(0, 2), timeZone: 'UTC' }),
     });
 
-    expect(hostA.querySelectorAll('.fg-bar').length).toBe(5);
-    expect(hostB.querySelectorAll('.fg-bar').length).toBe(2);
+    expect(containerA.querySelectorAll('.fg-bar').length).toBe(5);
+    expect(containerB.querySelectorAll('.fg-bar').length).toBe(2);
 
     ganttA.destroy();
-    expect(hostA.children.length).toBe(0);
-    expect(hostB.querySelectorAll('.fg-bar').length).toBe(2);
+    expect(containerA.children.length).toBe(0);
+    expect(containerB.querySelectorAll('.fg-bar').length).toBe(2);
 
     ganttB.destroy();
   });
@@ -69,23 +69,23 @@ describe('Gantt', () => {
     const scale = new TimeScaleModel({
       range: { start: sampleEntries[0]!.start, end: sampleEntries[0]!.end },
     });
-    const hostA = document.createElement('div');
-    const hostB = document.createElement('div');
+    const containerA = document.createElement('div');
+    const containerB = document.createElement('div');
     const ganttA = new Gantt({
-      host: hostA,
+      container: containerA,
       dataset: new Dataset({ entries: sampleEntries.slice(0, 3), timeZone: 'UTC' }),
       scale,
     });
     const ganttB = new Gantt({
-      host: hostB,
+      container: containerB,
       dataset: new Dataset({ entries: sampleEntries.slice(0, 3), timeZone: 'UTC' }),
       scale,
     });
 
-    const xOf = (host: HTMLElement): string[] =>
-      Array.from(host.querySelectorAll<HTMLElement>('.fg-bar')).map((el) => el.style.transform);
+    const xOf = (container: HTMLElement): string[] =>
+      Array.from(container.querySelectorAll<HTMLElement>('.fg-bar')).map((el) => el.style.transform);
 
-    expect(xOf(hostA)).toEqual(xOf(hostB));
+    expect(xOf(containerA)).toEqual(xOf(containerB));
 
     ganttA.destroy();
     ganttB.destroy();
@@ -102,19 +102,22 @@ describe('Gantt preset/range/zoom/overscan/zoomTo/zoomBy/reveal (S1.9)', () => {
     vi.stubGlobal('ResizeObserver', FakeResizeObserver);
 
     try {
-      const host = document.createElement('div');
-      const gantt = new Gantt({ host, dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }) });
+      const container = document.createElement('div');
+      const gantt = new Gantt({
+        container,
+        dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }),
+      });
       FakeResizeObserver.instances[0]!.fire({ width: 300, height: 100 });
 
-      const before = host.querySelector<HTMLElement>('.fg-bar');
-      expect(host.querySelectorAll('.fg-band')).toHaveLength(1);
+      const before = container.querySelector<HTMLElement>('.fg-bar');
+      expect(container.querySelectorAll('.fg-band')).toHaveLength(1);
 
       gantt.preset = 'weekAndMonth';
 
-      const after = host.querySelector<HTMLElement>('.fg-bar');
+      const after = container.querySelector<HTMLElement>('.fg-bar');
       expect(after).toBe(before);
       expect(gantt.preset.id).toBe('weekAndMonth');
-      expect(host.querySelectorAll('.fg-band')).toHaveLength(2);
+      expect(container.querySelectorAll('.fg-band')).toHaveLength(2);
 
       gantt.destroy();
     } finally {
@@ -123,9 +126,9 @@ describe('Gantt preset/range/zoom/overscan/zoomTo/zoomBy/reveal (S1.9)', () => {
   });
 
   it('U5: gantt.overscan is live and reaches the bound Viewport', () => {
-    const host = document.createElement('div');
+    const container = document.createElement('div');
     const gantt = new Gantt({
-      host,
+      container,
       dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }),
       overscan: { horizontalPx: 64 },
     });
@@ -145,10 +148,10 @@ describe('Gantt preset/range/zoom/overscan/zoomTo/zoomBy/reveal (S1.9)', () => {
     vi.stubGlobal('ResizeObserver', FakeResizeObserver);
 
     try {
-      const host = document.createElement('div');
+      const container = document.createElement('div');
       const scroll = new ScrollModel();
       const gantt = new Gantt({
-        host,
+        container,
         dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }),
         zoom: 'preset',
         preset: 'day',
@@ -170,8 +173,8 @@ describe('Gantt preset/range/zoom/overscan/zoomTo/zoomBy/reveal (S1.9)', () => {
   });
 
   it('U6: reveal throws EntryNotFoundError for an id the dataset has no entry for', () => {
-    const host = document.createElement('div');
-    const gantt = new Gantt({ host, dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }) });
+    const container = document.createElement('div');
+    const gantt = new Gantt({ container, dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }) });
 
     let caught: unknown;
     try {
@@ -192,28 +195,28 @@ describe('Gantt preset/range/zoom/overscan/zoomTo/zoomBy/reveal (S1.9)', () => {
     try {
       const scale = new TimeScaleModel({ zoom: 'preset', preset: 'day' });
       const scroll = new ScrollModel();
-      const hostA = document.createElement('div');
-      const hostB = document.createElement('div');
+      const containerA = document.createElement('div');
+      const containerB = document.createElement('div');
       const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
 
-      const ganttA = new Gantt({ host: hostA, dataset, scale, scroll });
+      const ganttA = new Gantt({ container: containerA, dataset, scale, scroll });
       FakeResizeObserver.instances[0]!.fire({ width: 300, height: 100 });
-      const ganttB = new Gantt({ host: hostB, dataset, scale, scroll });
+      const ganttB = new Gantt({ container: containerB, dataset, scale, scroll });
       FakeResizeObserver.instances[1]!.fire({ width: 300, height: 100 });
 
       // The last bar, not the first: entry-1 starts at the dataset's own range start, so its x stays
       // 0 at any zoom — a vacuous check. A later entry's x scales with pxPerMs.
-      const lastBarXOf = (host: HTMLElement): string => {
-        const bars = host.querySelectorAll<HTMLElement>('.fg-bar');
+      const lastBarXOf = (container: HTMLElement): string => {
+        const bars = container.querySelectorAll<HTMLElement>('.fg-bar');
         return bars[bars.length - 1]!.style.transform;
       };
-      const before = lastBarXOf(hostA);
-      expect(lastBarXOf(hostB)).toBe(before);
+      const before = lastBarXOf(containerA);
+      expect(lastBarXOf(containerB)).toBe(before);
 
       ganttA.zoomBy(2);
 
-      expect(lastBarXOf(hostA)).not.toBe(before);
-      expect(lastBarXOf(hostB)).toBe(lastBarXOf(hostA));
+      expect(lastBarXOf(containerA)).not.toBe(before);
+      expect(lastBarXOf(containerB)).toBe(lastBarXOf(containerA));
 
       ganttA.destroy();
       ganttB.destroy();
@@ -225,9 +228,9 @@ describe('Gantt preset/range/zoom/overscan/zoomTo/zoomBy/reveal (S1.9)', () => {
   it('a caller passing both scale and preset gets the shared scale, ignoring the constructor preset (D-S1.9-9)', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const scale = new TimeScaleModel({ preset: 'week' });
-    const host = document.createElement('div');
+    const container = document.createElement('div');
     const gantt = new Gantt({
-      host,
+      container,
       dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }),
       scale,
       preset: 'month',
@@ -242,32 +245,32 @@ describe('Gantt preset/range/zoom/overscan/zoomTo/zoomBy/reveal (S1.9)', () => {
 });
 
 describe('Gantt theme and a11yLabel (S1.10)', () => {
-  it('theme setter flips data-fg-theme on the host live; auto removes it', () => {
-    const host = document.createElement('div');
-    const gantt = new Gantt({ host, dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }) });
+  it('theme setter flips data-fg-theme on the container live; auto removes it', () => {
+    const container = document.createElement('div');
+    const gantt = new Gantt({ container, dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }) });
 
-    expect(host.getAttribute('data-fg-theme')).toBeNull();
+    expect(container.getAttribute('data-fg-theme')).toBeNull();
 
     gantt.theme = 'dark';
-    expect(host.getAttribute('data-fg-theme')).toBe('dark');
+    expect(container.getAttribute('data-fg-theme')).toBe('dark');
 
     gantt.theme = 'light';
-    expect(host.getAttribute('data-fg-theme')).toBe('light');
+    expect(container.getAttribute('data-fg-theme')).toBe('light');
 
     gantt.theme = 'auto';
-    expect(host.getAttribute('data-fg-theme')).toBeNull();
+    expect(container.getAttribute('data-fg-theme')).toBeNull();
 
     gantt.destroy();
   });
 
-  it('a11yLabel setter updates aria-label on the host live', () => {
-    const host = document.createElement('div');
-    const gantt = new Gantt({ host, dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }) });
+  it('a11yLabel setter updates aria-label on the container live', () => {
+    const container = document.createElement('div');
+    const gantt = new Gantt({ container, dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }) });
 
-    expect(host.getAttribute('aria-label')).toBe('Gantt');
+    expect(container.getAttribute('aria-label')).toBe('Gantt');
 
-    gantt.a11yLabel = 'Project plan';
-    expect(host.getAttribute('aria-label')).toBe('Project plan');
+    gantt.a11yLabel = 'Room bookings';
+    expect(container.getAttribute('aria-label')).toBe('Room bookings');
 
     gantt.destroy();
   });
@@ -275,9 +278,9 @@ describe('Gantt theme and a11yLabel (S1.10)', () => {
 
 describe('Gantt gridWidth and events (S1.8, plans/02 §6)', () => {
   it('beforeGridWidthChange returning false vetoes the change: gridWidth stays put', () => {
-    const host = document.createElement('div');
+    const container = document.createElement('div');
     const gantt = new Gantt({
-      host,
+      container,
       dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }),
       gridWidth: 160,
     });
@@ -286,16 +289,16 @@ describe('Gantt gridWidth and events (S1.8, plans/02 §6)', () => {
     gantt.gridWidth = 220;
 
     expect(gantt.gridWidth).toBe(160);
-    const gridPane = host.querySelector<HTMLElement>('.fg-grid-pane')!;
+    const gridPane = container.querySelector<HTMLElement>('.fg-grid-pane')!;
     expect(gridPane.style.width).toBe('160px');
 
     gantt.destroy();
   });
 
   it('a non-vetoed change fires gridWidthChange exactly once with {from, to}', () => {
-    const host = document.createElement('div');
+    const container = document.createElement('div');
     const gantt = new Gantt({
-      host,
+      container,
       dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }),
       gridWidth: 160,
     });
@@ -313,9 +316,9 @@ describe('Gantt gridWidth and events (S1.8, plans/02 §6)', () => {
   });
 
   it('off stops a handler from being called', () => {
-    const host = document.createElement('div');
+    const container = document.createElement('div');
     const gantt = new Gantt({
-      host,
+      container,
       dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }),
       gridWidth: 160,
     });
@@ -334,9 +337,9 @@ describe('Gantt gridWidth and events (S1.8, plans/02 §6)', () => {
   });
 
   it('setting gantt.gridWidth directly fires the same before/after pair a drag would', () => {
-    const host = document.createElement('div');
+    const container = document.createElement('div');
     const gantt = new Gantt({
-      host,
+      container,
       dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }),
       gridWidth: 160,
     });

@@ -633,7 +633,7 @@
           <span>38 source files in <code>src/</code></span>
           <span>10 layers, 6 with code</span>
           <span>generated 2026-08-25</span>
-          <span>main @ 522bf7f · §8 host boundary from host-input-dates-and-ids @ de5d755</span>
+          <span>main @ 522bf7f · §8 consumer boundary from host-input-dates-and-ids @ de5d755</span>
         </div>
         <nav>
           <a href="#s1"><b>1</b>Layer map &amp; import rules</a>
@@ -882,7 +882,8 @@
                 <code>Instant</code> is branded epoch-ms so a naked number cannot pass as a date.
                 <code>TimeSpan</code> is half-open <code>[start, end)</code>. Also holds the
                 <em>input twins</em> — <code>InstantInput</code>, <code>TimeSpanInput</code> and
-                <code>DateOnlyEndRule</code>: what a host may write, as opposed to what the library stores.
+                <code>DateOnlyEndRule</code>: what a consumer may write, as opposed to what the library
+                stores.
               </td>
             </tr>
             <tr>
@@ -891,10 +892,10 @@
               <td>
                 The authored record. <code>EntryKind</code> is an open union (<code
                   >'span' | 'group' | 'milestone' | (string &amp; {})</code
-                >) so a host can add kinds without a library edit. <code>EntryInput</code> is its loose twin:
-                plain-string ids, any <code>InstantInput</code> for dates. An <code>Entry</code> is itself a
-                valid <code>EntryInput</code>, so a host already holding branded values passes them straight
-                through.
+                >) so a consumer can add kinds without a library edit. <code>EntryInput</code> is its loose
+                twin: plain-string ids, any <code>InstantInput</code> for dates. An <code>Entry</code> is
+                itself a valid <code>EntryInput</code>, so a consumer already holding branded values passes
+                them straight through.
               </td>
             </tr>
             <tr>
@@ -1088,9 +1089,9 @@
             </tr>
             <tr>
               <td class="mono">render/backend.ts</td>
-              <td class="mono">RenderBackend&lt;THost&gt;, InteractionState, HitResult</td>
+              <td class="mono">RenderBackend&lt;TSurface&gt;, InteractionState, HitResult</td>
               <td>
-                The backend seam. Names no DOM type itself — <code>THost</code> carries that, so a canvas
+                The backend seam. Names no DOM type itself — <code>TSurface</code> carries that, so a canvas
                 backend is <code>RenderBackend&lt;HTMLCanvasElement&gt;</code> and the mismatch is caught at
                 the call site.
               </td>
@@ -1146,9 +1147,9 @@
               <td class="mono">view/gantt-shell.ts</td>
               <td class="mono">GanttShell, GanttShellOptions</td>
               <td>
-                The composition root. Resolves the host, builds the <code>Viewport</code>, mounts the backend,
-                wires both attachments, and owns <code>render()</code> — the one place pure and DOM-touching
-                code meet.
+                The composition root. Resolves the container, builds the <code>Viewport</code>, mounts the
+                backend, wires both attachments, and owns <code>render()</code> — the one place pure and
+                DOM-touching code meet.
               </td>
             </tr>
             <tr>
@@ -1186,7 +1187,7 @@
               <td class="mono">api/dataset.ts</td>
               <td class="mono">Dataset, DatasetOptions</td>
               <td>
-                Reads the host's <code>EntryInput[]</code> into stored <code>Entry[]</code> once, at
+                Reads the consumer's <code>EntryInput[]</code> into stored <code>Entry[]</code> once, at
                 construction, in its own zone. <code>implements</code> <code>model/</code>'s structural
                 contract, so the relationship is stated rather than structural-by-coincidence. Keeps
                 <code>dateOnlyEnd</code> rather than just consuming it — S2's mutations have to read later
@@ -1255,7 +1256,7 @@
             <tr>
               <td class="mono">extensions/index.ts</td>
               <td class="mono">—</td>
-              <td>S6. Plugin host; built-ins dogfood the public plugin contract.</td>
+              <td>S6. Plugin runtime; built-ins dogfood the public plugin contract.</td>
             </tr>
           </table>
         </div>
@@ -1265,8 +1266,8 @@
       <section id="s3">
         <h2><span class="num">3</span>Construction: the call sequence</h2>
         <p class="lede">
-          <code>new Gantt({ host, dataset })</code> is six lines of forwarding and then one long constructor.
-          Everything below happens synchronously, in this order, before the constructor returns.
+          <code>new Gantt({ container, dataset })</code> is six lines of forwarding and then one long
+          constructor. Everything below happens synchronously, in this order, before the constructor returns.
         </p>
         <p class="src">
           <b>derived from</b> harness/main.ts, api/gantt.ts, view/gantt-shell.ts, layout/viewport/viewport.ts,
@@ -1346,7 +1347,7 @@
                 marker-end="url(#a3)"
                 style="color: var(--sub)"
               />
-              <text x="138" y="78" text-anchor="middle">new Gantt({host, dataset})</text>
+              <text x="138" y="78" text-anchor="middle">new Gantt({container, dataset})</text>
 
               <!-- 2 -->
               <g class="num">
@@ -1370,7 +1371,7 @@
                 <text x="8" y="159" text-anchor="middle">3</text>
               </g>
               <path class="edge" d="M372,150 h44 v14 h-38" marker-end="url(#a3)" style="color: var(--sub)" />
-              <text x="424" y="154">resolveHost(host)</text>
+              <text x="424" y="154">resolveContainer(container)</text>
               <text class="warnink" x="546" y="154">← throws a plain Error, not FreeGanttError</text>
 
               <!-- 4 -->
@@ -1435,7 +1436,7 @@
                 marker-end="url(#a3)"
                 style="color: var(--sub)"
               />
-              <text x="456" y="294" text-anchor="middle">mount(host)</text>
+              <text x="456" y="294" text-anchor="middle">mount(container)</text>
               <text class="s" x="640" y="303">reads --fg-row-label-width, once</text>
 
               <!-- 8 self -->
@@ -1444,7 +1445,7 @@
                 <text x="8" y="339" text-anchor="middle">8</text>
               </g>
               <path class="edge" d="M372,330 h44 v14 h-38" marker-end="url(#a3)" style="color: var(--sub)" />
-              <text x="424" y="334">attachScroll(host, viewport)</text>
+              <text x="424" y="334">attachScroll(container, viewport)</text>
 
               <!-- 9 -->
               <g class="num">
@@ -1527,7 +1528,7 @@
                 <text x="8" y="559" text-anchor="middle">14</text>
               </g>
               <path class="edge" d="M372,550 h44 v14 h-38" marker-end="url(#a3)" style="color: var(--sub)" />
-              <text x="424" y="554">attachPaneSize(host, …) — ResizeObserver takes over</text>
+              <text x="424" y="554">attachPaneSize(container, …) — ResizeObserver takes over</text>
 
               <!-- 15 self -->
               <g class="num">
@@ -1564,8 +1565,8 @@
             <td class="mono">8</td>
             <td>
               Before either bind, so <code>#scrollAttachment</code> can never be <code>undefined</code> during
-              a render. The host element <em>is</em> the timeline pane and the single native scroller — there
-              is no second scroller to keep in sync, which is why nothing can fall a frame behind.
+              a render. The container element <em>is</em> the timeline pane and the single native scroller —
+              there is no second scroller to keep in sync, which is why nothing can fall a frame behind.
             </td>
           </tr>
           <tr>
@@ -1720,7 +1721,7 @@
               <text class="s" x="464" y="261">links[] ← [] (S3)</text>
               <text class="s" x="464" y="275">decorations[] ← [] (S2)</text>
               <text class="xs" x="464" y="296">plain numbers only —</text>
-              <text class="xs" x="464" y="309">no DOM, no host output,</text>
+              <text class="xs" x="464" y="309">no DOM, no consumer output,</text>
               <text class="xs" x="464" y="322">no hit-region index</text>
 
               <!-- col D -->
@@ -1764,7 +1765,7 @@
               />
               <rect class="bx dom" x="652" y="310" width="176" height="46" />
               <text class="t" x="664" y="328">contentSizer.transform</text>
-              <text class="s" x="664" y="342">gives host a scroll range</text>
+              <text class="s" x="664" y="342">gives the container a scroll range</text>
 
               <!-- feedback: setContentSize -->
               <path
@@ -1818,7 +1819,7 @@
           </li>
           <li>
             <strong>Zero disables culling.</strong> A zero <code>visible.height</code> means "no culling at
-            all", not "an empty window" — and likewise for width. Without that rule an unmeasured host
+            all", not "an empty window" — and likewise for width. Without that rule an unmeasured container
             (detached, <code>display:none</code>, pre-paint) would silently render nothing.
           </li>
           <li>
@@ -1881,7 +1882,7 @@
 
               <rect class="bx dom" x="776" y="16" width="168" height="44" />
               <text class="t" x="788" y="34">GanttShell B</text>
-              <text class="s" x="788" y="48">own host, own backend</text>
+              <text class="s" x="788" y="48">own container, own backend</text>
 
               <!-- viewports -->
               <rect class="bx pure" x="16" y="96" width="168" height="104" />
@@ -2019,7 +2020,7 @@
 
         <h4>Where the batches nest</h4>
         <pre><code>Viewport.batch(run)
-  └─ Viewport.#notifications.batch(          // coalesce the host reaction
+  └─ Viewport.#notifications.batch(          // coalesce the consumer reaction
        scale.batch(                          // coalesce within TimeScaleModel
          scroll.batch(run)))                 // coalesce within ScrollModel
 
@@ -2244,7 +2245,7 @@ Viewport.setPaneSize(size)                   // one measurement, two models
               <dt>destroy()</dt>
               <dd>
                 Idempotent. Detaches both attachments, unbinds the viewport, destroys the backend, clears the
-                host.
+                container.
               </dd>
             </dl>
           </div>
@@ -2394,7 +2395,7 @@ Viewport.setPaneSize(size)                   // one measurement, two models
               <text class="s" x="28" y="294">tickWidthPx / (one tick's real ms)</text>
               <text class="xs" x="28" y="314">The zoom a preset implies ON ITS OWN — what</text>
               <text class="xs" x="28" y="326">a scale resolves to when there is no measured</text>
-              <text class="xs" x="28" y="338">viewport to fit into. An unmeasured host is</text>
+              <text class="xs" x="28" y="338">viewport to fit into. An unmeasured container is</text>
               <text class="xs" x="28" y="350">therefore not a special case needing an</text>
               <text class="xs" x="28" y="362">invented minimum width.</text>
 
@@ -2460,7 +2461,7 @@ Viewport.setPaneSize(size)                   // one measurement, two models
             <td class="mono">id, parentId?, kind?, name, start, end, progress?, segments?, meta?</td>
             <td>
               <code>kind</code> is authored, never derived from having children. <code>meta</code> is
-              host-owned and typed through the generic.
+              consumer-owned and typed through the generic.
             </td>
           </tr>
           <tr>
@@ -2468,7 +2469,7 @@ Viewport.setPaneSize(size)                   // one measurement, two models
             <td class="mono">'span' | 'group' | 'milestone' | (string &amp; {})</td>
             <td>
               Open union: the <code>(string &amp; {})</code> arm keeps editor autocomplete on the three
-              shipped kinds while still accepting host-defined ones.
+              shipped kinds while still accepting consumer-defined ones.
             </td>
           </tr>
           <tr>
@@ -2488,7 +2489,7 @@ Viewport.setPaneSize(size)                   // one measurement, two models
             <td class="mono">InstantInput</td>
             <td class="mono">Instant | Date | number | string</td>
             <td>
-              The input twin of <code>Instant</code>: what a host may <em>write</em> where the library
+              The input twin of <code>Instant</code>: what a consumer may <em>write</em> where the library
               <em>stores</em> an <code>Instant</code>. A string is either absolute (explicit <code>Z</code> or
               numeric offset) or a Plain time that names no instant until the Dataset's zone resolves it.
             </td>
@@ -2507,11 +2508,11 @@ Viewport.setPaneSize(size)                   // one measurement, two models
             <td class="mono">DateOnlyEndRule</td>
             <td class="mono">'inclusive' | 'exclusive'</td>
             <td>
-              Reconciles half-open storage with what a host means by a bare date on <code>end</code>. A host
-              writing <code>end: '2026-09-08'</code> means "through the 8th"; storage needs the boundary
-              <em>after</em> the span. <code>'inclusive'</code> (default) advances such an end by one calendar
-              day; <code>'exclusive'</code> reads it literally. Only date-only strings are affected — anything
-              carrying a time of day is already a boundary.
+              Reconciles half-open storage with what a consumer means by a bare date on <code>end</code>. A
+              consumer writing <code>end: '2026-09-08'</code> means "through the 8th"; storage needs the
+              boundary <em>after</em> the span. <code>'inclusive'</code> (default) advances such an end by one
+              calendar day; <code>'exclusive'</code> reads it literally. Only date-only strings are affected —
+              anything carrying a time of day is already a boundary.
             </td>
           </tr>
         </table>
@@ -2522,14 +2523,14 @@ Viewport.setPaneSize(size)                   // one measurement, two models
         <h2><span class="num">8</span>Class map: <code>render/</code> &amp; <code>api/</code></h2>
         <p class="src"><b>derived from</b> src/render/**, src/api/**, harness/main.ts</p>
 
-        <h3>Reading what a host writes: <code>EntryInput</code> → <code>Entry</code></h3>
+        <h3>Reading what a consumer writes: <code>EntryInput</code> → <code>Entry</code></h3>
         <p class="src">
           <b>ahead of main</b> this subsection describes src/model/time.ts, src/time/input.ts and
           src/api/entry-input.ts as they stand on branch host-input-dates-and-ids (de5d755) — not yet merged
         </p>
         <p class="lede">
-          The library stores branded, absolute values; a host writes loose ones. Exactly one crossing turns
-          the second into the first, and it happens once, in the <code>Dataset</code> constructor.
+          The library stores branded, absolute values; a consumer writes loose ones. Exactly one crossing
+          turns the second into the first, and it happens once, in the <code>Dataset</code> constructor.
         </p>
 
         <figure>
@@ -2538,7 +2539,7 @@ Viewport.setPaneSize(size)                   // one measurement, two models
               class="d"
               viewBox="0 0 960 340"
               role="img"
-              aria-label="How host input becomes stored entries"
+              aria-label="How consumer input becomes stored entries"
             >
               <defs>
                 <marker
@@ -2555,7 +2556,7 @@ Viewport.setPaneSize(size)                   // one measurement, two models
               </defs>
 
               <rect class="bx api" x="16" y="24" width="196" height="120" />
-              <text class="t" x="28" y="42">what the host writes</text>
+              <text class="t" x="28" y="42">what the consumer writes</text>
               <text class="s" x="28" y="60">{ id: 'a',</text>
               <text class="s" x="28" y="74">name: 'Survey',</text>
               <text class="s" x="28" y="88">start: '2026-09-01',</text>
@@ -2619,7 +2620,7 @@ Viewport.setPaneSize(size)                   // one measurement, two models
               <rect class="bx warn" x="16" y="182" width="216" height="106" />
               <text class="warnink" x="28" y="200">the date-only end rule</text>
               <text class="xs" x="28" y="220">A bare date on `end` means the</text>
-              <text class="xs" x="28" y="232">last day the host wants INCLUDED,</text>
+              <text class="xs" x="28" y="232">last day the consumer wants INCLUDED,</text>
               <text class="xs" x="28" y="244">but storage wants the boundary</text>
               <text class="xs" x="28" y="256">AFTER it. 'inclusive' (default)</text>
               <text class="xs" x="28" y="268">advances one calendar day; only</text>
@@ -2638,7 +2639,7 @@ Viewport.setPaneSize(size)                   // one measurement, two models
             </svg>
           </div>
           <figcaption>
-            Diagram 5 — the host boundary. Amber = the one rule that is a policy choice rather than a
+            Diagram 5 — the consumer boundary. Amber = the one rule that is a policy choice rather than a
             mechanical conversion.
           </figcaption>
         </figure>
@@ -2654,7 +2655,7 @@ Viewport.setPaneSize(size)                   // one measurement, two models
 
         <h3>What the DOM backend builds</h3>
         <div class="tree">
-          host <span class="c">← GanttShellOptions.host; ALSO the single native scroller</span> ├─
+          container <span class="c">← GanttShellOptions.container; ALSO the single native scroller</span> ├─
           div.fg-header <span class="c">position:relative; margin-left: rowLabelWidth</span> │ └─ div.fg-band
           <span class="c">one per preset.headers entry, coarsest first — keyed by index</span> │ └─
           div.fg-tick <span class="c">keyed by index within the band; translateX + width + text</span> ├─
@@ -2669,10 +2670,10 @@ Viewport.setPaneSize(size)                   // one measurement, two models
           <strong>Two details that are load-bearing, not incidental.</strong>
           <code>margin-left</code>, not <code>left</code>, on the bar and header layers: an offset property
           shifts a relatively-positioned box <em>without</em> shrinking its auto width, so the layer would
-          overflow the host by the gutter width on the right — which is exactly the phantom horizontal scroll
-          range that once showed up as a blank gap past real content. And the content sizer must land its
-          <em>far</em> edge on the content extent, hence the <code>− 1</code>: it is 1×1px, so translating its
-          origin to the extent would make the browser's native scroll range one pixel longer than what
+          overflow the container by the gutter width on the right — which is exactly the phantom horizontal
+          scroll range that once showed up as a blank gap past real content. And the content sizer must land
+          its <em>far</em> edge on the content extent, hence the <code>− 1</code>: it is 1×1px, so translating
+          its origin to the extent would make the browser's native scroll range one pixel longer than what
           <code>ScrollModel</code> computed.
         </div>
 
@@ -2689,7 +2690,7 @@ Viewport.setPaneSize(size)                   // one measurement, two models
               <dd>
                 Reads <code>--fg-row-label-width</code> <em>once</em>, builds the four layers plus the sizer.
                 The backend owns where the gutter sits for the life of the mount, so header ticks and bars are
-                shifted by the same offset — a host stylesheet cannot move one without the other.
+                shifted by the same offset — a consumer stylesheet cannot move one without the other.
               </dd>
               <dt>sync(frame)</dt>
               <dd>Four <code>syncKeyed</code> passes plus one transform on the sizer. No layout reads.</dd>
@@ -2745,14 +2746,14 @@ Viewport.setPaneSize(size)                   // one measurement, two models
             <h5>readPixelProperty() <span class="tag dom">function</span></h5>
             <div class="path">render/dom/pixel-property.ts</div>
             <p>
-              Level 1 of the customization ladder: read a <code>--fg-*</code> custom property off the host,
-              parse to px, validate against what the library can actually draw with.
+              Level 1 of the customization ladder: read a <code>--fg-*</code> custom property off the
+              container, parse to px, validate against what the library can actually draw with.
             </p>
             <dl>
               <dt>policy.accepts</dt>
               <dd>
                 <code>'positive'</code> — zero is nonsense (a zero-height row is not a row).
-                <code>'zeroOrMore'</code> — zero is a real choice (a host turning the label gutter off).
+                <code>'zeroOrMore'</code> — zero is a real choice (a consumer turning the label gutter off).
                 Before this, the two properties were the same routine with silently different validity rules.
               </dd>
               <dt>re-read cadence</dt>
@@ -2794,7 +2795,7 @@ Viewport.setPaneSize(size)                   // one measurement, two models
             <dl>
               <dt>GanttOptions</dt>
               <dd>
-                <code>host</code>, <code>dataset</code>, optional <code>scale</code>, optional
+                <code>container</code>, <code>dataset</code>, optional <code>scale</code>, optional
                 <code>scroll</code>. <span class="tag smell">§9-F</span>
               </dd>
               <dt>destroy()</dt>
@@ -2816,8 +2817,8 @@ Viewport.setPaneSize(size)                   // one measurement, two models
             <dl>
               <dt>implements DatasetContract</dt>
               <dd>
-                States the relationship instead of leaving it structural-by-coincidence — the same host/façade
-                pairing as <code>Gantt</code>/<code>GanttShell</code>.
+                States the relationship instead of leaving it structural-by-coincidence — the same
+                structural/façade pairing as <code>Gantt</code>/<code>GanttShell</code>.
               </dd>
             </dl>
           </div>
@@ -2830,11 +2831,11 @@ Viewport.setPaneSize(size)                   // one measurement, two models
           no lint fires. It currently reads clean —
         </p>
         <pre><code>import { Gantt, Dataset } from '../src/api/index.js';
-import { sampleEntries } from '../fixtures/sample-project.js';
+import { sampleEntries } from '../fixtures/sample-dataset.js';
 
 const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
 
-new Gantt({ host: '#gantt', dataset });</code></pre>
+new Gantt({ container: '#gantt', dataset });</code></pre>
         <p>
           — no restated <code>rowHeight</code>, no hand-built <code>TimeScaleModel</code> standing in for
           <code>range: 'fitDataset'</code>. Both of those were real gaps that this file exposed and that were
@@ -2984,7 +2985,7 @@ new Gantt({ host: '#gantt', dataset });</code></pre>
             notify-iff-changed setter. <code>GanttShellOptions</code> does not carry it and
             <code>GanttOptions</code> does not either, so no consumer can set it and no consumer can reach the
             <code>Viewport</code> to set it afterwards. The same gap covers everything on
-            <code>Viewport</code>: a host can only call <code>panTo</code> if it constructed the
+            <code>Viewport</code>: a consumer can only call <code>panTo</code> if it constructed the
             <code>ScrollModel</code> itself and kept the reference.
           </p>
           <p>
@@ -3016,12 +3017,12 @@ new Gantt({ host: '#gantt', dataset });</code></pre>
 
         <div class="smell">
           <h5><span class="id">§9-H</span> Two error vocabularies on the public path</h5>
-          <p class="where">view/gantt-shell.ts <code>resolveHost()</code></p>
+          <p class="where">view/gantt-shell.ts <code>resolveContainer()</code></p>
           <p>
             <code>model/errors.ts</code> exists precisely so a public failure carries a stable
             <code>code</code>, and <code>Viewport.bind</code> uses it
             (<code>FreeGanttError('viewport-already-bound')</code>). But the most likely error a consumer will
-            ever hit — a <code>host</code> selector matching nothing — throws a bare
+            ever hit — a <code>container</code> selector matching nothing — throws a bare
             <code>new Error(...)</code>. A consumer cannot branch on it without matching the message string.
             Two lines to fix, and it should be fixed before anything else starts throwing.
           </p>
@@ -3043,8 +3044,8 @@ new Gantt({ host: '#gantt', dataset });</code></pre>
             so the barrel is not a complete view of its own layer.
           </p>
           <p>
-            The same shape shows up in <code>GanttShell</code>: <code>RenderBackend&lt;THost&gt;</code> is a
-            proper seam with two implementations, and the constructor hardcodes
+            The same shape shows up in <code>GanttShell</code>: <code>RenderBackend&lt;TSurface&gt;</code> is
+            a proper seam with two implementations, and the constructor hardcodes
             <code>createDomBackend()</code>. There is no way to build a Gantt on the null backend, so the one
             configuration that would let the whole <code>view/</code>+<code>layout/</code> stack be tested
             without a DOM is unreachable from the public path.
@@ -3182,7 +3183,7 @@ grep -n 'class="src"' harness/doc.html     # the full source index</code></pre>
           </tr>
           <tr>
             <td class="mono">time/input.ts or api/entry-input.ts</td>
-            <td>§8's host-boundary subsection (Diagram 5), §7's type table, §9-J</td>
+            <td>§8's consumer-boundary subsection (Diagram 5), §7's type table, §9-J</td>
           </tr>
           <tr>
             <td class="mono">render/dom/*</td>
@@ -3227,10 +3228,10 @@ grep -n 'class="src"' harness/doc.html     # the full source index</code></pre>
             add it there with the reason.
           </li>
           <li>
-            <strong>Vocabulary is <code>CONTEXT.md</code>'s.</strong> Entry, not Task. Dataset, not Project.
-            Item, not bar (a bar is what an Item renders). Row, not line. No scheduling framing in core
-            descriptions — a shift roster and units-sold-per-week are as much the intended use as a project
-            plan. No vendor Gantt product names, anywhere.
+            <strong>Vocabulary is <code>CONTEXT.md</code>'s.</strong> Entry, not Task. Dataset, not its
+            pre-ADR-0004 name. Item, not bar (a bar is what an Item renders). Row, not line. No scheduling
+            framing in core descriptions — a shift roster and units-sold-per-week are as much the intended use
+            as a project plan. No vendor Gantt product names, anywhere.
           </li>
           <li>
             <strong>Match the existing structure.</strong> Sections are numbered and self-linking; class
@@ -3307,9 +3308,9 @@ const entries: Entry[] = [
 describe('render count', () =&gt; {
   it('counts computeFrame calls', () =&gt; {
     const spy = vi.spyOn(FrameLayout.prototype, 'computeFrame');
-    const host = document.createElement('div');
-    document.body.append(host);
-    const shell = new GanttShell({ host, dataset: { entries, timeZone: 'UTC' } });
+    const container = document.createElement('div');
+    document.body.append(container);
+    const shell = new GanttShell({ container, dataset: { entries, timeZone: 'UTC' } });
     console.log('ON_CONSTRUCT =', spy.mock.calls.length);      // expect 2
     spy.mockClear();
     shell.render();
@@ -3340,7 +3341,7 @@ rm test/dom/tmp-render-count.test.ts</code></pre>
     <footer class="wrap">
       Map of <code>src/</code> as it stands at slice <b>S1</b>, read end to end on <b>2026-08-25</b> from
       <code>main</code> @ <code>522bf7f</code>. §9-A's pass count was measured, not inferred. §8's
-      host-boundary section — <code>model/time.ts</code>'s input twins, <code>time/input.ts</code>,
+      consumer-boundary section — <code>model/time.ts</code>'s input twins, <code>time/input.ts</code>,
       <code>api/entry-input.ts</code>, <code>Dataset.dateOnlyEnd</code> — describes work that landed on branch
       <code>host-input-dates-and-ids</code> (<code>de5d755</code>) while this page was being written and is
       <b>not on <code>main</code></b
