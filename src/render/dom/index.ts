@@ -15,7 +15,13 @@ import type { RenderBackend, RenderSurfaces, InteractionState, HitResult } from 
 import { syncKeyed } from './sync-keyed.js';
 
 type TickGeom = Pick<FrameHeaderTick, 'x' | 'width' | 'label'>;
-type RowGeom = Pick<FrameRow, 'top' | 'height' | 'label' | 'index'> & { rowCount: number };
+type RowGeom = {
+  top: number;
+  height: number;
+  label: string;
+  index: number;
+  rowCount: number;
+};
 type BarGeom = Pick<FrameBar, 'kind' | 'label' | 'x' | 'y' | 'width' | 'height' | 'flags' | 'a11yLabel'>;
 /** Bands carry no per-frame geometry of their own yet (height/stacking is S1.9/S1.10) — an always-
  * equal geom means `syncKeyed` patches a band node once, at creation, and never again. */
@@ -181,8 +187,6 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
       contentSizer = document.createElement('div');
       contentSizer.setAttribute('aria-hidden', 'true');
       contentSizer.className = 'fg-content-sizer';
-      contentSizer.style.width = '1px';
-      contentSizer.style.height = '1px';
       timelineHost.append(headerLayer, barLayer, contentSizer);
     },
     sync(frame: GeometryFrame) {

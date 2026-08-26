@@ -92,7 +92,7 @@ Slices are scope, not calendar estimates. Within a slice, entries are ordered so
 - Plugin registration: this scheduling plugin occupies the core resolve hook exclusively via the `01` §1 mechanism (issue #12) — `data/` calls the hook generically and has no scheduling-specific code path.
 - `data/` integration: transactions run the resolve hook, which (with this plugin installed) builds a `schedule()` call from the transaction's `proposed` edits; the plugin's patch merges into the same changeset (`origin: 'engine'`) — undo now reverts user + engine effects atomically (I7 complete).
 - `layout/`: link routing — orthogonal paths from bar edges, rendered as SVG; link flags (inactive, in-cycle).
-- Diagnostics surface: `scheduleDiagnostics` event; bars flagged via `data-flag` (level-2 theming shows conflicts with pure CSS).
+- Diagnostics surface: `scheduleDiagnostics` event; bars flagged via `data-flag` (level-2 theming shows conflicts with pure CSS). **Hot-path note:** `flagTokens()` in `render/dom/index.ts` does `Object.keys(flags).filter().join(' ')` per bar per frame. Today flags are always `{}` so it's free, but once S3 sets `conflict`/`cycle` true on real bars, this becomes a per-frame allocation in the hot path. Consider pre-computing flag tokens in `computeFrame` (same as `a11yLabel`) so the render path is a simple string copy.
 - Golden fixtures: hand-built scenario files with expected `ScheduleResult` JSON — lag combinations, all four types, pinned conflicts, cycles, deep chains. These define correctness from here on.
 - Harness: link fixture; edit a predecessor date, watch successors cascade; a cycle fixture showing named diagnostics.
 
