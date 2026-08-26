@@ -61,7 +61,7 @@ interface MutableBinding {
 const ZERO: ScrollPosition = Object.freeze({ x: 0, y: 0 });
 
 /** Frozen, not just `readonly`: `state` hands both halves out by reference, and `readonly` is a
- * compile-time claim only — a host writing `state.position.x` would move the shared model without
+ * compile-time claim only — a consumer writing `state.position.x` would move the shared model without
  * notifying anyone. Frozen, that write throws instead (every module here is an ES module, so it is
  * strict-mode code). Freezing at the two assignment points costs nothing per read; copying on every
  * `state` read would not. */
@@ -114,7 +114,7 @@ export class ScrollModel {
     this.#state.batch(run);
   }
 
-  /** @internal — called by `view/` only. A host that calls this creates a binding nothing
+  /** @internal — called by `view/` only. A consumer that calls this creates a binding nothing
    * will ever unbind. Use `GanttOptions.scroll` instead. */
   bind(binding: ScrollBinding, onChange: () => void): ScrollBindingHandle {
     // Copy-at-bind, as in `TimeScaleModel`: the handle is the only way to change what this binding

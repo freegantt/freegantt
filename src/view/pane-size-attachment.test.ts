@@ -54,9 +54,9 @@ function el(): HTMLElement {
 describe('attachPaneSize', () => {
   it('delivers the observed content-box size to the callback', () => {
     FakeResizeObserver.instances = [];
-    const host = el();
+    const container = el();
     const sizes: Size[] = [];
-    attachPaneSize(host, (size) => sizes.push(size), FakeResizeObserver);
+    attachPaneSize(container, (size) => sizes.push(size), FakeResizeObserver);
 
     FakeResizeObserver.instances[0]!.fire({ width: 400, height: 300 });
 
@@ -65,9 +65,9 @@ describe('attachPaneSize', () => {
 
   it('coalesces several entries in one callback tick to the last box', () => {
     FakeResizeObserver.instances = [];
-    const host = el();
+    const container = el();
     const sizes: Size[] = [];
-    attachPaneSize(host, (size) => sizes.push(size), FakeResizeObserver);
+    attachPaneSize(container, (size) => sizes.push(size), FakeResizeObserver);
 
     FakeResizeObserver.instances[0]!.fire({ width: 100, height: 100 }, { width: 200, height: 150 });
 
@@ -76,9 +76,9 @@ describe('attachPaneSize', () => {
 
   it('does not dedupe — an unchanged box is reported again (the models own that contract)', () => {
     FakeResizeObserver.instances = [];
-    const host = el();
+    const container = el();
     const sizes: Size[] = [];
-    attachPaneSize(host, (size) => sizes.push(size), FakeResizeObserver);
+    attachPaneSize(container, (size) => sizes.push(size), FakeResizeObserver);
 
     FakeResizeObserver.instances[0]!.fire({ width: 400, height: 300 });
     FakeResizeObserver.instances[0]!.fire({ width: 400, height: 300 });
@@ -91,9 +91,9 @@ describe('attachPaneSize', () => {
 
   it('detach() stops further callbacks', () => {
     FakeResizeObserver.instances = [];
-    const host = el();
+    const container = el();
     const sizes: Size[] = [];
-    const attachment = attachPaneSize(host, (size) => sizes.push(size), FakeResizeObserver);
+    const attachment = attachPaneSize(container, (size) => sizes.push(size), FakeResizeObserver);
 
     attachment.detach();
     FakeResizeObserver.instances[0]!.fire({ width: 400, height: 300 });
@@ -101,23 +101,23 @@ describe('attachPaneSize', () => {
     expect(sizes).toEqual([]);
   });
 
-  it('a host removed from the document without detach() neither throws nor leaks', () => {
+  it('a container removed from the document without detach() neither throws nor leaks', () => {
     FakeResizeObserver.instances = [];
-    const host = el();
-    attachPaneSize(host, () => {}, FakeResizeObserver);
+    const container = el();
+    attachPaneSize(container, () => {}, FakeResizeObserver);
 
-    expect(() => host.remove()).not.toThrow();
+    expect(() => container.remove()).not.toThrow();
     // The observer is still live (no detach() was called) — firing it after removal is exactly
     // what a real ResizeObserver can still do for a just-unmounted element, and it must not throw.
     expect(() => FakeResizeObserver.instances[0]!.fire({ width: 0, height: 0 })).not.toThrow();
   });
 
-  it('observes exactly the host, once', () => {
+  it('observes exactly the container, once', () => {
     FakeResizeObserver.instances = [];
-    const host = el();
-    attachPaneSize(host, () => {}, FakeResizeObserver);
+    const container = el();
+    attachPaneSize(container, () => {}, FakeResizeObserver);
 
     expect(FakeResizeObserver.instances).toHaveLength(1);
-    expect(FakeResizeObserver.instances[0]!.targets).toEqual([host]);
+    expect(FakeResizeObserver.instances[0]!.targets).toEqual([container]);
   });
 });

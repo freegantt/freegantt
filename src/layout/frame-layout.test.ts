@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { computeFrame } from './frame.js';
 import { FrameLayout } from './frame-layout.js';
-import { sampleEntries } from '../../fixtures/sample-project.js';
+import { sampleEntries } from '../../fixtures/sample-dataset.js';
 import { createTimeScale, dayPreset } from '../time/index.js';
 
 // FrameLayout exists to keep ONE row-height index alive across a Gantt's renders (#47), so what has

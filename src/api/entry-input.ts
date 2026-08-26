@@ -1,4 +1,4 @@
-// api/ is the host boundary, so it is where what a host *writes* (`EntryInput`) becomes what the
+// api/ is the consumer boundary, so it is where what a consumer *writes* (`EntryInput`) becomes what the
 // library *stores* (`Entry`) — see plans/01 §1. It is also the only layer permitted to see both
 // model/ and time/, which this reading needs: the brand helpers live in one and the zone-aware
 // reading in the other.
