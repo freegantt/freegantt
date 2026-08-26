@@ -44,7 +44,7 @@ Slices are scope, not calendar estimates. Within a slice, entries are ordered so
 - `view/`: Gantt shell — grid pane (label column), splitter, timeline pane; single scroll owner; vertical + horizontal virtualization windows; row-height index behind an interface (simple prefix-sum implementation).
 - Shared row geometry: grid and timeline both position rows from `frame.rows` (I9 pixel test).
 - Zoom: preset switching + `range: 'fitDataset'`; anchored zoom (the instant under the cursor stays put).
-- Theming foundation: CSS custom properties + parts vocabulary (`--fg-*`, `data-flag`); light/dark.
+- Theming foundation: CSS custom properties + parts vocabulary (`--fg-*`, `data-flag`); light/dark, default colour tokens sourced from an existing palette (`plans/s1.10-theming-and-a11y/README.md` D-S1.10-9), fully overridable per level 1; a named multi-preset picker beyond light/dark is deferred to S6 (same doc, §9).
 - A11y foundation: the Gantt is focusable, rows/bars have roles and labels, focus visible.
 
 **Acceptance**

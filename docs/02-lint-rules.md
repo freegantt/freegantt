@@ -195,6 +195,18 @@ Every custom rule spec below is complete enough to implement without re-reading 
 
 ---
 
+### 3.11 `freegantt/no-inline-style-outside-geometry` — syntactic · S1.10 (`plans/s1.10-theming-and-a11y/README.md` D-S1.10-6)
+
+**Flags:** in `src/render/**` and `src/view/**` — any `node.style.<prop> = …` assignment where `<prop>` is not `transform`, `width`, or `height`.
+
+**Allowed:** `transform`/`width`/`height` — the three properties that carry a live per-frame or per-instance number (row/bar position, grid width, header spacer height). Everything structural (`display`, `overflow`, `position`, `flexDirection`, `cursor`, colors, …) moves to the base stylesheet `ensureBaseStyles` injects (`src/view/styles.ts`).
+
+**Scope:** expected to widen to `src/interaction/**` once gesture previews need the same per-frame allowance (§3.3) — not a gap today, just not yet applicable.
+
+**Message:** `Structure moves to the base stylesheet; inline styles are for live per-frame/per-instance geometry only (transform/width/height). (plans/s1.10-theming-and-a11y/README.md D-S1.10-6)`
+
+---
+
 ## 4. Message discipline
 
 Every custom-rule message follows one shape: **what is wrong · what to do instead · the spec citation**. This matters more than usual here, because the primary consumer of these messages is often an agent editing the file, and a message ending in `(plans/01 §5)` sends it to the governing text instead of to a workaround.
@@ -206,7 +218,7 @@ Rules land with the code they can govern. Rows below match the matrix statuses.
 | Slice | Rules active |
 |---|---|
 | S0 | B1, B2, B3, B5, B6, B7, B8, B10, B11, 3.1, 3.3, 3.4, 3.5, 3.7, 3.8, 3.9 |
-| S1 | + B4, 3.2, 3.10 |
+| S1 | + B4, 3.2, 3.10, 3.11 |
 | S2 | + B9, 3.6 |
 | S4 | (no new rules — I6/I14 are tests) |
 
