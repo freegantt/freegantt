@@ -8,7 +8,7 @@ const gantt = new Gantt({ host: '#gantt', dataset });
 
 const THEME_STORAGE_KEY = 'freegantt-harness-theme';
 
-function isTheme(value: string | null): value is Theme {
+function isTheme(value: string | null | undefined): value is Theme {
   return value === 'auto' || value === 'light' || value === 'dark';
 }
 
@@ -21,7 +21,7 @@ function applyTheme(choice: Theme): void {
   }
   localStorage.setItem(THEME_STORAGE_KEY, choice);
   document.querySelectorAll<HTMLButtonElement>('[data-theme-choice]').forEach((button) => {
-    button.setAttribute('aria-pressed', String(button.dataset.themeChoice === choice));
+    button.setAttribute('aria-pressed', String(button.dataset['themeChoice'] === choice));
   });
 }
 
@@ -30,7 +30,7 @@ applyTheme(isTheme(stored) ? stored : 'auto');
 
 document.querySelectorAll<HTMLButtonElement>('[data-theme-choice]').forEach((button) => {
   button.addEventListener('click', () => {
-    const choice = button.dataset.themeChoice;
+    const choice = button.dataset['themeChoice'];
     if (isTheme(choice)) applyTheme(choice);
   });
 });
