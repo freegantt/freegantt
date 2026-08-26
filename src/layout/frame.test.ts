@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { computeFrame } from './frame.js';
 import { PrefixSumHeightIndex } from './row-height-index.js';
 import { sampleEntries } from '../../fixtures/sample-dataset.js';
+import { seededEntryInputs } from '../../fixtures/seeded-dataset.js';
 import { createTimeScale, dayPreset, instant, formatDate, formatEndInclusive } from '../time/index.js';
 import { entryId } from '../model/index.js';
 import type { Entry } from '../model/index.js';
@@ -335,3 +336,32 @@ describe('computeFrame — horizontal culling', () => {
     expect(frame.bars).toHaveLength(entries.length);
   });
 });
+
+describe(
+  'computeFrame — 5,000 entries (supporting test for [S1-A1], not the acceptance proof itself:' +
+    ' the box says "in the DOM", proven by e2e/large-dataset.spec.ts)',
+  () => {
+    const large: Entry[] = seededEntryInputs({ count: 5000 }).map((input) => ({
+      id: entryId(input.id),
+      name: input.name,
+      start: instant(input.start as Date),
+      end: instant(input.end as Date),
+    }));
+    const largeScale = createTimeScale({ timeZone: 'UTC', range: large[0]!, pxPerMs: 1 / 100_000 });
+
+    it('emits only windowed rows while contentHeight stays the full extent', () => {
+      const frame = computeFrame({
+        entries: large,
+        scale: largeScale,
+        preset,
+        visible: { x: 0, y: 0, width: 800, height: 600 },
+        overscan: { verticalRows: 2, horizontalPx: 128 },
+        rowHeight: 32,
+        revision: 0,
+      });
+      expect(frame.rows.length).toBeLessThan(large.length);
+      expect(frame.rowCount).toBe(large.length);
+      expect(frame.contentHeight).toBe(large.length * 32);
+    });
+  },
+);

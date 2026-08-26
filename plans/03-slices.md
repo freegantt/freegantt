@@ -49,11 +49,11 @@ Slices are scope, not calendar estimates. Within a slice, entries are ordered so
 
 **Acceptance**
 
-- [ ] Scroll a 5,000-entry fixture smoothly; only windowed rows exist in the DOM.
-- [ ] Grid and timeline row tops are pixel-identical under fractional zoom (I9).
-- [ ] Preset switch and zoom are live reconfigurations — no remount, anchor preserved.
-- [ ] Two harness Gantt instances given the same `ScrollModel` scroll together (a 5-line harness demo — the D9 seam proven now, cheaply).
-- [ ] Axis headers correct across a DST transition in the dataset zone (unit-tested in `time/`).
+- [x] `[S1-A1]` Scroll a 5,000-entry fixture: only windowed rows exist in the DOM. (Not "smoothly" — that's throughput, D2's measured spike at S7, and a timing assertion in CI is a flaky proxy for it; S1.11 D-S1.11-5.)
+- [x] `[S1-A2]` Grid and timeline row tops are pixel-identical under fractional zoom (I9).
+- [x] `[S1-A3]` Preset switch and zoom are live reconfigurations — no remount, anchor preserved.
+- [x] `[S1-A4]` Two harness Gantt instances given the same `ScrollModel` scroll together (a 5-line harness demo — the D9 seam proven now, cheaply).
+- [x] `[S1-A5]` Axis headers correct across a DST transition in the dataset zone (unit-tested in `time/`).
 
 ---
 
@@ -64,6 +64,7 @@ Slices are scope, not calendar estimates. Within a slice, entries are ordered so
 **Scope**
 
 - `data/`: normalized stores + indexes; instance-scoped reactivity façade (one small dep, swappable); `DatasetData` owning stores + zone.
+- Change signalling between `Dataset` and `GanttShell` (#33, deferred here at S1.11 D-S1.11-7): S2 **replaces** `GanttShellOptions.entries` with the real changeset-driven binding — it never adds a `setEntries()` beside it. A second reactivity mechanism living next to the real one is #1's R4, and the cheapest moment to forbid it is before this slice starts.
 - Transactions: batching, auto-wrap of single mutations, one changeset per transaction (`origin` tagged).
 - Undo/redo: transaction = atomic unit; recorded changesets replayed exactly; history API (`canUndo`, capacity).
 - Changesets: `{ added, removed, updated: {field, from, to} }` (`01` §6); `dataset.on('change')`; `dataset.apply(changeSet)` with validation + rejection reporting.

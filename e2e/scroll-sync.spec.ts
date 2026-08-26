@@ -15,6 +15,19 @@ async function scrollTops(page: import('@playwright/test').Page) {
   }));
 }
 
+async function scrollPositions(page: import('@playwright/test').Page) {
+  return page.evaluate(() => ({
+    tall: {
+      x: document.querySelector('#tall .fg-timeline-pane')!.scrollLeft,
+      y: document.querySelector('#tall .fg-timeline-pane')!.scrollTop,
+    },
+    short: {
+      x: document.querySelector('#short .fg-timeline-pane')!.scrollLeft,
+      y: document.querySelector('#short .fg-timeline-pane')!.scrollTop,
+    },
+  }));
+}
+
 test('a model-driven write does not feed back into another panTo (echo case, D-S1.5-6)', async ({ page }) => {
   await page.goto('/scroll-sync.html');
   await expect(page.locator('#tall .fg-bar').first()).toBeVisible();
@@ -70,4 +83,26 @@ test('a shorter chart pins at its own max while the taller one keeps going, and 
   await expect.poll(async () => (await scrollTops(page)).short).toBe(resumeAt);
   const resumed = await scrollTops(page);
   expect(resumed.tall).toBe(resumeAt);
+});
+
+test('[S1-A4] a scroll on #tall moves #short in x and y (D9, plans/00 §4 gate condition 2)', async ({
+  page,
+}) => {
+  await page.goto('/scroll-sync.html');
+  await expect(page.locator('#tall .fg-bar').first()).toBeVisible();
+
+  const before = await scrollPositions(page);
+
+  await page.evaluate(() => {
+    const el = document.querySelector('#tall .fg-timeline-pane')!;
+    el.scrollLeft = 400;
+    el.scrollTop = 150;
+    el.dispatchEvent(new Event('scroll'));
+  });
+
+  await expect.poll(async () => (await scrollPositions(page)).short.x).toBeGreaterThan(before.short.x);
+  const after = await scrollPositions(page);
+  expect(after.short.x).toBeGreaterThan(before.short.x);
+  expect(after.short.y).toBeGreaterThan(before.short.y);
+  expect(after.short).toEqual(after.tall);
 });

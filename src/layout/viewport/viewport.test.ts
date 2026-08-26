@@ -180,7 +180,7 @@ describe('Viewport.zoomTo / zoomBy (S1.9, D-S1.9-5)', () => {
     expect(calls()).toBe(1);
   });
 
-  it('zoomBy delivers exactly one notification', () => {
+  it('[S1-A3] zoomBy delivers exactly one notification', () => {
     const { viewport, calls } = boundViewport();
     viewport.zoomBy(1.5);
     expect(calls()).toBe(1);
