@@ -105,8 +105,8 @@ export function createTimeScale(options: TimeScaleOptions): TimeScale {
 }
 
 /** The zoom a preset implies on its own: one tick occupies its `tickWidthPx`. This is what a scale
- * resolves to when there is no measured viewport to fit into (detached host, `display:none`,
- * pre-paint) — the preset already states an intended density, so an unmeasured host is not a special
+ * resolves to when there is no measured viewport to fit into (detached container, `display:none`,
+ * pre-paint) — the preset already states an intended density, so an unmeasured container is not a special
  * case needing an invented minimum width. Calendar stepping resolves through `zone`, so a day tick is
  * 23 or 25 hours across a DST transition, not always 24. */
 export function pxPerMsForPreset(zone: string, preset: ViewPreset, at: Instant): number {

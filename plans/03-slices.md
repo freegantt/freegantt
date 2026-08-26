@@ -17,7 +17,7 @@ Slices are scope, not calendar estimates. Within a slice, entries are ordered so
 - `time/` (minimal): `instant()`, `toISO()`, zone-aware `startOfDay`/`addDays`/`diff` for one dataset zone; magic-constant lint (I10).
 - `layout/` (minimal): row resolution (`source: 'entries'`, flat list), one item per entry, fixed row height, `computeFrame()` returning rows + bars; deterministic `Item.id` (I8).
 - `render/dom` (minimal): mount, `sync(frame)` rendering absolutely-positioned row and bar elements; the keyed reconciler in its hard-bounded scope (`01` §8.1); `render/null` for tests.
-- `api/` (minimal): `new Dataset({ entries })`, `new Gantt({ host, dataset })`, `destroy()`.
+- `api/` (minimal): `new Dataset({ entries })`, `new Gantt({ container, dataset })`, `destroy()`.
 - Harness: a Vite page that mounts the Gantt on a fixture; this page lives forever and every slice adds to it.
 - Fixtures: one realistic sample project (~50 entries).
 
@@ -49,11 +49,11 @@ Slices are scope, not calendar estimates. Within a slice, entries are ordered so
 
 **Acceptance**
 
-- [ ] Scroll a 5,000-entry fixture smoothly; only windowed rows exist in the DOM.
-- [ ] Grid and timeline row tops are pixel-identical under fractional zoom (I9).
-- [ ] Preset switch and zoom are live reconfigurations — no remount, anchor preserved.
-- [ ] Two harness Gantt instances given the same `ScrollModel` scroll together (a 5-line harness demo — the D9 seam proven now, cheaply).
-- [ ] Axis headers correct across a DST transition in the dataset zone (unit-tested in `time/`).
+- [x] `[S1-A1]` Scroll a 5,000-entry fixture: only windowed rows exist in the DOM. (Not "smoothly" — that's throughput, D2's measured spike at S7, and a timing assertion in CI is a flaky proxy for it; S1.11 D-S1.11-5.)
+- [x] `[S1-A2]` Grid and timeline row tops are pixel-identical under fractional zoom (I9).
+- [x] `[S1-A3]` Preset switch and zoom are live reconfigurations — no remount, anchor preserved.
+- [x] `[S1-A4]` Two harness Gantt instances given the same `ScrollModel` scroll together (a 5-line harness demo — the D9 seam proven now, cheaply).
+- [x] `[S1-A5]` Axis headers correct across a DST transition in the dataset zone (unit-tested in `time/`).
 
 ---
 
@@ -64,6 +64,7 @@ Slices are scope, not calendar estimates. Within a slice, entries are ordered so
 **Scope**
 
 - `data/`: normalized stores + indexes; instance-scoped reactivity façade (one small dep, swappable); `DatasetData` owning stores + zone.
+- Change signalling between `Dataset` and `GanttShell` (#33, deferred here at S1.11 D-S1.11-7): S2 **replaces** `GanttShellOptions.entries` with the real changeset-driven binding — it never adds a `setEntries()` beside it. A second reactivity mechanism living next to the real one is #1's R4, and the cheapest moment to forbid it is before this slice starts.
 - Transactions: batching, auto-wrap of single mutations, one changeset per transaction (`origin` tagged).
 - Undo/redo: transaction = atomic unit; recorded changesets replayed exactly; history API (`canUndo`, capacity).
 - Changesets: `{ added, removed, updated: {field, from, to} }` (`01` §6); `dataset.on('change')`; `dataset.apply(changeSet)` with validation + rejection reporting.
@@ -140,7 +141,7 @@ Slices are scope, not calendar estimates. Within a slice, entries are ordered so
 **Scope**
 
 - Tree UI: indent + expand/collapse in the grid's name column; collapse state is view state (per Gantt, not in dataset data).
-- Kind-driven item emission (`01` §2.5): `group` → summary bracket (rollup from S3), `milestone` → diamond, host-registered kinds via the emitter seam; empty groups render as groups.
+- Kind-driven item emission (`01` §2.5): `group` → summary bracket (rollup from S3), `milestone` → diamond, consumer-registered kinds via the emitter seam; empty groups render as groups.
 - `hierarchy: { autoGroup: true }` on `Dataset`: first child promotes the parent to `group` within the triggering transaction; promote only, never demote (`02` §2).
 - Row sources: `{ source: 'group', groupBy }` and `{ source: 'custom', resolve }` (`01` §2.3); group header rows.
 - Sort and filter as store-level view specs with tree-aware policies (filter keeps ancestors by default; sort stays within parent).
@@ -167,7 +168,7 @@ Slices are scope, not calendar estimates. Within a slice, entries are ordered so
 
 **Scope**
 
-- `extensions/`: plugin host implementing the full `PluginContext` (`01` §10) — decorations, columns, renderers, overlay host, controllers, keybindings, commands, disposables.
+- `extensions/`: plugin runtime implementing the full `PluginContext` (`01` §10) — decorations, columns, renderers, overlay anchor, controllers, keybindings, commands, disposables.
 - Built-in features **as plugins**: tooltips (shared `Popup` primitive: anchoring, flipping, clamping, focus trap), context menu (command-registry-driven), row highlight decorations, today line.
 - Grid maturation: column types (name, start, end, duration, custom value/renderer), inline editors (text, date via a pluggable date-input seam — no bundled date-picker dependency), column resize/reorder; `beforeEntryEdit` veto/replace flow.
 - Renderer callbacks at every declared point (`bar`, `cell`, `header`, `tooltip`), text-safe by default (I13).
@@ -178,9 +179,9 @@ Slices are scope, not calendar estimates. Within a slice, entries are ordered so
 
 - [ ] Context menu and tooltips are plugins with zero private imports (lint-proven — the dogfood gate).
 - [ ] A harness-only third-party-style plugin (e.g., a "weekend shading + jump-to-today command" plugin) is written against the public contract only.
-- [ ] A host-defined entry kind (custom renderer + capabilities + context-menu `when` items, registered via config/plugin only) renders and behaves correctly with zero core edits — the §2.5 open-set claim, proven.
+- [ ] A consumer-defined entry kind (custom renderer + capabilities + context-menu `when` items, registered via config/plugin only) renders and behaves correctly with zero core edits — the §2.5 open-set claim, proven.
 - [ ] Every pointer capability has a keyboard path; axe reports no violations on harness pages.
-- [ ] Host replaces the entry editor via `beforeEntryEdit` (demo in harness).
+- [ ] Consumer replaces the entry editor via `beforeEntryEdit` (demo in harness).
 - [ ] Unused features are absent from a consumer bundle (tree-shaking test in CI).
 
 ---

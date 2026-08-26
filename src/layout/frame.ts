@@ -49,7 +49,7 @@ export interface FrameBar {
   lane: number;
   flags: BarFlags;
   /** What a screen reader announces: `${entry.name}, ${formatDate(zone, start)} – ${formatEndInclusive(zone, end)}`.
-   * Library-derived text, not host render output — same precedent as `label` (plans/01 §4: "no user
+   * Library-derived text, not consumer render output — same precedent as `label` (plans/01 §4: "no user
    * render output in the frame"). Composed here because it needs the dataset zone and inclusive-end
    * formatting, both `time/`-only (S1.10, D-S1.10-5). */
   a11yLabel: string;

@@ -8,7 +8,7 @@ export type { Dataset } from './dataset.js';
 export {
   FreeGanttError,
   UnsupportedUnitError,
-  HostNotFoundError,
+  ContainerNotFoundError,
   InvalidInstantError,
   UnknownPresetError,
   EntryNotFoundError,

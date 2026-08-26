@@ -11,7 +11,7 @@ declare global {
   }
 }
 
-test('zoomBy keeps the anchored pointer position visually fixed (U2/U3)', async ({ page }) => {
+test('[S1-A3] zoomBy keeps the anchored pointer position visually fixed (U2/U3)', async ({ page }) => {
   await page.goto('/zoom.html');
   const pane = page.locator('.fg-timeline-pane');
   const bar = page.locator('.fg-bar').first();

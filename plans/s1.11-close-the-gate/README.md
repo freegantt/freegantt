@@ -35,19 +35,19 @@ Not a question, and settled outside this document: **#64's naming verdict** (`ho
 Acceptance for each story is the checkbox under it — the only copy of this checklist.
 
 - **U1.** (reviewer) I want to know whether S1 is finished. I run `pnpm gate` and read five lines, each naming an acceptance box from `plans/03-slices.md` and each backed by a test that actually ran.
-  - [ ] `node scripts/slice-gate.mjs` prints an `S1 → S2` gate with six checks and `human: []`, and exits non-zero if any check fails (`test/guards/slice-gate.test.ts`).
+  - [x] `node scripts/slice-gate.mjs` prints an `S1 → S2` gate with six checks and `human: []`, and exits non-zero if any check fails (`test/guards/slice-gate.test.ts`).
 - **U2.** (reviewer) I delete the body of `[S1-A2]`'s test and re-run the gate. It goes red. A gate that stays green when its subject is removed is worse than no gate.
-  - [ ] Every id-addressed check fails when the id is absent from the source, and fails when the tagged test fails (`test/guards/slice-gate.test.ts`, both directions).
+  - [x] Every id-addressed check fails when the id is absent from the source, and fails when the tagged test fails (`test/guards/slice-gate.test.ts`, both directions).
 - **U3.** I open a 5,000-entry Gantt and scroll it. The DOM holds a bounded number of rows the whole time, not 5,000.
-  - [ ] `[S1-A1]` — `e2e/large-dataset.spec.ts`: node count bounded by window + overscan, and the id set moves after a scroll.
+  - [x] `[S1-A1]` — `e2e/large-dataset.spec.ts`: node count bounded by window + overscan, and the id set moves after a scroll.
 - **U4.** I give two Gantt instances the same `ScrollModel` and the same `TimeScaleModel`. Scrolling one moves the other, on both axes, with no code between them.
-  - [ ] `[S1-A4]` — `e2e/scroll-sync.spec.ts`: a scroll on one instance moves the other in x **and** y.
+  - [x] `[S1-A4]` — `e2e/scroll-sync.spec.ts`: a scroll on one instance moves the other in x **and** y.
 - **U5.** (maintainer) I read `docs/01-invariant-guard-matrix.md` to learn what is enforced today. Every rule it names as `AUTO` exists.
-  - [ ] `test/guards/matrix-coverage.test.ts` asserts every `freegantt/*` rule on an `AUTO`/`AUTO-PARTIAL` row is registered in `eslint/rules/index.cjs`; `PLANNED (Sn)` rows are exempt.
+  - [x] `test/guards/matrix-coverage.test.ts` asserts every `freegantt/*` rule on an `AUTO`/`AUTO-PARTIAL` row is registered in `eslint/rules/index.cjs`; `PLANNED (Sn)` rows are exempt.
 - **U6.** (maintainer) I search the codebase for `host`. Every hit means one thing.
-  - [ ] `host` appears nowhere in `src/`, `harness/`, `fixtures/`, `e2e/`, `plans/`, `docs/`, `CONTEXT.md` or `README.md` except as historical record in `docs/adr/**` (`test/guards/retired-words.test.ts`).
+  - [x] `host` appears nowhere in `src/`, `harness/`, `fixtures/`, `e2e/`, `plans/`, `docs/`, `CONTEXT.md` or `README.md` except as historical record in `docs/adr/**` (`test/guards/retired-words.test.ts`).
 - **U7.** (maintainer) I search for `Project`. Same answer — ADR 0004 retired it, and the tree agrees.
-  - [ ] `fixtures/sample-project.ts` is `fixtures/sample-dataset.ts`; the same guard covers `Project` outside `docs/adr/**`.
+  - [x] `fixtures/sample-project.ts` is `fixtures/sample-dataset.ts`; the same guard covers `Project` outside `docs/adr/**`.
 
 ---
 
@@ -355,43 +355,43 @@ Two PRs, in this order (D-S1.11-6). Vocabulary first — it touches every file t
 
 Nothing in this PR changes behaviour. `pnpm verify` and `pnpm test:e2e` are green at its parent commit and green at its head, and every existing test passes **unmodified except for the renamed identifiers** — that symmetry is the review. One test file is added: `retired-words.test.ts`, which asserts the rename itself and is what stops it regressing the week after it lands. No other test is added, removed, or has its assertions changed; if one needs to be, the rename changed behaviour and that is the finding.
 
-- [ ] `host` → `container` across `src/`, tests, `harness/`, `e2e/`, `README.md`, `plans/02`; `HostNotFoundError` → `ContainerNotFoundError`; `.fg-host` → `.fg-container`; `RenderSurfaces<THost>` → `<TSurface>`
-- [ ] `host` (application sense) → `consumer` in `CONTEXT.md`, `CLAUDE.md`, `plans/00`–`04` and doc comments
-- [ ] `fixtures/sample-project.ts` → `fixtures/sample-dataset.ts` and its eight import sites
-- [ ] `test/guards/retired-words.test.ts`; `CONTEXT.md` entries for **Container** and **Consumer**
-- [ ] `pnpm verify` green on the rename alone, before anything else lands
+- [x] `host` → `container` across `src/`, tests, `harness/`, `e2e/`, `README.md`, `plans/02`; `HostNotFoundError` → `ContainerNotFoundError`; `.fg-host` → `.fg-container`; `RenderSurfaces<THost>` → `<TSurface>`
+- [x] `host` (application sense) → `consumer` in `CONTEXT.md`, `CLAUDE.md`, `plans/00`–`04` and doc comments
+- [x] `fixtures/sample-project.ts` → `fixtures/sample-dataset.ts` and its eight import sites
+- [x] `test/guards/retired-words.test.ts`; `CONTEXT.md` entries for **Container** and **Consumer**
+- [x] `pnpm verify` green on the rename alone, before anything else lands (`pnpm test:e2e` green too, 11/11)
 
 ### PR 2 — S1.11b · the gate
 
 Everything below lands on top of a merged, green S1.11a.
 
 #### Fixtures and pages
-- [ ] `fixtures/seeded-dataset.ts` + `fixtures/seeded-dataset.test.ts` (§3.1)
-- [ ] `harness/large-dataset.html` + `.ts` at `zoom: 'preset'`
-- [ ] `harness/scroll-sync.ts` — `new TimeScaleModel({ zoom: 'preset' })` (D-S1.11-4)
-- [ ] `vite.config.ts` — declare all four harness inputs (D-S1.11-5)
+- [x] `fixtures/seeded-dataset.ts` + `fixtures/seeded-dataset.test.ts` (§3.1)
+- [x] `harness/large-dataset.html` + `.ts` at `zoom: 'preset'`
+- [x] `harness/scroll-sync.ts` — `new TimeScaleModel({ zoom: 'preset' })` (D-S1.11-4)
+- [x] `vite.config.ts` — declare all four harness inputs (D-S1.11-5)
 
 #### Acceptance ids
-- [ ] `[S1-A1]` — `e2e/large-dataset.spec.ts`
-- [ ] `[S1-A4]` — `e2e/scroll-sync.spec.ts`, both axes
-- [ ] `[S1-A3]` — added to `viewport.test.ts` and `e2e/zoom.spec.ts` (S1.9 specified the first and it did not land)
-- [ ] Supporting windowed-frame unit test over 5,000 entries (`layout/frame.test.ts`)
+- [x] `[S1-A1]` — `e2e/large-dataset.spec.ts`
+- [x] `[S1-A4]` — `e2e/scroll-sync.spec.ts`, both axes
+- [x] `[S1-A3]` — added to `viewport.test.ts` and `e2e/zoom.spec.ts` (S1.9 specified the first and it did not land)
+- [x] Supporting windowed-frame unit test over 5,000 entries (`layout/frame.test.ts`)
 
 #### The gate
-- [ ] `tagged()` helper + the `S1` entry in `scripts/slice-gate.mjs`, `human: []` (§3.2)
-- [ ] `test/guards/slice-gate.test.ts` — both directions (§3.4)
-- [ ] `test/guards/matrix-coverage.test.ts` — Mechanism column, both tables (§3.3)
+- [x] `tagged()` helper + the `S1` entry in `scripts/slice-gate.mjs`, `human: []` (§3.2)
+- [x] `test/guards/slice-gate.test.ts` — both directions (§3.4)
+- [x] `test/guards/matrix-coverage.test.ts` — Mechanism column, both tables (§3.3)
 
 #### Harness review (CLAUDE.md's standing rule)
-- [ ] Base stylesheet sets the origin for every absolutely-positioned Part (D-S1.11-8); delete `top`/`left`/`.fg-header { height }` from all harness pages; keep typography
-- [ ] Re-read all four `harness/*.ts` against the rule and record any remaining gap against S1.11
+- [x] Base stylesheet sets the origin for every absolutely-positioned Part (D-S1.11-8); delete `top`/`left`/`.fg-header { height }` from all harness pages; keep typography
+- [x] Re-read all four `harness/*.ts` against the rule — clean, no gap found (each mounts via public API only, no restated defaults, no hand-built stand-ins for library computation)
 
 #### Ledger
-- [ ] The §7 spec edits, landed with this step
-- [ ] `docs/01` — seven overstated rows corrected, dependency count fixed to two, I9/I12 enforced
-- [ ] #33 deferred to S2 with the reason in `plans/03` §S2; #41 and #64 closed
-- [ ] `plans/temp_todo_for_s1-close.md` deleted; `plans/need-fixing/` triaged
-- [ ] `pnpm verify` green; `pnpm test:e2e` green; `pnpm gate` prints `S1 → S2` with six ✔
+- [x] The §7 spec edits, landed with this step
+- [x] `docs/01` — ten overstated rows corrected (seven `AUTO`, three `AUTO-PARTIAL`; D-S1.11-11's own count was of the `AUTO` subset), dependency count fixed to two, I9/I12 already enforced (no change needed — already named `[S1-A2]`/the shipped rule names)
+- [x] #33 deferred to S2 with the reason in `plans/03` §S2; #41 and #64 closed
+- [x] `plans/temp_todo_for_s1-close.md` deleted; `plans/need-fixing/` triaged (the one file in it moved to `plans/fixed/` — its findings are all resolved by the S1.7–S1.9 `Viewport`/`bind(binding, onChange)` refactor)
+- [x] `pnpm verify` green; `pnpm test:e2e` green (13/13); `pnpm gate` prints `S1 → S2` with six ✔
 - [ ] `.slice` → `S2` in a **separate** reviewed commit (D-S1.11-10)
 
 ---

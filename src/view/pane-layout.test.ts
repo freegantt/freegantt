@@ -9,13 +9,13 @@ function el(): HTMLElement {
 }
 
 describe('PaneLayout', () => {
-  it('creates a grid pane, a splitter and a timeline pane inside the host', () => {
-    const host = el();
-    const paneLayout = new PaneLayout({ host });
+  it('creates a grid pane, a splitter and a timeline pane inside the container', () => {
+    const container = el();
+    const paneLayout = new PaneLayout({ container });
 
-    expect(host.querySelector('.fg-grid-pane')).not.toBeNull();
-    expect(host.querySelector('.fg-splitter')).not.toBeNull();
-    expect(host.querySelector('.fg-timeline-pane')).not.toBeNull();
+    expect(container.querySelector('.fg-grid-pane')).not.toBeNull();
+    expect(container.querySelector('.fg-splitter')).not.toBeNull();
+    expect(container.querySelector('.fg-timeline-pane')).not.toBeNull();
     expect(paneLayout.panes.grid).toBeInstanceOf(HTMLElement);
     expect(paneLayout.panes.splitter).toBeInstanceOf(HTMLElement);
     expect(paneLayout.panes.timeline).toBeInstanceOf(HTMLElement);
@@ -24,11 +24,11 @@ describe('PaneLayout', () => {
   });
 
   it('the grid pane carries a header spacer sized from --fg-header-height', () => {
-    const host = el();
-    host.style.setProperty('--fg-header-height', '30px');
-    const paneLayout = new PaneLayout({ host });
+    const container = el();
+    container.style.setProperty('--fg-header-height', '30px');
+    const paneLayout = new PaneLayout({ container });
 
-    const spacer = host.querySelector<HTMLElement>('.fg-grid-spacer')!;
+    const spacer = container.querySelector<HTMLElement>('.fg-grid-spacer')!;
     expect(spacer.style.height).toBe('30px');
 
     paneLayout.destroy();
@@ -37,33 +37,33 @@ describe('PaneLayout', () => {
   it('the default grid width comes from --fg-grid-pane-width and falls back to 160', () => {
     const withToken = el();
     withToken.style.setProperty('--fg-grid-pane-width', '240px');
-    const paneLayoutA = new PaneLayout({ host: withToken });
+    const paneLayoutA = new PaneLayout({ container: withToken });
     expect(paneLayoutA.gridWidth).toBe(240);
     paneLayoutA.destroy();
 
     const withoutToken = el();
-    const paneLayoutB = new PaneLayout({ host: withoutToken });
+    const paneLayoutB = new PaneLayout({ container: withoutToken });
     expect(paneLayoutB.gridWidth).toBe(160);
     paneLayoutB.destroy();
   });
 
   it('a constructor gridWidth option overrides the CSS property', () => {
-    const host = el();
-    host.style.setProperty('--fg-grid-pane-width', '240px');
-    const paneLayout = new PaneLayout({ host, gridWidth: 300 });
+    const container = el();
+    container.style.setProperty('--fg-grid-pane-width', '240px');
+    const paneLayout = new PaneLayout({ container, gridWidth: 300 });
     expect(paneLayout.gridWidth).toBe(300);
     paneLayout.destroy();
   });
 
   it('setting gridWidth moves the boundary and remounts no element', () => {
-    const host = el();
-    const paneLayout = new PaneLayout({ host });
-    const gridPaneBefore = host.querySelector('.fg-grid-pane');
+    const container = el();
+    const paneLayout = new PaneLayout({ container });
+    const gridPaneBefore = container.querySelector('.fg-grid-pane');
 
     paneLayout.gridWidth = 220;
 
     expect(paneLayout.gridWidth).toBe(220);
-    const gridPane = host.querySelector<HTMLElement>('.fg-grid-pane')!;
+    const gridPane = container.querySelector<HTMLElement>('.fg-grid-pane')!;
     expect(gridPane).toBe(gridPaneBefore);
     expect(gridPane.style.width).toBe('220px');
 
@@ -71,8 +71,8 @@ describe('PaneLayout', () => {
   });
 
   it('gridWidth never goes below minGridWidth', () => {
-    const host = el();
-    const paneLayout = new PaneLayout({ host, gridWidth: 200, minGridWidth: 120 });
+    const container = el();
+    const paneLayout = new PaneLayout({ container, gridWidth: 200, minGridWidth: 120 });
 
     paneLayout.gridWidth = 40;
 
@@ -80,23 +80,23 @@ describe('PaneLayout', () => {
     paneLayout.destroy();
   });
 
-  it('measureTimelinePane() reports the timeline pane, not the host', () => {
-    const host = el();
-    const paneLayout = new PaneLayout({ host });
+  it('measureTimelinePane() reports the timeline pane, not the container', () => {
+    const container = el();
+    const paneLayout = new PaneLayout({ container });
 
     Object.defineProperty(paneLayout.panes.timeline, 'clientWidth', { value: 500, configurable: true });
     Object.defineProperty(paneLayout.panes.timeline, 'clientHeight', { value: 300, configurable: true });
-    Object.defineProperty(host, 'clientWidth', { value: 999, configurable: true });
+    Object.defineProperty(container, 'clientWidth', { value: 999, configurable: true });
 
     expect(paneLayout.measureTimelinePane()).toEqual({ width: 500, height: 300 });
 
     paneLayout.destroy();
   });
 
-  it('destroy() clears the host', () => {
-    const host = el();
-    const paneLayout = new PaneLayout({ host });
+  it('destroy() clears the container', () => {
+    const container = el();
+    const paneLayout = new PaneLayout({ container });
     paneLayout.destroy();
-    expect(host.children.length).toBe(0);
+    expect(container.children.length).toBe(0);
   });
 });

@@ -21,7 +21,7 @@ export type {
 export {
   FreeGanttError,
   UnsupportedUnitError,
-  HostNotFoundError,
+  ContainerNotFoundError,
   InvalidInstantError,
   UnknownPresetError,
   EntryNotFoundError,
@@ -33,8 +33,8 @@ export {
 // consumer has no legal way to build the Entry[] that `new Dataset({ entries })` requires (#24).
 export { entryId, itemId } from '../model/index.js';
 export type { Entry, EntryKind, EntryId, ItemId, Instant, TimeSpan, Duration } from '../model/index.js';
-// The input twins of the stored types: what a host writes, as opposed to what the library stores.
-// Public because a host that types its own entry builder needs to name them.
+// The input twins of the stored types: what a consumer writes, as opposed to what the library stores.
+// Public because a consumer that types its own entry builder needs to name them.
 export type { EntryInput, InstantInput, TimeSpanInput, DateOnlyEndRule } from '../model/index.js';
 // Point/Size are the S1.5 ScrollModel's own vocabulary (S1.5 README §5) — a consumer building
 // `ScrollIntent.position` or reading `ScrollState` needs the shape in the public surface too.

@@ -17,6 +17,7 @@ export default defineWorkspace([
         'src/data/**/*.test.ts',
         'src/render/null/**/*.test.ts',
         'test/pure/**/*.test.ts',
+        'fixtures/**/*.test.ts',
       ],
     },
   },

@@ -12,7 +12,7 @@ Each layer depends only on layers below it. Everything below the DOM line runs i
 flowchart TB
   subgraph domside["Touches the DOM"]
     direction TB
-    EXT["<b>extensions/</b><br/>plugin host · built-in features<br/>(tooltips · context menu · editors · export)"]
+    EXT["<b>extensions/</b><br/>plugin runtime · built-in features<br/>(tooltips · context menu · editors · export)"]
     INT["<b>interaction/</b><br/>gesture controllers · drafts<br/>keyboard · selection"]
     VIEW["<b>view/</b><br/>Gantt shell · grid pane · timeline pane<br/>viewport binding · virtualization window"]
     REN["<b>render/</b><br/>dom backend (reconciler) · null backend (test/SSR)"]
@@ -78,7 +78,7 @@ src/
     null/        headless backend (tests, SSR, export seam)
   view/          Gantt shell, panes, viewport binding
   interaction/   gesture controllers, keyboard, selection
-  extensions/    plugin host + built-in features
+  extensions/    plugin runtime + built-in features
   api/           public façade: Gantt, Dataset, events
 fixtures/        sample projects + golden scheduling fixtures
 harness/         Vite dev app — every slice demos here
@@ -113,12 +113,12 @@ flowchart LR
   authored -->|"row source config +<br/>layout pipeline"| derived
 ```
 
-`Entry` is an authored, dated record that has no idea it will ever be drawn. `Row` is a horizontal display lane. `Item` is one drawn bar on a row. **A row may host many items, and one entry may produce items on several rows.** Today's classic Gantt (one row per entry, one bar per row) is just the default configuration of that pipeline — not a structural assumption. This is what makes split bars, grouped views, and future workload views configuration rather than rewrites.
+`Entry` is an authored, dated record that has no idea it will ever be drawn. `Row` is a horizontal display lane. `Item` is one drawn bar on a row. **A row may carry many items, and one entry may produce items on several rows.** Today's classic Gantt (one row per entry, one bar per row) is just the default configuration of that pipeline — not a structural assumption. This is what makes split bars, grouped views, and future workload views configuration rather than rewrites.
 
 ### 2.2 Entities
 
 ```ts
-// model/ — types only. TMeta lets hosts attach typed domain data without forking the model.
+// model/ — types only. TMeta lets consumers attach typed domain data without forking the model.
 
 /** Absolute instant, epoch ms. Branded to prevent naked-number mixing. */
 type Instant = number & { readonly __brand: 'Instant' };
@@ -127,7 +127,7 @@ interface TimeSpan { start: Instant; end: Instant }   // half-open [start, end)
 
 interface Duration { value: number; unit: TimeUnit }  // 'ms'|'m'|'h'|'d'|'w'|'M'|'y'
 
-/** Open classification — see §2.5. 'span' | 'group' | 'milestone' ship; hosts add their own. */
+/** Open classification — see §2.5. 'span' | 'group' | 'milestone' ship; consumers add their own. */
 type EntryKind = 'span' | 'group' | 'milestone' | (string & {});
 
 interface Entry<TMeta = unknown> {
@@ -143,7 +143,7 @@ interface Entry<TMeta = unknown> {
   progress?: number;           // 0..1
   /** Interrupted work — renders as multiple bars on one row. */
   segments?: readonly TimeSpan[];
-  meta?: TMeta;                // host-owned, typed via generic
+  meta?: TMeta;                // consumer-owned, typed via generic
 }
 
 /** DERIVED. One display lane. */
@@ -166,7 +166,7 @@ interface Item {
 }
 ```
 
-`Dependency` (predecessor/successor link, with `type`/`lag`/`active`) and the per-entry pin flag formerly on `Entry.scheduling` are **not** defined here. Both are scheduling-plugin-owned data now, not `model/` — pulling scheduling out of the mandatory core layers means `model/` stays scheduling-agnostic, and a host with no scheduling plugin installed never sees either type. They're still authored, persisted data in the sense of §2.1's separation — just owned by the plugin's storage rather than core's — and their shape is described alongside the engine in §7 (exact contract tracked in issue #12).
+`Dependency` (predecessor/successor link, with `type`/`lag`/`active`) and the per-entry pin flag formerly on `Entry.scheduling` are **not** defined here. Both are scheduling-plugin-owned data now, not `model/` — pulling scheduling out of the mandatory core layers means `model/` stays scheduling-agnostic, and a consumer with no scheduling plugin installed never sees either type. They're still authored, persisted data in the sense of §2.1's separation — just owned by the plugin's storage rather than core's — and their shape is described alongside the engine in §7 (exact contract tracked in issue #12).
 
 Reserved for later slices, designed-for now (fields and stores exist as named seams, not dead code) and scheduling-plugin-owned, not `model/` (same treatment as `Dependency` above): `Working calendar` (which days/hours count as workable), `Constraint` (date restrictions, policy-defined vocabulary), `Resource` + `Assignment` (staffing), `Baseline` (snapshots).
 
@@ -175,15 +175,15 @@ erDiagram
   DATASET ||--o{ ENTRY : owns
   ENTRY ||--o{ ENTRY : "parentId (tree)"
 
-  ROW ||--o{ ITEM : hosts
+  ROW ||--o{ ITEM : contains
   ITEM }o--|| ENTRY : "derived from"
 
   ENTRY {
-    string kind "span | group | milestone | host-defined"
+    string kind "span | group | milestone | consumer-defined"
     Instant start
     Instant end_exclusive
     number progress
-    json meta "host-owned"
+    json meta "consumer-owned"
   }
   ROW {
     string kind "entry | group | custom"
@@ -203,12 +203,12 @@ The layout pipeline is `row resolution → item emission → lane packing → ge
 ```ts
 rows: { source: 'entries', tree: true }                        // classic Gantt (default)
 rows: { source: 'group', groupBy: t => t.meta.team }         // one row per group value
-rows: { source: 'custom', resolve: myRowResolver }           // host-defined rows entirely
+rows: { source: 'custom', resolve: myRowResolver }           // consumer-defined rows entirely
 ```
 
 Item emission then places entries (or entry segments) onto rows; overlapping items on one row auto-pack into sub-lanes. Future workload/resource views are simply another row source — no new rendering or interaction code.
 
-Item emission is itself a per-kind seam, mirroring rendering (§10): the pipeline maps `Entry.kind` to an `ItemEmitter` that turns one Entry into its Item(s). Shipped kinds (`span`, `group`, `milestone`) ship a default emitter; a host-defined kind registers its own via `layout.registerItemEmitter` (§10) — unregistered kinds fall back to the `span` emitter (§2.5).
+Item emission is itself a per-kind seam, mirroring rendering (§10): the pipeline maps `Entry.kind` to an `ItemEmitter` that turns one Entry into its Item(s). Shipped kinds (`span`, `group`, `milestone`) ship a default emitter; a consumer-defined kind registers its own via `layout.registerItemEmitter` (§10) — unregistered kinds fall back to the `span` emitter (§2.5).
 
 ```ts
 type ItemEmitter = (entry: Entry) => readonly Item[];
@@ -232,7 +232,7 @@ type ItemEmitter = (entry: Entry) => readonly Item[];
 Rules:
 
 - **Kind is authored, never derived.** A `group` is a group because the user said so — not because it currently has children. An empty group is legal and renders as one (that is how "add a phase, then fill it" works). For derived-span kinds, input may omit `start`/`end`: the store initializes a zero-length span (at the dataset's reference date) and the Group rollup owns it from then on — the *stored* model always has both fields, so no layer downstream handles absence. `parentId` (tree position) and `kind` (what it is) are orthogonal; "every parent is a group" is a convention, not a model rule — and `hierarchy: { autoGroup: true }` (`02` §2) maintains that convention automatically: an entry gaining its first child is promoted to `group` in the same transaction. **Promote only, never demote** — demoting on losing the last child would reintroduce exactly the flickering identity this rule exists to prevent; demotion stays an explicit edit.
-- **The set is open.** Shipped kinds: `'span'`, `'group'`, `'milestone'`. A host-defined kind (say `'buffer'`) gets full behavior by registering at the four seams above — no core edits. Anything not registered at a seam falls back to `'span'` behavior there, so partial registration degrades gracefully instead of erroring.
+- **The set is open.** Shipped kinds: `'span'`, `'group'`, `'milestone'`. A consumer-defined kind (say `'buffer'`) gets full behavior by registering at the four seams above — no core edits. Anything not registered at a seam falls back to `'span'` behavior there, so partial registration degrades gracefully instead of erroring.
 - **Group *entry* ≠ row *grouping*.** `rows: { source: 'group', groupBy }` is a view-side arrangement of any entries and persists nothing; a `kind: 'group'` entry is a model entity that persists, schedules, and syncs. They compose — a grouped view of a dataset containing group entries is well-defined, because one is authored and the other is derived (principle 1).
 
 ---
@@ -308,7 +308,7 @@ interface GeometryFrame {
      *  never hover/selection. */
     flags: BarFlags;
     /** What a screen reader announces: `${entry.name}, ${formatDate(zone, start)} – ${formatEndInclusive(zone, end)}`
-     *  (S1.10, D-S1.10-5). Library-derived text, not host render output — same precedent as `label`. */
+     *  (S1.10, D-S1.10-5). Library-derived text, not consumer render output — same precedent as `label`. */
     a11yLabel: string;
   }>;
   /** `id` was `DependencyId` (a `model/` brand) pre-#13; `Dependency` is now scheduling-plugin-owned
@@ -460,7 +460,7 @@ function schedule(request: ScheduleRequest): ScheduleResult;   // pure, determin
 - An entry pinned in the plugin's own per-entry storage (the pin flag is no longer `Entry.scheduling` — that field is gone, see §2.2; where it lives instead is part of the #12 contract) is never moved; the engine reports what it *would* have done as a diagnostic.
 - Group rollup (summary spans from children) is a separate bottom-up pass after propagation settles — pass ordering, not mutual recursion. A dependency attached to a `group` entry resolves against its rolled-up span by default.
 
-**Kind semantics live in the policy, not the engine.** The engine knows graphs and lag; what a `group` or `milestone` (or host-defined kind) *means* for scheduling is a policy decision. The default policy: `group` spans derive from children (direct edits to a derived span are reported as diagnostics, not applied); `milestone` keeps `start === end`; unknown kinds behave as `'span'`. A host methodology that wants directly schedulable groups ships a policy — the engine and contract do not change.
+**Kind semantics live in the policy, not the engine.** The engine knows graphs and lag; what a `group` or `milestone` (or consumer-defined kind) *means* for scheduling is a policy decision. The default policy: `group` spans derive from children (direct edits to a derived span are reported as diagnostics, not applied); `milestone` keeps `start === end`; unknown kinds behave as `'span'`. A consumer methodology that wants directly schedulable groups ships a policy — the engine and contract do not change.
 
 **Policy (pluggable — where methodologies differ):**
 
@@ -501,7 +501,7 @@ interface RenderBackend {
 }
 ```
 
-`mount` takes two surfaces, not one host (S1.8, D-S1.8-1/D-S1.8-2): the grid pane's row layer and the timeline pane's content layer are two elements `view/pane-layout.ts` builds, not one host this backend reserves a gutter inside. `render/dom` puts rows in `grid` and header/bar/sizer layers in `timeline`, at `x = 0` — no gutter offset; the grid pane's own width is the gutter now. `render/null` takes the same signature and ignores both.
+`mount` takes two surfaces, not one container (S1.8, D-S1.8-1/D-S1.8-2): the grid pane's row layer and the timeline pane's content layer are two elements `view/pane-layout.ts` builds, not one container this backend reserves a gutter inside. `render/dom` puts rows in `grid` and header/bar/sizer layers in `timeline`, at `x = 0` — no gutter offset; the grid pane's own width is the gutter now. `render/null` takes the same signature and ignores both.
 
 Backends: `dom` (default — absolutely-positioned virtualized rows, SVG for link paths), `null` (tests, SSR of data, future export path). A dense canvas backend is a *possible future implementation* of this interface, built only if measurement demands it (D2).
 
@@ -511,7 +511,7 @@ Backends: `dom` (default — absolutely-positioned virtualized rows, SVG for lin
 
 **Inline writes are geometry-only; everything else ships as a base stylesheet (S1.10, D-S1.10-6).** `render/dom`'s `node.style.*` writes are pruned to exactly `transform`/`width`/`height` — the per-frame/per-instance numbers nothing but this backend knows. Structure (`position`, `display`, `overflow`, colour, background, border) moves to class rules in `view/styles.ts`'s base stylesheet, injected once per document by `ensureBaseStyles` (idempotent via a `<style data-freegantt-styles>` document marker — not `data/`'s kind of shared mutable state, I2 unaffected). `freegantt/no-inline-style-outside-geometry` (`src/render/**`, `src/view/**`) lints the split so it can't regress.
 
-**`mount`/`sync` write ARIA roles, not just geometry (S1.10, D-S1.10-5).** The host gets `role="group"`, a live `aria-label` (from `Gantt.a11yLabel`), and the one honest `tabindex="0"` this step defines (no roving tabindex until S4's keyboard controller exists to move one). `.fg-row` gets `role="listitem"` plus `aria-posinset`/`aria-setsize` (the latter from `GeometryFrame.rowCount`, the *total* row count, not the windowed slice). `.fg-bar` gets `role="img"` and an `aria-label` from `FrameBar.a11yLabel` — not the ARIA `grid`/`row`/`gridcell` pattern, because `.fg-row` and `.fg-bar` render into different scroll surfaces under the split-pane architecture (§8.3) and are DOM cousins, never ancestor/descendant, so no placement of `grid`/`row`/`gridcell` roles across them is spec-conformant.
+**`mount`/`sync` write ARIA roles, not just geometry (S1.10, D-S1.10-5).** The container gets `role="group"`, a live `aria-label` (from `Gantt.a11yLabel`), and the one honest `tabindex="0"` this step defines (no roving tabindex until S4's keyboard controller exists to move one). `.fg-row` gets `role="listitem"` plus `aria-posinset`/`aria-setsize` (the latter from `GeometryFrame.rowCount`, the *total* row count, not the windowed slice). `.fg-bar` gets `role="img"` and an `aria-label` from `FrameBar.a11yLabel` — not the ARIA `grid`/`row`/`gridcell` pattern, because `.fg-row` and `.fg-bar` render into different scroll surfaces under the split-pane architecture (§8.3) and are DOM cousins, never ancestor/descendant, so no placement of `grid`/`row`/`gridcell` roles across them is spec-conformant.
 
 ### 8.2 Viewport & multi-Gantt sync (D9)
 
@@ -540,11 +540,11 @@ flowchart TB
 
 `TimeScale` and `ScrollModel` are **standalone observable objects**. Every Gantt binds to one of each; by default the Gantt constructs its own privately, so single-Gantt usage never sees the concept. Passing the same instance to two Gantt instances syncs them on that axis — x, y, or both — with zero special-casing in either. **Rule:** no view or interaction code reads or writes scroll position except through the bound `ScrollModel`; no code converts time to pixels except through the bound `TimeScale`. That rule is what makes D9 free later, and it is lintable.
 
-**D-A — viewport models are pure observables; the DOM binding is separate.** "Observable" above is literal, not aspirational: `TimeScaleModel.bind(binding, onChange)` and `ScrollModel.bind(binding, onChange)` invalidate the memoized resolution *and* run every bound `onChange`, so every other Gantt sharing the model re-renders without anything external calling `render()` again (#6). `onChange` is supplied at bind time, not through a separate `subscribe()` — the reaction is part of what a Gantt states when it joins the shared axis, not a second lifecycle a caller wires up afterward. Each model keeps one `Map<Binding, onChange>`, so binding membership and change notification are the same collection instead of two kept in sync by hand. That mechanism is **implemented once**, in `layout/viewport/bound-value.ts`: a `BoundValue` owns one such map, the value resolved from it, and the contract itself — bind notifies the newcomer always, every other notification fires iff the resolved value changed — and each model supplies only what is its own, a `resolve` and an `equals`. Its batching half is `BatchedNotifier` (depth, pending flag, flush in a `finally`), which `Viewport` uses alone: `Viewport` has one subscriber and no resolved value of its own to compare, so it must not have `BoundValue`'s binding side at all. Until the 2026-08-25 review this paragraph read "there is no standalone notify primitive" and the contract was hand-copied into `TimeScaleModel`, `ScrollModel` and `Viewport`, kept aligned only by comments citing each other; one map per model instance is what the rule was protecting, and that is unchanged. **The scope is a hard boundary:** `BoundValue` serves `layout/viewport/`'s models and nothing else. It is deliberately minimal, not `data/`'s `alien-signals` façade — `layout/` has no edge to `data/` (§1, I1) — and it is not a general subscribe/notify primitive to reach for elsewhere. If a shareable model needs more than "call my reaction when I might be stale," that is still the signal to consolidate under the `data/` façade rather than widening this or growing a second one beside it. A resolved value handed out of a model is **frozen**, not merely `readonly`: `ScrollModel.state` returns the model's own `position` and `max` objects, and `readonly` is a compile-time claim that a host writing `state.position.x` would walk straight through — moving the shared position with nobody notified. Frozen, that write throws. `bind()` returns a small handle (`{ unbind(), setPaneWidth(width) }` / `{ unbind(), setContentSize(size), setPaneSize(size) }`) rather than a bare unbind closure, so a bound Gantt can push re-measured geometry without unbind+rebind churn — this is what lets the DOM-facing bindings (`view/scroll-attachment.ts`, shipped S1.5; `view/pane-size-attachment.ts`, #8) stay thin wrappers with no knowledge of `layout/`'s internals.
+**D-A — viewport models are pure observables; the DOM binding is separate.** "Observable" above is literal, not aspirational: `TimeScaleModel.bind(binding, onChange)` and `ScrollModel.bind(binding, onChange)` invalidate the memoized resolution *and* run every bound `onChange`, so every other Gantt sharing the model re-renders without anything external calling `render()` again (#6). `onChange` is supplied at bind time, not through a separate `subscribe()` — the reaction is part of what a Gantt states when it joins the shared axis, not a second lifecycle a caller wires up afterward. Each model keeps one `Map<Binding, onChange>`, so binding membership and change notification are the same collection instead of two kept in sync by hand. That mechanism is **implemented once**, in `layout/viewport/bound-value.ts`: a `BoundValue` owns one such map, the value resolved from it, and the contract itself — bind notifies the newcomer always, every other notification fires iff the resolved value changed — and each model supplies only what is its own, a `resolve` and an `equals`. Its batching half is `BatchedNotifier` (depth, pending flag, flush in a `finally`), which `Viewport` uses alone: `Viewport` has one subscriber and no resolved value of its own to compare, so it must not have `BoundValue`'s binding side at all. Until the 2026-08-25 review this paragraph read "there is no standalone notify primitive" and the contract was hand-copied into `TimeScaleModel`, `ScrollModel` and `Viewport`, kept aligned only by comments citing each other; one map per model instance is what the rule was protecting, and that is unchanged. **The scope is a hard boundary:** `BoundValue` serves `layout/viewport/`'s models and nothing else. It is deliberately minimal, not `data/`'s `alien-signals` façade — `layout/` has no edge to `data/` (§1, I1) — and it is not a general subscribe/notify primitive to reach for elsewhere. If a shareable model needs more than "call my reaction when I might be stale," that is still the signal to consolidate under the `data/` façade rather than widening this or growing a second one beside it. A resolved value handed out of a model is **frozen**, not merely `readonly`: `ScrollModel.state` returns the model's own `position` and `max` objects, and `readonly` is a compile-time claim that a consumer writing `state.position.x` would walk straight through — moving the shared position with nobody notified. Frozen, that write throws. `bind()` returns a small handle (`{ unbind(), setPaneWidth(width) }` / `{ unbind(), setContentSize(size), setPaneSize(size) }`) rather than a bare unbind closure, so a bound Gantt can push re-measured geometry without unbind+rebind churn — this is what lets the DOM-facing bindings (`view/scroll-attachment.ts`, shipped S1.5; `view/pane-size-attachment.ts`, #8) stay thin wrappers with no knowledge of `layout/`'s internals.
 
 **One notification contract for both models (S1.5, D-S1.5-4):** `bind` always notifies the newcomer — including when nothing measurably changed, since that call *is* the newcomer's first render. Every other notification (another binding's `bind`/`unbind`, a `setPaneWidth`/`setContentSize`/`setPaneSize`) fires iff the resolved value actually changed. Both models also expose `batch(run)`: several writes inside `run` deliver at most one notification, flushed in a `finally` so a throwing `run` cannot wedge the model.
 
-**`Viewport` (`layout/viewport/viewport.ts`, shipped S1.7) is the fan-in that owns both models.** A shell holding `TimeScaleModel` and `ScrollModel` separately also holds two reactions — the god object arriving on schedule the moment a third measurement (pane size, #8) joins them. `Viewport` gives `view/` one `bind(dataset, onChange)`, one handle, one reaction: **one measurement, three destinations.** A single `ViewportHandle.setPaneSize(size)` call fans out to `TimeScaleModel`'s `paneWidth`, `ScrollModel`'s `ScrollBinding.pane`, and `Viewport.visible`'s `width`/`height` — all three read from the one measurement instead of three callers each re-deriving it, and the fan-out is coalesced so the host still sees exactly one notification (D-S1.7-1). `Viewport.visible` resolves the culling window from the **locally clamped** position — this Gantt's own pushed `{content, pane}` extents, not `ScrollModel`'s loosest-bound-across-bindings `max` (D-S1.7-2) — straight into `LayoutInput.visible`, and it is also what `attachScroll` writes back to the DOM. `Viewport` is not exported from `api/` (D-S1.7-10); `view/` is its only caller. It is also **single-subscriber, on purpose**, unlike the two models it fans into: a `Viewport` holds one Gantt's pane size and content size, so a second shell binding to it would resolve `visible` from the other shell's box. The shareable objects are the models (D9); the fan-in is per Gantt, and a second `bind()` throws (`code: 'viewport-already-bound'`) instead of silently replacing the reaction.
+**`Viewport` (`layout/viewport/viewport.ts`, shipped S1.7) is the fan-in that owns both models.** A shell holding `TimeScaleModel` and `ScrollModel` separately also holds two reactions — the god object arriving on schedule the moment a third measurement (pane size, #8) joins them. `Viewport` gives `view/` one `bind(dataset, onChange)`, one handle, one reaction: **one measurement, three destinations.** A single `ViewportHandle.setPaneSize(size)` call fans out to `TimeScaleModel`'s `paneWidth`, `ScrollModel`'s `ScrollBinding.pane`, and `Viewport.visible`'s `width`/`height` — all three read from the one measurement instead of three callers each re-deriving it, and the fan-out is coalesced so the consumer still sees exactly one notification (D-S1.7-1). `Viewport.visible` resolves the culling window from the **locally clamped** position — this Gantt's own pushed `{content, pane}` extents, not `ScrollModel`'s loosest-bound-across-bindings `max` (D-S1.7-2) — straight into `LayoutInput.visible`, and it is also what `attachScroll` writes back to the DOM. `Viewport` is not exported from `api/` (D-S1.7-10); `view/` is its only caller. It is also **single-subscriber, on purpose**, unlike the two models it fans into: a `Viewport` holds one Gantt's pane size and content size, so a second shell binding to it would resolve `visible` from the other shell's box. The shareable objects are the models (D9); the fan-in is per Gantt, and a second `bind()` throws (`code: 'viewport-already-bound'`) instead of silently replacing the reaction.
 
 **The binding/attachment split (S1.7):** `Viewport.bind` owns the *binding* — `TimeScaleModel` and `ScrollModel` membership, one reaction. `view/scroll-attachment.ts`'s `attachScroll(element, viewport)` owns the *attachment* — the DOM edge, and nothing else: it reads the already-locally-clamped `viewport.visible` and writes/reads `element.scrollLeft`/`scrollTop` (the only file exempted from I12's scroll-manipulation lint), returning `{ writePosition(), detach() }`. It holds no binding of its own — `Viewport` already bound scale and scroll before `attachScroll` is ever called, so the attachment recomputes nothing, it only echoes.
 

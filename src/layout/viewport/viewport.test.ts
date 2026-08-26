@@ -121,7 +121,7 @@ describe('Viewport', () => {
     expect(calls).toBe(0);
   });
 
-  it('batch delivers one host reaction and no observer sees an intermediate state', () => {
+  it('batch delivers one consumer reaction and no observer sees an intermediate state', () => {
     const viewport = new Viewport();
     let calls = 0;
     const seenWidths: number[] = [];
@@ -180,7 +180,7 @@ describe('Viewport.zoomTo / zoomBy (S1.9, D-S1.9-5)', () => {
     expect(calls()).toBe(1);
   });
 
-  it('zoomBy delivers exactly one notification', () => {
+  it('[S1-A3] zoomBy delivers exactly one notification', () => {
     const { viewport, calls } = boundViewport();
     viewport.zoomBy(1.5);
     expect(calls()).toBe(1);

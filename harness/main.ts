@@ -1,10 +1,10 @@
 import { Gantt, Dataset } from '../src/api/index.js';
 import type { Theme } from '../src/api/index.js';
-import { sampleEntryInputs } from '../fixtures/sample-project.js';
+import { sampleEntryInputs } from '../fixtures/sample-dataset.js';
 
 const dataset = new Dataset({ entries: sampleEntryInputs, timeZone: 'UTC' });
 
-const gantt = new Gantt({ host: '#gantt', dataset });
+const gantt = new Gantt({ container: '#gantt', dataset });
 
 const THEME_STORAGE_KEY = 'freegantt-harness-theme';
 

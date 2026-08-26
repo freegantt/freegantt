@@ -4,7 +4,7 @@ import type { Dataset as DatasetContract, DateOnlyEndRule, Entry, EntryInput } f
 import { readEntries } from './entry-input.js';
 
 export interface DatasetOptions {
-  /** What the host writes. Ids are plain strings and dates are any `InstantInput` — an ISO string,
+  /** What the consumer writes. Ids are plain strings and dates are any `InstantInput` — an ISO string,
    * a `Date`, epoch milliseconds, or an already-branded `Instant`. Read into `Entry` once, here. */
   entries: readonly EntryInput[];
   /** IANA timeZone (D6, plans/02 §2) — all zone-aware date arithmetic (day boundaries, snapping,

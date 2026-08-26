@@ -3,13 +3,15 @@
 // chart holding far fewer rows than the first — the U3 clamp/pin case happy-dom cannot express.
 
 import { Gantt, Dataset, ScrollModel, TimeScaleModel } from '../src/api/index.js';
-import { sampleEntryInputs } from '../fixtures/sample-project.js';
+import { sampleEntryInputs } from '../fixtures/sample-dataset.js';
 
 const tallDataset = new Dataset({ entries: sampleEntryInputs, timeZone: 'UTC' });
 const shortDataset = new Dataset({ entries: sampleEntryInputs.slice(0, 20), timeZone: 'UTC' });
 
-const scale = new TimeScaleModel();
+// `zoom: 'preset'` (D-S1.11-4): the default `'fitViewport'` makes content width equal pane width,
+// so `max.x` is 0 and D9's x half is unobservable on the one page that exists to prove D9.
+const scale = new TimeScaleModel({ zoom: 'preset' });
 const scroll = new ScrollModel();
 
-new Gantt({ host: '#tall', dataset: tallDataset, scale, scroll });
-new Gantt({ host: '#short', dataset: shortDataset, scale, scroll });
+new Gantt({ container: '#tall', dataset: tallDataset, scale, scroll });
+new Gantt({ container: '#short', dataset: shortDataset, scale, scroll });

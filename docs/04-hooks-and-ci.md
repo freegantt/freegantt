@@ -93,6 +93,8 @@ Enabled by `git config core.hooksPath .githooks`, set by a `prepare` script so i
 
 `pnpm test:e2e` is the one check with **no CI job behind it**. Playwright owns what happy-dom cannot express: a real engine clamps `scrollTop`, fires `scroll`, and lays out. Two of the five S1 acceptance boxes are e2e tests (`[S1-A1]`, `[S1-A4]`), and `scripts/slice-gate.mjs` shells out to `pnpm test:e2e` for both, so an unrun e2e suite makes the S1 gate unprovable.
 
+**This is a recorded decision, not an oversight (S1.11, D-S1.11-12):** the repository owner chose to keep `ci.yml`'s `push`/`pull_request` triggers off. So `pnpm gate` (and the S1 → S2 condition it proves) is provable **locally** — via `pre-push`, or by a human/agent running it directly — and **not** on the server, until those triggers come back. When they do, e2e gets its own CI job (`pnpm exec playwright install --with-deps chromium`, then `pnpm test:e2e`) and this hook line stays as the local half.
+
 It sits **beside** `pnpm verify` in `pre-push`, not inside it. `verify` is kept at CI parity (below), and e2e is not a CI job — folding it in would make `verify` claim a parity it no longer has, and would demand a browser everywhere `verify` runs. When the `push`/`pull_request` triggers come back, e2e gets its own job and this line stays as the local half.
 
 The cost is small: the whole suite runs in about a second, and `playwright.config.ts` starts its own dev server. The failure mode that is *not* a real failure — a missing browser binary — gets its own message pointing at `pnpm exec playwright install chromium`.
@@ -111,8 +113,9 @@ The rule that makes this system trustworthy rather than decorative: **a guard wi
 | Builtin-restriction configs (B1–B11) | `test/guards/lint-fixtures.test.ts` — runs ESLint programmatically over `test/fixtures/violations/*.ts` and asserts the expected rule id fires on the expected line | a `files:` glob is edited so a rule silently stops covering a directory |
 | dependency-cruiser graph | `scripts/guard-red-test.mjs` (`03-boundaries-and-config.md` §1.3) | the graph config is loosened or the tool is misconfigured |
 | Purity of the pure layers | `test/setup/assert-no-dom.ts` throwing | a pure module reaches for the DOM |
-| The matrix itself | `test/guards/matrix-coverage.test.ts` — parses `docs/01-invariant-guard-matrix.md`, asserts every I1–I14 row names a CI job that exists in the workflow file, and that no row's status is blank | an invariant loses its job, or a job is renamed |
+| The matrix itself | `test/guards/matrix-coverage.test.ts` — parses `docs/01-invariant-guard-matrix.md`, asserts every I1–I14 row names a CI job that exists in the workflow file and that no row's status is blank; **and** (S1.11, D-S1.11-11) that every `freegantt/*` rule named in the Mechanism column of both §1 and §2 is registered in `eslint/rules/index.cjs`, unless it is honestly marked `PLANNED (Sn)` | an invariant loses its job, a job is renamed, or a row claims a rule is enforced when no rule file exists |
 | Hook/CI parity | `test/guards/verify-covers-ci.test.ts` — asserts every `pnpm <script>` a CI job runs also appears in the `verify` script, and that `.githooks/pre-push` invokes `verify` | a CI job is added that the local gate does not run, so `pre-push` reports green over a check it no longer performs |
+| The S1 → S2 gate itself | `test/guards/slice-gate.test.ts` (S1.11, plans/s1.11-close-the-gate/README.md §3.4) — drives `tagged()` against a temporary fixture: an id present with a passing runner passes; an id absent from source fails; an id present whose declared runner fails also fails | a gate check stays green after its subject is deleted — U2's own scenario |
 
 That last one deserves emphasis: it closes the loop `plans/04` §4 opens ("an invariant without a job is a TODO, tracked in the table itself"). The table stops being prose and becomes a checked artifact.
 
