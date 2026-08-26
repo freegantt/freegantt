@@ -3,7 +3,7 @@ import { test, expect } from '@playwright/test';
 // S0 acceptance (plans/03-slices.md): "Harness shows fixture entries as bars positioned
 // correctly against time." Smoke-checks what the DOM unit test (src/api/gantt.test.ts)
 // already proves headlessly, but in a real browser.
-test('harness renders the fixture project as positioned bars', async ({ page }) => {
+test('harness renders the fixture dataset as positioned bars', async ({ page }) => {
   await page.goto('/');
 
   const bars = page.locator('#gantt .fg-bar');

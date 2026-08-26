@@ -1,5 +1,5 @@
-// Reading host-written time values (plans/01 §5). This is the one place a loose `InstantInput` —
-// what a host writes — becomes an `Instant` — what the library stores.
+// Reading consumer-written time values (plans/01 §5). This is the one place a loose `InstantInput` —
+// what a consumer writes — becomes an `Instant` — what the library stores.
 //
 // It lives in time/ rather than at the api/ boundary for two reasons. Resolving a Plain time (a
 // wall-clock reading with no zone, CONTEXT.md) needs the Dataset's zone and the DST fold/gap policy
@@ -52,7 +52,7 @@ function fromPlainString(zone: string, value: string): Instant | undefined {
   };
 
   // Temporal splits its own handling of an out-of-range field: most constrain (month 13 -> 12), a
-  // few throw (day 0). Both mean the same thing to a host, so both leave here as InvalidInstantError
+  // few throw (day 0). Both mean the same thing to a consumer, so both leave here as InvalidInstantError
   // — the constrained ones caught by the read-back below, the throwing ones caught here.
   let resolved: Instant;
   try {
@@ -104,7 +104,7 @@ export function toInstant(zone: string, input: InstantInput): Instant {
  * The Instant an `end` field's `input` names, read in `zone` under `rule`.
  *
  * Storage is half-open [start, end) (plans/01 §5), so `end` is the boundary after the span, not the
- * last moment in it. A host writing a bare date on `end` means the last day it wants included, so
+ * last moment in it. A consumer writing a bare date on `end` means the last day it wants included, so
  * under `'inclusive'` a date-only input advances one day. Everything else — an `Instant`, a `Date`,
  * a string with a time of day — is already a boundary and is read literally, under either rule.
  */

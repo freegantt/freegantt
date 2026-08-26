@@ -26,25 +26,25 @@ const dataset = new Dataset({
 });
 
 const gantt = new Gantt({
-  host: document.getElementById('gantt')!, // an HTMLElement or a CSS selector
+  container: document.getElementById('gantt')!, // an HTMLElement or a CSS selector
   dataset,
 });
 ```
 
 That is the whole surface for a static chart today. Ids are plain strings and dates are plain
 strings; nothing has to be constructed first. Wrap the entries in a `Dataset` with the IANA
-`timeZone` they are written in, mount a `Gantt` on a host element, and `gantt.destroy()` tears it
+`timeZone` they are written in, mount a `Gantt` on a container element, and `gantt.destroy()` tears it
 down. Editing entries after mount (`dataset.entries.add/update/remove`), undo/redo, and dependencies
 land in later slices — see `plans/03-slices.md`.
 
-## Dates and ids a host can write
+## Dates and ids a consumer can write
 
-`Dataset` reads what a host writes (`EntryInput`) into what the library stores (`Entry`) once, at
+`Dataset` reads what a consumer writes (`EntryInput`) into what the library stores (`Entry`) once, at
 construction. Two things get looser at that boundary, and only there.
 
 **Ids** are plain `string`s. Internally an id is a branded `EntryId` so it cannot be mixed with an
-ordinary string, but the brand is applied on the way in — a host never calls `entryId()`. (It is
-still exported for a host that wants to hold branded ids of its own.)
+ordinary string, but the brand is applied on the way in — a consumer never calls `entryId()`. (It is
+still exported for a consumer that wants to hold branded ids of its own.)
 
 **Dates** are any `InstantInput`: a string, a `Date`, epoch milliseconds, or an already-branded
 `Instant`. Every form below is legal in the same entry list:
@@ -76,7 +76,7 @@ const dataset = new Dataset({
     { id: 'f', name: 'Date object', start: new Date('2026-09-08T14:30:00Z'), end: '2026-09-10' },
     //                                    -> 2026-09-08T14:30:00Z
 
-    // Epoch milliseconds, and an Instant a host built with instant() — both pass straight through.
+    // Epoch milliseconds, and an Instant a consumer built with instant() — both pass straight through.
     { id: 'g', name: 'Epoch ms', start: 1788000000000, end: '2026-09-10' },
     { id: 'h', name: 'Instant', start: instant('2026-09-08T14:30:00Z'), end: '2026-09-10' },
   ],
@@ -124,7 +124,7 @@ A value that names no instant — `'next tuesday'`, or a date the calendar does 
 ### `dateOnlyEnd` — what a bare date on `end` means
 
 Storage is half-open `[start, end)`, so `end` is the boundary _after_ the entry, not its last
-moment. A host writing a bare date on `end` normally means the last day it wants included, so that
+moment. A consumer writing a bare date on `end` normally means the last day it wants included, so that
 is the default reading:
 
 ```ts
@@ -164,7 +164,7 @@ surface.
 import { Dataset } from 'freegantt';
 
 const dataset = new Dataset({
-  entries, // readonly EntryInput[] — see "Dates and ids a host can write"
+  entries, // readonly EntryInput[] — see "Dates and ids a consumer can write"
   timeZone, // IANA zone, required (D6)
   dateOnlyEnd, // optional, 'inclusive' (default) | 'exclusive'
 });
@@ -173,7 +173,7 @@ dataset.entries; // readonly Entry[] — ids branded, dates resolved to Instant
 ```
 
 `Dataset` is a headless, DOM-free wrapper around an entry list. It reads each `EntryInput` into an
-`Entry` once, at construction, and never mutates what the host handed it. Transactions, undo/redo,
+`Entry` once, at construction, and never mutates what the consumer handed it. Transactions, undo/redo,
 and mutation (`dataset.entries.add/update/remove`) land in S2 — see `plans/03-slices.md`.
 
 ### `TimeScaleModel` (S1)
@@ -202,7 +202,7 @@ Preset switching, zoom, and named presets (`'weekAndMonth'` etc.) land later in 
 import { Gantt } from 'freegantt';
 
 const gantt = new Gantt({
-  host: element, // HTMLElement
+  container: element, // HTMLElement
   dataset, // Dataset
   scale, // optional TimeScaleModel — omit for a private default
   preset, // optional ViewPreset — omit for dayPreset (see below)
@@ -212,7 +212,7 @@ const gantt = new Gantt({
 gantt.destroy();
 ```
 
-Mounts a Gantt into `host` and renders `dataset.entries` as positioned bars under a header band of
+Mounts a Gantt into `container` and renders `dataset.entries` as positioned bars under a header band of
 time ticks, one row per entry (flat list; hierarchy/grouping land in S5). Two `Gantt` instances on
 one page are fully independent (no shared module state — I2); two given the same `scale` x-sync
 (D9, proven in `src/api/gantt.test.ts`).
@@ -230,11 +230,11 @@ shipped presets (hour→year) and preset switching land later in S1.
 ## Styling and theming
 
 `Gantt` injects its own default stylesheet once per `document` (`<style data-freegantt-styles>`),
-so nothing renders unstyled. A host never edits that stylesheet — instead, override the CSS custom
-properties it defines, in the host app's own `.css`:
+so nothing renders unstyled. A consumer never edits that stylesheet — instead, override the CSS custom
+properties it defines, in the consumer app's own `.css`:
 
 ```css
-/* host app's own stylesheet — no build step, no TypeScript */
+/* consumer app's own stylesheet — no build step, no TypeScript */
 :root {
   --fg-bar-fill: #2563eb;
   --fg-header-bg: #ffffff;
@@ -252,10 +252,10 @@ The base stylesheet ships both a light token set (on `:root`) and a dark token s
 ways:
 
 - **Automatic:** a `prefers-color-scheme: dark` media query supplies the dark tokens whenever the
-  host page hasn't set `data-fg-theme`, so a `Gantt` follows the OS/browser preference with no
+  consumer page hasn't set `data-fg-theme`, so a `Gantt` follows the OS/browser preference with no
   extra wiring.
 - **Explicit:** setting `data-fg-theme="dark"` (or `"light"`) on an ancestor element — typically
-  `<html>` or the `Gantt`'s `host` — pins the theme regardless of `prefers-color-scheme`.
+  `<html>` or the `Gantt`'s `container` — pins the theme regardless of `prefers-color-scheme`.
 
 To customize dark mode instead of just light mode, scope the override to the dark selector(s):
 

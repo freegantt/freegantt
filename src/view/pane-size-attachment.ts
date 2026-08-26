@@ -8,8 +8,8 @@ export interface PaneSizeAttachment {
   detach(): void;
 }
 
-/** `host` is the timeline pane (the same element `attachScroll` binds, D-D). `onPaneSize` is called
- *  with the host's content-box size once on observe, and again on every resize the browser reports.
+/** `container` is the timeline pane (the same element `attachScroll` binds, D-D). `onPaneSize` is called
+ *  with the container's content-box size once on observe, and again on every resize the browser reports.
  *
  *  `ResizeObserverCtor` is the test seam: happy-dom does no layout, so a dom test drives this with an
  *  injected fake that fires synchronously (`pane-size-attachment.test.ts`).
@@ -18,7 +18,7 @@ export interface PaneSizeAttachment {
  *  → `TimeScaleModel`/`ScrollModel`, D-S1.5-4). Re-implementing that check here would just be a
  *  second copy that can disagree with the first. */
 export function attachPaneSize(
-  host: HTMLElement,
+  container: HTMLElement,
   onPaneSize: (size: Size) => void,
   ResizeObserverCtor: typeof ResizeObserver = ResizeObserver,
 ): PaneSizeAttachment {
@@ -34,7 +34,7 @@ export function attachPaneSize(
         : { width: last.contentRect.width, height: last.contentRect.height },
     );
   });
-  observer.observe(host, { box: 'content-box' });
+  observer.observe(container, { box: 'content-box' });
 
   return {
     detach() {

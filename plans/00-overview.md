@@ -29,9 +29,9 @@ These were decided explicitly and the rest of the spec depends on them. Changing
 | D2 | Scale posture | **Design for growth.** Architecture targets ~10k entries smoothly, with named seams (height index, worker, dense rendering) for more. Validated by a measured spike, not assumed. |
 | D3 | Initial scheduling depth | FreeGantt ships an official **bars + dependencies** scheduler as its first-party default scheduling plugin: hierarchy, dependency links with lag, cascade propagation, cycle detection. Working calendars, constraints, and resources are later slices behind existing seams. Core does not require this (or any) scheduling plugin to function — see D4. |
 | D4 | Scheduling isolation | Scheduling is a **pure, DOM-free plugin boundary**, not a mandatory core layer. Core exposes one generic, synchronous resolve hook that turns a proposed edit into a committed one — the identity function when no plugin occupies it, decided once at setup (exact contract tracked in issue #12). A scheduling plugin, when installed, occupies that hook exclusively: it never imports rendering, rendering never imports it, and the two meet only through the data store. |
-| D5 | Host environment | **Framework-free TS core.** Wrappers (React etc.) are possible later as thin adapters; nothing in core may depend on one. |
+| D5 | Runtime environment | **Framework-free TS core.** Wrappers (React etc.) are possible later as thin adapters; nothing in core may depend on one. |
 | D6 | Time model | **Absolute timestamps (epoch ms) + dataset-owned IANA timezone.** All zone-aware date arithmetic (day boundaries, snapping, week starts) resolves through the dataset zone via a dedicated time module. A helper API gives users plain-date ergonomics. |
-| D7 | Persistence | **Host-owned via changesets.** Versioned `toJSON`/`fromJSON` + well-defined changeset events in core. An official sync adapter can be layered on later as an extension — the changeset contract is designed so that requires no core change. |
+| D7 | Persistence | **Consumer-owned via changesets.** Versioned `toJSON`/`fromJSON` + well-defined changeset events in core. An official sync adapter can be layered on later as an extension — the changeset contract is designed so that requires no core change. |
 | D8 | Layout | **Split-pane: grid (entry table) + timeline**, sharing one row-geometry source. Grid starts minimal (label column) and grows. |
 | D9 | Multi-Gantt sync | Two or more Gantt instances must eventually **scroll together on both axes** (e.g., a delivery-schedule Gantt above a workforce Gantt) **without core changes**. Therefore the time scale and scroll state are standalone, shareable objects a Gantt *binds to*, never private internals. Sharing a `ScrollModel` links both axes (S1.5, D-S1.5-3) — partial (x-only/y-only) sharing is deferred until a caller actually needs it. |
 | D10 | Editing | Programmatic mutation + **transactions + undo/redo live in the data core from slice one** (they shape everything). Pointer manipulation (drag/resize/link) arrives early but lives in its **own interaction module**. |
@@ -45,10 +45,10 @@ These were decided explicitly and the rest of the spec depends on them. Changing
 3. **Policies, not opinions.** Wherever planning methodologies disagree (conflict precedence, criticality, calendar semantics), the core exposes a policy seam with a sensible neutral default. The default is documented as *a* choice, not *the* truth.
 4. **The delta is the interface.** Every mutation flows through a transaction that produces a changeset (`{ from, to }` per field). Undo, persistence, animation, sync, and multi-view consistency all consume the same changesets.
 5. **Two channels for rendering.** Cold path: data/viewport changes rebuild memoized geometry. Hot path: hover/selection/drag apply as class toggles and transforms on existing nodes — zero allocation, no geometry rebuild.
-6. **Diagnostics over silent fixes.** The scheduling engine never silently rewrites what the user asked for. It reports conflicts as machine-readable diagnostics; the view (or host) decides what to do.
+6. **Diagnostics over silent fixes.** The scheduling engine never silently rewrites what the user asked for. It reports conflicts as machine-readable diagnostics; the view (or consumer) decides what to do.
 7. **Every slice ends on screen.** No slice is "pure infrastructure." Each cuts vertically (model → layout → render → API) and its acceptance criteria include something a human can see and poke in the dev harness.
 8. **Honest API.** Nothing appears in the public type surface that throws "not implemented." Every mutating interaction has a cancelable `before*` event. Every option is live-reconfigurable or it isn't an option.
-9. **One classification, many meanings.** `Entry.kind` (span, group, milestone, host-defined) is authored data declared once; each layer maps kind to its own behavior — schedule semantics, item shape, renderer, interaction capabilities — through registries and seams (`01` §2.5). A new kind of entry is configuration, never a core edit; per-entry looks and actions are the same mechanism at per-entry granularity (`02` §4.1).
+9. **One classification, many meanings.** `Entry.kind` (span, group, milestone, consumer-defined) is authored data declared once; each layer maps kind to its own behavior — schedule semantics, item shape, renderer, interaction capabilities — through registries and seams (`01` §2.5). A new kind of entry is configuration, never a core edit; per-entry looks and actions are the same mechanism at per-entry granularity (`02` §4.1).
 
 ## 4. Slice map
 
@@ -90,7 +90,7 @@ Not in these slices, but the architecture names where each plugs in so none requ
 
 - **Working-time calendars & date constraints** — scheduling policy seam + time module (`01` §6, §7).
 - **Resources / assignments / workload views** — the Row/Item split and row-source config (`01` §4).
-- **Sync adapter** (batched load/save against host endpoints) — consumes the changeset contract (`02` §6).
+- **Sync adapter** (batched load/save against consumer endpoints) — consumes the changeset contract (`02` §6).
 - **Dense/aggregate rendering backend** (canvas) — behind the `RenderBackend` interface (`01` §8).
 - **Non-linear axis** (e.g., collapsing non-working time) — behind the `TimeScale` interface (`01` §6).
 - **Export (image/PDF)** — via the null/static render path (`01` §8).

@@ -1,15 +1,15 @@
-// One realistic sample project (~50 entries), used by the harness and by layout tests (plans/03 S0).
+// One realistic sample dataset (~50 entries), used by the harness and by layout tests (plans/03 S0).
 //
-// Plain JSON: a host writes an EntryInput with a bare string id and bare date strings (plans/02 §2),
+// Plain JSON: a consumer writes an EntryInput with a bare string id and bare date strings (plans/02 §2),
 // so the fixture is written the same way — no date-math helpers, no id branding. A few entries use a
-// `Date` instead of a string, since `InstantInput` accepts either (plans/01 §5) and a real host mixes
+// `Date` instead of a string, since `InstantInput` accepts either (plans/01 §5) and a real consumer mixes
 // both depending on where the value came from. A `Date` already names a full instant, so its `end` is
 // the half-open boundary itself, not a date-only value `dateOnlyEnd` would read as "through that day".
 
 import { Dataset } from '../src/api/index.js';
 import type { Entry, EntryInput } from '../src/api/index.js';
 
-/** What a host actually writes — plain JSON, no id branding or date math. The harness uses this
+/** What a consumer actually writes — plain JSON, no id branding or date math. The harness uses this
  * directly, exactly as a consumer would. */
 export const sampleEntryInputs: EntryInput[] = [
   {

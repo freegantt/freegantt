@@ -1,13 +1,13 @@
 # FreeGantt
 
-A framework-free TypeScript Gantt library: layout and rendering of dated Entries over time. Scheduling — dependencies, propagation, constraints — is one optional first-party plugin (ADR 0002), not what the library is about. The core vocabulary is therefore domain-neutral (ADR 0003): a host charting shifts, bookings, machine uptime, or units sold per week is as much the intended user as one charting a project plan.
+A framework-free TypeScript Gantt library: layout and rendering of dated Entries over time. Scheduling — dependencies, propagation, constraints — is one optional first-party plugin (ADR 0002), not what the library is about. The core vocabulary is therefore domain-neutral (ADR 0003): a consumer charting shifts, bookings, machine uptime, or units sold per week is as much the intended user as one charting a project plan.
 
 ## Language
 
 ### Authored model
 
 **Dataset**:
-The body of authored data — its Entries, plus whatever scheduling-plugin-owned data (e.g. Dependencies) an installed scheduling plugin contributes — together with the settings that give it meaning, above all the IANA zone in which all zone-aware date arithmetic is performed. "The dataset's zone" and "the dataset's reference date" are properties of this, not of the host environment. A Dataset with no scheduling plugin installed has Entries and no Dependencies at all (ADR 0002). Renamed from Project in ADR 0004 — read every historical "Project" as "Dataset". `model/dataset.ts`'s `Dataset` is the structural contract `api/dataset.ts`'s `Dataset` class satisfies (`implements`) — the same host/façade relationship the Gantt entry states, and the type `layout/` binds against without importing `view/` or `api/` (S1.7 §3.2; formerly `DatasetLike` in `view/gantt-shell.ts`).
+The body of authored data — its Entries, plus whatever scheduling-plugin-owned data (e.g. Dependencies) an installed scheduling plugin contributes — together with the settings that give it meaning, above all the IANA zone in which all zone-aware date arithmetic is performed. "The dataset's zone" and "the dataset's reference date" are properties of this, not of the runtime environment. A Dataset with no scheduling plugin installed has Entries and no Dependencies at all (ADR 0002). Renamed from Project in ADR 0004 — read every historical "Project" as "Dataset". `model/dataset.ts`'s `Dataset` is the structural contract `api/dataset.ts`'s `Dataset` class satisfies (`implements`) — the same structural/façade relationship the Gantt entry states, and the type `layout/` binds against without importing `view/` or `api/` (S1.7 §3.2; formerly `DatasetLike` in `view/gantt-shell.ts`).
 _Avoid_: Project (retired in ADR 0004 — see that ADR for why; the word smuggled scheduling/PM assumptions into a domain-neutral concept the same way `Task` once did for `Entry`), Plan, schedule (a schedule is an output of scheduling a Dataset, not the Dataset itself)
 
 **Reference date**:
@@ -15,11 +15,11 @@ The `Instant` captured once when a Dataset is constructed — the one `Date.now(
 _Avoid_: Now, current time (both read as live/re-evaluated, which this isn't), wall clock (that's Plain time's vocabulary — a Reference date is an already-resolved `Instant`, not an unresolved zone-less reading)
 
 **Entry**:
-One authored, dated record: a name, a start, an end, and a `kind`. Entries are persisted; they are what a host creates, edits, and hands to the library. What an Entry _means_ is the host's business — a task, a shift, a delivery, a day's sales — and core never assumes. The word is the accountant's: a dated line in a ledger.
+One authored, dated record: a name, a start, an end, and a `kind`. Entries are persisted; they are what a consumer creates, edits, and hands to the library. What an Entry _means_ is the consumer's business — a task, a shift, a delivery, a day's sales — and core never assumes. The word is the accountant's: a dated line in a ledger.
 _Avoid_: **Task** (retired in ADR 0003 — it implies to-do work, and the whole point is that the record is domain-neutral), activity, event, bar (a bar is what an Item renders), record, row (a Row is a display track)
 
 **Kind**:
-The authored classification of an Entry (`'span' | 'group' | 'milestone'`, open to host-defined values) that selects its behavior at four seams: scheduling policy, item emission, rendering, and interaction capability. Kind is never derived from structure (e.g. from having children) — it is always explicitly set by whoever authored the Entry. `'span'` is the default: an Entry that simply occupies its start-to-end stretch, with no further meaning attached. _Exception:_ `hierarchy.autoGroup` (`02` §2) promotes an entry to `'group'` in the same transaction it gains its first child — an automated edit, not a derivation the store computes on the fly; it only promotes, never demotes, so kind still can't silently flicker based on current structure.
+The authored classification of an Entry (`'span' | 'group' | 'milestone'`, open to consumer-defined values) that selects its behavior at four seams: scheduling policy, item emission, rendering, and interaction capability. Kind is never derived from structure (e.g. from having children) — it is always explicitly set by whoever authored the Entry. `'span'` is the default: an Entry that simply occupies its start-to-end stretch, with no further meaning attached. _Exception:_ `hierarchy.autoGroup` (`02` §2) promotes an entry to `'group'` in the same transaction it gains its first child — an automated edit, not a derivation the store computes on the fly; it only promotes, never demotes, so kind still can't silently flicker based on current structure.
 _Avoid_: Type (reserved for `DependencyType`), category; and `'task'` as the default kind's name (ADR 0003 — a kind literal is data, so leaving the old word there would have kept it in every authored Entry)
 
 **Dependency**:
@@ -73,7 +73,7 @@ A horizontal track of a Gantt — the unit of vertical layout, and what the grid
 _Avoid_: Line, track (a track is what a Lane is), record
 
 **Row source**:
-The configuration that decides what the Rows are for a given Gantt — the Entries themselves (optionally as a tree), one Row per value of some grouping function, or a host-supplied resolver. Alternative views (workload, resources) are new row sources, not new rendering or interaction code.
+The configuration that decides what the Rows are for a given Gantt — the Entries themselves (optionally as a tree), one Row per value of some grouping function, or a consumer-supplied resolver. Alternative views (workload, resources) are new row sources, not new rendering or interaction code.
 _Avoid_: Row provider, row model
 
 **Item**:
@@ -93,17 +93,25 @@ The bottom-up pass, run after dependency propagation settles, that derives a `ki
 _Avoid_: Rollup pass (says "when," not "what" — Group rollup names the mechanism, not just its place in the pipeline)
 
 **GeometryFrame**:
-The complete, backend-neutral description of one rendered state: the visible Rows, the Items' boxes, the Dependency paths, and decorations, all as plain numbers. It is what a render backend consumes and the only thing it consumes — no host render output, no hit-region index, no DOM.
+The complete, backend-neutral description of one rendered state: the visible Rows, the Items' boxes, the Dependency paths, and decorations, all as plain numbers. It is what a render backend consumes and the only thing it consumes — no consumer render output, no hit-region index, no DOM.
 _Avoid_: Scene, render tree, viewport model
 
 ### Mounted instances
+
+**Consumer**:
+The application or page that embeds FreeGantt and calls its public API — the audience meant whenever CONTEXT.md or a spec says what "a consumer" does, wants, or authors (an Entry, a stylesheet override, a plugin). Distinct from Container, the DOM element that consumer's page hands to a Gantt to mount into.
+_Avoid_: Host (retired, #64 — the word named both this and Container, #7's "chart" failure repeated)
+
+**Container**:
+The DOM element (or a CSS selector naming one) a consumer hands to `new Gantt({ container })` to mount into — `GanttOptions.container`, `resolveContainer()`, `.fg-container`. One Gantt owns exactly one Container for its lifetime.
+_Avoid_: Host (retired, see Consumer), Mount target (a Render surface — a different, lower-level concept the Container is split into, see Render surface)
 
 **FrameLayout**:
 The `layout/` object that runs one Gantt's layout pass (`layout/frame-layout.ts`) and keeps what that pass must remember between renders — today the row-height index, tomorrow S5's finer-grained invalidation. `computeFrame` stays pure; FrameLayout is what makes the index O(log n) _across_ renders rather than per render. One instance per Gantt: the index describes that Gantt's rows and is not shareable, unlike a TimeScaleModel or a ScrollModel.
 _Avoid_: Layout cache, frame builder (it computes the pass; the cache is how, not what)
 
 **Gantt**:
-The public entry point and a whole mounted instance: one `Gantt` wraps one `host` element, one Dataset, and everything needed to render and interact with it. This is the sense used everywhere the specs discuss the product as a whole — D9's "multi-Gantt sync", I2's "two Gantt instances coexist independently", a host page that mounts "two Gantts". A `Gantt` _is_ the class; it is also the name of the concept, so `new Gantt(...)` and "a Gantt" mean the same thing.
+The public entry point and a whole mounted instance: one `Gantt` wraps one `container` element, one Dataset, and everything needed to render and interact with it. This is the sense used everywhere the specs discuss the product as a whole — D9's "multi-Gantt sync", I2's "two Gantt instances coexist independently", a consumer page that mounts "two Gantts". A `Gantt` _is_ the class; it is also the name of the concept, so `new Gantt(...)` and "a Gantt" mean the same thing.
 _Avoid_: Chart (see #7 — "chart" used to name both this and `GanttShell`, ambiguously, and is retired from the codebase entirely)
 
 **GanttShell**:
@@ -111,7 +119,7 @@ The internal `view/` class a `Gantt` constructs and owns: the composition root t
 _Avoid_: Chart, ChartShell (rejected in #7 — "shell" alone doesn't say what it's a shell _of_; `GanttShell` reads correctly even far from its definition)
 
 **Pane layout**:
-The DOM skeleton one Gantt's host is split into: a Grid pane, a Splitter, and a Timeline pane, built and owned by `view/pane-layout.ts`'s `PaneLayout` class (plans/01 §8.3, S1.8). Structure and one number only — Grid width — no geometry, no scale, no data, no frame, no events. `GanttShell` composes a Pane layout; it does not build panes itself.
+The DOM skeleton one Gantt's container is split into: a Grid pane, a Splitter, and a Timeline pane, built and owned by `view/pane-layout.ts`'s `PaneLayout` class (plans/01 §8.3, S1.8). Structure and one number only — Grid width — no geometry, no scale, no data, no frame, no events. `GanttShell` composes a Pane layout; it does not build panes itself.
 _Avoid_: Layout (Layout, unqualified, is the `layout/` source directory and its pure geometry types — a different concept)
 
 **Grid pane**:
@@ -119,20 +127,20 @@ The left-hand pane of a Pane layout: row labels and, from S6, columns. It has no
 _Avoid_: Label column, gutter (gutter was the pre-S1.8 shape, where the row-label width lived inside the render backend's paint layer instead of being a pane in its own right — D-S1.8-2 retired it)
 
 **Timeline pane**:
-The right-hand pane of a Pane layout and the single native scroller for both axes (D-D, D-S1.8-1): header bands, bars, links, and decorations all mount inside it. `attachScroll` and `attachPaneSize` both bind to this element, never to the host or the Grid pane.
+The right-hand pane of a Pane layout and the single native scroller for both axes (D-D, D-S1.8-1): header bands, bars, links, and decorations all mount inside it. `attachScroll` and `attachPaneSize` both bind to this element, never to the container or the Grid pane.
 _Avoid_: Chart area, canvas (canvas reads as the future canvas render backend, a different concept)
 
 **Splitter**:
 The draggable boundary between the Grid pane and the Timeline pane (`view/splitter.ts`'s `attachSplitter`). A pointer drag previews a candidate Grid width live and proposes the final value on release; it writes no state of its own; `GanttShell` decides whether a proposal becomes the committed Grid width.
-_Avoid_: Resizer, drag handle (both describe the affordance, not the domain concept a host or reviewer needs to name)
+_Avoid_: Resizer, drag handle (both describe the affordance, not the domain concept a consumer or reviewer needs to name)
 
 **Grid width**:
 The Grid pane's width in px — the one number `PaneLayout` owns and the one thing a Splitter drag changes. Public as `gantt.gridWidth`, with the cancelable `beforeGridWidthChange`/`gridWidthChange` pair (S1.8). Spelled two ways on purpose: `gridWidth` in code, where the object it hangs off disambiguates, but `--fg-grid-pane-width` as a CSS custom property, where there is no object to disambiguate and "grid width" alone would read as gridline spacing among other tick/gridline tokens. Both spellings name the same number.
 _Avoid_: Grid pane width in code (too long once `gantt.` already says "grid pane"), gutter width (gutter is retired — see Grid pane)
 
 **Render surface**:
-One of the two DOM elements (`grid`, `timeline`) a `RenderBackend.mount()` receives (`render/backend.ts`'s `RenderSurfaces<THost>`, S1.8). `render/dom` puts the row layer in the grid surface and the header/bar/sizer layers in the timeline surface; `render/null` ignores both. Replaces the pre-S1.8 single-`host` `mount()`, which reserved the row-label gutter inside the paint layer itself.
-_Avoid_: Mount target, host (host is the Gantt's own DOM anchor — a different, higher-level concept)
+One of the two DOM elements (`grid`, `timeline`) a `RenderBackend.mount()` receives (`render/backend.ts`'s `RenderSurfaces<TSurface>`, S1.8). `render/dom` puts the row layer in the grid surface and the header/bar/sizer layers in the timeline surface; `render/null` ignores both. Replaces the pre-S1.8 single-container `mount()`, which reserved the row-label gutter inside the paint layer itself.
+_Avoid_: Mount target, Container (Container is the Gantt's own DOM anchor — a different, higher-level concept a Render surface is carved out of)
 
 **Event bus**:
 The `view/event-bus.ts` class (`EventBus<TEvents>`) a `GanttShell` holds privately and `on`/`off` delegate to. Two events exist as of S1.8 — `beforeGridWidthChange` (cancelable) and `gridWidthChange` (notification) — and `GanttEventMap` is the map new event pairs join as later slices add gestures. Not exported from `api/`; a `Gantt`'s `on`/`off` are the only public surface onto it.
@@ -153,15 +161,15 @@ An absolute point on the timeline, stored as epoch milliseconds and branded so i
 _Avoid_: Date, timestamp, epoch
 
 **Entry input**:
-What a host writes where the library stores an Entry: ids as plain strings, dates as any Instant input. `Dataset` reads an Entry input into an Entry once, at construction — branding the ids and resolving the dates through its own zone. The distinction is the whole reason the core can stay strict about branded values without making a host construct them: looseness lives at the api/ boundary and nowhere behind it. An Entry is itself a valid Entry input, so a host already holding branded values passes them straight through.
+What a consumer writes where the library stores an Entry: ids as plain strings, dates as any Instant input. `Dataset` reads an Entry input into an Entry once, at construction — branding the ids and resolving the dates through its own zone. The distinction is the whole reason the core can stay strict about branded values without making a consumer construct them: looseness lives at the api/ boundary and nowhere behind it. An Entry is itself a valid Entry input, so a consumer already holding branded values passes them straight through.
 _Avoid_: Raw entry, entry DTO, unvalidated entry (nothing here is a validation stage — it is a reading)
 
 **Instant input**:
-Any value a host may write where an Instant is stored: an Instant, a `Date`, epoch milliseconds, or a string. A string carrying an explicit `Z` or numeric offset is absolute; every other string is a Plain time and resolves through the Dataset's zone. `time/toInstant` is the single place that reading happens.
+Any value a consumer may write where an Instant is stored: an Instant, a `Date`, epoch milliseconds, or a string. A string carrying an explicit `Z` or numeric offset is absolute; every other string is a Plain time and resolves through the Dataset's zone. `time/toInstant` is the single place that reading happens.
 _Avoid_: Date input, raw date, loose instant
 
 **Date-only end**:
-An `end` written as a bare calendar date — `'2026-09-08'`, no time of day. Storage is half-open `[start, end)`, so `end` is the boundary after the entry rather than its last moment, but a host writing a bare date means the last day it wants included. The `dateOnlyEnd` option names which of the two readings applies, and it applies to nothing else: an end that already carries a time of day is a boundary already.
+An `end` written as a bare calendar date — `'2026-09-08'`, no time of day. Storage is half-open `[start, end)`, so `end` is the boundary after the entry rather than its last moment, but a consumer writing a bare date means the last day it wants included. The `dateOnlyEnd` option names which of the two readings applies, and it applies to nothing else: an end that already carries a time of day is a boundary already.
 _Avoid_: Inclusive end, end date (an option named `endDate` should hold a date, not a rule)
 
 **TimeScale**:
@@ -196,7 +204,7 @@ The measured drawable box of a pane, measured by `attachPaneSize`, pushed into t
 _Avoid_: Viewport width/size (Viewport is the fan-in object, not a box)
 
 **Viewport**:
-The fan-in object (`layout/viewport/viewport.ts`) that owns one TimeScaleModel and one ScrollModel behind a single `bind`/handle/reaction, so `view/` never holds more than one of either (S1.7, D-S1.7-1). One measurement — a pane resize — fans out through it to the scale's pane width, the scroll model's pane size, and Visible's own width/height, coalesced to one host notification. Not exported from `api/`; `view/` is its only caller. One Viewport serves one Gantt — it holds that Gantt's pane and content extents, so a second `bind()` throws rather than replacing the reaction. Sharing is what the models are for.
+The fan-in object (`layout/viewport/viewport.ts`) that owns one TimeScaleModel and one ScrollModel behind a single `bind`/handle/reaction, so `view/` never holds more than one of either (S1.7, D-S1.7-1). One measurement — a pane resize — fans out through it to the scale's pane width, the scroll model's pane size, and Visible's own width/height, coalesced to one consumer notification. Not exported from `api/`; `view/` is its only caller. One Viewport serves one Gantt — it holds that Gantt's pane and content extents, so a second `bind()` throws rather than replacing the reaction. Sharing is what the models are for.
 _Avoid_: Viewport width/size (that measurement is Pane size), the rendered/visible region (that is Visible)
 
 **Visible**:
@@ -220,7 +228,7 @@ Moving the shared viewport — `ScrollModel.panTo`, and the drag gesture that wi
 _Avoid_: Scroll (an element's native offset), move (move is dragging an Entry — `entryMove`), seek
 
 **Reveal**:
-Bringing a named Entry into view — the intent-level verb a host uses (`gantt.reveal(entryId)`). The library resolves the pixel position from the row geometry it already computes; a host never converts an index or a row height into a scroll offset. Nearest-edge, not center: a no-op if the Entry is already inside Visible, otherwise the Pan moves exactly enough to align the nearest off-screen edge. Landed on both axes at S1.9 (D-S1.9-6) — the x half was a no-op before Zoom existed, since content width equalled pane width.
+Bringing a named Entry into view — the intent-level verb a consumer uses (`gantt.reveal(entryId)`). The library resolves the pixel position from the row geometry it already computes; a consumer never converts an index or a row height into a scroll offset. Nearest-edge, not center: a no-op if the Entry is already inside Visible, otherwise the Pan moves exactly enough to align the nearest off-screen edge. Landed on both axes at S1.9 (D-S1.9-6) — the x half was a no-op before Zoom existed, since content width equalled pane width.
 _Avoid_: ScrollTo, scrollIntoView, goTo, center (Reveal is nearest-edge; centering is a deferred, separate policy)
 
 **Batch**:
@@ -254,23 +262,23 @@ _Avoid_: Gridline (a gridline is one way a Tick is drawn), step
 ### Theming and accessibility
 
 **Base stylesheet**:
-The one stylesheet the library ever writes, injected once per document by `ensureBaseStyles` (`view/styles.ts`, S1.10). Idempotent per document via a `<style data-freegantt-styles>` marker — the document holds that state, not a module variable, so two Gantt instances in one document share one injected sheet without this being I2's kind of shared mutable state (the second call is a no-op precisely because the marker makes it safe to call twice). Ships every Token default and every Part's structural rule; there is no host-facing way to opt out (D-S1.10-8) — a host restyles it, it does not disable it.
+The one stylesheet the library ever writes, injected once per document by `ensureBaseStyles` (`view/styles.ts`, S1.10). Idempotent per document via a `<style data-freegantt-styles>` marker — the document holds that state, not a module variable, so two Gantt instances in one document share one injected sheet without this being I2's kind of shared mutable state (the second call is a no-op precisely because the marker makes it safe to call twice). Ships every Token default and every Part's structural rule; there is no consumer-facing way to opt out (D-S1.10-8) — a consumer restyles it, it does not disable it.
 _Avoid_: Default styles, styles.css (there is no separate package export — see D-S1.10-8)
 
 **Token**:
-A `--fg-*` CSS custom property — level 1 of the Customization ladder (`plans/02` §4). Metrics (`--fg-row-height`, `--fg-grid-pane-width`, …) are read once through `pixel-property.ts`; colour Tokens (`--fg-bar-fill`, `--fg-pane-bg`, …) are consumed directly by Base stylesheet rules with no JS in between. A host overrides any Token by setting the same property on the host element; the shipped default is always the fallback in `var(--fg-x, default)`, never the winner once a host has authored a value.
+A `--fg-*` CSS custom property — level 1 of the Customization ladder (`plans/02` §4). Metrics (`--fg-row-height`, `--fg-grid-pane-width`, …) are read once through `pixel-property.ts`; colour Tokens (`--fg-bar-fill`, `--fg-pane-bg`, …) are consumed directly by Base stylesheet rules with no JS in between. A consumer overrides any Token by setting the same property on the container element; the shipped default is always the fallback in `var(--fg-x, default)`, never the winner once a consumer has authored a value.
 _Avoid_: Variable, custom property (accurate but not this project's term of art — say Token), theme variable
 
 **Part**:
-One of the `fg-*` class names the library's DOM structure carries — level 2 of the Customization ladder. The vocabulary is closed and un-renamed (D-S1.10-1): `fg-host`, `fg-grid-pane`, `fg-grid-spacer`, `fg-rows-clip`, `fg-rows`, `fg-splitter`, `fg-timeline-pane`, `fg-header`, `fg-band`, `fg-tick`, `fg-row`, `fg-row-label`, `fg-bars`, `fg-bar`. A host writes level-2 CSS against a Part directly (`.fg-bar { ... }`) or against a Part plus a State attribute (`.fg-bar[data-flag~="conflict"] { ... }`).
+One of the `fg-*` class names the library's DOM structure carries — level 2 of the Customization ladder. The vocabulary is closed and un-renamed (D-S1.10-1): `fg-container`, `fg-grid-pane`, `fg-grid-spacer`, `fg-rows-clip`, `fg-rows`, `fg-splitter`, `fg-timeline-pane`, `fg-header`, `fg-band`, `fg-tick`, `fg-row`, `fg-row-label`, `fg-bars`, `fg-bar`. A consumer writes level-2 CSS against a Part directly (`.fg-bar { ... }`) or against a Part plus a State attribute (`.fg-bar[data-flag~="conflict"] { ... }`).
 _Avoid_: Pane (Grid pane/Timeline pane/Splitter are specific Parts, already named in "Mounted instances" — Part is the general term for the whole class vocabulary), BEM block (rejected, Q2 — renaming shipped classes to a BEM shape was churn with no behavior change)
 
 **State attribute**:
-A `data-*` attribute a Part carries so a host can select on state without JS — `data-flag` (space-joined, generated from `BarFlags`'/`LinkFlags`' own keys, D-S1.10-2: `conflict`, `cycle`), `data-kind` (an Entry's Kind), `data-testid`/`data-row-id`/`data-item-id` (stable E2E hooks, U6). Distinct from a Token (a value) and a Part (a structural class): a State attribute is level 2's other half, the thing a host's selector matches against rather than reads.
+A `data-*` attribute a Part carries so a consumer can select on state without JS — `data-flag` (space-joined, generated from `BarFlags`'/`LinkFlags`' own keys, D-S1.10-2: `conflict`, `cycle`), `data-kind` (an Entry's Kind), `data-testid`/`data-row-id`/`data-item-id` (stable E2E hooks, U6). Distinct from a Token (a value) and a Part (a structural class): a State attribute is level 2's other half, the thing a consumer's selector matches against rather than reads.
 _Avoid_: Data attribute (too generic — say State attribute when it's part of the level-2 vocabulary), modifier class (there is no modifier-class convention here — state lives in `data-*`, never a second class)
 
 **a11y label**:
-`FrameBar.a11yLabel` — the library-computed string a screen reader announces for one bar (`${entry.name}, ${formatDate(...)} – ${formatEndInclusive(...)}`), composed in `layout/` from the dataset zone and set as `.fg-bar`'s `aria-label` at sync time (D-S1.10-5). Not the same thing as `Gantt.a11yLabel` — the live option that sets the _host's_ `aria-label` (default `'Gantt'`). Two different things sharing a root word: say "the bar's a11y label" or "`Gantt.a11yLabel`" explicitly, never "a11y label" unqualified where both are in scope (#7's "chart" lesson applies).
+`FrameBar.a11yLabel` — the library-computed string a screen reader announces for one bar (`${entry.name}, ${formatDate(...)} – ${formatEndInclusive(...)}`), composed in `layout/` from the dataset zone and set as `.fg-bar`'s `aria-label` at sync time (D-S1.10-5). Not the same thing as `Gantt.a11yLabel` — the live option that sets the _container's_ `aria-label` (default `'Gantt'`). Two different things sharing a root word: say "the bar's a11y label" or "`Gantt.a11yLabel`" explicitly, never "a11y label" unqualified where both are in scope (#7's "chart" lesson applies).
 _Avoid_: aria-label (that is the DOM attribute `render/dom` maps this to — `a11yLabel` is the backend-neutral field `layout/` produces, same relationship `kind` has to `data-kind`), accessible name (a browser/AT term of art, not this project's field name)
 
 ### Extension
@@ -281,12 +289,12 @@ _Avoid_: Permission, ability
 
 **GanttPlugin**:
 The public extension contract: an `id` plus a `setup(ctx)` that returns a disposer. Built-in features (tooltips, context menu, editors) are themselves GanttPlugins using the same `PluginContext` a third party would use — no back-door capabilities reserved for first-party code.
-_Avoid_: Extension (Extensions is the name of the source layer that hosts plugins; GanttPlugin is the unit within it)
+_Avoid_: Extension (Extensions is the name of the source layer that runs plugins; GanttPlugin is the unit within it)
 
 **PluginContext**:
 The object `setup(ctx)` receives — a GanttPlugin's entire world: dataset access, the event bus (including cancelable `before*` events), registration for decorations/columns/renderers/item-emitters/interaction-controllers/keybindings, the command registry, and a disposable store. A plugin may not reach into anything outside it (enforced by the import-boundary lint).
 _Avoid_: Treating this as settled — the plugin system (`GanttPlugin`/`DatasetPlugin`/`PluginContext`) is still design work in progress; the shape, and possibly this name, may change before it lands
 
 **DatasetPlugin**, **ProposalResolver**, **PluginStore**:
-Names from the resolve hook's contract design (ADR 0002's consequences, issue #15, built on #12): a `DatasetPlugin` occupies the resolve hook via a `ProposalResolver`, and per-plugin per-entry data (e.g. the scheduling plugin's pin flag, `Dependency`) lives in a reserved `PluginStore` rather than on `Entry` or in a host/plugin-shared field. Design proposals only — not yet implemented or landed in `src/`; do not treat as existing API until #15 lands. Named `ProjectPlugin` before ADR 0004.
+Names from the resolve hook's contract design (ADR 0002's consequences, issue #15, built on #12): a `DatasetPlugin` occupies the resolve hook via a `ProposalResolver`, and per-plugin per-entry data (e.g. the scheduling plugin's pin flag, `Dependency`) lives in a reserved `PluginStore` rather than on `Entry` or in a consumer/plugin-shared field. Design proposals only — not yet implemented or landed in `src/`; do not treat as existing API until #15 lands. Named `ProjectPlugin` before ADR 0004.
 _Avoid_: Treating these as settled — the exact shapes are still open design work

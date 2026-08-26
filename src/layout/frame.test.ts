@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { computeFrame } from './frame.js';
 import { PrefixSumHeightIndex } from './row-height-index.js';
-import { sampleEntries } from '../../fixtures/sample-project.js';
+import { sampleEntries } from '../../fixtures/sample-dataset.js';
 import { createTimeScale, dayPreset, instant, formatDate, formatEndInclusive } from '../time/index.js';
 import { entryId } from '../model/index.js';
 import type { Entry } from '../model/index.js';

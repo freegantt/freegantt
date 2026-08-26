@@ -1048,7 +1048,7 @@
           Gantt, Dataset
         </text>
         <text x="205" y="102" text-anchor="middle" class="box-sub" font-size="10" fill="var(--muted)">
-          GanttOptions { host, dataset, scale? }
+          GanttOptions { container, dataset, scale? }
         </text>
         <text x="205" y="118" text-anchor="middle" class="box-sub" font-size="10" fill="var(--muted)">
           DatasetOptions { entries, timeZone }
@@ -1273,7 +1273,7 @@
       <svg
         viewBox="0 0 1240 660"
         role="img"
-        aria-label="Call graph of the implemented FreeGantt modules. api/'s new Gantt constructs a GanttShell in view/, passing host, dataset and an optional shared TimeScaleModel; shell.destroy() tears it down. GanttShell creates a DOM render backend (createDomBackend) and calls mount, reads rowLabelWidth, syncs frames with sync, and destroys it on teardown. It binds to the TimeScaleModel in layout/ via bind(binding, onChange), reading get scale and get preset; the model calls onChange which is this.render(), on bind and on every invalidation such as viewport width pushes or a co-bound Gantt changing. TimeScaleModel resolves lazily through time/: createTimeScale, with diffMs, instant(0) fallback, pxPerMsForPreset and dayPreset defaults. Per render, computeFrame in layout/frame.ts receives LayoutInput carrying entries, the resolved TimeScale, preset, viewport, rowHeight, revision and a cached PrefixSumHeightIndex; it culs rows through heights.indexAtY/topAt, positions bars via scale.xForInstant, builds header ticks via scale.ticks plus headers[0].format, and calls itemId()/rowId() from model/. The GeometryFrame goes to backend.sync, which runs the shared syncKeyed reconciler once per layer for ticks, rows and bars. model/ itself is a zero-dependency strip of types plus brand-id helpers."
+        aria-label="Call graph of the implemented FreeGantt modules. api/'s new Gantt constructs a GanttShell in view/, passing container, dataset and an optional shared TimeScaleModel; shell.destroy() tears it down. GanttShell creates a DOM render backend (createDomBackend) and calls mount, reads rowLabelWidth, syncs frames with sync, and destroys it on teardown. It binds to the TimeScaleModel in layout/ via bind(binding, onChange), reading get scale and get preset; the model calls onChange which is this.render(), on bind and on every invalidation such as viewport width pushes or a co-bound Gantt changing. TimeScaleModel resolves lazily through time/: createTimeScale, with diffMs, instant(0) fallback, pxPerMsForPreset and dayPreset defaults. Per render, computeFrame in layout/frame.ts receives LayoutInput carrying entries, the resolved TimeScale, preset, viewport, rowHeight, revision and a cached PrefixSumHeightIndex; it culs rows through heights.indexAtY/topAt, positions bars via scale.xForInstant, builds header ticks via scale.ticks plus headers[0].format, and calls itemId()/rowId() from model/. The GeometryFrame goes to backend.sync, which runs the shared syncKeyed reconciler once per layer for ticks, rows and bars. model/ itself is a zero-dependency strip of types plus brand-id helpers."
       >
         <defs>
           <marker
@@ -1318,7 +1318,7 @@
           Gantt · Dataset
         </text>
         <text x="125" y="118" text-anchor="middle" class="box-sub lbl" font-size="10" fill="var(--ink)">
-          new Gantt({host, dataset, scale?})
+          new Gantt({container, dataset, scale?})
         </text>
         <text x="125" y="136" text-anchor="middle" class="box-sub lbl" font-size="10" fill="var(--ink)">
           gantt.destroy()
@@ -1342,7 +1342,7 @@
           view/ — GanttShell
         </text>
         <text x="410" y="100" text-anchor="middle" class="box-sub lbl" font-size="10" fill="var(--ink)">
-          constructor: backend.mount(host)
+          constructor: backend.mount(container)
         </text>
         <text x="410" y="116" text-anchor="middle" class="box-sub lbl" font-size="10" fill="var(--ink)">
           → scale.bind(...) — its onChange fires
@@ -1360,7 +1360,7 @@
           destroy(): handle.unbind();
         </text>
         <text x="410" y="210" text-anchor="middle" class="box-sub lbl" font-size="10" fill="var(--ink)">
-          backend.destroy(); host cleared
+          backend.destroy(); container cleared
         </text>
         <text x="410" y="234" text-anchor="middle" class="box-sub lbl" font-size="9.5" fill="var(--muted)">
           caches one PrefixSumHeightIndex (#47)
@@ -1453,7 +1453,7 @@
           RenderBackend contract — backend.ts
         </text>
         <text x="720" y="376" text-anchor="middle" class="box-sub lbl" font-size="10" fill="var(--ink)">
-          mount(host) · sync(frame) · destroy()
+          mount(container) · sync(frame) · destroy()
         </text>
         <text x="720" y="392" text-anchor="middle" class="box-sub lbl" font-size="10" fill="var(--ink)">
           applyState(state) · hitTest(x, y)
@@ -1530,7 +1530,7 @@
           <path d="M225,132 H283" />
         </g>
         <text x="254" y="120" text-anchor="middle" class="box-sub lbl" font-size="10" fill="var(--ink)">
-          new GanttShell({host,
+          new GanttShell({container,
         </text>
         <text x="254" y="133" text-anchor="middle" class="box-sub lbl" font-size="10" fill="var(--ink)">
           dataset, scale?})
@@ -1579,7 +1579,7 @@
           <path d="M535,240 H720 V310" />
         </g>
         <text x="736" y="232" text-anchor="start" class="box-sub lbl" font-size="10" fill="var(--ink)">
-          createDomBackend() · mount(host)
+          createDomBackend() · mount(container)
         </text>
         <text x="736" y="246" text-anchor="start" class="box-sub lbl" font-size="10" fill="var(--ink)">
           rowLabelWidth · sync(frame) · destroy()

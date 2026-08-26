@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createDomBackend } from './index.js';
 import { computeFrame } from '../../layout/index.js';
 import type { TimeScale, ViewPreset } from '../../layout/index.js';
-import { sampleEntries } from '../../../fixtures/sample-project.js';
+import { sampleEntries } from '../../../fixtures/sample-dataset.js';
 
 const scale: TimeScale = {
   range: sampleEntries[0]!,

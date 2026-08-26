@@ -71,7 +71,7 @@
         border: 1px solid var(--page-border);
         /* No overflow/position rule here any more (S1.8): PaneLayout builds the grid pane / splitter
            / timeline pane structure inline, and the timeline pane is the library's own native
-           scroller (D-D, D-S1.8-1). This host only sizes the whole shell. */
+           scroller (D-D, D-S1.8-1). This container only sizes the whole shell. */
         height: 70vh;
       }
       /* Colour/background/border/border-radius for .fg-header/.fg-tick/.fg-row/.fg-bar now ship in
@@ -116,7 +116,7 @@
       <a href="./scroll-sync.html">Scroll sync</a>
       <a href="./zoom.html">Zoom &amp; presets</a>
     </nav>
-    <p>Fixture project rendered as positioned bars under a day-tick header. Every slice adds to this page.</p>
+    <p>Fixture dataset rendered as positioned bars under a day-tick header. Every slice adds to this page.</p>
     <div class="theme-toggle" role="group" aria-label="Theme">
       <button type="button" data-theme-choice="auto">Auto</button>
       <button type="button" data-theme-choice="light">Light</button>

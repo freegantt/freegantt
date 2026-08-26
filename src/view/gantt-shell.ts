@@ -18,7 +18,7 @@ import { attachPaneSize } from './pane-size-attachment.js';
 import type { PaneSizeAttachment } from './pane-size-attachment.js';
 import { ensureBaseStyles } from './styles.js';
 import type { RenderBackend } from '../render/backend.js';
-import { EntryNotFoundError, HostNotFoundError } from '../model/index.js';
+import { EntryNotFoundError, ContainerNotFoundError } from '../model/index.js';
 import type { Dataset, EntryId, Size, TimeSpan } from '../model/index.js';
 
 /** S1.10, D-S1.10-4: theming's only preset axis for this step — `'auto'` follows
@@ -40,7 +40,7 @@ const ROW_HEIGHT_POLICY = { fallback: DEFAULT_ROW_HEIGHT, accepts: 'positive' } 
 
 export interface GanttShellOptions {
   /** Element or CSS selector (plans/02 §2); a selector that matches nothing throws (#38). */
-  host: HTMLElement | string;
+  container: HTMLElement | string;
   dataset: Dataset;
   /** Bound viewport object (D9) — pass the same instance to two Gantt instances to x-sync them.
    * Constructs a private default when omitted (plans/01 §8.2: "single-Gantt usage never sees the
@@ -62,21 +62,21 @@ export interface GanttShellOptions {
   overscan?: Overscan;
   /** Live (S1.10, D-S1.10-4). Default `'auto'`: follows `prefers-color-scheme`. */
   theme?: Theme;
-  /** Live (S1.10, D-S1.10-4). Default `'Gantt'`; sets `aria-label` on the host. */
+  /** Live (S1.10, D-S1.10-4). Default `'Gantt'`; sets `aria-label` on the container. */
   a11yLabel?: string;
 }
 
-function resolveHost(host: HTMLElement | string): HTMLElement {
-  if (typeof host !== 'string') return host;
-  const el = document.querySelector(host);
+function resolveContainer(container: HTMLElement | string): HTMLElement {
+  if (typeof container !== 'string') return container;
+  const el = document.querySelector(container);
   if (!(el instanceof HTMLElement)) {
-    throw new HostNotFoundError(host);
+    throw new ContainerNotFoundError(container);
   }
   return el;
 }
 
 export class GanttShell {
-  #host: HTMLElement;
+  #container: HTMLElement;
   #paneLayout: PaneLayout;
   #panes: Panes;
   #backend: RenderBackend<HTMLElement>;
@@ -106,12 +106,12 @@ export class GanttShell {
 
   constructor(options: GanttShellOptions) {
     this.#options = options;
-    this.#host = resolveHost(options.host);
+    this.#container = resolveContainer(options.container);
     // S1.10, D-S1.10-8: must exist before PaneLayout builds the classed elements the stylesheet
     // targets, or there's a one-frame flash of unstyled content.
-    ensureBaseStyles(this.#host.ownerDocument);
+    ensureBaseStyles(this.#container.ownerDocument);
     this.#paneLayout = new PaneLayout({
-      host: this.#host,
+      container: this.#container,
       ...(options.gridWidth !== undefined ? { gridWidth: options.gridWidth } : {}),
     });
     this.#panes = this.#paneLayout.panes;
@@ -190,19 +190,19 @@ export class GanttShell {
   }
 
   #applyTheme(): void {
-    if (this.#theme === 'auto') this.#host.removeAttribute('data-fg-theme');
-    else this.#host.setAttribute('data-fg-theme', this.#theme);
+    if (this.#theme === 'auto') this.#container.removeAttribute('data-fg-theme');
+    else this.#container.setAttribute('data-fg-theme', this.#theme);
   }
 
   get a11yLabel(): string {
     return this.#a11yLabel;
   }
 
-  /** Live (S1.10, D-S1.10-4/5): sets `aria-label` on the host — the one honest tab stop this step
+  /** Live (S1.10, D-S1.10-4/5): sets `aria-label` on the container — the one honest tab stop this step
    *  defines (`view/pane-layout.ts`'s `role="group"`/`tabindex="0"`). */
   set a11yLabel(value: string) {
     this.#a11yLabel = value;
-    this.#host.setAttribute('aria-label', value);
+    this.#container.setAttribute('aria-label', value);
   }
 
   get gridWidth(): number {
@@ -292,7 +292,7 @@ export class GanttShell {
    *  timeline pane's own client box; no gutter to subtract (S1.8, D-S1.8-2) — the grid pane's width
    *  never overlapped it in the first place. */
   #applyPaneMeasurement(size: Size): void {
-    this.#rowHeight = readPixelProperty(this.#host, ROW_HEIGHT_PROPERTY, ROW_HEIGHT_POLICY);
+    this.#rowHeight = readPixelProperty(this.#container, ROW_HEIGHT_PROPERTY, ROW_HEIGHT_POLICY);
     this.#viewportHandle.setPaneSize(size);
   }
 

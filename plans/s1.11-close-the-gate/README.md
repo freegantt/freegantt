@@ -355,11 +355,11 @@ Two PRs, in this order (D-S1.11-6). Vocabulary first — it touches every file t
 
 Nothing in this PR changes behaviour. `pnpm verify` and `pnpm test:e2e` are green at its parent commit and green at its head, and every existing test passes **unmodified except for the renamed identifiers** — that symmetry is the review. One test file is added: `retired-words.test.ts`, which asserts the rename itself and is what stops it regressing the week after it lands. No other test is added, removed, or has its assertions changed; if one needs to be, the rename changed behaviour and that is the finding.
 
-- [ ] `host` → `container` across `src/`, tests, `harness/`, `e2e/`, `README.md`, `plans/02`; `HostNotFoundError` → `ContainerNotFoundError`; `.fg-host` → `.fg-container`; `RenderSurfaces<THost>` → `<TSurface>`
-- [ ] `host` (application sense) → `consumer` in `CONTEXT.md`, `CLAUDE.md`, `plans/00`–`04` and doc comments
-- [ ] `fixtures/sample-project.ts` → `fixtures/sample-dataset.ts` and its eight import sites
-- [ ] `test/guards/retired-words.test.ts`; `CONTEXT.md` entries for **Container** and **Consumer**
-- [ ] `pnpm verify` green on the rename alone, before anything else lands
+- [x] `host` → `container` across `src/`, tests, `harness/`, `e2e/`, `README.md`, `plans/02`; `HostNotFoundError` → `ContainerNotFoundError`; `.fg-host` → `.fg-container`; `RenderSurfaces<THost>` → `<TSurface>`
+- [x] `host` (application sense) → `consumer` in `CONTEXT.md`, `CLAUDE.md`, `plans/00`–`04` and doc comments
+- [x] `fixtures/sample-project.ts` → `fixtures/sample-dataset.ts` and its eight import sites
+- [x] `test/guards/retired-words.test.ts`; `CONTEXT.md` entries for **Container** and **Consumer**
+- [x] `pnpm verify` green on the rename alone, before anything else lands (`pnpm test:e2e` green too, 11/11)
 
 ### PR 2 — S1.11b · the gate
 

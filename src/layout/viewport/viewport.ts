@@ -52,7 +52,7 @@ export class Viewport {
    *  synchronously — before a render runs — rather than clamping `panTo` against a render-stale
    *  `ScrollModel.max` (S1.9, D-S1.9-5). Assigned in `bind()`; undefined before then. */
   #scrollHandle: ScrollBindingHandle | undefined;
-  // Coalesces notifications from BOTH sub-models into one host reaction (D-S1.7-1): scale and
+  // Coalesces notifications from BOTH sub-models into one consumer reaction (D-S1.7-1): scale and
   // scroll each already dedupe within themselves (D-S1.5-4), but a single setPaneSize touches both,
   // and without this layer each would flush its own notification for the same caller-visible change.
   // The batching half only — a Viewport has one subscriber and no resolved value of its own to
@@ -178,7 +178,7 @@ export class Viewport {
     };
   }
 
-  /** Several writes, one host reaction. Re-entrant, flushes in a `finally` (conventions §5).
+  /** Several writes, one consumer reaction. Re-entrant, flushes in a `finally` (conventions §5).
    *  First caller is S1.9's `zoomTo` (D-S1.7-10). */
   batch(run: () => void): void {
     this.#notifications.batch(() => this.scale.batch(() => this.scroll.batch(run)));

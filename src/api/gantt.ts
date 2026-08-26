@@ -9,7 +9,7 @@ import type { Dataset } from './dataset.js';
 export interface GanttOptions {
   /** Element or CSS selector (plans/02 §2) — resolved by GanttShell; a selector matching nothing
    * throws (#38). */
-  host: HTMLElement | string;
+  container: HTMLElement | string;
   dataset: Dataset;
   /** Bound viewport object (D9, plans/02 §5) — omit for a private default sized to the dataset's entries. */
   scale?: TimeScaleModel;
@@ -26,7 +26,7 @@ export interface GanttOptions {
   overscan?: Overscan;
   /** Live (S1.10). Default `'auto'`: follows `prefers-color-scheme`. */
   theme?: Theme;
-  /** Live (S1.10). Default `'Gantt'`; sets `aria-label` on the host. */
+  /** Live (S1.10). Default `'Gantt'`; sets `aria-label` on the container. */
   a11yLabel?: string;
 }
 
@@ -36,7 +36,7 @@ export class Gantt {
 
   constructor(options: GanttOptions) {
     this.#shell = new GanttShell({
-      host: options.host,
+      container: options.container,
       dataset: options.dataset,
       ...(options.scale ? { scale: options.scale } : {}),
       ...(options.scroll ? { scroll: options.scroll } : {}),

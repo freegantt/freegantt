@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createNullBackend } from './index.js';
 import { computeFrame } from '../../layout/index.js';
 import type { TimeScale, ViewPreset } from '../../layout/index.js';
-import { sampleEntries } from '../../../fixtures/sample-project.js';
+import { sampleEntries } from '../../../fixtures/sample-dataset.js';
 
 // render/ only imports layout/ (plans/01 §1), which type-exports TimeScale/ViewPreset but not the
 // runtime time/ constructors — so this fake stands in rather than reaching past the boundary.
