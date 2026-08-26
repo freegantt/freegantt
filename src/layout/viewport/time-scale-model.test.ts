@@ -327,6 +327,20 @@ describe('TimeScaleModel', () => {
       expect(calls).toBe(0);
     });
 
+    it('preset = notifies even when pxPerMs is unaffected — a measured pane under fitViewport zoom', () => {
+      // Regression: fitViewport's pxPerMs = paneWidth / spanMs does not depend on the preset, so a
+      // preset switch that leaves range/timeZone/pxPerMs all unchanged must still be visible to the
+      // D-S1.5-4 equality check — otherwise a bound Gantt never re-renders its header bands (U1).
+      const model = new TimeScaleModel();
+      let calls = 0;
+      model.bind({ timeZone: 'UTC', entries, paneWidth: 700 }, () => calls++);
+      calls = 0;
+
+      model.preset = 'weekAndMonth';
+      expect(calls).toBe(1);
+      expect(model.preset.id).toBe('weekAndMonth');
+    });
+
     it('preset = throws UnknownPresetError for an id outside the shipped set', () => {
       const model = new TimeScaleModel();
       expect(() => {

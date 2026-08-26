@@ -94,16 +94,32 @@ describe('Gantt', () => {
 
 describe('Gantt preset/range/zoom/overscan/zoomTo/zoomBy/reveal (S1.9)', () => {
   it('[S1-A3] a preset switch redraws the axis but keeps bar DOM identity (I8)', () => {
-    const host = document.createElement('div');
-    const gantt = new Gantt({ host, dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }) });
+    // Regression coverage for a measured pane under the default 'fitViewport' zoom: pxPerMs there
+    // does not depend on the preset, so this must exercise a real ResizeObserver measurement
+    // (not an unmeasured 0-width pane, where pxPerMs happens to depend on the preset anyway and
+    // would pass even if the notify path were broken).
+    FakeResizeObserver.instances = [];
+    vi.stubGlobal('ResizeObserver', FakeResizeObserver);
 
-    const before = host.querySelector<HTMLElement>('.fg-bar');
-    gantt.preset = 'weekAndMonth';
-    const after = host.querySelector<HTMLElement>('.fg-bar');
+    try {
+      const host = document.createElement('div');
+      const gantt = new Gantt({ host, dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }) });
+      FakeResizeObserver.instances[0]!.fire({ width: 300, height: 100 });
 
-    expect(after).toBe(before);
-    expect(gantt.preset.id).toBe('weekAndMonth');
-    gantt.destroy();
+      const before = host.querySelector<HTMLElement>('.fg-bar');
+      expect(host.querySelectorAll('.fg-band')).toHaveLength(1);
+
+      gantt.preset = 'weekAndMonth';
+
+      const after = host.querySelector<HTMLElement>('.fg-bar');
+      expect(after).toBe(before);
+      expect(gantt.preset.id).toBe('weekAndMonth');
+      expect(host.querySelectorAll('.fg-band')).toHaveLength(2);
+
+      gantt.destroy();
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it('U5: gantt.overscan is live and reaches the bound Viewport', () => {

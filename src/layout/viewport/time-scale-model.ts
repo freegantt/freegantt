@@ -63,14 +63,30 @@ interface MutableScaleBinding {
   paneWidth: number;
 }
 
-/** Whether a resolve actually changed anything (D-S1.5-4). Compared on exactly the fields `scale` is
- * built from, so the comparison can never drift from what a bound Gantt would see. */
-function sameScaleOptions(a: TimeScaleOptions, b: TimeScaleOptions): boolean {
+/** What `#scaleOptions` resolves and notifies on. `options` is exactly what `createTimeScale` takes;
+ * `preset` rides alongside it purely so a preset switch is visible to the D-S1.5-4 equality check —
+ * `TimeScale` itself stays preset-agnostic (`ticks` takes an explicit step, per D-S1.9-4), but a
+ * bound Gantt's render depends on the preset's headers too (`GanttShell.render` reads `viewport.preset`
+ * alongside `viewport.timeScale`), and `pxPerMs` alone does not always change when the preset does —
+ * `'fitViewport'` with a measured pane resolves the same density from any preset. Without `preset`
+ * here, that combination would invalidate the memoized `TimeScale` (identity-based, unconditional)
+ * but never notify a bound Gantt to re-render it. */
+interface ResolvedScale {
+  options: TimeScaleOptions;
+  preset: ViewPreset;
+}
+
+/** Whether a resolve actually changed anything (D-S1.5-4). Compared on exactly the fields `scale`
+ * (and the preset a render also depends on) are built from, so the comparison can never drift from
+ * what a bound Gantt would see. Presets are frozen singletons (shipped or a caller's own object
+ * passed straight through by `resolvePreset`), so reference equality is exact, not an approximation. */
+function sameResolvedScale(a: ResolvedScale, b: ResolvedScale): boolean {
   return (
-    a.timeZone === b.timeZone &&
-    a.range.start === b.range.start &&
-    a.range.end === b.range.end &&
-    a.pxPerMs === b.pxPerMs
+    a.preset === b.preset &&
+    a.options.timeZone === b.options.timeZone &&
+    a.options.range.start === b.options.range.start &&
+    a.options.range.end === b.options.range.end &&
+    a.options.pxPerMs === b.options.pxPerMs
   );
 }
 
@@ -91,9 +107,9 @@ export class TimeScaleModel {
   /** The bindings, the options resolved from them, and the D-S1.5-4 notification contract — one
    * object, shared with `ScrollModel` in implementation and with nothing else (`bound-value.ts`).
    * This model supplies only what is its own: how to resolve, and what counts as a change. */
-  #scaleOptions = new BoundValue<MutableScaleBinding, TimeScaleOptions>({
-    resolve: (bindings) => this.#resolve(bindings),
-    equals: sameScaleOptions,
+  #scaleOptions = new BoundValue<MutableScaleBinding, ResolvedScale>({
+    resolve: (bindings) => ({ options: this.#resolve(bindings), preset: this.#preset }),
+    equals: sameResolvedScale,
   });
   /** Memoized on the identity of the options it was built from — `BoundValue` hands back the same
    * object until something invalidates it, so identity is the whole invalidation signal here. */
@@ -171,7 +187,7 @@ export class TimeScaleModel {
   }
 
   get scale(): TimeScale {
-    const options = this.#scaleOptions.resolved;
+    const { options } = this.#scaleOptions.resolved;
     if (!this.#scale || this.#scaleBuiltFrom !== options) {
       this.#scale = createTimeScale(options);
       this.#scaleBuiltFrom = options;
