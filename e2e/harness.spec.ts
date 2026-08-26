@@ -25,6 +25,7 @@ test('harness renders the fixture project as positioned bars', async ({ page }) 
 // The timeline pane is the native scroller (S1.8, D-D/D-S1.8-1) — `#gantt` itself no longer scrolls.
 test('scrolling to the bottom of the frame shows rows, not a blank pane', async ({ page }) => {
   await page.goto('/');
+  await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
 
   const pane = page.locator('.fg-timeline-pane');
   await pane.evaluate((el) => {
@@ -54,6 +55,7 @@ test('grid pane rows are actually painted after scrolling, not just correctly po
   page,
 }) => {
   await page.goto('/');
+  await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
 
   const pane = page.locator('.fg-timeline-pane');
   await pane.evaluate((el) => {
@@ -62,27 +64,31 @@ test('grid pane rows are actually painted after scrolling, not just correctly po
   });
   await expect(page.locator('.fg-grid-pane .fg-row').first()).toBeVisible();
 
-  // The last dataset entry ('Sprint 2', fixtures/sample-project.ts) must be the one scrolled into
-  // view, and a hit-test inside it must land on that same row element — proof it is really painted
-  // there, not clipped away by an ancestor whose clip window rode off with the transform. The hit
-  // point is the middle of the row's overlap with the grid pane's own box, not the row's own
-  // center: `scrollTop = scrollHeight` can leave the last row only partly inside the pane, and its
-  // own center would then legitimately fall in the clipped-off sliver — a false failure that has
+  // The last row scrolled into view must have a hit-test inside it land on that same row
+  // element — proof it is really painted there, not clipped away by an ancestor whose clip
+  // window rode off with the transform. The target row is whichever one is currently lowest in
+  // the DOM (not a hardcoded fixture name, so this survives fixture edits), and the hit point is
+  // the middle of that row's overlap with the grid pane's own box, not the row's own center:
+  // `scrollTop = scrollHeight` can leave the last row only partly inside the pane, and its own
+  // center would then legitimately fall in the clipped-off sliver — a false failure that has
   // nothing to do with this regression.
   const hit = await page.evaluate(() => {
     const gridPane = document.querySelector('.fg-grid-pane')!;
     const gridPaneRect = gridPane.getBoundingClientRect();
     const rows = Array.from(document.querySelectorAll<HTMLElement>('.fg-grid-pane .fg-row'));
-    const sprintTwo = rows.find((row) => row.textContent === 'Sprint 2');
-    if (!sprintTwo) return { found: false as const };
-    const rect = sprintTwo.getBoundingClientRect();
+    const lastRow = rows.reduce<HTMLElement | undefined>((lowest, row) => {
+      if (!lowest) return row;
+      return row.getBoundingClientRect().top > lowest.getBoundingClientRect().top ? row : lowest;
+    }, undefined);
+    if (!lastRow) return { found: false as const };
+    const rect = lastRow.getBoundingClientRect();
     const top = Math.max(rect.top, gridPaneRect.top);
     const bottom = Math.min(rect.bottom, gridPaneRect.bottom);
     if (bottom <= top) return { found: true as const, overlapsPane: false as const, isSameElement: false };
     const cx = rect.x + rect.width / 2;
     const cy = (top + bottom) / 2;
     const atPoint = document.elementFromPoint(cx, cy);
-    return { found: true as const, overlapsPane: true as const, isSameElement: atPoint === sprintTwo };
+    return { found: true as const, overlapsPane: true as const, isSameElement: atPoint === lastRow };
   });
 
   expect(hit.found).toBe(true);
@@ -97,6 +103,7 @@ test('grid pane rows are actually painted after scrolling, not just correctly po
 // content sizer's own transform instead, for that reason) — only a real layout engine settles it.
 test('the timeline pane has no row-label gutter in its scrollable content (D1)', async ({ page }) => {
   await page.goto('/');
+  await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
 
   const pane = page.locator('.fg-timeline-pane');
   const scrollWidth = await pane.evaluate((el) => el.scrollWidth);
