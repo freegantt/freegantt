@@ -7,6 +7,7 @@ import { sampleEntries } from '../../../fixtures/sample-project.js';
 const scale: TimeScale = {
   range: sampleEntries[0]!,
   timeZone: 'UTC',
+  pxPerMs: 1,
   xForInstant: () => 0,
   instantForX: () => sampleEntries[0]!.start,
   widthForDuration: () => 100,
