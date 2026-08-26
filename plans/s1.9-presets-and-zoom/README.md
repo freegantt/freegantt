@@ -375,12 +375,12 @@ Call sites, read aloud: `gantt.zoomBy(1.5, pointerX)` — "zoom the Gantt by one
 Guardrails and glossary first, then engine, then the seam, then the public edge.
 
 ### Types and errors
-- [ ] `UnknownPresetError`, `EntryNotFoundError` in `src/model/errors.ts`; re-export from `src/model/index.ts` and `src/api/index.ts`
+- [x] `UnknownPresetError`, `EntryNotFoundError` in `src/model/errors.ts`; re-export from `src/model/index.ts` and `src/api/index.ts`
 
 ### `time/`
-- [ ] `src/time/presets.ts` per §3.1 — five presets moved unchanged, three new, `ShippedPresetId`, `presets`, `PresetRef`, `resolvePreset`
-- [ ] `src/time/scale.ts` — `pxPerMs` added to `TimeScale`; the six moved exports deleted; `src/time/index.ts` barrel updated
-- [ ] Confirm `startOf`/`stepBy` DST correctness for `'M'`/`'w'` with a test per §6 (code likely already correct — `zone.ts`'s `UNITS` table; this is a test gap, not an implementation gap)
+- [x] `src/time/presets.ts` per §3.1 — five presets moved unchanged, three new, `ShippedPresetId`, `presets`, `PresetRef`, `resolvePreset`
+- [x] `src/time/scale.ts` — `pxPerMs` added to `TimeScale`; the six moved exports deleted; `src/time/index.ts` barrel updated
+- [x] Confirm `startOf`/`stepBy` DST correctness for `'M'`/`'w'` with a test per §6 (code likely already correct — `zone.ts`'s `UNITS` table; this is a test gap, not an implementation gap)
 
 ### `layout/viewport/`
 - [ ] `TimeScaleIntent.zoom`, `TimeScaleZoom`; live `preset`/`range`/`zoom` setters on `TimeScaleModel`; `#resolvePxPerMs` per D-S1.9-2
