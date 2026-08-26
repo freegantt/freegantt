@@ -2,7 +2,7 @@
 
 **Slice:** S1 (`plans/03` §S1) · **Step:** S1.10 · **Issue:** #1 · **Baseline:** `main` @ `1046aee` plus this branch's own `S1.9: add UnknownPresetError and EntryNotFoundError` (`e06a4aa`) — mostly spec-only. S1.9's types/errors step has landed (`UnknownPresetError`/`EntryNotFoundError` are in `src/model/errors.ts`, re-exported from `model/`/`api/`); the rest of S1.9 has not (`src/time/presets.ts` does not exist; `Gantt`/`GanttShell` still expose only `gridWidth`, `on`/`off`, `destroy`). This document builds on [`plans/s1.9-presets-and-zoom/README.md`](../s1.9-presets-and-zoom/README.md) as **settled design**, same as S1.9 built on S1.8's README before its own code existed. Code order stays `S1.9 → S1.10` (`plans/temp_todo_for_s1-close.md` §3): the theming pass must not have to guess how many header bands a preset draws, and S1.9 is what makes that count variable (`dayAndWeekPreset` etc., two bands).
 **Governed by:** [S1 API conventions](https://github.com/Pawel-IT/FreeGantt/issues/1#issuecomment-5400465734) — names, geometry types, typed errors, `batch()` — and **D11** ("solid accessibility built in as slices land … never a retrofit pass"), which this step is the first to make good on.
-**Supersedes:** the [S1.10 issue comment](https://github.com/Pawel-IT/FreeGantt/issues/1#issuecomment-5400111232) (its revised form) and the S1.10 findings in `plans/fix-issue1-apis.md`, wherever they disagree. §2 records every decision and which finding it closes.
+**Supersedes:** the [S1.10 issue comment](https://github.com/Pawel-IT/FreeGantt/issues/1#issuecomment-5400111232) (its revised form) and the S1.10 findings in `plans/fix-issue1-apis.md`, wherever they disagree. §2 records every decision and which finding it closes. Also incorporates `plans/2026-08-25-s1.10-theming-a11y-review.md`'s findings against *this document*: H2/H3/JC3/JC4/S1/S2 applied as stated; H1 applied with a corrected diagnosis — the review's own fix (moving `role="grid"` off the host) doesn't address the actual break, which is that `.fg-row` and `.fg-bar` are DOM cousins under the split-pane architecture (D-S1.8-1), never ancestor/descendant of each other, so no role placement on host/row/bar alone yields a conformant grid; D-S1.10-5 now ships `group`/`listitem`/`img` instead. JC1/JC2 close as side effects (JC1 was already a recorded decision; JC2's question no longer applies once bars stop claiming `gridcell`).
 
 This directory is the settled spec for S1.10, in the same form as [`plans/s1.9-presets-and-zoom/README.md`](../s1.9-presets-and-zoom/README.md).
 
@@ -18,8 +18,8 @@ The issue comment was revised once already (see its own banner) — that revisio
 |---|---|---|
 | **Q1** | **Does the shipped stylesheet replace `PaneLayout`'s hand-written inline layout, or only add the tokens/parts the comment describes?** Not asked in the comment — it was written before `src/view/pane-layout.ts` existed. | **It replaces the structural half.** `pane-layout.ts` currently sets `display`, `overflow`, `flexDirection`, `flexShrink`, `flex`, `minWidth`, `cursor` and `position` inline (`pane-layout.ts:51-105`) — none of those are `transform`/`width`/`height`, so the new lint rule (§3.3) would fail on file one if the rule landed with nothing to replace it. §2 D-S1.10-6. |
 | **Q2** | **What are the shipped part class names — the comment's `fg-pane fg-pane--grid` / `fg-pane fg-pane--timeline`, or something else?** | **The names already in code**, unchanged: `fg-grid-pane`, `fg-grid-spacer`, `fg-rows-clip`, `fg-rows`, `fg-splitter`, `fg-timeline-pane` (`pane-layout.ts`), `fg-header`, `fg-band`, `fg-tick`, `fg-row`, `fg-bars`, `fg-bar` (`render/dom/index.ts`). Renaming shipped, tested class names to match a pre-S1.8 draft is churn with no behavior change and a broken `pane-layout.test.ts`/`gantt-shell.test.ts` for no reason. §2 D-S1.10-1. |
-| **Q3** | **`node.dataset['kind'] = geom.kind` already runs (`render/dom/index.ts:139`) — does S1.10 still need to "add" `data-kind`?** | **No — it's already shipped.** `plans/02` §4.1's "every bar element carries `data-kind`" is done. S1.10's job on that front is `data-flag` only (bars carry no flag state yet — `bar.flags` is computed by `layout/` since S0 but nothing in `render/dom` reads it). §2 D-S1.10-2. |
-| **Q4** | **Does the a11y row/cell structure need a new child node, or can `.fg-row` carry both `role="row"` and the label's `role="rowheader"`?** Not addressed in the comment. | **A child node.** ARIA's row/cell relationship is structural — a `role="row"` element with no `role="gridcell"`/`role="rowheader"` descendant is not a row a screen reader can navigate into. `.fg-row` gains one child, `.fg-row-label` (`role="rowheader"`, the same text `.fg-row` sets as `textContent` today), and `.fg-row` itself carries `role="row"` + `aria-rowindex`. Grid columns (S6) will add siblings beside this one label cell — the shape is chosen so that lands additively. §2 D-S1.10-7. |
+| **Q3** | **`node.dataset['kind'] = geom.kind` already runs (bar `patch`, `render/dom/index.ts`) — does S1.10 still need to "add" `data-kind`?** | **No — it's already shipped.** `plans/02` §4.1's "every bar element carries `data-kind`" is done. S1.10's job on that front is `data-flag` only (bars carry no flag state yet — `bar.flags` is computed by `layout/` since S0 but nothing in `render/dom` reads it). §2 D-S1.10-2. |
+| **Q4** | **Does the a11y row/cell structure need a new child node?** Not addressed in the comment. | **Yes, but not for a `row`/`rowheader` pair** — that pairing only means something inside a `grid`/`table`, and D-S1.10-5 (revised) drops the grid pattern for this step since bars can't be DOM descendants of their row (D-S1.8-1's split-pane architecture puts them in different scroll surfaces). `.fg-row` still gains one child, `.fg-row-label`, carrying the text `.fg-row` sets as `textContent` today, with no role of its own — it exists now so grid columns (S6) can add siblings beside it later without restructuring. §2 D-S1.10-7. |
 | **Q5** | **`--fg-header-height` and `--fg-splitter-width` — new tokens, or already shipped?** The comment lists them as part of "the `--fg-*` table" without saying which exist. | **Already shipped at S1.8** (`pane-layout.ts:18-21`, defaults 20 and 4). S1.10 only adds them to the documented table (`plans/02` §4) — no code change. Same situation as `--fg-grid-pane-width` was for S1.9 (temp_todo §2 C4). §2 D-S1.10-1. |
 | **Q6** | **`no-inline-style-outside-geometry` — scoped to `src/render/**` and `src/view/**` per the comment. Does that catch `attachScroll`/`attachPaneSize`, which write no styles, or `splitter.ts`, which writes none either?** | **Nothing to catch there — confirmed, not assumed.** `grep` over `src/view/*.ts` for `.style.` finds writes only in `pane-layout.ts` and (test-only) `gantt-shell.test.ts`/`pane-layout.test.ts`. `splitter.ts`, `scroll-attachment.ts`, `pane-size-attachment.ts`, `event-bus.ts` are clean today and stay clean; the rule guards against regression in them, not a known violation. |
 | **Q7** | **Roving tabindex — the fix-issue1-apis.md finding (§(a).4) says the earlier draft's "exactly one `tabindex='0'` (the active row)" has no mover and permanently focuses row 0, against D11.** | **Ship the host as the one tab stop, not a row.** `tabindex="0"` on the Gantt host element itself (the region, not any row) is honest today — nothing yet defines an "active row" to move it to. Rows/bars get roles and labels but no `tabindex` of their own until S4's keyboard controller exists to move one. §2 D-S1.10-5, restated from the comment's own fix — recorded here because `fix-issue1-apis.md` never got a closing entry for it. |
@@ -30,13 +30,22 @@ Not a question: `formatEndInclusive`/`formatDate`, the `theme` live setter, `a11
 
 ## 1. User stories
 
+Acceptance for each story is the checkbox under it — the only copy of this checklist (an earlier pass of this document also had one at the bottom of §8, duplicating this one; that copy is gone, not just unchecked elsewhere).
+
 - **U1.** I load the library with no CSS of my own. Rows, bars, header bands and the splitter already look like a Gantt chart — spacing, borders, a bar fill color — because the library ships a base stylesheet once per document.
+  - [ ] Base stylesheet + `data-flag` selector work with zero host CSS (`view/styles.test.ts`, `render/dom/index.test.ts`).
 - **U2.** I write `.fg-bar[data-flag~="conflict"] { outline: 2px solid var(--fg-warn); }` in my own stylesheet. No JS, no renderer callback — a scheduling-plugin conflict (S3) shows up the moment the flag is true.
+  - [ ] Same tests as U1 cover this — the selector exists and works even though nothing sets `conflict: true` until S3.
 - **U3.** I set `gantt.theme = 'dark'`. Every token flips in that document; a system in `prefers-color-scheme: dark` gets the same look with `theme` left at its default `'auto'`.
+  - [ ] `theme` setter is live (`api/gantt.test.ts`).
 - **U4.** I set `--fg-row-height: 40px` and `--fg-bar-radius: 6px` on the host element. The library reads them once/on remeasure (existing `readPixelProperty` cadence) — no rebuild, no option.
-- **U5.** I use a screen reader. Tabbing onto the Gantt announces it as a grid region with a label; arrowing (S4, not yet) will move a row cursor; today, every row and bar the reader can already reach (via the DOM tree, not a roving tabindex) is labelled with real dates, not raw pixel geometry.
+  - [ ] Token overrides read once/on remeasure, no rebuild (`api/gantt.test.ts`).
+- **U5.** I use a screen reader. Tabbing onto the Gantt announces it as a labelled group; arrowing (S4, not yet) will move a row cursor; today, every row and bar the reader can already reach (via the DOM tree, not a roving tabindex) is labelled with real dates, not raw pixel geometry.
+  - [ ] Roles, labels, one honest tab stop (`render/dom/index.test.ts`).
 - **U6.** (developer) I write `e2e` selectors against `[data-testid="fg-bar"][data-item-id="t42"]` instead of a CSS class that could change with a design tweak.
+  - [ ] `data-testid` hooks present (`render/dom/index.test.ts`); the `[S1-A1]`/`[S1-A4]` selectors S1.11's boxes will select on exist now, not invented at S1.11.
 - **U7.** (developer) I add a new `BarFlags` key next month (say, `late`). I don't touch `render/dom` — the flag shows up as `data-flag~="late"` because the generator reads the object's keys, not a hand-written map.
+  - [ ] A new `BarFlags` key needs no `render/dom` edit (`render/dom/index.test.ts`, table-driven).
 
 ---
 
@@ -46,9 +55,7 @@ Settled in review (the comment's own revision) and in this pass (reconciling aga
 
 ### D-S1.10-1 — No renames. The token table and the part-class list document what S1.8 already shipped, plus what's missing
 
-`--fg-row-height`, `--fg-grid-pane-width`, `--fg-header-height` (fallback 20), `--fg-splitter-width` (fallback 4) exist in code today, each read through `readPixelProperty` (`render/dom/pixel-property.ts`, whose own header comment already says *"S1.10's theming pass multiplies the count"*). S1.10 adds the remaining metric and every colour token, and documents all of them in `plans/02` §4 as one table — it does not touch the four that exist. Class names are the same story (Q2): `fg-grid-pane`, `fg-grid-spacer`, `fg-rows-clip`, `fg-rows`, `fg-splitter`, `fg-timeline-pane`, `fg-header`, `fg-band`, `fg-tick`, `fg-row`, `fg-bars`, `fg-bar` are the real vocabulary; the base stylesheet targets exactly these. The colour tokens' default *values* (light and dark) are D-S1.10-9's decision, not this one — this decision is only about which tokens/classes exist, unchanged from S1.8/Q2.
-
-*Rejected:* the comment's `fg-pane fg-pane--grid` / `fg-pane fg-pane--timeline` two-class BEM scheme. It never shipped — `PaneLayout` was written independently at S1.8 with single flat class names — and adopting it now means a rename PR that touches two already-green test files for a naming preference, not a defect.
+`--fg-row-height`, `--fg-grid-pane-width`, `--fg-header-height` (fallback 20), `--fg-splitter-width` (fallback 4) exist in code today, each read through `readPixelProperty` (`render/dom/pixel-property.ts`, whose own header comment already says *"S1.10's theming pass multiplies the count"*). S1.10 adds the remaining metric and every colour token, and documents all of them in `plans/02` §4 as one table — it does not touch the four that exist. Class names are the same story: the twelve already in code (Q2's list — not repeated here) are the real vocabulary, unchanged and un-renamed; the *rejected* BEM alternative and why (test churn, no behavior change) is Q2's `Rejected` line, also not repeated here. The colour tokens' default *values* (light and dark) are D-S1.10-9's decision, not this one — this decision is only about which tokens/classes exist.
 
 ### D-S1.10-2 — `data-flag` is new; `data-kind` is not
 
@@ -90,7 +97,7 @@ export function formatEndInclusive(zone: string, end: Instant): string;
 export function formatDate(zone: string, i: Instant): string;
 ```
 
-A span composes as `formatDate(zone, start)` + `formatEndInclusive(zone, end)`; nothing else touches the half-open→inclusive conversion. The earlier draft's `formatSpanInclusive` is cut — a second inclusive helper is exactly what `plans/01` §5's "exactly one" forbids (`fix-issue1-apis.md` Standards JC).
+A span composes as `formatDate(zone, start)` + `formatEndInclusive(zone, end)`; nothing else touches the half-open→inclusive conversion. Two functions ship, not one — `plans/01` §5's "exactly one formatting helper" governs the half-open→inclusive *conversion* specifically, not every formatter: `formatDate` does no conversion at all (a start is already inclusive, it just needs zone-aware display), so it isn't a second instance of the thing "exactly one" counts. The earlier draft's `formatSpanInclusive` is cut for the reason "exactly one" actually names — it would have been a *second path* doing the half-open→inclusive conversion `formatEndInclusive` already owns (`fix-issue1-apis.md` Standards JC).
 
 ```ts
 // GanttOptions / Gantt — both live, both flat
@@ -115,16 +122,18 @@ export interface FrameBar {
 
 Named `a11yLabel`, not `ariaLabel`: `layout/` is backend-neutral and ARIA is a DOM vocabulary (`render/dom` maps it to `aria-label` at sync time, the same relationship `kind` has to `data-kind`).
 
-Roles, for a virtualized grid (`render/dom` writes these at `mount`/`sync`, all new):
+Roles (`render/dom` writes these at `mount`/`sync`, all new) — **not** the ARIA `grid`/`row`/`gridcell` pattern (revised from an earlier draft of this decision; see the note below the table):
 
 | Element | Role / attribute |
 |---|---|
-| host | `role="grid"`, `aria-label` from `a11yLabel` option, `tabindex="0"` — the **only** tab stop this step defines, `aria-rowcount` = total row count (not the windowed count) |
-| `.fg-row` | `role="row"`, `aria-rowindex` = `frame.rows[].index + 1` |
-| `.fg-row-label` (new child, D-S1.10-7) | `role="rowheader"` |
-| `.fg-bar` | `role="gridcell"`, `aria-label` from `FrameBar.a11yLabel` |
+| host | `role="group"`, `aria-label` from `a11yLabel` option, `tabindex="0"` — the **only** tab stop this step defines |
+| `.fg-row` | `role="listitem"`, `aria-posinset` = `frame.rows[].index + 1`, `aria-setsize` = total row count (not the windowed count) |
+| `.fg-row-label` (new child, D-S1.10-7) | no role — its text is `.fg-row`'s accessible name via normal content-based naming, same as before the child existed |
+| `.fg-bar` | `role="img"`, `aria-label` from `FrameBar.a11yLabel` — an image-like element carrying its own description, not a cell of anything |
 
-`aria-rowcount`/`aria-rowindex` need the frame's absolute `index` and total `contentHeight`, both already carried (`GeometryFrame.rows[].index`, `contentHeight`) — virtualization without them announces "row 3 of 30" over a 5,000-row dataset.
+`aria-posinset`/`aria-setsize` need the frame's absolute `index` and total row count, both already carried (`GeometryFrame.rows[].index`, `contentHeight`) — virtualization without them announces "row 3" with no "of 30" over a 5,000-row dataset.
+
+**Why not `role="grid"`/`"row"`/`"gridcell"`, corrected from an earlier pass of this document:** that pattern requires `gridcell` to be a DOM descendant of its `row`. `.fg-row` renders into the grid pane's row layer; `.fg-bar` renders into the timeline pane's bar layer (D-S1.8-1's split-pane architecture — two independent scroll surfaces sharing row geometry, not one DOM subtree). A row and its bar are DOM cousins under `host`, never ancestor/descendant of each other, so no arrangement of roles on `host`/`.fg-row`/`.fg-bar` alone produces a spec-conformant grid — the earlier draft's table assigned `grid`/`row`/`gridcell` without checking this, and an external review's own fix for it (moving `role="grid"` from `host` to the row layer) doesn't repair the row↔bar relationship either, since that's a different pair than the one it diagnosed. `role="listitem"`/`role="img"` make no claim the DOM can't back up: each row is independently reachable and self-describing, each bar is independently reachable and self-describing, and nothing asserts a containment relationship between them that doesn't exist. The full grid pattern returns if a later step ever puts a row's cells in the same DOM subtree as the row itself (§9) — not committed to a specific slice, since S6's column work adds cells beside `.fg-row-label` in the *grid pane*, and doesn't by itself move bars out of the timeline pane.
 
 **Closes `fix-issue1-apis.md` §(a).4.** The earlier draft's roving `tabindex="0"` on "the active row" had no mover defined anywhere in S1–S3, so the ring would sit permanently on row 0 — worse than not claiming it, against D11. This step ships one honest `tabindex="0"` on the host; S4's keyboard controller changes the host's `tabindex` to `-1` and starts moving one row's, in the same commit that introduces the thing being roved.
 
@@ -186,7 +195,7 @@ The new lint rule (`freegantt/no-inline-style-outside-geometry`, `src/render/**`
 .fg-bar[data-flag~="conflict"] { outline: 2px solid var(--fg-warn); }
 ```
 
-Colour values above are D-S1.10-9's — this decision only owns which class gets which property (structure), not what the property defaults to (colour). `pane-layout.ts` keeps exactly the writes the rule already allows: `gridPane.style.width`/`splitter.style.width` (both driven by live numbers — `gridWidth`, `--fg-splitter-width`), `spacer.style.height`/`rowLayer.style.height` (`--fg-header-height`, the `100%` fill). `render/dom/index.ts`'s `position: absolute`/`relative` and `contentSizer`'s `top`/`left`/`visibility` move the same way, onto `fg-row`, `fg-bar`, `fg-tick`, `fg-band`, and a new `fg-content-sizer` class; its `transform`/`width`/`height` per-frame writes are unchanged (they're exactly what the rule exists to protect).
+Colour values above are D-S1.10-9's — this decision only owns which class gets which property (structure), not what the property defaults to (colour). `pane-layout.ts` keeps exactly the writes the rule already allows: `gridPane.style.width`/`splitter.style.width` (both driven by live numbers — `gridWidth`, `--fg-splitter-width`), `spacer.style.height` (`--fg-header-height`, a live number). `rowLayer.style.height = '100%'` also stays inline, on a narrower rationale than the others: `'100%'` isn't a live number, but it depends on `.fg-rows-clip`'s `flex: 1 1 auto` sizing its parent — moving it to a `.fg-rows { height: 100% }` CSS rule works exactly as well (nothing about it needs JS), so this is a judgement call kept inline for now for one reason only: `height` is already an allowed property under the lint rule, so leaving it doesn't need a rule exception, and it keeps `pane-layout.ts`'s few remaining writes visually grouped instead of splitting one element's sizing across two files. `render/dom/index.ts`'s `position: absolute`/`relative` and `contentSizer`'s `top`/`left`/`visibility` move the same way, onto `fg-row`, `fg-bar`, `fg-tick`, `fg-band`, and a new `fg-content-sizer` class; its `transform`/`width`/`height` per-frame writes are unchanged (they're exactly what the rule exists to protect).
 
 This is the concrete instance of what the comment's §3 called "R3's countermeasure, made concrete" — recorded here as a decision because the comment predates `pane-layout.ts` and could not have named these specific lines.
 
@@ -198,24 +207,26 @@ This is the concrete instance of what the comment's §3 called "R3's countermeas
 create: () => {
   const node = document.createElement('div');
   node.className = 'fg-row';
-  node.setAttribute('role', 'row');
+  node.setAttribute('role', 'listitem');
   const label = document.createElement('div');
   label.className = 'fg-row-label';
-  label.setAttribute('role', 'rowheader');
   node.append(label);
   return node;
 },
 patch: (node, geom) => {
   node.style.transform = `translateY(${geom.top}px)`;
   node.style.height = `${geom.height}px`;
-  node.setAttribute('aria-rowindex', String(geom.index + 1));
+  node.setAttribute('aria-posinset', String(geom.index + 1));
+  node.setAttribute('aria-setsize', String(geom.rowCount));
   node.querySelector('.fg-row-label')!.textContent = geom.label;
 },
 ```
 
-`RowGeom` gains `index` (already on `FrameRow`, just not carried into `BarGeom`'s row sibling type today). S6's column work adds sibling cells beside `.fg-row-label` inside the same `.fg-row` — this shape is why the label got its own child now instead of later.
+`RowGeom` gains `index` (already on `FrameRow`) and `rowCount` — the latter isn't a `FrameRow` field (it's a frame-level fact, the same one `aria-rowcount` would have used on the host), so `sync()`'s `toGeom` callback stamps it onto every row's geom object from `frame.rows.length`, closing over the frame the same way `syncKeyed`'s other `toGeom` callbacks already close over per-call context. `BarGeom` does **not** need `index` — D-S1.10-5's revised role table drops `.fg-bar`'s dependency on row position entirely (no `gridcell`, so no `aria-rowindex` to derive), closing what an earlier pass of this document left as an open question about how a bar would learn its row's index. `.fg-row-label` stays a plain, role-less child: S6's column work adds sibling cells beside it inside the same `.fg-row` — this shape is why the label got its own child now instead of later — and revisits the row's ARIA role at the same time, if the grid pattern becomes reachable then.
 
 ### D-S1.10-8 — `styles.css` package export stays cut; `ensureBaseStyles` is the only writer, idempotent per document
+
+**Why this doesn't trip I2:** I2 governs shared *mutable state* — configuration, subscriptions, caches that would let two Gantt instances see each other's changes. `ensureBaseStyles`'s `<style data-freegantt-styles>` marker isn't that: it's an idempotent one-time DOM write guarded by an attribute on the *document*, not a module variable, and the second Gantt's call is a no-op precisely because the marker makes it safe to call twice — no state is shared, exchanged, or capable of drifting between instances. Stated here, not only in the function's own doc comment, so a review checking this decision against I2 doesn't have to go find the source to see the reasoning.
 
 ```ts
 /** src/view/styles.ts — the only place the library writes a stylesheet. Idempotent per document via
@@ -288,7 +299,7 @@ bans `node.style.<prop> = …` for prop ∉ { transform, width, height }
 scope: src/render/**, src/view/**
 ```
 
-Lands **first**, with its red fixture, per `plans/04` §3.2/§3.3's "guardrail before the code it guards" — the earlier draft cited "`plans/04` §55", which doesn't exist (`plans/04` has five top-level sections); the real citation is §3.2 (boundary enforcement before real code) and §3.3 (custom rules land with a fixture).
+Lands **first**, with its red fixture, per `plans/04` §3.2/§3.3's "guardrail before the code it guards" — the earlier draft cited "`plans/04` §55", which doesn't exist (`plans/04` has five top-level sections); the real citation is §3.2 (boundary enforcement before real code) and §3.3 (custom rules land with a fixture). Scope is `src/render/**` + `src/view/**` because those are the only directories writing inline styles today; `src/interaction/` doesn't exist yet, but when it ships gesture previews (hover/drag, per CLAUDE.md's "hot path = class toggles + transforms only") it will need the same per-frame-geometry allowance, so the rule's scope is expected to widen to include it then — not a gap in this step, just not yet applicable.
 
 ### 3.4 `src/layout/frame.ts` — flag keys renamed; `FrameBar` gains one field
 
@@ -307,10 +318,10 @@ Every `BarFlags`/`LinkFlags` literal in `src/layout/**` (currently only the empt
 
 ### 3.5 `src/render/dom/index.ts` — flags, roles, the row label child, the class/inline-style split
 
-- `BarGeom` gains `flags: BarFlags`; `patch` writes `data-flag` (D-S1.10-2) and `aria-label` (from `a11yLabel`, carried the same way `label` already is) and `role="gridcell"` (`create`).
-- `RowGeom` gains `index: number`; `.fg-row`'s `create` adds the `.fg-row-label` child and `role="row"`; `patch` writes `aria-rowindex` and the label child's `textContent` (D-S1.10-7).
-- `mount` sets `role="grid"`, `tabindex="0"`, `aria-label` (from the `a11yLabel` option, threaded through `RenderSurfaces` or a `mount`-time option — exact plumbing point is `GanttShell`'s call into `backend.mount`, extended with one field) and `aria-rowcount` (from the frame's total row count, updated in `sync` since row count can change with the dataset) on the host.
-- Every `node.style.position/visibility/top/left` write in `mount`/`syncHeader`/`syncRows`/`syncBars` (`index.ts:48,71,108,131,161,164,171-176`) deletes; the corresponding class picks it up per D-S1.10-6's stylesheet.
+- `BarGeom` gains `flags: BarFlags`; `patch` writes `data-flag` (D-S1.10-2) and `aria-label` (from `a11yLabel`, carried the same way `label` already is) and `role="img"` (`create`) — not `gridcell` (D-S1.10-5, revised).
+- `RowGeom` gains `index: number` and `rowCount: number`; `.fg-row`'s `create` adds the `.fg-row-label` child and `role="listitem"`; `patch` writes `aria-posinset`/`aria-setsize` and the label child's `textContent` (D-S1.10-7).
+- `mount` sets `role="group"`, `tabindex="0"`, `aria-label` (from the `a11yLabel` option, threaded through `RenderSurfaces` or a `mount`-time option — exact plumbing point is `GanttShell`'s call into `backend.mount`, extended with one field) on the host — not `role="grid"`/`aria-rowcount` (D-S1.10-5, revised).
+- Every `node.style.position/visibility/top/left` write in `mount`/`syncHeader`/`syncRows`/`syncBars` deletes; the corresponding class picks it up per D-S1.10-6's stylesheet. Concretely: tick `create` (`position: absolute`), band `create` (`position: relative`), row `create` (`position: absolute`), bar `create` (`position: absolute`), `headerLayer`/`barLayer` at `mount` (`position: relative`), `contentSizer` at `mount` (`position: absolute`, `top`, `left`, `visibility`) — six call sites, not a line-number range (an earlier pass of this document cited `index.ts:48,71,108,131,161,164,171-176`, which drifts as the file changes; naming the call site survives edits the way a line number doesn't).
 - `data-testid="fg-bar"` + existing `data-item-id` (already `bar.dataset['itemId']` — just needs the testid sibling attribute); `data-testid="fg-row"` + a new `data-row-id`.
 
 ### 3.6 `src/view/pane-layout.ts` — inline styles trimmed to `width`/`height`
@@ -323,7 +334,7 @@ Per D-S1.10-6: every `display`/`overflow`/`flexDirection`/`flexShrink`/`flex`/`m
 
 `api/index.ts` gains: `Gantt.theme` (get/set), `Gantt.a11yLabel` (get/set), `GanttOptions.theme`/`.a11yLabel`, `formatEndInclusive`, `formatDate`. `ensureBaseStyles` is **not** exported — it's an internal `view/` call `GanttShell` makes at construction; there is no host-facing way to opt out (D-S1.10-8), matching `plans/02` §4's own "level 1: CSS custom properties" framing (a host restyles, it doesn't disable the sheet).
 
-**Declared gaps, now closed:** the `--fg-*` token table (`plans/02` §4) goes from five documented properties (`--fg-row-height`, `--fg-grid-pane-width`, `--fg-bar-radius` mentioned by example, plus the two S1.8 additions never written into the table) to the complete level-1 list (§7), now including 13 colour tokens with real default values, not just placeholder examples (D-S1.10-9). `data-flag` goes from documented-but-unimplemented to real. A11y goes from zero roles to full role coverage short of keyboard navigation (which stays S4's, by design — D-S1.10-5).
+**Declared gaps, now closed:** the `--fg-*` token table (`plans/02` §4) goes from five documented properties (`--fg-row-height`, `--fg-grid-pane-width`, `--fg-bar-radius` mentioned by example, plus the two S1.8 additions never written into the table) to the complete level-1 list (§7), now including 13 colour tokens with real default values, not just placeholder examples (D-S1.10-9). `data-flag` goes from documented-but-unimplemented to real. A11y goes from zero roles to every row/bar reachable and self-describing (`group`/`listitem`/`img`, not the full ARIA grid pattern — D-S1.10-5, revised; §9), short of keyboard navigation (which stays S4's, by design).
 
 **Unchanged:** no `styles` option, no second package export, no `describeBar`. `Gantt` still never re-exposes `scale`/`scroll` (S1.9, unaffected by this step).
 
@@ -337,7 +348,7 @@ Per D-S1.10-6: every `display`/`overflow`/`flexDirection`/`flexShrink`/`flex`/`m
 | Two Gantt instances in one document both call `ensureBaseStyles` | The second call is a no-op — the `<style data-freegantt-styles>` marker makes it idempotent, and the document (not a module variable) holds that state (I2 unaffected). |
 | A host writes `.fg-bar { transform: none }` trying to override bar position | It can't stick — `render/dom` writes `transform` inline every frame (allowed by the lint rule precisely because it's per-frame authoritative), and inline always wins the cascade over a stylesheet rule. Position is never a level-1/level-2 customization point; renderer callbacks (level 3) are, if a host needs different geometry logic entirely. |
 | Someone adds a `BarFlags` key and forgets `plans/02` §4's documented selector | Nothing enforces the doc stays in sync — the generator (D-S1.10-2) means the *behavior* is always right (the key's own spelling is the token), so the only drift risk is the doc table itself, caught at review. |
-| `aria-rowcount` read once and never updated as the dataset grows | `sync()` rewrites it every frame from the frame's row count — the same cadence `contentHeight` already gets, not a one-time `mount` write. |
+| `aria-setsize` read once and never updated as the dataset grows | `sync()` rewrites every row's `aria-setsize` each frame from the frame's row count — the same cadence `contentHeight` already gets, not a one-time `mount` write. |
 | A host sets `theme = 'dark'` and also has the page in `prefers-color-scheme: dark` | No conflict: `[data-fg-theme='dark']` and `[data-fg-theme='light']` both win over the media query by selector specificity + being attribute-scoped; `'auto'` (no attribute written) is the only state that lets the media query decide. |
 
 ---
@@ -348,7 +359,7 @@ Per D-S1.10-6: every `display`/`overflow`/`flexDirection`/`flexShrink`/`flex`/`m
 
 - **`view/styles.test.ts`** — `ensureBaseStyles` injects exactly one `<style>` for two Gantt instances constructed in one document; a second call after the first is a true no-op (node count unchanged); the injected sheet's `:root` and `[data-fg-theme='dark']` blocks carry all 13 D-S1.10-9 colour tokens with their documented default values; setting `--fg-bar-fill` on the host before construction overrides the shipped default on the rendered `.fg-bar` (proves U4/D-S1.10-9's "override wins" claim, not just that the property exists).
 - **`api/gantt.test.ts` (extended)** — `theme` setter flips `data-fg-theme` on the host live, `'auto'` writes no attribute; `a11yLabel` setter updates `aria-label` on the host live.
-- **`render/dom/index.test.ts` (extended)** — a bar with `flags: {conflict: true}` renders `data-flag="conflict"`; adding a hypothetical third `BarFlags` key and setting it true renders that key's name with no `render/dom` change (drives the generated path, not a hand-added case); `.fg-row` has one `.fg-row-label` child carrying the row's label text and `role="rowheader"`; `aria-rowindex`/`aria-rowcount` correct against a windowed frame over a larger-than-window fixture; host has exactly one `tabindex="0"` element in the whole render tree.
+- **`render/dom/index.test.ts` (extended)** — a bar with `flags: {conflict: true}` renders `data-flag="conflict"`; adding a hypothetical third `BarFlags` key and setting it true renders that key's name with no `render/dom` change (drives the generated path, not a hand-added case); `.fg-row` has one `.fg-row-label` child carrying the row's label text; `.fg-row`'s `aria-posinset`/`aria-setsize` correct against a windowed frame over a larger-than-window fixture; `.fg-bar` carries `role="img"` and its `aria-label`, not `role="gridcell"`; host has exactly one `tabindex="0"` element in the whole render tree.
 - **`eslint/rules/no-inline-style-outside-geometry.test.cjs`** — fires on a banned property (`style.position = ...`), passes on the three allowed ones; the red fixture is a snippet shaped like `pane-layout.ts`'s current `display`/`overflow` writes, proving the rule would have caught what D-S1.10-6 fixes.
 - **`time/format.test.ts`** — `formatEndInclusive` across a DST boundary and a month-end in a zone that observes DST; `formatDate` on a plain start; both against the existing `time/zone.ts` fixture zones (`time/zone.test.ts`'s DST zone, reused, not a new one).
 - **`layout/frame.test.ts` (extended)** — `FrameBar.a11yLabel` composition matches `formatDate` + `formatEndInclusive` for a known fixture entry.
@@ -387,7 +398,7 @@ Guardrail first, then the stylesheet it protects, then flags/roles, then the pub
 - [ ] `GanttShell`/`GanttShellOptions` — `theme`, `a11yLabel` live accessors; call `ensureBaseStyles` at construction, before `PaneLayout`
 
 ### `render/dom`
-- [ ] `data-flag` generation from `BarFlags` (§3.5); role attributes (`grid`/`row`/`rowheader`/`gridcell`), `aria-rowcount`/`aria-rowindex`, host `tabindex="0"` + `aria-label`; `.fg-row-label` child; `data-testid` on `fg-row`/`fg-bar`; delete the position/visibility/top/left inline writes
+- [ ] `data-flag` generation from `BarFlags` (§3.5); role attributes (`group`/`listitem`/`img`, not `grid`/`row`/`gridcell` — D-S1.10-5 revised), `aria-posinset`/`aria-setsize`, host `tabindex="0"` + `aria-label`; `.fg-row-label` child; `data-testid` on `fg-row`/`fg-bar`; delete the position/visibility/top/left inline writes
 
 ### `api/`
 - [ ] `Gantt.theme`, `Gantt.a11yLabel`; `GanttOptions` gains both; re-export `formatEndInclusive`/`formatDate` from `api/index.ts`
@@ -400,12 +411,8 @@ Guardrail first, then the stylesheet it protects, then flags/roles, then the pub
 - [ ] `pnpm verify` green; `pnpm test:e2e` green
 
 ### Acceptance
-- [ ] **U1–U2** — base stylesheet + `data-flag` selector work with zero host CSS (`view/styles.test.ts`, `render/dom/index.test.ts`)
-- [ ] **U3–U4** — `theme` live, token overrides read once/on remeasure (`api/gantt.test.ts`)
-- [ ] **U5** — roles, labels, one honest tab stop (`render/dom/index.test.ts`)
-- [ ] **U6** — `data-testid` hooks present (`render/dom/index.test.ts`)
-- [ ] **U7** — a new `BarFlags` key needs no `render/dom` edit (`render/dom/index.test.ts`, table-driven)
-- [ ] **`[S1-A1]`/`[S1-A4]` test hooks** — the `data-testid` selectors these boxes (S1.11) will select on exist now, not invented at S1.11
+
+Moved to §1 — each user story carries its own acceptance checkbox now, not a separate copy here.
 
 ---
 
@@ -419,3 +426,4 @@ Guardrail first, then the stylesheet it protects, then flags/roles, then the pub
 | Grid columns beside `.fg-row-label` | S6 | the grid's column-type work; the row/label-cell split lands now specifically so this is additive (D-S1.10-7) |
 | Named multi-preset picker (beyond `theme: 'auto'\|'light'\|'dark'`) — a caller choosing from more than one built-in colour set by name | S6 | `extensions/`'s `PluginContext` (`plans/01` §10) — the only I2-safe place a `registerThemePreset`-shaped seam can live; a module-level version would be shared mutable state (D-S1.10-9) |
 | The cut geometry/grid-line/today-marker/popup/drag-ghost tokens from the source palette (`gridLineColor`, `todayLineColor`, every `taskList*Drag*`/`popup*` key) | S3+ (grid lines: S6 columns) | the render surface each one styles — pulled from the same source palette when that surface ships, same "only what's rendered" rule as D-S1.10-9 |
+| The full ARIA grid pattern (`role="grid"`/`"row"`/`"gridcell"`, `aria-rowcount`/`aria-rowindex`) — S1.10 ships `group`/`listitem`/`img` instead (D-S1.10-5, revised) | not committed to a slice | a DOM structure that puts a row's cells in the same subtree as the row; S6's column work adds cells to the *grid pane* but doesn't by itself move `.fg-bar` out of the timeline pane, so it isn't guaranteed to close this on its own — revisit when it's clear what does |
