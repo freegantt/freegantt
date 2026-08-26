@@ -4,9 +4,60 @@
     <meta charset="UTF-8" />
     <title>FreeGantt harness — S1 timeline & viewport</title>
     <style>
+      :root {
+        --page-bg: #ffffff;
+        --page-ink: #1c1e26;
+        --page-muted: #55596b;
+        --page-border: #ccc;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root:not([data-theme]) {
+          --page-bg: #14151b;
+          --page-ink: #e7e8ee;
+          --page-muted: #9498ab;
+          --page-border: #444;
+        }
+      }
+      :root[data-theme='dark'] {
+        --page-bg: #14151b;
+        --page-ink: #e7e8ee;
+        --page-muted: #9498ab;
+        --page-border: #444;
+      }
       body {
         font-family: system-ui, sans-serif;
         margin: 2rem;
+        background: var(--page-bg);
+        color: var(--page-ink);
+      }
+      nav.harness-pages {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem 1.25rem;
+        font-size: 0.9rem;
+        margin-bottom: 1rem;
+      }
+      nav.harness-pages a {
+        color: var(--page-muted);
+      }
+      .theme-toggle {
+        display: inline-flex;
+        gap: 0.25rem;
+        margin-bottom: 1rem;
+      }
+      .theme-toggle button {
+        font: inherit;
+        font-size: 0.85rem;
+        padding: 0.3rem 0.7rem;
+        border: 1px solid var(--page-border);
+        background: var(--page-bg);
+        color: var(--page-ink);
+        border-radius: 4px;
+        cursor: pointer;
+      }
+      .theme-toggle button[aria-pressed='true'] {
+        background: var(--page-ink);
+        color: var(--page-bg);
       }
       #gantt {
         /* Level-1 theming (plans/02 §4): row height is a CSS custom property the library reads,
@@ -17,7 +68,7 @@
            harness no longer restates it as raw CSS. Renamed from --fg-row-label-width: the gutter
            is a pane width now, not a backend reservation. */
         --fg-grid-pane-width: 220px;
-        border: 1px solid #ccc;
+        border: 1px solid var(--page-border);
         /* No overflow/position rule here any more (S1.8): PaneLayout builds the grid pane / splitter
            / timeline pane structure inline, and the timeline pane is the library's own native
            scroller (D-D, D-S1.8-1). This host only sizes the whole shell. */
@@ -59,7 +110,18 @@
   </head>
   <body>
     <h1>FreeGantt — S1 timeline &amp; viewport</h1>
+    <nav class="harness-pages">
+      <a href="./diagram.html">Module map</a>
+      <a href="./doc.html">Module &amp; class map (doc)</a>
+      <a href="./scroll-sync.html">Scroll sync</a>
+      <a href="./zoom.html">Zoom &amp; presets</a>
+    </nav>
     <p>Fixture project rendered as positioned bars under a day-tick header. Every slice adds to this page.</p>
+    <div class="theme-toggle" role="group" aria-label="Theme">
+      <button type="button" data-theme-choice="auto">Auto</button>
+      <button type="button" data-theme-choice="light">Light</button>
+      <button type="button" data-theme-choice="dark">Dark</button>
+    </div>
     <div id="gantt"></div>
     <script type="module" src="./main.ts"></script>
   </body>

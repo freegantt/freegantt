@@ -78,7 +78,7 @@ const BASE_STYLESHEET = `
 .fg-bars { position: relative; }
 .fg-bar { background: var(--fg-bar-fill); color: var(--fg-bar-label-color); border-radius: var(--fg-bar-radius, 3px); position: absolute; }
 .fg-bar[data-flag~="conflict"] { outline: 2px solid var(--fg-warn); }
-.fg-content-sizer { position: absolute; top: 0; left: 0; visibility: hidden; }
+.fg-content-sizer { position: absolute; top: 0; left: 0; width: 1px; height: 1px; visibility: hidden; }
 `.trim();
 
 /** Injects the library's base stylesheet into `doc` exactly once. Safe to call from every Gantt
