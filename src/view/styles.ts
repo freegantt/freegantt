@@ -69,8 +69,8 @@ const BASE_STYLESHEET = `
 .fg-rows { position: relative; height: 100%; }
 .fg-splitter { flex-shrink: 0; cursor: col-resize; background: var(--fg-splitter-color); }
 .fg-timeline-pane { position: relative; flex: 1 1 auto; min-width: 0; overflow: auto; background: var(--fg-pane-bg); }
-.fg-header { background: var(--fg-header-bg); position: relative; }
-.fg-band { background: var(--fg-header-band-bg); color: var(--fg-header-text); border-bottom: 1px solid var(--fg-header-divider-color); position: relative; }
+.fg-header { background: var(--fg-header-bg); position: relative; display: flex; flex-direction: column; height: var(--fg-header-height, 20px); }
+.fg-band { background: var(--fg-header-band-bg); color: var(--fg-header-text); border-bottom: 1px solid var(--fg-header-divider-color); position: relative; flex: 1 1 0; min-height: 0; }
 .fg-tick { color: var(--fg-header-subtext); position: absolute; top: 0; left: 0; }
 .fg-row { background: var(--fg-row-even-bg); position: absolute; top: 0; left: 0; width: 100%; }
 .fg-row:nth-child(odd) { background: var(--fg-row-odd-bg); }
