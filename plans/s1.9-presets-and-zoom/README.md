@@ -384,7 +384,7 @@ Guardrails and glossary first, then engine, then the seam, then the public edge.
 
 ### `layout/viewport/`
 - [x] `TimeScaleIntent.zoom`, `TimeScaleZoom`; live `preset`/`range`/`zoom` setters on `TimeScaleModel`; `#resolvePxPerMs` per D-S1.9-2
-- [ ] `Viewport.#scrollHandle` field; `zoomTo`, `zoomBy`, `reveal` per D-S1.9-5/6
+- [x] `Viewport.#scrollHandle` field; `zoomTo`, `zoomBy`, `reveal` per D-S1.9-5/6
 
 ### `layout/`
 - [ ] `FrameLayout.rowTop(index)` per §3.5
