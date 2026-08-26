@@ -1,6 +1,6 @@
 # S1.10 — Theming tokens, parts vocabulary, a11y foundation
 
-**Slice:** S1 (`plans/03` §S1) · **Step:** S1.10 · **Issue:** #1 · **Baseline:** `main` @ `1046aee` — spec-only. S1.9 has not landed in code (`src/time/presets.ts` does not exist; `Gantt`/`GanttShell` expose only `gridWidth`, `on`/`off`, `destroy`; `UnknownPresetError`/`EntryNotFoundError` are not in `src/model/errors.ts`). This document builds on [`plans/s1.9-presets-and-zoom/README.md`](../s1.9-presets-and-zoom/README.md) as **settled design**, same as S1.9 built on S1.8's README before its own code existed. Code order stays `S1.9 → S1.10` (`plans/temp_todo_for_s1-close.md` §3): the theming pass must not have to guess how many header bands a preset draws, and S1.9 is what makes that count variable (`dayAndWeekPreset` etc., two bands).
+**Slice:** S1 (`plans/03` §S1) · **Step:** S1.10 · **Issue:** #1 · **Baseline:** `main` @ `1046aee` plus this branch's own `S1.9: add UnknownPresetError and EntryNotFoundError` (`e06a4aa`) — mostly spec-only. S1.9's types/errors step has landed (`UnknownPresetError`/`EntryNotFoundError` are in `src/model/errors.ts`, re-exported from `model/`/`api/`); the rest of S1.9 has not (`src/time/presets.ts` does not exist; `Gantt`/`GanttShell` still expose only `gridWidth`, `on`/`off`, `destroy`). This document builds on [`plans/s1.9-presets-and-zoom/README.md`](../s1.9-presets-and-zoom/README.md) as **settled design**, same as S1.9 built on S1.8's README before its own code existed. Code order stays `S1.9 → S1.10` (`plans/temp_todo_for_s1-close.md` §3): the theming pass must not have to guess how many header bands a preset draws, and S1.9 is what makes that count variable (`dayAndWeekPreset` etc., two bands).
 **Governed by:** [S1 API conventions](https://github.com/Pawel-IT/FreeGantt/issues/1#issuecomment-5400465734) — names, geometry types, typed errors, `batch()` — and **D11** ("solid accessibility built in as slices land … never a retrofit pass"), which this step is the first to make good on.
 **Supersedes:** the [S1.10 issue comment](https://github.com/Pawel-IT/FreeGantt/issues/1#issuecomment-5400111232) (its revised form) and the S1.10 findings in `plans/fix-issue1-apis.md`, wherever they disagree. §2 records every decision and which finding it closes.
 
@@ -46,7 +46,7 @@ Settled in review (the comment's own revision) and in this pass (reconciling aga
 
 ### D-S1.10-1 — No renames. The token table and the part-class list document what S1.8 already shipped, plus what's missing
 
-`--fg-row-height`, `--fg-grid-pane-width`, `--fg-header-height` (fallback 20), `--fg-splitter-width` (fallback 4) exist in code today, each read through `readPixelProperty` (`render/dom/pixel-property.ts`, whose own header comment already says *"S1.10's theming pass multiplies the count"*). S1.10 adds the remaining metric and every colour token, and documents all of them in `plans/02` §4 as one table — it does not touch the four that exist. Class names are the same story (Q2): `fg-grid-pane`, `fg-grid-spacer`, `fg-rows-clip`, `fg-rows`, `fg-splitter`, `fg-timeline-pane`, `fg-header`, `fg-band`, `fg-tick`, `fg-row`, `fg-bars`, `fg-bar` are the real vocabulary; the base stylesheet targets exactly these.
+`--fg-row-height`, `--fg-grid-pane-width`, `--fg-header-height` (fallback 20), `--fg-splitter-width` (fallback 4) exist in code today, each read through `readPixelProperty` (`render/dom/pixel-property.ts`, whose own header comment already says *"S1.10's theming pass multiplies the count"*). S1.10 adds the remaining metric and every colour token, and documents all of them in `plans/02` §4 as one table — it does not touch the four that exist. Class names are the same story (Q2): `fg-grid-pane`, `fg-grid-spacer`, `fg-rows-clip`, `fg-rows`, `fg-splitter`, `fg-timeline-pane`, `fg-header`, `fg-band`, `fg-tick`, `fg-row`, `fg-bars`, `fg-bar` are the real vocabulary; the base stylesheet targets exactly these. The colour tokens' default *values* (light and dark) are D-S1.10-9's decision, not this one — this decision is only about which tokens/classes exist, unchanged from S1.8/Q2.
 
 *Rejected:* the comment's `fg-pane fg-pane--grid` / `fg-pane fg-pane--timeline` two-class BEM scheme. It never shipped — `PaneLayout` was written independently at S1.8 with single flat class names — and adopting it now means a rename PR that touches two already-green test files for a naming preference, not a defect.
 
@@ -135,15 +135,58 @@ Roles, for a virtualized grid (`render/dom` writes these at `mount`/`sync`, all 
 The new lint rule (`freegantt/no-inline-style-outside-geometry`, `src/render/**` + `src/view/**`, allowing only `transform`/`width`/`height`) makes `pane-layout.ts` non-compliant as shipped: `display`, `overflow`, `flexDirection`, `flexShrink`, `flex`, `minWidth`, `cursor`, `position` are all set inline there (`pane-layout.ts:51-105`). This step's stylesheet absorbs every one of them as class rules keyed to the six `fg-*` pane class names (D-S1.10-1):
 
 ```css
-.fg-grid-pane { display: flex; flex-direction: column; flex-shrink: 0; overflow: hidden; }
+:root {
+  --fg-pane-bg: #FAFAF7;
+  --fg-splitter-color: #E6E2D9;
+  --fg-header-bg: #F4F2EC;
+  --fg-header-band-bg: #FFFFFF;
+  --fg-header-text: #1A1815;
+  --fg-header-subtext: #9A958B;
+  --fg-header-divider-color: #E6E2D9;
+  --fg-row-even-bg: transparent;
+  --fg-row-odd-bg: rgba(26, 24, 21, 0.028);
+  --fg-row-label-color: #1A1815;
+  --fg-bar-fill: oklch(0.55 0.13 245);
+  --fg-bar-label-color: #FFFFFF;
+  --fg-warn: #D97706;
+}
+[data-fg-theme='dark'] {
+  --fg-pane-bg: #15161A;
+  --fg-splitter-color: #2B2F36;
+  --fg-header-bg: #22252B;
+  --fg-header-band-bg: #1B1D22;
+  --fg-header-text: #ECEAE3;
+  --fg-header-subtext: #6E6A62;
+  --fg-header-divider-color: #2B2F36;
+  --fg-row-odd-bg: rgba(255, 255, 255, 0.032);
+  --fg-row-label-color: #ECEAE3;
+  --fg-bar-fill: oklch(0.72 0.13 245);
+  --fg-bar-label-color: #ECEAE3;
+  --fg-warn: #FBBF24;
+}
+@media (prefers-color-scheme: dark) {
+  /* 'auto' (no data-fg-theme attribute) follows the system; an explicit attribute always wins on
+   * specificity grounds over this block, which is why 'light'/'dark' never fight the media query. */
+  :root:not([data-fg-theme]) { /* same custom properties as [data-fg-theme='dark'] above */ }
+}
+
+.fg-grid-pane { display: flex; flex-direction: column; flex-shrink: 0; overflow: hidden; background: var(--fg-pane-bg); }
 .fg-grid-spacer { flex-shrink: 0; }
 .fg-rows-clip { position: relative; flex: 1 1 auto; overflow: hidden; }
 .fg-rows { position: relative; }
-.fg-splitter { flex-shrink: 0; cursor: col-resize; }
-.fg-timeline-pane { position: relative; flex: 1 1 auto; min-width: 0; overflow: auto; }
+.fg-splitter { flex-shrink: 0; cursor: col-resize; background: var(--fg-splitter-color); }
+.fg-timeline-pane { position: relative; flex: 1 1 auto; min-width: 0; overflow: auto; background: var(--fg-pane-bg); }
+.fg-header { background: var(--fg-header-bg); }
+.fg-band { background: var(--fg-header-band-bg); color: var(--fg-header-text); border-bottom: 1px solid var(--fg-header-divider-color); }
+.fg-tick { color: var(--fg-header-subtext); }
+.fg-row { background: var(--fg-row-even-bg); }
+.fg-row:nth-child(odd) { background: var(--fg-row-odd-bg); }
+.fg-row-label { color: var(--fg-row-label-color); }
+.fg-bar { background: var(--fg-bar-fill); color: var(--fg-bar-label-color); border-radius: var(--fg-bar-radius, 3px); }
+.fg-bar[data-flag~="conflict"] { outline: 2px solid var(--fg-warn); }
 ```
 
-`pane-layout.ts` keeps exactly the writes the rule already allows: `gridPane.style.width`/`splitter.style.width` (both driven by live numbers — `gridWidth`, `--fg-splitter-width`), `spacer.style.height`/`rowLayer.style.height` (`--fg-header-height`, the `100%` fill). `render/dom/index.ts`'s `position: absolute`/`relative` and `contentSizer`'s `top`/`left`/`visibility` move the same way, onto `fg-row`, `fg-bar`, `fg-tick`, `fg-band`, and a new `fg-content-sizer` class; its `transform`/`width`/`height` per-frame writes are unchanged (they're exactly what the rule exists to protect).
+Colour values above are D-S1.10-9's — this decision only owns which class gets which property (structure), not what the property defaults to (colour). `pane-layout.ts` keeps exactly the writes the rule already allows: `gridPane.style.width`/`splitter.style.width` (both driven by live numbers — `gridWidth`, `--fg-splitter-width`), `spacer.style.height`/`rowLayer.style.height` (`--fg-header-height`, the `100%` fill). `render/dom/index.ts`'s `position: absolute`/`relative` and `contentSizer`'s `top`/`left`/`visibility` move the same way, onto `fg-row`, `fg-bar`, `fg-tick`, `fg-band`, and a new `fg-content-sizer` class; its `transform`/`width`/`height` per-frame writes are unchanged (they're exactly what the rule exists to protect).
 
 This is the concrete instance of what the comment's §3 called "R3's countermeasure, made concrete" — recorded here as a decision because the comment predates `pane-layout.ts` and could not have named these specific lines.
 
@@ -184,6 +227,32 @@ export function ensureBaseStyles(doc: Document): void;
 ```
 
 `package.json`'s `exports` map stays sealed to `"."` (CLAUDE.md: "only `api/` and `model/` types are public"). A host needing to own the stylesheet itself (CSP, a bundler policy) is a real, distinct request — it gets its own decision and its own justified `plans/04` §1-style entry for the new export, not a `'none'` option riding in in a step whose bullet is tokens/parts/light-dark. Restated from the comment's own revision (Q-none — not reopened, listed for completeness since §0 says everything here is closed).
+
+### D-S1.10-9 — Default colour tokens are sourced from an existing, non-shipping palette; light/dark are the only preset axis this step ships
+
+The `--fg-*` colour defaults the base stylesheet writes (D-S1.10-6) are not invented for this step — they're carried over from a colour palette already in use and tuned on a separate project this team maintains. **That project's name never appears here or anywhere in `src/`, `docs/`, or `plans/`** (CLAUDE.md: "Vendor Gantt product names never appear in specs, docs, or code") — only the *values* cross over, the same way a designer hands over a colour ramp without the file it was designed in being named in the code that consumes it.
+
+Only the tokens with a real FreeGantt part to attach to are pulled — the source palette also carries ~90 keys for canvas-only geometry (stroke widths, corner radii, popup shadows, drag-ghost offsets, dash patterns) that have no DOM counterpart in anything S1.10 renders. Pulling those over now would be dead spec: undocumented CSS custom properties nothing reads. The cut list stays a `plans/04` §1.1-shaped "rejected, and why" note, not a silent drop:
+
+| Token | Light default | Dark default | CSS target | Source key |
+|---|---|---|---|---|
+| `--fg-pane-bg` | `#FAFAF7` | `#15161A` | `.fg-grid-pane`, `.fg-timeline-pane` background | `chromeShellBg` |
+| `--fg-splitter-color` | `#E6E2D9` | `#2B2F36` | `.fg-splitter` background | `chromeShellSplitBorder` |
+| `--fg-header-bg` | `#F4F2EC` | `#22252B` | `.fg-header` background | `timelineHeaderBg` |
+| `--fg-header-band-bg` | `#FFFFFF` | `#1B1D22` | `.fg-band` background | `timelineHeaderBand0Bg`/`Band1Bg` (identical in both source themes — one token, not two) |
+| `--fg-header-text` | `#1A1815` | `#ECEAE3` | `.fg-band`/`.fg-tick` text | `timelineHeaderText` |
+| `--fg-header-subtext` | `#9A958B` | `#6E6A62` | `.fg-tick` text (finer bands read dimmer) | `timelineHeaderSubText` |
+| `--fg-header-divider-color` | `#E6E2D9` | `#2B2F36` | rule between header bands | `timelineHeaderRowDividerColor` |
+| `--fg-row-even-bg` | `transparent` | `transparent` | `.fg-row:nth-child(even)` | `rowEvenBg` |
+| `--fg-row-odd-bg` | `rgba(26,24,21,.028)` | `rgba(255,255,255,.032)` | `.fg-row:nth-child(odd)` | `rowOddBg` |
+| `--fg-row-label-color` | `#1A1815` | `#ECEAE3` | `.fg-row-label` text | `taskListText` |
+| `--fg-bar-fill` | `oklch(.55 .13 245)` | `oklch(.72 .13 245)` | `.fg-bar` background | `barDefaultFill` |
+| `--fg-bar-label-color` | `#FFFFFF` | `#ECEAE3` | `.fg-bar` text | `barLabelColor` |
+| `--fg-warn` | `#D97706` | `#FBBF24` | `.fg-bar[data-flag~="conflict"]` outline (U2) | `alertWarning` |
+
+`gridLineColor`/`todayLineColor`/every `taskList*Drag*`/`popup*` source key is cut for the same reason as the geometry keys: nothing in `render/dom` today draws a grid line, a today marker, a drag ghost, or a popup. They return when the render surface that needs them ships (grid lines: S6 columns; today marker, drag ghost, popup: S3+/interaction slices) — each gets pulled from the same source palette at that point, on the same "only what's rendered" rule, not bulk-imported now.
+
+**Preset axis stays `theme: 'auto' | 'light' | 'dark'` only — no widening.** "Preset themes to pick from" beyond light/dark needs a place to register one, and every registration seam in this codebase (`registerItemEmitter`, `registerColumn`, `registerRenderer`, …, `plans/01` §10) is scoped to one Gantt instance via `PluginContext` — because a module-level `registerThemePreset(name, tokens)` would be exactly I2's forbidden shared mutable state, and `extensions/` (the plugin host `PluginContext` comes from) doesn't exist until S6. Shipping a global registry three steps early, just for this, means either breaking I2 or building a one-off instance-scoped registry that `extensions/` then has to reconcile with its own. Neither is this step's job. A caller fully replaces the shipped palette today the same way U4 already promises: set any `--fg-*` property on the host, which the stylesheet's `var(--fg-x, default)` always prefers over its own fallback — that is "replace the theme," no registry required. §9 carries the named multi-preset picker forward to S6 explicitly, next to the other `extensions/`-gated deferrals already there.
 
 ---
 
@@ -254,7 +323,7 @@ Per D-S1.10-6: every `display`/`overflow`/`flexDirection`/`flexShrink`/`flex`/`m
 
 `api/index.ts` gains: `Gantt.theme` (get/set), `Gantt.a11yLabel` (get/set), `GanttOptions.theme`/`.a11yLabel`, `formatEndInclusive`, `formatDate`. `ensureBaseStyles` is **not** exported — it's an internal `view/` call `GanttShell` makes at construction; there is no host-facing way to opt out (D-S1.10-8), matching `plans/02` §4's own "level 1: CSS custom properties" framing (a host restyles, it doesn't disable the sheet).
 
-**Declared gaps, now closed:** the `--fg-*` token table (`plans/02` §4) goes from five documented properties (`--fg-row-height`, `--fg-grid-pane-width`, `--fg-bar-radius` mentioned by example, plus the two S1.8 additions never written into the table) to the complete level-1 list (§7). `data-flag` goes from documented-but-unimplemented to real. A11y goes from zero roles to full role coverage short of keyboard navigation (which stays S4's, by design — D-S1.10-5).
+**Declared gaps, now closed:** the `--fg-*` token table (`plans/02` §4) goes from five documented properties (`--fg-row-height`, `--fg-grid-pane-width`, `--fg-bar-radius` mentioned by example, plus the two S1.8 additions never written into the table) to the complete level-1 list (§7), now including 13 colour tokens with real default values, not just placeholder examples (D-S1.10-9). `data-flag` goes from documented-but-unimplemented to real. A11y goes from zero roles to full role coverage short of keyboard navigation (which stays S4's, by design — D-S1.10-5).
 
 **Unchanged:** no `styles` option, no second package export, no `describeBar`. `Gantt` still never re-exposes `scale`/`scroll` (S1.9, unaffected by this step).
 
@@ -277,7 +346,7 @@ Per D-S1.10-6: every `display`/`overflow`/`flexDirection`/`flexShrink`/`flex`/`m
 
 `dom` (jsdom) throughout except the lint and pure-formatter tests.
 
-- **`view/styles.test.ts`** — `ensureBaseStyles` injects exactly one `<style>` for two Gantt instances constructed in one document; a second call after the first is a true no-op (node count unchanged).
+- **`view/styles.test.ts`** — `ensureBaseStyles` injects exactly one `<style>` for two Gantt instances constructed in one document; a second call after the first is a true no-op (node count unchanged); the injected sheet's `:root` and `[data-fg-theme='dark']` blocks carry all 13 D-S1.10-9 colour tokens with their documented default values; setting `--fg-bar-fill` on the host before construction overrides the shipped default on the rendered `.fg-bar` (proves U4/D-S1.10-9's "override wins" claim, not just that the property exists).
 - **`api/gantt.test.ts` (extended)** — `theme` setter flips `data-fg-theme` on the host live, `'auto'` writes no attribute; `a11yLabel` setter updates `aria-label` on the host live.
 - **`render/dom/index.test.ts` (extended)** — a bar with `flags: {conflict: true}` renders `data-flag="conflict"`; adding a hypothetical third `BarFlags` key and setting it true renders that key's name with no `render/dom` change (drives the generated path, not a hand-added case); `.fg-row` has one `.fg-row-label` child carrying the row's label text and `role="rowheader"`; `aria-rowindex`/`aria-rowcount` correct against a windowed frame over a larger-than-window fixture; host has exactly one `tabindex="0"` element in the whole render tree.
 - **`eslint/rules/no-inline-style-outside-geometry.test.cjs`** — fires on a banned property (`style.position = ...`), passes on the three allowed ones; the red fixture is a snippet shaped like `pane-layout.ts`'s current `display`/`overflow` writes, proving the rule would have caught what D-S1.10-6 fixes.
@@ -288,7 +357,7 @@ Per D-S1.10-6: every `display`/`overflow`/`flexDirection`/`flexShrink`/`flex`/`m
 
 ## 7. Spec edits implied — landed **with** this step
 
-- `plans/02` §4 — the complete `--fg-*` token table (metrics + colour, per §2's D-S1.10-1 list) becomes the documented level-1 list; `data-flag` vocabulary (`conflict`, `cycle`) written down as real, not aspirational; `data-testid` hooks documented per `plans/02` §7's "stable test hooks" bullet.
+- `plans/02` §4 — the complete `--fg-*` token table (metrics + colour, per §2's D-S1.10-1 list) becomes the documented level-1 list, including D-S1.10-9's 13 colour tokens with real light/dark default values (no vendor name attached — the table cites only token/value, per CLAUDE.md); `data-flag` vocabulary (`conflict`, `cycle`) written down as real, not aspirational; `data-testid` hooks documented per `plans/02` §7's "stable test hooks" bullet.
 - `plans/01` §4 — the `GeometryFrame`/`FrameBar`/`BarFlags`/`LinkFlags` code block: `hasConflict`→`conflict`, `inCycle`→`cycle`, `FrameBar.a11yLabel` added.
 - `plans/01` §5 — `formatEndInclusive`/`formatDate` move from "promised, no file implements it" to shipped (`time/format.ts`), closing the S0-era promise.
 - `plans/01` §8.1/§8.3 — a paragraph noting `render/dom`'s inline writes are now geometry-only (`transform`/`width`/`height`), everything else moved to the base stylesheet, and the ARIA roles `mount`/`sync` write.
@@ -313,7 +382,7 @@ Guardrail first, then the stylesheet it protects, then flags/roles, then the pub
 - [ ] `BarFlags`/`LinkFlags` key rename (§3.4); `FrameBar.a11yLabel` computed from `time/format.ts` + the dataset zone
 
 ### `view/`
-- [ ] `src/view/styles.ts` — `ensureBaseStyles`, the full stylesheet (D-S1.10-1 class rules + D-S1.10-6's structural rules + the `--fg-*` token defaults)
+- [ ] `src/view/styles.ts` — `ensureBaseStyles`, the full stylesheet (D-S1.10-1 class rules + D-S1.10-6's structural rules + colour rules + the `--fg-*` token defaults, light/dark values per D-S1.10-9's table)
 - [ ] `pane-layout.ts` — delete every non-`width`/`height`/`transform` inline write (§3.6); confirm `pane-layout.test.ts` still passes unmodified (proof that the visual result is unchanged, only the mechanism moved)
 - [ ] `GanttShell`/`GanttShellOptions` — `theme`, `a11yLabel` live accessors; call `ensureBaseStyles` at construction, before `PaneLayout`
 
@@ -348,3 +417,5 @@ Guardrail first, then the stylesheet it protects, then flags/roles, then the pub
 | `barRenderer`/`cellRenderer`/`headerRenderer`/`tooltipRenderer` (level 3) — including any per-bar host-authored description | S6 | `extensions/`'s plugin host and the renderer-callback seam (`plans/02` §4 level 3); `describeBar` specifically stays cut, not renamed (D-S1.10-4) |
 | A host-owned stylesheet delivery mode (`styles: 'none'` + a second package export) | when a host asks | a written justification for widening the sealed `exports` map, per `plans/04` §1's bar for any new public dependency/export surface (D-S1.10-8) |
 | Grid columns beside `.fg-row-label` | S6 | the grid's column-type work; the row/label-cell split lands now specifically so this is additive (D-S1.10-7) |
+| Named multi-preset picker (beyond `theme: 'auto'\|'light'\|'dark'`) — a caller choosing from more than one built-in colour set by name | S6 | `extensions/`'s `PluginContext` (`plans/01` §10) — the only I2-safe place a `registerThemePreset`-shaped seam can live; a module-level version would be shared mutable state (D-S1.10-9) |
+| The cut geometry/grid-line/today-marker/popup/drag-ghost tokens from the source palette (`gridLineColor`, `todayLineColor`, every `taskList*Drag*`/`popup*` key) | S3+ (grid lines: S6 columns) | the render surface each one styles — pulled from the same source palette when that surface ships, same "only what's rendered" rule as D-S1.10-9 |
