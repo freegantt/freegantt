@@ -469,8 +469,8 @@ Guardrails and glossary first (`plans/04` §3.2/§3.3, naming skill step 1), the
 
 | Deferred | Returns at | Needs |
 |---|---|---|
-| `gantt.reveal(entryId)` | S1.9 | `zoom`, so the x half of "bring into view" means something (Q1) |
-| `gantt.overscan` and the rest of the live keys | S1.9 | one public-surface pass, not two (Q2) |
+| `gantt.reveal(entryId)` | S1.9 (shipped — D-S1.9-6) | `zoom`, so the x half of "bring into view" means something (Q1) |
+| `gantt.overscan` and the rest of the live keys | S1.9 (shipped — D-S1.9-7) | one public-surface pass, not two (Q2) |
 | `gantt.scale =` / `gantt.scroll =` | **cut** | one key, one write path (`plans/02` §1.1) |
 | A sticky header that does not scroll away vertically | S1.10 | one line in the shipped stylesheet (D-S1.8-11) |
 | `.fg-row { width: 100% }` moving out of `render/dom` | S1.10 | the shipped stylesheet (§3.4) |

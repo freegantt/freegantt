@@ -356,11 +356,15 @@ Ergonomics: `time/` ships `instant(v: Date | number | string): Instant`, `toISO(
 ```ts
 /** Pure and standalone. Gantt instances BIND to one; two sharing one scale are x-synced by construction. */
 interface TimeScale {
-  readonly range: TimeSpan;                 // visible + buffered span
+  readonly range: TimeSpan;                 // full content span — 'fitDataset' min/max or a pinned TimeSpan
+  readonly timeZone: string;
+  /** Density: content px per ms, constant across the whole range at this zoom (S1.9, D-S1.9-5). */
+  readonly pxPerMs: number;
   xForInstant(i: Instant): number;
   instantForX(x: number): Instant;
   widthForDuration(d: Duration, at: Instant): number;
-  ticks(preset: ViewPreset): readonly Tick[];
+  ticks(step: TickStep, span: PixelSpan): readonly Tick[];
+  readonly contentWidth: number;             // px extent of the whole range at this zoom
 }
 
 interface ViewPreset {                       // data, not a switch statement
@@ -532,6 +536,8 @@ flowchart TB
 **The binding/attachment split (S1.7):** `Viewport.bind` owns the *binding* — `TimeScaleModel` and `ScrollModel` membership, one reaction. `view/scroll-attachment.ts`'s `attachScroll(element, viewport)` owns the *attachment* — the DOM edge, and nothing else: it reads the already-locally-clamped `viewport.visible` and writes/reads `element.scrollLeft`/`scrollTop` (the only file exempted from I12's scroll-manipulation lint), returning `{ writePosition(), detach() }`. It holds no binding of its own — `Viewport` already bound scale and scroll before `attachScroll` is ever called, so the attachment recomputes nothing, it only echoes.
 
 `ScrollModel` resolves `{ position, max }` (`layout/viewport/scroll-model.ts`, shipped S1.5): **one shared `position`**, clamped to `[0, max]` only at `panTo` write time — a later shrink of `max` (a filter, a collapse) never rewrites `position`, so restoring the extent restores the place with zero remembered state. `max` is the **loosest** bound across every bound Gantt's measured `{content, pane}` — not a claim about any one chart's scroller. Each bound Gantt clamps the shared `position` to its own `content`/`pane` locally (in `view/scroll-attachment.ts`, comparing against what *that* element should show, never the raw shared value — the local clamp is what lets two Gantts with different row counts share one `ScrollModel` without the shorter one vetoing the taller one's range, or a pinned chart's native browser clamp destroying the shared position every frame).
+
+**`Viewport.zoomTo`/`zoomBy`/`reveal` (S1.9) and D-F′.** D-F (locked at S1.7: `TimeScaleModel.zoomTo` recomputes `range.start` to keep an anchored instant under the cursor) is struck and replaced by D-F′: `range` stays the full content span — `'fitDataset'`'s min/max, or a pinned `TimeSpan` — and is never written by a zoom. The visible slice is `[scroll.x, scroll.x + paneWidth]`; anchored zoom moves *that*, not `range`. `Viewport.zoomTo(pxPerMs, anchorX?)` reads the instant currently under `anchorX` before writing anything, then inside one `batch()` writes `scale.zoom`, pushes the new `contentWidth` through the `ScrollBindingHandle` it keeps from `bind()`, and pans `scroll` so the same instant is back under `anchorX` — one notification, `range.start` untouched. `zoomBy(factor, anchorX?)` is `zoomTo(timeScale.pxPerMs * factor, anchorX)`. `reveal(target: Rect)` is nearest-edge, not center: a no-op if `target` is already inside `visible`, otherwise `panTo` moves exactly enough to align the nearest off-screen edge, on either axis or both. All three live on `Viewport` (not `TimeScaleModel`) because they need `scroll` to move the visible slice — a scale alone can only reshape the content it maps, never the window onto it.
 
 ### 8.3 Split pane (D8)
 

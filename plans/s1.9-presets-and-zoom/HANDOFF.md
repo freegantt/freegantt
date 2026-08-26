@@ -73,7 +73,17 @@ full `pnpm verify` + `pnpm test:e2e` pre-push gate (it runs automatically on eve
      correctly does nothing. Use a value that isn't `128` (e.g. `256`) when testing that the setter
      *does* propagate.
 
-## Remaining TODO (in the order the spec's §8 lays out, top to bottom)
+## Status: S1.9 complete
+
+All §8 boxes are checked. `pnpm verify` and `pnpm test:e2e` are green. One real bug was found and
+fixed while closing this step (not a checklist item — found while writing `e2e/zoom.spec.ts`):
+`TimeScaleModel`'s live `preset` setter didn't notify bound Gantts when the resolved
+`{timeZone, range, pxPerMs}` was unchanged, which is the common case under the default
+`zoom: 'fitViewport'` with a measured pane — a preset switch would silently never re-render. See
+`plans/s1.9-presets-and-zoom/README.md`'s new "Reviewed while closing S1.9" section for the fix and
+regression coverage. Ready for the pre-merge review pass and PR.
+
+## Remaining TODO (in the order the spec's §8 lays out, top to bottom) — all done, kept for history
 
 - [ ] **Harness review** — re-read `harness/main.ts` and `harness/scroll-sync.ts` against
   `CLAUDE.md`'s harness rule now that `preset`/`zoom`/`reveal`/`overscan` exist on the public API.

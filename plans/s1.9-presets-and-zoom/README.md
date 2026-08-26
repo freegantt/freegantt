@@ -394,24 +394,27 @@ Guardrails and glossary first, then engine, then the seam, then the public edge.
 - [x] `Gantt` — same surface, delegating; `GanttOptions` gains the four keys
 
 ### Harness
-- [ ] Review `harness/main.ts` and `harness/scroll-sync.ts` against CLAUDE.md's harness rule now that `preset`/`zoom`/`reveal` exist; record any gap against S1.9 and fix it in `src/`
+- [x] Review `harness/main.ts` and `harness/scroll-sync.ts` against CLAUDE.md's harness rule now that `preset`/`zoom`/`reveal` exist; record any gap against S1.9 and fix it in `src/` — reviewed, nothing hand-rolled; both files are minimal `new Gantt(...)`/`new Dataset(...)` construction with no restated defaults or standing-in computation, so no gap to close. `harness/zoom.html`/`zoom.ts` added as a new fixture (matching `scroll-sync.html`'s pattern) exposing the constructed `Gantt` for `e2e/zoom.spec.ts` — no gesture controller exists yet to drive `zoomBy` from a real wheel event (S4), so the fixture drives the imperative surface directly.
 
 ### Review and docs
-- [ ] The §7 spec edits, landed with this step
-- [ ] `pnpm verify` green; `pnpm test:e2e` green
+- [x] The §7 spec edits, landed with this step
+- [x] `pnpm verify` green; `pnpm test:e2e` green
 
 ### Acceptance
-- [ ] **U1–U3** — preset switch and anchored zoom (`viewport.test.ts`, `gantt.test.ts`, `e2e/zoom.spec.ts`)
-- [ ] **U4** — `reveal` nearest-edge on both axes (`viewport.test.ts`, `gantt.test.ts`)
-- [ ] **U5** — `overscan` live (`api/gantt.test.ts`, extending the existing S1.7 overscan coverage to the public key)
-- [ ] **U6** — `UnknownPresetError` with code `unknown-preset` (`time/presets.test.ts`)
-- [ ] **U7** — shared-scale `zoomBy` observed on both Gantts (`api/gantt.test.ts`)
-- [ ] **`[S1-A3]`** — one notification per zoom; bar DOM identity stable across a preset switch (`viewport.test.ts`, `api/gantt.test.ts`)
-- [ ] **`[S1-A5]`** — DST-correct axis headers, two-band presets included (`time/zone.test.ts`)
+- [x] **U1–U3** — preset switch and anchored zoom (`viewport.test.ts`, `gantt.test.ts`, `e2e/zoom.spec.ts`)
+- [x] **U4** — `reveal` nearest-edge on both axes (`viewport.test.ts`, `gantt.test.ts`)
+- [x] **U5** — `overscan` live (`api/gantt.test.ts`, extending the existing S1.7 overscan coverage to the public key)
+- [x] **U6** — `UnknownPresetError` with code `unknown-preset` (`time/presets.test.ts`)
+- [x] **U7** — shared-scale `zoomBy` observed on both Gantts (`api/gantt.test.ts`)
+- [x] **`[S1-A3]`** — one notification per zoom; bar DOM identity stable across a preset switch (`viewport.test.ts`, `api/gantt.test.ts`)
+- [x] **`[S1-A5]`** — DST-correct axis headers, two-band presets included (`time/zone.test.ts`)
 
 ### Review, Verify, and Fix Issues from 1.8 Review
 Confirm these findings before fixing them.
-- [ ] plans/2026-08-25-s1.8-review.md
+- [x] plans/2026-08-25-s1.8-review.md — reviewed; no hard violations reported against S1.8. The judgement-call items (EventBus genericity, `readPixelProperty` layering, `PaneLayout` constructor scope, `InvalidInstantError`/PR #66 scope note) are follow-up simplification/architecture opportunities, not correctness defects, and none block S1.9 — left as tracked follow-ups rather than in-scope rework for this step.
+
+### Reviewed while closing S1.9 (not from a prior checklist)
+- [x] **Bug found and fixed**: `TimeScaleModel`'s live `preset` setter invalidated the memoized `TimeScale` but did not notify bound Gantts when the resolved `{timeZone, range, pxPerMs}` was unchanged — the common case under the default `zoom: 'fitViewport'` with a measured pane, where `pxPerMs` doesn't depend on the preset at all. A preset switch would silently never re-render. Caught by `e2e/zoom.spec.ts`'s preset-switch test (the existing DOM unit test used an unmeasured 0-width pane, where the fallback zoom formula happens to depend on the preset, masking the gap). Fixed in `src/layout/viewport/time-scale-model.ts`: the bound-value's resolved type now carries `preset` alongside the scale options, and the D-S1.5-4 equality check compares both. Regression tests added to `time-scale-model.test.ts` and `api/gantt.test.ts` (the latter now measures a real pane via `FakeResizeObserver` and asserts `.fg-band` count, not just bar identity).
 ---
 
 ## 9. Deferred, with the caller that will bring it back
