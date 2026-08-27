@@ -1,7 +1,7 @@
 // data/ — the changeset shape a transaction commits, and the per-field equality table that decides
 // whether a field actually moved (plans/s2-data-core/README.md D-S2-7).
 
-import type { ChangeSetId, Entry, EntryId } from '../model/index.js';
+import type { ChangeSetId, Entry, EntryEdit, EntryId } from '../model/index.js';
 
 export type StoreName = 'entries'; // S3 adds `plugin:${string}/${string}`
 export type ChangeOrigin = 'user' | 'undo' | 'redo'; // 'engine' and 'load' arrive with their producers (D-S2-11)
@@ -72,6 +72,31 @@ const coreComparators = {
 export function fieldsEqual(field: FieldKey, from: unknown, to: unknown): boolean {
   const comparator = (coreComparators as Record<string, FieldComparator | undefined>)[field];
   return (comparator ?? byReference)(from, to);
+}
+
+/**
+ * Every `FieldUpdated` row an `edit` produces against the entry's current stored values, per D-S2-7's
+ * equality table — a field set back to its original value is not recorded. Shared by both producers of
+ * an edit in one transaction: the body's own `proposed` edits, and an extender's returned `EntryEdits`
+ * (S2.2 §2.2). Assumes `edit`'s fields already carry storage-shaped values (an `Instant`, not a loose
+ * `InstantInput`) — the mutator that built `edit` normalizes through `time/` first, so this function
+ * only compares, never converts. An `id` absent from `entries` yields no rows — nothing to diff against.
+ */
+export function diffEdit(
+  entries: ReadonlyMap<EntryId, Entry>,
+  id: EntryId,
+  edit: EntryEdit,
+): readonly FieldUpdated[] {
+  const current = entries.get(id);
+  if (!current) return [];
+
+  const updated: FieldUpdated[] = [];
+  for (const field of Object.keys(edit) as (keyof EntryEdit)[]) {
+    const to = edit[field];
+    const from = (current as unknown as Record<string, unknown>)[field];
+    if (!fieldsEqual(field, from, to)) updated.push({ store: 'entries', id, field, from, to });
+  }
+  return updated;
 }
 
 /**

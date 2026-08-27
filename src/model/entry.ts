@@ -48,3 +48,8 @@ export interface EntryInput<TMeta = unknown> {
   /** Consumer-owned, typed via generic. */
   meta?: TMeta;
 }
+
+/** What a consumer may change. Input-shaped, so dates stay loose the way `EntryInput`'s are: the store
+ * reads them through `time/`'s `toInstant`/`toEndInstant` in the dataset's zone, exactly as
+ * construction does. `id` is not editable — an id is identity. */
+export type EntryEdit<TMeta = unknown> = Partial<Omit<EntryInput<TMeta>, 'id'>>;
