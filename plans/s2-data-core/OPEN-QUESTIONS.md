@@ -44,73 +44,15 @@ is ADR-shaped: hard to reverse once S3's engine is written, and there was a real
 
 ---
 
-## OQ2 — Is the mutation core the right size for core, or should parts of it be installable?
+## OQ2 — **CLOSED** · OQ3 — **CLOSED**
 
-**Blocks:** the shape of S2.5 and S2.6 · **Touches:** `plans/01` §1/§6, `plans/00` D4, ADR 0002
+Both are answered in [`README.md`](./README.md): §0 Q7 and Q8, with the reasoning in §2 D-S2-23
+(removable by construction — history, serialization and the span rollup stay in `data/` as leaves with
+one importer each and a dependency-cruiser rule per leaf), D-S2-24 (one public change channel; the
+history and the view's live binding are ordinary subscribers to it) and D-S2-11 (`apply` ships with the
+sync adapter that calls it, and `ChangeOrigin` loses the two arms that had no producer).
 
-The concern: S2 is the largest slice in the plan, and a state system this size sitting in the mandatory
-core looks like the thing ADR 0002 already decided *not* to do for scheduling.
-
-What the renderer actually requires in order to work at all is two things: a way to read entries
-(`EntryStoreView`), and a way to know they changed (`change` carrying a delta). Everything else in S2
-is a consumer of those two.
-
-The nine pieces, split by whether anything else depends on them:
-
-| Piece | Depended on by |
-|---|---|
-| stores + indexes | `layout/`, `view/`, every plugin |
-| reactivity façade | the stores |
-| event bus | the `change` event |
-| transaction | every mutation path, including gestures and plugins |
-| changeset | undo, serialization, sync, the view binding |
-| resolve hook | cascades landing in one changeset |
-| span rollup (D-S2-22) | the resolve hook |
-| **history (undo/redo)** | **nothing** |
-| **serialization** | **nothing** |
-| **`apply()` / sync** | **nothing** (see OQ3) |
-
-The last three are already separate files in the plan (`data/history.ts`, `data/serialization/**`).
-
-The argument against making them plugins: undo can only promise "one gesture, one undo step, engine
-cascades included" (D10, I7) if **every** mutation — from `interaction/`, from other plugins, from the
-public API — flows through a transaction producing a complete changeset. That forces the transaction
-and the changeset into core. Once they are there, history is a stack, a cursor and an inverse; a
-plugin API to install that is more surface than the thing it installs, and designing, documenting,
-versioning and gating that API is the I11 defect §0 Q1 rejected for `DatasetOptions.plugins`.
-
-Options:
-
-| | Option | Consequence |
-|---|---|---|
-| a | Keep all nine in `data/`, and add a dependency rule proving the separation: `data/history.ts` and `data/serialization/**` may import the store and the changeset, and **nothing may import them**. Checkable by dependency-cruiser, the same trick ADR 0002 used. | Removability becomes a CI fact instead of a claim; no new public surface. |
-| b | Make history and serialization first-party installable plugins. | A plugin-installation API in S2 — the thing §0 Q1 deferred to S3 — plus a public store-enumeration surface, because a serialization plugin must read stores it does not own. |
-| c | Keep as planned, prove nothing. | The status quo the concern is about. |
-
-**Recommendation on the table: (a).** It delivers the removability and the low coupling without
-inventing an API, and it makes the claim falsifiable. But (b) is a real option and the call is not made.
-
----
-
-## OQ3 — Does `apply(changeSet)` ship in S2 at all?
-
-**Blocks:** S2.6 · **Touches:** `plans/03` §S2, `plans/02` §6, README §1 U6, §3, D-S2-11
-
-`apply` is the largest block of public surface in the slice with **no consumer inside it**: no harness
-button calls it, no acceptance id covers it, and it carries four public types (`ApplyReport`,
-`Rejection`, `RejectionReason`, plus the `'stale-from'` semantics) and a whole design axis —
-optimistic-concurrency detection, which D-S2-7's equality table already shows is subtle for `meta`.
-
-`plans/02` §6 asks that a future sync adapter be *"an extension, not a core change."* That promise is
-discharged by the changeset contract — `on('change')` carrying `{from, to}` — which S2 ships either
-way. `apply` is the thing such an extension **writes**, not the thing core must provide first.
-
-| | Option | Consequence |
-|---|---|---|
-| a | Defer `apply` to the slice with a sync caller. S2.6 becomes serialization only; the slice drops to six steps. | `plans/03` §S2's scope line and README U6 need correcting; `plans/00` §4's S2 → S3 condition does not mention `apply`, so the gate is unaffected. |
-| b | Ship it as planned. | Four public types and a staleness contract, frozen into the S2 `api-report` baseline, with the first real caller a slice or more away. |
-
-**Recommendation on the table: (a)**, as the cheapest honest reduction in the slice's size.
+Nothing settled is repeated here. Delete this heading when the next question closes.
 
 ---
 
@@ -170,3 +112,80 @@ corrected). Two more lines are stale and are not in the table:
   to S3, so the line contradicts a settled scope call.
 
 Add both to §7's `plans/03` row.
+
+---
+
+## OQ7 — **CLOSED** — the engine never reaches the span rollup, because it does not need to
+
+Answered in [`README.md`](./README.md) §2 **D-S2-22**, on the rule that grouping is core and scheduling
+is optional, so the rollup cannot sit in anything an optional plugin occupies.
+
+The rollup stopped being a resolver. It is step 5 of S2.2's commit sequence — after the resolve hook,
+unconditional, not displaceable by any install. The engine moves children; the rollup catches the
+parents up in the same transaction, the same changeset, one undo step. So the question's option (a) is
+the answer, and both of its stated costs are gone: there is no composition order for `data/` to invent
+(the sequence is the order), and "what wins when both patch a field" is decided once, in D-S2-22 — the
+rollup yields to the body and wins over the resolver.
+
+`scheduling-boundary` stays as ADR 0002 cut it, with no edge widened. `plans/03` §S3's *"parent/`group`
+rollup as a second pass"* is deleted from the engine's job rather than re-homed, and the `plans/01` §2.5
+ledger row can now be written.
+
+---
+
+## OQ8 — "Occupies the hook **exclusively**" — does the scheduling plugin *own* the slot, or is the slot simply *single-occupant*?
+
+**Blocks:** nothing in S2 — S2 ships the hook as one internal field with one call site (D-S2-6) and is
+compatible with either answer · **Decides:** S3's installation API (#15), and the wording of a locked
+decision · **Touches:** `plans/00` D4, `docs/adr/0002`, `plans/01` §7, `plans/03` §S3, `CLAUDE.md`
+
+The phrase comes from **`plans/00` D4** — *"A scheduling plugin, when installed, occupies that hook
+exclusively"* — and is repeated in `CLAUDE.md`, `plans/01` §7, `plans/03` §S3. ADR 0002 states it more
+weakly: *"a plugin **may** occupy it exclusively"*.
+
+Two readings, and the codebase currently inherits the wrong one:
+
+| | Reading | What it implies |
+|---|---|---|
+| a | **Ownership.** The slot is scheduling's by right; other resolvers are guests. | A scheduling-shaped hole in a hook whose whole point (D4) is that it is *generic*. `ProposalResolverConflictError` exists to tell a second claimant it lost. |
+| b | **Arity.** The hook has exactly **one occupant at a time**; scheduling has no more claim on it than a consumer's own rule does. | The exclusivity is about determinism, not ownership. Any resolver may occupy it; the first-party engine is merely the one most consumers install. |
+
+**(b) is what the rest of the design already assumes** — `data/` calls a `ProposalResolver`, not a
+scheduler; the identity function occupies it when nothing else does; the S2 **default** occupant is
+`data/`'s own span rollup, which is not scheduling at all (D-S2-22). Only the wording says (a).
+
+**What exclusivity was actually protecting**, and what must survive any rewording: one resolver means
+one call per transaction, one patch to check against the body's edits (I4), one deterministic answer,
+and no priority/registry machinery in `data/`. A free-for-all list of resolvers loses all four.
+
+**The mechanism that gives "tap into it or replace it" without losing them:** install a resolver as a
+**wrapper over the current one**, not as a value that displaces it.
+
+```ts
+// replace: ignore what was there
+setResolver(() => myResolver);
+
+// tap in: run the existing one, then adjust
+setResolver((next) => (request) => {
+  const resolution = next(request);
+  return { ...resolution, patch: [...resolution.patch, ...myExtraFields(request, resolution)] };
+});
+```
+
+`data/` still holds **one** field and calls it at **one** site — nothing about the commit path changes,
+and S2's internal `DatasetDataOptions.resolveProposal` is already the composed result. Composition order
+is written at the install site in the consumer's own config, which is readable, rather than inferred
+from priority numbers. And a plugin that wants no part of the built-in rollup replaces it, which is the
+freedom (a) denies.
+
+**No longer carries the rollup.** OQ7 closed by taking the span rollup *out* of the slot entirely
+(D-S2-22), so this question is now only about how one **policy** resolver composes with another — not
+about whether installing a plugin can switch off a core behaviour. It cannot.
+
+**Open because:** it edits a **locked** decision (D4) and the ADR that carries it, so it is the user's
+call, not a drafting fix. If it lands: D4's sentence becomes *"the hook has one occupant at a time; a
+scheduling plugin is one candidate occupant, with no special claim on it"*, the same correction goes to
+`CLAUDE.md`, `plans/01` §7 and `plans/03` §S3, ADR 0002 gets a superseding note, and
+`ProposalResolverConflictError` (README §9) loses its reason to exist — there is no conflict to report
+when installing composes.
+
