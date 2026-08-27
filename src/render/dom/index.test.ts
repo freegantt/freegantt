@@ -215,6 +215,30 @@ describe('render/dom backend', () => {
     backend.destroy();
   });
 
+  it('renders one .fg-row-cell per configured column, in column order, on top of the .fg-row-label first cell (#81)', () => {
+    const backend = createDomBackend();
+    const { grid, timeline } = mountSurfaces();
+    backend.mount({ grid, timeline });
+
+    const base = computeFrame({
+      entries: sampleEntries.slice(0, 1),
+      scale,
+      preset,
+      visible: { x: 0, y: 0, width: 0, height: 0 },
+      rowHeight: 32,
+      revision: 0,
+    });
+    backend.sync({ ...base, rows: base.rows.map((row) => ({ ...row, cells: ['Discovery', '5 d'] })) });
+
+    const row = grid.querySelector<HTMLElement>('.fg-row')!;
+    expect(row.querySelectorAll('.fg-row-label')).toHaveLength(1);
+    const otherCells = row.querySelectorAll('.fg-row-cell');
+    expect(otherCells).toHaveLength(1);
+    expect(row.children[0]?.textContent).toBe('Discovery');
+    expect(row.children[1]?.textContent).toBe('5 d');
+    backend.destroy();
+  });
+
   it("stamps .fg-row's aria-posinset/aria-setsize from the frame's absolute row index and total row count, not the windowed count (D-S1.10-5)", () => {
     const backend = createDomBackend();
     const { grid, timeline } = mountSurfaces();

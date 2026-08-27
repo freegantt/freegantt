@@ -15,10 +15,11 @@ import type { RenderBackend, RenderSurfaces, InteractionState, HitResult } from 
 import { syncKeyed } from './sync-keyed.js';
 
 type TickGeom = Pick<FrameHeaderTick, 'x' | 'width' | 'label'>;
+type CellGeom = { text: string };
 type RowGeom = {
   top: number;
   height: number;
-  label: string;
+  cells: readonly string[];
   index: number;
   rowCount: number;
 };
@@ -54,6 +55,9 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
   const bandTickGeom = new Map<number, Map<number, TickGeom>>();
   const rowNodes = new Map<RowId, HTMLElement>();
   const rowGeom = new Map<RowId, RowGeom>();
+  // One cell node/geom cache per row id — a nested keyed list, same pattern as bandTickNodes above.
+  const rowCellNodes = new Map<RowId, Map<number, HTMLElement>>();
+  const rowCellGeom = new Map<RowId, Map<number, CellGeom>>();
   const barNodes = new Map<ItemId, HTMLElement>();
   const barGeom = new Map<ItemId, BarGeom>();
 
@@ -109,30 +113,70 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
     }
   }
 
+  const cellSpec = {
+    key: (_cell: string, i: number) => i,
+    create: (_cell: string, i: number): HTMLElement => {
+      const node = document.createElement('div');
+      // The first cell keeps the pre-#81 class so existing style tokens and selectors still apply
+      // (issue #81: `.fg-row-label` stays as the class on the first cell).
+      node.className = i === 0 ? 'fg-row-label' : 'fg-row-cell';
+      return node;
+    },
+    toGeom: (cell: string): CellGeom => ({ text: cell }),
+    patch: (node: HTMLElement, geom: CellGeom): void => {
+      node.textContent = geom.text;
+    },
+  };
+
   function syncRows(rows: readonly FrameRow[], rowCount: number): void {
     if (!gridLayer) return;
     syncKeyed(gridLayer, rows, rowNodes, rowGeom, {
       key: (row) => row.id,
-      create: (row) => {
+      create: (_row, key) => {
         const node = document.createElement('div');
         node.className = 'fg-row';
         node.setAttribute('role', 'listitem');
         node.dataset['testid'] = 'fg-row';
-        node.dataset['rowId'] = row.id;
-        const label = document.createElement('div');
-        label.className = 'fg-row-label';
-        node.append(label);
+        node.dataset['rowId'] = key;
         return node;
       },
-      toGeom: (row) => ({ top: row.top, height: row.height, label: row.label, index: row.index, rowCount }),
+      toGeom: (row) => ({ top: row.top, height: row.height, cells: row.cells, index: row.index, rowCount }),
       patch: (node, geom) => {
         node.style.transform = `translateY(${geom.top}px)`;
         node.style.height = `${geom.height}px`;
         node.setAttribute('aria-posinset', String(geom.index + 1));
         node.setAttribute('aria-setsize', String(geom.rowCount));
-        node.querySelector('.fg-row-label')!.textContent = geom.label;
       },
     });
+
+    syncCellsForEachRow(rows);
+  }
+
+  /** Each row owns a nested keyed list of cells (one per configured column), the same "keyed list
+   * inside a keyed list" pattern `syncHeader` uses for ticks inside bands. Split out from `syncRows`
+   * because it needs its own per-row node/geom cache lookup and its own prune pass. */
+  function syncCellsForEachRow(rows: readonly FrameRow[]): void {
+    rows.forEach((row) => {
+      const rowNode = rowNodes.get(row.id);
+      if (!rowNode) return;
+      let cellNodesForRow = rowCellNodes.get(row.id);
+      let cellGeomForRow = rowCellGeom.get(row.id);
+      if (!cellNodesForRow || !cellGeomForRow) {
+        cellNodesForRow = new Map<number, HTMLElement>();
+        cellGeomForRow = new Map<number, CellGeom>();
+        rowCellNodes.set(row.id, cellNodesForRow);
+        rowCellGeom.set(row.id, cellGeomForRow);
+      }
+      syncKeyed(rowNode, row.cells, cellNodesForRow, cellGeomForRow, cellSpec);
+    });
+
+    const liveRowIds = new Set(rows.map((row) => row.id));
+    for (const id of rowCellNodes.keys()) {
+      if (!liveRowIds.has(id)) {
+        rowCellNodes.delete(id);
+        rowCellGeom.delete(id);
+      }
+    }
   }
 
   function syncBars(bars: readonly FrameBar[]): void {
@@ -231,6 +275,8 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
       bandTickGeom.clear();
       rowNodes.clear();
       rowGeom.clear();
+      rowCellNodes.clear();
+      rowCellGeom.clear();
       barNodes.clear();
       barGeom.clear();
       gridLayer = undefined;
