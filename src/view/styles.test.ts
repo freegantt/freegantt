@@ -1,8 +1,14 @@
 import { describe, expect, it, vi } from 'vitest';
 import { ensureBaseStyles } from './styles.js';
 import { GanttShell } from './gantt-shell.js';
+import type { GanttShellOptions } from './gantt-shell.js';
 import { entryId } from '../model/index.js';
 import type { Entry, Instant } from '../model/index.js';
+import { EntryStore } from '../data/index.js';
+
+function fakeDataset(list: readonly Entry[]): GanttShellOptions['dataset'] {
+  return { entries: new EntryStore(list), timeZone };
+}
 
 // happy-dom does no layout, so a real ResizeObserver never fires — same seam as gantt-shell.test.ts.
 class FakeResizeObserver {
@@ -55,8 +61,8 @@ function clearStyles(): void {
 describe('ensureBaseStyles', () => {
   it('injects exactly one <style> for two Gantt instances constructed in one document', () => {
     clearStyles();
-    const a = new GanttShell({ container: makeContainer(), dataset: { entries, timeZone } });
-    const b = new GanttShell({ container: makeContainer(), dataset: { entries, timeZone } });
+    const a = new GanttShell({ container: makeContainer(), dataset: fakeDataset(entries) });
+    const b = new GanttShell({ container: makeContainer(), dataset: fakeDataset(entries) });
     expect(document.head.querySelectorAll('style[data-freegantt-styles]')).toHaveLength(1);
     a.destroy();
     b.destroy();
@@ -90,7 +96,7 @@ describe('ensureBaseStyles', () => {
     clearStyles();
     const container = makeContainer();
     container.style.setProperty('--fg-bar-fill', 'rgb(1, 2, 3)');
-    const shell = new GanttShell({ container, dataset: { entries, timeZone } });
+    const shell = new GanttShell({ container, dataset: fakeDataset(entries) });
     const bar = container.querySelector('.fg-bar');
     expect(bar).not.toBeNull();
     expect(getComputedStyle(bar as Element).backgroundColor).toBe('rgb(1, 2, 3)');

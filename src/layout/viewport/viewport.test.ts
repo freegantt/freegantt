@@ -1,22 +1,23 @@
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 import { Viewport } from './viewport.js';
+import type { DatasetBinding } from './viewport.js';
 import { TimeScaleModel } from './time-scale-model.js';
 import { ScrollModel } from './scroll-model.js';
 import { diffMs, instant } from '../../time/index.js';
 import { entryId } from '../../model/index.js';
-import type { Dataset, Entry } from '../../model/index.js';
+import type { Entry } from '../../model/index.js';
 
 function entry(id: string, start: string, end: string): Entry {
   return { id: entryId(id), name: id, start: instant(start), end: instant(end) };
 }
 
-const dataset: Dataset = {
+const dataset: DatasetBinding = {
   timeZone: 'UTC',
   entries: [entry('t1', '2026-09-01T00:00:00Z', '2026-09-03T00:00:00Z')],
 };
 
-const wideDataset: Dataset = {
+const wideDataset: DatasetBinding = {
   timeZone: 'UTC',
   entries: [entry('t1', '2026-01-01T00:00:00Z', '2026-12-31T00:00:00Z')],
 };

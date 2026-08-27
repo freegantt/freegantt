@@ -42,6 +42,7 @@ flowchart TB
   LAY --> TIME
   LAY --> MODEL
   DATA --> MODEL
+  DATA --> TIME
   SCH --> TIME
   SCH --> MODEL
   TIME --> MODEL
@@ -53,6 +54,8 @@ flowchart TB
   class EXT,INT,VIEW,REN dom
   class API apic
 ```
+
+`data/ --> TIME` (S2.1, D-S2-1, `plans/s2-data-core`): serialization (Instant⇄ISO) and mutation-time input reading (resolving a Plain string, advancing a date-only `end`) are both zone-aware date arithmetic, and I10 confines that to `time/`. `time/` sits below `data/` in the pure stack, and `scheduling/` already has the same arrow — nothing about the layering changes, only the drawing catches up with what `data/` now does.
 
 There is deliberately no `data/ --> scheduling/` edge: `data/` has no static dependency on scheduling at all. Instead, `data/` calls the generic resolve hook (D4; exact contract tracked in issue #12) to turn a proposed edit into a committed one. `scheduling/` stays a directory in `src/`: it's where the first-party default scheduling plugin's pure engine lives, still DOM-free and still isolated from `render/`/`view/`/`interaction/`, but it is no longer a privileged layer every Gantt is wired to by default — a Gantt with no scheduling plugin installed never loads it.
 
@@ -71,6 +74,8 @@ src/
                  formerly DatasetLike in view/gantt-shell.ts)                                (pure)
   time/          instants, zones, TimeScale, presets  (pure)
   data/          stores, transactions, undo, changesets, serialization (pure)
+                 (S2.1: reactivity.ts, event-bus.ts, entry-reader.ts, entry-store.ts,
+                 dataset-state.ts — the only file layer that may additionally import time/, D-S2-1)
   scheduling/    propagation engine + policies        (pure)
   layout/        geometry: rows, lanes, bars, routing (pure)
   render/
@@ -145,7 +150,16 @@ interface Entry<TMeta = unknown> {
   segments?: readonly TimeSpan[];
   meta?: TMeta;                // consumer-owned, typed via generic; a declared key is a Field (§2.6)
 }
+```
 
+`Dataset.entries` is a store view, not a snapshot array (S2.1, D-S2-2, `plans/s2-data-core`):
+`dataset.entries.update('t2', { … })` is the published call site, so `dataset.entries` is the
+collection itself. `EntryStoreView` (`model/dataset.ts`) is the read half — `snapshot()`, `get`,
+`has`, `size` — and `data/`'s `EntryStore` adds the mutators once S2.3 lands. `snapshot()`'s
+returned array is cached and rebuilt once per commit, not once per read (D-S2-3), so a caller
+comparing two snapshots by reference is a correct "did anything change" check.
+
+```ts
 /** DERIVED. One display lane. */
 interface Row {
   id: RowId;

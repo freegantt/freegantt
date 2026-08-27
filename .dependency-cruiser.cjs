@@ -37,7 +37,9 @@ module.exports = {
     forbid('scheduling-boundary', 'scheduling', ['time', 'model']),
     // No 'scheduling' target: data/ has no static dependency on scheduling/ at all — they meet only
     // through the generic resolve hook, decided once at setup (plans/01 §1, issue #12).
-    forbid('data-boundary', 'data', ['model']),
+    // time: D-S2-1 (plans/s2-data-core/README.md) — serialization (Instant<->ISO, time/instant.ts's
+    // toISO) and mutation-time input reading (time/input.ts's toInstant/toEndInstant) both need it.
+    forbid('data-boundary', 'data', ['time', 'model']),
     forbid('render-boundary', 'render', ['layout']),
     // model: Entry types flow through view as type-only params (same rationale as api, above).
     forbid('view-boundary', 'view', ['render', 'layout', 'data', 'model']),

@@ -56,44 +56,36 @@ Nothing settled is repeated here. Delete this heading when the next question clo
 
 ---
 
-## OQ4 — Does `layout/` bind to a `Dataset` or to a snapshot?
+## OQ4 — **CLOSED** — `Viewport.bind` takes a snapshot, not a `Dataset`
 
-**Blocks:** S2.1 · **Touches:** D-S2-2, S2.1 §3, S2.4 §1
-
-D-S2-2 puts `EntryStoreView` — four members, three of them methods — in `model/`, so `Viewport.bind`
-receives a behavioural contract and calls `dataset.entries.snapshot()`. The plan states in the same
-paragraph that *"`layout/` takes a snapshot and has no interest in a store."*
-
-After S2.4, `ScaleBinding.entries` is push-to and the shell pushes `entries.snapshot()` on every
-change. `Viewport.bind` reading the dataset *and* the shell pushing entries are then two paths to one
-value — a small instance of #1's R4.
-
-| | Option | Consequence |
-|---|---|---|
-| a | `Viewport.bind` takes `{ entries: readonly Entry[]; timeZone: string }`. | Removes a read site instead of migrating it; kills the double path before S2.4 creates it; changes a `layout/` signature inside a step that otherwise promises no behaviour change. |
-| b | As planned — `layout/` binds to `model/Dataset`. | `layout/` depends on a method contract, and the double path stands. |
-
-**Recommendation on the table: (a).**
+**Closed as option (a).** `Viewport.bind` takes `{ entries: readonly Entry[]; timeZone: string }`,
+not `model/Dataset`. This removes the read site instead of migrating it, so the double path option (b)
+would have created against S2.4's push-to `ScaleBinding.entries` never opens. `layout/` keeps its
+existing "no interest in a store" posture from S2.1 onward, with no signature it will need to widen
+back later.
 
 ---
 
-## OQ5 — Is `DatasetData` the right name?
+## OQ5 — **CLOSED** — the class is `DatasetState`, not `DatasetData`
 
-**Blocks:** S2.1 · **Touches:** `plans/01` §6, `CONTEXT.md`
+Run through the naming skill at S2.1's start. `DatasetCore` was rejected: `core` already carries a
+loaded, specific meaning throughout this slice's own decisions ("grouping is core", "a core step in
+the commit path", "core behaviour must not live somewhere optional code can displace it") — naming a
+class `DatasetCore` would give that word a second meaning next to every one of those sentences, which
+is check 4 failing on its own turf. `DatasetStores` was rejected: the class holds more than stores —
+`timeZone`, `dateOnlyEnd`, `referenceDate`, the resolver, the history, the bus — so the name promises
+less than the class holds, and the plural reads wrong at the call site. Inverting the pair (`data/`
+owns the name `Dataset`) was rejected: `model/dataset.ts` already exports a structural `Dataset` that
+`api/dataset.ts`'s class satisfies, and a second class also named `Dataset` one file down disambiguated
+only by import path is worse, not better — check 4 again.
 
-`plans/01` §6 names the class `DatasetData`, written when `api/dataset.ts` did the real work. After
-S2.1 it is inverted: `DatasetData` holds the stores, the zone, the reference date, the resolver, the
-history and the bus, and `api/Dataset` is a façade that delegates.
-
-Read the call site: `new DatasetData({ entries, timeZone })` — "a new dataset data". `Data` is a
-generic word covering more than one concept in this codebase (`data/` the layer, `DatasetData` the
-class, the dataset itself), which CLAUDE.md calls a bug rather than a style nit, and it is the failure
-#7 records verbatim.
-
-Candidates: keep `DatasetData` (spec'd, and renaming costs a `plans/01` §6 edit); `DatasetCore`;
-`DatasetStores`; or invert the pair so `data/` owns the name `Dataset` and `api/` re-exports it.
-
-**No recommendation yet** — run it through the naming skill when S2.1 starts.
+**`DatasetState`.** It names what the class actually is — the live, mutable state one `Dataset`
+instance owns privately — and it does not collide: `CONTEXT.md`'s only existing use of the bare word is
+the two-word compound *State attribute* (a CSS `data-*` concept), which reads as its own term and
+creates no confusion with a class name one layer away in `data/`. Call site: `new DatasetState({
+entries, timeZone })` — "construct a new dataset's state, given these entries and this time zone" —
+reads true. `plans/01` §6 and `CONTEXT.md` get a **DatasetState** entry (_Avoid_: DatasetData — retired
+here for the reason above; DatasetCore, DatasetStores — rejected candidates, see this entry).
 
 ---
 

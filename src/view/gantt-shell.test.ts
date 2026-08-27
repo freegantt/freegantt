@@ -1,8 +1,16 @@
 import { describe, expect, it, vi } from 'vitest';
 import { GanttShell } from './gantt-shell.js';
+import type { GanttShellOptions } from './gantt-shell.js';
 import { ScrollModel, TimeScaleModel } from '../layout/index.js';
 import { entryId, EntryNotFoundError, ContainerNotFoundError } from '../model/index.js';
 import type { Entry, Instant } from '../model/index.js';
+import { EntryStore } from '../data/index.js';
+
+// D-S2-2: `GanttShellOptions.dataset` is a store view now, not a plain array — the real `EntryStore`
+// backs these fixtures the same way a `Dataset` would, with no test-only fake to keep in sync.
+function fakeDataset(entries: readonly Entry[]): GanttShellOptions['dataset'] {
+  return { entries: new EntryStore(entries), timeZone };
+}
 
 // happy-dom does no layout, so a real ResizeObserver never fires (verified against pane-size-
 // attachment.test.ts's own fake) — this is the same test seam, stubbed globally because GanttShell
@@ -73,7 +81,7 @@ describe('GanttShell header band', () => {
   it('renders one tick per day for the day preset', () => {
     const container = document.createElement('div');
     const scale = new TimeScaleModel({ range: { start: rangeStart, end: rangeEnd } });
-    const shell = new GanttShell({ container, dataset: { entries, timeZone }, scale });
+    const shell = new GanttShell({ container, dataset: fakeDataset(entries), scale });
 
     const ticks = container.querySelectorAll('.fg-header .fg-tick');
     expect(ticks).toHaveLength(5);
@@ -87,7 +95,7 @@ describe('GanttShell header band', () => {
     // No pinned range: the scale fits every bound dataset, so binding B widens the span A reads from.
     const scale = new TimeScaleModel();
     const containerA = document.createElement('div');
-    const shellA = new GanttShell({ container: containerA, dataset: { entries, timeZone }, scale });
+    const shellA = new GanttShell({ container: containerA, dataset: fakeDataset(entries), scale });
 
     const initialTickCount = containerA.querySelectorAll('.fg-header .fg-tick').length;
 
@@ -102,7 +110,7 @@ describe('GanttShell header band', () => {
     ];
     const shellB = new GanttShell({
       container: containerB,
-      dataset: { entries: widerEntries, timeZone },
+      dataset: fakeDataset(widerEntries),
       scale,
     });
 
@@ -120,7 +128,7 @@ describe('row height (#39)', () => {
     document.body.append(container);
     container.style.setProperty('--fg-row-height', '48px');
 
-    const shell = new GanttShell({ container, dataset: { entries, timeZone } });
+    const shell = new GanttShell({ container, dataset: fakeDataset(entries) });
     const bar = container.querySelector<HTMLElement>('.fg-bar')!;
     expect(bar.style.height).toBe('48px');
 
@@ -130,7 +138,7 @@ describe('row height (#39)', () => {
 
   it('falls back to a default when --fg-row-height is unset', () => {
     const container = document.createElement('div');
-    const shell = new GanttShell({ container, dataset: { entries, timeZone } });
+    const shell = new GanttShell({ container, dataset: fakeDataset(entries) });
     const bar = container.querySelector<HTMLElement>('.fg-bar')!;
     expect(bar.style.height).toBe('32px');
     shell.destroy();
@@ -140,7 +148,7 @@ describe('row height (#39)', () => {
 describe('GanttShell.destroy()', () => {
   it('is idempotent — a second call does not throw or double-unbind (#34)', () => {
     const container = document.createElement('div');
-    const shell = new GanttShell({ container, dataset: { entries, timeZone } });
+    const shell = new GanttShell({ container, dataset: fakeDataset(entries) });
 
     expect(() => {
       shell.destroy();
@@ -152,7 +160,7 @@ describe('GanttShell.destroy()', () => {
 describe('scroll (D9, #9)', () => {
   it('constructs a private default ScrollModel when scroll is omitted', () => {
     const container = document.createElement('div');
-    const shell = new GanttShell({ container, dataset: { entries, timeZone } });
+    const shell = new GanttShell({ container, dataset: fakeDataset(entries) });
     // No shared model was passed; the shell still renders and destroys cleanly, proving a
     // default was constructed rather than left unset.
     expect(container.querySelectorAll('.fg-bar').length).toBeGreaterThan(0);
@@ -179,13 +187,13 @@ describe('scroll (D9, #9)', () => {
 
       const shellA = new GanttShell({
         container: containerA,
-        dataset: { entries: tallEntries(50), timeZone },
+        dataset: fakeDataset(tallEntries(50)),
         scroll,
       });
       FakeResizeObserver.instances[0]!.fire({ width: 500, height: 100 });
       const shellB = new GanttShell({
         container: containerB,
-        dataset: { entries: tallEntries(50), timeZone },
+        dataset: fakeDataset(tallEntries(50)),
         scroll,
       });
       FakeResizeObserver.instances[1]!.fire({ width: 500, height: 100 });
@@ -208,7 +216,7 @@ describe('scroll (D9, #9)', () => {
       const scroll = new ScrollModel();
       const container = document.createElement('div');
 
-      const shell = new GanttShell({ container, dataset: { entries: tallEntries(50), timeZone }, scroll });
+      const shell = new GanttShell({ container, dataset: fakeDataset(tallEntries(50)), scroll });
       FakeResizeObserver.instances[0]!.fire({ width: 500, height: 320 }); // 10 rows @ 32px
 
       const labelsAt = (): string[] =>
@@ -239,13 +247,13 @@ describe('scroll (D9, #9)', () => {
 
       const shortShell = new GanttShell({
         container: shortContainer,
-        dataset: { entries: tallEntries(5), timeZone },
+        dataset: fakeDataset(tallEntries(5)),
         scroll,
       });
       FakeResizeObserver.instances[0]!.fire({ width: 500, height: 100 });
       const tallShell = new GanttShell({
         container: tallContainer,
-        dataset: { entries: tallEntries(500), timeZone },
+        dataset: fakeDataset(tallEntries(500)),
         scroll,
       });
       FakeResizeObserver.instances[1]!.fire({ width: 500, height: 100 });
@@ -268,7 +276,7 @@ describe('GanttShell container resolution (#38)', () => {
     container.id = 'target';
     document.body.append(container);
 
-    const shell = new GanttShell({ container: '#target', dataset: { entries, timeZone } });
+    const shell = new GanttShell({ container: '#target', dataset: fakeDataset(entries) });
     expect(container.querySelectorAll('.fg-bar').length).toBeGreaterThan(0);
 
     shell.destroy();
@@ -276,7 +284,7 @@ describe('GanttShell container resolution (#38)', () => {
   });
 
   it('throws naming the selector when nothing matches', () => {
-    expect(() => new GanttShell({ container: '#does-not-exist', dataset: { entries, timeZone } })).toThrow(
+    expect(() => new GanttShell({ container: '#does-not-exist', dataset: fakeDataset(entries) })).toThrow(
       /does-not-exist/,
     );
   });
@@ -284,7 +292,7 @@ describe('GanttShell container resolution (#38)', () => {
   it('throws a typed ContainerNotFoundError with code "container-not-found" (D-S1.8-9)', () => {
     let caught: unknown;
     try {
-      new GanttShell({ container: '#does-not-exist', dataset: { entries, timeZone } });
+      new GanttShell({ container: '#does-not-exist', dataset: fakeDataset(entries) });
     } catch (error) {
       caught = error;
     }
@@ -302,7 +310,7 @@ describe('pane split pixel identity (S1.8, D-S1.8-1)', () => {
     // is the case that would expose the two panes reading their `top` from different places.
     container.style.setProperty('--fg-row-height', '31.5px');
     const rowEntries = tallEntries(3);
-    const shell = new GanttShell({ container, dataset: { entries: rowEntries, timeZone } });
+    const shell = new GanttShell({ container, dataset: fakeDataset(rowEntries) });
 
     const rows = Array.from(container.querySelectorAll<HTMLElement>('.fg-grid-pane .fg-row'));
     const bars = Array.from(container.querySelectorAll<HTMLElement>('.fg-timeline-pane .fg-bar'));
@@ -339,7 +347,7 @@ describe('pane split pixel identity (S1.8, D-S1.8-1)', () => {
     try {
       const scale = new TimeScaleModel({ range: { start: rangeStart, end: rangeEnd } });
       const container = document.createElement('div');
-      const shell = new GanttShell({ container, dataset: { entries, timeZone }, scale, gridWidth: 300 });
+      const shell = new GanttShell({ container, dataset: fakeDataset(entries), scale, gridWidth: 300 });
       FakeResizeObserver.instances[0]!.fire({ width: 653, height: 400 });
 
       const sizer = container.querySelector<HTMLElement>('.fg-timeline-pane [aria-hidden="true"]')!;
@@ -373,7 +381,7 @@ describe('pane-size attachment (S1.7b, #8)', () => {
         start: rangeStart,
         end: instant('2026-09-03T00:00:00Z'),
       }));
-      const shell = new GanttShell({ container, dataset: { entries: tall, timeZone }, scale, scroll });
+      const shell = new GanttShell({ container, dataset: fakeDataset(tall), scale, scroll });
 
       // Exactly one observer for this one Gantt.
       expect(FakeResizeObserver.instances).toHaveLength(1);
@@ -411,7 +419,7 @@ describe('pane-size attachment (S1.7b, #8)', () => {
 describe('preset/range/zoom/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () => {
   it('preset/range/zoom/overscan accessors delegate straight to the bound Viewport', () => {
     const container = document.createElement('div');
-    const shell = new GanttShell({ container, dataset: { entries, timeZone } });
+    const shell = new GanttShell({ container, dataset: fakeDataset(entries) });
 
     expect(shell.zoom).toBe('fitViewport');
     shell.zoom = { pxPerMs: 2 };
@@ -437,7 +445,7 @@ describe('preset/range/zoom/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () 
   it('zoomTo/zoomBy delegate to the bound Viewport and move pxPerMs', () => {
     const container = document.createElement('div');
     const scale = new TimeScaleModel({ range: { start: rangeStart, end: rangeEnd }, zoom: { pxPerMs: 1 } });
-    const shell = new GanttShell({ container, dataset: { entries, timeZone }, scale });
+    const shell = new GanttShell({ container, dataset: fakeDataset(entries), scale });
 
     shell.zoomBy(2);
     expect(scale.scale.pxPerMs).toBe(2);
@@ -456,7 +464,7 @@ describe('preset/range/zoom/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () 
       const container = document.createElement('div');
       const scroll = new ScrollModel();
       const rowEntries = tallEntries(50);
-      const shell = new GanttShell({ container, dataset: { entries: rowEntries, timeZone }, scroll });
+      const shell = new GanttShell({ container, dataset: fakeDataset(rowEntries), scroll });
       FakeResizeObserver.instances[0]!.fire({ width: 500, height: 100 });
 
       expect(scroll.state.position.y).toBe(0);
@@ -478,7 +486,7 @@ describe('a11y roles and the one honest tab stop (S1.10, D-S1.10-5)', () => {
     const scale = new TimeScaleModel({ range: { start: rangeStart, end: rangeEnd } });
     const shell = new GanttShell({
       container,
-      dataset: { entries, timeZone },
+      dataset: fakeDataset(entries),
       scale,
       a11yLabel: 'Room bookings',
     });

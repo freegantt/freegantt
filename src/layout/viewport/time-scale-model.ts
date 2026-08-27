@@ -18,7 +18,7 @@ import {
   resolvePreset,
 } from '../../time/index.js';
 import type { PresetRef, TimeScale, TimeScaleOptions, ViewPreset } from '../../time/index.js';
-import type { Dataset, Instant, TimeSpan } from '../../model/index.js';
+import type { Entry, Instant, TimeSpan } from '../../model/index.js';
 import { BoundValue } from './bound-value.js';
 
 /** The density mode — what `pxPerMs` resolves to (S1.9, D-S1.9-2). `'fitViewport'` (default) fits
@@ -39,12 +39,18 @@ export interface TimeScaleIntent {
 
 /** One Gantt's contribution to resolution, supplied when it binds. `readonly`, and the model copies
  * it at bind time (S1.5, #6/#22 follow-up) — a caller holding a reference cannot change the model's
- * inputs behind its back; re-measurement goes through the returned handle's `setPaneWidth` instead. */
-export type ScaleBinding = Dataset & {
+ * inputs behind its back; re-measurement goes through the returned handle's `setPaneWidth` instead.
+ *
+ * A snapshot, not a `Dataset` (OQ4, plans/s2-data-core): `layout/` takes `entries.snapshot()` and has
+ * no interest in a store — a bound `Dataset` would be a second path to the same value once S2.4's
+ * live binding pushes `entries.snapshot()` on every change. */
+export interface ScaleBinding {
+  readonly timeZone: string;
+  readonly entries: readonly Entry[];
   /** Measured width (px) of the pane the Gantt renders its timeline into; `0` when unmeasured
    * (detached container, `display:none`, pre-paint). Unmeasured is not degenerate — see `pxPerMsForPreset`. */
   readonly paneWidth: number;
-};
+}
 
 /** Zone used before any Gantt has bound, so `scale` is readable on a fresh model. */
 const UNBOUND_ZONE = 'UTC';
@@ -59,7 +65,7 @@ export interface ScaleBindingHandle {
 /** The model's own mutable copy of a binding — what `setPaneWidth` writes and what `#resolve` reads. */
 interface MutableScaleBinding {
   timeZone: string;
-  entries: Dataset['entries'];
+  entries: readonly Entry[];
   paneWidth: number;
 }
 

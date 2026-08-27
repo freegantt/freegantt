@@ -10,7 +10,7 @@ import type { ScrollBindingHandle } from './scroll-model.js';
 import type { PresetRef, TimeScale, ViewPreset } from '../../time/index.js';
 import { BatchedNotifier } from './batched-notifier.js';
 import { FreeGanttError } from '../../model/index.js';
-import type { Dataset, Rect, Size, TimeSpan } from '../../model/index.js';
+import type { Entry, Rect, Size, TimeSpan } from '../../model/index.js';
 import { DEFAULT_OVERSCAN } from '../frame.js';
 import type { Overscan } from '../frame.js';
 
@@ -19,6 +19,15 @@ export interface ViewportOptions {
   scale?: TimeScaleModel;
   scroll?: ScrollModel;
   overscan?: Overscan;
+}
+
+/** What `bind()` needs off a Dataset (OQ4, plans/s2-data-core): a snapshot, not the store — `layout/`
+ *  takes `entries.snapshot()` and has no interest in a store. The caller reads it fresh at bind time;
+ *  S2.4's live binding is what pushes an updated snapshot in on every dataset change, through the
+ *  returned handle, not through this shape widening. */
+export interface DatasetBinding {
+  readonly entries: readonly Entry[];
+  readonly timeZone: string;
 }
 
 /** @internal — view/ only. Binding handle shape, per conventions §4. */
@@ -76,7 +85,7 @@ export class Viewport {
    *  from the other shell's box. Sharing is what `ViewportOptions.scale`/`scroll` are for: the
    *  models are the shareable objects (D9), the fan-in is per Gantt. A second `bind` is a
    *  programming error in `view/`, not a silently replaced reaction. */
-  bind(dataset: Dataset, onChange: () => void): ViewportHandle {
+  bind(dataset: DatasetBinding, onChange: () => void): ViewportHandle {
     if (this.#onChange) {
       throw new FreeGanttError(
         'viewport-already-bound',
