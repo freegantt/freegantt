@@ -42,6 +42,7 @@ flowchart TB
   LAY --> TIME
   LAY --> MODEL
   DATA --> MODEL
+  DATA --> TIME
   SCH --> TIME
   SCH --> MODEL
   TIME --> MODEL
@@ -54,7 +55,9 @@ flowchart TB
   class API apic
 ```
 
-There is deliberately no `data/ --> scheduling/` edge: `data/` has no static dependency on scheduling at all. Instead, `data/` calls the generic resolve hook (D4; exact contract tracked in issue #12) to turn a proposed edit into a committed one. `scheduling/` stays a directory in `src/`: it's where the first-party default scheduling plugin's pure engine lives, still DOM-free and still isolated from `render/`/`view/`/`interaction/`, but it is no longer a privileged layer every Gantt is wired to by default — a Gantt with no scheduling plugin installed never loads it.
+`data/ --> TIME` (S2.1, D-S2-1, `plans/s2-data-core`): serialization (Instant⇄ISO) and mutation-time input reading (resolving a Plain string, advancing a date-only `end`) are both zone-aware date arithmetic, and I10 confines that to `time/`. `time/` sits below `data/` in the pure stack, and `scheduling/` already has the same arrow — nothing about the layering changes, only the drawing catches up with what `data/` now does.
+
+There is deliberately no `data/ --> scheduling/` edge: `data/` has no static dependency on scheduling at all. Instead, `data/` calls the generic extension hook (D4; exact contract tracked in issue #12), which may add extra field writes to a proposed edit before it commits. `scheduling/` stays a directory in `src/`: it's where the first-party default scheduling plugin's pure engine lives, still DOM-free and still isolated from `render/`/`view/`/`interaction/`, but it is no longer a privileged layer every Gantt is wired to by default — a Gantt with no scheduling plugin installed never loads it.
 
 **Enforcement (D12):** an import-boundary lint rule in CI (dependency-cruiser or `no-restricted-imports`). Any arrow not in this diagram fails the build. Notably:
 
@@ -71,6 +74,8 @@ src/
                  formerly DatasetLike in view/gantt-shell.ts)                                (pure)
   time/          instants, zones, TimeScale, presets  (pure)
   data/          stores, transactions, undo, changesets, serialization (pure)
+                 (S2.1: reactivity.ts, event-bus.ts, entry-reader.ts, entry-store.ts,
+                 dataset-state.ts — the only file layer that may additionally import time/, D-S2-1)
   scheduling/    propagation engine + policies        (pure)
   layout/        geometry: rows, lanes, bars, routing (pure)
   render/
@@ -145,7 +150,16 @@ interface Entry<TMeta = unknown> {
   segments?: readonly TimeSpan[];
   meta?: TMeta;                // consumer-owned, typed via generic; a declared key is a Field (§2.6)
 }
+```
 
+`Dataset.entries` is a store view, not a bare array (S2.1, D-S2-2, `plans/s2-data-core`):
+`dataset.entries.update('t2', { … })` is the published call site, so `dataset.entries` is the
+collection itself. `EntryStoreView` (`model/dataset.ts`) is the read half — `all`, `get`,
+`has`, `size` — and `data/`'s `EntryStore` adds the mutators once S2.3 lands. `all`'s
+returned array is cached and rebuilt once per commit, not once per read (D-S2-3), so a caller
+comparing two reads of `all` by reference is a correct "did anything change" check.
+
+```ts
 /** DERIVED. One display lane. */
 interface Row {
   id: RowId;
@@ -289,7 +303,7 @@ Rules:
 - **A computed field reads the dataset only, never view state.** No zoom, no visible range, no selection. Its cache is then keyed on the entry's subtree revision alone, which is what makes the value the same for every reader of that dataset. A value that depends on the view is not a field — it is a renderer's business.
 - **`meta` is opaque unless you declare a key.** Undeclared keys keep §6's rule — carried by reference, never walked, compared by `===`. A write to a declared key emits a changeset row keyed on the **field key**, never a `meta` row.
 - **Edits name fields, not shapes.** `update('t1', { start: X, cost: 500 })` is one transaction, one changeset and one undo step across a core field and a consumer field. A key that is not registered is an `UnknownFieldError` — never a silent write.
-- **Rollup precedence is §7's rule, unchanged.** The rollup yields to a field the caller proposed in the same transaction and wins over one the resolve hook proposed. Bottom-up, one pass, so nested groups settle together. `derivedSpanKinds` says which **kinds** derive; the registry says how each **field** derives. The two are orthogonal and both are needed.
+- **Rollup precedence is §7's rule, unchanged.** The rollup yields to a field the caller proposed in the same transaction and wins over one the extension hook proposed. Bottom-up, one pass, so nested groups settle together. `derivedSpanKinds` says which **kinds** derive; the registry says how each **field** derives. The two are orthogonal and both are needed.
 - **Aggregation never lives on a grid column.** A stored value must not depend on whether a column is visible, and the rollup has already run before any Gantt is constructed.
 - **A field declares its own column defaults, so `gridColumns` is mostly ordering.** `gridColumns: ['name', 'start', 'cost']` names fields in display order; the object form (`{ field: 'cost', header: 'Budget — site A' }`) overrides this Gantt's presentation only, and never the data half.
 - **Text and structure stay separate.** `formatValue` returns a string, is DOM-free, and fills the frame's row cells; `cellRenderer` returns element descriptions and is applied by `render/`. Same split as `FrameBar.label` and `barRenderer` (§8).
@@ -304,7 +318,7 @@ flowchart TB
   subgraph cold["COLD PATH — data or viewport changed"]
     direction TB
     C1["mutation via transaction<br/>(API call or committed gesture)"]
-    C2["resolve hook<br/>identity, or installed plugin's schedule() — pure"]
+    C2["extension hook<br/>identity, or installed plugin's schedule() — pure"]
     C3["changeset applied to stores<br/>one event, from/to per field"]
     C4["layout.computeFrame()<br/>memoized on (data rev, scale, window)"]
     C5["backend.sync(frame)<br/>keyed diff, node recycling"]
@@ -454,8 +468,8 @@ Shipped presets cover hour→year zoom levels; custom presets are config objects
 
 ## 6. `data/` — stores, transactions, changesets
 
-- **`DatasetData`** owns normalized stores (`entries`, plus reserved stores for scheduling-plugin-owned data such as `dependencies`) with indexes (`byId`, `byParent`, `byPredecessor`, `bySuccessor` — the latter two populated only when a plugin uses them), the dataset timezone, and the generic resolve-hook binding (identity when unoccupied; §1). Fully headless (D4): constructible and usable in Node with no view.
-- **Transactions**: `dataset.transaction(() => { ...mutations })` batches mutations, runs the resolve hook once, emits **one changeset**. Every mutation path — API and gesture — goes through a transaction. No exceptions.
+- **`DatasetData`** owns normalized stores (`entries`, plus reserved stores for scheduling-plugin-owned data such as `dependencies`) with indexes (`byId`, `byParent`, `byPredecessor`, `bySuccessor` — the latter two populated only when a plugin uses them), the dataset timezone, and the generic edit-extension binding (identity when unoccupied; §1). Fully headless (D4): constructible and usable in Node with no view.
+- **Transactions**: `dataset.transaction(() => { ...mutations })` batches mutations, runs the extension hook once, emits **one changeset**. Every mutation path — API and gesture — goes through a transaction. No exceptions.
 - **Changesets** are the universal delta (D7, principle 4):
 
 ```ts
@@ -476,7 +490,7 @@ interface ChangeSet {
 
 ## 7. `scheduling/` — pure engine, pluggable policy
 
-This section describes FreeGantt's **first-party default scheduling plugin** — the bars + dependencies engine bundled with the library (D3) — not a mandatory core layer (D4). It occupies the resolve hook (D4; §1) exclusively when installed; when nothing is installed, none of what follows runs. The hook's own contract (where per-entry plugin data like the pin flag lives, how hot-path preview and commit-time resolution share one call) is separate, ongoing design work tracked in issue #12. The plugin's own public API and its re-spec against that hook are tracked in issue #14. What follows is still an accurate description of the engine's internals — propagation, cycle detection, the policy seam — just reframed as *this plugin's* internals rather than a core module's.
+This section describes FreeGantt's **first-party default scheduling plugin** — the bars + dependencies engine bundled with the library (D3) — not a mandatory core layer (D4). It occupies the extension hook (D4; §1) exclusively when installed; when nothing is installed, none of what follows runs. The hook's own contract (where per-entry plugin data like the pin flag lives, how hot-path preview and commit-time resolution share one call) is separate, ongoing design work tracked in issue #12. The plugin's own public API and its re-spec against that hook are tracked in issue #14. What follows is still an accurate description of the engine's internals — propagation, cycle detection, the policy seam — just reframed as *this plugin's* internals rather than a core module's.
 
 ```mermaid
 flowchart LR
@@ -541,7 +555,7 @@ interface SchedulingPolicy {
 
 The shipped `defaultPolicy` is deliberately minimal and neutral: dependencies push successors forward as early as their predecessors allow; pinned beats dependency; edits move the fields the user didn't touch. Working calendars, constraint vocabularies, criticality definitions, and resource-driven durations all arrive later as richer policies/analyses — **the request/result contract does not change.**
 
-**Speculative evaluation is free by purity:** during a drag, call the resolve hook (the installed scheduling plugin's `schedule()`, or identity if none) with a synthetic `proposed`, render the returned patch as a preview, discard on cancel. Throttled to one call per animation frame. This is a load-bearing reason `schedule()` must never mutate its input — write it in the module header.
+**Speculative evaluation is free by purity:** during a drag, call the extension hook (the installed scheduling plugin's `schedule()`, or identity if none) with a synthetic `proposed`, render the returned patch as a preview, discard on cancel. Throttled to one call per animation frame. This is a load-bearing reason `schedule()` must never mutate its input — write it in the module header.
 
 ---
 

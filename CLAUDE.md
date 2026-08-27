@@ -23,8 +23,8 @@ Name functions and classes in friendly easy to understand for humans and agents 
 
 **Layers** (`plans/01` §1 — enforced by dependency-cruiser):
 - `model/`, `time/`, `data/`, `layout/` are the mandatory DOM-free core: plain data + functions, no `document`/`window`/browser globals. (They ship to and run in the browser like everything else — but because they never touch the DOM they also run in plain Node, which is how they're unit-tested and how the future worker seam stays possible.) Only `render/`, `view/`, `interaction/`, `extensions/` may touch the DOM.
-- `scheduling/` is DOM-free the same way, but it is **not** one of the mandatory core layers — it's where the first-party default scheduling plugin's pure engine lives (D3/D4, ADR 0002). `data/` has no static dependency on it: mutations resolve through a generic resolve hook (identity function when no plugin is installed, or the installed plugin's `schedule()`). A Gantt with no scheduling plugin never loads `scheduling/`.
-- `scheduling/` and `render/view/interaction` never import each other — they meet only through `data/`'s resolve hook. Never put scheduling imports in render or view code.
+- `scheduling/` is DOM-free the same way, but it is **not** one of the mandatory core layers — it's where the first-party default scheduling plugin's pure engine lives (D3/D4, ADR 0002). `data/` has no static dependency on it: mutations resolve through a generic extension hook (identity function when no plugin is installed, or the installed plugin's `schedule()`). A Gantt with no scheduling plugin never loads `scheduling/`.
+- `scheduling/` and `render/view/interaction` never import each other — they meet only through `data/`'s extension hook. Never put scheduling imports in render or view code.
 - Only `api/` and `model/` types are public. Internals stay unreachable (sealed `exports` map).
 - `model/` is types only: zero runtime beyond id/brand helpers and the `FreeGanttError` base, zero dependencies. `Dependency`/`DependencyType`/`DependencyId` and the per-entry pin flag are scheduling-plugin-owned data, not `model/` (ADR 0002).
 
@@ -34,12 +34,12 @@ Name functions and classes in friendly easy to understand for humans and agents 
 - `time/` is the *only* place allowed to use `new Date()`/`Date.now()`, magic time constants (`86400000` etc.), or arithmetic on `Instant`. Everywhere else in `src/` these are forbidden — I10 lints this, scoped to `src/**`.
 
 **Data** (`plans/01` §6):
-- Every mutation goes through a transaction → the resolve hook (once) → one changeset (`{from, to}` per field). No exceptions, gestures included (one transaction per gesture, at commit). The resolve hook is the identity function when no scheduling plugin is installed, so this is not conditioned on scheduling being present — the shape holds either way.
+- Every mutation goes through a transaction → the extension hook (once) → one changeset (`{from, to}` per field). No exceptions, gestures included (one transaction per gesture, at commit). The extension hook is the identity function when no scheduling plugin is installed, so this is not conditioned on scheduling being present — the shape holds either way.
 - Undo records user edits + engine cascades atomically (when a scheduling plugin is installed and contributes cascades).
 - No module-level singletons anywhere; two Gantt instances on one page must be fully independent.
 
 **Scheduling** (`plans/01` §7 — first-party default plugin, not mandatory core, see ADR 0002):
-- Occupies the resolve hook (D4) exclusively when installed; when nothing is installed, none of this runs.
+- Occupies the extension hook (D4) exclusively when installed; when nothing is installed, none of this runs.
 - `schedule()` is pure and deterministic; never mutates input; policy never overwrites a user-proposed field.
 - Propagation is a worklist loop — no recursion, ever (5,000-link chain fixture guards this).
 - Conflicts become diagnostics; the engine never silently rewrites what the user asked for.
@@ -61,6 +61,9 @@ Name functions and classes in friendly easy to understand for humans and agents 
 
 **API** (`plans/02`):
 - Nothing in the public surface throws "not implemented". Every mutating interaction gets a cancelable `before*` event. Every config key is live-reconfigurable. Naming: greppable pairs (`beforeEntryMove`/`entryMove`), one name per concept. Names must be specific enough to disambiguate at a glance (Uncle Bob's naming rules) — a generic word covering more than one concept in the codebase is a bug, not a style nit. Cautionary example (#7): "chart" meant both the public `Gantt` instance and an internal `view/` class; nothing said which, and it stalled a real review (#4). Fix was to retire "chart" entirely — the public concept is `Gantt`, the internal shell is `GanttShell` — not to pick a synonym and hope it reads clearly from context.
+- **Call site first.** Publish the invocation an app author writes (`dataset.entries.update(id, { start })`, `gantt.preset = 'weekAndMonth'`). Name the *job*, not the pipeline. `*Request` / `*Adjustment` / `*Intent` / `*Patch` / `identity*` / `bind()` stay inside `data/` or `layout/` — they are not constructor options and not glossary terms for app authors. A one-field wrapper (`{ patch }`, `{ position }`) is the inner type, not a new name.
+- **Two callers, two surfaces.** App authors never meet a hook, a binding handle, or an expert knob (`overscan`, `pxPerMs`, a raw extender) to get the default behaviour. Plugin and shared-axis authors get a second, smaller surface. Core fills `from`, post-edit state, descendant walks, and zone math.
+- **One write shape, one knob.** Extra field writes (cascade, rollup) use `EntryEdit` — the same object `update()` takes. `{ from, to }` lives on the `ChangeSet` only. One config tree per job (link-create is not on both `interactions` and `features`). Illegal combinations are unrepresentable (shared `scale` vs `preset`/`range`/`zoom` on the same `Gantt`). Input is loose (`string` ids, `InstantInput` dates) on every way in, including `get`; stored types after ingest are complete (`kind` present). Common case is a shorthand; the long form is expert.
 - Vendor Gantt product names never appear in specs, docs, or code.
 - `harness/` is the library's first consumer, and sits outside the `src/**` lint scope by design — consumer code, not library code. That is not an exemption to spend: review `harness/main.ts` on every commit, changed or not, because code there that breaks a library rule or re-derives what the library already computes is an API gap even when no lint fires. Record it against the current slice and close it in `src/` — tidying the harness only hides the evidence. A clean `harness/main.ts` is the expected steady state, not a sign there is nothing to review: the last two gaps it exposed were `rowHeight: 32` restating `api/gantt.ts`'s default, and a hand-built `TimeScaleModel` standing in for `range: 'fitDataset'`.
 

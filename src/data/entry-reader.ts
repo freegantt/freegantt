@@ -1,7 +1,5 @@
-// api/ is the consumer boundary, so it is where what a consumer *writes* (`EntryInput`) becomes what the
-// library *stores* (`Entry`) — see plans/01 §1. It is also the only layer permitted to see both
-// model/ and time/, which this reading needs: the brand helpers live in one and the zone-aware
-// reading in the other.
+// Moved verbatim from api/entry-input.ts (D-S2-2): construction and `entries.add()` must read an
+// `EntryInput` the same way, and the one place that happens is inside the store now.
 //
 // This file maps fields and nothing else. Every date decision — resolving a Plain time through the
 // zone, and what a date-only `end` means against half-open storage — belongs to `time/input.ts`

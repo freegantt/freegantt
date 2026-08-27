@@ -8,35 +8,43 @@ that step.
 
 ---
 
-## OQ1 — Does `data/`'s resolve hook carry `diagnostics`, and who owns the word `patch`?
+## OQ1 — **CLOSED** — the hook is `EditRequest → EntryEdits` via an `EditExtender`; `diagnostics` waits for S3
 
-**Blocks:** S2.2 · **Touches:** `plans/01` §6, `CONTEXT.md`, `docs/adr/`
+**Current shape (see "Revised again" below, which supersedes the `EditAdjustment`/`FieldPatch` shape
+this section originally closed on):** `EditExtender = (request: EditRequest) => EntryEdits`.
 
-`data/resolve-hook.ts` is specified with `ProposalResolution = { patch, diagnostics }`. Two separate
-questions sit inside that shape and only one of them is really about `data/`.
+**Closed as diagnostics-option (a), patch-option (generalize).** `data/edit-extension.ts` was specified
+with `ProposalResolution = { patch, diagnostics }`. Renamed and resolved:
 
-**`patch`** — "here are additional fields to change, on top of what the consumer asked". It is not
-scheduling vocabulary: D-S2-22's span rollup produces one, `autoGroup` (S5) would produce one, and a
-consumer plugin that clears a flag when a date moves would produce one. But `CONTEXT.md`'s
-**ChangeSet** entry currently reads *"Patch is reserved for `ScheduleResult.patch`"*, which assigns the
-word to a type that does not exist yet and that `data/` cannot import.
+- **`ProposalResolution` → `EditAdjustment`**, `{ patch }` only in S2. `ProposalResolutionRequest` →
+  `EditRequest`, `{ entries, proposed }`. `ProposalResolver` → `EditExtender`. `Resolution`-suffixed
+  names were rejected outright — they read as the whole before/after state of the edit, when the type
+  only ever holds the extender's *additions*; `EditAdjustment` says that directly (naming pass recorded
+  in `plans/s2-data-core/HANDOFF.md`, and `CONTEXT.md`'s **EditRequest**/**EditAdjustment**/
+  **EditExtender** entries).
+- **`diagnostics` — option (a).** Dropped from S2 entirely. `EditAdjustment` is `{ patch }`;
+  `diagnostics` and the term `Diagnostic` arrive in S3 with the engine that fills them and the event
+  that carries them (`scheduleDiagnostics` was already deferred there, D-S2-5). Nothing in S2 has a
+  reason to produce one, so shipping it empty (b) or under a second word (c) would only have declared a
+  field I11 rejects elsewhere.
+- **`patch` — generalized.** `CONTEXT.md`'s **ChangeSet** entry now reserves `patch` for
+  `EditAdjustment.patch`. `ScheduleResult` is retired as a name — it existed only in prose (§7 draft
+  text) and never had a `src/` type to protect; S3's engine returns an `EditAdjustment` directly, no
+  mapping step, so the two never had a reason to diverge in the first place.
 
-**`diagnostics`** — "I could not do what you asked, and here is why, naming the entries". `CONTEXT.md`
-defines **Diagnostic** as a report *the scheduling engine* attaches. In S2 nothing produces one: a span
-rollup always succeeds, and `scheduleDiagnostics` on `DatasetEventMap` is already deferred to S3
-(D-S2-5). A field nothing fills and nobody reads is the I11 shape §0 Q1 and Q2 reject elsewhere.
+`plans/s2-data-core/README.md` §2.2 and the S2.2/S2.3 step files carry the same rename.
 
-Options for `diagnostics`:
-
-| | Option | Cost |
-|---|---|---|
-| a | Drop it in S2. `ProposalResolution` is `{ patch }`; `diagnostics` and the term `Diagnostic` arrive in S3 with the engine that fills them and the event that carries them. | S3 widens an interface it already owns. |
-| b | Ship it empty in S2. | A declared field with no producer for one whole slice. |
-| c | Ship it, and give `data/` its own word (`ResolutionNote`) so scheduling keeps `Diagnostic`. | Two words for one idea the day S3 lands. |
-
-Options for `patch`: generalize `CONTEXT.md`'s reservation to the resolve hook and retire
-`ScheduleResult` in favour of `ProposalResolution` (one name, and `ScheduleResult` exists only in prose
-today) — or keep both names and accept the pair.
+**Revised again, 2026-08-27, at the user's explicit direction:** `EditAdjustment { patch: FieldPatch[] }`
+is retired. `FieldPatch` was `FieldUpdated` with `store` removed, invented only so the extender had
+something to return. An `EditExtender` now returns `EntryEdits` (`ReadonlyMap<EntryId, EntryEdit>`)
+directly — the same shape a caller already writes to `dataset.entries.update()`. `EditRequest.entries`
+is now `ReadonlyMap<EntryId, Entry>`, not an array (`EntryStore` already keeps one). This drops the
+"structurally identical to `ScheduleResult`" guarantee the earlier shape carried — that guarantee
+protected an S3 type that doesn't exist yet, for a slice with no design; a clean, usable S2 API took
+priority over pre-matching a future spec. `data/change-set.ts` gains `diffEdit(entries, id, edit)`, run
+once per id in `proposed` and once per id in the extender's `EntryEdits`, so both sides go through one
+diffing function. Full detail: `CONTEXT.md`'s **EntryEdits**/**EditRequest**/**EditExtender** entries,
+`plans/s2-data-core/README.md` §2.2 (D-S2-6), and the S2.2/S2.3 step files.
 
 **Open because:** the standing worry is that scheduling concepts are being pulled into core through
 this hook. Settle what the hook is allowed to say before S2.2 writes the file. Whichever way it lands
@@ -56,44 +64,36 @@ Nothing settled is repeated here. Delete this heading when the next question clo
 
 ---
 
-## OQ4 — Does `layout/` bind to a `Dataset` or to a snapshot?
+## OQ4 — **CLOSED** — `Viewport.bind` takes a snapshot, not a `Dataset`
 
-**Blocks:** S2.1 · **Touches:** D-S2-2, S2.1 §3, S2.4 §1
-
-D-S2-2 puts `EntryStoreView` — four members, three of them methods — in `model/`, so `Viewport.bind`
-receives a behavioural contract and calls `dataset.entries.snapshot()`. The plan states in the same
-paragraph that *"`layout/` takes a snapshot and has no interest in a store."*
-
-After S2.4, `ScaleBinding.entries` is push-to and the shell pushes `entries.snapshot()` on every
-change. `Viewport.bind` reading the dataset *and* the shell pushing entries are then two paths to one
-value — a small instance of #1's R4.
-
-| | Option | Consequence |
-|---|---|---|
-| a | `Viewport.bind` takes `{ entries: readonly Entry[]; timeZone: string }`. | Removes a read site instead of migrating it; kills the double path before S2.4 creates it; changes a `layout/` signature inside a step that otherwise promises no behaviour change. |
-| b | As planned — `layout/` binds to `model/Dataset`. | `layout/` depends on a method contract, and the double path stands. |
-
-**Recommendation on the table: (a).**
+**Closed as option (a).** `Viewport.bind` takes `{ entries: readonly Entry[]; timeZone: string }`,
+not `model/Dataset`. This removes the read site instead of migrating it, so the double path option (b)
+would have created against S2.4's push-to `ScaleBinding.entries` never opens. `layout/` keeps its
+existing "no interest in a store" posture from S2.1 onward, with no signature it will need to widen
+back later.
 
 ---
 
-## OQ5 — Is `DatasetData` the right name?
+## OQ5 — **CLOSED** — the class is `DatasetState`, not `DatasetData`
 
-**Blocks:** S2.1 · **Touches:** `plans/01` §6, `CONTEXT.md`
+Run through the naming skill at S2.1's start. `DatasetCore` was rejected: `core` already carries a
+loaded, specific meaning throughout this slice's own decisions ("grouping is core", "a core step in
+the commit path", "core behaviour must not live somewhere optional code can displace it") — naming a
+class `DatasetCore` would give that word a second meaning next to every one of those sentences, which
+is check 4 failing on its own turf. `DatasetStores` was rejected: the class holds more than stores —
+`timeZone`, `dateOnlyEnd`, `referenceDate`, the extender, the history, the bus — so the name promises
+less than the class holds, and the plural reads wrong at the call site. Inverting the pair (`data/`
+owns the name `Dataset`) was rejected: `model/dataset.ts` already exports a structural `Dataset` that
+`api/dataset.ts`'s class satisfies, and a second class also named `Dataset` one file down disambiguated
+only by import path is worse, not better — check 4 again.
 
-`plans/01` §6 names the class `DatasetData`, written when `api/dataset.ts` did the real work. After
-S2.1 it is inverted: `DatasetData` holds the stores, the zone, the reference date, the resolver, the
-history and the bus, and `api/Dataset` is a façade that delegates.
-
-Read the call site: `new DatasetData({ entries, timeZone })` — "a new dataset data". `Data` is a
-generic word covering more than one concept in this codebase (`data/` the layer, `DatasetData` the
-class, the dataset itself), which CLAUDE.md calls a bug rather than a style nit, and it is the failure
-#7 records verbatim.
-
-Candidates: keep `DatasetData` (spec'd, and renaming costs a `plans/01` §6 edit); `DatasetCore`;
-`DatasetStores`; or invert the pair so `data/` owns the name `Dataset` and `api/` re-exports it.
-
-**No recommendation yet** — run it through the naming skill when S2.1 starts.
+**`DatasetState`.** It names what the class actually is — the live, mutable state one `Dataset`
+instance owns privately — and it does not collide: `CONTEXT.md`'s only existing use of the bare word is
+the two-word compound *State attribute* (a CSS `data-*` concept), which reads as its own term and
+creates no confusion with a class name one layer away in `data/`. Call site: `new DatasetState({
+entries, timeZone })` — "construct a new dataset's state, given these entries and this time zone" —
+reads true. `plans/01` §6 and `CONTEXT.md` get a **DatasetState** entry (_Avoid_: DatasetData — retired
+here for the reason above; DatasetCore, DatasetStores — rejected candidates, see this entry).
 
 ---
 
@@ -120,12 +120,12 @@ Add both to §7's `plans/03` row.
 Answered in [`README.md`](./README.md) §2 **D-S2-22**, on the rule that grouping is core and scheduling
 is optional, so the rollup cannot sit in anything an optional plugin occupies.
 
-The rollup stopped being a resolver. It is step 5 of S2.2's commit sequence — after the resolve hook,
+The rollup stopped being an extender. It is step 5 of S2.2's commit sequence — after the extension hook,
 unconditional, not displaceable by any install. The engine moves children; the rollup catches the
 parents up in the same transaction, the same changeset, one undo step. So the question's option (a) is
 the answer, and both of its stated costs are gone: there is no composition order for `data/` to invent
 (the sequence is the order), and "what wins when both patch a field" is decided once, in D-S2-22 — the
-rollup yields to the body and wins over the resolver.
+rollup yields to the body and wins over the extender.
 
 `scheduling-boundary` stays as ADR 0002 cut it, with no edge widened. `plans/03` §S3's *"parent/`group`
 rollup as a second pass"* is deleted from the engine's job rather than re-homed, and the `plans/01` §2.5
@@ -147,45 +147,45 @@ Two readings, and the codebase currently inherits the wrong one:
 
 | | Reading | What it implies |
 |---|---|---|
-| a | **Ownership.** The slot is scheduling's by right; other resolvers are guests. | A scheduling-shaped hole in a hook whose whole point (D4) is that it is *generic*. `ProposalResolverConflictError` exists to tell a second claimant it lost. |
-| b | **Arity.** The hook has exactly **one occupant at a time**; scheduling has no more claim on it than a consumer's own rule does. | The exclusivity is about determinism, not ownership. Any resolver may occupy it; the first-party engine is merely the one most consumers install. |
+| a | **Ownership.** The slot is scheduling's by right; other extenders are guests. | A scheduling-shaped hole in a hook whose whole point (D4) is that it is *generic*. `EditExtenderConflictError` exists to tell a second claimant it lost. |
+| b | **Arity.** The hook has exactly **one occupant at a time**; scheduling has no more claim on it than a consumer's own rule does. | The exclusivity is about determinism, not ownership. Any extender may occupy it; the first-party engine is merely the one most consumers install. |
 
-**(b) is what the rest of the design already assumes** — `data/` calls a `ProposalResolver`, not a
+**(b) is what the rest of the design already assumes** — `data/` calls an `EditExtender`, not a
 scheduler; the identity function occupies it when nothing else does; the S2 **default** occupant is
 `data/`'s own span rollup, which is not scheduling at all (D-S2-22). Only the wording says (a).
 
-**What exclusivity was actually protecting**, and what must survive any rewording: one resolver means
+**What exclusivity was actually protecting**, and what must survive any rewording: one extender means
 one call per transaction, one patch to check against the body's edits (I4), one deterministic answer,
-and no priority/registry machinery in `data/`. A free-for-all list of resolvers loses all four.
+and no priority/registry machinery in `data/`. A free-for-all list of extenders loses all four.
 
-**The mechanism that gives "tap into it or replace it" without losing them:** install a resolver as a
+**The mechanism that gives "tap into it or replace it" without losing them:** install an extender as a
 **wrapper over the current one**, not as a value that displaces it.
 
 ```ts
 // replace: ignore what was there
-setResolver(() => myResolver);
+setExtender(() => myExtender);
 
 // tap in: run the existing one, then adjust
-setResolver((next) => (request) => {
-  const resolution = next(request);
-  return { ...resolution, patch: [...resolution.patch, ...myExtraFields(request, resolution)] };
+setExtender((next) => (request) => {
+  const adjustment = next(request);
+  return { ...adjustment, patch: [...adjustment.patch, ...myExtraFields(request, adjustment)] };
 });
 ```
 
 `data/` still holds **one** field and calls it at **one** site — nothing about the commit path changes,
-and S2's internal `DatasetDataOptions.resolveProposal` is already the composed result. Composition order
+and S2's internal `DatasetDataOptions.editExtender` is already the composed result. Composition order
 is written at the install site in the consumer's own config, which is readable, rather than inferred
 from priority numbers. And a plugin that wants no part of the built-in rollup replaces it, which is the
 freedom (a) denies.
 
 **No longer carries the rollup.** OQ7 closed by taking the span rollup *out* of the slot entirely
-(D-S2-22), so this question is now only about how one **policy** resolver composes with another — not
+(D-S2-22), so this question is now only about how one **policy** extender composes with another — not
 about whether installing a plugin can switch off a core behaviour. It cannot.
 
 **Open because:** it edits a **locked** decision (D4) and the ADR that carries it, so it is the user's
 call, not a drafting fix. If it lands: D4's sentence becomes *"the hook has one occupant at a time; a
 scheduling plugin is one candidate occupant, with no special claim on it"*, the same correction goes to
 `CLAUDE.md`, `plans/01` §7 and `plans/03` §S3, ADR 0002 gets a superseding note, and
-`ProposalResolverConflictError` (README §9) loses its reason to exist — there is no conflict to report
+`EditExtenderConflictError` (README §9) loses its reason to exist — there is no conflict to report
 when installing composes.
 
