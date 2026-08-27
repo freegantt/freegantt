@@ -67,7 +67,7 @@ Slices are scope, not calendar estimates. Within a slice, entries are ordered so
 - Change signalling between `Dataset` and `GanttShell` (#33, deferred here at S1.11 D-S1.11-7): S2 **replaces** `GanttShellOptions.entries` with the real changeset-driven binding — it never adds a `setEntries()` beside it. A second reactivity mechanism living next to the real one is #1's R4, and the cheapest moment to forbid it is before this slice starts.
 - Transactions: batching, auto-wrap of single mutations, one changeset per transaction (`origin` tagged).
 - Undo/redo: transaction = atomic unit; recorded changesets replayed exactly; history API (`canUndo`, capacity).
-- Changesets: `{ added, removed, updated: {field, from, to} }` (`01` §6); `dataset.on('change')`; `dataset.apply(changeSet)` with validation + rejection reporting.
+- Changesets: `{ added, removed, updated: {field, from, to} }` (`01` §6); `dataset.on('change')`; `dataset.apply(changeSet)` with validation + rejection reporting. the key type is **`FieldKey`** (retiring `EntryField`, one concept with two names) and it stays **open**, validated at runtime rather than typed `keyof Omit<Entry, 'id'>` — it is public through `FieldUpdated`, `FieldPatch` and the undo record, and S5's field registry (`01` §2.6, ADR 0005) cannot open it later without a breaking change.
 - Serialization: `toJSON()`/`fromJSON()` with `schema: 1`, ISO instants, opaque `meta` round-trip.
 - Public mutation API: `dataset.entries.add/update/remove`, `dataset.dependencies.*`, typed, validating.
 - View binding: committed changesets invalidate layout incrementally (changed rows only), not globally.
@@ -140,6 +140,9 @@ Slices are scope, not calendar estimates. Within a slice, entries are ordered so
 
 **Scope**
 
+- Field registry (`01` §2.6, ADR 0005): core fields (`name`, `start`, `end`, `progress`, `duration`) ship as declarations in the registry a consumer adds to; `fields` / `fieldTypes` / `aggregators` on `Dataset`; a declared `meta` key becomes addressable for editing, comparison and rollup. A field carries its own `column` presentation defaults, so `gantt.gridColumns` is names in display order plus per-Gantt overrides.
+- Per-field rollup (#80): `rollUpDerivedSpans` widens to walk the registry — `start` is `min`, `end` is `max`, a declared `cost` sums, `name` does not roll up. Same commit step, same precedence (yields to the body, wins over the resolver), still bottom-up and still not displaceable by any plugin. Source decides stored vs. computed: `entry`/`meta` fields store the parent's aggregate, computed fields never reach the document.
+- Frame rows carry `cells` (one library-formatted string per configured grid column) instead of one `label` — the S1 shape that assumed a single-column grid (#81).
 - Tree UI: indent + expand/collapse in the grid's name column; collapse state is view state (per Gantt, not in dataset data).
 - Kind-driven item emission (`01` §2.5): `group` → summary bracket (rollup from S3), `milestone` → diamond, consumer-registered kinds via the emitter seam; empty groups render as groups.
 - `hierarchy: { autoGroup: true }` on `Dataset`: first child promotes the parent to `group` within the triggering transaction; promote only, never demote (`02` §2).
@@ -148,11 +151,13 @@ Slices are scope, not calendar estimates. Within a slice, entries are ordered so
 - Item emission: `entry.segments` → multiple items on one row; overlap auto-packing into sub-lanes; `heightMode: 'pack'` variable row heights through the height index.
 - Dependency endpoint rule for multi-item entries: links attach to the earliest item by default, configurable per view (`links.endpoints: 'first' | 'all' | 'none'`).
 - Interaction with lanes: drag/resize on packed items; collapse/expand by keyboard.
-- Harness: tree fixture; a grouped view of the same dataset side-by-side with the tree view (two Gantt instances, one dataset — the D9/D2 architecture visibly paying off).
+- Harness: tree fixture, with **one** Gantt and a button that switches `gantt.rows` between the tree and a grouped source. That proves the Row ≠ Entry payoff and proves live reconfiguration (`02` §2) in the same demo. Two Gantts on one dataset is not the demo: D9 is about a shared axis and scroll between charts with **different** data (`02` §5), and a shared `Dataset` — while free, since a second Gantt is only a second `change` subscriber — is not a case the library designs around or tests.
 
 **Acceptance**
 
-- [ ] Same dataset renders as tree and as grouped rows simultaneously in two Gantt instances; edits in one appear in both.
+- [ ] A consumer-declared `meta` field sums up the tree, shows in a grid column beside `start`, edits in the same `update()` call and the same undo step as a core field, and round-trips through `toJSON`/`fromJSON`.
+- [ ] An edit naming an unregistered field key throws `UnknownFieldError` — it is never written silently.
+- [ ] Switching `gantt.rows` between the tree and a grouped source re-resolves rows without a remount, and scroll position survives it.
 - [ ] A segmented entry renders N bars on one row; drag of one segment behaves sanely and transactionally.
 - [ ] Pack-mode rows change height correctly as overlaps come and go; scroll position stays stable (height index invalidation test).
 - [ ] Collapse state survives data edits and is independent per Gantt.
@@ -170,7 +175,8 @@ Slices are scope, not calendar estimates. Within a slice, entries are ordered so
 
 - `extensions/`: plugin runtime implementing the full `PluginContext` (`01` §10) — decorations, columns, renderers, overlay anchor, controllers, keybindings, commands, disposables.
 - Built-in features **as plugins**: tooltips (shared `Popup` primitive: anchoring, flipping, clamping, focus trap), context menu (command-registry-driven), row highlight decorations, today line.
-- Grid maturation: column types (name, start, end, duration, custom value/renderer), inline editors (text, date via a pluggable date-input seam — no bundled date-picker dependency), column resize/reorder; `beforeEntryEdit` veto/replace flow.
+- Grid maturation: grid-column **presentation** over S5's fields — header, width, alignment, `cellRenderer`; inline editors (text, date via a pluggable date-input seam — no bundled date-picker dependency), column resize/reorder; `beforeEntryEdit` veto/replace flow. There is no second definition system: a column names a field, and a consumer field and a core field take the same path (ADR 0005).
+- `PluginContext.data.registerField` / `view.registerGridColumn` (`01` §10): a plugin declares a field that aggregates exactly like a core one, and shows it like any other.
 - Renderer callbacks at every declared point (`bar`, `cell`, `header`, `tooltip`), text-safe by default (I13).
 - A11y completion: grid pattern with roving tabindex, full keyboard reach for every interaction (link creation included), screen-reader labels with dates/progress, focus management in popups; axe checks in CI on harness pages.
 - Docs seed: harness pages get explanatory text and become the example gallery; public API reference generated from types.
@@ -215,7 +221,7 @@ Each of these was designed-for above; none requires a core change:
 
 1. **Working-time calendars** — richer `SchedulingPolicy` + `time/` calendar arithmetic; non-working shading via a decoration.
 2. **Date constraints & analyses** — policy vocabulary + analyses (slack, critical highlighting) as policy output consumed by flags/decorations.
-3. **Resources & workload views** — `Resource`/`Assignment` stores + a `resources` row source; the second Gantt in the D9 demo becomes a real workload view.
+3. **Resources & workload views** — `Resource`/`Assignment` stores + a `resources` row source. Reachable two ways, and the choice is open until a caller exists: one Gantt switching `rows` to the resource source, or a second Gantt beside it sharing the axis. The second form is the one named case for two Gantts over one `Dataset`; it stays possible and stays untested until then.
 4. **Sync adapter** — an extension consuming the changeset contract (`02` §6).
 5. **Export** — image via the null/static render path; paginated print costed honestly as its own project.
 6. **Framework wrappers** — thin adapters (`02` §8).
