@@ -6,11 +6,18 @@ import type { DateOnlyEndRule, Dataset, Entry, EntryInput, Instant } from '../mo
 import { now } from '../time/index.js';
 import { EntryStore } from './entry-store.js';
 import { readEntries } from './entry-reader.js';
+import type { EditExtender } from './edit-extension.js';
+import { identityExtender } from './edit-extension.js';
 
 export interface DatasetStateOptions {
   entries: readonly EntryInput[];
   timeZone: string;
   dateOnlyEnd?: DateOnlyEndRule;
+  /** The extension hook a transaction calls once per commit (D-S2-6). Internal only — `data/` is
+   *  unreachable through the package's `exports` map, so a plugin-facing install API is S3's own job
+   *  (#15), not this option. Defaults to `identityExtender`: an unoccupied hook is the identity
+   *  function (D4). */
+  editExtender?: EditExtender;
 }
 
 export class DatasetState implements Dataset {
@@ -22,11 +29,13 @@ export class DatasetState implements Dataset {
    *  initialize a derived-span-kind entry's zero-length span before the S2.2 rollup gives it a
    *  real one. */
   readonly referenceDate: Instant;
+  readonly editExtender: EditExtender;
 
   constructor(options: DatasetStateOptions) {
     this.timeZone = options.timeZone;
     this.dateOnlyEnd = options.dateOnlyEnd ?? 'inclusive';
     this.referenceDate = now();
+    this.editExtender = options.editExtender ?? identityExtender;
     const entries: readonly Entry[] = readEntries(options.entries, {
       timeZone: this.timeZone,
       dateOnlyEnd: this.dateOnlyEnd,
