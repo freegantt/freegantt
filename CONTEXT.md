@@ -47,7 +47,7 @@ One named, addressable value on an Entry — declared once and used by every lay
 _Avoid_: Attribute, property (both read as "a key on an object", which is the storage detail rather than the declaration), column (a Grid column names a Field and carries presentation only)
 
 **Field key**:
-A Field's name, and the same string the changeset's `field` carries. One name for one concept: it retires `EntryField`, which meant exactly this in `FieldUpdated`/`FieldPatch` and gave the idea a second name (the #7 precedent). `CoreFieldKey` is the shipped subset — the keys of `Entry` — and it is what the per-field comparison table stays exhaustive over.
+A Field's name, and the same string the changeset's `field` carries. One name for one concept: it retires `EntryField`, which meant exactly this in `FieldUpdated` and gave the idea a second name (the #7 precedent). `CoreFieldKey` is the shipped subset — the keys of `Entry` — and it is what the per-field comparison table stays exhaustive over.
 _Avoid_: EntryField (retired), field name, column id
 
 **Field source**:
@@ -70,7 +70,18 @@ _Avoid_: Batch, operation
 
 **ChangeSet**:
 The single, atomic record of everything one transaction changed — added/removed/updated entities across stores, tagged with an `origin` (`'user' | 'engine' | 'undo' | 'redo' | 'load'`). Every mutation produces exactly one ChangeSet, even when the resolve hook's installed scheduling plugin triggers cascades.
-_Avoid_: Diff, patch (Patch is reserved for `ScheduleResult.patch`, the scheduler's proposed field changes before they're committed as a ChangeSet); Transaction (the scope that produces one); Commit (the act that produces one, and S1.8's `gridWidth` sequence, which produces none) — ADR 0006
+_Avoid_: Diff; Transaction (the scope that produces one); Commit (the act that produces one, and S1.8's `gridWidth` sequence, which produces none) — ADR 0006
+
+**EntryEdits**:
+A batch of proposed field changes, keyed by Entry: `ReadonlyMap<EntryId, EntryEdit>`. The shape a caller writes to `dataset.entries.update()`, a transaction hands to the resolve hook as `EditRequest.proposed`, and a resolver returns as its own extra writes — one shape for "an edit" wherever one appears, rather than a second type per producer.
+_Avoid_: Patch, FieldPatch (retired 2026-08-27 — `data/` diffs an `EntryEdits` against the store into `FieldUpdated` rows itself, rather than asking every producer of edits to compute a diff)
+
+**EditRequest**:
+What a transaction hands the resolve hook, once per transaction: the current entries plus the caller's proposed edits (`{ entries, proposed }`). `entries` is a `Map`, keyed by `EntryId`, not an array — `EntryStore` already keeps one internally.
+
+**EditResolver**:
+The function type that may occupy the resolve hook: `(request: EditRequest) => EntryEdits`. Returns extra writes only — the same shape the caller's own edit takes, not a wrapped or partial record of it. `data/` holds exactly one, calls it once per transaction, and defaults to `identityResolver`, which returns an empty `EntryEdits`.
+_Avoid_: ProposalResolver (superseded); EditAdjustment/`{ patch }` (retired 2026-08-27, along with `FieldPatch` — see EntryEdits. Chosen for a plain, usable API now over matching an S3 scheduling contract that has not been designed yet; S3 makes its own return-shape call when it exists)
 
 ### Scheduling
 
@@ -331,8 +342,8 @@ _Avoid_: Extension (Extensions is the name of the source layer that runs plugins
 The object `setup(ctx)` receives — a GanttPlugin's entire world: dataset access, the event bus (including cancelable `before*` events), registration for decorations/columns/renderers/item-emitters/interaction-controllers/keybindings, the command registry, and a disposable store. A plugin may not reach into anything outside it (enforced by the import-boundary lint).
 _Avoid_: Treating this as settled — the plugin system (`GanttPlugin`/`DatasetPlugin`/`PluginContext`) is still design work in progress; the shape, and possibly this name, may change before it lands
 
-**DatasetPlugin**, **ProposalResolver**, **PluginStore**:
-Names from the resolve hook's contract design (ADR 0002's consequences, issue #15, built on #12): a `DatasetPlugin` occupies the resolve hook via a `ProposalResolver`, and per-plugin per-entry data (e.g. the scheduling plugin's pin flag, `Dependency`) lives in a reserved `PluginStore` rather than on `Entry` or in a consumer/plugin-shared field. Design proposals only — not yet implemented or landed in `src/`; do not treat as existing API until #15 lands. Named `ProjectPlugin` before ADR 0004.
+**DatasetPlugin**, **EditResolver**, **PluginStore**:
+Names from the resolve hook's contract design (ADR 0002's consequences, issue #15, built on #12): a `DatasetPlugin` occupies the resolve hook via an `EditResolver`, and per-plugin per-entry data (e.g. the scheduling plugin's pin flag, `Dependency`) lives in a reserved `PluginStore` rather than on `Entry` or in a consumer/plugin-shared field. Design proposals only — not yet implemented or landed in `src/`; do not treat as existing API until #15 lands. Named `ProjectPlugin` before ADR 0004.
 _Avoid_: Treating these as settled — the exact shapes are still open design work
 
 ### Process

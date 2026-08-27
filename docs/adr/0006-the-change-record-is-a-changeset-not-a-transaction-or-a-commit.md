@@ -56,7 +56,7 @@ Three further costs, had the trap not been fatal on its own:
 
 ## The strongest surviving form, and why it also stops
 
-This project does nominalize verbs into types: `schedule()` → `ScheduleResult`, `resolveProposal` → `ProposalResolution`. So a commit-family noun is a legitimate move here in principle. But the pattern always gives the noun a **distinct surface form** — a `Result`, a `Resolution` — never the bare verb. Applied consistently it yields `CommitRecord`, and then `history.record(commitRecord)` stutters at the exact call site that motivated the exercise. The pattern that would make the name legitimate is the pattern that kills it.
+This project does nominalize verbs into types: `schedule()` → `ScheduleResult`, the resolve hook → `EditAdjustment`. So a commit-family noun is a legitimate move here in principle. But the pattern always gives the noun a **distinct surface form** — a `Result`, an `Adjustment` — never the bare verb. Applied consistently it yields `CommitRecord`, and then `history.record(commitRecord)` stutters at the exact call site that motivated the exercise. The pattern that would make the name legitimate is the pattern that kills it.
 
 ## What `ChangeSet` gives up
 

@@ -1,4 +1,4 @@
-# S2.1 — Implementation handoff
+# S2.1 done, S2.2 handoff
 
 **Branch:** `s2-implement`. S2.1 is committed and pushed at `ee4638c` — "S2.1: entries become a store
 view, data/ gains reactivity + time (D-S2-1/2/3/4/5)". Working tree is clean.
@@ -92,19 +92,87 @@ No assertion in any of the above changed — only how the fixture is built.
 
 ---
 
-## Not yet done — next step is S2.2
+## OQ1 closed (2026-08-27) — S2.2 is unblocked
 
-S2.1 explicitly adds **no mutation**: `Dataset` still cannot be edited after this step, by design (see
-the step file's opening paragraph). S2.2 (`plans/s2-data-core/s2.2-transactions-and-changesets.md`) is
-next in slice order and is **blocked on OQ1** (does the resolve hook carry `diagnostics`, and who owns
-the word `patch` — see `plans/s2-data-core/OPEN-QUESTIONS.md`). OQ1 needs a decision before S2.2 can
-start, the same way OQ4/OQ5 blocked S2.1 — it edits `CONTEXT.md`'s **ChangeSet** entry and is flagged in
-the open-questions doc as real design work, not a naming-skill call, so it likely needs the user's input
-rather than an agent's unilateral pick.
+`plans/s2-data-core/OPEN-QUESTIONS.md` OQ1 is closed, and revised once more the same day at the user's
+explicit direction: **a clean, usable S2 API now, over pre-matching an S3 scheduling contract that
+hasn't been designed.** Read the "Revised again" paragraph at the end of OQ1 before touching
+`data/resolve-hook.ts` — it supersedes an earlier, narrower closure of the same question that this repo
+briefly carried (visible in `plans/s2-data-core/README.md`'s D-S2-6 history if you want the "why" in
+full; the shape below is the one to implement).
 
-S2.1 leaves `EntryStore`'s mutators unwritten (typed to need a `TxToken` only `data/transaction.ts` can
-mint — "types do half the work," per `docs/02` §3.6) and the transaction/write-set overlay (D-S2-21)
-unbuilt. Both are S2.2's job.
+**The shape to implement:**
+
+```ts
+// data/resolve-hook.ts
+export type EntryEdits = ReadonlyMap<EntryId, EntryEdit>;
+
+export interface EditRequest {
+  entries: ReadonlyMap<EntryId, Entry>;   // current store snapshot, before this transaction's edits
+  proposed: EntryEdits;                   // what the caller asked to change
+}
+export type EditResolver = (request: EditRequest) => EntryEdits;  // extra writes only; empty map = no cascade
+
+export const identityResolver: EditResolver = () => EMPTY_EDITS;
+```
+
+No `EditAdjustment` wrapper, no `FieldPatch` type, no `diagnostics` in S2 (that's S3's own call to make
+when it exists). A resolver returns the same `EntryEdits` shape a caller already writes to
+`dataset.entries.update()` — reuse `EntryEdit` from S2.3's mutation API, don't invent a second "an edit"
+type. `EditRequest.entries` is a `Map`, not an array — `EntryStore` already keeps `#byId` as one
+(S2.1), so this is free.
+
+`data/change-set.ts` needs one new function: `diffEdit(entries, id, edit): readonly FieldUpdated[]`,
+applying D-S2-7's per-field equality table (own docs: `===` for primitives/`Instant`s, element-wise on
+`segments`, reference-only on `meta`; a field whose `from` equals its `to` is not recorded). The commit
+path calls it once per id in `proposed`, and once per id in the resolver's returned `EntryEdits` — one
+function, both producers. This also means `FieldPatch` is gone from the codebase entirely: it was
+`FieldUpdated` with `store` removed, invented only so a resolver had something to return, and now the
+resolver returns the same shape everything else does.
+
+`DatasetDataOptions.editResolver` stays internal-only — `data/` is unreachable through the package's
+`exports` map, so there's no way for `harness/` or a consumer to reach it in S2 regardless. Do **not**
+put `editResolver` on the public `Dataset` constructor or show it in a consumer-facing sample; the
+plugin-facing install API (`DatasetOptions.plugins`, `setResolver`) is explicitly S3's job (#15). Tests
+inject a resolver directly against `DatasetData`/`DatasetState`; nothing in `harness/main.ts` should
+ever construct one.
+
+**Commit sequence (S2.2 §2.3, updated for the shape above):**
+
+1. Run `body()`. Mutators record `{ before, after }` per touched field into the open transaction's
+   write set and write nothing to the store yet.
+2. Build `proposed` from the body's direct edits; diff each id via `diffEdit` against `entries`.
+3. Call the resolve hook once. `identityResolver` returns an empty `EntryEdits`.
+4. Diff the resolver's returned edits the same way and merge into the pending set. Dev-mode assert
+   (I4): a resolver edit may not touch an `(id, field)` the body already proposed.
+5. Roll up derived spans, always (D-S2-22, S2.3) — it already has both the old and computed value in
+   hand, so it builds its own `FieldUpdated` rows directly rather than going through `diffEdit`.
+6. Fold into one `ChangeSet`. Empty → stop, no write, no event, body's return value still comes back.
+7. Emit `beforeChange`; a `false` return discards the write set and throws `MutationCancelledError`.
+8. Apply to the stores, bump the revision signal once.
+9. Emit `change`.
+
+**S2.3's rollup signature also changes** to match — `rollUpDerivedSpans(entries: ReadonlyMap<EntryId,
+Entry>, proposed: EntryEdits, kinds): readonly FieldUpdated[]` (was `readonly Entry[]` in, `FieldPatch[]`
+out). Both step files (`s2.2-transactions-and-changesets.md`, `s2.3-mutation-api.md`) and
+`plans/s2-data-core/README.md` §2.2/D-S2-22 already carry this — check them before writing code, they
+are the source of truth over this handoff if the two ever disagree.
+
+**Everything else from S2.1 still stands** — `EntryStore`'s mutators are typed to need a `TxToken` only
+`data/transaction.ts` can mint, and the transaction/write-set overlay (D-S2-21) is what S2.2 builds to
+supply it.
+
+**Docs already updated to the finalized shape:** `CONTEXT.md` (**EntryEdits**/**EditRequest**/
+**EditResolver** entries), `docs/resolve-hook-flow.md` (flow + sample code, including a multi-edit
+`transaction()` sample so the resolver's batch handling isn't shown as a single-update special case —
+its linked published Artifact is redrawn to match), `docs/adr/0002`, `docs/adr/0005`,
+`docs/adr/0006`, `plans/03-slices.md`.
+
+**Not evaluated in this handoff:** `tmp/major-api-review.txt`, a separate, much broader API review
+(shipped `TimeScaleModel`/`ScrollModel`/zoom/presets, `snapshot()`/`get()`, `Entry.kind`, field
+declarations, and more) that landed in the working tree alongside the resolve-hook notes this handoff
+is based on. It was not in scope for this round and nothing in it has been actioned — read it and check
+with the user before treating any of it as settled.
 
 Two lint/guard rules `docs/02` §5 phases into S2 are **not yet landed**, because their governed files
 didn't exist until later S2 steps per D-S2-18's own table: `B8 no-not-implemented`, `3.4
@@ -112,6 +180,6 @@ no-module-level-state`, `3.6 no-store-mutation-outside-transaction`, `3.7 model-
 `B7 no-external-runtime-import` (scoped to `data/reactivity.ts`) and `3.8 require-invariant-header`
 were relevant to what S2.1 actually shipped, and both are satisfied by `reactivity.ts`'s header comment
 — but neither has its own dedicated fixture pair yet (`docs/04` §4's "≥2 valid and ≥2 invalid fixtures"
-per rule). Worth checking whether that lands with S2.2/S2.3 (whichever step's own files first make each
-rule real) or needs a dedicated pass — D-S2-18 says "a rule S2 cannot honestly land gets its `docs/01`
-row corrected," which hasn't been done for these four rows yet either.
+per rule). S2.2 is a natural point to land `3.6 no-store-mutation-outside-transaction` for real, since
+this is the step that makes `TxToken`-gated mutation exist at all — check whether it should ship in the
+same PR rather than sliding further right.
