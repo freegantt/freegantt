@@ -297,8 +297,11 @@ an empty history — and the rule that made `apply` need it. When `apply` lands 
 Rejected: shipping `apply` and leaving it uncovered by an acceptance id. That is the shape D-S1.11-11
 exists to catch, one layer up: surface documented before it is exercised.
 
-Rejected: shipping a narrower `apply` without `'stale-from'`. The staleness check is the reason `from`
-is in the contract at all; an `apply` without it is a worse API that still has to be versioned.
+Rejected: shipping an `apply` with no conflict detection at all. A write path that cannot refuse a
+stale edit is a worse API that still has to be versioned. **Which** detection it ships is §9.1's
+question, and the answer has moved since this paragraph was written: a revision token rather than the
+per-field `'stale-from'` check it originally assumed. `from` stays in the contract either way — undo
+inverts on it (D-S2-14) and U5's adapter reads it — so it was never staleness that put it there.
 
 ### D-S2-12 — `toJSON()` is byte-stable by construction, and the test asserts bytes
 
@@ -954,7 +957,7 @@ Per-step detail is in the step files. The shape:
 | Per-entity data hooks (`beforeEntryUpdate` and friends) | never as data events — the changeset carries the fields, and the gesture-level pairs (`beforeEntryMove`) land in S4 (D-S2-25) | S4, and on the `Gantt` |
 | A `transaction(fn, { origin })` option | `interaction/` needs to tag a gesture's transaction | S4 |
 | A way to ask "did this transaction commit anything?" at the call site | a caller appears that cannot use `on('change')`; it comes back as its own named member, never as an overloaded return (D-S2-8) | whenever one does |
-| `apply(changeSet)`, `ApplyReport`, `Rejection`, `RejectionReason`, the `'stale-from'` staleness check and `meta`'s exemption from it (a `from` parsed from JSON is never reference-equal, so checking it would reject every remote `meta` write — last-write-wins on `meta`, concurrency detection on every other field) | a sync adapter is written; the contract it needs — `from`/`to` on `change` — ships in S2 (D-S2-11) | whenever one is |
+| `apply(changeSet)`, `ApplyReport`, `Rejection`, `RejectionReason`, and a conflict model — **§9.1**, which recommends a revision token over the per-field `'stale-from'` check this row used to name | a sync adapter is written; the contract it needs — `from`/`to` on `change` — ships in S2 (D-S2-11) | whenever one is |
 | The `'engine'` and `'load'` arms of `ChangeOrigin` | their producers: an engine-initiated recompute, and `apply` (D-S2-11) | S3, and with `apply` |
 | An `apply(changeSet, { history })` option | a caller wants a remote delta on the undo stack (D-S2-11) | whenever one does |
 | A public opt-out for the built-in live binding (`new Gantt({ live: false })`) | a consumer wants the static-image floor without deleting the attachment. Today the floor is structural (D-S2-20) and the customization is additive — a consumer subscribes to the same event and does more. Shipping the flag with no caller is the I11 shape §0 Q1 rejects | whenever one asks |
@@ -964,3 +967,41 @@ Per-step detail is in the step files. The shape:
 | Row-level layout incrementality inside `computeFrame` | the S7 spike measures a windowed pass as a real cost | S7, D-S2-16 |
 | A `Duration`-typed `EntryEdit` (moving by `days(2)` rather than by absolute dates) | a caller authors a relative edit; `plans/s1.11` §9 already records the neighbouring gap (`addDays`/`startOf` are not re-exported from `api/`) | S4 |
 | `schema: 2` and the migration path | the document shape changes | whenever it does; the `readers` map is the seam (D-S2-12) |
+
+### 9.1 — When `apply` lands, its conflict model is a revision token, not a per-field `from` check
+
+Recorded here rather than left to the slice that ships `apply`, because the design improved *while* it
+was deferred and the improvement is cheap to lose: the row above named `'stale-from'` from the day
+D-S2-11 withdrew it, and nothing in the row says why anything else would be better.
+
+**The model that was deferred — `'stale-from'`.** Every `FieldUpdated` already carries a `from`, so
+`apply` compares it against what the store holds and rejects the row when the two differ. Conflict is
+detected at **field** granularity, which is the finest a sync adapter could ask for. It costs a walk of
+every row in the changeset, plus one carve-out that D-S2-7 already forces: `meta` is compared by
+reference (`===`), and a `from` parsed out of JSON is never reference-equal to the stored value, so the
+check refuses **every** remote `meta` write. The exemption is writable — last-write-wins on `meta`,
+detection on every other field — but it is a rule a consumer has to learn about the one field the
+library otherwise promises not to touch (D-S2-12).
+
+**The model to prefer — one monotonic token.** The changeset carries the dataset revision it was built
+against; `apply` compares that single integer against the current revision and refuses the whole
+changeset if it moved. One comparison instead of a per-row walk, and **no `meta` carve-out at all** —
+the rule that made `meta` special never comes up, because no `from` is read.
+
+**S2 already mints the counter.** D-S2-4's store revision is a `signal` written exactly once per commit
+and monotonic per instance. S2 does not expose it and must not: a public revision with no reader is the
+I11 shape §0 Q1 rejects. `apply` is the reader that earns it.
+
+Two costs, stated so neither is discovered by the slice that ships this:
+
+- **It is coarser.** Two changesets touching unrelated entries conflict under a revision token and do
+  not under `'stale-from'`. The answer is the retry, not a finer token: a refused adapter re-reads the
+  current state, rebases its edit and applies again — which every adapter must be able to do anyway,
+  since `'stale-from'` also refuses.
+- **`ChangeSetId` is not the token.** It is minted from a **per-instance** counter (D-S2-18), so two
+  clients both mint `1` and the ids do not compare across a network. The token has to be a revision the
+  writers agree on — server-assigned in any real sync topology. `ChangeSetId` stays what it is: identity
+  for one instance's own changesets, which is what the harness log and the history read.
+
+Neither model is in scope before `apply` has a caller (D-S2-11). This section fixes which one that
+slice starts from.
