@@ -188,7 +188,7 @@ export type StoreName = 'entries';                     // S3 adds `plugin:${stri
 
 export type EntityAdded  = { store: 'entries'; entity: Entry };
 export type EntityRemoved = { store: 'entries'; entity: Entry };
-export type FieldUpdated = { store: 'entries'; id: EntryId; field: EntryField; from: unknown; to: unknown };
+export type FieldUpdated = { store: 'entries'; id: EntryId; field: FieldKey; from: unknown; to: unknown };
 ```
 
 A consumer narrows on `store` and gets `Entry`, not `unknown`. When S3 adds the plugin arm, `unknown` comes back for that arm only — where it is honest, because core does not know the plugin's entity shape.
@@ -202,7 +202,7 @@ A consumer narrows on `store` and gets `Entry`, not `unknown`. When S3 adds the 
 | `name`, `kind`, `parentId`, `progress` | `===` | primitives |
 | `start`, `end` | `===` | `Instant` is `number & { __brand }` — exact epoch-ms equality, and *not* date arithmetic, so I10 is not implicated. The mutator reads the loose input through `time/`'s `toInstant`/`toEndInstant` **first**, then compares two Instants; comparing a raw `'2026-09-08'` against a stored `Instant` is the bug this ordering makes impossible. |
 | `segments` | element-wise on `start`/`end` | our own type, so this is not walking consumer data. A resize gesture (S4) rebuilds the array every frame; `===` would record a change on every commit that changed nothing. |
-| `meta` | `===` only | opaque and consumer-owned (D-S2-12). Deep comparison would be the library walking data it does not understand. |
+| `meta` | `===` only | opaque and consumer-owned (D-S2-12). Deep comparison would be the library walking data it does not understand. From S5 a **declared** key is compared by its own field's `equals` and emits a row keyed on the field key, never a `meta` row — declaring is the consumer's own act, and undeclared keys keep this rule (D-S2-26, ADR 0005). |
 
 `meta`'s reference-only rule has a consequence for the deferred `apply` (D-S2-11) that is recorded in §9 rather than lost: a `from` for `meta` parsed out of JSON can never be reference-equal to the stored value, so any future staleness check has to exempt `meta` or it rejects every remote `meta` write. Nothing in S2 compares a parsed `from`, so this is a note for the slice that ships `apply`, not a rule S2 enforces.
 
@@ -322,7 +322,7 @@ The test asserts `JSON.stringify(toJSON(fromJSON(doc)))` equals `JSON.stringify(
 
 `schema: 1` is the only version this build writes. `fromJSON` accepts `1` and throws `UnsupportedSchemaError` for anything else. `plans/02` §6's "migrates older schemas forward" has no older schema to migrate yet; the migration seam is a `readers: Record<number, Reader>` map with one entry, so the second entry is a map addition rather than a rewrite.
 
-**Keys the reader does not know are dropped**, and `plans/02` §6's *"never silently drops fields"* is corrected to *"never silently drops fields of a schema it reads"* — `schema` is the gate, and a schema-1 document carrying a key from a later build is not a schema-1 document this build can honour. Preserving unknown keys verbatim sounds more principled and is a trap: they would have to survive undo/redo too, which drags `EntryField` open to arbitrary strings and undoes D-S2-7's typed union. The rule a consumer needs is one sentence, and it belongs in `plans/02` §6 and `CONTEXT.md`: **anything of yours goes in `meta` and survives byte for byte; anything at top level belongs to the schema and is governed by it.**
+**Keys the reader does not know are dropped**, and `plans/02` §6's *"never silently drops fields"* is corrected to *"never silently drops fields of a schema it reads"* — `schema` is the gate, and a schema-1 document carrying a key from a later build is not a schema-1 document this build can honour. Preserving unknown keys verbatim sounds more principled and is a trap: they would have to survive undo/redo too, which drags `FieldKey` open to arbitrary strings and undoes D-S2-7's typed union. The rule a consumer needs is one sentence, and it belongs in `plans/02` §6 and `CONTEXT.md`: **anything of yours goes in `meta` and survives byte for byte; anything at top level belongs to the schema and is governed by it.**
 
 **`fromJSON` goes through construction like any other `Dataset`**, so the span rollup (D-S2-22) runs on read. A document whose stored group span disagrees with its children is corrected once, on the first read, and reaches its fixed point in that one pass — so `[S2-A2]` holds from the first `toJSON` onward. The disagreement raises a dev-mode `console.warn` naming the entry: a silent correction of authored data leaves the consumer no feedback that their document was wrong.
 
@@ -768,6 +768,42 @@ this bar" — and they arrive in S4 with the gestures that fire them. Neither is
 **Spec edit:** `plans/02` §3's event table gains `beforeChange` in the cancelable column beside `change`,
 and the "Rules" list gains the sync-only carve-out for it. §7 carries it.
 
+### D-S2-26 — the changeset's field key is `FieldKey`, and it stays open
+
+S5 gives consumers declared fields (`plans/01` §2.6, ADR 0005): a `meta` key becomes addressable, so it
+can be edited in the same `update()` call as `start`, compared per field, rolled up to a parent, and
+carried in a changeset row of its own. S2 has no such consumer and ships no registry. It has one
+obligation, and it is a typing obligation. It also settles a name: the changeset's key type is
+**`FieldKey`**, retiring `EntryField`, which meant exactly this and gave one concept two names (ADR
+0005; the #7 precedent):
+
+```ts
+export type CoreFieldKey = keyof Omit<Entry, 'id'>;
+export type FieldKey = CoreFieldKey | (string & {});
+```
+
+`FieldKey` is public three times over — `FieldUpdated`, `FieldPatch` and the undo record. A closed
+`keyof Omit<Entry, 'id'>` cannot be widened later without a breaking change to all three, and the cost
+of leaving it open now is one type alias. Core keys stay named, so autocomplete still lists them.
+
+**What S2 must do, and nothing more:**
+
+| S2 does | S2 does not |
+|---|---|
+| type `FieldKey` as above | ship a field registry, `fields`/`fieldTypes`/`aggregators` config, or a second aggregator |
+| narrow D-S2-7's comparator exhaustiveness to `CoreFieldKey` | give consumer fields an `equals` seam — S5 does, with `Object.is` as the default |
+| reject an edit key that is not a core field, as `UnknownFieldError` | reach into `meta` for any purpose |
+
+The runtime check is what keeps the open type honest: with no registry installed, the set of legal keys
+*is* the core set, so an open type and a closed one behave identically in S2. S5 widens the set the
+check reads, not the type it validates against.
+
+**`meta`'s promise gains one clause in S5, not in S2** — opaque unless you declare a key (D-S2-12, §3.3
+of #80). S2 keeps `meta` reference-compared and unwalked, and writes nothing that would have to be
+undone when the clause lands.
+
+**Spec edit:** `plans/03` §S2's changeset line names the open type and why. §7 carries it.
+
 ---
 
 ## 3. Public surface
@@ -786,7 +822,7 @@ Net change to `api/index.ts`. Everything here is new unless the row says otherwi
 | `Dataset.on('beforeChange')` — return `false` to refuse the whole changeset | event | D-S2-25 |
 | `Dataset.toJSON()` / `Dataset.fromJSON(doc)` | method + static | D-S2-12 |
 | `ChangeSet`, `ChangeSetId`, `StoreName`, `EntityAdded`, `EntityRemoved`, `FieldUpdated`, `ChangeOrigin` (`'user' \| 'undo' \| 'redo'`) | types | D-S2-7, D-S2-11 |
-| `EntryEdit`, `EntryField` | types | D-S2-2 |
+| `EntryEdit`, `CoreFieldKey`, `FieldKey` (open — D-S2-26) | types | D-S2-2, D-S2-26 |
 | `DatasetDocument` (the `toJSON` shape) | type | D-S2-12 |
 | `DatasetEventMap` | type | D-S2-5 |
 | `DuplicateEntryIdError`, `ParentCycleError`, `MutationDuringNotificationError`, `UnsupportedSchemaError`, `MutationCancelledError` | errors | D-S2-10, D-S2-25 |
@@ -820,7 +856,7 @@ Not added, deliberately: `DatasetOptions.plugins`, `declareStore`, `ProposalReso
 | Someone makes the commit path push onto the history | `history-is-removable`: `data/transaction.ts` importing `data/history.ts` fails the build (D-S2-23) |
 | A "small" import creeps into a leaf's importer set — `layout/` reading the history for a badge, a plugin importing `span-rollup.ts` | The rule names one importer per leaf, so widening the set is an edit to `.dependency-cruiser.cjs` that a reviewer sees (D-S2-23) |
 | A `ChangeOrigin` arm ships with nothing producing it | S2 ships `'user' \| 'undo' \| 'redo'`; `'engine'` and `'load'` arrive with their producers (D-S2-11) |
-| A new `Entry` field ships without a comparison rule, so no-op edits on it churn a frame and an undo entry | The comparator map is `satisfies Record<EntryField, FieldComparator>` — adding a field to `Entry` fails `typecheck` until it is given one (D-S2-7) |
+| A new `Entry` field ships without a comparison rule, so no-op edits on it churn a frame and an undo entry | The comparator map is `satisfies Record<CoreFieldKey, FieldComparator>` — adding a field to `Entry` fails `typecheck` until it is given one (D-S2-7). The check is exhaustive over the **core** set only; a field S5 declares carries its own `equals` and defaults to `Object.is` (D-S2-26) |
 | A `kind === 'group'` literal appears in `data/` or `layout/` | `no-kind-literal` (`no-restricted-syntax`), scoped to the DOM-free layers: the kind set is data (`derivedSpanKinds`) read by a seam. Enforces a CLAUDE.md hard rule that has no guard today — see §7 |
 | `.slice` gets bumped in the same PR as the gate | The gate script never writes `.slice`; the bump is its own reviewed commit (D-S1.11-10, unchanged) |
 
@@ -880,6 +916,7 @@ Not batched into S2.7. A spec that describes what shipped two steps ago is the d
 | `plans/02` §6 | the `schema: 1` document shape, key order, and the `readers` migration seam; "never silently drops fields" version-gated, with the `meta`-is-yours rule; the sync-adapter promise restated as what discharges it — the changeset contract — with `apply` named as the extension's own job (D-S2-11, D-S2-12) | S2.6 |
 | `plans/02` §7 | the four new typed errors | S2.3, S2.6 |
 | `plans/03` §S2 | `dataset.apply(changeSet)` struck from the changeset scope line, with the deferral named (D-S2-11); the four boxes get ids and are ticked; "invalidate incrementally" corrected to D-S2-16's falsifiable form; the stale *"replaces `GanttShellOptions.entries`"* clause corrected (that key never existed — the live half of the sentence is D-S2-20); `dataset.dependencies.*` struck from S2's mutation API, per §0 Q2 | S2.7 |
+| `plans/03` §S2 | the changeset line names `FieldKey`'s open type, the `EntryField` retirement, and why S2 cannot close it (D-S2-26) | S2.2 |
 | `plans/00` §4 | the S2 → S3 row cites the three checks that discharge it | S2.7 |
 | `plans/04` §2 | `fast-check` and `api-extractor` move from planned to shipped | S2.5, S2.7 |
 | `docs/01` | the eight rows of D-S2-18; B3's non-existent allowlist path; I11 moves to enforced | S2.7 |
@@ -922,7 +959,7 @@ Per-step detail is in the step files. The shape:
 | An `apply(changeSet, { history })` option | a caller wants a remote delta on the undo stack (D-S2-11) | whenever one does |
 | A public opt-out for the built-in live binding (`new Gantt({ live: false })`) | a consumer wants the static-image floor without deleting the attachment. Today the floor is structural (D-S2-20) and the customization is additive — a consumer subscribes to the same event and does more. Shipping the flag with no caller is the I11 shape §0 Q1 rejects | whenever one asks |
 | A return value on `undo()`/`redo()` saying what was undone | a caller that cannot use `on('change')`; it comes back as its own named member, never as an overloaded return (D-S2-8, D-S2-24) | whenever one does |
-| A **per-field rollup map** — `start`/`end` are min/max, a number sums, `progress` is a duration-weighted mean, `name` does not roll up at all | consumer fields exist to aggregate, which is columns and the tree. The shipped span rollup is already one instance of it (D-S2-22), so generalizing widens `rollUpDerivedSpans`' signature rather than moving it or adding a seam. **#80** holds the design questions — stored vs. derived-on-read first | S5, #80 |
+| A **per-field rollup map** — `start`/`end` are min/max, a declared `cost` sums, `progress` is a duration-weighted mean, `name` does not roll up at all | consumer fields exist to aggregate, which is columns and the tree. The shipped span rollup is already one instance of it (D-S2-22), so generalizing widens `rollUpDerivedSpans`' signature rather than moving it or adding a seam. **Design settled in ADR 0005** (a field is declared; a column names one; source decides stored vs. computed); #80 tracks the build. S2's only obligation is D-S2-26 | S5, #80 |
 | A per-entry manual-span opt-out, exempting one group from the rollup | it is a pin flag by another name, and pins are plugin-owned (ADR 0002, D-S2-22) | S3 |
 | Row-level layout incrementality inside `computeFrame` | the S7 spike measures a windowed pass as a real cost | S7, D-S2-16 |
 | A `Duration`-typed `EntryEdit` (moving by `days(2)` rather than by absolute dates) | a caller authors a relative edit; `plans/s1.11` §9 already records the neighbouring gap (`addDays`/`startOf` are not re-exported from `api/`) | S4 |

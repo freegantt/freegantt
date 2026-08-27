@@ -36,6 +36,13 @@ const dataset = new Dataset<{ team: string }>({
   dependencies: [
     { id: 'd1', fromId: 't1', toId: 't2', type: 'FS', lag: { value: 0, unit: 'd' } },
   ],
+
+  // What the values ARE — declared beside the ones core ships (`01` §2.6).
+  fieldTypes: { money: { rollUp: 'sum', formatValue: asCurrency, column: { align: 'end' } } },
+  fields: [
+    { key: 'cost', type: 'money', source: { from: 'meta', key: 'cost' } },
+    { key: 'team', source: { from: 'meta', key: 'team' } },
+  ],
 });
 
 // ── View: binds dataset to DOM ──────────────────────────────────
@@ -47,11 +54,10 @@ const gantt = new Gantt({
   preset: 'weekAndMonth',                 // or a full ViewPreset object
   range: 'fitDataset',                    // or a TimeSpan
 
-  columns: [
-    { type: 'name', flex: 1, editable: true },
-    { type: 'start' },
-    { type: 'duration' },
-    { id: 'team', header: 'Team', value: t => t.meta.team },
+  // Where THIS view shows them — names fields, in display order.
+  gridColumns: [
+    'name', 'start', 'duration',                   // a field's own `column` defaults apply
+    { field: 'cost', header: 'Budget — site A' },  // per-Gantt override of presentation only
   ],
 
   interactions: {
@@ -90,7 +96,7 @@ Single mutations outside an explicit transaction are auto-wrapped in one — con
 ```ts
 gantt.preset = 'dayAndWeek';
 gantt.rows = { source: 'group', groupBy: t => t.meta.team };
-gantt.columns = [...gantt.columns, extraColumn];
+gantt.gridColumns = [...gantt.gridColumns, 'cost'];
 gantt.gridWidth = 220;                  // S1.8 — same cancelable commit sequence a splitter drag runs
 ```
 
@@ -155,7 +161,7 @@ Documented in this order; each level solves what the previous can't, and consume
 | 2 | **State classes / parts** | `.fg-bar[data-flag~="conflict"] { outline: 2px solid var(--warn) }` |
 | 3 | **Renderer callbacks** | `barRenderer`, `cellRenderer`, `headerRenderer`, `tooltipRenderer` — return plain element-description objects |
 | 4 | **Events + feature config** | veto a drop, custom context-menu items, replace the editor |
-| 5 | **Plugins** | full `GanttPlugin` (see `01` §10): decorations, columns, controllers, commands |
+| 5 | **Plugins** | full `GanttPlugin` (see `01` §10): fields, decorations, columns, controllers, commands |
 
 Every level-1 property the library reads as a length goes through one reader (`render/dom/pixel-property.ts`): computed value → px → validated → library default. What counts as authored is stated per property rather than re-implemented per call site — `--fg-row-height` rejects zero (a zero-height row is not a row), `--fg-grid-pane-width` keeps it (a consumer turning the grid pane off authored that). Re-read cadence stays the caller's and is stated at each call site: the grid pane's width is read once at construction (renamed from `--fg-row-label-width`, S1.8 — the gutter is a pane width now, not a backend reservation), row height again on every pane measurement, neither per render. Two more tokens joined at S1.8: `--fg-splitter-width` (fallback `4`) and `--fg-header-height` (fallback `20`) — the grid pane's own header spacer needs the same height the timeline pane's header band uses, or every label sits one header-height above its bar.
 
@@ -219,6 +225,58 @@ barRenderer: {
 
 ---
 
+### 4.2 Fields and grid columns
+
+One sentence separates them: **a field is what a value *is*; a grid column is where a Gantt *shows* it.** Fields live on the `Dataset`, because the rollup writes stored, undoable, serialized values and runs at construction — before any Gantt exists. Grid columns live on the `Gantt`, because which fields this view shows is a view question (`01` §2.6).
+
+Core fields and consumer fields are the same declaration, so `'start'` and `'cost'` take one code path — one renderer, one editor, one comparison rule, one rollup.
+
+Four levels, each an addition to the one under it. Consumers stop at the shallowest that works:
+
+```ts
+// 1 — a field with no aggregate. Two keys.
+{ key: 'owner', source: { from: 'meta', key: 'owner' } }
+
+// 2 — a shipped aggregator, by name.
+{ key: 'cost', source: { from: 'meta', key: 'cost' }, rollUp: 'sum' }
+
+// 3 — a field type, so one bundle serves many fields, presentation included.
+fieldTypes: { money: { rollUp: 'sum', formatValue: asCurrency, column: { align: 'end' } } }
+{ key: 'cost', type: 'money', source: { from: 'meta', key: 'cost' } }
+
+// 4 — your own aggregator, registered by name.
+aggregators: { riskWeighted: (children, parent, ctx) => /* ... */ }
+{ key: 'risk', type: 'money', source: { from: 'meta', key: 'risk' }, rollUp: 'riskWeighted' }
+```
+
+A function appears at level 4 only. Levels 1–3 are plain data, so they serialize, they diff in review, and a document can carry them. `rollUp` never takes a bare function: a name can be refused when it is not registered, and a function cannot travel with a document.
+
+**Because a field carries its own column defaults, `gridColumns` is mostly ordering:**
+
+```ts
+gantt.gridColumns = ['name', 'start', 'duration', 'cost'];
+```
+
+The object form overrides this Gantt's presentation and never the data half — `{ field: 'cost', header: 'Budget — site A' }`. Aggregation is never a column key: a stored value must not depend on whether a column is visible, and the rollup has already run before the Gantt was built.
+
+**A value with no stored home** is a computed field — core's own `duration` is one:
+
+```ts
+{ key: 'duration', source: { from: 'compute', read: (e, ctx) => ctx.durationOf(e) } }
+```
+
+Source decides what happens to a parent's aggregate: a field sourced from `entry` or `meta` has somewhere to put it, so it is stored, undoable and serialized; a computed field's aggregate is computed on read and never reaches the document. A computed field reads the dataset only — never zoom, visible range or selection. A value that depends on the view is a renderer's business, not a field.
+
+**Editing crosses core and consumer fields freely** — one call, one transaction, one undo step:
+
+```ts
+dataset.entries.update('t1', { start: '2026-10-05', cost: 12_000 });
+```
+
+An unregistered key is an `UnknownFieldError`, never a silent write.
+
+---
+
 ## 5. Shared axes and scroll (multi-Gantt, D9)
 
 ```ts
@@ -227,9 +285,11 @@ import { TimeScaleModel, ScrollModel } from 'freegantt';
 const scale  = new TimeScaleModel({ preset: 'weekAndMonth', zoom: 'preset' });
 const scroll = new ScrollModel();
 
-const mainGantt   = new Gantt({ container: '#top',    dataset, scale, scroll });
-const linkedGantt = new Gantt({ container: '#bottom', dataset, scale, scroll });
+const deliveries = new Gantt({ container: '#top',    dataset: deliverySchedule, scale, scroll });
+const workforce  = new Gantt({ container: '#bottom', dataset: staffing,         scale, scroll });
 ```
+
+The two Gantts hold **different** datasets — D9's own example is a delivery-schedule Gantt above a workforce Gantt. What is shared is the axis and the scroll, never the data. Two Gantts *may* bind one `Dataset`: nothing forbids it, a second Gantt is simply a second subscriber to `dataset.on('change')` (D-S2-24), and it costs the library nothing. It is not a case the library designs around or tests, and a consumer who wants it owns the arrangement.
 
 Omit `scale`/`scroll` and the Gantt creates private ones — single-Gantt users never meet the concept. Passing shared instances is the *entire* sync API: no link manager, no event plumbing. Sharing a `scroll` instance links both axes (S1.5, D-S1.5-3) — a shorter chart's own row count clamps the shared position locally, so it pins at its last row while a taller chart keeps going, with zero remembered state. `TimeScaleModel` is a class with no `Source` interface; `ScrollModel` gets no `xOnly()`/`yOnly()` either — partial sharing returns when a caller actually needs "share x, keep y private".
 
@@ -244,7 +304,7 @@ const p2  = Dataset.fromJSON(doc);
 
 - The JSON shape is **public API**: documented, versioned by an integer `schema` field, semver-governed. `fromJSON` migrates older schemas forward; it never silently drops fields.
 - Instants serialize as ISO-8601 strings (readable, diffable, zone-explicit); brands exist only in TS types and never leak into JSON.
-- `meta` round-trips opaquely.
+- `meta` round-trips opaquely — **unless you declare a key as a field** (`01` §2.6), which makes that key addressable for editing, comparison and rollup while everything else in `meta` keeps the guarantee.
 - **Changesets are the incremental counterpart**: `dataset.on('change')` + `dataset.apply(changeSet)` are inverse-ish operations designed so a future sync adapter (or collaborative layer) is an extension, not a core change. `apply` validates and reports rejections rather than throwing mid-way.
 
 ---
