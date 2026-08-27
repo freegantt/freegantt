@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { TimeScaleModel } from './time-scale-model.js';
+import { TimeScaleModel, bindTimeScale } from './time-scale-model.js';
 import { dayPreset, instant, MS } from '../../time/index.js';
 import { entryId, UnknownPresetError } from '../../model/index.js';
 import type { Entry } from '../../model/index.js';
@@ -10,6 +10,7 @@ function entry(id: string, start: string, end: string): Entry {
     name: id,
     start: instant(start),
     end: instant(end),
+    kind: 'span',
   };
 }
 
@@ -23,13 +24,13 @@ describe('TimeScaleModel', () => {
 
   it('resolves zone from the binding, never from the caller (D6)', () => {
     const model = new TimeScaleModel();
-    model.bind({ timeZone: 'America/Chicago', entries, paneWidth: 800 }, noop);
+    bindTimeScale(model, { timeZone: 'America/Chicago', entries, paneWidth: 800 }, noop);
     expect(model.scale.timeZone).toBe('America/Chicago');
   });
 
   it("fits the bound dataset's span into the measured viewport by default", () => {
     const model = new TimeScaleModel();
-    model.bind({ timeZone: 'UTC', entries, paneWidth: 800 }, noop);
+    bindTimeScale(model, { timeZone: 'UTC', entries, paneWidth: 800 }, noop);
 
     expect(model.scale.xForInstant(entries[0]!.start)).toBe(0);
     expect(model.scale.xForInstant(entries[1]!.end)).toBeCloseTo(800);
@@ -37,8 +38,9 @@ describe('TimeScaleModel', () => {
 
   it('spans every bound dataset, so one scale can carry two Gantt instances (D9)', () => {
     const model = new TimeScaleModel();
-    model.bind({ timeZone: 'UTC', entries: [entries[0]!], paneWidth: 800 }, noop);
-    model.bind(
+    bindTimeScale(model, { timeZone: 'UTC', entries: [entries[0]!], paneWidth: 800 }, noop);
+    bindTimeScale(
+      model,
       {
         timeZone: 'UTC',
         entries: [entry('w1', '2026-09-04T00:00:00Z', '2026-09-10T00:00:00Z')],
@@ -54,8 +56,9 @@ describe('TimeScaleModel', () => {
 
   it('re-resolves when a Gantt binds or unbinds', () => {
     const model = new TimeScaleModel();
-    model.bind({ timeZone: 'UTC', entries: [entries[0]!], paneWidth: 800 }, noop);
-    const handle = model.bind(
+    bindTimeScale(model, { timeZone: 'UTC', entries: [entries[0]!], paneWidth: 800 }, noop);
+    const handle = bindTimeScale(
+      model,
       {
         timeZone: 'UTC',
         entries: [entry('w1', '2026-09-04T00:00:00Z', '2026-09-10T00:00:00Z')],
@@ -72,40 +75,44 @@ describe('TimeScaleModel', () => {
   it('honours a pinned TimeSpan range instead of fitting the dataset', () => {
     const range = { start: instant('2026-01-01T00:00:00Z'), end: instant('2026-01-08T00:00:00Z') };
     const model = new TimeScaleModel({ range });
-    model.bind({ timeZone: 'UTC', entries, paneWidth: 700 }, noop);
+    bindTimeScale(model, { timeZone: 'UTC', entries, paneWidth: 700 }, noop);
 
     expect(model.scale.range).toEqual(range);
     expect(model.scale.xForInstant(range.end)).toBeCloseTo(700);
   });
 
-  it("falls back to the preset's own zoom when the container is unmeasured, not to a degenerate scale", () => {
+  it("falls back to the preset's own density when the container is unmeasured, not to a degenerate scale", () => {
     const model = new TimeScaleModel();
-    model.bind({ timeZone: 'UTC', entries, paneWidth: 0 }, noop);
+    bindTimeScale(model, { timeZone: 'UTC', entries, paneWidth: 0 }, noop);
 
     // dayPreset states 24px per day tick; that is a scale, not a special case.
     expect(model.scale.xForInstant(instant('2026-09-02T00:00:00Z'))).toBeCloseTo(dayPreset.tickWidthPx);
-    expect(model.scale.widthForDuration({ value: 1, unit: 'd' }, entries[0]!.start)).toBeCloseTo(
+    expect(model.scale.widthForDuration({ value: 1, unit: 'day' }, entries[0]!.start)).toBeCloseTo(
       dayPreset.tickWidthPx,
     );
   });
 
   it('resolves a zero-span or empty dataset through the preset rather than dividing by zero', () => {
     const empty = new TimeScaleModel();
-    empty.bind({ timeZone: 'UTC', entries: [], paneWidth: 800 }, noop);
-    expect(empty.scale.widthForDuration({ value: 1, unit: 'd' }, instant(0))).toBeCloseTo(
+    bindTimeScale(empty, { timeZone: 'UTC', entries: [], paneWidth: 800 }, noop);
+    expect(empty.scale.widthForDuration({ value: 1, unit: 'day' }, instant(0))).toBeCloseTo(
       dayPreset.tickWidthPx,
     );
 
     const zeroSpan = new TimeScaleModel();
     const at = entries[0]!.start;
-    zeroSpan.bind({ timeZone: 'UTC', entries: [{ ...entries[0]!, end: at }], paneWidth: 800 }, noop);
-    expect(zeroSpan.scale.widthForDuration({ value: 1, unit: 'd' }, at)).toBeCloseTo(dayPreset.tickWidthPx);
+    bindTimeScale(
+      zeroSpan,
+      { timeZone: 'UTC', entries: [{ ...entries[0]!, end: at }], paneWidth: 800 },
+      noop,
+    );
+    expect(zeroSpan.scale.widthForDuration({ value: 1, unit: 'day' }, at)).toBeCloseTo(dayPreset.tickWidthPx);
   });
 
   it('fits the narrowest bound viewport, so the span fits in every Gantt', () => {
     const model = new TimeScaleModel();
-    model.bind({ timeZone: 'UTC', entries, paneWidth: 800 }, noop);
-    model.bind({ timeZone: 'UTC', entries, paneWidth: 500 }, noop);
+    bindTimeScale(model, { timeZone: 'UTC', entries, paneWidth: 800 }, noop);
+    bindTimeScale(model, { timeZone: 'UTC', entries, paneWidth: 500 }, noop);
 
     expect(model.scale.xForInstant(entries[1]!.end)).toBeCloseTo(500);
   });
@@ -120,14 +127,14 @@ describe('TimeScaleModel', () => {
     it("runs a binding's own onChange on bind — that IS its first render (#22)", () => {
       const model = new TimeScaleModel();
       let calls = 0;
-      model.bind({ timeZone: 'UTC', entries, paneWidth: 800 }, () => calls++);
+      bindTimeScale(model, { timeZone: 'UTC', entries, paneWidth: 800 }, () => calls++);
       expect(calls).toBe(1);
     });
 
     it("never runs a binding's own onChange for its own unbind", () => {
       const model = new TimeScaleModel();
       let calls = 0;
-      const handle = model.bind({ timeZone: 'UTC', entries, paneWidth: 800 }, () => calls++);
+      const handle = bindTimeScale(model, { timeZone: 'UTC', entries, paneWidth: 800 }, () => calls++);
       calls = 0;
 
       // The caller is tearing itself down and has no reason to react to its own departure.
@@ -138,10 +145,10 @@ describe('TimeScaleModel', () => {
     it("runs an existing binding's onChange when another Gantt binds or unbinds", () => {
       const model = new TimeScaleModel();
       let calls = 0;
-      model.bind({ timeZone: 'UTC', entries, paneWidth: 800 }, () => calls++);
+      bindTimeScale(model, { timeZone: 'UTC', entries, paneWidth: 800 }, () => calls++);
       calls = 0;
 
-      const other = model.bind({ timeZone: 'UTC', entries, paneWidth: 500 }, noop);
+      const other = bindTimeScale(model, { timeZone: 'UTC', entries, paneWidth: 500 }, noop);
       expect(calls).toBe(1);
 
       other.unbind();
@@ -151,11 +158,11 @@ describe('TimeScaleModel', () => {
     it('stops running onChange once unbound', () => {
       const model = new TimeScaleModel();
       let calls = 0;
-      const handle = model.bind({ timeZone: 'UTC', entries, paneWidth: 800 }, () => calls++);
+      const handle = bindTimeScale(model, { timeZone: 'UTC', entries, paneWidth: 800 }, () => calls++);
       handle.unbind();
       calls = 0;
 
-      model.bind({ timeZone: 'UTC', entries, paneWidth: 800 }, noop);
+      bindTimeScale(model, { timeZone: 'UTC', entries, paneWidth: 800 }, noop);
       expect(calls).toBe(0);
     });
 
@@ -163,8 +170,8 @@ describe('TimeScaleModel', () => {
       const model = new TimeScaleModel();
       let callsA = 0;
       let callsB = 0;
-      const handleA = model.bind({ timeZone: 'UTC', entries, paneWidth: 800 }, () => callsA++);
-      model.bind({ timeZone: 'UTC', entries, paneWidth: 500 }, () => callsB++);
+      const handleA = bindTimeScale(model, { timeZone: 'UTC', entries, paneWidth: 800 }, () => callsA++);
+      bindTimeScale(model, { timeZone: 'UTC', entries, paneWidth: 500 }, () => callsB++);
       callsA = 0;
       callsB = 0;
 
@@ -178,8 +185,8 @@ describe('TimeScaleModel', () => {
       const model = new TimeScaleModel();
       let callsA = 0;
       let callsB = 0;
-      const handleA = model.bind({ timeZone: 'UTC', entries, paneWidth: 800 }, () => callsA++);
-      model.bind({ timeZone: 'UTC', entries, paneWidth: 500 }, () => callsB++);
+      const handleA = bindTimeScale(model, { timeZone: 'UTC', entries, paneWidth: 800 }, () => callsA++);
+      bindTimeScale(model, { timeZone: 'UTC', entries, paneWidth: 500 }, () => callsB++);
       callsA = 0;
       callsB = 0;
 
@@ -192,7 +199,7 @@ describe('TimeScaleModel', () => {
 
     it('setPaneWidth invalidates and notifies when the width actually changes', () => {
       const model = new TimeScaleModel();
-      const handle = model.bind({ timeZone: 'UTC', entries, paneWidth: 800 }, noop);
+      const handle = bindTimeScale(model, { timeZone: 'UTC', entries, paneWidth: 800 }, noop);
       expect(model.scale.xForInstant(entries[1]!.end)).toBeCloseTo(800);
 
       handle.setPaneWidth(400);
@@ -202,7 +209,7 @@ describe('TimeScaleModel', () => {
     it('setPaneWidth is a no-op (no notify, no invalidation) when the width is unchanged', () => {
       const model = new TimeScaleModel();
       let calls = 0;
-      const handle = model.bind({ timeZone: 'UTC', entries, paneWidth: 800 }, () => calls++);
+      const handle = bindTimeScale(model, { timeZone: 'UTC', entries, paneWidth: 800 }, () => calls++);
       calls = 0;
 
       handle.setPaneWidth(800);
@@ -211,8 +218,8 @@ describe('TimeScaleModel', () => {
 
     it('a binding driven to width 0 (display:none) is excluded from fitWidth, others keep theirs', () => {
       const model = new TimeScaleModel();
-      const handleA = model.bind({ timeZone: 'UTC', entries, paneWidth: 300 }, noop);
-      model.bind({ timeZone: 'UTC', entries, paneWidth: 500 }, noop);
+      const handleA = bindTimeScale(model, { timeZone: 'UTC', entries, paneWidth: 300 }, noop);
+      bindTimeScale(model, { timeZone: 'UTC', entries, paneWidth: 500 }, noop);
       // Narrowest of {300, 500} is 300.
       expect(model.scale.xForInstant(entries[1]!.end)).toBeCloseTo(300);
 
@@ -225,10 +232,10 @@ describe('TimeScaleModel', () => {
   describe('batch', () => {
     it('delivers at most one notification for several writes', () => {
       const model = new TimeScaleModel();
-      const a = model.bind({ timeZone: 'UTC', entries, paneWidth: 800 }, noop);
-      const b = model.bind({ timeZone: 'UTC', entries, paneWidth: 500 }, noop);
+      const a = bindTimeScale(model, { timeZone: 'UTC', entries, paneWidth: 800 }, noop);
+      const b = bindTimeScale(model, { timeZone: 'UTC', entries, paneWidth: 500 }, noop);
       let calls = 0;
-      model.bind({ timeZone: 'UTC', entries, paneWidth: 500 }, () => calls++);
+      bindTimeScale(model, { timeZone: 'UTC', entries, paneWidth: 500 }, () => calls++);
       calls = 0;
 
       model.batch(() => {
@@ -240,9 +247,9 @@ describe('TimeScaleModel', () => {
 
     it('no observer sees an intermediate state mid-batch', () => {
       const model = new TimeScaleModel();
-      const a = model.bind({ timeZone: 'UTC', entries, paneWidth: 800 }, noop);
+      const a = bindTimeScale(model, { timeZone: 'UTC', entries, paneWidth: 800 }, noop);
       const seen: number[] = [];
-      model.bind({ timeZone: 'UTC', entries, paneWidth: 500 }, () =>
+      bindTimeScale(model, { timeZone: 'UTC', entries, paneWidth: 500 }, () =>
         seen.push(model.scale.xForInstant(entries[1]!.end)),
       );
       seen.length = 0; // drop the notify from this binding's own bind() call
@@ -258,9 +265,9 @@ describe('TimeScaleModel', () => {
 
     it('flushes in a finally so a throwing run still notifies and leaves the model usable', () => {
       const model = new TimeScaleModel();
-      const a = model.bind({ timeZone: 'UTC', entries, paneWidth: 800 }, noop);
+      const a = bindTimeScale(model, { timeZone: 'UTC', entries, paneWidth: 800 }, noop);
       let calls = 0;
-      model.bind({ timeZone: 'UTC', entries, paneWidth: 800 }, () => calls++);
+      bindTimeScale(model, { timeZone: 'UTC', entries, paneWidth: 800 }, () => calls++);
       calls = 0;
 
       expect(() =>
@@ -278,35 +285,37 @@ describe('TimeScaleModel', () => {
     });
   });
 
-  describe('zoom (S1.9, D-S1.9-2)', () => {
-    it("'preset' ignores a measured pane width and uses the preset's own zoom", () => {
-      const model = new TimeScaleModel({ zoom: 'preset' });
-      model.bind({ timeZone: 'UTC', entries, paneWidth: 800 }, noop);
+  describe('fit (S1.9, D-S1.9-2)', () => {
+    it("'preset' ignores a measured pane width and uses the preset's own density", () => {
+      const model = new TimeScaleModel({ fit: 'preset' });
+      bindTimeScale(model, { timeZone: 'UTC', entries, paneWidth: 800 }, noop);
 
-      expect(model.scale.widthForDuration({ value: 1, unit: 'd' }, entries[0]!.start)).toBeCloseTo(
+      expect(model.scale.widthForDuration({ value: 1, unit: 'day' }, entries[0]!.start)).toBeCloseTo(
         dayPreset.tickWidthPx,
       );
     });
 
-    it('{ pxPerMs } is read back exactly, ignoring both the pane width and the preset', () => {
-      const model = new TimeScaleModel({ zoom: { pxPerMs: 0.5 } });
-      model.bind({ timeZone: 'UTC', entries, paneWidth: 800 }, noop);
+    it('an explicit pxPerMs is read back exactly, ignoring both the pane width and the preset', () => {
+      const model = new TimeScaleModel({ fit: 0.5 });
+      bindTimeScale(model, { timeZone: 'UTC', entries, paneWidth: 800 }, noop);
 
-      expect(model.zoom).toEqual({ pxPerMs: 0.5 });
-      expect(model.scale.widthForDuration({ value: 1, unit: 'ms' }, entries[0]!.start)).toBeCloseTo(0.5);
+      expect(model.fit).toBe(0.5);
+      expect(model.scale.widthForDuration({ value: 1, unit: 'millisecond' }, entries[0]!.start)).toBeCloseTo(
+        0.5,
+      );
     });
 
-    it('a zoom write notifies iff the resolved scale changed', () => {
+    it('a fit write notifies iff the resolved scale changed', () => {
       const model = new TimeScaleModel();
       let calls = 0;
-      model.bind({ timeZone: 'UTC', entries, paneWidth: 800 }, () => calls++);
+      bindTimeScale(model, { timeZone: 'UTC', entries, paneWidth: 800 }, () => calls++);
       calls = 0;
 
-      model.zoom = { pxPerMs: 0.5 };
+      model.fit = 0.5;
       expect(calls).toBe(1);
 
       calls = 0;
-      model.zoom = { pxPerMs: 0.5 };
+      model.fit = 0.5;
       expect(calls).toBe(0);
     });
   });
@@ -315,7 +324,7 @@ describe('TimeScaleModel', () => {
     it('preset = notifies iff the resolved scale changed, and is a no-op at the current value', () => {
       const model = new TimeScaleModel();
       let calls = 0;
-      model.bind({ timeZone: 'UTC', entries, paneWidth: 0 }, () => calls++);
+      bindTimeScale(model, { timeZone: 'UTC', entries, paneWidth: 0 }, () => calls++);
       calls = 0;
 
       model.preset = 'week';
@@ -327,13 +336,13 @@ describe('TimeScaleModel', () => {
       expect(calls).toBe(0);
     });
 
-    it('preset = notifies even when pxPerMs is unaffected — a measured pane under fitViewport zoom', () => {
-      // Regression: fitViewport's pxPerMs = paneWidth / spanMs does not depend on the preset, so a
+    it("preset = notifies even when pxPerMs is unaffected — a measured pane under 'pane' fit", () => {
+      // Regression: 'pane' fit's pxPerMs = paneWidth / spanMs does not depend on the preset, so a
       // preset switch that leaves range/timeZone/pxPerMs all unchanged must still be visible to the
       // D-S1.5-4 equality check — otherwise a bound Gantt never re-renders its header bands (U1).
       const model = new TimeScaleModel();
       let calls = 0;
-      model.bind({ timeZone: 'UTC', entries, paneWidth: 700 }, () => calls++);
+      bindTimeScale(model, { timeZone: 'UTC', entries, paneWidth: 700 }, () => calls++);
       calls = 0;
 
       model.preset = 'weekAndMonth';
@@ -352,7 +361,7 @@ describe('TimeScaleModel', () => {
       const pinned = { start: instant('2026-01-01T00:00:00Z'), end: instant('2026-01-08T00:00:00Z') };
       const model = new TimeScaleModel({ range: pinned });
       let calls = 0;
-      model.bind({ timeZone: 'UTC', entries, paneWidth: 700 }, () => calls++);
+      bindTimeScale(model, { timeZone: 'UTC', entries, paneWidth: 700 }, () => calls++);
       calls = 0;
 
       const next = { start: instant('2026-02-01T00:00:00Z'), end: instant('2026-02-08T00:00:00Z') };
@@ -369,7 +378,7 @@ describe('TimeScaleModel', () => {
   it('mutating a ScaleBinding object after bind() cannot change the resolution', () => {
     const model = new TimeScaleModel();
     const binding = { timeZone: 'UTC', entries, paneWidth: 800 };
-    model.bind(binding, noop);
+    bindTimeScale(model, binding, noop);
     expect(model.scale.xForInstant(entries[1]!.end)).toBeCloseTo(800);
 
     // The model copied the binding at bind time; mutating the caller's object does nothing.

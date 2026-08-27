@@ -31,9 +31,9 @@ function readEntry(input: EntryInput, context: EntryReadContext): Entry {
     name: input.name,
     start: toInstant(context.timeZone, input.start),
     end: toEndInstant(context.timeZone, input.end, context.dateOnlyEnd),
+    kind: input.kind ?? 'span',
   };
   if (input.parentId !== undefined) entry.parentId = entryId(input.parentId);
-  if (input.kind !== undefined) entry.kind = input.kind;
   if (input.progress !== undefined) entry.progress = input.progress;
   if (input.segments !== undefined) {
     entry.segments = input.segments.map((span) => readSpan(span, context));

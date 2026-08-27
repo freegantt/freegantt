@@ -2,33 +2,49 @@
 // instance owns its own shell and state so two Gantt instances on one page are fully independent.
 
 import { GanttShell, ScrollModel, TimeScaleModel } from '../view/index.js';
-import type { GanttEventMap, Overscan, PresetRef, Theme, TimeScaleZoom, ViewPreset } from '../view/index.js';
+import type { GanttEventMap, PresetRef, Theme, TimeScaleFit, ViewPreset } from '../view/index.js';
 import type { EntryId, TimeSpan } from '../model/index.js';
 import type { Dataset } from './dataset.js';
 
-export interface GanttOptions {
+interface GanttOptionsBase {
   /** Element or CSS selector (plans/02 §2) — resolved by GanttShell; a selector matching nothing
    * throws (#38). */
   container: HTMLElement | string;
   dataset: Dataset;
-  /** Bound viewport object (D9, plans/02 §5) — omit for a private default sized to the dataset's entries. */
-  scale?: TimeScaleModel;
-  /** Bound scroll object (D9) — omit for a private default. Sharing one instance links both axes
-   * (S1.5 README D-S1.5-3). */
+  /** Bound scroll object (D9) — pass the same instance to two Gantt instances to scroll-sync them.
+   * Independent of `scale`/`preset`/`range`/`fit`: a Gantt may share its scroll position, its axis,
+   * both, or neither. */
   scroll?: ScrollModel;
   /** Initial grid pane width in px (S1.8). Default: `--fg-grid-pane-width`, fallback 160. */
   gridWidth?: number;
-  /** Build the private default `TimeScaleModel` only (D-S1.9-9) — a no-op, with a dev-mode warning,
-   * when `scale` is also supplied. */
-  preset?: PresetRef;
-  range?: 'fitDataset' | TimeSpan;
-  zoom?: TimeScaleZoom;
-  overscan?: Overscan;
   /** Live (S1.10). Default `'auto'`: follows `prefers-color-scheme`. */
   theme?: Theme;
   /** Live (S1.10). Default `'Gantt'`; sets `aria-label` on the container. */
   a11yLabel?: string;
 }
+
+/** Two ways to set the axis, made mutually exclusive at the type level (issue #84 — the prior shape
+ * accepted both and silently ignored `preset`/`range`/`fit` in favor of `scale`, with a dev-mode-only
+ * warning). Sharing an axis and building a private one from `preset`/`range`/`fit` are not two knobs
+ * for the same job; a caller states one or the other. */
+type GanttScaleOptions =
+  | {
+      /** Bound viewport object (D9, plans/02 §5) — pass the same instance to two Gantt instances to
+       * x-sync them. */
+      scale: TimeScaleModel;
+      preset?: never;
+      range?: never;
+      fit?: never;
+    }
+  | {
+      scale?: undefined;
+      /** Build a private default `TimeScaleModel` (D-S1.9-9) sized to the dataset's entries. */
+      preset?: PresetRef;
+      range?: 'fitDataset' | TimeSpan;
+      fit?: TimeScaleFit;
+    };
+
+export type GanttOptions = GanttOptionsBase & GanttScaleOptions;
 
 export class Gantt {
   #shell: GanttShell;
@@ -43,8 +59,7 @@ export class Gantt {
       ...(options.gridWidth !== undefined ? { gridWidth: options.gridWidth } : {}),
       ...(options.preset !== undefined ? { preset: options.preset } : {}),
       ...(options.range !== undefined ? { range: options.range } : {}),
-      ...(options.zoom !== undefined ? { zoom: options.zoom } : {}),
-      ...(options.overscan !== undefined ? { overscan: options.overscan } : {}),
+      ...(options.fit !== undefined ? { fit: options.fit } : {}),
       ...(options.theme !== undefined ? { theme: options.theme } : {}),
       ...(options.a11yLabel !== undefined ? { a11yLabel: options.a11yLabel } : {}),
     });
@@ -90,20 +105,12 @@ export class Gantt {
     this.#shell.range = r;
   }
 
-  get zoom(): TimeScaleZoom {
-    return this.#shell.zoom;
+  get fit(): TimeScaleFit {
+    return this.#shell.fit;
   }
 
-  set zoom(z: TimeScaleZoom) {
-    this.#shell.zoom = z;
-  }
-
-  get overscan(): Overscan {
-    return this.#shell.overscan;
-  }
-
-  set overscan(o: Overscan) {
-    this.#shell.overscan = o;
+  set fit(f: TimeScaleFit) {
+    this.#shell.fit = f;
   }
 
   zoomTo(pxPerMs: number, anchorX?: number): void {

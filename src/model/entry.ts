@@ -10,8 +10,8 @@ export interface Entry<TMeta = unknown> {
   id: EntryId;
   /** Hierarchy; roots have none. */
   parentId?: EntryId;
-  /** Authored, never derived — see plans/01 §2.5. Default 'span'. */
-  kind?: EntryKind;
+  /** Authored, never derived — see plans/01 §2.5. */
+  kind: EntryKind;
   name: string;
   start: Instant;
   /** Exclusive — see plans/01 §5. */

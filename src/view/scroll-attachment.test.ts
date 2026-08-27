@@ -13,7 +13,7 @@ function instant(iso: string): Instant {
 }
 
 function entry(id: string, start: string, end: string): Entry {
-  return { id: entryId(id), name: id, start: instant(start), end: instant(end) };
+  return { id: entryId(id), name: id, start: instant(start), end: instant(end), kind: 'span' };
 }
 
 const dataset: DatasetBinding = {
