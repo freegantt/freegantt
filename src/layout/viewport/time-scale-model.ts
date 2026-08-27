@@ -4,7 +4,7 @@
 // through allowed edges (view -> layout, api -> view) per the boundary lint (I1). Passing the same
 // instance to two Gantt instances syncs their x-axis by construction — no event plumbing, no link manager.
 //
-// The constructor takes *intent*, not resolved geometry (plans/02 §5). Zone, span and pixel density
+// The constructor takes options, not resolved geometry (plans/02 §5). Zone, span and pixel density
 // are resolved from the Gantt instances bound to the model, which is what lets one scale span a
 // delivery-schedule Gantt and a workforce Gantt: neither caller has to compute a cross-dataset span
 // by hand.
@@ -21,20 +21,23 @@ import type { PresetRef, TimeScale, TimeScaleOptions, ViewPreset } from '../../t
 import type { Entry, Instant, TimeSpan } from '../../model/index.js';
 import { BoundValue } from './bound-value.js';
 
-/** The density mode — what `pxPerMs` resolves to (S1.9, D-S1.9-2). `'fitViewport'` (default) fits
- *  the measured pane width; `'preset'` ignores it and uses the preset's own zoom; `{ pxPerMs }` is
- *  an explicit density, what `Viewport.zoomTo`/`zoomBy` write. */
-export type TimeScaleZoom = 'fitViewport' | 'preset' | { readonly pxPerMs: number };
+/** The density mode — what `pxPerMs` resolves to (S1.9, D-S1.9-2; renamed from `TimeScaleZoom`,
+ *  issue #84 — "zoom" was one word for this mode, the `zoomTo` density knob, and the `zoomBy`
+ *  gesture). `'pane'` (default) fits the measured pane width; `'preset'` ignores it and uses the
+ *  preset's own density; an explicit `number` is pixels per millisecond, what `Viewport.zoomTo`/
+ *  `zoomBy` write. */
+export type TimeScaleFit = 'pane' | 'preset' | number;
 
-/** What a caller states about how time should be displayed (plans/02 §5). Everything else — the
- * dataset's zone (D6), the span — is derived at bind time. */
-export interface TimeScaleIntent {
-  /** Governs header ticks and, with no viewport to fit, the resolved zoom. Defaults to `dayPreset`. */
+/** What a caller states about how time should be displayed, to construct a TimeScaleModel
+ *  (plans/02 §5; renamed from `TimeScaleIntent`, issue #84 — a caller states options, not
+ *  "intent"). Everything else — the dataset's zone (D6), the span — is derived at bind time. */
+export interface TimeScaleModelOptions {
+  /** Governs header ticks and, with no viewport to fit, the resolved density. Defaults to `dayPreset`. */
   preset?: PresetRef;
   /** `'fitDataset'` (the default) spans the entries of every bound dataset; a `TimeSpan` pins the axis. */
   range?: 'fitDataset' | TimeSpan;
-  /** Default `'fitViewport'`. */
-  zoom?: TimeScaleZoom;
+  /** Default `'pane'`. */
+  fit?: TimeScaleFit;
 }
 
 /** One Gantt's contribution to resolution, supplied when it binds. `readonly`, and the model copies
@@ -55,8 +58,8 @@ export interface ScaleBinding {
 /** Zone used before any Gantt has bound, so `scale` is readable on a fresh model. */
 const UNBOUND_ZONE = 'UTC';
 
-/** Returned by `bind()` (#6). `unbind` leaves the shared axis; `setPaneWidth` lets a bound Gantt
- * push a re-measured width (e.g. from a `ResizeObserver`) without unbind+rebind churn. */
+/** Returned by `bindTimeScale` (#6). `unbind` leaves the shared axis; `setPaneWidth` lets a bound
+ *  Gantt push a re-measured width (e.g. from a `ResizeObserver`) without unbind+rebind churn. */
 export interface ScaleBindingHandle {
   unbind(): void;
   setPaneWidth(width: number): void;
@@ -74,7 +77,7 @@ interface MutableScaleBinding {
  * `TimeScale` itself stays preset-agnostic (`ticks` takes an explicit step, per D-S1.9-4), but a
  * bound Gantt's render depends on the preset's headers too (`GanttShell.render` reads `viewport.preset`
  * alongside `viewport.timeScale`), and `pxPerMs` alone does not always change when the preset does —
- * `'fitViewport'` with a measured pane resolves the same density from any preset. Without `preset`
+ * `'pane'` with a measured pane resolves the same density from any preset. Without `preset`
  * here, that combination would invalidate the memoized `TimeScale` (identity-based, unconditional)
  * but never notify a bound Gantt to re-render it. */
 interface ResolvedScale {
@@ -101,15 +104,18 @@ function sameRange(a: 'fitDataset' | TimeSpan, b: 'fitDataset' | TimeSpan): bool
   return a.start === b.start && a.end === b.end;
 }
 
-function sameZoom(a: TimeScaleZoom, b: TimeScaleZoom): boolean {
-  if (typeof a === 'string' || typeof b === 'string') return a === b;
-  return a.pxPerMs === b.pxPerMs;
-}
+/** Per-instance state `bindTimeScale` needs but which is not on the published type (issue #84,
+ *  ADR 0007): `bind`/`unbind` are not class methods, so there is nothing for a caller holding a
+ *  `TimeScaleModel` reference to call. `view/` is the only importer of `bindTimeScale`. */
+const internals = new WeakMap<
+  TimeScaleModel,
+  { scaleOptions: BoundValue<MutableScaleBinding, ResolvedScale> }
+>();
 
 export class TimeScaleModel {
   #preset: ViewPreset;
   #range: 'fitDataset' | TimeSpan;
-  #zoom: TimeScaleZoom;
+  #fit: TimeScaleFit;
   /** The bindings, the options resolved from them, and the D-S1.5-4 notification contract — one
    * object, shared with `ScrollModel` in implementation and with nothing else (`bound-value.ts`).
    * This model supplies only what is its own: how to resolve, and what counts as a change. */
@@ -122,10 +128,11 @@ export class TimeScaleModel {
   #scale: TimeScale | undefined;
   #scaleBuiltFrom: TimeScaleOptions | undefined;
 
-  constructor(intent: TimeScaleIntent = {}) {
-    this.#preset = intent.preset ? resolvePreset(intent.preset) : dayPreset;
-    this.#range = intent.range ?? 'fitDataset';
-    this.#zoom = intent.zoom ?? 'fitViewport';
+  constructor(options: TimeScaleModelOptions = {}) {
+    this.#preset = options.preset ? resolvePreset(options.preset) : dayPreset;
+    this.#range = options.range ?? 'fitDataset';
+    this.#fit = options.fit ?? 'pane';
+    internals.set(this, { scaleOptions: this.#scaleOptions });
   }
 
   get preset(): ViewPreset {
@@ -154,42 +161,16 @@ export class TimeScaleModel {
     this.#scaleOptions.invalidate();
   }
 
-  get zoom(): TimeScaleZoom {
-    return this.#zoom;
+  get fit(): TimeScaleFit {
+    return this.#fit;
   }
 
-  /** Live. `'fitViewport'` (default) fits the measured pane width; `'preset'` ignores it; `{ pxPerMs }`
-   *  is an explicit density (D-S1.9-2). */
-  set zoom(z: TimeScaleZoom) {
-    if (sameZoom(this.#zoom, z)) return;
-    this.#zoom = z;
+  /** Live. `'pane'` (default) fits the measured pane width; `'preset'` ignores it; an explicit
+   *  `number` is `pxPerMs` (D-S1.9-2). */
+  set fit(f: TimeScaleFit) {
+    if (this.#fit === f) return;
+    this.#fit = f;
     this.#scaleOptions.invalidate();
-  }
-
-  /** Gantt instances bind at construction (after mounting their render target — see `GanttShell`,
-   * #22) and call the returned handle's `unbind` on destroy. One rule, no exceptions (D-S1.5-4):
-   * `bind` always notifies the newcomer — including this one — so a fresh binding gets its first
-   * render even when nothing measurably changed; every other notification (another binding's
-   * `bind`/`unbind`, a `setPaneWidth`) fires iff the resolved scale actually changed. It does not run
-   * on a binding's own `unbind()`: the caller is tearing itself down and has no reason to react to
-   * its own departure; remaining bindings still get notified. */
-  bind(binding: ScaleBinding, onChange: () => void): ScaleBindingHandle {
-    // Copy-at-bind (S1.5, #6/#22 follow-up): a caller holding a reference to its own binding object
-    // cannot change this model's inputs behind its back; re-measurement goes through the handle.
-    const copy: MutableScaleBinding = {
-      timeZone: binding.timeZone,
-      entries: binding.entries,
-      paneWidth: binding.paneWidth,
-    };
-    const bound = this.#scaleOptions.bind(copy, onChange);
-    return {
-      unbind: () => bound.unbind(),
-      setPaneWidth: (width) => {
-        if (copy.paneWidth === width) return;
-        copy.paneWidth = width;
-        this.#scaleOptions.invalidate();
-      },
-    };
   }
 
   get scale(): TimeScale {
@@ -233,7 +214,7 @@ export class TimeScaleModel {
     }
     timeZone ??= UNBOUND_ZONE;
     // With nothing bound — or nothing scheduled — this collapses to a zero span at the epoch, which
-    // resolves to the preset's own zoom rather than a divide-by-zero.
+    // resolves to the preset's own density rather than a divide-by-zero.
     const range =
       this.#range === 'fitDataset' ? (span ?? { start: instant(0), end: instant(0) }) : this.#range;
     const spanMs = diffMs(range.end, range.start);
@@ -241,12 +222,50 @@ export class TimeScaleModel {
     return { timeZone, range, pxPerMs };
   }
 
-  /** The three `TimeScaleZoom` modes (S1.9, D-S1.9-2). `'fitViewport'` is the pre-S1.9 formula,
-   *  unchanged — a refinement of the preset's own zoom when there is a pane to fit, not a
+  /** The three `TimeScaleFit` modes (S1.9, D-S1.9-2). `'pane'` is the pre-S1.9 formula,
+   *  unchanged — a refinement of the preset's own density when there is a pane to fit, not a
    *  precondition for having one. */
   #resolvePxPerMs(timeZone: string, rangeStart: Instant, width: number, spanMs: number): number {
-    if (typeof this.#zoom === 'object') return this.#zoom.pxPerMs;
-    if (this.#zoom === 'preset') return pxPerMsForPreset(timeZone, this.#preset, rangeStart);
+    if (typeof this.#fit === 'number') return this.#fit;
+    if (this.#fit === 'preset') return pxPerMsForPreset(timeZone, this.#preset, rangeStart);
     return width > 0 && spanMs > 0 ? width / spanMs : pxPerMsForPreset(timeZone, this.#preset, rangeStart);
   }
+}
+
+/** Gantt instances bind at construction (after mounting their render target — see `GanttShell`,
+ * #22) and call the returned handle's `unbind` on destroy. One rule, no exceptions (D-S1.5-4):
+ * bind always notifies the newcomer — including this one — so a fresh binding gets its first
+ * render even when nothing measurably changed; every other notification (another binding's
+ * bind/unbind, a `setPaneWidth`) fires iff the resolved scale actually changed. It does not run
+ * on a binding's own `unbind()`: the caller is tearing itself down and has no reason to react to
+ * its own departure; remaining bindings still get notified.
+ *
+ * Not a method on `TimeScaleModel` (issue #84, ADR 0007) — a free function reaching the model's
+ * internal `BoundValue` through a module-private `WeakMap`, so the published type has nothing a
+ * consumer holding a `TimeScaleModel` could call. `view/` is the only importer. */
+export function bindTimeScale(
+  model: TimeScaleModel,
+  binding: ScaleBinding,
+  onChange: () => void,
+): ScaleBindingHandle {
+  const state = internals.get(model);
+  if (!state) {
+    throw new Error('bindTimeScale: model was not constructed through the TimeScaleModel constructor');
+  }
+  // Copy-at-bind (S1.5, #6/#22 follow-up): a caller holding a reference to its own binding object
+  // cannot change this model's inputs behind its back; re-measurement goes through the handle.
+  const copy: MutableScaleBinding = {
+    timeZone: binding.timeZone,
+    entries: binding.entries,
+    paneWidth: binding.paneWidth,
+  };
+  const bound = state.scaleOptions.bind(copy, onChange);
+  return {
+    unbind: () => bound.unbind(),
+    setPaneWidth: (width) => {
+      if (copy.paneWidth === width) return;
+      copy.paneWidth = width;
+      state.scaleOptions.invalidate();
+    },
+  };
 }
