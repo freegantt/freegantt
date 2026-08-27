@@ -34,7 +34,7 @@ The scope and the record are not one-to-one, in three directions the spec had al
 
 `transaction()` also returns the body's own return value, never the record (D-S2-8) — so under the rename, `dataset.transaction()` would be the one method that does not return a `Transaction`.
 
-The glossary already writes the distinction into its own definitions, which is the shortest proof that both words are load-bearing: **Transaction** is *"a batch of proposed edits that runs the resolve hook once and commits as one ChangeSet."* That sentence is unwritable if the two share a name.
+The glossary already writes the distinction into its own definitions, which is the shortest proof that both words are load-bearing: **Transaction** is *"a batch of proposed edits that runs the extension hook once and commits as one ChangeSet."* That sentence is unwritable if the two share a name.
 
 ## Why `Commit` is not available
 
@@ -52,11 +52,11 @@ Three further costs, had the trap not been fatal on its own:
 
 - **D-S2-21 forbids it directly.** That decision grounds the design in prior art — Yjs's `doc.transact()`, Immer/Mutative drafts, TanStack DB's optimistic mutations — and states: *"Nothing here is invented, and the vocabulary should not read as though it were."* "Transaction … commits" is the most standard verb pairing in transactional programming.
 - **It reaches into a shipped slice for a reason that originates in a later one.** S1.8's commit sequence would be renamed so that S2's payload could have a word.
-- **A third grammatical form goes with it.** `snapshot()` is *"committed-only"* and returns *"the committed snapshot"* (D-S2-3, D-S2-21). That adjective is what distinguishes `snapshot()` from `get`/`has` inside a transaction body. "The settled snapshot" says nothing.
+- **A third grammatical form goes with it.** `all` is *"committed-only"* and returns *"the committed array"* (D-S2-3, D-S2-21). That adjective is what distinguishes `all` from `get`/`has` inside a transaction body. "The settled array" says nothing.
 
 ## The strongest surviving form, and why it also stops
 
-This project does nominalize verbs into types: `schedule()` → `ScheduleResult`, `resolveProposal` → `ProposalResolution`. So a commit-family noun is a legitimate move here in principle. But the pattern always gives the noun a **distinct surface form** — a `Result`, a `Resolution` — never the bare verb. Applied consistently it yields `CommitRecord`, and then `history.record(commitRecord)` stutters at the exact call site that motivated the exercise. The pattern that would make the name legitimate is the pattern that kills it.
+This project once nominalized verbs into types this way — `schedule()` → `ScheduleResult`, the extension hook → `EditAdjustment` — and both were later retired: `ScheduleResult` existed only in prose and never had a `src/` type to protect; `EditAdjustment` was replaced by `EntryEdits`, the same shape a caller's own edit already takes, precisely because a wrapped return value was ceremony the extender did not need. So a commit-family noun invented on this pattern would not be extending a live convention — it would be starting one fresh, on the two examples that did not survive contact with a real API. The retirement itself proves the point that matters here: had either survived, the pattern would still give the noun a **distinct surface form** — a `Result`, an `Adjustment` — never the bare verb. Applied consistently it yields `CommitRecord`, and then `history.record(commitRecord)` stutters at the exact call site that motivated the exercise. The pattern that would make the name legitimate is the pattern that kills it.
 
 ## What `ChangeSet` gives up
 

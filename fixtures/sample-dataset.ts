@@ -82,5 +82,7 @@ export const sampleEntryInputs: EntryInput[] = [
 /** The same entries, read once through the real Dataset boundary. Layout/render tests below `api/`
  * work with resolved `Entry` values (branded ids, `Instant` dates) and have no boundary of their own
  * to read `sampleEntryInputs` through, so this gives them the one already-resolved source of truth. */
-export const sampleEntries: readonly Entry[] = new Dataset({ entries: sampleEntryInputs, timeZone: 'UTC' })
-  .entries;
+export const sampleEntries: readonly Entry[] = new Dataset({
+  entries: sampleEntryInputs,
+  timeZone: 'UTC',
+}).entries.all;

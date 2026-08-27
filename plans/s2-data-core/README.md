@@ -29,10 +29,10 @@ Three findings are load-bearing enough to state before anything else:
 
 | # | Question | Answer |
 |---|---|---|
-| **Q1** | **Does S2 ship the plugin-installation API** (`DatasetOptions.plugins`, `setResolver`) that #15 designs? | **No — only the hook it feeds.** `DatasetData` holds one resolver field, initialized to identity before any transaction can run, with exactly one call site in the commit path. The public way to *claim* the slot lands in S3 with the plugin that claims it; a `plugins: []` option nothing can fill is the dishonest surface I11 exists to catch. Tests inject a resolver through the internal `DatasetDataOptions`, which proves the commit path is generic without widening anything public. §2 D-S2-6. |
+| **Q1** | **Does S2 ship the plugin-installation API** (`DatasetOptions.plugins`, `setExtender`) that #15 designs? | **No — only the hook it feeds.** `DatasetData` holds one extender field, initialized to identity before any transaction can run, with exactly one call site in the commit path. The public way to *claim* the slot lands in S3 with the plugin that claims it; a `plugins: []` option nothing can fill is the dishonest surface I11 exists to catch. Tests inject an extender through the internal `DatasetDataOptions`, which proves the commit path is generic without widening anything public. §2 D-S2-6. |
 | **Q2** | **Does S2 ship `declareStore` and the `plugin:${id}/${name}` arm of `StoreName`?** | **No.** `StoreName` is `'entries'` in S2 and widens in S3 with the first plugin store (#16). Shipping a union arm nothing produces makes `ChangeSet` untypeable at the point of use for no gain. §2 D-S2-7. |
 | **Q3** | **Does S2 ship `hierarchy: { autoGroup: true }`?** `plans/02` §2 shows it on `DatasetOptions`. | **No — `plans/03` puts it in S5**, with the tree UI that gives it a visible meaning. S2 stores `parentId` and validates it (no unknown parent, no cycle); it derives nothing from it. Recorded here so a reader does not read its absence as an oversight. §9. |
-| **Q4** | **Is `Entry.start`/`end` still mandatory when `kind` derives its span** (`plans/01` §2.5: "input may omit them and they are initialized")? | **Mandatory in the store, optional on input — and S2 both initializes and maintains them.** An input omitting both gets a zero-length span at the dataset's **Reference date** (CONTEXT.md); from then on the span rollup keeps it equal to the union of its children's. The rollup ships in S2 as a core step in the commit path — not as a resolver, and not as anything a plugin can displace — because a group whose dates never follow its children is not a group. §2 D-S2-10, D-S2-22. |
+| **Q4** | **Is `Entry.start`/`end` still mandatory when `kind` derives its span** (`plans/01` §2.5: "input may omit them and they are initialized")? | **Mandatory in the store, optional on input — and S2 both initializes and maintains them.** An input omitting both gets a zero-length span at the dataset's **Reference date** (CONTEXT.md); from then on the span rollup keeps it equal to the union of its children's. The rollup ships in S2 as a core step in the commit path — not as an extender, and not as anything a plugin can displace — because a group whose dates never follow its children is not a group. §2 D-S2-10, D-S2-22. |
 | **Q5** | **Does the render path get a rAF owner in S2?** `docs/01` marks `raf-single-owner` `PLANNED (S2)`. | **Yes.** The caller is in this slice: the mutation playground fires several mutations in one tick, and each auto-wrapped mutation is its own changeset. Measured cost of the migration: 45 dom tests, ~14 call sites. §2 D-S2-15. |
 | **Q6** | **Does S2 need a new harness page, or can the playground live on `index.html`?** | **A new page.** `e2e/harness.spec.ts` asserts against `index.html`'s fixed entry count; a page whose whole purpose is to change that count cannot share it. Same reasoning that gave S1.11 `large-dataset.html` (D-S1.11-5). §2 D-S2-17. |
 | **Q7** | **Are undo, JSON and the span rollup core, or should they be installable plugins?** | **Core files, and removable by construction — proved by CI, not claimed in prose.** Each is a leaf with exactly one importer, and a dependency-cruiser rule per leaf fails the build the moment a second one appears. Making them plugins would need the plugin-installation API Q1 just deferred, plus a public store-enumeration surface for serialization — more surface than the thing it installs. §2 D-S2-23. |
@@ -49,7 +49,7 @@ Acceptance for each story is the checkbox under it. The boxes live in the step f
 - **U3.** (consumer) I press Ctrl+Z. Every field the transaction touched goes back to the value it had, and nothing else moves. → S2.5
 - **U4.** (consumer) I save `dataset.toJSON()`, reload, and `Dataset.fromJSON(doc)` gives me the same dataset — byte for byte. → S2.6
 - **U5.** (consumer building a sync adapter) I subscribe to `change` and see `{ store, id, field, from, to }` for every edit. I can post that delta to a server without re-reading the dataset. → S2.2
-- **U8.** (consumer) Everything the library does to itself is on the public API. Its own view binding is `dataset.on('change')` plus `entries.snapshot()` — the same two members I have — so when I want to drive something of mine off an edit (a side panel, a save call, my own render policy), I write it the same way, against the same event. No built-in reaction has a private door. → S2.4
+- **U8.** (consumer) Everything the library does to itself is on the public API. Its own view binding is `dataset.on('change')` plus `entries.all` — the same two members I have — so when I want to drive something of mine off an edit (a side panel, a save call, my own render policy), I write it the same way, against the same event. No built-in reaction has a private door. → S2.4
 - **U9.** (consumer with a rule to enforce) I subscribe to `beforeChange`, look at the changeset, and return `false`. The edit does not happen — no store write, no `change`, no undo entry, no frame — and the call that made it throws `MutationCancelledError`. → S2.2
 - **U6.** (reviewer) I run `pnpm gate` on `.slice` = `S2` and read four lines, each naming an acceptance box from `plans/03` and each backed by a test that actually ran. → S2.7
 - **U7.** (maintainer) I read `docs/01-invariant-guard-matrix.md`. Every row that says `AUTO` for S2's rules has a rule file and a failing fixture behind it. → S2.7
@@ -88,9 +88,9 @@ dataset.entries.remove('t3');
 ```ts
 // model/ — types only
 export interface EntryStoreView {
-  /** The committed snapshot — see D-S2-3 for its identity rule and D-S2-21 for what it does
+  /** The committed array — see D-S2-3 for its identity rule and D-S2-21 for what it does
    *  *not* show while a transaction is open. */
-  snapshot(): readonly Entry[];
+  readonly all: readonly Entry[];
   get(id: EntryId): Entry | undefined;
   has(id: EntryId): boolean;
   readonly size: number;
@@ -102,7 +102,7 @@ export interface Dataset {
 }
 ```
 
-`data/`'s `EntryStore` extends the view with `add`/`update`/`remove`. The three read call sites in the tree today become `dataset.entries.snapshot()`: `Viewport.bind`'s `ScaleBinding`, `GanttShell.render`'s `LayoutInput`, and `GanttShell.reveal`'s index scan. `LayoutInput.entries` stays `readonly Entry[]` — `layout/` takes a snapshot and has no interest in a store.
+`data/`'s `EntryStore` extends the view with `add`/`update`/`remove`. The three read call sites in the tree today become `dataset.entries.all`: `Viewport.bind`'s `ScaleBinding`, `GanttShell.render`'s `LayoutInput`, and `GanttShell.reveal`'s index scan. `LayoutInput.entries` stays `readonly Entry[]` — `layout/` takes a snapshot and has no interest in a store.
 
 `api/entry-input.ts`'s `readEntries` moves to `data/entry-reader.ts` unchanged. It is the store's own reading now: construction and `entries.add()` must read an `EntryInput` the same way, and the one place that happens is inside the store.
 
@@ -110,14 +110,14 @@ Rejected: `dataset.entryStore.add(…)` beside `dataset.entries: readonly Entry[
 
 Rejected: an `EntryStore` that is also array-like (`Symbol.iterator`, `length`, index access). It reads as an array at some call sites and as a store at others, and the two never agree on what `entries[0]` means after a remove.
 
-### D-S2-3 — The snapshot array is rebuilt once per commit, not once per read
+### D-S2-3 — The `all` array is rebuilt once per commit, not once per read
 
-`snapshot()` returns a cached `readonly Entry[]`. Its identity changes only when a transaction commits. Two things depend on that:
+`all` returns a cached `readonly Entry[]`. Its identity changes only when a transaction commits. Two things depend on that:
 
 - `GanttShell.render()` calls it on every frame. A fresh array per render is an allocation on the cold path for no reason, and it defeats `ScaleBinding`'s reference comparison.
 - "did the data change?" becomes an identity check, which is what `BoundValue`'s equality half already expects (D-S1.5-4).
 
-Insertion order is the snapshot's order, and it is stable across updates. `toJSON()` reads the same order, which is half of what makes it byte-stable (D-S2-12).
+Insertion order is `all`'s order, and it is stable across updates. `toJSON()` reads the same order, which is half of what makes it byte-stable (D-S2-12).
 
 ### D-S2-4 — Signals own derived state inside `data/`; the event bus owns delta delivery
 
@@ -127,7 +127,7 @@ Insertion order is the snapshot's order, and it is stable across updates. `toJSO
 |---|---|---|
 | store revision | `signal` | one write per commit; every derived value below invalidates from it |
 | `byId`, `byParent` indexes | `computed` | rebuilt on read after a structural change, not on every mutation inside a transaction |
-| the `snapshot()` array | `computed` | D-S2-3's cached array, invalidated by the same revision |
+| the `all` array | `computed` | D-S2-3's cached array, invalidated by the same revision |
 
 `dataset.on('change')` is **not** an effect. An effect carries no payload, and the payload — the `ChangeSet` — is the entire contract (D7, principle 4). It is a typed `EventBus` subscription. Keeping the two jobs separate is what stops the codebase growing a second reactivity mechanism (#1's R4): signals answer *what is the current derived value*, the bus answers *what just changed*.
 
@@ -150,32 +150,51 @@ export interface DatasetEventMap {
 
 Two events, both fire, and both carry the same payload so a handler can move between them — `scheduleDiagnostics` is S3's, and declaring it now would be the I11 defect the map's own S1.8 comment warns about.
 
-### D-S2-6 — The resolve hook ships in S2; the public way to claim it ships in S3
+### D-S2-6 — The extension hook ships in S2; the public way to claim it ships in S3
 
-CLAUDE.md: *"The resolve hook is the identity function when no scheduling plugin is installed, so this is not conditioned on scheduling being present — the shape holds either way."* So `data/` must call it from day one, or S3 adds a second commit path.
+CLAUDE.md: *"The extension hook is the identity function when no scheduling plugin is installed, so this is not conditioned on scheduling being present — the shape holds either way."* So `data/` must call it from day one, or S3 adds a second commit path.
 
 ```ts
-// data/resolve-hook.ts
-export interface ProposalResolutionRequest {
-  entries: readonly Entry[];
-  proposed: ReadonlyMap<EntryId, EntryEdit>;
-}
-export interface ProposalResolution {
-  patch: readonly FieldPatch[];
-  diagnostics: readonly Diagnostic[];
-}
-export type ProposalResolver = (request: ProposalResolutionRequest) => ProposalResolution;
+// data/edit-extension.ts
+export type EntryEdits = ReadonlyMap<EntryId, EntryEdit>;
 
-export const identityResolver: ProposalResolver = () => EMPTY_RESOLUTION;
+export interface EditRequest {
+  entries: ReadonlyMap<EntryId, Entry>;   // the store's current snapshot, before this transaction's edits
+  proposed: EntryEdits;                   // what the caller asked to change
+}
+export type EditExtender = (request: EditRequest) => EntryEdits;  // extra writes only; empty map = no cascade
+
+export const identityExtender: EditExtender = () => EMPTY_EDITS;
 ```
 
-`DatasetData` holds one `#resolveProposal: ProposalResolver`, assigned once at construction, read at exactly one call site in the commit path. There is no `if (plugin)` to remove later because there is nothing to branch on. The **default is `identityResolver`** — what D4 says an unoccupied hook is. The span rollup is deliberately *not* the default value here: it is core, so it is its own step after the hook rather than an occupant of it, which is the whole of D-S2-22.
+**Revised, at the user's explicit direction (2026-08-27): a plain, usable API now beats matching a
+spec that has not been written yet.** The earlier shape — `EditAdjustment { patch: FieldPatch[] }` —
+is retired. `FieldPatch` was `FieldUpdated` (from `change-set.ts`, §2.1) with `store` removed, invented
+only to give the extender something to return; an extender now returns `EntryEdits`, the exact same
+shape a caller already writes to `dataset.entries.update()`. One vocabulary for "an edit", not three
+types for "an edit, a request, and an adjustment". `entries` is a `Map`, not an array — `EntryStore`
+already keeps `#byId` as one (S2.1), so this costs nothing and turns "find the dependent" into
+`entries.get(id)`, not a linear scan.
 
-**The hook is not scheduling's by right.** It holds one occupant at a time — that is arity, for determinism: one call per transaction, one patch to check against the body's edits (I4), no priority machinery in `data/`. It is **not** ownership: S2 ships the hook with *no* occupant — `identityResolver` — and the one cascade S2 does ship, the span rollup, deliberately does not sit in the slot at all (D-S2-22), because core behaviour must not live somewhere optional code can displace it. `plans/00` D4's wording says otherwise and is under correction in **OQ8**, which also decides whether S3 installs a resolver as a value or as a wrapper over the current one. S2 is compatible with either: the field holds whatever the composition produced.
+This drops the earlier "structurally identical to `ScheduleResult`, so S3's engine needs no mapping
+step" guarantee (the old D-S2-6 text, below). That guarantee protected a type that does not exist yet,
+for a slice that has not been designed; whoever designs S3's engine contract decides then whether it
+returns `EntryEdits` directly or needs its own mapping step — that is their call to make with real
+information, not a constraint S2 should carry today. `diagnostics` is still not part of this shape in
+S2 (OQ1) — S3 makes its own call on where a diagnostic-shaped return lives.
 
-**What S2 does not ship:** `DatasetOptions.plugins`, `DatasetPluginContext`, `edits.setResolver`, `ProposalResolverConflictError`. Those are #15's design and they land in S3 with the plugin that uses them. An option a consumer cannot fill is the dishonest surface I11 exists to catch, and `no-not-implemented` (B8) lands in this slice.
+`data/change-set.ts` gains one function, `diffEdit(entries, id, edit): readonly FieldUpdated[]`,
+applying D-S2-7's per-field equality table. The commit path calls it once per id in `proposed` and
+once per id in the extender's returned `EntryEdits` — one code path computes every `FieldUpdated` in
+the transaction, whether the edit came from the caller or from the extender.
 
-**How it is tested without a public claim:** `DatasetDataOptions.resolveProposal` is internal (`data/` is unreachable through the `exports` map). A test injects a resolver that patches a second entry and asserts the patch lands in the same changeset as the user's edit and reverts in one undo step. That is I7's shape, proven now, with the engine arriving in S3 to fill it.
+`DatasetData` holds one `#editExtender: EditExtender`, assigned once at construction, read at exactly one call site in the commit path. There is no `if (plugin)` to remove later because there is nothing to branch on. The **default is `identityExtender`** — what D4 says an unoccupied hook is. The span rollup is deliberately *not* the default value here: it is core, so it is its own step after the hook rather than an occupant of it, which is the whole of D-S2-22.
+
+**The hook is not scheduling's by right.** It holds one occupant at a time — that is arity, for determinism: one call per transaction, one patch to check against the body's edits (I4), no priority machinery in `data/`. It is **not** ownership: S2 ships the hook with *no* occupant — `identityExtender` — and the one cascade S2 does ship, the span rollup, deliberately does not sit in the slot at all (D-S2-22), because core behaviour must not live somewhere optional code can displace it. `plans/00` D4's wording says otherwise and is under correction in **OQ8**, which also decides whether S3 installs an extender as a value or as a wrapper over the current one. S2 is compatible with either: the field holds whatever the composition produced.
+
+**What S2 does not ship:** `DatasetOptions.plugins`, `DatasetPluginContext`, `edits.setExtender`, `EditExtenderConflictError`. Those are #15's design and they land in S3 with the plugin that uses them. An option a consumer cannot fill is the dishonest surface I11 exists to catch, and `no-not-implemented` (B8) lands in this slice.
+
+**How it is tested without a public claim:** `DatasetDataOptions.editExtender` is internal (`data/` is unreachable through the `exports` map). A test injects an extender that patches a second entry and asserts the patch lands in the same changeset as the user's edit and reverts in one undo step. That is I7's shape, proven now, with the engine arriving in S3 to fill it.
 
 Rejected: no hook at all until S3. The commit path would then be written twice, and the second writing is the one that has to keep undo atomic.
 
@@ -278,7 +297,7 @@ anything calls it.
 
 **What goes with it: the `ChangeOrigin` arms that had no producer.** `'load'` was `apply`'s and
 `fromJSON`'s — and `fromJSON` constructs a fresh `Dataset` rather than committing a changeset
-(D-S2-12), so it emits nothing. `'engine'` was never S2's either: a resolve-hook patch lands in the
+(D-S2-12), so it emits nothing. `'engine'` was never S2's either: a edit-extension patch lands in the
 **same** changeset as the edit that caused it, tagged with that changeset's origin (D-S2-22), so no
 S2 changeset is `'engine'`-originated. S2 therefore ships:
 
@@ -341,9 +360,9 @@ Rejected: unbounded. A long editing session in a browser tab then holds every ch
 
 Rejected: `undo: { capacity }`. `undo` is the verb (`dataset.undo()`); `history` is the thing that has a capacity. Two words, two jobs.
 
-### D-S2-14 — Undo and redo replay the recorded changeset; they never re-run the resolve hook
+### D-S2-14 — Undo and redo replay the recorded changeset; they never re-run the extension hook
 
-`plans/01` §6: *"Redo replays the recorded changeset (deterministic even if engine behavior changes between versions)."* Undo applies the recorded changeset inverted (`to`→`from`, added↔removed) with `origin: 'undo'`; redo re-applies it with `origin: 'redo'`. Neither opens a resolve-hook call, so an engine that changed between library versions cannot rewrite history.
+`plans/01` §6: *"Redo replays the recorded changeset (deterministic even if engine behavior changes between versions)."* Undo applies the recorded changeset inverted (`to`→`from`, added↔removed) with `origin: 'undo'`; redo re-applies it with `origin: 'redo'`. Neither opens a edit-extension call, so an engine that changed between library versions cannot rewrite history.
 
 A new edit after an undo clears the redo stack. A changeset applied by undo/redo does **not** push a new undo entry — it moves the cursor.
 
@@ -431,7 +450,7 @@ export function subscribeToDatasetChanges(
 ```ts
 // GanttShell constructor, after the viewport is bound
 this.#datasetChanges = subscribeToDatasetChanges(options.dataset, () => {
-  this.#viewportHandle.setEntries(options.dataset.entries.snapshot());
+  this.#viewportHandle.setEntries(options.dataset.entries.all);
   this.#frames.request();
 });
 ```
@@ -458,7 +477,7 @@ reads: *subscribe to the dataset's changes; on each one, push the snapshot and r
 | `bindDatasetChanges` / `DatasetChangeBinding` | Fails: Binding is `layout/viewport/`'s word for a Gantt's contribution to a shared model, and `ScaleBinding` already holds it one layer down. |
 | **`subscribeToDatasetChanges` / `DatasetChangeSubscription`** | Passes all five checks. |
 
-**It uses nothing a consumer could not use.** `dataset.on('change')` and `entries.snapshot()` are both
+**It uses nothing a consumer could not use.** `dataset.on('change')` and `entries.all` are both
 public (§3); the file imports no `data/` internal and holds no privileged channel. That is U8: a power
 user who wants to drive rendering themselves writes these same three lines against the same event.
 
@@ -491,40 +510,40 @@ Without the overlay every read-then-write helper is silently wrong inside a tran
 
 The overlay is not new state. `#pending` is the same map the changeset builder already fills (D-S2-8 step 1); this decision only says that reads consult it.
 
-**`snapshot()` is committed-only, and its name says so.** Materializing the overlay into an array on every in-body read costs an allocation per read and destroys D-S2-3's stable identity, which `ScaleBinding`'s reference comparison depends on. So the store carries one asymmetry, stated in the doc comment rather than discovered: inside a transaction body, `get`/`has`/`size`/`childrenOf` see your writes and `snapshot()` does not.
+**`all` is committed-only, by design.** Materializing the overlay into an array on every in-body read costs an allocation per read and destroys D-S2-3's stable identity, which `ScaleBinding`'s reference comparison depends on. So the store carries one asymmetry, stated in the doc comment rather than discovered: inside a transaction body, `get`/`has`/`size`/`childrenOf` see your writes and `all` does not.
 
 Rejected: writing through to the store immediately and keeping inverses for rollback (Yjs's variant). Yjs can afford it because a CRDT has no validation to fail; we do, and it would buy us a rollback engine this slice has not budgeted.
 
 Rejected: adopting `immer` or `mutative` to get drafts and inverse patches for free. `plans/04` §1.1 already rejects `immer`, and the reason holds under inspection: their delta is JSON Patch over a tree, ours is `{ store, id, field, from, to }` over normalized stores — the shape the sync story needs (D-S2-7, §9). We would carry the dependency and still write our own changeset.
 
-### D-S2-22 — The span rollup is a **core step** in the commit path, not a resolver
+### D-S2-22 — The span rollup is a **core step** in the commit path, not an extender
 
 A group whose dates do not follow its children is not a group. Grouping is core, so the rollup is core:
 it runs whether or not any plugin is installed, and **nothing installable can displace it**.
 
-An earlier draft of this decision made `spanRollupResolver` the *default value* of `#resolveProposal`.
+An earlier draft of this decision made `spanRollupResolver` the *default value* of `#editExtender`.
 That was the defect: a core behaviour parked in a slot that optional code occupies. Under OQ8's install
-model an occupant either wraps the current resolver or replaces it — so installing the scheduling
+model an occupant either wraps the current extender or replaces it — so installing the scheduling
 plugin, which is optional by D4, could silently turn off a behaviour that is not. Ownership inverted,
 one level below the wording OQ8 corrects.
 
-**So the rollup is its own step.** S2.2's commit sequence runs it after the resolve hook,
+**So the rollup is its own step.** S2.2's commit sequence runs it after the extension hook,
 unconditionally:
 
 ```
-body edits → resolve hook (once, whoever occupies it) → roll up derived spans (always) → changeset
+body edits → extension hook (once, whoever occupies it) → roll up derived spans (always) → changeset
 ```
 
 ```ts
 // data/span-rollup.ts — a plain function, exported; no plugin surface, no slot
 export function rollUpDerivedSpans(
-  entries: readonly Entry[],
-  proposed: ReadonlyMap<EntryId, EntryEdit>,
+  entries: ReadonlyMap<EntryId, Entry>,
+  proposed: EntryEdits,
   kinds: ReadonlySet<EntryKind>,
-): readonly FieldPatch[];
+): readonly FieldUpdated[];
 ```
 
-`#resolveProposal`'s default goes back to `identityResolver`, which is what D4 says a hook with no
+`#editExtender`'s default goes back to `identityExtender`, which is what D4 says a hook with no
 occupant is. The two are now different categories and read as different categories: the hook is
 **policy**, installed and replaceable; the rollup is a **derivation**, core and not.
 
@@ -535,11 +554,11 @@ occupant is. The two are now different categories and read as different categori
 | Rollup is core, scheduling is optional | The step runs with no plugin installed, and no install can remove it. |
 | Scheduling does not own it, in any way | `scheduling/` cannot import `data/` and now has no reason to: it moves children, and the rollup catches the parents up **in the same transaction, the same changeset, one undo step**. This is what **closed OQ7**, as its option (a): no import edge to widen, and no composition order to invent. |
 | Scheduling can still change what rolls up | Through its inputs, not through the pass — it moves children, and a consumer's `derivedSpanKinds` says which kinds derive at all. |
-| A consumer who wants manual group spans | `derivedSpanKinds: []`. The opt-out is **configuration data**, not a resolver someone has to write. |
+| A consumer who wants manual group spans | `derivedSpanKinds: []`. The opt-out is **configuration data**, not an extender someone has to write. |
 
 **Precedence, stated once because it is the one judgment call here:** the rollup **yields to the body**
 — a field the consumer proposed in this transaction is never overwritten, which is `plans/01` §7's
-*"policy never overwrites a user-proposed field"* — and **wins over the resolver**, because between two
+*"policy never overwrites a user-proposed field"* — and **wins over the extender**, because between two
 policies the derived one is the stronger claim on a derived-kind span. A plugin that needs a group to
 hold a hand-set span asks for `derivedSpanKinds: []`, or for a pin, which is plugin-owned data (ADR
 0002, §9). Always overwrites a **stored** value: `update('p1', { start: X })` wins for that transaction,
@@ -550,7 +569,7 @@ fourth influence point inside the commit path is where determinism stops holding
 
 | Wanted | Already is |
 |---|---|
-| Act **before** the rollup | The resolve hook — literally the step before it. One occupant, wrappable (OQ8), so order is written at the install site. An event with N subscribers that can change the outcome puts order-dependence inside the commit path, which is what single-occupant arity exists to prevent. |
+| Act **before** the rollup | The extension hook — literally the step before it. One occupant, wrappable (OQ8), so order is written at the install site. An event with N subscribers that can change the outcome puts order-dependence inside the commit path, which is what single-occupant arity exists to prevent. |
 | Act **after** the rollup | `beforeChange` (D-S2-25) — it fires on the finished changeset with the rollup's rows already in it, and it can refuse the whole thing. A second name for that moment is the `afterUpdate` synonym D-S2-25 rejects. |
 | **Watch** the rollup without changing it | The changeset. The rollup's rows are `updated` entries the consumer never typed, tagged with the origin, in the same payload as the edit that caused them. |
 
@@ -593,9 +612,9 @@ depending on them:
 
 | Depended on by something | Depended on by nothing |
 |---|---|
-| stores + indexes, reactivity façade, event bus, transaction, changeset, resolve hook | **history**, **serialization**, **span rollup** |
+| stores + indexes, reactivity façade, event bus, transaction, changeset, extension hook | **history**, **serialization**, **span rollup** |
 
-The rollup used to read as a dependency of the resolve hook and never was one; since D-S2-22 it is not
+The rollup used to read as a dependency of the extension hook and never was one; since D-S2-22 it is not
 even adjacent to it. It is its own commit step, so `data/transaction.ts` names it once and nothing else
 in `src/**` may. Removing it is not "the hook falls back to identity" — it is the dataset behaving as
 though `derivedSpanKinds` were empty, which is a supported configuration. That is what makes it a leaf
@@ -670,7 +689,7 @@ handler that throws is the consumer's bug and cannot cost anyone the undo entry,
 recorded first.
 
 **Why this is the load-bearing decision of the slice.** Everything the library does to itself, a
-consumer can do: subscribe to the same event, read the same `entries.snapshot()`, open the same
+consumer can do: subscribe to the same event, read the same `entries.all`, open the same
 `transaction()`. A power user who wants their own history, their own render policy or their own
 persistence writes what `data/history.ts` and the attachment write, against the same surface — and a
 consumer who wants none of it gets the static image. The alternative — a privileged internal channel
@@ -712,13 +731,13 @@ hook, before the store write:
 
 | Seam | Subscribers | May |
 |---|---|---|
-| `resolveProposal` (D-S2-6) | one installed resolver | extend the change — the scheduling plugin's slot in S3 |
+| `editExtender` (D-S2-6) | one installed extender | extend the change — the scheduling plugin's slot in S3 |
 | **`beforeChange`** | many | refuse the whole change; **not** modify it |
 | `change` (D-S2-24) | many | observe |
 
 After the hook, so a handler judges what would actually be committed, cascades included, and never
-vetoes a proposal the resolver would have grown. Not modify, so handler order cannot decide the
-outcome — rewriting is the resolver's job, and it has exactly one owner.
+vetoes a proposal the extender would have grown. Not modify, so handler order cannot decide the
+outcome — rewriting is the extender's job, and it has exactly one owner.
 
 **A veto costs one early return, because there is only one channel to not-fire.** The write set is
 discarded, no store write happens, the revision signal does not bump, and `change` never fires — so
@@ -766,7 +785,7 @@ The changeset already carries `store`, `id`, `field`, `from`, `to`, so "refuse u
 `.some()` on a payload the consumer already has. Note this is a different question from `plans/02` §3's
 `beforeEntryMove`/`beforeEntryEdit`: those are **gesture** events on the `Gantt` — "the user is dragging
 this bar" — and they arrive in S4 with the gestures that fire them. Neither is scheduling-specific;
-`scheduling/` reaches the data core through the resolver seam and nowhere else (D-S2-6).
+`scheduling/` reaches the data core through the extender seam and nowhere else (D-S2-6).
 
 **Spec edit:** `plans/02` §3's event table gains `beforeChange` in the cancelable column beside `change`,
 and the "Rules" list gains the sync-only carve-out for it. §7 carries it.
@@ -785,8 +804,8 @@ export type CoreFieldKey = keyof Omit<Entry, 'id'>;
 export type FieldKey = CoreFieldKey | (string & {});
 ```
 
-`FieldKey` is public three times over — `FieldUpdated`, `FieldPatch` and the undo record. A closed
-`keyof Omit<Entry, 'id'>` cannot be widened later without a breaking change to all three, and the cost
+`FieldKey` is public twice over — `FieldUpdated` and the undo record. A closed
+`keyof Omit<Entry, 'id'>` cannot be widened later without a breaking change to both, and the cost
 of leaving it open now is one type alias. Core keys stay named, so autocomplete still lists them.
 
 **What S2 must do, and nothing more:**
@@ -817,7 +836,7 @@ Net change to `api/index.ts`. Everything here is new unless the row says otherwi
 |---|---|---|
 | `DatasetOptions.history` | option | D-S2-13 |
 | `DatasetOptions.derivedSpanKinds` | option | D-S2-22 |
-| `Dataset.entries` — now `EntryStoreView` (`snapshot`/`get`/`has`/`size`) + `add`/`update`/`remove` | **changed** | D-S2-2, D-S2-21 |
+| `Dataset.entries` — now `EntryStoreView` (`all`/`get`/`has`/`size`) + `add`/`update`/`remove` | **changed** | D-S2-2, D-S2-21 |
 | `EntryInput.start` / `EntryInput.end` — now optional | **changed** | D-S2-10, D-S2-22 |
 | `Dataset.transaction(fn)` — returns the body's own return value, never a `ChangeSet` | method | D-S2-8 |
 | `Dataset.undo()` / `redo()` / `canUndo` / `canRedo` — `undo`/`redo` return `void`; what they did arrives on `change` | methods + getters | D-S2-14 |
@@ -831,9 +850,9 @@ Net change to `api/index.ts`. Everything here is new unless the row says otherwi
 | `DuplicateEntryIdError`, `ParentCycleError`, `MutationDuringNotificationError`, `UnsupportedSchemaError`, `MutationCancelledError` | errors | D-S2-10, D-S2-25 |
 | `changeSetId` | brand helper | D-S2-7 |
 
-Not added, deliberately: `DatasetOptions.plugins`, `declareStore`, `ProposalResolver` and friends (D-S2-6/7); `hierarchy.autoGroup` (Q3); `apply` and its four types, and the `'engine'`/`'load'` origin arms (D-S2-11); a `transaction` origin option and a per-entry manual-span opt-out (§9).
+Not added, deliberately: `DatasetOptions.plugins`, `declareStore`, `EditExtender` and friends (D-S2-6/7); `hierarchy.autoGroup` (Q3); `apply` and its four types, and the `'engine'`/`'load'` origin arms (D-S2-11); a `transaction` origin option and a per-entry manual-span opt-out (§9).
 
-**The live binding adds no public surface at all** (D-S2-20): `subscribeToDatasetChanges` is internal, and everything it calls — `on('change')`, `entries.snapshot()` — is already in the table above. That is the test D-S2-24 sets for every built-in reaction: if wiring one needed a private door, the door would be listed here.
+**The live binding adds no public surface at all** (D-S2-20): `subscribeToDatasetChanges` is internal, and everything it calls — `on('change')`, `entries.all` — is already in the table above. That is the test D-S2-24 sets for every built-in reaction: if wiring one needed a private door, the door would be listed here.
 
 `api-extractor`'s committed report is what holds this table honest from here on (D-S2-19).
 
@@ -850,11 +869,11 @@ Not added, deliberately: `DatasetOptions.plugins`, `declareStore`, `ProposalReso
 | `toJSON` gains a derived field (`rowCount`, a cached span) | B9 bans `Row`/`Item`/`GeometryFrame` references and `layout/`/`view/` imports inside `src/data/serialization/**` |
 | A new public type ships with nothing behind it | B8 (`no-not-implemented`) plus the `api-report` diff, which makes every surface addition a reviewed line |
 | `toJSON` starts emitting keys in `Object.keys` order after a refactor | `[S2-A2]` compares strings, not objects (D-S2-12) |
-| Undo restores the user's edit but not the engine's cascade | `[S2-A1]` runs with an injected non-identity resolver as well as without it (D-S2-6) |
+| Undo restores the user's edit but not the engine's cascade | `[S2-A1]` runs with an injected non-identity extender as well as without it (D-S2-6) |
 | The changeset log in the harness is written by re-reading the dataset instead of reading the changeset | `[S2-A4]` asserts `from` **and** `to` per field; a re-read cannot produce `from` |
 | A mutation inside a `change` handler half-applies | `MutationDuringNotificationError` throws before anything is written (D-S2-9) |
 | A vetoed change half-applies — the store written, `change` suppressed | `beforeChange` fires **before** the store write, so a veto is an early return, not an undo of work already done (D-S2-25) |
-| A second veto seam appears — a resolver that returns "rejected", a `change` handler that throws to mean "no" | One veto point, named in the surface table: `beforeChange`. A resolver extends a change (D-S2-6); a `change` handler is past the point of refusal by construction |
+| A second veto seam appears — an extender that returns "rejected", a `change` handler that throws to mean "no" | One veto point, named in the surface table: `beforeChange`. An extender extends a change (D-S2-6); a `change` handler is past the point of refusal by construction |
 | Someone gives the view or the history a private notification path — a callback `DatasetData` holds, an internal `#notifyView()` | There is one channel and it is public (D-S2-24). The view's whole dependency is one file, and `dataset-change-subscription-is-removable` fails the build the moment a second file imports it |
 | Someone makes the commit path push onto the history | `history-is-removable`: `data/transaction.ts` importing `data/history.ts` fails the build (D-S2-23) |
 | A "small" import creeps into a leaf's importer set — `layout/` reading the history for a badge, a plugin importing `span-rollup.ts` | The rule names one importer per leaf, so widening the set is an edit to `.dependency-cruiser.cjs` that a reviewer sees (D-S2-23) |
@@ -887,7 +906,7 @@ Seven steps, in order. Each is its own reviewable PR against a green `main`. The
 | Step | Plan | Ends with |
 |---|---|---|
 | S2.1 | [`s2.1-stores-and-reactivity.md`](./s2.1-stores-and-reactivity.md) | `data/` holds entries; `Dataset.entries` is a store view; nothing renders differently |
-| S2.2 | [`s2.2-transactions-and-changesets.md`](./s2.2-transactions-and-changesets.md) | one transaction → the resolve hook → the rollup step → one changeset → `beforeChange` → one `change` event |
+| S2.2 | [`s2.2-transactions-and-changesets.md`](./s2.2-transactions-and-changesets.md) | one transaction → the extension hook → the rollup step → one changeset → `beforeChange` → one `change` event |
 | S2.3 | [`s2.3-mutation-api.md`](./s2.3-mutation-api.md) | `dataset.entries.add/update/remove`, typed, validating; a group's dates follow its children |
 | S2.4 | [`s2.4-live-binding.md`](./s2.4-live-binding.md) | **an edit in the console moves a bar on screen** (#33 closed) |
 | S2.5 | [`s2.5-undo-redo.md`](./s2.5-undo-redo.md) | undo and redo buttons in the playground; `[S2-A1]` |
@@ -937,7 +956,7 @@ Not batched into S2.7. A spec that describes what shipped two steps ago is the d
 Per-step detail is in the step files. The shape:
 
 - **`src/data/**/*.test.ts`** — pure, Node, no DOM. The store, transactions, changesets, history and serialization are all plain data and functions; anything here that needs a DOM is a layering bug.
-- **Property tests (`fast-check`, first use — `plans/04` §2 budgets it at S2)** — `[S2-A1]` over random mutation sequences, run twice: once with the identity resolver and once with an injected resolver that cascades, so I7's engine half is proven before an engine exists.
+- **Property tests (`fast-check`, first use — `plans/04` §2 budgets it at S2)** — `[S2-A1]` over random mutation sequences, run twice: once with the identity extender and once with an injected extender that cascades, so I7's engine half is proven before an engine exists.
 - **`src/view/gantt-shell.test.ts`, `src/api/gantt.test.ts`** — the live binding and the frame scheduler; the ~14 call sites of D-S2-15's migration.
 - **`e2e/data.spec.ts`** — `[S2-A4]` against `harness/data.html`.
 - **`test/guards/`** — the new lint fixtures (including a red test per `*-is-removable` rule: a second importer must fail the build), the extended matrix coverage, the `S2` entry in `slice-gate.test.ts`.
@@ -948,7 +967,7 @@ Per-step detail is in the step files. The shape:
 
 | Deferred | Comes back when | Where |
 |---|---|---|
-| `DatasetOptions.plugins` / `setResolver` / `declareStore` / `ProposalResolverConflictError` | the first plugin claims the hook — and **what claiming means** is OQ8: a value that displaces the current resolver, or a wrapper over it. S2's one internal field is compatible either way; `ProposalResolverConflictError` is not, and OQ8 decides whether it ships at all | S3, #15/#16 |
+| `DatasetOptions.plugins` / `setExtender` / `declareStore` / `EditExtenderConflictError` | the first plugin claims the hook — and **what claiming means** is OQ8: a value that displaces the current extender, or a wrapper over it. S2's one internal field is compatible either way; `EditExtenderConflictError` is not, and OQ8 decides whether it ships at all | S3, #15/#16 |
 | `plugin:${id}/${name}` arm of `StoreName`; the plugin section of `toJSON()` | the first plugin store exists | S3, #16 |
 | `scheduleDiagnostics` on `DatasetEventMap` | an engine produces diagnostics | S3 |
 | `hierarchy: { autoGroup: true }` | the tree UI gives promotion a visible meaning | S5, `plans/02` §2 |

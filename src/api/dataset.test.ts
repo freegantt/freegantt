@@ -15,7 +15,7 @@ const oneEntry = (overrides: Partial<EntryInput> = {}): EntryInput => ({
 });
 
 const first = (dataset: Dataset): Entry => {
-  const entry = dataset.entries[0];
+  const entry = dataset.entries.all[0];
   if (!entry) throw new Error('expected one entry');
   return entry;
 };
@@ -27,7 +27,7 @@ describe('new Dataset()', () => {
       entries: [oneEntry({ id: 'root' }), oneEntry({ id: 't1', parentId: 'root' })],
     });
     expect(first(dataset).id).toBe(entryId('root'));
-    expect(dataset.entries[1]?.parentId).toBe(entryId('root'));
+    expect(dataset.entries.all[1]?.parentId).toBe(entryId('root'));
   });
 
   it("takes date strings and reads them in the dataset's zone", () => {
@@ -49,7 +49,7 @@ describe('new Dataset()', () => {
     });
     expect(first(dataset).start).toBe(1_000_000);
     expect(first(dataset).end).toBe(2_000_000);
-    expect(dataset.entries[1]?.start).toBe(utc('2026-09-01T00:00:00Z'));
+    expect(dataset.entries.all[1]?.start).toBe(utc('2026-09-01T00:00:00Z'));
   });
 
   it('reads a date-only end as inclusive by default', () => {

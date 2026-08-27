@@ -1,11 +1,12 @@
-// view/ — the first bus in the codebase (plans/01 §8.3, D-S1.8-3/D-S1.8-4). `plans/02` §3 puts view
-// events on the Gantt and data events on the Dataset — two emitters, not one object. `GanttShell`
-// owns this instance because the shell is what holds the splitter; `Gantt.on`/`Gantt.off` delegate
-// to it, the same way `Gantt` delegates every other job to its shell.
+// view/ — the Gantt's own event map. `plans/02` §3 puts view events on the Gantt and data events on
+// the Dataset — two emitters, not one object. `GanttShell` owns its `EventBus<GanttEventMap>` instance
+// because the shell is what holds the splitter; `Gantt.on`/`Gantt.off` delegate to it, the same way
+// `Gantt` delegates every other job to its shell.
 //
-// Not `model/`: `data/` may import only `model/`, and a bus shared with a future Dataset event would
-// be a third runtime carve-out in a module specified as types-only. The step that actually needs
-// sharing makes that call, with the caller in front of it (D-S1.8-4).
+// The bus mechanism itself moved to `data/event-bus.ts` in S2.1 (D-S2-5) — `view/` imports it from
+// there rather than owning a second copy.
+
+export { EventBus } from '../data/event-bus.js';
 
 export interface GridWidthChange {
   readonly from: number;
@@ -17,32 +18,4 @@ export interface GridWidthChange {
 export interface GanttEventMap {
   beforeGridWidthChange: GridWidthChange;
   gridWidthChange: GridWidthChange;
-}
-
-export class EventBus<TEvents> {
-  #handlers = new Map<keyof TEvents, Set<(payload: TEvents[keyof TEvents]) => void | false>>();
-
-  on<K extends keyof TEvents>(name: K, handler: (payload: TEvents[K]) => void | false): void {
-    let handlers = this.#handlers.get(name);
-    if (!handlers) {
-      handlers = new Set();
-      this.#handlers.set(name, handlers);
-    }
-    handlers.add(handler as (payload: TEvents[keyof TEvents]) => void | false);
-  }
-
-  off<K extends keyof TEvents>(name: K, handler: (payload: TEvents[K]) => void | false): void {
-    this.#handlers.get(name)?.delete(handler as (payload: TEvents[keyof TEvents]) => void | false);
-  }
-
-  /** Returns `false` if any handler returned `false`. Notification events ignore the result. */
-  emit<K extends keyof TEvents>(name: K, payload: TEvents[K]): boolean {
-    const handlers = this.#handlers.get(name);
-    if (!handlers) return true;
-    let ok = true;
-    for (const handler of handlers) {
-      if (handler(payload) === false) ok = false;
-    }
-    return ok;
-  }
 }
