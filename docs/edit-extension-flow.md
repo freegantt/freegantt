@@ -83,18 +83,18 @@ open, auto-wrapped or explicit, and sees the **whole** proposed batch in one cal
 // an installed extender — data/'s own internal seam only in S2 (DatasetDataOptions.editExtender
 // is unreachable through the package's exports map: tests inject it, harness code cannot)
 const cascadeStartDate: EditExtender = ({ entries, proposed }) => {
-  const extra = new Map<EntryId, EntryEdit>();
+  const extraEdits = new Map<EntryId, EntryEdit>();
 
   for (const [id, edit] of proposed) {
     if (edit.start === undefined) continue;
 
     const dependent = findDependent(entries, id);
     if (dependent) {
-      extra.set(dependent.id, { start: edit.start });
+      extraEdits.set(dependent.id, { start: edit.start });
     }
   }
 
-  return extra;
+  return extraEdits;
 };
 ```
 
