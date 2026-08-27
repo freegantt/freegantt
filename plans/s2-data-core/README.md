@@ -156,26 +156,45 @@ CLAUDE.md: *"The resolve hook is the identity function when no scheduling plugin
 
 ```ts
 // data/resolve-hook.ts
-export interface ProposalResolutionRequest {
-  entries: readonly Entry[];
-  proposed: ReadonlyMap<EntryId, EntryEdit>;
-}
-export interface ProposalResolution {
-  patch: readonly FieldPatch[];
-  diagnostics: readonly Diagnostic[];
-}
-export type ProposalResolver = (request: ProposalResolutionRequest) => ProposalResolution;
+export type EntryEdits = ReadonlyMap<EntryId, EntryEdit>;
 
-export const identityResolver: ProposalResolver = () => EMPTY_RESOLUTION;
+export interface EditRequest {
+  entries: ReadonlyMap<EntryId, Entry>;   // the store's current snapshot, before this transaction's edits
+  proposed: EntryEdits;                   // what the caller asked to change
+}
+export type EditResolver = (request: EditRequest) => EntryEdits;  // extra writes only; empty map = no cascade
+
+export const identityResolver: EditResolver = () => EMPTY_EDITS;
 ```
 
-`DatasetData` holds one `#resolveProposal: ProposalResolver`, assigned once at construction, read at exactly one call site in the commit path. There is no `if (plugin)` to remove later because there is nothing to branch on. The **default is `identityResolver`** — what D4 says an unoccupied hook is. The span rollup is deliberately *not* the default value here: it is core, so it is its own step after the hook rather than an occupant of it, which is the whole of D-S2-22.
+**Revised, at the user's explicit direction (2026-08-27): a plain, usable API now beats matching a
+spec that has not been written yet.** The earlier shape — `EditAdjustment { patch: FieldPatch[] }` —
+is retired. `FieldPatch` was `FieldUpdated` (from `change-set.ts`, §2.1) with `store` removed, invented
+only to give the resolver something to return; a resolver now returns `EntryEdits`, the exact same
+shape a caller already writes to `dataset.entries.update()`. One vocabulary for "an edit", not three
+types for "an edit, a request, and an adjustment". `entries` is a `Map`, not an array — `EntryStore`
+already keeps `#byId` as one (S2.1), so this costs nothing and turns "find the dependent" into
+`entries.get(id)`, not a linear scan.
+
+This drops the earlier "structurally identical to `ScheduleResult`, so S3's engine needs no mapping
+step" guarantee (the old D-S2-6 text, below). That guarantee protected a type that does not exist yet,
+for a slice that has not been designed; whoever designs S3's engine contract decides then whether it
+returns `EntryEdits` directly or needs its own mapping step — that is their call to make with real
+information, not a constraint S2 should carry today. `diagnostics` is still not part of this shape in
+S2 (OQ1) — S3 makes its own call on where a diagnostic-shaped return lives.
+
+`data/change-set.ts` gains one function, `diffEdit(entries, id, edit): readonly FieldUpdated[]`,
+applying D-S2-7's per-field equality table. The commit path calls it once per id in `proposed` and
+once per id in the resolver's returned `EntryEdits` — one code path computes every `FieldUpdated` in
+the transaction, whether the edit came from the caller or from the resolver.
+
+`DatasetData` holds one `#editResolver: EditResolver`, assigned once at construction, read at exactly one call site in the commit path. There is no `if (plugin)` to remove later because there is nothing to branch on. The **default is `identityResolver`** — what D4 says an unoccupied hook is. The span rollup is deliberately *not* the default value here: it is core, so it is its own step after the hook rather than an occupant of it, which is the whole of D-S2-22.
 
 **The hook is not scheduling's by right.** It holds one occupant at a time — that is arity, for determinism: one call per transaction, one patch to check against the body's edits (I4), no priority machinery in `data/`. It is **not** ownership: S2 ships the hook with *no* occupant — `identityResolver` — and the one cascade S2 does ship, the span rollup, deliberately does not sit in the slot at all (D-S2-22), because core behaviour must not live somewhere optional code can displace it. `plans/00` D4's wording says otherwise and is under correction in **OQ8**, which also decides whether S3 installs a resolver as a value or as a wrapper over the current one. S2 is compatible with either: the field holds whatever the composition produced.
 
-**What S2 does not ship:** `DatasetOptions.plugins`, `DatasetPluginContext`, `edits.setResolver`, `ProposalResolverConflictError`. Those are #15's design and they land in S3 with the plugin that uses them. An option a consumer cannot fill is the dishonest surface I11 exists to catch, and `no-not-implemented` (B8) lands in this slice.
+**What S2 does not ship:** `DatasetOptions.plugins`, `DatasetPluginContext`, `edits.setResolver`, `EditResolverConflictError`. Those are #15's design and they land in S3 with the plugin that uses them. An option a consumer cannot fill is the dishonest surface I11 exists to catch, and `no-not-implemented` (B8) lands in this slice.
 
-**How it is tested without a public claim:** `DatasetDataOptions.resolveProposal` is internal (`data/` is unreachable through the `exports` map). A test injects a resolver that patches a second entry and asserts the patch lands in the same changeset as the user's edit and reverts in one undo step. That is I7's shape, proven now, with the engine arriving in S3 to fill it.
+**How it is tested without a public claim:** `DatasetDataOptions.editResolver` is internal (`data/` is unreachable through the `exports` map). A test injects a resolver that patches a second entry and asserts the patch lands in the same changeset as the user's edit and reverts in one undo step. That is I7's shape, proven now, with the engine arriving in S3 to fill it.
 
 Rejected: no hook at all until S3. The commit path would then be written twice, and the second writing is the one that has to keep undo atomic.
 
@@ -502,7 +521,7 @@ Rejected: adopting `immer` or `mutative` to get drafts and inverse patches for f
 A group whose dates do not follow its children is not a group. Grouping is core, so the rollup is core:
 it runs whether or not any plugin is installed, and **nothing installable can displace it**.
 
-An earlier draft of this decision made `spanRollupResolver` the *default value* of `#resolveProposal`.
+An earlier draft of this decision made `spanRollupResolver` the *default value* of `#editResolver`.
 That was the defect: a core behaviour parked in a slot that optional code occupies. Under OQ8's install
 model an occupant either wraps the current resolver or replaces it — so installing the scheduling
 plugin, which is optional by D4, could silently turn off a behaviour that is not. Ownership inverted,
@@ -518,13 +537,13 @@ body edits → resolve hook (once, whoever occupies it) → roll up derived span
 ```ts
 // data/span-rollup.ts — a plain function, exported; no plugin surface, no slot
 export function rollUpDerivedSpans(
-  entries: readonly Entry[],
-  proposed: ReadonlyMap<EntryId, EntryEdit>,
+  entries: ReadonlyMap<EntryId, Entry>,
+  proposed: EntryEdits,
   kinds: ReadonlySet<EntryKind>,
-): readonly FieldPatch[];
+): readonly FieldUpdated[];
 ```
 
-`#resolveProposal`'s default goes back to `identityResolver`, which is what D4 says a hook with no
+`#editResolver`'s default goes back to `identityResolver`, which is what D4 says a hook with no
 occupant is. The two are now different categories and read as different categories: the hook is
 **policy**, installed and replaceable; the rollup is a **derivation**, core and not.
 
@@ -712,7 +731,7 @@ hook, before the store write:
 
 | Seam | Subscribers | May |
 |---|---|---|
-| `resolveProposal` (D-S2-6) | one installed resolver | extend the change — the scheduling plugin's slot in S3 |
+| `editResolver` (D-S2-6) | one installed resolver | extend the change — the scheduling plugin's slot in S3 |
 | **`beforeChange`** | many | refuse the whole change; **not** modify it |
 | `change` (D-S2-24) | many | observe |
 
@@ -785,8 +804,8 @@ export type CoreFieldKey = keyof Omit<Entry, 'id'>;
 export type FieldKey = CoreFieldKey | (string & {});
 ```
 
-`FieldKey` is public three times over — `FieldUpdated`, `FieldPatch` and the undo record. A closed
-`keyof Omit<Entry, 'id'>` cannot be widened later without a breaking change to all three, and the cost
+`FieldKey` is public twice over — `FieldUpdated` and the undo record. A closed
+`keyof Omit<Entry, 'id'>` cannot be widened later without a breaking change to both, and the cost
 of leaving it open now is one type alias. Core keys stay named, so autocomplete still lists them.
 
 **What S2 must do, and nothing more:**
@@ -831,7 +850,7 @@ Net change to `api/index.ts`. Everything here is new unless the row says otherwi
 | `DuplicateEntryIdError`, `ParentCycleError`, `MutationDuringNotificationError`, `UnsupportedSchemaError`, `MutationCancelledError` | errors | D-S2-10, D-S2-25 |
 | `changeSetId` | brand helper | D-S2-7 |
 
-Not added, deliberately: `DatasetOptions.plugins`, `declareStore`, `ProposalResolver` and friends (D-S2-6/7); `hierarchy.autoGroup` (Q3); `apply` and its four types, and the `'engine'`/`'load'` origin arms (D-S2-11); a `transaction` origin option and a per-entry manual-span opt-out (§9).
+Not added, deliberately: `DatasetOptions.plugins`, `declareStore`, `EditResolver` and friends (D-S2-6/7); `hierarchy.autoGroup` (Q3); `apply` and its four types, and the `'engine'`/`'load'` origin arms (D-S2-11); a `transaction` origin option and a per-entry manual-span opt-out (§9).
 
 **The live binding adds no public surface at all** (D-S2-20): `subscribeToDatasetChanges` is internal, and everything it calls — `on('change')`, `entries.snapshot()` — is already in the table above. That is the test D-S2-24 sets for every built-in reaction: if wiring one needed a private door, the door would be listed here.
 
@@ -948,7 +967,7 @@ Per-step detail is in the step files. The shape:
 
 | Deferred | Comes back when | Where |
 |---|---|---|
-| `DatasetOptions.plugins` / `setResolver` / `declareStore` / `ProposalResolverConflictError` | the first plugin claims the hook — and **what claiming means** is OQ8: a value that displaces the current resolver, or a wrapper over it. S2's one internal field is compatible either way; `ProposalResolverConflictError` is not, and OQ8 decides whether it ships at all | S3, #15/#16 |
+| `DatasetOptions.plugins` / `setResolver` / `declareStore` / `EditResolverConflictError` | the first plugin claims the hook — and **what claiming means** is OQ8: a value that displaces the current resolver, or a wrapper over it. S2's one internal field is compatible either way; `EditResolverConflictError` is not, and OQ8 decides whether it ships at all | S3, #15/#16 |
 | `plugin:${id}/${name}` arm of `StoreName`; the plugin section of `toJSON()` | the first plugin store exists | S3, #16 |
 | `scheduleDiagnostics` on `DatasetEventMap` | an engine produces diagnostics | S3 |
 | `hierarchy: { autoGroup: true }` | the tree UI gives promotion a visible meaning | S5, `plans/02` §2 |
