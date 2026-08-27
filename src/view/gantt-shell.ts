@@ -152,9 +152,12 @@ export class GanttShell {
     // notifies the newcomer) — before this call returns and #viewportHandle is assigned. Those
     // premature calls are dropped by #wiring; the deliberate first render below runs once
     // everything, including the initial pane-size measurement, is wired.
-    this.#viewportHandle = this.#viewport.bind(options.dataset, () => {
-      if (!this.#wiring) this.render();
-    });
+    this.#viewportHandle = this.#viewport.bind(
+      { entries: options.dataset.entries.snapshot(), timeZone: options.dataset.timeZone },
+      () => {
+        if (!this.#wiring) this.render();
+      },
+    );
     // Synchronous first measurement: a real ResizeObserver's own first callback is queued, not
     // immediate, so the first paint cannot wait for it. attachPaneSize below takes over from here —
     // every measurement after this one, live, for as long as the shell lives (S1.7b, #8).
@@ -260,9 +263,10 @@ export class GanttShell {
    * two can never drift apart — and hands the resulting `Rect` to `Viewport.reveal` (S1.9, D-S1.9-6).
    * Throws `EntryNotFoundError` for an id the dataset has no entry for. */
   reveal(entryId: EntryId): void {
-    const index = this.#options.dataset.entries.findIndex((e) => e.id === entryId);
+    const entries = this.#options.dataset.entries.snapshot();
+    const index = entries.findIndex((e) => e.id === entryId);
     if (index === -1) throw new EntryNotFoundError(entryId);
-    const entry = this.#options.dataset.entries[index]!;
+    const entry = entries[index]!;
     const { x, width } = barSpan(entry, this.#viewport.timeScale);
     this.#viewport.reveal({ x, y: this.#layout.rowTop(index), width, height: this.#rowHeight });
   }
@@ -298,7 +302,7 @@ export class GanttShell {
 
   render(): void {
     const frame = this.#layout.computeFrame({
-      entries: this.#options.dataset.entries,
+      entries: this.#options.dataset.entries.snapshot(),
       scale: this.#viewport.timeScale,
       preset: this.#viewport.preset,
       visible: this.#viewport.visible,

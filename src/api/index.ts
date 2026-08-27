@@ -32,7 +32,16 @@ export {
 // the same shape as api -> model in .dependency-cruiser.cjs / eslint.config.js. Without this, a
 // consumer has no legal way to build the Entry[] that `new Dataset({ entries })` requires (#24).
 export { entryId, itemId } from '../model/index.js';
-export type { Entry, EntryKind, EntryId, ItemId, Instant, TimeSpan, Duration } from '../model/index.js';
+export type {
+  Entry,
+  EntryKind,
+  EntryId,
+  ItemId,
+  Instant,
+  TimeSpan,
+  Duration,
+  EntryStoreView,
+} from '../model/index.js';
 // The input twins of the stored types: what a consumer writes, as opposed to what the library stores.
 // Public because a consumer that types its own entry builder needs to name them.
 export type { EntryInput, InstantInput, TimeSpanInput, DateOnlyEndRule } from '../model/index.js';

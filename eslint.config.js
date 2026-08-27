@@ -24,7 +24,9 @@ const ALLOWED = {
   time: ['model'],
   layout: ['time', 'model'],
   scheduling: ['time', 'model'],
-  data: ['scheduling', 'model'],
+  // time: D-S2-1 (plans/s2-data-core/README.md) — serialization (Instant<->ISO) and mutation-time
+  // input reading both need it; there is still no data/ --> scheduling static edge widened here.
+  data: ['scheduling', 'model', 'time'],
   render: ['layout'],
   // model: Entry/Dependency types flow through view as type-only params (same rationale as api, above).
   view: ['render', 'layout', 'data', 'model'],

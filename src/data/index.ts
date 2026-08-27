@@ -1,3 +1,5 @@
 // data/ — normalized stores, transactions, undo/redo, changesets, serialization (plans/01 §6).
-// DOM-free. Lands in S2. Every mutation goes through a transaction → the resolve hook → one changeset.
-export {};
+// DOM-free. Barrel exports nothing outside data/ that api/ does not re-export.
+export { DatasetState } from './dataset-state.js';
+export type { DatasetStateOptions } from './dataset-state.js';
+export { EntryStore } from './entry-store.js';

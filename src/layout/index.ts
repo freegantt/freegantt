@@ -48,4 +48,4 @@ export type {
   ShippedPresetId,
 } from '../time/index.js';
 export { Viewport } from './viewport/viewport.js';
-export type { ViewportOptions, ViewportHandle } from './viewport/viewport.js';
+export type { ViewportOptions, ViewportHandle, DatasetBinding } from './viewport/viewport.js';
