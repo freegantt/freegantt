@@ -5,7 +5,7 @@
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
-staged_all="$(git diff --cached --name-only --diff-filter=ACM)"
+staged_all="$(git diff --cached --name-only --diff-filter=ACM | while read -r f; do [[ -L "$f" ]] || echo "$f"; done)"
 
 if [[ -n "$staged_all" ]]; then
   echo "pre-commit: format (auto-fix) on all staged files"
