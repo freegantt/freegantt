@@ -97,13 +97,13 @@ describe('zone-aware date arithmetic', () => {
     // stepping by either must land on the correct wall-clock day, not drift by the 1h DST gap.
     const zone = 'America/Chicago';
     const beforeTransition = instant('2026-03-05T12:00:00Z'); // Thursday, before the transition
-    const weekStart = startOf(zone, beforeTransition, 'w');
-    const nextWeek = stepBy(zone, weekStart, 'w', 1);
+    const weekStart = startOf(zone, beforeTransition, 'week');
+    const nextWeek = stepBy(zone, weekStart, 'week', 1);
     expect(toPlain(zone, nextWeek).hour).toBe(0);
     expect(diffDays(zone, weekStart, nextWeek)).toBe(7);
 
-    const monthStart = startOf(zone, instant('2026-03-01T12:00:00Z'), 'M');
-    const nextMonth = stepBy(zone, monthStart, 'M', 1);
+    const monthStart = startOf(zone, instant('2026-03-01T12:00:00Z'), 'month');
+    const nextMonth = stepBy(zone, monthStart, 'month', 1);
     expect(toPlain(zone, monthStart)).toMatchObject({ year: 2026, month: 3, day: 1, hour: 0 });
     expect(toPlain(zone, nextMonth)).toMatchObject({ year: 2026, month: 4, day: 1, hour: 0 });
   });

@@ -3,7 +3,7 @@
 /** Absolute instant, epoch ms. Branded to prevent naked-number mixing (plans/01 §2.2). */
 export type Instant = number & { readonly __brand: 'Instant' };
 
-export type TimeUnit = 'ms' | 'm' | 'h' | 'd' | 'w' | 'M' | 'y';
+export type TimeUnit = 'millisecond' | 'minute' | 'hour' | 'day' | 'week' | 'month' | 'year';
 
 /** Half-open [start, end) — see plans/01 §5. */
 export interface TimeSpan {

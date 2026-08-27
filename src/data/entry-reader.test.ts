@@ -17,10 +17,11 @@ describe('readEntries', () => {
     expect(entry?.end).toBe(utc('2026-09-09T00:00:00Z'));
   });
 
-  it('leaves an optional field absent when the input never had it', () => {
+  it('leaves an optional field absent when the input never had it, but defaults kind to span', () => {
     const input: EntryInput = { id: 't1', name: 'Design', start: '2026-09-01', end: '2026-09-08' };
     const [entry] = readEntries([input], context);
-    expect(Object.keys(entry ?? {}).sort()).toEqual(['end', 'id', 'name', 'start'].sort());
+    expect(Object.keys(entry ?? {}).sort()).toEqual(['end', 'id', 'kind', 'name', 'start'].sort());
+    expect(entry?.kind).toBe('span');
   });
 
   it('carries parentId, kind, progress, segments and meta through when present', () => {

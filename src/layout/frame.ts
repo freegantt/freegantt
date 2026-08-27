@@ -210,7 +210,7 @@ export function computeFrame(
       id: itemId(entry.id),
       entryId: entry.id,
       rowId: id,
-      kind: entry.kind ?? 'span',
+      kind: entry.kind,
       label: entry.name,
       x,
       y: top,

@@ -95,31 +95,31 @@ interface UnitOps {
  * when it has an entry here (S1.7 §3.3, #32's "one list" fix carried forward from time/scale.ts).
  * `stepBy`/`startOf` both dispatch through it, so the two can never disagree on what's supported. */
 const UNITS: Record<TimeUnit, UnitOps> = {
-  ms: {
+  millisecond: {
     step: (_zone, i, increment) => addMs(i, increment),
     floor: (_zone, i) => i,
   },
-  m: {
+  minute: {
     step: (_zone, i, increment) => addMs(i, increment * MS.MINUTE),
     floor: (zone, i) => fromZoned(ZonedDateTimeFns.startOfMinute(toZoned(zone, i))),
   },
-  h: {
+  hour: {
     step: (_zone, i, increment) => addMs(i, increment * MS.HOUR),
     floor: (zone, i) => fromZoned(ZonedDateTimeFns.startOfHour(toZoned(zone, i))),
   },
-  d: {
+  day: {
     step: (zone, i, increment) => addDays(zone, i, increment),
     floor: (zone, i) => fromZoned(ZonedDateTimeFns.startOfDay(toZoned(zone, i))),
   },
-  w: {
+  week: {
     step: (zone, i, increment) => addDays(zone, i, increment * 7),
     floor: (zone, i) => fromZoned(ZonedDateTimeFns.startOfWeek(toZoned(zone, i))),
   },
-  M: {
+  month: {
     step: (zone, i, increment) => addMonths(zone, i, increment),
     floor: (zone, i) => fromZoned(ZonedDateTimeFns.startOfMonth(toZoned(zone, i))),
   },
-  y: {
+  year: {
     step: (zone, i, increment) => addYears(zone, i, increment),
     floor: (zone, i) => fromZoned(ZonedDateTimeFns.startOfYear(toZoned(zone, i))),
   },
