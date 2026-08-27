@@ -89,7 +89,7 @@ describe('computeFrame', () => {
       revision: 0,
     });
     expect(frame.bars[0]?.label).toBe(sampleEntries[0]?.name);
-    expect(frame.rows[0]?.label).toBe(sampleEntries[0]?.name);
+    expect(frame.rows[0]?.cells).toEqual([sampleEntries[0]?.name]);
   });
 
   it('culls rows outside the vertical window (#20), with overscan disabled', () => {
