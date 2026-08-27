@@ -65,6 +65,7 @@ const entries: Entry[] = [
     name: 'Entry 1',
     start: rangeStart,
     end: instant('2026-09-03T00:00:00Z'),
+    kind: 'span',
   },
 ];
 
@@ -74,6 +75,7 @@ function tallEntries(count: number): Entry[] {
     name: `Entry ${i}`,
     start: rangeStart,
     end: instant('2026-09-03T00:00:00Z'),
+    kind: 'span',
   }));
 }
 
@@ -106,6 +108,7 @@ describe('GanttShell header band', () => {
         name: 'W1',
         start: rangeStart,
         end: instant('2026-09-20T00:00:00Z'),
+        kind: 'span',
       },
     ];
     const shellB = new GanttShell({
@@ -380,6 +383,7 @@ describe('pane-size attachment (S1.7b, #8)', () => {
         name: `Entry ${i}`,
         start: rangeStart,
         end: instant('2026-09-03T00:00:00Z'),
+        kind: 'span',
       }));
       const shell = new GanttShell({ container, dataset: fakeDataset(tall), scale, scroll });
 

@@ -4,7 +4,13 @@ import { entryId } from '../model/index.js';
 import type { Entry } from '../model/index.js';
 
 function entry(id: string, parentId?: string): Entry {
-  const base: Entry = { id: entryId(id), name: id, start: 0 as Entry['start'], end: 1 as Entry['end'] };
+  const base: Entry = {
+    id: entryId(id),
+    name: id,
+    start: 0 as Entry['start'],
+    end: 1 as Entry['end'],
+    kind: 'span',
+  };
   if (parentId !== undefined) base.parentId = entryId(parentId);
   return base;
 }

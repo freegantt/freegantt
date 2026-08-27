@@ -29,6 +29,7 @@ const entries: Entry[] = [
     name: 'Entry 1',
     start: instant('2026-09-01T00:00:00Z'),
     end: instant('2026-09-03T00:00:00Z'),
+    kind: 'span',
   },
 ];
 

@@ -10,6 +10,7 @@ function entry(id: string, start: string, end: string): Entry {
     name: id,
     start: instant(start),
     end: instant(end),
+    kind: 'span',
   };
 }
 
@@ -86,7 +87,7 @@ describe('TimeScaleModel', () => {
 
     // dayPreset states 24px per day tick; that is a scale, not a special case.
     expect(model.scale.xForInstant(instant('2026-09-02T00:00:00Z'))).toBeCloseTo(dayPreset.tickWidthPx);
-    expect(model.scale.widthForDuration({ value: 1, unit: 'd' }, entries[0]!.start)).toBeCloseTo(
+    expect(model.scale.widthForDuration({ value: 1, unit: 'day' }, entries[0]!.start)).toBeCloseTo(
       dayPreset.tickWidthPx,
     );
   });
@@ -94,7 +95,7 @@ describe('TimeScaleModel', () => {
   it('resolves a zero-span or empty dataset through the preset rather than dividing by zero', () => {
     const empty = new TimeScaleModel();
     bindTimeScale(empty, { timeZone: 'UTC', entries: [], paneWidth: 800 }, noop);
-    expect(empty.scale.widthForDuration({ value: 1, unit: 'd' }, instant(0))).toBeCloseTo(
+    expect(empty.scale.widthForDuration({ value: 1, unit: 'day' }, instant(0))).toBeCloseTo(
       dayPreset.tickWidthPx,
     );
 
@@ -105,7 +106,7 @@ describe('TimeScaleModel', () => {
       { timeZone: 'UTC', entries: [{ ...entries[0]!, end: at }], paneWidth: 800 },
       noop,
     );
-    expect(zeroSpan.scale.widthForDuration({ value: 1, unit: 'd' }, at)).toBeCloseTo(dayPreset.tickWidthPx);
+    expect(zeroSpan.scale.widthForDuration({ value: 1, unit: 'day' }, at)).toBeCloseTo(dayPreset.tickWidthPx);
   });
 
   it('fits the narrowest bound viewport, so the span fits in every Gantt', () => {
@@ -289,7 +290,7 @@ describe('TimeScaleModel', () => {
       const model = new TimeScaleModel({ fit: 'preset' });
       bindTimeScale(model, { timeZone: 'UTC', entries, paneWidth: 800 }, noop);
 
-      expect(model.scale.widthForDuration({ value: 1, unit: 'd' }, entries[0]!.start)).toBeCloseTo(
+      expect(model.scale.widthForDuration({ value: 1, unit: 'day' }, entries[0]!.start)).toBeCloseTo(
         dayPreset.tickWidthPx,
       );
     });
@@ -299,7 +300,9 @@ describe('TimeScaleModel', () => {
       bindTimeScale(model, { timeZone: 'UTC', entries, paneWidth: 800 }, noop);
 
       expect(model.fit).toBe(0.5);
-      expect(model.scale.widthForDuration({ value: 1, unit: 'ms' }, entries[0]!.start)).toBeCloseTo(0.5);
+      expect(model.scale.widthForDuration({ value: 1, unit: 'millisecond' }, entries[0]!.start)).toBeCloseTo(
+        0.5,
+      );
     });
 
     it('a fit write notifies iff the resolved scale changed', () => {

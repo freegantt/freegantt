@@ -31,7 +31,7 @@ One authored, dated record: a name, a start, an end, and a `kind`. Entries are p
 _Avoid_: **Task** (retired in ADR 0003 — it implies to-do work, and the whole point is that the record is domain-neutral), activity, event, bar (a bar is what an Item renders), record, row (a Row is a display track)
 
 **Kind**:
-The authored classification of an Entry (`'span' | 'group' | 'milestone'`, open to consumer-defined values) that selects its behavior at four seams: scheduling policy, item emission, rendering, and interaction capability. Kind is never derived from structure (e.g. from having children) — it is always explicitly set by whoever authored the Entry. `'span'` is the default: an Entry that simply occupies its start-to-end stretch, with no further meaning attached. _Exception:_ `hierarchy.autoGroup` (`02` §2) promotes an entry to `'group'` in the same transaction it gains its first child — an automated edit, not a derivation the store computes on the fly; it only promotes, never demotes, so kind still can't silently flicker based on current structure.
+The authored classification of an Entry (`'span' | 'group' | 'milestone'`, open to consumer-defined values) that selects its behavior at four seams: scheduling policy, item emission, rendering, and interaction capability. Kind is never derived from structure (e.g. from having children) — it is always explicitly set by whoever authored the Entry. `'span'` is the default: an Entry that simply occupies its start-to-end stretch, with no further meaning attached. `kind` is required on the stored Entry (issue #84) — every reader can trust it is present, since ingest applies the `'span'` default once, at the api/ boundary; it stays optional on Entry input, where a consumer may omit it. _Exception:_ `hierarchy.autoGroup` (`02` §2) promotes an entry to `'group'` in the same transaction it gains its first child — an automated edit, not a derivation the store computes on the fly; it only promotes, never demotes, so kind still can't silently flicker based on current structure.
 _Avoid_: Type (reserved for `DependencyType`), category; and `'task'` as the default kind's name (ADR 0003 — a kind literal is data, so leaving the old word there would have kept it in every authored Entry)
 
 **Dependency**:
@@ -218,6 +218,10 @@ _Avoid_: Date input, raw date, loose instant
 **Date-only end**:
 An `end` written as a bare calendar date — `'2026-09-08'`, no time of day. Storage is half-open `[start, end)`, so `end` is the boundary after the entry rather than its last moment, but a consumer writing a bare date means the last day it wants included. The `dateOnlyEnd` option names which of the two readings applies, and it applies to nothing else: an end that already carries a time of day is a boundary already.
 _Avoid_: Inclusive end, end date (an option named `endDate` should hold a date, not a rule)
+
+**TimeUnit**:
+The named grain a Duration or a tick step counts in: `'millisecond' | 'minute' | 'hour' | 'day' | 'week' | 'month' | 'year'`. Spelled out in full — the prior single-letter codes (`'m'` minute vs `'M'` month) collapsed two units onto case alone, a typo trap the review behind issue #84 flagged.
+_Avoid_: `'m'`/`'M'`/`'d'`/`'w'`/`'y'`/`'ms'` (the retired short codes)
 
 **TimeScale**:
 The pure, DOM-free mapping between Instants and pixel positions, plus tick generation for a given ViewPreset. All time→pixel conversion in the codebase goes through a TimeScale — no inline pixel math.
