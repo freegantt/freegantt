@@ -10,6 +10,7 @@ Name functions and classes in friendly easy to understand for humans and agents 
 
 **Vocabulary** (`CONTEXT.md` is the glossary; ADR 0003):
 - The authored record is an `Entry` — `EntryId`, `EntryKind`, `entryId()`, `Dataset.entries`, `beforeEntryMove`/`entryMove`, default kind `'span'`. `Entry` in the ledger sense: a dated line whose meaning the consumer supplies.
+- **A Field is what a value _is_; a Grid column is where a Gantt _shows_ it.** Fields are declared on the `Dataset` (`fields`) — core's own are declarations of the same shape, so a consumer field and a core field take one code path; grid columns live on the `Gantt` (`gridColumns`) and carry presentation only (ADR 0005, `plans/01` §2.6). A **Field key** names a field and is the changeset's `field` — one name, which is why `EntryField` is retired. The **Rollup** is the pass, an **Aggregator** is the function it runs, and an Aggregator is always referenced by a registered name — never passed inline, because a name serializes into a document and a function does not. `meta` is the consumer's namespace in the document; declaring a key makes it addressable, and undeclared keys stay opaque.
 - Core names what the data *is* (dated, kinded, spanning); the consumer owns what it is *for*. A shift roster, units sold per week, and machine uptime are as much the intended use as a project plan, so scheduling vocabulary — dependency, predecessor, lag, deadline, "the schedule" — stays inside the scheduling plugin (`plans/01` §7) and its own docs.
 
 **Layers** (`plans/01` §1 — enforced by dependency-cruiser):
@@ -36,7 +37,7 @@ Name functions and classes in friendly easy to understand for humans and agents 
 - Conflicts become diagnostics; the engine never silently rewrites what the user asked for.
 
 **Rendering / view** (`plans/01` §8):
-- Authored vs. derived: entries/dependencies are persisted; rows/items/geometry are recomputed and never persisted.
+- Authored vs. derived: entries/dependencies are persisted; rows/items/geometry are recomputed and never persisted. A **field's source** decides which side a rolled-up parent value falls on (ADR 0005): an `entry`- or `meta`-sourced field has a stored home, so its aggregate is stored, undoable and serialized — this is what `start`/`end` already do; a `compute`-sourced field has no home, so its aggregate is computed on read and never reaches the document.
 - Hot path (hover/selection/drag preview) = class toggles + transforms only; zero allocation, never rebuilds a frame.
 - All time→pixel via the bound `TimeScale`; all scroll via the bound `ScrollModel`. No exceptions.
 - Renderer output is text by default; raw HTML is explicit opt-in only.
