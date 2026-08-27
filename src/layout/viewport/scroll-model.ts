@@ -14,12 +14,6 @@ import { BoundValue } from './bound-value.js';
 /** A scroll offset in content pixels. */
 export type ScrollPosition = Point;
 
-/** What a caller states up front. Extents are measured, never stated (mirrors `TimeScaleIntent`). */
-export interface ScrollIntent {
-  /** Starting position. Default `{ x: 0, y: 0 }`. */
-  position?: Partial<ScrollPosition>;
-}
-
 /** One Gantt's contribution to resolution, supplied when it binds — what it can scroll over.
  * Measured by `view/`; a `0` in either box means "unmeasured", exactly as in `ScaleBinding`.
  * `readonly`, and the model copies it at bind time: the handle is the only way to change it. */
@@ -78,6 +72,11 @@ function sameScrollState(a: ScrollState, b: ScrollState): boolean {
   );
 }
 
+/** Per-instance state `bindScroll` needs but which is not on the published type (issue #84,
+ *  ADR 0007): `bind`/`unbind` are not class methods, so there is nothing for a caller holding a
+ *  `ScrollModel` reference to call. `view/` is the only importer of `bindScroll`. */
+const internals = new WeakMap<ScrollModel, { state: BoundValue<MutableBinding, ScrollState> }>();
+
 export class ScrollModel {
   #position: ScrollPosition;
   /** The bindings, the state resolved from them, and the D-S1.5-4 notification contract — the same
@@ -88,8 +87,9 @@ export class ScrollModel {
     equals: sameScrollState,
   });
 
-  constructor(intent: ScrollIntent = {}) {
-    this.#position = frozenPosition(intent.position?.x ?? 0, intent.position?.y ?? 0);
+  constructor(position?: Partial<ScrollPosition>) {
+    this.#position = frozenPosition(position?.x ?? 0, position?.y ?? 0);
+    internals.set(this, { state: this.#state });
   }
 
   /** Resolved + clamped, memoized until an input changes. */
@@ -114,28 +114,6 @@ export class ScrollModel {
     this.#state.batch(run);
   }
 
-  /** @internal — called by `view/` only. A consumer that calls this creates a binding nothing
-   * will ever unbind. Use `GanttOptions.scroll` instead. */
-  bind(binding: ScrollBinding, onChange: () => void): ScrollBindingHandle {
-    // Copy-at-bind, as in `TimeScaleModel`: the handle is the only way to change what this binding
-    // contributes.
-    const copy: MutableBinding = { content: binding.content, pane: binding.pane };
-    const bound = this.#state.bind(copy, onChange);
-    return {
-      unbind: () => bound.unbind(),
-      setContentSize: (size) => {
-        if (copy.content.width === size.width && copy.content.height === size.height) return;
-        copy.content = size;
-        this.#state.invalidate();
-      },
-      setPaneSize: (size) => {
-        if (copy.pane.width === size.width && copy.pane.height === size.height) return;
-        copy.pane = size;
-        this.#state.invalidate();
-      },
-    };
-  }
-
   /** `max` is the loosest bound any bound Gantt needs (D-S1.5-1) — not a claim about any one
    * chart's scroller. Frozen with `position`: `state` hands the model's own objects out. */
   #resolve(bindings: Iterable<MutableBinding>): ScrollState {
@@ -152,4 +130,36 @@ export class ScrollModel {
       max: bound ? frozenPosition(maxX, maxY) : ZERO,
     });
   }
+}
+
+/** A consumer that calls this creates a binding nothing will ever unbind — use `GanttOptions.scroll`
+ * instead. Not a method on `ScrollModel` (issue #84, ADR 0007) — a free function reaching the
+ * model's internal `BoundValue` through a module-private `WeakMap`, so the published type has
+ * nothing a consumer holding a `ScrollModel` could call. `view/` is the only importer. */
+export function bindScroll(
+  model: ScrollModel,
+  binding: ScrollBinding,
+  onChange: () => void,
+): ScrollBindingHandle {
+  const internal = internals.get(model);
+  if (!internal) {
+    throw new Error('bindScroll: model was not constructed through the ScrollModel constructor');
+  }
+  // Copy-at-bind, as in `TimeScaleModel`: the handle is the only way to change what this binding
+  // contributes.
+  const copy: MutableBinding = { content: binding.content, pane: binding.pane };
+  const bound = internal.state.bind(copy, onChange);
+  return {
+    unbind: () => bound.unbind(),
+    setContentSize: (size) => {
+      if (copy.content.width === size.width && copy.content.height === size.height) return;
+      copy.content = size;
+      internal.state.invalidate();
+    },
+    setPaneSize: (size) => {
+      if (copy.pane.width === size.width && copy.pane.height === size.height) return;
+      copy.pane = size;
+      internal.state.invalidate();
+    },
+  };
 }

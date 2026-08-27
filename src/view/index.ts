@@ -5,13 +5,12 @@ export { GanttShell } from './gantt-shell.js';
 export type { GanttShellOptions, Theme } from './gantt-shell.js';
 export { TimeScaleModel, ScrollModel } from '../layout/index.js';
 export type {
-  TimeScaleIntent,
-  TimeScaleZoom,
+  TimeScaleModelOptions,
+  TimeScaleFit,
   ViewPreset,
   PresetRef,
   ShippedPresetId,
   Overscan,
-  ScrollIntent,
   ScrollPosition,
   ScrollState,
 } from '../layout/index.js';
