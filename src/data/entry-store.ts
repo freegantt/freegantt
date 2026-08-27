@@ -4,26 +4,27 @@
 // the work").
 
 import type { Entry, EntryId, EntryStoreView } from '../model/index.js';
+import { entryId } from '../model/index.js';
 import { computed, signal } from './reactivity.js';
 
 export class EntryStore implements EntryStoreView {
   #byId: Map<EntryId, Entry>;
   /** One write per commit; every derived value below invalidates from it (D-S2-4). */
   #revision = signal(0);
-  #snapshot: () => readonly Entry[];
+  #all: () => readonly Entry[];
   #byParent: () => ReadonlyMap<EntryId | undefined, readonly Entry[]>;
 
   constructor(entries: readonly Entry[]) {
     this.#byId = new Map(entries.map((entry) => [entry.id, entry]));
     // D-S2-3: rebuilt on commit, not on every read — one array identity per revision, so
     // `ScaleBinding`'s reference comparison and `BoundValue`'s equality half (D-S1.5-4) hold.
-    this.#snapshot = computed(() => {
+    this.#all = computed(() => {
       this.#revision.get();
       return Array.from(this.#byId.values());
     });
     this.#byParent = computed(() => {
       const byParent = new Map<EntryId | undefined, Entry[]>();
-      for (const entry of this.#snapshot()) {
+      for (const entry of this.#all()) {
         const siblings = byParent.get(entry.parentId);
         if (siblings) siblings.push(entry);
         else byParent.set(entry.parentId, [entry]);
@@ -32,16 +33,16 @@ export class EntryStore implements EntryStoreView {
     });
   }
 
-  snapshot(): readonly Entry[] {
-    return this.#snapshot();
+  get all(): readonly Entry[] {
+    return this.#all();
   }
 
-  get(id: EntryId): Entry | undefined {
-    return this.#byId.get(id);
+  get(id: EntryId | string): Entry | undefined {
+    return this.#byId.get(entryId(id));
   }
 
-  has(id: EntryId): boolean {
-    return this.#byId.has(id);
+  has(id: EntryId | string): boolean {
+    return this.#byId.has(entryId(id));
   }
 
   get size(): number {

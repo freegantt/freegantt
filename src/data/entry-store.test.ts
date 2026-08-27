@@ -10,9 +10,9 @@ function entry(id: string, parentId?: string): Entry {
 }
 
 describe('EntryStore', () => {
-  it('snapshot() returns the same array identity across reads (D-S2-3)', () => {
+  it('all returns the same array identity across reads (D-S2-3)', () => {
     const store = new EntryStore([entry('t1')]);
-    expect(store.snapshot()).toBe(store.snapshot());
+    expect(store.all).toBe(store.all);
   });
 
   it('get/has/size read the seeded fixture', () => {

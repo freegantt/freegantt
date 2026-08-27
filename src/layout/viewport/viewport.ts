@@ -22,7 +22,7 @@ export interface ViewportOptions {
 }
 
 /** What `bind()` needs off a Dataset (OQ4, plans/s2-data-core): a snapshot, not the store — `layout/`
- *  takes `entries.snapshot()` and has no interest in a store. The caller reads it fresh at bind time;
+ *  takes `entries.all` and has no interest in a store. The caller reads it fresh at bind time;
  *  S2.4's live binding is what pushes an updated snapshot in on every dataset change, through the
  *  returned handle, not through this shape widening. */
 export interface DatasetBinding {

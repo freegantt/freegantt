@@ -7,7 +7,7 @@ view, data/ gains reactivity + time (D-S2-1/2/3/4/5)". Working tree is clean.
 test:node, test:dom, vendor-names, disables, build) and `pnpm test:e2e` (15/15) — both run to
 completion, both green, via the `pre-push` hook on the push itself. No assertion changed in any
 pre-existing test; only the read sites that used to read `dataset.entries` as an array now call
-`dataset.entries.snapshot()`.
+`dataset.entries.all`.
 
 ---
 
@@ -24,14 +24,14 @@ file says "Close both before starting"):
   `DatasetData` as `plans/01` §6 originally spec'd. Ran through the naming skill — `DatasetCore` was
   rejected because "core" already has a loaded, specific meaning throughout this slice's own decisions
   (a *core step*, not displaceable by a plugin — D-S2-22); `DatasetStores` was rejected because the
-  class holds more than stores (zone, `dateOnlyEnd`, reference date, and later the resolve hook,
+  class holds more than stores (zone, `dateOnlyEnd`, reference date, and later the extension hook,
   history, bus); inverting the pair so `data/` owns the name `Dataset` was rejected because
   `model/dataset.ts` already has a structural `Dataset` and a second class with the same name one file
   down is worse, not better. Both closures are recorded in `plans/s2-data-core/OPEN-QUESTIONS.md`.
 
 Then the step itself:
 
-- **`model/dataset.ts`** — new `EntryStoreView` interface (`snapshot()`, `get`, `has`, `size`);
+- **`model/dataset.ts`** — new `EntryStoreView` interface (`all`, `get`, `has`, `size`);
   `Dataset.entries` is now `EntryStoreView`, not `readonly Entry[]`. Exported from `model/index.ts`.
 - **`data/reactivity.ts`** — the only file that imports `alien-signals` (B7, invariant header present).
   Three primitives: `signal`, `computed`, `batch`. `effect` is deliberately not exported — nothing in
@@ -42,7 +42,7 @@ Then the step itself:
   "the event maps themselves stay with their owners."
 - **`data/entry-reader.ts`** — `readEntries`, moved verbatim from the deleted `src/api/entry-input.ts`.
 - **`data/entry-store.ts`** — `EntryStore`, implementing `EntryStoreView`. `byId` is a plain `Map`;
-  `snapshot()` and the `byParent` index used by `childrenOf` are `computed` over one revision `signal`
+  `all` and the `byParent` index used by `childrenOf` are `computed` over one revision `signal`
   (D-S2-3's cached-identity rule — same array until the next commit). No write set yet: S2.2 adds the
   transaction overlay (D-S2-21) and the mutators, which are typed to need a `TxToken` only
   `data/transaction.ts` will be able to mint.
@@ -52,7 +52,7 @@ Then the step itself:
 - **`api/dataset.ts`** — `Dataset` is now a thin façade: constructs one `DatasetState`, delegates every
   read to it via getters. Constructor signature unchanged.
 - **Read-site migration** (§3 of the step file) — `layout/viewport/viewport.ts`'s `bind()`,
-  `view/gantt-shell.ts`'s `render()` and `reveal()` all call `.snapshot()` now instead of reading
+  `view/gantt-shell.ts`'s `render()` and `reveal()` all call `.all` now instead of reading
   `dataset.entries` as an array.
 - **`.dependency-cruiser.cjs` + `eslint.config.js`** — `data/` gains the `time/` import edge (D-S2-1):
   serialization needs `Instant⇄ISO` (`time/instant.ts`'s `toISO`) and mutation-time input reading needs
@@ -84,8 +84,8 @@ longer needs a store at all — just a snapshot). Fixed by:
   the real store, not a second hand-rolled fake) and mechanically replaced every
   `dataset: { entries, timeZone }` call site with `dataset: fakeDataset(entries)`.
 - `api/dataset.test.ts` — its `first()` helper and two direct index reads now go through
-  `dataset.entries.snapshot()[i]`.
-- `fixtures/sample-dataset.ts` — `sampleEntries` now reads `new Dataset({...}).entries.snapshot()`
+  `dataset.entries.all[i]`.
+- `fixtures/sample-dataset.ts` — `sampleEntries` now reads `new Dataset({...}).entries.all`
   instead of `.entries`.
 
 No assertion in any of the above changed — only how the fixture is built.
@@ -97,27 +97,27 @@ No assertion in any of the above changed — only how the fixture is built.
 `plans/s2-data-core/OPEN-QUESTIONS.md` OQ1 is closed, and revised once more the same day at the user's
 explicit direction: **a clean, usable S2 API now, over pre-matching an S3 scheduling contract that
 hasn't been designed.** Read the "Revised again" paragraph at the end of OQ1 before touching
-`data/resolve-hook.ts` — it supersedes an earlier, narrower closure of the same question that this repo
+`data/edit-extension.ts` — it supersedes an earlier, narrower closure of the same question that this repo
 briefly carried (visible in `plans/s2-data-core/README.md`'s D-S2-6 history if you want the "why" in
 full; the shape below is the one to implement).
 
 **The shape to implement:**
 
 ```ts
-// data/resolve-hook.ts
+// data/edit-extension.ts
 export type EntryEdits = ReadonlyMap<EntryId, EntryEdit>;
 
 export interface EditRequest {
   entries: ReadonlyMap<EntryId, Entry>;   // current store snapshot, before this transaction's edits
   proposed: EntryEdits;                   // what the caller asked to change
 }
-export type EditResolver = (request: EditRequest) => EntryEdits;  // extra writes only; empty map = no cascade
+export type EditExtender = (request: EditRequest) => EntryEdits;  // extra writes only; empty map = no cascade
 
-export const identityResolver: EditResolver = () => EMPTY_EDITS;
+export const identityExtender: EditExtender = () => EMPTY_EDITS;
 ```
 
 No `EditAdjustment` wrapper, no `FieldPatch` type, no `diagnostics` in S2 (that's S3's own call to make
-when it exists). A resolver returns the same `EntryEdits` shape a caller already writes to
+when it exists). An extender returns the same `EntryEdits` shape a caller already writes to
 `dataset.entries.update()` — reuse `EntryEdit` from S2.3's mutation API, don't invent a second "an edit"
 type. `EditRequest.entries` is a `Map`, not an array — `EntryStore` already keeps `#byId` as one
 (S2.1), so this is free.
@@ -125,16 +125,16 @@ type. `EditRequest.entries` is a `Map`, not an array — `EntryStore` already ke
 `data/change-set.ts` needs one new function: `diffEdit(entries, id, edit): readonly FieldUpdated[]`,
 applying D-S2-7's per-field equality table (own docs: `===` for primitives/`Instant`s, element-wise on
 `segments`, reference-only on `meta`; a field whose `from` equals its `to` is not recorded). The commit
-path calls it once per id in `proposed`, and once per id in the resolver's returned `EntryEdits` — one
+path calls it once per id in `proposed`, and once per id in the extender's returned `EntryEdits` — one
 function, both producers. This also means `FieldPatch` is gone from the codebase entirely: it was
-`FieldUpdated` with `store` removed, invented only so a resolver had something to return, and now the
-resolver returns the same shape everything else does.
+`FieldUpdated` with `store` removed, invented only so an extender had something to return, and now the
+extender returns the same shape everything else does.
 
-`DatasetDataOptions.editResolver` stays internal-only — `data/` is unreachable through the package's
+`DatasetDataOptions.editExtender` stays internal-only — `data/` is unreachable through the package's
 `exports` map, so there's no way for `harness/` or a consumer to reach it in S2 regardless. Do **not**
-put `editResolver` on the public `Dataset` constructor or show it in a consumer-facing sample; the
-plugin-facing install API (`DatasetOptions.plugins`, `setResolver`) is explicitly S3's job (#15). Tests
-inject a resolver directly against `DatasetData`/`DatasetState`; nothing in `harness/main.ts` should
+put `editExtender` on the public `Dataset` constructor or show it in a consumer-facing sample; the
+plugin-facing install API (`DatasetOptions.plugins`, `setExtender`) is explicitly S3's job (#15). Tests
+inject an extender directly against `DatasetData`/`DatasetState`; nothing in `harness/main.ts` should
 ever construct one.
 
 **Commit sequence (S2.2 §2.3, updated for the shape above):**
@@ -142,9 +142,9 @@ ever construct one.
 1. Run `body()`. Mutators record `{ before, after }` per touched field into the open transaction's
    write set and write nothing to the store yet.
 2. Build `proposed` from the body's direct edits; diff each id via `diffEdit` against `entries`.
-3. Call the resolve hook once. `identityResolver` returns an empty `EntryEdits`.
-4. Diff the resolver's returned edits the same way and merge into the pending set. Dev-mode assert
-   (I4): a resolver edit may not touch an `(id, field)` the body already proposed.
+3. Call the extension hook once. `identityExtender` returns an empty `EntryEdits`.
+4. Diff the extender's returned edits the same way and merge into the pending set. Dev-mode assert
+   (I4): an extender edit may not touch an `(id, field)` the body already proposed.
 5. Roll up derived spans, always (D-S2-22, S2.3) — it already has both the old and computed value in
    hand, so it builds its own `FieldUpdated` rows directly rather than going through `diffEdit`.
 6. Fold into one `ChangeSet`. Empty → stop, no write, no event, body's return value still comes back.
@@ -163,14 +163,14 @@ are the source of truth over this handoff if the two ever disagree.
 supply it.
 
 **Docs already updated to the finalized shape:** `CONTEXT.md` (**EntryEdits**/**EditRequest**/
-**EditResolver** entries), `docs/resolve-hook-flow.md` (flow + sample code, including a multi-edit
-`transaction()` sample so the resolver's batch handling isn't shown as a single-update special case —
+**EditExtender** entries), `docs/edit-extension-flow.md` (flow + sample code, including a multi-edit
+`transaction()` sample so the extender's batch handling isn't shown as a single-update special case —
 its linked published Artifact is redrawn to match), `docs/adr/0002`, `docs/adr/0005`,
 `docs/adr/0006`, `plans/03-slices.md`.
 
 **Not evaluated in this handoff:** `tmp/major-api-review.txt`, a separate, much broader API review
-(shipped `TimeScaleModel`/`ScrollModel`/zoom/presets, `snapshot()`/`get()`, `Entry.kind`, field
-declarations, and more) that landed in the working tree alongside the resolve-hook notes this handoff
+(shipped `TimeScaleModel`/`ScrollModel`/zoom/presets, `all`/`get()`, `Entry.kind`, field
+declarations, and more) that landed in the working tree alongside the edit-extension notes this handoff
 is based on. It was not in scope for this round and nothing in it has been actioned — read it and check
 with the user before treating any of it as settled.
 

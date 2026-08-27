@@ -9,13 +9,13 @@
 import type { Entry } from './entry.js';
 import type { EntryId } from './ids.js';
 
-/** The Dataset's own read view onto its entries (D-S2-2). `snapshot()` is the committed array — see
- *  D-S2-3 for its cached-identity rule and D-S2-21 for what it does *not* show while a transaction is
- *  open (`get`/`has`/`size` see a transaction's own uncommitted writes; `snapshot()` does not). */
+/** The Dataset's own read view onto its entries (D-S2-2). `all` is the committed array — see D-S2-3
+ *  for its cached-identity rule and D-S2-21 for what it does *not* show while a transaction is open
+ *  (`get`/`has`/`size` see a transaction's own uncommitted writes; `all` does not). */
 export interface EntryStoreView {
-  snapshot(): readonly Entry[];
-  get(id: EntryId): Entry | undefined;
-  has(id: EntryId): boolean;
+  readonly all: readonly Entry[];
+  get(id: EntryId | string): Entry | undefined;
+  has(id: EntryId | string): boolean;
   readonly size: number;
 }
 

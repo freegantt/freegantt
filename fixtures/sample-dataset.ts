@@ -85,4 +85,4 @@ export const sampleEntryInputs: EntryInput[] = [
 export const sampleEntries: readonly Entry[] = new Dataset({
   entries: sampleEntryInputs,
   timeZone: 'UTC',
-}).entries.snapshot();
+}).entries.all;
