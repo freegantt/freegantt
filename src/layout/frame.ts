@@ -32,7 +32,9 @@ export interface FrameRow {
   top: number;
   height: number;
   laneCount: number;
-  label: string;
+  /** One library-formatted string per configured grid column, in column order (ADR 0005). Until S5
+   * supplies the field registry, this is always one entry: `entry.name`. */
+  cells: readonly string[];
 }
 
 export interface FrameBar {
@@ -200,7 +202,7 @@ export function computeFrame(
     }
 
     const id = rowId(`row:${entry.id}`);
-    rows.push({ id, index, top, height: rowHeight, laneCount: 1, label: entry.name });
+    rows.push({ id, index, top, height: rowHeight, laneCount: 1, cells: [entry.name] });
 
     const { x, width } = barSpan(entry, scale);
     if (!intersectsHorizontally(x, width)) continue;
