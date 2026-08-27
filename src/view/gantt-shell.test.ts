@@ -416,14 +416,14 @@ describe('pane-size attachment (S1.7b, #8)', () => {
   });
 });
 
-describe('preset/range/zoom/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () => {
-  it('preset/range/zoom/overscan accessors delegate straight to the bound Viewport', () => {
+describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () => {
+  it('preset/range/fit/overscan accessors delegate straight to the bound Viewport', () => {
     const container = document.createElement('div');
     const shell = new GanttShell({ container, dataset: fakeDataset(entries) });
 
-    expect(shell.zoom).toBe('fitViewport');
-    shell.zoom = { pxPerMs: 2 };
-    expect(shell.zoom).toEqual({ pxPerMs: 2 });
+    expect(shell.fit).toBe('pane');
+    shell.fit = 2;
+    expect(shell.fit).toBe(2);
 
     expect(shell.range).toBe('fitDataset');
     shell.range = { start: rangeStart, end: rangeEnd };
@@ -444,7 +444,7 @@ describe('preset/range/zoom/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () 
 
   it('zoomTo/zoomBy delegate to the bound Viewport and move pxPerMs', () => {
     const container = document.createElement('div');
-    const scale = new TimeScaleModel({ range: { start: rangeStart, end: rangeEnd }, zoom: { pxPerMs: 1 } });
+    const scale = new TimeScaleModel({ range: { start: rangeStart, end: rangeEnd }, fit: 1 });
     const shell = new GanttShell({ container, dataset: fakeDataset(entries), scale });
 
     shell.zoomBy(2);
@@ -452,6 +452,22 @@ describe('preset/range/zoom/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () 
 
     shell.zoomTo(0.5);
     expect(scale.scale.pxPerMs).toBe(0.5);
+
+    shell.destroy();
+  });
+
+  it('a caller passing both scale and preset gets the shared scale, ignoring the constructor preset (D-S1.9-9)', () => {
+    // The public `Gantt`/`GanttOptions` makes this combination a compile-time error (issue #84,
+    // finding #3); `GanttShellOptions` stays a plain interface, so the dev-mode warning is still
+    // reachable for a caller constructing `GanttShell` directly.
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const scale = new TimeScaleModel({ preset: 'week' });
+    const container = document.createElement('div');
+    const shell = new GanttShell({ container, dataset: fakeDataset(entries), scale, preset: 'month' });
+
+    expect(shell.preset.id).toBe('week');
+    expect(warn).toHaveBeenCalledTimes(1);
+    warn.mockRestore();
 
     shell.destroy();
   });

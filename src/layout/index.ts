@@ -23,14 +23,13 @@ export type {
 export type { ItemId, RowId } from '../model/index.js';
 export { TimeScaleModel } from './viewport/time-scale-model.js';
 export type {
-  TimeScaleIntent,
-  TimeScaleZoom,
+  TimeScaleModelOptions,
+  TimeScaleFit,
   ScaleBinding,
   ScaleBindingHandle,
 } from './viewport/time-scale-model.js';
 export { ScrollModel } from './viewport/scroll-model.js';
 export type {
-  ScrollIntent,
   ScrollPosition,
   ScrollState,
   ScrollBinding,

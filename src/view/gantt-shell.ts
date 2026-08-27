@@ -2,7 +2,7 @@
 // viewport binding together (plans/01 §8.2-8.3, S1.8).
 
 import { barSpan, FrameLayout, ScrollModel, TimeScaleModel, Viewport } from '../layout/index.js';
-import type { Overscan, PresetRef, TimeScaleZoom, ViewportHandle, ViewPreset } from '../layout/index.js';
+import type { Overscan, PresetRef, TimeScaleFit, ViewportHandle, ViewPreset } from '../layout/index.js';
 
 import { createDomBackend } from '../render/dom/index.js';
 import { readPixelProperty } from '../render/dom/pixel-property.js';
@@ -44,7 +44,7 @@ export interface GanttShellOptions {
   dataset: Dataset;
   /** Bound viewport object (D9) — pass the same instance to two Gantt instances to x-sync them.
    * Constructs a private default when omitted (plans/01 §8.2: "single-Gantt usage never sees the
-   * concept"); the default resolves its zone, span and zoom from this shell's binding, so it needs
+   * concept"); the default resolves its zone, span and fit from this shell's binding, so it needs
    * no arguments. */
   scale?: TimeScaleModel;
   /** Bound scroll object (D9) — pass the same instance to two Gantt instances to scroll-sync them.
@@ -54,10 +54,10 @@ export interface GanttShellOptions {
   /** Initial grid pane width in px (S1.8, D-S1.8-3). Default: `--fg-grid-pane-width`, fallback 160. */
   gridWidth?: number;
   /** Build the private default `TimeScaleModel` only (D-S1.9-9) — a no-op, with a dev-mode warning,
-   * when `scale` is also supplied: the shared model already carries its own intent. */
+   * when `scale` is also supplied: the shared model already carries its own options. */
   preset?: PresetRef;
   range?: 'fitDataset' | TimeSpan;
-  zoom?: TimeScaleZoom;
+  fit?: TimeScaleFit;
   /** `Viewport` is never shared (D-S1.7-10), so this always applies to this shell's own viewport. */
   overscan?: Overscan;
   /** Live (S1.10, D-S1.10-4). Default `'auto'`: follows `prefers-color-scheme`. */
@@ -116,13 +116,13 @@ export class GanttShell {
     });
     this.#panes = this.#paneLayout.panes;
 
-    const hasOwnIntent =
-      options.preset !== undefined || options.range !== undefined || options.zoom !== undefined;
+    const hasOwnOptions =
+      options.preset !== undefined || options.range !== undefined || options.fit !== undefined;
     const isDev = (import.meta as { env?: { DEV?: boolean } }).env?.DEV ?? false;
-    if (options.scale && hasOwnIntent && isDev) {
+    if (options.scale && hasOwnOptions && isDev) {
       console.warn(
-        "FreeGantt: GanttOptions.preset/range/zoom are ignored when 'scale' is also supplied. " +
-          'The shared TimeScaleModel already carries its own intent — set preset/range/zoom on it directly.',
+        "FreeGantt: GanttOptions.preset/range/fit are ignored when 'scale' is also supplied. " +
+          'The shared TimeScaleModel already carries its own options — set preset/range/fit on it directly.',
       );
     }
     this.#viewport = new Viewport({
@@ -131,7 +131,7 @@ export class GanttShell {
         new TimeScaleModel({
           ...(options.preset !== undefined ? { preset: options.preset } : {}),
           ...(options.range !== undefined ? { range: options.range } : {}),
-          ...(options.zoom !== undefined ? { zoom: options.zoom } : {}),
+          ...(options.fit !== undefined ? { fit: options.fit } : {}),
         }),
       ...(options.scroll ? { scroll: options.scroll } : {}),
       ...(options.overscan !== undefined ? { overscan: options.overscan } : {}),
@@ -234,12 +234,12 @@ export class GanttShell {
     this.#viewport.range = r;
   }
 
-  get zoom(): TimeScaleZoom {
-    return this.#viewport.zoom;
+  get fit(): TimeScaleFit {
+    return this.#viewport.fit;
   }
 
-  set zoom(z: TimeScaleZoom) {
-    this.#viewport.zoom = z;
+  set fit(f: TimeScaleFit) {
+    this.#viewport.fit = f;
   }
 
   get overscan(): Overscan {
