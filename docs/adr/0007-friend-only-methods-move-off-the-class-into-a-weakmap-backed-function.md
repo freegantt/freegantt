@@ -1,0 +1,15 @@
+# Friend-only methods move off the class, into a WeakMap-backed function
+
+`TimeScaleModel.bind`/`ScrollModel.bind` (`layout/viewport/`) were marked `@internal — view/ only` in a comment, but the classes are re-exported as values from `api/index.ts` (D9's shared-axis call site needs `new TimeScaleModel(...)` to be public), so `bind` was fully public on the published type regardless of the comment — the exact "pipeline name leaking into the public surface" pattern issue #84 was filed to close out. TypeScript has no "internal to this module, public to this other module" visibility modifier: a class member is `public`, `#private`, or `protected`, none of which express "callable only from `view/`."
+
+We moved `bind`/`unbind` off both classes entirely, into free functions in `layout/viewport/` (`bindTimeScale`, `bindScroll`) that close over a module-private `WeakMap<Model, InternalState>` populated in each class's own constructor. Only `view/gantt-shell.ts` imports these functions; they are never re-exported from `view/index.ts` or `api/index.ts`. The exported `TimeScaleModel`/`ScrollModel` classes genuinely have no `bind` method — there is nothing to hide because it was never a method.
+
+## Considered options
+
+- **Interface+const declaration merging** (export a hand-authored narrower type for the constructed value, backed by a differently-shaped implementation class). Rejected: this project's public types come entirely from `tsc`-emitted `.d.ts`; this would be the first hand-authored type in the surface, and it only narrows the *variable's* type — a caller who does `const s = new TimeScaleModel(...)` still gets the full constructor return type unless the constructor itself is wrapped, which reintroduces a factory-function call site the project didn't otherwise want (see "Call site first," `CLAUDE.md`).
+- **Leave `bind` public, tighten only the doc comment.** Rejected: this was the status quo issue #84 was filed against — a comment is not enforced by the type checker and a consumer's IDE autocomplete shows `bind` regardless.
+
+## Consequences
+
+- Any future "core needs a method only `view/`/`layout/` may call, never a published caller" case should follow the same shape: a free function plus a module-private `WeakMap` keyed on the instance, not a class method with an `@internal` comment. `Viewport.bind` (already unexported, not part of `api/`) did not need this treatment because `Viewport` itself is never re-exported — the pattern here is specifically for members on a class that *is* otherwise legitimately public.
+- The constructor is the only place that populates the `WeakMap`, so a model instance always has its internal state by the time any bound function can see it — no null-check branch at the call sites in `bindTimeScale`/`bindScroll`.

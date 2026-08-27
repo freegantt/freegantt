@@ -224,12 +224,12 @@ The pure, DOM-free mapping between Instants and pixel positions, plus tick gener
 _Avoid_: Viewport (Viewport is the fan-in object; the region is Visible)
 
 **TimeScaleModel**:
-The standalone, shareable object that owns a TimeScale and that a Gantt binds to. Passing the same TimeScaleModel instance to two Gantt instances synchronizes their horizontal axis by construction — the mechanism behind multi-Gantt sync. It is constructed from Scale intent, never from resolved geometry.
+The standalone, shareable object that owns a TimeScale and that a Gantt binds to. Passing the same TimeScaleModel instance to two Gantt instances synchronizes their horizontal axis by construction — the mechanism behind multi-Gantt sync. It is constructed from a `TimeScaleModelOptions`, never from resolved geometry. `bind`/`unbind` are not methods on the published type (issue #84) — `view/` reaches them through an internal, module-private seam, so a caller who constructs a TimeScaleModel to share between two Gantt instances sees only the options and the read side.
 _Avoid_: Scale (Scale, unqualified, means the underlying `TimeScale` the model wraps — `TimeScaleModel.scale`)
 
-**Scale intent**:
-What a caller states about how time should be displayed — a ViewPreset and a range that is either `'fitDataset'` or a pinned TimeSpan. Intent is all a caller ever supplies to a TimeScaleModel; the zone (which is the Dataset's, D6), the resolved span, and the pixels-per-millisecond factor are derived at bind time and are not a caller's to state.
-_Avoid_: Scale options, scale config (both read as the resolved geometry, which is the opposite of intent)
+**TimeScaleModelOptions**:
+What a caller states about how time should be displayed to construct a TimeScaleModel — a Preset reference, a Range, and a Fit. This is all a caller ever supplies; the zone (which is the Dataset's, D6), the resolved span, and the pixels-per-millisecond factor are derived at bind time and are not a caller's to state. Named after the constructor call site (`new TimeScaleModel({ preset, range, fit })`), not after the pipeline stage it feeds (issue #84 retired the prior name, `TimeScaleIntent` — a caller states options, not "intent").
+_Avoid_: Scale intent, TimeScaleIntent, scale options, scale config (the resolved geometry is the opposite of this)
 
 **Binding**:
 One Gantt's _data_ contribution to a shared pure model, supplied when it joins — plus the reaction to run when that model's resolved value changes. A Gantt binds on construction and unbinds on destroy, and both re-resolve the shared model. Binding is the vocabulary of the DOM-free models in `layout/viewport/`; the DOM side of the same seam is an Attachment.
@@ -259,7 +259,7 @@ The culled region a Viewport resolves, in timeline-content coordinates, from the
 _Avoid_: Viewport (Viewport is the object that resolves this, not the region itself), culling window (fine in prose as a synonym, but the type and field name are `visible`/`Rect`)
 
 **Overscan**:
-The live-reconfigurable culling buffer a Viewport applies before handing `visible` to `computeFrame`: `verticalRows` (through the row-height index, since row heights vary from S5) and `horizontalPx` (bars and header ticks only — rows stay vertical-only). Default `{ verticalRows: 2, horizontalPx: 128 }`; a zero value disables culling on that axis.
+The live-reconfigurable culling buffer a Viewport applies before handing `visible` to `computeFrame`: `verticalRows` (through the row-height index, since row heights vary from S5) and `horizontalPx` (bars and header ticks only — rows stay vertical-only). Default `{ verticalRows: 2, horizontalPx: 128 }`; a zero value disables culling on that axis. Not exported from `api/` (issue #84) — an app author doesn't think in these units, and no real caller had asked for the knob; it stays live and internal to `layout/`/`view/` until one does.
 _Avoid_: Buffer, padding, margin
 
 **Header band**:
@@ -275,7 +275,7 @@ Moving the shared viewport — `ScrollModel.panTo`, and the drag gesture that wi
 _Avoid_: Scroll (an element's native offset), move (move is dragging an Entry — `entryMove`), seek
 
 **Reveal**:
-Bringing a named Entry into view — the intent-level verb a consumer uses (`gantt.reveal(entryId)`). The library resolves the pixel position from the row geometry it already computes; a consumer never converts an index or a row height into a scroll offset. Nearest-edge, not center: a no-op if the Entry is already inside Visible, otherwise the Pan moves exactly enough to align the nearest off-screen edge. Landed on both axes at S1.9 (D-S1.9-6) — the x half was a no-op before Zoom existed, since content width equalled pane width.
+Bringing a named Entry into view — the intent-level verb a consumer uses (`gantt.reveal(entryId)`). The library resolves the pixel position from the row geometry it already computes; a consumer never converts an index or a row height into a scroll offset. Nearest-edge, not center: a no-op if the Entry is already inside Visible, otherwise the Pan moves exactly enough to align the nearest off-screen edge. Landed on both axes at S1.9 (D-S1.9-6) — the x half was a no-op before Fit existed, since content width equalled pane width.
 _Avoid_: ScrollTo, scrollIntoView, goTo, center (Reveal is nearest-edge; centering is a deferred, separate policy)
 
 **Batch**:
@@ -287,19 +287,19 @@ The data description of one zoom level: what unit the ticks step in, how wide a 
 _Avoid_: Zoom level (a zoom level is what a preset expresses), timescale header
 
 **Preset reference**:
-What a caller states to name a ViewPreset: a shipped preset id (autocompletes against the closed `ShippedPresetId` union) or a full custom ViewPreset object. `resolvePreset` is the one place a Preset reference turns into a ViewPreset — a shipped id resolves against the built-in table and throws `UnknownPresetError` for anything outside it; a ViewPreset object passes through unchanged, so a custom preset is never a library edit.
+What a caller states to name a ViewPreset: a shipped preset id (autocompletes against the closed `ShippedPresetId` union) or a full custom ViewPreset object. `resolvePreset` is the one place a Preset reference turns into a ViewPreset — a shipped id resolves against the built-in table and throws `UnknownPresetError` for anything outside it; a ViewPreset object passes through unchanged, so a custom preset is never a library edit. `resolvePreset` and the individually named preset constants (`dayPreset`, `weekAndMonthPreset`, and their siblings) are not exported from `api/` (issue #84) — resolution is core's own job; a custom-preset author needs `ViewPreset` and the `presets` record, not the constants or the resolver.
 _Avoid_: Preset id (that names only the shipped-id half), preset name
 
 **Range**:
-The full content span a TimeScale maps — `'fitDataset'`'s min/max over every bound Dataset, or a pinned TimeSpan. Distinct from Zoom: Range says how much time the content covers; Zoom says how many pixels each unit of that time gets. Never written by an anchored zoom (D-F′) — only a Dataset edit or a caller assigning `range` moves it.
+The full content span a TimeScale maps — `'fitDataset'`'s min/max over every bound Dataset, or a pinned TimeSpan. Distinct from Fit: Range says how much time the content covers; Fit says how many pixels each unit of that time gets. Never written by an anchored zoom (D-F′) — only a Dataset edit or a caller assigning `range` moves it.
 _Avoid_: Span (Range is the caller-facing intent; span is used loosely elsewhere for a resolved interval), window, extent
 
-**Zoom**:
-The density mode a TimeScale resolves `pxPerMs` from: `'fitViewport'` (the default — content fills the measured pane width), `'preset'` (the preset's own density, ignoring pane width — the first mode where content can exceed the pane), or an explicit `{ pxPerMs }`. Distinct from Range (what content is shown) and from Preset reference (which labels and tick unit are shown) — Zoom answers only "how many pixels per unit of time."
-_Avoid_: Scale (Scale is the resolved `TimeScale` object, not this mode), density (fine in prose, but the type and field name are `zoom`/`TimeScaleZoom`)
+**Fit**:
+The density mode a TimeScale resolves `pxPerMs` from: `'pane'` (the default — content fills the measured pane width), `'preset'` (the preset's own density, ignoring pane width — the first mode where content can exceed the pane), or an explicit `number` of pixels per millisecond. Distinct from Range (what content is shown) and from Preset reference (which labels and tick unit are shown) — Fit answers only "how many pixels per unit of time." Renamed from `zoom`/`TimeScaleZoom` (issue #84): "zoom" was one word doing three jobs (this mode, the `zoomTo` density knob, the `zoomBy` gesture) — Fit keeps the word "zoom" for the gesture family only, named by `zoomTo`/`zoomBy` and Anchored zoom below.
+_Avoid_: Zoom, TimeScaleZoom (retired names — see above), Scale (Scale is the resolved `TimeScale` object, not this mode), density (fine in prose, but the type and field name are `fit`/`TimeScaleFit`)
 
 **Anchored zoom**:
-The read-before-write contract behind `Viewport.zoomTo`/`zoomBy` (D-S1.9-5): the Instant currently under the anchor pixel is read before anything is written, then Scale and Pan are updated together inside one Batch so that same Instant is back under the anchor pixel afterward. The anchor is always derived from a stated pixel position, never supplied as an Instant — a caller states _where_, not _what the pixel currently means_.
+The read-before-write contract behind `Viewport.zoomTo`/`zoomBy` (D-S1.9-5): the Instant currently under the anchor pixel is read before anything is written, then Scale and Pan are updated together inside one Batch so that same Instant is back under the anchor pixel afterward. The anchor is always derived from a stated pixel position, never supplied as an Instant — a caller states _where_, not _what the pixel currently means_. Distinct from Fit: Fit is the mode (`'pane' | 'preset' | number`); `zoomTo`/`zoomBy` are the gesture that writes an explicit density into it, anchored so the content under the pointer doesn't jump.
 _Avoid_: Pinned zoom, cursor zoom (the mechanism is not specific to a pointer — a caller can anchor anywhere)
 
 **Tick**:
