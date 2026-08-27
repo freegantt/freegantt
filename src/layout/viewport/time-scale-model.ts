@@ -41,9 +41,9 @@ export interface TimeScaleIntent {
  * it at bind time (S1.5, #6/#22 follow-up) — a caller holding a reference cannot change the model's
  * inputs behind its back; re-measurement goes through the returned handle's `setPaneWidth` instead.
  *
- * A snapshot, not a `Dataset` (OQ4, plans/s2-data-core): `layout/` takes `entries.snapshot()` and has
+ * A snapshot, not a `Dataset` (OQ4, plans/s2-data-core): `layout/` takes `entries.all` and has
  * no interest in a store — a bound `Dataset` would be a second path to the same value once S2.4's
- * live binding pushes `entries.snapshot()` on every change. */
+ * live binding pushes `entries.all` on every change. */
 export interface ScaleBinding {
   readonly timeZone: string;
   readonly entries: readonly Entry[];

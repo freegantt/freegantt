@@ -11,15 +11,15 @@ The body of authored data — its Entries, plus whatever scheduling-plugin-owned
 _Avoid_: Project (retired in ADR 0004 — see that ADR for why; the word smuggled scheduling/PM assumptions into a domain-neutral concept the same way `Task` once did for `Entry`), Plan, schedule (a schedule is an output of scheduling a Dataset, not the Dataset itself)
 
 **Store**:
-The normalized, mutable collection one kind of authored entity lives in inside `data/` — `EntryStore` for Entries, and each plugin's own reserved `PluginStore` for its own entities (ADR 0002). A Store is `data/`'s own, not a consumer-facing word: `dataset.entries` is the published call site (D-S2-2, `plans/s2-data-core`), and "Store" names the class behind it, the way "Signal" names the reactive cell behind `dataset.entries.snapshot()`'s cached identity.
+The normalized, mutable collection one kind of authored entity lives in inside `data/` — `EntryStore` for Entries, and each plugin's own reserved `PluginStore` for its own entities (ADR 0002). A Store is `data/`'s own, not a consumer-facing word: `dataset.entries` is the published call site (D-S2-2, `plans/s2-data-core`), and "Store" names the class behind it, the way "Signal" names the reactive cell behind `dataset.entries.all`'s cached identity.
 _Avoid_: Collection (too generic — every array is a collection), Repository (implies a persistence-layer abstraction this isn't; a Store has no I/O of its own), Table (a relational-database word this schema-free normalized store isn't)
 
 **Snapshot**:
-The committed, cached `readonly Entry[]` a Store's `snapshot()` returns (D-S2-2, D-S2-3). Its identity changes only when a transaction commits — not on every read — so a caller comparing two snapshots by reference is asking "did anything change" correctly. It shows the Store's last **committed** state only: a transaction's own in-body writes are visible through `get`/`has`/`size`, never through `snapshot()` (D-S2-21).
+The committed, cached `readonly Entry[]` a Store's `all` returns (D-S2-2, D-S2-3). Its identity changes only when a transaction commits — not on every read — so a caller comparing two reads of `all` by reference is asking "did anything change" correctly. It shows the Store's last **committed** state only: a transaction's own in-body writes are visible through `get`/`has`/`size`, never through `all` (D-S2-21).
 _Avoid_: View (View is a Row's rendering-facing sense, `plans/01` §2.3 — a different concept), Copy (implies a fresh array per call, which defeats the whole point of the cached identity), List (not a term this codebase uses elsewhere for a collection)
 
 **DatasetState**:
-The `data/` class holding one Dataset's live, private state — its Entry Store, its zone, its `dateOnlyEnd` rule, its Reference date, and (from later S2 steps) its resolve hook, undo history and event bus. `api/dataset.ts`'s `Dataset` class is a thin façade that constructs one `DatasetState` and delegates every read to it — the same structural/façade relationship `Gantt`/`GanttShell` already has, one layer up. Named after the naming skill's five checks ruled out the alternatives: `DatasetCore` collides with this slice's own loaded use of "core" (a core step, core behaviour — `plans/s2-data-core` D-S2-22); `DatasetStores` promises less than the class holds (it is not only stores); inverting the pair so `data/` owns the name `Dataset` collides with `model/dataset.ts`'s existing structural `Dataset`.
+The `data/` class holding one Dataset's live, private state — its Entry Store, its zone, its `dateOnlyEnd` rule, its Reference date, and (from later S2 steps) its extension hook, undo history and event bus. `api/dataset.ts`'s `Dataset` class is a thin façade that constructs one `DatasetState` and delegates every read to it — the same structural/façade relationship `Gantt`/`GanttShell` already has, one layer up. Named after the naming skill's five checks ruled out the alternatives: `DatasetCore` collides with this slice's own loaded use of "core" (a core step, core behaviour — `plans/s2-data-core` D-S2-22); `DatasetStores` promises less than the class holds (it is not only stores); inverting the pair so `data/` owns the name `Dataset` collides with `model/dataset.ts`'s existing structural `Dataset`.
 _Avoid_: DatasetData (retired — "Data" already named three things in this codebase: the `data/` layer, this class, and the dataset itself), DatasetCore, DatasetStores (both rejected candidates, see above)
 
 **Reference date**:
@@ -65,33 +65,33 @@ _Avoid_: Aggregation (the noun for the pass is Rollup — one concept, one word)
 ### Mutation
 
 **Transaction**:
-The unit of mutation: a batch of proposed edits that runs the resolve hook once and commits as one ChangeSet. One transaction per user gesture, at commit — never per intermediate drag frame.
+The unit of mutation: a batch of proposed edits that runs the extension hook once and commits as one ChangeSet. One transaction per user gesture, at commit — never per intermediate drag frame.
 _Avoid_: Batch, operation
 
 **ChangeSet**:
-The single, atomic record of everything one transaction changed — added/removed/updated entities across stores, tagged with an `origin` (`'user' | 'engine' | 'undo' | 'redo' | 'load'`). Every mutation produces exactly one ChangeSet, even when the resolve hook's installed scheduling plugin triggers cascades.
+The single, atomic record of everything one transaction changed — added/removed/updated entities across stores, tagged with an `origin` (`'user' | 'engine' | 'undo' | 'redo' | 'load'`). Every mutation produces exactly one ChangeSet, even when the extension hook's installed scheduling plugin triggers cascades.
 _Avoid_: Diff; Transaction (the scope that produces one); Commit (the act that produces one, and S1.8's `gridWidth` sequence, which produces none) — ADR 0006
 
 **EntryEdits**:
-A batch of proposed field changes, keyed by Entry: `ReadonlyMap<EntryId, EntryEdit>`. The shape a caller writes to `dataset.entries.update()`, a transaction hands to the resolve hook as `EditRequest.proposed`, and a resolver returns as its own extra writes — one shape for "an edit" wherever one appears, rather than a second type per producer.
+A batch of proposed field changes, keyed by Entry: `ReadonlyMap<EntryId, EntryEdit>`. The shape a caller writes to `dataset.entries.update()`, a transaction hands to the extension hook as `EditRequest.proposed`, and an extender returns as its own extra writes — one shape for "an edit" wherever one appears, rather than a second type per producer.
 _Avoid_: Patch, FieldPatch (retired 2026-08-27 — `data/` diffs an `EntryEdits` against the store into `FieldUpdated` rows itself, rather than asking every producer of edits to compute a diff)
 
 **EditRequest**:
-What a transaction hands the resolve hook, once per transaction: the current entries plus the caller's proposed edits (`{ entries, proposed }`). `entries` is a `Map`, keyed by `EntryId`, not an array — `EntryStore` already keeps one internally.
+What a transaction hands the extension hook, once per transaction: the current entries plus the caller's proposed edits (`{ entries, proposed }`). `entries` is a `Map`, keyed by `EntryId`, not an array — `EntryStore` already keeps one internally.
 
-**EditResolver**:
-The function type that may occupy the resolve hook: `(request: EditRequest) => EntryEdits`. Returns extra writes only — the same shape the caller's own edit takes, not a wrapped or partial record of it. `data/` holds exactly one, calls it once per transaction, and defaults to `identityResolver`, which returns an empty `EntryEdits`.
+**EditExtender**:
+The function type that may occupy the extension hook: `(request: EditRequest) => EntryEdits`. Returns extra writes only — the same shape the caller's own edit takes, not a wrapped or partial record of it. `data/` holds exactly one, calls it once per transaction, and defaults to `identityExtender`, which returns an empty `EntryEdits`.
 _Avoid_: ProposalResolver (superseded); EditAdjustment/`{ patch }` (retired 2026-08-27, along with `FieldPatch` — see EntryEdits. Chosen for a plain, usable API now over matching an S3 scheduling contract that has not been designed yet; S3 makes its own return-shape call when it exists)
 
 ### Scheduling
 
-**Resolve hook**:
-The generic, synchronous hook `data/` calls once per transaction to turn a proposed edit into a committed one (D4, `plans/01` §1) — the identity function when no scheduling plugin is installed, or the installed plugin's `schedule()` otherwise. `data/` has no static, scheduling-specific dependency; this hook is the only seam. Exact contract (where per-plugin per-entry data lives, how preview and commit-time calls share one resolution) is design work tracked in issue #12.
+**Extension hook**:
+The generic, synchronous hook `data/` calls once per transaction, letting one installed extender add extra field writes to the proposed edit (D4, `plans/01` §1) — adding nothing when no scheduling plugin is installed, or whatever the installed plugin's `schedule()` returns otherwise. `data/` has no static, scheduling-specific dependency; this hook is the only seam. Exact contract (where per-plugin per-entry data lives, how preview and commit-time calls share one resolution) is design work tracked in issue #12.
 _Avoid_: Scheduling hook (the hook itself is scheduling-agnostic — it's generic, and a non-scheduling plugin could occupy it)
 
 **Scheduling plugin**:
-Whatever plugin occupies the resolve hook, if any. FreeGantt ships an official bars + dependencies engine as its first-party default (D3) — described in §7 below — but core does not require it or any scheduling plugin to function (D4, ADR 0002).
-_Avoid_: The scheduling engine (ambiguous between "the seam" and "FreeGantt's default implementation of it" — say "the resolve hook" or "the default scheduling plugin" explicitly)
+Whatever plugin occupies the extension hook, if any. FreeGantt ships an official bars + dependencies engine as its first-party default (D3) — described in §7 below — but core does not require it or any scheduling plugin to function (D4, ADR 0002).
+_Avoid_: The scheduling engine (ambiguous between "the seam" and "FreeGantt's default implementation of it" — say "the extension hook" or "the default scheduling plugin" explicitly)
 
 **SchedulingPolicy**:
 The pluggable seam, within the default scheduling plugin, that resolves how a proposed edit interacts with an Entry's kind and existing schedule (e.g. whether the engine may move it, how a `'group'` Entry rolls up from children). Kind-specific scheduling semantics live in the policy, never in the engine itself.
@@ -132,7 +132,7 @@ The row-level nesting of the timeline grid (parent/child rows via `parentId`). D
 _Avoid_: Group (ambiguous with the `'group'` kind — say "row grouping" or "the `'group'` kind" explicitly)
 
 **Rollup**:
-The bottom-up pass in the commit path that derives a parent's value for a Field from its children's, using that Field's Aggregator. It is a core step, not a resolver: it runs whether or not a plugin is installed, and nothing installable can displace it (D-S2-22). It yields to a field the caller proposed in the same transaction and wins over one the resolve hook proposed. One pass settles nested parents, because the walk is bottom-up. The **Span rollup** is the instance that ships first — `start` is `min`, `end` is `max` over the children of a derived-span Kind — and `derivedSpanKinds` says which Kinds derive at all. Once a group has children, the Rollup owns its span; it can't be set directly. A dependency attached to a `'group'` Entry resolves against its rolled-up span by default.
+The bottom-up pass in the commit path that derives a parent's value for a Field from its children's, using that Field's Aggregator. It is a core step, not a resolver: it runs whether or not a plugin is installed, and nothing installable can displace it (D-S2-22). It yields to a field the caller proposed in the same transaction and wins over one the extension hook proposed. One pass settles nested parents, because the walk is bottom-up. The **Span rollup** is the instance that ships first — `start` is `min`, `end` is `max` over the children of a derived-span Kind — and `derivedSpanKinds` says which Kinds derive at all. Once a group has children, the Rollup owns its span; it can't be set directly. A dependency attached to a `'group'` Entry resolves against its rolled-up span by default.
 _Avoid_: Group rollup (the pass is not tied to the `'group'` Kind, nor to spans — it is per Field, over any derived-span Kind), rollup pass (says "when," not "what"), aggregation (Aggregator is the function; Rollup is the pass)
 
 **Grid column**:
@@ -279,7 +279,7 @@ Bringing a named Entry into view — the intent-level verb a consumer uses (`gan
 _Avoid_: ScrollTo, scrollIntoView, goTo, center (Reveal is nearest-edge; centering is a deferred, separate policy)
 
 **Batch**:
-Several writes to a viewport model delivering at most one notification, and only if the resolved value actually changed. No observer ever sees an intermediate state. A Batch is _not_ a Transaction: it has no changeset, no undo entry, and no resolve hook — `layout/` has no edge to `data/`. The two words never substitute for each other.
+Several writes to a viewport model delivering at most one notification, and only if the resolved value actually changed. No observer ever sees an intermediate state. A Batch is _not_ a Transaction: it has no changeset, no undo entry, and no extension hook — `layout/` has no edge to `data/`. The two words never substitute for each other.
 _Avoid_: Transaction (that is `data/`'s unit of mutation), commit, freeze
 
 **ViewPreset**:
@@ -342,8 +342,8 @@ _Avoid_: Extension (Extensions is the name of the source layer that runs plugins
 The object `setup(ctx)` receives — a GanttPlugin's entire world: dataset access, the event bus (including cancelable `before*` events), registration for decorations/columns/renderers/item-emitters/interaction-controllers/keybindings, the command registry, and a disposable store. A plugin may not reach into anything outside it (enforced by the import-boundary lint).
 _Avoid_: Treating this as settled — the plugin system (`GanttPlugin`/`DatasetPlugin`/`PluginContext`) is still design work in progress; the shape, and possibly this name, may change before it lands
 
-**DatasetPlugin**, **EditResolver**, **PluginStore**:
-Names from the resolve hook's contract design (ADR 0002's consequences, issue #15, built on #12): a `DatasetPlugin` occupies the resolve hook via an `EditResolver`, and per-plugin per-entry data (e.g. the scheduling plugin's pin flag, `Dependency`) lives in a reserved `PluginStore` rather than on `Entry` or in a consumer/plugin-shared field. Design proposals only — not yet implemented or landed in `src/`; do not treat as existing API until #15 lands. Named `ProjectPlugin` before ADR 0004.
+**DatasetPlugin**, **EditExtender**, **PluginStore**:
+Names from the extension hook's contract design (ADR 0002's consequences, issue #15, built on #12): a `DatasetPlugin` occupies the extension hook via an `EditExtender`, and per-plugin per-entry data (e.g. the scheduling plugin's pin flag, `Dependency`) lives in a reserved `PluginStore` rather than on `Entry` or in a consumer/plugin-shared field. Design proposals only — not yet implemented or landed in `src/`; do not treat as existing API until #15 lands. Named `ProjectPlugin` before ADR 0004.
 _Avoid_: Treating these as settled — the exact shapes are still open design work
 
 ### Process

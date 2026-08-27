@@ -153,7 +153,7 @@ export class GanttShell {
     // premature calls are dropped by #wiring; the deliberate first render below runs once
     // everything, including the initial pane-size measurement, is wired.
     this.#viewportHandle = this.#viewport.bind(
-      { entries: options.dataset.entries.snapshot(), timeZone: options.dataset.timeZone },
+      { entries: options.dataset.entries.all, timeZone: options.dataset.timeZone },
       () => {
         if (!this.#wiring) this.render();
       },
@@ -263,7 +263,7 @@ export class GanttShell {
    * two can never drift apart — and hands the resulting `Rect` to `Viewport.reveal` (S1.9, D-S1.9-6).
    * Throws `EntryNotFoundError` for an id the dataset has no entry for. */
   reveal(entryId: EntryId): void {
-    const entries = this.#options.dataset.entries.snapshot();
+    const entries = this.#options.dataset.entries.all;
     const index = entries.findIndex((e) => e.id === entryId);
     if (index === -1) throw new EntryNotFoundError(entryId);
     const entry = entries[index]!;
@@ -302,7 +302,7 @@ export class GanttShell {
 
   render(): void {
     const frame = this.#layout.computeFrame({
-      entries: this.#options.dataset.entries.snapshot(),
+      entries: this.#options.dataset.entries.all,
       scale: this.#viewport.timeScale,
       preset: this.#viewport.preset,
       visible: this.#viewport.visible,
