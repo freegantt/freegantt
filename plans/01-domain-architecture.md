@@ -137,20 +137,20 @@ interface Entry<TMeta = unknown> {
   kind?: EntryKind;
   name: string;
   /** Always present in the store. For kinds whose span the policy derives (default `group`),
-   *  Group rollup maintains these; input may omit them and they are initialized (§2.5). */
+   *  The Span rollup maintains these; input may omit them and they are initialized (§2.5, §2.6). */
   start: Instant;
   end: Instant;                // exclusive — see §5
   progress?: number;           // 0..1
   /** Interrupted work — renders as multiple bars on one row. */
   segments?: readonly TimeSpan[];
-  meta?: TMeta;                // consumer-owned, typed via generic
+  meta?: TMeta;                // consumer-owned, typed via generic; a declared key is a Field (§2.6)
 }
 
 /** DERIVED. One display lane. */
 interface Row {
   id: RowId;
   kind: 'entry' | 'group' | 'custom';
-  label: string;
+  cells: readonly string[];       // one per configured grid column, in display order — §2.6
   heightMode: 'fixed' | 'pack';   // 'pack' grows to fit lanes
 }
 
@@ -231,9 +231,69 @@ type ItemEmitter = (entry: Entry) => readonly Item[];
 
 Rules:
 
-- **Kind is authored, never derived.** A `group` is a group because the user said so — not because it currently has children. An empty group is legal and renders as one (that is how "add a phase, then fill it" works). For derived-span kinds, input may omit `start`/`end`: the store initializes a zero-length span (at the dataset's reference date) and the Group rollup owns it from then on — the *stored* model always has both fields, so no layer downstream handles absence. `parentId` (tree position) and `kind` (what it is) are orthogonal; "every parent is a group" is a convention, not a model rule — and `hierarchy: { autoGroup: true }` (`02` §2) maintains that convention automatically: an entry gaining its first child is promoted to `group` in the same transaction. **Promote only, never demote** — demoting on losing the last child would reintroduce exactly the flickering identity this rule exists to prevent; demotion stays an explicit edit.
+- **Kind is authored, never derived.** A `group` is a group because the user said so — not because it currently has children. An empty group is legal and renders as one (that is how "add a phase, then fill it" works). For derived-span kinds, input may omit `start`/`end`: the store initializes a zero-length span (at the dataset's reference date) and the Span rollup owns it from then on — the *stored* model always has both fields, so no layer downstream handles absence. `parentId` (tree position) and `kind` (what it is) are orthogonal; "every parent is a group" is a convention, not a model rule — and `hierarchy: { autoGroup: true }` (`02` §2) maintains that convention automatically: an entry gaining its first child is promoted to `group` in the same transaction. **Promote only, never demote** — demoting on losing the last child would reintroduce exactly the flickering identity this rule exists to prevent; demotion stays an explicit edit.
 - **The set is open.** Shipped kinds: `'span'`, `'group'`, `'milestone'`. A consumer-defined kind (say `'buffer'`) gets full behavior by registering at the four seams above — no core edits. Anything not registered at a seam falls back to `'span'` behavior there, so partial registration degrades gracefully instead of erroring.
 - **Group *entry* ≠ row *grouping*.** `rows: { source: 'group', groupBy }` is a view-side arrangement of any entries and persists nothing; a `kind: 'group'` entry is a model entity that persists, schedules, and syncs. They compose — a grouped view of a dataset containing group entries is well-defined, because one is authored and the other is derived (principle 1).
+
+### 2.6 Fields and grid columns — what a value **is**, and where a Gantt **shows** it
+
+`Entry` is a closed shape, so a consumer's `cost` has nowhere to be a first-class value: it can be stored in `meta`, but it cannot roll up, cannot be compared per field, and cannot appear in a changeset. A **Field** fixes that. It is a declared, named value on an entry, and core's own fields are declarations of the same kind (ADR 0005). A **Grid column** is where one Gantt shows a field.
+
+One sentence separates them, and it is the only one a reader has to hold: **a field is what a value *is*; a grid column is where a Gantt *shows* it.** Fields belong to the `Dataset`, because the rollup writes into stored, serialized, undoable values and runs at construction, before any Gantt exists. Grid columns belong to the `Gantt`, because which values this view shows, and in what order, is a view question.
+
+```ts
+// model/field.ts — types only
+type FieldKey = string & {};                        // a field's name; also the changeset's `field`
+type CoreFieldKey = keyof Omit<Entry, 'id'>;        // the shipped subset
+
+/** Where the value lives. The choice decides whether a rolled-up parent value is stored. */
+type FieldSource =
+  | { from: 'entry'; field: CoreFieldKey }          // name, start, end, progress — shipped
+  | { from: 'meta'; key: string }                   // consumer-authored; already serialized today
+  | { from: 'compute'; read(entry: Entry, ctx: FieldContext): unknown };
+
+interface Field<TValue = unknown> {
+  key: FieldKey;
+  type?: FieldTypeName;                             // a bundle; the field's own keys win over it
+  source: FieldSource;
+  rollUp?: AggregatorName;                          // 'min' | 'max' | 'sum' | 'count' | 'none' | yours
+  equals?(a: TValue | undefined, b: TValue | undefined): boolean;   // default Object.is
+  formatValue?(value: TValue | undefined, ctx: FieldContext): string;   // text for a cell; DOM-free
+  column?: Omit<GridColumn, 'field'>;               // presentation defaults, declared once with the field
+}
+
+/** Presentation only. Never carries an aggregate — see the rules below. */
+interface GridColumn {
+  field: FieldKey;
+  header?: string;
+  width?: number; flex?: number;
+  align?: 'start' | 'end';
+  cellRenderer?: CellRenderer;
+  editable?: boolean;
+}
+
+/** Registered by name, never passed inline — a name serializes, a function does not. */
+type Aggregator<TValue = unknown> = (
+  children: readonly Entry[],      // already rolled up; the walk is bottom-up
+  parent: Entry,
+  ctx: RollUpContext,
+) => TValue | undefined;           // undefined = no opinion, leave the stored value alone
+
+interface RollUpContext { read<T>(entry: Entry, key: FieldKey): T | undefined; }
+```
+
+Rules:
+
+- **Core fields are ordinary declarations.** `name`, `start` (`min`), `end` (`max`), `progress` (`weightedMeanByDuration`) and `duration` (computed from `start` and `end`) ship in the registry a consumer adds to. There is no separate path for core, which is what makes a `cost` column and a `start` column the same code.
+- **Source decides stored or computed.** A field sourced from `entry` or `meta` has a stored home, so its rolled-up parent value is stored — changeset, undo, document — exactly as the Span rollup already does for `start`/`end`. A field sourced from `compute` has no home, so its parent value is computed on read, cached against the entry's subtree revision, and never reaches the document. A consumer who wants an aggregate without document bytes declares a computed field; there is no flag to set.
+- **A computed field reads the dataset only, never view state.** No zoom, no visible range, no selection. Its cache is then keyed on the entry's subtree revision alone, which is what makes the value the same for every reader of that dataset. A value that depends on the view is not a field — it is a renderer's business.
+- **`meta` is opaque unless you declare a key.** Undeclared keys keep §6's rule — carried by reference, never walked, compared by `===`. A write to a declared key emits a changeset row keyed on the **field key**, never a `meta` row.
+- **Edits name fields, not shapes.** `update('t1', { start: X, cost: 500 })` is one transaction, one changeset and one undo step across a core field and a consumer field. A key that is not registered is an `UnknownFieldError` — never a silent write.
+- **Rollup precedence is §7's rule, unchanged.** The rollup yields to a field the caller proposed in the same transaction and wins over one the resolve hook proposed. Bottom-up, one pass, so nested groups settle together. `derivedSpanKinds` says which **kinds** derive; the registry says how each **field** derives. The two are orthogonal and both are needed.
+- **Aggregation never lives on a grid column.** A stored value must not depend on whether a column is visible, and the rollup has already run before any Gantt is constructed.
+- **A field declares its own column defaults, so `gridColumns` is mostly ordering.** `gridColumns: ['name', 'start', 'cost']` names fields in display order; the object form (`{ field: 'cost', header: 'Budget — site A' }`) overrides this Gantt's presentation only, and never the data half.
+- **Text and structure stay separate.** `formatValue` returns a string, is DOM-free, and fills the frame's row cells; `cellRenderer` returns element descriptions and is applied by `render/`. Same split as `FrameBar.label` and `barRenderer` (§8).
+- **One registration, split at `api/`.** A field (and a field type) carries both halves; `api/` sends the data half to `data/`'s registry and the presentation half to `view/`, so a consumer declares `money` once and the layer boundary still holds.
 
 ---
 
@@ -289,8 +349,11 @@ interface GeometryFrame {
    *  backend never builds tick DOM itself. Each tick carries `width` to the next boundary at that
    *  band's step (D-S1.7-4). */
   header: { bands: readonly { unit: TimeUnit; increment: number; ticks: readonly { x: number; width: number; label: string }[] }[] };
-  /** Only rows in the vertical window; `top` in absolute content coordinates. */
-  rows: Array<{ id: RowId; index: number; top: number; height: number; laneCount: number; label: string }>;
+  /** Only rows in the vertical window; `top` in absolute content coordinates. `cells` holds one
+   *  library-formatted string per configured grid column, in column order, produced by each field's
+   *  `formatValue` (§2.6). It is derived text on the `a11yLabel` precedent, not consumer render
+   *  output — a `cellRenderer` is applied by `render/`, never here. */
+  rows: Array<{ id: RowId; index: number; top: number; height: number; laneCount: number; cells: readonly string[] }>;
   /** Total row count across the whole dataset (`entries.length`), not the windowed `rows.length` —
    *  feeds `aria-setsize` (S1.10, D-S1.10-5): virtualization without it announces "row 3" with no
    *  "of 30" over a large dataset. */
@@ -458,7 +521,7 @@ function schedule(request: ScheduleRequest): ScheduleResult;   // pure, determin
 - Lag applied per dependency `type`; negative lag (overlap) is legal.
 - **Cycle detection names the members**: if the worklist drains with entries unvisited, those entries are the cycle — `{ code: 'cycle', entryIds }`, never "a cycle exists somewhere."
 - An entry pinned in the plugin's own per-entry storage (the pin flag is no longer `Entry.scheduling` — that field is gone, see §2.2; where it lives instead is part of the #12 contract) is never moved; the engine reports what it *would* have done as a diagnostic.
-- Group rollup (summary spans from children) is a separate bottom-up pass after propagation settles — pass ordering, not mutual recursion. A dependency attached to a `group` entry resolves against its rolled-up span by default.
+- The Rollup (a parent's value for a field derived from its children — §2.6) is `data/`'s own commit step, not the engine's: the engine moves children and stops there (D-S2-22). Pass ordering, not mutual recursion. A dependency attached to a `group` entry resolves against its rolled-up span by default.
 
 **Kind semantics live in the policy, not the engine.** The engine knows graphs and lag; what a `group` or `milestone` (or consumer-defined kind) *means* for scheduling is a policy decision. The default policy: `group` spans derive from children (direct edits to a derived span are reported as diagnostics, not applied); `milestone` keeps `start === end`; unknown kinds behave as `'span'`. A consumer methodology that wants directly schedulable groups ships a policy — the engine and contract do not change.
 
@@ -554,7 +617,7 @@ flowchart TB
 
 ### 8.3 Split pane (D8)
 
-`GanttShell` composes the split; `view/pane-layout.ts`'s `PaneLayout` holds it (S1.8): grid pane (columns over `frame.rows`) · splitter · timeline pane (header + bars + links + decorations). The timeline pane is the single native scroller for both axes (D-D, D-S1.8-1) — the grid pane has no scrollbar of its own. Its row layer follows the timeline pane's scroll position by one `translateY(-frame.visible.y)` transform per frame instead of a second real scroller; both panes read `top` from the same `frame.rows`/`frame.bars`, so pixel identity between them (I9) is structural rather than a property either side maintains by hand. The grid starts as a single label column (S1) and grows columns/editors in S6 without structural change.
+`GanttShell` composes the split; `view/pane-layout.ts`'s `PaneLayout` holds it (S1.8): grid pane (columns over `frame.rows`) · splitter · timeline pane (header + bars + links + decorations). The timeline pane is the single native scroller for both axes (D-D, D-S1.8-1) — the grid pane has no scrollbar of its own. Its row layer follows the timeline pane's scroll position by one `translateY(-frame.visible.y)` transform per frame instead of a second real scroller; both panes read `top` from the same `frame.rows`/`frame.bars`, so pixel identity between them (I9) is structural rather than a property either side maintains by hand. The grid starts as a single column (S1) and grows columns/editors in S5–S6 without structural change: `FrameRow.cells` carries one library-formatted string per configured column (§2.6), so adding a column adds a cell rather than a frame shape (#81).
 
 ---
 
@@ -589,9 +652,12 @@ interface PluginContext {
   events: EventBus;                 // subscribe to everything, including before* (may veto)
   view: {
     registerDecoration(layer: 'underBars' | 'overBars', d: DecorationProvider): void;
-    registerColumn(col: ColumnSpec): void;
+    registerGridColumn(column: GridColumn): void;   // names a field (§2.6); presentation only
     registerRenderer(kind: 'bar' | 'cell' | 'header' | 'tooltip', r: Renderer): void;
     overlay: OverlayHost;           // positioned DOM (popups, tooltips) with anchoring/flipping
+  };
+  data: {
+    registerField(field: Field): void;   // §2.6 — a plugin's field rolls up like a core one
   };
   layout: {
     registerItemEmitter(kind: string, emitter: ItemEmitter): void;
