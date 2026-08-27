@@ -16,9 +16,9 @@ const scale: TimeScale = {
 };
 const preset: ViewPreset = {
   id: 'none',
-  tickUnit: 'd',
+  tickUnit: 'day',
   tickIncrement: 1,
-  headers: [{ unit: 'd', increment: 1, format: () => 'tick' }],
+  headers: [{ unit: 'day', increment: 1, format: () => 'tick' }],
   tickWidthPx: 24,
 };
 

@@ -3,9 +3,9 @@
 // reactions, which is R1's god object arriving on schedule the moment a third model (pane-size
 // measurement, #8) joins them. Viewport exists so `view/` never holds more than one.
 
-import { TimeScaleModel } from './time-scale-model.js';
-import type { ScaleBinding, ScaleBindingHandle, TimeScaleZoom } from './time-scale-model.js';
-import { ScrollModel } from './scroll-model.js';
+import { TimeScaleModel, bindTimeScale } from './time-scale-model.js';
+import type { ScaleBinding, ScaleBindingHandle, TimeScaleFit } from './time-scale-model.js';
+import { ScrollModel, bindScroll } from './scroll-model.js';
 import type { ScrollBindingHandle } from './scroll-model.js';
 import type { PresetRef, TimeScale, ViewPreset } from '../../time/index.js';
 import { BatchedNotifier } from './batched-notifier.js';
@@ -98,8 +98,9 @@ export class Viewport {
       timeZone: dataset.timeZone,
       paneWidth: this.#paneSize.width,
     };
-    const scaleHandle: ScaleBindingHandle = this.scale.bind(scaleBinding, this.#notify);
-    const scrollHandle: ScrollBindingHandle = this.scroll.bind(
+    const scaleHandle: ScaleBindingHandle = bindTimeScale(this.scale, scaleBinding, this.#notify);
+    const scrollHandle: ScrollBindingHandle = bindScroll(
+      this.scroll,
       { content: this.#contentSize, pane: this.#paneSize },
       this.#notify,
     );
@@ -150,13 +151,13 @@ export class Viewport {
     this.scale.range = r;
   }
 
-  get zoom(): TimeScaleZoom {
-    return this.scale.zoom;
+  get fit(): TimeScaleFit {
+    return this.scale.fit;
   }
 
-  /** Live — delegates straight to `TimeScaleModel.zoom`. */
-  set zoom(z: TimeScaleZoom) {
-    this.scale.zoom = z;
+  /** Live — delegates straight to `TimeScaleModel.fit`. */
+  set fit(f: TimeScaleFit) {
+    this.scale.fit = f;
   }
 
   get overscan(): Overscan {
@@ -194,18 +195,18 @@ export class Viewport {
   }
 
   /** Reads the instant currently under `anchorX` (default: pane center) BEFORE writing anything,
-   *  then writes `scale.zoom` and repositions `scroll.x` inside one batch so that instant is back
+   *  then writes `scale.fit` and repositions `scroll.x` inside one batch so that instant is back
    *  under `anchorX` after (S1.9, D-S1.9-5). Never touches `range.start` (D-F′). One notification.
    *
    *  `scroll.panTo` clamps against `ScrollModel.state.max`, resolved from the LAST PUSHED content
-   *  size — the one `GanttShell.render()` pushes after computing a frame. Writing `scale.zoom` and
+   *  size — the one `GanttShell.render()` pushes after computing a frame. Writing `scale.fit` and
    *  immediately panning would clamp against the old, one-render-stale `contentWidth`. `contentWidth`
    *  is a pure function of `range`/`pxPerMs` — no layout pass needed to know it changed — so this
    *  pushes the new one itself, synchronously, between the scale write and the pan. */
   zoomTo(pxPerMs: number, anchorX: number = this.#paneSize.width / 2): void {
     const anchorInstant = this.timeScale.instantForX(this.scroll.state.position.x + anchorX);
     this.batch(() => {
-      this.scale.zoom = { pxPerMs };
+      this.scale.fit = pxPerMs;
       this.#scrollHandle?.setContentSize({
         width: this.timeScale.contentWidth,
         height: this.#contentSize.height,

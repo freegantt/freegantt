@@ -9,7 +9,7 @@ import { entryId } from '../../model/index.js';
 import type { Entry } from '../../model/index.js';
 
 function entry(id: string, start: string, end: string): Entry {
-  return { id: entryId(id), name: id, start: instant(start), end: instant(end) };
+  return { id: entryId(id), name: id, start: instant(start), end: instant(end), kind: 'span' };
 }
 
 const dataset: DatasetBinding = {
@@ -25,7 +25,7 @@ const wideDataset: DatasetBinding = {
 const noop = (): void => {};
 
 function boundViewport(width = 400, height = 200): { viewport: Viewport; calls: () => number } {
-  const viewport = new Viewport({ scale: new TimeScaleModel({ zoom: 'preset', preset: 'day' }) });
+  const viewport = new Viewport({ scale: new TimeScaleModel({ fit: 'preset', preset: 'day' }) });
   let calls = 0;
   const handle = viewport.bind(wideDataset, () => calls++);
   handle.setPaneSize({ width, height });
@@ -255,7 +255,7 @@ describe('Viewport.zoomTo / zoomBy (S1.9, D-S1.9-5)', () => {
   });
 
   it('called before the first render (pane width 0) resolves to a defined, non-throwing value', () => {
-    const viewport = new Viewport({ scale: new TimeScaleModel({ zoom: 'preset', preset: 'day' }) });
+    const viewport = new Viewport({ scale: new TimeScaleModel({ fit: 'preset', preset: 'day' }) });
     viewport.bind(wideDataset, noop);
     expect(() => viewport.zoomTo(viewport.timeScale.pxPerMs * 2)).not.toThrow();
   });

@@ -12,7 +12,7 @@ const rangeStart = instant('2026-09-01T05:00:00Z');
 const rangeEnd = instant('2026-09-08T05:00:00Z'); // 7 days later, same wall-clock offset
 const pxPerMs = 1 / (1000 * 60 * 60); // 1px per hour
 
-const dayStep: TickStep = { unit: 'd', increment: 1 };
+const dayStep: TickStep = { unit: 'day', increment: 1 };
 
 describe('createTimeScale', () => {
   it('round-trips xForInstant/instantForX', () => {
@@ -26,7 +26,7 @@ describe('createTimeScale', () => {
   it('computes widthForDuration via zone-aware stepping, not raw ms', () => {
     const scale = createTimeScale({ timeZone, range: { start: rangeStart, end: rangeEnd }, pxPerMs });
     // 1 day at 1px/hour = 24px, regardless of DST — the fixture range has no transition here.
-    expect(scale.widthForDuration({ value: 1, unit: 'd' }, rangeStart)).toBeCloseTo(24, 5);
+    expect(scale.widthForDuration({ value: 1, unit: 'day' }, rangeStart)).toBeCloseTo(24, 5);
   });
 
   it('exposes contentWidth as the full range extent at this zoom', () => {
@@ -91,8 +91,12 @@ describe('createTimeScale', () => {
 
   it('steps month and year units (#29 — a new zoom level is never a library edit)', () => {
     const scale = createTimeScale({ timeZone, range: { start: rangeStart, end: rangeEnd }, pxPerMs });
-    expect(() => scale.ticks({ unit: 'M', increment: 1 }, { x: 0, width: scale.contentWidth })).not.toThrow();
-    expect(() => scale.ticks({ unit: 'y', increment: 1 }, { x: 0, width: scale.contentWidth })).not.toThrow();
+    expect(() =>
+      scale.ticks({ unit: 'month', increment: 1 }, { x: 0, width: scale.contentWidth }),
+    ).not.toThrow();
+    expect(() =>
+      scale.ticks({ unit: 'year', increment: 1 }, { x: 0, width: scale.contentWidth }),
+    ).not.toThrow();
   });
 });
 
@@ -103,7 +107,10 @@ describe('pxPerMsForPreset', () => {
       range: { start: rangeStart, end: rangeEnd },
       pxPerMs: pxPerMsForPreset(timeZone, dayPreset, rangeStart),
     });
-    expect(scale.widthForDuration({ value: 1, unit: 'd' }, rangeStart)).toBeCloseTo(dayPreset.tickWidthPx, 5);
+    expect(scale.widthForDuration({ value: 1, unit: 'day' }, rangeStart)).toBeCloseTo(
+      dayPreset.tickWidthPx,
+      5,
+    );
   });
 
   it('refuses a preset that does not advance rather than returning Infinity', () => {

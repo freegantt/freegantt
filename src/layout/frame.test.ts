@@ -191,8 +191,8 @@ describe('computeFrame', () => {
     const twoHeaderPreset = {
       ...preset,
       headers: [
-        { unit: 'w' as const, increment: 1, format: () => 'w' },
-        { unit: 'd' as const, increment: 1, format: () => 'd' },
+        { unit: 'week' as const, increment: 1, format: () => 'w' },
+        { unit: 'day' as const, increment: 1, format: () => 'd' },
       ],
     };
     const frame = computeFrame({
@@ -204,8 +204,8 @@ describe('computeFrame', () => {
       revision: 0,
     });
     expect(frame.header.bands).toHaveLength(2);
-    expect(frame.header.bands[0]?.unit).toBe('w');
-    expect(frame.header.bands[1]?.unit).toBe('d');
+    expect(frame.header.bands[0]?.unit).toBe('week');
+    expect(frame.header.bands[1]?.unit).toBe('day');
     expect(frame.header.bands[0]?.ticks.length).toBeGreaterThan(0);
     expect(frame.header.bands[1]?.ticks.length).toBeGreaterThan(0);
   });
@@ -281,7 +281,7 @@ describe('computeFrame — horizontal culling', () => {
   });
 
   function entryAt(id: string, x: number, width: number): Entry {
-    return { id: entryId(id), name: id, start: instant(x), end: instant(x + width) };
+    return { id: entryId(id), name: id, start: instant(x), end: instant(x + width), kind: 'span' };
   }
 
   const entries: Entry[] = [
@@ -346,6 +346,7 @@ describe(
       name: input.name,
       start: instant(input.start as Date),
       end: instant(input.end as Date),
+      kind: 'span',
     }));
     const largeScale = createTimeScale({ timeZone: 'UTC', range: large[0]!, pxPerMs: 1 / 100_000 });
 

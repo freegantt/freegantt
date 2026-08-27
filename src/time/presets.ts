@@ -39,41 +39,41 @@ function freezePreset(preset: ViewPreset): ViewPreset {
  * object — a new zoom level is never a library edit. */
 export const hourPreset: ViewPreset = freezePreset({
   id: 'hour',
-  tickUnit: 'h',
+  tickUnit: 'hour',
   tickIncrement: 1,
-  headers: [{ unit: 'h', increment: 1, format: hourFormat }],
+  headers: [{ unit: 'hour', increment: 1, format: hourFormat }],
   tickWidthPx: 40,
 });
 
 export const dayPreset: ViewPreset = freezePreset({
   id: 'day',
-  tickUnit: 'd',
+  tickUnit: 'day',
   tickIncrement: 1,
-  headers: [{ unit: 'd', increment: 1, format: plainDateFormat }],
+  headers: [{ unit: 'day', increment: 1, format: plainDateFormat }],
   tickWidthPx: 24,
 });
 
 export const weekPreset: ViewPreset = freezePreset({
   id: 'week',
-  tickUnit: 'w',
+  tickUnit: 'week',
   tickIncrement: 1,
-  headers: [{ unit: 'w', increment: 1, format: plainDateFormat }],
+  headers: [{ unit: 'week', increment: 1, format: plainDateFormat }],
   tickWidthPx: 60,
 });
 
 export const monthPreset: ViewPreset = freezePreset({
   id: 'month',
-  tickUnit: 'M',
+  tickUnit: 'month',
   tickIncrement: 1,
-  headers: [{ unit: 'M', increment: 1, format: monthFormat }],
+  headers: [{ unit: 'month', increment: 1, format: monthFormat }],
   tickWidthPx: 80,
 });
 
 export const yearPreset: ViewPreset = freezePreset({
   id: 'year',
-  tickUnit: 'y',
+  tickUnit: 'year',
   tickIncrement: 1,
-  headers: [{ unit: 'y', increment: 1, format: yearFormat }],
+  headers: [{ unit: 'year', increment: 1, format: yearFormat }],
   tickWidthPx: 60,
 });
 
@@ -83,33 +83,33 @@ export const yearPreset: ViewPreset = freezePreset({
  * finest thing labelled, or a label would claim a boundary no gridline draws. */
 export const dayAndWeekPreset: ViewPreset = freezePreset({
   id: 'dayAndWeek',
-  tickUnit: 'd',
+  tickUnit: 'day',
   tickIncrement: 1,
   headers: [
-    { unit: 'w', increment: 1, format: plainDateFormat },
-    { unit: 'd', increment: 1, format: plainDateFormat },
+    { unit: 'week', increment: 1, format: plainDateFormat },
+    { unit: 'day', increment: 1, format: plainDateFormat },
   ],
   tickWidthPx: 24,
 });
 
 export const weekAndMonthPreset: ViewPreset = freezePreset({
   id: 'weekAndMonth',
-  tickUnit: 'w',
+  tickUnit: 'week',
   tickIncrement: 1,
   headers: [
-    { unit: 'M', increment: 1, format: monthFormat },
-    { unit: 'w', increment: 1, format: plainDateFormat },
+    { unit: 'month', increment: 1, format: monthFormat },
+    { unit: 'week', increment: 1, format: plainDateFormat },
   ],
   tickWidthPx: 60,
 });
 
 export const monthAndYearPreset: ViewPreset = freezePreset({
   id: 'monthAndYear',
-  tickUnit: 'M',
+  tickUnit: 'month',
   tickIncrement: 1,
   headers: [
-    { unit: 'y', increment: 1, format: yearFormat },
-    { unit: 'M', increment: 1, format: monthFormat },
+    { unit: 'year', increment: 1, format: yearFormat },
+    { unit: 'month', increment: 1, format: monthFormat },
   ],
   tickWidthPx: 80,
 });

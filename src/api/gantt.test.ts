@@ -92,9 +92,9 @@ describe('Gantt', () => {
   });
 });
 
-describe('Gantt preset/range/zoom/overscan/zoomTo/zoomBy/reveal (S1.9)', () => {
+describe('Gantt preset/range/fit/zoomTo/zoomBy/reveal (S1.9)', () => {
   it('[S1-A3] a preset switch redraws the axis but keeps bar DOM identity (I8)', () => {
-    // Regression coverage for a measured pane under the default 'fitViewport' zoom: pxPerMs there
+    // Regression coverage for a measured pane under the default 'pane' fit: pxPerMs there
     // does not depend on the preset, so this must exercise a real ResizeObserver measurement
     // (not an unmeasured 0-width pane, where pxPerMs happens to depend on the preset anyway and
     // would pass even if the notify path were broken).
@@ -125,21 +125,6 @@ describe('Gantt preset/range/zoom/overscan/zoomTo/zoomBy/reveal (S1.9)', () => {
     }
   });
 
-  it('U5: gantt.overscan is live and reaches the bound Viewport', () => {
-    const container = document.createElement('div');
-    const gantt = new Gantt({
-      container,
-      dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }),
-      overscan: { horizontalPx: 64 },
-    });
-
-    expect(gantt.overscan).toEqual({ horizontalPx: 64 });
-    gantt.overscan = { horizontalPx: 256 };
-    expect(gantt.overscan).toEqual({ horizontalPx: 256 });
-
-    gantt.destroy();
-  });
-
   it('U4: reveal(id) moves the bound ScrollModel to bring an off-screen entry into view', () => {
     // Reads the ScrollModel a caller shared, not the element's scrollLeft/scrollTop — I12 confines
     // that read to view/scroll-attachment.ts; scroll-attachment.test.ts and e2e/scroll-sync.spec.ts
@@ -153,7 +138,7 @@ describe('Gantt preset/range/zoom/overscan/zoomTo/zoomBy/reveal (S1.9)', () => {
       const gantt = new Gantt({
         container,
         dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }),
-        zoom: 'preset',
+        fit: 'preset',
         preset: 'day',
         scroll,
       });
@@ -193,7 +178,7 @@ describe('Gantt preset/range/zoom/overscan/zoomTo/zoomBy/reveal (S1.9)', () => {
     vi.stubGlobal('ResizeObserver', FakeResizeObserver);
 
     try {
-      const scale = new TimeScaleModel({ zoom: 'preset', preset: 'day' });
+      const scale = new TimeScaleModel({ fit: 'preset', preset: 'day' });
       const scroll = new ScrollModel();
       const containerA = document.createElement('div');
       const containerB = document.createElement('div');
@@ -225,23 +210,10 @@ describe('Gantt preset/range/zoom/overscan/zoomTo/zoomBy/reveal (S1.9)', () => {
     }
   });
 
-  it('a caller passing both scale and preset gets the shared scale, ignoring the constructor preset (D-S1.9-9)', () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const scale = new TimeScaleModel({ preset: 'week' });
-    const container = document.createElement('div');
-    const gantt = new Gantt({
-      container,
-      dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }),
-      scale,
-      preset: 'month',
-    });
-
-    expect(gantt.preset.id).toBe('week');
-    expect(warn).toHaveBeenCalledTimes(1);
-    warn.mockRestore();
-
-    gantt.destroy();
-  });
+  // `scale` and `preset`/`range`/`fit` together are now a compile-time error on the public
+  // `GanttOptions` (issue #84, finding #3) — see `gantt-shell.test.ts` for the runtime warning
+  // GanttShell itself still carries for a caller who bypasses that type (there is none through
+  // the public `Gantt` constructor).
 });
 
 describe('Gantt theme and a11yLabel (S1.10)', () => {
