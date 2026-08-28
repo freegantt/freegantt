@@ -8,14 +8,18 @@
 // `dataset.canUndo`/`canRedo`, and the log line's origin tag — a reader watches a cascade go away in
 // one row on undo, which is the thing the design exists to guarantee.
 
+// S2.6 (plans/s2-data-core/s2.6-serialization.md §3) adds export/import over toJSON/fromJSON.
+// Import replaces the dataset and rebuilds the Gantt, which is the proof that a Gantt survives a
+// rebind (or the finding against destroy() if it does not).
+
 import { Dataset, Gantt, MutationCancelledError } from '../src/api/index.js';
-import type { ChangeSet, Entry } from '../src/api/index.js';
+import type { ChangeSet, DatasetDocument, DatasetEventMap, Entry } from '../src/api/index.js';
 import { sampleEntryInputs } from '../fixtures/sample-dataset.js';
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
-const dataset = new Dataset({ entries: sampleEntryInputs.slice(0, 8), timeZone: 'UTC' });
-new Gantt({ container: '#gantt', dataset });
+let dataset = new Dataset({ entries: sampleEntryInputs.slice(0, 8), timeZone: 'UTC' });
+let gantt = new Gantt({ container: '#gantt', dataset });
 
 const select = document.querySelector<HTMLSelectElement>('#entry-select')!;
 const nameInput = document.querySelector<HTMLInputElement>('#rename-input')!;
@@ -26,6 +30,9 @@ const moveFwdBtn = document.querySelector<HTMLButtonElement>('#move-fwd-btn')!;
 const removeBtn = document.querySelector<HTMLButtonElement>('#remove-btn')!;
 const undoBtn = document.querySelector<HTMLButtonElement>('#undo-btn')!;
 const redoBtn = document.querySelector<HTMLButtonElement>('#redo-btn')!;
+const exportBtn = document.querySelector<HTMLButtonElement>('#export-btn')!;
+const importBtn = document.querySelector<HTMLButtonElement>('#import-btn')!;
+const documentJson = document.querySelector<HTMLTextAreaElement>('#document-json')!;
 const lockCheckbox = document.querySelector<HTMLInputElement>('#lock-checkbox')!;
 const log = document.querySelector<HTMLDivElement>('#log')!;
 
@@ -77,15 +84,15 @@ function refreshHistoryButtons(): void {
   redoBtn.disabled = !dataset.canRedo;
 }
 
-dataset.on('change', ({ changeSet }) => {
+function onChange({ changeSet }: DatasetEventMap['change']): void {
   logChangeSet(changeSet);
   refreshSelect();
   refreshHistoryButtons();
-});
+}
 
 // D-S2-25: while the checkbox is on, refuse any changeset touching the current first entry. Four
 // lines, and it makes the veto visible on the same page as everything else.
-dataset.on('beforeChange', ({ changeSet }) => {
+function onBeforeChange({ changeSet }: DatasetEventMap['beforeChange']): void | false {
   if (!lockCheckbox.checked) return undefined;
   const lockedId = firstEntryId();
   const touchesLocked =
@@ -94,7 +101,14 @@ dataset.on('beforeChange', ({ changeSet }) => {
   if (!touchesLocked) return undefined;
   logLine(`entries · ${lockedId} · refused (locked)`);
   return false;
-});
+}
+
+function bindDataset(): void {
+  dataset.on('change', onChange);
+  dataset.on('beforeChange', onBeforeChange);
+}
+
+bindDataset();
 
 addBtn.addEventListener('click', () => {
   const id = `new-${nextNewId++}`;
@@ -148,6 +162,25 @@ redoBtn.addEventListener('click', () => {
     dataset.redo();
   } catch (error) {
     if (!(error instanceof MutationCancelledError)) throw error;
+  }
+});
+
+exportBtn.addEventListener('click', () => {
+  documentJson.value = JSON.stringify(dataset.toJSON(), null, 2);
+});
+
+importBtn.addEventListener('click', () => {
+  try {
+    const doc = JSON.parse(documentJson.value) as DatasetDocument;
+    dataset = Dataset.fromJSON(doc);
+    gantt.destroy();
+    gantt = new Gantt({ container: '#gantt', dataset });
+    bindDataset();
+    refreshSelect();
+    refreshHistoryButtons();
+    logLine('[load] imported document');
+  } catch (error) {
+    logLine(`import failed: ${error instanceof Error ? error.message : String(error)}`);
   }
 });
 

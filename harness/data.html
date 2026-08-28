@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <title>FreeGantt harness — S2.4/S2.5 mutation, live binding &amp; undo</title>
+    <title>FreeGantt harness — S2 mutation, live binding, undo &amp; JSON</title>
     <style>
       body {
         font-family: system-ui, sans-serif;
@@ -63,10 +63,22 @@
       #log div {
         padding: 1px 0;
       }
+      #document-controls {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-start;
+        gap: 0.5rem;
+        margin: 1rem 0;
+      }
+      #document-json {
+        flex: 1 1 100%;
+        font-family: ui-monospace, monospace;
+        font-size: 0.8rem;
+      }
     </style>
   </head>
   <body>
-    <h1>FreeGantt — S2.4 mutation &amp; live binding, S2.5 undo/redo</h1>
+    <h1>FreeGantt — S2 mutation, live binding, undo/redo, export/import</h1>
     <nav style="display: flex; flex-wrap: wrap; gap: 0.5rem 1.25rem; font-size: 0.9rem; margin-bottom: 1rem">
       <a href="./index.html">Timeline &amp; viewport</a>
       <a href="./diagram.html">Module map</a>
@@ -98,6 +110,11 @@
       <label><input id="lock-checkbox" type="checkbox" /> Lock the first entry (D-S2-25)</label>
     </div>
     <div id="gantt"></div>
+    <div id="document-controls">
+      <button id="export-btn" type="button">Export</button>
+      <button id="import-btn" type="button">Import</button>
+      <textarea id="document-json" rows="10" cols="80" aria-label="Dataset document JSON"></textarea>
+    </div>
     <div id="log" aria-label="Changeset log"></div>
     <script type="module" src="./data.ts"></script>
   </body>
