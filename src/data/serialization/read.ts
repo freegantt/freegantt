@@ -2,9 +2,9 @@
 // reads `schema: 1` only. An unknown schema throws `UnsupportedSchemaError`. Keys the reader does
 // not know are dropped: top level belongs to the schema, `meta` is the consumer's namespace.
 
-import type { DateOnlyEndRule, EntryInput, EntryKind } from '../../model/index.js';
+import type { DateOnlyEndRule, EntryInput, EntryKind, Instant } from '../../model/index.js';
 import type { DatasetDocument, EntryDocument } from '../../model/index.js';
-import { UnsupportedSchemaError } from '../../model/index.js';
+import { InvalidInstantError, UnsupportedSchemaError } from '../../model/index.js';
 import { instant } from '../../time/index.js';
 
 export interface DatasetDocumentRead {
@@ -16,20 +16,31 @@ export interface DatasetDocumentRead {
 
 type Reader = (doc: DatasetDocument) => DatasetDocumentRead;
 
+/** Reads a stored absolute-ISO date. `fromJSON` is a public validation boundary (`plans/02` §7):
+ *  a bad document date must surface as `InvalidInstantError`, the same `FreeGanttError` subclass
+ *  mutation input throws through `toInstant()`, not `instant()`'s bare `RangeError`. */
+function readInstant(value: string): Instant {
+  try {
+    return instant(value);
+  } catch {
+    throw new InvalidInstantError(`fromJSON(): "${value}" is not a stored date this library can read`);
+  }
+}
+
 function readEntryDocument(row: EntryDocument): EntryInput {
   return {
     id: row.id,
     ...(row.parentId !== undefined ? { parentId: row.parentId } : {}),
     ...(row.kind !== undefined ? { kind: row.kind } : {}),
     name: row.name,
-    start: instant(row.start),
-    end: instant(row.end),
+    start: readInstant(row.start),
+    end: readInstant(row.end),
     ...(row.progress !== undefined ? { progress: row.progress } : {}),
     ...(row.segments !== undefined
       ? {
           segments: row.segments.map((segment) => ({
-            start: instant(segment.start),
-            end: instant(segment.end),
+            start: readInstant(segment.start),
+            end: readInstant(segment.end),
           })),
         }
       : {}),

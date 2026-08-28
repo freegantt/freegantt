@@ -210,4 +210,25 @@ describe('History', () => {
 
     expect(sawCanUndo).toBe(false);
   });
+
+  it('undo-all after remove-then-re-add of the same id restores the original insertion order', () => {
+    const state = dataset([{ id: 'a' }, { id: 'b' }, { id: 'c' }]);
+    const before = JSON.stringify(state.entries.all.map((entry) => entry.id));
+
+    state.entries.remove('a');
+    state.entries.add({ id: 'a', name: 'a', start: 0, end: 1 });
+    while (state.canUndo) state.undo();
+
+    expect(JSON.stringify(state.entries.all.map((entry) => entry.id))).toBe(before);
+  });
+
+  it('undo of an optional field edit removes the key instead of writing undefined onto the Entry', () => {
+    const state = dataset([{ id: 't1' }]);
+    expect('progress' in state.entries.get('t1')!).toBe(false);
+
+    state.entries.update('t1', { progress: 0.5 });
+    state.undo();
+
+    expect('progress' in state.entries.get('t1')!).toBe(false);
+  });
 });

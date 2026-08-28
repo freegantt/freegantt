@@ -19,11 +19,22 @@ import type { EntryStore as EntryStoreContract } from '../model/index.js';
 import { computed, signal } from './reactivity.js';
 import { CORE_FIELD_KEYS } from './change-set.js';
 import type { EntryEdits, StoredEdit } from './edit-extension.js';
-import type { ChangeSet } from '../model/index.js';
+import type { ChangeSet, FieldKey } from '../model/index.js';
 import { readEdit, readEntry } from './entry-reader.js';
 import type { EntryReadContext } from './entry-reader.js';
 import { runTransaction } from './transaction.js';
 import type { TransactionData, TxToken } from './transaction.js';
+
+/** Writes `field` on a copy of `current`. `value === undefined` omits the key instead of setting it —
+ *  an undo of an optional field's first edit must return the Entry to not having the key at all
+ *  (entry construction's "no key the input never had" rule, `exactOptionalPropertyTypes`), not to
+ *  having the key with value `undefined`. */
+function withField(current: Entry, field: FieldKey, value: unknown): Entry {
+  const next: Record<string, unknown> = { ...current };
+  if (value === undefined) delete next[field];
+  else next[field] = value;
+  return next as unknown as Entry;
+}
 
 interface WriteSet {
   added: Map<EntryId, Entry>;
@@ -38,10 +49,13 @@ export class EntryStore implements EntryStoreContract {
   #all: () => readonly Entry[];
   #byParent: () => ReadonlyMap<EntryId | undefined, readonly Entry[]>;
   #writeSet: WriteSet | null = null;
-  /** Insertion index of an id at the moment it was removed, so an undo/redo that adds it back can
-   *  put it in the same place in `all` (D-S2-3). A later `'user'` add of the same id is a new
-   *  insertion and drops the remembered index. */
-  #removedAtIndex = new Map<EntryId, number>();
+  /** Insertion index of an Entry object at the moment it was removed, so an undo/redo that adds it
+   *  back can put it in the same place in `all` (D-S2-3). Keyed by object identity, not `EntryId`:
+   *  `history.ts#invert` reuses the exact `Entry` reference between a removal and its paired
+   *  restoration, so this survives an unrelated `'user'` re-add of the same id in between — an
+   *  id-keyed map would let that second object's index clobber the first's (undo-all then restores
+   *  the wrong insertion order). A `'user'` add is always a fresh object, so it never collides here. */
+  #removedAtIndex = new Map<Entry, number>();
   #context: EntryReadContext;
   /** Bound once, right after construction, by whoever owns this store's transactions
    *  (`DatasetState`, `data/dataset-state.ts`) — `EntryStore` and its runner construct in a fixed
@@ -278,44 +292,42 @@ export class EntryStore implements EntryStoreContract {
 
       for (const row of changeSet.updated) {
         const current = this.#byId.get(row.id);
-        if (current) this.#byId.set(row.id, { ...current, [row.field]: row.to });
+        if (current) this.#byId.set(row.id, withField(current, row.field, row.to));
       }
       this.#revision.set(this.#revision.get() + 1);
     }
     this.#writeSet = null;
   }
 
-  /** A later `'user'` add of the same id is a new insertion (D-S2-3) — drop the tombstone and append. */
+  /** Records where each removed object sat, keyed by that exact object (D-S2-3). A `'user'` add of
+   *  the same id later is a new object and never reads this back — it just appends. */
   #rememberRemovedIndexes(changeSet: ChangeSet): void {
     if (changeSet.removed.length === 0) return;
     const order = Array.from(this.#byId.keys());
     for (const { entity } of changeSet.removed) {
       const index = order.indexOf(entity.id);
-      if (index !== -1) this.#removedAtIndex.set(entity.id, index);
+      if (index !== -1) this.#removedAtIndex.set(entity, index);
     }
   }
 
   #restoreAdded(changeSet: ChangeSet): void {
     if (changeSet.added.length === 0) return;
     if (changeSet.origin === 'user') {
-      for (const { entity } of changeSet.added) {
-        this.#removedAtIndex.delete(entity.id);
-        this.#byId.set(entity.id, entity);
-      }
+      for (const { entity } of changeSet.added) this.#byId.set(entity.id, entity);
       return;
     }
     const entries = Array.from(this.#byId.values());
     const restored = [...changeSet.added].sort((a, b) => {
-      const aIndex = this.#removedAtIndex.get(a.entity.id) ?? Number.POSITIVE_INFINITY;
-      const bIndex = this.#removedAtIndex.get(b.entity.id) ?? Number.POSITIVE_INFINITY;
+      const aIndex = this.#removedAtIndex.get(a.entity) ?? Number.POSITIVE_INFINITY;
+      const bIndex = this.#removedAtIndex.get(b.entity) ?? Number.POSITIVE_INFINITY;
       return aIndex - bIndex;
     });
     for (const { entity } of restored) {
-      const index = this.#removedAtIndex.get(entity.id);
+      const index = this.#removedAtIndex.get(entity);
       if (index === undefined) entries.push(entity);
       else {
         entries.splice(Math.min(Math.max(index, 0), entries.length), 0, entity);
-        this.#removedAtIndex.delete(entity.id);
+        this.#removedAtIndex.delete(entity);
       }
     }
     this.#byId = new Map(entries.map((entry) => [entry.id, entry]));
