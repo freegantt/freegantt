@@ -10,6 +10,7 @@ import type {
   EntryKind,
   EntryStore as EntryStoreContract,
 } from '../model/index.js';
+import type { HistoryOptions } from '../data/index.js';
 import { DatasetState } from '../data/index.js';
 
 export interface DatasetOptions {
@@ -28,6 +29,9 @@ export interface DatasetOptions {
    * commit (`01` §2.5/§2.6). Defaults to `['group']`. `derivedSpanKinds: []` opts every kind out of
    * derivation, which is the supported way to ask for hand-set spans everywhere. */
   derivedSpanKinds?: readonly EntryKind[];
+  /** Undo/redo history. `{ capacity: 200 }` keeps 200 undoable transactions; defaults to 100
+   * (`plans/s2-data-core/s2.5-undo-redo.md` §1). */
+  history?: HistoryOptions;
 }
 
 export class Dataset implements DatasetContract {
@@ -68,5 +72,27 @@ export class Dataset implements DatasetContract {
     handler: (payload: DatasetEventMap[K]) => void | false,
   ): void {
     this.#state.off(name, handler);
+  }
+
+  /** `true` while there is a committed changeset `undo()` can reverse. */
+  get canUndo(): boolean {
+    return this.#state.canUndo;
+  }
+
+  /** `true` while there is an undone changeset `redo()` can re-apply. */
+  get canRedo(): boolean {
+    return this.#state.canRedo;
+  }
+
+  /** Reverts the most recent undoable changeset (`plans/s2-data-core/s2.5-undo-redo.md` §1). A no-op
+   *  when `canUndo` is `false`. What it did arrives on `on('change')`, like every other commit — a
+   *  refused undo throws `MutationCancelledError` and leaves the history exactly where it was. */
+  undo(): void {
+    this.#state.undo();
+  }
+
+  /** Re-applies the most recently undone changeset. A no-op when `canRedo` is `false`. */
+  redo(): void {
+    this.#state.redo();
   }
 }

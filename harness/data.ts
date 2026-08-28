@@ -3,6 +3,10 @@
 // `dataset.entries.add/update/remove`, and a changeset log built from each `ChangeSet`, never a
 // re-read (D-S2-17). The lock checkbox is D-S2-25's `beforeChange` veto, made visible: the bar does
 // not move and the calling button's own `catch` reads `MutationCancelledError`.
+//
+// S2.5 (plans/s2-data-core/s2.5-undo-redo.md §5) adds the undo/redo buttons, `disabled` bound to
+// `dataset.canUndo`/`canRedo`, and the log line's origin tag — a reader watches a cascade go away in
+// one row on undo, which is the thing the design exists to guarantee.
 
 import { Dataset, Gantt, MutationCancelledError } from '../src/api/index.js';
 import type { ChangeSet, Entry } from '../src/api/index.js';
@@ -20,6 +24,8 @@ const renameBtn = document.querySelector<HTMLButtonElement>('#rename-btn')!;
 const moveBackBtn = document.querySelector<HTMLButtonElement>('#move-back-btn')!;
 const moveFwdBtn = document.querySelector<HTMLButtonElement>('#move-fwd-btn')!;
 const removeBtn = document.querySelector<HTMLButtonElement>('#remove-btn')!;
+const undoBtn = document.querySelector<HTMLButtonElement>('#undo-btn')!;
+const redoBtn = document.querySelector<HTMLButtonElement>('#redo-btn')!;
 const lockCheckbox = document.querySelector<HTMLInputElement>('#lock-checkbox')!;
 const log = document.querySelector<HTMLDivElement>('#log')!;
 
@@ -55,18 +61,26 @@ function logLine(text: string): void {
 }
 
 /** Built from the changeset alone (D-S2-17) — `from` is not a value a re-read of the dataset could
- *  ever produce. */
+ *  ever produce. Every row is tagged with the changeset's own origin, so an undo's row reads
+ *  `[undo]` right next to the field it reverted (S2.5 §5). */
 function logChangeSet(changeSet: ChangeSet): void {
-  for (const { store, entity } of changeSet.added) logLine(`${store} · ${entity.id} · added`);
-  for (const { store, entity } of changeSet.removed) logLine(`${store} · ${entity.id} · removed`);
+  const tag = `[${changeSet.origin}]`;
+  for (const { store, entity } of changeSet.added) logLine(`${tag} ${store} · ${entity.id} · added`);
+  for (const { store, entity } of changeSet.removed) logLine(`${tag} ${store} · ${entity.id} · removed`);
   for (const { store, id, field, from, to } of changeSet.updated) {
-    logLine(`${store} · ${id} · ${field} · ${String(from)} → ${String(to)}`);
+    logLine(`${tag} ${store} · ${id} · ${field} · ${String(from)} → ${String(to)}`);
   }
+}
+
+function refreshHistoryButtons(): void {
+  undoBtn.disabled = !dataset.canUndo;
+  redoBtn.disabled = !dataset.canRedo;
 }
 
 dataset.on('change', ({ changeSet }) => {
   logChangeSet(changeSet);
   refreshSelect();
+  refreshHistoryButtons();
 });
 
 // D-S2-25: while the checkbox is on, refuse any changeset touching the current first entry. Four
@@ -121,8 +135,25 @@ removeBtn.addEventListener('click', () => {
   }
 });
 
+undoBtn.addEventListener('click', () => {
+  try {
+    dataset.undo();
+  } catch (error) {
+    if (!(error instanceof MutationCancelledError)) throw error;
+  }
+});
+
+redoBtn.addEventListener('click', () => {
+  try {
+    dataset.redo();
+  } catch (error) {
+    if (!(error instanceof MutationCancelledError)) throw error;
+  }
+});
+
 select.addEventListener('change', () => {
   nameInput.value = selectedEntry()?.name ?? '';
 });
 
 refreshSelect();
+refreshHistoryButtons();

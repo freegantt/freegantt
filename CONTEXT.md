@@ -76,6 +76,10 @@ _Avoid_: Diff; Transaction (the scope that produces one); Commit (the act that p
 The tag on a ChangeSet naming why the transaction ran (`'user' | 'undo' | 'redo'` in S2; `'engine'`/`'load'` land with the producers that need them). Read by the undo History to decide what it records — a `'user'`-origin commit is undoable, an `'undo'`/`'redo'`-origin one moves the History's cursor instead of pushing a new entry.
 _Avoid_: Source (Field source already owns that word), reason, cause
 
+**History**:
+The undo/redo stack (`data/history.ts`) — a subscriber to `change`, not a step in the commit path: it records a `'user'`-origin ChangeSet, and moves its cursor rather than recording on an `'undo'`/`'redo'`-origin one. `undo()` applies the ChangeSet at the cursor inverted (`to`→`from`, `added`↔`removed`), `redo()` re-applies it exactly as recorded — neither re-runs the extension hook or the Rollup, so an engine whose behaviour changes between versions cannot rewrite History. Deleting `data/history.ts` and its one construction line leaves the commit path unchanged, byte for byte (D-S2-23) — a consumer could write this file themselves, using only `on('change')` and `transaction()`.
+_Avoid_: Undo stack (names the data structure, not the subscriber that owns it), journal, log — Changeset log is the harness panel that renders a `ChangeSet`, a different thing entirely
+
 **Write set**:
 The open Transaction's in-progress `{ before, after }` record per touched field, kept separate from the Store's committed indexes until commit. `get`/`has`/`size`/`childrenOf` read through it (read-your-own-writes); `all` does not. Discarding it — on a thrown body or a `beforeChange` veto — is the whole of rollback; there is no undo-engine involved in an in-flight transaction.
 _Avoid_: Draft (implies a persisted intermediate state this isn't), staging area, buffer
