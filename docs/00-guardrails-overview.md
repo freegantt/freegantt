@@ -60,9 +60,9 @@ L4 is a *convenience* layer: it runs a fast subset of L2/L3 early, for the agent
 Recording these so nobody later mistakes the gap for an oversight:
 
 - **"Is this the right design?"** Guards enforce the *decided* architecture; they cannot tell us a decision was wrong. Locked decisions D1–D12 change by editing `plans/`, not by adding an exception to a lint rule. When a guard is fighting the code, the correct first question is "is the code wrong?" and the correct second is "should the spec change?" — never "let me add an eslint-disable."
-- **Coverage as a quality target.** One coverage gate exists (>90% on `scheduling/`, per S3 acceptance) because that module is pure logic with golden fixtures. No global coverage threshold: it drives test-shaped-noise, not correctness.
+- **Coverage as a quality target.** One coverage gate exists (>90% on `scheduling/`, per S7 acceptance) because that module is pure logic with golden fixtures. No global coverage threshold: it drives test-shaped-noise, not correctness.
 - **Formatting debates.** Prettier decides, nobody reviews it, `--check` in CI.
-- **Performance budgets before S6/S7.** Budgets that predate a measured spike are guesses (D2). The *jobs* are scaffolded early and non-blocking; they gate at S6/S7.
+- **Performance budgets before S6.** Budgets that predate a measured spike are guesses (D2). The *jobs* are scaffolded early and non-blocking; they gate at S6.
 
 ## 5. Escape hatches, and their price
 

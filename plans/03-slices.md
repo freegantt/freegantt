@@ -4,6 +4,8 @@ Each slice cuts through the whole stack and ends with something visible and poke
 
 Slices are scope, not calendar estimates. Within a slice, entries are ordered so the visible result appears as early as possible.
 
+**Remap (2026-08-28):** Direct manipulation is **S3**. Hierarchy is **S4**. Extensibility is **S5**. Scale is **S6**. The first-party scheduling plugin is **S7**, last. S3–S6 must ship a complete Gantt with the identity extender. Extra field writes during drag come from that hook (`EntryEdits`), never from a `schedule()` import in `interaction/` or `view/`.
+
 ---
 
 ## S0 — Walking skeleton
@@ -44,12 +46,12 @@ Slices are scope, not calendar estimates. Within a slice, entries are ordered so
 - `view/`: Gantt shell — grid pane (label column), splitter, timeline pane; single scroll owner; vertical + horizontal virtualization windows; row-height index behind an interface (simple prefix-sum implementation).
 - Shared row geometry: grid and timeline both position rows from `frame.rows` (I9 pixel test).
 - Zoom: preset switching + `range: 'fitDataset'`; anchored zoom (the instant under the cursor stays put).
-- Theming foundation: CSS custom properties + parts vocabulary (`--fg-*`, `data-flag`); light/dark, default colour tokens sourced from an existing palette (`plans/s1.10-theming-and-a11y/README.md` D-S1.10-9), fully overridable per level 1; a named multi-preset picker beyond light/dark is deferred to S6 (same doc, §9).
+- Theming foundation: CSS custom properties + parts vocabulary (`--fg-*`, `data-flag`); light/dark, default colour tokens sourced from an existing palette (`plans/s1.10-theming-and-a11y/README.md` D-S1.10-9), fully overridable per level 1; a named multi-preset picker beyond light/dark is deferred to S5 (same doc, §9).
 - A11y foundation: the Gantt is focusable, rows/bars have roles and labels, focus visible.
 
 **Acceptance**
 
-- [x] `[S1-A1]` Scroll a 5,000-entry fixture: only windowed rows exist in the DOM. (Not "smoothly" — that's throughput, D2's measured spike at S7, and a timing assertion in CI is a flaky proxy for it; S1.11 D-S1.11-5.)
+- [x] `[S1-A1]` Scroll a 5,000-entry fixture: only windowed rows exist in the DOM. (Not "smoothly" — that's throughput, D2's measured spike at S6, and a timing assertion in CI is a flaky proxy for it; S1.11 D-S1.11-5.)
 - [x] `[S1-A2]` Grid and timeline row tops are pixel-identical under fractional zoom (I9).
 - [x] `[S1-A3]` Preset switch and zoom are live reconfigurations — no remount, anchor preserved.
 - [x] `[S1-A4]` Two harness Gantt instances given the same `ScrollModel` scroll together (a 5-line harness demo — the D9 seam proven now, cheaply).
@@ -67,7 +69,7 @@ Slices are scope, not calendar estimates. Within a slice, entries are ordered so
 - Change signalling between `Dataset` and `GanttShell` (#33, deferred here at S1.11 D-S1.11-7): S2 **replaces** `GanttShellOptions.entries` with the real changeset-driven binding — it never adds a `setEntries()` beside it. A second reactivity mechanism living next to the real one is #1's R4, and the cheapest moment to forbid it is before this slice starts.
 - Transactions: batching, auto-wrap of single mutations, one changeset per transaction (`origin` tagged).
 - Undo/redo: transaction = atomic unit; recorded changesets replayed exactly; history API (`canUndo`, capacity).
-- Changesets: `{ added, removed, updated: {field, from, to} }` (`01` §6); `dataset.on('change')`; `dataset.apply(changeSet)` with validation + rejection reporting. the key type is **`FieldKey`** (retiring `EntryField`, one concept with two names) and it stays **open**, validated at runtime rather than typed `keyof Omit<Entry, 'id'>` — it is public through `FieldUpdated` and the undo record, and S5's field registry (`01` §2.6, ADR 0005) cannot open it later without a breaking change.
+- Changesets: `{ added, removed, updated: {field, from, to} }` (`01` §6); `dataset.on('change')`; `dataset.apply(changeSet)` with validation + rejection reporting. the key type is **`FieldKey`** (retiring `EntryField`, one concept with two names) and it stays **open**, validated at runtime rather than typed `keyof Omit<Entry, 'id'>` — it is public through `FieldUpdated` and the undo record, and S4's field registry (`01` §2.6, ADR 0005) cannot open it later without a breaking change.
 - Serialization: `toJSON()`/`fromJSON()` with `schema: 1`, ISO instants, opaque `meta` round-trip.
 - Public mutation API: `dataset.entries.add/update/remove`, `dataset.dependencies.*`, typed, validating.
 - View binding: committed changesets invalidate layout incrementally (changed rows only), not globally.
@@ -75,66 +77,41 @@ Slices are scope, not calendar estimates. Within a slice, entries are ordered so
 
 **Acceptance**
 
-- [ ] Property test: random mutation sequences + undo-all restores byte-identical `toJSON()` (I7 groundwork — engine patches join in S3).
+- [ ] Property test: random mutation sequences + undo-all restores byte-identical `toJSON()` (I7 groundwork — engine patches join in S7).
 - [ ] `fromJSON(toJSON(p))` round-trips byte-stable.
 - [ ] A 500-entry bulk update inside one transaction produces one changeset, one layout pass, one frame.
 - [ ] Changeset log in harness shows `from`/`to` per field for every edit.
 
 ---
 
-## S3 — Dependencies & the scheduling plugin
+## S3 — Direct manipulation
 
-**Goal:** links drawn, and FreeGantt's first-party default scheduling plugin (D3) — occupying the extension hook `data/` exposes (D4; `01` §1; exact contract tracked in issue #12) — with its policy seam: propagation with lag, cycle detection with named members, diagnostics, pinned entries. Cascades visible live in the harness. Core itself does not require this plugin (D4); S3 is where FreeGantt's own default happens to occupy the hook it ships with.
-
-**Scope**
-
-- `scheduling/`: `schedule(request) → { patch, diagnostics }` — pure, deterministic; worklist-loop propagation (I3) with the 5,000-link chain fixture; lag per dependency type (FS/SS/FF/SF, negative legal); cycle diagnostics naming members; pinned-entry semantics (report, never move — the pin flag lives in the plugin's own per-entry storage per the #12 contract, not on `Entry`); parent/`group` rollup as a second pass — kind semantics owned by the policy per `01` §2.5 (tree exists in data from S2; visual tree lands in S5).
-- `SchedulingPolicy` seam + `defaultPolicy` (`01` §7): `resolveEdit` (proposed fields decide what moves), precedence (`pinned > dependency`), dev-assert that a proposed field is never overwritten (I4).
-- Plugin registration: this scheduling plugin occupies the core extension hook exclusively via the `01` §1 mechanism (issue #12) — `data/` calls the hook generically and has no scheduling-specific code path.
-- `data/` integration: transactions run the extension hook, which (with this plugin installed) builds a `schedule()` call from the transaction's `proposed` edits; the plugin's patch merges into the same changeset (`origin: 'engine'`) — undo now reverts user + engine effects atomically (I7 complete).
-- `layout/`: link routing — orthogonal paths from bar edges, rendered as SVG; link flags (inactive, in-cycle).
-- Diagnostics surface: `scheduleDiagnostics` event; bars flagged via `data-flag` (level-2 theming shows conflicts with pure CSS). **Hot-path note:** `flagTokens()` in `render/dom/index.ts` does `Object.keys(flags).filter().join(' ')` per bar per frame. Today flags are always `{}` so it's free, but once S3 sets `conflict`/`cycle` true on real bars, this becomes a per-frame allocation in the hot path. Consider pre-computing flag tokens in `computeFrame` (same as `a11yLabel`) so the render path is a simple string copy.
-- Golden fixtures: hand-built scenario files with expected `ScheduleResult` JSON — lag combinations, all four types, pinned conflicts, cycles, deep chains. These define correctness from here on.
-- Harness: link fixture; edit a predecessor date, watch successors cascade; a cycle fixture showing named diagnostics.
-
-**Acceptance**
-
-- [ ] All golden fixtures pass; 5,000-link chain completes without recursion-depth failure (gate S3→S4).
-- [ ] Cycle diagnostic lists the exact member entries; harness renders them flagged.
-- [ ] Moving a pinned entry's predecessor produces a diagnostic and moves nothing.
-- [ ] Undo of a cascading edit restores every affected entry (I7 property test now includes engine patches).
-- [ ] `scheduling/` has zero imports from view/render/interaction (lint-proven), >90% coverage — it's pure; no excuse.
-
----
-
-## S4 — Direct manipulation
-
-**Goal:** editing with the pointer (D10 second half): drag-move, resize, link-create, selection — each gesture cancelable, transactional, undoable, with live cascade preview.
+**Goal:** editing with the pointer (D10): drag-move, resize, selection — each gesture cancelable, transactional, undoable. Live preview of the draft plus any extra field writes the extension hook returns.
 
 **Scope**
 
-- `interaction/`: controller base with the pointer invariants (`01` §9 — arm threshold, nothing written on pointerdown, escape-cancel, pointer capture, touch); `Drag`, `Resize`, `LinkCreate`, `Select` controllers.
+- `interaction/`: controller base with the pointer invariants (`01` §9 — arm threshold, nothing written on pointerdown, escape-cancel, pointer capture, touch); `Drag`, `Resize`, `Select` controllers. `LinkCreate` waits for S7 (it writes plugin-owned `Dependency` data).
 - Hot path: `InteractionState` + `backend.applyState()` — hover, selection, drag ghost as class toggles and transforms; zero allocation (I5).
 - Snapping via the preset's `snap` spec; modifier key for fine placement.
-- Capabilities: the `interactions` config resolved per entry over per-kind defaults (`02` §4.1); one resolution gates gesture arming *and* affordance rendering — handles, ports, cursors (I14).
-- Cancelable events: `beforeEntryMove/Resize`, `beforeLinkCreate`, `beforeSelectionChange` + after-events; async veto suspends with pending state (`02` §3).
-- Speculative cascade preview: throttled pure `schedule()` call per frame with draft `proposed`; ghost positions for affected successors; discard on cancel (`01` §7).
-- One transaction per gesture at commit (I6); undo reverts the whole gesture.
+- Capabilities: the `interactions` config resolved per entry over per-kind defaults (`02` §4.1); one resolution gates gesture arming *and* affordance rendering — handles, cursors (I14). Link ports wait for S7.
+- Cancelable events: `beforeEntryMove` / `beforeEntryResize` / `beforeSelectionChange` + after-events; async veto suspends with pending state (`02` §3). `beforeLinkCreate` waits for S7.
+- Speculative preview: once per animation frame, call the **same** `EditExtender` the commit path uses, with a draft `proposed`. Paint the user's draft and the extender's extra `EntryEdits` as ghosts (transforms on existing nodes). Discard on cancel. Identity extender → only the dragged bar ghosts. A test injects an extender (same seam as S2) to prove extra bars ghost without `scheduling/`. `interaction/` never imports `schedule()` (`01` §7).
+- One transaction per gesture at commit (I6); undo reverts the user's edit and any extender extras in one step.
 - Keyboard parity begins: selected bar nudges by snap with arrow keys; Enter/Escape semantics.
-- Harness: full editing playground; a veto demo (drop before a boundary date is rejected with a toast).
+- Harness: editing playground; a veto demo (drop before a boundary date is rejected with a toast); a lock-style injected extender so extra ghosts are visible without the scheduling plugin.
 
 **Acceptance**
 
-- [ ] Every gesture: cancelable before-event → exactly one transaction → after-event (event-order test).
+- [ ] Every S3 gesture: cancelable before-event → exactly one transaction → after-event (event-order test).
 - [ ] Escape mid-drag restores exactly the pre-gesture state, including preview ghosts.
 - [ ] Hover across 1,000 visible bars allocates nothing and rebuilds no frame (I5 perf test).
-- [ ] Dragging a predecessor shows successors' ghost positions live; cancel discards them.
+- [ ] With the identity extender, only the dragged entry ghosts. With an injected extender that writes a second entry's `start`, that bar ghosts too; cancel discards both. No `scheduling/` import.
 - [ ] An entry whose `resize` capability resolves false shows no handles and cannot be resized by pointer or keyboard (I14).
-- [ ] A gesture undone by Ctrl+Z reverts user + cascade in one step.
+- [ ] A gesture undone by Ctrl+Z reverts the user edit and any extender extras in one step.
 
 ---
 
-## S5 — Hierarchy, grouping, multi-item rows
+## S4 — Hierarchy, grouping, multi-item rows
 
 **Goal:** the Row ≠ Entry payoff (principle 1). Tree view with collapse/expand, grouped row sources, entry segments as multiple bars on one row, lane packing with variable row heights.
 
@@ -144,12 +121,11 @@ Slices are scope, not calendar estimates. Within a slice, entries are ordered so
 - Per-field rollup (#80): `rollUpDerivedSpans` widens to walk the registry — `start` is `min`, `end` is `max`, a declared `cost` sums, `name` does not roll up. Same commit step, same precedence (yields to the body, wins over the resolver), still bottom-up and still not displaceable by any plugin. Source decides stored vs. computed: `entry`/`meta` fields store the parent's aggregate, computed fields never reach the document.
 - Frame rows carry `cells` (one library-formatted string per configured grid column) instead of one `label` — the S1 shape that assumed a single-column grid (#81).
 - Tree UI: indent + expand/collapse in the grid's name column; collapse state is view state (per Gantt, not in dataset data).
-- Kind-driven item emission (`01` §2.5): `group` → summary bracket (rollup from S3), `milestone` → diamond, consumer-registered kinds via the emitter seam; empty groups render as groups.
+- Kind-driven item emission (`01` §2.5): `group` → summary bracket (span rollup from S2), `milestone` → diamond, consumer-registered kinds via the emitter seam; empty groups render as groups.
 - `hierarchy: { autoGroup: true }` on `Dataset`: first child promotes the parent to `group` within the triggering transaction; promote only, never demote (`02` §2).
 - Row sources: `{ source: 'group', groupBy }` and `{ source: 'custom', resolve }` (`01` §2.3); group header rows.
 - Sort and filter as store-level view specs with tree-aware policies (filter keeps ancestors by default; sort stays within parent).
 - Item emission: `entry.segments` → multiple items on one row; overlap auto-packing into sub-lanes; `heightMode: 'pack'` variable row heights through the height index.
-- Dependency endpoint rule for multi-item entries: links attach to the earliest item by default, configurable per view (`links.endpoints: 'first' | 'all' | 'none'`).
 - Interaction with lanes: drag/resize on packed items; collapse/expand by keyboard.
 - Harness: tree fixture, with **one** Gantt and a button that switches `gantt.rows` between the tree and a grouped source. That proves the Row ≠ Entry payoff and proves live reconfiguration (`02` §2) in the same demo. Two Gantts on one dataset is not the demo: D9 is about a shared axis and scroll between charts with **different** data (`02` §5), and a shared `Dataset` — while free, since a second Gantt is only a second `change` subscriber — is not a case the library designs around or tests.
 
@@ -167,18 +143,18 @@ Slices are scope, not calendar estimates. Within a slice, entries are ordered so
 
 ---
 
-## S6 — Extensibility, editing surfaces, a11y completion
+## S5 — Extensibility, editing surfaces, a11y completion
 
 **Goal:** the library's extension story is real and dogfooded (gate: a non-trivial built-in feature uses only the public plugin API), the grid grows into a proper editable table, and accessibility reaches its full committed level (D11).
 
 **Scope**
 
-- `extensions/`: plugin runtime implementing the full `PluginContext` (`01` §10) — decorations, columns, renderers, overlay anchor, controllers, keybindings, commands, disposables.
+- `extensions/`: plugin runtime implementing the full `PluginContext` (`01` §10) — decorations, columns, renderers, overlay anchor, controllers, keybindings, commands, disposables. Public claim of `data/`'s extender slot (`DatasetOptions.plugins`, `setExtender`, #15) lands here so a later plugin can occupy it. S7 is the first-party occupant; until then the slot stays identity.
 - Built-in features **as plugins**: tooltips (shared `Popup` primitive: anchoring, flipping, clamping, focus trap), context menu (command-registry-driven), row highlight decorations, today line.
-- Grid maturation: grid-column **presentation** over S5's fields — header, width, alignment, `cellRenderer`; inline editors (text, date via a pluggable date-input seam — no bundled date-picker dependency), column resize/reorder; `beforeEntryEdit` veto/replace flow. There is no second definition system: a column names a field, and a consumer field and a core field take the same path (ADR 0005).
+- Grid maturation: grid-column **presentation** over S4's fields — header, width, alignment, `cellRenderer`; inline editors (text, date via a pluggable date-input seam — no bundled date-picker dependency), column resize/reorder; `beforeEntryEdit` veto/replace flow. There is no second definition system: a column names a field, and a consumer field and a core field take the same path (ADR 0005).
 - `PluginContext.data.registerField` / `view.registerGridColumn` (`01` §10): a plugin declares a field that aggregates exactly like a core one, and shows it like any other.
 - Renderer callbacks at every declared point (`bar`, `cell`, `header`, `tooltip`), text-safe by default (I13).
-- A11y completion: grid pattern with roving tabindex, full keyboard reach for every interaction (link creation included), screen-reader labels with dates/progress, focus management in popups; axe checks in CI on harness pages.
+- A11y completion: grid pattern with roving tabindex, full keyboard reach for every S3 interaction, screen-reader labels with dates/progress, focus management in popups; axe checks in CI on harness pages. Link-create keyboard lands with S7.
 - Docs seed: harness pages get explanatory text and become the example gallery; public API reference generated from types.
 
 **Acceptance**
@@ -186,24 +162,24 @@ Slices are scope, not calendar estimates. Within a slice, entries are ordered so
 - [ ] Context menu and tooltips are plugins with zero private imports (lint-proven — the dogfood gate).
 - [ ] A harness-only third-party-style plugin (e.g., a "weekend shading + jump-to-today command" plugin) is written against the public contract only.
 - [ ] A consumer-defined entry kind (custom renderer + capabilities + context-menu `when` items, registered via config/plugin only) renders and behaves correctly with zero core edits — the §2.5 open-set claim, proven.
-- [ ] Every pointer capability has a keyboard path; axe reports no violations on harness pages.
+- [ ] Every S3 pointer capability has a keyboard path; axe reports no violations on harness pages.
 - [ ] Consumer replaces the entry editor via `beforeEntryEdit` (demo in harness).
 - [ ] Unused features are absent from a consumer bundle (tree-shaking test in CI).
 
 ---
 
-## S7 — Scale validation, hardening, linked Gantt instances
+## S6 — Scale validation, hardening, linked Gantt instances
 
-**Goal:** the D2 posture is settled by measurement, budgets become CI-enforced, and the D9 multi-Gantt story ships as a real demo. Ends with a 1.0-able library.
+**Goal:** the D2 posture is settled by measurement, budgets become CI-enforced, and the D9 multi-Gantt story ships as a real demo. Core (no scheduling plugin) is scale-proven here.
 
 **Scope**
 
-- **Measured spike against the growth targets** (the numbers that decide, not guess): 10k entries / 5k rows scroll p95 frame time; pack-heavy rows layout cost; prefix-sum vs. log-time height index crossover; reconciler cost on 20k-bar sync + 200-bar commit; SVG link cost at 2k paths; zone arithmetic per-tick cost.
-- Act on the spike: swap in the log-time height index if warranted (interface already in place); worker seam for `schedule()` above a measured threshold (resident mirror + changeset shipping — only if the numbers demand it); any reconciler fixes.
+- **Measured spike against the growth targets** (the numbers that decide, not guess): 10k entries / 5k rows scroll p95 frame time; pack-heavy rows layout cost; prefix-sum vs. log-time height index crossover; reconciler cost on 20k-bar sync + 200-bar commit; zone arithmetic per-tick cost. Graph and SVG-link cost wait for S7, when links exist.
+- Act on the spike: swap in the log-time height index if warranted (interface already in place); any reconciler fixes. A worker seam for `schedule()` is not this slice's — measure it after S7 if the plugin's numbers demand it (D2).
 - Performance budgets in CI on reference hardware; regressions fail the build.
-- Linked-Gantt demo: a delivery-schedule Gantt + a workforce Gantt bound to the same `TimeScaleModel`/`ScrollModel` (x, y, and both variants) — the D9 acceptance demo.
+- Linked-Gantt demo: a delivery-schedule Gantt + a workforce Gantt bound to the same `TimeScaleModel`/`ScrollModel` (x, y, and both variants) — the D9 acceptance demo. Neither Gantt needs the scheduling plugin.
 - Hardening: error-path audit (typed errors everywhere), memory-leak pass (mount/destroy cycles), `exports` map sealing internals, semver/API-report tooling (I11 automated), bundle-size budget in CI.
-- Release: versioned docs from the harness gallery, CHANGELOG, publishing pipeline.
+- Release plumbing: versioned docs from the harness gallery, CHANGELOG, publishing pipeline. Product 1.0 waits for S7 (D3).
 
 **Acceptance**
 
@@ -212,6 +188,34 @@ Slices are scope, not calendar estimates. Within a slice, entries are ordered so
 - [ ] Linked-scroll demo works in x, y, and both modes with zero Gantt-side special-casing.
 - [ ] 100 mount/destroy cycles leak no nodes, listeners, or observables.
 - [ ] `npm pack` output audited: internals unreachable, types complete, bundle within budget.
+
+---
+
+## S7 — Dependencies & the scheduling plugin
+
+**Goal:** links drawn, and FreeGantt's first-party default scheduling plugin (D3) occupying the extension hook `data/` already exposes (D4; `01` §1; contract #12 / install API from S5). Policy seam: propagation with lag, cycle detection with named members, diagnostics, pinned entries. Cascades visible live in the harness. Core itself does not require this plugin; S3–S6 already ran without it.
+
+**Scope**
+
+- `scheduling/`: `schedule(request) → { patch, diagnostics }` — pure, deterministic; worklist-loop propagation (I3) with the 5,000-link chain fixture; lag per dependency type (FS/SS/FF/SF, negative legal); cycle diagnostics naming members; pinned-entry semantics (report, never move — the pin flag lives in the plugin's own per-entry storage per the #12 contract, not on `Entry`). Kind semantics owned by the policy per `01` §2.5. The engine moves children and stops; span rollup stays `data/`'s commit step (D-S2-22).
+- `SchedulingPolicy` seam + `defaultPolicy` (`01` §7): `resolveEdit` (proposed fields decide what moves), precedence (`pinned > dependency`), dev-assert that a proposed field is never overwritten (I4).
+- Plugin registration: this plugin occupies the core extension hook via the **public** plugin contract shipped in S5. Its extender body is the only place that calls `schedule()`. `data/` stays generic. `interaction/` and `view/` still do not import `scheduling/`.
+- `data/` integration: the extender builds a `schedule()` call from `proposed`; extra writes merge into the same changeset (`origin: 'engine'`). I7 now includes engine patches. Drag preview already calls that extender (S3), so successor ghosts appear with no S3/S4 code change.
+- `layout/`: link emission seam (#16) — orthogonal paths from bar edges, rendered as SVG; link flags (inactive, in-cycle). Multi-item endpoint rule: links attach to the earliest item by default (`links.endpoints: 'first' | 'all' | 'none'`).
+- `interaction/`: `LinkCreate` controller; `beforeLinkCreate` / `linkCreate`; link ports on the capability resolver (I14).
+- Diagnostics surface: `scheduleDiagnostics` event; bars flagged via `data-flag`. **Hot-path note:** `flagTokens()` in `render/dom/index.ts` does `Object.keys(flags).filter().join(' ')` per bar per frame. Pre-compute flag tokens in `computeFrame` (same as `a11yLabel`) so the render path is a string copy once flags are live.
+- Golden fixtures: hand-built scenario files with expected `ScheduleResult` JSON — lag combinations, all four types, pinned conflicts, cycles, deep chains.
+- Harness: link fixture; drag a predecessor, watch successors ghost from the extender (S3 paint path); a cycle fixture showing named diagnostics.
+
+**Acceptance**
+
+- [ ] All golden fixtures pass; 5,000-link chain completes without recursion-depth failure (gate S7→1.0).
+- [ ] Cycle diagnostic lists the exact member entries; harness renders them flagged.
+- [ ] Moving a pinned entry's predecessor produces a diagnostic and moves nothing.
+- [ ] Undo of a cascading edit restores every affected entry (I7 property test now includes engine patches).
+- [ ] Dragging a predecessor shows successors' ghost positions live; cancel discards them — via the S3 extender preview, not a `schedule()` call in `interaction/`.
+- [ ] The plugin uses only the public plugin contract (zero private imports into `src/scheduling/` from `view/`/`render/`/`interaction/`, and the reverse).
+- [ ] `scheduling/` has zero imports from view/render/interaction (lint-proven), >90% coverage — it's pure; no excuse.
 
 ---
 

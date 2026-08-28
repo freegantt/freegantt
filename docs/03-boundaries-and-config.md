@@ -71,7 +71,7 @@ Per `plans/04` §3.1, plus what each flag buys us here specifically:
 | `strict: true` | baseline |
 | `noUncheckedIndexedAccess` | `entriesById[id]` is `Entry \| undefined`. The normalized stores are index-lookup-heavy; this is the flag that stops the "it was there a frame ago" class |
 | `exactOptionalPropertyTypes` | a changeset's `from: undefined` (field was absent) and an absent `from` key are different facts (`01` §6). Without this flag they collapse |
-| `verbatimModuleSyntax` | type imports never emit runtime imports — load-bearing for `model/` being types-only and for tree-shaking (S6) |
+| `verbatimModuleSyntax` | type imports never emit runtime imports — load-bearing for `model/` being types-only and for tree-shaking (S5) |
 | `isolatedModules` | keeps every file independently transpilable (Vite/esbuild parity) |
 | `noPropertyAccessFromIndexSignature` | `meta.team` on an unknown-shaped `TMeta` must be deliberate |
 | `noImplicitOverride`, `noFallthroughCasesInSwitch` | cheap, catch real edits |
@@ -108,7 +108,7 @@ From day one (`plans/04` §3.1), only `.` resolves:
 | Public surface unchanged without notice | `api-extractor` report (`etc/freegantt.api.md`) committed; CI regenerates and fails on diff. The diff **is** the semver conversation (I11) |
 | Nothing unimplemented in the surface | `no-not-implemented` lint (B8) + a smoke test constructing `Dataset`/`Gantt` and invoking every zero-arg public method |
 | Runtime deps stay at one | Package-shape test: `dependencies` deep-equals `{ 'alien-signals': <range> }`; `peerDependencies`/`optionalDependencies` absent; `bundledDependencies` absent |
-| Tree-shakeability | `size-limit` entry importing only `Dataset` must not pull in `interaction/` or `extensions/` (S6) |
+| Tree-shakeability | `size-limit` entry importing only `Dataset` must not pull in `interaction/` or `extensions/` (S5) |
 
 ---
 
@@ -145,14 +145,14 @@ These are guard tests, not feature tests; they belong to the guardrail system an
 | `test/guards/item-identity.test.ts` | I8 | S0 |
 | `test/guards/package-shape.test.ts` | one runtime dep, exports sealed | S0 |
 | `test/guards/null-backend-in-node.test.ts` | pure pipeline runs headless | S0 |
-| `test/guards/schedule-purity.property.ts` | I4 | S3 |
+| `test/guards/schedule-purity.property.ts` | I4 | S7 |
 | `test/guards/undo-roundtrip.property.ts` | I7 | S2 |
-| `test/guards/chain-5000.test.ts` | I3 | S3 |
+| `test/guards/chain-5000.test.ts` | I3 | S7 |
 | `test/guards/row-geometry-parity.test.ts` | I9 | S1 |
 | `test/guards/event-pair-bijection.test.ts` | `02` §3 naming | S2 |
 | `test/guards/live-reconfigure.test.ts` | every config key live | S1 |
-| `test/guards/hot-path-no-frame.test.ts` | I5 | S4 |
-| `test/guards/capability-single-resolution.test.ts` | I14 | S4 |
+| `test/guards/hot-path-no-frame.test.ts` | I5 | S3 |
+| `test/guards/capability-single-resolution.test.ts` | I14 | S3 |
 
 Keeping them in `test/guards/` rather than beside their modules is deliberate: they are the executable form of `plans/01` §11, and a reviewer should be able to read that directory as the invariant list.
 

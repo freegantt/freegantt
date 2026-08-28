@@ -32,7 +32,7 @@ export interface FrameRow {
   top: number;
   height: number;
   laneCount: number;
-  /** One library-formatted string per configured grid column, in column order (ADR 0005). Until S5
+  /** One library-formatted string per configured grid column, in column order (ADR 0005). Until S4
    * supplies the field registry, this is always one entry: `entry.name`. */
   cells: readonly string[];
 }
@@ -107,7 +107,7 @@ export interface FrameHeader {
 }
 
 /** Live-reconfigurable culling buffer (plans/02 §1.1) — vertical in whole rows (culls through the
- * height index, and must keep doing so when S5 makes row heights vary); horizontal in px (no rows to
+ * height index, and must keep doing so when S4 makes row heights vary); horizontal in px (no rows to
  * count). Default `{ verticalRows: 2, horizontalPx: 128 }`. */
 export interface Overscan {
   verticalRows?: number;
@@ -186,7 +186,7 @@ export function computeFrame(
 
   // Bound the scan with indexAtY instead of walking every entry from 0 (#47): start at the row that
   // actually contains windowTop, expanded by verticalRows in INDEX space (#20's index-space fix) so
-  // the buffer stays correct once S5 makes row heights vary. Rows stay vertical-only (D-B): a row
+  // the buffer stays correct once S4 makes row heights vary. Rows stay vertical-only (D-B): a row
   // whose bar is off-screen horizontally is still emitted — the grid pane needs its label.
   const baseStart = entries.length > 0 ? heights.indexAtY(windowTop) : 0;
   const startIndex = Math.max(0, baseStart - verticalRows);

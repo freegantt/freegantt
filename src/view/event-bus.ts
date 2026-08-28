@@ -14,7 +14,7 @@ export interface GridWidthChange {
 }
 
 /** Ships with exactly two events, and both fire — nothing is declared that does not (I11). Sync veto
- *  only; the async-veto path `plans/02` §3 describes belongs to S4's gesture controllers. */
+ *  only; the async-veto path `plans/02` §3 describes belongs to S3's gesture controllers. */
 export interface GanttEventMap {
   beforeGridWidthChange: GridWidthChange;
   gridWidthChange: GridWidthChange;

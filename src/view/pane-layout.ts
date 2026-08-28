@@ -52,7 +52,7 @@ export class PaneLayout {
     // overflow are structural too, and nothing else identifies it for a stylesheet rule to target.
     this.#container.classList.add('fg-container');
     // S1.10, D-S1.10-5: the container is the one honest tab stop this step defines (no roving tabindex
-    // yet — that's S4's, once a keyboard controller exists to move it). `aria-label` is live
+    // yet — that's S3's, once a keyboard controller exists to move it). `aria-label` is live
     // (GanttShell.a11yLabel) and set separately, not here.
     this.#container.setAttribute('role', 'group');
     this.#container.setAttribute('tabindex', '0');

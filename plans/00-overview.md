@@ -17,7 +17,7 @@
 
 A **framework-free TypeScript Gantt/timeline library**, built library-first: our own app is the first consumer, but the API, docs, and packaging are designed for external consumers from day one.
 
-It makes **no assumptions about the user's planning methodology**. The core understands entries, time, dependencies, and rows — universal concepts. Everything opinionated (how conflicts resolve, what "critical" means, how deep resource modeling goes) is a **pluggable policy or extension**, never a baked-in rule.
+It makes **no assumptions about the user's planning methodology**. The core understands entries, time, and rows — universal concepts. Dependency links, lag, and cascade propagation belong to the first-party scheduling plugin (D3/D4), not to core. Everything opinionated (how conflicts resolve, what "critical" means, how deep resource modeling goes) is a **pluggable policy or extension**, never a baked-in rule.
 
 ## 2. Locked decisions
 
@@ -34,7 +34,7 @@ These were decided explicitly and the rest of the spec depends on them. Changing
 | D7 | Persistence | **Consumer-owned via changesets.** Versioned `toJSON`/`fromJSON` + well-defined changeset events in core. An official sync adapter can be layered on later as an extension — the changeset contract is designed so that requires no core change. |
 | D8 | Layout | **Split-pane: grid (entry table) + timeline**, sharing one row-geometry source. Grid starts minimal (label column) and grows. |
 | D9 | Multi-Gantt sync | Two or more Gantt instances must eventually **scroll together on both axes** (e.g., a delivery-schedule Gantt above a workforce Gantt) **without core changes**. Therefore the time scale and scroll state are standalone, shareable objects a Gantt *binds to*, never private internals. Sharing a `ScrollModel` links both axes (S1.5, D-S1.5-3) — partial (x-only/y-only) sharing is deferred until a caller actually needs it. |
-| D10 | Editing | Programmatic mutation + **transactions + undo/redo live in the data core from slice one** (they shape everything). Pointer manipulation (drag/resize/link) arrives early but lives in its **own interaction module**. |
+| D10 | Editing | Programmatic mutation + **transactions + undo/redo live in the data core from slice one** (they shape everything). Pointer manipulation (drag/resize/select) arrives in **S3** in its own interaction module. Link-create writes plugin-owned `Dependency` data, so it lands with the scheduling plugin in **S7**. |
 | D11 | A11y / browsers | Evergreen browsers. **Solid accessibility built in as slices land** (keyboard nav, focusable bars, grid semantics) — never a retrofit pass. |
 | D12 | Stack | TypeScript strict, Vite (dev harness + build), Vitest, Playwright for E2E later. Module boundaries enforced by lint rules in CI, not convention. Core runtime dependencies: a small, explicitly budgeted set — currently two (the reactive primitive; zone-aware plain-time arithmetic), each behind a façade, each justified in writing in `plans/04` §1. |
 
@@ -54,16 +54,18 @@ These were decided explicitly and the rest of the spec depends on them. Changing
 
 Eight slices. Each is independently reviewable and lands something visible. Detail in `03-slices.md`.
 
+**Scheduling is last on purpose.** S3–S6 land with the identity extender (or a test-injected one). They call `data/`'s extension hook for extra field writes. They never name `schedule()`, successors, lag, or `Dependency`. The first-party scheduling plugin occupies the hook in **S7**, after the public plugin contract exists (S5), so the engine is a consumer of that contract — not a reason to put scheduling types in core.
+
 ```mermaid
 flowchart LR
   S0["<b>S0 Walking skeleton</b><br/>repo · layers · harness<br/>static bars on screen"]
   S1["<b>S1 Timeline & viewport</b><br/>time axis · presets · scrolling<br/>split pane · shared viewport objects"]
   S2["<b>S2 Data core</b><br/>stores · transactions<br/>undo/redo · changesets · JSON"]
-  S3["<b>S3 Dependencies & scheduling plugin</b><br/>links · lag · propagation<br/>cycles · diagnostics · arrows"]
-  S4["<b>S4 Direct manipulation</b><br/>drag · resize · link-create<br/>select · before* events"]
-  S5["<b>S5 Hierarchy & rows</b><br/>tree · collapse · grouping<br/>multi-item rows · lane packing"]
-  S6["<b>S6 Extensibility & polish</b><br/>plugin API · renderers<br/>theming · keyboard/a11y complete"]
-  S7["<b>S7 Scale & sync</b><br/>perf validation · virtualization<br/>linked multi-Gantt demo"]
+  S3["<b>S3 Direct manipulation</b><br/>drag · resize · select<br/>before* events · extender preview"]
+  S4["<b>S4 Hierarchy & rows</b><br/>tree · collapse · grouping<br/>multi-item rows · lane packing"]
+  S5["<b>S5 Extensibility & polish</b><br/>plugin API · renderers<br/>theming · keyboard/a11y complete"]
+  S6["<b>S6 Scale & sync</b><br/>perf validation · virtualization<br/>linked multi-Gantt demo"]
+  S7["<b>S7 Scheduling plugin</b><br/>links · lag · propagation<br/>cycles · diagnostics · arrows"]
 
   S0 --> S1 --> S2 --> S3 --> S4 --> S5 --> S6 --> S7
 
@@ -78,11 +80,11 @@ flowchart LR
 | S0 → S1 | Layer-boundary lint rules active and failing on violation; harness renders fixture bars; layout tested headlessly. |
 | S1 → S2 | Grid and timeline provably share row geometry (single source, pixel-identical) — `[S1-A2]`; viewport/scale objects are external and injectable — `[S1-A4]`. `pnpm gate` proves both (plans/s1.11-close-the-gate/README.md D-S1.11-9). |
 | S2 → S3 | Undo round-trips are exact (property test); JSON round-trip is byte-stable; changesets carry `from` and `to`. |
-| S3 → S4 | Golden scheduling fixtures pass, including a 5,000-link chain with no recursion-depth failure; cycles reported with member ids. |
-| S4 → S5 | Every gesture = exactly one transaction; every gesture cancelable via `before*`; undo reverts a gesture completely (user + engine effects). |
-| S5 → S6 | Two Gantt instances on one page with independent state (isolation test); deterministic item identity asserted. |
-| S6 → S7 | A non-trivial feature exists as a plugin using only the public plugin API (dogfooding proof). |
-| S7 → 1.0 | Performance budgets met in CI on reference hardware; linked-scroll demo works x, y, and both. |
+| S3 → S4 | Every S3 gesture = exactly one transaction; every gesture cancelable via `before*`; undo reverts the gesture (user edit + any extender extras). Identity extender is enough; no scheduling plugin. |
+| S4 → S5 | Field registry live; tree and grouped row sources; pack-mode row heights; item identity deterministic. |
+| S5 → S6 | A non-trivial feature exists as a plugin using only the public plugin API (dogfooding proof). |
+| S6 → S7 | Performance budgets met in CI on reference hardware; linked-scroll demo works x, y, and both. |
+| S7 → 1.0 | Golden scheduling fixtures pass, including a 5,000-link chain with no recursion-depth failure; cycles reported with member ids; the first-party plugin uses only the public plugin contract. |
 
 ## 5. Deferred, with seams reserved
 

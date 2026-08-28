@@ -391,7 +391,7 @@ interface GeometryFrame {
   /** `id` was `DependencyId` (a `model/` brand) pre-#13; `Dependency` is now scheduling-plugin-owned
    *  (§7, #13), so link geometry needs a plugin-contributed emission seam mirroring `registerItemEmitter`
    *  above — exact registration contract (a `registerLinkEmitter`-shaped seam) and `id`'s brand type are
-   *  tracked in #16, not yet settled here. Shape lands in S1 (#30), contents in S3. */
+   *  tracked in #16, not yet settled here. Shape lands in S1 (#30), contents in S7. */
   links: readonly Array<{ id: string; path: PathCommand[]; flags: LinkFlags }>;
   decorations: readonly Array<TodayLine | RangeBand | RowStripe>;
 }
@@ -422,7 +422,7 @@ Rules that keep it honest:
 
 - **No user render output in the frame.** Custom renderers are invoked by the DOM backend at sync time (see `02-public-api.md` §5), keyed by `Item.id`. The frame stays pure geometry, snapshot-testable, backend-neutral.
 - **No materialized hit-region array.** The bars array *is* the hit index; DOM backends get hit-testing from event delegation.
-- **Row heights and virtualization:** a cumulative row-height index gives O(log n) "top of row i" and "row at offset y" even with pack-mode variable heights. Slice S1 ships a simple prefix-sum implementation behind the index interface; the O(log n) structure replaces it in S7 **only if the measured spike says so** (D2). The index is O(log n) only when one instance survives across renders, so `layout/` owns that lifetime in `FrameLayout` rather than instructing callers to keep it: a doc comment telling `view/` to build one index, cache it by entry count and row height, and invalidate it itself is implementation knowledge pushed across the seam, and it put four bookkeeping fields in `GanttShell` until the 2026-08-25 review. S5's variable-height `invalidateFrom` calls land in `FrameLayout` for the same reason — beside the index, where `layout/`'s own tests reach them.
+- **Row heights and virtualization:** a cumulative row-height index gives O(log n) "top of row i" and "row at offset y" even with pack-mode variable heights. Slice S1 ships a simple prefix-sum implementation behind the index interface; the O(log n) structure replaces it in S6 **only if the measured spike says so** (D2). The index is O(log n) only when one instance survives across renders, so `layout/` owns that lifetime in `FrameLayout` rather than instructing callers to keep it: a doc comment telling `view/` to build one index, cache it by entry count and row height, and invalidate it itself is implementation knowledge pushed across the seam, and it put four bookkeeping fields in `GanttShell` until the 2026-08-25 review. S4's variable-height `invalidateFrom` calls land in `FrameLayout` for the same reason — beside the index, where `layout/`'s own tests reach them.
 - **Grid and timeline consume the same `frame.rows`.** Both position rows absolutely from `top`/`height`; neither uses flow layout or computes a height. One vertical window, one scroll owner. This is the #1 defect source in split-pane Gantts and it is closed by construction (D8).
 
 ---
@@ -435,7 +435,7 @@ Three rules, in force from the first commit, because all three are retrofit-host
 2. **The dataset owns an IANA timezone; viewer-local is opt-in.** All zone-aware date arithmetic — day floors, week starts, snapping, shading — resolves through the dataset zone, so two users in different zones see identical day boundaries. `Instant` stays absolute.
 3. **No naked time arithmetic.** `time/` exposes `add`, `startOf`, `diff`, etc., all zone-aware and DST-correct. A lint rule bans magic time constants (`86400000` and friends) outside `time/`.
 
-Ergonomics: `time/` ships `instant(v: Date | number | string): Instant`, `toISO(i: Instant): string`, and a plain-date helper set so consumers work with "days" and "Mondays," not epoch math. Zone-aware arithmetic is memoized (offset table per zone/day) — budgeted for in the S7 spike.
+Ergonomics: `time/` ships `instant(v: Date | number | string): Instant`, `toISO(i: Instant): string`, and a plain-date helper set so consumers work with "days" and "Mondays," not epoch math. Zone-aware arithmetic is memoized (offset table per zone/day) — budgeted for in the S6 spike.
 
 ### 5.1 `TimeScale` — instants ⇄ pixels, shareable (D9)
 
@@ -529,7 +529,7 @@ interface ScheduleResult {
 function schedule(request: ScheduleRequest): ScheduleResult;   // pure, deterministic
 ```
 
-**Engine (deterministic and pure — slice S3, as the default plugin's internals):**
+**Engine (deterministic and pure — slice S7, as the default plugin's internals):**
 
 - Propagation over the dependency graph in topological order via an **explicit worklist loop, never recursion** — long chains blow the JS stack otherwise; a 5,000-link chain fixture forecloses it permanently. Module-header invariant: *this file contains no recursive call; chain depth is unbounded by design.*
 - Lag applied per dependency `type`; negative lag (overlap) is legal.
@@ -555,7 +555,7 @@ interface SchedulingPolicy {
 
 The shipped `defaultPolicy` is deliberately minimal and neutral: dependencies push successors forward as early as their predecessors allow; pinned beats dependency; edits move the fields the user didn't touch. Working calendars, constraint vocabularies, criticality definitions, and resource-driven durations all arrive later as richer policies/analyses — **the request/result contract does not change.**
 
-**Speculative evaluation is free by purity:** during a drag, call the extension hook (the installed scheduling plugin's `schedule()`, or identity if none) with a synthetic `proposed`, render the returned patch as a preview, discard on cancel. Throttled to one call per animation frame. This is a load-bearing reason `schedule()` must never mutate its input — write it in the module header.
+**Speculative evaluation is free by purity:** during a drag, `interaction/` calls the extension hook (the installed plugin's extender, or identity) with a synthetic `proposed`, paints the returned `EntryEdits` as a preview, and discards on cancel. Throttled to one call per animation frame. The first-party scheduler, when installed, runs `schedule()` **inside** that extender. `interaction/` never imports `scheduling/`. This is a load-bearing reason `schedule()` must never mutate its input — write it in the module header.
 
 ---
 
@@ -588,7 +588,7 @@ Backends: `dom` (default — absolutely-positioned virtualized rows, SVG for lin
 
 **Inline writes are geometry-only; everything else ships as a base stylesheet (S1.10, D-S1.10-6).** `render/dom`'s `node.style.*` writes are pruned to exactly `transform`/`width`/`height` — the per-frame/per-instance numbers nothing but this backend knows. Structure (`position`, `display`, `overflow`, colour, background, border) moves to class rules in `view/styles.ts`'s base stylesheet, injected once per document by `ensureBaseStyles` (idempotent via a `<style data-freegantt-styles>` document marker — not `data/`'s kind of shared mutable state, I2 unaffected). `freegantt/no-inline-style-outside-geometry` (`src/render/**`, `src/view/**`) lints the split so it can't regress.
 
-**`mount`/`sync` write ARIA roles, not just geometry (S1.10, D-S1.10-5).** The container gets `role="group"`, a live `aria-label` (from `Gantt.a11yLabel`), and the one honest `tabindex="0"` this step defines (no roving tabindex until S4's keyboard controller exists to move one). `.fg-row` gets `role="listitem"` plus `aria-posinset`/`aria-setsize` (the latter from `GeometryFrame.rowCount`, the *total* row count, not the windowed slice). `.fg-bar` gets `role="img"` and an `aria-label` from `FrameBar.a11yLabel` — not the ARIA `grid`/`row`/`gridcell` pattern, because `.fg-row` and `.fg-bar` render into different scroll surfaces under the split-pane architecture (§8.3) and are DOM cousins, never ancestor/descendant, so no placement of `grid`/`row`/`gridcell` roles across them is spec-conformant.
+**`mount`/`sync` write ARIA roles, not just geometry (S1.10, D-S1.10-5).** The container gets `role="group"`, a live `aria-label` (from `Gantt.a11yLabel`), and the one honest `tabindex="0"` this step defines (no roving tabindex until S3's keyboard controller exists to move one). `.fg-row` gets `role="listitem"` plus `aria-posinset`/`aria-setsize` (the latter from `GeometryFrame.rowCount`, the *total* row count, not the windowed slice). `.fg-bar` gets `role="img"` and an `aria-label` from `FrameBar.a11yLabel` — not the ARIA `grid`/`row`/`gridcell` pattern, because `.fg-row` and `.fg-bar` render into different scroll surfaces under the split-pane architecture (§8.3) and are DOM cousins, never ancestor/descendant, so no placement of `grid`/`row`/`gridcell` roles across them is spec-conformant.
 
 ### 8.2 Viewport & multi-Gantt sync (D9)
 
@@ -631,13 +631,13 @@ flowchart TB
 
 ### 8.3 Split pane (D8)
 
-`GanttShell` composes the split; `view/pane-layout.ts`'s `PaneLayout` holds it (S1.8): grid pane (columns over `frame.rows`) · splitter · timeline pane (header + bars + links + decorations). The timeline pane is the single native scroller for both axes (D-D, D-S1.8-1) — the grid pane has no scrollbar of its own. Its row layer follows the timeline pane's scroll position by one `translateY(-frame.visible.y)` transform per frame instead of a second real scroller; both panes read `top` from the same `frame.rows`/`frame.bars`, so pixel identity between them (I9) is structural rather than a property either side maintains by hand. The grid starts as a single column (S1) and grows columns/editors in S5–S6 without structural change: `FrameRow.cells` carries one library-formatted string per configured column (§2.6), so adding a column adds a cell rather than a frame shape (#81).
+`GanttShell` composes the split; `view/pane-layout.ts`'s `PaneLayout` holds it (S1.8): grid pane (columns over `frame.rows`) · splitter · timeline pane (header + bars + links + decorations). The timeline pane is the single native scroller for both axes (D-D, D-S1.8-1) — the grid pane has no scrollbar of its own. Its row layer follows the timeline pane's scroll position by one `translateY(-frame.visible.y)` transform per frame instead of a second real scroller; both panes read `top` from the same `frame.rows`/`frame.bars`, so pixel identity between them (I9) is structural rather than a property either side maintains by hand. The grid starts as a single column (S1) and grows columns/editors in S4–S5 without structural change: `FrameRow.cells` carries one library-formatted string per configured column (§2.6), so adding a column adds a cell rather than a frame shape (#81).
 
 ---
 
 ## 9. `interaction/` — gestures as drafts (D10)
 
-Small, single-purpose controllers — `Drag`, `Resize`, `LinkCreate`, `Select`, `Keyboard` — over a shared base that owns the invariants:
+Small, single-purpose controllers — `Drag`, `Resize`, `Select`, `Keyboard` in S3; `LinkCreate` in S7 — over a shared base that owns the invariants:
 
 - **Arm on slack threshold** (~14px) so click/double-click survive pointer jitter.
 - **Never write model or selection state on `pointerdown`** — it can rebuild DOM under the pointer and cancel the gesture.
@@ -690,7 +690,7 @@ Rules:
 - Plugins are configured declaratively (`features: { tooltips: true, contextMenu: {...} }`) and are tree-shakeable — an unused feature costs zero bytes.
 - Setup order = registration order; plugins must not depend on sibling load order (communicate via events/commands only).
 - A plugin may not reach into another plugin or any internal module — the `PluginContext` is its entire world. Enforced by the same import-boundary lint.
-- **Dogfooding is the test:** built-in features (tooltips, context menu, editors) use this contract with no private back-doors. If a built-in needs a back-door, the contract is wrong — fix the contract (gate S6 → S7).
+- **Dogfooding is the test:** built-in features (tooltips, context menu, editors) use this contract with no private back-doors. If a built-in needs a back-door, the contract is wrong — fix the contract (gate S5 → S6). The first-party scheduling plugin (S7) is a second consumer of the same contract.
 
 ---
 

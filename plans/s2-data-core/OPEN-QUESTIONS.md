@@ -3,12 +3,14 @@
 Decisions this slice needs and does **not** yet have. Everything settled lives in
 [`README.md`](./README.md) §2 as a `D-S2-*` decision; nothing settled is repeated here.
 
+**Slice numbers after S2 (remap 2026-08-28):** S3 is direct manipulation. S4 is hierarchy. S5 is the plugin runtime. S6 is scale. S7 is the first-party scheduling plugin. Closed entries below that say "S3" for the engine mean **S7**.
+
 **Do not start the step that depends on an open question below until it is closed.** Each entry names
 that step.
 
 ---
 
-## OQ1 — **CLOSED** — the hook is `EditRequest → EntryEdits` via an `EditExtender`; `diagnostics` waits for S3
+## OQ1 — **CLOSED** — the hook is `EditRequest → EntryEdits` via an `EditExtender`; `diagnostics` waits for S7
 
 **Current shape (see "Revised again" below, which supersedes the `EditAdjustment`/`FieldPatch` shape
 this section originally closed on):** `EditExtender = (request: EditRequest) => EntryEdits`.

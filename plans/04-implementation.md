@@ -40,10 +40,10 @@ Dev-side, cost is measured in maintenance, not bytes — still kept lean. "Slice
 | `dependency-cruiser` | the layer-boundary graph as executable config (I1) | S0 |
 | `vite-plugin-dts` + `@microsoft/api-extractor` | bundled `.d.ts` + API report; the report diff is the I11 type-surface snapshot | S0 (build) / S2 (report gating) |
 | `fast-check` | property tests: undo round-trips (I7), schedule purity (I4), JSON round-trip | S2 |
-| `@vitest/coverage-v8` | coverage gate (>90% on `scheduling/`, per S3 acceptance) | S3 |
-| `playwright` | E2E on the harness; gesture tests beyond what happy-dom can honestly simulate | S4 |
-| `@axe-core/playwright` | a11y checks in CI on harness pages | S6 |
-| `size-limit` | bundle + tree-shaking budgets (S6 tree-shake test, S7 budget gate) | S6 |
+| `@vitest/coverage-v8` | coverage gate (>90% on `scheduling/`, per S7 acceptance) | S7 |
+| `playwright` | E2E on the harness; gesture tests beyond what happy-dom can honestly simulate | S3 |
+| `@axe-core/playwright` | a11y checks in CI on harness pages | S5 |
+| `size-limit` | bundle + tree-shaking budgets (S5 tree-shake test, S6 budget gate) | S5 |
 | `prettier` | formatting; zero style debate in review | S0 |
 
 Package manager: **pnpm**, Node LTS pinned via `engines` + `.nvmrc`. Versions: latest stable at bootstrap, then renovate-style upgrades — this doc records *choices*, not version pins.
@@ -90,7 +90,7 @@ One workflow, jobs in dependency order — everything here is an S0 deliverable 
 
 ```
 typecheck → lint (eslint + custom rules) → boundaries (depcruise) → test (node) → test (dom)
-        → build (lib + harness) → api-report diff (S2+) → size-limit (S6+) → e2e + axe (S4+/S6+)
+        → build (lib + harness) → api-report diff (S2+) → size-limit (S5+) → e2e + axe (S3+/S5+)
 ```
 
 Every invariant in `01` §11 must name the CI job that enforces it; an invariant without a job is a TODO, tracked in the table itself.
@@ -100,6 +100,6 @@ Every invariant in `01` §11 must name the CI job that enforces it; an invariant
 ## 5. What we deliberately do not set up yet
 
 - **Monorepo / package splitting** — one package until demand proves otherwise (`01` §1.1).
-- **Changesets/release tooling, docs site generator** — S7 scope; the harness pages are the docs seed until then.
-- **Playwright component testing, visual regression** — considered at S4 when gestures land; not before there's something to regress.
-- **Worker build for `schedule()`** — only if the S7 spike's numbers demand it (D2).
+- **Changesets/release tooling, docs site generator** — S6 scope; the harness pages are the docs seed until then.
+- **Playwright component testing, visual regression** — considered at S3 when gestures land; not before there's something to regress.
+- **Worker build for `schedule()`** — only if measurement with the S7 plugin installed demands it (D2).

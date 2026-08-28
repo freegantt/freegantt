@@ -2,7 +2,7 @@
 
 **Scope:** `data/edit-extension.ts` (D-S2-6, `plans/s2-data-core`). This doc illustrates the mechanism
 closed in **OQ1** (`plans/s2-data-core/OPEN-QUESTIONS.md`), revised 2026-08-27 at the user's explicit
-direction — a plain, usable API now over pre-matching an S3 scheduling contract that doesn't exist yet.
+direction — a plain, usable API now over pre-matching an S7 scheduling contract that doesn't exist yet.
 It is a walkthrough, not a spec — the authoritative shape is
 `plans/s2-data-core/s2.2-transactions-and-changesets.md` §2.2.
 
@@ -103,7 +103,7 @@ can return up to two extra edits (`frame-walls` cascading from `pour-foundation`
 cascading from `site-survey`), all folded into the one `ChangeSet` the transaction commits.
 
 There is no public way to install an extender in S2 — `DatasetOptions.plugins` and the rest of the
-plugin-facing API are S3's job (#15). Until then this shape only exists for `data/`'s own tests to
+plugin-facing API are S5's job (#15). Until then this shape only exists for `data/`'s own tests to
 inject, so the sample above stops at the extender itself rather than showing it wired into a public
 `new Dataset({...})` call.
 
