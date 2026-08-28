@@ -23,6 +23,8 @@ export {
   InvalidInstantError,
   UnknownPresetError,
   EntryNotFoundError,
+  MutationDuringNotificationError,
+  MutationCancelledError,
 } from '../model/index.js';
 
 // model/ is the type surface api/ re-exports (plans/01 §1: "Only api/ and model/ types are public").
