@@ -5,24 +5,30 @@
     <title>FreeGantt harness — S1 timeline & viewport</title>
     <style>
       :root {
-        --page-bg: #ffffff;
-        --page-ink: #1c1e26;
-        --page-muted: #55596b;
-        --page-border: #ccc;
+        --page-bg: #fafaf7;
+        --page-ink: #1a1815;
+        --page-muted: #5e5a53;
+        --page-border: #e6e2d9;
       }
       @media (prefers-color-scheme: dark) {
         :root:not([data-theme]) {
-          --page-bg: #14151b;
-          --page-ink: #e7e8ee;
-          --page-muted: #9498ab;
-          --page-border: #444;
+          --page-bg: #15161a;
+          --page-ink: #eceae3;
+          --page-muted: #a8a49b;
+          --page-border: #2b2f36;
         }
       }
+      :root[data-theme='light'] {
+        --page-bg: #fafaf7;
+        --page-ink: #1a1815;
+        --page-muted: #5e5a53;
+        --page-border: #e6e2d9;
+      }
       :root[data-theme='dark'] {
-        --page-bg: #14151b;
-        --page-ink: #e7e8ee;
-        --page-muted: #9498ab;
-        --page-border: #444;
+        --page-bg: #15161a;
+        --page-ink: #eceae3;
+        --page-muted: #a8a49b;
+        --page-border: #2b2f36;
       }
       body {
         font-family: system-ui, sans-serif;

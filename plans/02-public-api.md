@@ -185,7 +185,7 @@ Every level-1 property the library reads as a length goes through one reader (`r
 | `--fg-row-odd-bg` | `rgba(26,24,21,.028)` | `rgba(255,255,255,.032)` | `.fg-row:nth-child(odd)` |
 | `--fg-row-label-color` | `#1A1815` | `#ECEAE3` | `.fg-row-label` text |
 | `--fg-bar-fill` | `oklch(.55 .13 245)` | `oklch(.72 .13 245)` | `.fg-bar` background |
-| `--fg-bar-label-color` | `#FFFFFF` | `#ECEAE3` | `.fg-bar` text |
+| `--fg-bar-label-color` | `#FFFFFF` | `#1A1815` | `.fg-bar` text |
 | `--fg-warn` | `#D97706` | `#FBBF24` | `.fg-bar[data-flag~="conflict"]` outline (U2) |
 
 Colour defaults are sourced from an existing, unnamed palette this team maintains elsewhere (D-S1.10-9) — only the *values* cross over, never the palette's name (CLAUDE.md: vendor product names never appear in specs/docs/code). `theme: 'auto' | 'light' | 'dark'` (default `'auto'`) selects which block applies: `'auto'` writes no `data-fg-theme` attribute and follows `prefers-color-scheme`; `'light'`/`'dark'` write the attribute and always win over the media query on specificity. No named multi-preset picker beyond light/dark yet — that needs `extensions/`'s `PluginContext`, the only I2-safe place a `registerThemePreset`-shaped seam can live (deferred to S6, D-S1.10-9).

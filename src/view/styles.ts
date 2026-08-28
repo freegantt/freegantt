@@ -12,11 +12,14 @@
 // only properties still legitimately written inline. Colour token defaults are D-S1.10-9's: pulled from
 // an existing, non-shipping palette this team maintains elsewhere — only the values cross over, per
 // CLAUDE.md's "vendor Gantt product names never appear in specs, docs, or code".
+//
+// Theme tokens live on `.fg-container`. `theme: 'light'|'dark'` writes `data-fg-theme` on that
+// container, not on `:root`. A `:root:not([data-fg-theme])` media query never sees the pin, so Light
+// would leave the Gantt on the system dark tokens. `.fg-container[data-fg-theme='light']` always wins.
 
 const MARKER_ATTR = 'data-freegantt-styles';
 
-const BASE_STYLESHEET = `
-:root {
+const LIGHT_COLOR_TOKENS = `
   --fg-pane-bg: #FAFAF7;
   --fg-splitter-color: #E6E2D9;
   --fg-header-bg: #F4F2EC;
@@ -30,8 +33,9 @@ const BASE_STYLESHEET = `
   --fg-bar-fill: oklch(0.55 0.13 245);
   --fg-bar-label-color: #FFFFFF;
   --fg-warn: #D97706;
-}
-[data-fg-theme='dark'] {
+`.trimEnd();
+
+const DARK_COLOR_TOKENS = `
   --fg-pane-bg: #15161A;
   --fg-splitter-color: #2B2F36;
   --fg-header-bg: #22252B;
@@ -39,27 +43,31 @@ const BASE_STYLESHEET = `
   --fg-header-text: #ECEAE3;
   --fg-header-subtext: #6E6A62;
   --fg-header-divider-color: #2B2F36;
+  --fg-row-even-bg: transparent;
   --fg-row-odd-bg: rgba(255, 255, 255, 0.032);
   --fg-row-label-color: #ECEAE3;
   --fg-bar-fill: oklch(0.72 0.13 245);
-  --fg-bar-label-color: #ECEAE3;
+  --fg-bar-label-color: #1A1815;
   --fg-warn: #FBBF24;
+`.trimEnd();
+
+const BASE_STYLESHEET = `
+:root {
+${LIGHT_COLOR_TOKENS}
+}
+.fg-container {
+${LIGHT_COLOR_TOKENS}
 }
 @media (prefers-color-scheme: dark) {
-  :root:not([data-fg-theme]) {
-    --fg-pane-bg: #15161A;
-    --fg-splitter-color: #2B2F36;
-    --fg-header-bg: #22252B;
-    --fg-header-band-bg: #1B1D22;
-    --fg-header-text: #ECEAE3;
-    --fg-header-subtext: #6E6A62;
-    --fg-header-divider-color: #2B2F36;
-    --fg-row-odd-bg: rgba(255, 255, 255, 0.032);
-    --fg-row-label-color: #ECEAE3;
-    --fg-bar-fill: oklch(0.72 0.13 245);
-    --fg-bar-label-color: #ECEAE3;
-    --fg-warn: #FBBF24;
+  .fg-container:not([data-fg-theme]) {
+${DARK_COLOR_TOKENS}
   }
+}
+.fg-container[data-fg-theme='light'] {
+${LIGHT_COLOR_TOKENS}
+}
+.fg-container[data-fg-theme='dark'] {
+${DARK_COLOR_TOKENS}
 }
 
 .fg-container { display: flex; overflow: hidden; }
