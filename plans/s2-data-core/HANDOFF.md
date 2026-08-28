@@ -95,7 +95,7 @@ No assertion in any of the above changed — only how the fixture is built.
 ## OQ1 closed (2026-08-27) — S2.2 is unblocked
 
 `plans/s2-data-core/OPEN-QUESTIONS.md` OQ1 is closed, and revised once more the same day at the user's
-explicit direction: **a clean, usable S2 API now, over pre-matching an S3 scheduling contract that
+explicit direction: **a clean, usable S2 API now, over pre-matching an S7 scheduling contract that
 hasn't been designed.** Read the "Revised again" paragraph at the end of OQ1 before touching
 `data/edit-extension.ts` — it supersedes an earlier, narrower closure of the same question that this repo
 briefly carried (visible in `plans/s2-data-core/README.md`'s D-S2-6 history if you want the "why" in
@@ -116,7 +116,7 @@ export type EditExtender = (request: EditRequest) => EntryEdits;  // extra write
 export const identityExtender: EditExtender = () => EMPTY_EDITS;
 ```
 
-No `EditAdjustment` wrapper, no `FieldPatch` type, no `diagnostics` in S2 (that's S3's own call to make
+No `EditAdjustment` wrapper, no `FieldPatch` type, no `diagnostics` in S2 (that's S7's own call to make
 when it exists). An extender returns the same `EntryEdits` shape a caller already writes to
 `dataset.entries.update()` — reuse `EntryEdit` from S2.3's mutation API, don't invent a second "an edit"
 type. `EditRequest.entries` is a `Map`, not an array — `EntryStore` already keeps `#byId` as one
@@ -133,7 +133,7 @@ extender returns the same shape everything else does.
 `DatasetDataOptions.editExtender` stays internal-only — `data/` is unreachable through the package's
 `exports` map, so there's no way for `harness/` or a consumer to reach it in S2 regardless. Do **not**
 put `editExtender` on the public `Dataset` constructor or show it in a consumer-facing sample; the
-plugin-facing install API (`DatasetOptions.plugins`, `setExtender`) is explicitly S3's job (#15). Tests
+plugin-facing install API (`DatasetOptions.plugins`, `setExtender`) is explicitly S5's job (#15). Tests
 inject an extender directly against `DatasetData`/`DatasetState`; nothing in `harness/main.ts` should
 ever construct one.
 

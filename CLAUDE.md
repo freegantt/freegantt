@@ -1,6 +1,6 @@
 # FreeGantt
 
-Framework-free TypeScript Gantt library, library-first. The spec is `plans/00`–`04` — read the relevant doc before changing anything it governs; locked decisions D1–D12 are in `plans/00-overview.md` and are not revisited casually. Work lands in vertical slices S0–S7 (`plans/03-slices.md`), in order, each ending with something visible in `harness/`. Follow Unlce Bob's (Robert C. Martin) clean code, and use well defined TypeScript types wherever possible and strong module boundries. Design for a clean easy to use API internally and externally.
+Framework-free TypeScript Gantt library, library-first. The spec is `plans/00`–`04` — read the relevant doc before changing anything it governs; locked decisions D1–D12 are in `plans/00-overview.md` and are not revisited casually. Work lands in vertical slices S0–S7 (`plans/03-slices.md`), in order, each ending with something visible in `harness/`. S3–S6 land with the identity extender. The first-party scheduling plugin, `schedule()`, `Dependency`, lag, and cycle diagnostics are **S7**. Extra field writes on commit and during drag come from `data/`'s `EditExtender`. `interaction/` never imports `scheduling/`. Follow Unlce Bob's (Robert C. Martin) clean code, and use well defined TypeScript types wherever possible and strong module boundries. Design for a clean easy to use API internally and externally.
 
 ## Hard rules
 
@@ -38,14 +38,14 @@ Name functions and classes in friendly easy to understand for humans and agents 
 - Undo records user edits + engine cascades atomically (when a scheduling plugin is installed and contributes cascades).
 - No module-level singletons anywhere; two Gantt instances on one page must be fully independent.
 
-**Scheduling** (`plans/01` §7 — first-party default plugin, not mandatory core, see ADR 0002):
+**Scheduling** (`plans/01` §7 — first-party default plugin, not mandatory core, see ADR 0002; **slice S7**):
 - Occupies the extension hook (D4) exclusively when installed; when nothing is installed, none of this runs.
 - `schedule()` is pure and deterministic; never mutates input; policy never overwrites a user-proposed field.
 - Propagation is a worklist loop — no recursion, ever (5,000-link chain fixture guards this).
 - Conflicts become diagnostics; the engine never silently rewrites what the user asked for.
 
 **Rendering / view** (`plans/01` §8):
-- Authored vs. derived: entries/dependencies are persisted; rows/items/geometry are recomputed and never persisted. A **field's source** decides which side a rolled-up parent value falls on (ADR 0005): an `entry`- or `meta`-sourced field has a stored home, so its aggregate is stored, undoable and serialized — this is what `start`/`end` already do; a `compute`-sourced field has no home, so its aggregate is computed on read and never reaches the document.
+- Authored vs. derived: entries are persisted; plugin-owned stores persist with their plugin; rows/items/geometry are recomputed and never persisted. A **field's source** decides which side a rolled-up parent value falls on (ADR 0005): an `entry`- or `meta`-sourced field has a stored home, so its aggregate is stored, undoable and serialized — this is what `start`/`end` already do; a `compute`-sourced field has no home, so its aggregate is computed on read and never reaches the document.
 - Hot path (hover/selection/drag preview) = class toggles + transforms only; zero allocation, never rebuilds a frame.
 - All time→pixel via the bound `TimeScale`; all scroll via the bound `ScrollModel`. No exceptions.
 - Renderer output is text by default; raw HTML is explicit opt-in only.

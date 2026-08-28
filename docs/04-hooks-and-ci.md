@@ -142,8 +142,8 @@ flowchart LR
   F --> H["test:dom"]
   H --> I["build (lib + harness)"]
   I --> J["api-report diff<br/>(S2+)"]
-  I --> K["size-limit<br/>(S6+)"]
-  I --> L["e2e + axe<br/>(S4+/S6+)"]
+  I --> K["size-limit<br/>(S5+)"]
+  I --> L["e2e + axe<br/>(S3+/S5+)"]
 
   classDef s fill:#e8f4ea,stroke:#4a7a58,color:#1c2b20
   class A,B,C,D,E,V,F,G,H,I,J,K,L s
@@ -154,7 +154,7 @@ flowchart LR
 - **No `continue-on-error` on a guard job.** A guard that can be yellow is a guard that is off. The only non-blocking jobs are the *measurement* jobs before their gating slice (`size-limit`, `perf`), and they are labeled as measurements, not guards.
 - **The red test runs on every PR**, not just at bootstrap. A boundary config that stops working is worse than none, because it is trusted.
 - **`api-report` failure is not a bug**, it is a semver decision: the fix is either "revert the surface change" or "commit the updated report and say so in the PR." The job message says exactly that.
-- **Required checks on `main`:** `format:check`, `typecheck`, `lint`, `boundaries`, `guards`, `test:node`, `test:dom`, `vendor-names`, `disables`, `build`. Later slices add `api-report` (S2), `e2e` (S4), `axe` + `size-limit` (S6), `perf` (S7).
+- **Required checks on `main`:** `format:check`, `typecheck`, `lint`, `boundaries`, `guards`, `test:node`, `test:dom`, `vendor-names`, `disables`, `build`. Later slices add `api-report` (S2), `e2e` (S3), `axe` + `size-limit` (S5), `perf` (S6).
 
 ### 5.1 Slice gates
 
