@@ -27,7 +27,7 @@ type BarGeom = Pick<FrameBar, 'kind' | 'label' | 'x' | 'y' | 'width' | 'height' 
 /** Bands carry no per-frame geometry of their own yet (height/stacking is S1.9/S1.10) — an always-
  * equal geom means `syncKeyed` patches a band node once, at creation, and never again. */
 type BandGeom = Record<string, never>;
-const EMPTY_BAND_GEOM: BandGeom = {};
+const EMPTY_BAND_GEOM: BandGeom = Object.freeze({});
 
 /** `data-flag` is generated from `BarFlags`' own keys, not hand-mapped (S1.10, D-S1.10-2) — adding a
  * new `BarFlags` key needs no edit here (U7). */

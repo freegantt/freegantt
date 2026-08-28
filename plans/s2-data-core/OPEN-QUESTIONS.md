@@ -97,9 +97,11 @@ here for the reason above; DatasetCore, DatasetStores — rejected candidates, s
 
 ---
 
-## OQ6 — Two stale lines in `plans/03` §S2 that the ledger does not correct
+## OQ6 — **CLOSED** — two stale lines in `plans/03` §S2 that the ledger did not correct
 
-**Blocks:** nothing · **Fix in:** S2.7 · **Touches:** README §7
+**Closed in S2.7.** Both lines are fixed: the `GanttShellOptions.entries` "replaces" clause now reads
+as D-S2-20's live-binding intent, and `dataset.dependencies.*` is struck from S2's mutation API scope
+with §0 Q2's deferral to S3 named alongside it.
 
 `README.md` §7 lists one `plans/03` §S2 edit (the four boxes get ids; "invalidate incrementally"
 corrected). Two more lines are stale and are not in the table:

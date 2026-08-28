@@ -26,6 +26,8 @@ import { Dataset, Gantt } from 'freegantt';
 const dataset = new Dataset<{ team: string }>({
   timeZone: 'America/Chicago',            // explicit; 'local' is opt-in
   dateOnlyEnd: 'inclusive',               // default; see §2.1
+  derivedSpanKinds: ['group'],            // default; a kind here may omit start/end — see §2.1
+  history: { capacity: 100 },             // default; undo/redo stack depth — see "Undo and redo" below
   hierarchy: { autoGroup: true },         // first child promotes parent to kind 'group'; promote only
   entries: [
     { id: 'p1', name: 'Sitework', kind: 'group' },     // span derives from children (default policy)
@@ -77,6 +79,10 @@ const gantt = new Gantt({
 ### Programmatic mutation — always transactional
 
 ```ts
+dataset.entries.add({ id: 't9', name: 'Roofing', start: '2026-10-01', end: '2026-10-15' });
+dataset.entries.update('t2', { name: 'Framing — north wing' });
+dataset.entries.remove('t9');           // and every descendant, in the same changeset
+
 dataset.transaction(() => {
   dataset.entries.update('t2', { name: 'Framing — north wing' });
   dataset.dependencies.add({ id: 'd2', fromId: 't2', toId: 't3', type: 'FS', lag: days(2) });
@@ -87,9 +93,15 @@ dataset.undo();  dataset.redo();
 dataset.canUndo; dataset.canRedo;
 ```
 
-Single mutations outside an explicit transaction are auto-wrapped in one — convenience without a second code path.
+Single mutations outside an explicit transaction are auto-wrapped in one — convenience without a second code path (D-S2-8). Each mutator validates against its own in-progress write set before staging anything, so a rejected call leaves the store untouched and a stack trace points at the call that made the bad edit, not at a transaction's closing brace.
+
+`transaction()` returns the body's own return value, not a `ChangeSet` — `dataset.on('change')` is the only channel a committed changeset travels on (§3). A nested `transaction()` call runs its body against the already-open transaction and returns that body's value without committing a second time; only the outermost call commits. A veto (`beforeChange` returning `false`, §3) makes `transaction()` throw `MutationCancelledError` carrying the refused changeset, rather than returning at all.
 
 `autoGroup` is data behavior, so it lives on `Dataset` (not `Gantt`): the promotion runs inside the same transaction as the edit that caused it — one changeset, one undo step. It only promotes; turning a group back into an entry is always an explicit edit (`01` §2.5).
+
+### Undo and redo
+
+`undo()`/`redo()` return nothing — like every other commit, what they did arrives on `dataset.on('change')`, tagged `origin: 'undo'`/`'redo'`; a caller that needs to know what an undo did reads the event, not a return value. `canUndo`/`canRedo` answer "is there anything to undo/redo" without a caller needing to try and catch. `history: { capacity: 200 }` at construction keeps 200 undoable transactions; the default is 100. An undo replays a cascade exactly as it committed — it never re-runs the extension hook, so an engine whose behaviour changed between library versions cannot rewrite history (`01` §6, `plans/s2-data-core/s2.5-undo-redo.md`).
 
 ### Reconfiguration is just assignment
 
@@ -113,6 +125,8 @@ A string with an explicit `Z` or numeric offset is absolute. Every other string 
 
 The reading itself lives in `time/` (`toInstant`, `toEndInstant`) — resolving a Plain time needs the zone and the DST fold/gap policy, and advancing a date-only end by one day is zone-aware arithmetic, which I10 confines to that layer. `api/` maps fields and does no date math of its own.
 
+`start` and `end` are required on every `EntryInput` except one case: an entry of a `derivedSpanKinds` kind (`01` §2.5, default `['group']`) may omit both — `{ id: 'p1', name: 'Sitework', kind: 'group' }` above is exactly this — and the store writes a zero-length span at the dataset's reference date until the span rollup gives it a real one (`01` §2.6). Omitting one field but not the other, on any kind, is `InvalidInstantError`: the field is required and `undefined` names no instant.
+
 ---
 
 ## 3. Events — one bus, one vocabulary
@@ -125,7 +139,7 @@ The reading itself lives in `time/` (`toInstant`, `toEndInstant`) — resolving 
 | `beforeLinkCreate` | `linkCreate` |
 | `beforeSelectionChange` | `selectionChange` |
 | `beforeGridWidthChange` | `gridWidthChange` |
-| — | `change` (every committed `ChangeSet`) |
+| `beforeChange` | `change` (every committed `ChangeSet`) |
 | — | `scheduleDiagnostics` (engine findings) |
 
 `beforeGridWidthChange`/`gridWidthChange` (S1.8) carry `{ from, to }` in px. Fired by both a Splitter drag's commit and a direct `gantt.gridWidth = px` assignment — one commit sequence, one place it lives (`GanttShell`). A veto restores the width the drag started from, so a rejected drag leaves nothing behind.
@@ -140,14 +154,19 @@ gantt.on('beforeEntryEdit', async ({ entry }) => {
   return false;                // suppress built-in
 });
 
+dataset.on('beforeChange', ({ changeSet }) => {
+  if (changeSet.updated.some(u => locked.has(u.id))) return false;   // veto — refuses the whole change
+});
+
 dataset.on('change', ({ changeSet }) => save(changeSet));           // persistence hook (D7)
 ```
 
 Rules:
 
-- Cancelable handlers may return `false` or `Promise<false>`; an async veto suspends the gesture with a visible pending state — it never commits optimistically.
+- Cancelable handlers may return `false` or `Promise<false>`; an async veto suspends the gesture with a visible pending state — it never commits optimistically. **`beforeChange` is the one exception: it is sync-only.** A data commit has nothing to suspend into — the store would have to hold its write set across an `await`, and every mutator would have to turn `async` to make that safe. The async path stays where gestures already are, one layer up in `interaction/`.
 - Pointer/gesture events fire on the `Gantt` (view concern); data events fire on the `Dataset` (data concern). Every event name exists exactly once.
 - Payloads are typed, stable, and carry entities plus context — no "re-read everything" events.
+- `change` is the only path out of a commit: the view's live binding and the undo history are both ordinary subscribers to it, not privileged internals with a second, private channel. `beforeChange` may refuse a changeset but never edit one — rewriting a proposed edit is the extension hook's job, and it has exactly one owner. A vetoed programmatic call (e.g. `entries.update()`) throws `MutationCancelledError` carrying the refused changeset, because a function with a return contract cannot quietly not honour it; a vetoed gesture is silent, the way `beforeGridWidthChange` already is.
 
 ---
 
@@ -298,14 +317,24 @@ Omit `scale`/`scroll` and the Gantt creates private ones — single-Gantt users 
 ## 6. Serialization contract (D7)
 
 ```ts
-const doc = dataset.toJSON();     // { schema: 1, timeZone, entries, dependencies, ... }
+const doc = dataset.toJSON();
 const p2  = Dataset.fromJSON(doc);
 ```
 
-- The JSON shape is **public API**: documented, versioned by an integer `schema` field, semver-governed. `fromJSON` migrates older schemas forward; it never silently drops fields.
-- Instants serialize as ISO-8601 strings (readable, diffable, zone-explicit); brands exist only in TS types and never leak into JSON.
-- `meta` round-trips opaquely — **unless you declare a key as a field** (`01` §2.6), which makes that key addressable for editing, comparison and rollup while everything else in `meta` keeps the guarantee.
-- **Changesets are the incremental counterpart**: `dataset.on('change')` + `dataset.apply(changeSet)` are inverse-ish operations designed so a future sync adapter (or collaborative layer) is an extension, not a core change. `apply` validates and reports rejections rather than throwing mid-way.
+```ts
+export interface DatasetDocument {
+  schema: 1;
+  timeZone: string;
+  dateOnlyEnd: DateOnlyEndRule;
+  derivedSpanKinds: readonly EntryKind[];
+  entries: readonly EntryDocument[];
+}
+```
+
+- The JSON shape is **public API**: documented, versioned by an integer `schema` field, semver-governed. This build writes `schema: 1` only. The reader is a `readers: Record<number, Reader>` map with one entry — a second schema is a map addition, not a rewrite. `fromJSON` migrates older schemas forward when they exist; it never silently drops fields **of a schema it reads**. Keys the reader does not know are dropped: **anything of yours goes in `meta` and survives byte for byte; anything at top level belongs to the schema.**
+- Key order is a contract (`schema`, `timeZone`, `dateOnlyEnd`, `derivedSpanKinds`, `entries`). Optional keys are omitted when absent, never written as `null`. Entries follow store insertion order. Instants serialize as `Z`-suffixed ISO-8601; brands exist only in TS types and never leak into JSON. `fromJSON` reads those instants as absolute, so the dataset zone never re-enters the reading.
+- `meta` round-trips opaquely — **unless you declare a key as a field** (`01` §2.6), which makes that key addressable for editing, comparison and rollup while everything else in `meta` keeps the guarantee. The value is carried by reference into the document and back out, never walked field by field.
+- **Changesets are the incremental counterpart**: `dataset.on('change')` already carries `{from, to}` per field, which is what discharges `02`'s promise that a sync adapter be *"an extension, not a core change"*. `dataset.apply(changeSet)` is what such an extension writes; it is not in S2 (D-S2-11).
 
 ---
 
@@ -313,7 +342,7 @@ const p2  = Dataset.fromJSON(doc);
 
 - **Dev-mode invariant warnings**: dependency cycle detected (with member ids), config set on destroyed instance, non-deterministic item identity, renderer returned a live node, and (S1.9) `GanttOptions.scale` supplied alongside any of `preset`/`range`/`zoom` — "FreeGantt: GanttOptions.preset/range/zoom are ignored when 'scale' is also supplied. The shared TimeScaleModel already carries its own intent — set preset/range/zoom on it directly." The shared `scale` always wins; the constructor keys are never merged into it (D-S1.9-9).
 - **Stable test hooks**: `data-testid` on every part so consumers can write E2E tests against the Gantt without brittle selectors. Shipped at S1.10 (D-S1.10-5/§3.5, U6): `[data-testid="fg-row"]` (with `data-row-id`) and `[data-testid="fg-bar"]` (alongside the existing `data-item-id`) — the selectors S1.11's e2e boxes select on.
-- **Errors are typed and actionable**: `FreeGanttError` subclasses with codes, never bare strings; validation failures name the entity and field. `ContainerNotFoundError` (`code: 'container-not-found'`, S1.8) is the first of these a consumer can actually catch — thrown when a string `container` selector matches nothing. `UnknownPresetError` (`code: 'unknown-preset'`, S1.9) is thrown by `resolvePreset` for a `PresetRef` string outside the shipped set. `EntryNotFoundError` (`code: 'entry-not-found'`, S1.9) is thrown by `reveal(entryId)` for an id the bound Dataset has no entry for.
+- **Errors are typed and actionable**: `FreeGanttError` subclasses with codes, never bare strings; validation failures name the entity and field. `ContainerNotFoundError` (`code: 'container-not-found'`, S1.8) is the first of these a consumer can actually catch — thrown when a string `container` selector matches nothing. `UnknownPresetError` (`code: 'unknown-preset'`, S1.9) is thrown by `resolvePreset` for a `PresetRef` string outside the shipped set. `EntryNotFoundError` (`code: 'entry-not-found'`) is thrown by `reveal(entryId)` (S1.9) and by `entries.update`/`entries.remove`/a bad `parentId` (S2.3) for an id the Dataset has no entry for — its message names the call that failed. `DuplicateEntryIdError` (`code: 'duplicate-entry-id'`, S2.3) is thrown by `entries.add` given an id already in the store. `ParentCycleError` (`code: 'parent-cycle'`, S2.3) is thrown by a `parentId` edit that would make an entry its own ancestor, self-parenting included. `UnknownFieldError` (`code: 'unknown-field'`, S2.3) is thrown by `entries.update` given an edit key that names no field — in S2 the legal set is the core `Entry` fields; S5's field registry widens the set, not the check. `UnsupportedSchemaError` (`code: 'unsupported-schema'`, S2.6) is thrown by `Dataset.fromJSON` for a `schema` this build has no reader for — the message names the version it found and the versions it reads.
 - **Docs site with live, editable examples** grows with the slices (the harness pages are its seed) — budgeted as a deliverable, not an afterthought.
 - **Semver honesty**: internal modules are not importable (enforced by the `exports` map), so semver only governs surfaces we actually promise.
 

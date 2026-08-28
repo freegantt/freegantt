@@ -64,21 +64,21 @@ Slices are scope, not calendar estimates. Within a slice, entries are ordered so
 **Scope**
 
 - `data/`: normalized stores + indexes; instance-scoped reactivity façade (one small dep, swappable); `DatasetData` owning stores + zone.
-- Change signalling between `Dataset` and `GanttShell` (#33, deferred here at S1.11 D-S1.11-7): S2 **replaces** `GanttShellOptions.entries` with the real changeset-driven binding — it never adds a `setEntries()` beside it. A second reactivity mechanism living next to the real one is #1's R4, and the cheapest moment to forbid it is before this slice starts.
+- Change signalling between `Dataset` and `GanttShell` (#33, deferred here at S1.11 D-S1.11-7): S2 makes the binding live, in one removable attachment (D-S2-20) — `GanttShellOptions` never had an `entries` key to replace, and it gains no `setEntries()` beside the real one. A second reactivity mechanism living next to the real one is #1's R4, and the cheapest moment to forbid it is before this slice starts.
 - Transactions: batching, auto-wrap of single mutations, one changeset per transaction (`origin` tagged).
 - Undo/redo: transaction = atomic unit; recorded changesets replayed exactly; history API (`canUndo`, capacity).
-- Changesets: `{ added, removed, updated: {field, from, to} }` (`01` §6); `dataset.on('change')`; `dataset.apply(changeSet)` with validation + rejection reporting. the key type is **`FieldKey`** (retiring `EntryField`, one concept with two names) and it stays **open**, validated at runtime rather than typed `keyof Omit<Entry, 'id'>` — it is public through `FieldUpdated` and the undo record, and S5's field registry (`01` §2.6, ADR 0005) cannot open it later without a breaking change.
+- Changesets: `{ added, removed, updated: {field, from, to} }` (`01` §6); `dataset.on('change')`. the key type is **`FieldKey`** (retiring `EntryField`, one concept with two names) and it stays **open**, validated at runtime rather than typed `keyof Omit<Entry, 'id'>` — it is public through `FieldUpdated` and the undo record, and S5's field registry (`01` §2.6, ADR 0005) cannot open it later without a breaking change. `dataset.apply(changeSet)` is deferred to the slice that ships a sync adapter (D-S2-11) — `plans/02` §6's "sync adapter is an extension, not a core change" promise is discharged by the changeset contract itself (`from`/`to` on `on('change')`), which S2 ships either way; `apply` is what such an extension would write.
 - Serialization: `toJSON()`/`fromJSON()` with `schema: 1`, ISO instants, opaque `meta` round-trip.
-- Public mutation API: `dataset.entries.add/update/remove`, `dataset.dependencies.*`, typed, validating.
-- View binding: committed changesets invalidate layout incrementally (changed rows only), not globally.
+- Public mutation API: `dataset.entries.add/update/remove`, typed, validating. `dataset.dependencies.*` is not S2's — `StoreName` is `'entries'` only until S3's first plugin store exists (§0 Q2).
+- View binding: committed changesets invalidate layout incrementally as defined and asserted by D-S2-16 — a changeset with only `updated` rows never rebuilds the row-height index, one with `added`/`removed` rows does; row-level incrementality inside `computeFrame` is not S2's, and is S7's to decide.
 - Harness: mutation playground — edit fixture via console/buttons, watch the Gantt update; undo/redo buttons; changeset log panel; export/import JSON.
 
 **Acceptance**
 
-- [ ] Property test: random mutation sequences + undo-all restores byte-identical `toJSON()` (I7 groundwork — engine patches join in S3).
-- [ ] `fromJSON(toJSON(p))` round-trips byte-stable.
-- [ ] A 500-entry bulk update inside one transaction produces one changeset, one layout pass, one frame.
-- [ ] Changeset log in harness shows `from`/`to` per field for every edit.
+- [x] `[S2-A1]` Property test: random mutation sequences + undo-all restores byte-identical `toJSON()` (I7 groundwork — engine patches join in S3).
+- [x] `[S2-A2]` `fromJSON(toJSON(p))` round-trips byte-stable.
+- [x] `[S2-A3]` A 500-entry bulk update inside one transaction produces one changeset, one layout pass, one frame.
+- [x] `[S2-A4]` Changeset log in harness shows `from`/`to` per field for every edit.
 
 ---
 
@@ -88,7 +88,7 @@ Slices are scope, not calendar estimates. Within a slice, entries are ordered so
 
 **Scope**
 
-- `scheduling/`: `schedule(request) → { patch, diagnostics }` — pure, deterministic; worklist-loop propagation (I3) with the 5,000-link chain fixture; lag per dependency type (FS/SS/FF/SF, negative legal); cycle diagnostics naming members; pinned-entry semantics (report, never move — the pin flag lives in the plugin's own per-entry storage per the #12 contract, not on `Entry`); parent/`group` rollup as a second pass — kind semantics owned by the policy per `01` §2.5 (tree exists in data from S2; visual tree lands in S5).
+- `scheduling/`: `schedule(request) → { patch, diagnostics }` — pure, deterministic; worklist-loop propagation (I3) with the 5,000-link chain fixture; lag per dependency type (FS/SS/FF/SF, negative legal); cycle diagnostics naming members; pinned-entry semantics (report, never move — the pin flag lives in the plugin's own per-entry storage per the #12 contract, not on `Entry`) — kind semantics owned by the policy per `01` §2.5 (tree exists in data from S2; visual tree lands in S5). The engine moves children and nothing else: `data/`'s own span rollup (S2.3) catches a `group` parent up in the same transaction, the same changeset, after the hook runs on every commit — there is no second rollup pass here (D-S2-22).
 - `SchedulingPolicy` seam + `defaultPolicy` (`01` §7): `resolveEdit` (proposed fields decide what moves), precedence (`pinned > dependency`), dev-assert that a proposed field is never overwritten (I4).
 - Plugin registration: this scheduling plugin occupies the core extension hook exclusively via the `01` §1 mechanism (issue #12) — `data/` calls the hook generically and has no scheduling-specific code path.
 - `data/` integration: transactions run the extension hook, which (with this plugin installed) builds a `schedule()` call from the transaction's `proposed` edits; the plugin's patch merges into the same changeset (`origin: 'engine'`) — undo now reverts user + engine effects atomically (I7 complete).

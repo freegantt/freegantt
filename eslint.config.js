@@ -121,6 +121,122 @@ export default tseslint.config(
     },
   },
   {
+    // I2, docs/02 §3.4: module-level mutable state, production code only. Test files legitimately
+    // declare module-level fixture data (`const CASES = [...]`) that is never shared Gantt state —
+    // scoping this to non-test files is what keeps the rule about I2 instead of about test style.
+    files: ['src/**/*.ts'],
+    ignores: ['src/**/*.test.ts'],
+    plugins: { freegantt },
+    rules: {
+      'freegantt/no-module-level-state': 'error',
+      // docs/02 §3.6, D-S2-18: belt to the TxToken type-gate; the rule's own allowlist names the
+      // files it exempts, so no directory scoping is needed here.
+      'freegantt/no-store-mutation-outside-transaction': 'error',
+      // plans/04 §3.1, docs/02 §3.8: the rule's own HEADERS map is the real scope filter.
+      'freegantt/require-invariant-header': 'error',
+    },
+  },
+  {
+    // plans/01 §1, docs/02 §3.7: model/ is types only.
+    files: ['src/model/**/*.ts'],
+    plugins: { freegantt },
+    rules: {
+      'freegantt/model-is-types-only': 'error',
+    },
+  },
+  {
+    // CLAUDE.md entry-kinds rule, D-S2-22: the first kind-dependent behaviour in data/ (span
+    // rollup) is the reason this lands now, scoped to the two layers with kind-aware code today.
+    // Test files legitimately build fixtures by kind (`{ kind: 'group' }`) — that's scenario setup,
+    // not the production behavior-per-kind chain the rule targets.
+    files: ['src/data/**/*.ts', 'src/layout/**/*.ts'],
+    ignores: ['src/**/*.test.ts'],
+    plugins: { freegantt },
+    rules: {
+      'freegantt/no-kind-literal': 'error',
+    },
+  },
+  {
+    // B7 (docs/02 §2, plans/04 §1): the two runtime deps are each confined to one façade file.
+    files: ['src/**/*.ts'],
+    ignores: ['src/data/reactivity.ts', 'src/time/zone.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: 'alien-signals',
+              message: 'plans/04 §1: alien-signals is confined to src/data/reactivity.ts.',
+            },
+            {
+              name: 'temporal-polyfill',
+              message: 'plans/04 §1: temporal-polyfill is confined to src/time/zone.ts.',
+            },
+          ],
+          patterns: [
+            {
+              group: ['temporal-polyfill/*'],
+              message: 'plans/04 §1: temporal-polyfill is confined to src/time/zone.ts.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    // B8 (docs/02 §2, I11): a dishonest public surface — `throw new Error(/not implemented/i)` — is
+    // banned everywhere except tests, which legitimately assert the message never appears.
+    files: ['src/**/*.ts'],
+    ignores: ['src/**/*.test.ts'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector:
+            "ThrowStatement NewExpression[callee.name='Error'] > Literal[value=/not.implemented|TODO|unsupported/i]",
+          message:
+            'B8: nothing in the public surface throws "not implemented". Implement it or cut the surface. (I11)',
+        },
+      ],
+    },
+  },
+  {
+    // B9 (docs/02 §2, "authored vs. derived" plans/01 §8): serialization persists authored fields
+    // only — a Row/Item/GeometryFrame type reference here would be derived data leaking into JSON.
+    files: ['src/data/serialization/**/*.ts'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: 'TSTypeReference[typeName.name=/^(Row|Item|GeometryFrame)$/]',
+          message:
+            'B9: derived types (Row/Item/GeometryFrame) never appear in serialization — only authored fields persist.',
+        },
+      ],
+    },
+  },
+  {
+    // B10 (docs/02 §2, plans/01 §8): one rAF pipeline. frame-scheduler.ts is that one file. Tests
+    // legitimately `await new Promise((resolve) => requestAnimationFrame(resolve))` to wait for a
+    // frame to settle — that's driving the clock, not a second scheduling implementation.
+    files: ['src/**/*.ts'],
+    ignores: ['src/view/frame-scheduler.ts', 'src/**/*.test.ts'],
+    rules: {
+      'no-restricted-globals': [
+        'error',
+        {
+          name: 'requestAnimationFrame',
+          message: 'B10: requestAnimationFrame has one owner, src/view/frame-scheduler.ts.',
+        },
+        {
+          name: 'cancelAnimationFrame',
+          message: 'B10: cancelAnimationFrame has one owner, src/view/frame-scheduler.ts.',
+        },
+      ],
+    },
+  },
+  {
     files: ['scripts/**/*.mjs', '*.config.js', 'eslint/rules/**/*.cjs', '.dependency-cruiser.cjs'],
     languageOptions: { globals: { ...globals.node } },
     rules: {

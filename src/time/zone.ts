@@ -94,7 +94,7 @@ interface UnitOps {
 /** One source of truth for which units time/ can step by and floor to: a unit is supported exactly
  * when it has an entry here (S1.7 §3.3, #32's "one list" fix carried forward from time/scale.ts).
  * `stepBy`/`startOf` both dispatch through it, so the two can never disagree on what's supported. */
-const UNITS: Record<TimeUnit, UnitOps> = {
+const UNITS: Record<TimeUnit, UnitOps> = Object.freeze({
   millisecond: {
     step: (_zone, i, increment) => addMs(i, increment),
     floor: (_zone, i) => i,
@@ -123,9 +123,9 @@ const UNITS: Record<TimeUnit, UnitOps> = {
     step: (zone, i, increment) => addYears(zone, i, increment),
     floor: (zone, i) => fromZoned(ZonedDateTimeFns.startOfYear(toZoned(zone, i))),
   },
-};
+});
 
-export const SUPPORTED_TIME_UNITS = new Set<TimeUnit>(Object.keys(UNITS) as TimeUnit[]);
+export const SUPPORTED_TIME_UNITS = Object.freeze(new Set<TimeUnit>(Object.keys(UNITS) as TimeUnit[]));
 
 function unsupportedUnit(unit: TimeUnit): UnsupportedUnitError {
   return new UnsupportedUnitError(

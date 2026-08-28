@@ -77,7 +77,7 @@ flowchart LR
 |---|---|
 | S0 → S1 | Layer-boundary lint rules active and failing on violation; harness renders fixture bars; layout tested headlessly. |
 | S1 → S2 | Grid and timeline provably share row geometry (single source, pixel-identical) — `[S1-A2]`; viewport/scale objects are external and injectable — `[S1-A4]`. `pnpm gate` proves both (plans/s1.11-close-the-gate/README.md D-S1.11-9). |
-| S2 → S3 | Undo round-trips are exact (property test); JSON round-trip is byte-stable; changesets carry `from` and `to`. |
+| S2 → S3 | Undo round-trips are exact (property test, `[S2-A1]`); JSON round-trip is byte-stable (`[S2-A2]`); changesets carry `from` and `to` (`[S2-A4]`). |
 | S3 → S4 | Golden scheduling fixtures pass, including a 5,000-link chain with no recursion-depth failure; cycles reported with member ids. |
 | S4 → S5 | Every gesture = exactly one transaction; every gesture cancelable via `before*`; undo reverts a gesture completely (user + engine effects). |
 | S5 → S6 | Two Gantt instances on one page with independent state (isolation test); deterministic item identity asserted. |

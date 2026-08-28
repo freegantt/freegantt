@@ -115,7 +115,7 @@ export interface Overscan {
 }
 
 /** One home for the default, imported by `Viewport` rather than restated there. */
-export const DEFAULT_OVERSCAN: Required<Overscan> = { verticalRows: 2, horizontalPx: 128 };
+export const DEFAULT_OVERSCAN: Required<Overscan> = Object.freeze({ verticalRows: 2, horizontalPx: 128 });
 
 export interface GeometryFrame {
   revision: number;

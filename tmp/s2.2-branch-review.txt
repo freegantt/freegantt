@@ -1,0 +1,131 @@
+S2.2 branch review — API, names, callers, mud
+==============================================
+
+Fixed point: origin/main (six S2.2 commits).
+Spec: plans/s2-data-core/s2.2-transactions-and-changesets.md
+docs/agents/issue-tracker.md is missing, so this review did not fetch a tracker issue.
+
+Caller view
+-----------
+dataset.transaction(fn), on('beforeChange'|'change'), and the ChangeSet payload are the
+right small public surface. Plugin types (EditExtender, TxToken, identityExtender) stay
+in data/. The commit path is four modules, not one mudball. The names that will hurt
+later are EntryEdit (loose input vs stored values) and a write set that does not close
+when beforeChange throws.
+
+## Standards
+
+Hard — public event map lives in data/ (src/api/index.ts, src/data/transaction.ts)
+  plans/01 §1: only api/ and the model/ type surface are public. ChangeSet moved to
+  model/ for that rule. DatasetEventMap is public event vocabulary (plans/02 §3) but is
+  defined on the commit runner and re-exported from data/. App authors then import a
+  data/ type through api/. Put the map next to ChangeSet in model/.
+
+Hard — EntryEdit has two meanings (src/model/entry.ts, src/data/entry-store.ts,
+src/data/change-set.ts)
+  Naming check 4; plans/02 one write shape. Public type is Partial<Omit<EntryInput, 'id'>>
+  (loose dates). Overlay and diffEdit treat the same name as storage-shaped (Instant).
+  Call: stageUpdate(token, id, { start: '2026-09-01' }) — the sentence “stage an entry
+  edit” is true for callers and false for the overlay. Split input edit vs stored edit,
+  or normalize at the mutator before the overlay.
+
+Judgement — TransactionalEntryStore is a wide, one-adapter seam (src/data/transaction.ts)
+  Codebase-design: one adapter ⇒ hypothetical seam. runTransaction never calls stageAdd /
+  stageUpdate / stageRemove; tests call them on EntryStore. Extra methods exist only to
+  break a cycle. Narrow the interface to snapshot / begin / pending* / end.
+
+Judgement — DatasetState is a flag bag (src/data/dataset-state.ts)
+  openTransactions, notifying, bus, editExtender, nextChangeSetId are public fields
+  runTransaction mutates. Feature envy / divergent change: the runner owns the protocol;
+  the state object is a struct. Fine internally if kept off api/. Do not grow this as
+  the plugin install surface.
+
+Judgement — CoreFieldKey on api/ (src/api/index.ts)
+  plans/02 two callers: app authors need ChangeSet / FieldUpdated / EntryEdit / the
+  errors / on('change'|'beforeChange'). CoreFieldKey is the comparator table’s type.
+  Keep it in model/ without re-export, or it becomes a second name for “a field”.
+
+Judgement — foldChangeSet(id, origin, added, removed, updated)
+  Data clump of a ChangeSet under construction. Spec shape wins if you keep the fold
+  pure.
+
+Call-site English that passes
+  dataset.transaction(() => { … }) — batches mutations.
+  dataset.on('change', ({ changeSet }) => save(changeSet)) — greppable pair with
+  beforeChange.
+  identityExtender({ entries, proposed }) — glossary; stays in data/ (plans/02:
+  identity* not for app authors).
+
+Not violations (repo/spec override)
+  TransactionData (retired host, S2.2 naming note). TxToken not on Dataset.transaction.
+  EditRequest / EditExtender / identityExtender sealed in data/. rollUp? no-op
+  (D-S2-22). Dataset → DatasetState → runTransaction façade (same as Gantt/GanttShell).
+  ChangeSet types + mutation errors on api/ are the right persistence/veto surface.
+  Commit path is four deep pieces (runTransaction, overlay, fold/diff, hook types), not
+  one mudball.
+
+Clean
+  No host / chart / EntryField / FieldPatch / EditAdjustment. No module-level counter
+  (I2). Layers: model/ types + id helper; data/ DOM-free; hook not on new Dataset().
+
+## Spec
+
+(a) Missing or partial
+
+Rollup call site is optional, not a no-op always invoked.
+  Spec: “until then this is a no-op call site” / TODO: “calls the rollup step
+  unconditionally (D-S2-22)”. Code: data.rollUp ? data.rollUp(...) : []. DatasetState
+  has no rollUp. Sequence shape is not the same as an always-called no-op.
+
+ChangeSet not frozen.
+  Spec: “the changeset is frozen in dev mode”. No Object.freeze (or other freeze) on
+  the folded set.
+
+§3 gaps (behaviour is mostly there; listed tests are not).
+  “inside one body, get after add returns the added entry” — test asserts get only
+  after commit. Veto “does not bump the revision signal” and MutationCancelledError
+  “carrying the refused changeset” — throw type only; no revision/changeSet check.
+  Change-handler case: “leaves the store as the handler found it” — throw only.
+  Public off() test uses an empty transaction() so beforeChange would not fire even
+  if still registered.
+
+§4 still open (correctly unchecked): plans/01 §6, plans/02 §2–3, CONTEXT.md Origin/
+Write set/Veto/Transaction/ChangeSet, pnpm verify.
+
+S2.3 mutators, history, rollup body, diagnostics: in spec as later; not missing.
+
+(b) Scope creep
+
+No extra public mutation API. Extra tests (change-set.test.ts, extender default, api
+delegation) do not add behaviour the spec forbade. TransactionData.rollUp? is the
+deferred step-5 slot, not a second hook.
+
+(c) Looks done, behaves wrong
+
+I4 is not a dev-mode assert.
+  Spec: “the dev-mode assert I4 names”. Implementation always throw new Error(...)
+  (not DEV-gated, not I4 in a named assert).
+
+Write set not discarded if beforeChange throws.
+  Spec: discard the write set on veto/stop; mutator during notification “before
+  writing anything”. endTransaction runs only on empty fold, veto (false), or apply.
+  A beforeChange handler that throws (MutationDuringNotificationError from nested
+  transaction()) leaves #writeSet open; overlay reads still see uncommitted edits
+  until the next beginTransaction.
+
+Net-effect fold vs overlay for remove-then-add.
+  Spec: changeset is “the transaction's net effect”; add+remove of the same id
+  “records neither”. stageAdd does not clear removed. Remove then add of a committed
+  id yields both pending add and remove → foldChangeSet cancels both → original row
+  remains. Add-then-remove (the §3 case) is correct.
+
+Nine-step path otherwise matches: body → write set, no store write; diffEdit on
+proposed and extender map; hook once; fold; empty → no write/no events, body value
+returned; nested joins; 'user' only on public transaction(); apply then change; no
+history/view import; identity vs injected extender.
+
+Summary
+-------
+Standards — 2 hard, 4 judgement; worst: EntryEdit meaning two shapes.
+Spec — several partial/wrong items; worst: write set stays open when beforeChange
+throws.

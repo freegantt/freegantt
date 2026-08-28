@@ -7,7 +7,8 @@
 // only (`model-is-types-only`).
 //
 // The event maps themselves stay with their owners: `GanttEventMap` in `view/event-bus.ts`,
-// `DatasetEventMap` in `data/dataset-state.ts`. This file exports only the mechanism.
+// `DatasetEventMap` in `model/change-set.ts` (public event vocabulary, so it lives with the rest of
+// the model/ type surface). This file exports only the mechanism.
 
 export class EventBus<TEvents> {
   #handlers = new Map<keyof TEvents, Set<(payload: TEvents[keyof TEvents]) => void | false>>();

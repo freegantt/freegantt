@@ -29,6 +29,19 @@ function forbid(name, from, allowedTargets) {
   };
 }
 
+// A "leaf" module (D-S2-23): exactly one file may import it, so deleting it is provably a
+// degradation, not a break — dependency-cruiser is what proves the claim, not just the prose that
+// makes it. Red-test fixtures for these land with the rest of the removable-leaf set in S2.7.
+function removable(name, modulePath, allowedImporterPath) {
+  return {
+    name,
+    severity: 'error',
+    comment: `D-S2-23: ${modulePath} is a leaf — only ${allowedImporterPath} may import it.`,
+    from: { path: '^src/', pathNot: allowedImporterPath },
+    to: { path: modulePath },
+  };
+}
+
 module.exports = {
   forbidden: [
     forbid('model-is-leaf', 'model', []),
@@ -48,6 +61,36 @@ module.exports = {
     // model and time are the type/primitive surface api/ re-exports (plans/01 §1: "api/ and model/
     // types are public", widened to time/'s public primitives and presets by #25).
     forbid('api-boundary', 'api', ['view', 'data', 'model', 'time']),
+    // D-S2-23: the first of the four removable-leaf rules. Only data/transaction.ts's own step-5
+    // call site may import the span rollup — delete src/data/span-rollup.ts and groups keep their
+    // authored span, the same result `derivedSpanKinds: []` already gives a consumer.
+    removable('span-rollup-is-removable', '^src/data/span-rollup\\.ts$', '^src/data/transaction\\.ts$'),
+    // D-S2-23/D-S2-20: view/gantt-shell.ts's one call site, plus this file's own unit test — delete
+    // src/view/dataset-change-subscription.ts and its one call site and the Gantt still constructs,
+    // lays out, renders and scrolls; it just renders the data as it was at construction and never
+    // updates again (the static-image floor).
+    removable(
+      'dataset-change-subscription-is-removable',
+      '^src/view/dataset-change-subscription\\.ts$',
+      '^src/view/(gantt-shell\\.ts|dataset-change-subscription\\.test\\.ts)$',
+    ),
+    // D-S2-23: delete src/data/history.ts and its one construction line in dataset-state.ts and the
+    // commit path is unchanged, byte for byte — a Dataset just has no undo/redo
+    // (plans/s2-data-core/s2.5-undo-redo.md §2.1). The property test lives in its own file
+    // (history.property.test.ts), so both test files are named here.
+    removable(
+      'history-is-removable',
+      '^src/data/history\\.ts$',
+      '^src/data/(dataset-state\\.ts|history\\.(test|property\\.test)\\.ts)$',
+    ),
+    // D-S2-23: delete src/data/serialization/** and its two façade lines in api/dataset.ts and the
+    // data core never learns a document format exists. The directory's own files (and its tests)
+    // import each other; the property test [S2-A1] reads `toJSON` for the DatasetState extender run.
+    removable(
+      'serialization-is-removable',
+      '^src/data/serialization/',
+      '^src/(api/dataset\\.ts|data/serialization/.+|data/history\\.property\\.test\\.ts)$',
+    ),
     {
       name: 'no-circular',
       severity: 'error',
