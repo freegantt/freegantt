@@ -89,6 +89,8 @@ dataset.canUndo; dataset.canRedo;
 
 Single mutations outside an explicit transaction are auto-wrapped in one — convenience without a second code path.
 
+`transaction()` returns the body's own return value, not a `ChangeSet` — `dataset.on('change')` is the only channel a committed changeset travels on (§3). A nested `transaction()` call runs its body against the already-open transaction and returns that body's value without committing a second time; only the outermost call commits. A veto (`beforeChange` returning `false`, §3) makes `transaction()` throw `MutationCancelledError` carrying the refused changeset, rather than returning at all.
+
 `autoGroup` is data behavior, so it lives on `Dataset` (not `Gantt`): the promotion runs inside the same transaction as the edit that caused it — one changeset, one undo step. It only promotes; turning a group back into an entry is always an explicit edit (`01` §2.5).
 
 ### Reconfiguration is just assignment
@@ -125,7 +127,7 @@ The reading itself lives in `time/` (`toInstant`, `toEndInstant`) — resolving 
 | `beforeLinkCreate` | `linkCreate` |
 | `beforeSelectionChange` | `selectionChange` |
 | `beforeGridWidthChange` | `gridWidthChange` |
-| — | `change` (every committed `ChangeSet`) |
+| `beforeChange` | `change` (every committed `ChangeSet`) |
 | — | `scheduleDiagnostics` (engine findings) |
 
 `beforeGridWidthChange`/`gridWidthChange` (S1.8) carry `{ from, to }` in px. Fired by both a Splitter drag's commit and a direct `gantt.gridWidth = px` assignment — one commit sequence, one place it lives (`GanttShell`). A veto restores the width the drag started from, so a rejected drag leaves nothing behind.
@@ -140,14 +142,19 @@ gantt.on('beforeEntryEdit', async ({ entry }) => {
   return false;                // suppress built-in
 });
 
+dataset.on('beforeChange', ({ changeSet }) => {
+  if (changeSet.updated.some(u => locked.has(u.id))) return false;   // veto — refuses the whole change
+});
+
 dataset.on('change', ({ changeSet }) => save(changeSet));           // persistence hook (D7)
 ```
 
 Rules:
 
-- Cancelable handlers may return `false` or `Promise<false>`; an async veto suspends the gesture with a visible pending state — it never commits optimistically.
+- Cancelable handlers may return `false` or `Promise<false>`; an async veto suspends the gesture with a visible pending state — it never commits optimistically. **`beforeChange` is the one exception: it is sync-only.** A data commit has nothing to suspend into — the store would have to hold its write set across an `await`, and every mutator would have to turn `async` to make that safe. The async path stays where gestures already are, one layer up in `interaction/`.
 - Pointer/gesture events fire on the `Gantt` (view concern); data events fire on the `Dataset` (data concern). Every event name exists exactly once.
 - Payloads are typed, stable, and carry entities plus context — no "re-read everything" events.
+- `change` is the only path out of a commit: the view's live binding and the undo history are both ordinary subscribers to it, not privileged internals with a second, private channel. `beforeChange` may refuse a changeset but never edit one — rewriting a proposed edit is the extension hook's job, and it has exactly one owner. A vetoed programmatic call (e.g. `entries.update()`) throws `MutationCancelledError` carrying the refused changeset, because a function with a return contract cannot quietly not honour it; a vetoed gesture is silent, the way `beforeGridWidthChange` already is.
 
 ---
 

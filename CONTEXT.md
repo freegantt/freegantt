@@ -65,12 +65,24 @@ _Avoid_: Aggregation (the noun for the pass is Rollup — one concept, one word)
 ### Mutation
 
 **Transaction**:
-The unit of mutation: a batch of proposed edits that runs the extension hook once and commits as one ChangeSet. One transaction per user gesture, at commit — never per intermediate drag frame.
+The unit of mutation: a batch of proposed edits that runs the extension hook once and commits as one ChangeSet. One transaction per user gesture, at commit — never per intermediate drag frame. A nested `transaction()` call joins the already-open one and returns its own body's value without committing a second time; only the outermost call runs the commit sequence. Inside an open transaction, `get`/`has`/`size`/`childrenOf` read through the Write set, so a body can read its own not-yet-committed edits (read-your-own-writes) — `all` stays committed-only, since it is the cached Snapshot.
 _Avoid_: Batch, operation
 
 **ChangeSet**:
-The single, atomic record of everything one transaction changed — added/removed/updated entities across stores, tagged with an `origin` (`'user' | 'engine' | 'undo' | 'redo' | 'load'`). Every mutation produces exactly one ChangeSet, even when the extension hook's installed scheduling plugin triggers cascades.
+The single, atomic record of everything one transaction changed — added/removed/updated entities across stores, tagged with an `origin` (`'user' | 'undo' | 'redo'`; `'engine'`/`'load'` arrive with their producers). Every mutation produces exactly one ChangeSet, even when the extension hook's installed scheduling plugin triggers cascades. Folding is net-effect: a field written more than once inside one transaction appears at most once, `from` its pre-transaction value and `to` its final one; a field set back to its starting value, or an add immediately followed by a remove of the same id, is folded away entirely and never recorded. An empty ChangeSet — nothing left after folding — commits nothing, emits neither `beforeChange` nor `change`, and pushes no history entry. While `beforeChange`/`change` are fanning out, the built ChangeSet is frozen (dev-mode assert) and no mutation may run — `MutationDuringNotificationError` catches a handler that tries.
 _Avoid_: Diff; Transaction (the scope that produces one); Commit (the act that produces one, and S1.8's `gridWidth` sequence, which produces none) — ADR 0006
+
+**Origin**:
+The tag on a ChangeSet naming why the transaction ran (`'user' | 'undo' | 'redo'` in S2; `'engine'`/`'load'` land with the producers that need them). Read by the undo History to decide what it records — a `'user'`-origin commit is undoable, an `'undo'`/`'redo'`-origin one moves the History's cursor instead of pushing a new entry.
+_Avoid_: Source (Field source already owns that word), reason, cause
+
+**Write set**:
+The open Transaction's in-progress `{ before, after }` record per touched field, kept separate from the Store's committed indexes until commit. `get`/`has`/`size`/`childrenOf` read through it (read-your-own-writes); `all` does not. Discarding it — on a thrown body or a `beforeChange` veto — is the whole of rollback; there is no undo-engine involved in an in-flight transaction.
+_Avoid_: Draft (implies a persisted intermediate state this isn't), staging area, buffer
+
+**Veto**:
+A `beforeChange` handler returning `false`, refusing the whole ChangeSet before it commits. Fires after the extension hook and the Rollup, on the ChangeSet that would actually be written, and before the Store write — so a handler judges the real cascade-inclusive change and a refusal is an early return, never an undo of work already applied. Sync-only, unlike gesture vetoes: a data commit has nothing to suspend an `await` into. A vetoed programmatic call (e.g. `entries.update()`) throws `MutationCancelledError` carrying the refused ChangeSet; a vetoed gesture stays silent, the way `beforeGridWidthChange` already behaves.
+_Avoid_: Cancel, reject, block (the codebase's one word for this is Veto — ADR 0006)
 
 **EntryEdits**:
 A batch of proposed field changes, keyed by Entry: `ReadonlyMap<EntryId, EntryEdit>`. The shape a caller writes to `dataset.entries.update()`, a transaction hands to the extension hook as `EditRequest.proposed`, and an extender returns as its own extra writes — one shape for "an edit" wherever one appears, rather than a second type per producer.
