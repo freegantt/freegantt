@@ -20,6 +20,9 @@ import { ensureBaseStyles } from './styles.js';
 import type { RenderBackend } from '../render/backend.js';
 import { EntryNotFoundError, ContainerNotFoundError } from '../model/index.js';
 import type { Dataset, EntryId, Size, TimeSpan } from '../model/index.js';
+import { subscribeToDatasetChanges } from './dataset-change-subscription.js';
+import type { DatasetChangeSubscription } from './dataset-change-subscription.js';
+import { FrameScheduler } from './frame-scheduler.js';
 
 /** S1.10, D-S1.10-4: theming's only preset axis for this step — `'auto'` follows
  * `prefers-color-scheme` (no `data-fg-theme` attribute written), `'light'`/`'dark'` pin it. */
@@ -86,6 +89,10 @@ export class GanttShell {
   #scrollAttachment: ScrollAttachment;
   #paneSizeAttachment: PaneSizeAttachment;
   #splitterAttachment: SplitterAttachment;
+  #datasetChanges: DatasetChangeSubscription;
+  /** The single rAF owner (B10, D-S2-15): every render request past construction goes through
+   *  this, so N mutations in one tick become one frame. */
+  #frames = new FrameScheduler(() => this.render());
   #events = new EventBus<GanttEventMap>();
   #destroyed = false;
   /** This Gantt's layout pass. It keeps the row-height index alive across renders (#47) — the shell
@@ -155,9 +162,17 @@ export class GanttShell {
     this.#viewportHandle = this.#viewport.bind(
       { entries: options.dataset.entries.all, timeZone: options.dataset.timeZone },
       () => {
-        if (!this.#wiring) this.render();
+        if (!this.#wiring) this.#frames.request();
       },
     );
+    // The whole of this shell's dependency on data change (D-S2-20): push the fresh snapshot into
+    // the bound viewport and request a frame — the changeset mechanism's own fan-out, not a second
+    // reactivity path (#33's `setEntries()` warning is against a *public* one; see dataset-change-
+    // subscription.ts).
+    this.#datasetChanges = subscribeToDatasetChanges(options.dataset, () => {
+      this.#viewportHandle.setEntries(options.dataset.entries.all);
+      this.#frames.request();
+    });
     // Synchronous first measurement: a real ResizeObserver's own first callback is queued, not
     // immediate, so the first paint cannot wait for it. attachPaneSize below takes over from here —
     // every measurement after this one, live, for as long as the shell lives (S1.7b, #8).
@@ -173,7 +188,7 @@ export class GanttShell {
       commitGridWidth: (px) => this.#commitGridWidth(px),
     });
     this.#wiring = false;
-    this.render();
+    this.#frames.flush();
 
     if (options.theme !== undefined) this.theme = options.theme;
     else this.#applyTheme();
@@ -318,6 +333,8 @@ export class GanttShell {
 
   destroy(): void {
     if (this.#destroyed) return;
+    this.#frames.cancel();
+    this.#datasetChanges.unsubscribe();
     this.#scrollAttachment.detach();
     this.#paneSizeAttachment.detach();
     this.#splitterAttachment.detach();

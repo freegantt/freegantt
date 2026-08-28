@@ -13,7 +13,7 @@ function fakeDataset(list: readonly Entry[]): GanttShellOptions['dataset'] {
     referenceDate: 0 as Instant,
     derivedSpanKinds: new Set(['group']),
   };
-  return { entries: new EntryStore(list, context), timeZone };
+  return { entries: new EntryStore(list, context), timeZone, on: () => {}, off: () => {} };
 }
 
 // happy-dom does no layout, so a real ResizeObserver never fires — same seam as gantt-shell.test.ts.

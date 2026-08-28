@@ -38,6 +38,9 @@ export interface ViewportHandle {
   setPaneSize(size: Size): void;
   /** Post-render extents from the frame. Fans out to `ScrollBinding.content`. */
   setContentSize(size: Size): void;
+  /** A committed changeset's fresh `entries.all` snapshot (S2.4, D-S2-20). Fans out to
+   *  `ScaleBinding.entries`, which re-resolves `'fitDataset'` through its own equality check. */
+  setEntries(entries: readonly Entry[]): void;
 }
 
 function sameOverscan(a: Overscan, b: Overscan): boolean {
@@ -123,6 +126,9 @@ export class Viewport {
       setContentSize: (size) => {
         this.#contentSize = size;
         this.#notifications.batch(() => scrollHandle.setContentSize(size));
+      },
+      setEntries: (entries) => {
+        this.#notifications.batch(() => scaleHandle.setEntries(entries));
       },
     };
   }

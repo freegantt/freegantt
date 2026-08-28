@@ -16,7 +16,9 @@ function fakeDataset(entries: readonly Entry[]): GanttShellOptions['dataset'] {
     referenceDate: 0 as Instant,
     derivedSpanKinds: new Set(['group']),
   };
-  return { entries: new EntryStore(entries, context), timeZone };
+  // No changes ever land on this store, so on/off are stubs — none of these tests mutate the
+  // dataset, so no handler this file registers is ever called.
+  return { entries: new EntryStore(entries, context), timeZone, on: () => {}, off: () => {} };
 }
 
 // happy-dom does no layout, so a real ResizeObserver never fires (verified against pane-size-
@@ -124,7 +126,9 @@ describe('GanttShell header band', () => {
       scale,
     });
 
-    // A never called render() itself after B bound — the notify from B's bind is what pushed this.
+    // A never called render() itself after B bound — the notify from B's bind is what requested
+    // this frame (D-S2-15); render() forces it now instead of waiting on the next animation frame.
+    shellA.render();
     expect(containerA.querySelectorAll('.fg-header .fg-tick').length).toBeGreaterThan(initialTickCount);
 
     shellA.destroy();
@@ -228,6 +232,7 @@ describe('scroll (D9, #9)', () => {
 
       const shell = new GanttShell({ container, dataset: fakeDataset(tallEntries(50)), scroll });
       FakeResizeObserver.instances[0]!.fire({ width: 500, height: 320 }); // 10 rows @ 32px
+      shell.render(); // D-S2-15: the resize's render request is coalesced onto the next frame
 
       const labelsAt = (): string[] =>
         Array.from(container.querySelectorAll('.fg-row'), (row) => row.textContent ?? '');
@@ -236,6 +241,7 @@ describe('scroll (D9, #9)', () => {
       expect(labelsAt()).not.toContain('Entry 40');
 
       scroll.panTo({ y: 40 * 32 }); // scroll 40 rows down
+      shell.render();
 
       expect(labelsAt()).not.toContain('Entry 0');
       expect(labelsAt()).toContain('Entry 40');
@@ -359,6 +365,7 @@ describe('pane split pixel identity (S1.8, D-S1.8-1)', () => {
       const container = document.createElement('div');
       const shell = new GanttShell({ container, dataset: fakeDataset(entries), scale, gridWidth: 300 });
       FakeResizeObserver.instances[0]!.fire({ width: 653, height: 400 });
+      shell.render(); // D-S2-15: the resize's render request is coalesced onto the next frame
 
       const sizer = container.querySelector<HTMLElement>('.fg-timeline-pane [aria-hidden="true"]')!;
       const match = /translate\(([-\d.]+)px,/.exec(sizer.style.transform);
