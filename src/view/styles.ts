@@ -58,16 +58,16 @@ ${LIGHT_COLOR_TOKENS}
 .fg-container {
 ${LIGHT_COLOR_TOKENS}
 }
+@media (prefers-color-scheme: dark) {
+  .fg-container:not([data-fg-theme]) {
+${DARK_COLOR_TOKENS}
+  }
+}
 .fg-container[data-fg-theme='light'] {
 ${LIGHT_COLOR_TOKENS}
 }
 .fg-container[data-fg-theme='dark'] {
 ${DARK_COLOR_TOKENS}
-}
-@media (prefers-color-scheme: dark) {
-  .fg-container:not([data-fg-theme]) {
-${DARK_COLOR_TOKENS}
-  }
 }
 
 .fg-container { display: flex; overflow: hidden; }

@@ -99,4 +99,14 @@ describe('ensureBaseStyles', () => {
     expect(getComputedStyle(bar as Element).backgroundColor).toBe('rgb(1, 2, 3)');
     shell.destroy();
   });
+
+  it('dark theme paints bar labels in warm ink so they read on the light blue fill', () => {
+    clearStyles();
+    const container = makeContainer();
+    const shell = new GanttShell({ container, dataset: { entries, timeZone }, theme: 'dark' });
+    const bar = container.querySelector('.fg-bar');
+    expect(bar).not.toBeNull();
+    expect(getComputedStyle(bar as Element).color).toBe('#1A1815');
+    shell.destroy();
+  });
 });
