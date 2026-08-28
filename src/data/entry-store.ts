@@ -1,14 +1,29 @@
-// data/ — EntryStore, the view half plus the S2.2 transaction overlay (D-S2-2, D-S2-21). `all` stays
+// data/ — EntryStore, the view half plus the S2.2 transaction overlay (D-S2-2, D-S2-21), and (S2.3
+// §1.1) the public mutators `dataset.entries.add/update/remove` delegate straight to. `all` stays
 // committed-only by design (D-S2-3's cached-identity rule); `get`/`has`/`size`/`childrenOf` read through
 // an open write set first, so a read-then-write helper inside a transaction body sees its own edits.
 // The staging/apply methods below are gated by a `TxToken` only `data/transaction.ts` can mint — a
-// mutation outside a transaction does not typecheck (docs/02 §3.6).
+// mutation outside a transaction does not typecheck (docs/02 §3.6). `add`/`update`/`remove` never
+// mint one themselves; they run their body through `runTransaction`, which auto-wraps when none is
+// open and joins one already open (D-S2-8) — the same entry point `DatasetState.transaction()` uses.
 
-import type { ChangeSet, Entry, EntryId, EntryStoreView } from '../model/index.js';
-import { entryId } from '../model/index.js';
+import type { Entry, EntryId, EntryInput, EntryEdit } from '../model/index.js';
+import {
+  entryId,
+  DuplicateEntryIdError,
+  EntryNotFoundError,
+  ParentCycleError,
+  UnknownFieldError,
+} from '../model/index.js';
+import type { EntryStore as EntryStoreContract } from '../model/index.js';
 import { computed, signal } from './reactivity.js';
+import { CORE_FIELD_KEYS } from './change-set.js';
 import type { EntryEdits, StoredEdit } from './edit-extension.js';
-import type { TxToken } from './transaction.js';
+import type { ChangeSet } from '../model/index.js';
+import { readEdit, readEntry } from './entry-reader.js';
+import type { EntryReadContext } from './entry-reader.js';
+import { runTransaction } from './transaction.js';
+import type { TransactionData, TxToken } from './transaction.js';
 
 interface WriteSet {
   added: Map<EntryId, Entry>;
@@ -16,15 +31,22 @@ interface WriteSet {
   edits: Map<EntryId, StoredEdit>;
 }
 
-export class EntryStore implements EntryStoreView {
+export class EntryStore implements EntryStoreContract {
   #byId: Map<EntryId, Entry>;
   /** One write per commit; every derived value below invalidates from it (D-S2-4). */
   #revision = signal(0);
   #all: () => readonly Entry[];
   #byParent: () => ReadonlyMap<EntryId | undefined, readonly Entry[]>;
   #writeSet: WriteSet | null = null;
+  #context: EntryReadContext;
+  /** Bound once, right after construction, by whoever owns this store's transactions
+   *  (`DatasetState`, `data/dataset-state.ts`) — `EntryStore` and its runner construct in a fixed
+   *  order, so the reference cannot pass through the constructor without a cycle. `add`/`update`/
+   *  `remove` are the only callers. */
+  #runner: TransactionData | undefined;
 
-  constructor(entries: readonly Entry[]) {
+  constructor(entries: readonly Entry[], context: EntryReadContext) {
+    this.#context = context;
     this.#byId = new Map(entries.map((entry) => [entry.id, entry]));
     // D-S2-3: rebuilt on commit, not on every read — one array identity per revision, so
     // `ScaleBinding`'s reference comparison and `BoundValue`'s equality half (D-S1.5-4) hold.
@@ -90,6 +112,84 @@ export class EntryStore implements EntryStoreView {
   /** The committed snapshot a transaction diffs against — never the write set (D-S2-6, D-S2-7). */
   snapshot(): ReadonlyMap<EntryId, Entry> {
     return this.#byId;
+  }
+
+  /** Wires this store to the transaction runner `add`/`update`/`remove` auto-wrap into (S2.3 §1.2).
+   *  Called once, by `data/dataset-state.ts`, right after both it and this store exist. */
+  bindTransactions(runner: TransactionData): void {
+    this.#runner = runner;
+  }
+
+  // ---- Public mutators (S2.3 §1.1): validate against the write set, then stage; each auto-wraps in
+  // a transaction via `runTransaction`, which joins one already open (D-S2-8) ----
+
+  add(input: EntryInput): Entry {
+    return this.#mutate((token) => {
+      const id = entryId(input.id);
+      if (this.has(id)) throw new DuplicateEntryIdError(id);
+      if (input.parentId !== undefined) {
+        this.#assertParentValid(id, entryId(input.parentId), 'entries.add');
+      }
+      const entry = readEntry(input, this.#context);
+      this.stageAdd(token, entry);
+      return this.get(id)!;
+    });
+  }
+
+  update(id: EntryId | string, edit: EntryEdit): Entry {
+    return this.#mutate((token) => {
+      const key = entryId(id);
+      if (!this.has(key)) throw new EntryNotFoundError(key, 'entries.update');
+      for (const field of Object.keys(edit)) {
+        if (!CORE_FIELD_KEYS.has(field)) throw new UnknownFieldError(field);
+      }
+      if (edit.parentId !== undefined) {
+        this.#assertParentValid(key, entryId(edit.parentId), 'entries.update');
+      }
+      this.stageUpdate(token, key, readEdit(edit, this.#context));
+      return this.get(key)!;
+    });
+  }
+
+  remove(id: EntryId | string): void {
+    this.#mutate((token) => {
+      const key = entryId(id);
+      if (!this.has(key)) throw new EntryNotFoundError(key, 'entries.remove');
+      for (const descendantId of this.#subtreeOf(key)) this.stageRemove(token, descendantId);
+      this.stageRemove(token, key);
+    });
+  }
+
+  #mutate<T>(body: (token: TxToken) => T): T {
+    if (!this.#runner) {
+      throw new Error(
+        'EntryStore: not bound to a transaction runner — data/dataset-state.ts always binds one',
+      );
+    }
+    return runTransaction(this.#runner, body, 'user');
+  }
+
+  /** `id`'s current descendants, deepest included — read before any removal in this call is staged,
+   *  so a self-referential write set never confuses the walk (S2.3 §1.4). */
+  #subtreeOf(id: EntryId): readonly EntryId[] {
+    const result: EntryId[] = [];
+    for (const child of this.childrenOf(id)) {
+      result.push(child.id);
+      result.push(...this.#subtreeOf(child.id));
+    }
+    return result;
+  }
+
+  /** `parentId` must name a known entry and must not make `id` its own ancestor, self-parenting
+   *  included (S2.3 §1.3). Read through the write set, so a reparent earlier in the same transaction
+   *  is seen. */
+  #assertParentValid(id: EntryId, parentId: EntryId, operation: string): void {
+    if (!this.has(parentId)) throw new EntryNotFoundError(parentId, operation);
+    let current: EntryId | undefined = parentId;
+    while (current !== undefined) {
+      if (current === id) throw new ParentCycleError(id);
+      current = this.get(current)?.parentId;
+    }
   }
 
   // ---- TxToken-gated: only data/transaction.ts holds a token (docs/02 §3.6) ----

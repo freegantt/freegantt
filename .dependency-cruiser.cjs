@@ -29,6 +29,19 @@ function forbid(name, from, allowedTargets) {
   };
 }
 
+// A "leaf" module (D-S2-23): exactly one file may import it, so deleting it is provably a
+// degradation, not a break — dependency-cruiser is what proves the claim, not just the prose that
+// makes it. Red-test fixtures for these land with the rest of the removable-leaf set in S2.7.
+function removable(name, modulePath, allowedImporterPath) {
+  return {
+    name,
+    severity: 'error',
+    comment: `D-S2-23: ${modulePath} is a leaf — only ${allowedImporterPath} may import it.`,
+    from: { path: '^src/', pathNot: allowedImporterPath },
+    to: { path: modulePath },
+  };
+}
+
 module.exports = {
   forbidden: [
     forbid('model-is-leaf', 'model', []),
@@ -48,6 +61,10 @@ module.exports = {
     // model and time are the type/primitive surface api/ re-exports (plans/01 §1: "api/ and model/
     // types are public", widened to time/'s public primitives and presets by #25).
     forbid('api-boundary', 'api', ['view', 'data', 'model', 'time']),
+    // D-S2-23: the first of the four removable-leaf rules. Only data/transaction.ts's own step-5
+    // call site may import the span rollup — delete src/data/span-rollup.ts and groups keep their
+    // authored span, the same result `derivedSpanKinds: []` already gives a consumer.
+    removable('span-rollup-is-removable', '^src/data/span-rollup\\.ts$', '^src/data/transaction\\.ts$'),
     {
       name: 'no-circular',
       severity: 'error',

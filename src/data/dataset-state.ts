@@ -7,23 +7,28 @@ import type {
   DateOnlyEndRule,
   Dataset,
   DatasetEventMap,
-  Entry,
   EntryInput,
+  EntryKind,
   Instant,
 } from '../model/index.js';
 import { changeSetId } from '../model/index.js';
 import { now } from '../time/index.js';
 import { EntryStore } from './entry-store.js';
 import { readEntries } from './entry-reader.js';
+import type { EntryReadContext } from './entry-reader.js';
 import type { EditExtender } from './edit-extension.js';
 import { identityExtender } from './edit-extension.js';
 import { EventBus } from './event-bus.js';
-import { noRollUp, runTransaction } from './transaction.js';
+import { runTransaction } from './transaction.js';
 
 export interface DatasetStateOptions {
   entries: readonly EntryInput[];
   timeZone: string;
   dateOnlyEnd?: DateOnlyEndRule;
+  /** Kinds whose span the rollup derives from their children's spans, min start/max end, every
+   *  commit (`01` §2.5/§2.6). Defaults to `['group']`. `derivedSpanKinds: []` opts every kind out —
+   *  the supported way to ask for hand-set spans everywhere (S2.3 §1.5). */
+  derivedSpanKinds?: readonly EntryKind[];
   /** The extension hook a transaction calls once per commit (D-S2-6). Internal only — `data/` is
    *  unreachable through the package's `exports` map, so a plugin-facing install API is S3's own job
    *  (#15), not this option. Defaults to `identityExtender`: an unoccupied hook is the identity
@@ -50,8 +55,11 @@ export class DatasetState implements Dataset {
   /** Set while `beforeChange`/`change` handlers are fanning out (D-S2-9, D-S2-25). Read and written
    *  only by `runTransaction`. */
   notifying = false;
-  /** Rolls up derived spans on every commit (D-S2-22). `noRollUp` until S2.3 lands the real one. */
-  rollUp = noRollUp;
+  /** Kinds whose span the rollup derives from their children (`01` §2.5). Set once, at construction —
+   *  live-reconfiguring which kinds derive is not part of S2. Read by `data/transaction.ts`'s commit
+   *  step, the only file allowed to import the rollup itself (`span-rollup-is-removable`, D-S2-23) —
+   *  this class hands over the *kinds*, never the function. */
+  readonly derivedSpanKinds: ReadonlySet<EntryKind>;
   /** Per-instance — never a module-level counter (I2). */
   #changeSetCounter = 0;
 
@@ -60,11 +68,21 @@ export class DatasetState implements Dataset {
     this.dateOnlyEnd = options.dateOnlyEnd ?? 'inclusive';
     this.referenceDate = now();
     this.editExtender = options.editExtender ?? identityExtender;
-    const entries: readonly Entry[] = readEntries(options.entries, {
+    this.derivedSpanKinds = new Set(options.derivedSpanKinds ?? ['group']);
+    const context: EntryReadContext = {
       timeZone: this.timeZone,
       dateOnlyEnd: this.dateOnlyEnd,
-    });
-    this.entries = new EntryStore(entries);
+      referenceDate: this.referenceDate,
+      derivedSpanKinds: this.derivedSpanKinds,
+    };
+    // NOTE (left for the next step to close, see handoff): construction does not run the rollup, so
+    // a deriving-kind entry given children only via the initial `entries: EntryInput[]` array (not a
+    // later transaction) keeps its reference-date span until the first transaction that touches one
+    // of those children. `01` §2.6 / README.md D-S2-22 describe rollup running at construction and
+    // on `fromJSON` too — closing that gap needs a way to run the same rollup step 5 uses without a
+    // second importer of `span-rollup.ts` (S2.6's job, or an S2.3 follow-up).
+    this.entries = new EntryStore(readEntries(options.entries, context), context);
+    this.entries.bindTransactions(this);
   }
 
   nextChangeSetId(): ChangeSetId {

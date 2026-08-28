@@ -49,12 +49,40 @@ export class UnknownPresetError extends FreeGanttError {
   }
 }
 
-/** `code: 'entry-not-found'` — `reveal(entryId)` given an id the bound Dataset has no entry for
- * (S1.9, D-S1.9-6). */
+/** `code: 'entry-not-found'` — an id the Dataset has no entry for, from `reveal(entryId)` (S1.9,
+ * D-S1.9-6) or a mutator (`entries.update`/`remove`, or a `parentId` naming a missing entry — S2.3
+ * §1.3). `operation` names the call that failed, so the message points at what the caller asked for
+ * rather than a generic "not found". */
 export class EntryNotFoundError extends FreeGanttError {
-  constructor(entryId: EntryId) {
-    super('entry-not-found', `reveal: no entry with id "${entryId}"`);
+  constructor(entryId: EntryId, operation: string) {
+    super('entry-not-found', `${operation}: no entry with id "${entryId}"`);
     this.name = 'EntryNotFoundError';
+  }
+}
+
+/** `code: 'duplicate-entry-id'` — `entries.add()` given an id already in the store (S2.3 §1.3). */
+export class DuplicateEntryIdError extends FreeGanttError {
+  constructor(entryId: EntryId) {
+    super('duplicate-entry-id', `entries.add: an entry with id "${entryId}" already exists`);
+    this.name = 'DuplicateEntryIdError';
+  }
+}
+
+/** `code: 'parent-cycle'` — a `parentId` edit that would make an entry its own ancestor, self-parenting
+ * included (S2.3 §1.3). */
+export class ParentCycleError extends FreeGanttError {
+  constructor(entryId: EntryId) {
+    super('parent-cycle', `entries: setting "${entryId}"'s parentId would create a cycle`);
+    this.name = 'ParentCycleError';
+  }
+}
+
+/** `code: 'unknown-field'` — an edit naming a key that is not a declared field. In S2 the legal set is
+ * the core `Entry` fields; S5's field registry widens the set, not the check (D-S2-26, S2.3 §1.3). */
+export class UnknownFieldError extends FreeGanttError {
+  constructor(field: string) {
+    super('unknown-field', `entries: "${field}" is not a known field`);
+    this.name = 'UnknownFieldError';
   }
 }
 

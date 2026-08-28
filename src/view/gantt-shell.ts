@@ -265,7 +265,7 @@ export class GanttShell {
   reveal(entryId: EntryId): void {
     const entries = this.#options.dataset.entries.all;
     const index = entries.findIndex((e) => e.id === entryId);
-    if (index === -1) throw new EntryNotFoundError(entryId);
+    if (index === -1) throw new EntryNotFoundError(entryId, 'reveal');
     const entry = entries[index]!;
     const { x, width } = barSpan(entry, this.#viewport.timeScale);
     this.#viewport.reveal({ x, y: this.#layout.rowTop(index), width, height: this.#rowHeight });
