@@ -120,3 +120,49 @@ describe('new Dataset()', () => {
     expect(first(dataset)).not.toBe(input);
   });
 });
+
+describe('Dataset transaction/on/off delegation', () => {
+  it('transaction() returns the body value; an empty body emits no change', () => {
+    const dataset = new Dataset({ timeZone: 'UTC', entries: [oneEntry()] });
+    let fired = false;
+    dataset.on('change', () => {
+      fired = true;
+    });
+
+    const result = dataset.transaction(() => 'ok');
+
+    expect(result).toBe('ok');
+    expect(fired).toBe(false);
+  });
+
+  it('entries.childrenOf returns direct children; derivedSpanKinds defaults to group', () => {
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      entries: [{ id: 'p1', name: 'Sitework', kind: 'group' }, oneEntry({ id: 't1', parentId: 'p1' })],
+    });
+    expect(dataset.derivedSpanKinds).toEqual(['group']);
+    expect(dataset.entries.childrenOf('p1').map((e) => e.id)).toEqual([entryId('t1')]);
+  });
+
+  it('off() stops a handler from seeing further events', () => {
+    const dataset = new Dataset({ timeZone: 'UTC', entries: [oneEntry()] });
+    let calls = 0;
+    const handler = (): void => {
+      calls += 1;
+    };
+    dataset.on('beforeChange', handler);
+    dataset.off('beforeChange', handler);
+    dataset.transaction(() => undefined);
+    expect(calls).toBe(0);
+  });
+
+  it('toJSON / fromJSON round-trips byte-stable on the façade (D-S2-12)', () => {
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      entries: [oneEntry({ start: '2026-09-01T00:00:00.000Z', end: '2026-09-11T00:00:00.000Z' })],
+    });
+    const doc = dataset.toJSON();
+    const round = Dataset.fromJSON(doc).toJSON();
+    expect(JSON.stringify(round)).toBe(JSON.stringify(doc));
+  });
+});

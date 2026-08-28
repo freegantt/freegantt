@@ -625,14 +625,14 @@ or *installed*. This decision says wired in, and makes the separation **a CI fac
 
 | Leaf | Only importer | A build without it |
 |---|---|---|
-| `data/history.ts` | `data/dataset-data.ts` (constructs it) | no undo/redo; every other line of the commit path unchanged (D-S2-24) |
+| `data/history.ts` | `data/dataset-state.ts` (constructs it) | no undo/redo; every other line of the commit path unchanged (D-S2-24) |
 | `data/serialization/**` | `api/dataset.ts` (`toJSON`/`fromJSON`) | no document format; `data/` never learns one exists |
 | `data/span-rollup.ts` | `data/transaction.ts` (the commit step) | groups keep their authored span — the same result as `derivedSpanKinds: []`, which is the supported way to ask for it |
 | `view/dataset-change-subscription.ts` | `view/gantt-shell.ts` | the Gantt renders once and never updates — the static image (D-S2-20) |
 
 ```js
 // .dependency-cruiser.cjs — one rule per leaf, beside the layer rules
-removable('history', 'src/data/history.ts', ['src/data/dataset-data.ts']),
+removable('history', 'src/data/history.ts', ['src/data/dataset-state.ts']),
 removable('serialization', 'src/data/serialization/.+', ['src/api/dataset.ts']),
 removable('span-rollup', 'src/data/span-rollup.ts', ['src/data/transaction.ts']),
 removable('dataset-change-subscription', 'src/view/dataset-change-subscription.ts', ['src/view/gantt-shell.ts']),

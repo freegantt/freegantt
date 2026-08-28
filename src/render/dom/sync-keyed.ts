@@ -33,6 +33,7 @@ export function syncKeyed<TItem, TKey, TGeom extends Record<string, unknown>>(
   spec: SyncKeyedSpec<TItem, TKey, TGeom>,
 ): void {
   const seen = new Set<TKey>();
+  let previousNode: HTMLElement | null = null;
   items.forEach((item, index) => {
     const key = spec.key(item, index);
     seen.add(key);
@@ -40,8 +41,15 @@ export function syncKeyed<TItem, TKey, TGeom extends Record<string, unknown>>(
     if (!node) {
       node = spec.create(item, key);
       nodes.set(key, node);
-      layer.append(node);
     }
+    // Keyed geometry (transform/top) places a node correctly on screen even out of DOM order, but
+    // DOM order still drives tab order, screen readers and `:nth-child` striping — so a node an undo
+    // brings back (or any other reorder) must land at its item's DOM position, not just get appended
+    // (#undo-restores-append-only).
+    const expectedNext = previousNode ? previousNode.nextSibling : layer.firstChild;
+    if (node !== expectedNext) layer.insertBefore(node, expectedNext);
+    previousNode = node;
+
     const geom = spec.toGeom(item);
     const prev = geoms.get(key);
     if (!prev || !shallowEqual(prev, geom)) {
