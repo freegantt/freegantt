@@ -572,7 +572,7 @@ describe('[S2-A3] one changeset, one layout pass, one frame (D-S2-15/16)', () =>
     const scale = new TimeScaleModel({ range: { start: rangeStart, end: rangeEnd } });
     const shell = new GanttShell({ container, dataset, scale });
 
-    const layout = computeFrameSpy.mock.instances[0] as FrameLayout;
+    const layout = computeFrameSpy.mock.instances[0] as unknown as FrameLayout;
     const revisionBefore = layout.heightIndexRevision;
     let changeCalls = 0;
     dataset.on('change', () => {
