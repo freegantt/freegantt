@@ -2,19 +2,15 @@
 // commit path: `data/transaction.ts` imports nothing from this file, and `history-is-removable`
 // (`.dependency-cruiser.cjs`, D-S2-23) allows exactly one importer, `data/dataset-state.ts`, which
 // constructs it. Delete this file and its one construction line and the commit path is unchanged, byte
-// for byte. Everything here goes through `on('change')`/`transaction()` and `commitChangeSet` — the same
-// surface a consumer would have to write this file themselves (D-S2-24).
+// for byte. Recording goes through `on('change')` alone, and `undo`/`redo` replay through
+// `replayChangeSet` (`replay.ts`) — the same primitive `Dataset.replay` publishes — so this file is
+// fully reproducible from the public surface (`plans/s2-data-core/s2b-undo-replay-seam.md`). It imports
+// nothing from `transaction.ts` directly.
 
-import type {
-  ChangeSet,
-  ChangeSetId,
-  DatasetEventMap,
-  EntityAdded,
-  EntityRemoved,
-  FieldUpdated,
-} from '../model/index.js';
-import { commitChangeSet } from './transaction.js';
-import type { TransactionData } from './transaction.js';
+import type { ChangeSet, DatasetEventMap } from '../model/index.js';
+import { invertChangeSet } from './change-set.js';
+import { replayChangeSet } from './replay.js';
+import type { TransactionData } from './replay.js';
 
 export interface HistoryOptions {
   /** How many undoable transactions the stack keeps. Oldest drops first once full (D-S2-13). */
@@ -22,13 +18,6 @@ export interface HistoryOptions {
 }
 
 const DEFAULT_CAPACITY = 100;
-
-function invert(id: ChangeSetId, changeSet: ChangeSet): ChangeSet {
-  const added: EntityAdded[] = changeSet.removed.map(({ store, entity }) => ({ store, entity }));
-  const removed: EntityRemoved[] = changeSet.added.map(({ store, entity }) => ({ store, entity }));
-  const updated: FieldUpdated[] = changeSet.updated.map((row) => ({ ...row, from: row.to, to: row.from }));
-  return { id, origin: 'undo', added, removed, updated };
-}
 
 /** Undo and redo over a Dataset's committed changesets (§2 of the step file). A stack plus a cursor:
  *  everything below the cursor is undoable, everything at or above it (up to the stack's own top) is
@@ -45,12 +34,6 @@ export class History {
     data.bus.on('change', this.#onChange);
   }
 
-  /** Stops recording. `data/dataset-state.ts` never calls this today — a `Dataset` has no `dispose()`
-   *  yet — but it exists so a future one, or a test, can unwind the subscription cleanly. */
-  dispose(): void {
-    this.#data.bus.off('change', this.#onChange);
-  }
-
   get canUndo(): boolean {
     return this.#cursor > 0;
   }
@@ -61,14 +44,14 @@ export class History {
 
   /** Applies the changeset at the cursor inverted (`to`→`from`, `added`↔`removed`) with
    *  `origin: 'undo'`. A no-op when `canUndo` is `false`. Neither re-runs the extension hook nor the
-   *  span rollup — `commitChangeSet` writes exactly the inverted rows and nothing else (§2.2). A
+   *  span rollup — `replayChangeSet` writes exactly the inverted rows and nothing else (§2.2). A
    *  refused undo (a `beforeChange` handler returning `false`) throws `MutationCancelledError` and
    *  leaves the stack exactly where it was — the cursor moves on the `change` that commit emits
    *  (D-S2-25), so a veto never reaches `#onChange`. */
   undo(): void {
     if (!this.canUndo) return;
     const changeSet = this.#stack[this.#cursor - 1]!;
-    commitChangeSet(this.#data, invert(this.#data.nextChangeSetId(), changeSet));
+    replayChangeSet(this.#data, invertChangeSet(changeSet));
   }
 
   /** Re-applies the changeset just above the cursor exactly as recorded, with `origin: 'redo'`. A
@@ -76,7 +59,7 @@ export class History {
   redo(): void {
     if (!this.canRedo) return;
     const changeSet = this.#stack[this.#cursor]!;
-    commitChangeSet(this.#data, { ...changeSet, id: this.#data.nextChangeSetId(), origin: 'redo' });
+    replayChangeSet(this.#data, { ...changeSet, origin: 'redo' });
   }
 
   /** The whole coupling to the rest of `data/`. `'user'` records a new stack entry. `'undo'`/`'redo'`

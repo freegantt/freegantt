@@ -110,6 +110,16 @@ export class MutationCancelledError extends FreeGanttError {
   }
 }
 
+/** `code: 'invalid-replay-origin'` — `replay(changeSet)` given a changeset whose `origin` is not
+ * `'undo'` or `'redo'`. `'user'` is `apply`'s door (D-S2-11), not open yet
+ * (`plans/s2-data-core/s2b-undo-replay-seam.md`). */
+export class InvalidReplayOriginError extends FreeGanttError {
+  constructor(origin: string) {
+    super('invalid-replay-origin', `replay: origin "${origin}" is not "undo" or "redo"`);
+    this.name = 'InvalidReplayOriginError';
+  }
+}
+
 /** `code: 'unsupported-schema'` — `fromJSON` given a `schema` this build has no reader for
  *  (D-S2-12, `plans/s2-data-core/s2.6-serialization.md` §1.3). Names the version it found and the
  *  versions it reads, so a caller can tell a future document from a corrupt one. */

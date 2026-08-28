@@ -57,7 +57,7 @@ export class EntryStore implements EntryStoreContract {
    *  the wrong insertion order). A `'user'` add is always a fresh object, so it never collides here. */
   #removedAtIndex = new Map<Entry, number>();
   #context: EntryReadContext;
-  /** Bound once, right after construction, by whoever owns this store's transactions
+  /** Set once, right after construction, by whoever owns this store's transactions
    *  (`DatasetState`, `data/dataset-state.ts`) — `EntryStore` and its runner construct in a fixed
    *  order, so the reference cannot pass through the constructor without a cycle. `add`/`update`/
    *  `remove` are the only callers. */
@@ -147,14 +147,15 @@ export class EntryStore implements EntryStoreContract {
     return result;
   }
 
-  /** The committed snapshot a transaction diffs against — never the write set (D-S2-6, D-S2-7). */
-  snapshot(): ReadonlyMap<EntryId, Entry> {
+  /** The committed by-id map a transaction diffs against — never the write set (D-S2-6, D-S2-7).
+   *  Distinct from Snapshot (`entries.all`), which is the cached array. */
+  committedById(): ReadonlyMap<EntryId, Entry> {
     return this.#byId;
   }
 
-  /** Wires this store to the transaction runner `add`/`update`/`remove` auto-wrap into (S2.3 §1.2).
-   *  Called once, by `data/dataset-state.ts`, right after both it and this store exist. */
-  bindTransactions(runner: TransactionData): void {
+  /** Sets the transaction runner `add`/`update`/`remove` auto-wrap into (S2.3 §1.2). Called once,
+   *  by `data/dataset-state.ts`, right after both it and this store exist. */
+  setTransactionRunner(runner: TransactionData): void {
     this.#runner = runner;
   }
 
@@ -303,10 +304,15 @@ export class EntryStore implements EntryStoreContract {
    *  the same id later is a new object and never reads this back — it just appends. */
   #rememberRemovedIndexes(changeSet: ChangeSet): void {
     if (changeSet.removed.length === 0) return;
-    const order = Array.from(this.#byId.keys());
+    const indexById = new Map<EntryId, number>();
+    let index = 0;
+    for (const id of this.#byId.keys()) {
+      indexById.set(id, index);
+      index += 1;
+    }
     for (const { entity } of changeSet.removed) {
-      const index = order.indexOf(entity.id);
-      if (index !== -1) this.#removedAtIndex.set(entity, index);
+      const removedAt = indexById.get(entity.id);
+      if (removedAt !== undefined) this.#removedAtIndex.set(entity, removedAt);
     }
   }
 

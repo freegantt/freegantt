@@ -1,36 +1,47 @@
-# Simplify — S2.5 / S2.6
+# Simplify — S2 branch (`main...HEAD`)
 
-**Scope:** `git diff d7f7a34...HEAD` (plus targeted follow-up edits in this session). Uncommitted `src/render/dom/sync-keyed.ts` was left alone.
-
-Three read-only reviewers (quality, performance, reuse) ran in parallel. Fixes below are the ones that reduce complexity without a larger redesign.
+Three read-only reviewers (quality, performance, reuse) ran in parallel. Fixes below reduce complexity or reuse existing patterns without a larger redesign.
 
 ## Fixed
 
-1. **History cursor on `change` (D-S2-25).** `undo()`/`redo()` no longer move the cursor then catch. `#onChange` records `'user'` and steps the cursor on `'undo'`/`'redo'`. History is the first subscriber, so harness `canUndo`/`canRedo` readers still see the post-move flags. A veto throws and never emits `change`. New test: undo’s own `change` handler reads `canUndo === false`.
+1. **Public names a caller can type.** `api/index.ts` now re-exports `CoreFieldKey`, `changeSetId`, `TimeUnit`, and `now`. README §3 already listed `CoreFieldKey` and `changeSetId`. `Duration.unit` and `FieldKey` needed those names. The Add-entry button used `instant(Date.now())`; it now calls `now()`. Call sites: `new Dataset({ … })`, `changeSetId(1)`, `now()`, `addMs(start, MS.DAY)`.
 
-2. **Public History options stay on `DatasetOptions`.** `api/dataset.ts` no longer imports `HistoryOptions` from `data/`. Consumers write `new Dataset({ …, history: { capacity: 200 } })` — the call S2.5 §1 already published.
+2. **`snapshot()` renamed to `committedById()`.** CONTEXT.md Snapshot is `entries.all`. The method returns the committed by-id Map the commit path diffs against. `data.entries.committedById()` reads true. Locals in `transaction.ts` are `byId`.
 
-3. **`runTransaction` closes the body write set before `commitChangeSet`.** The shared tail used to call `beginTransaction` on an already-open overlay and wipe it. The body now ends with `undefined` (store still committed-only), then replay opens its own transaction.
+3. **`bindTransactions` renamed to `setTransactionRunner`.** Binding is `layout/viewport/`'s word. `this.entries.setTransactionRunner(this)` reads "set the transaction runner on the entries".
 
-4. **Insertion-order restore is one rebuild, not one Map rebuild per restored Entry.** Field-only commits skip the id-index copy. `'user'` adds append and drop tombstones. Undo/redo adds splice once, then one `Map`.
+4. **`History.dispose()` removed.** Nothing called it. A Dataset still has no `dispose()`.
 
-5. **Stale `notifying` comment** on `DatasetState` now names `commitChangeSet` as a writer.
+5. **`invertChangeSet` lives next to `foldChangeSet`.** Undo invert is changeset algebra, not History policy. History calls `invertChangeSet(id, changeSet)`.
+
+6. **Dead type re-exports dropped** from `data/change-set.ts` (nothing imported them from that file).
+
+7. **Removal-index lookup is one Map**, not `indexOf` per removed id.
+
+8. **API report updated** (`etc/freegantt.api.md`) for the new exports.
 
 ## Skipped (recommend)
 
 | Finding | Why skipped |
 |---|---|
-| `History.dispose()` unused | Needs a Dataset dispose path. Comment already says so. |
 | Extract `isDevMode` | Two copies in `data/`. A shared helper needs a home both files may import; `view/` is illegal. Small. |
 | `readers` map of size one | Spec wants a map addition for schema 2. |
-| `writeSegments` one-off | Inlining saves little. |
-| `Dataset`/`DatasetState` undo passthrough | Layer façade. |
-| Ring buffer instead of `stack.shift()` | Cap is 100. |
-| Named replay on the Dataset interface so a consumer History does not import `commitChangeSet` | Architecture candidate 1 — not a local cleanup. |
-| `[S2-A1]` through `Dataset.toJSON` only | Architecture candidate 4. |
-| Carry restore index on the ChangeSet row | Architecture candidate 3. |
-| Generic `Dataset<TMeta>` | Touches the whole façade. |
+| Drop public `EntryStoreView` / `StoreName` | README §3 and D-S2-2 publish them. |
+| Drop `batch` from the reactivity façade | The test documents the third primitive. |
+| Collapse `setTransactionRunner` / constructor cycle | Needs a construction-order redesign. |
+| Fold `TxToken` into the lint rule alone | Larger; the token is the type-level gate. |
+| `fromJSON<TMeta>` / generic `Dataset` | Touches the whole façade. |
+| Span rollup walks the whole snapshot each commit | Larger; walk from the changeset. |
+| Skip `setEntries` unless start/end/segments moved | Changes fitDataset invalidation; needs its own test. |
+| Rebuild `#byParent` only on structural change | Same class as D-S2-16, different index. |
+| One Entry copy per id in `endTransaction` | Local, low payoff next to the rollup cost. |
+| `#restoreAdded` without per-row splice | Correctness of multi-index restore is the splice order. |
+| `#subtreeOf` worklist | Deep remove is not the hot path. |
+| Harness `MutationCancelledError` helper | Five copies teach the public catch; hide that and the example is worse. |
+| Named public replay so a consumer History skips `commitChangeSet` | Architecture, not a local cleanup. |
+| Delete `OPEN-QUESTIONS.md` | OQ8 is still open (S3). |
+| Tick s2.7 TODO boxes / DatasetData leftovers in plans | Docs ledger, not this cleanup. |
 
 ## Checks
 
-`vitest run` on history (example + property), serialization, `api/dataset`, entry-store, transaction: **91 tests passed**. `pnpm verify` was not run (full gate).
+`vitest run` on change-set, history (example + property), transaction, entry-store, `api/dataset`, instant: **100 tests passed**. `tsc --noEmit` green. ESLint on touched files green. Lib build + `api-extractor run --local` updated the report. `pnpm verify` was not run (full gate).

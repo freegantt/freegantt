@@ -5,6 +5,7 @@ export type {
   ChangeSetId,
   ChangeOrigin,
   StoreName,
+  CoreFieldKey,
   FieldKey,
   EntityAdded,
   EntityRemoved,
@@ -12,6 +13,11 @@ export type {
   EntryEdit,
   DatasetEventMap,
 } from '../model/index.js';
+// The consumer-History write path (`plans/s2-data-core/s2b-undo-replay-seam.md`): `invertChangeSet`
+// turns a recorded changeset into its undo; `Dataset.replay` writes it back. `data/change-set.js` is a
+// submodule of the `data` layer, not the `data` layer boundary itself — `api/` importing it directly
+// matches `api/dataset.ts`'s own import of `data/serialization/index.js`.
+export { invertChangeSet } from '../data/change-set.js';
 export { Gantt } from './gantt.js';
 export type { GanttOptions } from './gantt.js';
 export type { Theme } from '../view/index.js';
@@ -39,17 +45,19 @@ export {
   UnknownFieldError,
   MutationDuringNotificationError,
   MutationCancelledError,
+  InvalidReplayOriginError,
   UnsupportedSchemaError,
 } from '../model/index.js';
 
 // model/ types the public surface re-exports. A consumer building entries or catching errors names these.
-export { entryId, itemId } from '../model/index.js';
+export { entryId, itemId, changeSetId } from '../model/index.js';
 export type {
   Entry,
   EntryKind,
   EntryId,
   ItemId,
   Instant,
+  TimeUnit,
   TimeSpan,
   Duration,
   EntryStoreView,
@@ -63,11 +71,10 @@ export type { DatasetDocument, EntryDocument } from '../model/index.js';
 // `new ScrollModel({ x, y })` or reading `ScrollState` needs the shape in the public surface too.
 export type { Point, Size } from '../model/index.js';
 
-// Time helpers a caller needs: `instant` for a pinned `TimeSpan`, `addMs`/`MS` to shift one by a
-// duration (S2.7 harness-review finding — `harness/data.ts`'s move-by-a-day buttons had no public way
-// to do this and were hand-rolling `entry.start + 86400000`, exactly the Instant-arithmetic-outside-
-// time/ and magic-time-constant shapes CLAUDE.md bans in src/; both already existed in `time/`, just
-// not on the public surface), `presets`/`ViewPreset` for a custom axis. Named preset constants and
-// `resolvePreset` stay internal — resolving a `PresetRef` is core's job.
-export { presets, instant, addMs, MS, formatDate, formatEndInclusive } from '../time/index.js';
+// Time helpers a caller needs: `instant` for a pinned `TimeSpan`, `now` for "this Instant",
+// `addMs`/`MS` to shift one by a duration (S2.7 harness-review — `harness/data.ts`'s move-by-a-day
+// buttons had no public way to do this and were hand-rolling `entry.start + 86400000`; the Add-entry
+// button then used `instant(Date.now())` the same way). Named preset constants and `resolvePreset`
+// stay internal — resolving a `PresetRef` is core's job.
+export { presets, instant, now, addMs, MS, formatDate, formatEndInclusive } from '../time/index.js';
 export type { ViewPreset } from '../time/index.js';

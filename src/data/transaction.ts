@@ -29,7 +29,7 @@ export type TxToken = { readonly __brand: 'TxToken' };
  *  *body* (via its own `TxToken`) to call directly on `EntryStore`, never for `runTransaction` to call
  *  through this seam, so they are not named here. */
 export interface TransactionalEntryStore {
-  snapshot(): ReadonlyMap<EntryId, Entry>;
+  committedById(): ReadonlyMap<EntryId, Entry>;
   beginTransaction(token: TxToken): void;
   pendingAdded(): readonly { store: 'entries'; entity: Entry }[];
   pendingRemoved(): readonly { store: 'entries'; entity: Entry }[];
@@ -76,8 +76,8 @@ export interface TransactionData {
  * both in this file, which keeps `span-rollup-is-removable` (D-S2-23) honest.
  */
 export function applyConstructionRollUp(data: TransactionData): void {
-  const snapshot = data.entries.snapshot();
-  const updated = rollUpDerivedSpans(snapshot, new Map(), data.derivedSpanKinds);
+  const byId = data.entries.committedById();
+  const updated = rollUpDerivedSpans(byId, new Map(), data.derivedSpanKinds);
   if (updated.length === 0) return;
 
   const token: TxToken = {} as TxToken;
@@ -188,15 +188,15 @@ export function runTransaction<T>(
   data.openTransactions -= 1;
   if (!outermost) return result; // nested: joins the outer transaction, commits nothing itself (D-S2-8)
 
-  const snapshot = data.entries.snapshot();
+  const byId = data.entries.committedById();
   const proposed = data.entries.pendingEdits();
   const addedEntities = data.entries.pendingAdded();
   const removedEntities = data.entries.pendingRemoved();
 
   const bodyUpdated: FieldUpdated[] = [];
-  for (const [id, edit] of proposed) bodyUpdated.push(...diffEdit(snapshot, id, edit));
+  for (const [id, edit] of proposed) bodyUpdated.push(...diffEdit(byId, id, edit));
 
-  const extenderEdits = data.editExtender({ entries: snapshot, proposed });
+  const extenderEdits = data.editExtender({ entries: byId, proposed });
   const extenderUpdated: FieldUpdated[] = [];
   for (const [id, edit] of extenderEdits) {
     const bodyEdit = proposed.get(id);
@@ -210,14 +210,10 @@ export function runTransaction<T>(
         }
       }
     }
-    extenderUpdated.push(...diffEdit(snapshot, id, edit));
+    extenderUpdated.push(...diffEdit(byId, id, edit));
   }
 
-  const rollupUpdated = rollUpDerivedSpans(
-    snapshot,
-    mergeEdits(proposed, extenderEdits),
-    data.derivedSpanKinds,
-  );
+  const rollupUpdated = rollUpDerivedSpans(byId, mergeEdits(proposed, extenderEdits), data.derivedSpanKinds);
 
   const changeSet = foldChangeSet(data.nextChangeSetId(), origin, addedEntities, removedEntities, [
     ...bodyUpdated,
