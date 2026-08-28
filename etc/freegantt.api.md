@@ -5,6 +5,9 @@
 ```ts
 
 // @public (undocumented)
+export function addMs(i: Instant, ms: number): Instant;
+
+// @public (undocumented)
 export type ChangeOrigin = 'user' | 'undo' | 'redo';
 
 // @public (undocumented)
@@ -338,6 +341,14 @@ export type ItemId = string & {
 
 // @public
 export function itemId(entry: EntryId, segmentIndex?: number): ItemId;
+
+// @public (undocumented)
+export const MS: {
+    readonly SECOND: 1000;
+    readonly MINUTE: number;
+    readonly HOUR: number;
+    readonly DAY: number;
+};
 
 // @public
 export class MutationCancelledError extends FreeGanttError {

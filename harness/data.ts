@@ -12,11 +12,9 @@
 // Import replaces the dataset and rebuilds the Gantt, which is the proof that a Gantt survives a
 // rebind (or the finding against destroy() if it does not).
 
-import { Dataset, Gantt, MutationCancelledError } from '../src/api/index.js';
+import { Dataset, Gantt, MS, MutationCancelledError, addMs, instant } from '../src/api/index.js';
 import type { ChangeSet, DatasetDocument, DatasetEventMap, Entry } from '../src/api/index.js';
 import { sampleEntryInputs } from '../fixtures/sample-dataset.js';
-
-const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
 let dataset = new Dataset({ entries: sampleEntryInputs.slice(0, 8), timeZone: 'UTC' });
 let gantt = new Gantt({ container: '#gantt', dataset });
@@ -112,8 +110,8 @@ bindDataset();
 
 addBtn.addEventListener('click', () => {
   const id = `new-${nextNewId++}`;
-  const start = Date.now();
-  dataset.entries.add({ id, name: 'New entry', start, end: start + ONE_DAY_MS });
+  const start = instant(Date.now());
+  dataset.entries.add({ id, name: 'New entry', start, end: addMs(start, MS.DAY) });
 });
 
 renameBtn.addEventListener('click', () => {
@@ -130,14 +128,14 @@ function move(deltaMs: number): void {
   const entry = selectedEntry();
   if (!entry) return;
   try {
-    dataset.entries.update(entry.id, { start: entry.start + deltaMs, end: entry.end + deltaMs });
+    dataset.entries.update(entry.id, { start: addMs(entry.start, deltaMs), end: addMs(entry.end, deltaMs) });
   } catch (error) {
     if (!(error instanceof MutationCancelledError)) throw error;
   }
 }
 
-moveBackBtn.addEventListener('click', () => move(-ONE_DAY_MS));
-moveFwdBtn.addEventListener('click', () => move(ONE_DAY_MS));
+moveBackBtn.addEventListener('click', () => move(-MS.DAY));
+moveFwdBtn.addEventListener('click', () => move(MS.DAY));
 
 removeBtn.addEventListener('click', () => {
   const entry = selectedEntry();
