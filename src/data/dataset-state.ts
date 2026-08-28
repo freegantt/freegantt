@@ -2,12 +2,16 @@
 // is a thin façade that constructs one of these and delegates `entries`/`timeZone`/`dateOnlyEnd` to it —
 // the same structural/façade relationship `GanttShell` already has with `Gantt`.
 
-import type { DateOnlyEndRule, Dataset, Entry, EntryInput, Instant } from '../model/index.js';
+import type { ChangeSetId, DateOnlyEndRule, Dataset, Entry, EntryInput, Instant } from '../model/index.js';
+import { changeSetId } from '../model/index.js';
 import { now } from '../time/index.js';
 import { EntryStore } from './entry-store.js';
 import { readEntries } from './entry-reader.js';
 import type { EditExtender } from './edit-extension.js';
 import { identityExtender } from './edit-extension.js';
+import { EventBus } from './event-bus.js';
+import type { DatasetEventMap } from './transaction.js';
+import { runTransaction } from './transaction.js';
 
 export interface DatasetStateOptions {
   entries: readonly EntryInput[];
@@ -30,6 +34,17 @@ export class DatasetState implements Dataset {
    *  real one. */
   readonly referenceDate: Instant;
   readonly editExtender: EditExtender;
+  /** `runTransaction`'s notification channel (D-S2-5, D-S2-24). Internal only, same reasoning as
+   *  `editExtender` above — `data/` is unreachable through the package's `exports` map; `on`/`off`
+   *  below are the public surface. */
+  readonly bus = new EventBus<DatasetEventMap>();
+  /** 0 = no transaction open. Read and written only by `runTransaction` (D-S2-8's nesting rule). */
+  openTransactions = 0;
+  /** Set while `beforeChange`/`change` handlers are fanning out (D-S2-9, D-S2-25). Read and written
+   *  only by `runTransaction`. */
+  notifying = false;
+  /** Per-instance — never a module-level counter (I2). */
+  #changeSetCounter = 0;
 
   constructor(options: DatasetStateOptions) {
     this.timeZone = options.timeZone;
@@ -41,5 +56,27 @@ export class DatasetState implements Dataset {
       dateOnlyEnd: this.dateOnlyEnd,
     });
     this.entries = new EntryStore(entries);
+  }
+
+  nextChangeSetId(): ChangeSetId {
+    this.#changeSetCounter += 1;
+    return changeSetId(this.#changeSetCounter);
+  }
+
+  /** Batches `body`'s mutations into one `ChangeSet` (D-S2-8). `'user'` is the only origin a public
+   *  caller can produce in S2 — `interaction/` gets an option once it has a gesture to tag (S4). */
+  transaction<T>(body: () => T): T {
+    return runTransaction(this, body, 'user');
+  }
+
+  on<K extends keyof DatasetEventMap>(name: K, handler: (payload: DatasetEventMap[K]) => void | false): void {
+    this.bus.on(name, handler);
+  }
+
+  off<K extends keyof DatasetEventMap>(
+    name: K,
+    handler: (payload: DatasetEventMap[K]) => void | false,
+  ): void {
+    this.bus.off(name, handler);
   }
 }

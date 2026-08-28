@@ -12,6 +12,7 @@ import type {
   EntryStoreView,
 } from '../model/index.js';
 import { DatasetState } from '../data/index.js';
+import type { DatasetEventMap } from '../data/index.js';
 
 export interface DatasetOptions {
   /** What the consumer writes. Ids are plain strings and dates are any `InstantInput` — an ISO string,
@@ -50,5 +51,22 @@ export class Dataset implements DatasetContract {
    * this constructor read these (mutation lands in S2.3, plans/03). */
   get dateOnlyEnd(): DateOnlyEndRule {
     return this.#state.dateOnlyEnd;
+  }
+
+  /** Batches `body`'s mutations into one changeset (D-S2-8). `'user'` is the only origin a public
+   *  caller can produce in S2 — `interaction/` gets an option once it has a gesture to tag (S4). */
+  transaction<T>(body: () => T): T {
+    return this.#state.transaction(body);
+  }
+
+  on<K extends keyof DatasetEventMap>(name: K, handler: (payload: DatasetEventMap[K]) => void | false): void {
+    this.#state.on(name, handler);
+  }
+
+  off<K extends keyof DatasetEventMap>(
+    name: K,
+    handler: (payload: DatasetEventMap[K]) => void | false,
+  ): void {
+    this.#state.off(name, handler);
   }
 }
