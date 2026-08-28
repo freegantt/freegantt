@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { diffEdit, fieldsEqual, foldChangeSet } from './change-set.js';
 import { changeSetId, entryId } from '../model/index.js';
-import type { Entry, EntryEdit, EntryId, Instant } from '../model/index.js';
+import type { Entry, EntryId, Instant } from '../model/index.js';
+import type { StoredEdit } from './edit-extension.js';
 
 function span(start: number, end: number): { start: Instant; end: Instant } {
   return { start: start as Instant, end: end as Instant };
@@ -51,7 +52,7 @@ describe('diffEdit', () => {
 
   it('produces a FieldUpdated row per changed field', () => {
     const t1 = entry('t1');
-    const edit: EntryEdit = { name: 'Framing', progress: 0.5 };
+    const edit: StoredEdit = { name: 'Framing', progress: 0.5 };
     const rows = diffEdit(entries(t1), t1.id, edit);
     expect(rows).toEqual([
       { store: 'entries', id: t1.id, field: 'name', from: 't1', to: 'Framing' },

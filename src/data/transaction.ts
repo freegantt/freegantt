@@ -6,8 +6,8 @@ import type {
   ChangeOrigin,
   ChangeSet,
   ChangeSetId,
+  DatasetEventMap,
   Entry,
-  EntryEdit,
   EntryId,
   FieldUpdated,
 } from '../model/index.js';
@@ -21,23 +21,14 @@ import type { EventBus } from './event-bus.js';
  *  Deliberately carries no data: its only job is to gate at the type level who may call a mutator. */
 export type TxToken = { readonly __brand: 'TxToken' };
 
-/** `beforeChange`/`change` share one payload (D-S2-5, D-S2-25): a `false` return from a `beforeChange`
- *  handler vetoes the whole changeset; `change` handler return values are ignored. */
-export interface DatasetEventMap {
-  beforeChange: { changeSet: ChangeSet };
-  change: { changeSet: ChangeSet };
-}
-
-/** What a `TxToken`-gated `EntryStore` exposes to `runTransaction` — deliberately not the concrete
- *  `EntryStore` type: `data/dataset-state.ts` imports `runTransaction`/`DatasetEventMap` from this file,
- *  so importing `EntryStore`'s home (`entry-store.ts`) back would only risk a cycle for no gain, since
- *  this is all `runTransaction` ever calls on it. */
+/** What `runTransaction` itself reads off a `TxToken`-gated `EntryStore` — deliberately not the concrete
+ *  `EntryStore` type (same cycle-avoidance reason as `TransactionData` below), and deliberately narrower
+ *  than `EntryStore`'s own surface: `stageAdd`/`stageUpdate`/`stageRemove` exist for the transaction
+ *  *body* (via its own `TxToken`) to call directly on `EntryStore`, never for `runTransaction` to call
+ *  through this seam, so they are not named here. */
 export interface TransactionalEntryStore {
   snapshot(): ReadonlyMap<EntryId, Entry>;
   beginTransaction(token: TxToken): void;
-  stageAdd(token: TxToken, entry: Entry): void;
-  stageUpdate(token: TxToken, id: EntryId, edit: EntryEdit): void;
-  stageRemove(token: TxToken, id: EntryId): void;
   pendingAdded(): readonly { store: 'entries'; entity: Entry }[];
   pendingRemoved(): readonly { store: 'entries'; entity: Entry }[];
   pendingEdits(): EntryEdits;
@@ -60,10 +51,15 @@ export interface TransactionData {
    *  sync token. */
   nextChangeSetId(): ChangeSetId;
   readonly bus: EventBus<DatasetEventMap>;
-  /** Core, not an extender occupant (D-S2-22): rolls up derived spans on every commit. `undefined`
-   *  until S2.3 lands it — a no-op call site keeps this function's shape the same from day one. */
-  rollUp?: (entries: ReadonlyMap<EntryId, Entry>, proposed: EntryEdits) => readonly FieldUpdated[];
+  /** Core, not an extender occupant (D-S2-22): rolls up derived spans on every commit. Always called —
+   *  `noRollUp` until S2.3 lands the real one — so the sequence is one shape from the first step to the
+   *  last, not a step that is sometimes skipped. */
+  rollUp: (entries: ReadonlyMap<EntryId, Entry>, proposed: EntryEdits) => readonly FieldUpdated[];
 }
+
+/** The no-op `rollUp` every `TransactionData` gets until S2.3 lands span derivation (D-S2-22): an
+ *  always-invoked step that yields nothing, not a conditionally-skipped one. */
+export const noRollUp = (): readonly FieldUpdated[] => [];
 
 function mergeEdits(base: EntryEdits, extra: EntryEdits): EntryEdits {
   if (extra.size === 0) return base;
@@ -71,6 +67,8 @@ function mergeEdits(base: EntryEdits, extra: EntryEdits): EntryEdits {
   for (const [id, edit] of extra) merged.set(id, { ...merged.get(id), ...edit });
   return merged;
 }
+
+const isDevMode = (): boolean => (import.meta as { env?: { DEV?: boolean } }).env?.DEV ?? false;
 
 /**
  * The commit path (`plans/s2-data-core/s2.2-transactions-and-changesets.md` §2.3): run the body, call
@@ -121,7 +119,7 @@ export function runTransaction<T>(
   const extenderUpdated: FieldUpdated[] = [];
   for (const [id, edit] of extenderEdits) {
     const bodyEdit = proposed.get(id);
-    if (bodyEdit) {
+    if (bodyEdit && isDevMode()) {
       for (const field of Object.keys(edit)) {
         if (field in bodyEdit) {
           throw new Error(
@@ -134,7 +132,7 @@ export function runTransaction<T>(
     extenderUpdated.push(...diffEdit(snapshot, id, edit));
   }
 
-  const rollupUpdated = data.rollUp ? data.rollUp(snapshot, mergeEdits(proposed, extenderEdits)) : [];
+  const rollupUpdated = data.rollUp(snapshot, mergeEdits(proposed, extenderEdits));
 
   const changeSet = foldChangeSet(data.nextChangeSetId(), origin, addedEntities, removedEntities, [
     ...bodyUpdated,
@@ -147,10 +145,20 @@ export function runTransaction<T>(
     return result;
   }
 
+  if (isDevMode()) {
+    Object.freeze(changeSet.added);
+    Object.freeze(changeSet.removed);
+    Object.freeze(changeSet.updated);
+    Object.freeze(changeSet);
+  }
+
   data.notifying = true;
   let allowed: boolean;
   try {
     allowed = data.bus.emit('beforeChange', { changeSet });
+  } catch (error) {
+    data.entries.endTransaction(token, undefined);
+    throw error;
   } finally {
     data.notifying = false;
   }

@@ -7,12 +7,12 @@
 
 import type {
   Dataset as DatasetContract,
+  DatasetEventMap,
   DateOnlyEndRule,
   EntryInput,
   EntryStoreView,
 } from '../model/index.js';
 import { DatasetState } from '../data/index.js';
-import type { DatasetEventMap } from '../data/index.js';
 
 export interface DatasetOptions {
   /** What the consumer writes. Ids are plain strings and dates are any `InstantInput` — an ISO string,
