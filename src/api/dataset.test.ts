@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { Dataset } from './dataset.js';
-import { entryId, instant } from './index.js';
-import type { Entry, EntryInput } from './index.js';
+import { changeSetId, entryId, instant, invertChangeSet, InvalidReplayOriginError } from './index.js';
+import type { ChangeSet, Entry, EntryInput } from './index.js';
 
 const utc = (iso: string): number => Date.parse(iso);
 
@@ -164,5 +164,73 @@ describe('Dataset transaction/on/off delegation', () => {
     const doc = dataset.toJSON();
     const round = Dataset.fromJSON(doc).toJSON();
     expect(JSON.stringify(round)).toBe(JSON.stringify(doc));
+  });
+});
+
+/** A consumer History, written against `Dataset`'s public surface only — no `data/` import
+ *  (`plans/s2-data-core/s2b-undo-replay-seam.md`). Exactly the shape the seam doc's decision names. */
+class ConsumerHistory {
+  #stack: ChangeSet[] = [];
+
+  constructor(dataset: Dataset) {
+    dataset.on('change', ({ changeSet }) => {
+      if (changeSet.origin === 'user') this.#stack.push(changeSet);
+    });
+  }
+
+  undo(dataset: Dataset): void {
+    const changeSet = this.#stack.pop();
+    if (changeSet) dataset.replay(invertChangeSet(changeSet));
+  }
+}
+
+describe('Dataset.replay / invertChangeSet (consumer-surface undo)', () => {
+  it('a consumer History built on on/replay/invertChangeSet undoes a rollup cascade, restoring both rows', () => {
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      entries: [
+        { id: 'parent', name: 'Sitework', kind: 'group' },
+        oneEntry({ id: 'child', parentId: 'parent' }),
+      ],
+    });
+    const parentBefore = dataset.entries.get('parent')!;
+    const childBefore = dataset.entries.get('child')!;
+    const history = new ConsumerHistory(dataset);
+
+    dataset.entries.update('child', { end: '2026-10-01' });
+    expect(dataset.entries.get('parent')?.end).not.toEqual(parentBefore.end);
+
+    history.undo(dataset);
+
+    expect(dataset.entries.get('child')?.end).toEqual(childBefore.end);
+    expect(dataset.entries.get('parent')?.start).toEqual(parentBefore.start);
+    expect(dataset.entries.get('parent')?.end).toEqual(parentBefore.end);
+  });
+
+  it("replay refuses origin 'user' with InvalidReplayOriginError and never calls an injected extender", () => {
+    const dataset = new Dataset({ timeZone: 'UTC', entries: [oneEntry()] });
+    const changeSet: ChangeSet = {
+      id: changeSetId(1),
+      origin: 'user',
+      added: [],
+      removed: [],
+      updated: [{ store: 'entries', id: first(dataset).id, field: 'name', from: 'Design', to: 'Blocked' }],
+    };
+
+    expect(() => dataset.replay(changeSet)).toThrow(InvalidReplayOriginError);
+    expect(first(dataset).name).toBe('Design');
+  });
+
+  it('replay with an empty changeset is a no-op: no event, no throw', () => {
+    const dataset = new Dataset({ timeZone: 'UTC', entries: [oneEntry()] });
+    let fired = false;
+    dataset.on('change', () => {
+      fired = true;
+    });
+
+    expect(() =>
+      dataset.replay({ id: changeSetId(1), origin: 'undo', added: [], removed: [], updated: [] }),
+    ).not.toThrow();
+    expect(fired).toBe(false);
   });
 });

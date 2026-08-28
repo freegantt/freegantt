@@ -3,6 +3,7 @@
 // the same structural/façade relationship `GanttShell` already has with `Gantt`.
 
 import type {
+  ChangeSet,
   ChangeSetId,
   DateOnlyEndRule,
   Dataset,
@@ -20,6 +21,7 @@ import type { EditExtender } from './edit-extension.js';
 import { identityExtender } from './edit-extension.js';
 import { EventBus } from './event-bus.js';
 import { applyConstructionRollUp, runTransaction } from './transaction.js';
+import { replayChangeSet } from './replay.js';
 import { History } from './history.js';
 import type { HistoryOptions } from './history.js';
 
@@ -85,7 +87,7 @@ export class DatasetState implements Dataset {
       derivedSpanKinds: this.derivedSpanKinds,
     };
     this.entries = new EntryStore(readEntries(options.entries, context), context);
-    this.entries.bindTransactions(this);
+    this.entries.setTransactionRunner(this);
     // `01` §2.6 / README.md D-S2-22: a deriving-kind entry given children only through the initial
     // array gets a real span before anyone reads it, not just after the first later transaction
     // touches one of those children. `fromJSON` gets this for free, being construction like any other.
@@ -132,5 +134,11 @@ export class DatasetState implements Dataset {
 
   redo(): void {
     this.#history.redo();
+  }
+
+  /** The write path `data/history.ts` uses, published (`plans/s2-data-core/s2b-undo-replay-seam.md`).
+   *  Only `'undo'`/`'redo'` origins are legal; `'user'` throws `InvalidReplayOriginError`. */
+  replay(changeSet: ChangeSet): void {
+    replayChangeSet(this, changeSet);
   }
 }

@@ -16,17 +16,6 @@ import type {
 } from '../model/index.js';
 import type { StoredEdit } from './edit-extension.js';
 
-export type {
-  StoreName,
-  ChangeOrigin,
-  CoreFieldKey,
-  FieldKey,
-  EntityAdded,
-  EntityRemoved,
-  FieldUpdated,
-  ChangeSet,
-} from '../model/index.js';
-
 type FieldComparator = (from: unknown, to: unknown) => boolean;
 
 const byReference: FieldComparator = (from, to) => from === to;
@@ -121,4 +110,18 @@ export function foldChangeSet(
   if (foldedAdded.length === 0 && foldedRemoved.length === 0 && foldedUpdated.length === 0) return undefined;
 
   return { id, origin, added: foldedAdded, removed: foldedRemoved, updated: foldedUpdated };
+}
+
+/** Undo's recorded changeset, inverted: `added`↔`removed`, each `updated` row's `from`/`to` swapped,
+ *  `origin: 'undo'`. Redo does not invert — it re-applies the recorded rows with `origin: 'redo'`. The
+ *  `id` carried over is a placeholder only — `replay` mints a fresh one and ignores this one
+ *  (`plans/s2-data-core/s2b-undo-replay-seam.md`). */
+export function invertChangeSet(changeSet: ChangeSet): ChangeSet {
+  return {
+    id: changeSet.id,
+    origin: 'undo',
+    added: changeSet.removed.map(({ store, entity }) => ({ store, entity })),
+    removed: changeSet.added.map(({ store, entity }) => ({ store, entity })),
+    updated: changeSet.updated.map((row) => ({ ...row, from: row.to, to: row.from })),
+  };
 }

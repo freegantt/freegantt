@@ -206,6 +206,9 @@ dataset.undo(); // origin: 'undo' on the change event it emits
 dataset.redo(); // origin: 'redo'
 dataset.canUndo; // false once the stack (default capacity 100) is exhausted
 dataset.canRedo;
+
+// The write path undo()/redo() are built on, published for a consumer's own History:
+dataset.replay(invertChangeSet(recordedChangeSet)); // origin must be 'undo' or 'redo'
 ```
 
 `Dataset` is a headless, DOM-free wrapper around an entry list. It reads each `EntryInput` into an
@@ -214,8 +217,10 @@ auto-wraps in a transaction (D-S2-8); `dataset.transaction(() => { ... })` batch
 changeset. A `Gantt` bound to the dataset subscribes to `change` itself — editing after mount renders
 on the next frame with no extra call. `beforeChange` can veto a changeset (returning `false` throws
 `MutationCancelledError` from the mutator that triggered it); `undo()`/`redo()` revert or replay a
-committed changeset exactly, cascades included, without re-running the extension hook. Dependencies
-land in a later slice — see `plans/03-slices.md`.
+committed changeset exactly, cascades included, without re-running the extension hook. `replay` and
+`invertChangeSet` are that same write path, published — a consumer can write their own History against
+`on('change')`, `invertChangeSet`, and `replay` alone, with no internal import. Dependencies land in a
+later slice — see `plans/03-slices.md`.
 
 ### `TimeScaleModel` (S1)
 
