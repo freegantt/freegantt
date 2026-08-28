@@ -116,7 +116,7 @@ describe('ensureBaseStyles', () => {
   it('dark theme paints bar labels in warm ink so they read on the light blue fill', () => {
     clearStyles();
     const container = makeContainer();
-    const shell = new GanttShell({ container, dataset: { entries, timeZone }, theme: 'dark' });
+    const shell = new GanttShell({ container, dataset: fakeDataset(entries), theme: 'dark' });
     const bar = container.querySelector('.fg-bar');
     expect(bar).not.toBeNull();
     expect(getComputedStyle(bar as Element).color).toBe('#1A1815');

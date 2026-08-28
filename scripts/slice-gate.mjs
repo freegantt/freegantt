@@ -110,6 +110,25 @@ const GATES = {
     ],
     human: [],
   },
+  'S1.12': {
+    name: 'S1.12 → S3',
+    checks: [
+      tagged('S1-A6', ['e2e'], 'multi-year fixture at the day preset scrolls at the density floor'),
+      tagged('S1-A7', ['vitest'], 'zoomIn/zoomOut step one preset, keep the anchor, no-op at the ends'),
+      tagged(
+        'S1-A8',
+        ['vitest', 'e2e'],
+        'three-band preset renders three full-height bands; grid spacer matches to the pixel',
+      ),
+      tagged('S1-A9', ['e2e'], 'header stays pinned while rows scroll under it'),
+      tagged(
+        'S1-A10',
+        ['vitest', 'e2e'],
+        'panToToday reveals the today line; locale re-labels with no remount',
+      ),
+    ],
+    human: [],
+  },
 };
 
 // Guarded so `test/guards/slice-gate.test.ts` can import `tagged`/`idExistsInSource` without this
