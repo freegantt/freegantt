@@ -20,11 +20,19 @@ import type { EditExtender } from './edit-extension.js';
 import { identityExtender } from './edit-extension.js';
 import { EventBus } from './event-bus.js';
 import { applyConstructionRollUp, runTransaction } from './transaction.js';
+import { History } from './history.js';
+import type { HistoryOptions } from './history.js';
+
+export type { HistoryOptions };
 
 export interface DatasetStateOptions {
   entries: readonly EntryInput[];
   timeZone: string;
   dateOnlyEnd?: DateOnlyEndRule;
+  /** Undo/redo capacity (`plans/s2-data-core/s2.5-undo-redo.md` §1). Defaults to a 100-entry history —
+   *  `history: { capacity: 0 }` is not a supported way to disable it; construct without `data/history.ts`
+   *  for that (D-S2-23), which S2 has no consumer-facing option for yet. */
+  history?: HistoryOptions;
   /** Kinds whose span the rollup derives from their children's spans, min start/max end, every
    *  commit (`01` §2.5/§2.6). Defaults to `['group']`. `derivedSpanKinds: []` opts every kind out —
    *  the supported way to ask for hand-set spans everywhere (S2.3 §1.5). */
@@ -62,6 +70,7 @@ export class DatasetState implements Dataset {
   readonly derivedSpanKinds: ReadonlySet<EntryKind>;
   /** Per-instance — never a module-level counter (I2). */
   #changeSetCounter = 0;
+  readonly #history: History;
 
   constructor(options: DatasetStateOptions) {
     this.timeZone = options.timeZone;
@@ -81,6 +90,10 @@ export class DatasetState implements Dataset {
     // array gets a real span before anyone reads it, not just after the first later transaction
     // touches one of those children. `fromJSON` gets this for free, being construction like any other.
     applyConstructionRollUp(this);
+    // Subscribes to `change` right here, before the constructor returns and so before any consumer
+    // handler exists (`s2.5-undo-redo.md` §2.1) — `canUndo` reads true inside the very `change` a
+    // later-registered handler first sees.
+    this.#history = new History(this, options.history);
   }
 
   nextChangeSetId(): ChangeSetId {
@@ -103,5 +116,21 @@ export class DatasetState implements Dataset {
     handler: (payload: DatasetEventMap[K]) => void | false,
   ): void {
     this.bus.off(name, handler);
+  }
+
+  get canUndo(): boolean {
+    return this.#history.canUndo;
+  }
+
+  get canRedo(): boolean {
+    return this.#history.canRedo;
+  }
+
+  undo(): void {
+    this.#history.undo();
+  }
+
+  redo(): void {
+    this.#history.redo();
   }
 }

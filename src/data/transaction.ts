@@ -101,6 +101,57 @@ function mergeEdits(base: EntryEdits, extra: EntryEdits): EntryEdits {
 const isDevMode = (): boolean => (import.meta as { env?: { DEV?: boolean } }).env?.DEV ?? false;
 
 /**
+ * Applies an already-complete `ChangeSet` straight to the store and fans it out through
+ * `beforeChange`/`change` (D-S2-9, D-S2-25) — the notify-and-apply tail every commit shares, with no
+ * diffing, no extension hook, and no rollup: the caller hands over the exact rows to write. `runTransaction`
+ * uses this once it has built a changeset from a body; `data/history.ts` uses it directly for undo/redo,
+ * which is what "neither re-runs the extension hook" (`s2.5-undo-redo.md` §2.2) means in code — replaying
+ * or inverting a recorded `ChangeSet` never goes near `data.editExtender` or `rollUpDerivedSpans`.
+ */
+export function commitChangeSet(data: TransactionData, changeSet: ChangeSet): void {
+  if (data.notifying) {
+    throw new MutationDuringNotificationError(
+      'commitChangeSet: cannot commit while beforeChange/change handlers are running',
+    );
+  }
+
+  const token: TxToken = {} as TxToken;
+  data.entries.beginTransaction(token);
+
+  if (isDevMode()) {
+    Object.freeze(changeSet.added);
+    Object.freeze(changeSet.removed);
+    Object.freeze(changeSet.updated);
+    Object.freeze(changeSet);
+  }
+
+  data.notifying = true;
+  let allowed: boolean;
+  try {
+    allowed = data.bus.emit('beforeChange', { changeSet });
+  } catch (error) {
+    data.entries.endTransaction(token, undefined);
+    throw error;
+  } finally {
+    data.notifying = false;
+  }
+
+  if (!allowed) {
+    data.entries.endTransaction(token, undefined);
+    throw new MutationCancelledError(changeSet);
+  }
+
+  data.entries.endTransaction(token, changeSet);
+
+  data.notifying = true;
+  try {
+    data.bus.emit('change', { changeSet });
+  } finally {
+    data.notifying = false;
+  }
+}
+
+/**
  * The commit path (`plans/s2-data-core/s2.2-transactions-and-changesets.md` §2.3): run the body, call
  * the extension hook once, roll up derived spans, fold everything into one `ChangeSet`, and — unless it
  * is empty or a `beforeChange` handler refuses it — apply it and emit `change`.
@@ -179,37 +230,6 @@ export function runTransaction<T>(
     return result;
   }
 
-  if (isDevMode()) {
-    Object.freeze(changeSet.added);
-    Object.freeze(changeSet.removed);
-    Object.freeze(changeSet.updated);
-    Object.freeze(changeSet);
-  }
-
-  data.notifying = true;
-  let allowed: boolean;
-  try {
-    allowed = data.bus.emit('beforeChange', { changeSet });
-  } catch (error) {
-    data.entries.endTransaction(token, undefined);
-    throw error;
-  } finally {
-    data.notifying = false;
-  }
-
-  if (!allowed) {
-    data.entries.endTransaction(token, undefined);
-    throw new MutationCancelledError(changeSet);
-  }
-
-  data.entries.endTransaction(token, changeSet);
-
-  data.notifying = true;
-  try {
-    data.bus.emit('change', { changeSet });
-  } finally {
-    data.notifying = false;
-  }
-
+  commitChangeSet(data, changeSet);
   return result;
 }

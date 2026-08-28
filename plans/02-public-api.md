@@ -27,6 +27,7 @@ const dataset = new Dataset<{ team: string }>({
   timeZone: 'America/Chicago',            // explicit; 'local' is opt-in
   dateOnlyEnd: 'inclusive',               // default; see §2.1
   derivedSpanKinds: ['group'],            // default; a kind here may omit start/end — see §2.1
+  history: { capacity: 100 },             // default; undo/redo stack depth — see "Undo and redo" below
   hierarchy: { autoGroup: true },         // first child promotes parent to kind 'group'; promote only
   entries: [
     { id: 'p1', name: 'Sitework', kind: 'group' },     // span derives from children (default policy)
@@ -97,6 +98,10 @@ Single mutations outside an explicit transaction are auto-wrapped in one — con
 `transaction()` returns the body's own return value, not a `ChangeSet` — `dataset.on('change')` is the only channel a committed changeset travels on (§3). A nested `transaction()` call runs its body against the already-open transaction and returns that body's value without committing a second time; only the outermost call commits. A veto (`beforeChange` returning `false`, §3) makes `transaction()` throw `MutationCancelledError` carrying the refused changeset, rather than returning at all.
 
 `autoGroup` is data behavior, so it lives on `Dataset` (not `Gantt`): the promotion runs inside the same transaction as the edit that caused it — one changeset, one undo step. It only promotes; turning a group back into an entry is always an explicit edit (`01` §2.5).
+
+### Undo and redo
+
+`undo()`/`redo()` return nothing — like every other commit, what they did arrives on `dataset.on('change')`, tagged `origin: 'undo'`/`'redo'`; a caller that needs to know what an undo did reads the event, not a return value. `canUndo`/`canRedo` answer "is there anything to undo/redo" without a caller needing to try and catch. `history: { capacity: 200 }` at construction keeps 200 undoable transactions; the default is 100. An undo replays a cascade exactly as it committed — it never re-runs the extension hook, so an engine whose behaviour changed between library versions cannot rewrite history (`01` §6, `plans/s2-data-core/s2.5-undo-redo.md`).
 
 ### Reconfiguration is just assignment
 

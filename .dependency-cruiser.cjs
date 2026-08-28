@@ -74,6 +74,15 @@ module.exports = {
       '^src/view/dataset-change-subscription\\.ts$',
       '^src/view/(gantt-shell\\.ts|dataset-change-subscription\\.test\\.ts)$',
     ),
+    // D-S2-23: delete src/data/history.ts and its one construction line in dataset-state.ts and the
+    // commit path is unchanged, byte for byte — a Dataset just has no undo/redo
+    // (plans/s2-data-core/s2.5-undo-redo.md §2.1). The property test lives in its own file
+    // (history.property.test.ts), so both test files are named here.
+    removable(
+      'history-is-removable',
+      '^src/data/history\\.ts$',
+      '^src/data/(dataset-state\\.ts|history\\.(test|property\\.test)\\.ts)$',
+    ),
     {
       name: 'no-circular',
       severity: 'error',
