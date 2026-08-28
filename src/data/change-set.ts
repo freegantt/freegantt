@@ -1,43 +1,31 @@
-// data/ — the changeset shape a transaction commits, and the per-field equality table that decides
-// whether a field actually moved (plans/s2-data-core/README.md D-S2-7).
+// data/ — the per-field equality table that decides whether a field actually moved, and the functions
+// that build a ChangeSet from it (plans/s2-data-core/README.md D-S2-7). The ChangeSet shape itself is a
+// model/ type (model/change-set.ts) — model/ is a leaf and MutationCancelledError needs to carry one.
 
-import type { ChangeSetId, Entry, EntryEdit, EntryId } from '../model/index.js';
+import type {
+  ChangeOrigin,
+  ChangeSet,
+  ChangeSetId,
+  CoreFieldKey,
+  Entry,
+  EntityAdded,
+  EntityRemoved,
+  EntryEdit,
+  EntryId,
+  FieldKey,
+  FieldUpdated,
+} from '../model/index.js';
 
-export type StoreName = 'entries'; // S3 adds `plugin:${string}/${string}`
-export type ChangeOrigin = 'user' | 'undo' | 'redo'; // 'engine' and 'load' arrive with their producers (D-S2-11)
-
-/** Open by construction (D-S2-26, ADR 0005). Core keys are named for autocomplete and for the
- * comparator table's exhaustiveness check; a key S5's field registry declares is equally legal and
- * is validated at runtime, not by the type. Closing this union would make `FieldUpdated` and the
- * undo record — both public — impossible to open without a breaking change. */
-export type CoreFieldKey = keyof Omit<Entry, 'id'>;
-export type FieldKey = CoreFieldKey | (string & {});
-
-export interface EntityAdded {
-  store: 'entries';
-  entity: Entry;
-}
-
-export interface EntityRemoved {
-  store: 'entries';
-  entity: Entry;
-}
-
-export interface FieldUpdated {
-  store: 'entries';
-  id: EntryId;
-  field: FieldKey;
-  from: unknown;
-  to: unknown;
-}
-
-export interface ChangeSet {
-  id: ChangeSetId;
-  origin: ChangeOrigin;
-  added: readonly EntityAdded[];
-  removed: readonly EntityRemoved[];
-  updated: readonly FieldUpdated[];
-}
+export type {
+  StoreName,
+  ChangeOrigin,
+  CoreFieldKey,
+  FieldKey,
+  EntityAdded,
+  EntityRemoved,
+  FieldUpdated,
+  ChangeSet,
+} from '../model/index.js';
 
 type FieldComparator = (from: unknown, to: unknown) => boolean;
 

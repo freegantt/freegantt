@@ -3,6 +3,7 @@
 // types are public), so it lives where the rest of the public surface lives.
 
 import type { EntryId } from './ids.js';
+import type { ChangeSet } from './change-set.js';
 
 export class FreeGanttError extends Error {
   readonly code: string;
@@ -54,5 +55,29 @@ export class EntryNotFoundError extends FreeGanttError {
   constructor(entryId: EntryId) {
     super('entry-not-found', `reveal: no entry with id "${entryId}"`);
     this.name = 'EntryNotFoundError';
+  }
+}
+
+/** `code: 'mutation-during-notification'` — a mutator called while `beforeChange` or `change` handlers
+ * are running (D-S2-9, D-S2-25). The write set is discarded; nothing about the notification in
+ * progress is affected. */
+export class MutationDuringNotificationError extends FreeGanttError {
+  constructor(message: string) {
+    super('mutation-during-notification', message);
+    this.name = 'MutationDuringNotificationError';
+  }
+}
+
+/** `code: 'mutation-cancelled'` — a `beforeChange` handler returned `false`, refusing the whole
+ * changeset (D-S2-25). Thrown by the programmatic call that triggered the transaction, carrying the
+ * changeset that was refused — `entries.update()`'s contract is to return the stored entry, and if
+ * nothing was stored, returning one would be a lie. */
+export class MutationCancelledError extends FreeGanttError {
+  readonly changeSet: ChangeSet;
+
+  constructor(changeSet: ChangeSet) {
+    super('mutation-cancelled', 'transaction: a beforeChange handler refused this changeset');
+    this.name = 'MutationCancelledError';
+    this.changeSet = changeSet;
   }
 }
