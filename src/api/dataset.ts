@@ -3,7 +3,6 @@
 // in `data/` (`DatasetState`). `model/`'s `Dataset` is the smaller bindable surface a Gantt holds.
 
 import type {
-  Dataset as DatasetContract,
   DatasetDocument,
   DatasetEventMap,
   DateOnlyEndRule,
@@ -39,7 +38,11 @@ export interface DatasetOptions {
   history?: { capacity?: number };
 }
 
-export class Dataset implements DatasetContract {
+// Structurally satisfies model/'s `Dataset` (entries/timeZone/on/off) without an `implements` clause —
+// that clause would pull the model type into the public API report as an unexported `Dataset_2`, since
+// api-extractor inlines whatever an exported class's `implements`/`extends` names. Assignability where
+// it actually matters (`GanttOptions.dataset`, `GanttShell`) is still checked structurally.
+export class Dataset {
   #state: DatasetState;
 
   constructor(options: DatasetOptions) {

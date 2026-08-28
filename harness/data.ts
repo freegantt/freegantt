@@ -12,7 +12,7 @@
 // Import replaces the dataset and rebuilds the Gantt, which is the proof that a Gantt survives a
 // rebind (or the finding against destroy() if it does not).
 
-import { Dataset, Gantt, MS, MutationCancelledError, addMs, instant } from '../src/api/index.js';
+import { Dataset, Gantt, MS, MutationCancelledError, addMs, now } from '../src/api/index.js';
 import type { ChangeSet, DatasetDocument, DatasetEventMap, Entry } from '../src/api/index.js';
 import { sampleEntryInputs } from '../fixtures/sample-dataset.js';
 
@@ -110,7 +110,7 @@ bindDataset();
 
 addBtn.addEventListener('click', () => {
   const id = `new-${nextNewId++}`;
-  const start = instant(Date.now());
+  const start = now();
   dataset.entries.add({ id, name: 'New entry', start, end: addMs(start, MS.DAY) });
 });
 
