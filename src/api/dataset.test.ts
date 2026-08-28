@@ -155,4 +155,14 @@ describe('Dataset transaction/on/off delegation', () => {
     dataset.transaction(() => undefined);
     expect(calls).toBe(0);
   });
+
+  it('toJSON / fromJSON round-trips byte-stable on the façade (D-S2-12)', () => {
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      entries: [oneEntry({ start: '2026-09-01T00:00:00.000Z', end: '2026-09-11T00:00:00.000Z' })],
+    });
+    const doc = dataset.toJSON();
+    const round = Dataset.fromJSON(doc).toJSON();
+    expect(JSON.stringify(round)).toBe(JSON.stringify(doc));
+  });
 });
