@@ -6,7 +6,7 @@
 // `entries` became a store view in S2.1 (plans/s2-data-core/README.md D-S2-2): `dataset.entries.update(...)`
 // is the published call site, so `dataset.entries` is the collection, not a snapshot array.
 
-import type { Entry } from './entry.js';
+import type { Entry, EntryEdit, EntryInput } from './entry.js';
 import type { EntryId } from './ids.js';
 
 /** The Dataset's own read view onto its entries (D-S2-2). `all` is the committed array — see D-S2-3
@@ -19,7 +19,16 @@ export interface EntryStoreView {
   readonly size: number;
 }
 
+/** The Dataset's entries, read and write (S2.3 §1.1) — `dataset.entries.add/update/remove`. Each
+ *  mutator returns the entry as the store holds it after the call (branded id, resolved instants),
+ *  never the input, and each auto-wraps itself in a transaction when none is already open (D-S2-8). */
+export interface EntryStore extends EntryStoreView {
+  add(input: EntryInput): Entry;
+  update(id: EntryId | string, edit: EntryEdit): Entry;
+  remove(id: EntryId | string): void;
+}
+
 export interface Dataset {
-  readonly entries: EntryStoreView;
+  readonly entries: EntryStore;
   readonly timeZone: string;
 }

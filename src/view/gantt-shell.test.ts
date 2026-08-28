@@ -8,8 +8,15 @@ import { EntryStore } from '../data/index.js';
 
 // D-S2-2: `GanttShellOptions.dataset` is a store view now, not a plain array — the real `EntryStore`
 // backs these fixtures the same way a `Dataset` would, with no test-only fake to keep in sync.
+// `referenceDate` is a bare epoch-ms cast, not `time/`'s `instant()` — view/ may not import time/ (I1).
 function fakeDataset(entries: readonly Entry[]): GanttShellOptions['dataset'] {
-  return { entries: new EntryStore(entries), timeZone };
+  const context = {
+    timeZone,
+    dateOnlyEnd: 'inclusive' as const,
+    referenceDate: 0 as Instant,
+    derivedSpanKinds: new Set(['group']),
+  };
+  return { entries: new EntryStore(entries, context), timeZone };
 }
 
 // happy-dom does no layout, so a real ResizeObserver never fires (verified against pane-size-

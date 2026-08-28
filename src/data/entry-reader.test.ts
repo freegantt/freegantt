@@ -2,10 +2,16 @@ import { describe, expect, it } from 'vitest';
 import { readEntries } from './entry-reader.js';
 import { entryId } from '../model/index.js';
 import type { EntryInput } from '../model/index.js';
+import { instant } from '../time/index.js';
 
 const utc = (iso: string): number => Date.parse(iso);
 
-const context = { timeZone: 'UTC', dateOnlyEnd: 'inclusive' as const };
+const context = {
+  timeZone: 'UTC',
+  dateOnlyEnd: 'inclusive' as const,
+  referenceDate: instant('2026-01-01T00:00:00Z'),
+  derivedSpanKinds: new Set(['group']),
+};
 
 describe('readEntries', () => {
   it('brands a plain string id and reads a date-only end inclusively', () => {

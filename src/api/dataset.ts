@@ -10,7 +10,8 @@ import type {
   DatasetEventMap,
   DateOnlyEndRule,
   EntryInput,
-  EntryStoreView,
+  EntryKind,
+  EntryStore as EntryStoreContract,
 } from '../model/index.js';
 import { DatasetState } from '../data/index.js';
 
@@ -28,6 +29,10 @@ export interface DatasetOptions {
    * covers through the 8th. `'exclusive'` reads it literally as the start of the 8th, matching
    * half-open storage exactly. Only date-only strings are affected — see `DateOnlyEndRule`. */
   dateOnlyEnd?: DateOnlyEndRule;
+  /** Kinds whose span the rollup derives from their children's spans — min start, max end — every
+   * commit (`01` §2.5/§2.6). Defaults to `['group']`. `derivedSpanKinds: []` opts every kind out of
+   * derivation, which is the supported way to ask for hand-set spans everywhere. */
+  derivedSpanKinds?: readonly EntryKind[];
 }
 
 /** States the relationship instead of leaving it structural-by-coincidence (S1.7 §3.2): this class
@@ -39,7 +44,7 @@ export class Dataset implements DatasetContract {
     this.#state = new DatasetState(options);
   }
 
-  get entries(): EntryStoreView {
+  get entries(): EntryStoreContract {
     return this.#state.entries;
   }
 

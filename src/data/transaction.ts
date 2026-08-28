@@ -9,12 +9,14 @@ import type {
   DatasetEventMap,
   Entry,
   EntryId,
+  EntryKind,
   FieldUpdated,
 } from '../model/index.js';
 import { MutationCancelledError, MutationDuringNotificationError } from '../model/index.js';
 import { diffEdit, foldChangeSet } from './change-set.js';
 import type { EditExtender, EntryEdits } from './edit-extension.js';
 import type { EventBus } from './event-bus.js';
+import { rollUpDerivedSpans } from './span-rollup.js';
 
 /** Only `runTransaction` produces one. Store mutators require it, so a mutation outside a transaction
  *  does not typecheck — the belt to `docs/02` §3.6's `no-store-mutation-outside-transaction` braces.
@@ -51,15 +53,12 @@ export interface TransactionData {
    *  sync token. */
   nextChangeSetId(): ChangeSetId;
   readonly bus: EventBus<DatasetEventMap>;
-  /** Core, not an extender occupant (D-S2-22): rolls up derived spans on every commit. Always called —
-   *  `noRollUp` until S2.3 lands the real one — so the sequence is one shape from the first step to the
-   *  last, not a step that is sometimes skipped. */
-  rollUp: (entries: ReadonlyMap<EntryId, Entry>, proposed: EntryEdits) => readonly FieldUpdated[];
+  /** Kinds whose span the rollup derives from their children, every commit (`01` §2.5, D-S2-22).
+   *  This file is the only one that turns it into a rollup call — `span-rollup-is-removable`
+   *  (`.dependency-cruiser.cjs`, D-S2-23) says so, which is what makes deleting `span-rollup.ts` a
+   *  provable degradation to `derivedSpanKinds: []`'s own behavior rather than a break. */
+  readonly derivedSpanKinds: ReadonlySet<EntryKind>;
 }
-
-/** The no-op `rollUp` every `TransactionData` gets until S2.3 lands span derivation (D-S2-22): an
- *  always-invoked step that yields nothing, not a conditionally-skipped one. */
-export const noRollUp = (): readonly FieldUpdated[] => [];
 
 function mergeEdits(base: EntryEdits, extra: EntryEdits): EntryEdits {
   if (extra.size === 0) return base;
@@ -132,7 +131,11 @@ export function runTransaction<T>(
     extenderUpdated.push(...diffEdit(snapshot, id, edit));
   }
 
-  const rollupUpdated = data.rollUp(snapshot, mergeEdits(proposed, extenderEdits));
+  const rollupUpdated = rollUpDerivedSpans(
+    snapshot,
+    mergeEdits(proposed, extenderEdits),
+    data.derivedSpanKinds,
+  );
 
   const changeSet = foldChangeSet(data.nextChangeSetId(), origin, addedEntities, removedEntities, [
     ...bodyUpdated,

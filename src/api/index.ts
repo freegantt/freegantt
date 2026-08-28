@@ -35,6 +35,9 @@ export {
   InvalidInstantError,
   UnknownPresetError,
   EntryNotFoundError,
+  DuplicateEntryIdError,
+  ParentCycleError,
+  UnknownFieldError,
   MutationDuringNotificationError,
   MutationCancelledError,
 } from '../model/index.js';
@@ -53,6 +56,7 @@ export type {
   TimeSpan,
   Duration,
   EntryStoreView,
+  EntryStore,
 } from '../model/index.js';
 // The input twins of the stored types: what a consumer writes, as opposed to what the library stores.
 // Public because a consumer that types its own entry builder needs to name them.

@@ -39,9 +39,14 @@ export interface EntryInput<TMeta = unknown> {
   /** Authored, never derived — see plans/01 §2.5. Default 'span'. */
   kind?: EntryKind;
   name: string;
-  start: InstantInput;
-  /** Exclusive — see plans/01 §5 and `DateOnlyEndRule`. */
-  end: InstantInput;
+  /** Required for a `kind` whose span is authored. Omit both `start` and `end` for a
+   * `derivedSpanKinds` kind (default `'group'`) to let the span rollup fill them in — the store
+   * writes a zero-length span at the dataset's reference date until the rollup runs (`01` §2.5,
+   * S2.3 §1.5). Omitting one but not the other, or omitting both on a non-deriving kind, is an
+   * `InvalidInstantError`: the field is required and `undefined` names no instant. */
+  start?: InstantInput;
+  /** Exclusive — see plans/01 §5 and `DateOnlyEndRule`. See `start` for when this may be omitted. */
+  end?: InstantInput;
   progress?: number;
   /** Interrupted work — renders as multiple bars on one row. */
   segments?: readonly TimeSpanInput[];
