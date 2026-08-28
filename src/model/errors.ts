@@ -109,3 +109,21 @@ export class MutationCancelledError extends FreeGanttError {
     this.changeSet = changeSet;
   }
 }
+
+/** `code: 'unsupported-schema'` — `fromJSON` given a `schema` this build has no reader for
+ *  (D-S2-12, `plans/s2-data-core/s2.6-serialization.md` §1.3). Names the version it found and the
+ *  versions it reads, so a caller can tell a future document from a corrupt one. */
+export class UnsupportedSchemaError extends FreeGanttError {
+  readonly schema: number;
+  readonly supported: readonly number[];
+
+  constructor(schema: number, supported: readonly number[]) {
+    super(
+      'unsupported-schema',
+      `fromJSON: schema ${schema} is not readable; this build reads ${supported.join(', ')}`,
+    );
+    this.name = 'UnsupportedSchemaError';
+    this.schema = schema;
+    this.supported = supported;
+  }
+}
