@@ -5,7 +5,7 @@
 
 import type { DateOnlyEndRule, Entry, EntryKind } from '../../model/index.js';
 import type { DatasetDocument, EntryDocument } from '../../model/index.js';
-import { toISO } from '../../time/index.js';
+import { instant, toISO } from '../../time/index.js';
 
 export { readDocument, readers } from './read.js';
 export type { DatasetDocumentRead } from './read.js';
@@ -66,7 +66,7 @@ export function warnIfDerivedSpansWereCorrected(doc: DatasetDocument, dataset: D
     if (!kinds.has(kind)) continue;
     const stored = dataset.entries.get(row.id);
     if (stored === undefined) continue;
-    if (row.start === toISO(stored.start) && row.end === toISO(stored.end)) continue;
+    if (instant(row.start) === stored.start && instant(row.end) === stored.end) continue;
     console.warn(`FreeGantt: fromJSON corrected the derived span of entry "${row.id}" to match its children`);
   }
 }

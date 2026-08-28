@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { DatasetState } from '../dataset-state.js';
 import { toJSON, readDocument, warnIfDerivedSpansWereCorrected } from './index.js';
-import { UnsupportedSchemaError } from '../../model/index.js';
+import { FreeGanttError, UnsupportedSchemaError } from '../../model/index.js';
 import type { DatasetDocument } from '../../model/index.js';
 import type { EntryInput } from '../../model/index.js';
 
@@ -183,6 +183,46 @@ describe('[S2-A2] toJSON / fromJSON', () => {
     const second = toJSON(fromJSON(first));
     expect(JSON.stringify(second)).toBe(JSON.stringify(first));
     warn.mockRestore();
+  });
+
+  it('does not warn when a stored group span already matches its children under a different offset form', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const doc: DatasetDocument = {
+      schema: 1,
+      timeZone: 'UTC',
+      dateOnlyEnd: 'inclusive',
+      derivedSpanKinds: ['group'],
+      entries: [
+        {
+          id: 'p1',
+          kind: 'group',
+          name: 'Sitework',
+          start: '2026-09-01T00:00:00Z',
+          end: '2026-09-11T00:00:00Z',
+        },
+        {
+          id: 't1',
+          parentId: 'p1',
+          name: 'Groundwork',
+          start: '2026-09-01T00:00:00.000Z',
+          end: '2026-09-11T00:00:00.000Z',
+        },
+      ],
+    };
+    fromJSON(doc);
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  it('fromJSON throws FreeGanttError (InvalidInstantError), not a bare RangeError, on a zoneless stored date', () => {
+    const doc: DatasetDocument = {
+      schema: 1,
+      timeZone: 'UTC',
+      dateOnlyEnd: 'inclusive',
+      derivedSpanKinds: ['group'],
+      entries: [{ id: 't1', name: 't1', start: '2026-09-01', end: '2026-09-11T00:00:00.000Z' }],
+    };
+    expect(() => readDocument(doc)).toThrow(FreeGanttError);
   });
 
   it('throws UnsupportedSchemaError for a schema this build does not read', () => {
