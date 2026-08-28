@@ -38,7 +38,7 @@ Dev-side, cost is measured in maintenance, not bytes — still kept lean. "Slice
 | `vitest` + `happy-dom` | unit/property tests; happy-dom for the few DOM-touching unit tests (faster than jsdom; real-browser truth comes from Playwright later) | S0 |
 | `eslint` (flat config) + `typescript-eslint` | lint + the custom invariant rules (§3.3) | S0 |
 | `dependency-cruiser` | the layer-boundary graph as executable config (I1) | S0 |
-| `vite-plugin-dts` + `@microsoft/api-extractor` | bundled `.d.ts` + API report; the report diff is the I11 type-surface snapshot | S0 (build) / S2 (report gating) |
+| `vite-plugin-dts` + `@microsoft/api-extractor` | bundled `.d.ts` + API report; the report diff is the I11 type-surface snapshot | **shipped** — build S0, report gating S2.7 (`etc/freegantt.api.md`, `pnpm api-report`) |
 | `fast-check` | property tests: undo round-trips (I7), schedule purity (I4), JSON round-trip | **shipped (S2.6)** — `[S2-A1]` in `src/data/history.property.test.ts` |
 | `@vitest/coverage-v8` | coverage gate (>90% on `scheduling/`, per S3 acceptance) | S3 |
 | `playwright` | E2E on the harness; gesture tests beyond what happy-dom can honestly simulate | S4 |

@@ -64,6 +64,8 @@ There is deliberately no `data/ --> scheduling/` edge: `data/` has no static dep
 - `scheduling/` never imports `render/`, `view/`, or `interaction/` — and vice versa (D4). A scheduling plugin, when installed, meets `data/` only through that hook, never a static import.
 - `model/` is types only: zero runtime exports beyond id/brand helpers and the `FreeGanttError` base, zero dependencies.
 - Only `api/` and the type surface of `model/` are public entry points; everything else is internal and free to change.
+- **Removable leaves (D-S2-23, S2.7):** `span-rollup.ts`, `view/dataset-change-subscription.ts`, `data/history.ts`, and `data/serialization/**` each have exactly one legitimate importer, enforced the same way as the layer arrows above (dependency-cruiser `*-is-removable` rules, red-tested by `scripts/guard-red-test.mjs`). Each is provably deletable: its one caller goes away with it, and the rest of the system is unaffected (`plans/s2-data-core/README.md` §9's compatibility table names what each deletion degrades to).
+- **The commit path ends at `change`; `History` subscribes like any other consumer (D-S2-24):** `data/transaction.ts` commits a `ChangeSet` and emits `change`; it imports no history and no view. `History` and `view/dataset-change-subscription.ts` are both ordinary `on('change')` subscribers, not privileged callers on the commit path — the same discipline that makes both removable leaves above.
 
 ### 1.1 Directory shape
 
@@ -714,12 +716,12 @@ Rules:
 | # | Invariant | Enforced by |
 |---|---|---|
 | I1 | Layer imports match §1 exactly | dependency lint in CI |
-| I2 | No module-level singletons; two Gantt instances coexist independently | isolation test (mounts two Gantt instances) |
+| I2 | No module-level singletons; two Gantt instances coexist independently | isolation test (mounts two Gantt instances); `freegantt/no-module-level-state` lint rule (S2.7) |
 | I3 | The first-party scheduling plugin's propagation contains no recursion | 5,000-link chain fixture + review rule |
 | I4 | Its `schedule()` never mutates its input; policy never moves a proposed field | dev-mode asserts + property test |
 | I5 | Hot path allocates nothing and never rebuilds a frame | perf test on `applyState` |
 | I6 | One transaction per gesture, at commit | interaction tests |
-| I7 | Undo reverts user + engine effects atomically (when a scheduling plugin is installed) | round-trip property test |
+| I7 | Undo reverts user + engine effects atomically (when a scheduling plugin is installed) | round-trip property test (`[S2-A1]`, `src/data/history.property.test.ts`) |
 | I8 | `Item.id` deterministic across layout passes | layout snapshot test |
 | I9 | Grid and timeline share one row geometry | pixel-equality test on row tops |
 | I10 | No time math outside `time/`; no magic time constants | lint rule |
