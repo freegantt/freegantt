@@ -2,16 +2,15 @@
 // commit path: `data/transaction.ts` imports nothing from this file, and `history-is-removable`
 // (`.dependency-cruiser.cjs`, D-S2-23) allows exactly one importer, `data/dataset-state.ts`, which
 // constructs it. Delete this file and its one construction line and the commit path is unchanged, byte
-// for byte. Recording goes through `on('change')` alone — a real consumer could do that much. Replay
-// (`undo`/`redo`, below) calls `commitChangeSet` directly to skip the extension hook and Rollup
-// (D-S2-14), which is a `data/`-internal privilege: `commitChangeSet` is not reachable outside the
-// package (`plans/01` §1), so this file is not yet fully reproducible from the public surface — that is
-// S3 plugin-surface work, not an S2 gap (`s2.5-undo-redo.md` §2.1).
+// for byte. Recording goes through `on('change')` alone, and `undo`/`redo` replay through
+// `replayChangeSet` (`replay.ts`) — the same primitive `Dataset.replay` publishes — so this file is
+// fully reproducible from the public surface (`plans/s2-data-core/s2b-undo-replay-seam.md`). It imports
+// nothing from `transaction.ts` directly.
 
 import type { ChangeSet, DatasetEventMap } from '../model/index.js';
 import { invertChangeSet } from './change-set.js';
-import { commitChangeSet } from './transaction.js';
-import type { TransactionData } from './transaction.js';
+import { replayChangeSet } from './replay.js';
+import type { TransactionData } from './replay.js';
 
 export interface HistoryOptions {
   /** How many undoable transactions the stack keeps. Oldest drops first once full (D-S2-13). */
@@ -45,14 +44,14 @@ export class History {
 
   /** Applies the changeset at the cursor inverted (`to`→`from`, `added`↔`removed`) with
    *  `origin: 'undo'`. A no-op when `canUndo` is `false`. Neither re-runs the extension hook nor the
-   *  span rollup — `commitChangeSet` writes exactly the inverted rows and nothing else (§2.2). A
+   *  span rollup — `replayChangeSet` writes exactly the inverted rows and nothing else (§2.2). A
    *  refused undo (a `beforeChange` handler returning `false`) throws `MutationCancelledError` and
    *  leaves the stack exactly where it was — the cursor moves on the `change` that commit emits
    *  (D-S2-25), so a veto never reaches `#onChange`. */
   undo(): void {
     if (!this.canUndo) return;
     const changeSet = this.#stack[this.#cursor - 1]!;
-    commitChangeSet(this.#data, invertChangeSet(this.#data.nextChangeSetId(), changeSet));
+    replayChangeSet(this.#data, invertChangeSet(changeSet));
   }
 
   /** Re-applies the changeset just above the cursor exactly as recorded, with `origin: 'redo'`. A
@@ -60,7 +59,7 @@ export class History {
   redo(): void {
     if (!this.canRedo) return;
     const changeSet = this.#stack[this.#cursor]!;
-    commitChangeSet(this.#data, { ...changeSet, id: this.#data.nextChangeSetId(), origin: 'redo' });
+    replayChangeSet(this.#data, { ...changeSet, origin: 'redo' });
   }
 
   /** The whole coupling to the rest of `data/`. `'user'` records a new stack entry. `'undo'`/`'redo'`

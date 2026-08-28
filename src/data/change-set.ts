@@ -113,10 +113,12 @@ export function foldChangeSet(
 }
 
 /** Undo's recorded changeset, inverted: `added`↔`removed`, each `updated` row's `from`/`to` swapped,
- *  `origin: 'undo'`. Redo does not invert — it re-applies the recorded rows with `origin: 'redo'`. */
-export function invertChangeSet(id: ChangeSetId, changeSet: ChangeSet): ChangeSet {
+ *  `origin: 'undo'`. Redo does not invert — it re-applies the recorded rows with `origin: 'redo'`. The
+ *  `id` carried over is a placeholder only — `replay` mints a fresh one and ignores this one
+ *  (`plans/s2-data-core/s2b-undo-replay-seam.md`). */
+export function invertChangeSet(changeSet: ChangeSet): ChangeSet {
   return {
-    id,
+    id: changeSet.id,
     origin: 'undo',
     added: changeSet.removed.map(({ store, entity }) => ({ store, entity })),
     removed: changeSet.added.map(({ store, entity }) => ({ store, entity })),

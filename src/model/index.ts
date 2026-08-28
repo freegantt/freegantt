@@ -29,5 +29,6 @@ export {
   UnknownFieldError,
   MutationDuringNotificationError,
   MutationCancelledError,
+  InvalidReplayOriginError,
   UnsupportedSchemaError,
 } from './errors.js';

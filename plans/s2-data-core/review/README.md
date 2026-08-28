@@ -9,5 +9,6 @@
 |---|---|
 | [code-review.md](./code-review.md) | Two-axis review: Standards vs Spec |
 | [simplify.md](./simplify.md) | Simplify pass: findings, fixes landed, skips |
+| [s2b-undo-replay-seam.md](../s2b-undo-replay-seam.md) | Follow-up: publish `replay` so a consumer History does not import `commitChangeSet` |
 
-`docs/agents/issue-tracker.md` is missing. Run `/setup-matt-pocock-skills` to restore the tracker workflow. Spec for this review is `plans/s2-data-core/README.md` (issue #1 / closes #33 / core half of #15).
+Spec for this review is `plans/s2-data-core/README.md` (issue #1 / closes #33 / core half of #15).
