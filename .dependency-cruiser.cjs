@@ -83,6 +83,14 @@ module.exports = {
       '^src/data/history\\.ts$',
       '^src/data/(dataset-state\\.ts|history\\.(test|property\\.test)\\.ts)$',
     ),
+    // D-S2-23: delete src/data/serialization/** and its two façade lines in api/dataset.ts and the
+    // data core never learns a document format exists. The directory's own files (and its tests)
+    // import each other; the property test [S2-A1] reads `toJSON` for the DatasetState extender run.
+    removable(
+      'serialization-is-removable',
+      '^src/data/serialization/',
+      '^src/(api/dataset\\.ts|data/serialization/.+|data/history\\.property\\.test\\.ts)$',
+    ),
     {
       name: 'no-circular',
       severity: 'error',
