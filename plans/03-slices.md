@@ -57,6 +57,8 @@ Slices are scope, not calendar estimates. Within a slice, entries are ordered so
 - [x] `[S1-A4]` Two harness Gantt instances given the same `ScrollModel` scroll together (a 5-line harness demo — the D9 seam proven now, cheaply).
 - [x] `[S1-A5]` Axis headers correct across a DST transition in the dataset zone (unit-tested in `time/`).
 
+**Debt, paid at S1.12 (runs after S2, before S3 — see below).** These five landed. Three S1 scope items did not: a legible time axis at any density (`fit: 'pane'` has no minimum tick width, so a long dataset compresses to sub-pixel ticks), discrete zoom navigation (`zoomBy` exists; `zoomIn`/`zoomOut` and an ordered preset set do not), and multi-band headers that render as multiple bands (`.fg-header` is one fixed height split N ways). Spec: [`plans/s1.12-timeline-navigation/README.md`](./s1.12-timeline-navigation/README.md).
+
 ---
 
 ## S2 — Data core: transactions, undo, changesets, JSON
@@ -66,21 +68,48 @@ Slices are scope, not calendar estimates. Within a slice, entries are ordered so
 **Scope**
 
 - `data/`: normalized stores + indexes; instance-scoped reactivity façade (one small dep, swappable); `DatasetData` owning stores + zone.
-- Change signalling between `Dataset` and `GanttShell` (#33, deferred here at S1.11 D-S1.11-7): S2 **replaces** `GanttShellOptions.entries` with the real changeset-driven binding — it never adds a `setEntries()` beside it. A second reactivity mechanism living next to the real one is #1's R4, and the cheapest moment to forbid it is before this slice starts.
+- Change signalling between `Dataset` and `GanttShell` (#33, deferred here at S1.11 D-S1.11-7): S2 makes the binding live, in one removable attachment (D-S2-20) — `GanttShellOptions` never had an `entries` key to replace, and it gains no `setEntries()` beside the real one. A second reactivity mechanism living next to the real one is #1's R4, and the cheapest moment to forbid it is before this slice starts.
 - Transactions: batching, auto-wrap of single mutations, one changeset per transaction (`origin` tagged).
 - Undo/redo: transaction = atomic unit; recorded changesets replayed exactly; history API (`canUndo`, capacity).
-- Changesets: `{ added, removed, updated: {field, from, to} }` (`01` §6); `dataset.on('change')`; `dataset.apply(changeSet)` with validation + rejection reporting. the key type is **`FieldKey`** (retiring `EntryField`, one concept with two names) and it stays **open**, validated at runtime rather than typed `keyof Omit<Entry, 'id'>` — it is public through `FieldUpdated` and the undo record, and S4's field registry (`01` §2.6, ADR 0005) cannot open it later without a breaking change.
+- Changesets: `{ added, removed, updated: {field, from, to} }` (`01` §6); `dataset.on('change')`. the key type is **`FieldKey`** (retiring `EntryField`, one concept with two names) and it stays **open**, validated at runtime rather than typed `keyof Omit<Entry, 'id'>` — it is public through `FieldUpdated` and the undo record, and S4's field registry (`01` §2.6, ADR 0005) cannot open it later without a breaking change. `dataset.apply(changeSet)` is deferred to the slice that ships a sync adapter (D-S2-11) — `plans/02` §6's "sync adapter is an extension, not a core change" promise is discharged by the changeset contract itself (`from`/`to` on `on('change')`), which S2 ships either way; `apply` is what such an extension would write.
 - Serialization: `toJSON()`/`fromJSON()` with `schema: 1`, ISO instants, opaque `meta` round-trip.
-- Public mutation API: `dataset.entries.add/update/remove`, `dataset.dependencies.*`, typed, validating.
-- View binding: committed changesets invalidate layout incrementally (changed rows only), not globally.
+- Public mutation API: `dataset.entries.add/update/remove`, typed, validating. `dataset.dependencies.*` is not S2's — `StoreName` is `'entries'` only until the first plugin store exists (S5 runtime; scheduling's `Dependency` store in S7).
+- View binding: committed changesets invalidate layout incrementally as defined and asserted by D-S2-16 — a changeset with only `updated` rows never rebuilds the row-height index, one with `added`/`removed` rows does; row-level incrementality inside `computeFrame` is not S2's, and is S6's to decide.
 - Harness: mutation playground — edit fixture via console/buttons, watch the Gantt update; undo/redo buttons; changeset log panel; export/import JSON.
 
 **Acceptance**
 
-- [ ] Property test: random mutation sequences + undo-all restores byte-identical `toJSON()` (I7 groundwork — engine patches join in S7).
-- [ ] `fromJSON(toJSON(p))` round-trips byte-stable.
-- [ ] A 500-entry bulk update inside one transaction produces one changeset, one layout pass, one frame.
-- [ ] Changeset log in harness shows `from`/`to` per field for every edit.
+- [x] `[S2-A1]` Property test: random mutation sequences + undo-all restores byte-identical `toJSON()` (I7 groundwork — engine patches join in S7).
+- [x] `[S2-A2]` `fromJSON(toJSON(p))` round-trips byte-stable.
+- [x] `[S2-A3]` A 500-entry bulk update inside one transaction produces one changeset, one layout pass, one frame.
+- [x] `[S2-A4]` Changeset log in harness shows `from`/`to` per field for every edit.
+
+---
+
+## S1.12 — Timeline density, zoom navigation, date formatting  ·  **runs next**
+
+**Position:** after S2, before S3. S2 landed at `6e6299b`; S3 has not started. `.slice` is `S1.12` and the live gate is `S1.12 → S3`.
+**Scope is S1's** (`plans/03` §S1 above), not a new slice — the numbering says whose gap it closes, this position says when it runs. Full spec, settled: [`plans/s1.12-timeline-navigation/README.md`](./s1.12-timeline-navigation/README.md).
+
+**Goal:** the time axis stays legible at any density, zoom becomes navigable rather than a bare density knob, and dates format through `Intl` in a caller-chosen locale.
+
+**Scope**
+
+- `time/`: per-preset density floor (`minTickWidthPx`, with `tickWidthPx` renamed `preferredTickWidthPx`); three three-band presets (`hourDayWeek`, `dayWeekMonth`, `weekMonthYear`); `DateFormat` = `Intl.DateTimeFormatOptions` or the existing callback, resolved through a memoized `Intl.DateTimeFormat`; `weekOfYear` and `formatWeekNumber`. The two hand-rolled formatting vocabularies collapse to one.
+- `layout/`: the floor and a `MAX_CONTENT_PX` ceiling in the one place `pxPerMs` resolves; `zoomPresets` as the ordered set `zoomIn`/`zoomOut` step through; `zoomToSpan`; `panToInstant`. `computeFrame` emits the today line through the `FrameDecoration` seam that already ships, and threads `locale`.
+- `view/`/`render/`: header height derived from band count in CSS (`--fg-band-height` replaces `--fg-header-height`); the grid spacer mirrors the header's bands so both panes size from one expression; the sticky header owed since S1.8; `.fg-today-line`.
+- `api/`: `locale`, `todayLine`, `zoomPresets`, `zoomIn`/`zoomOut`/`canZoomIn`/`canZoomOut`, `zoomToSpan`, `panToDate`, `panToToday`; `range` accepts loose input like every other way in.
+- Harness: `zoom.html` becomes a real demo with a toolbar (it is a headless e2e fixture today, linked from the index as though it were a demo) and keeps `window.__gantt`; a multi-year fixture so the density floor is visible.
+
+**Explicitly out:** pointer and keyboard gestures (S3, listed there); weekend and non-working-time shading (S5's plugin dogfood example).
+
+**Acceptance**
+
+- [ ] `[S1-A6]` A multi-year fixture at the `day` preset scrolls horizontally at the density floor instead of compressing ticks below it.
+- [ ] `[S1-A7]` `zoomIn`/`zoomOut` step exactly one entry of `zoomPresets`, keep the anchored instant fixed, and no-op at the ends in agreement with `canZoomIn`/`canZoomOut`.
+- [ ] `[S1-A8]` A three-band preset renders three full-height bands, and the grid pane's spacer matches the header's height to the pixel.
+- [ ] `[S1-A9]` The header stays pinned to the top of the timeline pane while the rows scroll under it.
+- [ ] `[S1-A10]` `panToToday()` brings the today line into view, and `locale` re-labels every header band and every screen-reader date with no bar remount (I8).
 
 ---
 
@@ -98,6 +127,7 @@ Slices are scope, not calendar estimates. Within a slice, entries are ordered so
 - Speculative preview: once per animation frame, call the **same** `EditExtender` the commit path uses, with a draft `proposed`. Paint the user's draft and the extender's extra `EntryEdits` as ghosts (transforms on existing nodes). Discard on cancel. Identity extender → only the dragged bar ghosts. A test injects an extender (same seam as S2) to prove extra bars ghost without `scheduling/`. `interaction/` never imports `schedule()` (`01` §7).
 - One transaction per gesture at commit (I6); undo reverts the user's edit and any extender extras in one step.
 - Keyboard parity begins: selected bar nudges by snap with arrow keys; Enter/Escape semantics.
+- Timeline navigation gestures (deferred here from S1.12, D-S1.12-17): ctrl/⌘+wheel anchored zoom calling `zoomBy(factor, offsetX)`; shift+wheel horizontal pan; `PageUp`/`PageDown`/`Home`/`End`/arrow keys for pan. These write nothing to the dataset, so the arm-threshold, escape-cancel and one-transaction-per-gesture invariants do not apply to them — they are read-only viewport gestures over the surface S1.12 ships.
 - Harness: editing playground; a veto demo (drop before a boundary date is rejected with a toast); a lock-style injected extender so extra ghosts are visible without the scheduling plugin.
 
 **Acceptance**
@@ -160,7 +190,7 @@ Slices are scope, not calendar estimates. Within a slice, entries are ordered so
 **Acceptance**
 
 - [ ] Context menu and tooltips are plugins with zero private imports (lint-proven — the dogfood gate).
-- [ ] A harness-only third-party-style plugin (e.g., a "weekend shading + jump-to-today command" plugin) is written against the public contract only.
+- [ ] A harness-only third-party-style plugin (e.g., a "weekend shading" plugin) is written against the public contract only. (Was "weekend shading + jump-to-today"; the today line and `panToToday` ship in core at S1.12, so shading alone carries the gate.)
 - [ ] A consumer-defined entry kind (custom renderer + capabilities + context-menu `when` items, registered via config/plugin only) renders and behaves correctly with zero core edits — the §2.5 open-set claim, proven.
 - [ ] Every S3 pointer capability has a keyboard path; axe reports no violations on harness pages.
 - [ ] Consumer replaces the entry editor via `beforeEntryEdit` (demo in harness).

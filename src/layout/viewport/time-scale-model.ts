@@ -63,6 +63,10 @@ const UNBOUND_ZONE = 'UTC';
 export interface ScaleBindingHandle {
   unbind(): void;
   setPaneWidth(width: number): void;
+  /** Pushes a re-read `entries.all` snapshot (S2.4, D-S2-20) — the live half of `'fitDataset'`:
+   *  an edit inside the bound Dataset's own span is a no-op here (D-S1.5-4's equality check), an
+   *  edit outside it re-fits the range. */
+  setEntries(entries: readonly Entry[]): void;
 }
 
 /** The model's own mutable copy of a binding — what `setPaneWidth` writes and what `#resolve` reads. */
@@ -265,6 +269,11 @@ export function bindTimeScale(
     setPaneWidth: (width) => {
       if (copy.paneWidth === width) return;
       copy.paneWidth = width;
+      state.scaleOptions.invalidate();
+    },
+    setEntries: (entries) => {
+      if (copy.entries === entries) return;
+      copy.entries = entries;
       state.scaleOptions.invalidate();
     },
   };

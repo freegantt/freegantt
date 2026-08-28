@@ -1,15 +1,46 @@
 import { describe, expect, it, vi } from 'vitest';
 import { GanttShell } from './gantt-shell.js';
 import type { GanttShellOptions } from './gantt-shell.js';
-import { ScrollModel, TimeScaleModel } from '../layout/index.js';
+import { FrameLayout, ScrollModel, TimeScaleModel } from '../layout/index.js';
 import { entryId, EntryNotFoundError, ContainerNotFoundError } from '../model/index.js';
 import type { Entry, Instant } from '../model/index.js';
-import { EntryStore } from '../data/index.js';
+import { DatasetState, EntryStore } from '../data/index.js';
+
+// [S2-A3]: counts `RenderBackend.sync` calls without a production seam to reach `GanttShell`'s
+// private `#backend` (D-S2-16's own justification for `heightIndexRevision` applies here too — a
+// property of the implementation, made checkable). Wraps the real dom backend transparently; every
+// other test in this file goes through the same wrapper and is unaffected.
+const backendSyncCalls = vi.hoisted(() => ({ count: 0 }));
+vi.mock('../render/dom/index.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../render/dom/index.js')>();
+  return {
+    ...actual,
+    createDomBackend: () => {
+      const backend = actual.createDomBackend();
+      return {
+        ...backend,
+        sync: (frame: Parameters<typeof backend.sync>[0]) => {
+          backendSyncCalls.count++;
+          backend.sync(frame);
+        },
+      };
+    },
+  };
+});
 
 // D-S2-2: `GanttShellOptions.dataset` is a store view now, not a plain array — the real `EntryStore`
 // backs these fixtures the same way a `Dataset` would, with no test-only fake to keep in sync.
+// `referenceDate` is a bare epoch-ms cast, not `time/`'s `instant()` — view/ may not import time/ (I1).
 function fakeDataset(entries: readonly Entry[]): GanttShellOptions['dataset'] {
-  return { entries: new EntryStore(entries), timeZone };
+  const context = {
+    timeZone,
+    dateOnlyEnd: 'inclusive' as const,
+    referenceDate: 0 as Instant,
+    derivedSpanKinds: new Set(['group']),
+  };
+  // No changes ever land on this store, so on/off are stubs — none of these tests mutate the
+  // dataset, so no handler this file registers is ever called.
+  return { entries: new EntryStore(entries, context), timeZone, on: () => {}, off: () => {} };
 }
 
 // happy-dom does no layout, so a real ResizeObserver never fires (verified against pane-size-
@@ -117,7 +148,9 @@ describe('GanttShell header band', () => {
       scale,
     });
 
-    // A never called render() itself after B bound — the notify from B's bind is what pushed this.
+    // A never called render() itself after B bound — the notify from B's bind is what requested
+    // this frame (D-S2-15); render() forces it now instead of waiting on the next animation frame.
+    shellA.render();
     expect(containerA.querySelectorAll('.fg-header .fg-tick').length).toBeGreaterThan(initialTickCount);
 
     shellA.destroy();
@@ -221,6 +254,7 @@ describe('scroll (D9, #9)', () => {
 
       const shell = new GanttShell({ container, dataset: fakeDataset(tallEntries(50)), scroll });
       FakeResizeObserver.instances[0]!.fire({ width: 500, height: 320 }); // 10 rows @ 32px
+      shell.render(); // D-S2-15: the resize's render request is coalesced onto the next frame
 
       const labelsAt = (): string[] =>
         Array.from(container.querySelectorAll('.fg-row'), (row) => row.textContent ?? '');
@@ -229,6 +263,7 @@ describe('scroll (D9, #9)', () => {
       expect(labelsAt()).not.toContain('Entry 40');
 
       scroll.panTo({ y: 40 * 32 }); // scroll 40 rows down
+      shell.render();
 
       expect(labelsAt()).not.toContain('Entry 0');
       expect(labelsAt()).toContain('Entry 40');
@@ -352,6 +387,7 @@ describe('pane split pixel identity (S1.8, D-S1.8-1)', () => {
       const container = document.createElement('div');
       const shell = new GanttShell({ container, dataset: fakeDataset(entries), scale, gridWidth: 300 });
       FakeResizeObserver.instances[0]!.fire({ width: 653, height: 400 });
+      shell.render(); // D-S2-15: the resize's render request is coalesced onto the next frame
 
       const sizer = container.querySelector<HTMLElement>('.fg-timeline-pane [aria-hidden="true"]')!;
       const match = /translate\(([-\d.]+)px,/.exec(sizer.style.transform);
@@ -522,6 +558,44 @@ describe('a11y roles and the one honest tab stop (S1.10, D-S1.10-5)', () => {
     shell.a11yLabel = 'Renamed plan';
     expect(container.getAttribute('aria-label')).toBe('Renamed plan');
 
+    shell.destroy();
+  });
+});
+
+describe('[S2-A3] one changeset, one layout pass, one frame (D-S2-15/16)', () => {
+  it('a 500-entry transaction updating every entry yields one change, one computeFrame, one sync, and an unchanged height index', () => {
+    // Installed before construction so the shell's own first render (#22) is call #0 — the only way
+    // to reach the `FrameLayout` instance this shell owns and read its pre-transaction revision.
+    const computeFrameSpy = vi.spyOn(FrameLayout.prototype, 'computeFrame');
+    const dataset = new DatasetState({ entries: tallEntries(500), timeZone });
+    const container = document.createElement('div');
+    const scale = new TimeScaleModel({ range: { start: rangeStart, end: rangeEnd } });
+    const shell = new GanttShell({ container, dataset, scale });
+
+    const layout = computeFrameSpy.mock.instances[0] as unknown as FrameLayout;
+    const revisionBefore = layout.heightIndexRevision;
+    let changeCalls = 0;
+    dataset.on('change', () => {
+      changeCalls++;
+    });
+    computeFrameSpy.mockClear();
+    backendSyncCalls.count = 0;
+
+    dataset.transaction(() => {
+      for (const entry of dataset.entries.all) {
+        dataset.entries.update(entry.id, { name: `${entry.name} (updated)` });
+      }
+    });
+    shell.render(); // flushes the one frame the transaction's `change` requested (D-S2-15)
+
+    expect(changeCalls).toBe(1);
+    expect(computeFrameSpy).toHaveBeenCalledTimes(1);
+    expect(backendSyncCalls.count).toBe(1);
+    // Only `updated` rows: the row-height index's cache key (rowCount, rowHeight) is untouched, so
+    // no fresh index is built (D-S2-16).
+    expect(layout.heightIndexRevision).toBe(revisionBefore);
+
+    computeFrameSpy.mockRestore();
     shell.destroy();
   });
 });

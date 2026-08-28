@@ -625,14 +625,14 @@ or *installed*. This decision says wired in, and makes the separation **a CI fac
 
 | Leaf | Only importer | A build without it |
 |---|---|---|
-| `data/history.ts` | `data/dataset-data.ts` (constructs it) | no undo/redo; every other line of the commit path unchanged (D-S2-24) |
+| `data/history.ts` | `data/dataset-state.ts` (constructs it) | no undo/redo; every other line of the commit path unchanged (D-S2-24) |
 | `data/serialization/**` | `api/dataset.ts` (`toJSON`/`fromJSON`) | no document format; `data/` never learns one exists |
 | `data/span-rollup.ts` | `data/transaction.ts` (the commit step) | groups keep their authored span — the same result as `derivedSpanKinds: []`, which is the supported way to ask for it |
 | `view/dataset-change-subscription.ts` | `view/gantt-shell.ts` | the Gantt renders once and never updates — the static image (D-S2-20) |
 
 ```js
 // .dependency-cruiser.cjs — one rule per leaf, beside the layer rules
-removable('history', 'src/data/history.ts', ['src/data/dataset-data.ts']),
+removable('history', 'src/data/history.ts', ['src/data/dataset-state.ts']),
 removable('serialization', 'src/data/serialization/.+', ['src/api/dataset.ts']),
 removable('span-rollup', 'src/data/span-rollup.ts', ['src/data/transaction.ts']),
 removable('dataset-change-subscription', 'src/view/dataset-change-subscription.ts', ['src/view/gantt-shell.ts']),
@@ -690,8 +690,10 @@ recorded first.
 
 **Why this is the load-bearing decision of the slice.** Everything the library does to itself, a
 consumer can do: subscribe to the same event, read the same `entries.all`, open the same
-`transaction()`. A power user who wants their own history, their own render policy or their own
-persistence writes what `data/history.ts` and the attachment write, against the same surface — and a
+`transaction()`, replay a changeset through the same `replay` History uses
+(`plans/s2-data-core/s2b-undo-replay-seam.md`). A power user who wants their own history, their own
+render policy or their own persistence writes what `data/history.ts` and the attachment write, against
+the same surface — and a
 consumer who wants none of it gets the static image. The alternative — a privileged internal channel
 the view or the history uses and consumers cannot — would make every one of those a fork of the library
 instead of a use of it.
@@ -840,6 +842,8 @@ Net change to `api/index.ts`. Everything here is new unless the row says otherwi
 | `EntryInput.start` / `EntryInput.end` — now optional | **changed** | D-S2-10, D-S2-22 |
 | `Dataset.transaction(fn)` — returns the body's own return value, never a `ChangeSet` | method | D-S2-8 |
 | `Dataset.undo()` / `redo()` / `canUndo` / `canRedo` — `undo`/`redo` return `void`; what they did arrives on `change` | methods + getters | D-S2-14 |
+| `Dataset.replay(changeSet)` — the write path `undo`/`redo` use, published | method | s2b-undo-replay-seam |
+| `invertChangeSet(changeSet)` — pure function, not a `Dataset` method | function | s2b-undo-replay-seam |
 | `Dataset.on('change')` / `off` | methods | D-S2-5 |
 | `Dataset.on('beforeChange')` — return `false` to refuse the whole changeset | event | D-S2-25 |
 | `Dataset.toJSON()` / `Dataset.fromJSON(doc)` | method + static | D-S2-12 |
@@ -847,7 +851,7 @@ Net change to `api/index.ts`. Everything here is new unless the row says otherwi
 | `EntryEdit`, `CoreFieldKey`, `FieldKey` (open — D-S2-26) | types | D-S2-2, D-S2-26 |
 | `DatasetDocument` (the `toJSON` shape) | type | D-S2-12 |
 | `DatasetEventMap` | type | D-S2-5 |
-| `DuplicateEntryIdError`, `ParentCycleError`, `MutationDuringNotificationError`, `UnsupportedSchemaError`, `MutationCancelledError` | errors | D-S2-10, D-S2-25 |
+| `DuplicateEntryIdError`, `ParentCycleError`, `MutationDuringNotificationError`, `UnsupportedSchemaError`, `MutationCancelledError`, `InvalidReplayOriginError` | errors | D-S2-10, D-S2-25, s2b-undo-replay-seam |
 | `changeSetId` | brand helper | D-S2-7 |
 
 Not added, deliberately: `DatasetOptions.plugins`, `declareStore`, `EditExtender` and friends (D-S2-6/7); `hierarchy.autoGroup` (Q3); `apply` and its four types, and the `'engine'`/`'load'` origin arms (D-S2-11); a `transaction` origin option and a per-entry manual-span opt-out (§9).

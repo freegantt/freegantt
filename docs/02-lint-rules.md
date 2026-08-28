@@ -1,6 +1,6 @@
 # FreeGantt — Lint Rule Specifications
 
-Nineteen rules enforce the spec. **Ten are configuration of ESLint builtins** (`no-restricted-syntax`, `no-restricted-properties`, `no-restricted-globals`, `no-restricted-imports`) scoped by directory — zero maintenance, no plugin code. **Nine need real AST logic** and live in a local flat-config plugin. Prefer the builtin vehicle whenever it expresses the rule honestly: every custom rule is code we own, test, and debug.
+Twenty-three rules enforce the spec (S2.7 correction — the original count of nineteen predates §3.3a and drifted as rules landed). **Eleven are configuration of ESLint builtins** (`no-restricted-syntax`, `no-restricted-properties`, `no-restricted-globals`, `no-restricted-imports`) scoped by directory — zero maintenance, no plugin code. **Twelve need real AST logic** and live in a local flat-config plugin. Prefer the builtin vehicle whenever it expresses the rule honestly: every custom rule is code we own, test, and debug.
 
 ---
 
@@ -41,11 +41,11 @@ Each row is a `files`-scoped override. The `allowlist` column names the only pat
 |---|---|---|---|---|---|
 | B1 | `no-magic-time-constants` | `no-restricted-syntax` on `Literal[value=86400000]`, `3600000`, `604800000`, `60000`, `1000` *(in binary expressions only)* | Numeric time constants used as durations | `src/time/**` | I10 |
 | B2 | `no-date-outside-time` | `no-restricted-globals` (`Date`) + `no-restricted-properties` (`Date.now`, `Date.parse`, `Date.UTC`, `performance.now` for wall-clock use) | Any `Date` construction or read | `src/time/**` (the sanctioned `Intl`/`Date` boundary) | I10, determinism |
-| B3 | `no-random` | `no-restricted-properties` (`Math.random`, `crypto.randomUUID`) | Nondeterminism in pure layers | `src/data/id.ts` (id minting only), tests | I4 |
+| B3 | `no-random` | `no-restricted-properties` (`Math.random`, `crypto.randomUUID`) | Nondeterminism in pure layers | tests only — no production id minter uses randomness: `model/ids.ts`'s `changeSetId` takes a per-instance counter (S2.7 correction; the plan's original `src/data/id.ts` allowlist entry named a path that was never written) | I4 |
 | B4 | `no-scroll-outside-scroll-model` (shipped as a custom rule — `scrollLeft`/`scrollTop`/`scrollTo` need AST-level filename exemption, past what `no-restricted-properties` alone expresses) | `eslint/rules/no-scroll-outside-scroll-model.cjs` | Direct scroll manipulation | `src/view/scroll-attachment.ts` | I12 |
 | B5 | `no-inner-html` | `no-restricted-properties` (`innerHTML`, `outerHTML`, `insertAdjacentHTML`) + `no-restricted-syntax` on `document.write` | HTML injection paths | `src/render/dom/raw-html.ts` (the opt-in flag path) | I13 |
 | B6 | `no-dom-in-pure` | `no-restricted-globals` (`document`, `window`, `navigator`, `location`, `self`, `HTMLElement`, `Node`, `Element`, `requestAnimationFrame`, `getComputedStyle`) | DOM access below the line | — (pure dirs only, no exceptions) | I1, D4 |
-| B7 | `no-external-runtime-import` | `no-restricted-imports` (`alien-signals`, plus a `patterns: ['*']` deny with a node-builtin/relative allow) | Any runtime dep import | `src/data/reactivity.ts` | `plans/04` §1 |
+| B7 | `no-external-runtime-import` | `no-restricted-imports` (`alien-signals`, `temporal-polyfill`, `temporal-polyfill/*`) | Any runtime dep import | `src/data/reactivity.ts` (`alien-signals`), `src/time/zone.ts` (`temporal-polyfill`) — S2.7 correction: the plan's original text named only `alien-signals`/`reactivity.ts`; the shipped rule confines both façades | `plans/04` §1 |
 | B8 | `no-not-implemented` | `no-restricted-syntax` on `ThrowStatement > NewExpression[callee.name='Error'] > Literal[value=/not.implemented|TODO|unsupported/i]` | Dishonest public surface | tests | I11 |
 | B9 | `no-derived-in-json` | `no-restricted-imports` of `layout/`+`view/` types, and `no-restricted-syntax` on `TSTypeReference[typeName.name=/^(Row\|Item\|GeometryFrame)$/]` | Derived types in serialization | — (`src/data/serialization/**` only) | authored/derived |
 | B10 | `raf-single-owner` | `no-restricted-globals` (`requestAnimationFrame`, `cancelAnimationFrame`) | Multiple rAF pipelines | `src/view/frame-scheduler.ts` | `01` §3 |
@@ -108,6 +108,30 @@ Every custom rule spec below is complete enough to implement without re-reading 
 
 ---
 
+### 3.3a `freegantt/no-kind-literal` — syntactic · `01` §2.5 · shipped S2.7
+
+**Narrower cousin of §3.3, landed early.** D-S2-22's span rollup is the first kind-dependent
+behaviour in `data/`, before any of §3.3's four seam files exist (S3–S6). Rather than ship §3.3's
+seam-allowlist shape against seams that don't exist yet, S2.7 lands the part that is checkable today:
+no file may compare a kind string literal against `.kind` at all, in `src/data/**` or `src/layout/**`
+(tests exempt — fixture setup legitimately writes `{ kind: 'group' }`).
+
+**Flags:** `BinaryExpression` (`===`/`!==`/`==`/`!=`) where one side is a `*.kind` member expression
+and the other a string literal, and `switch (*.kind)` with a literal `case`.
+
+**Allowed:** `entry.kind ?? 'span'` (reading the stored default, not branching on behavior) and, by
+the same reasoning, a comparison against `'span'` specifically — treated as a shape/omission decision
+(e.g. "is this the default, so can be omitted from a serialized document"), not the "different
+behavior per kind" chain the rule targets. A comparison against any other kind value still trips it.
+
+**Message:** `kind is dispatched through a lookup, never compared inline. Register behavior at the seam for this layer. (plans/01 §2.5)`
+
+**When §3.3's seams land (S3+):** either fold this rule into §3.3's broader one with its allowlist, or
+keep both — the seam files themselves need to compare `kind` to dispatch, which is exactly what §3.3's
+allowlist exists for; `data/` and `layout/` have no such seam and never will, on the current design.
+
+---
+
 ### 3.4 `freegantt/no-module-level-state` — syntactic · I2
 
 **Flags, at module scope in `src/**`:**
@@ -135,9 +159,9 @@ Every custom rule spec below is complete enough to implement without re-reading 
 
 ---
 
-### 3.6 `freegantt/no-store-mutation-outside-transaction` — type-aware · `01` §6 · `PLANNED (S2)`
+### 3.6 `freegantt/no-store-mutation-outside-transaction` — type-aware · `01` §6 · shipped S2.7
 
-**Flags:** calls to store mutator methods (`add`, `update`, `remove`, `set`, `clear`) on a receiver whose type implements the internal `MutableStore` interface, outside `src/data/transaction.ts` and `src/data/undo.ts`.
+**Flags:** calls to store mutator methods (`add`, `update`, `remove`, `set`, `clear`) on a receiver whose type implements the internal `MutableStore` interface, outside `src/data/entry-store.ts` and `src/data/transaction.test.ts` — corrected from the plan's original `transaction.ts`/`history.ts` guess: neither of those calls the gated methods by name in the shipped code, `entry-store.ts` is the actual internal caller (via its own `TxToken`-gated methods), and the test file legitimately drives the gate directly.
 
 **Belt and braces:** the mutators additionally take a `TxToken` parameter that only `transaction.ts` can construct (private constructor + non-exported type), so `typecheck` catches it too. The lint rule exists for the clearer message and because the token can be threaded around by a determined caller.
 
@@ -217,9 +241,15 @@ Rules land with the code they can govern. Rows below match the matrix statuses.
 
 | Slice | Rules active |
 |---|---|
-| S0 | B1, B2, B3, B5, B6, B7, B8, B10, B11, 3.1, 3.3, 3.4, 3.5, 3.7, 3.8, 3.9 |
+| S0 | B1, B2, B5, B6, B11, 3.1 |
 | S1 | + B4, 3.2, 3.10, 3.11 |
-| S2 | + B9, 3.6 |
+| S2.7 | + B7, B8, B9, B10, 3.3a, 3.4, 3.6, 3.7, 3.8 (S2.7 correction: the plan drafted these against S0/S2, before the code they govern existed to write fixtures against — `no-store-mutation-outside-transaction` needs `data/transaction.ts`, `require-invariant-header` needs its five listed files, and so on; all landed together at slice-close instead) |
 | S3 | (no new rules — I6/I14 are tests) |
+
+**Not yet shipped (S2.7 correction — the table above previously claimed these landed at S0, before the
+code they govern existed):** B3 (no production id minter needs it — `01-invariant-guard-matrix.md`'s
+I4 row), 3.3 (its four seam files don't exist before S3–S6), 3.5 `no-recursion-in-scheduling` (I3,
+`scheduling/` is an empty stub until S7), 3.9 `no-allocation-in-hot-path` (I5, `interaction/` doesn't
+exist before S3).
 
 A rule scheduled for a later slice still exists in `eslint.config.js` from S0, pointed at its (empty) target directory: it costs nothing and it fires the moment the first violating file appears.

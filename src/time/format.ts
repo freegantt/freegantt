@@ -6,7 +6,20 @@ import type { Instant } from '../model/index.js';
 import { toPlain } from './zone.js';
 import { addMs } from './instant.js';
 
-const MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const MONTH_ABBR = Object.freeze([
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
+]);
 
 function formatPlainDate(zone: string, i: Instant): string {
   const { year, month, day } = toPlain(zone, i);

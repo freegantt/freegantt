@@ -31,11 +31,30 @@ const gantt = new Gantt({
 });
 ```
 
-That is the whole surface for a static chart today. Ids are plain strings and dates are plain
-strings; nothing has to be constructed first. Wrap the entries in a `Dataset` with the IANA
-`timeZone` they are written in, mount a `Gantt` on a container element, and `gantt.destroy()` tears it
-down. Editing entries after mount (`dataset.entries.add/update/remove`), undo/redo, and dependencies
-land in later slices — see `plans/03-slices.md`.
+Ids are plain strings and dates are plain strings; nothing has to be constructed first. Wrap the
+entries in a `Dataset` with the IANA `timeZone` they are written in, mount a `Gantt` on a container
+element, and `gantt.destroy()` tears it down.
+
+Editing after mount is a plain call on `dataset.entries` — no second render path, no re-mount. Every
+call auto-wraps in its own transaction (D-S2-8), so a bound `Gantt` moves the bar on the next frame:
+
+```ts
+dataset.entries.add({ id: 't9', name: 'Roofing', start: '2026-10-01', end: '2026-10-15' });
+dataset.entries.update('t2', { name: 'Framing — north wing' });
+dataset.entries.remove('t9'); // and every descendant, in the same changeset
+
+dataset.transaction(() => {
+  dataset.entries.update('t1', { start: '2026-10-05' });
+  dataset.entries.update('t2', { start: '2026-10-12' });
+}); // one changeset, one render
+
+dataset.undo(); // reverts the transaction above in one call
+dataset.redo();
+```
+
+`undo()`/`redo()` return nothing — like every other commit, what they did arrives on
+`dataset.on('change')`, tagged `origin: 'undo'`/`'redo'`. `canUndo`/`canRedo` say whether there is
+anything to undo/redo. Dependencies land in a later slice — see `plans/03-slices.md`.
 
 ## Dates and ids a consumer can write
 
@@ -169,12 +188,39 @@ const dataset = new Dataset({
   dateOnlyEnd, // optional, 'inclusive' (default) | 'exclusive'
 });
 
-dataset.entries; // readonly Entry[] — ids branded, dates resolved to Instant
+dataset.entries.all; // readonly Entry[] — ids branded, dates resolved to Instant
+
+dataset.entries.add({ id: 't9', name: 'Roofing', start: '2026-10-01', end: '2026-10-15' });
+dataset.entries.update('t2', { name: 'Framing — north wing' });
+dataset.entries.remove('t9');
+
+dataset.transaction(() => {
+  /* several entries.add/update/remove calls, one changeset */
+});
+
+dataset.on('change', ({ changeSet }) => {
+  /* changeSet.added / .removed / .updated — a bound Gantt reacts to this itself */
+});
+
+dataset.undo(); // origin: 'undo' on the change event it emits
+dataset.redo(); // origin: 'redo'
+dataset.canUndo; // false once the stack (default capacity 100) is exhausted
+dataset.canRedo;
+
+// The write path undo()/redo() are built on, published for a consumer's own History:
+dataset.replay(invertChangeSet(recordedChangeSet)); // origin must be 'undo' or 'redo'
 ```
 
 `Dataset` is a headless, DOM-free wrapper around an entry list. It reads each `EntryInput` into an
-`Entry` once, at construction, and never mutates what the consumer handed it. Transactions, undo/redo,
-and mutation (`dataset.entries.add/update/remove`) land in S2 — see `plans/03-slices.md`.
+`Entry` once, at construction, and never mutates what the consumer handed it. Every mutator
+auto-wraps in a transaction (D-S2-8); `dataset.transaction(() => { ... })` batches several into one
+changeset. A `Gantt` bound to the dataset subscribes to `change` itself — editing after mount renders
+on the next frame with no extra call. `beforeChange` can veto a changeset (returning `false` throws
+`MutationCancelledError` from the mutator that triggered it); `undo()`/`redo()` revert or replay a
+committed changeset exactly, cascades included, without re-running the extension hook. `replay` and
+`invertChangeSet` are that same write path, published — a consumer can write their own History against
+`on('change')`, `invertChangeSet`, and `replay` alone, with no internal import. Dependencies land in a
+later slice — see `plans/03-slices.md`.
 
 ### `TimeScaleModel` (S1)
 
