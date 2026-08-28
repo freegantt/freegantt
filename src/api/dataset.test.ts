@@ -120,3 +120,30 @@ describe('new Dataset()', () => {
     expect(first(dataset)).not.toBe(input);
   });
 });
+
+describe('Dataset transaction/on/off delegation', () => {
+  it('transaction() returns the body value; an empty body emits no change', () => {
+    const dataset = new Dataset({ timeZone: 'UTC', entries: [oneEntry()] });
+    let fired = false;
+    dataset.on('change', () => {
+      fired = true;
+    });
+
+    const result = dataset.transaction(() => 'ok');
+
+    expect(result).toBe('ok');
+    expect(fired).toBe(false);
+  });
+
+  it('off() stops a handler from seeing further events', () => {
+    const dataset = new Dataset({ timeZone: 'UTC', entries: [oneEntry()] });
+    let calls = 0;
+    const handler = (): void => {
+      calls += 1;
+    };
+    dataset.on('beforeChange', handler);
+    dataset.off('beforeChange', handler);
+    dataset.transaction(() => undefined);
+    expect(calls).toBe(0);
+  });
+});

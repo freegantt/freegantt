@@ -1,5 +1,18 @@
 export { Dataset } from './dataset.js';
 export type { DatasetOptions } from './dataset.js';
+export type { DatasetEventMap } from '../data/index.js';
+export type {
+  ChangeSet,
+  ChangeSetId,
+  ChangeOrigin,
+  StoreName,
+  CoreFieldKey,
+  FieldKey,
+  EntityAdded,
+  EntityRemoved,
+  FieldUpdated,
+  EntryEdit,
+} from '../model/index.js';
 export { Gantt } from './gantt.js';
 export type { GanttOptions } from './gantt.js';
 export type { Theme } from '../view/index.js';
