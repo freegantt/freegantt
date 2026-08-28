@@ -39,6 +39,7 @@ export {
   UnknownFieldError,
   MutationDuringNotificationError,
   MutationCancelledError,
+  UnsupportedSchemaError,
 } from '../model/index.js';
 
 // model/ types the public surface re-exports. A consumer building entries or catching errors names these.
@@ -57,6 +58,7 @@ export type {
 // The input twins of the stored types: what a consumer writes, as opposed to what the library stores.
 // Public because a consumer that types its own entry builder needs to name them.
 export type { EntryInput, InstantInput, TimeSpanInput, DateOnlyEndRule } from '../model/index.js';
+export type { DatasetDocument, EntryDocument } from '../model/index.js';
 // Point/Size are the S1.5 ScrollModel's own vocabulary (S1.5 README §5) — a consumer building
 // `new ScrollModel({ x, y })` or reading `ScrollState` needs the shape in the public surface too.
 export type { Point, Size } from '../model/index.js';
