@@ -19,7 +19,7 @@ import type { EntryReadContext } from './entry-reader.js';
 import type { EditExtender } from './edit-extension.js';
 import { identityExtender } from './edit-extension.js';
 import { EventBus } from './event-bus.js';
-import { runTransaction } from './transaction.js';
+import { applyConstructionRollUp, runTransaction } from './transaction.js';
 
 export interface DatasetStateOptions {
   entries: readonly EntryInput[];
@@ -75,14 +75,12 @@ export class DatasetState implements Dataset {
       referenceDate: this.referenceDate,
       derivedSpanKinds: this.derivedSpanKinds,
     };
-    // NOTE (left for the next step to close, see handoff): construction does not run the rollup, so
-    // a deriving-kind entry given children only via the initial `entries: EntryInput[]` array (not a
-    // later transaction) keeps its reference-date span until the first transaction that touches one
-    // of those children. `01` §2.6 / README.md D-S2-22 describe rollup running at construction and
-    // on `fromJSON` too — closing that gap needs a way to run the same rollup step 5 uses without a
-    // second importer of `span-rollup.ts` (S2.6's job, or an S2.3 follow-up).
     this.entries = new EntryStore(readEntries(options.entries, context), context);
     this.entries.bindTransactions(this);
+    // `01` §2.6 / README.md D-S2-22: a deriving-kind entry given children only through the initial
+    // array gets a real span before anyone reads it, not just after the first later transaction
+    // touches one of those children. `fromJSON` gets this for free, being construction like any other.
+    applyConstructionRollUp(this);
   }
 
   nextChangeSetId(): ChangeSetId {

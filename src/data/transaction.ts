@@ -60,6 +60,37 @@ export interface TransactionData {
   readonly derivedSpanKinds: ReadonlySet<EntryKind>;
 }
 
+/**
+ * Runs the span rollup once against `data`'s freshly built entries, with no proposed edits — what a
+ * fresh `Dataset(...)` and `Dataset.fromJSON(...)` share (`01` §2.6, D-S2-22): a `{ kind: 'group' }`
+ * given children only through the initial array gets a real span before anyone reads it, not just
+ * after the first later transaction touches one of those children.
+ *
+ * Writes any correction straight into the store and returns early if there is none. There is no
+ * `beforeChange`/`change` here and no history record (S2.5) — construction emits nothing (`01` §2.6),
+ * so this bypasses `runTransaction` entirely rather than opening a transaction only to suppress its
+ * notifications. `origin: 'user'` is inert: the changeset this builds is never emitted or returned,
+ * so nothing reads it — a `'load'` origin arrives with its own producer later (D-S2-11).
+ *
+ * The second and last caller of `rollUpDerivedSpans` in `src/**`, alongside `runTransaction` below —
+ * both in this file, which keeps `span-rollup-is-removable` (D-S2-23) honest.
+ */
+export function applyConstructionRollUp(data: TransactionData): void {
+  const snapshot = data.entries.snapshot();
+  const updated = rollUpDerivedSpans(snapshot, new Map(), data.derivedSpanKinds);
+  if (updated.length === 0) return;
+
+  const token: TxToken = {} as TxToken;
+  data.entries.beginTransaction(token);
+  data.entries.endTransaction(token, {
+    id: data.nextChangeSetId(),
+    origin: 'user',
+    added: [],
+    removed: [],
+    updated,
+  });
+}
+
 function mergeEdits(base: EntryEdits, extra: EntryEdits): EntryEdits {
   if (extra.size === 0) return base;
   const merged = new Map(base);
