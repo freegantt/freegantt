@@ -1,10 +1,32 @@
 import { describe, expect, it, vi } from 'vitest';
 import { GanttShell } from './gantt-shell.js';
 import type { GanttShellOptions } from './gantt-shell.js';
-import { ScrollModel, TimeScaleModel } from '../layout/index.js';
+import { FrameLayout, ScrollModel, TimeScaleModel } from '../layout/index.js';
 import { entryId, EntryNotFoundError, ContainerNotFoundError } from '../model/index.js';
 import type { Entry, Instant } from '../model/index.js';
-import { EntryStore } from '../data/index.js';
+import { DatasetState, EntryStore } from '../data/index.js';
+
+// [S2-A3]: counts `RenderBackend.sync` calls without a production seam to reach `GanttShell`'s
+// private `#backend` (D-S2-16's own justification for `heightIndexRevision` applies here too — a
+// property of the implementation, made checkable). Wraps the real dom backend transparently; every
+// other test in this file goes through the same wrapper and is unaffected.
+const backendSyncCalls = vi.hoisted(() => ({ count: 0 }));
+vi.mock('../render/dom/index.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../render/dom/index.js')>();
+  return {
+    ...actual,
+    createDomBackend: () => {
+      const backend = actual.createDomBackend();
+      return {
+        ...backend,
+        sync: (frame: Parameters<typeof backend.sync>[0]) => {
+          backendSyncCalls.count++;
+          backend.sync(frame);
+        },
+      };
+    },
+  };
+});
 
 // D-S2-2: `GanttShellOptions.dataset` is a store view now, not a plain array — the real `EntryStore`
 // backs these fixtures the same way a `Dataset` would, with no test-only fake to keep in sync.
@@ -536,6 +558,44 @@ describe('a11y roles and the one honest tab stop (S1.10, D-S1.10-5)', () => {
     shell.a11yLabel = 'Renamed plan';
     expect(container.getAttribute('aria-label')).toBe('Renamed plan');
 
+    shell.destroy();
+  });
+});
+
+describe('[S2-A3] one changeset, one layout pass, one frame (D-S2-15/16)', () => {
+  it('a 500-entry transaction updating every entry yields one change, one computeFrame, one sync, and an unchanged height index', () => {
+    // Installed before construction so the shell's own first render (#22) is call #0 — the only way
+    // to reach the `FrameLayout` instance this shell owns and read its pre-transaction revision.
+    const computeFrameSpy = vi.spyOn(FrameLayout.prototype, 'computeFrame');
+    const dataset = new DatasetState({ entries: tallEntries(500), timeZone });
+    const container = document.createElement('div');
+    const scale = new TimeScaleModel({ range: { start: rangeStart, end: rangeEnd } });
+    const shell = new GanttShell({ container, dataset, scale });
+
+    const layout = computeFrameSpy.mock.instances[0] as FrameLayout;
+    const revisionBefore = layout.heightIndexRevision;
+    let changeCalls = 0;
+    dataset.on('change', () => {
+      changeCalls++;
+    });
+    computeFrameSpy.mockClear();
+    backendSyncCalls.count = 0;
+
+    dataset.transaction(() => {
+      for (const entry of dataset.entries.all) {
+        dataset.entries.update(entry.id, { name: `${entry.name} (updated)` });
+      }
+    });
+    shell.render(); // flushes the one frame the transaction's `change` requested (D-S2-15)
+
+    expect(changeCalls).toBe(1);
+    expect(computeFrameSpy).toHaveBeenCalledTimes(1);
+    expect(backendSyncCalls.count).toBe(1);
+    // Only `updated` rows: the row-height index's cache key (rowCount, rowHeight) is untouched, so
+    // no fresh index is built (D-S2-16).
+    expect(layout.heightIndexRevision).toBe(revisionBefore);
+
+    computeFrameSpy.mockRestore();
     shell.destroy();
   });
 });

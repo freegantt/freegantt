@@ -155,7 +155,7 @@ interface Entry<TMeta = unknown> {
 `Dataset.entries` is a store view, not a bare array (S2.1, D-S2-2, `plans/s2-data-core`):
 `dataset.entries.update('t2', { … })` is the published call site, so `dataset.entries` is the
 collection itself. `EntryStoreView` (`model/dataset.ts`) is the read half — `all`, `get`,
-`has`, `size` — and `data/`'s `EntryStore` adds the mutators once S2.3 lands. `all`'s
+`has`, `size`, `childrenOf` — and `data/`'s `EntryStore` adds the mutators. `all`'s
 returned array is cached and rebuilt once per commit, not once per read (D-S2-3), so a caller
 comparing two reads of `all` by reference is a correct "did anything change" check.
 

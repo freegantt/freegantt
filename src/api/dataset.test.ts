@@ -135,6 +135,15 @@ describe('Dataset transaction/on/off delegation', () => {
     expect(fired).toBe(false);
   });
 
+  it('entries.childrenOf returns direct children; derivedSpanKinds defaults to group', () => {
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      entries: [{ id: 'p1', name: 'Sitework', kind: 'group' }, oneEntry({ id: 't1', parentId: 'p1' })],
+    });
+    expect(dataset.derivedSpanKinds).toEqual(['group']);
+    expect(dataset.entries.childrenOf('p1').map((e) => e.id)).toEqual([entryId('t1')]);
+  });
+
   it('off() stops a handler from seeing further events', () => {
     const dataset = new Dataset({ timeZone: 'UTC', entries: [oneEntry()] });
     let calls = 0;

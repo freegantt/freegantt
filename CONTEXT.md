@@ -85,7 +85,7 @@ A `beforeChange` handler returning `false`, refusing the whole ChangeSet before 
 _Avoid_: Cancel, reject, block (the codebase's one word for this is Veto — ADR 0006)
 
 **Subscription**:
-A held registration on a Dataset event, created through `on` and released by `unsubscribe()` — `data/`'s mechanism, not `layout/`'s (Bound value already tells `layout/` to avoid the word, since it names a different mechanism with a different owner). `view/dataset-change-subscription.ts`'s `subscribeToDatasetChanges` is the one built-in reaction that holds one: it subscribes to `change`, pushes the fresh `entries.all` snapshot into the bound viewport, and requests a frame — using nothing a consumer could not use (D-S2-20, D-S2-24).
+A held registration on a Dataset or Gantt event, created with `on` and released with `off` — the same pair on both objects (plans/02 §3). `data/` owns the Dataset bus; `layout/`'s Bound value is a different mechanism. `view/dataset-change-subscription.ts`'s `subscribeToDatasetChanges` is the one built-in reaction: it calls `dataset.on('change', …)`, pushes the fresh `entries.all` snapshot into the bound viewport, and requests a frame — using nothing a consumer could not use (D-S2-20, D-S2-24). Its handle's `unsubscribe()` is that helper's own word for calling `off`.
 _Avoid_: Attachment (that wires a DOM element; this touches no DOM), Binding (that is `layout/viewport/`'s word for a Gantt's own data contribution to a shared model)
 
 **EntryEdits**:
