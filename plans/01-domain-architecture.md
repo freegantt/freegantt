@@ -468,19 +468,33 @@ Shipped presets cover hour→year zoom levels; custom presets are config objects
 
 ## 6. `data/` — stores, transactions, changesets
 
-- **`DatasetData`** owns normalized stores (`entries`, plus reserved stores for scheduling-plugin-owned data such as `dependencies`) with indexes (`byId`, `byParent`, `byPredecessor`, `bySuccessor` — the latter two populated only when a plugin uses them), the dataset timezone, and the generic edit-extension binding (identity when unoccupied; §1). Fully headless (D4): constructible and usable in Node with no view.
+- **`DatasetState`** (named `DatasetData` in earlier drafts of this doc; renamed in S2.1, OQ5) owns normalized stores (`entries`, plus reserved stores for scheduling-plugin-owned data such as `dependencies` — S3 adds these; S2 has `entries` alone) with indexes (`byId`, `byParent`, `byPredecessor`, `bySuccessor` — the latter two populated only when a plugin uses them), the dataset timezone, and the generic edit-extension binding (identity when unoccupied; §1). Fully headless (D4): constructible and usable in Node with no view. `api/Dataset` is a thin façade delegating every read and the `transaction`/`on`/`off` trio to it.
 - **Transactions**: `dataset.transaction(() => { ...mutations })` batches mutations, runs the extension hook once, emits **one changeset**. Every mutation path — API and gesture — goes through a transaction. No exceptions.
-- **Changesets** are the universal delta (D7, principle 4):
+- **Changesets** are the universal delta (D7, principle 4) — an open-by-construction discriminated union, per store entity kind, so a `field` typo on `updated` and a stray property on `added`/`removed` are both caught at the type level rather than only at runtime:
 
 ```ts
+type StoreName = 'entries'; // S3 adds `plugin:${string}/${string}`
+type ChangeOrigin = 'user' | 'undo' | 'redo'; // 'engine' and 'load' arrive with their producers (D-S2-11)
+
+// FieldKey stays open (D-S2-26): the core Entry keys are named for autocomplete and the
+// per-field comparator table's exhaustiveness check, but a consumer- or plugin-declared field
+// (S5's field registry) is equally legal and validated at runtime, not by the type.
+type FieldKey = keyof Omit<Entry, 'id'> | (string & {});
+
+interface EntityAdded   { store: 'entries'; entity: Entry; }
+interface EntityRemoved { store: 'entries'; entity: Entry; }
+interface FieldUpdated  { store: 'entries'; id: EntryId; field: FieldKey; from: unknown; to: unknown; }
+
 interface ChangeSet {
   id: ChangeSetId;
-  origin: 'user' | 'engine' | 'undo' | 'redo' | 'load';
-  added:   Array<{ store: StoreName; entity: unknown }>;
-  removed: Array<{ store: StoreName; entity: unknown }>;
-  updated: Array<{ store: StoreName; id: EntityId; field: string; from: unknown; to: unknown }>;
+  origin: ChangeOrigin;
+  added:   readonly EntityAdded[];
+  removed: readonly EntityRemoved[];
+  updated: readonly FieldUpdated[];
 }
 ```
+
+A field whose `from` equals `to` under its per-field comparator (`===` for primitives/`Instant`s, element-wise on `segments`, reference-only on `meta`) is never recorded — an empty changeset commits nothing, emits no event, and pushes no history entry.
 
 - **Undo/redo**: the transaction is the atomic unit, and it records the **complete post-scheduling changeset — user edits and engine cascades together**. Undo that reverts only the user's edit while the cascade stays applied corrupts the dataset; this is the corruption class the design closes. Redo replays the recorded changeset (deterministic even if engine behavior changes between versions).
 - **Reactivity**: a thin internal `signal`/`computed`/`effect` façade in `data/`, backed by one small dependency, swappable in one file. Instance-scoped — **zero module-level singletons anywhere** (two Gantt instances on one page with independent state is a standing CI test).
