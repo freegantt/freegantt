@@ -57,6 +57,7 @@ export class Dataset {
     // (undocumented)
     on<K extends keyof DatasetEventMap>(name: K, handler: (payload: DatasetEventMap[K]) => void | false): void;
     redo(): void;
+    replay(changeSet: ChangeSet): void;
     // (undocumented)
     get timeZone(): string;
     toJSON(): DatasetDocument;
@@ -333,6 +334,14 @@ export type InstantInput = Instant | Date | number | string;
 export class InvalidInstantError extends FreeGanttError {
     constructor(message: string);
 }
+
+// @public
+export class InvalidReplayOriginError extends FreeGanttError {
+    constructor(origin: string);
+}
+
+// @public
+export function invertChangeSet(changeSet: ChangeSet): ChangeSet;
 
 // @public (undocumented)
 export type ItemId = string & {

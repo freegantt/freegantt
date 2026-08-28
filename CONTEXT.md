@@ -81,8 +81,12 @@ The tag on a ChangeSet naming why the transaction ran (`'user' | 'undo' | 'redo'
 _Avoid_: Source (Field source already owns that word), reason, cause
 
 **History**:
-The undo/redo stack (`data/history.ts`) — a subscriber to `change`, not a step in the commit path: it records a `'user'`-origin ChangeSet, and moves its cursor rather than recording on an `'undo'`/`'redo'`-origin one. `undo()` applies the ChangeSet at the cursor inverted (`to`→`from`, `added`↔`removed`), `redo()` re-applies it exactly as recorded — neither re-runs the extension hook or the Rollup, so an engine whose behaviour changes between versions cannot rewrite History. Deleting `data/history.ts` and its one construction line leaves the commit path unchanged, byte for byte (D-S2-23) — a consumer could write this file themselves, using only `on('change')` and `transaction()`.
+The undo/redo stack (`data/history.ts`) — a subscriber to `change`, not a step in the commit path: it records a `'user'`-origin ChangeSet, and moves its cursor rather than recording on an `'undo'`/`'redo'`-origin one. `undo()` Replays the ChangeSet at the cursor inverted (`to`→`from`, `added`↔`removed`), `redo()` Replays it exactly as recorded. Deleting `data/history.ts` and its one construction line leaves the commit path unchanged, byte for byte (D-S2-23) — a consumer could write this file themselves, using only `on('change')`, `invertChangeSet`, and `replay`.
 _Avoid_: Undo stack (names the data structure, not the subscriber that owns it), journal, log — Changeset log is the harness panel that renders a `ChangeSet`, a different thing entirely
+
+**Replay**:
+Applying a recorded ChangeSet exactly, through `Dataset.replay(changeSet)` — no extension hook, no Rollup (D-S2-14), so an engine whose behaviour changes between library versions cannot rewrite History. `changeSet.origin` must be `'undo'` or `'redo'`; `'user'` throws `InvalidReplayOriginError`. `undo()`/`redo()` are built on this; a consumer History uses the same door (`plans/s2-data-core/s2b-undo-replay-seam.md`).
+_Avoid_: Apply (the sync adapter's own job, D-S2-11, not open yet), Commit (the transaction's moment, ADR 0006)
 
 **Write set**:
 The open Transaction's in-progress `{ before, after }` record per touched field, kept separate from the Store's committed indexes until commit. `get`/`has`/`size`/`childrenOf` read through it (read-your-own-writes); `all` does not. Discarding it — on a thrown body or a `beforeChange` veto — is the whole of rollback; there is no undo-engine involved in an in-flight transaction.

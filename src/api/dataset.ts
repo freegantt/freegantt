@@ -3,6 +3,7 @@
 // in `data/` (`DatasetState`). `model/`'s `Dataset` is the smaller bindable surface a Gantt holds.
 
 import type {
+  ChangeSet,
   DatasetDocument,
   DatasetEventMap,
   DateOnlyEndRule,
@@ -102,6 +103,17 @@ export class Dataset {
   /** Re-applies the most recently undone changeset. A no-op when `canRedo` is `false`. */
   redo(): void {
     this.#state.redo();
+  }
+
+  /** Applies an already-complete `ChangeSet` exactly as given — no extension hook, no rollup
+   *  (`plans/s2-data-core/s2b-undo-replay-seam.md`). `changeSet.origin` must be `'undo'` or `'redo'`;
+   *  `'user'` throws `InvalidReplayOriginError` — that door is `apply`, later (D-S2-11). An empty
+   *  changeset is a no-op: no event, no throw. `beforeChange` then `change` still fire, and a veto
+   *  throws `MutationCancelledError` and writes nothing. This is the write path `undo()`/`redo()` use;
+   *  a consumer History can now be written against this method alone, plus `invertChangeSet` and
+   *  `on('change')`. */
+  replay(changeSet: ChangeSet): void {
+    this.#state.replay(changeSet);
   }
 
   /** Whole-document write (D-S2-12). Byte-stable: declared key order, optional keys omitted, entries

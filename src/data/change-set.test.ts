@@ -118,7 +118,7 @@ describe('foldChangeSet', () => {
 describe('invertChangeSet', () => {
   it('swaps added with removed and each updated row from/to, and tags origin undo', () => {
     const t1 = entry('t1');
-    const inverted = invertChangeSet(changeSetId(2), {
+    const inverted = invertChangeSet({
       id: changeSetId(1),
       origin: 'user',
       added: [{ store: 'entries', entity: t1 }],
@@ -126,7 +126,7 @@ describe('invertChangeSet', () => {
       updated: [{ store: 'entries', id: t1.id, field: 'name', from: 'old', to: 'new' }],
     });
     expect(inverted).toEqual({
-      id: changeSetId(2),
+      id: changeSetId(1),
       origin: 'undo',
       added: [],
       removed: [{ store: 'entries', entity: t1 }],
