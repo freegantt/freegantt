@@ -20,6 +20,7 @@ export default defineConfig({
         'scroll-sync': page('scroll-sync.html'),
         zoom: page('zoom.html'),
         'large-dataset': page('large-dataset.html'),
+        data: page('data.html'),
       },
     },
   },
