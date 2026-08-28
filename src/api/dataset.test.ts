@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { Dataset } from './dataset.js';
-import { entryId, instant } from './index.js';
-import type { Entry, EntryInput } from './index.js';
+import { changeSetId, entryId, instant, invertChangeSet, InvalidReplayOriginError } from './index.js';
+import type { ChangeSet, Entry, EntryInput } from './index.js';
 
 const utc = (iso: string): number => Date.parse(iso);
 
@@ -118,5 +118,119 @@ describe('new Dataset()', () => {
     const dataset = new Dataset({ timeZone: 'UTC', entries: [input] });
     expect(input.start).toBe('2026-09-01');
     expect(first(dataset)).not.toBe(input);
+  });
+});
+
+describe('Dataset transaction/on/off delegation', () => {
+  it('transaction() returns the body value; an empty body emits no change', () => {
+    const dataset = new Dataset({ timeZone: 'UTC', entries: [oneEntry()] });
+    let fired = false;
+    dataset.on('change', () => {
+      fired = true;
+    });
+
+    const result = dataset.transaction(() => 'ok');
+
+    expect(result).toBe('ok');
+    expect(fired).toBe(false);
+  });
+
+  it('entries.childrenOf returns direct children; derivedSpanKinds defaults to group', () => {
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      entries: [{ id: 'p1', name: 'Sitework', kind: 'group' }, oneEntry({ id: 't1', parentId: 'p1' })],
+    });
+    expect(dataset.derivedSpanKinds).toEqual(['group']);
+    expect(dataset.entries.childrenOf('p1').map((e) => e.id)).toEqual([entryId('t1')]);
+  });
+
+  it('off() stops a handler from seeing further events', () => {
+    const dataset = new Dataset({ timeZone: 'UTC', entries: [oneEntry()] });
+    let calls = 0;
+    const handler = (): void => {
+      calls += 1;
+    };
+    dataset.on('beforeChange', handler);
+    dataset.off('beforeChange', handler);
+    dataset.transaction(() => undefined);
+    expect(calls).toBe(0);
+  });
+
+  it('toJSON / fromJSON round-trips byte-stable on the façade (D-S2-12)', () => {
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      entries: [oneEntry({ start: '2026-09-01T00:00:00.000Z', end: '2026-09-11T00:00:00.000Z' })],
+    });
+    const doc = dataset.toJSON();
+    const round = Dataset.fromJSON(doc).toJSON();
+    expect(JSON.stringify(round)).toBe(JSON.stringify(doc));
+  });
+});
+
+/** A consumer History, written against `Dataset`'s public surface only — no `data/` import
+ *  (`plans/s2-data-core/s2b-undo-replay-seam.md`). Exactly the shape the seam doc's decision names. */
+class ConsumerHistory {
+  #stack: ChangeSet[] = [];
+
+  constructor(dataset: Dataset) {
+    dataset.on('change', ({ changeSet }) => {
+      if (changeSet.origin === 'user') this.#stack.push(changeSet);
+    });
+  }
+
+  undo(dataset: Dataset): void {
+    const changeSet = this.#stack.pop();
+    if (changeSet) dataset.replay(invertChangeSet(changeSet));
+  }
+}
+
+describe('Dataset.replay / invertChangeSet (consumer-surface undo)', () => {
+  it('a consumer History built on on/replay/invertChangeSet undoes a rollup cascade, restoring both rows', () => {
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      entries: [
+        { id: 'parent', name: 'Sitework', kind: 'group' },
+        oneEntry({ id: 'child', parentId: 'parent' }),
+      ],
+    });
+    const parentBefore = dataset.entries.get('parent')!;
+    const childBefore = dataset.entries.get('child')!;
+    const history = new ConsumerHistory(dataset);
+
+    dataset.entries.update('child', { end: '2026-10-01' });
+    expect(dataset.entries.get('parent')?.end).not.toEqual(parentBefore.end);
+
+    history.undo(dataset);
+
+    expect(dataset.entries.get('child')?.end).toEqual(childBefore.end);
+    expect(dataset.entries.get('parent')?.start).toEqual(parentBefore.start);
+    expect(dataset.entries.get('parent')?.end).toEqual(parentBefore.end);
+  });
+
+  it("replay refuses origin 'user' with InvalidReplayOriginError and never calls an injected extender", () => {
+    const dataset = new Dataset({ timeZone: 'UTC', entries: [oneEntry()] });
+    const changeSet: ChangeSet = {
+      id: changeSetId(1),
+      origin: 'user',
+      added: [],
+      removed: [],
+      updated: [{ store: 'entries', id: first(dataset).id, field: 'name', from: 'Design', to: 'Blocked' }],
+    };
+
+    expect(() => dataset.replay(changeSet)).toThrow(InvalidReplayOriginError);
+    expect(first(dataset).name).toBe('Design');
+  });
+
+  it('replay with an empty changeset is a no-op: no event, no throw', () => {
+    const dataset = new Dataset({ timeZone: 'UTC', entries: [oneEntry()] });
+    let fired = false;
+    dataset.on('change', () => {
+      fired = true;
+    });
+
+    expect(() =>
+      dataset.replay({ id: changeSetId(1), origin: 'undo', added: [], removed: [], updated: [] }),
+    ).not.toThrow();
+    expect(fired).toBe(false);
   });
 });

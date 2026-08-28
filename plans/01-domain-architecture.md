@@ -64,6 +64,8 @@ There is deliberately no `data/ --> scheduling/` edge: `data/` has no static dep
 - `scheduling/` never imports `render/`, `view/`, or `interaction/` — and vice versa (D4). A scheduling plugin, when installed, meets `data/` only through that hook, never a static import.
 - `model/` is types only: zero runtime exports beyond id/brand helpers and the `FreeGanttError` base, zero dependencies.
 - Only `api/` and the type surface of `model/` are public entry points; everything else is internal and free to change.
+- **Removable leaves (D-S2-23, S2.7):** `span-rollup.ts`, `view/dataset-change-subscription.ts`, `data/history.ts`, and `data/serialization/**` each have exactly one legitimate importer, enforced the same way as the layer arrows above (dependency-cruiser `*-is-removable` rules, red-tested by `scripts/guard-red-test.mjs`). Each is provably deletable: its one caller goes away with it, and the rest of the system is unaffected (`plans/s2-data-core/README.md` §9's compatibility table names what each deletion degrades to).
+- **The commit path ends at `change`; `History` subscribes like any other consumer (D-S2-24):** `data/transaction.ts` commits a `ChangeSet` and emits `change`; it imports no history and no view. `History` and `view/dataset-change-subscription.ts` are both ordinary `on('change')` subscribers, not privileged callers on the commit path — the same discipline that makes both removable leaves above.
 
 ### 1.1 Directory shape
 
@@ -155,7 +157,7 @@ interface Entry<TMeta = unknown> {
 `Dataset.entries` is a store view, not a bare array (S2.1, D-S2-2, `plans/s2-data-core`):
 `dataset.entries.update('t2', { … })` is the published call site, so `dataset.entries` is the
 collection itself. `EntryStoreView` (`model/dataset.ts`) is the read half — `all`, `get`,
-`has`, `size` — and `data/`'s `EntryStore` adds the mutators once S2.3 lands. `all`'s
+`has`, `size`, `childrenOf` — and `data/`'s `EntryStore` adds the mutators. `all`'s
 returned array is cached and rebuilt once per commit, not once per read (D-S2-3), so a caller
 comparing two reads of `all` by reference is a correct "did anything change" check.
 
@@ -246,6 +248,7 @@ type ItemEmitter = (entry: Entry) => readonly Item[];
 Rules:
 
 - **Kind is authored, never derived.** A `group` is a group because the user said so — not because it currently has children. An empty group is legal and renders as one (that is how "add a phase, then fill it" works). For derived-span kinds, input may omit `start`/`end`: the store initializes a zero-length span (at the dataset's reference date) and the Span rollup owns it from then on — the *stored* model always has both fields, so no layer downstream handles absence. `parentId` (tree position) and `kind` (what it is) are orthogonal; "every parent is a group" is a convention, not a model rule — and `hierarchy: { autoGroup: true }` (`02` §2) maintains that convention automatically: an entry gaining its first child is promoted to `group` in the same transaction. **Promote only, never demote** — demoting on losing the last child would reintroduce exactly the flickering identity this rule exists to prevent; demotion stays an explicit edit.
+- **`derivedSpanKinds`** (`Dataset` option, default `['group']`) names which kinds get a rolled-up span; a consumer's own kind (say `'phase'`) opts in the same way. The Span rollup that reads it is `data/`'s own commit step — it runs on every transaction and at construction, whether or not a scheduling plugin is installed, and nothing installable can occupy or displace it (D-S2-22, closes OQ7). `scheduling/`'s engine moves children and nothing else; it never reaches the rollup, because the rollup already ran by the time anyone reads the result (`02.6` below, `s2.3-mutation-api.md` §1.5).
 - **The set is open.** Shipped kinds: `'span'`, `'group'`, `'milestone'`. A consumer-defined kind (say `'buffer'`) gets full behavior by registering at the four seams above — no core edits. Anything not registered at a seam falls back to `'span'` behavior there, so partial registration degrades gracefully instead of erroring.
 - **Group *entry* ≠ row *grouping*.** `rows: { source: 'group', groupBy }` is a view-side arrangement of any entries and persists nothing; a `kind: 'group'` entry is a model entity that persists, schedules, and syncs. They compose — a grouped view of a dataset containing group entries is well-defined, because one is authored and the other is derived (principle 1).
 
@@ -468,19 +471,33 @@ Shipped presets cover hour→year zoom levels; custom presets are config objects
 
 ## 6. `data/` — stores, transactions, changesets
 
-- **`DatasetData`** owns normalized stores (`entries`, plus reserved stores for scheduling-plugin-owned data such as `dependencies`) with indexes (`byId`, `byParent`, `byPredecessor`, `bySuccessor` — the latter two populated only when a plugin uses them), the dataset timezone, and the generic edit-extension binding (identity when unoccupied; §1). Fully headless (D4): constructible and usable in Node with no view.
+- **`DatasetState`** (named `DatasetData` in earlier drafts of this doc; renamed in S2.1, OQ5) owns normalized stores (`entries`, plus reserved stores for scheduling-plugin-owned data such as `dependencies` — S3 adds these; S2 has `entries` alone) with indexes (`byId`, `byParent`, `byPredecessor`, `bySuccessor` — the latter two populated only when a plugin uses them), the dataset timezone, and the generic edit-extension binding (identity when unoccupied; §1). Fully headless (D4): constructible and usable in Node with no view. `api/Dataset` is a thin façade delegating every read and the `transaction`/`on`/`off` trio to it.
 - **Transactions**: `dataset.transaction(() => { ...mutations })` batches mutations, runs the extension hook once, emits **one changeset**. Every mutation path — API and gesture — goes through a transaction. No exceptions.
-- **Changesets** are the universal delta (D7, principle 4):
+- **Changesets** are the universal delta (D7, principle 4) — an open-by-construction discriminated union, per store entity kind, so a `field` typo on `updated` and a stray property on `added`/`removed` are both caught at the type level rather than only at runtime:
 
 ```ts
+type StoreName = 'entries'; // S3 adds `plugin:${string}/${string}`
+type ChangeOrigin = 'user' | 'undo' | 'redo'; // 'engine' and 'load' arrive with their producers (D-S2-11)
+
+// FieldKey stays open (D-S2-26): the core Entry keys are named for autocomplete and the
+// per-field comparator table's exhaustiveness check, but a consumer- or plugin-declared field
+// (S5's field registry) is equally legal and validated at runtime, not by the type.
+type FieldKey = keyof Omit<Entry, 'id'> | (string & {});
+
+interface EntityAdded   { store: 'entries'; entity: Entry; }
+interface EntityRemoved { store: 'entries'; entity: Entry; }
+interface FieldUpdated  { store: 'entries'; id: EntryId; field: FieldKey; from: unknown; to: unknown; }
+
 interface ChangeSet {
   id: ChangeSetId;
-  origin: 'user' | 'engine' | 'undo' | 'redo' | 'load';
-  added:   Array<{ store: StoreName; entity: unknown }>;
-  removed: Array<{ store: StoreName; entity: unknown }>;
-  updated: Array<{ store: StoreName; id: EntityId; field: string; from: unknown; to: unknown }>;
+  origin: ChangeOrigin;
+  added:   readonly EntityAdded[];
+  removed: readonly EntityRemoved[];
+  updated: readonly FieldUpdated[];
 }
 ```
+
+A field whose `from` equals `to` under its per-field comparator (`===` for primitives/`Instant`s, element-wise on `segments`, reference-only on `meta`) is never recorded — an empty changeset commits nothing, emits no event, and pushes no history entry.
 
 - **Undo/redo**: the transaction is the atomic unit, and it records the **complete post-scheduling changeset — user edits and engine cascades together**. Undo that reverts only the user's edit while the cascade stays applied corrupts the dataset; this is the corruption class the design closes. Redo replays the recorded changeset (deterministic even if engine behavior changes between versions).
 - **Reactivity**: a thin internal `signal`/`computed`/`effect` façade in `data/`, backed by one small dependency, swappable in one file. Instance-scoped — **zero module-level singletons anywhere** (two Gantt instances on one page with independent state is a standing CI test).
@@ -699,12 +716,12 @@ Rules:
 | # | Invariant | Enforced by |
 |---|---|---|
 | I1 | Layer imports match §1 exactly | dependency lint in CI |
-| I2 | No module-level singletons; two Gantt instances coexist independently | isolation test (mounts two Gantt instances) |
+| I2 | No module-level singletons; two Gantt instances coexist independently | isolation test (mounts two Gantt instances); `freegantt/no-module-level-state` lint rule (S2.7) |
 | I3 | The first-party scheduling plugin's propagation contains no recursion | 5,000-link chain fixture + review rule |
 | I4 | Its `schedule()` never mutates its input; policy never moves a proposed field | dev-mode asserts + property test |
 | I5 | Hot path allocates nothing and never rebuilds a frame | perf test on `applyState` |
 | I6 | One transaction per gesture, at commit | interaction tests |
-| I7 | Undo reverts user + engine effects atomically (when a scheduling plugin is installed) | round-trip property test |
+| I7 | Undo reverts user + engine effects atomically (when a scheduling plugin is installed) | round-trip property test (`[S2-A1]`, `src/data/history.property.test.ts`) |
 | I8 | `Item.id` deterministic across layout passes | layout snapshot test |
 | I9 | Grid and timeline share one row geometry | pixel-equality test on row tops |
 | I10 | No time math outside `time/`; no magic time constants | lint rule |

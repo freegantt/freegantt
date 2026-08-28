@@ -79,7 +79,8 @@ flowchart LR
 |---|---|
 | S0 → S1 | Layer-boundary lint rules active and failing on violation; harness renders fixture bars; layout tested headlessly. |
 | S1 → S2 | Grid and timeline provably share row geometry (single source, pixel-identical) — `[S1-A2]`; viewport/scale objects are external and injectable — `[S1-A4]`. `pnpm gate` proves both (plans/s1.11-close-the-gate/README.md D-S1.11-9). |
-| S2 → S3 | Undo round-trips are exact (property test); JSON round-trip is byte-stable; changesets carry `from` and `to`. |
+| S2 → S1.12 | Undo round-trips are exact (property test, `[S2-A1]`); JSON round-trip is byte-stable (`[S2-A2]`); changesets carry `from` and `to` (`[S2-A4]`). Discharged. |
+| S1.12 → S3 | Timeline density, zoom navigation, and date formatting (`[S1-A6]`–`[S1-A10]`, `plans/s1.12-timeline-navigation/README.md`). |
 | S3 → S4 | Every S3 gesture = exactly one transaction; every gesture cancelable via `before*`; undo reverts the gesture (user edit + any extender extras). Identity extender is enough; no scheduling plugin. |
 | S4 → S5 | Field registry live; tree and grouped row sources; pack-mode row heights; item identity deterministic. |
 | S5 → S6 | A non-trivial feature exists as a plugin using only the public plugin API (dogfooding proof). |

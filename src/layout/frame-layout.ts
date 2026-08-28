@@ -19,6 +19,10 @@ export class FrameLayout {
    * inside `layout/`, where the height index and its tests already are. */
   #rowCount = -1;
   #rowHeight = -1;
+  /** Bumped whenever `#heightsFor` builds a fresh index (D-S2-16) — what turns "a changeset with
+   *  only `updated` rows never rebuilds the row-height index" from a property of the cache key
+   *  into something `[S2-A3]` can assert. */
+  heightIndexRevision = 0;
 
   computeFrame(input: LayoutInput): GeometryFrame {
     return computeFrame(input, this.#heightsFor(input.entries.length, input.rowHeight));
@@ -38,6 +42,7 @@ export class FrameLayout {
     this.#heights = new PrefixSumHeightIndex(rowCount, () => rowHeight);
     this.#rowCount = rowCount;
     this.#rowHeight = rowHeight;
+    this.heightIndexRevision++;
     return this.#heights;
   }
 }

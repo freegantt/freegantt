@@ -22,8 +22,8 @@ Everything is a `package.json` script; hooks and CI only ever call these.
 | `guards` | `vitest run test/guards` + `scripts/guard-red-test.mjs` + `eslint/rules/*.test.js` | ~10s |
 | `vendor-names` | `scripts/check-vendor-names.mjs` | <1s |
 | `disables` | `scripts/audit-disables.mjs` | <1s |
-| `api:report` | `api-extractor run` (`--local` when updating) | ~10s |
-| `verify` | `format:check && typecheck && lint && boundaries && guards && test:node && test:dom && vendor-names && disables` | ~45s |
+| `api-report` | `node scripts/api-report.mjs` (`api-extractor run`, `--local` when updating; shipped S2.7, name corrected from the plan's `api:report`) | ~10s |
+| `verify` | `format:check && typecheck && lint && boundaries && guards && test:node && test:dom && vendor-names && disables && build && api-report` | ~45s |
 
 `pnpm verify` is the whole gate, runnable by a human, an agent, or CI. If it passes locally it passes in CI, modulo the jobs that need a browser.
 
@@ -141,7 +141,7 @@ flowchart LR
   E --> G
   F --> H["test:dom"]
   H --> I["build (lib + harness)"]
-  I --> J["api-report diff<br/>(S2+)"]
+  I --> J["api-report diff<br/>(shipped S2.7)"]
   I --> K["size-limit<br/>(S5+)"]
   I --> L["e2e + axe<br/>(S3+/S5+)"]
 
@@ -154,7 +154,7 @@ flowchart LR
 - **No `continue-on-error` on a guard job.** A guard that can be yellow is a guard that is off. The only non-blocking jobs are the *measurement* jobs before their gating slice (`size-limit`, `perf`), and they are labeled as measurements, not guards.
 - **The red test runs on every PR**, not just at bootstrap. A boundary config that stops working is worse than none, because it is trusted.
 - **`api-report` failure is not a bug**, it is a semver decision: the fix is either "revert the surface change" or "commit the updated report and say so in the PR." The job message says exactly that.
-- **Required checks on `main`:** `format:check`, `typecheck`, `lint`, `boundaries`, `guards`, `test:node`, `test:dom`, `vendor-names`, `disables`, `build`. Later slices add `api-report` (S2), `e2e` (S3), `axe` + `size-limit` (S5), `perf` (S6).
+- **Required checks on `main`:** `format:check`, `typecheck`, `lint`, `boundaries`, `guards`, `test:node`, `test:dom`, `vendor-names`, `disables`, `build`, `api-report` (shipped S2.7). Later slices add `e2e` (S3), `axe` + `size-limit` (S5), `perf` (S6).
 
 ### 5.1 Slice gates
 

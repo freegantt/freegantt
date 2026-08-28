@@ -9,5 +9,10 @@ module.exports = {
     'no-time-to-pixel-math': require('./no-time-to-pixel-math.cjs'),
     'no-flow-layout-rows': require('./no-flow-layout-rows.cjs'),
     'no-inline-style-outside-geometry': require('./no-inline-style-outside-geometry.cjs'),
+    'no-module-level-state': require('./no-module-level-state.cjs'),
+    'model-is-types-only': require('./model-is-types-only.cjs'),
+    'no-store-mutation-outside-transaction': require('./no-store-mutation-outside-transaction.cjs'),
+    'require-invariant-header': require('./require-invariant-header.cjs'),
+    'no-kind-literal': require('./no-kind-literal.cjs'),
   },
 };
