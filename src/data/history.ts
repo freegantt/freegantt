@@ -67,8 +67,17 @@ export class History {
   undo(): void {
     if (!this.canUndo) return;
     const changeSet = this.#stack[this.#cursor - 1]!;
-    commitChangeSet(this.#data, invert(this.#data.nextChangeSetId(), changeSet));
+    // Move the cursor before committing: `commitChangeSet` fires `change` synchronously, and a
+    // `canUndo`/`canRedo` reader inside that handler (S2.5 §5's own harness included) must see the
+    // post-undo state, not the pre-undo one. A refused undo restores the cursor before rethrowing,
+    // so the stack still ends up exactly where it started.
     this.#cursor -= 1;
+    try {
+      commitChangeSet(this.#data, invert(this.#data.nextChangeSetId(), changeSet));
+    } catch (error) {
+      this.#cursor += 1;
+      throw error;
+    }
   }
 
   /** Re-applies the changeset just above the cursor exactly as recorded, with `origin: 'redo'`. A
@@ -76,8 +85,13 @@ export class History {
   redo(): void {
     if (!this.canRedo) return;
     const changeSet = this.#stack[this.#cursor]!;
-    commitChangeSet(this.#data, { ...changeSet, id: this.#data.nextChangeSetId(), origin: 'redo' });
     this.#cursor += 1;
+    try {
+      commitChangeSet(this.#data, { ...changeSet, id: this.#data.nextChangeSetId(), origin: 'redo' });
+    } catch (error) {
+      this.#cursor -= 1;
+      throw error;
+    }
   }
 
   /** The whole coupling to the rest of `data/`. The origin filter names what it records, not what it
