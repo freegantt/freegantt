@@ -182,8 +182,8 @@ export class GanttShell {
   }
 
   /** Live (S1.10, D-S1.10-4): `'auto'` writes no attribute, letting `prefers-color-scheme` decide;
-   *  `'light'`/`'dark'` pin `data-fg-theme`, which always wins over the media query on selector
-   *  specificity + being attribute-scoped. */
+   *  `'light'`/`'dark'` pin `data-fg-theme` on this container. Colour tokens are scoped to
+   *  `.fg-container`, so the pin wins over the media query even when `:root` has no attribute. */
   set theme(value: Theme) {
     this.#theme = value;
     this.#applyTheme();

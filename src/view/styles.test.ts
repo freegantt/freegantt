@@ -70,20 +70,23 @@ describe('ensureBaseStyles', () => {
     expect(document.head.querySelectorAll('style[data-freegantt-styles]')).toHaveLength(before);
   });
 
-  it('the injected sheet carries every D-S1.10-9 colour token in :root, with its own value where dark differs', () => {
+  it('the injected sheet carries every D-S1.10-9 colour token on :root and on the container theme pins', () => {
     clearStyles();
     ensureBaseStyles(document);
     const css = document.head.querySelector('style[data-freegantt-styles]')?.textContent ?? '';
     const [rootBlock] = css.match(/:root\s*{[^}]*}/) ?? [''];
-    const [darkBlock] = css.match(/\[data-fg-theme='dark'\]\s*{[^}]*}/) ?? [''];
+    const [containerBlock] = css.match(/\.fg-container\s*{[^}]*}/) ?? [''];
+    const [lightBlock] = css.match(/\.fg-container\[data-fg-theme='light'\]\s*{[^}]*}/) ?? [''];
+    const [darkBlock] = css.match(/\.fg-container\[data-fg-theme='dark'\]\s*{[^}]*}/) ?? [''];
+    const [autoDarkBlock] = css.match(/\.fg-container:not\(\[data-fg-theme\]\)\s*{[^}]*}/) ?? [''];
     for (const token of COLOR_TOKENS) {
       expect(rootBlock, `:root missing ${token}`).toContain(token);
-    }
-    // --fg-row-even-bg is `transparent` in both themes (D-S1.10-9) — the dark block only overrides
-    // tokens whose value actually differs, so it's the one token legitimately absent here.
-    for (const token of COLOR_TOKENS.filter((t) => t !== '--fg-row-even-bg')) {
+      expect(containerBlock, `.fg-container missing ${token}`).toContain(token);
+      expect(lightBlock, `[data-fg-theme='light'] missing ${token}`).toContain(token);
       expect(darkBlock, `[data-fg-theme='dark'] missing ${token}`).toContain(token);
+      expect(autoDarkBlock, `auto-dark missing ${token}`).toContain(token);
     }
+    expect(css).not.toContain(':root:not([data-fg-theme])');
   });
 
   it('setting --fg-bar-fill on the container before construction overrides the shipped default', () => {
