@@ -61,7 +61,7 @@ export class DatasetState implements Dataset {
   /** 0 = no transaction open. Read and written only by `runTransaction` (D-S2-8's nesting rule). */
   openTransactions = 0;
   /** Set while `beforeChange`/`change` handlers are fanning out (D-S2-9, D-S2-25). Read and written
-   *  only by `runTransaction`. */
+   *  only by `runTransaction` and `commitChangeSet`. */
   notifying = false;
   /** Kinds whose span the rollup derives from their children (`01` §2.5). Set once, at construction —
    *  live-reconfiguring which kinds derive is not part of S2. Read by `data/transaction.ts`'s commit

@@ -272,27 +272,9 @@ export class EntryStore implements EntryStoreContract {
    *  write set is simply discarded) and closes the write set. */
   endTransaction(_token: TxToken, changeSet: ChangeSet | undefined): void {
     if (changeSet) {
-      const order = Array.from(this.#byId.keys());
-      for (const { entity } of changeSet.removed) {
-        const index = order.indexOf(entity.id);
-        if (index !== -1) this.#removedAtIndex.set(entity.id, index);
-      }
+      this.#rememberRemovedIndexes(changeSet);
       for (const { entity } of changeSet.removed) this.#byId.delete(entity.id);
-
-      const restored = [...changeSet.added].sort((a, b) => {
-        const aIndex = this.#removedAtIndex.get(a.entity.id) ?? Number.POSITIVE_INFINITY;
-        const bIndex = this.#removedAtIndex.get(b.entity.id) ?? Number.POSITIVE_INFINITY;
-        return aIndex - bIndex;
-      });
-      for (const { entity } of restored) {
-        if (changeSet.origin === 'user') this.#removedAtIndex.delete(entity.id);
-        const index = this.#removedAtIndex.get(entity.id);
-        if (index === undefined) this.#byId.set(entity.id, entity);
-        else {
-          this.#insertAt(index, entity);
-          this.#removedAtIndex.delete(entity.id);
-        }
-      }
+      this.#restoreAdded(changeSet);
 
       for (const row of changeSet.updated) {
         const current = this.#byId.get(row.id);
@@ -303,11 +285,39 @@ export class EntryStore implements EntryStoreContract {
     this.#writeSet = null;
   }
 
-  /** Rebuilds the insertion-ordered map so `entity` sits at `index` (clamped to the current length). */
-  #insertAt(index: number, entity: Entry): void {
+  /** A later `'user'` add of the same id is a new insertion (D-S2-3) — drop the tombstone and append. */
+  #rememberRemovedIndexes(changeSet: ChangeSet): void {
+    if (changeSet.removed.length === 0) return;
+    const order = Array.from(this.#byId.keys());
+    for (const { entity } of changeSet.removed) {
+      const index = order.indexOf(entity.id);
+      if (index !== -1) this.#removedAtIndex.set(entity.id, index);
+    }
+  }
+
+  #restoreAdded(changeSet: ChangeSet): void {
+    if (changeSet.added.length === 0) return;
+    if (changeSet.origin === 'user') {
+      for (const { entity } of changeSet.added) {
+        this.#removedAtIndex.delete(entity.id);
+        this.#byId.set(entity.id, entity);
+      }
+      return;
+    }
     const entries = Array.from(this.#byId.values());
-    const at = Math.min(Math.max(index, 0), entries.length);
-    entries.splice(at, 0, entity);
+    const restored = [...changeSet.added].sort((a, b) => {
+      const aIndex = this.#removedAtIndex.get(a.entity.id) ?? Number.POSITIVE_INFINITY;
+      const bIndex = this.#removedAtIndex.get(b.entity.id) ?? Number.POSITIVE_INFINITY;
+      return aIndex - bIndex;
+    });
+    for (const { entity } of restored) {
+      const index = this.#removedAtIndex.get(entity.id);
+      if (index === undefined) entries.push(entity);
+      else {
+        entries.splice(Math.min(Math.max(index, 0), entries.length), 0, entity);
+        this.#removedAtIndex.delete(entity.id);
+      }
+    }
     this.#byId = new Map(entries.map((entry) => [entry.id, entry]));
   }
 

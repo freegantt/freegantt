@@ -197,4 +197,17 @@ describe('History', () => {
 
     expect(sawCanUndo).toBe(true);
   });
+
+  it('subscriber order: a handler registered after construction reads canUndo === false inside the undo change (D-S2-25)', () => {
+    const state = dataset([{ id: 't1' }]);
+    state.entries.update('t1', { name: 'Roofing' });
+    let sawCanUndo: boolean | undefined;
+    state.on('change', () => {
+      sawCanUndo = state.canUndo;
+    });
+
+    state.undo();
+
+    expect(sawCanUndo).toBe(false);
+  });
 });

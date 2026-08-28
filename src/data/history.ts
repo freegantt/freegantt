@@ -63,21 +63,12 @@ export class History {
    *  `origin: 'undo'`. A no-op when `canUndo` is `false`. Neither re-runs the extension hook nor the
    *  span rollup — `commitChangeSet` writes exactly the inverted rows and nothing else (§2.2). A
    *  refused undo (a `beforeChange` handler returning `false`) throws `MutationCancelledError` and
-   *  leaves the stack exactly where it was — the cursor only moves once the commit below returns. */
+   *  leaves the stack exactly where it was — the cursor moves on the `change` that commit emits
+   *  (D-S2-25), so a veto never reaches `#onChange`. */
   undo(): void {
     if (!this.canUndo) return;
     const changeSet = this.#stack[this.#cursor - 1]!;
-    // Move the cursor before committing: `commitChangeSet` fires `change` synchronously, and a
-    // `canUndo`/`canRedo` reader inside that handler (S2.5 §5's own harness included) must see the
-    // post-undo state, not the pre-undo one. A refused undo restores the cursor before rethrowing,
-    // so the stack still ends up exactly where it started.
-    this.#cursor -= 1;
-    try {
-      commitChangeSet(this.#data, invert(this.#data.nextChangeSetId(), changeSet));
-    } catch (error) {
-      this.#cursor += 1;
-      throw error;
-    }
+    commitChangeSet(this.#data, invert(this.#data.nextChangeSetId(), changeSet));
   }
 
   /** Re-applies the changeset just above the cursor exactly as recorded, with `origin: 'redo'`. A
@@ -85,20 +76,17 @@ export class History {
   redo(): void {
     if (!this.canRedo) return;
     const changeSet = this.#stack[this.#cursor]!;
-    this.#cursor += 1;
-    try {
-      commitChangeSet(this.#data, { ...changeSet, id: this.#data.nextChangeSetId(), origin: 'redo' });
-    } catch (error) {
-      this.#cursor -= 1;
-      throw error;
-    }
+    commitChangeSet(this.#data, { ...changeSet, id: this.#data.nextChangeSetId(), origin: 'redo' });
   }
 
-  /** The whole coupling to the rest of `data/`. The origin filter names what it records, not what it
-   *  ignores — `'undo'` and `'redo'` are skipped today, and a future `'load'` origin (D-S2-11) needs no
-   *  edit here either. */
+  /** The whole coupling to the rest of `data/`. `'user'` records a new stack entry. `'undo'`/`'redo'`
+   *  move the cursor (D-S2-25): this handler is the first `change` subscriber, so a later handler
+   *  (the harness undo button included) already reads the post-move `canUndo`/`canRedo`. A future
+   *  `'load'` origin (D-S2-11) needs no edit here. */
   #onChange = ({ changeSet }: DatasetEventMap['change']): void => {
     if (changeSet.origin === 'user') this.#record(changeSet);
+    else if (changeSet.origin === 'undo') this.#cursor -= 1;
+    else if (changeSet.origin === 'redo') this.#cursor += 1;
   };
 
   /** A new user edit while the cursor sits below the top clears everything above it (§2.2) — that is

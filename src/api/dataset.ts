@@ -11,7 +11,6 @@ import type {
   EntryKind,
   EntryStore as EntryStoreContract,
 } from '../model/index.js';
-import type { HistoryOptions } from '../data/index.js';
 import { DatasetState } from '../data/index.js';
 import {
   toJSON as writeDocument,
@@ -35,9 +34,9 @@ export interface DatasetOptions {
    * commit (`01` §2.5/§2.6). Defaults to `['group']`. `derivedSpanKinds: []` opts every kind out of
    * derivation, which is the supported way to ask for hand-set spans everywhere. */
   derivedSpanKinds?: readonly EntryKind[];
-  /** Undo/redo history. `{ capacity: 200 }` keeps 200 undoable transactions; defaults to 100
+  /** Undo/redo History. `{ capacity: 200 }` keeps 200 undoable transactions; defaults to 100
    * (`plans/s2-data-core/s2.5-undo-redo.md` §1). */
-  history?: HistoryOptions;
+  history?: { capacity?: number };
 }
 
 export class Dataset implements DatasetContract {
