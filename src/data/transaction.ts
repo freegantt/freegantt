@@ -230,6 +230,9 @@ export function runTransaction<T>(
     return result;
   }
 
+  // Discard the body's write set. `commitChangeSet` opens its own transaction to apply the folded
+  // rows — a second `beginTransaction` here would wipe the overlay instead of closing it.
+  data.entries.endTransaction(token, undefined);
   commitChangeSet(data, changeSet);
   return result;
 }
