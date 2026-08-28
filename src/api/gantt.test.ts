@@ -93,7 +93,7 @@ describe('Gantt', () => {
 });
 
 describe('Gantt preset/range/fit/zoomTo/zoomBy/reveal (S1.9)', () => {
-  it('[S1-A3] a preset switch redraws the axis but keeps bar DOM identity (I8)', () => {
+  it('[S1-A3] a preset switch redraws the axis but keeps bar DOM identity (I8)', async () => {
     // Regression coverage for a measured pane under the default 'pane' fit: pxPerMs there
     // does not depend on the preset, so this must exercise a real ResizeObserver measurement
     // (not an unmeasured 0-width pane, where pxPerMs happens to depend on the preset anyway and
@@ -113,6 +113,8 @@ describe('Gantt preset/range/fit/zoomTo/zoomBy/reveal (S1.9)', () => {
       expect(container.querySelectorAll('.fg-band')).toHaveLength(1);
 
       gantt.preset = 'weekAndMonth';
+      // D-S2-15: the preset change's render request is coalesced onto the next animation frame.
+      await new Promise((resolve) => requestAnimationFrame(resolve));
 
       const after = container.querySelector<HTMLElement>('.fg-bar');
       expect(after).toBe(before);
@@ -173,7 +175,7 @@ describe('Gantt preset/range/fit/zoomTo/zoomBy/reveal (S1.9)', () => {
     gantt.destroy();
   });
 
-  it('U7: shared scale+scroll, zoomBy on one Gantt is observed on the other live DOM', () => {
+  it('U7: shared scale+scroll, zoomBy on one Gantt is observed on the other live DOM', async () => {
     FakeResizeObserver.instances = [];
     vi.stubGlobal('ResizeObserver', FakeResizeObserver);
 
@@ -199,6 +201,8 @@ describe('Gantt preset/range/fit/zoomTo/zoomBy/reveal (S1.9)', () => {
       expect(lastBarXOf(containerB)).toBe(before);
 
       ganttA.zoomBy(2);
+      // D-S2-15: zoomBy's render request is coalesced onto the next animation frame, for both Gantts.
+      await new Promise((resolve) => requestAnimationFrame(resolve));
 
       expect(lastBarXOf(containerA)).not.toBe(before);
       expect(lastBarXOf(containerB)).toBe(lastBarXOf(containerA));

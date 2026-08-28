@@ -84,6 +84,10 @@ _Avoid_: Draft (implies a persisted intermediate state this isn't), staging area
 A `beforeChange` handler returning `false`, refusing the whole ChangeSet before it commits. Fires after the extension hook and the Rollup, on the ChangeSet that would actually be written, and before the Store write — so a handler judges the real cascade-inclusive change and a refusal is an early return, never an undo of work already applied. Sync-only, unlike gesture vetoes: a data commit has nothing to suspend an `await` into. A vetoed programmatic call (e.g. `entries.update()`) throws `MutationCancelledError` carrying the refused ChangeSet; a vetoed gesture stays silent, the way `beforeGridWidthChange` already behaves.
 _Avoid_: Cancel, reject, block (the codebase's one word for this is Veto — ADR 0006)
 
+**Subscription**:
+A held registration on a Dataset event, created through `on` and released by `unsubscribe()` — `data/`'s mechanism, not `layout/`'s (Bound value already tells `layout/` to avoid the word, since it names a different mechanism with a different owner). `view/dataset-change-subscription.ts`'s `subscribeToDatasetChanges` is the one built-in reaction that holds one: it subscribes to `change`, pushes the fresh `entries.all` snapshot into the bound viewport, and requests a frame — using nothing a consumer could not use (D-S2-20, D-S2-24).
+_Avoid_: Attachment (that wires a DOM element; this touches no DOM), Binding (that is `layout/viewport/`'s word for a Gantt's own data contribution to a shared model)
+
 **EntryEdits**:
 A batch of proposed field changes, keyed by Entry: `ReadonlyMap<EntryId, EntryEdit>`. The shape a caller writes to `dataset.entries.update()`, a transaction hands to the extension hook as `EditRequest.proposed`, and an extender returns as its own extra writes — one shape for "an edit" wherever one appears, rather than a second type per producer.
 _Avoid_: Patch, FieldPatch (retired 2026-08-27 — `data/` diffs an `EntryEdits` against the store into `FieldUpdated` rows itself, rather than asking every producer of edits to compute a diff)

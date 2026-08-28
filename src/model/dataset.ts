@@ -8,6 +8,7 @@
 
 import type { Entry, EntryEdit, EntryInput } from './entry.js';
 import type { EntryId } from './ids.js';
+import type { DatasetEventMap } from './change-set.js';
 
 /** The Dataset's own read view onto its entries (D-S2-2). `all` is the committed array — see D-S2-3
  *  for its cached-identity rule and D-S2-21 for what it does *not* show while a transaction is open
@@ -31,4 +32,8 @@ export interface EntryStore extends EntryStoreView {
 export interface Dataset {
   readonly entries: EntryStore;
   readonly timeZone: string;
+  /** `beforeChange`/`change`, the one public change channel every built-in reaction — the live view
+   *  binding, the undo history — subscribes to on the same terms as a consumer (D-S2-24). */
+  on<K extends keyof DatasetEventMap>(name: K, handler: (payload: DatasetEventMap[K]) => void | false): void;
+  off<K extends keyof DatasetEventMap>(name: K, handler: (payload: DatasetEventMap[K]) => void | false): void;
 }
