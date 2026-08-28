@@ -4,6 +4,7 @@
 
 import type {
   Dataset as DatasetContract,
+  DatasetDocument,
   DatasetEventMap,
   DateOnlyEndRule,
   EntryInput,
@@ -12,6 +13,11 @@ import type {
 } from '../model/index.js';
 import type { HistoryOptions } from '../data/index.js';
 import { DatasetState } from '../data/index.js';
+import {
+  toJSON as writeDocument,
+  readDocument,
+  warnIfDerivedSpansWereCorrected,
+} from '../data/serialization/index.js';
 
 export interface DatasetOptions {
   /** What the consumer writes. Ids are plain strings and dates are any `InstantInput` — an ISO string,
@@ -94,5 +100,19 @@ export class Dataset implements DatasetContract {
   /** Re-applies the most recently undone changeset. A no-op when `canRedo` is `false`. */
   redo(): void {
     this.#state.redo();
+  }
+
+  /** Whole-document write (D-S2-12). Byte-stable: declared key order, optional keys omitted, entries
+   *  in insertion order, instants as `Z`-suffixed ISO. */
+  toJSON(): DatasetDocument {
+    return writeDocument(this);
+  }
+
+  /** Whole-document read. Constructs a fresh Dataset through the public constructor, so the span
+   *  rollup runs on read. Unknown top-level keys are dropped; `meta` is carried as-is. */
+  static fromJSON(doc: DatasetDocument): Dataset {
+    const dataset = new Dataset(readDocument(doc));
+    warnIfDerivedSpansWereCorrected(doc, dataset);
+    return dataset;
   }
 }
