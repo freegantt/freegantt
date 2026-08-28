@@ -3,6 +3,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { ESLint } from 'eslint';
+import type { Linter } from 'eslint';
 import parser from '@typescript-eslint/parser';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -47,7 +48,7 @@ describe('lint fixture violations', () => {
 // freegantt/ custom rules — each gets its own override block, mirroring the shape (not the file
 // scoping — these fixtures live outside src/, so every block matches '**/*.ts') of its
 // eslint.config.js entry, since the real config ignores test/fixtures/violations/** entirely.
-const BUILTIN_CASES: Array<{ file: string; ruleId: string; config: Record<string, unknown> }> = [
+const BUILTIN_CASES: Array<{ file: string; ruleId: string; config: Linter.RulesRecord }> = [
   {
     file: 'no-restricted-imports-b7.ts',
     ruleId: 'no-restricted-imports',
