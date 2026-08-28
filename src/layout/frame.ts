@@ -3,7 +3,7 @@
 import type { RowId, ItemId, EntryId, EntryKind, Entry, Rect, TimeUnit } from '../model/index.js';
 import { itemId, rowId } from '../model/index.js';
 import type { TimeScale, ViewPreset } from '../time/index.js';
-import { formatDate, formatEndInclusive } from '../time/index.js';
+import { formatDate, formatEndInclusive, now, resolveDateFormat } from '../time/index.js';
 import { PrefixSumHeightIndex } from './row-height-index.js';
 import type { RowHeightIndex } from './row-height-index.js';
 
@@ -150,6 +150,12 @@ export interface LayoutInput {
   overscan?: Overscan;
   rowHeight: number;
   revision: number;
+  /** Feeds every header band's `resolveDateFormat` call and `a11yLabel` (S1.12, D-S1.12-12).
+   * `undefined` = the runtime default. */
+  locale?: Intl.LocalesArgument;
+  /** Emits a `TodayLine` decoration when `true` and `now()` falls inside `scale.range` (S1.12,
+   * D-S1.12-14). Default `true`. */
+  todayLine?: boolean;
 }
 
 /** S0/S1 scope: flat row-per-entry, one bar per entry, fixed row height (plans/03 S0-S1).
@@ -163,7 +169,8 @@ export function computeFrame(
   input: LayoutInput,
   heights: RowHeightIndex = new PrefixSumHeightIndex(input.entries.length, () => input.rowHeight),
 ): GeometryFrame {
-  const { entries, scale, preset, visible, rowHeight, revision } = input;
+  const { entries, scale, preset, visible, rowHeight, revision, locale } = input;
+  const todayLineOn = input.todayLine ?? true;
   const verticalRows = input.overscan?.verticalRows ?? DEFAULT_OVERSCAN.verticalRows;
   const horizontalPx = input.overscan?.horizontalPx ?? DEFAULT_OVERSCAN.horizontalPx;
 
@@ -218,7 +225,7 @@ export function computeFrame(
       height: rowHeight,
       lane: 0,
       flags: {},
-      a11yLabel: `${entry.name}, ${formatDate(scale.timeZone, entry.start)} – ${formatEndInclusive(scale.timeZone, entry.end)}`,
+      a11yLabel: `${entry.name}, ${formatDate(scale.timeZone, entry.start, locale)} – ${formatEndInclusive(scale.timeZone, entry.end, locale)}`,
     });
   }
 
@@ -226,15 +233,26 @@ export function computeFrame(
     ? { x: hLeft, width: hRight - hLeft }
     : { x: 0, width: scale.contentWidth };
 
-  const bands: FrameHeaderBand[] = preset.headers.map((header) => ({
-    unit: header.unit,
-    increment: header.increment,
-    ticks: scale.ticks({ unit: header.unit, increment: header.increment }, horizontalSpan).map((tick) => ({
-      x: tick.x,
-      width: tick.width,
-      label: header.format(tick.instant, scale.timeZone),
-    })),
-  }));
+  const bands: FrameHeaderBand[] = preset.headers.map((header) => {
+    const format = resolveDateFormat(header.format, scale.timeZone, locale);
+    return {
+      unit: header.unit,
+      increment: header.increment,
+      ticks: scale.ticks({ unit: header.unit, increment: header.increment }, horizontalSpan).map((tick) => ({
+        x: tick.x,
+        width: tick.width,
+        label: format(tick.instant),
+      })),
+    };
+  });
+
+  const decorations: FrameDecoration[] = [];
+  if (todayLineOn) {
+    const today = now();
+    if (today >= scale.range.start && today < scale.range.end) {
+      decorations.push({ kind: 'todayLine', x: scale.xForInstant(today) });
+    }
+  }
 
   return {
     revision,
@@ -246,6 +264,6 @@ export function computeFrame(
     contentWidth: scale.contentWidth,
     bars,
     links: [],
-    decorations: [],
+    decorations,
   };
 }

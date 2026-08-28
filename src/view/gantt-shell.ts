@@ -19,7 +19,7 @@ import type { PaneSizeAttachment } from './pane-size-attachment.js';
 import { ensureBaseStyles } from './styles.js';
 import type { RenderBackend } from '../render/backend.js';
 import { EntryNotFoundError, ContainerNotFoundError } from '../model/index.js';
-import type { Dataset, EntryId, Size, TimeSpan } from '../model/index.js';
+import type { Dataset, EntryId, Instant, Size, TimeSpan } from '../model/index.js';
 import { subscribeToDatasetChanges } from './dataset-change-subscription.js';
 import type { DatasetChangeSubscription } from './dataset-change-subscription.js';
 import { FrameScheduler } from './frame-scheduler.js';
@@ -67,6 +67,11 @@ export interface GanttShellOptions {
   theme?: Theme;
   /** Live (S1.10, D-S1.10-4). Default `'Gantt'`; sets `aria-label` on the container. */
   a11yLabel?: string;
+  /** Live (S1.12, D-S1.12-12). `undefined` = the runtime default. Feeds header labels and
+   *  `a11yLabel` alike. */
+  locale?: Intl.LocalesArgument;
+  /** Live (S1.12, D-S1.12-14). Default `true`. */
+  todayLine?: boolean;
 }
 
 function resolveContainer(container: HTMLElement | string): HTMLElement {
@@ -110,6 +115,8 @@ export class GanttShell {
   #contentSize = { width: 0, height: 0 };
   #theme: Theme = DEFAULT_THEME;
   #a11yLabel: string = DEFAULT_A11Y_LABEL;
+  #locale: Intl.LocalesArgument | undefined;
+  #todayLine = true;
 
   constructor(options: GanttShellOptions) {
     this.#options = options;
@@ -193,6 +200,29 @@ export class GanttShell {
     if (options.theme !== undefined) this.theme = options.theme;
     else this.#applyTheme();
     this.a11yLabel = options.a11yLabel ?? DEFAULT_A11Y_LABEL;
+    this.#locale = options.locale;
+    this.#todayLine = options.todayLine ?? true;
+  }
+
+  get locale(): Intl.LocalesArgument | undefined {
+    return this.#locale;
+  }
+
+  /** Live (S1.12, D-S1.12-12): re-labels every header band and every screen-reader date with no bar
+   *  remount — it flows straight through `LayoutInput.locale` on the next render. */
+  set locale(l: Intl.LocalesArgument | undefined) {
+    this.#locale = l;
+    this.#frames.request();
+  }
+
+  get todayLine(): boolean {
+    return this.#todayLine;
+  }
+
+  set todayLine(on: boolean) {
+    if (this.#todayLine === on) return;
+    this.#todayLine = on;
+    this.#frames.request();
   }
 
   get theme(): Theme {
@@ -273,6 +303,38 @@ export class GanttShell {
     this.#viewport.zoomBy(factor, anchorX);
   }
 
+  get zoomPresets(): readonly ViewPreset[] {
+    return this.#viewport.zoomPresets;
+  }
+
+  set zoomPresets(refs: readonly PresetRef[]) {
+    this.#viewport.zoomPresets = refs;
+  }
+
+  get canZoomIn(): boolean {
+    return this.#viewport.canZoomIn;
+  }
+
+  get canZoomOut(): boolean {
+    return this.#viewport.canZoomOut;
+  }
+
+  zoomIn(anchorX?: number): void {
+    this.#viewport.zoomIn(anchorX);
+  }
+
+  zoomOut(anchorX?: number): void {
+    this.#viewport.zoomOut(anchorX);
+  }
+
+  zoomToSpan(span: TimeSpan): void {
+    this.#viewport.zoomToSpan(span);
+  }
+
+  panToInstant(i: Instant, align: 'start' | 'center'): void {
+    this.#viewport.panToInstant(i, align);
+  }
+
   /** Finds the entry's row via the bound dataset, asks `FrameLayout` for its top and `barSpan` for
    * its x/width off the bound `TimeScale` — the same formula `computeFrame` builds bars from, so the
    * two can never drift apart — and hands the resulting `Rect` to `Viewport.reveal` (S1.9, D-S1.9-6).
@@ -324,8 +386,13 @@ export class GanttShell {
       overscan: this.#viewport.overscan,
       rowHeight: this.#rowHeight,
       revision: this.#revision++,
+      locale: this.#locale,
+      todayLine: this.#todayLine,
     });
     this.#backend.sync(frame);
+    // D-S1.12-9: the grid pane's spacer mirrors the header's own band count, so both panes resolve
+    // their header height from the same `--fg-band-height` expression and cannot drift.
+    this.#paneLayout.setHeaderBandCount(frame.header.bands.length);
     this.#contentSize = { width: frame.contentWidth, height: frame.contentHeight };
     this.#viewportHandle.setContentSize(this.#contentSize);
     this.#scrollAttachment.writePosition();

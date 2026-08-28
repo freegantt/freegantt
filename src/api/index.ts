@@ -76,5 +76,14 @@ export type { Point, Size } from '../model/index.js';
 // buttons had no public way to do this and were hand-rolling `entry.start + 86400000`; the Add-entry
 // button then used `instant(Date.now())` the same way). Named preset constants and `resolvePreset`
 // stay internal — resolving a `PresetRef` is core's job.
-export { presets, instant, now, addMs, MS, formatDate, formatEndInclusive } from '../time/index.js';
-export type { ViewPreset } from '../time/index.js';
+export {
+  presets,
+  instant,
+  now,
+  addMs,
+  MS,
+  formatDate,
+  formatEndInclusive,
+  formatWeekNumber,
+} from '../time/index.js';
+export type { ViewPreset, DateFormat } from '../time/index.js';

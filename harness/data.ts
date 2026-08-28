@@ -15,9 +15,13 @@
 import { Dataset, Gantt, MS, MutationCancelledError, addMs, now } from '../src/api/index.js';
 import type { ChangeSet, DatasetDocument, DatasetEventMap, Entry } from '../src/api/index.js';
 import { sampleEntryInputs } from '../fixtures/sample-dataset.js';
+import { mountTimelineToolbar } from './timeline-toolbar.js';
 
 let dataset = new Dataset({ entries: sampleEntryInputs.slice(0, 8), timeZone: 'UTC' });
 let gantt = new Gantt({ container: '#gantt', dataset });
+
+const toolbar = document.querySelector<HTMLDivElement>('#toolbar')!;
+mountTimelineToolbar({ gantt, container: toolbar });
 
 const select = document.querySelector<HTMLSelectElement>('#entry-select')!;
 const nameInput = document.querySelector<HTMLInputElement>('#rename-input')!;
@@ -174,6 +178,8 @@ importBtn.addEventListener('click', () => {
     gantt.destroy();
     gantt = new Gantt({ container: '#gantt', dataset });
     bindDataset();
+    toolbar.innerHTML = '';
+    mountTimelineToolbar({ gantt, container: toolbar });
     refreshSelect();
     refreshHistoryButtons();
     logLine('[load] imported document');

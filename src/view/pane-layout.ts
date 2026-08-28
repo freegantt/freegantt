@@ -13,10 +13,6 @@ import type { Size } from '../model/index.js';
 const GRID_PANE_WIDTH_PROPERTY = '--fg-grid-pane-width';
 /** Zero is authored, not nonsense: a container that wants no grid pane sets `--fg-grid-pane-width: 0`. */
 const GRID_PANE_WIDTH_POLICY = { fallback: 160, accepts: 'zeroOrMore' } as const;
-/** D-S1.8-11: the grid pane's rows must start at the same y as the timeline pane's rows, which sit
- *  below the header bands — so the grid pane carries a spacer of its own, sized the same way. */
-const HEADER_HEIGHT_PROPERTY = '--fg-header-height';
-const HEADER_HEIGHT_POLICY = { fallback: 20, accepts: 'zeroOrMore' } as const;
 const SPLITTER_WIDTH_PROPERTY = '--fg-splitter-width';
 const SPLITTER_WIDTH_POLICY = { fallback: 4, accepts: 'positive' } as const;
 
@@ -41,8 +37,10 @@ export class PaneLayout {
   readonly panes: Panes;
   #container: HTMLElement;
   #gridPane: HTMLElement;
+  #spacer: HTMLElement;
   #gridWidth: number;
   #minGridWidth: number;
+  #headerBandCount = 0;
 
   constructor(options: PaneLayoutOptions) {
     this.#container = options.container;
@@ -58,7 +56,6 @@ export class PaneLayout {
     this.#container.setAttribute('tabindex', '0');
     this.#minGridWidth = options.minGridWidth ?? 0;
 
-    const headerHeight = readPixelProperty(this.#container, HEADER_HEIGHT_PROPERTY, HEADER_HEIGHT_POLICY);
     const splitterWidth = readPixelProperty(this.#container, SPLITTER_WIDTH_PROPERTY, SPLITTER_WIDTH_POLICY);
     const initialGridWidth =
       options.gridWidth ??
@@ -73,9 +70,11 @@ export class PaneLayout {
     this.#gridPane.className = 'fg-grid-pane';
     this.#gridPane.style.width = `${this.#gridWidth}px`;
 
-    const spacer = document.createElement('div');
-    spacer.className = 'fg-grid-spacer';
-    spacer.style.height = `${headerHeight}px`;
+    // D-S1.12-9: renders one empty `.fg-band` per header band (`setHeaderBandCount`) instead of
+    // being sized imperatively — both panes then resolve their header height from the same
+    // `--fg-band-height` CSS expression and cannot drift.
+    this.#spacer = document.createElement('div');
+    this.#spacer.className = 'fg-grid-spacer';
 
     const rowClip = document.createElement('div');
     rowClip.className = 'fg-rows-clip';
@@ -89,7 +88,7 @@ export class PaneLayout {
     rowLayer.className = 'fg-rows';
 
     rowClip.append(rowLayer);
-    this.#gridPane.append(spacer, rowClip);
+    this.#gridPane.append(this.#spacer, rowClip);
 
     const splitter = document.createElement('div');
     splitter.className = 'fg-splitter';
@@ -117,6 +116,20 @@ export class PaneLayout {
   /** The timeline pane's client box — the one measurement everything downstream is sized from. */
   measureTimelinePane(): Size {
     return { width: this.panes.timeline.clientWidth, height: this.panes.timeline.clientHeight };
+  }
+
+  /** D-S1.12-9: the grid pane's spacer renders one empty `.fg-band` per header band, so both panes
+   *  resolve their header height from the same `--fg-band-height` CSS expression and cannot drift.
+   *  A no-op when the count is unchanged — the common case, every render. */
+  setHeaderBandCount(count: number): void {
+    if (count === this.#headerBandCount) return;
+    this.#headerBandCount = count;
+    this.#spacer.replaceChildren();
+    for (let i = 0; i < count; i++) {
+      const band = document.createElement('div');
+      band.className = 'fg-band';
+      this.#spacer.append(band);
+    }
   }
 
   destroy(): void {

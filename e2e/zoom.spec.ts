@@ -62,13 +62,15 @@ test('a preset switch redraws header bands with no bar remount (U1, I8)', async 
     node.dataset['e2eMarker'] = 'still-here';
   }, itemId);
 
-  await expect(page.locator('.fg-band')).toHaveCount(1);
+  // Scoped to the header (S1.12, D-S1.12-9): the grid pane's spacer now mirrors one empty
+  // `.fg-band` per header band too, so an unscoped `.fg-band` count would double-count.
+  await expect(page.locator('.fg-header .fg-band')).toHaveCount(1);
 
   await page.evaluate(() => {
     window.__gantt.preset = 'weekAndMonth';
   });
 
-  await expect(page.locator('.fg-band')).toHaveCount(2);
+  await expect(page.locator('.fg-header .fg-band')).toHaveCount(2);
 
   const marker = await page.evaluate((id) => {
     const node = document.querySelector<HTMLElement>(`.fg-bar[data-item-id="${id}"]`);

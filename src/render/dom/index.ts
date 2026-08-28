@@ -4,6 +4,7 @@
 import type {
   BarFlags,
   FrameBar,
+  FrameDecoration,
   FrameHeaderBand,
   FrameHeaderTick,
   FrameRow,
@@ -46,6 +47,9 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
   let headerLayer: HTMLElement | undefined;
   let barLayer: HTMLElement | undefined;
   let contentSizer: HTMLElement | undefined;
+  // S1.12, D-S1.12-14: reuses the FrameDecoration seam that already shipped — one element toggled
+  // on/off each frame, not a keyed list, since `decorations` carries at most one TodayLine today.
+  let todayLine: HTMLElement | undefined;
 
   const bandNodes = new Map<number, HTMLElement>();
   const bandGeom = new Map<number, BandGeom>();
@@ -179,6 +183,13 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
     }
   }
 
+  function syncDecorations(decorations: readonly FrameDecoration[]): void {
+    if (!todayLine) return;
+    const today = decorations.find((d) => d.kind === 'todayLine');
+    todayLine.hidden = !today;
+    if (today) todayLine.style.transform = `translateX(${today.x}px)`;
+  }
+
   function syncBars(bars: readonly FrameBar[]): void {
     if (!barLayer) return;
     syncKeyed(barLayer, bars, barNodes, barGeom, {
@@ -231,12 +242,17 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
       contentSizer = document.createElement('div');
       contentSizer.setAttribute('aria-hidden', 'true');
       contentSizer.className = 'fg-content-sizer';
-      timelineHost.append(headerLayer, barLayer, contentSizer);
+      todayLine = document.createElement('div');
+      todayLine.setAttribute('aria-hidden', 'true');
+      todayLine.className = 'fg-today-line';
+      todayLine.hidden = true;
+      timelineHost.append(headerLayer, barLayer, contentSizer, todayLine);
     },
     sync(frame: GeometryFrame) {
       syncHeader(frame.header.bands);
       syncRows(frame.rows, frame.rowCount);
       syncBars(frame.bars);
+      syncDecorations(frame.decorations);
       if (gridLayer) {
         // The grid pane has no scrollbar of its own; its row layer follows the timeline pane's
         // native scroll by one transform per frame instead of a second real scroller (D-S1.8-1).
@@ -281,6 +297,7 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
       barGeom.clear();
       gridLayer = undefined;
       timelineHost = undefined;
+      todayLine = undefined;
       headerLayer = undefined;
       barLayer = undefined;
       contentSizer = undefined;
