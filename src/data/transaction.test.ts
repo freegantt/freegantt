@@ -2,8 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { runTransaction } from './transaction.js';
 import { DatasetState } from './dataset-state.js';
 import { MutationCancelledError, MutationDuringNotificationError, entryId } from '../model/index.js';
-import type { EntryEdits } from './edit-extension.js';
-import type { EntryEdit } from '../model/index.js';
+import type { EntryEdits, StoredEdit } from './edit-extension.js';
 
 function dataset(entries: { id: string; parentId?: string }[] = []): DatasetState {
   return new DatasetState({
@@ -102,6 +101,32 @@ describe('runTransaction', () => {
 
     expect(fired).toBe(false);
     expect(state.entries.has(entryId('t9'))).toBe(false);
+  });
+
+  it('a remove followed by an add of the same committed id replaces it — not a cancelled no-op', () => {
+    const state = dataset([{ id: 't1' }]);
+    let fired = false;
+    state.on('change', () => {
+      fired = true;
+    });
+
+    runTransaction(
+      state,
+      (token) => {
+        state.entries.stageRemove(token, entryId('t1'));
+        state.entries.stageAdd(token, {
+          id: entryId('t1'),
+          name: 'reborn',
+          start: 0 as never,
+          end: 1 as never,
+          kind: 'span',
+        });
+      },
+      'user',
+    );
+
+    expect(fired).toBe(true);
+    expect(state.entries.get(entryId('t1'))?.name).toBe('reborn');
   });
 
   it('an empty transaction emits nothing, writes nothing, and returns the body value', () => {
@@ -227,7 +252,7 @@ describe('runTransaction', () => {
       ],
       timeZone: 'UTC',
       editExtender: (): EntryEdits =>
-        new Map<ReturnType<typeof entryId>, EntryEdit>([[entryId('t2'), { name: 'cascaded' }]]),
+        new Map<ReturnType<typeof entryId>, StoredEdit>([[entryId('t2'), { name: 'cascaded' }]]),
     });
     let captured: readonly unknown[] = [];
     state.on('change', ({ changeSet }) => {
@@ -252,6 +277,35 @@ describe('runTransaction', () => {
     runTransaction(state, (token) => state.entries.stageUpdate(token, entryId('t1'), { name: 'a' }), 'user');
 
     expect(captured).toEqual([{ store: 'entries', id: entryId('t1'), field: 'name', from: 't1', to: 'a' }]);
+  });
+
+  it('I4 (dev-mode assert): an extender may not touch a field the body already proposed', () => {
+    const state = new DatasetState({
+      entries: [{ id: 't1', name: 't1', start: 0, end: 1 }],
+      timeZone: 'UTC',
+      editExtender: (): EntryEdits =>
+        new Map<ReturnType<typeof entryId>, StoredEdit>([[entryId('t1'), { name: 'clobbered' }]]),
+    });
+
+    expect(() =>
+      runTransaction(
+        state,
+        (token) => state.entries.stageUpdate(token, entryId('t1'), { name: 'a' }),
+        'user',
+      ),
+    ).toThrow(/I4/);
+  });
+
+  it('the changeset is frozen in dev mode — a beforeChange handler cannot edit it', () => {
+    const state = dataset([{ id: 't1' }]);
+    let sawFrozen = false;
+    state.on('beforeChange', ({ changeSet }) => {
+      sawFrozen = Object.isFrozen(changeSet) && Object.isFrozen(changeSet.updated);
+    });
+
+    runTransaction(state, (token) => state.entries.stageUpdate(token, entryId('t1'), { name: 'a' }), 'user');
+
+    expect(sawFrozen).toBe(true);
   });
 
   it('the extension hook is called exactly once per transaction, whatever the body size', () => {
@@ -298,6 +352,29 @@ describe('runTransaction', () => {
 
     expect(changeFired).toBe(false);
     expect(state.entries.get(entryId('t1'))?.name).toBe('t1');
+  });
+
+  it('a beforeChange handler that throws still discards the write set — not left open for the next transaction', () => {
+    const state = dataset([{ id: 't1' }]);
+    const explode = (): void => {
+      throw new Error('handler blew up');
+    };
+    state.on('beforeChange', explode);
+
+    expect(() =>
+      runTransaction(
+        state,
+        (token) => state.entries.stageUpdate(token, entryId('t1'), { name: 'a' }),
+        'user',
+      ),
+    ).toThrow('handler blew up');
+
+    // A prior open write set would leak this uncommitted 'a' back out here.
+    expect(state.entries.get(entryId('t1'))?.name).toBe('t1');
+
+    state.off('beforeChange', explode);
+    runTransaction(state, (token) => state.entries.stageUpdate(token, entryId('t1'), { name: 'b' }), 'user');
+    expect(state.entries.get(entryId('t1'))?.name).toBe('b');
   });
 
   it('a beforeChange handler that returns nothing does not veto; one false among two handlers is enough', () => {

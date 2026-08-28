@@ -41,3 +41,12 @@ export interface ChangeSet {
   removed: readonly EntityRemoved[];
   updated: readonly FieldUpdated[];
 }
+
+/** `beforeChange`/`change` share one payload (D-S2-5, D-S2-25): a `false` return from a `beforeChange`
+ *  handler vetoes the whole changeset; `change` handler return values are ignored. Public event
+ *  vocabulary (plans/02 §3), so it lives in `model/` beside `ChangeSet` — the same reason `ChangeSet`
+ *  itself moved here (§2.1's deviation note). */
+export interface DatasetEventMap {
+  beforeChange: { changeSet: ChangeSet };
+  change: { changeSet: ChangeSet };
+}

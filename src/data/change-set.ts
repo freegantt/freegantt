@@ -10,11 +10,11 @@ import type {
   Entry,
   EntityAdded,
   EntityRemoved,
-  EntryEdit,
   EntryId,
   FieldKey,
   FieldUpdated,
 } from '../model/index.js';
+import type { StoredEdit } from './edit-extension.js';
 
 export type {
   StoreName,
@@ -66,20 +66,21 @@ export function fieldsEqual(field: FieldKey, from: unknown, to: unknown): boolea
  * Every `FieldUpdated` row an `edit` produces against the entry's current stored values, per D-S2-7's
  * equality table — a field set back to its original value is not recorded. Shared by both producers of
  * an edit in one transaction: the body's own `proposed` edits, and an extender's returned `EntryEdits`
- * (S2.2 §2.2). Assumes `edit`'s fields already carry storage-shaped values (an `Instant`, not a loose
- * `InstantInput`) — the mutator that built `edit` normalizes through `time/` first, so this function
- * only compares, never converts. An `id` absent from `entries` yields no rows — nothing to diff against.
+ * (S2.2 §2.2). `edit` is `StoredEdit`, not the public `EntryEdit` — every field already carries a
+ * storage-shaped value (an `Instant`, not a loose `InstantInput`); the mutator that builds it normalizes
+ * through `time/` first (S2.3's job), so this function only compares, never converts. An `id` absent
+ * from `entries` yields no rows — nothing to diff against.
  */
 export function diffEdit(
   entries: ReadonlyMap<EntryId, Entry>,
   id: EntryId,
-  edit: EntryEdit,
+  edit: StoredEdit,
 ): readonly FieldUpdated[] {
   const current = entries.get(id);
   if (!current) return [];
 
   const updated: FieldUpdated[] = [];
-  for (const field of Object.keys(edit) as (keyof EntryEdit)[]) {
+  for (const field of Object.keys(edit) as (keyof StoredEdit)[]) {
     const to = edit[field];
     const from = (current as unknown as Record<string, unknown>)[field];
     if (!fieldsEqual(field, from, to)) updated.push({ store: 'entries', id, field, from, to });

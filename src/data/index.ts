@@ -3,4 +3,3 @@
 export { DatasetState } from './dataset-state.js';
 export type { DatasetStateOptions } from './dataset-state.js';
 export { EntryStore } from './entry-store.js';
-export type { DatasetEventMap } from './transaction.js';

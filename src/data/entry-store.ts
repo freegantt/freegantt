@@ -4,16 +4,16 @@
 // The staging/apply methods below are gated by a `TxToken` only `data/transaction.ts` can mint — a
 // mutation outside a transaction does not typecheck (docs/02 §3.6).
 
-import type { ChangeSet, Entry, EntryEdit, EntryId, EntryStoreView } from '../model/index.js';
+import type { ChangeSet, Entry, EntryId, EntryStoreView } from '../model/index.js';
 import { entryId } from '../model/index.js';
 import { computed, signal } from './reactivity.js';
-import type { EntryEdits } from './edit-extension.js';
+import type { EntryEdits, StoredEdit } from './edit-extension.js';
 import type { TxToken } from './transaction.js';
 
 interface WriteSet {
   added: Map<EntryId, Entry>;
   removed: Set<EntryId>;
-  edits: Map<EntryId, EntryEdit>;
+  edits: Map<EntryId, StoredEdit>;
 }
 
 export class EntryStore implements EntryStoreView {
@@ -57,7 +57,7 @@ export class EntryStore implements EntryStoreView {
     const committed = this.#byId.get(key);
     if (!committed) return undefined;
     const edit = this.#writeSet.edits.get(key);
-    return edit ? ({ ...committed, ...edit } as Entry) : committed;
+    return edit ? { ...committed, ...edit } : committed;
   }
 
   has(id: EntryId | string): boolean {
@@ -98,15 +98,21 @@ export class EntryStore implements EntryStoreView {
     this.#writeSet = { added: new Map(), removed: new Set(), edits: new Map() };
   }
 
+  /** A re-add of an id this same transaction already staged for removal replaces it outright — the
+   *  reverse of `stageRemove`'s own clearing below — so the net effect is one clean entity, not a
+   *  cancelled add/remove pair the fold treats as neither happening. */
   stageAdd(_token: TxToken, entry: Entry): void {
-    this.#openWriteSet().added.set(entry.id, entry);
+    const writeSet = this.#openWriteSet();
+    writeSet.added.set(entry.id, entry);
+    writeSet.removed.delete(entry.id);
+    writeSet.edits.delete(entry.id);
   }
 
-  stageUpdate(_token: TxToken, id: EntryId, edit: EntryEdit): void {
+  stageUpdate(_token: TxToken, id: EntryId, edit: StoredEdit): void {
     const writeSet = this.#openWriteSet();
     const staged = writeSet.added.get(id);
     if (staged) {
-      writeSet.added.set(id, { ...staged, ...edit } as Entry);
+      writeSet.added.set(id, { ...staged, ...edit });
       return;
     }
     writeSet.edits.set(id, { ...writeSet.edits.get(id), ...edit });

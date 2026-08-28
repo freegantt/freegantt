@@ -14,6 +14,7 @@ export type {
   EntityRemoved,
   FieldUpdated,
   ChangeSet,
+  DatasetEventMap,
 } from './change-set.js';
 export {
   FreeGanttError,

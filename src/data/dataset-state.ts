@@ -2,7 +2,15 @@
 // is a thin façade that constructs one of these and delegates `entries`/`timeZone`/`dateOnlyEnd` to it —
 // the same structural/façade relationship `GanttShell` already has with `Gantt`.
 
-import type { ChangeSetId, DateOnlyEndRule, Dataset, Entry, EntryInput, Instant } from '../model/index.js';
+import type {
+  ChangeSetId,
+  DateOnlyEndRule,
+  Dataset,
+  DatasetEventMap,
+  Entry,
+  EntryInput,
+  Instant,
+} from '../model/index.js';
 import { changeSetId } from '../model/index.js';
 import { now } from '../time/index.js';
 import { EntryStore } from './entry-store.js';
@@ -10,8 +18,7 @@ import { readEntries } from './entry-reader.js';
 import type { EditExtender } from './edit-extension.js';
 import { identityExtender } from './edit-extension.js';
 import { EventBus } from './event-bus.js';
-import type { DatasetEventMap } from './transaction.js';
-import { runTransaction } from './transaction.js';
+import { noRollUp, runTransaction } from './transaction.js';
 
 export interface DatasetStateOptions {
   entries: readonly EntryInput[];
@@ -43,6 +50,8 @@ export class DatasetState implements Dataset {
   /** Set while `beforeChange`/`change` handlers are fanning out (D-S2-9, D-S2-25). Read and written
    *  only by `runTransaction`. */
   notifying = false;
+  /** Rolls up derived spans on every commit (D-S2-22). `noRollUp` until S2.3 lands the real one. */
+  rollUp = noRollUp;
   /** Per-instance — never a module-level counter (I2). */
   #changeSetCounter = 0;
 
