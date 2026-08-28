@@ -43,7 +43,7 @@ describe('EntryStore', () => {
       [entry('root'), entry('a', 'root'), entry('b', 'root'), entry('c')],
       context,
     );
-    expect(store.childrenOf(entryId('root')).map((e) => e.id)).toEqual([entryId('a'), entryId('b')]);
+    expect(store.childrenOf('root').map((e) => e.id)).toEqual([entryId('a'), entryId('b')]);
   });
 
   it('an entry with no children returns an empty array, not undefined', () => {

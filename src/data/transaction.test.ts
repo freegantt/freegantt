@@ -205,6 +205,15 @@ describe('runTransaction', () => {
     expect(allDuring.map((e) => (e as { id: unknown }).id)).toEqual([entryId('root')]);
   });
 
+  it('childrenOf sees a parentId edit in the write set', () => {
+    const state = dataset([{ id: 'a' }, { id: 'b' }, { id: 'c', parentId: 'a' }]);
+    state.transaction(() => {
+      state.entries.update('c', { parentId: 'b' });
+      expect(state.entries.childrenOf('a').map((e) => e.id)).toEqual([]);
+      expect(state.entries.childrenOf('b').map((e) => e.id)).toEqual([entryId('c')]);
+    });
+  });
+
   it('rollback: a body that throws after two successful mutations leaves the store exactly as it was, and emits nothing', () => {
     const state = dataset([{ id: 't1' }, { id: 't2' }]);
     let fired = false;

@@ -83,7 +83,11 @@ export class EntryStore implements EntryStoreContract {
   }
 
   has(id: EntryId | string): boolean {
-    return this.get(id) !== undefined;
+    const key = entryId(id);
+    if (!this.#writeSet) return this.#byId.has(key);
+    if (this.#writeSet.removed.has(key)) return false;
+    if (this.#writeSet.added.has(key)) return true;
+    return this.#byId.has(key);
   }
 
   get size(): number {
@@ -95,16 +99,32 @@ export class EntryStore implements EntryStoreContract {
   }
 
   /** Children of an entry, in insertion order. An entry with no children returns an empty array. */
-  childrenOf(id: EntryId): readonly Entry[] {
-    if (!this.#writeSet) return this.#byParent().get(id) ?? [];
+  childrenOf(id: EntryId | string): readonly Entry[] {
+    const parent = entryId(id);
+    if (!this.#writeSet) return this.#byParent().get(parent) ?? [];
+    return this.#childrenOfWriteSet(parent);
+  }
+
+  /** Overlay the write set onto the committed `byParent` index — O(children + edits + adds),
+   *  not O(dataset). `remove` walks this while a transaction is already open (S2.3 §1.4). */
+  #childrenOfWriteSet(parent: EntryId): readonly Entry[] {
+    const writeSet = this.#writeSet;
+    if (!writeSet) return [];
+    const seen = new Set<EntryId>();
     const result: Entry[] = [];
-    for (const committed of this.#byId.values()) {
-      if (this.#writeSet.removed.has(committed.id)) continue;
-      const effective = this.get(committed.id);
-      if (effective?.parentId === id) result.push(effective);
+    const pushIfChild = (entry: Entry | undefined): void => {
+      if (!entry || entry.parentId !== parent || seen.has(entry.id)) return;
+      seen.add(entry.id);
+      result.push(entry);
+    };
+    for (const committed of this.#byParent().get(parent) ?? []) {
+      pushIfChild(this.get(committed.id));
     }
-    for (const added of this.#writeSet.added.values()) {
-      if (added.parentId === id) result.push(added);
+    for (const editedId of writeSet.edits.keys()) {
+      pushIfChild(this.get(editedId));
+    }
+    for (const added of writeSet.added.values()) {
+      pushIfChild(added);
     }
     return result;
   }

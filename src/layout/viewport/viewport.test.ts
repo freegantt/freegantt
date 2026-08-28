@@ -289,4 +289,32 @@ describe('Viewport.reveal (S1.9, D-S1.9-6)', () => {
     viewport.reveal({ x: 500, y: 400, width: 50, height: 20 });
     expect(viewport.scroll.state.position).toEqual({ x: 550 - 400, y: 420 - 200 });
   });
+
+  describe('setEntries (S2.4, D-S2-20)', () => {
+    it("an edit inside the bound span does not churn 'fitDataset' (D-S1.5-4)", () => {
+      const viewport = new Viewport({ scale: new TimeScaleModel({ range: 'fitDataset' }) });
+      let calls = 0;
+      const handle = viewport.bind(wideDataset, () => calls++);
+      const rangeBefore = viewport.timeScale.range;
+      calls = 0;
+
+      // Same span (Jan 1 - Dec 31), just a renamed entry — the resolved scale is unchanged.
+      handle.setEntries([entry('t1', '2026-01-01T00:00:00Z', '2026-12-31T00:00:00Z')]);
+
+      expect(calls).toBe(0);
+      expect(viewport.timeScale.range).toEqual(rangeBefore);
+    });
+
+    it("an edit outside the bound span re-fits 'fitDataset' and notifies", () => {
+      const viewport = new Viewport({ scale: new TimeScaleModel({ range: 'fitDataset' }) });
+      let calls = 0;
+      const handle = viewport.bind(wideDataset, () => calls++);
+      calls = 0;
+
+      handle.setEntries([entry('t1', '2026-01-01T00:00:00Z', '2027-06-30T00:00:00Z')]);
+
+      expect(calls).toBe(1);
+      expect(viewport.timeScale.range.end).toEqual(instant('2027-06-30T00:00:00Z'));
+    });
+  });
 });
