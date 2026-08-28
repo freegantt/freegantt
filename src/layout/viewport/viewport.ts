@@ -7,10 +7,11 @@ import { TimeScaleModel, bindTimeScale } from './time-scale-model.js';
 import type { ScaleBinding, ScaleBindingHandle, TimeScaleFit } from './time-scale-model.js';
 import { ScrollModel, bindScroll } from './scroll-model.js';
 import type { ScrollBindingHandle } from './scroll-model.js';
+import { diffMs, resolvePreset, ZOOM_PRESETS } from '../../time/index.js';
 import type { PresetRef, TimeScale, ViewPreset } from '../../time/index.js';
 import { BatchedNotifier } from './batched-notifier.js';
 import { FreeGanttError } from '../../model/index.js';
-import type { Entry, Rect, Size, TimeSpan } from '../../model/index.js';
+import type { Entry, Instant, Rect, Size, TimeSpan } from '../../model/index.js';
 import { DEFAULT_OVERSCAN } from '../frame.js';
 import type { Overscan } from '../frame.js';
 
@@ -57,6 +58,9 @@ export class Viewport {
   readonly scale: TimeScaleModel;
   readonly scroll: ScrollModel;
   #overscan: Overscan;
+  /** The ordered set `zoomIn`/`zoomOut` step through, finest first (S1.12, D-S1.12-5). Default: the
+   *  shipped nine-rung set. */
+  #zoomPresets: readonly ViewPreset[] = ZOOM_PRESETS;
   #paneSize: Size = ZERO_SIZE;
   #contentSize: Size = ZERO_SIZE;
   #onChange: (() => void) | undefined;
@@ -224,6 +228,82 @@ export class Viewport {
   /** `zoomTo(timeScale.pxPerMs * factor, anchorX)` (S1.9, D-S1.9-5). */
   zoomBy(factor: number, anchorX?: number): void {
     this.zoomTo(this.timeScale.pxPerMs * factor, anchorX ?? this.#paneSize.width / 2);
+  }
+
+  /** The ordered set `zoomIn`/`zoomOut` step through, finest first (S1.12, D-S1.12-5). Live. */
+  get zoomPresets(): readonly ViewPreset[] {
+    return this.#zoomPresets;
+  }
+
+  set zoomPresets(refs: readonly PresetRef[]) {
+    this.#zoomPresets = Object.freeze(refs.map(resolvePreset));
+  }
+
+  #zoomPresetIndex(): number {
+    return this.#zoomPresets.indexOf(this.scale.preset);
+  }
+
+  /** True unless the current preset is the finest entry of `zoomPresets`, or is not in it at all —
+   *  the same "not found" reading `zoomIn`'s no-op takes (D-S1.12-6). */
+  get canZoomIn(): boolean {
+    return this.#zoomPresetIndex() > 0;
+  }
+
+  get canZoomOut(): boolean {
+    const index = this.#zoomPresetIndex();
+    return index !== -1 && index < this.#zoomPresets.length - 1;
+  }
+
+  /** Steps `preset` to `zoomPresets[index + delta]`, re-anchoring inside one `batch()` exactly as
+   *  `zoomTo` does (D-S1.12-6). No-op — no notification — at the ends, or when the current preset is
+   *  not a member of `zoomPresets` at all. */
+  #stepPreset(delta: number, anchorX: number): void {
+    const index = this.#zoomPresetIndex();
+    const next = index + delta;
+    if (index === -1 || next < 0 || next >= this.#zoomPresets.length) return;
+    const anchorInstant = this.timeScale.instantForX(this.scroll.state.position.x + anchorX);
+    this.batch(() => {
+      this.scale.preset = this.#zoomPresets[next]!;
+      this.#scrollHandle?.setContentSize({
+        width: this.timeScale.contentWidth,
+        height: this.#contentSize.height,
+      });
+      this.scroll.panTo({ x: this.timeScale.xForInstant(anchorInstant) - anchorX });
+    });
+  }
+
+  /** Next finer entry of `zoomPresets`; no-op at the finest (S1.12, D-S1.12-6). `anchorX` defaults to
+   *  pane centre. */
+  zoomIn(anchorX?: number): void {
+    this.#stepPreset(-1, anchorX ?? this.#paneSize.width / 2);
+  }
+
+  /** Next coarser entry of `zoomPresets`; no-op at the coarsest (S1.12, D-S1.12-6). */
+  zoomOut(anchorX?: number): void {
+    this.#stepPreset(1, anchorX ?? this.#paneSize.width / 2);
+  }
+
+  /** Resolves the density that makes `span` exactly fill the pane, then pans so `span.start` sits at
+   *  the pane's left edge — both inside one batch, one notification (S1.12, D-S1.12-7). Floored by
+   *  the preset's `minTickWidthPx` (D-S1.12-2), so a span too long to be legible fills the pane only
+   *  as far as the floor allows. */
+  zoomToSpan(span: TimeSpan): void {
+    const spanMs = diffMs(span.end, span.start);
+    const targetPxPerMs = this.#paneSize.width > 0 && spanMs > 0 ? this.#paneSize.width / spanMs : 0;
+    this.batch(() => {
+      this.scale.fit = targetPxPerMs;
+      this.#scrollHandle?.setContentSize({
+        width: this.timeScale.contentWidth,
+        height: this.#contentSize.height,
+      });
+      this.scroll.panTo({ x: this.timeScale.xForInstant(span.start) });
+    });
+  }
+
+  /** Pans so `i` sits at `align` within the pane (S1.12, D-S1.12-8). */
+  panToInstant(i: Instant, align: 'start' | 'center'): void {
+    const x = this.timeScale.xForInstant(i) - (align === 'center' ? this.#paneSize.width / 2 : 0);
+    this.scroll.panTo({ x });
   }
 
   /** "Nearest edge," not "center" (S1.9, D-S1.9-6) — `view/`-only, not exported from `api/` (matches

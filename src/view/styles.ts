@@ -33,6 +33,7 @@ const LIGHT_COLOR_TOKENS = `
   --fg-bar-fill: oklch(0.55 0.13 245);
   --fg-bar-label-color: #FFFFFF;
   --fg-warn: #D97706;
+  --fg-today-line-color: #DC2626;
 `.trimEnd();
 
 const DARK_COLOR_TOKENS = `
@@ -49,6 +50,7 @@ const DARK_COLOR_TOKENS = `
   --fg-bar-fill: oklch(0.72 0.13 245);
   --fg-bar-label-color: #1A1815;
   --fg-warn: #FBBF24;
+  --fg-today-line-color: #F87171;
 `.trimEnd();
 
 const BASE_STYLESHEET = `
@@ -72,14 +74,19 @@ ${DARK_COLOR_TOKENS}
 
 .fg-container { display: flex; overflow: hidden; }
 .fg-grid-pane { display: flex; flex-direction: column; flex-shrink: 0; overflow: hidden; background: var(--fg-pane-bg); }
-.fg-grid-spacer { flex-shrink: 0; }
+/* S1.12, D-S1.12-9: mirrors .fg-header's own band stack — one .fg-band per header band
+   (setHeaderBandCount), sized from the same --fg-band-height expression. */
+.fg-grid-spacer { flex-shrink: 0; display: flex; flex-direction: column; }
 .fg-rows-clip { position: relative; flex: 1 1 auto; overflow: hidden; }
 .fg-rows { position: relative; height: 100%; }
 .fg-splitter { flex-shrink: 0; cursor: col-resize; background: var(--fg-splitter-color); }
 .fg-timeline-pane { position: relative; flex: 1 1 auto; min-width: 0; overflow: auto; background: var(--fg-pane-bg); }
-.fg-header { background: var(--fg-header-bg); position: relative; display: flex; flex-direction: column; height: var(--fg-header-height, 20px); }
-.fg-band { background: var(--fg-header-band-bg); color: var(--fg-header-text); border-bottom: 1px solid var(--fg-header-divider-color); position: relative; flex: 1 1 0; min-height: 0; }
-.fg-tick { color: var(--fg-header-subtext); position: absolute; top: 0; left: 0; }
+/* S1.12, D-S1.12-9/D-S1.12-15: height comes from band count × one band height, not a fixed total
+   split N ways — and it stays pinned to the top of the timeline pane while rows scroll under it
+   (closes the S1.8 debt, D-S1.12-15). */
+.fg-header { background: var(--fg-header-bg); position: sticky; top: 0; z-index: 1; display: flex; flex-direction: column; height: auto; }
+.fg-band { background: var(--fg-header-band-bg); color: var(--fg-header-text); border-bottom: 1px solid var(--fg-header-divider-color); position: relative; flex: 0 0 var(--fg-band-height, 20px); min-height: 0; }
+.fg-tick { color: var(--fg-header-subtext); position: absolute; top: 0; left: 0; height: var(--fg-band-height, 20px); line-height: var(--fg-band-height, 20px); }
 .fg-row { background: var(--fg-row-even-bg); position: absolute; top: 0; left: 0; width: 100%; }
 .fg-row:nth-child(odd) { background: var(--fg-row-odd-bg); }
 .fg-row-label { color: var(--fg-row-label-color); }
@@ -87,6 +94,7 @@ ${DARK_COLOR_TOKENS}
 .fg-bar { background: var(--fg-bar-fill); color: var(--fg-bar-label-color); border-radius: var(--fg-bar-radius, 3px); position: absolute; top: 0; left: 0; }
 .fg-bar[data-flag~="conflict"] { outline: 2px solid var(--fg-warn); }
 .fg-content-sizer { position: absolute; top: 0; left: 0; width: 1px; height: 1px; visibility: hidden; }
+.fg-today-line { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--fg-today-line-color); pointer-events: none; }
 `.trim();
 
 /** Injects the library's base stylesheet into `doc` exactly once. Safe to call from every Gantt

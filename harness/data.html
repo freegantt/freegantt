@@ -75,6 +75,18 @@
         font-family: ui-monospace, monospace;
         font-size: 0.8rem;
       }
+      #toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.5rem 1rem;
+        margin: 1rem 0;
+        font-size: 0.9rem;
+      }
+      #toolbar select,
+      #toolbar button {
+        font: inherit;
+      }
     </style>
   </head>
   <body>
@@ -84,7 +96,7 @@
       <a href="./diagram.html">Module map</a>
       <a href="./doc.html">Module &amp; class map (doc)</a>
       <a href="./scroll-sync.html">Scroll sync</a>
-      <a href="./zoom.html">Zoom &amp; presets</a>
+      <a href="./zoom.html">Timeline &amp; navigation</a>
       <a href="./large-dataset.html">Large dataset</a>
     </nav>
     <p>
@@ -109,6 +121,7 @@
       <button id="redo-btn" type="button">Redo</button>
       <label><input id="lock-checkbox" type="checkbox" /> Lock the first entry (D-S2-25)</label>
     </div>
+    <div id="toolbar"></div>
     <div id="gantt"></div>
     <div id="document-controls">
       <button id="export-btn" type="button">Export</button>

@@ -457,28 +457,29 @@ Guardrails and glossary first, then the engine, then the seam, then the public e
 - [ ] `plans/03` §S1 / §S3 / §S5 edits
 
 ### `time/`
-- [ ] `preferredTickWidthPx` rename + `minTickWidthPx`; `minPxPerMsForPreset`
-- [ ] `DateFormat`, `resolveDateFormat` with its cache; `HeaderFormat` gains `locale`
-- [ ] `weekOfYear` in `zone.ts`; `formatWeekNumber` in `format.ts`; `MONTH_ABBR` deleted
-- [ ] `hourDayWeek`, `dayWeekMonth`, `weekMonthYear`; every shipped band's `format` → options object
+- [x] `preferredTickWidthPx` rename + `minTickWidthPx`; `minPxPerMsForPreset`
+- [x] `DateFormat`, `resolveDateFormat` with its cache; `HeaderFormat` gains `locale`
+- [x] `weekOfYear` in `zone.ts`; `formatWeekNumber` in `format.ts`; `MONTH_ABBR` deleted
+- [x] `hourDayWeek`, `dayWeekMonth`, `weekMonthYear`; every shipped band's `format` → options object
 
 ### `layout/`
-- [ ] The density floor and `MAX_CONTENT_PX` in `#resolvePxPerMs`
-- [ ] `zoomPresets`, `zoomIn`/`zoomOut`/`canZoomIn`/`canZoomOut`, `zoomToSpan`, `panToInstant` on `Viewport`
-- [ ] `LayoutInput.locale`/`.todayLine`; `computeFrame` emits the `TodayLine` decoration and threads `locale`
+- [x] The density floor and `MAX_CONTENT_PX` in `#resolvePxPerMs`
+- [x] `zoomPresets`, `zoomIn`/`zoomOut`/`canZoomIn`/`canZoomOut`, `zoomToSpan`, `panToInstant` on `Viewport`
+- [x] `LayoutInput.locale`/`.todayLine`; `computeFrame` emits the `TodayLine` decoration and threads `locale`
 
 ### `view/` and `render/`
-- [ ] The D-S1.12-9 stylesheet block; `--fg-band-height`; `--fg-header-height` and `HEADER_HEIGHT_POLICY` deleted
-- [ ] Grid spacer renders one empty `.fg-band` per header band
-- [ ] Sticky header (D-S1.12-15)
-- [ ] `.fg-today-line` in `render/dom`; `--fg-today-line-color`
+- [x] The D-S1.12-9 stylesheet block; `--fg-band-height`; `--fg-header-height` and `HEADER_HEIGHT_POLICY` deleted
+- [x] Grid spacer renders one empty `.fg-band` per header band
+- [x] Sticky header (D-S1.12-15)
+- [x] `.fg-today-line` in `render/dom`; `--fg-today-line-color`
 
 ### `api/`
-- [ ] `Gantt` + `GanttOptions`: `locale`, `todayLine`, `zoomPresets`, `zoomIn`/`zoomOut`/`canZoomIn`/`canZoomOut`, `zoomToSpan`, `panToDate`, `panToToday`; `range` takes loose input
+- [x] `Gantt` + `GanttOptions`: `locale`, `todayLine`, `zoomPresets`, `zoomIn`/`zoomOut`/`canZoomIn`/`canZoomOut`, `zoomToSpan`, `panToDate`, `panToToday`; `range` takes loose input
 
 ### Harness
-- [ ] `fixtures/multi-year-dataset.ts`
-- [ ] `harness/zoom.html` + `zoom.ts` toolbar; `window.__gantt` kept; nav label updated in every page
+- [x] `fixtures/multi-year-dataset.ts`
+- [x] `harness/zoom.html` + `zoom.ts` toolbar; `window.__gantt` kept; nav label updated in every page
+- [x] Toolbar also mounted on `index.html`/`main.ts` and `data.html`/`data.ts` (shared `harness/timeline-toolbar.ts`), beyond §3.7's `zoom.html`-only ask
 - [ ] Review `harness/main.ts` and every harness page against CLAUDE.md's harness rule; record any gap against S1.12 and fix it in `src/`
 
 ### Review and gate

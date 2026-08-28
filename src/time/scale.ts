@@ -20,10 +20,16 @@ export interface Tick {
   width: number;
 }
 
-export type HeaderFormat = (i: Instant, zone: string) => string;
+/** Widened with `locale` (S1.12). Adding a parameter is source-compatible with existing callbacks. */
+export type HeaderFormat = (i: Instant, zone: string, locale: Intl.LocalesArgument | undefined) => string;
+
+/** What a header band states to turn an Instant into its label (S1.12, D-S1.12-11). Options are
+ * resolved through `Intl.DateTimeFormat` in the Gantt's locale and the Dataset's zone; a callback is
+ * the escape hatch for anything Intl has no field for (see `formatWeekNumber`). */
+export type DateFormat = Intl.DateTimeFormatOptions | HeaderFormat;
 
 export interface ViewPresetHeader extends TickStep {
-  format: HeaderFormat;
+  format: DateFormat;
 }
 
 /** Data, not a switch statement — shipped presets are config objects; custom ones are too (plans/01 §5.1). */
@@ -32,7 +38,11 @@ export interface ViewPreset {
   tickUnit: TimeUnit;
   tickIncrement: number;
   headers: readonly ViewPresetHeader[];
-  tickWidthPx: number;
+  /** The density this preset intends: one tick occupies this many px when nothing else decides. */
+  preferredTickWidthPx: number;
+  /** The density floor: below this, this preset's labels stop being legible. Defaults to
+   *  `preferredTickWidthPx` when omitted, which makes a custom preset never compress. */
+  minTickWidthPx?: number;
   snap?: { unit: TimeUnit; increment: number } | 'tick' | 'none';
 }
 
@@ -104,17 +114,28 @@ export function createTimeScale(options: TimeScaleOptions): TimeScale {
   return { range, timeZone, pxPerMs, xForInstant, instantForX, widthForDuration, ticks, contentWidth };
 }
 
-/** The zoom a preset implies on its own: one tick occupies its `tickWidthPx`. This is what a scale
- * resolves to when there is no measured viewport to fit into (detached container, `display:none`,
- * pre-paint) — the preset already states an intended density, so an unmeasured container is not a special
- * case needing an invented minimum width. Calendar stepping resolves through `zone`, so a day tick is
- * 23 or 25 hours across a DST transition, not always 24. */
-export function pxPerMsForPreset(zone: string, preset: ViewPreset, at: Instant): number {
+function tickMsForPreset(zone: string, preset: ViewPreset, at: Instant): number {
   const tickMs = stepBy(zone, at, preset.tickUnit, preset.tickIncrement) - at;
   if (tickMs <= 0) {
     throw new RangeError(
       `TimeScale: preset "${preset.id}" does not advance (${preset.tickIncrement}${preset.tickUnit})`,
     );
   }
-  return preset.tickWidthPx / tickMs;
+  return tickMs;
+}
+
+/** The zoom a preset implies on its own: one tick occupies its `preferredTickWidthPx`. This is what a
+ * scale resolves to when there is no measured viewport to fit into (detached container, `display:none`,
+ * pre-paint) — the preset already states an intended density, so an unmeasured container is not a special
+ * case needing an invented minimum width. Calendar stepping resolves through `zone`, so a day tick is
+ * 23 or 25 hours across a DST transition, not always 24. */
+export function pxPerMsForPreset(zone: string, preset: ViewPreset, at: Instant): number {
+  return preset.preferredTickWidthPx / tickMsForPreset(zone, preset, at);
+}
+
+/** The density floor this preset implies: one tick occupies at least `minTickWidthPx`. Falls back to
+ *  `preferredTickWidthPx`, so a custom preset that states nothing never compresses (D-S1.12-2). */
+export function minPxPerMsForPreset(zone: string, preset: ViewPreset, at: Instant): number {
+  const floorPx = preset.minTickWidthPx ?? preset.preferredTickWidthPx;
+  return floorPx / tickMsForPreset(zone, preset, at);
 }

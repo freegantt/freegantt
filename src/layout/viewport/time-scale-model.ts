@@ -14,6 +14,7 @@ import {
   dayPreset,
   diffMs,
   instant,
+  minPxPerMsForPreset,
   pxPerMsForPreset,
   resolvePreset,
 } from '../../time/index.js';
@@ -57,6 +58,12 @@ export interface ScaleBinding {
 
 /** Zone used before any Gantt has bound, so `scale` is readable on a fresh model. */
 const UNBOUND_ZONE = 'UTC';
+
+/** Content wider than this stops being addressable by browser scroll geometry (S1.12, D-S1.12-4).
+ *  Chromium clamps around 33.5M px; this leaves headroom for the narrowest reported limit. Mechanical,
+ *  not semantic — about the DOM, not about legibility — so it is one constant here, not a per-preset
+ *  knob. */
+const MAX_CONTENT_PX = 16_000_000;
 
 /** Returned by `bindTimeScale` (#6). `unbind` leaves the shared axis; `setPaneWidth` lets a bound
  *  Gantt push a re-measured width (e.g. from a `ResizeObserver`) without unbind+rebind churn. */
@@ -226,13 +233,23 @@ export class TimeScaleModel {
     return { timeZone, range, pxPerMs };
   }
 
-  /** The three `TimeScaleFit` modes (S1.9, D-S1.9-2). `'pane'` is the pre-S1.9 formula,
-   *  unchanged — a refinement of the preset's own density when there is a pane to fit, not a
-   *  precondition for having one. */
+  /** The three `TimeScaleFit` modes (S1.9, D-S1.9-2), floored by the preset's `minTickWidthPx` and
+   *  ceilinged by `MAX_CONTENT_PX` (S1.12, D-S1.12-2, D-S1.12-4) — applied to all three modes so an
+   *  explicit `number` (what `zoomTo`/`zoomBy` write) can never walk back into the squish the floor
+   *  exists to prevent. `'pane'` is otherwise the pre-S1.9 formula, unchanged — a refinement of the
+   *  preset's own density when there is a pane to fit, not a precondition for having one. */
   #resolvePxPerMs(timeZone: string, rangeStart: Instant, width: number, spanMs: number): number {
-    if (typeof this.#fit === 'number') return this.#fit;
-    if (this.#fit === 'preset') return pxPerMsForPreset(timeZone, this.#preset, rangeStart);
-    return width > 0 && spanMs > 0 ? width / spanMs : pxPerMsForPreset(timeZone, this.#preset, rangeStart);
+    const requested =
+      typeof this.#fit === 'number'
+        ? this.#fit
+        : this.#fit === 'preset'
+          ? pxPerMsForPreset(timeZone, this.#preset, rangeStart)
+          : width > 0 && spanMs > 0
+            ? width / spanMs
+            : pxPerMsForPreset(timeZone, this.#preset, rangeStart);
+    const floor = minPxPerMsForPreset(timeZone, this.#preset, rangeStart);
+    const ceiling = spanMs > 0 ? MAX_CONTENT_PX / spanMs : Infinity;
+    return Math.min(Math.max(requested, floor), ceiling);
   }
 }
 
