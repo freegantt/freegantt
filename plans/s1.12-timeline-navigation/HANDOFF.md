@@ -4,6 +4,51 @@ Picking this back up: read `plans/s1.12-timeline-navigation/README.md` first (th
 then this file for where implementation actually stands. `.slice` is already `S1.12`;
 `scripts/slice-gate.mjs` already has the `S1.12 → S3` gate entry (not yet passing).
 
+## Fixed this session — timeline pane failed to shrink on zoom-out
+
+**Consumer report:** "the container doesn't shrink when you change zoom levels." Confirmed and
+fixed. Also checked the today line report ("we don't see a today line yet") — not a bug, see below.
+
+**Root cause:** `render/dom/index.ts`'s `headerLayer` (`.fg-header`) never got an explicit width and
+`.fg-header` had no `overflow` rule (default `visible`). A boundary tick's cell is rendered at one
+full calendar-unit width (`ticks()`, `time/scale.ts`) — for a coarse preset (`weekMonthYear` and up)
+over a dataset shorter than that unit, that cell can be many times wider than `frame.contentWidth`.
+With nothing clipping it, the oversized tick `<div>` inflated the timeline pane's native
+`scrollWidth` far past what `frame.contentWidth`/`contentSizer` said the content should be — the pane
+looked "expanded" and never shrank back down on zoom-out. `harness/data.html`'s dataset
+(`sampleEntryInputs.slice(0, 8)`, ~3 weeks) reproduces it directly: `scrollWidth` jumped from 1158px
+to 6041px stepping from `weekAndMonth` to `weekMonthYear` and stayed there through `year`, on a 990px
+pane.
+
+**Fix**, two lines:
+- `src/view/styles.ts` — `.fg-header` gains `overflow: hidden`.
+- `src/render/dom/index.ts` `sync()` — `headerLayer.style.width = \`${frame.contentWidth}px\`` every
+  frame, so the clip lands on the content boundary instead of on whatever width the header's box
+  defaulted to (the pane's client width, not the content's — which is also why a normal scrolled
+  dataset didn't show this bug: ticks tile edge-to-edge with content there, so the unclipped overflow
+  happened to coincide with the real content edge).
+
+**Test:** `e2e/timeline-content-width.spec.ts` (new) — asserts `.fg-timeline-pane`'s `scrollWidth`
+never exceeds `clientWidth` (±1px) at any `zoomOut`/`zoomIn` step on `harness/data.html`'s short
+dataset. Verified red on the pre-fix code (`scrollWidth` 1158 vs an expected ≤991), green after.
+Also manually verified the fix doesn't regress the normal case: scrolled a multi-year dataset to
+start/middle/end at the `day` preset (content wider than pane) and confirmed header ticks stay
+visible and correctly positioned throughout (screenshot-checked).
+
+**Today line — not a bug.** `harness/zoom.html`'s default `sample` dataset starts 2026-09-01; "today"
+(2026-08-28, this session's date) is three days before that, so `computeFrame` correctly withholds
+the `TodayLine` decoration per D-S1.12-14 ("`now()` falls inside `scale.range`"). Switching to the
+`multi-year` dataset (spans the current date) shows the line correctly. Nothing to fix here — flagging
+so the next agent doesn't re-diagnose it.
+
+**Not run this session:** the pre-existing item 1 below (test files still on `tickWidthPx`, `tsc`
+fails on five test files) and five e2e failures pre-dating this session's change, confirmed
+pre-existing by stashing just this fix and re-running: `harness.spec.ts` "grid pane rows are actually
+painted after scrolling" and "no row-label gutter", and `pane-resize.spec.ts`'s three tests (window
+resize re-fit, splitter drag re-fit, pixel alignment after drag). These look like the same class of
+not-yet-triaged breakage item 1 already calls out — worth folding into that pass rather than
+re-diagnosing from scratch.
+
 ## Done — all of `src/`, typechecks and lints clean
 
 Ran `npx tsc --noEmit -p .` (zero errors outside `*.test.ts`) and `npx eslint` on every touched

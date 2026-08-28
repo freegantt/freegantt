@@ -84,7 +84,7 @@ ${DARK_COLOR_TOKENS}
 /* S1.12, D-S1.12-9/D-S1.12-15: height comes from band count × one band height, not a fixed total
    split N ways — and it stays pinned to the top of the timeline pane while rows scroll under it
    (closes the S1.8 debt, D-S1.12-15). */
-.fg-header { background: var(--fg-header-bg); position: sticky; top: 0; z-index: 1; display: flex; flex-direction: column; height: auto; }
+.fg-header { background: var(--fg-header-bg); position: sticky; top: 0; z-index: 1; display: flex; flex-direction: column; height: auto; overflow: hidden; }
 .fg-band { background: var(--fg-header-band-bg); color: var(--fg-header-text); border-bottom: 1px solid var(--fg-header-divider-color); position: relative; flex: 0 0 var(--fg-band-height, 20px); min-height: 0; }
 .fg-tick { color: var(--fg-header-subtext); position: absolute; top: 0; left: 0; height: var(--fg-band-height, 20px); line-height: var(--fg-band-height, 20px); }
 .fg-row { background: var(--fg-row-even-bg); position: absolute; top: 0; left: 0; width: 100%; }
