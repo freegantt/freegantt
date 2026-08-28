@@ -249,6 +249,13 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
       timelineHost.append(headerLayer, barLayer, contentSizer, todayLine);
     },
     sync(frame: GeometryFrame) {
+      if (headerLayer) {
+        // A boundary tick's cell is one full calendar unit wide and can overshoot `contentWidth` on a
+        // coarse preset over a short dataset. `.fg-header` clips (`overflow: hidden`) at its own box
+        // edge, so the box must be exactly `contentWidth` wide — or the clip lands at the pane's width
+        // instead and either hides in-range ticks or lets an oversized tick inflate native scrollWidth.
+        headerLayer.style.width = `${frame.contentWidth}px`;
+      }
       syncHeader(frame.header.bands);
       syncRows(frame.rows, frame.rowCount);
       syncBars(frame.bars);
