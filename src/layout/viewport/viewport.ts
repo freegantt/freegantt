@@ -51,7 +51,7 @@ function sameOverscan(a: Overscan, b: Overscan): boolean {
   return aRows === bRows && aPx === bPx;
 }
 
-const ZERO_SIZE: Size = { width: 0, height: 0 };
+const ZERO_SIZE: Size = Object.freeze({ width: 0, height: 0 });
 
 export class Viewport {
   readonly scale: TimeScaleModel;
