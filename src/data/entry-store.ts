@@ -38,6 +38,10 @@ export class EntryStore implements EntryStoreContract {
   #all: () => readonly Entry[];
   #byParent: () => ReadonlyMap<EntryId | undefined, readonly Entry[]>;
   #writeSet: WriteSet | null = null;
+  /** Insertion index of an id at the moment it was removed, so an undo/redo that adds it back can
+   *  put it in the same place in `all` (D-S2-3). A later `'user'` add of the same id is a new
+   *  insertion and drops the remembered index. */
+  #removedAtIndex = new Map<EntryId, number>();
   #context: EntryReadContext;
   /** Bound once, right after construction, by whoever owns this store's transactions
    *  (`DatasetState`, `data/dataset-state.ts`) — `EntryStore` and its runner construct in a fixed
@@ -268,8 +272,28 @@ export class EntryStore implements EntryStoreContract {
    *  write set is simply discarded) and closes the write set. */
   endTransaction(_token: TxToken, changeSet: ChangeSet | undefined): void {
     if (changeSet) {
-      for (const { entity } of changeSet.added) this.#byId.set(entity.id, entity);
+      const order = Array.from(this.#byId.keys());
+      for (const { entity } of changeSet.removed) {
+        const index = order.indexOf(entity.id);
+        if (index !== -1) this.#removedAtIndex.set(entity.id, index);
+      }
       for (const { entity } of changeSet.removed) this.#byId.delete(entity.id);
+
+      const restored = [...changeSet.added].sort((a, b) => {
+        const aIndex = this.#removedAtIndex.get(a.entity.id) ?? Number.POSITIVE_INFINITY;
+        const bIndex = this.#removedAtIndex.get(b.entity.id) ?? Number.POSITIVE_INFINITY;
+        return aIndex - bIndex;
+      });
+      for (const { entity } of restored) {
+        if (changeSet.origin === 'user') this.#removedAtIndex.delete(entity.id);
+        const index = this.#removedAtIndex.get(entity.id);
+        if (index === undefined) this.#byId.set(entity.id, entity);
+        else {
+          this.#insertAt(index, entity);
+          this.#removedAtIndex.delete(entity.id);
+        }
+      }
+
       for (const row of changeSet.updated) {
         const current = this.#byId.get(row.id);
         if (current) this.#byId.set(row.id, { ...current, [row.field]: row.to });
@@ -277,6 +301,14 @@ export class EntryStore implements EntryStoreContract {
       this.#revision.set(this.#revision.get() + 1);
     }
     this.#writeSet = null;
+  }
+
+  /** Rebuilds the insertion-ordered map so `entity` sits at `index` (clamped to the current length). */
+  #insertAt(index: number, entity: Entry): void {
+    const entries = Array.from(this.#byId.values());
+    const at = Math.min(Math.max(index, 0), entries.length);
+    entries.splice(at, 0, entity);
+    this.#byId = new Map(entries.map((entry) => [entry.id, entry]));
   }
 
   #openWriteSet(): WriteSet {
