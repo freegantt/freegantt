@@ -2,17 +2,14 @@
 // commit path: `data/transaction.ts` imports nothing from this file, and `history-is-removable`
 // (`.dependency-cruiser.cjs`, D-S2-23) allows exactly one importer, `data/dataset-state.ts`, which
 // constructs it. Delete this file and its one construction line and the commit path is unchanged, byte
-// for byte. Everything here goes through `on('change')`/`transaction()` and `commitChangeSet` — the same
-// surface a consumer would have to write this file themselves (D-S2-24).
+// for byte. Recording goes through `on('change')` alone — a real consumer could do that much. Replay
+// (`undo`/`redo`, below) calls `commitChangeSet` directly to skip the extension hook and Rollup
+// (D-S2-14), which is a `data/`-internal privilege: `commitChangeSet` is not reachable outside the
+// package (`plans/01` §1), so this file is not yet fully reproducible from the public surface — that is
+// S3 plugin-surface work, not an S2 gap (`s2.5-undo-redo.md` §2.1).
 
-import type {
-  ChangeSet,
-  ChangeSetId,
-  DatasetEventMap,
-  EntityAdded,
-  EntityRemoved,
-  FieldUpdated,
-} from '../model/index.js';
+import type { ChangeSet, DatasetEventMap } from '../model/index.js';
+import { invertChangeSet } from './change-set.js';
 import { commitChangeSet } from './transaction.js';
 import type { TransactionData } from './transaction.js';
 
@@ -22,13 +19,6 @@ export interface HistoryOptions {
 }
 
 const DEFAULT_CAPACITY = 100;
-
-function invert(id: ChangeSetId, changeSet: ChangeSet): ChangeSet {
-  const added: EntityAdded[] = changeSet.removed.map(({ store, entity }) => ({ store, entity }));
-  const removed: EntityRemoved[] = changeSet.added.map(({ store, entity }) => ({ store, entity }));
-  const updated: FieldUpdated[] = changeSet.updated.map((row) => ({ ...row, from: row.to, to: row.from }));
-  return { id, origin: 'undo', added, removed, updated };
-}
 
 /** Undo and redo over a Dataset's committed changesets (§2 of the step file). A stack plus a cursor:
  *  everything below the cursor is undoable, everything at or above it (up to the stack's own top) is
@@ -43,12 +33,6 @@ export class History {
     this.#data = data;
     this.#capacity = options.capacity ?? DEFAULT_CAPACITY;
     data.bus.on('change', this.#onChange);
-  }
-
-  /** Stops recording. `data/dataset-state.ts` never calls this today — a `Dataset` has no `dispose()`
-   *  yet — but it exists so a future one, or a test, can unwind the subscription cleanly. */
-  dispose(): void {
-    this.#data.bus.off('change', this.#onChange);
   }
 
   get canUndo(): boolean {
@@ -68,7 +52,7 @@ export class History {
   undo(): void {
     if (!this.canUndo) return;
     const changeSet = this.#stack[this.#cursor - 1]!;
-    commitChangeSet(this.#data, invert(this.#data.nextChangeSetId(), changeSet));
+    commitChangeSet(this.#data, invertChangeSet(this.#data.nextChangeSetId(), changeSet));
   }
 
   /** Re-applies the changeset just above the cursor exactly as recorded, with `origin: 'redo'`. A

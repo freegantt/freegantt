@@ -85,7 +85,7 @@ export class DatasetState implements Dataset {
       derivedSpanKinds: this.derivedSpanKinds,
     };
     this.entries = new EntryStore(readEntries(options.entries, context), context);
-    this.entries.bindTransactions(this);
+    this.entries.setTransactionRunner(this);
     // `01` §2.6 / README.md D-S2-22: a deriving-kind entry given children only through the initial
     // array gets a real span before anyone reads it, not just after the first later transaction
     // touches one of those children. `fromJSON` gets this for free, being construction like any other.

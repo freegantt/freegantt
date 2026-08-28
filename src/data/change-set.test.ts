@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { diffEdit, fieldsEqual, foldChangeSet } from './change-set.js';
+import { diffEdit, fieldsEqual, foldChangeSet, invertChangeSet } from './change-set.js';
 import { changeSetId, entryId } from '../model/index.js';
 import type { Entry, EntryId, Instant } from '../model/index.js';
 import type { StoredEdit } from './edit-extension.js';
@@ -112,5 +112,25 @@ describe('foldChangeSet', () => {
     expect(result?.added).toEqual([]);
     expect(result?.removed).toEqual([]);
     expect(result?.updated).toEqual([{ store: 'entries', id: t2.id, field: 'name', from: 'a', to: 'b' }]);
+  });
+});
+
+describe('invertChangeSet', () => {
+  it('swaps added with removed and each updated row from/to, and tags origin undo', () => {
+    const t1 = entry('t1');
+    const inverted = invertChangeSet(changeSetId(2), {
+      id: changeSetId(1),
+      origin: 'user',
+      added: [{ store: 'entries', entity: t1 }],
+      removed: [],
+      updated: [{ store: 'entries', id: t1.id, field: 'name', from: 'old', to: 'new' }],
+    });
+    expect(inverted).toEqual({
+      id: changeSetId(2),
+      origin: 'undo',
+      added: [],
+      removed: [{ store: 'entries', entity: t1 }],
+      updated: [{ store: 'entries', id: t1.id, field: 'name', from: 'new', to: 'old' }],
+    });
   });
 });

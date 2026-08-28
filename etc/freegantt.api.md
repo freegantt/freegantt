@@ -30,14 +30,18 @@ export type ChangeSetId = string & {
 };
 
 // @public
+export function changeSetId(counter: number): ChangeSetId;
+
+// @public
 export class ContainerNotFoundError extends FreeGanttError {
     constructor(container: string);
 }
 
-// Warning: (ae-forgotten-export) The symbol "Dataset_2" needs to be exported by the entry point index.d.ts
-//
+// @public
+export type CoreFieldKey = keyof Omit<Entry, 'id'>;
+
 // @public (undocumented)
-export class Dataset implements Dataset_2 {
+export class Dataset {
     constructor(options: DatasetOptions);
     get canRedo(): boolean;
     get canUndo(): boolean;
@@ -107,8 +111,6 @@ export class DuplicateEntryIdError extends FreeGanttError {
 
 // @public (undocumented)
 export interface Duration {
-    // Warning: (ae-forgotten-export) The symbol "TimeUnit" needs to be exported by the entry point index.d.ts
-    //
     // (undocumented)
     unit: TimeUnit;
     // (undocumented)
@@ -229,8 +231,6 @@ export interface EntryStoreView {
     readonly size: number;
 }
 
-// Warning: (ae-forgotten-export) The symbol "CoreFieldKey" needs to be exported by the entry point index.d.ts
-//
 // @public (undocumented)
 export type FieldKey = CoreFieldKey | (string & {});
 
@@ -362,6 +362,9 @@ export class MutationDuringNotificationError extends FreeGanttError {
     constructor(message: string);
 }
 
+// @public (undocumented)
+export function now(): Instant;
+
 // @public
 export class ParentCycleError extends FreeGanttError {
     constructor(entryId: EntryId);
@@ -459,6 +462,9 @@ export interface TimeSpanInput {
     // (undocumented)
     start: InstantInput;
 }
+
+// @public (undocumented)
+export type TimeUnit = 'millisecond' | 'minute' | 'hour' | 'day' | 'week' | 'month' | 'year';
 
 // @public
 export class UnknownFieldError extends FreeGanttError {

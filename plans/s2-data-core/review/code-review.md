@@ -1,9 +1,9 @@
-# Code review — S2.5 undo/redo and S2.6 serialization
+# Code review — S2 branch
 
-**Fixed point:** `d7f7a34` (three-dot: `git diff d7f7a34...HEAD`)
-**Commits:** `f5f2691` S2.5 · `29553cc` undo button lag · `ba1db86`…`344ffe0` S2.6
-**Spec sources:** `plans/s2-data-core/s2.5-undo-redo.md`, `s2.6-serialization.md`, D-S2-11/12/13/14/23/24/25
-**Issue tracker:** `docs/agents/issue-tracker.md` is missing (the skill asks for `/setup-matt-pocock-skills`). Slice specs above were used instead of GitHub issues.
+**Fixed point:** `main` (`5761462`) (three-dot: `git diff main...HEAD`)
+**Commits:** 49 on `s2-s2` (`ee4638c` S2.1 … `e6d4674` S2.7). This session’s simplify is uncommitted on top.
+**Spec sources:** `plans/s2-data-core/README.md` (D-S2-1–26, §3 surface, U1–U9, [S2-A1]–[S2-A4]), `plans/03` §S2, step files s2.1–s2.7, GitHub #33, #15 (hook only in S2).
+**Issue tracker:** `docs/agents/issue-tracker.md` is missing (the skill asks for `/setup-matt-pocock-skills`). Slice specs above were used instead of GitHub issue bodies as the primary spec.
 
 This review does **not** merge the two axes.
 
@@ -11,49 +11,65 @@ This review does **not** merge the two axes.
 
 ### Hard (documented)
 
-**`src/data/history.ts` cursor (was a breach; this session aligned it).**
-S2.5 §2.2 / D-S2-25: the cursor moves on the `change` the undo commit emits, never on the `undo()` call. The range as committed (`29553cc`) moved the cursor in `undo()`/`redo()` then rolled it back in `catch`. That is the pattern the spec rejects. After this review’s simplify pass, History’s `#onChange` moves the cursor (History is the first subscriber), so a later handler — including the harness buttons — already reads the post-move flags. A veto never emits `change`, so the stack does not move.
+**Public types a caller cannot name — was a breach; this session aligned it.**
+README §3 lists `CoreFieldKey` and `changeSetId`. `Duration` names `TimeUnit`. The committed report warned `ae-forgotten-export` for `CoreFieldKey` and `TimeUnit`. `src/api/index.ts` now re-exports all three plus `now`. **AGENTS.md harness-review / I10:** `harness/data.ts` used `instant(Date.now())`; it now calls public `now()`.
 
-**`src/api/dataset.ts` — `plans/01` §1: only `api/` and `model/` types are public.**
-The range typed `DatasetOptions.history` as `HistoryOptions` imported from `data/`, and `api/index.ts` did not re-export that name. S2.5 §1 already publishes `history?: { capacity?: number }`. This session inlined that shape on `DatasetOptions`.
+**Two meanings of Snapshot — was a breach; this session aligned it.**
+CONTEXT.md Snapshot is `entries.all`. `EntryStore.snapshot()` returned `ReadonlyMap<EntryId, Entry>`. **Naming skill check 4 / AGENTS.md one name per concept.** Renamed to `committedById()`. Call: `data.entries.committedById()`.
+
+**`bindTransactions` used Binding’s word.** CONTEXT.md Binding is `layout/viewport/`. Call `this.entries.bindTransactions(this)` failed naming check 2. Renamed to `setTransactionRunner`.
 
 ### Judgement (smells; repo rule wins)
 
-**D-S2-24 vs `commitChangeSet`.** S2.5 §2.1 says a consumer History uses `on('change')` and `transaction()` only, and undo goes through `runTransaction(..., 'undo')`. This History calls `commitChangeSet`. **`plans/01` §6 wins:** undo must not re-run the extension hook or the Rollup, so `runTransaction` is the wrong path. Not a ChangeSet rename (ADR 0006). Recorded as an architecture candidate, not a rename.
+**Possible Speculative Generality:** `History.dispose()` — unused. **Removed** this session.
 
-**Possible Speculative Generality:** `History.dispose()` — unused; the file says Dataset has no `dispose()` yet.
+**`EntryStore` / `StoreName` on the public barrel.** CONTEXT.md Store: “not a consumer-facing word; `dataset.entries` is the published call site.” Exporting `EntryStore` fights that. **plans/01 §1** (only `api/`/`model/` types are public) also forces a name for `dataset.entries`. Mysterious Name, not a rename mandate. `StoreName` stays: README §3 lists it.
 
-**Possible Duplicated Code:** `isDevMode` in `transaction.ts` and `serialization/index.ts`. Do not import from `view/`.
+**`EntityAdded.entity`.** Glossary term is Entry (naming check 1). The S3 `plugin:` arm of `StoreName` may override; otherwise Speculative Generality.
 
-**D-S2-23 leaf:** production importers match (`history` ← `dataset-state`; serialization ← `api/dataset.ts`). `history.property.test.ts` importing `serialization/` is a cruiser exception for `[S2-A1]`.
+**Duplicated Code:** `get` / `has` / `size` each replay the write-set overlay (`entry-store.ts`).
 
-**Façade `Dataset` → `DatasetState` → `History`:** Middle Man on the baseline; **layers require it** — suppress.
+**`Dataset` class implements model `Dataset`.** api-extractor still emits `Dataset_2`. Two “Dataset” types confuse agents. Layer façade is required (CONTEXT.md DatasetState) — suppress Middle Man; the forgotten-export remains.
 
-Leaves, one change channel for recording, `beforeChange` veto, and `undo()` returning void align with D-S2-23/24 and `plans/02`.
+Suppressed: Dataset class as Middle Man (CONTEXT.md DatasetState). Shotgun across the slice files is the slice, not a module split. `identityExtender` / `EditRequest` staying in `data/` matches D-S2-6.
+
+Leaves, one change channel, `beforeChange` veto, and `undo()` returning void align with D-S2-23/24/25.
 
 ## Spec
 
+Prior S2.5/S2.6 bugs (cursor on `change`, `HistoryOptions` leak, undo `undefined` keys, undo-all order, `fromJSON` `RangeError`, ISO vs Instant warn) look **fixed**. #33: no public `gantt.setEntries`; `GanttShell` pushes `entries.all` from `on('change')`. #15: no public `plugins` / `setExtender` / `declareStore`.
+
 ### (a) Missing or partial
 
-**`fromJSON<TMeta>` vs non-generic `Dataset`.** Spec: `static fromJSON<TMeta>(doc: DatasetDocument): Dataset<TMeta>;` (`s2.6` §1.3). Landed: `static fromJSON(doc: DatasetDocument): Dataset`. `DatasetDocument` takes `TMeta`; the façade class does not.
+**`fromJSON<TMeta>` / generic `Dataset`.** s2.6 §1.3: `static fromJSON<TMeta>(doc: DatasetDocument): Dataset<TMeta>`. `plans/02` §1.6: “`new Dataset<{ team: string }>`”. Landed: non-generic `class Dataset`; `fromJSON(doc: DatasetDocument): Dataset`. `DatasetDocument<TMeta>` exists; the façade does not carry it.
 
-**Removability test does not construct without History.** Spec: “a `DatasetData` constructed with no history records nothing and commits identically” (`s2.5` §4). `DatasetState` always constructs History. The test only checks a user `change` origin. Cruiser owns the import graph; the behavioural half of the box is incomplete.
+**`[S2-A1]` generators thinner than s2.5 §3.** Spec: “`update` (each editable field)” and “`remove` (including a parent with a subtree)”. Generators cover name/progress/start/end. Seed parent `p` is not in the remove id set.
 
-**`[S2-A1]` generators are thinner than §3.** Spec: “`update` (each editable field)” and “`remove` (including a parent with a subtree)”. Generators cover name/progress/start/end. Seed parent `p` is not in the id set the generator removes, so a parent+subtree remove is not generated.
+**Serialization import in `data/` tests.** s2.6 §1.5: “Nothing in `data/`, `layout/` or `view/` may import the directory”. `history.property.test.ts` still imports `serialization/` (cruiser exception). Spec comparison is `dataset.toJSON()`.
 
-**`data/` imports serialization in tests.** Spec: “Nothing in `data/`, `layout/` or `view/` may import the directory” (`s2.6` §1.5). `history.property.test.ts` imports `serialization/` (allowlisted). `[S2-A1]` needs `toJSON()`; it can go through the Dataset façade.
+**No-history construct still incomplete.** s2.5 §4: “a `DatasetData` constructed with no history records nothing and commits identically”. `DatasetState` always constructs `History`. The test only checks a `'user'` origin.
+
+**`OPEN-QUESTIONS.md` not deleted.** s2.7: “Deleting the file when its last entry closes is the intended end state.” OQ8 is still **OPEN** (S3). File staying matches “last entry”; the S2.7 TODO that demanded deletion in this slice overreaches.
+
+**`DatasetData` leftovers vs OQ5 `DatasetState`.** Code is `DatasetState`. README Q1/D-S2-6/D-S2-24, `plans/03` §S2 (“`DatasetData` owning stores”), s2.5 §4, s2.7 importer `src/data/dataset-data.ts`, and OQ8 still say `DatasetData`.
+
+**s2.7 TODO boxes still `[ ]`** while `.slice` is `S3` and the gate work landed.
+
+**`CoreFieldKey` / `changeSetId` not on the public barrel** — quoted README §3. **Fixed this session.** `TimeUnit` (via public `Duration`) and `now()` (harness `Date.now()`) landed with them.
 
 ### (b) Not asked for
 
-**`commitChangeSet` as a second apply path** used by History. Spec’s consumer story is `on('change')` and `transaction()` only (`s2.5` §2.1). Needed so undo does not re-run the extender (D-S2-14). Scope the spec did not name; behaviour the spec also requires.
+**`addMs` / `MS` / `now` on the public surface** (S2.7 + this session). README §3 does not list them. Needed so `harness/data.ts` does not add epoch ms or call `Date.now()` itself.
 
-### (c) Present but wrong vs spec (as committed)
+**`dateOnlyEnd` / `derivedSpanKinds` getters** and public `childrenOf` sit outside the §3 table (`all`/`get`/`has`/`size` + add/update/remove). `childrenOf` is required by D-S2-21.
 
-**Cursor on `undo()`.** Quoted: “**The cursor moves on the `change` the undo commit emits, never on the `undo()` call** (D-S2-25).” Same paragraph: “Moving the cursor first and rolling it back on failure is two places that have to agree — hanging it off the event is one.” The committed `29553cc` pattern matched the rejected design. **Fixed in this review** by hanging the move on `#onChange`.
+### (c) Implemented but wrong vs spec
 
-**Undo does not go through `runTransaction`.** Quoted: “Undo itself runs back through the ordinary path — `runTransaction(data, …, 'undo')`”. Undo/redo call `commitChangeSet` to skip extender/rollup. That matches D-S2-14 / §2.2 “Neither re-runs the extension hook” and fights the `runTransaction` sentence. A consumer cannot write `history.ts` with only `transaction()`. **Still open** — see architecture candidate 1.
+**D-S2-24 consumer History vs `commitChangeSet`.** s2.5 §2.1: undo through `transaction()`. History calls `commitChangeSet` so it does not re-run the hook (D-S2-14 / §2.2 “Neither re-runs the extension hook”). A consumer cannot copy History with public `Dataset` methods only. **Still open.**
+
+**D-S2-5 vs landing:** `DatasetEventMap` lives in `model/`, not `data/`. Intentional S2.2 move so `MutationCancelledError` can carry a changeset; README D-S2-5 was not updated.
 
 ## Summary
 
-- **Standards:** 2 hard findings in the committed range (cursor, `HistoryOptions` leak). Both addressed in this session’s simplify pass. Worst remaining judgement: `commitChangeSet` vs D-S2-24’s “`transaction()` only” story.
-- **Spec:** 4 partial boxes (`TMeta`, no-history construct, `[S2-A1]` generators, test import of serialization). Worst remaining: undo replay is not `runTransaction`, and a consumer cannot copy History using only the published Dataset methods.
+- **Standards:** 3 hard findings in the committed range (forgotten public names, Snapshot collision, Binding word on the store). All three addressed in this session’s simplify pass. Worst remaining judgement: `commitChangeSet` vs D-S2-24’s “`transaction()` only” story, and the `Dataset` / `Dataset_2` report warning.
+- **Spec:** 6 partial boxes (`TMeta`, generators, test import of serialization, no-history construct, DatasetData leftovers, s2.7 TODO ticks). Worst remaining: undo replay is not `runTransaction`, and a consumer cannot copy History using only the published Dataset methods.
