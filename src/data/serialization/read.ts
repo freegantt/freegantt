@@ -58,9 +58,9 @@ function readSchema1(doc: DatasetDocument): DatasetDocumentRead {
 }
 
 /** The migration seam. A second schema is a map addition, not a rewrite (`plans/02` §6). */
-export const readers: Record<number, Reader> = {
+export const readers: Record<number, Reader> = Object.freeze({
   1: readSchema1,
-};
+});
 
 export function readDocument(doc: DatasetDocument): DatasetDocumentRead {
   const reader = readers[doc.schema];

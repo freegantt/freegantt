@@ -59,7 +59,7 @@ const coreComparators = {
 /** The core `Entry` keys `coreComparators` is exhaustive over — what `entries.update()` validates an
  * edit's keys against in S2 (`UnknownFieldError`, S2.3 §1.3). S5's field registry widens the legal
  * set; this stays the core subset either way. */
-export const CORE_FIELD_KEYS: ReadonlySet<string> = new Set(Object.keys(coreComparators));
+export const CORE_FIELD_KEYS: ReadonlySet<string> = Object.freeze(new Set(Object.keys(coreComparators)));
 
 /** `true` when a field's `from` and `to` are the same value — such a field is not recorded (D-S2-7). */
 export function fieldsEqual(field: FieldKey, from: unknown, to: unknown): boolean {

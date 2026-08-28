@@ -21,7 +21,7 @@ export interface EditRequest {
 /** Extra writes only; an empty map means no cascade. */
 export type EditExtender = (request: EditRequest) => EntryEdits;
 
-const EMPTY_EDITS: EntryEdits = new Map();
+const EMPTY_EDITS: EntryEdits = Object.freeze(new Map());
 
 /** No cascade, ever — the baseline the tests contrast an installed extender against. */
 export const identityExtender: EditExtender = () => EMPTY_EDITS;

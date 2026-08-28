@@ -42,3 +42,69 @@ describe('lint fixture violations', () => {
     });
   }
 });
+
+// S2.7 §3: B7-B10 are built-in-rule (no-restricted-imports/syntax/globals) configurations, not
+// freegantt/ custom rules — each gets its own override block, mirroring the shape (not the file
+// scoping — these fixtures live outside src/, so every block matches '**/*.ts') of its
+// eslint.config.js entry, since the real config ignores test/fixtures/violations/** entirely.
+const BUILTIN_CASES: Array<{ file: string; ruleId: string; config: Record<string, unknown> }> = [
+  {
+    file: 'no-restricted-imports-b7.ts',
+    ruleId: 'no-restricted-imports',
+    config: {
+      'no-restricted-imports': ['error', { paths: [{ name: 'alien-signals', message: 'B7' }] }],
+    },
+  },
+  {
+    file: 'no-restricted-syntax-b8.ts',
+    ruleId: 'no-restricted-syntax',
+    config: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector:
+            "ThrowStatement NewExpression[callee.name='Error'] > Literal[value=/not.implemented|TODO|unsupported/i]",
+          message: 'B8',
+        },
+      ],
+    },
+  },
+  {
+    file: 'no-derived-in-json-b9.ts',
+    ruleId: 'no-restricted-syntax',
+    config: {
+      'no-restricted-syntax': [
+        'error',
+        { selector: 'TSTypeReference[typeName.name=/^(Row|Item|GeometryFrame)$/]', message: 'B9' },
+      ],
+    },
+  },
+  {
+    file: 'raf-single-owner-b10.ts',
+    ruleId: 'no-restricted-globals',
+    config: {
+      'no-restricted-globals': ['error', { name: 'requestAnimationFrame', message: 'B10' }],
+    },
+  },
+];
+
+describe('lint fixture violations (B7-B10 built-in rules)', () => {
+  for (const { file, ruleId, config } of BUILTIN_CASES) {
+    it(`${file} triggers ${ruleId}`, async () => {
+      const eslint = new ESLint({
+        cwd: root,
+        overrideConfigFile: true,
+        overrideConfig: [
+          {
+            files: ['**/*.ts'],
+            languageOptions: { parser },
+            rules: config,
+          },
+        ],
+      });
+      const results = await eslint.lintFiles([path.join(root, 'test/fixtures/violations', file)]);
+      const messages = results[0]?.messages ?? [];
+      expect(messages.some((m) => m.ruleId === ruleId)).toBe(true);
+    });
+  }
+});
