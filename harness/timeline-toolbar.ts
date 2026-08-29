@@ -2,9 +2,7 @@
 // §3.7): zoom in/out, a preset picker and a "Today" button, over the plain `Gantt` API. Shared across
 // `index.html`, `zoom.html` and `data.html` (§3.7's own toolbar is `zoom.html`-only, but the request
 // this answers is "make the surface visible on every demo page", so this file exists to avoid three
-// copies of the same dozen lines) — every control is a plain assignment or a one-line call, same as
-// the spec's toolbar; a control that had to compute something would be a library gap, not a harness
-// convenience.
+// copies of the same dozen lines). Zoom buttons stay in sync through `gantt.on('navigationChange')`.
 
 import type { Gantt, PresetRef } from '../src/api/index.js';
 
@@ -22,9 +20,8 @@ export interface TimelineToolbarOptions {
 
 const LOCALE_OPTIONS = ['en-US', 'de-DE', 'ja-JP'] as const;
 
-/** Builds the toolbar DOM and wires it straight to the plain `Gantt` surface — `zoomIn`/`zoomOut`,
- *  `preset`, `panToToday`, and (when enabled) `fit`/`locale`/`todayLine`. `Gantt` has no navigation
- *  `change` event (`plans/02` §3); each control refreshes the toolbar after its own write. */
+/** Builds the toolbar DOM and wires it to the `Gantt` surface. `navigationChange` keeps the
+ *  zoom buttons and preset picker in sync when something else writes Preset or Fit. */
 export function mountTimelineToolbar(options: TimelineToolbarOptions): void {
   const { gantt, container, showFit = false, showLocale = false, showTodayLineToggle = false } = options;
 
@@ -107,25 +104,18 @@ export function mountTimelineToolbar(options: TimelineToolbarOptions): void {
     if (fitSelect && typeof gantt.fit === 'string') fitSelect.value = gantt.fit;
   }
 
-  // `Gantt` has no `change` event for `preset`/`fit`/`zoomPresets` (`plans/02` §3 ships exactly two
-  // events, both grid-width — I11); each control refreshes the toolbar itself right after its own
-  // plain assignment or call, the same read-after-write a caller would do.
   zoomOutBtn.addEventListener('click', () => {
     gantt.zoomOut();
-    refresh();
   });
   zoomInBtn.addEventListener('click', () => {
     gantt.zoomIn();
-    refresh();
   });
   presetSelect.addEventListener('change', () => {
     gantt.preset = presetSelect.value as PresetRef;
-    refresh();
   });
   todayBtn.addEventListener('click', () => gantt.panToToday());
   fitSelect?.addEventListener('change', () => {
     gantt.fit = fitSelect!.value as 'pane' | 'preset';
-    refresh();
   });
   localeSelect?.addEventListener('change', () => {
     gantt.locale = localeSelect!.value;
@@ -134,5 +124,6 @@ export function mountTimelineToolbar(options: TimelineToolbarOptions): void {
     gantt.todayLine = todayLineCheckbox!.checked;
   });
 
+  gantt.on('navigationChange', refresh);
   refresh();
 }

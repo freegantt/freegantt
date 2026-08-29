@@ -277,7 +277,7 @@ export function computeFrame(
 
   const decorations: FrameDecoration[] = resolveDateLines({
     scale,
-    todayLine: input.todayLine,
+    todayLine: input.todayLine ?? true,
     ...(input.dateLines ? { dateLines: input.dateLines } : {}),
   });
 

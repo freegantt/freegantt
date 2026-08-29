@@ -334,6 +334,8 @@ export interface GanttEventMap {
     beforeGridWidthChange: GridWidthChange;
     // (undocumented)
     gridWidthChange: GridWidthChange;
+    // (undocumented)
+    navigationChange: NavigationChange;
 }
 
 // Warning: (ae-forgotten-export) The symbol "GanttOptionsBase" needs to be exported by the entry point index.d.ts
@@ -408,6 +410,18 @@ export class MutationCancelledError extends FreeGanttError {
 // @public
 export class MutationDuringNotificationError extends FreeGanttError {
     constructor(message: string);
+}
+
+// @public
+export interface NavigationChange {
+    // (undocumented)
+    readonly canZoomIn: boolean;
+    // (undocumented)
+    readonly canZoomOut: boolean;
+    // (undocumented)
+    readonly fit: TimeScaleFit;
+    // (undocumented)
+    readonly presetId: string;
 }
 
 // @public (undocumented)
