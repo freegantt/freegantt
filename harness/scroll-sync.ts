@@ -3,10 +3,10 @@
 // chart holding far fewer rows than the first — the U3 clamp/pin case happy-dom cannot express.
 
 import { Gantt, Dataset, ScrollModel, TimeScaleModel } from '../src/api/index.js';
-import { sampleEntryInputs } from '../fixtures/sample-dataset.js';
+import { demoEntryInputs } from '../fixtures/demo-dataset.js';
 
-const tallDataset = new Dataset({ entries: sampleEntryInputs, timeZone: 'UTC' });
-const shortDataset = new Dataset({ entries: sampleEntryInputs.slice(0, 20), timeZone: 'UTC' });
+const tallDataset = new Dataset({ entries: demoEntryInputs, timeZone: 'UTC' });
+const shortDataset = new Dataset({ entries: demoEntryInputs.slice(0, 20), timeZone: 'UTC' });
 
 // `fit: 'preset'` (D-S1.11-4): the default `'pane'` makes content width equal pane width,
 // so `max.x` is 0 and D9's x half is unobservable on the one page that exists to prove D9.

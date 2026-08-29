@@ -88,8 +88,10 @@ ${DARK_COLOR_TOKENS}
 .fg-band { background: var(--fg-header-band-bg); color: var(--fg-header-text); border-bottom: 1px solid var(--fg-header-divider-color); position: relative; flex: 0 0 var(--fg-band-height, 20px); min-height: 0; }
 /* padding/overflow are structural, not typography (D-S1.10-6/D-S1.11-8 leave font-size/family to the
    consumer): a tick's box is exactly its own width, so a label that would collide with its neighbour
-   clips with an ellipsis instead of overflowing and garbling both (S1.12 header readability follow-up). */
-.fg-tick { color: var(--fg-header-subtext); position: absolute; top: 0; left: 0; height: var(--fg-band-height, 20px); line-height: var(--fg-band-height, 20px); box-sizing: border-box; padding: 0 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+   clips with an ellipsis instead of overflowing and garbling both (S1.12 header readability follow-up).
+   border-left marks each tick's own cell boundary so adjacent ticks in the same band read as
+   separate columns, matching .fg-band's existing border-bottom between bands. */
+.fg-tick { color: var(--fg-header-subtext); position: absolute; top: 0; left: 0; height: var(--fg-band-height, 20px); line-height: var(--fg-band-height, 20px); box-sizing: border-box; padding: 0 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-left: 1px solid var(--fg-header-divider-color); }
 .fg-row { background: var(--fg-row-even-bg); position: absolute; top: 0; left: 0; width: 100%; }
 .fg-row:nth-child(odd) { background: var(--fg-row-odd-bg); }
 .fg-row-label { color: var(--fg-row-label-color); }
@@ -97,7 +99,11 @@ ${DARK_COLOR_TOKENS}
 .fg-bar { background: var(--fg-bar-fill); color: var(--fg-bar-label-color); border-radius: var(--fg-bar-radius, 3px); position: absolute; top: 0; left: 0; }
 .fg-bar[data-flag~="conflict"] { outline: 2px solid var(--fg-warn); }
 .fg-content-sizer { position: absolute; top: 0; left: 0; width: 1px; height: 1px; visibility: hidden; }
-.fg-today-line { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--fg-today-line-color); pointer-events: none; }
+/* height is set inline per frame (render/dom/index.ts), not bottom: 0: .fg-timeline-pane is both
+   this element's positioned ancestor and its own overflow: auto scroll container, so bottom: 0
+   would resolve against the pane's visible clientHeight and cut the line off at the first
+   screenful instead of running the full scrollable row content. */
+.fg-today-line { position: absolute; top: 0; width: 1px; background: var(--fg-today-line-color); pointer-events: none; }
 `.trim();
 
 /** Injects the library's base stylesheet into `doc` exactly once. Safe to call from every Gantt
