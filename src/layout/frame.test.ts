@@ -3,7 +3,14 @@ import { computeFrame } from './frame.js';
 import { PrefixSumHeightIndex } from './row-height-index.js';
 import { sampleEntries } from '../../fixtures/sample-dataset.js';
 import { seededEntryInputs } from '../../fixtures/seeded-dataset.js';
-import { createTimeScale, dayPreset, instant, formatDate, formatEndInclusive } from '../time/index.js';
+import {
+  createTimeScale,
+  dayPreset,
+  hourPreset,
+  instant,
+  formatDate,
+  formatEndInclusive,
+} from '../time/index.js';
 import { entryId } from '../model/index.js';
 import type { Entry } from '../model/index.js';
 
@@ -334,6 +341,53 @@ describe('computeFrame — horizontal culling', () => {
       revision: 0,
     });
     expect(frame.bars).toHaveLength(entries.length);
+  });
+});
+
+describe('computeFrame — sticky label clamp (finding 3, header readability follow-up)', () => {
+  // range.start is instant(0) (the UTC epoch, itself an hour boundary) with pxPerMs = 1/60000 (one
+  // px per minute), so every hour tick is exactly 60px wide and a tick's x is just its instant in
+  // minutes-since-epoch — easy to hand-verify against the clamp math in frame.ts.
+  const hourMs = 60 * 60 * 1000;
+  const minuteMs = 60 * 1000;
+  const hourScale = createTimeScale({
+    timeZone: 'UTC',
+    range: { start: instant(0), end: instant(24 * hourMs) },
+    pxPerMs: 1 / minuteMs,
+  });
+  // visible.x = 130 puts the clamp line (labelLeftClamp = max(visible.x, 0)) at x=130. With
+  // horizontalPx: 200 buffering the tick scan, the ticks at x=-120,-60,0,60 are pulled in by
+  // overscan but sit fully left of 130 (fully behind); the tick at x=120 (width 60) straddles
+  // 130 — its cell spans the clamp line, so it alone gets stuck to the visible edge.
+  const visible = { x: 130, y: 0, width: 200, height: 0 };
+  const overscan = { verticalRows: 0, horizontalPx: 200 };
+
+  it('sticks only the straddling tick to the visible edge, leaving ticks fully behind it unclamped', () => {
+    const frame = computeFrame({
+      entries: [],
+      scale: hourScale,
+      preset: hourPreset,
+      visible,
+      overscan,
+      rowHeight: 32,
+      revision: 0,
+    });
+    const ticks = frame.header.bands[0]!.ticks;
+
+    // Fully behind the clamp line (tick.x + tick.width <= 130): true x untouched.
+    const farBehind = ticks.find((t) => t.x === -120);
+    const behind = ticks.find((t) => t.x === 60);
+    expect(farBehind).toMatchObject({ x: -120, width: 60 });
+    expect(behind).toMatchObject({ x: 60, width: 60 });
+
+    // Straddles the clamp line (tick.x=120 < 130 < tick.x+width=180): x clamped to 130, width
+    // reduced by the same 10px shift — never the original tick.x=120.
+    const straddling = ticks.find((t) => t.width === 50);
+    expect(straddling).toMatchObject({ x: 130, width: 50 });
+    expect(ticks.some((t) => t.x === 120)).toBe(false);
+
+    // width never goes negative even where a tick's cell is clamped away almost entirely.
+    for (const tick of ticks) expect(tick.width).toBeGreaterThanOrEqual(0);
   });
 });
 
