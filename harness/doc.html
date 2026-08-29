@@ -632,8 +632,8 @@
           <span>slice: S1</span>
           <span>38 source files in <code>src/</code></span>
           <span>10 layers, 6 with code</span>
-          <span>generated 2026-08-25</span>
-          <span>main @ 522bf7f · §8 consumer boundary from host-input-dates-and-ids @ de5d755</span>
+          <span>generated 2026-08-28</span>
+          <span>§9 smells triaged @ 17586ba · page first written 2026-08-25 @ 522bf7f</span>
         </div>
         <nav>
           <a href="#s1"><b>1</b>Layer map &amp; import rules</a>
@@ -1266,8 +1266,8 @@
       <section id="s3">
         <h2><span class="num">3</span>Construction: the call sequence</h2>
         <p class="lede">
-          <code>new Gantt({ container, dataset })</code> is six lines of forwarding and then one long
-          constructor. Everything below happens synchronously, in this order, before the constructor returns.
+          <code>new Gantt({ container, dataset })</code> forwards into one long <code>GanttShell</code>
+          constructor. Everything below happens synchronously, in this order, before that constructor returns.
         </p>
         <p class="src">
           <b>derived from</b> harness/main.ts, api/gantt.ts, view/gantt-shell.ts, layout/viewport/viewport.ts,
@@ -1278,7 +1278,7 @@
           <div class="scroller">
             <svg
               class="d"
-              viewBox="0 0 960 668"
+              viewBox="0 0 960 740"
               role="img"
               aria-label="Sequence diagram of Gantt construction"
             >
@@ -1325,12 +1325,12 @@
 
               <!-- lifelines -->
               <g class="life">
-                <line x1="71" y1="52" x2="71" y2="650" />
-                <line x1="210" y1="52" x2="210" y2="650" />
-                <line x1="372" y1="52" x2="372" y2="650" />
-                <line x1="546" y1="52" x2="546" y2="650" />
-                <line x1="701" y1="52" x2="701" y2="650" />
-                <line x1="867" y1="52" x2="867" y2="650" />
+                <line x1="71" y1="52" x2="71" y2="720" />
+                <line x1="210" y1="52" x2="210" y2="720" />
+                <line x1="372" y1="52" x2="372" y2="720" />
+                <line x1="546" y1="52" x2="546" y2="720" />
+                <line x1="701" y1="52" x2="701" y2="720" />
+                <line x1="867" y1="52" x2="867" y2="720" />
               </g>
 
               <!-- 1 -->
@@ -1371,118 +1371,124 @@
                 <text x="8" y="159" text-anchor="middle">3</text>
               </g>
               <path class="edge" d="M372,150 h44 v14 h-38" marker-end="url(#a3)" style="color: var(--sub)" />
-              <text x="424" y="154">resolveContainer(container)</text>
-              <text class="warnink" x="546" y="154">← throws a plain Error, not FreeGanttError</text>
+              <text x="424" y="154">resolveContainer — throws ContainerNotFoundError</text>
 
-              <!-- 4 -->
+              <!-- 4 self -->
               <g class="num">
-                <circle cx="8" cy="192" r="8" />
-                <text x="8" y="195" text-anchor="middle">4</text>
+                <circle cx="8" cy="188" r="8" />
+                <text x="8" y="191" text-anchor="middle">4</text>
               </g>
-              <line
-                class="edge"
-                x1="372"
-                y1="192"
-                x2="695"
-                y2="192"
-                marker-end="url(#a3)"
-                style="color: var(--sub)"
-              />
-              <text x="533" y="186" text-anchor="middle">new Viewport({ scale?, scroll? })</text>
+              <path class="edge" d="M372,182 h44 v14 h-38" marker-end="url(#a3)" style="color: var(--sub)" />
+              <text x="424" y="186">ensureBaseStyles; new PaneLayout → grid / splitter / timeline</text>
 
               <!-- 5 -->
               <g class="num">
-                <circle cx="8" cy="228" r="8" />
-                <text x="8" y="231" text-anchor="middle">5</text>
+                <circle cx="8" cy="220" r="8" />
+                <text x="8" y="223" text-anchor="middle">5</text>
               </g>
               <line
                 class="edge"
-                x1="701"
-                y1="228"
-                x2="861"
-                y2="228"
+                x1="372"
+                y1="220"
+                x2="695"
+                y2="220"
                 marker-end="url(#a3)"
                 style="color: var(--sub)"
               />
-              <text x="781" y="222" text-anchor="middle">private defaults</text>
+              <text x="533" y="214" text-anchor="middle">new Viewport({ scale?, scroll?, overscan? })</text>
 
               <!-- 6 -->
               <g class="num">
-                <circle cx="8" cy="264" r="8" />
-                <text x="8" y="267" text-anchor="middle">6</text>
-              </g>
-              <line
-                class="edge"
-                x1="372"
-                y1="264"
-                x2="540"
-                y2="264"
-                marker-end="url(#a3)"
-                style="color: var(--sub)"
-              />
-              <text x="456" y="258" text-anchor="middle">createDomBackend()</text>
-
-              <!-- 7 -->
-              <g class="num">
-                <circle cx="8" cy="300" r="8" />
-                <text x="8" y="303" text-anchor="middle">7</text>
-              </g>
-              <line
-                class="edge"
-                x1="372"
-                y1="300"
-                x2="540"
-                y2="300"
-                marker-end="url(#a3)"
-                style="color: var(--sub)"
-              />
-              <text x="456" y="294" text-anchor="middle">mount(container)</text>
-              <text class="s" x="640" y="303">reads --fg-row-label-width, once</text>
-
-              <!-- 8 self -->
-              <g class="num">
-                <circle cx="8" cy="336" r="8" />
-                <text x="8" y="339" text-anchor="middle">8</text>
-              </g>
-              <path class="edge" d="M372,330 h44 v14 h-38" marker-end="url(#a3)" style="color: var(--sub)" />
-              <text x="424" y="334">attachScroll(container, viewport)</text>
-
-              <!-- 9 -->
-              <g class="num">
-                <circle cx="8" cy="372" r="8" />
-                <text x="8" y="375" text-anchor="middle">9</text>
-              </g>
-              <line
-                class="edge"
-                x1="372"
-                y1="372"
-                x2="695"
-                y2="372"
-                marker-end="url(#a3)"
-                style="color: var(--sub)"
-              />
-              <text x="533" y="366" text-anchor="middle">bind(dataset, onChange)</text>
-
-              <!-- 10 -->
-              <g class="num">
-                <circle cx="8" cy="408" r="8" />
-                <text x="8" y="411" text-anchor="middle">10</text>
+                <circle cx="8" cy="252" r="8" />
+                <text x="8" y="255" text-anchor="middle">6</text>
               </g>
               <line
                 class="edge"
                 x1="701"
-                y1="408"
+                y1="252"
                 x2="861"
-                y2="408"
+                y2="252"
                 marker-end="url(#a3)"
                 style="color: var(--sub)"
               />
-              <text x="781" y="402" text-anchor="middle">scale.bind · scroll.bind</text>
+              <text x="781" y="246" text-anchor="middle">private defaults if omitted</text>
 
-              <!-- 11 return -->
+              <!-- 7 -->
+              <g class="num">
+                <circle cx="8" cy="284" r="8" />
+                <text x="8" y="287" text-anchor="middle">7</text>
+              </g>
+              <line
+                class="edge"
+                x1="372"
+                y1="284"
+                x2="540"
+                y2="284"
+                marker-end="url(#a3)"
+                style="color: var(--sub)"
+              />
+              <text x="456" y="278" text-anchor="middle">createDomBackend()</text>
+
+              <!-- 8 -->
+              <g class="num">
+                <circle cx="8" cy="316" r="8" />
+                <text x="8" y="319" text-anchor="middle">8</text>
+              </g>
+              <line
+                class="edge"
+                x1="372"
+                y1="316"
+                x2="540"
+                y2="316"
+                marker-end="url(#a3)"
+                style="color: var(--sub)"
+              />
+              <text x="456" y="310" text-anchor="middle">mount({ grid, timeline })</text>
+
+              <!-- 9 self -->
+              <g class="num">
+                <circle cx="8" cy="348" r="8" />
+                <text x="8" y="351" text-anchor="middle">9</text>
+              </g>
+              <path class="edge" d="M372,342 h44 v14 h-38" marker-end="url(#a3)" style="color: var(--sub)" />
+              <text x="424" y="346">attachScroll(timeline pane, viewport)</text>
+
+              <!-- 10 -->
+              <g class="num">
+                <circle cx="8" cy="380" r="8" />
+                <text x="8" y="383" text-anchor="middle">10</text>
+              </g>
+              <line
+                class="edge"
+                x1="372"
+                y1="380"
+                x2="695"
+                y2="380"
+                marker-end="url(#a3)"
+                style="color: var(--sub)"
+              />
+              <text x="533" y="374" text-anchor="middle">bind(dataset, onChange)</text>
+
+              <!-- 11 -->
+              <g class="num">
+                <circle cx="8" cy="412" r="8" />
+                <text x="8" y="415" text-anchor="middle">11</text>
+              </g>
+              <line
+                class="edge"
+                x1="701"
+                y1="412"
+                x2="861"
+                y2="412"
+                marker-end="url(#a3)"
+                style="color: var(--sub)"
+              />
+              <text x="781" y="406" text-anchor="middle">scale.bind, then scroll.bind</text>
+
+              <!-- 12 return -->
               <g class="num">
                 <circle cx="8" cy="444" r="8" />
-                <text x="8" y="447" text-anchor="middle">11</text>
+                <text x="8" y="447" text-anchor="middle">12</text>
               </g>
               <line
                 class="edge ret"
@@ -1493,56 +1499,69 @@
                 marker-end="url(#a3)"
                 style="color: var(--smell-line)"
               />
-              <text class="warnink" x="620" y="438" text-anchor="middle">
-                onChange() ×2 — dropped, #wiring === true
+              <text class="warnink" x="620" y="432" text-anchor="middle">
+                onChange() ×2 — one from each bind, not batched
+              </text>
+              <text class="s" x="620" y="456" text-anchor="middle">
+                dropped: #wiring, so #frames.request() is not called
               </text>
 
-              <!-- 12 self -->
+              <!-- 13 self -->
               <g class="num">
-                <circle cx="8" cy="480" r="8" />
-                <text x="8" y="483" text-anchor="middle">12</text>
+                <circle cx="8" cy="484" r="8" />
+                <text x="8" y="487" text-anchor="middle">13</text>
               </g>
-              <path class="edge" d="M372,474 h44 v14 h-38" marker-end="url(#a3)" style="color: var(--sub)" />
-              <text x="424" y="478">#applyPaneMeasurement(clientWidth/Height)</text>
-              <text class="s" x="424" y="492">reads --fg-row-height</text>
+              <path class="edge" d="M372,478 h44 v14 h-38" marker-end="url(#a3)" style="color: var(--sub)" />
+              <text x="424" y="482">subscribeToDatasetChanges — later commits request a frame</text>
 
-              <!-- 13 -->
+              <!-- 14 self -->
               <g class="num">
-                <circle cx="8" cy="520" r="8" />
-                <text x="8" y="523" text-anchor="middle">13</text>
+                <circle cx="8" cy="516" r="8" />
+                <text x="8" y="519" text-anchor="middle">14</text>
+              </g>
+              <path class="edge" d="M372,510 h44 v14 h-38" marker-end="url(#a3)" style="color: var(--sub)" />
+              <text x="424" y="514">#applyPaneMeasurement(measureTimelinePane())</text>
+              <text class="s" x="424" y="528">reads --fg-row-height; size is the timeline pane box</text>
+
+              <!-- 15 -->
+              <g class="num">
+                <circle cx="8" cy="556" r="8" />
+                <text x="8" y="559" text-anchor="middle">15</text>
               </g>
               <line
                 class="edge"
                 x1="372"
-                y1="520"
+                y1="556"
                 x2="695"
-                y2="520"
+                y2="556"
                 marker-end="url(#a3)"
                 style="color: var(--sub)"
               />
-              <text x="533" y="514" text-anchor="middle">setPaneSize({ w − rowLabelWidth, h })</text>
+              <text x="533" y="550" text-anchor="middle">setPaneSize({ w, h }) — no gutter subtract</text>
 
-              <!-- 14 self -->
+              <!-- 16 self -->
               <g class="num">
-                <circle cx="8" cy="556" r="8" />
-                <text x="8" y="559" text-anchor="middle">14</text>
+                <circle cx="8" cy="588" r="8" />
+                <text x="8" y="591" text-anchor="middle">16</text>
               </g>
-              <path class="edge" d="M372,550 h44 v14 h-38" marker-end="url(#a3)" style="color: var(--sub)" />
-              <text x="424" y="554">attachPaneSize(container, …) — ResizeObserver takes over</text>
+              <path class="edge" d="M372,582 h44 v14 h-38" marker-end="url(#a3)" style="color: var(--sub)" />
+              <text x="424" y="586">attachPaneSize(timeline); attachSplitter(splitter)</text>
 
-              <!-- 15 self -->
+              <!-- 17 self -->
               <g class="num">
-                <circle cx="8" cy="600" r="8" />
-                <text x="8" y="603" text-anchor="middle">15</text>
+                <circle cx="8" cy="628" r="8" />
+                <text x="8" y="631" text-anchor="middle">17</text>
               </g>
-              <rect class="bx hot" x="292" y="584" width="330" height="34" />
-              <text class="hotink" x="304" y="598">#wiring = false; render()</text>
-              <text class="s" x="304" y="611">→ §4. This one call becomes TWO layout passes.</text>
+              <rect class="bx" x="292" y="612" width="330" height="34" />
+              <text class="t" x="304" y="626">#wiring = false; #frames.flush()</text>
+              <text class="s" x="304" y="639">→ §4. One layout pass (measured).</text>
             </svg>
           </div>
           <figcaption>
-            Diagram 1 — <code>new Gantt(...)</code>, synchronous, top to bottom. Amber = a smell (§9-B, §9-H);
-            red = the re-entrancy of §4.
+            Diagram 1 — <code>new Gantt(...)</code>, synchronous, top to bottom. Amber = the two bind notifies
+            that <code>#wiring</code> drops (§9-B). ×2 means <code>TimeScaleModel.bind</code> and
+            <code>ScrollModel.bind</code> each call <code>Viewport.#notify</code> immediately;
+            <code>Viewport</code> does not batch those two.
           </figcaption>
         </figure>
 
@@ -1553,46 +1572,43 @@
             <th>the constraint that forces this position</th>
           </tr>
           <tr>
-            <td class="mono">6–7</td>
+            <td class="mono">4</td>
             <td>
-              <strong>Mount before bind.</strong> The binding's own <code>onChange</code> <em>is</em> this
-              shell's first render, so the render target must already exist when it fires. Doing it this way
-              removes the "call <code>render()</code> yourself after <code>bind()</code>" step that would
-              otherwise be a construction-order exception in the docs.
+              <strong>Styles and panes before paint.</strong> <code>ensureBaseStyles</code> must run before
+              <code>PaneLayout</code> inserts classed elements, or the first frame is unstyled.
+              <code>mount</code> needs the grid and timeline panes that <code>PaneLayout</code> builds.
             </td>
           </tr>
           <tr>
-            <td class="mono">8</td>
+            <td class="mono">7–8</td>
             <td>
-              Before either bind, so <code>#scrollAttachment</code> can never be <code>undefined</code> during
-              a render. The container element <em>is</em> the timeline pane and the single native scroller —
-              there is no second scroller to keep in sync, which is why nothing can fall a frame behind.
+              <strong>Mount before bind.</strong> Each model's <code>bind</code> notifies the newcomer at
+              once. Those calls are dropped while wiring, but the render target must already exist for the
+              deliberate first <code>flush()</code> at step 17.
             </td>
           </tr>
           <tr>
-            <td class="mono">9–11</td>
+            <td class="mono">9</td>
             <td>
-              <code>bind()</code> always notifies the newcomer (that <em>is</em> its first render), once per
-              sub-model. Those two calls land before <code>#viewportHandle</code> is even assigned, so
-              <code>#wiring</code> swallows them. See §9-B.
+              Before <code>bind</code>, so <code>#scrollAttachment</code> is never
+              <code>undefined</code> during a render. The timeline pane is the single native scroller.
             </td>
           </tr>
           <tr>
-            <td class="mono">12</td>
+            <td class="mono">10–12</td>
+            <td>
+              <code>bind()</code> always notifies the newcomer (D-S1.5-4), once per sub-model, with no
+              <code>Viewport</code> batch around the pair. Those two <code>onChange</code>s land before
+              <code>#viewportHandle</code> is assigned. <code>#wiring</code> drops them so they do not
+              <code>request()</code> a frame. The first real frame is step 17.
+            </td>
+          </tr>
+          <tr>
+            <td class="mono">14–15</td>
             <td>
               One synchronous measurement, because a real <code>ResizeObserver</code>'s first callback is
-              <em>queued</em>, not immediate — the first paint cannot wait for it.
-              <code>--fg-row-height</code> is re-read here rather than per render, because
-              <code>getComputedStyle</code> forces a style recalculation and a resize is the only realistic
-              moment the value changes.
-            </td>
-          </tr>
-          <tr>
-            <td class="mono">13</td>
-            <td>
-              <code>rowLabelWidth</code> is subtracted <em>here</em>, once, so every consumer of "pane width"
-              — <code>TimeScaleModel</code>'s zoom fit, <code>ScrollModel</code>'s max,
-              <code>visible.width</code> — agrees on the width that is actually drawable.
+              queued, not immediate. The size is the timeline pane's own box — the grid pane never overlapped
+              it, so nothing is subtracted. <code>--fg-row-height</code> is re-read here, not per render.
             </td>
           </tr>
         </table>
@@ -1602,9 +1618,8 @@
       <section id="s4">
         <h2><span class="num">4</span>One render pass</h2>
         <p class="lede">
-          <code>GanttShell.render()</code> is fourteen lines and the entire hot path today. It gathers six
-          inputs, runs one pure function, hands the result to the backend, then pushes the resulting extents
-          back into the viewport — which is where it gets interesting.
+          <code>GanttShell.render()</code> gathers <code>LayoutInput</code>, runs one pure function, hands the
+          frame to the backend, then pushes the resulting extents back into the viewport.
         </p>
         <p class="src">
           <b>derived from</b> view/gantt-shell.ts <code>render()</code>, layout/frame.ts,
@@ -1633,16 +1648,16 @@
               <text class="t" x="28" y="38">GanttShell.render()</text>
               <text class="s" x="28" y="51">view/ — the only DOM/pure meeting point</text>
 
-              <rect class="bx pure" x="16" y="86" width="182" height="152" />
+              <rect class="bx pure" x="16" y="86" width="182" height="176" />
               <text class="t" x="28" y="104">LayoutInput</text>
-              <text class="s" x="28" y="121">entries ← #options.dataset</text>
+              <text class="s" x="28" y="121">entries ← dataset.entries.all</text>
               <text class="s" x="28" y="136">scale ← viewport.timeScale</text>
               <text class="s" x="28" y="151">preset ← viewport.preset</text>
               <text class="s" x="28" y="166">visible ← viewport.visible</text>
               <text class="s" x="28" y="181">overscan ← viewport.overscan</text>
               <text class="s" x="28" y="196">rowHeight ← --fg-row-height</text>
-              <text class="s" x="28" y="211">revision ← #revision++</text>
-              <text class="xs" x="28" y="228">all six read fresh, every pass</text>
+              <text class="s" x="28" y="211">locale · todayLine · revision</text>
+              <text class="xs" x="28" y="232">read fresh, every pass</text>
 
               <line
                 class="edge"
@@ -1719,7 +1734,7 @@
               <text class="s" x="464" y="233">contentWidth ← FULL</text>
               <text class="s" x="464" y="247">contentHeight ← FULL</text>
               <text class="s" x="464" y="261">links[] ← [] (S3)</text>
-              <text class="s" x="464" y="275">decorations[] ← [] (S2)</text>
+              <text class="s" x="464" y="275">decorations[] ← todayLine</text>
               <text class="xs" x="464" y="296">plain numbers only —</text>
               <text class="xs" x="464" y="309">no DOM, no consumer output,</text>
               <text class="xs" x="464" y="322">no hit-region index</text>
@@ -1747,12 +1762,12 @@
                 marker-end="url(#a4)"
                 style="color: var(--sub)"
               />
-              <rect class="bx dom" x="652" y="196" width="176" height="88" />
-              <text class="t" x="664" y="214">syncKeyed ×4</text>
-              <text class="s" x="664" y="229">bands (by index)</text>
-              <text class="s" x="664" y="242">ticks per band (by index)</text>
-              <text class="s" x="664" y="255">rows (by RowId)</text>
-              <text class="s" x="664" y="268">bars (by ItemId)</text>
+              <rect class="bx dom" x="652" y="196" width="176" height="108" />
+              <text class="t" x="664" y="214">sync() keyed layers</text>
+              <text class="s" x="664" y="229">bands + ticks per band</text>
+              <text class="s" x="664" y="242">rows + cells per row</text>
+              <text class="s" x="664" y="255">bars (by ItemId)</text>
+              <text class="s" x="664" y="268">todayLine; grid translateY</text>
 
               <line
                 class="edge"
@@ -1765,32 +1780,31 @@
               />
               <rect class="bx dom" x="652" y="310" width="176" height="46" />
               <text class="t" x="664" y="328">contentSizer.transform</text>
-              <text class="s" x="664" y="342">gives the container a scroll range</text>
+              <text class="s" x="664" y="342">gives the timeline pane a scroll range</text>
 
               <!-- feedback: setContentSize -->
               <path
-                class="edge hot"
+                class="edge"
                 d="M740,356 v46 h-620 v-40"
                 marker-end="url(#a4)"
-                style="color: var(--hot-line)"
+                style="color: var(--sub)"
               />
-              <rect class="bx hot" x="300" y="386" width="330" height="34" />
-              <text class="hotink" x="312" y="401">#viewportHandle.setContentSize(…)</text>
+              <rect class="bx pure" x="300" y="386" width="330" height="34" />
+              <text class="t" x="312" y="401">#viewportHandle.setContentSize(…)</text>
               <text class="s" x="312" y="414">→ Viewport.#contentSize → ScrollModel binding.content</text>
 
-              <rect class="bx hot" x="16" y="424" width="182" height="60" />
-              <text class="hotink" x="28" y="442">re-entrant render()</text>
+              <rect class="bx dom" x="16" y="424" width="182" height="60" />
+              <text class="t" x="28" y="442">FrameScheduler.request()</text>
               <text class="s" x="28" y="456">max changed → notify →</text>
-              <text class="s" x="28" y="469">shell reacts → render() again</text>
-              <text class="s" x="28" y="480">nested inside the first pass</text>
+              <text class="s" x="28" y="469">shell requests a later frame</text>
+              <text class="s" x="28" y="480">not nested in this pass</text>
 
               <path
-                class="edge hot"
+                class="edge"
                 d="M107,424 V412 H8 V30 H12"
                 marker-end="url(#a4)"
-                style="color: var(--hot-line)"
+                style="color: var(--sub)"
               />
-              <text class="hotink" x="14" y="300">§9-A</text>
 
               <!-- writePosition -->
               <rect class="bx dom" x="300" y="440" width="330" height="44" />
@@ -1798,14 +1812,14 @@
               <text class="s" x="312" y="472">element.scrollLeft/Top ← visible.x/y, ε-filtered</text>
               <text class="xs" x="312" y="500">the last statement of render() — after sync(), by design</text>
 
-              <text class="xs" x="652" y="450">Everything in this diagram is synchronous.</text>
-              <text class="xs" x="652" y="464">There is no requestAnimationFrame anywhere</text>
-              <text class="xs" x="652" y="478">in src/ yet — S4's hot path introduces one.</text>
+              <text class="xs" x="652" y="450">This pass is synchronous.</text>
+              <text class="xs" x="652" y="464">A content-size notify schedules the next</text>
+              <text class="xs" x="652" y="478">frame through FrameScheduler (rAF).</text>
             </svg>
           </div>
           <figcaption>
-            Diagram 2 — one <code>render()</code>. Green = pure, blue = DOM, red = the re-entrant loop
-            documented in §9-A.
+            Diagram 2 — one <code>render()</code>. Green = pure, blue = DOM. A content-size notify requests a
+            later frame; it does not re-enter this pass.
           </figcaption>
         </figure>
 
@@ -1878,7 +1892,7 @@
               <!-- shells -->
               <rect class="bx dom" x="16" y="16" width="168" height="44" />
               <text class="t" x="28" y="34">GanttShell A</text>
-              <text class="s" x="28" y="48">if (!#wiring) render()</text>
+              <text class="s" x="28" y="48">if (!#wiring) #frames.request()</text>
 
               <rect class="bx dom" x="776" y="16" width="168" height="44" />
               <text class="t" x="788" y="34">GanttShell B</text>
@@ -2071,8 +2085,9 @@ Viewport.setPaneSize(size)                   // one measurement, two models
               </dd>
               <dt>get/set overscan</dt>
               <dd>
-                Live-reconfigurable, notifies iff actually changed. <span class="tag smell">§9-F</span> no
-                public route reaches it.
+                Live-reconfigurable, notifies iff actually changed. On <code>GanttShell</code> and
+                <code>Viewport</code>; not on public <code>GanttOptions</code> (issue #84 — an app author does
+                not think in these units).
               </dd>
               <dt>batch(run)</dt>
               <dd>Nests all three notifiers. First real caller is S1.9's <code>zoomTo</code>.</dd>
@@ -2227,20 +2242,20 @@ Viewport.setPaneSize(size)                   // one measurement, two models
             <dl>
               <dt>#wiring: boolean</dt>
               <dd>
-                True until pane-size wiring completes; swallows the two synchronous <code>onChange</code>s
-                that <code>bind()</code> fires before there is anything to render.
-                <span class="tag smell">§9-B</span>
+                True until pane-size wiring completes; drops the two synchronous <code>onChange</code>s from
+                <code>scale.bind</code> and <code>scroll.bind</code> so they do not <code>request()</code> a
+                frame. <span class="tag smell">§9-B</span>
               </dd>
               <dt>#applyPaneMeasurement(size)</dt>
               <dd>
                 One measurement pushed to everything it feeds — <code>--fg-row-height</code> and pane size
-                change for the same reason, so both are re-read on the same signal. Subtracts
-                <code>backend.rowLabelWidth</code> once, here.
+                change for the same reason. The size is the timeline pane's own box; nothing is subtracted.
               </dd>
               <dt>render()</dt>
               <dd>
                 Gather → <code>computeFrame</code> → <code>backend.sync</code> → <code>setContentSize</code> →
-                <code>writePosition</code>. <span class="tag hot">§9-A</span>
+                <code>writePosition</code>. One pass per call; later work goes through
+                <code>FrameScheduler</code>.
               </dd>
               <dt>destroy()</dt>
               <dd>
@@ -2367,10 +2382,10 @@ Viewport.setPaneSize(size)                   // one measurement, two models
               <path class="edge" d="M760,74 H782" marker-end="url(#a7)" style="color: var(--sub)" />
 
               <rect class="bx pure" x="788" y="24" width="156" height="130" />
-              <text class="t" x="800" y="42">ViewPreset ×5</text>
-              <text class="s" x="800" y="60">hour 40px · day 24px</text>
-              <text class="s" x="800" y="74">week 60 · month 80</text>
-              <text class="s" x="800" y="88">year 60</text>
+              <text class="t" x="800" y="42">ViewPreset ×9</text>
+              <text class="s" x="800" y="60">ZOOM_PRESETS ladder</text>
+              <text class="s" x="800" y="74">finest hour → coarsest year</text>
+              <text class="s" x="800" y="88">plus 5 single-band ids</text>
               <text class="xs" x="800" y="108">Deep-FROZEN: a shipped</text>
               <text class="xs" x="800" y="120">preset is a value, not a</text>
               <text class="xs" x="800" y="132">shared mutable singleton</text>
@@ -2572,13 +2587,13 @@ Viewport.setPaneSize(size)                   // one measurement, two models
               <text class="s" x="264" y="74">timeZone, dateOnlyEnd? })</text>
               <text class="xs" x="264" y="94">Resolves dateOnlyEnd to its</text>
               <text class="xs" x="264" y="106">'inclusive' default, then calls</text>
-              <text class="xs" x="264" y="118">readEntries ONCE. Keeps the rule</text>
-              <text class="xs" x="264" y="130">on the instance for S2's mutations.</text>
+              <text class="xs" x="264" y="118">readEntries ONCE at construct,</text>
+              <text class="xs" x="264" y="130">and again on every add/update.</text>
 
               <path class="edge" d="M360,144 V176" marker-end="url(#a8)" style="color: var(--sub)" />
 
               <rect class="bx api" x="252" y="182" width="216" height="106" />
-              <text class="t" x="264" y="200">api/entry-input.ts</text>
+              <text class="t" x="264" y="200">data/entry-reader.ts</text>
               <text class="s" x="264" y="216">readEntries(inputs, context)</text>
               <text class="xs" x="264" y="236">Field mapping ONLY: applies the</text>
               <text class="xs" x="264" y="248">entryId brand, copies optionals</text>
@@ -2645,36 +2660,35 @@ Viewport.setPaneSize(size)                   // one measurement, two models
         </figure>
 
         <div class="note">
-          <strong>Why the split is where it is.</strong> <code>api/entry-input.ts</code> may see both
-          <code>model/</code> (for the brand helpers) and <code>time/</code> (for the reading) — it is the
-          only layer permitted both. But it does no date math itself: resolving a Plain time needs the zone
-          and the DST fold/gap policy, and advancing a date-only <code>end</code> by "one day" is zone-aware
-          arithmetic that is not always 86 400 000 ms. Both belong to <code>time/</code> under I10. The rule
-          to carry forward when touching either file: <em>api/ maps fields, time/ decides dates.</em>
+          <strong>Why the split is where it is.</strong> <code>data/entry-reader.ts</code> may see both
+          <code>model/</code> (for the brand helpers) and <code>time/</code> (for the reading). It does no
+          date math itself: resolving a Plain time needs the zone and the DST fold/gap policy, and advancing a
+          date-only <code>end</code> by "one day" is zone-aware arithmetic that is not always 86 400 000 ms.
+          Both belong to <code>time/</code> under I10. The rule to carry forward:
+          <em>data/ maps fields, time/ decides dates.</em>
         </div>
 
         <h3>What the DOM backend builds</h3>
         <div class="tree">
-          container <span class="c">← GanttShellOptions.container; ALSO the single native scroller</span> ├─
-          div.fg-header <span class="c">position:relative; margin-left: rowLabelWidth</span> │ └─ div.fg-band
-          <span class="c">one per preset.headers entry, coarsest first — keyed by index</span> │ └─
-          div.fg-tick <span class="c">keyed by index within the band; translateX + width + text</span> ├─
-          div.fg-rows <span class="c">position:relative; width: rowLabelWidth → the label gutter</span> │ └─
-          div.fg-row <span class="c">keyed by RowId; translateY + height + label text</span> ├─ div.fg-bars
-          <span class="c">position:relative; margin-left: rowLabelWidth</span> │ └─ div.fg-bar
-          <span class="c">keyed by ItemId; data-item-id + data-kind + translate() + w/h</span> └─
-          div[aria-hidden] <span class="c">the content sizer — 1×1px, invisible, translated to the</span>
-          <span class="c">frame's bottom-right corner minus 1px on each axis</span>
+          container.fg-container <span class="c">role=group; not the scroller</span> ├─ div.fg-grid-pane
+          <span class="c">width = gridWidth</span> │ ├─ div.fg-grid-spacer
+          <span class="c">one empty .fg-band per header band</span> │ └─ div.fg-rows-clip
+          <span class="c">clip; not transformed</span> │ └─ div.fg-rows
+          <span class="c">RenderSurfaces.grid; translateY(−visible.y)</span> │ └─ div.fg-row
+          <span class="c">keyed by RowId; cells inside</span> ├─ div.fg-splitter ├─ div.fg-timeline-pane
+          <span class="c">the single native scroller</span> │ ├─ div.fg-header
+          <span class="c">width = contentWidth</span> │ │ └─ div.fg-band
+          <span class="c">keyed by index</span> │ │ └─ div.fg-tick
+          <span class="c">keyed by index within the band</span> │ ├─ div.fg-bars │ │ └─ div.fg-bar
+          <span class="c">keyed by ItemId</span> │ ├─ div.fg-content-sizer
+          <span class="c">1×1px, translated to content extent − 1px</span> │ └─ div.fg-today-line
         </div>
         <div class="note">
-          <strong>Two details that are load-bearing, not incidental.</strong>
-          <code>margin-left</code>, not <code>left</code>, on the bar and header layers: an offset property
-          shifts a relatively-positioned box <em>without</em> shrinking its auto width, so the layer would
-          overflow the container by the gutter width on the right — which is exactly the phantom horizontal
-          scroll range that once showed up as a blank gap past real content. And the content sizer must land
-          its <em>far</em> edge on the content extent, hence the <code>− 1</code>: it is 1×1px, so translating
-          its origin to the extent would make the browser's native scroll range one pixel longer than what
-          <code>ScrollModel</code> computed.
+          <strong>One detail that is load-bearing, not incidental.</strong> The content sizer must land its
+          <em>far</em> edge on the content extent, hence the <code>− 1</code>: it is 1×1px, so translating its
+          origin to the extent would make the browser's native scroll range one pixel longer than what
+          <code>ScrollModel</code> computed. Header, bars and sizer sit at x=0 in the timeline pane — the grid
+          pane owns the label width, so there is no gutter offset in this backend.
         </div>
 
         <div class="cards">
@@ -2682,18 +2696,20 @@ Viewport.setPaneSize(size)                   // one measurement, two models
             <h5>createDomBackend() <span class="tag dom">factory</span></h5>
             <div class="path">render/dom/index.ts</div>
             <p>
-              A closure, not a class — the eight caches and five layer references are private by construction.
+              A closure, not a class — the ten caches and the layer references are private by construction.
               Implements <code>RenderBackend&lt;HTMLElement&gt;</code>.
             </p>
             <dl>
-              <dt>mount(el)</dt>
+              <dt>mount(surfaces)</dt>
               <dd>
-                Reads <code>--fg-row-label-width</code> <em>once</em>, builds the four layers plus the sizer.
-                The backend owns where the gutter sits for the life of the mount, so header ticks and bars are
-                shifted by the same offset — a consumer stylesheet cannot move one without the other.
+                Takes <code>{ grid, timeline }</code>. Builds header, bars, content sizer and today-line
+                inside the timeline pane. Does not read a gutter width.
               </dd>
               <dt>sync(frame)</dt>
-              <dd>Four <code>syncKeyed</code> passes plus one transform on the sizer. No layout reads.</dd>
+              <dd>
+                Keyed header/rows/cells/bars, today-line, grid <code>translateY</code>, sizer transform. No
+                layout reads.
+              </dd>
               <dt>applyState(state)</dt>
               <dd>
                 Empty. The hot path (hover/selection/drag preview) lands in S4: class toggles and transforms
@@ -2705,12 +2721,6 @@ Viewport.setPaneSize(size)                   // one measurement, two models
                 <code>dataset.itemId</code>. No materialized hit-region array: the bars array <em>is</em> the
                 hit index, and DOM backends get hit-testing from event delegation.
                 <span class="tag smell">§9-G</span>
-              </dd>
-              <dt>get rowLabelWidth</dt>
-              <dd>
-                The single source of truth for the gutter. Callers that feed a pane width to
-                <code>TimeScaleModel</code> must subtract it first, or ticks and bars end up computed against
-                the wrong width <em>and</em> sitting in different coordinate frames.
               </dd>
             </dl>
           </div>
@@ -2795,8 +2805,9 @@ Viewport.setPaneSize(size)                   // one measurement, two models
             <dl>
               <dt>GanttOptions</dt>
               <dd>
-                <code>container</code>, <code>dataset</code>, optional <code>scale</code>, optional
-                <code>scroll</code>. <span class="tag smell">§9-F</span>
+                <code>container</code>, <code>dataset</code>, optional shared <code>scale</code> <em>or</em>
+                <code>preset</code>/<code>range</code>/<code>fit</code>, optional <code>scroll</code>, plus
+                live keys (<code>theme</code>, <code>gridWidth</code>, <code>locale</code>, …).
               </dd>
               <dt>destroy()</dt>
               <dd>
@@ -2849,56 +2860,14 @@ new Gantt({ container: '#gantt', dataset });</code></pre>
       <section id="s9">
         <h2><span class="num">9</span>Smells</h2>
         <p class="lede">
-          Ten findings from following the call graph. None of them breaks anything today. They are ordered by
+          Six findings from following the call graph. None of them breaks anything today. They are ordered by
           how much they will cost when the area is next touched, and each names the file and the exact
-          condition under which it becomes a bug.
+          condition under which it becomes a bug. Closed ids (§9-A, §9-F, §9-H, §9-J) stay unused so older
+          notes that cite them do not silently point at a new finding.
         </p>
-        <p class="src"><b>derived from</b> a full read of src/**; A verified by measurement — see §10</p>
-
-        <div class="smell hot">
-          <h5>
-            <span class="id">§9-A</span> Every content-size change runs the layout pass twice, re-entrantly
-          </h5>
-          <p class="where">
-            view/gantt-shell.ts <code>render()</code> · layout/viewport/viewport.ts
-            <code>setPaneSize</code>/<code>setContentSize</code>
-          </p>
-          <p>
-            <code>render()</code>'s fourth statement is
-            <code>#viewportHandle.setContentSize(#contentSize)</code>. When the content size actually changed,
-            that invalidates <code>ScrollModel</code>, whose <code>max</code> moves, which notifies
-            <code>Viewport</code>, which calls the shell's <code>onChange</code> — which calls
-            <code>render()</code> again, <em>synchronously, nested inside the first pass</em>, before that
-            pass has reached its last statement.
-          </p>
-          <p>
-            <strong>Measured:</strong> constructing a <code>GanttShell</code> calls
-            <code>FrameLayout.computeFrame</code> <b>2</b> times, not 1. A later <code>render()</code> whose
-            content size is unchanged costs 1. So the doubling lands on exactly the expensive renders — first
-            paint, a zoom change, a row-count change — and not on the cheap ones.
-          </p>
-          <p>
-            <strong>It is not pure waste, which is the problem.</strong> The second pass is partly
-            load-bearing: <code>visible</code> is clamped against <code>#contentSize</code>, so pass 1 culls
-            against a window computed from the <em>previous</em> content extent. The second pass is what
-            corrects it. That behaviour is real and nothing states it — no comment, no test. It also means
-            pass 1's <code>backend.sync()</code> output is immediately overwritten by pass 2's, and pass 2's
-            <code>writePosition()</code> runs <em>before</em> pass 1's.
-          </p>
-          <p>
-            <strong>Why it terminates:</strong> only by accident. <code>contentWidth</code> comes from
-            <code>scale.contentWidth</code> and <code>contentHeight</code> from
-            <code>heights.totalHeight</code> — neither depends on <code>visible</code>, so pass 2 produces the
-            same extents and the notify-iff-changed rule stops the recursion. The day any part of content
-            extent starts depending on the culling window, this becomes an infinite loop with no guard in the
-            path.
-          </p>
-          <p>
-            <strong>Worth doing:</strong> make the two passes explicit — resolve the window against the new
-            extents <em>before</em> drawing, so one <code>render()</code> is one frame — or, failing that, add
-            a re-entrancy depth guard and a test that pins the pass count.
-          </p>
-        </div>
+        <p class="src">
+          <b>derived from</b> a full read of src/**; former §9-A pass count re-measured 2026-08-28
+        </p>
 
         <div class="smell">
           <h5><span class="id">§9-B</span> Boot ordering is held by a boolean, not by structure</h5>
@@ -2909,12 +2878,14 @@ new Gantt({ container: '#gantt', dataset });</code></pre>
             constructor. The field is now well named — it says what phase it guards, which the older
             <code>ready</code> did not — but it is still a flag: reordering two constructor statements would
             produce a render against a half-built shell, or a dropped first render, with nothing failing
-            loudly.
+            loudly. Premature <code>bind()</code> notifies now hit
+            <code>FrameScheduler.request()</code> rather than <code>render()</code> directly, so the flag's
+            job is smaller than it was, but it is still what drops those two calls.
           </p>
           <p>
             The structural fix is the usual one — a private <code>#wire()</code> that returns the fully-built
             collaborators, with <code>render()</code> unreachable until it has returned — but it is worth
-            doing only when S2 or S4 adds a fourth thing to wire, not before.
+            doing only when a later slice adds a fourth thing to wire, not before.
           </p>
         </div>
 
@@ -2938,22 +2909,24 @@ new Gantt({ container: '#gantt', dataset });</code></pre>
         </div>
 
         <div class="smell">
-          <h5><span class="id">§9-D</span> Eight parallel caches that must be cleared in lockstep</h5>
+          <h5><span class="id">§9-D</span> Ten parallel caches that must be cleared in lockstep</h5>
           <p class="where">render/dom/index.ts</p>
           <p>
             <code>bandNodes</code>/<code>bandGeom</code>,
             <code>bandTickNodes</code>/<code>bandTickGeom</code>, <code>rowNodes</code>/<code>rowGeom</code>,
-            <code>barNodes</code>/<code>barGeom</code> — four conceptual keyed layers stored as eight
-            <code>Map</code>s, because <code>syncKeyed</code> takes nodes and geoms as two separate
-            parameters. <code>destroy()</code> has eight <code>.clear()</code> calls that must stay in sync by
-            hand, and <code>syncHeader</code> carries its own manual prune loop for the per-band tick caches
-            <em>alongside</em> the pruning <code>syncKeyed</code> already does for the bands themselves.
+            <code>rowCellNodes</code>/<code>rowCellGeom</code>, <code>barNodes</code>/<code>barGeom</code> —
+            five conceptual keyed layers stored as ten <code>Map</code>s, because <code>syncKeyed</code> takes
+            nodes and geoms as two separate parameters. <code>destroy()</code> has ten
+            <code>.clear()</code> calls that must stay in sync by hand, and <code>syncHeader</code> carries
+            its own manual prune loop for the per-band tick caches <em>alongside</em> the pruning
+            <code>syncKeyed</code> already does for the bands themselves. The per-row cell caches are the same
+            nested shape.
           </p>
           <p>
             One <code>KeyedLayer&lt;TKey, TGeom&gt;</code> holding both maps behind
-            <code>syncKeyed(layer, items, cache, spec)</code> collapses eight fields to four, removes four
-            clear calls, and makes the nested band/tick case a <code>KeyedLayer</code> that owns a
-            <code>Map</code> of child <code>KeyedLayer</code>s — which is what the manual prune loop is
+            <code>syncKeyed(layer, items, cache, spec)</code> collapses ten fields to five, removes five clear
+            calls, and makes the nested band/tick and row/cell cases a <code>KeyedLayer</code> that owns a
+            <code>Map</code> of child <code>KeyedLayer</code>s — which is what the manual prune loops are
             hand-rolling today.
           </p>
         </div>
@@ -2978,53 +2951,20 @@ new Gantt({ container: '#gantt', dataset });</code></pre>
         </div>
 
         <div class="smell">
-          <h5><span class="id">§9-F</span> Options exist that no public path can reach</h5>
-          <p class="where">api/gantt.ts · layout/viewport/viewport.ts</p>
-          <p>
-            <code>ViewportOptions.overscan</code> is a documented, live-reconfigurable knob with a
-            notify-iff-changed setter. <code>GanttShellOptions</code> does not carry it and
-            <code>GanttOptions</code> does not either, so no consumer can set it and no consumer can reach the
-            <code>Viewport</code> to set it afterwards. The same gap covers everything on
-            <code>Viewport</code>: a consumer can only call <code>panTo</code> if it constructed the
-            <code>ScrollModel</code> itself and kept the reference.
-          </p>
-          <p>
-            Secondly, <code>GanttOptions</code> and <code>GanttShellOptions</code> are field-for-field
-            identical, and <code>Gantt</code>'s constructor re-spreads the two optionals to satisfy
-            <code>exactOptionalPropertyTypes</code>. Adding one key means editing two interfaces, one spread
-            and one barrel — four places for a change that has one meaning.
-          </p>
-        </div>
-
-        <div class="smell">
           <h5><span class="id">§9-G</span> <code>hitTest(x, y)</code> does not say which coordinate space</h5>
           <p class="where">render/backend.ts · render/dom/index.ts</p>
           <p>
             The seam declares <code>hitTest(x: number, y: number)</code> with no note on the frame of
             reference. The DOM implementation passes them straight to <code>document.elementFromPoint</code>,
             which takes <em>client</em> (viewport) coordinates — while everything else the backend consumes,
-            <code>GeometryFrame</code> included, is in <em>content</em> coordinates offset by
-            <code>rowLabelWidth</code> and the scroll position. Two spaces, one signature, nothing stating
-            which.
+            <code>GeometryFrame</code> included, is in <em>content</em> coordinates offset by the timeline
+            pane's scroll position. Two spaces, one signature, nothing stating which.
           </p>
           <p>
             Nothing calls it yet, so nothing is wrong today. S4's gesture controllers are the first callers,
             and this is precisely the kind of ambiguity that produces an off-by-scroll-offset bug that only
             shows up once the chart is scrolled. The fix is a named parameter type (<code>ClientPoint</code>
             vs the existing <code>Point</code>) rather than a comment.
-          </p>
-        </div>
-
-        <div class="smell">
-          <h5><span class="id">§9-H</span> Two error vocabularies on the public path</h5>
-          <p class="where">view/gantt-shell.ts <code>resolveContainer()</code></p>
-          <p>
-            <code>model/errors.ts</code> exists precisely so a public failure carries a stable
-            <code>code</code>, and <code>Viewport.bind</code> uses it
-            (<code>FreeGanttError('viewport-already-bound')</code>). But the most likely error a consumer will
-            ever hit — a <code>container</code> selector matching nothing — throws a bare
-            <code>new Error(...)</code>. A consumer cannot branch on it without matching the message string.
-            Two lines to fix, and it should be fixed before anything else starts throwing.
           </p>
         </div>
 
@@ -3052,31 +2992,6 @@ new Gantt({ container: '#gantt', dataset });</code></pre>
           </p>
         </div>
 
-        <div class="smell">
-          <h5><span class="id">§9-J</span> The input reader validates strings hard and numbers not at all</h5>
-          <p class="where">time/input.ts <code>toInstant()</code></p>
-          <p>
-            <code>fromPlainString</code> goes to real trouble over a bad string: because Temporal
-            <em>constrains</em> an out-of-range field rather than throwing, it resolves the value and then
-            reads it back, so <code>'2026-02-31'</code> is caught sliding to Feb 28 and becomes an
-            <code>InvalidInstantError</code>. That is careful work, and right.
-          </p>
-          <p>
-            A <code>number</code> gets one check — <code>Number.isFinite</code> — and is then taken as epoch
-            milliseconds. So <code>start: 20260901</code>, a compact date integer of the kind that arrives
-            from CSVs and older APIs, is read silently as 1970-08-23 and draws a bar half a century off. The
-            string path rejects a date the calendar does not have; the numeric path accepts a value no
-            calendar produced.
-          </p>
-          <p>
-            Nothing is provably wrong here — epoch ms genuinely is the contract, and any plausibility window
-            (say, rejecting values outside 1970–2400) is a policy choice with its own edge cases. This is
-            listed so the asymmetry is a <em>decision</em> rather than an oversight: either accept it and say
-            so in <code>InstantInput</code>'s docstring, or add the guard. It should be settled before S2
-            makes the same reader run on every mutation.
-          </p>
-        </div>
-
         <h4>Explicitly not smells</h4>
         <ul class="plain">
           <li>
@@ -3099,6 +3014,18 @@ new Gantt({ container: '#gantt', dataset });</code></pre>
             <code>TimeScaleModel</code>'s <code>copy.paneWidth</code>, <code>ScrollModel</code>'s
             <code>copy.pane</code>) — copy-at-bind is the mechanism that stops a caller mutating a shared
             model's inputs behind its back. The duplication is the price of sharing.
+          </li>
+          <li>
+            <strong>A numeric <code>InstantInput</code> is epoch milliseconds</strong> — the string path
+            rejects calendar-impossible dates; the numeric path only checks <code>Number.isFinite</code>.
+            Deliberate: <code>InstantInput</code>'s docstring states the contract, so a compact date integer
+            such as <code>20260901</code> is still a silent 1970 date, not an oversight.
+          </li>
+          <li>
+            <strong><code>overscan</code> not on public <code>GanttOptions</code></strong> — live on
+            <code>GanttShell</code>/<code>Viewport</code>; withheld from the app-author surface (issue #84).
+            Pan goes through <code>panToDate</code>/<code>panToNow</code>, not a raw
+            <code>ScrollModel.panTo</code>.
           </li>
         </ul>
       </section>
@@ -3153,14 +3080,11 @@ grep -n 'class="src"' harness/doc.html     # the full source index</code></pre>
           </tr>
           <tr>
             <td class="mono">view/gantt-shell.ts constructor</td>
-            <td>
-              §3 (Diagram 1 + the "why the order" table), §6, and §9-A/B if the ordering or re-entrancy
-              changed
-            </td>
+            <td>§3 (Diagram 1 + the "why the order" table), §6, and §9-B if the wiring flag changed</td>
           </tr>
           <tr>
             <td class="mono">view/gantt-shell.ts render()</td>
-            <td>§4 (Diagram 2), §9-A — and <em>re-measure</em> the pass count (recipe below)</td>
+            <td>§4 (Diagram 2) — and <em>re-measure</em> the pass count (recipe below)</td>
           </tr>
           <tr>
             <td class="mono">layout/frame.ts</td>
@@ -3183,7 +3107,7 @@ grep -n 'class="src"' harness/doc.html     # the full source index</code></pre>
           </tr>
           <tr>
             <td class="mono">time/input.ts or api/entry-input.ts</td>
-            <td>§8's consumer-boundary subsection (Diagram 5), §7's type table, §9-J</td>
+            <td>§8's consumer-boundary subsection (Diagram 5), §7's type table</td>
           </tr>
           <tr>
             <td class="mono">render/dom/*</td>
@@ -3191,7 +3115,7 @@ grep -n 'class="src"' harness/doc.html     # the full source index</code></pre>
           </tr>
           <tr>
             <td class="mono">api/*</td>
-            <td>§8, §9-F, and §1 if the public surface's allowed imports moved</td>
+            <td>§8, and §1 if the public surface's allowed imports moved</td>
           </tr>
           <tr>
             <td class="mono">harness/main.ts</td>
@@ -3212,9 +3136,10 @@ grep -n 'class="src"' harness/doc.html     # the full source index</code></pre>
             say so; that difference is a finding.
           </li>
           <li>
-            <strong>Measure the claims that are measurable.</strong> §9-A says "two layout passes" because it
-            was counted, not reasoned. If you assert a count, a complexity, or a firing order, prove it and
-            write the number down. If you cannot prove it, write "appears to" and say why you could not.
+            <strong>Measure the claims that are measurable.</strong> Construction used to cost two
+            <code>computeFrame</code> calls; a 2026-08-28 re-measure got 1. If you assert a count, a
+            complexity, or a firing order, prove it and write the number down. If you cannot prove it, write
+            "appears to" and say why you could not.
           </li>
           <li>
             <strong>A smell needs a failure condition, not a preference.</strong> Every entry in §9 names the
@@ -3275,55 +3200,20 @@ grep -n 'class="src"' harness/doc.html     # the full source index</code></pre>
           </li>
         </ul>
 
-        <h3>Recipe: re-measuring the §9-A pass count</h3>
+        <h3>Recipe: re-measuring the construction pass count</h3>
         <p>
-          The claim is that construction costs two <code>computeFrame</code> calls and a no-op render costs
+          Construction costs one <code>computeFrame</code> call and a later no-op <code>render()</code> costs
           one. To re-verify after touching <code>render()</code>, <code>Viewport</code> or
-          <code>ScrollModel</code>, drop this at <code>test/dom/tmp-render-count.test.ts</code>, run it, read
-          the numbers, and <strong>delete the file</strong> — it is a probe, not a test to commit:
+          <code>ScrollModel</code>, spy <code>FrameLayout.prototype.computeFrame</code> around
+          <code>new GanttShell(…)</code> (use the same dataset fixture as
+          <code>src/view/gantt-shell.test.ts</code> — a store view, not a plain array). Read the numbers from
+          a throwaway file under <code>test/dom/</code>, then delete it.
         </p>
-        <pre><code>import { describe, expect, it, vi } from 'vitest';
-import { GanttShell } from '../../src/view/gantt-shell.js';
-import { FrameLayout } from '../../src/layout/index.js';
-import { entryId } from '../../src/model/index.js';
-import type { Entry, Instant } from '../../src/model/index.js';
-
-class FakeResizeObserver {
-  constructor(_cb: ResizeObserverCallback) {}
-  observe(): void {}
-  unobserve(): void {}
-  disconnect(): void {}
-}
-vi.stubGlobal('ResizeObserver', FakeResizeObserver);
-
-const entries: Entry[] = [
-  {
-    id: entryId('t1'),
-    name: 'Entry 1',
-    start: Date.parse('2026-09-01T00:00:00Z') as Instant,
-    end: Date.parse('2026-09-03T00:00:00Z') as Instant,
-  },
-];
-
-describe('render count', () =&gt; {
-  it('counts computeFrame calls', () =&gt; {
-    const spy = vi.spyOn(FrameLayout.prototype, 'computeFrame');
-    const container = document.createElement('div');
-    document.body.append(container);
-    const shell = new GanttShell({ container, dataset: { entries, timeZone: 'UTC' } });
-    console.log('ON_CONSTRUCT =', spy.mock.calls.length);      // expect 2
-    spy.mockClear();
-    shell.render();
-    console.log('PER_NOOP_RENDER =', spy.mock.calls.length);   // expect 1
-    expect(true).toBe(true);
-  });
-});</code></pre>
         <pre><code>npx vitest run --project dom test/dom/tmp-render-count.test.ts
 rm test/dom/tmp-render-count.test.ts</code></pre>
         <p>
-          If <code>ON_CONSTRUCT</code> has become 1, §9-A is fixed — delete the finding and say in the footer
-          which commit fixed it. If it has grown past 2, the loop stopped converging: that is no longer a
-          smell, it is a bug, and it belongs in the tracker rather than on this page.
+          If <code>ON_CONSTRUCT</code> is greater than 1, the notify path is rendering inside the first pass
+          again: that is a bug, and it belongs in the tracker rather than on this page.
         </p>
 
         <h3>Before you commit an edit to this page</h3>
@@ -3339,16 +3229,15 @@ rm test/dom/tmp-render-count.test.ts</code></pre>
     </div>
 
     <footer class="wrap">
-      Map of <code>src/</code> as it stands at slice <b>S1</b>, read end to end on <b>2026-08-25</b> from
-      <code>main</code> @ <code>522bf7f</code>. §9-A's pass count was measured, not inferred. §8's
-      consumer-boundary section — <code>model/time.ts</code>'s input twins, <code>time/input.ts</code>,
-      <code>api/entry-input.ts</code>, <code>Dataset.dateOnlyEnd</code> — describes work that landed on branch
-      <code>host-input-dates-and-ids</code> (<code>de5d755</code>) while this page was being written and is
-      <b>not on <code>main</code></b
-      >. Those two files therefore do not exist on this branch; the section is written ahead of the merge so
-      it does not have to be reconstructed afterwards. The spec is <code>plans/00</code>–<code>04</code>; the
-      glossary is <code>CONTEXT.md</code>; the decisions are in <code>docs/adr/</code>. This page is a map,
-      and maps go stale — §10 says how to keep this one honest.
+      Map of <code>src/</code>, smells re-checked on <b>2026-08-28</b> against <code>17586ba</code>. Closed
+      and removed: <b>§9-A</b> (construction is one <code>computeFrame</code>;
+      <code>FrameScheduler</code> stops nested re-entry), <b>§9-F</b> (<code>GanttShell.overscan</code>,
+      <code>panToDate</code>, and the <code>GanttOptions</code> scale union),
+      <b>§9-H</b> (<code>ContainerNotFoundError</code>), <b>§9-J</b> (epoch-ms contract is on
+      <code>InstantInput</code>'s docstring — moved to "explicitly not smells"). Remaining: §9-B, §9-C, §9-D,
+      §9-E, §9-G, §9-I. The spec is <code>plans/00</code>–<code>04</code>; the glossary is
+      <code>CONTEXT.md</code>; the decisions are in <code>docs/adr/</code>. This page is a map, and maps go
+      stale — §10 says how to keep this one honest.
     </footer>
   </body>
 </html>
