@@ -18,28 +18,37 @@ test('every grid pane row lines up with its own bar in the timeline pane (I9)', 
   await page.goto('/');
   await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
 
-  const rows = page.locator('.fg-grid-pane .fg-row');
-  const bars = page.locator('#gantt .fg-bar');
+  // Matched by entry id, not by sorted position/count: the row layer windows purely on vertical
+  // scroll, but the bar layer also culls on the horizontal viewport (S1.12's density floor,
+  // D-S1.12-2/3, can make fitDataset's content wider than the pane, so a visible row can
+  // legitimately have no bar in view at the current scroll position at some viewport widths).
+  // I9 only claims a row and its OWN entry's bar agree in y — not that every row has a bar.
+  const pairs = await page.evaluate(() => {
+    const rowTopByEntryId = new Map<string, number>();
+    for (const row of Array.from(document.querySelectorAll<HTMLElement>('.fg-grid-pane .fg-row'))) {
+      const rowId = row.dataset['rowId']; // "row:<entryId>"
+      const entryId = rowId?.slice('row:'.length);
+      if (entryId) rowTopByEntryId.set(entryId, row.getBoundingClientRect().top);
+    }
+    const matched: Array<{ entryId: string; rowTop: number; barTop: number }> = [];
+    for (const bar of Array.from(document.querySelectorAll<HTMLElement>('#gantt .fg-bar'))) {
+      const itemId = bar.dataset['itemId']; // "<entryId>:<segmentIndex>"
+      const entryId = itemId?.split(':')[0];
+      const rowTop = entryId ? rowTopByEntryId.get(entryId) : undefined;
+      if (entryId && rowTop !== undefined) {
+        matched.push({ entryId, rowTop, barTop: bar.getBoundingClientRect().top });
+      }
+    }
+    return matched;
+  });
 
-  const rowCount = await rows.count();
-  const barCount = await bars.count();
-  expect(rowCount).toBeGreaterThan(1);
-  expect(rowCount).toBe(barCount);
-
-  // Both panes are native page geometry at this point (no fixture ids hardcoded) — sort each set
-  // top-to-bottom and pair them off positionally, exactly like `computeFrame` pairs a `FrameRow`
-  // with its `FrameBar` by shared array index.
-  const rowTops = (await rows.evaluateAll((els) => els.map((el) => el.getBoundingClientRect().top))).sort(
-    (a, b) => a - b,
-  );
-  const barTops = (await bars.evaluateAll((els) => els.map((el) => el.getBoundingClientRect().top))).sort(
-    (a, b) => a - b,
-  );
-
+  expect(pairs.length).toBeGreaterThan(1);
   // Sub-pixel rounding between the two panes' independent transforms is the only expected slop.
   const PIXEL_TOLERANCE = 1;
-  for (let i = 0; i < rowTops.length; i++) {
-    expect(Math.abs(rowTops[i]! - barTops[i]!)).toBeLessThanOrEqual(PIXEL_TOLERANCE);
+  for (const { entryId, rowTop, barTop } of pairs) {
+    expect(Math.abs(rowTop - barTop), `entry ${entryId}: bar top must match its row top`).toBeLessThanOrEqual(
+      PIXEL_TOLERANCE,
+    );
   }
 });
 
