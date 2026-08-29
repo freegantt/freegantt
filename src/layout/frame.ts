@@ -9,12 +9,12 @@ import type { DateLine, DateLineInput } from './date-line.js';
 import { PrefixSumHeightIndex } from './row-height-index.js';
 import type { RowHeightIndex } from './row-height-index.js';
 
+/** Shipped Tick box floor (CONTEXT.md) — `--fg-tick-box-floor` fallback and CSS padding calc. */
+export const DEFAULT_TICK_BOX_FLOOR_PX = 9;
+
 /** An entry's horizontal extent in content pixels, at the bound `TimeScale` (S1.9). The one formula
  * both `computeFrame` and `GanttShell.reveal` need — extracted so the two can never drift apart
  * (they briefly did: `reveal` had its own copy missing the zero-duration/inverted-entry clamp). */
-/** `.fg-tick` padding 4+4 plus 1px border (view/styles.ts). layout/ cannot read that stylesheet. */
-const STICKY_LABEL_MIN_WIDTH_PX = 9;
-
 export function barSpan(entry: Pick<Entry, 'start' | 'end'>, scale: TimeScale): { x: number; width: number } {
   const x = scale.xForInstant(entry.start);
   const width = Math.max(0, scale.xForInstant(entry.end) - x);
@@ -158,6 +158,9 @@ export interface LayoutInput {
   todayLine?: boolean;
   /** Authored Date lines, resolved on the same path as the today wrapper. Not on `Gantt` yet. */
   dateLines?: readonly DateLineInput[];
+  /** Tick box floor in px (CONTEXT.md). Default `DEFAULT_TICK_BOX_FLOOR_PX`. View reads
+   *  `--fg-tick-box-floor` and passes it; layout never restates the stylesheet. */
+  tickBoxFloorPx?: number;
 }
 
 /** S0/S1 scope: flat row-per-entry, one bar per entry, fixed row height (plans/03 S0-S1).
@@ -172,6 +175,7 @@ export function computeFrame(
   heights: RowHeightIndex = new PrefixSumHeightIndex(input.entries.length, () => input.rowHeight),
 ): GeometryFrame {
   const { entries, scale, preset, visible, rowHeight, revision, locale } = input;
+  const tickBoxFloorPx = input.tickBoxFloorPx ?? DEFAULT_TICK_BOX_FLOOR_PX;
   const verticalRows = input.overscan?.verticalRows ?? DEFAULT_OVERSCAN.verticalRows;
   const horizontalPx = input.overscan?.horizontalPx ?? DEFAULT_OVERSCAN.horizontalPx;
 
@@ -244,17 +248,10 @@ export function computeFrame(
   // ticking and formatting; only where the label paints moves.
   const labelLeftClamp = cullHorizontally ? Math.max(visible.x, 0) : 0;
 
-  // `.fg-tick` (view/styles.ts) is `box-sizing: border-box` with `padding: 0 4px` and a 1px
-  // `border-left` — 9px of border-box that no declared `width` below it can shrink, per the CSS box
-  // model (a border-box narrower than its own padding+border clamps up to that floor; verified
-  // against a live browser, not assumed). A straddling tick clamped to a remainder thinner than
-  // this floor would ask for e.g. `width: 0.5px` and *render* at a fixed 9px regardless — eating
-  // into the next tick's true cell and breaking the very "ticks never overlap" invariant this clamp
-  // exists to keep (header readability follow-up, pass 4: found once panning scrolled the pane off
-  // 0 made a thin straddle reachable in practice). Below the floor, the sticky behaviour buys
-  // nothing anyway — there is no room left to show a label in — so it falls back to the tick's own
-  // true (off-screen) x, same as a tick fully behind the visible edge. The 9 restates the stylesheet
-  // (layout/ is DOM-free and cannot read computed style); a Token would close that leak.
+  // A Tick's CSS border-box cannot shrink below the Tick box floor (`tickBoxFloorPx`, Token
+  // `--fg-tick-box-floor`). A straddling tick clamped to a thinner remainder would ask for e.g.
+  // `width: 0.5px` and still paint at that floor — eating into the next cell. Below the floor the
+  // sticky behaviour buys nothing, so the tick keeps its true (off-screen) x.
 
   const headerFormats = dedupeHeaderFormats(preset.headers);
   const bands: FrameHeaderBand[] = preset.headers.map((header, i) => {
@@ -268,7 +265,7 @@ export function computeFrame(
         // buffer) must keep its own true x, or every such tick collapses onto the same clamped
         // column and their labels stack on top of each other (header readability follow-up).
         const remainder = tick.x + tick.width - labelLeftClamp;
-        const straddlesClamp = tick.x < labelLeftClamp && remainder >= STICKY_LABEL_MIN_WIDTH_PX;
+        const straddlesClamp = tick.x < labelLeftClamp && remainder >= tickBoxFloorPx;
         const x = straddlesClamp ? labelLeftClamp : tick.x;
         return { x, width: Math.max(0, tick.width - (x - tick.x)), label: format(tick.instant) };
       }),

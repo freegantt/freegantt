@@ -406,6 +406,7 @@ interface LayoutInput {
   visible: Rect;                  // the culling window, in timeline-content coordinates — was `viewport`
   overscan?: Overscan;            // live; default { verticalRows: 2, horizontalPx: 128 } (S1.7 §3.4)
   rowHeight: number;
+  tickBoxFloorPx?: number;        // Tick box floor; default DEFAULT_TICK_BOX_FLOOR_PX (S1.12)
   revision: number;
 }
 
