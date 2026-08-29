@@ -387,7 +387,7 @@ describe('Gantt locale / todayLine (S1.12, D-S1.12-12 / D-S1.12-14)', () => {
       const barBefore = container.querySelector<HTMLElement>('.fg-bar');
       const labelsOf = (): string => {
         const labels: string[] = [];
-        for (const node of container.querySelectorAll('.fg-tick')) {
+        for (const node of Array.from(container.querySelectorAll('.fg-tick'))) {
           if (node instanceof HTMLElement) labels.push(node.textContent ?? '');
         }
         return labels.join('|');
