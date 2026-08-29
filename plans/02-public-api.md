@@ -206,6 +206,7 @@ Every level-1 property the library reads as a length goes through one reader (`r
 | `--fg-grid-pane-width` | `220px` | — | `pixel-property.ts`, read once at construction |
 | `--fg-splitter-width` | `4px` | — | `pixel-property.ts` |
 | `--fg-band-height` | `20px` | — | `.fg-band` / `.fg-tick` CSS (`--fg-header-height` retired, S1.12) |
+| `--fg-tick-box-floor` | `9px` | — | `.fg-tick` padding calc + `pixel-property.ts` into `LayoutInput.tickBoxFloorPx` |
 | `--fg-bar-radius` | `3px` | — | `.fg-bar` CSS rule directly (not `pixel-property.ts` — a border-radius, not a layout number) |
 | `--fg-pane-bg` | `#FAFAF7` | `#15161A` | `.fg-grid-pane`, `.fg-timeline-pane` background |
 | `--fg-splitter-color` | `#E6E2D9` | `#2B2F36` | `.fg-splitter` background |

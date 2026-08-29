@@ -362,6 +362,10 @@ _Avoid_: Pinned zoom, cursor zoom (the mechanism is not specific to a pointer �
 One step of the time axis at the current ViewPreset's resolution — the unit the header bands label and the unit a gesture snaps to by default. Since S1.7 a Tick also carries its own cell `width` (px to the next boundary at its band's step), so a DST-shortened or -lengthened day draws at its true width instead of an assumed constant. Width is floored by the preset's Tick width (`minTickWidthPx`); a pane too narrow to honour that floor scrolls.
 _Avoid_: Gridline (a gridline is one way a Tick is drawn), step
 
+**Tick box floor**:
+The smallest CSS border-box a painted Tick cell can occupy (`--fg-tick-box-floor`, default 9). Distinct from Tick width (density on the axis). A sticky header label clamps to the pane edge only when the remaining cell is at least this wide; a thinner remainder keeps the Tick's true x.
+_Avoid_: min-width (that is Tick width's `minTickWidthPx`), sticky min width, STICKY_LABEL_MIN_WIDTH_PX
+
 ### Theming and accessibility
 
 **Base stylesheet**:
@@ -369,7 +373,7 @@ The one stylesheet the library ever writes, injected once per document by `ensur
 _Avoid_: Default styles, styles.css (there is no separate package export — see D-S1.10-8)
 
 **Token**:
-A `--fg-*` CSS custom property — level 1 of the Customization ladder (`plans/02` §4). Metrics (`--fg-row-height`, `--fg-grid-pane-width`, `--fg-band-height`, …) are read once through `pixel-property.ts` or consumed as CSS `var()` fallbacks; colour Tokens (`--fg-bar-fill`, `--fg-pane-bg`, `--fg-today-line-color`, …) are consumed directly by Base stylesheet rules with no JS in between. A consumer overrides any Token by setting the same property on the container element; the shipped default is always the fallback in `var(--fg-x, default)`, never the winner once a consumer has authored a value. `--fg-header-height` retired at S1.12 in favour of `--fg-band-height` (one band, not the whole header).
+A `--fg-*` CSS custom property — level 1 of the Customization ladder (`plans/02` §4). Metrics (`--fg-row-height`, `--fg-grid-pane-width`, `--fg-band-height`, `--fg-tick-box-floor`, …) are read once through `pixel-property.ts` or consumed as CSS `var()` fallbacks; colour Tokens (`--fg-bar-fill`, `--fg-pane-bg`, `--fg-today-line-color`, …) are consumed directly by Base stylesheet rules with no JS in between. A consumer overrides any Token by setting the same property on the container element; the shipped default is always the fallback in `var(--fg-x, default)`, never the winner once a consumer has authored a value. `--fg-header-height` retired at S1.12 in favour of `--fg-band-height` (one band, not the whole header).
 _Avoid_: Variable, custom property (accurate but not this project's term of art — say Token), theme variable
 
 **Part**:

@@ -389,6 +389,57 @@ describe('computeFrame — sticky label clamp (finding 3, header readability fol
     // width never goes negative even where a tick's cell is clamped away almost entirely.
     for (const tick of ticks) expect(tick.width).toBeGreaterThanOrEqual(0);
   });
+
+  it('does not stick a straddle thinner than the Tick box floor', () => {
+    const frame = computeFrame({
+      entries: [],
+      scale: hourScale,
+      preset: hourPreset,
+      visible: { x: 172, y: 0, width: 200, height: 0 },
+      overscan,
+      rowHeight: 32,
+      revision: 0,
+    });
+    const ticks = frame.header.bands[0]!.ticks;
+    // Tick at 120 has remainder 8 (< shipped floor 9) — keeps true x.
+    expect(ticks.find((t) => t.x === 120)).toMatchObject({ x: 120, width: 60 });
+    expect(ticks.some((t) => t.x === 172)).toBe(false);
+  });
+
+  it('sticks a straddle that meets the Tick box floor', () => {
+    const frame = computeFrame({
+      entries: [],
+      scale: hourScale,
+      preset: hourPreset,
+      visible: { x: 171, y: 0, width: 200, height: 0 },
+      overscan,
+      rowHeight: 32,
+      revision: 0,
+    });
+    const ticks = frame.header.bands[0]!.ticks;
+    expect(ticks.find((t) => t.width === 9)).toMatchObject({ x: 171, width: 9 });
+    expect(ticks.some((t) => t.x === 120)).toBe(false);
+  });
+
+  it('takes tickBoxFloorPx from the caller instead of restating the stylesheet', () => {
+    const input = {
+      entries: [],
+      scale: hourScale,
+      preset: hourPreset,
+      visible,
+      overscan,
+      rowHeight: 32,
+      revision: 0,
+    };
+    const atDefault = computeFrame(input);
+    expect(atDefault.header.bands[0]!.ticks.find((t) => t.width === 50)).toMatchObject({ x: 130, width: 50 });
+
+    const aboveRemainder = computeFrame({ ...input, tickBoxFloorPx: 51 });
+    expect(aboveRemainder.header.bands[0]!.ticks.find((t) => t.x === 120)).toMatchObject({
+      x: 120,
+      width: 60,
+    });
+  });
 });
 
 describe(

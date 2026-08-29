@@ -17,6 +17,8 @@
 // container, not on `:root`. A `:root:not([data-fg-theme])` media query never sees the pin, so Light
 // would leave the Gantt on the system dark tokens. `.fg-container[data-fg-theme='light']` always wins.
 
+import { DEFAULT_TICK_BOX_FLOOR_PX } from '../layout/index.js';
+
 const MARKER_ATTR = 'data-freegantt-styles';
 
 const LIGHT_COLOR_TOKENS = `
@@ -90,8 +92,10 @@ ${DARK_COLOR_TOKENS}
    consumer): a tick's box is exactly its own width, so a label that would collide with its neighbour
    clips with an ellipsis instead of overflowing and garbling both (S1.12 header readability follow-up).
    border-left marks each tick's own cell boundary so adjacent ticks in the same band read as
-   separate columns, matching .fg-band's existing border-bottom between bands. */
-.fg-tick { color: var(--fg-header-subtext); position: absolute; top: 0; left: 0; height: var(--fg-band-height, 20px); line-height: var(--fg-band-height, 20px); box-sizing: border-box; padding: 0 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-left: 1px solid var(--fg-header-divider-color); }
+   separate columns, matching .fg-band's existing border-bottom between bands.
+   --fg-tick-box-floor is the Tick box floor (CONTEXT.md): padding-inline derives from it so the
+   CSS box and layout's clamp input stay one Token. The 1px in the calc is this rule's border-left. */
+.fg-tick { color: var(--fg-header-subtext); position: absolute; top: 0; left: 0; height: var(--fg-band-height, 20px); line-height: var(--fg-band-height, 20px); box-sizing: border-box; padding: 0 calc((var(--fg-tick-box-floor, ${DEFAULT_TICK_BOX_FLOOR_PX}px) - 1px) / 2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-left: 1px solid var(--fg-header-divider-color); }
 .fg-row { background: var(--fg-row-even-bg); position: absolute; top: 0; left: 0; width: 100%; }
 .fg-row:nth-child(odd) { background: var(--fg-row-odd-bg); }
 .fg-row-label { color: var(--fg-row-label-color); }

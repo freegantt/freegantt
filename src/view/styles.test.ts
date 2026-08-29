@@ -108,6 +108,7 @@ describe('ensureBaseStyles', () => {
     ensureBaseStyles(document);
     const css = document.head.querySelector('style[data-freegantt-styles]')?.textContent ?? '';
     expect(css).toContain('--fg-band-height');
+    expect(css).toContain('--fg-tick-box-floor');
     expect(css).not.toContain('--fg-header-height');
   });
 
