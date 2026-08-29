@@ -249,6 +249,18 @@ export function computeFrame(
   // ticking and formatting; only where the label paints moves.
   const labelLeftClamp = cullHorizontally ? Math.max(visible.x, 0) : 0;
 
+  // `.fg-tick` (view/styles.ts) is `box-sizing: border-box` with `padding: 0 4px` and a 1px
+  // `border-left` — 9px of border-box that no declared `width` below it can shrink, per the CSS box
+  // model (a border-box narrower than its own padding+border clamps up to that floor; verified
+  // against a live browser, not assumed). A straddling tick clamped to a remainder thinner than
+  // this floor would ask for e.g. `width: 0.5px` and *render* at a fixed 9px regardless — eating
+  // into the next tick's true cell and breaking the very "ticks never overlap" invariant this clamp
+  // exists to keep (header readability follow-up, pass 4: found once panning scrolled the pane off
+  // 0 made a thin straddle reachable in practice). Below the floor, the sticky behaviour buys
+  // nothing anyway — there is no room left to show a label in — so it falls back to the tick's own
+  // true (off-screen) x, same as a tick fully behind the visible edge.
+  const STICKY_LABEL_MIN_WIDTH_PX = 9;
+
   const headerFormats = dedupeHeaderFormats(preset.headers);
   const bands: FrameHeaderBand[] = preset.headers.map((header, i) => {
     const format = resolveDateFormat(headerFormats[i]!, scale.timeZone, locale);
@@ -260,7 +272,8 @@ export function computeFrame(
         // that ends before it (fully behind the visible edge, kept around only by the overscan
         // buffer) must keep its own true x, or every such tick collapses onto the same clamped
         // column and their labels stack on top of each other (header readability follow-up).
-        const straddlesClamp = tick.x < labelLeftClamp && tick.x + tick.width > labelLeftClamp;
+        const remainder = tick.x + tick.width - labelLeftClamp;
+        const straddlesClamp = tick.x < labelLeftClamp && remainder >= STICKY_LABEL_MIN_WIDTH_PX;
         const x = straddlesClamp ? labelLeftClamp : tick.x;
         return { x, width: Math.max(0, tick.width - (x - tick.x)), label: format(tick.instant) };
       }),
