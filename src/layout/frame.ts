@@ -3,7 +3,13 @@
 import type { RowId, ItemId, EntryId, EntryKind, Entry, Rect, TimeUnit } from '../model/index.js';
 import { itemId, rowId } from '../model/index.js';
 import type { TimeScale, ViewPreset } from '../time/index.js';
-import { formatDate, formatEndInclusive, now, resolveDateFormat } from '../time/index.js';
+import {
+  dedupeHeaderFormats,
+  formatDate,
+  formatEndInclusive,
+  now,
+  resolveDateFormat,
+} from '../time/index.js';
 import { PrefixSumHeightIndex } from './row-height-index.js';
 import type { RowHeightIndex } from './row-height-index.js';
 
@@ -233,16 +239,26 @@ export function computeFrame(
     ? { x: hLeft, width: hRight - hLeft }
     : { x: 0, width: scale.contentWidth };
 
-  const bands: FrameHeaderBand[] = preset.headers.map((header) => {
-    const format = resolveDateFormat(header.format, scale.timeZone, locale);
+  // A coarse band's boundary (a year, say) is often well behind the visible pane — the calendar
+  // year started before this dataset's own first entry, or the caller has scrolled past it — so
+  // its true cell left edge sits off-screen. Left un-clamped, the label paints at that off-screen
+  // x and never becomes visible even though most of the cell is on screen (header readability
+  // follow-up: "year never renders at the top level" turned out to be exactly this). Clamping the
+  // *label's* x to the visible pane's own left edge keeps it stuck to the front of its cell while
+  // any part of that cell is in view — the cell's true `x`/`width` (and its `instant`) still drive
+  // ticking and formatting; only where the label paints moves.
+  const labelLeftClamp = cullHorizontally ? Math.max(visible.x, 0) : 0;
+
+  const headerFormats = dedupeHeaderFormats(preset.headers);
+  const bands: FrameHeaderBand[] = preset.headers.map((header, i) => {
+    const format = resolveDateFormat(headerFormats[i]!, scale.timeZone, locale);
     return {
       unit: header.unit,
       increment: header.increment,
-      ticks: scale.ticks({ unit: header.unit, increment: header.increment }, horizontalSpan).map((tick) => ({
-        x: tick.x,
-        width: tick.width,
-        label: format(tick.instant),
-      })),
+      ticks: scale.ticks({ unit: header.unit, increment: header.increment }, horizontalSpan).map((tick) => {
+        const x = Math.max(tick.x, labelLeftClamp);
+        return { x, width: Math.max(0, tick.width - (x - tick.x)), label: format(tick.instant) };
+      }),
     };
   });
 

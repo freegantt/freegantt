@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { instant } from './instant.js';
 import { startOfDay } from './zone.js';
-import { formatDate, formatEndInclusive } from './format.js';
+import { dedupeHeaderFormats, formatDate, formatEndInclusive, formatWeekNumber } from './format.js';
+import type { ViewPresetHeader } from './scale.js';
 
 const ZONE = 'America/New_York';
 
@@ -31,5 +32,69 @@ describe('formatEndInclusive', () => {
     // displays as ending Oct 31, crossing both a DST fold and a month boundary correctly.
     const end = startOfDay(ZONE, instant('2026-11-01T12:00:00Z'));
     expect(formatEndInclusive(ZONE, end)).toBe('Oct 31, 2026');
+  });
+});
+
+describe('dedupeHeaderFormats', () => {
+  const at = instant('2026-09-21T12:00:00Z');
+  const YEAR_MONTH_DAY: Intl.DateTimeFormatOptions = { year: 'numeric', month: 'short', day: 'numeric' };
+  const YEAR_MONTH: Intl.DateTimeFormatOptions = { year: 'numeric', month: 'short' };
+  const YEAR: Intl.DateTimeFormatOptions = { year: 'numeric' };
+
+  function label(format: Intl.DateTimeFormatOptions): string {
+    return new Intl.DateTimeFormat(undefined, { ...format, timeZone: ZONE }).format(new Date(at));
+  }
+
+  it('leaves a single-header preset untouched — nothing coarser to dedupe against', () => {
+    const headers: ViewPresetHeader[] = [{ unit: 'day', increment: 1, format: YEAR_MONTH_DAY }];
+    expect(dedupeHeaderFormats(headers)).toEqual([YEAR_MONTH_DAY]);
+  });
+
+  it('strips year and month from a finer band once a coarser band already states them', () => {
+    const headers: ViewPresetHeader[] = [
+      { unit: 'month', increment: 1, format: YEAR_MONTH },
+      { unit: 'day', increment: 1, format: YEAR_MONTH_DAY },
+    ];
+    const [month, day] = dedupeHeaderFormats(headers);
+    expect(label(month as Intl.DateTimeFormatOptions)).toBe('Sep 2026');
+    expect(label(day as Intl.DateTimeFormatOptions)).toBe('21');
+  });
+
+  it('strips only the fields an earlier band actually states — a lone year band leaves month alone', () => {
+    const headers: ViewPresetHeader[] = [
+      { unit: 'year', increment: 1, format: YEAR },
+      { unit: 'month', increment: 1, format: YEAR_MONTH },
+    ];
+    const [, month] = dedupeHeaderFormats(headers);
+    expect(label(month as Intl.DateTimeFormatOptions)).toBe('Sep');
+  });
+
+  it('passes a callback format through untouched, and it still counts as showing nothing to dedupe', () => {
+    const headers: ViewPresetHeader[] = [
+      { unit: 'week', increment: 1, format: formatWeekNumber },
+      { unit: 'day', increment: 1, format: YEAR_MONTH_DAY },
+    ];
+    const [week, day] = dedupeHeaderFormats(headers);
+    expect(week).toBe(formatWeekNumber);
+    expect(label(day as Intl.DateTimeFormatOptions)).toBe('Sep 21, 2026');
+  });
+
+  it('repeatCoarserUnits opts a band out of stripping, but it still marks the field as shown below it', () => {
+    const headers: ViewPresetHeader[] = [
+      { unit: 'month', increment: 1, format: YEAR_MONTH },
+      { unit: 'week', increment: 1, format: YEAR_MONTH_DAY, repeatCoarserUnits: true },
+      { unit: 'day', increment: 1, format: YEAR_MONTH_DAY },
+    ];
+    const [, week, day] = dedupeHeaderFormats(headers);
+    expect(label(week as Intl.DateTimeFormatOptions)).toBe('Sep 21, 2026');
+    expect(label(day as Intl.DateTimeFormatOptions)).toBe('21');
+  });
+
+  it('memoizes by the headers array identity so the stripped format keeps one object identity', () => {
+    const headers: ViewPresetHeader[] = [
+      { unit: 'month', increment: 1, format: YEAR_MONTH },
+      { unit: 'day', increment: 1, format: YEAR_MONTH_DAY },
+    ];
+    expect(dedupeHeaderFormats(headers)).toBe(dedupeHeaderFormats(headers));
   });
 });

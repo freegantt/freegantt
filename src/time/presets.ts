@@ -1,18 +1,13 @@
 // time/ owns the shipped view presets and the one way in to them (plans/01 §5.1, S1.9 D-S1.9-3).
 // scale.ts keeps the engine and the shape of a preset; this file is the data — a new zoom level is
 // never a library edit (CONTEXT.md, ViewPreset), just a new entry here. Every shipped band's `format`
-// is an `Intl.DateTimeFormatOptions` object (S1.12, D-S1.12-11) except `formatWeekNumber`, the one
-// escape-hatch callback Intl has no field for.
+// is an `Intl.DateTimeFormatOptions` object (S1.12, D-S1.12-11) except `formatWeekNumber` and
+// `formatHour`, the escape-hatch callbacks Intl has no reliable field for.
 
 import { UnknownPresetError } from '../model/index.js';
-import { formatWeekNumber } from './format.js';
+import { formatHour, formatWeekNumber } from './format.js';
 import type { ViewPreset } from './scale.js';
 
-const HOUR_FORMAT: Intl.DateTimeFormatOptions = Object.freeze({
-  hour: '2-digit',
-  minute: '2-digit',
-  hour12: false,
-});
 const DAY_FORMAT: Intl.DateTimeFormatOptions = Object.freeze({
   year: 'numeric',
   month: 'short',
@@ -35,9 +30,11 @@ export const hourPreset: ViewPreset = freezePreset({
   id: 'hour',
   tickUnit: 'hour',
   tickIncrement: 1,
-  headers: [{ unit: 'hour', increment: 1, format: HOUR_FORMAT }],
-  preferredTickWidthPx: 40,
-  minTickWidthPx: 24,
+  headers: [{ unit: 'hour', increment: 1, format: formatHour }],
+  preferredTickWidthPx: 56,
+  // Below 48px "23:00" clips or overlaps its neighbour (measured at a 12px tick label — header
+  // readability follow-up to S1.12).
+  minTickWidthPx: 48,
 });
 
 export const dayPreset: ViewPreset = freezePreset({
@@ -45,10 +42,12 @@ export const dayPreset: ViewPreset = freezePreset({
   tickUnit: 'day',
   tickIncrement: 1,
   headers: [{ unit: 'day', increment: 1, format: DAY_FORMAT }],
-  preferredTickWidthPx: 24,
-  // S1.12, D-S1.12-3: below 32px a day tick's label is not legible; the shipped sample fixture
-  // (72 days in a ~900px pane) resolves to ~12px/day pre-floor and scrolls at 32px/day after.
-  minTickWidthPx: 32,
+  preferredTickWidthPx: 112,
+  // S1.12, D-S1.12-3, revised (header readability follow-up): a lone day band's label is the full
+  // "Sep 21, 2026" — nothing coarser above it to dedupe against — and that clips below 96px at a
+  // 12px tick label. Multi-band presets below don't need this much: `dedupeHeaderFormats` leaves
+  // their day band showing only the day number once a coarser band already states the month/year.
+  minTickWidthPx: 96,
 });
 
 export const weekPreset: ViewPreset = freezePreset({
@@ -56,8 +55,9 @@ export const weekPreset: ViewPreset = freezePreset({
   tickUnit: 'week',
   tickIncrement: 1,
   headers: [{ unit: 'week', increment: 1, format: DAY_FORMAT }],
-  preferredTickWidthPx: 60,
-  minTickWidthPx: 40,
+  preferredTickWidthPx: 120,
+  // Same full-date label as `dayPreset`, same floor (header readability follow-up).
+  minTickWidthPx: 96,
 });
 
 export const monthPreset: ViewPreset = freezePreset({
@@ -66,7 +66,8 @@ export const monthPreset: ViewPreset = freezePreset({
   tickIncrement: 1,
   headers: [{ unit: 'month', increment: 1, format: MONTH_FORMAT }],
   preferredTickWidthPx: 80,
-  minTickWidthPx: 50,
+  // "Sep 2026" clips below 72px at a 12px tick label (header readability follow-up).
+  minTickWidthPx: 72,
 });
 
 export const yearPreset: ViewPreset = freezePreset({
@@ -126,10 +127,12 @@ export const hourDayWeekPreset: ViewPreset = freezePreset({
   headers: [
     { unit: 'week', increment: 1, format: DAY_FORMAT },
     { unit: 'day', increment: 1, format: DAY_FORMAT },
-    { unit: 'hour', increment: 1, format: HOUR_FORMAT },
+    { unit: 'hour', increment: 1, format: formatHour },
   ],
-  preferredTickWidthPx: 40,
-  minTickWidthPx: 24,
+  preferredTickWidthPx: 56,
+  // Floors the hour band exactly like `hourPreset` — the week/day bands above it dedupe away their
+  // year/month and stay legible at far less width (header readability follow-up).
+  minTickWidthPx: 48,
 });
 
 export const dayWeekMonthPreset: ViewPreset = freezePreset({
@@ -142,7 +145,9 @@ export const dayWeekMonthPreset: ViewPreset = freezePreset({
     { unit: 'day', increment: 1, format: DAY_FORMAT },
   ],
   preferredTickWidthPx: 32,
-  minTickWidthPx: 20,
+  // The day band dedupes to a bare day number under the month band above it — "21" needs far less
+  // room than a full date (header readability follow-up).
+  minTickWidthPx: 28,
 });
 
 export const weekMonthYearPreset: ViewPreset = freezePreset({

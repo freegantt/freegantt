@@ -259,6 +259,9 @@ export function formatDate(zone: string, i: Instant, locale?: Intl.LocalesArgume
 export function formatEndInclusive(zone: string, end: Instant, locale?: Intl.LocalesArgument): string;
 
 // @public
+export const formatHour: HeaderFormat;
+
+// @public
 export const formatWeekNumber: HeaderFormat;
 
 // @public (undocumented)
@@ -459,6 +462,14 @@ export type StoreName = 'entries';
 export type Theme = 'auto' | 'light' | 'dark';
 
 // @public
+export interface TickStep {
+    // (undocumented)
+    readonly increment: number;
+    // (undocumented)
+    readonly unit: TimeUnit;
+}
+
+// @public
 export type TimeScaleFit = 'pane' | 'preset' | number;
 
 // @public (undocumented)
@@ -532,8 +543,6 @@ export class UnsupportedUnitError extends FreeGanttError {
 
 // @public
 export interface ViewPreset {
-    // Warning: (ae-forgotten-export) The symbol "ViewPresetHeader" needs to be exported by the entry point index.d.ts
-    //
     // (undocumented)
     headers: readonly ViewPresetHeader[];
     // (undocumented)
@@ -549,6 +558,13 @@ export interface ViewPreset {
     tickIncrement: number;
     // (undocumented)
     tickUnit: TimeUnit;
+}
+
+// @public (undocumented)
+export interface ViewPresetHeader extends TickStep {
+    // (undocumented)
+    format: DateFormat;
+    repeatCoarserUnits?: boolean;
 }
 
 // (No @packageDocumentation comment for this package)

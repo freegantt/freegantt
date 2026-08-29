@@ -30,6 +30,12 @@ export type DateFormat = Intl.DateTimeFormatOptions | HeaderFormat;
 
 export interface ViewPresetHeader extends TickStep {
   format: DateFormat;
+  /** A coarser band earlier in `headers` (bands are coarsest first) that already spells out `year`
+   *  or `month` makes this band drop that field from its own `format` by default — the day band
+   *  under a month band reads "21", not "Sep 21, 2026" (S1.12 follow-up, header readability). Set
+   *  `true` to keep this band's `format` exactly as written. No effect on a callback `format`: only
+   *  `Intl.DateTimeFormatOptions` fields are ever inspected or stripped. */
+  repeatCoarserUnits?: boolean;
 }
 
 /** Data, not a switch statement — shipped presets are config objects; custom ones are too (plans/01 §5.1). */
