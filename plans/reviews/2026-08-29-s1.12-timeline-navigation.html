@@ -35,6 +35,12 @@
           Spec source: <span class="font-mono">plans/s1.12-timeline-navigation/README.md</span>
           + <span class="font-mono">header-readability-followup.md</span>.
         </p>
+        <p class="text-sm rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-3 text-indigo-950 max-w-3xl">
+          Tracked smell:
+          <a class="underline font-medium" href="https://github.com/Pawel-IT/FreeGantt/issues/96">#96</a>
+          — axis chrome has no DateLine module (grill: not a “Timeline” file).
+          Close that smell when <a class="underline" href="#c3">Candidate 3</a> lands.
+        </p>
       </header>
 
       <!-- ========== AXIS ROLLUPS ========== -->
@@ -215,38 +221,67 @@ flowchart LR
 
         <article id="c3" class="rounded-xl border border-slate-200 bg-white p-6 space-y-5 shadow-sm">
           <div class="flex items-start justify-between gap-4">
-            <h3 class="font-serif text-xl">3 · Sticky label clamp leaks CSS into computeFrame</h3>
+            <h3 class="font-serif text-xl">3 · DateLine has no home file</h3>
             <div class="flex gap-2 shrink-0">
-              <span class="rounded-full bg-amber-100 text-amber-800 text-xs px-3 py-1 font-medium">Worth exploring</span>
+              <span class="rounded-full bg-emerald-100 text-emerald-800 text-xs px-3 py-1 font-medium">Strong</span>
               <span class="rounded-full bg-slate-100 text-slate-600 text-xs px-3 py-1">in-process</span>
+              <a class="rounded-full bg-indigo-100 text-indigo-800 text-xs px-3 py-1 font-medium underline" href="https://github.com/Pawel-IT/FreeGantt/issues/96">#96</a>
             </div>
           </div>
-          <p class="font-mono text-sm text-slate-600">src/layout/frame.ts · src/view/styles.ts</p>
+          <p class="font-mono text-sm text-slate-600">src/layout/frame.ts · src/render/dom/index.ts · (missing) src/layout/date-line.ts · src/render/dom/date-line.ts</p>
 
-          <div class="grid md:grid-cols-2 gap-4 items-end">
-            <div class="rounded-lg border border-slate-200 bg-stone-50 p-4 flex flex-col items-center gap-2">
-              <p class="text-xs uppercase tracking-wider text-slate-400">Before — one tall pass</p>
-              <div class="w-full h-8 border-2 border-slate-400 flex items-center justify-center text-[10px] uppercase">rows / bars / cull</div>
-              <div class="w-full h-8 border-2 border-red-400 text-red-700 flex items-center justify-center text-[10px] uppercase">sticky + 9px CSS floor</div>
-              <div class="w-full h-8 border-2 border-slate-400 flex items-center justify-center text-[10px] uppercase">todayLine decoration</div>
-              <div class="w-full h-6 border-2 border-slate-800 bg-slate-900 text-white flex items-center justify-center text-[10px] uppercase">GeometryFrame</div>
+          <div class="grid md:grid-cols-2 gap-4">
+            <div class="rounded-lg border border-slate-200 bg-stone-50 p-4">
+              <p class="text-xs uppercase tracking-wider text-slate-400 mb-2">Before — no DateLine module</p>
+              <pre class="mermaid">
+flowchart TB
+  cf["computeFrame"] --> rows["rows / bars / cull"]
+  cf --> today["todayLine geometry"]
+  dom["render/dom/index.ts"] --> grid["grid rows"]
+  dom --> bars["bars + header ticks"]
+  dom --> paint["one .fg-today-line node"]
+  today -.leak.-> paint
+  classDef leak stroke:#dc2626,stroke-width:2px,color:#dc2626;
+  class today,paint leak
+              </pre>
             </div>
-            <div class="rounded-lg border border-slate-200 bg-stone-50 p-4 flex flex-col items-center gap-2">
-              <p class="text-xs uppercase tracking-wider text-slate-400">After — named passes</p>
-              <div class="w-full h-8 border-2 border-slate-400 flex items-center justify-center text-[10px] uppercase">rows / bars</div>
-              <div class="w-full h-16 deep rounded flex items-center justify-center text-[10px] text-white uppercase tracking-wider text-center px-2">stickyHeaderTicks(ticks, visible, minLabelWidthPx)</div>
-              <div class="w-full h-8 border-2 border-slate-400 flex items-center justify-center text-[10px] uppercase">decorations</div>
-              <div class="w-full h-6 border-2 border-slate-800 bg-slate-900 text-white flex items-center justify-center text-[10px] uppercase">GeometryFrame</div>
+            <div class="rounded-lg border border-slate-200 bg-stone-50 p-4">
+              <p class="text-xs uppercase tracking-wider text-slate-400 mb-2">After — two files, one name</p>
+              <pre class="mermaid">
+flowchart TB
+  subgraph layoutLayer ["layout/ — DOM-free"]
+    dl["date-line.ts"]
+  end
+  subgraph renderLayer ["render/dom/"]
+    rdl["date-line.ts"]
+  end
+  cf2["computeFrame"] --> rows2["rows / bars"]
+  cf2 --> dl
+  dl --> rdl
+  classDef deep fill:#0f172a,stroke:#0f172a,color:#fff;
+  class dl,rdl deep
+              </pre>
             </div>
           </div>
 
-          <p><strong>Problem:</strong> <span class="font-mono">layout/</span> knows <span class="font-mono">.fg-tick</span> padding. Change the Token, break the clamp. Sticky policy has no glossary name.</p>
-          <p><strong>Solution:</strong> extract <span class="font-mono">stickyHeaderTicks</span>; pass min label width from <span class="font-mono">LayoutInput</span> or a Token. Keep GeometryFrame as the only render seam. Do not move the math into <span class="font-mono">render/dom</span> (forks backends).</p>
+          <p><strong>Problem:</strong> the glossary job is a <strong>Date line</strong> (<a href="https://github.com/Pawel-IT/FreeGantt/issues/96#issuecomment-5463063205">#96 grill round 4</a>), not a Timeline file. Geometry sits in <span class="font-mono">computeFrame</span> next to row culling. Paint sits in <span class="font-mono">render/dom/index.ts</span> next to bars. One god “timeline.ts” across layers would break the DOM-free <span class="font-mono">layout/</span> seam.</p>
+          <p><strong>Solution:</strong> two files, one name, layers stay split — as #96 already settled. Do not name either file Timeline. Sticky header clamp stays a separate leak in <span class="font-mono">computeFrame</span> (Standards, above); it is not DateLine.</p>
           <ul class="text-sm space-y-1 list-disc list-inside text-slate-700">
-            <li>locality: CSS metric and clamp share one named input</li>
-            <li>leverage: canvas backend gets the same sticky labels</li>
-            <li>tests: clamp without a full frame fixture</li>
+            <li>locality: DateLine geometry and paint each have one module</li>
+            <li>leverage: <span class="font-mono">dateLines</span> and the today wrapper share one path</li>
+            <li>tests: layout in Node; paint through the render seam</li>
           </ul>
+          <div class="rounded-lg border border-indigo-200 bg-indigo-50 p-4 text-sm text-indigo-950 space-y-2">
+            <p class="text-xs uppercase tracking-widest font-semibold">Close the #96 home-file smell when all of these are true</p>
+            <ul class="list-disc list-inside space-y-1">
+              <li><span class="font-mono">src/layout/date-line.ts</span> resolves <span class="font-mono">todayLine</span> wrapper + <span class="font-mono">dateLines</span> → decorations (<span class="font-mono">DateLine</span>, <span class="font-mono">x</span>, label, className)</li>
+              <li><span class="font-mono">src/render/dom/date-line.ts</span> keyed-paints those decorations (stroke + header caption)</li>
+              <li><span class="font-mono">computeFrame</span> and <span class="font-mono">render/dom/index.ts</span> no longer own today-line geometry or the single-node paint</li>
+              <li>Part/token: <span class="font-mono">.fg-date-line</span> / <span class="font-mono">--fg-date-line-color</span>; drop <span class="font-mono">.fg-today-line</span> / <span class="font-mono">--fg-today-line-color</span> (no alias)</li>
+              <li>CONTEXT.md names <strong>Date line</strong>; <span class="font-mono">todayLine</span> stays the wrapper shorthand</li>
+            </ul>
+            <p class="text-xs">Then tick the smell on <a class="underline" href="https://github.com/Pawel-IT/FreeGantt/issues/96">#96</a>. Keep #96 open for the rest of the DateLine product grill (list, labels, Part rename) until that spec lands. <span class="font-mono">RangeBand</span> stays <a class="underline" href="https://github.com/Pawel-IT/FreeGantt/issues/97">#97</a>.</p>
+          </div>
         </article>
 
         <article id="c4" class="rounded-xl border border-slate-200 bg-white p-6 space-y-5 shadow-sm">
@@ -369,7 +404,7 @@ sequenceDiagram
           <tbody class="divide-y divide-slate-100">
             <tr><td class="p-3 font-mono">zoomPresets</td><td class="p-3">not landed</td><td class="p-3">new concept with no glossary home</td></tr>
             <tr><td class="p-3 font-mono">DateFormat / HeaderFormat</td><td class="p-3">not landed</td><td class="p-3">two names for how a band labels an Instant</td></tr>
-            <tr><td class="p-3 font-mono">todayLine / TodayLine</td><td class="p-3">not landed</td><td class="p-3">option vs decoration kind</td></tr>
+            <tr><td class="p-3 font-mono">todayLine / TodayLine</td><td class="p-3">not landed</td><td class="p-3">wrapper vs type; grill on <a class="underline" href="https://github.com/Pawel-IT/FreeGantt/issues/96">#96</a> names type <span class="font-mono">DateLine</span>, glossary <strong>Date line</strong></td></tr>
             <tr><td class="p-3 font-mono">preferredTickWidthPx</td><td class="p-3">not landed</td><td class="p-3">Tick entry still older wording</td></tr>
             <tr><td class="p-3">sticky label clamp</td><td class="p-3">no term</td><td class="p-3">policy with no domain name</td></tr>
             <tr><td class="p-3 font-mono">panToInstant vs panToDate</td><td class="p-3">Pan exists</td><td class="p-3">intentional InstantInput seam; document it</td></tr>
@@ -386,7 +421,7 @@ sequenceDiagram
       </section>
 
       <footer class="text-xs text-slate-400 pt-4 border-t border-slate-200">
-        Summary: Standards 4 (worst: CONTEXT.md) · Spec 6 (worst: missing [S1-A6]–[S1-A10]) · Simplify 4 would-fix · Architecture 2 Strong/Worth-as-Strong (c1) plus five explore/speculative. Locked D1–D12 and D-S1.7-10 (do not export Viewport) not reopened.
+        Summary: Standards 4 (worst: CONTEXT.md) · Spec 6 (worst: missing [S1-A6]–[S1-A10]) · Simplify 4 would-fix · Architecture: c1 (stale content width) and c3 (DateLine home files, <a href="https://github.com/Pawel-IT/FreeGantt/issues/96">#96</a>) are Strong. Locked D1–D12 and D-S1.7-10 (do not export Viewport) not reopened. Do not name a Timeline module for DateLine.
       </footer>
     </main>
   </body>
