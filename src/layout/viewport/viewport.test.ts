@@ -263,6 +263,45 @@ describe('Viewport.zoomTo / zoomBy (S1.9, D-S1.9-5)', () => {
   });
 });
 
+describe('Viewport.panToInstant (S1.12, D-S1.12-8)', () => {
+  it("align 'start' (default) puts the instant's content x at the pane's left edge", () => {
+    const { viewport } = boundViewport(400, 200);
+    const target = instant('2026-06-15T00:00:00Z');
+    viewport.panToInstant(target, 'start');
+    expect(viewport.scroll.state.position.x).toBe(viewport.timeScale.xForInstant(target));
+  });
+
+  it("align 'center' puts the instant at the pane's own centre — exactly paneWidth/2 left of 'start'", () => {
+    const { viewport: startViewport } = boundViewport(400, 200);
+    const { viewport: centerViewport } = boundViewport(400, 200);
+    const target = instant('2026-06-15T00:00:00Z');
+
+    startViewport.panToInstant(target, 'start');
+    centerViewport.panToInstant(target, 'center');
+
+    expect(centerViewport.scroll.state.position.x).toBe(startViewport.scroll.state.position.x - 200);
+  });
+
+  it('delivers exactly one notification', () => {
+    const { viewport, calls } = boundViewport(400, 200);
+    viewport.panToInstant(instant('2026-06-15T00:00:00Z'), 'start');
+    expect(calls()).toBe(1);
+  });
+
+  it('an instant before the scale range clamps to scroll position 0, never negative', () => {
+    const { viewport } = boundViewport(400, 200);
+    // wideDataset runs Jan-Dec 2026 — well before its own range.start.
+    viewport.panToInstant(instant('2020-01-01T00:00:00Z'), 'start');
+    expect(viewport.scroll.state.position.x).toBe(0);
+  });
+
+  it('an instant past the scale range clamps to scroll.max.x, never past it', () => {
+    const { viewport } = boundViewport(400, 200);
+    viewport.panToInstant(instant('2099-01-01T00:00:00Z'), 'start');
+    expect(viewport.scroll.state.position.x).toBe(viewport.scroll.state.max.x);
+  });
+});
+
 describe('Viewport.reveal (S1.9, D-S1.9-6)', () => {
   it('is a no-op when target is already inside visible', () => {
     const { viewport, calls } = boundViewport(400, 200);
