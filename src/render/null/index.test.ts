@@ -16,7 +16,13 @@ const scale: TimeScale = {
   ticks: () => [],
   contentWidth: 0,
 };
-const preset: ViewPreset = { id: 'none', tickUnit: 'day', tickIncrement: 1, headers: [], tickWidthPx: 24 };
+const preset: ViewPreset = {
+  id: 'none',
+  tickUnit: 'day',
+  tickIncrement: 1,
+  headers: [],
+  preferredTickWidthPx: 24,
+};
 
 describe('null render backend', () => {
   it('consumes a frame in Node with no DOM', () => {

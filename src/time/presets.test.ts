@@ -26,7 +26,7 @@ describe('resolvePreset', () => {
       tickUnit: 'hour',
       tickIncrement: 6,
       headers: [{ unit: 'hour', increment: 6, format: () => 'x' }],
-      tickWidthPx: 40,
+      preferredTickWidthPx: 40,
     };
     expect(resolvePreset(custom)).toBe(custom);
   });

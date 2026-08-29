@@ -150,7 +150,9 @@ describe('Viewport', () => {
 
     expect(() =>
       viewport.batch(() => {
-        handle.setPaneSize({ width: 50, height: 50 });
+        // Wide enough that the resolved density clears S1.12's floor, so this genuinely changes
+        // the scale — a size the floor would clamp away leaves nothing to notify.
+        handle.setPaneSize({ width: 800, height: 500 });
         throw new Error('boom');
       }),
     ).toThrow('boom');
