@@ -85,10 +85,13 @@ describe('TimeScaleModel', () => {
     const model = new TimeScaleModel();
     bindTimeScale(model, { timeZone: 'UTC', entries, paneWidth: 0 }, noop);
 
-    // dayPreset's own density (24px) is below its S1.12 density floor (32px), so the floor wins.
-    expect(model.scale.xForInstant(instant('2026-09-02T00:00:00Z'))).toBeCloseTo(dayPreset.minTickWidthPx!);
+    // dayPreset's preferredTickWidthPx already clears its own density floor (header readability
+    // follow-up), so an unmeasured container falls back to the preferred density directly.
+    expect(model.scale.xForInstant(instant('2026-09-02T00:00:00Z'))).toBeCloseTo(
+      dayPreset.preferredTickWidthPx,
+    );
     expect(model.scale.widthForDuration({ value: 1, unit: 'day' }, entries[0]!.start)).toBeCloseTo(
-      dayPreset.minTickWidthPx!,
+      dayPreset.preferredTickWidthPx,
     );
   });
 
@@ -96,7 +99,7 @@ describe('TimeScaleModel', () => {
     const empty = new TimeScaleModel();
     bindTimeScale(empty, { timeZone: 'UTC', entries: [], paneWidth: 800 }, noop);
     expect(empty.scale.widthForDuration({ value: 1, unit: 'day' }, instant(0))).toBeCloseTo(
-      dayPreset.minTickWidthPx!,
+      dayPreset.preferredTickWidthPx,
     );
 
     const zeroSpan = new TimeScaleModel();
@@ -107,7 +110,7 @@ describe('TimeScaleModel', () => {
       noop,
     );
     expect(zeroSpan.scale.widthForDuration({ value: 1, unit: 'day' }, at)).toBeCloseTo(
-      dayPreset.minTickWidthPx!,
+      dayPreset.preferredTickWidthPx,
     );
   });
 
@@ -204,8 +207,10 @@ describe('TimeScaleModel', () => {
       const handle = bindTimeScale(model, { timeZone: 'UTC', entries, paneWidth: 800 }, noop);
       expect(model.scale.xForInstant(entries[1]!.end)).toBeCloseTo(800);
 
-      handle.setPaneWidth(400);
-      expect(model.scale.xForInstant(entries[1]!.end)).toBeCloseTo(400);
+      // 600px over this fixture's 5-day span is 120px/day, still clear of dayPreset's density
+      // floor (96px/day) — the resize itself is what's under test, not the floor.
+      handle.setPaneWidth(600);
+      expect(model.scale.xForInstant(entries[1]!.end)).toBeCloseTo(600);
     });
 
     it('setPaneWidth is a no-op (no notify, no invalidation) when the width is unchanged', () => {
@@ -220,14 +225,15 @@ describe('TimeScaleModel', () => {
 
     it('a binding driven to width 0 (display:none) is excluded from fitWidth, others keep theirs', () => {
       const model = new TimeScaleModel();
-      const handleA = bindTimeScale(model, { timeZone: 'UTC', entries, paneWidth: 300 }, noop);
-      bindTimeScale(model, { timeZone: 'UTC', entries, paneWidth: 500 }, noop);
-      // Narrowest of {300, 500} is 300.
-      expect(model.scale.xForInstant(entries[1]!.end)).toBeCloseTo(300);
+      // 600/1000 over this fixture's 5-day span stay clear of dayPreset's density floor (96px/day).
+      const handleA = bindTimeScale(model, { timeZone: 'UTC', entries, paneWidth: 600 }, noop);
+      bindTimeScale(model, { timeZone: 'UTC', entries, paneWidth: 1000 }, noop);
+      // Narrowest of {600, 1000} is 600.
+      expect(model.scale.xForInstant(entries[1]!.end)).toBeCloseTo(600);
 
       handleA.setPaneWidth(0);
-      // A is unmeasured (display:none) and excluded from fitWidth; B's 500 is the only measured width left.
-      expect(model.scale.xForInstant(entries[1]!.end)).toBeCloseTo(500);
+      // A is unmeasured (display:none) and excluded from fitWidth; B's 1000 is the only measured width left.
+      expect(model.scale.xForInstant(entries[1]!.end)).toBeCloseTo(1000);
     });
   });
 
@@ -251,20 +257,21 @@ describe('TimeScaleModel', () => {
       const model = new TimeScaleModel();
       const a = bindTimeScale(model, { timeZone: 'UTC', entries, paneWidth: 800 }, noop);
       const seen: number[] = [];
-      bindTimeScale(model, { timeZone: 'UTC', entries, paneWidth: 500 }, () =>
+      bindTimeScale(model, { timeZone: 'UTC', entries, paneWidth: 700 }, () =>
         seen.push(model.scale.xForInstant(entries[1]!.end)),
       );
       seen.length = 0; // drop the notify from this binding's own bind() call
 
       model.batch(() => {
-        // Both widths stay above the S1.12 density floor for this fixture's span, so the
-        // resolved density tracks pane width exactly and isn't itself the thing under test.
-        a.setPaneWidth(300);
-        a.setPaneWidth(200);
+        // Both widths stay above the S1.12 density floor for this fixture's 5-day span (96px/day,
+        // i.e. 480px), so the resolved density tracks pane width exactly and isn't itself the
+        // thing under test.
+        a.setPaneWidth(700);
+        a.setPaneWidth(600);
       });
       // Only the final, fully-applied state is ever observed.
       expect(seen).toHaveLength(1);
-      expect(seen[0]).toBeCloseTo(200);
+      expect(seen[0]).toBeCloseTo(600);
     });
 
     it('flushes in a finally so a throwing run still notifies and leaves the model usable', () => {
@@ -294,8 +301,10 @@ describe('TimeScaleModel', () => {
       const model = new TimeScaleModel({ fit: 'preset' });
       bindTimeScale(model, { timeZone: 'UTC', entries, paneWidth: 800 }, noop);
 
+      // dayPreset's preferredTickWidthPx now already clears its own density floor (header
+      // readability follow-up), so 'preset' fit resolves to the preferred density directly.
       expect(model.scale.widthForDuration({ value: 1, unit: 'day' }, entries[0]!.start)).toBeCloseTo(
-        dayPreset.minTickWidthPx!,
+        dayPreset.preferredTickWidthPx,
       );
     });
 

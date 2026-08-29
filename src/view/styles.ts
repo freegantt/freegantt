@@ -86,7 +86,10 @@ ${DARK_COLOR_TOKENS}
    (closes the S1.8 debt, D-S1.12-15). */
 .fg-header { background: var(--fg-header-bg); position: sticky; top: 0; z-index: 1; display: flex; flex-direction: column; height: auto; overflow: hidden; }
 .fg-band { background: var(--fg-header-band-bg); color: var(--fg-header-text); border-bottom: 1px solid var(--fg-header-divider-color); position: relative; flex: 0 0 var(--fg-band-height, 20px); min-height: 0; }
-.fg-tick { color: var(--fg-header-subtext); position: absolute; top: 0; left: 0; height: var(--fg-band-height, 20px); line-height: var(--fg-band-height, 20px); }
+/* padding/overflow are structural, not typography (D-S1.10-6/D-S1.11-8 leave font-size/family to the
+   consumer): a tick's box is exactly its own width, so a label that would collide with its neighbour
+   clips with an ellipsis instead of overflowing and garbling both (S1.12 header readability follow-up). */
+.fg-tick { color: var(--fg-header-subtext); position: absolute; top: 0; left: 0; height: var(--fg-band-height, 20px); line-height: var(--fg-band-height, 20px); box-sizing: border-box; padding: 0 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .fg-row { background: var(--fg-row-even-bg); position: absolute; top: 0; left: 0; width: 100%; }
 .fg-row:nth-child(odd) { background: var(--fg-row-odd-bg); }
 .fg-row-label { color: var(--fg-row-label-color); }

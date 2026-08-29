@@ -2,7 +2,14 @@ export { instant, now, toISO, addMs, diffMs, MS } from './instant.js';
 export { toInstant, toEndInstant } from './input.js';
 export { toPlain, fromPlain, startOfDay, addDays, diffDays, startOf, stepBy, weekOfYear } from './zone.js';
 export type { PlainParts } from './zone.js';
-export { formatDate, formatEndInclusive, resolveDateFormat, formatWeekNumber } from './format.js';
+export {
+  formatDate,
+  formatEndInclusive,
+  resolveDateFormat,
+  formatWeekNumber,
+  formatHour,
+  dedupeHeaderFormats,
+} from './format.js';
 export { createTimeScale, pxPerMsForPreset, minPxPerMsForPreset } from './scale.js';
 export type {
   TimeScale,
