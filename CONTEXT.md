@@ -338,9 +338,13 @@ _Avoid_: ladder (taken), zoom levels (that is what a ViewPreset expresses)
 How a header band labels an Instant: an `Intl.DateTimeFormatOptions` object, or a `HeaderFormat` callback as the escape hatch (week numbers, unpadded hours). Resolved through `Intl.DateTimeFormat` in the Dataset's zone and the Gantt's locale — not through Temporal's `toLocaleString`. Year and month appear once, on the coarsest band that states them; finer bands drop those fields unless `repeatCoarserUnits` (`dedupeHeaderFormats`).
 _Avoid_: HeaderFormat as the everyday name (that is the callback half only)
 
-**Today line**:
-A current-date marker on the timeline (`gantt.todayLine`, default on). Geometry is a `FrameDecoration`; paint is `.fg-today-line`. It is a wrapper around the Date line job (issue #96) — `todayLine` stays the shorthand until Date line has a home module. Updates on the next render, not on a clock tick. `panToToday` pans to `now()`.
+**Date line**:
+A vertical marker at an Instant on the timeline. Geometry is a `DateLine` decoration. `gantt.todayLine` is the wrapper that emits the one at `now()`. Authored lines share that job (issue #96). Paint is `.fg-today-line` until the Part rename on #96 lands.
 _Avoid_: Timeline (the pane, not this marker), cursor, now-line
+
+**Today line**:
+The Date line at `now()`. `gantt.todayLine` (default on) is the wrapper that emits it. Updates on the next render, not on a clock tick. `panToToday` pans to `now()`.
+_Avoid_: Timeline, cursor, now-line
 
 **Tick width**:
 Two numbers on a ViewPreset: `preferredTickWidthPx` is the density the preset intends when nothing else decides; `minTickWidthPx` is the floor below which that preset's labels stop being legible (defaults to preferred, so a custom preset never compresses).

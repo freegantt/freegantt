@@ -99,7 +99,7 @@ ${DARK_COLOR_TOKENS}
 .fg-bar { background: var(--fg-bar-fill); color: var(--fg-bar-label-color); border-radius: var(--fg-bar-radius, 3px); position: absolute; top: 0; left: 0; }
 .fg-bar[data-flag~="conflict"] { outline: 2px solid var(--fg-warn); }
 .fg-content-sizer { position: absolute; top: 0; left: 0; width: 1px; height: 1px; visibility: hidden; }
-/* height is set inline per frame (render/dom/index.ts), not bottom: 0: .fg-timeline-pane is both
+/* height is set inline per frame (render/dom/date-line.ts), not bottom: 0: .fg-timeline-pane is both
    this element's positioned ancestor and its own overflow: auto scroll container, so bottom: 0
    would resolve against the pane's visible clientHeight and cut the line off at the first
    screenful instead of running the full scrollable row content. */

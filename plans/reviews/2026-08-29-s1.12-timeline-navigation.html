@@ -39,13 +39,15 @@
           Follow-up pass (same day): Candidate 1, glossary, §7 spec edits, and gate tags
           <span class="font-mono">[S1-A6]</span>–<span class="font-mono">[S1-A10]</span> landed.
           <span class="font-mono">scripts/slice-gate.mjs</span> <span class="font-mono">S1.12 → S3</span> is green.
-          Candidate 3 / <a class="underline" href="https://github.com/Pawel-IT/FreeGantt/issues/96">#96</a> DateLine home files still open.
+          Candidate 3 home files landed (<span class="font-mono">layout/date-line.ts</span>,
+          <span class="font-mono">render/dom/date-line.ts</span>). Part rename and authored
+          <span class="font-mono">dateLines</span> on <span class="font-mono">Gantt</span> stay on
+          <a class="underline" href="https://github.com/Pawel-IT/FreeGantt/issues/96">#96</a>.
         </p>
         <p class="text-sm rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-3 text-indigo-950 max-w-3xl">
           Tracked smell:
           <a class="underline font-medium" href="https://github.com/Pawel-IT/FreeGantt/issues/96">#96</a>
-          — axis chrome has no DateLine module (grill: not a “Timeline” file).
-          Close that smell when <a class="underline" href="#c3">Candidate 3</a> lands.
+          — home files landed; keep open for the DateLine product grill (list, labels, Part rename).
         </p>
       </header>
 
@@ -231,11 +233,11 @@ flowchart LR
             <h3 class="font-serif text-xl">3 · DateLine has no home file</h3>
             <div class="flex gap-2 shrink-0">
               <span class="rounded-full bg-emerald-100 text-emerald-800 text-xs px-3 py-1 font-medium">Strong</span>
-              <span class="rounded-full bg-slate-100 text-slate-600 text-xs px-3 py-1">open</span>
+              <span class="rounded-full bg-emerald-100 text-emerald-800 text-xs px-3 py-1">home files landed</span>
               <a class="rounded-full bg-indigo-100 text-indigo-800 text-xs px-3 py-1 font-medium underline" href="https://github.com/Pawel-IT/FreeGantt/issues/96">#96</a>
             </div>
           </div>
-          <p class="font-mono text-sm text-slate-600">src/layout/frame.ts · src/render/dom/index.ts · (missing) src/layout/date-line.ts · src/render/dom/date-line.ts</p>
+          <p class="font-mono text-sm text-slate-600">src/layout/date-line.ts · src/render/dom/date-line.ts</p>
 
           <div class="grid md:grid-cols-2 gap-4">
             <div class="rounded-lg border border-slate-200 bg-stone-50 p-4">
@@ -423,12 +425,12 @@ sequenceDiagram
         <div class="rounded-xl border-2 border-emerald-600 bg-emerald-50 p-6 space-y-2">
           <p class="text-xs uppercase tracking-widest text-emerald-700 font-semibold">Top recommendation</p>
           <p class="text-lg"><a href="#c1" class="underline decoration-emerald-600">Candidate 1 — one anchored scale+pan write</a></p>
-          <p class="text-sm text-emerald-900">Landed as <span class="font-mono">Viewport.#pushContentWidth</span>. Glossary + gate tags landed in the same pass. DateLine home files remain Candidate 3 / <a href="https://github.com/Pawel-IT/FreeGantt/issues/96">#96</a>.</p>
+          <p class="text-sm text-emerald-900">Landed as <span class="font-mono">Viewport.#pushContentWidth</span>. Glossary + gate tags landed in the same pass. DateLine home files landed as Candidate 3; #96 stays open for list, labels, and Part rename.</p>
         </div>
       </section>
 
       <footer class="text-xs text-slate-400 pt-4 border-t border-slate-200">
-        Summary: Landed — glossary, gate tags, §7 docs, #pushContentWidth, toolbar zoomPresets, zoomIn contract. Open — sticky CSS floor Token, dedupeHeaderFormats name, DateLine home files (<a href="https://github.com/Pawel-IT/FreeGantt/issues/96">#96</a> / c3), c4–c7. Do not name a Timeline module for DateLine.
+        Summary: Landed — glossary, gate tags, §7 docs, #pushContentWidth, toolbar zoomPresets, zoomIn contract, DateLine home files. Open — sticky CSS floor Token, dedupeHeaderFormats name, #96 product grill (list/labels/Part rename), c4–c7. Do not name a Timeline module for DateLine.
       </footer>
     </main>
   </body>

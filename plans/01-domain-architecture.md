@@ -396,7 +396,7 @@ interface GeometryFrame {
    *  above — exact registration contract (a `registerLinkEmitter`-shaped seam) and `id`'s brand type are
    *  tracked in #16, not yet settled here. Shape lands in S1 (#30), contents in S7. */
   links: readonly Array<{ id: string; path: PathCommand[]; flags: LinkFlags }>;
-  decorations: readonly Array<TodayLine | RangeBand | RowStripe>;
+  decorations: readonly Array<DateLine | RangeBand | RowStripe>;
 }
 
 interface LayoutInput {

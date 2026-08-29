@@ -407,7 +407,7 @@ describe('Gantt locale / todayLine (S1.12, D-S1.12-12 / D-S1.12-14)', () => {
     }
   });
 
-  it('[S1-A10] todayLine = false hides .fg-today-line', async () => {
+  it('[S1-A10] todayLine = false removes .fg-today-line', async () => {
     FakeResizeObserver.instances = [];
     vi.stubGlobal('ResizeObserver', FakeResizeObserver);
 
@@ -430,7 +430,7 @@ describe('Gantt locale / todayLine (S1.12, D-S1.12-12 / D-S1.12-14)', () => {
       gantt.todayLine = false;
       await new Promise((resolve) => requestAnimationFrame(resolve));
 
-      expect(container.querySelector<HTMLElement>('.fg-today-line')!.hidden).toBe(true);
+      expect(container.querySelector('.fg-today-line')).toBeNull();
 
       gantt.destroy();
     } finally {
