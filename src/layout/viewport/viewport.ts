@@ -147,27 +147,66 @@ export class Viewport {
   }
 
   /** Live — delegates straight to `TimeScaleModel.preset` (D-S1.9-9's "GanttShell delegates straight
-   *  to #viewport"). Resolved through `resolvePreset`; no-op, no notification, when unchanged. */
+   *  to #viewport"). Resolved through `resolvePreset`; no-op, no notification, when unchanged.
+   *
+   *  Re-clamps scroll against the freshly resolved `contentWidth`, in place, the same way
+   *  `#stepPreset`/`zoomToSpan` already re-clamp around their own anchor (D-S1.9-5) — without it,
+   *  `visible` (below) keeps clamping against the OLD content size and `scroll.state.position`
+   *  keeps its OLD, now-meaningless pixel value until `GanttShell.render()` calls `setContentSize`
+   *  itself, one render later. A preset that shrinks content while scrolled away from 0 then
+   *  computes that one frame against a `visible.x` outside the new, smaller extent — every bar
+   *  culls out, and the DOM nodes for whatever bars survive once the browser's own scrollLeft clamp
+   *  corrects it on the following frame are new nodes, a full unwanted remount (found while adding
+   *  `panToToday` to the harness pages, header readability follow-up pass 4 — previously
+   *  unreachable because every existing fixture only ever scrolled from position 0, where any
+   *  content size is still in bounds). */
   set preset(ref: PresetRef) {
-    this.scale.preset = ref;
+    this.batch(() => {
+      this.scale.preset = ref;
+      this.#reclampToContentWidth();
+    });
   }
 
   get range(): 'fitDataset' | TimeSpan {
     return this.scale.range;
   }
 
-  /** Live — delegates straight to `TimeScaleModel.range`. */
+  /** Live — delegates straight to `TimeScaleModel.range`. Re-clamps against `contentWidth` eagerly —
+   *  see `set preset` above; a `range` change can resize content exactly the same way a `preset`
+   *  change can. */
   set range(r: 'fitDataset' | TimeSpan) {
-    this.scale.range = r;
+    this.batch(() => {
+      this.scale.range = r;
+      this.#reclampToContentWidth();
+    });
   }
 
   get fit(): TimeScaleFit {
     return this.scale.fit;
   }
 
-  /** Live — delegates straight to `TimeScaleModel.fit`. */
+  /** Live — delegates straight to `TimeScaleModel.fit`. Re-clamps against `contentWidth` eagerly —
+   *  see `set preset` above; a `fit` change can resize content exactly the same way a `preset`
+   *  change can. */
   set fit(f: TimeScaleFit) {
-    this.scale.fit = f;
+    this.batch(() => {
+      this.scale.fit = f;
+      this.#reclampToContentWidth();
+    });
+  }
+
+  /** Pushes the just-resolved `TimeScale.contentWidth` into both this Viewport's own tracked
+   *  `#contentSize` (what `visible`'s local clamp reads, D-S1.7-2) and the scroll binding, then
+   *  re-pans to the CURRENT position — a no-op move whose only job is forcing `ScrollModel.panTo`'s
+   *  own clamp (D-S1.5-2) to run against the fresh `max` right now, instead of leaving a stale
+   *  position for `GanttShell.render()` to compute a frame against. See `set preset`'s doc. A no-op
+   *  before the first `bind()` (`#scrollHandle` is unset then). */
+  #reclampToContentWidth(): void {
+    if (!this.#scrollHandle) return;
+    const size = { width: this.timeScale.contentWidth, height: this.#contentSize.height };
+    this.#contentSize = size;
+    this.#scrollHandle.setContentSize(size);
+    this.scroll.panTo(this.scroll.state.position);
   }
 
   get overscan(): Overscan {

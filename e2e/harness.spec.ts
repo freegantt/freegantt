@@ -126,11 +126,14 @@ test('the timeline pane has no row-label gutter in its scrollable content (D1)',
   // clientWidth, works whether or not the current preset's density floor (S1.12, D-S1.12-2) makes
   // the content genuinely wider than the pane. What D1 guards against is the gutter being counted
   // a second time: `scrollWidth` must track the sizer's own extent, not sizer-extent + gridWidth.
+  // getBoundingClientRect() is viewport-relative, so a scrolled pane (e.g. panToToday on load)
+  // moves the sizer's painted rect left by exactly el.scrollLeft — add it back so this reads the
+  // sizer's extent against the pane's unscrolled content origin, matching scrollWidth's own frame.
   const sizerRight = await pane.evaluate((el) => {
     const sizer = Array.from(el.children).find(
       (child) => child instanceof HTMLElement && child.getAttribute('aria-hidden') === 'true',
     ) as HTMLElement;
-    return sizer.getBoundingClientRect().right - el.getBoundingClientRect().left;
+    return sizer.getBoundingClientRect().right - el.getBoundingClientRect().left + el.scrollLeft;
   });
 
   // A few px of slack for borders/rounding; the old defect's exact shape was scrollWidth landing
