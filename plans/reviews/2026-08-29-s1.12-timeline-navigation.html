@@ -1,0 +1,393 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Architecture review — S1.12 timeline navigation</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script type="module">
+      import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+      mermaid.initialize({ startOnLoad: true, theme: "neutral", securityLevel: "loose" });
+    </script>
+    <style>
+      .seam { stroke-dasharray: 4 4; }
+      .leak { stroke: #dc2626; }
+      .deep { background: linear-gradient(135deg, #0f172a, #1e293b); }
+    </style>
+  </head>
+  <body class="bg-stone-50 text-slate-900 font-sans">
+    <main class="max-w-5xl mx-auto px-6 py-12 space-y-12">
+
+      <header class="space-y-4">
+        <p class="text-xs uppercase tracking-widest text-slate-500">FreeGantt — pk-branch-review</p>
+        <h1 class="font-serif text-3xl">S1.12 — timeline density, zoom, formatting</h1>
+        <p class="text-sm text-slate-500">
+          2026-08-29 · <span class="font-mono">origin/main...HEAD</span>
+          (<span class="font-mono">8599677</span> → <span class="font-mono">ba732a9</span>, 16 commits)
+        </p>
+        <div class="flex flex-wrap gap-3 text-xs text-slate-600">
+          <span class="inline-flex items-center gap-1"><span class="inline-block w-4 h-3 border border-slate-500 bg-white"></span> module</span>
+          <span class="inline-flex items-center gap-1"><svg width="24" height="8"><line x1="0" y1="4" x2="24" y2="4" stroke="#475569" stroke-width="2" class="seam"/></svg> seam</span>
+          <span class="inline-flex items-center gap-1"><svg width="24" height="8"><line x1="0" y1="4" x2="24" y2="4" stroke="#dc2626" stroke-width="2"/></svg> leakage</span>
+          <span class="inline-flex items-center gap-1"><span class="inline-block w-4 h-3 deep rounded-sm"></span> deep module</span>
+        </div>
+        <p class="text-sm text-slate-600 max-w-3xl">
+          Axes run separately: Standards, Spec, Simplify, then deepening candidates.
+          Spec source: <span class="font-mono">plans/s1.12-timeline-navigation/README.md</span>
+          + <span class="font-mono">header-readability-followup.md</span>.
+        </p>
+      </header>
+
+      <!-- ========== AXIS ROLLUPS ========== -->
+      <section id="axes" class="grid md:grid-cols-3 gap-4">
+        <div class="rounded-xl border border-rose-200 bg-rose-50 p-4 space-y-2">
+          <p class="text-xs uppercase tracking-widest text-rose-700 font-semibold">Standards</p>
+          <p class="text-2xl font-serif">4 findings</p>
+          <p class="text-sm text-rose-900">Worst: <span class="font-mono">CONTEXT.md</span> never gained the S1.12 glossary terms.</p>
+        </div>
+        <div class="rounded-xl border border-rose-200 bg-rose-50 p-4 space-y-2">
+          <p class="text-xs uppercase tracking-widest text-rose-700 font-semibold">Spec</p>
+          <p class="text-2xl font-serif">6 findings</p>
+          <p class="text-sm text-rose-900">Worst: gate ids <span class="font-mono">[S1-A6]</span>–<span class="font-mono">[S1-A10]</span> are not in any test.</p>
+        </div>
+        <div class="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-2">
+          <p class="text-xs uppercase tracking-widest text-amber-800 font-semibold">Simplify</p>
+          <p class="text-2xl font-serif">4 would-fix</p>
+          <p class="text-sm text-amber-900">Worst: <span class="font-mono">zoomTo</span> / <span class="font-mono">#stepPreset</span> skip <span class="font-mono">#contentSize</span>.</p>
+        </div>
+      </section>
+
+      <section id="standards" class="space-y-4">
+        <h2 class="font-serif text-2xl">Standards</h2>
+        <ul class="space-y-3 text-sm">
+          <li class="rounded-lg border border-rose-200 bg-white p-4">
+            <span class="rounded-full bg-rose-100 text-rose-800 text-xs px-2 py-0.5 font-medium">Hard</span>
+            <span class="font-mono text-xs text-slate-500 ml-2">CONTEXT.md · naming skill §1 · CLAUDE.md vocabulary</span>
+            <p class="mt-2"><strong>Glossary not updated.</strong> Code ships <span class="font-mono">zoomPresets</span>, <span class="font-mono">preferredTickWidthPx</span> / <span class="font-mono">minTickWidthPx</span>, <span class="font-mono">DateFormat</span>, <span class="font-mono">todayLine</span>, <span class="font-mono">panToDate</span> / <span class="font-mono">panToToday</span>. CONTEXT still describes ViewPreset as “how wide a tick is”, Fit without the floor, Pan without the public verbs, Part without <span class="font-mono">fg-today-line</span>. Spec §7 listed these edits as landing with the step.</p>
+          </li>
+          <li class="rounded-lg border border-rose-200 bg-white p-4">
+            <span class="rounded-full bg-rose-100 text-rose-800 text-xs px-2 py-0.5 font-medium">Hard</span>
+            <span class="font-mono text-xs text-slate-500 ml-2">src/layout/frame.ts:262 · plans/01 layout is DOM-free</span>
+            <p class="mt-2"><strong>CSS box floor inside pure geometry.</strong> <span class="font-mono">STICKY_LABEL_MIN_WIDTH_PX = 9</span> restates <span class="font-mono">.fg-tick</span> padding 4+4 plus 1px border from <span class="font-mono">view/styles.ts</span>. Change the stylesheet and the clamp silently lies.</p>
+          </li>
+          <li class="rounded-lg border border-slate-200 bg-white p-4">
+            <span class="rounded-full bg-slate-100 text-slate-600 text-xs px-2 py-0.5 font-medium">Judgement · Mysterious Name</span>
+            <span class="font-mono text-xs text-slate-500 ml-2">src/time/format.ts · dedupeHeaderFormats</span>
+            <p class="mt-2">Call <span class="font-mono">dedupeHeaderFormats(headers)</span> does not say it strips <span class="font-mono">year</span>/<span class="font-mono">month</span> from finer bands. Name the glossary concept first, then the function.</p>
+          </li>
+          <li class="rounded-lg border border-slate-200 bg-white p-4">
+            <span class="rounded-full bg-slate-100 text-slate-600 text-xs px-2 py-0.5 font-medium">Judgement · Duplicated Code</span>
+            <span class="font-mono text-xs text-slate-500 ml-2">harness/timeline-toolbar.ts · PRESET_OPTIONS</span>
+            <p class="mt-2">Nine shipped ids re-listed by hand. Library already owns <span class="font-mono">ZOOM_PRESETS</span>. Harness rule: a hand list can mean a missing public picker export. JSDoc also claims <span class="font-mono">gantt.on('change')</span>; body correctly says that event does not exist.</p>
+          </li>
+        </ul>
+        <p class="text-xs text-slate-500">Clean: I10 / ADR 0001 (<span class="font-mono">weekOfYear</span> in <span class="font-mono">zone.ts</span>), I12 pan through ScrollModel, public names match S1.12 call sites, <span class="font-mono">harness/main.ts</span> uses the Gantt surface only.</p>
+      </section>
+
+      <section id="spec" class="space-y-4">
+        <h2 class="font-serif text-2xl">Spec</h2>
+        <ul class="space-y-3 text-sm">
+          <li class="rounded-lg border border-rose-200 bg-white p-4">
+            <span class="rounded-full bg-rose-100 text-rose-800 text-xs px-2 py-0.5 font-medium">Missing</span>
+            <p class="mt-2"><strong>Gate tags absent.</strong> D-S1.12-1: the gate “fails until <span class="font-mono">[S1-A6]</span>–<span class="font-mono">[S1-A10]</span> exist as passing tests.” <span class="font-mono">scripts/slice-gate.mjs</span> looks for those strings. Tests cover pieces of the behaviour; none of the five ids appear in <span class="font-mono">e2e/</span> or <span class="font-mono">src/**/*.test.ts</span>.</p>
+          </li>
+          <li class="rounded-lg border border-rose-200 bg-white p-4">
+            <span class="rounded-full bg-rose-100 text-rose-800 text-xs px-2 py-0.5 font-medium">Missing</span>
+            <p class="mt-2"><strong>§7 doc edits not done.</strong> <span class="font-mono">plans/01</span> still says <span class="font-mono">tickWidthPx</span>. <span class="font-mono">plans/02</span> still lists <span class="font-mono">--fg-header-height</span> and <span class="font-mono">zoom: 'preset'</span>. ADR 0001 has no line that formatting goes through <span class="font-mono">Intl.DateTimeFormat</span>. s1.8 sticky / s1.9 harness / s1.10 today-line-color carry-forwards stay open.</p>
+          </li>
+          <li class="rounded-lg border border-amber-200 bg-white p-4">
+            <span class="rounded-full bg-amber-100 text-amber-800 text-xs px-2 py-0.5 font-medium">Partial</span>
+            <p class="mt-2"><strong>§6 coverage.</strong> No <span class="font-mono">zoomIn</span>/<span class="font-mono">zoomOut</span>/<span class="font-mono">canZoom*</span> (or fast-check round-trip) in <span class="font-mono">viewport.test.ts</span>. <span class="font-mono">panToDate</span> tests miss <span class="font-mono">Date</span> and epoch equality (D-S1.12-8 / U6). No live <span class="font-mono">locale</span> remount or <span class="font-mono">todayLine = false</span> in <span class="font-mono">gantt.test.ts</span>.</p>
+          </li>
+          <li class="rounded-lg border border-slate-200 bg-white p-4">
+            <span class="rounded-full bg-slate-100 text-slate-600 text-xs px-2 py-0.5 font-medium">Creep</span>
+            <p class="mt-2">Toolbar on index/data + shared <span class="font-mono">timeline-toolbar.ts</span> (beyond §3.7). <span class="font-mono">panToToday('center')</span> on harness load (follow-up pass 4, not U7). <span class="font-mono">harness/docs/</span> move is unrelated.</p>
+          </li>
+          <li class="rounded-lg border border-slate-200 bg-white p-4">
+            <span class="rounded-full bg-slate-100 text-slate-600 text-xs px-2 py-0.5 font-medium">Drift</span>
+            <p class="mt-2">D-S1.12-3 still says the shipped <span class="font-mono">day</span> floor is 32. HEAD is 96 after follow-up finding 5. HANDOFF still claims §6 tests were never written.</p>
+          </li>
+        </ul>
+        <p class="text-xs text-slate-500">Implemented as specified: density floor + <span class="font-mono">MAX_CONTENT_PX</span>, <span class="font-mono">zoomIn</span>/<span class="font-mono">Out</span> only assign preset, locale/todayLine on Gantt, no today-line timer, sticky header + <span class="font-mono">--fg-band-height</span>, <span class="font-mono">formatHour</span> / <span class="font-mono">dedupeHeaderFormats</span>.</p>
+      </section>
+
+      <section id="simplify" class="space-y-4">
+        <h2 class="font-serif text-2xl">Simplify</h2>
+        <div class="rounded-lg border border-slate-200 bg-white p-4 text-sm space-y-2">
+          <p class="text-xs uppercase tracking-wider text-slate-400">Would fix</p>
+          <ol class="list-decimal list-inside space-y-1 text-slate-800">
+            <li><span class="font-mono">viewport.ts</span> — one <span class="font-mono">#pushContentWidth()</span>; <span class="font-mono">zoomTo</span> / <span class="font-mono">#stepPreset</span> / <span class="font-mono">zoomToSpan</span> currently skip <span class="font-mono">#contentSize</span>.</li>
+            <li><span class="font-mono">format.ts</span> — avoid <span class="font-mono">JSON.stringify(locale)</span> on every lookup when locale is a string.</li>
+            <li><span class="font-mono">frame.ts</span> — hoist <span class="font-mono">STICKY_LABEL_MIN_WIDTH_PX</span> (still a leak until it is an input or a Token).</li>
+            <li><span class="font-mono">harness/zoom.ts</span> — one helper for repeated toolbar options.</li>
+          </ol>
+          <p class="text-xs uppercase tracking-wider text-slate-400 pt-2">Skip</p>
+          <p class="text-slate-600">Sticky clamp per tick (needed, not hover hot path). <span class="font-mono">now()</span> each frame (I10). Intl WeakMap caches (I2-legal). Thin Gantt → Shell → Viewport façade. Shipping the harness toolbar as library code.</p>
+        </div>
+      </section>
+
+      <!-- ========== CANDIDATES ========== -->
+      <section id="candidates" class="space-y-10">
+        <h2 class="font-serif text-2xl">Deepening candidates</h2>
+
+        <article id="c1" class="rounded-xl border border-slate-200 bg-white p-6 space-y-5 shadow-sm">
+          <div class="flex items-start justify-between gap-4">
+            <h3 class="font-serif text-xl">1 · One anchored scale+pan write inside Viewport</h3>
+            <div class="flex gap-2 shrink-0">
+              <span class="rounded-full bg-emerald-100 text-emerald-800 text-xs px-3 py-1 font-medium">Strong</span>
+              <span class="rounded-full bg-slate-100 text-slate-600 text-xs px-3 py-1">in-process</span>
+            </div>
+          </div>
+          <p class="font-mono text-sm text-slate-600">src/layout/viewport/viewport.ts — zoomTo, #stepPreset, zoomToSpan, #reclampToContentWidth</p>
+
+          <div class="grid md:grid-cols-2 gap-4">
+            <div class="rounded-lg border border-slate-200 bg-stone-50 p-4">
+              <p class="text-xs uppercase tracking-wider text-slate-400 mb-2">Before</p>
+              <pre class="mermaid">
+flowchart TB
+  zoomTo["zoomTo"] --> pushA["setContentSize only"]
+  step["#stepPreset"] --> pushB["setContentSize only"]
+  span["zoomToSpan"] --> pushC["setContentSize only"]
+  reclamp["#reclampToContentWidth"] --> both["#contentSize + handle + panTo"]
+  pushA -.stale #contentSize.-> vis["visible clamp"]
+  classDef leak stroke:#dc2626,stroke-width:2px,color:#dc2626;
+  class pushA,pushB,pushC,vis leak
+              </pre>
+            </div>
+            <div class="rounded-lg border border-slate-200 bg-stone-50 p-4">
+              <p class="text-xs uppercase tracking-wider text-slate-400 mb-2">After</p>
+              <pre class="mermaid">
+flowchart TB
+  callers["zoomTo / #stepPreset / zoomToSpan / preset|range|fit"] --> helper["#pushContentWidth then pan"]
+  helper --> size["#contentSize"]
+  helper --> handle["scroll handle"]
+  helper --> pan["panTo"]
+  classDef deep fill:#0f172a,stroke:#0f172a,color:#fff;
+  class helper deep
+              </pre>
+            </div>
+          </div>
+
+          <p><strong>Problem:</strong> four copies of “push content width, then pan.” Only <span class="font-mono">#reclampToContentWidth</span> updates <span class="font-mono">#contentSize</span>. Pass 4 already showed stale content width as a real bug class.</p>
+          <p><strong>Solution:</strong> one private helper. Callers pass the scale mutation and the pan target.</p>
+          <ul class="text-sm space-y-1 list-disc list-inside text-slate-700">
+            <li>locality: stale-content contract in one module</li>
+            <li>leverage: next anchored gesture reuses it</li>
+            <li>tests: one suite for “content size then pan”</li>
+          </ul>
+        </article>
+
+        <article id="c2" class="rounded-xl border border-slate-200 bg-white p-6 space-y-5 shadow-sm">
+          <div class="flex items-start justify-between gap-4">
+            <h3 class="font-serif text-xl">2 · zoomIn under fit:'pane' is a shallow gesture</h3>
+            <div class="flex gap-2 shrink-0">
+              <span class="rounded-full bg-amber-100 text-amber-800 text-xs px-3 py-1 font-medium">Worth exploring</span>
+              <span class="rounded-full bg-slate-100 text-slate-600 text-xs px-3 py-1">in-process</span>
+            </div>
+          </div>
+          <p class="font-mono text-sm text-slate-600">viewport.ts #stepPreset · time-scale-model.ts #resolvePxPerMs · HANDOFF design note</p>
+
+          <div class="grid md:grid-cols-2 gap-4">
+            <div class="rounded-lg border border-slate-200 bg-stone-50 p-4">
+              <p class="text-xs uppercase tracking-wider text-slate-400 mb-2">As shipped</p>
+              <pre class="mermaid">
+flowchart LR
+  zi["zoomIn"] --> p["preset only"]
+  p --> r["#resolvePxPerMs"]
+  r --> pane["fit still pane"]
+  pane -.no-op on wide pane.-> dens["pxPerMs unchanged"]
+  classDef leak stroke:#dc2626,stroke-width:2px,color:#dc2626;
+  class dens leak
+              </pre>
+            </div>
+            <div class="rounded-lg border border-slate-200 bg-stone-50 p-4 space-y-3">
+              <p class="text-xs uppercase tracking-wider text-slate-400">Two honest deepenings</p>
+              <div class="h-12 border-l-4 border-slate-400 pl-3 flex items-center text-xs">A · Document the interface: “steps labels; density follows the floor only.”</div>
+              <div class="h-12 border-l-4 border-amber-500 pl-3 flex items-center text-xs">B · Also write preferred density / fit:'preset' inside one Batch (contradicts D-S1.12-6).</div>
+            </div>
+          </div>
+
+          <p><strong>Problem:</strong> the interface says “zoom in.” The implementation only swaps preset. Under default <span class="font-mono">fit: 'pane'</span>, <span class="font-mono">pxPerMs</span> stays pane-fill until <span class="font-mono">minTickWidthPx</span> bites. <span class="font-mono">canZoomIn</span> can stay true while nothing visible happens.</p>
+          <p><strong>Solution:</strong> do not silently rewrite Fit. Either state the contract on the public methods, or reopen D-S1.12-6 with a grill. Option B writes density as Anchored zoom, not as a second meaning of “zoom.”</p>
+          <div class="text-xs bg-amber-50 border border-amber-200 text-amber-800 rounded p-2">
+            Contradicts D-S1.12-6 if option B lands (“zoomIn/zoomOut step the preset; nothing else ever changes it”). Surface because HANDOFF already flags the UX as possibly a no-op. Do not rename Fit back to zoom (issue #84).
+          </div>
+        </article>
+
+        <article id="c3" class="rounded-xl border border-slate-200 bg-white p-6 space-y-5 shadow-sm">
+          <div class="flex items-start justify-between gap-4">
+            <h3 class="font-serif text-xl">3 · Sticky label clamp leaks CSS into computeFrame</h3>
+            <div class="flex gap-2 shrink-0">
+              <span class="rounded-full bg-amber-100 text-amber-800 text-xs px-3 py-1 font-medium">Worth exploring</span>
+              <span class="rounded-full bg-slate-100 text-slate-600 text-xs px-3 py-1">in-process</span>
+            </div>
+          </div>
+          <p class="font-mono text-sm text-slate-600">src/layout/frame.ts · src/view/styles.ts</p>
+
+          <div class="grid md:grid-cols-2 gap-4 items-end">
+            <div class="rounded-lg border border-slate-200 bg-stone-50 p-4 flex flex-col items-center gap-2">
+              <p class="text-xs uppercase tracking-wider text-slate-400">Before — one tall pass</p>
+              <div class="w-full h-8 border-2 border-slate-400 flex items-center justify-center text-[10px] uppercase">rows / bars / cull</div>
+              <div class="w-full h-8 border-2 border-red-400 text-red-700 flex items-center justify-center text-[10px] uppercase">sticky + 9px CSS floor</div>
+              <div class="w-full h-8 border-2 border-slate-400 flex items-center justify-center text-[10px] uppercase">todayLine decoration</div>
+              <div class="w-full h-6 border-2 border-slate-800 bg-slate-900 text-white flex items-center justify-center text-[10px] uppercase">GeometryFrame</div>
+            </div>
+            <div class="rounded-lg border border-slate-200 bg-stone-50 p-4 flex flex-col items-center gap-2">
+              <p class="text-xs uppercase tracking-wider text-slate-400">After — named passes</p>
+              <div class="w-full h-8 border-2 border-slate-400 flex items-center justify-center text-[10px] uppercase">rows / bars</div>
+              <div class="w-full h-16 deep rounded flex items-center justify-center text-[10px] text-white uppercase tracking-wider text-center px-2">stickyHeaderTicks(ticks, visible, minLabelWidthPx)</div>
+              <div class="w-full h-8 border-2 border-slate-400 flex items-center justify-center text-[10px] uppercase">decorations</div>
+              <div class="w-full h-6 border-2 border-slate-800 bg-slate-900 text-white flex items-center justify-center text-[10px] uppercase">GeometryFrame</div>
+            </div>
+          </div>
+
+          <p><strong>Problem:</strong> <span class="font-mono">layout/</span> knows <span class="font-mono">.fg-tick</span> padding. Change the Token, break the clamp. Sticky policy has no glossary name.</p>
+          <p><strong>Solution:</strong> extract <span class="font-mono">stickyHeaderTicks</span>; pass min label width from <span class="font-mono">LayoutInput</span> or a Token. Keep GeometryFrame as the only render seam. Do not move the math into <span class="font-mono">render/dom</span> (forks backends).</p>
+          <ul class="text-sm space-y-1 list-disc list-inside text-slate-700">
+            <li>locality: CSS metric and clamp share one named input</li>
+            <li>leverage: canvas backend gets the same sticky labels</li>
+            <li>tests: clamp without a full frame fixture</li>
+          </ul>
+        </article>
+
+        <article id="c4" class="rounded-xl border border-slate-200 bg-white p-6 space-y-5 shadow-sm">
+          <div class="flex items-start justify-between gap-4">
+            <h3 class="font-serif text-xl">4 · Density resolve split across TimeScaleModel and zoomToSpan</h3>
+            <div class="flex gap-2 shrink-0">
+              <span class="rounded-full bg-amber-100 text-amber-800 text-xs px-3 py-1 font-medium">Worth exploring</span>
+              <span class="rounded-full bg-slate-100 text-slate-600 text-xs px-3 py-1">in-process</span>
+            </div>
+          </div>
+          <p class="font-mono text-sm text-slate-600">time-scale-model.ts #resolvePxPerMs · viewport.ts zoomToSpan · time/scale.ts minPxPerMsForPreset</p>
+
+          <div class="rounded-lg border border-slate-200 bg-stone-50 p-4">
+            <pre class="mermaid">
+flowchart LR
+  subgraph today [As shipped]
+    zts["zoomToSpan: pane/spanMs"] --> fit["write numeric fit"]
+    tsm["#resolvePxPerMs"] --> floor["floor + MAX_CONTENT_PX"]
+    fit --> tsm
+  end
+  subgraph after [Deepen]
+    r["one resolve: fit, span, pane, preset, range"]
+    zts2["zoomToSpan"] --> r
+    tsm2["#resolve"] --> r
+  end
+            </pre>
+          </div>
+
+          <p><strong>Problem:</strong> floor and ceiling live in the model. <span class="font-mono">zoomToSpan</span> invents raw density then hopes the model clamps. Callers must know that split.</p>
+          <p><strong>Solution:</strong> one resolve function both call. Keep Fit as the mode name.</p>
+        </article>
+
+        <article id="c5" class="rounded-xl border border-slate-200 bg-white p-6 space-y-5 shadow-sm">
+          <div class="flex items-start justify-between gap-4">
+            <h3 class="font-serif text-xl">5 · Navigation pass-through on GanttShell</h3>
+            <div class="flex gap-2 shrink-0">
+              <span class="rounded-full bg-amber-100 text-amber-800 text-xs px-3 py-1 font-medium">Worth exploring</span>
+              <span class="rounded-full bg-slate-100 text-slate-600 text-xs px-3 py-1">in-process</span>
+            </div>
+          </div>
+          <p class="font-mono text-sm text-slate-600">src/api/gantt.ts · src/view/gantt-shell.ts · src/layout/viewport/viewport.ts</p>
+
+          <div class="grid md:grid-cols-2 gap-4">
+            <div class="rounded-lg border border-slate-200 bg-stone-50 p-4 flex flex-col items-center gap-1">
+              <p class="text-xs uppercase tracking-wider text-slate-400 mb-2">Before</p>
+              <div class="w-40 h-10 border-2 border-slate-400 flex items-center justify-center text-[10px]">Gantt InstantInput</div>
+              <div class="text-slate-400 text-xs">↓ copy every verb</div>
+              <div class="w-40 h-10 border-2 border-red-400 text-red-700 flex items-center justify-center text-[10px]">GanttShell same list</div>
+              <div class="text-slate-400 text-xs">↓ copy every verb</div>
+              <div class="w-40 h-16 deep rounded flex items-center justify-center text-[10px] text-white uppercase">Viewport deep</div>
+            </div>
+            <div class="rounded-lg border border-slate-200 bg-stone-50 p-4 flex flex-col items-center gap-1">
+              <p class="text-xs uppercase tracking-wider text-slate-400 mb-2">After</p>
+              <div class="w-44 h-10 border-2 border-slate-400 flex items-center justify-center text-[10px]">Gantt InstantInput adapter</div>
+              <div class="text-slate-400 text-xs">↓ one handle</div>
+              <div class="w-44 h-10 border-2 border-slate-400 flex items-center justify-center text-[10px]">Shell navigation handle</div>
+              <div class="text-slate-400 text-xs">↓</div>
+              <div class="w-44 h-16 deep rounded flex items-center justify-center text-[10px] text-white uppercase">Viewport</div>
+            </div>
+          </div>
+
+          <p><strong>Problem:</strong> Viewport is deep. Shell restates the same method list. Shell earns depth for reveal, locale, todayLine, render — not for most zoom lines.</p>
+          <p><strong>Solution:</strong> one internal navigation handle. Gantt adapts InstantInput once. Do not export Viewport (D-S1.7-10, D9).</p>
+          <div class="text-xs bg-slate-100 border border-slate-200 text-slate-600 rounded p-2">
+            Deletion test: delete Shell’s <span class="font-mono">zoomIn</span> alone and Gantt must still not reach Viewport. Keep the façade; drop the hand-copied listing.
+          </div>
+        </article>
+
+        <article id="c6" class="rounded-xl border border-slate-200 bg-white p-6 space-y-5 shadow-sm">
+          <div class="flex items-start justify-between gap-4">
+            <h3 class="font-serif text-xl">6 · Toolbar refresh is a library gap, not a harness module</h3>
+            <div class="flex gap-2 shrink-0">
+              <span class="rounded-full bg-amber-100 text-amber-800 text-xs px-3 py-1 font-medium">Worth exploring</span>
+              <span class="rounded-full bg-slate-100 text-slate-600 text-xs px-3 py-1">in-process</span>
+            </div>
+          </div>
+          <p class="font-mono text-sm text-slate-600">harness/timeline-toolbar.ts · src/view/event-bus.ts</p>
+
+          <div class="rounded-lg border border-slate-200 bg-stone-50 p-4">
+            <pre class="mermaid">
+sequenceDiagram
+  participant T as toolbar
+  participant G as Gantt
+  T->>G: zoomIn()
+  Note over T: recomputes canZoom* itself
+  G-->>T: no navigation notify
+  Note over T: programmatic preset= leaves buttons stale
+            </pre>
+          </div>
+
+          <p><strong>Problem:</strong> spec: a toolbar that must compute is a library gap. There is no navigation notify. Event bus is grid-width only. JSDoc in the toolbar already names the missing <span class="font-mono">change</span> event.</p>
+          <p><strong>Solution:</strong> one notify after a Viewport Batch (or <span class="font-mono">before*</span> pairs if navigation counts as interaction). Do not ship the harness toolbar in <span class="font-mono">src/</span> (YAGNI).</p>
+          <ul class="text-sm space-y-1 list-disc list-inside text-slate-700">
+            <li>locality: sync rules on the event bus</li>
+            <li>leverage: any consumer chrome</li>
+            <li>tests: one notify per Batch</li>
+          </ul>
+        </article>
+
+        <article id="c7" class="rounded-xl border border-slate-200 bg-white p-6 space-y-5 shadow-sm">
+          <div class="flex items-start justify-between gap-4">
+            <h3 class="font-serif text-xl">7 · HeaderLabelFormatter as a deeper format module</h3>
+            <div class="flex gap-2 shrink-0">
+              <span class="rounded-full bg-slate-200 text-slate-700 text-xs px-3 py-1 font-medium">Speculative</span>
+              <span class="rounded-full bg-slate-100 text-slate-600 text-xs px-3 py-1">in-process</span>
+            </div>
+          </div>
+          <p class="font-mono text-sm text-slate-600">src/time/format.ts</p>
+          <p><strong>Problem:</strong> callers must freeze options, keep <span class="font-mono">headers</span> identity, and dedupe before <span class="font-mono">resolveDateFormat</span>, or the cache rebuilds every frame. Interface is several free functions plus hidden identity rules.</p>
+          <p><strong>Solution:</strong> optional module constructed with zone+locale+headers; frame only calls <span class="font-mono">label(band, instant)</span>. Keep WeakMap (ADR 0007). Defer until profiling shows churn.</p>
+        </article>
+      </section>
+
+      <section id="naming" class="space-y-3">
+        <h2 class="font-serif text-2xl">Naming vs CONTEXT.md</h2>
+        <table class="w-full text-sm border-collapse bg-white rounded-xl overflow-hidden border border-slate-200">
+          <thead class="bg-stone-100 text-left text-xs uppercase tracking-wider text-slate-500">
+            <tr><th class="p-3">Term in branch</th><th class="p-3">CONTEXT</th><th class="p-3">Risk</th></tr>
+          </thead>
+          <tbody class="divide-y divide-slate-100">
+            <tr><td class="p-3 font-mono">zoomPresets</td><td class="p-3">not landed</td><td class="p-3">new concept with no glossary home</td></tr>
+            <tr><td class="p-3 font-mono">DateFormat / HeaderFormat</td><td class="p-3">not landed</td><td class="p-3">two names for how a band labels an Instant</td></tr>
+            <tr><td class="p-3 font-mono">todayLine / TodayLine</td><td class="p-3">not landed</td><td class="p-3">option vs decoration kind</td></tr>
+            <tr><td class="p-3 font-mono">preferredTickWidthPx</td><td class="p-3">not landed</td><td class="p-3">Tick entry still older wording</td></tr>
+            <tr><td class="p-3">sticky label clamp</td><td class="p-3">no term</td><td class="p-3">policy with no domain name</td></tr>
+            <tr><td class="p-3 font-mono">panToInstant vs panToDate</td><td class="p-3">Pan exists</td><td class="p-3">intentional InstantInput seam; document it</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="top-recommendation">
+        <div class="rounded-xl border-2 border-emerald-600 bg-emerald-50 p-6 space-y-2">
+          <p class="text-xs uppercase tracking-widest text-emerald-700 font-semibold">Top recommendation</p>
+          <p class="text-lg"><a href="#c1" class="underline decoration-emerald-600">Candidate 1 — one anchored scale+pan write</a></p>
+          <p class="text-sm text-emerald-900">Zero product-policy change. Closes a stale-<span class="font-mono">#contentSize</span> bug class the follow-up already hit. Do the glossary + gate tags in the same pass: they are Standards/Spec hard findings, not architecture, and they block S1.12 → S3.</p>
+        </div>
+      </section>
+
+      <footer class="text-xs text-slate-400 pt-4 border-t border-slate-200">
+        Summary: Standards 4 (worst: CONTEXT.md) · Spec 6 (worst: missing [S1-A6]–[S1-A10]) · Simplify 4 would-fix · Architecture 2 Strong/Worth-as-Strong (c1) plus five explore/speculative. Locked D1–D12 and D-S1.7-10 (do not export Viewport) not reopened.
+      </footer>
+    </main>
+  </body>
+</html>
