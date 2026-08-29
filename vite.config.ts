@@ -21,6 +21,12 @@ export default defineConfig({
         zoom: page('zoom.html'),
         'large-dataset': page('large-dataset.html'),
         data: page('data.html'),
+        // Static architecture pages under harness/docs/ — without an input entry, `pnpm build`
+        // would drop them the same way D-S1.11-5 caught the missing demo HTML files.
+        'docs-index': page('docs/index.html'),
+        'docs-doc': page('docs/doc.html'),
+        'docs-diagram': page('docs/diagram.html'),
+        'docs-timeline': page('docs/timeline.html'),
       },
     },
   },
