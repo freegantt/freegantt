@@ -180,17 +180,41 @@ having been audited for it. The safer alternative if this is wanted again: give 
 page (not the shared e2e fixture pages), or fix the D1 test's measurement properly first and then
 work through the other two one at a time, re-running the full `test:e2e` suite after each.
 
+## Pass 3 — preferredTickWidthPx invariant, and two pre-existing e2e regressions found along the way
+
+Commits `50c0a1c` (invariant) and `d306bb7` (e2e fixes), both pushed to `jolly-salmon`.
+
+- **`preferredTickWidthPx >= minTickWidthPx` is now enforced**, not just convention. New
+  `InvalidPresetError` (`code: 'invalid-preset'`, `src/model/errors.ts`, exported from `model/` and
+  `api/`); a `validatePresetTickWidths` check in `src/time/presets.ts` runs from `freezePreset`
+  (shipped presets, at module load) and `resolvePreset` (custom presets, at first use). This
+  immediately caught a real, pre-existing violation: `dayAndWeekPreset` shipped with
+  `preferredTickWidthPx: 24` below its own `minTickWidthPx: 32` since S1.9 — fixed by raising
+  `preferredTickWidthPx` to 32. `etc/freegantt.api.md` regenerated for the new export. Unit tests in
+  `src/time/presets.test.ts` (shipped-preset sweep + two `resolvePreset` cases for a custom preset).
+- **Two e2e specs were failing before this pass touched anything** —
+  `e2e/pane-resize.spec.ts` ("resizing the window re-fits the axis (#8)" and "dragging the splitter
+  re-fits the axis with no other call (U4)") and `e2e/timeline-content-width.spec.ts`. Root cause:
+  both picked viewport widths assuming dayPreset's old `minTickWidthPx: 32` (pre-header-readability);
+  the pass-1 fix (finding 5, this doc) raised it to 96, which triples the floored content width at
+  any given dataset span. The full demo dataset (~83 days) now floors at ~7968px — far past the old
+  3000–3600px test viewports — and `harness/data.html`'s 19-day slice now floors at ~1824px, past its
+  default 1280px viewport's ~990px pane. Confirmed pre-existing (not caused by this pass or by pass
+  3's own preset change) by reproducing both failures identically on `7518b43` and `f2ab918` in a
+  scratch `git worktree`, before editing anything. Fixed by widening each test's `setViewportSize`
+  to clear the new floor (measured directly against a running `pnpm dev`, not calculated from the
+  preset table by hand — see each test's own updated comment for the numbers and margins). All 25
+  e2e specs pass; `pnpm verify` and the pre-push hook (which runs `test:e2e`) are both green.
+
 ## Not done — pick up here
 
 - **The "today line isn't visible without a scroll/click" gap is still open.** The toolbar's
   existing "Today" button (`panToToday`, already wired, always present via
   `mountTimelineToolbar`) is the workaround today. Auto-panning on load is the fix that was tried
   and reverted above — pick that up if a person still needs zero-interaction visibility, following
-  the guidance above about the three tests it touches.
-- Consider whether `preferredTickWidthPx` deserves its own doc/lint invariant ("must be ≥
-  `minTickWidthPx`") now that finding 5 depended on that relationship by hand — currently just
-  convention, not enforced. Not done this pass; flagging since a future preset edit could
-  reintroduce finding 5 silently if `preferredTickWidthPx` drifts below the floor again.
+  the guidance above about the three tests it touches. Note the three tests named there
+  (`e2e/harness.spec.ts` D1, `e2e/zoom.spec.ts` U1/I8, `e2e/header-readability.spec.ts` finding 5)
+  are a *different* set from pass 3's two viewport fixes above — don't conflate them.
 - The sticky-label clamp fix has e2e coverage only (`header-readability.spec.ts`'s finding-5 case
   exercises it indirectly). A direct `computeFrame` fixture in `src/layout/frame.test.ts` with two
   off-screen ticks in the overscan buffer plus one straddling the clamp line would pin this down at
