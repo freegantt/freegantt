@@ -303,7 +303,7 @@ The standalone, shareable object owning a scroll position on both axes, and the 
 _Avoid_: Scroll position, offset, viewport state
 
 **Pan**:
-Moving the shared viewport — `ScrollModel.panTo`, and the drag gesture that will call into it. One concept at two layers, which is why they share the word. Distinct from **scroll**, which means one element's native offset and is confined to `view/scroll-attachment.ts` (I12): a Pan may result in no scroll at all when the chart is already at its end.
+Moving the shared viewport — `ScrollModel.panTo`, and the drag gesture that will call into it. Public verbs on Gantt are `panToDate` / `panToToday` (loose InstantInput, never `scrollTo*`). One concept at two layers, which is why they share the word. Distinct from **scroll**, which means one element's native offset and is confined to `view/scroll-attachment.ts` (I12): a Pan may result in no scroll at all when the chart is already at its end. `panToInstant` is the Viewport-internal twin that already holds a branded Instant.
 _Avoid_: Scroll (an element's native offset), move (move is dragging an Entry — `entryMove`), seek
 
 **Reveal**:
@@ -315,7 +315,7 @@ Several writes to a viewport model delivering at most one notification, and only
 _Avoid_: Transaction (that is `data/`'s unit of mutation), commit, freeze
 
 **ViewPreset**:
-The data description of one zoom level: what unit the ticks step in, how wide a tick is, and one or more header bands sitting above them, coarsest first. A preset is a config object, so a new zoom level is never a library edit. `tickUnit` is never coarser than the finest header — a label must not claim a boundary no gridline draws.
+The data description of one zoom level: what unit the ticks step in, how wide a tick _intends_ to be (`preferredTickWidthPx`) versus the density floor (`minTickWidthPx`), and one or more header bands sitting above them, coarsest first. A preset is a config object, so a new zoom level is never a library edit. `tickUnit` is never coarser than the finest header — a label must not claim a boundary no gridline draws. Each band's `format` is a Date format.
 _Avoid_: Zoom level (a zoom level is what a preset expresses), timescale header
 
 **Preset reference**:
@@ -327,15 +327,31 @@ The full content span a TimeScale maps — `'fitDataset'`'s min/max over every b
 _Avoid_: Span (Range is the caller-facing intent; span is used loosely elsewhere for a resolved interval), window, extent
 
 **Fit**:
-The density mode a TimeScale resolves `pxPerMs` from: `'pane'` (the default — content fills the measured pane width), `'preset'` (the preset's own density, ignoring pane width — the first mode where content can exceed the pane), or an explicit `number` of pixels per millisecond. Distinct from Range (what content is shown) and from Preset reference (which labels and tick unit are shown) — Fit answers only "how many pixels per unit of time." Renamed from `zoom`/`TimeScaleZoom` (issue #84): "zoom" was one word doing three jobs (this mode, the `zoomTo` density knob, the `zoomBy` gesture) — Fit keeps the word "zoom" for the gesture family only, named by `zoomTo`/`zoomBy` and Anchored zoom below.
+The density mode a TimeScale resolves `pxPerMs` from: `'pane'` (the default — content fills the measured pane width), `'preset'` (the preset's own density, ignoring pane width — the first mode where content can exceed the pane), or an explicit `number` of pixels per millisecond. Distinct from Range (what content is shown) and from Preset reference (which labels and tick unit are shown) — Fit answers only "how many pixels per unit of time." Every mode is floored by the current preset's `minTickWidthPx` and capped by a content-width ceiling in `layout/` (`MAX_CONTENT_PX`): when the pane is too narrow to give each tick a legible width, content becomes wider than the pane and the timeline scrolls. Renamed from `zoom`/`TimeScaleZoom` (issue #84): "zoom" was one word doing three jobs (this mode, the `zoomTo` density knob, the `zoomBy` gesture) — Fit keeps the word "zoom" for the gesture family only, named by `zoomTo`/`zoomBy` and Anchored zoom below.
 _Avoid_: Zoom, TimeScaleZoom (retired names — see above), Scale (Scale is the resolved `TimeScale` object, not this mode), density (fine in prose, but the type and field name are `fit`/`TimeScaleFit`)
+
+**Zoom presets**:
+The ordered ViewPreset set `zoomIn`/`zoomOut` step through, finest first (`gantt.zoomPresets`). Default is the nine-rung shipped set. Live. Distinct from Preset reference (the _current_ labels) and from Fit (density). "ladder" already names the Customization ladder (Token / Part / renderer).
+_Avoid_: ladder (taken), zoom levels (that is what a ViewPreset expresses)
+
+**Date format**:
+How a header band labels an Instant: an `Intl.DateTimeFormatOptions` object, or a `HeaderFormat` callback as the escape hatch (week numbers, unpadded hours). Resolved through `Intl.DateTimeFormat` in the Dataset's zone and the Gantt's locale — not through Temporal's `toLocaleString`. Year and month appear once, on the coarsest band that states them; finer bands drop those fields unless `repeatCoarserUnits` (`dedupeHeaderFormats`).
+_Avoid_: HeaderFormat as the everyday name (that is the callback half only)
+
+**Today line**:
+A current-date marker on the timeline (`gantt.todayLine`, default on). Geometry is a `FrameDecoration`; paint is `.fg-today-line`. It is a wrapper around the Date line job (issue #96) — `todayLine` stays the shorthand until Date line has a home module. Updates on the next render, not on a clock tick. `panToToday` pans to `now()`.
+_Avoid_: Timeline (the pane, not this marker), cursor, now-line
+
+**Tick width**:
+Two numbers on a ViewPreset: `preferredTickWidthPx` is the density the preset intends when nothing else decides; `minTickWidthPx` is the floor below which that preset's labels stop being legible (defaults to preferred, so a custom preset never compresses).
+_Avoid_: tickWidthPx (retired — it read as a minimum when it sat beside `minTickWidthPx`)
 
 **Anchored zoom**:
 The read-before-write contract behind `Viewport.zoomTo`/`zoomBy` (D-S1.9-5): the Instant currently under the anchor pixel is read before anything is written, then Scale and Pan are updated together inside one Batch so that same Instant is back under the anchor pixel afterward. The anchor is always derived from a stated pixel position, never supplied as an Instant — a caller states _where_, not _what the pixel currently means_. Distinct from Fit: Fit is the mode (`'pane' | 'preset' | number`); `zoomTo`/`zoomBy` are the gesture that writes an explicit density into it, anchored so the content under the pointer doesn't jump.
 _Avoid_: Pinned zoom, cursor zoom (the mechanism is not specific to a pointer — a caller can anchor anywhere)
 
 **Tick**:
-One step of the time axis at the current ViewPreset's resolution — the unit the header bands label and the unit a gesture snaps to by default. Since S1.7 a Tick also carries its own cell `width` (px to the next boundary at its band's step), so a DST-shortened or -lengthened day draws at its true width instead of an assumed constant.
+One step of the time axis at the current ViewPreset's resolution — the unit the header bands label and the unit a gesture snaps to by default. Since S1.7 a Tick also carries its own cell `width` (px to the next boundary at its band's step), so a DST-shortened or -lengthened day draws at its true width instead of an assumed constant. Width is floored by the preset's Tick width (`minTickWidthPx`); a pane too narrow to honour that floor scrolls.
 _Avoid_: Gridline (a gridline is one way a Tick is drawn), step
 
 ### Theming and accessibility
@@ -345,11 +361,11 @@ The one stylesheet the library ever writes, injected once per document by `ensur
 _Avoid_: Default styles, styles.css (there is no separate package export — see D-S1.10-8)
 
 **Token**:
-A `--fg-*` CSS custom property — level 1 of the Customization ladder (`plans/02` §4). Metrics (`--fg-row-height`, `--fg-grid-pane-width`, …) are read once through `pixel-property.ts`; colour Tokens (`--fg-bar-fill`, `--fg-pane-bg`, …) are consumed directly by Base stylesheet rules with no JS in between. A consumer overrides any Token by setting the same property on the container element; the shipped default is always the fallback in `var(--fg-x, default)`, never the winner once a consumer has authored a value.
+A `--fg-*` CSS custom property — level 1 of the Customization ladder (`plans/02` §4). Metrics (`--fg-row-height`, `--fg-grid-pane-width`, `--fg-band-height`, …) are read once through `pixel-property.ts` or consumed as CSS `var()` fallbacks; colour Tokens (`--fg-bar-fill`, `--fg-pane-bg`, `--fg-today-line-color`, …) are consumed directly by Base stylesheet rules with no JS in between. A consumer overrides any Token by setting the same property on the container element; the shipped default is always the fallback in `var(--fg-x, default)`, never the winner once a consumer has authored a value. `--fg-header-height` retired at S1.12 in favour of `--fg-band-height` (one band, not the whole header).
 _Avoid_: Variable, custom property (accurate but not this project's term of art — say Token), theme variable
 
 **Part**:
-One of the `fg-*` class names the library's DOM structure carries — level 2 of the Customization ladder. The vocabulary is closed and un-renamed (D-S1.10-1): `fg-container`, `fg-grid-pane`, `fg-grid-spacer`, `fg-rows-clip`, `fg-rows`, `fg-splitter`, `fg-timeline-pane`, `fg-header`, `fg-band`, `fg-tick`, `fg-row`, `fg-row-label`, `fg-bars`, `fg-bar`. A consumer writes level-2 CSS against a Part directly (`.fg-bar { ... }`) or against a Part plus a State attribute (`.fg-bar[data-flag~="conflict"] { ... }`).
+One of the `fg-*` class names the library's DOM structure carries — level 2 of the Customization ladder. The vocabulary is closed and un-renamed (D-S1.10-1): `fg-container`, `fg-grid-pane`, `fg-grid-spacer`, `fg-rows-clip`, `fg-rows`, `fg-splitter`, `fg-timeline-pane`, `fg-header`, `fg-band`, `fg-tick`, `fg-row`, `fg-row-label`, `fg-bars`, `fg-bar`, `fg-today-line`. A consumer writes level-2 CSS against a Part directly (`.fg-bar { ... }`) or against a Part plus a State attribute (`.fg-bar[data-flag~="conflict"] { ... }`).
 _Avoid_: Pane (Grid pane/Timeline pane/Splitter are specific Parts, already named in "Mounted instances" — Part is the general term for the whole class vocabulary), BEM block (rejected, Q2 — renaming shipped classes to a BEM shape was churn with no behavior change)
 
 **State attribute**:

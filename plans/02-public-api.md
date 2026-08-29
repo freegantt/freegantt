@@ -54,7 +54,10 @@ const gantt = new Gantt({
 
   rows: { source: 'entries', tree: true },
   preset: 'weekAndMonth',                 // or a full ViewPreset object
-  range: 'fitDataset',                    // or a TimeSpan
+  range: 'fitDataset',                    // or { start, end } — InstantInput, not branded Instant
+  locale: 'de-DE',                        // presentation; live; never reaches toJSON()
+  todayLine: true,                        // current-date marker; panToToday() pans to now()
+  zoomPresets: ['day', 'weekAndMonth'],   // ordered set zoomIn/zoomOut step through
 
   // Where THIS view shows them — names fields, in display order.
   gridColumns: [
@@ -184,7 +187,7 @@ Documented in this order; each level solves what the previous can't, and consume
 | 4 | **Events + feature config** | veto a drop, custom context-menu items, replace the editor |
 | 5 | **Plugins** | full `GanttPlugin` (see `01` §10): fields, decorations, columns, controllers, commands |
 
-Every level-1 property the library reads as a length goes through one reader (`render/dom/pixel-property.ts`): computed value → px → validated → library default. What counts as authored is stated per property rather than re-implemented per call site — `--fg-row-height` rejects zero (a zero-height row is not a row), `--fg-grid-pane-width` keeps it (a consumer turning the grid pane off authored that). Re-read cadence stays the caller's and is stated at each call site: the grid pane's width is read once at construction (renamed from `--fg-row-label-width`, S1.8 — the gutter is a pane width now, not a backend reservation), row height again on every pane measurement, neither per render. Two more tokens joined at S1.8: `--fg-splitter-width` (fallback `4`) and `--fg-header-height` (fallback `20`) — the grid pane's own header spacer needs the same height the timeline pane's header band uses, or every label sits one header-height above its bar.
+Every level-1 property the library reads as a length goes through one reader (`render/dom/pixel-property.ts`): computed value → px → validated → library default. What counts as authored is stated per property rather than re-implemented per call site — `--fg-row-height` rejects zero (a zero-height row is not a row), `--fg-grid-pane-width` keeps it (a consumer turning the grid pane off authored that). Re-read cadence stays the caller's and is stated at each call site: the grid pane's width is read once at construction (renamed from `--fg-row-label-width`, S1.8 — the gutter is a pane width now, not a backend reservation), row height again on every pane measurement, neither per render. Two more tokens joined at S1.8: `--fg-splitter-width` (fallback `4`) and `--fg-header-height` (fallback `20`, **retired at S1.12** — migration: `--fg-header-height: 40px` on a two-band preset becomes `--fg-band-height: 20px`). The grid pane's spacer now mirrors one empty `.fg-band` per header band, so both panes size from `--fg-band-height`.
 
 **The complete level-1 `--fg-*` table (S1.10, D-S1.10-1/D-S1.10-9).** A consumer with no CSS of its own gets these defaults; every one is overridable by setting the same property on the container element, which `view/styles.ts`'s `var(--fg-x, default)` always prefers over its own fallback (U4). Metrics are read through `pixel-property.ts` (above); colour tokens are plain CSS custom properties consumed directly by the base stylesheet's class rules — no JS reads them.
 
@@ -193,7 +196,7 @@ Every level-1 property the library reads as a length goes through one reader (`r
 | `--fg-row-height` | `32px` | — (not theme-dependent) | `pixel-property.ts`, re-read on pane measurement |
 | `--fg-grid-pane-width` | `220px` | — | `pixel-property.ts`, read once at construction |
 | `--fg-splitter-width` | `4px` | — | `pixel-property.ts` |
-| `--fg-header-height` | `20px` | — | `pixel-property.ts` |
+| `--fg-band-height` | `20px` | — | `.fg-band` / `.fg-tick` CSS (`--fg-header-height` retired, S1.12) |
 | `--fg-bar-radius` | `3px` | — | `.fg-bar` CSS rule directly (not `pixel-property.ts` — a border-radius, not a layout number) |
 | `--fg-pane-bg` | `#FAFAF7` | `#15161A` | `.fg-grid-pane`, `.fg-timeline-pane` background |
 | `--fg-splitter-color` | `#E6E2D9` | `#2B2F36` | `.fg-splitter` background |
@@ -208,6 +211,7 @@ Every level-1 property the library reads as a length goes through one reader (`r
 | `--fg-bar-fill` | `oklch(.55 .13 245)` | `oklch(.72 .13 245)` | `.fg-bar` background |
 | `--fg-bar-label-color` | `#FFFFFF` | `#1A1815` | `.fg-bar` text |
 | `--fg-warn` | `#D97706` | `#FBBF24` | `.fg-bar[data-flag~="conflict"]` outline (U2) |
+| `--fg-today-line-color` | `#DC2626` | `#F87171` | `.fg-today-line` |
 
 Colour defaults are sourced from an existing, unnamed palette this team maintains elsewhere (D-S1.10-9) — only the *values* cross over, never the palette's name (CLAUDE.md: vendor product names never appear in specs/docs/code). `theme: 'auto' | 'light' | 'dark'` (default `'auto'`) selects which block applies: `'auto'` writes no `data-fg-theme` attribute and follows `prefers-color-scheme`; `'light'`/`'dark'` write the attribute and always win over the media query on specificity. No named multi-preset picker beyond light/dark yet — that needs `extensions/`'s `PluginContext`, the only I2-safe place a `registerThemePreset`-shaped seam can live (deferred to S5, D-S1.10-9).
 
@@ -303,7 +307,7 @@ An unregistered key is an `UnknownFieldError`, never a silent write.
 ```ts
 import { TimeScaleModel, ScrollModel } from 'freegantt';
 
-const scale  = new TimeScaleModel({ preset: 'weekAndMonth', zoom: 'preset' });
+const scale  = new TimeScaleModel({ preset: 'weekAndMonth', fit: 'preset' });
 const scroll = new ScrollModel();
 
 const deliveries = new Gantt({ container: '#top',    dataset: deliverySchedule, scale, scroll });

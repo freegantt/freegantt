@@ -177,7 +177,8 @@ export class Gantt {
   }
 
   /** Next finer entry of `zoomPresets`; no-op at the finest (S1.12, D-S1.12-6). `anchorX` defaults
-   *  to pane centre. */
+   *  to pane centre. Steps the preset only — under `fit: 'pane'`, density stays pane-fill until the
+   *  floor bites. */
   zoomIn(anchorX?: number): void {
     this.#shell.zoomIn(anchorX);
   }

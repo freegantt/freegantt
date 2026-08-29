@@ -196,16 +196,22 @@ export class Viewport {
   }
 
   /** Pushes the just-resolved `TimeScale.contentWidth` into both this Viewport's own tracked
-   *  `#contentSize` (what `visible`'s local clamp reads, D-S1.7-2) and the scroll binding, then
-   *  re-pans to the CURRENT position — a no-op move whose only job is forcing `ScrollModel.panTo`'s
-   *  own clamp (D-S1.5-2) to run against the fresh `max` right now, instead of leaving a stale
-   *  position for `GanttShell.render()` to compute a frame against. See `set preset`'s doc. A no-op
-   *  before the first `bind()` (`#scrollHandle` is unset then). */
-  #reclampToContentWidth(): void {
+   *  `#contentSize` (what `visible`'s local clamp reads, D-S1.7-2) and the scroll binding. Every
+   *  anchored scale write calls this *before* `panTo`, or `visible` and `ScrollModel.max` keep the
+   *  previous render's width. A no-op before the first `bind()` (`#scrollHandle` is unset then). */
+  #pushContentWidth(): void {
     if (!this.#scrollHandle) return;
     const size = { width: this.timeScale.contentWidth, height: this.#contentSize.height };
     this.#contentSize = size;
     this.#scrollHandle.setContentSize(size);
+  }
+
+  /** `#pushContentWidth`, then re-pan to the CURRENT position — a no-op move whose only job is
+   *  forcing `ScrollModel.panTo`'s own clamp (D-S1.5-2) to run against the fresh `max` right now,
+   *  instead of leaving a stale position for `GanttShell.render()` to compute a frame against. See
+   *  `set preset`'s doc. */
+  #reclampToContentWidth(): void {
+    this.#pushContentWidth();
     this.scroll.panTo(this.scroll.state.position);
   }
 
@@ -256,10 +262,7 @@ export class Viewport {
     const anchorInstant = this.timeScale.instantForX(this.scroll.state.position.x + anchorX);
     this.batch(() => {
       this.scale.fit = pxPerMs;
-      this.#scrollHandle?.setContentSize({
-        width: this.timeScale.contentWidth,
-        height: this.#contentSize.height,
-      });
+      this.#pushContentWidth();
       this.scroll.panTo({ x: this.timeScale.xForInstant(anchorInstant) - anchorX });
     });
   }
@@ -303,16 +306,15 @@ export class Viewport {
     const anchorInstant = this.timeScale.instantForX(this.scroll.state.position.x + anchorX);
     this.batch(() => {
       this.scale.preset = this.#zoomPresets[next]!;
-      this.#scrollHandle?.setContentSize({
-        width: this.timeScale.contentWidth,
-        height: this.#contentSize.height,
-      });
+      this.#pushContentWidth();
       this.scroll.panTo({ x: this.timeScale.xForInstant(anchorInstant) - anchorX });
     });
   }
 
   /** Next finer entry of `zoomPresets`; no-op at the finest (S1.12, D-S1.12-6). `anchorX` defaults to
-   *  pane centre. */
+   *  pane centre. Steps the preset (labels and tick unit) only — it does not write Fit. Under the
+   *  default `fit: 'pane'`, `pxPerMs` stays pane-fill until `minTickWidthPx` bites, so a step can
+   *  change labels while density stays put (HANDOFF; D-S1.12-6). */
   zoomIn(anchorX?: number): void {
     this.#stepPreset(-1, anchorX ?? this.#paneSize.width / 2);
   }
@@ -331,10 +333,7 @@ export class Viewport {
     const targetPxPerMs = this.#paneSize.width > 0 && spanMs > 0 ? this.#paneSize.width / spanMs : 0;
     this.batch(() => {
       this.scale.fit = targetPxPerMs;
-      this.#scrollHandle?.setContentSize({
-        width: this.timeScale.contentWidth,
-        height: this.#contentSize.height,
-      });
+      this.#pushContentWidth();
       this.scroll.panTo({ x: this.timeScale.xForInstant(span.start) });
     });
   }

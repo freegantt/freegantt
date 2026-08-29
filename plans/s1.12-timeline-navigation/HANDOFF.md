@@ -2,7 +2,7 @@
 
 Picking this back up: read `plans/s1.12-timeline-navigation/README.md` first (the settled spec),
 then this file for where implementation actually stands. `.slice` is already `S1.12`;
-`scripts/slice-gate.mjs` already has the `S1.12 → S3` gate entry (not yet passing).
+`scripts/slice-gate.mjs` already has the `S1.12 → S3` gate entry and it passes (`[S1-A6]`–`[S1-A10]`).
 
 ## Fixed this session — timeline pane failed to shrink on zoom-out
 
@@ -122,15 +122,9 @@ ticked in the README.
    - `pane-layout.test.ts:26`'s `--fg-header-height` spacer test needs replacing with a
      `setHeaderBandCount` test per §6 ("`pane-layout.test.ts:26` changes accordingly" per
      D-S1.12-9).
-2. **New tests from §6** — none written yet: `presets.test.ts` (11 ids, band/tickUnit legibility,
-   `minTickWidthPx` default), `format.test.ts` (memoization identity, locale output differs,
-   `formatWeekNumber` ISO correctness, `formatEndInclusive`), `zone.test.ts` (`weekOfYear`
-   boundaries), `time-scale-model.test.ts` (floor/ceiling behavior), `viewport.test.ts`
-   (`zoomIn`/`zoomOut` incl. the fast-check round-trip property, `zoomToSpan`, `panToInstant`),
-   `frame.test.ts` (`TodayLine` decoration, locale-driven labels/`a11yLabel`), `styles.test.ts` /
-   `pane-layout.test.ts` (band-height token + spacer band count/pixel match), `gantt.test.ts`
-   (`panToDate` input variants, live `locale`, `todayLine` toggle), and the five e2e ids
-   `[S1-A6]`–`[S1-A10]` in `e2e/zoom.spec.ts`.
+2. **New tests from §6** — gate ids `[S1-A6]`–`[S1-A10]` now exist in `e2e/zoom.spec.ts` and the matching
+   vitest titles. Remaining coverage still useful: pixel-identical header/spacer heights in jsdom
+   (e2e covers that); a11yLabel locale (header labels are covered).
 3. **Harness (§3.7, D-S1.12-16)** — done, and extended beyond the spec's own ask. `fixtures/multi-year-dataset.ts`
    exists (60 entries, ~3 years, seeded LCG like `seeded-dataset.ts` but with wider gaps). `harness/zoom.html`/
    `zoom.ts` carry the full §3.7 toolbar (zoom in/out, preset, fit, locale, Today, today-line toggle, sample/
@@ -154,12 +148,10 @@ ticked in the README.
      preset select, Today, and (on `zoom.html`) the fit/locale/today-line/dataset controls.
    - **Not done:** the CLAUDE.md-mandated full `harness/main.ts`-and-every-page review against the harness
      rule (this pass only touched what §3.7 and the toolbar request needed) — still open, see below.
-4. **§7 spec edits** — none landed: `CONTEXT.md` (new: Zoom presets, Date format, Today line, Tick
-   width; edited: ViewPreset, Fit, Tick, Pan, Token, Part), `plans/01` §5.1, `plans/02` §2/§4/§5,
+4. **§7 spec edits** — landed: `CONTEXT.md`, `plans/01` §5.1, `plans/02` §2/§4/§5,
    `plans/s1.9-presets-and-zoom/README.md` §8, `plans/s1.8-pane-layout/README.md` §177,
-   `plans/s1.10-theming-and-a11y/README.md` §270, `docs/adr/0001` (one line). `plans/03`'s S1.12
-   section already exists (landed in a prior commit) and needs no further edit.
-5. **Gate** — `scripts/slice-gate.mjs`'s `S1.12 → S3` entry has not been run since real code landed.
+   `plans/s1.10-theming-and-a11y/README.md` §270, `docs/adr/0001` (Intl.DateTimeFormat line).
+5. **Gate** — `S1.12 → S3` is green (`[S1-A6]`–`[S1-A10]` exist and pass).
 
 ## A design note worth re-checking
 
@@ -167,7 +159,6 @@ ticked in the README.
 `fit: 'pane'`, this only visibly changes anything once the new preset's `minTickWidthPx` floor
 exceeds the pane-fit density, which is precisely the D-S1.12-2 floor doing double duty as the zoom
 mechanism. That reading was inferred from the spec text (§2 D-S1.12-2/6/7 together) rather than
-stated as one sentence anywhere — worth a sanity check against `[S1-A7]`'s e2e assertion once that
-test is written, to make sure the intended UX ("stepping through zoomPresets visibly zooms") isn't
-silently a no-op at typical pane widths for the coarser end of the ladder (year/monthAndYear, whose
-`minTickWidthPx` a wide pane may never hit).
+stated as one sentence anywhere — `[S1-A7]` now covers step/anchor/no-op in vitest. The public
+`zoomIn` JSDoc states the honest contract: it steps the preset only; under `fit: 'pane'`, density
+stays pane-fill until the floor bites. Option B (also write preferred density) stays closed (D-S1.12-6).

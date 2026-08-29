@@ -53,6 +53,7 @@ const COLOR_TOKENS = [
   '--fg-bar-fill',
   '--fg-bar-label-color',
   '--fg-warn',
+  '--fg-today-line-color',
 ];
 
 function makeContainer(): HTMLElement {
@@ -100,6 +101,14 @@ describe('ensureBaseStyles', () => {
       expect(autoDarkBlock, `auto-dark missing ${token}`).toContain(token);
     }
     expect(css).not.toContain(':root:not([data-fg-theme])');
+  });
+
+  it('[S1-A8] --fg-band-height sizes bands; --fg-header-height is gone (D-S1.12-10)', () => {
+    clearStyles();
+    ensureBaseStyles(document);
+    const css = document.head.querySelector('style[data-freegantt-styles]')?.textContent ?? '';
+    expect(css).toContain('--fg-band-height');
+    expect(css).not.toContain('--fg-header-height');
   });
 
   it('setting --fg-bar-fill on the container before construction overrides the shipped default', () => {

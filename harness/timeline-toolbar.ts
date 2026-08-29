@@ -6,7 +6,7 @@
 // the spec's toolbar; a control that had to compute something would be a library gap, not a harness
 // convenience.
 
-import type { Gantt, PresetRef, ShippedPresetId } from '../src/api/index.js';
+import type { Gantt, PresetRef } from '../src/api/index.js';
 
 export interface TimelineToolbarOptions {
   gantt: Gantt;
@@ -20,23 +20,11 @@ export interface TimelineToolbarOptions {
   showTodayLineToggle?: boolean;
 }
 
-const PRESET_OPTIONS: readonly ShippedPresetId[] = [
-  'hour',
-  'hourDayWeek',
-  'day',
-  'dayAndWeek',
-  'dayWeekMonth',
-  'weekAndMonth',
-  'weekMonthYear',
-  'monthAndYear',
-  'year',
-];
-
 const LOCALE_OPTIONS = ['en-US', 'de-DE', 'ja-JP'] as const;
 
 /** Builds the toolbar DOM and wires it straight to the plain `Gantt` surface — `zoomIn`/`zoomOut`,
- *  `preset`, `panToToday`, and (when enabled) `fit`/`locale`/`todayLine`. Every button's disabled
- *  state and the preset select's value stay in sync with `gantt.on('change')`. */
+ *  `preset`, `panToToday`, and (when enabled) `fit`/`locale`/`todayLine`. `Gantt` has no navigation
+ *  `change` event (`plans/02` §3); each control refreshes the toolbar after its own write. */
 export function mountTimelineToolbar(options: TimelineToolbarOptions): void {
   const { gantt, container, showFit = false, showLocale = false, showTodayLineToggle = false } = options;
 
@@ -56,10 +44,10 @@ export function mountTimelineToolbar(options: TimelineToolbarOptions): void {
   const presetLabel = document.createElement('label');
   presetLabel.textContent = 'Preset ';
   const presetSelect = document.createElement('select');
-  for (const id of PRESET_OPTIONS) {
+  for (const preset of gantt.zoomPresets) {
     const option = document.createElement('option');
-    option.value = id;
-    option.textContent = id;
+    option.value = preset.id;
+    option.textContent = preset.id;
     presetSelect.append(option);
   }
   presetLabel.append(presetSelect);

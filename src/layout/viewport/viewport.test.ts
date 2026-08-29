@@ -261,6 +261,98 @@ describe('Viewport.zoomTo / zoomBy (S1.9, D-S1.9-5)', () => {
     viewport.bind(wideDataset, noop);
     expect(() => viewport.zoomTo(viewport.timeScale.pxPerMs * 2)).not.toThrow();
   });
+
+  it('zoomTo pushes content width into visible so a shrink clamps before the next render', () => {
+    const { viewport } = boundViewport(400, 200);
+    viewport.scroll.panTo({ x: 50_000 });
+    expect(viewport.visible.x).toBeGreaterThan(0);
+
+    viewport.zoomTo(viewport.timeScale.pxPerMs / 20);
+
+    const maxX = Math.max(0, viewport.timeScale.contentWidth - 400);
+    expect(viewport.visible.x).toBeLessThanOrEqual(maxX);
+  });
+});
+
+describe('Viewport.zoomIn / zoomOut (S1.12, D-S1.12-6)', () => {
+  it('[S1-A7] zoomIn steps one finer zoomPresets entry, keeps the anchored instant, and notifies once', () => {
+    const { viewport, calls } = boundViewport();
+    const startId = viewport.preset.id;
+    const startIndex = viewport.zoomPresets.findIndex((p) => p.id === startId);
+    const anchorX = 100;
+    const before = viewport.timeScale.instantForX(viewport.scroll.state.position.x + anchorX);
+
+    viewport.zoomIn(anchorX);
+
+    expect(calls()).toBe(1);
+    expect(viewport.preset.id).toBe(viewport.zoomPresets[startIndex - 1]!.id);
+    const after = viewport.timeScale.instantForX(viewport.scroll.state.position.x + anchorX);
+    expect(Math.abs(diffMs(after, before))).toBeLessThanOrEqual(1);
+  });
+
+  it('[S1-A7] zoomOut steps one coarser zoomPresets entry and canZoomOut agrees until the coarsest', () => {
+    const { viewport, calls } = boundViewport();
+    expect(viewport.canZoomOut).toBe(true);
+    const startId = viewport.preset.id;
+    const startIndex = viewport.zoomPresets.findIndex((p) => p.id === startId);
+
+    viewport.zoomOut();
+
+    expect(calls()).toBe(1);
+    expect(viewport.preset.id).toBe(viewport.zoomPresets[startIndex + 1]!.id);
+  });
+
+  it('[S1-A7] zoomIn / zoomOut are no-ops at the ends and canZoomIn / canZoomOut agree', () => {
+    const finest = new Viewport({ scale: new TimeScaleModel({ fit: 'preset', preset: 'hour' }) });
+    let finestCalls = 0;
+    const finestHandle = finest.bind(wideDataset, () => finestCalls++);
+    finestHandle.setPaneSize({ width: 400, height: 200 });
+    finestHandle.setContentSize({ width: finest.timeScale.contentWidth, height: 5000 });
+    finestCalls = 0;
+
+    expect(finest.canZoomIn).toBe(false);
+    expect(finest.canZoomOut).toBe(true);
+    finest.zoomIn();
+    expect(finestCalls).toBe(0);
+    expect(finest.preset.id).toBe('hour');
+
+    const coarsest = new Viewport({ scale: new TimeScaleModel({ fit: 'preset', preset: 'year' }) });
+    let coarsestCalls = 0;
+    const coarsestHandle = coarsest.bind(wideDataset, () => coarsestCalls++);
+    coarsestHandle.setPaneSize({ width: 400, height: 200 });
+    coarsestHandle.setContentSize({ width: coarsest.timeScale.contentWidth, height: 5000 });
+    coarsestCalls = 0;
+
+    expect(coarsest.canZoomOut).toBe(false);
+    expect(coarsest.canZoomIn).toBe(true);
+    coarsest.zoomOut();
+    expect(coarsestCalls).toBe(0);
+    expect(coarsest.preset.id).toBe('year');
+  });
+
+  it('[S1-A7] zoomIn then zoomOut returns preset and scroll x to their starting values', () => {
+    const { viewport } = boundViewport();
+    const preset0 = viewport.preset.id;
+    const x0 = viewport.scroll.state.position.x;
+    expect(viewport.canZoomIn).toBe(true);
+    viewport.zoomIn(80);
+    viewport.zoomOut(80);
+    expect(viewport.preset.id).toBe(preset0);
+    expect(viewport.scroll.state.position.x).toBeCloseTo(x0, 5);
+  });
+});
+
+describe('Viewport.zoomToSpan (S1.12, D-S1.12-7)', () => {
+  it('fills the pane with the span, or hits the density floor', () => {
+    const { viewport } = boundViewport(400, 200);
+    const start = instant('2026-06-01T00:00:00Z');
+    const end = instant('2026-07-01T00:00:00Z');
+    viewport.zoomToSpan({ start, end });
+    expect(viewport.scroll.state.position.x).toBe(viewport.timeScale.xForInstant(start));
+    const spanMs = diffMs(end, start);
+    const requested = 400 / spanMs;
+    expect(viewport.timeScale.pxPerMs).toBeGreaterThanOrEqual(requested - 1e-12);
+  });
 });
 
 describe('Viewport.panToInstant (S1.12, D-S1.12-8)', () => {

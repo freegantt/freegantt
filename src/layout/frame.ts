@@ -16,6 +16,9 @@ import type { RowHeightIndex } from './row-height-index.js';
 /** An entry's horizontal extent in content pixels, at the bound `TimeScale` (S1.9). The one formula
  * both `computeFrame` and `GanttShell.reveal` need — extracted so the two can never drift apart
  * (they briefly did: `reveal` had its own copy missing the zero-duration/inverted-entry clamp). */
+/** `.fg-tick` padding 4+4 plus 1px border (view/styles.ts). layout/ cannot read that stylesheet. */
+const STICKY_LABEL_MIN_WIDTH_PX = 9;
+
 export function barSpan(entry: Pick<Entry, 'start' | 'end'>, scale: TimeScale): { x: number; width: number } {
   const x = scale.xForInstant(entry.start);
   const width = Math.max(0, scale.xForInstant(entry.end) - x);
@@ -258,8 +261,8 @@ export function computeFrame(
   // exists to keep (header readability follow-up, pass 4: found once panning scrolled the pane off
   // 0 made a thin straddle reachable in practice). Below the floor, the sticky behaviour buys
   // nothing anyway — there is no room left to show a label in — so it falls back to the tick's own
-  // true (off-screen) x, same as a tick fully behind the visible edge.
-  const STICKY_LABEL_MIN_WIDTH_PX = 9;
+  // true (off-screen) x, same as a tick fully behind the visible edge. The 9 restates the stylesheet
+  // (layout/ is DOM-free and cannot read computed style); a Token would close that leak.
 
   const headerFormats = dedupeHeaderFormats(preset.headers);
   const bands: FrameHeaderBand[] = preset.headers.map((header, i) => {
