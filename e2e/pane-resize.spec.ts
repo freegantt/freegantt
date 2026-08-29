@@ -42,15 +42,19 @@ test('resizing the window re-fits the axis (#8)', async ({ page }) => {
   // Both widths wide enough that the sample dataset's day-preset density floor (S1.12,
   // D-S1.12-2/3) does not clamp fitDataset's pxPerMs at either end — a floored pane doesn't move
   // its content edge on resize by design (the point of the floor is to scroll instead of squish),
-  // so a resize test has to stay above that floor to observe a re-fit at all.
-  await page.setViewportSize({ width: 3000, height: 800 });
+  // so a resize test has to stay above that floor to observe a re-fit at all. The full demo dataset
+  // spans ~83 days at dayPreset's minTickWidthPx of 96 (raised from 32 in the header readability
+  // follow-up, finding 5), so the floor itself is ~7968px — these widths were measured directly
+  // against the running harness to confirm both clear it (below it, per commit f2ab918, the pane
+  // stops re-fitting on resize by design and this test would no longer be testing what it says).
+  await page.setViewportSize({ width: 8600, height: 800 });
   await page.goto('/');
   await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
 
   const before = await contentSizerRight(page);
   expect(before).toBeGreaterThan(0);
 
-  await page.setViewportSize({ width: 3600, height: 800 });
+  await page.setViewportSize({ width: 9600, height: 800 });
   // The resize observation is queued by the browser, not synchronous with setViewportSize.
   await expect.poll(async () => contentSizerRight(page), { timeout: 2000 }).not.toBe(before);
 
@@ -66,7 +70,7 @@ test('resizing the window re-fits the axis (#8)', async ({ page }) => {
 test('dragging the splitter re-fits the axis with no other call (U4)', async ({ page }) => {
   // Wide enough that the pane stays above the S1.12 density floor (see the #8 test above) both
   // before and after the 120px drag — otherwise the content edge legitimately does not move.
-  await page.setViewportSize({ width: 3200, height: 800 });
+  await page.setViewportSize({ width: 8800, height: 800 });
   await page.goto('/');
   await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
 
