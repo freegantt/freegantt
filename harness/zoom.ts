@@ -5,11 +5,11 @@
 // toolbar over the plain `zoomIn`/`zoomOut`/`panToToday`/`fit`/`locale`/`todayLine` surface.
 
 import { Gantt, Dataset } from '../src/api/index.js';
-import { sampleEntryInputs } from '../fixtures/sample-dataset.js';
+import { demoEntryInputs } from '../fixtures/demo-dataset.js';
 import { multiYearEntryInputs } from '../fixtures/multi-year-dataset.js';
 import { mountTimelineToolbar } from './timeline-toolbar.js';
 
-let dataset = new Dataset({ entries: sampleEntryInputs, timeZone: 'UTC' });
+let dataset = new Dataset({ entries: demoEntryInputs, timeZone: 'UTC' });
 let gantt = new Gantt({ container: '#gantt', dataset });
 
 declare global {
@@ -35,7 +35,7 @@ document.querySelectorAll<HTMLInputElement>('input[name="dataset"]').forEach((ra
   radio.addEventListener('change', () => {
     if (!radio.checked) return;
     dataset = new Dataset({
-      entries: radio.value === 'multi-year' ? multiYearEntryInputs : sampleEntryInputs,
+      entries: radio.value === 'multi-year' ? multiYearEntryInputs : demoEntryInputs,
       timeZone: 'UTC',
     });
     gantt.destroy();

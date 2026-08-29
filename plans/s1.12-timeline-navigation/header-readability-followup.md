@@ -108,25 +108,48 @@ impossible to read." Root-caused live with Playwright against the dev server (`p
 
 `pnpm verify` is green end to end as of this doc.
 
+## Follow-up pass 2 — e2e coverage, tick borders, a real bug found along the way
+
+- **e2e tests added**: `e2e/header-readability.spec.ts` covers all four suggested cases (findings
+  2, 3, 4, 5) against `harness/zoom.html`, following `e2e/zoom.spec.ts`'s `window.__gantt` pattern.
+  `test:e2e` stays excluded from `pnpm verify`/the push gate, per the existing precedent.
+- **Real bug found while writing the finding-5 overlap test**: the finding-3 sticky-label clamp
+  (`layout/frame.ts`) clamped *every* tick left of the visible edge to the same x, not just the one
+  tick whose cell actually straddles that edge. With the overscan buffer rendering several ticks
+  before the true visible edge, this collapsed multiple ticks onto the same pixel column — visible
+  as several stacked day labels at `dayWeekMonth`'s tight 28px floor. Fixed: the clamp now only
+  applies when `tick.x < labelLeftClamp && tick.x + tick.width > labelLeftClamp` (the tick's cell
+  spans the clamp line); a tick fully behind it keeps its own true `x`.
+- **`.fg-tick` gained `border-left: 1px solid var(--fg-header-divider-color)`**, so adjacent ticks
+  in one band read as separate columns — matches `.fg-band`'s existing `border-bottom` between
+  bands.
+- **New `fixtures/demo-dataset.ts`**: `sampleEntryInputs` stays frozen at 2026-09-01 (finding 1,
+  above — dozens of unit tests depend on those exact instants). `demoEntryInputs` reshapes it onto
+  the real calendar, starting 3 weeks before whatever "now" is when the module loads, so
+  `todayLine`/`panToToday` show something real on every harness page instead of finding 1's gap.
+  Wired into `harness/main.ts`, `zoom.ts`, `scroll-sync.ts`, `data.ts` in place of
+  `sampleEntryInputs`; unit tests and `sampleEntries` are untouched.
+- **Real bug found once `demoEntryInputs` made the today line actually visible day-to-day**: it
+  stopped partway down the pane on any dataset taller than one screenful, at whatever height the
+  pane happened to be when the page first laid out. `.fg-today-line`'s CSS gave it `top: 0; bottom:
+  0`, but its parent (`timelineHost`, i.e. `.fg-timeline-pane`) is *both* the positioned ancestor an
+  absolutely positioned child measures against *and* that same element's own `overflow: auto` scroll
+  container — so `bottom: 0` resolved against the pane's own laid-out box (its visible clientHeight),
+  never its scrollable content height. Fixed in `render/dom/index.ts`'s `syncDecorations`: the line
+  now gets an explicit inline `height`, `Math.max(frame.contentHeight, frame.visible.height)` (the
+  taller of the two, so a short dataset still fills the visible pane and a tall one gets its own full
+  content height) — `height` is one of the geometry properties this codebase allows inline
+  (D-S1.10-6). `.fg-today-line`'s CSS dropped `bottom: 0` accordingly. Covered by
+  `src/render/dom/index.test.ts` (unit, both the short- and tall-dataset cases) and
+  `e2e/today-line.spec.ts` (a real browser, scrollable pane).
+
 ## Not done — pick up here
 
-- **No e2e tests were added yet** for any of this (today-line visibility at a real scroll
-  position, dedupe showing up in the DOM, the sticky-label clamp, tick labels never overlapping at
-  any shipped preset). `browser-tests` skill covers how this repo writes them; follow
-  `e2e/zoom.spec.ts`'s pattern (`window.__gantt`, `page.evaluate`). Suggested cases:
-  - weekMonthYear (or any 3-band preset): assert the coarsest band's first visible tick's
-    `getBoundingClientRect()` is inside the pane's own bounds, not just present in the DOM — this
-    is the regression test for finding 3.
-  - A multi-band preset: assert a finer band's tick text does NOT contain the year/month a coarser
-    band's tick already shows, for the regression test for finding 2.
-  - hourPreset: assert an hour tick's text has no leading zero for single-digit hours, for finding 4.
-  - Two adjacent `.fg-tick` elements' bounding boxes never overlap at the shipped `minTickWidthPx`
-    floor, for finding 5 — this is the one place `browser-tests` was explicitly suggested for
-    since it needs real measured text, not just JSDOM.
-- **Gating decision**: `test:e2e` is already excluded from `pnpm verify`/the push gate (see
-  `package.json`'s `verify` script — it was never included, this predates this pass). Follow that
-  existing precedent for any new e2e tests here; nothing to change.
 - Consider whether `preferredTickWidthPx` deserves its own doc/lint invariant ("must be ≥
   `minTickWidthPx`") now that finding 5 depended on that relationship by hand — currently just
   convention, not enforced. Not done this pass; flagging since a future preset edit could
   reintroduce finding 5 silently if `preferredTickWidthPx` drifts below the floor again.
+- The sticky-label clamp fix above has no unit test yet in `src/layout/frame.test.ts` — only e2e
+  coverage (`header-readability.spec.ts`'s finding-5 case exercises it indirectly). A direct
+  `computeFrame` fixture with two off-screen ticks in the overscan buffer plus one straddling the
+  clamp line would pin this down at the Node/Vitest layer instead of only at the browser layer.

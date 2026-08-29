@@ -14,10 +14,10 @@
 
 import { Dataset, Gantt, MS, MutationCancelledError, addMs, now } from '../src/api/index.js';
 import type { ChangeSet, DatasetDocument, DatasetEventMap, Entry } from '../src/api/index.js';
-import { sampleEntryInputs } from '../fixtures/sample-dataset.js';
+import { demoEntryInputs } from '../fixtures/demo-dataset.js';
 import { mountTimelineToolbar } from './timeline-toolbar.js';
 
-let dataset = new Dataset({ entries: sampleEntryInputs.slice(0, 8), timeZone: 'UTC' });
+let dataset = new Dataset({ entries: demoEntryInputs.slice(0, 8), timeZone: 'UTC' });
 let gantt = new Gantt({ container: '#gantt', dataset });
 
 const toolbar = document.querySelector<HTMLDivElement>('#toolbar')!;

@@ -1,9 +1,9 @@
 import { Gantt, Dataset } from '../src/api/index.js';
 import type { Theme } from '../src/api/index.js';
-import { sampleEntryInputs } from '../fixtures/sample-dataset.js';
+import { demoEntryInputs } from '../fixtures/demo-dataset.js';
 import { mountTimelineToolbar } from './timeline-toolbar.js';
 
-const dataset = new Dataset({ entries: sampleEntryInputs, timeZone: 'UTC' });
+const dataset = new Dataset({ entries: demoEntryInputs, timeZone: 'UTC' });
 
 const gantt = new Gantt({ container: '#gantt', dataset });
 

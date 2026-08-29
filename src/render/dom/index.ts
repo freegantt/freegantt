@@ -183,11 +183,27 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
     }
   }
 
-  function syncDecorations(decorations: readonly FrameDecoration[]): void {
+  // `.fg-today-line`'s CSS gives it `top: 0`, but not a height: this element is a child of
+  // `timelineHost` (`.fg-timeline-pane`), which is *both* the positioned ancestor an absolutely
+  // positioned child measures against *and* the native `overflow: auto` scroll container. A CSS
+  // `bottom: 0` on that child resolves against the pane's own laid-out box (its visible clientHeight),
+  // not its scrollable content height — so the line would only ever cover the first screenful of
+  // rows and stop there, however tall the dataset actually is. Setting `height` explicitly, to
+  // whichever is taller (a short dataset should still fill the visible pane; a tall one needs its
+  // own full content height), is the fix — `height` is one of the geometry properties this codebase
+  // allows inline (D-S1.10-6).
+  function syncDecorations(
+    decorations: readonly FrameDecoration[],
+    contentHeight: number,
+    paneHeight: number,
+  ): void {
     if (!todayLine) return;
     const today = decorations.find((d) => d.kind === 'todayLine');
     todayLine.hidden = !today;
-    if (today) todayLine.style.transform = `translateX(${today.x}px)`;
+    if (today) {
+      todayLine.style.transform = `translateX(${today.x}px)`;
+      todayLine.style.height = `${Math.max(contentHeight, paneHeight)}px`;
+    }
   }
 
   function syncBars(bars: readonly FrameBar[]): void {
@@ -259,7 +275,7 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
       syncHeader(frame.header.bands);
       syncRows(frame.rows, frame.rowCount);
       syncBars(frame.bars);
-      syncDecorations(frame.decorations);
+      syncDecorations(frame.decorations, frame.contentHeight, frame.visible.height);
       if (gridLayer) {
         // The grid pane has no scrollbar of its own; its row layer follows the timeline pane's
         // native scroll by one transform per frame instead of a second real scroller (D-S1.8-1).

@@ -256,7 +256,12 @@ export function computeFrame(
       unit: header.unit,
       increment: header.increment,
       ticks: scale.ticks({ unit: header.unit, increment: header.increment }, horizontalSpan).map((tick) => {
-        const x = Math.max(tick.x, labelLeftClamp);
+        // Only the one tick whose cell actually straddles the clamp line is "stuck" — a tick
+        // that ends before it (fully behind the visible edge, kept around only by the overscan
+        // buffer) must keep its own true x, or every such tick collapses onto the same clamped
+        // column and their labels stack on top of each other (header readability follow-up).
+        const straddlesClamp = tick.x < labelLeftClamp && tick.x + tick.width > labelLeftClamp;
+        const x = straddlesClamp ? labelLeftClamp : tick.x;
         return { x, width: Math.max(0, tick.width - (x - tick.x)), label: format(tick.instant) };
       }),
     };
