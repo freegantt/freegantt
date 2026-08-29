@@ -153,7 +153,7 @@ Commit `f3efab7`. Picks up the "Not done" list below the pass-1 line.
   and tall-dataset cases) and `e2e/today-line.spec.ts` (a real browser, scrollable pane). Both
   regression tests were checked against the pre-fix code and genuinely fail there.
 
-## Tried and reverted this pass — read before re-attempting
+## Tried and reverted in pass 2 — superseded by pass 4, below
 
 **Auto-panning the harness pages to "today" on load** (`gantt.panToToday('center')` right after
 construction in `main.ts`/`zoom.ts`) was implemented, screenshotted (it visibly works — the today
@@ -179,6 +179,9 @@ currently satisfy, and several other tests likely share the same unstated assump
 having been audited for it. The safer alternative if this is wanted again: give it its own harness
 page (not the shared e2e fixture pages), or fix the D1 test's measurement properly first and then
 work through the other two one at a time, re-running the full `test:e2e` suite after each.
+
+**Update, pass 4: done — see below.** All three tests were fixed or (for two of them) revealed a
+real library bug that pass 4 fixed instead of the test.
 
 ## Pass 3 — preferredTickWidthPx invariant, and two pre-existing e2e regressions found along the way
 
@@ -206,23 +209,58 @@ Commits `50c0a1c` (invariant) and `d306bb7` (e2e fixes), both pushed to `jolly-s
   preset table by hand — see each test's own updated comment for the numbers and margins). All 25
   e2e specs pass; `pnpm verify` and the pre-push hook (which runs `test:e2e`) are both green.
 
-## Not done — pick up here
+## Pass 4 — sticky-clamp unit coverage, panToToday/panToDate unit coverage, auto-pan shipped
 
-- **The "today line isn't visible without a scroll/click" gap is still open.** The toolbar's
-  existing "Today" button (`panToToday`, already wired, always present via
-  `mountTimelineToolbar`) is the workaround today. Auto-panning on load is the fix that was tried
-  and reverted above — pick that up if a person still needs zero-interaction visibility, following
-  the guidance above about the three tests it touches. Note the three tests named there
-  (`e2e/harness.spec.ts` D1, `e2e/zoom.spec.ts` U1/I8, `e2e/header-readability.spec.ts` finding 5)
-  are a *different* set from pass 3's two viewport fixes above — don't conflate them.
-- The sticky-label clamp fix has e2e coverage only (`header-readability.spec.ts`'s finding-5 case
-  exercises it indirectly). A direct `computeFrame` fixture in `src/layout/frame.test.ts` with two
-  off-screen ticks in the overscan buffer plus one straddling the clamp line would pin this down at
-  the Node/Vitest layer instead of only at the browser layer.
-- `panToToday`/`panToDate` have no unit test coverage anywhere in the repo (`grep -rn panToToday
-  src/**/*.test.ts` is empty). Not blocking, but worth knowing before trusting that surface further
-  — the pass-2 "tried and reverted" investigation above leaned partly on manual/screenshot
-  verification because of this gap.
+Commits `f109031` (sticky-clamp unit test), `37b08d9` (panToDate/panToToday/panToInstant unit
+tests), `ea06cf5` (auto-pan + the two real bugs it exposed), all pushed to `jolly-salmon`.
+
+- **Sticky-label clamp now has direct `computeFrame` coverage** (pass 3's "not done" item):
+  `src/layout/frame.test.ts` gained a fixture built on `hourPreset` at a scale where 1px = 1 minute,
+  so tick positions are hand-verifiable integers. Two ticks fully behind the visible edge (kept only
+  by the overscan buffer) keep their own true `x`; the one tick whose cell straddles the clamp line
+  gets `x` clamped to the visible edge with `width` reduced by the same amount.
+- **`panToDate`/`panToToday` now have unit coverage** (pass 2/3's "not done" item): `Viewport.
+  panToInstant` gets exact-arithmetic coverage in `src/layout/viewport/viewport.test.ts` (`align`
+  'start'/'center', one notification, clamping before `range.start` and past `range.end`); the
+  public `Gantt.panToDate`/`panToToday` get delegation coverage in `src/api/gantt.test.ts`,
+  including `panToToday` under a faked clock proven identical to `panToDate(now(), align)`.
+- **`panToToday('center')` is now wired into `harness/main.ts` and `harness/zoom.ts`**, right after
+  construction — the zero-interaction-visibility gap pass 2/3 left open is closed. Going through
+  the three tests pass 2 flagged (re-running the *full* `playwright test` suite, several times,
+  after each fix, per the doc's own warning that other tests might share the unstated `scrollLeft:
+  0` assumption — none turned out to):
+  - **`e2e/harness.spec.ts` D1** — fixed exactly as pass 2 suggested: the sizer-extent measurement
+    now adds back `el.scrollLeft` (a `getBoundingClientRect()` read is viewport-relative, so a
+    scrolled pane moved the sizer's painted rect left by exactly the scroll offset).
+  - **`e2e/header-readability.spec.ts` finding 5 — a real library bug, not a test-assumption gap.**
+    Scrolling away from 0 makes the sticky-label clamp (finding 3) produce thin straddling
+    remainders far more often. `.fg-tick` (`view/styles.ts`) is `box-sizing: border-box` with
+    `padding: 0 4px` and a 1px `border-left` — 9px of border-box that no declared `width` below it
+    can shrink (verified directly against a live browser: a border-box narrower than its own
+    padding+border clamps *up* to that floor, per the CSS box model). A straddling tick clamped to
+    a remainder thinner than 9px asked for e.g. `width: 0.5px` in `layout/frame.ts`'s math but
+    *rendered* at a fixed 9px regardless, eating into the next tick's true cell — overlapping
+    labels, the exact "impossible to read" symptom finding 5 exists to catch. Fixed in
+    `layout/frame.ts`: a straddling tick only gets clamped when the remaining room is at least that
+    9px floor; thinner remainders fall back to the tick's own true (possibly off-screen) `x`, same
+    as a tick fully behind the visible edge — there's no room left to show a label in either way.
+  - **`e2e/zoom.spec.ts` U1/I8 — also a real library bug, in `layout/viewport/viewport.ts`.**
+    `preset`/`range`/`fit` assignment, unlike `zoomIn`/`zoomOut`/`zoomToSpan`, never re-clamped
+    scroll against the freshly resolved `contentWidth` before the next render. A preset that
+    shrinks content while scrolled away from 0 (switching `day` → `weekAndMonth` after
+    `panToToday`, in the test) computed one frame against a stale, now out-of-bounds `visible.x` —
+    every bar culled out of that frame — and the DOM nodes that survived once the browser's own
+    native `scrollLeft` clamp corrected the position a frame later were new nodes: a full, unwanted
+    remount. Fixed with `Viewport.#reclampToContentWidth()` (push the new `contentWidth` into both
+    `#contentSize` and the scroll binding, then `panTo` the current position to force `ScrollModel`'s
+    own clamp to run immediately) — mirroring the re-clamp `#stepPreset`/`zoomToSpan` already do
+    around their own explicit anchor, now applied to the three setters that previously had none.
+  - Re-ran the full `playwright test` suite (all 25 specs) 5+ times after each individual fix and
+    again after all three together — stable, no flakiness introduced. `e2e/scroll-sync.spec.ts`'s
+    D-S1.5-6 case flaked once during this pass's repeated runs; reproduced identically on the
+    pre-pass-4 commit (`37b08d9`) in a scratch `git worktree` with no `panToToday` involved at all —
+    confirmed pre-existing and unrelated, not touched.
+- `pnpm verify` and `pnpm exec playwright test` are both green as of `ea06cf5`.
 
 ## Unrelated, in-flight in this working tree — do not touch as part of this doc's work
 
