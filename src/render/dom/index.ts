@@ -4,7 +4,6 @@
 import type {
   BarFlags,
   FrameBar,
-  FrameDecoration,
   FrameHeaderBand,
   FrameHeaderTick,
   FrameRow,
@@ -13,6 +12,8 @@ import type {
   RowId,
 } from '../../layout/index.js';
 import type { RenderBackend, RenderSurfaces, InteractionState, HitResult } from '../backend.js';
+import { attachDateLines } from './date-line.js';
+import type { DateLineAttachment } from './date-line.js';
 import { syncKeyed } from './sync-keyed.js';
 
 type TickGeom = Pick<FrameHeaderTick, 'x' | 'width' | 'label'>;
@@ -47,9 +48,7 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
   let headerLayer: HTMLElement | undefined;
   let barLayer: HTMLElement | undefined;
   let contentSizer: HTMLElement | undefined;
-  // S1.12, D-S1.12-14: reuses the FrameDecoration seam that already shipped — one element toggled
-  // on/off each frame, not a keyed list, since `decorations` carries at most one TodayLine today.
-  let todayLine: HTMLElement | undefined;
+  let dateLines: DateLineAttachment | undefined;
 
   const bandNodes = new Map<number, HTMLElement>();
   const bandGeom = new Map<number, BandGeom>();
@@ -183,29 +182,6 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
     }
   }
 
-  // `.fg-today-line`'s CSS gives it `top: 0`, but not a height: this element is a child of
-  // `timelineHost` (`.fg-timeline-pane`), which is *both* the positioned ancestor an absolutely
-  // positioned child measures against *and* the native `overflow: auto` scroll container. A CSS
-  // `bottom: 0` on that child resolves against the pane's own laid-out box (its visible clientHeight),
-  // not its scrollable content height — so the line would only ever cover the first screenful of
-  // rows and stop there, however tall the dataset actually is. Setting `height` explicitly, to
-  // whichever is taller (a short dataset should still fill the visible pane; a tall one needs its
-  // own full content height), is the fix — `height` is one of the geometry properties this codebase
-  // allows inline (D-S1.10-6).
-  function syncDecorations(
-    decorations: readonly FrameDecoration[],
-    contentHeight: number,
-    paneHeight: number,
-  ): void {
-    if (!todayLine) return;
-    const today = decorations.find((d) => d.kind === 'todayLine');
-    todayLine.hidden = !today;
-    if (today) {
-      todayLine.style.transform = `translateX(${today.x}px)`;
-      todayLine.style.height = `${Math.max(contentHeight, paneHeight)}px`;
-    }
-  }
-
   function syncBars(bars: readonly FrameBar[]): void {
     if (!barLayer) return;
     syncKeyed(barLayer, bars, barNodes, barGeom, {
@@ -258,11 +234,8 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
       contentSizer = document.createElement('div');
       contentSizer.setAttribute('aria-hidden', 'true');
       contentSizer.className = 'fg-content-sizer';
-      todayLine = document.createElement('div');
-      todayLine.setAttribute('aria-hidden', 'true');
-      todayLine.className = 'fg-today-line';
-      todayLine.hidden = true;
-      timelineHost.append(headerLayer, barLayer, contentSizer, todayLine);
+      timelineHost.append(headerLayer, barLayer, contentSizer);
+      dateLines = attachDateLines(timelineHost);
     },
     sync(frame: GeometryFrame) {
       if (headerLayer) {
@@ -275,7 +248,7 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
       syncHeader(frame.header.bands);
       syncRows(frame.rows, frame.rowCount);
       syncBars(frame.bars);
-      syncDecorations(frame.decorations, frame.contentHeight, frame.visible.height);
+      dateLines?.sync(frame.decorations, frame.contentHeight, frame.visible.height);
       if (gridLayer) {
         // The grid pane has no scrollbar of its own; its row layer follows the timeline pane's
         // native scroll by one transform per frame instead of a second real scroller (D-S1.8-1).
@@ -306,6 +279,8 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
       return id ? { itemId: id as ItemId } : null;
     },
     destroy() {
+      dateLines?.destroy();
+      dateLines = undefined;
       gridLayer?.replaceChildren();
       timelineHost?.replaceChildren();
       bandNodes.clear();
@@ -320,7 +295,6 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
       barGeom.clear();
       gridLayer = undefined;
       timelineHost = undefined;
-      todayLine = undefined;
       headerLayer = undefined;
       barLayer = undefined;
       contentSizer = undefined;

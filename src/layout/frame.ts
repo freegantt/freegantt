@@ -3,13 +3,9 @@
 import type { RowId, ItemId, EntryId, EntryKind, Entry, Rect, TimeUnit } from '../model/index.js';
 import { itemId, rowId } from '../model/index.js';
 import type { TimeScale, ViewPreset } from '../time/index.js';
-import {
-  dedupeHeaderFormats,
-  formatDate,
-  formatEndInclusive,
-  now,
-  resolveDateFormat,
-} from '../time/index.js';
+import { dedupeHeaderFormats, formatDate, formatEndInclusive, resolveDateFormat } from '../time/index.js';
+import { resolveDateLines } from './date-line.js';
+import type { DateLine, DateLineInput } from './date-line.js';
 import { PrefixSumHeightIndex } from './row-height-index.js';
 import type { RowHeightIndex } from './row-height-index.js';
 
@@ -78,11 +74,6 @@ export interface FrameLink {
   flags: LinkFlags;
 }
 
-export interface TodayLine {
-  kind: 'todayLine';
-  x: number;
-}
-
 export interface RangeBand {
   kind: 'rangeBand';
   x: number;
@@ -94,7 +85,7 @@ export interface RowStripe {
   rowId: RowId;
 }
 
-export type FrameDecoration = TodayLine | RangeBand | RowStripe;
+export type FrameDecoration = DateLine | RangeBand | RowStripe;
 
 /** One header tick, positioned and labelled — the render seam's only route for header state (#19). */
 export interface FrameHeaderTick {
@@ -162,9 +153,11 @@ export interface LayoutInput {
   /** Feeds every header band's `resolveDateFormat` call and `a11yLabel` (S1.12, D-S1.12-12).
    * `undefined` = the runtime default. */
   locale?: Intl.LocalesArgument;
-  /** Emits a `TodayLine` decoration when `true` and `now()` falls inside `scale.range` (S1.12,
-   * D-S1.12-14). Default `true`. */
+  /** Emits the today Date line when `true` and `now()` falls inside `scale.range` (S1.12,
+   *  D-S1.12-14). Default `true`. Wrapper around Date line (issue #96). */
   todayLine?: boolean;
+  /** Authored Date lines, resolved on the same path as the today wrapper. Not on `Gantt` yet. */
+  dateLines?: readonly DateLineInput[];
 }
 
 /** S0/S1 scope: flat row-per-entry, one bar per entry, fixed row height (plans/03 S0-S1).
@@ -179,7 +172,6 @@ export function computeFrame(
   heights: RowHeightIndex = new PrefixSumHeightIndex(input.entries.length, () => input.rowHeight),
 ): GeometryFrame {
   const { entries, scale, preset, visible, rowHeight, revision, locale } = input;
-  const todayLineOn = input.todayLine ?? true;
   const verticalRows = input.overscan?.verticalRows ?? DEFAULT_OVERSCAN.verticalRows;
   const horizontalPx = input.overscan?.horizontalPx ?? DEFAULT_OVERSCAN.horizontalPx;
 
@@ -283,13 +275,11 @@ export function computeFrame(
     };
   });
 
-  const decorations: FrameDecoration[] = [];
-  if (todayLineOn) {
-    const today = now();
-    if (today >= scale.range.start && today < scale.range.end) {
-      decorations.push({ kind: 'todayLine', x: scale.xForInstant(today) });
-    }
-  }
+  const decorations: FrameDecoration[] = resolveDateLines({
+    scale,
+    todayLine: input.todayLine,
+    ...(input.dateLines ? { dateLines: input.dateLines } : {}),
+  });
 
   return {
     revision,

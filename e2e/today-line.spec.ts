@@ -5,7 +5,7 @@ import { test, expect } from '@playwright/test';
 // resolved against the pane's own visible clientHeight (the height it had when the page first laid
 // out), not its scrollable content height — so the line only ever covered the dataset's first
 // screenful of rows and stopped there, however many rows scrolled below it. Fixed in
-// `render/dom/index.ts`'s `syncDecorations` by giving the line an explicit `height` (`fixtures/
+// `render/dom/date-line.ts` sets an explicit `height` (`fixtures/
 // demo-dataset.ts` puts "today" inside every harness dataset's range, so the line always renders here).
 
 test("[today line] spans the full scrollable row content, not just the pane's initial viewport", async ({
