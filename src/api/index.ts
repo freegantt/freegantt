@@ -39,6 +39,7 @@ export {
   ContainerNotFoundError,
   InvalidInstantError,
   UnknownPresetError,
+  InvalidPresetError,
   EntryNotFoundError,
   DuplicateEntryIdError,
   ParentCycleError,

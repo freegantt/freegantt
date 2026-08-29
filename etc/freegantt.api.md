@@ -370,6 +370,11 @@ export class InvalidInstantError extends FreeGanttError {
 }
 
 // @public
+export class InvalidPresetError extends FreeGanttError {
+    constructor(message: string);
+}
+
+// @public
 export class InvalidReplayOriginError extends FreeGanttError {
     constructor(origin: string);
 }
