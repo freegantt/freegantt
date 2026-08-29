@@ -4,9 +4,26 @@
 // is an `Intl.DateTimeFormatOptions` object (S1.12, D-S1.12-11) except `formatWeekNumber` and
 // `formatHour`, the escape-hatch callbacks Intl has no reliable field for.
 
-import { UnknownPresetError } from '../model/index.js';
+import { InvalidPresetError, UnknownPresetError } from '../model/index.js';
 import { formatHour, formatWeekNumber } from './format.js';
 import type { ViewPreset } from './scale.js';
+
+/** `minTickWidthPx` is the density floor below which a preset's labels stop being legible;
+ * `preferredTickWidthPx` is the zoom the preset resolves to with nothing else deciding (D-S1.12-2,
+ * `pxPerMsForPreset`/`minPxPerMsForPreset`). A floor above the preset's own preferred density is
+ * unreachable at that density and can only be an authoring mistake — caught here for both shipped
+ * presets (`freezePreset`, at module load) and custom ones (`resolvePreset`, at first use), so a
+ * future preset edit can't silently reintroduce the header-readability follow-up's finding 5 (a
+ * min/preferred mismatch shipped as `dayAndWeekPreset: { preferredTickWidthPx: 24, minTickWidthPx:
+ * 32 }` until this check caught it). */
+function validatePresetTickWidths(preset: ViewPreset): void {
+  if (preset.minTickWidthPx !== undefined && preset.minTickWidthPx > preset.preferredTickWidthPx) {
+    throw new InvalidPresetError(
+      `preset "${preset.id}": minTickWidthPx (${preset.minTickWidthPx}) exceeds preferredTickWidthPx ` +
+        `(${preset.preferredTickWidthPx}) — the floor would be unreachable at the preset's own preferred zoom`,
+    );
+  }
+}
 
 const DAY_FORMAT: Intl.DateTimeFormatOptions = Object.freeze({
   year: 'numeric',
@@ -19,6 +36,7 @@ const YEAR_FORMAT: Intl.DateTimeFormatOptions = Object.freeze({ year: 'numeric' 
 /** Deep-freezes a preset (and its `headers` array) so a shipped preset is a value, not a shared
  * mutable singleton — one consumer's zoom cannot retune every Gantt on the page (I2). */
 function freezePreset(preset: ViewPreset): ViewPreset {
+  validatePresetTickWidths(preset);
   Object.freeze(preset.headers);
   for (const header of preset.headers) Object.freeze(header);
   return Object.freeze(preset);
@@ -91,7 +109,9 @@ export const dayAndWeekPreset: ViewPreset = freezePreset({
     { unit: 'week', increment: 1, format: DAY_FORMAT },
     { unit: 'day', increment: 1, format: DAY_FORMAT },
   ],
-  preferredTickWidthPx: 24,
+  // preferredTickWidthPx must stay >= minTickWidthPx (validatePresetTickWidths) — this was 24 (below
+  // its own 32px floor) until the header readability follow-up caught it.
+  preferredTickWidthPx: 32,
   minTickWidthPx: 32,
 });
 
@@ -210,7 +230,10 @@ export type PresetRef = ShippedPresetId | ViewPreset;
 /** Throws `UnknownPresetError` for an id outside `presets`. A `ViewPreset` object passes through
  * unchanged — a custom preset is never a library edit. */
 export function resolvePreset(ref: PresetRef): ViewPreset {
-  if (typeof ref !== 'string') return ref;
+  if (typeof ref !== 'string') {
+    validatePresetTickWidths(ref);
+    return ref;
+  }
   const preset = presets[ref];
   if (!preset) throw new UnknownPresetError(ref);
   return preset;
