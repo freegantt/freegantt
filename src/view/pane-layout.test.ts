@@ -23,7 +23,7 @@ describe('PaneLayout', () => {
     paneLayout.destroy();
   });
 
-  it('setHeaderBandCount renders one empty .fg-band per band in the spacer (D-S1.12-9)', () => {
+  it('[S1-A8] setHeaderBandCount renders one empty .fg-band per band in the spacer (D-S1.12-9)', () => {
     const container = el();
     const paneLayout = new PaneLayout({ container });
     const spacer = container.querySelector<HTMLElement>('.fg-grid-spacer')!;

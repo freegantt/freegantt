@@ -39,7 +39,9 @@ function intlFormatter(
     byZoneLocale = new Map<string, Intl.DateTimeFormat>();
     formatterCache.set(options, byZoneLocale);
   }
-  const key = `${zone} ${JSON.stringify(locale ?? null)}`;
+  const localeKey =
+    typeof locale === 'string' || locale == null ? String(locale ?? '') : JSON.stringify(locale);
+  const key = `${zone} ${localeKey}`;
   let formatter = byZoneLocale.get(key);
   if (!formatter) {
     formatter = new Intl.DateTimeFormat(locale, { ...options, timeZone: zone });

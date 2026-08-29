@@ -174,7 +174,7 @@ The header bands live in the timeline pane. The grid pane's rows must start at t
 
 `PaneLayout` creates a spacer element at the top of the grid pane, sized from `--fg-header-height` (fallback `20`, matching today's harness). The token is introduced here because the pane split cannot be built without it; S1.10 adds it to the documented token table rather than inventing it.
 
-**The header still scrolls away vertically.** It does today, and it does after this step: it sits inside the scroller. `position: sticky; top: 0` fixes it, and that is one line in the stylesheet S1.10 ships. This step does not change the behaviour and does not claim to. §9 records it.
+**The header still scrolls away vertically.** It did at S1.8: it sits inside the scroller. `position: sticky; top: 0` shipped at S1.12 (D-S1.12-15) in the D-S1.12-9 stylesheet block.
 
 ### D-S1.8-12 — Sub-pixel drift between panes, named rather than assumed away
 
@@ -472,7 +472,7 @@ Guardrails and glossary first (`plans/04` §3.2/§3.3, naming skill step 1), the
 | `gantt.reveal(entryId)` | S1.9 (shipped — D-S1.9-6) | `zoom`, so the x half of "bring into view" means something (Q1) |
 | `gantt.overscan` and the rest of the live keys | S1.9 (shipped — D-S1.9-7) | one public-surface pass, not two (Q2) |
 | `gantt.scale =` / `gantt.scroll =` | **cut** | one key, one write path (`plans/02` §1.1) |
-| A sticky header that does not scroll away vertically | S1.10 | one line in the shipped stylesheet (D-S1.8-11) |
+| A sticky header that does not scroll away vertically | S1.12 (shipped — D-S1.12-15) | one line in the shipped stylesheet (D-S1.8-11) |
 | `.fg-row { width: 100% }` moving out of `render/dom` | S1.10 | the shipped stylesheet (§3.4) |
 | Sub-pixel drift between panes under a fractional device-pixel ratio | S7, if measured | the element's reported position handed back through `ScrollAttachment` (D-S1.8-12) |
 | Async veto on `beforeGridWidthChange` | S4 | the gesture controllers `plans/02` §3 describes |

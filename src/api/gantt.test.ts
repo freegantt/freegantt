@@ -277,7 +277,7 @@ describe('Gantt.panToDate / panToToday (S1.12, D-S1.12-8)', () => {
     }
   });
 
-  it('panToToday is panToDate(now(), align) — same resulting scroll position for the same instant', () => {
+  it('[S1-A10] panToToday is panToDate(now(), align) — same resulting scroll position for the same instant', () => {
     FakeResizeObserver.instances = [];
     vi.stubGlobal('ResizeObserver', FakeResizeObserver);
     const fakeNow = instant('2026-09-20T12:00:00Z');
@@ -331,6 +331,106 @@ describe('Gantt.panToDate / panToToday (S1.12, D-S1.12-8)', () => {
 
       expect(() => gantt.panToDate('2099-01-01T00:00:00Z')).not.toThrow();
       expect(scroll.state.position.x).toBe(scroll.state.max.x); // well past range.end, clamped up
+
+      gantt.destroy();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('panToDate accepts an epoch number and lands at the same x as the ISO string (U6)', () => {
+    FakeResizeObserver.instances = [];
+    vi.stubGlobal('ResizeObserver', FakeResizeObserver);
+
+    try {
+      const container = document.createElement('div');
+      const scroll = new ScrollModel();
+      const gantt = new Gantt({
+        container,
+        dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }),
+        fit: 'preset',
+        preset: 'day',
+        scroll,
+      });
+      FakeResizeObserver.instances[0]!.fire({ width: 300, height: 100 });
+
+      gantt.panToDate('2026-10-15T00:00:00Z');
+      const fromString = scroll.state.position.x;
+
+      // A Date object is `toInstant`'s job (`time/input.test.ts`); I10 bans `new Date()` here.
+      gantt.panToDate(Date.parse('2026-10-15T00:00:00Z'));
+      expect(scroll.state.position.x).toBe(fromString);
+
+      gantt.destroy();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+});
+
+describe('Gantt locale / todayLine (S1.12, D-S1.12-12 / D-S1.12-14)', () => {
+  it('[S1-A10] locale = ja-JP re-labels the header with no bar remount (I8)', async () => {
+    FakeResizeObserver.instances = [];
+    vi.stubGlobal('ResizeObserver', FakeResizeObserver);
+
+    try {
+      const container = document.createElement('div');
+      const gantt = new Gantt({
+        container,
+        dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }),
+        locale: 'en-US',
+        preset: 'monthAndYear',
+        fit: 'preset',
+      });
+      FakeResizeObserver.instances[0]!.fire({ width: 300, height: 100 });
+
+      const barBefore = container.querySelector<HTMLElement>('.fg-bar');
+      const labelsOf = (): string => {
+        const labels: string[] = [];
+        for (const node of container.querySelectorAll('.fg-tick')) {
+          if (node instanceof HTMLElement) labels.push(node.textContent ?? '');
+        }
+        return labels.join('|');
+      };
+      const labelBefore = labelsOf();
+      expect(labelBefore).toBeTruthy();
+
+      gantt.locale = 'ja-JP';
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+
+      expect(container.querySelector<HTMLElement>('.fg-bar')).toBe(barBefore);
+      expect(labelsOf()).not.toBe(labelBefore);
+
+      gantt.destroy();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('[S1-A10] todayLine = false hides .fg-today-line', async () => {
+    FakeResizeObserver.instances = [];
+    vi.stubGlobal('ResizeObserver', FakeResizeObserver);
+
+    try {
+      const container = document.createElement('div');
+      const gantt = new Gantt({
+        container,
+        dataset: new Dataset({
+          entries: [{ id: 'span', name: 'span', start: '2020-01-01', end: '2030-01-01' }],
+          timeZone: 'UTC',
+        }),
+        fit: 'preset',
+        preset: 'year',
+      });
+      FakeResizeObserver.instances[0]!.fire({ width: 300, height: 100 });
+
+      expect(container.querySelector('.fg-today-line')).not.toBeNull();
+      expect(container.querySelector<HTMLElement>('.fg-today-line')!.hidden).toBe(false);
+
+      gantt.todayLine = false;
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+
+      expect(container.querySelector<HTMLElement>('.fg-today-line')!.hidden).toBe(true);
 
       gantt.destroy();
     } finally {

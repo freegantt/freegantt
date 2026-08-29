@@ -93,7 +93,7 @@ export interface ViewPreset {
 
 Twenty-three references across nine files — `time/scale.ts`, `time/presets.ts`, four test files, `render/dom` and `render/null` test fixtures, `harness/doc.html`, and `plans/01` §5.1. Wider than it first looks, but every site is a literal in a preset object or an assertion against one. This is the same class of rename as `zoom` → `fit` and `TimeScaleIntent` → `TimeScaleModelOptions` (issue #84), for the same reason: a name that covers two concepts is a bug, not a style nit (CLAUDE.md, cautionary example #7).
 
-**Behaviour change, deliberate:** the shipped `day` preset gets `minTickWidthPx: 32`. Today's sample fixture (72 days in a ~900px pane) resolves to ~12px/day and squishes; after this step it resolves to 32px/day and scrolls. That is the point of the step, and `[S1-A6]` asserts it.
+**Behaviour change, deliberate:** the shipped `day` preset gets `minTickWidthPx: 96` (32 in the original S1.12 draft; header readability follow-up finding 5 raised it so a day label and its padding stay legible). Today's sample fixture (72 days in a ~900px pane) resolves well below that and scrolls. That is the point of the step, and `[S1-A6]` asserts it.
 
 ### D-S1.12-4 — A content-width ceiling, not a max tick width
 
@@ -453,8 +453,8 @@ set range(r: 'fitDataset' | { start: InstantInput; end: InstantInput });
 Guardrails and glossary first, then the engine, then the seam, then the public edge.
 
 ### Glossary and specs
-- [ ] `CONTEXT.md` entries per §7, before any code carries the new names
-- [ ] `plans/03` §S1 / §S3 / §S5 edits
+- [x] `CONTEXT.md` entries per §7, before any code carries the new names
+- [x] `plans/03` §S1 / §S3 / §S5 edits
 
 ### `time/`
 - [x] `preferredTickWidthPx` rename + `minTickWidthPx`; `minPxPerMsForPreset`
@@ -483,8 +483,8 @@ Guardrails and glossary first, then the engine, then the seam, then the public e
 - [ ] Review `harness/main.ts` and every harness page against CLAUDE.md's harness rule; record any gap against S1.12 and fix it in `src/`
 
 ### Review and gate
-- [ ] The §7 spec edits, landed with this step
-- [ ] Re-run the S1→S2 gate (`scripts/slice-gate.mjs`)
+- [x] The §7 spec edits, landed with this step
+- [x] Re-run the S1→S2 gate (`scripts/slice-gate.mjs`)
 
 ---
 
