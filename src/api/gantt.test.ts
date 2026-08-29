@@ -439,6 +439,93 @@ describe('Gantt locale / todayLine (S1.12, D-S1.12-12 / D-S1.12-14)', () => {
   });
 });
 
+describe('Gantt navigationChange (S1.12)', () => {
+  it('zoomIn fires navigationChange once per Viewport Batch', () => {
+    FakeResizeObserver.instances = [];
+    vi.stubGlobal('ResizeObserver', FakeResizeObserver);
+    try {
+      const container = document.createElement('div');
+      const gantt = new Gantt({
+        container,
+        dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }),
+        preset: 'weekAndMonth',
+        fit: 'preset',
+      });
+      FakeResizeObserver.instances[0]!.fire({ width: 300, height: 100 });
+
+      const seen: string[] = [];
+      gantt.on('navigationChange', (payload) => {
+        seen.push(payload.presetId);
+      });
+      const before = gantt.preset.id;
+      gantt.zoomIn();
+      expect(seen).toHaveLength(1);
+      expect(seen[0]).not.toBe(before);
+      expect(seen[0]).toBe(gantt.preset.id);
+
+      gantt.destroy();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('a no-op zoomIn at the finest preset emits nothing', () => {
+    FakeResizeObserver.instances = [];
+    vi.stubGlobal('ResizeObserver', FakeResizeObserver);
+    try {
+      const container = document.createElement('div');
+      const gantt = new Gantt({
+        container,
+        dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }),
+        preset: 'hour',
+        fit: 'preset',
+      });
+      FakeResizeObserver.instances[0]!.fire({ width: 300, height: 100 });
+
+      let calls = 0;
+      gantt.on('navigationChange', () => {
+        calls++;
+      });
+      expect(gantt.canZoomIn).toBe(false);
+      gantt.zoomIn();
+      expect(calls).toBe(0);
+
+      gantt.destroy();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('programmatic preset assignment fires navigationChange so chrome can stay in sync', () => {
+    FakeResizeObserver.instances = [];
+    vi.stubGlobal('ResizeObserver', FakeResizeObserver);
+    try {
+      const container = document.createElement('div');
+      const gantt = new Gantt({
+        container,
+        dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }),
+        preset: 'weekAndMonth',
+        fit: 'preset',
+      });
+      FakeResizeObserver.instances[0]!.fire({ width: 300, height: 100 });
+
+      const seen: string[] = [];
+      gantt.on('navigationChange', (payload) => {
+        seen.push(payload.presetId);
+      });
+      gantt.preset = 'month';
+      expect(seen).toEqual(['month']);
+
+      gantt.preset = 'month';
+      expect(seen).toEqual(['month']);
+
+      gantt.destroy();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+});
+
 describe('Gantt theme and a11yLabel (S1.10)', () => {
   it('theme setter flips data-fg-theme on the container live; auto removes it', () => {
     const container = document.createElement('div');

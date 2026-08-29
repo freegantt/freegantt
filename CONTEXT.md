@@ -217,8 +217,12 @@ _Avoid_: Grid pane width in code (too long once `gantt.` already says "grid pane
 One of the two DOM elements (`grid`, `timeline`) a `RenderBackend.mount()` receives (`render/backend.ts`'s `RenderSurfaces<TSurface>`, S1.8). `render/dom` puts the row layer in the grid surface and the header/bar/sizer layers in the timeline surface; `render/null` ignores both. Replaces the pre-S1.8 single-container `mount()`, which reserved the row-label gutter inside the paint layer itself.
 _Avoid_: Mount target, Container (Container is the Gantt's own DOM anchor — a different, higher-level concept a Render surface is carved out of)
 
+**Navigation**:
+The view-side motion of the timeline — Preset, Fit, Range, Pan, and Anchored zoom. Distinct from a Dataset `change` (data) and from `gridWidthChange` (Grid pane width). One Viewport Batch delivers at most one `navigationChange`. There is no `beforeNavigationChange`: assignment is reconfiguration, not a vetoable gesture (S1.9).
+_Avoid_: change (Dataset), viewportChange (Viewport is not public)
+
 **Event bus**:
-The `view/event-bus.ts` class (`EventBus<TEvents>`) a `GanttShell` holds privately and `on`/`off` delegate to. Two events exist as of S1.8 — `beforeGridWidthChange` (cancelable) and `gridWidthChange` (notification) — and `GanttEventMap` is the map new event pairs join as later slices add gestures. Not exported from `api/`; a `Gantt`'s `on`/`off` are the only public surface onto it.
+The `view/event-bus.ts` class (`EventBus<TEvents>`) a `GanttShell` holds privately and `on`/`off` delegate to. `GanttEventMap` is the map: `beforeGridWidthChange` / `gridWidthChange`, and `navigationChange` (S1.12). Not exported from `api/`; a `Gantt`'s `on`/`off` are the only public surface onto it.
 _Avoid_: Emitter, dispatcher (both are implementation-neutral; Event bus is this project's term for the specific `GanttShell`-owned instance)
 
 ### Time and viewport

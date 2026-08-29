@@ -31,6 +31,7 @@ export type {
   ScrollState,
   GanttEventMap,
   GridWidthChange,
+  NavigationChange,
 } from '../view/index.js';
 // Catchable errors (plans/02 §7): FreeGanttError is the base; a consumer can catch broadly or on `.code`.
 export {

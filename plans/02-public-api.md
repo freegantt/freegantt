@@ -144,8 +144,11 @@ The reading itself lives in `time/` (`toInstant`, `toEndInstant`) — resolving 
 | `beforeLinkCreate` | `linkCreate` |
 | `beforeSelectionChange` | `selectionChange` |
 | `beforeGridWidthChange` | `gridWidthChange` |
+| — | `navigationChange` (one Viewport Batch: Preset, Fit, Range, Pan, Anchored zoom) |
 | `beforeChange` | `change` (every committed `ChangeSet`) |
 | — | `scheduleDiagnostics` (engine findings) |
+
+`navigationChange` (S1.12) fires once per Viewport Batch after Preset, Fit, Range, Pan, or Anchored zoom actually change. There is no `before*` pair: those writes are reconfiguration (S1.9), not a vetoable gesture. Chrome reads `presetId` / `canZoom*` from the payload, or re-reads the live Gantt getters.
 
 `beforeGridWidthChange`/`gridWidthChange` (S1.8) carry `{ from, to }` in px. Fired by both a Splitter drag's commit and a direct `gantt.gridWidth = px` assignment — one commit sequence, one place it lives (`GanttShell`). A veto restores the width the drag started from, so a rejected drag leaves nothing behind.
 
@@ -157,6 +160,12 @@ gantt.on('beforeEntryMove', ({ entry, start, end }) => {
 gantt.on('beforeEntryEdit', async ({ entry }) => {
   await myDialog.open(entry);   // bring-your-own editor
   return false;                // suppress built-in
+});
+
+gantt.on('navigationChange', ({ canZoomIn, canZoomOut, presetId }) => {
+  zoomIn.disabled = !canZoomIn;
+  zoomOut.disabled = !canZoomOut;
+  presetSelect.value = presetId;
 });
 
 dataset.on('beforeChange', ({ changeSet }) => {

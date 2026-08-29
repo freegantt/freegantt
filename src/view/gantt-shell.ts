@@ -169,7 +169,9 @@ export class GanttShell {
     this.#viewportHandle = this.#viewport.bind(
       { entries: options.dataset.entries.all, timeZone: options.dataset.timeZone },
       () => {
-        if (!this.#wiring) this.#frames.request();
+        if (this.#wiring) return;
+        this.#frames.request();
+        this.#emitNavigationChange();
       },
     );
     // The whole of this shell's dependency on data change (D-S2-20): push the fresh snapshot into
@@ -309,6 +311,7 @@ export class GanttShell {
 
   set zoomPresets(refs: readonly PresetRef[]) {
     this.#viewport.zoomPresets = refs;
+    if (!this.#wiring) this.#emitNavigationChange();
   }
 
   get canZoomIn(): boolean {
@@ -354,6 +357,15 @@ export class GanttShell {
 
   off<K extends keyof GanttEventMap>(name: K, handler: (payload: GanttEventMap[K]) => void | false): void {
     this.#events.off(name, handler);
+  }
+
+  #emitNavigationChange(): void {
+    this.#events.emit('navigationChange', {
+      presetId: this.#viewport.preset.id,
+      fit: this.#viewport.fit,
+      canZoomIn: this.#viewport.canZoomIn,
+      canZoomOut: this.#viewport.canZoomOut,
+    });
   }
 
   #commitGridWidth(px: number): void {
