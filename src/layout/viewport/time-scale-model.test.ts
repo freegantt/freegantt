@@ -85,10 +85,10 @@ describe('TimeScaleModel', () => {
     const model = new TimeScaleModel();
     bindTimeScale(model, { timeZone: 'UTC', entries, paneWidth: 0 }, noop);
 
-    // dayPreset states 24px per day tick; that is a scale, not a special case.
-    expect(model.scale.xForInstant(instant('2026-09-02T00:00:00Z'))).toBeCloseTo(dayPreset.tickWidthPx);
+    // dayPreset's own density (24px) is below its S1.12 density floor (32px), so the floor wins.
+    expect(model.scale.xForInstant(instant('2026-09-02T00:00:00Z'))).toBeCloseTo(dayPreset.minTickWidthPx!);
     expect(model.scale.widthForDuration({ value: 1, unit: 'day' }, entries[0]!.start)).toBeCloseTo(
-      dayPreset.tickWidthPx,
+      dayPreset.minTickWidthPx!,
     );
   });
 
@@ -96,7 +96,7 @@ describe('TimeScaleModel', () => {
     const empty = new TimeScaleModel();
     bindTimeScale(empty, { timeZone: 'UTC', entries: [], paneWidth: 800 }, noop);
     expect(empty.scale.widthForDuration({ value: 1, unit: 'day' }, instant(0))).toBeCloseTo(
-      dayPreset.tickWidthPx,
+      dayPreset.minTickWidthPx!,
     );
 
     const zeroSpan = new TimeScaleModel();
@@ -106,7 +106,9 @@ describe('TimeScaleModel', () => {
       { timeZone: 'UTC', entries: [{ ...entries[0]!, end: at }], paneWidth: 800 },
       noop,
     );
-    expect(zeroSpan.scale.widthForDuration({ value: 1, unit: 'day' }, at)).toBeCloseTo(dayPreset.tickWidthPx);
+    expect(zeroSpan.scale.widthForDuration({ value: 1, unit: 'day' }, at)).toBeCloseTo(
+      dayPreset.minTickWidthPx!,
+    );
   });
 
   it('fits the narrowest bound viewport, so the span fits in every Gantt', () => {
@@ -255,12 +257,14 @@ describe('TimeScaleModel', () => {
       seen.length = 0; // drop the notify from this binding's own bind() call
 
       model.batch(() => {
+        // Both widths stay above the S1.12 density floor for this fixture's span, so the
+        // resolved density tracks pane width exactly and isn't itself the thing under test.
         a.setPaneWidth(300);
-        a.setPaneWidth(100);
+        a.setPaneWidth(200);
       });
       // Only the final, fully-applied state is ever observed.
       expect(seen).toHaveLength(1);
-      expect(seen[0]).toBeCloseTo(100);
+      expect(seen[0]).toBeCloseTo(200);
     });
 
     it('flushes in a finally so a throwing run still notifies and leaves the model usable', () => {
@@ -291,17 +295,19 @@ describe('TimeScaleModel', () => {
       bindTimeScale(model, { timeZone: 'UTC', entries, paneWidth: 800 }, noop);
 
       expect(model.scale.widthForDuration({ value: 1, unit: 'day' }, entries[0]!.start)).toBeCloseTo(
-        dayPreset.tickWidthPx,
+        dayPreset.minTickWidthPx!,
       );
     });
 
     it('an explicit pxPerMs is read back exactly, ignoring both the pane width and the preset', () => {
-      const model = new TimeScaleModel({ fit: 0.5 });
+      // Small enough to clear the floor and stay under S1.12's MAX_CONTENT_PX ceiling for this
+      // fixture's span — a value that only exercises the "read back exactly" behaviour.
+      const model = new TimeScaleModel({ fit: 0.01 });
       bindTimeScale(model, { timeZone: 'UTC', entries, paneWidth: 800 }, noop);
 
-      expect(model.fit).toBe(0.5);
+      expect(model.fit).toBe(0.01);
       expect(model.scale.widthForDuration({ value: 1, unit: 'millisecond' }, entries[0]!.start)).toBeCloseTo(
-        0.5,
+        0.01,
       );
     });
 

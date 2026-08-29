@@ -86,4 +86,4 @@ export {
   formatEndInclusive,
   formatWeekNumber,
 } from '../time/index.js';
-export type { ViewPreset, DateFormat } from '../time/index.js';
+export type { ViewPreset, DateFormat, HeaderFormat } from '../time/index.js';

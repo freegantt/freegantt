@@ -103,6 +103,9 @@ export interface DatasetOptions {
 }
 
 // @public
+export type DateFormat = Intl.DateTimeFormatOptions | HeaderFormat;
+
+// @public
 export type DateOnlyEndRule = 'inclusive' | 'exclusive';
 
 // @public
@@ -250,10 +253,13 @@ export interface FieldUpdated {
 }
 
 // @public
-export function formatDate(zone: string, i: Instant): string;
+export function formatDate(zone: string, i: Instant, locale?: Intl.LocalesArgument): string;
 
 // @public
-export function formatEndInclusive(zone: string, end: Instant): string;
+export function formatEndInclusive(zone: string, end: Instant, locale?: Intl.LocalesArgument): string;
+
+// @public
+export const formatWeekNumber: HeaderFormat;
 
 // @public (undocumented)
 export class FreeGanttError extends Error {
@@ -269,6 +275,10 @@ export class Gantt {
     get a11yLabel(): string;
     set a11yLabel(value: string);
     // (undocumented)
+    get canZoomIn(): boolean;
+    // (undocumented)
+    get canZoomOut(): boolean;
+    // (undocumented)
     destroy(): void;
     // (undocumented)
     get fit(): TimeScaleFit;
@@ -277,24 +287,42 @@ export class Gantt {
     get gridWidth(): number;
     set gridWidth(px: number);
     // (undocumented)
+    get locale(): Intl.LocalesArgument | undefined;
+    set locale(l: Intl.LocalesArgument | undefined);
+    // (undocumented)
     off<K extends keyof GanttEventMap>(name: K, handler: (payload: GanttEventMap[K]) => void | false): void;
     // (undocumented)
     on<K extends keyof GanttEventMap>(name: K, handler: (payload: GanttEventMap[K]) => void | false): void;
+    panToDate(date: InstantInput, align?: 'start' | 'center'): void;
+    panToToday(align?: 'start' | 'center'): void;
     // (undocumented)
     get preset(): ViewPreset;
     set preset(ref: PresetRef);
-    // (undocumented)
     get range(): 'fitDataset' | TimeSpan;
-    set range(r: 'fitDataset' | TimeSpan);
+    set range(r: 'fitDataset' | {
+        start: InstantInput;
+        end: InstantInput;
+    });
     // (undocumented)
     reveal(entryId: EntryId): void;
     // (undocumented)
     get theme(): Theme;
     set theme(value: Theme);
     // (undocumented)
+    get todayLine(): boolean;
+    set todayLine(on: boolean);
+    // (undocumented)
     zoomBy(factor: number, anchorX?: number): void;
+    zoomIn(anchorX?: number): void;
+    zoomOut(anchorX?: number): void;
+    get zoomPresets(): readonly ViewPreset[];
+    set zoomPresets(refs: readonly PresetRef[]);
     // (undocumented)
     zoomTo(pxPerMs: number, anchorX?: number): void;
+    zoomToSpan(span: {
+        start: InstantInput;
+        end: InstantInput;
+    }): void;
 }
 
 // @public
@@ -318,6 +346,9 @@ export interface GridWidthChange {
     // (undocumented)
     readonly to: number;
 }
+
+// @public
+export type HeaderFormat = (i: Instant, zone: string, locale: Intl.LocalesArgument | undefined) => string;
 
 // @public
 export type Instant = number & {
@@ -411,7 +442,7 @@ export interface ScrollState {
 }
 
 // @public (undocumented)
-export type ShippedPresetId = 'hour' | 'day' | 'week' | 'month' | 'year' | 'dayAndWeek' | 'weekAndMonth' | 'monthAndYear';
+export type ShippedPresetId = 'hour' | 'day' | 'week' | 'month' | 'year' | 'dayAndWeek' | 'weekAndMonth' | 'monthAndYear' | 'hourDayWeek' | 'dayWeekMonth' | 'weekMonthYear';
 
 // @public
 export interface Size {
@@ -507,6 +538,8 @@ export interface ViewPreset {
     headers: readonly ViewPresetHeader[];
     // (undocumented)
     id: string;
+    minTickWidthPx?: number;
+    preferredTickWidthPx: number;
     // (undocumented)
     snap?: {
         unit: TimeUnit;
@@ -516,8 +549,6 @@ export interface ViewPreset {
     tickIncrement: number;
     // (undocumented)
     tickUnit: TimeUnit;
-    // (undocumented)
-    tickWidthPx: number;
 }
 
 // (No @packageDocumentation comment for this package)

@@ -118,7 +118,8 @@ describe('GanttShell header band', () => {
 
     const ticks = container.querySelectorAll('.fg-header .fg-tick');
     expect(ticks).toHaveLength(5);
-    expect(ticks[0]?.textContent).toBe('2026-09-01');
+    // S1.12 moved header formatting onto Intl.DateTimeFormatOptions (D-S1.12-11), locale-formatted.
+    expect(ticks[0]?.textContent).toBe('Sep 1, 2026');
 
     shell.destroy();
     expect(container.children.length).toBe(0);
@@ -484,14 +485,16 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
 
   it('zoomTo/zoomBy delegate to the bound Viewport and move pxPerMs', () => {
     const container = document.createElement('div');
-    const scale = new TimeScaleModel({ range: { start: rangeStart, end: rangeEnd }, fit: 1 });
+    // Small enough that 2x still clears the S1.12 density floor and stays under MAX_CONTENT_PX
+    // for this fixture's 5-day span — a range that only exercises zoomTo/zoomBy delegation.
+    const scale = new TimeScaleModel({ range: { start: rangeStart, end: rangeEnd }, fit: 0.00001 });
     const shell = new GanttShell({ container, dataset: fakeDataset(entries), scale });
 
     shell.zoomBy(2);
-    expect(scale.scale.pxPerMs).toBe(2);
+    expect(scale.scale.pxPerMs).toBe(0.00002);
 
-    shell.zoomTo(0.5);
-    expect(scale.scale.pxPerMs).toBe(0.5);
+    shell.zoomTo(0.00001);
+    expect(scale.scale.pxPerMs).toBe(0.00001);
 
     shell.destroy();
   });

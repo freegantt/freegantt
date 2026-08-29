@@ -110,7 +110,7 @@ describe('Gantt preset/range/fit/zoomTo/zoomBy/reveal (S1.9)', () => {
       FakeResizeObserver.instances[0]!.fire({ width: 300, height: 100 });
 
       const before = container.querySelector<HTMLElement>('.fg-bar');
-      expect(container.querySelectorAll('.fg-band')).toHaveLength(1);
+      expect(container.querySelectorAll('.fg-header .fg-band')).toHaveLength(1);
 
       gantt.preset = 'weekAndMonth';
       // D-S2-15: the preset change's render request is coalesced onto the next animation frame.
@@ -119,7 +119,7 @@ describe('Gantt preset/range/fit/zoomTo/zoomBy/reveal (S1.9)', () => {
       const after = container.querySelector<HTMLElement>('.fg-bar');
       expect(after).toBe(before);
       expect(gantt.preset.id).toBe('weekAndMonth');
-      expect(container.querySelectorAll('.fg-band')).toHaveLength(2);
+      expect(container.querySelectorAll('.fg-header .fg-band')).toHaveLength(2);
 
       gantt.destroy();
     } finally {

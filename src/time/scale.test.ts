@@ -101,14 +101,14 @@ describe('createTimeScale', () => {
 });
 
 describe('pxPerMsForPreset', () => {
-  it('gives the zoom at which one tick occupies its tickWidthPx', () => {
+  it('gives the zoom at which one tick occupies its preferredTickWidthPx', () => {
     const scale = createTimeScale({
       timeZone,
       range: { start: rangeStart, end: rangeEnd },
       pxPerMs: pxPerMsForPreset(timeZone, dayPreset, rangeStart),
     });
     expect(scale.widthForDuration({ value: 1, unit: 'day' }, rangeStart)).toBeCloseTo(
-      dayPreset.tickWidthPx,
+      dayPreset.preferredTickWidthPx,
       5,
     );
   });

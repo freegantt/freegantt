@@ -19,7 +19,7 @@ const preset: ViewPreset = {
   tickUnit: 'day',
   tickIncrement: 1,
   headers: [{ unit: 'day', increment: 1, format: () => 'tick' }],
-  tickWidthPx: 24,
+  preferredTickWidthPx: 24,
 };
 
 function mountSurfaces(): { grid: HTMLElement; timeline: HTMLElement } {
