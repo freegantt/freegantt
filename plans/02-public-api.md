@@ -70,6 +70,7 @@ const gantt = new Gantt({
     resize: t => t.kind !== 'group',      // boolean or per-entry predicate — see §4.1
     linkCreate: true,
   },
+  viewportGestures: { wheelZoom: true },  // or `false` to turn wheel/keyboard pan+zoom off
 
   features: {
     links: { allowCreate: true },
@@ -257,6 +258,8 @@ barRenderer: {
 **Actions.** The `interactions` config takes a boolean or a per-entry predicate for each gesture (`move`, `resize`, `linkCreate`, `select`, `edit`), layered over per-kind defaults. One resolution both hides the affordance and refuses the gesture — pointer and keyboard alike (I14) — so a non-resizable entry simply has no handles rather than handles that scold. `select` has no affordance to hide; `select: false` (or a predicate that returns false) refuses pointer and keyboard selection of that entry and skips it in a shift-range. The public `gantt.selection` setter does not consult the capability — it is the programmatic path, matching `entries.update` under `move: false`. Context-menu items and commands carry a `when(entry)` clause, so a kind (or any predicate) ships its own action set.
 
 **Division of labor:** capabilities answer the *static* question ("groups don't resize"); `before*` events answer the *contextual* one ("not before mobilization"). Use the shallowest one that fits.
+
+**Viewport gestures** are a separate knob (`Gantt.viewportGestures`): they are not per-entry, they write no data, and they do not belong on `interactions`. `false` turns wheel zoom, shift+wheel pan, and keyboard pan off together; `{ wheelZoom: false }` pins one gesture and leaves the others on. `zoomBy` / `panToDate` / `zoomIn` stay available either way.
 
 ---
 

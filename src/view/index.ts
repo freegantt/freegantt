@@ -16,6 +16,7 @@ export type {
   EntryResize,
 } from './event-bus.js';
 export type { CapabilityRule, Interactions } from './capability.js';
+export type { ViewportGestures, ViewportGestureFlags } from './viewport-gestures.js';
 export type {
   DraftOptions,
   EntryGesture,

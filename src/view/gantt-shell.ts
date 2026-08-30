@@ -30,6 +30,12 @@ import { attachScroll } from './scroll-attachment.js';
 import type { ScrollAttachment } from './scroll-attachment.js';
 import { attachPaneSize } from './pane-size-attachment.js';
 import type { PaneSizeAttachment } from './pane-size-attachment.js';
+import { attachWheelNavigation } from './wheel-navigation.js';
+import type { WheelNavigationAttachment } from './wheel-navigation.js';
+import { attachKeyboardNavigation } from './keyboard-navigation.js';
+import type { KeyboardNavigationAttachment } from './keyboard-navigation.js';
+import { resolveViewportGestures } from './viewport-gestures.js';
+import type { ViewportGestures } from './viewport-gestures.js';
 import { ensureBaseStyles } from './styles.js';
 import type { InteractionState, RenderBackend } from '../render/backend.js';
 import { EntryNotFoundError, ContainerNotFoundError, entryId, itemId } from '../model/index.js';
@@ -137,6 +143,10 @@ export interface GanttShellOptions {
   /** Live (S3, D-S3-9). Per-gesture, boolean or per-entry predicate, over the per-kind default table
    *  (`view/capability.ts`). Default `{}`: every gesture resolves off the default table alone. */
   interactions?: Interactions;
+  /** Live (S3.7, D-S3-14). Wheel zoom/pan and keyboard pan. Default `{}`: every viewport gesture
+   *  is on. `false` turns them all off. The imperative `zoomBy`/`panToDate` surface does not
+   *  consult this. */
+  viewportGestures?: ViewportGestures;
   /** Expert knob, not on `GanttOptions` (plans/02 "two callers, two surfaces") — a test naming its
    * own `RenderBackend<HTMLElement>` in place of the DOM one (§9-I: the seam had two implementations
    * and one hardcoded call site, so nothing could reach the other short of mocking the module).
@@ -199,6 +209,8 @@ export class GanttShell {
   #datasetChanges: DatasetChangeSubscription;
   #entryGestures: EntryGesturesAttachment | undefined;
   #keyboardEditing: KeyboardEditingAttachment | undefined;
+  #wheelNavigation: WheelNavigationAttachment | undefined;
+  #keyboardNavigation: KeyboardNavigationAttachment | undefined;
   /** D-S3-6: one long-lived, mutable per-Gantt object — `applyState` diffs against what it painted
    *  last, so writing into this and calling `#backend.applyState` allocates nothing per hover/select
    *  step (I5). Never rebuilt per call. */
@@ -207,6 +219,8 @@ export class GanttShell {
   /** S3.2, D-S3-9: resolved once, re-resolved only when `interactions` is reassigned — never per
    *  hover step. `#refreshAffordances` reads it, it never calls `resolveCapabilities` itself. */
   #interactions: Interactions = {};
+  #viewportGestures: ViewportGestures = {};
+  #resolvedViewportGestures = resolveViewportGestures(undefined);
   #capabilities: Capabilities;
   /** The raw hit under the pointer, reported by `EntrySelectionContext.setHovered` — undefined on
    *  pointerleave or when nothing is wired (no `entryGestures` attachment). */
@@ -331,6 +345,8 @@ export class GanttShell {
       commitGridWidth: (px) => this.#commitGridWidth(px),
     });
     this.#interactions = options.interactions ?? {};
+    this.#viewportGestures = options.viewportGestures ?? {};
+    this.#resolvedViewportGestures = resolveViewportGestures(this.#viewportGestures);
     this.#capabilities = resolveCapabilities(this.#interactions, (kind) =>
       this.#options.dataset.isDerivedSpanKind(kind),
     );
@@ -371,6 +387,22 @@ export class GanttShell {
     };
     this.#entryGestures = options.entryGestures?.(this.#panes.timeline, this.#container, gestureContext);
     this.#keyboardEditing = options.keyboardEditing?.(this.#container, gestureContext);
+    this.#wheelNavigation = attachWheelNavigation(this.#panes.timeline, {
+      wheelZoomEnabled: () => this.#resolvedViewportGestures.wheelZoom,
+      wheelPanEnabled: () => this.#resolvedViewportGestures.wheelPan,
+      zoomBy: (factor, offsetX) => this.zoomBy(factor, offsetX),
+      panBy: (dx, dy) => this.#panBy(dx, dy),
+    });
+    this.#keyboardNavigation = attachKeyboardNavigation(this.#container, {
+      keyboardPanEnabled: () => this.#resolvedViewportGestures.keyboardPan,
+      hasSelection: () => this.#selection.length > 0,
+      panBy: (dx, dy) => this.#panBy(dx, dy),
+      panTo: (to) => this.#viewport.scroll.panTo(to),
+      arrowStepX: () => this.#viewport.preset.preferredTickWidthPx,
+      arrowStepY: () => this.#rowHeight,
+      pageStepY: () => this.#viewport.visible.height,
+      scrollMaxX: () => this.#viewport.scroll.state.max.x,
+    });
     this.#wiring = false;
     this.#frames.flush();
 
@@ -456,6 +488,21 @@ export class GanttShell {
       this.#options.dataset.isDerivedSpanKind(kind),
     );
     this.#refreshAffordances();
+  }
+
+  get viewportGestures(): ViewportGestures {
+    return this.#viewportGestures;
+  }
+
+  /** Live (S3.7, D-S3-14): the next wheel or key reads the new flags; no remount. */
+  set viewportGestures(next: ViewportGestures) {
+    this.#viewportGestures = next;
+    this.#resolvedViewportGestures = resolveViewportGestures(next);
+  }
+
+  #panBy(dx: number, dy: number): void {
+    const { x, y } = this.#viewport.scroll.state.position;
+    this.#viewport.scroll.panTo({ x: x + dx, y: y + dy });
   }
 
   /** D-S3-9's one resolution, shared by the pointer path (`canSelect` above), the keyboard path
@@ -714,6 +761,8 @@ export class GanttShell {
     this.#frames.cancel();
     this.#entryGestures?.detach();
     this.#keyboardEditing?.detach();
+    this.#wheelNavigation?.detach();
+    this.#keyboardNavigation?.detach();
     this.#datasetChanges.unsubscribe();
     this.#scrollAttachment.detach();
     this.#paneSizeAttachment.detach();
