@@ -181,7 +181,7 @@ describe('[S2-A1] undo-all restores byte-identical toJSON', () => {
     );
   });
 
-  it('with an injected extender that cascades an unrelated entry', () => {
+  it('[S3-A6] with an injected extender that cascades an unrelated entry (opArb includes gesture-shaped move ops)', () => {
     fc.assert(
       fc.property(fc.array(opArb, { minLength: 1, maxLength: 50 }), (ops) => {
         assertUndoRestores(seedSpans, ops, cascade);

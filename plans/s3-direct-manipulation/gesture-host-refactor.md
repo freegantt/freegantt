@@ -1,7 +1,11 @@
 # Gesture host refactor — closing C1–C5
 
 **Slice:** S3 · **Position:** after S3.4, before S3.5 · **Source:** [`plans/reviews/2026-08-30-s3.1-s3.3-impl.html`](../reviews/2026-08-30-s3.1-s3.3-impl.html), Simplify candidates 1–5.
-**Status:** not started · **Ends with:** `gantt-shell.ts` back under 500 lines, one home for `EntryGestureContext`, gesture commit/preview/draft logic in one deep module, all five checks green.
+**Status:** done · **Ends with:** one home for `EntryGestureContext`, gesture commit/preview/draft
+logic in one deep module (`GesturePipeline` — "Host" is a retired word, D-S1.11-6/#64),
+all five checks green. `gantt-shell.ts` shrank from 850 to 719 at HEAD (694 after D-GH-4, then S3.5
+wiring added the 25 back). Leftover D-S3-17 ghost work lives in
+[`s3.5-keyboard-parity-and-async-veto.md`](./s3.5-keyboard-parity-and-async-veto.md) §4, not here.
 
 ## 0. Why now, not later
 
@@ -50,10 +54,10 @@ This fixes where each piece can live:
 ```
 src/view/entry-gesture-context.ts   (new)  EntryGesture, EntryGestureContext, EntryGestureSession,
                                             EntryHit, DraftOptions — the one declaration.
-src/view/gesture-host.ts            (new)  GestureHost — owns entriesForGesture, draftFor, commit,
+src/view/gesture-pipeline.ts        (new)  GesturePipeline — owns entriesForGesture, draftFor, commit,
                                             preview/rAF coalescing. Built once in GanttShell's
-                                            constructor from narrow deps (dataset accessor, viewport,
-                                            EventBus, commitEntryEdits, InteractionState writer).
+                                            constructor from narrow deps (preset, selection, entryById,
+                                            canGesture, EventBus, commitEntryEdits, applyGestureState).
 src/view/affordance-projection.ts   (new)  projectAffordances() — pure function, hover + selection +
                                             capabilities in, paint ids out. No shell, no applyState.
 src/view/gantt-shell.ts             (cut)  Loses #entriesForGesture, #draftFor, #commitGesture,
@@ -76,11 +80,11 @@ flowchart TB
   end
   subgraph after [After]
     EG2[attachEntryGestures] --> CTX2["EntryGestureContext, 7 members (session replaces 4)"]
-    CTX2 --> HOST[GestureHost]
-    HOST --> LAY[draftForMove / draftForResize / previewOffsets]
-    HOST --> BUS[EventBus: beforeEntryMove/Resize, entryMove/Resize]
-    HOST --> ST[InteractionState.preview]
-    SHELL2[GanttShell] --> HOST
+    CTX2 --> PIPE[GesturePipeline]
+    PIPE --> LAY[draftForMove / draftForResize / previewOffsets]
+    PIPE --> BUS[EventBus: beforeEntryMove/Resize, entryMove/Resize]
+    PIPE --> ST[InteractionState.preview]
+    SHELL2[GanttShell] --> PIPE
     SHELL2 --> PROJ[projectAffordances]
   end
 ```
@@ -96,10 +100,12 @@ export interface DraftOptions { suspendSnap?: boolean }
 export interface EntryHit { itemId: ItemId; edge?: 'start' | 'end' }
 
 export interface EntryGestureSession {
-  /** Raw-pixel preview (D-S3-3/12 realigned, see §4) — coalesced on the host's own rAF. */
+  /** Raw-pixel preview (D-S3-3/12 realigned, see §4) — coalesced on the pipeline's own rAF. */
   preview(dxPx: number, options?: DraftOptions): void;
   /** Snapped write: beforeEntry{Move,Resize} → commitEntryEdits → entry{Move,Resize}. */
   commit(dxPx: number, options?: DraftOptions): Promise<boolean>;
+  /** S3.5: one snap-unit step through commit's veto/pending path. */
+  nudge(direction: 1 | -1, options?: DraftOptions): Promise<boolean>;
   /** Escape / pointer cancel — clears the preview, writes nothing. */
   cancel(): void;
 }
@@ -129,38 +135,39 @@ collapse into one `let session: EntryGestureSession | undefined`, set in `drag.s
 behavior-preserving rewrite of `entry-gestures.ts` this refactor requires — same pointer semantics
 (D-S3-10), same snap-on-commit behavior, different shape for holding gesture state.
 
-### D-GH-2 — `GestureHost` owns draft, preview, and the commit pipeline
+### D-GH-2 — `GesturePipeline` owns draft, preview, and the commit pipeline
 
 ```ts
-// src/view/gesture-host.ts
-export interface GestureHostDeps {
+// src/view/gesture-pipeline.ts
+export interface GesturePipelineDeps {
   timeZone(): string;
   timeScale(): TimeScale;
-  snap(suspendSnap: boolean | undefined): SnapUnit;      // moved #resolveSnap, unchanged logic
-  entriesForGesture(grabbed: EntryId, capability: keyof Interactions): readonly Entry[];
+  preset(): ViewPreset;                                  // snap resolves inside the pipeline
+  selection(): readonly EntryId[];
+  entryById(id: EntryId): Entry | undefined;
+  canGesture(capability: keyof Interactions, id: EntryId): boolean;
   commitEntryEdits(edits: EntryEdits): boolean;
-  emit: EventBus<GanttEventMap>['emit'];
-  applyPreview(draft: EntryEdits | undefined): void;      // moved #applyPreview, unchanged logic
+  emit: EventBus<GanttEventMap, AsyncCancelableEvent>['emit'];
+  applyGestureState(
+    preview: readonly ItemPreview[] | undefined,
+    pendingItemIds: readonly ItemId[] | undefined,
+  ): void;
 }
-export class GestureHost {
-  constructor(deps: GestureHostDeps);
+export class GesturePipeline {
+  constructor(deps: GesturePipelineDeps);
   session(grabbed: EntryId, gesture: EntryGesture): EntryGestureSession | undefined;
 }
 ```
 
-One `#commitGesture`-shaped private method inside `GestureHost` handles both `EntryGesture` kinds by
-building the `beforeEntry*`/`entry*` payload names off `gesture.kind` — still one fork, but it is now
-the *only* fork, isolated in one file instead of spread across shell state (closes C4 exactly as its
-"Wins" line describes: "move/resize/nudge share one commit path"). S3.5's keyboard nudge and S3.6's
-extender preview both become new callers of the same `GestureHost`, not new branches on the shell.
+`#commit` is one `#settle` path; event names and payload shape still fork once on `gesture.kind`.
+S3.6's extender preview did **not** add a third commit kind; it feeds `#computePreview` only.
 
-Preview rAF coalescing (`#previewFrame`, `#pendingPreviewDraft`) moves into `GestureHost` verbatim —
-it was already self-contained, just relocated.
+Preview rAF coalescing (`#previewFrame`, `#scheduledDraft`) moved into `GesturePipeline`
+verbatim. An async veto holds `#scheduledDraft` at the commit draft and paints it immediately with
+`pendingItemIds` through the same `applyGestureState` write (`#heldItemIds` is the arm lock).
 
-`GanttShell`'s constructor builds one `GestureHost` from its own primitives (dataset accessor,
-`#viewport.timeScale`, `#events.emit`, `#options.commitEntryEdits`, an `applyPreview` closure that
-still writes `#interactionState.preview` and calls `#backend.applyState`) and wires
-`ctx.session = (grabbed, gesture) => this.#gestureHost.session(grabbed, gesture)`.
+`GanttShell`'s constructor builds one `GesturePipeline` from its own primitives and wires
+`ctx.session = (grabbed, gesture) => this.#gesturePipeline.session(grabbed, gesture)`.
 
 ### D-GH-3 — Affordance projection is a pure function
 
@@ -189,7 +196,7 @@ sequencing dependency on D-GH-1/2 — it can land first or in parallel.
 
 The 2026-08-30 review's Spec axis flagged the same file: D-S3-3 says "snap the pointer," D-S3-12 says
 "Alt suspends snapping for fine placement during a gesture," but commit `4105b08` made live preview
-always raw and snap only on write. Since `GestureHost.session().preview()`/`.commit()` is the new home
+always raw and snap only on write. Since `GesturePipeline.session().preview()`/`.commit()` is the new home
 for this logic, update the two decision records in `plans/s3-direct-manipulation/s3.3-drag-move.md` to
 read "smooth (unsnapped) preview; snap applied on write; Alt suspends snap on write, not preview" —
 matching what the code already does. No behavior change, doc-only, bundled here because it is the same
@@ -202,13 +209,13 @@ Each step keeps all five checks green before starting the next — no big-bang r
 1. **D-GH-3 first** (affordance projector) — smallest, no interface change for `entry-gestures.ts`,
    lowest risk. Extract `projectAffordances`, add its unit tests, wire `#refreshAffordances` to call
    it. Commit.
-2. **D-GH-2** (`GestureHost`) — move `#entriesForGesture`/`#draftFor`/`#resolveSnap`/`#commitGesture`/
-   `#previewGesture`/`#applyPreview` into `src/view/gesture-host.ts` verbatim (no logic change yet),
+2. **D-GH-2** (`GesturePipeline`) — move `#entriesForGesture`/`#draftFor`/`#resolveSnap`/`#commitGesture`/
+   `#previewGesture`/`#applyPreview` into `src/view/gesture-pipeline.ts` verbatim (no logic change yet),
    keep the *existing* wide `EntryGestureContext` shape in `gantt-shell.ts` calling straight through to
-   the new host's individual methods. Proves the extraction is behavior-preserving before the interface
+   the new pipeline's individual methods. Proves the extraction is behavior-preserving before the interface
    also changes. Commit.
 3. **D-GH-1** (`session()`, single type home) — add `view/entry-gesture-context.ts`, change
-   `GestureHost` to expose `session()`, rewrite `entry-gestures.ts`'s pointer machine to hold a session
+   `GesturePipeline` to expose `session()`, rewrite `entry-gestures.ts`'s pointer machine to hold a session
    instead of `armedEntries`, delete `interaction/entry-gesture-context.ts` and the mirror in
    `gantt-shell.ts`, update `interaction/index.ts`'s re-exports to point at `view/`. Commit.
 4. **D-GH-4** (spec doc realignment) — trivial doc edit, same commit as step 3 or its own.
@@ -219,11 +226,11 @@ Each step keeps all five checks green before starting the next — no big-bang r
 |---|---|
 | `src/view/affordance-projection.ts` | new — `projectAffordances` |
 | `src/view/affordance-projection.test.ts` | new — pure unit tests, hover/selection/capability matrix |
-| `src/view/gesture-host.ts` | new — `GestureHost`, `GestureHostDeps` |
-| `src/view/gesture-host.test.ts` | new — draft/preview/commit/veto/multi-select, moved from `gantt-shell.test.ts` where those cases live today |
+| `src/view/gesture-pipeline.ts` | new — `GesturePipeline`, `GesturePipelineDeps` |
+| `src/view/gesture-pipeline.test.ts` | new — draft/preview/commit/veto/multi-select |
 | `src/view/entry-gesture-context.ts` | new — canonical `EntryGesture`/`EntryGestureContext`/`EntryGestureSession`/`EntryHit`/`DraftOptions` |
 | `src/view/index.ts` | export the new context types |
-| `src/view/gantt-shell.ts` | delete `#entriesForGesture`, `#draftFor`, `#resolveSnap`, `#commitGesture`, `#previewGesture`, `#applyPreview`, `#resolveResizableItemId`, the `EntryGesture`/`EntryGestureContext` mirror (lines 54–85); construct `#gestureHost`; `#refreshAffordances` calls `projectAffordances` |
+| `src/view/gantt-shell.ts` | delete `#entriesForGesture`, `#draftFor`, `#resolveSnap`, `#commitGesture`, `#previewGesture`, `#applyPreview`, `#resolveResizableItemId`, the `EntryGesture`/`EntryGestureContext` mirror (lines 54–85); construct `#gesturePipeline`; `#refreshAffordances` calls `projectAffordances` |
 | `src/interaction/entry-gesture-context.ts` | deleted |
 | `src/interaction/entry-gestures.ts` | `armedEntries`/`grabbedId`/`grabbedEdge` → one `session: EntryGestureSession \| undefined`; import context types from `../view/index.js` |
 | `src/interaction/entry-gestures.test.ts` | update fakes to the new `session()`-shaped context |
@@ -236,10 +243,11 @@ Each step keeps all five checks green before starting the next — no big-bang r
 - `affordance-projection.test.ts`: hover wins over selection; selection fallback only at exactly one
   selected entry; incapable hover/selection resolves to `undefined`; existing `gantt-shell.test.ts`
   cases for `movableItemId`/`resizableItemId` move here or stay as thin integration checks.
-- `gesture-host.test.ts`: move draft (single + multi-select), resize draft (both edges, milestone/
+- `gesture-pipeline.test.ts`: move draft (single + multi-select), resize draft (both edges, milestone/
   derived-span refusal), sync veto (`beforeEntryMove`/`beforeEntryResize` returning `false`), async
   `MutationCancelledError` → `false`, preview rAF coalescing (multiple `preview()` calls before a
-  frame flush paint only the last).
+  frame flush paint only the last). Multi-select is armed in tests today; a multi-entry draft/commit
+  and an end-edge preview case still sit on the S3.5 follow-up if that change set touches the file.
 - `entry-gestures.test.ts`: rewrite the fake `EntryGestureContext` to the `session()` shape; keep
   every existing `[S3-A1]`/`[S3-A2]` scenario (drag threshold, Escape mid-drag no commit, ctrl/shift
   selection unaffected by a gesture) passing unchanged in behavior.
@@ -263,12 +271,19 @@ node scripts/guard-red-test.mjs
 
 ## 8. TODO
 
-- [ ] D-GH-3: `projectAffordances`, its tests, `#refreshAffordances` wired to it
-- [ ] D-GH-2: `GestureHost` extraction, behavior-preserving, existing wide context still calls through
-- [ ] D-GH-1: `session()`-shaped context, `view/entry-gesture-context.ts` as sole type home,
+- [x] D-GH-3: `projectAffordances`, its tests, `#refreshAffordances` wired to it
+- [x] D-GH-2: gesture pipeline extraction, behavior-preserving, existing wide context still calls
+      through. Landed as `GesturePipeline`, not the plan's original name "GestureHost" — "Host" is a
+      retired word (D-S1.11-6, #64) for the same failure class as the retired "chart" (#7).
+- [x] D-GH-1: `session()`-shaped context, `view/entry-gesture-context.ts` as sole type home,
       `interaction/entry-gesture-context.ts` deleted, `entry-gestures.ts` rewritten to hold a session
-- [ ] D-GH-4: D-S3-3/D-S3-12 wording realigned to smooth-preview/snap-on-write in
-      `s3.3-drag-move.md`
-- [ ] **Visible:** `gantt-shell.ts` back under ~500 lines; `git grep -c "EntryGestureContext ="` finds
-      exactly one declaration in `src/`; all five checks green; harness drag/resize behavior
-      unchanged (manual smoke test in `harness/`, plus the existing e2e suite)
+- [x] D-GH-4: D-S3-3/D-S3-12 already read smooth-preview/snap-on-write — landed earlier in `cbc781a`
+      ("Address S3.1-S3.3 review"), before this refactor started. No doc edit was needed.
+- [x] **Visible:** `git grep -rn "interface EntryGestureContext" src` finds exactly one declaration;
+      all five checks green; full e2e suite (including `resize.spec.ts` and `data.spec.ts`'s
+      drag-move/undo coverage) passes unchanged. `gantt-shell.ts` is 719 lines at HEAD (694 after
+      D-GH-4; S3.5 shared context / keyboard / `setPending` added 25). Every method the plan's §2
+      "cut" list named is gone (verified by grep). The residual is the shell's non-gesture surface
+      (viewport/theme/scroll/splitter/pane wiring) — out of C1–C5; do not split it in this plan.
+- [ ] Leftover `#commit` fold, pending-ghost, two "pending" field names — tracked under S3.5 §4
+      follow-up, not a new D-GH step.

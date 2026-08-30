@@ -57,6 +57,10 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
   // one pair per bar.
   let startHandle: HTMLElement | undefined;
   let endHandle: HTMLElement | undefined;
+  // S3.8, D-S3-15: Cursor line singletons, created once at mount() and moved/parked by applyState.
+  let cursorLine: HTMLElement | undefined;
+  let cursorLineLabel: HTMLElement | undefined;
+  let cursorLineHeight = 0;
 
   const bandLayer = new KeyedLayer<FrameHeaderBand, number, BandGeom>();
   // One tick layer per band index — a nested keyed list is still a keyed list (plans/01 §8.1's
@@ -73,9 +77,17 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
   let paintedSelected: ReadonlySet<ItemId> = new Set();
   let paintedResizable: ItemId | undefined;
   let paintedMovable: ItemId | undefined;
+  /** S3.5, D-S3-17: bars an unsettled `beforeEntryMove`/`beforeEntryResize` Promise is holding. */
+  let paintedPending: ReadonlySet<ItemId> = new Set();
   /** S3.3, D-S3-18: items this backend currently holds off their committed transform for a drag
    *  preview — so the next `applyState` knows which ones to park back when they drop out of the set. */
   let paintedPreview: ReadonlySet<ItemId> = new Set();
+  /** S3.6, D-S3-18: split of `paintedPreview` by `ItemPreview.extra` — `dragging` is the caller's own
+   *  gesture, `ghost` is an installed extension hook's cascade. Tracked separately from
+   *  `paintedPreview` (which drives the transform, not the token) so a `data-state` repaint touches
+   *  only the items whose *token* actually changed, same diff-and-touch pattern as `paintedPending`. */
+  let paintedDragging: ReadonlySet<ItemId> = new Set();
+  let paintedGhost: ReadonlySet<ItemId> = new Set();
   // Committed geometry per mounted bar (D-S3-6): what the handle pair and the future preview offsets
   // (S3.3) both read. `syncBars` is the only writer.
   const barGeomByItemId = new Map<ItemId, HandleGeom>();
@@ -95,6 +107,23 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
     startHandle.style.height = `${geom.height}px`;
     endHandle.style.transform = `translate(${geom.x + geom.width}px, ${geom.y}px)`;
     endHandle.style.height = `${geom.height}px`;
+  }
+
+  /** S3.8, D-S3-15: parks the Cursor line when `x` is undefined; otherwise translates the stroke
+   *  and writes the snapped caption. Height comes from the last `sync()`, same rule as Date lines. */
+  function paintCursorLine(x: number | undefined, label: string | undefined): void {
+    if (!cursorLine || !cursorLineLabel) return;
+    if (x === undefined) {
+      cursorLine.hidden = true;
+      cursorLineLabel.hidden = true;
+      return;
+    }
+    cursorLine.hidden = false;
+    cursorLine.style.transform = `translateX(${x}px)`;
+    cursorLine.style.height = `${cursorLineHeight}px`;
+    cursorLineLabel.hidden = label === undefined || label === '';
+    cursorLineLabel.style.transform = `translateX(${x}px)`;
+    cursorLineLabel.textContent = label ?? '';
   }
 
   /** Applies the base committed transform (`syncBars`'s own geometry) to one bar — what a previewed
@@ -125,14 +154,48 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
     });
     next.forEach((preview, id) => applyBarPreview(id, preview));
     paintedPreview = new Set(next.keys());
+
+    // S3.6, D-S3-18: `dragging` (the caller's own draft) vs `ghost` (an installed extension hook's
+    // `extra`, U7) — same diff-and-touch-only-changed shape `applyState`'s selected/pending sets use.
+    const nextDragging = new Set<ItemId>();
+    const nextGhost = new Set<ItemId>();
+    next.forEach((preview, id) => (preview.extra ? nextGhost : nextDragging).add(id));
+    const changed = new Set<ItemId>();
+    paintedDragging.forEach((id) => {
+      if (!nextDragging.has(id)) changed.add(id);
+    });
+    nextDragging.forEach((id) => {
+      if (!paintedDragging.has(id)) changed.add(id);
+    });
+    paintedGhost.forEach((id) => {
+      if (!nextGhost.has(id)) changed.add(id);
+    });
+    nextGhost.forEach((id) => {
+      if (!paintedGhost.has(id)) changed.add(id);
+    });
+    changed.forEach((id) =>
+      paintDataState(id, paintedHovered, paintedSelected, paintedPending, nextDragging, nextGhost),
+    );
+    paintedDragging = nextDragging;
+    paintedGhost = nextGhost;
   }
 
-  function paintDataState(itemId: ItemId, hovered: ItemId | undefined, selected: ReadonlySet<ItemId>): void {
+  function paintDataState(
+    itemId: ItemId,
+    hovered: ItemId | undefined,
+    selected: ReadonlySet<ItemId>,
+    pending: ReadonlySet<ItemId>,
+    dragging: ReadonlySet<ItemId>,
+    ghost: ReadonlySet<ItemId>,
+  ): void {
     const node = barLayerCache.node(itemId);
     if (!node) return;
     const tokens: string[] = [];
     if (hovered === itemId) tokens.push('hovered');
     if (selected.has(itemId)) tokens.push('selected');
+    if (pending.has(itemId)) tokens.push('pending');
+    if (dragging.has(itemId)) tokens.push('dragging');
+    if (ghost.has(itemId)) tokens.push('ghost');
     node.dataset['state'] = tokens.join(' ');
   }
 
@@ -299,8 +362,18 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
       // child, so appending the handles here once leaves them undisturbed at the end of barLayer's
       // children on every later sync — still painted above every bar (D-S3-8).
       barLayer.append(startHandle, endHandle);
+      cursorLine = document.createElement('div');
+      cursorLine.className = 'fg-cursor-line';
+      cursorLine.setAttribute('aria-hidden', 'true');
+      cursorLine.hidden = true;
+      cursorLineLabel = document.createElement('div');
+      cursorLineLabel.className = 'fg-cursor-line-label';
+      cursorLineLabel.setAttribute('aria-hidden', 'true');
+      cursorLineLabel.hidden = true;
       timelineHost.append(headerLayer, barLayer, contentSizer);
       dateLines = attachDateLines(timelineHost, headerLayer);
+      timelineHost.append(cursorLine);
+      headerLayer.append(cursorLineLabel);
     },
     sync(frame: GeometryFrame) {
       if (headerLayer) {
@@ -321,6 +394,8 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
       // identity change.
       if (paintedResizable !== undefined) paintResizeHandles(barGeomByItemId.get(paintedResizable));
       dateLines?.sync(frame.decorations, frame.contentHeight, frame.visible.height);
+      cursorLineHeight = Math.max(frame.contentHeight, frame.visible.height);
+      if (cursorLine && !cursorLine.hidden) cursorLine.style.height = `${cursorLineHeight}px`;
       if (gridLayer) {
         // The grid pane has no scrollbar of its own; its row layer follows the timeline pane's
         // native scroll by one transform per frame instead of a second real scroller (D-S1.8-1).
@@ -343,6 +418,7 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
       // bar's node from the last sync().
       const nextSelected = new Set(state.selectedItemIds ?? []);
       const nextHovered = state.hoveredItemId;
+      const nextPending = new Set(state.pendingItemIds ?? []);
       const changed = new Set<ItemId>();
       paintedSelected.forEach((id) => {
         if (!nextSelected.has(id)) changed.add(id);
@@ -350,13 +426,22 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
       nextSelected.forEach((id) => {
         if (!paintedSelected.has(id)) changed.add(id);
       });
+      paintedPending.forEach((id) => {
+        if (!nextPending.has(id)) changed.add(id);
+      });
+      nextPending.forEach((id) => {
+        if (!paintedPending.has(id)) changed.add(id);
+      });
       if (paintedHovered !== nextHovered) {
         if (paintedHovered !== undefined) changed.add(paintedHovered);
         if (nextHovered !== undefined) changed.add(nextHovered);
       }
-      changed.forEach((id) => paintDataState(id, nextHovered, nextSelected));
+      changed.forEach((id) =>
+        paintDataState(id, nextHovered, nextSelected, nextPending, paintedDragging, paintedGhost),
+      );
       paintedSelected = nextSelected;
       paintedHovered = nextHovered;
+      paintedPending = nextPending;
 
       // D-S3-8: the shared handle pair follows `resizableItemId`, positioned off the committed
       // geometry `syncBars` already recorded — never a per-item computation of its own.
@@ -376,6 +461,7 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
       }
 
       paintPreview(state.preview);
+      paintCursorLine(state.cursorX, state.cursorLabel);
     },
     hitTest(x: number, y: number): HitResult | null {
       // "The bars array is the hit index; DOM backends get hit-testing from event delegation"
@@ -408,9 +494,12 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
       barGeomByItemId.clear();
       paintedHovered = undefined;
       paintedSelected = new Set();
+      paintedPending = new Set();
       paintedResizable = undefined;
       paintedMovable = undefined;
       paintedPreview = new Set();
+      paintedDragging = new Set();
+      paintedGhost = new Set();
       gridLayer = undefined;
       timelineHost = undefined;
       headerLayer = undefined;
@@ -418,6 +507,9 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
       contentSizer = undefined;
       startHandle = undefined;
       endHandle = undefined;
+      cursorLine = undefined;
+      cursorLineLabel = undefined;
+      cursorLineHeight = 0;
     },
   };
 }

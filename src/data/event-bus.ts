@@ -9,31 +9,81 @@
 // The event maps themselves stay with their owners: `GanttEventMap` in `view/event-bus.ts`,
 // `DatasetEventMap` in `model/change-set.ts` (public event vocabulary, so it lives with the rest of
 // the model/ type surface). This file exports only the mechanism.
+//
+// S3.5, D-S3-17: a handler may veto asynchronously by returning a `Promise` instead of `false` — but
+// only for the event names a caller opts into via `TAsyncKeys` (default `never`, D-S2-9's `beforeChange`
+// stays sync-only, unchanged). `GanttEventMap`'s `beforeEntryMove`/`beforeEntryResize` are the first
+// (and, for now, only) `TAsyncKeys` a caller names — see `view/event-bus.ts`'s `AsyncCancelableEvent`.
 
-export class EventBus<TEvents> {
-  #handlers = new Map<keyof TEvents, Set<(payload: TEvents[keyof TEvents]) => void | false>>();
+export type SyncVeto = void | false;
 
-  on<K extends keyof TEvents>(name: K, handler: (payload: TEvents[K]) => void | false): void {
+export class EventBus<TEvents, TAsyncKeys extends keyof TEvents = never> {
+  #handlers = new Map<
+    keyof TEvents,
+    Set<(payload: TEvents[keyof TEvents]) => SyncVeto | Promise<SyncVeto>>
+  >();
+
+  on<K extends keyof TEvents>(
+    name: K,
+    handler: (payload: TEvents[K]) => SyncVeto | (K extends TAsyncKeys ? Promise<SyncVeto> : never),
+  ): void {
     let handlers = this.#handlers.get(name);
     if (!handlers) {
       handlers = new Set();
       this.#handlers.set(name, handlers);
     }
-    handlers.add(handler as (payload: TEvents[keyof TEvents]) => void | false);
+    handlers.add(handler as (payload: TEvents[keyof TEvents]) => SyncVeto | Promise<SyncVeto>);
   }
 
-  off<K extends keyof TEvents>(name: K, handler: (payload: TEvents[K]) => void | false): void {
-    this.#handlers.get(name)?.delete(handler as (payload: TEvents[keyof TEvents]) => void | false);
+  off<K extends keyof TEvents>(
+    name: K,
+    handler: (payload: TEvents[K]) => SyncVeto | (K extends TAsyncKeys ? Promise<SyncVeto> : never),
+  ): void {
+    this.#handlers
+      .get(name)
+      ?.delete(handler as (payload: TEvents[keyof TEvents]) => SyncVeto | Promise<SyncVeto>);
   }
 
-  /** Returns `false` if any handler returned `false`. Notification events ignore the result. */
-  emit<K extends keyof TEvents>(name: K, payload: TEvents[K]): boolean {
+  /** Every handler runs (a sync veto from one handler does not skip the rest). Returns
+   *  `false`/`true` synchronously when no handler returned a `Promise`. When one did, the overall
+   *  result waits on **all** of them (D-S3-17) — a synchronous `false` still vetoes, but it does not
+   *  abandon an already-started Promise. A rejected Promise is a veto; the rejection is re-thrown
+   *  on a later turn so `void emit()` / `void session.commit()` do not become the unhandled path. */
+  emit<K extends keyof TEvents>(
+    name: K,
+    payload: TEvents[K],
+  ): K extends TAsyncKeys ? boolean | Promise<boolean> : boolean {
+    // The conditional return type is provable to a caller (K is known there), not to this generic
+    // body — one cast, isolated to this line, stands in for the two mirrored `if (K extends ...)`
+    // overload bodies that type would otherwise force.
+    return this.#emitRaw(name, payload) as K extends TAsyncKeys ? boolean | Promise<boolean> : boolean;
+  }
+
+  #emitRaw<K extends keyof TEvents>(name: K, payload: TEvents[K]): boolean | Promise<boolean> {
     const handlers = this.#handlers.get(name);
     if (!handlers) return true;
     let ok = true;
+    const pending: Promise<SyncVeto>[] = [];
     for (const handler of handlers) {
-      if (handler(payload) === false) ok = false;
+      const result = handler(payload);
+      if (result === false) ok = false;
+      else if (result instanceof Promise) pending.push(result);
     }
-    return ok;
+    if (pending.length === 0) return ok;
+    return Promise.allSettled(pending).then((outcomes) => {
+      let allowed = ok;
+      for (const outcome of outcomes) {
+        if (outcome.status === 'rejected') {
+          allowed = false;
+          const reason: unknown = outcome.reason;
+          queueMicrotask(() => {
+            throw reason;
+          });
+        } else if (outcome.value === false) {
+          allowed = false;
+        }
+      }
+      return allowed;
+    });
   }
 }

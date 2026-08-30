@@ -155,6 +155,24 @@ const GATES = {
     ],
     human: [],
   },
+  S3: {
+    name: 'S3 → S4',
+    checks: [
+      tagged(
+        'S3-A1',
+        ['vitest'],
+        'before-event → one transaction → after-event (move, resize, nudge); selection event pair, no change',
+      ),
+      tagged('S3-A2', ['vitest'], 'Escape mid-drag restores store and paint'),
+      tagged('S3-A3', ['vitest'], 'hover allocates nothing, no frame rebuild'),
+      tagged('S3-A4', ['vitest'], 'extender preview ghosts extra entries'),
+      tagged('S3-A5', ['vitest'], 'capability gates pointer and keyboard affordances'),
+      tagged('S3-A6', ['vitest'], 'gesture + extender extras undo atomically'),
+      tagged('S3-A7', ['vitest'], 'viewport gestures write nothing'),
+      tagged('S3-A8', ['e2e'], 'cursor line during drag; drag + Ctrl+Z; veto demo'),
+    ],
+    human: ['HUMAN: harness/editing.html is pokeable — drag, resize, veto toast, Ctrl+Z'],
+  },
 };
 
 // Guarded so `test/guards/slice-gate.test.ts` can import `tagged`/`idExistsInSource` without this

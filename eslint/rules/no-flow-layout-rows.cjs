@@ -5,7 +5,9 @@
 // Exempt: `pane-layout.ts` and `pane-size-attachment.ts`, both of which legitimately read
 // `clientWidth`/`clientHeight` to measure the *pane's own box* — a different concept from *row*
 // height (CONTEXT.md's "Pane size" vs "Row"). Banning that would break the synchronous first
-// measurement `PaneLayout.measureTimelinePane()` already needs.
+// measurement `PaneLayout.measureTimelinePane()` already needs. `wheel-navigation.ts` reads the
+// pane's left edge (`getBoundingClientRect().left`) so ctrl+wheel can pass a pane-relative
+// `offsetX` into `zoomBy` — also pane-box geometry, not a row height.
 //
 // Syntactic, not type-aware (docs/01 §I9 is AUTO-PARTIAL, mirroring I12's own shape): this rule
 // bans reading `offsetHeight`/`clientHeight` and calling `getBoundingClientRect()`. It does not
@@ -16,7 +18,7 @@
 
 const BANNED_PROPS = new Set(['offsetHeight', 'clientHeight']);
 const SCOPE = /[/\\]src[/\\](view|render[/\\]dom)[/\\]/;
-const EXEMPT = /[/\\](pane-layout|pane-size-attachment)\.ts$/;
+const EXEMPT = /[/\\](pane-layout|pane-size-attachment|wheel-navigation)\.ts$/;
 
 /** @type {import('eslint').Rule.RuleModule} */
 module.exports = {

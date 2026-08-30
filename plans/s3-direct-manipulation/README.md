@@ -1,6 +1,6 @@
 # S3 — Direct manipulation
 
-**Slice:** S3 (`plans/03` §S3) · **Position:** after S1.13, before S4 · **Status:** in progress — S3.1, S3.2, S3.3, S3.4 done; continue at **S3.5**
+**Slice:** S3 (`plans/03` §S3) · **Position:** after S1.13, before S4 · **Status:** done — S3.8 gate green; continue at **S4**
 **Form:** same settled-spec shape as [`plans/s2-data-core/README.md`](../s2-data-core/README.md) — this file is the tracker and shared context; each step file holds the work and its TODO boxes.
 **Handoff:** [`HANDOFF.md`](./HANDOFF.md) — session notes for whoever continues.
 **Review:** [`plans/reviews/2026-08-29-s3-direct-manipulation.html`](../reviews/2026-08-29-s3-direct-manipulation.html) (2026-08-29 standards/spec pass).
@@ -58,11 +58,11 @@ Eight steps, in order. Riskiest seam (hot path) before data writes. Open the ste
 | S3.2 | [`s3.2-hot-path-and-capabilities.md`](./s3.2-hot-path-and-capabilities.md) | done | handles + grab cursor in tests |
 | S3.3 | [`s3.3-drag-move.md`](./s3.3-drag-move.md) | done | drag, snap, commit, undo |
 | S3.4 | [`s3.4-resize.md`](./s3.4-resize.md) | done | independent edge drag |
-| — | [`gesture-host-refactor.md`](./gesture-host-refactor.md) | **next** | closes review C1–C5: gesture host + affordance projector, one `EntryGestureContext` home |
-| S3.5 | [`s3.5-keyboard-parity-and-async-veto.md`](./s3.5-keyboard-parity-and-async-veto.md) | pending | keyboard nudge + async veto |
-| S3.6 | [`s3.6-extender-preview.md`](./s3.6-extender-preview.md) | partial | extender ghost in `dom` test |
-| S3.7 | [`s3.7-viewport-gestures.md`](./s3.7-viewport-gestures.md) | pending | wheel zoom/pan, no writes |
-| S3.8 | [`s3.8-cursor-line-harness-gate.md`](./s3.8-cursor-line-harness-gate.md) | pending | editing harness, e2e, gate green |
+| — | [`gesture-host-refactor.md`](./gesture-host-refactor.md) | done | closes review C1–C5: gesture host + affordance projector, one `EntryGestureContext` home |
+| S3.5 | [`s3.5-keyboard-parity-and-async-veto.md`](./s3.5-keyboard-parity-and-async-veto.md) | done | keyboard nudge + async veto; pending ghost at the commit draft |
+| S3.6 | [`s3.6-extender-preview.md`](./s3.6-extender-preview.md) | done | extender ghost in `dom` test |
+| S3.7 | [`s3.7-viewport-gestures.md`](./s3.7-viewport-gestures.md) | done | wheel zoom/pan, no writes |
+| S3.8 | [`s3.8-cursor-line-harness-gate.md`](./s3.8-cursor-line-harness-gate.md) | done | editing harness, e2e, gate green |
 
 ---
 
@@ -82,7 +82,7 @@ Read these before touching `src/`.
 
 ## Acceptance ids
 
-`plans/03` §S3 boxes become `[S3-A1]`–`[S3-A8]` when S3.8's spec edits land.
+`plans/03` §S3 boxes are `[S3-A1]`–`[S3-A8]`.
 
 | Id | Box | Primary tests |
 |---|---|---|
@@ -116,13 +116,15 @@ gantt.selection = ['t1', 't2'];
 | Export | Step |
 |---|---|
 | `Gantt.interactions`, `Interactions`, `CapabilityRule` | S3.2 |
+| `Gantt.viewportGestures`, `ViewportGestures`, `ViewportGestureFlags` | S3.7 |
 | `Gantt.selection`, `Gantt.selectionEntries` | S3.1 |
 | `beforeEntryMove`/`entryMove`, `beforeEntryResize`/`entryResize` | S3.3, S3.4 |
 | `beforeSelectionChange`/`selectionChange`, `SelectionChange` | S3.1 |
 | `ProposedSpan`, `EntryMove`, `EntryResize` | S3.3, S3.4 |
+| `GanttEventHandler<K>`, `AsyncCancelableEvent` — `beforeEntryMove`/`beforeEntryResize` handlers may return a `Promise<void \| false>` (D-S3-17); every other event stays sync-only | S3.5 |
 | Parts: `fg-bar-handle`, `fg-cursor-line`, `fg-cursor-line-label` | S3.2, S3.8 |
-| Tokens: `--fg-selection-color`, `--fg-ghost-opacity` | S3.2, S3.6 |
-| `data-state` on `.fg-bar` | S3.2+ |
+| Tokens: `--fg-selection-color`, `--fg-ghost-opacity`, `--fg-pending-opacity` | S3.2, S3.5, S3.6 |
+| `data-state` on `.fg-bar` (`hovered`, `selected`, `pending`) | S3.2+ |
 
 **Not public:** `EntryEdits`, `StoredEdit`, `ItemPreview`, `EntryGesture`, `EntryGestureContext` — internal write/gesture shapes.
 
@@ -162,6 +164,7 @@ Full prose for each decision lives in the step file that implements it. Use this
 | D-S3-20 | Hover perf test fixture | S3.2 |
 | D-S3-21 | Touch long-press | S3.3 |
 | D-S3-22 | Event payloads | S3.1, S3.3, S3.4 |
+| D-S3-23 | Keyboard nudge reuses the pointer commit pipeline via `EntryGestureSession.nudge()`; async veto via `EventBus<TEvents, TAsyncKeys>` | S3.5 |
 
 ---
 

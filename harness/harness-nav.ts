@@ -1,5 +1,5 @@
 type HarnessPageId =
-  'generic-demo' | 'scroll-sync' | 'timeline-navigation' | 'large-dataset' | 'mutation' | 'docs';
+  'generic-demo' | 'scroll-sync' | 'timeline-navigation' | 'large-dataset' | 'mutation' | 'editing' | 'docs';
 
 type HarnessPage = {
   readonly id: HarnessPageId;
@@ -13,6 +13,7 @@ const HARNESS_PAGES: readonly HarnessPage[] = [
   { id: 'timeline-navigation', label: 'Timeline & navigation', file: 'zoom.html' },
   { id: 'large-dataset', label: 'Large dataset', file: 'large-dataset.html' },
   { id: 'mutation', label: 'Mutation & live binding', file: 'data.html' },
+  { id: 'editing', label: 'Direct manipulation', file: 'editing.html' },
   { id: 'docs', label: 'Docs', file: 'docs/index.html' },
 ];
 
@@ -38,6 +39,8 @@ function detectCurrentPage(pathname: string): HarnessPageId {
       return 'large-dataset';
     case 'data.html':
       return 'mutation';
+    case 'editing.html':
+      return 'editing';
     default:
       return 'generic-demo';
   }

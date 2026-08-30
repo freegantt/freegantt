@@ -2,7 +2,13 @@
 // instance owns its own shell and state so two Gantt instances on one page are fully independent.
 
 import { GanttShell } from '../view/index.js';
-import type { GanttEventMap, Interactions, Theme } from '../view/index.js';
+import type {
+  GanttEventHandler,
+  GanttEventMap,
+  Interactions,
+  Theme,
+  ViewportGestures,
+} from '../view/index.js';
 import { ScrollModel, TimeScaleModel } from '../layout/index.js';
 import type { PresetRef, TimeScaleFit, ViewPreset } from '../layout/index.js';
 import type { DateLineSpec } from '../layout/index.js';
@@ -13,7 +19,7 @@ import type { Dataset } from './dataset.js';
 // api/ is the composition root that reaches interaction/ in (plans/01 §1: `API --> INT`,
 // `plans/s3-direct-manipulation/README.md` §0) — `view/` cannot, so `GanttShell` takes this by
 // constructor injection rather than importing it itself (see `AttachEntryGestures` in gantt-shell.ts).
-import { attachEntryGestures } from '../interaction/index.js';
+import { attachEntryGestures, attachKeyboardEditing } from '../interaction/index.js';
 
 /** Public, loose. What `GanttOptions.dateLines` and `Gantt.dateLines` both take (S1.13, D-S1.13-2). */
 export interface DateLineInput {
@@ -60,6 +66,9 @@ interface GanttOptionsBase {
   /** Live (S3, D-S3-9). Per-gesture, boolean or per-entry predicate, over the per-kind default
    *  table. Default `{}`: every gesture resolves off the default table alone. */
   interactions?: Interactions;
+  /** Live (S3.7, D-S3-14). Wheel zoom, shift+wheel pan, and keyboard pan. Default `{}`: every
+   *  viewport gesture is on. `false` turns them all off. Does not gate `zoomBy` / `panToDate`. */
+  viewportGestures?: ViewportGestures;
 }
 
 /** Two ways to set the axis, made mutually exclusive at the type level (issue #84 — the prior shape
@@ -111,7 +120,9 @@ export class Gantt {
         ? { todayLineMarginTicks: options.todayLineMarginTicks }
         : {}),
       ...(options.interactions !== undefined ? { interactions: options.interactions } : {}),
+      ...(options.viewportGestures !== undefined ? { viewportGestures: options.viewportGestures } : {}),
       entryGestures: attachEntryGestures,
+      keyboardEditing: attachKeyboardEditing,
       // S3.3, D-S3-16: `GanttShell`'s own `dataset` option is `model/`'s narrow `Dataset` interface
       // ("a view never opens a transaction") — this class holds the full `api/Dataset`, so a
       // committed gesture draft reaches the store through here, not through the shell itself.
@@ -297,6 +308,15 @@ export class Gantt {
     this.#shell.interactions = next;
   }
 
+  /** Live (S3.7, D-S3-14): the next wheel or key reads the new flags; no remount. */
+  get viewportGestures(): ViewportGestures {
+    return this.#shell.viewportGestures;
+  }
+
+  set viewportGestures(next: ViewportGestures) {
+    this.#shell.viewportGestures = next;
+  }
+
   get canZoomIn(): boolean {
     return this.#shell.canZoomIn;
   }
@@ -352,11 +372,11 @@ export class Gantt {
     this.#shell.reveal(entryId);
   }
 
-  on<K extends keyof GanttEventMap>(name: K, handler: (payload: GanttEventMap[K]) => void | false): void {
+  on<K extends keyof GanttEventMap>(name: K, handler: GanttEventHandler<K>): void {
     this.#shell.on(name, handler);
   }
 
-  off<K extends keyof GanttEventMap>(name: K, handler: (payload: GanttEventMap[K]) => void | false): void {
+  off<K extends keyof GanttEventMap>(name: K, handler: GanttEventHandler<K>): void {
     this.#shell.off(name, handler);
   }
 

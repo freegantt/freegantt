@@ -17,6 +17,15 @@ export interface InteractionState {
    *  Undefined outside a gesture — a backend parks every previewed bar back on its committed
    *  transform the moment this clears. */
   preview?: readonly ItemPreview[];
+  /** S3.5, D-S3-17: which bars a `beforeEntryMove`/`beforeEntryResize` handler's unsettled Promise is
+   *  holding — painted `data-state~="pending"` (reduced opacity and a dotted outline). Undefined once
+   *  it settles either way. */
+  pendingItemIds?: readonly ItemId[];
+  /** S3.8, D-S3-15: content-x of the Cursor line during a pointer drag. Undefined parks the
+   *  singleton. Never a frame decoration. */
+  cursorX?: number;
+  /** S3.8, D-S3-15: snapped `formatDate` caption for `cursorX`. Empty parks the label node. */
+  cursorLabel?: string;
 }
 
 export interface HitResult {

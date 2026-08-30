@@ -139,7 +139,7 @@ Slices are scope, not calendar estimates. Within a slice, entries are ordered so
 
 ## S3 — Direct manipulation
 
-**Position:** after S1.13, before S4. Tracker: [`plans/s3-direct-manipulation/README.md`](./s3-direct-manipulation/README.md); work splits into [`s3.1-selection.md`](./s3-direct-manipulation/s3.1-selection.md)–[`s3.8-cursor-line-harness-gate.md`](./s3-direct-manipulation/s3.8-cursor-line-harness-gate.md) (S3.1–S3.2 done as of 2026-08-30). Prerequisites are closed; S3 publishes no install API and tests inject through the internal seam D-S2-6 sanctions. The acceptance boxes below become `[S3-A1]`–`[S3-A8]` when S3.8's spec edits land.
+**Position:** after S1.13, before S4. Tracker: [`plans/s3-direct-manipulation/README.md`](./s3-direct-manipulation/README.md); work splits into [`s3.1-selection.md`](./s3-direct-manipulation/s3.1-selection.md)–[`s3.8-cursor-line-harness-gate.md`](./s3-direct-manipulation/s3.8-cursor-line-harness-gate.md). **Done, gate passing.** S3 publishes no install API; tests inject through the internal seam D-S2-6 sanctions.
 
 **Goal:** editing with the pointer (D10): drag-move, resize, selection — each gesture cancelable, transactional, undoable. Live preview of the draft plus any extra field writes the extension hook returns.
 
@@ -153,18 +153,20 @@ Slices are scope, not calendar estimates. Within a slice, entries are ordered so
 - Speculative preview: once per animation frame, call the **same** `EditExtender` the commit path uses, with a draft `proposed`. Paint the user's draft and the extender's extra `EntryEdits` as ghosts (transforms on existing nodes). Discard on cancel. Identity extender → only the dragged bar ghosts. A test injects an extender (same seam as S2) to prove extra bars ghost without `scheduling/`. `interaction/` never imports `schedule()` (`01` §7).
 - One transaction per gesture at commit (I6); undo reverts the user's edit and any extender extras in one step.
 - Keyboard parity begins: selected bar nudges by snap with arrow keys, one transaction per press; Escape clears the selection and hands the arrows back to panning. `Enter` is reserved and a no-op — it opens the inline editor, which is S5 (D-S3-13).
-- Timeline navigation gestures (deferred here from S1.12, D-S1.12-17): ctrl/⌘+wheel anchored zoom calling `zoomBy(factor, offsetX)`; shift+wheel horizontal pan; `PageUp`/`PageDown`/`Home`/`End`/arrow keys for pan. These write nothing to the dataset, so the arm-threshold, escape-cancel and one-transaction-per-gesture invariants do not apply to them — they are read-only viewport gestures over the surface S1.12 ships.
+- Timeline navigation gestures (S3.7, D-S3-14, closed D-S1.12-17): ctrl/⌘+wheel anchored zoom calling `zoomIn`/`zoomOut` (one `zoomPresets` step per wheel notch); shift+wheel horizontal pan; `PageUp`/`PageDown`/`Home`/`End`/arrow keys for pan. These write nothing to the dataset, so the arm-threshold, escape-cancel and one-transaction-per-gesture invariants do not apply to them — they are read-only viewport gestures over the surface S1.12 ships. Continuous `zoomBy` stays an expert call; the wheel does not use it.
 - Cursor date hairline (deferred here from S1.13, D-S1.13-9, issue #99 gap 5): show the instant under the pointer during a drag, via `instantForX` over the `DateLine` seam S1.13 ships. Read-only, same invariant exemption as the line above; pairs with #100's gesture work.
 - Harness: editing playground; a veto demo (drop before a boundary date is rejected with a toast). The lock-style injected extender that makes extra ghosts visible **moves to S5** (listed there): the public way to claim the extender slot lands with the plugin runtime (D-S2-6), and until it does, a harness page cannot install one without reaching past the public API — which the harness rule (CLAUDE.md) forbids. S3 proves the same behaviour in a `dom` test through the internal seam S2 already sanctions (`plans/s3-direct-manipulation/README.md` §0 P1).
 
 **Acceptance**
 
-- [ ] Every S3 gesture that writes data — pointer move, pointer resize, keyboard nudge — runs cancelable before-event → exactly one transaction → after-event (event-order test). Selection writes no dataset transaction: it fires its own cancelable pair and `dataset.on('change')` never sees it.
-- [ ] Escape mid-drag restores exactly the pre-gesture state, including preview ghosts.
-- [ ] Hover across 1,000 visible bars allocates nothing and rebuilds no frame (I5 perf test).
-- [ ] With the identity extender, only the dragged entry ghosts. With an injected extender that writes a second entry's `start`, that bar ghosts too; cancel discards both. No `scheduling/` import.
-- [ ] An entry whose `resize` capability resolves false shows no handles and cannot be resized by pointer or keyboard (I14).
-- [ ] A gesture undone by Ctrl+Z reverts the user edit and any extender extras in one step.
+- [x] `[S3-A1]` Every S3 gesture that writes data — pointer move, pointer resize, keyboard nudge — runs cancelable before-event → exactly one transaction → after-event (event-order test). Selection writes no dataset transaction: it fires its own cancelable pair and `dataset.on('change')` never sees it.
+- [x] `[S3-A2]` Escape mid-drag restores exactly the pre-gesture state, including preview ghosts.
+- [x] `[S3-A3]` Hover across a 1,000-entry fixture allocates nothing and rebuilds no frame (I5 perf test, D-S3-20).
+- [x] `[S3-A4]` With the identity extender, only the dragged entry ghosts. With an injected extender that writes a second entry's `start`, that bar ghosts too; cancel discards both. No `scheduling/` import.
+- [x] `[S3-A5]` An entry whose `resize` capability resolves false shows no handles and cannot be resized by pointer or keyboard (I14).
+- [x] `[S3-A6]` A gesture undone by Ctrl+Z reverts the user edit and any extender extras in one step.
+- [x] `[S3-A7]` Viewport gestures (ctrl/⌘+wheel zoom, shift+wheel pan, Page/Home/End/arrows) write nothing to the dataset.
+- [x] `[S3-A8]` During a pointer drag, a Cursor line and label follow the pointer; they park when the drag ends.
 
 ---
 
