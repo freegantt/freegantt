@@ -15,13 +15,20 @@ export interface DraftOptions {
   suspendSnap?: boolean;
 }
 
+/** S3.4, D-S3-4: what `hitTest` found. `edge` is set only for a hit on the shared resize-handle pair
+ *  — sourced from the handle's own `data-edge` attribute (D-S3-8) — never for a hit on the bar body. */
+export interface EntryHit {
+  itemId: ItemId;
+  edge?: 'start' | 'end';
+}
+
 /** Grown from S3.1/S3.2's `EntrySelectionContext` into the full gesture context (D-S3-5): the
  *  selection half (`hitTest`/`rowOrder`/`selection`/`setHovered`) is unchanged; `entryFor`/`can`
  *  replace `entryIdFor`/`canSelect` (one capability resolution serves both selection and gesture
  *  checks, I14); `entriesForGesture` through `pointerAt` are new. */
 export interface EntryGestureContext {
   /** Content-surface hit test — `RenderBackend.hitTest`, already client-relative (S1 D-D). */
-  hitTest(x: number, y: number): ItemId | undefined;
+  hitTest(x: number, y: number): EntryHit | undefined;
   /** The entry under an item id, or undefined once segments exist and an id outlives its item. */
   entryFor(itemId: ItemId): Entry | undefined;
   /** One resolution (I14, D-S3-9) — `view/capability.ts`'s answer for `entry` on `capability`. */
@@ -34,8 +41,9 @@ export interface EntryGestureContext {
   setHovered(itemId: ItemId | undefined): void;
   /** The entries one gesture moves, grabbed entry first (D-S3-19, D-S3-22): just the grabbed entry
    *  when it is not part of a multi-entry selection, else every *capable* selected entry — an
-   *  incapable one is skipped, not blocking. */
-  entriesForGesture(grabbed: EntryId): readonly Entry[];
+   *  incapable one is skipped, not blocking. `capability` is `'move'` or `'resize'` depending on what
+   *  was grabbed (S3.4) — the same capability the gesture itself will later be refused or allowed by. */
+  entriesForGesture(grabbed: EntryId, capability: 'move' | 'resize'): readonly Entry[];
   /** Pure gesture math (`layout/gesture-draft.ts`'s `draftForMove`), with the shell's own zone/scale/
    *  snap already resolved in. `dxPx` is horizontal pointer travel since the gesture armed.
    *  `entry-gestures.ts` always passes `{ suspendSnap: true }` for the live preview (so the bar

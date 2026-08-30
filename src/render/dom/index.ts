@@ -367,6 +367,14 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
       // (plans/01 §4) — no materialized hit-region array (#31).
       if (!barLayer) return null;
       const el = document.elementFromPoint(x, y);
+      // S3.4, D-S3-4: the shared handle pair sits above the bar layer in paint order, so a hit on a
+      // handle is checked first — `paintedResizable` is the one entry the handle pair currently
+      // belongs to (D-S3-8), a parked (hidden) handle is never returned by elementFromPoint.
+      const handle = el instanceof Element ? el.closest<HTMLElement>('.fg-bar-handle') : null;
+      if (handle && paintedResizable !== undefined) {
+        const edge = handle.dataset['edge'];
+        if (edge === 'start' || edge === 'end') return { itemId: paintedResizable, edge };
+      }
       const bar = el instanceof Element ? el.closest<HTMLElement>('.fg-bar') : null;
       if (!bar || !barLayer.contains(bar)) return null;
       const id = bar.dataset['itemId'];

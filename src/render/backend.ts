@@ -21,6 +21,9 @@ export interface InteractionState {
 
 export interface HitResult {
   itemId: ItemId;
+  /** S3.4, D-S3-4: set when the hit landed on a resize handle rather than the bar body — which edge
+   *  a resize gesture should grab. Sourced from the handle's own `data-edge` attribute (D-S3-8). */
+  edge?: 'start' | 'end';
 }
 
 /** The two paint surfaces a backend mounts into (S1.8, D-S1.8-1): the grid pane's row layer, and the

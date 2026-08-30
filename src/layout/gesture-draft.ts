@@ -4,7 +4,7 @@
 // Every date computation goes through `time/` (I10); this file never touches an Instant except by
 // calling one of those functions.
 
-import type { Entry, EntryEdits, EntryId, ItemId, StoredEdit } from '../model/index.js';
+import type { Entry, EntryEdits, EntryId, Instant, ItemId, StoredEdit } from '../model/index.js';
 import { itemId } from '../model/index.js';
 import { addMs, diffMs, stepBy, snapInstant, stepsBetween } from '../time/index.js';
 import type { SnapUnit } from '../time/index.js';
@@ -52,6 +52,48 @@ export function draftForMove(input: DraftInput): EntryEdits {
     });
   }
   return edits;
+}
+
+/** A resize draft: one edge of every grabbed entry moves by the same snapped/stepped calendar delta
+ *  as `entries[0]`'s own grabbed edge (D-S3-19), the opposite edge held fixed. Zero-length clamp: the
+ *  dragged edge never crosses the fixed one — an inverted span is refused right here, in the layout
+ *  layer, before it ever reaches a changeset (D-S3-4). */
+export function draftForResize(input: DraftInput & { edge: 'start' | 'end' }): EntryEdits {
+  const { zone, scale, snap, entries, dxPx, edge } = input;
+  const anchor = entries[0];
+  if (!anchor) return new Map();
+
+  const anchorInstant = edge === 'start' ? anchor.start : anchor.end;
+  const anchorX = scale.xForInstant(anchorInstant);
+  const rawCandidate = scale.instantForX(anchorX + dxPx);
+  const snappedCandidate = snapInstant(zone, rawCandidate, snap);
+
+  const edits = new Map<EntryId, StoredEdit>();
+
+  function place(entry: Entry, moved: Instant): void {
+    edits.set(entry.id, clampedEdgeEdit(entry, edge, moved));
+  }
+
+  if (snap === 'none') {
+    const deltaMs = diffMs(snappedCandidate, anchorInstant);
+    for (const entry of entries) {
+      place(entry, addMs(edge === 'start' ? entry.start : entry.end, deltaMs));
+    }
+    return edits;
+  }
+
+  const steps = stepsBetween(zone, snap.unit, snap.increment, anchorInstant, snappedCandidate);
+  for (const entry of entries) {
+    place(entry, stepBy(zone, edge === 'start' ? entry.start : entry.end, snap.unit, steps * snap.increment));
+  }
+  return edits;
+}
+
+function clampedEdgeEdit(entry: Entry, edge: 'start' | 'end', moved: Instant): StoredEdit {
+  if (edge === 'start') {
+    return { start: moved > entry.end ? entry.end : moved, end: entry.end };
+  }
+  return { start: entry.start, end: moved < entry.start ? entry.start : moved };
 }
 
 /** What the hot-path paint needs to preview a draft with no frame rebuild (D-S3-18): a pixel offset
