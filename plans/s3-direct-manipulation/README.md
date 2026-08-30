@@ -1,6 +1,6 @@
 # S3 — Direct manipulation
 
-**Slice:** S3 (`plans/03` §S3) · **Position:** after S1.13, before S4 · **Status:** in progress — S3.1–S3.6 and the gesture-host-refactor done; continue at **S3.7**
+**Slice:** S3 (`plans/03` §S3) · **Position:** after S1.13, before S4 · **Status:** in progress — S3.1–S3.6 and the gesture-host-refactor done; continue at **S3.5 D-S3-17 follow-up**, then S3.7
 **Form:** same settled-spec shape as [`plans/s2-data-core/README.md`](../s2-data-core/README.md) — this file is the tracker and shared context; each step file holds the work and its TODO boxes.
 **Handoff:** [`HANDOFF.md`](./HANDOFF.md) — session notes for whoever continues.
 **Review:** [`plans/reviews/2026-08-29-s3-direct-manipulation.html`](../reviews/2026-08-29-s3-direct-manipulation.html) (2026-08-29 standards/spec pass).
@@ -59,9 +59,9 @@ Eight steps, in order. Riskiest seam (hot path) before data writes. Open the ste
 | S3.3 | [`s3.3-drag-move.md`](./s3.3-drag-move.md) | done | drag, snap, commit, undo |
 | S3.4 | [`s3.4-resize.md`](./s3.4-resize.md) | done | independent edge drag |
 | — | [`gesture-host-refactor.md`](./gesture-host-refactor.md) | done | closes review C1–C5: gesture host + affordance projector, one `EntryGestureContext` home |
-| S3.5 | [`s3.5-keyboard-parity-and-async-veto.md`](./s3.5-keyboard-parity-and-async-veto.md) | done | keyboard nudge + async veto |
+| S3.5 | [`s3.5-keyboard-parity-and-async-veto.md`](./s3.5-keyboard-parity-and-async-veto.md) | **next** (D-S3-17 follow-up) | keyboard nudge + async veto; pending ghost still open |
 | S3.6 | [`s3.6-extender-preview.md`](./s3.6-extender-preview.md) | done | extender ghost in `dom` test |
-| S3.7 | [`s3.7-viewport-gestures.md`](./s3.7-viewport-gestures.md) | **next** | wheel zoom/pan, no writes |
+| S3.7 | [`s3.7-viewport-gestures.md`](./s3.7-viewport-gestures.md) | after follow-up | wheel zoom/pan, no writes |
 | S3.8 | [`s3.8-cursor-line-harness-gate.md`](./s3.8-cursor-line-harness-gate.md) | pending | editing harness, e2e, gate green |
 
 ---
