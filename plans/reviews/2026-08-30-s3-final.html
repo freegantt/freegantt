@@ -57,8 +57,8 @@
       <section id="axes" class="grid md:grid-cols-3 gap-4">
         <div class="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-2">
           <p class="text-xs uppercase tracking-widest text-amber-700 font-semibold">Standards</p>
-          <p class="text-2xl font-serif">6 findings</p>
-          <p class="text-sm text-amber-900">No hard layer breach. Worst: twin <span class="font-mono">KeyboardEditingAttachment</span> + three <span class="font-mono">keydown</span> listeners for one keymap.</p>
+          <p class="text-2xl font-serif">5 findings</p>
+          <p class="text-sm text-amber-900">No hard layer breach. Worst: twin <span class="font-mono">KeyboardEditingAttachment</span>. Three <span class="font-mono">keydown</span> listeners are the S3 shape, not a debt (see closed note).</p>
         </div>
         <div class="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-2">
           <p class="text-xs uppercase tracking-widest text-amber-700 font-semibold">Spec</p>
@@ -94,10 +94,10 @@
             <p class="mt-1"><span class="font-mono">KeyboardEditingAttachment</span> is declared twice (same <span class="font-mono">{ detach() }</span> as <span class="font-mono">EntryGesturesAttachment</span>). D-GH-1 closed this class of leak for <span class="font-mono">EntryGestureContext</span>. <span class="font-mono">view/</span> must not import <span class="font-mono">interaction/</span>, so folding by import is illegal. One <span class="font-mono">Detachable</span> in <span class="font-mono">view/</span> is the legal home. Not a layer breach.</p>
           </li>
 
-          <li class="rounded-lg border border-amber-200 bg-white p-4">
-            <span class="rounded-full bg-amber-100 text-amber-800 text-xs px-2 py-0.5 font-medium">Judgement — one concept, three listeners</span>
-            <span class="font-mono text-xs text-slate-500 ml-2">entry-gestures.ts:193 · keyboard-editing.ts:64 · keyboard-navigation.ts:58</span>
-            <p class="mt-1">D-S3-13 is one keymap. Escape, selected arrows, and unselected pan each own a <span class="font-mono">keydown</span> on the container. Spec permits the per-module split. Naming skill check 4: “arrow” means nudge <em>or</em> pan depending on which file you opened. Search for <span class="font-mono">ArrowRight</span> does not show one table.</p>
+          <li class="rounded-lg border border-emerald-200 bg-white p-4">
+            <span class="rounded-full bg-emerald-100 text-emerald-800 text-xs px-2 py-0.5 font-medium">Closed — S3 shape, not a fold</span>
+            <span class="font-mono text-xs text-slate-500 ml-2">D-S3-13 · S5 remap · entry-gestures / keyboard-editing / keyboard-navigation</span>
+            <p class="mt-1">Three <span class="font-mono">keydown</span> listeners on the container are the S3 decision (S3.5: per-module, disjoint <span class="font-mono">e.key</span>; S3.7: same split, not one merged listener). They are not a placeholder for mandatory core. Remap is <strong>S5</strong> on the plugin runtime (<span class="font-mono">CommandRegistry</span>, <span class="font-mono">registerKeybinding</span>) — <span class="font-mono">plans/03</span> §S5, S3 README deferred table. S3 forbids a <span class="font-mono">keyMap</span> option (I11). The split that must survive S5 is the layer split: <span class="font-mono">interaction/</span> writes data; <span class="font-mono">view/</span> pans. S5 may put a registry in front of those adapters. It does not fold keyboard editing into <span class="font-mono">view/</span> or into <span class="font-mono">model/</span>/<span class="font-mono">data/</span>/<span class="font-mono">layout/</span>.</p>
           </li>
 
           <li class="rounded-lg border border-amber-200 bg-white p-4">
@@ -181,7 +181,7 @@
 
           <li class="rounded-lg border border-slate-200 bg-white p-4">
             <span class="rounded-full bg-slate-100 text-slate-700 text-xs px-2 py-0.5 font-medium">Keep</span>
-            <p class="mt-1"><span class="font-mono">#settle</span> / <span class="font-mono">#awaitVeto</span> / <span class="font-mono">#releaseHold</span> — real D-S3-17 constraint (sync-fast, async-hold, one paint). Two viewport attachers — wheel vs keys, two adapters, real seam. <span class="font-mono">viewport-gestures.ts</span> is the public type home, not a pass-through. <span class="font-mono">GanttShell</span> as composition root — do not extract for line count.</p>
+            <p class="mt-1"><span class="font-mono">#settle</span> / <span class="font-mono">#awaitVeto</span> / <span class="font-mono">#releaseHold</span> — real D-S3-17 constraint (sync-fast, async-hold, one paint). Two viewport attachers — wheel vs keys, two adapters, real seam. Three <span class="font-mono">keydown</span> listeners — S3 per-module split; remap waits for S5 <span class="font-mono">extensions/</span>, not a core merge. <span class="font-mono">viewport-gestures.ts</span> is the public type home, not a pass-through. <span class="font-mono">GanttShell</span> as composition root — do not extract for line count.</p>
           </li>
 
         </ul>
@@ -261,8 +261,8 @@
           <div class="flex items-start justify-between gap-4">
             <h3 class="font-serif text-xl">3 · D-S3-13 as one pure table</h3>
             <span class="inline-flex items-center gap-2">
-              <span class="rounded-full bg-amber-100 text-amber-800 text-xs px-2 py-0.5 font-medium">Worth exploring</span>
-              <span class="rounded-full bg-slate-100 text-slate-600 text-xs px-2 py-0.5">in-process</span>
+              <span class="rounded-full bg-slate-100 text-slate-700 text-xs px-2 py-0.5 font-medium">Speculative — S5, not S3</span>
+              <span class="rounded-full bg-slate-100 text-slate-600 text-xs px-2 py-0.5">ports &amp; adapters</span>
             </span>
           </div>
           <p class="font-mono text-sm text-slate-600">entry-gestures.ts Escape · keyboard-editing.ts · keyboard-navigation.ts</p>
@@ -283,11 +283,11 @@
           </div>
 
           <div class="space-y-2 text-sm">
-            <p><strong>Problem.</strong> One glossary keymap, three listeners. Delete one listener and Arrow/Escape policy reappears in the other two tests.</p>
-            <p><strong>Solution.</strong> Pure key→intent function (Node-testable). Keep two attach adapters — the INT/VIEW layer split is load-bearing, not a fake merge seam.</p>
-            <p class="text-xs text-slate-600"><strong>Wins.</strong> locality of D-S3-13 · leverage: parity tests hit one table</p>
+            <p><strong>Problem.</strong> One glossary table, three listeners. That is the S3 attach shape, not missing core.</p>
+            <p><strong>Solution.</strong> Leave the listeners. If S5’s command registry wants one key→intent table, add it then, in front of the existing INT and VIEW adapters. Do not merge listeners in this slice.</p>
+            <p class="text-xs text-slate-600"><strong>Wins if S5 needs a table.</strong> locality of D-S3-13 · leverage: remap hits one intent list</p>
           </div>
-          <div class="text-xs rounded-lg border border-amber-200 bg-amber-50 p-3 text-amber-950">Do not merge <span class="font-mono">attachKeyboardEditing</span> into <span class="font-mono">view/</span>. Data gestures stay in <span class="font-mono">interaction/</span>.</div>
+          <div class="text-xs rounded-lg border border-amber-200 bg-amber-50 p-3 text-amber-950">Do not treat this as S3 debt or as a mandatory-core job. Remap is S5 plugin runtime. Do not merge <span class="font-mono">attachKeyboardEditing</span> into <span class="font-mono">view/</span>.</div>
         </article>
 
         <article id="c4" class="rounded-xl border border-slate-200 bg-white p-6 space-y-4">
@@ -349,7 +349,9 @@
             <span class="font-mono">pending</span>. Then fold Candidate 2
             (<span class="font-mono">Detachable</span>) — cheap, no behavior change.
             Candidate 1 (viewport attach) if S4 keeps adding shell constructor lines.
-            Do not split the 780-line shell for size. Do not merge keyboard editing into
+            Do not split the 780-line shell for size. Do not merge the three
+            <span class="font-mono">keydown</span> listeners — that is S3’s per-module split;
+            remap is S5 plugin runtime, not core. Do not merge keyboard editing into
             <span class="font-mono">view/</span>.
           </p>
           <a class="text-sm font-medium text-indigo-700 underline" href="#c1">→ open Candidate 1</a>
@@ -357,7 +359,7 @@
       </section>
 
       <section class="text-sm text-slate-500 border-t border-slate-200 pt-6 space-y-2">
-        <p>Summary: Standards 6 (worst: twin attachment types + three keydown listeners). Spec 3 open (worst: async veto demo missing from harness; D-GH-2 tests; weak transform assertion). Simplify 4 fold / rest keep. Axes are not ranked against each other.</p>
+        <p>Summary: Standards 5 open (worst: twin attachment types). Three <span class="font-mono">keydown</span> listeners closed as the S3 shape; remap is S5 <span class="font-mono">extensions/</span>, not core. Spec 3 open (worst: async veto demo missing from harness; D-GH-2 tests; weak transform assertion). Simplify 4 fold / rest keep. Axes are not ranked against each other.</p>
         <p>No <span class="font-mono">docs/agents/issue-tracker.md</span> — spec files under <span class="font-mono">plans/s3-direct-manipulation/</span> were used. Smell baseline applied; repo layer rules override “import the interaction type” as a fold.</p>
       </section>
 
