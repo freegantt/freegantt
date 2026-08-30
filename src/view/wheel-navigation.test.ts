@@ -13,23 +13,28 @@ function pane(): HTMLElement {
 
 function makeCtx(overrides: Partial<WheelNavigationContext> = {}): {
   ctx: WheelNavigationContext;
-  zooms: [number, number][];
+  zoomIns: number[];
+  zoomOuts: number[];
   pans: [number, number][];
 } {
-  const zooms: [number, number][] = [];
+  const zoomIns: number[] = [];
+  const zoomOuts: number[] = [];
   const pans: [number, number][] = [];
   const ctx: WheelNavigationContext = {
     wheelZoomEnabled: () => true,
     wheelPanEnabled: () => true,
-    zoomBy: (factor, offsetX) => {
-      zooms.push([factor, offsetX]);
+    zoomIn: (offsetX) => {
+      zoomIns.push(offsetX);
+    },
+    zoomOut: (offsetX) => {
+      zoomOuts.push(offsetX);
     },
     panBy: (dx, dy) => {
       pans.push([dx, dy]);
     },
     ...overrides,
   };
-  return { ctx, zooms, pans };
+  return { ctx, zoomIns, zoomOuts, pans };
 }
 
 function wheel(props: {
@@ -89,34 +94,59 @@ describe('resolveViewportGestures', () => {
 });
 
 describe('attachWheelNavigation (S3.7, D-S3-14)', () => {
-  it('ctrl+wheel zooms, anchored at clientX minus the pane left', () => {
+  it('ctrl+wheel zooms in one preset step, anchored at clientX minus the pane left', () => {
     const node = pane();
-    const { ctx, zooms, pans } = makeCtx();
+    const { ctx, zoomIns, zoomOuts, pans } = makeCtx();
     attachWheelNavigation(node, ctx);
 
-    const event = wheel({ ctrlKey: true, deltaY: -250, clientX: 60 });
+    const event = wheel({ ctrlKey: true, deltaY: -100, clientX: 60 });
     node.dispatchEvent(event);
 
     expect(event.defaultPrevented).toBe(true);
-    expect(zooms).toEqual([[2, 50]]);
+    expect(zoomIns).toEqual([50]);
+    expect(zoomOuts).toEqual([]);
     expect(pans).toEqual([]);
     node.remove();
   });
 
-  it('metaKey (⌘) zooms the same way as ctrlKey', () => {
+  it('metaKey (⌘) zooms out the same way as ctrlKey', () => {
     const node = pane();
-    const { ctx, zooms } = makeCtx();
+    const { ctx, zoomIns, zoomOuts } = makeCtx();
     attachWheelNavigation(node, ctx);
 
-    node.dispatchEvent(wheel({ metaKey: true, deltaY: 250, clientX: 10 }));
+    node.dispatchEvent(wheel({ metaKey: true, deltaY: 100, clientX: 10 }));
 
-    expect(zooms).toEqual([[0.5, 0]]);
+    expect(zoomOuts).toEqual([0]);
+    expect(zoomIns).toEqual([]);
+    node.remove();
+  });
+
+  it('small wheel deltas accumulate to one preset step', () => {
+    const node = pane();
+    const { ctx, zoomIns } = makeCtx();
+    attachWheelNavigation(node, ctx);
+
+    node.dispatchEvent(wheel({ ctrlKey: true, deltaY: -40, clientX: 10 }));
+    expect(zoomIns).toEqual([]);
+    node.dispatchEvent(wheel({ ctrlKey: true, deltaY: -60, clientX: 10 }));
+    expect(zoomIns).toEqual([0]);
+    node.remove();
+  });
+
+  it('a large delta steps more than one preset', () => {
+    const node = pane();
+    const { ctx, zoomOuts } = makeCtx();
+    attachWheelNavigation(node, ctx);
+
+    node.dispatchEvent(wheel({ ctrlKey: true, deltaY: 250, clientX: 10 }));
+
+    expect(zoomOuts).toEqual([0, 0]);
     node.remove();
   });
 
   it('shift+wheel pans horizontally by deltaY when deltaX is 0', () => {
     const node = pane();
-    const { ctx, zooms, pans } = makeCtx();
+    const { ctx, zoomIns, zoomOuts, pans } = makeCtx();
     attachWheelNavigation(node, ctx);
 
     const event = wheel({ shiftKey: true, deltaY: 40, clientX: 20 });
@@ -124,59 +154,62 @@ describe('attachWheelNavigation (S3.7, D-S3-14)', () => {
 
     expect(event.defaultPrevented).toBe(true);
     expect(pans).toEqual([[40, 0]]);
-    expect(zooms).toEqual([]);
+    expect(zoomIns).toEqual([]);
+    expect(zoomOuts).toEqual([]);
     node.remove();
   });
 
   it('ctrl+shift+wheel zooms rather than pans', () => {
     const node = pane();
-    const { ctx, zooms, pans } = makeCtx();
+    const { ctx, zoomIns, pans } = makeCtx();
     attachWheelNavigation(node, ctx);
 
-    node.dispatchEvent(wheel({ ctrlKey: true, shiftKey: true, deltaY: -250, clientX: 10 }));
+    node.dispatchEvent(wheel({ ctrlKey: true, shiftKey: true, deltaY: -100, clientX: 10 }));
 
-    expect(zooms).toHaveLength(1);
+    expect(zoomIns).toHaveLength(1);
     expect(pans).toEqual([]);
     node.remove();
   });
 
   it('a plain wheel writes nothing (native scroll owns it)', () => {
     const node = pane();
-    const { ctx, zooms, pans } = makeCtx();
+    const { ctx, zoomIns, zoomOuts, pans } = makeCtx();
     attachWheelNavigation(node, ctx);
 
     const event = wheel({ deltaY: 80 });
     node.dispatchEvent(event);
 
     expect(event.defaultPrevented).toBe(false);
-    expect(zooms).toEqual([]);
+    expect(zoomIns).toEqual([]);
+    expect(zoomOuts).toEqual([]);
     expect(pans).toEqual([]);
     node.remove();
   });
 
   it('wheelZoomEnabled false leaves ctrl+wheel to the browser', () => {
     const node = pane();
-    const { ctx, zooms } = makeCtx({ wheelZoomEnabled: () => false });
+    const { ctx, zoomIns } = makeCtx({ wheelZoomEnabled: () => false });
     attachWheelNavigation(node, ctx);
 
-    const event = wheel({ ctrlKey: true, deltaY: -250, clientX: 10 });
+    const event = wheel({ ctrlKey: true, deltaY: -100, clientX: 10 });
     node.dispatchEvent(event);
 
     expect(event.defaultPrevented).toBe(false);
-    expect(zooms).toEqual([]);
+    expect(zoomIns).toEqual([]);
     node.remove();
   });
 
   it('detach() stops further zoom and pan', () => {
     const node = pane();
-    const { ctx, zooms, pans } = makeCtx();
+    const { ctx, zoomIns, zoomOuts, pans } = makeCtx();
     const attachment = attachWheelNavigation(node, ctx);
     attachment.detach();
 
-    node.dispatchEvent(wheel({ ctrlKey: true, deltaY: -250, clientX: 10 }));
+    node.dispatchEvent(wheel({ ctrlKey: true, deltaY: -100, clientX: 10 }));
     node.dispatchEvent(wheel({ shiftKey: true, deltaY: 40 }));
 
-    expect(zooms).toEqual([]);
+    expect(zoomIns).toEqual([]);
+    expect(zoomOuts).toEqual([]);
     expect(pans).toEqual([]);
     node.remove();
   });

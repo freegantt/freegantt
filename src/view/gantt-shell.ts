@@ -390,7 +390,8 @@ export class GanttShell {
     this.#wheelNavigation = attachWheelNavigation(this.#panes.timeline, {
       wheelZoomEnabled: () => this.#resolvedViewportGestures.wheelZoom,
       wheelPanEnabled: () => this.#resolvedViewportGestures.wheelPan,
-      zoomBy: (factor, offsetX) => this.zoomBy(factor, offsetX),
+      zoomIn: (offsetX) => this.zoomIn(offsetX),
+      zoomOut: (offsetX) => this.zoomOut(offsetX),
       panBy: (dx, dy) => this.#panBy(dx, dy),
     });
     this.#keyboardNavigation = attachKeyboardNavigation(this.#container, {

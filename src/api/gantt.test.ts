@@ -1551,12 +1551,12 @@ describe('Gantt viewport gestures (S3.7, [S3-A7], D-S3-14)', () => {
         changes.push(c);
       });
 
-      const pxBefore = a.scale.scale.pxPerMs;
-      a.timeline.dispatchEvent(wheel({ ctrlKey: true, deltaY: -250, clientX: 0 }));
-      b.timeline.dispatchEvent(wheel({ ctrlKey: true, deltaY: -250, clientX: 150 }));
+      const presetBefore = a.gantt.preset.id;
+      a.timeline.dispatchEvent(wheel({ ctrlKey: true, deltaY: -100, clientX: 0 }));
+      b.timeline.dispatchEvent(wheel({ ctrlKey: true, deltaY: -100, clientX: 150 }));
 
-      expect(a.scale.scale.pxPerMs).toBeGreaterThan(pxBefore);
-      expect(b.scale.scale.pxPerMs).toBe(a.scale.scale.pxPerMs);
+      expect(a.gantt.preset.id).not.toBe(presetBefore);
+      expect(b.gantt.preset.id).toBe(a.gantt.preset.id);
       expect(a.scroll.state.position.x).not.toBe(b.scroll.state.position.x);
 
       const xBeforePan = a.scroll.state.position.x;
@@ -1610,9 +1610,11 @@ describe('Gantt viewport gestures (S3.7, [S3-A7], D-S3-14)', () => {
         ({ left: 0, top: 0, width: 300, height: 100, right: 300, bottom: 100, x: 0, y: 0 }) as DOMRect;
 
       const pxBefore = scale.scale.pxPerMs;
+      const presetBefore = gantt.preset.id;
       const xBefore = scroll.state.position.x;
-      timeline.dispatchEvent(wheel({ ctrlKey: true, deltaY: -250, clientX: 0 }));
+      timeline.dispatchEvent(wheel({ ctrlKey: true, deltaY: -100, clientX: 0 }));
       container.dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true, cancelable: true }));
+      expect(gantt.preset.id).toBe(presetBefore);
       expect(scale.scale.pxPerMs).toBe(pxBefore);
       expect(scroll.state.position.x).toBe(xBefore);
 
@@ -1620,8 +1622,8 @@ describe('Gantt viewport gestures (S3.7, [S3-A7], D-S3-14)', () => {
       expect(scale.scale.pxPerMs).toBeGreaterThan(pxBefore);
 
       gantt.viewportGestures = { wheelZoom: true };
-      timeline.dispatchEvent(wheel({ ctrlKey: true, deltaY: -250, clientX: 0 }));
-      expect(scale.scale.pxPerMs).toBeGreaterThan(pxBefore * 2);
+      timeline.dispatchEvent(wheel({ ctrlKey: true, deltaY: -100, clientX: 0 }));
+      expect(gantt.preset.id).not.toBe(presetBefore);
 
       gantt.destroy();
     } finally {
