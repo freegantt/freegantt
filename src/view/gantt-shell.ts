@@ -43,6 +43,7 @@ import type { Capabilities, Interactions } from './capability.js';
 import { subscribeToDatasetChanges } from './dataset-change-subscription.js';
 import type { DatasetChangeSubscription } from './dataset-change-subscription.js';
 import { FrameScheduler } from './frame-scheduler.js';
+import { projectAffordances } from './affordance-projection.js';
 
 /** `view/` may not import `interaction/` (plans/01 §1: `INT --> VIEW`, not the reverse — interaction/
  *  controllers are one layer *above* view/, the way `EXT --> VIEW`/`EXT --> INT` puts extensions/
@@ -469,32 +470,16 @@ export class GanttShell {
    *  any of the three inputs change — never per pointer move beyond that (I5). `exactOptionalPropertyTypes`
    *  makes "clear" a `delete`, not an `= undefined` assignment (`#setOptional` below). */
   #refreshAffordances(): void {
-    setOptional(this.#interactionState, 'hoveredItemId', this.#hoveredItemId);
-    const hoveredEntryId =
-      this.#hoveredItemId !== undefined ? this.#itemEntryIds.get(this.#hoveredItemId) : undefined;
-    setOptional(
-      this.#interactionState,
-      'movableItemId',
-      hoveredEntryId !== undefined && this.#canGesture('move', hoveredEntryId)
-        ? this.#hoveredItemId
-        : undefined,
-    );
-    setOptional(this.#interactionState, 'resizableItemId', this.#resolveResizableItemId(hoveredEntryId));
+    const ids = projectAffordances({
+      hoveredItemId: this.#hoveredItemId,
+      selection: this.#selection,
+      itemEntryIds: this.#itemEntryIds,
+      canGesture: (capability, id) => this.#canGesture(capability, id),
+    });
+    setOptional(this.#interactionState, 'hoveredItemId', ids.hoveredItemId);
+    setOptional(this.#interactionState, 'movableItemId', ids.movableItemId);
+    setOptional(this.#interactionState, 'resizableItemId', ids.resizableItemId);
     this.#backend.applyState(this.#interactionState);
-  }
-
-  /** The hovered bar decides when there is one — even a hover that resolves to "no handles" wins
-   *  over the selection fallback. Only when nothing is hovered does the single selected entry, if
-   *  there is exactly one, get a turn (D-S3-6). */
-  #resolveResizableItemId(hoveredEntryId: EntryId | undefined): ItemId | undefined {
-    if (this.#hoveredItemId !== undefined) {
-      return hoveredEntryId !== undefined && this.#canGesture('resize', hoveredEntryId)
-        ? this.#hoveredItemId
-        : undefined;
-    }
-    if (this.#selection.length !== 1) return undefined;
-    const soleId = this.#selection[0]!;
-    return this.#canGesture('resize', soleId) ? itemId(soleId) : undefined;
   }
 
   #entryFor(item: ItemId): Entry | undefined {
