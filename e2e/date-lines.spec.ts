@@ -10,7 +10,9 @@ declare global {
   }
 }
 
-test('a consumer stylesheet styling a Date line className actually paints — U3', async ({ page }) => {
+test('[S1-A14] a consumer stylesheet styling a Date line className actually paints — U3', async ({
+  page,
+}) => {
   await page.goto('/zoom.html');
   await expect(page.locator('.fg-bar').first()).toBeVisible();
 
