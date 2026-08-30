@@ -1,6 +1,6 @@
 // interaction/ — the one pointer stream over the bar layer (plans/01 §9, `plans/03` §S3). A
 // pointerdown that becomes a drag never also changes the selection — every pointerup that
-// `attachPointerGesture.up()` reports as a drag skips the click/selection path below entirely.
+// `createPointerGesture.up()` reports as a drag skips the click/selection path below entirely.
 //
 // Never writes on pointerdown (plans/01 §9) — arming a drag previews nothing but its own hover state
 // until the drag threshold (or a touch long-press) is crossed. `mousedown` is only there so a
@@ -8,10 +8,10 @@
 
 import type { Entry, EntryId } from '../model/index.js';
 import { itemId } from '../model/index.js';
-import { attachPointerGesture } from './pointer-gesture.js';
-import type { EntryGestureContext, Gesture } from './entry-gesture-context.js';
+import { createPointerGesture } from './pointer-gesture.js';
+import type { EntryGestureContext, EntryGesture } from './entry-gesture-context.js';
 
-export type { EntryGestureContext, Gesture, DraftOptions, EntryHit } from './entry-gesture-context.js';
+export type { EntryGestureContext, EntryGesture, DraftOptions, EntryHit } from './entry-gesture-context.js';
 
 export interface EntryGesturesAttachment {
   detach(): void;
@@ -50,11 +50,16 @@ export function attachEntryGestures(
   let grabbedEdge: 'start' | 'end' | undefined;
   let armedEntries: readonly Entry[] = [];
 
-  function currentGesture(): Gesture {
-    return grabbedEdge !== undefined ? { kind: 'resize', edge: grabbedEdge } : { kind: 'move' };
+  /** The `'move'` shape is a fixed constant, never per-instance data — reusing it avoids allocating
+   *  a fresh object on every pointermove of a move gesture (`entry-gesture-context.ts`'s `draftFor`
+   *  and `commit` only ever read it). */
+  const MOVE_GESTURE: EntryGesture = { kind: 'move' };
+
+  function currentGesture(): EntryGesture {
+    return grabbedEdge !== undefined ? { kind: 'resize', edge: grabbedEdge } : MOVE_GESTURE;
   }
 
-  const drag = attachPointerGesture(pane, {
+  const drag = createPointerGesture(pane, {
     start(): boolean {
       if (grabbedId === undefined) return false;
       armedEntries = ctx.entriesForGesture(grabbedId, grabbedEdge !== undefined ? 'resize' : 'move');

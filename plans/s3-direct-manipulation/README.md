@@ -115,7 +115,7 @@ gantt.selection = ['t1', 't2'];
 | Export | Step |
 |---|---|
 | `Gantt.interactions`, `Interactions`, `CapabilityRule` | S3.2 |
-| `Gantt.selection` | S3.1 |
+| `Gantt.selection`, `Gantt.selectionEntries` | S3.1 |
 | `beforeEntryMove`/`entryMove`, `beforeEntryResize`/`entryResize` | S3.3, S3.4 |
 | `beforeSelectionChange`/`selectionChange`, `SelectionChange` | S3.1 |
 | `ProposedSpan`, `EntryMove`, `EntryResize` | S3.3, S3.4 |
@@ -123,13 +123,13 @@ gantt.selection = ['t1', 't2'];
 | Tokens: `--fg-selection-color`, `--fg-ghost-opacity` | S3.2, S3.6 |
 | `data-state` on `.fg-bar` | S3.2+ |
 
-**Not public:** `EntryEdits`, `StoredEdit`, `ItemPreview`, `Gesture`, `EntryGestureContext` — internal write/gesture shapes.
+**Not public:** `EntryEdits`, `StoredEdit`, `ItemPreview`, `EntryGesture`, `EntryGestureContext` — internal write/gesture shapes.
 
 Full module map (which file owns what) is split across step files §2. Cross-cutting snap rule:
 
 ### D-S3-12 — Snap defaults to preset tick; Alt suspends
 
-Unset `ViewPreset.snap` reads as `'tick'`. `snapInstant(zone, at, snap)` in `time/`; `layout/gesture-draft.ts` is its caller. Alt suspends snapping for fine placement during a gesture.
+Unset `ViewPreset.snap` reads as `'tick'`. `snapInstant(zone, at, snap)` in `time/`; `layout/gesture-draft.ts` is its caller. The live preview always tracks the pointer at full pixel resolution (`suspendSnap: true`) so the bar never lags the cursor between tick crossings — snap and Alt both apply only to the value written on commit (4105b08).
 
 ---
 

@@ -39,7 +39,7 @@ export interface PointerGestureController {
   detach(): void;
 }
 
-export function attachPointerGesture(
+export function createPointerGesture(
   pane: HTMLElement,
   callbacks: PointerGestureCallbacks,
 ): PointerGestureController {

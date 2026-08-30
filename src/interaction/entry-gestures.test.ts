@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { attachEntryGestures } from './entry-gestures.js';
-import type { EntryGestureContext, Gesture } from './entry-gesture-context.js';
+import type { EntryGestureContext, EntryGesture } from './entry-gesture-context.js';
 import { entryId, itemId } from '../model/index.js';
 import type { Entry, EntryEdits, EntryId, Instant, ItemId } from '../model/index.js';
 
@@ -219,7 +219,7 @@ describe('attachEntryGestures — move (S3.3)', () => {
     mockPointerCapture(pane);
     const container = document.createElement('div');
     const previews: (EntryEdits | undefined)[] = [];
-    const commits: [Gesture, EntryEdits][] = [];
+    const commits: [EntryGesture, EntryEdits][] = [];
     const { ctx, proposals } = makeContext({
       can: (capability) => capability === 'move' || capability === 'select',
       preview: (draft) => previews.push(draft),
@@ -307,7 +307,7 @@ describe('attachEntryGestures — resize (S3.4)', () => {
     const pane = document.createElement('div');
     mockPointerCapture(pane);
     const container = document.createElement('div');
-    const commits: [Gesture, EntryEdits][] = [];
+    const commits: [EntryGesture, EntryEdits][] = [];
     const capabilities: ('move' | 'resize')[] = [];
     const { ctx, proposals } = makeContext({
       hitTest: () => ({ itemId: itemId(A), edge: 'end' }),

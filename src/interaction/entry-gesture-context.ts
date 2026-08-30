@@ -5,8 +5,8 @@
 import type { Entry, EntryEdits, EntryId, ItemId } from '../model/index.js';
 import type { Interactions } from '../view/index.js';
 
-/** What kind of data gesture is in flight. Only `'move'` exists in S3.3 — `'resize'` lands in S3.4. */
-export type Gesture = { kind: 'move' } | { kind: 'resize'; edge: 'start' | 'end' };
+/** What kind of data gesture is in flight — `'move'` (S3.3) or `'resize'` with the grabbed edge (S3.4). */
+export type EntryGesture = { kind: 'move' } | { kind: 'resize'; edge: 'start' | 'end' };
 
 /** Alt suspends snapping for fine placement during a gesture (D-S3-12) — `entry-gestures.ts` reads
  *  `e.altKey` off the pointer event and passes it through here; only the shell knows how a preset's
@@ -48,11 +48,16 @@ export interface EntryGestureContext {
    *  snap already resolved in. `dxPx` is horizontal pointer travel since the gesture armed.
    *  `entry-gestures.ts` always passes `{ suspendSnap: true }` for the live preview (so the bar
    *  tracks the pointer with no drift) and only lets the preset's snap through at commit. */
-  draftFor(gesture: Gesture, entries: readonly Entry[], dxPx: number, options?: DraftOptions): EntryEdits;
+  draftFor(
+    gesture: EntryGesture,
+    entries: readonly Entry[],
+    dxPx: number,
+    options?: DraftOptions,
+  ): EntryEdits;
   /** `beforeEntryMove` → one `dataset.transaction()` → `entryMove` (D-S3-16). Resolves `false` on a
    *  sync veto or a `MutationCancelledError` from `beforeChange` — both restore silently, nothing
    *  thrown back into the pointer handler. */
-  commit(gesture: Gesture, draft: EntryEdits): Promise<boolean>;
+  commit(gesture: EntryGesture, draft: EntryEdits): Promise<boolean>;
   /** Coalesced on the shell's own rAF (D-S3-18): `undefined` clears whatever was previewing. */
   preview(draft: EntryEdits | undefined): void;
   /** The item id and content-x under the pointer during a gesture, or `undefined` once the gesture
