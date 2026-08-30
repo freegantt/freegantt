@@ -83,6 +83,13 @@ export interface GanttShellOptions {
   locale?: Intl.LocalesArgument;
   /** Live (S1.12, D-S1.12-14). Default `true`. */
   todayLine?: boolean;
+  /** Expert knob, not on `GanttOptions` (plans/02 "two callers, two surfaces") — a test naming its
+   * own `RenderBackend<HTMLElement>` in place of the DOM one (§9-I: the seam had two implementations
+   * and one hardcoded call site, so nothing could reach the other short of mocking the module).
+   * Still `RenderBackend<HTMLElement>`, not the null backend's `RenderBackend<void>` — `PaneLayout`
+   * mounts real elements regardless of which backend paints them, so this closes the hardcoding, not
+   * DOM-free `view/`. Defaults to `createDomBackend()`. */
+  backend?: RenderBackend<HTMLElement>;
 }
 
 function resolveContainer(container: HTMLElement | string): HTMLElement {
@@ -166,7 +173,7 @@ export class GanttShell {
     // Mount before binding (#22): the render target exists by the time the binding's own onChange
     // — which IS this shell's first render — fires, so there is no construction-order exception to
     // document and no separate explicit render() call after bind().
-    this.#backend = createDomBackend();
+    this.#backend = options.backend ?? createDomBackend();
     this.#backend.mount({ grid: this.#panes.grid, timeline: this.#panes.timeline });
 
     // The timeline pane is the single native scroller (D-D, D-S1.8-1); the grid pane follows it by

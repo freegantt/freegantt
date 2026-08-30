@@ -33,9 +33,11 @@ const ALLOWED = {
   interaction: ['view', 'data'],
   extensions: ['view', 'interaction'],
   // model and time are the type/primitive surface api/ re-exports (plans/01 §1: "api/ and model/
-  // types are public", widened to time/'s public primitives and presets by #25); the layer diagram
-  // doesn't draw either arrow because they're type-only/primitive re-exports, not behavioral ones.
-  api: ['view', 'data', 'model', 'time'],
+  // types are public", widened to time/'s public primitives and presets by #25, and to layout/'s
+  // TimeScaleModel/ScrollModel by issue #91 §9-I — both are public, consumer-constructed objects
+  // (D9), so laundering them through view/ was the same bug as #25's dayPreset); the layer diagram
+  // doesn't draw these arrows because they're type-only/primitive re-exports, not behavioral ones.
+  api: ['view', 'data', 'model', 'time', 'layout'],
 };
 
 // I1 backstop for editor feedback; dependency-cruiser (`pnpm boundaries`) is the enforced source of truth.

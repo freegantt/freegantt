@@ -5,28 +5,21 @@ import { FrameLayout, ScrollModel, TimeScaleModel } from '../layout/index.js';
 import { entryId, EntryNotFoundError, ContainerNotFoundError } from '../model/index.js';
 import type { Entry, Instant } from '../model/index.js';
 import { DatasetState, EntryStore } from '../data/index.js';
+import { createDomBackend } from '../render/dom/index.js';
+import type { RenderBackend } from '../render/backend.js';
 
-// [S2-A3]: counts `RenderBackend.sync` calls without a production seam to reach `GanttShell`'s
-// private `#backend` (D-S2-16's own justification for `heightIndexRevision` applies here too — a
-// property of the implementation, made checkable). Wraps the real dom backend transparently; every
-// other test in this file goes through the same wrapper and is unaffected.
-const backendSyncCalls = vi.hoisted(() => ({ count: 0 }));
-vi.mock('../render/dom/index.js', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../render/dom/index.js')>();
+// [S2-A3]: counts `RenderBackend.sync` calls, one test's own instance (§9-I's `GanttShellOptions.backend`
+// injection point) rather than a module-wide mock every other test in this file would otherwise pay for.
+function countingDomBackend(calls: { count: number }): RenderBackend<HTMLElement> {
+  const backend = createDomBackend();
   return {
-    ...actual,
-    createDomBackend: () => {
-      const backend = actual.createDomBackend();
-      return {
-        ...backend,
-        sync: (frame: Parameters<typeof backend.sync>[0]) => {
-          backendSyncCalls.count++;
-          backend.sync(frame);
-        },
-      };
+    ...backend,
+    sync: (frame) => {
+      calls.count++;
+      backend.sync(frame);
     },
   };
-});
+}
 
 // D-S2-2: `GanttShellOptions.dataset` is a store view now, not a plain array — the real `EntryStore`
 // backs these fixtures the same way a `Dataset` would, with no test-only fake to keep in sync.
@@ -573,7 +566,13 @@ describe('[S2-A3] one changeset, one layout pass, one frame (D-S2-15/16)', () =>
     const dataset = new DatasetState({ entries: tallEntries(500), timeZone });
     const container = document.createElement('div');
     const scale = new TimeScaleModel({ range: { start: rangeStart, end: rangeEnd } });
-    const shell = new GanttShell({ container, dataset, scale });
+    const backendSyncCalls = { count: 0 };
+    const shell = new GanttShell({
+      container,
+      dataset,
+      scale,
+      backend: countingDomBackend(backendSyncCalls),
+    });
 
     const layout = computeFrameSpy.mock.instances[0] as unknown as FrameLayout;
     const revisionBefore = layout.heightIndexRevision;
