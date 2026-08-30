@@ -7,6 +7,11 @@ passes; S2 landed; S1.13 is **specified but not implemented** (`plans/s1.13-date
 **Status: settled except §0's P2 and P3.** P1 closed on 2026-08-29. Two prerequisites remain — one a
 sequence, one a one-arrow diagram edit — and each blocks a single step. Every other question this
 spec's own grill raised is answered in §2. §8 is the work list, cut into vertical steps S3.1–S3.8.
+**Revised 2026-08-29** after a standards/spec/simplify/architecture review
+(`plans/reviews/2026-08-29-s3-direct-manipulation.html`) and a second API pass: two layer-map breaches
+closed (`ItemPreview`, the cursor label), the `data-state` derivation claim corrected, capabilities
+given a carrier `render/dom` can read, `EntryGestureContext` cut from thirteen members to seven, and
+the event payloads rebuilt so `plans/02` §3's published handler actually typechecks.
 **Builds on:** S2's transaction/changeset/undo core (`plans/s2-data-core/`), S1.12's viewport surface
 (`zoomBy`, `panToInstant`, `zoomPresets`), S1.13's Date line seam, and `view/splitter.ts` — the
 pointer-drag-that-commits-nothing-itself precedent this slice generalises.
@@ -129,6 +134,23 @@ Preview, extender call and commit all take the same shape, so nothing converts b
 is no `DragRequest` / `MovePatch` / `GestureIntent` type to name. **Draft** joins the glossary as a
 word for the *state a gesture is in*, not as a type.
 
+**Draft is not the Write set, and the glossary entry must say so.** `CONTEXT.md`'s **Write set** entry
+carries `_Avoid: Draft (implies a persisted intermediate state this isn't)`, so adding **Draft** as a
+term needs the two held apart or CLAUDE.md's one-word-one-meaning breaks (#7). They are different
+things at different layers, and the line between them is when `transaction()` opens:
+
+| | **Draft** | **Write set** |
+|---|---|---|
+| Owner | the gesture, in `interaction/` | the open Transaction, in `data/` |
+| Lives | pointerdown → release, across frames | inside one `transaction()` body |
+| Shape | `EntryEdits` — what the gesture *would* commit | `{ before, after }` per touched field |
+| Read by | preview paint and the extender | `get`/`has`/`size`/`childrenOf` (read-your-own-writes) |
+| Discarded by | Escape, or a gesture veto | a thrown body, or a `beforeChange` veto |
+
+A gesture holds a Draft; committing it opens a transaction, which builds a Write set from it. The
+Write set entry's `_Avoid` stands unchanged — it forbids calling the Write set a Draft, not the
+existence of the gesture term.
+
 `StoredEdit` (Instants) rather than the public `EntryEdit` (loose `InstantInput`) because a gesture's
 dates come out of the `TimeScale` already resolved — there is nothing loose left to read.
 
@@ -149,8 +171,10 @@ confines that to `time/`, which only `layout/`, `data/` and `scheduling/` may re
 
 ### D-S3-4 — The gesture math is pure, lives in `layout/`, and is unit-tested in Node
 
-New file `src/layout/gesture-draft.ts`, in the `xForInstant` / `widthForDuration` / `barSpan` naming
-tradition already in `layout/` — an `X-for-Y` name that says what comes out and what goes in:
+New file `src/layout/gesture-draft.ts`, in the `X-for-Y` naming tradition — a name that says what
+comes out and what goes in. `barSpan` (`src/layout/frame.ts:18`) is the one already in `layout/`;
+`xForInstant` and `widthForDuration` are `TimeScale`'s (`src/time/scale.ts`), so the tradition is
+project-wide and `barSpan` is the local precedent to read before writing these:
 
 ```ts
 export interface DraftInput {
@@ -163,10 +187,39 @@ export interface DraftInput {
 export function draftForMove(input: DraftInput): EntryEdits;
 export function draftForResize(input: DraftInput & { edge: 'start' | 'end' }): EntryEdits;
 
-/** Committed geometry + a draft → the per-item px offsets `applyState` paints. */
-export function previewOffsets(
-  draft: EntryEdits, entries: readonly Entry[], scale: TimeScale,
-): readonly ItemPreview[];
+/** One bar's paint offsets from its committed geometry — the shape `applyState` transforms by.
+ *  Declared here, in `layout/`, for the same reason `FrameBar` is: it is layout output that
+ *  `render/` reads over the legal `REN --> LAY` edge (`plans/01` §1). `interaction/` never sees it. */
+export interface ItemPreview {
+  itemId: ItemId;
+  dx: number;
+  dWidth: number;
+  /** True when the extension hook added this write, false when the gesture proposed it. Decides
+   *  `ghost` vs `dragging` in `data-state` (D-S3-7); "extra" is the standing word for what the
+   *  extender contributes (CLAUDE.md, `data/edit-extension.ts`). */
+  extra: boolean;
+}
+
+/** Committed geometry + a draft → the per-item px offsets `applyState` paints. An object, not four
+ *  positional params: `proposed` and `extra` are the same type, so positionally they are swappable
+ *  and a swap still compiles. The two names are `data/`'s own (`EditRequest.proposed`, and the
+ *  "extra writes" the extender contributes), and they map straight onto `ItemPreview.extra`. */
+export function previewOffsets(input: {
+  proposed: EntryEdits;
+  extra: EntryEdits;
+  entries: readonly Entry[];
+  scale: TimeScale;
+}): readonly ItemPreview[];
+
+/** The cursor line's caption for a pointer x (D-S3-15): `instantForX` → `snapInstant` → `formatDate`,
+ *  all three of them `time/` calls `view/` cannot make. Takes the raw x rather than an already-snapped
+ *  Instant, so it is a real step and not a one-line wrapper around `formatDate` — the shell has a
+ *  pixel and wants a string, and everything between is zone-aware work I10 keeps out of `view/`.
+ *  Same division `FrameBar.a11yLabel` already uses (`layout/frame.ts:233`); `locale` arrives the way
+ *  `computeFrame` already takes it, and `zone` rides in on the scale. */
+export function cursorLabelForX(
+  x: number, scale: TimeScale, snap: SnapSpec, locale?: Intl.LocalesArgument,
+): string;
 ```
 
 `interaction/` performs no arithmetic of its own, ever: it hands the shell a pixel displacement and
@@ -176,9 +229,13 @@ the same trade `barSpan` already bought.
 
 `EntryEdits` is `data/`'s type and `layout/` may not import `data/`. It moves to `model/` in this step
 (`model/entry.ts`, beside `EntryEdit`), which is where a shape three layers speak belongs; `data/`
-re-exports it so no existing import path breaks.
+re-exports it so no existing import path breaks. This widens no published surface: `package.json`'s
+`exports` map has exactly one entry (`.` → `dist/api/index.d.ts`), and `api/index.ts` re-exports from
+`model/` name by name rather than wholesale. `model/` is a public *type vocabulary*, not a package
+entry point — a type only reaches a consumer when `api/index.ts` names it, and §4 says these two stay
+unnamed there.
 
-### D-S3-5 — Controllers get a context, not a reach; `interaction/` imports `model/` types only
+### D-S3-5 — Controllers get a context, not a reach; `interaction/` names types, never modules
 
 `view/splitter.ts` already has the shape: the attachment reads and proposes through a small object of
 callbacks the shell supplies, and knows nothing about what is on the other side. Gestures use the
@@ -186,32 +243,55 @@ same seam, one layer up:
 
 ```ts
 // src/interaction/entry-gesture-context.ts
+
+/** What the user is doing, as one value. A discriminated union rather than a `kind` plus an
+ *  optional `edge`: a move with an edge, and a resize without one, are both unrepresentable
+ *  (CLAUDE.md, "illegal combinations are unrepresentable"). It is also the single table the
+ *  capability set (D-S3-9), the event pairs (D-S3-22) and the keyboard map (D-S3-13) all read. */
+export type Gesture =
+  | { readonly kind: 'move' }
+  | { readonly kind: 'resize'; readonly edge: 'start' | 'end' };
+
 export interface EntryGestureContext {
   /** The entry under an item id, or undefined if it left the store mid-gesture. */
   entryFor(itemId: ItemId): Entry | undefined;
-  /** One resolution, shared with affordance painting (I14, D-S3-9). */
-  canMove(entry: Entry): boolean;
-  canResize(entry: Entry): boolean;
-  canSelect(entry: Entry): boolean;
-  /** Entries this gesture applies to: the selection when the grabbed entry is in it, else just it. */
+  /** One resolution, shared with affordance painting (I14, D-S3-9). `keyof Interactions` rather than
+   *  a hand-written union: S5's `edit` and S7's `linkCreate` extend `can()` by adding a key to the
+   *  config type, with no edit here — open for extension, closed for modification. */
+  can(capability: keyof Interactions, entry: Entry): boolean;
+  /** Entries the gesture applies to: the selection when the grabbed entry is in it, else just it.
+   *  The `Gesture` is not a parameter because it does not change the answer — move and resize take
+   *  the same set (D-S3-19). */
   entriesForGesture(grabbed: Entry): readonly Entry[];
-  /** px → draft. The shell wires this straight to `layout/`'s `draftForMove`/`draftForResize`. */
-  draftMove(entries: readonly Entry[], byPx: number): EntryEdits;
-  draftResize(entries: readonly Entry[], byPx: number, edge: 'start' | 'end'): EntryEdits;
-  /** Paint a draft plus whatever the extension hook adds. At most one call per frame (D-S3-18). */
-  previewDraft(draft: EntryEdits | undefined): void;
+  /** px → draft. The shell drops entries whose capability for this gesture is false (D-S3-19), then
+   *  calls `layout/gesture-draft.ts`. The filter is the shell's, not `layout/`'s: capability is
+   *  `view/`'s answer and `layout/` neither has it nor should ask. */
+  draftFor(gesture: Gesture, entries: readonly Entry[], byPx: number): EntryEdits;
   /** before-event → one transaction → after-event. Resolves false when vetoed (D-S3-17). */
-  commitMove(draft: EntryEdits): Promise<boolean>;
-  commitResize(draft: EntryEdits, edge: 'start' | 'end'): Promise<boolean>;
-  /** Hot-path writes; the shell owns the state object (D-S3-6). */
-  hover(itemId: ItemId | undefined): void;
-  cursorAt(x: number | undefined): void;
+  commit(gesture: Gesture, draft: EntryEdits): Promise<boolean>;
+  /** Show a draft plus whatever the extension hook adds; `undefined` clears it. At most one call
+   *  per frame (D-S3-18). */
+  preview(draft: EntryEdits | undefined): void;
+  /** Where the pointer is, as one call, so a pointer move touches shell state once. `x` is content
+   *  px and drives the cursor line; `itemId` is what is under it. `undefined` on pointerleave.
+   *  Named for the job the controller does — reporting the pointer — not for the paint it causes:
+   *  `interaction/` cannot see `render/`, and should not read as if it could. */
+  pointerAt(at: { itemId?: ItemId; x?: number } | undefined): void;
   selection: { get(): readonly EntryId[]; propose(next: readonly EntryId[]): void };
 }
 ```
 
-Everything the controller names is a `model/` type. That, and only that, is why P3 asks for one new
-arrow. `interaction/` may not import `layout/`, `time/`, or `render/` after this step either.
+Seven members, not thirteen. The earlier sketch spelled `draftMove`/`draftResize`/`commitMove`/
+`commitResize` and `canMove`/`canResize`/`canSelect` out one flavour at a time, which re-encoded the
+move/resize/select triplet a fourth time and made the interface as tall as the code behind it.
+Parameterising on `Gesture` collapses the duplicated pair, and folding `hover`/`cursorAt` into one
+`pointerAt` call keeps a pointer move to a single write.
+
+The types the controller names are `model/`'s (`Entry`, `EntryId`, `ItemId`), its own `Gesture`, and
+`Interactions` — which is `view/`'s, over the `INT --> VIEW` edge the layer map already draws. Only
+the first group needs P3's new arrow. `interaction/` may not import `layout/`, `time/`, or `render/`
+after this step either, and `Gesture` is the reason it does not need to: it names *what the user is
+doing*, never how far in pixels or which instant that lands on.
 
 **One name per concept:** `SplitterHooks` renames to `SplitterContext` in the same step. "Hook" already
 means the extension hook (D4, `CONTEXT.md`), and CLAUDE.md's #7 lesson is that a word covering two
@@ -226,32 +306,62 @@ and diffs against what it painted last. No module-level instance (I2) — one pe
 other piece of shell state.
 
 ```ts
-// src/render/backend.ts — widened
-export interface ItemPreview { itemId: ItemId; dx: number; dWidth: number; }
-
+// src/render/backend.ts — widened. `ItemPreview` is imported from `layout/gesture-draft.ts`
+// (D-S3-4), not declared here: `REN --> LAY` is a legal edge and `LAY --> REN` is not.
 export interface InteractionState {
   hoveredItemId?: ItemId;
   selectedItemIds?: readonly ItemId[];
+  /** The one item the shared handle pair sits on: the hovered bar, else the single selected one —
+   *  and only when its `resize` capability resolved true. Undefined parks the handles (D-S3-8). */
+  resizableItemId?: ItemId;
+  /** The hovered bar, and only when its `move` capability resolved true — what gets `cursor: grab`. */
+  movableItemId?: ItemId;
   /** Non-empty only while a gesture previews. Includes the extension hook's extra writes. */
   preview?: readonly ItemPreview[];
   /** Content-px x of the cursor line, or undefined when no gesture is running (D-S3-15). */
   cursorX?: number;
   cursorLabel?: string;
-  /** A gesture awaiting an async veto (D-S3-17). */
+  /** A gesture awaiting an async veto — paint only, the reduced-opacity state (D-S3-17). */
   pending?: boolean;
 }
 ```
+
+**Why two resolved ids rather than a capability field per item.** `applyState` must not answer
+"can this resize?" — that answer belongs to `view/capability.ts` and asking it twice is exactly the
+split I14 forbids (D-S3-9). But nothing needs a per-item map either: the handles are one shared pair
+(D-S3-8) and the cursor paints on the hovered bar alone, so *two ids* describe the whole affordance
+surface. The shell resolves once, when hover or selection changes, and writes the id or leaves it
+undefined. `render/dom` reads; it never derives. Two id writes per hover step, no allocation (I5).
 
 `ItemPreview` carries **offsets from committed geometry**, not absolute boxes: `render/dom` already
 keeps each bar's committed `BarGeom`, so `applyState` writes
 `translate(x + dx, y)` / `width: w + dWidth` and restores by dropping the preview — no second copy of
 the frame, and cancel is structurally exact (`[S3-A2]`).
 
-### D-S3-7 — Interaction state paints as one `data-state` attribute, generated from its own keys
+### D-S3-7 — Interaction state paints as one `data-state` attribute, over a fixed token vocabulary
 
-`data-flag` set the pattern (D-S1.10-2): one space-joined attribute, tokens generated from the
-carrier type's own keys, so a new key needs no `render/dom` edit. Interaction state joins it as
-`data-state` on `.fg-bar`, with tokens `hovered selected dragging ghost pending`.
+`data-flag` set half the pattern (D-S1.10-2): one space-joined attribute on `.fg-bar`. Interaction
+state joins it as `data-state`, with tokens `hovered selected dragging ghost pending`.
+
+**It does not inherit the other half, and this spec previously claimed it did.** `data-flag`'s tokens
+come out of `Object.keys(flags)` (`render/dom/index.ts:36`) because `BarFlags` is a per-bar record of
+booleans — key present and true, token emitted. `InteractionState` is nothing like that shape: it is
+one per-Gantt object carrying **item ids and arrays**, and a token is per bar. `hoveredItemId` is not
+the token `hovered`; it is the id of the one bar that gets it. So the token set is a **fixed
+projection** of `InteractionState`, written once in `render/dom`, and adding a sixth token *is* a
+`render/dom` edit. That is the honest cost, and it is small — five rows:
+
+| Token | Painted on | Read from |
+|---|---|---|
+| `hovered` | one bar | `hoveredItemId` |
+| `selected` | every selected bar | `selectedItemIds` |
+| `dragging` | the bars the gesture itself moves | `preview` entries with `extra: false` |
+| `ghost` | the bars the extension hook added | `preview` entries with `extra: true` |
+| `pending` | the previewed bars, while an async veto is outstanding | `pending` |
+
+`ItemPreview.extra` (D-S3-4) exists for rows three and four: without it the two are indistinguishable
+at paint time, and telling "the bar I grabbed" from "the bar something else moved" is the whole point
+of the ghost (U7).
 
 `CONTEXT.md`'s State attribute entry is explicit that there is no modifier-class convention here, so
 `.fg-bar--dragging` is not an option. Level-2 CSS reads
@@ -263,13 +373,17 @@ New Tokens: `--fg-selection-color`, `--fg-ghost-opacity`. Both join `plans/02` �
 
 Two handle children per bar is 2N nodes, N allocations per sync, and a reconciler scope widening for
 something no frame describes. Instead: `mount()` creates exactly two handle nodes
-(`.fg-bar-handle[data-edge="start"|"end"]`) once, and `applyState` moves them onto the hovered or
-selected bar with a transform — or parks them (`display: none`) when the bar's `canResize` is false.
+(`.fg-bar-handle[data-edge="start"|"end"]`) once, and `applyState` moves them onto
+`InteractionState.resizableItemId` with a transform — or parks them (`display: none`) when that field
+is undefined. Cursor follows the same route: `applyState` writes `cursor: grab` on
+`movableItemId`.
 
-Zero per-bar cost, zero allocation on the hot path, and I14 falls out for free: the same
-`canResize(entry)` call that refuses the gesture is what decides whether the handles are visible.
-Cursor follows the same route — `applyState` writes `cursor: grab` on the hovered bar only when
-`canMove` is true.
+**`applyState` reads a resolved answer; it never asks the question.** `render/dom` may reach `layout/`
+and nothing else, so it cannot call `resolveCapabilities` (that is `view/`'s, D-S3-9) — and an earlier
+draft of this decision had it branch on `canResize`/`canMove` directly, which would have split I14's
+one resolution across two layers. The shell resolves once and hands the answer over as the two ids of
+D-S3-6. I14 then holds by construction: the same `can('resize', entry)` call that refuses the gesture
+is the one that decided `resizableItemId`, so the affordance and the veto cannot disagree.
 
 ### D-S3-9 — Capabilities resolve once, in `view/`, over a per-kind default table
 
@@ -298,15 +412,30 @@ bug. Subtree move is a policy question that belongs to S4's hierarchy work — �
 `linkCreate` and `edit` are **not** declared on `Interactions` in S3: I11 keeps unimplemented keys out
 of the public `.d.ts`. They arrive with S7 and S5 respectively.
 
+**This table is the slice's one gesture table, and three other things read off it** rather than
+restating the move/resize/select triplet in their own words: the context's `can()` (D-S3-5), the two
+resolved ids the shell writes into paint state (D-S3-6/8), and the keyboard rows (D-S3-13). A gesture
+a consumer has switched off is therefore unreachable from every direction at once, which is what
+"one resolution" (I14) means in practice.
+
 ### D-S3-10 — Selection is a set of **Entry** ids on the **Gantt**; Items are what gets painted
 
 An Entry with Segments produces several Items (`01` §2.4), and "this segment is selected but its
 siblings are not" means nothing at this slice. So the authored concept is entries:
 
 ```ts
-get selection(): readonly EntryId[];
-set selection(ids: readonly EntryId[]);      // live, runs the same cancelable sequence a click runs
+get selection(): readonly EntryId[];                    // stored type out: complete, branded
+set selection(ids: readonly (EntryId | string)[]);      // loose in; live, and runs the same
+                                                        // cancelable sequence a click runs
 ```
+
+**Loose in, complete out — the same asymmetry `entries.get/update/remove` already ship**
+(`model/dataset.ts:15,27,28` take `EntryId | string`). `EntryId` is a branded string
+(`model/ids.ts:3`), so a setter typed `readonly EntryId[]` would force an app author to write
+`gantt.selection = [entryId('t1'), entryId('t2')]` — importing a helper to hand the library back ids
+it minted itself. CLAUDE.md is explicit that input is loose on **every** way in; a new public setter
+is not the place to break that. The getter stays branded, because what comes out has been through
+ingest.
 
 On the `Gantt`, not the `Dataset` — `plans/02` §3 already rules that pointer/gesture events fire on
 the Gantt and data events on the Dataset, and two Gantt instances bound to one Dataset must be able to
@@ -356,7 +485,13 @@ wants arrow-key nudge. Those collide, and the resolution is **selection is the m
 | `Enter` | — | reserved; no-op in S3 (the editor is S5) |
 
 Every row of the pointer's capability set has a keyboard row, which is what `plans/03`'s "every S3
-pointer capability has a keyboard path" asks for. Rejected: requiring a modifier for every nudge —
+pointer capability has a keyboard path" asks for — and the editing rows **read off D-S3-9's table**
+rather than re-encoding it: `attachKeyboardEditing` asks the same `can(gesture, entry)` the pointer
+path asks, so a `resize`-incapable entry refuses `Shift`+`←`/`→` for the same reason it grows no
+handles. That is `[S3-A5]`'s keyboard half, and it is why the table above lists keys against
+gestures, not against entry kinds.
+
+Rejected: requiring a modifier for every nudge —
 it makes the primary editing gesture the hardest one to find, and Escape already gives an
 unambiguous, discoverable way back to panning.
 
@@ -392,11 +527,23 @@ via `InteractionState.cursorX` — the same mechanism as the shared resize handl
 New Parts: `.fg-cursor-line` and `.fg-cursor-line-label`, structurally the stroke-plus-caption pair
 S1.13 builds for `.fg-date-line`, reusing `--fg-date-line-color`. Not a `data-state` variant of
 `.fg-date-line`: that Part is painted from `frame.decorations` and this one is never in a frame.
-Glossary term **Cursor line**; "hairline" describes a stroke width, not a concept.
 
-The label is the snapped instant, formatted through `time/`'s `formatDate` in the Gantt's locale and
-the Dataset's zone — composed in `view/` (which has the zone and the locale) and handed over as a
-string, the same division `FrameBar.a11yLabel` already uses.
+**Glossary term Cursor line, and the entry must carry the disambiguation.** `CONTEXT.md`'s **Date
+line** and **Today line** entries both list `_Avoid: cursor` — meaning the *pane's* cursor, not this
+marker. Adding a term whose first word is the word two neighbouring entries tell you to avoid needs
+the difference stated in the entry itself, or a reader maps it straight onto the Date line seam: a
+Date line is authored, lives in `frame.decorations`, and survives a render; a Cursor line is
+transient, exists only while a gesture runs, and is never in a frame. Those two `_Avoid` lines narrow
+to "cursor (the pane) — for the drag-time marker, say Cursor line". "Hairline" stays out: it
+describes a stroke width, not a concept.
+
+The label is the snapped instant under the pointer, formatted in the Gantt's locale and the Dataset's
+zone. It is composed in **`layout/`** — `cursorLabelForX` (D-S3-4) — and handed over as a string, the
+same division `FrameBar.a11yLabel` already uses (`layout/frame.ts:233`). Not in `view/`: the layer map
+gives `view/` arrows to `render/`, `layout/` and `data/` and **no `time/` edge**, and all three steps
+between a pixel and that string — `instantForX`, `snapInstant`, `formatDate` — are `time/` calls I10
+keeps out of `view/`. The shell hands over an x; `layout/` returns the caption. Widening the map with
+a second arrow was the alternative, and P3 deliberately asks for one arrow, not two.
 
 ### D-S3-16 — One explicit transaction per gesture, and what a data-layer veto does to it
 
@@ -430,6 +577,14 @@ committed frame (accept) or the pre-gesture state (veto). A promise that rejects
 and the rejection is re-thrown asynchronously so it reaches the consumer's error reporting rather than
 vanishing.
 
+**Pending is two jobs, and only one of them is paint.** It dims the bar, and it locks the Gantt
+against a second gesture. `InteractionState.pending` is the **paint** half and stays there — a bar
+that shows a pending state has to be painted like every other state, through the same attribute
+(D-S3-7). The **lock** is not paint: it is decided once per gesture, not per pointer move, and
+`applyState` has no business reading it. So the shell's gesture machinery owns the lock as its own
+value, beside the draft it already holds (D-S3-18), and *writes* `pending` into paint state the way it
+writes `preview`. One direction, one owner: the gesture decides, paint reflects.
+
 ### D-S3-18 — The extender preview runs at most once per animation frame, on the shell's existing rAF
 
 `FrameScheduler` is already the single rAF owner (B10, D-S2-15). Pointer moves write the draft into
@@ -437,8 +592,9 @@ the gesture's own state and request a preview; the shell coalesces to one call p
 
 ```
 pointermove (n per frame)  →  draft (last one wins)
-rAF                        →  extender({ entries: committed, proposed: draft })
-                           →  previewOffsets(draft + extras)  →  applyState
+rAF                        →  extra = extender({ entries: committed, proposed: draft })
+                           →  previewOffsets({ proposed: draft, extra, entries, scale })
+                           →  applyState
 ```
 
 The extender is called with the same `EditRequest` a commit builds — same function, same shape, so a
@@ -454,13 +610,21 @@ which is what its perf test measures.
 ### D-S3-19 — A drag moves every selected, capable entry
 
 Dragging a bar that is part of the selection moves the whole selection; dragging one outside the
-selection moves only it (and does not change the selection). Entries in the selection whose
-`canMove` is false are silently skipped rather than blocking the gesture — the capability is
+selection moves only it (and does not change the selection). Entries in the selection whose `move`
+capability resolves false are silently skipped rather than blocking the gesture — the capability is
 per-entry, so a mixed selection is a legal thing to have.
 
 This costs one loop, because D-S3-3 made the delta a single calendar quantity applied to N entries
 rather than N independent pixel computations. One draft, one transaction, one undo step, one
 before-event carrying all affected entries.
+
+**Resize follows the same rule**, and the spec has to say so because `draftForResize` takes `entries`
+plural (D-S3-4) and silence would leave the implementer guessing. Dragging the `end` handle of a bar
+that is part of the selection moves every selected entry's `end` by the same calendar delta; dragging
+one outside the selection resizes only it. `resize` is per-entry too, so a milestone or a group inside
+a mixed selection is skipped rather than blocking the gesture — exactly as `move` behaves. This is
+why `entriesForGesture` takes no `Gesture` (D-S3-5): the set is the same either way, and only the
+capability filter differs.
 
 ### D-S3-20 — "Allocates nothing" is proven by named proxies
 
@@ -498,14 +662,51 @@ unimplemented, and `view/event-bus.ts`'s existing comment ("Declared events fire
 standing rule.
 
 ```ts
-export interface EntryMove   { readonly entries: readonly Entry[]; readonly edits: EntryEdits; }
-export interface EntryResize extends EntryMove { readonly edge: 'start' | 'end'; }
+/** One entry and the span the gesture proposes for it. "Proposed" is `data/`'s own word for what a
+ *  caller asked for before anything else writes (`EditRequest.proposed`, `data/edit-extension.ts`). */
+export interface ProposedSpan {
+  readonly entry: Entry;
+  readonly start: Instant;
+  readonly end: Instant;
+}
+
+interface EntryGestureEvent extends ProposedSpan {
+  /** Every entry the gesture moves, the grabbed one first — one element for a plain drag, the whole
+   *  capable selection for a multi-drag (D-S3-19). The grabbed entry's own fields are repeated at
+   *  the top level so the common case needs no indexing; `entries[0]` is the same row. The extension
+   *  hook's extra writes are deliberately **not** here: they are not what the user asked for, and a
+   *  veto handler must judge the user's edit, not the cascade (the cascade's own veto is
+   *  `beforeChange` on the Dataset, D-S3-16). */
+  readonly entries: readonly ProposedSpan[];
+}
+
+export type EntryMove = EntryGestureEvent;
+export interface EntryResize extends EntryGestureEvent { readonly edge: 'start' | 'end'; }
 export interface SelectionChange { readonly from: readonly EntryId[]; readonly to: readonly EntryId[]; }
 ```
 
-`edits` is the draft — `{ start, end }` per entry — so a handler reads the proposed values without
-recomputing them, and `plans/02` §3's example (`({ entry, start, end }) => …`) generalises to the
-multi-entry case rather than being contradicted by it.
+**This shape exists because the map shape broke the documented call site.** An earlier draft carried
+`{ entries: readonly Entry[]; edits: EntryEdits }`, and that fails twice. First, `plans/02:156` already
+publishes the handler an app author writes —
+
+```ts
+gantt.on('beforeEntryMove', ({ entry, start, end }) => {
+  if (start < mobilization) { toast('Too early'); return false; }   // veto
+});
+```
+
+— and against a `ReadonlyMap<EntryId, StoredEdit>` that does not destructure, let alone typecheck. The
+spec claimed the map "generalises" that example; it contradicted it. Second, it made a public payload
+field carry `EntryEdits`, which §4 says stays unexported — a consumer could read the value but could
+never name its type to write a typed helper against it. Both faults come from publishing an internal
+write shape as an event payload. `ProposedSpan` is the shorthand-plus-long-form CLAUDE.md asks for:
+the grabbed entry's `start`/`end` inline for the ordinary drag, `entries` when a handler actually
+cares about a multi-selection. `EntryEdits` stays where it belongs — the commit path and the
+extension hook.
+
+`EntryMove` and `EntryResize` share a base rather than one extending the other: a resize is not a kind
+of move, and typing it that way would let a resize payload stand in wherever a move payload is
+expected. Same fields, no false hierarchy.
 
 ---
 
@@ -518,18 +719,38 @@ interface GanttOptionsBase {
   // …unchanged keys…
   /** Live. Per-gesture, boolean or per-entry predicate, over per-kind defaults (D-S3-9). */
   interactions?: Interactions;
-  /** Live. Entry ids; assignment runs the same cancelable sequence a click runs (D-S3-10). */
-  selection?: readonly EntryId[];
+  /** Live. Entry ids, loose; assignment runs the same cancelable sequence a click runs (D-S3-10). */
+  selection?: readonly (EntryId | string)[];
 }
 
 export class Gantt {
   get interactions(): Interactions;     set interactions(i: Interactions);
-  get selection(): readonly EntryId[];  set selection(ids: readonly EntryId[]);
+  get selection(): readonly EntryId[];  set selection(ids: readonly (EntryId | string)[]);
 }
 ```
 
 `GanttEventMap` gains the six names in D-S3-22. No new methods: a gesture is not something a consumer
 invokes.
+
+The whole S3 public surface an app author touches is two live properties and six events. Read as one
+call site:
+
+```ts
+const gantt = new Gantt({
+  container, dataset,
+  interactions: { resize: (entry) => entry.kind !== 'group' },   // U4
+  selection: ['t1'],
+});
+
+gantt.on('beforeEntryMove', ({ entry, start }) =>
+  start < mobilization ? false : undefined);                     // U5 — plans/02:156, verbatim
+
+gantt.selection = ['t1', 't2'];                                  // U8, live
+```
+
+No hook, no binding handle, no extender, no `overscan`, no `pxPerMs` — the second surface CLAUDE.md
+reserves for plugin authors stays out of the app author's way, and `EntryGestureContext` (D-S3-5) is
+internal to `interaction/`, not something a consumer ever names.
 
 ### 3.2 `src/interaction/`
 
@@ -538,7 +759,7 @@ invokes.
 | `pointer-gesture.ts` | `attachPointerGesture` | The base: arm threshold, long-press on coarse pointers, pointer capture, Escape, teardown. Knows nothing about entries |
 | `entry-gestures.ts` | `attachEntryGestures` | The one pointer stream over the bar layer; decides select vs. move vs. resize from the hit target; drives preview and commit |
 | `keyboard-editing.ts` | `attachKeyboardEditing` | D-S3-13's editing half |
-| `entry-gesture-context.ts` | `EntryGestureContext` | D-S3-5's seam type |
+| `entry-gesture-context.ts` | `EntryGestureContext`, `Gesture` | D-S3-5's seam type and the gesture union every other table reads |
 
 One pointer stream, not three attachments racing for it: a pointerdown that becomes a drag must not
 also change the selection, and that is only expressible where both outcomes are decided in one place.
@@ -547,13 +768,22 @@ also change the selection, and that is only expressible where both outcomes are 
 
 `capability.ts` (`resolveCapabilities`, `Interactions`, `CapabilityRule` — D-S3-9);
 `wheel-navigation.ts` (`attachWheelNavigation`); `keyboard-navigation.ts`
-(`attachKeyboardNavigation`); `splitter.ts` (`SplitterHooks` → `SplitterContext`, D-S3-5).
+(`attachKeyboardNavigation`); `splitter.ts` (`SplitterHooks` → `SplitterContext`, D-S3-5); the three
+event payload types of D-S3-22 beside the existing ones.
+
+Public types in `view/`, re-exported by `api/index.ts`, is the established shape here, not a new
+concession: `GanttEventMap`, `GridWidthChange`, `NavigationChange` and `Theme` already come from
+`view/index.js` (`api/index.ts:23–24`). `plans/01`'s "only `api/` and `model/` types are public" is
+about the *sealed `exports` map*, which publishes `api/index.ts` alone — not about which directory a
+re-exported type is authored in.
 `GanttShell` owns the `InteractionState`, the capability resolution, the selection, and the wiring of
 every context above — the composition root's existing job, one more set of attachments.
 
 ### 3.4 `src/layout/`
 
-`gesture-draft.ts` (`draftForMove`, `draftForResize`, `previewOffsets`, `ItemPreview` — D-S3-4).
+`gesture-draft.ts` (`draftForMove`, `draftForResize`, `previewOffsets`, `ItemPreview`,
+`cursorLabelForX` — D-S3-4). `ItemPreview` is declared here and read by `render/` over the legal
+`REN --> LAY` edge, exactly as `FrameBar` already is.
 
 ### 3.5 `src/time/`
 
@@ -566,9 +796,11 @@ path breaks. `StoredEdit` moves with it — it is the same shape's other half.
 
 ### 3.7 `src/render/dom/`
 
-`applyState` becomes real: `data-state` tokens, preview transforms, the shared handle pair, the cursor
-line, the hovered bar's cursor. `mount()` creates the four singleton nodes (two handles, cursor line,
-cursor label). The reconciler's scope is untouched — none of this is keyed-children work.
+`applyState` becomes real: `data-state` tokens (D-S3-7's five-row projection), preview transforms, the
+shared handle pair parked on `resizableItemId`, the cursor line, and `cursor: grab` on
+`movableItemId`. `mount()` creates the four singleton nodes (two handles, cursor line, cursor label).
+`backend.ts` imports `ItemPreview` from `layout/`. The reconciler's scope is untouched — none of this
+is keyed-children work, and `render/dom` resolves no capability of its own (D-S3-8).
 
 ### 3.8 `harness/`
 
@@ -581,9 +813,15 @@ P1 — a lock-style extender showing a second bar ghosting.
 ## 4. Public surface
 
 `api/index.ts` gains: `Interactions`, `CapabilityRule`, `Gantt.interactions`, `Gantt.selection`, and
-the six event names of D-S3-22 with their payload types. **Nothing extender-shaped becomes public**
+the six event names of D-S3-22 with their payload types — `EntryMove`, `EntryResize`,
+`SelectionChange`, and `ProposedSpan`, which the first two are built from and a handler needs to name
+in order to write a typed helper. **Nothing extender-shaped becomes public**
 — D-S2-6 puts the install API in S5 and I11 forbids an option a consumer cannot fill (P1).
-`EntryEdits`/`StoredEdit` move to `model/` (D-S3-4) but stay unexported from `api/index.ts`.
+`EntryEdits`/`StoredEdit` move to `model/` (D-S3-4) but stay unexported from `api/index.ts`, and that
+is sufficient: `package.json`'s `exports` map publishes one entry (`.` → `dist/api/index.d.ts`), and
+`api/index.ts` names its `model/` re-exports individually rather than star-exporting, so a `model/`
+type a consumer cannot import is genuinely unreachable. `ItemPreview` and `Gesture` are likewise
+internal — `layout/`'s and `interaction/`'s respectively.
 
 New Parts: `fg-bar-handle`, `fg-cursor-line`, `fg-cursor-line-label`. New State attribute:
 `data-state` on `.fg-bar`. New Tokens: `--fg-selection-color`, `--fg-ghost-opacity`.
@@ -598,7 +836,7 @@ existing signature except `SplitterHooks`, which is internal.
 | Foot-gun | Answer |
 |---|---|
 | A consumer mutates the entry inside a `beforeEntryMove` handler | The handler gets the committed `Entry` and the draft `edits`; mutating a store outside a transaction does not typecheck (`TxToken`), and a nested `transaction()` during notification throws `MutationDuringNotificationError` (D-S2-9) |
-| Dragging a `'group'` "works" and then snaps back | It never arms: `canMove` is false for every `derivedSpanKinds` kind, and the handles/cursor never appear (D-S3-9) |
+| Dragging a `'group'` "works" and then snaps back | It never arms: `move` resolves false for every `derivedSpanKinds` kind, and the handles/cursor never appear (D-S3-9) |
 | A drag across a DST boundary silently shifts the bar by an hour | It cannot: the delta is a calendar delta stepped through `time/` (D-S3-3), and the DST case is a plain Node test |
 | An async `beforeEntryMove` never resolves | The gesture stays visibly pending and no further gesture arms on that Gantt. It is the consumer's promise; the library will not invent a timeout that silently commits |
 | The extender's ghost points at an entry scrolled out of the window | No node exists to transform, so no ghost paints. The commit is unaffected — the draft is data, the ghost is paint |
@@ -607,6 +845,8 @@ existing signature except `SplitterHooks`, which is internal.
 | A dense chart cannot be scrolled by touch | `touch-action: none` is on `.fg-bar` only, and touch drags arm on long-press (D-S3-21) |
 | Ten arrow presses need ten Ctrl+Z presses | True, and named: undo coalescing needs a History merge policy S2 did not ship (§9) |
 | Two Gantt instances on one Dataset fight over the selection | They cannot: selection is Gantt state, not Dataset state (D-S3-10) |
+| A `beforeEntryMove` handler reads the payload expecting the extender's cascade in it | It is not there by design: the payload carries what the *user* asked for (D-S3-22). The cascade-inclusive view is `beforeChange` on the Dataset, which fires after the extension hook and the Rollup on the ChangeSet that would actually be written (D-S3-16) |
+| `gantt.selection = ['t1']` fails to typecheck because `EntryId` is branded | It does not: the setter takes `EntryId \| string`, the same loose input `entries.get/update/remove` already accept. Only what comes *out* is branded (D-S3-10) |
 
 ---
 
@@ -614,13 +854,24 @@ existing signature except `SplitterHooks`, which is internal.
 
 `pure` (Node, no DOM) except where noted.
 
-- **`layout/gesture-draft.test.ts` (new, pure)** — snap to tick, `snap: 'none'`, Alt-suspended snapping; a move across a spring-forward and a fall-back boundary keeps both wall-clock ends (D-S3-3); resize clamps at zero length rather than inverting; a multi-entry draft applies one delta to N entries; `previewOffsets` against known committed geometry.
+**What `[S3-A1]` covers, and what it does not.** `plans/03` §S3's first box says "every S3 gesture:
+before-event → exactly one transaction → after-event". Read literally that sweeps in selection, which
+opens **no** transaction at all — selection is Gantt state, not a `Dataset` write (D-S3-10). So the
+box is scoped here: `[S3-A1]` covers the three gestures that write data — **pointer move, pointer
+resize, and keyboard nudge** — and asserts the full ordered log for each. Selection gets its own
+assertion in the same test: `beforeSelectionChange` → the Gantt's selection changes →
+`selectionChange`, with `dataset.on('change')` proven **not** to fire. Keyboard nudge is a gesture
+under I6 (one transaction per keypress, D-S3-13), so it belongs in this box rather than needing a
+ninth one — that is where `plans/03`'s "keyboard parity begins" is accepted.
+
+- **`layout/gesture-draft.test.ts` (new, pure)** — snap to tick, `snap: 'none'`, Alt-suspended snapping; a move across a spring-forward and a fall-back boundary keeps both wall-clock ends (D-S3-3); resize clamps at zero length rather than inverting; a multi-entry draft applies one delta to N entries; `previewOffsets` against known committed geometry, with `extra` set on the extender's rows and clear on the gesture's own (D-S3-7); `cursorLabelForX` snaps before it formats, in a non-UTC zone.
 - **`time/snap.test.ts` (new, pure)** — `snapInstant` at each `TimeUnit`, including across a DST transition and at a week start in a non-UTC zone.
 - **`view/capability.test.ts` (new, pure)** — the D-S3-9 default table per kind; a boolean rule; a predicate rule; a consumer-defined kind; `interactions` reassignment re-resolves live.
-- **`interaction/entry-gestures.test.ts` (new, dom)** — `[S3-A1]` before-event → exactly one transaction → after-event, asserted as an ordered log for move, resize and selection; nothing is written on pointerdown; `[S3-A2]` Escape mid-drag leaves store, `data-state` and transforms exactly as they were.
-- **`interaction/keyboard-editing.test.ts` (new, dom)** — the D-S3-13 map, both modes; `[S3-A5]`'s keyboard half.
+- **`render/dom/index.test.ts` (extended, dom)** — `applyState` parks the handles when `resizableItemId` is undefined and moves them when it is set; `cursor: grab` follows `movableItemId`; the D-S3-7 token projection, including `dragging` vs `ghost` off `ItemPreview.extra`. `render/dom` calls no capability resolver — asserted by the import boundary, not by a spy (D-S3-8).
+- **`interaction/entry-gestures.test.ts` (new, dom)** — `[S3-A1]`'s pointer half: before-event → exactly one transaction → after-event, asserted as an ordered log for move and resize; selection fires its own event pair and opens no transaction; nothing is written on pointerdown; `[S3-A2]` Escape mid-drag leaves store, `data-state` and transforms exactly as they were.
+- **`interaction/keyboard-editing.test.ts` (new, dom)** — the D-S3-13 map, both modes; `[S3-A1]`'s keyboard half (one nudge = one before-event, one transaction, one after-event, and one Ctrl+Z puts it back — U9); `[S3-A5]`'s keyboard half, refused off the same `can()` the pointer path asks.
 - **`api/gantt.test.ts` (extended, dom)** — `[S3-A5]` a `resize`-incapable entry renders no handle and refuses pointer and keyboard resize; `[S3-A3]` hover across every mounted bar of a 1,000-entry fixture calls no `computeFrame` and creates/removes no nodes (D-S3-20); `[S3-A7]` ctrl+wheel zooms anchored, shift+wheel pans, Page/Home/End pan, and `dataset.on('change')` never fires for any of them.
-- **`interaction/extender-preview.test.ts` (new, dom)** — `[S3-A4]` with the identity extender only the dragged bar carries a preview; with an extender injected through `DatasetStateOptions` (D-S2-6's sanctioned route) that writes a second entry's `start`, that bar carries one too; Escape discards both; a static-import assertion proves no `scheduling/` import reaches `interaction/`.
+- **`interaction/extender-preview.test.ts` (new, dom)** — `[S3-A4]` with the identity extender only the dragged bar carries a preview; with an extender injected through `DatasetStateOptions.editExtender` (D-S2-6's sanctioned route, the one `data/history.property.test.ts:169` already takes under `[S2-A1]`) that writes a second entry's `start`, that bar carries one too, marked `extra`; Escape discards both; a static-import assertion proves no `scheduling/` import reaches `interaction/`.
 - **`data/history.property.test.ts` (extended, pure)** — `[S3-A6]` a gesture's changeset (user edit + extender extras) inverts to the exact pre-gesture state, folded into the existing `[S2-A1]` property test rather than given a second one.
 - **e2e `e2e/direct-manipulation.spec.ts` (new)** — `[S3-A8]` the cursor line follows the pointer during a drag, reports the snapped date, and is gone on release; a real drag moves a bar and a real Ctrl+Z puts it back; the veto demo refuses a drop and leaves nothing behind.
 - **Guard** — `scripts/guard-red-test.mjs` gains a fixture proving `interaction/` importing `layout/`, `time/` or `render/` still fails the build after P3's one-arrow widening.
@@ -632,13 +883,15 @@ existing signature except `SplitterHooks`, which is internal.
 - `plans/03` §S3 — acceptance boxes `[S3-A1]`–`[S3-A8]`, replacing the six untagged ones; the "1,000 visible bars" wording corrected per D-S3-20; a pointer to this spec.
 - `plans/00` §4 — the `S3 → S4` gate restated over the acceptance ids; the `S1.13 → S3` gate marked discharged.
 - `plans/01` §1 — the `INT --> MODEL` arrow and its one-line justification (**P3**); §9 updated to name the attachments this step actually ships rather than the `Drag`/`Resize`/`Select`/`Keyboard` controller sketch.
-- `plans/02` §3 — the three event pairs with their payload types; §4 token table gains `--fg-selection-color` and `--fg-ghost-opacity`; the Part vocabulary gains `fg-bar-handle`, `fg-cursor-line`, `fg-cursor-line-label`; §4.1's `interactions` example drops `linkCreate` until S7.
+- `plans/02` §3 — the three event pairs with their payload types, including `ProposedSpan` and the note that §3's existing `({ entry, start, end })` example is the payload's own top level, not a simplification of it (D-S3-22); §4 token table gains `--fg-selection-color` and `--fg-ghost-opacity`; the Part vocabulary gains `fg-bar-handle`, `fg-cursor-line`, `fg-cursor-line-label`; §4.1's `interactions` example drops `linkCreate` until S7, and §4.1's list of gesture keys is marked as the set `keyof Interactions` grows into (D-S3-5).
 - `plans/04` §1 — nothing (no new runtime dependency).
 
 Already landed **with this spec**, not waiting for the step: `plans/03` §S3's and §S5's harness scope
-lines (P1, option (a)), and `src/data/dataset-state.ts`'s stale `editExtender` comment — a pre-remap
-reference, not a live decision.
-- `CONTEXT.md` — new entries **Gesture**, **Draft**, **Ghost**, **Cursor line**, **Interaction state**, **Nudge**; **Capability** updated with the per-kind default table's existence; **Part** and **State attribute** updated with the new members.
+lines (P1, option (a)), `plans/03` §S3's prerequisite count (two, not three — P1 is closed), and
+`src/data/dataset-state.ts`'s stale `editExtender` comment — a pre-remap reference, not a live
+decision.
+- `CONTEXT.md` — new entries **Gesture**, **Draft**, **Ghost**, **Cursor line**, **Interaction state**, **Nudge**; **Capability** updated with the per-kind default table's existence; **Part** and **State attribute** updated with the new members. Two entries need the disambiguation written in, not assumed: **Draft** against **Write set**'s standing `_Avoid: Draft` (D-S3-2's table), and **Cursor line** against **Date line**'s and **Today line**'s standing `_Avoid: cursor` (D-S3-15). Both `_Avoid` lines narrow rather than disappear.
+- **The other two pre-remap "S3 means scheduling" comments**, found by the same search that caught the `dataset-state.ts` one: `src/data/edit-extension.ts:2` ("an installed plugin (S3's scheduling engine)" → S7, ADR 0002) and `src/model/change-set.ts:9` ("S3 adds `plugin:${string}/${string}`" → S5's plugin runtime, D-S2-7). Both predate `87af449`. `src/view/pane-layout.ts:53` and `src/view/event-bus.ts:28` also say S3 and are **correct** — they mean this slice's gesture controllers, so they stay.
 - `.dependency-cruiser.cjs` — `interaction-boundary` widened to `['view', 'data', 'model']` (**P3**), with the red-test fixture.
 - `.slice` → `S3`; `scripts/slice-gate.mjs` gains the `S3 → S4` gate.
 - Issue #99 gap 5 — closed by `[S3-A8]`; issue #100's gesture half — closed by `[S3-A7]`, its period-view half stays open.
@@ -661,15 +914,15 @@ reachable without holding up the rest.
 ### S3.2 — The hot path and capabilities *(blocked on **P3**)*
 - [ ] `plans/01` §1 arrow + `.dependency-cruiser.cjs` widening + red-test fixture
 - [ ] `view/capability.ts` with the D-S3-9 default table; `Gantt.interactions`, live
-- [ ] `applyState` real: `data-state` from the state's own keys (D-S3-7), hover, cursor
-- [ ] Shared `.fg-bar-handle` pair, positioned by `applyState`, gated by `canResize` (D-S3-8)
+- [ ] `applyState` real: `data-state` over D-S3-7's five-row projection; hover; `cursor: grab` on `movableItemId`
+- [ ] Shared `.fg-bar-handle` pair, positioned by `applyState`, parked when `resizableItemId` is undefined; the shell resolves both ids once per hover/selection change (D-S3-6, D-S3-8)
 - [ ] `[S3-A3]`, `[S3-A5]`'s pointer half
 - [ ] **Visible:** handles and a grab cursor appear on capable bars only; groups show neither
 
 ### S3.3 — Drag-move *(no prerequisite)*
-- [ ] `time/snapInstant`; `layout/gesture-draft.ts`'s `draftForMove` + `previewOffsets`; `EntryEdits`/`StoredEdit` move to `model/`
+- [ ] `time/snapInstant`; `layout/gesture-draft.ts`'s `draftForMove` + `previewOffsets` + `ItemPreview`; `EntryEdits`/`StoredEdit` move to `model/`
 - [ ] `attachPointerGesture`: threshold, capture, Escape, long-press (D-S3-21); `SplitterHooks` → `SplitterContext`
-- [ ] `EntryGestureContext`; preview through the shell's rAF (D-S3-18, extender not yet called)
+- [ ] `Gesture` + `EntryGestureContext`; preview through the shell's rAF (D-S3-18, extender not yet called)
 - [ ] `beforeEntryMove` → one `dataset.transaction()` → `entryMove`; `MutationCancelledError` restores (D-S3-16)
 - [ ] Multi-entry draft from the selection (D-S3-19); `[S3-A1]`'s move half, `[S3-A2]`, `[S3-A6]`
 - [ ] **Visible:** bars drag, snap, commit, and Ctrl+Z reverts them
@@ -681,16 +934,17 @@ reachable without holding up the rest.
 - [ ] **Visible:** edges drag independently; a group's edges refuse
 
 ### S3.5 — Keyboard parity and the async veto *(no prerequisite)*
-- [ ] `attachKeyboardEditing` + the shell's one `keydown` listener and the D-S3-13 mode switch
-- [ ] Async `before*`: `pending` state, gesture lock, resolution both ways (D-S3-17)
+- [ ] `attachKeyboardEditing` + the shell's one `keydown` listener and the D-S3-13 mode switch; the editing rows refuse off the same `can()` the pointer path asks (D-S3-9)
+- [ ] Async `before*`: the gesture's own arm lock, `pending` written into paint state, resolution both ways (D-S3-17)
 - [ ] Screen-reader announcement of the committed span on nudge (the bar's a11y label already carries it)
-- [ ] `[S3-A5]`'s keyboard half
+- [ ] `[S3-A1]`'s keyboard half and `[S3-A5]`'s keyboard half
 - [ ] **Visible:** a bar nudges by keyboard; the veto demo's async path holds a pending ghost
 
 ### S3.6 — Extender preview *(no prerequisite — P1 closed)*
 - [ ] The rAF preview calls the extender with the draft; extras join `previewOffsets`
-- [ ] `[S3-A4]` and `[S3-A6]` inject through the internal `DatasetStateOptions.editExtender`, as `[S2-A1]` already does (D-S2-6)
+- [ ] `[S3-A4]` and `[S3-A6]` inject through the internal `DatasetStateOptions.editExtender` — D-S2-6's sanctioned route, and the one `[S2-A1]`'s third property already takes (`data/history.property.test.ts:169`)
 - [ ] The no-`scheduling/`-import assertion
+- [ ] `src/data/edit-extension.ts:2` and `src/model/change-set.ts:9`: the two remaining pre-remap "S3" comments corrected to S7 and S5 (§7)
 - [ ] ~~`src/data/dataset-state.ts`'s stale "S3's own job (#15)" comment~~ — corrected with this spec
 - [ ] ~~`plans/03` §S3/§S5 harness scope lines~~ — moved with this spec (P1, option (a))
 - [ ] **Visible:** a dragged bar ghosts under an extender in a `dom` test now; on a harness page at S5
