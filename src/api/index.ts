@@ -23,6 +23,8 @@ export type { GanttOptions, DateLineInput } from './gantt.js';
 export type { Theme } from '../view/index.js';
 export type {
   GanttEventMap,
+  GanttEventHandler,
+  AsyncCancelableEvent,
   GridWidthChange,
   NavigationChange,
   SelectionChange,

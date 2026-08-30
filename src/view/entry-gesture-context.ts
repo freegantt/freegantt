@@ -33,8 +33,14 @@ export interface EntryGestureSession {
    *  passes `{ suspendSnap: true }` so the grabbed spot on the bar tracks the pointer with no drift. */
   preview(dxPx: number, options?: DraftOptions): void;
   /** Snapped write: `beforeEntry{Move,Resize}` → commit → `entry{Move,Resize}` (D-S3-16). Resolves
-   *  `false` on a sync veto or a `MutationCancelledError` — both restore silently. */
+   *  `false` on a sync veto or a `MutationCancelledError` — both restore silently. A returned Promise
+   *  from a `before*` handler resolves this one asynchronously instead (D-S3-17): the pipeline marks
+   *  itself `pending` (paint + arm lock) until it settles. */
   commit(dxPx: number, options?: DraftOptions): Promise<boolean>;
+  /** S3.5, D-S3-13: one discrete step in `direction`, sized to one resolved snap unit and written
+   *  straight through `commit`'s own veto/pending path — `interaction/keyboard-editing.ts`'s only way
+   *  to move an entry, so it never resolves a pixel width or reads a `TimeScale` itself. */
+  nudge(direction: 1 | -1, options?: DraftOptions): Promise<boolean>;
   /** Escape / pointer cancel — clears the preview, writes nothing. */
   cancel(): void;
 }

@@ -7,9 +7,10 @@
 
 import { draftForMove, draftForResize, previewOffsets } from '../layout/index.js';
 import type { ItemPreview, SnapUnit, TimeScale, ViewPreset } from '../layout/index.js';
-import type { Entry, EntryEdits, EntryId } from '../model/index.js';
+import type { Entry, EntryEdits, EntryId, ItemId } from '../model/index.js';
+import { itemId } from '../model/index.js';
 import type { EventBus } from './event-bus.js';
-import type { GanttEventMap } from './event-bus.js';
+import type { AsyncCancelableEvent, EntryMove, EntryResize, GanttEventMap } from './event-bus.js';
 import type { Interactions } from './capability.js';
 import { FrameScheduler } from './frame-scheduler.js';
 import type { DraftOptions, EntryGesture, EntryGestureSession } from './entry-gesture-context.js';
@@ -28,9 +29,13 @@ export interface GesturePipelineDeps {
    *  path and the affordance ids resolve through, never re-derived here. */
   canGesture(capability: keyof Interactions, id: EntryId): boolean;
   commitEntryEdits(edits: EntryEdits): boolean;
-  emit: EventBus<GanttEventMap>['emit'];
+  emit: EventBus<GanttEventMap, AsyncCancelableEvent>['emit'];
   /** D-S3-18: coalesced on the pipeline's own rAF. `undefined` clears whatever was previewing. */
   applyPreview(preview: readonly ItemPreview[] | undefined): void;
+  /** D-S3-17: which bars a not-yet-settled `beforeEntryMove`/`beforeEntryResize` Promise is holding —
+   *  `undefined` once it settles either way. Paint only; the arm lock itself is `session()` refusing
+   *  to arm while this pipeline already has one in flight (`#pendingItemIds`). */
+  setPending(itemIds: readonly ItemId[] | undefined): void;
 }
 
 /** Owns entry resolution, draft math, preview coalescing and the commit pipeline for move/resize
@@ -43,6 +48,10 @@ export class GesturePipeline {
    *  frame rather than synchronously on every pointermove — one paint per frame, not one per event. */
   #pendingPreviewDraft: EntryEdits | undefined;
   #previewFrame: FrameScheduler;
+  /** D-S3-17: set for the duration of an unsettled `beforeEntryMove`/`beforeEntryResize` Promise;
+   *  `session()` refuses to arm a new gesture while this is defined (the arm lock), and its value is
+   *  handed straight to `#deps.setPending` (the paint half). */
+  #pendingItemIds: readonly ItemId[] | undefined;
 
   constructor(deps: GesturePipelineDeps) {
     this.#deps = deps;
@@ -56,14 +65,25 @@ export class GesturePipeline {
    *  nothing capable is grabbed, replacing the length check a caller used to make by hand against
    *  `entriesForGesture()`'s result. */
   session(grabbed: EntryId, gesture: EntryGesture): EntryGestureSession | undefined {
+    // D-S3-17: no new gesture arms while a prior one's async veto is still unsettled — one choke
+    // point, so both the pointer path and `interaction/keyboard-editing.ts`'s `ctx.session()` call
+    // refuse the same way (I14).
+    if (this.#pendingItemIds !== undefined) return undefined;
     const capability: keyof Interactions = gesture.kind === 'resize' ? 'resize' : 'move';
     const entries = this.#entriesForGesture(grabbed, capability);
     if (entries.length === 0) return undefined;
+    const anchor = entries[0]!;
     return {
       preview: (dxPx, options) => {
         this.#preview(this.#draftFor(gesture, entries, dxPx, options));
       },
       commit: (dxPx, options) => {
+        const draft = this.#draftFor(gesture, entries, dxPx, options);
+        this.#preview(undefined);
+        return this.#commit(gesture, draft);
+      },
+      nudge: (direction, options) => {
+        const dxPx = this.#stepPx(gesture, anchor, options?.suspendSnap) * direction;
         const draft = this.#draftFor(gesture, entries, dxPx, options);
         this.#preview(undefined);
         return this.#commit(gesture, draft);
@@ -108,6 +128,21 @@ export class GesturePipeline {
     return snap;
   }
 
+  /** S3.5, D-S3-13: the px width of one resolved snap unit, anchored at the grabbed edge's own
+   *  current instant — what `nudge()` feeds `#draftFor` as `dxPx` so a keyboard step reuses the exact
+   *  same pixel-then-snap math a mouse drag's `commit()` already runs, instead of a second, parallel
+   *  calendar-stepping path. Falls back to the preset's own tick when `suspendSnap` clears `snap` to
+   *  `'none'` — a keyboard nudge always has *some* unit to size a step by, even unsnapped. */
+  #stepPx(gesture: EntryGesture, anchor: Entry, suspendSnap: boolean | undefined): number {
+    const snap = this.#resolveSnap(suspendSnap);
+    const preset = this.#deps.preset();
+    const unit = snap === 'none' ? preset.tickUnit : snap.unit;
+    const increment = snap === 'none' ? preset.tickIncrement : snap.increment;
+    const anchorInstant =
+      gesture.kind === 'resize' ? (gesture.edge === 'start' ? anchor.start : anchor.end) : anchor.start;
+    return this.#deps.timeScale().widthForDuration({ unit, value: increment }, anchorInstant);
+  }
+
   #draftFor(
     gesture: EntryGesture,
     entries: readonly Entry[],
@@ -136,7 +171,9 @@ export class GesturePipeline {
 
   /** `beforeEntryMove`/`beforeEntryResize` → one commit → `entryMove`/`entryResize` (D-S3-16,
    *  D-S3-22). `commitEntryEdits` does the actual write and folds a sync veto and a
-   *  `MutationCancelledError` into one `false`. */
+   *  `MutationCancelledError` into one `false`. A `before*` handler that returns a Promise instead of
+   *  resolving synchronously suspends this pipeline `pending` until it settles (D-S3-17) — resolving
+   *  `false` still means "commit nothing", exactly like a sync veto, just later. */
   #commit(gesture: EntryGesture, draft: EntryEdits): Promise<boolean> {
     if (draft.size === 0) return Promise.resolve(false);
     const spans = [...draft].flatMap(([id, edit]) =>
@@ -146,18 +183,45 @@ export class GesturePipeline {
     );
     const grabbed = spans[0];
     if (!grabbed) return Promise.resolve(false);
+    const itemIds = spans.map((span) => itemId(span.entry));
+
     if (gesture.kind === 'resize') {
-      const payload = { ...grabbed, entries: spans, edge: gesture.edge };
-      if (this.#deps.emit('beforeEntryResize', payload) === false) return Promise.resolve(false);
-      const committed = this.#deps.commitEntryEdits(draft);
-      if (committed) this.#deps.emit('entryResize', payload);
-      return Promise.resolve(committed);
+      const payload: EntryResize = { ...grabbed, entries: spans, edge: gesture.edge };
+      const result = this.#deps.emit('beforeEntryResize', payload);
+      if (result === false) return Promise.resolve(false);
+      const finish = (): boolean => {
+        const committed = this.#deps.commitEntryEdits(draft);
+        if (committed) this.#deps.emit('entryResize', payload);
+        return committed;
+      };
+      if (result === true) return Promise.resolve(finish());
+      return this.#awaitVeto(result, itemIds).then((allowed) => (allowed ? finish() : false));
     }
-    const payload = { ...grabbed, entries: spans };
-    if (this.#deps.emit('beforeEntryMove', payload) === false) return Promise.resolve(false);
-    const committed = this.#deps.commitEntryEdits(draft);
-    if (committed) this.#deps.emit('entryMove', payload);
-    return Promise.resolve(committed);
+    const payload: EntryMove = { ...grabbed, entries: spans };
+    const result = this.#deps.emit('beforeEntryMove', payload);
+    if (result === false) return Promise.resolve(false);
+    const finish = (): boolean => {
+      const committed = this.#deps.commitEntryEdits(draft);
+      if (committed) this.#deps.emit('entryMove', payload);
+      return committed;
+    };
+    if (result === true) return Promise.resolve(finish());
+    return this.#awaitVeto(result, itemIds).then((allowed) => (allowed ? finish() : false));
+  }
+
+  /** D-S3-17: only reached for a `before*` handler's unsettled Promise — the `result === true`/
+   *  `false` cases above resolve (and, for `true`, actually commit) synchronously within `#commit`
+   *  itself, same as before this pipeline supported async veto at all: `entryMove`/`entryResize`
+   *  still fire in the same tick as `beforeEntryMove`/`beforeEntryResize` for the common sync case.
+   *  Marks `itemIds` pending (paint via `#deps.setPending`, arm-locks `session()`) until `result`
+   *  settles, clearing either way. */
+  #awaitVeto(result: Promise<boolean>, itemIds: readonly ItemId[]): Promise<boolean> {
+    this.#pendingItemIds = itemIds;
+    this.#deps.setPending(itemIds);
+    return result.finally(() => {
+      this.#pendingItemIds = undefined;
+      this.#deps.setPending(undefined);
+    });
   }
 
   /** D-S3-18: coalesces on the pipeline's own rAF — a drag's every pointermove replaces the pending

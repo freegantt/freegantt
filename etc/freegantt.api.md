@@ -8,6 +8,9 @@
 export function addMs(i: Instant, ms: number): Instant;
 
 // @public
+export type AsyncCancelableEvent = 'beforeEntryMove' | 'beforeEntryResize';
+
+// @public
 export type CapabilityRule = boolean | ((entry: Entry) => boolean);
 
 // @public (undocumented)
@@ -326,9 +329,9 @@ export class Gantt {
     get locale(): Intl.LocalesArgument | undefined;
     set locale(l: Intl.LocalesArgument | undefined);
     // (undocumented)
-    off<K extends keyof GanttEventMap>(name: K, handler: (payload: GanttEventMap[K]) => void | false): void;
+    off<K extends keyof GanttEventMap>(name: K, handler: GanttEventHandler<K>): void;
     // (undocumented)
-    on<K extends keyof GanttEventMap>(name: K, handler: (payload: GanttEventMap[K]) => void | false): void;
+    on<K extends keyof GanttEventMap>(name: K, handler: GanttEventHandler<K>): void;
     panToDate(date: InstantInput, align?: 'start' | 'center'): void;
     panToToday(align?: 'start' | 'center'): void;
     // (undocumented)
@@ -365,6 +368,9 @@ export class Gantt {
         end: InstantInput;
     }): void;
 }
+
+// @public
+export type GanttEventHandler<K extends keyof GanttEventMap> = (payload: GanttEventMap[K]) => void | false | (K extends AsyncCancelableEvent ? Promise<void | false> : never);
 
 // @public
 export interface GanttEventMap {

@@ -44,9 +44,10 @@ function makeDeps(overrides: Partial<GesturePipelineDeps> = {}): {
     commitEntryEdits: () => true,
     emit: (name, payload) => {
       emitted.push([name, payload]);
-      return undefined as never;
+      return true;
     },
     applyPreview: (preview) => applied.push(preview),
+    setPending: () => {},
     ...overrides,
   };
   return { deps, emitted, applied };
@@ -225,5 +226,158 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
     await new Promise((resolve) => requestAnimationFrame(resolve));
 
     expect(applied.at(-1)).toBeUndefined();
+  });
+
+  describe('nudge() (S3.5, D-S3-13)', () => {
+    /** `tickPreset`/`tickScale` pair a 5-minute tick with a fixed 5-minute px width, so a `direction:
+     *  1` nudge is unambiguously "one tick forward" — `linearScale`/`noneSnapPreset` above stub
+     *  `widthForDuration` to 0, which would make every nudge a no-op. 300_000 (not one of I10's
+     *  banned literals: 60_000/3_600_000/86_400_000/604_800_000) is 5 real minutes in ms — this file
+     *  is `view/`, which may not import `time/` (view-boundary), so the expected deltas below have to
+     *  be spelled out as a literal rather than computed via a `time/` helper. */
+    const FIVE_MIN_MS = 300_000;
+    const tickPreset = { snap: 'tick', tickUnit: 'minute', tickIncrement: 5 } as unknown as ViewPreset;
+    const tickScale: TimeScale = { ...linearScale, widthForDuration: () => FIVE_MIN_MS };
+
+    it('moves the anchor entry forward one tick on direction: 1', async () => {
+      const { deps, emitted } = withRoster([entry('a', 600_000, 900_000)], {
+        preset: () => tickPreset,
+        timeScale: () => tickScale,
+      });
+      const pipeline = new GesturePipeline(deps);
+      const session = pipeline.session(entryId('a'), { kind: 'move' })!;
+
+      await session.nudge(1);
+
+      const payload = emitted[0]![1] as { start: number; end: number };
+      expect(payload.start).toBe(600_000 + FIVE_MIN_MS);
+      expect(emitted.map(([name]) => name)).toEqual(['beforeEntryMove', 'entryMove']);
+    });
+
+    it('moves the anchor entry backward one tick on direction: -1', async () => {
+      const { deps, emitted } = withRoster([entry('a', 1_200_000, 1_500_000)], {
+        preset: () => tickPreset,
+        timeScale: () => tickScale,
+      });
+      const pipeline = new GesturePipeline(deps);
+      const session = pipeline.session(entryId('a'), { kind: 'move' })!;
+
+      await session.nudge(-1);
+
+      const payload = emitted[0]![1] as { start: number };
+      expect(payload.start).toBe(1_200_000 - FIVE_MIN_MS);
+    });
+
+    it('resizes the grabbed edge one tick for a resize gesture', async () => {
+      const { deps, emitted } = withRoster([entry('a', 600_000, 900_000)], {
+        preset: () => tickPreset,
+        timeScale: () => tickScale,
+      });
+      const pipeline = new GesturePipeline(deps);
+      const session = pipeline.session(entryId('a'), { kind: 'resize', edge: 'end' })!;
+
+      await session.nudge(1);
+
+      const payload = emitted[0]![1] as { end: number };
+      expect(payload.end).toBe(900_000 + FIVE_MIN_MS);
+      expect(emitted.map(([name]) => name)).toEqual(['beforeEntryResize', 'entryResize']);
+    });
+
+    it('suspendSnap still sizes the step off the preset tick, just skips grid alignment', async () => {
+      // 150_000 is not a multiple of FIVE_MIN_MS — a plain (snapped) nudge would round it onto the
+      // grid; suspendSnap must not.
+      const { deps, emitted } = withRoster([entry('a', 150_000, 450_000)], {
+        preset: () => tickPreset,
+        timeScale: () => tickScale,
+      });
+      const pipeline = new GesturePipeline(deps);
+      const session = pipeline.session(entryId('a'), { kind: 'move' })!;
+
+      await session.nudge(1, { suspendSnap: true });
+
+      const payload = emitted[0]![1] as { start: number };
+      expect(payload.start).toBe(150_000 + FIVE_MIN_MS);
+    });
+  });
+
+  describe('async veto and pending (S3.5, D-S3-17)', () => {
+    it('an unsettled before* Promise marks setPending with the gesture item ids, then clears it', async () => {
+      let resolveVeto!: (value: boolean) => void;
+      const veto = new Promise<boolean>((resolve) => {
+        resolveVeto = resolve;
+      });
+      const pendingCalls: (readonly unknown[] | undefined)[] = [];
+      const { deps } = withRoster([entry('a', 100, 200)], {
+        emit: ((name: string) => (name === 'beforeEntryMove' ? veto : true)) as GesturePipelineDeps['emit'],
+        setPending: (itemIds) => pendingCalls.push(itemIds),
+      });
+      const pipeline = new GesturePipeline(deps);
+      const session = pipeline.session(entryId('a'), { kind: 'move' })!;
+
+      const commitPromise = session.commit(50);
+      expect(pendingCalls).toHaveLength(1);
+      expect(pendingCalls[0]).toBeDefined();
+
+      resolveVeto(true);
+      const committed = await commitPromise;
+
+      expect(committed).toBe(true);
+      expect(pendingCalls).toHaveLength(2);
+      expect(pendingCalls[1]).toBeUndefined();
+    });
+
+    it('session() refuses to arm a new gesture while a prior async veto is unsettled', async () => {
+      let resolveVeto!: (value: boolean) => void;
+      const veto = new Promise<boolean>((resolve) => {
+        resolveVeto = resolve;
+      });
+      const { deps } = withRoster([entry('a', 100, 200)], {
+        emit: ((name: string) => (name === 'beforeEntryMove' ? veto : true)) as GesturePipelineDeps['emit'],
+      });
+      const pipeline = new GesturePipeline(deps);
+      const session = pipeline.session(entryId('a'), { kind: 'move' })!;
+
+      void session.commit(50);
+      expect(pipeline.session(entryId('a'), { kind: 'move' })).toBeUndefined();
+
+      resolveVeto(true);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(pipeline.session(entryId('a'), { kind: 'move' })).toBeDefined();
+    });
+
+    it('an async veto resolving false commits nothing', async () => {
+      let resolveVeto!: (value: boolean) => void;
+      const veto = new Promise<boolean>((resolve) => {
+        resolveVeto = resolve;
+      });
+      const commitEntryEdits = vi.fn(() => true);
+      const { deps } = withRoster([entry('a', 100, 200)], {
+        emit: ((name: string) => (name === 'beforeEntryMove' ? veto : true)) as GesturePipelineDeps['emit'],
+        commitEntryEdits,
+      });
+      const pipeline = new GesturePipeline(deps);
+      const session = pipeline.session(entryId('a'), { kind: 'move' })!;
+
+      const commitPromise = session.commit(50);
+      resolveVeto(false);
+      const committed = await commitPromise;
+
+      expect(committed).toBe(false);
+      expect(commitEntryEdits).not.toHaveBeenCalled();
+    });
+
+    it('a sync true result commits without touching setPending', async () => {
+      const pendingCalls: unknown[] = [];
+      const { deps } = withRoster([entry('a', 100, 200)], {
+        setPending: (itemIds) => pendingCalls.push(itemIds),
+      });
+      const pipeline = new GesturePipeline(deps);
+      const session = pipeline.session(entryId('a'), { kind: 'move' })!;
+
+      const committed = await session.commit(50);
+
+      expect(committed).toBe(true);
+      expect(pendingCalls).toEqual([]);
+    });
   });
 });
