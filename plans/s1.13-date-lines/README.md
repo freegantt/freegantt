@@ -1,9 +1,9 @@
 # S1.13 — Date lines: public shape, header caption, line style
 
-**Slice:** S1 (`plans/03` §S1) · **Step:** S1.13 · **Position: runs next.** S1.12 landed and its gate
-(`S1.12 → S3`) passes; S2 landed; S3 has not started. `.slice` moves `S1.12` → `S1.13`, and
-`scripts/slice-gate.mjs` gains an `S1.13 → S3` gate over this step's acceptance ids.
-**Status: settled spec.** Ready to implement; §8 is the work list.
+**Slice:** S1 (`plans/03` §S1) · **Step:** S1.13 · **Position: done, gate passing.** S1.12 landed and
+its gate (`S1.12 → S3`) passes; S2 landed; S3 has not started. `.slice` is `S1.13`, and
+`scripts/slice-gate.mjs`'s `S1.13 → S3` gate over this step's acceptance ids is green.
+**Status: landed.** §8 is the work list; every item is checked off.
 **Builds on:** [`plans/s1.12-timeline-navigation/README.md`](../s1.12-timeline-navigation/README.md)
 D-S1.12-14 (the today-line decoration seam) and the `layout/date-line.ts` / `render/dom/date-line.ts`
 split already landed against it (issue #96).
@@ -394,35 +394,35 @@ are.
 Glossary first, then the engine, then the seam, then the public edge.
 
 ### Glossary and specs
-- [ ] `CONTEXT.md` **Date line** / **Today line** entries updated; new **Date line label** entry
-- [ ] `plans/03` §S1.13 block + §S3 TODO line
+- [x] `CONTEXT.md` **Date line** / **Today line** entries updated; new **Date line label** entry
+- [x] `plans/03` §S1.13 block + §S3 TODO line
 
 ### `layout/`
-- [ ] `DateLineSpec` replaces the old `DateLineInput`; `DateLine` drops `id`, gains `className?`
-- [ ] `resolveDateLines`: `todayLine: boolean | Instant`, positional output, `TODAY_DATE_LINE_ID`
+- [x] `DateLineSpec` replaces the old `DateLineInput`; `DateLine` drops `id`, gains `className?`
+- [x] `resolveDateLines`: `todayLine: boolean | Instant`, positional output, `TODAY_DATE_LINE_ID`
       deleted
-- [ ] `LayoutInput.todayLine`/`.dateLines` retyped
+- [x] `LayoutInput.todayLine`/`.dateLines` retyped
 
 ### `render/dom/`
-- [ ] `attachDateLines` takes `headerLayer`; second keyed layer for `.fg-date-line-label`
-- [ ] Index-keyed `syncKeyed` calls (both layers); `className` composed onto the base class
-- [ ] `.fg-date-line` (border-left) / `.fg-date-line-label` in `view/styles.ts`; `--fg-date-line-color`
+- [x] `attachDateLines` takes `headerLayer`; second keyed layer for `.fg-date-line-label`
+- [x] Index-keyed `syncKeyed` calls (both layers); `className` composed onto the base class
+- [x] `.fg-date-line` (border-left) / `.fg-date-line-label` in `view/styles.ts`; `--fg-date-line-color`
       replaces `--fg-today-line-color` in both palettes; no alias
 
 ### `api/`
-- [ ] `DateLineInput`; `Gantt.dateLines` get/set + `#toDateLines`; `Gantt.todayLine` widens to
+- [x] `DateLineInput`; `Gantt.dateLines` get/set + `#toDateLines`; `Gantt.todayLine` widens to
       `boolean | InstantInput`
-- [ ] `GanttShellOptions.dateLines`; `GanttShell.todayLine` widens
+- [x] `GanttShellOptions.dateLines`; `GanttShell.todayLine` widens
 
 ### Tests
-- [ ] `layout/date-line.test.ts` rewritten for the new shape
-- [ ] `[S1-A11]`–`[S1-A14]` written and passing
-- [ ] `api/gantt.test.ts`'s existing `.fg-today-line` assertions rewritten against `.fg-date-line`
-- [ ] `e2e/date-lines.spec.ts`
+- [x] `layout/date-line.test.ts` rewritten for the new shape
+- [x] `[S1-A11]`–`[S1-A14]` written and passing
+- [x] `api/gantt.test.ts`'s existing `.fg-today-line` assertions rewritten against `.fg-date-line`
+- [x] `e2e/date-lines.spec.ts`
 
 ### Review and gate
-- [ ] The §7 spec edits, landed with this step
-- [ ] `S1.13 → S3` gate green; `.slice` bumped
+- [x] The §7 spec edits, landed with this step
+- [x] `S1.13 → S3` gate green; `.slice` bumped
 
 ---
 

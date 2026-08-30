@@ -14,12 +14,31 @@ declare global {
 test('[S1-A3] zoomBy keeps the anchored pointer position visually fixed (U2/U3)', async ({ page }) => {
   await page.goto('/zoom.html');
   const pane = page.locator('.fg-timeline-pane');
-  const bar = page.locator('.fg-bar').first();
-  await expect(bar).toBeVisible();
+  await expect(page.locator('.fg-bar').first()).toBeVisible();
 
   const paneBefore = await pane.boundingBox();
+  if (!paneBefore) throw new Error('missing bounding box');
+
+  // A bar near the pane's own centre, identified by its stable `data-item-id` (not DOM position,
+  // which windowing can reshuffle once `zoomBy` changes what's horizontally visible) and not
+  // `.first()`: the page now loads panned to the today line with only `todayLineMarginTicks`' worth
+  // of margin (S1.13 follow-up), so horizontal culling can drop the dataset's first entries from
+  // the DOM outright, or clip them against the pane's own left edge — an edge case this test isn't
+  // about.
+  const itemId = await page.evaluate(
+    (viewportX) => {
+      const atAnchor = Array.from(document.querySelectorAll<HTMLElement>('.fg-bar')).find((el) => {
+        const rect = el.getBoundingClientRect();
+        return viewportX >= rect.left && viewportX <= rect.right;
+      });
+      return atAnchor?.dataset['itemId'] ?? null;
+    },
+    paneBefore.x + paneBefore.width / 2,
+  );
+  if (!itemId) throw new Error('no bar under the pane centre');
+  const bar = page.locator(`.fg-bar[data-item-id="${itemId}"]`);
   const barBefore = await bar.boundingBox();
-  if (!paneBefore || !barBefore) throw new Error('missing bounding box');
+  if (!barBefore) throw new Error('missing bounding box');
 
   // Anchor exactly on this bar's current left edge, in pane-local (viewport) pixels — the same
   // coordinate a real pointer's clientX-relative-to-pane would supply.
@@ -27,8 +46,8 @@ test('[S1-A3] zoomBy keeps the anchored pointer position visually fixed (U2/U3)'
 
   await page.evaluate((x) => window.__gantt.zoomBy(2, x), anchorX);
 
-  // The anchored instant (this bar's start) must render at the same pane-local x afterward, even
-  // though the bar's own content-space x and the pane's scrollLeft both changed to get there.
+  // The anchored instant must render at the same pane-local x afterward, even though the bar's own
+  // content-space x and the pane's scrollLeft both changed to get there.
   await expect
     .poll(async () => {
       const paneAfter = await pane.boundingBox();
@@ -160,7 +179,7 @@ test('[S1-A10] Today pans so the today line sits in the pane', async ({ page }) 
 
   await page.getByRole('button', { name: 'Today' }).click();
 
-  const line = page.locator('.fg-today-line');
+  const line = page.locator('.fg-date-line');
   await expect(line).toBeVisible();
   const pane = page.locator('.fg-timeline-pane');
   await expect
