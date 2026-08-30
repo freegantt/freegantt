@@ -302,7 +302,7 @@ A new fixture, `fixtures/multi-year-dataset.ts` (`multiYearEntryInputs`, ~3 year
 
 `plans/03` §S3 scope gains, verbatim (§7):
 
-> - Timeline navigation gestures (deferred here from S1.12, D-S1.12-17): ctrl/⌘+wheel anchored zoom calling `zoomBy(factor, offsetX)`; shift+wheel horizontal pan; `PageUp`/`PageDown`/`Home`/`End`/arrow keys for pan. These write nothing to the dataset, so the arm-threshold, escape-cancel and one-transaction-per-gesture invariants do not apply to them — they are read-only viewport gestures over the S1.12 surface.
+> - Timeline navigation gestures (deferred here from S1.12, D-S1.12-17): ctrl/⌘+wheel anchored zoom calling `zoomIn`/`zoomOut` (S3.7 landed this on the preset ladder, not `zoomBy`); shift+wheel horizontal pan; `PageUp`/`PageDown`/`Home`/`End`/arrow keys for pan. These write nothing to the dataset, so the arm-threshold, escape-cancel and one-transaction-per-gesture invariants do not apply to them — they are read-only viewport gestures over the S1.12 surface.
 
 ---
 

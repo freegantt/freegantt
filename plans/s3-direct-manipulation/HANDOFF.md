@@ -8,9 +8,11 @@ Read [`s3.8-cursor-line-harness-gate.md`](./s3.8-cursor-line-harness-gate.md).
 D-S3-14: wheel zoom/pan and keyboard pan live in `view/`, write nothing to the dataset.
 
 - **`src/view/wheel-navigation.ts`** — `attachWheelNavigation(pane, ctx)`. ctrl/⌘+wheel calls
-  `zoomBy(2 ** (-deltaY / 250), offsetX)` with `offsetX` from `clientX - pane left`. shift+wheel
-  pans on x (`deltaX`, or `deltaY` when `deltaX` is 0). `{ passive: false }` + `preventDefault`
-  only when the gesture is enabled and handled. A plain wheel is left to native scroll.
+  `zoomIn`/`zoomOut` (one `zoomPresets` step per 100 px of wheel delta, anchored at `offsetX`
+  from `clientX - pane left`). Trackpad crumbs accumulate. `zoomBy` is not on this path — it
+  stretches ticks without changing the preset. shift+wheel pans on x (`deltaX`, or `deltaY`
+  when `deltaX` is 0). `{ passive: false }` + `preventDefault` only when the gesture is enabled
+  and handled. A plain wheel is left to native scroll.
 - **`src/view/keyboard-navigation.ts`** — `attachKeyboardNavigation(container, ctx)`. PageUp/Down
   pan y by pane height; Home/End pan x to 0 / `scroll.max.x` (even with a selection — D-S3-13
   "never re-bound"); unmodified arrows pan by one tick / one row height only when the selection
@@ -40,9 +42,12 @@ and the disable switch).
    not the pane. Always `clientX - pane.getBoundingClientRect().left`. That call is an I9 lint
    exemption on `wheel-navigation.ts` (pane-box left, not a row height). happy-dom's `WheelEvent`
    drops `ctrlKey`/`clientX`; unit tests `defineProperty` those fields.
-9. **Run all checks** before marking a step done. `pnpm boundaries` raced with `pnpm guards` can
+9. **`zoomIn`/`zoomOut` look up the ladder by `preset.id`**, not object identity. The index harness
+   spreads `{ ...gantt.preset, snap }` on load (#116). Reference `indexOf` made `canZoom*` false
+   and the wheel a no-op. Carry `snap` across a ladder step.
+10. **Run all checks** before marking a step done. `pnpm boundaries` raced with `pnpm guards` can
    show a transient violation — rerun `boundaries` alone.
-10. **`.slice` bumps only at S3.8.**
+11. **`.slice` bumps only at S3.8.**
 
 ## TODO — in priority order
 
