@@ -343,8 +343,8 @@ How a header band labels an Instant: an `Intl.DateTimeFormatOptions` object, or 
 _Avoid_: HeaderFormat as the everyday name (that is the callback half only)
 
 **Date line**:
-A vertical marker at an Instant on the timeline. Geometry is a `DateLine` decoration. `gantt.todayLine` is the wrapper that emits the one at `now()`. Authored lines share that job (issue #96). Paint is `.fg-today-line` until the Part rename on #96 lands.
-_Avoid_: Timeline (the pane, not this marker), cursor, now-line
+A vertical marker at an Instant on the timeline. Geometry is a `DateLine` decoration. `gantt.todayLine` is the wrapper that emits the one at `now()`; a caller states any other Date line through `gantt.dateLines`, an array of `{ placeAt, label?, className? }`. `placeAt` carries the Instant — never `location`, which already names a pixel position (`model/geometry.ts`), and never `id`, since the list is index-keyed the same way Header bands are (issue #96). Paint is `.fg-today-line` until the Part rename on #96 lands.
+_Avoid_: Timeline (the pane, not this marker), cursor, now-line, location (that is a pixel position, not an Instant), id (`dateLines` has none — index-keyed like Header bands)
 
 **Today line**:
 The Date line at `now()`. `gantt.todayLine` (default on) is the wrapper that emits it. Updates on the next render, not on a clock tick. `panToToday` pans to `now()`.
