@@ -343,11 +343,15 @@ How a header band labels an Instant: an `Intl.DateTimeFormatOptions` object, or 
 _Avoid_: HeaderFormat as the everyday name (that is the callback half only)
 
 **Date line**:
-A vertical marker at an Instant on the timeline. Geometry is a `DateLine` decoration. `gantt.todayLine` is the wrapper that emits the one at `now()`; a caller states any other Date line through `gantt.dateLines`, an array of `{ placeAt, label?, className? }`. `placeAt` carries the Instant — never `location`, which already names a pixel position (`model/geometry.ts`), and never `id`, since the list is index-keyed the same way Header bands are (issue #96). Paint is `.fg-today-line` until the Part rename on #96 lands.
+A vertical marker at an Instant on the timeline. Geometry is a `DateLine` decoration. `gantt.todayLine` is the wrapper that emits the one at `now()`; a caller states any other Date line through `gantt.dateLines`, an array of `{ placeAt, label?, className? }`. `placeAt` carries the Instant — never `location`, which already names a pixel position (`model/geometry.ts`), and never `id`, since the list is index-keyed the same way Header bands are. Paint is `.fg-date-line` (S1.13, D-S1.13-8 — `.fg-today-line` is gone, no alias); the stroke is `border-left`, so a consumer's own `className` reaches `border-left-style`/`-width` with no new option (D-S1.13-5).
 _Avoid_: Timeline (the pane, not this marker), cursor, now-line, location (that is a pixel position, not an Instant), id (`dateLines` has none — index-keyed like Header bands)
 
+**Date line label**:
+The caption a Date line carries when it has a `label`. A sibling Part, `.fg-date-line-label`, mounted in `.fg-header` at the line's x — not the stroke's own `textContent`, which is unreadable at 1px wide (S1.13, D-S1.13-6). The `todayLine` wrapper's own line never gets one; give it a label by turning `todayLine` off and authoring the same Instant through `dateLines` instead.
+_Avoid_: caption (used generically elsewhere), tooltip (this is always-visible, not hover-triggered)
+
 **Today line**:
-The Date line at `now()`. `gantt.todayLine` (default on) is the wrapper that emits it. Updates on the next render, not on a clock tick. `panToToday` pans to `now()`.
+The Date line at `now()`. `gantt.todayLine` (default on) is the wrapper that emits it — `true`, `false`, or a pinned `InstantInput` (S1.13, D-S1.13-4), with no clock read once pinned. Updates on the next render, not on a clock tick. `panToToday` pans to `now()`.
 _Avoid_: Timeline, cursor, now-line
 
 **Tick width**:
@@ -373,11 +377,11 @@ The one stylesheet the library ever writes, injected once per document by `ensur
 _Avoid_: Default styles, styles.css (there is no separate package export — see D-S1.10-8)
 
 **Token**:
-A `--fg-*` CSS custom property — level 1 of the Customization ladder (`plans/02` §4). Metrics (`--fg-row-height`, `--fg-grid-pane-width`, `--fg-band-height`, `--fg-tick-box-floor`, …) are read once through `pixel-property.ts` or consumed as CSS `var()` fallbacks; colour Tokens (`--fg-bar-fill`, `--fg-pane-bg`, `--fg-today-line-color`, …) are consumed directly by Base stylesheet rules with no JS in between. A consumer overrides any Token by setting the same property on the container element; the shipped default is always the fallback in `var(--fg-x, default)`, never the winner once a consumer has authored a value. `--fg-header-height` retired at S1.12 in favour of `--fg-band-height` (one band, not the whole header).
+A `--fg-*` CSS custom property — level 1 of the Customization ladder (`plans/02` §4). Metrics (`--fg-row-height`, `--fg-grid-pane-width`, `--fg-band-height`, `--fg-tick-box-floor`, …) are read once through `pixel-property.ts` or consumed as CSS `var()` fallbacks; colour Tokens (`--fg-bar-fill`, `--fg-pane-bg`, `--fg-date-line-color`, …) are consumed directly by Base stylesheet rules with no JS in between. A consumer overrides any Token by setting the same property on the container element; the shipped default is always the fallback in `var(--fg-x, default)`, never the winner once a consumer has authored a value. `--fg-header-height` retired at S1.12 in favour of `--fg-band-height` (one band, not the whole header).
 _Avoid_: Variable, custom property (accurate but not this project's term of art — say Token), theme variable
 
 **Part**:
-One of the `fg-*` class names the library's DOM structure carries — level 2 of the Customization ladder. The vocabulary is closed and un-renamed (D-S1.10-1): `fg-container`, `fg-grid-pane`, `fg-grid-spacer`, `fg-rows-clip`, `fg-rows`, `fg-splitter`, `fg-timeline-pane`, `fg-header`, `fg-band`, `fg-tick`, `fg-row`, `fg-row-label`, `fg-bars`, `fg-bar`, `fg-today-line`. A consumer writes level-2 CSS against a Part directly (`.fg-bar { ... }`) or against a Part plus a State attribute (`.fg-bar[data-flag~="conflict"] { ... }`).
+One of the `fg-*` class names the library's DOM structure carries — level 2 of the Customization ladder. The vocabulary is closed and un-renamed (D-S1.10-1), with one exception before 1.0 (S1.13, D-S1.13-8): `fg-container`, `fg-grid-pane`, `fg-grid-spacer`, `fg-rows-clip`, `fg-rows`, `fg-splitter`, `fg-timeline-pane`, `fg-header`, `fg-band`, `fg-tick`, `fg-row`, `fg-row-label`, `fg-bars`, `fg-bar`, `fg-date-line`, `fg-date-line-label`. A consumer writes level-2 CSS against a Part directly (`.fg-bar { ... }`) or against a Part plus a State attribute (`.fg-bar[data-flag~="conflict"] { ... }`).
 _Avoid_: Pane (Grid pane/Timeline pane/Splitter are specific Parts, already named in "Mounted instances" — Part is the general term for the whole class vocabulary), BEM block (rejected, Q2 — renaming shipped classes to a BEM shape was churn with no behavior change)
 
 **State attribute**:
