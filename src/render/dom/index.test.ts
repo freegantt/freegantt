@@ -515,6 +515,62 @@ describe('render/dom backend', () => {
     timeline.remove();
   });
 
+  it('hitTest reports the edge of a resize handle, resolved against resizableItemId (S3.4, D-S3-4)', () => {
+    const backend = createDomBackend();
+    const { grid, timeline } = mountSurfaces();
+    backend.mount({ grid, timeline });
+
+    const frame = computeFrame({
+      entries: sampleEntries.slice(0, 1),
+      scale,
+      preset,
+      visible: { x: 0, y: 0, width: 0, height: 0 },
+      rowHeight: 32,
+      revision: 0,
+    });
+    backend.sync(frame);
+    backend.applyState({ resizableItemId: frame.bars[0]!.id });
+
+    const end = timeline.querySelector<HTMLElement>('.fg-bar-handle[data-edge="end"]')!;
+    const original = document.elementFromPoint.bind(document);
+    document.elementFromPoint = (x: number, y: number) => (x === 5 && y === 5 ? end : original(x, y));
+
+    expect(backend.hitTest(5, 5)).toEqual({ itemId: frame.bars[0]!.id, edge: 'end' });
+
+    document.elementFromPoint = original;
+    backend.destroy();
+    grid.remove();
+    timeline.remove();
+  });
+
+  it('hitTest never reports an edge for a parked (hidden) handle pair', () => {
+    const backend = createDomBackend();
+    const { grid, timeline } = mountSurfaces();
+    backend.mount({ grid, timeline });
+
+    const frame = computeFrame({
+      entries: sampleEntries.slice(0, 1),
+      scale,
+      preset,
+      visible: { x: 0, y: 0, width: 0, height: 0 },
+      rowHeight: 32,
+      revision: 0,
+    });
+    backend.sync(frame);
+    // resizableItemId never set — handles stay hidden.
+
+    const bar = timeline.querySelector<HTMLElement>('.fg-bar')!;
+    const original = document.elementFromPoint.bind(document);
+    document.elementFromPoint = (x: number, y: number) => (x === 5 && y === 5 ? bar : original(x, y));
+
+    expect(backend.hitTest(5, 5)).toEqual({ itemId: frame.bars[0]!.id });
+
+    document.elementFromPoint = original;
+    backend.destroy();
+    grid.remove();
+    timeline.remove();
+  });
+
   it("sets data-movable on movableItemId's bar and clears it when the id moves elsewhere (D-S3-6)", () => {
     const backend = createDomBackend();
     const { grid, timeline } = mountSurfaces();

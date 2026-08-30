@@ -194,6 +194,12 @@ export interface EntryDocument<TMeta = unknown> {
 // @public
 export type EntryEdit<TMeta = unknown> = Partial<Omit<EntryInput<TMeta>, 'id'>>;
 
+// @public
+export interface EntryGestureEvent extends ProposedSpan {
+    // (undocumented)
+    readonly entries: readonly ProposedSpan[];
+}
+
 // @public (undocumented)
 export type EntryId = string & {
     readonly __brand: 'EntryId';
@@ -221,15 +227,18 @@ export interface EntryInput<TMeta = unknown> {
 // @public
 export type EntryKind = 'span' | 'group' | 'milestone' | (string & {});
 
-// @public
-export interface EntryMove extends ProposedSpan {
-    // (undocumented)
-    readonly entries: readonly ProposedSpan[];
-}
+// @public (undocumented)
+export type EntryMove = EntryGestureEvent;
 
 // @public
 export class EntryNotFoundError extends FreeGanttError {
     constructor(entryId: EntryId, operation: string);
+}
+
+// @public
+export interface EntryResize extends EntryGestureEvent {
+    // (undocumented)
+    readonly edge: 'start' | 'end';
 }
 
 // @public
@@ -360,11 +369,14 @@ export class Gantt {
 // @public
 export interface GanttEventMap {
     beforeEntryMove: EntryMove;
+    beforeEntryResize: EntryResize;
     // (undocumented)
     beforeGridWidthChange: GridWidthChange;
     beforeSelectionChange: SelectionChange;
     // (undocumented)
     entryMove: EntryMove;
+    // (undocumented)
+    entryResize: EntryResize;
     // (undocumented)
     gridWidthChange: GridWidthChange;
     // (undocumented)

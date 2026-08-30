@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { draftForMove, previewOffsets } from './gesture-draft.js';
+import { draftForMove, draftForResize, previewOffsets } from './gesture-draft.js';
 import type { Entry } from '../model/index.js';
 import { entryId, itemId } from '../model/index.js';
 import { instant, createTimeScale, MS } from '../time/index.js';
@@ -84,6 +84,107 @@ describe('draftForMove', () => {
     expect(draft.get(a.id)).toEqual({
       start: instant('2026-03-08T16:00:00Z'), // 12:00 EDT
       end: instant('2026-03-08T18:00:00Z'), // 14:00 EDT
+    });
+  });
+});
+
+describe('draftForResize', () => {
+  it('returns an empty map when there are no entries', () => {
+    const draft = draftForResize({ zone: ZONE, scale, snap: 'none', entries: [], dxPx: 100, edge: 'end' });
+    expect(draft.size).toBe(0);
+  });
+
+  it('moves only the dragged edge, holding the other fixed', () => {
+    const a = entry('a', '2026-06-15T14:00:00Z', '2026-06-15T16:00:00Z');
+    const draft = draftForResize({
+      zone: ZONE,
+      scale,
+      snap: { unit: 'hour', increment: 1 },
+      entries: [a],
+      dxPx: 65, // snaps to +1 hour
+      edge: 'end',
+    });
+    expect(draft.get(a.id)).toEqual({
+      start: instant('2026-06-15T14:00:00Z'),
+      end: instant('2026-06-15T17:00:00Z'),
+    });
+  });
+
+  it('resizes the start edge, holding end fixed', () => {
+    const a = entry('a', '2026-06-15T14:00:00Z', '2026-06-15T16:00:00Z');
+    const draft = draftForResize({
+      zone: ZONE,
+      scale,
+      snap: { unit: 'hour', increment: 1 },
+      entries: [a],
+      dxPx: -65, // snaps to -1 hour
+      edge: 'start',
+    });
+    expect(draft.get(a.id)).toEqual({
+      start: instant('2026-06-15T13:00:00Z'),
+      end: instant('2026-06-15T16:00:00Z'),
+    });
+  });
+
+  it('clamps the end edge at zero length instead of crossing start (inverted span refused)', () => {
+    const a = entry('a', '2026-06-15T14:00:00Z', '2026-06-15T16:00:00Z');
+    const draft = draftForResize({
+      zone: ZONE,
+      scale,
+      snap: 'none',
+      entries: [a],
+      dxPx: -300, // 300 minutes back, well past start
+      edge: 'end',
+    });
+    expect(draft.get(a.id)).toEqual({
+      start: instant('2026-06-15T14:00:00Z'),
+      end: instant('2026-06-15T14:00:00Z'),
+    });
+  });
+
+  it('clamps the start edge at zero length instead of crossing end (inverted span refused)', () => {
+    const a = entry('a', '2026-06-15T14:00:00Z', '2026-06-15T16:00:00Z');
+    const draft = draftForResize({
+      zone: ZONE,
+      scale,
+      snap: 'none',
+      entries: [a],
+      dxPx: 300, // 300 minutes forward, well past end
+      edge: 'start',
+    });
+    expect(draft.get(a.id)).toEqual({
+      start: instant('2026-06-15T16:00:00Z'),
+      end: instant('2026-06-15T16:00:00Z'),
+    });
+  });
+
+  it('resizes every entry in a multi-selection by the same whole-unit step, rigidly', () => {
+    const a = entry('a', '2026-06-15T14:00:00Z', '2026-06-15T16:00:00Z');
+    const b = entry('b', '2026-06-16T09:00:00Z', '2026-06-16T12:00:00Z');
+    const draft = draftForResize({
+      zone: ZONE,
+      scale,
+      snap: { unit: 'hour', increment: 1 },
+      entries: [a, b],
+      dxPx: 65,
+      edge: 'end',
+    });
+    expect(draft.get(a.id)).toEqual({
+      start: instant('2026-06-15T14:00:00Z'),
+      end: instant('2026-06-15T17:00:00Z'),
+    });
+    expect(draft.get(b.id)).toEqual({
+      start: instant('2026-06-16T09:00:00Z'),
+      end: instant('2026-06-16T13:00:00Z'),
+    });
+  });
+
+  it("falls back to raw millisecond delta when snap is 'none'", () => {
+    const a = entry('a', '2026-06-15T14:00:00Z', '2026-06-15T16:00:00Z');
+    const draft = draftForResize({ zone: ZONE, scale, snap: 'none', entries: [a], dxPx: 30, edge: 'end' });
+    expect(draft.get(a.id)).toEqual({
+      start: instant('2026-06-15T14:00:00Z'),
+      end: instant('2026-06-15T16:30:00Z'),
     });
   });
 });

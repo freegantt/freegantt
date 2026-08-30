@@ -41,7 +41,7 @@ function makeContext(overrides: Partial<EntryGestureContext> = {}): {
   let selection: readonly EntryId[] = [];
   const proposals: (readonly EntryId[])[] = [];
   const ctx: EntryGestureContext = {
-    hitTest: (x) => (x >= 0 && x < ORDER.length ? itemId(ORDER[x]!) : undefined),
+    hitTest: (x) => (x >= 0 && x < ORDER.length ? { itemId: itemId(ORDER[x]!) } : undefined),
     entryFor: (item: ItemId) => {
       const id = ITEMS[item];
       return id !== undefined ? entryFor(id) : undefined;
@@ -299,5 +299,57 @@ describe('attachEntryGestures — move (S3.3)', () => {
     pane.dispatchEvent(move(0 + DRAG_THRESHOLD_PX + 1));
 
     expect(seenEntries[0]?.map((e) => e.id)).toEqual([A, B]);
+  });
+});
+
+describe('attachEntryGestures — resize (S3.4)', () => {
+  it("[S3-A1] a pointerdown on the end handle arms a resize({ edge: 'end' }) gesture, committed on pointerup", () => {
+    const pane = document.createElement('div');
+    mockPointerCapture(pane);
+    const container = document.createElement('div');
+    const commits: [Gesture, EntryEdits][] = [];
+    const capabilities: ('move' | 'resize')[] = [];
+    const { ctx, proposals } = makeContext({
+      hitTest: () => ({ itemId: itemId(A), edge: 'end' }),
+      can: (capability) => capability === 'resize' || capability === 'select',
+      entriesForGesture: (grabbed, capability) => {
+        capabilities.push(capability);
+        return [entryFor(grabbed)];
+      },
+      commit: (gesture, draft) => {
+        commits.push([gesture, draft]);
+        return Promise.resolve(true);
+      },
+    });
+    attachEntryGestures(pane, container, ctx);
+
+    pane.dispatchEvent(down(0));
+    pane.dispatchEvent(move(0 + DRAG_THRESHOLD_PX + 1));
+    pane.dispatchEvent(up(0 + DRAG_THRESHOLD_PX + 5));
+
+    expect(capabilities).toEqual(['resize']);
+    expect(commits).toHaveLength(1);
+    expect(commits[0]![0]).toEqual({ kind: 'resize', edge: 'end' });
+    expect(proposals).toEqual([]); // a drag never also proposes a selection change
+  });
+
+  it('a pointerdown on the start handle of a resize-incapable entry falls back to a plain click', () => {
+    const pane = document.createElement('div');
+    mockPointerCapture(pane);
+    const container = document.createElement('div');
+    const commit = vi.fn(() => Promise.resolve(true));
+    const { ctx, proposals } = makeContext({
+      hitTest: (x) => (x === 0 ? { itemId: itemId(A), edge: 'start' } : { itemId: itemId(ORDER[x]!) }),
+      can: (capability) => capability === 'select', // resize refused (e.g. milestone)
+      commit,
+    });
+    attachEntryGestures(pane, container, ctx);
+
+    pane.dispatchEvent(down(0));
+    pane.dispatchEvent(move(0 + DRAG_THRESHOLD_PX + 1)); // never arms: not resize-capable
+    pane.dispatchEvent(up(0));
+
+    expect(commit).not.toHaveBeenCalled();
+    expect(proposals).toEqual([[A]]);
   });
 });

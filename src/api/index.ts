@@ -27,7 +27,9 @@ export type {
   NavigationChange,
   SelectionChange,
   ProposedSpan,
+  EntryGestureEvent,
   EntryMove,
+  EntryResize,
 } from '../view/index.js';
 // S3, D-S3-9: `Gantt.interactions`'s own type and the per-gesture rule shape (`view/capability.ts`).
 export type { CapabilityRule, Interactions } from '../view/index.js';

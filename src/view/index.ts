@@ -9,6 +9,8 @@ export type {
   NavigationChange,
   SelectionChange,
   ProposedSpan,
+  EntryGestureEvent,
   EntryMove,
+  EntryResize,
 } from './event-bus.js';
 export type { CapabilityRule, Interactions } from './capability.js';

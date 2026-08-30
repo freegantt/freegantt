@@ -11,14 +11,10 @@ import { itemId } from '../model/index.js';
 import { attachPointerGesture } from './pointer-gesture.js';
 import type { EntryGestureContext, Gesture } from './entry-gesture-context.js';
 
-export type { EntryGestureContext, Gesture, DraftOptions } from './entry-gesture-context.js';
+export type { EntryGestureContext, Gesture, DraftOptions, EntryHit } from './entry-gesture-context.js';
 
 export interface EntryGesturesAttachment {
   detach(): void;
-}
-
-function moveGesture(): Gesture {
-  return { kind: 'move' };
 }
 
 /** Pointer semantics (D-S3-10): plain click replaces, ctrl/⌘-click toggles, shift-click extends over
@@ -31,7 +27,11 @@ function moveGesture(): Gesture {
  *  resolution — never snapped — so the grabbed spot on the bar tracks the cursor with no drift, and
  *  pointerup commits the snapped draft (`ctx.commit`) through `beforeEntryMove` → one transaction →
  *  `entryMove`. Escape mid-drag clears the preview and commits nothing (`[S3-A2]`) — the store was
- *  never touched. */
+ *  never touched.
+ *
+ *  Resize (S3.4, D-S3-4): a pointerdown on the shared resize-handle pair (`ctx.hitTest`'s `edge`)
+ *  arms the same drag machinery with a `{ kind: 'resize', edge }` gesture instead — one pointer
+ *  stream, one state machine, only the grabbed gesture shape differs. */
 export function attachEntryGestures(
   pane: HTMLElement,
   container: HTMLElement,
@@ -42,15 +42,22 @@ export function attachEntryGestures(
    *  target (there is no prior anchor to range from). */
   let anchor: EntryId | undefined;
 
-  /** Set on pointerdown when the hit is a `move`-capable bar; cleared once the pointer stream for
-   *  that gesture ends (commit or cancel), never read past that point. */
+  /** Set on pointerdown when the hit is a `move`-capable bar or a `resize`-capable handle; cleared
+   *  once the pointer stream for that gesture ends (commit or cancel), never read past that point. */
   let grabbedId: EntryId | undefined;
+  /** Set alongside `grabbedId` only for a handle grab (S3.4) — its presence is what distinguishes a
+   *  resize gesture from a move gesture everywhere below. */
+  let grabbedEdge: 'start' | 'end' | undefined;
   let armedEntries: readonly Entry[] = [];
+
+  function currentGesture(): Gesture {
+    return grabbedEdge !== undefined ? { kind: 'resize', edge: grabbedEdge } : { kind: 'move' };
+  }
 
   const drag = attachPointerGesture(pane, {
     start(): boolean {
       if (grabbedId === undefined) return false;
-      armedEntries = ctx.entriesForGesture(grabbedId);
+      armedEntries = ctx.entriesForGesture(grabbedId, grabbedEdge !== undefined ? 'resize' : 'move');
       return armedEntries.length > 0;
     },
     move(e, dxPx): void {
@@ -58,7 +65,7 @@ export function attachEntryGestures(
       // unit) so the grabbed spot on the bar never drifts from the cursor mid-drag. Snapping still
       // applies to what actually gets written — see commit() below — this only affects what paints
       // while the gesture is in flight.
-      const draft = ctx.draftFor(moveGesture(), armedEntries, dxPx, { suspendSnap: true });
+      const draft = ctx.draftFor(currentGesture(), armedEntries, dxPx, { suspendSnap: true });
       ctx.preview(draft);
     },
     commit(e, dxPx): void {
@@ -66,20 +73,22 @@ export function attachEntryGestures(
       // placement (D-S3-12) — this is the one place snapping actually lands, now that move() above
       // always previews raw.
       const draft = ctx.draftFor(
-        moveGesture(),
+        currentGesture(),
         armedEntries,
         dxPx,
         e.altKey ? { suspendSnap: true } : undefined,
       );
       ctx.preview(undefined);
-      void ctx.commit(moveGesture(), draft);
+      void ctx.commit(currentGesture(), draft);
       armedEntries = [];
       grabbedId = undefined;
+      grabbedEdge = undefined;
     },
     cancel(): void {
       ctx.preview(undefined);
       armedEntries = [];
       grabbedId = undefined;
+      grabbedEdge = undefined;
     },
   });
 
@@ -102,16 +111,25 @@ export function attachEntryGestures(
 
   function onPointerDown(e: PointerEvent): void {
     const hit = ctx.hitTest(e.clientX, e.clientY);
-    const entry = hit !== undefined ? ctx.entryFor(hit) : undefined;
-    grabbedId = entry !== undefined && ctx.can('move', entry) ? entry.id : undefined;
+    const entry = hit !== undefined ? ctx.entryFor(hit.itemId) : undefined;
+    if (entry !== undefined && hit?.edge !== undefined && ctx.can('resize', entry)) {
+      grabbedId = entry.id;
+      grabbedEdge = hit.edge;
+    } else if (entry !== undefined && ctx.can('move', entry)) {
+      grabbedId = entry.id;
+      grabbedEdge = undefined;
+    } else {
+      grabbedId = undefined;
+      grabbedEdge = undefined;
+    }
     drag.down(e);
   }
 
   function onPointerUp(e: PointerEvent): void {
     if (drag.up(e)) return; // was a drag — commit/cancel already ran inside pointer-gesture's callbacks
 
-    const itemId = ctx.hitTest(e.clientX, e.clientY);
-    const entry = itemId !== undefined ? ctx.entryFor(itemId) : undefined;
+    const hit = ctx.hitTest(e.clientX, e.clientY);
+    const entry = hit !== undefined ? ctx.entryFor(hit.itemId) : undefined;
 
     if (entry === undefined) {
       anchor = undefined;
@@ -164,7 +182,7 @@ export function attachEntryGestures(
    *  independent listeners racing each other. */
   function onPointerMove(e: PointerEvent): void {
     drag.move(e);
-    ctx.setHovered(ctx.hitTest(e.clientX, e.clientY));
+    ctx.setHovered(ctx.hitTest(e.clientX, e.clientY)?.itemId);
   }
 
   function onPointerLeave(): void {

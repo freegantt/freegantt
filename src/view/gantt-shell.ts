@@ -4,6 +4,7 @@
 import {
   barSpan,
   draftForMove,
+  draftForResize,
   previewOffsets,
   FrameLayout,
   ScrollModel,
@@ -61,13 +62,13 @@ type Gesture = { kind: 'move' } | { kind: 'resize'; edge: 'start' | 'end' };
  *  against (S3.6 wires an extender's actual extras in here). */
 const EMPTY_EDITS: EntryEdits = Object.freeze(new Map());
 interface EntryGestureContext {
-  hitTest(x: number, y: number): ItemId | undefined;
+  hitTest(x: number, y: number): { itemId: ItemId; edge?: 'start' | 'end' } | undefined;
   entryFor(item: ItemId): Entry | undefined;
   can(capability: keyof Interactions, entry: Entry): boolean;
   rowOrder(): readonly EntryId[];
   selection: { get(): readonly EntryId[]; propose(next: readonly EntryId[]): void };
   setHovered(itemId: ItemId | undefined): void;
-  entriesForGesture(grabbed: EntryId): readonly Entry[];
+  entriesForGesture(grabbed: EntryId, capability: 'move' | 'resize'): readonly Entry[];
   draftFor(
     gesture: Gesture,
     entries: readonly Entry[],
@@ -342,7 +343,11 @@ export class GanttShell {
       this.#options.dataset.isDerivedSpanKind(kind),
     );
     this.#entryGestures = options.entryGestures?.(this.#panes.timeline, this.#container, {
-      hitTest: (x, y) => this.#backend.hitTest(x, y)?.itemId,
+      hitTest: (x, y) => {
+        const hit = this.#backend.hitTest(x, y);
+        if (!hit) return undefined;
+        return hit.edge !== undefined ? { itemId: hit.itemId, edge: hit.edge } : { itemId: hit.itemId };
+      },
       entryFor: (item) => this.#entryFor(item),
       can: (capability, entry) => this.#capabilities.can(capability, entry),
       rowOrder: () => this.#options.dataset.entries.all.map((e) => e.id),
@@ -351,7 +356,7 @@ export class GanttShell {
         propose: (next) => this.#proposeSelection(next),
       },
       setHovered: (item) => this.#setHovered(item),
-      entriesForGesture: (grabbed) => this.#entriesForGesture(grabbed),
+      entriesForGesture: (grabbed, capability) => this.#entriesForGesture(grabbed, capability),
       draftFor: (gesture, entries, dxPx, gestureOptions) =>
         this.#draftFor(gesture, entries, dxPx, gestureOptions),
       commit: (gesture, draft) => this.#commitGesture(gesture, draft),
@@ -498,8 +503,10 @@ export class GanttShell {
   }
 
   /** D-S3-19: just the grabbed entry when it is not part of a multi-entry selection; else every
-   *  *capable* selected entry, grabbed first (D-S3-22) — an incapable one is skipped, not blocking. */
-  #entriesForGesture(grabbedId: EntryId): readonly Entry[] {
+   *  *capable* selected entry, grabbed first (D-S3-22) — an incapable one is skipped, not blocking.
+   *  `capability` is `'move'` for a move gesture, `'resize'` for a resize gesture (S3.4) — the same
+   *  rule, checked against whichever capability the grabbed gesture actually needs. */
+  #entriesForGesture(grabbedId: EntryId, capability: keyof Interactions = 'move'): readonly Entry[] {
     const inMultiSelection = this.#selection.includes(grabbedId) && this.#selection.length > 1;
     const candidateIds = inMultiSelection ? this.#selection : [grabbedId];
     const entries: Entry[] = [];
@@ -507,7 +514,7 @@ export class GanttShell {
     const pushCapable = (id: EntryId): void => {
       if (seen.has(id)) return;
       const entry = this.#options.dataset.entries.get(id);
-      if (entry && this.#canGesture('move', id)) {
+      if (entry && this.#canGesture(capability, id)) {
         entries.push(entry);
         seen.add(id);
       }
@@ -535,22 +542,33 @@ export class GanttShell {
     dxPx: number,
     options: { suspendSnap?: boolean } | undefined,
   ): EntryEdits {
-    if (gesture.kind !== 'move') return EMPTY_EDITS; // resize lands in S3.4
+    const snap = this.#resolveSnap(options?.suspendSnap);
+    if (gesture.kind === 'resize') {
+      return draftForResize({
+        zone: this.#options.dataset.timeZone,
+        scale: this.#viewport.timeScale,
+        snap,
+        entries,
+        dxPx,
+        edge: gesture.edge,
+      });
+    }
     return draftForMove({
       zone: this.#options.dataset.timeZone,
       scale: this.#viewport.timeScale,
-      snap: this.#resolveSnap(options?.suspendSnap),
+      snap,
       entries,
       dxPx,
     });
   }
 
-  /** `beforeEntryMove` → one commit → `entryMove` (D-S3-16). `commitEntryEdits` (injected by
-   *  `api/gantt.ts`, which alone holds a `dataset.transaction()`-capable `Dataset` — this shell's own
-   *  `dataset` option is the narrower `model/` interface, "a view never opens a transaction") does
-   *  the actual write and folds a sync veto and a `MutationCancelledError` into one `false`. */
+  /** `beforeEntryMove`/`beforeEntryResize` → one commit → `entryMove`/`entryResize` (D-S3-16,
+   *  D-S3-22). `commitEntryEdits` (injected by `api/gantt.ts`, which alone holds a
+   *  `dataset.transaction()`-capable `Dataset` — this shell's own `dataset` option is the narrower
+   *  `model/` interface, "a view never opens a transaction") does the actual write and folds a sync
+   *  veto and a `MutationCancelledError` into one `false`. */
   #commitGesture(gesture: Gesture, draft: EntryEdits): Promise<boolean> {
-    if (gesture.kind !== 'move' || draft.size === 0) return Promise.resolve(false);
+    if (draft.size === 0) return Promise.resolve(false);
     const spans = [...draft].flatMap(([id, edit]) =>
       edit.start !== undefined && edit.end !== undefined
         ? [{ entry: id, start: edit.start, end: edit.end }]
@@ -558,6 +576,13 @@ export class GanttShell {
     );
     const grabbed = spans[0];
     if (!grabbed) return Promise.resolve(false);
+    if (gesture.kind === 'resize') {
+      const payload = { ...grabbed, entries: spans, edge: gesture.edge };
+      if (this.#events.emit('beforeEntryResize', payload) === false) return Promise.resolve(false);
+      const committed = this.#options.commitEntryEdits?.(draft) ?? false;
+      if (committed) this.#events.emit('entryResize', payload);
+      return Promise.resolve(committed);
+    }
     const payload = { ...grabbed, entries: spans };
     if (this.#events.emit('beforeEntryMove', payload) === false) return Promise.resolve(false);
     const committed = this.#options.commitEntryEdits?.(draft) ?? false;

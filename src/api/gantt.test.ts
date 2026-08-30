@@ -1173,3 +1173,137 @@ describe('Gantt entryMove (S3.3, [S3-A1] move half, [S3-A6])', () => {
     gantt.destroy();
   });
 });
+
+describe('Gantt entryResize (S3.4, [S3-A1] resize half)', () => {
+  function stubPointerCapture(el: HTMLElement): void {
+    el.setPointerCapture = vi.fn();
+    el.releasePointerCapture = vi.fn();
+  }
+
+  it('a real drag on the end handle fires beforeEntryResize/entryResize, writes the dataset once, and undo reverts it in one step', () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
+    const gantt = new Gantt({ container, dataset });
+
+    const bar = container.querySelector<HTMLElement>('.fg-bar')!;
+    const timeline = container.querySelector<HTMLElement>('.fg-timeline-pane')!;
+    stubPointerCapture(timeline);
+    const original = document.elementFromPoint.bind(document);
+    // Hover the bar first (D-S3-6): resizableItemId only resolves once something is hovered or
+    // singly selected, and only then does the handle pair stop being `hidden`.
+    document.elementFromPoint = (x: number, y: number) => (x === 5 && y === 5 ? bar : original(x, y));
+    timeline.dispatchEvent(new PointerEvent('pointermove', { clientX: 5, clientY: 5 }));
+
+    const endHandle = container.querySelector<HTMLElement>('.fg-bar-handle[data-edge="end"]')!;
+    expect(endHandle.hidden).toBe(false);
+    document.elementFromPoint = (x: number, y: number) => (x === 10 && y === 5 ? endHandle : original(x, y));
+
+    const id = entryId(sampleEntries[0]!.id);
+    const before = dataset.entries.get(id)!;
+
+    const beforeEvents: unknown[] = [];
+    const afterEvents: unknown[] = [];
+    gantt.on('beforeEntryResize', (p) => {
+      beforeEvents.push(p);
+    });
+    gantt.on('entryResize', (p) => {
+      afterEvents.push(p);
+    });
+    const datasetChanges: unknown[] = [];
+    dataset.on('change', (c) => {
+      datasetChanges.push(c);
+    });
+
+    timeline.dispatchEvent(new PointerEvent('pointerdown', { clientX: 10, clientY: 5, pointerId: 1 }));
+    timeline.dispatchEvent(new PointerEvent('pointermove', { clientX: 5010, clientY: 5, pointerId: 1 }));
+    timeline.dispatchEvent(new PointerEvent('pointerup', { clientX: 5010, clientY: 5, pointerId: 1 }));
+
+    expect(beforeEvents).toHaveLength(1);
+    expect(afterEvents).toHaveLength(1);
+    const proposed = afterEvents[0] as { entry: unknown; start: unknown; end: unknown; edge: string };
+    expect(proposed.entry).toBe(id);
+    expect(proposed.edge).toBe('end');
+    expect(proposed.start).toBe(before.start); // start edge untouched by an end-handle resize
+    expect(proposed.end).not.toBe(before.end);
+    expect(datasetChanges).toHaveLength(1); // one transaction, D-S3-16
+
+    const resized = dataset.entries.get(id)!;
+    expect(resized.start).toBe(before.start);
+    expect(resized.end).toBe(proposed.end);
+    expect(resized.end).not.toBe(before.end);
+
+    expect(dataset.canUndo).toBe(true);
+    dataset.undo();
+    const reverted = dataset.entries.get(id)!;
+    expect(reverted.start).toBe(before.start);
+    expect(reverted.end).toBe(before.end);
+
+    document.elementFromPoint = original;
+    gantt.destroy();
+  });
+
+  it('beforeEntryResize returning false vetoes the commit: the dataset is untouched', () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
+    const gantt = new Gantt({ container, dataset });
+
+    const bar = container.querySelector<HTMLElement>('.fg-bar')!;
+    const timeline = container.querySelector<HTMLElement>('.fg-timeline-pane')!;
+    stubPointerCapture(timeline);
+    const original = document.elementFromPoint.bind(document);
+    document.elementFromPoint = (x: number, y: number) => (x === 5 && y === 5 ? bar : original(x, y));
+    timeline.dispatchEvent(new PointerEvent('pointermove', { clientX: 5, clientY: 5 }));
+
+    const endHandle = container.querySelector<HTMLElement>('.fg-bar-handle[data-edge="end"]')!;
+    document.elementFromPoint = (x: number, y: number) => (x === 10 && y === 5 ? endHandle : original(x, y));
+
+    const id = entryId(sampleEntries[0]!.id);
+    const before = dataset.entries.get(id)!;
+    gantt.on('beforeEntryResize', () => false);
+
+    const afterEvents: unknown[] = [];
+    gantt.on('entryResize', (p) => {
+      afterEvents.push(p);
+    });
+
+    timeline.dispatchEvent(new PointerEvent('pointerdown', { clientX: 10, clientY: 5, pointerId: 1 }));
+    timeline.dispatchEvent(new PointerEvent('pointermove', { clientX: 5010, clientY: 5, pointerId: 1 }));
+    timeline.dispatchEvent(new PointerEvent('pointerup', { clientX: 5010, clientY: 5, pointerId: 1 }));
+
+    expect(afterEvents).toEqual([]);
+    expect(dataset.entries.get(id)).toEqual(before);
+    expect(dataset.canUndo).toBe(false);
+
+    document.elementFromPoint = original;
+    gantt.destroy();
+  });
+
+  it('a milestone (resize-incapable) never gets a resize handle to grab (D-S3-9)', () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({
+      entries: [
+        {
+          id: 'm1',
+          kind: 'milestone',
+          name: 'Milestone',
+          start: sampleEntries[0]!.start,
+          end: sampleEntries[0]!.start,
+        },
+      ],
+      timeZone: 'UTC',
+    });
+    const gantt = new Gantt({ container, dataset });
+
+    const bar = container.querySelector<HTMLElement>('.fg-bar')!;
+    const timeline = container.querySelector<HTMLElement>('.fg-timeline-pane')!;
+    const original = document.elementFromPoint.bind(document);
+    document.elementFromPoint = (x: number, y: number) => (x === 5 && y === 5 ? bar : original(x, y));
+    timeline.dispatchEvent(new PointerEvent('pointermove', { clientX: 5, clientY: 5 }));
+
+    const endHandle = container.querySelector<HTMLElement>('.fg-bar-handle[data-edge="end"]')!;
+    expect(endHandle.hidden).toBe(true);
+
+    document.elementFromPoint = original;
+    gantt.destroy();
+  });
+});
