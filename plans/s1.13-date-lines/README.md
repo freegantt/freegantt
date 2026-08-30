@@ -418,7 +418,7 @@ Glossary first, then the engine, then the seam, then the public edge.
 - [x] `layout/date-line.test.ts` rewritten for the new shape
 - [x] `[S1-A11]`–`[S1-A14]` written and passing
 - [x] `api/gantt.test.ts`'s existing `.fg-today-line` assertions rewritten against `.fg-date-line`
-- [ ] `e2e/date-lines.spec.ts`
+- [x] `e2e/date-lines.spec.ts`
 
 ### Review and gate
 - [ ] The §7 spec edits, landed with this step

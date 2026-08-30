@@ -160,7 +160,7 @@ test('[S1-A10] Today pans so the today line sits in the pane', async ({ page }) 
 
   await page.getByRole('button', { name: 'Today' }).click();
 
-  const line = page.locator('.fg-today-line');
+  const line = page.locator('.fg-date-line');
   await expect(line).toBeVisible();
   const pane = page.locator('.fg-timeline-pane');
   await expect
