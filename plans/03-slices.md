@@ -139,7 +139,7 @@ Slices are scope, not calendar estimates. Within a slice, entries are ordered so
 
 ## S3 — Direct manipulation
 
-**Position:** after S1.13, before S4. Full spec: [`plans/s3-direct-manipulation/README.md`](./s3-direct-manipulation/README.md) — settled except its §0, which names two remaining prerequisites (S1.13's implementation, and one `interaction/` import edge) and the step each one blocks. Its third, the `EditExtender` install seam, closed on 2026-08-29: S3 publishes no install API and its tests inject through the internal seam D-S2-6 already sanctions. The step list there cuts this slice into S3.1–S3.8; the acceptance boxes below become `[S3-A1]`–`[S3-A8]` when that spec's §7 edits land.
+**Position:** after S1.13, before S4. Tracker: [`plans/s3-direct-manipulation/README.md`](./s3-direct-manipulation/README.md); work splits into [`s3.1-selection.md`](./s3-direct-manipulation/s3.1-selection.md)–[`s3.8-cursor-line-harness-gate.md`](./s3-direct-manipulation/s3.8-cursor-line-harness-gate.md) (S3.1–S3.2 done as of 2026-08-30). Prerequisites are closed; S3 publishes no install API and tests inject through the internal seam D-S2-6 sanctions. The acceptance boxes below become `[S3-A1]`–`[S3-A8]` when S3.8's spec edits land.
 
 **Goal:** editing with the pointer (D10): drag-move, resize, selection — each gesture cancelable, transactional, undoable. Live preview of the draft plus any extra field writes the extension hook returns.
 

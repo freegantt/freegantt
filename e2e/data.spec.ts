@@ -4,19 +4,41 @@ import { test, expect } from '@playwright/test';
 // changeset log in harness/data.html is built from each committed ChangeSet alone (D-S2-17), never
 // by re-reading the dataset. `from` is what makes this falsifiable — a log built from a re-read can
 // produce `to` but never `from`, since the dataset has already moved on by the time it is read.
+//
+// Rename/move/remove act on `gantt.selection`. The test clicks a rendered bar rather than a fixture
+// id, so a fixture edit does not break the log assertion.
 
 function logLines(page: import('@playwright/test').Page) {
   return page.locator('#log div').allTextContents();
 }
 
+/** Item.id is `${entryId}:${segmentIndex}` (plans/01 §2.4). Segment index is the suffix after the
+ *  last colon; the entry id is everything before it. */
+function entryIdFromItemId(itemId: string): string {
+  const colon = itemId.lastIndexOf(':');
+  return colon === -1 ? itemId : itemId.slice(0, colon);
+}
+
+async function selectFirstBar(
+  page: import('@playwright/test').Page,
+): Promise<{ entryId: string; name: string }> {
+  const bar = page.locator('#gantt .fg-bar').first();
+  await expect(bar).toBeVisible();
+  await bar.click();
+  await expect(page.locator('#rename-btn')).toBeEnabled();
+  const itemId = await bar.getAttribute('data-item-id');
+  expect(itemId).toBeTruthy();
+  return {
+    entryId: entryIdFromItemId(itemId!),
+    name: (await page.locator('#rename-input').inputValue()).trim(),
+  };
+}
+
 test('[S2-A4] rename logs from and to for the name field', async ({ page }) => {
   await page.goto('/data.html');
-  await expect(page.locator('.fg-bar').first()).toBeVisible();
+  await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
 
-  const select = page.locator('#entry-select');
-  const firstOption = await select.locator('option').first().textContent();
-  const entryId = firstOption!.split(' — ')[0]!;
-  const before = (await page.locator('#rename-input').inputValue()).trim();
+  const { entryId, name: before } = await selectFirstBar(page);
 
   await page.fill('#rename-input', 'Renamed by e2e');
   await page.click('#rename-btn');
@@ -29,9 +51,9 @@ test('[S2-A4] rename logs from and to for the name field', async ({ page }) => {
 
 test('[S2-A4] move +1 day logs from and to for start and end', async ({ page }) => {
   await page.goto('/data.html');
-  await expect(page.locator('.fg-bar').first()).toBeVisible();
+  await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
 
-  const entryId = (await page.locator('#entry-select option').first().textContent())!.split(' — ')[0]!;
+  const { entryId } = await selectFirstBar(page);
 
   await page.click('#move-fwd-btn');
 
@@ -51,10 +73,9 @@ test('[S2-A4] move +1 day logs from and to for start and end', async ({ page }) 
 
 test('[S2-A4] undo logs an [undo]-tagged row whose to is the original value', async ({ page }) => {
   await page.goto('/data.html');
-  await expect(page.locator('.fg-bar').first()).toBeVisible();
+  await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
 
-  const entryId = (await page.locator('#entry-select option').first().textContent())!.split(' — ')[0]!;
-  const original = (await page.locator('#rename-input').inputValue()).trim();
+  const { entryId, name: original } = await selectFirstBar(page);
 
   await page.fill('#rename-input', 'Renamed before undo');
   await page.click('#rename-btn');
