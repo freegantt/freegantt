@@ -1,6 +1,6 @@
 # S3 — Direct manipulation
 
-**Slice:** S3 (`plans/03` §S3) · **Position:** after S1.13, before S4 · **Status:** in progress — S3.1–S3.7 and the gesture-host-refactor done; continue at **S3.8**
+**Slice:** S3 (`plans/03` §S3) · **Position:** after S1.13, before S4 · **Status:** done — S3.8 gate green; continue at **S4**
 **Form:** same settled-spec shape as [`plans/s2-data-core/README.md`](../s2-data-core/README.md) — this file is the tracker and shared context; each step file holds the work and its TODO boxes.
 **Handoff:** [`HANDOFF.md`](./HANDOFF.md) — session notes for whoever continues.
 **Review:** [`plans/reviews/2026-08-29-s3-direct-manipulation.html`](../reviews/2026-08-29-s3-direct-manipulation.html) (2026-08-29 standards/spec pass).
@@ -62,7 +62,7 @@ Eight steps, in order. Riskiest seam (hot path) before data writes. Open the ste
 | S3.5 | [`s3.5-keyboard-parity-and-async-veto.md`](./s3.5-keyboard-parity-and-async-veto.md) | done | keyboard nudge + async veto; pending ghost at the commit draft |
 | S3.6 | [`s3.6-extender-preview.md`](./s3.6-extender-preview.md) | done | extender ghost in `dom` test |
 | S3.7 | [`s3.7-viewport-gestures.md`](./s3.7-viewport-gestures.md) | done | wheel zoom/pan, no writes |
-| S3.8 | [`s3.8-cursor-line-harness-gate.md`](./s3.8-cursor-line-harness-gate.md) | **next** | editing harness, e2e, gate green |
+| S3.8 | [`s3.8-cursor-line-harness-gate.md`](./s3.8-cursor-line-harness-gate.md) | done | editing harness, e2e, gate green |
 
 ---
 
@@ -82,7 +82,7 @@ Read these before touching `src/`.
 
 ## Acceptance ids
 
-`plans/03` §S3 boxes become `[S3-A1]`–`[S3-A8]` when S3.8's spec edits land.
+`plans/03` §S3 boxes are `[S3-A1]`–`[S3-A8]`.
 
 | Id | Box | Primary tests |
 |---|---|---|

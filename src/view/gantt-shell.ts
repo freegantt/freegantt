@@ -361,9 +361,12 @@ export class GanttShell {
       emit: (name, payload) => this.#events.emit(name, payload),
       ...(options.editExtender ? { extend: options.editExtender } : {}),
       allEntries: () => new Map(this.#options.dataset.entries.all.map((e) => [e.id, e])),
-      applyGestureState: (preview, pendingItemIds) => {
+      locale: () => this.#locale,
+      applyGestureState: (preview, pendingItemIds, cursor) => {
         setOptional(this.#interactionState, 'preview', preview);
         setOptional(this.#interactionState, 'pendingItemIds', pendingItemIds);
+        setOptional(this.#interactionState, 'cursorX', cursor?.x);
+        setOptional(this.#interactionState, 'cursorLabel', cursor?.label);
         this.#backend.applyState(this.#interactionState);
       },
     });
@@ -383,6 +386,7 @@ export class GanttShell {
         propose: (next) => this.#proposeSelection(next),
       },
       setHovered: (item) => this.#setHovered(item),
+      contentXAtPaneOffset: (offsetX) => offsetX + this.#viewport.scroll.state.position.x,
       session: (grabbed, gesture) => this.#gesturePipeline.session(grabbed, gesture),
     };
     this.#entryGestures = options.entryGestures?.(this.#panes.timeline, this.#container, gestureContext);

@@ -6,7 +6,7 @@
 
 import type { Entry, EntryEdits, EntryId, Instant, ItemId, StoredEdit } from '../model/index.js';
 import { itemId } from '../model/index.js';
-import { addMs, diffMs, stepBy, snapInstant, stepsBetween } from '../time/index.js';
+import { addMs, diffMs, formatDate, stepBy, snapInstant, stepsBetween } from '../time/index.js';
 import type { SnapUnit } from '../time/index.js';
 import type { TimeScale } from '../time/index.js';
 
@@ -135,4 +135,16 @@ export function previewOffsets(input: PreviewOffsetsInput): readonly ItemPreview
   for (const [id, edit] of proposed) pushOffset(id, edit, false);
   for (const [id, edit] of extra) pushOffset(id, edit, true);
   return out;
+}
+
+/** S3.8, D-S3-15: the Cursor line label at content `x` — `instantForX` → `snapInstant` →
+ *  `formatDate`. All `time/` work stays in this file so `view/` never formats a date. */
+export function cursorLabelForX(
+  x: number,
+  scale: TimeScale,
+  snap: SnapUnit,
+  locale?: Intl.LocalesArgument,
+): string {
+  const snapped = snapInstant(scale.timeZone, scale.instantForX(x), snap);
+  return formatDate(scale.timeZone, snapped, locale);
 }

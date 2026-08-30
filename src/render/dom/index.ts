@@ -57,6 +57,10 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
   // one pair per bar.
   let startHandle: HTMLElement | undefined;
   let endHandle: HTMLElement | undefined;
+  // S3.8, D-S3-15: Cursor line singletons, created once at mount() and moved/parked by applyState.
+  let cursorLine: HTMLElement | undefined;
+  let cursorLineLabel: HTMLElement | undefined;
+  let cursorLineHeight = 0;
 
   const bandLayer = new KeyedLayer<FrameHeaderBand, number, BandGeom>();
   // One tick layer per band index — a nested keyed list is still a keyed list (plans/01 §8.1's
@@ -103,6 +107,23 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
     startHandle.style.height = `${geom.height}px`;
     endHandle.style.transform = `translate(${geom.x + geom.width}px, ${geom.y}px)`;
     endHandle.style.height = `${geom.height}px`;
+  }
+
+  /** S3.8, D-S3-15: parks the Cursor line when `x` is undefined; otherwise translates the stroke
+   *  and writes the snapped caption. Height comes from the last `sync()`, same rule as Date lines. */
+  function paintCursorLine(x: number | undefined, label: string | undefined): void {
+    if (!cursorLine || !cursorLineLabel) return;
+    if (x === undefined) {
+      cursorLine.hidden = true;
+      cursorLineLabel.hidden = true;
+      return;
+    }
+    cursorLine.hidden = false;
+    cursorLine.style.transform = `translateX(${x}px)`;
+    cursorLine.style.height = `${cursorLineHeight}px`;
+    cursorLineLabel.hidden = label === undefined || label === '';
+    cursorLineLabel.style.transform = `translateX(${x}px)`;
+    cursorLineLabel.textContent = label ?? '';
   }
 
   /** Applies the base committed transform (`syncBars`'s own geometry) to one bar — what a previewed
@@ -341,8 +362,18 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
       // child, so appending the handles here once leaves them undisturbed at the end of barLayer's
       // children on every later sync — still painted above every bar (D-S3-8).
       barLayer.append(startHandle, endHandle);
+      cursorLine = document.createElement('div');
+      cursorLine.className = 'fg-cursor-line';
+      cursorLine.setAttribute('aria-hidden', 'true');
+      cursorLine.hidden = true;
+      cursorLineLabel = document.createElement('div');
+      cursorLineLabel.className = 'fg-cursor-line-label';
+      cursorLineLabel.setAttribute('aria-hidden', 'true');
+      cursorLineLabel.hidden = true;
       timelineHost.append(headerLayer, barLayer, contentSizer);
       dateLines = attachDateLines(timelineHost, headerLayer);
+      timelineHost.append(cursorLine);
+      headerLayer.append(cursorLineLabel);
     },
     sync(frame: GeometryFrame) {
       if (headerLayer) {
@@ -363,6 +394,8 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
       // identity change.
       if (paintedResizable !== undefined) paintResizeHandles(barGeomByItemId.get(paintedResizable));
       dateLines?.sync(frame.decorations, frame.contentHeight, frame.visible.height);
+      cursorLineHeight = Math.max(frame.contentHeight, frame.visible.height);
+      if (cursorLine && !cursorLine.hidden) cursorLine.style.height = `${cursorLineHeight}px`;
       if (gridLayer) {
         // The grid pane has no scrollbar of its own; its row layer follows the timeline pane's
         // native scroll by one transform per frame instead of a second real scroller (D-S1.8-1).
@@ -428,6 +461,7 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
       }
 
       paintPreview(state.preview);
+      paintCursorLine(state.cursorX, state.cursorLabel);
     },
     hitTest(x: number, y: number): HitResult | null {
       // "The bars array is the hit index; DOM backends get hit-testing from event delegation"
@@ -473,6 +507,9 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
       contentSizer = undefined;
       startHandle = undefined;
       endHandle = undefined;
+      cursorLine = undefined;
+      cursorLineLabel = undefined;
+      cursorLineHeight = 0;
     },
   };
 }

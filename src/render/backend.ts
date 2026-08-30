@@ -21,6 +21,11 @@ export interface InteractionState {
    *  holding — painted `data-state~="pending"` (reduced opacity and a dotted outline). Undefined once
    *  it settles either way. */
   pendingItemIds?: readonly ItemId[];
+  /** S3.8, D-S3-15: content-x of the Cursor line during a pointer drag. Undefined parks the
+   *  singleton. Never a frame decoration. */
+  cursorX?: number;
+  /** S3.8, D-S3-15: snapped `formatDate` caption for `cursorX`. Empty parks the label node. */
+  cursorLabel?: string;
 }
 
 export interface HitResult {

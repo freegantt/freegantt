@@ -70,6 +70,7 @@ function makeContext(overrides: Partial<EntryGestureContext> & SessionOverrides 
     can: () => true,
     rowOrder: () => ORDER,
     setHovered: () => {},
+    contentXAtPaneOffset: (offsetX) => offsetX,
     session: (grabbed, gesture) => {
       const entries = entriesForGesture(grabbed, gesture.kind === 'resize' ? 'resize' : 'move');
       if (entries.length === 0) return undefined;

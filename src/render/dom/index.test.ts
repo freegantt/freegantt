@@ -639,4 +639,39 @@ describe('render/dom backend', () => {
     grid.remove();
     timeline.remove();
   });
+
+  it('applyState paints the Cursor line singleton at cursorX and parks it when cursorX drops (D-S3-15)', () => {
+    const backend = createDomBackend();
+    const { grid, timeline } = mountSurfaces();
+    backend.mount({ grid, timeline });
+
+    const frame = computeFrame({
+      entries: sampleEntries.slice(0, 1),
+      scale,
+      preset,
+      visible: { x: 0, y: 0, width: 0, height: 0 },
+      rowHeight: 32,
+      revision: 0,
+    });
+    backend.sync(frame);
+
+    const line = timeline.querySelector<HTMLElement>('.fg-cursor-line')!;
+    const label = timeline.querySelector<HTMLElement>('.fg-cursor-line-label')!;
+    expect(line.hidden).toBe(true);
+    expect(label.hidden).toBe(true);
+
+    backend.applyState({ cursorX: 40, cursorLabel: 'Jun 15, 2026' });
+    expect(line.hidden).toBe(false);
+    expect(line.style.transform).toBe('translateX(40px)');
+    expect(label.hidden).toBe(false);
+    expect(label.textContent).toBe('Jun 15, 2026');
+
+    backend.applyState({});
+    expect(line.hidden).toBe(true);
+    expect(label.hidden).toBe(true);
+
+    backend.destroy();
+    grid.remove();
+    timeline.remove();
+  });
 });
