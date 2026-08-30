@@ -90,7 +90,7 @@ _Avoid_: Apply (the sync adapter's own job, D-S2-11, not open yet), Commit (the 
 
 **Write set**:
 The open Transaction's in-progress `{ before, after }` record per touched field, kept separate from the Store's committed indexes until commit. `get`/`has`/`size`/`childrenOf` read through it (read-your-own-writes); `all` does not. Discarding it — on a thrown body or a `beforeChange` veto — is the whole of rollback; there is no undo-engine involved in an in-flight transaction.
-_Avoid_: Draft (implies a persisted intermediate state this isn't), staging area, buffer
+_Avoid_: Draft (gesture-state prose, not this — see **Draft** under "Direct manipulation"), staging area, buffer
 
 **Veto**:
 A `beforeChange` handler returning `false`, refusing the whole ChangeSet before it commits. Fires after the extension hook and the Rollup, on the ChangeSet that would actually be written, and before the Store write — so a handler judges the real cascade-inclusive change and a refusal is an early return, never an undo of work already applied. Sync-only, unlike gesture vetoes: a data commit has nothing to suspend an `await` into. A vetoed programmatic call (e.g. `entries.update()`) throws `MutationCancelledError` carrying the refused ChangeSet; a vetoed gesture stays silent, the way `beforeGridWidthChange` already behaves.
@@ -373,6 +373,20 @@ _Avoid_: Gridline (a gridline is one way a Tick is drawn), step
 **Tick box floor**:
 The smallest CSS border-box a painted Tick cell can occupy (`--fg-tick-box-floor`, default 9). Distinct from Tick width (density on the axis). A sticky header label clamps to the pane edge only when the remaining cell is at least this wide; a thinner remainder keeps the Tick's true x.
 _Avoid_: min-width (that is Tick width's `minTickWidthPx`), sticky min width, STICKY_LABEL_MIN_WIDTH_PX
+
+### Direct manipulation
+
+**Selection**:
+The set of Entry ids a `Gantt` currently highlights — `Gantt.selection` (loose in, branded out, live) — never Item ids, since "this Segment is selected but its siblings are not" means nothing yet (S3, D-S3-10). Per-Gantt, not per-Dataset: two Gantts bound to one Dataset can select differently. Written on pointerup, never pointerdown, and not at all when the gesture armed into a drag. `Gantt.selectionEntries` re-reads the bound Dataset for each id in `selection`, in order, on every access — skipping an id the store no longer has (e.g. after a `remove`) rather than throwing.
+_Avoid_: highlight (paint detail, not the authored concept), `selectedItemIds` unqualified (that is `InteractionState`'s paint-side mirror, Item-keyed, never the public word)
+
+**EntryGesture**:
+The kind of data edit a drag is making — `{ kind: 'move' }` or `{ kind: 'resize', edge }` — the shape `interaction/entry-gesture-context.ts`'s `EntryGestureContext` carries through `draftFor`/`commit`. Distinct from the pointer machine itself (`createPointerGesture`, `pointer-gesture.ts`), which knows nothing about entries, drafts, or kinds — only threshold, capture, Escape, and long-press over plain `start`/`move`/`commit`/`cancel` callbacks.
+_Avoid_: Gesture unqualified (collides with the pointer machine's own word — say "the pointer gesture" or "the EntryGesture" explicitly)
+
+**Draft**:
+Prose for a gesture's in-flight edit while a drag previews — not a type of its own (D-S3-2). A Draft **is** `EntryEdits`, the same shape `dataset.entries.update()` takes; nothing new is declared for it. Distinct from Write set (a Transaction's own in-progress record, once a Draft actually commits).
+_Avoid_: Draft as a type name (there is none — see Write set's own _Avoid_ line), staging area, buffer
 
 ### Theming and accessibility
 

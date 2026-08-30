@@ -445,4 +445,160 @@ describe('render/dom backend', () => {
     grid.remove();
     timeline.remove();
   });
+
+  // D-S3-6/D-S3-7, [S3-A3]: applyState paints the fixed data-state projection, touching only the
+  // bars whose token set actually changed.
+  it('applyState paints hovered/selected data-state tokens and clears them on the next call', () => {
+    const backend = createDomBackend();
+    const { grid, timeline } = mountSurfaces();
+    backend.mount({ grid, timeline });
+
+    const frame = computeFrame({
+      entries: sampleEntries.slice(0, 2),
+      scale,
+      preset,
+      visible: { x: 0, y: 0, width: 0, height: 0 },
+      rowHeight: 32,
+      revision: 0,
+    });
+    backend.sync(frame);
+    const [a, b] = frame.bars;
+    const nodeA = timeline.querySelector<HTMLElement>(`[data-item-id="${a!.id}"]`)!;
+    const nodeB = timeline.querySelector<HTMLElement>(`[data-item-id="${b!.id}"]`)!;
+
+    backend.applyState({ hoveredItemId: a!.id, selectedItemIds: [a!.id, b!.id] });
+    expect(nodeA.dataset['state']).toBe('hovered selected');
+    expect(nodeB.dataset['state']).toBe('selected');
+
+    backend.applyState({ selectedItemIds: [b!.id] });
+    expect(nodeA.dataset['state']).toBe('');
+    expect(nodeB.dataset['state']).toBe('selected');
+
+    backend.destroy();
+    grid.remove();
+    timeline.remove();
+  });
+
+  it('parks the shared handle pair when resizableItemId is undefined and moves them onto the committed bar when it is set (D-S3-8)', () => {
+    const backend = createDomBackend();
+    const { grid, timeline } = mountSurfaces();
+    backend.mount({ grid, timeline });
+
+    const frame = computeFrame({
+      entries: sampleEntries.slice(0, 2),
+      scale,
+      preset,
+      visible: { x: 0, y: 0, width: 0, height: 0 },
+      rowHeight: 32,
+      revision: 0,
+    });
+    backend.sync(frame);
+    const [a] = frame.bars;
+    const start = timeline.querySelector<HTMLElement>('.fg-bar-handle[data-edge="start"]')!;
+    const end = timeline.querySelector<HTMLElement>('.fg-bar-handle[data-edge="end"]')!;
+    expect(start.hidden).toBe(true);
+    expect(end.hidden).toBe(true);
+
+    backend.applyState({ resizableItemId: a!.id });
+    expect(start.hidden).toBe(false);
+    expect(end.hidden).toBe(false);
+    expect(start.style.transform).toBe(`translate(${a!.x}px, ${a!.y}px)`);
+    expect(end.style.transform).toBe(`translate(${a!.x + a!.width}px, ${a!.y}px)`);
+    expect(start.style.height).toBe(`${a!.height}px`);
+
+    backend.applyState({});
+    expect(start.hidden).toBe(true);
+    expect(end.hidden).toBe(true);
+
+    backend.destroy();
+    grid.remove();
+    timeline.remove();
+  });
+
+  it('hitTest reports the edge of a resize handle, resolved against resizableItemId (S3.4, D-S3-4)', () => {
+    const backend = createDomBackend();
+    const { grid, timeline } = mountSurfaces();
+    backend.mount({ grid, timeline });
+
+    const frame = computeFrame({
+      entries: sampleEntries.slice(0, 1),
+      scale,
+      preset,
+      visible: { x: 0, y: 0, width: 0, height: 0 },
+      rowHeight: 32,
+      revision: 0,
+    });
+    backend.sync(frame);
+    backend.applyState({ resizableItemId: frame.bars[0]!.id });
+
+    const end = timeline.querySelector<HTMLElement>('.fg-bar-handle[data-edge="end"]')!;
+    const original = document.elementFromPoint.bind(document);
+    document.elementFromPoint = (x: number, y: number) => (x === 5 && y === 5 ? end : original(x, y));
+
+    expect(backend.hitTest(5, 5)).toEqual({ itemId: frame.bars[0]!.id, edge: 'end' });
+
+    document.elementFromPoint = original;
+    backend.destroy();
+    grid.remove();
+    timeline.remove();
+  });
+
+  it('hitTest never reports an edge for a parked (hidden) handle pair', () => {
+    const backend = createDomBackend();
+    const { grid, timeline } = mountSurfaces();
+    backend.mount({ grid, timeline });
+
+    const frame = computeFrame({
+      entries: sampleEntries.slice(0, 1),
+      scale,
+      preset,
+      visible: { x: 0, y: 0, width: 0, height: 0 },
+      rowHeight: 32,
+      revision: 0,
+    });
+    backend.sync(frame);
+    // resizableItemId never set — handles stay hidden.
+
+    const bar = timeline.querySelector<HTMLElement>('.fg-bar')!;
+    const original = document.elementFromPoint.bind(document);
+    document.elementFromPoint = (x: number, y: number) => (x === 5 && y === 5 ? bar : original(x, y));
+
+    expect(backend.hitTest(5, 5)).toEqual({ itemId: frame.bars[0]!.id });
+
+    document.elementFromPoint = original;
+    backend.destroy();
+    grid.remove();
+    timeline.remove();
+  });
+
+  it("sets data-movable on movableItemId's bar and clears it when the id moves elsewhere (D-S3-6)", () => {
+    const backend = createDomBackend();
+    const { grid, timeline } = mountSurfaces();
+    backend.mount({ grid, timeline });
+
+    const frame = computeFrame({
+      entries: sampleEntries.slice(0, 2),
+      scale,
+      preset,
+      visible: { x: 0, y: 0, width: 0, height: 0 },
+      rowHeight: 32,
+      revision: 0,
+    });
+    backend.sync(frame);
+    const [a, b] = frame.bars;
+    const nodeA = timeline.querySelector<HTMLElement>(`[data-item-id="${a!.id}"]`)!;
+    const nodeB = timeline.querySelector<HTMLElement>(`[data-item-id="${b!.id}"]`)!;
+
+    backend.applyState({ movableItemId: a!.id });
+    expect(nodeA.hasAttribute('data-movable')).toBe(true);
+    expect(nodeB.hasAttribute('data-movable')).toBe(false);
+
+    backend.applyState({ movableItemId: b!.id });
+    expect(nodeA.hasAttribute('data-movable')).toBe(false);
+    expect(nodeB.hasAttribute('data-movable')).toBe(true);
+
+    backend.destroy();
+    grid.remove();
+    timeline.remove();
+  });
 });

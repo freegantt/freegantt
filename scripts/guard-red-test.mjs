@@ -45,6 +45,15 @@ checkRedTestFile(
   'scheduling/ -> render/ boundary violation',
 );
 
+// P3 (plans/s3-direct-manipulation/README.md): interaction/ gained a type-only MODEL edge in S3, but
+// still may not reach time/, layout/ or render/ — the one-arrow widening must not have quietly opened
+// the door to anything else.
+checkRedTestFile(
+  'src/interaction/__boundary_red_test__.ts',
+  "// Deliberate boundary violation — interaction/ may import model/ (P3) but not layout/.\nimport '../layout/index.js';\nexport {};\n",
+  'interaction/ -> layout/ boundary violation (P3 widening stays to one arrow)',
+);
+
 // D-S2-23: each removable leaf has exactly one allowed importer. A second file importing the leaf
 // from outside that allowlist must fail the build, the same way a layer violation does.
 checkRedTestFile(

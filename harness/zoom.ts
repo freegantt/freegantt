@@ -4,6 +4,7 @@
 // directly (no wheel/gesture controller exists until S4), and the page now also carries a real
 // toolbar over the plain `zoomIn`/`zoomOut`/`panToToday`/`fit`/`locale`/`todayLine` surface.
 
+import './harness-nav.ts';
 import { Gantt, Dataset } from '../src/api/index.js';
 import { demoEntryInputs } from '../fixtures/demo-dataset.js';
 import { multiYearEntryInputs } from '../fixtures/multi-year-dataset.js';

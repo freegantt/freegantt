@@ -3,6 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <title>FreeGantt harness — S1 timeline & viewport</title>
+    <link rel="stylesheet" href="./harness-nav.css" />
     <style>
       :root {
         --page-bg: #fafaf7;
@@ -35,16 +36,6 @@
         margin: 2rem;
         background: var(--page-bg);
         color: var(--page-ink);
-      }
-      nav.harness-pages {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.5rem 1.25rem;
-        font-size: 0.9rem;
-        margin-bottom: 1rem;
-      }
-      nav.harness-pages a {
-        color: var(--page-muted);
       }
       .theme-toggle {
         display: inline-flex;
@@ -115,22 +106,63 @@
       #toolbar button {
         font: inherit;
       }
+      #controls {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.5rem;
+        margin: 1rem 0;
+      }
+      #controls label {
+        display: flex;
+        align-items: center;
+        gap: 0.35rem;
+        font-size: 0.9rem;
+      }
+      #selection-readout {
+        margin: 0;
+        font-size: 0.85rem;
+        color: var(--page-muted);
+      }
+      #controls button {
+        font: inherit;
+        font-size: 0.9rem;
+      }
+      #controls input {
+        font: inherit;
+      }
     </style>
   </head>
   <body>
     <h1>FreeGantt — S1 timeline &amp; viewport</h1>
-    <nav class="harness-pages">
-      <a href="./docs/">Docs</a>
-      <a href="./scroll-sync.html">Scroll sync</a>
-      <a href="./zoom.html">Timeline &amp; navigation</a>
-      <a href="./large-dataset.html">Large dataset</a>
-      <a href="./data.html">Mutation &amp; live binding</a>
-    </nav>
+    <nav class="harness-site-nav" aria-label="Harness pages"></nav>
     <p>Fixture dataset rendered as positioned bars under a day-tick header. Every slice adds to this page.</p>
     <div class="theme-toggle" role="group" aria-label="Theme">
       <button type="button" data-theme-choice="auto">Auto</button>
       <button type="button" data-theme-choice="light">Light</button>
       <button type="button" data-theme-choice="dark">Dark</button>
+    </div>
+    <div id="controls">
+      <p id="selection-readout">Selection: (none)</p>
+      <label>Name <input id="rename-input" type="text" size="20" /></label>
+      <button id="rename-btn" type="button">Rename</button>
+      <button id="remove-btn" type="button">Remove</button>
+      <button id="undo-btn" type="button">Undo</button>
+      <button id="redo-btn" type="button">Redo</button>
+      <label>
+        Snap
+        <select id="snap-unit">
+          <option value="tick">Auto (preset's tick)</option>
+          <option value="none">Off</option>
+          <option value="hour">Hour</option>
+          <option value="day">Day</option>
+          <option value="week">Week</option>
+        </select>
+      </label>
+      <label>
+        Every
+        <input id="snap-increment" type="number" min="1" step="1" value="1" size="3" />
+      </label>
     </div>
     <div id="toolbar"></div>
     <div id="gantt"></div>

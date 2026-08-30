@@ -13,7 +13,14 @@ const ORIGINAL_START_MS = Date.UTC(2026, 8, 1); // sampleEntryInputs's entry-1 s
 const WEEKS_BACK = 3;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-const desiredStartMs = Date.now() - WEEKS_BACK * 7 * DAY_MS;
+// Floored to today's own UTC midnight, not `Date.now()` directly (which carries the current
+// time-of-day) — every `sampleEntryInputs` instant is already a bare midnight, and shifting by a
+// non-day-aligned amount would carry that same fractional-day offset onto every demo entry, so a
+// day-snapped drag would never land on the visible day gridline (it snaps to whole days from each
+// entry's own start, wherever that already sits).
+const now = new Date();
+const todayStartMs = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+const desiredStartMs = todayStartMs - WEEKS_BACK * 7 * DAY_MS;
 const shiftMs = ORIGINAL_START_MS - desiredStartMs;
 
 function shift(input: NonNullable<EntryInput['start']>): Date {

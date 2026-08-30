@@ -1,7 +1,8 @@
 // e2e fixture for S2.4 (plans/s2-data-core/s2.4-live-binding.md §5): the mutation half of the live
 // binding, exercised the way an app author would — add/rename/move/remove buttons calling
 // `dataset.entries.add/update/remove`, and a changeset log built from each `ChangeSet`, never a
-// re-read (D-S2-17). The lock checkbox is D-S2-25's `beforeChange` veto, made visible: the bar does
+// re-read (D-S2-17). Rename/move/remove target `gantt.selection` (S3.1), not a parallel entry picker.
+// The lock checkbox is D-S2-25's `beforeChange` veto, made visible: the bar does
 // not move and the calling button's own `catch` reads `MutationCancelledError`.
 //
 // S2.5 (plans/s2-data-core/s2.5-undo-redo.md §5) adds the undo/redo buttons, `disabled` bound to
@@ -12,8 +13,9 @@
 // Import replaces the dataset and rebuilds the Gantt, which is the proof that a Gantt survives a
 // rebind (or the finding against destroy() if it does not).
 
+import './harness-nav.ts';
 import { Dataset, Gantt, MS, MutationCancelledError, addMs, now } from '../src/api/index.js';
-import type { ChangeSet, DatasetDocument, DatasetEventMap, Entry } from '../src/api/index.js';
+import type { ChangeSet, DatasetDocument, DatasetEventMap } from '../src/api/index.js';
 import { demoEntryInputs } from '../fixtures/demo-dataset.js';
 import { mountTimelineToolbar } from './timeline-toolbar.js';
 
@@ -23,7 +25,6 @@ let gantt = new Gantt({ container: '#gantt', dataset });
 const toolbar = document.querySelector<HTMLDivElement>('#toolbar')!;
 mountTimelineToolbar({ gantt, container: toolbar });
 
-const select = document.querySelector<HTMLSelectElement>('#entry-select')!;
 const nameInput = document.querySelector<HTMLInputElement>('#rename-input')!;
 const addBtn = document.querySelector<HTMLButtonElement>('#add-entry')!;
 const renameBtn = document.querySelector<HTMLButtonElement>('#rename-btn')!;
@@ -37,12 +38,9 @@ const importBtn = document.querySelector<HTMLButtonElement>('#import-btn')!;
 const documentJson = document.querySelector<HTMLTextAreaElement>('#document-json')!;
 const lockCheckbox = document.querySelector<HTMLInputElement>('#lock-checkbox')!;
 const log = document.querySelector<HTMLDivElement>('#log')!;
+const selectionReadout = document.querySelector<HTMLParagraphElement>('#selection-readout')!;
 
 let nextNewId = 1;
-
-function selectedEntry(): Entry | undefined {
-  return dataset.entries.get(select.value);
-}
 
 /** The store's own current first entry — dynamic, so a remove/reorder keeps "the first entry"
  *  honest rather than pinning an id from before the page's mutations started. */
@@ -50,17 +48,34 @@ function firstEntryId(): string | undefined {
   return dataset.entries.all[0]?.id;
 }
 
-function refreshSelect(): void {
-  const previous = select.value;
-  select.innerHTML = '';
-  for (const entry of dataset.entries.all) {
-    const option = document.createElement('option');
-    option.value = entry.id;
-    option.textContent = `${entry.id} — ${entry.name}`;
-    select.append(option);
+function refreshNameInput(): void {
+  const entries = gantt.selectionEntries;
+  if (entries.length === 0) {
+    nameInput.value = '';
+    return;
   }
-  if (dataset.entries.has(previous)) select.value = previous;
-  nameInput.value = selectedEntry()?.name ?? '';
+  const firstName = entries[0]!.name;
+  nameInput.value = entries.every((entry) => entry.name === firstName) ? firstName : '';
+}
+
+function refreshMutationButtons(): void {
+  const none = gantt.selectionEntries.length === 0;
+  nameInput.disabled = none;
+  renameBtn.disabled = none;
+  moveBackBtn.disabled = none;
+  moveFwdBtn.disabled = none;
+  removeBtn.disabled = none;
+}
+
+function renderSelectionReadout(): void {
+  const ids = gantt.selection;
+  selectionReadout.textContent = ids.length === 0 ? 'Selection: (none)' : `Selection: ${ids.join(', ')}`;
+}
+
+function syncSelectionUi(): void {
+  refreshNameInput();
+  refreshMutationButtons();
+  renderSelectionReadout();
 }
 
 function logLine(text: string): void {
@@ -88,7 +103,7 @@ function refreshHistoryButtons(): void {
 
 function onChange({ changeSet }: DatasetEventMap['change']): void {
   logChangeSet(changeSet);
-  refreshSelect();
+  syncSelectionUi();
   refreshHistoryButtons();
 }
 
@@ -105,12 +120,17 @@ function onBeforeChange({ changeSet }: DatasetEventMap['beforeChange']): void | 
   return false;
 }
 
+function bindGantt(): void {
+  gantt.on('selectionChange', syncSelectionUi);
+}
+
 function bindDataset(): void {
   dataset.on('change', onChange);
   dataset.on('beforeChange', onBeforeChange);
 }
 
 bindDataset();
+bindGantt();
 
 addBtn.addEventListener('click', () => {
   const id = `new-${nextNewId++}`;
@@ -119,20 +139,29 @@ addBtn.addEventListener('click', () => {
 });
 
 renameBtn.addEventListener('click', () => {
-  const entry = selectedEntry();
-  if (!entry) return;
+  const entries = gantt.selectionEntries;
+  if (entries.length === 0) return;
   try {
-    dataset.entries.update(entry.id, { name: nameInput.value });
+    dataset.transaction(() => {
+      for (const entry of entries) dataset.entries.update(entry.id, { name: nameInput.value });
+    });
   } catch (error) {
     if (!(error instanceof MutationCancelledError)) throw error;
   }
 });
 
 function move(deltaMs: number): void {
-  const entry = selectedEntry();
-  if (!entry) return;
+  const entries = gantt.selectionEntries;
+  if (entries.length === 0) return;
   try {
-    dataset.entries.update(entry.id, { start: addMs(entry.start, deltaMs), end: addMs(entry.end, deltaMs) });
+    dataset.transaction(() => {
+      for (const entry of entries) {
+        dataset.entries.update(entry.id, {
+          start: addMs(entry.start, deltaMs),
+          end: addMs(entry.end, deltaMs),
+        });
+      }
+    });
   } catch (error) {
     if (!(error instanceof MutationCancelledError)) throw error;
   }
@@ -142,10 +171,12 @@ moveBackBtn.addEventListener('click', () => move(-MS.DAY));
 moveFwdBtn.addEventListener('click', () => move(MS.DAY));
 
 removeBtn.addEventListener('click', () => {
-  const entry = selectedEntry();
-  if (!entry) return;
+  const entries = gantt.selectionEntries;
+  if (entries.length === 0) return;
   try {
-    dataset.entries.remove(entry.id);
+    dataset.transaction(() => {
+      for (const entry of entries) dataset.entries.remove(entry.id);
+    });
   } catch (error) {
     if (!(error instanceof MutationCancelledError)) throw error;
   }
@@ -178,9 +209,10 @@ importBtn.addEventListener('click', () => {
     gantt.destroy();
     gantt = new Gantt({ container: '#gantt', dataset });
     bindDataset();
+    bindGantt();
     toolbar.innerHTML = '';
     mountTimelineToolbar({ gantt, container: toolbar });
-    refreshSelect();
+    syncSelectionUi();
     refreshHistoryButtons();
     logLine('[load] imported document');
   } catch (error) {
@@ -188,9 +220,5 @@ importBtn.addEventListener('click', () => {
   }
 });
 
-select.addEventListener('change', () => {
-  nameInput.value = selectedEntry()?.name ?? '';
-});
-
-refreshSelect();
 refreshHistoryButtons();
+syncSelectionUi();
