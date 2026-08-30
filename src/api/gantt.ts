@@ -42,6 +42,11 @@ interface GanttOptionsBase {
    *  status/as-of dates, sprint or holiday markers, project start/finish. No id: index-keyed, like
    *  Header bands. The wrapper's own line never gets a caption; give one of these a `label` instead. */
   dateLines?: readonly DateLineInput[];
+  /** Live. How many of the current preset's own ticks `panToToday()` leaves between the pane's left
+   *  edge and where it lands `align: 'start'` (the default) — enough that the today line reads as
+   *  "near the start" without sitting flush on the edge. Default `2`; `0` restores the old flush
+   *  landing. No effect on `align: 'center'`. */
+  todayLineMarginTicks?: number;
   /** The ordered set `zoomIn`/`zoomOut` step through, finest first (S1.12, D-S1.12-5). Live.
    *  Default: the shipped nine-rung set. */
   zoomPresets?: readonly PresetRef[];
@@ -92,6 +97,9 @@ export class Gantt {
       ...(options.locale !== undefined ? { locale: options.locale } : {}),
       ...(options.todayLine !== undefined ? { todayLine: this.#toTodayLine(options.todayLine) } : {}),
       ...(options.dateLines !== undefined ? { dateLines: this.#toDateLines(options.dateLines) } : {}),
+      ...(options.todayLineMarginTicks !== undefined
+        ? { todayLineMarginTicks: options.todayLineMarginTicks }
+        : {}),
     });
     if (options.zoomPresets !== undefined) this.#shell.zoomPresets = options.zoomPresets;
   }
@@ -208,6 +216,15 @@ export class Gantt {
     this.#shell.dateLines = this.#toDateLines(lines);
   }
 
+  get todayLineMarginTicks(): number {
+    return this.#shell.todayLineMarginTicks;
+  }
+
+  /** Live. See `GanttOptions.todayLineMarginTicks`. */
+  set todayLineMarginTicks(ticks: number) {
+    this.#shell.todayLineMarginTicks = ticks;
+  }
+
   /** The ordered set `zoomIn`/`zoomOut` step through, finest first (S1.12, D-S1.12-5). Live. */
   get zoomPresets(): readonly ViewPreset[] {
     return this.#shell.zoomPresets;
@@ -259,9 +276,13 @@ export class Gantt {
     this.#shell.panToInstant(toInstant(this.#dataset.timeZone, date), align);
   }
 
-  /** `panToDate(now(), align)`. `time/` owns the clock read (I10). */
+  /** Pans to `now()` (`time/` owns the clock read, I10), leaving `todayLineMarginTicks`' worth of
+   *  margin to the left at `align: 'start'` (the default) so the today line reads as "near the
+   *  start" rather than sitting flush on the pane's own edge. `align: 'center'` is unaffected:
+   *  already centred, a margin has nothing to add. Off the dataset's own range, `panTo`'s clamp
+   *  (D-S1.5-2) lands at whichever edge is closest instead of throwing. */
   panToToday(align: 'start' | 'center' = 'start'): void {
-    this.#shell.panToInstant(now(), align);
+    this.#shell.panToToday(now(), align);
   }
 
   reveal(entryId: EntryId): void {

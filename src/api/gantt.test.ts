@@ -310,6 +310,86 @@ describe('Gantt.panToDate / panToToday (S1.12, D-S1.12-8)', () => {
     }
   });
 
+  it("[S1.13 follow-up] panToToday('start') lands todayLineMarginTicks left of panToDate(now(), 'start')", () => {
+    FakeResizeObserver.instances = [];
+    vi.stubGlobal('ResizeObserver', FakeResizeObserver);
+    const fakeNow = instant('2026-09-20T12:00:00Z');
+    vi.useFakeTimers();
+    vi.setSystemTime(fakeNow);
+
+    try {
+      const container = document.createElement('div');
+      const scroll = new ScrollModel();
+      const gantt = new Gantt({
+        container,
+        dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }),
+        fit: 'preset',
+        preset: 'day',
+        scroll,
+      });
+      FakeResizeObserver.instances[0]!.fire({ width: 300, height: 100 });
+
+      gantt.panToDate(fakeNow, 'start');
+      const flush = scroll.state.position.x;
+
+      gantt.panToToday('start');
+      const withMargin = scroll.state.position.x;
+
+      // Default margin (2 ticks of the 'day' preset): strictly left of the flush landing.
+      expect(withMargin).toBeLessThan(flush);
+
+      // align 'center' is untouched by the margin (S1.13 follow-up doc: "no effect on 'center'").
+      gantt.panToDate(fakeNow, 'center');
+      const centerFlush = scroll.state.position.x;
+      gantt.panToToday('center');
+      expect(scroll.state.position.x).toBe(centerFlush);
+
+      gantt.destroy();
+    } finally {
+      vi.useRealTimers();
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('todayLineMarginTicks is configurable, live, and constructor-settable', () => {
+    FakeResizeObserver.instances = [];
+    vi.stubGlobal('ResizeObserver', FakeResizeObserver);
+    const fakeNow = instant('2026-09-20T12:00:00Z');
+    vi.useFakeTimers();
+    vi.setSystemTime(fakeNow);
+
+    try {
+      const container = document.createElement('div');
+      const scroll = new ScrollModel();
+      const gantt = new Gantt({
+        container,
+        dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }),
+        fit: 'preset',
+        preset: 'day',
+        scroll,
+        todayLineMarginTicks: 0,
+      });
+      FakeResizeObserver.instances[0]!.fire({ width: 300, height: 100 });
+      expect(gantt.todayLineMarginTicks).toBe(0);
+
+      // 0 ticks of margin: panToToday('start') lands exactly where panToDate('start') does.
+      gantt.panToDate(fakeNow, 'start');
+      const flush = scroll.state.position.x;
+      gantt.panToToday('start');
+      expect(scroll.state.position.x).toBe(flush);
+
+      // Raising it live moves the landing further left of the flush position.
+      gantt.todayLineMarginTicks = 5;
+      gantt.panToToday('start');
+      expect(scroll.state.position.x).toBeLessThan(flush);
+
+      gantt.destroy();
+    } finally {
+      vi.useRealTimers();
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('a date outside the dataset range still pans — clamped to the scroll bound, not thrown', () => {
     FakeResizeObserver.instances = [];
     vi.stubGlobal('ResizeObserver', FakeResizeObserver);

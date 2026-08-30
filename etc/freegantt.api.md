@@ -326,6 +326,9 @@ export class Gantt {
     get todayLine(): boolean | InstantInput;
     set todayLine(on: boolean | InstantInput);
     // (undocumented)
+    get todayLineMarginTicks(): number;
+    set todayLineMarginTicks(ticks: number);
+    // (undocumented)
     zoomBy(factor: number, anchorX?: number): void;
     zoomIn(anchorX?: number): void;
     zoomOut(anchorX?: number): void;
