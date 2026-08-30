@@ -62,17 +62,113 @@ test('a preset switch redraws header bands with no bar remount (U1, I8)', async 
     node.dataset['e2eMarker'] = 'still-here';
   }, itemId);
 
-  await expect(page.locator('.fg-band')).toHaveCount(1);
+  // Scoped to the header (S1.12, D-S1.12-9): the grid pane's spacer now mirrors one empty
+  // `.fg-band` per header band too, so an unscoped `.fg-band` count would double-count.
+  await expect(page.locator('.fg-header .fg-band')).toHaveCount(1);
 
   await page.evaluate(() => {
     window.__gantt.preset = 'weekAndMonth';
   });
 
-  await expect(page.locator('.fg-band')).toHaveCount(2);
+  await expect(page.locator('.fg-header .fg-band')).toHaveCount(2);
 
   const marker = await page.evaluate((id) => {
     const node = document.querySelector<HTMLElement>(`.fg-bar[data-item-id="${id}"]`);
     return node?.dataset['e2eMarker'];
   }, itemId);
   expect(marker).toBe('still-here');
+});
+
+test('[S1-A6] a multi-year fixture at the day preset scrolls at the density floor instead of compressing', async ({
+  page,
+}) => {
+  await page.goto('/zoom.html');
+  await expect(page.locator('.fg-bar').first()).toBeVisible();
+
+  await page.getByLabel('multi-year').check();
+  await expect(page.locator('.fg-bar').first()).toBeVisible();
+
+  await page.evaluate(() => {
+    window.__gantt.fit = 'pane';
+    window.__gantt.preset = 'day';
+  });
+
+  const pane = page.locator('.fg-timeline-pane');
+  await expect
+    .poll(async () => {
+      const { scrollWidth, clientWidth } = await pane.evaluate((el) => ({
+        scrollWidth: el.scrollWidth,
+        clientWidth: el.clientWidth,
+      }));
+      return scrollWidth > clientWidth;
+    })
+    .toBe(true);
+});
+
+test('[S1-A8] a three-band preset renders three full-height bands aligned with the grid spacer', async ({
+  page,
+}) => {
+  await page.goto('/zoom.html');
+  await expect(page.locator('.fg-bar').first()).toBeVisible();
+
+  await page.evaluate(() => {
+    window.__gantt.preset = 'dayWeekMonth';
+  });
+
+  const headerBands = page.locator('.fg-header .fg-band');
+  await expect(headerBands).toHaveCount(3);
+  const spacerBands = page.locator('.fg-grid-spacer .fg-band');
+  await expect(spacerBands).toHaveCount(3);
+
+  const headerBox = await page.locator('.fg-header').boundingBox();
+  const spacerBox = await page.locator('.fg-grid-spacer').boundingBox();
+  if (!headerBox || !spacerBox) throw new Error('missing bounding box');
+  // Sub-pixel layout: one CSS pixel of disagreement is the D-S1.8-12 residue, not a height bug.
+  expect(Math.abs(headerBox.height - spacerBox.height)).toBeLessThan(1);
+
+  const bandBox = await headerBands.first().boundingBox();
+  if (!bandBox) throw new Error('missing band box');
+  expect(bandBox.height).toBeGreaterThan(10);
+});
+
+test('[S1-A9] the header stays pinned to the top of the timeline pane while rows scroll under it', async ({
+  page,
+}) => {
+  await page.goto('/large-dataset.html');
+  await expect(page.locator('[data-testid="fg-row"]').first()).toBeVisible();
+
+  const header = page.locator('.fg-header');
+  const pane = page.locator('.fg-timeline-pane');
+  const yBefore = (await header.boundingBox())?.y;
+  if (yBefore === undefined) throw new Error('missing header box');
+
+  await pane.evaluate((el) => {
+    el.scrollTop = 400;
+    el.dispatchEvent(new Event('scroll'));
+  });
+
+  await expect.poll(async () => (await header.boundingBox())?.y).toBeCloseTo(yBefore, 0);
+});
+
+test('[S1-A10] Today pans so the today line sits in the pane', async ({ page }) => {
+  await page.goto('/zoom.html');
+  await expect(page.locator('.fg-bar').first()).toBeVisible();
+
+  await page.evaluate(() => {
+    window.__gantt.panToDate('2099-01-01', 'start');
+  });
+
+  await page.getByRole('button', { name: 'Today' }).click();
+
+  const line = page.locator('.fg-today-line');
+  await expect(line).toBeVisible();
+  const pane = page.locator('.fg-timeline-pane');
+  await expect
+    .poll(async () => {
+      const paneBox = await pane.boundingBox();
+      const lineBox = await line.boundingBox();
+      if (!paneBox || !lineBox) return false;
+      return lineBox.x >= paneBox.x - 1 && lineBox.x <= paneBox.x + paneBox.width + 1;
+    })
+    .toBe(true);
 });

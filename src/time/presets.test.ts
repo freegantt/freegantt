@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { presets, resolvePreset } from './presets.js';
 import type { ShippedPresetId } from './presets.js';
-import { UnknownPresetError } from '../model/index.js';
+import { InvalidPresetError, UnknownPresetError } from '../model/index.js';
 import type { ViewPreset } from './scale.js';
 
 describe('resolvePreset', () => {
@@ -26,9 +26,48 @@ describe('resolvePreset', () => {
       tickUnit: 'hour',
       tickIncrement: 6,
       headers: [{ unit: 'hour', increment: 6, format: () => 'x' }],
-      tickWidthPx: 40,
+      preferredTickWidthPx: 40,
     };
     expect(resolvePreset(custom)).toBe(custom);
+  });
+
+  it('throws InvalidPresetError with code "invalid-preset" when a custom preset\'s minTickWidthPx exceeds its preferredTickWidthPx', () => {
+    const tooNarrow: ViewPreset = {
+      id: 'custom-too-narrow',
+      tickUnit: 'hour',
+      tickIncrement: 6,
+      headers: [{ unit: 'hour', increment: 6, format: () => 'x' }],
+      preferredTickWidthPx: 24,
+      minTickWidthPx: 32,
+    };
+    expect(() => resolvePreset(tooNarrow)).toThrow(InvalidPresetError);
+    try {
+      resolvePreset(tooNarrow);
+    } catch (error) {
+      expect((error as InvalidPresetError).code).toBe('invalid-preset');
+    }
+  });
+
+  it('allows a custom preset whose minTickWidthPx equals its preferredTickWidthPx', () => {
+    const exact: ViewPreset = {
+      id: 'custom-exact',
+      tickUnit: 'hour',
+      tickIncrement: 6,
+      headers: [{ unit: 'hour', increment: 6, format: () => 'x' }],
+      preferredTickWidthPx: 32,
+      minTickWidthPx: 32,
+    };
+    expect(resolvePreset(exact)).toBe(exact);
+  });
+});
+
+describe('validatePresetTickWidths (via freezePreset)', () => {
+  it('every shipped preset has minTickWidthPx <= preferredTickWidthPx', () => {
+    for (const preset of Object.values(presets)) {
+      if (preset.minTickWidthPx !== undefined) {
+        expect(preset.minTickWidthPx).toBeLessThanOrEqual(preset.preferredTickWidthPx);
+      }
+    }
   });
 });
 

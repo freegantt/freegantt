@@ -1,10 +1,17 @@
 import { Gantt, Dataset } from '../src/api/index.js';
 import type { Theme } from '../src/api/index.js';
-import { sampleEntryInputs } from '../fixtures/sample-dataset.js';
+import { demoEntryInputs } from '../fixtures/demo-dataset.js';
+import { mountTimelineToolbar } from './timeline-toolbar.js';
 
-const dataset = new Dataset({ entries: sampleEntryInputs, timeZone: 'UTC' });
+const dataset = new Dataset({ entries: demoEntryInputs, timeZone: 'UTC' });
 
 const gantt = new Gantt({ container: '#gantt', dataset });
+// Zero-interaction visibility for the today line (S1.12, D-S1.12-14) — header readability
+// follow-up pass 4. Needs no ResizeObserver measurement first: panToToday reads the already-
+// resolved TimeScale, and the pane re-measures/re-renders on its own right after mount.
+gantt.panToToday('center');
+
+mountTimelineToolbar({ gantt, container: document.querySelector<HTMLDivElement>('#toolbar')! });
 
 const THEME_STORAGE_KEY = 'freegantt-harness-theme';
 

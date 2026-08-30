@@ -17,6 +17,8 @@
 // container, not on `:root`. A `:root:not([data-fg-theme])` media query never sees the pin, so Light
 // would leave the Gantt on the system dark tokens. `.fg-container[data-fg-theme='light']` always wins.
 
+import { DEFAULT_TICK_BOX_FLOOR_PX } from '../layout/index.js';
+
 const MARKER_ATTR = 'data-freegantt-styles';
 
 const LIGHT_COLOR_TOKENS = `
@@ -33,6 +35,7 @@ const LIGHT_COLOR_TOKENS = `
   --fg-bar-fill: oklch(0.55 0.13 245);
   --fg-bar-label-color: #FFFFFF;
   --fg-warn: #D97706;
+  --fg-today-line-color: #DC2626;
 `.trimEnd();
 
 const DARK_COLOR_TOKENS = `
@@ -49,6 +52,7 @@ const DARK_COLOR_TOKENS = `
   --fg-bar-fill: oklch(0.72 0.13 245);
   --fg-bar-label-color: #1A1815;
   --fg-warn: #FBBF24;
+  --fg-today-line-color: #F87171;
 `.trimEnd();
 
 const BASE_STYLESHEET = `
@@ -72,14 +76,26 @@ ${DARK_COLOR_TOKENS}
 
 .fg-container { display: flex; overflow: hidden; }
 .fg-grid-pane { display: flex; flex-direction: column; flex-shrink: 0; overflow: hidden; background: var(--fg-pane-bg); }
-.fg-grid-spacer { flex-shrink: 0; }
+/* S1.12, D-S1.12-9: mirrors .fg-header's own band stack — one .fg-band per header band
+   (setHeaderBandCount), sized from the same --fg-band-height expression. */
+.fg-grid-spacer { flex-shrink: 0; display: flex; flex-direction: column; }
 .fg-rows-clip { position: relative; flex: 1 1 auto; overflow: hidden; }
 .fg-rows { position: relative; height: 100%; }
 .fg-splitter { flex-shrink: 0; cursor: col-resize; background: var(--fg-splitter-color); }
 .fg-timeline-pane { position: relative; flex: 1 1 auto; min-width: 0; overflow: auto; background: var(--fg-pane-bg); }
-.fg-header { background: var(--fg-header-bg); position: relative; display: flex; flex-direction: column; height: var(--fg-header-height, 20px); }
-.fg-band { background: var(--fg-header-band-bg); color: var(--fg-header-text); border-bottom: 1px solid var(--fg-header-divider-color); position: relative; flex: 1 1 0; min-height: 0; }
-.fg-tick { color: var(--fg-header-subtext); position: absolute; top: 0; left: 0; }
+/* S1.12, D-S1.12-9/D-S1.12-15: height comes from band count × one band height, not a fixed total
+   split N ways — and it stays pinned to the top of the timeline pane while rows scroll under it
+   (closes the S1.8 debt, D-S1.12-15). */
+.fg-header { background: var(--fg-header-bg); position: sticky; top: 0; z-index: 1; display: flex; flex-direction: column; height: auto; overflow: hidden; }
+.fg-band { background: var(--fg-header-band-bg); color: var(--fg-header-text); border-bottom: 1px solid var(--fg-header-divider-color); position: relative; flex: 0 0 var(--fg-band-height, 20px); min-height: 0; }
+/* padding/overflow are structural, not typography (D-S1.10-6/D-S1.11-8 leave font-size/family to the
+   consumer): a tick's box is exactly its own width, so a label that would collide with its neighbour
+   clips with an ellipsis instead of overflowing and garbling both (S1.12 header readability follow-up).
+   border-left marks each tick's own cell boundary so adjacent ticks in the same band read as
+   separate columns, matching .fg-band's existing border-bottom between bands.
+   --fg-tick-box-floor is the Tick box floor (CONTEXT.md): padding-inline derives from it so the
+   CSS box and layout's clamp input stay one Token. The 1px in the calc is this rule's border-left. */
+.fg-tick { color: var(--fg-header-subtext); position: absolute; top: 0; left: 0; height: var(--fg-band-height, 20px); line-height: var(--fg-band-height, 20px); box-sizing: border-box; padding: 0 calc((var(--fg-tick-box-floor, ${DEFAULT_TICK_BOX_FLOOR_PX}px) - 1px) / 2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-left: 1px solid var(--fg-header-divider-color); }
 .fg-row { background: var(--fg-row-even-bg); position: absolute; top: 0; left: 0; width: 100%; }
 .fg-row:nth-child(odd) { background: var(--fg-row-odd-bg); }
 .fg-row-label { color: var(--fg-row-label-color); }
@@ -87,6 +103,11 @@ ${DARK_COLOR_TOKENS}
 .fg-bar { background: var(--fg-bar-fill); color: var(--fg-bar-label-color); border-radius: var(--fg-bar-radius, 3px); position: absolute; top: 0; left: 0; }
 .fg-bar[data-flag~="conflict"] { outline: 2px solid var(--fg-warn); }
 .fg-content-sizer { position: absolute; top: 0; left: 0; width: 1px; height: 1px; visibility: hidden; }
+/* height is set inline per frame (render/dom/date-line.ts), not bottom: 0: .fg-timeline-pane is both
+   this element's positioned ancestor and its own overflow: auto scroll container, so bottom: 0
+   would resolve against the pane's visible clientHeight and cut the line off at the first
+   screenful instead of running the full scrollable row content. */
+.fg-today-line { position: absolute; top: 0; width: 1px; background: var(--fg-today-line-color); pointer-events: none; }
 `.trim();
 
 /** Injects the library's base stylesheet into `doc` exactly once. Safe to call from every Gantt

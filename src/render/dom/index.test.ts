@@ -19,7 +19,7 @@ const preset: ViewPreset = {
   tickUnit: 'day',
   tickIncrement: 1,
   headers: [{ unit: 'day', increment: 1, format: () => 'tick' }],
-  tickWidthPx: 24,
+  preferredTickWidthPx: 24,
 };
 
 function mountSurfaces(): { grid: HTMLElement; timeline: HTMLElement } {
@@ -308,5 +308,76 @@ describe('render/dom backend', () => {
     expect(bar.dataset['testid']).toBe('fg-bar');
     expect(bar.dataset['itemId']).toBe(frame.bars[0]!.id);
     backend.destroy();
+  });
+
+  it('spans the today line the full row content height, not just the visible pane (header readability follow-up)', () => {
+    const backend = createDomBackend();
+    const { grid, timeline } = mountSurfaces();
+    backend.mount({ grid, timeline });
+
+    const base = computeFrame({
+      entries: sampleEntries.slice(0, 1),
+      scale,
+      preset,
+      visible: { x: 0, y: 0, width: 0, height: 200 },
+      rowHeight: 32,
+      revision: 0,
+    });
+
+    // A dataset far taller than the pane's own visible window: `.fg-timeline-pane` is both the
+    // today line's positioned ancestor and its own `overflow: auto` scroll container, so a naive
+    // `bottom: 0` would size the line to the pane's clientHeight (200) and cut it off long before
+    // `contentHeight` (5000) — the regression this guards.
+    backend.sync({ ...base, contentHeight: 5000, decorations: [{ kind: 'dateLine', id: 'today', x: 10 }] });
+
+    const line = timeline.querySelector<HTMLElement>('.fg-today-line')!;
+    expect(line.hidden).toBe(false);
+    expect(line.style.height).toBe('5000px');
+
+    // A dataset shorter than the pane must still fill the visible pane down to its own bottom,
+    // not just its own (shorter) content height.
+    backend.sync({ ...base, contentHeight: 50, decorations: [{ kind: 'dateLine', id: 'today', x: 10 }] });
+    expect(line.style.height).toBe('200px');
+
+    backend.sync({ ...base, decorations: [] });
+    expect(timeline.querySelector('.fg-today-line')).toBeNull();
+
+    backend.destroy();
+  });
+
+  it('paints each Date line as a keyed node and drops nodes that leave the frame', () => {
+    const backend = createDomBackend();
+    const { grid, timeline } = mountSurfaces();
+    backend.mount({ grid, timeline });
+
+    const base = computeFrame({
+      entries: sampleEntries.slice(0, 1),
+      scale,
+      preset,
+      visible: { x: 0, y: 0, width: 0, height: 200 },
+      rowHeight: 32,
+      revision: 0,
+    });
+
+    backend.sync({
+      ...base,
+      decorations: [
+        { kind: 'dateLine', id: 'today', x: 10 },
+        { kind: 'dateLine', id: 'deadline', x: 40, label: 'Ship' },
+      ],
+    });
+    const nodes = timeline.querySelectorAll<HTMLElement>('.fg-today-line');
+    expect(nodes).toHaveLength(2);
+    expect(nodes[0]!.style.transform).toBe('translateX(10px)');
+    expect(nodes[1]!.style.transform).toBe('translateX(40px)');
+    expect(nodes[1]!.textContent).toBe('Ship');
+
+    backend.sync({ ...base, decorations: [{ kind: 'dateLine', id: 'deadline', x: 40, label: 'Ship' }] });
+    expect(timeline.querySelectorAll('.fg-today-line')).toHaveLength(1);
+    expect(timeline.querySelector('.fg-today-line')?.textContent).toBe('Ship');
+
+    backend.destroy();
+    grid.remove();
+    timeline.remove();
   });
 });

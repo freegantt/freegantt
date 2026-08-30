@@ -85,10 +85,6 @@
          — this harness keeps only the typography that stays legitimately harness-owned (D-S1.11-8). */
       .fg-tick {
         font-size: 10px;
-        padding-left: 2px;
-        white-space: nowrap;
-        height: 20px;
-        line-height: 20px;
       }
       .fg-row {
         font-size: 11px;
@@ -107,15 +103,26 @@
         white-space: nowrap;
         overflow: hidden;
       }
+      #toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.5rem 1rem;
+        margin: 1rem 0;
+        font-size: 0.9rem;
+      }
+      #toolbar select,
+      #toolbar button {
+        font: inherit;
+      }
     </style>
   </head>
   <body>
     <h1>FreeGantt — S1 timeline &amp; viewport</h1>
     <nav class="harness-pages">
-      <a href="./diagram.html">Module map</a>
-      <a href="./doc.html">Module &amp; class map (doc)</a>
+      <a href="./docs/">Docs</a>
       <a href="./scroll-sync.html">Scroll sync</a>
-      <a href="./zoom.html">Zoom &amp; presets</a>
+      <a href="./zoom.html">Timeline &amp; navigation</a>
       <a href="./large-dataset.html">Large dataset</a>
       <a href="./data.html">Mutation &amp; live binding</a>
     </nav>
@@ -125,6 +132,7 @@
       <button type="button" data-theme-choice="light">Light</button>
       <button type="button" data-theme-choice="dark">Dark</button>
     </div>
+    <div id="toolbar"></div>
     <div id="gantt"></div>
     <script type="module" src="./main.ts"></script>
   </body>

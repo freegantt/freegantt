@@ -31,6 +31,7 @@ export type {
   ScrollState,
   GanttEventMap,
   GridWidthChange,
+  NavigationChange,
 } from '../view/index.js';
 // Catchable errors (plans/02 §7): FreeGanttError is the base; a consumer can catch broadly or on `.code`.
 export {
@@ -39,6 +40,7 @@ export {
   ContainerNotFoundError,
   InvalidInstantError,
   UnknownPresetError,
+  InvalidPresetError,
   EntryNotFoundError,
   DuplicateEntryIdError,
   ParentCycleError,
@@ -76,5 +78,15 @@ export type { Point, Size } from '../model/index.js';
 // buttons had no public way to do this and were hand-rolling `entry.start + 86400000`; the Add-entry
 // button then used `instant(Date.now())` the same way). Named preset constants and `resolvePreset`
 // stay internal — resolving a `PresetRef` is core's job.
-export { presets, instant, now, addMs, MS, formatDate, formatEndInclusive } from '../time/index.js';
-export type { ViewPreset } from '../time/index.js';
+export {
+  presets,
+  instant,
+  now,
+  addMs,
+  MS,
+  formatDate,
+  formatEndInclusive,
+  formatWeekNumber,
+  formatHour,
+} from '../time/index.js';
+export type { ViewPreset, ViewPresetHeader, TickStep, DateFormat, HeaderFormat } from '../time/index.js';

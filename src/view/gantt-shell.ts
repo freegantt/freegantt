@@ -1,7 +1,14 @@
 // view/ — Gantt shell, the composition root that wires the grid pane, splitter, timeline pane and
 // viewport binding together (plans/01 §8.2-8.3, S1.8).
 
-import { barSpan, FrameLayout, ScrollModel, TimeScaleModel, Viewport } from '../layout/index.js';
+import {
+  barSpan,
+  FrameLayout,
+  ScrollModel,
+  TimeScaleModel,
+  Viewport,
+  DEFAULT_TICK_BOX_FLOOR_PX,
+} from '../layout/index.js';
 import type { Overscan, PresetRef, TimeScaleFit, ViewportHandle, ViewPreset } from '../layout/index.js';
 
 import { createDomBackend } from '../render/dom/index.js';
@@ -19,7 +26,7 @@ import type { PaneSizeAttachment } from './pane-size-attachment.js';
 import { ensureBaseStyles } from './styles.js';
 import type { RenderBackend } from '../render/backend.js';
 import { EntryNotFoundError, ContainerNotFoundError } from '../model/index.js';
-import type { Dataset, EntryId, Size, TimeSpan } from '../model/index.js';
+import type { Dataset, EntryId, Instant, Size, TimeSpan } from '../model/index.js';
 import { subscribeToDatasetChanges } from './dataset-change-subscription.js';
 import type { DatasetChangeSubscription } from './dataset-change-subscription.js';
 import { FrameScheduler } from './frame-scheduler.js';
@@ -40,6 +47,10 @@ const ROW_HEIGHT_PROPERTY = '--fg-row-height';
 const DEFAULT_ROW_HEIGHT = 32;
 /** A zero-height row is not a row: only a positive value is an authored row height. */
 const ROW_HEIGHT_POLICY = { fallback: DEFAULT_ROW_HEIGHT, accepts: 'positive' } as const;
+
+const TICK_BOX_FLOOR_PROPERTY = '--fg-tick-box-floor';
+/** A zero floor would re-open thin straddles painting at the CSS box minimum. */
+const TICK_BOX_FLOOR_POLICY = { fallback: DEFAULT_TICK_BOX_FLOOR_PX, accepts: 'positive' } as const;
 
 export interface GanttShellOptions {
   /** Element or CSS selector (plans/02 §2); a selector that matches nothing throws (#38). */
@@ -67,6 +78,11 @@ export interface GanttShellOptions {
   theme?: Theme;
   /** Live (S1.10, D-S1.10-4). Default `'Gantt'`; sets `aria-label` on the container. */
   a11yLabel?: string;
+  /** Live (S1.12, D-S1.12-12). `undefined` = the runtime default. Feeds header labels and
+   *  `a11yLabel` alike. */
+  locale?: Intl.LocalesArgument;
+  /** Live (S1.12, D-S1.12-14). Default `true`. */
+  todayLine?: boolean;
 }
 
 function resolveContainer(container: HTMLElement | string): HTMLElement {
@@ -99,6 +115,7 @@ export class GanttShell {
    * states what to draw and holds no layout bookkeeping of its own. */
   #layout = new FrameLayout();
   #rowHeight: number = DEFAULT_ROW_HEIGHT;
+  #tickBoxFloorPx: number = DEFAULT_TICK_BOX_FLOOR_PX;
   #options: GanttShellOptions;
   /** True until pane-size wiring completes. `Viewport.bind()` notifies the newcomer synchronously
    * per D-S1.5-4 (once for scale, once for scroll) — those calls land before pane size is wired, so
@@ -110,6 +127,8 @@ export class GanttShell {
   #contentSize = { width: 0, height: 0 };
   #theme: Theme = DEFAULT_THEME;
   #a11yLabel: string = DEFAULT_A11Y_LABEL;
+  #locale: Intl.LocalesArgument | undefined;
+  #todayLine = true;
 
   constructor(options: GanttShellOptions) {
     this.#options = options;
@@ -162,7 +181,9 @@ export class GanttShell {
     this.#viewportHandle = this.#viewport.bind(
       { entries: options.dataset.entries.all, timeZone: options.dataset.timeZone },
       () => {
-        if (!this.#wiring) this.#frames.request();
+        if (this.#wiring) return;
+        this.#frames.request();
+        this.#emitNavigationChange();
       },
     );
     // The whole of this shell's dependency on data change (D-S2-20): push the fresh snapshot into
@@ -193,6 +214,29 @@ export class GanttShell {
     if (options.theme !== undefined) this.theme = options.theme;
     else this.#applyTheme();
     this.a11yLabel = options.a11yLabel ?? DEFAULT_A11Y_LABEL;
+    this.#locale = options.locale;
+    this.#todayLine = options.todayLine ?? true;
+  }
+
+  get locale(): Intl.LocalesArgument | undefined {
+    return this.#locale;
+  }
+
+  /** Live (S1.12, D-S1.12-12): re-labels every header band and every screen-reader date with no bar
+   *  remount — it flows straight through `LayoutInput.locale` on the next render. */
+  set locale(l: Intl.LocalesArgument | undefined) {
+    this.#locale = l;
+    this.#frames.request();
+  }
+
+  get todayLine(): boolean {
+    return this.#todayLine;
+  }
+
+  set todayLine(on: boolean) {
+    if (this.#todayLine === on) return;
+    this.#todayLine = on;
+    this.#frames.request();
   }
 
   get theme(): Theme {
@@ -273,6 +317,39 @@ export class GanttShell {
     this.#viewport.zoomBy(factor, anchorX);
   }
 
+  get zoomPresets(): readonly ViewPreset[] {
+    return this.#viewport.zoomPresets;
+  }
+
+  set zoomPresets(refs: readonly PresetRef[]) {
+    this.#viewport.zoomPresets = refs;
+    if (!this.#wiring) this.#emitNavigationChange();
+  }
+
+  get canZoomIn(): boolean {
+    return this.#viewport.canZoomIn;
+  }
+
+  get canZoomOut(): boolean {
+    return this.#viewport.canZoomOut;
+  }
+
+  zoomIn(anchorX?: number): void {
+    this.#viewport.zoomIn(anchorX);
+  }
+
+  zoomOut(anchorX?: number): void {
+    this.#viewport.zoomOut(anchorX);
+  }
+
+  zoomToSpan(span: TimeSpan): void {
+    this.#viewport.zoomToSpan(span);
+  }
+
+  panToInstant(i: Instant, align: 'start' | 'center'): void {
+    this.#viewport.panToInstant(i, align);
+  }
+
   /** Finds the entry's row via the bound dataset, asks `FrameLayout` for its top and `barSpan` for
    * its x/width off the bound `TimeScale` — the same formula `computeFrame` builds bars from, so the
    * two can never drift apart — and hands the resulting `Rect` to `Viewport.reveal` (S1.9, D-S1.9-6).
@@ -294,6 +371,15 @@ export class GanttShell {
     this.#events.off(name, handler);
   }
 
+  #emitNavigationChange(): void {
+    this.#events.emit('navigationChange', {
+      presetId: this.#viewport.preset.id,
+      fit: this.#viewport.fit,
+      canZoomIn: this.#viewport.canZoomIn,
+      canZoomOut: this.#viewport.canZoomOut,
+    });
+  }
+
   #commitGridWidth(px: number): void {
     const from = this.#paneLayout.gridWidth;
     const to = px;
@@ -305,13 +391,14 @@ export class GanttShell {
     this.#events.emit('gridWidthChange', { from, to });
   }
 
-  /** One measurement, pushed to everything it feeds (#8, #49): `--fg-row-height` and the pane size
-   *  both change for the same reason — the timeline pane was just resized — so both are re-read on
-   *  the same signal instead of `--fg-row-height` being read once and going stale. `size` is the
-   *  timeline pane's own client box; no gutter to subtract (S1.8, D-S1.8-2) — the grid pane's width
-   *  never overlapped it in the first place. */
+  /** One measurement, pushed to everything it feeds (#8, #49): `--fg-row-height`, `--fg-tick-box-floor`,
+   *  and the pane size all change for the same reason — the timeline pane was just resized — so they
+   *  are re-read on the same signal instead of going stale. `size` is the timeline pane's own client
+   *  box; no gutter to subtract (S1.8, D-S1.8-2) — the grid pane's width never overlapped it in the
+   *  first place. */
   #applyPaneMeasurement(size: Size): void {
     this.#rowHeight = readPixelProperty(this.#container, ROW_HEIGHT_PROPERTY, ROW_HEIGHT_POLICY);
+    this.#tickBoxFloorPx = readPixelProperty(this.#container, TICK_BOX_FLOOR_PROPERTY, TICK_BOX_FLOOR_POLICY);
     this.#viewportHandle.setPaneSize(size);
   }
 
@@ -323,9 +410,15 @@ export class GanttShell {
       visible: this.#viewport.visible,
       overscan: this.#viewport.overscan,
       rowHeight: this.#rowHeight,
+      tickBoxFloorPx: this.#tickBoxFloorPx,
       revision: this.#revision++,
+      locale: this.#locale,
+      todayLine: this.#todayLine,
     });
     this.#backend.sync(frame);
+    // D-S1.12-9: the grid pane's spacer mirrors the header's own band count, so both panes resolve
+    // their header height from the same `--fg-band-height` expression and cannot drift.
+    this.#paneLayout.setHeaderBandCount(frame.header.bands.length);
     this.#contentSize = { width: frame.contentWidth, height: frame.contentHeight };
     this.#viewportHandle.setContentSize(this.#contentSize);
     this.#scrollAttachment.writePosition();

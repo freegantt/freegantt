@@ -396,7 +396,7 @@ interface GeometryFrame {
    *  above — exact registration contract (a `registerLinkEmitter`-shaped seam) and `id`'s brand type are
    *  tracked in #16, not yet settled here. Shape lands in S1 (#30), contents in S7. */
   links: readonly Array<{ id: string; path: PathCommand[]; flags: LinkFlags }>;
-  decorations: readonly Array<TodayLine | RangeBand | RowStripe>;
+  decorations: readonly Array<DateLine | RangeBand | RowStripe>;
 }
 
 interface LayoutInput {
@@ -406,6 +406,7 @@ interface LayoutInput {
   visible: Rect;                  // the culling window, in timeline-content coordinates — was `viewport`
   overscan?: Overscan;            // live; default { verticalRows: 2, horizontalPx: 128 } (S1.7 §3.4)
   rowHeight: number;
+  tickBoxFloorPx?: number;        // Tick box floor; default DEFAULT_TICK_BOX_FLOOR_PX (S1.12)
   revision: number;
 }
 
@@ -459,13 +460,14 @@ interface TimeScale {
 interface ViewPreset {                       // data, not a switch statement
   id: string;
   tickUnit: TimeUnit; tickIncrement: number;
-  headers: Array<{ unit: TimeUnit; increment: number; format: HeaderFormat }>;
-  tickWidthPx: number;
+  headers: Array<{ unit: TimeUnit; increment: number; format: DateFormat }>;
+  preferredTickWidthPx: number;
+  minTickWidthPx?: number;
   snap?: { unit: TimeUnit; increment: number } | 'tick' | 'none';
 }
 ```
 
-Shipped presets cover hour→year zoom levels; custom presets are config objects, never a library edit. A non-linear scale (e.g., collapsing non-working time) is a future *implementation* of `TimeScale` — the interface is the seam; nothing else may assume linearity except through it.
+Shipped presets cover hour→year zoom levels; custom presets are config objects, never a library edit. `preferredTickWidthPx` is the density the preset intends; `minTickWidthPx` floors every Fit mode so labels stay legible and the timeline scrolls rather than squishes (S1.12). A content-width ceiling (`MAX_CONTENT_PX` in `layout/`) caps `pxPerMs` so `zoomIn` cannot exceed browser scroll geometry. A non-linear scale (e.g., collapsing non-working time) is a future *implementation* of `TimeScale` — the interface is the seam; nothing else may assume linearity except through it.
 
 ---
 
