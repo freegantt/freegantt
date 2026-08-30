@@ -3,7 +3,8 @@
 // the same pointer stream, so a pointerdown that becomes a drag never also changes the selection —
 // today there is no drag yet, so every pointerup is read as a click.
 //
-// Never writes on pointerdown (plans/01 §9) — S3.1 does not listen for it at all.
+// Never writes on pointerdown (plans/01 §9) — S3.1 does not listen for it at all. `mousedown` is
+// only there so a double-click cannot start a native text range; it writes no Gantt state.
 
 import type { EntryId, ItemId } from '../model/index.js';
 
@@ -22,6 +23,10 @@ export interface EntrySelectionContext {
    *  `dataset.entries.all`'s own order, the only order there is. Shift-click ranges over it. */
   rowOrder(): readonly EntryId[];
   selection: { get(): readonly EntryId[]; propose(next: readonly EntryId[]): void };
+  /** S3.2 (D-S3-6): the item id under the pointer, or undefined on pointerleave. The shell resolves
+   *  `movableItemId`/`resizableItemId` off this and `InteractionState.hoveredItemId` itself —
+   *  `interaction/` reports the raw hit, never the capability answer (I14 stays one resolution). */
+  setHovered(itemId: ItemId | undefined): void;
 }
 
 export interface EntryGesturesAttachment {
@@ -87,13 +92,43 @@ export function attachEntryGestures(
     if (ctx.selection.get().length > 0) ctx.selection.propose([]);
   }
 
+  /** `user-select: none` stops highlight *inside* the Gantt. A double-click still starts a native
+   *  word range on nearby page text (the harness chrome). `detail > 1` is the second click of that
+   *  sequence; the first click still focuses the container (preventDefault on mousedown would not). */
+  function onMouseDown(e: MouseEvent): void {
+    if (e.detail > 1) e.preventDefault();
+  }
+
+  function onSelectStart(e: Event): void {
+    e.preventDefault();
+  }
+
+  /** S3.2: reports the raw hit under the pointer on every move — one write, D-S3-5's `pointerAt`
+   *  precedent a step early. No arithmetic, no capability check: `ctx.setHovered` is the shell's own
+   *  seam and the shell decides what a hover means. */
+  function onPointerMove(e: PointerEvent): void {
+    ctx.setHovered(ctx.hitTest(e.clientX, e.clientY));
+  }
+
+  function onPointerLeave(): void {
+    ctx.setHovered(undefined);
+  }
+
   pane.addEventListener('pointerup', onPointerUp);
+  pane.addEventListener('pointermove', onPointerMove);
+  pane.addEventListener('pointerleave', onPointerLeave);
   container.addEventListener('keydown', onKeyDown);
+  container.addEventListener('mousedown', onMouseDown);
+  container.addEventListener('selectstart', onSelectStart);
 
   return {
     detach(): void {
       pane.removeEventListener('pointerup', onPointerUp);
+      pane.removeEventListener('pointermove', onPointerMove);
+      pane.removeEventListener('pointerleave', onPointerLeave);
       container.removeEventListener('keydown', onKeyDown);
+      container.removeEventListener('mousedown', onMouseDown);
+      container.removeEventListener('selectstart', onSelectStart);
     },
   };
 }

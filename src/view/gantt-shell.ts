@@ -34,6 +34,8 @@ import { ensureBaseStyles } from './styles.js';
 import type { InteractionState, RenderBackend } from '../render/backend.js';
 import { EntryNotFoundError, ContainerNotFoundError, entryId, itemId } from '../model/index.js';
 import type { Dataset, EntryId, ItemId, Instant, Size, TimeSpan } from '../model/index.js';
+import { resolveCapabilities } from './capability.js';
+import type { Capabilities, Interactions } from './capability.js';
 import { subscribeToDatasetChanges } from './dataset-change-subscription.js';
 import type { DatasetChangeSubscription } from './dataset-change-subscription.js';
 import { FrameScheduler } from './frame-scheduler.js';
@@ -55,6 +57,7 @@ interface EntrySelectionContext {
   canSelect(entry: EntryId): boolean;
   rowOrder(): readonly EntryId[];
   selection: { get(): readonly EntryId[]; propose(next: readonly EntryId[]): void };
+  setHovered(itemId: ItemId | undefined): void;
 }
 export type AttachEntryGestures = (
   pane: HTMLElement,
@@ -124,6 +127,9 @@ export interface GanttShellOptions {
   dateLines?: readonly DateLineSpec[];
   /** Live. See `GanttOptions.todayLineMarginTicks`. Default `DEFAULT_TODAY_LINE_MARGIN_TICKS`. */
   todayLineMarginTicks?: number;
+  /** Live (S3, D-S3-9). Per-gesture, boolean or per-entry predicate, over the per-kind default table
+   *  (`view/capability.ts`). Default `{}`: every gesture resolves off the default table alone. */
+  interactions?: Interactions;
   /** Expert knob, not on `GanttOptions` (plans/02 "two callers, two surfaces") — a test naming its
    * own `RenderBackend<HTMLElement>` in place of the DOM one (§9-I: the seam had two implementations
    * and one hardcoded call site, so nothing could reach the other short of mocking the module).
@@ -135,6 +141,15 @@ export interface GanttShellOptions {
    * import `interaction/` to supply its own default. `api/gantt.ts` always passes
    * `attachEntryGestures`; omitted only by tests exercising the shell with no pointer wiring. */
   entryGestures?: AttachEntryGestures;
+}
+
+/** `exactOptionalPropertyTypes` treats `obj.key = undefined` as a type error when `key` is declared
+ *  `T | undefined` rather than `T?` on the read side (`InteractionState`'s own shape) — the honest
+ *  "unset" is `delete`, not an assignment. One helper rather than an `if`/`delete` pair at each of
+ *  `#refreshAffordances`'s three call sites. */
+function setOptional<T, K extends keyof T>(target: T, key: K, value: T[K] | undefined): void {
+  if (value === undefined) delete target[key];
+  else target[key] = value;
 }
 
 function resolveContainer(container: HTMLElement | string): HTMLElement {
@@ -164,6 +179,13 @@ export class GanttShell {
    *  step (I5). Never rebuilt per call. */
   #interactionState: InteractionState = {};
   #selection: readonly EntryId[] = [];
+  /** S3.2, D-S3-9: resolved once, re-resolved only when `interactions` is reassigned — never per
+   *  hover step. `#refreshAffordances` reads it, it never calls `resolveCapabilities` itself. */
+  #interactions: Interactions = {};
+  #capabilities: Capabilities;
+  /** The raw hit under the pointer, reported by `EntrySelectionContext.setHovered` — undefined on
+   *  pointerleave or when nothing is wired (no `entryGestures` attachment). */
+  #hoveredItemId: ItemId | undefined;
   /** `id:0` today (segments are not yet laid out as separate items, `layout/frame.ts`), rebuilt every
    *  render from `frame.bars` so this stays correct the moment segments do land — the shell reads the
    *  frame it already computed rather than re-deriving item ids of its own (D-S3-10). */
@@ -280,17 +302,20 @@ export class GanttShell {
       },
       commitGridWidth: (px) => this.#commitGridWidth(px),
     });
+    this.#interactions = options.interactions ?? {};
+    this.#capabilities = resolveCapabilities(this.#interactions, (kind) =>
+      this.#options.dataset.isDerivedSpanKind(kind),
+    );
     this.#entryGestures = options.entryGestures?.(this.#panes.timeline, this.#container, {
       hitTest: (x, y) => this.#backend.hitTest(x, y)?.itemId,
       entryIdFor: (item) => this.#itemEntryIds.get(item),
-      // D-S3-9's per-kind default table lands in S3.2 (`view/capability.ts`); every entry is
-      // select-capable until `Gantt.interactions` exists to say otherwise.
-      canSelect: () => true,
+      canSelect: (id) => this.#canGesture('select', id),
       rowOrder: () => this.#options.dataset.entries.all.map((e) => e.id),
       selection: {
         get: () => this.#selection,
         propose: (next) => this.#proposeSelection(next),
       },
+      setHovered: (item) => this.#setHovered(item),
     });
     this.#wiring = false;
     this.#frames.flush();
@@ -358,8 +383,71 @@ export class GanttShell {
     if (this.#events.emit('beforeSelectionChange', { from, to: next }) === false) return;
     this.#selection = next;
     this.#interactionState.selectedItemIds = next.map((id) => itemId(id));
-    this.#backend.applyState(this.#interactionState);
+    // D-S3-6: resizableItemId falls back to the single selected entry when nothing is hovered, so a
+    // selection change can move the handles even with the pointer sitting still.
+    this.#refreshAffordances();
     this.#events.emit('selectionChange', { from, to: next });
+  }
+
+  get interactions(): Interactions {
+    return this.#interactions;
+  }
+
+  /** Live (S3, D-S3-9): re-resolves the capability table immediately, then re-derives the two
+   *  resolved affordance ids off the current hover/selection so a stricter rule takes effect without
+   *  waiting for the next pointer move. */
+  set interactions(next: Interactions) {
+    this.#interactions = next;
+    this.#capabilities = resolveCapabilities(this.#interactions, (kind) =>
+      this.#options.dataset.isDerivedSpanKind(kind),
+    );
+    this.#refreshAffordances();
+  }
+
+  /** D-S3-9's one resolution, shared by the pointer path (`canSelect` above), the keyboard path
+   *  (S3.5) and the affordance ids below — never asked twice for the same gesture (I14). */
+  #canGesture(capability: keyof Interactions, id: EntryId): boolean {
+    const entry = this.#options.dataset.entries.get(id);
+    return entry !== undefined && this.#capabilities.can(capability, entry);
+  }
+
+  #setHovered(next: ItemId | undefined): void {
+    if (this.#hoveredItemId === next) return;
+    this.#hoveredItemId = next;
+    this.#refreshAffordances();
+  }
+
+  /** D-S3-6: resolves `hoveredItemId`/`movableItemId`/`resizableItemId` from the current hover and
+   *  selection, writes them into the one long-lived `InteractionState`, and applies. Called whenever
+   *  any of the three inputs change — never per pointer move beyond that (I5). `exactOptionalPropertyTypes`
+   *  makes "clear" a `delete`, not an `= undefined` assignment (`#setOptional` below). */
+  #refreshAffordances(): void {
+    setOptional(this.#interactionState, 'hoveredItemId', this.#hoveredItemId);
+    const hoveredEntryId =
+      this.#hoveredItemId !== undefined ? this.#itemEntryIds.get(this.#hoveredItemId) : undefined;
+    setOptional(
+      this.#interactionState,
+      'movableItemId',
+      hoveredEntryId !== undefined && this.#canGesture('move', hoveredEntryId)
+        ? this.#hoveredItemId
+        : undefined,
+    );
+    setOptional(this.#interactionState, 'resizableItemId', this.#resolveResizableItemId(hoveredEntryId));
+    this.#backend.applyState(this.#interactionState);
+  }
+
+  /** The hovered bar decides when there is one — even a hover that resolves to "no handles" wins
+   *  over the selection fallback. Only when nothing is hovered does the single selected entry, if
+   *  there is exactly one, get a turn (D-S3-6). */
+  #resolveResizableItemId(hoveredEntryId: EntryId | undefined): ItemId | undefined {
+    if (this.#hoveredItemId !== undefined) {
+      return hoveredEntryId !== undefined && this.#canGesture('resize', hoveredEntryId)
+        ? this.#hoveredItemId
+        : undefined;
+    }
+    if (this.#selection.length !== 1) return undefined;
+    const soleId = this.#selection[0]!;
+    return this.#canGesture('resize', soleId) ? itemId(soleId) : undefined;
   }
 
   get theme(): Theme {

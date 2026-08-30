@@ -478,4 +478,71 @@ describe('render/dom backend', () => {
     grid.remove();
     timeline.remove();
   });
+
+  it('parks the shared handle pair when resizableItemId is undefined and moves them onto the committed bar when it is set (D-S3-8)', () => {
+    const backend = createDomBackend();
+    const { grid, timeline } = mountSurfaces();
+    backend.mount({ grid, timeline });
+
+    const frame = computeFrame({
+      entries: sampleEntries.slice(0, 2),
+      scale,
+      preset,
+      visible: { x: 0, y: 0, width: 0, height: 0 },
+      rowHeight: 32,
+      revision: 0,
+    });
+    backend.sync(frame);
+    const [a] = frame.bars;
+    const start = timeline.querySelector<HTMLElement>('.fg-bar-handle[data-edge="start"]')!;
+    const end = timeline.querySelector<HTMLElement>('.fg-bar-handle[data-edge="end"]')!;
+    expect(start.hidden).toBe(true);
+    expect(end.hidden).toBe(true);
+
+    backend.applyState({ resizableItemId: a!.id });
+    expect(start.hidden).toBe(false);
+    expect(end.hidden).toBe(false);
+    expect(start.style.transform).toBe(`translate(${a!.x}px, ${a!.y}px)`);
+    expect(end.style.transform).toBe(`translate(${a!.x + a!.width}px, ${a!.y}px)`);
+    expect(start.style.height).toBe(`${a!.height}px`);
+
+    backend.applyState({});
+    expect(start.hidden).toBe(true);
+    expect(end.hidden).toBe(true);
+
+    backend.destroy();
+    grid.remove();
+    timeline.remove();
+  });
+
+  it("sets data-movable on movableItemId's bar and clears it when the id moves elsewhere (D-S3-6)", () => {
+    const backend = createDomBackend();
+    const { grid, timeline } = mountSurfaces();
+    backend.mount({ grid, timeline });
+
+    const frame = computeFrame({
+      entries: sampleEntries.slice(0, 2),
+      scale,
+      preset,
+      visible: { x: 0, y: 0, width: 0, height: 0 },
+      rowHeight: 32,
+      revision: 0,
+    });
+    backend.sync(frame);
+    const [a, b] = frame.bars;
+    const nodeA = timeline.querySelector<HTMLElement>(`[data-item-id="${a!.id}"]`)!;
+    const nodeB = timeline.querySelector<HTMLElement>(`[data-item-id="${b!.id}"]`)!;
+
+    backend.applyState({ movableItemId: a!.id });
+    expect(nodeA.hasAttribute('data-movable')).toBe(true);
+    expect(nodeB.hasAttribute('data-movable')).toBe(false);
+
+    backend.applyState({ movableItemId: b!.id });
+    expect(nodeA.hasAttribute('data-movable')).toBe(false);
+    expect(nodeB.hasAttribute('data-movable')).toBe(true);
+
+    backend.destroy();
+    grid.remove();
+    timeline.remove();
+  });
 });

@@ -13,7 +13,13 @@ function fakeDataset(list: readonly Entry[]): GanttShellOptions['dataset'] {
     referenceDate: 0 as Instant,
     derivedSpanKinds: new Set(['group']),
   };
-  return { entries: new EntryStore(list, context), timeZone, on: () => {}, off: () => {} };
+  return {
+    entries: new EntryStore(list, context),
+    timeZone,
+    isDerivedSpanKind: () => false,
+    on: () => {},
+    off: () => {},
+  };
 }
 
 // happy-dom does no layout, so a real ResizeObserver never fires — same seam as gantt-shell.test.ts.
@@ -121,6 +127,13 @@ describe('ensureBaseStyles', () => {
     expect(bar).not.toBeNull();
     expect(getComputedStyle(bar as Element).backgroundColor).toBe('rgb(1, 2, 3)');
     shell.destroy();
+  });
+
+  it('the container turns off native text highlight so a click on a bar is an Entry select', () => {
+    clearStyles();
+    ensureBaseStyles(document);
+    const css = document.head.querySelector('style[data-freegantt-styles]')?.textContent ?? '';
+    expect(css).toContain('user-select: none');
   });
 
   it('dark theme paints bar labels in warm ink so they read on the light blue fill', () => {
