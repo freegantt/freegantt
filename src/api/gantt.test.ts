@@ -962,3 +962,93 @@ describe('Gantt selection (S3.1, D-S3-10, [S3-A1])', () => {
     gantt.destroy();
   });
 });
+
+describe('Gantt interactions / capability hot path (S3.2, D-S3-9, [S3-A3]/[S3-A5])', () => {
+  it('a resize-incapable entry renders no handle on hover ([S3-A5])', () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
+    const gantt = new Gantt({ container, dataset, interactions: { resize: false } });
+
+    const bar = container.querySelector<HTMLElement>('.fg-bar')!;
+    const timeline = container.querySelector<HTMLElement>('.fg-timeline-pane')!;
+    const original = document.elementFromPoint.bind(document);
+    document.elementFromPoint = (x: number, y: number) => (x === 5 && y === 5 ? bar : original(x, y));
+    timeline.dispatchEvent(new PointerEvent('pointermove', { clientX: 5, clientY: 5 }));
+
+    const start = container.querySelector<HTMLElement>('.fg-bar-handle[data-edge="start"]')!;
+    expect(start.hidden).toBe(true);
+    expect(bar.hasAttribute('data-movable')).toBe(true); // move is untouched by this rule
+
+    document.elementFromPoint = original;
+    gantt.destroy();
+  });
+
+  it('a group entry (derivedSpanKinds) gets neither the grab cursor nor a handle', () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({
+      entries: [{ id: 'g1', kind: 'group', name: 'Group' }, ...sampleEntries],
+      timeZone: 'UTC',
+    });
+    const gantt = new Gantt({ container, dataset });
+
+    const groupBar = container.querySelector<HTMLElement>('[data-kind="group"]')!;
+    const timeline = container.querySelector<HTMLElement>('.fg-timeline-pane')!;
+    const original = document.elementFromPoint.bind(document);
+    document.elementFromPoint = () => groupBar;
+    timeline.dispatchEvent(new PointerEvent('pointermove', { clientX: 5, clientY: 5 }));
+
+    expect(groupBar.hasAttribute('data-movable')).toBe(false);
+    const start = container.querySelector<HTMLElement>('.fg-bar-handle[data-edge="start"]')!;
+    expect(start.hidden).toBe(true);
+
+    document.elementFromPoint = original;
+    gantt.destroy();
+  });
+
+  it('gantt.selection = [id] still accepts a select-incapable id — the setter does not consult can("select") (D-S3-9)', () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
+    const gantt = new Gantt({ container, dataset, interactions: { select: false } });
+
+    gantt.selection = [sampleEntries[0]!.id];
+    expect(gantt.selection).toEqual([entryId(sampleEntries[0]!.id)]);
+
+    gantt.destroy();
+  });
+
+  it('a select-incapable bar refuses a pointer click', () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
+    const gantt = new Gantt({ container, dataset, interactions: { select: false } });
+
+    const bar = container.querySelector<HTMLElement>('.fg-bar')!;
+    const original = document.elementFromPoint.bind(document);
+    document.elementFromPoint = (x: number, y: number) => (x === 5 && y === 5 ? bar : original(x, y));
+    const timeline = container.querySelector<HTMLElement>('.fg-timeline-pane')!;
+    timeline.dispatchEvent(new PointerEvent('pointerup', { clientX: 5, clientY: 5 }));
+
+    expect(gantt.selection).toEqual([]);
+
+    document.elementFromPoint = original;
+    gantt.destroy();
+  });
+
+  it('reassigning interactions re-resolves the affordance ids without a new pointer move', () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
+    const gantt = new Gantt({ container, dataset });
+
+    const bar = container.querySelector<HTMLElement>('.fg-bar')!;
+    const timeline = container.querySelector<HTMLElement>('.fg-timeline-pane')!;
+    const original = document.elementFromPoint.bind(document);
+    document.elementFromPoint = (x: number, y: number) => (x === 5 && y === 5 ? bar : original(x, y));
+    timeline.dispatchEvent(new PointerEvent('pointermove', { clientX: 5, clientY: 5 }));
+    expect(bar.hasAttribute('data-movable')).toBe(true);
+
+    gantt.interactions = { move: false };
+    expect(bar.hasAttribute('data-movable')).toBe(false);
+
+    document.elementFromPoint = original;
+    gantt.destroy();
+  });
+});

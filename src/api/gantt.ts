@@ -2,7 +2,7 @@
 // instance owns its own shell and state so two Gantt instances on one page are fully independent.
 
 import { GanttShell } from '../view/index.js';
-import type { GanttEventMap, Theme } from '../view/index.js';
+import type { GanttEventMap, Interactions, Theme } from '../view/index.js';
 import { ScrollModel, TimeScaleModel } from '../layout/index.js';
 import type { PresetRef, TimeScaleFit, ViewPreset } from '../layout/index.js';
 import type { DateLineSpec } from '../layout/index.js';
@@ -56,6 +56,9 @@ interface GanttOptionsBase {
   /** Live (S3, D-S3-10). Entry ids, loose on the way in; assignment runs the same cancelable
    *  sequence a click runs. Default `[]`. */
   selection?: readonly (EntryId | string)[];
+  /** Live (S3, D-S3-9). Per-gesture, boolean or per-entry predicate, over the per-kind default
+   *  table. Default `{}`: every gesture resolves off the default table alone. */
+  interactions?: Interactions;
 }
 
 /** Two ways to set the axis, made mutually exclusive at the type level (issue #84 — the prior shape
@@ -106,6 +109,7 @@ export class Gantt {
       ...(options.todayLineMarginTicks !== undefined
         ? { todayLineMarginTicks: options.todayLineMarginTicks }
         : {}),
+      ...(options.interactions !== undefined ? { interactions: options.interactions } : {}),
       entryGestures: attachEntryGestures,
     });
     if (options.zoomPresets !== undefined) this.#shell.zoomPresets = options.zoomPresets;
@@ -251,6 +255,16 @@ export class Gantt {
 
   set selection(ids: readonly (EntryId | string)[]) {
     this.#shell.selection = ids;
+  }
+
+  /** Live (S3, D-S3-9): re-resolves immediately, so a stricter rule hides a handle or refuses a
+   *  gesture without waiting for the next pointer move. */
+  get interactions(): Interactions {
+    return this.#shell.interactions;
+  }
+
+  set interactions(next: Interactions) {
+    this.#shell.interactions = next;
   }
 
   get canZoomIn(): boolean {

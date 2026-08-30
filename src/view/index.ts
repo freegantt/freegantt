@@ -3,4 +3,5 @@
 // bound ScrollModel (I12).
 export { GanttShell } from './gantt-shell.js';
 export type { GanttShellOptions, Theme } from './gantt-shell.js';
-export type { GanttEventMap, GridWidthChange, NavigationChange } from './event-bus.js';
+export type { GanttEventMap, GridWidthChange, NavigationChange, SelectionChange } from './event-bus.js';
+export type { CapabilityRule, Interactions } from './capability.js';

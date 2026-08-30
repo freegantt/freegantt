@@ -947,13 +947,24 @@ reachable without holding up the rest.
 - [x] `attachEntryGestures`, first outcome only: pointerup selects; click-empty and Escape clear; ctrl/⌘ toggles; shift extends
 - [x] **Visible:** clicking bars in `harness/index.html` highlights them; a readout shows the selection
 
-### S3.2 — The hot path and capabilities *(blocked on **P3**)*
-- [ ] `plans/01` §1 arrow + `.dependency-cruiser.cjs` widening + red-test fixture
-- [ ] `view/capability.ts` with the D-S3-9 default table; `Gantt.interactions`, live
-- [ ] `applyState` real: `data-state` over D-S3-7's five-row projection; hover; `cursor: grab` on `movableItemId`
-- [ ] Shared `.fg-bar-handle` pair, positioned by `applyState`, parked when `resizableItemId` is undefined; the shell resolves both ids once per hover/selection change (D-S3-6, D-S3-8)
-- [ ] `[S3-A3]`, `[S3-A5]`'s pointer half; pointer select asks `can('select', entry)` (D-S3-10)
-- [ ] **Visible:** handles and a grab cursor appear on capable bars only; groups show neither
+### S3.2 — The hot path and capabilities *(blocked on **P3**)* — done 2026-08-30
+- [x] `plans/01` §1 arrow + `.dependency-cruiser.cjs` widening + red-test fixture — landed with S3.1 (P3)
+- [x] `view/capability.ts` with the D-S3-9 default table; `Gantt.interactions`, live
+- [x] `applyState` real: `data-state` over D-S3-7's five-row projection (still `hovered`/`selected`
+      only — `dragging`/`ghost`/`pending` need `ItemPreview`, S3.3+); hover; `cursor: grab` on
+      `movableItemId` via a `data-movable` boolean attribute (`no-inline-style-outside-geometry`
+      forbids an inline `cursor` write)
+- [x] Shared `.fg-bar-handle` pair, positioned by `applyState`, parked (`hidden`) when `resizableItemId`
+      is undefined; the shell resolves both ids once per hover/selection/`interactions` change, never
+      per pointer move beyond that (D-S3-6, D-S3-8)
+- [x] `[S3-A3]`, `[S3-A5]`'s pointer half; pointer select asks `can('select', entry)` (D-S3-10, already
+      landed in S3.1's wiring, now backed by the real resolver instead of `() => true`)
+- [ ] **Visible:** handles and a grab cursor appear on capable bars only; groups show neither — proven
+      by `dom` tests (`api/gantt.test.ts`'s capability describe block); **not** added to
+      `harness/index.html`'s demo dataset this step (no `kind: 'group'` entry exists in
+      `fixtures/sample-dataset.ts`/`demo-dataset.ts` today, and mutating either risked shifting rows
+      other harness pages and `e2e/today-line.spec.ts` render). Left as a follow-up, not a gap in the
+      capability logic itself.
 
 ### S3.3 — Drag-move *(no prerequisite)*
 - [ ] `time/snapInstant`; `layout/gesture-draft.ts`'s `draftForMove` + `previewOffsets` + `ItemPreview`; `EntryEdits`/`StoredEdit` move to `model/`

@@ -66,6 +66,12 @@ export class Dataset {
     return [...this.#state.derivedSpanKinds];
   }
 
+  /** `model/`'s `Dataset` interface (S3, D-S3-9) — `GanttShell` asks this, never `derivedSpanKinds`
+   *  itself, to resolve the per-kind capability default table. */
+  isDerivedSpanKind(kind: EntryKind): boolean {
+    return this.#state.isDerivedSpanKind(kind);
+  }
+
   /** Batches `body`'s mutations into one changeset (D-S2-8). Nested calls join the open transaction.
    *  `'user'` is the only origin a public caller can produce in S2. */
   transaction<T>(body: () => T): T {

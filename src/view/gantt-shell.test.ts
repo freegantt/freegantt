@@ -3,7 +3,7 @@ import { GanttShell } from './gantt-shell.js';
 import type { GanttShellOptions } from './gantt-shell.js';
 import { FrameLayout, ScrollModel, TimeScaleModel } from '../layout/index.js';
 import { entryId, EntryNotFoundError, ContainerNotFoundError } from '../model/index.js';
-import type { Entry, Instant } from '../model/index.js';
+import type { Entry, Instant, ItemId } from '../model/index.js';
 import { DatasetState, EntryStore } from '../data/index.js';
 import { createDomBackend } from '../render/dom/index.js';
 import type { RenderBackend } from '../render/backend.js';
@@ -33,7 +33,13 @@ function fakeDataset(entries: readonly Entry[]): GanttShellOptions['dataset'] {
   };
   // No changes ever land on this store, so on/off are stubs — none of these tests mutate the
   // dataset, so no handler this file registers is ever called.
-  return { entries: new EntryStore(entries, context), timeZone, on: () => {}, off: () => {} };
+  return {
+    entries: new EntryStore(entries, context),
+    timeZone,
+    isDerivedSpanKind: () => false,
+    on: () => {},
+    off: () => {},
+  };
 }
 
 // happy-dom does no layout, so a real ResizeObserver never fires (verified against pane-size-
@@ -598,6 +604,92 @@ describe('[S2-A3] one changeset, one layout pass, one frame (D-S2-15/16)', () =>
     expect(layout.heightIndexRevision).toBe(revisionBefore);
 
     computeFrameSpy.mockRestore();
+    shell.destroy();
+  });
+});
+
+// S3.2 (D-S3-6/D-S3-9): view/ may not import interaction/ (view-boundary), so these tests drive the
+// injected `EntrySelectionContext.setHovered` directly rather than a real `attachEntryGestures` —
+// `interaction/entry-gestures.test.ts` already covers that the real attachment reports hover
+// correctly; this file's job is what the shell does with the report.
+describe('GanttShell hot path (S3.2, D-S3-6/D-S3-9, [S3-A3])', () => {
+  it('[S3-A3] hovering every mounted bar of a 1,000-entry fixture calls no computeFrame and creates/removes no nodes', () => {
+    FakeResizeObserver.instances = [];
+    vi.stubGlobal('ResizeObserver', FakeResizeObserver);
+    try {
+      const container = document.createElement('div');
+      let hover: ((item: ItemId | undefined) => void) | undefined;
+      const shell = new GanttShell({
+        container,
+        dataset: fakeDataset(tallEntries(1000)),
+        overscan: { verticalRows: 200 },
+        entryGestures: (_pane, _container, ctx) => {
+          hover = (item) => ctx.setHovered(item);
+          return { detach() {} };
+        },
+      });
+      FakeResizeObserver.instances[0]!.fire({ width: 500, height: 320 }); // 10 visible rows @ 32px
+      shell.render();
+
+      const bars = Array.from(container.querySelectorAll<HTMLElement>('.fg-bar'));
+      expect(bars.length).toBeGreaterThanOrEqual(200);
+
+      const computeFrameSpy = vi.spyOn(FrameLayout.prototype, 'computeFrame');
+      let mutations = 0;
+      const observer = new MutationObserver((records) => {
+        for (const record of records) mutations += record.addedNodes.length + record.removedNodes.length;
+      });
+      observer.observe(container, { childList: true, subtree: true });
+
+      for (const bar of bars) hover?.(bar.dataset['itemId'] as ItemId);
+      hover?.(undefined);
+
+      observer.disconnect();
+      expect(computeFrameSpy).not.toHaveBeenCalled();
+      expect(mutations).toBe(0);
+
+      computeFrameSpy.mockRestore();
+      shell.destroy();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('movableItemId/resizableItemId follow the hovered entry, gated by capability (D-S3-6/D-S3-9)', () => {
+    const container = document.createElement('div');
+    const dataset = fakeDataset(entries);
+    let hover: ((item: ItemId | undefined) => void) | undefined;
+    const shell = new GanttShell({
+      container,
+      dataset,
+      interactions: { resize: false },
+      entryGestures: (_pane, _container, ctx) => {
+        hover = (item) => ctx.setHovered(item);
+        return { detach() {} };
+      },
+    });
+
+    const bar = container.querySelector<HTMLElement>('.fg-bar')!;
+    hover?.(bar.dataset['itemId'] as ItemId);
+
+    expect(bar.hasAttribute('data-movable')).toBe(true);
+    const start = container.querySelector<HTMLElement>('.fg-bar-handle[data-edge="start"]')!;
+    expect(start.hidden).toBe(true); // resize: false — no handle even though it is hovered
+
+    hover?.(undefined);
+    expect(bar.hasAttribute('data-movable')).toBe(false);
+
+    shell.destroy();
+  });
+
+  it('resizableItemId falls back to the sole selected entry when nothing is hovered (D-S3-6)', () => {
+    const container = document.createElement('div');
+    const shell = new GanttShell({ container, dataset: fakeDataset(entries) });
+
+    shell.selection = [entries[0]!.id];
+    const start = container.querySelector<HTMLElement>('.fg-bar-handle[data-edge="start"]')!;
+    expect(start.hidden).toBe(false);
+
     shell.destroy();
   });
 });

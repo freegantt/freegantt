@@ -26,6 +26,9 @@ type RowGeom = {
   rowCount: number;
 };
 type BarGeom = Pick<FrameBar, 'kind' | 'label' | 'x' | 'y' | 'width' | 'height' | 'flags' | 'a11yLabel'>;
+/** What the shared handle pair (D-S3-8) needs to place itself over a committed bar — a narrower slice
+ *  than `BarGeom`, which also carries paint fields the handles don't read. */
+type HandleGeom = Pick<FrameBar, 'x' | 'y' | 'width' | 'height'>;
 /** Bands carry no per-frame geometry of their own yet (height/stacking is S1.9/S1.10) — an always-
  * equal geom means `syncKeyed` patches a band node once, at creation, and never again. */
 type BandGeom = Record<string, never>;
@@ -49,6 +52,10 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
   let barLayer: HTMLElement | undefined;
   let contentSizer: HTMLElement | undefined;
   let dateLines: DateLineAttachment | undefined;
+  // D-S3-8: one shared handle pair, created once at mount() and moved/parked by applyState — never
+  // one pair per bar.
+  let startHandle: HTMLElement | undefined;
+  let endHandle: HTMLElement | undefined;
 
   const bandLayer = new KeyedLayer<FrameHeaderBand, number, BandGeom>();
   // One tick layer per band index — a nested keyed list is still a keyed list (plans/01 §8.1's
@@ -63,6 +70,28 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
   // whose token set actually changed — O(changed items), not O(bars) (I5, [S3-A3]).
   let paintedHovered: ItemId | undefined;
   let paintedSelected: ReadonlySet<ItemId> = new Set();
+  let paintedResizable: ItemId | undefined;
+  let paintedMovable: ItemId | undefined;
+  // Committed geometry per mounted bar (D-S3-6): what the handle pair and the future preview offsets
+  // (S3.3) both read. `syncBars` is the only writer.
+  const barGeomByItemId = new Map<ItemId, HandleGeom>();
+
+  /** Moves the shared handle pair onto `geom`, or parks both (D-S3-8) when it is undefined. `hidden`
+   *  is a DOM property write, not `.style` — the base stylesheet owns `[hidden] { display: none }`. */
+  function paintResizeHandles(geom: HandleGeom | undefined): void {
+    if (!startHandle || !endHandle) return;
+    if (!geom) {
+      startHandle.hidden = true;
+      endHandle.hidden = true;
+      return;
+    }
+    startHandle.hidden = false;
+    endHandle.hidden = false;
+    startHandle.style.transform = `translate(${geom.x}px, ${geom.y}px)`;
+    startHandle.style.height = `${geom.height}px`;
+    endHandle.style.transform = `translate(${geom.x + geom.width}px, ${geom.y}px)`;
+    endHandle.style.height = `${geom.height}px`;
+  }
 
   function paintDataState(itemId: ItemId, hovered: ItemId | undefined, selected: ReadonlySet<ItemId>): void {
     const node = barLayerCache.node(itemId);
@@ -166,6 +195,10 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
 
   function syncBars(bars: readonly FrameBar[]): void {
     if (!barLayer) return;
+    barGeomByItemId.clear();
+    for (const bar of bars) {
+      barGeomByItemId.set(bar.id, { x: bar.x, y: bar.y, width: bar.width, height: bar.height });
+    }
     barLayerCache.sync(barLayer, bars, {
       key: (bar) => bar.id,
       create: (bar) => {
@@ -216,7 +249,15 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
       contentSizer = document.createElement('div');
       contentSizer.setAttribute('aria-hidden', 'true');
       contentSizer.className = 'fg-content-sizer';
-      timelineHost.append(headerLayer, barLayer, contentSizer);
+      startHandle = document.createElement('div');
+      startHandle.className = 'fg-bar-handle';
+      startHandle.dataset['edge'] = 'start';
+      startHandle.hidden = true;
+      endHandle = document.createElement('div');
+      endHandle.className = 'fg-bar-handle';
+      endHandle.dataset['edge'] = 'end';
+      endHandle.hidden = true;
+      timelineHost.append(headerLayer, barLayer, contentSizer, startHandle, endHandle);
       dateLines = attachDateLines(timelineHost, headerLayer);
     },
     sync(frame: GeometryFrame) {
@@ -267,6 +308,23 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
       changed.forEach((id) => paintDataState(id, nextHovered, nextSelected));
       paintedSelected = nextSelected;
       paintedHovered = nextHovered;
+
+      // D-S3-8: the shared handle pair follows `resizableItemId`, positioned off the committed
+      // geometry `syncBars` already recorded — never a per-item computation of its own.
+      const nextResizable = state.resizableItemId;
+      if (nextResizable !== paintedResizable) {
+        paintResizeHandles(nextResizable !== undefined ? barGeomByItemId.get(nextResizable) : undefined);
+        paintedResizable = nextResizable;
+      }
+
+      // D-S3-6: `cursor: grab` follows `movableItemId` via a boolean attribute, not an inline style
+      // (`no-inline-style-outside-geometry`) — the base stylesheet owns the actual `cursor` rule.
+      const nextMovable = state.movableItemId;
+      if (nextMovable !== paintedMovable) {
+        if (paintedMovable !== undefined) barLayerCache.node(paintedMovable)?.removeAttribute('data-movable');
+        if (nextMovable !== undefined) barLayerCache.node(nextMovable)?.setAttribute('data-movable', '');
+        paintedMovable = nextMovable;
+      }
     },
     hitTest(x: number, y: number): HitResult | null {
       // "The bars array is the hit index; DOM backends get hit-testing from event delegation"
@@ -288,13 +346,18 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
       rowLayer.clear();
       rowCellLayers.clear();
       barLayerCache.clear();
+      barGeomByItemId.clear();
       paintedHovered = undefined;
       paintedSelected = new Set();
+      paintedResizable = undefined;
+      paintedMovable = undefined;
       gridLayer = undefined;
       timelineHost = undefined;
       headerLayer = undefined;
       barLayer = undefined;
       contentSizer = undefined;
+      startHandle = undefined;
+      endHandle = undefined;
     },
   };
 }
