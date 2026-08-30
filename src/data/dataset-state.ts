@@ -40,9 +40,15 @@ export interface DatasetStateOptions {
    *  the supported way to ask for hand-set spans everywhere (S2.3 §1.5). */
   derivedSpanKinds?: readonly EntryKind[];
   /** The extension hook a transaction calls once per commit (D-S2-6). Internal only — `data/` is
-   *  unreachable through the package's `exports` map, so a plugin-facing install API is S3's own job
-   *  (#15), not this option. Defaults to `identityExtender`: an unoccupied hook is the identity
-   *  function (D4). */
+   *  unreachable through the package's `exports` map, so a plugin-facing install API lands in **S5**
+   *  with the plugin runtime (#15), not on this option; the first-party scheduler occupies the slot in
+   *  S7. Until then this is how a test installs one (D-S2-6, "How it is tested without a public
+   *  claim") — S3's drag preview and undo tests use exactly this route. Defaults to
+   *  `identityExtender`: an unoccupied hook is the identity function (D4).
+   *
+   *  Said "S3's own job" until 2026-08-29: written the day before `87af449` moved the scheduling
+   *  slice from S3 to S7, so that "S3" named the scheduling slice, not today's S3 (direct
+   *  manipulation, `plans/s3-direct-manipulation/README.md` §0 P1). */
   editExtender?: EditExtender;
 }
 

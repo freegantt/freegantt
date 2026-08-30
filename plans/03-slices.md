@@ -139,6 +139,8 @@ Slices are scope, not calendar estimates. Within a slice, entries are ordered so
 
 ## S3 — Direct manipulation
 
+**Position:** after S1.13, before S4. Full spec: [`plans/s3-direct-manipulation/README.md`](./s3-direct-manipulation/README.md) — settled except its §0, which names three prerequisites (the `EditExtender` install seam, S1.13's implementation, and one `interaction/` import edge) and the step each one blocks. The step list there cuts this slice into S3.1–S3.8; the acceptance boxes below become `[S3-A1]`–`[S3-A8]` when that spec's §7 edits land.
+
 **Goal:** editing with the pointer (D10): drag-move, resize, selection — each gesture cancelable, transactional, undoable. Live preview of the draft plus any extra field writes the extension hook returns.
 
 **Scope**
@@ -153,7 +155,7 @@ Slices are scope, not calendar estimates. Within a slice, entries are ordered so
 - Keyboard parity begins: selected bar nudges by snap with arrow keys; Enter/Escape semantics.
 - Timeline navigation gestures (deferred here from S1.12, D-S1.12-17): ctrl/⌘+wheel anchored zoom calling `zoomBy(factor, offsetX)`; shift+wheel horizontal pan; `PageUp`/`PageDown`/`Home`/`End`/arrow keys for pan. These write nothing to the dataset, so the arm-threshold, escape-cancel and one-transaction-per-gesture invariants do not apply to them — they are read-only viewport gestures over the surface S1.12 ships.
 - Cursor date hairline (deferred here from S1.13, D-S1.13-9, issue #99 gap 5): show the instant under the pointer during a drag, via `instantForX` over the `DateLine` seam S1.13 ships. Read-only, same invariant exemption as the line above; pairs with #100's gesture work.
-- Harness: editing playground; a veto demo (drop before a boundary date is rejected with a toast); a lock-style injected extender so extra ghosts are visible without the scheduling plugin.
+- Harness: editing playground; a veto demo (drop before a boundary date is rejected with a toast). The lock-style injected extender that makes extra ghosts visible **moves to S5** (listed there): the public way to claim the extender slot lands with the plugin runtime (D-S2-6), and until it does, a harness page cannot install one without reaching past the public API — which the harness rule (CLAUDE.md) forbids. S3 proves the same behaviour in a `dom` test through the internal seam S2 already sanctions (`plans/s3-direct-manipulation/README.md` §0 P1).
 
 **Acceptance**
 
@@ -207,6 +209,7 @@ Slices are scope, not calendar estimates. Within a slice, entries are ordered so
 
 - `extensions/`: plugin runtime implementing the full `PluginContext` (`01` §10) — decorations, columns, renderers, overlay anchor, controllers, keybindings, commands, disposables. Public claim of `data/`'s extender slot (`DatasetOptions.plugins`, `setExtender`, #15) lands here so a later plugin can occupy it. S7 is the first-party occupant; until then the slot stays identity.
 - Built-in features **as plugins**: tooltips (shared `Popup` primitive: anchoring, flipping, clamping, focus trap), context menu (command-registry-driven), row highlight decorations, today line.
+- Harness: the lock-style extender demo deferred here from S3 — drag one bar, watch a locked second bar ghost — now that a page can install an extender through the public claim above. S3 already proves the preview path; this makes it pokeable.
 - Grid maturation: grid-column **presentation** over S4's fields — header, width, alignment, `cellRenderer`; inline editors (text, date via a pluggable date-input seam — no bundled date-picker dependency), column resize/reorder; `beforeEntryEdit` veto/replace flow. There is no second definition system: a column names a field, and a consumer field and a core field take the same path (ADR 0005).
 - `PluginContext.data.registerField` / `view.registerGridColumn` (`01` §10): a plugin declares a field that aggregates exactly like a core one, and shows it like any other.
 - Renderer callbacks at every declared point (`bar`, `cell`, `header`, `tooltip`), text-safe by default (I13).
