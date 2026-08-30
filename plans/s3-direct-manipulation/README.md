@@ -58,7 +58,8 @@ Eight steps, in order. Riskiest seam (hot path) before data writes. Open the ste
 | S3.2 | [`s3.2-hot-path-and-capabilities.md`](./s3.2-hot-path-and-capabilities.md) | done | handles + grab cursor in tests |
 | S3.3 | [`s3.3-drag-move.md`](./s3.3-drag-move.md) | done | drag, snap, commit, undo |
 | S3.4 | [`s3.4-resize.md`](./s3.4-resize.md) | done | independent edge drag |
-| S3.5 | [`s3.5-keyboard-parity-and-async-veto.md`](./s3.5-keyboard-parity-and-async-veto.md) | **next** | keyboard nudge + async veto |
+| — | [`gesture-host-refactor.md`](./gesture-host-refactor.md) | **next** | closes review C1–C5: gesture host + affordance projector, one `EntryGestureContext` home |
+| S3.5 | [`s3.5-keyboard-parity-and-async-veto.md`](./s3.5-keyboard-parity-and-async-veto.md) | pending | keyboard nudge + async veto |
 | S3.6 | [`s3.6-extender-preview.md`](./s3.6-extender-preview.md) | partial | extender ghost in `dom` test |
 | S3.7 | [`s3.7-viewport-gestures.md`](./s3.7-viewport-gestures.md) | pending | wheel zoom/pan, no writes |
 | S3.8 | [`s3.8-cursor-line-harness-gate.md`](./s3.8-cursor-line-harness-gate.md) | pending | editing harness, e2e, gate green |
