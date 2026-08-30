@@ -222,6 +222,12 @@ export interface EntryInput<TMeta = unknown> {
 export type EntryKind = 'span' | 'group' | 'milestone' | (string & {});
 
 // @public
+export interface EntryMove extends ProposedSpan {
+    // (undocumented)
+    readonly entries: readonly ProposedSpan[];
+}
+
+// @public
 export class EntryNotFoundError extends FreeGanttError {
     constructor(entryId: EntryId, operation: string);
 }
@@ -352,9 +358,12 @@ export class Gantt {
 
 // @public
 export interface GanttEventMap {
+    beforeEntryMove: EntryMove;
     // (undocumented)
     beforeGridWidthChange: GridWidthChange;
     beforeSelectionChange: SelectionChange;
+    // (undocumented)
+    entryMove: EntryMove;
     // (undocumented)
     gridWidthChange: GridWidthChange;
     // (undocumented)
@@ -480,6 +489,16 @@ export type PresetRef = ShippedPresetId | ViewPreset;
 
 // @public (undocumented)
 export const presets: Readonly<Record<ShippedPresetId, ViewPreset>>;
+
+// @public
+export interface ProposedSpan {
+    // (undocumented)
+    readonly end: Instant;
+    // (undocumented)
+    readonly entry: EntryId;
+    // (undocumented)
+    readonly start: Instant;
+}
 
 // @public (undocumented)
 export class ScrollModel {
