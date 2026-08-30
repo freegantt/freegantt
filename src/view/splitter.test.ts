@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { attachSplitter } from './splitter.js';
-import type { SplitterHooks } from './splitter.js';
+import type { SplitterContext } from './splitter.js';
 
 // happy-dom's pointer-capture methods are not layout-backed; stubbed here the same way other DOM
 // suites in this repo stub browser primitives happy-dom does not implement (pane-size-attachment.test.ts).
@@ -27,7 +27,7 @@ describe('attachSplitter', () => {
     stubPointerCapture(handle);
     const previews: number[] = [];
     const commits: number[] = [];
-    const hooks: SplitterHooks = {
+    const hooks: SplitterContext = {
       readGridWidth: () => 200,
       previewGridWidth: (px) => previews.push(px),
       commitGridWidth: (px) => commits.push(px),
@@ -49,7 +49,7 @@ describe('attachSplitter', () => {
     stubPointerCapture(handle);
     const previews: number[] = [];
     const commits: number[] = [];
-    const hooks: SplitterHooks = {
+    const hooks: SplitterContext = {
       readGridWidth: () => 200,
       previewGridWidth: (px) => previews.push(px),
       commitGridWidth: (px) => commits.push(px),
@@ -72,7 +72,7 @@ describe('attachSplitter', () => {
     const { releasePointerCapture } = stubPointerCapture(handle);
     const previews: number[] = [];
     const commits: number[] = [];
-    const hooks: SplitterHooks = {
+    const hooks: SplitterContext = {
       readGridWidth: () => 200,
       previewGridWidth: (px) => previews.push(px),
       commitGridWidth: (px) => commits.push(px),

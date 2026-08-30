@@ -1,6 +1,6 @@
 # S3 — Direct manipulation
 
-**Slice:** S3 (`plans/03` §S3) · **Position:** after S1.13, before S4 · **Status:** in progress — S3.1 and S3.2 done; continue at **S3.3**
+**Slice:** S3 (`plans/03` §S3) · **Position:** after S1.13, before S4 · **Status:** in progress — S3.1, S3.2, S3.3 done; continue at **S3.4**
 **Form:** same settled-spec shape as [`plans/s2-data-core/README.md`](../s2-data-core/README.md) — this file is the tracker and shared context; each step file holds the work and its TODO boxes.
 **Handoff:** [`HANDOFF.md`](./HANDOFF.md) — session notes for whoever continues.
 **Review:** [`plans/reviews/2026-08-29-s3-direct-manipulation.html`](../reviews/2026-08-29-s3-direct-manipulation.html) (2026-08-29 standards/spec pass).
@@ -56,8 +56,8 @@ Eight steps, in order. Riskiest seam (hot path) before data writes. Open the ste
 |---|---|---|---|
 | S3.1 | [`s3.1-selection.md`](./s3.1-selection.md) | done | click-to-select in harness |
 | S3.2 | [`s3.2-hot-path-and-capabilities.md`](./s3.2-hot-path-and-capabilities.md) | done | handles + grab cursor in tests |
-| S3.3 | [`s3.3-drag-move.md`](./s3.3-drag-move.md) | **next** | drag, snap, commit, undo |
-| S3.4 | [`s3.4-resize.md`](./s3.4-resize.md) | pending | independent edge drag |
+| S3.3 | [`s3.3-drag-move.md`](./s3.3-drag-move.md) | done | drag, snap, commit, undo |
+| S3.4 | [`s3.4-resize.md`](./s3.4-resize.md) | **next** | independent edge drag |
 | S3.5 | [`s3.5-keyboard-parity-and-async-veto.md`](./s3.5-keyboard-parity-and-async-veto.md) | pending | keyboard nudge + async veto |
 | S3.6 | [`s3.6-extender-preview.md`](./s3.6-extender-preview.md) | partial | extender ghost in `dom` test |
 | S3.7 | [`s3.7-viewport-gestures.md`](./s3.7-viewport-gestures.md) | pending | wheel zoom/pan, no writes |

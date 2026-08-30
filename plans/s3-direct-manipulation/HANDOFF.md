@@ -1,156 +1,110 @@
 # S3 implementation handoff
 
-Status as of 2026-08-30, mid-session on **S3.3 (drag-move)**. The pure gesture math, the
-`interaction/` pointer stream, `view/`'s context implementation, and `api/gantt.ts`'s commit
-wiring are all written and green — `tsc --noEmit`, `eslint src harness`,
-`depcruise --config .dependency-cruiser.cjs src harness`, `node scripts/guard-red-test.mjs`, and
-`pnpm vitest run` (550/550) all pass as of this handoff. **A real drag now actually commits and is
-undoable** — this was verified via the full check suite, not yet via a dedicated integration test
-(see TODO 2 below) or manual harness use (the harness doesn't demo it yet, TODO 4).
+Status as of 2026-08-30: **S3.3 (drag-move) is done and committed.** All five checks are green
+(`pnpm vitest run` 572/572, `tsc --noEmit`, `eslint src harness`, `depcruise --config
+.dependency-cruiser.cjs src harness`, `node scripts/guard-red-test.mjs`). Continue at **S3.4
+(resize)** — read [`s3.4-resize.md`](./s3.4-resize.md) before touching anything.
 
-**Not committed to git yet** — do that once you've read this file. `git status`/`git diff` first
-per the usual safety rule; there is a good amount of new/changed `src/` content to review before
-staging.
+## What landed this session
 
-**Read [`README.md`](./README.md) (tracker) and [`s3.3-drag-move.md`](./s3.3-drag-move.md) (this
-step's spec) before touching anything below** — this handoff assumes both.
+Picked up from a prior handoff where S3.3's core (gesture math, pointer stream, shell wiring,
+commit path) was already written but untested at the integration level. This session closed out
+the remaining TODOs:
 
-## What already landed this session (all green)
+- **`src/time/snap.test.ts`** (new) — `snapInstant` (round-down, round-up, `'none'` passthrough,
+  a larger increment pushing the upper boundary farther away) and `stepsBetween` (zero, forward,
+  backward, spring-forward and fall-back DST crossings preserving wall-clock time). 9/9.
+- **`src/layout/gesture-draft.test.ts`** (new) — `draftForMove` (empty entries, single entry,
+  multi-entry rigid group, `snap: 'none'` ms fallback, a DST-crossing day-snapped drag) and
+  `previewOffsets` (dx/dWidth sign and magnitude, the `extra` flag, an id with no matching
+  original entry skipped). 9/9. **Gotcha hit and fixed**: my first DST test assumed midnight
+  instantly becomes DST-shifted the day of a spring-forward transition — wrong, the US transition
+  is at 2am local, so midnight-to-midnight stays on the pre-transition offset. Rewrote using a
+  noon-anchored entry, which cleanly demonstrates the 23-hour (not 24-hour) elapsed time and wall
+  clock preserved.
+- **`src/api/gantt.test.ts`** — new `describe('Gantt entryMove (S3.3, ...)')` block: a real
+  pointerdown/move/up sequence dispatched on the mounted `.fg-timeline-pane` (same
+  `document.elementFromPoint` stub pattern S3.1/S3.2 already use, plus a `setPointerCapture`/
+  `releasePointerCapture` stub on the pane — `attachPointerGesture` calls these and jsdom/happy-dom
+  doesn't implement them). Asserts `beforeEntryMove`/`entryMove` both fire once, `dataset.on('change')`
+  fires exactly once (one transaction, D-S3-16), the dataset's entry actually changed to the
+  proposed span, and `dataset.undo()` reverts it in one step (`[S3-A6]`). A second test confirms
+  `beforeEntryMove` returning `false` leaves the dataset untouched and `canUndo` `false`.
+- **`src/data/history.property.test.ts`** — added a `'move'` `SimpleOp` (writes `{start, end}`
+  together in one `update()` call, via `addMs` from `time/` since raw arithmetic on an `Instant` is
+  banned outside `time/`, I10) to the existing arbitrary, distinct from the pre-existing
+  `'update-start'`/`'update-end'` ops which each touch one field alone. This is what a gesture
+  commit actually writes per row, so the existing undo-all-restores-byte-identical property now
+  exercises that exact shape, not just single-field edits composed in one transaction.
+- **`src/view/splitter.ts` / `splitter.test.ts`** — mechanical `SplitterHooks` → `SplitterContext`
+  rename (D-S3-5), no behavior change. This was TODO 6, optional/low-priority; did it since it was
+  quick and bundled with S3.3 per the decision.
+- Updated `s3.3-drag-move.md`'s TODO boxes (all checked) and `README.md`'s step map (S3.3 `done`,
+  S3.4 `next`).
+- **Committed and pushed to `s3-impl`.**
 
-- **`src/model/entry.ts`** — `StoredEdit`/`EntryEdits` moved here from `data/edit-extension.ts`
-  (D-S3-4); `data/edit-extension.ts` re-exports them so every existing import site still works.
-  Exported from `model/index.ts` (not from `api/index.ts` — stays non-public, per spec).
-- **`src/time/snap.ts`** (new) — `snapInstant(zone, at, snap)` and `stepsBetween(zone, unit,
-  increment, from, to)`. `SnapUnit = { unit, increment } | 'none'`. Exported from `time/index.ts`
-  and re-exported from `layout/index.ts` (so `view/` can name the type without importing `time/`
-  directly — `view-boundary`'s depcruise rule doesn't list `time` as an allowed target).
-  **No `time/snap.test.ts` yet** — see TODO below.
-- **`src/layout/gesture-draft.ts`** (new) — `draftForMove(input: DraftInput): EntryEdits` (snaps
-  the pointer's candidate instant off `entries[0]`'s own `start`, then steps every entry by the
-  same whole-unit count — D-S3-3/D-S3-19 multi-selection moves as one rigid group) and
-  `previewOffsets(input): readonly ItemPreview[]` (px `dx`/`dWidth` per item, diffed off each
-  entry's committed span). Exported from `layout/index.ts`. **No
-  `layout/gesture-draft.test.ts` yet** — see TODO below.
-- **`src/interaction/pointer-gesture.ts`** (new) — `attachPointerGesture(pane, callbacks)`:
-  threshold-arm (4px) for mouse/pen, long-press-arm (400ms) for touch, pointer capture, Escape.
-  Owns no DOM listeners itself — `entry-gestures.ts` feeds it `down`/`move`/`up`/`escape` from its
-  own one pointer stream (comment in that file explains why: a drag must never also change the
-  selection).
-- **`src/interaction/entry-gesture-context.ts`** (new) — `Gesture`, `DraftOptions`,
-  `EntryGestureContext` (the seven-plus-selection-member context from D-S3-5).
-- **`src/interaction/entry-gestures.ts`** (grown, not replaced) — now takes `EntryGestureContext`
-  instead of S3.1/S3.2's `EntrySelectionContext` (which is gone — `entryIdFor`/`canSelect` are
-  replaced by `entryFor`/`can`, one capability resolution serving both selection and gesture
-  checks per I14). Adds `onPointerDown`, wires `attachPointerGesture` for move, and both
-  `onPointerUp`/`onKeyDown` check the drag controller first (`drag.up(e)` / `drag.escape()`)
-  before falling into the existing click/selection logic.
-- **`src/interaction/entry-gestures.test.ts`** (rewritten) — old S3.1/S3.2 tests ported to the new
-  context shape (`can` replaces `canSelect`), plus new S3.3 tests: `[S3-A1]` drag-past-threshold
-  previews then commits and never touches selection; `[S3-A2]` Escape mid-drag clears preview and
-  commits nothing; a non-movable bar falls back to a plain click; multi-entry drag order
-  (grabbed first). 14/14 passing.
-- **`src/interaction/index.ts`** — exports updated for the new files.
-- **`src/view/event-bus.ts`** — added `ProposedSpan`, `EntryMove` (public — D-S3-22), and
-  `beforeEntryMove`/`entryMove` on `GanttEventMap`. **S3.3 only implements the sync-veto half** —
-  a handler returning `false` vetoes; nothing awaits a returned Promise yet (that's S3.5's
-  `D-S3-17` async-veto work). Re-exported through `view/index.ts` and `api/index.ts`.
-- **`src/render/backend.ts`** — `InteractionState.preview?: readonly ItemPreview[]`.
-- **`src/render/dom/index.ts`** — `paintPreview`/`applyBarPreview`/`restoreBarTransform`: offsets a
-  bar's transform/width on top of its committed geometry for an in-flight drag, parks it back when
-  the preview clears. Wired into `applyState`/`destroy`. No new test added for this yet (existing
-  `render/dom/index.test.ts` still passes; a preview-specific case would be a good addition, not
-  required by the acceptance table).
-- **`src/view/gantt-shell.ts`** — the big one. New private methods: `#entryFor`,
-  `#entriesForGesture` (D-S3-19: grabbed entry, plus every *capable* selected entry when grabbed is
-  part of a multi-selection), `#resolveSnap` (D-S3-12: unset/`'tick'` → the live preset's own
-  `tickUnit`/`tickIncrement`; Alt → `'none'`), `#draftFor` (calls `layout/gesture-draft.ts`),
-  `#commitGesture` (→ `beforeEntryMove` → `commitEntryEdits` injection → `entryMove`, D-S3-16),
-  `#previewGesture`/`#applyPreview` (D-S3-18: coalesced through a **second `FrameScheduler`
-  instance** — not a raw `requestAnimationFrame` call, which the `no-restricted-globals` lint rule
-  blocks outside `frame-scheduler.ts`; its callback applies the preview directly, never a full
-  `render()`). `GanttShellOptions` gained `commitEntryEdits`.
-- **`src/api/gantt.ts`** — supplies `commitEntryEdits` to `GanttShell`: wraps
-  `options.dataset.transaction()` + one `entries.update()` per draft row, catching
-  `MutationCancelledError` into a plain `false` (D-S3-16's "restores silently"). This is the piece
-  that makes a drag's commit actually reach the store — `view/`'s own `dataset` option is the
-  narrow `model/` interface with no `transaction()`.
+## What was already on the branch before this session (for context)
+
+Two commits landed between the previous handoff and this session's start, neither reflected in
+that handoff's text (it had said "not committed yet" — stale by the time I read it):
+`0d5dc18` (S3.3 core) and `4105b08` ("Smooth drag preview, snap only on commit" — the live preview
+now tracks the pointer at full pixel resolution and only the commit-time value snaps; also fixed
+`fixtures/demo-dataset.ts`'s midnight-drift bug and added a Snap control to the harness). Worth
+knowing if `git log` looks unfamiliar against an older handoff copy.
 
 ## TODO — in priority order
 
-1. **`src/time/snap.test.ts`** — `snapInstant` (whole-unit rounding, both flanking directions,
-   `'none'` passthrough), `stepsBetween` (positive/negative direction, zero, DST — e.g. step by
-   `day` across a spring-forward/fall-back boundary and confirm wall-clock time is preserved, not
-   just epoch-ms offset).
-2. **`src/layout/gesture-draft.test.ts`** — `draftForMove` (single entry, multi-entry rigid-group
-   move, DST-crossing drag, `snap: 'none'` fallback, empty `entries` → empty map) and
-   `previewOffsets` (`dx`/`dWidth` sign and magnitude, `extra` flag true only for the `extra` map's
-   entries, an id with no matching original entry is skipped).
-3. **`src/api/gantt.test.ts`** — integration tests for `[S3-A1]` (move half) through a real `Gantt`
-   + `Dataset`: dispatch pointer events on the mounted timeline pane, assert
-   `beforeEntryMove`/`entryMove` fire with the right `ProposedSpan`s, the entry's `start`/`end`
-   actually changed in the dataset, and `dataset.undo()` reverts it in one step (`[S3-A6]`). Look
-   at how S3.1/S3.2 wrote their selection/hover integration tests in this same file for the
-   pattern (real DOM dispatch, not a bare context mock — that's what `entry-gestures.test.ts`
-   already covers).
-4. **`src/data/history.property.test.ts`** — confirm (add a case if missing) that a move commit's
-   changeset inverts cleanly through the existing property-test harness; this is likely already
-   covered generically since moves go through the ordinary `dataset.entries.update`/`transaction`
-   path with no new mutation primitive, but the spec names `[S3-A6]` against this file explicitly
-   so check before assuming it's free.
-5. **Harness** (`harness/main.ts` / `harness/index.html`) — the user explicitly asked for the
-   harness to become **"a general demo of all the features"**, including dateline (S1.13 landed in
-   a prior session but has **never been demoed in the harness** — grep confirms zero `dateLines`/
-   `DateLine` usage under `harness/`) and every S3 interaction feature. Drag-to-move already works
-   in the harness as-is (any bar is draggable now that `api/gantt.ts` is wired) — try it before
-   adding anything. Concretely, still missing:
-   - `Gantt({ dateLines: [...] })` with at least one labeled date line, and/or a small UI to add
-     one — S1.13's whole harness-visible feature currently has zero demo surface.
-   - A demo of `gantt.interactions` (e.g. a checkbox that flips `{ move: false }` or `{ resize: e
-     => e.kind !== 'group' }`) so a viewer can see capability gating actually change drag/handle
-     behavior, not just read it in code.
-   - Undo/Redo buttons (`dataset.canUndo`/`dataset.undo()`/`redo()`), plus probably a
-     `Ctrl+Z`/`Ctrl+Shift+Z` keydown handler on the harness page — "drag, snap, one undo" (U1) is
-     the acceptance story and there's currently no visible way to undo in the harness at all.
-   - Update `index.html`'s intro copy/title away from "S1 timeline & viewport" once this lands —
-     it undersells everything S2/S3 already added.
-6. **Optional, low priority**: `view/splitter.ts`'s `SplitterHooks` → `SplitterContext` rename
-   (D-S3-5 calls this "mechanical" cleanup, bundled with the S3.3 context growth, but it's cosmetic
-   and touches no behavior — skip it if time is short, do it last if not).
-7. Once 1–5 (6 optional) are done and the full check sequence is green, update:
-   - `plans/s3-direct-manipulation/s3.3-drag-move.md` — check off its `## 4. TODO` boxes.
-   - `plans/s3-direct-manipulation/README.md` — step map: S3.3 `done`, S3.4 `next`.
-   - This file, with a fresh summary, pointing at S3.4 (`s3.4-resize.md`).
-   - **Commit and push** (`git add`/`git commit`/`git push` on `s3-impl`) — nothing from this
-     session is committed yet. Review `git status`/`git diff` first as usual.
+1. **S3.4 (resize)** — read [`s3.4-resize.md`](./s3.4-resize.md) in full first. Needs
+   `draftForResize(input: DraftInput & { edge: 'start' | 'end' })` in `layout/gesture-draft.ts`
+   (zero-length clamp; inverted span refused at the layout layer — the spec's own words, not yet
+   investigated exactly where "layout layer" means here, check S3.3's `draftForMove` neighbors),
+   edge detection in `entry-gestures.ts` from the handle's `data-edge` attribute (handles already
+   exist from S3.2 — `.fg-bar-handle[data-edge="start"/"end"]` — this step wires them to a drag,
+   doesn't create them), and `beforeEntryResize`/`entryResize` on `GanttEventMap` (not a subtype of
+   `EntryMove` — shared fields only, per D-S3-22). Milestones and derived-span kinds (`'group'`)
+   must refuse resize via `can('resize')`, same capability seam S3.2 already built.
+2. **Harness demo gaps** (not S3.4's own gate, but flagged by the user as a standing ask — see
+   `plans/s3-direct-manipulation/README.md`'s step map, which puts the *formal* harness/e2e gate at
+   S3.8, `s3.8-cursor-line-harness-gate.md`). Don't block S3.4 on this, but note for whoever reaches
+   S3.8: `harness/main.ts` already has Undo/Redo buttons wired to `dataset.canUndo`/`undo()`/
+   `redo()` (contrary to an older handoff's claim they were missing) and a Snap control, but still
+   no `Ctrl+Z`/`Ctrl+Shift+Z` keydown shortcut, no `Gantt({ dateLines: [...] })` demo (S1.13 still
+   has zero harness-visible surface — grep confirms zero `dateLines`/`DateLine` usage under
+   `harness/` as of this handoff), and no UI to flip `gantt.interactions` live.
+3. Once S3.4 is done and the full check sequence is green, update `s3.4-resize.md`'s TODO boxes,
+   `README.md` (S3.4 `done`, S3.5 `next`), and this file, pointing at S3.5
+   (`s3.5-keyboard-parity-and-async-veto.md`).
 
 ## Gotchas (carried forward + new)
 
-1. **Don't let `view/` import `interaction/` or `time/`.** The `Gesture`/`EntryGestureContext`
-   shapes are re-declared structurally in `gantt-shell.ts` (mirroring `interaction/`'s real ones,
-   same pattern S3.2 already used for `EntrySelectionContext`). `SnapUnit` is re-exported through
-   `layout/index.ts` for the same reason — `view-boundary`'s depcruise rule allows `render,
-   layout, data, model`, not `time`.
-2. **`view/` cannot call `dataset.transaction()` directly** — that's why `commitEntryEdits` exists
-   as an injected callback from `api/gantt.ts` rather than the shell reaching into a fuller
-   `Dataset` type itself. Don't "simplify" this by widening `GanttShellOptions.dataset`'s type.
-3. **No raw `requestAnimationFrame` outside `view/frame-scheduler.ts`** — an eslint
-   `no-restricted-globals` rule blocks it (B10, one rAF owner). Preview coalescing
-   (`#previewGesture`) uses a second `FrameScheduler` instance for exactly this reason.
-4. **`itemId(entryId)` is `${entryId}:0`, not the same string.** `entry-gestures.ts`'s `canSelect`
-   calls the real `itemId()` helper from `model/` — an early draft of this file used a raw
-   `as unknown as ItemId` cast instead, which silently broke shift-click range selection (the bug
-   was caught by the existing S3.1 tests failing after the S3.3 rewrite — rerun the whole
-   `entry-gestures.test.ts` file after touching this area, not just the new tests).
+1. **Don't let `view/` import `interaction/` or `time/`.** Unchanged from last handoff.
+2. **`view/` cannot call `dataset.transaction()` directly** — `commitEntryEdits` stays an injected
+   callback from `api/gantt.ts`. Unchanged.
+3. **No raw `requestAnimationFrame` outside `view/frame-scheduler.ts`.** Unchanged.
+4. **`itemId(entryId)` is `${entryId}:0`, not the same string.** Unchanged.
 5. **Test `PointerEvent`s need a consistent `pointerId`** across `down`/`move`/`up` in the same
-   gesture, or `attachPointerGesture`'s internal `up()`/`move()` silently no-op (they compare
-   `e.pointerId` against the id captured on `down`). `entry-gestures.test.ts`'s `up`/`down`/`move`
-   helpers all default to `pointerId: 1` now — keep that if you add more drag tests.
-6. **Pre-commit hook auto-formats; `protect-spec.sh` may block small `.dependency-cruiser.cjs`
-   edits** — use full-file `Write` if needed (unchanged from last handoff; not touched this
-   session since no depcruise rule needed editing).
-7. **Run all five checks** before marking a step done: `pnpm vitest run`, `tsc --noEmit`,
-   `eslint src harness`, `depcruise --config .dependency-cruiser.cjs src harness`,
-   `node scripts/guard-red-test.mjs`. All five are green as of this handoff — but note none of
-   them yet exercise a full `Gantt` instance's drag-to-commit path end to end (that's TODO item 3),
-   so a future regression in that specific path could slip through until that test exists.
-8. **Write a fresh handoff before context runs low** — same as always.
+   gesture. Unchanged — the new `gantt.test.ts` drag tests all use `pointerId: 1` throughout.
+6. **A drag integration test needs `setPointerCapture`/`releasePointerCapture` stubbed on the pane
+   element**, not just `document.elementFromPoint` — jsdom/happy-dom implement neither, and
+   `attachPointerGesture` calls both unconditionally on arm/release. `entry-gestures.test.ts` had
+   this already (`mockPointerCapture`); `gantt.test.ts`'s new tests needed their own
+   `stubPointerCapture` helper for the same reason, one level up (the real `.fg-timeline-pane`
+   element, not a bare test `pane` div).
+7. **DST midnight is not automatically DST-shifted** — the US spring-forward transition happens at
+   2am local, not midnight, so a day-boundary snap computed for an early-morning instant can land
+   on the *pre-transition* offset even on the transition's own calendar day. A DST test that wants
+   to see the offset actually change needs an anchor time later than the transition hour (noon is
+   a safe choice) — see `layout/gesture-draft.test.ts`'s DST case for the worked example.
+8. **`freegantt/no-instant-arithmetic` and `no-magic-time-constants` lint rules apply inside test
+   files too**, not just `src/` non-test code — caught by the pre-commit/eslint hook when I first
+   wrote `current.start + op.deltaMs` in `history.property.test.ts` and `1 / 60_000` in
+   `gesture-draft.test.ts`. Use `addMs`/`MS.MINUTE` etc. from `time/index.js` instead, same as
+   production code would.
+9. **Pre-commit hook auto-formats; `protect-spec.sh` may block small `.dependency-cruiser.cjs`
+   edits** — use full-file `Write` if needed. Unchanged, not touched this session.
+10. **Run all five checks** before marking a step done: `pnpm vitest run`, `tsc --noEmit`,
+    `eslint src harness`, `depcruise --config .dependency-cruiser.cjs src harness`,
+    `node scripts/guard-red-test.mjs`. All five are green as of this handoff, now including a real
+    end-to-end drag-to-commit-to-undo path (`api/gantt.test.ts`'s new tests close the gap the
+    previous handoff flagged).
+11. **Write a fresh handoff before context runs low** — same as always.

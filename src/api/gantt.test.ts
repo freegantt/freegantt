@@ -1081,3 +1081,95 @@ describe('Gantt interactions / capability hot path (S3.2, D-S3-9, [S3-A3]/[S3-A5
     gantt.destroy();
   });
 });
+
+describe('Gantt entryMove (S3.3, [S3-A1] move half, [S3-A6])', () => {
+  function stubPointerCapture(el: HTMLElement): void {
+    el.setPointerCapture = vi.fn();
+    el.releasePointerCapture = vi.fn();
+  }
+
+  it('a real drag past the threshold fires beforeEntryMove/entryMove, writes the dataset once, and undo reverts it in one step', () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
+    const gantt = new Gantt({ container, dataset });
+
+    const bar = container.querySelector<HTMLElement>('.fg-bar')!;
+    const timeline = container.querySelector<HTMLElement>('.fg-timeline-pane')!;
+    stubPointerCapture(timeline);
+    const original = document.elementFromPoint.bind(document);
+    document.elementFromPoint = (x: number, y: number) => (x === 5 && y === 5 ? bar : original(x, y));
+
+    const id = entryId(sampleEntries[0]!.id);
+    const before = dataset.entries.get(id)!;
+
+    const beforeEvents: unknown[] = [];
+    const afterEvents: unknown[] = [];
+    gantt.on('beforeEntryMove', (p) => {
+      beforeEvents.push(p);
+    });
+    gantt.on('entryMove', (p) => {
+      afterEvents.push(p);
+    });
+    const datasetChanges: unknown[] = [];
+    dataset.on('change', (c) => {
+      datasetChanges.push(c);
+    });
+
+    timeline.dispatchEvent(new PointerEvent('pointerdown', { clientX: 5, clientY: 5, pointerId: 1 }));
+    timeline.dispatchEvent(new PointerEvent('pointermove', { clientX: 5005, clientY: 5, pointerId: 1 }));
+    timeline.dispatchEvent(new PointerEvent('pointerup', { clientX: 5005, clientY: 5, pointerId: 1 }));
+
+    expect(beforeEvents).toHaveLength(1);
+    expect(afterEvents).toHaveLength(1);
+    const proposed = afterEvents[0] as { entry: unknown; start: unknown; end: unknown };
+    expect(proposed.entry).toBe(id);
+    expect(proposed.start).not.toBe(before.start);
+    expect(datasetChanges).toHaveLength(1); // one transaction, D-S3-16
+
+    const moved = dataset.entries.get(id)!;
+    expect(moved.start).toBe(proposed.start);
+    expect(moved.end).toBe(proposed.end);
+    expect(moved.start).not.toBe(before.start);
+
+    expect(dataset.canUndo).toBe(true);
+    dataset.undo();
+    const reverted = dataset.entries.get(id)!;
+    expect(reverted.start).toBe(before.start);
+    expect(reverted.end).toBe(before.end);
+
+    document.elementFromPoint = original;
+    gantt.destroy();
+  });
+
+  it('beforeEntryMove returning false vetoes the commit: the dataset is untouched', () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
+    const gantt = new Gantt({ container, dataset });
+
+    const bar = container.querySelector<HTMLElement>('.fg-bar')!;
+    const timeline = container.querySelector<HTMLElement>('.fg-timeline-pane')!;
+    stubPointerCapture(timeline);
+    const original = document.elementFromPoint.bind(document);
+    document.elementFromPoint = (x: number, y: number) => (x === 5 && y === 5 ? bar : original(x, y));
+
+    const id = entryId(sampleEntries[0]!.id);
+    const before = dataset.entries.get(id)!;
+    gantt.on('beforeEntryMove', () => false);
+
+    const afterEvents: unknown[] = [];
+    gantt.on('entryMove', (p) => {
+      afterEvents.push(p);
+    });
+
+    timeline.dispatchEvent(new PointerEvent('pointerdown', { clientX: 5, clientY: 5, pointerId: 1 }));
+    timeline.dispatchEvent(new PointerEvent('pointermove', { clientX: 5005, clientY: 5, pointerId: 1 }));
+    timeline.dispatchEvent(new PointerEvent('pointerup', { clientX: 5005, clientY: 5, pointerId: 1 }));
+
+    expect(afterEvents).toEqual([]);
+    expect(dataset.entries.get(id)).toEqual(before);
+    expect(dataset.canUndo).toBe(false);
+
+    document.elementFromPoint = original;
+    gantt.destroy();
+  });
+});
