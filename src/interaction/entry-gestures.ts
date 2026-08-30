@@ -27,9 +27,11 @@ function moveGesture(): Gesture {
  *  shift-click omits incapable entries from the range and writes nothing if that empties the range.
  *
  *  Move (S3.3, D-S3-16): a pointerdown on a `move`-capable bar arms a drag once the pointer clears
- *  the drag threshold; every subsequent move previews the draft (`ctx.preview`) and pointerup commits
- *  it (`ctx.commit`) through `beforeEntryMove` → one transaction → `entryMove`. Escape mid-drag
- *  clears the preview and commits nothing (`[S3-A2]`) — the store was never touched. */
+ *  the drag threshold; every subsequent move previews the draft (`ctx.preview`) at full pixel
+ *  resolution — never snapped — so the grabbed spot on the bar tracks the cursor with no drift, and
+ *  pointerup commits the snapped draft (`ctx.commit`) through `beforeEntryMove` → one transaction →
+ *  `entryMove`. Escape mid-drag clears the preview and commits nothing (`[S3-A2]`) — the store was
+ *  never touched. */
 export function attachEntryGestures(
   pane: HTMLElement,
   container: HTMLElement,
@@ -52,15 +54,17 @@ export function attachEntryGestures(
       return armedEntries.length > 0;
     },
     move(e, dxPx): void {
-      const draft = ctx.draftFor(
-        moveGesture(),
-        armedEntries,
-        dxPx,
-        e.altKey ? { suspendSnap: true } : undefined,
-      );
+      // The live preview always tracks the pointer at full resolution (never quantized to a snap
+      // unit) so the grabbed spot on the bar never drifts from the cursor mid-drag. Snapping still
+      // applies to what actually gets written — see commit() below — this only affects what paints
+      // while the gesture is in flight.
+      const draft = ctx.draftFor(moveGesture(), armedEntries, dxPx, { suspendSnap: true });
       ctx.preview(draft);
     },
     commit(e, dxPx): void {
+      // The committed value snaps to the preset's tick unit unless Alt held it off for fine
+      // placement (D-S3-12) — this is the one place snapping actually lands, now that move() above
+      // always previews raw.
       const draft = ctx.draftFor(
         moveGesture(),
         armedEntries,

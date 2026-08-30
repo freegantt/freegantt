@@ -37,7 +37,9 @@ export interface EntryGestureContext {
    *  incapable one is skipped, not blocking. */
   entriesForGesture(grabbed: EntryId): readonly Entry[];
   /** Pure gesture math (`layout/gesture-draft.ts`'s `draftForMove`), with the shell's own zone/scale/
-   *  snap already resolved in. `dxPx` is horizontal pointer travel since the gesture armed. */
+   *  snap already resolved in. `dxPx` is horizontal pointer travel since the gesture armed.
+   *  `entry-gestures.ts` always passes `{ suspendSnap: true }` for the live preview (so the bar
+   *  tracks the pointer with no drift) and only lets the preset's snap through at commit. */
   draftFor(gesture: Gesture, entries: readonly Entry[], dxPx: number, options?: DraftOptions): EntryEdits;
   /** `beforeEntryMove` → one `dataset.transaction()` → `entryMove` (D-S3-16). Resolves `false` on a
    *  sync veto or a `MutationCancelledError` from `beforeChange` — both restore silently, nothing
