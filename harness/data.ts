@@ -13,6 +13,7 @@
 // Import replaces the dataset and rebuilds the Gantt, which is the proof that a Gantt survives a
 // rebind (or the finding against destroy() if it does not).
 
+import './harness-nav.ts';
 import { Dataset, Gantt, MS, MutationCancelledError, addMs, now } from '../src/api/index.js';
 import type { ChangeSet, DatasetDocument, DatasetEventMap, Entry } from '../src/api/index.js';
 import { demoEntryInputs } from '../fixtures/demo-dataset.js';
