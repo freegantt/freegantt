@@ -38,6 +38,12 @@ test('a model-driven write does not feed back into another panTo (echo case, D-S
     el.dispatchEvent(new Event('scroll'));
   });
   await expect.poll(async () => (await scrollTops(page)).tall).toBeGreaterThan(0);
+  await expect
+    .poll(async () => {
+      const tops = await scrollTops(page);
+      return tops.short === tops.tall ? tops.short : -1;
+    })
+    .toBe(150);
   const first = await scrollTops(page);
   // #short has plenty of headroom at 150 (its own max is well over that), so it tracks exactly.
   expect(first.short).toBe(first.tall);
