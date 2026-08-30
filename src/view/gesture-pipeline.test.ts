@@ -450,5 +450,24 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
       expect(committed).toBe(true);
       expect(paints.filter((pending) => pending !== undefined)).toEqual([]);
     });
+
+    it('preview with cursorX paints a Cursor line and cancel parks it (D-S3-15)', async () => {
+      const cursors: ({ x: number; label: string } | undefined)[] = [];
+      const { deps } = withRoster([entry('a', 100, 200)], {
+        applyGestureState: (_preview, _pending, cursor) => cursors.push(cursor),
+      });
+      const pipeline = new GesturePipeline(deps);
+      const session = pipeline.session(entryId('a'), { kind: 'move' })!;
+
+      session.preview(50, { suspendSnap: true, cursorX: 120 });
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+      const painted = cursors.at(-1);
+      expect(painted?.x).toBe(120);
+      expect(painted?.label?.length).toBeGreaterThan(0);
+
+      session.cancel();
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+      expect(cursors.at(-1)).toBeUndefined();
+    });
   });
 });

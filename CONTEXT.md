@@ -356,7 +356,11 @@ _Avoid_: caption (used generically elsewhere), tooltip (this is always-visible, 
 
 **Today line**:
 The Date line at `now()`. `gantt.todayLine` (default on) is the wrapper that emits it — `true`, `false`, or a pinned `InstantInput` (S1.13, D-S1.13-4), with no clock read once pinned. Updates on the next render, not on a clock tick. Paint marks it with `data-flag="today"` on `.fg-date-line`. `panToToday` pans to `now()`.
-_Avoid_: Timeline, cursor, now-line
+_Avoid_: Cursor (that is the pane's CSS cursor, or the Cursor line during a drag — never this Date line)
+
+**Cursor line**:
+A hot-path hairline at the Instant under the pointer during a pointer drag (S3.8, D-S3-15, issue #99 gap 5). Paint is `.fg-cursor-line` / `.fg-cursor-line-label`, singleton nodes moved by `applyState` via `InteractionState.cursorX` / `cursorLabel`. Reuses `--fg-date-line-color`. Never a `frame.decorations` Date line — those are authored markers; this one tracks the pointer and parks when the drag ends. The caption is `cursorLabelForX` in `layout/` (`instantForX` → `snapInstant` → `formatDate`).
+_Avoid_: Date line (authored, in the frame), Today line, cursor (the CSS `cursor` property on a bar)
 
 **Today line margin**:
 How many of the current preset's Ticks `panToToday('start')` leaves between the timeline pane's left edge and the Today line. Live on `Gantt.todayLineMarginTicks` (default `2`; `0` lands flush). No effect on `align: 'center'`. The shell converts ticks to px at the Instant being panned to — calendar ticks vary (DST, month length), so this is not a cached pixel constant.
@@ -392,6 +396,18 @@ _Avoid_: Gesture unqualified (collides with the pointer machine's own word — s
 Prose for a gesture's in-flight edit while a drag previews — not a type of its own (D-S3-2). A Draft **is** `EntryEdits`, the same shape `dataset.entries.update()` takes; nothing new is declared for it. Distinct from Write set (a Transaction's own in-progress record, once a Draft actually commits).
 _Avoid_: Draft as a type name (there is none — see Write set's own _Avoid_ line), staging area, buffer
 
+**Ghost**:
+Hot-path paint of an in-flight Draft (and any extra `EntryEdits` the extension hook returned) as transforms on existing bar nodes — `data-state~="ghost"` for an extender extra, `data-state~="dragging"` for the caller's own grabbed bars. Discarded on cancel; never written to the Dataset until commit.
+_Avoid_: Preview as a type name (`ItemPreview` is the internal pixel offset; Ghost is the user-visible paint)
+
+**Nudge**:
+One keyboard step of a selected entry, sized to one resolved snap unit, committed through the same `session().nudge()` pipeline a pointer `commit()` uses (D-S3-13, D-S3-23). One transaction per key press. Distinct from viewport pan (arrows pan only while the selection is empty).
+_Avoid_: Step (that is Tick stepping), keyboard drag
+
+**Interaction state**:
+The one long-lived, mutable per-Gantt object `RenderBackend.applyState` diffs against (`hoveredItemId`, `selectedItemIds`, `resizableItemId`, `movableItemId`, `preview`, `pendingItemIds`, `cursorX`, `cursorLabel`). Hot path: class toggles and transforms only, no frame rebuild (I5, D-S3-6).
+_Avoid_: Selection (that is the public `Gantt.selection` Entry-id set; this is the paint-side mirror)
+
 ### Theming and accessibility
 
 **Base stylesheet**:
@@ -403,11 +419,11 @@ A `--fg-*` CSS custom property — level 1 of the Customization ladder (`plans/0
 _Avoid_: Variable, custom property (accurate but not this project's term of art — say Token), theme variable
 
 **Part**:
-One of the `fg-*` class names the library's DOM structure carries — level 2 of the Customization ladder. The vocabulary is closed and un-renamed (D-S1.10-1), with one exception before 1.0 (S1.13, D-S1.13-8): `fg-container`, `fg-grid-pane`, `fg-grid-spacer`, `fg-rows-clip`, `fg-rows`, `fg-splitter`, `fg-timeline-pane`, `fg-header`, `fg-band`, `fg-tick`, `fg-row`, `fg-row-label`, `fg-bars`, `fg-bar`, `fg-date-line`, `fg-date-line-label`. A consumer writes level-2 CSS against a Part directly (`.fg-bar { ... }`) or against a Part plus a State attribute (`.fg-bar[data-flag~="conflict"] { ... }`).
+One of the `fg-*` class names the library's DOM structure carries — level 2 of the Customization ladder. The vocabulary is closed and un-renamed (D-S1.10-1), with one exception before 1.0 (S1.13, D-S1.13-8): `fg-container`, `fg-grid-pane`, `fg-grid-spacer`, `fg-rows-clip`, `fg-rows`, `fg-splitter`, `fg-timeline-pane`, `fg-header`, `fg-band`, `fg-tick`, `fg-row`, `fg-row-label`, `fg-bars`, `fg-bar`, `fg-bar-handle`, `fg-date-line`, `fg-date-line-label`, `fg-cursor-line`, `fg-cursor-line-label`. A consumer writes level-2 CSS against a Part directly (`.fg-bar { ... }`) or against a Part plus a State attribute (`.fg-bar[data-flag~="conflict"] { ... }`).
 _Avoid_: Pane (Grid pane/Timeline pane/Splitter are specific Parts, already named in "Mounted instances" — Part is the general term for the whole class vocabulary), BEM block (rejected, Q2 — renaming shipped classes to a BEM shape was churn with no behavior change)
 
 **State attribute**:
-A `data-*` attribute a Part carries so a consumer can select on state without JS — `data-flag` (space-joined, generated from `BarFlags`'/`LinkFlags`' own keys, D-S1.10-2: `conflict`, `cycle`; on `.fg-date-line` the Today line wrapper writes `today`), `data-kind` (an Entry's Kind), `data-testid`/`data-row-id`/`data-item-id` (stable E2E hooks, U6). Distinct from a Token (a value) and a Part (a structural class): a State attribute is level 2's other half, the thing a consumer's selector matches against rather than reads.
+A `data-*` attribute a Part carries so a consumer can select on state without JS — `data-flag` (space-joined, generated from `BarFlags`'/`LinkFlags`' own keys, D-S1.10-2: `conflict`, `cycle`; on `.fg-date-line` the Today line wrapper writes `today`), `data-kind` (an Entry's Kind), `data-state` on `.fg-bar` (`hovered`, `selected`, `pending`, `dragging`, `ghost`), `data-movable` (grab cursor), `data-testid`/`data-row-id`/`data-item-id` (stable E2E hooks, U6). Distinct from a Token (a value) and a Part (a structural class): a State attribute is level 2's other half, the thing a consumer's selector matches against rather than reads.
 _Avoid_: Data attribute (too generic — say State attribute when it's part of the level-2 vocabulary), modifier class (there is no modifier-class convention here — state lives in `data-*`, never a second class)
 
 **a11y label**:

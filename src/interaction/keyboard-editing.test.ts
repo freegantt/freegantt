@@ -53,6 +53,7 @@ function makeContext(
     can: (capability, entry) => (capability === 'select' ? !incapableRows.includes(entry.id) : true),
     rowOrder: () => ORDER,
     setHovered: () => {},
+    contentXAtPaneOffset: (offsetX) => offsetX,
     selection: {
       get: () => selection,
       propose: (next) => {

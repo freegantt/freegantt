@@ -139,7 +139,7 @@ Slices are scope, not calendar estimates. Within a slice, entries are ordered so
 
 ## S3 — Direct manipulation
 
-**Position:** after S1.13, before S4. Tracker: [`plans/s3-direct-manipulation/README.md`](./s3-direct-manipulation/README.md); work splits into [`s3.1-selection.md`](./s3-direct-manipulation/s3.1-selection.md)–[`s3.8-cursor-line-harness-gate.md`](./s3-direct-manipulation/s3.8-cursor-line-harness-gate.md) (S3.1–S3.2 done as of 2026-08-30). Prerequisites are closed; S3 publishes no install API and tests inject through the internal seam D-S2-6 sanctions. The acceptance boxes below become `[S3-A1]`–`[S3-A8]` when S3.8's spec edits land.
+**Position:** after S1.13, before S4. Tracker: [`plans/s3-direct-manipulation/README.md`](./s3-direct-manipulation/README.md); work splits into [`s3.1-selection.md`](./s3-direct-manipulation/s3.1-selection.md)–[`s3.8-cursor-line-harness-gate.md`](./s3-direct-manipulation/s3.8-cursor-line-harness-gate.md). **Done, gate passing.** S3 publishes no install API; tests inject through the internal seam D-S2-6 sanctions.
 
 **Goal:** editing with the pointer (D10): drag-move, resize, selection — each gesture cancelable, transactional, undoable. Live preview of the draft plus any extra field writes the extension hook returns.
 
@@ -159,12 +159,14 @@ Slices are scope, not calendar estimates. Within a slice, entries are ordered so
 
 **Acceptance**
 
-- [ ] Every S3 gesture that writes data — pointer move, pointer resize, keyboard nudge — runs cancelable before-event → exactly one transaction → after-event (event-order test). Selection writes no dataset transaction: it fires its own cancelable pair and `dataset.on('change')` never sees it.
-- [ ] Escape mid-drag restores exactly the pre-gesture state, including preview ghosts.
-- [ ] Hover across 1,000 visible bars allocates nothing and rebuilds no frame (I5 perf test).
-- [ ] With the identity extender, only the dragged entry ghosts. With an injected extender that writes a second entry's `start`, that bar ghosts too; cancel discards both. No `scheduling/` import.
-- [ ] An entry whose `resize` capability resolves false shows no handles and cannot be resized by pointer or keyboard (I14).
-- [ ] A gesture undone by Ctrl+Z reverts the user edit and any extender extras in one step.
+- [x] `[S3-A1]` Every S3 gesture that writes data — pointer move, pointer resize, keyboard nudge — runs cancelable before-event → exactly one transaction → after-event (event-order test). Selection writes no dataset transaction: it fires its own cancelable pair and `dataset.on('change')` never sees it.
+- [x] `[S3-A2]` Escape mid-drag restores exactly the pre-gesture state, including preview ghosts.
+- [x] `[S3-A3]` Hover across a 1,000-entry fixture allocates nothing and rebuilds no frame (I5 perf test, D-S3-20).
+- [x] `[S3-A4]` With the identity extender, only the dragged entry ghosts. With an injected extender that writes a second entry's `start`, that bar ghosts too; cancel discards both. No `scheduling/` import.
+- [x] `[S3-A5]` An entry whose `resize` capability resolves false shows no handles and cannot be resized by pointer or keyboard (I14).
+- [x] `[S3-A6]` A gesture undone by Ctrl+Z reverts the user edit and any extender extras in one step.
+- [x] `[S3-A7]` Viewport gestures (ctrl/⌘+wheel zoom, shift+wheel pan, Page/Home/End/arrows) write nothing to the dataset.
+- [x] `[S3-A8]` During a pointer drag, a Cursor line and label follow the pointer; they park when the drag ends.
 
 ---
 

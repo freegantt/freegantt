@@ -67,8 +67,10 @@ export function attachEntryGestures(
       // The live preview always tracks the pointer at full resolution (never quantized to a snap
       // unit) so the grabbed spot on the bar never drifts from the cursor mid-drag. Snapping still
       // applies to what actually gets written — see commit() below — this only affects what paints
-      // while the gesture is in flight.
-      session!.preview(dxPx, { suspendSnap: true });
+      // while the gesture is in flight. Cursor line x is content space (D-S3-15): pane-local offset
+      // plus the bound scroll, never element.scrollLeft (I12).
+      const offsetX = e.clientX - pane.getBoundingClientRect().left;
+      session!.preview(dxPx, { suspendSnap: true, cursorX: ctx.contentXAtPaneOffset(offsetX) });
     },
     commit(e, dxPx): void {
       // The committed value snaps to the preset's tick unit unless Alt held it off for fine

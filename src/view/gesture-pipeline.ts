@@ -5,7 +5,7 @@
 // through `EntryGestureContext`. (Named `GesturePipeline`, not the plan's original "GestureHost" —
 // "Host" is a retired word, D-S1.11-6/#64, for smuggling two concepts under one name.)
 
-import { draftForMove, draftForResize, previewOffsets } from '../layout/index.js';
+import { cursorLabelForX, draftForMove, draftForResize, previewOffsets } from '../layout/index.js';
 import type { ItemPreview, SnapUnit, TimeScale, ViewPreset } from '../layout/index.js';
 import type { Entry, EntryEdits, EntryId, ItemId } from '../model/index.js';
 import { itemId } from '../model/index.js';
@@ -40,12 +40,16 @@ export interface GesturePipelineDeps {
    *  when a preview frame actually calls `extend` (an installed extender may cascade to an entry
    *  outside the caller's own draft, so `entryById` alone cannot answer it). */
   allEntries?(): ReadonlyMap<EntryId, Entry>;
+  /** S3.8, D-S3-15: locale for `cursorLabelForX` — the same value header ticks already use. */
+  locale?(): Intl.LocalesArgument | undefined;
   /** D-S3-17/D-S3-18: one `InteractionState` write for the live or held preview and the pending-bar
    *  ids. `undefined` preview parks bars on committed geometry; `undefined` pendingItemIds clears the
-   *  `pending` token. The arm lock itself is `session()` refusing while `#heldItemIds` is set. */
+   *  `pending` token. The arm lock itself is `session()` refusing while `#heldItemIds` is set.
+   *  `cursor` is the Cursor line (D-S3-15); `undefined` parks it. */
   applyGestureState(
     preview: readonly ItemPreview[] | undefined,
     pendingItemIds: readonly ItemId[] | undefined,
+    cursor?: { x: number; label: string },
   ): void;
 }
 
@@ -63,11 +67,17 @@ export class GesturePipeline {
    *  `session()` refuses to arm a new gesture while this is defined (the arm lock). Paint uses the
    *  same value as `pendingItemIds` in the one `applyGestureState` write. */
   #heldItemIds: readonly ItemId[] | undefined;
+  /** S3.8, D-S3-15: content-x of the live pointer, coalesced with the preview on the same rAF. */
+  #scheduledCursorX: number | undefined;
 
   constructor(deps: GesturePipelineDeps) {
     this.#deps = deps;
     this.#previewFrame = new FrameScheduler(() => {
-      this.#deps.applyGestureState(this.#computePreview(this.#scheduledDraft), this.#heldItemIds);
+      this.#deps.applyGestureState(
+        this.#computePreview(this.#scheduledDraft),
+        this.#heldItemIds,
+        this.#computeCursor(),
+      );
     });
   }
 
@@ -86,7 +96,7 @@ export class GesturePipeline {
     const anchor = entries[0]!;
     return {
       preview: (dxPx, options) => {
-        this.#preview(this.#draftFor(gesture, entries, dxPx, options));
+        this.#preview(this.#draftFor(gesture, entries, dxPx, options), options?.cursorX);
       },
       commit: (dxPx, options) => {
         return this.#commit(gesture, this.#draftFor(gesture, entries, dxPx, options));
@@ -182,6 +192,7 @@ export class GesturePipeline {
    *  into one `false`. A `before*` handler that returns a Promise instead of resolving synchronously
    *  holds the **commit draft** as preview and marks the bars `pending` until it settles (D-S3-17). */
   #commit(gesture: EntryGesture, draft: EntryEdits): Promise<boolean> {
+    this.#scheduledCursorX = undefined;
     if (draft.size === 0) return Promise.resolve(false);
     const spans = [...draft].flatMap(([id, edit]) =>
       edit.start !== undefined && edit.end !== undefined
@@ -259,9 +270,24 @@ export class GesturePipeline {
 
   /** D-S3-18: coalesces on the pipeline's own rAF — a drag's every pointermove replaces the scheduled
    *  draft, but only the last one before the next frame is ever painted. */
-  #preview(draft: EntryEdits | undefined): void {
+  #preview(draft: EntryEdits | undefined, cursorX?: number): void {
     this.#scheduledDraft = draft;
+    this.#scheduledCursorX = draft === undefined ? undefined : cursorX;
     this.#previewFrame.request();
+  }
+
+  /** D-S3-15: label snaps even while the bar preview is unsnapped (D-S3-12). */
+  #computeCursor(): { x: number; label: string } | undefined {
+    if (this.#scheduledCursorX === undefined) return undefined;
+    return {
+      x: this.#scheduledCursorX,
+      label: cursorLabelForX(
+        this.#scheduledCursorX,
+        this.#deps.timeScale(),
+        this.#resolveSnap(false),
+        this.#deps.locale?.(),
+      ),
+    };
   }
 
   #paintNow(): void {

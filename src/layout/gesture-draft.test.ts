@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { draftForMove, draftForResize, previewOffsets } from './gesture-draft.js';
+import { cursorLabelForX, draftForMove, draftForResize, previewOffsets } from './gesture-draft.js';
 import type { Entry } from '../model/index.js';
 import { entryId, itemId } from '../model/index.js';
 import { instant, createTimeScale, MS } from '../time/index.js';
@@ -219,5 +219,15 @@ describe('previewOffsets', () => {
     const proposed = new Map([[entryId('missing'), { start: a.start, end: a.end }]]);
     const previews = previewOffsets({ proposed, extra: new Map(), entries: [a], scale });
     expect(previews).toEqual([]);
+  });
+});
+
+describe('cursorLabelForX (S3.8, D-S3-15)', () => {
+  it('snaps before format, in a non-UTC zone', () => {
+    // 23:50 EDT on 14 Jun (2026-06-15T03:50:00Z) is 10 minutes from 15 Jun 00:00 EDT, so a day
+    // snap rounds forward. Unsnapped formatDate would still read 14 Jun.
+    const x = scale.xForInstant(instant('2026-06-15T03:50:00Z'));
+    expect(cursorLabelForX(x, scale, { unit: 'day', increment: 1 })).toBe('Jun 15, 2026');
+    expect(cursorLabelForX(x, scale, 'none')).toBe('Jun 14, 2026');
   });
 });

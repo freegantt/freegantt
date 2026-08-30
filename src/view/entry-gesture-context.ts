@@ -16,6 +16,9 @@ export type EntryGesture = { kind: 'move' } | { kind: 'resize'; edge: 'start' | 
  *  preset's own `snap` setting resolves, so `interaction/` never resolves it itself. */
 export interface DraftOptions {
   suspendSnap?: boolean;
+  /** S3.8, D-S3-15: content-x under the pointer, already converted by `contentXAtPaneOffset`.
+   *  `preview()` paints the Cursor line here; `commit()`/`nudge()` ignore it. */
+  cursorX?: number;
 }
 
 /** S3.4, D-S3-4: what `hitTest` found. `edge` is set only for a hit on the shared resize-handle pair
@@ -62,6 +65,9 @@ export interface EntryGestureContext {
   selection: { get(): readonly EntryId[]; propose(next: readonly EntryId[]): void };
   /** S3.2 (D-S3-6): the item id under the pointer, or undefined on pointerleave. */
   setHovered(itemId: ItemId | undefined): void;
+  /** S3.8: pane-local `offsetX` (`clientX - pane left`) plus the bound `ScrollModel`'s x — content
+   *  x for the Cursor line. `interaction/` never reads element scroll (I12). */
+  contentXAtPaneOffset(offsetX: number): number;
   /** Arms a gesture on the grabbed entry (+ capable co-selected entries, D-S3-19/22). Returns
    *  `undefined` when nothing capable is grabbed — replaces the length check `start()` in
    *  `entry-gestures.ts` used to make by hand against `entriesForGesture()`'s result. */
