@@ -885,13 +885,13 @@ describe('Gantt selection (S3.1, D-S3-10, [S3-A1])', () => {
     gantt.destroy();
   });
 
-  it('entriesForSelection resolves selection ids through the bound dataset, in order', () => {
+  it('selectionEntries resolves selection ids through the bound dataset, in order', () => {
     const container = document.createElement('div');
     const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
     const gantt = new Gantt({ container, dataset });
 
     gantt.selection = [sampleEntries[1]!.id, sampleEntries[0]!.id];
-    expect(gantt.entriesForSelection).toEqual([
+    expect(gantt.selectionEntries).toEqual([
       dataset.entries.get(sampleEntries[1]!.id),
       dataset.entries.get(sampleEntries[0]!.id),
     ]);
@@ -899,17 +899,17 @@ describe('Gantt selection (S3.1, D-S3-10, [S3-A1])', () => {
     gantt.destroy();
   });
 
-  it('entriesForSelection skips ids no longer in the store and re-reads field edits', () => {
+  it('selectionEntries skips ids no longer in the store and re-reads field edits', () => {
     const container = document.createElement('div');
     const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
     const gantt = new Gantt({ container, dataset });
     gantt.selection = [sampleEntries[0]!.id, sampleEntries[1]!.id];
 
     dataset.entries.remove(sampleEntries[1]!.id);
-    expect(gantt.entriesForSelection).toEqual([dataset.entries.get(sampleEntries[0]!.id)]);
+    expect(gantt.selectionEntries).toEqual([dataset.entries.get(sampleEntries[0]!.id)]);
 
     dataset.entries.update(sampleEntries[0]!.id, { name: 'Renamed' });
-    expect(gantt.entriesForSelection[0]!.name).toBe('Renamed');
+    expect(gantt.selectionEntries[0]!.name).toBe('Renamed');
 
     gantt.destroy();
   });

@@ -49,7 +49,7 @@ function firstEntryId(): string | undefined {
 }
 
 function refreshNameInput(): void {
-  const entries = gantt.entriesForSelection;
+  const entries = gantt.selectionEntries;
   if (entries.length === 0) {
     nameInput.value = '';
     return;
@@ -59,7 +59,7 @@ function refreshNameInput(): void {
 }
 
 function refreshMutationButtons(): void {
-  const none = gantt.entriesForSelection.length === 0;
+  const none = gantt.selectionEntries.length === 0;
   nameInput.disabled = none;
   renameBtn.disabled = none;
   moveBackBtn.disabled = none;
@@ -68,7 +68,7 @@ function refreshMutationButtons(): void {
 }
 
 function renderSelectionReadout(): void {
-  const ids = gantt.entriesForSelection.map((entry) => entry.id);
+  const ids = gantt.selectionEntries.map((entry) => entry.id);
   selectionReadout.textContent = ids.length === 0 ? 'Selection: (none)' : `Selection: ${ids.join(', ')}`;
 }
 
@@ -139,7 +139,7 @@ addBtn.addEventListener('click', () => {
 });
 
 renameBtn.addEventListener('click', () => {
-  const entries = gantt.entriesForSelection;
+  const entries = gantt.selectionEntries;
   if (entries.length === 0) return;
   try {
     dataset.transaction(() => {
@@ -151,7 +151,7 @@ renameBtn.addEventListener('click', () => {
 });
 
 function move(deltaMs: number): void {
-  const entries = gantt.entriesForSelection;
+  const entries = gantt.selectionEntries;
   if (entries.length === 0) return;
   try {
     dataset.transaction(() => {
@@ -171,7 +171,7 @@ moveBackBtn.addEventListener('click', () => move(-MS.DAY));
 moveFwdBtn.addEventListener('click', () => move(MS.DAY));
 
 removeBtn.addEventListener('click', () => {
-  const entries = gantt.entriesForSelection;
+  const entries = gantt.selectionEntries;
   if (entries.length === 0) return;
   try {
     dataset.transaction(() => {

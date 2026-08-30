@@ -1,6 +1,7 @@
 import './harness-nav.ts';
 import { Gantt, Dataset, MutationCancelledError } from '../src/api/index.js';
 import type { Theme } from '../src/api/index.js';
+import type { TimeUnit } from '../src/model/index.js';
 import { demoEntryInputs } from '../fixtures/demo-dataset.js';
 import { mountTimelineToolbar } from './timeline-toolbar.js';
 
@@ -24,7 +25,7 @@ const redoBtn = document.querySelector<HTMLButtonElement>('#redo-btn')!;
 const selectionReadout = document.querySelector<HTMLParagraphElement>('#selection-readout')!;
 
 function refreshNameInput(): void {
-  const entries = gantt.entriesForSelection;
+  const entries = gantt.selectionEntries;
   if (entries.length === 0) {
     nameInput.value = '';
     return;
@@ -34,14 +35,14 @@ function refreshNameInput(): void {
 }
 
 function refreshMutationButtons(): void {
-  const none = gantt.entriesForSelection.length === 0;
+  const none = gantt.selectionEntries.length === 0;
   nameInput.disabled = none;
   renameBtn.disabled = none;
   removeBtn.disabled = none;
 }
 
 function renderSelection(): void {
-  const ids = gantt.entriesForSelection.map((entry) => entry.id);
+  const ids = gantt.selectionEntries.map((entry) => entry.id);
   selectionReadout.textContent = ids.length === 0 ? 'Selection: (none)' : `Selection: ${ids.join(', ')}`;
 }
 
@@ -63,7 +64,7 @@ dataset.on('change', () => {
 });
 
 renameBtn.addEventListener('click', () => {
-  const entries = gantt.entriesForSelection;
+  const entries = gantt.selectionEntries;
   if (entries.length === 0) return;
   try {
     dataset.transaction(() => {
@@ -75,7 +76,7 @@ renameBtn.addEventListener('click', () => {
 });
 
 removeBtn.addEventListener('click', () => {
-  const entries = gantt.entriesForSelection;
+  const entries = gantt.selectionEntries;
   if (entries.length === 0) return;
   try {
     dataset.transaction(() => {
@@ -104,6 +105,27 @@ redoBtn.addEventListener('click', () => {
 
 refreshHistoryButtons();
 syncSelectionUi();
+
+// Snap demo (D-S3-12): a drag always previews at full pixel resolution — this only controls where
+// the *committed* start/end lands. 'tick' defers to whatever the active preset already steps by;
+// 'none' matches holding Alt for every drag, not just the current one; hour/day/week let a visitor
+// pick a coarser or finer grid than the preset's own tick, at any increment.
+const snapUnitSelect = document.querySelector<HTMLSelectElement>('#snap-unit')!;
+const snapIncrementInput = document.querySelector<HTMLInputElement>('#snap-increment')!;
+
+function applySnapChoice(): void {
+  const unit = snapUnitSelect.value;
+  snapIncrementInput.disabled = unit === 'tick' || unit === 'none';
+  const snap =
+    unit === 'tick' || unit === 'none'
+      ? unit
+      : { unit: unit as TimeUnit, increment: Math.max(1, Number(snapIncrementInput.value) || 1) };
+  gantt.preset = { ...gantt.preset, snap };
+}
+
+snapUnitSelect.addEventListener('change', applySnapChoice);
+snapIncrementInput.addEventListener('change', applySnapChoice);
+applySnapChoice();
 
 const THEME_STORAGE_KEY = 'freegantt-harness-theme';
 
