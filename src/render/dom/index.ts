@@ -78,6 +78,12 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
   /** S3.3, D-S3-18: items this backend currently holds off their committed transform for a drag
    *  preview — so the next `applyState` knows which ones to park back when they drop out of the set. */
   let paintedPreview: ReadonlySet<ItemId> = new Set();
+  /** S3.6, D-S3-18: split of `paintedPreview` by `ItemPreview.extra` — `dragging` is the caller's own
+   *  gesture, `ghost` is an installed extension hook's cascade. Tracked separately from
+   *  `paintedPreview` (which drives the transform, not the token) so a `data-state` repaint touches
+   *  only the items whose *token* actually changed, same diff-and-touch pattern as `paintedPending`. */
+  let paintedDragging: ReadonlySet<ItemId> = new Set();
+  let paintedGhost: ReadonlySet<ItemId> = new Set();
   // Committed geometry per mounted bar (D-S3-6): what the handle pair and the future preview offsets
   // (S3.3) both read. `syncBars` is the only writer.
   const barGeomByItemId = new Map<ItemId, HandleGeom>();
@@ -127,6 +133,30 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
     });
     next.forEach((preview, id) => applyBarPreview(id, preview));
     paintedPreview = new Set(next.keys());
+
+    // S3.6, D-S3-18: `dragging` (the caller's own draft) vs `ghost` (an installed extension hook's
+    // `extra`, U7) — same diff-and-touch-only-changed shape `applyState`'s selected/pending sets use.
+    const nextDragging = new Set<ItemId>();
+    const nextGhost = new Set<ItemId>();
+    next.forEach((preview, id) => (preview.extra ? nextGhost : nextDragging).add(id));
+    const changed = new Set<ItemId>();
+    paintedDragging.forEach((id) => {
+      if (!nextDragging.has(id)) changed.add(id);
+    });
+    nextDragging.forEach((id) => {
+      if (!paintedDragging.has(id)) changed.add(id);
+    });
+    paintedGhost.forEach((id) => {
+      if (!nextGhost.has(id)) changed.add(id);
+    });
+    nextGhost.forEach((id) => {
+      if (!paintedGhost.has(id)) changed.add(id);
+    });
+    changed.forEach((id) =>
+      paintDataState(id, paintedHovered, paintedSelected, paintedPending, nextDragging, nextGhost),
+    );
+    paintedDragging = nextDragging;
+    paintedGhost = nextGhost;
   }
 
   function paintDataState(
@@ -134,6 +164,8 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
     hovered: ItemId | undefined,
     selected: ReadonlySet<ItemId>,
     pending: ReadonlySet<ItemId>,
+    dragging: ReadonlySet<ItemId>,
+    ghost: ReadonlySet<ItemId>,
   ): void {
     const node = barLayerCache.node(itemId);
     if (!node) return;
@@ -141,6 +173,8 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
     if (hovered === itemId) tokens.push('hovered');
     if (selected.has(itemId)) tokens.push('selected');
     if (pending.has(itemId)) tokens.push('pending');
+    if (dragging.has(itemId)) tokens.push('dragging');
+    if (ghost.has(itemId)) tokens.push('ghost');
     node.dataset['state'] = tokens.join(' ');
   }
 
@@ -369,7 +403,9 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
         if (paintedHovered !== undefined) changed.add(paintedHovered);
         if (nextHovered !== undefined) changed.add(nextHovered);
       }
-      changed.forEach((id) => paintDataState(id, nextHovered, nextSelected, nextPending));
+      changed.forEach((id) =>
+        paintDataState(id, nextHovered, nextSelected, nextPending, paintedDragging, paintedGhost),
+      );
       paintedSelected = nextSelected;
       paintedHovered = nextHovered;
       paintedPending = nextPending;
@@ -428,6 +464,8 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
       paintedResizable = undefined;
       paintedMovable = undefined;
       paintedPreview = new Set();
+      paintedDragging = new Set();
+      paintedGhost = new Set();
       gridLayer = undefined;
       timelineHost = undefined;
       headerLayer = undefined;

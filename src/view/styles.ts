@@ -119,6 +119,10 @@ ${DARK_COLOR_TOKENS}
 /* S3.5, D-S3-17: an unsettled beforeEntryMove/beforeEntryResize Promise holds the bar here, reduced
    opacity by default, until it settles either way. */
 .fg-bar[data-state~="pending"] { opacity: var(--fg-pending-opacity, 0.6); }
+/* S3.6, D-S3-18, U7: an installed extension hook's own preview extra (ItemPreview.extra) — a second
+   bar the caller never grabbed, moved by the hook's own cascade. 'dragging' (the caller's own grabbed
+   bar, ItemPreview.extra: false) paints no rule of its own yet, same as 'hovered' above. */
+.fg-bar[data-state~="ghost"] { opacity: var(--fg-ghost-opacity, 0.4); pointer-events: none; }
 /* D-S3-6: movableItemId's cursor is a boolean attribute, not an inline style — cursor is not one of
    the geometry properties no-inline-style-outside-geometry allows inline. */
 .fg-bar[data-movable] { cursor: grab; }
