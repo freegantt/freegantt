@@ -1,7 +1,10 @@
 # Gesture host refactor — closing C1–C5
 
 **Slice:** S3 · **Position:** after S3.4, before S3.5 · **Source:** [`plans/reviews/2026-08-30-s3.1-s3.3-impl.html`](../reviews/2026-08-30-s3.1-s3.3-impl.html), Simplify candidates 1–5.
-**Status:** not started · **Ends with:** `gantt-shell.ts` back under 500 lines, one home for `EntryGestureContext`, gesture commit/preview/draft logic in one deep module, all five checks green.
+**Status:** done · **Ends with:** one home for `EntryGestureContext`, gesture commit/preview/draft
+logic in one deep module (`GesturePipeline` — see the D-GH-2 TODO note on the "GestureHost" rename),
+all five checks green. `gantt-shell.ts` shrank from 850 to 694 lines (short of the ~500 estimate; see
+the Visible TODO entry for why).
 
 ## 0. Why now, not later
 
@@ -263,12 +266,17 @@ node scripts/guard-red-test.mjs
 
 ## 8. TODO
 
-- [ ] D-GH-3: `projectAffordances`, its tests, `#refreshAffordances` wired to it
-- [ ] D-GH-2: `GestureHost` extraction, behavior-preserving, existing wide context still calls through
-- [ ] D-GH-1: `session()`-shaped context, `view/entry-gesture-context.ts` as sole type home,
+- [x] D-GH-3: `projectAffordances`, its tests, `#refreshAffordances` wired to it
+- [x] D-GH-2: gesture pipeline extraction, behavior-preserving, existing wide context still calls
+      through. Landed as `GesturePipeline`, not the plan's original name "GestureHost" — "Host" is a
+      retired word (D-S1.11-6, #64) for the same failure class as the retired "chart" (#7).
+- [x] D-GH-1: `session()`-shaped context, `view/entry-gesture-context.ts` as sole type home,
       `interaction/entry-gesture-context.ts` deleted, `entry-gestures.ts` rewritten to hold a session
-- [ ] D-GH-4: D-S3-3/D-S3-12 wording realigned to smooth-preview/snap-on-write in
-      `s3.3-drag-move.md`
-- [ ] **Visible:** `gantt-shell.ts` back under ~500 lines; `git grep -c "EntryGestureContext ="` finds
-      exactly one declaration in `src/`; all five checks green; harness drag/resize behavior
-      unchanged (manual smoke test in `harness/`, plus the existing e2e suite)
+- [x] D-GH-4: D-S3-3/D-S3-12 already read smooth-preview/snap-on-write — landed earlier in `cbc781a`
+      ("Address S3.1-S3.3 review"), before this refactor started. No doc edit was needed.
+- [x] **Visible:** `git grep -rn "interface EntryGestureContext" src` finds exactly one declaration;
+      all five checks green; full e2e suite (including `resize.spec.ts` and `data.spec.ts`'s
+      drag-move/undo coverage) passes unchanged. `gantt-shell.ts` is 694 lines, down from 850 but
+      short of the ~500 target — every method the plan's §2 "cut" list named is gone (verified by
+      grep), so the gap is the shell's non-gesture surface (viewport/theme/scroll/splitter/pane
+      wiring), which this refactor's C1–C5 scope never touched.
