@@ -38,7 +38,7 @@ test('[S1-A14] a consumer stylesheet styling a Date line className actually pain
   await expect(line).toHaveCSS('border-left-width', '2px');
 });
 
-test('a Date line caption stays glued to its line while the timeline pane scrolls — U4', async ({ page }) => {
+test('a Date line label stays glued to its line while the timeline pane scrolls — U4', async ({ page }) => {
   await page.goto('/zoom.html');
   await expect(page.locator('.fg-bar').first()).toBeVisible();
 

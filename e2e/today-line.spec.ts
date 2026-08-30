@@ -16,6 +16,7 @@ test("[today line] spans the full scrollable row content, not just the pane's in
 
   const line = page.locator('.fg-date-line');
   await expect(line).toBeVisible();
+  await expect(line).toHaveAttribute('data-flag', 'today');
 
   const pane = page.locator('.fg-timeline-pane');
   const { scrollHeight, clientHeight } = await pane.evaluate((el) => ({

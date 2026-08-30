@@ -5,12 +5,14 @@ import { now } from '../time/index.js';
 import type { TimeScale } from '../time/index.js';
 
 /** One vertical marker at an Instant, in content pixels. Index-keyed by the caller, like Header
- * bands — no `id` (S1.13, D-S1.13-3). */
+ * bands — no `id` (S1.13, D-S1.13-3). `today` marks the Today line wrapper (U5) — paint writes
+ * `data-flag="today"`; authored `dateLines` entries omit it. */
 export interface DateLine {
   kind: 'dateLine';
   x: number;
   label?: string;
   className?: string;
+  today?: true;
 }
 
 /** What a caller states to place a Date line besides the today wrapper. Layout-internal resolved
@@ -38,13 +40,13 @@ function inScaleRange(scale: Pick<TimeScale, 'range'>, at: Instant): boolean {
 function dateLineAt(
   scale: Pick<TimeScale, 'range' | 'xForInstant'>,
   at: Instant,
-  label: string | undefined,
-  className: string | undefined,
+  extras: { label?: string; className?: string; today?: true } = {},
 ): DateLine | undefined {
   if (!inScaleRange(scale, at)) return undefined;
   const line: DateLine = { kind: 'dateLine', x: scale.xForInstant(at) };
-  if (label !== undefined) line.label = label;
-  if (className !== undefined) line.className = className;
+  if (extras.label !== undefined) line.label = extras.label;
+  if (extras.className !== undefined) line.className = extras.className;
+  if (extras.today) line.today = true;
   return line;
 }
 
@@ -56,11 +58,14 @@ export function resolveDateLines(input: ResolveDateLinesInput): DateLine[] {
   const todayLine = input.todayLine ?? true;
   if (todayLine !== false) {
     const at = todayLine === true ? (input.now ?? now()) : todayLine;
-    const today = dateLineAt(scale, at, undefined, undefined);
+    const today = dateLineAt(scale, at, { today: true });
     if (today) lines.push(today);
   }
   for (const spec of input.dateLines ?? []) {
-    const line = dateLineAt(scale, spec.placeAt, spec.label, spec.className);
+    const extras: { label?: string; className?: string } = {};
+    if (spec.label !== undefined) extras.label = spec.label;
+    if (spec.className !== undefined) extras.className = spec.className;
+    const line = dateLineAt(scale, spec.placeAt, extras);
     if (line) lines.push(line);
   }
   return lines;

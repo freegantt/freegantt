@@ -196,7 +196,6 @@ export class GanttShell {
     this.#locale = options.locale;
     this.#todayLine = options.todayLine ?? true;
     this.#dateLines = options.dateLines ?? [];
-    this.#todayLineMarginTicks = options.todayLineMarginTicks ?? DEFAULT_TODAY_LINE_MARGIN_TICKS;
 
     // Mount before binding (#22): the render target exists by the time the binding's own onChange
     // — which IS this shell's first render — fires, so there is no construction-order exception to
@@ -246,6 +245,8 @@ export class GanttShell {
     this.#wiring = false;
     this.#frames.flush();
 
+    this.#todayLineMarginTicks = options.todayLineMarginTicks ?? DEFAULT_TODAY_LINE_MARGIN_TICKS;
+
     if (options.theme !== undefined) this.theme = options.theme;
     else this.#applyTheme();
     this.a11yLabel = options.a11yLabel ?? DEFAULT_A11Y_LABEL;
@@ -277,6 +278,7 @@ export class GanttShell {
   }
 
   set dateLines(lines: readonly DateLineSpec[]) {
+    if (lines === this.#dateLines) return;
     this.#dateLines = lines;
     this.#frames.request();
   }
@@ -407,7 +409,7 @@ export class GanttShell {
    *  `now()`, read by the caller — `view/` may not import `time/` (I1) and has no clock read of its
    *  own to make. */
   panToToday(at: Instant, align: 'start' | 'center' = 'start'): void {
-    this.#viewport.panToInstant(at, align, this.#todayLineMarginPx(at));
+    this.#viewport.panToInstant(at, align, align === 'start' ? this.#todayLineMarginPx(at) : 0);
   }
 
   /** Px width of `todayLineMarginTicks` ticks of the CURRENT preset, evaluated at `at` — calendar
