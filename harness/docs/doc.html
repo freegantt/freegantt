@@ -28,7 +28,7 @@
           <span>38 source files in <code>src/</code></span>
           <span>10 layers, 6 with code</span>
           <span>generated 2026-08-28</span>
-          <span>§9 smells triaged @ 17586ba · page first written 2026-08-25 @ 522bf7f</span>
+          <span>§9 smells triaged @ issue #91 (2026-08-29) · page first written 2026-08-25 @ 522bf7f</span>
         </div>
         <nav>
           <a href="#s1"><b>1</b>Layer map &amp; import rules</a>
@@ -211,10 +211,12 @@
           </tr>
           <tr>
             <td class="mono">api</td>
-            <td class="mono">view, data, model, time</td>
+            <td class="mono">view, data, model, time, layout</td>
             <td>
-              <code>model</code> and <code>time</code> are type/primitive re-export edges, not behavioural
-              ones.
+              <code>model</code>, <code>time</code> and <code>layout</code> are type/primitive re-export
+              edges, not behavioural ones — <code>layout</code> widened by issue #91 §9-I to reach
+              <code>TimeScaleModel</code>/<code>ScrollModel</code> directly instead of laundering them
+              through <code>view/</code>, which had no other interest in them.
             </td>
           </tr>
         </table>
@@ -2126,13 +2128,17 @@ Viewport.setPaneSize(size)                   // one measurement, two models
             <p>
               The entire reconciler, in 30 lines. Three phases per call: look-up-or-create by key → patch only
               if <code>toGeom</code> differs from the cached geometry → prune keys no longer present.
+              Also exports <code>KeyedLayer</code>/<code>NestedKeyedLayers</code> (issue #91 §9-D) — the
+              node/geom cache pair a caller needs, and one such pair per parent key for a nested list (a
+              band's ticks, a row's cells), so <code>render/dom/index.ts</code> holds five layer fields with
+              one <code>clear()</code> each instead of ten parallel <code>Map</code>s.
             </p>
             <dl>
               <dt>nodes / geoms</dt>
               <dd>
-                The caller's persistent per-layer caches. They must survive across calls for reconciliation to
-                do anything — a fresh <code>Map</code> per call would patch every node and never prune.
-                <span class="tag smell">§9-D</span>
+                The caller's persistent per-layer caches, now owned by one <code>KeyedLayer</code> instance
+                rather than kept in sync by hand. They must survive across calls for reconciliation to do
+                anything — a fresh <code>Map</code> per call would patch every node and never prune.
               </dd>
               <dt>create(item, key)</dt>
               <dd>
@@ -2141,8 +2147,8 @@ Viewport.setPaneSize(size)                   // one measurement, two models
               </dd>
               <dt>shallowEqual(a, b)</dt>
               <dd>
-                Exact, not approximate: every <code>TGeom</code> is a <code>Pick&lt;…&gt;</code> of primitive
-                fields. <span class="tag smell">§9-C</span>
+                Both directions now (issue #91 §9-C): a key-count check catches a field that dropped out of
+                <code>b</code> even when every key still in both sides matches.
               </dd>
             </dl>
           </div>
@@ -2185,8 +2191,14 @@ Viewport.setPaneSize(size)                   // one measurement, two models
               <dd>The whole added surface over the seam.</dd>
             </dl>
             <p style="margin-top: 0.6rem; font-size: 0.8rem">
-              Zero production callers — nothing in <code>view/</code> can select it.
-              <span class="tag smell">§9-I</span>
+              Zero production callers. <code>GanttShellOptions.backend</code> (issue #91 §9-I) closed the
+              hardcoded <code>createDomBackend()</code> call — a test can now inject its own
+              <code>RenderBackend&lt;HTMLElement&gt;</code> — but it is still typed to <code>THost</code>
+              <code>HTMLElement</code>, so this backend, whose <code>THost</code> is <code>void</code>, stays
+              unreachable from
+              <code>view/</code>: <code>PaneLayout</code> mounts real elements regardless of which backend
+              paints them, so driving the whole <code>view/</code>+<code>layout/</code> stack DOM-free needs a
+              change there too. <span class="tag smell">§9-I</span>
             </p>
           </div>
 
@@ -2255,13 +2267,15 @@ new Gantt({ container: '#gantt', dataset });</code></pre>
       <section id="s9">
         <h2><span class="num">9</span>Smells</h2>
         <p class="lede">
-          Six findings from following the call graph. None of them breaks anything today. They are ordered by
-          how much they will cost when the area is next touched, and each names the file and the exact
-          condition under which it becomes a bug. Closed ids (§9-A, §9-F, §9-H, §9-J) stay unused so older
-          notes that cite them do not silently point at a new finding.
+          Four open findings from following the call graph (down from six — §9-C and §9-D closed by issue #91;
+          §9-I closed by half). None of them breaks anything today. They are ordered by how much they will
+          cost when the area is next touched, and each names the file and the exact condition under which it
+          becomes a bug. Closed ids (§9-A, §9-C, §9-D, §9-F, §9-H, §9-J) stay unused so older notes that cite
+          them do not silently point at a new finding.
         </p>
         <p class="src">
-          <b>derived from</b> a full read of src/**; former §9-A pass count re-measured 2026-08-28
+          <b>derived from</b> a full read of src/**; former §9-A pass count re-measured 2026-08-28; §9-C/D/I
+          re-verified against issue #91's fix 2026-08-29
         </p>
 
         <div class="smell">
@@ -2281,48 +2295,6 @@ new Gantt({ container: '#gantt', dataset });</code></pre>
             The structural fix is the usual one — a private <code>#wire()</code> that returns the fully-built
             collaborators, with <code>render()</code> unreachable until it has returned — but it is worth
             doing only when a later slice adds a fourth thing to wire, not before.
-          </p>
-        </div>
-
-        <div class="smell">
-          <h5><span class="id">§9-C</span> <code>shallowEqual</code> compares one direction only</h5>
-          <p class="where">render/dom/sync-keyed.ts</p>
-          <p>
-            <code>for (const key in a) if (a[key] !== b[key]) return false</code> never looks at keys present
-            in <code>b</code> but absent from <code>a</code>. Today every geom for a given layer comes from
-            one <code>toGeom</code> that always returns the same key set, so the comparison is exact and the
-            docstring's claim holds.
-          </p>
-          <p>
-            It stops holding the first time a <code>toGeom</code> becomes conditional —
-            <code>{ ...base, ...(flag ? { tint } : {}) }</code> is the obvious S4 shape for hover and conflict
-            flags. Then a transition from "has <code>tint</code>" to "has no <code>tint</code>" compares equal
-            and the node is never repatched: a stale tint that persists until something else about the bar
-            moves. A <code>Object.keys(a).length !== Object.keys(b).length</code> guard closes it, or the type
-            could forbid optional fields outright.
-          </p>
-        </div>
-
-        <div class="smell">
-          <h5><span class="id">§9-D</span> Ten parallel caches that must be cleared in lockstep</h5>
-          <p class="where">render/dom/index.ts</p>
-          <p>
-            <code>bandNodes</code>/<code>bandGeom</code>,
-            <code>bandTickNodes</code>/<code>bandTickGeom</code>, <code>rowNodes</code>/<code>rowGeom</code>,
-            <code>rowCellNodes</code>/<code>rowCellGeom</code>, <code>barNodes</code>/<code>barGeom</code> —
-            five conceptual keyed layers stored as ten <code>Map</code>s, because <code>syncKeyed</code> takes
-            nodes and geoms as two separate parameters. <code>destroy()</code> has ten
-            <code>.clear()</code> calls that must stay in sync by hand, and <code>syncHeader</code> carries
-            its own manual prune loop for the per-band tick caches <em>alongside</em> the pruning
-            <code>syncKeyed</code> already does for the bands themselves. The per-row cell caches are the same
-            nested shape.
-          </p>
-          <p>
-            One <code>KeyedLayer&lt;TKey, TGeom&gt;</code> holding both maps behind
-            <code>syncKeyed(layer, items, cache, spec)</code> collapses ten fields to five, removes five clear
-            calls, and makes the nested band/tick and row/cell cases a <code>KeyedLayer</code> that owns a
-            <code>Map</code> of child <code>KeyedLayer</code>s — which is what the manual prune loops are
-            hand-rolling today.
           </p>
         </div>
 
@@ -2369,21 +2341,33 @@ new Gantt({ container: '#gantt', dataset });</code></pre>
             layout/index.ts · view/index.ts · api/index.ts · time/index.ts · view/gantt-shell.ts
           </p>
           <p>
-            <code>TimeScaleModel</code> is reachable as <code>layout/viewport/time-scale-model.ts</code>,
-            <code>layout/index.ts</code>, <code>view/index.ts</code> and <code>api/index.ts</code> — four
-            paths to one symbol. <code>api/index.ts</code>'s own comment records that laundering
-            <code>dayPreset</code> through <code>layout</code> and <code>view</code> was the bug worth fixing,
-            and it was fixed there; <code>layout/index.ts</code> and <code>view/index.ts</code> still launder
-            the models. Separately, <code>time/index.ts</code> omits <code>addMonths</code>,
-            <code>addYears</code> and <code>SUPPORTED_TIME_UNITS</code>, which <code>zone.ts</code> exports —
-            so the barrel is not a complete view of its own layer.
+            <b>Resolved (issue #91):</b> <code>TimeScaleModel</code> was reachable as
+            <code>layout/viewport/time-scale-model.ts</code>, <code>layout/index.ts</code>,
+            <code>view/index.ts</code> and <code>api/index.ts</code> — four paths to one symbol.
+            <code>api/index.ts</code>'s own comment recorded that laundering <code>dayPreset</code> through
+            <code>layout</code> and <code>view</code> was the bug worth fixing, and it was fixed there;
+            <code>layout/index.ts</code> and <code>view/index.ts</code> still laundered the models. The fix:
+            <code>api/</code> gained a direct <code>layout</code> edge (same rationale as the earlier
+            <code>time</code> widening — both are public, consumer-constructed objects per D9), so
+            <code>api/index.ts</code> and <code>api/gantt.ts</code> now import
+            <code>TimeScaleModel</code>/<code>ScrollModel</code> straight from <code>layout/index.ts</code>,
+            and <code>view/index.ts</code> dropped the re-export entirely (§1's import table). Separately,
+            <code>time/index.ts</code> now exports <code>addMonths</code>, <code>addYears</code> and
+            <code>SUPPORTED_TIME_UNITS</code>, which <code>zone.ts</code> always had.
           </p>
           <p>
-            The same shape shows up in <code>GanttShell</code>: <code>RenderBackend&lt;TSurface&gt;</code> is
-            a proper seam with two implementations, and the constructor hardcodes
-            <code>createDomBackend()</code>. There is no way to build a Gantt on the null backend, so the one
-            configuration that would let the whole <code>view/</code>+<code>layout/</code> stack be tested
-            without a DOM is unreachable from the public path.
+            <b>Still open:</b> the same shape showed up in <code>GanttShell</code>:
+            <code>RenderBackend&lt;TSurface&gt;</code> is a proper seam with two implementations, and the
+            constructor hardcoded <code>createDomBackend()</code>. <code>GanttShellOptions</code> now takes an
+            expert <code>backend</code> knob (not on the public <code>GanttOptions</code> — plans/02 "two
+            callers, two surfaces") defaulting to <code>createDomBackend()</code>, so a caller can inject its
+            own <code>RenderBackend&lt;HTMLElement&gt;</code> — <code>gantt-shell.test.ts</code>'s [S2-A3]
+            sync-count test uses this instead of the module mock it used to need. But the null backend is
+            <code>RenderBackend&lt;void&gt;</code>, a different <code>THost</code>, so it still cannot be
+            swapped in this way; <code>PaneLayout</code> mounts real <code>HTMLElement</code>s regardless of
+            which backend paints them, so driving the whole <code>view/</code>+<code>layout/</code> stack
+            DOM-free needs a change there too. The hardcoded-call-site half of this finding is closed; the
+            DOM-free-testing half is not.
           </p>
         </div>
 
@@ -2506,7 +2490,7 @@ grep -n 'class="src"' harness/docs/doc.html     # the full source index</code></
           </tr>
           <tr>
             <td class="mono">render/dom/*</td>
-            <td>§8 (the DOM tree, the backend card), §9-C/D/G</td>
+            <td>§8 (the DOM tree, the backend card), §9-G</td>
           </tr>
           <tr>
             <td class="mono">api/*</td>
@@ -2624,15 +2608,17 @@ rm test/dom/tmp-render-count.test.ts</code></pre>
     </div>
 
     <footer class="wrap">
-      Map of <code>src/</code>, smells re-checked on <b>2026-08-28</b> against <code>17586ba</code>. Closed
+      Map of <code>src/</code>, smells re-checked on <b>2026-08-29</b> against issue #91's fix. Closed
       and removed: <b>§9-A</b> (construction is one <code>computeFrame</code>;
-      <code>FrameScheduler</code> stops nested re-entry), <b>§9-F</b> (<code>GanttShell.overscan</code>,
+      <code>FrameScheduler</code> stops nested re-entry), <b>§9-C</b> (<code>shallowEqual</code> now compares
+      both directions), <b>§9-D</b> (<code>KeyedLayer</code>/<code>NestedKeyedLayers</code> replace the ten
+      parallel <code>Map</code>s), <b>§9-F</b> (<code>GanttShell.overscan</code>,
       <code>panToDate</code>, and the <code>GanttOptions</code> scale union),
       <b>§9-H</b> (<code>ContainerNotFoundError</code>), <b>§9-J</b> (epoch-ms contract is on
-      <code>InstantInput</code>'s docstring — moved to "explicitly not smells"). Remaining: §9-B, §9-C, §9-D,
-      §9-E, §9-G, §9-I. The spec is <code>plans/00</code>–<code>04</code>; the glossary is
-      <code>CONTEXT.md</code>; the decisions are in <code>docs/adr/</code>. This page is a map, and maps go
-      stale — §10 says how to keep this one honest.
+      <code>InstantInput</code>'s docstring — moved to "explicitly not smells"). Remaining: §9-B, §9-E, §9-G,
+      and half of §9-I (the barrel laundering closed; the null-backend injection point did not). The spec is
+      <code>plans/00</code>–<code>04</code>; the glossary is <code>CONTEXT.md</code>; the decisions are in
+      <code>docs/adr/</code>. This page is a map, and maps go stale — §10 says how to keep this one honest.
     </footer>
   </body>
 </html>

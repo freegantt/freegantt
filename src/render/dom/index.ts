@@ -14,7 +14,7 @@ import type {
 import type { RenderBackend, RenderSurfaces, InteractionState, HitResult } from '../backend.js';
 import { attachDateLines } from './date-line.js';
 import type { DateLineAttachment } from './date-line.js';
-import { syncKeyed } from './sync-keyed.js';
+import { KeyedLayer, NestedKeyedLayers } from './sync-keyed.js';
 
 type TickGeom = Pick<FrameHeaderTick, 'x' | 'width' | 'label'>;
 type CellGeom = { text: string };
@@ -50,19 +50,14 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
   let contentSizer: HTMLElement | undefined;
   let dateLines: DateLineAttachment | undefined;
 
-  const bandNodes = new Map<number, HTMLElement>();
-  const bandGeom = new Map<number, BandGeom>();
-  // One tick node/geom cache per band index — a nested keyed list is still a keyed list (plans/01
-  // §8.1's reconciler scope: attr/class/style/text + keyed children, nothing more).
-  const bandTickNodes = new Map<number, Map<number, HTMLElement>>();
-  const bandTickGeom = new Map<number, Map<number, TickGeom>>();
-  const rowNodes = new Map<RowId, HTMLElement>();
-  const rowGeom = new Map<RowId, RowGeom>();
-  // One cell node/geom cache per row id — a nested keyed list, same pattern as bandTickNodes above.
-  const rowCellNodes = new Map<RowId, Map<number, HTMLElement>>();
-  const rowCellGeom = new Map<RowId, Map<number, CellGeom>>();
-  const barNodes = new Map<ItemId, HTMLElement>();
-  const barGeom = new Map<ItemId, BarGeom>();
+  const bandLayer = new KeyedLayer<FrameHeaderBand, number, BandGeom>();
+  // One tick layer per band index — a nested keyed list is still a keyed list (plans/01 §8.1's
+  // reconciler scope: attr/class/style/text + keyed children, nothing more).
+  const bandTickLayers = new NestedKeyedLayers<number, FrameHeaderTick, number, TickGeom>();
+  const rowLayer = new KeyedLayer<FrameRow, RowId, RowGeom>();
+  // One cell layer per row id, same nested pattern as bandTickLayers above.
+  const rowCellLayers = new NestedKeyedLayers<RowId, string, number, CellGeom>();
+  const barLayerCache = new KeyedLayer<FrameBar, ItemId, BarGeom>();
 
   const tickSpec = {
     key: (_tick: FrameHeaderTick, i: number) => i,
@@ -83,7 +78,7 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
   // preset has exactly one header, so this renders byte-identical output to the pre-S1.7 single list.
   function syncHeader(bands: readonly FrameHeaderBand[]): void {
     if (!headerLayer) return;
-    syncKeyed(headerLayer, bands, bandNodes, bandGeom, {
+    bandLayer.sync(headerLayer, bands, {
       key: (_band, i) => i,
       create: () => {
         const node = document.createElement('div');
@@ -95,25 +90,12 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
     });
 
     bands.forEach((band, i) => {
-      const bandNode = bandNodes.get(i);
+      const bandNode = bandLayer.node(i);
       if (!bandNode) return;
-      let ticksForBand = bandTickNodes.get(i);
-      let geomForBand = bandTickGeom.get(i);
-      if (!ticksForBand || !geomForBand) {
-        ticksForBand = new Map<number, HTMLElement>();
-        geomForBand = new Map<number, TickGeom>();
-        bandTickNodes.set(i, ticksForBand);
-        bandTickGeom.set(i, geomForBand);
-      }
-      syncKeyed(bandNode, band.ticks, ticksForBand, geomForBand, tickSpec);
+      bandTickLayers.layerFor(i).sync(bandNode, band.ticks, tickSpec);
     });
 
-    for (const i of bandTickNodes.keys()) {
-      if (i >= bands.length) {
-        bandTickNodes.delete(i);
-        bandTickGeom.delete(i);
-      }
-    }
+    bandTickLayers.prune(new Set(bands.map((_band, i) => i)));
   }
 
   const cellSpec = {
@@ -133,7 +115,7 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
 
   function syncRows(rows: readonly FrameRow[], rowCount: number): void {
     if (!gridLayer) return;
-    syncKeyed(gridLayer, rows, rowNodes, rowGeom, {
+    rowLayer.sync(gridLayer, rows, {
       key: (row) => row.id,
       create: (_row, key) => {
         const node = document.createElement('div');
@@ -157,34 +139,20 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
 
   /** Each row owns a nested keyed list of cells (one per configured column), the same "keyed list
    * inside a keyed list" pattern `syncHeader` uses for ticks inside bands. Split out from `syncRows`
-   * because it needs its own per-row node/geom cache lookup and its own prune pass. */
+   * because it needs its own per-row layer lookup and its own prune pass. */
   function syncCellsForEachRow(rows: readonly FrameRow[]): void {
     rows.forEach((row) => {
-      const rowNode = rowNodes.get(row.id);
+      const rowNode = rowLayer.node(row.id);
       if (!rowNode) return;
-      let cellNodesForRow = rowCellNodes.get(row.id);
-      let cellGeomForRow = rowCellGeom.get(row.id);
-      if (!cellNodesForRow || !cellGeomForRow) {
-        cellNodesForRow = new Map<number, HTMLElement>();
-        cellGeomForRow = new Map<number, CellGeom>();
-        rowCellNodes.set(row.id, cellNodesForRow);
-        rowCellGeom.set(row.id, cellGeomForRow);
-      }
-      syncKeyed(rowNode, row.cells, cellNodesForRow, cellGeomForRow, cellSpec);
+      rowCellLayers.layerFor(row.id).sync(rowNode, row.cells, cellSpec);
     });
 
-    const liveRowIds = new Set(rows.map((row) => row.id));
-    for (const id of rowCellNodes.keys()) {
-      if (!liveRowIds.has(id)) {
-        rowCellNodes.delete(id);
-        rowCellGeom.delete(id);
-      }
-    }
+    rowCellLayers.prune(new Set(rows.map((row) => row.id)));
   }
 
   function syncBars(bars: readonly FrameBar[]): void {
     if (!barLayer) return;
-    syncKeyed(barLayer, bars, barNodes, barGeom, {
+    barLayerCache.sync(barLayer, bars, {
       key: (bar) => bar.id,
       create: (bar) => {
         const node = document.createElement('div');
@@ -283,16 +251,11 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
       dateLines = undefined;
       gridLayer?.replaceChildren();
       timelineHost?.replaceChildren();
-      bandNodes.clear();
-      bandGeom.clear();
-      bandTickNodes.clear();
-      bandTickGeom.clear();
-      rowNodes.clear();
-      rowGeom.clear();
-      rowCellNodes.clear();
-      rowCellGeom.clear();
-      barNodes.clear();
-      barGeom.clear();
+      bandLayer.clear();
+      bandTickLayers.clear();
+      rowLayer.clear();
+      rowCellLayers.clear();
+      barLayerCache.clear();
       gridLayer = undefined;
       timelineHost = undefined;
       headerLayer = undefined;
