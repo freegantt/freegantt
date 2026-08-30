@@ -99,10 +99,11 @@ flowchart TB
 
 ## 3. Step map
 
-Eleven steps, in order. The Field context lands first, because the row cells and the grid columns read from it. Open the step file for decisions, files, tests and checkboxes.
+Twelve steps, in order. S4.0 grills the whole spec and writes no code — it has no harness artifact. The Field context then lands first, because the row cells and the grid columns read from it. Open the step file for decisions, files, tests and checkboxes.
 
 | Step | Plan | Ends with |
 |---|---|---|
+| S4.0 | [`s4.0-grill-with-docs.md`](./s4.0-grill-with-docs.md) | the S4 design tree fully resolved; answers transcribed to step files, ADRs, and `CONTEXT.md` |
 | S4.1 | [`s4.1-field-registry.md`](./s4.1-field-registry.md) | `update('t1', { cost: 500 })` commits one changeset row keyed `cost` |
 | S4.2 | [`s4.2-rollup.md`](./s4.2-rollup.md) | a parent's `cost` is the sum of its children, undoably |
 | S4.3 | [`s4.3-grid-columns-and-cells.md`](./s4.3-grid-columns-and-cells.md) | four columns in the grid pane, live-reconfigurable |
