@@ -51,3 +51,6 @@ export type {
 export { ZOOM_PRESETS } from '../time/index.js';
 export { Viewport } from './viewport/viewport.js';
 export type { ViewportOptions, ViewportHandle, DatasetBinding } from './viewport/viewport.js';
+export { draftForMove, previewOffsets } from './gesture-draft.js';
+export type { DraftInput, ItemPreview, PreviewOffsetsInput } from './gesture-draft.js';
+export type { SnapUnit } from '../time/index.js';

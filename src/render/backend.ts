@@ -1,7 +1,7 @@
 // render/ backend contract (plans/01 §8.1). Shared by dom and null backends; DOM types are structural only —
 // this file itself never touches document/window.
 
-import type { GeometryFrame, ItemId } from '../layout/index.js';
+import type { GeometryFrame, ItemId, ItemPreview } from '../layout/index.js';
 
 export interface InteractionState {
   hoveredItemId?: ItemId;
@@ -13,6 +13,10 @@ export interface InteractionState {
   /** The hovered bar, and only when its `move` capability resolved true — what gets `cursor: grab`
    *  (S3, D-S3-6). */
   movableItemId?: ItemId;
+  /** S3.3, D-S3-18: an in-flight drag's per-item pixel offset, coalesced on the shell's own rAF.
+   *  Undefined outside a gesture — a backend parks every previewed bar back on its committed
+   *  transform the moment this clears. */
+  preview?: readonly ItemPreview[];
 }
 
 export interface HitResult {

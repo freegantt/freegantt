@@ -9,6 +9,7 @@ import type {
   FrameRow,
   GeometryFrame,
   ItemId,
+  ItemPreview,
   RowId,
 } from '../../layout/index.js';
 import type { RenderBackend, RenderSurfaces, InteractionState, HitResult } from '../backend.js';
@@ -72,6 +73,9 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
   let paintedSelected: ReadonlySet<ItemId> = new Set();
   let paintedResizable: ItemId | undefined;
   let paintedMovable: ItemId | undefined;
+  /** S3.3, D-S3-18: items this backend currently holds off their committed transform for a drag
+   *  preview — so the next `applyState` knows which ones to park back when they drop out of the set. */
+  let paintedPreview: ReadonlySet<ItemId> = new Set();
   // Committed geometry per mounted bar (D-S3-6): what the handle pair and the future preview offsets
   // (S3.3) both read. `syncBars` is the only writer.
   const barGeomByItemId = new Map<ItemId, HandleGeom>();
@@ -91,6 +95,36 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
     startHandle.style.height = `${geom.height}px`;
     endHandle.style.transform = `translate(${geom.x + geom.width}px, ${geom.y}px)`;
     endHandle.style.height = `${geom.height}px`;
+  }
+
+  /** Applies the base committed transform (`syncBars`'s own geometry) to one bar — what a previewed
+   *  bar returns to once the preview clears (S3.3, D-S3-18). */
+  function restoreBarTransform(id: ItemId): void {
+    const node = barLayerCache.node(id);
+    const geom = barGeomByItemId.get(id);
+    if (!node || !geom) return;
+    node.style.transform = `translate(${geom.x}px, ${geom.y}px)`;
+    node.style.width = `${geom.width}px`;
+  }
+
+  /** Offsets one bar's transform/width by `preview`'s px delta, on top of its committed geometry —
+   *  a hot-path write only (I5): no frame recompute, no node creation. */
+  function applyBarPreview(id: ItemId, preview: ItemPreview): void {
+    const node = barLayerCache.node(id);
+    const geom = barGeomByItemId.get(id);
+    if (!node || !geom) return;
+    node.style.transform = `translate(${geom.x + preview.dx}px, ${geom.y}px)`;
+    if (preview.dWidth !== 0) node.style.width = `${geom.width + preview.dWidth}px`;
+  }
+
+  function paintPreview(previews: readonly ItemPreview[] | undefined): void {
+    const next = new Map<ItemId, ItemPreview>();
+    for (const preview of previews ?? []) next.set(preview.itemId, preview);
+    paintedPreview.forEach((id) => {
+      if (!next.has(id)) restoreBarTransform(id);
+    });
+    next.forEach((preview, id) => applyBarPreview(id, preview));
+    paintedPreview = new Set(next.keys());
   }
 
   function paintDataState(itemId: ItemId, hovered: ItemId | undefined, selected: ReadonlySet<ItemId>): void {
@@ -325,6 +359,8 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
         if (nextMovable !== undefined) barLayerCache.node(nextMovable)?.setAttribute('data-movable', '');
         paintedMovable = nextMovable;
       }
+
+      paintPreview(state.preview);
     },
     hitTest(x: number, y: number): HitResult | null {
       // "The bars array is the hit index; DOM backends get hit-testing from event delegation"
@@ -351,6 +387,7 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
       paintedSelected = new Set();
       paintedResizable = undefined;
       paintedMovable = undefined;
+      paintedPreview = new Set();
       gridLayer = undefined;
       timelineHost = undefined;
       headerLayer = undefined;

@@ -3,6 +3,8 @@
 
 import {
   barSpan,
+  draftForMove,
+  previewOffsets,
   FrameLayout,
   ScrollModel,
   TimeScaleModel,
@@ -13,6 +15,7 @@ import type {
   DateLineSpec,
   Overscan,
   PresetRef,
+  SnapUnit,
   TimeScaleFit,
   ViewportHandle,
   ViewPreset,
@@ -33,7 +36,7 @@ import type { PaneSizeAttachment } from './pane-size-attachment.js';
 import { ensureBaseStyles } from './styles.js';
 import type { InteractionState, RenderBackend } from '../render/backend.js';
 import { EntryNotFoundError, ContainerNotFoundError, entryId, itemId } from '../model/index.js';
-import type { Dataset, EntryId, ItemId, Instant, Size, TimeSpan } from '../model/index.js';
+import type { Dataset, Entry, EntryEdits, EntryId, ItemId, Instant, Size, TimeSpan } from '../model/index.js';
 import { resolveCapabilities } from './capability.js';
 import type { Capabilities, Interactions } from './capability.js';
 import { subscribeToDatasetChanges } from './dataset-change-subscription.js';
@@ -51,18 +54,34 @@ import { FrameScheduler } from './frame-scheduler.js';
 export interface EntryGesturesAttachment {
   detach(): void;
 }
-interface EntrySelectionContext {
+/** Mirrors `interaction/entry-gesture-context.ts`'s `Gesture` (S3.3, D-S3-5) — only `'move'` is ever
+ *  built here (S3.4 builds `'resize'`), but the shape must match structurally either way. */
+type Gesture = { kind: 'move' } | { kind: 'resize'; edge: 'start' | 'end' };
+/** No cascade — the baseline `#applyPreview`'s `previewOffsets` call contrasts a real gesture draft
+ *  against (S3.6 wires an extender's actual extras in here). */
+const EMPTY_EDITS: EntryEdits = Object.freeze(new Map());
+interface EntryGestureContext {
   hitTest(x: number, y: number): ItemId | undefined;
-  entryIdFor(item: ItemId): EntryId | undefined;
-  canSelect(entry: EntryId): boolean;
+  entryFor(item: ItemId): Entry | undefined;
+  can(capability: keyof Interactions, entry: Entry): boolean;
   rowOrder(): readonly EntryId[];
   selection: { get(): readonly EntryId[]; propose(next: readonly EntryId[]): void };
   setHovered(itemId: ItemId | undefined): void;
+  entriesForGesture(grabbed: EntryId): readonly Entry[];
+  draftFor(
+    gesture: Gesture,
+    entries: readonly Entry[],
+    dxPx: number,
+    options?: { suspendSnap?: boolean },
+  ): EntryEdits;
+  commit(gesture: Gesture, draft: EntryEdits): Promise<boolean>;
+  preview(draft: EntryEdits | undefined): void;
+  pointerAt(at: { itemId?: ItemId; x?: number } | undefined): void;
 }
 export type AttachEntryGestures = (
   pane: HTMLElement,
   container: HTMLElement,
-  ctx: EntrySelectionContext,
+  ctx: EntryGestureContext,
 ) => EntryGesturesAttachment;
 
 /** S1.10, D-S1.10-4: theming's only preset axis for this step — `'auto'` follows
@@ -141,6 +160,13 @@ export interface GanttShellOptions {
    * import `interaction/` to supply its own default. `api/gantt.ts` always passes
    * `attachEntryGestures`; omitted only by tests exercising the shell with no pointer wiring. */
   entryGestures?: AttachEntryGestures;
+  /** S3.3, D-S3-16: how a committed gesture draft actually reaches the store. `model/dataset.ts`'s
+   *  `Dataset` (this shell's own `dataset` option) deliberately has no `transaction()` — "a view
+   *  never opens a transaction" — so `api/gantt.ts`, which holds the full `api/Dataset` the model
+   *  interface narrows away, supplies this instead. Returns `false` for both a sync veto and a
+   *  `MutationCancelledError` from `beforeChange`; the shell never sees the exception either way.
+   *  Omitted only by tests exercising the shell with no data-write wiring. */
+  commitEntryEdits?: (edits: EntryEdits) => boolean;
 }
 
 /** `exactOptionalPropertyTypes` treats `obj.key = undefined` as a type error when `key` is declared
@@ -186,6 +212,15 @@ export class GanttShell {
   /** The raw hit under the pointer, reported by `EntrySelectionContext.setHovered` — undefined on
    *  pointerleave or when nothing is wired (no `entryGestures` attachment). */
   #hoveredItemId: ItemId | undefined;
+  /** D-S3-18: the most recent in-flight draft a drag has proposed, applied on the next animation
+   *  frame rather than synchronously on every pointermove — one paint per frame, not one per event. */
+  #pendingPreviewDraft: EntryEdits | undefined;
+  /** The single rAF owner for preview coalescing (B10) — a second `FrameScheduler` instance, not a
+   *  raw `requestAnimationFrame` call: its own callback applies the preview directly, never
+   *  `render()`'s full frame recompute, so a drag never rebuilds geometry it only needs to offset. */
+  #previewFrame = new FrameScheduler(() => {
+    this.#applyPreview(this.#pendingPreviewDraft);
+  });
   /** `id:0` today (segments are not yet laid out as separate items, `layout/frame.ts`), rebuilt every
    *  render from `frame.bars` so this stays correct the moment segments do land — the shell reads the
    *  frame it already computed rather than re-deriving item ids of its own (D-S3-10). */
@@ -308,14 +343,21 @@ export class GanttShell {
     );
     this.#entryGestures = options.entryGestures?.(this.#panes.timeline, this.#container, {
       hitTest: (x, y) => this.#backend.hitTest(x, y)?.itemId,
-      entryIdFor: (item) => this.#itemEntryIds.get(item),
-      canSelect: (id) => this.#canGesture('select', id),
+      entryFor: (item) => this.#entryFor(item),
+      can: (capability, entry) => this.#capabilities.can(capability, entry),
       rowOrder: () => this.#options.dataset.entries.all.map((e) => e.id),
       selection: {
         get: () => this.#selection,
         propose: (next) => this.#proposeSelection(next),
       },
       setHovered: (item) => this.#setHovered(item),
+      entriesForGesture: (grabbed) => this.#entriesForGesture(grabbed),
+      draftFor: (gesture, entries, dxPx, gestureOptions) =>
+        this.#draftFor(gesture, entries, dxPx, gestureOptions),
+      commit: (gesture, draft) => this.#commitGesture(gesture, draft),
+      preview: (draft) => this.#previewGesture(draft),
+      // S3.6 reserved (extender-ghost trigger) — nothing reads this yet in S3.3.
+      pointerAt: () => {},
     });
     this.#wiring = false;
     this.#frames.flush();
@@ -448,6 +490,107 @@ export class GanttShell {
     if (this.#selection.length !== 1) return undefined;
     const soleId = this.#selection[0]!;
     return this.#canGesture('resize', soleId) ? itemId(soleId) : undefined;
+  }
+
+  #entryFor(item: ItemId): Entry | undefined {
+    const id = this.#itemEntryIds.get(item);
+    return id !== undefined ? this.#options.dataset.entries.get(id) : undefined;
+  }
+
+  /** D-S3-19: just the grabbed entry when it is not part of a multi-entry selection; else every
+   *  *capable* selected entry, grabbed first (D-S3-22) — an incapable one is skipped, not blocking. */
+  #entriesForGesture(grabbedId: EntryId): readonly Entry[] {
+    const inMultiSelection = this.#selection.includes(grabbedId) && this.#selection.length > 1;
+    const candidateIds = inMultiSelection ? this.#selection : [grabbedId];
+    const entries: Entry[] = [];
+    const seen = new Set<EntryId>();
+    const pushCapable = (id: EntryId): void => {
+      if (seen.has(id)) return;
+      const entry = this.#options.dataset.entries.get(id);
+      if (entry && this.#canGesture('move', id)) {
+        entries.push(entry);
+        seen.add(id);
+      }
+    };
+    pushCapable(grabbedId);
+    for (const id of candidateIds) pushCapable(id);
+    return entries;
+  }
+
+  /** D-S3-12: an unset/`'tick'` `ViewPreset.snap` resolves to the current preset's own tick unit;
+   *  Alt (`suspendSnap`) always wins and falls back to raw millisecond placement. */
+  #resolveSnap(suspendSnap: boolean | undefined): SnapUnit {
+    if (suspendSnap) return 'none';
+    const snap = this.#viewport.preset.snap ?? 'tick';
+    if (snap === 'none') return 'none';
+    if (snap === 'tick') {
+      return { unit: this.#viewport.preset.tickUnit, increment: this.#viewport.preset.tickIncrement };
+    }
+    return snap;
+  }
+
+  #draftFor(
+    gesture: Gesture,
+    entries: readonly Entry[],
+    dxPx: number,
+    options: { suspendSnap?: boolean } | undefined,
+  ): EntryEdits {
+    if (gesture.kind !== 'move') return EMPTY_EDITS; // resize lands in S3.4
+    return draftForMove({
+      zone: this.#options.dataset.timeZone,
+      scale: this.#viewport.timeScale,
+      snap: this.#resolveSnap(options?.suspendSnap),
+      entries,
+      dxPx,
+    });
+  }
+
+  /** `beforeEntryMove` → one commit → `entryMove` (D-S3-16). `commitEntryEdits` (injected by
+   *  `api/gantt.ts`, which alone holds a `dataset.transaction()`-capable `Dataset` — this shell's own
+   *  `dataset` option is the narrower `model/` interface, "a view never opens a transaction") does
+   *  the actual write and folds a sync veto and a `MutationCancelledError` into one `false`. */
+  #commitGesture(gesture: Gesture, draft: EntryEdits): Promise<boolean> {
+    if (gesture.kind !== 'move' || draft.size === 0) return Promise.resolve(false);
+    const spans = [...draft].flatMap(([id, edit]) =>
+      edit.start !== undefined && edit.end !== undefined
+        ? [{ entry: id, start: edit.start, end: edit.end }]
+        : [],
+    );
+    const grabbed = spans[0];
+    if (!grabbed) return Promise.resolve(false);
+    const payload = { ...grabbed, entries: spans };
+    if (this.#events.emit('beforeEntryMove', payload) === false) return Promise.resolve(false);
+    const committed = this.#options.commitEntryEdits?.(draft) ?? false;
+    if (committed) this.#events.emit('entryMove', payload);
+    return Promise.resolve(committed);
+  }
+
+  /** D-S3-18: coalesces on the shell's own rAF — a drag's every pointermove replaces the pending
+   *  draft, but only the last one before the next frame is ever painted. */
+  #previewGesture(draft: EntryEdits | undefined): void {
+    this.#pendingPreviewDraft = draft;
+    this.#previewFrame.request();
+  }
+
+  #applyPreview(draft: EntryEdits | undefined): void {
+    if (!draft || draft.size === 0) {
+      setOptional(this.#interactionState, 'preview', undefined);
+      this.#backend.applyState(this.#interactionState);
+      return;
+    }
+    const entries: Entry[] = [];
+    for (const id of draft.keys()) {
+      const entry = this.#options.dataset.entries.get(id);
+      if (entry) entries.push(entry);
+    }
+    const preview = previewOffsets({
+      proposed: draft,
+      extra: EMPTY_EDITS,
+      entries,
+      scale: this.#viewport.timeScale,
+    });
+    setOptional(this.#interactionState, 'preview', preview);
+    this.#backend.applyState(this.#interactionState);
   }
 
   get theme(): Theme {
