@@ -7,6 +7,9 @@
 // @public (undocumented)
 export function addMs(i: Instant, ms: number): Instant;
 
+// @public
+export type CapabilityRule = boolean | ((entry: Entry) => boolean);
+
 // @public (undocumented)
 export type ChangeOrigin = 'user' | 'undo' | 'redo';
 
@@ -52,6 +55,7 @@ export class Dataset {
     // (undocumented)
     get entries(): EntryStore;
     static fromJSON(doc: DatasetDocument): Dataset;
+    isDerivedSpanKind(kind: EntryKind): boolean;
     // (undocumented)
     off<K extends keyof DatasetEventMap>(name: K, handler: (payload: DatasetEventMap[K]) => void | false): void;
     // (undocumented)
@@ -301,6 +305,8 @@ export class Gantt {
     // (undocumented)
     get gridWidth(): number;
     set gridWidth(px: number);
+    get interactions(): Interactions;
+    set interactions(next: Interactions);
     // (undocumented)
     get locale(): Intl.LocalesArgument | undefined;
     set locale(l: Intl.LocalesArgument | undefined);
@@ -320,6 +326,8 @@ export class Gantt {
     });
     // (undocumented)
     reveal(entryId: EntryId): void;
+    get selection(): readonly EntryId[];
+    set selection(ids: readonly (EntryId | string)[]);
     // (undocumented)
     get theme(): Theme;
     set theme(value: Theme);
@@ -346,10 +354,13 @@ export class Gantt {
 export interface GanttEventMap {
     // (undocumented)
     beforeGridWidthChange: GridWidthChange;
+    beforeSelectionChange: SelectionChange;
     // (undocumented)
     gridWidthChange: GridWidthChange;
     // (undocumented)
     navigationChange: NavigationChange;
+    // (undocumented)
+    selectionChange: SelectionChange;
 }
 
 // Warning: (ae-forgotten-export) The symbol "GanttOptionsBase" needs to be exported by the entry point index.d.ts
@@ -379,6 +390,16 @@ export function instant(value: Date | number | string): Instant;
 
 // @public
 export type InstantInput = Instant | Date | number | string;
+
+// @public
+export interface Interactions {
+    // (undocumented)
+    move?: CapabilityRule;
+    // (undocumented)
+    resize?: CapabilityRule;
+    // (undocumented)
+    select?: CapabilityRule;
+}
 
 // @public
 export class InvalidInstantError extends FreeGanttError {
@@ -475,6 +496,14 @@ export type ScrollPosition = Point;
 export interface ScrollState {
     readonly max: ScrollPosition;
     readonly position: ScrollPosition;
+}
+
+// @public
+export interface SelectionChange {
+    // (undocumented)
+    readonly from: readonly EntryId[];
+    // (undocumented)
+    readonly to: readonly EntryId[];
 }
 
 // @public (undocumented)
