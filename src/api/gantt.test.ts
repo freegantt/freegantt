@@ -407,7 +407,7 @@ describe('Gantt locale / todayLine (S1.12, D-S1.12-12 / D-S1.12-14)', () => {
     }
   });
 
-  it('[S1-A10] todayLine = false removes .fg-today-line', async () => {
+  it('[S1-A10] todayLine = false removes .fg-date-line', async () => {
     FakeResizeObserver.instances = [];
     vi.stubGlobal('ResizeObserver', FakeResizeObserver);
 
@@ -424,13 +424,157 @@ describe('Gantt locale / todayLine (S1.12, D-S1.12-12 / D-S1.12-14)', () => {
       });
       FakeResizeObserver.instances[0]!.fire({ width: 300, height: 100 });
 
-      expect(container.querySelector('.fg-today-line')).not.toBeNull();
-      expect(container.querySelector<HTMLElement>('.fg-today-line')!.hidden).toBe(false);
+      expect(container.querySelector('.fg-date-line')).not.toBeNull();
+      expect(container.querySelector<HTMLElement>('.fg-date-line')!.hidden).toBe(false);
 
       gantt.todayLine = false;
       await new Promise((resolve) => requestAnimationFrame(resolve));
 
+      expect(container.querySelector('.fg-date-line')).toBeNull();
+
+      gantt.destroy();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+});
+
+describe('Gantt dateLines (S1.13)', () => {
+  it("[S1-A11] a dateLines entry with a label renders a .fg-date-line-label at the line's x; one without a label renders no caption", () => {
+    FakeResizeObserver.instances = [];
+    vi.stubGlobal('ResizeObserver', FakeResizeObserver);
+
+    try {
+      const container = document.createElement('div');
+      const gantt = new Gantt({
+        container,
+        dataset: new Dataset({
+          entries: [{ id: 'span', name: 'span', start: '2020-01-01', end: '2030-01-01' }],
+          timeZone: 'UTC',
+        }),
+        fit: 'preset',
+        preset: 'year',
+        todayLine: false,
+        dateLines: [{ placeAt: '2026-06-01', label: 'Launch' }, { placeAt: '2027-06-01' }],
+      });
+      FakeResizeObserver.instances[0]!.fire({ width: 300, height: 100 });
+
+      const labels = container.querySelectorAll<HTMLElement>('.fg-date-line-label');
+      expect(labels).toHaveLength(1);
+      expect(labels[0]!.textContent).toBe('Launch');
+      const lines = container.querySelectorAll<HTMLElement>('.fg-date-line');
+      expect(lines).toHaveLength(2);
+      expect(labels[0]!.style.transform).toBe(lines[0]!.style.transform);
+
+      gantt.destroy();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('[S1-A12] .fg-today-line does not exist anywhere in the rendered DOM; .fg-date-line does, with --fg-date-line-color in the token table and --fg-today-line-color absent', () => {
+    FakeResizeObserver.instances = [];
+    vi.stubGlobal('ResizeObserver', FakeResizeObserver);
+
+    try {
+      const container = document.createElement('div');
+      const gantt = new Gantt({
+        container,
+        dataset: new Dataset({
+          entries: [{ id: 'span', name: 'span', start: '2020-01-01', end: '2030-01-01' }],
+          timeZone: 'UTC',
+        }),
+        fit: 'preset',
+        preset: 'year',
+      });
+      FakeResizeObserver.instances[0]!.fire({ width: 300, height: 100 });
+
       expect(container.querySelector('.fg-today-line')).toBeNull();
+      expect(container.querySelector('.fg-date-line')).not.toBeNull();
+
+      const styleSheet = Array.from(document.head.querySelectorAll('style'))
+        .map((s) => s.textContent ?? '')
+        .join('\n');
+      expect(styleSheet).toContain('--fg-date-line-color');
+      expect(styleSheet).not.toContain('--fg-today-line-color');
+
+      gantt.destroy();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('[S1-A13] todayLine pinned to an Instant renders one .fg-date-line there with no caption, and does not move when the clock advances', async () => {
+    FakeResizeObserver.instances = [];
+    vi.stubGlobal('ResizeObserver', FakeResizeObserver);
+    vi.useFakeTimers();
+    vi.setSystemTime(instant('2020-06-01T00:00:00Z'));
+
+    try {
+      const container = document.createElement('div');
+      const gantt = new Gantt({
+        container,
+        dataset: new Dataset({
+          entries: [{ id: 'span', name: 'span', start: '2020-01-01', end: '2030-01-01' }],
+          timeZone: 'UTC',
+        }),
+        // Explicit range (not fit: 'preset'/'fitDataset') so the scale itself stays put across
+        // renders — the assertion below is about the pinned Date line, not the axis.
+        range: { start: '2020-01-01', end: '2030-01-01' },
+        preset: 'year',
+        todayLine: '2026-09-14',
+      });
+      FakeResizeObserver.instances[0]!.fire({ width: 300, height: 100 });
+      // The pane resize above only requests a frame (FrameScheduler, async); awaiting one here
+      // settles it before "before" is captured, so both measurements below reflect the same
+      // resolved pane width instead of comparing a pre-resize layout to a post-resize one.
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+
+      const lines = container.querySelectorAll<HTMLElement>('.fg-date-line');
+      expect(lines).toHaveLength(1);
+      const before = lines[0]!.style.transform;
+      expect(container.querySelector('.fg-date-line-label')).toBeNull();
+
+      vi.setSystemTime(instant('2029-06-01T00:00:00Z'));
+      // Forces a real re-render with no change to todayLine itself and nothing that touches the
+      // scale (unlike locale, which can shift pxPerMs by re-measuring tick label widths) — proves
+      // the pinned line held its position through a render pass, not just that no render happened.
+      gantt.dateLines = [];
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+
+      const after = container.querySelectorAll<HTMLElement>('.fg-date-line');
+      expect(after).toHaveLength(1);
+      expect(after[0]!.style.transform).toBe(before);
+
+      gantt.destroy();
+    } finally {
+      vi.useRealTimers();
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("[S1-A14] a dateLines entry's className reaches the rendered node's classList alongside the base class", () => {
+    FakeResizeObserver.instances = [];
+    vi.stubGlobal('ResizeObserver', FakeResizeObserver);
+
+    try {
+      const container = document.createElement('div');
+      const gantt = new Gantt({
+        container,
+        dataset: new Dataset({
+          entries: [{ id: 'span', name: 'span', start: '2020-01-01', end: '2030-01-01' }],
+          timeZone: 'UTC',
+        }),
+        fit: 'preset',
+        preset: 'year',
+        todayLine: false,
+        dateLines: [{ placeAt: '2026-06-01', label: 'Ship', className: 'fg-deadline-line' }],
+      });
+      FakeResizeObserver.instances[0]!.fire({ width: 300, height: 100 });
+
+      const line = container.querySelector<HTMLElement>('.fg-date-line')!;
+      expect(line.classList.contains('fg-date-line')).toBe(true);
+      expect(line.classList.contains('fg-deadline-line')).toBe(true);
 
       gantt.destroy();
     } finally {

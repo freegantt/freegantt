@@ -90,7 +90,7 @@ export function mountTimelineToolbar(options: TimelineToolbarOptions): void {
     const todayLineLabel = document.createElement('label');
     todayLineCheckbox = document.createElement('input');
     todayLineCheckbox.type = 'checkbox';
-    todayLineCheckbox.checked = gantt.todayLine;
+    todayLineCheckbox.checked = gantt.todayLine !== false;
     todayLineLabel.append(todayLineCheckbox, ' Today line');
     bar.append(todayLineLabel);
   }

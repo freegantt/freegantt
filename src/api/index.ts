@@ -19,7 +19,7 @@ export type {
 // matches `api/dataset.ts`'s own import of `data/serialization/index.js`.
 export { invertChangeSet } from '../data/change-set.js';
 export { Gantt } from './gantt.js';
-export type { GanttOptions } from './gantt.js';
+export type { GanttOptions, DateLineInput } from './gantt.js';
 export type { Theme } from '../view/index.js';
 export type { GanttEventMap, GridWidthChange, NavigationChange } from '../view/index.js';
 // TimeScaleModel/ScrollModel are layout/'s own — both are public, consumer-constructed objects

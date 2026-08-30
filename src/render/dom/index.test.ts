@@ -328,19 +328,19 @@ describe('render/dom backend', () => {
     // today line's positioned ancestor and its own `overflow: auto` scroll container, so a naive
     // `bottom: 0` would size the line to the pane's clientHeight (200) and cut it off long before
     // `contentHeight` (5000) — the regression this guards.
-    backend.sync({ ...base, contentHeight: 5000, decorations: [{ kind: 'dateLine', id: 'today', x: 10 }] });
+    backend.sync({ ...base, contentHeight: 5000, decorations: [{ kind: 'dateLine', x: 10 }] });
 
-    const line = timeline.querySelector<HTMLElement>('.fg-today-line')!;
+    const line = timeline.querySelector<HTMLElement>('.fg-date-line')!;
     expect(line.hidden).toBe(false);
     expect(line.style.height).toBe('5000px');
 
     // A dataset shorter than the pane must still fill the visible pane down to its own bottom,
     // not just its own (shorter) content height.
-    backend.sync({ ...base, contentHeight: 50, decorations: [{ kind: 'dateLine', id: 'today', x: 10 }] });
+    backend.sync({ ...base, contentHeight: 50, decorations: [{ kind: 'dateLine', x: 10 }] });
     expect(line.style.height).toBe('200px');
 
     backend.sync({ ...base, decorations: [] });
-    expect(timeline.querySelector('.fg-today-line')).toBeNull();
+    expect(timeline.querySelector('.fg-date-line')).toBeNull();
 
     backend.destroy();
   });
@@ -362,19 +362,52 @@ describe('render/dom backend', () => {
     backend.sync({
       ...base,
       decorations: [
-        { kind: 'dateLine', id: 'today', x: 10 },
-        { kind: 'dateLine', id: 'deadline', x: 40, label: 'Ship' },
+        { kind: 'dateLine', x: 10 },
+        { kind: 'dateLine', x: 40, label: 'Ship' },
       ],
     });
-    const nodes = timeline.querySelectorAll<HTMLElement>('.fg-today-line');
+    const nodes = timeline.querySelectorAll<HTMLElement>('.fg-date-line');
     expect(nodes).toHaveLength(2);
     expect(nodes[0]!.style.transform).toBe('translateX(10px)');
     expect(nodes[1]!.style.transform).toBe('translateX(40px)');
-    expect(nodes[1]!.textContent).toBe('Ship');
 
-    backend.sync({ ...base, decorations: [{ kind: 'dateLine', id: 'deadline', x: 40, label: 'Ship' }] });
-    expect(timeline.querySelectorAll('.fg-today-line')).toHaveLength(1);
-    expect(timeline.querySelector('.fg-today-line')?.textContent).toBe('Ship');
+    const labels = timeline.querySelectorAll<HTMLElement>('.fg-date-line-label');
+    expect(labels).toHaveLength(1);
+    expect(labels[0]!.textContent).toBe('Ship');
+    expect(labels[0]!.style.transform).toBe('translateX(40px)');
+
+    backend.sync({ ...base, decorations: [{ kind: 'dateLine', x: 40, label: 'Ship' }] });
+    expect(timeline.querySelectorAll('.fg-date-line')).toHaveLength(1);
+    expect(timeline.querySelector('.fg-date-line-label')?.textContent).toBe('Ship');
+
+    backend.destroy();
+    grid.remove();
+    timeline.remove();
+  });
+
+  it('composes a Date line className onto the base class, on both the stroke and the caption', () => {
+    const backend = createDomBackend();
+    const { grid, timeline } = mountSurfaces();
+    backend.mount({ grid, timeline });
+
+    const base = computeFrame({
+      entries: sampleEntries.slice(0, 1),
+      scale,
+      preset,
+      visible: { x: 0, y: 0, width: 0, height: 200 },
+      rowHeight: 32,
+      revision: 0,
+    });
+
+    backend.sync({
+      ...base,
+      decorations: [{ kind: 'dateLine', x: 10, label: 'Ship', className: 'fg-deadline-line' }],
+    });
+
+    const line = timeline.querySelector<HTMLElement>('.fg-date-line')!;
+    expect(line.classList.contains('fg-deadline-line')).toBe(true);
+    const label = timeline.querySelector<HTMLElement>('.fg-date-line-label')!;
+    expect(label.classList.contains('fg-deadline-line')).toBe(true);
 
     backend.destroy();
     grid.remove();

@@ -5,9 +5,17 @@ import { GanttShell } from '../view/index.js';
 import type { GanttEventMap, Theme } from '../view/index.js';
 import { ScrollModel, TimeScaleModel } from '../layout/index.js';
 import type { PresetRef, TimeScaleFit, ViewPreset } from '../layout/index.js';
-import type { EntryId, InstantInput, TimeSpan } from '../model/index.js';
+import type { DateLineSpec } from '../layout/index.js';
+import type { EntryId, Instant, InstantInput, TimeSpan } from '../model/index.js';
 import { now, toInstant } from '../time/index.js';
 import type { Dataset } from './dataset.js';
+
+/** Public, loose. What `GanttOptions.dateLines` and `Gantt.dateLines` both take (S1.13, D-S1.13-2). */
+export interface DateLineInput {
+  placeAt: InstantInput;
+  label?: string;
+  className?: string;
+}
 
 interface GanttOptionsBase {
   /** Element or CSS selector (plans/02 §2) — resolved by GanttShell; a selector matching nothing
@@ -27,8 +35,13 @@ interface GanttOptionsBase {
   /** Live (S1.12, D-S1.12-12). `undefined` = the runtime default. Feeds header labels and
    *  screen-reader dates alike, with no bar remount. */
   locale?: Intl.LocalesArgument;
-  /** Live (S1.12, D-S1.12-14). Default `true`. */
-  todayLine?: boolean;
+  /** Live (S1.12/S1.13, D-S1.12-14, D-S1.13-4). Default `true`: `now()`. `false`: off. An instant
+   *  pins it with no clock read. To keep today visible, pan with `panToToday()` or grow `range`. */
+  todayLine?: boolean | InstantInput;
+  /** Live (S1.13, D-S1.13-4). Default `[]`. Extra Date lines beside the today wrapper —
+   *  status/as-of dates, sprint or holiday markers, project start/finish. No id: index-keyed, like
+   *  Header bands. The wrapper's own line never gets a caption; give one of these a `label` instead. */
+  dateLines?: readonly DateLineInput[];
   /** The ordered set `zoomIn`/`zoomOut` step through, finest first (S1.12, D-S1.12-5). Live.
    *  Default: the shipped nine-rung set. */
   zoomPresets?: readonly PresetRef[];
@@ -77,7 +90,8 @@ export class Gantt {
       ...(options.theme !== undefined ? { theme: options.theme } : {}),
       ...(options.a11yLabel !== undefined ? { a11yLabel: options.a11yLabel } : {}),
       ...(options.locale !== undefined ? { locale: options.locale } : {}),
-      ...(options.todayLine !== undefined ? { todayLine: options.todayLine } : {}),
+      ...(options.todayLine !== undefined ? { todayLine: this.#toTodayLine(options.todayLine) } : {}),
+      ...(options.dateLines !== undefined ? { dateLines: this.#toDateLines(options.dateLines) } : {}),
     });
     if (options.zoomPresets !== undefined) this.#shell.zoomPresets = options.zoomPresets;
   }
@@ -89,6 +103,24 @@ export class Gantt {
     if (r === 'fitDataset') return r;
     const zone = this.#dataset.timeZone;
     return { start: toInstant(zone, r.start), end: toInstant(zone, r.end) };
+  }
+
+  /** Reads `todayLine`'s loose pinned form through the dataset's zone (S1.13, D-S1.13-4) — booleans
+   *  pass through untouched, so `true`/`false` never take a clock read they don't need. */
+  #toTodayLine(todayLine: boolean | InstantInput): boolean | Instant {
+    if (typeof todayLine === 'boolean') return todayLine;
+    return toInstant(this.#dataset.timeZone, todayLine);
+  }
+
+  /** `#toRange`'s counterpart for `dateLines` (S1.13, D-S1.13-2): one `toInstant` call per entry. */
+  #toDateLines(lines: readonly DateLineInput[]): readonly DateLineSpec[] {
+    const zone = this.#dataset.timeZone;
+    return lines.map((line) => {
+      const spec: DateLineSpec = { placeAt: toInstant(zone, line.placeAt) };
+      if (line.label !== undefined) spec.label = line.label;
+      if (line.className !== undefined) spec.className = line.className;
+      return spec;
+    });
   }
 
   get theme(): Theme {
@@ -153,12 +185,27 @@ export class Gantt {
     this.#shell.locale = l;
   }
 
-  get todayLine(): boolean {
+  /** Getter returns what was resolved (S1.13, D-S1.13-4) — legal against `boolean | InstantInput`
+   *  since `Instant` is one of `InstantInput`'s member types, `range`'s own precedent. */
+  get todayLine(): boolean | InstantInput {
     return this.#shell.todayLine;
   }
 
-  set todayLine(on: boolean) {
-    this.#shell.todayLine = on;
+  /** Live (S1.12/S1.13, D-S1.12-14, D-S1.13-4). `true`/`false` pass straight through; any other
+   *  `InstantInput` is read once through the dataset's zone and pins the line with no clock read. */
+  set todayLine(on: boolean | InstantInput) {
+    this.#shell.todayLine = this.#toTodayLine(on);
+  }
+
+  /** Getter returns what was resolved, same precedent as `todayLine`/`range` above. */
+  get dateLines(): readonly DateLineInput[] {
+    return this.#shell.dateLines;
+  }
+
+  /** Live (S1.13, D-S1.13-4). Loose on the way in: every `placeAt` is read through the dataset's
+   *  zone via `toInstant`. */
+  set dateLines(lines: readonly DateLineInput[]) {
+    this.#shell.dateLines = this.#toDateLines(lines);
   }
 
   /** The ordered set `zoomIn`/`zoomOut` step through, finest first (S1.12, D-S1.12-5). Live. */

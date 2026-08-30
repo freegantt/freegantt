@@ -383,7 +383,7 @@ describe('pane split pixel identity (S1.8, D-S1.8-1)', () => {
       FakeResizeObserver.instances[0]!.fire({ width: 653, height: 400 });
       shell.render(); // D-S2-15: the resize's render request is coalesced onto the next frame
 
-      const sizer = container.querySelector<HTMLElement>('.fg-timeline-pane [aria-hidden="true"]')!;
+      const sizer = container.querySelector<HTMLElement>('.fg-timeline-pane .fg-content-sizer')!;
       const match = /translate\(([-\d.]+)px,/.exec(sizer.style.transform);
       const sizerX = match ? Number(match[1]) : NaN;
 
