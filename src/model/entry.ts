@@ -58,3 +58,14 @@ export interface EntryInput<TMeta = unknown> {
  * reads them through `time/`'s `toInstant`/`toEndInstant` in the dataset's zone, exactly as
  * construction does. `id` is not editable — an id is identity. */
 export type EntryEdit<TMeta = unknown> = Partial<Omit<EntryInput<TMeta>, 'id'>>;
+
+/** Storage-shaped edit: every field already read through `time/` (an `Instant`, not a loose
+ *  `InstantInput`) — what a write set holds and what `diffEdit` compares against `entries`. Distinct
+ *  from `EntryEdit` above, the public input-shaped edit a caller writes (`plans/02` one write shape):
+ *  the two only coincide today because no mutator normalizes loose input into this shape yet. Not
+ *  public (`plans/s3-direct-manipulation/README.md`) — an internal write/gesture shape only, moved
+ *  here (from `data/edit-extension.ts`) in S3.3 (D-S3-4) so `layout/gesture-draft.ts` can build one
+ *  without reaching into `data/`. */
+export type StoredEdit<TMeta = unknown> = Partial<Omit<Entry<TMeta>, 'id'>>;
+
+export type EntryEdits = ReadonlyMap<EntryId, StoredEdit>;

@@ -21,7 +21,14 @@ export { invertChangeSet } from '../data/change-set.js';
 export { Gantt } from './gantt.js';
 export type { GanttOptions, DateLineInput } from './gantt.js';
 export type { Theme } from '../view/index.js';
-export type { GanttEventMap, GridWidthChange, NavigationChange, SelectionChange } from '../view/index.js';
+export type {
+  GanttEventMap,
+  GridWidthChange,
+  NavigationChange,
+  SelectionChange,
+  ProposedSpan,
+  EntryMove,
+} from '../view/index.js';
 // S3, D-S3-9: `Gantt.interactions`'s own type and the per-gesture rule shape (`view/capability.ts`).
 export type { CapabilityRule, Interactions } from '../view/index.js';
 // TimeScaleModel/ScrollModel are layout/'s own — both are public, consumer-constructed objects

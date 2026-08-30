@@ -1,8 +1,8 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { attachEntryGestures } from './entry-gestures.js';
-import type { EntrySelectionContext } from './entry-gestures.js';
+import type { EntryGestureContext, Gesture } from './entry-gesture-context.js';
 import { entryId, itemId } from '../model/index.js';
-import type { EntryId, ItemId } from '../model/index.js';
+import type { Entry, EntryEdits, EntryId, Instant, ItemId } from '../model/index.js';
 
 const A = entryId('a');
 const B = entryId('b');
@@ -10,24 +10,50 @@ const C = entryId('c');
 const ORDER: readonly EntryId[] = [A, B, C];
 const ITEMS: Record<string, EntryId> = { [itemId(A)]: A, [itemId(B)]: B, [itemId(C)]: C };
 
+/** `interaction/` may not import `time/` (I1) — this suite is about pointer semantics, never real
+ *  dates, so a bare number stands in for an `Instant` at this one call site. */
+function toInstant(ms: number): Instant {
+  return ms as unknown as Instant;
+}
+
+function entryFor(id: EntryId): Entry {
+  return { id, kind: 'span', name: id, start: toInstant(0), end: toInstant(1) };
+}
+
 function up(clientX: number, mods: Partial<PointerEventInit> = {}): PointerEvent {
-  return new PointerEvent('pointerup', { clientX, clientY: 0, ...mods });
+  return new PointerEvent('pointerup', { clientX, clientY: 0, pointerId: 1, ...mods });
+}
+
+function down(clientX: number, mods: Partial<PointerEventInit> = {}): PointerEvent {
+  return new PointerEvent('pointerdown', { clientX, clientY: 0, pointerId: 1, ...mods });
+}
+
+function move(clientX: number, mods: Partial<PointerEventInit> = {}): PointerEvent {
+  return new PointerEvent('pointermove', { clientX, clientY: 0, pointerId: 1, ...mods });
 }
 
 /** `hitTest` reads a fake `data-hit-x` position map instead of real layout — this suite is about
  *  pointer semantics (D-S3-10), not hit-testing, which `render/dom/index.test.ts` already covers. */
-function makeContext(overrides: Partial<EntrySelectionContext> = {}): {
-  ctx: EntrySelectionContext;
+function makeContext(overrides: Partial<EntryGestureContext> = {}): {
+  ctx: EntryGestureContext;
   proposals: (readonly EntryId[])[];
 } {
   let selection: readonly EntryId[] = [];
   const proposals: (readonly EntryId[])[] = [];
-  const ctx: EntrySelectionContext = {
+  const ctx: EntryGestureContext = {
     hitTest: (x) => (x >= 0 && x < ORDER.length ? itemId(ORDER[x]!) : undefined),
-    entryIdFor: (item: ItemId) => ITEMS[item],
-    canSelect: () => true,
+    entryFor: (item: ItemId) => {
+      const id = ITEMS[item];
+      return id !== undefined ? entryFor(id) : undefined;
+    },
+    can: () => true,
     rowOrder: () => ORDER,
     setHovered: () => {},
+    entriesForGesture: (grabbed) => [entryFor(grabbed)],
+    draftFor: () => new Map(),
+    commit: () => Promise.resolve(true),
+    preview: () => {},
+    pointerAt: () => {},
     selection: {
       get: () => selection,
       propose: (next) => {
@@ -38,6 +64,11 @@ function makeContext(overrides: Partial<EntrySelectionContext> = {}): {
     ...overrides,
   };
   return { ctx, proposals };
+}
+
+function mockPointerCapture(el: HTMLElement): void {
+  el.setPointerCapture = vi.fn();
+  el.releasePointerCapture = vi.fn();
 }
 
 describe('attachEntryGestures — selection (S3.1)', () => {
@@ -82,7 +113,9 @@ describe('attachEntryGestures — selection (S3.1)', () => {
   it('shift-click omits incapable entries from the range; an empty result writes nothing', () => {
     const pane = document.createElement('div');
     const container = document.createElement('div');
-    const { ctx, proposals } = makeContext({ canSelect: (id) => id !== B });
+    const { ctx, proposals } = makeContext({
+      can: (capability, entry) => capability !== 'select' || entry.id !== B,
+    });
     attachEntryGestures(pane, container, ctx);
 
     pane.dispatchEvent(up(0)); // anchor = A (capable)
@@ -93,7 +126,9 @@ describe('attachEntryGestures — selection (S3.1)', () => {
   it('a click on an incapable bar leaves the selection untouched', () => {
     const pane = document.createElement('div');
     const container = document.createElement('div');
-    const { ctx, proposals } = makeContext({ canSelect: (id) => id !== B });
+    const { ctx, proposals } = makeContext({
+      can: (capability, entry) => capability !== 'select' || entry.id !== B,
+    });
     attachEntryGestures(pane, container, ctx);
 
     pane.dispatchEvent(up(0));
@@ -149,10 +184,6 @@ describe('attachEntryGestures — selection (S3.1)', () => {
   });
 });
 
-function move(clientX: number): PointerEvent {
-  return new PointerEvent('pointermove', { clientX, clientY: 0 });
-}
-
 describe('attachEntryGestures — hover (S3.2)', () => {
   it('reports the raw hit under the pointer on pointermove, and undefined on pointerleave', () => {
     const pane = document.createElement('div');
@@ -177,5 +208,96 @@ describe('attachEntryGestures — hover (S3.2)', () => {
 
     pane.dispatchEvent(move(1));
     expect(hovered).toEqual([]);
+  });
+});
+
+const DRAG_THRESHOLD_PX = 4;
+
+describe('attachEntryGestures — move (S3.3)', () => {
+  it('[S3-A1] a drag past the threshold previews, then commits on pointerup and never touches selection', () => {
+    const pane = document.createElement('div');
+    mockPointerCapture(pane);
+    const container = document.createElement('div');
+    const previews: (EntryEdits | undefined)[] = [];
+    const commits: [Gesture, EntryEdits][] = [];
+    const { ctx, proposals } = makeContext({
+      can: (capability) => capability === 'move' || capability === 'select',
+      preview: (draft) => previews.push(draft),
+      draftFor: (_gesture, entries, dxPx) =>
+        new Map(entries.map((e) => [e.id, { start: toInstant(dxPx), end: toInstant(dxPx) }])),
+      commit: (gesture, draft) => {
+        commits.push([gesture, draft]);
+        return Promise.resolve(true);
+      },
+    });
+    attachEntryGestures(pane, container, ctx);
+
+    pane.dispatchEvent(down(0));
+    pane.dispatchEvent(move(0 + DRAG_THRESHOLD_PX + 1));
+    pane.dispatchEvent(up(0 + DRAG_THRESHOLD_PX + 5));
+
+    expect(previews.length).toBeGreaterThan(0);
+    expect(previews.at(-1)).toBeUndefined(); // cleared on commit
+    expect(commits).toHaveLength(1);
+    expect(commits[0]![0]).toEqual({ kind: 'move' });
+    expect(proposals).toEqual([]); // a drag never also proposes a selection change
+  });
+
+  it('[S3-A2] Escape mid-drag clears the preview and commits nothing', () => {
+    const pane = document.createElement('div');
+    mockPointerCapture(pane);
+    const container = document.createElement('div');
+    const previews: (EntryEdits | undefined)[] = [];
+    const commit = vi.fn(() => Promise.resolve(true));
+    const { ctx } = makeContext({
+      can: (capability) => capability === 'move' || capability === 'select',
+      preview: (draft) => previews.push(draft),
+      commit,
+    });
+    attachEntryGestures(pane, container, ctx);
+
+    pane.dispatchEvent(down(0));
+    pane.dispatchEvent(move(0 + DRAG_THRESHOLD_PX + 1));
+    container.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+
+    expect(previews.at(-1)).toBeUndefined();
+    expect(commit).not.toHaveBeenCalled();
+  });
+
+  it('a pointerdown on a bar without move capability falls back to a plain click on pointerup', () => {
+    const pane = document.createElement('div');
+    mockPointerCapture(pane);
+    const container = document.createElement('div');
+    const commit = vi.fn(() => Promise.resolve(true));
+    const { ctx, proposals } = makeContext({ can: (capability) => capability === 'select', commit });
+    attachEntryGestures(pane, container, ctx);
+
+    pane.dispatchEvent(down(0));
+    pane.dispatchEvent(move(0 + DRAG_THRESHOLD_PX + 1)); // never arms: not move-capable
+    pane.dispatchEvent(up(0));
+
+    expect(commit).not.toHaveBeenCalled();
+    expect(proposals).toEqual([[A]]);
+  });
+
+  it('a drag moves every capable entry `entriesForGesture` returns, grabbed first', () => {
+    const pane = document.createElement('div');
+    mockPointerCapture(pane);
+    const container = document.createElement('div');
+    const seenEntries: Entry[][] = [];
+    const { ctx } = makeContext({
+      can: () => true,
+      entriesForGesture: (grabbed) => [entryFor(grabbed), entryFor(grabbed === A ? B : A)],
+      draftFor: (_g, entries) => {
+        seenEntries.push([...entries]);
+        return new Map();
+      },
+    });
+    attachEntryGestures(pane, container, ctx);
+
+    pane.dispatchEvent(down(0)); // grabs A
+    pane.dispatchEvent(move(0 + DRAG_THRESHOLD_PX + 1));
+
+    expect(seenEntries[0]?.map((e) => e.id)).toEqual([A, B]);
   });
 });

@@ -1,15 +1,12 @@
 // data/ — the extension hook every transaction calls once (D4). An unoccupied hook is the identity
 // function; an installed plugin (S7's scheduling engine) is what returns anything else (D-S2-6).
 
-import type { Entry, EntryId } from '../model/index.js';
+import type { Entry, EntryEdits, EntryId } from '../model/index.js';
 
-/** Storage-shaped edit: every field already read through `time/` (an `Instant`, not a loose
- *  `InstantInput`) — what the write set holds and what `diffEdit` compares against `entries`. Distinct
- *  from the public, input-shaped `EntryEdit` a caller writes (`plans/02` one write shape): the two only
- *  coincide today because no mutator normalizes loose input into this shape yet (S2.3's job). */
-export type StoredEdit<TMeta = unknown> = Partial<Omit<Entry<TMeta>, 'id'>>;
-
-export type EntryEdits = ReadonlyMap<EntryId, StoredEdit>;
+// `StoredEdit`/`EntryEdits` moved to `model/entry.ts` in S3.3 (D-S3-4) so `layout/gesture-draft.ts`
+// can build one without reaching into `data/`. Re-exported here so every existing `data/` import
+// site keeps working unchanged.
+export type { StoredEdit, EntryEdits } from '../model/index.js';
 
 export interface EditRequest {
   /** Current store snapshot, before this transaction's edits. */
