@@ -203,7 +203,7 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
       contentSizer.setAttribute('aria-hidden', 'true');
       contentSizer.className = 'fg-content-sizer';
       timelineHost.append(headerLayer, barLayer, contentSizer);
-      dateLines = attachDateLines(timelineHost);
+      dateLines = attachDateLines(timelineHost, headerLayer);
     },
     sync(frame: GeometryFrame) {
       if (headerLayer) {

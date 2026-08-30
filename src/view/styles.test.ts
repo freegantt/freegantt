@@ -53,7 +53,7 @@ const COLOR_TOKENS = [
   '--fg-bar-fill',
   '--fg-bar-label-color',
   '--fg-warn',
-  '--fg-today-line-color',
+  '--fg-date-line-color',
 ];
 
 function makeContainer(): HTMLElement {

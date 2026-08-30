@@ -1,7 +1,7 @@
 export { computeFrame, barSpan, DEFAULT_TICK_BOX_FLOOR_PX } from './frame.js';
 export { FrameLayout } from './frame-layout.js';
-export { resolveDateLines, TODAY_DATE_LINE_ID } from './date-line.js';
-export type { DateLine, DateLineInput, ResolveDateLinesInput } from './date-line.js';
+export { resolveDateLines } from './date-line.js';
+export type { DateLine, DateLineSpec, ResolveDateLinesInput } from './date-line.js';
 export type {
   GeometryFrame,
   FrameRow,

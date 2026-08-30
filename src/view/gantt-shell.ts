@@ -9,7 +9,14 @@ import {
   Viewport,
   DEFAULT_TICK_BOX_FLOOR_PX,
 } from '../layout/index.js';
-import type { Overscan, PresetRef, TimeScaleFit, ViewportHandle, ViewPreset } from '../layout/index.js';
+import type {
+  DateLineSpec,
+  Overscan,
+  PresetRef,
+  TimeScaleFit,
+  ViewportHandle,
+  ViewPreset,
+} from '../layout/index.js';
 
 import { createDomBackend } from '../render/dom/index.js';
 import { readPixelProperty } from '../render/dom/pixel-property.js';
@@ -81,8 +88,10 @@ export interface GanttShellOptions {
   /** Live (S1.12, D-S1.12-12). `undefined` = the runtime default. Feeds header labels and
    *  `a11yLabel` alike. */
   locale?: Intl.LocalesArgument;
-  /** Live (S1.12, D-S1.12-14). Default `true`. */
-  todayLine?: boolean;
+  /** Live (S1.12/S1.13, D-S1.12-14, D-S1.13-4). Default `true`. */
+  todayLine?: boolean | Instant;
+  /** Live (S1.13, D-S1.13-4). Default `[]`. */
+  dateLines?: readonly DateLineSpec[];
   /** Expert knob, not on `GanttOptions` (plans/02 "two callers, two surfaces") — a test naming its
    * own `RenderBackend<HTMLElement>` in place of the DOM one (§9-I: the seam had two implementations
    * and one hardcoded call site, so nothing could reach the other short of mocking the module).
@@ -135,7 +144,8 @@ export class GanttShell {
   #theme: Theme = DEFAULT_THEME;
   #a11yLabel: string = DEFAULT_A11Y_LABEL;
   #locale: Intl.LocalesArgument | undefined;
-  #todayLine = true;
+  #todayLine: boolean | Instant = true;
+  #dateLines: readonly DateLineSpec[] = [];
 
   constructor(options: GanttShellOptions) {
     this.#options = options;
@@ -169,6 +179,14 @@ export class GanttShell {
       ...(options.scroll ? { scroll: options.scroll } : {}),
       ...(options.overscan !== undefined ? { overscan: options.overscan } : {}),
     });
+
+    // Set before the deliberate first render below (`#frames.flush()`) — plain field writes, not
+    // the live setters, so this first paint sees the constructor's own options instead of the
+    // field initializers' defaults (a bug caught by S1.13's `dateLines` constructor option:
+    // rendering it required this to move ahead of the flush it used to follow).
+    this.#locale = options.locale;
+    this.#todayLine = options.todayLine ?? true;
+    this.#dateLines = options.dateLines ?? [];
 
     // Mount before binding (#22): the render target exists by the time the binding's own onChange
     // — which IS this shell's first render — fires, so there is no construction-order exception to
@@ -221,8 +239,6 @@ export class GanttShell {
     if (options.theme !== undefined) this.theme = options.theme;
     else this.#applyTheme();
     this.a11yLabel = options.a11yLabel ?? DEFAULT_A11Y_LABEL;
-    this.#locale = options.locale;
-    this.#todayLine = options.todayLine ?? true;
   }
 
   get locale(): Intl.LocalesArgument | undefined {
@@ -236,13 +252,22 @@ export class GanttShell {
     this.#frames.request();
   }
 
-  get todayLine(): boolean {
+  get todayLine(): boolean | Instant {
     return this.#todayLine;
   }
 
-  set todayLine(on: boolean) {
+  set todayLine(on: boolean | Instant) {
     if (this.#todayLine === on) return;
     this.#todayLine = on;
+    this.#frames.request();
+  }
+
+  get dateLines(): readonly DateLineSpec[] {
+    return this.#dateLines;
+  }
+
+  set dateLines(lines: readonly DateLineSpec[]) {
+    this.#dateLines = lines;
     this.#frames.request();
   }
 
@@ -421,6 +446,7 @@ export class GanttShell {
       revision: this.#revision++,
       locale: this.#locale,
       todayLine: this.#todayLine,
+      dateLines: this.#dateLines,
     });
     this.#backend.sync(frame);
     // D-S1.12-9: the grid pane's spacer mirrors the header's own band count, so both panes resolve

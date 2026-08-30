@@ -35,7 +35,7 @@ const LIGHT_COLOR_TOKENS = `
   --fg-bar-fill: oklch(0.55 0.13 245);
   --fg-bar-label-color: #FFFFFF;
   --fg-warn: #D97706;
-  --fg-today-line-color: #DC2626;
+  --fg-date-line-color: #DC2626;
 `.trimEnd();
 
 const DARK_COLOR_TOKENS = `
@@ -52,7 +52,7 @@ const DARK_COLOR_TOKENS = `
   --fg-bar-fill: oklch(0.72 0.13 245);
   --fg-bar-label-color: #1A1815;
   --fg-warn: #FBBF24;
-  --fg-today-line-color: #F87171;
+  --fg-date-line-color: #F87171;
 `.trimEnd();
 
 const BASE_STYLESHEET = `
@@ -107,7 +107,8 @@ ${DARK_COLOR_TOKENS}
    this element's positioned ancestor and its own overflow: auto scroll container, so bottom: 0
    would resolve against the pane's visible clientHeight and cut the line off at the first
    screenful instead of running the full scrollable row content. */
-.fg-today-line { position: absolute; top: 0; width: 1px; background: var(--fg-today-line-color); pointer-events: none; }
+.fg-date-line { position: absolute; top: 0; border-left: 1px solid var(--fg-date-line-color); pointer-events: none; }
+.fg-date-line-label { position: absolute; left: 0; top: 0; white-space: nowrap; color: var(--fg-date-line-color); }
 `.trim();
 
 /** Injects the library's base stylesheet into `doc` exactly once. Safe to call from every Gantt

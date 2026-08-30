@@ -398,26 +398,26 @@ Glossary first, then the engine, then the seam, then the public edge.
 - [ ] `plans/03` §S1.13 block + §S3 TODO line
 
 ### `layout/`
-- [ ] `DateLineSpec` replaces the old `DateLineInput`; `DateLine` drops `id`, gains `className?`
-- [ ] `resolveDateLines`: `todayLine: boolean | Instant`, positional output, `TODAY_DATE_LINE_ID`
+- [x] `DateLineSpec` replaces the old `DateLineInput`; `DateLine` drops `id`, gains `className?`
+- [x] `resolveDateLines`: `todayLine: boolean | Instant`, positional output, `TODAY_DATE_LINE_ID`
       deleted
-- [ ] `LayoutInput.todayLine`/`.dateLines` retyped
+- [x] `LayoutInput.todayLine`/`.dateLines` retyped
 
 ### `render/dom/`
-- [ ] `attachDateLines` takes `headerLayer`; second keyed layer for `.fg-date-line-label`
-- [ ] Index-keyed `syncKeyed` calls (both layers); `className` composed onto the base class
-- [ ] `.fg-date-line` (border-left) / `.fg-date-line-label` in `view/styles.ts`; `--fg-date-line-color`
+- [x] `attachDateLines` takes `headerLayer`; second keyed layer for `.fg-date-line-label`
+- [x] Index-keyed `syncKeyed` calls (both layers); `className` composed onto the base class
+- [x] `.fg-date-line` (border-left) / `.fg-date-line-label` in `view/styles.ts`; `--fg-date-line-color`
       replaces `--fg-today-line-color` in both palettes; no alias
 
 ### `api/`
-- [ ] `DateLineInput`; `Gantt.dateLines` get/set + `#toDateLines`; `Gantt.todayLine` widens to
+- [x] `DateLineInput`; `Gantt.dateLines` get/set + `#toDateLines`; `Gantt.todayLine` widens to
       `boolean | InstantInput`
-- [ ] `GanttShellOptions.dateLines`; `GanttShell.todayLine` widens
+- [x] `GanttShellOptions.dateLines`; `GanttShell.todayLine` widens
 
 ### Tests
-- [ ] `layout/date-line.test.ts` rewritten for the new shape
-- [ ] `[S1-A11]`–`[S1-A14]` written and passing
-- [ ] `api/gantt.test.ts`'s existing `.fg-today-line` assertions rewritten against `.fg-date-line`
+- [x] `layout/date-line.test.ts` rewritten for the new shape
+- [x] `[S1-A11]`–`[S1-A14]` written and passing
+- [x] `api/gantt.test.ts`'s existing `.fg-today-line` assertions rewritten against `.fg-date-line`
 - [ ] `e2e/date-lines.spec.ts`
 
 ### Review and gate

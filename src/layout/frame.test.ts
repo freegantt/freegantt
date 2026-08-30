@@ -344,6 +344,39 @@ describe('computeFrame — horizontal culling', () => {
   });
 });
 
+describe('computeFrame — Date lines (S1.13)', () => {
+  it('carries a DateLine decoration with className when dateLines supplies one', () => {
+    const placeAt = instant('2026-09-02T00:00:00Z'); // inside sampleEntries[0]'s range
+    const frame = computeFrame({
+      entries: sampleEntries,
+      scale,
+      preset,
+      visible,
+      rowHeight: 32,
+      revision: 0,
+      todayLine: false,
+      dateLines: [{ placeAt, label: 'Ship', className: 'fg-deadline-line' }],
+    });
+    expect(frame.decorations).toEqual([
+      { kind: 'dateLine', x: scale.xForInstant(placeAt), label: 'Ship', className: 'fg-deadline-line' },
+    ]);
+  });
+
+  it('emits nothing for a pinned todayLine Instant outside scale.range, same as the boolean form', () => {
+    const outside = instant('2020-01-01T00:00:00Z'); // well before sampleEntries[0]'s range
+    const frame = computeFrame({
+      entries: sampleEntries,
+      scale,
+      preset,
+      visible,
+      rowHeight: 32,
+      revision: 0,
+      todayLine: outside,
+    });
+    expect(frame.decorations).toEqual([]);
+  });
+});
+
 describe('computeFrame — sticky label clamp (finding 3, header readability follow-up)', () => {
   // range.start is instant(0) (the UTC epoch, itself an hour boundary) with pxPerMs = 1/60000 (one
   // px per minute), so every hour tick is exactly 60px wide and a tick's x is just its instant in
