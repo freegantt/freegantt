@@ -14,3 +14,10 @@ export type {
   EntryResize,
 } from './event-bus.js';
 export type { CapabilityRule, Interactions } from './capability.js';
+export type {
+  DraftOptions,
+  EntryGesture,
+  EntryGestureContext,
+  EntryGestureSession,
+  EntryHit,
+} from './entry-gesture-context.js';
