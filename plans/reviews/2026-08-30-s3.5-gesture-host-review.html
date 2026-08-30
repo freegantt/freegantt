@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Architecture review — S3.5 + gesture-host refactor</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script type="module">
+      import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+      mermaid.initialize({ startOnLoad: true, theme: "neutral", securityLevel: "loose" });
+    </script>
+    <style>
+      .seam { stroke-dasharray: 4 4; }
+      .leak { stroke: #dc2626; }
+      .deep { background: linear-gradient(135deg, #0f172a, #1e293b); }
+    </style>
+  </head>
+  <body class="bg-stone-50 text-slate-900 font-sans">
+    <main class="max-w-5xl mx-auto px-6 py-12 space-y-12">
+
+      <header class="space-y-4">
+        <p class="text-xs uppercase tracking-widest text-slate-500">FreeGantt — pk-branch-review</p>
+        <h1 class="font-serif text-3xl">S3.5 + gesture-host refactor — keyboard parity, async veto, and the seam reshape</h1>
+        <p class="text-sm text-slate-500">
+          2026-08-30 · <span class="font-mono">origin/main...HEAD</span> on
+          <span class="font-mono">s3-impl-3.5to3.8</span> (6 commits)
+        </p>
+        <div class="flex flex-wrap gap-3 text-xs text-slate-600">
+          <span class="inline-flex items-center gap-1"><span class="inline-block w-4 h-3 border border-slate-500 bg-white"></span> module</span>
+          <span class="inline-flex items-center gap-1"><svg width="24" height="8"><line x1="0" y1="4" x2="24" y2="4" stroke="#475569" stroke-width="2" class="seam"/></svg> seam</span>
+          <span class="inline-flex items-center gap-1"><svg width="24" height="8"><line x1="0" y1="4" x2="24" y2="4" stroke="#dc2626" stroke-width="2"/></svg> leakage</span>
+          <span class="inline-flex items-center gap-1"><span class="inline-block w-4 h-3 deep rounded-sm"></span> deep module</span>
+        </div>
+        <p class="text-sm text-slate-600 max-w-3xl">
+          The changeset closes the 2026-08-30 review's D-GH-1–D-GH-4 refactor candidates (the gesture-host
+          collapse, one type home, pure affordance projection) and adds S3.5 (keyboard parity, D-S3-13;
+          async veto and <span class="font-mono">pending</span>, D-S3-17). Axes run separately — Standards,
+          Spec, Simplify — then architecture-deepening candidates; they are not ranked against each other.
+        </p>
+        <div class="text-sm rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-emerald-950 max-w-3xl">
+          <strong>Closed since the 2026-08-30 review.</strong> Gesture logic lives in one deep module;
+          <span class="font-mono">EntryGestureContext</span> has one type home on the legal
+          <span class="font-mono">interaction/ → view/</span> edge (C5); the mirrored shell copy is gone;
+          <span class="font-mono">pointerAt</span> dropped, not carried empty; affordance projection is a
+          pure Node-testable function (C3); <span class="font-mono">gantt-shell.ts</span> shrank 850 → 719.
+        </div>
+      </header>
+
+      <section id="axes" class="grid md:grid-cols-3 gap-4">
+        <div class="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-2">
+          <p class="text-xs uppercase tracking-widest text-amber-700 font-semibold">Standards</p>
+          <p class="text-2xl font-serif">3 findings</p>
+          <p class="text-sm text-amber-900">No hard breach. Two judgement smells, one borderline name. Naming of the new surface is clean.</p>
+        </div>
+        <div class="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-2">
+          <p class="text-xs uppercase tracking-widest text-amber-700 font-semibold">Spec</p>
+          <p class="text-2xl font-serif">5 findings</p>
+          <p class="text-sm text-amber-900">Worst: D-S3-17's "preview stays at dropped position" is not implemented. Plus plan-text drift to <span class="font-mono">GesturePipeline</span>.</p>
+        </div>
+        <div class="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-2">
+          <p class="text-xs uppercase tracking-widest text-amber-700 font-semibold">Simplify</p>
+          <p class="text-2xl font-serif">2 overbuilt</p>
+          <p class="text-sm text-amber-900">The <span class="font-mono">#commit</span> fork; the drop-vs-paint coupling behind <span class="font-mono">pending</span>.</p>
+        </div>
+      </section>
+
+      <section id="wins" class="space-y-3">
+        <h2 class="font-serif text-2xl">Already deep</h2>
+        <ul class="grid md:grid-cols-2 gap-3 text-sm">
+          <li class="rounded-lg border border-slate-200 bg-white p-3"><span class="font-mono">GesturePipeline</span> — entry resolution, draft math, rAF preview, commit all behind one <span class="font-mono">session()</span>. Retires "Host" (D-S1.11-6/#64) for a name that reads.</li>
+          <li class="rounded-lg border border-slate-200 bg-white p-3"><span class="font-mono">EntryGestureContext</span> — one type home on the legal edge; 7 members, <span class="font-mono">session()</span> absorbed four. C5 done.</li>
+          <li class="rounded-lg border border-slate-200 bg-white p-3"><span class="font-mono">projectAffordances</span> — pure, Node-testable, hover-wins logic intact. C3 done.</li>
+          <li class="rounded-lg border border-slate-200 bg-white p-3"><span class="font-mono">keyboard-editing.ts</span> — one <span class="font-mono">keydown</span> listener, disjoint <span class="font-mono">e.key</span> from the pointer one, never resolves a pixel or <span class="font-mono">Instant</span> itself (I1).</li>
+          <li class="rounded-lg border border-slate-200 bg-white p-3"><span class="font-mono">EventBus&lt;T, TAsyncKeys&gt;</span> — opt-in per instantiation; sync vetoes fold immediately, Promises awaited. <span class="font-mono">dataset-state</span> untouched.</li>
+          <li class="rounded-lg border border-slate-200 bg-white p-3 col-span-full"><span class="font-mono">session()</span> refuses to arm while pending — one choke point (I14) guards pointer and keyboard alike. The seam now has two real adapters (pointer + keyboard).</li>
+        </ul>
+      </section>
+
+      <section id="standards" class="space-y-4">
+        <h2 class="font-serif text-2xl">Standards</h2>
+        <ul class="space-y-3 text-sm">
+
+          <li class="rounded-lg border border-amber-200 bg-white p-4">
+            <span class="rounded-full bg-amber-100 text-amber-800 text-xs px-2 py-0.5 font-medium">Judgement — Duplicated Code</span>
+            <span class="font-mono text-xs text-slate-500 ml-2">GesturePipeline.#commit · gesture-pipeline.ts:188–209</span>
+            <p class="mt-1">The <span class="font-mono">resize</span> and <span class="font-mono">move</span> branches are structurally identical: same <span class="font-mono">payload</span> / <span class="font-mono">emit('before*')</span> / <span class="font-mono">false</span>-early-return / <span class="font-mono">finish</span> closure / after-emit / <span class="font-mono">awaitVeto</span>. Only the event names and <span class="font-mono">edge</span> differ — ~11 duplicate lines a parameterized helper could fold. The maintainer comment calls it an intentional one-place fork; still the single most concrete cleanup in the diff.</p>
+          </li>
+
+          <li class="rounded-lg border border-amber-200 bg-white p-4">
+            <span class="rounded-full bg-amber-100 text-amber-800 text-xs px-2 py-0.5 font-medium">Judgement — one word, two meanings</span>
+            <span class="font-mono text-xs text-slate-500 ml-2">GesturePipeline fields</span>
+            <p class="mt-1"><span class="font-mono">#pendingPreviewDraft</span> (a draft awaiting the next rAF) and <span class="font-mono">#pendingItemIds</span> (entries held by an unsettled veto) both use "pending". Naming-skill check 4: same word, two concepts, one class. <span class="font-mono">#pendingPreviewDraft</span> predates this diff, but the async-veto work added the second "pending" beside it. Worth one distinction e.g. <span class="font-mono">#scheduledDraft</span> vs <span class="font-mono">#heldItemIds</span>.</p>
+          </li>
+
+          <li class="rounded-lg border border-amber-200 bg-white p-4">
+            <span class="rounded-full bg-amber-100 text-amber-800 text-xs px-2 py-0.5 font-medium">Judgement — Feature Envy (mild)</span>
+            <span class="font-mono text-xs text-slate-500 ml-2">GanttShell → GesturePipelineDeps</span>
+            <p class="mt-1"><span class="font-mono">GesturePipelineDeps</span> is correct DI, but <span class="font-mono">GanttShell</span> funnels its own state through closures (<span class="font-mono">selection()</span>, <span class="font-mono">applyPreview</span>, <span class="font-mono">setPending</span> writing <span class="font-mono">#interactionState</span>), so the pipeline reads shell-owned fields. Balanced: <span class="font-mono">#draftFor</span>/<span class="font-mono">#commit</span> reach only through <span class="font-mono">deps</span>. Not a violation.</p>
+          </li>
+
+          <li class="rounded-lg border border-slate-200 bg-white p-4">
+            <span class="rounded-full bg-slate-100 text-slate-700 text-xs px-2 py-0.5 font-medium">Pass notes</span>
+            <p class="mt-1">No <span class="font-mono">interaction/</span> → <span class="font-mono">layout/</span>/<span class="font-mono">time/</span>/<span class="font-mono">render/</span>. No <span class="font-mono">view/</span> → <span class="font-mono">interaction/</span>. DOM-free core holds. New names pass the 5 checks; the <span class="font-mono">GestureHost</span> → <span class="font-mono">GesturePipeline</span> rename is a genuine improvement (avoids the retired "Host"). <span class="font-mono">#emitRaw</span> cast is isolated to one line with a disclosing comment.</p>
+          </li>
+
+        </ul>
+      </section>
+
+      <section id="spec" class="space-y-4">
+        <h2 class="font-serif text-2xl">Spec</h2>
+        <p class="text-sm text-slate-600">Originating: <span class="font-mono">plans/s3-direct-manipulation/s3.5-keyboard-parity-and-async-veto.md</span> (D-S3-13, D-S3-17) and <span class="font-mono">gesture-host-refactor.md</span> (D-GH-1–D-GH-4).</p>
+        <ul class="space-y-3 text-sm">
+
+          <li class="rounded-lg border border-red-200 bg-white p-4">
+            <span class="rounded-full bg-red-100 text-red-800 text-xs px-2 py-0.5 font-medium">Looks done, disagrees</span>
+            <span class="font-mono text-xs text-slate-500 ml-2">D-S3-17 · gesture-pipeline.ts:80–83</span>
+            <p class="mt-1">Spec: "preview stays at dropped position … <span class="font-mono">pending</span> = true." <span class="font-mono">session().commit()</span> calls <span class="font-mono">#preview(undefined)</span> <em>before</em> <span class="font-mono">#commit()</span> enters <span class="font-mono">#awaitVeto</span>. So while the async veto is unsettled the bar parks at its pre-move position at reduced opacity — not the dropped position. The <span class="font-mono">api/gantt.test.ts</span> async-veto tests only assert <span class="font-mono">data-state~="pending"</span>, never the preview/transform, so the gap is untested too. This is exactly the "pending ghost" the slice's Ends-with line promises.</p>
+          </li>
+
+          <li class="rounded-lg border border-amber-200 bg-white p-4">
+            <span class="rounded-full bg-amber-100 text-amber-800 text-xs px-2 py-0.5 font-medium">Drift — plan text</span>
+            <span class="font-mono text-xs text-slate-500 ml-2">gesture-host-refactor.md §2/§3</span>
+            <p class="mt-1">The plan still names <span class="font-mono">src/view/gesture-host.ts</span> / <span class="font-mono">GestureHost</span> / <span class="font-mono">GestureHostDeps</span> with <span class="font-mono">snap(suspendSnap)</span> / <span class="font-mono">entriesForGesture()</span> / <span class="font-mono">applyPreview(draft: EntryEdits)</span>. The landed <span class="font-mono">GesturePipeline</span> has a different deps shape (<span class="font-mono">preset()</span> / <span class="font-mono">selection()</span> / <span class="font-mono">entryById()</span> / <span class="font-mono">canGesture()</span> / <span class="font-mono">setPending()</span>, <span class="font-mono">applyPreview(items)</span>). The rename is flagged only in the Status line and §8 TODO; the §2/§3 bodies were not updated to match what landed.</p>
+          </li>
+
+          <li class="rounded-lg border border-amber-200 bg-white p-4">
+            <span class="rounded-full bg-amber-100 text-amber-800 text-xs px-2 py-0.5 font-medium">Partial — D-GH-2 §6 tests</span>
+            <span class="font-mono text-xs text-slate-500 ml-2">gesture-pipeline.test.ts</span>
+            <p class="mt-1">"Move draft (single + multi-select)": multi-select is tested only as arming, never a multi-entry draft/commit. "Resize draft (both edges …)": the <span class="font-mono">end</span> edge is covered only via commit, no end-edge draft-preview test. Milestone/derived-span refusal is only the generic <span class="font-mono">canGesture:false</span>, never a named kind.</p>
+          </li>
+
+          <li class="rounded-lg border border-amber-200 bg-white p-4">
+            <span class="rounded-full bg-amber-100 text-amber-800 text-xs px-2 py-0.5 font-medium">Stale claim</span>
+            <span class="font-mono text-xs text-slate-500 ml-2">gesture-host-refactor.md §8</span>
+            <p class="mt-1">"<span class="font-mono">gantt-shell.ts</span> is 694 lines" was true at <span class="font-mono">ff90399</span> but is 719 at HEAD — S3.5's shell wiring (shared context, keyboard attachment, <span class="font-mono">setPending</span>) added the 25 back. The "every §2 cut method is gone" claim does hold (grep-verified).</p>
+          </li>
+
+          <li class="rounded-lg border border-emerald-200 bg-white p-4">
+            <span class="rounded-full bg-emerald-100 text-emerald-800 text-xs px-2 py-0.5 font-medium">Matching</span>
+            <p class="mt-1">D-S3-13 table (both modes, four arrows, Shift resize, Alt, Escape, one transaction per keypress); two-listener disjoint split; one shared <span class="font-mono">EntryGestureContext</span> DI; <span class="font-mono">EventBus&lt;T,TAsyncKeys&gt;</span>; <span class="font-mono">data-state~="pending"</span> + <span class="font-mono">--fg-pending-opacity</span>; no S3.6 scope leak (<span class="font-mono">pointerAt</span> dropped as planned, <span class="font-mono">#computePreview</span> still <span class="font-mono">EMPTY_EDITS</span>); harness touched only in plans, matching S3.5's deferred-visibility decision. Tests run green.</p>
+          </li>
+
+        </ul>
+      </section>
+
+      <section id="simplify" class="space-y-4">
+        <h2 class="font-serif text-2xl">Simplify</h2>
+        <ul class="space-y-3 text-sm">
+
+          <li class="rounded-lg border border-red-200 bg-white p-4">
+            <span class="rounded-full bg-red-100 text-red-800 text-xs px-2 py-0.5 font-medium">One fork, two bodies</span>
+            <span class="font-mono text-xs text-slate-500 ml-2">GesturePipeline.#commit</span>
+            <p class="mt-1">Move and resize are the same pipeline twice with different event names. A single <span class="font-mono">commit(gesture.discriminated)</span> choosing the event names once would cut the branch and the duplicated <span class="font-mono">finish</span> closure. The maintainers' comment frames it as "isolated here" — true, but the isolation does not demand the body be written twice. Read the spec note in candidate A.</p>
+          </li>
+
+          <li class="rounded-lg border border-amber-200 bg-white p-4">
+            <span class="rounded-full bg-amber-100 text-amber-800 text-xs px-2 py-0.5 font-medium">Coupling — drop vs paint behind pending</span>
+            <span class="font-mono text-xs text-slate-500 ml-2">D-S3-17 · #pendingItemIds + #preview(undefined)</span>
+            <p class="mt-1">The spec's "lock vs paint" split is only half-realized: <span class="font-mono">#pendingItemIds</span> drives the arm lock <em>and</em> paint via <span class="font-mono">setPending</span>, but the dropped preview is cleared first. Two effects are fused in one field where the spec asked for two. Decouple: keep the dropped draft previewed while pending, and let the lock live beside it (candidate B).</p>
+          </li>
+
+          <li class="rounded-lg border border-slate-200 bg-white p-4">
+            <span class="rounded-full bg-slate-100 text-slate-700 text-xs px-2 py-0.5 font-medium">Keep</span>
+            <p class="mt-1"><span class="font-mono">attachKeyboardEditing</span> — the file owns its listener, so the call site "attach keyboard editing to the container" is true. <span class="font-mono">nudge</span> reads as the job. <span class="font-mono">GesturePipeline</span> over <span class="font-mono">GestureHost</span>. Sync-fast / async-slow <span class="font-mono">#commit</span> dual shape is a real constraint (undone draft in HANDOFF gotcha #5), not over-engineering.</p>
+          </li>
+
+        </ul>
+      </section>
+
+      <section id="candidates" class="space-y-10">
+        <h2 class="font-serif text-2xl">Deepening candidates</h2>
+
+        <article id="c1" class="rounded-xl border border-slate-200 bg-white p-6 space-y-4">
+          <div class="flex items-start justify-between gap-4">
+            <h3 class="font-serif text-xl">1 · Fold the duplicate commit fork</h3>
+            <span class="inline-flex items-center gap-2">
+              <span class="rounded-full bg-amber-100 text-amber-800 text-xs px-2 py-0.5 font-medium">Worth exploring</span>
+              <span class="rounded-full bg-slate-100 text-slate-600 text-xs px-2 py-0.5">in-process</span>
+            </span>
+          </div>
+          <p class="text-xs uppercase tracking-wider text-slate-500">Files</p>
+          <p class="font-mono text-sm text-slate-600">src/view/gesture-pipeline.ts #commit · #awaitVeto · view/event-bus.ts</p>
+
+          <div class="rounded-lg border border-slate-200 bg-white p-4">
+            <pre class="mermaid">
+              flowchart TB
+                subgraph before [Before]
+                  MT["#commit(gesture.kind='move')"] --> MV[emit beforeEntryMove / finish / entryMove]
+                  RS["#commit(gesture.kind='resize')"] --> RV[emit beforeEntryResize / finish / entryResize]
+                  MV -.duplicate shape.- RV
+                end
+                subgraph after [After]
+                  CM[#commit(once)] --> PK[payload names from gesture.kind]
+                  PK --> ONE[emit before* / finish / entry* before]
+                end
+            </pre>
+          </div>
+
+          <div class="space-y-2 text-sm">
+            <p><strong>Problem.</strong> The <span class="font-mono">#commit</span> body is written twice for two kinds; only event names and <span class="font-mono">edge</span> differ.</p>
+            <p><strong>Solution.</strong> Resolve the event pair from <span class="font-mono">gesture.kind</span> once, run one commit path, keep <span class="font-mono">resolveSnap/draftFor</span> kinded.</p>
+            <p class="text-xs text-slate-600"><strong>Wins.</strong> locality: veto/pending live in one path · test once, not twice · S3.6's third outcome lands on one seam</p>
+          </div>
+          <div class="text-xs rounded-lg border border-amber-200 bg-amber-50 p-3 text-amber-950">Do with candidate 2: the dropped-position fix touches the same lines. The maintainer comment sanctions the fork as "isolated here"; the case for folding is that isolation does not require the body duplicated, and the next kind (S3.6 extender preview) forks again.</div>
+        </article>
+
+        <article id="c2" class="rounded-xl border border-slate-200 bg-white p-6 space-y-4">
+          <div class="flex items-start justify-between gap-4">
+            <h3 class="font-serif text-xl">2 · Decouple drop preview from the arm lock</h3>
+            <span class="inline-flex items-center gap-2">
+              <span class="rounded-full bg-emerald-100 text-emerald-800 text-xs px-2 py-0.5 font-medium">Strong</span>
+              <span class="rounded-full bg-slate-100 text-slate-600 text-xs px-2 py-0.5">in-process</span>
+            </span>
+          </div>
+          <p class="text-xs uppercase tracking-wider text-slate-500">Files · D-S3-17</p>
+          <p class="font-mono text-sm text-slate-600">src/view/gesture-pipeline.ts session().commit · #awaitVeto · render/backend.ts InteractionState.pendingItemIds</p>
+
+          <div class="grid md:grid-cols-2 gap-4 text-xs">
+            <div class="rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-1">
+              <p class="uppercase tracking-wider text-slate-500">Before — preview cleared, lock set</p>
+              <div class="h-8 border-l-4 border-slate-300 bg-white px-2 flex items-center">commit(dxPx)</div>
+              <div class="h-8 border-l-4 border-slate-300 bg-white px-2 flex items-center">#preview(undefined) ← drop vanishes</div>
+              <div class="h-16 border-l-4 border-slate-900 deep text-slate-100 px-2 flex items-center">#awaitVeto: pending = held + paint</div>
+            </div>
+            <div class="rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-1">
+              <p class="uppercase tracking-wider text-slate-500">After — drop stays put</p>
+              <div class="h-8 border-l-4 border-slate-300 bg-white px-2 flex items-center">commit(dxPx)</div>
+              <div class="h-16 border-l-4 border-slate-900 deep text-slate-100 px-2 flex items-center">#awaitVeto: keep dropped draft previewed</div>
+              <div class="h-8 border-l-4 border-slate-300 bg-white px-2 flex items-center">settle → clear preview or commit</div>
+            </div>
+          </div>
+
+          <div class="space-y-2 text-sm">
+            <p><strong>Problem.</strong> D-S3-17's "preview stays at dropped position" is not met: pending parks the bar at origin, so the veto demo shows no ghost at the drop.</p>
+            <p><strong>Solution.</strong> Hold the dropped draft as the pending preview until the veto settles; clear it only on <span class="font-mono">false</span>, commit then clear on <span class="font-mono">true</span>.</p>
+            <p class="text-xs text-slate-600"><strong>Wins.</strong> spec truth: the held ghost the slice promises · locality: lock and paint no longer fused · test asserts transform + token</p>
+          </div>
+        </article>
+
+        <article id="c3" class="rounded-xl border border-slate-200 bg-white p-6 space-y-4">
+          <div class="flex items-start justify-between gap-4">
+            <h3 class="font-serif text-xl">3 · GanttShell's non-gesture surface</h3>
+            <span class="inline-flex items-center gap-2">
+              <span class="rounded-full bg-slate-100 text-slate-700 text-xs px-2 py-0.5 font-medium">Speculative</span>
+              <span class="rounded-full bg-slate-100 text-slate-600 text-xs px-2 py-0.5">in-process</span>
+            </span>
+          </div>
+          <p class="font-mono text-sm text-slate-600">src/view/gantt-shell.ts — viewport/theme/scroll/splitter/pane/date-line wiring</p>
+          <div class="grid md:grid-cols-2 gap-4 text-sm">
+            <div class="rounded border border-slate-200 bg-slate-50 p-3"><span class="font-mono">#commitGesture</span> etc. gone</div>
+            <div class="deep rounded p-3 text-white">viewport · theme · scroll · panes still one 719-line shell</div>
+          </div>
+          <div class="space-y-2 text-sm">
+            <p><strong>Problem.</strong> Gesture logic is out, but the shell is still 719 lines across several concerns.</p>
+            <p><strong>Solution.</strong> Only if the next slice (S3.6) touches these lines enough to justify a split; not a debt this changeset owes.</p>
+            <p class="text-xs text-slate-600"><strong>Wins.</strong> locality if animated · leverage uncertain</p>
+          </div>
+          <div class="text-xs rounded-lg border border-amber-200 bg-amber-50 p-3 text-amber-950">The D-GH plan explicitly scoped this out of C1–C5; reopening is a judgement. Surface only if S3.6/S3.7 keeps editing the shell's non-gesture half.</div>
+        </article>
+      </section>
+
+      <section id="top" class="space-y-4">
+        <h2 class="font-serif text-2xl">Top recommendation</h2>
+        <div class="rounded-xl border border-indigo-200 bg-indigo-50 p-6 space-y-3">
+          <h3 class="font-serif text-xl text-indigo-950">Candidate 2 first — make the async veto hold the dropped ghost</h3>
+          <p class="text-sm text-indigo-900 max-w-3xl">
+            The refactor closed the seam correctly; what is left is one spec gap with a clean
+            architecture shape. D-S3-17 promises a pending ghost at the drop; the code clears the preview
+            before the lock. Decouple the dropped draft from the arm lock so <span class="font-mono">pending</span>
+            means what it says, then fold the duplicate commit fork on the same lines, then update the
+            plan's stale <span class="font-mono">GestureHost</span> → <span class="font-mono">GesturePipeline</span>
+            text and the two "pending" field names. The shell's residual 719 lines are deliberately
+            out of this plan's scope — leave them until S3.6 earns the split.
+          </p>
+          <a class="text-sm font-medium text-indigo-700 underline" href="#c2">→ open Candidate 2</a>
+        </div>
+      </section>
+
+      <section class="text-sm text-slate-500 border-t border-slate-200 pt-6">
+        <p>Summary: Standards 3 (worst: the duplicate <span class="font-mono">#commit</span> fork + one-word-two-meanings "pending"). Spec 5 (worst: D-S3-17 dropped-position preview unmet). Simplify 2 (worst: fork + drop/paint coupling). Axes are not ranked against each other.</p>
+      </section>
+
+    </main>
+  </body>
+</html>
