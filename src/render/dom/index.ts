@@ -59,6 +59,20 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
   const rowCellLayers = new NestedKeyedLayers<RowId, string, number, CellGeom>();
   const barLayerCache = new KeyedLayer<FrameBar, ItemId, BarGeom>();
 
+  // D-S3-6/D-S3-7: what the last applyState() call painted, so the next call touches only the bars
+  // whose token set actually changed — O(changed items), not O(bars) (I5, [S3-A3]).
+  let paintedHovered: ItemId | undefined;
+  let paintedSelected: ReadonlySet<ItemId> = new Set();
+
+  function paintDataState(itemId: ItemId, hovered: ItemId | undefined, selected: ReadonlySet<ItemId>): void {
+    const node = barLayerCache.node(itemId);
+    if (!node) return;
+    const tokens: string[] = [];
+    if (hovered === itemId) tokens.push('hovered');
+    if (selected.has(itemId)) tokens.push('selected');
+    node.dataset['state'] = tokens.join(' ');
+  }
+
   const tickSpec = {
     key: (_tick: FrameHeaderTick, i: number) => i,
     create: (): HTMLElement => {
@@ -233,8 +247,26 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
         contentSizer.style.transform = `translate(${x}px, ${y}px)`;
       }
     },
-    applyState(_state: InteractionState) {
-      // Hot path lands in S3: class toggles + transforms only, zero allocation (plans/01 §9).
+    applyState(state: InteractionState) {
+      // D-S3-6/D-S3-7: diff against what was last painted, touch only the bars whose token set
+      // changed. No frame recompute, no node creation — `barLayerCache` already holds every mounted
+      // bar's node from the last sync().
+      const nextSelected = new Set(state.selectedItemIds ?? []);
+      const nextHovered = state.hoveredItemId;
+      const changed = new Set<ItemId>();
+      paintedSelected.forEach((id) => {
+        if (!nextSelected.has(id)) changed.add(id);
+      });
+      nextSelected.forEach((id) => {
+        if (!paintedSelected.has(id)) changed.add(id);
+      });
+      if (paintedHovered !== nextHovered) {
+        if (paintedHovered !== undefined) changed.add(paintedHovered);
+        if (nextHovered !== undefined) changed.add(nextHovered);
+      }
+      changed.forEach((id) => paintDataState(id, nextHovered, nextSelected));
+      paintedSelected = nextSelected;
+      paintedHovered = nextHovered;
     },
     hitTest(x: number, y: number): HitResult | null {
       // "The bars array is the hit index; DOM backends get hit-testing from event delegation"
@@ -256,6 +288,8 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
       rowLayer.clear();
       rowCellLayers.clear();
       barLayerCache.clear();
+      paintedHovered = undefined;
+      paintedSelected = new Set();
       gridLayer = undefined;
       timelineHost = undefined;
       headerLayer = undefined;

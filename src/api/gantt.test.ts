@@ -872,3 +872,93 @@ describe('Gantt gridWidth and events (S1.8, plans/02 §6)', () => {
     gantt.destroy();
   });
 });
+
+describe('Gantt selection (S3.1, D-S3-10, [S3-A1])', () => {
+  it('gantt.selection = [id] is live and loose in, branded out', () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
+    const gantt = new Gantt({ container, dataset });
+
+    gantt.selection = [sampleEntries[0]!.id];
+    expect(gantt.selection).toEqual([entryId(sampleEntries[0]!.id)]);
+
+    gantt.destroy();
+  });
+
+  it('assignment runs beforeSelectionChange → selectionChange, and dataset.on("change") never fires', () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
+    const gantt = new Gantt({ container, dataset });
+
+    const before: unknown[] = [];
+    const after: unknown[] = [];
+    const datasetChanges: unknown[] = [];
+    gantt.on('beforeSelectionChange', (p) => {
+      before.push(p);
+    });
+    gantt.on('selectionChange', (p) => {
+      after.push(p);
+    });
+    dataset.on('change', (c) => {
+      datasetChanges.push(c);
+    });
+
+    gantt.selection = [sampleEntries[0]!.id];
+
+    expect(before).toEqual([{ from: [], to: [entryId(sampleEntries[0]!.id)] }]);
+    expect(after).toEqual([{ from: [], to: [entryId(sampleEntries[0]!.id)] }]);
+    expect(datasetChanges).toEqual([]);
+
+    gantt.destroy();
+  });
+
+  it('beforeSelectionChange returning false vetoes the change: selection stays put', () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
+    const gantt = new Gantt({ container, dataset });
+    gantt.selection = [sampleEntries[0]!.id];
+
+    gantt.on('beforeSelectionChange', () => false);
+    gantt.selection = [sampleEntries[1]!.id];
+
+    expect(gantt.selection).toEqual([entryId(sampleEntries[0]!.id)]);
+
+    gantt.destroy();
+  });
+
+  it('a non-empty-click, non-Escape assignment with an identical set is a no-op (no events)', () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
+    const gantt = new Gantt({ container, dataset });
+    gantt.selection = [sampleEntries[0]!.id];
+
+    const after: unknown[] = [];
+    gantt.on('selectionChange', (p) => {
+      after.push(p);
+    });
+    gantt.selection = [sampleEntries[0]!.id];
+
+    expect(after).toEqual([]);
+
+    gantt.destroy();
+  });
+
+  it('a real click selects the bar and paints data-state~="selected"', () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
+    const gantt = new Gantt({ container, dataset });
+
+    const bar = container.querySelector<HTMLElement>('.fg-bar')!;
+    const original = document.elementFromPoint.bind(document);
+    document.elementFromPoint = (x: number, y: number) => (x === 5 && y === 5 ? bar : original(x, y));
+
+    const timeline = container.querySelector<HTMLElement>('.fg-timeline-pane')!;
+    timeline.dispatchEvent(new PointerEvent('pointerup', { clientX: 5, clientY: 5 }));
+
+    expect(gantt.selection).toEqual([entryId(sampleEntries[0]!.id)]);
+    expect(bar.dataset['state']).toBe('selected');
+
+    document.elementFromPoint = original;
+    gantt.destroy();
+  });
+});

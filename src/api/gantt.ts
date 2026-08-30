@@ -9,6 +9,10 @@ import type { DateLineSpec } from '../layout/index.js';
 import type { EntryId, Instant, InstantInput, TimeSpan } from '../model/index.js';
 import { now, toInstant } from '../time/index.js';
 import type { Dataset } from './dataset.js';
+// api/ is the composition root that reaches interaction/ in (plans/01 §1: `API --> INT`,
+// `plans/s3-direct-manipulation/README.md` §0) — `view/` cannot, so `GanttShell` takes this by
+// constructor injection rather than importing it itself (see `AttachEntryGestures` in gantt-shell.ts).
+import { attachEntryGestures } from '../interaction/index.js';
 
 /** Public, loose. What `GanttOptions.dateLines` and `Gantt.dateLines` both take (S1.13, D-S1.13-2). */
 export interface DateLineInput {
@@ -49,6 +53,9 @@ interface GanttOptionsBase {
   /** The ordered set `zoomIn`/`zoomOut` step through, finest first (S1.12, D-S1.12-5). Live.
    *  Default: the shipped nine-rung set. */
   zoomPresets?: readonly PresetRef[];
+  /** Live (S3, D-S3-10). Entry ids, loose on the way in; assignment runs the same cancelable
+   *  sequence a click runs. Default `[]`. */
+  selection?: readonly (EntryId | string)[];
 }
 
 /** Two ways to set the axis, made mutually exclusive at the type level (issue #84 — the prior shape
@@ -99,8 +106,10 @@ export class Gantt {
       ...(options.todayLineMarginTicks !== undefined
         ? { todayLineMarginTicks: options.todayLineMarginTicks }
         : {}),
+      entryGestures: attachEntryGestures,
     });
     if (options.zoomPresets !== undefined) this.#shell.zoomPresets = options.zoomPresets;
+    if (options.selection !== undefined) this.#shell.selection = options.selection;
   }
 
   /** Reads a loose `range` through the dataset's zone (S1.12, D-S1.12-8) — the one place `Gantt`
@@ -231,6 +240,17 @@ export class Gantt {
 
   set zoomPresets(refs: readonly PresetRef[]) {
     this.#shell.zoomPresets = refs;
+  }
+
+  /** Loose in, branded out — the same asymmetry `dataset.entries.get/update/remove` already ship
+   *  (D-S3-10). Live: assignment runs the same cancelable `beforeSelectionChange` → `selectionChange`
+   *  sequence a click runs. */
+  get selection(): readonly EntryId[] {
+    return this.#shell.selection;
+  }
+
+  set selection(ids: readonly (EntryId | string)[]) {
+    this.#shell.selection = ids;
   }
 
   get canZoomIn(): boolean {

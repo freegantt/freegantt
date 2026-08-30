@@ -31,12 +31,36 @@ import type { ScrollAttachment } from './scroll-attachment.js';
 import { attachPaneSize } from './pane-size-attachment.js';
 import type { PaneSizeAttachment } from './pane-size-attachment.js';
 import { ensureBaseStyles } from './styles.js';
-import type { RenderBackend } from '../render/backend.js';
-import { EntryNotFoundError, ContainerNotFoundError } from '../model/index.js';
-import type { Dataset, EntryId, Instant, Size, TimeSpan } from '../model/index.js';
+import type { InteractionState, RenderBackend } from '../render/backend.js';
+import { EntryNotFoundError, ContainerNotFoundError, entryId, itemId } from '../model/index.js';
+import type { Dataset, EntryId, ItemId, Instant, Size, TimeSpan } from '../model/index.js';
 import { subscribeToDatasetChanges } from './dataset-change-subscription.js';
 import type { DatasetChangeSubscription } from './dataset-change-subscription.js';
 import { FrameScheduler } from './frame-scheduler.js';
+
+/** `view/` may not import `interaction/` (plans/01 §1: `INT --> VIEW`, not the reverse — interaction/
+ *  controllers are one layer *above* view/, the way `EXT --> VIEW`/`EXT --> INT` puts extensions/
+ *  above both). So the shell takes its pointer-gesture attachment by injection instead of import —
+ *  the same DI shape `GanttShellOptions.backend` already uses, one layer further out: `api/gantt.ts`
+ *  (which does import `interaction/`, `API --> INT`) supplies the real `attachEntryGestures`.
+ *  TypeScript's structural typing makes that function satisfy `AttachEntryGestures` with no import
+ *  here at all — this is a type-shape mirror of `interaction/entry-gestures.ts`'s own exports, not a
+ *  second declaration of a public type. */
+export interface EntryGesturesAttachment {
+  detach(): void;
+}
+interface EntrySelectionContext {
+  hitTest(x: number, y: number): ItemId | undefined;
+  entryIdFor(item: ItemId): EntryId | undefined;
+  canSelect(entry: EntryId): boolean;
+  rowOrder(): readonly EntryId[];
+  selection: { get(): readonly EntryId[]; propose(next: readonly EntryId[]): void };
+}
+export type AttachEntryGestures = (
+  pane: HTMLElement,
+  container: HTMLElement,
+  ctx: EntrySelectionContext,
+) => EntryGesturesAttachment;
 
 /** S1.10, D-S1.10-4: theming's only preset axis for this step — `'auto'` follows
  * `prefers-color-scheme` (no `data-fg-theme` attribute written), `'light'`/`'dark'` pin it. */
@@ -107,6 +131,10 @@ export interface GanttShellOptions {
    * mounts real elements regardless of which backend paints them, so this closes the hardcoding, not
    * DOM-free `view/`. Defaults to `createDomBackend()`. */
   backend?: RenderBackend<HTMLElement>;
+  /** Injected, not defaulted here — see the `AttachEntryGestures` comment above: `view/` cannot
+   * import `interaction/` to supply its own default. `api/gantt.ts` always passes
+   * `attachEntryGestures`; omitted only by tests exercising the shell with no pointer wiring. */
+  entryGestures?: AttachEntryGestures;
 }
 
 function resolveContainer(container: HTMLElement | string): HTMLElement {
@@ -130,6 +158,16 @@ export class GanttShell {
   #paneSizeAttachment: PaneSizeAttachment;
   #splitterAttachment: SplitterAttachment;
   #datasetChanges: DatasetChangeSubscription;
+  #entryGestures: EntryGesturesAttachment | undefined;
+  /** D-S3-6: one long-lived, mutable per-Gantt object — `applyState` diffs against what it painted
+   *  last, so writing into this and calling `#backend.applyState` allocates nothing per hover/select
+   *  step (I5). Never rebuilt per call. */
+  #interactionState: InteractionState = {};
+  #selection: readonly EntryId[] = [];
+  /** `id:0` today (segments are not yet laid out as separate items, `layout/frame.ts`), rebuilt every
+   *  render from `frame.bars` so this stays correct the moment segments do land — the shell reads the
+   *  frame it already computed rather than re-deriving item ids of its own (D-S3-10). */
+  #itemEntryIds = new Map<ItemId, EntryId>();
   /** The single rAF owner (B10, D-S2-15): every render request past construction goes through
    *  this, so N mutations in one tick become one frame. */
   #frames = new FrameScheduler(() => this.render());
@@ -242,6 +280,18 @@ export class GanttShell {
       },
       commitGridWidth: (px) => this.#commitGridWidth(px),
     });
+    this.#entryGestures = options.entryGestures?.(this.#panes.timeline, this.#container, {
+      hitTest: (x, y) => this.#backend.hitTest(x, y)?.itemId,
+      entryIdFor: (item) => this.#itemEntryIds.get(item),
+      // D-S3-9's per-kind default table lands in S3.2 (`view/capability.ts`); every entry is
+      // select-capable until `Gantt.interactions` exists to say otherwise.
+      canSelect: () => true,
+      rowOrder: () => this.#options.dataset.entries.all.map((e) => e.id),
+      selection: {
+        get: () => this.#selection,
+        propose: (next) => this.#proposeSelection(next),
+      },
+    });
     this.#wiring = false;
     this.#frames.flush();
 
@@ -290,6 +340,26 @@ export class GanttShell {
   /** Live — takes effect on the next `panToToday()` call; does not itself move the scroll position. */
   set todayLineMarginTicks(ticks: number) {
     this.#todayLineMarginTicks = ticks;
+  }
+
+  get selection(): readonly EntryId[] {
+    return this.#selection;
+  }
+
+  /** Live; runs the same cancelable sequence a click runs (D-S3-10). Loose in (`EntryId | string`),
+   *  branded out — the same asymmetry `dataset.entries.get/update/remove` already ship. */
+  set selection(ids: readonly (EntryId | string)[]) {
+    this.#proposeSelection(ids.map((id) => entryId(id)));
+  }
+
+  #proposeSelection(next: readonly EntryId[]): void {
+    const from = this.#selection;
+    if (from.length === next.length && from.every((id, i) => id === next[i])) return;
+    if (this.#events.emit('beforeSelectionChange', { from, to: next }) === false) return;
+    this.#selection = next;
+    this.#interactionState.selectedItemIds = next.map((id) => itemId(id));
+    this.#backend.applyState(this.#interactionState);
+    this.#events.emit('selectionChange', { from, to: next });
   }
 
   get theme(): Theme {
@@ -496,6 +566,10 @@ export class GanttShell {
       dateLines: this.#dateLines,
     });
     this.#backend.sync(frame);
+    // D-S3-10: rebuilt every render from the frame layout just computed — item ids are deterministic
+    // (`itemId`, plans/01 §2.4) but this is the one place that already walks every mounted bar.
+    this.#itemEntryIds.clear();
+    for (const bar of frame.bars) this.#itemEntryIds.set(bar.id, bar.entryId);
     // D-S1.12-9: the grid pane's spacer mirrors the header's own band count, so both panes resolve
     // their header height from the same `--fg-band-height` expression and cannot drift.
     this.#paneLayout.setHeaderBandCount(frame.header.bands.length);
@@ -507,6 +581,7 @@ export class GanttShell {
   destroy(): void {
     if (this.#destroyed) return;
     this.#frames.cancel();
+    this.#entryGestures?.detach();
     this.#datasetChanges.unsubscribe();
     this.#scrollAttachment.detach();
     this.#paneSizeAttachment.detach();
