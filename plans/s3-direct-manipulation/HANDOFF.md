@@ -1,11 +1,82 @@
 # S3 implementation handoff
 
-Status as of 2026-08-30: **S3.4 (resize) is done and committed.** All five checks are green
-(`pnpm vitest run` 586/586, `tsc --noEmit`, `eslint src harness`, `depcruise --config
-.dependency-cruiser.cjs src harness`, `node scripts/guard-red-test.mjs`). Continue at **S3.5
-(keyboard parity + async veto)** — read
+Status as of 2026-08-30: **S3.4 (resize) is done, plus a same-day bug fix** (uncommitted — see
+below). All five checks are green (`pnpm vitest run` 586/586, `tsc --noEmit`, `eslint src harness`,
+`depcruise --config .dependency-cruiser.cjs src harness`, `node scripts/guard-red-test.mjs`), plus
+the full `playwright test` e2e suite (37/37, one unrelated scroll-sync flake that passed on retry).
+Continue at **S3.5 (keyboard parity + async veto)** — read
 [`s3.5-keyboard-parity-and-async-veto.md`](./s3.5-keyboard-parity-and-async-veto.md) before touching
 anything.
+
+## Bug found and fixed after S3.4 landed (not yet committed)
+
+The user reported no visible way to resize an entry in `harness/`'s `index.html`. Root cause: in
+`src/render/dom/index.ts`'s `mount()`, the shared resize-handle pair (`startHandle`/`endHandle`,
+D-S3-8) was appended as a sibling of `.fg-bars` directly on `timelineHost`, so their
+`position: absolute` resolved against `.fg-timeline-pane` (the nearest positioned ancestor) instead
+of `.fg-bars` — the exact coordinate origin a bar's own `transform` (`syncBars`) uses. `.fg-header`
+sits above `.fg-bars` in normal flow (`position: sticky` still takes flow space), so every handle
+painted exactly one header-height too high — never over the bar it belonged to. Confirmed with a
+throwaway Playwright script before touching code: handle `y` was 21px above the bar `y` (`.fg-header`
+was 21px tall) in a real browser; a drag at the handle's true (invisible) position did nothing to
+the bar's width.
+
+**Why none of S3.4's own tests caught this**: `pnpm vitest run`'s `dom`-tagged tests run in
+jsdom/happy-dom, which never runs real CSS layout — an element positioned absolute against the wrong
+ancestor lays out identically to one positioned against the right one in that environment, so every
+S3.4 unit/integration test (`entry-gestures.test.ts`, `render/dom/index.test.ts`, `gantt.test.ts`)
+passed regardless. S3.4 shipped with **no real-browser (Playwright) e2e test at all** — the existing
+`e2e/pane-resize.spec.ts` covers the splitter between panes, not entry resize. Same failure class
+`e2e/row-bar-alignment.spec.ts`'s doc comment already calls out for a different bug (I9, S1) — worth
+rereading before any future `render/dom/index.ts` geometry change.
+
+**Fix**: append `startHandle`/`endHandle` into `barLayer` (`.fg-bars`) itself instead of
+`timelineHost`, appended once at mount as the last two children. `sync-keyed.ts`'s `syncKeyed` only
+tracks and reorders nodes it created itself (its own `Map`) and never touches a foreign child, so the
+handles stay undisturbed at the end of `barLayer`'s children (still painted above every bar) on every
+later `syncBars` call — verified by reading `sync-keyed.ts` and confirming with the same Playwright
+script.
+
+**New regression coverage**: `e2e/resize.spec.ts` (two tests) — handle-pair `y` matches the bar's own
+`y` within 1px, and dragging the end handle actually changes the bar's rendered width. Modeled on
+`e2e/row-bar-alignment.spec.ts`'s doc-comment pattern explaining why this needs a real browser.
+Verified the new tests fail (21px mismatch, no width change) against the pre-fix code via
+`git stash`, confirming they'd have caught this at S3.4 review time.
+
+## Second bug in the same area, found immediately after the first fix (also uncommitted)
+
+The user reported: resize a selected entry once, and a second resize attempt (still selected) no
+longer works — deselecting first makes it work again. Root cause: `GanttShell#refreshAffordances`
+(`src/view/gantt-shell.ts`) only calls `applyState` with a new `resizableItemId` when that id's
+*identity* changes; it stays the same item across a resize commit whenever the bar is still hovered
+or is the sole selection. The render backend's `applyState` (`src/render/dom/index.ts`) mirrors that
+same gate — `paintResizeHandles` only ran when `nextResizable !== paintedResizable` — so the handle
+pair kept its pre-commit transform even though `syncBars` had already repainted the bar itself at
+its new, wider geometry one line above. A second drag at the bar's new visible edge hit nothing,
+because the real (invisible) handle was still sitting at the old edge.
+
+**Fix**: in `render/dom/index.ts`'s `sync()`, after `syncBars(frame.bars)`, unconditionally repaint
+the handle pair off the current `barGeomByItemId` whenever one is currently shown
+(`if (paintedResizable !== undefined) paintResizeHandles(barGeomByItemId.get(paintedResizable))`) —
+the handle pair's geometry now tracks every frame the same way a bar's own transform does, not just
+identity changes on `resizableItemId`.
+
+**Regression coverage**: `e2e/resize.spec.ts` gained a `dragBarEndEdgeBy` helper that drags from the
+bar's own live bounding box (not the handle's own boundingBox — querying the handle directly would
+"succeed" at hitting it even when its position is stale, masking the exact symptom a user hits) and
+a third test, `'a second resize at the bar edge still works after the entry stays selected from the
+first'`, which selects the entry then resizes it twice in a row. Verified this test (and the plain
+"dragging the end handle resizes the bar" test) fails against the pre-fix code by swapping in
+`git show HEAD:src/render/dom/index.ts` temporarily, confirming the fix and test both do their job.
+
+**Still needed before this is "done"**: commit `src/render/dom/index.ts`, `e2e/resize.spec.ts`, and
+this handoff file together (not committed by this session — ask the user first, per repo workflow).
+Consider whether S3.5+ needs its own real-browser e2e test written alongside the jsdom ones from now
+on, not after-the-fact — this is the second and third time (after I9) a `render/dom/index.ts`
+geometry bug shipped past a fully green jsdom test suite, both times in the same handle-pair code
+this session touched. Worth a closer look at whether `resizableItemId`'s identity-gated repaint
+pattern (`#refreshAffordances` in `gantt-shell.ts`) has the same staleness risk for `movableItemId`
+or `hoveredItemId` in some other codepath — not investigated this session, no evidence either way.
 
 ## What landed this session
 

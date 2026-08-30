@@ -291,7 +291,15 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
       endHandle.className = 'fg-bar-handle';
       endHandle.dataset['edge'] = 'end';
       endHandle.hidden = true;
-      timelineHost.append(headerLayer, barLayer, contentSizer, startHandle, endHandle);
+      // The handle pair's `transform` (paintResizeHandles) uses the same geometry as a bar's own
+      // `transform` (syncBars) — both must share one coordinate origin. That origin is `.fg-bars`
+      // (barLayer), which sits below `.fg-header` in normal flow; a handle appended to `timelineHost`
+      // instead would position absolute against the pane itself and land one header-height too high.
+      // `syncKeyed` (sync-keyed.ts) only reorders the bar nodes it tracks and never touches a foreign
+      // child, so appending the handles here once leaves them undisturbed at the end of barLayer's
+      // children on every later sync — still painted above every bar (D-S3-8).
+      barLayer.append(startHandle, endHandle);
+      timelineHost.append(headerLayer, barLayer, contentSizer);
       dateLines = attachDateLines(timelineHost, headerLayer);
     },
     sync(frame: GeometryFrame) {
@@ -305,6 +313,13 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
       syncHeader(frame.header.bands);
       syncRows(frame.rows, frame.rowCount);
       syncBars(frame.bars);
+      // A resize commit repaints the resized bar with new geometry through this same `sync()`, but
+      // `applyState`'s handle repaint is gated on `resizableItemId` actually changing — it stays the
+      // same item across a commit whenever the bar is still hovered or is the sole selection, so that
+      // gate alone left the handle pair glued to its pre-commit position. The handle pair's geometry
+      // has to track `syncBars` every frame, the same way a bar's own transform does, not just on
+      // identity change.
+      if (paintedResizable !== undefined) paintResizeHandles(barGeomByItemId.get(paintedResizable));
       dateLines?.sync(frame.decorations, frame.contentHeight, frame.visible.height);
       if (gridLayer) {
         // The grid pane has no scrollbar of its own; its row layer follows the timeline pane's
