@@ -55,9 +55,9 @@ import { FrameScheduler } from './frame-scheduler.js';
 export interface EntryGesturesAttachment {
   detach(): void;
 }
-/** Mirrors `interaction/entry-gesture-context.ts`'s `Gesture` (S3.3, D-S3-5) — only `'move'` is ever
+/** Mirrors `interaction/entry-gesture-context.ts`'s `EntryGesture` (S3.3, D-S3-5) — only `'move'` is ever
  *  built here (S3.4 builds `'resize'`), but the shape must match structurally either way. */
-type Gesture = { kind: 'move' } | { kind: 'resize'; edge: 'start' | 'end' };
+type EntryGesture = { kind: 'move' } | { kind: 'resize'; edge: 'start' | 'end' };
 /** No cascade — the baseline `#applyPreview`'s `previewOffsets` call contrasts a real gesture draft
  *  against (S3.6 wires an extender's actual extras in here). */
 const EMPTY_EDITS: EntryEdits = Object.freeze(new Map());
@@ -70,12 +70,12 @@ interface EntryGestureContext {
   setHovered(itemId: ItemId | undefined): void;
   entriesForGesture(grabbed: EntryId, capability: 'move' | 'resize'): readonly Entry[];
   draftFor(
-    gesture: Gesture,
+    gesture: EntryGesture,
     entries: readonly Entry[],
     dxPx: number,
     options?: { suspendSnap?: boolean },
   ): EntryEdits;
-  commit(gesture: Gesture, draft: EntryEdits): Promise<boolean>;
+  commit(gesture: EntryGesture, draft: EntryEdits): Promise<boolean>;
   preview(draft: EntryEdits | undefined): void;
   pointerAt(at: { itemId?: ItemId; x?: number } | undefined): void;
 }
@@ -537,7 +537,7 @@ export class GanttShell {
   }
 
   #draftFor(
-    gesture: Gesture,
+    gesture: EntryGesture,
     entries: readonly Entry[],
     dxPx: number,
     options: { suspendSnap?: boolean } | undefined,
@@ -567,7 +567,7 @@ export class GanttShell {
    *  `dataset.transaction()`-capable `Dataset` — this shell's own `dataset` option is the narrower
    *  `model/` interface, "a view never opens a transaction") does the actual write and folds a sync
    *  veto and a `MutationCancelledError` into one `false`. */
-  #commitGesture(gesture: Gesture, draft: EntryEdits): Promise<boolean> {
+  #commitGesture(gesture: EntryGesture, draft: EntryEdits): Promise<boolean> {
     if (draft.size === 0) return Promise.resolve(false);
     const spans = [...draft].flatMap(([id, edit]) =>
       edit.start !== undefined && edit.end !== undefined

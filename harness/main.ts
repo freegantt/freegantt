@@ -42,7 +42,7 @@ function refreshMutationButtons(): void {
 }
 
 function renderSelection(): void {
-  const ids = gantt.selectionEntries.map((entry) => entry.id);
+  const ids = gantt.selection;
   selectionReadout.textContent = ids.length === 0 ? 'Selection: (none)' : `Selection: ${ids.join(', ')}`;
 }
 

@@ -613,7 +613,7 @@ describe('[S2-A3] one changeset, one layout pass, one frame (D-S2-15/16)', () =>
 // `interaction/entry-gestures.test.ts` already covers that the real attachment reports hover
 // correctly; this file's job is what the shell does with the report.
 describe('GanttShell hot path (S3.2, D-S3-6/D-S3-9, [S3-A3])', () => {
-  it('[S3-A3] hovering every mounted bar of a 1,000-entry fixture calls no computeFrame and creates/removes no nodes', () => {
+  it('[S3-A3] hovering every mounted bar of a 1,000-entry fixture calls no computeFrame, creates/removes no nodes, and writes O(changed items) data-state', () => {
     FakeResizeObserver.instances = [];
     vi.stubGlobal('ResizeObserver', FakeResizeObserver);
     try {
@@ -641,13 +641,25 @@ describe('GanttShell hot path (S3.2, D-S3-6/D-S3-9, [S3-A3])', () => {
       });
       observer.observe(container, { childList: true, subtree: true });
 
+      // D-S3-20: each hover step touches only the bar(s) whose token set actually changed — never
+      // every mounted bar. `setAttribute('data-state', ...)` is the one write `paintDataState` makes,
+      // so counting it directly (rather than inferring it from mutations, which also covers
+      // `data-movable`/handle moves) is what tells O(changed items) apart from O(mounted bars).
+      const setAttributeSpy = vi.spyOn(HTMLElement.prototype, 'setAttribute');
+
       for (const bar of bars) hover?.(bar.dataset['itemId'] as ItemId);
       hover?.(undefined);
 
       observer.disconnect();
       expect(computeFrameSpy).not.toHaveBeenCalled();
       expect(mutations).toBe(0);
+      const dataStateWrites = setAttributeSpy.mock.calls.filter(([name]) => name === 'data-state').length;
+      // Each of the `bars.length` steps changes at most two bars' `data-state` (the newly hovered one
+      // and the previously hovered one) plus the final clear — a per-mounted-bar write pattern would
+      // instead scale with `bars.length * bars.length`.
+      expect(dataStateWrites).toBeLessThanOrEqual(bars.length * 2 + 2);
 
+      setAttributeSpy.mockRestore();
       computeFrameSpy.mockRestore();
       shell.destroy();
     } finally {
