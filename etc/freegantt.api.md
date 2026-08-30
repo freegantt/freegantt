@@ -103,6 +103,9 @@ export interface DatasetOptions {
 }
 
 // @public
+export type DateFormat = Intl.DateTimeFormatOptions | HeaderFormat;
+
+// @public
 export type DateOnlyEndRule = 'inclusive' | 'exclusive';
 
 // @public
@@ -250,10 +253,16 @@ export interface FieldUpdated {
 }
 
 // @public
-export function formatDate(zone: string, i: Instant): string;
+export function formatDate(zone: string, i: Instant, locale?: Intl.LocalesArgument): string;
 
 // @public
-export function formatEndInclusive(zone: string, end: Instant): string;
+export function formatEndInclusive(zone: string, end: Instant, locale?: Intl.LocalesArgument): string;
+
+// @public
+export const formatHour: HeaderFormat;
+
+// @public
+export const formatWeekNumber: HeaderFormat;
 
 // @public (undocumented)
 export class FreeGanttError extends Error {
@@ -269,6 +278,10 @@ export class Gantt {
     get a11yLabel(): string;
     set a11yLabel(value: string);
     // (undocumented)
+    get canZoomIn(): boolean;
+    // (undocumented)
+    get canZoomOut(): boolean;
+    // (undocumented)
     destroy(): void;
     // (undocumented)
     get fit(): TimeScaleFit;
@@ -277,24 +290,42 @@ export class Gantt {
     get gridWidth(): number;
     set gridWidth(px: number);
     // (undocumented)
+    get locale(): Intl.LocalesArgument | undefined;
+    set locale(l: Intl.LocalesArgument | undefined);
+    // (undocumented)
     off<K extends keyof GanttEventMap>(name: K, handler: (payload: GanttEventMap[K]) => void | false): void;
     // (undocumented)
     on<K extends keyof GanttEventMap>(name: K, handler: (payload: GanttEventMap[K]) => void | false): void;
+    panToDate(date: InstantInput, align?: 'start' | 'center'): void;
+    panToToday(align?: 'start' | 'center'): void;
     // (undocumented)
     get preset(): ViewPreset;
     set preset(ref: PresetRef);
-    // (undocumented)
     get range(): 'fitDataset' | TimeSpan;
-    set range(r: 'fitDataset' | TimeSpan);
+    set range(r: 'fitDataset' | {
+        start: InstantInput;
+        end: InstantInput;
+    });
     // (undocumented)
     reveal(entryId: EntryId): void;
     // (undocumented)
     get theme(): Theme;
     set theme(value: Theme);
     // (undocumented)
+    get todayLine(): boolean;
+    set todayLine(on: boolean);
+    // (undocumented)
     zoomBy(factor: number, anchorX?: number): void;
+    zoomIn(anchorX?: number): void;
+    zoomOut(anchorX?: number): void;
+    get zoomPresets(): readonly ViewPreset[];
+    set zoomPresets(refs: readonly PresetRef[]);
     // (undocumented)
     zoomTo(pxPerMs: number, anchorX?: number): void;
+    zoomToSpan(span: {
+        start: InstantInput;
+        end: InstantInput;
+    }): void;
 }
 
 // @public
@@ -303,6 +334,8 @@ export interface GanttEventMap {
     beforeGridWidthChange: GridWidthChange;
     // (undocumented)
     gridWidthChange: GridWidthChange;
+    // (undocumented)
+    navigationChange: NavigationChange;
 }
 
 // Warning: (ae-forgotten-export) The symbol "GanttOptionsBase" needs to be exported by the entry point index.d.ts
@@ -320,6 +353,9 @@ export interface GridWidthChange {
 }
 
 // @public
+export type HeaderFormat = (i: Instant, zone: string, locale: Intl.LocalesArgument | undefined) => string;
+
+// @public
 export type Instant = number & {
     readonly __brand: 'Instant';
 };
@@ -332,6 +368,11 @@ export type InstantInput = Instant | Date | number | string;
 
 // @public
 export class InvalidInstantError extends FreeGanttError {
+    constructor(message: string);
+}
+
+// @public
+export class InvalidPresetError extends FreeGanttError {
     constructor(message: string);
 }
 
@@ -369,6 +410,18 @@ export class MutationCancelledError extends FreeGanttError {
 // @public
 export class MutationDuringNotificationError extends FreeGanttError {
     constructor(message: string);
+}
+
+// @public
+export interface NavigationChange {
+    // (undocumented)
+    readonly canZoomIn: boolean;
+    // (undocumented)
+    readonly canZoomOut: boolean;
+    // (undocumented)
+    readonly fit: TimeScaleFit;
+    // (undocumented)
+    readonly presetId: string;
 }
 
 // @public (undocumented)
@@ -411,7 +464,7 @@ export interface ScrollState {
 }
 
 // @public (undocumented)
-export type ShippedPresetId = 'hour' | 'day' | 'week' | 'month' | 'year' | 'dayAndWeek' | 'weekAndMonth' | 'monthAndYear';
+export type ShippedPresetId = 'hour' | 'day' | 'week' | 'month' | 'year' | 'dayAndWeek' | 'weekAndMonth' | 'monthAndYear' | 'hourDayWeek' | 'dayWeekMonth' | 'weekMonthYear';
 
 // @public
 export interface Size {
@@ -426,6 +479,14 @@ export type StoreName = 'entries';
 
 // @public
 export type Theme = 'auto' | 'light' | 'dark';
+
+// @public
+export interface TickStep {
+    // (undocumented)
+    readonly increment: number;
+    // (undocumented)
+    readonly unit: TimeUnit;
+}
 
 // @public
 export type TimeScaleFit = 'pane' | 'preset' | number;
@@ -501,12 +562,12 @@ export class UnsupportedUnitError extends FreeGanttError {
 
 // @public
 export interface ViewPreset {
-    // Warning: (ae-forgotten-export) The symbol "ViewPresetHeader" needs to be exported by the entry point index.d.ts
-    //
     // (undocumented)
     headers: readonly ViewPresetHeader[];
     // (undocumented)
     id: string;
+    minTickWidthPx?: number;
+    preferredTickWidthPx: number;
     // (undocumented)
     snap?: {
         unit: TimeUnit;
@@ -516,8 +577,13 @@ export interface ViewPreset {
     tickIncrement: number;
     // (undocumented)
     tickUnit: TimeUnit;
+}
+
+// @public (undocumented)
+export interface ViewPresetHeader extends TickStep {
     // (undocumented)
-    tickWidthPx: number;
+    format: DateFormat;
+    repeatCoarserUnits?: boolean;
 }
 
 // (No @packageDocumentation comment for this package)

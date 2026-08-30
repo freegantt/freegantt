@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>FreeGantt — Harness docs</title>
+    <link rel="stylesheet" href="./doc.css" />
+  </head>
+  <body>
+    <div class="wrap">
+      <header>
+        <nav style="display: flex; flex-wrap: wrap; gap: 0.4rem 1.25rem; margin-bottom: 0.75rem">
+          <a href="../index.html">Timeline &amp; viewport</a>
+          <a href="../scroll-sync.html">Scroll sync</a>
+          <a href="../zoom.html">Timeline &amp; navigation</a>
+          <a href="../large-dataset.html">Large dataset</a>
+          <a href="../data.html">Mutation &amp; live binding</a>
+        </nav>
+        <h1>Harness docs</h1>
+        <p class="tagline">
+          Maps of the library as the harness demos run it today. These pages sit next to the demos so a
+          maintainer can open the Gantt and the explanation in one session.
+        </p>
+        <div class="meta">
+          <span>location: <code>harness/docs/</code></span>
+          <span>slice: S1.12 + header readability</span>
+        </div>
+      </header>
+
+      <div class="cards">
+        <article class="card">
+          <h5><a href="./timeline.html">Timeline render</a></h5>
+          <p class="path">timeline.html</p>
+          <p>
+            How the header, density floor, sticky tick labels, and today line paint on this branch. Includes
+            a pipeline graph and a density chart of shipped presets.
+          </p>
+        </article>
+        <article class="card">
+          <h5><a href="./doc.html">Module &amp; class map</a></h5>
+          <p class="path">doc.html</p>
+          <p>
+            Every module and class in <code>src/</code>, construction order, one render pass, and the
+            notification machine.
+          </p>
+        </article>
+        <article class="card">
+          <h5><a href="./diagram.html">Module map</a></h5>
+          <p class="path">diagram.html</p>
+          <p>
+            Layer graph of <code>src/</code>: the DOM-free core on the left, the DOM column on the right, and
+            the forbidden scheduling shortcut.
+          </p>
+        </article>
+      </div>
+    </div>
+    <footer>
+      Spec: <code>plans/00</code>–<code>04</code>. Glossary: <code>CONTEXT.md</code>. Demos live one folder
+      up in <code>harness/</code>.
+    </footer>
+  </body>
+</html>

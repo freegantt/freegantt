@@ -13,7 +13,7 @@ This is a deliberate exception to the one-runtime-dependency budget, and the sec
 
 ## Consequences
 
-- **The escape hatch stays open.** Only `time/zone.ts` imports the package, via `/fns/*` entry points, and `time/`'s public surface (`instant`, `toPlain`, `fromPlain`, `startOfDay`, `addDays`, `diffDays`) did not change. Swapping to native `Temporal` when it ships is a one-file change.
+- **The escape hatch stays open.** Only `time/zone.ts` imports the package, via `/fns/*` entry points, and `time/`'s public surface (`instant`, `toPlain`, `fromPlain`, `startOfDay`, `addDays`, `diffDays`) did not change. Swapping to native `Temporal` when it ships is a one-file change. Header and a11y date formatting go through `Intl.DateTimeFormat` directly, not the polyfill's `toLocaleString`, so that single-import-site consequence still holds; `weekOfYear` is the one new polyfill call, and it lives in `zone.ts` (S1.12, D-S1.12-13).
 - **Accepted bus-factor risk.** ~95% of the package's commits come from a single maintainer. We took this knowingly rather than by oversight; the pin is `^1.0.4` (not exact) so patch and minor updates — security fixes included — land automatically and are caught by the DST fold/gap and multi-zone round-trip tests in `zone.test.ts` before merge.
 - **One live workaround.** `temporal-polyfill@1.0.4`'s zoned day-unit diff throws (`prepareZonedEpochDiff is not a function`) in every zone, UTC included — a packaging bug in that build. `diffDays` routes through `PlainDate.diffDays` instead, which is exact there because both operands are already calendar day-starts. Re-check this when the version bumps.
 

@@ -23,13 +23,22 @@ describe('PaneLayout', () => {
     paneLayout.destroy();
   });
 
-  it('the grid pane carries a header spacer sized from --fg-header-height', () => {
+  it('[S1-A8] setHeaderBandCount renders one empty .fg-band per band in the spacer (D-S1.12-9)', () => {
     const container = el();
-    container.style.setProperty('--fg-header-height', '30px');
     const paneLayout = new PaneLayout({ container });
-
     const spacer = container.querySelector<HTMLElement>('.fg-grid-spacer')!;
-    expect(spacer.style.height).toBe('30px');
+    expect(spacer.children).toHaveLength(0);
+
+    paneLayout.setHeaderBandCount(2);
+    expect(spacer.querySelectorAll('.fg-band')).toHaveLength(2);
+
+    // A no-op when the count is unchanged — it must not remount the bands.
+    const bandBefore = spacer.firstElementChild;
+    paneLayout.setHeaderBandCount(2);
+    expect(spacer.firstElementChild).toBe(bandBefore);
+
+    paneLayout.setHeaderBandCount(1);
+    expect(spacer.querySelectorAll('.fg-band')).toHaveLength(1);
 
     paneLayout.destroy();
   });

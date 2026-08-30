@@ -25,11 +25,15 @@ test('[S1-A1] only windowed rows exist in the DOM, and the row-id set moves afte
     el.scrollTop = el.scrollHeight;
     el.dispatchEvent(new Event('scroll'));
   });
-  await expect.poll(async () => rows.count()).toBeGreaterThan(0);
+  const currentIds = () => rows.evaluateAll((nodes) => nodes.map((n) => (n as HTMLElement).dataset['rowId']));
+
+  // Poll the actual thing under test, not a proxy: `rows.count() > 0` is already true before the
+  // scroll, since rows already exist — it proves nothing about whether the windowed id set has
+  // caught up. The re-render runs through FrameScheduler's rAF coalescing (S1.12), so the DOM can
+  // still hold the pre-scroll id set for a frame or two after the `scroll` event returns.
+  await expect.poll(currentIds).not.toEqual(idsBefore);
 
   const afterCount = await rows.count();
   expect(afterCount).toBeLessThan(500);
-
-  const idsAfter = await rows.evaluateAll((nodes) => nodes.map((n) => (n as HTMLElement).dataset['rowId']));
-  expect(idsAfter).not.toEqual(idsBefore);
+  expect(await currentIds()).not.toEqual(idsBefore);
 });

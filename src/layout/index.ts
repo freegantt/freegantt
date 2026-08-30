@@ -1,5 +1,7 @@
-export { computeFrame, barSpan } from './frame.js';
+export { computeFrame, barSpan, DEFAULT_TICK_BOX_FLOOR_PX } from './frame.js';
 export { FrameLayout } from './frame-layout.js';
+export { resolveDateLines, TODAY_DATE_LINE_ID } from './date-line.js';
+export type { DateLine, DateLineInput, ResolveDateLinesInput } from './date-line.js';
 export type {
   GeometryFrame,
   FrameRow,
@@ -11,7 +13,6 @@ export type {
   FrameHeaderTick,
   Overscan,
   PathCommand,
-  TodayLine,
   RangeBand,
   RowStripe,
   BarFlags,
@@ -43,8 +44,10 @@ export type {
   ViewPresetHeader,
   Tick,
   HeaderFormat,
+  DateFormat,
   PresetRef,
   ShippedPresetId,
 } from '../time/index.js';
+export { ZOOM_PRESETS } from '../time/index.js';
 export { Viewport } from './viewport/viewport.js';
 export type { ViewportOptions, ViewportHandle, DatasetBinding } from './viewport/viewport.js';

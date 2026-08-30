@@ -105,11 +105,11 @@ Slices are scope, not calendar estimates. Within a slice, entries are ordered so
 
 **Acceptance**
 
-- [ ] `[S1-A6]` A multi-year fixture at the `day` preset scrolls horizontally at the density floor instead of compressing ticks below it.
-- [ ] `[S1-A7]` `zoomIn`/`zoomOut` step exactly one entry of `zoomPresets`, keep the anchored instant fixed, and no-op at the ends in agreement with `canZoomIn`/`canZoomOut`.
-- [ ] `[S1-A8]` A three-band preset renders three full-height bands, and the grid pane's spacer matches the header's height to the pixel.
-- [ ] `[S1-A9]` The header stays pinned to the top of the timeline pane while the rows scroll under it.
-- [ ] `[S1-A10]` `panToToday()` brings the today line into view, and `locale` re-labels every header band and every screen-reader date with no bar remount (I8).
+- [x] `[S1-A6]` A multi-year fixture at the `day` preset scrolls horizontally at the density floor instead of compressing ticks below it.
+- [x] `[S1-A7]` `zoomIn`/`zoomOut` step exactly one entry of `zoomPresets`, keep the anchored instant fixed, and no-op at the ends in agreement with `canZoomIn`/`canZoomOut`.
+- [x] `[S1-A8]` A three-band preset renders three full-height bands, and the grid pane's spacer matches the header's height to the pixel.
+- [x] `[S1-A9]` The header stays pinned to the top of the timeline pane while the rows scroll under it.
+- [x] `[S1-A10]` `panToToday()` brings the today line into view, and `locale` re-labels every header band and every screen-reader date with no bar remount (I8).
 
 ---
 

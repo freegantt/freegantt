@@ -394,7 +394,7 @@ Guardrails and glossary first, then engine, then the seam, then the public edge.
 - [x] `Gantt` — same surface, delegating; `GanttOptions` gains the four keys
 
 ### Harness
-- [x] Review `harness/main.ts` and `harness/scroll-sync.ts` against CLAUDE.md's harness rule now that `preset`/`zoom`/`reveal` exist; record any gap against S1.9 and fix it in `src/` — reviewed, nothing hand-rolled; both files are minimal `new Gantt(...)`/`new Dataset(...)` construction with no restated defaults or standing-in computation, so no gap to close. `harness/zoom.html`/`zoom.ts` added as a new fixture (matching `scroll-sync.html`'s pattern) exposing the constructed `Gantt` for `e2e/zoom.spec.ts` — no gesture controller exists yet to drive `zoomBy` from a real wheel event (S4), so the fixture drives the imperative surface directly.
+- [x] Review `harness/main.ts` and `harness/scroll-sync.ts` against CLAUDE.md's harness rule now that `preset`/`zoom`/`reveal` exist; record any gap against S1.9 and fix it in `src/` — reviewed at S1.9 as "nothing hand-rolled"; **correction (S1.12, D-S1.12-9):** `harness/zoom.html` carried `.fg-band { height: 20px }`, a consumer workaround for N bands splitting one 20px header. That rule is gone now that `--fg-band-height` sizes each band.
 
 ### Review and docs
 - [x] The §7 spec edits, landed with this step

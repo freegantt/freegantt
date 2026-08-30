@@ -12,6 +12,8 @@ import type {
   RowId,
 } from '../../layout/index.js';
 import type { RenderBackend, RenderSurfaces, InteractionState, HitResult } from '../backend.js';
+import { attachDateLines } from './date-line.js';
+import type { DateLineAttachment } from './date-line.js';
 import { syncKeyed } from './sync-keyed.js';
 
 type TickGeom = Pick<FrameHeaderTick, 'x' | 'width' | 'label'>;
@@ -46,6 +48,7 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
   let headerLayer: HTMLElement | undefined;
   let barLayer: HTMLElement | undefined;
   let contentSizer: HTMLElement | undefined;
+  let dateLines: DateLineAttachment | undefined;
 
   const bandNodes = new Map<number, HTMLElement>();
   const bandGeom = new Map<number, BandGeom>();
@@ -232,11 +235,20 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
       contentSizer.setAttribute('aria-hidden', 'true');
       contentSizer.className = 'fg-content-sizer';
       timelineHost.append(headerLayer, barLayer, contentSizer);
+      dateLines = attachDateLines(timelineHost);
     },
     sync(frame: GeometryFrame) {
+      if (headerLayer) {
+        // A boundary tick's cell is one full calendar unit wide and can overshoot `contentWidth` on a
+        // coarse preset over a short dataset. `.fg-header` clips (`overflow: hidden`) at its own box
+        // edge, so the box must be exactly `contentWidth` wide — or the clip lands at the pane's width
+        // instead and either hides in-range ticks or lets an oversized tick inflate native scrollWidth.
+        headerLayer.style.width = `${frame.contentWidth}px`;
+      }
       syncHeader(frame.header.bands);
       syncRows(frame.rows, frame.rowCount);
       syncBars(frame.bars);
+      dateLines?.sync(frame.decorations, frame.contentHeight, frame.visible.height);
       if (gridLayer) {
         // The grid pane has no scrollbar of its own; its row layer follows the timeline pane's
         // native scroll by one transform per frame instead of a second real scroller (D-S1.8-1).
@@ -267,6 +279,8 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
       return id ? { itemId: id as ItemId } : null;
     },
     destroy() {
+      dateLines?.destroy();
+      dateLines = undefined;
       gridLayer?.replaceChildren();
       timelineHost?.replaceChildren();
       bandNodes.clear();

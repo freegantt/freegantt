@@ -3,9 +3,14 @@
 import type { RowId, ItemId, EntryId, EntryKind, Entry, Rect, TimeUnit } from '../model/index.js';
 import { itemId, rowId } from '../model/index.js';
 import type { TimeScale, ViewPreset } from '../time/index.js';
-import { formatDate, formatEndInclusive } from '../time/index.js';
+import { dedupeHeaderFormats, formatDate, formatEndInclusive, resolveDateFormat } from '../time/index.js';
+import { resolveDateLines } from './date-line.js';
+import type { DateLine, DateLineInput } from './date-line.js';
 import { PrefixSumHeightIndex } from './row-height-index.js';
 import type { RowHeightIndex } from './row-height-index.js';
+
+/** Shipped Tick box floor (CONTEXT.md) — `--fg-tick-box-floor` fallback and CSS padding calc. */
+export const DEFAULT_TICK_BOX_FLOOR_PX = 9;
 
 /** An entry's horizontal extent in content pixels, at the bound `TimeScale` (S1.9). The one formula
  * both `computeFrame` and `GanttShell.reveal` need — extracted so the two can never drift apart
@@ -69,11 +74,6 @@ export interface FrameLink {
   flags: LinkFlags;
 }
 
-export interface TodayLine {
-  kind: 'todayLine';
-  x: number;
-}
-
 export interface RangeBand {
   kind: 'rangeBand';
   x: number;
@@ -85,7 +85,7 @@ export interface RowStripe {
   rowId: RowId;
 }
 
-export type FrameDecoration = TodayLine | RangeBand | RowStripe;
+export type FrameDecoration = DateLine | RangeBand | RowStripe;
 
 /** One header tick, positioned and labelled — the render seam's only route for header state (#19). */
 export interface FrameHeaderTick {
@@ -150,6 +150,17 @@ export interface LayoutInput {
   overscan?: Overscan;
   rowHeight: number;
   revision: number;
+  /** Feeds every header band's `resolveDateFormat` call and `a11yLabel` (S1.12, D-S1.12-12).
+   * `undefined` = the runtime default. */
+  locale?: Intl.LocalesArgument;
+  /** Emits the today Date line when `true` and `now()` falls inside `scale.range` (S1.12,
+   *  D-S1.12-14). Default `true`. Wrapper around Date line (issue #96). */
+  todayLine?: boolean;
+  /** Authored Date lines, resolved on the same path as the today wrapper. Not on `Gantt` yet. */
+  dateLines?: readonly DateLineInput[];
+  /** Tick box floor in px (CONTEXT.md). Default `DEFAULT_TICK_BOX_FLOOR_PX`. View reads
+   *  `--fg-tick-box-floor` and passes it; layout never restates the stylesheet. */
+  tickBoxFloorPx?: number;
 }
 
 /** S0/S1 scope: flat row-per-entry, one bar per entry, fixed row height (plans/03 S0-S1).
@@ -163,7 +174,8 @@ export function computeFrame(
   input: LayoutInput,
   heights: RowHeightIndex = new PrefixSumHeightIndex(input.entries.length, () => input.rowHeight),
 ): GeometryFrame {
-  const { entries, scale, preset, visible, rowHeight, revision } = input;
+  const { entries, scale, preset, visible, rowHeight, revision, locale } = input;
+  const tickBoxFloorPx = input.tickBoxFloorPx ?? DEFAULT_TICK_BOX_FLOOR_PX;
   const verticalRows = input.overscan?.verticalRows ?? DEFAULT_OVERSCAN.verticalRows;
   const horizontalPx = input.overscan?.horizontalPx ?? DEFAULT_OVERSCAN.horizontalPx;
 
@@ -218,7 +230,7 @@ export function computeFrame(
       height: rowHeight,
       lane: 0,
       flags: {},
-      a11yLabel: `${entry.name}, ${formatDate(scale.timeZone, entry.start)} – ${formatEndInclusive(scale.timeZone, entry.end)}`,
+      a11yLabel: `${entry.name}, ${formatDate(scale.timeZone, entry.start, locale)} – ${formatEndInclusive(scale.timeZone, entry.end, locale)}`,
     });
   }
 
@@ -226,15 +238,45 @@ export function computeFrame(
     ? { x: hLeft, width: hRight - hLeft }
     : { x: 0, width: scale.contentWidth };
 
-  const bands: FrameHeaderBand[] = preset.headers.map((header) => ({
-    unit: header.unit,
-    increment: header.increment,
-    ticks: scale.ticks({ unit: header.unit, increment: header.increment }, horizontalSpan).map((tick) => ({
-      x: tick.x,
-      width: tick.width,
-      label: header.format(tick.instant, scale.timeZone),
-    })),
-  }));
+  // A coarse band's boundary (a year, say) is often well behind the visible pane — the calendar
+  // year started before this dataset's own first entry, or the caller has scrolled past it — so
+  // its true cell left edge sits off-screen. Left un-clamped, the label paints at that off-screen
+  // x and never becomes visible even though most of the cell is on screen (header readability
+  // follow-up: "year never renders at the top level" turned out to be exactly this). Clamping the
+  // *label's* x to the visible pane's own left edge keeps it stuck to the front of its cell while
+  // any part of that cell is in view — the cell's true `x`/`width` (and its `instant`) still drive
+  // ticking and formatting; only where the label paints moves.
+  const labelLeftClamp = cullHorizontally ? Math.max(visible.x, 0) : 0;
+
+  // A Tick's CSS border-box cannot shrink below the Tick box floor (`tickBoxFloorPx`, Token
+  // `--fg-tick-box-floor`). A straddling tick clamped to a thinner remainder would ask for e.g.
+  // `width: 0.5px` and still paint at that floor — eating into the next cell. Below the floor the
+  // sticky behaviour buys nothing, so the tick keeps its true (off-screen) x.
+
+  const headerFormats = dedupeHeaderFormats(preset.headers);
+  const bands: FrameHeaderBand[] = preset.headers.map((header, i) => {
+    const format = resolveDateFormat(headerFormats[i]!, scale.timeZone, locale);
+    return {
+      unit: header.unit,
+      increment: header.increment,
+      ticks: scale.ticks({ unit: header.unit, increment: header.increment }, horizontalSpan).map((tick) => {
+        // Only the one tick whose cell actually straddles the clamp line is "stuck" — a tick
+        // that ends before it (fully behind the visible edge, kept around only by the overscan
+        // buffer) must keep its own true x, or every such tick collapses onto the same clamped
+        // column and their labels stack on top of each other (header readability follow-up).
+        const remainder = tick.x + tick.width - labelLeftClamp;
+        const straddlesClamp = tick.x < labelLeftClamp && remainder >= tickBoxFloorPx;
+        const x = straddlesClamp ? labelLeftClamp : tick.x;
+        return { x, width: Math.max(0, tick.width - (x - tick.x)), label: format(tick.instant) };
+      }),
+    };
+  });
+
+  const decorations: FrameDecoration[] = resolveDateLines({
+    scale,
+    todayLine: input.todayLine ?? true,
+    ...(input.dateLines ? { dateLines: input.dateLines } : {}),
+  });
 
   return {
     revision,
@@ -246,6 +288,6 @@ export function computeFrame(
     contentWidth: scale.contentWidth,
     bars,
     links: [],
-    decorations: [],
+    decorations,
   };
 }

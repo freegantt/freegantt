@@ -6,7 +6,7 @@
 // historical record). Two narrower exemptions cover legitimate historical citations elsewhere: a line
 // citing the ADR that retired `Project` (CONTEXT.md's own glossary explains the retirement, which
 // necessarily names the retired word once), and the literal git branch name `host-input-dates-and-ids`
-// cited in `harness/doc.html` as a historical fact, not a live usage of the concept.
+// cited in `harness/docs/doc.html` as a historical fact, not a live usage of the concept.
 
 import { describe, expect, it } from 'vitest';
 import fs from 'node:fs';

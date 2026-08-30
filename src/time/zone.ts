@@ -55,6 +55,14 @@ export function startOfDay(zone: string, i: Instant): Instant {
   return fromZoned(ZonedDateTimeFns.startOfDay(toZoned(zone, i)));
 }
 
+/** ISO week number (1-53) of `i` in `zone` (D-S1.12-13). `Intl.DateTimeFormatOptions` has no week
+ * field, so this is the one thing formatting still reaches the polyfill for directly. The polyfill
+ * types this `| undefined` for calendars with no week numbering; `toZoned` always builds an ISO
+ * calendar reading, which always has one. */
+export function weekOfYear(zone: string, i: Instant): number {
+  return ZonedDateTimeFns.weekOfYear(toZoned(zone, i))!;
+}
+
 export function addDays(zone: string, i: Instant, days: number): Instant {
   return fromZoned(ZonedDateTimeFns.addDays(toZoned(zone, i), days));
 }

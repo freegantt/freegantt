@@ -7,10 +7,11 @@ import { TimeScaleModel, bindTimeScale } from './time-scale-model.js';
 import type { ScaleBinding, ScaleBindingHandle, TimeScaleFit } from './time-scale-model.js';
 import { ScrollModel, bindScroll } from './scroll-model.js';
 import type { ScrollBindingHandle } from './scroll-model.js';
+import { diffMs, resolvePreset, ZOOM_PRESETS } from '../../time/index.js';
 import type { PresetRef, TimeScale, ViewPreset } from '../../time/index.js';
 import { BatchedNotifier } from './batched-notifier.js';
 import { FreeGanttError } from '../../model/index.js';
-import type { Entry, Rect, Size, TimeSpan } from '../../model/index.js';
+import type { Entry, Instant, Rect, Size, TimeSpan } from '../../model/index.js';
 import { DEFAULT_OVERSCAN } from '../frame.js';
 import type { Overscan } from '../frame.js';
 
@@ -57,6 +58,9 @@ export class Viewport {
   readonly scale: TimeScaleModel;
   readonly scroll: ScrollModel;
   #overscan: Overscan;
+  /** The ordered set `zoomIn`/`zoomOut` step through, finest first (S1.12, D-S1.12-5). Default: the
+   *  shipped nine-rung set. */
+  #zoomPresets: readonly ViewPreset[] = ZOOM_PRESETS;
   #paneSize: Size = ZERO_SIZE;
   #contentSize: Size = ZERO_SIZE;
   #onChange: (() => void) | undefined;
@@ -143,27 +147,72 @@ export class Viewport {
   }
 
   /** Live — delegates straight to `TimeScaleModel.preset` (D-S1.9-9's "GanttShell delegates straight
-   *  to #viewport"). Resolved through `resolvePreset`; no-op, no notification, when unchanged. */
+   *  to #viewport"). Resolved through `resolvePreset`; no-op, no notification, when unchanged.
+   *
+   *  Re-clamps scroll against the freshly resolved `contentWidth`, in place, the same way
+   *  `#stepPreset`/`zoomToSpan` already re-clamp around their own anchor (D-S1.9-5) — without it,
+   *  `visible` (below) keeps clamping against the OLD content size and `scroll.state.position`
+   *  keeps its OLD, now-meaningless pixel value until `GanttShell.render()` calls `setContentSize`
+   *  itself, one render later. A preset that shrinks content while scrolled away from 0 then
+   *  computes that one frame against a `visible.x` outside the new, smaller extent — every bar
+   *  culls out, and the DOM nodes for whatever bars survive once the browser's own scrollLeft clamp
+   *  corrects it on the following frame are new nodes, a full unwanted remount (found while adding
+   *  `panToToday` to the harness pages, header readability follow-up pass 4 — previously
+   *  unreachable because every existing fixture only ever scrolled from position 0, where any
+   *  content size is still in bounds). */
   set preset(ref: PresetRef) {
-    this.scale.preset = ref;
+    this.batch(() => {
+      this.scale.preset = ref;
+      this.#reclampToContentWidth();
+    });
   }
 
   get range(): 'fitDataset' | TimeSpan {
     return this.scale.range;
   }
 
-  /** Live — delegates straight to `TimeScaleModel.range`. */
+  /** Live — delegates straight to `TimeScaleModel.range`. Re-clamps against `contentWidth` eagerly —
+   *  see `set preset` above; a `range` change can resize content exactly the same way a `preset`
+   *  change can. */
   set range(r: 'fitDataset' | TimeSpan) {
-    this.scale.range = r;
+    this.batch(() => {
+      this.scale.range = r;
+      this.#reclampToContentWidth();
+    });
   }
 
   get fit(): TimeScaleFit {
     return this.scale.fit;
   }
 
-  /** Live — delegates straight to `TimeScaleModel.fit`. */
+  /** Live — delegates straight to `TimeScaleModel.fit`. Re-clamps against `contentWidth` eagerly —
+   *  see `set preset` above; a `fit` change can resize content exactly the same way a `preset`
+   *  change can. */
   set fit(f: TimeScaleFit) {
-    this.scale.fit = f;
+    this.batch(() => {
+      this.scale.fit = f;
+      this.#reclampToContentWidth();
+    });
+  }
+
+  /** Pushes the just-resolved `TimeScale.contentWidth` into both this Viewport's own tracked
+   *  `#contentSize` (what `visible`'s local clamp reads, D-S1.7-2) and the scroll binding. Every
+   *  anchored scale write calls this *before* `panTo`, or `visible` and `ScrollModel.max` keep the
+   *  previous render's width. A no-op before the first `bind()` (`#scrollHandle` is unset then). */
+  #pushContentWidth(): void {
+    if (!this.#scrollHandle) return;
+    const size = { width: this.timeScale.contentWidth, height: this.#contentSize.height };
+    this.#contentSize = size;
+    this.#scrollHandle.setContentSize(size);
+  }
+
+  /** `#pushContentWidth`, then re-pan to the CURRENT position — a no-op move whose only job is
+   *  forcing `ScrollModel.panTo`'s own clamp (D-S1.5-2) to run against the fresh `max` right now,
+   *  instead of leaving a stale position for `GanttShell.render()` to compute a frame against. See
+   *  `set preset`'s doc. */
+  #reclampToContentWidth(): void {
+    this.#pushContentWidth();
+    this.scroll.panTo(this.scroll.state.position);
   }
 
   get overscan(): Overscan {
@@ -213,10 +262,7 @@ export class Viewport {
     const anchorInstant = this.timeScale.instantForX(this.scroll.state.position.x + anchorX);
     this.batch(() => {
       this.scale.fit = pxPerMs;
-      this.#scrollHandle?.setContentSize({
-        width: this.timeScale.contentWidth,
-        height: this.#contentSize.height,
-      });
+      this.#pushContentWidth();
       this.scroll.panTo({ x: this.timeScale.xForInstant(anchorInstant) - anchorX });
     });
   }
@@ -224,6 +270,78 @@ export class Viewport {
   /** `zoomTo(timeScale.pxPerMs * factor, anchorX)` (S1.9, D-S1.9-5). */
   zoomBy(factor: number, anchorX?: number): void {
     this.zoomTo(this.timeScale.pxPerMs * factor, anchorX ?? this.#paneSize.width / 2);
+  }
+
+  /** The ordered set `zoomIn`/`zoomOut` step through, finest first (S1.12, D-S1.12-5). Live. */
+  get zoomPresets(): readonly ViewPreset[] {
+    return this.#zoomPresets;
+  }
+
+  set zoomPresets(refs: readonly PresetRef[]) {
+    this.#zoomPresets = Object.freeze(refs.map(resolvePreset));
+  }
+
+  #zoomPresetIndex(): number {
+    return this.#zoomPresets.indexOf(this.scale.preset);
+  }
+
+  /** True unless the current preset is the finest entry of `zoomPresets`, or is not in it at all —
+   *  the same "not found" reading `zoomIn`'s no-op takes (D-S1.12-6). */
+  get canZoomIn(): boolean {
+    return this.#zoomPresetIndex() > 0;
+  }
+
+  get canZoomOut(): boolean {
+    const index = this.#zoomPresetIndex();
+    return index !== -1 && index < this.#zoomPresets.length - 1;
+  }
+
+  /** Steps `preset` to `zoomPresets[index + delta]`, re-anchoring inside one `batch()` exactly as
+   *  `zoomTo` does (D-S1.12-6). No-op — no notification — at the ends, or when the current preset is
+   *  not a member of `zoomPresets` at all. */
+  #stepPreset(delta: number, anchorX: number): void {
+    const index = this.#zoomPresetIndex();
+    const next = index + delta;
+    if (index === -1 || next < 0 || next >= this.#zoomPresets.length) return;
+    const anchorInstant = this.timeScale.instantForX(this.scroll.state.position.x + anchorX);
+    this.batch(() => {
+      this.scale.preset = this.#zoomPresets[next]!;
+      this.#pushContentWidth();
+      this.scroll.panTo({ x: this.timeScale.xForInstant(anchorInstant) - anchorX });
+    });
+  }
+
+  /** Next finer entry of `zoomPresets`; no-op at the finest (S1.12, D-S1.12-6). `anchorX` defaults to
+   *  pane centre. Steps the preset (labels and tick unit) only — it does not write Fit. Under the
+   *  default `fit: 'pane'`, `pxPerMs` stays pane-fill until `minTickWidthPx` bites, so a step can
+   *  change labels while density stays put (HANDOFF; D-S1.12-6). */
+  zoomIn(anchorX?: number): void {
+    this.#stepPreset(-1, anchorX ?? this.#paneSize.width / 2);
+  }
+
+  /** Next coarser entry of `zoomPresets`; no-op at the coarsest (S1.12, D-S1.12-6). */
+  zoomOut(anchorX?: number): void {
+    this.#stepPreset(1, anchorX ?? this.#paneSize.width / 2);
+  }
+
+  /** Resolves the density that makes `span` exactly fill the pane, then pans so `span.start` sits at
+   *  the pane's left edge — both inside one batch, one notification (S1.12, D-S1.12-7). Floored by
+   *  the preset's `minTickWidthPx` (D-S1.12-2), so a span too long to be legible fills the pane only
+   *  as far as the floor allows. */
+  zoomToSpan(span: TimeSpan): void {
+    const spanMs = diffMs(span.end, span.start);
+    const targetPxPerMs = this.#paneSize.width > 0 && spanMs > 0 ? this.#paneSize.width / spanMs : 0;
+    this.batch(() => {
+      this.scale.fit = targetPxPerMs;
+      this.#pushContentWidth();
+      this.scroll.panTo({ x: this.timeScale.xForInstant(span.start) });
+    });
+  }
+
+  /** Pans so `i` sits at `align` within the pane (S1.12, D-S1.12-8). */
+  panToInstant(i: Instant, align: 'start' | 'center'): void {
+    const x = this.timeScale.xForInstant(i) - (align === 'center' ? this.#paneSize.width / 2 : 0);
+    this.scroll.panTo({ x });
   }
 
   /** "Nearest edge," not "center" (S1.9, D-S1.9-6) — `view/`-only, not exported from `api/` (matches

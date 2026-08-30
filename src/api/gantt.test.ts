@@ -3,6 +3,7 @@ import { Gantt } from './gantt.js';
 import { Dataset } from './dataset.js';
 import { EntryNotFoundError, ScrollModel, TimeScaleModel, entryId } from './index.js';
 import { sampleEntries } from '../../fixtures/sample-dataset.js';
+import { instant } from '../time/index.js';
 
 // happy-dom does no layout, so a real ResizeObserver never fires (same seam gantt-shell.test.ts
 // stubs globally — Gantt/GanttShell wire attachPaneSize themselves and take no ResizeObserverCtor
@@ -110,7 +111,7 @@ describe('Gantt preset/range/fit/zoomTo/zoomBy/reveal (S1.9)', () => {
       FakeResizeObserver.instances[0]!.fire({ width: 300, height: 100 });
 
       const before = container.querySelector<HTMLElement>('.fg-bar');
-      expect(container.querySelectorAll('.fg-band')).toHaveLength(1);
+      expect(container.querySelectorAll('.fg-header .fg-band')).toHaveLength(1);
 
       gantt.preset = 'weekAndMonth';
       // D-S2-15: the preset change's render request is coalesced onto the next animation frame.
@@ -119,7 +120,7 @@ describe('Gantt preset/range/fit/zoomTo/zoomBy/reveal (S1.9)', () => {
       const after = container.querySelector<HTMLElement>('.fg-bar');
       expect(after).toBe(before);
       expect(gantt.preset.id).toBe('weekAndMonth');
-      expect(container.querySelectorAll('.fg-band')).toHaveLength(2);
+      expect(container.querySelectorAll('.fg-header .fg-band')).toHaveLength(2);
 
       gantt.destroy();
     } finally {
@@ -218,6 +219,311 @@ describe('Gantt preset/range/fit/zoomTo/zoomBy/reveal (S1.9)', () => {
   // `GanttOptions` (issue #84, finding #3) — see `gantt-shell.test.ts` for the runtime warning
   // GanttShell itself still carries for a caller who bypasses that type (there is none through
   // the public `Gantt` constructor).
+});
+
+describe('Gantt.panToDate / panToToday (S1.12, D-S1.12-8)', () => {
+  it("panToDate (align 'start', the default) moves the scroll off the dataset's own start", () => {
+    FakeResizeObserver.instances = [];
+    vi.stubGlobal('ResizeObserver', FakeResizeObserver);
+
+    try {
+      const container = document.createElement('div');
+      const scroll = new ScrollModel();
+      const gantt = new Gantt({
+        container,
+        dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }),
+        fit: 'preset',
+        preset: 'day',
+        scroll,
+      });
+      FakeResizeObserver.instances[0]!.fire({ width: 300, height: 100 });
+
+      expect(scroll.state.position.x).toBe(0);
+      gantt.panToDate('2026-10-15T00:00:00Z');
+      expect(scroll.state.position.x).toBeGreaterThan(0);
+
+      gantt.destroy();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("align 'center' lands exactly gridWidth-independent half-pane-width left of align 'start', for the same date", () => {
+    FakeResizeObserver.instances = [];
+    vi.stubGlobal('ResizeObserver', FakeResizeObserver);
+
+    try {
+      const container = document.createElement('div');
+      const scroll = new ScrollModel();
+      const gantt = new Gantt({
+        container,
+        dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }),
+        fit: 'preset',
+        preset: 'day',
+        scroll,
+      });
+      FakeResizeObserver.instances[0]!.fire({ width: 300, height: 100 });
+
+      gantt.panToDate('2026-10-15T00:00:00Z', 'start');
+      const start = scroll.state.position.x;
+
+      gantt.panToDate('2026-10-15T00:00:00Z', 'center');
+      const center = scroll.state.position.x;
+
+      expect(center).toBe(start - 150); // half of the 300px measured pane
+      gantt.destroy();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('[S1-A10] panToToday is panToDate(now(), align) — same resulting scroll position for the same instant', () => {
+    FakeResizeObserver.instances = [];
+    vi.stubGlobal('ResizeObserver', FakeResizeObserver);
+    const fakeNow = instant('2026-09-20T12:00:00Z');
+    vi.useFakeTimers();
+    vi.setSystemTime(fakeNow);
+
+    try {
+      const container = document.createElement('div');
+      const scroll = new ScrollModel();
+      const gantt = new Gantt({
+        container,
+        dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }),
+        fit: 'preset',
+        preset: 'day',
+        scroll,
+      });
+      FakeResizeObserver.instances[0]!.fire({ width: 300, height: 100 });
+
+      gantt.panToToday('center');
+      const fromToday = scroll.state.position.x;
+
+      gantt.panToDate(fakeNow, 'center');
+      const fromDate = scroll.state.position.x;
+
+      expect(fromToday).toBe(fromDate);
+      gantt.destroy();
+    } finally {
+      vi.useRealTimers();
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('a date outside the dataset range still pans — clamped to the scroll bound, not thrown', () => {
+    FakeResizeObserver.instances = [];
+    vi.stubGlobal('ResizeObserver', FakeResizeObserver);
+
+    try {
+      const container = document.createElement('div');
+      const scroll = new ScrollModel();
+      const gantt = new Gantt({
+        container,
+        dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }),
+        fit: 'preset',
+        preset: 'day',
+        scroll,
+      });
+      FakeResizeObserver.instances[0]!.fire({ width: 300, height: 100 });
+
+      expect(() => gantt.panToDate('1990-01-01T00:00:00Z')).not.toThrow();
+      expect(scroll.state.position.x).toBe(0); // well before range.start, clamped down to 0
+
+      expect(() => gantt.panToDate('2099-01-01T00:00:00Z')).not.toThrow();
+      expect(scroll.state.position.x).toBe(scroll.state.max.x); // well past range.end, clamped up
+
+      gantt.destroy();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('panToDate accepts an epoch number and lands at the same x as the ISO string (U6)', () => {
+    FakeResizeObserver.instances = [];
+    vi.stubGlobal('ResizeObserver', FakeResizeObserver);
+
+    try {
+      const container = document.createElement('div');
+      const scroll = new ScrollModel();
+      const gantt = new Gantt({
+        container,
+        dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }),
+        fit: 'preset',
+        preset: 'day',
+        scroll,
+      });
+      FakeResizeObserver.instances[0]!.fire({ width: 300, height: 100 });
+
+      gantt.panToDate('2026-10-15T00:00:00Z');
+      const fromString = scroll.state.position.x;
+
+      // A Date object is `toInstant`'s job (`time/input.test.ts`); I10 bans `new Date()` here.
+      gantt.panToDate(Date.parse('2026-10-15T00:00:00Z'));
+      expect(scroll.state.position.x).toBe(fromString);
+
+      gantt.destroy();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+});
+
+describe('Gantt locale / todayLine (S1.12, D-S1.12-12 / D-S1.12-14)', () => {
+  it('[S1-A10] locale = ja-JP re-labels the header with no bar remount (I8)', async () => {
+    FakeResizeObserver.instances = [];
+    vi.stubGlobal('ResizeObserver', FakeResizeObserver);
+
+    try {
+      const container = document.createElement('div');
+      const gantt = new Gantt({
+        container,
+        dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }),
+        locale: 'en-US',
+        preset: 'monthAndYear',
+        fit: 'preset',
+      });
+      FakeResizeObserver.instances[0]!.fire({ width: 300, height: 100 });
+
+      const barBefore = container.querySelector<HTMLElement>('.fg-bar');
+      const labelsOf = (): string => {
+        const labels: string[] = [];
+        for (const node of Array.from(container.querySelectorAll('.fg-tick'))) {
+          if (node instanceof HTMLElement) labels.push(node.textContent ?? '');
+        }
+        return labels.join('|');
+      };
+      const labelBefore = labelsOf();
+      expect(labelBefore).toBeTruthy();
+
+      gantt.locale = 'ja-JP';
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+
+      expect(container.querySelector<HTMLElement>('.fg-bar')).toBe(barBefore);
+      expect(labelsOf()).not.toBe(labelBefore);
+
+      gantt.destroy();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('[S1-A10] todayLine = false removes .fg-today-line', async () => {
+    FakeResizeObserver.instances = [];
+    vi.stubGlobal('ResizeObserver', FakeResizeObserver);
+
+    try {
+      const container = document.createElement('div');
+      const gantt = new Gantt({
+        container,
+        dataset: new Dataset({
+          entries: [{ id: 'span', name: 'span', start: '2020-01-01', end: '2030-01-01' }],
+          timeZone: 'UTC',
+        }),
+        fit: 'preset',
+        preset: 'year',
+      });
+      FakeResizeObserver.instances[0]!.fire({ width: 300, height: 100 });
+
+      expect(container.querySelector('.fg-today-line')).not.toBeNull();
+      expect(container.querySelector<HTMLElement>('.fg-today-line')!.hidden).toBe(false);
+
+      gantt.todayLine = false;
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+
+      expect(container.querySelector('.fg-today-line')).toBeNull();
+
+      gantt.destroy();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+});
+
+describe('Gantt navigationChange (S1.12)', () => {
+  it('zoomIn fires navigationChange once per Viewport Batch', () => {
+    FakeResizeObserver.instances = [];
+    vi.stubGlobal('ResizeObserver', FakeResizeObserver);
+    try {
+      const container = document.createElement('div');
+      const gantt = new Gantt({
+        container,
+        dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }),
+        preset: 'weekAndMonth',
+        fit: 'preset',
+      });
+      FakeResizeObserver.instances[0]!.fire({ width: 300, height: 100 });
+
+      const seen: string[] = [];
+      gantt.on('navigationChange', (payload) => {
+        seen.push(payload.presetId);
+      });
+      const before = gantt.preset.id;
+      gantt.zoomIn();
+      expect(seen).toHaveLength(1);
+      expect(seen[0]).not.toBe(before);
+      expect(seen[0]).toBe(gantt.preset.id);
+
+      gantt.destroy();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('a no-op zoomIn at the finest preset emits nothing', () => {
+    FakeResizeObserver.instances = [];
+    vi.stubGlobal('ResizeObserver', FakeResizeObserver);
+    try {
+      const container = document.createElement('div');
+      const gantt = new Gantt({
+        container,
+        dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }),
+        preset: 'hour',
+        fit: 'preset',
+      });
+      FakeResizeObserver.instances[0]!.fire({ width: 300, height: 100 });
+
+      let calls = 0;
+      gantt.on('navigationChange', () => {
+        calls++;
+      });
+      expect(gantt.canZoomIn).toBe(false);
+      gantt.zoomIn();
+      expect(calls).toBe(0);
+
+      gantt.destroy();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('programmatic preset assignment fires navigationChange so chrome can stay in sync', () => {
+    FakeResizeObserver.instances = [];
+    vi.stubGlobal('ResizeObserver', FakeResizeObserver);
+    try {
+      const container = document.createElement('div');
+      const gantt = new Gantt({
+        container,
+        dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }),
+        preset: 'weekAndMonth',
+        fit: 'preset',
+      });
+      FakeResizeObserver.instances[0]!.fire({ width: 300, height: 100 });
+
+      const seen: string[] = [];
+      gantt.on('navigationChange', (payload) => {
+        seen.push(payload.presetId);
+      });
+      gantt.preset = 'month';
+      expect(seen).toEqual(['month']);
+
+      gantt.preset = 'month';
+      expect(seen).toEqual(['month']);
+
+      gantt.destroy();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
 });
 
 describe('Gantt theme and a11yLabel (S1.10)', () => {

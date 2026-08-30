@@ -12,5 +12,11 @@ export default defineConfig({
   },
   use: {
     baseURL: 'http://localhost:5173',
+    // Tall enough that the harness page (nav + toolbar + #gantt's 70vh) fits inside the viewport
+    // at Playwright's implicit default (1280x720) it does not — a test that hit-tests painted
+    // pixels then fails not because anything is mispainted, but because part of the page sits
+    // below the fold and the browser never scrolled the window to reveal it. A test that needs a
+    // different size (e.g. pane-resize.spec.ts's resize assertions) still calls setViewportSize.
+    viewport: { width: 1280, height: 1100 },
   },
 });

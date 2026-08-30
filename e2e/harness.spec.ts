@@ -72,32 +72,40 @@ test('grid pane rows are actually painted after scrolling, not just correctly po
   // `scrollTop = scrollHeight` can leave the last row only partly inside the pane, and its own
   // center would then legitimately fall in the clipped-off sliver — a false failure that has
   // nothing to do with this regression.
-  const hit = await page.evaluate(() => {
-    const gridPane = document.querySelector('.fg-grid-pane')!;
-    const gridPaneRect = gridPane.getBoundingClientRect();
-    const rows = Array.from(document.querySelectorAll<HTMLElement>('.fg-grid-pane .fg-row'));
-    const lastRow = rows.reduce<HTMLElement | undefined>((lowest, row) => {
-      if (!lowest) return row;
-      return row.getBoundingClientRect().top > lowest.getBoundingClientRect().top ? row : lowest;
-    }, undefined);
-    if (!lastRow) return { found: false as const };
-    const rect = lastRow.getBoundingClientRect();
-    const top = Math.max(rect.top, gridPaneRect.top);
-    const bottom = Math.min(rect.bottom, gridPaneRect.bottom);
-    if (bottom <= top) return { found: true as const, overlapsPane: false as const, isSameElement: false };
-    const cx = rect.x + rect.width / 2;
-    const cy = (top + bottom) / 2;
-    const atPoint = document.elementFromPoint(cx, cy);
-    // S1.10, D-S1.10-7: .fg-row now wraps a .fg-row-label child, so the topmost painted element at
-    // the row's center is often that label, not .fg-row itself — still proof the row is painted,
-    // as long as the hit lands on the row or something the row itself contains.
-    const isSameElement = atPoint === lastRow || (atPoint !== null && lastRow.contains(atPoint));
-    return { found: true as const, overlapsPane: true as const, isSameElement };
-  });
+  //
+  // Polled, not read once: the scroll fires a re-render through FrameScheduler's rAF coalescing
+  // (S1.12), so the row set/positions can still be mid-update for a frame or two after the
+  // `scroll` event returns. `toBeVisible()` above only proves *a* row exists, not that layout has
+  // settled — polling this whole hit-test is what actually waits for that settling.
+  const computeHit = () =>
+    page.evaluate(() => {
+      const gridPane = document.querySelector('.fg-grid-pane')!;
+      const gridPaneRect = gridPane.getBoundingClientRect();
+      const rows = Array.from(document.querySelectorAll<HTMLElement>('.fg-grid-pane .fg-row'));
+      const lastRow = rows.reduce<HTMLElement | undefined>((lowest, row) => {
+        if (!lowest) return row;
+        return row.getBoundingClientRect().top > lowest.getBoundingClientRect().top ? row : lowest;
+      }, undefined);
+      if (!lastRow) return { found: false as const, overlapsPane: false, isSameElement: false };
+      const rect = lastRow.getBoundingClientRect();
+      const top = Math.max(rect.top, gridPaneRect.top);
+      const bottom = Math.min(rect.bottom, gridPaneRect.bottom);
+      if (bottom <= top) return { found: true as const, overlapsPane: false, isSameElement: false };
+      const cx = rect.x + rect.width / 2;
+      const cy = (top + bottom) / 2;
+      const atPoint = document.elementFromPoint(cx, cy);
+      // S1.10, D-S1.10-7: .fg-row now wraps a .fg-row-label child, so the topmost painted element
+      // at the row's center is often that label, not .fg-row itself — still proof the row is
+      // painted, as long as the hit lands on the row or something the row itself contains.
+      const isSameElement = atPoint === lastRow || (atPoint !== null && lastRow.contains(atPoint));
+      return { found: true as const, overlapsPane: true, isSameElement };
+    });
 
-  expect(hit.found).toBe(true);
-  expect(hit.overlapsPane).toBe(true);
-  expect(hit.isSameElement).toBe(true);
+  await expect.poll(computeHit, { timeout: 2000 }).toEqual({
+    found: true,
+    overlapsPane: true,
+    isSameElement: true,
+  });
 });
 
 // D1 (plans/s1.8-pane-layout/README.md, D-S1.8-1/D-S1.8-10): the row-label gutter used to sit
@@ -111,11 +119,25 @@ test('the timeline pane has no row-label gutter in its scrollable content (D1)',
 
   const pane = page.locator('.fg-timeline-pane');
   const scrollWidth = await pane.evaluate((el) => el.scrollWidth);
-  const clientWidth = await pane.evaluate((el) => el.clientWidth);
   const gridPaneWidth = await page.locator('.fg-grid-pane').evaluate((el) => el.clientWidth);
 
-  // fitDataset: content is fitted to the pane, so any overflow is header tick labels running
-  // wider than their day slot at this zoom level, not scrollable content — it must stay far under
-  // a whole grid-pane-width's worth (the old defect's exact shape: `gridWidth + contentWidth`).
-  expect(scrollWidth - clientWidth).toBeLessThan(gridPaneWidth);
+  // The content sizer (render/dom/index.ts) is the library's own statement of how wide the
+  // timeline's content is — reading its painted right edge, not comparing scrollWidth to
+  // clientWidth, works whether or not the current preset's density floor (S1.12, D-S1.12-2) makes
+  // the content genuinely wider than the pane. What D1 guards against is the gutter being counted
+  // a second time: `scrollWidth` must track the sizer's own extent, not sizer-extent + gridWidth.
+  // getBoundingClientRect() is viewport-relative, so a scrolled pane (e.g. panToToday on load)
+  // moves the sizer's painted rect left by exactly el.scrollLeft — add it back so this reads the
+  // sizer's extent against the pane's unscrolled content origin, matching scrollWidth's own frame.
+  const sizerRight = await pane.evaluate((el) => {
+    const sizer = Array.from(el.children).find(
+      (child) => child instanceof HTMLElement && child.getAttribute('aria-hidden') === 'true',
+    ) as HTMLElement;
+    return sizer.getBoundingClientRect().right - el.getBoundingClientRect().left + el.scrollLeft;
+  });
+
+  // A few px of slack for borders/rounding; the old defect's exact shape was scrollWidth landing
+  // a whole gridPaneWidth past the sizer's own right edge, so failing well short of that gap is
+  // enough to prove the gutter isn't folded into the scrollable content.
+  expect(Math.abs(scrollWidth - sizerRight)).toBeLessThan(gridPaneWidth / 2);
 });

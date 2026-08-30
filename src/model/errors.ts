@@ -49,6 +49,16 @@ export class UnknownPresetError extends FreeGanttError {
   }
 }
 
+/** `code: 'invalid-preset'` — a `ViewPreset` whose `preferredTickWidthPx` is below its own
+ * `minTickWidthPx`, from `resolvePreset` (header readability follow-up). The floor would then be
+ * unreachable at the preset's own intended zoom, which is never a preset author's intent. */
+export class InvalidPresetError extends FreeGanttError {
+  constructor(message: string) {
+    super('invalid-preset', message);
+    this.name = 'InvalidPresetError';
+  }
+}
+
 /** `code: 'entry-not-found'` — an id the Dataset has no entry for, from `reveal(entryId)` (S1.9,
  * D-S1.9-6) or a mutator (`entries.update`/`remove`, or a `parentId` naming a missing entry — S2.3
  * §1.3). `operation` names the call that failed, so the message points at what the caller asked for
