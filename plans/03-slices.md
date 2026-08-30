@@ -170,6 +170,8 @@ Slices are scope, not calendar estimates. Within a slice, entries are ordered so
 
 ## S4 — Hierarchy, grouping, multi-item rows
 
+**Position:** after S3, before S5. Tracker: [`plans/s4-hierarchy-and-rows/README.md`](./s4-hierarchy-and-rows/README.md); work splits into [`s4.1-field-registry.md`](./s4-hierarchy-and-rows/s4.1-field-registry.md)–[`s4.11-harness-and-gate.md`](./s4-hierarchy-and-rows/s4.11-harness-and-gate.md). That spec settles eight scope calls, closes ADR 0005's two open questions, and renames `derivedSpanKinds` to `rollUpKinds` as the Rollup gate widens from spans to every rolling-up field. The acceptance boxes below become `[S4-A1]`–`[S4-A9]` when S4.11's spec edits land.
+
 **Goal:** the Row ≠ Entry payoff (principle 1). Tree view with collapse/expand, grouped row sources, entry segments as multiple bars on one row, lane packing with variable row heights.
 
 **Scope**
