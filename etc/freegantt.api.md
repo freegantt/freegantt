@@ -305,7 +305,6 @@ export class Gantt {
     set dateLines(lines: readonly DateLineInput[]);
     // (undocumented)
     destroy(): void;
-    get entriesForSelection(): readonly Entry[];
     // (undocumented)
     get fit(): TimeScaleFit;
     set fit(f: TimeScaleFit);
@@ -335,6 +334,7 @@ export class Gantt {
     reveal(entryId: EntryId): void;
     get selection(): readonly EntryId[];
     set selection(ids: readonly (EntryId | string)[]);
+    get selectionEntries(): readonly Entry[];
     // (undocumented)
     get theme(): Theme;
     set theme(value: Theme);
