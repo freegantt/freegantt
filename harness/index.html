@@ -149,6 +149,20 @@
       <button id="remove-btn" type="button">Remove</button>
       <button id="undo-btn" type="button">Undo</button>
       <button id="redo-btn" type="button">Redo</button>
+      <label>
+        Snap
+        <select id="snap-unit">
+          <option value="tick">Auto (preset's tick)</option>
+          <option value="none">Off</option>
+          <option value="hour">Hour</option>
+          <option value="day">Day</option>
+          <option value="week">Week</option>
+        </select>
+      </label>
+      <label>
+        Every
+        <input id="snap-increment" type="number" min="1" step="1" value="1" size="3" />
+      </label>
     </div>
     <div id="toolbar"></div>
     <div id="gantt"></div>
