@@ -498,3 +498,7 @@ Guardrails and glossary first, then the engine, then the seam, then the public e
 | `align: 'end'` on `panToDate` | when a caller asks | `'start'` and `'center'` cover the toolbar and the "show me this date" case; a third alignment is a policy nobody has requested |
 | A per-band `minTickWidthPx` (rather than per-preset) | when a band's labels need a floor its tick unit does not imply | today `tickUnit` is never coarser than the finest header, so the tick floor is already at least as strict |
 | Quarter as a `TimeUnit` | when a consumer asks for a fiscal-quarter band | `TimeUnit` is a closed union; adding one means `zone.ts`'s stepping table, not a preset |
+| A second named line (status/as-of date, not `now`) | when a caller needs to mark a date other than today | extends the `dateLines` seam already shipped; tracked with the rest of the DateLine grill on #99 |
+| `shiftNext` / `shiftPrevious` (pan by one `tickUnit`) | when a caller wants page-by-preset navigation, not only `panToDate` | a small `Viewport` method reusing the pan math `panToToday` already has (#100) |
+| `zoomToSpan` over a set of entry ids, not the whole dataset | when a caller wants to fit a selection | `zoomToSpan` already takes a `TimeSpan`; the new call computes one from ids first (#100) |
+| Sub-hour preset rungs (`minute`, 15-minute, 6-hour) | when a shift-roster or ops dataset asks for them | custom presets already support this; shipping named ones is a preset-table addition, not new `time/` code (#101) |
