@@ -5,8 +5,9 @@ Status as of 2026-08-30: **S3.6 (extender preview) is done.** All checks are gre
 `node scripts/guard-red-test.mjs`, `pnpm build`, `pnpm api-report`), plus the full `playwright test`
 e2e suite (37/37).
 
-Continue at **S3.7 (viewport gestures)** — read
-[`s3.7-viewport-gestures.md`](./s3.7-viewport-gestures.md) before touching anything.
+Continue at **S3.5 D-S3-17 follow-up**, then **S3.7**. Read
+[`s3.5-keyboard-parity-and-async-veto.md`](./s3.5-keyboard-parity-and-async-veto.md) §4 (ordered
+follow-up) before [`s3.7-viewport-gestures.md`](./s3.7-viewport-gestures.md).
 
 ## What landed this session (S3.6)
 
@@ -100,16 +101,20 @@ extender cascade undo atomically" — it just wasn't tagged with the acceptance 
 
 ## TODO — in priority order
 
-1. **S3.7 (viewport gestures)** — read [`s3.7-viewport-gestures.md`](./s3.7-viewport-gestures.md) in
+1. **S3.5 D-S3-17 follow-up** — [`s3.5-keyboard-parity-and-async-veto.md`](./s3.5-keyboard-parity-and-async-veto.md)
+   §4, items 1–6, one change set: commit-draft pending ghost, one `applyState`, fold `#commit`,
+   rename the two "pending" fields, dotted pending CSS (`outline: 2px dotted var(--fg-selection-color)`
+   on the existing rule), EventBus rejection tests, stale `entry-gestures.ts` comments.
+2. **S3.7 (viewport gestures)** — read [`s3.7-viewport-gestures.md`](./s3.7-viewport-gestures.md) in
    full before touching anything. D-S3-14: viewport gestures (wheel zoom/pan) live in `view/`, write
    nothing to the dataset (`[S3-A7]`).
-2. **Harness demo gaps** (standing ask, carried across several handoffs now): no `Ctrl+Z`/
+3. **Harness demo gaps** (standing ask, carried across several handoffs now): no `Ctrl+Z`/
    `Ctrl+Shift+Z` keydown shortcut, no `Gantt({ dateLines: [...] })` demo, no UI to flip
    `gantt.interactions` live, no `kind: 'group'` entry in the demo fixture, no visible way to see a
    keyboard nudge or the async-veto `pending` state in `harness/` itself, and — new, S3.6's own gap —
    no way to see an extender ghost in `harness/` either, since S3 has no public install API for one
    (P1: that demo is explicitly deferred to S5, `plans/s3-direct-manipulation/README.md`'s Deferred
    table). None of this blocks S3.7; it is explicitly S3.8's gate to close.
-3. Once S3.7 is done and the full check sequence (including `pnpm test:e2e`) is green, update its own
+4. Once S3.7 is done and the full check sequence (including `pnpm test:e2e`) is green, update its own
    TODO boxes, `README.md` (S3.7 `done`, S3.8 `next`), and this file, pointing at S3.8
    (`s3.8-cursor-line-harness-gate.md`).
