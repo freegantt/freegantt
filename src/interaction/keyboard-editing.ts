@@ -7,15 +7,11 @@
 
 import type { EntryId } from '../model/index.js';
 import { itemId } from '../model/index.js';
-import type { EntryGesture, EntryGestureContext } from '../view/index.js';
+import type { Detachable, EntryGesture, EntryGestureContext } from '../view/index.js';
 
-export interface KeyboardEditingAttachment {
-  detach(): void;
-}
-
-function rowCapable(ctx: EntryGestureContext, id: EntryId, capability: 'select'): boolean {
+function canSelect(ctx: EntryGestureContext, id: EntryId): boolean {
   const entry = ctx.entryFor(itemId(id));
-  return entry !== undefined && ctx.can(capability, entry);
+  return entry !== undefined && ctx.can('select', entry);
 }
 
 /** D-S3-13: `↑`/`↓` move the selection to the nearest `select`-capable row in `direction` over
@@ -27,7 +23,7 @@ function moveSelectionRow(ctx: EntryGestureContext, current: EntryId, direction:
   let index = order.indexOf(current) + direction;
   while (index >= 0 && index < order.length) {
     const candidate = order[index]!;
-    if (rowCapable(ctx, candidate, 'select')) {
+    if (canSelect(ctx, candidate)) {
       ctx.selection.propose([candidate]);
       return;
     }
@@ -38,10 +34,7 @@ function moveSelectionRow(ctx: EntryGestureContext, current: EntryId, direction:
 /** D-S3-13, D-S3-9: `attachKeyboardEditing` refuses off the same `ctx.session()` the pointer path
  *  arms through (I14) — an incapable or already-`pending` (D-S3-17) grab silently no-ops, same as a
  *  pointer grab on an incapable bar. */
-export function attachKeyboardEditing(
-  container: HTMLElement,
-  ctx: EntryGestureContext,
-): KeyboardEditingAttachment {
+export function attachKeyboardEditing(container: HTMLElement, ctx: EntryGestureContext): Detachable {
   function onKeyDown(e: KeyboardEvent): void {
     const grabbed = ctx.selection.get()[0];
     if (grabbed === undefined) return; // D-S3-13: nothing selected — S3.7 owns the pan bindings

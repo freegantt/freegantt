@@ -1423,6 +1423,7 @@ describe('Gantt async veto and pending (S3.5, D-S3-17)', () => {
     const container = document.createElement('div');
     const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
     const gantt = new Gantt({ container, dataset });
+    gantt.preset = { ...gantt.preset, snap: { unit: 'day', increment: 1 } };
 
     const bar = container.querySelector<HTMLElement>('.fg-bar')!;
     const timeline = container.querySelector<HTMLElement>('.fg-timeline-pane')!;
@@ -1446,10 +1447,17 @@ describe('Gantt async veto and pending (S3.5, D-S3-17)', () => {
     const originTransform = bar.style.transform;
     timeline.dispatchEvent(new PointerEvent('pointerdown', { clientX: 5, clientY: 5, pointerId: 1 }));
     timeline.dispatchEvent(new PointerEvent('pointermove', { clientX: 5005, clientY: 5, pointerId: 1 }));
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    const unsnappedPreview = bar.style.transform;
+    expect(unsnappedPreview).not.toBe(originTransform);
+
     timeline.dispatchEvent(new PointerEvent('pointerup', { clientX: 5005, clientY: 5, pointerId: 1 }));
 
     expect(bar.dataset['state']).toContain('pending');
-    expect(bar.style.transform).not.toBe(originTransform);
+    const heldTransform = bar.style.transform;
+    expect(heldTransform).not.toBe(originTransform);
+    // D-S3-17: held paint is the snapped commit draft, not the last unsnapped pointer preview.
+    expect(heldTransform).not.toBe(unsnappedPreview);
     expect(afterEvents).toEqual([]);
 
     resolveVeto(true);

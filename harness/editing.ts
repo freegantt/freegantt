@@ -21,6 +21,7 @@ mountTimelineToolbar({ gantt, container: document.querySelector<HTMLDivElement>(
 const undoBtn = document.querySelector<HTMLButtonElement>('#undo-btn')!;
 const redoBtn = document.querySelector<HTMLButtonElement>('#redo-btn')!;
 const lockResize = document.querySelector<HTMLInputElement>('#lock-resize')!;
+const holdDrop = document.querySelector<HTMLInputElement>('#hold-drop')!;
 const selectionReadout = document.querySelector<HTMLParagraphElement>('#selection-readout')!;
 const log = document.querySelector<HTMLDivElement>('#log')!;
 const toast = document.querySelector<HTMLDivElement>('#toast')!;
@@ -61,14 +62,29 @@ function hideToast(): void {
   toast.textContent = '';
 }
 
+let releaseHold: ((allow: boolean) => void) | undefined;
+
 gantt.on('selectionChange', renderSelection);
 gantt.on('beforeEntryMove', ({ start }) => {
   if (start < mobilization) {
     showToast('Too early — drop is before mobilization');
+    releaseHold?.(false);
+    releaseHold = undefined;
     return false;
   }
   hideToast();
-  return undefined;
+  if (!holdDrop.checked) return undefined;
+  showToast('Holding drop — uncheck Hold drop to confirm');
+  return new Promise<void | false>((resolve) => {
+    releaseHold = (allow) => resolve(allow ? undefined : false);
+  });
+});
+
+holdDrop.addEventListener('change', () => {
+  if (holdDrop.checked || releaseHold === undefined) return;
+  releaseHold(true);
+  releaseHold = undefined;
+  hideToast();
 });
 
 dataset.on('change', ({ changeSet }: DatasetEventMap['change']) => {

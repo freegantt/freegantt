@@ -9,13 +9,9 @@
 import type { EntryId } from '../model/index.js';
 import { itemId } from '../model/index.js';
 import { createPointerGesture } from './pointer-gesture.js';
-import type { EntryGestureContext, EntryGesture, EntryGestureSession } from '../view/index.js';
+import type { Detachable, EntryGestureContext, EntryGesture, EntryGestureSession } from '../view/index.js';
 
 export type { EntryGestureContext, EntryGesture, DraftOptions, EntryHit } from '../view/index.js';
-
-export interface EntryGesturesAttachment {
-  detach(): void;
-}
 
 /** Pointer semantics (D-S3-10): plain click replaces, ctrl/⌘-click toggles, shift-click extends over
  *  `rowOrder()`, a click on empty timeline clears, Escape clears. A click on an incapable bar leaves
@@ -36,7 +32,7 @@ export function attachEntryGestures(
   pane: HTMLElement,
   container: HTMLElement,
   ctx: EntryGestureContext,
-): EntryGesturesAttachment {
+): Detachable {
   /** Last plain- or ctrl-clicked capable entry — shift-click's range end. Cleared on an empty-click
    *  or Escape clear, so a shift-click right after either one degenerates to selecting just its
    *  target (there is no prior anchor to range from). */

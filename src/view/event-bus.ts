@@ -72,10 +72,12 @@ export interface GanttEventMap {
   /** S3, D-S3-10. Sync veto: returning `false` leaves the selection untouched. */
   beforeSelectionChange: SelectionChange;
   selectionChange: SelectionChange;
-  /** S3.3, D-S3-16. Sync veto: returning `false` commits nothing. */
+  /** S3.3, D-S3-16. Sync or async veto (D-S3-17): returning `false` or a Promise that settles
+   *  `false` commits nothing. A returned Promise holds the commit-draft ghost until it settles. */
   beforeEntryMove: EntryMove;
   entryMove: EntryMove;
-  /** S3.4, D-S3-22. Sync veto: returning `false` commits nothing. */
+  /** S3.4, D-S3-22. Sync or async veto (D-S3-17): returning `false` or a Promise that settles
+   *  `false` commits nothing. A returned Promise holds the commit-draft ghost until it settles. */
   beforeEntryResize: EntryResize;
   entryResize: EntryResize;
 }

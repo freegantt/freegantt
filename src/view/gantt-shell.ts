@@ -50,33 +50,26 @@ import { projectAffordances } from './affordance-projection.js';
 import { GesturePipeline } from './gesture-pipeline.js';
 import type { EntryGestureContext } from './entry-gesture-context.js';
 
-/** `view/` may not import `interaction/` (plans/01 §1: `INT --> VIEW`, not the reverse — interaction/
- *  controllers are one layer *above* view/, the way `EXT --> VIEW`/`EXT --> INT` puts extensions/
- *  above both). So the shell takes its pointer-gesture attachment by injection instead of import —
- *  the same DI shape `GanttShellOptions.backend` already uses, one layer further out: `api/gantt.ts`
- *  (which does import `interaction/`, `API --> INT`) supplies the real `attachEntryGestures`.
- *  `EntryGestureContext` itself lives in `./entry-gesture-context.js` (D-GH-1, C5) — `interaction/`
- *  imports it from there too, so there is exactly one declaration, not a mirror on each side. */
-export interface EntryGesturesAttachment {
+/** One `{ detach() }` for every inject slot. `view/` may not import `interaction/` (plans/01 §1:
+ *  `INT --> VIEW`, not the reverse), so the shell takes pointer and keyboard attachments by
+ *  injection — the same DI shape `GanttShellOptions.backend` already uses. `api/gantt.ts` (which
+ *  does import `interaction/`, `API --> INT`) supplies `attachEntryGestures` /
+ *  `attachKeyboardEditing`. `interaction/` returns this type; there is no per-slot mirror.
+ *  `EntryGestureContext` itself lives in `./entry-gesture-context.js` (D-GH-1, C5). */
+export interface Detachable {
   detach(): void;
 }
 export type AttachEntryGestures = (
   pane: HTMLElement,
   container: HTMLElement,
   ctx: EntryGestureContext,
-) => EntryGesturesAttachment;
+) => Detachable;
 
 /** S3.5, D-S3-13: same DI shape as `AttachEntryGestures` just above, and the same `ctx` instance —
  *  `interaction/keyboard-editing.ts`'s `attachKeyboardEditing` needs `session()`/`selection`/
  *  `rowOrder`/`entryFor`/`can` only, not `hitTest`/`setHovered`, but there is no value in a second,
  *  narrower context type for one caller. */
-export interface KeyboardEditingAttachment {
-  detach(): void;
-}
-export type AttachKeyboardEditing = (
-  container: HTMLElement,
-  ctx: EntryGestureContext,
-) => KeyboardEditingAttachment;
+export type AttachKeyboardEditing = (container: HTMLElement, ctx: EntryGestureContext) => Detachable;
 
 /** S1.10, D-S1.10-4: theming's only preset axis for this step — `'auto'` follows
  * `prefers-color-scheme` (no `data-fg-theme` attribute written), `'light'`/`'dark'` pin it. */
@@ -207,8 +200,8 @@ export class GanttShell {
   #paneSizeAttachment: PaneSizeAttachment;
   #splitterAttachment: SplitterAttachment;
   #datasetChanges: DatasetChangeSubscription;
-  #entryGestures: EntryGesturesAttachment | undefined;
-  #keyboardEditing: KeyboardEditingAttachment | undefined;
+  #entryGestures: Detachable | undefined;
+  #keyboardEditing: Detachable | undefined;
   #wheelNavigation: WheelNavigationAttachment | undefined;
   #keyboardNavigation: KeyboardNavigationAttachment | undefined;
   /** D-S3-6: one long-lived, mutable per-Gantt object — `applyState` diffs against what it painted

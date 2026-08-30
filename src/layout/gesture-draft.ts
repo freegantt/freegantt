@@ -1,6 +1,6 @@
 // layout/ — the pure gesture math a drag needs (plans/s3-direct-manipulation/s3.3-drag-move.md
 // D-S3-4). `interaction/` performs no arithmetic of its own — it receives a `Draft` (an `EntryEdits`,
-// D-S3-2) from `EntryGestureContext.draftFor`, which the shell builds by calling `draftForMove` here.
+// D-S3-2) from `GesturePipeline.session()` (`#draftFor`), which calls `draftForMove` here.
 // Every date computation goes through `time/` (I10); this file never touches an Instant except by
 // calling one of those functions.
 

@@ -107,6 +107,46 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
     expect(checked).toEqual([a.id, b.id, c.id]);
   });
 
+  it('preview() and commit() move every armed entry of a multi-selection by the same delta', async () => {
+    const a = entry('a', 0, 100);
+    const b = entry('b', 200, 300);
+    const { deps, applied, emitted } = withRoster([a, b], { selection: () => [a.id, b.id] });
+    const pipeline = new GesturePipeline(deps);
+    const session = pipeline.session(a.id, { kind: 'move' })!;
+
+    session.preview(40);
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    const preview = applied.at(-1) as readonly { itemId: string; dx: number }[];
+    expect(preview).toHaveLength(2);
+    expect(preview.map((p) => p.dx)).toEqual([40, 40]);
+
+    const committed = await session.commit(40);
+    expect(committed).toBe(true);
+    const payload = emitted[0]![1] as { entries: readonly unknown[] };
+    expect(payload.entries).toHaveLength(2);
+  });
+
+  it('preview() on the end edge grows width and leaves dx at 0', async () => {
+    const a = entry('a', 100, 200);
+    const { deps, applied } = withRoster([a]);
+    const pipeline = new GesturePipeline(deps);
+    const session = pipeline.session(a.id, { kind: 'resize', edge: 'end' })!;
+
+    session.preview(50);
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    const preview = applied.at(-1) as readonly { dx: number; dWidth: number }[];
+    expect(preview[0]?.dx).toBe(0);
+    expect(preview[0]?.dWidth).toBe(50);
+  });
+
+  it('a milestone grab is refused through canGesture, not a kind check in the pipeline', () => {
+    const milestone: Entry = { ...entry('m', 50, 50), kind: 'milestone' };
+    const { deps } = withRoster([milestone], { canGesture: () => false });
+    const pipeline = new GesturePipeline(deps);
+
+    expect(pipeline.session(milestone.id, { kind: 'move' })).toBeUndefined();
+  });
+
   it('preview() moves a single entry by raw px delta when snap is none', async () => {
     const { deps, applied } = withRoster([entry('a', 100, 200)]);
     const pipeline = new GesturePipeline(deps);
