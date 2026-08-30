@@ -9,16 +9,12 @@ import { cursorLabelForX, draftForMove, draftForResize, previewOffsets } from '.
 import type { ItemPreview, SnapUnit, TimeScale, ViewPreset } from '../layout/index.js';
 import type { Entry, EntryEdits, EntryId, ItemId } from '../model/index.js';
 import { itemId } from '../model/index.js';
-import type { EditExtender } from '../data/edit-extension.js';
+import { identityExtender, type EditExtender } from '../data/edit-extension.js';
 import type { EventBus } from './event-bus.js';
 import type { AsyncCancelableEvent, EntryMove, EntryResize, GanttEventMap } from './event-bus.js';
 import type { Interactions } from './capability.js';
 import { FrameScheduler } from './frame-scheduler.js';
 import type { DraftOptions, EntryGesture, EntryGestureSession } from './entry-gesture-context.js';
-
-/** No cascade — what an unset `GesturePipelineDeps.extend` (P1: no public install API in S3) resolves
- *  to, same as `data/edit-extension.ts`'s own `identityExtender`. */
-const EMPTY_EDITS: EntryEdits = Object.freeze(new Map());
 
 export interface GesturePipelineDeps {
   timeZone(): string;
@@ -202,19 +198,28 @@ export class GesturePipeline {
     const grabbed = spans[0];
     if (!grabbed) return Promise.resolve(false);
     const itemIds = spans.map((span) => itemId(span.entry));
-
-    if (gesture.kind === 'resize') {
-      const payload: EntryResize = { ...grabbed, entries: spans, edge: gesture.edge };
-      return this.#settle(this.#deps.emit('beforeEntryResize', payload), draft, itemIds, () => {
-        const committed = this.#deps.commitEntryEdits(draft);
-        if (committed) this.#deps.emit('entryResize', payload);
-        return committed;
-      });
-    }
-    const payload: EntryMove = { ...grabbed, entries: spans };
-    return this.#settle(this.#deps.emit('beforeEntryMove', payload), draft, itemIds, () => {
+    const event =
+      gesture.kind === 'resize'
+        ? {
+            before: 'beforeEntryResize' as const,
+            after: 'entryResize' as const,
+            payload: { ...grabbed, entries: spans, edge: gesture.edge } satisfies EntryResize,
+          }
+        : {
+            before: 'beforeEntryMove' as const,
+            after: 'entryMove' as const,
+            payload: { ...grabbed, entries: spans } satisfies EntryMove,
+          };
+    const before =
+      event.before === 'beforeEntryResize'
+        ? this.#deps.emit(event.before, event.payload)
+        : this.#deps.emit(event.before, event.payload);
+    return this.#settle(before, draft, itemIds, () => {
       const committed = this.#deps.commitEntryEdits(draft);
-      if (committed) this.#deps.emit('entryMove', payload);
+      if (committed) {
+        if (event.after === 'entryResize') this.#deps.emit(event.after, event.payload);
+        else this.#deps.emit(event.after, event.payload);
+      }
       return committed;
     });
   }
@@ -255,7 +260,7 @@ export class GesturePipeline {
   #awaitVeto(result: Promise<boolean>, itemIds: readonly ItemId[], draft: EntryEdits): Promise<boolean> {
     this.#heldItemIds = itemIds;
     this.#scheduledDraft = draft;
-    this.#paintNow();
+    this.#previewFrame.flush();
     return result.then(
       (allowed) => allowed,
       () => false,
@@ -265,7 +270,7 @@ export class GesturePipeline {
   #releaseHold(): void {
     this.#heldItemIds = undefined;
     this.#scheduledDraft = undefined;
-    this.#paintNow();
+    this.#previewFrame.flush();
   }
 
   /** D-S3-18: coalesces on the pipeline's own rAF — a drag's every pointermove replaces the scheduled
@@ -288,10 +293,6 @@ export class GesturePipeline {
         this.#deps.locale?.(),
       ),
     };
-  }
-
-  #paintNow(): void {
-    this.#previewFrame.flush();
   }
 
   #computePreview(draft: EntryEdits | undefined): readonly ItemPreview[] | undefined {
@@ -319,11 +320,10 @@ export class GesturePipeline {
 
   /** D-S3-18, S3.6: `extra = extend({ entries: committed, proposed: draft })` — the exact pseudocode
    *  the decision names, run on the pipeline's own rAF (`#preview`'s caller) rather than on every
-   *  `pointermove`. No installed hook (P1's default): `EMPTY_EDITS`, so `previewOffsets` paints no
-   *  ghost — behaviorally identical to before this hook existed. */
+   *  `pointermove`. No installed hook (P1's default): `identityExtender`, so `previewOffsets` paints
+   *  no ghost — behaviorally identical to before this hook existed. */
   #extraFor(draft: EntryEdits): EntryEdits {
-    if (!this.#deps.extend) return EMPTY_EDITS;
     const entries = this.#deps.allEntries?.() ?? new Map<EntryId, Entry>();
-    return this.#deps.extend({ entries, proposed: draft });
+    return (this.#deps.extend ?? identityExtender)({ entries, proposed: draft });
   }
 }

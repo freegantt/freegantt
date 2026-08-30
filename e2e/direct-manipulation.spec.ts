@@ -106,3 +106,31 @@ test('[S3-A8] dropping a bar before the mobilization line shows the veto toast',
   await expect(page.locator('#toast')).toBeVisible();
   await expect(page.locator('#toast')).toContainText('Too early');
 });
+
+test('[S3-A8] a held drop paints pending until Hold drop is unchecked', async ({ page }) => {
+  await gotoEditing(page);
+  await page.selectOption('#snap-unit', 'none');
+  await page.locator('#hold-drop').check();
+
+  const lineBox = await page.locator('#gantt .fg-date-line.fg-mobilization-line').boundingBox();
+  expect(lineBox).not.toBeNull();
+  const bar = await barRightOf(page, lineBox!.x);
+  const before = await bar.boundingBox();
+  expect(before).not.toBeNull();
+
+  await dragBy(page, bar, 80);
+  await page.mouse.up();
+
+  await expect(page.locator('#gantt .fg-bar[data-state~="pending"]').first()).toBeVisible();
+
+  await page.locator('#hold-drop').uncheck();
+
+  await expect(page.locator('#gantt .fg-bar[data-state~="pending"]')).toHaveCount(0);
+  await expect
+    .poll(async () => {
+      const after = await bar.boundingBox();
+      return after ? after.x - before!.x : 0;
+    })
+    // 8px: well past the 4px drag threshold and past typical subpixel layout jitter.
+    .toBeGreaterThan(8);
+});

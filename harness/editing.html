@@ -106,13 +106,15 @@
     <p>
       Drag a bar to move it. Drag an edge handle to resize. Click to select; Shift-click extends the
       selection. Arrow keys nudge a selection by one snap; Escape clears it and hands the arrows back to
-      panning. Ctrl/⌘+Z undoes the last gesture. A drop before the dashed mobilization line is refused.
+      panning. Ctrl/⌘+Z undoes the last gesture. A drop before the dashed mobilization line is refused. Check
+      “Hold drop” to keep the commit as a pending ghost until you uncheck it.
     </p>
     <div id="controls">
       <p id="selection-readout">Selection: (none)</p>
       <button id="undo-btn" type="button">Undo</button>
       <button id="redo-btn" type="button">Redo</button>
       <label><input id="lock-resize" type="checkbox" /> Disable resize</label>
+      <label><input id="hold-drop" type="checkbox" /> Hold drop</label>
       <label>
         Snap
         <select id="snap-unit">
