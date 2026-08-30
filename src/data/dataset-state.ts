@@ -110,7 +110,7 @@ export class DatasetState implements Dataset {
   }
 
   /** Batches `body`'s mutations into one `ChangeSet` (D-S2-8). `'user'` is the only origin a public
-   *  caller can produce in S2 — `interaction/` gets an option once it has a gesture to tag (S4). */
+   *  caller can produce in S2 — `interaction/` gets an option once it has a gesture to tag (S3). */
   transaction<T>(body: () => T): T {
     return runTransaction(this, body, 'user');
   }
