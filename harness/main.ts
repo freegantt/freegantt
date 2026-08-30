@@ -6,10 +6,12 @@ import { mountTimelineToolbar } from './timeline-toolbar.js';
 const dataset = new Dataset({ entries: demoEntryInputs, timeZone: 'UTC' });
 
 const gantt = new Gantt({ container: '#gantt', dataset });
-// Zero-interaction visibility for the today line (S1.12, D-S1.12-14) — header readability
-// follow-up pass 4. Needs no ResizeObserver measurement first: panToToday reads the already-
-// resolved TimeScale, and the pane re-measures/re-renders on its own right after mount.
-gantt.panToToday('center');
+// Zero-interaction visibility for the today line (S1.12, D-S1.12-14) — header readability follow-up
+// pass 4. Needs no ResizeObserver measurement first: panToToday reads the already-resolved
+// TimeScale, and the pane re-measures/re-renders on its own right after mount. `panToToday()`'s
+// default `align: 'start'` leaves `todayLineMarginTicks`' worth of the timeline visible to the left
+// of the line, the same landing a later "Today" button click reuses (S1.13 follow-up).
+gantt.panToToday();
 
 mountTimelineToolbar({ gantt, container: document.querySelector<HTMLDivElement>('#toolbar')! });
 

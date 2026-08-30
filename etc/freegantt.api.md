@@ -106,6 +106,16 @@ export interface DatasetOptions {
 export type DateFormat = Intl.DateTimeFormatOptions | HeaderFormat;
 
 // @public
+export interface DateLineInput {
+    // (undocumented)
+    className?: string;
+    // (undocumented)
+    label?: string;
+    // (undocumented)
+    placeAt: InstantInput;
+}
+
+// @public
 export type DateOnlyEndRule = 'inclusive' | 'exclusive';
 
 // @public
@@ -281,6 +291,8 @@ export class Gantt {
     get canZoomIn(): boolean;
     // (undocumented)
     get canZoomOut(): boolean;
+    get dateLines(): readonly DateLineInput[];
+    set dateLines(lines: readonly DateLineInput[]);
     // (undocumented)
     destroy(): void;
     // (undocumented)
@@ -311,9 +323,11 @@ export class Gantt {
     // (undocumented)
     get theme(): Theme;
     set theme(value: Theme);
+    get todayLine(): boolean | InstantInput;
+    set todayLine(on: boolean | InstantInput);
     // (undocumented)
-    get todayLine(): boolean;
-    set todayLine(on: boolean);
+    get todayLineMarginTicks(): number;
+    set todayLineMarginTicks(ticks: number);
     // (undocumented)
     zoomBy(factor: number, anchorX?: number): void;
     zoomIn(anchorX?: number): void;

@@ -338,7 +338,9 @@ export class Viewport {
     });
   }
 
-  /** Pans so `i` sits at `align` within the pane (S1.12, D-S1.12-8). */
+  /** Pans so `i` sits at `align` within the pane (S1.12, D-S1.12-8). `scroll.panTo` clamps to
+   *  `[0, max]` (D-S1.5-2), so `i` outside the pannable range lands at whichever edge is closest
+   *  instead of throwing. */
   panToInstant(i: Instant, align: 'start' | 'center'): void {
     const x = this.timeScale.xForInstant(i) - (align === 'center' ? this.#paneSize.width / 2 : 0);
     this.scroll.panTo({ x });

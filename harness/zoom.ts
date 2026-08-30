@@ -12,8 +12,9 @@ import { mountTimelineToolbar } from './timeline-toolbar.js';
 let dataset = new Dataset({ entries: demoEntryInputs, timeZone: 'UTC' });
 let gantt = new Gantt({ container: '#gantt', dataset });
 // Zero-interaction visibility for the today line (S1.12, D-S1.12-14) — header readability
-// follow-up pass 4.
-gantt.panToToday('center');
+// follow-up pass 4; `align: 'start'` (the default) leaves `todayLineMarginTicks`' worth of margin
+// (S1.13 follow-up), the same landing a "Today" button click reuses.
+gantt.panToToday();
 
 declare global {
   interface Window {

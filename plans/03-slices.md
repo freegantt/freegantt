@@ -113,7 +113,7 @@ Slices are scope, not calendar estimates. Within a slice, entries are ordered so
 
 ---
 
-## S1.13 — Date lines: public shape, header caption, line style  ·  **runs next**
+## S1.13 — Date lines: public shape, header caption, line style  ·  **done, gate passing**
 
 **Position:** after S1.12 and S2, before S3. `.slice` moves `S1.12` → `S1.13`; the live gate is `S1.13 → S3`.
 **Scope is S1's**, same reasoning as S1.12 — axis furniture, not a new capability area. Full spec, settled: [`plans/s1.13-date-lines/README.md`](./s1.13-date-lines/README.md).
@@ -130,10 +130,10 @@ Slices are scope, not calendar estimates. Within a slice, entries are ordered so
 
 **Acceptance**
 
-- [ ] `[S1-A11]` A `dateLines` entry with a `label` renders a `.fg-date-line-label` at the line's x in the header; one without a label renders no caption node.
-- [ ] `[S1-A12]` `.fg-today-line` does not exist anywhere in the rendered DOM; `.fg-date-line` does, with `--fg-date-line-color` in the token table and `--fg-today-line-color` gone from it.
-- [ ] `[S1-A13]` `todayLine` set to a pinned `InstantInput` renders one uncaptioned `.fg-date-line` there, with no `now()` read.
-- [ ] `[S1-A14]` A `dateLines` entry's `className` reaches the rendered node's class list alongside the base class, and a consumer stylesheet's `border-left-style: dashed` on it actually renders dashed.
+- [x] `[S1-A11]` A `dateLines` entry with a `label` renders a `.fg-date-line-label` at the line's x in the header; one without a label renders no caption node.
+- [x] `[S1-A12]` `.fg-today-line` does not exist anywhere in the rendered DOM; `.fg-date-line` does, with `--fg-date-line-color` in the token table and `--fg-today-line-color` gone from it.
+- [x] `[S1-A13]` `todayLine` set to a pinned `InstantInput` renders one uncaptioned `.fg-date-line` there, with no `now()` read.
+- [x] `[S1-A14]` A `dateLines` entry's `className` reaches the rendered node's class list alongside the base class, and a consumer stylesheet's `border-left-style: dashed` on it actually renders dashed.
 
 ---
 

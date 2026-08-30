@@ -1,11 +1,11 @@
 // layout/ is headless geometry — no DOM, no drawing calls (plans/01 §4). DOM-free by construction.
 
-import type { RowId, ItemId, EntryId, EntryKind, Entry, Rect, TimeUnit } from '../model/index.js';
+import type { RowId, ItemId, EntryId, EntryKind, Entry, Instant, Rect, TimeUnit } from '../model/index.js';
 import { itemId, rowId } from '../model/index.js';
 import type { TimeScale, ViewPreset } from '../time/index.js';
 import { dedupeHeaderFormats, formatDate, formatEndInclusive, resolveDateFormat } from '../time/index.js';
 import { resolveDateLines } from './date-line.js';
-import type { DateLine, DateLineInput } from './date-line.js';
+import type { DateLine, DateLineSpec } from './date-line.js';
 import { PrefixSumHeightIndex } from './row-height-index.js';
 import type { RowHeightIndex } from './row-height-index.js';
 
@@ -153,11 +153,11 @@ export interface LayoutInput {
   /** Feeds every header band's `resolveDateFormat` call and `a11yLabel` (S1.12, D-S1.12-12).
    * `undefined` = the runtime default. */
   locale?: Intl.LocalesArgument;
-  /** Emits the today Date line when `true` and `now()` falls inside `scale.range` (S1.12,
-   *  D-S1.12-14). Default `true`. Wrapper around Date line (issue #96). */
-  todayLine?: boolean;
-  /** Authored Date lines, resolved on the same path as the today wrapper. Not on `Gantt` yet. */
-  dateLines?: readonly DateLineInput[];
+  /** `true`/`undefined` reads `now()`; `false` omits the today wrapper; an `Instant` pins it with
+   *  no clock read (S1.12/S1.13, D-S1.12-14, D-S1.13-3). Default `true`. */
+  todayLine?: boolean | Instant;
+  /** Authored Date lines, resolved on the same path as the today wrapper (S1.13). */
+  dateLines?: readonly DateLineSpec[];
   /** Tick box floor in px (CONTEXT.md). Default `DEFAULT_TICK_BOX_FLOOR_PX`. View reads
    *  `--fg-tick-box-floor` and passes it; layout never restates the stylesheet. */
   tickBoxFloorPx?: number;

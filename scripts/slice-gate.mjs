@@ -129,6 +129,32 @@ const GATES = {
     ],
     human: [],
   },
+  'S1.13': {
+    name: 'S1.13 → S3',
+    checks: [
+      tagged(
+        'S1-A11',
+        ['vitest'],
+        "a labelled dateLines entry renders a .fg-date-line-label at the line's x; an unlabelled one renders no caption",
+      ),
+      tagged(
+        'S1-A12',
+        ['vitest'],
+        '.fg-today-line is gone everywhere in the rendered DOM; .fg-date-line and --fg-date-line-color replace it',
+      ),
+      tagged(
+        'S1-A13',
+        ['vitest'],
+        'a pinned todayLine Instant renders one uncaptioned .fg-date-line, no now() read',
+      ),
+      tagged(
+        'S1-A14',
+        ['vitest', 'e2e'],
+        "a dateLines entry's className reaches the node's class list, and a consumer's dashed CSS actually renders",
+      ),
+    ],
+    human: [],
+  },
 };
 
 // Guarded so `test/guards/slice-gate.test.ts` can import `tagged`/`idExistsInSource` without this
