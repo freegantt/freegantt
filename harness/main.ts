@@ -15,6 +15,16 @@ gantt.panToToday();
 
 mountTimelineToolbar({ gantt, container: document.querySelector<HTMLDivElement>('#toolbar')! });
 
+// S3.1: a click-to-select readout — the whole of S3's first visible step (D-S3-10). No drag/resize
+// yet (S3.3/S3.4); this is selection only, over the plain `Gantt.selection` getter/setter and events.
+const selectionReadout = document.querySelector<HTMLDivElement>('#selection-readout')!;
+function renderSelection(): void {
+  selectionReadout.textContent =
+    gantt.selection.length === 0 ? 'Selection: (none)' : `Selection: ${gantt.selection.join(', ')}`;
+}
+gantt.on('selectionChange', renderSelection);
+renderSelection();
+
 const THEME_STORAGE_KEY = 'freegantt-harness-theme';
 
 function isTheme(value: string | null | undefined): value is Theme {

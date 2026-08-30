@@ -75,7 +75,7 @@ Not a question, a sequence, now satisfied. `plans/s1.13-date-lines/README.md` sh
 optional caption" shape, so the Part vocabulary it builds on is final and renamed. Steps S3.1–S3.7
 were never blocked by it.
 
-### P3 — `interaction/` needs one new import edge (blocks **S3.2**)
+### P3 — `interaction/` needs one new import edge (blocks **S3.2**) — **CLOSED (2026-08-30): option recommended below, landed with S3.1**
 
 `plans/01` §1 draws `INT --> VIEW` and `INT --> DATA` and nothing else;
 `.dependency-cruiser.cjs`'s `interaction-boundary` transcribes it literally. A gesture controller
@@ -87,7 +87,19 @@ carries** ("Entry types flow through view as type-only params"), and **nothing e
 `layout/`, no `render/`. D-S3-4 and D-S3-5 are built to keep it at exactly one arrow: every piece of
 arithmetic a gesture needs is a pure `layout/` function the shell hands over pre-wired, so
 `interaction/` stays plumbing. This edits a `plans/01` diagram, so it wants an explicit yes before the
-code lands.
+code lands — given 2026-08-30, landed with S3.1 (ahead of S3.2's own hot-path work, since S3.1's
+`attachEntryGestures` already names `EntryId`/`ItemId`).
+
+**A second arrow surfaced during S3.1 that this section did not anticipate: `API --> INT`.** The layer
+map draws `INT --> VIEW` (interaction/ names view/'s `Interactions` type) but no `VIEW --> INT` —
+`GanttShell` cannot import `interaction/` to wire the default pointer-gesture attachment in, and
+`extensions/` (the other layer that reaches both) does not exist until S5. Resolution, approved the
+same way as P3 itself: `api/gantt.ts` becomes the composition root that supplies
+`attachEntryGestures` to `GanttShell` by constructor injection — the shell takes it as a
+structurally-typed `AttachEntryGestures` option (mirroring `interaction/entry-gestures.ts`'s exports
+with no import of its own), the same DI shape `GanttShellOptions.backend` already uses one layer down.
+`.dependency-cruiser.cjs`'s `api-boundary` gained `interaction` and `plans/01` §1 gained the arrow and
+its prose, both landed with S3.1.
 
 ---
 
@@ -929,11 +941,11 @@ proven before anything writes data, and so the two steps with an open prerequisi
 reachable without holding up the rest.
 
 ### S3.1 — Selection *(no prerequisite)*
-- [ ] `Gantt.selection` get/set; `beforeSelectionChange`/`selectionChange` on `GanttEventMap`
-- [ ] `InteractionState.selectedItemIds` written by the shell; entry ids in, item ids out (D-S3-10)
-- [ ] `applyState` paints `data-state~="selected"`; `--fg-selection-color` in both palettes
-- [ ] `attachEntryGestures`, first outcome only: pointerup selects; click-empty and Escape clear; ctrl/⌘ toggles; shift extends
-- [ ] **Visible:** clicking bars in `harness/index.html` highlights them; a readout shows the selection
+- [x] `Gantt.selection` get/set; `beforeSelectionChange`/`selectionChange` on `GanttEventMap`
+- [x] `InteractionState.selectedItemIds` written by the shell; entry ids in, item ids out (D-S3-10)
+- [x] `applyState` paints `data-state~="selected"`; `--fg-selection-color` in both palettes
+- [x] `attachEntryGestures`, first outcome only: pointerup selects; click-empty and Escape clear; ctrl/⌘ toggles; shift extends
+- [x] **Visible:** clicking bars in `harness/index.html` highlights them; a readout shows the selection
 
 ### S3.2 — The hot path and capabilities *(blocked on **P3**)*
 - [ ] `plans/01` §1 arrow + `.dependency-cruiser.cjs` widening + red-test fixture

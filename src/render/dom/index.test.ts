@@ -445,4 +445,37 @@ describe('render/dom backend', () => {
     grid.remove();
     timeline.remove();
   });
+
+  // D-S3-6/D-S3-7, [S3-A3]: applyState paints the fixed data-state projection, touching only the
+  // bars whose token set actually changed.
+  it('applyState paints hovered/selected data-state tokens and clears them on the next call', () => {
+    const backend = createDomBackend();
+    const { grid, timeline } = mountSurfaces();
+    backend.mount({ grid, timeline });
+
+    const frame = computeFrame({
+      entries: sampleEntries.slice(0, 2),
+      scale,
+      preset,
+      visible: { x: 0, y: 0, width: 0, height: 0 },
+      rowHeight: 32,
+      revision: 0,
+    });
+    backend.sync(frame);
+    const [a, b] = frame.bars;
+    const nodeA = timeline.querySelector<HTMLElement>(`[data-item-id="${a!.id}"]`)!;
+    const nodeB = timeline.querySelector<HTMLElement>(`[data-item-id="${b!.id}"]`)!;
+
+    backend.applyState({ hoveredItemId: a!.id, selectedItemIds: [a!.id, b!.id] });
+    expect(nodeA.dataset['state']).toBe('hovered selected');
+    expect(nodeB.dataset['state']).toBe('selected');
+
+    backend.applyState({ selectedItemIds: [b!.id] });
+    expect(nodeA.dataset['state']).toBe('');
+    expect(nodeB.dataset['state']).toBe('selected');
+
+    backend.destroy();
+    grid.remove();
+    timeline.remove();
+  });
 });
