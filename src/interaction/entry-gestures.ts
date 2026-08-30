@@ -23,11 +23,11 @@ export interface EntryGesturesAttachment {
  *  shift-click omits incapable entries from the range and writes nothing if that empties the range.
  *
  *  Move (S3.3, D-S3-16): a pointerdown on a `move`-capable bar arms a drag once the pointer clears
- *  the drag threshold; every subsequent move previews the draft (`ctx.preview`) at full pixel
+ *  the drag threshold; every subsequent move previews the draft (`session().preview`) at full pixel
  *  resolution — never snapped — so the grabbed spot on the bar tracks the cursor with no drift, and
- *  pointerup commits the snapped draft (`ctx.commit`) through `beforeEntryMove` → one transaction →
- *  `entryMove`. Escape mid-drag clears the preview and commits nothing (`[S3-A2]`) — the store was
- *  never touched.
+ *  pointerup commits the snapped draft (`session().commit`) through `beforeEntryMove` → one
+ *  transaction → `entryMove`. Escape mid-drag clears the preview and commits nothing (`[S3-A2]`) —
+ *  the store was never touched.
  *
  *  Resize (S3.4, D-S3-4): a pointerdown on the shared resize-handle pair (`ctx.hitTest`'s `edge`)
  *  arms the same drag machinery with a `{ kind: 'resize', edge }` gesture instead — one pointer

@@ -57,8 +57,7 @@ src/view/entry-gesture-context.ts   (new)  EntryGesture, EntryGestureContext, En
 src/view/gesture-pipeline.ts        (new)  GesturePipeline — owns entriesForGesture, draftFor, commit,
                                             preview/rAF coalescing. Built once in GanttShell's
                                             constructor from narrow deps (preset, selection, entryById,
-                                            canGesture, EventBus, commitEntryEdits, applyPreview,
-                                            setPending).
+                                            canGesture, EventBus, commitEntryEdits, applyGestureState).
 src/view/affordance-projection.ts   (new)  projectAffordances() — pure function, hover + selection +
                                             capabilities in, paint ids out. No shell, no applyState.
 src/view/gantt-shell.ts             (cut)  Loses #entriesForGesture, #draftFor, #commitGesture,
@@ -149,8 +148,10 @@ export interface GesturePipelineDeps {
   canGesture(capability: keyof Interactions, id: EntryId): boolean;
   commitEntryEdits(edits: EntryEdits): boolean;
   emit: EventBus<GanttEventMap, AsyncCancelableEvent>['emit'];
-  applyPreview(preview: readonly ItemPreview[] | undefined): void;
-  setPending(itemIds: readonly ItemId[] | undefined): void;
+  applyGestureState(
+    preview: readonly ItemPreview[] | undefined,
+    pendingItemIds: readonly ItemId[] | undefined,
+  ): void;
 }
 export class GesturePipeline {
   constructor(deps: GesturePipelineDeps);
@@ -158,13 +159,12 @@ export class GesturePipeline {
 }
 ```
 
-`#commit` is still one file (closes C4's "spread across shell state"), but the move and resize
-bodies are still written twice — event names and `edge` only. Fold that fork in the S3.5 D-S3-17
-follow-up; isolation does not require the body twice. S3.6's extender preview did **not** add a
-third commit kind; it feeds `#computePreview` only.
+`#commit` is one `#settle` path; event names and payload shape still fork once on `gesture.kind`.
+S3.6's extender preview did **not** add a third commit kind; it feeds `#computePreview` only.
 
-Preview rAF coalescing (`#previewFrame`, `#pendingPreviewDraft`) moved into `GesturePipeline`
-verbatim.
+Preview rAF coalescing (`#previewFrame`, `#scheduledDraft`) moved into `GesturePipeline`
+verbatim. An async veto holds `#scheduledDraft` at the commit draft and paints it immediately with
+`pendingItemIds` through the same `applyGestureState` write (`#heldItemIds` is the arm lock).
 
 `GanttShell`'s constructor builds one `GesturePipeline` from its own primitives and wires
 `ctx.session = (grabbed, gesture) => this.#gesturePipeline.session(grabbed, gesture)`.
