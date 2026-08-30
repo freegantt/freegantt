@@ -1,0 +1,279 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Architecture review — S1.13 Date lines</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script type="module">
+      import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+      mermaid.initialize({ startOnLoad: true, theme: "neutral", securityLevel: "loose" });
+    </script>
+    <style>
+      .seam { stroke-dasharray: 4 4; }
+      .leak { stroke: #dc2626; }
+      .deep { background: linear-gradient(135deg, #0f172a, #1e293b); }
+    </style>
+  </head>
+  <body class="bg-stone-50 text-slate-900 font-sans">
+    <main class="max-w-5xl mx-auto px-6 py-12 space-y-12">
+
+      <header class="space-y-4">
+        <p class="text-xs uppercase tracking-widest text-slate-500">FreeGantt — pk-branch-review</p>
+        <h1 class="font-serif text-3xl">S1.13 — Date lines: public shape, header label, line style</h1>
+        <p class="text-sm text-slate-500">
+          2026-08-29 · <span class="font-mono">origin/main...HEAD</span>
+          (<span class="font-mono">8c3ec96</span> → <span class="font-mono">2e295ee</span>, 5 commits)
+        </p>
+        <div class="flex flex-wrap gap-3 text-xs text-slate-600">
+          <span class="inline-flex items-center gap-1"><span class="inline-block w-4 h-3 border border-slate-500 bg-white"></span> module</span>
+          <span class="inline-flex items-center gap-1"><svg width="24" height="8"><line x1="0" y1="4" x2="24" y2="4" stroke="#475569" stroke-width="2" class="seam"/></svg> seam</span>
+          <span class="inline-flex items-center gap-1"><svg width="24" height="8"><line x1="0" y1="4" x2="24" y2="4" stroke="#dc2626" stroke-width="2"/></svg> leakage</span>
+          <span class="inline-flex items-center gap-1"><span class="inline-block w-4 h-3 deep rounded-sm"></span> deep module</span>
+        </div>
+        <p class="text-sm text-slate-600 max-w-3xl">
+          Axes run separately: Standards, Spec, Simplify, then deepening candidates.
+          Spec source: <span class="font-mono">plans/s1.13-date-lines/README.md</span>.
+          Follow-up commit <span class="font-mono">2e295ee</span> is not in that spec.
+        </p>
+      </header>
+
+      <section id="axes" class="grid md:grid-cols-3 gap-4">
+        <div class="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-2">
+          <p class="text-xs uppercase tracking-widest text-amber-700 font-semibold">Standards</p>
+          <p class="text-2xl font-serif">3 findings</p>
+          <p class="text-sm text-amber-950">Worst: <span class="font-mono">todayLineMarginTicks</span> has no glossary entry. Docs still say “caption”.</p>
+        </div>
+        <div class="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-2">
+          <p class="text-xs uppercase tracking-widest text-amber-700 font-semibold">Spec</p>
+          <p class="text-2xl font-serif">U5 open</p>
+          <p class="text-sm text-amber-950">Worst: today wrapper has no State attribute. <a class="underline" href="https://github.com/Pawel-IT/FreeGantt/issues/96">#96</a> still open.</p>
+        </div>
+        <div class="rounded-xl border border-slate-200 bg-white p-4 space-y-2">
+          <p class="text-xs uppercase tracking-widest text-slate-500 font-semibold">Simplify</p>
+          <p class="text-2xl font-serif">label keys</p>
+          <p class="text-sm text-slate-700">Worst: captions key the filtered list, not the source index.</p>
+        </div>
+      </section>
+
+      <section id="standards" class="space-y-4">
+        <h2 class="font-serif text-2xl">Standards</h2>
+        <ul class="space-y-3 text-sm">
+          <li class="rounded-lg border border-amber-200 bg-white p-4">
+            <span class="rounded-full bg-amber-100 text-amber-800 text-xs px-2 py-0.5 font-medium">Hard · naming skill §1</span>
+            <span class="font-mono text-xs text-slate-500 ml-2">src/api/gantt.ts · CONTEXT.md</span>
+            <p class="mt-2"><strong>No glossary term for the pan margin.</strong> <span class="font-mono">todayLineMarginTicks</span> is a live public knob. <strong>Today line</strong> only says <span class="font-mono">panToToday</span> pans to <span class="font-mono">now()</span>. Write the glossary entry, then keep or rename the knob.</p>
+          </li>
+          <li class="rounded-lg border border-amber-200 bg-white p-4">
+            <span class="rounded-full bg-amber-100 text-amber-800 text-xs px-2 py-0.5 font-medium">Hard · CONTEXT Date line label</span>
+            <span class="font-mono text-xs text-slate-500 ml-2">gantt.ts · date-line.ts · tests</span>
+            <p class="mt-2"><strong>The word “caption” is forbidden.</strong> CONTEXT says Date line label; avoid caption. Comments and tests still say caption.</p>
+          </li>
+          <li class="rounded-lg border border-slate-200 bg-white p-4">
+            <span class="rounded-full bg-slate-100 text-slate-600 text-xs px-2 py-0.5 font-medium">Judgement · Mysterious Name</span>
+            <span class="font-mono text-xs text-slate-500 ml-2">viewport.ts panToInstant</span>
+            <p class="mt-2"><span class="font-mono">leftMarginPx</span> does not name the today-line landing. A search for “margin” does not find the Today line job.</p>
+          </li>
+        </ul>
+        <p class="text-xs text-slate-500">Clean: I10 clock stays in <span class="font-mono">time/</span>; <span class="font-mono">view/</span> takes an Instant. <span class="font-mono">DateLineInput</span> / <span class="font-mono">DateLineSpec</span> match D-S1.13-2. Consumer <span class="font-mono">className</span> is Customization, not a library State class. <span class="font-mono">harness/main.ts</span> only calls <span class="font-mono">gantt.panToToday()</span>.</p>
+      </section>
+
+      <section id="spec" class="space-y-4">
+        <h2 class="font-serif text-2xl">Spec</h2>
+        <ul class="space-y-3 text-sm">
+          <li class="rounded-lg border border-amber-200 bg-white p-4">
+            <span class="rounded-full bg-amber-100 text-amber-800 text-xs px-2 py-0.5 font-medium">Missing · U5</span>
+            <p class="mt-2">U5: “<span class="font-mono">data-flag</span> state (or a plain modifier class) marking the one at <span class="font-mono">now()</span>.” Layout emits the wrapper with no origin. Paint never writes a State attribute. CONTEXT State attribute: state lives in <span class="font-mono">data-*</span>, never a second class. Neither path is used.</p>
+          </li>
+          <li class="rounded-lg border border-amber-200 bg-white p-4">
+            <span class="rounded-full bg-amber-100 text-amber-800 text-xs px-2 py-0.5 font-medium">Partial · §7</span>
+            <p class="mt-2"><a class="underline" href="https://github.com/Pawel-IT/FreeGantt/issues/96">#96</a> is still OPEN (spec: close it). <a class="underline" href="https://github.com/Pawel-IT/FreeGantt/issues/99">#99</a> is CLOSED with no pointer comment; gap 5 lives only in <span class="font-mono">plans/03</span>.</p>
+          </li>
+          <li class="rounded-lg border border-slate-200 bg-white p-4">
+            <span class="rounded-full bg-slate-100 text-slate-600 text-xs px-2 py-0.5 font-medium">Wrong · D-S1.13-6 keying</span>
+            <p class="mt-2">Spec: both layers key by index; toggling <span class="font-mono">todayLine</span> shifts every list entry. Code keys labels on <span class="font-mono">withLabels(lines)</span>, so stroke index ≠ label index when an unlabelled line sits first.</p>
+          </li>
+          <li class="rounded-lg border border-slate-200 bg-white p-4">
+            <span class="rounded-full bg-slate-100 text-slate-600 text-xs px-2 py-0.5 font-medium">Creep · kept</span>
+            <p class="mt-2"><span class="font-mono">todayLineMarginTicks</span> and the default <span class="font-mono">panToToday('start')</span> inset (<span class="font-mono">2e295ee</span>) are not in S1.13. Constructor writes before first flush are required for D-S1.13-4 first paint.</p>
+          </li>
+        </ul>
+        <p class="text-xs text-slate-500">Landed as specified: <span class="font-mono">placeAt</span>/<span class="font-mono">className</span>, no <span class="font-mono">id</span>, <span class="font-mono">DateLineSpec</span>, widened <span class="font-mono">todayLine</span>, <span class="font-mono">border-left</span>, <span class="font-mono">.fg-date-line</span> with no alias, <span class="font-mono">[S1-A11]</span>–<span class="font-mono">[S1-A14]</span>, e2e U3/U4. Stroke+label <span class="font-mono">className</span> is covered in <span class="font-mono">render/dom/index.test.ts</span>; <span class="font-mono">[S1-A14]</span> only asserts the stroke.</p>
+      </section>
+
+      <section id="simplify" class="space-y-4">
+        <h2 class="font-serif text-2xl">Simplify</h2>
+        <div class="rounded-lg border border-slate-200 bg-white p-4 text-sm space-y-2">
+          <p class="text-xs uppercase tracking-wider text-slate-400">Do next (local, no redesign)</p>
+          <ol class="list-decimal list-inside space-y-1 text-slate-800">
+            <li><span class="font-mono">date-line.ts</span> (render) — key labels by source index, not filtered index.</li>
+            <li><span class="font-mono">gantt-shell.ts</span> — skip a frame when <span class="font-mono">dateLines</span> is the same array (same as <span class="font-mono">todayLine</span>).</li>
+            <li>Say Date line label, not caption, in comments and tests.</li>
+            <li>Add a CONTEXT entry for the pan-to-today tick inset, or drop the public knob and keep a constant in the shell.</li>
+            <li>One <span class="font-mono">createHiddenDiv()</span> for both layers.</li>
+          </ol>
+          <p class="text-xs uppercase tracking-wider text-slate-400 pt-2">Skip</p>
+          <p class="text-slate-600">Merge the two <span class="font-mono">syncKeyed</span> layers (spec wants two Parts). Fold <span class="font-mono">#toTodayLine</span> / <span class="font-mono">#toDateLines</span> (exactOptionalPropertyTypes copies). Collapse Gantt → Shell passthrough (plans/02 two callers).</p>
+        </div>
+      </section>
+
+      <section id="candidates" class="space-y-10">
+        <h2 class="font-serif text-2xl">Deepening candidates</h2>
+
+        <article id="c1" class="rounded-xl border border-slate-200 bg-white p-6 space-y-5 shadow-sm">
+          <div class="flex items-start justify-between gap-4">
+            <h3 class="font-serif text-xl">1 · Today-wrapper origin on the DateLine decoration</h3>
+            <div class="flex gap-2 shrink-0">
+              <span class="rounded-full bg-emerald-100 text-emerald-800 text-xs px-3 py-1 font-medium">Strong</span>
+              <span class="rounded-full bg-slate-100 text-slate-600 text-xs px-3 py-1">in-process</span>
+            </div>
+          </div>
+          <p class="font-mono text-sm text-slate-600">src/layout/date-line.ts · src/render/dom/date-line.ts · src/view/styles.ts</p>
+
+          <div class="grid md:grid-cols-2 gap-4">
+            <div class="rounded-lg border border-slate-200 bg-stone-50 p-4">
+              <p class="text-xs uppercase tracking-wider text-slate-400 mb-2">Before</p>
+              <pre class="mermaid">
+flowchart TB
+  resolve["resolveDateLines"] --> plain["DateLine: kind, x, label?, className?"]
+  plain --> paint["attachDateLines"]
+  paint -.no origin.-> css["consumer guesses index 0"]
+  classDef leak stroke:#dc2626,stroke-width:2px,color:#dc2626;
+  class css leak
+              </pre>
+            </div>
+            <div class="rounded-lg border border-slate-200 bg-stone-50 p-4">
+              <p class="text-xs uppercase tracking-wider text-slate-400 mb-2">After</p>
+              <pre class="mermaid">
+flowchart TB
+  resolve2["resolveDateLines"] --> origin["DateLine + wrapper origin"]
+  origin --> paint2["attachDateLines"]
+  paint2 --> flag["data-* State attribute"]
+  classDef deep fill:#0f172a,stroke:#0f172a,color:#fff;
+  class origin,flag deep
+              </pre>
+            </div>
+          </div>
+
+          <p><strong>Problem:</strong> after index-keying dropped <span class="font-mono">id</span>, the decoration has no origin, so paint cannot mark the today wrapper.</p>
+          <p><strong>Solution:</strong> layout sets origin on the wrapper line; render writes a State attribute on <span class="font-mono">.fg-date-line</span>.</p>
+          <ul class="text-sm space-y-1 list-disc list-inside text-slate-700">
+            <li>locality: today identity lives in layout</li>
+            <li>leverage: one seam with bar <span class="font-mono">data-flag</span></li>
+            <li>U5 without index heuristics</li>
+          </ul>
+          <div class="text-xs bg-amber-50 border border-amber-200 text-amber-800 rounded p-2">
+            Grill Q4 already said one Part, today is class/state on it. Do not add a second Part. Do not use a modifier class (CONTEXT State attribute).
+          </div>
+        </article>
+
+        <article id="c2" class="rounded-xl border border-slate-200 bg-white p-6 space-y-5 shadow-sm">
+          <div class="flex items-start justify-between gap-4">
+            <h3 class="font-serif text-xl">2 · Retract leftMarginPx from Viewport</h3>
+            <div class="flex gap-2 shrink-0">
+              <span class="rounded-full bg-emerald-100 text-emerald-800 text-xs px-3 py-1 font-medium">Strong</span>
+              <span class="rounded-full bg-slate-100 text-slate-600 text-xs px-3 py-1">in-process</span>
+            </div>
+          </div>
+          <p class="font-mono text-sm text-slate-600">src/layout/viewport/viewport.ts · src/view/gantt-shell.ts · src/api/gantt.ts</p>
+
+          <div class="grid md:grid-cols-2 gap-4">
+            <div class="rounded-lg border border-slate-200 bg-stone-50 p-4">
+              <p class="text-xs uppercase tracking-wider text-slate-400 mb-2">Before</p>
+              <pre class="mermaid">
+flowchart LR
+  gantt["Gantt.panToToday"] --> shell["GanttShell #todayLineMarginPx"]
+  shell --> vp["Viewport.panToInstant(..., leftMarginPx)"]
+  vp -.today policy.-> pan["scroll.panTo"]
+  classDef leak stroke:#dc2626,stroke-width:2px,color:#dc2626;
+  class vp leak
+              </pre>
+            </div>
+            <div class="rounded-lg border border-slate-200 bg-stone-50 p-4">
+              <p class="text-xs uppercase tracking-wider text-slate-400 mb-2">After</p>
+              <pre class="mermaid">
+flowchart LR
+  gantt2["Gantt.panToToday"] --> shell2["GanttShell: ticks to px, target x"]
+  shell2 --> pan2["scroll.panTo / panToInstant align-only"]
+  classDef deep fill:#0f172a,stroke:#0f172a,color:#fff;
+  class shell2 deep
+              </pre>
+            </div>
+          </div>
+
+          <p><strong>Problem:</strong> today-line landing policy leaks into Viewport’s interface. One adapter uses the third parameter. The seam is hypothetical.</p>
+          <p><strong>Solution:</strong> keep ticks→px and the inset inside <span class="font-mono">GanttShell.panToToday</span>. Restore <span class="font-mono">panToInstant</span> to align-only, or wait until a second pan caller needs a generic start inset.</p>
+          <ul class="text-sm space-y-1 list-disc list-inside text-slate-700">
+            <li>locality: today landing stays in the shell</li>
+            <li>leverage: Viewport pan stays general</li>
+            <li><span class="font-mono">panToDate</span> stays free of margin</li>
+          </ul>
+        </article>
+
+        <article id="c3" class="rounded-xl border border-slate-200 bg-white p-6 space-y-5 shadow-sm">
+          <div class="flex items-start justify-between gap-4">
+            <h3 class="font-serif text-xl">3 · One key space for stroke and label layers</h3>
+            <div class="flex gap-2 shrink-0">
+              <span class="rounded-full bg-amber-100 text-amber-800 text-xs px-3 py-1 font-medium">Worth exploring</span>
+              <span class="rounded-full bg-slate-100 text-slate-600 text-xs px-3 py-1">in-process</span>
+            </div>
+          </div>
+          <p class="font-mono text-sm text-slate-600">src/render/dom/date-line.ts</p>
+
+          <div class="grid md:grid-cols-2 gap-4">
+            <div class="rounded-lg border border-slate-200 bg-stone-50 p-4 space-y-3">
+              <p class="text-xs uppercase tracking-wider text-slate-400">Before — two key spaces</p>
+              <div class="h-12 border-l-4 border-red-400 pl-3 flex items-center text-xs">strokes: key = i on all Date lines</div>
+              <div class="h-12 border-l-4 border-red-400 pl-3 flex items-center text-xs">labels: key = i on withLabels() only</div>
+            </div>
+            <div class="rounded-lg border border-slate-200 bg-stone-50 p-4 space-y-3">
+              <p class="text-xs uppercase tracking-wider text-slate-400">After — one key space</p>
+              <div class="h-16 border-l-4 border-slate-800 pl-3 flex items-center text-xs bg-slate-900 text-white rounded-r">both layers: source index; label map is sparse</div>
+            </div>
+          </div>
+
+          <p><strong>Problem:</strong> one decoration has two key spaces. Label identity drifts when a mid-list label appears or drops.</p>
+          <p><strong>Solution:</strong> key both <span class="font-mono">syncKeyed</span> passes by the full-list index. Keep two DOM layers. Spec wants two Parts, not two key spaces.</p>
+          <ul class="text-sm space-y-1 list-disc list-inside text-slate-700">
+            <li>locality: line identity is one rule</li>
+            <li>stable remounts when labels change</li>
+          </ul>
+        </article>
+
+        <article id="c4" class="rounded-xl border border-slate-200 bg-white p-6 space-y-5 shadow-sm">
+          <div class="flex items-start justify-between gap-4">
+            <h3 class="font-serif text-xl">4 · Semantic flags vs className on layout DateLine</h3>
+            <div class="flex gap-2 shrink-0">
+              <span class="rounded-full bg-slate-100 text-slate-600 text-xs px-3 py-1 font-medium">Speculative</span>
+              <span class="rounded-full bg-slate-100 text-slate-600 text-xs px-3 py-1">in-process</span>
+            </div>
+          </div>
+          <p class="font-mono text-sm text-slate-600">src/layout/date-line.ts · src/render/dom/date-line.ts · flagTokens</p>
+
+          <p><strong>Problem:</strong> layout decorations carry a consumer CSS class, while bars use semantic flags then a State attribute. Today identity and line style travel different seams.</p>
+          <p><strong>Solution:</strong> keep consumer <span class="font-mono">className</span> as the paint adapter (D-S1.13-5 locked). Put library state (today wrapper) on origin/flags. Do not fold style into flags.</p>
+          <div class="text-xs bg-amber-50 border border-amber-200 text-amber-800 rounded p-2">
+            Soft tension with ADR 0005 (“frame holds no consumer render output”). Decorations are not fields. Do not reopen D-S1.13-5.
+          </div>
+        </article>
+      </section>
+
+      <section id="top-recommendation" class="rounded-xl border-2 border-slate-800 bg-white p-6 space-y-3">
+        <p class="text-xs uppercase tracking-widest text-slate-500">Top recommendation</p>
+        <h2 class="font-serif text-2xl">Candidate 1 — today-wrapper origin</h2>
+        <p class="text-sm text-slate-700 max-w-3xl">
+          U5 is still open, and the S1.12 review already asked paint to mark the wrapper after home files landed.
+          Origin on <span class="font-mono">DateLine</span> is the missing interface fact. Candidate 3 is a local
+          keying fix and can land in the same paint pass. Candidate 2 is the follow-up commit’s leak; grill the
+          public <span class="font-mono">todayLineMarginTicks</span> name before you deepen Viewport further.
+        </p>
+        <p class="text-sm"><a class="underline font-medium" href="#c1">Go to candidate 1</a></p>
+      </section>
+
+      <section class="text-xs text-slate-500 space-y-1">
+        <p>Not candidates: <span class="font-mono">DateLineInput</span> / <span class="font-mono">DateLineSpec</span> / <span class="font-mono">DateLine</span> (D-S1.13-2). Gantt ↔ GanttShell passthrough (plans/02).</p>
+        <p>Standards: 3 findings (worst: glossary + “caption”). Spec: 4 findings (worst: U5 / #96 still open). Simplify: 5 local fixes, no merge of layers.</p>
+      </section>
+
+    </main>
+  </body>
+</html>
