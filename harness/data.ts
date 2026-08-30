@@ -15,7 +15,7 @@
 
 import './harness-nav.ts';
 import { Dataset, Gantt, MS, MutationCancelledError, addMs, now } from '../src/api/index.js';
-import type { ChangeSet, DatasetDocument, DatasetEventMap, Entry } from '../src/api/index.js';
+import type { ChangeSet, DatasetDocument, DatasetEventMap } from '../src/api/index.js';
 import { demoEntryInputs } from '../fixtures/demo-dataset.js';
 import { mountTimelineToolbar } from './timeline-toolbar.js';
 
@@ -42,17 +42,6 @@ const selectionReadout = document.querySelector<HTMLParagraphElement>('#selectio
 
 let nextNewId = 1;
 
-/** Entries that still exist in the store, in `gantt.selection` order. A removed id is skipped so
- *  a stale selection cannot drive update/remove. */
-function selectedEntries(): Entry[] {
-  const entries: Entry[] = [];
-  for (const id of gantt.selection) {
-    const entry = dataset.entries.get(id);
-    if (entry !== undefined) entries.push(entry);
-  }
-  return entries;
-}
-
 /** The store's own current first entry — dynamic, so a remove/reorder keeps "the first entry"
  *  honest rather than pinning an id from before the page's mutations started. */
 function firstEntryId(): string | undefined {
@@ -60,7 +49,7 @@ function firstEntryId(): string | undefined {
 }
 
 function refreshNameInput(): void {
-  const entries = selectedEntries();
+  const entries = gantt.entriesForSelection;
   if (entries.length === 0) {
     nameInput.value = '';
     return;
@@ -70,7 +59,7 @@ function refreshNameInput(): void {
 }
 
 function refreshMutationButtons(): void {
-  const none = selectedEntries().length === 0;
+  const none = gantt.entriesForSelection.length === 0;
   nameInput.disabled = none;
   renameBtn.disabled = none;
   moveBackBtn.disabled = none;
@@ -79,7 +68,7 @@ function refreshMutationButtons(): void {
 }
 
 function renderSelectionReadout(): void {
-  const ids = selectedEntries().map((entry) => entry.id);
+  const ids = gantt.entriesForSelection.map((entry) => entry.id);
   selectionReadout.textContent = ids.length === 0 ? 'Selection: (none)' : `Selection: ${ids.join(', ')}`;
 }
 
@@ -150,7 +139,7 @@ addBtn.addEventListener('click', () => {
 });
 
 renameBtn.addEventListener('click', () => {
-  const entries = selectedEntries();
+  const entries = gantt.entriesForSelection;
   if (entries.length === 0) return;
   try {
     dataset.transaction(() => {
@@ -162,7 +151,7 @@ renameBtn.addEventListener('click', () => {
 });
 
 function move(deltaMs: number): void {
-  const entries = selectedEntries();
+  const entries = gantt.entriesForSelection;
   if (entries.length === 0) return;
   try {
     dataset.transaction(() => {
@@ -182,7 +171,7 @@ moveBackBtn.addEventListener('click', () => move(-MS.DAY));
 moveFwdBtn.addEventListener('click', () => move(MS.DAY));
 
 removeBtn.addEventListener('click', () => {
-  const entries = selectedEntries();
+  const entries = gantt.entriesForSelection;
   if (entries.length === 0) return;
   try {
     dataset.transaction(() => {

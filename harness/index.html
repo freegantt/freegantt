@@ -106,6 +106,31 @@
       #toolbar button {
         font: inherit;
       }
+      #controls {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.5rem;
+        margin: 1rem 0;
+      }
+      #controls label {
+        display: flex;
+        align-items: center;
+        gap: 0.35rem;
+        font-size: 0.9rem;
+      }
+      #selection-readout {
+        margin: 0;
+        font-size: 0.85rem;
+        color: var(--page-muted);
+      }
+      #controls button {
+        font: inherit;
+        font-size: 0.9rem;
+      }
+      #controls input {
+        font: inherit;
+      }
     </style>
   </head>
   <body>
@@ -117,9 +142,16 @@
       <button type="button" data-theme-choice="light">Light</button>
       <button type="button" data-theme-choice="dark">Dark</button>
     </div>
+    <div id="controls">
+      <p id="selection-readout">Selection: (none)</p>
+      <label>Name <input id="rename-input" type="text" size="20" /></label>
+      <button id="rename-btn" type="button">Rename</button>
+      <button id="remove-btn" type="button">Remove</button>
+      <button id="undo-btn" type="button">Undo</button>
+      <button id="redo-btn" type="button">Redo</button>
+    </div>
     <div id="toolbar"></div>
     <div id="gantt"></div>
-    <p id="selection-readout" style="font-size: 0.85rem; color: var(--page-muted)">Selection: (none)</p>
     <script type="module" src="./main.ts"></script>
   </body>
 </html>

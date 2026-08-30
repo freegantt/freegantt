@@ -305,6 +305,7 @@ export class Gantt {
     set dateLines(lines: readonly DateLineInput[]);
     // (undocumented)
     destroy(): void;
+    get entriesForSelection(): readonly Entry[];
     // (undocumented)
     get fit(): TimeScaleFit;
     set fit(f: TimeScaleFit);

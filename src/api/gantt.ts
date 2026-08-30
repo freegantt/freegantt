@@ -6,7 +6,7 @@ import type { GanttEventMap, Interactions, Theme } from '../view/index.js';
 import { ScrollModel, TimeScaleModel } from '../layout/index.js';
 import type { PresetRef, TimeScaleFit, ViewPreset } from '../layout/index.js';
 import type { DateLineSpec } from '../layout/index.js';
-import type { EntryEdits, EntryId, Instant, InstantInput, TimeSpan } from '../model/index.js';
+import type { Entry, EntryEdits, EntryId, Instant, InstantInput, TimeSpan } from '../model/index.js';
 import { MutationCancelledError } from '../model/index.js';
 import { now, toInstant } from '../time/index.js';
 import type { Dataset } from './dataset.js';
@@ -270,6 +270,20 @@ export class Gantt {
 
   set selection(ids: readonly (EntryId | string)[]) {
     this.#shell.selection = ids;
+  }
+
+  /** The bound dataset's `Entry` records for each id in `selection`, in the same order.
+   *  Re-reads the store on every access, so field edits show up without a selection change. An id
+   *  in `selection` that no longer exists in the store is skipped — for example after
+   *  `dataset.entries.remove` left a stale id in the selection set. To change which entries are
+   *  selected, assign `selection`; this getter is read-only. */
+  get entriesForSelection(): readonly Entry[] {
+    const entries: Entry[] = [];
+    for (const id of this.#shell.selection) {
+      const entry = this.#dataset.entries.get(id);
+      if (entry !== undefined) entries.push(entry);
+    }
+    return entries;
   }
 
   /** Live (S3, D-S3-9): re-resolves immediately, so a stricter rule hides a handle or refuses a
