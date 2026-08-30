@@ -9,14 +9,15 @@ import { draftForMove, draftForResize, previewOffsets } from '../layout/index.js
 import type { ItemPreview, SnapUnit, TimeScale, ViewPreset } from '../layout/index.js';
 import type { Entry, EntryEdits, EntryId, ItemId } from '../model/index.js';
 import { itemId } from '../model/index.js';
+import type { EditExtender } from '../data/edit-extension.js';
 import type { EventBus } from './event-bus.js';
 import type { AsyncCancelableEvent, EntryMove, EntryResize, GanttEventMap } from './event-bus.js';
 import type { Interactions } from './capability.js';
 import { FrameScheduler } from './frame-scheduler.js';
 import type { DraftOptions, EntryGesture, EntryGestureSession } from './entry-gesture-context.js';
 
-/** No cascade — the pipeline's own `previewOffsets` call contrasts a real gesture draft against
- *  (S3.6 wires an extender's actual extras in here). */
+/** No cascade — what an unset `GesturePipelineDeps.extend` (P1: no public install API in S3) resolves
+ *  to, same as `data/edit-extension.ts`'s own `identityExtender`. */
 const EMPTY_EDITS: EntryEdits = Object.freeze(new Map());
 
 export interface GesturePipelineDeps {
@@ -30,6 +31,15 @@ export interface GesturePipelineDeps {
   canGesture(capability: keyof Interactions, id: EntryId): boolean;
   commitEntryEdits(edits: EntryEdits): boolean;
   emit: EventBus<GanttEventMap, AsyncCancelableEvent>['emit'];
+  /** D-S3-18, S3.6, P1: an installed extension hook, read for **preview only** — the real hook still
+   *  runs again, for real, inside `data/transaction.ts`'s own commit; this never writes anything.
+   *  `undefined` (S3's default: no public install API yet) previews no ghost extras, same as
+   *  `data/edit-extension.ts`'s `identityExtender`. */
+  extend?: EditExtender;
+  /** Committed entries `extend`'s `EditRequest.entries` argument reads — a snapshot map, built only
+   *  when a preview frame actually calls `extend` (an installed extender may cascade to an entry
+   *  outside the caller's own draft, so `entryById` alone cannot answer it). */
+  allEntries?(): ReadonlyMap<EntryId, Entry>;
   /** D-S3-18: coalesced on the pipeline's own rAF. `undefined` clears whatever was previewing. */
   applyPreview(preview: readonly ItemPreview[] | undefined): void;
   /** D-S3-17: which bars a not-yet-settled `beforeEntryMove`/`beforeEntryResize` Promise is holding —
@@ -233,16 +243,34 @@ export class GesturePipeline {
 
   #computePreview(draft: EntryEdits | undefined): readonly ItemPreview[] | undefined {
     if (!draft || draft.size === 0) return undefined;
+    const extra = this.#extraFor(draft);
     const entries: Entry[] = [];
-    for (const id of draft.keys()) {
+    const seen = new Set<EntryId>();
+    const pushEntry = (id: EntryId): void => {
+      if (seen.has(id)) return;
       const entry = this.#deps.entryById(id);
-      if (entry) entries.push(entry);
-    }
+      if (entry) {
+        entries.push(entry);
+        seen.add(id);
+      }
+    };
+    for (const id of draft.keys()) pushEntry(id);
+    for (const id of extra.keys()) pushEntry(id);
     return previewOffsets({
       proposed: draft,
-      extra: EMPTY_EDITS,
+      extra,
       entries,
       scale: this.#deps.timeScale(),
     });
+  }
+
+  /** D-S3-18, S3.6: `extra = extend({ entries: committed, proposed: draft })` — the exact pseudocode
+   *  the decision names, run on the pipeline's own rAF (`#preview`'s caller) rather than on every
+   *  `pointermove`. No installed hook (P1's default): `EMPTY_EDITS`, so `previewOffsets` paints no
+   *  ghost — behaviorally identical to before this hook existed. */
+  #extraFor(draft: EntryEdits): EntryEdits {
+    if (!this.#deps.extend) return EMPTY_EDITS;
+    const entries = this.#deps.allEntries?.() ?? new Map<EntryId, Entry>();
+    return this.#deps.extend({ entries, proposed: draft });
   }
 }

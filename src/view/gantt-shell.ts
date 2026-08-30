@@ -34,6 +34,7 @@ import { ensureBaseStyles } from './styles.js';
 import type { InteractionState, RenderBackend } from '../render/backend.js';
 import { EntryNotFoundError, ContainerNotFoundError, entryId, itemId } from '../model/index.js';
 import type { Dataset, Entry, EntryEdits, EntryId, ItemId, Instant, Size, TimeSpan } from '../model/index.js';
+import type { EditExtender } from '../data/edit-extension.js';
 import { resolveCapabilities } from './capability.js';
 import type { Capabilities, Interactions } from './capability.js';
 import { subscribeToDatasetChanges } from './dataset-change-subscription.js';
@@ -157,6 +158,13 @@ export interface GanttShellOptions {
    *  `MutationCancelledError` from `beforeChange`; the shell never sees the exception either way.
    *  Omitted only by tests exercising the shell with no data-write wiring. */
   commitEntryEdits?: (edits: EntryEdits) => boolean;
+  /** S3.6, D-S3-18, P1: an installed extension hook, read for **preview only** — ghosts its extras in
+   *  the rAF-coalesced drag preview. There is no public way to install one in S3 (`GanttOptions` has
+   *  no such field, `api/gantt.ts` never passes this); only a test constructing `GanttShell` directly
+   *  (the same shape `commitEntryEdits` already uses) can. The real hook — same `EditExtender`
+   *  function, if a caller passes the identical reference to both — still runs again, for real, inside
+   *  `data/transaction.ts`'s own commit; this option never writes anything itself. */
+  editExtender?: EditExtender;
 }
 
 /** `exactOptionalPropertyTypes` treats `obj.key = undefined` as a type error when `key` is declared
@@ -335,6 +343,8 @@ export class GanttShell {
       canGesture: (capability, id) => this.#canGesture(capability, id),
       commitEntryEdits: (edits) => this.#options.commitEntryEdits?.(edits) ?? false,
       emit: (name, payload) => this.#events.emit(name, payload),
+      ...(options.editExtender ? { extend: options.editExtender } : {}),
+      allEntries: () => new Map(this.#options.dataset.entries.all.map((e) => [e.id, e])),
       applyPreview: (preview) => {
         setOptional(this.#interactionState, 'preview', preview);
         this.#backend.applyState(this.#interactionState);

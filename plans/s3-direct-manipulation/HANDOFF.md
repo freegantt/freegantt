@@ -1,129 +1,115 @@
 # S3 implementation handoff
 
-Status as of 2026-08-30: **S3.5 (keyboard parity + async veto) is done.** All checks are green
-(`pnpm vitest run` 639/639, `pnpm typecheck`, `pnpm lint`, `pnpm boundaries`, `pnpm guards`,
+Status as of 2026-08-30: **S3.6 (extender preview) is done.** All checks are green
+(`pnpm vitest run` 646/646, `pnpm typecheck`, `pnpm lint`, `pnpm boundaries`, `pnpm guards`,
 `node scripts/guard-red-test.mjs`, `pnpm build`, `pnpm api-report`), plus the full `playwright test`
-e2e suite (37/37). The gesture-host-refactor (between S3.4 and S3.5) was already done and committed
-before this session started; this session found the tracker files hadn't been updated to say so and
-fixed that alongside its own S3.5 work.
+e2e suite (37/37).
 
-Continue at **S3.6 (extender preview)** — read
-[`s3.6-extender-preview.md`](./s3.6-extender-preview.md) before touching anything; its status is
-"partial" already (some prior work landed), not a cold start.
+Continue at **S3.7 (viewport gestures)** — read
+[`s3.7-viewport-gestures.md`](./s3.7-viewport-gestures.md) before touching anything.
 
-## What landed this session (S3.5)
+## What landed this session (S3.6)
 
-**Keyboard nudge** reuses the pointer commit pipeline rather than a parallel calendar-stepping path:
+D-S3-18's pseudocode, wired for real: `pointermove → draft → rAF → extra = extender({ entries:
+committed, proposed: draft }) → previewOffsets({ proposed, extra, entries, scale }) → applyState`.
+`GesturePipeline#computePreview` already took an `extra: EntryEdits` parameter shaped for this
+(always `EMPTY_EDITS` before this session) — the work was wiring a real value into it, not building
+the shape from scratch.
 
-- **`src/interaction/keyboard-editing.ts`** (new) — `attachKeyboardEditing(container, ctx)`. One
-  `keydown` listener, gated on `ctx.selection.get()[0]`: nothing selected is a no-op (S3.7 owns pan
-  bindings there, not yet built); something selected implements D-S3-13's table — `↑`/`↓` move the
-  selection to the next/previous `select`-capable row over `rowOrder()` (skipping incapable ones,
-  same shape `entry-gestures.ts`'s shift-click range already uses); `←`/`→` call
-  `ctx.session(grabbed, {kind:'move'}).nudge(direction)`; `Shift+←/→` grab `{kind:'resize',edge:'end'}`
-  instead; `Alt` passes `{suspendSnap:true}`. Never resolves a pixel or an `Instant` itself (I1) — it
-  only picks `direction: 1 | -1` and hands it to `session().nudge()`.
-- **`src/view/entry-gesture-context.ts`** — `EntryGestureSession` grew a fourth method,
-  `nudge(direction, options): Promise<boolean>`, alongside `preview`/`commit`/`cancel`.
-- **`src/view/gesture-pipeline.ts`** — `session()` now also returns `nudge`, implemented as
-  `#stepPx(gesture, anchor, suspendSnap) * direction` fed straight into the existing
-  `#draftFor`/`#commit` — `#stepPx` asks `TimeScale.widthForDuration` for one resolved snap unit's
-  px width (falling back to the preset's own tick when `suspendSnap` clears snap to `'none'`), so a
-  keyboard step is pixel-for-pixel the same math a mouse drag's `commit(dxPx)` already runs.
-- **`src/view/gantt-shell.ts`** — builds one `EntryGestureContext` object in the constructor now
-  (previously an inline literal passed only to `attachEntryGestures`) and passes the *same* instance to
-  both `options.entryGestures?.(...)` and the new `options.keyboardEditing?.(...)` (new
-  `AttachKeyboardEditing`/`KeyboardEditingAttachment` types, same DI shape as `AttachEntryGestures` —
-  `view/` still cannot import `interaction/`). `#keyboardEditing` field added, detached in `destroy()`.
-- **`src/api/gantt.ts`** — passes `attachKeyboardEditing` from `interaction/index.ts`.
+- **`src/view/gesture-pipeline.ts`** — `GesturePipelineDeps` grew two optional members: `extend?:
+  EditExtender` (from `data/edit-extension.ts` — `view/` may import `data/`, same edge
+  `view/event-bus.ts` already uses non-barrel) and `allEntries?(): ReadonlyMap<EntryId, Entry>`. New
+  private `#extraFor(draft)`: `undefined` extend (P1's default — no public install API in S3) returns
+  `EMPTY_EDITS`, otherwise calls `extend({ entries: allEntries(), proposed: draft })`. `#computePreview`
+  now calls `#extraFor` and folds its result into both `previewOffsets`'s `extra` argument and the
+  `entries` array it diffs against (a cascade can touch an entry outside the caller's own draft, so
+  `entries` is built from `draft.keys()` **and** `extra.keys()`, deduped, same `pushCapable`-shaped
+  pattern `#entriesForGesture` already uses). This runs on the pipeline's own rAF (`#preview`'s
+  scheduled callback), never per `pointermove` — one extender call per painted frame, matching the
+  existing preview-coalescing cost, not adding a second one.
+- **`src/view/gantt-shell.ts`** — `GanttShellOptions.editExtender?: EditExtender`, internal-only
+  (P1: no field on the public `GanttOptions`, `api/gantt.ts` never passes one — production `Gantt`
+  usage previews no ghost until a real install API exists, S5). Wired straight into
+  `GesturePipelineDeps.extend`; `allEntries` is always supplied (`new
+  Map(dataset.entries.all.map(e => [e.id, e]))`), built fresh each time a preview frame actually needs
+  it (only when `extend` is set) rather than cached, since it must reflect the live committed store.
+- **`src/render/dom/index.ts`** — `paintedDragging`/`paintedGhost` (same diff-and-touch-only-changed
+  shape as `paintedPending`), computed inside `paintPreview` off `ItemPreview.extra`. `paintDataState`
+  grew two params (`dragging`, `ghost`) and two more tokens on the existing fixed `data-state`
+  projection. Reset in `destroy()`.
+- **`src/view/styles.ts`** — `.fg-bar[data-state~="ghost"] { opacity: var(--fg-ghost-opacity, 0.4);
+  pointer-events: none; }`. `dragging` paints no rule of its own yet, same as `hovered`.
 
-**Async veto (D-S3-17)** — a `beforeEntryMove`/`beforeEntryResize` handler may now return
-`Promise<void | false>` instead of resolving synchronously:
+**No public API surface change** — `pnpm api-report` produced no diff on `etc/freegantt.api.md`.
+`EditExtender`/`EditRequest`, `GanttShellOptions.editExtender`, `GesturePipelineDeps` are all internal
+(P1 holds: S3 still publishes no install API for `EditExtender`).
 
-- **`src/data/event-bus.ts`** — `EventBus<TEvents, TAsyncKeys extends keyof TEvents = never>`.
-  `TAsyncKeys` (default `never`) names which event keys may have a Promise-returning handler; `on`/
-  `off`'s handler type and `emit`'s return type widen only for those keys (a conditional type). Every
-  handler still runs (no short-circuit on a sync veto, unchanged from before); a sync `false` from any
-  handler wins immediately; if none did but some returned a Promise, the overall result is
-  `Promise.all(...).then(results => !results.includes(false))`. `data/dataset-state.ts`'s
-  `EventBus<DatasetEventMap>` (used by `data/transaction.ts`'s `beforeChange`) is unaffected — it never
-  names `TAsyncKeys`, so it stays sync-only exactly as before, no code there changed.
-- **`src/view/event-bus.ts`** — `AsyncCancelableEvent = 'beforeEntryMove' | 'beforeEntryResize'`
-  (the only two names), `GanttEventHandler<K>` (the one handler type `Gantt.on`/`off` and
-  `GanttShell.on`/`off` all share now, replacing four copies of the same inline union).
-  `GanttShell`'s `#events` is now `EventBus<GanttEventMap, AsyncCancelableEvent>`.
-- **`src/view/gesture-pipeline.ts`**'s `#commit` — **important shape**: a sync `true`/`false` from
-  `emit(...)` resolves (and, for `true`, actually commits — `commitEntryEdits` + the after-event) fully
-  *synchronously* inside `#commit`, wrapped only in `Promise.resolve()` at the very end. Only a
-  genuine Promise result goes through `#awaitVeto`, which sets `#pendingItemIds`/calls
-  `#deps.setPending(itemIds)`, awaits, then clears both in a `.finally()`. **Do not** restructure this
-  into one `.then()`-chained path for both cases — an earlier draft this session did that and broke
-  `api/gantt.test.ts`'s synchronous (non-`async`) drag tests, which assert `entryMove` fired *before*
-  the test function returns; that only holds if the sync path never crosses a microtask boundary.
-- **`session()`** now refuses to arm (`return undefined`) while `#pendingItemIds !== undefined` — one
-  choke point (I14) both the pointer path and `keyboard-editing.ts` go through, so neither needs its
-  own pending check.
-- **`src/render/backend.ts`** — `InteractionState.pendingItemIds?: readonly ItemId[]`.
-- **`src/render/dom/index.ts`** — `paintedPending` set (same diff-and-touch-only-changed pattern as
-  `paintedSelected`), `paintDataState` gained a `pending` param/token, reset in `destroy()`.
-- **`src/view/styles.ts`** — `.fg-bar[data-state~="pending"] { opacity: var(--fg-pending-opacity, 0.6); }`.
-
-**Public API surface change** (confirmed intentional, `pnpm api-report` updated and committed):
-`Gantt.on`/`Gantt.off`'s handler parameter is now `GanttEventHandler<K>` instead of an inline
-`(payload) => void | false` — for `'beforeEntryMove'`/`'beforeEntryResize'` specifically, a handler may
-return `Promise<void | false>`. `GanttEventHandler`/`AsyncCancelableEvent` are now exported from
-`api/index.ts` (api-extractor's `ae-forgotten-export` caught the initial miss — re-run
-`npx api-extractor run --local --config api-extractor.json` and diff `etc/freegantt.api.md` after any
-future public-type change, not just `pnpm api-report`'s pass/fail).
-
-Tests: `src/interaction/keyboard-editing.test.ts` (new, 11 tests — fake-context style matching
-`entry-gestures.test.ts`); `src/view/gesture-pipeline.test.ts` gained `nudge()` (4 tests, using a
-5-minute/300,000ms tick — **not** a real hour, because I10's magic-time-constant lint bans the literal
-`3600000` outside `time/`, and this file is `view/`, which the `view-boundary` dependency-cruiser rule
-also forbids from importing `time/` to compute it any other way) and async-veto/pending (4 tests);
-`src/api/gantt.test.ts` gained a keyboard-nudge integration describe block (4 tests, real `keydown`
-dispatch) and an async-veto/pending describe block (2 tests, real pointer drag + a `Promise`-returning
-`beforeEntryMove` handler, `await new Promise(r => setTimeout(r, 0))` to flush the multi-tick
-`.then()`/`.finally()` chain rather than counting exact microtask ticks).
+Tests: `src/view/gesture-pipeline.test.ts` gained 3 tests (`[S3-A4]`) — injected `extend` previews a
+ghost `ItemPreview` alongside the caller's own draft, no `extend` previews only the draft, `cancel()`
+clears both, all using the file's existing `withRoster`/`makeDeps` fake-deps style.
+`src/render/dom/index.test.ts` gained 1 test — `applyState({ preview: [...] })` paints
+`dragging`/`ghost` off `ItemPreview.extra` and clears them once the preview drops.
+**`src/interaction/extender-preview.test.ts`** (new) — the plan's named `[S3-A4]` test file: a real
+`GanttShell` (not `Gantt` — `editExtender` isn't public) built directly over a real `DatasetState`
+(the "inject through the internal `DatasetStateOptions.editExtender`"-shaped test P1 names), wired
+with `entryGestures: attachEntryGestures` and a `commitEntryEdits` closure calling
+`state.transaction()`/`state.entries.update()` — the same shape `api/gantt.ts` uses for real. A real
+pointer drag (`pointerdown`/`pointermove` past the threshold, `document.elementFromPoint` stubbed,
+same pattern `api/gantt.test.ts`'s drag suite uses) with an injected cascading `EditExtender` ghosts
+the un-grabbed entry by the identical px delta; Escape mid-drag clears the ghost and writes nothing
+(`[S3-A2]` contrast); no `editExtender` (P1's identity default) previews no ghost. This file imports
+only `view/`, `data/`, `model/` — never `scheduling/` (S7, doesn't exist yet) — satisfying the plan's
+"no `scheduling/` import" line by construction rather than a runtime assertion; the depcruise
+`interaction-boundary` rule already forbids that edge globally.
+`src/data/history.property.test.ts` — `[S3-A6]` labeled onto the existing "with an injected extender
+that cascades an unrelated entry" property test rather than adding a duplicate: `opArb` already mixes
+in gesture-shaped `move` ops (added in S3.3), so the existing property already covers "gesture write +
+extender cascade undo atomically" — it just wasn't tagged with the acceptance id.
 
 ## Gotchas (carried forward + new)
 
-1. **Don't let `view/` import `interaction/` or `time/`.** Unchanged (the `time/` half is why the
-   `nudge()` tests above use a made-up 5-minute tick instead of a real hour).
+1. **Don't let `view/` import `interaction/` or `time/`.** Unchanged.
 2. **`view/` cannot call `dataset.transaction()` directly.** Unchanged.
-3. **No raw `requestAnimationFrame` outside `view/frame-scheduler.ts`.** Unchanged.
-4. **`itemId(entryId)` is `${entryId}:0`, not the same string.** Unchanged.
-5. **A synchronous (non-`async`) test asserting an after-event fired requires the commit path to never
-   cross a microtask boundary for the sync case** — see `#commit`'s shape note above. If you touch
-   `GesturePipeline#commit` again, run the full `pnpm vitest run` before assuming a refactor is
-   behavior-preserving; a `.then()`-only rewrite compiles fine and fails two specific sync tests.
-6. **`EventBus`'s `TAsyncKeys` is opt-in per instantiation, not per `on()` call** — `new
-   EventBus<TEvents>()` (default `never`) stays fully sync-only; only `new EventBus<TEvents,
-   'someKey'>()` grants that one key's handlers a Promise return. `data/dataset-state.ts`'s bus was
-   deliberately left at the default — `beforeChange` is not part of D-S3-17's scope.
-7. **Magic-time-constant lint (I10) reaches test files too** — `3_600_000`/`60_000`/`86_400_000`/
-   `604_800_000` are banned literals anywhere outside `time/`, tests included. `300_000` (5 minutes)
-   is not banned and was this session's workaround for `gesture-pipeline.test.ts`'s `nudge()` tests.
-8. **A drag integration test needs `setPointerCapture`/`releasePointerCapture` stubbed on the pane
-   element.** Unchanged (S3.3's gotcha).
+3. **No raw `requestAnimationFrame` outside `view/frame-scheduler.ts`.** Unchanged — but plenty of
+   *tests* legitimately call the real global `requestAnimationFrame` to await one coalesced preview
+   frame (`gesture-pipeline.test.ts`'s existing pattern, now also in `extender-preview.test.ts`); that
+   is not the same thing as production code scheduling its own frame outside `FrameScheduler`.
+4. **A preview repaint (including the S3.6 ghost) is never synchronous** — it lands on the pipeline's
+   own rAF, one frame later. A DOM-level test asserting `data-state`/transform right after a
+   `pointermove` or an Escape `keydown` dispatch needs `await new Promise((resolve) =>
+   requestAnimationFrame(resolve))` first, or it reads stale (pre-preview) state. This tripped both
+   new `extender-preview.test.ts` tests on the first pass this session.
+5. **I10's `no-instant-arithmetic` lint is type-aware and reaches test files too** — even a file that
+   cannot import `time/` (`interaction/`) must not do `someInstant - anotherInstant` arithmetic
+   directly; cast to `as unknown as number` first (unbranding), do the arithmetic, cast back. See
+   `extender-preview.test.ts`'s `makeCascadeExtender`.
+6. **`itemId(entryId)` is `${entryId}:0`, not the same string.** Unchanged.
+7. **A drag integration test needs `setPointerCapture`/`releasePointerCapture` stubbed on the pane
+   element**, and `render/dom`'s `hitTest` resolves through `document.elementFromPoint` (not layout
+   math) — stub that too, keyed on the one point each test drags from. Unchanged (S3.3's gotcha),
+   reused as-is for `extender-preview.test.ts`.
+8. **`EventBus`'s `TAsyncKeys` is opt-in per instantiation, not per `on()` call.** Unchanged (S3.5).
 9. **Run all checks** before marking a step done: `pnpm vitest run`, `pnpm typecheck`, `pnpm lint`,
    `pnpm boundaries`, `pnpm guards`, `node scripts/guard-red-test.mjs`, `pnpm build`,
-   `pnpm api-report` (this last one specifically — a public-surface change silently drifts otherwise),
-   plus `pnpm test:e2e`. All green as of this handoff.
+   `pnpm api-report`, plus `pnpm test:e2e`. All green as of this handoff. Note: `pnpm boundaries` run
+   concurrently with a `pnpm guards` run (which itself invokes `guard-red-test.mjs`, writing and
+   deleting a temp fixture under `src/interaction/`) can show one transient, spurious dependency
+   violation on that fixture's path if the two commands race on the filesystem — rerun `pnpm
+   boundaries` alone before treating a failure there as real.
 10. **Write a fresh handoff before context runs low** — same as always.
 
 ## TODO — in priority order
 
-1. **S3.6 (extender preview)** — read [`s3.6-extender-preview.md`](./s3.6-extender-preview.md) in
-   full; it is already "partial", not a cold start. `GesturePipeline#computePreview` already takes an
-   `extra: EntryEdits` parameter shaped for this (currently always `EMPTY_EDITS`) — check what's
-   already wired before assuming a blank slate.
+1. **S3.7 (viewport gestures)** — read [`s3.7-viewport-gestures.md`](./s3.7-viewport-gestures.md) in
+   full before touching anything. D-S3-14: viewport gestures (wheel zoom/pan) live in `view/`, write
+   nothing to the dataset (`[S3-A7]`).
 2. **Harness demo gaps** (standing ask, carried across several handoffs now): no `Ctrl+Z`/
    `Ctrl+Shift+Z` keydown shortcut, no `Gantt({ dateLines: [...] })` demo, no UI to flip
-   `gantt.interactions` live, no `kind: 'group'` entry in the demo fixture, and — new this session — no
-   visible way to see a keyboard nudge or the async-veto `pending` state in `harness/` itself (both are
-   proven only by `api/gantt.test.ts`'s `dom`-environment integration tests, never in a real browser).
-   None of this blocks S3.6; it is explicitly S3.8's gate to close.
-3. Once S3.6 is done and the full check sequence (including `pnpm test:e2e`) is green, update its own
-   TODO boxes, `README.md` (S3.6 `done`, S3.7 `next`), and this file, pointing at S3.7
-   (`s3.7-viewport-gestures.md`).
+   `gantt.interactions` live, no `kind: 'group'` entry in the demo fixture, no visible way to see a
+   keyboard nudge or the async-veto `pending` state in `harness/` itself, and — new, S3.6's own gap —
+   no way to see an extender ghost in `harness/` either, since S3 has no public install API for one
+   (P1: that demo is explicitly deferred to S5, `plans/s3-direct-manipulation/README.md`'s Deferred
+   table). None of this blocks S3.7; it is explicitly S3.8's gate to close.
+3. Once S3.7 is done and the full check sequence (including `pnpm test:e2e`) is green, update its own
+   TODO boxes, `README.md` (S3.7 `done`, S3.8 `next`), and this file, pointing at S3.8
+   (`s3.8-cursor-line-harness-gate.md`).

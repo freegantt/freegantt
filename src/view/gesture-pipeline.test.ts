@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { GesturePipeline } from './gesture-pipeline.js';
 import type { GesturePipelineDeps } from './gesture-pipeline.js';
-import { entryId } from '../model/index.js';
+import { entryId, itemId } from '../model/index.js';
 import type { Entry, EntryId, Instant } from '../model/index.js';
 import type { TimeScale, ViewPreset } from '../layout/index.js';
 
@@ -364,6 +364,75 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
 
       expect(committed).toBe(false);
       expect(commitEntryEdits).not.toHaveBeenCalled();
+    });
+
+    it('[S3-A4] session().preview() calls the injected extend and previews its extra as a ghost', async () => {
+      const a = entry('a', 100, 200);
+      const x = entry('x', 300, 400);
+      const requests: unknown[] = [];
+      const extend: GesturePipelineDeps['extend'] = (request) => {
+        requests.push(request);
+        return new Map([[x.id, { start: 350 as unknown as Instant, end: 450 as unknown as Instant }]]);
+      };
+      const { deps, applied } = withRoster([a, x], {
+        extend,
+        allEntries: () =>
+          new Map([
+            [a.id, a],
+            [x.id, x],
+          ]),
+      });
+      const pipeline = new GesturePipeline(deps);
+      const session = pipeline.session(a.id, { kind: 'move' })!;
+
+      session.preview(50);
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+
+      expect(requests).toHaveLength(1);
+      const preview = applied.at(-1) as readonly { itemId: string; dx: number; extra: boolean }[];
+      expect(preview).toHaveLength(2);
+      const dragging = preview.find((p) => p.itemId === itemId(a.id))!;
+      const ghost = preview.find((p) => p.itemId === itemId(x.id))!;
+      expect(dragging.extra).toBe(false);
+      expect(ghost.extra).toBe(true);
+      expect(ghost.dx).toBe(50); // x0 300 -> x1 350
+    });
+
+    it('[S3-A4] no extend (identity, P1 default) previews only the caller’s own draft, no ghost', async () => {
+      const a = entry('a', 100, 200);
+      const { deps, applied } = withRoster([a]);
+      const pipeline = new GesturePipeline(deps);
+      const session = pipeline.session(a.id, { kind: 'move' })!;
+
+      session.preview(50);
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+
+      const preview = applied.at(-1) as readonly { extra: boolean }[];
+      expect(preview).toHaveLength(1);
+      expect(preview[0]?.extra).toBe(false);
+    });
+
+    it('[S3-A4] cancel() clears the ghost along with the caller’s own preview', async () => {
+      const a = entry('a', 100, 200);
+      const x = entry('x', 300, 400);
+      const extend: GesturePipelineDeps['extend'] = () =>
+        new Map([[x.id, { start: 350 as unknown as Instant, end: 450 as unknown as Instant }]]);
+      const { deps, applied } = withRoster([a, x], {
+        extend,
+        allEntries: () =>
+          new Map([
+            [a.id, a],
+            [x.id, x],
+          ]),
+      });
+      const pipeline = new GesturePipeline(deps);
+      const session = pipeline.session(a.id, { kind: 'move' })!;
+
+      session.preview(50);
+      session.cancel();
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+
+      expect(applied.at(-1)).toBeUndefined();
     });
 
     it('a sync true result commits without touching setPending', async () => {

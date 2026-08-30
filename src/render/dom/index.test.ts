@@ -479,6 +479,44 @@ describe('render/dom backend', () => {
     timeline.remove();
   });
 
+  // S3.6, D-S3-18, U7: ItemPreview.extra distinguishes the caller's own gesture ('dragging') from an
+  // installed extension hook's cascade ('ghost') — two entries offset in the same preview frame.
+  it('applyState paints dragging/ghost data-state tokens off ItemPreview.extra and clears them once the preview drops', () => {
+    const backend = createDomBackend();
+    const { grid, timeline } = mountSurfaces();
+    backend.mount({ grid, timeline });
+
+    const frame = computeFrame({
+      entries: sampleEntries.slice(0, 2),
+      scale,
+      preset,
+      visible: { x: 0, y: 0, width: 0, height: 0 },
+      rowHeight: 32,
+      revision: 0,
+    });
+    backend.sync(frame);
+    const [a, b] = frame.bars;
+    const nodeA = timeline.querySelector<HTMLElement>(`[data-item-id="${a!.id}"]`)!;
+    const nodeB = timeline.querySelector<HTMLElement>(`[data-item-id="${b!.id}"]`)!;
+
+    backend.applyState({
+      preview: [
+        { itemId: a!.id, dx: 10, dWidth: 0, extra: false },
+        { itemId: b!.id, dx: 5, dWidth: 0, extra: true },
+      ],
+    });
+    expect(nodeA.dataset['state']).toBe('dragging');
+    expect(nodeB.dataset['state']).toBe('ghost');
+
+    backend.applyState({});
+    expect(nodeA.dataset['state']).toBe('');
+    expect(nodeB.dataset['state']).toBe('');
+
+    backend.destroy();
+    grid.remove();
+    timeline.remove();
+  });
+
   it('parks the shared handle pair when resizableItemId is undefined and moves them onto the committed bar when it is set (D-S3-8)', () => {
     const backend = createDomBackend();
     const { grid, timeline } = mountSurfaces();
