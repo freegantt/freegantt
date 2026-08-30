@@ -3,6 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <title>FreeGantt harness — S1 timeline & viewport</title>
+    <link rel="stylesheet" href="./harness-nav.css" />
     <style>
       :root {
         --page-bg: #fafaf7;
@@ -35,16 +36,6 @@
         margin: 2rem;
         background: var(--page-bg);
         color: var(--page-ink);
-      }
-      nav.harness-pages {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.5rem 1.25rem;
-        font-size: 0.9rem;
-        margin-bottom: 1rem;
-      }
-      nav.harness-pages a {
-        color: var(--page-muted);
       }
       .theme-toggle {
         display: inline-flex;
@@ -119,13 +110,7 @@
   </head>
   <body>
     <h1>FreeGantt — S1 timeline &amp; viewport</h1>
-    <nav class="harness-pages">
-      <a href="./docs/">Docs</a>
-      <a href="./scroll-sync.html">Scroll sync</a>
-      <a href="./zoom.html">Timeline &amp; navigation</a>
-      <a href="./large-dataset.html">Large dataset</a>
-      <a href="./data.html">Mutation &amp; live binding</a>
-    </nav>
+    <nav class="harness-site-nav" aria-label="Harness pages"></nav>
     <p>Fixture dataset rendered as positioned bars under a day-tick header. Every slice adds to this page.</p>
     <div class="theme-toggle" role="group" aria-label="Theme">
       <button type="button" data-theme-choice="auto">Auto</button>

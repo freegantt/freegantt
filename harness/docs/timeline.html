@@ -5,17 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>FreeGantt — Timeline render</title>
     <link rel="stylesheet" href="./doc.css" />
+    <link rel="stylesheet" href="../harness-nav.css" />
   </head>
   <body>
     <div class="wrap">
       <header>
-        <nav style="display: flex; flex-wrap: wrap; gap: 0.4rem 1.25rem; margin-bottom: 0.75rem">
-          <a href="./index.html">Docs index</a>
-          <a href="./doc.html">Module &amp; class map</a>
-          <a href="./diagram.html">Module map</a>
-          <a href="../zoom.html">Timeline &amp; navigation</a>
-          <a href="../index.html">Demos</a>
-        </nav>
+        <nav class="harness-site-nav" aria-label="Harness pages"></nav>
+        <script type="module" src="../harness-nav.ts"></script>
         <h1>How the timeline paints</h1>
         <p class="tagline">
           The timeline is a bound <code>TimeScale</code> plus a header of absolutely positioned ticks. This

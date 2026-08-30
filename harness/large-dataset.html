@@ -3,6 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <title>FreeGantt harness — S1.11 large dataset</title>
+    <link rel="stylesheet" href="./harness-nav.css" />
     <style>
       body {
         font-family: system-ui, sans-serif;
@@ -40,13 +41,7 @@
   </head>
   <body>
     <h1>FreeGantt — S1.11 large dataset</h1>
-    <nav style="display: flex; flex-wrap: wrap; gap: 0.5rem 1.25rem; font-size: 0.9rem; margin-bottom: 1rem">
-      <a href="./index.html">Timeline &amp; viewport</a>
-      <a href="./docs/">Docs</a>
-      <a href="./scroll-sync.html">Scroll sync</a>
-      <a href="./zoom.html">Timeline &amp; navigation</a>
-      <a href="./data.html">Mutation &amp; live binding</a>
-    </nav>
+    <nav class="harness-site-nav" aria-label="Harness pages"></nav>
     <p>
       e2e fixture for S1's <code>[S1-A1]</code> acceptance check (plans/s1.11-close-the-gate/README.md
       D-S1.11-5): 5,000 seeded entries at <code>zoom: 'preset'</code>, content wider than the pane, so the DOM

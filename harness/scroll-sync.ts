@@ -2,6 +2,7 @@
 // sharing one ScrollModel (and one TimeScaleModel, matching D9's "x, y, or both"), with the second
 // chart holding far fewer rows than the first — the U3 clamp/pin case happy-dom cannot express.
 
+import './harness-nav.ts';
 import { Gantt, Dataset, ScrollModel, TimeScaleModel } from '../src/api/index.js';
 import { demoEntryInputs } from '../fixtures/demo-dataset.js';
 

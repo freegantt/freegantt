@@ -1,3 +1,4 @@
+import './harness-nav.ts';
 import { Gantt, Dataset } from '../src/api/index.js';
 import type { Theme } from '../src/api/index.js';
 import { demoEntryInputs } from '../fixtures/demo-dataset.js';
