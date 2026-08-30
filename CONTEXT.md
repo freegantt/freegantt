@@ -279,7 +279,7 @@ _Avoid_: Observable, signal, store, subscription (those name `data/`'s reactivit
 One Gantt's Binding to a TimeScaleModel: its Dataset's zone, its Entries, and its measured Pane size. This is how `'fitDataset'` spans every bound Dataset rather than whichever one was passed to the constructor.
 
 **Attachment**:
-A wiring between a DOM element and a pure model, living in `view/` and returned by an `attach*` function with a `detach()` method. An Attachment is the only thing on either side of the seam allowed to touch the element: `attachScroll` owns element scroll (I12), `attachPaneSize` owns measurement. Distinct from a Binding, which carries data and never sees the DOM.
+A wiring between a DOM element and a pure model, living in `view/` and returned by an `attach*` function with a `detach()` method. An Attachment is the only thing on either side of the seam allowed to touch the element: `attachScroll` owns element scroll (I12), `attachPaneSize` owns measurement, `attachWheelNavigation` and `attachKeyboardNavigation` own the read-only viewport gestures (S3.7). Distinct from a Binding, which carries data and never sees the DOM.
 _Avoid_: Binding (that is the pure-model side), adapter, connector
 
 **Pane size**:
@@ -307,8 +307,12 @@ The standalone, shareable object owning a scroll position on both axes, and the 
 _Avoid_: Scroll position, offset, viewport state
 
 **Pan**:
-Moving the shared viewport — `ScrollModel.panTo`, and the drag gesture that will call into it. Public verbs on Gantt are `panToDate` / `panToToday` (loose InstantInput, never `scrollTo*`). One concept at two layers, which is why they share the word. Distinct from **scroll**, which means one element's native offset and is confined to `view/scroll-attachment.ts` (I12): a Pan may result in no scroll at all when the chart is already at its end. `panToInstant` is the Viewport-internal twin that already holds a branded Instant.
+Moving the shared viewport — `ScrollModel.panTo`, plus the wheel and keyboard viewport gestures that call it (shift+wheel, Page/Home/End, unselected arrows). Public verbs on Gantt are `panToDate` / `panToToday` (loose InstantInput, never `scrollTo*`). One concept at two layers, which is why they share the word. Distinct from **scroll**, which means one element's native offset and is confined to `view/scroll-attachment.ts` (I12): a Pan may result in no scroll at all when the chart is already at its end. `panToInstant` is the Viewport-internal twin that already holds a branded Instant.
 _Avoid_: Scroll (an element's native offset), move (move is dragging an Entry — `entryMove`), seek
+
+**Viewport gestures**:
+The read-only wheel and keyboard motions that change the Viewport and write nothing to the Dataset: ctrl/⌘+wheel anchored zoom (`zoomBy`), shift+wheel pan, and keyboard pan (Page/Home/End always; arrows when nothing is selected). They live in `view/` (`attachWheelNavigation`, `attachKeyboardNavigation`), not `interaction/`, and they are exempt from the arm-threshold, escape-cancel, and one-transaction-per-gesture invariants. Live config is `Gantt.viewportGestures` — a boolean shorthand or `{ wheelZoom, wheelPan, keyboardPan }`. The imperative `zoomBy` / `panToDate` / `zoomIn` surface does not consult this flag. Distinct from **Capability** / `interactions`, which are per-entry and gate data gestures.
+_Avoid_: Navigation (that is the motion itself — Preset, Fit, Range, Pan, Anchored zoom — and the `navigationChange` event), interactions (per-entry data gestures)
 
 **Reveal**:
 Bringing a named Entry into view — the intent-level verb a consumer uses (`gantt.reveal(entryId)`). The library resolves the pixel position from the row geometry it already computes; a consumer never converts an index or a row height into a scroll offset. Nearest-edge, not center: a no-op if the Entry is already inside Visible, otherwise the Pan moves exactly enough to align the nearest off-screen edge. Landed on both axes at S1.9 (D-S1.9-6) — the x half was a no-op before Fit existed, since content width equalled pane width.

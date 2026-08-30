@@ -355,6 +355,8 @@ export class Gantt {
     // (undocumented)
     get todayLineMarginTicks(): number;
     set todayLineMarginTicks(ticks: number);
+    get viewportGestures(): ViewportGestures;
+    set viewportGestures(next: ViewportGestures);
     // (undocumented)
     zoomBy(factor: number, anchorX?: number): void;
     zoomIn(anchorX?: number): void;
@@ -640,6 +642,16 @@ export class UnsupportedSchemaError extends FreeGanttError {
 export class UnsupportedUnitError extends FreeGanttError {
     constructor(message: string);
 }
+
+// @public
+export interface ViewportGestureFlags {
+    keyboardPan?: boolean;
+    wheelPan?: boolean;
+    wheelZoom?: boolean;
+}
+
+// @public
+export type ViewportGestures = boolean | ViewportGestureFlags;
 
 // @public
 export interface ViewPreset {

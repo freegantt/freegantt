@@ -2,7 +2,13 @@
 // instance owns its own shell and state so two Gantt instances on one page are fully independent.
 
 import { GanttShell } from '../view/index.js';
-import type { GanttEventHandler, GanttEventMap, Interactions, Theme } from '../view/index.js';
+import type {
+  GanttEventHandler,
+  GanttEventMap,
+  Interactions,
+  Theme,
+  ViewportGestures,
+} from '../view/index.js';
 import { ScrollModel, TimeScaleModel } from '../layout/index.js';
 import type { PresetRef, TimeScaleFit, ViewPreset } from '../layout/index.js';
 import type { DateLineSpec } from '../layout/index.js';
@@ -60,6 +66,9 @@ interface GanttOptionsBase {
   /** Live (S3, D-S3-9). Per-gesture, boolean or per-entry predicate, over the per-kind default
    *  table. Default `{}`: every gesture resolves off the default table alone. */
   interactions?: Interactions;
+  /** Live (S3.7, D-S3-14). Wheel zoom, shift+wheel pan, and keyboard pan. Default `{}`: every
+   *  viewport gesture is on. `false` turns them all off. Does not gate `zoomBy` / `panToDate`. */
+  viewportGestures?: ViewportGestures;
 }
 
 /** Two ways to set the axis, made mutually exclusive at the type level (issue #84 — the prior shape
@@ -111,6 +120,7 @@ export class Gantt {
         ? { todayLineMarginTicks: options.todayLineMarginTicks }
         : {}),
       ...(options.interactions !== undefined ? { interactions: options.interactions } : {}),
+      ...(options.viewportGestures !== undefined ? { viewportGestures: options.viewportGestures } : {}),
       entryGestures: attachEntryGestures,
       keyboardEditing: attachKeyboardEditing,
       // S3.3, D-S3-16: `GanttShell`'s own `dataset` option is `model/`'s narrow `Dataset` interface
@@ -296,6 +306,15 @@ export class Gantt {
 
   set interactions(next: Interactions) {
     this.#shell.interactions = next;
+  }
+
+  /** Live (S3.7, D-S3-14): the next wheel or key reads the new flags; no remount. */
+  get viewportGestures(): ViewportGestures {
+    return this.#shell.viewportGestures;
+  }
+
+  set viewportGestures(next: ViewportGestures) {
+    this.#shell.viewportGestures = next;
   }
 
   get canZoomIn(): boolean {

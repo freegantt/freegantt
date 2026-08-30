@@ -22,6 +22,10 @@ ruleTester.run('no-flow-layout-rows', rule, {
     { code: 'const w = host.clientWidth;', filename: '/repo/src/view/pane-layout.ts' },
     { code: 'const h = host.clientHeight;', filename: '/repo/src/view/pane-layout.ts' },
     { code: 'const h = host.clientHeight;', filename: '/repo/src/view/pane-size-attachment.ts' },
+    {
+      code: 'const x = pane.getBoundingClientRect().left;',
+      filename: '/repo/src/view/wheel-navigation.ts',
+    },
   ],
   invalid: [
     {

@@ -20,7 +20,7 @@ export type {
 export { invertChangeSet } from '../data/change-set.js';
 export { Gantt } from './gantt.js';
 export type { GanttOptions, DateLineInput } from './gantt.js';
-export type { Theme } from '../view/index.js';
+export type { Theme, ViewportGestures, ViewportGestureFlags } from '../view/index.js';
 export type {
   GanttEventMap,
   GanttEventHandler,
