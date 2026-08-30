@@ -59,8 +59,11 @@ module.exports = {
     forbid('interaction-boundary', 'interaction', ['view', 'data']),
     forbid('extensions-boundary', 'extensions', ['view', 'interaction']),
     // model and time are the type/primitive surface api/ re-exports (plans/01 §1: "api/ and model/
-    // types are public", widened to time/'s public primitives and presets by #25).
-    forbid('api-boundary', 'api', ['view', 'data', 'model', 'time']),
+    // types are public", widened to time/'s public primitives and presets by #25, and to layout/'s
+    // TimeScaleModel/ScrollModel by issue #91 §9-I — D9 names both as public, consumer-constructed
+    // objects, so laundering them through view/ (which has no other interest in them) was the same
+    // bug as #25's dayPreset, not a load-bearing hop).
+    forbid('api-boundary', 'api', ['view', 'data', 'model', 'time', 'layout']),
     // D-S2-23: the first of the four removable-leaf rules. Only data/transaction.ts's own step-5
     // call site may import the span rollup — delete src/data/span-rollup.ts and groups keep their
     // authored span, the same result `derivedSpanKinds: []` already gives a consumer.

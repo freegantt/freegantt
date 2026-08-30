@@ -1,6 +1,18 @@
 export { instant, now, toISO, addMs, diffMs, MS } from './instant.js';
 export { toInstant, toEndInstant } from './input.js';
-export { toPlain, fromPlain, startOfDay, addDays, diffDays, startOf, stepBy, weekOfYear } from './zone.js';
+export {
+  toPlain,
+  fromPlain,
+  startOfDay,
+  addDays,
+  addMonths,
+  addYears,
+  diffDays,
+  startOf,
+  stepBy,
+  weekOfYear,
+  SUPPORTED_TIME_UNITS,
+} from './zone.js';
 export type { PlainParts } from './zone.js';
 export {
   formatDate,

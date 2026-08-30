@@ -2,9 +2,11 @@
 // the reconciler's hard-bounded scope (plans/01 §8.1): attr/class/style/text + keyed children only,
 // no lifecycle hooks.
 
-/** Shallow, flat-record equality — every `TGeom` synced through `syncKeyed` is a `Pick<...>` of
- * primitive fields, so comparing own-enumerable-key-by-key is exact, not an approximation. */
+/** Shallow, flat-record equality over both directions: a key-count check catches a field that
+ * dropped out of `b` (e.g. a conditional `tint`) even though every key still in both sides matches
+ * (§9-C — a one-direction scan compared equal on that drop and left the node unpatched). */
 function shallowEqual<TGeom extends Record<string, unknown>>(a: TGeom, b: TGeom): boolean {
+  if (Object.keys(a).length !== Object.keys(b).length) return false;
   for (const key in a) {
     if (a[key] !== b[key]) return false;
   }
@@ -63,5 +65,53 @@ export function syncKeyed<TItem, TKey, TGeom extends Record<string, unknown>>(
       nodes.delete(key);
       geoms.delete(key);
     }
+  }
+}
+
+/** One keyed layer: the node/geom cache pair `syncKeyed` needs, held together instead of as two
+ * parallel `Map`s a caller must keep in sync by hand (§9-D). */
+export class KeyedLayer<TItem, TKey, TGeom extends Record<string, unknown>> {
+  #nodes = new Map<TKey, HTMLElement>();
+  #geoms = new Map<TKey, TGeom>();
+
+  sync(container: HTMLElement, items: readonly TItem[], spec: SyncKeyedSpec<TItem, TKey, TGeom>): void {
+    syncKeyed(container, items, this.#nodes, this.#geoms, spec);
+  }
+
+  node(key: TKey): HTMLElement | undefined {
+    return this.#nodes.get(key);
+  }
+
+  clear(): void {
+    this.#nodes.clear();
+    this.#geoms.clear();
+  }
+}
+
+/** One `KeyedLayer` per parent key — the "keyed list inside a keyed list" shape a band's ticks and a
+ * row's cells both need. Collapses the hand-rolled `Map<ParentKey, Map<...>>` pair plus its own
+ * prune loop (`syncHeader`'s tick cache, `syncCellsForEachRow`'s cell cache, §9-D) into one type. */
+export class NestedKeyedLayers<TParentKey, TItem, TKey, TGeom extends Record<string, unknown>> {
+  #layers = new Map<TParentKey, KeyedLayer<TItem, TKey, TGeom>>();
+
+  layerFor(parentKey: TParentKey): KeyedLayer<TItem, TKey, TGeom> {
+    let layer = this.#layers.get(parentKey);
+    if (!layer) {
+      layer = new KeyedLayer<TItem, TKey, TGeom>();
+      this.#layers.set(parentKey, layer);
+    }
+    return layer;
+  }
+
+  /** Drops every child layer whose parent key is no longer live — same job as the hand-rolled
+   * "delete keys past `bands.length`" / "delete row ids not in `liveRowIds`" loops it replaces. */
+  prune(liveParentKeys: ReadonlySet<TParentKey>): void {
+    for (const key of this.#layers.keys()) {
+      if (!liveParentKeys.has(key)) this.#layers.delete(key);
+    }
+  }
+
+  clear(): void {
+    this.#layers.clear();
   }
 }

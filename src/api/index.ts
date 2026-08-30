@@ -21,7 +21,11 @@ export { invertChangeSet } from '../data/change-set.js';
 export { Gantt } from './gantt.js';
 export type { GanttOptions } from './gantt.js';
 export type { Theme } from '../view/index.js';
-export { TimeScaleModel, ScrollModel } from '../view/index.js';
+export type { GanttEventMap, GridWidthChange, NavigationChange } from '../view/index.js';
+// TimeScaleModel/ScrollModel are layout/'s own — both are public, consumer-constructed objects
+// (D9), so this re-exports straight from their owning layer rather than laundering them through
+// view/, which has no other interest in them (issue #91 §9-I).
+export { TimeScaleModel, ScrollModel } from '../layout/index.js';
 export type {
   TimeScaleModelOptions,
   TimeScaleFit,
@@ -29,10 +33,7 @@ export type {
   ShippedPresetId,
   ScrollPosition,
   ScrollState,
-  GanttEventMap,
-  GridWidthChange,
-  NavigationChange,
-} from '../view/index.js';
+} from '../layout/index.js';
 // Catchable errors (plans/02 §7): FreeGanttError is the base; a consumer can catch broadly or on `.code`.
 export {
   FreeGanttError,
