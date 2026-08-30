@@ -59,6 +59,12 @@ const TICK_BOX_FLOOR_PROPERTY = '--fg-tick-box-floor';
 /** A zero floor would re-open thin straddles painting at the CSS box minimum. */
 const TICK_BOX_FLOOR_POLICY = { fallback: DEFAULT_TICK_BOX_FLOOR_PX, accepts: 'positive' } as const;
 
+/** Default for `todayLineMarginTicks` below: how many of the current preset's own ticks sit between
+ *  the pane's left edge and `panToToday`'s landing (S1.13 follow-up) — enough that the today line
+ *  reads as "near the start" without sitting flush on the edge, leaving a sliver of the timeline
+ *  visible to its left. */
+const DEFAULT_TODAY_LINE_MARGIN_TICKS = 2;
+
 export interface GanttShellOptions {
   /** Element or CSS selector (plans/02 §2); a selector that matches nothing throws (#38). */
   container: HTMLElement | string;
@@ -92,6 +98,8 @@ export interface GanttShellOptions {
   todayLine?: boolean | Instant;
   /** Live (S1.13, D-S1.13-4). Default `[]`. */
   dateLines?: readonly DateLineSpec[];
+  /** Live. See `GanttOptions.todayLineMarginTicks`. Default `DEFAULT_TODAY_LINE_MARGIN_TICKS`. */
+  todayLineMarginTicks?: number;
   /** Expert knob, not on `GanttOptions` (plans/02 "two callers, two surfaces") — a test naming its
    * own `RenderBackend<HTMLElement>` in place of the DOM one (§9-I: the seam had two implementations
    * and one hardcoded call site, so nothing could reach the other short of mocking the module).
@@ -146,6 +154,7 @@ export class GanttShell {
   #locale: Intl.LocalesArgument | undefined;
   #todayLine: boolean | Instant = true;
   #dateLines: readonly DateLineSpec[] = [];
+  #todayLineMarginTicks: number = DEFAULT_TODAY_LINE_MARGIN_TICKS;
 
   constructor(options: GanttShellOptions) {
     this.#options = options;
@@ -187,6 +196,7 @@ export class GanttShell {
     this.#locale = options.locale;
     this.#todayLine = options.todayLine ?? true;
     this.#dateLines = options.dateLines ?? [];
+    this.#todayLineMarginTicks = options.todayLineMarginTicks ?? DEFAULT_TODAY_LINE_MARGIN_TICKS;
 
     // Mount before binding (#22): the render target exists by the time the binding's own onChange
     // — which IS this shell's first render — fires, so there is no construction-order exception to
@@ -269,6 +279,15 @@ export class GanttShell {
   set dateLines(lines: readonly DateLineSpec[]) {
     this.#dateLines = lines;
     this.#frames.request();
+  }
+
+  get todayLineMarginTicks(): number {
+    return this.#todayLineMarginTicks;
+  }
+
+  /** Live — takes effect on the next `panToToday()` call; does not itself move the scroll position. */
+  set todayLineMarginTicks(ticks: number) {
+    this.#todayLineMarginTicks = ticks;
   }
 
   get theme(): Theme {
@@ -380,6 +399,26 @@ export class GanttShell {
 
   panToInstant(i: Instant, align: 'start' | 'center'): void {
     this.#viewport.panToInstant(i, align);
+  }
+
+  /** `panToInstant(at, align)`, plus `todayLineMarginTicks`' worth of left margin at
+   *  `align: 'start'` — the one place this shell decides where "today" lands, so every caller
+   *  (`Gantt.panToToday()`, a consumer's own load-time call) resolves it the same way. `at` is
+   *  `now()`, read by the caller — `view/` may not import `time/` (I1) and has no clock read of its
+   *  own to make. */
+  panToToday(at: Instant, align: 'start' | 'center' = 'start'): void {
+    this.#viewport.panToInstant(at, align, this.#todayLineMarginPx(at));
+  }
+
+  /** Px width of `todayLineMarginTicks` ticks of the CURRENT preset, evaluated at `at` — calendar
+   *  ticks (day/week/month) vary in duration (DST, month length), so this is a live read off
+   *  `timeScale`/`preset`, never a cached constant. */
+  #todayLineMarginPx(at: Instant): number {
+    const preset = this.#viewport.preset;
+    return this.#viewport.timeScale.widthForDuration(
+      { unit: preset.tickUnit, value: preset.tickIncrement * this.#todayLineMarginTicks },
+      at,
+    );
   }
 
   /** Finds the entry's row via the bound dataset, asks `FrameLayout` for its top and `barSpan` for
