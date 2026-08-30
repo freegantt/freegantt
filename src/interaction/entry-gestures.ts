@@ -6,12 +6,12 @@
 // until the drag threshold (or a touch long-press) is crossed. `mousedown` is only there so a
 // double-click cannot start a native text range; it writes no Gantt state.
 
-import type { Entry, EntryId } from '../model/index.js';
+import type { EntryId } from '../model/index.js';
 import { itemId } from '../model/index.js';
 import { createPointerGesture } from './pointer-gesture.js';
-import type { EntryGestureContext, EntryGesture } from './entry-gesture-context.js';
+import type { EntryGestureContext, EntryGesture, EntryGestureSession } from '../view/index.js';
 
-export type { EntryGestureContext, EntryGesture, DraftOptions, EntryHit } from './entry-gesture-context.js';
+export type { EntryGestureContext, EntryGesture, DraftOptions, EntryHit } from '../view/index.js';
 
 export interface EntryGesturesAttachment {
   detach(): void;
@@ -48,50 +48,40 @@ export function attachEntryGestures(
   /** Set alongside `grabbedId` only for a handle grab (S3.4) — its presence is what distinguishes a
    *  resize gesture from a move gesture everywhere below. */
   let grabbedEdge: 'start' | 'end' | undefined;
-  let armedEntries: readonly Entry[] = [];
-
-  /** The `'move'` shape is a fixed constant, never per-instance data — reusing it avoids allocating
-   *  a fresh object on every pointermove of a move gesture (`entry-gesture-context.ts`'s `draftFor`
-   *  and `commit` only ever read it). */
-  const MOVE_GESTURE: EntryGesture = { kind: 'move' };
+  /** D-GH-1: what `ctx.session()` armed for this drag — replaces `armedEntries` (`session` already
+   *  closes over the capable entries and the grabbed `EntryGesture` shape). Defined only between a
+   *  successful `start()` and the matching `commit`/`cancel`. */
+  let session: EntryGestureSession | undefined;
 
   function currentGesture(): EntryGesture {
-    return grabbedEdge !== undefined ? { kind: 'resize', edge: grabbedEdge } : MOVE_GESTURE;
+    return grabbedEdge !== undefined ? { kind: 'resize', edge: grabbedEdge } : { kind: 'move' };
   }
 
   const drag = createPointerGesture(pane, {
     start(): boolean {
       if (grabbedId === undefined) return false;
-      armedEntries = ctx.entriesForGesture(grabbedId, grabbedEdge !== undefined ? 'resize' : 'move');
-      return armedEntries.length > 0;
+      session = ctx.session(grabbedId, currentGesture());
+      return session !== undefined;
     },
     move(e, dxPx): void {
       // The live preview always tracks the pointer at full resolution (never quantized to a snap
       // unit) so the grabbed spot on the bar never drifts from the cursor mid-drag. Snapping still
       // applies to what actually gets written — see commit() below — this only affects what paints
       // while the gesture is in flight.
-      const draft = ctx.draftFor(currentGesture(), armedEntries, dxPx, { suspendSnap: true });
-      ctx.preview(draft);
+      session!.preview(dxPx, { suspendSnap: true });
     },
     commit(e, dxPx): void {
       // The committed value snaps to the preset's tick unit unless Alt held it off for fine
       // placement (D-S3-12) — this is the one place snapping actually lands, now that move() above
       // always previews raw.
-      const draft = ctx.draftFor(
-        currentGesture(),
-        armedEntries,
-        dxPx,
-        e.altKey ? { suspendSnap: true } : undefined,
-      );
-      ctx.preview(undefined);
-      void ctx.commit(currentGesture(), draft);
-      armedEntries = [];
+      void session!.commit(dxPx, e.altKey ? { suspendSnap: true } : undefined);
+      session = undefined;
       grabbedId = undefined;
       grabbedEdge = undefined;
     },
     cancel(): void {
-      ctx.preview(undefined);
-      armedEntries = [];
+      session!.cancel();
+      session = undefined;
       grabbedId = undefined;
       grabbedEdge = undefined;
     },

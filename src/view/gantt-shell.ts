@@ -3,7 +3,6 @@
 
 import {
   barSpan,
-  previewOffsets,
   FrameLayout,
   ScrollModel,
   TimeScaleModel,
@@ -14,7 +13,6 @@ import type {
   DateLineSpec,
   Overscan,
   PresetRef,
-  SnapUnit,
   TimeScaleFit,
   ViewportHandle,
   ViewPreset,
@@ -43,41 +41,17 @@ import type { DatasetChangeSubscription } from './dataset-change-subscription.js
 import { FrameScheduler } from './frame-scheduler.js';
 import { projectAffordances } from './affordance-projection.js';
 import { GesturePipeline } from './gesture-pipeline.js';
+import type { EntryGestureContext } from './entry-gesture-context.js';
 
 /** `view/` may not import `interaction/` (plans/01 §1: `INT --> VIEW`, not the reverse — interaction/
  *  controllers are one layer *above* view/, the way `EXT --> VIEW`/`EXT --> INT` puts extensions/
  *  above both). So the shell takes its pointer-gesture attachment by injection instead of import —
  *  the same DI shape `GanttShellOptions.backend` already uses, one layer further out: `api/gantt.ts`
  *  (which does import `interaction/`, `API --> INT`) supplies the real `attachEntryGestures`.
- *  TypeScript's structural typing makes that function satisfy `AttachEntryGestures` with no import
- *  here at all — this is a type-shape mirror of `interaction/entry-gestures.ts`'s own exports, not a
- *  second declaration of a public type. */
+ *  `EntryGestureContext` itself lives in `./entry-gesture-context.js` (D-GH-1, C5) — `interaction/`
+ *  imports it from there too, so there is exactly one declaration, not a mirror on each side. */
 export interface EntryGesturesAttachment {
   detach(): void;
-}
-/** Mirrors `interaction/entry-gesture-context.ts`'s `EntryGesture` (S3.3, D-S3-5) — only `'move'` is ever
- *  built here (S3.4 builds `'resize'`), but the shape must match structurally either way. */
-type EntryGesture = { kind: 'move' } | { kind: 'resize'; edge: 'start' | 'end' };
-/** No cascade — the baseline `#applyPreview`'s `previewOffsets` call contrasts a real gesture draft
- *  against (S3.6 wires an extender's actual extras in here). */
-const EMPTY_EDITS: EntryEdits = Object.freeze(new Map());
-interface EntryGestureContext {
-  hitTest(x: number, y: number): { itemId: ItemId; edge?: 'start' | 'end' } | undefined;
-  entryFor(item: ItemId): Entry | undefined;
-  can(capability: keyof Interactions, entry: Entry): boolean;
-  rowOrder(): readonly EntryId[];
-  selection: { get(): readonly EntryId[]; propose(next: readonly EntryId[]): void };
-  setHovered(itemId: ItemId | undefined): void;
-  entriesForGesture(grabbed: EntryId, capability: 'move' | 'resize'): readonly Entry[];
-  draftFor(
-    gesture: EntryGesture,
-    entries: readonly Entry[],
-    dxPx: number,
-    options?: { suspendSnap?: boolean },
-  ): EntryEdits;
-  commit(gesture: EntryGesture, draft: EntryEdits): Promise<boolean>;
-  preview(draft: EntryEdits | undefined): void;
-  pointerAt(at: { itemId?: ItemId; x?: number } | undefined): void;
 }
 export type AttachEntryGestures = (
   pane: HTMLElement,
@@ -339,11 +313,16 @@ export class GanttShell {
     this.#gesturePipeline = new GesturePipeline({
       timeZone: () => this.#options.dataset.timeZone,
       timeScale: () => this.#viewport.timeScale,
-      snap: (suspendSnap) => this.#resolveSnap(suspendSnap),
-      entriesForGesture: (grabbed, capability) => this.#entriesForGesture(grabbed, capability),
+      preset: () => this.#viewport.preset,
+      selection: () => this.#selection,
+      entryById: (id) => this.#options.dataset.entries.get(id),
+      canGesture: (capability, id) => this.#canGesture(capability, id),
       commitEntryEdits: (edits) => this.#options.commitEntryEdits?.(edits) ?? false,
       emit: (name, payload) => this.#events.emit(name, payload),
-      applyPreview: (draft) => this.#applyPreview(draft),
+      applyPreview: (preview) => {
+        setOptional(this.#interactionState, 'preview', preview);
+        this.#backend.applyState(this.#interactionState);
+      },
     });
     this.#entryGestures = options.entryGestures?.(this.#panes.timeline, this.#container, {
       hitTest: (x, y) => {
@@ -359,14 +338,7 @@ export class GanttShell {
         propose: (next) => this.#proposeSelection(next),
       },
       setHovered: (item) => this.#setHovered(item),
-      entriesForGesture: (grabbed, capability) =>
-        this.#gesturePipeline.entriesForGesture(grabbed, capability),
-      draftFor: (gesture, entries, dxPx, gestureOptions) =>
-        this.#gesturePipeline.draftFor(gesture, entries, dxPx, gestureOptions),
-      commit: (gesture, draft) => this.#gesturePipeline.commit(gesture, draft),
-      preview: (draft) => this.#gesturePipeline.preview(draft),
-      // S3.6 reserved (extender-ghost trigger) — nothing reads this yet in S3.3.
-      pointerAt: () => {},
+      session: (grabbed, gesture) => this.#gesturePipeline.session(grabbed, gesture),
     });
     this.#wiring = false;
     this.#frames.flush();
@@ -488,61 +460,6 @@ export class GanttShell {
   #entryFor(item: ItemId): Entry | undefined {
     const id = this.#itemEntryIds.get(item);
     return id !== undefined ? this.#options.dataset.entries.get(id) : undefined;
-  }
-
-  /** D-S3-19: just the grabbed entry when it is not part of a multi-entry selection; else every
-   *  *capable* selected entry, grabbed first (D-S3-22) — an incapable one is skipped, not blocking.
-   *  `capability` is `'move'` for a move gesture, `'resize'` for a resize gesture (S3.4) — the same
-   *  rule, checked against whichever capability the grabbed gesture actually needs. */
-  #entriesForGesture(grabbedId: EntryId, capability: keyof Interactions = 'move'): readonly Entry[] {
-    const inMultiSelection = this.#selection.includes(grabbedId) && this.#selection.length > 1;
-    const candidateIds = inMultiSelection ? this.#selection : [grabbedId];
-    const entries: Entry[] = [];
-    const seen = new Set<EntryId>();
-    const pushCapable = (id: EntryId): void => {
-      if (seen.has(id)) return;
-      const entry = this.#options.dataset.entries.get(id);
-      if (entry && this.#canGesture(capability, id)) {
-        entries.push(entry);
-        seen.add(id);
-      }
-    };
-    pushCapable(grabbedId);
-    for (const id of candidateIds) pushCapable(id);
-    return entries;
-  }
-
-  /** D-S3-12: an unset/`'tick'` `ViewPreset.snap` resolves to the current preset's own tick unit;
-   *  Alt (`suspendSnap`) always wins and falls back to raw millisecond placement. */
-  #resolveSnap(suspendSnap: boolean | undefined): SnapUnit {
-    if (suspendSnap) return 'none';
-    const snap = this.#viewport.preset.snap ?? 'tick';
-    if (snap === 'none') return 'none';
-    if (snap === 'tick') {
-      return { unit: this.#viewport.preset.tickUnit, increment: this.#viewport.preset.tickIncrement };
-    }
-    return snap;
-  }
-
-  #applyPreview(draft: EntryEdits | undefined): void {
-    if (!draft || draft.size === 0) {
-      setOptional(this.#interactionState, 'preview', undefined);
-      this.#backend.applyState(this.#interactionState);
-      return;
-    }
-    const entries: Entry[] = [];
-    for (const id of draft.keys()) {
-      const entry = this.#options.dataset.entries.get(id);
-      if (entry) entries.push(entry);
-    }
-    const preview = previewOffsets({
-      proposed: draft,
-      extra: EMPTY_EDITS,
-      entries,
-      scale: this.#viewport.timeScale,
-    });
-    setOptional(this.#interactionState, 'preview', preview);
-    this.#backend.applyState(this.#interactionState);
   }
 
   get theme(): Theme {

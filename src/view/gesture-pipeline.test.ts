@@ -2,13 +2,13 @@ import { describe, expect, it, vi } from 'vitest';
 import { GesturePipeline } from './gesture-pipeline.js';
 import type { GesturePipelineDeps } from './gesture-pipeline.js';
 import { entryId } from '../model/index.js';
-import type { Entry, EntryEdits, EntryId, Instant } from '../model/index.js';
-import type { TimeScale } from '../layout/index.js';
+import type { Entry, EntryId, Instant } from '../model/index.js';
+import type { TimeScale, ViewPreset } from '../layout/index.js';
 
 /** `view/` may not import `time/` (I1) — a linear px<->ms fake stands in for the bound `TimeScale`;
- *  paired with `snap: 'none'` (unused zone) this is exactly what `draftForMove`/`draftForResize`
- *  read (`scale.xForInstant`/`scale.instantForX`), so the real `layout/gesture-draft.ts` math still
- *  runs unmocked. */
+ *  paired with `snap: 'none'` (the default preset below) this is exactly what
+ *  `draftForMove`/`draftForResize` read (`scale.xForInstant`/`scale.instantForX`), so the real
+ *  `layout/gesture-draft.ts` math still runs unmocked. */
 const linearScale: TimeScale = {
   range: { start: 0 as Instant, end: 1000 as Instant },
   timeZone: 'UTC',
@@ -20,6 +20,8 @@ const linearScale: TimeScale = {
   contentWidth: 1000,
 };
 
+const noneSnapPreset = { snap: 'none' } as unknown as ViewPreset;
+
 function entry(id: string, start: number, end: number): Entry {
   return { id: entryId(id), kind: 'span', name: id, start: start as Instant, end: end as Instant };
 }
@@ -27,128 +29,165 @@ function entry(id: string, start: number, end: number): Entry {
 function makeDeps(overrides: Partial<GesturePipelineDeps> = {}): {
   deps: GesturePipelineDeps;
   emitted: [string, unknown][];
-  applied: (EntryEdits | undefined)[];
+  applied: unknown[];
 } {
   const emitted: [string, unknown][] = [];
-  const applied: (EntryEdits | undefined)[] = [];
+  const applied: unknown[] = [];
+  const entries = new Map<EntryId, Entry>();
   const deps: GesturePipelineDeps = {
     timeZone: () => 'UTC',
     timeScale: () => linearScale,
-    snap: () => 'none',
-    entriesForGesture: (grabbed) => [entry(grabbed, 0, 100)],
+    preset: () => noneSnapPreset,
+    selection: () => [],
+    entryById: (id) => entries.get(id),
+    canGesture: () => true,
     commitEntryEdits: () => true,
     emit: (name, payload) => {
       emitted.push([name, payload]);
       return undefined as never;
     },
-    applyPreview: (draft) => applied.push(draft),
+    applyPreview: (preview) => applied.push(preview),
     ...overrides,
   };
   return { deps, emitted, applied };
 }
 
-describe('GesturePipeline.draftFor (D-GH-2)', () => {
-  it('moves a single entry by raw px delta when snap is none', () => {
-    const { deps } = makeDeps();
+/** Wires `entryById`/`selection` off a fixed roster, the shape most tests below want: one grabbed
+ *  entry, every capability granted, no multi-selection. */
+function withRoster(entries: readonly Entry[], overrides: Partial<GesturePipelineDeps> = {}) {
+  const byId = new Map(entries.map((e) => [e.id, e]));
+  return makeDeps({ entryById: (id) => byId.get(id), ...overrides });
+}
+
+describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
+  it('returns undefined when the grabbed entry is not capable', () => {
+    const { deps } = withRoster([entry('a', 0, 100)], { canGesture: () => false });
     const pipeline = new GesturePipeline(deps);
+
+    expect(pipeline.session(entryId('a'), { kind: 'move' })).toBeUndefined();
+  });
+
+  it('returns undefined when the grabbed entry has no dataset row', () => {
+    const { deps } = withRoster([], {});
+    const pipeline = new GesturePipeline(deps);
+
+    expect(pipeline.session(entryId('missing'), { kind: 'move' })).toBeUndefined();
+  });
+
+  it("asks canGesture with 'move' for a move gesture and 'resize' for a resize gesture", () => {
+    const canGesture = vi.fn(() => true);
+    const { deps } = withRoster([entry('a', 0, 100)], { canGesture });
+    const pipeline = new GesturePipeline(deps);
+
+    pipeline.session(entryId('a'), { kind: 'move' });
+    expect(canGesture).toHaveBeenCalledWith('move', entryId('a'));
+
+    pipeline.session(entryId('a'), { kind: 'resize', edge: 'end' });
+    expect(canGesture).toHaveBeenCalledWith('resize', entryId('a'));
+  });
+
+  it('arms every capable entry of a multi-selection, grabbed first, and skips an incapable one', () => {
+    const a = entry('a', 0, 100);
+    const b = entry('b', 100, 200);
+    const c = entry('c', 200, 300);
+    const checked: EntryId[] = [];
+    const { deps } = withRoster([a, b, c], {
+      selection: () => [b.id, a.id, c.id],
+      canGesture: (_capability, id) => {
+        checked.push(id);
+        return id !== c.id;
+      },
+    });
+    const pipeline = new GesturePipeline(deps);
+
+    // session() resolves the armed entry set synchronously (D-S3-19/D-S3-22): a first, then the
+    // selection in order — b (capable), a (already seen, skipped without a second capability check),
+    // c (checked and refused).
+    expect(pipeline.session(a.id, { kind: 'move' })).toBeDefined();
+    expect(checked).toEqual([a.id, b.id, c.id]);
+  });
+
+  it('preview() moves a single entry by raw px delta when snap is none', async () => {
+    const { deps, applied } = withRoster([entry('a', 100, 200)]);
+    const pipeline = new GesturePipeline(deps);
+    const session = pipeline.session(entryId('a'), { kind: 'move' })!;
+
+    session.preview(50);
+    expect(applied).toEqual([]); // rAF-coalesced, not applied synchronously
+
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    const preview = applied.at(-1) as readonly { itemId: string; dx: number; dWidth: number }[];
+    expect(preview).toHaveLength(1);
+    expect(preview[0]?.dx).toBe(50);
+    expect(preview[0]?.dWidth).toBe(0);
+  });
+
+  it('resizes the start edge, clamped so it never crosses the end', async () => {
     const a = entry('a', 100, 200);
+    const { deps, applied } = withRoster([a]);
+    const pipeline = new GesturePipeline(deps);
+    const session = pipeline.session(a.id, { kind: 'resize', edge: 'start' })!;
 
-    const draft = pipeline.draftFor({ kind: 'move' }, [a], 50, undefined);
-
-    expect(draft.get(a.id)).toEqual({ start: 150, end: 250 });
+    session.preview(150); // would push start past end — clamped in layout/gesture-draft.ts
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    const preview = applied.at(-1) as readonly { dx: number; dWidth: number }[];
+    // Clamped to the fixed end (200): start moves the full remaining span, width collapses to 0.
+    expect(preview[0]?.dx).toBe(100);
+    expect(preview[0]?.dWidth).toBe(-100);
   });
 
-  it('moves every entry of a multi-select rigidly by the grabbed entry’s own delta', () => {
-    const { deps } = makeDeps();
+  it('passes suspendSnap through to the resolved preset snap', async () => {
+    const preset = vi.fn(() => ({ snap: 'tick', tickUnit: 'hour', tickIncrement: 1 }) as ViewPreset);
+    const { deps, applied } = withRoster([entry('a', 0, 100)], { preset });
     const pipeline = new GesturePipeline(deps);
-    const a = entry('a', 100, 200);
-    const b = entry('b', 300, 400);
+    const session = pipeline.session(entryId('a'), { kind: 'move' })!;
 
-    const draft = pipeline.draftFor({ kind: 'move' }, [a, b], 50, undefined);
-
-    expect(draft.get(a.id)).toEqual({ start: 150, end: 250 });
-    expect(draft.get(b.id)).toEqual({ start: 350, end: 450 });
+    // suspendSnap: true always falls back to raw px, bypassing the tick preset entirely.
+    session.preview(37, { suspendSnap: true });
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    const preview = applied.at(-1) as readonly { dx: number }[];
+    expect(preview[0]?.dx).toBe(37);
   });
 
-  it('resizes the start edge, clamped so it never crosses the end', () => {
-    const { deps } = makeDeps();
+  it('coalesces several preview() calls into one applyPreview call, with only the last draft', async () => {
+    const { deps, applied } = withRoster([entry('a', 0, 100)]);
     const pipeline = new GesturePipeline(deps);
-    const a = entry('a', 100, 200);
+    const session = pipeline.session(entryId('a'), { kind: 'move' })!;
 
-    const draft = pipeline.draftFor({ kind: 'resize', edge: 'start' }, [a], 150, undefined);
-    expect(draft.get(a.id)).toEqual({ start: 200, end: 200 }); // clamped at the fixed end
+    session.preview(10);
+    session.preview(20);
+    expect(applied).toEqual([]);
 
-    const normal = pipeline.draftFor({ kind: 'resize', edge: 'start' }, [a], 30, undefined);
-    expect(normal.get(a.id)).toEqual({ start: 130, end: 200 });
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    expect(applied).toHaveLength(1);
+    const preview = applied[0] as readonly { dx: number }[];
+    expect(preview[0]?.dx).toBe(20);
   });
 
-  it('resizes the end edge, clamped so it never crosses the start', () => {
-    const { deps } = makeDeps();
+  it('commit() on a move gesture fires beforeEntryMove, writes, then entryMove', async () => {
+    const { deps, emitted } = withRoster([entry('a', 100, 200)]);
     const pipeline = new GesturePipeline(deps);
-    const a = entry('a', 100, 200);
+    const session = pipeline.session(entryId('a'), { kind: 'move' })!;
 
-    const draft = pipeline.draftFor({ kind: 'resize', edge: 'end' }, [a], -150, undefined);
-    expect(draft.get(a.id)).toEqual({ start: 100, end: 100 }); // clamped at the fixed start
-  });
-
-  it('passes suspendSnap through to the injected snap resolver', () => {
-    const snap = vi.fn().mockReturnValue('none');
-    const { deps } = makeDeps({ snap });
-    const pipeline = new GesturePipeline(deps);
-    const a = entry('a', 100, 200);
-
-    pipeline.draftFor({ kind: 'move' }, [a], 10, { suspendSnap: true });
-    expect(snap).toHaveBeenCalledWith(true);
-
-    pipeline.draftFor({ kind: 'move' }, [a], 10, undefined);
-    expect(snap).toHaveBeenCalledWith(undefined);
-  });
-});
-
-describe('GesturePipeline.entriesForGesture', () => {
-  it('delegates to the injected deps', () => {
-    const entriesForGesture = vi.fn((grabbed: EntryId) => [entry(grabbed, 0, 1)]);
-    const { deps } = makeDeps({ entriesForGesture });
-    const pipeline = new GesturePipeline(deps);
-
-    pipeline.entriesForGesture(entryId('a'), 'resize');
-    expect(entriesForGesture).toHaveBeenCalledWith(entryId('a'), 'resize');
-  });
-});
-
-describe('GesturePipeline.commit (D-S3-16/D-S3-22)', () => {
-  it('an empty draft resolves false and emits nothing', async () => {
-    const { deps, emitted } = makeDeps();
-    const pipeline = new GesturePipeline(deps);
-
-    await expect(pipeline.commit({ kind: 'move' }, new Map())).resolves.toBe(false);
-    expect(emitted).toEqual([]);
-  });
-
-  it('a move commit fires beforeEntryMove, writes, then entryMove', async () => {
-    const { deps, emitted } = makeDeps();
-    const pipeline = new GesturePipeline(deps);
-    const draft: EntryEdits = new Map([[entryId('a'), { start: 10 as Instant, end: 20 as Instant }]]);
-
-    const committed = await pipeline.commit({ kind: 'move' }, draft);
+    const committed = await session.commit(50);
 
     expect(committed).toBe(true);
     expect(emitted.map(([name]) => name)).toEqual(['beforeEntryMove', 'entryMove']);
   });
 
-  it('a resize commit fires beforeEntryResize/entryResize, carrying the grabbed edge', async () => {
-    const { deps, emitted } = makeDeps();
+  it('commit() on a resize gesture fires beforeEntryResize/entryResize, carrying the grabbed edge', async () => {
+    const { deps, emitted } = withRoster([entry('a', 100, 200)]);
     const pipeline = new GesturePipeline(deps);
-    const draft: EntryEdits = new Map([[entryId('a'), { start: 10 as Instant, end: 20 as Instant }]]);
+    const session = pipeline.session(entryId('a'), { kind: 'resize', edge: 'end' })!;
 
-    await pipeline.commit({ kind: 'resize', edge: 'end' }, draft);
+    await session.commit(50);
 
     expect(emitted.map(([name]) => name)).toEqual(['beforeEntryResize', 'entryResize']);
     expect((emitted[0]![1] as { edge: string }).edge).toBe('end');
   });
 
-  it('a sync veto (beforeEntryMove returning false) skips the write and resolves false', async () => {
-    const { deps, emitted } = makeDeps({
+  it('a sync veto (beforeEntryMove returning false) skips the write and resolves commit() false', async () => {
+    const { deps, emitted } = withRoster([entry('a', 100, 200)], {
       emit: ((name: string, payload: unknown) => {
         emitted.push([name, payload]);
         return name === 'beforeEntryMove' ? false : undefined;
@@ -156,9 +195,9 @@ describe('GesturePipeline.commit (D-S3-16/D-S3-22)', () => {
     });
     const commitEntryEdits = vi.fn(() => true);
     const pipeline = new GesturePipeline({ ...deps, commitEntryEdits });
-    const draft: EntryEdits = new Map([[entryId('a'), { start: 10 as Instant, end: 20 as Instant }]]);
+    const session = pipeline.session(entryId('a'), { kind: 'move' })!;
 
-    const committed = await pipeline.commit({ kind: 'move' }, draft);
+    const committed = await session.commit(50);
 
     expect(committed).toBe(false);
     expect(commitEntryEdits).not.toHaveBeenCalled();
@@ -166,29 +205,25 @@ describe('GesturePipeline.commit (D-S3-16/D-S3-22)', () => {
   });
 
   it('commitEntryEdits resolving false (async veto already folded by the caller) skips the after-event', async () => {
-    const { deps, emitted } = makeDeps({ commitEntryEdits: () => false });
+    const { deps, emitted } = withRoster([entry('a', 100, 200)], { commitEntryEdits: () => false });
     const pipeline = new GesturePipeline(deps);
-    const draft: EntryEdits = new Map([[entryId('a'), { start: 10 as Instant, end: 20 as Instant }]]);
+    const session = pipeline.session(entryId('a'), { kind: 'move' })!;
 
-    const committed = await pipeline.commit({ kind: 'move' }, draft);
+    const committed = await session.commit(50);
 
     expect(committed).toBe(false);
     expect(emitted.map(([name]) => name)).toEqual(['beforeEntryMove']);
   });
-});
 
-describe('GesturePipeline.preview (D-S3-18)', () => {
-  it('coalesces several preview() calls into one applyPreview call, with only the last draft', async () => {
-    const { deps, applied } = makeDeps();
+  it('cancel() clears the preview and never commits', async () => {
+    const { deps, applied } = withRoster([entry('a', 100, 200)]);
     const pipeline = new GesturePipeline(deps);
-    const draftA: EntryEdits = new Map([[entryId('a'), { start: 1 as Instant, end: 2 as Instant }]]);
-    const draftB: EntryEdits = new Map([[entryId('b'), { start: 3 as Instant, end: 4 as Instant }]]);
+    const session = pipeline.session(entryId('a'), { kind: 'move' })!;
 
-    pipeline.preview(draftA);
-    pipeline.preview(draftB);
-    expect(applied).toEqual([]);
-
+    session.preview(50);
+    session.cancel();
     await new Promise((resolve) => requestAnimationFrame(resolve));
-    expect(applied).toEqual([draftB]);
+
+    expect(applied.at(-1)).toBeUndefined();
   });
 });

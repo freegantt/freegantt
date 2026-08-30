@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { attachEntryGestures } from './entry-gestures.js';
-import type { EntryGestureContext, EntryGesture } from './entry-gesture-context.js';
+import type { DraftOptions, EntryGestureContext, EntryGesture } from '../view/index.js';
 import { entryId, itemId } from '../model/index.js';
 import type { Entry, EntryEdits, EntryId, Instant, ItemId } from '../model/index.js';
 
@@ -32,14 +32,35 @@ function move(clientX: number, mods: Partial<PointerEventInit> = {}): PointerEve
   return new PointerEvent('pointermove', { clientX, clientY: 0, pointerId: 1, ...mods });
 }
 
+/** The `session()`-shaped pieces a test wants to control — everything `GesturePipeline.session()`
+ *  would otherwise resolve for real (D-GH-1). Not `EntryGestureContext` members themselves: they
+ *  build the fake `session` this file's `ctx.session` returns. */
+interface SessionOverrides {
+  entriesForGesture?: (grabbed: EntryId, capability: 'move' | 'resize') => Entry[];
+  draftFor?: (gesture: EntryGesture, entries: Entry[], dxPx: number, options?: DraftOptions) => EntryEdits;
+  commit?: (gesture: EntryGesture, draft: EntryEdits) => Promise<boolean>;
+}
+
 /** `hitTest` reads a fake `data-hit-x` position map instead of real layout — this suite is about
  *  pointer semantics (D-S3-10), not hit-testing, which `render/dom/index.test.ts` already covers. */
-function makeContext(overrides: Partial<EntryGestureContext> = {}): {
+function makeContext(overrides: Partial<EntryGestureContext> & SessionOverrides = {}): {
   ctx: EntryGestureContext;
   proposals: (readonly EntryId[])[];
+  previews: (EntryEdits | undefined)[];
+  commits: [EntryGesture, EntryEdits][];
 } {
+  const {
+    entriesForGesture = (grabbed) => [entryFor(grabbed)],
+    draftFor = () => new Map(),
+    commit = () => Promise.resolve(true),
+    ...ctxOverrides
+  } = overrides;
+
   let selection: readonly EntryId[] = [];
   const proposals: (readonly EntryId[])[] = [];
+  const previews: (EntryEdits | undefined)[] = [];
+  const commits: [EntryGesture, EntryEdits][] = [];
+
   const ctx: EntryGestureContext = {
     hitTest: (x) => (x >= 0 && x < ORDER.length ? { itemId: itemId(ORDER[x]!) } : undefined),
     entryFor: (item: ItemId) => {
@@ -49,11 +70,25 @@ function makeContext(overrides: Partial<EntryGestureContext> = {}): {
     can: () => true,
     rowOrder: () => ORDER,
     setHovered: () => {},
-    entriesForGesture: (grabbed) => [entryFor(grabbed)],
-    draftFor: () => new Map(),
-    commit: () => Promise.resolve(true),
-    preview: () => {},
-    pointerAt: () => {},
+    session: (grabbed, gesture) => {
+      const entries = entriesForGesture(grabbed, gesture.kind === 'resize' ? 'resize' : 'move');
+      if (entries.length === 0) return undefined;
+      return {
+        preview: (dxPx, options) => {
+          const draft = draftFor(gesture, entries, dxPx, options);
+          previews.push(draft);
+        },
+        commit: (dxPx, options) => {
+          const draft = draftFor(gesture, entries, dxPx, options);
+          previews.push(undefined);
+          commits.push([gesture, draft]);
+          return commit(gesture, draft);
+        },
+        cancel: () => {
+          previews.push(undefined);
+        },
+      };
+    },
     selection: {
       get: () => selection,
       propose: (next) => {
@@ -61,9 +96,9 @@ function makeContext(overrides: Partial<EntryGestureContext> = {}): {
         proposals.push(next);
       },
     },
-    ...overrides,
+    ...ctxOverrides,
   };
-  return { ctx, proposals };
+  return { ctx, proposals, previews, commits };
 }
 
 function mockPointerCapture(el: HTMLElement): void {
@@ -218,17 +253,10 @@ describe('attachEntryGestures — move (S3.3)', () => {
     const pane = document.createElement('div');
     mockPointerCapture(pane);
     const container = document.createElement('div');
-    const previews: (EntryEdits | undefined)[] = [];
-    const commits: [EntryGesture, EntryEdits][] = [];
-    const { ctx, proposals } = makeContext({
+    const { ctx, proposals, previews, commits } = makeContext({
       can: (capability) => capability === 'move' || capability === 'select',
-      preview: (draft) => previews.push(draft),
       draftFor: (_gesture, entries, dxPx) =>
         new Map(entries.map((e) => [e.id, { start: toInstant(dxPx), end: toInstant(dxPx) }])),
-      commit: (gesture, draft) => {
-        commits.push([gesture, draft]);
-        return Promise.resolve(true);
-      },
     });
     attachEntryGestures(pane, container, ctx);
 
@@ -247,11 +275,9 @@ describe('attachEntryGestures — move (S3.3)', () => {
     const pane = document.createElement('div');
     mockPointerCapture(pane);
     const container = document.createElement('div');
-    const previews: (EntryEdits | undefined)[] = [];
     const commit = vi.fn(() => Promise.resolve(true));
-    const { ctx } = makeContext({
+    const { ctx, previews, commits } = makeContext({
       can: (capability) => capability === 'move' || capability === 'select',
-      preview: (draft) => previews.push(draft),
       commit,
     });
     attachEntryGestures(pane, container, ctx);
@@ -262,6 +288,7 @@ describe('attachEntryGestures — move (S3.3)', () => {
 
     expect(previews.at(-1)).toBeUndefined();
     expect(commit).not.toHaveBeenCalled();
+    expect(commits).toEqual([]);
   });
 
   it('a pointerdown on a bar without move capability falls back to a plain click on pointerup', () => {
@@ -307,18 +334,13 @@ describe('attachEntryGestures — resize (S3.4)', () => {
     const pane = document.createElement('div');
     mockPointerCapture(pane);
     const container = document.createElement('div');
-    const commits: [EntryGesture, EntryEdits][] = [];
     const capabilities: ('move' | 'resize')[] = [];
-    const { ctx, proposals } = makeContext({
+    const { ctx, proposals, commits } = makeContext({
       hitTest: () => ({ itemId: itemId(A), edge: 'end' }),
       can: (capability) => capability === 'resize' || capability === 'select',
       entriesForGesture: (grabbed, capability) => {
         capabilities.push(capability);
         return [entryFor(grabbed)];
-      },
-      commit: (gesture, draft) => {
-        commits.push([gesture, draft]);
-        return Promise.resolve(true);
       },
     });
     attachEntryGestures(pane, container, ctx);
