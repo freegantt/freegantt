@@ -17,6 +17,9 @@ export interface InteractionState {
    *  Undefined outside a gesture — a backend parks every previewed bar back on its committed
    *  transform the moment this clears. */
   preview?: readonly ItemPreview[];
+  /** S3.5, D-S3-17: which bars a `beforeEntryMove`/`beforeEntryResize` handler's unsettled Promise is
+   *  holding — painted `data-state~="pending"` (reduced opacity). Undefined once it settles either way. */
+  pendingItemIds?: readonly ItemId[];
 }
 
 export interface HitResult {

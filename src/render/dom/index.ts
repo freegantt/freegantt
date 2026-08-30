@@ -73,6 +73,8 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
   let paintedSelected: ReadonlySet<ItemId> = new Set();
   let paintedResizable: ItemId | undefined;
   let paintedMovable: ItemId | undefined;
+  /** S3.5, D-S3-17: bars an unsettled `beforeEntryMove`/`beforeEntryResize` Promise is holding. */
+  let paintedPending: ReadonlySet<ItemId> = new Set();
   /** S3.3, D-S3-18: items this backend currently holds off their committed transform for a drag
    *  preview — so the next `applyState` knows which ones to park back when they drop out of the set. */
   let paintedPreview: ReadonlySet<ItemId> = new Set();
@@ -127,12 +129,18 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
     paintedPreview = new Set(next.keys());
   }
 
-  function paintDataState(itemId: ItemId, hovered: ItemId | undefined, selected: ReadonlySet<ItemId>): void {
+  function paintDataState(
+    itemId: ItemId,
+    hovered: ItemId | undefined,
+    selected: ReadonlySet<ItemId>,
+    pending: ReadonlySet<ItemId>,
+  ): void {
     const node = barLayerCache.node(itemId);
     if (!node) return;
     const tokens: string[] = [];
     if (hovered === itemId) tokens.push('hovered');
     if (selected.has(itemId)) tokens.push('selected');
+    if (pending.has(itemId)) tokens.push('pending');
     node.dataset['state'] = tokens.join(' ');
   }
 
@@ -343,6 +351,7 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
       // bar's node from the last sync().
       const nextSelected = new Set(state.selectedItemIds ?? []);
       const nextHovered = state.hoveredItemId;
+      const nextPending = new Set(state.pendingItemIds ?? []);
       const changed = new Set<ItemId>();
       paintedSelected.forEach((id) => {
         if (!nextSelected.has(id)) changed.add(id);
@@ -350,13 +359,20 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
       nextSelected.forEach((id) => {
         if (!paintedSelected.has(id)) changed.add(id);
       });
+      paintedPending.forEach((id) => {
+        if (!nextPending.has(id)) changed.add(id);
+      });
+      nextPending.forEach((id) => {
+        if (!paintedPending.has(id)) changed.add(id);
+      });
       if (paintedHovered !== nextHovered) {
         if (paintedHovered !== undefined) changed.add(paintedHovered);
         if (nextHovered !== undefined) changed.add(nextHovered);
       }
-      changed.forEach((id) => paintDataState(id, nextHovered, nextSelected));
+      changed.forEach((id) => paintDataState(id, nextHovered, nextSelected, nextPending));
       paintedSelected = nextSelected;
       paintedHovered = nextHovered;
+      paintedPending = nextPending;
 
       // D-S3-8: the shared handle pair follows `resizableItemId`, positioned off the committed
       // geometry `syncBars` already recorded — never a per-item computation of its own.
@@ -408,6 +424,7 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
       barGeomByItemId.clear();
       paintedHovered = undefined;
       paintedSelected = new Set();
+      paintedPending = new Set();
       paintedResizable = undefined;
       paintedMovable = undefined;
       paintedPreview = new Set();

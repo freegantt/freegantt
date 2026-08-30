@@ -5,6 +5,8 @@ export { GanttShell } from './gantt-shell.js';
 export type { GanttShellOptions, Theme } from './gantt-shell.js';
 export type {
   GanttEventMap,
+  GanttEventHandler,
+  AsyncCancelableEvent,
   GridWidthChange,
   NavigationChange,
   SelectionChange,

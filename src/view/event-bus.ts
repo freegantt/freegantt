@@ -56,11 +56,15 @@ export interface EntryResize extends EntryGestureEvent {
   readonly edge: 'start' | 'end';
 }
 
+/** S3.5, D-S3-17: the only two event names whose handler may veto asynchronously, by returning a
+ *  `Promise<void | false>` instead of resolving `false` synchronously — `EventBus<GanttEventMap,
+ *  AsyncCancelableEvent>` is what actually grants that return shape at `on`/`off`/`emit`'s call sites
+ *  (`data/event-bus.ts`'s `TAsyncKeys`). Every other event (grid width, selection) stays sync-only:
+ *  `plans/02` §3's async-veto path is scoped to a data gesture's own before-event, not every veto. */
+export type AsyncCancelableEvent = 'beforeEntryMove' | 'beforeEntryResize';
+
 /** Declared events fire (I11). `navigationChange` has no `before*` pair: Preset/Fit/Pan writes are
- *  reconfiguration, not a vetoable gesture (S1.9). Sync veto only on grid width and selection; the
- *  async-veto path `plans/02` §3 describes is `beforeEntryMove`/`beforeEntryResize` only (D-S3-17),
- *  landing with S3.5 — S3.3/S3.4 ship the sync half only (a handler may still return `false` to veto;
- *  nothing here awaits a returned Promise yet). */
+ *  reconfiguration, not a vetoable gesture (S1.9). */
 export interface GanttEventMap {
   beforeGridWidthChange: GridWidthChange;
   gridWidthChange: GridWidthChange;
@@ -75,3 +79,10 @@ export interface GanttEventMap {
   beforeEntryResize: EntryResize;
   entryResize: EntryResize;
 }
+
+/** The one handler shape `Gantt.on`/`Gantt.off` and `GanttShell.on`/`GanttShell.off` all share
+ *  (D-S3-17) — declared once here rather than repeating the same conditional at each of those four
+ *  call sites. `K extends AsyncCancelableEvent` is the only two names a handler may resolve async. */
+export type GanttEventHandler<K extends keyof GanttEventMap> = (
+  payload: GanttEventMap[K],
+) => void | false | (K extends AsyncCancelableEvent ? Promise<void | false> : never);

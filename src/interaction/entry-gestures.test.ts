@@ -84,6 +84,12 @@ function makeContext(overrides: Partial<EntryGestureContext> & SessionOverrides 
           commits.push([gesture, draft]);
           return commit(gesture, draft);
         },
+        nudge: (direction, options) => {
+          const draft = draftFor(gesture, entries, direction, options);
+          previews.push(undefined);
+          commits.push([gesture, draft]);
+          return commit(gesture, draft);
+        },
         cancel: () => {
           previews.push(undefined);
         },

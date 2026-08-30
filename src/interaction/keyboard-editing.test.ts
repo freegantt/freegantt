@@ -1,0 +1,200 @@
+import { describe, expect, it, vi } from 'vitest';
+import { attachKeyboardEditing } from './keyboard-editing.js';
+import type { EntryGesture, EntryGestureContext, EntryGestureSession } from '../view/index.js';
+import { entryId, itemId } from '../model/index.js';
+import type { Entry, EntryId, Instant, ItemId } from '../model/index.js';
+
+const A = entryId('a');
+const B = entryId('b');
+const C = entryId('c');
+const ORDER: readonly EntryId[] = [A, B, C];
+
+function toInstant(ms: number): Instant {
+  return ms as unknown as Instant;
+}
+
+function entryFor(id: EntryId): Entry {
+  return { id, kind: 'span', name: id, start: toInstant(0), end: toInstant(1) };
+}
+
+function key(type: 'keydown', props: Partial<KeyboardEventInit> = {}): KeyboardEvent {
+  return new KeyboardEvent(type, { bubbles: true, cancelable: true, ...props });
+}
+
+interface ContextOptions {
+  /** Row ids `can('select', ...)` refuses — everything else defaults capable. */
+  incapableRows?: readonly EntryId[];
+  /** `ctx.session()` returns `undefined` for these grabbed ids — simulates an incapable grab or a
+   *  pending (D-S3-17) arm-lock refusal. */
+  refuseSession?: readonly EntryId[];
+}
+
+function makeContext(
+  selectionInit: readonly EntryId[],
+  options: ContextOptions = {},
+): {
+  ctx: EntryGestureContext;
+  proposals: (readonly EntryId[])[];
+  sessions: [EntryId, EntryGesture][];
+  nudges: [1 | -1, boolean | undefined][];
+} {
+  const { incapableRows = [], refuseSession = [] } = options;
+  let selection: readonly EntryId[] = selectionInit;
+  const proposals: (readonly EntryId[])[] = [];
+  const sessions: [EntryId, EntryGesture][] = [];
+  const nudges: [1 | -1, boolean | undefined][] = [];
+
+  const ctx: EntryGestureContext = {
+    hitTest: () => undefined,
+    entryFor: (item: ItemId) => {
+      const id = ORDER.find((candidate) => itemId(candidate) === item);
+      return id !== undefined ? entryFor(id) : undefined;
+    },
+    can: (capability, entry) => (capability === 'select' ? !incapableRows.includes(entry.id) : true),
+    rowOrder: () => ORDER,
+    setHovered: () => {},
+    selection: {
+      get: () => selection,
+      propose: (next) => {
+        selection = next;
+        proposals.push(next);
+      },
+    },
+    session: (grabbed, gesture): EntryGestureSession | undefined => {
+      if (refuseSession.includes(grabbed)) return undefined;
+      sessions.push([grabbed, gesture]);
+      return {
+        preview: () => {},
+        commit: () => Promise.resolve(true),
+        nudge: (direction, opts) => {
+          nudges.push([direction, opts?.suspendSnap]);
+          return Promise.resolve(true);
+        },
+        cancel: () => {},
+      };
+    },
+  };
+  return { ctx, proposals, sessions, nudges };
+}
+
+describe('attachKeyboardEditing (S3.5, D-S3-13)', () => {
+  it('does nothing on any arrow key when nothing is selected — S3.7 owns the pan bindings', () => {
+    const container = document.createElement('div');
+    const { ctx, proposals, sessions } = makeContext([]);
+    attachKeyboardEditing(container, ctx);
+
+    container.dispatchEvent(key('keydown', { key: 'ArrowRight' }));
+    container.dispatchEvent(key('keydown', { key: 'ArrowUp' }));
+
+    expect(proposals).toEqual([]);
+    expect(sessions).toEqual([]);
+  });
+
+  it('ArrowRight nudges the selected entry forward by one step', () => {
+    const container = document.createElement('div');
+    const { ctx, sessions, nudges } = makeContext([A]);
+    attachKeyboardEditing(container, ctx);
+
+    container.dispatchEvent(key('keydown', { key: 'ArrowRight' }));
+
+    expect(sessions).toEqual([[A, { kind: 'move' }]]);
+    expect(nudges).toEqual([[1, undefined]]);
+  });
+
+  it('ArrowLeft nudges the selected entry backward by one step', () => {
+    const container = document.createElement('div');
+    const { ctx, nudges } = makeContext([A]);
+    attachKeyboardEditing(container, ctx);
+
+    container.dispatchEvent(key('keydown', { key: 'ArrowLeft' }));
+
+    expect(nudges).toEqual([[-1, undefined]]);
+  });
+
+  it('Shift+ArrowRight resizes the end edge forward', () => {
+    const container = document.createElement('div');
+    const { ctx, sessions, nudges } = makeContext([A]);
+    attachKeyboardEditing(container, ctx);
+
+    container.dispatchEvent(key('keydown', { key: 'ArrowRight', shiftKey: true }));
+
+    expect(sessions).toEqual([[A, { kind: 'resize', edge: 'end' }]]);
+    expect(nudges).toEqual([[1, undefined]]);
+  });
+
+  it('Alt+ArrowRight nudges with suspendSnap', () => {
+    const container = document.createElement('div');
+    const { ctx, nudges } = makeContext([A]);
+    attachKeyboardEditing(container, ctx);
+
+    container.dispatchEvent(key('keydown', { key: 'ArrowRight', altKey: true }));
+
+    expect(nudges).toEqual([[1, true]]);
+  });
+
+  it('an incapable or pending grab (ctx.session() undefined) no-ops silently', () => {
+    const container = document.createElement('div');
+    const { ctx, nudges } = makeContext([A], { refuseSession: [A] });
+    attachKeyboardEditing(container, ctx);
+
+    expect(() => container.dispatchEvent(key('keydown', { key: 'ArrowRight' }))).not.toThrow();
+    expect(nudges).toEqual([]);
+  });
+
+  it('ArrowDown moves the selection to the next select-capable row, skipping an incapable one', () => {
+    const container = document.createElement('div');
+    const { ctx, proposals } = makeContext([A], { incapableRows: [B] });
+    attachKeyboardEditing(container, ctx);
+
+    container.dispatchEvent(key('keydown', { key: 'ArrowDown' }));
+
+    expect(proposals).toEqual([[C]]);
+  });
+
+  it('ArrowUp moves the selection to the previous select-capable row', () => {
+    const container = document.createElement('div');
+    const { ctx, proposals } = makeContext([C]);
+    attachKeyboardEditing(container, ctx);
+
+    container.dispatchEvent(key('keydown', { key: 'ArrowUp' }));
+
+    expect(proposals).toEqual([[B]]);
+  });
+
+  it('ArrowUp at the top row leaves the selection untouched — no capable neighbour that way', () => {
+    const container = document.createElement('div');
+    const { ctx, proposals } = makeContext([A]);
+    attachKeyboardEditing(container, ctx);
+
+    container.dispatchEvent(key('keydown', { key: 'ArrowUp' }));
+
+    expect(proposals).toEqual([]);
+  });
+
+  it('preventDefault fires for a handled key, not for an unrelated one', () => {
+    const container = document.createElement('div');
+    const { ctx } = makeContext([A]);
+    attachKeyboardEditing(container, ctx);
+
+    const handled = key('keydown', { key: 'ArrowRight' });
+    const handledSpy = vi.spyOn(handled, 'preventDefault');
+    container.dispatchEvent(handled);
+    expect(handledSpy).toHaveBeenCalled();
+
+    const unrelated = key('keydown', { key: 'a' });
+    const unrelatedSpy = vi.spyOn(unrelated, 'preventDefault');
+    container.dispatchEvent(unrelated);
+    expect(unrelatedSpy).not.toHaveBeenCalled();
+  });
+
+  it('detach() removes the listener', () => {
+    const container = document.createElement('div');
+    const { ctx, nudges } = makeContext([A]);
+    const attachment = attachKeyboardEditing(container, ctx);
+
+    attachment.detach();
+    container.dispatchEvent(key('keydown', { key: 'ArrowRight' }));
+
+    expect(nudges).toEqual([]);
+  });
+});

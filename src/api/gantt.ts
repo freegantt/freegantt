@@ -2,7 +2,7 @@
 // instance owns its own shell and state so two Gantt instances on one page are fully independent.
 
 import { GanttShell } from '../view/index.js';
-import type { GanttEventMap, Interactions, Theme } from '../view/index.js';
+import type { GanttEventHandler, GanttEventMap, Interactions, Theme } from '../view/index.js';
 import { ScrollModel, TimeScaleModel } from '../layout/index.js';
 import type { PresetRef, TimeScaleFit, ViewPreset } from '../layout/index.js';
 import type { DateLineSpec } from '../layout/index.js';
@@ -13,7 +13,7 @@ import type { Dataset } from './dataset.js';
 // api/ is the composition root that reaches interaction/ in (plans/01 §1: `API --> INT`,
 // `plans/s3-direct-manipulation/README.md` §0) — `view/` cannot, so `GanttShell` takes this by
 // constructor injection rather than importing it itself (see `AttachEntryGestures` in gantt-shell.ts).
-import { attachEntryGestures } from '../interaction/index.js';
+import { attachEntryGestures, attachKeyboardEditing } from '../interaction/index.js';
 
 /** Public, loose. What `GanttOptions.dateLines` and `Gantt.dateLines` both take (S1.13, D-S1.13-2). */
 export interface DateLineInput {
@@ -112,6 +112,7 @@ export class Gantt {
         : {}),
       ...(options.interactions !== undefined ? { interactions: options.interactions } : {}),
       entryGestures: attachEntryGestures,
+      keyboardEditing: attachKeyboardEditing,
       // S3.3, D-S3-16: `GanttShell`'s own `dataset` option is `model/`'s narrow `Dataset` interface
       // ("a view never opens a transaction") — this class holds the full `api/Dataset`, so a
       // committed gesture draft reaches the store through here, not through the shell itself.
@@ -352,11 +353,11 @@ export class Gantt {
     this.#shell.reveal(entryId);
   }
 
-  on<K extends keyof GanttEventMap>(name: K, handler: (payload: GanttEventMap[K]) => void | false): void {
+  on<K extends keyof GanttEventMap>(name: K, handler: GanttEventHandler<K>): void {
     this.#shell.on(name, handler);
   }
 
-  off<K extends keyof GanttEventMap>(name: K, handler: (payload: GanttEventMap[K]) => void | false): void {
+  off<K extends keyof GanttEventMap>(name: K, handler: GanttEventHandler<K>): void {
     this.#shell.off(name, handler);
   }
 

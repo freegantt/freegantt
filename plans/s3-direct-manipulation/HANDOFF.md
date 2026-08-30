@@ -1,178 +1,129 @@
 # S3 implementation handoff
 
-Status as of 2026-08-30: **S3.4 (resize) is done, plus a same-day bug fix** (uncommitted — see
-below). All five checks are green (`pnpm vitest run` 586/586, `tsc --noEmit`, `eslint src harness`,
-`depcruise --config .dependency-cruiser.cjs src harness`, `node scripts/guard-red-test.mjs`), plus
-the full `playwright test` e2e suite (37/37, one unrelated scroll-sync flake that passed on retry).
-Continue at **S3.5 (keyboard parity + async veto)** — read
-[`s3.5-keyboard-parity-and-async-veto.md`](./s3.5-keyboard-parity-and-async-veto.md) before touching
-anything.
+Status as of 2026-08-30: **S3.5 (keyboard parity + async veto) is done.** All checks are green
+(`pnpm vitest run` 639/639, `pnpm typecheck`, `pnpm lint`, `pnpm boundaries`, `pnpm guards`,
+`node scripts/guard-red-test.mjs`, `pnpm build`, `pnpm api-report`), plus the full `playwright test`
+e2e suite (37/37). The gesture-host-refactor (between S3.4 and S3.5) was already done and committed
+before this session started; this session found the tracker files hadn't been updated to say so and
+fixed that alongside its own S3.5 work.
 
-## Bug found and fixed after S3.4 landed (not yet committed)
+Continue at **S3.6 (extender preview)** — read
+[`s3.6-extender-preview.md`](./s3.6-extender-preview.md) before touching anything; its status is
+"partial" already (some prior work landed), not a cold start.
 
-The user reported no visible way to resize an entry in `harness/`'s `index.html`. Root cause: in
-`src/render/dom/index.ts`'s `mount()`, the shared resize-handle pair (`startHandle`/`endHandle`,
-D-S3-8) was appended as a sibling of `.fg-bars` directly on `timelineHost`, so their
-`position: absolute` resolved against `.fg-timeline-pane` (the nearest positioned ancestor) instead
-of `.fg-bars` — the exact coordinate origin a bar's own `transform` (`syncBars`) uses. `.fg-header`
-sits above `.fg-bars` in normal flow (`position: sticky` still takes flow space), so every handle
-painted exactly one header-height too high — never over the bar it belonged to. Confirmed with a
-throwaway Playwright script before touching code: handle `y` was 21px above the bar `y` (`.fg-header`
-was 21px tall) in a real browser; a drag at the handle's true (invisible) position did nothing to
-the bar's width.
+## What landed this session (S3.5)
 
-**Why none of S3.4's own tests caught this**: `pnpm vitest run`'s `dom`-tagged tests run in
-jsdom/happy-dom, which never runs real CSS layout — an element positioned absolute against the wrong
-ancestor lays out identically to one positioned against the right one in that environment, so every
-S3.4 unit/integration test (`entry-gestures.test.ts`, `render/dom/index.test.ts`, `gantt.test.ts`)
-passed regardless. S3.4 shipped with **no real-browser (Playwright) e2e test at all** — the existing
-`e2e/pane-resize.spec.ts` covers the splitter between panes, not entry resize. Same failure class
-`e2e/row-bar-alignment.spec.ts`'s doc comment already calls out for a different bug (I9, S1) — worth
-rereading before any future `render/dom/index.ts` geometry change.
+**Keyboard nudge** reuses the pointer commit pipeline rather than a parallel calendar-stepping path:
 
-**Fix**: append `startHandle`/`endHandle` into `barLayer` (`.fg-bars`) itself instead of
-`timelineHost`, appended once at mount as the last two children. `sync-keyed.ts`'s `syncKeyed` only
-tracks and reorders nodes it created itself (its own `Map`) and never touches a foreign child, so the
-handles stay undisturbed at the end of `barLayer`'s children (still painted above every bar) on every
-later `syncBars` call — verified by reading `sync-keyed.ts` and confirming with the same Playwright
-script.
+- **`src/interaction/keyboard-editing.ts`** (new) — `attachKeyboardEditing(container, ctx)`. One
+  `keydown` listener, gated on `ctx.selection.get()[0]`: nothing selected is a no-op (S3.7 owns pan
+  bindings there, not yet built); something selected implements D-S3-13's table — `↑`/`↓` move the
+  selection to the next/previous `select`-capable row over `rowOrder()` (skipping incapable ones,
+  same shape `entry-gestures.ts`'s shift-click range already uses); `←`/`→` call
+  `ctx.session(grabbed, {kind:'move'}).nudge(direction)`; `Shift+←/→` grab `{kind:'resize',edge:'end'}`
+  instead; `Alt` passes `{suspendSnap:true}`. Never resolves a pixel or an `Instant` itself (I1) — it
+  only picks `direction: 1 | -1` and hands it to `session().nudge()`.
+- **`src/view/entry-gesture-context.ts`** — `EntryGestureSession` grew a fourth method,
+  `nudge(direction, options): Promise<boolean>`, alongside `preview`/`commit`/`cancel`.
+- **`src/view/gesture-pipeline.ts`** — `session()` now also returns `nudge`, implemented as
+  `#stepPx(gesture, anchor, suspendSnap) * direction` fed straight into the existing
+  `#draftFor`/`#commit` — `#stepPx` asks `TimeScale.widthForDuration` for one resolved snap unit's
+  px width (falling back to the preset's own tick when `suspendSnap` clears snap to `'none'`), so a
+  keyboard step is pixel-for-pixel the same math a mouse drag's `commit(dxPx)` already runs.
+- **`src/view/gantt-shell.ts`** — builds one `EntryGestureContext` object in the constructor now
+  (previously an inline literal passed only to `attachEntryGestures`) and passes the *same* instance to
+  both `options.entryGestures?.(...)` and the new `options.keyboardEditing?.(...)` (new
+  `AttachKeyboardEditing`/`KeyboardEditingAttachment` types, same DI shape as `AttachEntryGestures` —
+  `view/` still cannot import `interaction/`). `#keyboardEditing` field added, detached in `destroy()`.
+- **`src/api/gantt.ts`** — passes `attachKeyboardEditing` from `interaction/index.ts`.
 
-**New regression coverage**: `e2e/resize.spec.ts` (two tests) — handle-pair `y` matches the bar's own
-`y` within 1px, and dragging the end handle actually changes the bar's rendered width. Modeled on
-`e2e/row-bar-alignment.spec.ts`'s doc-comment pattern explaining why this needs a real browser.
-Verified the new tests fail (21px mismatch, no width change) against the pre-fix code via
-`git stash`, confirming they'd have caught this at S3.4 review time.
+**Async veto (D-S3-17)** — a `beforeEntryMove`/`beforeEntryResize` handler may now return
+`Promise<void | false>` instead of resolving synchronously:
 
-## Second bug in the same area, found immediately after the first fix (also uncommitted)
+- **`src/data/event-bus.ts`** — `EventBus<TEvents, TAsyncKeys extends keyof TEvents = never>`.
+  `TAsyncKeys` (default `never`) names which event keys may have a Promise-returning handler; `on`/
+  `off`'s handler type and `emit`'s return type widen only for those keys (a conditional type). Every
+  handler still runs (no short-circuit on a sync veto, unchanged from before); a sync `false` from any
+  handler wins immediately; if none did but some returned a Promise, the overall result is
+  `Promise.all(...).then(results => !results.includes(false))`. `data/dataset-state.ts`'s
+  `EventBus<DatasetEventMap>` (used by `data/transaction.ts`'s `beforeChange`) is unaffected — it never
+  names `TAsyncKeys`, so it stays sync-only exactly as before, no code there changed.
+- **`src/view/event-bus.ts`** — `AsyncCancelableEvent = 'beforeEntryMove' | 'beforeEntryResize'`
+  (the only two names), `GanttEventHandler<K>` (the one handler type `Gantt.on`/`off` and
+  `GanttShell.on`/`off` all share now, replacing four copies of the same inline union).
+  `GanttShell`'s `#events` is now `EventBus<GanttEventMap, AsyncCancelableEvent>`.
+- **`src/view/gesture-pipeline.ts`**'s `#commit` — **important shape**: a sync `true`/`false` from
+  `emit(...)` resolves (and, for `true`, actually commits — `commitEntryEdits` + the after-event) fully
+  *synchronously* inside `#commit`, wrapped only in `Promise.resolve()` at the very end. Only a
+  genuine Promise result goes through `#awaitVeto`, which sets `#pendingItemIds`/calls
+  `#deps.setPending(itemIds)`, awaits, then clears both in a `.finally()`. **Do not** restructure this
+  into one `.then()`-chained path for both cases — an earlier draft this session did that and broke
+  `api/gantt.test.ts`'s synchronous (non-`async`) drag tests, which assert `entryMove` fired *before*
+  the test function returns; that only holds if the sync path never crosses a microtask boundary.
+- **`session()`** now refuses to arm (`return undefined`) while `#pendingItemIds !== undefined` — one
+  choke point (I14) both the pointer path and `keyboard-editing.ts` go through, so neither needs its
+  own pending check.
+- **`src/render/backend.ts`** — `InteractionState.pendingItemIds?: readonly ItemId[]`.
+- **`src/render/dom/index.ts`** — `paintedPending` set (same diff-and-touch-only-changed pattern as
+  `paintedSelected`), `paintDataState` gained a `pending` param/token, reset in `destroy()`.
+- **`src/view/styles.ts`** — `.fg-bar[data-state~="pending"] { opacity: var(--fg-pending-opacity, 0.6); }`.
 
-The user reported: resize a selected entry once, and a second resize attempt (still selected) no
-longer works — deselecting first makes it work again. Root cause: `GanttShell#refreshAffordances`
-(`src/view/gantt-shell.ts`) only calls `applyState` with a new `resizableItemId` when that id's
-*identity* changes; it stays the same item across a resize commit whenever the bar is still hovered
-or is the sole selection. The render backend's `applyState` (`src/render/dom/index.ts`) mirrors that
-same gate — `paintResizeHandles` only ran when `nextResizable !== paintedResizable` — so the handle
-pair kept its pre-commit transform even though `syncBars` had already repainted the bar itself at
-its new, wider geometry one line above. A second drag at the bar's new visible edge hit nothing,
-because the real (invisible) handle was still sitting at the old edge.
+**Public API surface change** (confirmed intentional, `pnpm api-report` updated and committed):
+`Gantt.on`/`Gantt.off`'s handler parameter is now `GanttEventHandler<K>` instead of an inline
+`(payload) => void | false` — for `'beforeEntryMove'`/`'beforeEntryResize'` specifically, a handler may
+return `Promise<void | false>`. `GanttEventHandler`/`AsyncCancelableEvent` are now exported from
+`api/index.ts` (api-extractor's `ae-forgotten-export` caught the initial miss — re-run
+`npx api-extractor run --local --config api-extractor.json` and diff `etc/freegantt.api.md` after any
+future public-type change, not just `pnpm api-report`'s pass/fail).
 
-**Fix**: in `render/dom/index.ts`'s `sync()`, after `syncBars(frame.bars)`, unconditionally repaint
-the handle pair off the current `barGeomByItemId` whenever one is currently shown
-(`if (paintedResizable !== undefined) paintResizeHandles(barGeomByItemId.get(paintedResizable))`) —
-the handle pair's geometry now tracks every frame the same way a bar's own transform does, not just
-identity changes on `resizableItemId`.
-
-**Regression coverage**: `e2e/resize.spec.ts` gained a `dragBarEndEdgeBy` helper that drags from the
-bar's own live bounding box (not the handle's own boundingBox — querying the handle directly would
-"succeed" at hitting it even when its position is stale, masking the exact symptom a user hits) and
-a third test, `'a second resize at the bar edge still works after the entry stays selected from the
-first'`, which selects the entry then resizes it twice in a row. Verified this test (and the plain
-"dragging the end handle resizes the bar" test) fails against the pre-fix code by swapping in
-`git show HEAD:src/render/dom/index.ts` temporarily, confirming the fix and test both do their job.
-
-**Still needed before this is "done"**: commit `src/render/dom/index.ts`, `e2e/resize.spec.ts`, and
-this handoff file together (not committed by this session — ask the user first, per repo workflow).
-Consider whether S3.5+ needs its own real-browser e2e test written alongside the jsdom ones from now
-on, not after-the-fact — this is the second and third time (after I9) a `render/dom/index.ts`
-geometry bug shipped past a fully green jsdom test suite, both times in the same handle-pair code
-this session touched. Worth a closer look at whether `resizableItemId`'s identity-gated repaint
-pattern (`#refreshAffordances` in `gantt-shell.ts`) has the same staleness risk for `movableItemId`
-or `hoveredItemId` in some other codepath — not investigated this session, no evidence either way.
-
-## What landed this session
-
-- **`src/layout/gesture-draft.ts`** — `draftForResize(input: DraftInput & { edge: 'start' | 'end' })`
-  (D-S3-4): moves only the grabbed edge by the snapped/stepped calendar delta, holding the opposite
-  edge fixed; clamps at zero length instead of letting the dragged edge cross the fixed one (the
-  spec's "inverted span refused at the layout layer" — this file is that layer). Mirrors
-  `draftForMove`'s snap/`'none'` branching exactly, just against one edge instead of both.
-- **`src/render/backend.ts` / `src/render/dom/index.ts`** — `HitResult` grew an optional `edge`.
-  `hitTest` now checks `elementFromPoint`'s result against `.fg-bar-handle` first (handles paint on
-  top of bars); a hit there resolves to `{ itemId: paintedResizable, edge }` off the handle's own
-  `data-edge` attribute (D-S3-8) — a parked (`hidden`) handle is never returned by
-  `elementFromPoint`, so no extra guard was needed for that case. Falls through to the existing
-  `.fg-bar` hit-test unchanged.
-- **`src/interaction/entry-gesture-context.ts` / `entry-gestures.ts`** — `hitTest` now returns
-  `EntryHit = { itemId, edge? }` instead of a bare `ItemId`; `entriesForGesture` takes a second
-  `capability: 'move' | 'resize'` parameter. `onPointerDown` grabs a resize (`grabbedEdge` set) when
-  the hit carries an `edge` and `can('resize', entry)`, else falls back to the existing move grab.
-  `currentGesture()` replaces the old hardcoded `moveGesture()` and builds `{ kind: 'resize', edge }`
-  or `{ kind: 'move' }` from that one piece of state — same pointer-gesture state machine as S3.3,
-  now branching on what was grabbed instead of assuming move.
-- **`src/view/gantt-shell.ts`** — `#entriesForGesture` takes the same `capability` param (defaults
-  `'move'`, filters by `can(capability, …)` instead of a hardcoded `'move'`); `#draftFor` calls
-  `draftForResize` for a `{ kind: 'resize' }` gesture; `#commitGesture` no longer bails out on
-  non-move gestures — it builds the `EntryResize` payload (`{ ...span, entries, edge }`) and runs
-  `beforeEntryResize` → commit → `entryResize`, the same shape `beforeEntryMove`/`entryMove` already
-  had. The `hitTest`/`entriesForGesture` wiring in the constructor now passes `edge`/`capability`
-  through instead of stripping them.
-- **`src/view/event-bus.ts`** — introduced `EntryGestureEvent` (the shared `{ entry, start, end,
-  entries }` shape `ProposedSpan` + `entries` already was) and made `EntryMove` a type alias for it
-  rather than extending it; added `EntryResize extends EntryGestureEvent { edge }` — per D-S3-22,
-  resize is *not* a subtype of move, both extend the same shared base. `beforeEntryResize`/
-  `entryResize` added to `GanttEventMap`. Re-exported through `view/index.ts` and `api/index.ts`
-  (`EntryGestureEvent`, `EntryResize` alongside the existing `EntryMove`).
-- Tests: `layout/gesture-draft.test.ts` (`draftForResize` — empty input, single-edge move each
-  direction, zero-length clamp each direction, multi-selection rigid step, `snap: 'none'` fallback);
-  `interaction/entry-gestures.test.ts` (new `describe('… — resize (S3.4)')`: `[S3-A1]`'s resize half —
-  a handle grab arms `{ kind: 'resize', edge }` and commits it; a resize-incapable handle grab falls
-  back to a plain click); `render/dom/index.test.ts` (`hitTest` resolves a handle hit to
-  `{ itemId, edge }`, and never reports an edge while the handle pair is parked);
-  `api/gantt.test.ts` (new `describe('Gantt entryResize …')`: a real pointerdown-on-the-end-handle →
-  drag → pointerup sequence fires `beforeEntryResize`/`entryResize` once, one dataset transaction,
-  undo reverts in one step; `beforeEntryResize` returning `false` leaves the dataset untouched; a
-  milestone never renders a resize handle to grab).
-- Updated `s3.4-resize.md`'s TODO boxes (all checked) and `README.md`'s step map (S3.4 `done`, S3.5
-  `next`).
-- **Committed and pushed to `s3-impl`.**
+Tests: `src/interaction/keyboard-editing.test.ts` (new, 11 tests — fake-context style matching
+`entry-gestures.test.ts`); `src/view/gesture-pipeline.test.ts` gained `nudge()` (4 tests, using a
+5-minute/300,000ms tick — **not** a real hour, because I10's magic-time-constant lint bans the literal
+`3600000` outside `time/`, and this file is `view/`, which the `view-boundary` dependency-cruiser rule
+also forbids from importing `time/` to compute it any other way) and async-veto/pending (4 tests);
+`src/api/gantt.test.ts` gained a keyboard-nudge integration describe block (4 tests, real `keydown`
+dispatch) and an async-veto/pending describe block (2 tests, real pointer drag + a `Promise`-returning
+`beforeEntryMove` handler, `await new Promise(r => setTimeout(r, 0))` to flush the multi-tick
+`.then()`/`.finally()` chain rather than counting exact microtask ticks).
 
 ## Gotchas (carried forward + new)
 
-1. **Don't let `view/` import `interaction/` or `time/`.** Unchanged.
-2. **`view/` cannot call `dataset.transaction()` directly** — `commitEntryEdits` stays an injected
-   callback from `api/gantt.ts`. Unchanged.
+1. **Don't let `view/` import `interaction/` or `time/`.** Unchanged (the `time/` half is why the
+   `nudge()` tests above use a made-up 5-minute tick instead of a real hour).
+2. **`view/` cannot call `dataset.transaction()` directly.** Unchanged.
 3. **No raw `requestAnimationFrame` outside `view/frame-scheduler.ts`.** Unchanged.
 4. **`itemId(entryId)` is `${entryId}:0`, not the same string.** Unchanged.
-5. **Test `PointerEvent`s need a consistent `pointerId`** across `down`/`move`/`up` in the same
-   gesture. Unchanged.
-6. **A drag integration test needs `setPointerCapture`/`releasePointerCapture` stubbed on the pane
-   element.** Unchanged.
-7. **DST midnight is not automatically DST-shifted.** Unchanged (S3.3's gotcha; `draftForResize`
-   inherits the same `stepBy`/`stepsBetween` machinery, no new DST case needed for S3.4's own tests).
-8. **Lint bans arithmetic (`+ - * / %`) on an `Instant`-typed value outside `time/`, including in test
-   files** — but *comparisons* (`<`, `>`) are fine: `draftForResize`'s zero-length clamp compares
-   `moved > entry.end` / `moved < entry.start` directly, no `time/` helper needed for that part.
-9. **A resize test entry needs `end` set even for a `'milestone'` kind** — `Dataset`'s entry reader
-   throws `InvalidInstantError` if `start`/`end` aren't both present or both absent; a milestone in a
-   test fixture still needs `end: <same instant as start>` explicitly (there is no kind-based
-   default in the reader).
-10. **A milestone/derived-span entry never needs its own resize-refusal test in `entry-gestures.ts`**
-    — capability is fully resolved before `interaction/` ever sees a hit (S3.2's `resizableItemId`
-    only appears for `resize`-capable entries, so a handle to grab never exists for one). The
-    `api/gantt.test.ts` milestone test asserts the handle stays `hidden`, not that a grab is refused
-    mid-gesture — there's nothing to grab.
-11. **This session hit a transient scare, not a real loss**: partway through, `git status` briefly
-    reported a clean working tree while another commit (`00c7ef2`, co-authored by a "Cursor" agent —
-    apparently another tool operating on this same checkout concurrently) landed and was followed by
-    a `git reset` in the reflog. My uncommitted S3.4 edits reappeared on disk moments later (borne
-    out by `git diff --stat` right after) and nothing was actually lost, but it's worth knowing this
-    working directory is not exclusively mine this session — a future session should `git status`
-    defensively if anything looks unfamiliar, and consider committing more frequently to shrink the
-    window where a concurrent reset could actually cost work.
-12. **Run all five checks** before marking a step done: `pnpm vitest run` (586/586), `tsc --noEmit`,
-    `eslint src harness`, `depcruise --config .dependency-cruiser.cjs src harness`,
-    `node scripts/guard-red-test.mjs`. All green as of this handoff.
-13. **Write a fresh handoff before context runs low** — same as always.
+5. **A synchronous (non-`async`) test asserting an after-event fired requires the commit path to never
+   cross a microtask boundary for the sync case** — see `#commit`'s shape note above. If you touch
+   `GesturePipeline#commit` again, run the full `pnpm vitest run` before assuming a refactor is
+   behavior-preserving; a `.then()`-only rewrite compiles fine and fails two specific sync tests.
+6. **`EventBus`'s `TAsyncKeys` is opt-in per instantiation, not per `on()` call** — `new
+   EventBus<TEvents>()` (default `never`) stays fully sync-only; only `new EventBus<TEvents,
+   'someKey'>()` grants that one key's handlers a Promise return. `data/dataset-state.ts`'s bus was
+   deliberately left at the default — `beforeChange` is not part of D-S3-17's scope.
+7. **Magic-time-constant lint (I10) reaches test files too** — `3_600_000`/`60_000`/`86_400_000`/
+   `604_800_000` are banned literals anywhere outside `time/`, tests included. `300_000` (5 minutes)
+   is not banned and was this session's workaround for `gesture-pipeline.test.ts`'s `nudge()` tests.
+8. **A drag integration test needs `setPointerCapture`/`releasePointerCapture` stubbed on the pane
+   element.** Unchanged (S3.3's gotcha).
+9. **Run all checks** before marking a step done: `pnpm vitest run`, `pnpm typecheck`, `pnpm lint`,
+   `pnpm boundaries`, `pnpm guards`, `node scripts/guard-red-test.mjs`, `pnpm build`,
+   `pnpm api-report` (this last one specifically — a public-surface change silently drifts otherwise),
+   plus `pnpm test:e2e`. All green as of this handoff.
+10. **Write a fresh handoff before context runs low** — same as always.
 
 ## TODO — in priority order
 
-1. **S3.5 (keyboard parity + async veto)** — read
-   [`s3.5-keyboard-parity-and-async-veto.md`](./s3.5-keyboard-parity-and-async-veto.md) in full
-   first. Not yet investigated by this session beyond the README's decision table (D-S3-13 keyboard
-   map, D-S3-17 async pending, U6/U9 in the requirements table).
-2. **Harness demo gaps** (not S3.4's or S3.5's own gate — standing ask, same note as the last two
-   handoffs): no `Ctrl+Z`/`Ctrl+Shift+Z` keydown shortcut, no `Gantt({ dateLines: [...] })` demo, no
-   UI to flip `gantt.interactions` live, and still no `kind: 'group'` entry in the demo fixture (so
-   "a group's edges refuse" is proven only in `dom`/`api` tests, never visible in `harness/`).
-3. Once S3.5 is done and the full check sequence is green, update its own TODO boxes, `README.md`
-   (S3.5 `done`, S3.6 `next`), and this file, pointing at S3.6
-   (`s3.6-extender-preview.md`).
+1. **S3.6 (extender preview)** — read [`s3.6-extender-preview.md`](./s3.6-extender-preview.md) in
+   full; it is already "partial", not a cold start. `GesturePipeline#computePreview` already takes an
+   `extra: EntryEdits` parameter shaped for this (currently always `EMPTY_EDITS`) — check what's
+   already wired before assuming a blank slate.
+2. **Harness demo gaps** (standing ask, carried across several handoffs now): no `Ctrl+Z`/
+   `Ctrl+Shift+Z` keydown shortcut, no `Gantt({ dateLines: [...] })` demo, no UI to flip
+   `gantt.interactions` live, no `kind: 'group'` entry in the demo fixture, and — new this session — no
+   visible way to see a keyboard nudge or the async-veto `pending` state in `harness/` itself (both are
+   proven only by `api/gantt.test.ts`'s `dom`-environment integration tests, never in a real browser).
+   None of this blocks S3.6; it is explicitly S3.8's gate to close.
+3. Once S3.6 is done and the full check sequence (including `pnpm test:e2e`) is green, update its own
+   TODO boxes, `README.md` (S3.6 `done`, S3.7 `next`), and this file, pointing at S3.7
+   (`s3.7-viewport-gestures.md`).

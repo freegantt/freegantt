@@ -25,7 +25,7 @@ import type { Panes } from './pane-layout.js';
 import { attachSplitter } from './splitter.js';
 import type { SplitterAttachment } from './splitter.js';
 import { EventBus } from './event-bus.js';
-import type { GanttEventMap } from './event-bus.js';
+import type { AsyncCancelableEvent, GanttEventHandler, GanttEventMap } from './event-bus.js';
 import { attachScroll } from './scroll-attachment.js';
 import type { ScrollAttachment } from './scroll-attachment.js';
 import { attachPaneSize } from './pane-size-attachment.js';
@@ -58,6 +58,18 @@ export type AttachEntryGestures = (
   container: HTMLElement,
   ctx: EntryGestureContext,
 ) => EntryGesturesAttachment;
+
+/** S3.5, D-S3-13: same DI shape as `AttachEntryGestures` just above, and the same `ctx` instance —
+ *  `interaction/keyboard-editing.ts`'s `attachKeyboardEditing` needs `session()`/`selection`/
+ *  `rowOrder`/`entryFor`/`can` only, not `hitTest`/`setHovered`, but there is no value in a second,
+ *  narrower context type for one caller. */
+export interface KeyboardEditingAttachment {
+  detach(): void;
+}
+export type AttachKeyboardEditing = (
+  container: HTMLElement,
+  ctx: EntryGestureContext,
+) => KeyboardEditingAttachment;
 
 /** S1.10, D-S1.10-4: theming's only preset axis for this step — `'auto'` follows
  * `prefers-color-scheme` (no `data-fg-theme` attribute written), `'light'`/`'dark'` pin it. */
@@ -135,6 +147,9 @@ export interface GanttShellOptions {
    * import `interaction/` to supply its own default. `api/gantt.ts` always passes
    * `attachEntryGestures`; omitted only by tests exercising the shell with no pointer wiring. */
   entryGestures?: AttachEntryGestures;
+  /** Injected, same reason as `entryGestures` above. `api/gantt.ts` always passes
+   * `attachKeyboardEditing`; omitted only by tests exercising the shell with no keyboard wiring. */
+  keyboardEditing?: AttachKeyboardEditing;
   /** S3.3, D-S3-16: how a committed gesture draft actually reaches the store. `model/dataset.ts`'s
    *  `Dataset` (this shell's own `dataset` option) deliberately has no `transaction()` — "a view
    *  never opens a transaction" — so `api/gantt.ts`, which holds the full `api/Dataset` the model
@@ -175,6 +190,7 @@ export class GanttShell {
   #splitterAttachment: SplitterAttachment;
   #datasetChanges: DatasetChangeSubscription;
   #entryGestures: EntryGesturesAttachment | undefined;
+  #keyboardEditing: KeyboardEditingAttachment | undefined;
   /** D-S3-6: one long-lived, mutable per-Gantt object — `applyState` diffs against what it painted
    *  last, so writing into this and calling `#backend.applyState` allocates nothing per hover/select
    *  step (I5). Never rebuilt per call. */
@@ -197,7 +213,7 @@ export class GanttShell {
   /** The single rAF owner (B10, D-S2-15): every render request past construction goes through
    *  this, so N mutations in one tick become one frame. */
   #frames = new FrameScheduler(() => this.render());
-  #events = new EventBus<GanttEventMap>();
+  #events = new EventBus<GanttEventMap, AsyncCancelableEvent>();
   #destroyed = false;
   /** This Gantt's layout pass. It keeps the row-height index alive across renders (#47) — the shell
    * states what to draw and holds no layout bookkeeping of its own. */
@@ -323,8 +339,14 @@ export class GanttShell {
         setOptional(this.#interactionState, 'preview', preview);
         this.#backend.applyState(this.#interactionState);
       },
+      setPending: (itemIds) => {
+        setOptional(this.#interactionState, 'pendingItemIds', itemIds);
+        this.#backend.applyState(this.#interactionState);
+      },
     });
-    this.#entryGestures = options.entryGestures?.(this.#panes.timeline, this.#container, {
+    // D-S3-13: one `EntryGestureContext`, shared by the pointer attachment and the keyboard one —
+    // both drive the same `#gesturePipeline.session()`, so there is no value in building two.
+    const gestureContext: EntryGestureContext = {
       hitTest: (x, y) => {
         const hit = this.#backend.hitTest(x, y);
         if (!hit) return undefined;
@@ -339,7 +361,9 @@ export class GanttShell {
       },
       setHovered: (item) => this.#setHovered(item),
       session: (grabbed, gesture) => this.#gesturePipeline.session(grabbed, gesture),
-    });
+    };
+    this.#entryGestures = options.entryGestures?.(this.#panes.timeline, this.#container, gestureContext);
+    this.#keyboardEditing = options.keyboardEditing?.(this.#container, gestureContext);
     this.#wiring = false;
     this.#frames.flush();
 
@@ -612,11 +636,11 @@ export class GanttShell {
     this.#viewport.reveal({ x, y: this.#layout.rowTop(index), width, height: this.#rowHeight });
   }
 
-  on<K extends keyof GanttEventMap>(name: K, handler: (payload: GanttEventMap[K]) => void | false): void {
+  on<K extends keyof GanttEventMap>(name: K, handler: GanttEventHandler<K>): void {
     this.#events.on(name, handler);
   }
 
-  off<K extends keyof GanttEventMap>(name: K, handler: (payload: GanttEventMap[K]) => void | false): void {
+  off<K extends keyof GanttEventMap>(name: K, handler: GanttEventHandler<K>): void {
     this.#events.off(name, handler);
   }
 
@@ -682,6 +706,7 @@ export class GanttShell {
     if (this.#destroyed) return;
     this.#frames.cancel();
     this.#entryGestures?.detach();
+    this.#keyboardEditing?.detach();
     this.#datasetChanges.unsubscribe();
     this.#scrollAttachment.detach();
     this.#paneSizeAttachment.detach();

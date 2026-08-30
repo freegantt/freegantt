@@ -116,6 +116,9 @@ ${DARK_COLOR_TOKENS}
    (S3.2 adds the grab cursor it pairs with); the token still paints so a consumer's own selector can
    already key off it. */
 .fg-bar[data-state~="selected"] { outline: 2px solid var(--fg-selection-color); }
+/* S3.5, D-S3-17: an unsettled beforeEntryMove/beforeEntryResize Promise holds the bar here, reduced
+   opacity by default, until it settles either way. */
+.fg-bar[data-state~="pending"] { opacity: var(--fg-pending-opacity, 0.6); }
 /* D-S3-6: movableItemId's cursor is a boolean attribute, not an inline style — cursor is not one of
    the geometry properties no-inline-style-outside-geometry allows inline. */
 .fg-bar[data-movable] { cursor: grab; }
