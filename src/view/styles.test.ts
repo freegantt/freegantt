@@ -136,6 +136,14 @@ describe('ensureBaseStyles', () => {
     expect(css).toContain('user-select: none');
   });
 
+  it('a pending bar uses reduced opacity and a dotted selection outline (D-S3-17)', () => {
+    clearStyles();
+    ensureBaseStyles(document);
+    const css = document.head.querySelector('style[data-freegantt-styles]')?.textContent ?? '';
+    expect(css).toContain('--fg-pending-opacity');
+    expect(css).toContain('outline: 2px dotted var(--fg-selection-color)');
+  });
+
   it('dark theme paints bar labels in warm ink so they read on the light blue fill', () => {
     clearStyles();
     const container = makeContainer();

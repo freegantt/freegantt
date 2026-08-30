@@ -662,16 +662,20 @@ flowchart TB
 
 ## 9. `interaction/` — gestures as drafts (D10)
 
-Small, single-purpose controllers — `Drag`, `Resize`, `Select`, `Keyboard` in S3; `LinkCreate` in S7 — over a shared base that owns the invariants:
+S3 ships two attachments over one pointer stream and one keyboard stream, not named `Drag`/`Resize`/`Select` classes. `createPointerGesture` owns the shared invariants (threshold, capture, Escape, touch long-press). `attachEntryGestures` is the pointer attachment: click-to-select, drag-move, and edge-resize on that one stream. `attachKeyboardEditing` is the keyboard attachment: arrow nudge and row-to-row selection. `LinkCreate` waits for S7.
 
-- **Arm on slack threshold** (~14px) so click/double-click survive pointer jitter.
+Read-only viewport gestures live in `view/` (`attachWheelNavigation`, `attachKeyboardNavigation`) — they write nothing to the dataset, so the arm-threshold / escape-cancel / one-transaction invariants do not apply to them (D-S3-14).
+
+Invariants the data-gesture attachments own:
+
+- **Arm on slack threshold** (4px; touch waits 400ms) so click/double-click survive pointer jitter.
 - **Never write model or selection state on `pointerdown`** — it can rebuild DOM under the pointer and cancel the gesture.
 - Gesture lifecycle: `pointerdown → draft → (preview via hot path) → before* event (cancelable, may be async) → one transaction → after event`.
 - Escape cancels; pointer capture always; touch works.
-- Keyboard is a first-class controller, not an afterthought: arrow-key nudge by the preset's snap, full gesture parity (D11).
-- **Capabilities gate gestures and affordances from one resolution.** Before arming, every controller asks the Gantt's capability resolver — `can('move' | 'resize' | 'select' | …, entry)` — built from the `interactions` config (`02` §4.1) over per-kind defaults (e.g. a `group` with a derived span doesn't resize). The **same** resolution drives visual affordances (resize handles, link ports, cursors), so nothing is shown that can't be done and nothing hidden can be triggered — pointer or keyboard (invariant I14). `select` has no affordance; the refuse half still applies. `before*` events remain the *contextual* veto (this drop, this target, this moment); capabilities are the *static* per-entry answer. The public `gantt.selection` setter is not a controller and does not consult `can('select')`.
+- Keyboard is a first-class attachment, not an afterthought: arrow-key nudge by the preset's snap, through the same `session().nudge()` commit path as a pointer commit (D11, D-S3-23).
+- **Capabilities gate gestures and affordances from one resolution.** Before arming, every attachment asks the Gantt's capability resolver — `can('move' | 'resize' | 'select' | …, entry)` — built from the `interactions` config (`02` §4.1) over per-kind defaults (e.g. a `group` with a derived span doesn't resize). The **same** resolution drives visual affordances (resize handles, grab cursor), so nothing is shown that can't be done and nothing hidden can be triggered — pointer or keyboard (invariant I14). `select` has no affordance; the refuse half still applies. `before*` events remain the *contextual* veto (this drop, this target, this moment); capabilities are the *static* per-entry answer. The public `gantt.selection` setter is not a controller and does not consult `can('select')`.
 
-Controllers talk to `data/` only through drafts and transactions, and to the screen only through `InteractionState` — they import neither `render/` internals nor `scheduling/`.
+Attachments talk to `data/` only through drafts and transactions (the shell's `commitEntryEdits`), and to the screen only through `InteractionState` — they import neither `render/` internals nor `scheduling/`. `view/` never imports `interaction/`; `api/gantt.ts` injects the attachments into `GanttShell`.
 
 ---
 

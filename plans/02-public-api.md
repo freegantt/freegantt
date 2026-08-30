@@ -70,6 +70,7 @@ const gantt = new Gantt({
     resize: t => t.kind !== 'group',      // boolean or per-entry predicate — see §4.1
     linkCreate: true,
   },
+  viewportGestures: { wheelZoom: true },  // or `false` to turn wheel/keyboard pan+zoom off
 
   features: {
     links: { allowCreate: true },
@@ -152,6 +153,8 @@ The reading itself lives in `time/` (`toInstant`, `toEndInstant`) — resolving 
 
 `beforeGridWidthChange`/`gridWidthChange` (S1.8) carry `{ from, to }` in px. Fired by both a Splitter drag's commit and a direct `gantt.gridWidth = px` assignment — one commit sequence, one place it lives (`GanttShell`). A veto restores the width the drag started from, so a rejected drag leaves nothing behind.
 
+S3 data-gesture payloads (D-S3-22): `beforeEntryMove`/`entryMove` carry `ProposedSpan` (`entry`, `start`, `end`) plus `entries` (grabbed first; extender extras never included). `beforeEntryResize`/`entryResize` add `edge: 'start' | 'end'`. `beforeSelectionChange`/`selectionChange` carry `{ from, to }` as `EntryId[]` — Gantt state, no Dataset transaction. `beforeEntryMove`/`beforeEntryResize` handlers may return `Promise<void | false>` (D-S3-17); every other Gantt event stays sync-only.
+
 ```ts
 gantt.on('beforeEntryMove', ({ entry, start, end }) => {
   if (start < mobilization) { toast('Too early'); return false; }   // veto
@@ -221,11 +224,16 @@ Every level-1 property the library reads as a length goes through one reader (`r
 | `--fg-bar-fill` | `oklch(.55 .13 245)` | `oklch(.72 .13 245)` | `.fg-bar` background |
 | `--fg-bar-label-color` | `#FFFFFF` | `#1A1815` | `.fg-bar` text |
 | `--fg-warn` | `#D97706` | `#FBBF24` | `.fg-bar[data-flag~="conflict"]` outline (U2) |
-| `--fg-date-line-color` | `#DC2626` | `#F87171` | `.fg-date-line`, `.fg-date-line-label` |
+| `--fg-date-line-color` | `#DC2626` | `#F87171` | `.fg-date-line`, `.fg-date-line-label`, `.fg-cursor-line`, `.fg-cursor-line-label` |
+| `--fg-selection-color` | `oklch(.55 .19 25)` | `oklch(.75 .19 25)` | `.fg-bar[data-state~="selected"]` outline; pending uses the same token, dotted |
+| `--fg-ghost-opacity` | `0.4` | — | `.fg-bar[data-state~="ghost"]` |
+| `--fg-pending-opacity` | `0.6` | — | `.fg-bar[data-state~="pending"]` |
 
 Colour defaults are sourced from an existing, unnamed palette this team maintains elsewhere (D-S1.10-9) — only the *values* cross over, never the palette's name (CLAUDE.md: vendor product names never appear in specs/docs/code). `theme: 'auto' | 'light' | 'dark'` (default `'auto'`) selects which block applies: `'auto'` writes no `data-fg-theme` attribute and follows `prefers-color-scheme`; `'light'`/`'dark'` write the attribute and always win over the media query on specificity. No named multi-preset picker beyond light/dark yet — that needs `extensions/`'s `PluginContext`, the only I2-safe place a `registerThemePreset`-shaped seam can live (deferred to S5, D-S1.10-9).
 
 **`data-flag` is real (S1.10, D-S1.10-2).** Generated from `BarFlags`'/`LinkFlags`' own keys, not hand-mapped — `.fg-bar[data-flag~="conflict"]`, `.fg-bar[data-flag~="cycle"]` are live selectors today (nothing sets them true until S7's scheduling plugin, but the mechanism and the vocabulary both ship now, U2). A new `BarFlags` key needs no `render/dom` edit to show up as a token (U7).
+
+S3 Parts: `.fg-bar-handle` (shared resize-handle pair), `.fg-cursor-line`, `.fg-cursor-line-label`. S3 State attribute: `data-state` on `.fg-bar` (`hovered`, `selected`, `pending`, `dragging`, `ghost`) and `data-movable` (grab cursor).
 
 Renderers return **plain serializable element descriptions** (tag/class/style/text/children), applied by the engine's reconciler — never live DOM nodes (nodes are recycled by virtualization) and never framework components in core (D5). Text by default; HTML by explicit opt-in only.
 
@@ -257,6 +265,8 @@ barRenderer: {
 **Actions.** The `interactions` config takes a boolean or a per-entry predicate for each gesture (`move`, `resize`, `linkCreate`, `select`, `edit`), layered over per-kind defaults. One resolution both hides the affordance and refuses the gesture — pointer and keyboard alike (I14) — so a non-resizable entry simply has no handles rather than handles that scold. `select` has no affordance to hide; `select: false` (or a predicate that returns false) refuses pointer and keyboard selection of that entry and skips it in a shift-range. The public `gantt.selection` setter does not consult the capability — it is the programmatic path, matching `entries.update` under `move: false`. Context-menu items and commands carry a `when(entry)` clause, so a kind (or any predicate) ships its own action set.
 
 **Division of labor:** capabilities answer the *static* question ("groups don't resize"); `before*` events answer the *contextual* one ("not before mobilization"). Use the shallowest one that fits.
+
+**Viewport gestures** are a separate knob (`Gantt.viewportGestures`): they are not per-entry, they write no data, and they do not belong on `interactions`. `false` turns wheel zoom, shift+wheel pan, and keyboard pan off together; `{ wheelZoom: false }` pins one gesture and leaves the others on. `zoomBy` / `panToDate` / `zoomIn` stay available either way.
 
 ---
 

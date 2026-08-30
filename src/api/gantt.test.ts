@@ -1307,3 +1307,335 @@ describe('Gantt entryResize (S3.4, [S3-A1] resize half)', () => {
     gantt.destroy();
   });
 });
+
+describe('Gantt keyboard nudge (S3.5, [S3-A1] keyboard half, D-S3-13)', () => {
+  it('ArrowRight on the container nudges the selected entry, one transaction, undo reverts', () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
+    const gantt = new Gantt({ container, dataset });
+
+    const id = entryId(sampleEntries[0]!.id);
+    const before = dataset.entries.get(id)!;
+    gantt.selection = [id];
+
+    const beforeEvents: unknown[] = [];
+    const afterEvents: unknown[] = [];
+    gantt.on('beforeEntryMove', (p) => {
+      beforeEvents.push(p);
+    });
+    gantt.on('entryMove', (p) => {
+      afterEvents.push(p);
+    });
+    const datasetChanges: unknown[] = [];
+    dataset.on('change', (c) => {
+      datasetChanges.push(c);
+    });
+
+    container.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+
+    expect(beforeEvents).toHaveLength(1);
+    expect(afterEvents).toHaveLength(1);
+    expect(datasetChanges).toHaveLength(1); // one transaction per keypress, I6
+
+    const moved = dataset.entries.get(id)!;
+    expect(moved.start).not.toBe(before.start);
+
+    expect(dataset.canUndo).toBe(true);
+    dataset.undo();
+    expect(dataset.entries.get(id)!.start).toBe(before.start);
+
+    gantt.destroy();
+  });
+
+  it('a plain arrow key does nothing while the selection is empty (S3.7 owns the pan bindings)', () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
+    const gantt = new Gantt({ container, dataset });
+
+    const datasetChanges: unknown[] = [];
+    dataset.on('change', (c) => {
+      datasetChanges.push(c);
+    });
+
+    container.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+
+    expect(datasetChanges).toEqual([]);
+    gantt.destroy();
+  });
+
+  it('Shift+ArrowRight resizes the end edge of the selected entry', () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
+    const gantt = new Gantt({ container, dataset });
+
+    const id = entryId(sampleEntries[0]!.id);
+    const before = dataset.entries.get(id)!;
+    gantt.selection = [id];
+
+    const afterEvents: { edge: string }[] = [];
+    gantt.on('entryResize', (p) => {
+      afterEvents.push(p);
+    });
+
+    container.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'ArrowRight', shiftKey: true, bubbles: true }),
+    );
+
+    expect(afterEvents).toHaveLength(1);
+    expect(afterEvents[0]!.edge).toBe('end');
+    const resized = dataset.entries.get(id)!;
+    expect(resized.start).toBe(before.start);
+    expect(resized.end).not.toBe(before.end);
+
+    gantt.destroy();
+  });
+
+  it('ArrowDown moves the selection to the next row without writing the dataset', () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
+    const gantt = new Gantt({ container, dataset });
+
+    const firstId = entryId(sampleEntries[0]!.id);
+    const secondId = entryId(sampleEntries[1]!.id);
+    gantt.selection = [firstId];
+
+    const datasetChanges: unknown[] = [];
+    dataset.on('change', (c) => {
+      datasetChanges.push(c);
+    });
+
+    container.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+
+    expect(gantt.selection).toEqual([secondId]);
+    expect(datasetChanges).toEqual([]);
+
+    gantt.destroy();
+  });
+});
+
+describe('Gantt async veto and pending (S3.5, D-S3-17)', () => {
+  function stubPointerCapture(el: HTMLElement): void {
+    el.setPointerCapture = vi.fn();
+    el.releasePointerCapture = vi.fn();
+  }
+
+  it('a beforeEntryMove Promise holds the dragged bar data-state~="pending" until it settles', async () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
+    const gantt = new Gantt({ container, dataset });
+    gantt.preset = { ...gantt.preset, snap: { unit: 'day', increment: 1 } };
+
+    const bar = container.querySelector<HTMLElement>('.fg-bar')!;
+    const timeline = container.querySelector<HTMLElement>('.fg-timeline-pane')!;
+    stubPointerCapture(timeline);
+    const original = document.elementFromPoint.bind(document);
+    document.elementFromPoint = (x: number, y: number) => (x === 5 && y === 5 ? bar : original(x, y));
+
+    let resolveVeto!: (allowed: boolean) => void;
+    gantt.on(
+      'beforeEntryMove',
+      () =>
+        new Promise<void | false>((resolve) => {
+          resolveVeto = (allowed) => resolve(allowed ? undefined : false);
+        }),
+    );
+    const afterEvents: unknown[] = [];
+    gantt.on('entryMove', (p) => {
+      afterEvents.push(p);
+    });
+
+    const originTransform = bar.style.transform;
+    timeline.dispatchEvent(new PointerEvent('pointerdown', { clientX: 5, clientY: 5, pointerId: 1 }));
+    timeline.dispatchEvent(new PointerEvent('pointermove', { clientX: 5005, clientY: 5, pointerId: 1 }));
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    const unsnappedPreview = bar.style.transform;
+    expect(unsnappedPreview).not.toBe(originTransform);
+
+    timeline.dispatchEvent(new PointerEvent('pointerup', { clientX: 5005, clientY: 5, pointerId: 1 }));
+
+    expect(bar.dataset['state']).toContain('pending');
+    const heldTransform = bar.style.transform;
+    expect(heldTransform).not.toBe(originTransform);
+    // D-S3-17: held paint is the snapped commit draft, not the last unsnapped pointer preview.
+    expect(heldTransform).not.toBe(unsnappedPreview);
+    expect(afterEvents).toEqual([]);
+
+    resolveVeto(true);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(afterEvents).toHaveLength(1);
+    expect(bar.dataset['state']).not.toContain('pending');
+
+    document.elementFromPoint = original;
+    gantt.destroy();
+  });
+
+  it('a beforeEntryMove Promise resolving false commits nothing and clears pending', async () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
+    const gantt = new Gantt({ container, dataset });
+
+    const bar = container.querySelector<HTMLElement>('.fg-bar')!;
+    const timeline = container.querySelector<HTMLElement>('.fg-timeline-pane')!;
+    stubPointerCapture(timeline);
+    const original = document.elementFromPoint.bind(document);
+    document.elementFromPoint = (x: number, y: number) => (x === 5 && y === 5 ? bar : original(x, y));
+
+    const id = entryId(sampleEntries[0]!.id);
+    const before = dataset.entries.get(id)!;
+    let resolveVeto!: () => void;
+    gantt.on(
+      'beforeEntryMove',
+      () =>
+        new Promise<void | false>((resolve) => {
+          resolveVeto = () => resolve(false);
+        }),
+    );
+
+    timeline.dispatchEvent(new PointerEvent('pointerdown', { clientX: 5, clientY: 5, pointerId: 1 }));
+    timeline.dispatchEvent(new PointerEvent('pointermove', { clientX: 5005, clientY: 5, pointerId: 1 }));
+    timeline.dispatchEvent(new PointerEvent('pointerup', { clientX: 5005, clientY: 5, pointerId: 1 }));
+
+    resolveVeto();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(dataset.entries.get(id)).toEqual(before);
+    expect(bar.dataset['state']).not.toContain('pending');
+    expect(dataset.canUndo).toBe(false);
+
+    document.elementFromPoint = original;
+    gantt.destroy();
+  });
+});
+
+describe('Gantt viewport gestures (S3.7, [S3-A7], D-S3-14)', () => {
+  // happy-dom's WheelEvent drops MouseEvent fields from the init dict (ctrlKey, clientX).
+  function wheel(props: {
+    deltaY?: number;
+    clientX?: number;
+    ctrlKey?: boolean;
+    shiftKey?: boolean;
+  }): WheelEvent {
+    const event = new WheelEvent('wheel', {
+      bubbles: true,
+      cancelable: true,
+      deltaY: props.deltaY ?? 0,
+    });
+    Object.defineProperty(event, 'ctrlKey', { value: props.ctrlKey ?? false });
+    Object.defineProperty(event, 'shiftKey', { value: props.shiftKey ?? false });
+    Object.defineProperty(event, 'metaKey', { value: false });
+    Object.defineProperty(event, 'clientX', { value: props.clientX ?? 0 });
+    return event;
+  }
+  function mount(): {
+    container: HTMLElement;
+    gantt: Gantt;
+    dataset: Dataset;
+    scroll: ScrollModel;
+    scale: TimeScaleModel;
+    timeline: HTMLElement;
+  } {
+    const container = document.createElement('div');
+    const scroll = new ScrollModel();
+    const scale = new TimeScaleModel({ fit: 'preset', preset: 'day' });
+    const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
+    const gantt = new Gantt({ container, dataset, scale, scroll });
+    FakeResizeObserver.instances.at(-1)!.fire({ width: 300, height: 100 });
+    const timeline = container.querySelector<HTMLElement>('.fg-timeline-pane')!;
+    timeline.getBoundingClientRect = () =>
+      ({ left: 0, top: 0, width: 300, height: 100, right: 300, bottom: 100, x: 0, y: 0 }) as DOMRect;
+    return { container, gantt, dataset, scroll, scale, timeline };
+  }
+
+  it('[S3-A7] ctrl+wheel zooms, anchored; shift+wheel pans; Page/Home/End pan; dataset.on("change") never fires', () => {
+    FakeResizeObserver.instances = [];
+    vi.stubGlobal('ResizeObserver', FakeResizeObserver);
+
+    try {
+      const a = mount();
+      const b = mount();
+      const changes: unknown[] = [];
+      a.dataset.on('change', (c) => {
+        changes.push(c);
+      });
+
+      const presetBefore = a.gantt.preset.id;
+      a.timeline.dispatchEvent(wheel({ ctrlKey: true, deltaY: -100, clientX: 0 }));
+      b.timeline.dispatchEvent(wheel({ ctrlKey: true, deltaY: -100, clientX: 150 }));
+
+      expect(a.gantt.preset.id).not.toBe(presetBefore);
+      expect(b.gantt.preset.id).toBe(a.gantt.preset.id);
+      expect(a.scroll.state.position.x).not.toBe(b.scroll.state.position.x);
+
+      const xBeforePan = a.scroll.state.position.x;
+      a.timeline.dispatchEvent(wheel({ shiftKey: true, deltaY: 80 }));
+      expect(a.scroll.state.position.x).toBe(xBeforePan + 80);
+
+      const yBefore = a.scroll.state.position.y;
+      a.container.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'PageDown', bubbles: true, cancelable: true }),
+      );
+      expect(a.scroll.state.position.y).toBeGreaterThan(yBefore);
+
+      a.container.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Home', bubbles: true, cancelable: true }),
+      );
+      expect(a.scroll.state.position.x).toBe(0);
+
+      a.container.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'End', bubbles: true, cancelable: true }),
+      );
+      expect(a.scroll.state.position.x).toBe(a.scroll.state.max.x);
+
+      expect(changes).toEqual([]);
+
+      a.gantt.destroy();
+      b.gantt.destroy();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('viewportGestures: false leaves ctrl+wheel and keyboard pan inert; zoomBy still works', () => {
+    FakeResizeObserver.instances = [];
+    vi.stubGlobal('ResizeObserver', FakeResizeObserver);
+
+    try {
+      const container = document.createElement('div');
+      const scroll = new ScrollModel();
+      const scale = new TimeScaleModel({ fit: 'preset', preset: 'day' });
+      const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
+      const gantt = new Gantt({
+        container,
+        dataset,
+        scale,
+        scroll,
+        viewportGestures: false,
+      });
+      FakeResizeObserver.instances[0]!.fire({ width: 300, height: 100 });
+      const timeline = container.querySelector<HTMLElement>('.fg-timeline-pane')!;
+      timeline.getBoundingClientRect = () =>
+        ({ left: 0, top: 0, width: 300, height: 100, right: 300, bottom: 100, x: 0, y: 0 }) as DOMRect;
+
+      const pxBefore = scale.scale.pxPerMs;
+      const presetBefore = gantt.preset.id;
+      const xBefore = scroll.state.position.x;
+      timeline.dispatchEvent(wheel({ ctrlKey: true, deltaY: -100, clientX: 0 }));
+      container.dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true, cancelable: true }));
+      expect(gantt.preset.id).toBe(presetBefore);
+      expect(scale.scale.pxPerMs).toBe(pxBefore);
+      expect(scroll.state.position.x).toBe(xBefore);
+
+      gantt.zoomBy(2);
+      expect(scale.scale.pxPerMs).toBeGreaterThan(pxBefore);
+
+      gantt.viewportGestures = { wheelZoom: true };
+      timeline.dispatchEvent(wheel({ ctrlKey: true, deltaY: -100, clientX: 0 }));
+      expect(gantt.preset.id).not.toBe(presetBefore);
+
+      gantt.destroy();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+});
