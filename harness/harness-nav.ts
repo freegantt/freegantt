@@ -66,6 +66,6 @@ function mountHarnessNav(nav: HTMLElement): void {
   }
 }
 
-for (const nav of document.querySelectorAll<HTMLElement>('.harness-site-nav')) {
+document.querySelectorAll<HTMLElement>('.harness-site-nav').forEach((nav) => {
   mountHarnessNav(nav);
-}
+});
