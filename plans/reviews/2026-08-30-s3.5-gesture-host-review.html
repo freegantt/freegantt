@@ -113,7 +113,7 @@
           <li class="rounded-lg border border-red-200 bg-white p-4">
             <span class="rounded-full bg-red-100 text-red-800 text-xs px-2 py-0.5 font-medium">Looks done, disagrees</span>
             <span class="font-mono text-xs text-slate-500 ml-2">D-S3-17 · gesture-pipeline.ts:80–83</span>
-            <p class="mt-1">Spec: "preview stays at dropped position … <span class="font-mono">pending</span> = true." <span class="font-mono">session().commit()</span> calls <span class="font-mono">#preview(undefined)</span> <em>before</em> <span class="font-mono">#commit()</span> enters <span class="font-mono">#awaitVeto</span>. So while the async veto is unsettled the bar parks at its pre-move position at reduced opacity — not the dropped position. The <span class="font-mono">api/gantt.test.ts</span> async-veto tests only assert <span class="font-mono">data-state~="pending"</span>, never the preview/transform, so the gap is untested too. This is exactly the "pending ghost" the slice's Ends-with line promises.</p>
+            <p class="mt-1">Spec: "preview stays at dropped position … <span class="font-mono">pending</span> = true." <span class="font-mono">session().commit()</span> calls <span class="font-mono">#preview(undefined)</span> <em>before</em> <span class="font-mono">#commit()</span> enters <span class="font-mono">#awaitVeto</span>. So while the async veto is unsettled the bar parks at its pre-move position — not the dropped position. The <span class="font-mono">api/gantt.test.ts</span> async-veto tests only assert <span class="font-mono">data-state~="pending"</span>, never the preview/transform, so the gap is untested too. This is exactly the "pending ghost" the slice's Ends-with line promises. When implemented, the pending bar should render as a <em>dotted line at reduced opacity</em> — shake out the exact token/opacity with the front-design skill before wiring <span class="font-mono">data-state~="pending"</span> into the style.</p>
           </li>
 
           <li class="rounded-lg border border-amber-200 bg-white p-4">
@@ -184,13 +184,13 @@
             <pre class="mermaid">
               flowchart TB
                 subgraph before [Before]
-                  MT["#commit(gesture.kind='move')"] --> MV[emit beforeEntryMove / finish / entryMove]
-                  RS["#commit(gesture.kind='resize')"] --> RV[emit beforeEntryResize / finish / entryResize]
-                  MV -.duplicate shape.- RV
+                  MT["#commit (gesture.kind = move)"] --> MV["emit beforeEntryMove / finish / entryMove"]
+                  RS["#commit (gesture.kind = resize)"] --> RV["emit beforeEntryResize / finish / entryResize"]
+                  MV -. duplicate shape .-> RV
                 end
                 subgraph after [After]
-                  CM[#commit(once)] --> PK[payload names from gesture.kind]
-                  PK --> ONE[emit before* / finish / entry* before]
+                  CM["#commit (once)"] --> PK["payload names from gesture.kind"]
+                  PK --> ONE["emit before* / finish / entry*"]
                 end
             </pre>
           </div>
@@ -231,7 +231,7 @@
 
           <div class="space-y-2 text-sm">
             <p><strong>Problem.</strong> D-S3-17's "preview stays at dropped position" is not met: pending parks the bar at origin, so the veto demo shows no ghost at the drop.</p>
-            <p><strong>Solution.</strong> Hold the dropped draft as the pending preview until the veto settles; clear it only on <span class="font-mono">false</span>, commit then clear on <span class="font-mono">true</span>.</p>
+            <p><strong>Solution.</strong> Hold the dropped draft as the pending preview until the veto settles; clear it only on <span class="font-mono">false</span>, commit then clear on <span class="font-mono">true</span>. Render the held ghost as a dotted line at reduced opacity — settle the exact token with the front-design skill before wiring <span class="font-mono">data-state~="pending"</span>.</p>
             <p class="text-xs text-slate-600"><strong>Wins.</strong> spec truth: the held ghost the slice promises · locality: lock and paint no longer fused · test asserts transform + token</p>
           </div>
         </article>
@@ -266,7 +266,8 @@
             The refactor closed the seam correctly; what is left is one spec gap with a clean
             architecture shape. D-S3-17 promises a pending ghost at the drop; the code clears the preview
             before the lock. Decouple the dropped draft from the arm lock so <span class="font-mono">pending</span>
-            means what it says, then fold the duplicate commit fork on the same lines, then update the
+            means what it says — a dotted line at reduced opacity, token settled via the front-design skill —
+            then fold the duplicate commit fork on the same lines, then update the
             plan's stale <span class="font-mono">GestureHost</span> → <span class="font-mono">GesturePipeline</span>
             text and the two "pending" field names. The shell's residual 719 lines are deliberately
             out of this plan's scope — leave them until S3.6 earns the split.
