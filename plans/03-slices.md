@@ -158,6 +158,7 @@ Slices are scope, not calendar estimates. Within a slice, entries are ordered so
 - Item emission: `entry.segments` → multiple items on one row; overlap auto-packing into sub-lanes; `heightMode: 'pack'` variable row heights through the height index.
 - Interaction with lanes: drag/resize on packed items; collapse/expand by keyboard.
 - Harness: tree fixture, with **one** Gantt and a button that switches `gantt.rows` between the tree and a grouped source. That proves the Row ≠ Entry payoff and proves live reconfiguration (`02` §2) in the same demo. Two Gantts on one dataset is not the demo: D9 is about a shared axis and scroll between charts with **different** data (`02` §5), and a shared `Dataset` — while free, since a second Gantt is only a second `change` subscriber — is not a case the library designs around or tests.
+- **Known gaps due this slice (issue #91 §9):** §9-E is a bet on `RowHeightIndex.heightAt`/`invalidateFrom` and `RenderBackend.applyState` finally getting production callers — pack-mode row heights above and the hover/selection/drag hot path are exactly that; if either lands and still does not use the methods, remove them rather than leave decoration. §9-G: `render/backend.ts`'s `hitTest(x, y)` does not name its coordinate space (DOM backend takes client coords, `GeometryFrame` is content coords) — this slice's gesture controllers are its first callers, so give it a named `ClientPoint` type before wiring them up, not after. §9-B (`view/gantt-shell.ts`'s `#wiring` boolean) is worth revisiting too: tree UI and lane interaction both add more to wire during construction.
 
 **Acceptance**
 
@@ -209,6 +210,7 @@ Slices are scope, not calendar estimates. Within a slice, entries are ordered so
 - Performance budgets in CI on reference hardware; regressions fail the build.
 - Linked-Gantt demo: a delivery-schedule Gantt + a workforce Gantt bound to the same `TimeScaleModel`/`ScrollModel` (x, y, and both variants) — the D9 acceptance demo. Neither Gantt needs the scheduling plugin.
 - Hardening: error-path audit (typed errors everywhere), memory-leak pass (mount/destroy cycles), `exports` map sealing internals, semver/API-report tooling (I11 automated), bundle-size budget in CI.
+- **Known gap (issue #91 §9-I, remaining half):** `GanttShellOptions.backend` closed the hardcoded `createDomBackend()` call site, but `render/null`'s backend is still unreachable from `view/` — `PaneLayout` mounts real `HTMLElement`s regardless of which backend paints them. If this slice's measurement/hardening work wants a DOM-free `view/`+`layout/` harness, `PaneLayout` (or an equivalent) needs to accept a non-DOM surface too, not just a swappable backend.
 - Release plumbing: versioned docs from the harness gallery, CHANGELOG, publishing pipeline. Product 1.0 waits for S7 (D3).
 
 **Acceptance**

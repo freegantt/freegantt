@@ -3,15 +3,4 @@
 // bound ScrollModel (I12).
 export { GanttShell } from './gantt-shell.js';
 export type { GanttShellOptions, Theme } from './gantt-shell.js';
-export { TimeScaleModel, ScrollModel } from '../layout/index.js';
-export type {
-  TimeScaleModelOptions,
-  TimeScaleFit,
-  ViewPreset,
-  PresetRef,
-  ShippedPresetId,
-  Overscan,
-  ScrollPosition,
-  ScrollState,
-} from '../layout/index.js';
 export type { GanttEventMap, GridWidthChange, NavigationChange } from './event-bus.js';

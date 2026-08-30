@@ -1,8 +1,10 @@
 // api/ is the only layer a consumer imports (plans/01 §1). No module-level singletons (I2) — every
 // instance owns its own shell and state so two Gantt instances on one page are fully independent.
 
-import { GanttShell, ScrollModel, TimeScaleModel } from '../view/index.js';
-import type { GanttEventMap, PresetRef, Theme, TimeScaleFit, ViewPreset } from '../view/index.js';
+import { GanttShell } from '../view/index.js';
+import type { GanttEventMap, Theme } from '../view/index.js';
+import { ScrollModel, TimeScaleModel } from '../layout/index.js';
+import type { PresetRef, TimeScaleFit, ViewPreset } from '../layout/index.js';
 import type { EntryId, InstantInput, TimeSpan } from '../model/index.js';
 import { now, toInstant } from '../time/index.js';
 import type { Dataset } from './dataset.js';
