@@ -1,11 +1,12 @@
 # S3 — Direct manipulation
 
 **Slice:** S3 (`plans/03` §S3) · **Position: after S1.13, before S4.** S1.12 landed and its gate
-passes; S2 landed; S1.13 is **specified but not implemented** (`plans/s1.13-date-lines/README.md`,
-§0 P2 below). `.slice` moves `S1.13` → `S3`; `scripts/slice-gate.mjs` gains an `S3 → S4` gate over
+passes; S2 landed; S1.13 has landed (its `.slice` move is outstanding). `.slice` moves `S1.13` → `S3`;
+`scripts/slice-gate.mjs` gains an `S3 → S4` gate over
 `[S3-A1]`–`[S3-A8]`.
-**Status: settled except §0's P2 and P3.** P1 closed on 2026-08-29. Two prerequisites remain — one a
-sequence, one a one-arrow diagram edit — and each blocks a single step. Every other question this
+**Status: settled except §0's P3.** P1 closed on 2026-08-29. P2 closed 2026-08-30 when S1.13's code
+landed — it is now a sequence note, not a block. The one remaining prerequisite is a one-arrow diagram
+edit that blocks a single step. Every other question this
 spec's own grill raised is answered in §2. §8 is the work list, cut into vertical steps S3.1–S3.8.
 **Revised 2026-08-29** after a standards/spec/simplify/architecture review
 (`plans/reviews/2026-08-29-s3-direct-manipulation.html`) and a second API pass: two layer-map breaches
@@ -65,14 +66,14 @@ behaviour it defers is the one behaviour that has no consumer-facing surface unt
 builds that surface. Landed with this spec: `plans/03` §S3's harness line now defers the demo and
 says why, §S5's harness line receives it, and `src/data/dataset-state.ts`'s comment names S5.
 
-### P2 — S1.13 must land before S3.8 (blocks **S3.8**)
+### P2 — S1.13 must land before S3.8 — **CLOSED (2026-08-30): S1.13 landed**
 
-Not a question, a sequence. `plans/s1.13-date-lines/README.md` is a settled spec with no code behind
-it: `src/layout/date-line.ts` still exports `DateLineInput { id, instant, label }` and
-`src/render/dom/date-line.ts` still paints `.fg-today-line`. S3.8's cursor line (D-S3-15) reuses that
-step's `--fg-date-line-color` token and its "a marker is a stroke plus an optional caption" shape.
-Starting S3.8 first would build the cursor line against a Part vocabulary that is about to be renamed.
-Steps S3.1–S3.7 touch none of it and can proceed in parallel with S1.13.
+Not a question, a sequence, now satisfied. `plans/s1.13-date-lines/README.md` shipped: it renamed
+`DateLineInput { id, instant, label }` → the `DateLineSpec`/`DateLine` shape, and
+`src/render/dom/date-line.ts` paints `.fg-date-line` (not `.fg-today-line`). S3.8's cursor line
+(D-S3-15) reuses that step's `--fg-date-line-color` token and its "a marker is a stroke plus an
+optional caption" shape, so the Part vocabulary it builds on is final and renamed. Steps S3.1–S3.7
+were never blocked by it.
 
 ### P3 — `interaction/` needs one new import edge (blocks **S3.2**)
 
@@ -412,11 +413,21 @@ bug. Subtree move is a policy question that belongs to S4's hierarchy work — �
 `linkCreate` and `edit` are **not** declared on `Interactions` in S3: I11 keeps unimplemented keys out
 of the public `.d.ts`. They arrive with S7 and S5 respectively.
 
-**This table is the slice's one gesture table, and three other things read off it** rather than
+**This table is the slice's one gesture table, and four other things read off it** rather than
 restating the move/resize/select triplet in their own words: the context's `can()` (D-S3-5), the two
-resolved ids the shell writes into paint state (D-S3-6/8), and the keyboard rows (D-S3-13). A gesture
-a consumer has switched off is therefore unreachable from every direction at once, which is what
-"one resolution" (I14) means in practice.
+resolved ids the shell writes into paint state (D-S3-6/8), the pointer select path (D-S3-10), and the
+keyboard rows (D-S3-13). A gesture a consumer has switched off is therefore unreachable from
+pointer and keyboard at once, which is what "one resolution" (I14) means in practice. The public
+setter is not a gesture (see `select` below).
+
+**`select` has no visual affordance.** I14's hide half is a vacant no-op for this key: there is no
+handle, no cursor, and no port that would hint "you can select this". The `selected` token is paint
+of current Gantt state, not a hint that a click will select. The refuse half is the whole of I14 for
+`select`: pointer and keyboard paths ask `can('select', entry)` and skip an incapable entry rather
+than blocking (the same skip rule D-S3-19 uses for `move`/`resize`). `gantt.selection = …` does
+**not** consult `can('select')` — capabilities gate controllers, not the public setter, the same
+way `move: false` does not refuse `entries.update`. A consumer who wants the setter to refuse uses
+`beforeSelectionChange`. Clearing (empty click, Escape) is not a select, and does not ask.
 
 ### D-S3-10 — Selection is a set of **Entry** ids on the **Gantt**; Items are what gets painted
 
@@ -442,8 +453,12 @@ the Gantt and data events on the Dataset, and two Gantt instances bound to one D
 have different selections. `InteractionState.selectedItemIds` stays item-keyed: it is paint.
 
 Pointer semantics: plain click replaces; ctrl/⌘-click toggles; shift-click extends over the current
-row order; a click on empty timeline clears; Escape clears. Selection is written on **pointerup**,
-never pointerdown (`01` §9), and not at all if the gesture armed into a drag.
+row order; a click on empty timeline clears; Escape clears. Each candidate entry must pass
+`can('select', entry)` (D-S3-9). A click on an incapable bar does not change the selection (it is
+not an empty-timeline clear). Ctrl/⌘-click on an incapable bar is a no-op. Shift-click omits
+incapable entries from the range; if the filter leaves the proposal empty, the write does not run —
+clear stays with empty-timeline and Escape. Selection is written on **pointerup**, never pointerdown
+(`01` §9), and not at all if the gesture armed into a drag.
 
 ### D-S3-11 — Drag is horizontal only in S3
 
@@ -476,7 +491,7 @@ wants arrow-key nudge. Those collide, and the resolution is **selection is the m
 
 | Keys | Nothing selected | Something selected |
 |---|---|---|
-| `↑` / `↓` | pan vertically | move the selection to the previous / next row |
+| `↑` / `↓` | pan vertically | move the selection to the previous / next **selectable** row (`can('select')`; skip incapable; no-op when none remain in that direction) |
 | `←` / `→` | pan horizontally | nudge the selected entries by one snap unit |
 | `Shift`+`←`/`→` | — | resize: move the `end` edge by one snap unit |
 | `Alt`+`←`/`→` | — | nudge without snapping |
@@ -488,8 +503,15 @@ Every row of the pointer's capability set has a keyboard row, which is what `pla
 pointer capability has a keyboard path" asks for — and the editing rows **read off D-S3-9's table**
 rather than re-encoding it: `attachKeyboardEditing` asks the same `can(gesture, entry)` the pointer
 path asks, so a `resize`-incapable entry refuses `Shift`+`←`/`→` for the same reason it grows no
-handles. That is `[S3-A5]`'s keyboard half, and it is why the table above lists keys against
+handles, and a `select`-incapable row is skipped by `↑`/`↓` for the same reason a click does not
+select it. That is `[S3-A5]`'s keyboard half, and it is why the table above lists keys against
 gestures, not against entry kinds.
+
+**This table is the shipped default, not a public keymap.** S3 does not add a `keyMap` option
+(I11). Remap waits for S5: named commands on `CommandRegistry`, default bindings, and
+`registerKeybinding` to replace or add chords (`01` §10). `interactions` still gates whether a
+command may run; the keymap only chooses which chord runs it. The load-bearing S3 decision is the
+mode switch (selection rebinds the arrows), not the particular chords.
 
 Rejected: requiring a modifier for every nudge —
 it makes the primary editing gesture the hardest one to find, and Escape already gives an
@@ -868,9 +890,9 @@ ninth one — that is where `plans/03`'s "keyboard parity begins" is accepted.
 - **`time/snap.test.ts` (new, pure)** — `snapInstant` at each `TimeUnit`, including across a DST transition and at a week start in a non-UTC zone.
 - **`view/capability.test.ts` (new, pure)** — the D-S3-9 default table per kind; a boolean rule; a predicate rule; a consumer-defined kind; `interactions` reassignment re-resolves live.
 - **`render/dom/index.test.ts` (extended, dom)** — `applyState` parks the handles when `resizableItemId` is undefined and moves them when it is set; `cursor: grab` follows `movableItemId`; the D-S3-7 token projection, including `dragging` vs `ghost` off `ItemPreview.extra`. `render/dom` calls no capability resolver — asserted by the import boundary, not by a spy (D-S3-8).
-- **`interaction/entry-gestures.test.ts` (new, dom)** — `[S3-A1]`'s pointer half: before-event → exactly one transaction → after-event, asserted as an ordered log for move and resize; selection fires its own event pair and opens no transaction; nothing is written on pointerdown; `[S3-A2]` Escape mid-drag leaves store, `data-state` and transforms exactly as they were.
-- **`interaction/keyboard-editing.test.ts` (new, dom)** — the D-S3-13 map, both modes; `[S3-A1]`'s keyboard half (one nudge = one before-event, one transaction, one after-event, and one Ctrl+Z puts it back — U9); `[S3-A5]`'s keyboard half, refused off the same `can()` the pointer path asks.
-- **`api/gantt.test.ts` (extended, dom)** — `[S3-A5]` a `resize`-incapable entry renders no handle and refuses pointer and keyboard resize; `[S3-A3]` hover across every mounted bar of a 1,000-entry fixture calls no `computeFrame` and creates/removes no nodes (D-S3-20); `[S3-A7]` ctrl+wheel zooms anchored, shift+wheel pans, Page/Home/End pan, and `dataset.on('change')` never fires for any of them.
+- **`interaction/entry-gestures.test.ts` (new, dom)** — `[S3-A1]`'s pointer half: before-event → exactly one transaction → after-event, asserted as an ordered log for move and resize; selection fires its own event pair and opens no transaction; nothing is written on pointerdown; `[S3-A2]` Escape mid-drag leaves store, `data-state` and transforms exactly as they were. A `select`-incapable bar: click and ctrl-click do not change the selection; shift-click omits it (D-S3-10).
+- **`interaction/keyboard-editing.test.ts` (new, dom)** — the D-S3-13 map, both modes; `[S3-A1]`'s keyboard half (one nudge = one before-event, one transaction, one after-event, and one Ctrl+Z puts it back — U9); `[S3-A5]`'s keyboard half, refused off the same `can()` the pointer path asks; `↑`/`↓` skip a `select`-incapable row.
+- **`api/gantt.test.ts` (extended, dom)** — `[S3-A5]` a `resize`-incapable entry renders no handle and refuses pointer and keyboard resize; `gantt.selection = [id]` still accepts a `select`-incapable id (the setter does not consult `can('select')`, D-S3-9); `[S3-A3]` hover across every mounted bar of a 1,000-entry fixture calls no `computeFrame` and creates/removes no nodes (D-S3-20); `[S3-A7]` ctrl+wheel zooms anchored, shift+wheel pans, Page/Home/End pan, and `dataset.on('change')` never fires for any of them.
 - **`interaction/extender-preview.test.ts` (new, dom)** — `[S3-A4]` with the identity extender only the dragged bar carries a preview; with an extender injected through `DatasetStateOptions.editExtender` (D-S2-6's sanctioned route, the one `data/history.property.test.ts:169` already takes under `[S2-A1]`) that writes a second entry's `start`, that bar carries one too, marked `extra`; Escape discards both; a static-import assertion proves no `scheduling/` import reaches `interaction/`.
 - **`data/history.property.test.ts` (extended, pure)** — `[S3-A6]` a gesture's changeset (user edit + extender extras) inverts to the exact pre-gesture state, folded into the existing `[S2-A1]` property test rather than given a second one.
 - **e2e `e2e/direct-manipulation.spec.ts` (new)** — `[S3-A8]` the cursor line follows the pointer during a drag, reports the snapped date, and is gone on release; a real drag moves a bar and a real Ctrl+Z puts it back; the veto demo refuses a drop and leaves nothing behind.
@@ -883,15 +905,17 @@ ninth one — that is where `plans/03`'s "keyboard parity begins" is accepted.
 - `plans/03` §S3 — acceptance boxes `[S3-A1]`–`[S3-A8]`, replacing the six untagged ones; the "1,000 visible bars" wording corrected per D-S3-20; a pointer to this spec.
 - `plans/00` §4 — the `S3 → S4` gate restated over the acceptance ids; the `S1.13 → S3` gate marked discharged.
 - `plans/01` §1 — the `INT --> MODEL` arrow and its one-line justification (**P3**); §9 updated to name the attachments this step actually ships rather than the `Drag`/`Resize`/`Select`/`Keyboard` controller sketch.
-- `plans/02` §3 — the three event pairs with their payload types, including `ProposedSpan` and the note that §3's existing `({ entry, start, end })` example is the payload's own top level, not a simplification of it (D-S3-22); §4 token table gains `--fg-selection-color` and `--fg-ghost-opacity`; the Part vocabulary gains `fg-bar-handle`, `fg-cursor-line`, `fg-cursor-line-label`; §4.1's `interactions` example drops `linkCreate` until S7, and §4.1's list of gesture keys is marked as the set `keyof Interactions` grows into (D-S3-5).
+- `plans/02` §3 — the three event pairs with their payload types, including `ProposedSpan` and the note that §3's existing `({ entry, start, end })` example is the payload's own top level, not a simplification of it (D-S3-22); §4 token table gains `--fg-selection-color` and `--fg-ghost-opacity`; the Part vocabulary gains `fg-bar-handle`, `fg-cursor-line`, `fg-cursor-line-label`; §4.1's `interactions` example drops `linkCreate` until S7, and §4.1's list of gesture keys is marked as the set `keyof Interactions` grows into (D-S3-5). §4.1 also states that `select: false` refuses pointer and keyboard selection while the public setter does not consult `can('select')` (D-S3-9).
+- **`select` capability wiring, closed 2026-08-30:** D-S3-9/10/13 now state that pointer and keyboard ask `can('select', entry)` and skip; I14's hide half is vacant for this key; `gantt.selection` does not consult the capability. `CONTEXT.md` **Capability** and `plans/01` §9 aligned.
+- **D-S3-13 keymap scope, closed 2026-08-30:** the chord table is the shipped default; S3 publishes no `keyMap` option (I11); remap is deferred to S5's commands and `registerKeybinding`.
 - `plans/04` §1 — nothing (no new runtime dependency).
 
 Already landed **with this spec**, not waiting for the step: `plans/03` §S3's and §S5's harness scope
-lines (P1, option (a)), `plans/03` §S3's prerequisite count (two, not three — P1 is closed), and
+lines (P1, option (a)), `plans/03` §S3's prerequisite count (one, not three — P1 and P2 closed), and
 `src/data/dataset-state.ts`'s stale `editExtender` comment — a pre-remap reference, not a live
 decision.
 - `CONTEXT.md` — new entries **Gesture**, **Draft**, **Ghost**, **Cursor line**, **Interaction state**, **Nudge**; **Capability** updated with the per-kind default table's existence; **Part** and **State attribute** updated with the new members. Two entries need the disambiguation written in, not assumed: **Draft** against **Write set**'s standing `_Avoid: Draft` (D-S3-2's table), and **Cursor line** against **Date line**'s and **Today line**'s standing `_Avoid: cursor` (D-S3-15). Both `_Avoid` lines narrow rather than disappear.
-- **The other two pre-remap "S3 means scheduling" comments**, found by the same search that caught the `dataset-state.ts` one: `src/data/edit-extension.ts:2` ("an installed plugin (S3's scheduling engine)" → S7, ADR 0002) and `src/model/change-set.ts:9` ("S3 adds `plugin:${string}/${string}`" → S5's plugin runtime, D-S2-7). Both predate `87af449`. `src/view/pane-layout.ts:53` and `src/view/event-bus.ts:28` also say S3 and are **correct** — they mean this slice's gesture controllers, so they stay.
+- **The pre-remap "S3 means scheduling" comments, corrected 2026-08-30:** `src/data/edit-extension.ts:2` ("an installed plugin (S3's scheduling engine)" → S7, ADR 0002) and `src/model/change-set.ts:9` ("S3 adds `plugin:${string}/${string}`" → S5's plugin runtime, D-S2-7), both predating `87af449`. The mirror-image "Lands in S4" family went with them — pre-remap anchors for direct manipulation, now S3: `src/interaction/index.ts:2` and `src/render/dom/index.ts:237` ("Hot path lands in S4"), and `src/data/dataset-state.ts:113` ("a gesture to tag (S4)"). `src/view/pane-layout.ts:53` and `src/view/event-bus.ts:28` also say S3 and are **correct** — they mean this slice's gesture controllers, so they stay.
 - `.dependency-cruiser.cjs` — `interaction-boundary` widened to `['view', 'data', 'model']` (**P3**), with the red-test fixture.
 - `.slice` → `S3`; `scripts/slice-gate.mjs` gains the `S3 → S4` gate.
 - Issue #99 gap 5 — closed by `[S3-A8]`; issue #100's gesture half — closed by `[S3-A7]`, its period-view half stays open.
@@ -916,7 +940,7 @@ reachable without holding up the rest.
 - [ ] `view/capability.ts` with the D-S3-9 default table; `Gantt.interactions`, live
 - [ ] `applyState` real: `data-state` over D-S3-7's five-row projection; hover; `cursor: grab` on `movableItemId`
 - [ ] Shared `.fg-bar-handle` pair, positioned by `applyState`, parked when `resizableItemId` is undefined; the shell resolves both ids once per hover/selection change (D-S3-6, D-S3-8)
-- [ ] `[S3-A3]`, `[S3-A5]`'s pointer half
+- [ ] `[S3-A3]`, `[S3-A5]`'s pointer half; pointer select asks `can('select', entry)` (D-S3-10)
 - [ ] **Visible:** handles and a grab cursor appear on capable bars only; groups show neither
 
 ### S3.3 — Drag-move *(no prerequisite)*
@@ -934,7 +958,7 @@ reachable without holding up the rest.
 - [ ] **Visible:** edges drag independently; a group's edges refuse
 
 ### S3.5 — Keyboard parity and the async veto *(no prerequisite)*
-- [ ] `attachKeyboardEditing` + the shell's one `keydown` listener and the D-S3-13 mode switch; the editing rows refuse off the same `can()` the pointer path asks (D-S3-9)
+- [ ] `attachKeyboardEditing` + the shell's one `keydown` listener and the D-S3-13 mode switch; the editing rows refuse off the same `can()` the pointer path asks (D-S3-9); `↑`/`↓` skip `select`-incapable rows
 - [ ] Async `before*`: the gesture's own arm lock, `pending` written into paint state, resolution both ways (D-S3-17)
 - [ ] Screen-reader announcement of the committed span on nudge (the bar's a11y label already carries it)
 - [ ] `[S3-A1]`'s keyboard half and `[S3-A5]`'s keyboard half
@@ -944,7 +968,7 @@ reachable without holding up the rest.
 - [ ] The rAF preview calls the extender with the draft; extras join `previewOffsets`
 - [ ] `[S3-A4]` and `[S3-A6]` inject through the internal `DatasetStateOptions.editExtender` — D-S2-6's sanctioned route, and the one `[S2-A1]`'s third property already takes (`data/history.property.test.ts:169`)
 - [ ] The no-`scheduling/`-import assertion
-- [ ] `src/data/edit-extension.ts:2` and `src/model/change-set.ts:9`: the two remaining pre-remap "S3" comments corrected to S7 and S5 (§7)
+- [x] `src/data/edit-extension.ts:2` and `src/model/change-set.ts:9`: the two remaining pre-remap "S3" comments corrected to S7 and S5 (§7) — done 2026-08-30, along with the "Lands in S4" family (`src/interaction/index.ts:2`, `src/render/dom/index.ts:237`, `src/data/dataset-state.ts:113`)
 - [ ] ~~`src/data/dataset-state.ts`'s stale "S3's own job (#15)" comment~~ — corrected with this spec
 - [ ] ~~`plans/03` §S3/§S5 harness scope lines~~ — moved with this spec (P1, option (a))
 - [ ] **Visible:** a dragged bar ghosts under an extender in a `dom` test now; on a harness page at S5
@@ -976,4 +1000,5 @@ reachable without holding up the rest.
 | Context menu, tooltips | S5 | The plugin contract's `commands` and `overlay` |
 | `linkCreate` gesture, link ports | S7 | Plugin-owned `Dependency` data (ADR 0002) |
 | Roving tabindex, full grid a11y pattern, axe in CI | S5 | `plans/03` §S5's a11y completion block, which already owns it |
+| Remappable keyboard chords (`keyMap` / `registerKeybinding`) | S5 | `CommandRegistry` and `PluginContext.interaction.registerKeybinding` (`01` §10). D-S3-13 ships the default table only |
 | Multi-Gantt gesture sync (drag in one, ghost in another) | when a caller asks | Selection is per-Gantt by design (D-S3-10); a shared selection object would be a D9-shaped seam, not a core change |

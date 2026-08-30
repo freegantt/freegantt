@@ -234,7 +234,7 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
       }
     },
     applyState(_state: InteractionState) {
-      // Hot path lands in S4: class toggles + transforms only, zero allocation (plans/01 §3).
+      // Hot path lands in S3: class toggles + transforms only, zero allocation (plans/01 §9).
     },
     hitTest(x: number, y: number): HitResult | null {
       // "The bars array is the hit index; DOM backends get hit-testing from event delegation"

@@ -6,7 +6,7 @@
 import type { ChangeSetId, EntryId } from './ids.js';
 import type { Entry } from './entry.js';
 
-export type StoreName = 'entries'; // S3 adds `plugin:${string}/${string}`
+export type StoreName = 'entries'; // S5 adds `plugin:${string}/${string}`
 export type ChangeOrigin = 'user' | 'undo' | 'redo'; // 'engine' and 'load' arrive with their producers (D-S2-11)
 
 /** Open by construction (D-S2-26, ADR 0005). Core keys are named for autocomplete and for the

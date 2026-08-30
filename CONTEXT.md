@@ -399,7 +399,7 @@ _Avoid_: aria-label (that is the DOM attribute `render/dom` maps this to — `a1
 ### Extension
 
 **Capability**:
-Whether a specific gesture (move, resize, link) is permitted on a given Entry, resolved once per Entry from its Kind and gating both the gesture itself and any affordance that hints at it (e.g. a resize handle only renders if resize is capable).
+Whether a specific gesture (move, resize, select, link) is permitted on a given Entry, resolved once per Entry from its Kind and gating both the gesture itself and any affordance that hints at it (e.g. a resize handle only renders if resize is capable). `select` is a Capability with no visual affordance — I14's refuse half still applies (pointer and keyboard skip an incapable entry); the public `Gantt.selection` setter does not consult it (D-S3-9).
 _Avoid_: Permission, ability
 
 **GanttPlugin**:

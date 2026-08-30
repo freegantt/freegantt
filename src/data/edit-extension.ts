@@ -1,5 +1,5 @@
 // data/ — the extension hook every transaction calls once (D4). An unoccupied hook is the identity
-// function; an installed plugin (S3's scheduling engine) is what returns anything else (D-S2-6).
+// function; an installed plugin (S7's scheduling engine) is what returns anything else (D-S2-6).
 
 import type { Entry, EntryId } from '../model/index.js';
 
