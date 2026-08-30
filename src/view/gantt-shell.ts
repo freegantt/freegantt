@@ -3,8 +3,6 @@
 
 import {
   barSpan,
-  draftForMove,
-  draftForResize,
   previewOffsets,
   FrameLayout,
   ScrollModel,
@@ -44,6 +42,7 @@ import { subscribeToDatasetChanges } from './dataset-change-subscription.js';
 import type { DatasetChangeSubscription } from './dataset-change-subscription.js';
 import { FrameScheduler } from './frame-scheduler.js';
 import { projectAffordances } from './affordance-projection.js';
+import { GesturePipeline } from './gesture-pipeline.js';
 
 /** `view/` may not import `interaction/` (plans/01 §1: `INT --> VIEW`, not the reverse — interaction/
  *  controllers are one layer *above* view/, the way `EXT --> VIEW`/`EXT --> INT` puts extensions/
@@ -214,15 +213,9 @@ export class GanttShell {
   /** The raw hit under the pointer, reported by `EntrySelectionContext.setHovered` — undefined on
    *  pointerleave or when nothing is wired (no `entryGestures` attachment). */
   #hoveredItemId: ItemId | undefined;
-  /** D-S3-18: the most recent in-flight draft a drag has proposed, applied on the next animation
-   *  frame rather than synchronously on every pointermove — one paint per frame, not one per event. */
-  #pendingPreviewDraft: EntryEdits | undefined;
-  /** The single rAF owner for preview coalescing (B10) — a second `FrameScheduler` instance, not a
-   *  raw `requestAnimationFrame` call: its own callback applies the preview directly, never
-   *  `render()`'s full frame recompute, so a drag never rebuilds geometry it only needs to offset. */
-  #previewFrame = new FrameScheduler(() => {
-    this.#applyPreview(this.#pendingPreviewDraft);
-  });
+  /** D-GH-2: owns draft math, preview rAF coalescing and the commit pipeline for a move/resize
+   *  gesture — built once, from this shell's own primitives, right after `#capabilities` below. */
+  #gesturePipeline!: GesturePipeline;
   /** `id:0` today (segments are not yet laid out as separate items, `layout/frame.ts`), rebuilt every
    *  render from `frame.bars` so this stays correct the moment segments do land — the shell reads the
    *  frame it already computed rather than re-deriving item ids of its own (D-S3-10). */
@@ -343,6 +336,15 @@ export class GanttShell {
     this.#capabilities = resolveCapabilities(this.#interactions, (kind) =>
       this.#options.dataset.isDerivedSpanKind(kind),
     );
+    this.#gesturePipeline = new GesturePipeline({
+      timeZone: () => this.#options.dataset.timeZone,
+      timeScale: () => this.#viewport.timeScale,
+      snap: (suspendSnap) => this.#resolveSnap(suspendSnap),
+      entriesForGesture: (grabbed, capability) => this.#entriesForGesture(grabbed, capability),
+      commitEntryEdits: (edits) => this.#options.commitEntryEdits?.(edits) ?? false,
+      emit: (name, payload) => this.#events.emit(name, payload),
+      applyPreview: (draft) => this.#applyPreview(draft),
+    });
     this.#entryGestures = options.entryGestures?.(this.#panes.timeline, this.#container, {
       hitTest: (x, y) => {
         const hit = this.#backend.hitTest(x, y);
@@ -357,11 +359,12 @@ export class GanttShell {
         propose: (next) => this.#proposeSelection(next),
       },
       setHovered: (item) => this.#setHovered(item),
-      entriesForGesture: (grabbed, capability) => this.#entriesForGesture(grabbed, capability),
+      entriesForGesture: (grabbed, capability) =>
+        this.#gesturePipeline.entriesForGesture(grabbed, capability),
       draftFor: (gesture, entries, dxPx, gestureOptions) =>
-        this.#draftFor(gesture, entries, dxPx, gestureOptions),
-      commit: (gesture, draft) => this.#commitGesture(gesture, draft),
-      preview: (draft) => this.#previewGesture(draft),
+        this.#gesturePipeline.draftFor(gesture, entries, dxPx, gestureOptions),
+      commit: (gesture, draft) => this.#gesturePipeline.commit(gesture, draft),
+      preview: (draft) => this.#gesturePipeline.preview(draft),
       // S3.6 reserved (extender-ghost trigger) — nothing reads this yet in S3.3.
       pointerAt: () => {},
     });
@@ -519,67 +522,6 @@ export class GanttShell {
       return { unit: this.#viewport.preset.tickUnit, increment: this.#viewport.preset.tickIncrement };
     }
     return snap;
-  }
-
-  #draftFor(
-    gesture: EntryGesture,
-    entries: readonly Entry[],
-    dxPx: number,
-    options: { suspendSnap?: boolean } | undefined,
-  ): EntryEdits {
-    const snap = this.#resolveSnap(options?.suspendSnap);
-    if (gesture.kind === 'resize') {
-      return draftForResize({
-        zone: this.#options.dataset.timeZone,
-        scale: this.#viewport.timeScale,
-        snap,
-        entries,
-        dxPx,
-        edge: gesture.edge,
-      });
-    }
-    return draftForMove({
-      zone: this.#options.dataset.timeZone,
-      scale: this.#viewport.timeScale,
-      snap,
-      entries,
-      dxPx,
-    });
-  }
-
-  /** `beforeEntryMove`/`beforeEntryResize` → one commit → `entryMove`/`entryResize` (D-S3-16,
-   *  D-S3-22). `commitEntryEdits` (injected by `api/gantt.ts`, which alone holds a
-   *  `dataset.transaction()`-capable `Dataset` — this shell's own `dataset` option is the narrower
-   *  `model/` interface, "a view never opens a transaction") does the actual write and folds a sync
-   *  veto and a `MutationCancelledError` into one `false`. */
-  #commitGesture(gesture: EntryGesture, draft: EntryEdits): Promise<boolean> {
-    if (draft.size === 0) return Promise.resolve(false);
-    const spans = [...draft].flatMap(([id, edit]) =>
-      edit.start !== undefined && edit.end !== undefined
-        ? [{ entry: id, start: edit.start, end: edit.end }]
-        : [],
-    );
-    const grabbed = spans[0];
-    if (!grabbed) return Promise.resolve(false);
-    if (gesture.kind === 'resize') {
-      const payload = { ...grabbed, entries: spans, edge: gesture.edge };
-      if (this.#events.emit('beforeEntryResize', payload) === false) return Promise.resolve(false);
-      const committed = this.#options.commitEntryEdits?.(draft) ?? false;
-      if (committed) this.#events.emit('entryResize', payload);
-      return Promise.resolve(committed);
-    }
-    const payload = { ...grabbed, entries: spans };
-    if (this.#events.emit('beforeEntryMove', payload) === false) return Promise.resolve(false);
-    const committed = this.#options.commitEntryEdits?.(draft) ?? false;
-    if (committed) this.#events.emit('entryMove', payload);
-    return Promise.resolve(committed);
-  }
-
-  /** D-S3-18: coalesces on the shell's own rAF — a drag's every pointermove replaces the pending
-   *  draft, but only the last one before the next frame is ever painted. */
-  #previewGesture(draft: EntryEdits | undefined): void {
-    this.#pendingPreviewDraft = draft;
-    this.#previewFrame.request();
   }
 
   #applyPreview(draft: EntryEdits | undefined): void {
