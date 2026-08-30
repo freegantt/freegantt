@@ -86,7 +86,7 @@ Slices are scope, not calendar estimates. Within a slice, entries are ordered so
 
 ---
 
-## S1.12 — Timeline density, zoom navigation, date formatting  ·  **runs next**
+## S1.12 — Timeline density, zoom navigation, date formatting  ·  **done, gate passing**
 
 **Position:** after S2, before S3. S2 landed at `6e6299b`; S3 has not started. `.slice` is `S1.12` and the live gate is `S1.12 → S3`.
 **Scope is S1's** (`plans/03` §S1 above), not a new slice — the numbering says whose gap it closes, this position says when it runs. Full spec, settled: [`plans/s1.12-timeline-navigation/README.md`](./s1.12-timeline-navigation/README.md).
@@ -113,6 +113,30 @@ Slices are scope, not calendar estimates. Within a slice, entries are ordered so
 
 ---
 
+## S1.13 — Date lines: public shape, header caption, line style  ·  **runs next**
+
+**Position:** after S1.12 and S2, before S3. `.slice` moves `S1.12` → `S1.13`; the live gate is `S1.13 → S3`.
+**Scope is S1's**, same reasoning as S1.12 — axis furniture, not a new capability area. Full spec, settled: [`plans/s1.13-date-lines/README.md`](./s1.13-date-lines/README.md).
+
+**Goal:** finish the `DateLine` shape issue #96's grill already settled but S1.12 never wired to the public surface, and close issues #96/#99's remaining gaps — the rename, `Gantt.dateLines`, a header caption, and line style via `className`.
+
+**Scope**
+
+- `layout/`: `DateLineInput`'s old `{ id, instant, label }` shape renamed to the internal `DateLineSpec` (`placeAt`, resolved `Instant`); index-keyed, `id`-free; `todayLine` widens to `boolean | Instant`.
+- `render/dom/`: `.fg-today-line` → `.fg-date-line` (no alias); `--fg-today-line-color` → `--fg-date-line-color`; a second keyed layer, `.fg-date-line-label`, mounted in the header at each labelled line's x; stroke painted via `border-left` so a `className` can set dash/width in one declaration.
+- `api/`: `Gantt.dateLines` (new, `DateLineInput[]`, loose `placeAt`); `Gantt.todayLine` widens from `boolean` to `boolean | InstantInput`.
+
+**Explicitly out:** cursor date hairline during drag (S3, listed there — needs `interaction/`'s pointer plumbing); `RangeBand` shaded spans (#97); period views, shift-by-tick, fit-selection (#100); new axis presets (#101).
+
+**Acceptance**
+
+- [ ] `[S1-A11]` A `dateLines` entry with a `label` renders a `.fg-date-line-label` at the line's x in the header; one without a label renders no caption node.
+- [ ] `[S1-A12]` `.fg-today-line` does not exist anywhere in the rendered DOM; `.fg-date-line` does, with `--fg-date-line-color` in the token table and `--fg-today-line-color` gone from it.
+- [ ] `[S1-A13]` `todayLine` set to a pinned `InstantInput` renders one uncaptioned `.fg-date-line` there, with no `now()` read.
+- [ ] `[S1-A14]` A `dateLines` entry's `className` reaches the rendered node's class list alongside the base class, and a consumer stylesheet's `border-left-style: dashed` on it actually renders dashed.
+
+---
+
 ## S3 — Direct manipulation
 
 **Goal:** editing with the pointer (D10): drag-move, resize, selection — each gesture cancelable, transactional, undoable. Live preview of the draft plus any extra field writes the extension hook returns.
@@ -128,6 +152,7 @@ Slices are scope, not calendar estimates. Within a slice, entries are ordered so
 - One transaction per gesture at commit (I6); undo reverts the user's edit and any extender extras in one step.
 - Keyboard parity begins: selected bar nudges by snap with arrow keys; Enter/Escape semantics.
 - Timeline navigation gestures (deferred here from S1.12, D-S1.12-17): ctrl/⌘+wheel anchored zoom calling `zoomBy(factor, offsetX)`; shift+wheel horizontal pan; `PageUp`/`PageDown`/`Home`/`End`/arrow keys for pan. These write nothing to the dataset, so the arm-threshold, escape-cancel and one-transaction-per-gesture invariants do not apply to them — they are read-only viewport gestures over the surface S1.12 ships.
+- Cursor date hairline (deferred here from S1.13, D-S1.13-9, issue #99 gap 5): show the instant under the pointer during a drag, via `instantForX` over the `DateLine` seam S1.13 ships. Read-only, same invariant exemption as the line above; pairs with #100's gesture work.
 - Harness: editing playground; a veto demo (drop before a boundary date is rejected with a toast); a lock-style injected extender so extra ghosts are visible without the scheduling plugin.
 
 **Acceptance**
