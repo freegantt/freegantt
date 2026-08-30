@@ -116,9 +116,9 @@ ${DARK_COLOR_TOKENS}
    (S3.2 adds the grab cursor it pairs with); the token still paints so a consumer's own selector can
    already key off it. */
 .fg-bar[data-state~="selected"] { outline: 2px solid var(--fg-selection-color); }
-/* S3.5, D-S3-17: an unsettled beforeEntryMove/beforeEntryResize Promise holds the bar here, reduced
-   opacity by default, until it settles either way. */
-.fg-bar[data-state~="pending"] { opacity: var(--fg-pending-opacity, 0.6); }
+/* S3.5, D-S3-17: an unsettled beforeEntryMove/beforeEntryResize Promise holds the bar here. Selected
+   uses 2px solid; pending uses 2px dotted of the same token so the two read apart. */
+.fg-bar[data-state~="pending"] { opacity: var(--fg-pending-opacity, 0.6); outline: 2px dotted var(--fg-selection-color); }
 /* S3.6, D-S3-18, U7: an installed extension hook's own preview extra (ItemPreview.extra) — a second
    bar the caller never grabbed, moved by the hook's own cascade. 'dragging' (the caller's own grabbed
    bar, ItemPreview.extra: false) paints no rule of its own yet, same as 'hovered' above. */

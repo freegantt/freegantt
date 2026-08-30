@@ -44,10 +44,11 @@ export class EventBus<TEvents, TAsyncKeys extends keyof TEvents = never> {
       ?.delete(handler as (payload: TEvents[keyof TEvents]) => SyncVeto | Promise<SyncVeto>);
   }
 
-  /** Every handler runs, same as before (a sync veto from one handler does not skip the rest).
-   *  Returns `false`/`true` synchronously when no handler returned a `Promise`. When one did, the
-   *  overall result waits on all of them (D-S3-17) — a synchronous `false` from another handler still
-   *  wins immediately, without waiting. */
+  /** Every handler runs (a sync veto from one handler does not skip the rest). Returns
+   *  `false`/`true` synchronously when no handler returned a `Promise`. When one did, the overall
+   *  result waits on **all** of them (D-S3-17) — a synchronous `false` still vetoes, but it does not
+   *  abandon an already-started Promise. A rejected Promise is a veto; the rejection is re-thrown
+   *  on a later turn so `void emit()` / `void session.commit()` do not become the unhandled path. */
   emit<K extends keyof TEvents>(
     name: K,
     payload: TEvents[K],
@@ -68,8 +69,21 @@ export class EventBus<TEvents, TAsyncKeys extends keyof TEvents = never> {
       if (result === false) ok = false;
       else if (result instanceof Promise) pending.push(result);
     }
-    if (!ok) return false;
-    if (pending.length === 0) return true;
-    return Promise.all(pending).then((results) => !results.includes(false));
+    if (pending.length === 0) return ok;
+    return Promise.allSettled(pending).then((outcomes) => {
+      let allowed = ok;
+      for (const outcome of outcomes) {
+        if (outcome.status === 'rejected') {
+          allowed = false;
+          const reason: unknown = outcome.reason;
+          queueMicrotask(() => {
+            throw reason;
+          });
+        } else if (outcome.value === false) {
+          allowed = false;
+        }
+      }
+      return allowed;
+    });
   }
 }

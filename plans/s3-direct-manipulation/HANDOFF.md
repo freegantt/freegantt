@@ -5,9 +5,8 @@ Status as of 2026-08-30: **S3.6 (extender preview) is done.** All checks are gre
 `node scripts/guard-red-test.mjs`, `pnpm build`, `pnpm api-report`), plus the full `playwright test`
 e2e suite (37/37).
 
-Continue at **S3.5 D-S3-17 follow-up**, then **S3.7**. Read
-[`s3.5-keyboard-parity-and-async-veto.md`](./s3.5-keyboard-parity-and-async-veto.md) §4 (ordered
-follow-up) before [`s3.7-viewport-gestures.md`](./s3.7-viewport-gestures.md).
+Continue at **S3.7**. The S3.5 D-S3-17 follow-up has landed. Read
+[`s3.7-viewport-gestures.md`](./s3.7-viewport-gestures.md).
 
 ## What landed this session (S3.6)
 
@@ -75,11 +74,13 @@ extender cascade undo atomically" — it just wasn't tagged with the acceptance 
    *tests* legitimately call the real global `requestAnimationFrame` to await one coalesced preview
    frame (`gesture-pipeline.test.ts`'s existing pattern, now also in `extender-preview.test.ts`); that
    is not the same thing as production code scheduling its own frame outside `FrameScheduler`.
-4. **A preview repaint (including the S3.6 ghost) is never synchronous** — it lands on the pipeline's
+4. **A live drag preview (including the S3.6 ghost) is never synchronous** — it lands on the pipeline's
    own rAF, one frame later. A DOM-level test asserting `data-state`/transform right after a
    `pointermove` or an Escape `keydown` dispatch needs `await new Promise((resolve) =>
    requestAnimationFrame(resolve))` first, or it reads stale (pre-preview) state. This tripped both
-   new `extender-preview.test.ts` tests on the first pass this session.
+   new `extender-preview.test.ts` tests on the first pass this session. **Exception:** the D-S3-17
+   pending ghost is an immediate `#paintNow()` of the commit draft — `pointerup` tests may read
+   transform and `data-state~="pending"` in the same tick.
 5. **I10's `no-instant-arithmetic` lint is type-aware and reaches test files too** — even a file that
    cannot import `time/` (`interaction/`) must not do `someInstant - anotherInstant` arithmetic
    directly; cast to `as unknown as number` first (unbranding), do the arithmetic, cast back. See
@@ -101,20 +102,16 @@ extender cascade undo atomically" — it just wasn't tagged with the acceptance 
 
 ## TODO — in priority order
 
-1. **S3.5 D-S3-17 follow-up** — [`s3.5-keyboard-parity-and-async-veto.md`](./s3.5-keyboard-parity-and-async-veto.md)
-   §4, items 1–6, one change set: commit-draft pending ghost, one `applyState`, fold `#commit`,
-   rename the two "pending" fields, dotted pending CSS (`outline: 2px dotted var(--fg-selection-color)`
-   on the existing rule), EventBus rejection tests, stale `entry-gestures.ts` comments.
-2. **S3.7 (viewport gestures)** — read [`s3.7-viewport-gestures.md`](./s3.7-viewport-gestures.md) in
+1. **S3.7 (viewport gestures)** — read [`s3.7-viewport-gestures.md`](./s3.7-viewport-gestures.md) in
    full before touching anything. D-S3-14: viewport gestures (wheel zoom/pan) live in `view/`, write
    nothing to the dataset (`[S3-A7]`).
-3. **Harness demo gaps** (standing ask, carried across several handoffs now): no `Ctrl+Z`/
+2. **Harness demo gaps** (standing ask, carried across several handoffs now): no `Ctrl+Z`/
    `Ctrl+Shift+Z` keydown shortcut, no `Gantt({ dateLines: [...] })` demo, no UI to flip
    `gantt.interactions` live, no `kind: 'group'` entry in the demo fixture, no visible way to see a
    keyboard nudge or the async-veto `pending` state in `harness/` itself, and — new, S3.6's own gap —
    no way to see an extender ghost in `harness/` either, since S3 has no public install API for one
    (P1: that demo is explicitly deferred to S5, `plans/s3-direct-manipulation/README.md`'s Deferred
    table). None of this blocks S3.7; it is explicitly S3.8's gate to close.
-4. Once S3.7 is done and the full check sequence (including `pnpm test:e2e`) is green, update its own
+3. Once S3.7 is done and the full check sequence (including `pnpm test:e2e`) is green, update its own
    TODO boxes, `README.md` (S3.7 `done`, S3.8 `next`), and this file, pointing at S3.8
    (`s3.8-cursor-line-harness-gate.md`).

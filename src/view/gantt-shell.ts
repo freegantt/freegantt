@@ -345,12 +345,9 @@ export class GanttShell {
       emit: (name, payload) => this.#events.emit(name, payload),
       ...(options.editExtender ? { extend: options.editExtender } : {}),
       allEntries: () => new Map(this.#options.dataset.entries.all.map((e) => [e.id, e])),
-      applyPreview: (preview) => {
+      applyGestureState: (preview, pendingItemIds) => {
         setOptional(this.#interactionState, 'preview', preview);
-        this.#backend.applyState(this.#interactionState);
-      },
-      setPending: (itemIds) => {
-        setOptional(this.#interactionState, 'pendingItemIds', itemIds);
+        setOptional(this.#interactionState, 'pendingItemIds', pendingItemIds);
         this.#backend.applyState(this.#interactionState);
       },
     });

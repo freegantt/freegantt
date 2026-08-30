@@ -46,8 +46,7 @@ function makeDeps(overrides: Partial<GesturePipelineDeps> = {}): {
       emitted.push([name, payload]);
       return true;
     },
-    applyPreview: (preview) => applied.push(preview),
-    setPending: () => {},
+    applyGestureState: (preview) => applied.push(preview),
     ...overrides,
   };
   return { deps, emitted, applied };
@@ -150,7 +149,7 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
     expect(preview[0]?.dx).toBe(37);
   });
 
-  it('coalesces several preview() calls into one applyPreview call, with only the last draft', async () => {
+  it('coalesces several preview() calls into one applyGestureState call, with only the last draft', async () => {
     const { deps, applied } = withRoster([entry('a', 0, 100)]);
     const pipeline = new GesturePipeline(deps);
     const session = pipeline.session(entryId('a'), { kind: 'move' })!;
@@ -301,29 +300,32 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
   });
 
   describe('async veto and pending (S3.5, D-S3-17)', () => {
-    it('an unsettled before* Promise marks setPending with the gesture item ids, then clears it', async () => {
+    it('an unsettled before* Promise paints pending ids and the commit-draft preview, then clears both', async () => {
       let resolveVeto!: (value: boolean) => void;
       const veto = new Promise<boolean>((resolve) => {
         resolveVeto = resolve;
       });
-      const pendingCalls: (readonly unknown[] | undefined)[] = [];
+      const paints: { preview: unknown; pending: unknown }[] = [];
       const { deps } = withRoster([entry('a', 100, 200)], {
         emit: ((name: string) => (name === 'beforeEntryMove' ? veto : true)) as GesturePipelineDeps['emit'],
-        setPending: (itemIds) => pendingCalls.push(itemIds),
+        applyGestureState: (preview, pendingItemIds) => {
+          paints.push({ preview, pending: pendingItemIds });
+        },
       });
       const pipeline = new GesturePipeline(deps);
       const session = pipeline.session(entryId('a'), { kind: 'move' })!;
 
       const commitPromise = session.commit(50);
-      expect(pendingCalls).toHaveLength(1);
-      expect(pendingCalls[0]).toBeDefined();
+      expect(paints).toHaveLength(1);
+      expect(paints[0]?.pending).toEqual([itemId(entryId('a'))]);
+      const preview = paints[0]?.preview as readonly { dx: number }[];
+      expect(preview[0]?.dx).toBe(50);
 
       resolveVeto(true);
       const committed = await commitPromise;
 
       expect(committed).toBe(true);
-      expect(pendingCalls).toHaveLength(2);
-      expect(pendingCalls[1]).toBeUndefined();
+      expect(paints.at(-1)).toEqual({ preview: undefined, pending: undefined });
     });
 
     it('session() refuses to arm a new gesture while a prior async veto is unsettled', async () => {
@@ -435,10 +437,10 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
       expect(applied.at(-1)).toBeUndefined();
     });
 
-    it('a sync true result commits without touching setPending', async () => {
-      const pendingCalls: unknown[] = [];
+    it('a sync true result commits without painting pending', async () => {
+      const paints: unknown[] = [];
       const { deps } = withRoster([entry('a', 100, 200)], {
-        setPending: (itemIds) => pendingCalls.push(itemIds),
+        applyGestureState: (_preview, pendingItemIds) => paints.push(pendingItemIds),
       });
       const pipeline = new GesturePipeline(deps);
       const session = pipeline.session(entryId('a'), { kind: 'move' })!;
@@ -446,7 +448,7 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
       const committed = await session.commit(50);
 
       expect(committed).toBe(true);
-      expect(pendingCalls).toEqual([]);
+      expect(paints.filter((pending) => pending !== undefined)).toEqual([]);
     });
   });
 });

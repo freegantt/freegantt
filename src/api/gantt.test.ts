@@ -1443,11 +1443,13 @@ describe('Gantt async veto and pending (S3.5, D-S3-17)', () => {
       afterEvents.push(p);
     });
 
+    const originTransform = bar.style.transform;
     timeline.dispatchEvent(new PointerEvent('pointerdown', { clientX: 5, clientY: 5, pointerId: 1 }));
     timeline.dispatchEvent(new PointerEvent('pointermove', { clientX: 5005, clientY: 5, pointerId: 1 }));
     timeline.dispatchEvent(new PointerEvent('pointerup', { clientX: 5005, clientY: 5, pointerId: 1 }));
 
     expect(bar.dataset['state']).toContain('pending');
+    expect(bar.style.transform).not.toBe(originTransform);
     expect(afterEvents).toEqual([]);
 
     resolveVeto(true);
