@@ -3,7 +3,7 @@
 // not a snapshot array (D-S2-2). `Dataset` here is the bindable surface a Gantt holds; the public
 // class adds `transaction()` and the construction-time options a view never reads.
 
-import type { Entry, EntryEdit, EntryInput } from './entry.js';
+import type { Entry, EntryEdit, EntryInput, EntryKind } from './entry.js';
 import type { EntryId } from './ids.js';
 import type { DatasetEventMap } from './change-set.js';
 
@@ -29,11 +29,16 @@ export interface EntryStore extends EntryStoreView {
 }
 
 /** What a Gantt (and any other `change` subscriber) holds: entries, zone, and the change bus.
- *  The public `Dataset` class also exposes construction options (`dateOnlyEnd`, `derivedSpanKinds`)
- *  and `transaction()` — those stay on the class, because a view never opens a transaction. */
+ *  The public `Dataset` class also exposes construction options (`dateOnlyEnd`, `derivedSpanKinds`'s
+ *  full list) and `transaction()` — those stay on the class, because a view never opens a transaction.
+ *  `isDerivedSpanKind` is the one exception (S3, D-S3-9): `view/capability.ts`'s per-kind default
+ *  table needs to know whether an entry's span is the Rollup's output before it can answer whether
+ *  that entry accepts `move`/`resize`, and a single predicate answers that without exposing the
+ *  `derivedSpanKinds` set's own shape (`ReadonlySet` internally, a plain array on the public class). */
 export interface Dataset {
   readonly entries: EntryStore;
   readonly timeZone: string;
+  isDerivedSpanKind(kind: EntryKind): boolean;
   on<K extends keyof DatasetEventMap>(name: K, handler: (payload: DatasetEventMap[K]) => void | false): void;
   off<K extends keyof DatasetEventMap>(name: K, handler: (payload: DatasetEventMap[K]) => void | false): void;
 }

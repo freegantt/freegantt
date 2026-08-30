@@ -36,6 +36,9 @@ const LIGHT_COLOR_TOKENS = `
   --fg-bar-label-color: #FFFFFF;
   --fg-warn: #D97706;
   --fg-date-line-color: #DC2626;
+  /* Distinct hue from --fg-bar-fill (S3, D-S3-7): the same colour as the bar's own fill would make the
+     selection outline invisible against it. */
+  --fg-selection-color: oklch(0.55 0.19 25);
 `.trimEnd();
 
 const DARK_COLOR_TOKENS = `
@@ -53,6 +56,7 @@ const DARK_COLOR_TOKENS = `
   --fg-bar-label-color: #1A1815;
   --fg-warn: #FBBF24;
   --fg-date-line-color: #F87171;
+  --fg-selection-color: oklch(0.75 0.19 25);
 `.trimEnd();
 
 const BASE_STYLESHEET = `
@@ -74,7 +78,10 @@ ${LIGHT_COLOR_TOKENS}
 ${DARK_COLOR_TOKENS}
 }
 
-.fg-container { display: flex; overflow: hidden; }
+/* S3.1: a click selects an Entry. Native text highlight on a bar or row label is a different
+   action and it also lets a double-click take text from outside the Gantt. S5's editor overlay
+   sets user-select: text on the editor itself. */
+.fg-container { display: flex; overflow: hidden; user-select: none; }
 .fg-grid-pane { display: flex; flex-direction: column; flex-shrink: 0; overflow: hidden; background: var(--fg-pane-bg); }
 /* S1.12, D-S1.12-9: mirrors .fg-header's own band stack — one .fg-band per header band
    (setHeaderBandCount), sized from the same --fg-band-height expression. */
@@ -100,8 +107,22 @@ ${DARK_COLOR_TOKENS}
 .fg-row:nth-child(odd) { background: var(--fg-row-odd-bg); }
 .fg-row-label { color: var(--fg-row-label-color); }
 .fg-bars { position: relative; }
-.fg-bar { background: var(--fg-bar-fill); color: var(--fg-bar-label-color); border-radius: var(--fg-bar-radius, 3px); position: absolute; top: 0; left: 0; }
+/* D-S3-21: touch-action: none on the bar itself, not just the resize handles — a touch drag must
+   never fight the browser's own pan/scroll gesture over the same surface. */
+.fg-bar { background: var(--fg-bar-fill); color: var(--fg-bar-label-color); border-radius: var(--fg-bar-radius, 3px); position: absolute; top: 0; left: 0; touch-action: none; }
 .fg-bar[data-flag~="conflict"] { outline: 2px solid var(--fg-warn); }
+/* D-S3-7: data-state is a fixed five-token projection of InteractionState, painted once here — not a
+   per-bar modifier class (CONTEXT.md's State attribute entry). 'hovered' has no rule of its own yet
+   (S3.2 adds the grab cursor it pairs with); the token still paints so a consumer's own selector can
+   already key off it. */
+.fg-bar[data-state~="selected"] { outline: 2px solid var(--fg-selection-color); }
+/* D-S3-6: movableItemId's cursor is a boolean attribute, not an inline style — cursor is not one of
+   the geometry properties no-inline-style-outside-geometry allows inline. */
+.fg-bar[data-movable] { cursor: grab; }
+/* D-S3-8: one shared pair of handle nodes, moved onto the resizable bar's edges by applyState rather
+   than one pair per bar. Parked with the hidden DOM property (render/dom/index.ts), which the UA's
+   own [hidden] { display: none } default already covers. */
+.fg-bar-handle { position: absolute; top: 0; left: -4px; width: 8px; cursor: ew-resize; touch-action: none; z-index: 1; }
 .fg-content-sizer { position: absolute; top: 0; left: 0; width: 1px; height: 1px; visibility: hidden; }
 /* height is set inline per frame (render/dom/date-line.ts), not bottom: 0: .fg-timeline-pane is both
    this element's positioned ancestor and its own overflow: auto scroll container, so bottom: 0

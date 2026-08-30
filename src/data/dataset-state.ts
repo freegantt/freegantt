@@ -109,6 +109,12 @@ export class DatasetState implements Dataset {
     return changeSetId(this.#changeSetCounter);
   }
 
+  /** `model/`'s `Dataset` interface (S3, D-S3-9) — a predicate rather than exposing `derivedSpanKinds`
+   *  itself, so `view/capability.ts` can ask the one question it needs without naming the Set's shape. */
+  isDerivedSpanKind(kind: EntryKind): boolean {
+    return this.derivedSpanKinds.has(kind);
+  }
+
   /** Batches `body`'s mutations into one `ChangeSet` (D-S2-8). `'user'` is the only origin a public
    *  caller can produce in S2 — `interaction/` gets an option once it has a gesture to tag (S3). */
   transaction<T>(body: () => T): T {

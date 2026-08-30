@@ -1,15 +1,29 @@
 // render/ backend contract (plans/01 §8.1). Shared by dom and null backends; DOM types are structural only —
 // this file itself never touches document/window.
 
-import type { GeometryFrame, ItemId } from '../layout/index.js';
+import type { GeometryFrame, ItemId, ItemPreview } from '../layout/index.js';
 
 export interface InteractionState {
   hoveredItemId?: ItemId;
   selectedItemIds?: readonly ItemId[];
+  /** The one item the shared handle pair sits on (S3, D-S3-6/D-S3-8): the hovered bar, else the
+   *  single selected one — and only when its `resize` capability resolved true. Undefined parks the
+   *  handles. */
+  resizableItemId?: ItemId;
+  /** The hovered bar, and only when its `move` capability resolved true — what gets `cursor: grab`
+   *  (S3, D-S3-6). */
+  movableItemId?: ItemId;
+  /** S3.3, D-S3-18: an in-flight drag's per-item pixel offset, coalesced on the shell's own rAF.
+   *  Undefined outside a gesture — a backend parks every previewed bar back on its committed
+   *  transform the moment this clears. */
+  preview?: readonly ItemPreview[];
 }
 
 export interface HitResult {
   itemId: ItemId;
+  /** S3.4, D-S3-4: set when the hit landed on a resize handle rather than the bar body — which edge
+   *  a resize gesture should grab. Sourced from the handle's own `data-edge` attribute (D-S3-8). */
+  edge?: 'start' | 'end';
 }
 
 /** The two paint surfaces a backend mounts into (S1.8, D-S1.8-1): the grid pane's row layer, and the

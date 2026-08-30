@@ -3,6 +3,9 @@
 
 import {
   barSpan,
+  draftForMove,
+  draftForResize,
+  previewOffsets,
   FrameLayout,
   ScrollModel,
   TimeScaleModel,
@@ -13,6 +16,7 @@ import type {
   DateLineSpec,
   Overscan,
   PresetRef,
+  SnapUnit,
   TimeScaleFit,
   ViewportHandle,
   ViewPreset,
@@ -31,12 +35,55 @@ import type { ScrollAttachment } from './scroll-attachment.js';
 import { attachPaneSize } from './pane-size-attachment.js';
 import type { PaneSizeAttachment } from './pane-size-attachment.js';
 import { ensureBaseStyles } from './styles.js';
-import type { RenderBackend } from '../render/backend.js';
-import { EntryNotFoundError, ContainerNotFoundError } from '../model/index.js';
-import type { Dataset, EntryId, Instant, Size, TimeSpan } from '../model/index.js';
+import type { InteractionState, RenderBackend } from '../render/backend.js';
+import { EntryNotFoundError, ContainerNotFoundError, entryId, itemId } from '../model/index.js';
+import type { Dataset, Entry, EntryEdits, EntryId, ItemId, Instant, Size, TimeSpan } from '../model/index.js';
+import { resolveCapabilities } from './capability.js';
+import type { Capabilities, Interactions } from './capability.js';
 import { subscribeToDatasetChanges } from './dataset-change-subscription.js';
 import type { DatasetChangeSubscription } from './dataset-change-subscription.js';
 import { FrameScheduler } from './frame-scheduler.js';
+
+/** `view/` may not import `interaction/` (plans/01 §1: `INT --> VIEW`, not the reverse — interaction/
+ *  controllers are one layer *above* view/, the way `EXT --> VIEW`/`EXT --> INT` puts extensions/
+ *  above both). So the shell takes its pointer-gesture attachment by injection instead of import —
+ *  the same DI shape `GanttShellOptions.backend` already uses, one layer further out: `api/gantt.ts`
+ *  (which does import `interaction/`, `API --> INT`) supplies the real `attachEntryGestures`.
+ *  TypeScript's structural typing makes that function satisfy `AttachEntryGestures` with no import
+ *  here at all — this is a type-shape mirror of `interaction/entry-gestures.ts`'s own exports, not a
+ *  second declaration of a public type. */
+export interface EntryGesturesAttachment {
+  detach(): void;
+}
+/** Mirrors `interaction/entry-gesture-context.ts`'s `EntryGesture` (S3.3, D-S3-5) — only `'move'` is ever
+ *  built here (S3.4 builds `'resize'`), but the shape must match structurally either way. */
+type EntryGesture = { kind: 'move' } | { kind: 'resize'; edge: 'start' | 'end' };
+/** No cascade — the baseline `#applyPreview`'s `previewOffsets` call contrasts a real gesture draft
+ *  against (S3.6 wires an extender's actual extras in here). */
+const EMPTY_EDITS: EntryEdits = Object.freeze(new Map());
+interface EntryGestureContext {
+  hitTest(x: number, y: number): { itemId: ItemId; edge?: 'start' | 'end' } | undefined;
+  entryFor(item: ItemId): Entry | undefined;
+  can(capability: keyof Interactions, entry: Entry): boolean;
+  rowOrder(): readonly EntryId[];
+  selection: { get(): readonly EntryId[]; propose(next: readonly EntryId[]): void };
+  setHovered(itemId: ItemId | undefined): void;
+  entriesForGesture(grabbed: EntryId, capability: 'move' | 'resize'): readonly Entry[];
+  draftFor(
+    gesture: EntryGesture,
+    entries: readonly Entry[],
+    dxPx: number,
+    options?: { suspendSnap?: boolean },
+  ): EntryEdits;
+  commit(gesture: EntryGesture, draft: EntryEdits): Promise<boolean>;
+  preview(draft: EntryEdits | undefined): void;
+  pointerAt(at: { itemId?: ItemId; x?: number } | undefined): void;
+}
+export type AttachEntryGestures = (
+  pane: HTMLElement,
+  container: HTMLElement,
+  ctx: EntryGestureContext,
+) => EntryGesturesAttachment;
 
 /** S1.10, D-S1.10-4: theming's only preset axis for this step — `'auto'` follows
  * `prefers-color-scheme` (no `data-fg-theme` attribute written), `'light'`/`'dark'` pin it. */
@@ -100,6 +147,9 @@ export interface GanttShellOptions {
   dateLines?: readonly DateLineSpec[];
   /** Live. See `GanttOptions.todayLineMarginTicks`. Default `DEFAULT_TODAY_LINE_MARGIN_TICKS`. */
   todayLineMarginTicks?: number;
+  /** Live (S3, D-S3-9). Per-gesture, boolean or per-entry predicate, over the per-kind default table
+   *  (`view/capability.ts`). Default `{}`: every gesture resolves off the default table alone. */
+  interactions?: Interactions;
   /** Expert knob, not on `GanttOptions` (plans/02 "two callers, two surfaces") — a test naming its
    * own `RenderBackend<HTMLElement>` in place of the DOM one (§9-I: the seam had two implementations
    * and one hardcoded call site, so nothing could reach the other short of mocking the module).
@@ -107,6 +157,26 @@ export interface GanttShellOptions {
    * mounts real elements regardless of which backend paints them, so this closes the hardcoding, not
    * DOM-free `view/`. Defaults to `createDomBackend()`. */
   backend?: RenderBackend<HTMLElement>;
+  /** Injected, not defaulted here — see the `AttachEntryGestures` comment above: `view/` cannot
+   * import `interaction/` to supply its own default. `api/gantt.ts` always passes
+   * `attachEntryGestures`; omitted only by tests exercising the shell with no pointer wiring. */
+  entryGestures?: AttachEntryGestures;
+  /** S3.3, D-S3-16: how a committed gesture draft actually reaches the store. `model/dataset.ts`'s
+   *  `Dataset` (this shell's own `dataset` option) deliberately has no `transaction()` — "a view
+   *  never opens a transaction" — so `api/gantt.ts`, which holds the full `api/Dataset` the model
+   *  interface narrows away, supplies this instead. Returns `false` for both a sync veto and a
+   *  `MutationCancelledError` from `beforeChange`; the shell never sees the exception either way.
+   *  Omitted only by tests exercising the shell with no data-write wiring. */
+  commitEntryEdits?: (edits: EntryEdits) => boolean;
+}
+
+/** `exactOptionalPropertyTypes` treats `obj.key = undefined` as a type error when `key` is declared
+ *  `T | undefined` rather than `T?` on the read side (`InteractionState`'s own shape) — the honest
+ *  "unset" is `delete`, not an assignment. One helper rather than an `if`/`delete` pair at each of
+ *  `#refreshAffordances`'s three call sites. */
+function setOptional<T, K extends keyof T>(target: T, key: K, value: T[K] | undefined): void {
+  if (value === undefined) delete target[key];
+  else target[key] = value;
 }
 
 function resolveContainer(container: HTMLElement | string): HTMLElement {
@@ -130,6 +200,32 @@ export class GanttShell {
   #paneSizeAttachment: PaneSizeAttachment;
   #splitterAttachment: SplitterAttachment;
   #datasetChanges: DatasetChangeSubscription;
+  #entryGestures: EntryGesturesAttachment | undefined;
+  /** D-S3-6: one long-lived, mutable per-Gantt object — `applyState` diffs against what it painted
+   *  last, so writing into this and calling `#backend.applyState` allocates nothing per hover/select
+   *  step (I5). Never rebuilt per call. */
+  #interactionState: InteractionState = {};
+  #selection: readonly EntryId[] = [];
+  /** S3.2, D-S3-9: resolved once, re-resolved only when `interactions` is reassigned — never per
+   *  hover step. `#refreshAffordances` reads it, it never calls `resolveCapabilities` itself. */
+  #interactions: Interactions = {};
+  #capabilities: Capabilities;
+  /** The raw hit under the pointer, reported by `EntrySelectionContext.setHovered` — undefined on
+   *  pointerleave or when nothing is wired (no `entryGestures` attachment). */
+  #hoveredItemId: ItemId | undefined;
+  /** D-S3-18: the most recent in-flight draft a drag has proposed, applied on the next animation
+   *  frame rather than synchronously on every pointermove — one paint per frame, not one per event. */
+  #pendingPreviewDraft: EntryEdits | undefined;
+  /** The single rAF owner for preview coalescing (B10) — a second `FrameScheduler` instance, not a
+   *  raw `requestAnimationFrame` call: its own callback applies the preview directly, never
+   *  `render()`'s full frame recompute, so a drag never rebuilds geometry it only needs to offset. */
+  #previewFrame = new FrameScheduler(() => {
+    this.#applyPreview(this.#pendingPreviewDraft);
+  });
+  /** `id:0` today (segments are not yet laid out as separate items, `layout/frame.ts`), rebuilt every
+   *  render from `frame.bars` so this stays correct the moment segments do land — the shell reads the
+   *  frame it already computed rather than re-deriving item ids of its own (D-S3-10). */
+  #itemEntryIds = new Map<ItemId, EntryId>();
   /** The single rAF owner (B10, D-S2-15): every render request past construction goes through
    *  this, so N mutations in one tick become one frame. */
   #frames = new FrameScheduler(() => this.render());
@@ -242,6 +338,32 @@ export class GanttShell {
       },
       commitGridWidth: (px) => this.#commitGridWidth(px),
     });
+    this.#interactions = options.interactions ?? {};
+    this.#capabilities = resolveCapabilities(this.#interactions, (kind) =>
+      this.#options.dataset.isDerivedSpanKind(kind),
+    );
+    this.#entryGestures = options.entryGestures?.(this.#panes.timeline, this.#container, {
+      hitTest: (x, y) => {
+        const hit = this.#backend.hitTest(x, y);
+        if (!hit) return undefined;
+        return hit.edge !== undefined ? { itemId: hit.itemId, edge: hit.edge } : { itemId: hit.itemId };
+      },
+      entryFor: (item) => this.#entryFor(item),
+      can: (capability, entry) => this.#capabilities.can(capability, entry),
+      rowOrder: () => this.#options.dataset.entries.all.map((e) => e.id),
+      selection: {
+        get: () => this.#selection,
+        propose: (next) => this.#proposeSelection(next),
+      },
+      setHovered: (item) => this.#setHovered(item),
+      entriesForGesture: (grabbed, capability) => this.#entriesForGesture(grabbed, capability),
+      draftFor: (gesture, entries, dxPx, gestureOptions) =>
+        this.#draftFor(gesture, entries, dxPx, gestureOptions),
+      commit: (gesture, draft) => this.#commitGesture(gesture, draft),
+      preview: (draft) => this.#previewGesture(draft),
+      // S3.6 reserved (extender-ghost trigger) — nothing reads this yet in S3.3.
+      pointerAt: () => {},
+    });
     this.#wiring = false;
     this.#frames.flush();
 
@@ -290,6 +412,210 @@ export class GanttShell {
   /** Live — takes effect on the next `panToToday()` call; does not itself move the scroll position. */
   set todayLineMarginTicks(ticks: number) {
     this.#todayLineMarginTicks = ticks;
+  }
+
+  get selection(): readonly EntryId[] {
+    return this.#selection;
+  }
+
+  /** Live; runs the same cancelable sequence a click runs (D-S3-10). Loose in (`EntryId | string`),
+   *  branded out — the same asymmetry `dataset.entries.get/update/remove` already ship. */
+  set selection(ids: readonly (EntryId | string)[]) {
+    this.#proposeSelection(ids.map((id) => entryId(id)));
+  }
+
+  #proposeSelection(next: readonly EntryId[]): void {
+    const from = this.#selection;
+    if (from.length === next.length && from.every((id, i) => id === next[i])) return;
+    if (this.#events.emit('beforeSelectionChange', { from, to: next }) === false) return;
+    this.#selection = next;
+    this.#interactionState.selectedItemIds = next.map((id) => itemId(id));
+    // D-S3-6: resizableItemId falls back to the single selected entry when nothing is hovered, so a
+    // selection change can move the handles even with the pointer sitting still.
+    this.#refreshAffordances();
+    this.#events.emit('selectionChange', { from, to: next });
+  }
+
+  get interactions(): Interactions {
+    return this.#interactions;
+  }
+
+  /** Live (S3, D-S3-9): re-resolves the capability table immediately, then re-derives the two
+   *  resolved affordance ids off the current hover/selection so a stricter rule takes effect without
+   *  waiting for the next pointer move. */
+  set interactions(next: Interactions) {
+    this.#interactions = next;
+    this.#capabilities = resolveCapabilities(this.#interactions, (kind) =>
+      this.#options.dataset.isDerivedSpanKind(kind),
+    );
+    this.#refreshAffordances();
+  }
+
+  /** D-S3-9's one resolution, shared by the pointer path (`canSelect` above), the keyboard path
+   *  (S3.5) and the affordance ids below — never asked twice for the same gesture (I14). */
+  #canGesture(capability: keyof Interactions, id: EntryId): boolean {
+    const entry = this.#options.dataset.entries.get(id);
+    return entry !== undefined && this.#capabilities.can(capability, entry);
+  }
+
+  #setHovered(next: ItemId | undefined): void {
+    if (this.#hoveredItemId === next) return;
+    this.#hoveredItemId = next;
+    this.#refreshAffordances();
+  }
+
+  /** D-S3-6: resolves `hoveredItemId`/`movableItemId`/`resizableItemId` from the current hover and
+   *  selection, writes them into the one long-lived `InteractionState`, and applies. Called whenever
+   *  any of the three inputs change — never per pointer move beyond that (I5). `exactOptionalPropertyTypes`
+   *  makes "clear" a `delete`, not an `= undefined` assignment (`#setOptional` below). */
+  #refreshAffordances(): void {
+    setOptional(this.#interactionState, 'hoveredItemId', this.#hoveredItemId);
+    const hoveredEntryId =
+      this.#hoveredItemId !== undefined ? this.#itemEntryIds.get(this.#hoveredItemId) : undefined;
+    setOptional(
+      this.#interactionState,
+      'movableItemId',
+      hoveredEntryId !== undefined && this.#canGesture('move', hoveredEntryId)
+        ? this.#hoveredItemId
+        : undefined,
+    );
+    setOptional(this.#interactionState, 'resizableItemId', this.#resolveResizableItemId(hoveredEntryId));
+    this.#backend.applyState(this.#interactionState);
+  }
+
+  /** The hovered bar decides when there is one — even a hover that resolves to "no handles" wins
+   *  over the selection fallback. Only when nothing is hovered does the single selected entry, if
+   *  there is exactly one, get a turn (D-S3-6). */
+  #resolveResizableItemId(hoveredEntryId: EntryId | undefined): ItemId | undefined {
+    if (this.#hoveredItemId !== undefined) {
+      return hoveredEntryId !== undefined && this.#canGesture('resize', hoveredEntryId)
+        ? this.#hoveredItemId
+        : undefined;
+    }
+    if (this.#selection.length !== 1) return undefined;
+    const soleId = this.#selection[0]!;
+    return this.#canGesture('resize', soleId) ? itemId(soleId) : undefined;
+  }
+
+  #entryFor(item: ItemId): Entry | undefined {
+    const id = this.#itemEntryIds.get(item);
+    return id !== undefined ? this.#options.dataset.entries.get(id) : undefined;
+  }
+
+  /** D-S3-19: just the grabbed entry when it is not part of a multi-entry selection; else every
+   *  *capable* selected entry, grabbed first (D-S3-22) — an incapable one is skipped, not blocking.
+   *  `capability` is `'move'` for a move gesture, `'resize'` for a resize gesture (S3.4) — the same
+   *  rule, checked against whichever capability the grabbed gesture actually needs. */
+  #entriesForGesture(grabbedId: EntryId, capability: keyof Interactions = 'move'): readonly Entry[] {
+    const inMultiSelection = this.#selection.includes(grabbedId) && this.#selection.length > 1;
+    const candidateIds = inMultiSelection ? this.#selection : [grabbedId];
+    const entries: Entry[] = [];
+    const seen = new Set<EntryId>();
+    const pushCapable = (id: EntryId): void => {
+      if (seen.has(id)) return;
+      const entry = this.#options.dataset.entries.get(id);
+      if (entry && this.#canGesture(capability, id)) {
+        entries.push(entry);
+        seen.add(id);
+      }
+    };
+    pushCapable(grabbedId);
+    for (const id of candidateIds) pushCapable(id);
+    return entries;
+  }
+
+  /** D-S3-12: an unset/`'tick'` `ViewPreset.snap` resolves to the current preset's own tick unit;
+   *  Alt (`suspendSnap`) always wins and falls back to raw millisecond placement. */
+  #resolveSnap(suspendSnap: boolean | undefined): SnapUnit {
+    if (suspendSnap) return 'none';
+    const snap = this.#viewport.preset.snap ?? 'tick';
+    if (snap === 'none') return 'none';
+    if (snap === 'tick') {
+      return { unit: this.#viewport.preset.tickUnit, increment: this.#viewport.preset.tickIncrement };
+    }
+    return snap;
+  }
+
+  #draftFor(
+    gesture: EntryGesture,
+    entries: readonly Entry[],
+    dxPx: number,
+    options: { suspendSnap?: boolean } | undefined,
+  ): EntryEdits {
+    const snap = this.#resolveSnap(options?.suspendSnap);
+    if (gesture.kind === 'resize') {
+      return draftForResize({
+        zone: this.#options.dataset.timeZone,
+        scale: this.#viewport.timeScale,
+        snap,
+        entries,
+        dxPx,
+        edge: gesture.edge,
+      });
+    }
+    return draftForMove({
+      zone: this.#options.dataset.timeZone,
+      scale: this.#viewport.timeScale,
+      snap,
+      entries,
+      dxPx,
+    });
+  }
+
+  /** `beforeEntryMove`/`beforeEntryResize` → one commit → `entryMove`/`entryResize` (D-S3-16,
+   *  D-S3-22). `commitEntryEdits` (injected by `api/gantt.ts`, which alone holds a
+   *  `dataset.transaction()`-capable `Dataset` — this shell's own `dataset` option is the narrower
+   *  `model/` interface, "a view never opens a transaction") does the actual write and folds a sync
+   *  veto and a `MutationCancelledError` into one `false`. */
+  #commitGesture(gesture: EntryGesture, draft: EntryEdits): Promise<boolean> {
+    if (draft.size === 0) return Promise.resolve(false);
+    const spans = [...draft].flatMap(([id, edit]) =>
+      edit.start !== undefined && edit.end !== undefined
+        ? [{ entry: id, start: edit.start, end: edit.end }]
+        : [],
+    );
+    const grabbed = spans[0];
+    if (!grabbed) return Promise.resolve(false);
+    if (gesture.kind === 'resize') {
+      const payload = { ...grabbed, entries: spans, edge: gesture.edge };
+      if (this.#events.emit('beforeEntryResize', payload) === false) return Promise.resolve(false);
+      const committed = this.#options.commitEntryEdits?.(draft) ?? false;
+      if (committed) this.#events.emit('entryResize', payload);
+      return Promise.resolve(committed);
+    }
+    const payload = { ...grabbed, entries: spans };
+    if (this.#events.emit('beforeEntryMove', payload) === false) return Promise.resolve(false);
+    const committed = this.#options.commitEntryEdits?.(draft) ?? false;
+    if (committed) this.#events.emit('entryMove', payload);
+    return Promise.resolve(committed);
+  }
+
+  /** D-S3-18: coalesces on the shell's own rAF — a drag's every pointermove replaces the pending
+   *  draft, but only the last one before the next frame is ever painted. */
+  #previewGesture(draft: EntryEdits | undefined): void {
+    this.#pendingPreviewDraft = draft;
+    this.#previewFrame.request();
+  }
+
+  #applyPreview(draft: EntryEdits | undefined): void {
+    if (!draft || draft.size === 0) {
+      setOptional(this.#interactionState, 'preview', undefined);
+      this.#backend.applyState(this.#interactionState);
+      return;
+    }
+    const entries: Entry[] = [];
+    for (const id of draft.keys()) {
+      const entry = this.#options.dataset.entries.get(id);
+      if (entry) entries.push(entry);
+    }
+    const preview = previewOffsets({
+      proposed: draft,
+      extra: EMPTY_EDITS,
+      entries,
+      scale: this.#viewport.timeScale,
+    });
+    setOptional(this.#interactionState, 'preview', preview);
+    this.#backend.applyState(this.#interactionState);
   }
 
   get theme(): Theme {
@@ -496,6 +822,10 @@ export class GanttShell {
       dateLines: this.#dateLines,
     });
     this.#backend.sync(frame);
+    // D-S3-10: rebuilt every render from the frame layout just computed — item ids are deterministic
+    // (`itemId`, plans/01 §2.4) but this is the one place that already walks every mounted bar.
+    this.#itemEntryIds.clear();
+    for (const bar of frame.bars) this.#itemEntryIds.set(bar.id, bar.entryId);
     // D-S1.12-9: the grid pane's spacer mirrors the header's own band count, so both panes resolve
     // their header height from the same `--fg-band-height` expression and cannot drift.
     this.#paneLayout.setHeaderBandCount(frame.header.bands.length);
@@ -507,6 +837,7 @@ export class GanttShell {
   destroy(): void {
     if (this.#destroyed) return;
     this.#frames.cancel();
+    this.#entryGestures?.detach();
     this.#datasetChanges.unsubscribe();
     this.#scrollAttachment.detach();
     this.#paneSizeAttachment.detach();

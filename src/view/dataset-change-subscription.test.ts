@@ -10,6 +10,7 @@ function fakeDataset(): { dataset: Dataset; emit: (changeSet: ChangeSet) => void
   const dataset: Dataset = {
     entries: undefined as unknown as Dataset['entries'],
     timeZone: 'UTC',
+    isDerivedSpanKind: () => false,
     on: (_name, handler) => {
       handlers.add(handler);
     },

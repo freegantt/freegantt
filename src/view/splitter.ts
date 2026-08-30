@@ -6,7 +6,7 @@ export interface SplitterAttachment {
   detach(): void;
 }
 
-export interface SplitterHooks {
+export interface SplitterContext {
   /** The grid width when the drag arms. */
   readGridWidth(): number;
   /** During the drag — preview only, no event, no commit. */
@@ -19,7 +19,7 @@ export interface SplitterHooks {
  *  it previews the restored width but commits nothing (U5). Clamping to `minGridWidth` is
  *  `PaneLayout`'s job (`gridWidth`'s setter), not this attachment's — it proposes a raw px delta and
  *  nothing more. */
-export function attachSplitter(handle: HTMLElement, hooks: SplitterHooks): SplitterAttachment {
+export function attachSplitter(handle: HTMLElement, hooks: SplitterContext): SplitterAttachment {
   let dragging = false;
   let pointerId: number | undefined;
   let startWidth = 0;

@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { DatasetState } from './dataset-state.js';
 import { toJSON } from './serialization/index.js';
 import { entryId } from '../model/index.js';
+import { addMs } from '../time/index.js';
 import type { EditExtender } from './edit-extension.js';
 import type { EntryInput } from '../model/index.js';
 
@@ -12,7 +13,10 @@ type SimpleOp =
   | { kind: 'update-progress'; id: string; progress: number }
   | { kind: 'update-start'; id: string; start: number }
   | { kind: 'update-end'; id: string; end: number }
-  | { kind: 'remove'; id: string };
+  | { kind: 'remove'; id: string }
+  // S3.3, [S3-A6]: a gesture commit writes {start, end} together in one `update()` call per row —
+  // distinct from 'update-start'/'update-end' above, which each touch one field alone.
+  | { kind: 'move'; id: string; deltaMs: number };
 
 type Op = SimpleOp | { kind: 'transaction'; ops: SimpleOp[] };
 
@@ -46,6 +50,11 @@ const simpleOpArb: fc.Arbitrary<SimpleOp> = fc.oneof(
   fc.record({ kind: fc.constant('update-start' as const), id: idArb, start: msArb }),
   fc.record({ kind: fc.constant('update-end' as const), id: idArb, end: msArb }),
   fc.record({ kind: fc.constant('remove' as const), id: idArb }),
+  fc.record({
+    kind: fc.constant('move' as const),
+    id: idArb,
+    deltaMs: fc.integer({ min: -2_000_000, max: 2_000_000 }),
+  }),
 );
 
 const opArb: fc.Arbitrary<Op> = fc.oneof(
@@ -89,6 +98,15 @@ function applySimple(state: DatasetState, op: SimpleOp): void {
       case 'remove':
         state.entries.remove(op.id);
         return;
+      case 'move': {
+        const current = state.entries.get(op.id);
+        if (current === undefined) return;
+        state.entries.update(op.id, {
+          start: addMs(current.start, op.deltaMs),
+          end: addMs(current.end, op.deltaMs),
+        });
+        return;
+      }
     }
   } catch {
     // Duplicate ids, missing ids, and invalid field combinations are not the property — skip them.

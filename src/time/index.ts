@@ -23,6 +23,8 @@ export {
   dedupeHeaderFormats,
 } from './format.js';
 export { createTimeScale, pxPerMsForPreset, minPxPerMsForPreset } from './scale.js';
+export { snapInstant, stepsBetween } from './snap.js';
+export type { SnapUnit } from './snap.js';
 export type {
   TimeScale,
   TimeScaleOptions,

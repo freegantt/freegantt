@@ -7,6 +7,9 @@
 // @public (undocumented)
 export function addMs(i: Instant, ms: number): Instant;
 
+// @public
+export type CapabilityRule = boolean | ((entry: Entry) => boolean);
+
 // @public (undocumented)
 export type ChangeOrigin = 'user' | 'undo' | 'redo';
 
@@ -52,6 +55,7 @@ export class Dataset {
     // (undocumented)
     get entries(): EntryStore;
     static fromJSON(doc: DatasetDocument): Dataset;
+    isDerivedSpanKind(kind: EntryKind): boolean;
     // (undocumented)
     off<K extends keyof DatasetEventMap>(name: K, handler: (payload: DatasetEventMap[K]) => void | false): void;
     // (undocumented)
@@ -190,6 +194,12 @@ export interface EntryDocument<TMeta = unknown> {
 // @public
 export type EntryEdit<TMeta = unknown> = Partial<Omit<EntryInput<TMeta>, 'id'>>;
 
+// @public
+export interface EntryGestureEvent extends ProposedSpan {
+    // (undocumented)
+    readonly entries: readonly ProposedSpan[];
+}
+
 // @public (undocumented)
 export type EntryId = string & {
     readonly __brand: 'EntryId';
@@ -217,9 +227,18 @@ export interface EntryInput<TMeta = unknown> {
 // @public
 export type EntryKind = 'span' | 'group' | 'milestone' | (string & {});
 
+// @public (undocumented)
+export type EntryMove = EntryGestureEvent;
+
 // @public
 export class EntryNotFoundError extends FreeGanttError {
     constructor(entryId: EntryId, operation: string);
+}
+
+// @public
+export interface EntryResize extends EntryGestureEvent {
+    // (undocumented)
+    readonly edge: 'start' | 'end';
 }
 
 // @public
@@ -301,6 +320,8 @@ export class Gantt {
     // (undocumented)
     get gridWidth(): number;
     set gridWidth(px: number);
+    get interactions(): Interactions;
+    set interactions(next: Interactions);
     // (undocumented)
     get locale(): Intl.LocalesArgument | undefined;
     set locale(l: Intl.LocalesArgument | undefined);
@@ -320,6 +341,9 @@ export class Gantt {
     });
     // (undocumented)
     reveal(entryId: EntryId): void;
+    get selection(): readonly EntryId[];
+    set selection(ids: readonly (EntryId | string)[]);
+    get selectionEntries(): readonly Entry[];
     // (undocumented)
     get theme(): Theme;
     set theme(value: Theme);
@@ -344,12 +368,21 @@ export class Gantt {
 
 // @public
 export interface GanttEventMap {
+    beforeEntryMove: EntryMove;
+    beforeEntryResize: EntryResize;
     // (undocumented)
     beforeGridWidthChange: GridWidthChange;
+    beforeSelectionChange: SelectionChange;
+    // (undocumented)
+    entryMove: EntryMove;
+    // (undocumented)
+    entryResize: EntryResize;
     // (undocumented)
     gridWidthChange: GridWidthChange;
     // (undocumented)
     navigationChange: NavigationChange;
+    // (undocumented)
+    selectionChange: SelectionChange;
 }
 
 // Warning: (ae-forgotten-export) The symbol "GanttOptionsBase" needs to be exported by the entry point index.d.ts
@@ -379,6 +412,16 @@ export function instant(value: Date | number | string): Instant;
 
 // @public
 export type InstantInput = Instant | Date | number | string;
+
+// @public
+export interface Interactions {
+    // (undocumented)
+    move?: CapabilityRule;
+    // (undocumented)
+    resize?: CapabilityRule;
+    // (undocumented)
+    select?: CapabilityRule;
+}
 
 // @public
 export class InvalidInstantError extends FreeGanttError {
@@ -460,6 +503,16 @@ export type PresetRef = ShippedPresetId | ViewPreset;
 // @public (undocumented)
 export const presets: Readonly<Record<ShippedPresetId, ViewPreset>>;
 
+// @public
+export interface ProposedSpan {
+    // (undocumented)
+    readonly end: Instant;
+    // (undocumented)
+    readonly entry: EntryId;
+    // (undocumented)
+    readonly start: Instant;
+}
+
 // @public (undocumented)
 export class ScrollModel {
     constructor(position?: Partial<ScrollPosition>);
@@ -475,6 +528,14 @@ export type ScrollPosition = Point;
 export interface ScrollState {
     readonly max: ScrollPosition;
     readonly position: ScrollPosition;
+}
+
+// @public
+export interface SelectionChange {
+    // (undocumented)
+    readonly from: readonly EntryId[];
+    // (undocumented)
+    readonly to: readonly EntryId[];
 }
 
 // @public (undocumented)

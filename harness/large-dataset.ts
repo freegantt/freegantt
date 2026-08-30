@@ -2,6 +2,7 @@
 // 5,000 entries, `fit: 'preset'` so content is wider than the pane — the only configuration that
 // exercises the horizontal window as well as the vertical one.
 
+import './harness-nav.ts';
 import { Gantt, Dataset, TimeScaleModel } from '../src/api/index.js';
 import { seededEntryInputs } from '../fixtures/seeded-dataset.js';
 

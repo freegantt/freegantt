@@ -2,13 +2,18 @@
 // instance owns its own shell and state so two Gantt instances on one page are fully independent.
 
 import { GanttShell } from '../view/index.js';
-import type { GanttEventMap, Theme } from '../view/index.js';
+import type { GanttEventMap, Interactions, Theme } from '../view/index.js';
 import { ScrollModel, TimeScaleModel } from '../layout/index.js';
 import type { PresetRef, TimeScaleFit, ViewPreset } from '../layout/index.js';
 import type { DateLineSpec } from '../layout/index.js';
-import type { EntryId, Instant, InstantInput, TimeSpan } from '../model/index.js';
+import type { Entry, EntryEdits, EntryId, Instant, InstantInput, TimeSpan } from '../model/index.js';
+import { MutationCancelledError } from '../model/index.js';
 import { now, toInstant } from '../time/index.js';
 import type { Dataset } from './dataset.js';
+// api/ is the composition root that reaches interaction/ in (plans/01 §1: `API --> INT`,
+// `plans/s3-direct-manipulation/README.md` §0) — `view/` cannot, so `GanttShell` takes this by
+// constructor injection rather than importing it itself (see `AttachEntryGestures` in gantt-shell.ts).
+import { attachEntryGestures } from '../interaction/index.js';
 
 /** Public, loose. What `GanttOptions.dateLines` and `Gantt.dateLines` both take (S1.13, D-S1.13-2). */
 export interface DateLineInput {
@@ -49,6 +54,12 @@ interface GanttOptionsBase {
   /** The ordered set `zoomIn`/`zoomOut` step through, finest first (S1.12, D-S1.12-5). Live.
    *  Default: the shipped nine-rung set. */
   zoomPresets?: readonly PresetRef[];
+  /** Live (S3, D-S3-10). Entry ids, loose on the way in; assignment runs the same cancelable
+   *  sequence a click runs. Default `[]`. */
+  selection?: readonly (EntryId | string)[];
+  /** Live (S3, D-S3-9). Per-gesture, boolean or per-entry predicate, over the per-kind default
+   *  table. Default `{}`: every gesture resolves off the default table alone. */
+  interactions?: Interactions;
 }
 
 /** Two ways to set the axis, made mutually exclusive at the type level (issue #84 — the prior shape
@@ -99,8 +110,25 @@ export class Gantt {
       ...(options.todayLineMarginTicks !== undefined
         ? { todayLineMarginTicks: options.todayLineMarginTicks }
         : {}),
+      ...(options.interactions !== undefined ? { interactions: options.interactions } : {}),
+      entryGestures: attachEntryGestures,
+      // S3.3, D-S3-16: `GanttShell`'s own `dataset` option is `model/`'s narrow `Dataset` interface
+      // ("a view never opens a transaction") — this class holds the full `api/Dataset`, so a
+      // committed gesture draft reaches the store through here, not through the shell itself.
+      commitEntryEdits: (edits: EntryEdits) => {
+        try {
+          options.dataset.transaction(() => {
+            for (const [id, edit] of edits) options.dataset.entries.update(id, edit);
+          });
+          return true;
+        } catch (error) {
+          if (error instanceof MutationCancelledError) return false;
+          throw error;
+        }
+      },
     });
     if (options.zoomPresets !== undefined) this.#shell.zoomPresets = options.zoomPresets;
+    if (options.selection !== undefined) this.#shell.selection = options.selection;
   }
 
   /** Reads a loose `range` through the dataset's zone (S1.12, D-S1.12-8) — the one place `Gantt`
@@ -231,6 +259,42 @@ export class Gantt {
 
   set zoomPresets(refs: readonly PresetRef[]) {
     this.#shell.zoomPresets = refs;
+  }
+
+  /** Loose in, branded out — the same asymmetry `dataset.entries.get/update/remove` already ship
+   *  (D-S3-10). Live: assignment runs the same cancelable `beforeSelectionChange` → `selectionChange`
+   *  sequence a click runs. */
+  get selection(): readonly EntryId[] {
+    return this.#shell.selection;
+  }
+
+  set selection(ids: readonly (EntryId | string)[]) {
+    this.#shell.selection = ids;
+  }
+
+  /** The bound dataset's `Entry` records for each id in `selection`, in the same order.
+   *  Re-reads the store on every access, so field edits show up without a selection change. An id
+   *  in `selection` that no longer exists in the store is skipped — for example after
+   *  `dataset.entries.remove` left a stale id in the selection set. To change which entries are
+   *  selected, assign `selection`; this getter is read-only. See README — `selection` vs
+   *  `selectionEntries`. */
+  get selectionEntries(): readonly Entry[] {
+    const entries: Entry[] = [];
+    for (const id of this.#shell.selection) {
+      const entry = this.#dataset.entries.get(id);
+      if (entry !== undefined) entries.push(entry);
+    }
+    return entries;
+  }
+
+  /** Live (S3, D-S3-9): re-resolves immediately, so a stricter rule hides a handle or refuses a
+   *  gesture without waiting for the next pointer move. */
+  get interactions(): Interactions {
+    return this.#shell.interactions;
+  }
+
+  set interactions(next: Interactions) {
+    this.#shell.interactions = next;
   }
 
   get canZoomIn(): boolean {

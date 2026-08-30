@@ -1,0 +1,387 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Architecture review — S3.1–S3.3 implementation</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script type="module">
+      import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+      mermaid.initialize({ startOnLoad: true, theme: "neutral", securityLevel: "loose" });
+    </script>
+    <style>
+      .seam { stroke-dasharray: 4 4; }
+      .leak { stroke: #dc2626; }
+      .deep { background: linear-gradient(135deg, #0f172a, #1e293b); }
+    </style>
+  </head>
+  <body class="bg-stone-50 text-slate-900 font-sans">
+    <main class="max-w-5xl mx-auto px-6 py-12 space-y-12">
+
+      <header class="space-y-4">
+        <p class="text-xs uppercase tracking-widest text-slate-500">FreeGantt — pk-branch-review</p>
+        <h1 class="font-serif text-3xl">S3.1–S3.3 — Selection, hot path, drag-move</h1>
+        <p class="text-sm text-slate-500">
+          2026-08-30 · <span class="font-mono">main...HEAD</span>
+          (<span class="font-mono">f57e838</span> → <span class="font-mono">969360e</span>, 14 commits)
+        </p>
+        <div class="flex flex-wrap gap-3 text-xs text-slate-600">
+          <span class="inline-flex items-center gap-1"><span class="inline-block w-4 h-3 border border-slate-500 bg-white"></span> module</span>
+          <span class="inline-flex items-center gap-1"><svg width="24" height="8"><line x1="0" y1="4" x2="24" y2="4" stroke="#475569" stroke-width="2" class="seam"/></svg> seam</span>
+          <span class="inline-flex items-center gap-1"><svg width="24" height="8"><line x1="0" y1="4" x2="24" y2="4" stroke="#dc2626" stroke-width="2"/></svg> leakage</span>
+          <span class="inline-flex items-center gap-1"><span class="inline-block w-4 h-3 deep rounded-sm"></span> deep module</span>
+        </div>
+        <p class="text-sm text-slate-600 max-w-3xl">
+          Committed work only: S3.1 selection, S3.2 hot path and capabilities, S3.3 drag-move.
+          Unstaged S3.4 resize work is out of this review. Axes run separately — Standards, Spec,
+          Simplify — then architecture-deepening candidates.
+        </p>
+        <div class="text-sm rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-emerald-950 max-w-3xl">
+          <strong>Closed since the 2026-08-29 plan review.</strong>
+          I14's affordance half now travels as <span class="font-mono">movableItemId</span> /
+          <span class="font-mono">resizableItemId</span> on <span class="font-mono">InteractionState</span>;
+          <span class="font-mono">applyState</span> never calls <span class="font-mono">resolveCapabilities</span>.
+          <span class="font-mono">ItemPreview</span> lives in <span class="font-mono">layout/</span>.
+          <span class="font-mono">data-state</span> is a fixed projection, not <span class="font-mono">Object.keys</span>.
+          <span class="font-mono">draftFor(gesture, …)</span> already parameterizes move (the old
+          draftMove/commitMove pair is gone).
+        </div>
+      </header>
+
+      <section id="axes" class="grid md:grid-cols-3 gap-4">
+        <div class="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-2">
+          <p class="text-xs uppercase tracking-widest text-amber-700 font-semibold">Standards</p>
+          <p class="text-2xl font-serif">5 findings</p>
+          <p class="text-sm text-amber-900">Worst: public <span class="font-mono">selectionEntries</span> with no <strong>Selection</strong> glossary headword. No hard layer-map breach.</p>
+        </div>
+        <div class="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-2">
+          <p class="text-xs uppercase tracking-widest text-amber-700 font-semibold">Spec</p>
+          <p class="text-2xl font-serif">8 findings</p>
+          <p class="text-sm text-amber-900">Worst: D-S3-3 still says snap the pointer; commit <span class="font-mono">4105b08</span> snaps only on write. Align the spec or restore preview snap.</p>
+        </div>
+        <div class="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-2">
+          <p class="text-xs uppercase tracking-widest text-amber-700 font-semibold">Simplify</p>
+          <p class="text-2xl font-serif">4 overbuilt</p>
+          <p class="text-sm text-amber-900">Wide <span class="font-mono">EntryGestureContext</span> still, plus a mirrored type in the shell. <span class="font-mono">attachPointerGesture</span> fails the call-site test.</p>
+        </div>
+      </section>
+
+      <section id="wins" class="space-y-3">
+        <h2 class="font-serif text-2xl">Already deep</h2>
+        <ul class="grid md:grid-cols-2 gap-3 text-sm">
+          <li class="rounded-lg border border-slate-200 bg-white p-3"><span class="font-mono">pointer-gesture.ts</span> — threshold, capture, Escape, long-press behind <span class="font-mono">down/move/up/escape</span>.</li>
+          <li class="rounded-lg border border-slate-200 bg-white p-3"><span class="font-mono">gesture-draft.ts</span> + <span class="font-mono">time/snap.ts</span> — calendar delta, DST, preview offsets. <span class="font-mono">interaction/</span> does no Instant math.</li>
+          <li class="rounded-lg border border-slate-200 bg-white p-3"><span class="font-mono">view/capability.ts</span> — one <span class="font-mono">can()</span>. I14's static half.</li>
+          <li class="rounded-lg border border-slate-200 bg-white p-3"><span class="font-mono">applyState</span> — tokens, shared handles, <span class="font-mono">data-movable</span>, preview transforms. Reads resolved ids.</li>
+          <li class="rounded-lg border border-slate-200 bg-white p-3 col-span-full"><span class="font-mono">api/gantt.ts</span> injects <span class="font-mono">attachEntryGestures</span> and <span class="font-mono">commitEntryEdits</span> — two adapters at a real seam (<span class="font-mono">API → INT</span>, no <span class="font-mono">VIEW → INT</span>).</li>
+        </ul>
+      </section>
+
+      <section id="standards" class="space-y-4">
+        <h2 class="font-serif text-2xl">Standards</h2>
+        <ul class="space-y-3 text-sm">
+
+          <li class="rounded-lg border border-red-200 bg-white p-4">
+            <span class="rounded-full bg-red-100 text-red-800 text-xs px-2 py-0.5 font-medium">Glossary first</span>
+            <span class="font-mono text-xs text-slate-500 ml-2">naming skill · CONTEXT.md · CLAUDE.md</span>
+            <p class="mt-1">Public <span class="font-mono">gantt.selection</span> and <span class="font-mono">gantt.selectionEntries</span> shipped with no <strong>Selection</strong> headword. <strong>Capability</strong> mentions the setter. Naming skill step 1: write the glossary entry, then the name. Add <strong>Draft</strong> as gesture state (D-S3-2) next to Write set's <em>Avoid: Draft</em>, or the two stay one word with two meanings.</p>
+          </li>
+
+          <li class="rounded-lg border border-amber-200 bg-white p-4">
+            <span class="rounded-full bg-amber-100 text-amber-800 text-xs px-2 py-0.5 font-medium">Judgement — Speculative Generality</span>
+            <span class="font-mono text-xs text-slate-500 ml-2">entry-gesture-context.ts · D-S3-5</span>
+            <p class="mt-1"><span class="font-mono">pointerAt</span> is on the seam; the shell wires <span class="font-mono">pointerAt: () =&gt; {}</span>. Comment: S3.6. Spec lists the member, so this is not a hard breach. Leave it off the S3.3 adapter until the extender ghost needs it.</p>
+          </li>
+
+          <li class="rounded-lg border border-amber-200 bg-white p-4">
+            <span class="rounded-full bg-amber-100 text-amber-800 text-xs px-2 py-0.5 font-medium">Judgement — Duplicated Code</span>
+            <span class="font-mono text-xs text-slate-500 ml-2">gantt-shell.ts:54–85 · plans/01 §1</span>
+            <p class="mt-1"><span class="font-mono">Gesture</span> / <span class="font-mono">EntryGestureContext</span> are mirrored so <span class="font-mono">view/</span> never imports <span class="font-mono">interaction/</span>. The layer rule wins. Structural typing hides drift until a call site breaks. One type home on the legal import edge (see candidate 5).</p>
+          </li>
+
+          <li class="rounded-lg border border-slate-200 bg-white p-4">
+            <span class="rounded-full bg-slate-100 text-slate-700 text-xs px-2 py-0.5 font-medium">Harness</span>
+            <span class="font-mono text-xs text-slate-500 ml-2">CLAUDE.md harness review</span>
+            <p class="mt-1"><span class="font-mono">harness/main.ts</span> <span class="font-mono">renderSelection</span> maps <span class="font-mono">selectionEntries</span> back to ids while <span class="font-mono">gantt.selection</span> already holds them (filters stale ids after remove — README). Same chrome copied in <span class="font-mono">harness/data.ts</span>. Not a restated <span class="font-mono">rowHeight</span>. Duplicate consumer UI, not a library gap.</p>
+          </li>
+
+          <li class="rounded-lg border border-slate-200 bg-white p-4">
+            <span class="rounded-full bg-slate-100 text-slate-700 text-xs px-2 py-0.5 font-medium">Pass notes</span>
+            <p class="mt-1">No <span class="font-mono">interaction/</span> → <span class="font-mono">layout/</span>/<span class="font-mono">time/</span>/<span class="font-mono">render/</span>. Capabilities resolve in <span class="font-mono">view/</span> only. <span class="font-mono">gantt.selectionEntries</span> passes the call-site test: <span class="font-mono">gantt.selectionEntries.map(entry =&gt; entry.name)</span>. I11: no unimplemented public key.</p>
+          </li>
+
+        </ul>
+      </section>
+
+      <section id="spec" class="space-y-4">
+        <h2 class="font-serif text-2xl">Spec</h2>
+        <p class="text-sm text-slate-600">Originating: <span class="font-mono">plans/s3-direct-manipulation/</span> README + s3.1 / s3.2 / s3.3. S3.4+ stories (resize, keyboard nudge, async veto, extender ghosts, viewport, cursor line) are out of scope.</p>
+        <ul class="space-y-3 text-sm">
+
+          <li class="rounded-lg border border-red-200 bg-white p-4">
+            <span class="rounded-full bg-red-100 text-red-800 text-xs px-2 py-0.5 font-medium">Looks done, disagrees</span>
+            <span class="font-mono text-xs text-slate-500 ml-2">D-S3-3 · D-S3-12 · 4105b08</span>
+            <p class="mt-1">D-S3-3: “Snap pointer to whole snap units; step both ends through zone-aware <span class="font-mono">stepBy</span>.” Live preview always calls <span class="font-mono">draftFor(…, { suspendSnap: true })</span>. Snap runs on commit only. D-S3-12: “Alt suspends snapping for fine placement <em>during</em> a gesture.” Alt is read only on commit. Mid-drag paint never shows snapped vs Alt. Either rewrite D-S3-3/12 to “smooth preview, snap on write” or restore preview snap.</p>
+          </li>
+
+          <li class="rounded-lg border border-red-200 bg-white p-4">
+            <span class="rounded-full bg-red-100 text-red-800 text-xs px-2 py-0.5 font-medium">Partial</span>
+            <span class="font-mono text-xs text-slate-500 ml-2">D-S3-21</span>
+            <p class="mt-1">“<span class="font-mono">touch-action: none</span> on bars/handles only.” Handles have it (<span class="font-mono">styles.ts</span>); <span class="font-mono">.fg-bar</span> does not. Long-press 400ms exists for <span class="font-mono">pointerType === 'touch'</span>, not coarse-pointer media. No dedicated long-press test.</p>
+          </li>
+
+          <li class="rounded-lg border border-amber-200 bg-white p-4">
+            <span class="rounded-full bg-amber-100 text-amber-800 text-xs px-2 py-0.5 font-medium">Partial</span>
+            <span class="font-mono text-xs text-slate-500 ml-2">D-S3-20 · [S3-A3]</span>
+            <p class="mt-1">“assert no <span class="font-mono">computeFrame</span>, no node create/remove, O(changed items) <span class="font-mono">data-state</span> writes.” The 1,000-entry test in <span class="font-mono">gantt-shell.test.ts</span> checks <span class="font-mono">computeFrame</span> and node add/remove only — not allocation or write count.</p>
+          </li>
+
+          <li class="rounded-lg border border-amber-200 bg-white p-4">
+            <span class="rounded-full bg-amber-100 text-amber-800 text-xs px-2 py-0.5 font-medium">Partial</span>
+            <span class="font-mono text-xs text-slate-500 ml-2">S3.3 TODO · D-S3-7</span>
+            <p class="mt-1">S3.3 “Ends with: bars drag, snap, commit, and Ctrl+Z reverts them.” Harness has an Undo button; HANDOFF records no Ctrl+Z binding. S3.1 said S3.3 adds <span class="font-mono">dragging</span>/<span class="font-mono">ghost</span>/<span class="font-mono">pending</span> tokens; preview uses transforms only. Tracker vs step file: README says S3.3 done; <span class="font-mono">s3.3-drag-move.md</span> header still says “Status: not started”.</p>
+          </li>
+
+          <li class="rounded-lg border border-slate-200 bg-white p-4">
+            <span class="rounded-full bg-slate-100 text-slate-700 text-xs px-2 py-0.5 font-medium">Scope creep</span>
+            <span class="font-mono text-xs text-slate-500 ml-2">README public surface</span>
+            <p class="mt-1"><span class="font-mono">Gantt.selectionEntries</span> is not in s3.1's file table (only <span class="font-mono">Gantt.selection</span>). Useful; record it. Shared <span class="font-mono">harness-nav</span> is not an S3.1–S3.3 box. <span class="font-mono">DraftOptions.suspendSnap</span> is extra vs D-S3-5's <span class="font-mono">draftFor(gesture, entries, byPx)</span> — justified once D-S3-3/12 are rewritten.</p>
+          </li>
+
+          <li class="rounded-lg border border-emerald-200 bg-white p-4">
+            <span class="rounded-full bg-emerald-100 text-emerald-800 text-xs px-2 py-0.5 font-medium">Matching</span>
+            <p class="mt-1">D-S3-10 pointerup + ctrl/shift/empty/Escape; selection events with no Dataset <span class="font-mono">change</span>. D-S3-9 defaults + I14. D-S3-8 shared handles + <span class="font-mono">data-movable</span>. D-S3-4 <span class="font-mono">ItemPreview</span> in <span class="font-mono">layout/</span>. D-S3-16 one <span class="font-mono">transaction</span>, sync <span class="font-mono">beforeEntryMove</span>, <span class="font-mono">MutationCancelledError</span> → silent false. D-S3-19 capable multi-select move. Calendar <span class="font-mono">stepBy</span> on commit drafts.</p>
+          </li>
+
+        </ul>
+      </section>
+
+      <section id="simplify" class="space-y-4">
+        <h2 class="font-serif text-2xl">Simplify</h2>
+        <ul class="space-y-3 text-sm">
+
+          <li class="rounded-lg border border-red-200 bg-white p-4">
+            <span class="rounded-full bg-red-100 text-red-800 text-xs px-2 py-0.5 font-medium">Call-site test</span>
+            <span class="font-mono text-xs text-slate-500 ml-2">attachPointerGesture</span>
+            <p class="mt-1">The file owns no listeners; <span class="font-mono">entry-gestures</span> feeds <span class="font-mono">drag.down/move/up</span>. “Attach a pointer gesture to the pane” is false.</p>
+            <p class="mt-2 font-mono text-xs">const drag = createPointerGesture(pane, { start, move, commit, cancel }); drag.down(e)</p>
+            <p class="mt-1 text-slate-600">Winner: <span class="font-mono">createPointerGesture</span>. Rejected: <span class="font-mono">bindPointerGesture</span> (Binding is <span class="font-mono">layout/viewport/</span>'s word).</p>
+          </li>
+
+          <li class="rounded-lg border border-amber-200 bg-white p-4">
+            <span class="rounded-full bg-amber-100 text-amber-800 text-xs px-2 py-0.5 font-medium">One word, two concepts</span>
+            <span class="font-mono text-xs text-slate-500 ml-2">Gesture · pointer-gesture</span>
+            <p class="mt-1"><span class="font-mono">Gesture</span> is the span edit (<span class="font-mono">{ kind: 'move' }</span>). <span class="font-mono">pointer-gesture</span> is the pointer machine. A search for <span class="font-mono">gesture</span> hits both. Prefer <span class="font-mono">EntryGesture</span> for the kinded union. Keep <strong>Draft</strong> as prose (D-S3-2); do not add a <span class="font-mono">Draft</span> type.</p>
+          </li>
+
+          <li class="rounded-lg border border-amber-200 bg-white p-4">
+            <span class="rounded-full bg-amber-100 text-amber-800 text-xs px-2 py-0.5 font-medium">Overbuilt</span>
+            <span class="font-mono text-xs text-slate-500 ml-2">EntryGestureContext · #canGesture</span>
+            <p class="mt-1">Context still ~11 slots including unused <span class="font-mono">pointerAt</span> and S3.6 <span class="font-mono">ItemPreview.extra</span> / empty extra edits. <span class="font-mono">#canGesture('move', hoveredEntryId)</span> reads “can gesture move”. Call <span class="font-mono">#capabilities.can</span> after <span class="font-mono">entries.get</span>. <span class="font-mono">moveGesture()</span> allocates <span class="font-mono">{ kind: 'move' }</span> on every pointermove — use a const. <span class="font-mono">onPointerUp</span> shadows imported <span class="font-mono">itemId</span>; name the local <span class="font-mono">hit</span>.</p>
+          </li>
+
+          <li class="rounded-lg border border-slate-200 bg-white p-4">
+            <span class="rounded-full bg-slate-100 text-slate-700 text-xs px-2 py-0.5 font-medium">Keep</span>
+            <p class="mt-1">Draft is <span class="font-mono">EntryEdits</span> (D-S3-2). Math in <span class="font-mono">layout/gesture-draft.ts</span>. Snap in <span class="font-mono">time/</span>. One pointer stream. One <span class="font-mono">can()</span> for gesture and affordance. Injected <span class="font-mono">attachEntryGestures</span> / <span class="font-mono">commitEntryEdits</span>. Preview on the shell's rAF. Shared handle pair. Touch long-press. Selection is Entry ids on the Gantt; paint uses item ids.</p>
+          </li>
+
+        </ul>
+      </section>
+
+      <section id="candidates" class="space-y-10">
+        <h2 class="font-serif text-2xl">Deepening candidates</h2>
+
+        <article id="c1" class="rounded-xl border border-slate-200 bg-white p-6 space-y-4">
+          <div class="flex items-start justify-between gap-4">
+            <h3 class="font-serif text-xl">1 · Collapse the shell gesture-host cluster</h3>
+            <span class="inline-flex items-center gap-2">
+              <span class="rounded-full bg-emerald-100 text-emerald-800 text-xs px-2 py-0.5 font-medium">Strong</span>
+              <span class="rounded-full bg-slate-100 text-slate-600 text-xs px-2 py-0.5">in-process</span>
+            </span>
+          </div>
+          <p class="text-xs uppercase tracking-wider text-slate-500">Files</p>
+          <p class="font-mono text-sm text-slate-600">src/view/gantt-shell.ts · #entriesForGesture · #draftFor · #commitGesture · #previewGesture · #refreshAffordances</p>
+
+          <div class="rounded-lg border border-slate-200 bg-white p-4">
+            <pre class="mermaid">
+              flowchart TB
+                subgraph before [Before]
+                  EG[attachEntryGestures] --> CTX[EntryGestureContext]
+                  CTX --> A["#draftFor"]
+                  CTX --> B["#commitGesture"]
+                  CTX --> C["#previewGesture"]
+                  CTX --> D["#entriesForGesture"]
+                  CTX --> E["#refreshAffordances"]
+                  A & B & C & D & E --> SHELL[GanttShell]
+                end
+                subgraph after [After]
+                  EG2[attachEntryGestures] --> CTX2[narrow context]
+                  CTX2 --> HOST[GestureHost module]
+                  HOST --> LAY[draftForMove / previewOffsets]
+                  HOST --> BUS[beforeEntryMove / entryMove]
+                  HOST --> ST[InteractionState]
+                end
+            </pre>
+          </div>
+
+          <div class="space-y-2 text-sm">
+            <p><strong>Problem.</strong> Gesture lifecycle knowledge is a fan of shallow private methods on <span class="font-mono">GanttShell</span>, beside zoom, theme, and pane wiring.</p>
+            <p><strong>Solution.</strong> One deep module builds the context adapter and owns draft / preview rAF / commit / affordance projection.</p>
+            <p class="text-xs text-slate-600"><strong>Wins.</strong> locality: D-S3-16/18/19 concentrate · leverage: S3.4–S3.6 stop growing the 800-line shell · tests hit one interface</p>
+          </div>
+        </article>
+
+        <article id="c2" class="rounded-xl border border-slate-200 bg-white p-6 space-y-4">
+          <div class="flex items-start justify-between gap-4">
+            <h3 class="font-serif text-xl">2 · Deepen <span class="font-mono">EntryGestureContext</span></h3>
+            <span class="inline-flex items-center gap-2">
+              <span class="rounded-full bg-emerald-100 text-emerald-800 text-xs px-2 py-0.5 font-medium">Strong</span>
+              <span class="rounded-full bg-slate-100 text-slate-600 text-xs px-2 py-0.5">in-process</span>
+            </span>
+          </div>
+          <p class="text-xs uppercase tracking-wider text-slate-500">Files / D-S3-5</p>
+          <p class="font-mono text-sm text-slate-600">src/interaction/entry-gesture-context.ts · src/view/gantt-shell.ts (mirror) · src/interaction/entry-gestures.ts</p>
+
+          <div class="grid md:grid-cols-2 gap-4">
+            <div class="rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <p class="text-xs uppercase tracking-wider text-slate-500 mb-2">Before — wide / shallow</p>
+              <div class="h-40 rounded border border-slate-300 bg-white p-2 text-[11px] space-y-1">
+                <div class="h-16 border border-slate-400 rounded p-1">hitTest entryFor can rowOrder selection setHovered entriesForGesture draftFor commit preview pointerAt(noop)</div>
+                <div class="h-16 border border-dashed border-slate-300 rounded p-1 text-slate-500">shell methods + entry-gestures split</div>
+              </div>
+              <p class="text-[11px] text-slate-500 mt-2">interface nearly as tall as the implementation</p>
+            </div>
+            <div class="rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <p class="text-xs uppercase tracking-wider text-slate-500 mb-2">After — deep</p>
+              <div class="h-40 rounded p-2 text-[11px] space-y-1 deep text-white">
+                <div class="h-10 border border-slate-500 rounded p-1 text-slate-200">hit / can / selection · session(draft|preview|commit)</div>
+                <div class="h-24 border border-slate-600 rounded p-1 text-slate-300">host: snap, multi-select, rAF preview, veto, write</div>
+              </div>
+              <p class="text-[11px] text-slate-500 mt-2">small interface · implementation absorbs the slots</p>
+            </div>
+          </div>
+
+          <div class="space-y-2 text-sm">
+            <p><strong>Problem.</strong> The seam grew past D-S3-5's seven members to ~11 slots (including unused <span class="font-mono">pointerAt</span>).</p>
+            <p><strong>Solution.</strong> Fold related jobs: one in-flight draft session; keep selection nested. Leave depth inside the host.</p>
+            <p class="text-xs text-slate-600"><strong>Wins.</strong> leverage: S3.4–S3.6 add no new context methods · locality: the gesture protocol lives at one seam</p>
+          </div>
+          <div class="text-xs rounded-lg border border-amber-200 bg-amber-50 p-3 text-amber-950">Same top call as the 2026-08-29 plan review. Parameterized <span class="font-mono">draftFor(gesture)</span> landed; the surface is still wide. One production adapter today — still a hypothetical seam until a second real adapter appears (tests already fake pieces).</div>
+        </article>
+
+        <article id="c3" class="rounded-xl border border-slate-200 bg-white p-6 space-y-4">
+          <div class="flex items-start justify-between gap-4">
+            <h3 class="font-serif text-xl">3 · Affordance projector as its own deep module</h3>
+            <span class="inline-flex items-center gap-2">
+              <span class="rounded-full bg-amber-100 text-amber-800 text-xs px-2 py-0.5 font-medium">Worth exploring</span>
+              <span class="rounded-full bg-slate-100 text-slate-600 text-xs px-2 py-0.5">in-process</span>
+            </span>
+          </div>
+          <p class="text-xs uppercase tracking-wider text-slate-500">Files / I14</p>
+          <p class="font-mono text-sm text-slate-600">gantt-shell.ts #refreshAffordances · #resolveResizableItemId · render/backend.ts InteractionState · view/capability.ts</p>
+
+          <div class="grid md:grid-cols-2 gap-4 text-xs">
+            <div class="rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-1">
+              <p class="uppercase tracking-wider text-slate-500">Before — cross-section</p>
+              <div class="h-8 border-l-4 border-slate-300 bg-white px-2 flex items-center">pointermove</div>
+              <div class="h-8 border-l-4 border-slate-300 bg-white px-2 flex items-center">setHovered</div>
+              <div class="h-8 border-l-4 border-red-400 bg-red-50 px-2 flex items-center">#refreshAffordances mixed with applyState</div>
+              <div class="h-8 border-l-4 border-slate-300 bg-white px-2 flex items-center">applyState</div>
+            </div>
+            <div class="rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-1">
+              <p class="uppercase tracking-wider text-slate-500">After</p>
+              <div class="h-8 border-l-4 border-slate-300 bg-white px-2 flex items-center">pointermove → setHovered</div>
+              <div class="h-16 border-l-4 border-slate-900 deep text-slate-100 px-2 flex items-center">projectAffordances — pure, Node-testable</div>
+              <div class="h-8 border-l-4 border-slate-300 bg-white px-2 flex items-center">InteractionState patch → applyState</div>
+            </div>
+          </div>
+
+          <div class="space-y-2 text-sm">
+            <p><strong>Problem.</strong> Mapping hover + selection + Capabilities → paint ids is pure projection interleaved with <span class="font-mono">applyState</span> side effects on the shell.</p>
+            <p><strong>Solution.</strong> One pure module: inputs in, paint fields out; the shell only writes and calls <span class="font-mono">applyState</span>.</p>
+            <p class="text-xs text-slate-600"><strong>Wins.</strong> locality: I14's affordance half · leverage: S3.5 keyboard and D-S3-17 pending arrive without mixing mode gates into paint · interface is the test surface</p>
+          </div>
+        </article>
+
+        <article id="c4" class="rounded-xl border border-slate-200 bg-white p-6 space-y-4">
+          <div class="flex items-start justify-between gap-4">
+            <h3 class="font-serif text-xl">4 · Gesture commit pipeline</h3>
+            <span class="inline-flex items-center gap-2">
+              <span class="rounded-full bg-amber-100 text-amber-800 text-xs px-2 py-0.5 font-medium">Worth exploring</span>
+              <span class="rounded-full bg-slate-100 text-slate-600 text-xs px-2 py-0.5">local-substitutable</span>
+            </span>
+          </div>
+          <p class="text-xs uppercase tracking-wider text-slate-500">Files / D-S3-16</p>
+          <p class="font-mono text-sm text-slate-600">gantt-shell.ts #commitGesture · api/gantt.ts commitEntryEdits · view/event-bus.ts EntryMove</p>
+
+          <div class="rounded-lg border border-slate-200 bg-white p-4">
+            <pre class="mermaid">
+              sequenceDiagram
+                participant G as entry-gestures
+                participant H as commit module
+                participant E as EventBus
+                participant W as commitEntryEdits
+                G->>H: commit(move, draft)
+                H->>E: beforeEntryMove
+                alt vetoed
+                  H-->>G: false
+                else ok
+                  H->>W: EntryEdits
+                  W-->>H: true/false
+                  H->>E: entryMove
+                  H-->>G: boolean
+                end
+            </pre>
+          </div>
+
+          <div class="space-y-2 text-sm">
+            <p><strong>Problem.</strong> <span class="font-mono">#commitGesture</span> is a thin pass-through that will fork for resize and async veto if left on the shell.</p>
+            <p><strong>Solution.</strong> One deep module owns veto → write → after for every EntryGesture kind. <span class="font-mono">commitEntryEdits</span> stays the injected write adapter.</p>
+            <p class="text-xs text-slate-600"><strong>Wins.</strong> locality: D-S3-16 · leverage: move/resize/nudge share one commit path · two adapters already (prod write vs test omit)</p>
+          </div>
+          <div class="text-xs rounded-lg border border-amber-200 bg-amber-50 p-3 text-amber-950">No ADR conflict with ADR 0006. Raise to Strong if S3.4 starts immediately. Keep <span class="font-mono">pending</span> out of <span class="font-mono">InteractionState</span> when S3.5 lands (2026-08-29 candidate 2).</div>
+        </article>
+
+        <article id="c5" class="rounded-xl border border-slate-200 bg-white p-6 space-y-4">
+          <div class="flex items-start justify-between gap-4">
+            <h3 class="font-serif text-xl">5 · One home for the context type</h3>
+            <span class="inline-flex items-center gap-2">
+              <span class="rounded-full bg-slate-100 text-slate-700 text-xs px-2 py-0.5 font-medium">Speculative</span>
+              <span class="rounded-full bg-slate-100 text-slate-600 text-xs px-2 py-0.5">in-process</span>
+            </span>
+          </div>
+          <p class="font-mono text-sm text-slate-600">src/interaction/entry-gesture-context.ts · src/view/gantt-shell.ts lines 54–85</p>
+          <div class="grid md:grid-cols-2 gap-4 text-sm">
+            <div class="rounded border border-red-200 bg-red-50 p-3 text-red-800">Two boxes that must stay identical</div>
+            <div class="deep rounded p-3 text-white">One shared type both adapters satisfy</div>
+          </div>
+          <div class="space-y-2 text-sm">
+            <p><strong>Problem.</strong> <span class="font-mono">Gesture</span> / context shape is declared twice; structural typing hides drift.</p>
+            <p><strong>Solution.</strong> Keep a single type home on the legal import edge (<span class="font-mono">interaction/</span> already imports <span class="font-mono">view/</span> for <span class="font-mono">Interactions</span>; <span class="font-mono">view/</span> must not import <span class="font-mono">interaction/</span>).</p>
+            <p class="text-xs text-slate-600"><strong>Wins.</strong> locality of the DI seam's type · little new runtime depth — do with candidate 2, not alone</p>
+          </div>
+        </article>
+      </section>
+
+      <section id="top" class="space-y-4">
+        <h2 class="font-serif text-2xl">Top recommendation</h2>
+        <div class="rounded-xl border border-indigo-200 bg-indigo-50 p-6 space-y-3">
+          <h3 class="font-serif text-xl text-indigo-950">Candidates 1 + 2 first — host + narrow context before S3.4 grows the shell</h3>
+          <p class="text-sm text-indigo-900 max-w-3xl">
+            S3.3 already proved the deep pieces (snap, draft math, pointer machine, capability table, hot-path paint).
+            What remains shallow is the cluster of private methods on <span class="font-mono">GanttShell</span>
+            and the wide context seam they satisfy. Collapse those together so resize, async veto, and extender
+            preview add implementation behind one interface instead of more slots and more shell methods.
+            Align D-S3-3/12 with the smooth-preview commit while you are in that file. Add the Selection / Draft
+            glossary entries with the public names.
+          </p>
+          <a class="text-sm font-medium text-indigo-700 underline" href="#c1">→ open Candidate 1</a>
+        </div>
+      </section>
+
+      <section class="text-sm text-slate-500 border-t border-slate-200 pt-6">
+        <p>Summary: Standards 5 (worst: missing Selection glossary). Spec 8 (worst: D-S3-3 snap-on-pointer vs snap-on-commit). Simplify 4 (worst: <span class="font-mono">attachPointerGesture</span> name + wide context). Axes are not ranked against each other.</p>
+      </section>
+
+    </main>
+  </body>
+</html>

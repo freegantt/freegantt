@@ -273,6 +273,66 @@ The shipped default `ViewPreset`: one header tick per civil day, labeled `YYYY-M
 scale's zone. Presets are plain config objects, never a switch statement (`plans/01` §5.1) — more
 shipped presets (hour→year) and preset switching land later in S1.
 
+### Selection (S3)
+
+Selection is **Gantt state**, not **Dataset** state — two `Gantt` instances on one `Dataset` can
+hold different selections. The library exposes two getters; they answer different questions:
+
+| Getter                   | Type                 | Writable                    | What it is                                        |
+| ------------------------ | -------------------- | --------------------------- | ------------------------------------------------- |
+| `gantt.selection`        | `readonly EntryId[]` | yes (`gantt.selection = …`) | Which entry ids are selected                      |
+| `gantt.selectionEntries` | `readonly Entry[]`   | no                          | The bound dataset's `Entry` records for those ids |
+
+Use **`selection`** when you only need ids, or when you want to **set** selection (click parity:
+assignment runs `beforeSelectionChange` → `selectionChange` and opens no transaction).
+
+Use **`selectionEntries`** when you need entry **fields** — `name`, `start`, `end`, and so on — for
+a toolbar, bulk rename, or any "act on the selected rows" control:
+
+```ts
+gantt.on('selectionChange', () => {
+  const names = gantt.selectionEntries.map((entry) => entry.name);
+  toolbar.textContent = names.join(', ');
+});
+
+renameBtn.addEventListener('click', () => {
+  dataset.transaction(() => {
+    for (const entry of gantt.selectionEntries) {
+      dataset.entries.update(entry.id, { name: input.value });
+    }
+  });
+});
+```
+
+`selectionEntries` re-reads the store on every access, so field edits show up without a selection
+change. It keeps `selection` order and **skips** ids that no longer exist — for example after
+`dataset.entries.remove` left a stale id in `selection`. To change which entries are selected,
+assign `selection`; `selectionEntries` is read-only.
+
+`selectionDataset` was not used: **`Dataset`** is already the name of the entry store (`new
+Dataset({ … })`), so a getter named `selectionDataset` reads like a second `Dataset` instance rather
+than a list of `Entry` records.
+
+### Dragging bars and snapping (S3)
+
+A pointer drag on a `move`-capable bar previews at full pixel resolution — the grabbed spot on the
+bar tracks the cursor with no drift — and snaps only the value it writes on release, so the visible
+motion is always smooth even when the committed `start`/`end` lands on a calendar boundary.
+
+Where a drag snaps to comes from the active `ViewPreset`'s `snap` field, live-reconfigurable like
+any other config:
+
+```ts
+gantt.preset = { ...gantt.preset, snap: 'none' }; // free placement, no snapping at all
+gantt.preset = { ...gantt.preset, snap: 'tick' }; // default: whatever the preset's own tick is
+gantt.preset = { ...gantt.preset, snap: { unit: 'hour', increment: 2 } }; // every 2 hours
+```
+
+Holding **Alt** during a drag suspends snapping for that one gesture, regardless of the configured
+`snap` — useful for fine placement without changing the preset. The harness (`harness/index.html`)
+has a "Snap" control (Auto / Off / Hour / Day / Week, plus an increment) wired to this same
+`gantt.preset` assignment — try it against a live drag at `pnpm dev`.
+
 ## Styling and theming
 
 `Gantt` injects its own default stylesheet once per `document` (`<style data-freegantt-styles>`),
