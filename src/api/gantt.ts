@@ -40,12 +40,11 @@ interface GanttOptionsBase {
   todayLine?: boolean | InstantInput;
   /** Live (S1.13, D-S1.13-4). Default `[]`. Extra Date lines beside the today wrapper —
    *  status/as-of dates, sprint or holiday markers, project start/finish. No id: index-keyed, like
-   *  Header bands. The wrapper's own line never gets a caption; give one of these a `label` instead. */
+   *  Header bands. The wrapper's own line never gets a Date line label; give one of these a `label` instead. */
   dateLines?: readonly DateLineInput[];
   /** Live. How many of the current preset's own ticks `panToToday()` leaves between the pane's left
-   *  edge and where it lands `align: 'start'` (the default) — enough that the today line reads as
-   *  "near the start" without sitting flush on the edge. Default `2`; `0` restores the old flush
-   *  landing. No effect on `align: 'center'`. */
+   *  edge and where it lands `align: 'start'` (the default) — the **Today line margin** (CONTEXT.md).
+   *  Default `2`; `0` restores the old flush landing. No effect on `align: 'center'`. */
   todayLineMarginTicks?: number;
   /** The ordered set `zoomIn`/`zoomOut` step through, finest first (S1.12, D-S1.12-5). Live.
    *  Default: the shipped nine-rung set. */

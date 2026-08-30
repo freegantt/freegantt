@@ -11,7 +11,7 @@ const outside = instant('2025-06-01T00:00:00Z');
 describe('resolveDateLines', () => {
   it('emits the today wrapper when now() falls inside the scale range', () => {
     const lines = resolveDateLines({ scale, now: inside });
-    expect(lines).toEqual([{ kind: 'dateLine', x: scale.xForInstant(inside) }]);
+    expect(lines).toEqual([{ kind: 'dateLine', x: scale.xForInstant(inside), today: true }]);
   });
 
   it('emits nothing for the today wrapper when now() is outside the scale range', () => {
@@ -25,7 +25,7 @@ describe('resolveDateLines', () => {
   it('pins the today wrapper at an Instant with no clock read', () => {
     const other = instant('2026-09-01T00:00:00Z');
     const lines = resolveDateLines({ scale, todayLine: other, now: inside });
-    expect(lines).toEqual([{ kind: 'dateLine', x: scale.xForInstant(other) }]);
+    expect(lines).toEqual([{ kind: 'dateLine', x: scale.xForInstant(other), today: true }]);
   });
 
   it('emits an authored Date line that falls inside the scale range, with className', () => {
@@ -57,7 +57,7 @@ describe('resolveDateLines', () => {
       dateLines: [{ placeAt: other, label: 'Kickoff' }],
     });
     expect(lines).toEqual([
-      { kind: 'dateLine', x: scale.xForInstant(inside) },
+      { kind: 'dateLine', x: scale.xForInstant(inside), today: true },
       { kind: 'dateLine', x: scale.xForInstant(other), label: 'Kickoff' },
     ]);
   });

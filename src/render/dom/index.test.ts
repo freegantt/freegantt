@@ -385,7 +385,7 @@ describe('render/dom backend', () => {
     timeline.remove();
   });
 
-  it('composes a Date line className onto the base class, on both the stroke and the caption', () => {
+  it('composes a Date line className onto the base class, on both the stroke and the Date line label', () => {
     const backend = createDomBackend();
     const { grid, timeline } = mountSurfaces();
     backend.mount({ grid, timeline });
@@ -406,8 +406,40 @@ describe('render/dom backend', () => {
 
     const line = timeline.querySelector<HTMLElement>('.fg-date-line')!;
     expect(line.classList.contains('fg-deadline-line')).toBe(true);
-    const label = timeline.querySelector<HTMLElement>('.fg-date-line-label')!;
-    expect(label.classList.contains('fg-deadline-line')).toBe(true);
+    expect(line.dataset['flag']).toBeUndefined();
+    const dateLineLabel = timeline.querySelector<HTMLElement>('.fg-date-line-label')!;
+    expect(dateLineLabel.classList.contains('fg-deadline-line')).toBe(true);
+
+    backend.destroy();
+    grid.remove();
+    timeline.remove();
+  });
+
+  it('marks the Today line wrapper with data-flag=today and leaves authored Date lines unmarked (U5)', () => {
+    const backend = createDomBackend();
+    const { grid, timeline } = mountSurfaces();
+    backend.mount({ grid, timeline });
+
+    const base = computeFrame({
+      entries: sampleEntries.slice(0, 1),
+      scale,
+      preset,
+      visible: { x: 0, y: 0, width: 0, height: 200 },
+      rowHeight: 32,
+      revision: 0,
+    });
+
+    backend.sync({
+      ...base,
+      decorations: [
+        { kind: 'dateLine', x: 10, today: true },
+        { kind: 'dateLine', x: 40, label: 'Ship' },
+      ],
+    });
+
+    const nodes = timeline.querySelectorAll<HTMLElement>('.fg-date-line');
+    expect(nodes[0]!.dataset['flag']).toBe('today');
+    expect(nodes[1]!.dataset['flag']).toBeUndefined();
 
     backend.destroy();
     grid.remove();

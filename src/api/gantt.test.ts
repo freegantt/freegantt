@@ -520,7 +520,7 @@ describe('Gantt locale / todayLine (S1.12, D-S1.12-12 / D-S1.12-14)', () => {
 });
 
 describe('Gantt dateLines (S1.13)', () => {
-  it("[S1-A11] a dateLines entry with a label renders a .fg-date-line-label at the line's x; one without a label renders no caption", () => {
+  it("[S1-A11] a dateLines entry with a label renders a .fg-date-line-label at the line's x; one without a label renders no Date line label", () => {
     FakeResizeObserver.instances = [];
     vi.stubGlobal('ResizeObserver', FakeResizeObserver);
 
@@ -570,7 +570,9 @@ describe('Gantt dateLines (S1.13)', () => {
       FakeResizeObserver.instances[0]!.fire({ width: 300, height: 100 });
 
       expect(container.querySelector('.fg-today-line')).toBeNull();
-      expect(container.querySelector('.fg-date-line')).not.toBeNull();
+      const todayStroke = container.querySelector<HTMLElement>('.fg-date-line');
+      expect(todayStroke).not.toBeNull();
+      expect(todayStroke!.dataset['flag']).toBe('today');
 
       const styleSheet = Array.from(document.head.querySelectorAll('style'))
         .map((s) => s.textContent ?? '')
@@ -584,7 +586,7 @@ describe('Gantt dateLines (S1.13)', () => {
     }
   });
 
-  it('[S1-A13] todayLine pinned to an Instant renders one .fg-date-line there with no caption, and does not move when the clock advances', async () => {
+  it('[S1-A13] todayLine pinned to an Instant renders one .fg-date-line there with no Date line label, and does not move when the clock advances', async () => {
     FakeResizeObserver.instances = [];
     vi.stubGlobal('ResizeObserver', FakeResizeObserver);
     vi.useFakeTimers();
@@ -612,6 +614,7 @@ describe('Gantt dateLines (S1.13)', () => {
 
       const lines = container.querySelectorAll<HTMLElement>('.fg-date-line');
       expect(lines).toHaveLength(1);
+      expect(lines[0]!.dataset['flag']).toBe('today');
       const before = lines[0]!.style.transform;
       expect(container.querySelector('.fg-date-line-label')).toBeNull();
 
@@ -655,6 +658,9 @@ describe('Gantt dateLines (S1.13)', () => {
       const line = container.querySelector<HTMLElement>('.fg-date-line')!;
       expect(line.classList.contains('fg-date-line')).toBe(true);
       expect(line.classList.contains('fg-deadline-line')).toBe(true);
+      expect(line.dataset['flag']).toBeUndefined();
+      const dateLineLabel = container.querySelector<HTMLElement>('.fg-date-line-label')!;
+      expect(dateLineLabel.classList.contains('fg-deadline-line')).toBe(true);
 
       gantt.destroy();
     } finally {

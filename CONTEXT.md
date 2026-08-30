@@ -343,16 +343,20 @@ How a header band labels an Instant: an `Intl.DateTimeFormatOptions` object, or 
 _Avoid_: HeaderFormat as the everyday name (that is the callback half only)
 
 **Date line**:
-A vertical marker at an Instant on the timeline. Geometry is a `DateLine` decoration. `gantt.todayLine` is the wrapper that emits the one at `now()`; a caller states any other Date line through `gantt.dateLines`, an array of `{ placeAt, label?, className? }`. `placeAt` carries the Instant — never `location`, which already names a pixel position (`model/geometry.ts`), and never `id`, since the list is index-keyed the same way Header bands are. Paint is `.fg-date-line` (S1.13, D-S1.13-8 — `.fg-today-line` is gone, no alias); the stroke is `border-left`, so a consumer's own `className` reaches `border-left-style`/`-width` with no new option (D-S1.13-5).
+A vertical marker at an Instant on the timeline. Geometry is a `DateLine` decoration. `gantt.todayLine` is the wrapper that emits the one at `now()`; a caller states any other Date line through `gantt.dateLines`, an array of `{ placeAt, label?, className? }`. `placeAt` carries the Instant — never `location`, which already names a pixel position (`model/geometry.ts`), and never `id`, since the list is index-keyed the same way Header bands are. Paint is `.fg-date-line` (S1.13, D-S1.13-8 — `.fg-today-line` is gone, no alias); the stroke is `border-left`, so a consumer's own `className` reaches `border-left-style`/`-width` with no new option (D-S1.13-5). The wrapper's stroke carries `data-flag="today"` (U5); authored list entries do not.
 _Avoid_: Timeline (the pane, not this marker), cursor, now-line, location (that is a pixel position, not an Instant), id (`dateLines` has none — index-keyed like Header bands)
 
 **Date line label**:
-The caption a Date line carries when it has a `label`. A sibling Part, `.fg-date-line-label`, mounted in `.fg-header` at the line's x — not the stroke's own `textContent`, which is unreadable at 1px wide (S1.13, D-S1.13-6). The `todayLine` wrapper's own line never gets one; give it a label by turning `todayLine` off and authoring the same Instant through `dateLines` instead.
+The text a Date line shows when it has a `label`. A sibling Part, `.fg-date-line-label`, mounted in `.fg-header` at the line's x — not the stroke's own `textContent`, which is unreadable at 1px wide (S1.13, D-S1.13-6). The `todayLine` wrapper's own line never gets one; give it a label by turning `todayLine` off and authoring the same Instant through `dateLines` instead.
 _Avoid_: caption (used generically elsewhere), tooltip (this is always-visible, not hover-triggered)
 
 **Today line**:
-The Date line at `now()`. `gantt.todayLine` (default on) is the wrapper that emits it — `true`, `false`, or a pinned `InstantInput` (S1.13, D-S1.13-4), with no clock read once pinned. Updates on the next render, not on a clock tick. `panToToday` pans to `now()`.
+The Date line at `now()`. `gantt.todayLine` (default on) is the wrapper that emits it — `true`, `false`, or a pinned `InstantInput` (S1.13, D-S1.13-4), with no clock read once pinned. Updates on the next render, not on a clock tick. Paint marks it with `data-flag="today"` on `.fg-date-line`. `panToToday` pans to `now()`.
 _Avoid_: Timeline, cursor, now-line
+
+**Today line margin**:
+How many of the current preset's Ticks `panToToday('start')` leaves between the timeline pane's left edge and the Today line. Live on `Gantt.todayLineMarginTicks` (default `2`; `0` lands flush). No effect on `align: 'center'`. The shell converts ticks to px at the Instant being panned to — calendar ticks vary (DST, month length), so this is not a cached pixel constant.
+_Avoid_: leftMargin (a Viewport implementation parameter, not the public knob), gutter (that is the grid pane)
 
 **Tick width**:
 Two numbers on a ViewPreset: `preferredTickWidthPx` is the density the preset intends when nothing else decides; `minTickWidthPx` is the floor below which that preset's labels stop being legible (defaults to preferred, so a custom preset never compresses).
@@ -385,7 +389,7 @@ One of the `fg-*` class names the library's DOM structure carries — level 2 of
 _Avoid_: Pane (Grid pane/Timeline pane/Splitter are specific Parts, already named in "Mounted instances" — Part is the general term for the whole class vocabulary), BEM block (rejected, Q2 — renaming shipped classes to a BEM shape was churn with no behavior change)
 
 **State attribute**:
-A `data-*` attribute a Part carries so a consumer can select on state without JS — `data-flag` (space-joined, generated from `BarFlags`'/`LinkFlags`' own keys, D-S1.10-2: `conflict`, `cycle`), `data-kind` (an Entry's Kind), `data-testid`/`data-row-id`/`data-item-id` (stable E2E hooks, U6). Distinct from a Token (a value) and a Part (a structural class): a State attribute is level 2's other half, the thing a consumer's selector matches against rather than reads.
+A `data-*` attribute a Part carries so a consumer can select on state without JS — `data-flag` (space-joined, generated from `BarFlags`'/`LinkFlags`' own keys, D-S1.10-2: `conflict`, `cycle`; on `.fg-date-line` the Today line wrapper writes `today`), `data-kind` (an Entry's Kind), `data-testid`/`data-row-id`/`data-item-id` (stable E2E hooks, U6). Distinct from a Token (a value) and a Part (a structural class): a State attribute is level 2's other half, the thing a consumer's selector matches against rather than reads.
 _Avoid_: Data attribute (too generic — say State attribute when it's part of the level-2 vocabulary), modifier class (there is no modifier-class convention here — state lives in `data-*`, never a second class)
 
 **a11y label**:
