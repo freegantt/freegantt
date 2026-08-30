@@ -338,14 +338,11 @@ export class Viewport {
     });
   }
 
-  /** Pans so `i` sits at `align` within the pane (S1.12, D-S1.12-8). `leftMarginPx` shifts an
-   *  `align: 'start'` landing right by that many px, so `i` sits a little inside the pane's left
-   *  edge instead of flush against it (S1.13 follow-up, `panToToday`'s own margin); no effect on
-   *  `align: 'center'`, which is already centred. `scroll.panTo` clamps to `[0, max]` (D-S1.5-2), so
-   *  `i` outside the pannable range — or a margin that would push it there — lands at whichever
-   *  edge is closest instead of throwing. */
-  panToInstant(i: Instant, align: 'start' | 'center', leftMarginPx = 0): void {
-    const x = this.timeScale.xForInstant(i) - (align === 'center' ? this.#paneSize.width / 2 : leftMarginPx);
+  /** Pans so `i` sits at `align` within the pane (S1.12, D-S1.12-8). `scroll.panTo` clamps to
+   *  `[0, max]` (D-S1.5-2), so `i` outside the pannable range lands at whichever edge is closest
+   *  instead of throwing. */
+  panToInstant(i: Instant, align: 'start' | 'center'): void {
+    const x = this.timeScale.xForInstant(i) - (align === 'center' ? this.#paneSize.width / 2 : 0);
     this.scroll.panTo({ x });
   }
 

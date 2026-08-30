@@ -37,8 +37,9 @@
         </p>
         <p class="text-sm rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-emerald-950 max-w-3xl">
           Follow-up pass: U5 State attribute, glossary <strong>Today line margin</strong>, Date line label wording,
-          source-index label keys, and the small shell/paint cleanups landed. Candidate 2
-          (<span class="font-mono">leftMarginPx</span>) and leftover issue hygiene stay on
+          source-index label keys, the small shell/paint cleanups, and candidate 2
+          (<span class="font-mono">leftMarginPx</span> retracted from <span class="font-mono">Viewport</span>) all
+          landed. Candidate 4 and leftover issue hygiene stay on
           <a class="underline" href="https://github.com/Pawel-IT/FreeGantt/issues/105">#105</a>.
         </p>
       </header>
@@ -47,7 +48,7 @@
         <div class="rounded-xl border border-emerald-200 bg-emerald-50 p-4 space-y-2">
           <p class="text-xs uppercase tracking-widest text-emerald-700 font-semibold">Standards</p>
           <p class="text-2xl font-serif">landed</p>
-          <p class="text-sm text-emerald-900">Glossary + Date line label wording landed. <span class="font-mono">leftMarginPx</span> stays open.</p>
+          <p class="text-sm text-emerald-900">Glossary + Date line label wording landed. <span class="font-mono">leftMarginPx</span> retracted from <span class="font-mono">Viewport</span>.</p>
         </div>
         <div class="rounded-xl border border-emerald-200 bg-emerald-50 p-4 space-y-2">
           <p class="text-xs uppercase tracking-widest text-emerald-700 font-semibold">Spec</p>
@@ -74,10 +75,10 @@
             <span class="font-mono text-xs text-slate-500 ml-2">src/ · e2e/</span>
             <p class="mt-2"><strong>Date line label, not caption.</strong> Runtime comments and tests use the glossary term. Spec README still uses “caption” as historical prose.</p>
           </li>
-          <li class="rounded-lg border border-slate-200 bg-white p-4">
-            <span class="rounded-full bg-slate-100 text-slate-600 text-xs px-2 py-0.5 font-medium">Open · Mysterious Name</span>
-            <span class="font-mono text-xs text-slate-500 ml-2">viewport.ts panToInstant</span>
-            <p class="mt-2"><span class="font-mono">leftMarginPx</span> does not name the today-line landing. Tracked with candidate 2.</p>
+          <li class="rounded-lg border border-emerald-200 bg-white p-4">
+            <span class="rounded-full bg-emerald-100 text-emerald-800 text-xs px-2 py-0.5 font-medium">Landed · candidate 2</span>
+            <span class="font-mono text-xs text-slate-500 ml-2">viewport.ts panToInstant · gantt-shell.ts panToToday</span>
+            <p class="mt-2"><span class="font-mono">panToInstant</span> is align-only again. Today-landing margin math moved into <span class="font-mono">GanttShell.panToToday</span>, which reads <span class="font-mono">timeScale</span>/<span class="font-mono">scroll</span> directly.</p>
           </li>
         </ul>
         <p class="text-xs text-slate-500">Clean: I10 clock stays in <span class="font-mono">time/</span>; <span class="font-mono">view/</span> takes an Instant. <span class="font-mono">DateLineInput</span> / <span class="font-mono">DateLineSpec</span> match D-S1.13-2. Consumer <span class="font-mono">className</span> is Customization, not a library State class. <span class="font-mono">harness/main.ts</span> only calls <span class="font-mono">gantt.panToToday()</span>.</p>
@@ -177,7 +178,7 @@ flowchart TB
             <h3 class="font-serif text-xl">2 · Retract leftMarginPx from Viewport</h3>
             <div class="flex gap-2 shrink-0">
                 <span class="rounded-full bg-emerald-100 text-emerald-800 text-xs px-3 py-1 font-medium">Strong</span>
-              <span class="rounded-full bg-slate-100 text-slate-600 text-xs px-3 py-1">open · #105</span>
+              <span class="rounded-full bg-emerald-100 text-emerald-800 text-xs px-3 py-1">landed</span>
             </div>
           </div>
           <p class="font-mono text-sm text-slate-600">src/layout/viewport/viewport.ts · src/view/gantt-shell.ts · src/api/gantt.ts</p>
@@ -265,18 +266,20 @@ flowchart LR
 
       <section id="top-recommendation" class="rounded-xl border-2 border-slate-800 bg-white p-6 space-y-3">
         <p class="text-xs uppercase tracking-widest text-slate-500">Top recommendation</p>
-        <h2 class="font-serif text-2xl">Candidate 1 — today-wrapper origin</h2>
+        <h2 class="font-serif text-2xl">Candidates 1 and 2 — landed</h2>
         <p class="text-sm text-slate-700 max-w-3xl">
           Candidate 1 landed: origin on <span class="font-mono">DateLine</span>, State attribute on paint.
-          Candidate 3 landed with it. Next grill is candidate 2 — retract <span class="font-mono">leftMarginPx</span>
-          from Viewport so today landing stays in the shell.
+          Candidate 3 landed with it. Candidate 2 landed: <span class="font-mono">leftMarginPx</span> is out of
+          <span class="font-mono">Viewport.panToInstant</span>; today-landing margin math lives in
+          <span class="font-mono">GanttShell.panToToday</span> only. Remaining: candidate 4 (speculative), on
+          <a class="underline" href="https://github.com/Pawel-IT/FreeGantt/issues/105">#105</a>.
         </p>
-        <p class="text-sm"><a class="underline font-medium" href="https://github.com/Pawel-IT/FreeGantt/issues/105">#105</a> · <a class="underline" href="#c2">candidate 2</a></p>
+        <p class="text-sm"><a class="underline font-medium" href="https://github.com/Pawel-IT/FreeGantt/issues/105">#105</a> · <a class="underline" href="#c4">candidate 4</a></p>
       </section>
 
       <section class="text-xs text-slate-500 space-y-1">
         <p>Not candidates: <span class="font-mono">DateLineInput</span> / <span class="font-mono">DateLineSpec</span> / <span class="font-mono">DateLine</span> (D-S1.13-2). Gantt ↔ GanttShell passthrough (plans/02).</p>
-        <p>Follow-up pass landed U5, glossary, label keys, #96/#99 comments. Still open: <a class="underline" href="https://github.com/Pawel-IT/FreeGantt/issues/105">#105</a> (candidates 2 and 4).</p>
+        <p>Follow-up pass landed U5, glossary, label keys, #96/#99 comments, and candidate 2. Still open: <a class="underline" href="https://github.com/Pawel-IT/FreeGantt/issues/105">#105</a> (candidate 4).</p>
       </section>
 
     </main>

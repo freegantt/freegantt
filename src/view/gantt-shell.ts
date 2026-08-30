@@ -407,9 +407,15 @@ export class GanttShell {
    *  `align: 'start'` — the one place this shell decides where "today" lands, so every caller
    *  (`Gantt.panToToday()`, a consumer's own load-time call) resolves it the same way. `at` is
    *  `now()`, read by the caller — `view/` may not import `time/` (I1) and has no clock read of its
-   *  own to make. */
+   *  own to make. The margin is today-landing policy, not a general `Viewport` pan option, so it is
+   *  applied here rather than threaded through `panToInstant` (S1.13 follow-up, candidate 2). */
   panToToday(at: Instant, align: 'start' | 'center' = 'start'): void {
-    this.#viewport.panToInstant(at, align, align === 'start' ? this.#todayLineMarginPx(at) : 0);
+    if (align === 'center') {
+      this.#viewport.panToInstant(at, align);
+      return;
+    }
+    const x = this.#viewport.timeScale.xForInstant(at) - this.#todayLineMarginPx(at);
+    this.#viewport.scroll.panTo({ x });
   }
 
   /** Px width of `todayLineMarginTicks` ticks of the CURRENT preset, evaluated at `at` — calendar
