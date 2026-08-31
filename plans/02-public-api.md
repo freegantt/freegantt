@@ -322,9 +322,11 @@ dataset.entries.update('t1', { start: '2026-10-05', cost: 12_000 });
 dataset.entries.fieldValue('t1', 'cost');       // 12_000 — meta-sourced
 dataset.entries.fieldValue('t1', 'start');      // entry-sourced
 dataset.entries.fieldValue('t1', 'duration');   // compute-sourced; no Gantt required
+dataset.field('cost');                         // resolved Field | undefined
+dataset.fields.all;                            // every declared Field, core included
 ```
 
-An unregistered key is an `UnknownFieldError`, never a silent write. A missing id on `fieldValue` is an `EntryNotFoundError`. The read goes through the same Field registry path as the write: a consumer who declared `{ key: 'cost' }` does not reach into `entry.meta`.
+An unregistered key is an `UnknownFieldError`, never a silent write. A missing id on `fieldValue` is an `EntryNotFoundError`. The read goes through the same Field registry path as the write: a consumer who declared `{ key: 'cost' }` does not reach into `entry.meta`. `dataset.field` and `dataset.fields.all` return **resolved** declarations (type merge applied, `source` filled). They are not the raw `DatasetOptions.fields` array.
 
 ---
 

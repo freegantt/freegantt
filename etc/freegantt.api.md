@@ -61,9 +61,9 @@ export class Dataset<TMeta = unknown, TFields extends Record<string, unknown> = 
     get dateOnlyEnd(): DateOnlyEndRule;
     // (undocumented)
     get entries(): EntryStore<TMeta, TFields>;
+    field(key: FieldKey): Field | undefined;
     get fields(): {
         readonly all: readonly Field[];
-        get(key: string): Field | undefined;
     };
     static fromJSON<TMeta = unknown, TFields extends Record<string, unknown> = Record<string, unknown>>(doc: DatasetDocument<TMeta>): Dataset<TMeta, TFields>;
     isRollUpKind(kind: EntryKind): boolean;

@@ -1,7 +1,7 @@
 // data/ — one FieldRegistry per DatasetState (D-S4-1). Resolves Field types, stores the whole
 // declaration (`column` included), and never formats or paints.
 
-import type { Aggregator, Field, FieldSource, FieldType } from '../../model/index.js';
+import type { Aggregator, Field, FieldKey, FieldSource, FieldType } from '../../model/index.js';
 import {
   DuplicateFieldKeyError,
   DuplicateFieldSourceError,
@@ -81,11 +81,11 @@ export class FieldRegistry {
     this.#byKey = byKey;
   }
 
-  get(key: string): ResolvedField | undefined {
+  get(key: FieldKey): ResolvedField | undefined {
     return this.#byKey.get(key);
   }
 
-  has(key: string): boolean {
+  has(key: FieldKey): boolean {
     return this.#byKey.has(key);
   }
 
