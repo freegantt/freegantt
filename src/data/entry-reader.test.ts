@@ -30,7 +30,7 @@ describe('readEntries', () => {
     expect(entry?.kind).toBe('span');
   });
 
-  it('carries parentId, kind, progress, segments and meta through when present', () => {
+  it('carries parentId, kind, segments and meta through when present', () => {
     const input: EntryInput = {
       id: 'child',
       parentId: 'root',
@@ -38,14 +38,12 @@ describe('readEntries', () => {
       name: 'Review',
       start: '2026-09-01',
       end: '2026-09-01',
-      progress: 0.5,
       segments: [{ start: '2026-09-01', end: '2026-09-02' }],
       meta: { team: 'A' },
     };
     const [entry] = readEntries([input], context);
     expect(entry?.parentId).toBe(entryId('root'));
     expect(entry?.kind).toBe('milestone');
-    expect(entry?.progress).toBe(0.5);
     expect(entry?.segments).toEqual([
       { start: utc('2026-09-01T00:00:00Z'), end: utc('2026-09-03T00:00:00Z') },
     ]);

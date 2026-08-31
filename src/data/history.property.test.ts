@@ -10,7 +10,6 @@ import type { EntryInput } from '../model/index.js';
 type SimpleOp =
   | { kind: 'add'; id: string; name: string; start: number; end: number }
   | { kind: 'update-name'; id: string; name: string }
-  | { kind: 'update-progress'; id: string; progress: number }
   | { kind: 'update-start'; id: string; start: number }
   | { kind: 'update-end'; id: string; end: number }
   | { kind: 'remove'; id: string }
@@ -42,11 +41,6 @@ const simpleOpArb: fc.Arbitrary<SimpleOp> = fc.oneof(
     }),
   ),
   fc.record({ kind: fc.constant('update-name' as const), id: idArb, name: nameArb }),
-  fc.record({
-    kind: fc.constant('update-progress' as const),
-    id: idArb,
-    progress: fc.double({ min: 0, max: 1, noNaN: true }),
-  }),
   fc.record({ kind: fc.constant('update-start' as const), id: idArb, start: msArb }),
   fc.record({ kind: fc.constant('update-end' as const), id: idArb, end: msArb }),
   fc.record({ kind: fc.constant('remove' as const), id: idArb }),
@@ -77,9 +71,6 @@ function applySimple(state: DatasetState, op: SimpleOp): void {
         return;
       case 'update-name':
         state.entries.update(op.id, { name: op.name });
-        return;
-      case 'update-progress':
-        state.entries.update(op.id, { progress: op.progress });
         return;
       case 'update-start': {
         const current = state.entries.get(op.id);

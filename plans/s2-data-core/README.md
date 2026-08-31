@@ -218,7 +218,7 @@ A consumer narrows on `store` and gets `Entry`, not `unknown`. When S5 adds the 
 
 | Field(s) | Comparison | Why |
 |---|---|---|
-| `name`, `kind`, `parentId`, `progress` | `===` | primitives |
+| `name`, `kind`, `parentId` | `===` | primitives |
 | `start`, `end` | `===` | `Instant` is `number & { __brand }` — exact epoch-ms equality, and *not* date arithmetic, so I10 is not implicated. The mutator reads the loose input through `time/`'s `toInstant`/`toEndInstant` **first**, then compares two Instants; comparing a raw `'2026-09-08'` against a stored `Instant` is the bug this ordering makes impossible. |
 | `segments` | element-wise on `start`/`end` | our own type, so this is not walking consumer data. A resize gesture (S3) rebuilds the array every frame; `===` would record a change on every commit that changed nothing. |
 | `meta` | `===` only | opaque and consumer-owned (D-S2-12). Deep comparison would be the library walking data it does not understand. From S4 a **declared** key is compared by its own field's `equals` and emits a row keyed on the field key, never a `meta` row — declaring is the consumer's own act, and undeclared keys keep this rule (D-S2-26, ADR 0005). |
@@ -985,7 +985,7 @@ Per-step detail is in the step files. The shape:
 | An `apply(changeSet, { history })` option | a caller wants a remote delta on the undo stack (D-S2-11) | whenever one does |
 | A public opt-out for the built-in live binding (`new Gantt({ live: false })`) | a consumer wants the static-image floor without deleting the attachment. Today the floor is structural (D-S2-20) and the customization is additive — a consumer subscribes to the same event and does more. Shipping the flag with no caller is the I11 shape §0 Q1 rejects | whenever one asks |
 | A return value on `undo()`/`redo()` saying what was undone | a caller that cannot use `on('change')`; it comes back as its own named member, never as an overloaded return (D-S2-8, D-S2-24) | whenever one does |
-| A **per-field rollup map** — `start`/`end` are min/max, a declared `cost` sums, `progress` is a duration-weighted mean, `name` does not roll up at all | consumer fields exist to aggregate, which is columns and the tree. The shipped span rollup is already one instance of it (D-S2-22), so generalizing widens `rollUpDerivedSpans`' signature rather than moving it or adding a seam. **Design settled in ADR 0005** (a field is declared; a column names one; source decides stored vs. computed); #80 tracks the build. S2's only obligation is D-S2-26 | S4, #80 |
+| A **per-field rollup map** — `start`/`end` are min/max, a declared `cost` sums, `name` does not roll up at all | consumer fields exist to aggregate, which is columns and the tree. The shipped span rollup is already one instance of it (D-S2-22), so generalizing widens `rollUpDerivedSpans`' signature rather than moving it or adding a seam. **Design settled in ADR 0005**; `progress` is scheduling-plugin data (ADR 0008), not part of this map. #80 tracks the build. S2's only obligation is D-S2-26 | S4, #80 |
 | A per-entry manual-span opt-out, exempting one group from the rollup | it is a pin flag by another name, and pins are plugin-owned (ADR 0002, D-S2-22) | S7 |
 | Row-level layout incrementality inside `computeFrame` | the S6 spike measures a windowed pass as a real cost | S6, D-S2-16 |
 | A `Duration`-typed `EntryEdit` (moving by `days(2)` rather than by absolute dates) | a caller authors a relative edit; `plans/s1.11` §9 already records the neighbouring gap (`addDays`/`startOf` are not re-exported from `api/`) | S3 |

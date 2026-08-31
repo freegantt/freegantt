@@ -224,11 +224,11 @@ describe('History', () => {
 
   it('undo of an optional field edit removes the key instead of writing undefined onto the Entry', () => {
     const state = dataset([{ id: 't1' }]);
-    expect('progress' in state.entries.get('t1')!).toBe(false);
+    expect('meta' in state.entries.get('t1')!).toBe(false);
 
-    state.entries.update('t1', { progress: 0.5 });
+    state.entries.update('t1', { meta: { team: 'A' } });
     state.undo();
 
-    expect('progress' in state.entries.get('t1')!).toBe(false);
+    expect('meta' in state.entries.get('t1')!).toBe(false);
   });
 });

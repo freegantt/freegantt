@@ -54,7 +54,6 @@ export function readEntry(input: EntryInput, context: EntryReadContext): Entry {
     kind,
   };
   if (input.parentId !== undefined) entry.parentId = entryId(input.parentId);
-  if (input.progress !== undefined) entry.progress = input.progress;
   if (input.segments !== undefined) {
     entry.segments = input.segments.map((s) => readSpan(s, context));
   }
@@ -99,7 +98,6 @@ export function readEdit(edit: EntryEdit, context: EntryReadContext): StoredEdit
   if (edit.name !== undefined) stored.name = edit.name;
   if (edit.start !== undefined) stored.start = toInstant(context.timeZone, edit.start);
   if (edit.end !== undefined) stored.end = toEndInstant(context.timeZone, edit.end, context.dateOnlyEnd);
-  if (edit.progress !== undefined) stored.progress = edit.progress;
   if (edit.segments !== undefined) stored.segments = edit.segments.map((s) => readSpan(s, context));
   if (edit.meta !== undefined) stored.meta = edit.meta;
   return stored;

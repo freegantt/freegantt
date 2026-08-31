@@ -153,7 +153,6 @@ interface Entry<TMeta = unknown> {
    *  The Span rollup maintains these; input may omit them and they are initialized (§2.5, §2.6). */
   start: Instant;
   end: Instant;                // exclusive — see §5
-  progress?: number;           // 0..1
   /** Interrupted work — renders as multiple bars on one row. */
   segments?: readonly TimeSpan[];
   meta?: TMeta;                // consumer-owned, typed via generic; a declared key is a Field (§2.6)
@@ -204,7 +203,6 @@ erDiagram
     string kind "span | group | milestone | consumer-defined"
     Instant start
     Instant end_exclusive
-    number progress
     json meta "consumer-owned"
   }
   ROW {
@@ -271,7 +269,7 @@ type CoreFieldKey = keyof Omit<Entry, 'id'>;        // the shipped subset
 
 /** Where the value lives. The choice decides whether a rolled-up parent value is stored. */
 type FieldSource =
-  | { from: 'entry'; field: CoreFieldKey }          // name, start, end, progress — shipped
+  | { from: 'entry'; field: CoreFieldKey }          // name, start, end — shipped; progress is S7's
   | { from: 'meta'; key: string }                   // consumer-authored; already serialized today
   | { from: 'compute'; read(entry: Entry, ctx: FieldContext): unknown };
 
@@ -307,14 +305,15 @@ interface RollUpContext { read<T>(entry: Entry, key: FieldKey): T | undefined; }
 
 Rules:
 
-- **Core fields are ordinary declarations.** `name`, `start` (`min`), `end` (`max`), `progress` (`weightedMeanByDuration`) and `duration` (computed from `start` and `end`) ship in the registry a consumer adds to. There is no separate path for core, which is what makes a `cost` column and a `start` column the same code.
+- **Core fields are ordinary declarations.** `name`, `start` (`min`), `end` (`max`), and `duration` (computed from `start` and `end`) ship in the registry a consumer adds to. `kind` ships with a text column; `parentId`, `segments` and `meta` ship as data-only Fields (no `column`). There is no separate path for core, which is what makes a `cost` column and a `start` column the same code. **`progress` is not in this list** — it is scheduling-plugin data (ADR 0008). `weightedMeanByDuration` still ships as an Aggregator name.
+- **A Field is columnable only when it declares `column`.** `gridColumns` names columnable Fields in display order. Default `gridColumns` is `['name']`. A Field with no `column` still rolls up and still appears in the changeset; naming it in `gridColumns` throws `FieldNotColumnableError`.
 - **Source decides stored or computed.** A field sourced from `entry` or `meta` has a stored home, so its rolled-up parent value is stored — changeset, undo, document — exactly as the Span rollup already does for `start`/`end`. A field sourced from `compute` has no home, so its parent value is computed on read, cached against the entry's subtree revision, and never reaches the document. A consumer who wants an aggregate without document bytes declares a computed field; there is no flag to set.
 - **A computed field reads the dataset only, never view state.** No zoom, no visible range, no selection. Its cache is then keyed on the entry's subtree revision alone, which is what makes the value the same for every reader of that dataset. A value that depends on the view is not a field — it is a renderer's business.
 - **`meta` is opaque unless you declare a key.** Undeclared keys keep §6's rule — carried by reference, never walked, compared by `===`. A write to a declared key emits a changeset row keyed on the **field key**, never a `meta` row.
 - **Edits name fields, not shapes.** `update('t1', { start: X, cost: 500 })` is one transaction, one changeset and one undo step across a core field and a consumer field. A key that is not registered is an `UnknownFieldError` — never a silent write.
 - **Rollup precedence is §7's rule, unchanged.** The rollup yields to a field the caller proposed in the same transaction and wins over one the extension hook proposed. Bottom-up, one pass, so nested groups settle together. `derivedSpanKinds` says which **kinds** derive; the registry says how each **field** derives. The two are orthogonal and both are needed.
 - **Aggregation never lives on a grid column.** A stored value must not depend on whether a column is visible, and the rollup has already run before any Gantt is constructed.
-- **A field declares its own column defaults, so `gridColumns` is mostly ordering.** `gridColumns: ['name', 'start', 'cost']` names fields in display order; the object form (`{ field: 'cost', header: 'Budget — site A' }`) overrides this Gantt's presentation only, and never the data half.
+- **A columnable Field declares its own column defaults, so `gridColumns` is mostly ordering.** `gridColumns: ['name', 'start', 'cost']` names fields in display order; the object form (`{ field: 'cost', header: 'Budget — site A' }`) overrides this Gantt's presentation only, and never the data half.
 - **Text and structure stay separate.** `formatValue` returns a string, is DOM-free, and fills the frame's row cells; `cellRenderer` returns element descriptions and is applied by `render/`. Same split as `FrameBar.label` and `barRenderer` (§8).
 - **One registration, split at `api/`.** A field (and a field type) carries both halves; `api/` sends the data half to `data/`'s registry and the presentation half to `view/`, so a consumer declares `money` once and the layer boundary still holds.
 
