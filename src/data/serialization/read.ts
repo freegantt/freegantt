@@ -35,7 +35,6 @@ function readEntryDocument(row: EntryDocument): EntryInput {
     name: row.name,
     start: readInstant(row.start),
     end: readInstant(row.end),
-    ...(row.progress !== undefined ? { progress: row.progress } : {}),
     ...(row.segments !== undefined
       ? {
           segments: row.segments.map((segment) => ({

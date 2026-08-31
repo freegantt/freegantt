@@ -211,7 +211,7 @@ Full prose for each decision lives in the step file that implements it. Use this
 | Row reorder and reparent by drag | S4 | Authored order field; tree row source |
 | Moving a `'group'` moves subtree | S4 or S7 | Extension hook writes children |
 | Undo coalescing for keyboard nudges | when asked | History merge policy |
-| `progress` drag handle | S5 | Second affordance + capability |
+| `progress` drag handle | S7 | Scheduling-plugin Field (ADR 0008) |
 | Inline editing (`beforeEntryEdit`) | S5 | Editor + overlay host |
 | Context menu, tooltips | S5 | Plugin `commands` / `overlay` |
 | `linkCreate`, link ports | S7 | Plugin `Dependency` data |

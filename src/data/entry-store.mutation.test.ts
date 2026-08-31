@@ -69,15 +69,15 @@ describe('entries.update', () => {
     const state = dataset([{ id: 't1', name: 'Framing' }]);
     const seen = changeSets(state);
 
-    const updated = state.entries.update('t1', { name: 'Framing — north wing', progress: 0.5 });
+    const updated = state.entries.update('t1', { name: 'Framing — north wing', kind: 'milestone' });
 
     expect(updated.name).toBe('Framing — north wing');
-    expect(updated.progress).toBe(0.5);
+    expect(updated.kind).toBe('milestone');
     expect(seen).toHaveLength(1);
     expect(seen[0]?.updated).toEqual(
       expect.arrayContaining([
         { store: 'entries', id: entryId('t1'), field: 'name', from: 'Framing', to: 'Framing — north wing' },
-        { store: 'entries', id: entryId('t1'), field: 'progress', from: undefined, to: 0.5 },
+        { store: 'entries', id: entryId('t1'), field: 'kind', from: 'span', to: 'milestone' },
       ]),
     );
 

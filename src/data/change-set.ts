@@ -38,7 +38,6 @@ const coreComparators = {
   name: byReference,
   kind: byReference,
   parentId: byReference,
-  progress: byReference,
   start: byReference,
   end: byReference,
   segments: segmentsEqual,

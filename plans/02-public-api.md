@@ -26,7 +26,7 @@ import { Dataset, Gantt } from 'freegantt';
 const dataset = new Dataset<{ team: string }>({
   timeZone: 'America/Chicago',            // explicit; 'local' is opt-in
   dateOnlyEnd: 'inclusive',               // default; see §2.1
-  derivedSpanKinds: ['group'],            // default; a kind here may omit start/end — see §2.1
+  rollUpKinds: ['group'],                 // default; `'none'` keeps caller-assigned parent values
   history: { capacity: 100 },             // default; undo/redo stack depth — see "Undo and redo" below
   hierarchy: { autoGroup: true },         // first child promotes parent to kind 'group'; promote only
   entries: [
@@ -42,8 +42,8 @@ const dataset = new Dataset<{ team: string }>({
   // What the values ARE — declared beside the ones core ships (`01` §2.6).
   fieldTypes: { money: { rollUp: 'sum', formatValue: asCurrency, column: { align: 'end' } } },
   fields: [
-    { key: 'cost', type: 'money', source: { from: 'meta', key: 'cost' } },
-    { key: 'team', source: { from: 'meta', key: 'team' } },
+    { key: 'cost', type: 'money' },
+    { key: 'team' },
   ],
 });
 
@@ -131,7 +131,7 @@ A string with an explicit `Z` or numeric offset is absolute. Every other string 
 
 The reading itself lives in `time/` (`toInstant`, `toEndInstant`) — resolving a Plain time needs the zone and the DST fold/gap policy, and advancing a date-only end by one day is zone-aware arithmetic, which I10 confines to that layer. `api/` maps fields and does no date math of its own.
 
-`start` and `end` are required on every `EntryInput` except one case: an entry of a `derivedSpanKinds` kind (`01` §2.5, default `['group']`) may omit both — `{ id: 'p1', name: 'Sitework', kind: 'group' }` above is exactly this — and the store writes a zero-length span at the dataset's reference date until the span rollup gives it a real one (`01` §2.6). Omitting one field but not the other, on any kind, is `InvalidInstantError`: the field is required and `undefined` names no instant.
+`start` and `end` are required on every `EntryInput` except one case: an entry of a `rollUpKinds` kind (`01` §2.5, default `['group']`) may omit both — `{ id: 'p1', name: 'Sitework', kind: 'group' }` above is exactly this — and the store writes a zero-length span at the dataset's reference date until the Rollup gives it a real one (`01` §2.6). `rollUpKinds: 'none'` does not grant that omit: every entry must bring `start` and `end`, because the parent keeps the caller's values. Omitting one field but not the other, on any kind, is `InvalidInstantError`: the field is required and `undefined` names no instant.
 
 ---
 
@@ -279,22 +279,25 @@ Core fields and consumer fields are the same declaration, so `'start'` and `'cos
 Four levels, each an addition to the one under it. Consumers stop at the shallowest that works:
 
 ```ts
-// 1 — a field with no aggregate. Two keys.
-{ key: 'owner', source: { from: 'meta', key: 'owner' } }
+// 1 — a field with no aggregate. One key. Lives in meta under that key.
+{ key: 'owner' }
 
-// 2 — a shipped aggregator, by name.
-{ key: 'cost', source: { from: 'meta', key: 'cost' }, rollUp: 'sum' }
+// 2 — a shipped aggregator, by name, still no Field type.
+{ key: 'cost', rollUp: 'sum' }
 
-// 3 — a field type, so one bundle serves many fields, presentation included.
+// 3 — a field type, so one bundle serves many fields: rollup, formatter, compare, column.
 fieldTypes: { money: { rollUp: 'sum', formatValue: asCurrency, column: { align: 'end' } } }
-{ key: 'cost', type: 'money', source: { from: 'meta', key: 'cost' } }
+{ key: 'cost', type: 'money' }
 
-// 4 — your own aggregator, registered by name.
+// 4 — your own aggregator: register the function under `aggregators`, then name it on the type or Field.
+//    The function never goes on `rollUp` — only the name does (`01` §2.6).
 aggregators: { riskWeighted: (children, parent, ctx) => /* ... */ }
-{ key: 'risk', type: 'money', source: { from: 'meta', key: 'risk' }, rollUp: 'riskWeighted' }
+fieldTypes: { risk: { rollUp: 'riskWeighted', formatValue: asRisk } }
+{ key: 'risk', type: 'risk' }
+// One-off without a type: { key: 'risk', rollUp: 'riskWeighted' } with the same `aggregators` entry.
 ```
 
-A function appears at level 4 only. Levels 1–3 are plain data, so they serialize, they diff in review, and a document can carry them. `rollUp` never takes a bare function: a name can be refused when it is not registered, and a function cannot travel with a document.
+Levels 1–3 are plain data on the Field declaration, so they serialize, they diff in review, and a document can carry them. Level 4 adds a function in `DatasetOptions.aggregators` (and the same map in `fromJSON`'s second argument on reload). `rollUp` on the Field or Field type is always an **Aggregator name** — shipped (`'sum'`) or yours (`'riskWeighted'`). It never takes a bare function: a name can be refused when it is not registered, and a function cannot travel with a document. The Aggregator signature is `01` §2.6 (`children`, `parent`, `ctx.read(fieldKey)`); return `undefined` to leave the parent's stored value alone. Write `source: { from: 'meta', key: 'budget' }` only when the Document key is not the Field key. `formatValue` is display: money stays a number in the store; the cell shows currency text. Sort reads the stored value (`01` §2.6, S4.9).
 
 **Because a field carries its own column defaults, `gridColumns` is mostly ordering:**
 
@@ -344,21 +347,24 @@ Omit `scale`/`scroll` and the Gantt creates private ones — single-Gantt users 
 
 ```ts
 const doc = dataset.toJSON();
-const p2  = Dataset.fromJSON(doc);
+const p2  = Dataset.fromJSON(doc, { aggregators });
 ```
 
 ```ts
 export interface DatasetDocument {
-  schema: 1;
+  schema: 2;
   timeZone: string;
   dateOnlyEnd: DateOnlyEndRule;
-  derivedSpanKinds: readonly EntryKind[];
+  rollUpKinds: readonly EntryKind[];
+  fields?: readonly SerializedField[];
   entries: readonly EntryDocument[];
 }
 ```
 
-- The JSON shape is **public API**: documented, versioned by an integer `schema` field, semver-governed. This build writes `schema: 1` only. The reader is a `readers: Record<number, Reader>` map with one entry — a second schema is a map addition, not a rewrite. `fromJSON` migrates older schemas forward when they exist; it never silently drops fields **of a schema it reads**. Keys the reader does not know are dropped: **anything of yours goes in `meta` and survives byte for byte; anything at top level belongs to the schema.**
-- Key order is a contract (`schema`, `timeZone`, `dateOnlyEnd`, `derivedSpanKinds`, `entries`). Optional keys are omitted when absent, never written as `null`. Entries follow store insertion order. Instants serialize as `Z`-suffixed ISO-8601; brands exist only in TS types and never leak into JSON. `fromJSON` reads those instants as absolute, so the dataset zone never re-enters the reading.
+S4.4 is the step that writes `schema: 2`. This build still writes `schema: 1` (`derivedSpanKinds`, no `fields`). `schema: 1` still reads. `progress` is not an entry key (ADR 0008). Omit `aggregators` and a Field that names an Aggregator throws `UnknownAggregatorError`. Document `rollUpKinds: []` keeps stored parents and does not maintain them.
+
+- The JSON shape is **public API**: documented, versioned by an integer `schema` field, semver-governed. This build writes `schema: 1` only; S4.4 adds a `schema: 2` writer and keeps the `schema: 1` reader. The reader is a `readers: Record<number, Reader>` map — a second schema is a map addition, not a rewrite. `fromJSON` migrates older schemas forward when they exist; it never silently drops fields **of a schema it reads**. Keys the reader does not know are dropped: **anything of yours goes in `meta` and survives byte for byte; anything at top level belongs to the schema.** `progress` on an old entry row is an unknown key and is dropped (ADR 0008).
+- Key order is a contract (`schema`, `timeZone`, `dateOnlyEnd`, `rollUpKinds`, `fields`, `entries`). Optional keys are omitted when absent, never written as `null`. Entries follow store insertion order. Instants serialize as `Z`-suffixed ISO-8601; brands exist only in TS types and never leak into JSON. `fromJSON` reads those instants as absolute, so the dataset zone never re-enters the reading.
 - `meta` round-trips opaquely — **unless you declare a key as a field** (`01` §2.6), which makes that key addressable for editing, comparison and rollup while everything else in `meta` keeps the guarantee. The value is carried by reference into the document and back out, never walked field by field.
 - **Changesets are the incremental counterpart**: `dataset.on('change')` already carries `{from, to}` per field, which is what discharges `02`'s promise that a sync adapter be *"an extension, not a core change"*. `dataset.apply(changeSet)` is what such an extension writes; it is not in S2 (D-S2-11).
 

@@ -164,8 +164,6 @@ export interface Entry<TMeta = unknown> {
     // (undocumented)
     name: string;
     parentId?: EntryId;
-    // (undocumented)
-    progress?: number;
     segments?: readonly TimeSpan[];
     // (undocumented)
     start: Instant;
@@ -183,8 +181,6 @@ export interface EntryDocument<TMeta = unknown> {
     name: string;
     // (undocumented)
     parentId?: string;
-    // (undocumented)
-    progress?: number;
     // (undocumented)
     segments?: readonly {
         start: string;
@@ -221,8 +217,6 @@ export interface EntryInput<TMeta = unknown> {
     // (undocumented)
     name: string;
     parentId?: string;
-    // (undocumented)
-    progress?: number;
     segments?: readonly TimeSpanInput[];
     start?: InstantInput;
 }
