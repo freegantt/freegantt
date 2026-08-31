@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { DatasetState } from '../dataset-state.js';
-import { toJSON } from './index.js';
+import { toJSON, readDocument } from './index.js';
 import type { EntryInput } from '../../model/index.js';
 
 function span(id: string, overrides: Partial<EntryInput> = {}): EntryInput {
@@ -74,6 +74,18 @@ describe('toJSON fields (S4.4, D-S4-15)', () => {
     expect('equals' in cost).toBe(false);
     expect('compare' in cost).toBe(false);
     expect('formatValue' in cost).toBe(false);
+  });
+
+  it('stays byte-stable when a declared Field is present ([S2-A2])', () => {
+    const dataset = new DatasetState({
+      timeZone: 'UTC',
+      fieldTypes: { money: { rollUp: 'sum' } },
+      fields: [{ key: 'cost', type: 'money' }],
+      entries: [span('t1', { meta: { cost: 400 } })],
+    });
+    const doc = toJSON(dataset);
+    const round = toJSON(new DatasetState(readDocument(doc)));
+    expect(JSON.stringify(round)).toBe(JSON.stringify(doc));
   });
 
   it('does not write core Fields', () => {

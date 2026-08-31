@@ -3,12 +3,12 @@
 // only api/dataset.ts imports it (serialization-is-removable, D-S2-23). Delete this directory and
 // the data core does not notice a document format exists.
 
-import type { DateOnlyEndRule, Entry, EntryKind, Field, FieldSource, GridColumn } from '../../model/index.js';
-import type { DatasetDocument, EntryDocument, SerializedField } from '../../model/index.js';
+import type { DateOnlyEndRule, Entry, EntryKind, Field } from '../../model/index.js';
+import type { DatasetDocument, EntryDocument } from '../../model/index.js';
 import { instant, toISO } from '../../time/index.js';
-import { CORE_FIELDS } from '../fields/core-fields.js';
+import { encodeFieldDocument } from './field-document.js';
 
-export { readDocument, readers, mergeDeclaredFields } from './read.js';
+export { readDocument, readers } from './read.js';
 export type { DatasetDocumentRead, FromJSONOptions } from './read.js';
 
 /** The readable Dataset surface `toJSON` needs — what a consumer already has (`entries.all`, zone,
@@ -22,10 +22,6 @@ export interface DatasetDocumentSource {
     readonly all: readonly Entry[];
     get(id: string): Entry | undefined;
   };
-}
-
-function isCoreFieldKey(key: string): boolean {
-  return CORE_FIELDS.some((field) => String(field.key) === key);
 }
 
 function writeSegments(entry: Entry): EntryDocument['segments'] {
@@ -47,50 +43,10 @@ function writeEntry(entry: Entry): EntryDocument {
   };
 }
 
-function writeStoredSource(source: FieldSource): SerializedField['source'] | undefined {
-  if (source.from === 'compute') return undefined;
-  if (source.from === 'entry') return { from: 'entry', field: source.field };
-  return { from: 'meta', key: source.key ?? '' };
-}
-
-function writeColumn(column: Omit<GridColumn, 'field'>): Omit<GridColumn, 'field'> {
-  return {
-    ...(column.header !== undefined ? { header: column.header } : {}),
-    ...(column.width !== undefined ? { width: column.width } : {}),
-    ...(column.flex !== undefined ? { flex: column.flex } : {}),
-    ...(column.align !== undefined ? { align: column.align } : {}),
-  };
-}
-
-/** Core Fields and `compute` sources stay out of the Document (D-S4-15). */
-function writeDeclaredField(field: Field): SerializedField | undefined {
-  if (isCoreFieldKey(String(field.key))) return undefined;
-  const source = field.source ?? { from: 'meta' as const, key: String(field.key) };
-  const stored = writeStoredSource(source);
-  if (stored === undefined) return undefined;
-  const column = field.column === undefined ? undefined : writeColumn(field.column);
-  return {
-    key: field.key,
-    ...(field.type !== undefined ? { type: field.type } : {}),
-    source: stored,
-    ...(field.rollUp !== undefined ? { rollUp: field.rollUp } : {}),
-    ...(column !== undefined && Object.keys(column).length > 0 ? { column } : {}),
-  };
-}
-
-function writeDeclaredFields(all: readonly Field[]): SerializedField[] | undefined {
-  const rows: SerializedField[] = [];
-  for (const field of all) {
-    const row = writeDeclaredField(field);
-    if (row !== undefined) rows.push(row);
-  }
-  return rows.length === 0 ? undefined : rows;
-}
-
 /** `toJSON(dataset)` — write the Dataset as a Document. Keys are declared in order; `Object.keys`
  *  over a store entity is never used. Always `schema: 2` (D-S4-16). */
 export function toJSON(dataset: DatasetDocumentSource): DatasetDocument {
-  const fields = writeDeclaredFields(dataset.fields.all);
+  const fields = encodeFieldDocument(dataset.fields.all);
   return {
     schema: 2,
     timeZone: dataset.timeZone,

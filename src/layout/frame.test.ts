@@ -86,7 +86,7 @@ describe('computeFrame', () => {
     expect(new Set(first.bars.map((b) => b.id)).size).toBe(sampleEntries.length);
   });
 
-  it('labels bars and rows with the entry name, not its id (#26)', () => {
+  it('labels bars with the entry name, not its id (#26)', () => {
     const frame = computeFrame({
       entries: sampleEntries,
       scale,
@@ -96,7 +96,43 @@ describe('computeFrame', () => {
       revision: 0,
     });
     expect(frame.bars[0]?.label).toBe(sampleEntries[0]?.name);
-    expect(frame.rows[0]?.cells).toEqual([sampleEntries[0]?.name]);
+    expect(frame.rows[0]?.cells).toEqual([]);
+    expect(frame.columns).toEqual([]);
+  });
+
+  it('fills each cell from the Field formatValue bound on the column (S4.3 §3)', () => {
+    const nameField = {
+      formatValue: (value: unknown) => `name:${String(value)}`,
+    };
+    const kindField = {
+      formatValue: (value: unknown) => `kind:${String(value)}`,
+    };
+    const frame = computeFrame({
+      entries: sampleEntries.slice(0, 1),
+      scale,
+      preset,
+      visible,
+      rowHeight: 32,
+      revision: 0,
+      columns: [
+        {
+          key: 'name',
+          header: 'Name',
+          align: 'start',
+          format: (entry) => nameField.formatValue(entry.name),
+        },
+        {
+          key: 'kind',
+          header: 'Kind',
+          align: 'start',
+          format: (entry) => kindField.formatValue(entry.kind),
+        },
+      ],
+    });
+    expect(frame.rows[0]?.cells).toEqual([
+      nameField.formatValue(sampleEntries[0]!.name),
+      kindField.formatValue(sampleEntries[0]!.kind),
+    ]);
   });
 
   it('fills cells from LayoutInput.columns in column order (D-S4-13)', () => {

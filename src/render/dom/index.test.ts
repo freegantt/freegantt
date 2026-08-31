@@ -70,6 +70,7 @@ describe('render/dom backend', () => {
       visible: { x: 0, y: 0, width: 0, height: 0 },
       rowHeight: 32,
       revision: 0,
+      columns: [{ key: 'name', header: 'Name', align: 'start', format: (e) => e.name }],
     });
     backend.sync(frame);
 
@@ -205,6 +206,7 @@ describe('render/dom backend', () => {
         visible: { x: 0, y: 0, width: 0, height: 0 },
         rowHeight: 32,
         revision: 0,
+        columns: [{ key: 'name', header: 'Name', align: 'start', format: (e) => e.name }],
       }),
     );
 
@@ -256,7 +258,7 @@ describe('render/dom backend', () => {
       columns: [
         { key: 'name', header: 'Name', align: 'start', format: (e) => e.name },
         { key: 'start', header: 'Start', align: 'start', width: 80, format: () => 'Sep 1' },
-        { key: 'duration', header: 'Duration', align: 'end', format: () => '2 d' },
+        { key: 'duration', header: 'Duration', align: 'end', flex: 2, format: () => '2 d' },
         { key: 'cost', header: 'Budget', align: 'end', width: 90, format: () => '$500' },
       ],
     });
@@ -269,6 +271,10 @@ describe('render/dom backend', () => {
     const costCell = row.querySelector<HTMLElement>('[data-field="cost"]')!;
     expect(costCell.style.width).toBe('90px');
     expect(costCell.dataset['align']).toBe('end');
+    const durationCell = row.querySelector<HTMLElement>('[data-field="duration"]')!;
+    expect(durationCell.style.getPropertyValue('--fg-col-flex')).toBe('2');
+    const durationHeader = gridHeader.querySelector<HTMLElement>('[data-field="duration"]')!;
+    expect(durationHeader.style.getPropertyValue('--fg-col-flex')).toBe('2');
     const costNode = costCell;
 
     backend.sync({

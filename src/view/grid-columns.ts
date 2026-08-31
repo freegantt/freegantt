@@ -1,6 +1,6 @@
 // view/ — binds this Gantt's locale to declared Fields (D-S4-13). layout/ never learns FieldSource.
 
-import type { Entry, Field, FieldKey, FormatContext, GridColumn, GridColumnInput } from '../model/index.js';
+import type { Entry, Field, FormatContext, GridColumn, GridColumnInput } from '../model/index.js';
 import type { Dataset } from '../model/index.js';
 import { FieldNotColumnableError, UnknownFieldError } from '../model/index.js';
 import { createFieldContext } from '../data/fields/field-access.js';
@@ -12,10 +12,6 @@ export const DEFAULT_GRID_COLUMNS: readonly GridColumnInput[] = Object.freeze(['
 export interface ResolveColumnsBind {
   timeZone: string;
   locale?: Intl.LocalesArgument;
-}
-
-function asColumn(input: GridColumnInput): GridColumn {
-  return typeof input === 'string' ? { field: input } : input;
 }
 
 function formatUnknown(value: unknown): string {
@@ -38,19 +34,20 @@ function defaultCompareStored(locale: Intl.LocalesArgument): (a: unknown, b: unk
   };
 }
 
-function mergeColumn(input: GridColumn, field: Field): Omit<GridColumn, 'field'> & { field: FieldKey } {
+function columnFrom(item: GridColumnInput, field: Field): Omit<ResolvedColumn, 'format'> {
+  const input: GridColumn = typeof item === 'string' ? { field: item } : item;
   const defaults = field.column;
   if (defaults === undefined) throw new FieldNotColumnableError(String(field.key));
-  const merged: Omit<GridColumn, 'field'> & { field: FieldKey } = {
-    field: field.key,
+  const column: Omit<ResolvedColumn, 'format'> = {
+    key: field.key,
     header: input.header ?? defaults.header ?? String(field.key),
     align: input.align ?? defaults.align ?? 'start',
   };
   const width = input.width ?? defaults.width;
-  if (width !== undefined) merged.width = width;
+  if (width !== undefined) column.width = width;
   const flex = input.flex ?? defaults.flex;
-  if (flex !== undefined) merged.flex = flex;
-  return merged;
+  if (flex !== undefined) column.flex = flex;
+  return column;
 }
 
 function lookupOf(dataset: Pick<Dataset, 'field'>): FieldLookup {
@@ -68,23 +65,18 @@ export function resolveColumns(
   const formatCtx: FormatContext = { ...fieldCtx, locale };
 
   return gridColumns.map((item) => {
-    const input = asColumn(item);
-    const field = lookup.get(input.field);
-    if (field === undefined) throw new UnknownFieldError(String(input.field));
-    const merged = mergeColumn(input, field);
-    const column: ResolvedColumn = {
-      key: merged.field,
-      header: merged.header ?? String(merged.field),
-      align: merged.align ?? 'start',
+    const key = typeof item === 'string' ? item : item.field;
+    const field = lookup.get(key);
+    if (field === undefined) throw new UnknownFieldError(String(key));
+    const column = columnFrom(item, field);
+    return {
+      ...column,
       format: (entry: Entry) => {
         const value = formatCtx.read(entry, field.key);
         if (field.formatValue) return field.formatValue(value, formatCtx);
         return formatUnknown(value);
       },
     };
-    if (merged.width !== undefined) column.width = merged.width;
-    if (merged.flex !== undefined) column.flex = merged.flex;
-    return column;
   });
 }
 
