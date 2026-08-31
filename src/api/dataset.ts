@@ -12,6 +12,7 @@ import type {
   EntryKind,
   EntryStore as EntryStoreContract,
   Field,
+  FieldKey,
   FieldType,
 } from '../model/index.js';
 import { DatasetState } from '../data/index.js';
@@ -81,9 +82,18 @@ export class Dataset<TMeta = unknown, TFields extends Record<string, unknown> = 
     return [...this.#state.rollUpKinds];
   }
 
-  /** Resolved Field declarations this Dataset owns, core Fields included (D-S4-1). */
-  get fields(): { readonly all: readonly Field[]; get(key: string): Field | undefined } {
-    return this.#state.fields;
+  /** The resolved Field for this key, or `undefined` when the key is not declared.
+   *  Resolution merges the named Field type and fills `source` (an omitted source becomes
+   *  `{ from: 'meta', key }` — D-S4-35). This is the declaration, not an Entry value;
+   *  `entries.fieldValue` reads the value. */
+  field(key: FieldKey): Field | undefined {
+    return this.#state.fields.get(key);
+  }
+
+  /** Resolved Field declarations this Dataset owns, core Fields included (D-S4-1).
+   *  Each item is post type-merge, with `source` filled. */
+  get fields(): { readonly all: readonly Field[] } {
+    return { all: this.#state.fields.all };
   }
 
   /** `model/`'s `Dataset` interface (S3, D-S3-9) — `GanttShell` asks this, never `rollUpKinds`

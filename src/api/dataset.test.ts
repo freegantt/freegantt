@@ -241,6 +241,30 @@ describe('Dataset.replay / invertChangeSet (consumer-surface undo)', () => {
 });
 
 describe('Dataset fields (S4.1)', () => {
+  it('field(key) returns the resolved declaration, and fields.all lists them (#125)', () => {
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      fieldTypes: { money: { rollUp: 'sum' } },
+      fields: [{ key: 'cost', type: 'money' }],
+      entries: [oneEntry({ meta: { cost: 400 } })],
+    });
+
+    expect(dataset.field('cost')).toEqual(
+      expect.objectContaining({
+        key: 'cost',
+        type: 'money',
+        rollUp: 'sum',
+        source: { from: 'meta', key: 'cost' },
+      }),
+    );
+    expect(dataset.field('missing')).toBeUndefined();
+
+    const keys = dataset.fields.all.map((field) => field.key);
+    expect(keys).toContain('start');
+    expect(keys).toContain('cost');
+    expect(dataset.fields).not.toHaveProperty('get');
+  });
+
   it("update('t1', { start, cost }) is one transaction and one changeset", () => {
     const dataset = new Dataset({
       timeZone: 'UTC',

@@ -177,7 +177,7 @@ gantt.on('collapseChange', ({ to }) => save(to));
 | Export | Step |
 |---|---|
 | `Field`, `FieldSource`, `FieldType`, `FieldKey`, `Aggregator`, `AggregatorName`, `FieldContext`, `FormatContext`, `RollUpContext` | S4.1 |
-| `DatasetOptions.fields` / `.fieldTypes` / `.aggregators` / `.rollUpKinds` (`'none'` or Kind list), `Dataset.fields` (read view), `entries.fieldValue` | S4.1, S4.2 |
+| `DatasetOptions.fields` / `.fieldTypes` / `.aggregators` / `.rollUpKinds` (`'none'` or Kind list), `Dataset.field(key)` / `Dataset.fields.all` (resolved read view), `entries.fieldValue` | S4.1, S4.2 |
 | `AggregatorFailedError`, `DuplicateFieldKeyError`, `DuplicateFieldSourceError`, `UnknownAggregatorError` | S4.1, S4.2 |
 | `DatasetOptions.hierarchy`, `Dataset.hierarchy` | S4.5 |
 | `GridColumn`, `GridColumnInput`, `Gantt.gridColumns` | S4.3 |
