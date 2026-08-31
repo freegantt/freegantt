@@ -16,7 +16,7 @@
 |---|---|---|
 | **Q1** | Does S4 ship the **public** way to register a Field, a Grid column or an Item emitter? | **No — only the registries and the shipped occupants.** A consumer declares Fields through `DatasetOptions.fields` (data, not code registration) and orders columns through `Gantt.gridColumns`. Registering an *emitter* or a *renderer* needs `PluginContext`, which is S5's. S4 ships `ItemEmitter` with three occupants and no way in from outside; tests inject through an internal option. Same posture S2 took for the extender slot (D-S2-6). §S4.7, D-S4-24. |
 | **Q2** | Does the Rollup gate stay `derivedSpanKinds`? | **No — it widens and it is renamed `rollUpKinds`.** Once `cost` rolls up, a gate whose name says "span" governs values that are not spans. Widening the meaning under the old name is the drift CLAUDE.md's naming rule forbids (#7). The rule itself is the one that reads correctly: a parent of a rolling-up Kind derives **every** rolling-up Field; a parent of any other Kind keeps its authored values. §S4.2, D-S4-6. |
-| **Q3** | Does the Document carry Field declarations? | **The data half, yes; the code half, no.** Without them, `fromJSON(toJSON(d))` returns a Dataset that still holds rolled-up values but no longer maintains them — a silent corruption on the next edit. `fields` joins the Document; `equals`, `formatValue`, `fieldTypes`, `aggregators` and `rollUp` are code the reading application supplies, through a second `fromJSON` parameter. `schema` goes to 2. §S4.4, D-S4-15, D-S4-16, D-S4-7. |
+| **Q3** | Does the Document carry Field declarations? | **The data half, yes; the code half, no.** Without them, `fromJSON(toJSON(d))` returns a Dataset that still holds rolled-up values but no longer maintains them — a silent corruption on the next edit. `fields` joins the Document; `equals`, `compare`, `formatValue`, `fieldTypes` and `aggregators` are code the reading application supplies, through a second `fromJSON` parameter. Omitted `source` is written **resolved**. `schema` goes to 2. §S4.4, D-S4-15, D-S4-16, D-S4-35. |
 | **Q4** | Where do sort and filter live? `plans/03` §S4 says "store-level view specs". | **On the row source, not on the Store.** Sorting the Store would reorder `entries.all`, and that order is what makes `toJSON` byte-stable (D-S2-12). A view knob must not rewrite the Document. `rows: { source: 'entries', tree: true, sort, filter }` is one config tree for one job (`plans/02` §1). `plans/03` §S4 is edited to match. §S4.9, D-S4-28. |
 | **Q5** | Does an Aggregator that throws roll the transaction back, or keep the stored value? (ADR 0005's open question) | **It rolls the transaction back**, with a named `AggregatorFailedError`. Keeping the stored value leaves a parent whose value no longer follows its children, with nothing said — principle 6 ("diagnostics over silent fixes") forbids exactly that, and a diagnostics channel does not exist before S7. §S4.2, D-S4-9. |
 | **Q6** | Are shipped Aggregators maintained incrementally while consumer ones force a full walk? (ADR 0005's other open question) | **No — one path for both.** Every Aggregator recomputes the ancestor chains of the touched entries. A two-speed design would give a consumer field different commit semantics from `start`, which is the second code path ADR 0005 exists to remove. §S4.2, D-S4-8. |
@@ -28,7 +28,11 @@
 | **Q12** | After a Segment write, who owns `start`/`end`? | **The envelope, in the same transaction.** A `start`/`end` write on a segmented entry throws `SegmentsOutOfSyncError`. §S4.10, D-S4-30. |
 | **Q13** | Does `autoGroup` promote a `'milestone'`? | **No.** `'span'` only. Already-`'group'` is a no-op. No throw. §S4.5, D-S4-17. |
 | **Q14** | What is in `gantt.collapsed`, and what does a grouping-header cell show? | **`RowId`s.** Entries-source ids equal `EntryId`. Header `cells[0]` is `headerLabel`; the rest are empty. §S4.6, D-S4-22, D-S4-23. |
-| **Q15** | Does `transaction.ts` keep a static import of the Rollup? | **No.** Default is `identityRollUp`. The consumer passes `rollUp: rollUpFields`. The bundler drops `rollup.ts` when that name is not imported. `rollUpKinds: []` still disables work when the function is installed. §S4.2, D-S4-7. |
+| **Q15** | Does `transaction.ts` keep a static import of the Rollup? | **Yes — it is the one importer**, same as S2's span leaf. Default is on. `rollUpKinds: 'none'` (or `[]`) keeps the values the caller assigned on the parent. Delete `rollup.ts` is that same stored result. No public `rollUp` function. §S4.2, D-S4-6, D-S4-7. |
+| **Q16** | If a Field omits `rollUp`, what happens? | **After Field-type merge, it does not participate — unless the type supplied a name.** A Field type's `rollUp` is the default Aggregator name (shipped or a consumer name in `aggregators`). The Field's own keys win, so `rollUp: 'none'` opts that Field out. There is no global default Aggregator and no shipped `number`/`instant` types. Dates use `min`/`max`, not `sum`. §S4.1, D-S4-3. |
+| **Q17** | Must `{ key: 'cost', type: 'money' }` also name `source: { from: 'meta', key: 'cost' }`? | **No.** Omitted `source` is `meta` under the Field key (D-S4-35). `Entry` stays closed: top-level unknown keys still drop; `update({ cost })` writes `entry.meta.cost` and creates `meta` if needed. Two Fields may not share one `meta` slot (`DuplicateFieldSourceError`). The long form remains for a remapped Document key. |
+| **Q18** | Where does currency formatting live? | **`formatValue` on the Field type.** Money stays a number in the store. The cell is text. `cellRenderer` is S5, on the Grid column. §S4.3, D-S4-14. |
+| **Q19** | Can a view override sort order? | **Yes — `RowSort.compare`.** Default is `asc`/`desc` on the **stored** value, never on `formatValue`. Then the Field type's `compare`, then a shipped compare (numbers, Instants, strings). §S4.9, D-S4-28. |
 
 ---
 
@@ -36,7 +40,7 @@
 
 Each story names the step that owns it. Acceptance boxes live in the step files.
 
-- **U1.** (consumer) I pass `rollUp: rollUpFields` and declare `{ key: 'cost', source: { from: 'meta', key: 'cost' }, rollUp: 'sum' }`. Each parent shows the sum of its children. I wrote no aggregation code. → S4.1, S4.2
+- **U1.** (consumer) I declare `{ key: 'cost', type: 'money' }`. Each parent shows the sum of its children. I wrote no aggregation code. → S4.1, S4.2
 - **U2.** (consumer) I call `dataset.entries.update('t1', { start: X, cost: 500 })`. That is one transaction, one changeset, one undo step — across a core Field and my own. → S4.1, S4.3
 - **U3.** (consumer) I misspell a Field key. The call throws `UnknownFieldError` and writes nothing. → S4.1
 - **U4.** (consumer) I set `gantt.gridColumns = ['name', 'start', 'duration', 'cost']`. Four columns appear, each formatted by its Field. → S4.3
@@ -48,6 +52,7 @@ Each story names the step that owns it. Acceptance boxes live in the step files.
 - **U10.** (consumer) I filter to one team. A matching deep child still appears under its chain of parents. → S4.9
 - **U11.** (consumer) I turn on `autoGroup`. Reparenting an entry promotes its new parent to `'group'` in the same undo step. Removing the last child demotes nothing. → S4.5
 - **U12.** (reviewer) I run `pnpm gate` on `.slice` = `S4` and read nine lines, each naming an acceptance box from `plans/03` and each backed by a test that ran. → S4.11
+- **U13.** (consumer) I set `rollUpKinds: 'none'` and assign `start`/`end`/`cost` on the parent. A child edit leaves those values. → S4.2
 
 ---
 
@@ -128,19 +133,18 @@ Eleven steps, in order. The Field context lands first, because the row cells and
 
 ## 5. Public surface (app author)
 
-What an app author gains. No registry handle. The Rollup is one named function the consumer opts into.
+What an app author gains. No registry handle. The Rollup runs by default.
 
 ```ts
-import { Dataset, Gantt, rollUpFields } from 'freegantt';
+import { Dataset, Gantt } from 'freegantt';
 
 const dataset = new Dataset({
   timeZone: 'America/Chicago',
-  rollUp: rollUpFields,                       // omit this and parents keep authored values
-  rollUpKinds: ['group'],                     // was derivedSpanKinds
+  rollUpKinds: ['group'],                     // default; `'none'` keeps caller-assigned parent values
   hierarchy: { autoGroup: true },             // default false
   fieldTypes: { money: { rollUp: 'sum', formatValue: asCurrency, column: { align: 'end' } } },
   aggregators: { riskWeighted: (children, parent, ctx) => /* … */ },
-  fields: [{ key: 'cost', type: 'money', source: { from: 'meta', key: 'cost' } }],
+  fields: [{ key: 'cost', type: 'money' }],
   entries,
 });
 
@@ -160,8 +164,8 @@ gantt.on('collapseChange', ({ to }) => save(to));
 | Export | Step |
 |---|---|
 | `Field`, `FieldSource`, `FieldType`, `FieldKey`, `Aggregator`, `AggregatorName`, `FieldContext`, `RollUpContext` | S4.1 |
-| `DatasetOptions.fields` / `.fieldTypes` / `.aggregators` / `.rollUpKinds` / `.rollUp`, `Dataset.fields` (read view), `rollUpFields` | S4.1, S4.2 |
-| `AggregatorFailedError`, `DuplicateFieldKeyError`, `UnknownAggregatorError` | S4.1, S4.2 |
+| `DatasetOptions.fields` / `.fieldTypes` / `.aggregators` / `.rollUpKinds` (`'none'` or Kind list), `Dataset.fields` (read view) | S4.1, S4.2 |
+| `AggregatorFailedError`, `DuplicateFieldKeyError`, `DuplicateFieldSourceError`, `UnknownAggregatorError` | S4.1, S4.2 |
 | `DatasetOptions.hierarchy`, `Dataset.hierarchy` | S4.5 |
 | `GridColumn`, `GridColumnInput`, `Gantt.gridColumns` | S4.3 |
 | `Dataset.fromJSON(doc, options?)`, `schema: 2` | S4.4 |
@@ -187,8 +191,9 @@ Full prose lives in the step file that implements each decision.
 | D-S4-3 | Aggregators by name; skip holes; no function on the Field | S4.1 |
 | D-S4-4 | Core Fields are ordinary declarations; no `progress` | S4.1 |
 | D-S4-5 | Declaration errors at construction | S4.1 |
-| D-S4-6 | `derivedSpanKinds` → `rollUpKinds`, gate widens | S4.2 |
-| D-S4-7 | `rollup.ts` is a leaf; commit path never imports it; `identityRollUp` default | S4.2 |
+| D-S4-35 | Omitted `source` is `meta` under the Field key | S4.1 |
+| D-S4-6 | `derivedSpanKinds` → `rollUpKinds`; `'none'` keeps authored parents | S4.2 |
+| D-S4-7 | `rollup.ts` is a leaf; one importer `transaction.ts`; default on | S4.2 |
 | D-S4-8 | Ancestor chains only; one path for every Aggregator | S4.2 |
 | D-S4-9 | `AggregatorFailedError` fails the transaction | S4.2 |
 | D-S4-10 | Computed Fields memoized on dataset revision | S4.2 |
@@ -233,7 +238,8 @@ Read these before you touch `src/`.
 8. **Review `harness/main.ts` on every commit**, changed or not (CLAUDE.md). Code there that re-derives what the library computes is an API gap to close in `src/`.
 9. **Run the full check sequence** after each step: `pnpm vitest run`, `tsc --noEmit`, `eslint src harness`, `depcruise`, `node scripts/guard-red-test.mjs`.
 10. **`.slice` bumps only at S4.11** — not before the gate is green.
-11. **`data/transaction.ts` must not import `data/rollup.ts`.** Call `data.rollUp`. The only importer is `api/roll-up.ts`.
+11. **`data/transaction.ts` is the only importer of `data/rollup.ts`.** Do not add `api/roll-up.ts` or a constructor `rollUp` function. `'none'` is `rollUpKinds`, not a second option.
+12. **Omitted `source` is `meta[field.key]`, never a new key on `Entry`.** A top-level `cost` on ingest still drops. Core Fields set `source` explicitly. `toJSON` writes the resolved source.
 
 ---
 
@@ -241,7 +247,7 @@ Read these before you touch `src/`.
 
 | Foot-gun | Answer |
 |---|---|
-| A consumer field is written but never rolls up | `rollUp: rollUpFields` was omitted (identity is the default), or the parent's Kind is not in `rollUpKinds` (D-S4-6, D-S4-7) |
+| A consumer field is written but never rolls up | After type merge the Field has no `rollUp` or `'none'`, or the parent's Kind is not in `rollUpKinds` (including `'none'`) (D-S4-3, D-S4-6) |
 | `update('t1', { meta: {...} })` loses a declared value | Whole-`meta` write emits the `meta` row **and** one row per changed declared key; apply order is `meta` first (D-S4-2) |
 | An aggregate appears in the Document that the consumer did not want | The Field is `entry`- or `meta`-sourced. A `compute` source never reaches the Document (ADR 0005) |
 | A consumer Aggregator reads the zoom level | Forbidden. A computed Field reads the Dataset only; its cache key assumes it (D-S4-10) |
@@ -253,6 +259,9 @@ Read these before you touch `src/`.
 | Two Gantts on one Dataset fight over collapse | Collapse is per Gantt, like selection (D-S4-22) |
 | `Row.kind: 'group'` is read as "a `'group'` Entry" | It is not. A `'group'` Entry produces a `Row.kind: 'entry'` row (D-S4-23) |
 | A segment drag moves the whole entry | The grabbed `ItemId` carries the segment index and the draft writes `segments` (D-S4-30) |
+| I declared `cost` but `entry.cost` is undefined | Correct. The Field key is the API; storage is `entry.meta.cost` (D-S4-35). Use `update({ cost })` or read through the Field. |
+| A top-level `cost` on the JSON entry never appears | Unknown top-level keys drop. Put the value in `meta`, or write it through `update({ cost })` after construction (D-S4-35). |
+| Two Fields silently share `meta.cost` | They cannot. That is `DuplicateFieldSourceError` at construction (D-S4-35). |
 | `derivedSpanKinds` still works | It does not. The option is renamed with no alias; a `schema: 1` Document still reads (D-S4-6, D-S4-16) |
 
 ---
@@ -309,7 +318,55 @@ Read these before you touch `src/`.
 
 ---
 
-## 12. Spec edits
+## 12. Grill later
+
+Parked 2026-08-30 after the Field-type / omit-`source` / formatter / sort pass. Do not treat these as settled. Run the grilling skill against this list before S4.1 lands in `src/`. Recommended answers are starting points, not locks.
+
+**Settled in this pass** (grill to try to break them, do not reopen casually): Q16–Q19, D-S4-3 (type default `rollUp`), D-S4-14 (`formatValue`), D-S4-28 (sort comparer chain), D-S4-35 (omit `source` → `meta[field.key]` and the breakage table in `s4.1`).
+
+❓ **G1 — Nested `meta` paths.** Does `{ key: 'cost' }` ever mean `meta.finance.cost`?
+
+➡️ No. One key, one segment. Nesting is a computed Field or a flatter Document.
+
+---
+
+❓ **G2 — Shipped Field types.** Does core ship `money` / `instant` / `text` with a baked-in `rollUp` and `formatValue`?
+
+➡️ No. The consumer registers `money`. Core `start`/`end` set `min`/`max` on those Fields. A later cookbook can show a `money` bundle; it is not a registry seed.
+
+---
+
+❓ **G3 — Whose `locale` fills `FieldContext`?** `formatValue` and the shipped string compare both want a locale. The Dataset has `timeZone`. The Gantt has `locale`. D-S4-13 currently binds format to the Dataset's `FieldContext`.
+
+➡️ Bind `formatValue` and sort's string compare at column-resolve time with the **Gantt's** `locale`. A headless Dataset with no Gantt does not format cells. Do not put `locale` on the Document.
+
+---
+
+❓ **G4 — `update({ cost })` vs `entries.add({ meta: { cost } })`.** Must ingest of `EntryInput.meta.cost` and a later `update({ cost })` be the same slot even when `source` was omitted?
+
+➡️ Yes. Both go to `meta.cost`. D-S4-35's first two table rows. If they diverge, the default is wrong.
+
+---
+
+❓ **G5 — Declaring `cost` when passenger data already used `meta.cost` for something else.** Is that a construction error, or does declaring claim the key?
+
+➡️ Declaring claims the key. The value becomes addressable. There is no "this slot was passenger" marker. A Document that stored a string under `cost` and then declares `type: 'money'` is a consumer bug: `sum` skips non-numeric holes (D-S4-3).
+
+---
+
+❓ **G6 — `compare` on the Field type vs only on `RowSort`.** Is Field-level `compare` needed in S4, or is the view override enough?
+
+➡️ Keep Field-type `compare`. Status order is a property of the value, not of one Gantt. `RowSort.compare` is the per-view override. Grill this if S4.9 feels over-specified.
+
+---
+
+❓ **G7 — Creating `meta` on first declared write.** An entry that never had `meta` gains `meta: { cost: 500 }` after `update({ cost: 500 })`. Does that surprise D-S2-12's "optional keys omitted" byte-stability?
+
+➡️ No. The key was absent, then a user write added it. `toJSON` writes `meta` when present, omits it when absent — same as today. Grill only if construction rollup would invent `meta` on parents with no authored cost: a rolling-up parent should get a stored `cost` from `sum`, which also creates `meta`. That is the Span rollup's `start`/`end` precedent (store initializes, then the pass owns it).
+
+---
+
+## 13. Spec edits
 
 Landed in the step that proves each one, except the batch at S4.11. Full list in [`s4.11-harness-and-gate.md`](./s4.11-harness-and-gate.md) §4. The four that change settled text rather than adding to it:
 

@@ -20,14 +20,13 @@ The API is a product surface, designed once and defended. Everything here is wha
 ## 2. Shape
 
 ```ts
-import { Dataset, Gantt, rollUpFields } from 'freegantt';
+import { Dataset, Gantt } from 'freegantt';
 
 // ── Data: headless, works in Node ───────────────────────────────
 const dataset = new Dataset<{ team: string }>({
   timeZone: 'America/Chicago',            // explicit; 'local' is opt-in
   dateOnlyEnd: 'inclusive',               // default; see §2.1
-  rollUp: rollUpFields,                   // omit this and parents keep authored values (D-S4-7)
-  rollUpKinds: ['group'],                 // default; a kind here may omit start/end — see §2.1
+  rollUpKinds: ['group'],                 // default; `'none'` keeps caller-assigned parent values
   history: { capacity: 100 },             // default; undo/redo stack depth — see "Undo and redo" below
   hierarchy: { autoGroup: true },         // first child promotes parent to kind 'group'; promote only
   entries: [
@@ -43,8 +42,8 @@ const dataset = new Dataset<{ team: string }>({
   // What the values ARE — declared beside the ones core ships (`01` §2.6).
   fieldTypes: { money: { rollUp: 'sum', formatValue: asCurrency, column: { align: 'end' } } },
   fields: [
-    { key: 'cost', type: 'money', source: { from: 'meta', key: 'cost' } },
-    { key: 'team', source: { from: 'meta', key: 'team' } },
+    { key: 'cost', type: 'money' },
+    { key: 'team' },
   ],
 });
 
@@ -132,7 +131,7 @@ A string with an explicit `Z` or numeric offset is absolute. Every other string 
 
 The reading itself lives in `time/` (`toInstant`, `toEndInstant`) — resolving a Plain time needs the zone and the DST fold/gap policy, and advancing a date-only end by one day is zone-aware arithmetic, which I10 confines to that layer. `api/` maps fields and does no date math of its own.
 
-`start` and `end` are required on every `EntryInput` except one case: an entry of a `rollUpKinds` kind (`01` §2.5, default `['group']`) may omit both — `{ id: 'p1', name: 'Sitework', kind: 'group' }` above is exactly this — and the store writes a zero-length span at the dataset's reference date until the Rollup gives it a real one (`01` §2.6), and only when `rollUp: rollUpFields` is passed. Omitting one field but not the other, on any kind, is `InvalidInstantError`: the field is required and `undefined` names no instant.
+`start` and `end` are required on every `EntryInput` except one case: an entry of a `rollUpKinds` kind (`01` §2.5, default `['group']`) may omit both — `{ id: 'p1', name: 'Sitework', kind: 'group' }` above is exactly this — and the store writes a zero-length span at the dataset's reference date until the Rollup gives it a real one (`01` §2.6). `rollUpKinds: 'none'` does not grant that omit: every entry must bring `start` and `end`, because the parent keeps the caller's values. Omitting one field but not the other, on any kind, is `InvalidInstantError`: the field is required and `undefined` names no instant.
 
 ---
 
@@ -280,22 +279,23 @@ Core fields and consumer fields are the same declaration, so `'start'` and `'cos
 Four levels, each an addition to the one under it. Consumers stop at the shallowest that works:
 
 ```ts
-// 1 — a field with no aggregate. Two keys.
-{ key: 'owner', source: { from: 'meta', key: 'owner' } }
+// 1 — a field with no aggregate. One key. Lives in meta under that key.
+{ key: 'owner' }
 
-// 2 — a shipped aggregator, by name.
-{ key: 'cost', source: { from: 'meta', key: 'cost' }, rollUp: 'sum' }
+// 2 — a shipped aggregator, by name, still no Field type.
+{ key: 'cost', rollUp: 'sum' }
 
-// 3 — a field type, so one bundle serves many fields, presentation included.
+// 3 — a field type, so one bundle serves many fields: rollup, formatter, compare, column.
 fieldTypes: { money: { rollUp: 'sum', formatValue: asCurrency, column: { align: 'end' } } }
-{ key: 'cost', type: 'money', source: { from: 'meta', key: 'cost' } }
+{ key: 'cost', type: 'money' }
 
-// 4 — your own aggregator, registered by name.
+// 4 — your own aggregator, registered by name. Put the name on the type (default) or on the Field.
 aggregators: { riskWeighted: (children, parent, ctx) => /* ... */ }
-{ key: 'risk', type: 'money', source: { from: 'meta', key: 'risk' }, rollUp: 'riskWeighted' }
+fieldTypes: { risk: { rollUp: 'riskWeighted', formatValue: asRisk } }
+{ key: 'risk', type: 'risk' }
 ```
 
-A function appears at level 4 only. Levels 1–3 are plain data, so they serialize, they diff in review, and a document can carry them. `rollUp` never takes a bare function: a name can be refused when it is not registered, and a function cannot travel with a document.
+A function appears at level 4 only. Levels 1–3 are plain data, so they serialize, they diff in review, and a document can carry them. `rollUp` never takes a bare function: a name can be refused when it is not registered, and a function cannot travel with a document. Write `source: { from: 'meta', key: 'budget' }` only when the Document key is not the Field key. `formatValue` is display: money stays a number in the store; the cell shows currency text. Sort reads the stored value (`01` §2.6, S4.9).
 
 **Because a field carries its own column defaults, `gridColumns` is mostly ordering:**
 
@@ -345,7 +345,7 @@ Omit `scale`/`scroll` and the Gantt creates private ones — single-Gantt users 
 
 ```ts
 const doc = dataset.toJSON();
-const p2  = Dataset.fromJSON(doc, { aggregators, rollUp: rollUpFields });
+const p2  = Dataset.fromJSON(doc, { aggregators });
 ```
 
 ```ts
