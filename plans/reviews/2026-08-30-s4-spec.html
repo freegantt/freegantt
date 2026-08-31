@@ -1,0 +1,445 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Spec review — S4 hierarchy, grouping, multi-item rows</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script type="module">
+      import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+      mermaid.initialize({ startOnLoad: true, theme: "neutral", securityLevel: "loose" });
+    </script>
+    <style>
+      .seam { stroke-dasharray: 4 4; }
+      .leak { stroke: #dc2626; }
+      .deep { background: linear-gradient(135deg, #0f172a, #1e293b); }
+      .badge-strong { background:#fee2e2; color:#7f1d1d; border:1px solid #fecaca; }
+      .badge-worth { background:#fef3c7; color:#78350f; border:1px solid #fde68a; }
+      .badge-spec { background:#e0e7ff; color:#312e81; border:1px solid #c7d2fe; }
+    </style>
+  </head>
+  <body class="bg-stone-50 text-slate-900 font-sans">
+    <main class="max-w-5xl mx-auto px-6 py-12 space-y-12">
+
+      <header class="space-y-4">
+        <p class="text-xs uppercase tracking-widest text-slate-500">FreeGantt — pk-branch-review (spec edition)</p>
+        <h1 class="font-serif text-3xl">S4 — hierarchy, grouping, multi-item rows: spec pass</h1>
+        <p class="text-sm text-slate-500">
+          2026-08-30 · reviewed artifact:
+          <span class="font-mono">plans/s4-hierarchy-and-rows/</span>
+          (README + s4.1–s4.11) · branch <span class="font-mono">s4</span> · no code landed
+        </p>
+        <div class="flex flex-wrap gap-3 text-xs text-slate-600">
+          <span class="inline-flex items-center gap-1"><span class="inline-block w-4 h-3 border border-slate-500 bg-white"></span> context</span>
+          <span class="inline-flex items-center gap-1"><svg width="24" height="8"><line x1="0" y1="4" x2="24" y2="4" stroke="#475569" stroke-width="2" class="seam"/></svg> seam</span>
+          <span class="inline-flex items-center gap-1"><svg width="24" height="8"><line x1="0" y1="4" x2="24" y2="4" stroke="#dc2626" stroke-width="2"/></svg> leak / ambiguity</span>
+        </div>
+        <p class="text-sm text-slate-600 max-w-3xl">
+          This is a review of a <strong>spec</strong>, not a code diff. The user asked for it through
+          <span class="font-mono">/pk-branch-review</span> but applied to a settled document. Axes are
+          the skill's criteria translated to a spec: <strong>simplicity</strong> (SOLID / DDD / no ball of mud),
+          <strong>caller ergonomics</strong> (easy to use, both for a human app author and for an agent reading it),
+          and <strong>extensibility</strong>. Governing sources read in full:
+          <span class="font-mono">plans/01</span> §2.3/§2.5/§2.6/§4/§6,
+          <span class="font-mono">plans/02</span> §2/§4.2/§6,
+          <span class="font-mono">plans/03</span> §S4, ADR 0005, ADR 0008. Findings are judgement calls, not laws.
+        </p>
+        <div class="text-sm rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-emerald-950 max-w-3xl">
+          <strong>Verdict: a strong, unusually disciplined spec.</strong> The two-context split
+          (FIELD in <span class="font-mono">data/</span>·<span class="font-mono">api/</span>,
+          ROW in <span class="font-mono">layout/</span>·<span class="font-mono">view/</span>) meeting at one
+          plain-data point (<span class="font-mono">LayoutInput.columns</span>) is the right anti-ball-of-mud
+          measure, and the settled Q/D/box/bookkeeping machinery is exemplary for agent navigation. The findings
+          below are three <em>genuine</em> issues worth closing before S4.1 lands and several softer notes —
+          none threatens the architecture. Two of the three are single-sentence additions to the doc.
+        </div>
+      </header>
+
+      <section id="axes" class="grid md:grid-cols-3 gap-4">
+        <div class="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-2">
+          <p class="text-xs uppercase tracking-widest text-amber-700 font-semibold">Simplicity · SOLID · DDD</p>
+          <p class="text-2xl font-serif">3 findings</p>
+          <p class="text-xs text-amber-900">cohesion, single-responsibility, bounded contexts, YAGNI</p>
+        </div>
+        <div class="rounded-xl border border-sky-200 bg-sky-50 p-4 space-y-2">
+          <p class="text-xs uppercase tracking-widest text-sky-700 font-semibold">Caller ergonomics</p>
+          <p class="text-2xl font-serif">4 findings</p>
+          <p class="text-xs text-sky-900">assigned/default semantics, merge rules, foot-gun clarity</p>
+        </div>
+        <div class="rounded-xl border border-emerald-200 bg-emerald-50 p-4 space-y-2">
+          <p class="text-xs uppercase tracking-widest text-emerald-700 font-semibold">Extensibility · naming</p>
+          <p class="text-2xl font-serif">3 findings</p>
+          <p class="text-xs text-emerald-900">registered-name seams, one-concept-one-name, S5 handoff</p>
+        </div>
+      </section>
+
+      <!-- ============ SIMPLICITY ============ -->
+      <section id="simplicity" class="space-y-8">
+        <h2 class="text-xl font-serif border-b border-slate-300 pb-2">Simplicity — SOLID, DDD, no ball of mud</h2>
+
+        <!-- S1 -->
+        <article class="rounded-xl border border-slate-200 bg-white p-6 space-y-4 shadow-sm">
+          <div class="flex items-start justify-between gap-4">
+            <h3 class="text-lg font-semibold">S1 · “The three later stages are windowed” is over-stated for pack rows — D-S4-20 vs D-S4-26</h3>
+            <span class="badge-strong inline-block rounded px-2 py-0.5 text-xs font-semibold shrink-0">Strong</span>
+          </div>
+          <div class="grid md:grid-cols-2 gap-6">
+            <div>
+              <p class="text-xs uppercase tracking-widest text-slate-400 mb-1">Problem</p>
+              <p class="text-sm text-slate-700">
+                D-S4-20 says resolve whole-dataset, then “<em>Emit, pack and place for the windowed rows only</em>.”
+                D-S4-26 makes the height index's <span class="font-mono">getHeight</span> callback, for a pack row,
+                <em>emit and pack that row</em> to read its lane count. The prefix-sum index must answer
+                <span class="font-mono">topAt</span> for every row above the viewport, so pack rows are emitted
+                from index 0 up, not just in the window. The two decisions are reconciled by the memo
+                (“one emit-and-pack per row per revision”), but the literal wording of D-S4-20 is true only for
+                <span class="font-mono">'fixed'</span> rows. An implementer who takes D-S4-20 literally will
+                window emission and stall the height index.
+              </p>
+              <p class="text-sm text-slate-700 mt-2">
+                <span class="font-semibold">Fix (one sentence).</span> Reword D-S4-20: “rows resolve whole-dataset;
+                geometry placement is windowed; emission and packing are on-demand per row, forced by the height
+                index for pack rows and memoized.” Say which passes are really windowed and which are forced.
+              </p>
+            </div>
+            <div>
+              <p class="text-xs uppercase tracking-widest text-slate-400 mb-2">Ordering truth</p>
+              <div class="rounded border border-slate-200 p-3 bg-slate-50 text-xs font-mono leading-5">
+                resolve (whole)<br/>
+                <span class="text-slate-400">// height index needs every pack row above viewport:</span><br/>
+                getHeight(packRow) ──&gt; emit + pack ──&gt; laneCount<br/>
+                <span class="text-slate-400">// then, in the window only:</span><br/>
+                emit + pack + place (visible rows)<br/>
+                topAt(index) = prefix-sum(getHeight 0..index)
+              </div>
+              <p class="text-xs text-slate-500 mt-2">Emission is forced twice for visible pack rows unless the memo guarantees once — it does, but the two decisions should say so together.</p>
+            </div>
+          </div>
+        </article>
+
+        <!-- S2 -->
+        <article class="rounded-xl border border-slate-200 bg-white p-6 space-y-4 shadow-sm">
+          <div class="flex items-start justify-between gap-4">
+            <h3 class="text-lg font-semibold">S2 · <span class="font-mono">'none'</span> is a triple-loaded word</h3>
+            <span class="badge-worth inline-block rounded px-2 py-0.5 text-xs font-semibold shrink-0">Worth exploring</span>
+          </div>
+          <div class="grid md:grid-cols-2 gap-6">
+            <div>
+              <p class="text-xs uppercase tracking-widest text-slate-400 mb-1">Problem</p>
+              <p class="text-sm text-slate-700">
+                <span class="font-mono">'none'</span> means three different things in this slice: (1) dataset
+                <span class="font-mono">rollUpKinds: 'none'</span> — no Kind derives; (2) field
+                <span class="font-mono">rollUp: 'none'</span> — this Field does not participate; (3) the shipped
+                <span class="font-mono">'none'</span> Aggregator — always returns
+                <span class="font-mono">undefined</span>. D-S4-3, D-S4-6 and the foot-guns table disambiguate each,
+                and each reading is locally correct. But a caller holding one word across three axes must hold all
+                three distinctions, and an <em>agent</em> reading the spec must too.
+              </p>
+              <p class="text-sm text-slate-700 mt-2">
+                <span class="font-semibold">Consider.</span> It is defensible — verboten is a heavier hammer and these
+                are genuinely the same “derive nothing from this” idea at three scopes. Keep it, but add one line to
+                D-S4-3 stating the three are conscious homonyms with the same <em>intent</em> at different scopes, so a
+                future editor does not “fix” one into a different word.
+              </p>
+            </div>
+            <div>
+              <p class="text-xs uppercase tracking-widest text-slate-400 mb-2">Three scopes, one word</p>
+              <div class="rounded border border-slate-200 p-3 bg-slate-50 text-xs font-mono leading-6">
+                rollUpKinds:'none' &nbsp;<span class="text-slate-400">// no Kind derives</span><br/>
+                rollUp:'none' &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <span class="text-slate-400">// this Field opts out</span><br/>
+                Aggregator:'none' &nbsp; <span class="text-slate-400">// always → undefined</span>
+              </div>
+              <p class="text-xs text-slate-500 mt-2">Three readings, one intent (“derive nothing here”). Document the homonym instead of renaming any one of them.</p>
+            </div>
+          </div>
+        </article>
+
+        <!-- S3 -->
+        <article class="rounded-xl border border-slate-200 bg-white p-6 space-y-4 shadow-sm">
+          <div class="flex items-start justify-between gap-4">
+            <h3 class="text-lg font-semibold">S3 · <span class="font-mono">'matchOnly'</span> filter policy and the three-occupant “proven seam” are the slice's mild speculative-generality</h3>
+            <span class="badge-worth inline-block rounded px-2 py-0.5 text-xs font-semibold shrink-0">Worth exploring</span>
+          </div>
+          <div class="grid md:grid-cols-2 gap-6">
+            <div>
+              <p class="text-xs uppercase tracking-widest text-slate-400 mb-1">Problem</p>
+              <p class="text-sm text-slate-700">
+                D-S4-29 ships <span class="font-mono">filterPolicy: 'keepAncestors' | 'matchOnly'</span>; only the
+                default has a box (<span class="font-mono">[S4-A7]</span>). G6 (parked) already asks whether S4.9 is
+                over-specified. Separately, D-S4-21 ships a <span class="font-mono">CustomRowSource</span> with no
+                acceptance box, justified as “a seam with one occupant is not a proven seam.” Both are cheap and each
+                has a named consumer, but both are exactly the no-box surface the slice's own YAGNI discipline
+                (I11: nothing unimplemented publicly; “no speculative generality”) exists to keep out.
+              </p>
+              <p class="text-sm text-slate-700 mt-2">
+                <span class="font-semibold">Recommendation.</span> Either keep them and add one acceptance line each in
+                <span class="font-mono">plans/03</span> §S4 (cheapest — makes them first-class), or cut
+                <span class="font-mono">'matchOnly'</span> and the custom source to S5. Do not leave a shipped knob with
+                no box: an agent implementing the slice has no gate to prove it.
+              </p>
+            </div>
+            <div>
+              <p class="text-xs uppercase tracking-widest text-slate-400 mb-2">Shipped-but-unboxed in S4</p>
+              <div class="rounded border border-slate-200 p-3 bg-slate-50 text-xs font-mono leading-6">
+                filterPolicy:'matchOnly' &nbsp;<span class="text-slate-400">// no [S4-A*] box</span><br/>
+                source:'custom' resolve &nbsp;<span class="text-slate-400">// no [S4-A*] box</span><br/>
+                groupSort (deferred)&nbsp;&nbsp;&nbsp;&nbsp; <span class="text-slate-400">// correctly parked</span>
+              </div>
+              <p class="text-xs text-slate-500 mt-2">Contrast with <span class="font-mono">groupSort</span>, which the spec rightly defers with a reason. These two lack the same treatment.</p>
+            </div>
+          </div>
+        </article>
+      </section>
+
+      <!-- ============ CALLER ERGONOMICS ============ -->
+      <section id="ergonomics" class="space-y-8">
+        <h2 class="text-xl font-serif border-b border-slate-300 pb-2">Caller ergonomics — easy to use, unambiguous</h2>
+
+        <!-- E1 -->
+        <article class="rounded-xl border border-slate-200 bg-white p-6 space-y-4 shadow-sm">
+          <div class="flex items-start justify-between gap-4">
+            <h3 class="text-lg font-semibold">E1 · <span class="font-mono">gridColumns</span> object-form merge semantics are unspecified — the slice's most likely caller confusion</h3>
+            <span class="badge-strong inline-block rounded px-2 py-0.5 text-xs font-semibold shrink-0">Strong</span>
+          </div>
+          <div class="grid md:grid-cols-2 gap-6">
+            <div>
+              <p class="text-xs uppercase tracking-widest text-slate-400 mb-1">Problem</p>
+              <p class="text-sm text-slate-700">
+                S4.3/ADR 0005 say a <span class="font-mono">GridColumn</span> object “overrides this Gantt's
+                presentation.” A &nbsp;<span class="font-mono">{ field: 'cost', header: 'Budget' }</span>&nbsp; object
+                carries four presentation keys (<span class="font-mono">header, width, flex, align</span>). The spec
+                never states the merge level: does an omitted <span class="font-mono">width</span> inherit the Field's
+                declared <span class="font-mono">column.width</span> (per-key merge), or does the object replace the
+                Field's column defaults wholesale? A caller who expects “keep the Field's currency alignment, just
+                rename the header” and gets a bare cell is going to file a bug.
+              </p>
+              <p class="text-sm text-slate-700 mt-2">
+                <span class="font-semibold">Fix (one sentence).</span> Add to D-S4-12: “the object form merges
+                per-key over the Field's <span class="font-mono">column</span> defaults; an omitted key inherits the
+                Field's value.” Then cover it with one <span class="font-mono">grid-columns.test.ts</span> case
+                (<span class="font-mono">src/view/grid-columns.test.ts</span>).
+              </p>
+            </div>
+            <div>
+              <p class="text-xs uppercase tracking-widest text-slate-400 mb-2">Merge level is the question</p>
+              <div class="rounded border border-slate-200 p-3 bg-slate-50 text-xs font-mono leading-5">
+                field.column = { width: 90, align:'end', header:'Cost' }<br/>
+                gantt: { field:'cost', header:'Budget' }
+                <div class="my-1 text-slate-400">── ── ── merge? ── ── ──</div>
+                A) { header:'Budget', width:90, align:'end' }&nbsp; <span class="text-slate-400">(per-key)</span><br/>
+                B) { header:'Budget' }&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <span class="text-slate-400">(replace)</span>
+              </div>
+              <p class="text-xs text-slate-500 mt-2">A is the intuition ADR 0005's “overrides … presentation only” whispers; B is what “overrides” can be misread as. State it.</p>
+            </div>
+          </div>
+        </article>
+
+        <!-- E2 -->
+        <article class="rounded-xl border border-slate-200 bg-white p-6 space-y-4 shadow-sm">
+          <div class="flex items-start justify-between gap-4">
+            <h3 class="text-lg font-semibold">E2 · Locale binding (G3) is load-bearing for S4.9 but parked — sort and format disagree on whose locale</h3>
+            <span class="badge-strong inline-block rounded px-2 py-0.5 text-xs font-semibold shrink-0">Strong</span>
+          </div>
+          <div class="grid md:grid-cols-2 gap-6">
+            <div>
+              <p class="text-xs uppercase tracking-widest text-slate-400 mb-1">Problem</p>
+              <p class="text-sm text-slate-700">
+                D-S4-13 as written binds <span class="font-mono">formatValue</span> to the <strong>Dataset's</strong>
+                <span class="font-mono">FieldContext</span>. G3's <em>recommended</em> answer is to bind at
+                column-resolve time with the <strong>Gantt's</strong> locale. S4.9 then says the default string sort
+                uses <span class="font-mono">localeCompare</span> “with the Gantt's locale” — but the comparator runs in
+                <span class="font-mono">layout/rows/sort.ts</span>, resolved from <span class="font-mono">gantt.rows</span>
+                before/inside the Gantt-agnostic row pipeline. The spec never says how the locale reaches that code path
+                (<span class="font-mono">RowResolutionInput</span>? on <span class="font-mono">ResolvedColumn</span>?).
+              </p>
+              <p class="text-sm text-slate-700 mt-2">
+                <span class="font-semibold">Recommendation.</span> Settle G3's recommended answer before S4.9 lands —
+                not during implementation. Decide one place (<span class="font-mono">ResolvedColumn</span> is the
+                natural carrier: it already holds the bound <span class="font-mono">format</span> closure, so put the
+                bound default <span class="font-mono">compare</span> beside it) and write it into D-S4-13 and S4.9.
+              </p>
+            </div>
+            <div>
+              <p class="text-xs uppercase tracking-widest text-slate-400 mb-2">Who owns the locale today?</p>
+              <div class="rounded border border-slate-200 p-3 bg-slate-50 text-xs font-mono leading-5">
+                Dataset.FieldContext&nbsp;&nbsp; <span class="text-slate-400">timeZone, locale?</span><br/>
+                Gantt.locale&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <span class="text-slate-400">(S5-era)</span>
+                <div class="my-1 text-slate-400">◆ format (D-S4-13) → Dataset<br/>◆ default sort (S4.9) → “Gantt's”</div>
+              </div>
+              <p class="text-xs text-slate-500 mt-2">Two halves, two homes, one unresolved path into a headless row pass. Close it in the doc, not in code.</p>
+            </div>
+          </div>
+        </article>
+
+        <!-- E3 -->
+        <article class="rounded-xl border border-slate-200 bg-white p-6 space-y-4 shadow-sm">
+          <div class="flex items-start justify-between gap-4">
+            <h3 class="text-lg font-semibold">E3 · A grouping header shows blank cells in every column but the label (D-S4-23) is a silent product surprise</h3>
+            <span class="badge-worth inline-block rounded px-2 py-0.5 text-xs font-semibold shrink-0">Worth exploring</span>
+          </div>
+          <div class="grid md:grid-cols-2 gap-6">
+            <div>
+              <p class="text-xs uppercase tracking-widest text-slate-400 mb-1">Problem</p>
+              <p class="text-sm text-slate-700">
+                D-S4-23: a <span class="font-mono">Row.kind:'group'</span> header fills column 0 with the
+                <span class="font-mono">groupBy</span> label and “the rest are empty strings.” This is deliberate and
+                architecturally right — D-S4-11 forbids view-side aggregates — but a caller who turns on
+                <span class="font-mono">{ source:'group' }</span> beside a <span class="font-mono">cost</span> column
+                sees a header row with a team name and empty cells, expecting a per-team sum. Not a bug; a stated
+                consequence that would read as a bug.
+              </p>
+              <p class="text-sm text-slate-700 mt-2">
+                <span class="font-semibold">Recommendation.</span> One foot-gun row (the table already has the right
+                shape) and one line in the public surface: “group headers render the group label in column 0 and blank
+                cells elsewhere; per-team aggregates are the caller's data (declare a computed Field or write through a
+                group, D-S4-11).”
+              </p>
+            </div>
+            <div>
+              <p class="text-xs uppercase tracking-widest text-slate-400 mb-2">What the caller sees</p>
+              <div class="rounded border border-slate-200 p-3 bg-slate-50 text-xs font-mono leading-5">
+                Team A &nbsp;│&nbsp; &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; │&nbsp; &nbsp;&nbsp;&nbsp;&nbsp; │&nbsp; &nbsp;&nbsp;&nbsp;&nbsp;<br/>
+                ── framing │ 2026-10-01 │ 2026-10-10 │ $12,000<br/>
+                ── roof&nbsp;&nbsp;&nbsp; │ 2026-10-08 │ 2026-10-20 │ $9,400
+              </div>
+              <p class="text-xs text-slate-500 mt-2">Header “Block” cell is empty. Correct per D-S4-11; should be a documented, deliberate surprise.</p>
+            </div>
+          </div>
+        </article>
+
+        <!-- E4 -->
+        <article class="rounded-xl border border-slate-200 bg-white p-6 space-y-4 shadow-sm">
+          <div class="flex items-start justify-between gap-4">
+            <h3 class="text-lg font-semibold">E4 · Public constructor surface is large but each group is one concept — a strength, not a finding</h3>
+            <span class="badge-spec inline-block rounded px-2 py-0.5 text-xs font-semibold shrink-0">Positive</span>
+          </div>
+          <p class="text-sm text-slate-700">
+            The S4 call site adds <span class="font-mono">rollUpKinds</span>, <span class="font-mono">hierarchy</span>,
+            <span class="font-mono">fieldTypes</span>, <span class="font-mono">aggregators</span>, <span class="font-mono">fields</span>
+            to <span class="font-mono">Dataset</span> and <span class="font-mono">gridColumns</span>, <span class="font-mono">rows</span>
+            (+ sub-keys), <span class="font-mono">collapse</span> to <span class="font-mono">Gantt</span>. That is twelve options,
+            but every one maps to one concept and every one is optional with a sensible default
+            (<span class="font-mono">['name']</span>, <span class="font-mono">tree:false</span>, <span class="font-mono">'fixed'</span>,
+            <span class="font-mono">autoGroup:false</span>, <span class="font-mono">rollUpKinds:['group']</span>). The “one write
+            shape, one knob” rule (<span class="font-mono">plans/02</span> §1) is honored — <span class="font-mono">'none'</span> is
+            <span class="font-mono">rollUpKinds</span>, not a second option; sort/filter live on the row source, not on the Gantt
+            (D-S4-28's rejection is a model example of the rule). This is the difference between surface area and complexity:
+            the spec adds area, not coupling.
+          </p>
+        </article>
+      </section>
+
+      <!-- ============ EXTENSIBILITY / NAMING ============ -->
+      <section id="extensibility" class="space-y-8">
+        <h2 class="text-xl font-serif border-b border-slate-300 pb-2">Extensibility &amp; naming</h2>
+
+        <!-- X1 -->
+        <article class="rounded-xl border border-slate-200 bg-white p-6 space-y-4 shadow-sm">
+          <div class="flex items-start justify-between gap-4">
+            <h3 class="text-lg font-semibold">X1 · Registered-name seams are cleanly extensible — the model to follow</h3>
+            <span class="badge-spec inline-block rounded px-2 py-0.5 text-xs font-semibold shrink-0">Positive</span>
+          </div>
+          <div class="grid md:grid-cols-2 gap-6">
+            <div>
+              <p class="text-xs uppercase tracking-widest text-slate-400 mb-1">Why it extends well</p>
+              <p class="text-sm text-slate-700">
+                Three seams in this slice take the “registered name, never inline” shape:
+                <span class="font-mono">aggregators</span> (name → function, so <span class="font-mono">rollUp:'sum'</span>
+                serializes), <span class="font-mono">fieldTypes</span> (name → bundle), and
+                <span class="font-mono">ItemEmitter</span> (kind → emitter with the <span class="font-mono">span</span>
+                fallback). Each is open/closed: adding a value is registration, not a branch. The <span class="font-mono">kind
+                → emitter</span> fallback (§2.5's graceful degradation) is the piece that keeps a consumer Kind working
+                before S5 lands the four-seam story. D-S4-24's “no public registration, tests inject through an internal
+                option” correctly clones S2's D-S2-6 posture and keeps I11 honest — no public key with no consumer.
+              </p>
+            </div>
+            <div>
+              <p class="text-xs uppercase tracking-widest text-slate-400 mb-2">The seam table (what a new thing does)</p>
+              <div class="rounded border border-slate-200 p-3 bg-slate-50 text-xs font-mono leading-6">
+                new Aggregator&nbsp;&nbsp; → aggregators[name]<br/>
+                new Field type&nbsp;&nbsp;&nbsp; → fieldTypes[name]<br/>
+                new Entry kind&nbsp;&nbsp; → ItemEmitter (S5 registers)<br/>
+                new Grid column&nbsp; → names a declared Field only<br/>
+                new row view&nbsp;&nbsp;&nbsp;&nbsp; → a RowSource (S6+)
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <!-- X2 -->
+        <article class="rounded-xl border border-slate-200 bg-white p-6 space-y-4 shadow-sm">
+          <div class="flex items-start justify-between gap-4">
+            <h3 class="text-lg font-semibold">X2 · The <span class="font-mono">Row.kind</span> / <span class="font-mono">Entry.kind</span> collision is contained by a stated rule — but two names for the same glyph will keep asking for one</h3>
+            <span class="badge-worth inline-block rounded px-2 py-0.5 text-xs font-semibold shrink-0">Worth exploring</span>
+          </div>
+          <div class="grid md:grid-cols-2 gap-6">
+            <div>
+              <p class="text-xs uppercase tracking-widest text-slate-400 mb-1">Problem</p>
+              <p class="text-sm text-slate-700">
+                D-S4-23 names two different things <span class="font-mono">'group'</span> — an authored
+                <span class="font-mono">Entry.kind</span> and a derived <span class="font-mono">Row.kind</span>. The spec
+                handles it head-on with a two-row table, which is the right minimal response (CONTEXT.md already had a
+                warning). But this is a genuine homonym that will keep confusing readers and agents forever after, and it
+                is the exact failure mode CLAUDE.md's #7 example (#54, pane size) warns about — except this one was
+                consciously chosen.
+              </p>
+              <p class="text-sm text-slate-700 mt-2">
+                <span class="font-semibold">Consider.</span> A <span class="font-mono">PlannedRow.kind</span> literal of
+                <span class="font-mono">'group'</span> is internal-only (README §5: <span class="font-mono">PlannedRow</span>
+                is “not public”), so renaming the row-side literal to e.g. <span class="font-mono">'header'</span> costs
+                nothing public and removes the collision at the one place it bites (a grouping header “stands for no
+                Entry”). Worth debating; if kept, the D-S4-23 table plus a CONTEXT.md cross-reference is enough.
+              </p>
+            </div>
+            <div>
+              <p class="text-xs uppercase tracking-widest text-slate-400 mb-2">Two 'group's, one glyph</p>
+              <div class="rounded border border-slate-200 p-3 bg-slate-50 text-xs font-mono leading-6">
+                Entry.kind === 'group' &nbsp;<span class="text-slate-400">→ Row.kind 'entry'</span><br/>
+                Row.kind === 'group'&nbsp;&nbsp; <span class="text-slate-400">(by groupBy) → no Entry</span>
+              </div>
+              <p class="text-xs text-slate-500 mt-2">The dart is D-S4-23's own table. If the row literal is internal, a rename is free and kills the homonym at source.</p>
+            </div>
+          </div>
+        </article>
+
+        <!-- X3 -->
+        <article class="rounded-xl border border-slate-200 bg-white p-6 space-y-4 shadow-sm">
+          <div class="flex items-start justify-between gap-4">
+            <h3 class="text-lg font-semibold">X3 · S5 handoff is precise — nothing this slice builds is orphaned by the next</h3>
+            <span class="badge-spec inline-block rounded px-2 py-0.5 text-xs font-semibold shrink-0">Positive</span>
+          </div>
+          <p class="text-sm text-slate-700">
+            The “what this slice is not” line (README) and the Deferred table route every seam to its future owner:
+            registries open to <span class="font-mono">PluginContext</span> at S5, <span class="font-mono">cellRenderer</span>
+            and column chrome at S5, drag-reparent waits on an authored order Field. The registries are built per-Gantt in S4
+            and registration moves to the plugin context at S5 — the spec says so explicitly, so S5 does not have to relitigate
+            who owns them. <span class="font-mono">weightedMeanByDuration</span> ships as an Aggregator “because S7's Progress
+            Field needs it,” a just-in-time justification that keeps it honest. This is the property that keeps the slice
+            sequence from compounding into a ball of mud across slices, not just within one.
+          </p>
+        </article>
+      </section>
+
+      <!-- ============ TOP RECOMMENDATIONS ============ -->
+      <section id="top" class="rounded-xl border border-slate-300 bg-slate-100 p-6 space-y-4">
+        <h2 class="text-lg font-serif">Top recommendations — in the order to do them</h2>
+        <ol class="list-decimal list-inside space-y-2 text-sm text-slate-800">
+          <li><strong>E1 · State the <span class="font-mono">gridColumns</span> merge rule (one sentence in D-S4-12 + one test).</strong> The most likely real-caller confusion; cheapest to fix; zero architectural risk.</li>
+          <li><strong>E2 · Settle G3's recommended answer into D-S4-13 and S4.9 before S4.9 lands.</strong> It is load-bearing — a headless row pass has no obvious locale carrier today. Decide the carrier in the doc, not in code.</li>
+          <li><strong>S1 · Sharpen D-S4-20's “windowed” wording for pack rows.</strong> One sentence; prevents an implementer from stalling the height index. Pairs with E2 as “close the doc gaps” before implementation.</li>
+          <li><strong>S3 / X2 · Either give the two no-box shipped kinks (and the <span class="font-mono">Row.kind 'group'</span> literal) acceptance lines or trim them.</strong> Both are cheap; the point is nothing ships a knob with no gate.</li>
+          <li><strong>E3 · One foot-gun row for blank group-header cells + one public-surface line (S2's homonym note).</strong> Documentation polish; low effort, high reader/agent value.</li>
+        </ol>
+        <p class="text-sm text-slate-700 pt-2 border-t border-slate-300">
+          <strong>Summary.</strong> 10 findings across three axes: 3 simplicity/SOLID/DDD, 4 caller ergonomics, 3
+          extensibility/naming — of which 2 are <em>strong</em> (E1, E2), 5 worth-exploring, 3 positive notes. The
+          worst issue within each axis: <em>simplicity</em> — D-S4-20's over-stated “windowed” (an implementer trap);
+          <em>ergonomics</em> — the undefined <span class="font-mono">gridColumns</span> merge (a caller bug waiting to
+          happen); <em>extensibility</em> — the <span class="font-mono">Row.kind 'group'</span> homonym (a durable
+          reader/agent confusion). No finding threatens the architecture; the two-context split and registered-name
+          seams are the right spine. All three strong issues close with documentation sentences before any code ships.
+        </p>
+      </section>
+
+    </main>
+  </body>
+</html>
