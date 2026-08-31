@@ -43,7 +43,6 @@ describe('[S2-A2] toJSON / fromJSON', () => {
         span('t1', {
           parentId: 'p1',
           kind: 'milestone',
-          progress: 0.5,
           segments: [{ start: '2026-09-01T00:00:00.000Z', end: '2026-09-02T00:00:00.000Z' }],
           meta: { team: 'A' },
         }),
@@ -53,7 +52,6 @@ describe('[S2-A2] toJSON / fromJSON', () => {
     const present = toJSON(withAll).entries.find((row) => row.id === 't1');
     expect(present?.parentId).toBe('p1');
     expect(present?.kind).toBe('milestone');
-    expect(present?.progress).toBe(0.5);
     expect(present?.segments).toEqual([
       { start: '2026-09-01T00:00:00.000Z', end: '2026-09-02T00:00:00.000Z' },
     ]);
@@ -69,7 +67,6 @@ describe('[S2-A2] toJSON / fromJSON', () => {
     });
     expect(bare && 'kind' in bare).toBe(false);
     expect(bare && 'parentId' in bare).toBe(false);
-    expect(bare && 'progress' in bare).toBe(false);
     expect(bare && 'segments' in bare).toBe(false);
     expect(bare && 'meta' in bare).toBe(false);
   });

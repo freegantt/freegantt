@@ -20,13 +20,14 @@ The API is a product surface, designed once and defended. Everything here is wha
 ## 2. Shape
 
 ```ts
-import { Dataset, Gantt } from 'freegantt';
+import { Dataset, Gantt, rollUpFields } from 'freegantt';
 
 // ── Data: headless, works in Node ───────────────────────────────
 const dataset = new Dataset<{ team: string }>({
   timeZone: 'America/Chicago',            // explicit; 'local' is opt-in
   dateOnlyEnd: 'inclusive',               // default; see §2.1
-  derivedSpanKinds: ['group'],            // default; a kind here may omit start/end — see §2.1
+  rollUp: rollUpFields,                   // omit this and parents keep authored values (D-S4-7)
+  rollUpKinds: ['group'],                 // default; a kind here may omit start/end — see §2.1
   history: { capacity: 100 },             // default; undo/redo stack depth — see "Undo and redo" below
   hierarchy: { autoGroup: true },         // first child promotes parent to kind 'group'; promote only
   entries: [
@@ -131,7 +132,7 @@ A string with an explicit `Z` or numeric offset is absolute. Every other string 
 
 The reading itself lives in `time/` (`toInstant`, `toEndInstant`) — resolving a Plain time needs the zone and the DST fold/gap policy, and advancing a date-only end by one day is zone-aware arithmetic, which I10 confines to that layer. `api/` maps fields and does no date math of its own.
 
-`start` and `end` are required on every `EntryInput` except one case: an entry of a `derivedSpanKinds` kind (`01` §2.5, default `['group']`) may omit both — `{ id: 'p1', name: 'Sitework', kind: 'group' }` above is exactly this — and the store writes a zero-length span at the dataset's reference date until the span rollup gives it a real one (`01` §2.6). Omitting one field but not the other, on any kind, is `InvalidInstantError`: the field is required and `undefined` names no instant.
+`start` and `end` are required on every `EntryInput` except one case: an entry of a `rollUpKinds` kind (`01` §2.5, default `['group']`) may omit both — `{ id: 'p1', name: 'Sitework', kind: 'group' }` above is exactly this — and the store writes a zero-length span at the dataset's reference date until the Rollup gives it a real one (`01` §2.6), and only when `rollUp: rollUpFields` is passed. Omitting one field but not the other, on any kind, is `InvalidInstantError`: the field is required and `undefined` names no instant.
 
 ---
 
@@ -344,21 +345,24 @@ Omit `scale`/`scroll` and the Gantt creates private ones — single-Gantt users 
 
 ```ts
 const doc = dataset.toJSON();
-const p2  = Dataset.fromJSON(doc);
+const p2  = Dataset.fromJSON(doc, { aggregators, rollUp: rollUpFields });
 ```
 
 ```ts
 export interface DatasetDocument {
-  schema: 1;
+  schema: 2;
   timeZone: string;
   dateOnlyEnd: DateOnlyEndRule;
-  derivedSpanKinds: readonly EntryKind[];
+  rollUpKinds: readonly EntryKind[];
+  fields?: readonly SerializedField[];
   entries: readonly EntryDocument[];
 }
 ```
 
-- The JSON shape is **public API**: documented, versioned by an integer `schema` field, semver-governed. This build writes `schema: 1` only. The reader is a `readers: Record<number, Reader>` map with one entry — a second schema is a map addition, not a rewrite. `fromJSON` migrates older schemas forward when they exist; it never silently drops fields **of a schema it reads**. Keys the reader does not know are dropped: **anything of yours goes in `meta` and survives byte for byte; anything at top level belongs to the schema.**
-- Key order is a contract (`schema`, `timeZone`, `dateOnlyEnd`, `derivedSpanKinds`, `entries`). Optional keys are omitted when absent, never written as `null`. Entries follow store insertion order. Instants serialize as `Z`-suffixed ISO-8601; brands exist only in TS types and never leak into JSON. `fromJSON` reads those instants as absolute, so the dataset zone never re-enters the reading.
+S4.4 is the step that writes `schema: 2`. This build still writes `schema: 1` (`derivedSpanKinds`, no `fields`). `schema: 1` still reads. `progress` is not an entry key (ADR 0008). `fromJSON` without `rollUp` uses identity — parents keep stored values and do not maintain them.
+
+- The JSON shape is **public API**: documented, versioned by an integer `schema` field, semver-governed. This build writes `schema: 1` only; S4.4 adds a `schema: 2` writer and keeps the `schema: 1` reader. The reader is a `readers: Record<number, Reader>` map — a second schema is a map addition, not a rewrite. `fromJSON` migrates older schemas forward when they exist; it never silently drops fields **of a schema it reads**. Keys the reader does not know are dropped: **anything of yours goes in `meta` and survives byte for byte; anything at top level belongs to the schema.** `progress` on an old entry row is an unknown key and is dropped (ADR 0008).
+- Key order is a contract (`schema`, `timeZone`, `dateOnlyEnd`, `rollUpKinds`, `fields`, `entries`). Optional keys are omitted when absent, never written as `null`. Entries follow store insertion order. Instants serialize as `Z`-suffixed ISO-8601; brands exist only in TS types and never leak into JSON. `fromJSON` reads those instants as absolute, so the dataset zone never re-enters the reading.
 - `meta` round-trips opaquely — **unless you declare a key as a field** (`01` §2.6), which makes that key addressable for editing, comparison and rollup while everything else in `meta` keeps the guarantee. The value is carried by reference into the document and back out, never walked field by field.
 - **Changesets are the incremental counterpart**: `dataset.on('change')` already carries `{from, to}` per field, which is what discharges `02`'s promise that a sync adapter be *"an extension, not a core change"*. `dataset.apply(changeSet)` is what such an extension writes; it is not in S2 (D-S2-11).
 

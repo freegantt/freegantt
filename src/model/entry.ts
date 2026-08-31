@@ -16,7 +16,6 @@ export interface Entry<TMeta = unknown> {
   start: Instant;
   /** Exclusive — see plans/01 §5. */
   end: Instant;
-  progress?: number;
   /** Interrupted work — renders as multiple bars on one row. */
   segments?: readonly TimeSpan[];
   /** Consumer-owned, typed via generic. */
@@ -47,7 +46,6 @@ export interface EntryInput<TMeta = unknown> {
   start?: InstantInput;
   /** Exclusive — see plans/01 §5 and `DateOnlyEndRule`. See `start` for when this may be omitted. */
   end?: InstantInput;
-  progress?: number;
   /** Interrupted work — renders as multiple bars on one row. */
   segments?: readonly TimeSpanInput[];
   /** Consumer-owned, typed via generic. */

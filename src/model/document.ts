@@ -14,7 +14,6 @@ export interface EntryDocument<TMeta = unknown> {
   name: string;
   start: string;
   end: string;
-  progress?: number;
   segments?: readonly { start: string; end: string }[];
   /** Consumer-owned. Carried by reference, never walked field by field (D-S2-12). */
   meta?: TMeta;
