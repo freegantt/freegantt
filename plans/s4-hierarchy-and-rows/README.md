@@ -35,6 +35,7 @@
 | **Q18** | Where does currency formatting live? | **`formatValue` on the Field type.** Money stays a number in the store. The cell is text. `cellRenderer` is S5, on the Grid column. §S4.3, D-S4-14. |
 | **Q19** | Can a view override sort order? | **Yes — `RowSort.compare`.** Default is `asc`/`desc` on the **stored** value, never on `formatValue`. Then `ResolvedColumn.compareStored` (built with this Gantt's `locale` at column-resolve time), then a shipped compare. §S4.3, S4.9, D-S4-13, D-S4-28. |
 | **Q20** | Whose `locale` drives `formatValue` and default string sort? | **This Gantt's `locale`, at column-resolve time.** `ResolvedColumn` carries bound `format` and `compareStored` closures. A headless `Dataset` with no `Gantt` does not format cells. `locale` does not travel in the Document. §S4.3, D-S4-13. |
+| **Q21** | How do I ship a custom rollup? | **Register the function in `aggregators`, name it on the Field or Field type.** `rollUp` is always a name (`'sum'`, `'riskWeighted'`), never a bare function — the name serializes; the function travels with the app (`fromJSON`'s second argument). One registration can serve many Fields. §S4.1, D-S4-3; `02` §4.2 level 4. |
 
 ---
 
@@ -57,6 +58,7 @@ Each story names the step that owns it. Acceptance boxes live in the step files.
 - **U13.** (consumer) I set `rollUpKinds: 'none'` and assign `start`/`end`/`cost` on the parent. A child edit leaves those values. → S4.2
 - **U14.** (consumer) I set `filterPolicy: 'matchOnly'`. Only matching entries appear — no ancestor rows. → S4.9
 - **U15.** (consumer) I supply `{ source: 'custom', resolve }`. My rows appear in the Gantt. → S4.6
+- **U16.** (consumer) I register `aggregators: { riskWeighted: fn }` and set `rollUp: 'riskWeighted'` on a Field type. Parents roll up with my function. I did not put a function on `rollUp`. → S4.1
 
 ---
 
@@ -335,7 +337,7 @@ Read these before you touch `src/`.
 
 Parked 2026-08-30 after the Field-type / omit-`source` / formatter / sort pass, then updated after [`plans/reviews/2026-08-30-s4-spec.html`](../reviews/2026-08-30-s4-spec.html). Run the grilling skill against the **blocking** item before S4.6 lands in `src/`. Recommended answers below are starting points, not locks.
 
-**Settled** (grill to try to break them, do not reopen casually): Q16–Q19; D-S4-3 (type default `rollUp`, `'none'` homonyms); D-S4-12 (per-key `gridColumns` merge); D-S4-13 / G3 (`locale` and `compareStored` on `ResolvedColumn` at Gantt resolve time); D-S4-20 (emit/pack on-demand for pack rows); D-S4-28 (sort comparer chain); D-S4-35 (omit `source` → `meta[field.key]`); `[S4-A10]` / `[S4-A11]` (boxed `matchOnly` and `custom` source).
+**Settled** (grill to try to break them, do not reopen casually): Q16–Q21; D-S4-3 (type default `rollUp`, `'none'` homonyms); D-S4-12 (per-key `gridColumns` merge); D-S4-13 / G3 (`locale` and `compareStored` on `ResolvedColumn` at Gantt resolve time); D-S4-20 (emit/pack on-demand for pack rows); D-S4-28 (sort comparer chain); D-S4-35 (omit `source` → `meta[field.key]`); `[S4-A10]` / `[S4-A11]` (boxed `matchOnly` and `custom` source).
 
 ### BLOCKING — answer before S4.6 implementation
 
