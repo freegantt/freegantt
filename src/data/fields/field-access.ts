@@ -7,6 +7,7 @@ import type {
   EntryEdit,
   EntryEdits,
   EntryId,
+  Field,
   FieldContext,
   FieldKey,
   StoredEdit,
@@ -15,8 +16,10 @@ import { diffMs } from '../../time/index.js';
 import type { ComputedFieldCache } from '../computed-cache.js';
 import type { FieldRegistry, ResolvedField } from './field-registry.js';
 
-/** What `createFieldContext` needs — `FieldRegistry` satisfies this. */
-export type FieldLookup = Pick<FieldRegistry, 'get'>;
+/** What `createFieldContext` needs — `FieldRegistry.get` and `dataset.field` both satisfy this. */
+export type FieldLookup = {
+  get(key: FieldKey): Field | undefined;
+};
 
 const authoredFieldKeys = Symbol('authoredFieldKeys');
 
@@ -85,9 +88,9 @@ export function createFieldContext(
   const ctx: FieldContext = {
     timeZone,
     read<T>(entry: Entry, key: FieldKey): T | undefined {
-      const field = fields.get(String(key));
-      if (!field) return undefined;
-      return readField(entry, field, ctx, memo?.()) as T | undefined;
+      const field = fields.get(key);
+      if (field === undefined || field.source === undefined) return undefined;
+      return readField(entry, field as ResolvedField, ctx, memo?.()) as T | undefined;
     },
     durationOf(entry: Entry): Duration {
       return { value: diffMs(entry.end, entry.start), unit: 'millisecond' };

@@ -62,23 +62,29 @@
           core Fields, compute sources, and function keys stay out.
           Harness paints Name / Start / Duration / Budget and reloads cost types on Import.
         </div>
+        <div class="text-sm rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-emerald-950 max-w-3xl">
+          <strong>Closed this pass.</strong>
+          St1: Dataset-only <span class="font-mono">TFields</span> in ADR 0005 and S4.1.
+          C1 / Si1 / St2: <span class="font-mono">bindGanttFields(dataset, gridColumns, bind)</span>; no Map rebuild.
+          Sp1: Dataset change re-binds columns.
+        </div>
       </header>
 
       <section id="axes" class="grid md:grid-cols-3 gap-4">
-        <div class="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-2">
-          <p class="text-xs uppercase tracking-widest text-amber-800 font-semibold">Standards</p>
-          <p class="text-2xl font-serif">1 hard · 4 judgement</p>
-          <p class="text-xs text-amber-950">Worst: <span class="font-mono">Dataset&lt;TFields&gt;</span> still rejected in S4.1 and ADR 0005.</p>
+        <div class="rounded-xl border border-emerald-200 bg-emerald-50 p-4 space-y-2">
+          <p class="text-xs uppercase tracking-widest text-emerald-700 font-semibold">Standards</p>
+          <p class="text-2xl font-serif">St1 · St2 closed</p>
+          <p class="text-xs text-emerald-900">St3–St4 still judgement. St5 closed: <span class="font-mono">bindGanttFields</span> calls compares.</p>
         </div>
         <div class="rounded-xl border border-sky-200 bg-sky-50 p-4 space-y-2">
           <p class="text-xs uppercase tracking-widest text-sky-700 font-semibold">Spec</p>
-          <p class="text-2xl font-serif">4 partial · 1 recorded</p>
-          <p class="text-xs text-sky-900">Worst: column bind does not re-run on Dataset change; <span class="font-mono">fieldCompares</span> wait for S4.9.</p>
+          <p class="text-2xl font-serif">Sp1 closed · 3 partial</p>
+          <p class="text-xs text-sky-900">Column bind re-runs on Dataset change. Two lists leave one bind; shell keeps columns until S4.9.</p>
         </div>
-        <div class="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-2">
-          <p class="text-xs uppercase tracking-widest text-amber-800 font-semibold">Simplify</p>
-          <p class="text-2xl font-serif">6 open</p>
-          <p class="text-xs text-amber-950">Worst: <span class="font-mono">lookupFrom</span> rebuilds a Map the registry already has.</p>
+        <div class="rounded-xl border border-emerald-200 bg-emerald-50 p-4 space-y-2">
+          <p class="text-xs uppercase tracking-widest text-emerald-700 font-semibold">Simplify</p>
+          <p class="text-2xl font-serif">Si1 closed</p>
+          <p class="text-xs text-emerald-950">Si2–Si6 still open. <span class="font-mono">lookupFrom</span> is gone.</p>
         </div>
       </section>
 
@@ -88,7 +94,7 @@
         <article class="rounded-xl border border-slate-200 bg-white p-6 space-y-3 shadow-sm">
           <div class="flex items-start justify-between gap-4">
             <h3 class="text-lg font-semibold">St1 · <span class="font-mono">Dataset&lt;TFields&gt;</span> fights ADR 0005 and S4.1</h3>
-            <span class="badge-hard inline-block rounded px-2 py-0.5 text-xs font-semibold shrink-0">Hard</span>
+            <span class="badge-closed inline-block rounded px-2 py-0.5 text-xs font-semibold shrink-0">Closed</span>
           </div>
           <p class="font-mono text-xs text-slate-500">src/api/dataset.ts · src/model/entry.ts · docs/adr/0005 · s4.1-field-registry.md D-S4-1</p>
           <p class="text-sm text-slate-700">
@@ -102,21 +108,20 @@
             narrower than the reject. <span class="font-mono">plans/02</span> now documents the
             generic. The step file and the ADR do not.
           </p>
-          <p class="text-sm text-slate-700"><strong>Fix.</strong> Amend ADR 0005 and S4.1 to allow a Dataset-only generic, or drop <span class="font-mono">TFields</span>.</p>
+          <p class="text-sm text-slate-700"><strong>Closed.</strong> ADR 0005 and D-S4-1 now reject a generic on <span class="font-mono">Gantt</span> / <span class="font-mono">view/</span> / <span class="font-mono">layout/</span>, and allow <span class="font-mono">Dataset&lt;TMeta, TFields&gt;</span> plus <span class="font-mono">EntryEdit</span> only.</p>
         </article>
 
         <article class="rounded-xl border border-slate-200 bg-white p-6 space-y-3 shadow-sm">
           <div class="flex items-start justify-between gap-4">
             <h3 class="text-lg font-semibold">St2 · <span class="font-mono">lookupFrom</span> casts <span class="font-mono">Field</span> to <span class="font-mono">ResolvedField</span></h3>
-            <span class="badge-judge inline-block rounded px-2 py-0.5 text-xs font-semibold shrink-0">Judgement</span>
+            <span class="badge-closed inline-block rounded px-2 py-0.5 text-xs font-semibold shrink-0">Closed</span>
           </div>
-          <p class="font-mono text-xs text-slate-500">src/view/grid-columns.ts:17–21</p>
+          <p class="font-mono text-xs text-slate-500">src/view/grid-columns.ts</p>
           <p class="text-sm text-slate-700">
             Feature Envy. <span class="font-mono">fields.all</span> dropped <span class="font-mono">get</span>
-            (#125). The bind then rebuilds a Map and casts.
-            Call: <span class="font-mono">createFieldContext({ get: (key) =&gt; dataset.field(key) }, timeZone)</span>
-            already reads as English. One registry; do not invent a second lookup adapter.
+            (#125). The bind then rebuilt a Map and cast.
           </p>
+          <p class="text-sm text-slate-700"><strong>Closed.</strong> <span class="font-mono">lookupFrom</span> is gone. <span class="font-mono">resolveColumns</span> takes a <span class="font-mono">FieldLookup</span>. <span class="font-mono">bindGanttFields(dataset, gridColumns, bind)</span> uses <span class="font-mono">dataset.field</span>. <span class="font-mono">model.Dataset</span> now exposes <span class="font-mono">field</span>.</p>
         </article>
 
         <article class="rounded-xl border border-slate-200 bg-white p-6 space-y-3 shadow-sm">
@@ -146,13 +151,14 @@
         <article class="rounded-xl border border-slate-200 bg-white p-6 space-y-3 shadow-sm">
           <div class="flex items-start justify-between gap-4">
             <h3 class="text-lg font-semibold">St5 · <span class="font-mono">resolveFieldCompares</span> has no production caller</h3>
-            <span class="badge-judge inline-block rounded px-2 py-0.5 text-xs font-semibold shrink-0">Judgement</span>
+            <span class="badge-closed inline-block rounded px-2 py-0.5 text-xs font-semibold shrink-0">Closed</span>
           </div>
           <p class="font-mono text-xs text-slate-500">src/view/grid-columns.ts · src/layout/column.ts</p>
           <p class="text-sm text-slate-700">
             Speculative Generality vs D-S4-13, which names the list in this step.
             Keep the function. Wire it in S4.9, not a second bind later.
           </p>
+          <p class="text-sm text-slate-700"><strong>Closed.</strong> <span class="font-mono">bindGanttFields</span> is the production caller. The shell keeps columns. Sort still waits for S4.9.</p>
         </article>
 
         <div class="rounded-lg border border-slate-200 bg-white p-4 text-sm text-slate-700">
@@ -173,28 +179,25 @@
         <article class="rounded-xl border border-slate-200 bg-white p-6 space-y-3 shadow-sm">
           <div class="flex items-start justify-between gap-4">
             <h3 class="text-lg font-semibold">Sp1 · Dataset change does not re-bind columns</h3>
-            <span class="badge-partial inline-block rounded px-2 py-0.5 text-xs font-semibold shrink-0">Partial</span>
+            <span class="badge-closed inline-block rounded px-2 py-0.5 text-xs font-semibold shrink-0">Closed</span>
           </div>
-          <p class="font-mono text-xs text-slate-500">s4.3 files table · gantt-shell.ts:344–347 vs #bindColumns</p>
+          <p class="font-mono text-xs text-slate-500">s4.3 files table · gantt-shell.ts #bindColumns</p>
           <p class="text-sm text-slate-700">
             Spec: “holds <span class="font-mono">gridColumns</span>, re-resolves on assignment or on a Dataset change, requests a frame.”
-            Change only does <span class="font-mono">setEntries</span> and <span class="font-mono">request()</span>.
-            Cell text still updates because <span class="font-mono">format(entry)</span> reads the live Entry.
-            Declaration bind (locale, <span class="font-mono">formatValue</span>, column merge) does not re-run.
-            Fields do not change after construction in this slice, so paint still works.
+            Change only did <span class="font-mono">setEntries</span> and <span class="font-mono">request()</span>.
           </p>
+          <p class="text-sm text-slate-700"><strong>Closed.</strong> The change handler calls <span class="font-mono">#bindColumns</span> then <span class="font-mono">setEntries</span>. A cost edit paints the new cell text.</p>
         </article>
 
         <article class="rounded-xl border border-slate-200 bg-white p-6 space-y-3 shadow-sm">
           <div class="flex items-start justify-between gap-4">
             <h3 class="text-lg font-semibold">Sp2 · <span class="font-mono">fieldCompares</span> leave the bind on paper only</h3>
-            <span class="badge-partial inline-block rounded px-2 py-0.5 text-xs font-semibold shrink-0">Partial · S4.9</span>
+            <span class="badge-closed inline-block rounded px-2 py-0.5 text-xs font-semibold shrink-0">Closed this bind</span>
           </div>
           <p class="text-sm text-slate-700">
             D-S4-13: “Two lists leave that bind.”
-            <span class="font-mono">resolveFieldCompares</span> exists and the unit test covers a hidden Field.
-            <span class="font-mono">GanttShell</span> never calls it. No <span class="font-mono">RowResolutionInput</span> yet.
-            Record for S4.9. Do not invent a second locale bind then.
+            <span class="font-mono">bindGanttFields</span> returns both. The shell keeps columns.
+            Sort still has no <span class="font-mono">RowResolutionInput</span> (S4.9). Do not invent a second locale bind then.
           </p>
         </article>
 
@@ -269,12 +272,11 @@
         <article class="rounded-xl border border-slate-200 bg-white p-6 space-y-3 shadow-sm">
           <div class="flex items-start justify-between gap-4">
             <h3 class="text-lg font-semibold">Si1 · Delete <span class="font-mono">lookupFrom</span></h3>
-            <span class="badge-hard inline-block rounded px-2 py-0.5 text-xs font-semibold shrink-0">Open</span>
+            <span class="badge-closed inline-block rounded px-2 py-0.5 text-xs font-semibold shrink-0">Closed</span>
           </div>
           <p class="text-sm text-slate-700">
-            After: <span class="font-mono">resolveColumns(gantt.gridColumns, dataset.field, bind)</span>
-            or pass the registry <span class="font-mono">FieldLookup</span>.
-            Same as St2. One adapter at the existing seam.
+            After: <span class="font-mono">bindGanttFields(dataset, gantt.gridColumns, bind)</span>.
+            Same as St2. One adapter at <span class="font-mono">FieldLookup</span>.
           </p>
         </article>
 
@@ -355,8 +357,8 @@
           <div class="flex items-start justify-between gap-4 flex-wrap">
             <h3 class="font-serif text-xl">1 · One Gantt Field-bind module</h3>
             <span class="inline-flex items-center gap-2">
-              <span class="badge-strong rounded-full text-xs px-2 py-0.5 font-medium">Strong</span>
-              <span class="rounded-full bg-slate-100 text-slate-600 text-xs px-2 py-0.5">in-process</span>
+              <span class="badge-closed rounded-full text-xs px-2 py-0.5 font-medium">Closed</span>
+              <span class="rounded-full bg-slate-100 text-slate-600 text-xs px-2 py-0.5">was Strong</span>
             </span>
           </div>
           <p class="font-mono text-sm text-slate-600">grid-columns.ts · gantt-shell.ts · api/dataset.ts · layout/column.ts (types)</p>
@@ -475,21 +477,21 @@ flowchart TB
 
       <section id="top-recommendation" class="rounded-xl border-2 border-slate-800 bg-white p-6 space-y-3">
         <p class="text-xs uppercase tracking-widest text-slate-500">Top recommendation</p>
-        <h2 class="font-serif text-2xl"><a href="#c1" class="underline decoration-slate-300">Candidate 1 — one Gantt Field-bind module</a></h2>
+        <h2 class="font-serif text-2xl"><a href="#c1" class="underline decoration-slate-300">Candidate 1 — one Gantt Field-bind module</a> (closed)</h2>
         <p class="text-sm text-slate-700">
-          Closes St2 / Si1 and pre-pays Sp2. Pass the existing <span class="font-mono">FieldLookup</span>.
-          Then amend ADR 0005 / S4.1 for St1, or drop <span class="font-mono">TFields</span>.
+          <span class="font-mono">bindGanttFields(dataset, gridColumns, bind)</span> is the one locale bind.
+          St1 is amended in ADR 0005 and S4.1.
+          Next: C2 Field Document codec, or C3 require bound columns.
           Do not put Field logic in <span class="font-mono">layout/</span>.
-          Do not put roll-up on Grid columns.
         </p>
       </section>
 
       <section class="text-sm text-slate-600 space-y-2 pb-8">
         <h2 class="font-serif text-xl text-slate-900">Axis totals</h2>
-        <p>Standards: 1 hard (St1 TFields vs ADR 0005); 4 judgement. Worst in-axis: St1.</p>
-        <p>Spec: 4 partial; Sp6 recorded as D-S4-5 vs [S4-A1]. Worst in-axis: Sp1 column re-bind.</p>
-        <p>Simplify: 6 open. Worst in-axis: Si1 lookupFrom.</p>
-        <p>Architecture: C1 Strong; C2–C3 Worth exploring; C4 Speculative.</p>
+        <p>Standards: St1, St2, St5 closed. St3–St4 still judgement.</p>
+        <p>Spec: Sp1 closed; Sp2 bind closed (sort still S4.9); Sp3–Sp5 partial; Sp6 recorded.</p>
+        <p>Simplify: Si1 closed. Si2–Si6 still open.</p>
+        <p>Architecture: C1 closed. C2–C3 Worth exploring; C4 Speculative.</p>
       </section>
     </main>
   </body>

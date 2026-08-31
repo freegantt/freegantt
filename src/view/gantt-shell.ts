@@ -60,7 +60,7 @@ import { FrameScheduler } from './frame-scheduler.js';
 import { projectAffordances } from './affordance-projection.js';
 import { GesturePipeline } from './gesture-pipeline.js';
 import type { EntryGestureContext } from './entry-gesture-context.js';
-import { DEFAULT_GRID_COLUMNS, resolveColumns } from './grid-columns.js';
+import { DEFAULT_GRID_COLUMNS, bindGanttFields } from './grid-columns.js';
 
 /** One `{ detach() }` for every inject slot. `view/` may not import `interaction/` (plans/01 §1:
  *  `INT --> VIEW`, not the reverse), so the shell takes pointer and keyboard attachments by
@@ -342,6 +342,7 @@ export class GanttShell {
     // reactivity path (#33's `setEntries()` warning is against a *public* one; see dataset-change-
     // subscription.ts).
     this.#datasetChanges = subscribeToDatasetChanges(options.dataset, () => {
+      this.#bindColumns();
       this.#viewportHandle.setEntries(options.dataset.entries.all);
       this.#frames.request();
     });
@@ -743,7 +744,7 @@ export class GanttShell {
       this.#locale !== undefined
         ? { timeZone: this.#options.dataset.timeZone, locale: this.#locale }
         : { timeZone: this.#options.dataset.timeZone };
-    this.#resolvedColumns = resolveColumns(this.#gridColumnInput, this.#options.dataset.fields.all, bind);
+    this.#resolvedColumns = bindGanttFields(this.#options.dataset, this.#gridColumnInput, bind).columns;
   }
 
   #commitGridWidth(px: number): void {

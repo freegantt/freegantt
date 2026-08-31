@@ -12,6 +12,7 @@ function fakeDataset(): { dataset: Dataset; emit: (changeSet: ChangeSet) => void
     timeZone: 'UTC',
     isRollUpKind: () => false,
     fields: { all: [] },
+    field: () => undefined,
     on: (_name, handler) => {
       handlers.add(handler);
     },
