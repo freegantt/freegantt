@@ -1,10 +1,10 @@
 // view/ — binds this Gantt's locale to declared Fields (D-S4-13). layout/ never learns FieldSource.
 
 import type { Entry, Field, FieldKey, FormatContext, GridColumn, GridColumnInput } from '../model/index.js';
+import type { Dataset } from '../model/index.js';
 import { FieldNotColumnableError, UnknownFieldError } from '../model/index.js';
 import { createFieldContext } from '../data/fields/field-access.js';
 import type { FieldLookup } from '../data/fields/field-access.js';
-import type { ResolvedField } from '../data/fields/field-registry.js';
 import type { FieldCompare, ResolvedColumn } from '../layout/index.js';
 
 export const DEFAULT_GRID_COLUMNS: readonly GridColumnInput[] = Object.freeze(['name']);
@@ -12,12 +12,6 @@ export const DEFAULT_GRID_COLUMNS: readonly GridColumnInput[] = Object.freeze(['
 export interface ResolveColumnsBind {
   timeZone: string;
   locale?: Intl.LocalesArgument;
-}
-
-function lookupFrom(fields: readonly Field[]): FieldLookup {
-  const map = new Map<string, ResolvedField>();
-  for (const field of fields) map.set(String(field.key), field as ResolvedField);
-  return { get: (key) => map.get(String(key)) };
 }
 
 function asColumn(input: GridColumnInput): GridColumn {
@@ -59,13 +53,16 @@ function mergeColumn(input: GridColumn, field: Field): Omit<GridColumn, 'field'>
   return merged;
 }
 
-/** Call: `resolveColumns(gantt.gridColumns, dataset.fields.all, { timeZone, locale })`. */
+function lookupOf(dataset: Pick<Dataset, 'field'>): FieldLookup {
+  return { get: (key) => dataset.field(key) };
+}
+
+/** Call: `resolveColumns(gantt.gridColumns, { get: (key) => dataset.field(key) }, { timeZone, locale })`. */
 export function resolveColumns(
   gridColumns: readonly GridColumnInput[],
-  fields: readonly Field[],
+  lookup: FieldLookup,
   bind: ResolveColumnsBind,
 ): readonly ResolvedColumn[] {
-  const lookup = lookupFrom(fields);
   const fieldCtx = createFieldContext(lookup, bind.timeZone);
   const locale: Intl.LocalesArgument = bind.locale ?? [];
   const formatCtx: FormatContext = { ...fieldCtx, locale };
@@ -105,4 +102,17 @@ export function resolveFieldCompares(
       return field.compare(a, b);
     },
   }));
+}
+
+/** Call: `bindGanttFields(dataset, gantt.gridColumns, { timeZone, locale })`.
+ *  One locale bind. Two lists leave: visible columns, and every Field's compare (D-S4-13). */
+export function bindGanttFields(
+  dataset: Pick<Dataset, 'field' | 'fields'>,
+  gridColumns: readonly GridColumnInput[],
+  bind: ResolveColumnsBind,
+): { columns: readonly ResolvedColumn[]; fieldCompares: readonly FieldCompare[] } {
+  return {
+    columns: resolveColumns(gridColumns, lookupOf(dataset), bind),
+    fieldCompares: resolveFieldCompares(dataset.fields.all, bind),
+  };
 }

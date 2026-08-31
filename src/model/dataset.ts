@@ -52,6 +52,8 @@ export interface Dataset<TMeta = unknown, TFields extends Record<string, unknown
   readonly timeZone: string;
   /** Resolved Field declarations this Dataset owns, core Fields included. */
   readonly fields: { readonly all: readonly Field[] };
+  /** Resolved declaration for this key, or `undefined` when the key is not declared. */
+  field(key: FieldKey): Field | undefined;
   isRollUpKind(kind: EntryKind): boolean;
   on<K extends keyof DatasetEventMap>(name: K, handler: (payload: DatasetEventMap[K]) => void | false): void;
   off<K extends keyof DatasetEventMap>(name: K, handler: (payload: DatasetEventMap[K]) => void | false): void;

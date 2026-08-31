@@ -13,6 +13,7 @@ import type {
   EntryKind,
   Field,
   FieldContext,
+  FieldKey,
   FieldType,
   Instant,
   RollUpKinds,
@@ -151,6 +152,11 @@ export class DatasetState implements Dataset {
    *  itself, so `view/capability.ts` can ask the one question it needs without naming the Set's shape. */
   isRollUpKind(kind: EntryKind): boolean {
     return this.rollUpKinds.has(kind);
+  }
+
+  /** Call: `dataset.field('cost')` — the resolved declaration, or `undefined`. */
+  field(key: FieldKey): Field | undefined {
+    return this.fields.get(key);
   }
 
   get datasetRevision(): number {

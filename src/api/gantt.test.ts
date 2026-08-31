@@ -911,6 +911,33 @@ describe('Gantt gridColumns (S4.3, D-S4-12, [S4-A1] column half)', () => {
     gantt.destroy();
   });
 
+  it('a Dataset change re-binds columns so a later cost edit paints the new cell text', async () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      fieldTypes: {
+        money: {
+          rollUp: 'sum',
+          formatValue: (value) => (typeof value === 'number' ? `$${value}` : ''),
+          column: { header: 'Cost', align: 'end' },
+        },
+      },
+      fields: [{ key: 'cost', type: 'money' }],
+      entries: sampleEntries.map((entry, i) => (i === 0 ? { ...entry, meta: { cost: 500 } } : entry)),
+    });
+    const gantt = new Gantt({
+      container,
+      dataset,
+      gridColumns: ['name', 'cost'],
+    });
+    const id = dataset.entries.all[0]!.id;
+    dataset.entries.update(id, { cost: 999 });
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    const costCell = container.querySelector('.fg-row [data-field="cost"]');
+    expect(costCell?.textContent).toBe('$999');
+    gantt.destroy();
+  });
+
   it("default gridColumns is ['name']", () => {
     const container = document.createElement('div');
     const gantt = new Gantt({
