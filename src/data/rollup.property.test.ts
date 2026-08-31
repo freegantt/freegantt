@@ -1,7 +1,6 @@
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 import { DatasetState } from './dataset-state.js';
-import { readField } from './fields/field-access.js';
 import { SHIPPED_AGGREGATORS } from './fields/aggregators.js';
 import type { EntryInput } from '../model/index.js';
 
@@ -15,16 +14,15 @@ function moneyDataset(entries: readonly EntryInput[]): DatasetState {
 }
 
 function assertParentsMatchCostSum(state: DatasetState): void {
-  const field = state.fields.get('cost')!;
   for (const parent of state.entries.all) {
     if (!state.isRollUpKind(parent.kind)) continue;
     const children = state.entries.childrenOf(parent.id);
     if (children.length === 0) continue;
     const expected = SHIPPED_AGGREGATORS.sum?.(children, parent, {
+      ...state.fieldContext,
       field: 'cost',
-      read: (entry, key) => state.fieldContext.read(entry, key),
     });
-    expect(readField(parent, field, state.fieldContext)).toBe(expected);
+    expect(state.fieldContext.read(parent, 'cost')).toBe(expected);
   }
 }
 

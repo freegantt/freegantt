@@ -300,13 +300,16 @@ type Aggregator<TValue = unknown> = (
   ctx: RollUpContext,
 ) => TValue | undefined;           // undefined = no opinion, leave the stored value alone
 
-interface RollUpContext { read<T>(entry: Entry, key: FieldKey): T | undefined; }
-
 /** Compute and store access. No locale. */
 interface FieldContext {
   readonly timeZone: string;
   read<T>(entry: Entry, key: FieldKey): T | undefined;
   durationOf(entry: Entry): Duration;
+}
+
+/** FieldContext plus the Field currently rolling up. Shipped Aggregators read `ctx.field`. */
+interface RollUpContext extends FieldContext {
+  readonly field: FieldKey;
 }
 
 /** Built only at Gantt column-resolve time. `formatValue` reads this, never a Dataset locale. */

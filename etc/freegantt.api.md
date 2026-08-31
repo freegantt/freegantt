@@ -615,11 +615,9 @@ export interface ProposedSpan {
 }
 
 // @public
-export interface RollUpContext {
+export interface RollUpContext extends FieldContext {
     // (undocumented)
     readonly field: FieldKey;
-    // (undocumented)
-    read<T>(entry: Entry, key: FieldKey): T | undefined;
 }
 
 // @public (undocumented)

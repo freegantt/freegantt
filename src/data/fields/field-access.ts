@@ -73,14 +73,16 @@ function storesInMeta(field: ResolvedField): boolean {
   return field.source.from === 'meta';
 }
 
+/** Call: `createFieldContext(registry, 'UTC')` — bind Field read to this registry. */
 export function createFieldContext(
+  registry: FieldRegistry,
   timeZone: string,
-  readByKey: (entry: Entry, key: FieldKey, ctx: FieldContext) => unknown,
+  memo?: () => FieldReadMemo | undefined,
 ): FieldContext {
   const ctx: FieldContext = {
     timeZone,
     read<T>(entry: Entry, key: FieldKey): T | undefined {
-      return readByKey(entry, key, ctx) as T | undefined;
+      return registry.read(entry, key, ctx, memo?.()) as T | undefined;
     },
     durationOf(entry: Entry): Duration {
       return { value: diffMs(entry.end, entry.start), unit: 'millisecond' };

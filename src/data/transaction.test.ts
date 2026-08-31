@@ -3,7 +3,6 @@ import { runTransaction } from './transaction.js';
 import { DatasetState } from './dataset-state.js';
 import { MutationCancelledError, MutationDuringNotificationError, entryId } from '../model/index.js';
 import type { EntryEdits, StoredEdit } from './edit-extension.js';
-import { readField } from './fields/field-access.js';
 
 function dataset(entries: { id: string; parentId?: string }[] = []): DatasetState {
   return new DatasetState({
@@ -499,11 +498,10 @@ describe('runTransaction', () => {
       fieldTypes: { money: { rollUp: 'sum' } },
       fields: [{ key: 'cost', type: 'money' }],
     });
-    const cost = state.fields.get('cost')!;
     const costOf = (id: string): number | undefined => {
       const entry = state.entries.get(id);
       if (!entry) return undefined;
-      return readField(entry, cost, state.fieldContext) as number | undefined;
+      return state.fieldContext.read<number>(entry, 'cost');
     };
 
     let changeCount = 0;

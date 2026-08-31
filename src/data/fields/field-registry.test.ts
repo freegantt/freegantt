@@ -1,19 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { FieldRegistry } from './field-registry.js';
+import { createFieldContext } from './field-access.js';
 import {
   DuplicateFieldKeyError,
   DuplicateFieldSourceError,
   UnknownAggregatorError,
   UnknownFieldTypeError,
 } from '../../model/index.js';
-import { createFieldContext, readField } from './field-access.js';
 
 function ctx(registry: FieldRegistry) {
-  return createFieldContext('UTC', (entry, key, fieldCtx) => {
-    const field = registry.get(key);
-    if (!field) return undefined;
-    return readField(entry, field, fieldCtx);
-  });
+  return createFieldContext(registry, 'UTC');
 }
 
 describe('FieldRegistry type merge (D-S4-3)', () => {
@@ -54,14 +50,14 @@ describe('D-S4-35 omitted source', () => {
       end: 1 as never,
       meta: { cost: 500 },
     };
-    expect(readField(entry, field, ctx(registry))).toBe(500);
+    expect(ctx(registry).read(entry, 'cost')).toBe(500);
   });
 
   it('{ from: meta, key: budget } maps a different Document key', () => {
     const registry = new FieldRegistry({
       fields: [{ key: 'cost', source: { from: 'meta', key: 'budget' } }],
     });
-    const field = registry.get('cost')!;
+    expect(registry.get('cost')?.source).toEqual({ from: 'meta', key: 'budget' });
     const entry = {
       id: 't1' as never,
       name: 't1',
@@ -70,7 +66,7 @@ describe('D-S4-35 omitted source', () => {
       end: 1 as never,
       meta: { budget: 1, cost: 2 },
     };
-    expect(readField(entry, field, ctx(registry))).toBe(1);
+    expect(ctx(registry).read(entry, 'cost')).toBe(1);
   });
 
   it('{ key: start } throws DuplicateFieldKeyError', () => {
@@ -107,5 +103,22 @@ describe('D-S4-35 omitted source', () => {
   it('toJSON of an omitted-source Field is the resolved source (read view)', () => {
     const registry = new FieldRegistry({ fields: [{ key: 'cost' }] });
     expect(registry.get('cost')?.source).toEqual({ from: 'meta', key: 'cost' });
+  });
+
+  it('read looks up by key; write folds cost onto the edit', () => {
+    const registry = new FieldRegistry({ fields: [{ key: 'cost' }] });
+    const context = ctx(registry);
+    const entry = {
+      id: 't1' as never,
+      name: 't1',
+      kind: 'span' as const,
+      start: 0 as never,
+      end: 1 as never,
+    };
+    const written = registry.write({}, entry, 'cost', 500);
+    expect(written.meta).toEqual({ cost: 500 });
+    const next = { ...entry, meta: written.meta };
+    expect(registry.read(next, 'cost', context)).toBe(500);
+    expect(context.read(next, 'cost')).toBe(500);
   });
 });
