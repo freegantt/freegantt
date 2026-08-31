@@ -283,6 +283,7 @@ export interface EntryStoreView {
     // (undocumented)
     readonly all: readonly Entry[];
     childrenOf(id: EntryId | string): readonly Entry[];
+    fieldValue<T>(id: EntryId | string, field: FieldKey): T | undefined;
     // (undocumented)
     get(id: EntryId | string): Entry | undefined;
     // (undocumented)

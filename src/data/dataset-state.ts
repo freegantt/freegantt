@@ -124,7 +124,12 @@ export class DatasetState implements Dataset {
       referenceDate: this.referenceDate,
       rollUpKinds: this.rollUpKinds,
     };
-    this.entries = new EntryStore(readEntries(options.entries, context), context, this.fields);
+    this.entries = new EntryStore(
+      readEntries(options.entries, context),
+      context,
+      this.fields,
+      this.fieldContext,
+    );
     this.entries.setTransactionRunner(this);
     // `01` §2.6 / README.md D-S2-22: a roll-up-kind entry given children only through the initial
     // array gets real rolled-up values before anyone reads it, not just after the first later

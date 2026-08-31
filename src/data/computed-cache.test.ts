@@ -45,4 +45,28 @@ describe('ComputedFieldCache (D-S4-10)', () => {
     const after = state.entries.get('t1')!;
     expect(state.fieldContext.read(after, 'label')).toBe('t2:2');
   });
+
+  it('entries.fieldValue uses the same memo as FieldContext.read', () => {
+    let calls = 0;
+    const state = new DatasetState({
+      timeZone: 'UTC',
+      entries: [{ id: 't1', name: 't1', start: '2026-01-01', end: '2026-01-02' }],
+      fields: [
+        {
+          key: 'label',
+          source: {
+            from: 'compute',
+            read(entry, ctx) {
+              calls += 1;
+              return `${ctx.read<string>(entry, 'name')}:${calls}`;
+            },
+          },
+        },
+      ],
+    });
+    expect(state.entries.fieldValue('t1', 'label')).toBe('t1:1');
+    expect(state.entries.fieldValue('t1', 'label')).toBe('t1:1');
+    state.entries.update('t1', { name: 't2' });
+    expect(state.entries.fieldValue('t1', 'label')).toBe('t2:2');
+  });
 });

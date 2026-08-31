@@ -4,6 +4,7 @@
 // class adds `transaction()` and the construction-time options a view never reads.
 
 import type { Entry, EntryEdit, EntryInput, EntryKind } from './entry.js';
+import type { FieldKey } from './field.js';
 import type { EntryId } from './ids.js';
 import type { DatasetEventMap } from './change-set.js';
 
@@ -13,7 +14,7 @@ export type RollUpKinds = readonly EntryKind[] | 'none';
 
 /** The Dataset's own read view onto its entries (D-S2-2). `all` is the committed array — see D-S2-3
  *  for its cached-identity rule and D-S2-21 for what it does *not* show while a transaction is open
- *  (`get`/`has`/`size`/`childrenOf` see a transaction's own uncommitted writes; `all` does not). */
+ *  (`get`/`has`/`size`/`childrenOf`/`fieldValue` see a transaction's own uncommitted writes; `all` does not). */
 export interface EntryStoreView {
   readonly all: readonly Entry[];
   get(id: EntryId | string): Entry | undefined;
@@ -21,6 +22,10 @@ export interface EntryStoreView {
   readonly size: number;
   /** Direct children, in insertion order. An entry with no children returns `[]`. */
   childrenOf(id: EntryId | string): readonly Entry[];
+  /** The value of `field` on this entry. Routes through the Field registry, so a meta Field and
+   *  a compute Field take the same call as `start`. An unregistered key throws `UnknownFieldError`.
+   *  A missing id throws `EntryNotFoundError`. */
+  fieldValue<T>(id: EntryId | string, field: FieldKey): T | undefined;
 }
 
 /** The Dataset's entries, read and write — `dataset.entries.add/update/remove`. Each
