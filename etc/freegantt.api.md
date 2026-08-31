@@ -65,7 +65,7 @@ export class Dataset<TMeta = unknown, TFields extends Record<string, unknown> = 
     get fields(): {
         readonly all: readonly Field[];
     };
-    static fromJSON<TMeta = unknown, TFields extends Record<string, unknown> = Record<string, unknown>>(doc: DatasetDocument<TMeta>): Dataset<TMeta, TFields>;
+    static fromJSON<TMeta = unknown, TFields extends Record<string, unknown> = Record<string, unknown>>(doc: DatasetDocument<TMeta>, options?: Pick<DatasetOptions, 'fields' | 'fieldTypes' | 'aggregators'>): Dataset<TMeta, TFields>;
     isRollUpKind(kind: EntryKind): boolean;
     // (undocumented)
     off<K extends keyof DatasetEventMap>(name: K, handler: (payload: DatasetEventMap[K]) => void | false): void;
@@ -88,10 +88,11 @@ export interface DatasetDocument<TMeta = unknown> {
     dateOnlyEnd: DateOnlyEndRule;
     // (undocumented)
     entries: readonly EntryDocument<TMeta>[];
+    fields?: readonly SerializedField[];
     // (undocumented)
     rollUpKinds: readonly EntryKind[];
     // (undocumented)
-    schema: 1;
+    schema: 1 | 2;
     // (undocumented)
     timeZone: string;
 }
@@ -653,6 +654,21 @@ export interface SelectionChange {
     // (undocumented)
     readonly to: readonly EntryId[];
 }
+
+// @public
+export type SerializedField = Pick<Field, 'key' | 'type' | 'source' | 'rollUp' | 'column'> & {
+    key: FieldKey;
+    type?: FieldTypeName;
+    source: {
+        from: 'entry';
+        field: CoreFieldKey;
+    } | {
+        from: 'meta';
+        key: string;
+    };
+    rollUp?: AggregatorName;
+    column?: Omit<GridColumn, 'field'>;
+};
 
 // @public (undocumented)
 export type ShippedPresetId = 'hour' | 'day' | 'week' | 'month' | 'year' | 'dayAndWeek' | 'weekAndMonth' | 'monthAndYear' | 'hourDayWeek' | 'dayWeekMonth' | 'weekMonthYear';
