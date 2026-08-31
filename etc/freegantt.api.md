@@ -322,6 +322,13 @@ export interface FieldContext {
 export type FieldKey = CoreFieldKey | (string & {});
 
 // @public
+export class FieldNotColumnableError extends FreeGanttError {
+    constructor(key: string);
+    // (undocumented)
+    readonly key: string;
+}
+
+// @public
 export type FieldSource = {
     from: 'entry';
     field: CoreFieldKey;
@@ -395,6 +402,9 @@ export class Gantt {
     // (undocumented)
     get fit(): TimeScaleFit;
     set fit(f: TimeScaleFit);
+    // (undocumented)
+    get gridColumns(): readonly GridColumnInput[];
+    set gridColumns(columns: readonly GridColumnInput[]);
     // (undocumented)
     get gridWidth(): number;
     set gridWidth(px: number);

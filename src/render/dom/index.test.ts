@@ -239,6 +239,49 @@ describe('render/dom backend', () => {
     backend.destroy();
   });
 
+  it('four columns paint four cells; widths and alignment apply; a removed column prunes its node', () => {
+    const backend = createDomBackend();
+    const { grid, timeline } = mountSurfaces();
+    const gridHeader = document.createElement('div');
+    document.body.append(gridHeader);
+    backend.mount({ grid, timeline, gridHeader });
+
+    const base = computeFrame({
+      entries: sampleEntries.slice(0, 1),
+      scale,
+      preset,
+      visible: { x: 0, y: 0, width: 0, height: 0 },
+      rowHeight: 32,
+      revision: 0,
+      columns: [
+        { key: 'name', header: 'Name', align: 'start', format: (e) => e.name },
+        { key: 'start', header: 'Start', align: 'start', width: 80, format: () => 'Sep 1' },
+        { key: 'duration', header: 'Duration', align: 'end', format: () => '2 d' },
+        { key: 'cost', header: 'Budget', align: 'end', width: 90, format: () => '$500' },
+      ],
+    });
+    backend.sync(base);
+
+    const row = grid.querySelector<HTMLElement>('.fg-row')!;
+    expect(row.querySelectorAll('.fg-row-label, .fg-row-cell')).toHaveLength(4);
+    expect(gridHeader.querySelectorAll('.fg-col-header')).toHaveLength(4);
+    expect(gridHeader.querySelector('[data-field="cost"]')?.textContent).toBe('Budget');
+    const costCell = row.querySelector<HTMLElement>('[data-field="cost"]')!;
+    expect(costCell.style.width).toBe('90px');
+    expect(costCell.dataset['align']).toBe('end');
+    const costNode = costCell;
+
+    backend.sync({
+      ...base,
+      columns: base.columns.filter((c) => c.key !== 'cost'),
+      rows: base.rows.map((r) => ({ ...r, cells: r.cells.slice(0, 3) })),
+    });
+    expect(row.querySelector('[data-field="cost"]')).toBeNull();
+    expect(costNode.isConnected).toBe(false);
+    expect(row.querySelectorAll('.fg-row-label, .fg-row-cell')).toHaveLength(3);
+    backend.destroy();
+  });
+
   it("stamps .fg-row's aria-posinset/aria-setsize from the frame's absolute row index and total row count, not the windowed count (D-S1.10-5)", () => {
     const backend = createDomBackend();
     const { grid, timeline } = mountSurfaces();

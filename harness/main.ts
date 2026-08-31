@@ -1,19 +1,55 @@
 import './harness-nav.ts';
 import { Gantt, Dataset, MutationCancelledError } from '../src/api/index.js';
-import type { Theme } from '../src/api/index.js';
+import type { GridColumnInput, Theme } from '../src/api/index.js';
 import type { TimeUnit } from '../src/model/index.js';
 import { demoEntryInputs } from '../fixtures/demo-dataset.js';
 import { mountTimelineToolbar } from './timeline-toolbar.js';
 
-const dataset = new Dataset({ entries: demoEntryInputs, timeZone: 'UTC' });
+const COST_TYPE = {
+  money: {
+    rollUp: 'sum' as const,
+    formatValue: (value: unknown, ctx: { locale: Intl.LocalesArgument }) =>
+      typeof value === 'number'
+        ? new Intl.NumberFormat(ctx.locale, {
+            style: 'currency',
+            currency: 'USD',
+            maximumFractionDigits: 0,
+          }).format(value)
+        : '',
+    column: { align: 'end' as const, header: 'Cost' },
+  },
+};
 
-const gantt = new Gantt({ container: '#gantt', dataset });
+const dataset = new Dataset({
+  entries: demoEntryInputs.map((entry, i) => (i === 0 ? { ...entry, meta: { cost: 12_000 } } : entry)),
+  timeZone: 'UTC',
+  fieldTypes: COST_TYPE,
+  fields: [{ key: 'cost', type: 'money' }],
+});
+
+const GRID_WITH_BUDGET: readonly GridColumnInput[] = [
+  'name',
+  'start',
+  'duration',
+  { field: 'cost', header: 'Budget' },
+];
+const GRID_WITHOUT_BUDGET: readonly GridColumnInput[] = ['name', 'start', 'duration'];
+
+const gantt = new Gantt({ container: '#gantt', dataset, gridColumns: GRID_WITH_BUDGET });
 // Zero-interaction visibility for the today line (S1.12, D-S1.12-14) — header readability follow-up
 // pass 4. Needs no ResizeObserver measurement first: panToToday reads the already-resolved
 // TimeScale, and the pane re-measures/re-renders on its own right after mount. `panToToday()`'s
 // default `align: 'start'` leaves `todayLineMarginTicks`' worth of the timeline visible to the left
 // of the line, the same landing a later "Today" button click reuses (S1.13 follow-up).
 gantt.panToToday();
+
+const toggleBudgetBtn = document.querySelector<HTMLButtonElement>('#toggle-budget-btn')!;
+let budgetVisible = true;
+toggleBudgetBtn.addEventListener('click', () => {
+  budgetVisible = !budgetVisible;
+  gantt.gridColumns = budgetVisible ? GRID_WITH_BUDGET : GRID_WITHOUT_BUDGET;
+  toggleBudgetBtn.textContent = budgetVisible ? 'Hide Budget' : 'Show Budget';
+});
 
 mountTimelineToolbar({ gantt, container: document.querySelector<HTMLDivElement>('#toolbar')! });
 

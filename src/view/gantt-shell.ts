@@ -13,6 +13,7 @@ import type {
   DateLineSpec,
   Overscan,
   PresetRef,
+  ResolvedColumn,
   TimeScaleFit,
   ViewportHandle,
   ViewPreset,
@@ -39,7 +40,17 @@ import type { ViewportGestures } from './viewport-gestures.js';
 import { ensureBaseStyles } from './styles.js';
 import type { InteractionState, RenderBackend } from '../render/backend.js';
 import { EntryNotFoundError, ContainerNotFoundError, entryId, itemId } from '../model/index.js';
-import type { Dataset, Entry, EntryEdits, EntryId, ItemId, Instant, Size, TimeSpan } from '../model/index.js';
+import type {
+  Dataset,
+  Entry,
+  EntryEdits,
+  EntryId,
+  GridColumnInput,
+  ItemId,
+  Instant,
+  Size,
+  TimeSpan,
+} from '../model/index.js';
 import type { EditExtender } from '../data/edit-extension.js';
 import { resolveCapabilities } from './capability.js';
 import type { Capabilities, Interactions } from './capability.js';
@@ -49,6 +60,7 @@ import { FrameScheduler } from './frame-scheduler.js';
 import { projectAffordances } from './affordance-projection.js';
 import { GesturePipeline } from './gesture-pipeline.js';
 import type { EntryGestureContext } from './entry-gesture-context.js';
+import { DEFAULT_GRID_COLUMNS, resolveColumns } from './grid-columns.js';
 
 /** One `{ detach() }` for every inject slot. `view/` may not import `interaction/` (plans/01 §1:
  *  `INT --> VIEW`, not the reverse), so the shell takes pointer and keyboard attachments by
@@ -140,6 +152,8 @@ export interface GanttShellOptions {
    *  is on. `false` turns them all off. The imperative `zoomBy`/`panToDate` surface does not
    *  consult this. */
   viewportGestures?: ViewportGestures;
+  /** Live (S4.3, D-S4-12). Field keys in display order, plus per-Gantt overrides. Default `['name']`. */
+  gridColumns?: readonly GridColumnInput[];
   /** Expert knob, not on `GanttOptions` (plans/02 "two callers, two surfaces") — a test naming its
    * own `RenderBackend<HTMLElement>` in place of the DOM one (§9-I: the seam had two implementations
    * and one hardcoded call site, so nothing could reach the other short of mocking the module).
@@ -250,6 +264,8 @@ export class GanttShell {
   #todayLine: boolean | Instant = true;
   #dateLines: readonly DateLineSpec[] = [];
   #todayLineMarginTicks: number = DEFAULT_TODAY_LINE_MARGIN_TICKS;
+  #gridColumnInput: readonly GridColumnInput[] = DEFAULT_GRID_COLUMNS;
+  #resolvedColumns: readonly ResolvedColumn[] = [];
 
   constructor(options: GanttShellOptions) {
     this.#options = options;
@@ -291,12 +307,18 @@ export class GanttShell {
     this.#locale = options.locale;
     this.#todayLine = options.todayLine ?? true;
     this.#dateLines = options.dateLines ?? [];
+    this.#gridColumnInput = options.gridColumns ?? DEFAULT_GRID_COLUMNS;
+    this.#bindColumns();
 
     // Mount before binding (#22): the render target exists by the time the binding's own onChange
     // — which IS this shell's first render — fires, so there is no construction-order exception to
     // document and no separate explicit render() call after bind().
     this.#backend = options.backend ?? createDomBackend();
-    this.#backend.mount({ grid: this.#panes.grid, timeline: this.#panes.timeline });
+    this.#backend.mount({
+      grid: this.#panes.grid,
+      timeline: this.#panes.timeline,
+      gridHeader: this.#panes.gridHeader,
+    });
 
     // The timeline pane is the single native scroller (D-D, D-S1.8-1); the grid pane follows it by
     // transform, in render/dom's sync(). Constructed before either bind (Viewport's fan-in,
@@ -419,6 +441,17 @@ export class GanttShell {
    *  remount — it flows straight through `LayoutInput.locale` on the next render. */
   set locale(l: Intl.LocalesArgument | undefined) {
     this.#locale = l;
+    this.#bindColumns();
+    this.#frames.request();
+  }
+
+  get gridColumns(): readonly GridColumnInput[] {
+    return this.#gridColumnInput;
+  }
+
+  set gridColumns(columns: readonly GridColumnInput[]) {
+    this.#gridColumnInput = columns;
+    this.#bindColumns();
     this.#frames.request();
   }
 
@@ -705,6 +738,14 @@ export class GanttShell {
     });
   }
 
+  #bindColumns(): void {
+    const bind =
+      this.#locale !== undefined
+        ? { timeZone: this.#options.dataset.timeZone, locale: this.#locale }
+        : { timeZone: this.#options.dataset.timeZone };
+    this.#resolvedColumns = resolveColumns(this.#gridColumnInput, this.#options.dataset.fields.all, bind);
+  }
+
   #commitGridWidth(px: number): void {
     const from = this.#paneLayout.gridWidth;
     const to = px;
@@ -740,6 +781,7 @@ export class GanttShell {
       locale: this.#locale,
       todayLine: this.#todayLine,
       dateLines: this.#dateLines,
+      columns: this.#resolvedColumns,
     });
     this.#backend.sync(frame);
     // D-S3-10: rebuilt every render from the frame layout just computed — item ids are deterministic

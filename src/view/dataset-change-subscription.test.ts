@@ -11,6 +11,7 @@ function fakeDataset(): { dataset: Dataset; emit: (changeSet: ChangeSet) => void
     entries: undefined as unknown as Dataset['entries'],
     timeZone: 'UTC',
     isRollUpKind: () => false,
+    fields: { all: [] },
     on: (_name, handler) => {
       handlers.add(handler);
     },

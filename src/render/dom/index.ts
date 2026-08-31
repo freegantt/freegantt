@@ -12,13 +12,29 @@ import type {
   ItemPreview,
   RowId,
 } from '../../layout/index.js';
+import type { FrameColumn } from '../../layout/index.js';
 import type { RenderBackend, RenderSurfaces, InteractionState, HitResult } from '../backend.js';
 import { attachDateLines } from './date-line.js';
 import type { DateLineAttachment } from './date-line.js';
 import { KeyedLayer, NestedKeyedLayers } from './sync-keyed.js';
 
 type TickGeom = Pick<FrameHeaderTick, 'x' | 'width' | 'label'>;
-type CellGeom = { text: string };
+type CellItem = {
+  key: string;
+  text: string;
+  first: boolean;
+  align: 'start' | 'end';
+  width?: number;
+  flex?: number;
+};
+type CellGeom = {
+  text: string;
+  first: boolean;
+  align: 'start' | 'end';
+  width: number;
+  flex: number;
+};
+type HeaderCellGeom = Omit<CellGeom, 'first' | 'text'> & { text: string };
 type RowGeom = {
   top: number;
   height: number;
@@ -41,11 +57,53 @@ function flagTokens(flags: BarFlags): string {
   return (Object.keys(flags) as (keyof BarFlags)[]).filter((k) => flags[k]).join(' ');
 }
 
+function cellItemsFor(cells: readonly string[], columns: readonly FrameColumn[]): readonly CellItem[] {
+  return cells.map((text, i) => {
+    const column = columns[i];
+    const item: CellItem = {
+      key: column !== undefined ? String(column.key) : String(i),
+      text,
+      first: i === 0,
+      align: column?.align ?? 'start',
+    };
+    if (column?.width !== undefined) item.width = column.width;
+    if (column?.flex !== undefined) item.flex = column.flex;
+    return item;
+  });
+}
+
+function paintColumnBox(
+  node: HTMLElement,
+  geom: { width: number; flex: number; align: 'start' | 'end' },
+): void {
+  node.dataset['align'] = geom.align;
+  if (geom.width > 0) {
+    node.style.width = `${geom.width}px`;
+    node.setAttribute('data-fixed', '');
+  } else {
+    node.style.width = '';
+    node.removeAttribute('data-fixed');
+  }
+  if (geom.flex > 0) node.style.setProperty('--fg-col-flex', String(geom.flex));
+  else node.style.removeProperty('--fg-col-flex');
+}
+
+function cellGeom(item: CellItem): CellGeom {
+  return {
+    text: item.text,
+    first: item.first,
+    align: item.align,
+    width: item.width ?? 0,
+    flex: item.flex ?? 0,
+  };
+}
+
 export function createDomBackend(): RenderBackend<HTMLElement> {
   // The grid pane's row layer (RenderSurfaces.grid) — created by `view/pane-layout.ts`, not this
   // backend (S1.8, D-S1.8-2). No scrollbar of its own: it follows the timeline pane's scroll
   // position by one `translateY(-visible.y)` per frame (D-S1.8-1), written in `sync()` below.
   let gridLayer: HTMLElement | undefined;
+  let gridHeaderLayer: HTMLElement | undefined;
   // The timeline pane's content layer (RenderSurfaces.timeline) — this backend's own header, bar
   // and sizer layers mount inside it, at x=0: no gutter to offset by, the grid pane owns that width.
   let timelineHost: HTMLElement | undefined;
@@ -68,7 +126,8 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
   const bandTickLayers = new NestedKeyedLayers<number, FrameHeaderTick, number, TickGeom>();
   const rowLayer = new KeyedLayer<FrameRow, RowId, RowGeom>();
   // One cell layer per row id, same nested pattern as bandTickLayers above.
-  const rowCellLayers = new NestedKeyedLayers<RowId, string, number, CellGeom>();
+  const rowCellLayers = new NestedKeyedLayers<RowId, CellItem, string, CellGeom>();
+  const headerCellLayer = new KeyedLayer<CellItem, string, HeaderCellGeom>();
   const barLayerCache = new KeyedLayer<FrameBar, ItemId, BarGeom>();
 
   // D-S3-6/D-S3-7: what the last applyState() call painted, so the next call touches only the bars
@@ -239,21 +298,41 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
   }
 
   const cellSpec = {
-    key: (_cell: string, i: number) => i,
-    create: (_cell: string, i: number): HTMLElement => {
+    key: (cell: CellItem) => cell.key,
+    create: (_cell: CellItem, key: string): HTMLElement => {
       const node = document.createElement('div');
-      // The first cell keeps the pre-#81 class so existing style tokens and selectors still apply
-      // (issue #81: `.fg-row-label` stays as the class on the first cell).
-      node.className = i === 0 ? 'fg-row-label' : 'fg-row-cell';
+      node.dataset['field'] = key;
       return node;
     },
-    toGeom: (cell: string): CellGeom => ({ text: cell }),
+    toGeom: (cell: CellItem): CellGeom => cellGeom(cell),
     patch: (node: HTMLElement, geom: CellGeom): void => {
+      node.className = geom.first ? 'fg-row-label' : 'fg-row-cell';
       node.textContent = geom.text;
+      paintColumnBox(node, geom);
     },
   };
 
-  function syncRows(rows: readonly FrameRow[], rowCount: number): void {
+  const headerCellSpec = {
+    key: (cell: CellItem) => cell.key,
+    create: (_cell: CellItem, key: string): HTMLElement => {
+      const node = document.createElement('div');
+      node.className = 'fg-col-header';
+      node.dataset['field'] = key;
+      return node;
+    },
+    toGeom: (cell: CellItem): HeaderCellGeom => ({
+      text: cell.text,
+      align: cell.align,
+      width: cell.width ?? 0,
+      flex: cell.flex ?? 0,
+    }),
+    patch: (node: HTMLElement, geom: HeaderCellGeom): void => {
+      node.textContent = geom.text;
+      paintColumnBox(node, geom);
+    },
+  };
+
+  function syncRows(rows: readonly FrameRow[], rowCount: number, columns: readonly FrameColumn[]): void {
     if (!gridLayer) return;
     rowLayer.sync(gridLayer, rows, {
       key: (row) => row.id,
@@ -274,20 +353,36 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
       },
     });
 
-    syncCellsForEachRow(rows);
+    syncCellsForEachRow(rows, columns);
   }
 
   /** Each row owns a nested keyed list of cells (one per configured column), the same "keyed list
    * inside a keyed list" pattern `syncHeader` uses for ticks inside bands. Split out from `syncRows`
    * because it needs its own per-row layer lookup and its own prune pass. */
-  function syncCellsForEachRow(rows: readonly FrameRow[]): void {
+  function syncCellsForEachRow(rows: readonly FrameRow[], columns: readonly FrameColumn[]): void {
     rows.forEach((row) => {
       const rowNode = rowLayer.node(row.id);
       if (!rowNode) return;
-      rowCellLayers.layerFor(row.id).sync(rowNode, row.cells, cellSpec);
+      rowCellLayers.layerFor(row.id).sync(rowNode, cellItemsFor(row.cells, columns), cellSpec);
     });
 
     rowCellLayers.prune(new Set(rows.map((row) => row.id)));
+  }
+
+  function syncGridHeader(columns: readonly FrameColumn[]): void {
+    if (!gridHeaderLayer) return;
+    const items: CellItem[] = columns.map((column, i) => {
+      const item: CellItem = {
+        key: String(column.key),
+        text: column.header,
+        first: i === 0,
+        align: column.align,
+      };
+      if (column.width !== undefined) item.width = column.width;
+      if (column.flex !== undefined) item.flex = column.flex;
+      return item;
+    });
+    headerCellLayer.sync(gridHeaderLayer, items, headerCellSpec);
   }
 
   function syncBars(bars: readonly FrameBar[]): void {
@@ -332,6 +427,8 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
     mount(surfaces: RenderSurfaces<HTMLElement>) {
       gridLayer = surfaces.grid;
       gridLayer.replaceChildren();
+      gridHeaderLayer = surfaces.gridHeader;
+      gridHeaderLayer?.replaceChildren();
       timelineHost = surfaces.timeline;
       timelineHost.replaceChildren();
 
@@ -384,7 +481,8 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
         headerLayer.style.width = `${frame.contentWidth}px`;
       }
       syncHeader(frame.header.bands);
-      syncRows(frame.rows, frame.rowCount);
+      syncGridHeader(frame.columns);
+      syncRows(frame.rows, frame.rowCount, frame.columns);
       syncBars(frame.bars);
       // A resize commit repaints the resized bar with new geometry through this same `sync()`, but
       // `applyState`'s handle repaint is gated on `resizableItemId` actually changing — it stays the
@@ -490,6 +588,7 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
       bandTickLayers.clear();
       rowLayer.clear();
       rowCellLayers.clear();
+      headerCellLayer.clear();
       barLayerCache.clear();
       barGeomByItemId.clear();
       paintedHovered = undefined;
@@ -501,6 +600,7 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
       paintedDragging = new Set();
       paintedGhost = new Set();
       gridLayer = undefined;
+      gridHeaderLayer = undefined;
       timelineHost = undefined;
       headerLayer = undefined;
       barLayer = undefined;

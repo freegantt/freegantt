@@ -8,6 +8,8 @@ import { resolveDateLines } from './date-line.js';
 import type { DateLine, DateLineSpec } from './date-line.js';
 import { PrefixSumHeightIndex } from './row-height-index.js';
 import type { RowHeightIndex } from './row-height-index.js';
+import { paintColumns } from './column.js';
+import type { FrameColumn, ResolvedColumn } from './column.js';
 
 /** Shipped Tick box floor (CONTEXT.md) — `--fg-tick-box-floor` fallback and CSS padding calc. */
 export const DEFAULT_TICK_BOX_FLOOR_PX = 9;
@@ -37,8 +39,7 @@ export interface FrameRow {
   top: number;
   height: number;
   laneCount: number;
-  /** One library-formatted string per configured grid column, in column order (ADR 0005). Until S4
-   * supplies the field registry, this is always one entry: `entry.name`. */
+  /** One library-formatted string per configured grid column, in column order (ADR 0005). */
   cells: readonly string[];
 }
 
@@ -136,6 +137,8 @@ export interface GeometryFrame {
   bars: FrameBar[];
   links: readonly FrameLink[];
   decorations: readonly FrameDecoration[];
+  /** Paint description for Grid columns, in display order. Matches `rows[].cells` 1:1 (D-S4-13). */
+  columns: readonly FrameColumn[];
 }
 
 export interface LayoutInput {
@@ -161,6 +164,22 @@ export interface LayoutInput {
   /** Tick box floor in px (CONTEXT.md). Default `DEFAULT_TICK_BOX_FLOOR_PX`. View reads
    *  `--fg-tick-box-floor` and passes it; layout never restates the stylesheet. */
   tickBoxFloorPx?: number;
+  /** Visible Grid columns. Omitted → one `name` cell, matching S1's single label column (D-S4-12). */
+  columns?: readonly ResolvedColumn[];
+}
+
+const NAME_ONLY_COLUMNS: readonly FrameColumn[] = Object.freeze([
+  { key: 'name', header: 'Name', align: 'start' },
+]);
+
+function cellsFor(entry: Entry, columns: readonly ResolvedColumn[] | undefined): readonly string[] {
+  if (columns === undefined || columns.length === 0) return [entry.name];
+  return columns.map((column) => column.format(entry));
+}
+
+function columnsForFrame(columns: readonly ResolvedColumn[] | undefined): readonly FrameColumn[] {
+  if (columns === undefined || columns.length === 0) return NAME_ONLY_COLUMNS;
+  return paintColumns(columns);
 }
 
 /** S0/S1 scope: flat row-per-entry, one bar per entry, fixed row height (plans/03 S0-S1).
@@ -214,7 +233,14 @@ export function computeFrame(
     }
 
     const id = rowId(`row:${entry.id}`);
-    rows.push({ id, index, top, height: rowHeight, laneCount: 1, cells: [entry.name] });
+    rows.push({
+      id,
+      index,
+      top,
+      height: rowHeight,
+      laneCount: 1,
+      cells: cellsFor(entry, input.columns),
+    });
 
     const { x, width } = barSpan(entry, scale);
     if (!intersectsHorizontally(x, width)) continue;
@@ -289,5 +315,6 @@ export function computeFrame(
     bars,
     links: [],
     decorations,
+    columns: columnsForFrame(input.columns),
   };
 }

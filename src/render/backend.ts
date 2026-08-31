@@ -42,6 +42,8 @@ export interface HitResult {
 export interface RenderSurfaces<THost> {
   grid: THost;
   timeline: THost;
+  /** Column header row in the grid pane. Omitted by tests that only paint body cells. */
+  gridHeader?: THost;
 }
 
 /** `THost` is the seam's only DOM-shaped type parameter — `backend.ts` itself still names no DOM

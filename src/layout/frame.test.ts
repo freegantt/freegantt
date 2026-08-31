@@ -99,6 +99,23 @@ describe('computeFrame', () => {
     expect(frame.rows[0]?.cells).toEqual([sampleEntries[0]?.name]);
   });
 
+  it('fills cells from LayoutInput.columns in column order (D-S4-13)', () => {
+    const frame = computeFrame({
+      entries: sampleEntries.slice(0, 1),
+      scale,
+      preset,
+      visible,
+      rowHeight: 32,
+      revision: 0,
+      columns: [
+        { key: 'name', header: 'Name', align: 'start', format: (entry) => entry.name },
+        { key: 'kind', header: 'Kind', align: 'start', format: (entry) => entry.kind },
+      ],
+    });
+    expect(frame.rows[0]?.cells).toEqual([sampleEntries[0]?.name, sampleEntries[0]?.kind]);
+    expect(frame.columns.map((c) => c.key)).toEqual(['name', 'kind']);
+  });
+
   it('culls rows outside the vertical window (#20), with overscan disabled', () => {
     const windowed = computeFrame({
       entries: sampleEntries,

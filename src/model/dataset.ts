@@ -4,7 +4,7 @@
 // class adds `transaction()` and the construction-time options a view never reads.
 
 import type { Entry, EntryEdit, EntryInput, EntryKind } from './entry.js';
-import type { FieldKey } from './field.js';
+import type { Field, FieldKey } from './field.js';
 import type { EntryId } from './ids.js';
 import type { DatasetEventMap } from './change-set.js';
 
@@ -50,6 +50,8 @@ export interface EntryStore<
 export interface Dataset<TMeta = unknown, TFields extends Record<string, unknown> = Record<string, unknown>> {
   readonly entries: EntryStore<TMeta, TFields>;
   readonly timeZone: string;
+  /** Resolved Field declarations this Dataset owns, core Fields included. */
+  readonly fields: { readonly all: readonly Field[] };
   isRollUpKind(kind: EntryKind): boolean;
   on<K extends keyof DatasetEventMap>(name: K, handler: (payload: DatasetEventMap[K]) => void | false): void;
   off<K extends keyof DatasetEventMap>(name: K, handler: (payload: DatasetEventMap[K]) => void | false): void;

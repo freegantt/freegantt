@@ -85,7 +85,11 @@ ${DARK_COLOR_TOKENS}
 .fg-grid-pane { display: flex; flex-direction: column; flex-shrink: 0; overflow: hidden; background: var(--fg-pane-bg); }
 /* S1.12, D-S1.12-9: mirrors .fg-header's own band stack — one .fg-band per header band
    (setHeaderBandCount), sized from the same --fg-band-height expression. */
-.fg-grid-spacer { flex-shrink: 0; display: flex; flex-direction: column; }
+.fg-grid-spacer { flex-shrink: 0; display: flex; flex-direction: column; position: relative; }
+.fg-grid-header { position: absolute; inset: 0; display: flex; align-items: stretch; z-index: 1; color: var(--fg-row-label-color); }
+.fg-col-header { display: flex; align-items: center; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; box-sizing: border-box; flex: var(--fg-col-flex, 1) 1 0; }
+.fg-col-header[data-fixed] { flex: 0 0 auto; }
+.fg-col-header[data-align='end'] { justify-content: flex-end; text-align: end; }
 .fg-rows-clip { position: relative; flex: 1 1 auto; overflow: hidden; }
 .fg-rows { position: relative; height: 100%; }
 .fg-splitter { flex-shrink: 0; cursor: col-resize; background: var(--fg-splitter-color); }
@@ -103,9 +107,11 @@ ${DARK_COLOR_TOKENS}
    --fg-tick-box-floor is the Tick box floor (CONTEXT.md): padding-inline derives from it so the
    CSS box and layout's clamp input stay one Token. The 1px in the calc is this rule's border-left. */
 .fg-tick { color: var(--fg-header-subtext); position: absolute; top: 0; left: 0; height: var(--fg-band-height, 20px); line-height: var(--fg-band-height, 20px); box-sizing: border-box; padding: 0 calc((var(--fg-tick-box-floor, ${DEFAULT_TICK_BOX_FLOOR_PX}px) - 1px) / 2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-left: 1px solid var(--fg-header-divider-color); }
-.fg-row { background: var(--fg-row-even-bg); position: absolute; top: 0; left: 0; width: 100%; }
+.fg-row { background: var(--fg-row-even-bg); position: absolute; top: 0; left: 0; width: 100%; display: flex; align-items: stretch; }
 .fg-row:nth-child(odd) { background: var(--fg-row-odd-bg); }
-.fg-row-label { color: var(--fg-row-label-color); }
+.fg-row-label, .fg-row-cell { color: var(--fg-row-label-color); display: flex; align-items: center; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; box-sizing: border-box; flex: var(--fg-col-flex, 1) 1 0; }
+.fg-row-label[data-fixed], .fg-row-cell[data-fixed] { flex: 0 0 auto; }
+.fg-row-label[data-align='end'], .fg-row-cell[data-align='end'] { justify-content: flex-end; text-align: end; }
 .fg-bars { position: relative; }
 /* D-S3-21: touch-action: none on the bar itself, not just the resize handles — a touch drag must
    never fight the browser's own pan/scroll gesture over the same surface. */
