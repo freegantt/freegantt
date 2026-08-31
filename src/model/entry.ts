@@ -55,10 +55,16 @@ export interface EntryInput<TMeta = unknown> {
 /** What a consumer may change. Input-shaped, so dates stay loose the way `EntryInput`'s are: the store
  * reads them through `time/`'s `toInstant`/`toEndInstant` in the dataset's zone, exactly as
  * construction does. `id` is not editable — an id is identity. Declared Field keys (`cost`) are
- * legal beside core keys (D-S4-2); the registry rejects an unregistered name at the call. */
-export type EntryEdit<TMeta = unknown> = Partial<Omit<EntryInput<TMeta>, 'id'>> & {
-  readonly [field: string]: unknown;
-};
+ * legal beside core keys (D-S4-2); the registry rejects an unregistered name at the call.
+ *
+ * `TFields` is the TypeScript map of those declared keys (`Dataset<TMeta, { cost: number }>`). The
+ * default stays open (`Record<string, unknown>`) so a Dataset that omitted the second generic still
+ * type-checks `update({ cost: 500 })`; pass `{ cost: number }` to get a type error on `'nope'` and
+ * autocomplete for `cost`. */
+export type EntryEdit<
+  TMeta = unknown,
+  TFields extends Record<string, unknown> = Record<string, unknown>,
+> = Partial<Omit<EntryInput<TMeta>, 'id'>> & Partial<TFields>;
 
 /** Storage-shaped edit: every field already read through `time/` (an `Instant`, not a loose
  *  `InstantInput`) — what a write set holds and what `diffEdit` compares against `entries`. Distinct

@@ -13,7 +13,7 @@ The API is a product surface, designed once and defended. Everything here is wha
 3. **Every mutating interaction has a cancelable `before*` event.** Consumers can veto a drop, substitute their own editor, validate a link — before commit, not after.
 4. **Honest surface.** Nothing in the published types throws "not implemented" (invariant I11). Declared events fire; declared methods work.
 5. **Predictable naming.** One vocabulary, one bus, greppable pairs (`beforeEntryMove` / `entryMove`). No synonyms, no two names for one concept.
-6. **Typed extensibility.** `meta` generics flow end-to-end: `new Dataset<{ team: string }>` makes `entry.meta.team` typed in renderers, events, and queries.
+6. **Typed extensibility.** `meta` generics flow end-to-end: `new Dataset<{ team: string }>` makes `entry.meta.team` typed in renderers, events, and queries. Declared Field writes take a second type parameter: `new Dataset<{ team: string }, { cost: number }>` types `update({ cost })`. TypeScript does not infer that map from the `fields` array once TMeta is written.
 
 ---
 
@@ -23,7 +23,7 @@ The API is a product surface, designed once and defended. Everything here is wha
 import { Dataset, Gantt } from 'freegantt';
 
 // ── Data: headless, works in Node ───────────────────────────────
-const dataset = new Dataset<{ team: string }>({
+const dataset = new Dataset<{ team: string }, { cost: number }>({
   timeZone: 'America/Chicago',            // explicit; 'local' is opt-in
   dateOnlyEnd: 'inclusive',               // default; see §2.1
   rollUpKinds: ['group'],                 // default; `'none'` keeps caller-assigned parent values

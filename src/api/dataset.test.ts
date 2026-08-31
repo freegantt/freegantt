@@ -380,3 +380,40 @@ describe('entries.fieldValue', () => {
     });
   });
 });
+
+describe('Dataset generics (#123)', () => {
+  it('types meta from TMeta and declared Field writes from TFields', () => {
+    const dataset = new Dataset<{ team: string }, { cost: number }>({
+      timeZone: 'UTC',
+      fieldTypes: { money: { rollUp: 'sum' } },
+      fields: [{ key: 'cost', type: 'money' }],
+      entries: [
+        {
+          id: 't1',
+          name: 'Design',
+          start: '2026-09-01',
+          end: '2026-09-08',
+          meta: { team: 'A' },
+        },
+      ],
+    });
+
+    const team: string | undefined = dataset.entries.get('t1')?.meta?.team;
+    expect(team).toBe('A');
+
+    const updated = dataset.entries.update('t1', { cost: 500 });
+    expect(updated.meta?.team).toBe('A');
+    expect(dataset.entries.fieldValue<number>('t1', 'cost')).toBe(500);
+
+    const fromJson = Dataset.fromJSON<{ team: string }, { cost: number }>(dataset.toJSON());
+    expect(fromJson.entries.get('t1')?.meta?.team).toBe('A');
+
+    // Compile-time only: a string is not a number for `cost`, and `bogus` is not a Field key.
+    if (false as boolean) {
+      // @ts-expect-error — cost is number
+      dataset.entries.update('t1', { cost: 'nope' });
+      // @ts-expect-error — undeclared key
+      dataset.entries.update('t1', { bogus: 1 });
+    }
+  });
+});
