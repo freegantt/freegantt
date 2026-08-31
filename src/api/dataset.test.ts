@@ -170,6 +170,24 @@ describe('Dataset transaction/on/off delegation', () => {
     const round = Dataset.fromJSON(doc).toJSON();
     expect(JSON.stringify(round)).toBe(JSON.stringify(doc));
   });
+
+  it('[S4-A1] fromJSON(toJSON(d), { aggregators }) still sums after a later child edit', () => {
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      fieldTypes: { money: { rollUp: 'sum' } },
+      fields: [{ key: 'cost', type: 'money' }],
+      entries: [
+        { id: 'root', name: 'Sitework', kind: 'group' },
+        oneEntry({ id: 'leaf', parentId: 'root', meta: { cost: 100 } }),
+      ],
+    });
+    expect(dataset.entries.fieldValue('root', 'cost')).toBe(100);
+    const restored = Dataset.fromJSON(dataset.toJSON(), { aggregators: {} });
+    expect(restored.entries.fieldValue('root', 'cost')).toBe(100);
+    restored.entries.update('leaf', { cost: 250 });
+    expect(restored.entries.fieldValue('leaf', 'cost')).toBe(250);
+    expect(restored.entries.fieldValue('root', 'cost')).toBe(250);
+  });
 });
 
 /** A consumer History, written against `Dataset`'s public surface only — no `data/` import

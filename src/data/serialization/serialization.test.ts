@@ -252,7 +252,7 @@ describe('[S2-A2] toJSON / fromJSON', () => {
 
   it('throws UnsupportedSchemaError for a schema this build does not read', () => {
     const doc = {
-      schema: 2,
+      schema: 3,
       timeZone: 'UTC',
       dateOnlyEnd: 'inclusive',
       rollUpKinds: [],
@@ -265,8 +265,8 @@ describe('[S2-A2] toJSON / fromJSON', () => {
       expect(error).toBeInstanceOf(UnsupportedSchemaError);
       if (error instanceof UnsupportedSchemaError) {
         expect(error.code).toBe('unsupported-schema');
-        expect(error.schema).toBe(2);
-        expect(error.supported).toEqual([1]);
+        expect(error.schema).toBe(3);
+        expect(error.supported).toEqual([1, 2]);
       }
     }
   });

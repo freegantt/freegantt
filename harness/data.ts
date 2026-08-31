@@ -255,7 +255,7 @@ exportBtn.addEventListener('click', () => {
 importBtn.addEventListener('click', () => {
   try {
     const doc = JSON.parse(documentJson.value) as DatasetDocument<{ cost: number }>;
-    dataset = Dataset.fromJSON<{ cost: number }, { cost: number }>(doc);
+    dataset = Dataset.fromJSON<{ cost: number }, { cost: number }>(doc, COST_FIELDS);
     window.__dataset = dataset;
     gantt.destroy();
     gantt = new Gantt({ container: '#gantt', dataset });

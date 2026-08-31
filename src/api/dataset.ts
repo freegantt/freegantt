@@ -158,12 +158,14 @@ export class Dataset<TMeta = unknown, TFields extends Record<string, unknown> = 
     return writeDocument(this) as DatasetDocument<TMeta>;
   }
 
-  /** Whole-document read. Constructs a fresh Dataset through the public constructor, so the span
-   *  rollup runs on read. Unknown top-level keys are dropped; `meta` is carried as-is. */
+  /** Whole-document read. Constructs a fresh Dataset through the public constructor, so the Rollup
+   *  runs on read. The Document carries Field data keys; `options` supplies functions (D-S4-15).
+   *  Unknown top-level keys are dropped; `meta` is carried as-is. */
   static fromJSON<TMeta = unknown, TFields extends Record<string, unknown> = Record<string, unknown>>(
     doc: DatasetDocument<TMeta>,
+    options?: Pick<DatasetOptions, 'fields' | 'fieldTypes' | 'aggregators'>,
   ): Dataset<TMeta, TFields> {
-    const dataset = new Dataset<TMeta, TFields>(readDocument(doc) as DatasetOptions<TMeta>);
+    const dataset = new Dataset<TMeta, TFields>(readDocument(doc, options) as DatasetOptions<TMeta>);
     warnIfRollUpsWereCorrected(doc, dataset);
     return dataset;
   }
