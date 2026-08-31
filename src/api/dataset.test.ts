@@ -231,3 +231,28 @@ describe('Dataset.replay / invertChangeSet (consumer-surface undo)', () => {
     expect(fired).toBe(false);
   });
 });
+
+describe('Dataset fields (S4.1)', () => {
+  it("update('t1', { start, cost }) is one transaction and one changeset", () => {
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      fieldTypes: { money: { rollUp: 'sum' } },
+      fields: [{ key: 'cost', type: 'money' }],
+      entries: [oneEntry({ meta: { cost: 400 } })],
+    });
+    const changes: ChangeSet[] = [];
+    dataset.on('change', ({ changeSet }) => {
+      changes.push(changeSet);
+    });
+
+    const updated = dataset.entries.update('t1', { start: '2026-10-05', cost: 500 });
+
+    expect(changes).toHaveLength(1);
+    expect(updated.meta).toEqual({ cost: 500 });
+    const fields = changes[0]?.updated.map((row) => row.field).sort();
+    expect(fields).toEqual(['cost', 'start']);
+    expect(changes[0]?.updated).toContainEqual(
+      expect.objectContaining({ field: 'cost', from: 400, to: 500 }),
+    );
+  });
+});

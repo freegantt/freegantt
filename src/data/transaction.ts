@@ -10,6 +10,7 @@ import type {
   Entry,
   EntryId,
   EntryKind,
+  FieldContext,
   FieldUpdated,
 } from '../model/index.js';
 import { MutationCancelledError, MutationDuringNotificationError } from '../model/index.js';
@@ -17,6 +18,7 @@ import { diffEdit, foldChangeSet } from './change-set.js';
 import type { EditExtender, EntryEdits } from './edit-extension.js';
 import type { EventBus } from './event-bus.js';
 import { rollUpDerivedSpans } from './span-rollup.js';
+import type { FieldRegistry } from './fields/field-registry.js';
 
 /** Only `runTransaction` produces one. Store mutators require it, so a mutation outside a transaction
  *  does not typecheck — the belt to `docs/02` §3.6's `no-store-mutation-outside-transaction` braces.
@@ -58,6 +60,8 @@ export interface TransactionData {
    *  (`.dependency-cruiser.cjs`, D-S2-23) says so, which is what makes deleting `span-rollup.ts` a
    *  provable degradation to `derivedSpanKinds: []`'s own behavior rather than a break. */
   readonly derivedSpanKinds: ReadonlySet<EntryKind>;
+  readonly fields: FieldRegistry;
+  readonly fieldContext: FieldContext;
 }
 
 /**
@@ -194,7 +198,8 @@ export function runTransaction<T>(
   const removedEntities = data.entries.pendingRemoved();
 
   const bodyUpdated: FieldUpdated[] = [];
-  for (const [id, edit] of proposed) bodyUpdated.push(...diffEdit(byId, id, edit));
+  for (const [id, edit] of proposed)
+    bodyUpdated.push(...diffEdit(byId, id, edit, data.fields, data.fieldContext));
 
   const extenderEdits = data.editExtender({ entries: byId, proposed });
   const extenderUpdated: FieldUpdated[] = [];
@@ -210,7 +215,7 @@ export function runTransaction<T>(
         }
       }
     }
-    extenderUpdated.push(...diffEdit(byId, id, edit));
+    extenderUpdated.push(...diffEdit(byId, id, edit, data.fields, data.fieldContext));
   }
 
   const rollupUpdated = rollUpDerivedSpans(byId, mergeEdits(proposed, extenderEdits), data.derivedSpanKinds);

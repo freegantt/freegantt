@@ -87,12 +87,73 @@ export class ParentCycleError extends FreeGanttError {
   }
 }
 
-/** `code: 'unknown-field'` — an edit naming a key that is not a declared field. In S2 the legal set is
- * the core `Entry` fields; S5's field registry widens the set, not the check (D-S2-26, S2.3 §1.3). */
+/** `code: 'unknown-field'` — an edit naming a key that is not a declared Field. The registry is the
+ *  legal set: core Fields plus the consumer's (D-S4-5, D-S2-26). */
 export class UnknownFieldError extends FreeGanttError {
   constructor(field: string) {
     super('unknown-field', `entries: "${field}" is not a known field`);
     this.name = 'UnknownFieldError';
+  }
+}
+
+/** `code: 'duplicate-field-key'` — two Field declarations share a `key`, or a declaration names a
+ *  core Field (D-S4-5). */
+export class DuplicateFieldKeyError extends FreeGanttError {
+  readonly key: string;
+
+  constructor(key: string) {
+    super('duplicate-field-key', `fields: "${key}" is already declared`);
+    this.name = 'DuplicateFieldKeyError';
+    this.key = key;
+  }
+}
+
+/** `code: 'duplicate-field-source'` — two Fields resolve to the same `{ from: 'meta', key }` (D-S4-5). */
+export class DuplicateFieldSourceError extends FreeGanttError {
+  readonly metaKey: string;
+
+  constructor(metaKey: string) {
+    super(
+      'duplicate-field-source',
+      `fields: two Fields read meta key "${metaKey}" — each Document slot belongs to one Field`,
+    );
+    this.name = 'DuplicateFieldSourceError';
+    this.metaKey = metaKey;
+  }
+}
+
+/** `code: 'unknown-aggregator'` — `rollUp` names an Aggregator that is not shipped and not in
+ *  `DatasetOptions.aggregators` (D-S4-5). */
+export class UnknownAggregatorError extends FreeGanttError {
+  readonly aggregatorName: string;
+
+  constructor(aggregatorName: string) {
+    super('unknown-aggregator', `fields: aggregator "${aggregatorName}" is not registered`);
+    this.name = 'UnknownAggregatorError';
+    this.aggregatorName = aggregatorName;
+  }
+}
+
+/** `code: 'unknown-field-type'` — `type` names a bundle that is not in `fieldTypes` (D-S4-5). */
+export class UnknownFieldTypeError extends FreeGanttError {
+  readonly typeName: string;
+
+  constructor(typeName: string) {
+    super('unknown-field-type', `fields: type "${typeName}" is not registered`);
+    this.name = 'UnknownFieldTypeError';
+    this.typeName = typeName;
+  }
+}
+
+/** `code: 'field-not-columnable'` — `gridColumns` named a Field that did not declare `column`
+ *  (D-S4-12). Thrown when S4.3 resolves columns. */
+export class FieldNotColumnableError extends FreeGanttError {
+  readonly key: string;
+
+  constructor(key: string) {
+    super('field-not-columnable', `gridColumns: "${key}" is not a Grid column candidate`);
+    this.name = 'FieldNotColumnableError';
+    this.key = key;
   }
 }
 

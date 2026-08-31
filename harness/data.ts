@@ -19,8 +19,27 @@ import type { ChangeSet, DatasetDocument, DatasetEventMap } from '../src/api/ind
 import { demoEntryInputs } from '../fixtures/demo-dataset.js';
 import { mountTimelineToolbar } from './timeline-toolbar.js';
 
-let dataset = new Dataset({ entries: demoEntryInputs.slice(0, 8), timeZone: 'UTC' });
+declare global {
+  interface Window {
+    __dataset: Dataset;
+  }
+}
+
+const COST_FIELDS = {
+  fieldTypes: { money: { rollUp: 'sum' as const } },
+  fields: [{ key: 'cost' as const, type: 'money' }],
+};
+
+let dataset = new Dataset({
+  entries: demoEntryInputs.slice(0, 8).map((entry) => ({
+    ...entry,
+    meta: { cost: 400 },
+  })),
+  timeZone: 'UTC',
+  ...COST_FIELDS,
+});
 let gantt = new Gantt({ container: '#gantt', dataset });
+window.__dataset = dataset;
 
 const toolbar = document.querySelector<HTMLDivElement>('#toolbar')!;
 mountTimelineToolbar({ gantt, container: toolbar });
@@ -31,6 +50,7 @@ const renameBtn = document.querySelector<HTMLButtonElement>('#rename-btn')!;
 const moveBackBtn = document.querySelector<HTMLButtonElement>('#move-back-btn')!;
 const moveFwdBtn = document.querySelector<HTMLButtonElement>('#move-fwd-btn')!;
 const removeBtn = document.querySelector<HTMLButtonElement>('#remove-btn')!;
+const costBtn = document.querySelector<HTMLButtonElement>('#cost-btn')!;
 const undoBtn = document.querySelector<HTMLButtonElement>('#undo-btn')!;
 const redoBtn = document.querySelector<HTMLButtonElement>('#redo-btn')!;
 const exportBtn = document.querySelector<HTMLButtonElement>('#export-btn')!;
@@ -65,6 +85,7 @@ function refreshMutationButtons(): void {
   moveBackBtn.disabled = none;
   moveFwdBtn.disabled = none;
   removeBtn.disabled = none;
+  costBtn.disabled = none;
 }
 
 function renderSelectionReadout(): void {
@@ -170,6 +191,18 @@ function move(deltaMs: number): void {
 moveBackBtn.addEventListener('click', () => move(-MS.DAY));
 moveFwdBtn.addEventListener('click', () => move(MS.DAY));
 
+costBtn.addEventListener('click', () => {
+  const entries = gantt.selectionEntries;
+  if (entries.length === 0) return;
+  try {
+    dataset.transaction(() => {
+      for (const selected of entries) dataset.entries.update(selected.id, { cost: 500 });
+    });
+  } catch (error) {
+    if (!(error instanceof MutationCancelledError)) throw error;
+  }
+});
+
 removeBtn.addEventListener('click', () => {
   const entries = gantt.selectionEntries;
   if (entries.length === 0) return;
@@ -206,6 +239,7 @@ importBtn.addEventListener('click', () => {
   try {
     const doc = JSON.parse(documentJson.value) as DatasetDocument;
     dataset = Dataset.fromJSON(doc);
+    window.__dataset = dataset;
     gantt.destroy();
     gantt = new Gantt({ container: '#gantt', dataset });
     bindDataset();

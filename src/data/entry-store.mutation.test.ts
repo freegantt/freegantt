@@ -105,11 +105,16 @@ describe('entries.update', () => {
 
   it('an edit naming a key that is not a field throws UnknownFieldError', () => {
     const state = dataset([{ id: 't1' }]);
-    expect(() =>
-      state.entries.update('t1', { notAField: true } as unknown as Parameters<
-        typeof state.entries.update
-      >[1]),
-    ).toThrow(UnknownFieldError);
+    expect(() => state.entries.update('t1', { notAField: true })).toThrow(UnknownFieldError);
+    expect(state.entries.get('t1')?.name).toBe('t1');
+  });
+
+  it('[S4-A2] an unregistered key throws and stages nothing', () => {
+    const state = dataset([{ id: 't1' }]);
+    const seen = changeSets(state);
+    expect(() => state.entries.update('t1', { cost: 500 })).toThrow(UnknownFieldError);
+    expect(seen).toHaveLength(0);
+    expect(state.entries.get('t1')?.meta).toBeUndefined();
   });
 });
 

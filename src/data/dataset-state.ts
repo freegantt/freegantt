@@ -3,6 +3,7 @@
 // the same structural/façade relationship `GanttShell` already has with `Gantt`.
 
 import type {
+  Aggregator,
   ChangeSet,
   ChangeSetId,
   DateOnlyEndRule,
@@ -10,6 +11,9 @@ import type {
   DatasetEventMap,
   EntryInput,
   EntryKind,
+  Field,
+  FieldContext,
+  FieldType,
   Instant,
 } from '../model/index.js';
 import { changeSetId } from '../model/index.js';
@@ -24,6 +28,8 @@ import { applyConstructionRollUp, runTransaction } from './transaction.js';
 import { replayChangeSet } from './replay.js';
 import { History } from './history.js';
 import type { HistoryOptions } from './history.js';
+import { createFieldContext, readField } from './fields/field-access.js';
+import { FieldRegistry } from './fields/field-registry.js';
 
 export type { HistoryOptions };
 
@@ -39,6 +45,9 @@ export interface DatasetStateOptions {
    *  commit (`01` §2.5/§2.6). Defaults to `['group']`. `derivedSpanKinds: []` opts every kind out —
    *  the supported way to ask for hand-set spans everywhere (S2.3 §1.5). */
   derivedSpanKinds?: readonly EntryKind[];
+  fields?: readonly Field[];
+  fieldTypes?: Readonly<Record<string, FieldType>>;
+  aggregators?: Readonly<Record<string, Aggregator>>;
   /** The extension hook a transaction calls once per commit (D-S2-6). Internal only — `data/` is
    *  unreachable through the package's `exports` map, so a plugin-facing install API lands in **S5**
    *  with the plugin runtime (#15), not on this option; the first-party scheduler occupies the slot in
@@ -76,6 +85,8 @@ export class DatasetState implements Dataset {
    *  step, the only file allowed to import the rollup itself (`span-rollup-is-removable`, D-S2-23) —
    *  this class hands over the *kinds*, never the function. */
   readonly derivedSpanKinds: ReadonlySet<EntryKind>;
+  readonly fields: FieldRegistry;
+  readonly fieldContext: FieldContext;
   /** Per-instance — never a module-level counter (I2). */
   #changeSetCounter = 0;
   readonly #history: History;
@@ -86,13 +97,23 @@ export class DatasetState implements Dataset {
     this.referenceDate = now();
     this.editExtender = options.editExtender ?? identityExtender;
     this.derivedSpanKinds = new Set(options.derivedSpanKinds ?? ['group']);
+    this.fields = new FieldRegistry({
+      fields: options.fields ?? [],
+      fieldTypes: options.fieldTypes ?? {},
+      aggregators: options.aggregators ?? {},
+    });
+    this.fieldContext = createFieldContext(this.timeZone, (entry, key, ctx) => {
+      const field = this.fields.get(key);
+      if (!field) return undefined;
+      return readField(entry, field, ctx);
+    });
     const context: EntryReadContext = {
       timeZone: this.timeZone,
       dateOnlyEnd: this.dateOnlyEnd,
       referenceDate: this.referenceDate,
       derivedSpanKinds: this.derivedSpanKinds,
     };
-    this.entries = new EntryStore(readEntries(options.entries, context), context);
+    this.entries = new EntryStore(readEntries(options.entries, context), context, this.fields);
     this.entries.setTransactionRunner(this);
     // `01` §2.6 / README.md D-S2-22: a deriving-kind entry given children only through the initial
     // array gets a real span before anyone reads it, not just after the first later transaction
