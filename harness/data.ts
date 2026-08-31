@@ -20,7 +20,7 @@ import { mountTimelineToolbar } from './timeline-toolbar.js';
 
 declare global {
   interface Window {
-    __dataset: Dataset;
+    __dataset: Dataset<{ cost: number }, { cost: number }>;
   }
 }
 
@@ -50,7 +50,7 @@ const ROLLUP_TREE = [
   },
 ];
 
-let dataset = new Dataset({
+let dataset = new Dataset<{ cost: number }, { cost: number }>({
   entries: ROLLUP_TREE,
   timeZone: 'UTC',
   ...COST_FIELDS,
@@ -254,8 +254,8 @@ exportBtn.addEventListener('click', () => {
 
 importBtn.addEventListener('click', () => {
   try {
-    const doc = JSON.parse(documentJson.value) as DatasetDocument;
-    dataset = Dataset.fromJSON(doc);
+    const doc = JSON.parse(documentJson.value) as DatasetDocument<{ cost: number }>;
+    dataset = Dataset.fromJSON<{ cost: number }, { cost: number }>(doc);
     window.__dataset = dataset;
     gantt.destroy();
     gantt = new Gantt({ container: '#gantt', dataset });

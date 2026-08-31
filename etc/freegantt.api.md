@@ -53,19 +53,19 @@ export class ContainerNotFoundError extends FreeGanttError {
 export type CoreFieldKey = keyof Omit<Entry, 'id'>;
 
 // @public (undocumented)
-export class Dataset {
-    constructor(options: DatasetOptions);
+export class Dataset<TMeta = unknown, TFields extends Record<string, unknown> = Record<string, unknown>> {
+    constructor(options: DatasetOptions<TMeta>);
     get canRedo(): boolean;
     get canUndo(): boolean;
     // (undocumented)
     get dateOnlyEnd(): DateOnlyEndRule;
     // (undocumented)
-    get entries(): EntryStore;
+    get entries(): EntryStore<TMeta, TFields>;
     get fields(): {
         readonly all: readonly Field[];
         get(key: string): Field | undefined;
     };
-    static fromJSON(doc: DatasetDocument): Dataset;
+    static fromJSON<TMeta = unknown, TFields extends Record<string, unknown> = Record<string, unknown>>(doc: DatasetDocument<TMeta>): Dataset<TMeta, TFields>;
     isRollUpKind(kind: EntryKind): boolean;
     // (undocumented)
     off<K extends keyof DatasetEventMap>(name: K, handler: (payload: DatasetEventMap[K]) => void | false): void;
@@ -77,7 +77,7 @@ export class Dataset {
     get rollUpKinds(): readonly EntryKind[];
     // (undocumented)
     get timeZone(): string;
-    toJSON(): DatasetDocument;
+    toJSON(): DatasetDocument<TMeta>;
     transaction<T>(body: () => T): T;
     undo(): void;
 }
@@ -109,10 +109,10 @@ export interface DatasetEventMap {
 }
 
 // @public (undocumented)
-export interface DatasetOptions {
+export interface DatasetOptions<TMeta = unknown> {
     aggregators?: Readonly<Record<string, Aggregator>>;
     dateOnlyEnd?: DateOnlyEndRule;
-    entries: readonly EntryInput[];
+    entries: readonly EntryInput<TMeta>[];
     fields?: readonly Field[];
     fieldTypes?: Readonly<Record<string, FieldType>>;
     history?: {
@@ -219,9 +219,7 @@ export interface EntryDocument<TMeta = unknown> {
 }
 
 // @public
-export type EntryEdit<TMeta = unknown> = Partial<Omit<EntryInput<TMeta>, 'id'>> & {
-    readonly [field: string]: unknown;
-};
+export type EntryEdit<TMeta = unknown, TFields extends Record<string, unknown> = Record<string, unknown>> = Partial<Omit<EntryInput<TMeta>, 'id'>> & Partial<TFields>;
 
 // @public
 export interface EntryGestureEvent extends ProposedSpan {
@@ -269,23 +267,23 @@ export interface EntryResize extends EntryGestureEvent {
 }
 
 // @public
-export interface EntryStore extends EntryStoreView {
+export interface EntryStore<TMeta = unknown, TFields extends Record<string, unknown> = Record<string, unknown>> extends EntryStoreView<TMeta> {
     // (undocumented)
-    add(input: EntryInput): Entry;
+    add(input: EntryInput<TMeta>): Entry<TMeta>;
     // (undocumented)
     remove(id: EntryId | string): void;
     // (undocumented)
-    update(id: EntryId | string, edit: EntryEdit): Entry;
+    update(id: EntryId | string, edit: EntryEdit<TMeta, TFields>): Entry<TMeta>;
 }
 
 // @public
-export interface EntryStoreView {
+export interface EntryStoreView<TMeta = unknown> {
     // (undocumented)
-    readonly all: readonly Entry[];
-    childrenOf(id: EntryId | string): readonly Entry[];
+    readonly all: readonly Entry<TMeta>[];
+    childrenOf(id: EntryId | string): readonly Entry<TMeta>[];
     fieldValue<T>(id: EntryId | string, field: FieldKey): T | undefined;
     // (undocumented)
-    get(id: EntryId | string): Entry | undefined;
+    get(id: EntryId | string): Entry<TMeta> | undefined;
     // (undocumented)
     has(id: EntryId | string): boolean;
     // (undocumented)

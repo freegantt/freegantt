@@ -22,10 +22,10 @@ import {
 } from '../data/serialization/index.js';
 import type { RollUpKinds } from '../model/index.js';
 
-export interface DatasetOptions {
+export interface DatasetOptions<TMeta = unknown> {
   /** What the consumer writes. Ids are plain strings and dates are any `InstantInput` — an ISO string,
    * a `Date`, epoch milliseconds, or an already-branded `Instant`. Read into `Entry` once, here. */
-  entries: readonly EntryInput[];
+  entries: readonly EntryInput<TMeta>[];
   /** IANA timeZone (D6, plans/02 §2) — all zone-aware date arithmetic (day boundaries, snapping,
    * week starts) resolves through it, so two users in different zones see identical day boundaries.
    * It is also the zone a Plain (zoneless) date in `entries` resolves through. */
@@ -53,15 +53,20 @@ export interface DatasetOptions {
 // that clause would pull the model type into the public API report as an unexported `Dataset_2`, since
 // api-extractor inlines whatever an exported class's `implements`/`extends` names. Assignability where
 // it actually matters (`GanttOptions.dataset`, `GanttShell`) is still checked structurally.
-export class Dataset {
+//
+// TMeta is the documented generic (`plans/02` §1.6). TFields is the declared-key map
+// (`Dataset<{ team: string }, { cost: number }>`). TypeScript does not infer a later type
+// parameter once an earlier one is written, so Field keys cannot come from the `fields` array
+// at `new Dataset<{ team: string }>(...)` (#123).
+export class Dataset<TMeta = unknown, TFields extends Record<string, unknown> = Record<string, unknown>> {
   #state: DatasetState;
 
-  constructor(options: DatasetOptions) {
+  constructor(options: DatasetOptions<TMeta>) {
     this.#state = new DatasetState(options);
   }
 
-  get entries(): EntryStoreContract {
-    return this.#state.entries;
+  get entries(): EntryStoreContract<TMeta, TFields> {
+    return this.#state.entries as EntryStoreContract<TMeta, TFields>;
   }
 
   get timeZone(): string {
@@ -139,14 +144,16 @@ export class Dataset {
 
   /** Whole-document write (D-S2-12). Byte-stable: declared key order, optional keys omitted, entries
    *  in insertion order, instants as `Z`-suffixed ISO. */
-  toJSON(): DatasetDocument {
-    return writeDocument(this);
+  toJSON(): DatasetDocument<TMeta> {
+    return writeDocument(this) as DatasetDocument<TMeta>;
   }
 
   /** Whole-document read. Constructs a fresh Dataset through the public constructor, so the span
    *  rollup runs on read. Unknown top-level keys are dropped; `meta` is carried as-is. */
-  static fromJSON(doc: DatasetDocument): Dataset {
-    const dataset = new Dataset(readDocument(doc));
+  static fromJSON<TMeta = unknown, TFields extends Record<string, unknown> = Record<string, unknown>>(
+    doc: DatasetDocument<TMeta>,
+  ): Dataset<TMeta, TFields> {
+    const dataset = new Dataset<TMeta, TFields>(readDocument(doc) as DatasetOptions<TMeta>);
     warnIfRollUpsWereCorrected(doc, dataset);
     return dataset;
   }
