@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { FieldRegistry } from './field-registry.js';
-import { createFieldContext } from './field-access.js';
+import { createFieldContext, writeField } from './field-access.js';
 import {
   DuplicateFieldKeyError,
   DuplicateFieldSourceError,
@@ -105,7 +105,7 @@ describe('D-S4-35 omitted source', () => {
     expect(registry.get('cost')?.source).toEqual({ from: 'meta', key: 'cost' });
   });
 
-  it('read looks up by key; write folds cost onto the edit', () => {
+  it('bound FieldContext.read looks up by key after writeField', () => {
     const registry = new FieldRegistry({ fields: [{ key: 'cost' }] });
     const context = ctx(registry);
     const entry = {
@@ -115,10 +115,10 @@ describe('D-S4-35 omitted source', () => {
       start: 0 as never,
       end: 1 as never,
     };
-    const written = registry.write({}, entry, 'cost', 500);
+    const cost = registry.get('cost')!;
+    const written = writeField({}, entry, cost, 500);
     expect(written.meta).toEqual({ cost: 500 });
     const next = { ...entry, meta: written.meta };
-    expect(registry.read(next, 'cost', context)).toBe(500);
     expect(context.read(next, 'cost')).toBe(500);
   });
 });

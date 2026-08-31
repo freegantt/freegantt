@@ -69,12 +69,12 @@ export function diffEdit(
     for (const field of registry.all) {
       if (!authored.has(String(field.key))) continue;
       if (field.key === 'meta') continue;
-      emit(field.key, registry.read(current, field.key, ctx), registry.read(next, field.key, ctx));
+      emit(field.key, ctx.read(current, field.key), ctx.read(next, field.key));
     }
     if (authored.has('meta')) {
       for (const field of registry.all) {
         if (field.key === 'meta') continue;
-        emit(field.key, registry.read(current, field.key, ctx), registry.read(next, field.key, ctx));
+        emit(field.key, ctx.read(current, field.key), ctx.read(next, field.key));
       }
     }
     return rows;
@@ -84,7 +84,7 @@ export function diffEdit(
     if (field === 'meta') continue;
     const declared = registry.get(field);
     if (declared) {
-      emit(field, registry.read(current, field, ctx), registry.read(next, field, ctx));
+      emit(field, ctx.read(current, field), ctx.read(next, field));
       continue;
     }
     emit(field, (current as unknown as Record<string, unknown>)[field], edit[field]);
