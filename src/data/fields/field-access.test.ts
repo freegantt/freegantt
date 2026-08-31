@@ -30,11 +30,7 @@ describe('readField / writeField (D-S4-2)', () => {
     fieldTypes: { money: { rollUp: 'sum' } },
     fields: [{ key: 'cost', type: 'money' }],
   });
-  const fieldCtx = createFieldContext('UTC', (entry, key, ctx) => {
-    const field = registry.get(key);
-    if (!field) return undefined;
-    return readField(entry, field, ctx);
-  });
+  const fieldCtx = createFieldContext(registry, 'UTC');
   const cost = registry.get('cost')!;
   const start = registry.get('start')!;
   const duration = registry.get('duration')!;

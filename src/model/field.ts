@@ -60,11 +60,10 @@ export interface FormatContext extends FieldContext {
   readonly locale: Intl.LocalesArgument;
 }
 
-/** What an Aggregator reads. `field` is the Field currently rolling up — shipped Aggregators
- *  (`sum`, `min`) have no other way to know which value to read. */
-export interface RollUpContext {
+/** FieldContext plus the Field currently rolling up. Shipped Aggregators (`sum`, `min`) read
+ *  `ctx.field`; a consumer Aggregator reads any declared key through the same `ctx.read`. */
+export interface RollUpContext extends FieldContext {
   readonly field: FieldKey;
-  read<T>(entry: Entry, key: FieldKey): T | undefined;
 }
 
 /** Registered by name, never passed inline. `undefined` means no opinion — keep the stored value. */

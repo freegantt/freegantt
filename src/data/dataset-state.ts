@@ -29,7 +29,7 @@ import { applyConstructionRollUp, runTransaction } from './transaction.js';
 import { replayChangeSet } from './replay.js';
 import { History } from './history.js';
 import type { HistoryOptions } from './history.js';
-import { createFieldContext, readField } from './fields/field-access.js';
+import { createFieldContext } from './fields/field-access.js';
 import { FieldRegistry } from './fields/field-registry.js';
 import { ComputedFieldCache } from './computed-cache.js';
 
@@ -114,14 +114,10 @@ export class DatasetState implements Dataset {
       fieldTypes: options.fieldTypes ?? {},
       aggregators: options.aggregators ?? {},
     });
-    this.fieldContext = createFieldContext(this.timeZone, (entry, key, ctx) => {
-      const field = this.fields.get(key);
-      if (!field) return undefined;
-      return readField(entry, field, ctx, {
-        cache: this.computedCache,
-        datasetRevision: this.#datasetRevision,
-      });
-    });
+    this.fieldContext = createFieldContext(this.fields, this.timeZone, () => ({
+      cache: this.computedCache,
+      datasetRevision: this.#datasetRevision,
+    }));
     const context: EntryReadContext = {
       timeZone: this.timeZone,
       dateOnlyEnd: this.dateOnlyEnd,

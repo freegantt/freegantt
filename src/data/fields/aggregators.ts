@@ -2,7 +2,7 @@
 // Skip holes (`undefined`, non-numeric for sum/min/max, zero-duration children for the weighted
 // mean) and never throw. Every child skipped → `undefined` (keep the stored value).
 
-import type { Aggregator, Duration, Entry, RollUpContext } from '../../model/index.js';
+import type { Aggregator, Entry, RollUpContext } from '../../model/index.js';
 
 function readNumber(ctx: RollUpContext, entry: Entry): number | undefined {
   const value = ctx.read<unknown>(entry, ctx.field);
@@ -10,8 +10,7 @@ function readNumber(ctx: RollUpContext, entry: Entry): number | undefined {
 }
 
 function durationMs(ctx: RollUpContext, entry: Entry): number | undefined {
-  const duration = ctx.read<Duration>(entry, 'duration');
-  if (duration === undefined) return undefined;
+  const duration = ctx.durationOf(entry);
   if (typeof duration.value !== 'number' || !Number.isFinite(duration.value)) return undefined;
   if (duration.value === 0) return undefined;
   return duration.value;

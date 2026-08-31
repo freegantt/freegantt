@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import { DatasetState } from './dataset-state.js';
 import { AggregatorFailedError } from '../model/index.js';
 import { toEndInstant, toInstant } from '../time/index.js';
-import { readField } from './fields/field-access.js';
 
 function treeDataset(
   entries: {
@@ -31,9 +30,8 @@ function treeDataset(
 
 function costOf(state: DatasetState, id: string): number | undefined {
   const entry = state.entries.get(id);
-  const field = state.fields.get('cost');
-  if (!entry || !field) return undefined;
-  return readField(entry, field, state.fieldContext) as number | undefined;
+  if (!entry) return undefined;
+  return state.fieldContext.read<number>(entry, 'cost');
 }
 
 describe('rollUpFields (S4.2)', () => {
@@ -178,9 +176,8 @@ describe('rollUpFields (S4.2)', () => {
 
     state.entries.update('c1', { start: '2026-06-01', end: '2026-06-05', notes: 9 });
 
-    const notesField = state.fields.get('notes')!;
     const parent = state.entries.get('p1')!;
-    expect(readField(parent, notesField, state.fieldContext)).toBe(5);
+    expect(state.fieldContext.read(parent, 'notes')).toBe(5);
     expect(parent.start).toBe(toInstant('UTC', '2026-06-01'));
   });
   it('reparenting recomputes both the old and new parent', () => {
@@ -194,5 +191,18 @@ describe('rollUpFields (S4.2)', () => {
 
     expect(costOf(state, 'a')).toBe(10);
     expect(costOf(state, 'b')).toBe(20);
+  });
+
+  it('D-S4-11: every store child counts toward the parent, including one a view would hide', () => {
+    const state = treeDataset([
+      { id: 'root', kind: 'group' },
+      { id: 'visible', parentId: 'root', meta: { cost: 40 } },
+      { id: 'hidden', parentId: 'root', meta: { cost: 60 } },
+    ]);
+
+    expect(costOf(state, 'root')).toBe(100);
+    state.entries.update('visible', { cost: 50 });
+    expect(costOf(state, 'hidden')).toBe(60);
+    expect(costOf(state, 'root')).toBe(110);
   });
 });

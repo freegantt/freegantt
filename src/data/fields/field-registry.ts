@@ -1,7 +1,16 @@
 // data/ — one FieldRegistry per DatasetState (D-S4-1). Resolves Field types, stores the whole
 // declaration (`column` included), and never formats or paints.
 
-import type { Aggregator, Field, FieldSource, FieldType } from '../../model/index.js';
+import type {
+  Aggregator,
+  Entry,
+  Field,
+  FieldContext,
+  FieldKey,
+  FieldSource,
+  FieldType,
+  StoredEdit,
+} from '../../model/index.js';
 import {
   DuplicateFieldKeyError,
   DuplicateFieldSourceError,
@@ -10,6 +19,8 @@ import {
 } from '../../model/index.js';
 import { SHIPPED_AGGREGATORS } from './aggregators.js';
 import { CORE_FIELDS } from './core-fields.js';
+import { readField, writeField } from './field-access.js';
+import type { FieldReadMemo } from './field-access.js';
 
 export interface ResolvedField extends Field {
   readonly source: FieldSource;
@@ -102,5 +113,19 @@ export class FieldRegistry {
     const field = this.get(key);
     if (field?.equals) return field.equals(from, to);
     return Object.is(from, to);
+  }
+
+  /** Call: `registry.read(entry, 'cost', ctx)` — look up the Field and read it. */
+  read(entry: Entry, key: FieldKey, ctx: FieldContext, memo?: FieldReadMemo): unknown {
+    const field = this.get(String(key));
+    if (!field) return undefined;
+    return readField(entry, field, ctx, memo);
+  }
+
+  /** Call: `registry.write(edit, entry, 'cost', 500)` — look up the Field and write it. */
+  write(edit: StoredEdit, entry: Entry, key: FieldKey, value: unknown): StoredEdit {
+    const field = this.get(String(key));
+    if (!field) return edit;
+    return writeField(edit, entry, field, value);
   }
 }

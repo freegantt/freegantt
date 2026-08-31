@@ -181,14 +181,9 @@ export function rollUpFields(
       const aggregator = registry.aggregator(field.rollUp!);
       if (!aggregator) continue;
 
-      const rollCtx = {
-        field: field.key,
-        read: <T>(entry: Entry, key: typeof field.key) => ctx.read<T>(entry, key),
-      };
-
       let value: unknown;
       try {
-        value = aggregator(children, effectiveParent, rollCtx);
+        value = aggregator(children, effectiveParent, { ...ctx, field: field.key });
       } catch {
         throw new AggregatorFailedError(field.key, field.rollUp!, parentId);
       }

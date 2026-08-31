@@ -284,4 +284,38 @@ describe('Dataset fields (S4.1)', () => {
     const costRows = changes[0]!.updated.filter((row) => row.field === 'cost');
     expect(costRows.map((row) => row.id)).toEqual(expect.arrayContaining(['root', 'leaf']));
   });
+
+  it("D-S4-11: a child cost edit leaves entries.all's order and the other child's stored cost", () => {
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      fieldTypes: { money: { rollUp: 'sum' } },
+      fields: [{ key: 'cost', type: 'money' }],
+      entries: [
+        { id: 'root', name: 'Root', kind: 'group' },
+        {
+          id: 'a',
+          name: 'A',
+          parentId: 'root',
+          start: '2026-01-01',
+          end: '2026-01-05',
+          meta: { cost: 40, team: 'A' },
+        },
+        {
+          id: 'b',
+          name: 'B',
+          parentId: 'root',
+          start: '2026-01-01',
+          end: '2026-01-05',
+          meta: { cost: 60, team: 'B' },
+        },
+      ],
+    });
+    const order = dataset.entries.all.map((entry) => String(entry.id));
+
+    dataset.entries.update('a', { cost: 50 });
+
+    expect(dataset.entries.all.map((entry) => String(entry.id))).toEqual(order);
+    expect(dataset.entries.get('b')?.meta).toEqual({ cost: 60, team: 'B' });
+    expect(dataset.entries.get('root')?.meta).toEqual({ cost: 110 });
+  });
 });

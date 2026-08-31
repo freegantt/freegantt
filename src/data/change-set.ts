@@ -14,7 +14,7 @@ import type {
   FieldUpdated,
 } from '../model/index.js';
 import type { StoredEdit } from './edit-extension.js';
-import { authoredFieldKeysOf, overlayStoredEdit, readField } from './fields/field-access.js';
+import { authoredFieldKeysOf, overlayStoredEdit } from './fields/field-access.js';
 import type { FieldRegistry } from './fields/field-registry.js';
 
 function pushRow(
@@ -69,12 +69,12 @@ export function diffEdit(
     for (const field of registry.all) {
       if (!authored.has(String(field.key))) continue;
       if (field.key === 'meta') continue;
-      emit(field.key, readField(current, field, ctx), readField(next, field, ctx));
+      emit(field.key, registry.read(current, field.key, ctx), registry.read(next, field.key, ctx));
     }
     if (authored.has('meta')) {
       for (const field of registry.all) {
         if (field.key === 'meta') continue;
-        emit(field.key, readField(current, field, ctx), readField(next, field, ctx));
+        emit(field.key, registry.read(current, field.key, ctx), registry.read(next, field.key, ctx));
       }
     }
     return rows;
@@ -84,7 +84,7 @@ export function diffEdit(
     if (field === 'meta') continue;
     const declared = registry.get(field);
     if (declared) {
-      emit(field, readField(current, declared, ctx), readField(next, declared, ctx));
+      emit(field, registry.read(current, field, ctx), registry.read(next, field, ctx));
       continue;
     }
     emit(field, (current as unknown as Record<string, unknown>)[field], edit[field]);

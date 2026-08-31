@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { Entry, RollUpContext } from '../../model/index.js';
+import type { Entry, FieldKey, RollUpContext } from '../../model/index.js';
 import { entryId } from '../../model/index.js';
 import { diffMs } from '../../time/index.js';
 import { SHIPPED_AGGREGATORS } from './aggregators.js';
@@ -15,17 +15,18 @@ function child(id: string, values: Record<string, unknown>, duration = 1): Entry
   };
 }
 
-function ctx(field: string, extras: Record<string, Record<string, unknown>> = {}): RollUpContext {
+function ctx(field: FieldKey, extras: Record<string, Record<string, unknown>> = {}): RollUpContext {
   return {
     field,
-    read<T>(entry: Entry, key: string): T | undefined {
-      if (key === 'duration') {
-        return { value: diffMs(entry.end, entry.start), unit: 'millisecond' } as T;
-      }
+    timeZone: 'UTC',
+    read<T>(entry: Entry, key: FieldKey): T | undefined {
       const extra = extras[entry.id];
       if (extra && key in extra) return extra[key] as T;
       const meta = entry.meta as Record<string, unknown> | undefined;
       return meta?.[key] as T | undefined;
+    },
+    durationOf(entry: Entry) {
+      return { value: diffMs(entry.end, entry.start), unit: 'millisecond' };
     },
   };
 }
