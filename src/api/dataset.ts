@@ -3,6 +3,7 @@
 // in `data/` (`DatasetState`). `model/`'s `Dataset` is the smaller bindable surface a Gantt holds.
 
 import type {
+  Aggregator,
   ChangeSet,
   DatasetDocument,
   DatasetEventMap,
@@ -10,6 +11,8 @@ import type {
   EntryInput,
   EntryKind,
   EntryStore as EntryStoreContract,
+  Field,
+  FieldType,
 } from '../model/index.js';
 import { DatasetState } from '../data/index.js';
 import {
@@ -34,6 +37,12 @@ export interface DatasetOptions {
    * commit (`01` §2.5/§2.6). Defaults to `['group']`. `derivedSpanKinds: []` opts every kind out of
    * derivation, which is the supported way to ask for hand-set spans everywhere. */
   derivedSpanKinds?: readonly EntryKind[];
+  /** Consumer Field declarations. Core Fields are already in the registry (D-S4-4). */
+  fields?: readonly Field[];
+  /** Named Field type bundles. A Field's own keys win over the bundle (D-S4-3). */
+  fieldTypes?: Readonly<Record<string, FieldType>>;
+  /** Consumer Aggregators by name. Shipped names (`min`, `sum`, …) are already registered. */
+  aggregators?: Readonly<Record<string, Aggregator>>;
   /** Undo/redo History. `{ capacity: 200 }` keeps 200 undoable transactions; defaults to 100
    * (`plans/s2-data-core/s2.5-undo-redo.md` §1). */
   history?: { capacity?: number };
@@ -64,6 +73,11 @@ export class Dataset {
 
   get derivedSpanKinds(): readonly EntryKind[] {
     return [...this.#state.derivedSpanKinds];
+  }
+
+  /** Resolved Field declarations this Dataset owns, core Fields included (D-S4-1). */
+  get fields(): { readonly all: readonly Field[]; get(key: string): Field | undefined } {
+    return this.#state.fields;
   }
 
   /** `model/`'s `Dataset` interface (S3, D-S3-9) — `GanttShell` asks this, never `derivedSpanKinds`

@@ -100,7 +100,11 @@
       Rename, move, and remove act on <code>gantt.selection</code>. The log below is built from each committed
       <code>ChangeSet</code>, never by re-reading the dataset, and subscribes to
       <code>dataset.on('change')</code> the same way <code>GanttShell</code>'s own live binding does (D-S2-24)
-      — the honest proof that nothing here reaches past the public API.
+      — the honest proof that nothing here reaches past the public API. S4.1: a declared
+      <code>cost</code> Field writes <code>entry.meta.cost</code>. Select a bar and press
+      <strong>Set cost 500</strong>, or in the console
+      <code>window.__dataset.entries.update('entry-1', { cost: 500 })</code> — the log shows one
+      <code>cost</code> row with <code>from</code> and <code>to</code>.
     </p>
     <div id="controls">
       <button id="add-entry" type="button">Add entry</button>
@@ -110,6 +114,7 @@
       <button id="move-back-btn" type="button">Move −1 day</button>
       <button id="move-fwd-btn" type="button">Move +1 day</button>
       <button id="remove-btn" type="button">Remove</button>
+      <button id="cost-btn" type="button">Set cost 500</button>
       <button id="undo-btn" type="button">Undo</button>
       <button id="redo-btn" type="button">Redo</button>
       <label><input id="lock-checkbox" type="checkbox" /> Lock the first entry (D-S2-25)</label>

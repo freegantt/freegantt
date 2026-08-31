@@ -18,6 +18,8 @@ import type {
 } from '../model/index.js';
 import { toEndInstant, toInstant } from '../time/index.js';
 import type { StoredEdit } from './edit-extension.js';
+import { markAuthoredFieldKeys, overlayStoredEdit, writeField } from './fields/field-access.js';
+import type { FieldRegistry } from './fields/field-registry.js';
 
 /** The Dataset context every entry is read against: one zone, one end rule, for the whole list, plus
  * what `01` §2.5's span rollup needs to fill in a deriving-kind entry's initial span (S2.3 §1.5). */
@@ -87,12 +89,16 @@ export function readEntries(inputs: readonly EntryInput[], context: EntryReadCon
   return inputs.map((input) => readEntry(input, context));
 }
 
-/** Reads an `entries.update()` edit into `StoredEdit` (S2.3 §1.1) — every present field goes through
- * `time/` the way `readEntry` reads a whole `Entry`, but each field is independent: unlike `add`,
- * an update may set `start` without `end` (it is patching one field of an already-complete `Entry`,
- * not constructing a new one), so there is no both-or-neither rule here. */
-export function readEdit(edit: EntryEdit, context: EntryReadContext): StoredEdit {
-  const stored: StoredEdit = {};
+/** Reads an `entries.update()` edit into `StoredEdit` (S2.3 §1.1) — every present core date field
+ * goes through `time/` the way `readEntry` reads a whole `Entry`. Declared Field keys fold through
+ * `writeField` so the write set stays entry-shaped (D-S4-2). An update may set `start` without `end`. */
+export function readEdit(
+  edit: EntryEdit,
+  context: EntryReadContext,
+  entry: Entry,
+  registry: FieldRegistry,
+): StoredEdit {
+  let stored: StoredEdit = {};
   if (edit.parentId !== undefined) stored.parentId = entryId(edit.parentId);
   if (edit.kind !== undefined) stored.kind = edit.kind;
   if (edit.name !== undefined) stored.name = edit.name;
@@ -100,5 +106,14 @@ export function readEdit(edit: EntryEdit, context: EntryReadContext): StoredEdit
   if (edit.end !== undefined) stored.end = toEndInstant(context.timeZone, edit.end, context.dateOnlyEnd);
   if (edit.segments !== undefined) stored.segments = edit.segments.map((s) => readSpan(s, context));
   if (edit.meta !== undefined) stored.meta = edit.meta;
-  return stored;
+
+  const overlay = overlayStoredEdit(entry, stored);
+  for (const key of Object.keys(edit)) {
+    const field = registry.get(key);
+    if (!field) continue;
+    if (field.source.from !== 'meta') continue;
+    stored = writeField(stored, overlay, field, (edit as Record<string, unknown>)[key]);
+  }
+
+  return markAuthoredFieldKeys(stored, Object.keys(edit));
 }

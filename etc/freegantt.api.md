@@ -8,6 +8,12 @@
 export function addMs(i: Instant, ms: number): Instant;
 
 // @public
+export type Aggregator<TValue = unknown> = (children: readonly Entry[], parent: Entry, ctx: RollUpContext) => TValue | undefined;
+
+// @public (undocumented)
+export type AggregatorName = 'min' | 'max' | 'sum' | 'count' | 'none' | (string & {});
+
+// @public
 export type AsyncCancelableEvent = 'beforeEntryMove' | 'beforeEntryResize';
 
 // @public
@@ -57,6 +63,10 @@ export class Dataset {
     get derivedSpanKinds(): readonly EntryKind[];
     // (undocumented)
     get entries(): EntryStore;
+    get fields(): {
+        readonly all: readonly Field[];
+        get(key: string): Field | undefined;
+    };
     static fromJSON(doc: DatasetDocument): Dataset;
     isDerivedSpanKind(kind: EntryKind): boolean;
     // (undocumented)
@@ -100,9 +110,12 @@ export interface DatasetEventMap {
 
 // @public (undocumented)
 export interface DatasetOptions {
+    aggregators?: Readonly<Record<string, Aggregator>>;
     dateOnlyEnd?: DateOnlyEndRule;
     derivedSpanKinds?: readonly EntryKind[];
     entries: readonly EntryInput[];
+    fields?: readonly Field[];
+    fieldTypes?: Readonly<Record<string, FieldType>>;
     history?: {
         capacity?: number;
     };
@@ -128,6 +141,20 @@ export type DateOnlyEndRule = 'inclusive' | 'exclusive';
 // @public
 export class DuplicateEntryIdError extends FreeGanttError {
     constructor(entryId: EntryId);
+}
+
+// @public
+export class DuplicateFieldKeyError extends FreeGanttError {
+    constructor(key: string);
+    // (undocumented)
+    readonly key: string;
+}
+
+// @public
+export class DuplicateFieldSourceError extends FreeGanttError {
+    constructor(metaKey: string);
+    // (undocumented)
+    readonly metaKey: string;
 }
 
 // @public (undocumented)
@@ -191,7 +218,9 @@ export interface EntryDocument<TMeta = unknown> {
 }
 
 // @public
-export type EntryEdit<TMeta = unknown> = Partial<Omit<EntryInput<TMeta>, 'id'>>;
+export type EntryEdit<TMeta = unknown> = Partial<Omit<EntryInput<TMeta>, 'id'>> & {
+    readonly [field: string]: unknown;
+};
 
 // @public
 export interface EntryGestureEvent extends ProposedSpan {
@@ -262,7 +291,60 @@ export interface EntryStoreView {
 }
 
 // @public (undocumented)
+export interface Field<TValue = unknown> {
+    // (undocumented)
+    column?: Omit<GridColumn, 'field'>;
+    // (undocumented)
+    compare?(a: TValue | undefined, b: TValue | undefined): number;
+    // (undocumented)
+    equals?(a: TValue | undefined, b: TValue | undefined): boolean;
+    // (undocumented)
+    formatValue?(value: TValue | undefined, ctx: FormatContext): string;
+    // (undocumented)
+    key: FieldKey;
+    rollUp?: AggregatorName;
+    source?: FieldSource;
+    // (undocumented)
+    type?: FieldTypeName;
+}
+
+// @public
+export interface FieldContext {
+    // (undocumented)
+    durationOf(entry: Entry): Duration;
+    // (undocumented)
+    read<T>(entry: Entry, key: FieldKey): T | undefined;
+    // (undocumented)
+    readonly timeZone: string;
+}
+
+// @public
 export type FieldKey = CoreFieldKey | (string & {});
+
+// @public
+export class FieldNotColumnableError extends FreeGanttError {
+    constructor(key: string);
+    // (undocumented)
+    readonly key: string;
+}
+
+// @public
+export type FieldSource = {
+    from: 'entry';
+    field: CoreFieldKey;
+} | {
+    from: 'meta';
+    key?: string;
+} | {
+    from: 'compute';
+    read(entry: Entry, ctx: FieldContext): unknown;
+};
+
+// @public
+export type FieldType<TValue = unknown> = Omit<Field<TValue>, 'key' | 'source' | 'type'>;
+
+// @public (undocumented)
+export type FieldTypeName = string & {};
 
 // @public (undocumented)
 export interface FieldUpdated {
@@ -276,6 +358,12 @@ export interface FieldUpdated {
     store: 'entries';
     // (undocumented)
     to: unknown;
+}
+
+// @public
+export interface FormatContext extends FieldContext {
+    // (undocumented)
+    readonly locale: Intl.LocalesArgument;
 }
 
 // @public
@@ -392,6 +480,23 @@ export interface GanttEventMap {
 //
 // @public (undocumented)
 export type GanttOptions = GanttOptionsBase & GanttScaleOptions;
+
+// @public
+export interface GridColumn {
+    // (undocumented)
+    align?: 'start' | 'end';
+    // (undocumented)
+    field: FieldKey;
+    // (undocumented)
+    flex?: number;
+    // (undocumented)
+    header?: string;
+    // (undocumented)
+    width?: number;
+}
+
+// @public
+export type GridColumnInput = FieldKey | GridColumn;
 
 // @public (undocumented)
 export interface GridWidthChange {
@@ -515,6 +620,14 @@ export interface ProposedSpan {
     readonly start: Instant;
 }
 
+// @public
+export interface RollUpContext {
+    // (undocumented)
+    readonly field: FieldKey;
+    // (undocumented)
+    read<T>(entry: Entry, key: FieldKey): T | undefined;
+}
+
 // @public (undocumented)
 export class ScrollModel {
     constructor(position?: Partial<ScrollPosition>);
@@ -614,8 +727,22 @@ export interface TimeSpanInput {
 export type TimeUnit = 'millisecond' | 'minute' | 'hour' | 'day' | 'week' | 'month' | 'year';
 
 // @public
+export class UnknownAggregatorError extends FreeGanttError {
+    constructor(aggregatorName: string);
+    // (undocumented)
+    readonly aggregatorName: string;
+}
+
+// @public
 export class UnknownFieldError extends FreeGanttError {
     constructor(field: string);
+}
+
+// @public
+export class UnknownFieldTypeError extends FreeGanttError {
+    constructor(typeName: string);
+    // (undocumented)
+    readonly typeName: string;
 }
 
 // @public

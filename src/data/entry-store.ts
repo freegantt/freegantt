@@ -17,19 +17,24 @@ import {
 } from '../model/index.js';
 import type { EntryStore as EntryStoreContract } from '../model/index.js';
 import { computed, signal } from './reactivity.js';
-import { CORE_FIELD_KEYS } from './change-set.js';
 import type { EntryEdits, StoredEdit } from './edit-extension.js';
 import type { ChangeSet, FieldKey } from '../model/index.js';
 import { readEdit, readEntry } from './entry-reader.js';
 import type { EntryReadContext } from './entry-reader.js';
 import { runTransaction } from './transaction.js';
 import type { TransactionData, TxToken } from './transaction.js';
+import { mergeStoredEdits, overlayStoredEdit, writeField } from './fields/field-access.js';
+import { FieldRegistry } from './fields/field-registry.js';
 
 /** Writes `field` on a copy of `current`. `value === undefined` omits the key instead of setting it —
  *  an undo of an optional field's first edit must return the Entry to not having the key at all
  *  (entry construction's "no key the input never had" rule, `exactOptionalPropertyTypes`), not to
- *  having the key with value `undefined`. */
-function withField(current: Entry, field: FieldKey, value: unknown): Entry {
+ *  having the key with value `undefined`. Declared meta Fields write through `writeField`. */
+function applyFieldRow(current: Entry, field: FieldKey, value: unknown, registry: FieldRegistry): Entry {
+  const declared = registry.get(field);
+  if (declared?.source.from === 'meta') {
+    return overlayStoredEdit(current, writeField({}, current, declared, value));
+  }
   const next: Record<string, unknown> = { ...current };
   if (value === undefined) delete next[field];
   else next[field] = value;
@@ -62,9 +67,15 @@ export class EntryStore implements EntryStoreContract {
    *  order, so the reference cannot pass through the constructor without a cycle. `add`/`update`/
    *  `remove` are the only callers. */
   #runner: TransactionData | undefined;
+  readonly #registry: FieldRegistry;
 
-  constructor(entries: readonly Entry[], context: EntryReadContext) {
+  constructor(
+    entries: readonly Entry[],
+    context: EntryReadContext,
+    registry: FieldRegistry = new FieldRegistry(),
+  ) {
     this.#context = context;
+    this.#registry = registry;
     this.#byId = new Map(entries.map((entry) => [entry.id, entry]));
     // D-S2-3: rebuilt on commit, not on every read — one array identity per revision, so
     // `ScaleBinding`'s reference comparison and `BoundValue`'s equality half (D-S1.5-4) hold.
@@ -97,7 +108,7 @@ export class EntryStore implements EntryStoreContract {
     const committed = this.#byId.get(key);
     if (!committed) return undefined;
     const edit = this.#writeSet.edits.get(key);
-    return edit ? { ...committed, ...edit } : committed;
+    return edit ? overlayStoredEdit(committed, edit) : committed;
   }
 
   has(id: EntryId | string): boolean {
@@ -180,12 +191,13 @@ export class EntryStore implements EntryStoreContract {
       const key = entryId(id);
       if (!this.has(key)) throw new EntryNotFoundError(key, 'entries.update');
       for (const field of Object.keys(edit)) {
-        if (!CORE_FIELD_KEYS.has(field)) throw new UnknownFieldError(field);
+        if (!this.#registry.has(field)) throw new UnknownFieldError(field);
       }
       if (edit.parentId !== undefined) {
         this.#assertParentValid(key, entryId(edit.parentId), 'entries.update');
       }
-      this.stageUpdate(token, key, readEdit(edit, this.#context));
+      const current = this.get(key)!;
+      this.stageUpdate(token, key, readEdit(edit, this.#context, current, this.#registry));
       return this.get(key)!;
     });
   }
@@ -251,10 +263,10 @@ export class EntryStore implements EntryStoreContract {
     const writeSet = this.#openWriteSet();
     const staged = writeSet.added.get(id);
     if (staged) {
-      writeSet.added.set(id, { ...staged, ...edit });
+      writeSet.added.set(id, overlayStoredEdit(staged, edit));
       return;
     }
-    writeSet.edits.set(id, { ...writeSet.edits.get(id), ...edit });
+    writeSet.edits.set(id, mergeStoredEdits(writeSet.edits.get(id), edit));
   }
 
   stageRemove(_token: TxToken, id: EntryId): void {
@@ -293,7 +305,7 @@ export class EntryStore implements EntryStoreContract {
 
       for (const row of changeSet.updated) {
         const current = this.#byId.get(row.id);
-        if (current) this.#byId.set(row.id, withField(current, row.field, row.to));
+        if (current) this.#byId.set(row.id, applyFieldRow(current, row.field, row.to, this.#registry));
       }
       this.#revision.set(this.#revision.get() + 1);
     }

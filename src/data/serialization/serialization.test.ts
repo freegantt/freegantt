@@ -149,6 +149,34 @@ describe('[S2-A2] toJSON / fromJSON', () => {
     expect(JSON.stringify(toJSON(fromJSON(round)))).toBe(JSON.stringify(round));
   });
 
+  it('drops a top-level cost on ingest; a declared Field reads meta.cost', () => {
+    const raw = {
+      schema: 1 as const,
+      timeZone: 'UTC',
+      dateOnlyEnd: 'inclusive' as const,
+      derivedSpanKinds: ['group'],
+      entries: [
+        {
+          id: 't1',
+          name: 'Groundwork',
+          start: '2026-09-01T00:00:00.000Z',
+          end: '2026-09-11T00:00:00.000Z',
+          cost: 500,
+          meta: { cost: 400 },
+        },
+      ],
+    };
+    const state = new DatasetState({
+      ...readDocument(raw),
+      fieldTypes: { money: { rollUp: 'sum' } },
+      fields: [{ key: 'cost', type: 'money' }],
+    });
+    expect(state.entries.get('t1') && 'cost' in (state.entries.get('t1') as object)).toBe(false);
+    expect(state.entries.get('t1')?.meta).toEqual({ cost: 400 });
+    expect(state.fields.get('cost')?.source).toEqual({ from: 'meta', key: 'cost' });
+    expect(toJSON(state).entries[0]?.meta).toEqual({ cost: 400 });
+  });
+
   it('corrects a stored group span that disagrees with its children, then stays stable', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     const disagreeing: DatasetDocument = {
