@@ -341,7 +341,7 @@ export class GanttShell {
     this.#viewportGestures = options.viewportGestures ?? {};
     this.#resolvedViewportGestures = resolveViewportGestures(this.#viewportGestures);
     this.#capabilities = resolveCapabilities(this.#interactions, (kind) =>
-      this.#options.dataset.isDerivedSpanKind(kind),
+      this.#options.dataset.isRollUpKind(kind),
     );
     this.#gesturePipeline = new GesturePipeline({
       timeZone: () => this.#options.dataset.timeZone,
@@ -483,7 +483,7 @@ export class GanttShell {
   set interactions(next: Interactions) {
     this.#interactions = next;
     this.#capabilities = resolveCapabilities(this.#interactions, (kind) =>
-      this.#options.dataset.isDerivedSpanKind(kind),
+      this.#options.dataset.isRollUpKind(kind),
     );
     this.#refreshAffordances();
   }

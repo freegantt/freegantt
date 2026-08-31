@@ -20,11 +20,11 @@ export interface EntryDocument<TMeta = unknown> {
 }
 
 /** The whole-document half of D7. Key order is a contract: `schema`, `timeZone`, `dateOnlyEnd`,
- *  `derivedSpanKinds`, `entries`. */
+ *  `rollUpKinds`, `entries`. */
 export interface DatasetDocument<TMeta = unknown> {
   schema: 1;
   timeZone: string;
   dateOnlyEnd: DateOnlyEndRule;
-  derivedSpanKinds: readonly EntryKind[];
+  rollUpKinds: readonly EntryKind[];
   entries: readonly EntryDocument<TMeta>[];
 }

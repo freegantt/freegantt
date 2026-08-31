@@ -20,7 +20,7 @@ interface Seed extends Partial<Omit<EntryInput, 'id'>> {
   id: string;
 }
 
-function dataset(entries: Seed[] = [], options: { derivedSpanKinds?: readonly string[] } = {}): DatasetState {
+function dataset(entries: Seed[] = [], options: { rollUpKinds?: readonly string[] } = {}): DatasetState {
   return new DatasetState({
     entries: entries.map((e) => ({ start: 0, end: 1, ...e, name: e.name ?? e.id })),
     timeZone: 'UTC',
@@ -304,13 +304,13 @@ describe('rollup (§1.5)', () => {
     expect(group.end).toBe(state.referenceDate);
   });
 
-  it('with derivedSpanKinds: [], nothing rolls up at all', () => {
+  it('with rollUpKinds: [], nothing rolls up at all', () => {
     const state = dataset(
       [
         { id: 'p1', kind: 'group', start: '2026-01-01', end: '2026-01-05' },
         { id: 'c1', parentId: 'p1', start: '2026-06-01', end: '2026-06-05' },
       ],
-      { derivedSpanKinds: [] },
+      { rollUpKinds: [] },
     );
 
     state.entries.update('c1', { start: '2026-09-01', end: '2026-09-05' });

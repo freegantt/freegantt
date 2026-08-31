@@ -11,12 +11,12 @@ function fakeDataset(list: readonly Entry[]): GanttShellOptions['dataset'] {
     timeZone,
     dateOnlyEnd: 'inclusive' as const,
     referenceDate: 0 as Instant,
-    derivedSpanKinds: new Set(['group']),
+    rollUpKinds: new Set(['group']),
   };
   return {
     entries: new EntryStore(list, context),
     timeZone,
-    isDerivedSpanKind: () => false,
+    isRollUpKind: () => false,
     on: () => {},
     off: () => {},
   };

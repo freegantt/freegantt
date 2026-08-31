@@ -15,11 +15,13 @@ import type {
   FieldType,
 } from '../model/index.js';
 import { DatasetState } from '../data/index.js';
+import { rollUpKindsAsArray } from '../data/roll-up-kinds.js';
 import {
   toJSON as writeDocument,
   readDocument,
-  warnIfDerivedSpansWereCorrected,
+  warnIfRollUpsWereCorrected,
 } from '../data/serialization/index.js';
+import type { RollUpKinds } from '../model/index.js';
 
 export interface DatasetOptions {
   /** What the consumer writes. Ids are plain strings and dates are any `InstantInput` — an ISO string,
@@ -33,10 +35,10 @@ export interface DatasetOptions {
    * covers through the 8th. `'exclusive'` reads it literally as the start of the 8th, matching
    * half-open storage exactly. Only date-only strings are affected — see `DateOnlyEndRule`. */
   dateOnlyEnd?: DateOnlyEndRule;
-  /** Kinds whose span the rollup derives from their children's spans — min start, max end — every
-   * commit (`01` §2.5/§2.6). Defaults to `['group']`. `derivedSpanKinds: []` opts every kind out of
-   * derivation, which is the supported way to ask for hand-set spans everywhere. */
-  derivedSpanKinds?: readonly EntryKind[];
+  /** Kinds whose rolling-up Fields the Rollup derives from their children every commit (`01` §2.5/§2.6).
+   *  Defaults to `['group']`. `rollUpKinds: 'none'` or `[]` opts every kind out of derivation, which is
+   *  the supported way to ask for hand-set values everywhere. */
+  rollUpKinds?: RollUpKinds;
   /** Consumer Field declarations. Core Fields are already in the registry (D-S4-4). */
   fields?: readonly Field[];
   /** Named Field type bundles. A Field's own keys win over the bundle (D-S4-3). */
@@ -71,8 +73,8 @@ export class Dataset {
     return this.#state.dateOnlyEnd;
   }
 
-  get derivedSpanKinds(): readonly EntryKind[] {
-    return [...this.#state.derivedSpanKinds];
+  get rollUpKinds(): readonly EntryKind[] {
+    return rollUpKindsAsArray(this.#state.rollUpKinds);
   }
 
   /** Resolved Field declarations this Dataset owns, core Fields included (D-S4-1). */
@@ -80,10 +82,10 @@ export class Dataset {
     return this.#state.fields;
   }
 
-  /** `model/`'s `Dataset` interface (S3, D-S3-9) — `GanttShell` asks this, never `derivedSpanKinds`
+  /** `model/`'s `Dataset` interface (S3, D-S3-9) — `GanttShell` asks this, never `rollUpKinds`
    *  itself, to resolve the per-kind capability default table. */
-  isDerivedSpanKind(kind: EntryKind): boolean {
-    return this.#state.isDerivedSpanKind(kind);
+  isRollUpKind(kind: EntryKind): boolean {
+    return this.#state.isRollUpKind(kind);
   }
 
   /** Batches `body`'s mutations into one changeset (D-S2-8). Nested calls join the open transaction.
@@ -146,7 +148,7 @@ export class Dataset {
    *  rollup runs on read. Unknown top-level keys are dropped; `meta` is carried as-is. */
   static fromJSON(doc: DatasetDocument): Dataset {
     const dataset = new Dataset(readDocument(doc));
-    warnIfDerivedSpansWereCorrected(doc, dataset);
+    warnIfRollUpsWereCorrected(doc, dataset);
     return dataset;
   }
 }

@@ -10,7 +10,7 @@ import { instant } from '../../time/index.js';
 export interface DatasetDocumentRead {
   timeZone: string;
   dateOnlyEnd: DateOnlyEndRule;
-  derivedSpanKinds: readonly EntryKind[];
+  rollUpKinds: readonly EntryKind[];
   entries: readonly EntryInput[];
 }
 
@@ -48,10 +48,11 @@ function readEntryDocument(row: EntryDocument): EntryInput {
 }
 
 function readSchema1(doc: DatasetDocument): DatasetDocumentRead {
+  const legacy = doc as DatasetDocument & { derivedSpanKinds?: readonly EntryKind[] };
   return {
     timeZone: doc.timeZone,
     dateOnlyEnd: doc.dateOnlyEnd,
-    derivedSpanKinds: [...doc.derivedSpanKinds],
+    rollUpKinds: [...(doc.rollUpKinds ?? legacy.derivedSpanKinds ?? ['group'])],
     entries: doc.entries.map(readEntryDocument),
   };
 }

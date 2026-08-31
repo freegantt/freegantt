@@ -31,7 +31,7 @@ export interface EntryReadContext {
   referenceDate: Instant;
   /** Kinds whose span the rollup derives from children (`01` §2.5, default `['group']`) — an entry
    * of one of these kinds may omit `start`/`end`. */
-  derivedSpanKinds: ReadonlySet<EntryKind>;
+  rollUpKinds: ReadonlySet<EntryKind>;
 }
 
 function readSpan(span: TimeSpanInput, context: EntryReadContext): TimeSpan {
@@ -69,7 +69,7 @@ export function readEntry(input: EntryInput, context: EntryReadContext): Entry {
  * half-specified span is not a span the rollup or a non-deriving kind can make sense of. */
 function readEntrySpan(input: EntryInput, kind: EntryKind, context: EntryReadContext): TimeSpan {
   if (input.start === undefined && input.end === undefined) {
-    if (context.derivedSpanKinds.has(kind)) {
+    if (context.rollUpKinds.has(kind)) {
       return { start: context.referenceDate, end: context.referenceDate };
     }
     throw new InvalidInstantError(

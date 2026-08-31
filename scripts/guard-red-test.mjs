@@ -57,9 +57,9 @@ checkRedTestFile(
 // D-S2-23: each removable leaf has exactly one allowed importer. A second file importing the leaf
 // from outside that allowlist must fail the build, the same way a layer violation does.
 checkRedTestFile(
-  'src/data/__span_rollup_red_test__.ts',
-  "// Deliberate second importer of the span-rollup leaf — only transaction.ts may import it.\nimport './span-rollup.js';\nexport {};\n",
-  'span-rollup-is-removable: second importer',
+  'src/data/__rollup_red_test__.ts',
+  "// Deliberate second importer of the rollup leaf — only transaction.ts may import it.\nimport './rollup.js';\nexport {};\n",
+  'rollup-is-removable: second importer',
 );
 checkRedTestFile(
   'src/view/__dataset_change_subscription_red_test__.ts',

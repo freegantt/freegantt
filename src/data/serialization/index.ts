@@ -11,11 +11,11 @@ export { readDocument, readers } from './read.js';
 export type { DatasetDocumentRead } from './read.js';
 
 /** The readable Dataset surface `toJSON` needs — what a consumer already has (`entries.all`, zone,
- *  `dateOnlyEnd`, `derivedSpanKinds`). `Dataset` and `DatasetState` both match. */
+ *  `dateOnlyEnd`, `rollUpKinds`). `Dataset` and `DatasetState` both match. */
 export interface DatasetDocumentSource {
   readonly timeZone: string;
   readonly dateOnlyEnd: DateOnlyEndRule;
-  readonly derivedSpanKinds: Iterable<EntryKind>;
+  readonly rollUpKinds: Iterable<EntryKind>;
   readonly entries: {
     readonly all: readonly Entry[];
     get(id: string): Entry | undefined;
@@ -48,24 +48,26 @@ export function toJSON(dataset: DatasetDocumentSource): DatasetDocument {
     schema: 1,
     timeZone: dataset.timeZone,
     dateOnlyEnd: dataset.dateOnlyEnd,
-    derivedSpanKinds: Array.from(dataset.derivedSpanKinds),
+    rollUpKinds: Array.from(dataset.rollUpKinds),
     entries: dataset.entries.all.map(writeEntry),
   };
 }
 
 const isDevMode = (): boolean => (import.meta as { env?: { DEV?: boolean } }).env?.DEV ?? false;
 
-/** A document whose stored group span disagrees with its children is corrected by construction
+/** A document whose stored roll-up values disagree with its children is corrected by construction
  *  (D-S2-22). In dev mode, name the entry so the rewrite is not silent. */
-export function warnIfDerivedSpansWereCorrected(doc: DatasetDocument, dataset: DatasetDocumentSource): void {
+export function warnIfRollUpsWereCorrected(doc: DatasetDocument, dataset: DatasetDocumentSource): void {
   if (!isDevMode()) return;
-  const kinds = new Set(dataset.derivedSpanKinds);
+  const kinds = new Set(dataset.rollUpKinds);
   for (const row of doc.entries) {
     const kind = row.kind ?? 'span';
     if (!kinds.has(kind)) continue;
     const stored = dataset.entries.get(row.id);
     if (stored === undefined) continue;
     if (instant(row.start) === stored.start && instant(row.end) === stored.end) continue;
-    console.warn(`FreeGantt: fromJSON corrected the derived span of entry "${row.id}" to match its children`);
+    console.warn(
+      `FreeGantt: fromJSON corrected the rolled-up span of entry "${row.id}" to match its children`,
+    );
   }
 }

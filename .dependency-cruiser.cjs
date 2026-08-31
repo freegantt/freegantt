@@ -77,9 +77,9 @@ module.exports = {
     // layout/ together for a plain `new Gantt(...)`.
     forbid('api-boundary', 'api', ['view', 'data', 'model', 'time', 'layout', 'interaction']),
     // D-S2-23: the first of the four removable-leaf rules. Only data/transaction.ts's own step-5
-    // call site may import the span rollup — delete src/data/span-rollup.ts and groups keep their
+    // call site may import the span rollup — delete src/data/rollup.ts and groups keep their
     // authored span, the same result `derivedSpanKinds: []` already gives a consumer.
-    removable('span-rollup-is-removable', '^src/data/span-rollup\\.ts$', '^src/data/transaction\\.ts$'),
+    removable('rollup-is-removable', '^src/data/rollup\\.ts$', '^src/data/transaction\\.ts$'),
     // D-S2-23/D-S2-20: view/gantt-shell.ts's one call site, plus this file's own unit test — delete
     // src/view/dataset-change-subscription.ts and its one call site and the Gantt still constructs,
     // lays out, renders and scrolls; it just renders the data as it was at construction and never

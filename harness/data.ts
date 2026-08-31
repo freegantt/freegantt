@@ -16,7 +16,6 @@
 import './harness-nav.ts';
 import { Dataset, Gantt, MS, MutationCancelledError, addMs, now } from '../src/api/index.js';
 import type { ChangeSet, DatasetDocument, DatasetEventMap } from '../src/api/index.js';
-import { demoEntryInputs } from '../fixtures/demo-dataset.js';
 import { mountTimelineToolbar } from './timeline-toolbar.js';
 
 declare global {
@@ -30,11 +29,29 @@ const COST_FIELDS = {
   fields: [{ key: 'cost' as const, type: 'money' }],
 };
 
+// S4.2: a small tree proves cost rolls up through ancestors in one changeset; undo reverts all rows.
+const ROLLUP_TREE = [
+  { id: 'phase', name: 'Phase', kind: 'group' as const },
+  {
+    id: 'task-a',
+    name: 'Task A',
+    parentId: 'phase',
+    start: '2026-01-01',
+    end: '2026-01-10',
+    meta: { cost: 100 },
+  },
+  {
+    id: 'task-b',
+    name: 'Task B',
+    parentId: 'phase',
+    start: '2026-01-15',
+    end: '2026-01-20',
+    meta: { cost: 200 },
+  },
+];
+
 let dataset = new Dataset({
-  entries: demoEntryInputs.slice(0, 8).map((entry) => ({
-    ...entry,
-    meta: { cost: 400 },
-  })),
+  entries: ROLLUP_TREE,
   timeZone: 'UTC',
   ...COST_FIELDS,
 });

@@ -1012,7 +1012,7 @@ describe('Gantt interactions / capability hot path (S3.2, D-S3-9, [S3-A3]/[S3-A5
     gantt.destroy();
   });
 
-  it('a group entry (derivedSpanKinds) gets neither the grab cursor nor a handle', () => {
+  it('a group entry (rollUpKinds) gets neither the grab cursor nor a handle', () => {
     const container = document.createElement('div');
     const dataset = new Dataset({
       entries: [{ id: 'g1', kind: 'group', name: 'Group' }, ...sampleEntries],

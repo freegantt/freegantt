@@ -29,14 +29,14 @@ function fakeDataset(entries: readonly Entry[]): GanttShellOptions['dataset'] {
     timeZone,
     dateOnlyEnd: 'inclusive' as const,
     referenceDate: 0 as Instant,
-    derivedSpanKinds: new Set(['group']),
+    rollUpKinds: new Set(['group']),
   };
   // No changes ever land on this store, so on/off are stubs — none of these tests mutate the
   // dataset, so no handler this file registers is ever called.
   return {
     entries: new EntryStore(entries, context),
     timeZone,
-    isDerivedSpanKind: () => false,
+    isRollUpKind: () => false,
     on: () => {},
     off: () => {},
   };
