@@ -4,7 +4,7 @@ export type { Instant, TimeUnit, TimeSpan, Duration } from './time.js';
 export type { InstantInput, TimeSpanInput, DateOnlyEndRule } from './time.js';
 export type { Entry, EntryKind, EntryInput, EntryEdit, StoredEdit, EntryEdits } from './entry.js';
 export type { Point, Size, PixelSpan, Rect } from './geometry.js';
-export type { Dataset, EntryStore, EntryStoreView } from './dataset.js';
+export type { Dataset, EntryStore, EntryStoreView, RollUpKinds } from './dataset.js';
 export type { DatasetDocument, EntryDocument } from './document.js';
 export type {
   StoreName,
@@ -46,6 +46,7 @@ export {
   UnknownAggregatorError,
   UnknownFieldTypeError,
   FieldNotColumnableError,
+  AggregatorFailedError,
   MutationDuringNotificationError,
   MutationCancelledError,
   InvalidReplayOriginError,

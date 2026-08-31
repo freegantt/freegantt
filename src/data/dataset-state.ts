@@ -15,6 +15,7 @@ import type {
   FieldContext,
   FieldType,
   Instant,
+  RollUpKinds,
 } from '../model/index.js';
 import { changeSetId } from '../model/index.js';
 import { now } from '../time/index.js';
@@ -30,6 +31,8 @@ import { History } from './history.js';
 import type { HistoryOptions } from './history.js';
 import { createFieldContext, readField } from './fields/field-access.js';
 import { FieldRegistry } from './fields/field-registry.js';
+import { ComputedFieldCache } from './computed-cache.js';
+import { resolveRollUpKinds } from './roll-up-kinds.js';
 
 export type { HistoryOptions };
 
@@ -41,10 +44,10 @@ export interface DatasetStateOptions {
    *  `history: { capacity: 0 }` is not a supported way to disable it; construct without `data/history.ts`
    *  for that (D-S2-23), which S2 has no consumer-facing option for yet. */
   history?: HistoryOptions;
-  /** Kinds whose span the rollup derives from their children's spans, min start/max end, every
-   *  commit (`01` §2.5/§2.6). Defaults to `['group']`. `derivedSpanKinds: []` opts every kind out —
-   *  the supported way to ask for hand-set spans everywhere (S2.3 §1.5). */
-  derivedSpanKinds?: readonly EntryKind[];
+  /** Kinds whose rolling-up Fields the Rollup derives from their children, every commit
+   *  (`01` §2.5/§2.6). Defaults to `['group']`. `rollUpKinds: 'none'` or `[]` opts every kind out —
+   *  the supported way to ask for hand-set values everywhere (S4.2). */
+  rollUpKinds?: RollUpKinds;
   fields?: readonly Field[];
   fieldTypes?: Readonly<Record<string, FieldType>>;
   aggregators?: Readonly<Record<string, Aggregator>>;
@@ -80,13 +83,16 @@ export class DatasetState implements Dataset {
   /** Set while `beforeChange`/`change` handlers are fanning out (D-S2-9, D-S2-25). Read and written
    *  only by `runTransaction` and `commitChangeSet`. */
   notifying = false;
-  /** Kinds whose span the rollup derives from their children (`01` §2.5). Set once, at construction —
-   *  live-reconfiguring which kinds derive is not part of S2. Read by `data/transaction.ts`'s commit
-   *  step, the only file allowed to import the rollup itself (`span-rollup-is-removable`, D-S2-23) —
-   *  this class hands over the *kinds*, never the function. */
-  readonly derivedSpanKinds: ReadonlySet<EntryKind>;
+  /** Kinds whose rolling-up Fields the Rollup derives from their children (`01` §2.5). Set once, at
+   *  construction — live-reconfiguring which kinds derive is not part of S4. Read by
+   *  `data/transaction.ts`'s commit step, the only file allowed to import the rollup itself
+   *  (`rollup-is-removable`, D-S4-7) — this class hands over the *kinds*, never the function. */
+  readonly rollUpKinds: ReadonlySet<EntryKind>;
   readonly fields: FieldRegistry;
   readonly fieldContext: FieldContext;
+  readonly computedCache = new ComputedFieldCache();
+  /** Bumped on every committed changeset — the computed-field cache key (D-S4-10). */
+  #datasetRevision = 0;
   /** Per-instance — never a module-level counter (I2). */
   #changeSetCounter = 0;
   readonly #history: History;
@@ -96,7 +102,7 @@ export class DatasetState implements Dataset {
     this.dateOnlyEnd = options.dateOnlyEnd ?? 'inclusive';
     this.referenceDate = now();
     this.editExtender = options.editExtender ?? identityExtender;
-    this.derivedSpanKinds = new Set(options.derivedSpanKinds ?? ['group']);
+    this.rollUpKinds = resolveRollUpKinds(options.rollUpKinds);
     this.fields = new FieldRegistry({
       fields: options.fields ?? [],
       fieldTypes: options.fieldTypes ?? {},
@@ -105,13 +111,18 @@ export class DatasetState implements Dataset {
     this.fieldContext = createFieldContext(this.timeZone, (entry, key, ctx) => {
       const field = this.fields.get(key);
       if (!field) return undefined;
+      if (field.source.from === 'compute') {
+        return this.computedCache.read(entry.id, key, this.#datasetRevision, () =>
+          readField(entry, field, ctx),
+        );
+      }
       return readField(entry, field, ctx);
     });
     const context: EntryReadContext = {
       timeZone: this.timeZone,
       dateOnlyEnd: this.dateOnlyEnd,
       referenceDate: this.referenceDate,
-      derivedSpanKinds: this.derivedSpanKinds,
+      rollUpKinds: this.rollUpKinds,
     };
     this.entries = new EntryStore(readEntries(options.entries, context), context, this.fields);
     this.entries.setTransactionRunner(this);
@@ -130,10 +141,18 @@ export class DatasetState implements Dataset {
     return changeSetId(this.#changeSetCounter);
   }
 
-  /** `model/`'s `Dataset` interface (S3, D-S3-9) — a predicate rather than exposing `derivedSpanKinds`
+  /** `model/`'s `Dataset` interface (S3, D-S3-9) — a predicate rather than exposing `rollUpKinds`
    *  itself, so `view/capability.ts` can ask the one question it needs without naming the Set's shape. */
-  isDerivedSpanKind(kind: EntryKind): boolean {
-    return this.derivedSpanKinds.has(kind);
+  isRollUpKind(kind: EntryKind): boolean {
+    return this.rollUpKinds.has(kind);
+  }
+
+  get datasetRevision(): number {
+    return this.#datasetRevision;
+  }
+
+  bumpDatasetRevision(): void {
+    this.#datasetRevision += 1;
   }
 
   /** Batches `body`'s mutations into one `ChangeSet` (D-S2-8). `'user'` is the only origin a public

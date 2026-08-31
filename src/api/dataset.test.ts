@@ -132,12 +132,12 @@ describe('Dataset transaction/on/off delegation', () => {
     expect(fired).toBe(false);
   });
 
-  it('entries.childrenOf returns direct children; derivedSpanKinds defaults to group', () => {
+  it('entries.childrenOf returns direct children; rollUpKinds defaults to group', () => {
     const dataset = new Dataset({
       timeZone: 'UTC',
       entries: [{ id: 'p1', name: 'Sitework', kind: 'group' }, oneEntry({ id: 't1', parentId: 'p1' })],
     });
-    expect(dataset.derivedSpanKinds).toEqual(['group']);
+    expect(dataset.rollUpKinds).toEqual(['group']);
     expect(dataset.entries.childrenOf('p1').map((e) => e.id)).toEqual([entryId('t1')]);
   });
 
@@ -254,5 +254,34 @@ describe('Dataset fields (S4.1)', () => {
     expect(changes[0]?.updated).toContainEqual(
       expect.objectContaining({ field: 'cost', from: 400, to: 500 }),
     );
+  });
+
+  it("a child cost edit rolls the group parent's cost in the same changeset (S4.2)", () => {
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      fieldTypes: { money: { rollUp: 'sum' } },
+      fields: [{ key: 'cost', type: 'money' }],
+      entries: [
+        { id: 'root', name: 'Root', kind: 'group' },
+        {
+          id: 'leaf',
+          name: 'Leaf',
+          parentId: 'root',
+          start: '2026-01-01',
+          end: '2026-01-05',
+          meta: { cost: 100 },
+        },
+      ],
+    });
+    const changes: ChangeSet[] = [];
+    dataset.on('change', ({ changeSet }) => {
+      changes.push(changeSet);
+    });
+
+    dataset.entries.update('leaf', { cost: 500 });
+
+    expect(changes).toHaveLength(1);
+    const costRows = changes[0]!.updated.filter((row) => row.field === 'cost');
+    expect(costRows.map((row) => row.id)).toEqual(expect.arrayContaining(['root', 'leaf']));
   });
 });

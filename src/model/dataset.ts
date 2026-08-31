@@ -7,6 +7,10 @@ import type { Entry, EntryEdit, EntryInput, EntryKind } from './entry.js';
 import type { EntryId } from './ids.js';
 import type { DatasetEventMap } from './change-set.js';
 
+/** Which parent Kinds derive rolling-up Fields from their children (`01` §2.6, D-S4-6). `'none'` and
+ *  `[]` both mean no Kind derives. */
+export type RollUpKinds = readonly EntryKind[] | 'none';
+
 /** The Dataset's own read view onto its entries (D-S2-2). `all` is the committed array — see D-S2-3
  *  for its cached-identity rule and D-S2-21 for what it does *not* show while a transaction is open
  *  (`get`/`has`/`size`/`childrenOf` see a transaction's own uncommitted writes; `all` does not). */
@@ -29,16 +33,16 @@ export interface EntryStore extends EntryStoreView {
 }
 
 /** What a Gantt (and any other `change` subscriber) holds: entries, zone, and the change bus.
- *  The public `Dataset` class also exposes construction options (`dateOnlyEnd`, `derivedSpanKinds`'s
+ *  The public `Dataset` class also exposes construction options (`dateOnlyEnd`, `rollUpKinds`'s
  *  full list) and `transaction()` — those stay on the class, because a view never opens a transaction.
- *  `isDerivedSpanKind` is the one exception (S3, D-S3-9): `view/capability.ts`'s per-kind default
- *  table needs to know whether an entry's span is the Rollup's output before it can answer whether
+ *  `isRollUpKind` is the one exception (S3, D-S3-9): `view/capability.ts`'s per-kind default
+ *  table needs to know whether an entry's values are the Rollup's output before it can answer whether
  *  that entry accepts `move`/`resize`, and a single predicate answers that without exposing the
- *  `derivedSpanKinds` set's own shape (`ReadonlySet` internally, a plain array on the public class). */
+ *  `rollUpKinds` set's own shape (`ReadonlySet` internally, a plain array on the public class). */
 export interface Dataset {
   readonly entries: EntryStore;
   readonly timeZone: string;
-  isDerivedSpanKind(kind: EntryKind): boolean;
+  isRollUpKind(kind: EntryKind): boolean;
   on<K extends keyof DatasetEventMap>(name: K, handler: (payload: DatasetEventMap[K]) => void | false): void;
   off<K extends keyof DatasetEventMap>(name: K, handler: (payload: DatasetEventMap[K]) => void | false): void;
 }

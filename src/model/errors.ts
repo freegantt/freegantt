@@ -145,6 +145,25 @@ export class UnknownFieldTypeError extends FreeGanttError {
   }
 }
 
+/** `code: 'aggregator-failed'` — a consumer Aggregator threw during the Rollup (D-S4-9). The
+ *  transaction rolls back; nothing commits and no history entry is pushed. */
+export class AggregatorFailedError extends FreeGanttError {
+  readonly fieldKey: string;
+  readonly aggregatorName: string;
+  readonly entryId: EntryId;
+
+  constructor(fieldKey: string, aggregatorName: string, entryId: EntryId) {
+    super(
+      'aggregator-failed',
+      `rollup: aggregator "${aggregatorName}" failed on field "${fieldKey}" for entry "${String(entryId)}"`,
+    );
+    this.name = 'AggregatorFailedError';
+    this.fieldKey = fieldKey;
+    this.aggregatorName = aggregatorName;
+    this.entryId = entryId;
+  }
+}
+
 /** `code: 'field-not-columnable'` — `gridColumns` named a Field that did not declare `column`
  *  (D-S4-12). Thrown when S4.3 resolves columns. */
 export class FieldNotColumnableError extends FreeGanttError {

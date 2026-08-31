@@ -17,7 +17,7 @@ import { MutationCancelledError, MutationDuringNotificationError } from '../mode
 import { diffEdit, foldChangeSet } from './change-set.js';
 import type { EditExtender, EntryEdits } from './edit-extension.js';
 import type { EventBus } from './event-bus.js';
-import { rollUpDerivedSpans } from './span-rollup.js';
+import { rollUpFields, collectTouchedIds, buildEffectiveEntries } from './rollup.js';
 import type { FieldRegistry } from './fields/field-registry.js';
 
 /** Only `runTransaction` produces one. Store mutators require it, so a mutation outside a transaction
@@ -55,20 +55,21 @@ export interface TransactionData {
    *  sync token. */
   nextChangeSetId(): ChangeSetId;
   readonly bus: EventBus<DatasetEventMap>;
-  /** Kinds whose span the rollup derives from their children, every commit (`01` §2.5, D-S2-22).
-   *  This file is the only one that turns it into a rollup call — `span-rollup-is-removable`
-   *  (`.dependency-cruiser.cjs`, D-S2-23) says so, which is what makes deleting `span-rollup.ts` a
-   *  provable degradation to `derivedSpanKinds: []`'s own behavior rather than a break. */
-  readonly derivedSpanKinds: ReadonlySet<EntryKind>;
+  /** Kinds whose rolling-up Fields the Rollup derives from their children, every commit (`01` §2.5,
+   *  D-S4-7). This file is the only one that turns it into a rollup call — `rollup-is-removable`
+   *  (`.dependency-cruiser.cjs`) says so, which is what makes deleting `rollup.ts` a provable
+   *  degradation to `rollUpKinds: 'none'`'s own behavior rather than a break. */
+  readonly rollUpKinds: ReadonlySet<EntryKind>;
   readonly fields: FieldRegistry;
   readonly fieldContext: FieldContext;
+  bumpDatasetRevision(): void;
 }
 
 /**
- * Runs the span rollup once against `data`'s freshly built entries, with no proposed edits — what a
+ * Runs the Rollup once against `data`'s freshly built entries, with no proposed edits — what a
  * fresh `Dataset(...)` and `Dataset.fromJSON(...)` share (`01` §2.6, D-S2-22): a `{ kind: 'group' }`
- * given children only through the initial array gets a real span before anyone reads it, not just
- * after the first later transaction touches one of those children.
+ * given children only through the initial array gets real rolled-up values before anyone reads it,
+ * not just after the first later transaction touches one of those children.
  *
  * Writes any correction straight into the store and returns early if there is none. There is no
  * `beforeChange`/`change` here and no history record (S2.5) — construction emits nothing (`01` §2.6),
@@ -76,12 +77,18 @@ export interface TransactionData {
  * notifications. `origin: 'user'` is inert: the changeset this builds is never emitted or returned,
  * so nothing reads it — a `'load'` origin arrives with its own producer later (D-S2-11).
  *
- * The second and last caller of `rollUpDerivedSpans` in `src/**`, alongside `runTransaction` below —
- * both in this file, which keeps `span-rollup-is-removable` (D-S2-23) honest.
+ * The second and last caller of `rollUpFields` in `src/**`, alongside `runTransaction` below —
+ * both in this file, which keeps `rollup-is-removable` (D-S4-7) honest.
  */
 export function applyConstructionRollUp(data: TransactionData): void {
   const byId = data.entries.committedById();
-  const updated = rollUpDerivedSpans(byId, new Map(), data.derivedSpanKinds);
+  const updated = rollUpFields(
+    byId,
+    { body: new Map(), merged: new Map() },
+    data.fields,
+    data.rollUpKinds,
+    data.fieldContext,
+  );
   if (updated.length === 0) return;
 
   const token: TxToken = {} as TxToken;
@@ -93,6 +100,7 @@ export function applyConstructionRollUp(data: TransactionData): void {
     removed: [],
     updated,
   });
+  data.bumpDatasetRevision();
 }
 
 function mergeEdits(base: EntryEdits, extra: EntryEdits): EntryEdits {
@@ -110,7 +118,7 @@ const isDevMode = (): boolean => (import.meta as { env?: { DEV?: boolean } }).en
  * diffing, no extension hook, and no rollup: the caller hands over the exact rows to write. `runTransaction`
  * uses this once it has built a changeset from a body; `data/history.ts` uses it directly for undo/redo,
  * which is what "neither re-runs the extension hook" (`s2.5-undo-redo.md` §2.2) means in code — replaying
- * or inverting a recorded `ChangeSet` never goes near `data.editExtender` or `rollUpDerivedSpans`.
+ * or inverting a recorded `ChangeSet` never goes near `data.editExtender` or `rollUpFields`.
  */
 export function commitChangeSet(data: TransactionData, changeSet: ChangeSet): void {
   if (data.notifying) {
@@ -146,6 +154,8 @@ export function commitChangeSet(data: TransactionData, changeSet: ChangeSet): vo
   }
 
   data.entries.endTransaction(token, changeSet);
+
+  data.bumpDatasetRevision();
 
   data.notifying = true;
   try {
@@ -192,48 +202,71 @@ export function runTransaction<T>(
   data.openTransactions -= 1;
   if (!outermost) return result; // nested: joins the outer transaction, commits nothing itself (D-S2-8)
 
-  const byId = data.entries.committedById();
-  const proposed = data.entries.pendingEdits();
-  const addedEntities = data.entries.pendingAdded();
-  const removedEntities = data.entries.pendingRemoved();
+  try {
+    const byId = data.entries.committedById();
+    const proposed = data.entries.pendingEdits();
+    const addedEntities = data.entries.pendingAdded();
+    const removedEntities = data.entries.pendingRemoved();
+    const effectiveEntries = buildEffectiveEntries(
+      byId,
+      addedEntities.map((row) => row.entity),
+      removedEntities.map((row) => row.entity),
+      proposed,
+    );
 
-  const bodyUpdated: FieldUpdated[] = [];
-  for (const [id, edit] of proposed)
-    bodyUpdated.push(...diffEdit(byId, id, edit, data.fields, data.fieldContext));
+    const bodyUpdated: FieldUpdated[] = [];
+    for (const [id, edit] of proposed)
+      bodyUpdated.push(...diffEdit(byId, id, edit, data.fields, data.fieldContext));
 
-  const extenderEdits = data.editExtender({ entries: byId, proposed });
-  const extenderUpdated: FieldUpdated[] = [];
-  for (const [id, edit] of extenderEdits) {
-    const bodyEdit = proposed.get(id);
-    if (bodyEdit && isDevMode()) {
-      for (const field of Object.keys(edit)) {
-        if (field in bodyEdit) {
-          throw new Error(
-            `runTransaction: the extension hook proposed field "${field}" on entry "${String(id)}", ` +
-              'which the transaction body already proposed (I4)',
-          );
+    const extenderEdits = data.editExtender({ entries: byId, proposed });
+    const extenderUpdated: FieldUpdated[] = [];
+    for (const [id, edit] of extenderEdits) {
+      const bodyEdit = proposed.get(id);
+      if (bodyEdit && isDevMode()) {
+        for (const field of Object.keys(edit)) {
+          if (field in bodyEdit) {
+            throw new Error(
+              `runTransaction: the extension hook proposed field "${field}" on entry "${String(id)}", ` +
+                'which the transaction body already proposed (I4)',
+            );
+          }
         }
       }
+      extenderUpdated.push(...diffEdit(byId, id, edit, data.fields, data.fieldContext));
     }
-    extenderUpdated.push(...diffEdit(byId, id, edit, data.fields, data.fieldContext));
-  }
 
-  const rollupUpdated = rollUpDerivedSpans(byId, mergeEdits(proposed, extenderEdits), data.derivedSpanKinds);
+    const rollupUpdated = rollUpFields(
+      effectiveEntries,
+      { body: proposed, merged: mergeEdits(proposed, extenderEdits) },
+      data.fields,
+      data.rollUpKinds,
+      data.fieldContext,
+      collectTouchedIds(
+        byId,
+        addedEntities.map((row) => row.entity),
+        removedEntities.map((row) => row.entity),
+        proposed,
+      ),
+    );
 
-  const changeSet = foldChangeSet(data.nextChangeSetId(), origin, addedEntities, removedEntities, [
-    ...bodyUpdated,
-    ...extenderUpdated,
-    ...rollupUpdated,
-  ]);
+    const changeSet = foldChangeSet(data.nextChangeSetId(), origin, addedEntities, removedEntities, [
+      ...bodyUpdated,
+      ...extenderUpdated,
+      ...rollupUpdated,
+    ]);
 
-  if (!changeSet) {
+    if (!changeSet) {
+      data.entries.endTransaction(token, undefined);
+      return result;
+    }
+
+    // Discard the body's write set. `commitChangeSet` opens its own transaction to apply the folded
+    // rows — a second `beginTransaction` here would wipe the overlay instead of closing it.
     data.entries.endTransaction(token, undefined);
+    commitChangeSet(data, changeSet);
     return result;
+  } catch (error) {
+    data.entries.endTransaction(token, undefined);
+    throw error;
   }
-
-  // Discard the body's write set. `commitChangeSet` opens its own transaction to apply the folded
-  // rows — a second `beginTransaction` here would wipe the overlay instead of closing it.
-  data.entries.endTransaction(token, undefined);
-  commitChangeSet(data, changeSet);
-  return result;
 }

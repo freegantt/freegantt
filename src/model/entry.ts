@@ -39,7 +39,7 @@ export interface EntryInput<TMeta = unknown> {
   kind?: EntryKind;
   name: string;
   /** Required for a `kind` whose span is authored. Omit both `start` and `end` for a
-   * `derivedSpanKinds` kind (default `'group'`) to let the span rollup fill them in — the store
+   * `rollUpKinds` kind (default `'group'`) to let the Rollup fill them in — the store
    * writes a zero-length span at the dataset's reference date until the rollup runs (`01` §2.5,
    * S2.3 §1.5). Omitting one but not the other, or omitting both on a non-deriving kind, is an
    * `InvalidInstantError`: the field is required and `undefined` names no instant. */
