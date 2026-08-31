@@ -219,7 +219,7 @@ Slices are scope, not calendar estimates. Within a slice, entries are ordered so
 - Grid maturation: grid-column **presentation** over S4's fields — header, width, alignment, `cellRenderer`; inline editors (text, date via a pluggable date-input seam — no bundled date-picker dependency), column resize/reorder; `beforeEntryEdit` veto/replace flow. There is no second definition system: a column names a field, and a consumer field and a core field take the same path (ADR 0005).
 - `PluginContext.data.registerField` / `view.registerGridColumn` (`01` §10): a plugin declares a field that aggregates exactly like a core one, and shows it like any other.
 - Renderer callbacks at every declared point (`bar`, `cell`, `header`, `tooltip`), text-safe by default (I13).
-- A11y completion: grid pattern with roving tabindex, full keyboard reach for every S3 interaction, screen-reader labels with dates/progress, focus management in popups; axe checks in CI on harness pages. Link-create keyboard lands with S7.
+- A11y completion: grid pattern with roving tabindex, full keyboard reach for every S3 interaction, screen-reader labels with dates, focus management in popups; axe checks in CI on harness pages. Link-create keyboard lands with S7. Progress is scheduling-plugin data (ADR 0008), not a core a11y string.
 - Docs seed: harness pages get explanatory text and become the example gallery; public API reference generated from types.
 
 **Acceptance**

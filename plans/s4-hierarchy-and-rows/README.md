@@ -2,7 +2,7 @@
 
 **Slice:** S4 (`plans/03` §S4) · **Position:** after S3, before S5 · **Status:** specified, not started
 **Form:** the same settled-spec form as [`plans/s3-direct-manipulation/README.md`](../s3-direct-manipulation/README.md) — this file is the tracker and the shared context; each step file holds the decisions it implements and its TODO boxes.
-**Last spec review:** [`plans/reviews/2026-08-30-s4-spec.html`](../reviews/2026-08-30-s4-spec.html) — final pass 2026-08-30; first-pass recs landed; **X2 is blocking** (see §12). Close Sp2 (sort vs visible columns) before S4.9.
+**Last spec review:** [`plans/reviews/2026-08-30-s4-spec.html`](../reviews/2026-08-30-s4-spec.html) — findings landed in this spec (2026-08-31): sort binds `FieldCompare` from declared Fields; `emitRow`/`packRow`; X2 is `'header'`; `CustomRow` is the public custom-source DTO.
 **Governed by:** `plans/00` D2/D7/D8, `plans/01` §2.3/§2.5/§2.6/§4/§6, `plans/02` §2/§4.1/§4.2/§6, ADR [0005](../../docs/adr/0005-fields-are-declared-and-grid-columns-reference-them.md).
 **Builds on:** S2 data core (transactions, changesets, undo, JSON), S3 gestures, S1's height index and `FrameLayout`.
 **Closes:** issue #80 (per-field rollup), #81 (row cells), ADR 0005's two open questions, `plans/03` §S4's three known gaps (#91 §9-B, §9-E, §9-G).
@@ -33,8 +33,8 @@
 | **Q16** | If a Field omits `rollUp`, what happens? | **After Field-type merge, it does not participate — unless the type supplied a name.** A Field type's `rollUp` is the default Aggregator name (shipped or a consumer name in `aggregators`). The Field's own keys win, so `rollUp: 'none'` opts that Field out. There is no global default Aggregator and no shipped `number`/`instant` types. Dates use `min`/`max`, not `sum`. §S4.1, D-S4-3. |
 | **Q17** | Must `{ key: 'cost', type: 'money' }` also name `source: { from: 'meta', key: 'cost' }`? | **No.** Omitted `source` is `meta` under the Field key (D-S4-35). `Entry` stays closed: top-level unknown keys still drop; `update({ cost })` writes `entry.meta.cost` and creates `meta` if needed. Two Fields may not share one `meta` slot (`DuplicateFieldSourceError`). The long form remains for a remapped Document key. |
 | **Q18** | Where does currency formatting live? | **`formatValue` on the Field type.** Money stays a number in the store. The cell is text. `cellRenderer` is S5, on the Grid column. §S4.3, D-S4-14. |
-| **Q19** | Can a view override sort order? | **Yes — `RowSort.compare`.** Default is `asc`/`desc` on the **stored** value, never on `formatValue`. Then `ResolvedColumn.compareStored` (built with this Gantt's `locale` at column-resolve time), then a shipped compare. §S4.3, S4.9, D-S4-13, D-S4-28. |
-| **Q20** | Whose `locale` drives `formatValue` and default string sort? | **This Gantt's `locale`, at column-resolve time.** `ResolvedColumn` carries bound `format` and `compareStored` closures. A headless `Dataset` with no `Gantt` does not format cells. `locale` does not travel in the Document. §S4.3, D-S4-13. |
+| **Q19** | Can a view override sort order? | **Yes — `RowSort.compare`.** Default is `asc`/`desc` on the **stored** value, never on `formatValue`. Then `FieldCompare.compareStored` (every declared Field, same Gantt locale bind as columns), then a shipped compare. Sort does not require the Field on the Grid. §S4.3, S4.9, D-S4-13, D-S4-28. |
+| **Q20** | Whose `locale` drives `formatValue` and default string sort? | **This Gantt's `locale`, at resolve time.** `ResolvedColumn.format` and `FieldCompare.compareStored` are bound then. `FieldContext` has no `locale`. A headless `Dataset` does not format cells. `locale` does not travel in the Document. §S4.3, D-S4-13. |
 | **Q21** | How do I ship a custom rollup? | **Register the function in `aggregators`, name it on the Field or Field type.** `rollUp` is always a name (`'sum'`, `'riskWeighted'`), never a bare function — the name serializes; the function travels with the app (`fromJSON`'s second argument). One registration can serve many Fields. §S4.1, D-S4-3; `02` §4.2 level 4. |
 
 ---
@@ -79,13 +79,13 @@ flowchart TB
   subgraph rowctx["ROW context — what a Gantt DRAWS (layout/, view/)"]
     direction TB
     R1["resolveRows<br/>row source: entries | group | custom"]
-    R2["emitItems<br/>per-kind ItemEmitter"]
-    R3["packLanes<br/>lane per item, laneCount per row"]
+    R2["emitRow<br/>per-kind ItemEmitter"]
+    R3["packRow<br/>lane per item, laneCount per row"]
     R4["placeGeometry<br/>x/y/width/height, cells"]
     R1 --> R2 --> R3 --> R4
   end
 
-  fieldctx -->|"resolved columns<br/>on LayoutInput"| rowctx
+  fieldctx -->|"columns + fieldCompares"| rowctx
 
   classDef f fill:#eef1f8,stroke:#5a6a9a,color:#1c2230
   classDef r fill:#eaf3ec,stroke:#4a7a58,color:#1c2b20
@@ -93,7 +93,7 @@ flowchart TB
   class R1,R2,R3,R4 r
 ```
 
-**The one meeting point is `LayoutInput.columns`** — a resolved, plain-data list that `view/` assembles from `gantt.gridColumns` and the Dataset's Fields. `layout/` never imports `data/`, and `data/` never learns that a Gantt exists. Everything else in the two contexts is independent, which is why the step order can interleave them freely.
+**Cells meet Fields at `LayoutInput.columns`.** Sort meets Fields at `RowResolutionInput.fieldCompares`. `view/` binds both with this Gantt's locale. `layout/` never imports `data/`, and `data/` never learns that a Gantt exists. Everything else in the two contexts is independent, which is why the step order can interleave them freely.
 
 ---
 
@@ -176,13 +176,13 @@ gantt.on('collapseChange', ({ to }) => save(to));
 
 | Export | Step |
 |---|---|
-| `Field`, `FieldSource`, `FieldType`, `FieldKey`, `Aggregator`, `AggregatorName`, `FieldContext`, `RollUpContext` | S4.1 |
+| `Field`, `FieldSource`, `FieldType`, `FieldKey`, `Aggregator`, `AggregatorName`, `FieldContext`, `FormatContext`, `RollUpContext` | S4.1 |
 | `DatasetOptions.fields` / `.fieldTypes` / `.aggregators` / `.rollUpKinds` (`'none'` or Kind list), `Dataset.fields` (read view) | S4.1, S4.2 |
 | `AggregatorFailedError`, `DuplicateFieldKeyError`, `DuplicateFieldSourceError`, `UnknownAggregatorError` | S4.1, S4.2 |
 | `DatasetOptions.hierarchy`, `Dataset.hierarchy` | S4.5 |
 | `GridColumn`, `GridColumnInput`, `Gantt.gridColumns` | S4.3 |
 | `Dataset.fromJSON(doc, options?)`, `schema: 2` | S4.4 |
-| `RowSource`, `EntriesRowSource`, `GroupRowSource`, `CustomRowSource`, `Gantt.rows` | S4.6 |
+| `RowSource`, `EntriesRowSource`, `GroupRowSource`, `CustomRowSource`, `CustomRow`, `Gantt.rows` | S4.6 |
 | `Gantt.collapsed`, `collapse`, `expand`, `toggleCollapse`, `beforeCollapseChange`/`collapseChange`, `CollapseChange` | S4.6 |
 | `RowFilter`, `RowSort` | S4.9 |
 | Parts: `fg-row-cell`, `fg-row-twisty`, `fg-bar-bracket`, `fg-bar-diamond`; tokens `--fg-indent-width`, `--fg-lane-gap` | S4.3, S4.6, S4.7, S4.8 |
@@ -212,17 +212,17 @@ Full prose lives in the step file that implements each decision.
 | D-S4-10 | Computed Fields memoized on dataset revision | S4.2 |
 | D-S4-11 | View state never changes a stored value | S4.2 |
 | D-S4-12 | `gridColumns` is names plus overrides; `column` means columnable | S4.3 |
-| D-S4-13 | `LayoutInput.columns` is the one meeting point | S4.3 |
+| D-S4-13 | Visible `columns` for cells; `fieldCompares` for sort | S4.3 |
 | D-S4-14 | `formatValue` is text; renderers stay out of `data/` | S4.3 |
 | D-S4-15 | The Document carries the data half of a Field | S4.4 |
 | D-S4-16 | `schema: 2`, and `schema: 1` still reads | S4.4 |
 | D-S4-17 | `autoGroup` defaults to `false`; promotes `'span'` only | S4.5 |
 | D-S4-18 | Promote only, never demote | S4.5 |
-| D-S4-19 | `computeFrame` becomes four stages | S4.6 |
+| D-S4-19 | `computeFrame` becomes four stages; `emitRow` / `packRow` | S4.6 |
 | D-S4-20 | Rows resolve whole-dataset; placement windowed; emit/pack on-demand | S4.6 |
-| D-S4-21 | One `RowSource` interface, three occupants | S4.6 |
+| D-S4-21 | One `RowSource` interface, three occupants; public `CustomRow` | S4.6 |
 | D-S4-22 | Collapse is Gantt state; ids are `RowId`s | S4.6 |
-| D-S4-23 | `Row.kind: 'group'` stands for no Entry; `headerLabel` | S4.6 |
+| D-S4-23 | `Row.kind: 'header'` stands for no Entry; `headerLabel` | S4.6 |
 | D-S4-24 | `ItemEmitter` seam, three occupants, no public registration | S4.7 |
 | D-S4-25 | One Item per Segment; one id builder | S4.7 |
 | D-S4-26 | Lane packing memoized; the height index forces it | S4.8 |
@@ -253,6 +253,8 @@ Read these before you touch `src/`.
 10. **`.slice` bumps only at S4.11** — not before the gate is green.
 11. **`data/transaction.ts` is the only importer of `data/rollup.ts`.** Do not add `api/roll-up.ts` or a constructor `rollUp` function. `'none'` is `rollUpKinds`, not a second option.
 12. **Omitted `source` is `meta[field.key]`, never a new key on `Entry`.** A top-level `cost` on ingest still drops. Core Fields set `source` explicitly. `toJSON` writes the resolved source.
+13. **Sort comparers bind from declared Fields** (`FieldCompare`), not from `gridColumns`. Hiding a column does not change order.
+14. **`{ source: 'custom' }` takes `CustomRow[]`.** Adapt in `custom-source.ts`. Do not publish `PlannedRow`.
 
 ---
 
@@ -270,7 +272,7 @@ Read these before you touch `src/`.
 | Pack mode makes `contentHeight` cost O(n) per render | It costs one pack per row per revision, memoized. The height index is the only forcing caller (D-S4-26) |
 | Switching `rows` scrolls the user to the top | Scroll is a pixel position, clamped against the new content height (D-S4-27) |
 | Two Gantts on one Dataset fight over collapse | Collapse is per Gantt, like selection (D-S4-22) |
-| `Row.kind: 'group'` is read as "a `'group'` Entry" | It is not. A `'group'` Entry produces a `Row.kind: 'entry'` row (D-S4-23) |
+| `Row.kind: 'header'` is read as "a `'group'` Entry" | It is not. A `'group'` Entry produces a `Row.kind: 'entry'` row (D-S4-23) |
 | A segment drag moves the whole entry | The grabbed `ItemId` carries the segment index and the draft writes `segments` (D-S4-30) |
 | I declared `cost` but `entry.cost` is undefined | Correct. The Field key is the API; storage is `entry.meta.cost` (D-S4-35). Use `update({ cost })` or read through the Field. |
 | A top-level `cost` on the JSON entry never appears | Unknown top-level keys drop. Put the value in `meta`, or write it through `update({ cost })` after construction (D-S4-35). |
@@ -278,6 +280,8 @@ Read these before you touch `src/`.
 | `{ field: 'cost', header: 'Budget' }` drops the Field's `align: 'end'` | It should not. The object form merges per-key over the Field's `column` defaults (D-S4-12). |
 | A grouped view shows per-team sums in header cells | It does not. Group headers show the label in column 0 and blank cells elsewhere (D-S4-23, D-S4-11). |
 | `derivedSpanKinds` still works | It does not. The option is renamed with no alias; a `schema: 1` Document still reads (D-S4-6, D-S4-16) |
+| `sort: { field: 'cost' }` with `gridColumns: ['name']` ignores Field-type `compare` | It must not. Sort reads `fieldCompares`, not visible columns (D-S4-13, D-S4-28). |
+| `fromJSON(doc, { fields: [{ key: 'cost', rollUp: 'none' }] })` replaces Document `rollUp: 'sum'` | It does not. Same-key merge keeps Document `rollUp` / `type` / `column` / `source` (D-S4-15). |
 
 ---
 
@@ -335,20 +339,9 @@ Read these before you touch `src/`.
 
 ## 12. Grill later
 
-Parked 2026-08-30 after the Field-type / omit-`source` / formatter / sort pass, then updated after [`plans/reviews/2026-08-30-s4-spec.html`](../reviews/2026-08-30-s4-spec.html). Run the grilling skill against the **blocking** item before S4.6 lands in `src/`. Recommended answers below are starting points, not locks.
+Parked 2026-08-30 after the Field-type / omit-`source` / formatter / sort pass. Updated 2026-08-31 after landing the final spec-review findings. Grill to try to break the settled answers; do not reopen them casually.
 
-**Settled** (grill to try to break them, do not reopen casually): Q16–Q21; D-S4-3 (type default `rollUp`, `'none'` homonyms); D-S4-12 (per-key `gridColumns` merge); D-S4-13 / G3 (`locale` and `compareStored` on `ResolvedColumn` at Gantt resolve time); D-S4-20 (emit/pack on-demand for pack rows); D-S4-28 (sort comparer chain); D-S4-35 (omit `source` → `meta[field.key]`); `[S4-A10]` / `[S4-A11]` (boxed `matchOnly` and `custom` source).
-
-### BLOCKING — answer before S4.6 implementation
-
-❓ **X2 — `PlannedRow.kind: 'group'` vs `Entry.kind: 'group'`.** D-S4-23 uses the same literal for an authored Entry kind and a derived grouping-header row. The collision is documented, but it is the #7 homonym failure mode. `PlannedRow` is not public (README §5).
-
-**Options:**
-
-- **A (rename):** `PlannedRow.kind` uses `'header'` for grouping-header rows. `Row.kind` in the frame follows. Removes the homonym at source; costs a sweep through internal types and tests.
-- **B (keep):** Keep `'group'` on the row side. Rely on D-S4-23's table and CONTEXT.md. No rename cost; the homonym persists forever.
-
-**Pick one before S4.6 lands.** Until then, do not implement `group-source.ts` against a literal that may change.
+**Settled** (do not reopen casually): Q16–Q21; X2 (`Row.kind: 'header'`); D-S4-3; D-S4-12; D-S4-13 (`columns` vs `fieldCompares`); D-S4-15 same-key merge table; D-S4-19 `emitRow`/`packRow`; D-S4-20; D-S4-21 `CustomRow`; D-S4-23; D-S4-28; D-S4-35; `[S4-A10]` / `[S4-A11]`.
 
 ---
 
@@ -380,7 +373,7 @@ Parked 2026-08-30 after the Field-type / omit-`source` / formatter / sort pass, 
 
 ❓ **G6 — `compare` on the Field type vs only on `RowSort`.**
 
-➡️ Keep Field-type `compare`. It flows into `compareStored` at column-resolve time. `RowSort.compare` is the per-view override.
+➡️ Keep Field-type `compare`. It flows into `FieldCompare` at the Gantt locale bind. `RowSort.compare` is the per-view override.
 
 ---
 

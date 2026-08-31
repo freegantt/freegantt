@@ -251,8 +251,8 @@ type ItemEmitter = (entry: Entry) => readonly Item[];
 
 Rules:
 
-- **Kind is authored, never derived.** A `group` is a group because the user said so — not because it currently has children. An empty group is legal and renders as one (that is how "add a phase, then fill it" works). For derived-span kinds, input may omit `start`/`end`: the store initializes a zero-length span (at the dataset's reference date) and the Span rollup owns it from then on — the *stored* model always has both fields, so no layer downstream handles absence. `parentId` (tree position) and `kind` (what it is) are orthogonal; "every parent is a group" is a convention, not a model rule — and `hierarchy: { autoGroup: true }` (`02` §2) maintains that convention automatically: an entry gaining its first child is promoted to `group` in the same transaction. **Promote only, never demote** — demoting on losing the last child would reintroduce exactly the flickering identity this rule exists to prevent; demotion stays an explicit edit.
-- **`derivedSpanKinds`** (`Dataset` option, default `['group']`) names which kinds get a rolled-up span; a consumer's own kind (say `'phase'`) opts in the same way. The Span rollup that reads it is `data/`'s own commit step — it runs on every transaction and at construction, whether or not a scheduling plugin is installed, and nothing installable can occupy or displace it (D-S2-22, closes OQ7). `scheduling/`'s engine moves children and nothing else; it never reaches the rollup, because the rollup already ran by the time anyone reads the result (`02.6` below, `s2.3-mutation-api.md` §1.5).
+- **Kind is authored, never derived.** A `group` is a group because the user said so — not because it currently has children. An empty group is legal and renders as one (that is how "add a phase, then fill it" works). For kinds in `rollUpKinds`, input may omit `start`/`end`: the store initializes a zero-length span (at the dataset's reference date) and the Span rollup owns it from then on — the *stored* model always has both fields, so no layer downstream handles absence. `parentId` (tree position) and `kind` (what it is) are orthogonal; "every parent is a group" is a convention, not a model rule — and `hierarchy: { autoGroup: true }` (`02` §2) maintains that convention automatically: an entry gaining its first child is promoted to `group` in the same transaction. **Promote only, never demote** — demoting on losing the last child would reintroduce exactly the flickering identity this rule exists to prevent; demotion stays an explicit edit.
+- **`rollUpKinds`** (`Dataset` option, default `['group']`) names which kinds get a rolled-up value for **every** rolling-up Field (`start`/`end` and a consumer `cost` alike). A consumer's own kind (say `'phase'`) opts in the same way. `'none'` or `[]` keeps authored parent values. The Rollup that reads it is `data/`'s own commit step — it runs on every transaction and at construction, whether or not a scheduling plugin is installed, and nothing installable can occupy or displace it (D-S2-22, closes OQ7). `scheduling/`'s engine moves children and nothing else; it never reaches the rollup, because the rollup already ran by the time anyone reads the result (`02.6` below, `s2.3-mutation-api.md` §1.5).
 - **The set is open.** Shipped kinds: `'span'`, `'group'`, `'milestone'`. A consumer-defined kind (say `'buffer'`) gets full behavior by registering at the four seams above — no core edits. Anything not registered at a seam falls back to `'span'` behavior there, so partial registration degrades gracefully instead of erroring.
 - **Group *entry* ≠ row *grouping*.** `rows: { source: 'group', groupBy }` is a view-side arrangement of any entries and persists nothing; a `kind: 'group'` entry is a model entity that persists, schedules, and syncs. They compose — a grouped view of a dataset containing group entries is well-defined, because one is authored and the other is derived (principle 1).
 
@@ -280,7 +280,7 @@ interface Field<TValue = unknown> {
   rollUp?: AggregatorName;                          // 'min' | 'max' | 'sum' | 'count' | 'none' | yours
   equals?(a: TValue | undefined, b: TValue | undefined): boolean;   // default Object.is
   compare?(a: TValue | undefined, b: TValue | undefined): number;   // sort; default is the stored value
-  formatValue?(value: TValue | undefined, ctx: FieldContext): string;   // text for a cell; DOM-free
+  formatValue?(value: TValue | undefined, ctx: FormatContext): string;   // text for a cell; DOM-free; locale only here
   column?: Omit<GridColumn, 'field'>;               // presentation defaults, declared once with the field
 }
 
@@ -290,8 +290,7 @@ interface GridColumn {
   header?: string;
   width?: number; flex?: number;
   align?: 'start' | 'end';
-  cellRenderer?: CellRenderer;
-  editable?: boolean;
+  // cellRenderer and editable arrive in S5, on the Gantt column, when code honours them (I11).
 }
 
 /** Registered by name, never passed inline — a name serializes, a function does not. */
@@ -302,14 +301,26 @@ type Aggregator<TValue = unknown> = (
 ) => TValue | undefined;           // undefined = no opinion, leave the stored value alone
 
 interface RollUpContext { read<T>(entry: Entry, key: FieldKey): T | undefined; }
+
+/** Compute and store access. No locale. */
+interface FieldContext {
+  readonly timeZone: string;
+  read<T>(entry: Entry, key: FieldKey): T | undefined;
+  durationOf(entry: Entry): Duration;
+}
+
+/** Built only at Gantt column-resolve time. `formatValue` reads this, never a Dataset locale. */
+interface FormatContext extends FieldContext {
+  readonly locale: Intl.LocalesArgument;
+}
 ```
 
 Rules:
 
 - **Core fields are ordinary declarations.** `name`, `start` (`min`), `end` (`max`), and `duration` (computed from `start` and `end`) ship in the registry a consumer adds to. `kind` ships with a text column; `parentId`, `segments` and `meta` ship as data-only Fields (no `column`). There is no separate path for core, which is what makes a `cost` column and a `start` column the same code. **`progress` is not in this list** — it is scheduling-plugin data (ADR 0008). `weightedMeanByDuration` still ships as an Aggregator name.
 - **A Field is columnable only when it declares `column`.** `gridColumns` names columnable Fields in display order. Default `gridColumns` is `['name']`. A Field with no `column` still rolls up and still appears in the changeset; naming it in `gridColumns` throws `FieldNotColumnableError`.
-- **Source decides stored or computed.** A field sourced from `entry` or `meta` has a stored home, so its rolled-up parent value is stored — changeset, undo, document — exactly as the Span rollup already does for `start`/`end`. A field sourced from `compute` has no home, so its parent value is computed on read, cached against the entry's subtree revision, and never reaches the document. A consumer who wants an aggregate without document bytes declares a computed field; there is no flag to set.
-- **A computed field reads the dataset only, never view state.** No zoom, no visible range, no selection. Its cache is then keyed on the entry's subtree revision alone, which is what makes the value the same for every reader of that dataset. A value that depends on the view is not a field — it is a renderer's business.
+- **Source decides stored or computed.** A field sourced from `entry` or `meta` has a stored home, so its rolled-up parent value is stored — changeset, undo, document — exactly as the Span rollup already does for `start`/`end`. A field sourced from `compute` has no home, so its parent value is computed on read, cached against **dataset revision** in S4 (D-S4-10 — coarser, never stale), and never reaches the document. A per-entry subtree-revision key returns at S6 if the spike says so. A consumer who wants an aggregate without document bytes declares a computed field; there is no flag to set.
+- **A computed field reads the dataset only, never view state.** No zoom, no visible range, no selection. Its cache is then keyed on dataset revision (S4) or subtree revision (S6), which is what makes the value the same for every reader of that dataset. A value that depends on the view is not a field — it is a renderer's business.
 - **`meta` is opaque unless you declare a key.** Undeclared keys keep §6's rule — carried by reference, never walked, compared by `===`. A write to a declared key emits a changeset row keyed on the **field key**, never a `meta` row.
 - **Edits name fields, not shapes.** `update('t1', { start: X, cost: 500 })` is one transaction, one changeset and one undo step across a core field and a consumer field. A key that is not registered is an `UnknownFieldError` — never a silent write.
 - **Rollup precedence is §7's rule, unchanged.** The rollup yields to a field the caller proposed in the same transaction and wins over one the extension hook proposed. Bottom-up, one pass, so nested groups settle together. `rollUpKinds` says which **kinds** derive (`'none'` or `[]` opts every Kind out); the registry says how each **field** derives. The two are orthogonal and both are needed.
@@ -318,7 +329,7 @@ Rules:
 - **Text and structure stay separate.** `formatValue` returns a string, is DOM-free, and fills the frame's row cells; `cellRenderer` returns element descriptions and is applied by `render/`. Same split as `FrameBar.label` and `barRenderer` (§8).
 - **A Field that omits `source` lives in `meta` under the Field key.** `{ key: 'cost', type: 'money' }` is the common call. Write `{ from: 'meta', key }` only when the Document key differs. `{ from: 'entry' }` and `{ from: 'compute', read }` stay explicit.
 - **A Field type supplies the default `rollUp`, `formatValue`, `compare`, and column defaults.** The registry merges the Field onto its type first; the Field's own keys win. After that merge, absent `rollUp` or `'none'` means the Field does not participate. The type's `rollUp` is an Aggregator name — shipped or a consumer name in `aggregators`. Core does not ship primitive Field types, and there is no global default Aggregator — `sum` is what a consumer puts on `money`, not what an Instant uses. The Span rollup stays `start` as `min` and `end` as `max` on those core Fields (D-S4-3).
-- **One registration, split at `api/`.** A field (and a field type) carries both halves; `api/` sends the data half to `data/`'s registry and the presentation half to `view/`, so a consumer declares `money` once and the layer boundary still holds.
+- **One registry, whole declaration.** A field (and a field type) carries both halves, `column` included. `data/` stores those bytes and does not interpret them — it never formats and never paints. `view/` reads `column` at Grid resolve time. `api/` is the composition root. Do not open a second registry. ADR 0005's "split at `api/`" is who sends what where at read time, not two copies.
 
 ---
 

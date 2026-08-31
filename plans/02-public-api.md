@@ -361,7 +361,7 @@ export interface DatasetDocument {
 }
 ```
 
-S4.4 is the step that writes `schema: 2`. This build still writes `schema: 1` (`derivedSpanKinds`, no `fields`). `schema: 1` still reads. `progress` is not an entry key (ADR 0008). `fromJSON` without `rollUp` uses identity — parents keep stored values and do not maintain them.
+S4.4 is the step that writes `schema: 2`. This build still writes `schema: 1` (`derivedSpanKinds`, no `fields`). `schema: 1` still reads. `progress` is not an entry key (ADR 0008). Omit `aggregators` and a Field that names an Aggregator throws `UnknownAggregatorError`. Document `rollUpKinds: []` keeps stored parents and does not maintain them.
 
 - The JSON shape is **public API**: documented, versioned by an integer `schema` field, semver-governed. This build writes `schema: 1` only; S4.4 adds a `schema: 2` writer and keeps the `schema: 1` reader. The reader is a `readers: Record<number, Reader>` map — a second schema is a map addition, not a rewrite. `fromJSON` migrates older schemas forward when they exist; it never silently drops fields **of a schema it reads**. Keys the reader does not know are dropped: **anything of yours goes in `meta` and survives byte for byte; anything at top level belongs to the schema.** `progress` on an old entry row is an unknown key and is dropped (ADR 0008).
 - Key order is a contract (`schema`, `timeZone`, `dateOnlyEnd`, `rollUpKinds`, `fields`, `entries`). Optional keys are omitted when absent, never written as `null`. Entries follow store insertion order. Instants serialize as `Z`-suffixed ISO-8601; brands exist only in TS types and never leak into JSON. `fromJSON` reads those instants as absolute, so the dataset zone never re-enters the reading.
