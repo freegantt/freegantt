@@ -172,7 +172,7 @@ Slices are scope, not calendar estimates. Within a slice, entries are ordered so
 
 ## S4 — Hierarchy, grouping, multi-item rows
 
-**Position:** after S3, before S5. Tracker: [`plans/s4-hierarchy-and-rows/README.md`](./s4-hierarchy-and-rows/README.md); work splits into [`s4.1-field-registry.md`](./s4-hierarchy-and-rows/s4.1-field-registry.md)–[`s4.11-harness-and-gate.md`](./s4-hierarchy-and-rows/s4.11-harness-and-gate.md). That spec settles eight scope calls, closes ADR 0005's two open questions, and renames `derivedSpanKinds` to `rollUpKinds` as the Rollup gate widens from spans to every rolling-up field. The acceptance boxes below become `[S4-A1]`–`[S4-A9]` when S4.11's spec edits land.
+**Position:** after S3, before S5. Tracker: [`plans/s4-hierarchy-and-rows/README.md`](./s4-hierarchy-and-rows/README.md); work splits into [`s4.1-field-registry.md`](./s4-hierarchy-and-rows/s4.1-field-registry.md)–[`s4.11-harness-and-gate.md`](./s4-hierarchy-and-rows/s4.11-harness-and-gate.md). That spec settles scope calls, closes ADR 0005's two open questions, and renames `derivedSpanKinds` to `rollUpKinds` as the Rollup gate widens from spans to every rolling-up field. The acceptance boxes below become `[S4-A1]`–`[S4-A11]` when S4.11's spec edits land.
 
 **Goal:** the Row ≠ Entry payoff (principle 1). Tree view with collapse/expand, grouped row sources, entry segments as multiple bars on one row, lane packing with variable row heights.
 
@@ -185,7 +185,7 @@ Slices are scope, not calendar estimates. Within a slice, entries are ordered so
 - Kind-driven item emission (`01` §2.5): `group` → summary bracket (span rollup from S2), `milestone` → diamond, consumer-registered kinds via the emitter seam; empty groups render as groups.
 - `hierarchy: { autoGroup: true }` on `Dataset`: first child promotes a `'span'` parent to `group` within the triggering transaction; promote `'span'` only, never demote (`02` §2).
 - Row sources: `{ source: 'group', groupBy }` and `{ source: 'custom', resolve }` (`01` §2.3); group header rows.
-- Sort and filter as store-level view specs with tree-aware policies (filter keeps ancestors by default; sort stays within parent).
+- Sort and filter on the row source (`rows.filter`, `rows.sort`, `rows.filterPolicy`) with tree-aware policies (filter keeps ancestors by default; `filterPolicy: 'matchOnly'` for flat match lists; sort stays within parent).
 - Item emission: `entry.segments` → multiple items on one row; overlap auto-packing into sub-lanes; `heightMode: 'pack'` variable row heights through the height index.
 - Interaction with lanes: drag/resize on packed items; collapse/expand by keyboard.
 - Harness: tree fixture, with **one** Gantt and a button that switches `gantt.rows` between the tree and a grouped source. That proves the Row ≠ Entry payoff and proves live reconfiguration (`02` §2) in the same demo. Two Gantts on one dataset is not the demo: D9 is about a shared axis and scroll between charts with **different** data (`02` §5), and a shared `Dataset` — while free, since a second Gantt is only a second `change` subscriber — is not a case the library designs around or tests.
@@ -200,8 +200,10 @@ Slices are scope, not calendar estimates. Within a slice, entries are ordered so
 - [ ] Pack-mode rows change height correctly as overlaps come and go; scroll position stays stable (height index invalidation test).
 - [ ] Collapse state survives data edits and is independent per Gantt.
 - [ ] Filter with keep-ancestors shows a matching deep child under its chain of parents.
+- [ ] `filterPolicy: 'matchOnly'` returns only matching entries — no ancestor rows.
 - [ ] An empty `kind: 'group'` entry renders as a group, accepts children, and its span appears once children exist — no special-casing.
 - [ ] With `autoGroup` on: reparenting an entry under a plain entry promotes that parent to `group` in the same undo step; removing all children demotes nothing.
+- [ ] `{ source: 'custom', resolve }` produces the resolver's rows.
 
 ---
 

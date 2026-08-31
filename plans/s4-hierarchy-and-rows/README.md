@@ -2,6 +2,7 @@
 
 **Slice:** S4 (`plans/03` §S4) · **Position:** after S3, before S5 · **Status:** specified, not started
 **Form:** the same settled-spec form as [`plans/s3-direct-manipulation/README.md`](../s3-direct-manipulation/README.md) — this file is the tracker and the shared context; each step file holds the decisions it implements and its TODO boxes.
+**Last spec review:** [`plans/reviews/2026-08-30-s4-spec.html`](../reviews/2026-08-30-s4-spec.html) — recommendations landed 2026-08-30; **X2 is blocking** (see §12).
 **Governed by:** `plans/00` D2/D7/D8, `plans/01` §2.3/§2.5/§2.6/§4/§6, `plans/02` §2/§4.1/§4.2/§6, ADR [0005](../../docs/adr/0005-fields-are-declared-and-grid-columns-reference-them.md).
 **Builds on:** S2 data core (transactions, changesets, undo, JSON), S3 gestures, S1's height index and `FrameLayout`.
 **Closes:** issue #80 (per-field rollup), #81 (row cells), ADR 0005's two open questions, `plans/03` §S4's three known gaps (#91 §9-B, §9-E, §9-G).
@@ -32,7 +33,8 @@
 | **Q16** | If a Field omits `rollUp`, what happens? | **After Field-type merge, it does not participate — unless the type supplied a name.** A Field type's `rollUp` is the default Aggregator name (shipped or a consumer name in `aggregators`). The Field's own keys win, so `rollUp: 'none'` opts that Field out. There is no global default Aggregator and no shipped `number`/`instant` types. Dates use `min`/`max`, not `sum`. §S4.1, D-S4-3. |
 | **Q17** | Must `{ key: 'cost', type: 'money' }` also name `source: { from: 'meta', key: 'cost' }`? | **No.** Omitted `source` is `meta` under the Field key (D-S4-35). `Entry` stays closed: top-level unknown keys still drop; `update({ cost })` writes `entry.meta.cost` and creates `meta` if needed. Two Fields may not share one `meta` slot (`DuplicateFieldSourceError`). The long form remains for a remapped Document key. |
 | **Q18** | Where does currency formatting live? | **`formatValue` on the Field type.** Money stays a number in the store. The cell is text. `cellRenderer` is S5, on the Grid column. §S4.3, D-S4-14. |
-| **Q19** | Can a view override sort order? | **Yes — `RowSort.compare`.** Default is `asc`/`desc` on the **stored** value, never on `formatValue`. Then the Field type's `compare`, then a shipped compare (numbers, Instants, strings). §S4.9, D-S4-28. |
+| **Q19** | Can a view override sort order? | **Yes — `RowSort.compare`.** Default is `asc`/`desc` on the **stored** value, never on `formatValue`. Then `ResolvedColumn.compareStored` (built with this Gantt's `locale` at column-resolve time), then a shipped compare. §S4.3, S4.9, D-S4-13, D-S4-28. |
+| **Q20** | Whose `locale` drives `formatValue` and default string sort? | **This Gantt's `locale`, at column-resolve time.** `ResolvedColumn` carries bound `format` and `compareStored` closures. A headless `Dataset` with no `Gantt` does not format cells. `locale` does not travel in the Document. §S4.3, D-S4-13. |
 
 ---
 
@@ -51,8 +53,10 @@ Each story names the step that owns it. Acceptance boxes live in the step files.
 - **U9.** (consumer) I turn on `heightMode: 'pack'`. Overlapping items stack into lanes and the row grows to fit them. → S4.8
 - **U10.** (consumer) I filter to one team. A matching deep child still appears under its chain of parents. → S4.9
 - **U11.** (consumer) I turn on `autoGroup`. Reparenting an entry promotes its new parent to `'group'` in the same undo step. Removing the last child demotes nothing. → S4.5
-- **U12.** (reviewer) I run `pnpm gate` on `.slice` = `S4` and read nine lines, each naming an acceptance box from `plans/03` and each backed by a test that ran. → S4.11
+- **U12.** (reviewer) I run `pnpm gate` on `.slice` = `S4` and read eleven lines, each naming an acceptance box from `plans/03` and each backed by a test that ran. → S4.11
 - **U13.** (consumer) I set `rollUpKinds: 'none'` and assign `start`/`end`/`cost` on the parent. A child edit leaves those values. → S4.2
+- **U14.** (consumer) I set `filterPolicy: 'matchOnly'`. Only matching entries appear — no ancestor rows. → S4.9
+- **U15.** (consumer) I supply `{ source: 'custom', resolve }`. My rows appear in the Gantt. → S4.6
 
 ---
 
@@ -113,7 +117,7 @@ Eleven steps, in order. The Field context lands first, because the row cells and
 
 ## 4. Acceptance ids
 
-`plans/03` §S4's nine boxes become `[S4-A1]`–`[S4-A9]` when S4.11's spec edits land.
+`plans/03` §S4's eleven boxes become `[S4-A1]`–`[S4-A11]` when S4.11's spec edits land.
 
 | Id | Box | Owning step | Primary tests |
 |---|---|---|---|
@@ -126,6 +130,8 @@ Eleven steps, in order. The Field context lands first, because the row cells and
 | `[S4-A7]` | Filter with keep-ancestors shows a matching deep child under its parents | S4.9 | `layout/rows/filter.test.ts` |
 | `[S4-A8]` | An empty `'group'` renders as a group, accepts children, and gains a span — no special-casing | S4.7 | `layout/items/*.test.ts`, `data/rollup.test.ts` |
 | `[S4-A9]` | `autoGroup` promotes in the same undo step; losing the last child demotes nothing | S4.5 | `data/hierarchy.test.ts`, `data/history.property.test.ts` |
+| `[S4-A10]` | `filterPolicy: 'matchOnly'` returns only matching entries — no ancestor rows | S4.9 | `layout/rows/filter.test.ts` |
+| `[S4-A11]` | `{ source: 'custom', resolve }` produces the resolver's rows | S4.6 | `layout/rows/custom-source.test.ts` |
 
 **Gate S4 → S5** (`plans/00` §4): field registry live; tree and grouped row sources; pack-mode row heights; item identity deterministic.
 
@@ -157,6 +163,11 @@ const gantt = new Gantt({
 });
 
 gantt.rows = { source: 'group', groupBy: (entry) => entry.meta.team };
+```
+
+Group headers render the `groupBy` label in column 0 and **blank cells** elsewhere. Per-team aggregates are the caller's data — declare a computed Field or write through a group entry (D-S4-11). The grid does not invent them.
+
+```ts
 gantt.collapse('p1');
 gantt.on('collapseChange', ({ to }) => save(to));
 ```
@@ -206,7 +217,7 @@ Full prose lives in the step file that implements each decision.
 | D-S4-17 | `autoGroup` defaults to `false`; promotes `'span'` only | S4.5 |
 | D-S4-18 | Promote only, never demote | S4.5 |
 | D-S4-19 | `computeFrame` becomes four stages | S4.6 |
-| D-S4-20 | Rows resolve whole-dataset; the rest is windowed | S4.6 |
+| D-S4-20 | Rows resolve whole-dataset; placement windowed; emit/pack on-demand | S4.6 |
 | D-S4-21 | One `RowSource` interface, three occupants | S4.6 |
 | D-S4-22 | Collapse is Gantt state; ids are `RowId`s | S4.6 |
 | D-S4-23 | `Row.kind: 'group'` stands for no Entry; `headerLabel` | S4.6 |
@@ -262,6 +273,8 @@ Read these before you touch `src/`.
 | I declared `cost` but `entry.cost` is undefined | Correct. The Field key is the API; storage is `entry.meta.cost` (D-S4-35). Use `update({ cost })` or read through the Field. |
 | A top-level `cost` on the JSON entry never appears | Unknown top-level keys drop. Put the value in `meta`, or write it through `update({ cost })` after construction (D-S4-35). |
 | Two Fields silently share `meta.cost` | They cannot. That is `DuplicateFieldSourceError` at construction (D-S4-35). |
+| `{ field: 'cost', header: 'Budget' }` drops the Field's `align: 'end'` | It should not. The object form merges per-key over the Field's `column` defaults (D-S4-12). |
+| A grouped view shows per-team sums in header cells | It does not. Group headers show the label in column 0 and blank cells elsewhere (D-S4-23, D-S4-11). |
 | `derivedSpanKinds` still works | It does not. The option is renamed with no alias; a `schema: 1` Document still reads (D-S4-6, D-S4-16) |
 
 ---
@@ -320,9 +333,24 @@ Read these before you touch `src/`.
 
 ## 12. Grill later
 
-Parked 2026-08-30 after the Field-type / omit-`source` / formatter / sort pass. Do not treat these as settled. Run the grilling skill against this list before S4.1 lands in `src/`. Recommended answers are starting points, not locks.
+Parked 2026-08-30 after the Field-type / omit-`source` / formatter / sort pass, then updated after [`plans/reviews/2026-08-30-s4-spec.html`](../reviews/2026-08-30-s4-spec.html). Run the grilling skill against the **blocking** item before S4.6 lands in `src/`. Recommended answers below are starting points, not locks.
 
-**Settled in this pass** (grill to try to break them, do not reopen casually): Q16–Q19, D-S4-3 (type default `rollUp`), D-S4-14 (`formatValue`), D-S4-28 (sort comparer chain), D-S4-35 (omit `source` → `meta[field.key]` and the breakage table in `s4.1`).
+**Settled** (grill to try to break them, do not reopen casually): Q16–Q19; D-S4-3 (type default `rollUp`, `'none'` homonyms); D-S4-12 (per-key `gridColumns` merge); D-S4-13 / G3 (`locale` and `compareStored` on `ResolvedColumn` at Gantt resolve time); D-S4-20 (emit/pack on-demand for pack rows); D-S4-28 (sort comparer chain); D-S4-35 (omit `source` → `meta[field.key]`); `[S4-A10]` / `[S4-A11]` (boxed `matchOnly` and `custom` source).
+
+### BLOCKING — answer before S4.6 implementation
+
+❓ **X2 — `PlannedRow.kind: 'group'` vs `Entry.kind: 'group'`.** D-S4-23 uses the same literal for an authored Entry kind and a derived grouping-header row. The collision is documented, but it is the #7 homonym failure mode. `PlannedRow` is not public (README §5).
+
+**Options:**
+
+- **A (rename):** `PlannedRow.kind` uses `'header'` for grouping-header rows. `Row.kind` in the frame follows. Removes the homonym at source; costs a sweep through internal types and tests.
+- **B (keep):** Keep `'group'` on the row side. Rely on D-S4-23's table and CONTEXT.md. No rename cost; the homonym persists forever.
+
+**Pick one before S4.6 lands.** Until then, do not implement `group-source.ts` against a literal that may change.
+
+---
+
+### Parked (non-blocking)
 
 ❓ **G1 — Nested `meta` paths.** Does `{ key: 'cost' }` ever mean `meta.finance.cost`?
 
@@ -332,37 +360,31 @@ Parked 2026-08-30 after the Field-type / omit-`source` / formatter / sort pass. 
 
 ❓ **G2 — Shipped Field types.** Does core ship `money` / `instant` / `text` with a baked-in `rollUp` and `formatValue`?
 
-➡️ No. The consumer registers `money`. Core `start`/`end` set `min`/`max` on those Fields. A later cookbook can show a `money` bundle; it is not a registry seed.
-
----
-
-❓ **G3 — Whose `locale` fills `FieldContext`?** `formatValue` and the shipped string compare both want a locale. The Dataset has `timeZone`. The Gantt has `locale`. D-S4-13 currently binds format to the Dataset's `FieldContext`.
-
-➡️ Bind `formatValue` and sort's string compare at column-resolve time with the **Gantt's** `locale`. A headless Dataset with no Gantt does not format cells. Do not put `locale` on the Document.
+➡️ No. The consumer registers `money`. Core `start`/`end` set `min`/`max` on those Fields.
 
 ---
 
 ❓ **G4 — `update({ cost })` vs `entries.add({ meta: { cost } })`.** Must ingest of `EntryInput.meta.cost` and a later `update({ cost })` be the same slot even when `source` was omitted?
 
-➡️ Yes. Both go to `meta.cost`. D-S4-35's first two table rows. If they diverge, the default is wrong.
+➡️ Yes. Both go to `meta.cost`. D-S4-35's first two table rows.
 
 ---
 
-❓ **G5 — Declaring `cost` when passenger data already used `meta.cost` for something else.** Is that a construction error, or does declaring claim the key?
+❓ **G5 — Declaring `cost` when passenger data already used `meta.cost` for something else.**
 
-➡️ Declaring claims the key. The value becomes addressable. There is no "this slot was passenger" marker. A Document that stored a string under `cost` and then declares `type: 'money'` is a consumer bug: `sum` skips non-numeric holes (D-S4-3).
-
----
-
-❓ **G6 — `compare` on the Field type vs only on `RowSort`.** Is Field-level `compare` needed in S4, or is the view override enough?
-
-➡️ Keep Field-type `compare`. Status order is a property of the value, not of one Gantt. `RowSort.compare` is the per-view override. Grill this if S4.9 feels over-specified.
+➡️ Declaring claims the key. A Document that stored a string under `cost` and then declares `type: 'money'` is a consumer bug.
 
 ---
 
-❓ **G7 — Creating `meta` on first declared write.** An entry that never had `meta` gains `meta: { cost: 500 }` after `update({ cost: 500 })`. Does that surprise D-S2-12's "optional keys omitted" byte-stability?
+❓ **G6 — `compare` on the Field type vs only on `RowSort`.**
 
-➡️ No. The key was absent, then a user write added it. `toJSON` writes `meta` when present, omits it when absent — same as today. Grill only if construction rollup would invent `meta` on parents with no authored cost: a rolling-up parent should get a stored `cost` from `sum`, which also creates `meta`. That is the Span rollup's `start`/`end` precedent (store initializes, then the pass owns it).
+➡️ Keep Field-type `compare`. It flows into `compareStored` at column-resolve time. `RowSort.compare` is the per-view override.
+
+---
+
+❓ **G7 — Creating `meta` on first declared write.**
+
+➡️ No surprise. `toJSON` writes `meta` when present. Construction rollup may create `meta.cost` on a parent — same precedent as span `start`/`end`.
 
 ---
 
