@@ -289,13 +289,15 @@ Four levels, each an addition to the one under it. Consumers stop at the shallow
 fieldTypes: { money: { rollUp: 'sum', formatValue: asCurrency, column: { align: 'end' } } }
 { key: 'cost', type: 'money' }
 
-// 4 — your own aggregator, registered by name. Put the name on the type (default) or on the Field.
+// 4 — your own aggregator: register the function under `aggregators`, then name it on the type or Field.
+//    The function never goes on `rollUp` — only the name does (`01` §2.6).
 aggregators: { riskWeighted: (children, parent, ctx) => /* ... */ }
 fieldTypes: { risk: { rollUp: 'riskWeighted', formatValue: asRisk } }
 { key: 'risk', type: 'risk' }
+// One-off without a type: { key: 'risk', rollUp: 'riskWeighted' } with the same `aggregators` entry.
 ```
 
-A function appears at level 4 only. Levels 1–3 are plain data, so they serialize, they diff in review, and a document can carry them. `rollUp` never takes a bare function: a name can be refused when it is not registered, and a function cannot travel with a document. Write `source: { from: 'meta', key: 'budget' }` only when the Document key is not the Field key. `formatValue` is display: money stays a number in the store; the cell shows currency text. Sort reads the stored value (`01` §2.6, S4.9).
+Levels 1–3 are plain data on the Field declaration, so they serialize, they diff in review, and a document can carry them. Level 4 adds a function in `DatasetOptions.aggregators` (and the same map in `fromJSON`'s second argument on reload). `rollUp` on the Field or Field type is always an **Aggregator name** — shipped (`'sum'`) or yours (`'riskWeighted'`). It never takes a bare function: a name can be refused when it is not registered, and a function cannot travel with a document. The Aggregator signature is `01` §2.6 (`children`, `parent`, `ctx.read(fieldKey)`); return `undefined` to leave the parent's stored value alone. Write `source: { from: 'meta', key: 'budget' }` only when the Document key is not the Field key. `formatValue` is display: money stays a number in the store; the cell shows currency text. Sort reads the stored value (`01` §2.6, S4.9).
 
 **Because a field carries its own column defaults, `gridColumns` is mostly ordering:**
 
