@@ -3,6 +3,7 @@ import { runTransaction } from './transaction.js';
 import { DatasetState } from './dataset-state.js';
 import { MutationCancelledError, MutationDuringNotificationError, entryId } from '../model/index.js';
 import type { EntryEdits, StoredEdit } from './edit-extension.js';
+import { readField } from './fields/field-access.js';
 
 function dataset(entries: { id: string; parentId?: string }[] = []): DatasetState {
   return new DatasetState({
@@ -468,5 +469,59 @@ describe('runTransaction', () => {
     runTransaction(state, (token) => state.entries.stageUpdate(token, entryId('t1'), { name: 'b' }), 'user');
 
     expect(seen.length).toBe(2);
+  });
+
+  it('a 500-entry bulk edit still produces one changeset and touches only the ancestors it must', () => {
+    const leafCount = 500;
+    const leaves = Array.from({ length: leafCount }, (_, i) => ({
+      id: `c${i}`,
+      parentId: 'root' as const,
+      name: `c${i}`,
+      start: '2026-01-01',
+      end: '2026-01-02',
+      meta: { cost: 1 },
+    }));
+    const state = new DatasetState({
+      entries: [
+        { id: 'root', kind: 'group', name: 'root' },
+        { id: 'other', kind: 'group', name: 'other' },
+        {
+          id: 'kept',
+          parentId: 'other',
+          name: 'kept',
+          start: '2026-01-01',
+          end: '2026-01-02',
+          meta: { cost: 7 },
+        },
+        ...leaves,
+      ],
+      timeZone: 'UTC',
+      fieldTypes: { money: { rollUp: 'sum' } },
+      fields: [{ key: 'cost', type: 'money' }],
+    });
+    const cost = state.fields.get('cost')!;
+    const costOf = (id: string): number | undefined => {
+      const entry = state.entries.get(id);
+      if (!entry) return undefined;
+      return readField(entry, cost, state.fieldContext) as number | undefined;
+    };
+
+    let changeCount = 0;
+    const updatedIds = new Set<string>();
+    state.on('change', ({ changeSet }) => {
+      changeCount += 1;
+      for (const row of changeSet.updated) updatedIds.add(String(row.id));
+    });
+
+    state.transaction(() => {
+      for (const leaf of leaves) state.entries.update(leaf.id, { cost: 2 });
+    });
+
+    expect(changeCount).toBe(1);
+    expect(costOf('root')).toBe(leafCount * 2);
+    expect(costOf('other')).toBe(7);
+    expect(updatedIds.has('other')).toBe(false);
+    expect(updatedIds.has('kept')).toBe(false);
+    expect(updatedIds.has('root')).toBe(true);
   });
 });

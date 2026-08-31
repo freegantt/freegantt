@@ -17,7 +17,8 @@ import { MutationCancelledError, MutationDuringNotificationError } from '../mode
 import { diffEdit, foldChangeSet } from './change-set.js';
 import type { EditExtender, EntryEdits } from './edit-extension.js';
 import type { EventBus } from './event-bus.js';
-import { rollUpFields, collectTouchedIds, buildEffectiveEntries } from './rollup.js';
+import { mergeEntryEdits } from './fields/field-access.js';
+import { rollUpFields } from './rollup.js';
 import type { FieldRegistry } from './fields/field-registry.js';
 
 /** Only `runTransaction` produces one. Store mutators require it, so a mutation outside a transaction
@@ -82,13 +83,7 @@ export interface TransactionData {
  */
 export function applyConstructionRollUp(data: TransactionData): void {
   const byId = data.entries.committedById();
-  const updated = rollUpFields(
-    byId,
-    { body: new Map(), merged: new Map() },
-    data.fields,
-    data.rollUpKinds,
-    data.fieldContext,
-  );
+  const updated = rollUpFields(byId, undefined, data.fields, data.rollUpKinds, data.fieldContext);
   if (updated.length === 0) return;
 
   const token: TxToken = {} as TxToken;
@@ -101,13 +96,6 @@ export function applyConstructionRollUp(data: TransactionData): void {
     updated,
   });
   data.bumpDatasetRevision();
-}
-
-function mergeEdits(base: EntryEdits, extra: EntryEdits): EntryEdits {
-  if (extra.size === 0) return base;
-  const merged = new Map(base);
-  for (const [id, edit] of extra) merged.set(id, { ...merged.get(id), ...edit });
-  return merged;
 }
 
 const isDevMode = (): boolean => (import.meta as { env?: { DEV?: boolean } }).env?.DEV ?? false;
@@ -167,7 +155,7 @@ export function commitChangeSet(data: TransactionData, changeSet: ChangeSet): vo
 
 /**
  * The commit path (`plans/s2-data-core/s2.2-transactions-and-changesets.md` §2.3): run the body, call
- * the extension hook once, roll up derived spans, fold everything into one `ChangeSet`, and — unless it
+ * the extension hook once, roll up Fields, fold everything into one `ChangeSet`, and — unless it
  * is empty or a `beforeChange` handler refuses it — apply it and emit `change`.
  *
  * `body` takes a `TxToken` deliberately: it is how this file's own tests stage mutations directly
@@ -207,12 +195,8 @@ export function runTransaction<T>(
     const proposed = data.entries.pendingEdits();
     const addedEntities = data.entries.pendingAdded();
     const removedEntities = data.entries.pendingRemoved();
-    const effectiveEntries = buildEffectiveEntries(
-      byId,
-      addedEntities.map((row) => row.entity),
-      removedEntities.map((row) => row.entity),
-      proposed,
-    );
+    const added = addedEntities.map((row) => row.entity);
+    const removed = removedEntities.map((row) => row.entity);
 
     const bodyUpdated: FieldUpdated[] = [];
     for (const [id, edit] of proposed)
@@ -236,17 +220,15 @@ export function runTransaction<T>(
     }
 
     const rollupUpdated = rollUpFields(
-      effectiveEntries,
-      { body: proposed, merged: mergeEdits(proposed, extenderEdits) },
+      byId,
+      {
+        added,
+        removed,
+        edits: { body: proposed, merged: mergeEntryEdits(proposed, extenderEdits) },
+      },
       data.fields,
       data.rollUpKinds,
       data.fieldContext,
-      collectTouchedIds(
-        byId,
-        addedEntities.map((row) => row.entity),
-        removedEntities.map((row) => row.entity),
-        proposed,
-      ),
     );
 
     const changeSet = foldChangeSet(data.nextChangeSetId(), origin, addedEntities, removedEntities, [

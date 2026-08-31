@@ -74,7 +74,6 @@ export {
   DuplicateFieldSourceError,
   UnknownAggregatorError,
   UnknownFieldTypeError,
-  FieldNotColumnableError,
   MutationDuringNotificationError,
   MutationCancelledError,
   InvalidReplayOriginError,

@@ -37,6 +37,17 @@ function costOf(state: DatasetState, id: string): number | undefined {
 }
 
 describe('rollUpFields (S4.2)', () => {
+  it('construction writes parent meta.cost from children (D-S4-35)', () => {
+    const state = treeDataset([
+      { id: 'root', kind: 'group' },
+      { id: 'a', parentId: 'root', meta: { cost: 40 } },
+      { id: 'b', parentId: 'root', meta: { cost: 60 } },
+    ]);
+
+    expect(costOf(state, 'root')).toBe(100);
+    expect((state.entries.get('root')!.meta as { cost: number }).cost).toBe(100);
+  });
+
   it('sum rolls cost up two levels in one commit', () => {
     const state = treeDataset([
       { id: 'root', kind: 'group' },
@@ -172,9 +183,6 @@ describe('rollUpFields (S4.2)', () => {
     expect(readField(parent, notesField, state.fieldContext)).toBe(5);
     expect(parent.start).toBe(toInstant('UTC', '2026-06-01'));
   });
-});
-
-describe('collectTouchedIds includes a reparented entry’s former parent', () => {
   it('reparenting recomputes both the old and new parent', () => {
     const state = treeDataset([
       { id: 'a', kind: 'group' },

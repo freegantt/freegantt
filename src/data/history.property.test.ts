@@ -163,7 +163,7 @@ describe('[S2-A1] undo-all restores byte-identical toJSON', () => {
     );
   });
 
-  it('with the span rollup and a fixture containing groups (D-S2-22)', () => {
+  it('with the Rollup and a fixture containing groups (D-S2-22)', () => {
     fc.assert(
       fc.property(fc.array(opArb, { minLength: 1, maxLength: 50 }), (ops) => {
         assertUndoRestores(seedGroups, ops);

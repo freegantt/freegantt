@@ -31,10 +31,10 @@ describe('FieldRegistry type merge (D-S4-3)', () => {
     expect(registry.get('risk')?.rollUp).toBe('riskWeighted');
     expect(registry.get('cost')?.rollUp).toBe('sum');
     expect(registry.get('notes')?.rollUp).toBe('none');
-    expect(registry.rollingUp().map((field) => field.key)).toEqual(
+    expect(registry.rollingUpFields().map((field) => field.key)).toEqual(
       expect.arrayContaining(['start', 'end', 'risk', 'cost']),
     );
-    expect(registry.rollingUp().some((field) => field.key === 'notes')).toBe(false);
+    expect(registry.rollingUpFields().some((field) => field.key === 'notes')).toBe(false);
   });
 });
 
