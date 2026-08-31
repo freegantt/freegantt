@@ -1,13 +1,14 @@
 // data/ — EntryStore, the view half plus the S2.2 transaction overlay (D-S2-2, D-S2-21), and (S2.3
 // §1.1) the public mutators `dataset.entries.add/update/remove` delegate straight to. `all` stays
-// committed-only by design (D-S2-3's cached-identity rule); `get`/`has`/`size`/`childrenOf` read through
-// an open write set first, so a read-then-write helper inside a transaction body sees its own edits.
+// committed-only by design (D-S2-3's cached-identity rule); `get`/`has`/`size`/`childrenOf`/`fieldValue`
+// read through an open write set first, so a read-then-write helper inside a transaction body sees its
+// own edits.
 // The staging/apply methods below are gated by a `TxToken` only `data/transaction.ts` can mint — a
 // mutation outside a transaction does not typecheck (docs/02 §3.6). `add`/`update`/`remove` never
 // mint one themselves; they run their body through `runTransaction`, which auto-wraps when none is
 // open and joins one already open (D-S2-8) — the same entry point `DatasetState.transaction()` uses.
 
-import type { Entry, EntryId, EntryInput, EntryEdit } from '../model/index.js';
+import type { Entry, EntryId, EntryInput, EntryEdit, FieldContext, FieldKey } from '../model/index.js';
 import {
   entryId,
   DuplicateEntryIdError,
@@ -18,12 +19,17 @@ import {
 import type { EntryStore as EntryStoreContract } from '../model/index.js';
 import { computed, signal } from './reactivity.js';
 import type { EntryEdits, StoredEdit } from './edit-extension.js';
-import type { ChangeSet, FieldKey } from '../model/index.js';
+import type { ChangeSet } from '../model/index.js';
 import { readEdit, readEntry } from './entry-reader.js';
 import type { EntryReadContext } from './entry-reader.js';
 import { runTransaction } from './transaction.js';
 import type { TransactionData, TxToken } from './transaction.js';
-import { mergeStoredEdits, overlayStoredEdit, writeOntoEntry } from './fields/field-access.js';
+import {
+  createFieldContext,
+  mergeStoredEdits,
+  overlayStoredEdit,
+  writeOntoEntry,
+} from './fields/field-access.js';
 import { FieldRegistry } from './fields/field-registry.js';
 
 /** Writes `field` on a copy of `current`. `value === undefined` omits the key instead of setting it —
@@ -66,14 +72,17 @@ export class EntryStore implements EntryStoreContract {
    *  `remove` are the only callers. */
   #runner: TransactionData | undefined;
   readonly #registry: FieldRegistry;
+  readonly #fieldContext: FieldContext;
 
   constructor(
     entries: readonly Entry[],
     context: EntryReadContext,
     registry: FieldRegistry = new FieldRegistry(),
+    fieldContext: FieldContext = createFieldContext(registry, context.timeZone),
   ) {
     this.#context = context;
     this.#registry = registry;
+    this.#fieldContext = fieldContext;
     this.#byId = new Map(entries.map((entry) => [entry.id, entry]));
     // D-S2-3: rebuilt on commit, not on every read — one array identity per revision, so
     // `ScaleBinding`'s reference comparison and `BoundValue`'s equality half (D-S1.5-4) hold.
@@ -123,6 +132,14 @@ export class EntryStore implements EntryStoreContract {
     for (const id of this.#writeSet.added.keys()) if (!this.#byId.has(id)) size += 1;
     for (const id of this.#writeSet.removed) if (this.#byId.has(id)) size -= 1;
     return size;
+  }
+
+  fieldValue<T>(id: EntryId | string, field: FieldKey): T | undefined {
+    const key = String(field);
+    if (!this.#registry.has(key)) throw new UnknownFieldError(key);
+    const entry = this.get(id);
+    if (!entry) throw new EntryNotFoundError(entryId(id), 'entries.fieldValue');
+    return this.#fieldContext.read<T>(entry, field);
   }
 
   /** Children of an entry, in insertion order. An entry with no children returns an empty array. */

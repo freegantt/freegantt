@@ -60,9 +60,9 @@ export class InvalidPresetError extends FreeGanttError {
 }
 
 /** `code: 'entry-not-found'` — an id the Dataset has no entry for, from `reveal(entryId)` (S1.9,
- * D-S1.9-6) or a mutator (`entries.update`/`remove`, or a `parentId` naming a missing entry — S2.3
- * §1.3). `operation` names the call that failed, so the message points at what the caller asked for
- * rather than a generic "not found". */
+ * D-S1.9-6), `entries.fieldValue`, or a mutator (`entries.update`/`remove`, or a `parentId` naming a
+ * missing entry — S2.3 §1.3). `operation` names the call that failed, so the message points at what
+ * the caller asked for rather than a generic "not found". */
 export class EntryNotFoundError extends FreeGanttError {
   constructor(entryId: EntryId, operation: string) {
     super('entry-not-found', `${operation}: no entry with id "${entryId}"`);
@@ -87,8 +87,8 @@ export class ParentCycleError extends FreeGanttError {
   }
 }
 
-/** `code: 'unknown-field'` — an edit naming a key that is not a declared Field. The registry is the
- *  legal set: core Fields plus the consumer's (D-S4-5, D-S2-26). */
+/** `code: 'unknown-field'` — an edit or `entries.fieldValue` naming a key that is not a declared
+ *  Field. The registry is the legal set: core Fields plus the consumer's (D-S4-5, D-S2-26). */
 export class UnknownFieldError extends FreeGanttError {
   constructor(field: string) {
     super('unknown-field', `entries: "${field}" is not a known field`);

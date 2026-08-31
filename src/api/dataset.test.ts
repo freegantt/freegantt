@@ -1,7 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { Dataset } from './dataset.js';
-import { changeSetId, entryId, instant, invertChangeSet, InvalidReplayOriginError } from './index.js';
-import type { ChangeSet, Entry, EntryInput } from './index.js';
+import {
+  changeSetId,
+  entryId,
+  instant,
+  invertChangeSet,
+  InvalidReplayOriginError,
+  EntryNotFoundError,
+  UnknownFieldError,
+} from './index.js';
+import type { ChangeSet, Duration, Entry, EntryInput } from './index.js';
 
 const utc = (iso: string): number => Date.parse(iso);
 
@@ -317,5 +325,58 @@ describe('Dataset fields (S4.1)', () => {
     expect(dataset.entries.all.map((entry) => String(entry.id))).toEqual(order);
     expect(dataset.entries.get('b')?.meta).toEqual({ cost: 60, team: 'B' });
     expect(dataset.entries.get('root')?.meta).toEqual({ cost: 110 });
+  });
+});
+
+describe('entries.fieldValue', () => {
+  it('reads a meta Field without going through entry.meta', () => {
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      fields: [{ key: 'cost', type: 'money' }],
+      fieldTypes: { money: { rollUp: 'sum' } },
+      entries: [oneEntry()],
+    });
+    dataset.entries.update('t1', { cost: 500 });
+    expect(dataset.entries.fieldValue('t1', 'cost')).toBe(500);
+  });
+
+  it('reads an entry-sourced Field', () => {
+    const dataset = new Dataset({ timeZone: 'UTC', entries: [oneEntry()] });
+    expect(dataset.entries.fieldValue('t1', 'start')).toBe(first(dataset).start);
+    expect(dataset.entries.fieldValue('t1', 'name')).toBe('Design');
+  });
+
+  it('reads duration on a headless Dataset before any Gantt exists', () => {
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      dateOnlyEnd: 'exclusive',
+      entries: [oneEntry({ start: 0, end: 1 })],
+    });
+    expect(dataset.entries.fieldValue<Duration>('t1', 'duration')).toEqual({
+      value: 1,
+      unit: 'millisecond',
+    });
+  });
+
+  it('throws UnknownFieldError for an unregistered key', () => {
+    const dataset = new Dataset({ timeZone: 'UTC', entries: [oneEntry()] });
+    expect(() => dataset.entries.fieldValue('t1', 'cost')).toThrow(UnknownFieldError);
+  });
+
+  it('throws EntryNotFoundError for a missing id', () => {
+    const dataset = new Dataset({ timeZone: 'UTC', entries: [oneEntry()] });
+    expect(() => dataset.entries.fieldValue('missing', 'name')).toThrow(EntryNotFoundError);
+  });
+
+  it('reads a staged write inside an open transaction', () => {
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      fields: [{ key: 'cost' }],
+      entries: [oneEntry()],
+    });
+    dataset.transaction(() => {
+      dataset.entries.update('t1', { cost: 40 });
+      expect(dataset.entries.fieldValue('t1', 'cost')).toBe(40);
+    });
   });
 });
