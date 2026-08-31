@@ -2,7 +2,7 @@
 
 **Slice:** S4 (`plans/03` §S4) · **Position:** after S3, before S5 · **Status:** specified, not started
 **Form:** the same settled-spec form as [`plans/s3-direct-manipulation/README.md`](../s3-direct-manipulation/README.md) — this file is the tracker and the shared context; each step file holds the decisions it implements and its TODO boxes.
-**Last spec review:** [`plans/reviews/2026-08-30-s4-spec.html`](../reviews/2026-08-30-s4-spec.html) — recommendations landed 2026-08-30; **X2 is blocking** (see §12).
+**Last spec review:** [`plans/reviews/2026-08-30-s4-spec.html`](../reviews/2026-08-30-s4-spec.html) — final pass 2026-08-30; first-pass recs landed; **X2 is blocking** (see §12). Close Sp2 (sort vs visible columns) before S4.9.
 **Governed by:** `plans/00` D2/D7/D8, `plans/01` §2.3/§2.5/§2.6/§4/§6, `plans/02` §2/§4.1/§4.2/§6, ADR [0005](../../docs/adr/0005-fields-are-declared-and-grid-columns-reference-them.md).
 **Builds on:** S2 data core (transactions, changesets, undo, JSON), S3 gestures, S1's height index and `FrameLayout`.
 **Closes:** issue #80 (per-field rollup), #81 (row cells), ADR 0005's two open questions, `plans/03` §S4's three known gaps (#91 §9-B, §9-E, §9-G).
