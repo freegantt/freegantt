@@ -183,8 +183,8 @@ describe('auto-wrap (D-S2-8)', () => {
   });
 });
 
-describe('derived-span kinds (§1.5)', () => {
-  it('a derived-span kind with no dates gets a zero-length span at the reference date', () => {
+describe('roll-up kinds (§1.5)', () => {
+  it('a roll-up kind with no dates gets a zero-length span at the reference date', () => {
     const state = dataset();
     const group = state.entries.add({ id: 'p1', name: 'Sitework', kind: 'group' });
 

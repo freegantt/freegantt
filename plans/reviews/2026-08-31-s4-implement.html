@@ -28,10 +28,9 @@
         <p class="text-xs uppercase tracking-widest text-slate-500">FreeGantt — pk-branch-review</p>
         <h1 class="font-serif text-3xl">S4.1 / S4.2 — Field registry and Rollup</h1>
         <p class="text-sm text-slate-500">
-          2026-08-31 · <span class="font-mono">origin/main...HEAD</span> plus working tree on
+          2026-08-31 · <span class="font-mono">origin/main...HEAD</span> on
           <span class="font-mono">s4-implement</span> · merge-base
-          <span class="font-mono">80e0717</span> · commit
-          <span class="font-mono">c912c8e</span> (S4.1) plus uncommitted S4.2
+          <span class="font-mono">80e0717</span> · status updated after the Field-access / Rollup close
         </p>
         <div class="flex flex-wrap gap-3 text-xs text-slate-600">
           <span class="inline-flex items-center gap-1"><span class="inline-block w-4 h-3 border border-slate-500 bg-white"></span> module</span>
@@ -58,30 +57,51 @@
           <span class="font-mono">progress</span> is not a core Field.
           Harness commits <span class="font-mono">update({ cost })</span> on a tree.
         </div>
+        <div class="text-sm rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-emerald-950 max-w-3xl">
+          <strong>Closed this pass.</strong>
+          Field-access seam (St1 / Sp1 / Si1 / C1 / St3):
+          <span class="font-mono">field-access.ts</span> owns read, write, apply-onto-Entry,
+          “did the body propose this Field”, and compute-cache gating.
+          Callers no longer branch on <span class="font-mono">source.from</span>.
+          Authored keys sit on the edit as a non-enumerable symbol.
+          Edit maps merge only through <span class="font-mono">mergeEntryEdits</span> /
+          <span class="font-mono">mergeStoredEdits</span>.
+          Rollup (C2): <span class="font-mono">rollUpFields(committed, pending, …)</span>
+          builds the effective tree and the touched ancestor set. Construction omits pending.
+          Those helpers stay unexported.
+          Spec tests: construction writes parent <span class="font-mono">meta.cost</span> (Sp4 / D-S4-35);
+          <span class="font-mono">rollup.property.test.ts</span> (Sp2);
+          a 500-leaf bulk edit is one changeset and does not touch an unrelated parent (Sp3).
+          Simplify: <span class="font-mono">fieldsEqual</span> and <span class="font-mono">readDeclared</span>
+          are gone; <span class="font-mono">rollingUpFields()</span>;
+          <span class="font-mono">roll-up-kinds.ts</span> folded into Dataset construction;
+          numeric aggregators share one fold; live comments no longer say “derived-span”;
+          <span class="font-mono">FieldNotColumnableError</span> stays in <span class="font-mono">model/</span>
+          and is not on the public API until S4.3.
+        </div>
         <div class="text-sm rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-amber-950 max-w-3xl">
-          <strong>Worst across axes (do not merge ranks).</strong>
-          Standards: D-S4-2’s one <span class="font-mono">FieldSource</span> switch leaked.
-          Spec: that same leak, plus missing property and ancestor-walk tests.
-          Simplify: two write-onto-entry copies plus a WeakMap side channel.
-          Architecture: hide storage behind one Field-access seam, then fold rollup orchestration.
+          <strong>Left as this review asked.</strong>
+          Collapse / filter / sort (Sp5 / S4.9).
+          Registry.read (C3).
+          Folding <span class="font-mono">RollUpContext</span> (C4).
         </div>
       </header>
 
       <section id="axes" class="grid md:grid-cols-3 gap-4">
-        <div class="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-2">
-          <p class="text-xs uppercase tracking-widest text-amber-700 font-semibold">Standards</p>
-          <p class="text-2xl font-serif">3 hard · 4 judgement</p>
-          <p class="text-xs text-amber-900">Worst: <span class="font-mono">source.from</span> branches outside <span class="font-mono">field-access.ts</span>.</p>
+        <div class="rounded-xl border border-emerald-200 bg-emerald-50 p-4 space-y-2">
+          <p class="text-xs uppercase tracking-widest text-emerald-700 font-semibold">Standards</p>
+          <p class="text-2xl font-serif">7 closed</p>
+          <p class="text-xs text-emerald-900">St1–St7 closed this pass. No open Standards finding.</p>
         </div>
         <div class="rounded-xl border border-sky-200 bg-sky-50 p-4 space-y-2">
           <p class="text-xs uppercase tracking-widest text-sky-700 font-semibold">Spec</p>
-          <p class="text-2xl font-serif">1 wrong · 3 missing · 1 partial</p>
-          <p class="text-xs text-sky-900">Worst: D-S4-2 “only switch” is false in six files. Tests listed in S4.2 §3 are not all present.</p>
+          <p class="text-2xl font-serif">4 closed · 1 deferred</p>
+          <p class="text-xs text-sky-900">Open: Sp5 collapse / filter / sort — S4.6 / S4.9, not an S4.1–S4.2 gap.</p>
         </div>
         <div class="rounded-xl border border-emerald-200 bg-emerald-50 p-4 space-y-2">
           <p class="text-xs uppercase tracking-widest text-emerald-700 font-semibold">Simplify</p>
-          <p class="text-2xl font-serif">4 fold · 3 skip</p>
-          <p class="text-xs text-emerald-900">Worst: <span class="font-mono">entryWithFieldValue</span> and <span class="font-mono">applyFieldRow</span> both write a Field onto an Entry.</p>
+          <p class="text-2xl font-serif">4 closed</p>
+          <p class="text-xs text-emerald-900">Si1–Si4 folded this pass. Skip notes still hold.</p>
         </div>
       </section>
 
@@ -92,7 +112,7 @@
         <article class="rounded-xl border border-slate-200 bg-white p-6 space-y-3 shadow-sm">
           <div class="flex items-start justify-between gap-4">
             <h3 class="text-lg font-semibold">St1 · Storage shape leaks past the Field-access seam</h3>
-            <span class="badge-hard inline-block rounded px-2 py-0.5 text-xs font-semibold shrink-0">Hard</span>
+            <span class="badge-closed inline-block rounded px-2 py-0.5 text-xs font-semibold shrink-0">Closed</span>
           </div>
           <p class="font-mono text-xs text-slate-500">rollup.ts:114–137 · entry-store.ts:33–41 · change-set.ts:85 · entry-reader.ts:114 · dataset-state.ts:114 · field-registry.ts:27–32</p>
           <p class="text-sm text-slate-700">
@@ -108,7 +128,7 @@
         <article class="rounded-xl border border-slate-200 bg-white p-6 space-y-3 shadow-sm">
           <div class="flex items-start justify-between gap-4">
             <h3 class="text-lg font-semibold">St2 · Retired span-gate wording in live comments</h3>
-            <span class="badge-hard inline-block rounded px-2 py-0.5 text-xs font-semibold shrink-0">Hard</span>
+            <span class="badge-closed inline-block rounded px-2 py-0.5 text-xs font-semibold shrink-0">Closed</span>
           </div>
           <p class="font-mono text-xs text-slate-500">dataset-state.ts:73 · .dependency-cruiser.cjs:81 · transaction.ts:170</p>
           <p class="text-sm text-slate-700">
@@ -123,7 +143,7 @@
         <article class="rounded-xl border border-slate-200 bg-white p-6 space-y-3 shadow-sm">
           <div class="flex items-start justify-between gap-4">
             <h3 class="text-lg font-semibold">St3 · Authored keys travel on a WeakMap, not on the edit</h3>
-            <span class="badge-hard inline-block rounded px-2 py-0.5 text-xs font-semibold shrink-0">Hard</span>
+            <span class="badge-closed inline-block rounded px-2 py-0.5 text-xs font-semibold shrink-0">Closed</span>
           </div>
           <p class="font-mono text-xs text-slate-500">field-access.ts:8–24 · transaction.ts:106–110</p>
           <p class="text-sm text-slate-700">
@@ -138,7 +158,7 @@
         <article class="rounded-xl border border-slate-200 bg-white p-6 space-y-3 shadow-sm">
           <div class="flex items-start justify-between gap-4">
             <h3 class="text-lg font-semibold">St4 · <span class="font-mono">fieldsEqual</span> is a one-line middle man</h3>
-            <span class="badge-judge inline-block rounded px-2 py-0.5 text-xs font-semibold shrink-0">Judgement</span>
+            <span class="badge-closed inline-block rounded px-2 py-0.5 text-xs font-semibold shrink-0">Closed</span>
           </div>
           <p class="text-sm text-slate-700">
             <span class="font-mono">fieldsEqual</span> only calls <span class="font-mono">registry.valuesEqual</span>.
@@ -150,7 +170,7 @@
         <article class="rounded-xl border border-slate-200 bg-white p-6 space-y-3 shadow-sm">
           <div class="flex items-start justify-between gap-4">
             <h3 class="text-lg font-semibold">St5 · <span class="font-mono">FieldNotColumnableError</span> is public with no thrower</h3>
-            <span class="badge-judge inline-block rounded px-2 py-0.5 text-xs font-semibold shrink-0">Judgement</span>
+            <span class="badge-closed inline-block rounded px-2 py-0.5 text-xs font-semibold shrink-0">Closed</span>
           </div>
           <p class="text-sm text-slate-700">
             S4.1’s files table names the class. S4.3 throws it.
@@ -162,7 +182,7 @@
         <article class="rounded-xl border border-slate-200 bg-white p-6 space-y-3 shadow-sm">
           <div class="flex items-start justify-between gap-4">
             <h3 class="text-lg font-semibold">St6 · <span class="font-mono">rollUpKindsAsArray</span> has no domain meaning</h3>
-            <span class="badge-judge inline-block rounded px-2 py-0.5 text-xs font-semibold shrink-0">Judgement</span>
+            <span class="badge-closed inline-block rounded px-2 py-0.5 text-xs font-semibold shrink-0">Closed</span>
           </div>
           <p class="text-sm text-slate-700">
             The helper is <span class="font-mono">[...kinds]</span>.
@@ -174,7 +194,7 @@
         <article class="rounded-xl border border-slate-200 bg-white p-6 space-y-3 shadow-sm">
           <div class="flex items-start justify-between gap-4">
             <h3 class="text-lg font-semibold">St7 · Numeric Aggregators share one skip-and-fold loop</h3>
-            <span class="badge-judge inline-block rounded px-2 py-0.5 text-xs font-semibold shrink-0">Judgement</span>
+            <span class="badge-closed inline-block rounded px-2 py-0.5 text-xs font-semibold shrink-0">Closed</span>
           </div>
           <p class="text-sm text-slate-700">
             Duplicated Code in <span class="font-mono">min</span> / <span class="font-mono">max</span> / <span class="font-mono">sum</span>.
@@ -190,7 +210,7 @@
         <article class="rounded-xl border border-slate-200 bg-white p-6 space-y-3 shadow-sm">
           <div class="flex items-start justify-between gap-4">
             <h3 class="text-lg font-semibold">Sp1 · D-S4-2 “only switch” is not true</h3>
-            <span class="badge-hard inline-block rounded px-2 py-0.5 text-xs font-semibold shrink-0">Wrong</span>
+            <span class="badge-closed inline-block rounded px-2 py-0.5 text-xs font-semibold shrink-0">Closed</span>
           </div>
           <p class="text-sm text-slate-700">
             Spec: “<span class="font-mono">data/fields/field-access.ts</span> holds the only
@@ -204,7 +224,7 @@
         <article class="rounded-xl border border-slate-200 bg-white p-6 space-y-3 shadow-sm">
           <div class="flex items-start justify-between gap-4">
             <h3 class="text-lg font-semibold">Sp2 · <span class="font-mono">rollup.property.test.ts</span> is absent</h3>
-            <span class="badge-miss inline-block rounded px-2 py-0.5 text-xs font-semibold shrink-0">Missing</span>
+            <span class="badge-closed inline-block rounded px-2 py-0.5 text-xs font-semibold shrink-0">Closed</span>
           </div>
           <p class="text-sm text-slate-700">
             S4.2 §3: “random trees and random edits: every rolling-up parent equals its Aggregator over its children after commit.”
@@ -216,7 +236,7 @@
         <article class="rounded-xl border border-slate-200 bg-white p-6 space-y-3 shadow-sm">
           <div class="flex items-start justify-between gap-4">
             <h3 class="text-lg font-semibold">Sp3 · 500-entry ancestor walk is not asserted on the commit path</h3>
-            <span class="badge-miss inline-block rounded px-2 py-0.5 text-xs font-semibold shrink-0">Missing</span>
+            <span class="badge-closed inline-block rounded px-2 py-0.5 text-xs font-semibold shrink-0">Closed</span>
           </div>
           <p class="text-sm text-slate-700">
             S4.2 §3: “<span class="font-mono">src/data/transaction.test.ts</span> — a 500-entry bulk edit still produces one changeset, and touches only the ancestors it must.”
@@ -228,7 +248,7 @@
         <article class="rounded-xl border border-slate-200 bg-white p-6 space-y-3 shadow-sm">
           <div class="flex items-start justify-between gap-4">
             <h3 class="text-lg font-semibold">Sp4 · D-S4-35 construction → parent <span class="font-mono">meta.cost</span></h3>
-            <span class="badge-miss inline-block rounded px-2 py-0.5 text-xs font-semibold shrink-0">Partial</span>
+            <span class="badge-closed inline-block rounded px-2 py-0.5 text-xs font-semibold shrink-0">Closed</span>
           </div>
           <p class="text-sm text-slate-700">
             Spec: each omit-source row “is a test in S4.1.” Construction rollup of a
@@ -272,7 +292,7 @@
         <article class="rounded-xl border border-slate-200 bg-white p-6 space-y-3 shadow-sm">
           <div class="flex items-start justify-between gap-4">
             <h3 class="text-lg font-semibold">Si1 · One write-onto-Entry helper</h3>
-            <span class="badge-hard inline-block rounded px-2 py-0.5 text-xs font-semibold shrink-0">Fold</span>
+            <span class="badge-closed inline-block rounded px-2 py-0.5 text-xs font-semibold shrink-0">Closed</span>
           </div>
           <p class="text-sm text-slate-700">
             <span class="font-mono">entryWithFieldValue</span> and <span class="font-mono">applyFieldRow</span> both copy an Entry and special-case meta vs entry.
@@ -284,7 +304,7 @@
         <article class="rounded-xl border border-slate-200 bg-white p-6 space-y-3 shadow-sm">
           <div class="flex items-start justify-between gap-4">
             <h3 class="text-lg font-semibold">Si2 · Delete <span class="font-mono">fieldsEqual</span> and <span class="font-mono">readDeclared</span></h3>
-            <span class="badge-hard inline-block rounded px-2 py-0.5 text-xs font-semibold shrink-0">Fold</span>
+            <span class="badge-closed inline-block rounded px-2 py-0.5 text-xs font-semibold shrink-0">Closed</span>
           </div>
           <p class="text-sm text-slate-700">
             Both are aliases. Call <span class="font-mono">registry.valuesEqual</span> and <span class="font-mono">readField</span>.
@@ -295,7 +315,7 @@
         <article class="rounded-xl border border-slate-200 bg-white p-6 space-y-3 shadow-sm">
           <div class="flex items-start justify-between gap-4">
             <h3 class="text-lg font-semibold">Si3 · <span class="font-mono">rollingUp()</span> names a verb with no object</h3>
-            <span class="badge-worth inline-block rounded px-2 py-0.5 text-xs font-semibold shrink-0">Rename</span>
+            <span class="badge-closed inline-block rounded px-2 py-0.5 text-xs font-semibold shrink-0">Closed</span>
           </div>
           <p class="text-sm text-slate-700">
             Call: <span class="font-mono">registry.rollingUpFields()</span> — “rolling-up Fields of the registry.”
@@ -306,7 +326,7 @@
         <article class="rounded-xl border border-slate-200 bg-white p-6 space-y-3 shadow-sm">
           <div class="flex items-start justify-between gap-4">
             <h3 class="text-lg font-semibold">Si4 · File-name spelling: <span class="font-mono">rollup.ts</span> vs <span class="font-mono">roll-up-kinds.ts</span></h3>
-            <span class="badge-worth inline-block rounded px-2 py-0.5 text-xs font-semibold shrink-0">Fold</span>
+            <span class="badge-closed inline-block rounded px-2 py-0.5 text-xs font-semibold shrink-0">Closed</span>
           </div>
           <p class="text-sm text-slate-700">
             Glossary term is Rollup / <span class="font-mono">rollUpKinds</span>.
@@ -331,8 +351,8 @@
           <div class="flex items-start justify-between gap-4 flex-wrap">
             <h3 class="font-serif text-xl">1 · Hide Field storage behind one access module</h3>
             <span class="inline-flex items-center gap-2">
-              <span class="rounded-full bg-emerald-100 text-emerald-800 text-xs px-2 py-0.5 font-medium">Strong</span>
-              <span class="rounded-full bg-slate-100 text-slate-600 text-xs px-2 py-0.5">in-process</span>
+              <span class="badge-closed rounded-full text-xs px-2 py-0.5 font-medium">Closed</span>
+              <span class="rounded-full bg-slate-100 text-slate-600 text-xs px-2 py-0.5">was Strong</span>
             </span>
           </div>
           <p class="font-mono text-sm text-slate-600">field-access.ts · rollup.ts · entry-store.ts · change-set.ts · transaction.ts</p>
@@ -391,8 +411,8 @@ flowchart TB
           <div class="flex items-start justify-between gap-4 flex-wrap">
             <h3 class="font-serif text-xl">2 · Fold effective tree and touched set into <span class="font-mono">rollUpFields</span></h3>
             <span class="inline-flex items-center gap-2">
-              <span class="rounded-full bg-emerald-100 text-emerald-800 text-xs px-2 py-0.5 font-medium">Strong</span>
-              <span class="rounded-full bg-slate-100 text-slate-600 text-xs px-2 py-0.5">in-process</span>
+              <span class="badge-closed rounded-full text-xs px-2 py-0.5 font-medium">Closed</span>
+              <span class="rounded-full bg-slate-100 text-slate-600 text-xs px-2 py-0.5">was Strong</span>
             </span>
           </div>
           <p class="font-mono text-sm text-slate-600">rollup.ts · transaction.ts</p>
@@ -426,7 +446,7 @@ flowchart TB
             <h3 class="font-serif text-xl">3 · Registry.read / Registry.write (keep FieldContext)</h3>
             <span class="inline-flex items-center gap-2">
               <span class="rounded-full bg-amber-100 text-amber-900 text-xs px-2 py-0.5 font-medium">Worth exploring</span>
-              <span class="rounded-full bg-slate-100 text-slate-600 text-xs px-2 py-0.5">in-process</span>
+              <span class="rounded-full bg-slate-100 text-slate-600 text-xs px-2 py-0.5">left open</span>
             </span>
           </div>
           <p class="font-mono text-sm text-slate-600">field-registry.ts · field-access.ts · dataset-state.ts</p>
@@ -453,7 +473,7 @@ flowchart TB
             <h3 class="font-serif text-xl">4 · <span class="font-mono">RollUpContext</span> is a thin second read seam</h3>
             <span class="inline-flex items-center gap-2">
               <span class="rounded-full bg-amber-100 text-amber-900 text-xs px-2 py-0.5 font-medium">Worth exploring</span>
-              <span class="rounded-full bg-slate-100 text-slate-600 text-xs px-2 py-0.5">in-process</span>
+              <span class="rounded-full bg-slate-100 text-slate-600 text-xs px-2 py-0.5">left open</span>
             </span>
           </div>
           <p class="font-mono text-sm text-slate-600">model/field.ts · aggregators.ts · rollup.ts</p>
@@ -465,8 +485,8 @@ flowchart TB
           <div class="flex items-start justify-between gap-4 flex-wrap">
             <h3 class="font-serif text-xl">5 · Tiny helpers vs the real test surface</h3>
             <span class="inline-flex items-center gap-2">
-              <span class="rounded-full bg-slate-200 text-slate-700 text-xs px-2 py-0.5 font-medium">Speculative</span>
-              <span class="rounded-full bg-slate-100 text-slate-600 text-xs px-2 py-0.5">in-process</span>
+              <span class="badge-closed rounded-full text-xs px-2 py-0.5 font-medium">Closed</span>
+              <span class="rounded-full bg-slate-100 text-slate-600 text-xs px-2 py-0.5">kinds fold</span>
             </span>
           </div>
           <p class="font-mono text-sm text-slate-600">roll-up-kinds.ts · computed-cache.ts · computed-cache.test.ts</p>
@@ -477,22 +497,21 @@ flowchart TB
 
       <section id="top-recommendation" class="rounded-xl border-2 border-slate-800 bg-white p-6 space-y-3">
         <p class="text-xs uppercase tracking-widest text-slate-500">Top recommendation</p>
-        <h2 class="font-serif text-2xl"><a href="#c1" class="underline decoration-slate-300">Candidate 1 — one Field-access seam</a></h2>
+        <h2 class="font-serif text-2xl"><a href="#c1" class="underline decoration-slate-300">Candidate 1 — one Field-access seam</a> (closed)</h2>
         <p class="text-sm text-slate-700">
-          It closes the hard Standards finding, the Wrong Spec finding, and the strongest Simplify fold in one change.
-          Candidate 2 (fold rollup orchestration) is next and is smaller once apply-onto-Entry exists.
-          Do not move the Rollup into the extender (ADR 0005 / D-S2-22).
+          C1 and C2 landed. Do not move the Rollup into the extender (ADR 0005 / D-S2-22).
           Do not put aggregates on Grid columns.
           FIELD and ROW still meet later at <span class="font-mono">LayoutInput.columns</span>.
+          C3 (Registry.read) and C4 (fold <span class="font-mono">RollUpContext</span>) stay worth exploring.
         </p>
       </section>
 
       <section class="text-sm text-slate-600 space-y-2 pb-8">
         <h2 class="font-serif text-xl text-slate-900">Axis totals</h2>
-        <p>Standards: 3 hard, 4 judgement — worst St1 (FieldSource leak).</p>
-        <p>Spec: 1 wrong, 3 missing, 1 partial, 1 deferred — worst Sp1 (same leak) then missing property / ancestor tests.</p>
-        <p>Simplify: 4 folds — worst Si1 (duplicate write-onto-Entry).</p>
-        <p>Architecture: 2 Strong, 2 Worth exploring, 1 Speculative. Tackle C1 first.</p>
+        <p>Standards: 7 closed. No open finding.</p>
+        <p>Spec: 4 closed, 1 deferred (Sp5 / S4.9 collapse / filter / sort).</p>
+        <p>Simplify: 4 closed. Skip notes unchanged.</p>
+        <p>Architecture: C1, C2, C5 closed. C3 and C4 left open as this review asked.</p>
       </section>
     </main>
   </body>

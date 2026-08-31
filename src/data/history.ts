@@ -44,7 +44,7 @@ export class History {
 
   /** Applies the changeset at the cursor inverted (`to`→`from`, `added`↔`removed`) with
    *  `origin: 'undo'`. A no-op when `canUndo` is `false`. Neither re-runs the extension hook nor the
-   *  span rollup — `replayChangeSet` writes exactly the inverted rows and nothing else (§2.2). A
+   *  Rollup — `replayChangeSet` writes exactly the inverted rows and nothing else (§2.2). A
    *  refused undo (a `beforeChange` handler returning `false`) throws `MutationCancelledError` and
    *  leaves the stack exactly where it was — the cursor moves on the `change` that commit emits
    *  (D-S2-25), so a veto never reaches `#onChange`. */

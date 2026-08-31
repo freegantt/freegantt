@@ -18,19 +18,19 @@ import type {
 } from '../model/index.js';
 import { toEndInstant, toInstant } from '../time/index.js';
 import type { StoredEdit } from './edit-extension.js';
-import { markAuthoredFieldKeys, overlayStoredEdit, writeField } from './fields/field-access.js';
+import { markAuthoredFieldKeys, writeDeclaredMetaFields } from './fields/field-access.js';
 import type { FieldRegistry } from './fields/field-registry.js';
 
 /** The Dataset context every entry is read against: one zone, one end rule, for the whole list, plus
- * what `01` §2.5's span rollup needs to fill in a deriving-kind entry's initial span (S2.3 §1.5). */
+ * what the Rollup needs to fill in a roll-up-kind entry's initial span (S2.3 §1.5). */
 export interface EntryReadContext {
   timeZone: string;
   dateOnlyEnd: DateOnlyEndRule;
   /** The one `Date.now()` read the owning Dataset performed — used as a deriving-kind entry's
    * zero-length span until the rollup gives it a real one (CONTEXT.md, Reference date). */
   referenceDate: Instant;
-  /** Kinds whose span the rollup derives from children (`01` §2.5, default `['group']`) — an entry
-   * of one of these kinds may omit `start`/`end`. */
+  /** Kinds whose rolling-up Fields the Rollup derives from children (`01` §2.5, default `['group']`)
+   * — an entry of one of these kinds may omit `start`/`end`. */
   rollUpKinds: ReadonlySet<EntryKind>;
 }
 
@@ -107,13 +107,6 @@ export function readEdit(
   if (edit.segments !== undefined) stored.segments = edit.segments.map((s) => readSpan(s, context));
   if (edit.meta !== undefined) stored.meta = edit.meta;
 
-  const overlay = overlayStoredEdit(entry, stored);
-  for (const key of Object.keys(edit)) {
-    const field = registry.get(key);
-    if (!field) continue;
-    if (field.source.from !== 'meta') continue;
-    stored = writeField(stored, overlay, field, (edit as Record<string, unknown>)[key]);
-  }
-
+  stored = writeDeclaredMetaFields(stored, entry, edit, registry);
   return markAuthoredFieldKeys(stored, Object.keys(edit));
 }

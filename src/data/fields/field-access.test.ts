@@ -1,7 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import { entryId } from '../../model/index.js';
 import type { Entry } from '../../model/index.js';
-import { createFieldContext, overlayStoredEdit, readField, writeField } from './field-access.js';
+import {
+  createFieldContext,
+  editProposesField,
+  mergeStoredEdits,
+  overlayStoredEdit,
+  readField,
+  writeField,
+  writeOntoEntry,
+} from './field-access.js';
+import { markAuthoredFieldKeys } from './field-access.js';
 import { FieldRegistry } from './field-registry.js';
 
 const span = (meta?: unknown): Entry => {
@@ -55,14 +64,29 @@ describe('readField / writeField (D-S4-2)', () => {
     expect(written.meta).toEqual({ team: 'A', cost: 500 });
   });
 
-  it('omits meta when the last declared key is cleared', () => {
+  it('clears meta when the last declared key is cleared', () => {
     const entry = span({ cost: 500 });
     const written = writeField({}, entry, cost, undefined);
-    expect('meta' in written).toBe(false);
+    expect('meta' in written).toBe(true);
+    expect(written.meta).toBeUndefined();
+    expect('meta' in writeOntoEntry(entry, cost, undefined)).toBe(false);
   });
 
   it('reads a compute Field through durationOf', () => {
     const entry = span();
     expect(readField(entry, duration, fieldCtx)).toEqual({ value: 1, unit: 'millisecond' });
+  });
+
+  it('writeOntoEntry writes cost onto parent', () => {
+    const parent = span();
+    const next = writeOntoEntry(parent, cost, 300);
+    expect(next.meta).toEqual({ cost: 300 });
+    expect(readField(next, cost, fieldCtx)).toBe(300);
+  });
+
+  it('mergeStoredEdits keeps authored keys', () => {
+    const authored = markAuthoredFieldKeys(writeField({}, span(), cost, 3), ['cost']);
+    const merged = mergeStoredEdits({ name: 'x' }, authored);
+    expect(editProposesField(merged, cost)).toBe(true);
   });
 });

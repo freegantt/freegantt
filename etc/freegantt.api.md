@@ -323,13 +323,6 @@ export interface FieldContext {
 export type FieldKey = CoreFieldKey | (string & {});
 
 // @public
-export class FieldNotColumnableError extends FreeGanttError {
-    constructor(key: string);
-    // (undocumented)
-    readonly key: string;
-}
-
-// @public
 export type FieldSource = {
     from: 'entry';
     field: CoreFieldKey;

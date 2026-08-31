@@ -23,18 +23,16 @@ import { readEdit, readEntry } from './entry-reader.js';
 import type { EntryReadContext } from './entry-reader.js';
 import { runTransaction } from './transaction.js';
 import type { TransactionData, TxToken } from './transaction.js';
-import { mergeStoredEdits, overlayStoredEdit, writeField } from './fields/field-access.js';
+import { mergeStoredEdits, overlayStoredEdit, writeOntoEntry } from './fields/field-access.js';
 import { FieldRegistry } from './fields/field-registry.js';
 
 /** Writes `field` on a copy of `current`. `value === undefined` omits the key instead of setting it —
  *  an undo of an optional field's first edit must return the Entry to not having the key at all
  *  (entry construction's "no key the input never had" rule, `exactOptionalPropertyTypes`), not to
- *  having the key with value `undefined`. Declared meta Fields write through `writeField`. */
+ *  having the key with value `undefined`. Declared Fields write through `writeOntoEntry`. */
 function applyFieldRow(current: Entry, field: FieldKey, value: unknown, registry: FieldRegistry): Entry {
   const declared = registry.get(field);
-  if (declared?.source.from === 'meta') {
-    return overlayStoredEdit(current, writeField({}, current, declared, value));
-  }
+  if (declared) return writeOntoEntry(current, declared, value);
   const next: Record<string, unknown> = { ...current };
   if (value === undefined) delete next[field];
   else next[field] = value;

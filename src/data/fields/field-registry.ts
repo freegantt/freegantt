@@ -94,7 +94,7 @@ export class FieldRegistry {
   }
 
   /** Fields that participate in the Rollup after type merge (D-S4-3). */
-  rollingUp(): readonly ResolvedField[] {
+  rollingUpFields(): readonly ResolvedField[] {
     return this.all.filter((field) => field.rollUp !== undefined && field.rollUp !== 'none');
   }
 

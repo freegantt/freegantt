@@ -7,8 +7,8 @@
 import type { Entry, EntryId, EntryKind, FieldContext, FieldUpdated } from '../model/index.js';
 import { AggregatorFailedError } from '../model/index.js';
 import type { EntryEdits } from './edit-extension.js';
-import { authoredFieldKeysOf, overlayStoredEdit, readField, writeField } from './fields/field-access.js';
-import type { FieldRegistry, ResolvedField } from './fields/field-registry.js';
+import { editProposesField, overlayStoredEdit, readField, writeOntoEntry } from './fields/field-access.js';
+import type { FieldRegistry } from './fields/field-registry.js';
 
 export interface RollUpEditSets {
   /** The transaction body's edits — the Rollup yields to a field proposed here (D-S2-22). */
@@ -17,8 +17,14 @@ export interface RollUpEditSets {
   readonly merged: EntryEdits;
 }
 
-/** The entry tree as this transaction will commit it — adds, removes and staged edits applied (S4.2). */
-export function buildEffectiveEntries(
+/** Adds, removes and body edits the commit path has not written yet. Construction omits this. */
+export interface PendingRollUp {
+  readonly added: readonly Entry[];
+  readonly removed: readonly Entry[];
+  readonly edits: RollUpEditSets;
+}
+
+function buildEffectiveEntries(
   committed: ReadonlyMap<EntryId, Entry>,
   added: readonly Entry[],
   removed: readonly Entry[],
@@ -65,8 +71,7 @@ function ancestorsOf(id: EntryId, entries: ReadonlyMap<EntryId, Entry>): readonl
   return result;
 }
 
-/** Collects every parent that may need recomputation after this transaction (D-S4-8). */
-export function collectTouchedIds(
+function collectTouchedIds(
   entries: ReadonlyMap<EntryId, Entry>,
   added: readonly Entry[],
   removed: readonly Entry[],
@@ -111,31 +116,6 @@ function parentsToRecompute(
     .sort((a, b) => depthOf(b, entries) - depthOf(a, entries));
 }
 
-function bodyProposedField(body: EntryEdits, id: EntryId, field: ResolvedField): boolean {
-  const edit = body.get(id);
-  if (!edit) return false;
-  if (field.source.from === 'entry') {
-    return (edit as Record<string, unknown>)[field.source.field] !== undefined;
-  }
-  if (field.source.from === 'meta') {
-    return authoredFieldKeysOf(edit).has(String(field.key));
-  }
-  return false;
-}
-
-function entryWithFieldValue(entry: Entry, field: ResolvedField, value: unknown): Entry {
-  if (field.source.from === 'meta') {
-    return overlayStoredEdit(entry, writeField({}, entry, field, value));
-  }
-  if (field.source.from === 'entry') {
-    const next: Record<string, unknown> = { ...entry };
-    if (value === undefined) delete next[field.source.field];
-    else next[field.source.field] = value;
-    return next as unknown as Entry;
-  }
-  return entry;
-}
-
 function effectiveEntry(
   id: EntryId,
   entries: ReadonlyMap<EntryId, Entry>,
@@ -151,22 +131,28 @@ function effectiveEntry(
 }
 
 /**
- * `entries` is the pre-transaction committed snapshot. `edits.body` is the transaction body's
- * proposed edits; `edits.merged` is body plus the extension hook. When `touched` is omitted, every
- * deriving parent is walked (construction and `fromJSON`).
+ * Construction omits `pending` and walks every deriving parent. Commit passes adds, removes and
+ * edits; the pass then builds the effective tree and walks only the ancestors it must (D-S4-8).
  */
 export function rollUpFields(
-  entries: ReadonlyMap<EntryId, Entry>,
-  edits: RollUpEditSets,
+  committed: ReadonlyMap<EntryId, Entry>,
+  pending: PendingRollUp | undefined,
   registry: FieldRegistry,
   rollUpKinds: ReadonlySet<EntryKind>,
   ctx: FieldContext,
-  touched?: ReadonlySet<EntryId>,
 ): readonly FieldUpdated[] {
   if (rollUpKinds.size === 0) return [];
 
-  const rollingFields = registry.rollingUp();
+  const rollingFields = registry.rollingUpFields();
   if (rollingFields.length === 0) return [];
+
+  const added = pending?.added ?? [];
+  const removed = pending?.removed ?? [];
+  const emptyEdits: EntryEdits = new Map();
+  const body = pending?.edits.body ?? emptyEdits;
+  const merged = pending?.edits.merged ?? emptyEdits;
+  const entries = pending === undefined ? committed : buildEffectiveEntries(committed, added, removed, body);
+  const touched = pending === undefined ? undefined : collectTouchedIds(committed, added, removed, body);
 
   const byParent = childrenByParent(entries);
   const parents = parentsToRecompute(entries, rollUpKinds, touched);
@@ -182,15 +168,15 @@ export function rollUpFields(
 
     const children: Entry[] = [];
     for (const childId of childIds) {
-      const child = effectiveEntry(childId, entries, edits.merged, computed);
+      const child = effectiveEntry(childId, entries, merged, computed);
       if (child) children.push(child);
     }
     if (children.length === 0) continue;
 
-    let effectiveParent = effectiveEntry(parentId, entries, edits.merged, computed) ?? parent;
+    let effectiveParent = effectiveEntry(parentId, entries, merged, computed) ?? parent;
 
     for (const field of rollingFields) {
-      if (bodyProposedField(edits.body, parentId, field)) continue;
+      if (editProposesField(body.get(parentId), field)) continue;
 
       const aggregator = registry.aggregator(field.rollUp!);
       if (!aggregator) continue;
@@ -213,7 +199,7 @@ export function rollUpFields(
       if (registry.valuesEqual(String(field.key), from, value)) continue;
 
       updated.push({ store: 'entries', id: parentId, field: field.key, from, to: value });
-      effectiveParent = entryWithFieldValue(effectiveParent, field, value);
+      effectiveParent = writeOntoEntry(effectiveParent, field, value);
     }
 
     computed.set(parentId, effectiveParent);

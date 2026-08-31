@@ -17,35 +17,26 @@ function durationMs(ctx: RollUpContext, entry: Entry): number | undefined {
   return duration.value;
 }
 
-const min: Aggregator<number> = (children, _parent, ctx) => {
+function foldNumbers(
+  children: readonly Entry[],
+  ctx: RollUpContext,
+  combine: (found: number, value: number) => number,
+): number | undefined {
   let found: number | undefined;
   for (const child of children) {
     const value = readNumber(ctx, child);
     if (value === undefined) continue;
-    found = found === undefined ? value : Math.min(found, value);
+    found = found === undefined ? value : combine(found, value);
   }
   return found;
-};
+}
 
-const max: Aggregator<number> = (children, _parent, ctx) => {
-  let found: number | undefined;
-  for (const child of children) {
-    const value = readNumber(ctx, child);
-    if (value === undefined) continue;
-    found = found === undefined ? value : Math.max(found, value);
-  }
-  return found;
-};
+const min: Aggregator<number> = (children, _parent, ctx) => foldNumbers(children, ctx, Math.min);
 
-const sum: Aggregator<number> = (children, _parent, ctx) => {
-  let found: number | undefined;
-  for (const child of children) {
-    const value = readNumber(ctx, child);
-    if (value === undefined) continue;
-    found = (found ?? 0) + value;
-  }
-  return found;
-};
+const max: Aggregator<number> = (children, _parent, ctx) => foldNumbers(children, ctx, Math.max);
+
+const sum: Aggregator<number> = (children, _parent, ctx) =>
+  foldNumbers(children, ctx, (found, value) => found + value);
 
 const count: Aggregator<number> = (children, _parent, ctx) => {
   let n = 0;

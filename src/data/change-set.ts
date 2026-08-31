@@ -15,12 +15,7 @@ import type {
 } from '../model/index.js';
 import type { StoredEdit } from './edit-extension.js';
 import { authoredFieldKeysOf, overlayStoredEdit, readField } from './fields/field-access.js';
-import type { FieldRegistry, ResolvedField } from './fields/field-registry.js';
-
-/** `true` when a field's `from` and `to` are the same value — such a field is not recorded (D-S2-7). */
-export function fieldsEqual(field: FieldKey, from: unknown, to: unknown, registry: FieldRegistry): boolean {
-  return registry.valuesEqual(field, from, to);
-}
+import type { FieldRegistry } from './fields/field-registry.js';
 
 function pushRow(
   rows: FieldUpdated[],
@@ -33,13 +28,9 @@ function pushRow(
 ): void {
   const key = String(field);
   if (seen.has(key)) return;
-  if (fieldsEqual(field, from, to, registry)) return;
+  if (registry.valuesEqual(field, from, to)) return;
   seen.add(key);
   rows.push({ store: 'entries', id, field, from, to });
-}
-
-function readDeclared(entry: Entry, field: ResolvedField, ctx: FieldContext): unknown {
-  return readField(entry, field, ctx);
 }
 
 /**
@@ -78,12 +69,12 @@ export function diffEdit(
     for (const field of registry.all) {
       if (!authored.has(String(field.key))) continue;
       if (field.key === 'meta') continue;
-      emit(field.key, readDeclared(current, field, ctx), readDeclared(next, field, ctx));
+      emit(field.key, readField(current, field, ctx), readField(next, field, ctx));
     }
     if (authored.has('meta')) {
       for (const field of registry.all) {
-        if (field.source.from !== 'meta') continue;
-        emit(field.key, readDeclared(current, field, ctx), readDeclared(next, field, ctx));
+        if (field.key === 'meta') continue;
+        emit(field.key, readField(current, field, ctx), readField(next, field, ctx));
       }
     }
     return rows;
@@ -93,7 +84,7 @@ export function diffEdit(
     if (field === 'meta') continue;
     const declared = registry.get(field);
     if (declared) {
-      emit(field, readDeclared(current, declared, ctx), readDeclared(next, declared, ctx));
+      emit(field, readField(current, declared, ctx), readField(next, declared, ctx));
       continue;
     }
     emit(field, (current as unknown as Record<string, unknown>)[field], edit[field]);

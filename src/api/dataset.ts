@@ -15,7 +15,6 @@ import type {
   FieldType,
 } from '../model/index.js';
 import { DatasetState } from '../data/index.js';
-import { rollUpKindsAsArray } from '../data/roll-up-kinds.js';
 import {
   toJSON as writeDocument,
   readDocument,
@@ -74,7 +73,7 @@ export class Dataset {
   }
 
   get rollUpKinds(): readonly EntryKind[] {
-    return rollUpKindsAsArray(this.#state.rollUpKinds);
+    return [...this.#state.rollUpKinds];
   }
 
   /** Resolved Field declarations this Dataset owns, core Fields included (D-S4-1). */

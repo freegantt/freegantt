@@ -32,9 +32,16 @@ import type { HistoryOptions } from './history.js';
 import { createFieldContext, readField } from './fields/field-access.js';
 import { FieldRegistry } from './fields/field-registry.js';
 import { ComputedFieldCache } from './computed-cache.js';
-import { resolveRollUpKinds } from './roll-up-kinds.js';
 
 export type { HistoryOptions };
+
+/** `'none'` and `[]` both disable derivation; omitted defaults to `['group']`. */
+function resolveRollUpKinds(input: RollUpKinds | undefined): ReadonlySet<EntryKind> {
+  if (input === 'none') return new Set();
+  const list = input ?? ['group'];
+  if (list.length === 0) return new Set();
+  return new Set(list);
+}
 
 export interface DatasetStateOptions {
   entries: readonly EntryInput[];
@@ -70,8 +77,7 @@ export class DatasetState implements Dataset {
   readonly dateOnlyEnd: DateOnlyEndRule;
   /** The one `Date.now()` read this Dataset performs, via time/'s `now()` (CONTEXT.md, Reference
    *  date). Fixed for the Dataset's lifetime — not re-derived on every layout pass. Used to
-   *  initialize a derived-span-kind entry's zero-length span before the S2.2 rollup gives it a
-   *  real one. */
+   *  initialize a roll-up-kind entry's zero-length span before the Rollup gives it a real one. */
   readonly referenceDate: Instant;
   readonly editExtender: EditExtender;
   /** `runTransaction`'s notification channel (D-S2-5, D-S2-24). Internal only, same reasoning as
@@ -111,12 +117,10 @@ export class DatasetState implements Dataset {
     this.fieldContext = createFieldContext(this.timeZone, (entry, key, ctx) => {
       const field = this.fields.get(key);
       if (!field) return undefined;
-      if (field.source.from === 'compute') {
-        return this.computedCache.read(entry.id, key, this.#datasetRevision, () =>
-          readField(entry, field, ctx),
-        );
-      }
-      return readField(entry, field, ctx);
+      return readField(entry, field, ctx, {
+        cache: this.computedCache,
+        datasetRevision: this.#datasetRevision,
+      });
     });
     const context: EntryReadContext = {
       timeZone: this.timeZone,
@@ -126,9 +130,10 @@ export class DatasetState implements Dataset {
     };
     this.entries = new EntryStore(readEntries(options.entries, context), context, this.fields);
     this.entries.setTransactionRunner(this);
-    // `01` §2.6 / README.md D-S2-22: a deriving-kind entry given children only through the initial
-    // array gets a real span before anyone reads it, not just after the first later transaction
-    // touches one of those children. `fromJSON` gets this for free, being construction like any other.
+    // `01` §2.6 / README.md D-S2-22: a roll-up-kind entry given children only through the initial
+    // array gets real rolled-up values before anyone reads it, not just after the first later
+    // transaction touches one of those children. `fromJSON` gets this for free, being construction
+    // like any other.
     applyConstructionRollUp(this);
     // Subscribes to `change` right here, before the constructor returns and so before any consumer
     // handler exists (`s2.5-undo-redo.md` §2.1) — `canUndo` reads true inside the very `change` a
