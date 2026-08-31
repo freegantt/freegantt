@@ -12,7 +12,15 @@ import type {
 import { ScrollModel, TimeScaleModel } from '../layout/index.js';
 import type { PresetRef, TimeScaleFit, ViewPreset } from '../layout/index.js';
 import type { DateLineSpec } from '../layout/index.js';
-import type { Entry, EntryEdits, EntryId, Instant, InstantInput, TimeSpan } from '../model/index.js';
+import type {
+  Entry,
+  EntryEdits,
+  EntryId,
+  GridColumnInput,
+  Instant,
+  InstantInput,
+  TimeSpan,
+} from '../model/index.js';
 import { MutationCancelledError } from '../model/index.js';
 import { now, toInstant } from '../time/index.js';
 import type { Dataset } from './dataset.js';
@@ -69,6 +77,8 @@ interface GanttOptionsBase {
   /** Live (S3.7, D-S3-14). Wheel zoom, shift+wheel pan, and keyboard pan. Default `{}`: every
    *  viewport gesture is on. `false` turns them all off. Does not gate `zoomBy` / `panToDate`. */
   viewportGestures?: ViewportGestures;
+  /** Live (S4.3, D-S4-12). Field keys in display order, plus per-Gantt overrides. Default `['name']`. */
+  gridColumns?: readonly GridColumnInput[];
 }
 
 /** Two ways to set the axis, made mutually exclusive at the type level (issue #84 — the prior shape
@@ -121,6 +131,7 @@ export class Gantt {
         : {}),
       ...(options.interactions !== undefined ? { interactions: options.interactions } : {}),
       ...(options.viewportGestures !== undefined ? { viewportGestures: options.viewportGestures } : {}),
+      ...(options.gridColumns !== undefined ? { gridColumns: options.gridColumns } : {}),
       entryGestures: attachEntryGestures,
       keyboardEditing: attachKeyboardEditing,
       // S3.3, D-S3-16: `GanttShell`'s own `dataset` option is `model/`'s narrow `Dataset` interface
@@ -191,6 +202,14 @@ export class Gantt {
 
   set gridWidth(px: number) {
     this.#shell.gridWidth = px;
+  }
+
+  get gridColumns(): readonly GridColumnInput[] {
+    return this.#shell.gridColumns;
+  }
+
+  set gridColumns(columns: readonly GridColumnInput[]) {
+    this.#shell.gridColumns = columns;
   }
 
   get preset(): ViewPreset {

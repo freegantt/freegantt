@@ -25,9 +25,11 @@ export interface PaneLayoutOptions {
 }
 
 export interface Panes {
-  /** The grid pane's row layer. Row labels and, from S6, columns. No scrollbar — it follows the
+  /** The grid pane's row layer. Row labels and Grid cells. No scrollbar — it follows the
    *  scroll owner by transform (D-S1.8-1). */
   readonly grid: HTMLElement;
+  /** Column headers, overlaid on the grid spacer so they match the timeline header height. */
+  readonly gridHeader: HTMLElement;
   /** The single native scroller: header bands, bars, links, decorations. */
   readonly timeline: HTMLElement;
   readonly splitter: HTMLElement;
@@ -79,6 +81,10 @@ export class PaneLayout {
     const rowClip = document.createElement('div');
     rowClip.className = 'fg-rows-clip';
 
+    const headerRow = document.createElement('div');
+    headerRow.className = 'fg-grid-header';
+    this.#spacer.append(headerRow);
+
     // render/dom's sync() moves this element by `translateY(-visible.y)` every frame (D-S1.8-1).
     // It must NOT also be the overflow:hidden clip boundary: transforming an element moves its own
     // box along with it, so a clip on the transformed element itself would carry the clip window
@@ -99,7 +105,7 @@ export class PaneLayout {
 
     this.#container.append(this.#gridPane, splitter, timelinePane);
 
-    this.panes = { grid: rowLayer, splitter, timeline: timelinePane };
+    this.panes = { grid: rowLayer, gridHeader: headerRow, splitter, timeline: timelinePane };
   }
 
   get gridWidth(): number {
@@ -130,6 +136,7 @@ export class PaneLayout {
       band.className = 'fg-band';
       this.#spacer.append(band);
     }
+    this.#spacer.append(this.panes.gridHeader);
   }
 
   destroy(): void {

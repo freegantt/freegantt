@@ -64,7 +64,7 @@
            they share one coordinate frame with the timeline pane (S1.8, D-S1.8-1/D-S1.8-2) — this
            harness no longer restates it as raw CSS. Renamed from --fg-row-label-width: the gutter
            is a pane width now, not a backend reservation. */
-        --fg-grid-pane-width: 220px;
+        --fg-grid-pane-width: 480px;
         border: 1px solid var(--page-border);
         /* No overflow/position rule here any more (S1.8): PaneLayout builds the grid pane / splitter
            / timeline pane structure inline, and the timeline pane is the library's own native
@@ -163,6 +163,7 @@
         Every
         <input id="snap-increment" type="number" min="1" step="1" value="1" size="3" />
       </label>
+      <button id="toggle-budget-btn" type="button">Hide Budget</button>
     </div>
     <div id="toolbar"></div>
     <div id="gantt"></div>

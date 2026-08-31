@@ -5,6 +5,7 @@ import type { GanttShellOptions } from './gantt-shell.js';
 import { entryId } from '../model/index.js';
 import type { Entry, Instant } from '../model/index.js';
 import { EntryStore } from '../data/index.js';
+import { CORE_FIELDS } from '../data/fields/core-fields.js';
 
 function fakeDataset(list: readonly Entry[]): GanttShellOptions['dataset'] {
   const context = {
@@ -17,6 +18,7 @@ function fakeDataset(list: readonly Entry[]): GanttShellOptions['dataset'] {
     entries: new EntryStore(list, context),
     timeZone,
     isRollUpKind: () => false,
+    fields: { all: CORE_FIELDS },
     on: () => {},
     off: () => {},
   };

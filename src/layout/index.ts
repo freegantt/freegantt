@@ -1,4 +1,6 @@
 export { computeFrame, barSpan, DEFAULT_TICK_BOX_FLOOR_PX } from './frame.js';
+export { paintColumns } from './column.js';
+export type { FrameColumn, ResolvedColumn, FieldCompare } from './column.js';
 export { FrameLayout } from './frame-layout.js';
 export { resolveDateLines } from './date-line.js';
 export type { DateLine, DateLineSpec, ResolveDateLinesInput } from './date-line.js';

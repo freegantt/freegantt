@@ -1,7 +1,8 @@
 // data/ — core Fields are ordinary declarations (D-S4-4). They always set `source` explicitly so
 // omitted-source cannot steal `start` into `meta.start`. `progress` is not declared (ADR 0008).
 
-import type { Entry, Field } from '../../model/index.js';
+import type { Duration, Entry, Field, Instant } from '../../model/index.js';
+import { formatDate, formatEndInclusive, MS } from '../../time/index.js';
 
 const byReference = (from: unknown, to: unknown): boolean => from === to;
 
@@ -13,11 +14,36 @@ const segmentsEqual = (from: unknown, to: unknown): boolean => {
   return a.every((span, index) => span.start === b[index]?.start && span.end === b[index]?.end);
 };
 
+function asText(value: unknown): string {
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  return '';
+}
+
+function formatStart(value: unknown, ctx: { timeZone: string; locale: Intl.LocalesArgument }): string {
+  if (value === undefined || value === null) return '';
+  return formatDate(ctx.timeZone, value as Instant, ctx.locale);
+}
+
+function formatEnd(value: unknown, ctx: { timeZone: string; locale: Intl.LocalesArgument }): string {
+  if (value === undefined || value === null) return '';
+  return formatEndInclusive(ctx.timeZone, value as Instant, ctx.locale);
+}
+
+function formatDuration(value: unknown): string {
+  if (value === undefined || value === null) return '';
+  const duration = value as Duration;
+  const days = duration.value / MS.DAY;
+  if (Number.isInteger(days)) return `${days} d`;
+  return `${days.toFixed(1)} d`;
+}
+
 export const CORE_FIELDS: readonly Field[] = Object.freeze([
   {
     key: 'name',
     source: { from: 'entry', field: 'name' },
     equals: byReference,
+    formatValue: asText,
     column: { header: 'Name' },
   },
   {
@@ -25,6 +51,7 @@ export const CORE_FIELDS: readonly Field[] = Object.freeze([
     source: { from: 'entry', field: 'start' },
     rollUp: 'min',
     equals: byReference,
+    formatValue: formatStart,
     column: { header: 'Start' },
   },
   {
@@ -32,12 +59,14 @@ export const CORE_FIELDS: readonly Field[] = Object.freeze([
     source: { from: 'entry', field: 'end' },
     rollUp: 'max',
     equals: byReference,
+    formatValue: formatEnd,
     column: { header: 'End' },
   },
   {
     key: 'kind',
     source: { from: 'entry', field: 'kind' },
     equals: byReference,
+    formatValue: asText,
     column: { header: 'Kind' },
   },
   {
@@ -61,6 +90,7 @@ export const CORE_FIELDS: readonly Field[] = Object.freeze([
       from: 'compute',
       read: (entry, ctx) => ctx.durationOf(entry),
     },
-    column: { header: 'Duration' },
+    formatValue: formatDuration,
+    column: { header: 'Duration', align: 'end' },
   },
 ]);

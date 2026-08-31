@@ -15,6 +15,9 @@ import { diffMs } from '../../time/index.js';
 import type { ComputedFieldCache } from '../computed-cache.js';
 import type { FieldRegistry, ResolvedField } from './field-registry.js';
 
+/** What `createFieldContext` needs — `FieldRegistry` satisfies this. */
+export type FieldLookup = Pick<FieldRegistry, 'get'>;
+
 const authoredFieldKeys = Symbol('authoredFieldKeys');
 
 type StoredEditWithAuthoredKeys = StoredEdit & {
@@ -73,16 +76,16 @@ function storesInMeta(field: ResolvedField): boolean {
   return field.source.from === 'meta';
 }
 
-/** Call: `createFieldContext(registry, 'UTC')` — bind Field read to this registry. */
+/** Call: `createFieldContext(registry, 'UTC')` — bind Field read to this lookup. */
 export function createFieldContext(
-  registry: FieldRegistry,
+  fields: FieldLookup,
   timeZone: string,
   memo?: () => FieldReadMemo | undefined,
 ): FieldContext {
   const ctx: FieldContext = {
     timeZone,
     read<T>(entry: Entry, key: FieldKey): T | undefined {
-      const field = registry.get(String(key));
+      const field = fields.get(String(key));
       if (!field) return undefined;
       return readField(entry, field, ctx, memo?.()) as T | undefined;
     },

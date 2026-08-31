@@ -5,6 +5,7 @@ import { FrameLayout, ScrollModel, TimeScaleModel } from '../layout/index.js';
 import { entryId, EntryNotFoundError, ContainerNotFoundError } from '../model/index.js';
 import type { Entry, Instant, ItemId } from '../model/index.js';
 import { DatasetState, EntryStore } from '../data/index.js';
+import { CORE_FIELDS } from '../data/fields/core-fields.js';
 import { createDomBackend } from '../render/dom/index.js';
 import type { RenderBackend } from '../render/backend.js';
 
@@ -37,6 +38,7 @@ function fakeDataset(entries: readonly Entry[]): GanttShellOptions['dataset'] {
     entries: new EntryStore(entries, context),
     timeZone,
     isRollUpKind: () => false,
+    fields: { all: CORE_FIELDS },
     on: () => {},
     off: () => {},
   };

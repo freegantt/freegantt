@@ -873,6 +873,57 @@ describe('Gantt gridWidth and events (S1.8, plans/02 §6)', () => {
   });
 });
 
+describe('Gantt gridColumns (S4.3, D-S4-12, [S4-A1] column half)', () => {
+  it('a declared cost shows beside start; assigning gridColumns re-renders with no remount', async () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      fieldTypes: {
+        money: {
+          rollUp: 'sum',
+          formatValue: (value) => (typeof value === 'number' ? `$${value}` : ''),
+          column: { header: 'Cost', align: 'end' },
+        },
+      },
+      fields: [{ key: 'cost', type: 'money' }],
+      entries: sampleEntries.map((entry, i) => (i === 0 ? { ...entry, meta: { cost: 500 } } : entry)),
+    });
+    const gantt = new Gantt({
+      container,
+      dataset,
+      gridColumns: ['name', 'start', 'cost'],
+    });
+
+    const firstRow = container.querySelector<HTMLElement>('.fg-row')!;
+    const cells = Array.from(firstRow.querySelectorAll('.fg-row-label, .fg-row-cell'));
+    expect(cells.map((c) => c.textContent)).toEqual([sampleEntries[0]?.name, expect.any(String), '$500']);
+    expect(cells[1]?.getAttribute('data-field')).toBe('start');
+    expect(cells[2]?.getAttribute('data-field')).toBe('cost');
+
+    const barsBefore = Array.from(container.querySelectorAll('.fg-bar'));
+    gantt.gridColumns = ['name', 'start'];
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    const barsAfter = Array.from(container.querySelectorAll('.fg-bar'));
+    expect(barsAfter).toEqual(barsBefore);
+    expect(firstRow.querySelector('[data-field="cost"]')).toBeNull();
+    expect(firstRow.querySelectorAll('.fg-row-label, .fg-row-cell')).toHaveLength(2);
+
+    gantt.destroy();
+  });
+
+  it("default gridColumns is ['name']", () => {
+    const container = document.createElement('div');
+    const gantt = new Gantt({
+      container,
+      dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }),
+    });
+    expect(gantt.gridColumns).toEqual(['name']);
+    const row = container.querySelector('.fg-row')!;
+    expect(row.querySelectorAll('.fg-row-label, .fg-row-cell')).toHaveLength(1);
+    gantt.destroy();
+  });
+});
+
 describe('Gantt selection (S3.1, D-S3-10, [S3-A1])', () => {
   it('gantt.selection = [id] is live and loose in, branded out', () => {
     const container = document.createElement('div');

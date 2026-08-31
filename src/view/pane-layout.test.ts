@@ -27,10 +27,12 @@ describe('PaneLayout', () => {
     const container = el();
     const paneLayout = new PaneLayout({ container });
     const spacer = container.querySelector<HTMLElement>('.fg-grid-spacer')!;
-    expect(spacer.children).toHaveLength(0);
+    expect(spacer.querySelector('.fg-grid-header')).not.toBeNull();
+    expect(spacer.querySelectorAll('.fg-band')).toHaveLength(0);
 
     paneLayout.setHeaderBandCount(2);
     expect(spacer.querySelectorAll('.fg-band')).toHaveLength(2);
+    expect(spacer.querySelector('.fg-grid-header')).not.toBeNull();
 
     // A no-op when the count is unchanged — it must not remount the bands.
     const bandBefore = spacer.firstElementChild;
