@@ -11,7 +11,7 @@ The body of authored data — its Entries, plus whatever scheduling-plugin-owned
 _Avoid_: Project (retired in ADR 0004 — see that ADR for why; the word smuggled scheduling/PM assumptions into a domain-neutral concept the same way `Task` once did for `Entry`), Plan, schedule (a schedule is an output of scheduling a Dataset, not the Dataset itself)
 
 **Document**:
-The `toJSON()` / `fromJSON()` shape of a Dataset (`DatasetDocument`): `schema`, `timeZone`, `dateOnlyEnd`, `derivedSpanKinds`, and `entries`. A Document is a state, not a session — `fromJSON` constructs a fresh Dataset with an empty History. Top-level keys belong to the schema; anything of the consumer's goes in `meta` and survives byte for byte. Derived layout (`Row`, `Item`, `GeometryFrame`) never appears here.
+The `toJSON()` / `fromJSON()` shape of a Dataset (`DatasetDocument`): `schema`, `timeZone`, `dateOnlyEnd`, `rollUpKinds`, `fields`, and `entries`. A Document is a state, not a session — `fromJSON` constructs a fresh Dataset with an empty History. Function-valued keys (`aggregators`, `equals`, `compare`, `formatValue`) travel with the reading application, not in the Document. Top-level keys belong to the schema; anything of the consumer's goes in `meta` and survives byte for byte. Derived layout (`Row`, `Item`, `GeometryFrame`) never appears here.
 _Avoid_: file, payload, snapshot — Snapshot is the committed array `entries.all` returns
 
 **Store**:
@@ -27,7 +27,7 @@ The `data/` class holding one Dataset's live, private state — its Entry Store,
 _Avoid_: DatasetData (retired — "Data" already named three things in this codebase: the `data/` layer, this class, and the dataset itself), DatasetCore, DatasetStores (both rejected candidates, see above)
 
 **Reference date**:
-The `Instant` captured once when a Dataset is constructed — the one `Date.now()` read `time/` performs for that Dataset (CLAUDE.md confines `Date.now()` to `time/`). It stays fixed for the Dataset's lifetime; it is not re-derived on every layout pass. Used to initialize the zero-length `start`/`end` span of a derived-span-kind Entry (e.g. a newly created `'group'`) before the Span rollup gives it a real span.
+The `Instant` captured once when a Dataset is constructed — the one `Date.now()` read `time/` performs for that Dataset (CLAUDE.md confines `Date.now()` to `time/`). It stays fixed for the Dataset's lifetime; it is not re-derived on every layout pass. Used to initialize the zero-length `start`/`end` span of a `rollUpKinds` Entry (e.g. a newly created `'group'`) before the Span rollup gives it a real span.
 _Avoid_: Now, current time (both read as live/re-evaluated, which this isn't), wall clock (that's Plain time's vocabulary — a Reference date is an already-resolved `Instant`, not an unresolved zone-less reading)
 
 **Entry**:
@@ -35,7 +35,7 @@ One authored, dated record: a name, a start, an end, and a `kind`. Entries are p
 _Avoid_: **Task** (retired in ADR 0003 — it implies to-do work, and the whole point is that the record is domain-neutral), activity, event, bar (a bar is what an Item renders), record, row (a Row is a display track)
 
 **Kind**:
-The authored classification of an Entry (`'span' | 'group' | 'milestone'`, open to consumer-defined values) that selects its behavior at four seams: scheduling policy, item emission, rendering, and interaction capability. Kind is never derived from structure (e.g. from having children) — it is always explicitly set by whoever authored the Entry. `'span'` is the default: an Entry that simply occupies its start-to-end stretch, with no further meaning attached. `kind` is required on the stored Entry (issue #84) — every reader can trust it is present, since ingest applies the `'span'` default once, at the api/ boundary; it stays optional on Entry input, where a consumer may omit it. _Exception:_ `hierarchy.autoGroup` (`02` §2) promotes an entry to `'group'` in the same transaction it gains its first child — an automated edit, not a derivation the store computes on the fly; it only promotes, never demotes, so kind still can't silently flicker based on current structure. `derivedSpanKinds` (default `['group']`) names which Kinds get their `start`/`end` from the Span rollup instead of authoring them directly — a consumer's own Kind opts in the same way `'group'` does by default.
+The authored classification of an Entry (`'span' | 'group' | 'milestone'`, open to consumer-defined values) that selects its behavior at four seams: scheduling policy, item emission, rendering, and interaction capability. Kind is never derived from structure (e.g. from having children) — it is always explicitly set by whoever authored the Entry. `'span'` is the default: an Entry that simply occupies its start-to-end stretch, with no further meaning attached. `kind` is required on the stored Entry (issue #84) — every reader can trust it is present, since ingest applies the `'span'` default once, at the api/ boundary; it stays optional on Entry input, where a consumer may omit it. _Exception:_ `hierarchy.autoGroup` (`02` §2) promotes a `'span'` entry to `'group'` in the same transaction it gains its first child — an automated edit, not a derivation the store computes on the fly. It promotes `'span'` only, never a `'milestone'` or a consumer Kind, and it never demotes, so kind still can't silently flicker based on current structure. `rollUpKinds` (default `['group']`) names which Kinds get their values from the Rollup instead of authoring them directly — a consumer's own Kind opts in the same way `'group'` does by default. `rollUpKinds: 'none'` (stored as `[]`) opts every Kind out: the parent keeps the values the caller assigned.
 _Avoid_: Type (reserved for `DependencyType`), category; and `'task'` as the default kind's name (ADR 0003 — a kind literal is data, so leaving the old word there would have kept it in every authored Entry)
 
 **Dependency**:
@@ -43,11 +43,11 @@ A first-class entity linking a predecessor Entry to a successor Entry with a typ
 _Avoid_: Link (reserved for the rendered geometry of a dependency, i.e. what appears in `GeometryFrame.links`), Relationship
 
 **Segment**:
-One contiguous stretch of an Entry's span, when that span is interrupted rather than continuous (`Entry.segments`). Segments are authored — an Entry without them is simply one unbroken stretch — and each one emits its own Item.
+One contiguous stretch of an Entry's span, when that span is interrupted rather than continuous (`Entry.segments`). Segments are authored — an Entry without them is simply one unbroken stretch — and each one emits its own Item. When Segments are present, `start`/`end` are the envelope of those Segments and stay in the same transaction as any Segment write. A direct `start`/`end` write on an entry that has Segments is refused; the consumer writes `segments` instead.
 _Avoid_: Split, interval, piece
 
 **Field**:
-One named, addressable value on an Entry — declared once and used by every layer that needs it. Core ships `name`, `start`, `end`, `progress` and the computed `duration` as declarations of exactly the shape a consumer adds to, which is what lets a consumer's `cost` be edited, compared, rolled up and shown by the same code as `start` (ADR 0005, `01` §2.6). Fields belong to the Dataset (`fields`), because the Rollup writes stored, undoable, serialized values and runs at construction, before any Gantt exists. **A Field is what a value _is_; a Grid column is where a Gantt _shows_ it** — the one sentence that separates the pair. A Field also carries its own default column presentation, so declaring `cost` once covers both halves.
+One named, addressable value on an Entry — declared once and used by every layer that needs it. Core ships `name`, `start` (`min`), `end` (`max`), and the computed `duration` as declarations of exactly the shape a consumer adds to, which is what lets a consumer's `cost` be edited, compared, rolled up and shown by the same code as `start` (ADR 0005, `01` §2.6). `kind`, `parentId`, `segments` and `meta` are Fields too, so the changeset has one path, but only a Field that declares `column` is a Grid column candidate. **`progress` is not a core Field** — it is scheduling-plugin data (ADR 0008). Fields belong to the Dataset (`fields`), because the Rollup writes stored, undoable, serialized values and runs at construction, before any Gantt exists. **A Field is what a value _is_; a Grid column is where a Gantt _shows_ it** — the one sentence that separates the pair.
 _Avoid_: Attribute, property (both read as "a key on an object", which is the storage detail rather than the declaration), column (a Grid column names a Field and carries presentation only)
 
 **Field key**:
@@ -55,16 +55,16 @@ A Field's name, and the same string the changeset's `field` carries. One name fo
 _Avoid_: EntryField (retired), field name, column id
 
 **Field source**:
-Where a Field's value lives: `entry` (a core key), `meta` (a consumer key the consumer declared), or `compute` (no stored value — read from other Fields). The source is not bookkeeping: it decides whether a rolled-up parent value is **stored** (changeset, undo, Document) or **computed on read** and never written. A consumer who wants an aggregate without Document bytes declares a computed Field rather than setting a flag.
+Where a Field's value lives: `entry` (a core key), `meta` (a consumer key the consumer declared), or `compute` (no stored value — read from other Fields). A Field that omits `source` lives in `meta` under the Field key. Write `{ from: 'meta', key }` only when the Document key differs. The source decides whether a rolled-up parent value is **stored** (changeset, undo, Document) or **computed on read** and never written.
 _Avoid_: Storage, backing, accessor; and note this is Row source's word applied to a different subject — say "field source" or "row source", never a bare "source"
 
 **Field type**:
-A named bundle of Field settings — a rollup, an equality rule, text formatting, and column presentation defaults — applied with `type: 'money'` so one declaration serves many Fields. The Field's own keys win over the bundle's. `api/` splits it: the data half reaches `data/`'s registry, the presentation half reaches `view/`, so the consumer writes it once and the layer boundary still holds.
-_Avoid_: Column type (the bundle is broader than a column), Kind (Kind classifies an Entry, not a value)
+A named bundle of Field settings — a rollup **name**, an equality rule, a sort `compare`, text formatting, and column presentation defaults — applied with `type: 'money'` so one declaration serves many Fields. The bundle's `rollUp` is the default Aggregator name (shipped or a consumer name in `aggregators`) for Fields that name this type and omit `rollUp`; `formatValue` is the default display text; `compare` is the default sort order. The Field's own keys win, so `rollUp: 'none'` on the Field opts that Field out. The Aggregator function lives in `aggregators` under that name, never on the bundle. Core ships no primitive Field types. `api/` splits it: the data half reaches `data/`'s registry, the presentation half reaches `view/`, so the consumer writes it once and the layer boundary still holds.
+_Avoid_: Column type (the bundle is broader than a column), Kind (Kind classifies an Entry, not a value), putting a function on `rollUp` (ADR 0005 — a name serializes, a function does not)
 
 **Aggregator**:
-The function that turns a set of children's values into a parent's value for one Field — `min`, `max`, `sum`, `count`, a duration-weighted mean, or a consumer's own. Always referenced **by name**, never passed inline: a name is data that serializes into a Document and can be refused when it is not registered, and a function is neither. Returning `undefined` means "no opinion, leave the stored value alone". The Aggregator is the function; the Rollup is the pass that runs it.
-_Avoid_: Aggregation (the noun for the pass is Rollup — one concept, one word), reducer, accumulator
+The function that turns a set of children's values into a parent's value for one Field — `min`, `max`, `sum`, `count`, `'none'`, a duration-weighted mean, or a consumer's own. Always referenced **by name**, never passed inline: a name is data that serializes into a Document and can be refused when it is not registered, and a function is neither. Returning `undefined` means "no opinion, leave the stored value alone". `'none'` always returns `undefined`, so that Field keeps the parent's authored value. A shipped Aggregator skips holes (`undefined`, non-numeric for `sum`/`min`/`max`, zero-duration children for the weighted mean) and never throws; if every child is skipped it returns `undefined`. The Aggregator is the function; the Rollup is the pass that runs it.
+_Avoid_: Aggregation (the noun for the pass is Rollup — one concept, one word), reducer, accumulator, closure on the Field (the function is registered under a name)
 
 ### Mutation
 
@@ -133,6 +133,10 @@ _Avoid_: Error, warning
 A whole-Entry boolean state, set by the user, that tells the scheduling engine never to move that Entry — an upstream change that would otherwise push it instead produces a Diagnostic reporting what the engine _would_ have done. It lives in the default scheduling plugin's own per-entry storage (exact contract tracked in issue #12), not on `Entry`/`model/`, the same way `Dependency` does — a Dataset with no scheduling plugin installed has no notion of "pinned" at all.
 _Avoid_: Locked, frozen, fixed
 
+**Progress**:
+How complete an Entry is, as a fraction `0..1`. Scheduling-plugin data, not a core Field and not a key on `Entry` (ADR 0008) — a Dataset with no scheduling plugin installed has no Progress, the same way it has no pin flag. The plugin declares it as a Field and may roll it up with `weightedMeanByDuration`.
+_Avoid_: Percent complete as a core Entry key, treating Progress as shipped with `name`/`start`/`end`
+
 **Working calendar**, **Constraint**, **Resource** / **Assignment**, **Baseline**:
 Reserved, not yet implemented — named seams for later slices (`plans/01` §4). `Working calendar` (which days/hours count as workable), `Constraint` (date restrictions, defined by `SchedulingPolicy`'s own vocabulary), `Resource`/`Assignment` (staffing), and `Baseline` (schedule snapshots) all belong to the default scheduling plugin's domain, not `model/` — like `Dependency` and the pin flag (ADR 0002), a Dataset with no scheduling plugin installed has none of these.
 _Avoid_: Calendar alone (ambiguous with a UI date picker or an imported ICS calendar — the qualifier is load-bearing)
@@ -140,12 +144,12 @@ _Avoid_: Calendar alone (ambiguous with a UI date picker or an imported ICS cale
 ### Derived layout
 
 **Row**:
-A horizontal track of a Gantt — the unit of vertical layout, and what the grid pane and the timeline pane both position against. Rows are derived on every layout pass and never persisted. A Row is not an Entry: one Row may carry the Items of many Entries, and a row source may produce Rows that correspond to no Entry at all.
-_Avoid_: Line, track (a track is what a Lane is), record
+A horizontal track of a Gantt — the unit of vertical layout, and what the grid pane and the timeline pane both position against. Rows are derived on every layout pass and never persisted. A Row is not an Entry: one Row may carry the Items of many Entries, and a row source may produce Rows that correspond to no Entry at all. `Row.kind: 'header'` is a grouping header that stands for no Entry (`entryIds` is empty). An Entry of kind `'group'` produces a row of `Row.kind: 'entry'`. Collapse holds `RowId`s; for the entries source a `RowId` equals the `EntryId`. A grouping header uses a derived `RowId` from the group key. Its name cell is `headerLabel`; other cells are empty.
+_Avoid_: Line, track (a track is what a Lane is), record; reading `Row.kind: 'header'` as "a `'group'` Entry"; using `'group'` as a Row kind (that literal is `Entry.kind` only)
 
 **Row source**:
-The configuration that decides what the Rows are for a given Gantt — the Entries themselves (optionally as a tree), one Row per value of some grouping function, or a consumer-supplied resolver. Alternative views (workload, resources) are new row sources, not new rendering or interaction code.
-_Avoid_: Row provider, row model
+The configuration that decides what the Rows are for a given Gantt — the Entries themselves (optionally as a tree), one Row per value of some grouping function, or a consumer-supplied resolver. Alternative views (workload, resources) are new row sources, not new rendering or interaction code. `{ source: 'custom', resolve }` returns `CustomRow` values (`id`, optional `entryIds`, optional `label`). Core adapts those to the internal row plan. This `custom` is the row-source occupant, not a custom ViewPreset object.
+_Avoid_: Row provider, row model; treating `PlannedRow` as public
 
 **Item**:
 A derived, renderable piece of geometry produced from an Entry for one Segment of its span — most entries produce exactly one Item, but an Entry with Segments produces one Item per Segment. Items are recomputed on every layout pass and never persisted. `Item.id` is deterministic: `${entryId}:${segmentIndex}`.
@@ -160,11 +164,11 @@ The row-level nesting of the timeline grid (parent/child rows via `parentId`). D
 _Avoid_: Group (ambiguous with the `'group'` kind — say "row grouping" or "the `'group'` kind" explicitly)
 
 **Rollup**:
-The bottom-up pass in the commit path that derives a parent's value for a Field from its children's, using that Field's Aggregator. It is a core step, not a resolver: it runs whether or not a plugin is installed, and nothing installable can displace it (D-S2-22). It yields to a field the caller proposed in the same transaction and wins over one the extension hook proposed. One pass settles nested parents, because the walk is bottom-up. The **Span rollup** is the instance that ships first — `start` is `min`, `end` is `max` over the children of a derived-span Kind — and `derivedSpanKinds` says which Kinds derive at all. Once a group has children, the Rollup owns its span; it can't be set directly. A dependency attached to a `'group'` Entry resolves against its rolled-up span by default.
-_Avoid_: Group rollup (the pass is not tied to the `'group'` Kind, nor to spans — it is per Field, over any derived-span Kind), rollup pass (says "when," not "what"), aggregation (Aggregator is the function; Rollup is the pass)
+The bottom-up pass in the commit path that derives a parent's value for a Field from its children's, using that Field's Aggregator. It is a core step, not a resolver: it runs whether or not a plugin is installed, and nothing installable can displace it (D-S2-22). It is a leaf with one importer (`data/transaction.ts`). Default is on. `rollUpKinds: 'none'` (or `[]`) skips derivation so every parent keeps the values the caller assigned. After Field-type merge, a Field with `rollUp: 'none'` or with no `rollUp` skips that Field only. The pass yields to a field the caller proposed in the same transaction and wins over one the extension hook proposed. One pass settles nested parents, because the walk is bottom-up. The **Span rollup** is `start` as `min` and `end` as `max` over the children of a rolling-up Kind — not `sum` of Instants.
+_Avoid_: Group rollup (the pass is not tied to the `'group'` Kind, nor to spans — it is per Field, over any rolling-up Kind), rollup pass (says "when," not "what"), aggregation (Aggregator is the function; Rollup is the pass)
 
 **Grid column**:
-One vertical slice of the grid pane. A Grid column names the Field it shows and carries presentation only — header, width, alignment, cell renderer, editability. Grid columns belong to the Gantt (`gridColumns`), because which fields this view shows, and in what order, is a view question; the name carries `grid` because a bare "column" does not say whether it means data or display. Aggregation never lives on a Grid column: a stored value must not depend on whether a column is visible, and the Rollup has already run before any Gantt is built. Since a Field declares its own column defaults, `gridColumns` is usually names in display order plus per-Gantt overrides.
+One vertical slice of the grid pane. A Grid column names a Field that declared `column` and carries presentation only — header, width, alignment, cell renderer, editability. A Field with no `column` key is data only: it rolls up and appears in the changeset, and `gridColumns` may not name it. Grid columns belong to the Gantt (`gridColumns`), because which of the columnable Fields this view shows, and in what order, is a view question. Aggregation never lives on a Grid column: a stored value must not depend on whether a column is visible, and the Rollup has already run before any Gantt is built. Default `gridColumns` is `['name']`; naming a Field does not add it to the grid by itself.
 _Avoid_: Column on its own (says nothing about which side it is on), Field (a Grid column names one, it is not one), cell (a cell is one Grid column's value on one Row)
 
 **GeometryFrame**:

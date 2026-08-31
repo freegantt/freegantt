@@ -36,7 +36,6 @@ function writeEntry(entry: Entry): EntryDocument {
     name: entry.name,
     start: toISO(entry.start),
     end: toISO(entry.end),
-    ...(entry.progress !== undefined ? { progress: entry.progress } : {}),
     ...(segments !== undefined ? { segments } : {}),
     ...(entry.meta !== undefined ? { meta: entry.meta } : {}),
   };

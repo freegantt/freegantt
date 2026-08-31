@@ -101,16 +101,13 @@ describe('new Dataset()', () => {
   it('carries optional fields through, and leaves absent ones absent', () => {
     const dataset = new Dataset({
       timeZone: 'UTC',
-      entries: [oneEntry({ kind: 'milestone', progress: 0.5, meta: { team: 'A' } })],
+      entries: [oneEntry({ kind: 'milestone', meta: { team: 'A' } })],
     });
     const entry = first(dataset);
     expect(entry.kind).toBe('milestone');
-    expect(entry.progress).toBe(0.5);
     expect(entry.meta).toEqual({ team: 'A' });
     // exactOptionalPropertyTypes: an absent key must not become a key holding undefined.
-    expect(Object.keys(entry).sort()).toEqual(
-      ['end', 'id', 'kind', 'meta', 'progress', 'start', 'name'].sort(),
-    );
+    expect(Object.keys(entry).sort()).toEqual(['end', 'id', 'kind', 'meta', 'start', 'name'].sort());
   });
 
   it('does not mutate the entries the consumer handed it', () => {
