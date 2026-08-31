@@ -65,7 +65,8 @@
         <div class="text-sm rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-emerald-950 max-w-3xl">
           <strong>Closed this pass.</strong>
           St1: Dataset-only <span class="font-mono">TFields</span> in ADR 0005 and S4.1.
-          C1 / Si1 / St2: <span class="font-mono">bindGanttFields(dataset, gridColumns, bind)</span>; no Map rebuild.
+          C1 / Si1: <span class="font-mono">bindGanttFields(dataset, gridColumns, bind)</span>.
+          The <span class="font-mono">FieldLookup</span> adapter stays.
           Sp1: Dataset change re-binds columns.
         </div>
       </header>
@@ -73,8 +74,8 @@
       <section id="axes" class="grid md:grid-cols-3 gap-4">
         <div class="rounded-xl border border-emerald-200 bg-emerald-50 p-4 space-y-2">
           <p class="text-xs uppercase tracking-widest text-emerald-700 font-semibold">Standards</p>
-          <p class="text-2xl font-serif">St1 · St2 closed</p>
-          <p class="text-xs text-emerald-900">St3–St4 still judgement. St5 closed: <span class="font-mono">bindGanttFields</span> calls compares.</p>
+          <p class="text-2xl font-serif">St1 closed</p>
+          <p class="text-xs text-emerald-900">St3–St4 still judgement. St5 closed: <span class="font-mono">bindGanttFields</span> calls compares. <span class="font-mono">FieldLookup</span> is kept.</p>
         </div>
         <div class="rounded-xl border border-sky-200 bg-sky-50 p-4 space-y-2">
           <p class="text-xs uppercase tracking-widest text-sky-700 font-semibold">Spec</p>
@@ -84,7 +85,7 @@
         <div class="rounded-xl border border-emerald-200 bg-emerald-50 p-4 space-y-2">
           <p class="text-xs uppercase tracking-widest text-emerald-700 font-semibold">Simplify</p>
           <p class="text-2xl font-serif">Si1 closed</p>
-          <p class="text-xs text-emerald-950">Si2–Si6 still open. <span class="font-mono">lookupFrom</span> is gone.</p>
+          <p class="text-xs text-emerald-950">Si2–Si6 still open. The <span class="font-mono">FieldLookup</span> adapter stays.</p>
         </div>
       </section>
 
@@ -109,19 +110,6 @@
             generic. The step file and the ADR do not.
           </p>
           <p class="text-sm text-slate-700"><strong>Closed.</strong> ADR 0005 and D-S4-1 now reject a generic on <span class="font-mono">Gantt</span> / <span class="font-mono">view/</span> / <span class="font-mono">layout/</span>, and allow <span class="font-mono">Dataset&lt;TMeta, TFields&gt;</span> plus <span class="font-mono">EntryEdit</span> only.</p>
-        </article>
-
-        <article class="rounded-xl border border-slate-200 bg-white p-6 space-y-3 shadow-sm">
-          <div class="flex items-start justify-between gap-4">
-            <h3 class="text-lg font-semibold">St2 · <span class="font-mono">lookupFrom</span> casts <span class="font-mono">Field</span> to <span class="font-mono">ResolvedField</span></h3>
-            <span class="badge-closed inline-block rounded px-2 py-0.5 text-xs font-semibold shrink-0">Closed</span>
-          </div>
-          <p class="font-mono text-xs text-slate-500">src/view/grid-columns.ts</p>
-          <p class="text-sm text-slate-700">
-            Feature Envy. <span class="font-mono">fields.all</span> dropped <span class="font-mono">get</span>
-            (#125). The bind then rebuilt a Map and cast.
-          </p>
-          <p class="text-sm text-slate-700"><strong>Closed.</strong> <span class="font-mono">lookupFrom</span> is gone. <span class="font-mono">resolveColumns</span> takes a <span class="font-mono">FieldLookup</span>. <span class="font-mono">bindGanttFields(dataset, gridColumns, bind)</span> uses <span class="font-mono">dataset.field</span>. <span class="font-mono">model.Dataset</span> now exposes <span class="font-mono">field</span>.</p>
         </article>
 
         <article class="rounded-xl border border-slate-200 bg-white p-6 space-y-3 shadow-sm">
@@ -170,6 +158,7 @@
           <span class="font-mono">paintColumns</span> strips <span class="font-mono">format</span> before the backend.
           Harness cost button writes <span class="font-mono">update({ cost })</span>.
           Seed still uses <span class="font-mono">EntryInput.meta</span> — construction, not the live write path.
+          <span class="font-mono">FieldLookup</span> (<span class="font-mono">lookupOf</span> / <span class="font-mono">dataset.field</span>) is the bind adapter — keep it.
         </div>
       </section>
 
@@ -276,7 +265,7 @@
           </div>
           <p class="text-sm text-slate-700">
             After: <span class="font-mono">bindGanttFields(dataset, gantt.gridColumns, bind)</span>.
-            Same as St2. One adapter at <span class="font-mono">FieldLookup</span>.
+            The <span class="font-mono">FieldLookup</span> adapter stays. Do not rebuild a Map from <span class="font-mono">fields.all</span>.
           </p>
         </article>
 
@@ -488,7 +477,7 @@ flowchart TB
 
       <section class="text-sm text-slate-600 space-y-2 pb-8">
         <h2 class="font-serif text-xl text-slate-900">Axis totals</h2>
-        <p>Standards: St1, St2, St5 closed. St3–St4 still judgement.</p>
+        <p>Standards: St1, St5 closed. St3–St4 still judgement. FieldLookup is not a finding.</p>
         <p>Spec: Sp1 closed; Sp2 bind closed (sort still S4.9); Sp3–Sp5 partial; Sp6 recorded.</p>
         <p>Simplify: Si1 closed. Si2–Si6 still open.</p>
         <p>Architecture: C1 closed. C2–C3 Worth exploring; C4 Speculative.</p>
