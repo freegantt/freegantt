@@ -81,10 +81,9 @@
         </div>
         <div class="text-sm rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-emerald-950 max-w-3xl">
           <strong>Closed this pass (follow-up).</strong>
-          C3: <span class="font-mono">createFieldContext(registry, zone)</span> binds read.
-          <span class="font-mono">registry.read(entry, key, ctx)</span> /
-          <span class="font-mono">registry.write(edit, entry, key, value)</span> look up the Field.
-          Tests no longer copy the get-then-read loop. Cache is exercised through
+          C3: <span class="font-mono">createFieldContext(registry, zone)</span> binds
+          <span class="font-mono">FieldContext.read</span>. Callers read by Field key; they do not
+          copy the get-then-read loop. Cache is exercised through
           <span class="font-mono">fieldContext.read</span> after commit.
           C4: <span class="font-mono">RollUpContext</span> extends <span class="font-mono">FieldContext</span>
           with <span class="font-mono">field</span>. Aggregators take

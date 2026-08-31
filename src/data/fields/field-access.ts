@@ -82,7 +82,9 @@ export function createFieldContext(
   const ctx: FieldContext = {
     timeZone,
     read<T>(entry: Entry, key: FieldKey): T | undefined {
-      return registry.read(entry, key, ctx, memo?.()) as T | undefined;
+      const field = registry.get(String(key));
+      if (!field) return undefined;
+      return readField(entry, field, ctx, memo?.()) as T | undefined;
     },
     durationOf(entry: Entry): Duration {
       return { value: diffMs(entry.end, entry.start), unit: 'millisecond' };
