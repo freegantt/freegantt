@@ -60,21 +60,21 @@ export class Dataset {
     // (undocumented)
     get dateOnlyEnd(): DateOnlyEndRule;
     // (undocumented)
-    get derivedSpanKinds(): readonly EntryKind[];
-    // (undocumented)
     get entries(): EntryStore;
     get fields(): {
         readonly all: readonly Field[];
         get(key: string): Field | undefined;
     };
     static fromJSON(doc: DatasetDocument): Dataset;
-    isDerivedSpanKind(kind: EntryKind): boolean;
+    isRollUpKind(kind: EntryKind): boolean;
     // (undocumented)
     off<K extends keyof DatasetEventMap>(name: K, handler: (payload: DatasetEventMap[K]) => void | false): void;
     // (undocumented)
     on<K extends keyof DatasetEventMap>(name: K, handler: (payload: DatasetEventMap[K]) => void | false): void;
     redo(): void;
     replay(changeSet: ChangeSet): void;
+    // (undocumented)
+    get rollUpKinds(): readonly EntryKind[];
     // (undocumented)
     get timeZone(): string;
     toJSON(): DatasetDocument;
@@ -87,9 +87,9 @@ export interface DatasetDocument<TMeta = unknown> {
     // (undocumented)
     dateOnlyEnd: DateOnlyEndRule;
     // (undocumented)
-    derivedSpanKinds: readonly EntryKind[];
-    // (undocumented)
     entries: readonly EntryDocument<TMeta>[];
+    // (undocumented)
+    rollUpKinds: readonly EntryKind[];
     // (undocumented)
     schema: 1;
     // (undocumented)
@@ -112,13 +112,14 @@ export interface DatasetEventMap {
 export interface DatasetOptions {
     aggregators?: Readonly<Record<string, Aggregator>>;
     dateOnlyEnd?: DateOnlyEndRule;
-    derivedSpanKinds?: readonly EntryKind[];
     entries: readonly EntryInput[];
     fields?: readonly Field[];
     fieldTypes?: Readonly<Record<string, FieldType>>;
     history?: {
         capacity?: number;
     };
+    // Warning: (ae-forgotten-export) The symbol "RollUpKinds" needs to be exported by the entry point index.d.ts
+    rollUpKinds?: RollUpKinds;
     timeZone: string;
 }
 
