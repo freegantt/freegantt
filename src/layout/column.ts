@@ -21,12 +21,3 @@ export interface FieldCompare {
   key: FieldKey;
   compareStored(a: unknown, b: unknown): number;
 }
-
-export function paintColumns(columns: readonly ResolvedColumn[]): readonly FrameColumn[] {
-  return columns.map((column) => {
-    const painted: FrameColumn = { key: column.key, header: column.header, align: column.align };
-    if (column.width !== undefined) painted.width = column.width;
-    if (column.flex !== undefined) painted.flex = column.flex;
-    return painted;
-  });
-}

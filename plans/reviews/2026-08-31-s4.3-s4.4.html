@@ -68,24 +68,26 @@
           C1 / Si1: <span class="font-mono">bindGanttFields(dataset, gridColumns, bind)</span>.
           The <span class="font-mono">FieldLookup</span> adapter stays.
           Sp1: Dataset change re-binds columns.
+          Sp3–Sp6, St4, Si2–Si6, C2, C3 closed below.
+          St3 stays judgement (do not fold format helpers until both files move).
         </div>
       </header>
 
       <section id="axes" class="grid md:grid-cols-3 gap-4">
         <div class="rounded-xl border border-emerald-200 bg-emerald-50 p-4 space-y-2">
           <p class="text-xs uppercase tracking-widest text-emerald-700 font-semibold">Standards</p>
-          <p class="text-2xl font-serif">St1 closed</p>
-          <p class="text-xs text-emerald-900">St3–St4 still judgement. St5 closed: <span class="font-mono">bindGanttFields</span> calls compares. <span class="font-mono">FieldLookup</span> is kept.</p>
+          <p class="text-2xl font-serif">St1, St4–St5 closed</p>
+          <p class="text-xs text-emerald-900">St3 still judgement. St5 closed: <span class="font-mono">bindGanttFields</span> calls compares. <span class="font-mono">FieldLookup</span> is kept.</p>
         </div>
         <div class="rounded-xl border border-sky-200 bg-sky-50 p-4 space-y-2">
           <p class="text-xs uppercase tracking-widest text-sky-700 font-semibold">Spec</p>
-          <p class="text-2xl font-serif">Sp1 closed · 3 partial</p>
-          <p class="text-xs text-sky-900">Column bind re-runs on Dataset change. Two lists leave one bind; shell keeps columns until S4.9.</p>
+          <p class="text-2xl font-serif">Sp1–Sp6 closed</p>
+          <p class="text-xs text-sky-900">Column bind re-runs on Dataset change. Frame cells use Field <span class="font-mono">formatValue</span>. Flex is asserted. D-S4-5 records the Document type seed.</p>
         </div>
         <div class="rounded-xl border border-emerald-200 bg-emerald-50 p-4 space-y-2">
           <p class="text-xs uppercase tracking-widest text-emerald-700 font-semibold">Simplify</p>
-          <p class="text-2xl font-serif">Si1 closed</p>
-          <p class="text-xs text-emerald-950">Si2–Si6 still open. The <span class="font-mono">FieldLookup</span> adapter stays.</p>
+          <p class="text-2xl font-serif">Si1–Si6 closed</p>
+          <p class="text-xs text-emerald-950">One <span class="font-mono">columnFrom</span>. Codec owns Document Fields. Layout does not invent <span class="font-mono">name</span>.</p>
         </div>
       </section>
 
@@ -127,13 +129,14 @@
         <article class="rounded-xl border border-slate-200 bg-white p-6 space-y-3 shadow-sm">
           <div class="flex items-start justify-between gap-4">
             <h3 class="text-lg font-semibold">St4 · Meta source writes an empty key</h3>
-            <span class="badge-judge inline-block rounded px-2 py-0.5 text-xs font-semibold shrink-0">Judgement</span>
+            <span class="badge-closed inline-block rounded px-2 py-0.5 text-xs font-semibold shrink-0">Closed</span>
           </div>
-          <p class="font-mono text-xs text-slate-500">src/data/serialization/index.ts writeStoredSource</p>
+          <p class="font-mono text-xs text-slate-500">src/data/serialization/field-document.ts writeStoredSource</p>
           <p class="text-sm text-slate-700">
             Primitive Obsession: <span class="font-mono">source.key ?? ''</span> is not a Field key.
             Resolved sources always have a key after registry merge. Drop the fallback or fail the write.
           </p>
+          <p class="text-sm text-slate-700"><strong>Closed.</strong> Meta write uses the resolved key, or the Field key when the source omitted it (D-S4-35). It never writes an empty string.</p>
         </article>
 
         <article class="rounded-xl border border-slate-200 bg-white p-6 space-y-3 shadow-sm">
@@ -193,7 +196,7 @@
         <article class="rounded-xl border border-slate-200 bg-white p-6 space-y-3 shadow-sm">
           <div class="flex items-start justify-between gap-4">
             <h3 class="text-lg font-semibold">Sp3 · Frame test does not prove <span class="font-mono">formatValue</span></h3>
-            <span class="badge-partial inline-block rounded px-2 py-0.5 text-xs font-semibold shrink-0">Partial</span>
+            <span class="badge-closed inline-block rounded px-2 py-0.5 text-xs font-semibold shrink-0">Closed</span>
           </div>
           <p class="text-sm text-slate-700">
             S4.3 §3: “each came from that Field’s <span class="font-mono">formatValue</span>.”
@@ -201,35 +204,38 @@
             <span class="font-mono">ResolvedColumn</span>. Order is covered. The Field bind is covered in
             <span class="font-mono">grid-columns.test.ts</span> and the Gantt test, not in the frame test the spec named.
           </p>
+          <p class="text-sm text-slate-700"><strong>Closed.</strong> <span class="font-mono">frame.test.ts</span> now binds two Field <span class="font-mono">formatValue</span> functions as column <span class="font-mono">format</span> and asserts the cells match those returns. Layout still does not import a Field source.</p>
         </article>
 
         <article class="rounded-xl border border-slate-200 bg-white p-6 space-y-3 shadow-sm">
           <div class="flex items-start justify-between gap-4">
             <h3 class="text-lg font-semibold">Sp4 · Byte stability is not in <span class="font-mono">write.test.ts</span></h3>
-            <span class="badge-partial inline-block rounded px-2 py-0.5 text-xs font-semibold shrink-0">Partial</span>
+            <span class="badge-closed inline-block rounded px-2 py-0.5 text-xs font-semibold shrink-0">Closed</span>
           </div>
           <p class="text-sm text-slate-700">
             S4.4 §3 lists byte stability under <span class="font-mono">write.test.ts</span>.
             The assertion lives in <span class="font-mono">read.test.ts</span> / <span class="font-mono">dataset.test.ts</span>
             as [S2-A2] with declared Fields. Behaviour holds; the file table does not.
           </p>
+          <p class="text-sm text-slate-700"><strong>Closed.</strong> <span class="font-mono">write.test.ts</span> asserts <span class="font-mono">JSON.stringify</span> equality for a Document that carries a declared Field.</p>
         </article>
 
         <article class="rounded-xl border border-slate-200 bg-white p-6 space-y-3 shadow-sm">
           <div class="flex items-start justify-between gap-4">
             <h3 class="text-lg font-semibold">Sp5 · <span class="font-mono">flex</span> is painted, not asserted</h3>
-            <span class="badge-partial inline-block rounded px-2 py-0.5 text-xs font-semibold shrink-0">Partial</span>
+            <span class="badge-closed inline-block rounded px-2 py-0.5 text-xs font-semibold shrink-0">Closed</span>
           </div>
           <p class="text-sm text-slate-700">
             S4.3 files: “per-column width, flex and alignment.” §3 tests: “widths and alignment apply.”
             DOM sets <span class="font-mono">--fg-col-flex</span>. The four-column test never sets or checks <span class="font-mono">flex</span>.
           </p>
+          <p class="text-sm text-slate-700"><strong>Closed.</strong> The four-column test sets <span class="font-mono">flex: 2</span> on Duration and asserts <span class="font-mono">--fg-col-flex</span> on the body cell and the header.</p>
         </article>
 
         <article class="rounded-xl border border-slate-200 bg-white p-6 space-y-3 shadow-sm">
           <div class="flex items-start justify-between gap-4">
             <h3 class="text-lg font-semibold">Sp6 · Empty Field-type seed vs D-S4-5</h3>
-            <span class="badge-miss inline-block rounded px-2 py-0.5 text-xs font-semibold shrink-0">Recorded</span>
+            <span class="badge-closed inline-block rounded px-2 py-0.5 text-xs font-semibold shrink-0">Closed</span>
           </div>
           <p class="text-sm text-slate-700">
             D-S4-5: unknown <span class="font-mono">type</span> throws <span class="font-mono">UnknownFieldTypeError</span>.
@@ -239,6 +245,7 @@
             <span class="font-mono">options.fieldTypes</span>. Construction without a Document still throws.
             Keep the seed; write the exception next to D-S4-5 so the next reader does not “fix” [S4-A1].
           </p>
+          <p class="text-sm text-slate-700"><strong>Closed.</strong> D-S4-5 now records the Document empty-type seed. Construction without a Document still throws.</p>
         </article>
 
         <div class="rounded-lg border border-slate-200 bg-white p-4 text-sm text-slate-700">
@@ -272,17 +279,18 @@
         <article class="rounded-xl border border-slate-200 bg-white p-6 space-y-3 shadow-sm">
           <div class="flex items-start justify-between gap-4">
             <h3 class="text-lg font-semibold">Si2 · One column merge, not <span class="font-mono">asColumn</span> + <span class="font-mono">mergeColumn</span> + second defaults</h3>
-            <span class="badge-judge inline-block rounded px-2 py-0.5 text-xs font-semibold shrink-0">Open</span>
+            <span class="badge-closed inline-block rounded px-2 py-0.5 text-xs font-semibold shrink-0">Closed</span>
           </div>
           <p class="text-sm text-slate-700">
             Header and align default twice. After: <span class="font-mono">const column = columnFrom(item, field)</span>.
           </p>
+          <p class="text-sm text-slate-700"><strong>Closed.</strong> <span class="font-mono">columnFrom(item, field)</span> merges once. <span class="font-mono">resolveColumns</span> only adds <span class="font-mono">format</span>.</p>
         </article>
 
         <article class="rounded-xl border border-slate-200 bg-white p-6 space-y-3 shadow-sm">
           <div class="flex items-start justify-between gap-4">
             <h3 class="text-lg font-semibold">Si3 · Unexport <span class="font-mono">paintColumns</span> and <span class="font-mono">mergeDeclaredFields</span></h3>
-            <span class="badge-judge inline-block rounded px-2 py-0.5 text-xs font-semibold shrink-0">Open</span>
+            <span class="badge-closed inline-block rounded px-2 py-0.5 text-xs font-semibold shrink-0">Closed</span>
           </div>
           <p class="text-sm text-slate-700">
             Deletion test: only <span class="font-mono">computeFrame</span> paints columns; only
@@ -291,12 +299,13 @@
             <span class="font-mono">readDocument(doc, { fields })</span>.
             Keep the types <span class="font-mono">ResolvedColumn</span> / <span class="font-mono">FrameColumn</span> — that seam is real.
           </p>
+          <p class="text-sm text-slate-700"><strong>Closed.</strong> <span class="font-mono">paintColumns</span> and <span class="font-mono">mergeDeclaredFields</span> are gone from the barrels. <span class="font-mono">columnsForFrame</span> lives in <span class="font-mono">frame.ts</span>. Merge lives in the Field Document codec.</p>
         </article>
 
         <article class="rounded-xl border border-slate-200 bg-white p-6 space-y-3 shadow-sm">
           <div class="flex items-start justify-between gap-4">
             <h3 class="text-lg font-semibold">Si4 · <span class="font-mono">SchemaRead</span> vs <span class="font-mono">FromJSONOptions</span></h3>
-            <span class="badge-judge inline-block rounded px-2 py-0.5 text-xs font-semibold shrink-0">Open</span>
+            <span class="badge-closed inline-block rounded px-2 py-0.5 text-xs font-semibold shrink-0">Closed</span>
           </div>
           <p class="text-sm text-slate-700">
             After: <span class="font-mono">SchemaRead = Omit&lt;DatasetDocumentRead, 'fieldTypes' | 'aggregators'&gt;</span>.
@@ -304,24 +313,26 @@
             <span class="font-mono">Pick&lt;DatasetOptions, 'fields' | 'fieldTypes' | 'aggregators'&gt;</span>
             only — <span class="font-mono">api/dataset.ts</span> already does; <span class="font-mono">read.ts</span> duplicates the shape.
           </p>
+          <p class="text-sm text-slate-700"><strong>Closed.</strong> <span class="font-mono">SchemaRead</span> omits <span class="font-mono">fields</span>, <span class="font-mono">fieldTypes</span> and <span class="font-mono">aggregators</span>. <span class="font-mono">FromJSONOptions</span> is <span class="font-mono">Pick&lt;DatasetStateOptions, 'fields' | 'fieldTypes' | 'aggregators'&gt;</span> — the data-layer twin of the public pick.</p>
         </article>
 
         <article class="rounded-xl border border-slate-200 bg-white p-6 space-y-3 shadow-sm">
           <div class="flex items-start justify-between gap-4">
             <h3 class="text-lg font-semibold">Si5 · Fold <span class="font-mono">fieldTypesForConstruction</span> into <span class="font-mono">readDocument</span></h3>
-            <span class="badge-judge inline-block rounded px-2 py-0.5 text-xs font-semibold shrink-0">Open</span>
+            <span class="badge-closed inline-block rounded px-2 py-0.5 text-xs font-semibold shrink-0">Closed</span>
           </div>
           <p class="text-sm text-slate-700">
             Keep the empty-bundle seed (Sp6 / [S4-A1]). Do not export a helper whose only job is to stop
             <span class="font-mono">DatasetState</span> throwing. Same-key merge can be one function that
             names the D-S4-15 table.
           </p>
+          <p class="text-sm text-slate-700"><strong>Closed.</strong> Seed and merge sit inside <span class="font-mono">decodeFieldDocument</span>. Neither is exported.</p>
         </article>
 
         <article class="rounded-xl border border-slate-200 bg-white p-6 space-y-3 shadow-sm">
           <div class="flex items-start justify-between gap-4">
             <h3 class="text-lg font-semibold">Si6 · Layout must not invent the name column</h3>
-            <span class="badge-judge inline-block rounded px-2 py-0.5 text-xs font-semibold shrink-0">Open</span>
+            <span class="badge-closed inline-block rounded px-2 py-0.5 text-xs font-semibold shrink-0">Closed</span>
           </div>
           <p class="text-sm text-slate-700">
             <span class="font-mono">NAME_ONLY_COLUMNS</span> and <span class="font-mono">[entry.name]</span>
@@ -329,6 +340,7 @@
             Shell already defaults <span class="font-mono">['name']</span>.
             After: always pass bound columns; frame only maps <span class="font-mono">format</span>.
           </p>
+          <p class="text-sm text-slate-700"><strong>Closed.</strong> Omitted or empty <span class="font-mono">LayoutInput.columns</span> yield no cells. The Gantt default stays in <span class="font-mono">view/</span>.</p>
         </article>
 
         <div class="rounded-lg border border-slate-200 bg-white p-4 text-sm text-slate-700">
@@ -404,11 +416,11 @@ flowchart TB
           <div class="flex items-start justify-between gap-4 flex-wrap">
             <h3 class="font-serif text-xl">2 · Field Document codec</h3>
             <span class="inline-flex items-center gap-2">
-              <span class="badge-worth rounded-full text-xs px-2 py-0.5 font-medium">Worth exploring</span>
-              <span class="rounded-full bg-slate-100 text-slate-600 text-xs px-2 py-0.5">in-process</span>
+              <span class="badge-closed rounded-full text-xs px-2 py-0.5 font-medium">Closed</span>
+              <span class="rounded-full bg-slate-100 text-slate-600 text-xs px-2 py-0.5">was Worth exploring</span>
             </span>
           </div>
-          <p class="font-mono text-sm text-slate-600">serialization/read.ts · serialization/index.ts · api/dataset.ts</p>
+          <p class="font-mono text-sm text-slate-600">serialization/field-document.ts · serialization/read.ts · serialization/index.ts</p>
 
           <div class="grid md:grid-cols-2 gap-4 text-xs">
             <div class="rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-2">
@@ -425,6 +437,7 @@ flowchart TB
 
           <p class="text-sm"><strong>Problem.</strong> Document Field law is mirrored across read and write. The module interface is the pipeline.</p>
           <p class="text-sm"><strong>Solution.</strong> One interface for encode and decode. Keep the empty type seed here and document Sp6.</p>
+          <p class="text-sm text-slate-700"><strong>Closed.</strong> <span class="font-mono">encodeFieldDocument</span> / <span class="font-mono">decodeFieldDocument</span> in <span class="font-mono">field-document.ts</span>. <span class="font-mono">toJSON</span> and <span class="font-mono">readDocument</span> call it.</p>
           <ul class="text-sm space-y-1 list-disc list-inside text-slate-700">
             <li>Locality: D-S4-15 has one home</li>
             <li>Leverage: schema 3 Field migration edits one module</li>
@@ -436,13 +449,14 @@ flowchart TB
           <div class="flex items-start justify-between gap-4 flex-wrap">
             <h3 class="font-serif text-xl">3 · Require bound columns in layout/</h3>
             <span class="inline-flex items-center gap-2">
-              <span class="badge-worth rounded-full text-xs px-2 py-0.5 font-medium">Worth exploring</span>
-              <span class="rounded-full bg-slate-100 text-slate-600 text-xs px-2 py-0.5">in-process</span>
+              <span class="badge-closed rounded-full text-xs px-2 py-0.5 font-medium">Closed</span>
+              <span class="rounded-full bg-slate-100 text-slate-600 text-xs px-2 py-0.5">was Worth exploring</span>
             </span>
           </div>
           <p class="font-mono text-sm text-slate-600">layout/frame.ts · view/grid-columns.ts · view/gantt-shell.ts</p>
           <p class="text-sm"><strong>Problem.</strong> <span class="font-mono">NAME_ONLY_COLUMNS</span> teaches layout the Field key <span class="font-mono">name</span>. Soft leak across the Field / Grid-column seam (Si6).</p>
           <p class="text-sm"><strong>Solution.</strong> Shell always passes <span class="font-mono">ResolvedColumn[]</span>. Delete the fallback. Empty columns stay empty.</p>
+          <p class="text-sm text-slate-700"><strong>Closed.</strong> <span class="font-mono">NAME_ONLY_COLUMNS</span> is gone. Frame maps <span class="font-mono">format</span> only. Empty input yields empty cells.</p>
           <ul class="text-sm space-y-1 list-disc list-inside text-slate-700">
             <li>Locality: Grid default lives in view/</li>
             <li>Deeper layout interface: geometry only</li>
@@ -455,7 +469,7 @@ flowchart TB
             <h3 class="font-serif text-xl">4 · DOM FrameColumn → cell item projection</h3>
             <span class="inline-flex items-center gap-2">
               <span class="badge-spec rounded-full text-xs px-2 py-0.5 font-medium">Speculative</span>
-              <span class="rounded-full bg-slate-100 text-slate-600 text-xs px-2 py-0.5">in-process</span>
+              <span class="rounded-full bg-slate-100 text-slate-600 text-xs px-2 py-0.5">skip</span>
             </span>
           </div>
           <p class="font-mono text-sm text-slate-600">src/render/dom/index.ts</p>
@@ -466,21 +480,21 @@ flowchart TB
 
       <section id="top-recommendation" class="rounded-xl border-2 border-slate-800 bg-white p-6 space-y-3">
         <p class="text-xs uppercase tracking-widest text-slate-500">Top recommendation</p>
-        <h2 class="font-serif text-2xl"><a href="#c1" class="underline decoration-slate-300">Candidate 1 — one Gantt Field-bind module</a> (closed)</h2>
+        <h2 class="font-serif text-2xl"><a href="#c2" class="underline decoration-slate-300">Candidate 2 — Field Document codec</a> and <a href="#c3" class="underline decoration-slate-300">C3 bound columns</a> (closed)</h2>
         <p class="text-sm text-slate-700">
-          <span class="font-mono">bindGanttFields(dataset, gridColumns, bind)</span> is the one locale bind.
-          St1 is amended in ADR 0005 and S4.1.
-          Next: C2 Field Document codec, or C3 require bound columns.
-          Do not put Field logic in <span class="font-mono">layout/</span>.
+          <span class="font-mono">bindGanttFields</span> is the one locale bind.
+          Document Field law lives in <span class="font-mono">field-document.ts</span>.
+          Layout no longer invents the name column.
+          St3 stays judgement. C4 stays speculative until a second render adapter exists.
         </p>
       </section>
 
       <section class="text-sm text-slate-600 space-y-2 pb-8">
         <h2 class="font-serif text-xl text-slate-900">Axis totals</h2>
-        <p>Standards: St1, St5 closed. St3–St4 still judgement. FieldLookup is not a finding.</p>
-        <p>Spec: Sp1 closed; Sp2 bind closed (sort still S4.9); Sp3–Sp5 partial; Sp6 recorded.</p>
-        <p>Simplify: Si1 closed. Si2–Si6 still open.</p>
-        <p>Architecture: C1 closed. C2–C3 Worth exploring; C4 Speculative.</p>
+        <p>Standards: St1, St4, St5 closed. St3 still judgement. FieldLookup is not a finding.</p>
+        <p>Spec: Sp1–Sp6 closed. Sp2 sort still waits for S4.9.</p>
+        <p>Simplify: Si1–Si6 closed.</p>
+        <p>Architecture: C1–C3 closed. C4 Speculative.</p>
       </section>
     </main>
   </body>

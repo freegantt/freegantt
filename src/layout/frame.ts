@@ -8,7 +8,6 @@ import { resolveDateLines } from './date-line.js';
 import type { DateLine, DateLineSpec } from './date-line.js';
 import { PrefixSumHeightIndex } from './row-height-index.js';
 import type { RowHeightIndex } from './row-height-index.js';
-import { paintColumns } from './column.js';
 import type { FrameColumn, ResolvedColumn } from './column.js';
 
 /** Shipped Tick box floor (CONTEXT.md) — `--fg-tick-box-floor` fallback and CSS padding calc. */
@@ -164,22 +163,23 @@ export interface LayoutInput {
   /** Tick box floor in px (CONTEXT.md). Default `DEFAULT_TICK_BOX_FLOOR_PX`. View reads
    *  `--fg-tick-box-floor` and passes it; layout never restates the stylesheet. */
   tickBoxFloorPx?: number;
-  /** Visible Grid columns. Omitted → one `name` cell, matching S1's single label column (D-S4-12). */
+  /** Visible Grid columns. Omitted or empty → no cells. The Gantt default `['name']` lives in view/. */
   columns?: readonly ResolvedColumn[];
 }
 
-const NAME_ONLY_COLUMNS: readonly FrameColumn[] = Object.freeze([
-  { key: 'name', header: 'Name', align: 'start' },
-]);
-
 function cellsFor(entry: Entry, columns: readonly ResolvedColumn[] | undefined): readonly string[] {
-  if (columns === undefined || columns.length === 0) return [entry.name];
+  if (columns === undefined) return [];
   return columns.map((column) => column.format(entry));
 }
 
 function columnsForFrame(columns: readonly ResolvedColumn[] | undefined): readonly FrameColumn[] {
-  if (columns === undefined || columns.length === 0) return NAME_ONLY_COLUMNS;
-  return paintColumns(columns);
+  if (columns === undefined) return [];
+  return columns.map((column) => {
+    const painted: FrameColumn = { key: column.key, header: column.header, align: column.align };
+    if (column.width !== undefined) painted.width = column.width;
+    if (column.flex !== undefined) painted.flex = column.flex;
+    return painted;
+  });
 }
 
 /** S0/S1 scope: flat row-per-entry, one bar per entry, fixed row height (plans/03 S0-S1).
