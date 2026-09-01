@@ -11,6 +11,7 @@
 | `02-lint-rules.md` | Spec for each custom ESLint rule: what it bans, allowlist, message, fixtures |
 | `03-boundaries-and-config.md` | dependency-cruiser, tsconfig, `exports` map, Vitest projects, package checks |
 | `04-hooks-and-ci.md` | Git hooks, Claude Code hooks, the CI pipeline, guard-test meta-suite |
+| `05-consumer-api.md` | Index for app authors — links README, `plans/02`, glossary, export report, S4 surface |
 
 ---
 
