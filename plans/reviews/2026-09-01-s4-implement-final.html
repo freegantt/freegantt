@@ -127,8 +127,18 @@
           Seven passes: <strong>standards</strong> (CLAUDE.md, CONTEXT.md, <span class="font-mono">plans/00–04</span>,
           ADRs, plus Fowler ch.3 smells), <strong>spec</strong> (<span class="font-mono">plans/s4-hierarchy-and-rows/</span>),
           <strong>reuse</strong>, <strong>simplification</strong>, <strong>efficiency</strong>, <strong>altitude</strong>,
-          and <strong>architecture</strong> (deepening opportunities). Architecture vocabulary: module, interface,
+          and <strong>architecture</strong> (deepening opportunities), then a <strong>second pass</strong> on ball-of-mud
+          pressure, API friendliness, self-documentation and extensibility. Architecture vocabulary: module, interface,
           implementation, depth, seam, adapter, leverage, locality.
+        </p>
+        <p class="text-sm">
+          <a class="underline" href="#defects">Defects (7)</a> ·
+          <a class="underline" href="#standards">Standards (6)</a> ·
+          <a class="underline" href="#spec">Spec (4)</a> ·
+          <a class="underline" href="#cleanup">Cleanup (16)</a> ·
+          <a class="underline" href="#candidates">Deepening (6)</a> ·
+          <a class="underline" href="#top-recommendation">Top recommendation</a> ·
+          <a class="underline" href="#second-pass">Second pass</a>
         </p>
         <p class="text-sm text-slate-600 max-w-3xl">
           <span class="font-mono">harness/index.html</span> is out of scope at the author's request. The rest of
@@ -1283,6 +1293,397 @@ rowSource = { source: 'entries', tree: true,
           Sequencing note: A1 and A2 both touch <span class="font-mono">layout/</span> and both should land before S5 grows
           the plugin registration surface on top of them.
         </p>
+      </section>
+
+      <!-- ─────────────────────────── SECOND PASS ─────────────────────────── -->
+      <section id="second-pass" class="space-y-8 border-t-4 border-slate-900 pt-10">
+        <div class="space-y-2">
+          <p class="lbl">Second pass · added after the first report was committed</p>
+          <h2 class="font-serif text-2xl">Ball of mud, friendlier API, self-documentation, extensibility</h2>
+          <p class="text-sm text-slate-600 max-w-3xl">
+            A fresh look, not a re-run: where does this codebase turn into a ball of mud, which parts of the API are less
+            friendly than they could be, which names still need a comment to be understood, and what does it actually cost
+            to extend each seam.
+          </p>
+        </div>
+
+        <!-- 1. Ball of mud -->
+        <article class="rounded-2xl border bg-white p-6 space-y-5">
+          <h3 class="font-serif text-xl">1 · Ball-of-mud pressure — the six-edit ritual</h3>
+          <p class="text-sm text-slate-700 max-w-3xl">
+            The layering holds. Dependency-cruiser enforces it and nothing crosses a line it should not. The pressure is
+            not on the layers; it is on the <strong>ritual for publishing one concept</strong>, which no compiler checks.
+          </p>
+
+          <div class="grid md:grid-cols-2 gap-5">
+            <div class="rounded-lg border border-slate-200 bg-stone-50 p-4">
+              <p class="lbl mb-3">Churn — commits touching each file (of 55)</p>
+              <div class="space-y-1.5 text-xs">
+                <div class="flex items-center gap-2">
+                  <span class="font-mono w-52 shrink-0">view/gantt-shell.ts</span>
+                  <span class="bg-red-400 h-3 rounded-sm" style="width: 140px"></span><span>14</span>
+                </div>
+                <div class="flex items-center gap-2">
+                  <span class="font-mono w-52 shrink-0">api/index.ts</span>
+                  <span class="bg-amber-400 h-3 rounded-sm" style="width: 120px"></span><span>12</span>
+                </div>
+                <div class="flex items-center gap-2">
+                  <span class="font-mono w-52 shrink-0">layout/index.ts</span>
+                  <span class="bg-amber-400 h-3 rounded-sm" style="width: 100px"></span><span>10</span>
+                </div>
+                <div class="flex items-center gap-2">
+                  <span class="font-mono w-52 shrink-0">layout/frame.ts</span>
+                  <span class="bg-slate-400 h-3 rounded-sm" style="width: 100px"></span><span>10</span>
+                </div>
+                <div class="flex items-center gap-2">
+                  <span class="font-mono w-52 shrink-0">data/dataset-state.ts</span>
+                  <span class="bg-slate-400 h-3 rounded-sm" style="width: 90px"></span><span>9</span>
+                </div>
+                <div class="flex items-center gap-2">
+                  <span class="font-mono w-52 shrink-0">model/index.ts</span>
+                  <span class="bg-amber-400 h-3 rounded-sm" style="width: 80px"></span><span>8</span>
+                </div>
+                <div class="flex items-center gap-2">
+                  <span class="font-mono w-52 shrink-0">api/dataset.ts</span>
+                  <span class="bg-slate-400 h-3 rounded-sm" style="width: 80px"></span><span>8</span>
+                </div>
+              </div>
+              <p class="text-xs text-slate-600 mt-3">
+                Three of the top six are <strong>barrels</strong> — 304 lines of pure re-export that change for every
+                unrelated reason. Textbook Divergent Change, on files that hold no logic to review.
+              </p>
+            </div>
+
+            <div class="rounded-lg border border-slate-200 bg-stone-50 p-4">
+              <p class="lbl mb-3">One feature — <span class="font-mono">rowSource</span> (S4.6, commit 4c52aaf)</p>
+              <div class="flex items-baseline gap-2 mb-3">
+                <span class="font-serif text-4xl">35</span>
+                <span class="text-sm text-slate-600">files, for one config key</span>
+              </div>
+              <p class="lbl mb-2">The six edits nothing enforces</p>
+              <ol class="list-decimal list-inside text-xs space-y-1 text-slate-700">
+                <li><span class="font-mono">layout/rows/*</span> — the implementation</li>
+                <li><span class="font-mono">layout/index.ts</span> — layer barrel</li>
+                <li><span class="font-mono">view/gantt-shell.ts</span> — option + field + setter + render wiring</li>
+                <li><span class="font-mono">api/gantt.ts</span> — option + getter + setter forwarder</li>
+                <li><span class="font-mono">api/index.ts</span> — public barrel</li>
+                <li><span class="font-mono">etc/freegantt.api.md</span> — re-run the extractor</li>
+              </ol>
+              <div class="mt-3 rounded border border-red-300 bg-red-50 p-3 text-xs text-slate-700">
+                <strong>Proof the ritual gets missed:</strong> the API report carries four
+                <span class="font-mono">ae-forgotten-export</span> warnings —
+                <span class="font-mono">RollUpKinds</span>, <span class="font-mono">TimeScale</span>,
+                <span class="font-mono">GanttOptionsBase</span>, <span class="font-mono">GanttScaleOptions</span>. Each is a
+                type a consumer meets in a signature and cannot name. They are warnings, so
+                <span class="font-mono">pnpm verify</span> stays green.
+              </div>
+            </div>
+          </div>
+
+          <div class="rounded-lg border border-slate-300 bg-white p-4 text-sm">
+            <p class="lbl mb-2">What would relieve it</p>
+            <ul class="list-disc list-inside space-y-1 text-slate-700">
+              <li>
+                <strong>Fail the build on <span class="font-mono text-xs">ae-forgotten-export</span>.</strong> One line of
+                api-extractor config turns the silent half of the ritual into a red test. Cheapest fix in this report, and it
+                closes SP2 permanently rather than once.
+              </li>
+              <li>
+                <strong>Keep extracting stateful clusters from the shell</strong> — A3 and A6 above. The shell should be
+                wiring; every job that has a rule of its own belongs in a module, the way
+                <span class="font-mono text-xs">TreeCollapse</span> and
+                <span class="font-mono text-xs">GesturePipeline</span> already are. C4 already established the pattern and
+                closed itself out; the discipline is what stops S5's plugin attach points landing back in the same file.
+              </li>
+              <li>
+                <strong>Curate the barrels rather than growing them.</strong> See §3 — several exports are internals that
+                arrived by forwarding rather than by decision.
+              </li>
+            </ul>
+          </div>
+        </article>
+
+        <!-- 2. Naming -->
+        <article class="rounded-2xl border bg-white p-6 space-y-5">
+          <h3 class="font-serif text-xl">2 · Names a grep can no longer disambiguate</h3>
+          <p class="text-sm text-slate-700 max-w-3xl">
+            CLAUDE.md's cautionary example is #7: “chart” meant two things, nothing said which, and it stalled a real
+            review. Three names on this branch have reached the same state. All three are new in S4.
+          </p>
+
+          <div class="rounded-2xl border overflow-hidden">
+            <table class="find">
+              <thead>
+                <tr>
+                  <th style="width: 20%">Name</th>
+                  <th style="width: 40%">Two meanings</th>
+                  <th>Fix</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="font-mono text-xs">resolveSource</td>
+                  <td>
+                    <span class="font-mono text-xs">field-registry.ts:29</span> — takes a
+                    <span class="font-mono text-xs">Field</span>, returns a
+                    <span class="font-mono text-xs">FieldSource</span>.<br />
+                    <span class="font-mono text-xs">resolve-rows.ts:53</span> — takes a
+                    <span class="font-mono text-xs">RowResolutionInput</span>, returns rows.<br />
+                    Unrelated jobs, unrelated types, one grep.
+                  </td>
+                  <td>
+                    The first is a one-line alias of <span class="font-mono text-xs">storedSourceOf</span> — delete it (C14).
+                    The second becomes <span class="font-mono text-xs">produceRows</span>, or disappears into A1.
+                  </td>
+                </tr>
+                <tr>
+                  <td class="font-mono text-xs">childrenByParent</td>
+                  <td>
+                    <span class="font-mono text-xs">data/entry-tree.ts:22</span> — returns
+                    <span class="font-mono text-xs">Map&lt;EntryId, EntryId[]&gt;</span>.<br />
+                    <span class="font-mono text-xs">layout/rows/entries-source.ts:8</span> — returns
+                    <span class="font-mono text-xs">{ roots, childrenOf: Map&lt;EntryId, Entry[]&gt; }</span>.<br />
+                    Same name, two different data structures. The duplication is required —
+                    <span class="font-mono">layout/</span> may not import <span class="font-mono">data/</span> — but the
+                    <em>name</em> is not.
+                  </td>
+                  <td>
+                    Name them for what they return:
+                    <span class="font-mono text-xs">childIdsByParent</span> in <span class="font-mono">data/</span>,
+                    <span class="font-mono text-xs">entryTreeIndex</span> in <span class="font-mono">layout/</span>. A reader
+                    who greps either one should not have to check which layer they landed in.
+                  </td>
+                </tr>
+                <tr>
+                  <td class="font-mono text-xs">RowResolveInput<br />RowResolutionInput</td>
+                  <td>
+                    Both in <span class="font-mono text-xs">row-source.ts</span>, 54 lines apart, one letter of stem apart.
+                    <span class="font-mono text-xs">RowResolveInput</span> is the <strong>published</strong> DTO handed to
+                    <span class="font-mono text-xs">{ source: 'custom' }.resolve()</span>;
+                    <span class="font-mono text-xs">RowResolutionInput</span> is <strong>internal</strong> input to
+                    <span class="font-mono text-xs">resolveRows</span>. A consumer sees one in the API report; an implementer
+                    sees both and must tell them apart by suffix.
+                  </td>
+                  <td>
+                    Read the call site aloud: the public one is what a custom resolver is given, so
+                    <span class="font-mono text-xs">CustomRowInput</span> — it already sits beside
+                    <span class="font-mono text-xs">CustomRow</span> and <span class="font-mono text-xs">CustomRowSource</span>.
+                    The internal one is what one pass over the rows needs:
+                    <span class="font-mono text-xs">RowPassInput</span>.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="grid md:grid-cols-2 gap-5 text-sm">
+            <div class="rounded-lg border border-slate-200 bg-stone-50 p-4">
+              <p class="lbl mb-2">Call sites that fail the read-aloud test</p>
+              <pre class="bg-white border rounded p-3 text-[0.72rem] font-mono overflow-x-auto">entryRow(entry, frame.depth, expandable, expandable, heightMode)</pre>
+              <p class="text-xs text-slate-600 mt-2">
+                <span class="font-mono">entries-source.ts:67</span>. Two identical boolean arguments in a row, positionally
+                distinguished. The reader cannot tell which is
+                <span class="font-mono">expandable</span> and which is <span class="font-mono">expanded</span>, and the flat
+                branch passes <span class="font-mono">false, false</span>. Take one object, or drop
+                <span class="font-mono">expanded</span> here — <span class="font-mono">applyCollapse</span> restamps it
+                anyway.
+              </p>
+              <pre class="bg-white border rounded p-3 text-[0.72rem] font-mono mt-3 overflow-x-auto">const packing = packRow(items);</pre>
+              <p class="text-xs text-slate-600 mt-2">
+                <span class="font-mono">pack-lanes.ts:34</span>. The name says row, the argument is items, the return is a
+                <span class="font-mono">LanePacking</span>. <span class="font-mono">packIntoLanes(items)</span> reads as what
+                it does, and matches the module it lives in.
+              </p>
+            </div>
+            <div class="rounded-lg border border-slate-200 bg-stone-50 p-4">
+              <p class="lbl mb-2">Self-documentation — the comments are load-bearing</p>
+              <p class="text-xs text-slate-700">
+                Comment density runs 17–30% in the S4 files, and the comments are <em>good</em>: they carry decision ids and
+                the reason a thing is the way it is. That is the right use of a comment. But two patterns show a name doing
+                too little work:
+              </p>
+              <ul class="list-disc list-inside text-xs space-y-1.5 text-slate-700 mt-2">
+                <li>
+                  <span class="font-mono">row-source.ts:67</span> — a six-line comment explains that
+                  <span class="font-mono">PLANNED_ROW_KIND</span> exists to satisfy a lint rule. When the comment's subject is
+                  the linter rather than the domain, delete the construct (C12).
+                </li>
+                <li>
+                  <span class="font-mono">gantt-shell.ts:216</span> — <span class="font-mono">setOptional</span> needs eight
+                  lines to explain <span class="font-mono">exactOptionalPropertyTypes</span>. The rule is real; the name says
+                  nothing. <span class="font-mono">clearOrSet(target, key, value)</span> states the two branches.
+                </li>
+                <li>
+                  <span class="font-mono">transaction.ts:43</span> —
+                  <span class="font-mono">writeCommittedFieldRows</span> introduces “Field row”, a noun the glossary does not
+                  define. The thing is a <span class="font-mono">FieldUpdated[]</span>, the changeset's own
+                  <span class="font-mono">updated</span> shape. Either glossary the term or name it for what it is.
+                </li>
+              </ul>
+            </div>
+          </div>
+        </article>
+
+        <!-- 3. API friendliness -->
+        <article class="rounded-2xl border bg-white p-6 space-y-5">
+          <h3 class="font-serif text-xl">3 · A friendlier public surface</h3>
+          <p class="text-sm text-slate-700 max-w-3xl">
+            127 exported names. The consumer-facing shape is genuinely good — loose input everywhere
+            (<span class="font-mono text-xs">string</span> ids, <span class="font-mono text-xs">InstantInput</span> dates),
+            branded output, live setters, a cancelable <span class="font-mono text-xs">before*</span> for every mutation, and
+            <span class="font-mono text-xs">MS</span> / <span class="font-mono text-xs">addMs</span> so a consumer does day
+            maths without magic constants. Three things would make it friendlier.
+          </p>
+
+          <div class="grid md:grid-cols-3 gap-4 text-sm">
+            <div class="rounded-lg border border-red-200 bg-red-50 p-4">
+              <p class="lbl text-red-800 mb-2">Needed, not nameable</p>
+              <p class="font-mono text-xs">RollUpKinds · TimeScale · GanttOptionsBase · GanttScaleOptions</p>
+              <p class="text-xs text-slate-700 mt-2">
+                All four appear in public signatures. A consumer writing
+                <span class="font-mono">function setKinds(k: ???)</span> has no type to write. Fix with SP2 plus the
+                build-fails-on-warning change in §1.
+              </p>
+            </div>
+            <div class="rounded-lg border border-amber-200 bg-amber-50 p-4">
+              <p class="lbl text-amber-800 mb-2">Public by forwarding, not by decision</p>
+              <p class="font-mono text-xs">ClientPoint · AsyncCancelableEvent · EntityAdded · EntityRemoved · StoreName</p>
+              <p class="text-xs text-slate-700 mt-2">
+                None appears in <span class="font-mono">docs/05-consumer-api.md</span> or the harness.
+                <span class="font-mono">ClientPoint</span> is structurally identical to
+                <span class="font-mono">Point</span>, so it teaches a distinction the type system does not make (C14).
+                Each is a name a consumer must read past.
+              </p>
+            </div>
+            <div class="rounded-lg border border-emerald-200 bg-emerald-50 p-4">
+              <p class="lbl text-emerald-800 mb-2">Holding well</p>
+              <p class="text-xs text-slate-700">
+                “Two callers, two surfaces” holds: <span class="font-mono">overscan</span>,
+                <span class="font-mono">backend</span>, <span class="font-mono">editExtender</span> and
+                <span class="font-mono">itemProducerRegistry</span> are on
+                <span class="font-mono">GanttShellOptions</span> and deliberately not on
+                <span class="font-mono">GanttOptions</span>. Illegal combinations are unrepresentable —
+                <span class="font-mono">scale</span> vs <span class="font-mono">preset</span>/<span class="font-mono">range</span>/<span class="font-mono">fit</span>
+                is a discriminated union, not a runtime warning.
+              </p>
+            </div>
+          </div>
+
+          <div class="rounded-lg border border-slate-300 p-4 text-sm">
+            <p class="lbl mb-2">The one call site that still reads badly</p>
+            <p class="text-slate-700">
+              A5 above is the biggest friendliness win — a consumer who declared a Field should not unpack
+              <span class="font-mono text-xs">entry.meta</span> to filter on it. Behind it, the same asymmetry runs through
+              the whole S4 surface: <strong>the Gantt takes Field keys everywhere except in the three callbacks where it
+              hands back a raw <span class="font-mono text-xs">Entry</span></strong>. Closing that closes the harness gap, the
+              duplication in two demo pages, and the “compute Fields cannot be filtered or grouped” hole in one change.
+            </p>
+          </div>
+        </article>
+
+        <!-- 4. Extensibility -->
+        <article class="rounded-2xl border bg-white p-6 space-y-5">
+          <h3 class="font-serif text-xl">4 · Extensibility scorecard</h3>
+          <p class="text-sm text-slate-700 max-w-3xl">
+            CLAUDE.md names four seams for per-kind behaviour: policy, item emitter, renderer registry, capability resolver.
+            Two are open. Two hardcode. That is the crisp statement of where this design is closed to extension today.
+          </p>
+          <div class="rounded-2xl border overflow-hidden">
+            <table class="find">
+              <thead>
+                <tr>
+                  <th style="width: 26%">To add…</th>
+                  <th style="width: 12%">Today</th>
+                  <th>What it costs</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>an item shape for a new Kind</td>
+                  <td><span class="badge badge-ok">open</span></td>
+                  <td>
+                    <span class="font-mono text-xs">createItemProducerRegistry(extras)</span> — a real registry, one per
+                    Gantt, falls back to <span class="font-mono text-xs">span</span>. Public registration is S5, as planned.
+                  </td>
+                </tr>
+                <tr>
+                  <td>a rolled-up Field for a new Kind</td>
+                  <td><span class="badge badge-ok">open</span></td>
+                  <td>
+                    <span class="font-mono text-xs">rollUpKinds</span> is a live-settable Kind list, and Aggregators register
+                    by name so they serialize. This is the model the other seams should copy.
+                  </td>
+                </tr>
+                <tr>
+                  <td>a gesture rule for a new Kind</td>
+                  <td><span class="badge badge-hard">closed</span></td>
+                  <td>
+                    <span class="font-mono text-xs">capability.ts:defaultRule</span> hardcodes
+                    <span class="font-mono text-xs">entry.kind === 'milestone'</span>. A consumer adding a
+                    <span class="font-mono text-xs">'deadline'</span> Kind that is also zero-length cannot say “refuses
+                    resize” without writing an <span class="font-mono text-xs">interactions.resize</span> predicate that
+                    re-implements <span class="font-mono text-xs">isRollUpKind</span> and the milestone rule too. Make the
+                    table a table.
+                  </td>
+                </tr>
+                <tr>
+                  <td>hierarchy promotion for a new Kind</td>
+                  <td><span class="badge badge-hard">closed</span></td>
+                  <td>
+                    <span class="font-mono text-xs">hierarchy.ts:51,55</span> — <span class="font-mono text-xs">span → group</span>
+                    behind a boolean, beside a sibling that takes a Kind list (C9).
+                  </td>
+                </tr>
+                <tr>
+                  <td>a fourth row source</td>
+                  <td><span class="badge badge-judge">friction</span></td>
+                  <td>
+                    Four conditionals in <span class="font-mono text-xs">resolve-rows.ts</span> plus a twin in
+                    <span class="font-mono text-xs">sort.ts</span> and one in
+                    <span class="font-mono text-xs">filter.ts</span> — six edits, none of which the type system demands.
+                    A1 makes this one edit.
+                  </td>
+                </tr>
+                <tr>
+                  <td>a fourth <span class="font-mono text-xs">FieldSource</span></td>
+                  <td><span class="badge badge-judge">friction</span></td>
+                  <td>
+                    Six cascades in three files (SP4). S5's plugin-owned source is exactly this case. A4 makes it one table
+                    entry.
+                  </td>
+                </tr>
+                <tr>
+                  <td>a fifth <span class="font-mono text-xs">before*</span> event</td>
+                  <td><span class="badge badge-judge">friction</span></td>
+                  <td>
+                    The propose → veto → commit → emit protocol is written longhand three times and diverges (only
+                    <span class="font-mono text-xs">gridWidth</span> rolls back). A6.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </article>
+
+        <!-- Verdict -->
+        <article class="rounded-2xl border-2 border-slate-900 bg-white p-6 space-y-3">
+          <h3 class="font-serif text-xl">Second-pass verdict</h3>
+          <p class="text-sm text-slate-700 max-w-3xl">
+            This is not a ball of mud and it is not trending into one. The layers are enforced, the vocabulary is
+            deliberate, decisions are recorded next to the code that implements them, and C4 shows the team already
+            extracting from the shell rather than letting it grow — the parked items in that plan were parked with reasons,
+            not forgotten.
+          </p>
+          <p class="text-sm text-slate-700 max-w-3xl">
+            The real risk is narrower and worth naming plainly: <strong>S4 added several tagged unions
+            (<span class="font-mono text-xs">RowSource</span>, <span class="font-mono text-xs">FieldSource</span>,
+            <span class="font-mono text-xs">EntryKind</span>) and dispatched on their tags with
+            <span class="font-mono text-xs">if</span>-chains instead of tables.</strong> Each chain is small and readable
+            today. S5 adds a plugin runtime on top of all three at once. That is when six small chains across five files
+            become the thing nobody wants to touch — and A1, A4 and the two closed seams in §4 are all the same fix applied
+            in different places. Do them while each is still three conditionals.
+          </p>
+        </article>
       </section>
 
       <footer class="text-xs text-slate-500 border-t pt-6">
