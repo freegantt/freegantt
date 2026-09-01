@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { cursorLabelForX, draftForMove, draftForResize, previewOffsets } from './gesture-draft.js';
-import type { Entry } from '../model/index.js';
+import type { Entry, EntryEdits } from '../model/index.js';
 import { entryId, itemId } from '../model/index.js';
 import { instant, createTimeScale, MS } from '../time/index.js';
 
@@ -219,6 +219,120 @@ describe('previewOffsets', () => {
     const proposed = new Map([[entryId('missing'), { start: a.start, end: a.end }]]);
     const previews = previewOffsets({ proposed, extra: new Map(), entries: [a], scale });
     expect(previews).toEqual([]);
+  });
+});
+
+describe('draftForMove — segments (S4.10, D-S4-30)', () => {
+  const segmented: Entry = {
+    ...entry('seg', '2026-06-15T14:00:00Z', '2026-06-20T00:00:00Z'),
+    segments: [
+      { start: instant('2026-06-15T14:00:00Z'), end: instant('2026-06-16T00:00:00Z') },
+      { start: instant('2026-06-16T09:00:00Z'), end: instant('2026-06-17T00:00:00Z') },
+      { start: instant('2026-06-17T12:00:00Z'), end: instant('2026-06-20T00:00:00Z') },
+    ],
+  };
+
+  it('writes segments and the envelope when the grabbed segment moves', () => {
+    const draft = draftForMove({
+      zone: ZONE,
+      scale,
+      snap: 'none',
+      entries: [segmented],
+      dxPx: 30,
+      grabbedSegmentIndex: 1,
+    });
+    const edit = draft.get(segmented.id)!;
+    expect(edit.segments).toEqual([
+      segmented.segments![0],
+      {
+        start: instant('2026-06-16T09:30:00Z'),
+        end: instant('2026-06-17T00:30:00Z'),
+      },
+      segmented.segments![2],
+    ]);
+    expect(edit.start).toEqual(instant('2026-06-15T14:00:00Z'));
+    expect(edit.end).toEqual(instant('2026-06-20T00:00:00Z'));
+  });
+
+  it('still writes start/end only for a single-item entry', () => {
+    const single = entry('one', '2026-06-15T14:00:00Z', '2026-06-15T16:00:00Z');
+    const draft = draftForMove({ zone: ZONE, scale, snap: 'none', entries: [single], dxPx: 30 });
+    expect(draft.get(single.id)).toEqual({
+      start: instant('2026-06-15T14:30:00Z'),
+      end: instant('2026-06-15T16:30:00Z'),
+    });
+  });
+
+  it('writes segments for a one-segment entry so the store does not throw (D3)', () => {
+    const one: Entry = {
+      ...entry('t1', '2026-06-15T14:00:00Z', '2026-06-16T00:00:00Z'),
+      segments: [{ start: instant('2026-06-15T14:00:00Z'), end: instant('2026-06-16T00:00:00Z') }],
+    };
+    const draft = draftForMove({
+      zone: ZONE,
+      scale,
+      snap: 'none',
+      entries: [one],
+      dxPx: 30,
+    });
+    const edit = draft.get(one.id)!;
+    expect(edit.segments).toEqual([
+      { start: instant('2026-06-15T14:30:00Z'), end: instant('2026-06-16T00:30:00Z') },
+    ]);
+    expect(edit.start).toEqual(instant('2026-06-15T14:30:00Z'));
+    expect(edit.end).toEqual(instant('2026-06-16T00:30:00Z'));
+  });
+
+  it('moves every segment of a co-selected segmented entry as one span (D-S4-30)', () => {
+    const grabbed = entry('g', '2026-06-15T14:00:00Z', '2026-06-15T16:00:00Z');
+    const other: Entry = {
+      ...entry('o', '2026-06-16T09:00:00Z', '2026-06-18T00:00:00Z'),
+      segments: [
+        { start: instant('2026-06-16T09:00:00Z'), end: instant('2026-06-17T00:00:00Z') },
+        { start: instant('2026-06-17T12:00:00Z'), end: instant('2026-06-18T00:00:00Z') },
+      ],
+    };
+    const draft = draftForMove({
+      zone: ZONE,
+      scale,
+      snap: 'none',
+      entries: [grabbed, other],
+      dxPx: 30,
+    });
+    expect(draft.get(other.id)?.segments).toEqual([
+      { start: instant('2026-06-16T09:30:00Z'), end: instant('2026-06-17T00:30:00Z') },
+      { start: instant('2026-06-17T12:30:00Z'), end: instant('2026-06-18T00:30:00Z') },
+    ]);
+  });
+});
+
+describe('previewOffsets — segments (S4.10)', () => {
+  it('offsets each segment item independently', () => {
+    const segmented: Entry = {
+      ...entry('seg', '2026-06-15T14:00:00Z', '2026-06-20T00:00:00Z'),
+      segments: [
+        { start: instant('2026-06-15T14:00:00Z'), end: instant('2026-06-16T00:00:00Z') },
+        { start: instant('2026-06-16T09:00:00Z'), end: instant('2026-06-17T00:00:00Z') },
+      ],
+    };
+    const proposed: EntryEdits = new Map([
+      [
+        segmented.id,
+        {
+          segments: [
+            segmented.segments![0]!,
+            { start: instant('2026-06-16T10:00:00Z'), end: instant('2026-06-17T01:00:00Z') },
+          ],
+          start: segmented.start,
+          end: instant('2026-06-20T00:00:00Z'),
+        },
+      ],
+    ]);
+    const previews = previewOffsets({ proposed, extra: new Map(), entries: [segmented], scale });
+    expect(previews).toEqual([
+      { itemId: itemId(segmented.id, 0), dx: 0, dWidth: 0, extra: false },
+      { itemId: itemId(segmented.id, 1), dx: 60, dWidth: 0, extra: false },
+    ]);
   });
 });
 

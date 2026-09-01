@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { createDomBackend } from './index.js';
-import { computeFrame } from '../../layout/index.js';
+import { computeFrame, createItemProducerRegistry } from '../../layout/index.js';
 import type { TimeScale, ViewPreset } from '../../layout/index.js';
 import { sampleEntries } from '../../../fixtures/sample-dataset.js';
+
+const point = (x: number, y: number) => ({ x, y });
 
 const scale: TimeScale = {
   range: sampleEntries[0]!,
@@ -21,6 +23,7 @@ const preset: ViewPreset = {
   headers: [{ unit: 'day', increment: 1, format: () => 'tick' }],
   preferredTickWidthPx: 24,
 };
+const itemProducerRegistry = createItemProducerRegistry();
 
 function mountSurfaces(): { grid: HTMLElement; timeline: HTMLElement } {
   const grid = document.createElement('div');
@@ -42,6 +45,7 @@ describe('render/dom backend', () => {
       visible: { x: 0, y: 0, width: 0, height: 0 },
       rowHeight: 32,
       revision: 0,
+      itemProducerRegistry,
     });
     backend.sync(frame);
 
@@ -49,8 +53,8 @@ describe('render/dom backend', () => {
     const original = document.elementFromPoint.bind(document);
     document.elementFromPoint = (x: number, y: number) => (x === 5 && y === 5 ? bar : original(x, y));
 
-    expect(backend.hitTest(5, 5)).toEqual({ itemId: frame.bars[0]!.id });
-    expect(backend.hitTest(999, 999)).toBeNull();
+    expect(backend.hitTest(point(5, 5))).toEqual({ itemId: frame.bars[0]!.id });
+    expect(backend.hitTest(point(999, 999))).toBeNull();
 
     document.elementFromPoint = original;
     backend.destroy();
@@ -70,6 +74,8 @@ describe('render/dom backend', () => {
       visible: { x: 0, y: 0, width: 0, height: 0 },
       rowHeight: 32,
       revision: 0,
+      itemProducerRegistry,
+      columns: [{ key: 'name', header: 'Name', align: 'start', format: (e) => e.name }],
     });
     backend.sync(frame);
 
@@ -92,6 +98,7 @@ describe('render/dom backend', () => {
         visible: { x: 0, y: 0, width: 0, height: 0 },
         rowHeight: 32,
         revision: 0,
+        itemProducerRegistry,
       }),
     );
 
@@ -119,6 +126,7 @@ describe('render/dom backend', () => {
         visible: { x: 0, y: 40, width: 0, height: 0 },
         rowHeight: 32,
         revision: 0,
+        itemProducerRegistry,
       }),
     );
 
@@ -139,6 +147,7 @@ describe('render/dom backend', () => {
         visible: { x: 0, y: 0, width: 0, height: 0 },
         rowHeight: 32,
         revision: 0,
+        itemProducerRegistry,
       }),
     );
 
@@ -160,6 +169,7 @@ describe('render/dom backend', () => {
       visible: { x: 0, y: 0, width: 0, height: 0 },
       rowHeight: 32,
       revision: 0,
+      itemProducerRegistry,
     });
     // computeFrame never sets a flag true today (no scheduling plugin wired yet) — mutate the frame's
     // own bar object, same shape a future scheduling plugin would produce, to prove the generator path.
@@ -183,6 +193,7 @@ describe('render/dom backend', () => {
       visible: { x: 0, y: 0, width: 0, height: 0 },
       rowHeight: 32,
       revision: 0,
+      itemProducerRegistry,
     });
     (frame.bars[0]!.flags as Record<string, boolean>)['late'] = true;
     backend.sync(frame);
@@ -205,6 +216,8 @@ describe('render/dom backend', () => {
         visible: { x: 0, y: 0, width: 0, height: 0 },
         rowHeight: 32,
         revision: 0,
+        itemProducerRegistry,
+        columns: [{ key: 'name', header: 'Name', align: 'start', format: (e) => e.name }],
       }),
     );
 
@@ -227,6 +240,7 @@ describe('render/dom backend', () => {
       visible: { x: 0, y: 0, width: 0, height: 0 },
       rowHeight: 32,
       revision: 0,
+      itemProducerRegistry,
     });
     backend.sync({ ...base, rows: base.rows.map((row) => ({ ...row, cells: ['Discovery', '5 d'] })) });
 
@@ -236,6 +250,54 @@ describe('render/dom backend', () => {
     expect(otherCells).toHaveLength(1);
     expect(row.children[0]?.textContent).toBe('Discovery');
     expect(row.children[1]?.textContent).toBe('5 d');
+    backend.destroy();
+  });
+
+  it('four columns paint four cells; widths and alignment apply; a removed column prunes its node', () => {
+    const backend = createDomBackend();
+    const { grid, timeline } = mountSurfaces();
+    const gridHeader = document.createElement('div');
+    document.body.append(gridHeader);
+    backend.mount({ grid, timeline, gridHeader });
+
+    const base = computeFrame({
+      entries: sampleEntries.slice(0, 1),
+      scale,
+      preset,
+      visible: { x: 0, y: 0, width: 0, height: 0 },
+      rowHeight: 32,
+      revision: 0,
+      itemProducerRegistry,
+      columns: [
+        { key: 'name', header: 'Name', align: 'start', format: (e) => e.name },
+        { key: 'start', header: 'Start', align: 'start', width: 80, format: () => 'Sep 1' },
+        { key: 'duration', header: 'Duration', align: 'end', flex: 2, format: () => '2 d' },
+        { key: 'cost', header: 'Budget', align: 'end', width: 90, format: () => '$500' },
+      ],
+    });
+    backend.sync(base);
+
+    const row = grid.querySelector<HTMLElement>('.fg-row')!;
+    expect(row.querySelectorAll('.fg-row-label, .fg-row-cell')).toHaveLength(4);
+    expect(gridHeader.querySelectorAll('.fg-col-header')).toHaveLength(4);
+    expect(gridHeader.querySelector('[data-field="cost"]')?.textContent).toBe('Budget');
+    const costCell = row.querySelector<HTMLElement>('[data-field="cost"]')!;
+    expect(costCell.style.width).toBe('90px');
+    expect(costCell.dataset['align']).toBe('end');
+    const durationCell = row.querySelector<HTMLElement>('[data-field="duration"]')!;
+    expect(durationCell.style.getPropertyValue('--fg-col-flex')).toBe('2');
+    const durationHeader = gridHeader.querySelector<HTMLElement>('[data-field="duration"]')!;
+    expect(durationHeader.style.getPropertyValue('--fg-col-flex')).toBe('2');
+    const costNode = costCell;
+
+    backend.sync({
+      ...base,
+      columns: base.columns.filter((c) => c.key !== 'cost'),
+      rows: base.rows.map((r) => ({ ...r, cells: r.cells.slice(0, 3) })),
+    });
+    expect(row.querySelector('[data-field="cost"]')).toBeNull();
+    expect(costNode.isConnected).toBe(false);
+    expect(row.querySelectorAll('.fg-row-label, .fg-row-cell')).toHaveLength(3);
     backend.destroy();
   });
 
@@ -254,6 +316,7 @@ describe('render/dom backend', () => {
         visible: { x: 0, y: 0, width: 0, height: 32 },
         rowHeight: 32,
         revision: 0,
+        itemProducerRegistry,
       }),
     );
 
@@ -275,6 +338,7 @@ describe('render/dom backend', () => {
       visible: { x: 0, y: 0, width: 0, height: 0 },
       rowHeight: 32,
       revision: 0,
+      itemProducerRegistry,
     });
     backend.sync(frame);
 
@@ -296,6 +360,7 @@ describe('render/dom backend', () => {
       visible: { x: 0, y: 0, width: 0, height: 0 },
       rowHeight: 32,
       revision: 0,
+      itemProducerRegistry,
     });
     backend.sync(frame);
 
@@ -322,6 +387,7 @@ describe('render/dom backend', () => {
       visible: { x: 0, y: 0, width: 0, height: 200 },
       rowHeight: 32,
       revision: 0,
+      itemProducerRegistry,
     });
 
     // A dataset far taller than the pane's own visible window: `.fg-timeline-pane` is both the
@@ -357,6 +423,7 @@ describe('render/dom backend', () => {
       visible: { x: 0, y: 0, width: 0, height: 200 },
       rowHeight: 32,
       revision: 0,
+      itemProducerRegistry,
     });
 
     backend.sync({
@@ -397,6 +464,7 @@ describe('render/dom backend', () => {
       visible: { x: 0, y: 0, width: 0, height: 200 },
       rowHeight: 32,
       revision: 0,
+      itemProducerRegistry,
     });
 
     backend.sync({
@@ -427,6 +495,7 @@ describe('render/dom backend', () => {
       visible: { x: 0, y: 0, width: 0, height: 200 },
       rowHeight: 32,
       revision: 0,
+      itemProducerRegistry,
     });
 
     backend.sync({
@@ -460,6 +529,7 @@ describe('render/dom backend', () => {
       visible: { x: 0, y: 0, width: 0, height: 0 },
       rowHeight: 32,
       revision: 0,
+      itemProducerRegistry,
     });
     backend.sync(frame);
     const [a, b] = frame.bars;
@@ -493,6 +563,7 @@ describe('render/dom backend', () => {
       visible: { x: 0, y: 0, width: 0, height: 0 },
       rowHeight: 32,
       revision: 0,
+      itemProducerRegistry,
     });
     backend.sync(frame);
     const [a, b] = frame.bars;
@@ -529,6 +600,7 @@ describe('render/dom backend', () => {
       visible: { x: 0, y: 0, width: 0, height: 0 },
       rowHeight: 32,
       revision: 0,
+      itemProducerRegistry,
     });
     backend.sync(frame);
     const [a] = frame.bars;
@@ -565,6 +637,7 @@ describe('render/dom backend', () => {
       visible: { x: 0, y: 0, width: 0, height: 0 },
       rowHeight: 32,
       revision: 0,
+      itemProducerRegistry,
     });
     backend.sync(frame);
     backend.applyState({ resizableItemId: frame.bars[0]!.id });
@@ -573,7 +646,7 @@ describe('render/dom backend', () => {
     const original = document.elementFromPoint.bind(document);
     document.elementFromPoint = (x: number, y: number) => (x === 5 && y === 5 ? end : original(x, y));
 
-    expect(backend.hitTest(5, 5)).toEqual({ itemId: frame.bars[0]!.id, edge: 'end' });
+    expect(backend.hitTest(point(5, 5))).toEqual({ itemId: frame.bars[0]!.id, edge: 'end' });
 
     document.elementFromPoint = original;
     backend.destroy();
@@ -593,6 +666,7 @@ describe('render/dom backend', () => {
       visible: { x: 0, y: 0, width: 0, height: 0 },
       rowHeight: 32,
       revision: 0,
+      itemProducerRegistry,
     });
     backend.sync(frame);
     // resizableItemId never set — handles stay hidden.
@@ -601,7 +675,7 @@ describe('render/dom backend', () => {
     const original = document.elementFromPoint.bind(document);
     document.elementFromPoint = (x: number, y: number) => (x === 5 && y === 5 ? bar : original(x, y));
 
-    expect(backend.hitTest(5, 5)).toEqual({ itemId: frame.bars[0]!.id });
+    expect(backend.hitTest(point(5, 5))).toEqual({ itemId: frame.bars[0]!.id });
 
     document.elementFromPoint = original;
     backend.destroy();
@@ -621,6 +695,7 @@ describe('render/dom backend', () => {
       visible: { x: 0, y: 0, width: 0, height: 0 },
       rowHeight: 32,
       revision: 0,
+      itemProducerRegistry,
     });
     backend.sync(frame);
     const [a, b] = frame.bars;
@@ -652,6 +727,7 @@ describe('render/dom backend', () => {
       visible: { x: 0, y: 0, width: 0, height: 0 },
       rowHeight: 32,
       revision: 0,
+      itemProducerRegistry,
     });
     backend.sync(frame);
 
@@ -669,6 +745,109 @@ describe('render/dom backend', () => {
     backend.applyState({});
     expect(line.hidden).toBe(true);
     expect(label.hidden).toBe(true);
+
+    backend.destroy();
+    grid.remove();
+    timeline.remove();
+  });
+
+  it('indents from depth, puts aria-expanded on the twisty, and omits a twisty on a leaf (S4.6)', () => {
+    const backend = createDomBackend();
+    const { grid, timeline } = mountSurfaces();
+    backend.mount({ grid, timeline });
+
+    const parent = sampleEntries[0]!;
+    const child = { ...sampleEntries[1]!, parentId: parent.id };
+    const frame = computeFrame({
+      entries: [parent, child],
+      scale,
+      preset,
+      visible: { x: 0, y: 0, width: 0, height: 0 },
+      rowHeight: 32,
+      revision: 0,
+      itemProducerRegistry,
+      rows: { source: 'entries', tree: true },
+      columns: [{ key: 'name', header: 'Name', align: 'start', format: (e) => e.name }],
+    });
+    backend.sync(frame);
+
+    const parentRow = grid.querySelector<HTMLElement>(`[data-row-id="${parent.id}"]`)!;
+    const childRow = grid.querySelector<HTMLElement>(`[data-row-id="${child.id}"]`)!;
+    expect(parentRow.style.getPropertyValue('--fg-row-depth')).toBe('0');
+    expect(childRow.style.getPropertyValue('--fg-row-depth')).toBe('1');
+    expect(parentRow.getAttribute('aria-level')).toBe('1');
+    expect(childRow.getAttribute('aria-level')).toBe('2');
+    const twisty = parentRow.querySelector<HTMLElement>('.fg-row-twisty');
+    expect(twisty).not.toBeNull();
+    expect(twisty?.hidden).toBe(false);
+    expect(twisty?.getAttribute('aria-expanded')).toBe('true');
+    const childTwisty = childRow.querySelector<HTMLButtonElement>('.fg-row-twisty');
+    expect(childTwisty).not.toBeNull();
+    expect(childTwisty?.hidden).toBe(true);
+
+    backend.destroy();
+    grid.remove();
+    timeline.remove();
+  });
+
+  it('[S4-A4] paints N bars on one row for N segments', () => {
+    const backend = createDomBackend();
+    const { grid, timeline } = mountSurfaces();
+    backend.mount({ grid, timeline });
+    const entry = sampleEntries[0]!;
+    const frame = computeFrame({
+      entries: [
+        {
+          ...entry,
+          segments: [
+            { start: entry.start, end: entry.end },
+            { start: entry.start, end: entry.end },
+            { start: entry.start, end: entry.end },
+          ],
+        },
+      ],
+      scale,
+      preset,
+      visible: { x: 0, y: 0, width: 0, height: 0 },
+      rowHeight: 32,
+      revision: 0,
+      itemProducerRegistry,
+    });
+    backend.sync(frame);
+
+    expect(grid.querySelectorAll('.fg-row')).toHaveLength(1);
+    expect(timeline.querySelectorAll('.fg-bar')).toHaveLength(3);
+    expect(frame.bars.every((bar) => String(bar.rowId) === String(frame.rows[0]?.id))).toBe(true);
+
+    backend.destroy();
+    grid.remove();
+    timeline.remove();
+  });
+
+  it('applies bracket and diamond classes off data-kind', () => {
+    const backend = createDomBackend();
+    const { grid, timeline } = mountSurfaces();
+    backend.mount({ grid, timeline });
+    const [span, groupSeed, mileSeed] = sampleEntries;
+    backend.sync(
+      computeFrame({
+        entries: [span!, { ...groupSeed!, kind: 'group' }, { ...mileSeed!, kind: 'milestone' }],
+        scale,
+        preset,
+        visible: { x: 0, y: 0, width: 0, height: 0 },
+        rowHeight: 32,
+        revision: 0,
+        itemProducerRegistry,
+      }),
+    );
+
+    const groupBar = timeline.querySelector<HTMLElement>('[data-kind="group"]')!;
+    const mileBar = timeline.querySelector<HTMLElement>('[data-kind="milestone"]')!;
+    const spanBar = timeline.querySelector<HTMLElement>('[data-kind="span"]')!;
+    expect(groupBar.className.split(' ')).toContain('fg-bar-bracket');
+    expect(mileBar.className.split(' ')).toContain('fg-bar-diamond');
+    expect(spanBar.className.split(' ')).not.toContain('fg-bar-bracket');
+    expect(spanBar.className.split(' ')).not.toContain('fg-bar-diamond');
 
     backend.destroy();
     grid.remove();

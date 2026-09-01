@@ -1,3 +1,8 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>FreeGantt Module Map</title>
 <link rel="stylesheet" href="../harness-nav.css" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -16,6 +21,9 @@
     --border: #c9c1a9;
     --border-strong: #a89f88;
     --accent: #b8541f;
+    --link: #9a4416;
+    --link-visited: #7c5a2e;
+    --link-hover: #6d2f0d;
     --accent-ink: #ffffff;
     --core: #276a63;
     --core-bg: rgba(39, 106, 99, 0.06);
@@ -27,6 +35,7 @@
       rgba(114, 107, 89, 0.09) 7px,
       rgba(114, 107, 89, 0.09) 8px
     );
+    --stub-fill: #e4e0d2;
     --forbid: #8a3b3b;
     font-synthesis: none;
   }
@@ -40,6 +49,9 @@
       --border: #363b3a;
       --border-strong: #4b514e;
       --accent: #e2874a;
+      --link: #f0a469;
+      --link-visited: #d9bd94;
+      --link-hover: #ffc79a;
       --accent-ink: #1a1006;
       --core: #5fb0a5;
       --core-bg: rgba(95, 176, 165, 0.08);
@@ -51,6 +63,7 @@
         rgba(154, 146, 124, 0.09) 7px,
         rgba(154, 146, 124, 0.09) 8px
       );
+      --stub-fill: #1e2124;
       --forbid: #c67a7a;
     }
   }
@@ -63,6 +76,9 @@
     --border: #363b3a;
     --border-strong: #4b514e;
     --accent: #e2874a;
+    --link: #f0a469;
+    --link-visited: #d9bd94;
+    --link-hover: #ffc79a;
     --accent-ink: #1a1006;
     --core: #5fb0a5;
     --core-bg: rgba(95, 176, 165, 0.08);
@@ -74,6 +90,7 @@
       rgba(154, 146, 124, 0.09) 7px,
       rgba(154, 146, 124, 0.09) 8px
     );
+    --stub-fill: #1e2124;
     --forbid: #c67a7a;
   }
 
@@ -87,6 +104,22 @@
     font-family: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
     margin: 0;
     padding: 2.5rem 1.5rem 4rem;
+  }
+  /* Prose links. Without these the browser defaults (#0000ee / #551a8b) sit unreadably on the
+     dark background; both states stay inside this page's own accent family. */
+  a {
+    color: var(--link);
+    text-decoration-color: color-mix(in srgb, var(--link) 45%, transparent);
+    text-underline-offset: 0.18em;
+  }
+  a:visited {
+    color: var(--link-visited);
+    text-decoration-color: color-mix(in srgb, var(--link-visited) 45%, transparent);
+  }
+  a:hover,
+  a:focus-visible {
+    color: var(--link-hover);
+    text-decoration-color: currentColor;
   }
 
   .page {
@@ -143,9 +176,11 @@
     overflow-x: auto;
   }
 
-  svg {
+  figure svg {
     display: block;
-    min-width: 880px;
+    width: 100%;
+    height: auto;
+    max-width: 100%;
   }
 
   figcaption {
@@ -228,6 +263,30 @@
     margin-top: 3rem;
   }
 
+  .updated {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6rem;
+    margin: 0 0 1.2rem;
+    padding: 0.6rem 1.1rem;
+    border: 1px solid var(--core);
+    border-left: 5px solid var(--core);
+    border-radius: 6px;
+    background: var(--core-bg);
+    color: var(--ink);
+    font-family: 'IBM Plex Mono', ui-monospace, monospace;
+    font-size: 1.05rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+  }
+  .updated .k {
+    color: var(--muted);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    font-size: 0.72rem;
+  }
+
   .section-eyebrow {
     font-family: 'IBM Plex Mono', ui-monospace, monospace;
     font-size: 0.72rem;
@@ -294,29 +353,35 @@
   }
 </style>
 
+  </head>
+  <body>
 <div class="page">
   <header>
     <nav class="harness-site-nav" aria-label="Harness pages"></nav>
+    <nav class="harness-docs-nav" aria-label="Harness docs"></nav>
     <script type="module" src="../harness-nav.ts"></script>
-    <p class="eyebrow">Architecture snapshot — S0/S1 in progress</p>
+    <p class="eyebrow">Architecture snapshot — slice S4</p>
+    <div class="updated"><span class="k">updated</span> 2026-08-31 — slice S4</div>
     <h1>FreeGantt module map</h1>
     <p>
       The dependency graph as it actually stands in <code>src/</code> right now: solid boxes are built and
-      wired together by real imports; hatched boxes are stub modules (<code>index.ts</code> only, 3 lines)
+      wired together by real imports; hatched boxes are stub modules (<code>index.ts</code> only, 3–5 lines)
       that the slice plan reserves but hasn't filled in yet. The vertical split is the one boundary the linter
       enforces — <code>model/</code>, <code>time/</code>, <code>data/</code>, and <code>layout/</code> stay
       DOM-free; only the right-hand column may touch <code>document</code> or <code>window</code>.
       <code>scheduling/</code> is DOM-free too, but sits outside the core zone on purpose: it is the
       first-party default scheduling plugin's engine, not a mandatory core layer (D4, ADR 0002) — a Gantt with
       no scheduling plugin installed never loads it.
+      At S4, <code>data/</code> and <code>interaction/</code> are now fully built — the only stubs left are
+      <code>scheduling/</code> and <code>extensions/</code>.
     </p>
   </header>
 
   <figure>
     <svg
-      viewBox="0 0 1240 900"
+      viewBox="0 0 1240 960"
       role="img"
-      aria-label="Layered dependency diagram of the FreeGantt src tree: model, time, layout and data form the mandatory DOM-free core on the left; below them, outside the core zone, sits scheduling — the first-party default plugin's DOM-free engine, not part of the core. The right column holds the DOM-touching render, view, interaction and extensions modules, all surfaced through a single api module on top. Data and scheduling meet only through data/'s generic resolve hook; a direct link between scheduling and interaction is marked forbidden."
+      aria-label="Layered dependency diagram of the FreeGantt src tree at slice S4: model, time, data and layout form the mandatory DOM-free core on the left; below them, outside the core zone, sits scheduling — the first-party default plugin's DOM-free engine, not part of the core. The right column holds the DOM-touching render, view, interaction and extensions modules, all surfaced through a single api module on top. data/ and interaction/ are now fully built; scheduling/ and extensions/ remain stubs. Data and scheduling meet only through data/'s generic extension hook; a direct link between scheduling and interaction is marked forbidden."
     >
       <defs>
         <marker
@@ -356,7 +421,7 @@
       />
       <text x="620" y="44" text-anchor="middle" class="box-name" font-size="17" fill="var(--ink)">api/</text>
       <text x="620" y="63" text-anchor="middle" class="box-sub" font-size="11.5" fill="var(--muted)">
-        Gantt, Dataset · 78 lines · the only public export surface, alongside model/ types
+        Gantt, Dataset · 765 lines · the only public export surface, alongside model/ types
       </text>
 
       <!-- boundary zones -->
@@ -364,7 +429,7 @@
         x="40"
         y="118"
         width="560"
-        height="448"
+        height="580"
         rx="10"
         fill="var(--core-bg)"
         stroke="var(--core)"
@@ -378,7 +443,7 @@
       <!-- first-party plugin zone: scheduling is deliberately NOT inside the core zone (D4, ADR 0002) -->
       <rect
         x="40"
-        y="586"
+        y="726"
         width="560"
         height="114"
         rx="10"
@@ -387,7 +452,7 @@
         stroke-width="1.25"
         stroke-dasharray="3 4"
       />
-      <text x="60" y="610" class="box-name" font-size="11.5" fill="var(--muted)" letter-spacing="0.06em">
+      <text x="60" y="750" class="box-name" font-size="11.5" fill="var(--muted)" letter-spacing="0.06em">
         FIRST-PARTY DEFAULT PLUGIN — DOM-free, not mandatory core (D4 · ADR 0002)
       </text>
 
@@ -395,7 +460,7 @@
         x="660"
         y="118"
         width="540"
-        height="590"
+        height="630"
         rx="10"
         fill="var(--dom-bg)"
         stroke="var(--accent)"
@@ -411,19 +476,19 @@
         x1="628"
         y1="118"
         x2="628"
-        y2="708"
+        y2="748"
         stroke="var(--border-strong)"
         stroke-width="1.25"
         stroke-dasharray="1 5"
       />
       <text
         x="628"
-        y="410"
+        y="430"
         text-anchor="middle"
         class="box-sub"
         font-size="10.5"
         fill="var(--muted)"
-        transform="rotate(90 628 410)"
+        transform="rotate(90 628 430)"
         letter-spacing="0.08em"
       >
         DOM BOUNDARY
@@ -433,21 +498,24 @@
       <rect
         x="80"
         y="168"
-        width="210"
-        height="76"
+        width="230"
+        height="96"
         rx="7"
         fill="var(--bg)"
         stroke="var(--ink)"
         stroke-width="1.5"
       />
-      <text x="185" y="196" text-anchor="middle" class="box-name" font-size="14.5" fill="var(--ink)">
+      <text x="195" y="194" text-anchor="middle" class="box-name" font-size="14.5" fill="var(--ink)">
         model/
       </text>
-      <text x="185" y="215" text-anchor="middle" class="box-sub" font-size="10.5" fill="var(--muted)">
-        Entry, ids, time
+      <text x="195" y="212" text-anchor="middle" class="box-sub" font-size="10.5" fill="var(--muted)">
+        Entry, Field, ChangeSet, ids
       </text>
-      <text x="185" y="230" text-anchor="middle" class="box-sub" font-size="10.5" fill="var(--muted)">
-        63 lines · types + brand helpers, 0 deps
+      <text x="195" y="227" text-anchor="middle" class="box-sub" font-size="10.5" fill="var(--muted)">
+        716 lines · 10 files · types + brand helpers, 0 deps
+      </text>
+      <text x="195" y="242" text-anchor="middle" class="box-sub" font-size="10" fill="var(--muted)">
+        errors, geometry, document schema
       </text>
 
       <!-- time/ -->
@@ -465,10 +533,10 @@
         time/
       </text>
       <text x="455" y="215" text-anchor="middle" class="box-sub" font-size="10.5" fill="var(--muted)">
-        instant, zone, scale
+        instant, zone, scale, format
       </text>
       <text x="455" y="230" text-anchor="middle" class="box-sub" font-size="10.5" fill="var(--muted)">
-        348 lines · only new Date() here
+        940 lines · 8 files · only new Date() here
       </text>
 
       <!-- layout/ -->
@@ -476,83 +544,87 @@
         x="80"
         y="310"
         width="480"
-        height="76"
+        height="100"
         rx="7"
         fill="var(--bg)"
         stroke="var(--ink)"
         stroke-width="1.5"
       />
-      <text x="320" y="338" text-anchor="middle" class="box-name" font-size="14.5" fill="var(--ink)">
+      <text x="320" y="336" text-anchor="middle" class="box-name" font-size="14.5" fill="var(--ink)">
         layout/
       </text>
-      <text x="320" y="357" text-anchor="middle" class="box-sub" font-size="10.5" fill="var(--muted)">
-        frame.ts, row-height-index.ts, viewport/time-scale-model.ts
+      <text x="320" y="354" text-anchor="middle" class="box-sub" font-size="10.5" fill="var(--muted)">
+        frame.ts, items/, lanes/, rows/, viewport/
       </text>
-      <text x="320" y="372" text-anchor="middle" class="box-sub" font-size="10.5" fill="var(--muted)">
-        392 lines · computeFrame(), PrefixSumHeightIndex, TimeScaleModel
+      <text x="320" y="370" text-anchor="middle" class="box-sub" font-size="10.5" fill="var(--muted)">
+        2,342 lines · 20 files · computeFrame(), row/item pipeline
+      </text>
+      <text x="320" y="386" text-anchor="middle" class="box-sub" font-size="10" fill="var(--muted)">
+        TimeScaleModel, ScrollModel, gesture-draft, FrameLayout
       </text>
 
-      <!-- data/ stub -->
+      <!-- data/ — BUILT, solid box -->
       <rect
         x="80"
-        y="460"
-        width="210"
-        height="76"
+        y="480"
+        width="250"
+        height="96"
         rx="7"
-        fill="var(--stub-bg)"
-        fill-opacity="1"
-        stroke="var(--border-strong)"
+        fill="var(--bg)"
+        stroke="var(--ink)"
         stroke-width="1.5"
-        stroke-dasharray="5 4"
       />
-      <text x="185" y="490" text-anchor="middle" class="box-name" font-size="14.5" fill="var(--muted)">
+      <text x="205" y="506" text-anchor="middle" class="box-name" font-size="14.5" fill="var(--ink)">
         data/
       </text>
-      <text x="185" y="507" text-anchor="middle" class="box-sub" font-size="10" fill="var(--muted)">
-        3 lines · stub — S2 (transactions, undo)
+      <text x="205" y="524" text-anchor="middle" class="box-sub" font-size="10.5" fill="var(--muted)">
+        DatasetState, EntryStore, transaction
       </text>
-      <text x="185" y="522" text-anchor="middle" class="box-sub" font-size="9" fill="var(--muted)">
-        when built: imports model/ · called by api, view, interaction
+      <text x="205" y="540" text-anchor="middle" class="box-sub" font-size="10.5" fill="var(--muted)">
+        2,607 lines · 23 files · extension hook → changeset
+      </text>
+      <text x="205" y="556" text-anchor="middle" class="box-sub" font-size="10" fill="var(--muted)">
+        History, fields, serialization · imports time + model
       </text>
 
       <!-- scheduling/ stub — outside the core zone: plugin engine, not a core layer -->
       <rect
         x="350"
-        y="622"
+        y="762"
         width="210"
         height="64"
         rx="7"
-        fill="var(--stub-bg)"
+        fill="var(--stub-fill)"
         stroke="var(--border-strong)"
         stroke-width="1.5"
         stroke-dasharray="5 4"
       />
-      <text x="455" y="648" text-anchor="middle" class="box-name" font-size="14.5" fill="var(--muted)">
+      <text x="455" y="788" text-anchor="middle" class="box-name" font-size="14.5" fill="var(--muted)">
         scheduling/
       </text>
-      <text x="455" y="666" text-anchor="middle" class="box-sub" font-size="10.5" fill="var(--muted)">
-        5 lines · stub — S3, ADR 0002
+      <text x="455" y="806" text-anchor="middle" class="box-sub" font-size="10.5" fill="var(--muted)">
+        5 lines · stub — S7, ADR 0002
       </text>
 
       <!-- render/ -->
       <rect
         x="700"
         y="168"
-        width="210"
+        width="220"
         height="76"
         rx="7"
         fill="var(--bg)"
         stroke="var(--ink)"
         stroke-width="1.5"
       />
-      <text x="805" y="196" text-anchor="middle" class="box-name" font-size="14.5" fill="var(--ink)">
+      <text x="810" y="196" text-anchor="middle" class="box-name" font-size="14.5" fill="var(--ink)">
         render/
       </text>
-      <text x="805" y="215" text-anchor="middle" class="box-sub" font-size="10.5" fill="var(--muted)">
+      <text x="810" y="215" text-anchor="middle" class="box-sub" font-size="10.5" fill="var(--muted)">
         backend, dom/{index,sync-keyed}, null/
       </text>
-      <text x="805" y="230" text-anchor="middle" class="box-sub" font-size="10.5" fill="var(--muted)">
-        287 lines · shared syncKeyed reconciler (#48), headless twin
+      <text x="810" y="230" text-anchor="middle" class="box-sub" font-size="10.5" fill="var(--muted)">
+        1,028 lines · 7 files · syncKeyed reconciler, date-line
       </text>
 
       <!-- view/ -->
@@ -560,64 +632,69 @@
         x="700"
         y="310"
         width="460"
+        height="100"
+        rx="7"
+        fill="var(--bg)"
+        stroke="var(--ink)"
+        stroke-width="1.5"
+      />
+      <text x="930" y="336" text-anchor="middle" class="box-name" font-size="14.5" fill="var(--ink)">
+        view/
+      </text>
+      <text x="930" y="354" text-anchor="middle" class="box-sub" font-size="10.5" fill="var(--muted)">
+        GanttShell, PaneLayout, GesturePipeline
+      </text>
+      <text x="930" y="370" text-anchor="middle" class="box-sub" font-size="10.5" fill="var(--muted)">
+        2,440 lines · 20 files · capability, affordance, event-bus
+      </text>
+      <text x="930" y="386" text-anchor="middle" class="box-sub" font-size="10" fill="var(--muted)">
+        CollapseState, grid-columns, keyboard/wheel nav, splitter
+      </text>
+
+      <!-- interaction/ — BUILT, solid box -->
+      <rect
+        x="700"
+        y="480"
+        width="220"
         height="76"
         rx="7"
         fill="var(--bg)"
         stroke="var(--ink)"
         stroke-width="1.5"
       />
-      <text x="930" y="338" text-anchor="middle" class="box-name" font-size="14.5" fill="var(--ink)">
-        view/
-      </text>
-      <text x="930" y="357" text-anchor="middle" class="box-sub" font-size="10.5" fill="var(--muted)">
-        GanttShell
-      </text>
-      <text x="930" y="372" text-anchor="middle" class="box-sub" font-size="10.5" fill="var(--muted)">
-        141 lines · #private-field GanttShell binds layout → render backend
-      </text>
-
-      <!-- interaction/ stub -->
-      <rect
-        x="700"
-        y="460"
-        width="210"
-        height="76"
-        rx="7"
-        fill="var(--stub-bg)"
-        stroke="var(--border-strong)"
-        stroke-width="1.5"
-        stroke-dasharray="5 4"
-      />
-      <text x="805" y="490" text-anchor="middle" class="box-name" font-size="14.5" fill="var(--muted)">
+      <text x="810" y="506" text-anchor="middle" class="box-name" font-size="14.5" fill="var(--ink)">
         interaction/
       </text>
-      <text x="805" y="509" text-anchor="middle" class="box-sub" font-size="10.5" fill="var(--muted)">
-        3 lines · stub — drag, select, edit
+      <text x="810" y="524" text-anchor="middle" class="box-sub" font-size="10.5" fill="var(--muted)">
+        entry-gestures, keyboard-editing
+      </text>
+      <text x="810" y="540" text-anchor="middle" class="box-sub" font-size="10.5" fill="var(--muted)">
+        401 lines · 4 files · drives EntryGestureContext
       </text>
 
       <!-- extensions/ stub -->
       <rect
         x="960"
-        y="460"
+        y="480"
         width="200"
         height="76"
         rx="7"
-        fill="var(--stub-bg)"
+        fill="var(--stub-fill)"
         stroke="var(--border-strong)"
         stroke-width="1.5"
         stroke-dasharray="5 4"
       />
-      <text x="1060" y="490" text-anchor="middle" class="box-name" font-size="14.5" fill="var(--muted)">
+      <text x="1060" y="506" text-anchor="middle" class="box-name" font-size="14.5" fill="var(--muted)">
         extensions/
       </text>
-      <text x="1060" y="509" text-anchor="middle" class="box-sub" font-size="10.5" fill="var(--muted)">
-        3 lines · stub
+      <text x="1060" y="525" text-anchor="middle" class="box-sub" font-size="10.5" fill="var(--muted)">
+        3 lines · stub — S6
       </text>
 
       <!-- harness note -->
       <rect
         x="700"
-        y="600"
+        y="640"
         width="460"
         height="70"
         rx="7"
@@ -626,34 +703,73 @@
         stroke-width="1"
         stroke-dasharray="2 4"
       />
-      <text x="930" y="627" text-anchor="middle" class="box-name" font-size="12.5" fill="var(--muted)">
+      <text x="930" y="667" text-anchor="middle" class="box-name" font-size="12.5" fill="var(--muted)">
         harness/main.ts
       </text>
-      <text x="930" y="645" text-anchor="middle" class="box-sub" font-size="10" fill="var(--muted)">
-        6 lines · first consumer, sits outside src/ — reviewed every commit regardless
+      <text x="930" y="685" text-anchor="middle" class="box-sub" font-size="10" fill="var(--muted)">
+        first consumer, sits outside src/ — reviewed every commit regardless
       </text>
 
       <!-- arrows: within DOM-free core -->
       <g stroke="var(--ink)" stroke-width="1.5" fill="none" marker-end="url(#arrow)" color="var(--ink)">
-        <path d="M290,206 H350" />
-        <path d="M150,244 V310" />
+        <!-- model -> time -->
+        <path d="M310,206 H350" />
+        <!-- model -> layout -->
+        <path d="M150,264 V310" />
+        <!-- time -> layout -->
         <path d="M455,244 V310" />
+        <!-- time -> data -->
+        <path d="M400,244 V480" />
+        <!-- model -> data -->
+        <path d="M230,264 V480" />
       </g>
 
       <!-- arrows: within DOM column -->
       <g stroke="var(--ink)" stroke-width="1.5" fill="none" marker-end="url(#arrow)" color="var(--ink)">
-        <path d="M805,244 V310" />
+        <!-- render -> view -->
+        <path d="M810,244 V310" />
       </g>
 
-      <!-- arrows crossing the boundary -->
+      <!-- arrows crossing the boundary: layout -> view, render -->
       <g stroke="var(--ink)" stroke-width="1.5" fill="none" marker-end="url(#arrow)" color="var(--ink)">
-        <path d="M560,335 L700,206" />
-        <path d="M560,348 H700" />
+        <path d="M560,340 L700,206" />
+        <path d="M560,355 H700" />
       </g>
 
-      <!-- model -> view (long hop) -->
+      <!-- data -> view (view imports data) -->
       <path
-        d="M290,188 C 470,110 560,150 700,326"
+        d="M330,520 H700"
+        stroke="var(--ink)"
+        stroke-width="1.5"
+        fill="none"
+        marker-end="url(#arrow)"
+        color="var(--ink)"
+      />
+      <text x="515" y="512" text-anchor="middle" class="box-sub" font-size="9.5" fill="var(--muted)">
+        DatasetState, dataset
+      </text>
+
+      <!-- interaction -> view, data, model -->
+      <g stroke="var(--ink)" stroke-width="1.5" fill="none" marker-end="url(#arrow)" color="var(--ink)">
+        <!-- interaction -> view (upward) -->
+        <path d="M810,480 V412" />
+      </g>
+      <path
+        d="M700,518 H332"
+        stroke="var(--ink)"
+        stroke-width="1.25"
+        fill="none"
+        marker-end="url(#arrow)"
+        stroke-dasharray="1 4"
+        color="var(--ink)"
+      />
+      <text x="516" y="542" text-anchor="middle" class="box-sub" font-size="9.5" fill="var(--muted)">
+        view + data + model (type-only)
+      </text>
+
+      <!-- model -> view (long hop, type-only) -->
+      <path
+        d="M310,188 C 470,110 560,150 700,326"
         stroke="var(--ink)"
         stroke-width="1.25"
         fill="none"
@@ -665,7 +781,7 @@
         Entry type
       </text>
 
-      <!-- view -> api, model -> api -->
+      <!-- api arrows: view -> api, model -> api, data -> api, layout -> api, time -> api, interaction -> api -->
       <path
         d="M840,310 C 760,190 700,110 660,70"
         stroke="var(--ink)"
@@ -682,10 +798,46 @@
         marker-end="url(#arrow)"
         color="var(--ink)"
       />
-
-      <!-- data <-> scheduling : the designed seam — generic resolve hook, no static import -->
       <path
-        d="M185,538 V572 H455 V620"
+        d="M330,578 C 330,50 400,30 460,42"
+        stroke="var(--ink)"
+        stroke-width="1.5"
+        fill="none"
+        marker-end="url(#arrow)"
+        color="var(--ink)"
+      />
+      <path
+        d="M560,348 L660,70"
+        stroke="var(--ink)"
+        stroke-width="1.5"
+        fill="none"
+        marker-end="url(#arrow)"
+        color="var(--ink)"
+      />
+      <path
+        d="M455,168 C 455,110 455,80 460,70"
+        stroke="var(--ink)"
+        stroke-width="1.5"
+        fill="none"
+        marker-end="url(#arrow)"
+        color="var(--ink)"
+      />
+      <path
+        d="M810,480 C 810,200 680,100 660,70"
+        stroke="var(--ink)"
+        stroke-width="1.5"
+        fill="none"
+        marker-end="url(#arrow)"
+        stroke-dasharray="1 4"
+        color="var(--ink)"
+      />
+      <text x="720" y="180" text-anchor="middle" class="box-sub" font-size="9" fill="var(--muted)">
+        view + data + layout + time + interaction
+      </text>
+
+      <!-- data <-> scheduling : the designed seam — generic extension hook, no static import -->
+      <path
+        d="M205,578 V710 H455 V760"
         stroke="var(--muted)"
         stroke-width="1.5"
         fill="none"
@@ -693,22 +845,22 @@
         marker-start="url(#arrow-muted)"
         stroke-dasharray="4 3"
       />
-      <text x="320" y="560" text-anchor="middle" class="box-sub" font-size="9.5" fill="var(--muted)">
-        resolve hook — generic seam (D4)
+      <text x="330" y="650" text-anchor="middle" class="box-sub" font-size="9.5" fill="var(--muted)">
+        extension hook — generic seam (D4)
       </text>
 
       <!-- forbidden link -->
       <path
-        d="M562,654 H650 V498 H698"
+        d="M562,796 H650 V518 H698"
         stroke="var(--forbid)"
         stroke-width="1.5"
         fill="none"
         stroke-dasharray="5 4"
       />
-      <circle cx="674" cy="498" r="9" fill="var(--bg-raised)" stroke="var(--forbid)" stroke-width="1.5" />
+      <circle cx="674" cy="518" r="9" fill="var(--bg-raised)" stroke="var(--forbid)" stroke-width="1.5" />
       <text
         x="674"
-        y="502"
+        y="522"
         text-anchor="middle"
         font-size="11"
         fill="var(--forbid)"
@@ -716,21 +868,23 @@
       >
         ×
       </text>
-      <text x="674" y="522" text-anchor="middle" class="box-sub" font-size="9.5" fill="var(--forbid)">
+      <text x="674" y="540" text-anchor="middle" class="box-sub" font-size="9.5" fill="var(--forbid)">
         never — meet only through data/
       </text>
     </svg>
     <figcaption>
-      Boxes trace what <code>src/</code> contains today; arrows trace real <code>import</code> statements —
-      except the muted <code>data/ ⇄ scheduling/</code> bridge, which is the designed resolve-hook seam (D4):
+      Boxes trace what <code>src/</code> contains at S4; arrows trace real <code>import</code> statements —
+      except the muted <code>data/ ⇄ scheduling/</code> bridge, which is the designed extension-hook seam (D4):
       no static import in either direction. <code>model/</code> has zero dependencies and feeds nearly
       everything; <code>time/</code> and <code>layout/</code> stay DOM-free so they run the same in Node as in
-      a browser; <code>render/</code> and <code>view/</code> are the only modules currently touching the DOM.
-      <code>scheduling/</code> is drawn outside the core zone because that is where the plans put it: a
-      plugin's engine home, not a layer every Gantt is wired to (ADR 0002 considered moving it under
-      <code>extensions/</code> and rejected it — extensions/ touches the DOM, scheduling's purity is
-      load-bearing). <code>data/</code>, <code>scheduling/</code>, <code>interaction/</code>, and
-      <code>extensions/</code> are reserved names with stub files — later slices, not missing imports.
+      a browser; <code>render/</code> and <code>view/</code> are the DOM-touching modules.
+      <code>data/</code> and <code>interaction/</code> are now fully built — <code>data/</code> owns live
+      state, transactions, fields and serialization (importing <code>time/</code> and <code>model/</code>);
+      <code>interaction/</code> drives gestures through the <code>EntryGestureContext</code> seam in
+      <code>view/</code> (importing <code>view/</code>, <code>data/</code> and <code>model/</code>).
+      <code>scheduling/</code> and <code>extensions/</code> remain stubs — reserved names with stub files
+      for S7 and S6 respectively.
+      <code>api/</code> now imports <code>interaction/</code> for constructor injection of gesture attachments.
     </figcaption>
   </figure>
 
@@ -745,24 +899,27 @@
     </div>
   </div>
 
+  <!-- ══════════════════════════════════════════════════════════ detail — model/ -->
   <section class="section">
     <p class="section-eyebrow">Detail — model/</p>
     <h2>Model coupling</h2>
     <p>
-      <code>model/</code> is the one module every other layer is allowed to reach into — 63 lines, zero
-      dependencies, no runtime beyond id/brand helpers (plans/01 §1.1). Every arrow below is a real
+      <code>model/</code> is the one module every other layer is allowed to reach into — 716 lines, zero
+      dependencies, no runtime beyond id/brand helpers (plans/01 §1.1). At S4 it exports
+      <code>Field</code>/<code>ChangeSet</code>/<code>DatasetDocument</code> alongside the original
+      <code>Entry</code>/<code>EntryKind</code> types. Every arrow below is a real
       <code>import</code> in <code>src/</code> today; the label on each box is exactly what that layer pulls
-      across the boundary, type-only imports called out separately from the two runtime calls
-      (<code>itemId()</code>, <code>rowId()</code>) that actually execute outside <code>model/</code>.
-      <code>render/</code> never imports <code>model/</code> at all — it's included to show how it still ends
-      up typed in terms of <code>ItemId</code>/<code>RowId</code>, purely through <code>layout/</code>'s
-      re-export.
+      across the boundary, type-only imports called out separately from the runtime calls
+      (<code>entryId()</code>, <code>rowId()</code>, <code>itemId()</code>) that actually execute outside
+      <code>model/</code>. <code>render/</code> never imports <code>model/</code> at all — it's included to
+      show how it still ends up typed in terms of <code>ItemId</code>/<code>RowId</code>, purely through
+      <code>layout/</code>'s re-export.
     </p>
     <figure>
       <svg
-        viewBox="0 0 1240 620"
+        viewBox="0 0 1240 600"
         role="img"
-        aria-label="Diagram of what crosses the model/ module boundary: model/ exports Entry, EntryKind, the EntryId/RowId/ItemId brands with their entryId/rowId/itemId helpers, and Instant/TimeSpan/Duration. time/ imports Instant, TimeSpan and Duration type-only. layout/ imports Entry, EntryKind and the id types, and also calls itemId() and rowId() at runtime. api/index.ts re-exports entryId, itemId and the same type list as model/'s public allow-list. view/ imports only the Entry type, through GanttShell's structural DatasetLike interface, not through api/. render/ imports nothing from model/ directly; it only sees ItemId and RowId as types, re-exported by layout/index.ts."
+        aria-label="Diagram of what crosses the model/ module boundary: model/ exports Entry, EntryKind, EntryId/RowId/ItemId brands with helpers, Field, FieldSource, ChangeSet, geometry types, errors and DatasetDocument. time/ imports Instant/TimeSpan/Duration type-only. layout/ imports Entry, EntryKind and the id types, and calls itemId()/rowId() at runtime. api/ re-exports the model types plus entryId/itemId. view/ imports only the Entry type through GanttShell's structural DatasetLike interface. data/ imports model types plus entryId()/rowId()/itemId() runtime helpers. render/ imports nothing from model/ directly."
       >
         <defs>
           <marker
@@ -783,7 +940,7 @@
           x="470"
           y="20"
           width="300"
-          height="122"
+          height="140"
           rx="8"
           fill="var(--core-bg)"
           stroke="var(--core)"
@@ -793,139 +950,148 @@
           model/
         </text>
         <text x="620" y="64" text-anchor="middle" class="box-sub" font-size="10.5" fill="var(--ink)">
-          Entry, EntryKind
+          Entry, EntryKind, EntryInput
         </text>
         <text x="620" y="79" text-anchor="middle" class="box-sub" font-size="10.5" fill="var(--ink)">
-          EntryId / RowId / ItemId brands
+          EntryId / RowId / ItemId brands + entryId(), rowId(), itemId()
         </text>
         <text x="620" y="94" text-anchor="middle" class="box-sub" font-size="10.5" fill="var(--ink)">
-          entryId(), rowId(), itemId() helpers
+          Field, FieldSource, ChangeSet, DatasetDocument
         </text>
         <text x="620" y="109" text-anchor="middle" class="box-sub" font-size="10.5" fill="var(--ink)">
-          Instant, TimeSpan, Duration
+          geometry (Point, Size, PixelSpan, Rect)
         </text>
-        <text x="620" y="128" text-anchor="middle" class="box-sub" font-size="10" fill="var(--muted)">
-          63 lines · 0 deps — types + brand helpers only
+        <text x="620" y="124" text-anchor="middle" class="box-sub" font-size="10.5" fill="var(--ink)">
+          Instant, TimeSpan, Duration, FreeGanttError hierarchy
+        </text>
+        <text x="620" y="148" text-anchor="middle" class="box-sub" font-size="10" fill="var(--muted)">
+          716 lines · 10 files · 0 deps — types + brand helpers only
         </text>
 
         <!-- time/ -->
         <rect
           x="30"
-          y="200"
-          width="270"
-          height="150"
+          y="220"
+          width="230"
+          height="140"
           rx="7"
           fill="var(--bg)"
           stroke="var(--ink)"
           stroke-width="1.5"
         />
-        <text x="165" y="226" text-anchor="middle" class="box-name" font-size="14" fill="var(--ink)">
+        <text x="145" y="246" text-anchor="middle" class="box-name" font-size="14" fill="var(--ink)">
           time/
         </text>
-        <text x="165" y="244" text-anchor="middle" class="box-sub" font-size="10" fill="var(--muted)">
+        <text x="145" y="264" text-anchor="middle" class="box-sub" font-size="10" fill="var(--muted)">
           receives (type-only):
         </text>
-        <text x="165" y="260" text-anchor="middle" class="box-sub" font-size="10.5" fill="var(--ink)">
+        <text x="145" y="280" text-anchor="middle" class="box-sub" font-size="10.5" fill="var(--ink)">
           Instant, TimeSpan, Duration
         </text>
-        <text x="165" y="278" text-anchor="middle" class="box-sub" font-size="9.5" fill="var(--muted)">
+        <text x="145" y="298" text-anchor="middle" class="box-sub" font-size="9.5" fill="var(--muted)">
           scale.ts / zone.ts / instant.ts
         </text>
-        <text x="165" y="326" text-anchor="middle" class="box-sub" font-size="10" fill="var(--muted)">
-          348 lines · only new Date() here
+        <text x="145" y="320" text-anchor="middle" class="box-sub" font-size="9.5" fill="var(--muted)">
+          format.ts / presets.ts / snap.ts
+        </text>
+        <text x="145" y="344" text-anchor="middle" class="box-sub" font-size="10" fill="var(--muted)">
+          940 lines · 8 files
         </text>
 
         <!-- layout/ -->
         <rect
-          x="330"
-          y="200"
+          x="290"
+          y="220"
           width="270"
-          height="150"
+          height="140"
           rx="7"
           fill="var(--bg)"
           stroke="var(--ink)"
           stroke-width="1.5"
         />
-        <text x="465" y="226" text-anchor="middle" class="box-name" font-size="14" fill="var(--ink)">
+        <text x="425" y="246" text-anchor="middle" class="box-name" font-size="14" fill="var(--ink)">
           layout/
         </text>
-        <text x="465" y="244" text-anchor="middle" class="box-sub" font-size="10" fill="var(--muted)">
+        <text x="425" y="264" text-anchor="middle" class="box-sub" font-size="10" fill="var(--muted)">
           receives:
         </text>
-        <text x="465" y="260" text-anchor="middle" class="box-sub" font-size="10.5" fill="var(--ink)">
+        <text x="425" y="280" text-anchor="middle" class="box-sub" font-size="10.5" fill="var(--ink)">
           Entry, EntryKind, EntryId/ItemId/RowId
         </text>
-        <text x="465" y="276" text-anchor="middle" class="box-sub" font-size="10.5" fill="var(--core)">
+        <text x="425" y="296" text-anchor="middle" class="box-sub" font-size="10.5" fill="var(--core)">
           + itemId(), rowId() — runtime calls
         </text>
-        <text x="465" y="326" text-anchor="middle" class="box-sub" font-size="10" fill="var(--muted)">
-          392 lines · frame.ts's only real dep
+        <text x="425" y="320" text-anchor="middle" class="box-sub" font-size="9.5" fill="var(--muted)">
+          geometry, Field types
+        </text>
+        <text x="425" y="344" text-anchor="middle" class="box-sub" font-size="10" fill="var(--muted)">
+          2,342 lines · 20 files
         </text>
 
         <!-- api/ -->
         <rect
-          x="630"
-          y="200"
+          x="590"
+          y="220"
           width="270"
-          height="150"
+          height="140"
           rx="7"
           fill="var(--core-bg)"
           stroke="var(--core)"
           stroke-width="1.5"
         />
-        <text x="765" y="226" text-anchor="middle" class="box-name" font-size="14" fill="var(--ink)">
+        <text x="725" y="246" text-anchor="middle" class="box-name" font-size="14" fill="var(--ink)">
           api/
         </text>
-        <text x="765" y="244" text-anchor="middle" class="box-sub" font-size="10" fill="var(--muted)">
+        <text x="725" y="264" text-anchor="middle" class="box-sub" font-size="10" fill="var(--muted)">
           re-exports:
         </text>
-        <text x="765" y="260" text-anchor="middle" class="box-sub" font-size="10.5" fill="var(--ink)">
-          Entry, EntryKind, EntryId, ItemId,
+        <text x="725" y="280" text-anchor="middle" class="box-sub" font-size="10.5" fill="var(--ink)">
+          Entry, EntryKind, EntryId, RowId, ItemId
         </text>
-        <text x="765" y="276" text-anchor="middle" class="box-sub" font-size="10.5" fill="var(--ink)">
-          Instant, TimeSpan, Duration types
+        <text x="725" y="296" text-anchor="middle" class="box-sub" font-size="10.5" fill="var(--ink)">
+          Field, FieldSource, ChangeSet
         </text>
-        <text x="765" y="292" text-anchor="middle" class="box-sub" font-size="10.5" fill="var(--core)">
+        <text x="725" y="312" text-anchor="middle" class="box-sub" font-size="10.5" fill="var(--core)">
           + entryId(), itemId() functions
         </text>
-        <text x="765" y="326" text-anchor="middle" class="box-sub" font-size="10" fill="var(--muted)">
-          78 lines · index.ts's model allow-list (#24)
+        <text x="725" y="344" text-anchor="middle" class="box-sub" font-size="10" fill="var(--muted)">
+          765 lines · the public surface allow-list
         </text>
 
         <!-- view/ -->
         <rect
-          x="930"
-          y="200"
+          x="900"
+          y="220"
           width="270"
-          height="150"
+          height="140"
           rx="7"
           fill="var(--dom-bg)"
           stroke="var(--accent)"
           stroke-width="1.5"
         />
-        <text x="1065" y="226" text-anchor="middle" class="box-name" font-size="14" fill="var(--ink)">
+        <text x="1035" y="246" text-anchor="middle" class="box-name" font-size="14" fill="var(--ink)">
           view/
         </text>
-        <text x="1065" y="244" text-anchor="middle" class="box-sub" font-size="10" fill="var(--muted)">
+        <text x="1035" y="264" text-anchor="middle" class="box-sub" font-size="10" fill="var(--muted)">
           receives:
         </text>
-        <text x="1065" y="260" text-anchor="middle" class="box-sub" font-size="10.5" fill="var(--ink)">
+        <text x="1035" y="280" text-anchor="middle" class="box-sub" font-size="10.5" fill="var(--ink)">
           Entry type only
         </text>
-        <text x="1065" y="278" text-anchor="middle" class="box-sub" font-size="9.5" fill="var(--muted)">
+        <text x="1035" y="298" text-anchor="middle" class="box-sub" font-size="9.5" fill="var(--muted)">
           via GanttShell's structural DatasetLike —
         </text>
-        <text x="1065" y="292" text-anchor="middle" class="box-sub" font-size="9.5" fill="var(--muted)">
+        <text x="1035" y="312" text-anchor="middle" class="box-sub" font-size="9.5" fill="var(--muted)">
           not an api/ import (view -&gt; api is not allowed)
         </text>
-        <text x="1065" y="326" text-anchor="middle" class="box-sub" font-size="10" fill="var(--muted)">
-          141 lines
+        <text x="1035" y="344" text-anchor="middle" class="box-sub" font-size="10" fill="var(--muted)">
+          2,440 lines · 20 files
         </text>
 
         <!-- render/ -->
         <rect
-          x="330"
-          y="440"
+          x="290"
+          y="420"
           width="270"
           height="140"
           rx="7"
@@ -934,33 +1100,64 @@
           stroke-width="1.5"
           stroke-dasharray="3 4"
         />
-        <text x="465" y="466" text-anchor="middle" class="box-name" font-size="14" fill="var(--ink)">
+        <text x="425" y="446" text-anchor="middle" class="box-name" font-size="14" fill="var(--ink)">
           render/
         </text>
-        <text x="465" y="484" text-anchor="middle" class="box-sub" font-size="10" fill="var(--muted)">
+        <text x="425" y="464" text-anchor="middle" class="box-sub" font-size="10" fill="var(--muted)">
           no model/ import
         </text>
-        <text x="465" y="500" text-anchor="middle" class="box-sub" font-size="9.5" fill="var(--muted)">
+        <text x="425" y="480" text-anchor="middle" class="box-sub" font-size="9.5" fill="var(--muted)">
           ItemId, RowId arrive only as types,
         </text>
-        <text x="465" y="514" text-anchor="middle" class="box-sub" font-size="9.5" fill="var(--muted)">
+        <text x="425" y="494" text-anchor="middle" class="box-sub" font-size="9.5" fill="var(--muted)">
           re-exported through layout/index.ts
         </text>
-        <text x="465" y="556" text-anchor="middle" class="box-sub" font-size="10" fill="var(--muted)">
-          287 lines
+        <text x="425" y="540" text-anchor="middle" class="box-sub" font-size="10" fill="var(--muted)">
+          1,028 lines · 7 files
         </text>
 
-        <!-- arrows: model -> the four consumers -->
+        <!-- data/ — NEW consumer -->
+        <rect
+          x="60"
+          y="420"
+          width="200"
+          height="140"
+          rx="7"
+          fill="var(--bg)"
+          stroke="var(--ink)"
+          stroke-width="1.5"
+        />
+        <text x="160" y="446" text-anchor="middle" class="box-name" font-size="14" fill="var(--ink)">
+          data/
+        </text>
+        <text x="160" y="464" text-anchor="middle" class="box-sub" font-size="10" fill="var(--muted)">
+          receives:
+        </text>
+        <text x="160" y="480" text-anchor="middle" class="box-sub" font-size="10.5" fill="var(--ink)">
+          Entry, EntryKind, EntryId/ItemId/RowId
+        </text>
+        <text x="160" y="496" text-anchor="middle" class="box-sub" font-size="10.5" fill="var(--core)">
+          + entryId(), rowId(), itemId() — runtime
+        </text>
+        <text x="160" y="514" text-anchor="middle" class="box-sub" font-size="9.5" fill="var(--muted)">
+          Field, ChangeSet, DatasetDocument
+        </text>
+        <text x="160" y="540" text-anchor="middle" class="box-sub" font-size="10" fill="var(--muted)">
+          2,607 lines · 23 files
+        </text>
+
+        <!-- arrows: model -> the six consumers -->
         <g stroke="var(--ink)" stroke-width="1.5" fill="none" marker-end="url(#arrow2)" color="var(--ink)">
-          <path d="M540,142 C 400,175 240,175 165,200" />
-          <path d="M580,142 C 520,165 480,175 465,200" />
-          <path d="M660,142 C 700,165 740,175 765,200" />
-          <path d="M700,142 C 850,175 1000,175 1065,200" />
+          <path d="M510,160 C 380,195 200,195 145,220" />
+          <path d="M560,160 C 500,195 440,195 425,220" />
+          <path d="M680,160 C 720,195 720,195 725,220" />
+          <path d="M770,160 C 920,195 1010,195 1035,220" />
+          <path d="M540,160 C 420,200 160,350 160,420" />
         </g>
 
         <!-- layout -> render, indirect (re-export only) -->
         <path
-          d="M465,350 V440"
+          d="M425,360 V420"
           stroke="var(--muted)"
           stroke-width="1.5"
           fill="none"
@@ -968,15 +1165,15 @@
           stroke-dasharray="4 3"
           color="var(--muted)"
         />
-        <text x="500" y="400" class="box-sub" font-size="9" fill="var(--muted)">re-export only</text>
+        <text x="460" y="395" class="box-sub" font-size="9" fill="var(--muted)">re-export only</text>
       </svg>
       <figcaption>
         <code>layout/</code> is the only layer that both imports <code>model/</code> and calls its runtime
-        helpers — everywhere else the crossing is types only. <code>api/index.ts</code>'s re-export list
-        (<code>entryId</code>, <code>itemId</code>, <code>Entry</code>, <code>EntryKind</code>,
-        <code>EntryId</code>, <code>ItemId</code>, <code>Instant</code>, <code>TimeSpan</code>,
-        <code>Duration</code>) exists because otherwise a consumer would have no legal way to build the
-        <code>Entry[]</code> that <code>new Dataset({ entries })</code> requires (#24).
+        helpers — everywhere else the crossing is types only. <code>data/</code> also calls
+        <code>entryId()</code>/<code>rowId()</code>/<code>itemId()</code> at runtime for brand helpers. The
+        <code>api/index.ts</code> re-export list now includes <code>Field</code>, <code>FieldSource</code> and
+        <code>ChangeSet</code> alongside the original types, giving consumers the full vocabulary to declare
+        fields and react to changesets.
         <code>view/</code> never imports <code>api/</code> — <code>GanttShell</code> takes a
         structurally-compatible <code>DatasetLike</code> instead, so <code>view -&gt; api</code> stays a
         non-edge (#40).
@@ -984,6 +1181,305 @@
     </figure>
   </section>
 
+  <!-- ══════════════════════════════════════════════════════════ detail — data transaction flow -->
+  <section class="section">
+    <p class="section-eyebrow">Detail — data/ transaction flow</p>
+    <h2>The transaction pipeline</h2>
+    <p>
+      Every mutation in <code>data/</code> flows through one path: the consumer calls
+      <code>dataset.transaction()</code>, which runs the body through a staged entry store, calls the
+      extension hook once, runs hierarchy promotion and rollup, folds the changeset, and emits
+      <code>beforeChange</code>/<code>change</code>. The extension hook is the designed seam where a
+      scheduling plugin can inject cascade writes; without a plugin installed it is the identity function.
+    </p>
+    <figure>
+      <svg
+        viewBox="0 0 1240 340"
+        role="img"
+        aria-label="Flow diagram of the data/ transaction pipeline: consumer calls transaction(), the body runs against the EntryStore staging surface, the EditExtender extension hook is called once, hierarchy promotion and rollup run, the changeset is folded, and beforeChange/change events fire"
+      >
+        <defs>
+          <marker
+            id="arrow5"
+            viewBox="0 0 10 10"
+            refX="8"
+            refY="5"
+            markerWidth="7"
+            markerHeight="7"
+            orient="auto-start-reverse"
+          >
+            <path d="M0,0 L10,5 L0,10 z" fill="currentColor" />
+          </marker>
+        </defs>
+
+        <!-- consumer -->
+        <rect
+          x="30"
+          y="30"
+          width="160"
+          height="60"
+          rx="7"
+          fill="var(--core-bg)"
+          stroke="var(--core)"
+          stroke-width="1.5"
+        />
+        <text x="110" y="56" text-anchor="middle" class="box-name" font-size="13" fill="var(--ink)">
+          dataset.transaction()
+        </text>
+        <text x="110" y="74" text-anchor="middle" class="box-sub" font-size="10" fill="var(--muted)">
+          api/dataset.ts → data/
+        </text>
+
+        <!-- runTransaction -->
+        <rect
+          x="240"
+          y="30"
+          width="170"
+          height="60"
+          rx="7"
+          fill="var(--bg)"
+          stroke="var(--ink)"
+          stroke-width="1.5"
+        />
+        <text x="325" y="56" text-anchor="middle" class="box-name" font-size="13" fill="var(--ink)">
+          runTransaction()
+        </text>
+        <text x="325" y="74" text-anchor="middle" class="box-sub" font-size="10" fill="var(--muted)">
+          data/transaction.ts
+        </text>
+
+        <!-- body runs on staged store -->
+        <rect
+          x="460"
+          y="30"
+          width="170"
+          height="60"
+          rx="7"
+          fill="var(--bg)"
+          stroke="var(--ink)"
+          stroke-width="1.5"
+        />
+        <text x="545" y="56" text-anchor="middle" class="box-name" font-size="13" fill="var(--ink)">
+          body runs
+        </text>
+        <text x="545" y="74" text-anchor="middle" class="box-sub" font-size="10" fill="var(--muted)">
+          add/update/remove on staged store
+        </text>
+
+        <!-- extension hook -->
+        <rect
+          x="680"
+          y="30"
+          width="180"
+          height="60"
+          rx="7"
+          fill="var(--bg)"
+          stroke="var(--ink)"
+          stroke-width="1.5"
+          stroke-dasharray="5 4"
+        />
+        <text x="770" y="56" text-anchor="middle" class="box-name" font-size="13" fill="var(--ink)">
+          extension hook
+        </text>
+        <text x="770" y="74" text-anchor="middle" class="box-sub" font-size="10" fill="var(--muted)">
+          identityExtender (default)
+        </text>
+        <text x="770" y="88" text-anchor="middle" class="box-sub" font-size="9" fill="var(--muted)">
+          scheduling plugin occupies in S7
+        </text>
+
+        <!-- hierarchy + rollup -->
+        <rect
+          x="920"
+          y="30"
+          width="180"
+          height="60"
+          rx="7"
+          fill="var(--bg)"
+          stroke="var(--ink)"
+          stroke-width="1.5"
+        />
+        <text x="1010" y="56" text-anchor="middle" class="box-name" font-size="13" fill="var(--ink)">
+          promote + rollup
+        </text>
+        <text x="1010" y="74" text-anchor="middle" class="box-sub" font-size="10" fill="var(--muted)">
+          hierarchy.ts, rollup.ts
+        </text>
+
+        <!-- fold changeset -->
+        <rect
+          x="340"
+          y="140"
+          width="200"
+          height="60"
+          rx="7"
+          fill="var(--bg)"
+          stroke="var(--ink)"
+          stroke-width="1.5"
+        />
+        <text x="440" y="166" text-anchor="middle" class="box-name" font-size="13" fill="var(--ink)">
+          foldChangeSet()
+        </text>
+        <text x="440" y="184" text-anchor="middle" class="box-sub" font-size="10" fill="var(--muted)">
+          data/change-set.ts — diffs staged vs committed
+        </text>
+
+        <!-- ChangeSet -->
+        <rect
+          x="620"
+          y="140"
+          width="220"
+          height="60"
+          rx="7"
+          fill="var(--core-bg)"
+          stroke="var(--core)"
+          stroke-width="1.5"
+        />
+        <text x="730" y="166" text-anchor="middle" class="box-name" font-size="13" fill="var(--ink)">
+          ChangeSet { added, removed, updated }
+        </text>
+        <text x="730" y="184" text-anchor="middle" class="box-sub" font-size="10" fill="var(--muted)">
+          one write shape — model/change-set.ts
+        </text>
+
+        <!-- apply to committed -->
+        <rect
+          x="900"
+          y="140"
+          width="200"
+          height="60"
+          rx="7"
+          fill="var(--bg)"
+          stroke="var(--ink)"
+          stroke-width="1.5"
+        />
+        <text x="1000" y="166" text-anchor="middle" class="box-name" font-size="13" fill="var(--ink)">
+          apply to committed
+        </text>
+        <text x="1000" y="184" text-anchor="middle" class="box-sub" font-size="10" fill="var(--muted)">
+          EntryStore.applyChangeSet()
+        </text>
+
+        <!-- beforeChange -->
+        <rect
+          x="340"
+          y="250"
+          width="180"
+          height="50"
+          rx="7"
+          fill="var(--dom-bg)"
+          stroke="var(--accent)"
+          stroke-width="1.5"
+        />
+        <text x="430" y="272" text-anchor="middle" class="box-name" font-size="13" fill="var(--ink)">
+          beforeChange
+        </text>
+        <text x="430" y="288" text-anchor="middle" class="box-sub" font-size="10" fill="var(--muted)">
+          cancelable veto
+        </text>
+
+        <!-- change -->
+        <rect
+          x="620"
+          y="250"
+          width="180"
+          height="50"
+          rx="7"
+          fill="var(--dom-bg)"
+          stroke="var(--accent)"
+          stroke-width="1.5"
+        />
+        <text x="710" y="272" text-anchor="middle" class="box-name" font-size="13" fill="var(--ink)">
+          change
+        </text>
+        <text x="710" y="288" text-anchor="middle" class="box-sub" font-size="10" fill="var(--muted)">
+          carries the ChangeSet
+        </text>
+
+        <!-- history subscribes -->
+        <rect
+          x="880"
+          y="250"
+          width="180"
+          height="50"
+          rx="7"
+          fill="var(--bg)"
+          stroke="var(--ink)"
+          stroke-width="1.5"
+        />
+        <text x="970" y="272" text-anchor="middle" class="box-name" font-size="13" fill="var(--ink)">
+          History
+        </text>
+        <text x="970" y="288" text-anchor="middle" class="box-sub" font-size="10" fill="var(--muted)">
+          records for undo/redo
+        </text>
+
+        <!-- arrows -->
+        <g stroke="var(--ink)" stroke-width="1.5" fill="none" marker-end="url(#arrow5)" color="var(--ink)">
+          <path d="M190,60 H240" />
+          <path d="M410,60 H460" />
+          <path d="M630,60 H680" />
+          <path d="M860,60 H920" />
+        </g>
+        <!-- fold down from promote+rollup -->
+        <path
+          d="M1010,90 V120 H540 V140"
+          stroke="var(--ink)"
+          stroke-width="1.5"
+          fill="none"
+          marker-end="url(#arrow5)"
+          color="var(--ink)"
+        />
+        <path
+          d="M540,200 V240 H430"
+          stroke="var(--ink)"
+          stroke-width="1.5"
+          fill="none"
+          marker-end="url(#arrow5)"
+          color="var(--ink)"
+        />
+        <path
+          d="M520,275 H620"
+          stroke="var(--ink)"
+          stroke-width="1.5"
+          fill="none"
+          marker-end="url(#arrow5)"
+          color="var(--ink)"
+        />
+        <path
+          d="M800,275 H880"
+          stroke="var(--ink)"
+          stroke-width="1.5"
+          fill="none"
+          marker-end="url(#arrow5)"
+          color="var(--ink)"
+        />
+        <!-- apply to committed back up from fold -->
+        <path
+          d="M640,170 H900"
+          stroke="var(--ink)"
+          stroke-width="1.5"
+          fill="none"
+          marker-end="url(#arrow5)"
+          color="var(--ink)"
+        />
+      </svg>
+      <figcaption>
+        The transaction pipeline at S4. The consumer calls <code>dataset.transaction()</code>, which delegates
+        to <code>runTransaction()</code> in <code>data/transaction.ts</code>. The body runs against a staged
+        <code>EntryStore</code> overlay so mid-flight reads see consistent state. The
+        <code>EditExtender</code> hook is called once (identity function by default; a scheduling plugin
+        occupies this slot in S7). Hierarchy promotion and rollup run next, then
+        <code>foldChangeSet()</code> diffs the staged edits against committed state to produce one
+        <code>ChangeSet</code>. The events fire in order: <code>beforeChange</code> (cancelable — the
+        consumer can veto), then <code>change</code> (carries the changeset). The <code>History</code>
+        subscribes to <code>change</code> for undo/redo; <code>view/</code>'s
+        <code>subscribeToDatasetChanges</code> subscribes for re-render.
+      </figcaption>
+    </figure>
+  </section>
+
+  <!-- ══════════════════════════════════════════════════════════ detail — api/ -->
   <section class="section">
     <p class="section-eyebrow">Detail — api/</p>
     <h2>Public API surface</h2>
@@ -998,7 +1494,7 @@
       <svg
         viewBox="0 0 1240 560"
         role="img"
-        aria-label="Diagram of api/index.ts's public export surface split into three groups — classes Gantt and Dataset with their options types, model/ re-exports (entryId, itemId, Entry, EntryKind, EntryId, ItemId, Instant, TimeSpan, Duration), and time/ re-exports (dayPreset, hourPreset, weekPreset, monthPreset, yearPreset, instant, ViewPreset) plus TimeScaleModel and TimeScaleIntent surfaced from view/ — and below it the construction call chain: new Gantt constructs a GanttShell, which resolves or binds a TimeScaleModel, which drives render() calling computeFrame() in layout/, whose GeometryFrame is handed to the DOM render backend's sync() using the shared syncKeyed reconciler."
+        aria-label="Diagram of api/index.ts's public export surface split into four groups — Gantt with properties, Dataset with CRUD and events, model/ re-exports, and time/ plus layout/ re-exports — and below it the construction call chain: new Gantt constructs a GanttShell, which mounts the backend and binds to the viewport, the FrameScheduler flushes after construction completes, computeFrame() produces a GeometryFrame, and the DOM render backend syncs it"
       >
         <defs>
           <marker
@@ -1030,94 +1526,127 @@
           PUBLIC — api/index.ts, sealed exports map
         </text>
 
-        <!-- classes -->
+        <!-- Gantt -->
         <rect
           x="60"
           y="60"
-          width="290"
+          width="250"
           height="130"
           rx="7"
           fill="var(--bg)"
           stroke="var(--core)"
           stroke-width="1.5"
         />
-        <text x="205" y="84" text-anchor="middle" class="box-name" font-size="13.5" fill="var(--ink)">
-          Gantt, Dataset
+        <text x="185" y="82" text-anchor="middle" class="box-name" font-size="13.5" fill="var(--ink)">
+          Gantt
         </text>
-        <text x="205" y="102" text-anchor="middle" class="box-sub" font-size="10" fill="var(--muted)">
-          GanttOptions { container, dataset, scale? }
+        <text x="185" y="100" text-anchor="middle" class="box-sub" font-size="10" fill="var(--muted)">
+          preset · range · fit · gridColumns
         </text>
-        <text x="205" y="118" text-anchor="middle" class="box-sub" font-size="10" fill="var(--muted)">
-          DatasetOptions { entries, timeZone }
+        <text x="185" y="114" text-anchor="middle" class="box-sub" font-size="10" fill="var(--muted)">
+          rowSource · collapsed · collapsedIds
         </text>
-        <text x="205" y="136" text-anchor="middle" class="box-sub" font-size="10" fill="var(--muted)">
-          Gantt.destroy()
+        <text x="185" y="128" text-anchor="middle" class="box-sub" font-size="10" fill="var(--muted)">
+          selection · selectionEntries
         </text>
-        <text x="205" y="158" text-anchor="middle" class="box-sub" font-size="9.5" fill="var(--muted)">
-          gantt.ts (33) + dataset.ts (22)
+        <text x="185" y="142" text-anchor="middle" class="box-sub" font-size="10" fill="var(--muted)">
+          interactions · theme · locale · todayLine
         </text>
-        <text x="205" y="174" text-anchor="middle" class="box-sub" font-size="9.5" fill="var(--muted)">
-          + index.ts barrel (23) = 78 lines
+        <text x="185" y="158" text-anchor="middle" class="box-sub" font-size="10" fill="var(--muted)">
+          destroy()
+        </text>
+        <text x="185" y="176" text-anchor="middle" class="box-sub" font-size="9.5" fill="var(--muted)">
+          api/gantt.ts
+        </text>
+
+        <!-- Dataset -->
+        <rect
+          x="330"
+          y="60"
+          width="260"
+          height="130"
+          rx="7"
+          fill="var(--bg)"
+          stroke="var(--core)"
+          stroke-width="1.5"
+        />
+        <text x="460" y="82" text-anchor="middle" class="box-name" font-size="13.5" fill="var(--ink)">
+          Dataset
+        </text>
+        <text x="460" y="100" text-anchor="middle" class="box-sub" font-size="10" fill="var(--muted)">
+          entries.add / .update / .remove / .all
+        </text>
+        <text x="460" y="114" text-anchor="middle" class="box-sub" font-size="10" fill="var(--muted)">
+          entries.childrenOf / .fieldValue
+        </text>
+        <text x="460" y="128" text-anchor="middle" class="box-sub" font-size="10" fill="var(--muted)">
+          transaction · on/off · undo/redo
+        </text>
+        <text x="460" y="142" text-anchor="middle" class="box-sub" font-size="10" fill="var(--muted)">
+          field · fields · toJSON / fromJSON
+        </text>
+        <text x="460" y="158" text-anchor="middle" class="box-sub" font-size="10" fill="var(--muted)">
+          replay
+        </text>
+        <text x="460" y="176" text-anchor="middle" class="box-sub" font-size="9.5" fill="var(--muted)">
+          api/dataset.ts
         </text>
 
         <!-- model re-exports -->
         <rect
-          x="375"
+          x="610"
           y="60"
-          width="290"
+          width="250"
           height="130"
           rx="7"
           fill="var(--bg)"
           stroke="var(--core)"
           stroke-width="1.5"
         />
-        <text x="520" y="84" text-anchor="middle" class="box-name" font-size="13.5" fill="var(--ink)">
+        <text x="735" y="82" text-anchor="middle" class="box-name" font-size="13.5" fill="var(--ink)">
           model/ re-exports
         </text>
-        <text x="520" y="102" text-anchor="middle" class="box-sub" font-size="10" fill="var(--muted)">
+        <text x="735" y="100" text-anchor="middle" class="box-sub" font-size="10" fill="var(--muted)">
           entryId(), itemId()
         </text>
-        <text x="520" y="118" text-anchor="middle" class="box-sub" font-size="10" fill="var(--muted)">
-          Entry, EntryKind, EntryId, ItemId
+        <text x="735" y="114" text-anchor="middle" class="box-sub" font-size="10" fill="var(--muted)">
+          Entry, EntryKind, EntryId, RowId, ItemId
         </text>
-        <text x="520" y="134" text-anchor="middle" class="box-sub" font-size="10" fill="var(--muted)">
+        <text x="735" y="128" text-anchor="middle" class="box-sub" font-size="10" fill="var(--muted)">
+          Field, FieldSource, ChangeSet
+        </text>
+        <text x="735" y="142" text-anchor="middle" class="box-sub" font-size="10" fill="var(--muted)">
           Instant, TimeSpan, Duration
         </text>
-        <text x="520" y="158" text-anchor="middle" class="box-sub" font-size="9.5" fill="var(--muted)">
-          the only route to build the Entry[]
-        </text>
-        <text x="520" y="174" text-anchor="middle" class="box-sub" font-size="9.5" fill="var(--muted)">
-          a Dataset constructor requires (#24)
+        <text x="735" y="176" text-anchor="middle" class="box-sub" font-size="9.5" fill="var(--muted)">
+          the route to build Entry[] and declare fields
         </text>
 
-        <!-- time/view re-exports -->
+        <!-- time/layout re-exports -->
         <rect
-          x="690"
+          x="880"
           y="60"
-          width="490"
+          width="300"
           height="130"
           rx="7"
           fill="var(--bg)"
           stroke="var(--core)"
           stroke-width="1.5"
         />
-        <text x="935" y="84" text-anchor="middle" class="box-name" font-size="13.5" fill="var(--ink)">
-          time/ + view/ re-exports
+        <text x="1030" y="82" text-anchor="middle" class="box-name" font-size="13.5" fill="var(--ink)">
+          time/ + layout/ re-exports
         </text>
-        <text x="935" y="102" text-anchor="middle" class="box-sub" font-size="10" fill="var(--muted)">
+        <text x="1030" y="100" text-anchor="middle" class="box-sub" font-size="10" fill="var(--muted)">
           dayPreset, hourPreset, weekPreset, monthPreset, yearPreset
         </text>
-        <text x="935" y="118" text-anchor="middle" class="box-sub" font-size="10" fill="var(--muted)">
+        <text x="1030" y="114" text-anchor="middle" class="box-sub" font-size="10" fill="var(--muted)">
           instant(), ViewPreset
         </text>
-        <text x="935" y="136" text-anchor="middle" class="box-sub" font-size="10" fill="var(--ink)">
-          TimeScaleModel, TimeScaleIntent — for D9 x-sync
+        <text x="1030" y="132" text-anchor="middle" class="box-sub" font-size="10" fill="var(--ink)">
+          TimeScaleModel, ScrollModel — D9 x-sync objects
         </text>
-        <text x="935" y="158" text-anchor="middle" class="box-sub" font-size="9.5" fill="var(--muted)">
-          re-exported straight from time/, not laundered through
-        </text>
-        <text x="935" y="174" text-anchor="middle" class="box-sub" font-size="9.5" fill="var(--muted)">
-          layout/ or view/'s barrels, which have no other interest in them (#25)
+        <text x="1030" y="176" text-anchor="middle" class="box-sub" font-size="9.5" fill="var(--muted)">
+          layout/ re-exports widened by issue #91 §9-I
         </text>
 
         <!-- boundary -->
@@ -1138,139 +1667,148 @@
         <rect
           x="60"
           y="270"
-          width="220"
+          width="200"
           height="90"
           rx="7"
           fill="var(--bg-raised)"
           stroke="var(--border-strong)"
           stroke-width="1.5"
         />
-        <text x="170" y="298" text-anchor="middle" class="box-name" font-size="12.5" fill="var(--ink)">
+        <text x="160" y="298" text-anchor="middle" class="box-name" font-size="12.5" fill="var(--ink)">
           new Gantt(options)
         </text>
-        <text x="170" y="316" text-anchor="middle" class="box-sub" font-size="9.5" fill="var(--muted)">
+        <text x="160" y="316" text-anchor="middle" class="box-sub" font-size="9.5" fill="var(--muted)">
           api/gantt.ts
         </text>
-        <text x="170" y="332" text-anchor="middle" class="box-sub" font-size="9.5" fill="var(--muted)">
+        <text x="160" y="332" text-anchor="middle" class="box-sub" font-size="9.5" fill="var(--muted)">
           constructs a GanttShell
         </text>
 
         <rect
-          x="330"
+          x="310"
           y="270"
-          width="220"
+          width="200"
           height="90"
           rx="7"
           fill="var(--bg-raised)"
           stroke="var(--border-strong)"
           stroke-width="1.5"
         />
-        <text x="440" y="298" text-anchor="middle" class="box-name" font-size="12.5" fill="var(--ink)">
+        <text x="410" y="298" text-anchor="middle" class="box-name" font-size="12.5" fill="var(--ink)">
           GanttShell
         </text>
-        <text x="440" y="316" text-anchor="middle" class="box-sub" font-size="9.5" fill="var(--muted)">
+        <text x="410" y="316" text-anchor="middle" class="box-sub" font-size="9.5" fill="var(--muted)">
           view/gantt-shell.ts
         </text>
-        <text x="440" y="332" text-anchor="middle" class="box-sub" font-size="9.5" fill="var(--muted)">
-          mounts, binds TimeScaleModel
+        <text x="410" y="332" text-anchor="middle" class="box-sub" font-size="9.5" fill="var(--muted)">
+          mounts, binds viewport, wires gestures
         </text>
 
         <rect
-          x="600"
+          x="560"
           y="270"
-          width="220"
+          width="200"
           height="90"
           rx="7"
           fill="var(--bg-raised)"
           stroke="var(--border-strong)"
           stroke-width="1.5"
         />
-        <text x="710" y="298" text-anchor="middle" class="box-name" font-size="12.5" fill="var(--ink)">
-          render()
+        <text x="660" y="298" text-anchor="middle" class="box-name" font-size="12.5" fill="var(--ink)">
+          FrameScheduler.flush()
         </text>
-        <text x="710" y="316" text-anchor="middle" class="box-sub" font-size="9.5" fill="var(--muted)">
-          on bind + every scale change
+        <text x="660" y="316" text-anchor="middle" class="box-sub" font-size="9.5" fill="var(--muted)">
+          view/frame-scheduler.ts
         </text>
-        <text x="710" y="332" text-anchor="middle" class="box-sub" font-size="9.5" fill="var(--muted)">
-          calls computeFrame() (layout/)
+        <text x="660" y="332" text-anchor="middle" class="box-sub" font-size="9.5" fill="var(--muted)">
+          first render after construction
         </text>
 
         <rect
-          x="870"
+          x="810"
           y="270"
-          width="220"
+          width="200"
           height="90"
           rx="7"
           fill="var(--bg-raised)"
           stroke="var(--border-strong)"
           stroke-width="1.5"
         />
-        <text x="980" y="298" text-anchor="middle" class="box-name" font-size="12.5" fill="var(--ink)">
-          GeometryFrame
+        <text x="910" y="298" text-anchor="middle" class="box-name" font-size="12.5" fill="var(--ink)">
+          computeFrame()
         </text>
-        <text x="980" y="316" text-anchor="middle" class="box-sub" font-size="9.5" fill="var(--muted)">
-          layout/frame.ts's return value
+        <text x="910" y="316" text-anchor="middle" class="box-sub" font-size="9.5" fill="var(--muted)">
+          layout/frame.ts
         </text>
-        <text x="980" y="332" text-anchor="middle" class="box-sub" font-size="9.5" fill="var(--muted)">
+        <text x="910" y="332" text-anchor="middle" class="box-sub" font-size="9.5" fill="var(--muted)">
           rows, bars, header ticks
         </text>
 
         <rect
-          x="960"
+          x="810"
           y="400"
-          width="220"
+          width="200"
           height="90"
           rx="7"
           fill="var(--dom-bg)"
           stroke="var(--accent)"
           stroke-width="1.5"
         />
-        <text x="1070" y="428" text-anchor="middle" class="box-name" font-size="12.5" fill="var(--ink)">
+        <text x="910" y="428" text-anchor="middle" class="box-name" font-size="12.5" fill="var(--ink)">
           backend.sync(frame)
         </text>
-        <text x="1070" y="446" text-anchor="middle" class="box-sub" font-size="9.5" fill="var(--muted)">
+        <text x="910" y="446" text-anchor="middle" class="box-sub" font-size="9.5" fill="var(--muted)">
           render/dom/index.ts
         </text>
-        <text x="1070" y="462" text-anchor="middle" class="box-sub" font-size="9.5" fill="var(--muted)">
+        <text x="910" y="462" text-anchor="middle" class="box-sub" font-size="9.5" fill="var(--muted)">
           syncKeyed() per layer (#48)
         </text>
 
         <g stroke="var(--ink)" stroke-width="1.5" fill="none" marker-end="url(#arrow3)" color="var(--ink)">
-          <path d="M280,315 H330" />
-          <path d="M550,315 H600" />
-          <path d="M820,315 H870" />
-          <path d="M980,360 C 980,390 1030,390 1050,400" />
+          <path d="M260,315 H310" />
+          <path d="M510,315 H560" />
+          <path d="M760,315 H810" />
+          <path d="M910,360 V400" />
         </g>
-        <text x="700" y="380" text-anchor="middle" class="box-sub" font-size="9.5" fill="var(--muted)">
+        <text x="660" y="380" text-anchor="middle" class="box-sub" font-size="9.5" fill="var(--muted)">
           same call chain re-runs on every TimeScaleModel onChange — resize, zoom, or a second bound Gantt
         </text>
       </svg>
       <figcaption>
-        Three export groups, one allow-list philosophy: <code>api/index.ts</code> re-exports exactly the types
+        Four export groups, one allow-list philosophy: <code>api/index.ts</code> re-exports exactly the types
         a consumer needs to call the classes above it and nothing else — <code>TimeScaleOptions</code> stays
-        internal because it carries <em>resolved</em> geometry, not a caller's to state (#5). The call chain
-        underneath never appears in the public surface; a consumer only ever sees it as bars moving on screen.
+        internal because it carries <em>resolved</em> geometry, not a caller's state (#5). At S4 the
+        <code>Gantt</code> class exposes many live-reconfigurable properties (preset, range, gridColumns,
+        rowSource, collapsed, selection, etc.) and <code>Dataset</code> exposes entries CRUD, transactions,
+        events, fields, serialization, and undo/redo. The call chain underneath never appears in the public
+        surface; a consumer only ever sees it as bars moving on screen. The first render happens after
+        construction completes via <code>FrameScheduler.flush()</code>, not via bind-notify.
       </figcaption>
     </figure>
   </section>
 
+  <!-- ══════════════════════════════════════════════════════════ detail — implemented modules -->
   <section class="section">
     <p class="section-eyebrow">Detail — implemented modules</p>
     <h2>How the built modules talk</h2>
     <p>
-      The same graph as above, minus every stub — <code>data/</code>, <code>scheduling/</code>,
-      <code>interaction/</code>, and <code>extensions/</code> don't exist yet, so they don't appear. Every
-      arrow label below is a real symbol in <code>src/</code> today. Two loops carry all the traffic: the
-      bind-time notification loop (<code>TimeScaleModel</code> calls back into
-      <code>GanttShell.render()</code> on every resolved-scale change — including the first render), and the
-      per-render pipeline (<code>render()</code> → <code>computeFrame()</code> → <code>backend.sync()</code>).
-      Solid arrows are direct calls; dashed arrows are callbacks or value/type flow.
+      The same graph as above, minus the two remaining stubs — <code>scheduling/</code> and
+      <code>extensions/</code> don't appear. Every arrow label below is a real symbol in
+      <code>src/</code> today. <code>api/</code> builds both <code>Dataset</code> (from <code>data/</code>)
+      and <code>Gantt</code> (from <code>view/</code>). <code>view/GanttShell</code> binds to the dataset
+      (receiving <code>DatasetState</code>), builds the <code>GesturePipeline</code> with capability
+      resolution, and wires <code>interaction/</code> through constructor injection — the shell never imports
+      <code>interaction/</code> directly. Two loops carry all the traffic: the bind-time notification loop
+      (<code>TimeScaleModel</code> calls back into <code>GanttShell.render()</code> on every resolved-scale
+      change), and the per-render pipeline (<code>render()</code> → <code>computeFrame()</code> →
+      <code>backend.sync()</code>). Solid arrows are direct calls; dashed arrows are callbacks or value/type
+      flow.
     </p>
     <figure>
       <svg
-        viewBox="0 0 1240 660"
+        viewBox="0 0 1240 720"
         role="img"
-        aria-label="Call graph of the implemented FreeGantt modules. api/'s new Gantt constructs a GanttShell in view/, passing container, dataset and an optional shared TimeScaleModel; shell.destroy() tears it down. GanttShell creates a DOM render backend (createDomBackend) and calls mount, reads rowLabelWidth, syncs frames with sync, and destroys it on teardown. It binds to the TimeScaleModel in layout/ via bind(binding, onChange), reading get scale and get preset; the model calls onChange which is this.render(), on bind and on every invalidation such as viewport width pushes or a co-bound Gantt changing. TimeScaleModel resolves lazily through time/: createTimeScale, with diffMs, instant(0) fallback, pxPerMsForPreset and dayPreset defaults. Per render, computeFrame in layout/frame.ts receives LayoutInput carrying entries, the resolved TimeScale, preset, viewport, rowHeight, revision and a cached PrefixSumHeightIndex; it culs rows through heights.indexAtY/topAt, positions bars via scale.xForInstant, builds header ticks via scale.ticks plus headers[0].format, and calls itemId()/rowId() from model/. The GeometryFrame goes to backend.sync, which runs the shared syncKeyed reconciler once per layer for ticks, rows and bars. model/ itself is a zero-dependency strip of types plus brand-id helpers."
+        aria-label="Call graph of the implemented FreeGantt modules at S4. api/ builds Dataset (data/) and Gantt (view/). GanttShell constructs the Viewport, FrameLayout, RenderBackend, EventBus, GesturePipeline, CollapseState, and every attachment. GanttShell binds to the TimeScaleModel via scale.bind, reads scale and preset, and the model calls onChange which is this.render(). interaction/ drives the EntryGestureContext seam. Per render, computeFrame in layout/frame.ts receives LayoutInput and produces GeometryFrame. The GeometryFrame goes to backend.sync which runs syncKeyed once per layer. model/ is a zero-dependency strip of types plus brand-id helpers."
       >
         <defs>
           <marker
@@ -1323,6 +1861,9 @@
         <text x="125" y="158" text-anchor="middle" class="box-sub lbl" font-size="9.5" fill="var(--muted)">
           one private GanttShell each (I2)
         </text>
+        <text x="125" y="174" text-anchor="middle" class="box-sub lbl" font-size="9.5" fill="var(--muted)">
+          765 lines · 3 files
+        </text>
 
         <!-- view/ -->
         <rect
@@ -1360,46 +1901,79 @@
           backend.destroy(); container cleared
         </text>
         <text x="410" y="234" text-anchor="middle" class="box-sub lbl" font-size="9.5" fill="var(--muted)">
-          caches one PrefixSumHeightIndex (#47)
+          caches one RowHeightIndex (#47)
         </text>
         <text x="410" y="250" text-anchor="middle" class="box-sub lbl" font-size="9.5" fill="var(--muted)">
-          row-height from --fg-row-height, read once
+          FrameScheduler coalesces rAF
+        </text>
+        <text x="410" y="272" text-anchor="middle" class="box-sub lbl" font-size="10" fill="var(--ink)">
+          build Gestures + Capabilities
+        </text>
+        <text x="410" y="288" text-anchor="middle" class="box-sub lbl" font-size="10" fill="var(--ink)">
+          CollapseState · keyboard/wheel nav
+        </text>
+        <text x="410" y="308" text-anchor="middle" class="box-sub lbl" font-size="9.5" fill="var(--muted)">
+          2,440 lines · 20 files
         </text>
 
-        <!-- TimeScaleModel -->
+        <!-- data/ -->
         <rect
           x="595"
           y="52"
           width="250"
-          height="170"
+          height="150"
           rx="7"
           fill="var(--bg)"
           stroke="var(--ink)"
           stroke-width="1.5"
         />
-        <text x="720" y="76" text-anchor="middle" class="box-name" font-size="14" fill="var(--ink)">
-          TimeScaleModel
+        <text x="720" y="78" text-anchor="middle" class="box-name" font-size="14.5" fill="var(--ink)">
+          data/ — DatasetState
         </text>
-        <text x="720" y="92" text-anchor="middle" class="box-sub lbl" font-size="9.5" fill="var(--muted)">
-          layout/viewport/time-scale-model.ts
+        <text x="720" y="98" text-anchor="middle" class="box-sub lbl" font-size="10" fill="var(--ink)">
+          transaction() → staged edits
         </text>
         <text x="720" y="114" text-anchor="middle" class="box-sub lbl" font-size="10" fill="var(--ink)">
-          bind(binding, onChange) → handle
+          extension hook → changeset → events
         </text>
-        <text x="720" y="130" text-anchor="middle" class="box-sub lbl" font-size="10" fill="var(--ink)">
-          handle.setPaneWidth(w) · unbind()
+        <text x="720" y="134" text-anchor="middle" class="box-sub lbl" font-size="10" fill="var(--ink)">
+          EntryStore, FieldRegistry, History
         </text>
-        <text x="720" y="152" text-anchor="middle" class="box-sub lbl" font-size="10" fill="var(--ink)">
-          get scale — memoized createTimeScale()
+        <text x="720" y="150" text-anchor="middle" class="box-sub lbl" font-size="10" fill="var(--ink)">
+          serialization (toJSON / fromJSON)
         </text>
-        <text x="720" y="168" text-anchor="middle" class="box-sub lbl" font-size="10" fill="var(--ink)">
-          get preset
+        <text x="720" y="174" text-anchor="middle" class="box-sub lbl" font-size="9.5" fill="var(--muted)">
+          imports time/ + model/ only
         </text>
-        <text x="720" y="194" text-anchor="middle" class="box-sub lbl" font-size="9.5" fill="var(--muted)">
-          one shared instance = x-synced Gantts (D9)
+        <text x="720" y="190" text-anchor="middle" class="box-sub lbl" font-size="9.5" fill="var(--muted)">
+          2,607 lines · 23 files
         </text>
 
-        <!-- time/ -->
+        <!-- interaction/ -->
+        <rect
+          x="595"
+          y="232"
+          width="250"
+          height="100"
+          rx="7"
+          fill="var(--dom-bg)"
+          stroke="var(--accent)"
+          stroke-width="1.5"
+        />
+        <text x="720" y="256" text-anchor="middle" class="box-name" font-size="14.5" fill="var(--ink)">
+          interaction/
+        </text>
+        <text x="720" y="276" text-anchor="middle" class="box-sub lbl" font-size="10" fill="var(--ink)">
+          attachEntryGestures()
+        </text>
+        <text x="720" y="292" text-anchor="middle" class="box-sub lbl" font-size="10" fill="var(--ink)">
+          attachKeyboardEditing()
+        </text>
+        <text x="720" y="308" text-anchor="middle" class="box-sub lbl" font-size="9.5" fill="var(--muted)">
+          drives EntryGestureContext seam
+        </text>
+
+        <!-- TimeScaleModel -->
         <rect
           x="905"
           y="52"
@@ -1411,114 +1985,129 @@
           stroke-width="1.5"
         />
         <text x="1060" y="76" text-anchor="middle" class="box-name" font-size="14" fill="var(--ink)">
-          time/
+          TimeScaleModel
         </text>
-        <text x="1060" y="96" text-anchor="middle" class="box-sub lbl" font-size="10" fill="var(--ink)">
-          createTimeScale(o): xForInstant,
+        <text x="1060" y="92" text-anchor="middle" class="box-sub lbl" font-size="9.5" fill="var(--muted)">
+          layout/viewport/time-scale-model.ts
         </text>
-        <text x="1060" y="112" text-anchor="middle" class="box-sub lbl" font-size="10" fill="var(--ink)">
-          instantForX, widthForDuration, ticks(preset)
+        <text x="1060" y="114" text-anchor="middle" class="box-sub lbl" font-size="10" fill="var(--ink)">
+          bind(binding, onChange) → handle
         </text>
-        <text x="1060" y="134" text-anchor="middle" class="box-sub lbl" font-size="10" fill="var(--ink)">
-          pxPerMsForPreset(zone, preset, at)
+        <text x="1060" y="130" text-anchor="middle" class="box-sub lbl" font-size="10" fill="var(--ink)">
+          handle.setPaneWidth(w) · unbind()
         </text>
-        <text x="1060" y="154" text-anchor="middle" class="box-sub lbl" font-size="10" fill="var(--ink)">
-          hourPreset … yearPreset — frozen objects
+        <text x="1060" y="152" text-anchor="middle" class="box-sub lbl" font-size="10" fill="var(--ink)">
+          get scale — memoized createTimeScale()
         </text>
-        <text x="1060" y="180" text-anchor="middle" class="box-sub lbl" font-size="9.5" fill="var(--muted)">
-          only new Date()/Date.now() in src/ (I10)
+        <text x="1060" y="168" text-anchor="middle" class="box-sub lbl" font-size="10" fill="var(--ink)">
+          get preset
         </text>
-        <text x="1060" y="196" text-anchor="middle" class="box-sub lbl" font-size="9.5" fill="var(--muted)">
-          temporal-polyfill confined behind time/'s facade
-        </text>
-
-        <!-- render/ -->
-        <rect
-          x="595"
-          y="312"
-          width="250"
-          height="180"
-          rx="7"
-          fill="var(--dom-bg)"
-          stroke="var(--accent)"
-          stroke-width="1.5"
-        />
-        <text x="720" y="338" text-anchor="middle" class="box-name" font-size="14" fill="var(--ink)">
-          render/
-        </text>
-        <text x="720" y="354" text-anchor="middle" class="box-sub lbl" font-size="9.5" fill="var(--muted)">
-          RenderBackend contract — backend.ts
-        </text>
-        <text x="720" y="376" text-anchor="middle" class="box-sub lbl" font-size="10" fill="var(--ink)">
-          mount(container) · sync(frame) · destroy()
-        </text>
-        <text x="720" y="392" text-anchor="middle" class="box-sub lbl" font-size="10" fill="var(--ink)">
-          applyState(state) · hitTest(x, y)
-        </text>
-        <text x="720" y="408" text-anchor="middle" class="box-sub lbl" font-size="10" fill="var(--ink)">
-          rowLabelWidth — owns the gutter (#46)
-        </text>
-        <text x="720" y="432" text-anchor="middle" class="box-sub lbl" font-size="9.5" fill="var(--muted)">
-          sync() = syncKeyed() × {ticks, rows, bars}
-        </text>
-        <text x="720" y="448" text-anchor="middle" class="box-sub lbl" font-size="9.5" fill="var(--muted)">
-          null/ twin: same contract, headless
+        <text x="1060" y="194" text-anchor="middle" class="box-sub lbl" font-size="9.5" fill="var(--muted)">
+          one shared instance = x-synced Gantts (D9)
         </text>
 
-        <!-- layout frame -->
+        <!-- time/ -->
         <rect
           x="905"
-          y="312"
+          y="242"
           width="310"
-          height="180"
+          height="90"
           rx="7"
           fill="var(--bg)"
           stroke="var(--ink)"
           stroke-width="1.5"
         />
-        <text x="1060" y="338" text-anchor="middle" class="box-name" font-size="14" fill="var(--ink)">
+        <text x="1060" y="266" text-anchor="middle" class="box-name" font-size="14" fill="var(--ink)">
+          time/
+        </text>
+        <text x="1060" y="286" text-anchor="middle" class="box-sub lbl" font-size="10" fill="var(--ink)">
+          createTimeScale(), hourPreset … yearPreset
+        </text>
+        <text x="1060" y="302" text-anchor="middle" class="box-sub lbl" font-size="9.5" fill="var(--muted)">
+          only new Date()/Date.now() in src/ (I10)
+        </text>
+        <text x="1060" y="318" text-anchor="middle" class="box-sub lbl" font-size="9.5" fill="var(--muted)">
+          940 lines · 8 files · temporal-polyfill façade
+        </text>
+
+        <!-- render/ -->
+        <rect
+          x="905"
+          y="372"
+          width="310"
+          height="160"
+          rx="7"
+          fill="var(--dom-bg)"
+          stroke="var(--accent)"
+          stroke-width="1.5"
+        />
+        <text x="1060" y="396" text-anchor="middle" class="box-name" font-size="14" fill="var(--ink)">
+          render/
+        </text>
+        <text x="1060" y="412" text-anchor="middle" class="box-sub lbl" font-size="9.5" fill="var(--muted)">
+          RenderBackend contract — backend.ts
+        </text>
+        <text x="1060" y="432" text-anchor="middle" class="box-sub lbl" font-size="10" fill="var(--ink)">
+          mount(container) · sync(frame) · destroy()
+        </text>
+        <text x="1060" y="448" text-anchor="middle" class="box-sub lbl" font-size="10" fill="var(--ink)">
+          rowLabelWidth · date-line · row-twisty
+        </text>
+        <text x="1060" y="468" text-anchor="middle" class="box-sub lbl" font-size="9.5" fill="var(--muted)">
+          sync() = syncKeyed() × {ticks, rows, bars}
+        </text>
+        <text x="1060" y="484" text-anchor="middle" class="box-sub lbl" font-size="9.5" fill="var(--muted)">
+          null/ twin: same contract, headless
+        </text>
+        <text x="1060" y="508" text-anchor="middle" class="box-sub lbl" font-size="9.5" fill="var(--muted)">
+          1,028 lines · 7 files
+        </text>
+
+        <!-- computeFrame -->
+        <rect
+          x="905"
+          y="562"
+          width="310"
+          height="120"
+          rx="7"
+          fill="var(--bg)"
+          stroke="var(--ink)"
+          stroke-width="1.5"
+        />
+        <text x="1060" y="586" text-anchor="middle" class="box-name" font-size="14" fill="var(--ink)">
           computeFrame()
         </text>
-        <text x="1060" y="354" text-anchor="middle" class="box-sub lbl" font-size="9.5" fill="var(--muted)">
-          layout/frame.ts + row-height-index.ts
+        <text x="1060" y="602" text-anchor="middle" class="box-sub lbl" font-size="9.5" fill="var(--muted)">
+          layout/frame.ts + items/ + lanes/ + rows/
         </text>
-        <text x="1060" y="376" text-anchor="middle" class="box-sub lbl" font-size="10" fill="var(--ink)">
-          LayoutInput → GeometryFrame
+        <text x="1060" y="622" text-anchor="middle" class="box-sub lbl" font-size="10" fill="var(--ink)">
+          resolveRows → produceItems → packLanes → cull
         </text>
-        <text x="1060" y="392" text-anchor="middle" class="box-sub lbl" font-size="10" fill="var(--ink)">
-          scale.xForInstant(start | end) → bar x/w
+        <text x="1060" y="638" text-anchor="middle" class="box-sub lbl" font-size="10" fill="var(--ink)">
+          header ticks, date-lines, columns
         </text>
-        <text x="1060" y="408" text-anchor="middle" class="box-sub lbl" font-size="10" fill="var(--ink)">
-          scale.ticks(preset) → header tick xs
-        </text>
-        <text x="1060" y="424" text-anchor="middle" class="box-sub lbl" font-size="10" fill="var(--ink)">
-          headers[0].format(tick.instant, timeZone)
-        </text>
-        <text x="1060" y="448" text-anchor="middle" class="box-sub lbl" font-size="9.5" fill="var(--muted)">
-          rows culled: heights.indexAtY / topAt / totalHeight
-        </text>
-        <text x="1060" y="464" text-anchor="middle" class="box-sub lbl" font-size="9.5" fill="var(--muted)">
-          heights: shell-cached PrefixSumHeightIndex (#47)
+        <text x="1060" y="662" text-anchor="middle" class="box-sub lbl" font-size="9.5" fill="var(--muted)">
+          heights: shell-cached RowHeightIndex (#47)
         </text>
 
         <!-- model/ strip -->
         <rect
           x="25"
-          y="557"
-          width="1190"
+          y="620"
+          width="840"
           height="85"
           rx="7"
           fill="var(--bg)"
           stroke="var(--ink)"
           stroke-width="1.5"
         />
-        <text x="620" y="583" text-anchor="middle" class="box-name" font-size="14" fill="var(--ink)">
+        <text x="445" y="646" text-anchor="middle" class="box-name" font-size="14" fill="var(--ink)">
           model/
         </text>
-        <text x="620" y="605" text-anchor="middle" class="box-sub lbl" font-size="10" fill="var(--ink)">
-          Entry · EntryKind · EntryId / RowId / ItemId · Instant / TimeSpan / Duration
+        <text x="445" y="668" text-anchor="middle" class="box-sub lbl" font-size="10" fill="var(--ink)">
+          Entry · EntryKind · EntryId / RowId / ItemId · Field · ChangeSet · geometry · errors
         </text>
-        <text x="620" y="623" text-anchor="middle" class="box-sub lbl" font-size="10" fill="var(--ink)">
+        <text x="445" y="686" text-anchor="middle" class="box-sub lbl" font-size="10" fill="var(--ink)">
           entryId() · rowId() · itemId() — zero deps: types + brand-id helpers only
         </text>
 
@@ -1530,82 +2119,92 @@
           new GanttShell({container,
         </text>
         <text x="254" y="133" text-anchor="middle" class="box-sub lbl" font-size="10" fill="var(--ink)">
-          dataset, scale?})
+          dataset, scale?, attachEntryGestures})
         </text>
         <text x="254" y="152" text-anchor="middle" class="box-sub lbl" font-size="9.5" fill="var(--muted)">
           shell.destroy()
         </text>
 
-        <!-- 2. view -> TSM : bind + reads -->
+        <!-- 2. api -> data : construct Dataset -->
+        <path
+          d="M150,52 C 150,30 400,20 595,80"
+          stroke="var(--ink)"
+          stroke-width="1.5"
+          fill="none"
+          marker-end="url(#arrow4)"
+          color="var(--ink)"
+        />
+        <text x="400" y="46" text-anchor="middle" class="box-sub lbl" font-size="10" fill="var(--ink)">
+          new Dataset({entries, timeZone, editExtender?})
+        </text>
+
+        <!-- 3. view -> TSM : bind + reads -->
         <g stroke="var(--ink)" stroke-width="1.5" fill="none" marker-end="url(#arrow4)" color="var(--ink)">
-          <path d="M535,122 H593" />
+          <path d="M535,122 H903" />
         </g>
-        <text x="564" y="110" text-anchor="middle" class="box-sub lbl" font-size="10" fill="var(--ink)">
+        <text x="720" y="110" text-anchor="middle" class="box-sub lbl" font-size="10" fill="var(--ink)">
           scale.bind(binding, onChange)
         </text>
-        <text x="564" y="140" text-anchor="middle" class="box-sub lbl" font-size="9.5" fill="var(--muted)">
+        <text x="720" y="140" text-anchor="middle" class="box-sub lbl" font-size="9.5" fill="var(--muted)">
           reads .scale · .preset
         </text>
 
-        <!-- 3. TSM -> view : the notification loop -->
+        <!-- 4. TSM -> view : the notification loop -->
         <path
-          d="M593,177 H537"
+          d="M903,177 H537"
           stroke="var(--muted)"
           stroke-width="1.5"
           fill="none"
           marker-end="url(#arrow-muted4)"
           stroke-dasharray="4 3"
         />
-        <text x="564" y="167" text-anchor="middle" class="box-sub lbl" font-size="10" fill="var(--muted)">
+        <text x="720" y="167" text-anchor="middle" class="box-sub lbl" font-size="10" fill="var(--muted)">
           onChange() → this.render()
         </text>
 
-        <!-- 4. TSM -> time : lazy resolution -->
+        <!-- 5. TSM -> time : lazy resolution -->
         <g stroke="var(--ink)" stroke-width="1.5" fill="none" marker-end="url(#arrow4)" color="var(--ink)">
-          <path d="M720,50 V32 H1060 V50" />
+          <path d="M1060,222 V240" />
         </g>
-        <text x="890" y="14" text-anchor="middle" class="box-sub lbl" font-size="10" fill="var(--ink)">
-          on first get scale → #resolve(): createTimeScale(o) — memoized
-        </text>
-        <text x="890" y="44" text-anchor="middle" class="box-sub lbl" font-size="9.5" fill="var(--muted)">
-          diffMs(range) · instant(0) fallback · pxPerMsForPreset(zone, preset, at) · dayPreset default
+        <text x="1072" y="236" text-anchor="start" class="box-sub lbl" font-size="10" fill="var(--ink)">
+          on first get scale → createTimeScale(o) — memoized
         </text>
 
-        <!-- 5. view -> render : backend lifecycle -->
+        <!-- 6. view -> render : backend lifecycle -->
         <g stroke="var(--ink)" stroke-width="1.5" fill="none" marker-end="url(#arrow4)" color="var(--ink)">
-          <path d="M535,240 H720 V310" />
+          <path d="M535,240 V420 H903" />
         </g>
-        <text x="736" y="232" text-anchor="start" class="box-sub lbl" font-size="10" fill="var(--ink)">
+        <text x="736" y="350" text-anchor="start" class="box-sub lbl" font-size="10" fill="var(--ink)">
           createDomBackend() · mount(container)
         </text>
-        <text x="736" y="246" text-anchor="start" class="box-sub lbl" font-size="10" fill="var(--ink)">
+        <text x="736" y="364" text-anchor="start" class="box-sub lbl" font-size="10" fill="var(--ink)">
           rowLabelWidth · sync(frame) · destroy()
         </text>
 
-        <!-- 6. view -> frame : the per-render pipeline -->
+        <!-- 7. view -> frame : the per-render pipeline -->
         <g stroke="var(--ink)" stroke-width="1.5" fill="none" marker-end="url(#arrow4)" color="var(--ink)">
-          <path d="M535,282 H1060 V310" />
+          <path d="M535,282 V590 H903" />
         </g>
-        <text x="736" y="270" text-anchor="start" class="box-sub lbl" font-size="10" fill="var(--ink)">
-          computeFrame(LayoutInput) → GeometryFrame — input.scale carries the resolved TimeScale
+        <text x="736" y="440" text-anchor="start" class="box-sub lbl" font-size="10" fill="var(--ink)">
+          computeFrame(LayoutInput) → GeometryFrame
         </text>
 
-        <!-- 7. frame -> time : scale methods (listed in the box) -->
+        <!-- 8. frame -> time : scale methods -->
         <g stroke="var(--ink)" stroke-width="1.5" fill="none" marker-end="url(#arrow4)" color="var(--ink)">
-          <path d="M1060,310 V226" />
+          <path d="M1060,560 V336" />
         </g>
 
-        <!-- 8. frame -> model : the only runtime brand-helper calls outside model/ -->
+        <!-- 9. frame -> model : the only runtime brand-helper calls outside model/ -->
         <g stroke="var(--ink)" stroke-width="1.5" fill="none" marker-end="url(#arrow4)" color="var(--ink)">
-          <path d="M1060,494 V555" />
+          <path d="M980,684 V700 H865 V660 H865" />
         </g>
-        <text x="1072" y="530" text-anchor="start" class="box-sub lbl" font-size="10" fill="var(--ink)">
+        <text x="875" y="700" text-anchor="start" class="box-sub lbl" font-size="10" fill="var(--ink)">
           itemId() · rowId()
         </text>
 
-        <!-- 9. view -> model : type-only -->
+        <!-- 10. view -> model : type-only -->
         <path
-          d="M310,374 V555"
+          d="M310,374 V620"
           stroke="var(--muted)"
           stroke-width="1.25"
           fill="none"
@@ -1615,13 +2214,57 @@
         <text x="322" y="470" text-anchor="start" class="box-sub lbl" font-size="9.5" fill="var(--muted)">
           Entry (type-only) via DatasetLike
         </text>
+
+        <!-- 11. view -> interaction : constructs and wires -->
+        <path
+          d="M535,340 H593"
+          stroke="var(--muted)"
+          stroke-width="1.25"
+          fill="none"
+          marker-end="url(#arrow-muted4)"
+          stroke-dasharray="4 3"
+        />
+        <text x="564" y="340" text-anchor="middle" class="box-sub lbl" font-size="9.5" fill="var(--muted)">
+          inject via constructor
+        </text>
+
+        <!-- 12. interaction -> view : drives the seam -->
+        <path
+          d="M595,280 H537"
+          stroke="var(--ink)"
+          stroke-width="1.5"
+          fill="none"
+          marker-end="url(#arrow4)"
+          color="var(--ink)"
+        />
+        <text x="566" y="270" text-anchor="middle" class="box-sub lbl" font-size="9.5" fill="var(--ink)">
+          EntryGestureContext
+        </text>
+
+        <!-- 13. data -> events : change fires -->
+        <path
+          d="M720,202 V220"
+          stroke="var(--muted)"
+          stroke-width="1.25"
+          fill="none"
+          marker-end="url(#arrow-muted4)"
+          stroke-dasharray="4 3"
+        />
+        <text x="736" y="218" text-anchor="start" class="box-sub lbl" font-size="9.5" fill="var(--muted)">
+          change → re-render
+        </text>
       </svg>
       <figcaption>
-        Reading order is construction (api → view), bind (view → TimeScaleModel), resolve (TimeScaleModel →
-        time/), then the per-render pipeline (view → computeFrame → backend.sync). The dashed return edge is
-        the whole reactivity story — there is no event bus and no observer list beyond the bindings map: a
-        second <code>Gantt</code> sharing one <code>TimeScaleModel</code> is x-synced because its
-        <code>onChange</code> is simply also in the map. <code>destroy()</code> unwinds in reverse:
+        Reading order is construction (api → view + data), bind (view → TimeScaleModel), resolve
+        (TimeScaleModel → time/), then the per-render pipeline (view → computeFrame → backend.sync). The
+        dashed return edge from TimeScaleModel is the whole reactivity story — there is no event bus and no
+        observer list beyond the bindings map: a second <code>Gantt</code> sharing one
+        <code>TimeScaleModel</code> is x-synced because its <code>onChange</code> is simply also in the map.
+        <code>interaction/</code> drives the <code>EntryGestureContext</code> seam — injected by
+        <code>api/gantt.ts</code>, never imported by <code>view/</code> directly.
+        <code>data/</code>'s <code>change</code> event bridges into <code>view/</code> via
+        <code>subscribeToDatasetChanges</code> for re-render.
+        <code>destroy()</code> unwinds in reverse:
         <code>handle.unbind()</code> then <code>backend.destroy()</code>. Everything left of
         <code>view/</code> is DOM-free — the same <code>computeFrame</code>/<code>createTimeScale</code> calls
         run identically in Node, which is what the null backend's tests rely on.
@@ -1629,5 +2272,9 @@
     </figure>
   </section>
 
-  <footer>src/ · 1,323 lines across 24 non-test files · plans/03-slices.md — currently mid S0/S1</footer>
+  <nav class="harness-docs-pager" aria-label="Other docs pages"></nav>
+
+  <footer>src/ · 97 non-test files · 10 layers, 8 with code · plans/03-slices.md — slice S4</footer>
 </div>
+  </body>
+</html>

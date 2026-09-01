@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { DatasetState } from '../dataset-state.js';
-import { toJSON, readDocument, warnIfDerivedSpansWereCorrected } from './index.js';
+import { toJSON, readDocument, warnIfRollUpsWereCorrected } from './index.js';
 import { FreeGanttError, UnsupportedSchemaError } from '../../model/index.js';
 import type { DatasetDocument } from '../../model/index.js';
 import type { EntryInput } from '../../model/index.js';
@@ -17,7 +17,7 @@ function span(id: string, overrides: Partial<EntryInput> = {}): EntryInput {
 
 function fromJSON(doc: DatasetDocument): DatasetState {
   const state = new DatasetState(readDocument(doc));
-  warnIfDerivedSpansWereCorrected(doc, state);
+  warnIfRollUpsWereCorrected(doc, state);
   return state;
 }
 
@@ -105,13 +105,13 @@ describe('[S2-A2] toJSON / fromJSON', () => {
     roundTrip(dataset);
   });
 
-  it('round-trips a non-default derivedSpanKinds', () => {
+  it('round-trips a non-default rollUpKinds', () => {
     const dataset = new DatasetState({
       timeZone: 'UTC',
-      derivedSpanKinds: ['milestone'],
+      rollUpKinds: ['milestone'],
       entries: [span('t1')],
     });
-    expect(toJSON(dataset).derivedSpanKinds).toEqual(['milestone']);
+    expect(toJSON(dataset).rollUpKinds).toEqual(['milestone']);
     roundTrip(dataset);
   });
 
@@ -131,7 +131,7 @@ describe('[S2-A2] toJSON / fromJSON', () => {
       schema: 1 as const,
       timeZone: 'UTC',
       dateOnlyEnd: 'inclusive' as const,
-      derivedSpanKinds: ['group'],
+      rollUpKinds: ['group'],
       extraTop: true,
       entries: [
         {
@@ -149,13 +149,41 @@ describe('[S2-A2] toJSON / fromJSON', () => {
     expect(JSON.stringify(toJSON(fromJSON(round)))).toBe(JSON.stringify(round));
   });
 
+  it('drops a top-level cost on ingest; a declared Field reads meta.cost', () => {
+    const raw = {
+      schema: 1 as const,
+      timeZone: 'UTC',
+      dateOnlyEnd: 'inclusive' as const,
+      rollUpKinds: ['group'],
+      entries: [
+        {
+          id: 't1',
+          name: 'Groundwork',
+          start: '2026-09-01T00:00:00.000Z',
+          end: '2026-09-11T00:00:00.000Z',
+          cost: 500,
+          meta: { cost: 400 },
+        },
+      ],
+    };
+    const state = new DatasetState({
+      ...readDocument(raw),
+      fieldTypes: { money: { rollUp: 'sum' } },
+      fields: [{ key: 'cost', type: 'money' }],
+    });
+    expect(state.entries.get('t1') && 'cost' in (state.entries.get('t1') as object)).toBe(false);
+    expect(state.entries.get('t1')?.meta).toEqual({ cost: 400 });
+    expect(state.fields.get('cost')?.source).toEqual({ from: 'meta', key: 'cost' });
+    expect(toJSON(state).entries[0]?.meta).toEqual({ cost: 400 });
+  });
+
   it('corrects a stored group span that disagrees with its children, then stays stable', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     const disagreeing: DatasetDocument = {
       schema: 1,
       timeZone: 'UTC',
       dateOnlyEnd: 'inclusive',
-      derivedSpanKinds: ['group'],
+      rollUpKinds: ['group'],
       entries: [
         {
           id: 'p1',
@@ -188,7 +216,7 @@ describe('[S2-A2] toJSON / fromJSON', () => {
       schema: 1,
       timeZone: 'UTC',
       dateOnlyEnd: 'inclusive',
-      derivedSpanKinds: ['group'],
+      rollUpKinds: ['group'],
       entries: [
         {
           id: 'p1',
@@ -216,7 +244,7 @@ describe('[S2-A2] toJSON / fromJSON', () => {
       schema: 1,
       timeZone: 'UTC',
       dateOnlyEnd: 'inclusive',
-      derivedSpanKinds: ['group'],
+      rollUpKinds: ['group'],
       entries: [{ id: 't1', name: 't1', start: '2026-09-01', end: '2026-09-11T00:00:00.000Z' }],
     };
     expect(() => readDocument(doc)).toThrow(FreeGanttError);
@@ -224,10 +252,10 @@ describe('[S2-A2] toJSON / fromJSON', () => {
 
   it('throws UnsupportedSchemaError for a schema this build does not read', () => {
     const doc = {
-      schema: 2,
+      schema: 3,
       timeZone: 'UTC',
       dateOnlyEnd: 'inclusive',
-      derivedSpanKinds: [],
+      rollUpKinds: [],
       entries: [],
     };
     expect(() => readDocument(doc as unknown as DatasetDocument)).toThrow(UnsupportedSchemaError);
@@ -237,8 +265,8 @@ describe('[S2-A2] toJSON / fromJSON', () => {
       expect(error).toBeInstanceOf(UnsupportedSchemaError);
       if (error instanceof UnsupportedSchemaError) {
         expect(error.code).toBe('unsupported-schema');
-        expect(error.schema).toBe(2);
-        expect(error.supported).toEqual([1]);
+        expect(error.schema).toBe(3);
+        expect(error.supported).toEqual([1, 2]);
       }
     }
   });

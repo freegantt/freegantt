@@ -39,7 +39,7 @@ export interface EntryInput<TMeta = unknown> {
   kind?: EntryKind;
   name: string;
   /** Required for a `kind` whose span is authored. Omit both `start` and `end` for a
-   * `derivedSpanKinds` kind (default `'group'`) to let the span rollup fill them in — the store
+   * `rollUpKinds` kind (default `'group'`) to let the Rollup fill them in — the store
    * writes a zero-length span at the dataset's reference date until the rollup runs (`01` §2.5,
    * S2.3 §1.5). Omitting one but not the other, or omitting both on a non-deriving kind, is an
    * `InvalidInstantError`: the field is required and `undefined` names no instant. */
@@ -54,8 +54,17 @@ export interface EntryInput<TMeta = unknown> {
 
 /** What a consumer may change. Input-shaped, so dates stay loose the way `EntryInput`'s are: the store
  * reads them through `time/`'s `toInstant`/`toEndInstant` in the dataset's zone, exactly as
- * construction does. `id` is not editable — an id is identity. */
-export type EntryEdit<TMeta = unknown> = Partial<Omit<EntryInput<TMeta>, 'id'>>;
+ * construction does. `id` is not editable — an id is identity. Declared Field keys (`cost`) are
+ * legal beside core keys (D-S4-2); the registry rejects an unregistered name at the call.
+ *
+ * `TFields` is the TypeScript map of those declared keys (`Dataset<TMeta, { cost: number }>`). The
+ * default stays open (`Record<string, unknown>`) so a Dataset that omitted the second generic still
+ * type-checks `update({ cost: 500 })`; pass `{ cost: number }` to get a type error on `'nope'` and
+ * autocomplete for `cost`. */
+export type EntryEdit<
+  TMeta = unknown,
+  TFields extends Record<string, unknown> = Record<string, unknown>,
+> = Partial<Omit<EntryInput<TMeta>, 'id'>> & Partial<TFields>;
 
 /** Storage-shaped edit: every field already read through `time/` (an `Instant`, not a loose
  *  `InstantInput`) — what a write set holds and what `diffEdit` compares against `entries`. Distinct
@@ -64,6 +73,10 @@ export type EntryEdit<TMeta = unknown> = Partial<Omit<EntryInput<TMeta>, 'id'>>;
  *  public (`plans/s3-direct-manipulation/README.md`) — an internal write/gesture shape only, moved
  *  here (from `data/edit-extension.ts`) in S3.3 (D-S3-4) so `layout/gesture-draft.ts` can build one
  *  without reaching into `data/`. */
-export type StoredEdit<TMeta = unknown> = Partial<Omit<Entry<TMeta>, 'id'>>;
+/** Storage-shaped patch plus the Field keys the caller proposed. `proposedKeys` is part of the edit,
+ *  not a side channel — spread keeps it, overlay never copies it onto an Entry. */
+export type StoredEdit<TMeta = unknown> = Partial<Omit<Entry<TMeta>, 'id'>> & {
+  readonly proposedKeys?: ReadonlySet<string>;
+};
 
 export type EntryEdits = ReadonlyMap<EntryId, StoredEdit>;

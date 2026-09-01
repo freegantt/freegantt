@@ -163,7 +163,7 @@ describe('[S2-A1] undo-all restores byte-identical toJSON', () => {
     );
   });
 
-  it('with the span rollup and a fixture containing groups (D-S2-22)', () => {
+  it('with the Rollup and a fixture containing groups (D-S2-22)', () => {
     fc.assert(
       fc.property(fc.array(opArb, { minLength: 1, maxLength: 50 }), (ops) => {
         assertUndoRestores(seedGroups, ops);
@@ -179,5 +179,22 @@ describe('[S2-A1] undo-all restores byte-identical toJSON', () => {
       }),
       { numRuns: 40 },
     );
+  });
+});
+
+describe('[S4-A9] autoGroup undo', () => {
+  it('undo of a promoting transaction restores kind and the parent span together', () => {
+    const state = new DatasetState({
+      timeZone: 'UTC',
+      entries: [
+        { id: 'p1', name: 'p1', start: '2026-01-01', end: '2026-01-02' },
+        { id: 'c1', name: 'c1', start: '2026-03-01', end: '2026-03-05' },
+      ],
+    });
+    const before = JSON.stringify(toJSON(state));
+    state.entries.update('c1', { parentId: 'p1' });
+    expect(state.entries.get('p1')!.kind).toBe('group');
+    undoAll(state);
+    expect(JSON.stringify(toJSON(state))).toBe(before);
   });
 });

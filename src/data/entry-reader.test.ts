@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { readEntries } from './entry-reader.js';
-import { entryId } from '../model/index.js';
+import { readEntries, readEdit } from './entry-reader.js';
+import { entryId, SegmentsOutOfSyncError } from '../model/index.js';
 import type { EntryInput } from '../model/index.js';
 import { instant } from '../time/index.js';
+import { FieldRegistry } from './fields/field-registry.js';
+
+const registry = new FieldRegistry({ fields: [] });
 
 const utc = (iso: string): number => Date.parse(iso);
 
@@ -10,7 +13,7 @@ const context = {
   timeZone: 'UTC',
   dateOnlyEnd: 'inclusive' as const,
   referenceDate: instant('2026-01-01T00:00:00Z'),
-  derivedSpanKinds: new Set(['group']),
+  rollUpKinds: new Set(['group']),
 };
 
 describe('readEntries', () => {
@@ -48,5 +51,28 @@ describe('readEntries', () => {
       { start: utc('2026-09-01T00:00:00Z'), end: utc('2026-09-03T00:00:00Z') },
     ]);
     expect(entry?.meta).toEqual({ team: 'A' });
+  });
+});
+
+describe('readEdit (S4.10, D-S4-30)', () => {
+  it('throws SegmentsOutOfSyncError when start/end are written without segments on a segmented entry', () => {
+    const [segmented] = readEntries(
+      [
+        {
+          id: 'seg',
+          name: 'Seg',
+          start: '2026-09-01',
+          end: '2026-09-10',
+          segments: [
+            { start: '2026-09-01', end: '2026-09-05' },
+            { start: '2026-09-06', end: '2026-09-10' },
+          ],
+        },
+      ],
+      context,
+    );
+    expect(() => readEdit({ start: '2026-09-02' }, context, segmented!, registry)).toThrow(
+      SegmentsOutOfSyncError,
+    );
   });
 });

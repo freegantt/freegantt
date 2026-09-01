@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <title>FreeGantt harness — S1 timeline & viewport</title>
+    <title>FreeGantt harness — generic demo</title>
     <link rel="stylesheet" href="./harness-nav.css" />
     <style>
       :root {
@@ -64,7 +64,7 @@
            they share one coordinate frame with the timeline pane (S1.8, D-S1.8-1/D-S1.8-2) — this
            harness no longer restates it as raw CSS. Renamed from --fg-row-label-width: the gutter
            is a pane width now, not a backend reservation. */
-        --fg-grid-pane-width: 220px;
+        --fg-grid-pane-width: 720px;
         border: 1px solid var(--page-border);
         /* No overflow/position rule here any more (S1.8): PaneLayout builds the grid pane / splitter
            / timeline pane structure inline, and the timeline pane is the library's own native
@@ -134,9 +134,13 @@
     </style>
   </head>
   <body>
-    <h1>FreeGantt — S1 timeline &amp; viewport</h1>
+    <h1>FreeGantt — generic demo</h1>
     <nav class="harness-site-nav" aria-label="Harness pages"></nav>
-    <p>Fixture dataset rendered as positioned bars under a day-tick header. Every slice adds to this page.</p>
+    <p>
+      Fixture dataset as a four-level tree with grid columns. Switch to grouped rows, pack lanes, filter by
+      team, or hide Budget. The S4.11 acceptance playground with the changeset log stays on
+      <a href="./hierarchy.html">hierarchy.html</a>.
+    </p>
     <div class="theme-toggle" role="group" aria-label="Theme">
       <button type="button" data-theme-choice="auto">Auto</button>
       <button type="button" data-theme-choice="light">Light</button>
@@ -149,6 +153,14 @@
       <button id="remove-btn" type="button">Remove</button>
       <button id="undo-btn" type="button">Undo</button>
       <button id="redo-btn" type="button">Redo</button>
+      <button id="toggle-budget-btn" type="button">Hide Budget</button>
+      <button id="reparent-btn" type="button">Nest timeline rendering under Discovery</button>
+      <button id="rows-source-btn" type="button">Group by team</button>
+      <button id="pack-rows-btn" type="button">Pack overlapping bars</button>
+      <button id="filter-team-btn" type="button">Filter team: off</button>
+      <button id="sort-name-btn" type="button">Sort by name: off</button>
+      <button id="expand-all-btn" type="button">Expand all</button>
+      <button id="collapse-all-btn" type="button">Collapse all</button>
       <label>
         Snap
         <select id="snap-unit">

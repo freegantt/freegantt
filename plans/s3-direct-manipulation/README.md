@@ -208,7 +208,7 @@ Full prose for each decision lives in the step file that implements it. Use this
 
 | Deferred | Returns at | Needs |
 |---|---|---|
-| Row reorder and reparent by drag | S4 | Authored order field; tree row source |
+| Row reorder and reparent by drag | when an authored order Field exists | That Field, plus a drop-target vocabulary (D-S4-31). S4 ships the data half: `update(id, { parentId })` |
 | Moving a `'group'` moves subtree | S4 or S7 | Extension hook writes children |
 | Undo coalescing for keyboard nudges | when asked | History merge policy |
 | `progress` drag handle | S7 | Scheduling-plugin Field (ADR 0008) |

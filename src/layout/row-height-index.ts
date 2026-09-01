@@ -1,7 +1,7 @@
 // layout/ owns row geometry (plans/01 §4, D-C). `computeFrame` needs O(log n) "top of row i" and "row
-// at offset y" for virtualization even under S5's pack-mode variable heights, so the index sits behind
+// at offset y" for virtualization even under S4's pack-mode variable heights, so the index sits behind
 // an interface from S1 rather than being inlined as an array walk. `PrefixSumHeightIndex` is the S1
-// implementation; an O(log n) structure replaces it in S7 only if the measured spike says so (D2).
+// implementation; an O(log n) structure replaces it in S6 only if the measured spike says so (D2).
 
 export interface RowHeightIndex {
   heightAt(index: number): number;

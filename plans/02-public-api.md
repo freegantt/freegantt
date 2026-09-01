@@ -13,7 +13,7 @@ The API is a product surface, designed once and defended. Everything here is wha
 3. **Every mutating interaction has a cancelable `before*` event.** Consumers can veto a drop, substitute their own editor, validate a link — before commit, not after.
 4. **Honest surface.** Nothing in the published types throws "not implemented" (invariant I11). Declared events fire; declared methods work.
 5. **Predictable naming.** One vocabulary, one bus, greppable pairs (`beforeEntryMove` / `entryMove`). No synonyms, no two names for one concept.
-6. **Typed extensibility.** `meta` generics flow end-to-end: `new Dataset<{ team: string }>` makes `entry.meta.team` typed in renderers, events, and queries.
+6. **Typed extensibility.** `meta` generics flow end-to-end: `new Dataset<{ team: string }>` makes `entry.meta.team` typed in renderers, events, and queries. Declared Field writes take a second type parameter: `new Dataset<{ team: string }, { cost: number }>` types `update({ cost })`. TypeScript does not infer that map from the `fields` array once TMeta is written.
 
 ---
 
@@ -23,12 +23,12 @@ The API is a product surface, designed once and defended. Everything here is wha
 import { Dataset, Gantt } from 'freegantt';
 
 // ── Data: headless, works in Node ───────────────────────────────
-const dataset = new Dataset<{ team: string }>({
+const dataset = new Dataset<{ team: string }, { cost: number }>({
   timeZone: 'America/Chicago',            // explicit; 'local' is opt-in
   dateOnlyEnd: 'inclusive',               // default; see §2.1
   rollUpKinds: ['group'],                 // default; `'none'` keeps caller-assigned parent values
   history: { capacity: 100 },             // default; undo/redo stack depth — see "Undo and redo" below
-  hierarchy: { autoGroup: true },         // first child promotes parent to kind 'group'; promote only
+  hierarchy: { autoGroup: true },         // default; first child promotes parent to kind 'group'; promote only
   entries: [
     { id: 'p1', name: 'Sitework', kind: 'group' },     // span derives from children (default policy)
     { id: 't1', parentId: 'p1', name: 'Groundwork', start: '2026-09-01', end: '2026-09-11' },
@@ -52,7 +52,7 @@ const gantt = new Gantt({
   container: '#gantt',                    // element or selector
   dataset,
 
-  rows: { source: 'entries', tree: true },
+  rowSource: { source: 'entries', tree: true },
   preset: 'weekAndMonth',                 // or a full ViewPreset object
   range: 'fitDataset',                    // or { start, end } — InstantInput, not branded Instant
   locale: 'de-DE',                        // presentation; live; never reaches toJSON()
@@ -113,7 +113,7 @@ Single mutations outside an explicit transaction are auto-wrapped in one — con
 
 ```ts
 gantt.preset = 'dayAndWeek';
-gantt.rows = { source: 'group', groupBy: t => t.meta.team };
+gantt.rowSource = { source: 'group', groupBy: (entry, fields) => fields?.read<string>(entry, 'team') ?? 'unassigned' };
 gantt.gridColumns = [...gantt.gridColumns, 'cost'];
 gantt.gridWidth = 220;                  // S1.8 — same cancelable commit sequence a splitter drag runs
 ```
@@ -145,6 +145,7 @@ The reading itself lives in `time/` (`toInstant`, `toEndInstant`) — resolving 
 | `beforeLinkCreate` | `linkCreate` |
 | `beforeSelectionChange` | `selectionChange` |
 | `beforeGridWidthChange` | `gridWidthChange` |
+| `beforeCollapseChange` | `collapseChange` |
 | — | `navigationChange` (one Viewport Batch: Preset, Fit, Range, Pan, Anchored zoom) |
 | `beforeChange` | `change` (every committed `ChangeSet`) |
 | — | `scheduleDiagnostics` (engine findings) |
@@ -152,6 +153,8 @@ The reading itself lives in `time/` (`toInstant`, `toEndInstant`) — resolving 
 `navigationChange` (S1.12) fires once per Viewport Batch after Preset, Fit, Range, Pan, or Anchored zoom actually change. There is no `before*` pair: those writes are reconfiguration (S1.9), not a vetoable gesture. Chrome reads `presetId` / `canZoom*` from the payload, or re-reads the live Gantt getters.
 
 `beforeGridWidthChange`/`gridWidthChange` (S1.8) carry `{ from, to }` in px. Fired by both a Splitter drag's commit and a direct `gantt.gridWidth = px` assignment — one commit sequence, one place it lives (`GanttShell`). A veto restores the width the drag started from, so a rejected drag leaves nothing behind.
+
+`beforeCollapseChange`/`collapseChange` (S4.6, D-S4-22) carry `{ from, to }` as `RowId[]` — Gantt view state, no Dataset transaction. Fired by a twisty click, keyboard collapse/expand, and a direct `gantt.collapsed = ids` assignment. A veto restores the set the interaction started from. Collapse is per Gantt: two Gantts on one Dataset collapse independently, the same way `selection` already does.
 
 S3 data-gesture payloads (D-S3-22): `beforeEntryMove`/`entryMove` carry `ProposedSpan` (`entry`, `start`, `end`) plus `entries` (grabbed first; extender extras never included). `beforeEntryResize`/`entryResize` add `edge: 'start' | 'end'`. `beforeSelectionChange`/`selectionChange` carry `{ from, to }` as `EntryId[]` — Gantt state, no Dataset transaction. `beforeEntryMove`/`beforeEntryResize` handlers may return `Promise<void | false>` (D-S3-17); every other Gantt event stays sync-only.
 
@@ -319,9 +322,78 @@ Source decides what happens to a parent's aggregate: a field sourced from `entry
 
 ```ts
 dataset.entries.update('t1', { start: '2026-10-05', cost: 12_000 });
+dataset.entries.fieldValue('t1', 'cost');       // 12_000 — meta-sourced
+dataset.entries.fieldValue('t1', 'start');      // entry-sourced
+dataset.entries.fieldValue('t1', 'duration');   // compute-sourced; no Gantt required
+dataset.field('cost');                         // resolved Field | undefined
+dataset.fields.all;                            // every declared Field, core included
 ```
 
-An unregistered key is an `UnknownFieldError`, never a silent write.
+An unregistered key is an `UnknownFieldError`, never a silent write. A missing id on `fieldValue` is an `EntryNotFoundError`. The read goes through the same Field registry path as the write: a consumer who declared `{ key: 'cost' }` does not reach into `entry.meta`. `dataset.field` and `dataset.fields.all` return **resolved** declarations (type merge applied, `source` filled). They are not the raw `DatasetOptions.fields` array.
+
+**Default `gridColumns` is `['name']`.** Naming a Field does not add it to the grid by itself.
+
+**Row-source sort** names a declared Field, not a visible column — `sort: { field: 'cost' }` orders by the stored value through `FieldCompare`, even when `gridColumns` is `['name']` only (`01` §2.6, S4.9, D-S4-13/D-S4-28).
+
+---
+
+### 4.3 Row sources, collapse, and tree
+
+A **Row** is a derived horizontal track — not an Entry. One Row may carry many Entries' items; a row source may produce Rows that stand for no Entry at all. **`gantt.rowSource`** names the config that decides what the Rows are for this Gantt. The name matches its type (`RowSource`) and leaves `rows` free for a future getter of the derived rows themselves.
+
+Default: `{ source: 'entries', tree: false }` — a flat list, exactly what S1 drew. Three occupants ship:
+
+```ts
+// Entries, optionally as a tree over parentId
+rowSource: { source: 'entries', tree: true }
+
+// One header row per groupBy value, then that group's entries.
+// groupBy (and filter / sort.compare) receive the bound Field reader as a second argument.
+rowSource: { source: 'group', groupBy: (entry, fields) => fields?.read<string>(entry, 'team') ?? 'unassigned' }
+
+// Consumer-supplied rows — id, optional entryIds, optional label
+rowSource: {
+  source: 'custom',
+  resolve: ({ entries }) => [
+    { id: 'hdr-a', label: 'Team A' },
+    { id: 'row-a1', entryIds: ['t1', 't2'] },
+  ],
+}
+```
+
+`{ source: 'entries' }` and `{ source: 'group' }` share a common block (`RowSourceCommon`): `heightMode` today. `{ source: 'custom' }` takes `heightMode` only — the resolver owns row membership.
+
+```ts
+rowSource: {
+  source: 'entries',
+  tree: true,
+  heightMode: 'pack', // 'fixed' (default) or 'pack' — stack overlaps into lanes
+}
+```
+
+**Sort and filter** live on the row source (`rowSource.filter`, `rowSource.sort`, `rowSource.filterPolicy`) — view knobs that never reorder `dataset.entries.all` or change what the Rollup sees (D-S4-28). `sort.field` names a declared Field; sort reads `fieldCompares`, not visible `gridColumns`.
+
+**Collapse is Gantt state**, not Dataset state — no transaction, no changeset:
+
+```ts
+gantt.collapsed = ['p1'];           // live; RowIds, loose on the way in
+gantt.collapse('p1');
+gantt.expand('p1');
+gantt.toggleCollapse('p1');
+gantt.collapseAll();
+gantt.expandAll();
+
+gantt.on('beforeCollapseChange', ({ from, to }) => false);  // veto
+gantt.on('collapseChange', ({ to }) => saveCollapsed(to));
+```
+
+For `{ source: 'entries' }`, a `RowId` equals the `EntryId`, so `collapse('p1')` names the parent entry. A grouping header uses a derived `RowId` from the `groupBy` value. Collapsed subtrees are absent from the row list, not merely hidden — `rowCount`, `aria-setsize`, and the scrollbar stay honest. The collapsed set survives data edits; a stale id simply matches nothing, the same way a removed entry id can linger in `selection`.
+
+**Live reconfiguration.** Assigning `gantt.rowSource` re-resolves rows, invalidates the height index from 0, and requests one frame — no remount. Scroll survives as a pixel position, clamped against the new content height.
+
+Group header rows show the `groupBy` label in column 0 and blank cells elsewhere. Per-group aggregates are the caller's data — declare a computed Field or write through a group entry; the grid does not invent them (D-S4-11).
+
+Published types: `RowSource`, `EntriesRowSource`, `GroupRowSource`, `CustomRowSource`, `CustomRow`, `CustomRowInput`, `RowHeightMode`, `RowSourceCommon`, `RowId`, `CollapseChange`, `RowFilter`, `RowSort`, `FilterPolicy`.
 
 ---
 
@@ -347,7 +419,7 @@ Omit `scale`/`scroll` and the Gantt creates private ones — single-Gantt users 
 
 ```ts
 const doc = dataset.toJSON();
-const p2  = Dataset.fromJSON(doc, { aggregators });
+const p2  = Dataset.fromJSON(doc, { aggregators, fieldTypes, fields });
 ```
 
 ```ts
@@ -361,9 +433,9 @@ export interface DatasetDocument {
 }
 ```
 
-S4.4 is the step that writes `schema: 2`. This build still writes `schema: 1` (`derivedSpanKinds`, no `fields`). `schema: 1` still reads. `progress` is not an entry key (ADR 0008). Omit `aggregators` and a Field that names an Aggregator throws `UnknownAggregatorError`. Document `rollUpKinds: []` keeps stored parents and does not maintain them.
+This build writes `schema: 2` (`rollUpKinds`, `fields`). `schema: 1` still reads (`derivedSpanKinds` lands on `rollUpKinds`; Fields come from `options.fields` only). `progress` is not an entry key (ADR 0008). Omit `aggregators` and a Field that names an Aggregator throws `UnknownAggregatorError`. Document `rollUpKinds: []` keeps stored parents and does not maintain them.
 
-- The JSON shape is **public API**: documented, versioned by an integer `schema` field, semver-governed. This build writes `schema: 1` only; S4.4 adds a `schema: 2` writer and keeps the `schema: 1` reader. The reader is a `readers: Record<number, Reader>` map — a second schema is a map addition, not a rewrite. `fromJSON` migrates older schemas forward when they exist; it never silently drops fields **of a schema it reads**. Keys the reader does not know are dropped: **anything of yours goes in `meta` and survives byte for byte; anything at top level belongs to the schema.** `progress` on an old entry row is an unknown key and is dropped (ADR 0008).
+- The JSON shape is **public API**: documented, versioned by an integer `schema` field, semver-governed. The reader is a `readers: Record<number, Reader>` map — a second schema is a map addition, not a rewrite. `fromJSON` migrates older schemas forward when they exist; it never silently drops fields **of a schema it reads**. Keys the reader does not know are dropped: **anything of yours goes in `meta` and survives byte for byte; anything at top level belongs to the schema.** `progress` on an old entry row is an unknown key and is dropped (ADR 0008).
 - Key order is a contract (`schema`, `timeZone`, `dateOnlyEnd`, `rollUpKinds`, `fields`, `entries`). Optional keys are omitted when absent, never written as `null`. Entries follow store insertion order. Instants serialize as `Z`-suffixed ISO-8601; brands exist only in TS types and never leak into JSON. `fromJSON` reads those instants as absolute, so the dataset zone never re-enters the reading.
 - `meta` round-trips opaquely — **unless you declare a key as a field** (`01` §2.6), which makes that key addressable for editing, comparison and rollup while everything else in `meta` keeps the guarantee. The value is carried by reference into the document and back out, never walked field by field.
 - **Changesets are the incremental counterpart**: `dataset.on('change')` already carries `{from, to}` per field, which is what discharges `02`'s promise that a sync adapter be *"an extension, not a core change"*. `dataset.apply(changeSet)` is what such an extension writes; it is not in S2 (D-S2-11).
@@ -374,7 +446,7 @@ S4.4 is the step that writes `schema: 2`. This build still writes `schema: 1` (`
 
 - **Dev-mode invariant warnings**: dependency cycle detected (with member ids), config set on destroyed instance, non-deterministic item identity, renderer returned a live node, and (S1.9) `GanttOptions.scale` supplied alongside any of `preset`/`range`/`zoom` — "FreeGantt: GanttOptions.preset/range/zoom are ignored when 'scale' is also supplied. The shared TimeScaleModel already carries its own intent — set preset/range/zoom on it directly." The shared `scale` always wins; the constructor keys are never merged into it (D-S1.9-9).
 - **Stable test hooks**: `data-testid` on every part so consumers can write E2E tests against the Gantt without brittle selectors. Shipped at S1.10 (D-S1.10-5/§3.5, U6): `[data-testid="fg-row"]` (with `data-row-id`) and `[data-testid="fg-bar"]` (alongside the existing `data-item-id`) — the selectors S1.11's e2e boxes select on.
-- **Errors are typed and actionable**: `FreeGanttError` subclasses with codes, never bare strings; validation failures name the entity and field. `ContainerNotFoundError` (`code: 'container-not-found'`, S1.8) is the first of these a consumer can actually catch — thrown when a string `container` selector matches nothing. `UnknownPresetError` (`code: 'unknown-preset'`, S1.9) is thrown by `resolvePreset` for a `PresetRef` string outside the shipped set. `EntryNotFoundError` (`code: 'entry-not-found'`) is thrown by `reveal(entryId)` (S1.9) and by `entries.update`/`entries.remove`/a bad `parentId` (S2.3) for an id the Dataset has no entry for — its message names the call that failed. `DuplicateEntryIdError` (`code: 'duplicate-entry-id'`, S2.3) is thrown by `entries.add` given an id already in the store. `ParentCycleError` (`code: 'parent-cycle'`, S2.3) is thrown by a `parentId` edit that would make an entry its own ancestor, self-parenting included. `UnknownFieldError` (`code: 'unknown-field'`, S2.3) is thrown by `entries.update` given an edit key that names no field — in S2 the legal set is the core `Entry` fields; S5's field registry widens the set, not the check. `UnsupportedSchemaError` (`code: 'unsupported-schema'`, S2.6) is thrown by `Dataset.fromJSON` for a `schema` this build has no reader for — the message names the version it found and the versions it reads.
+- **Errors are typed and actionable**: `FreeGanttError` subclasses with codes, never bare strings; validation failures name the entity and field. `ContainerNotFoundError` (`code: 'container-not-found'`, S1.8) is thrown when a string `container` selector matches nothing. `UnknownPresetError` (`code: 'unknown-preset'`, S1.9) is thrown by `resolvePreset` for a `PresetRef` string outside the shipped set. `EntryNotFoundError` (`code: 'entry-not-found'`) is thrown by `reveal(entryId)` (S1.9), `entries.fieldValue`, and by `entries.update`/`entries.remove`/a bad `parentId` (S2.3) for an id the Dataset has no entry for — its message names the call that failed. `DuplicateEntryIdError` (`code: 'duplicate-entry-id'`, S2.3) is thrown by `entries.add` given an id already in the store. `ParentCycleError` (`code: 'parent-cycle'`, S2.3) is thrown by a `parentId` edit that would make an entry its own ancestor, self-parenting included. `UnknownFieldError` (`code: 'unknown-field'`, S2.3) is thrown by `entries.update` or `entries.fieldValue` given a key that names no field — the Field registry is the legal set. `DuplicateFieldKeyError` (`code: 'duplicate-field-key'`, S4.1) is thrown when two Field declarations share a key. `DuplicateFieldSourceError` (`code: 'duplicate-field-source'`, S4.1) is thrown when two Fields claim the same `meta` key. `UnknownAggregatorError` (`code: 'unknown-aggregator'`, S4.1) is thrown when a Field names an Aggregator that is not registered. `UnknownFieldTypeError` (`code: 'unknown-field-type'`, S4.1) is thrown when a Field names a `type` with no matching `fieldTypes` entry. `FieldNotColumnableError` (`code: 'field-not-columnable'`, S4.3) is thrown when `gridColumns` names a Field that declared no `column`. `DuplicateRowIdError` (`code: 'duplicate-row-id'`, S4.6) is thrown by a `{ source: 'custom' }` resolver that returns the same `id` twice. `UnsupportedSchemaError` (`code: 'unsupported-schema'`, S2.6) is thrown by `Dataset.fromJSON` for a `schema` this build has no reader for — the message names the version it found and the versions it reads.
 - **Docs site with live, editable examples** grows with the slices (the harness pages are its seed) — budgeted as a deliverable, not an afterthought.
 - **Semver honesty**: internal modules are not importable (enforced by the `exports` map), so semver only governs surfaces we actually promise.
 

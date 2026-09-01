@@ -8,6 +8,9 @@
 
 import type { TimeScaleFit } from '../layout/index.js';
 import type { EntryId, Instant } from '../model/index.js';
+import type { CollapseChange } from './collapse-state.js';
+
+export type { CollapseChange };
 
 export { EventBus } from '../data/event-bus.js';
 
@@ -72,6 +75,9 @@ export interface GanttEventMap {
   /** S3, D-S3-10. Sync veto: returning `false` leaves the selection untouched. */
   beforeSelectionChange: SelectionChange;
   selectionChange: SelectionChange;
+  /** S4.6, D-S4-22. Sync veto: returning `false` leaves the collapsed set untouched. */
+  beforeCollapseChange: CollapseChange;
+  collapseChange: CollapseChange;
   /** S3.3, D-S3-16. Sync or async veto (D-S3-17): returning `false` or a Promise that settles
    *  `false` commits nothing. A returned Promise holds the commit-draft ghost until it settles. */
   beforeEntryMove: EntryMove;

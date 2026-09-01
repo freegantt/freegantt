@@ -173,6 +173,35 @@ const GATES = {
     ],
     human: ['HUMAN: harness/editing.html is pokeable — drag, resize, veto toast, Ctrl+Z'],
   },
+  S4: {
+    name: 'S4 → S5',
+    checks: [
+      tagged(
+        'S4-A1',
+        ['vitest'],
+        'declared meta Field rolls up, shows in grid, edits and undoes with core fields, round-trips',
+      ),
+      tagged('S4-A2', ['vitest'], 'unregistered field key throws UnknownFieldError — never a silent write'),
+      tagged('S4-A3', ['vitest', 'e2e'], 'switching rowSource re-resolves with no remount; scroll survives'),
+      tagged('S4-A4', ['vitest'], 'segmented entry renders N bars; one segment drags transactionally'),
+      tagged('S4-A5', ['vitest'], 'pack-mode rows change height; scroll offset re-clamped, not reset'),
+      tagged('S4-A6', ['vitest'], 'collapse survives data edits and is independent per Gantt'),
+      tagged('S4-A7', ['vitest'], 'filter with keep-ancestors shows a deep match under its parents'),
+      tagged(
+        'S4-A8',
+        ['vitest'],
+        "empty 'group' renders, accepts children, gains a span — no special-casing",
+      ),
+      tagged(
+        'S4-A9',
+        ['vitest'],
+        'autoGroup promotes in one undo step; losing the last child demotes nothing',
+      ),
+      tagged('S4-A10', ['vitest'], 'filterPolicy matchOnly returns matching entries — no ancestor rows'),
+      tagged('S4-A11', ['vitest'], "{ source: 'custom', resolve } produces the resolver's rows"),
+    ],
+    human: ['HUMAN: harness/hierarchy.html is pokeable — row sources, pack, filter, collapse, cost + undo'],
+  },
 };
 
 // Guarded so `test/guards/slice-gate.test.ts` can import `tagged`/`idExistsInSource` without this

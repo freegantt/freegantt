@@ -1,18 +1,30 @@
 import './harness-nav.ts';
-import { Gantt, Dataset, MutationCancelledError } from '../src/api/index.js';
-import type { Theme } from '../src/api/index.js';
-import type { TimeUnit } from '../src/model/index.js';
-import { demoEntryInputs } from '../fixtures/demo-dataset.js';
+import { Gantt, Dataset, attemptMutation } from '../src/api/index.js';
+import type { Entry, FieldContext, GridColumnInput, RowSource, Theme, TimeUnit } from '../src/api/index.js';
+import { demoFieldOptions, demoTreeEntryInputs } from '../fixtures/demo-dataset.js';
 import { mountTimelineToolbar } from './timeline-toolbar.js';
 
-const dataset = new Dataset({ entries: demoEntryInputs, timeZone: 'UTC' });
+const GRID_WITH_BUDGET: readonly GridColumnInput[] = [
+  'name',
+  'start',
+  'end',
+  'duration',
+  { field: 'cost', header: 'Budget' },
+];
+const GRID_WITHOUT_BUDGET: readonly GridColumnInput[] = ['name', 'start', 'end', 'duration'];
 
-const gantt = new Gantt({ container: '#gantt', dataset });
-// Zero-interaction visibility for the today line (S1.12, D-S1.12-14) — header readability follow-up
-// pass 4. Needs no ResizeObserver measurement first: panToToday reads the already-resolved
-// TimeScale, and the pane re-measures/re-renders on its own right after mount. `panToToday()`'s
-// default `align: 'start'` leaves `todayLineMarginTicks`' worth of the timeline visible to the left
-// of the line, the same landing a later "Today" button click reuses (S1.13 follow-up).
+const dataset = new Dataset<{ cost?: number; team?: string }, { cost: number; team?: string }>({
+  entries: demoTreeEntryInputs,
+  timeZone: 'UTC',
+  ...demoFieldOptions,
+});
+
+const gantt = new Gantt({
+  container: '#gantt',
+  dataset,
+  gridColumns: GRID_WITH_BUDGET,
+  rowSource: { source: 'entries', tree: true },
+});
 gantt.panToToday();
 
 mountTimelineToolbar({ gantt, container: document.querySelector<HTMLDivElement>('#toolbar')! });
@@ -23,6 +35,14 @@ const removeBtn = document.querySelector<HTMLButtonElement>('#remove-btn')!;
 const undoBtn = document.querySelector<HTMLButtonElement>('#undo-btn')!;
 const redoBtn = document.querySelector<HTMLButtonElement>('#redo-btn')!;
 const selectionReadout = document.querySelector<HTMLParagraphElement>('#selection-readout')!;
+const toggleBudgetBtn = document.querySelector<HTMLButtonElement>('#toggle-budget-btn')!;
+const reparentBtn = document.querySelector<HTMLButtonElement>('#reparent-btn')!;
+const rowsSourceBtn = document.querySelector<HTMLButtonElement>('#rows-source-btn')!;
+const packRowsBtn = document.querySelector<HTMLButtonElement>('#pack-rows-btn')!;
+const filterTeamBtn = document.querySelector<HTMLButtonElement>('#filter-team-btn')!;
+const sortNameBtn = document.querySelector<HTMLButtonElement>('#sort-name-btn')!;
+const expandAllBtn = document.querySelector<HTMLButtonElement>('#expand-all-btn')!;
+const collapseAllBtn = document.querySelector<HTMLButtonElement>('#collapse-all-btn')!;
 
 function refreshNameInput(): void {
   const entries = gantt.selectionEntries;
@@ -66,50 +86,34 @@ dataset.on('change', () => {
 renameBtn.addEventListener('click', () => {
   const entries = gantt.selectionEntries;
   if (entries.length === 0) return;
-  try {
+  attemptMutation(() => {
     dataset.transaction(() => {
       for (const entry of entries) dataset.entries.update(entry.id, { name: nameInput.value });
     });
-  } catch (error) {
-    if (!(error instanceof MutationCancelledError)) throw error;
-  }
+  });
 });
 
 removeBtn.addEventListener('click', () => {
   const entries = gantt.selectionEntries;
   if (entries.length === 0) return;
-  try {
+  attemptMutation(() => {
     dataset.transaction(() => {
       for (const entry of entries) dataset.entries.remove(entry.id);
     });
-  } catch (error) {
-    if (!(error instanceof MutationCancelledError)) throw error;
-  }
+  });
 });
 
 undoBtn.addEventListener('click', () => {
-  try {
-    dataset.undo();
-  } catch (error) {
-    if (!(error instanceof MutationCancelledError)) throw error;
-  }
+  attemptMutation(() => dataset.undo());
 });
 
 redoBtn.addEventListener('click', () => {
-  try {
-    dataset.redo();
-  } catch (error) {
-    if (!(error instanceof MutationCancelledError)) throw error;
-  }
+  attemptMutation(() => dataset.redo());
 });
 
 refreshHistoryButtons();
 syncSelectionUi();
 
-// Snap demo (D-S3-12): a drag always previews at full pixel resolution — this only controls where
-// the *committed* start/end lands. 'tick' defers to whatever the active preset already steps by;
-// 'none' matches holding Alt for every drag, not just the current one; hour/day/week let a visitor
-// pick a coarser or finer grid than the preset's own tick, at any increment.
 const snapUnitSelect = document.querySelector<HTMLSelectElement>('#snap-unit')!;
 const snapIncrementInput = document.querySelector<HTMLInputElement>('#snap-increment')!;
 
@@ -126,6 +130,87 @@ function applySnapChoice(): void {
 snapUnitSelect.addEventListener('change', applySnapChoice);
 snapIncrementInput.addEventListener('change', applySnapChoice);
 applySnapChoice();
+
+let budgetVisible = true;
+toggleBudgetBtn.addEventListener('click', () => {
+  budgetVisible = !budgetVisible;
+  gantt.gridColumns = budgetVisible ? GRID_WITH_BUDGET : GRID_WITHOUT_BUDGET;
+  toggleBudgetBtn.textContent = budgetVisible ? 'Hide Budget' : 'Show Budget';
+});
+
+reparentBtn.addEventListener('click', () => {
+  attemptMutation(() => {
+    dataset.entries.update('entry-18', { parentId: 'entry-1' });
+  });
+});
+
+let grouped = false;
+let pack = false;
+let filterTeam: 'core' | 'edge' | 'launch' | null = null;
+const NEXT_FILTER_TEAM: Record<'core' | 'edge' | 'launch' | 'off', 'core' | 'edge' | 'launch' | null> = {
+  off: 'core',
+  core: 'edge',
+  edge: 'launch',
+  launch: null,
+};
+let sortByName = false;
+
+function applyRowSource(): void {
+  const heightMode: 'fixed' | 'pack' = pack ? 'pack' : 'fixed';
+  const shared = {
+    heightMode,
+    ...(filterTeam !== null && !grouped
+      ? { filter: (entry: Entry, fields?: FieldContext) => fields?.read(entry, 'team') === filterTeam }
+      : {}),
+    ...(sortByName && !grouped ? { sort: { field: 'name' as const } } : {}),
+  };
+  const next: RowSource = grouped
+    ? {
+        source: 'group',
+        groupBy: (entry: Entry, fields?: FieldContext) => fields?.read<string>(entry, 'team') ?? 'unassigned',
+        ...shared,
+      }
+    : { source: 'entries', tree: true, ...shared };
+  gantt.rowSource = next;
+  rowsSourceBtn.textContent = grouped ? 'Show tree' : 'Group by team';
+  packRowsBtn.textContent = pack ? 'Stack bars (fixed rows)' : 'Pack overlapping bars';
+  filterTeamBtn.disabled = grouped;
+  sortNameBtn.disabled = grouped;
+  filterTeamBtn.textContent = filterTeam === null ? 'Filter team: off' : `Filter team: ${filterTeam}`;
+  sortNameBtn.textContent = sortByName ? 'Sort by name: on' : 'Sort by name: off';
+}
+
+rowsSourceBtn.addEventListener('click', () => {
+  grouped = !grouped;
+  applyRowSource();
+});
+
+packRowsBtn.addEventListener('click', () => {
+  pack = !pack;
+  applyRowSource();
+});
+
+filterTeamBtn.addEventListener('click', () => {
+  if (grouped) return;
+  filterTeam = NEXT_FILTER_TEAM[filterTeam ?? 'off'];
+  applyRowSource();
+});
+
+sortNameBtn.addEventListener('click', () => {
+  if (grouped) return;
+  sortByName = !sortByName;
+  applyRowSource();
+});
+
+expandAllBtn.addEventListener('click', () => {
+  gantt.expandAll();
+});
+
+collapseAllBtn.addEventListener('click', () => {
+  gantt.collapseAll();
+});
+
+applyRowSource();
 
 const THEME_STORAGE_KEY = 'freegantt-harness-theme';
 

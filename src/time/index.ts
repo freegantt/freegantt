@@ -17,6 +17,7 @@ export type { PlainParts } from './zone.js';
 export {
   formatDate,
   formatEndInclusive,
+  DATE_TIME_FORMAT,
   resolveDateFormat,
   formatWeekNumber,
   formatHour,

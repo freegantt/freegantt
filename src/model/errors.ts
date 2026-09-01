@@ -8,8 +8,8 @@ import type { ChangeSet } from './change-set.js';
 export class FreeGanttError extends Error {
   readonly code: string;
 
-  constructor(code: string, message: string) {
-    super(message);
+  constructor(code: string, message: string, options?: ErrorOptions) {
+    super(message, options);
     this.name = 'FreeGanttError';
     this.code = code;
   }
@@ -60,9 +60,9 @@ export class InvalidPresetError extends FreeGanttError {
 }
 
 /** `code: 'entry-not-found'` — an id the Dataset has no entry for, from `reveal(entryId)` (S1.9,
- * D-S1.9-6) or a mutator (`entries.update`/`remove`, or a `parentId` naming a missing entry — S2.3
- * §1.3). `operation` names the call that failed, so the message points at what the caller asked for
- * rather than a generic "not found". */
+ * D-S1.9-6), `entries.fieldValue`, or a mutator (`entries.update`/`remove`, or a `parentId` naming a
+ * missing entry — S2.3 §1.3). `operation` names the call that failed, so the message points at what
+ * the caller asked for rather than a generic "not found". */
 export class EntryNotFoundError extends FreeGanttError {
   constructor(entryId: EntryId, operation: string) {
     super('entry-not-found', `${operation}: no entry with id "${entryId}"`);
@@ -87,12 +87,112 @@ export class ParentCycleError extends FreeGanttError {
   }
 }
 
-/** `code: 'unknown-field'` — an edit naming a key that is not a declared field. In S2 the legal set is
- * the core `Entry` fields; S5's field registry widens the set, not the check (D-S2-26, S2.3 §1.3). */
+/** `code: 'segments-out-of-sync'` — a `start`/`end` write on an entry that stores `segments` (D-S4-30).
+ *  Write `segments` instead; the envelope updates in the same transaction. */
+export class SegmentsOutOfSyncError extends FreeGanttError {
+  constructor(entryId: EntryId) {
+    super(
+      'segments-out-of-sync',
+      `entries.update: "${entryId}" has segments — write segments, not start/end alone`,
+    );
+    this.name = 'SegmentsOutOfSyncError';
+  }
+}
+
+/** `code: 'unknown-field'` — an edit or `entries.fieldValue` naming a key that is not a declared
+ *  Field. The registry is the legal set: core Fields plus the consumer's (D-S4-5, D-S2-26). */
 export class UnknownFieldError extends FreeGanttError {
   constructor(field: string) {
     super('unknown-field', `entries: "${field}" is not a known field`);
     this.name = 'UnknownFieldError';
+  }
+}
+
+/** `code: 'duplicate-field-key'` — two Field declarations share a `key`, or a declaration names a
+ *  core Field (D-S4-5). */
+export class DuplicateFieldKeyError extends FreeGanttError {
+  readonly key: string;
+
+  constructor(key: string) {
+    super('duplicate-field-key', `fields: "${key}" is already declared`);
+    this.name = 'DuplicateFieldKeyError';
+    this.key = key;
+  }
+}
+
+/** `code: 'duplicate-field-source'` — two Fields resolve to the same `{ from: 'meta', key }` (D-S4-5). */
+export class DuplicateFieldSourceError extends FreeGanttError {
+  readonly metaKey: string;
+
+  constructor(metaKey: string) {
+    super(
+      'duplicate-field-source',
+      `fields: two Fields read meta key "${metaKey}" — each Document slot belongs to one Field`,
+    );
+    this.name = 'DuplicateFieldSourceError';
+    this.metaKey = metaKey;
+  }
+}
+
+/** `code: 'unknown-aggregator'` — `rollUp` names an Aggregator that is not shipped and not in
+ *  `DatasetOptions.aggregators` (D-S4-5). */
+export class UnknownAggregatorError extends FreeGanttError {
+  readonly aggregatorName: string;
+
+  constructor(aggregatorName: string) {
+    super('unknown-aggregator', `fields: aggregator "${aggregatorName}" is not registered`);
+    this.name = 'UnknownAggregatorError';
+    this.aggregatorName = aggregatorName;
+  }
+}
+
+/** `code: 'unknown-field-type'` — `type` names a bundle that is not in `fieldTypes` (D-S4-5). */
+export class UnknownFieldTypeError extends FreeGanttError {
+  readonly typeName: string;
+
+  constructor(typeName: string) {
+    super('unknown-field-type', `fields: type "${typeName}" is not registered`);
+    this.name = 'UnknownFieldTypeError';
+    this.typeName = typeName;
+  }
+}
+
+/** `code: 'aggregator-failed'` — a consumer Aggregator threw during the Rollup (D-S4-9). The
+ *  transaction rolls back; nothing commits and no history entry is pushed. */
+export class AggregatorFailedError extends FreeGanttError {
+  readonly fieldKey: string;
+  readonly aggregatorName: string;
+  readonly entryId: EntryId;
+
+  constructor(fieldKey: string, aggregatorName: string, entryId: EntryId, cause?: unknown) {
+    if (cause === undefined) {
+      super(
+        'aggregator-failed',
+        `rollup: aggregator "${aggregatorName}" failed on field "${fieldKey}" for entry "${String(entryId)}"`,
+      );
+    } else {
+      super(
+        'aggregator-failed',
+        `rollup: aggregator "${aggregatorName}" failed on field "${fieldKey}" for entry "${String(entryId)}"`,
+        { cause },
+      );
+    }
+    this.name = 'AggregatorFailedError';
+    this.fieldKey = fieldKey;
+    this.aggregatorName = aggregatorName;
+    this.entryId = entryId;
+  }
+}
+
+/** `code: 'field-not-columnable'` — `gridColumns` named a Field that did not declare `column`
+ *  (D-S4-12). Thrown when S4.3 resolves columns. */
+export class FieldNotColumnableError extends FreeGanttError {
+  readonly key: string;
+
+  constructor(key: string) {
+    super('field-not-columnable', `gridColumns: "${key}" is not a Grid column candidate`);
+    this.name = 'FieldNotColumnableError';
+    this.key = key;
   }
 }
 
@@ -127,6 +227,17 @@ export class InvalidReplayOriginError extends FreeGanttError {
   constructor(origin: string) {
     super('invalid-replay-origin', `replay: origin "${origin}" is not "undo" or "redo"`);
     this.name = 'InvalidReplayOriginError';
+  }
+}
+
+/** `code: 'duplicate-row-id'` — `{ source: 'custom' }` returned two `CustomRow`s with the same `id`. */
+export class DuplicateRowIdError extends FreeGanttError {
+  readonly rowId: string;
+
+  constructor(rowId: string) {
+    super('duplicate-row-id', `rows: custom source returned duplicate id "${rowId}"`);
+    this.name = 'DuplicateRowIdError';
+    this.rowId = rowId;
   }
 }
 

@@ -47,9 +47,19 @@ Each row is a `files`-scoped override. The `allowlist` column names the only pat
 | B6 | `no-dom-in-pure` | `no-restricted-globals` (`document`, `window`, `navigator`, `location`, `self`, `HTMLElement`, `Node`, `Element`, `requestAnimationFrame`, `getComputedStyle`) | DOM access below the line | — (pure dirs only, no exceptions) | I1, D4 |
 | B7 | `no-external-runtime-import` | `no-restricted-imports` (`alien-signals`, `temporal-polyfill`, `temporal-polyfill/*`) | Any runtime dep import | `src/data/reactivity.ts` (`alien-signals`), `src/time/zone.ts` (`temporal-polyfill`) — S2.7 correction: the plan's original text named only `alien-signals`/`reactivity.ts`; the shipped rule confines both façades | `plans/04` §1 |
 | B8 | `no-not-implemented` | `no-restricted-syntax` on `ThrowStatement > NewExpression[callee.name='Error'] > Literal[value=/not.implemented|TODO|unsupported/i]` | Dishonest public surface | tests | I11 |
-| B9 | `no-derived-in-json` | `no-restricted-imports` of `layout/`+`view/` types, and `no-restricted-syntax` on `TSTypeReference[typeName.name=/^(Row\|Item\|GeometryFrame)$/]` | Derived types in serialization | — (`src/data/serialization/**` only) | authored/derived |
+| B9 | `no-derived-in-json` | `eslint/rules/no-derived-in-json.cjs` — bans `Row`/`Item`/`GeometryFrame` type references and `layout/`/`view/` imports | Derived types in serialization | — (`src/data/serialization/**` only) | authored/derived |
 | B10 | `raf-single-owner` | `no-restricted-globals` (`requestAnimationFrame`, `cancelAnimationFrame`) | Multiple rAF pipelines | `src/view/frame-scheduler.ts` | `01` §3 |
 | B11 | `no-restricted-imports` layer mirror | `no-restricted-imports` with per-directory `patterns` | Layer violations (fast editor feedback) | — | I1 (backstop for `03` §1) |
+
+### dependency-cruiser removable leaves (not ESLint rules)
+
+These live in `.dependency-cruiser.cjs` and are proved by `scripts/guard-red-test.mjs` (D-S2-23, S4):
+
+| Rule | Module | Allowed importers | Invariant |
+|---|---|---|---|
+| `rollup-is-removable` | `src/data/rollup.ts` | `build-commit-change-set.ts`, `transaction.ts` | D-S4-7 — delete the file and parents keep caller-assigned values |
+| `autogroup-is-removable` | `src/data/hierarchy.ts` | `build-commit-change-set.ts`, `transaction.ts` | D-S4-17 — delete the file and promotion never runs |
+| `layout-boundary` | `src/layout/**` | may import `time/`, `model/` only | I1 — `layout/` never imports `data/` |
 
 *(B11 duplicates dependency-cruiser deliberately: `depcruise` is the authority and understands the whole graph; the ESLint mirror gives the red squiggle in-editor and inside the Claude Code PostToolUse hook, where a full graph crawl would be too slow.)*
 
@@ -171,7 +181,7 @@ allowlist exists for; `data/` and `layout/` have no such seam and never will, on
 
 ### 3.7 `freegantt/model-is-types-only` — syntactic · `01` §1
 
-**Flags:** in `src/model/**`, any value-producing declaration — function/class/variable — except an allowlist of id/brand helpers (`brand`, `unbrand`, `entryId`, `dependencyId`, `rowId`, `itemId`, `changeSetId`) which must additionally be one-line, dependency-free identity casts. Any `import` that is not `import type` is flagged.
+**Flags:** in `src/model/**` (tests exempt), any value-producing declaration — function/class/variable — except an allowlist of id/brand helpers (`brand`, `unbrand`, `entryId`, `dependencyId`, `rowId`, `itemId`, `changeSetId`) which must additionally be one-line, dependency-free identity casts, plus the ItemId readers `entryIdOfItem` and `segmentIndexOfItem` (D-S4-25). Any `import` that is not `import type` is flagged.
 
 **Message:** `model/ is types only: zero runtime beyond id/brand helpers, zero dependencies. (plans/01 §1)`
 
@@ -244,7 +254,8 @@ Rules land with the code they can govern. Rows below match the matrix statuses.
 | S0 | B1, B2, B5, B6, B11, 3.1 |
 | S1 | + B4, 3.2, 3.10, 3.11 |
 | S2.7 | + B7, B8, B9, B10, 3.3a, 3.4, 3.6, 3.7, 3.8 (S2.7 correction: the plan drafted these against S0/S2, before the code they govern existed to write fixtures against — `no-store-mutation-outside-transaction` needs `data/transaction.ts`, `require-invariant-header` needs its five listed files, and so on; all landed together at slice-close instead) |
-| S3 | (no new rules — I6/I14 are tests) |
+| S4 | dependency-cruiser: `rollup-is-removable`, `autogroup-is-removable`, `layout-boundary` (proved by `scripts/guard-red-test.mjs`) |
+| S3 | (no new ESLint rules — I6/I14 are tests) |
 
 **Not yet shipped (S2.7 correction — the table above previously claimed these landed at S0, before the
 code they govern existed):** B3 (no production id minter needs it — `01-invariant-guard-matrix.md`'s

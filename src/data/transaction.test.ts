@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { runTransaction } from './transaction.js';
 import { DatasetState } from './dataset-state.js';
 import { MutationCancelledError, MutationDuringNotificationError, entryId } from '../model/index.js';
+import { toEndInstant, toInstant } from '../time/index.js';
 import type { EntryEdits, StoredEdit } from './edit-extension.js';
 
 function dataset(entries: { id: string; parentId?: string }[] = []): DatasetState {
@@ -468,5 +469,75 @@ describe('runTransaction', () => {
     runTransaction(state, (token) => state.entries.stageUpdate(token, entryId('t1'), { name: 'b' }), 'user');
 
     expect(seen.length).toBe(2);
+  });
+
+  it('a 500-entry bulk edit still produces one changeset and touches only the ancestors it must', () => {
+    const leafCount = 500;
+    const leaves = Array.from({ length: leafCount }, (_, i) => ({
+      id: `c${i}`,
+      parentId: 'root' as const,
+      name: `c${i}`,
+      start: '2026-01-01',
+      end: '2026-01-02',
+      meta: { cost: 1 },
+    }));
+    const state = new DatasetState({
+      entries: [
+        { id: 'root', kind: 'group', name: 'root' },
+        { id: 'other', kind: 'group', name: 'other' },
+        {
+          id: 'kept',
+          parentId: 'other',
+          name: 'kept',
+          start: '2026-01-01',
+          end: '2026-01-02',
+          meta: { cost: 7 },
+        },
+        ...leaves,
+      ],
+      timeZone: 'UTC',
+      fieldTypes: { money: { rollUp: 'sum' } },
+      fields: [{ key: 'cost', type: 'money' }],
+    });
+    const costOf = (id: string): number | undefined => {
+      const entry = state.entries.get(id);
+      if (!entry) return undefined;
+      return state.fieldContext.read<number>(entry, 'cost');
+    };
+
+    let changeCount = 0;
+    const updatedIds = new Set<string>();
+    state.on('change', ({ changeSet }) => {
+      changeCount += 1;
+      for (const row of changeSet.updated) updatedIds.add(String(row.id));
+    });
+
+    state.transaction(() => {
+      for (const leaf of leaves) state.entries.update(leaf.id, { cost: 2 });
+    });
+
+    expect(changeCount).toBe(1);
+    expect(costOf('root')).toBe(leafCount * 2);
+    expect(costOf('other')).toBe(7);
+    expect(updatedIds.has('other')).toBe(false);
+    expect(updatedIds.has('kept')).toBe(false);
+    expect(updatedIds.has('root')).toBe(true);
+  });
+
+  it('a parent promoted on this commit is inside the Rollup reach on the same commit (D-S4-17)', () => {
+    const state = new DatasetState({
+      entries: [
+        { id: 'p1', name: 'p1', start: '2026-01-01', end: '2026-01-02' },
+        { id: 'c1', name: 'c1', start: '2026-03-01', end: '2026-03-05' },
+      ],
+      timeZone: 'UTC',
+    });
+
+    state.entries.update('c1', { parentId: 'p1' });
+
+    const parent = state.entries.get('p1')!;
+    expect(parent.kind).toBe('group');
+    expect(parent.start).toBe(toInstant('UTC', '2026-03-01'));
+    expect(parent.end).toBe(toEndInstant('UTC', '2026-03-05', 'inclusive'));
   });
 });

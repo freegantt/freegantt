@@ -3,10 +3,9 @@
 // `scripts/check-vendor-names.mjs`, keeps either word from creeping back into prose or an identifier.
 //
 // `docs/adr/**` is exempt by design (ADR 0004's own consequences: ADRs keep their original wording as
-// historical record). Two narrower exemptions cover legitimate historical citations elsewhere: a line
+// historical record). One narrower exemption covers a legitimate historical citation elsewhere: a line
 // citing the ADR that retired `Project` (CONTEXT.md's own glossary explains the retirement, which
-// necessarily names the retired word once), and the literal git branch name `host-input-dates-and-ids`
-// cited in `harness/docs/doc.html` as a historical fact, not a live usage of the concept.
+// necessarily names the retired word once).
 
 import { describe, expect, it } from 'vitest';
 import fs from 'node:fs';
@@ -33,7 +32,6 @@ const SCAN_FILES = [
 ];
 const SKIP_DIRS = new Set(['node_modules', 'dist', '.git']);
 const SELF = path.relative(root, fileURLToPath(import.meta.url));
-const BRANCH_NAME_CITATION = 'host-input-dates-and-ids';
 
 function walk(dir: string, files: string[]): void {
   for (const entry of fs.readdirSync(dir)) {
@@ -90,10 +88,7 @@ function findHits(pattern: RegExp, isExempt: (line: string) => boolean): Hit[] {
 
 describe('retired words stay retired', () => {
   it('never reintroduces `host` (D-S1.11-6, #64)', () => {
-    const hits = findHits(
-      /\bhosts?\b/i,
-      (line) => /retired/i.test(line) || line.includes(BRANCH_NAME_CITATION) || /localhost/i.test(line),
-    );
+    const hits = findHits(/\bhosts?\b/i, (line) => /retired/i.test(line) || /localhost/i.test(line));
     expect(hits, JSON.stringify(hits, null, 2)).toEqual([]);
   });
 

@@ -1,22 +1,36 @@
 export type { EntryId, RowId, ItemId, ChangeSetId } from './ids.js';
-export { entryId, rowId, itemId, changeSetId } from './ids.js';
+export { entryId, rowId, itemId, entryIdOfItem, segmentIndexOfItem, changeSetId } from './ids.js';
 export type { Instant, TimeUnit, TimeSpan, Duration } from './time.js';
 export type { InstantInput, TimeSpanInput, DateOnlyEndRule } from './time.js';
 export type { Entry, EntryKind, EntryInput, EntryEdit, StoredEdit, EntryEdits } from './entry.js';
-export type { Point, Size, PixelSpan, Rect } from './geometry.js';
-export type { Dataset, EntryStore, EntryStoreView } from './dataset.js';
-export type { DatasetDocument, EntryDocument } from './document.js';
+export type { Point, Size, PixelSpan, Rect, ClientPoint } from './geometry.js';
+export type { Dataset, DatasetHierarchy, EntryStore, EntryStoreView, RollUpKinds } from './dataset.js';
+export type { DatasetDocument, EntryDocument, SerializedField } from './document.js';
 export type {
   StoreName,
   ChangeOrigin,
-  CoreFieldKey,
-  FieldKey,
   EntityAdded,
   EntityRemoved,
   FieldUpdated,
   ChangeSet,
   DatasetEventMap,
 } from './change-set.js';
+export type {
+  CoreFieldKey,
+  FieldKey,
+  AggregatorName,
+  FieldTypeName,
+  FieldSource,
+  Field,
+  FieldType,
+  FieldLookup,
+  FieldContext,
+  FormatContext,
+  RollUpContext,
+  Aggregator,
+  GridColumn,
+  GridColumnInput,
+} from './field.js';
 export {
   FreeGanttError,
   UnsupportedUnitError,
@@ -27,7 +41,15 @@ export {
   EntryNotFoundError,
   DuplicateEntryIdError,
   ParentCycleError,
+  SegmentsOutOfSyncError,
   UnknownFieldError,
+  DuplicateFieldKeyError,
+  DuplicateFieldSourceError,
+  UnknownAggregatorError,
+  UnknownFieldTypeError,
+  FieldNotColumnableError,
+  DuplicateRowIdError,
+  AggregatorFailedError,
   MutationDuringNotificationError,
   MutationCancelledError,
   InvalidReplayOriginError,

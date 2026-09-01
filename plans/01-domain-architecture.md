@@ -221,9 +221,9 @@ erDiagram
 The layout pipeline is `row resolution → item emission → lane packing → geometry`. The **row source** is configuration:
 
 ```ts
-rows: { source: 'entries', tree: true }                        // classic Gantt (default)
-rows: { source: 'group', groupBy: t => t.meta.team }         // one row per group value
-rows: { source: 'custom', resolve: myRowResolver }           // consumer-defined rows entirely
+rowSource: { source: 'entries', tree: true }                        // classic Gantt (default)
+rowSource: { source: 'group', groupBy: t => t.meta.team }         // one row per group value
+rowSource: { source: 'custom', resolve: myRowResolver }           // consumer-defined rows entirely
 ```
 
 Item emission then places entries (or entry segments) onto rows; overlapping items on one row auto-pack into sub-lanes. Future workload/resource views are simply another row source — no new rendering or interaction code.
@@ -251,10 +251,10 @@ type ItemEmitter = (entry: Entry) => readonly Item[];
 
 Rules:
 
-- **Kind is authored, never derived.** A `group` is a group because the user said so — not because it currently has children. An empty group is legal and renders as one (that is how "add a phase, then fill it" works). For kinds in `rollUpKinds`, input may omit `start`/`end`: the store initializes a zero-length span (at the dataset's reference date) and the Span rollup owns it from then on — the *stored* model always has both fields, so no layer downstream handles absence. `parentId` (tree position) and `kind` (what it is) are orthogonal; "every parent is a group" is a convention, not a model rule — and `hierarchy: { autoGroup: true }` (`02` §2) maintains that convention automatically: an entry gaining its first child is promoted to `group` in the same transaction. **Promote only, never demote** — demoting on losing the last child would reintroduce exactly the flickering identity this rule exists to prevent; demotion stays an explicit edit.
+- **Kind is authored, never derived.** A `group` is a group because the user said so — not because it currently has children. An empty group is legal and renders as one (that is how "add a phase, then fill it" works). For kinds in `rollUpKinds`, input may omit `start`/`end`: the store initializes a zero-length span (at the dataset's reference date) and the Span rollup owns it from then on — the *stored* model always has both fields, so no layer downstream handles absence. `parentId` (tree position) and `kind` (what it is) are orthogonal; "every parent is a group" is a convention, not a model rule — and `hierarchy: { autoGroup: true }` (`02` §2, the default) maintains that convention automatically: an entry gaining its first child is promoted to `group` in the same transaction. **Promote only, never demote** — demoting on losing the last child would reintroduce exactly the flickering identity this rule exists to prevent; demotion stays an explicit edit.
 - **`rollUpKinds`** (`Dataset` option, default `['group']`) names which kinds get a rolled-up value for **every** rolling-up Field (`start`/`end` and a consumer `cost` alike). A consumer's own kind (say `'phase'`) opts in the same way. `'none'` or `[]` keeps authored parent values. The Rollup that reads it is `data/`'s own commit step — it runs on every transaction and at construction, whether or not a scheduling plugin is installed, and nothing installable can occupy or displace it (D-S2-22, closes OQ7). `scheduling/`'s engine moves children and nothing else; it never reaches the rollup, because the rollup already ran by the time anyone reads the result (`02.6` below, `s2.3-mutation-api.md` §1.5).
 - **The set is open.** Shipped kinds: `'span'`, `'group'`, `'milestone'`. A consumer-defined kind (say `'buffer'`) gets full behavior by registering at the four seams above — no core edits. Anything not registered at a seam falls back to `'span'` behavior there, so partial registration degrades gracefully instead of erroring.
-- **Group *entry* ≠ row *grouping*.** `rows: { source: 'group', groupBy }` is a view-side arrangement of any entries and persists nothing; a `kind: 'group'` entry is a model entity that persists, schedules, and syncs. They compose — a grouped view of a dataset containing group entries is well-defined, because one is authored and the other is derived (principle 1).
+- **Group *entry* ≠ row *grouping*.** `rowSource: { source: 'group', groupBy }` is a view-side arrangement of any entries and persists nothing; a `kind: 'group'` entry is a model entity that persists, schedules, and syncs. They compose — a grouped view of a dataset containing group entries is well-defined, because one is authored and the other is derived (principle 1).
 
 ### 2.6 Fields and grid columns — what a value **is**, and where a Gantt **shows** it
 
@@ -300,13 +300,16 @@ type Aggregator<TValue = unknown> = (
   ctx: RollUpContext,
 ) => TValue | undefined;           // undefined = no opinion, leave the stored value alone
 
-interface RollUpContext { read<T>(entry: Entry, key: FieldKey): T | undefined; }
-
 /** Compute and store access. No locale. */
 interface FieldContext {
   readonly timeZone: string;
   read<T>(entry: Entry, key: FieldKey): T | undefined;
   durationOf(entry: Entry): Duration;
+}
+
+/** FieldContext plus the Field currently rolling up. Shipped Aggregators read `ctx.field`. */
+interface RollUpContext extends FieldContext {
+  readonly field: FieldKey;
 }
 
 /** Built only at Gantt column-resolve time. `formatValue` reads this, never a Dataset locale. */
@@ -389,7 +392,12 @@ interface GeometryFrame {
    *  library-formatted string per configured grid column, in column order, produced by each field's
    *  `formatValue` (§2.6). It is derived text on the `a11yLabel` precedent, not consumer render
    *  output — a `cellRenderer` is applied by `render/`, never here. */
-  rows: Array<{ id: RowId; index: number; top: number; height: number; laneCount: number; cells: readonly string[] }>;
+  rows: Array<{
+    id: RowId; kind: PlannedRowKind; index: number; top: number; height: number; laneCount: number;
+    depth: number; expandable: boolean; expanded: boolean;
+    matched?: boolean;   // false when kept only because a descendant matched the filter
+    cells: readonly string[];
+  }>;
   /** Total row count across the whole dataset (`entries.length`), not the windowed `rows.length` —
    *  feeds `aria-setsize` (S1.10, D-S1.10-5): virtualization without it announces "row 3" with no
    *  "of 30" over a large dataset. */
@@ -427,11 +435,19 @@ interface LayoutInput {
   rowHeight: number;
   tickBoxFloorPx?: number;        // Tick box floor; default DEFAULT_TICK_BOX_FLOOR_PX (S1.12)
   revision: number;
+  /** Visible Grid columns — resolved in `view/`, plain data here (D-S4-13). Default `['name']` lives on the Gantt. */
+  columns?: readonly ResolvedColumn[];
+  /** Which rows to draw. Omitted → `{ source: 'entries', tree: false }` (S1's flat list). */
+  rows?: RowSource;
+  /** Collapsed `RowId`s. Omitted → none (D-S4-22). */
+  collapsed?: readonly RowId[];
+  itemProducerRegistry: ItemProducerRegistry;
+  fieldCompares?: readonly FieldCompare[];
 }
 
-/** Pure and stateless. `heights` is the row-top index this pass reads from; omitted, one is built
- *  and discarded within the call. Production callers never pass it — `FrameLayout` does. */
-function computeFrame(input: LayoutInput, heights?: RowHeightIndex): GeometryFrame;
+/** Pure and stateless. `memory` is what this pass remembers between calls — `FrameLayout` keeps one
+ *  alive across renders. Production callers never pass it — `FrameLayout` does. */
+function computeFrame(input: LayoutInput, memory?: FrameMemory): GeometryFrame;
 
 /** One Gantt's layout pass, and the one thing that pass must remember between renders: the row-height
  *  index. `view/` states what to draw and holds no layout bookkeeping — the index, its cache key and
@@ -492,7 +508,7 @@ Shipped presets cover hour→year zoom levels; custom presets are config objects
 
 ## 6. `data/` — stores, transactions, changesets
 
-- **`DatasetState`** (named `DatasetData` in earlier drafts of this doc; renamed in S2.1, OQ5) owns normalized stores (`entries`, plus reserved stores for scheduling-plugin-owned data such as `dependencies` — S3 adds these; S2 has `entries` alone) with indexes (`byId`, `byParent`, `byPredecessor`, `bySuccessor` — the latter two populated only when a plugin uses them), the dataset timezone, and the generic edit-extension binding (identity when unoccupied; §1). Fully headless (D4): constructible and usable in Node with no view. `api/Dataset` is a thin façade delegating every read and the `transaction`/`on`/`off` trio to it.
+- **`DatasetState`** (named `DatasetData` in earlier drafts of this doc; renamed in S2.1, OQ5) owns normalized stores (`entries`, plus reserved stores for scheduling-plugin-owned data such as `dependencies` — S5's plugin runtime; S7's `Dependency` store) with indexes (`byId`, `byParent`, `byPredecessor`, `bySuccessor` — the latter two populated only when a plugin uses them), the dataset timezone, and the generic edit-extension binding (identity when unoccupied; §1). Fully headless (D4): constructible and usable in Node with no view. `api/Dataset` is a thin façade delegating every read and the `transaction`/`on`/`off` trio to it.
 - **Transactions**: `dataset.transaction(() => { ...mutations })` batches mutations, runs the extension hook once, emits **one changeset**. Every mutation path — API and gesture — goes through a transaction. No exceptions.
 - **Changesets** are the universal delta (D7, principle 4) — an open-by-construction discriminated union, per store entity kind, so a `field` typo on `updated` and a stray property on `added`/`removed` are both caught at the type level rather than only at runtime:
 
@@ -502,7 +518,7 @@ type ChangeOrigin = 'user' | 'undo' | 'redo'; // 'engine' and 'load' arrive with
 
 // FieldKey stays open (D-S2-26): the core Entry keys are named for autocomplete and the
 // per-field comparator table's exhaustiveness check, but a consumer- or plugin-declared field
-// (S5's field registry) is equally legal and validated at runtime, not by the type.
+// (S4's field registry, `01` §2.6, ADR 0005) is equally legal and validated at runtime, not by the type.
 type FieldKey = keyof Omit<Entry, 'id'> | (string & {});
 
 interface EntityAdded   { store: 'entries'; entity: Entry; }
@@ -605,6 +621,7 @@ The shipped `defaultPolicy` is deliberately minimal and neutral: dependencies pu
 interface RenderSurfaces<THost> {
   grid: THost;      // the grid pane's row layer
   timeline: THost;  // the timeline pane's content layer: header bands, bars, links, decorations
+  gridHeader?: THost; // column header row in the grid pane; omitted by tests that only paint body cells
 }
 
 interface RenderBackend {
@@ -616,7 +633,7 @@ interface RenderBackend {
 }
 ```
 
-`mount` takes two surfaces, not one container (S1.8, D-S1.8-1/D-S1.8-2): the grid pane's row layer and the timeline pane's content layer are two elements `view/pane-layout.ts` builds, not one container this backend reserves a gutter inside. `render/dom` puts rows in `grid` and header/bar/sizer layers in `timeline`, at `x = 0` — no gutter offset; the grid pane's own width is the gutter now. `render/null` takes the same signature and ignores both.
+`mount` takes two required surfaces plus an optional grid header (S1.8, D-S1.8-1/D-S1.8-2): the grid pane's row layer, the timeline pane's content layer, and — when column headers are shown — the grid pane's header row. They are elements `view/pane-layout.ts` builds, not one container this backend reserves a gutter inside. `render/dom` puts body rows in `grid`, column headers in `gridHeader` when present, and header/bar/sizer layers in `timeline`, at `x = 0` — no gutter offset; the grid pane's own width is the gutter now. `render/null` takes the same signature and ignores all three.
 
 Backends: `dom` (default — absolutely-positioned virtualized rows, SVG for link paths), `null` (tests, SSR of data, future export path). A dense canvas backend is a *possible future implementation* of this interface, built only if measurement demands it (D2).
 

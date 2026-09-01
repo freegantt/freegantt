@@ -10,24 +10,29 @@ import { test, expect, type Locator } from '@playwright/test';
 // one (see also e2e/row-bar-alignment.spec.ts, same reasoning). Fix: append the handle pair inside
 // `.fg-bars` itself.
 
-/** A bar fully inside the viewport — `.fg-bars` is wider than the pane at some scroll positions
- *  (S1.12's density floor), so the first bar in DOM order can sit partly or fully off-screen. */
-async function visibleBar(page: import('@playwright/test').Page): Promise<Locator> {
+/** A bar fully inside the viewport that shows resize handles on hover.
+ *  `.fg-bars` is wider than the pane at some scroll positions (S1.12's density floor), so the
+ *  first bar in DOM order can sit off-screen. A `'group'` (rollUpKinds) also paints a bar but
+ *  refuses resize, so hover must prove the handle before this helper returns. */
+async function visibleResizableBar(page: import('@playwright/test').Page): Promise<Locator> {
   const bars = page.locator('#gantt .fg-bar');
   await bars.first().waitFor();
   const count = await bars.count();
   const viewport = page.viewportSize();
+  const endHandle = page.locator('.fg-bar-handle[data-edge="end"]');
   for (let i = 0; i < count; i++) {
     const bar = bars.nth(i);
     const box = await bar.boundingBox();
-    if (box && box.x >= 0 && viewport && box.x + box.width <= viewport.width) return bar;
+    if (!box || box.x < 0 || !viewport || box.x + box.width > viewport.width) continue;
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    if (await endHandle.isVisible()) return bar;
   }
-  throw new Error('no on-screen bar found');
+  throw new Error('no on-screen resizable bar found');
 }
 
 test('the resize handle pair lines up with the bar it belongs to (I9-adjacent)', async ({ page }) => {
   await page.goto('/');
-  const bar = await visibleBar(page);
+  const bar = await visibleResizableBar(page);
   const box = (await bar.boundingBox())!;
 
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
@@ -59,7 +64,7 @@ async function dragBarEndEdgeBy(
 
 test('dragging the end handle resizes the bar', async ({ page }) => {
   await page.goto('/');
-  const bar = await visibleBar(page);
+  const bar = await visibleResizableBar(page);
   const box = (await bar.boundingBox())!;
 
   await dragBarEndEdgeBy(page, bar, 60);
@@ -81,7 +86,7 @@ test('a second resize at the bar edge still works after the entry stays selected
   page,
 }) => {
   await page.goto('/');
-  const bar = await visibleBar(page);
+  const bar = await visibleResizableBar(page);
   await bar.click(); // selects the entry; it stays selected and hovered through both resizes below
   const box = (await bar.boundingBox())!;
 

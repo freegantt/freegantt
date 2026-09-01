@@ -5,7 +5,7 @@
 // The sole declaration (C5): `interaction/` may import `view/` (the legal edge, plans/01 §1), so this
 // type lives here once instead of being mirrored on both sides of that edge.
 
-import type { Entry, EntryId, ItemId } from '../model/index.js';
+import type { Entry, EntryId, ItemId, ClientPoint } from '../model/index.js';
 import type { Interactions } from './capability.js';
 
 /** What kind of data gesture is in flight — `'move'` (S3.3) or `'resize'` with the grabbed edge (S3.4). */
@@ -49,27 +49,35 @@ export interface EntryGestureSession {
 }
 
 /** Grown from S3.1/S3.2's `EntrySelectionContext` into the full gesture context (D-S3-5/D-GH-1): the
- *  selection half (`hitTest`/`rowOrder`/`selection`/`setHovered`) is unchanged; `entryFor`/`can`
+ *  selection half (`hitTest`/`selectableEntriesInRowOrder`/`selection`/`setHovered`) is unchanged; `entryFor`/`can`
  *  replace `entryIdFor`/`canSelect` (one capability resolution serves both selection and gesture
  *  checks, I14); `session` replaces `entriesForGesture`/`draftFor`/`commit`/`preview`. */
 export interface EntryGestureContext {
   /** Content-surface hit test — `RenderBackend.hitTest`, already client-relative (S1 D-D). */
-  hitTest(x: number, y: number): EntryHit | undefined;
+  hitTest(at: ClientPoint): EntryHit | undefined;
   /** The entry under an item id, or undefined once segments exist and an id outlives its item. */
   entryFor(itemId: ItemId): Entry | undefined;
   /** One resolution (I14, D-S3-9) — `view/capability.ts`'s answer for `entry` on `capability`. */
   can(capability: keyof Interactions, entry: Entry): boolean;
-  /** The current row order, oldest-first — shift-click ranges over it (S4's row sources replace this
-   *  once they exist). */
-  rowOrder(): readonly EntryId[];
-  selection: { get(): readonly EntryId[]; propose(next: readonly EntryId[]): void };
+  /** The selectable entries in resolved row order — shift-click ranges over this list (D-S4-32). */
+  selectableEntriesInRowOrder(): readonly EntryId[];
+  selection: {
+    get(): readonly EntryId[];
+    /** `selectedItemIds` is paint: which Items show the selected token. Omit it to paint
+     *  segment 0 of each entry. A click on a later segment of the same row passes the hit Item. */
+    propose(next: readonly EntryId[], selectedItemIds?: readonly ItemId[]): void;
+  };
   /** S3.2 (D-S3-6): the item id under the pointer, or undefined on pointerleave. */
   setHovered(itemId: ItemId | undefined): void;
   /** S3.8: pane-local `offsetX` (`clientX - pane left`) plus the bound `ScrollModel`'s x — content
    *  x for the Cursor line. `interaction/` never reads element scroll (I12). */
   contentXAtPaneOffset(offsetX: number): number;
+  /** When focus is on an expandable tree row, handles ArrowLeft/Right before nudge (D-S4-33). */
+  tryTreeArrow?(direction: 'left' | 'right'): boolean;
+  /** Expands every collapsed row in the current tree (`*` key, D-S4-33). */
+  expandAllRows?(): void;
   /** Arms a gesture on the grabbed entry (+ capable co-selected entries, D-S3-19/22). Returns
    *  `undefined` when nothing capable is grabbed — replaces the length check `start()` in
    *  `entry-gestures.ts` used to make by hand against `entriesForGesture()`'s result. */
-  session(grabbed: EntryId, gesture: EntryGesture): EntryGestureSession | undefined;
+  session(grabbed: EntryId, gesture: EntryGesture, grabbedItemId?: ItemId): EntryGestureSession | undefined;
 }

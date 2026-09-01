@@ -3,7 +3,7 @@
 // `dataset.entries.add/update/remove`, and a changeset log built from each `ChangeSet`, never a
 // re-read (D-S2-17). Rename/move/remove target `gantt.selection` (S3.1), not a parallel entry picker.
 // The lock checkbox is D-S2-25's `beforeChange` veto, made visible: the bar does
-// not move and the calling button's own `catch` reads `MutationCancelledError`.
+// not move and `attemptMutation` returns `false` instead of throwing.
 //
 // S2.5 (plans/s2-data-core/s2.5-undo-redo.md §5) adds the undo/redo buttons, `disabled` bound to
 // `dataset.canUndo`/`canRedo`, and the log line's origin tag — a reader watches a cascade go away in
@@ -14,13 +14,50 @@
 // rebind (or the finding against destroy() if it does not).
 
 import './harness-nav.ts';
-import { Dataset, Gantt, MS, MutationCancelledError, addMs, now } from '../src/api/index.js';
-import type { ChangeSet, DatasetDocument, DatasetEventMap } from '../src/api/index.js';
-import { demoEntryInputs } from '../fixtures/demo-dataset.js';
+import { Dataset, Gantt, MS, attemptMutation, addMs, now } from '../src/api/index.js';
+import type { DatasetDocument, DatasetEventMap } from '../src/api/index.js';
 import { mountTimelineToolbar } from './timeline-toolbar.js';
+import { prependChangeSet, prependLogLine } from './change-log.js';
 
-let dataset = new Dataset({ entries: demoEntryInputs.slice(0, 8), timeZone: 'UTC' });
+declare global {
+  interface Window {
+    __dataset: Dataset<{ cost: number }, { cost: number }>;
+  }
+}
+
+const COST_FIELDS = {
+  fieldTypes: { money: { rollUp: 'sum' as const } },
+  fields: [{ key: 'cost' as const, type: 'money' }],
+};
+
+// S4.2: a small tree proves cost rolls up through ancestors in one changeset; undo reverts all rows.
+const ROLLUP_TREE = [
+  { id: 'phase', name: 'Phase', kind: 'group' as const },
+  {
+    id: 'task-a',
+    name: 'Task A',
+    parentId: 'phase',
+    start: '2026-01-01',
+    end: '2026-01-10',
+    meta: { cost: 100 },
+  },
+  {
+    id: 'task-b',
+    name: 'Task B',
+    parentId: 'phase',
+    start: '2026-01-15',
+    end: '2026-01-20',
+    meta: { cost: 200 },
+  },
+];
+
+let dataset = new Dataset<{ cost: number }, { cost: number }>({
+  entries: ROLLUP_TREE,
+  timeZone: 'UTC',
+  ...COST_FIELDS,
+});
 let gantt = new Gantt({ container: '#gantt', dataset });
+window.__dataset = dataset;
 
 const toolbar = document.querySelector<HTMLDivElement>('#toolbar')!;
 mountTimelineToolbar({ gantt, container: toolbar });
@@ -31,6 +68,7 @@ const renameBtn = document.querySelector<HTMLButtonElement>('#rename-btn')!;
 const moveBackBtn = document.querySelector<HTMLButtonElement>('#move-back-btn')!;
 const moveFwdBtn = document.querySelector<HTMLButtonElement>('#move-fwd-btn')!;
 const removeBtn = document.querySelector<HTMLButtonElement>('#remove-btn')!;
+const costBtn = document.querySelector<HTMLButtonElement>('#cost-btn')!;
 const undoBtn = document.querySelector<HTMLButtonElement>('#undo-btn')!;
 const redoBtn = document.querySelector<HTMLButtonElement>('#redo-btn')!;
 const exportBtn = document.querySelector<HTMLButtonElement>('#export-btn')!;
@@ -65,6 +103,7 @@ function refreshMutationButtons(): void {
   moveBackBtn.disabled = none;
   moveFwdBtn.disabled = none;
   removeBtn.disabled = none;
+  costBtn.disabled = none;
 }
 
 function renderSelectionReadout(): void {
@@ -79,21 +118,7 @@ function syncSelectionUi(): void {
 }
 
 function logLine(text: string): void {
-  const row = document.createElement('div');
-  row.textContent = text;
-  log.prepend(row);
-}
-
-/** Built from the changeset alone (D-S2-17) — `from` is not a value a re-read of the dataset could
- *  ever produce. Every row is tagged with the changeset's own origin, so an undo's row reads
- *  `[undo]` right next to the field it reverted (S2.5 §5). */
-function logChangeSet(changeSet: ChangeSet): void {
-  const tag = `[${changeSet.origin}]`;
-  for (const { store, entity } of changeSet.added) logLine(`${tag} ${store} · ${entity.id} · added`);
-  for (const { store, entity } of changeSet.removed) logLine(`${tag} ${store} · ${entity.id} · removed`);
-  for (const { store, id, field, from, to } of changeSet.updated) {
-    logLine(`${tag} ${store} · ${id} · ${field} · ${String(from)} → ${String(to)}`);
-  }
+  prependLogLine(log, text);
 }
 
 function refreshHistoryButtons(): void {
@@ -102,7 +127,7 @@ function refreshHistoryButtons(): void {
 }
 
 function onChange({ changeSet }: DatasetEventMap['change']): void {
-  logChangeSet(changeSet);
+  prependChangeSet(log, changeSet);
   syncSelectionUi();
   refreshHistoryButtons();
 }
@@ -141,19 +166,17 @@ addBtn.addEventListener('click', () => {
 renameBtn.addEventListener('click', () => {
   const entries = gantt.selectionEntries;
   if (entries.length === 0) return;
-  try {
+  attemptMutation(() => {
     dataset.transaction(() => {
       for (const entry of entries) dataset.entries.update(entry.id, { name: nameInput.value });
     });
-  } catch (error) {
-    if (!(error instanceof MutationCancelledError)) throw error;
-  }
+  });
 });
 
 function move(deltaMs: number): void {
   const entries = gantt.selectionEntries;
   if (entries.length === 0) return;
-  try {
+  attemptMutation(() => {
     dataset.transaction(() => {
       for (const entry of entries) {
         dataset.entries.update(entry.id, {
@@ -162,40 +185,38 @@ function move(deltaMs: number): void {
         });
       }
     });
-  } catch (error) {
-    if (!(error instanceof MutationCancelledError)) throw error;
-  }
+  });
 }
 
 moveBackBtn.addEventListener('click', () => move(-MS.DAY));
 moveFwdBtn.addEventListener('click', () => move(MS.DAY));
 
+costBtn.addEventListener('click', () => {
+  const entries = gantt.selectionEntries;
+  if (entries.length === 0) return;
+  attemptMutation(() => {
+    dataset.transaction(() => {
+      for (const selected of entries) dataset.entries.update(selected.id, { cost: 500 });
+    });
+  });
+});
+
 removeBtn.addEventListener('click', () => {
   const entries = gantt.selectionEntries;
   if (entries.length === 0) return;
-  try {
+  attemptMutation(() => {
     dataset.transaction(() => {
       for (const entry of entries) dataset.entries.remove(entry.id);
     });
-  } catch (error) {
-    if (!(error instanceof MutationCancelledError)) throw error;
-  }
+  });
 });
 
 undoBtn.addEventListener('click', () => {
-  try {
-    dataset.undo();
-  } catch (error) {
-    if (!(error instanceof MutationCancelledError)) throw error;
-  }
+  attemptMutation(() => dataset.undo());
 });
 
 redoBtn.addEventListener('click', () => {
-  try {
-    dataset.redo();
-  } catch (error) {
-    if (!(error instanceof MutationCancelledError)) throw error;
-  }
+  attemptMutation(() => dataset.redo());
 });
 
 exportBtn.addEventListener('click', () => {
@@ -204,8 +225,9 @@ exportBtn.addEventListener('click', () => {
 
 importBtn.addEventListener('click', () => {
   try {
-    const doc = JSON.parse(documentJson.value) as DatasetDocument;
-    dataset = Dataset.fromJSON(doc);
+    const doc = JSON.parse(documentJson.value) as DatasetDocument<{ cost: number }>;
+    dataset = Dataset.fromJSON<{ cost: number }, { cost: number }>(doc, COST_FIELDS);
+    window.__dataset = dataset;
     gantt.destroy();
     gantt = new Gantt({ container: '#gantt', dataset });
     bindDataset();

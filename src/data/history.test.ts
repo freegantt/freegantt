@@ -55,7 +55,7 @@ describe('History', () => {
     for (let i = 0; i < 50; i += 1) expect(state.entries.get(`t${i}`)?.name).toBe(`t${i}`);
   });
 
-  it('undo of a cascade from the span rollup restores the user field and the parent span (D-S2-22)', () => {
+  it('undo of a cascade from the Rollup restores the user field and the parent span (D-S2-22)', () => {
     const state = dataset([
       { id: 'parent', kind: 'group' },
       { id: 'child', parentId: 'parent', start: 0, end: 10 },
