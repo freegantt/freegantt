@@ -137,8 +137,27 @@ export const demoFieldOptions = {
   fields: [{ key: 'cost' as const, type: 'money' }],
 } as const;
 
-/** Generic-demo entries: four-level tree, team + cost on leaves, one milestone, one segmented row. */
+/** Root spans that sit beside Program — not in the nested work tree. */
+const DEMO_ROOT_SPANS: readonly EntryInput<DemoMeta>[] = [
+  {
+    id: 'ops-oncall',
+    name: 'Ops on-call',
+    start: shift('2026-09-08'),
+    end: shift('2026-09-12'),
+    meta: { cost: 800, team: 'ops' },
+  },
+  {
+    id: 'staff-training',
+    name: 'Staff training',
+    start: shift('2026-10-06'),
+    end: shift('2026-10-10'),
+    meta: { cost: 1200, team: 'ops' },
+  },
+];
+
+/** Generic-demo entries: two root spans, then a four-level Program tree. */
 export const demoTreeEntryInputs: EntryInput<DemoMeta>[] = [
+  ...DEMO_ROOT_SPANS,
   { id: 'program', name: 'Program', kind: 'group' },
   ...demoEntryInputs.map((entry, i) => {
     const id = entry.id ?? '';
