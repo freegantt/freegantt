@@ -1,0 +1,369 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Branch review — s4-implement (GLM)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script type="module">
+      import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+      mermaid.initialize({ startOnLoad: true, theme: "neutral", securityLevel: "loose" });
+    </script>
+    <style>
+      .seam { stroke-dasharray: 4 4; }
+      .leak { stroke: #dc2626; }
+      .deep { background: linear-gradient(135deg, #0f172a, #1e293b); }
+    </style>
+  </head>
+  <body class="bg-stone-50 text-slate-900 font-sans">
+    <main class="max-w-5xl mx-auto px-6 py-12 space-y-12">
+
+      <header class="space-y-3">
+        <h1 class="text-3xl font-serif font-semibold">Branch review — <span class="font-mono text-2xl">s4-implement</span></h1>
+        <p class="text-sm text-slate-500">FreeGantt · 2026-08-31 · reviewed by GLM · 23 commits (S4.1–S4.6) vs merge-base <span class="font-mono">80e0717</span> · 110 files, +5992/−1115</p>
+        <div class="flex gap-4 text-xs text-slate-600">
+          <span class="flex items-center gap-1"><span class="inline-block w-4 h-3 border border-slate-500 bg-white"></span> module</span>
+          <span class="flex items-center gap-1"><svg width="18" height="8"><line x1="0" y1="4" x2="18" y2="4" stroke="#64748b" stroke-width="1.5" class="seam"/></svg> seam</span>
+          <span class="flex items-center gap-1"><svg width="18" height="8"><line x1="0" y1="4" x2="18" y2="4" stroke="#dc2626" stroke-width="2"/></svg> leakage</span>
+          <span class="flex items-center gap-1"><span class="inline-block w-4 h-3 deep rounded-sm"></span> deep module</span>
+        </div>
+        <p class="text-sm">Four passes: Standards (naming, smells, SOLID) · Spec (S4.1–S4.6) · Architecture (deepening) · Ball-of-mud / API / self-documentation. Architecture candidates below carry the diagrams; the other findings are rolled into the axis cards and tagged onto candidates where they share a fix.</p>
+      </header>
+
+      <!-- ============ AXIS CARDS ============ -->
+      <section class="space-y-6">
+        <h2 class="text-xl font-serif font-semibold">Review axes</h2>
+
+        <article class="rounded-lg border border-slate-200 bg-white p-5 space-y-3">
+          <h3 class="font-semibold text-sm uppercase tracking-wider text-slate-500">Spec — S4.1–S4.6</h3>
+          <p class="text-sm text-emerald-700">S4.1–S4.4 complete; earlier review findings verified closed (512ac35, ab3959f, 5e0c347). Two fresh findings, both on the newest surface:</p>
+          <ul class="text-sm space-y-2 list-disc pl-5">
+            <li><span class="font-semibold text-red-700">S4.5 Visible box is mis-wired.</span> <span class="font-mono text-xs">harness/main.ts</span> builds the fixture already nested (<span class="font-mono text-xs">'entry-2': 'entry-1'</span>), then the reparent button sets the <em>same</em> parentId — no changeset, no promotion, no undo step to watch. The spec asks for a button that reparents and for Undo to revert bracket and span in one press; neither is demonstrable.</li>
+            <li><span class="font-semibold text-amber-700">Scope creep (minor).</span> <span class="font-mono text-xs">reveal()</span> was rewritten onto <span class="font-mono text-xs">rowIndexForEntry</span> and silently falls back to <span class="font-mono text-xs">y: 0</span> for an entry whose rows are absent — a collapsed-away reveal now scrolls to top instead of surfacing the problem. No S4 item asked for this.</li>
+            <li>Nit: <span class="font-mono text-xs">[S4-A2]</span> test lives in <span class="font-mono text-xs">entry-store.mutation.test.ts</span>, not the spec's named file.</li>
+          </ul>
+        </article>
+
+        <article class="rounded-lg border border-slate-200 bg-white p-5 space-y-3">
+          <h3 class="font-semibold text-sm uppercase tracking-wider text-slate-500">Standards — naming, smells, SOLID</h3>
+          <ul class="text-sm space-y-2 list-disc pl-5">
+            <li><span class="font-semibold text-red-700">Hard: inert public config keys.</span> <span class="font-mono text-xs">layout/rows/row-source.ts:7-34</span> publishes <span class="font-mono text-xs">filter</span>, <span class="font-mono text-xs">sort</span>, <span class="font-mono text-xs">filterPolicy</span> (re-exported from <span class="font-mono text-xs">api/index.ts</span>); nothing reads them ("Applied in S4.9"). AGENTS.md: every config key is live-reconfigurable — accept-and-ignore is worse than not shipping. Defer the types to S4.9.</li>
+            <li><span class="font-semibold text-red-700">Hard: dead work per data change.</span> <span class="font-mono text-xs">view/grid-columns.ts:101-109</span> — <span class="font-mono text-xs">bindGanttFields</span> always computes <span class="font-mono text-xs">fieldCompares</span>; the only caller (<span class="font-mono text-xs">gantt-shell.ts:817</span>) discards it. Also a misnomer: it binds nothing, and *Binding* is reserved for <span class="font-mono text-xs">layout/viewport/</span>.</li>
+            <li>Judgement: <span class="font-mono text-xs">buildEffectiveEntries</span> byte-identical in <span class="font-mono text-xs">rollup.ts</span> + <span class="font-mono text-xs">hierarchy.ts</span>; <span class="font-mono text-xs">resolveSource</span> ≡ <span class="font-mono text-xs">sourceForWrite</span>; twin loops in <span class="font-mono text-xs">change-set.ts:68-79</span>; 14-line doc block pasted twice in <span class="font-mono text-xs">transaction.ts</span>.</li>
+            <li>Judgement: quadratic promotion walk — <span class="font-mono text-xs">hierarchy.ts:33-39</span> scans all entries per parent while <span class="font-mono text-xs">rollup.ts:53</span> already builds a children index.</li>
+            <li>Judgement: <span class="font-mono text-xs">rowResolutionInput</span> (<span class="font-mono text-xs">resolve-rows.ts:14</span>) is a function named like its return type; <span class="font-mono text-xs">resolveRows(rowResolutionInput(input))</span> reads as a constructor.</li>
+            <li>Judgement: <span class="font-mono text-xs">rollup.ts:190-192</span> swallows the original error — no <span class="font-mono text-xs">cause</span> on <span class="font-mono text-xs">AggregatorFailedError</span>.</li>
+            <li>Judgement: money/cost fixture copied across ~10 test files; harness patches <span class="font-mono text-xs">parentId</span> onto fixture entries that the fixture should carry (API gap per AGENTS.md harness rule).</li>
+          </ul>
+        </article>
+
+        <article class="rounded-lg border border-slate-200 bg-white p-5 space-y-3">
+          <h3 class="font-semibold text-sm uppercase tracking-wider text-slate-500">Ball-of-mud · API · self-documentation · SOLID</h3>
+          <ul class="text-sm space-y-2 list-disc pl-5">
+            <li><span class="font-semibold text-red-700">Mud risk:</span> <span class="font-mono text-xs">view/gantt-shell.ts</span> — 889 lines, ≥5 reasons to change (10 constructor attachments, ~15 config axes, today-landing policy, collapse/twisty DOM delegation, column binding, selection).</li>
+            <li><span class="font-semibold text-red-700">Mud risk:</span> <span class="font-mono text-xs">data/transaction.ts:203</span> — <span class="font-mono text-xs">runTransaction</span> is a 5-stage pipeline inlined in one 310-line file; S7 scheduling becomes stage six, editing the same file.</li>
+            <li><span class="font-semibold text-red-700">Temporal coupling:</span> <span class="font-mono text-xs">entry-store.ts:229-236</span> — <span class="font-mono text-xs">#runner</span> set post-construction by <span class="font-mono text-xs">dataset-state.ts:145</span>; a runtime <span class="font-mono text-xs">Error</span> if the bind order slips. Same pattern in <span class="font-mono text-xs">gantt-shell.ts:263</span> <span class="font-mono text-xs">#phase</span>.</li>
+            <li><span class="font-semibold text-red-700">O/C hole:</span> <span class="font-mono text-xs">fields/field-access.ts:175-193</span> — <span class="font-mono text-xs">overlayStoredEdit</span> hard-codes the core key list; a new entry-sourced core field touches 4 files.</li>
+            <li><span class="font-semibold text-amber-700">Seam leak:</span> <span class="font-mono text-xs">view/grid-columns.ts:6-7</span> imports <span class="font-mono text-xs">createFieldContext</span> from <span class="font-mono text-xs">data/fields/field-access.js</span> — view reaching into data internals; <span class="font-mono text-xs">FieldLookup</span> deserves its own tiny module.</li>
+            <li><span class="font-semibold text-amber-700">API:</span> <span class="font-mono text-xs">dataset.fields.all</span> reads as double-plural for a one-property wrapper; five identical <span class="font-mono text-xs">try { mutate } catch (MutationCancelledError) {}</span> blocks in <span class="font-mono text-xs">harness/main.ts</span> — an API gap, not harness noise.</li>
+            <li><span class="font-semibold text-amber-700">Self-doc:</span> <span class="font-mono text-xs">applySilentUpdates</span> mints a real transaction and <span class="font-mono text-xs">origin: 'user'</span> changeset — "silent" is true only of events; <span class="font-mono text-xs">frame.ts cellsForRow</span> treats an empty custom row as a header (<span class="font-mono text-xs">entryIds.length === 0</span>) when <span class="font-mono text-xs">PlannedRow.kind === 'header'</span> exists.</li>
+            <li><span class="font-semibold text-emerald-700">Sound:</span> errors file uniform (20 classes, no sprawl); DIP holds; RowSource has 3 adapters, FieldLookup 2 — real seams. Extension costs: new Aggregator = 1 file (good); new row source = 3–4; new Entry kind = 5+.</li>
+          </ul>
+        </article>
+      </section>
+
+      <!-- ============ CANDIDATES ============ -->
+      <section id="candidates" class="space-y-10">
+        <h2 class="text-xl font-serif font-semibold">Deepening candidates</h2>
+
+        <!-- 1 -->
+        <article id="c1" class="rounded-lg border border-slate-200 bg-white p-6 space-y-4">
+          <div class="flex items-center gap-2 flex-wrap">
+            <h3 class="text-lg font-serif font-semibold">1 · One module reads the tree as of this commit</h3>
+            <span class="px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800">Strong</span>
+            <span class="px-2 py-0.5 rounded-full text-xs bg-slate-100 text-slate-600">in-process</span>
+          </div>
+          <p class="font-mono text-sm text-slate-600">src/data/rollup.ts:27-62 · src/data/hierarchy.ts:17-39</p>
+          <div class="grid grid-cols-2 gap-4">
+            <div class="rounded-lg border border-slate-200 bg-white p-4">
+              <p class="text-xs uppercase tracking-wider text-slate-400 mb-2">Before — three private copies</p>
+              <pre class="mermaid">
+flowchart TD
+  R["rollup.ts"] --> BE1["buildEffectiveEntries<br/>(copy 1)"]
+  R --> IDX1["childrenByParent<br/>ancestorsOf · depthOf"]
+  H["hierarchy.ts"] --> BE2["buildEffectiveEntries<br/>(copy 2)"]
+  H --> SCAN["childCount scans<br/>all entries per parent"]
+  BE1 -.-> BE2
+  classDef leak stroke:#dc2626,stroke-width:2px;
+  class BE1,BE2 leak
+              </pre>
+            </div>
+            <div class="rounded-lg border border-slate-200 bg-white p-4">
+              <p class="text-xs uppercase tracking-wider text-slate-400 mb-2">After — one deep module</p>
+              <div class="relative h-[290px]">
+                <div class="deep text-white rounded-lg p-4 absolute inset-x-6 top-6">
+                  <p class="text-xs uppercase tracking-wider text-emerald-300">data/entry-tree.ts</p>
+                  <p class="text-sm mt-2">effective map · children index · ancestors · depth</p>
+                  <div class="mt-3 space-y-1 text-xs text-slate-400">
+                    <p class="line-through">buildEffectiveEntries (copy 1)</p>
+                    <p class="line-through">buildEffectiveEntries (copy 2)</p>
+                    <p class="line-through">quadratic childCount scan</p>
+                  </div>
+                </div>
+                <div class="absolute inset-x-6 bottom-4 text-center text-sm">
+                  <span class="border border-slate-300 rounded px-2 py-1 bg-white mr-2">rollup.ts</span>
+                  <span class="border border-slate-300 rounded px-2 py-1 bg-white">hierarchy.ts</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <p class="text-sm"><span class="font-semibold">Problem:</span> "read the tree as of this commit" is implemented three times across two modules; the promotion walk is quadratic where a shared index is linear.</p>
+          <p class="text-sm"><span class="font-semibold">Solution:</span> one <span class="font-mono text-xs">data/entry-tree.ts</span> module owning effective-map, children index, and ancestors/depth; both callers import it. The <span class="font-mono text-xs">layout/</span> twin stays — <span class="font-mono text-xs">layout/</span> may not import <span class="font-mono text-xs">data/</span> (plans/01 §1).</p>
+          <ul class="text-sm space-y-1 list-disc pl-5">
+            <li>locality: one place to reason about read-your-own-writes trees</li>
+            <li>leverage: S7 scheduling reads the same overlay</li>
+            <li>one property-test target instead of two</li>
+          </ul>
+          <p class="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded px-3 py-2">Fixes the Duplicated Code and quadratic-walk findings from the Standards axis in one move.</p>
+        </article>
+
+        <!-- 2 -->
+        <article id="c2" class="rounded-lg border border-slate-200 bg-white p-6 space-y-4">
+          <div class="flex items-center gap-2 flex-wrap">
+            <h3 class="text-lg font-serif font-semibold">2 · Put the proposed-field set in the edit interface</h3>
+            <span class="px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800">Strong</span>
+            <span class="px-2 py-0.5 rounded-full text-xs bg-slate-100 text-slate-600">in-process</span>
+          </div>
+          <p class="font-mono text-sm text-slate-600">src/data/fields/field-access.ts:24-63 · src/data/entry-reader.ts:111 · src/data/transaction.ts:246-255</p>
+          <div class="grid grid-cols-2 gap-4">
+            <div class="rounded-lg border border-slate-200 bg-white p-4">
+              <p class="text-xs uppercase tracking-wider text-slate-400 mb-2">Before — hidden side-channel</p>
+              <div class="relative h-[290px] text-sm">
+                <div class="border-2 border-slate-300 rounded-lg p-4 mx-4 mt-4 bg-white">
+                  <p class="text-xs uppercase tracking-wider text-slate-500">StoredEdit</p>
+                  <p class="mt-2 font-mono text-xs">start, end, cost …</p>
+                  <div class="mt-2 border-2 border-red-400 border-dashed rounded px-2 py-1 text-red-700 font-mono text-xs bg-red-50">
+                    [Symbol(authoredFieldKeys)] → Set
+                  </div>
+                  <p class="mt-2 text-xs text-slate-500">invisible to the type · dropped by spread · bypassed by the overlap check · merged by hand in 3 files</p>
+                </div>
+              </div>
+            </div>
+            <div class="rounded-lg border border-slate-200 bg-white p-4">
+              <p class="text-xs uppercase tracking-wider text-slate-400 mb-2">After — one shape carries both</p>
+              <div class="relative h-[290px] text-sm">
+                <div class="deep text-white rounded-lg p-4 mx-4 mt-4">
+                  <p class="text-xs uppercase tracking-wider text-emerald-300">Edit</p>
+                  <p class="mt-2 font-mono text-xs text-slate-300">{ start, end, cost … }</p>
+                  <p class="mt-1 font-mono text-xs text-emerald-300">proposedKeys: EntryFieldKey[]</p>
+                  <p class="mt-3 text-xs text-slate-400">one interface · the Rollup-precedence rule becomes directly assertable · no silent drop when a producer forgets to mark</p>
+                </div>
+              </div>
+            </div>
+          </div>
+          <p class="text-sm"><span class="font-semibold">Problem:</span> "which fields did the caller propose" — the Rollup-precedence fact — travels as a non-enumerable Symbol on <span class="font-mono text-xs">StoredEdit</span>, so every consumer re-merges it and every spread silently drops it.</p>
+          <p class="text-sm"><span class="font-semibold">Solution:</span> make proposed keys part of the edit interface — an explicit record or tuple field, not a side channel.</p>
+          <ul class="text-sm space-y-1 list-disc pl-5">
+            <li>testability: precedence rule assertable through the interface</li>
+            <li>no hidden temporal coupling across field-access, entry-reader, transaction</li>
+            <li>removes the merge-everywhere tax</li>
+          </ul>
+        </article>
+
+        <!-- 3 -->
+        <article id="c3" class="rounded-lg border border-slate-200 bg-white p-6 space-y-4">
+          <div class="flex items-center gap-2 flex-wrap">
+            <h3 class="text-lg font-serif font-semibold">3 · Name the silent store-write seam</h3>
+            <span class="px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800">Worth exploring</span>
+            <span class="px-2 py-0.5 rounded-full text-xs bg-slate-100 text-slate-600">in-process</span>
+          </div>
+          <p class="font-mono text-sm text-slate-600">src/data/transaction.ts:89-136 · src/data/fields/field-registry.ts:24-34 · src/data/serialization/field-document.ts:88-93 · src/data/fields/field-access.ts:72-76</p>
+          <div class="grid grid-cols-2 gap-4">
+            <div class="rounded-lg border border-slate-200 bg-white p-4">
+              <p class="text-xs uppercase tracking-wider text-slate-400 mb-2">Before — forged tokens & re-derived rules</p>
+              <pre class="mermaid">
+flowchart TD
+  SU["applySilentUpdates"] -->|"{} as TxToken"| STORE[EntryStore]
+  CP["applyConstructionPromote"] -->|"origin: 'user' fake"| STORE
+  REG["field-registry<br/>resolveSource"] -.->|"copy"| DOC["field-document<br/>sourceForWrite"]
+  FAC["field-access<br/>metaKeyOf"] -.->|"copy"| REG
+  classDef leak stroke:#dc2626,stroke-width:2px;
+  class SU,CP leak
+              </pre>
+            </div>
+            <div class="rounded-lg border border-slate-200 bg-white p-4">
+              <p class="text-xs uppercase tracking-wider text-slate-400 mb-2">After — named seams</p>
+              <div class="relative h-[290px] text-sm">
+                <div class="border border-slate-300 rounded-lg p-3 mx-4 mt-4 bg-white">
+                  <p class="text-xs uppercase tracking-wider text-slate-500">transaction.ts</p>
+                  <p class="mt-1 font-mono text-xs">store.writeCommittedRows(…) <span class="text-slate-400">— "write committed rows without notifying"</span></p>
+                </div>
+                <div class="border border-slate-300 rounded-lg p-3 mx-4 mt-3 bg-white">
+                  <p class="text-xs uppercase tracking-wider text-slate-500">data/fields/normalize-source.ts</p>
+                  <p class="mt-1 font-mono text-xs">one normalizer · codec asks for a field's stored source</p>
+                </div>
+                <p class="mt-3 mx-4 text-xs text-slate-500">no forgeable token · no fake changeset · one normalization the codec trusts</p>
+              </div>
+            </div>
+          </div>
+          <p class="text-sm"><span class="font-semibold">Problem:</span> construction rollup/promotion forges a <span class="font-mono text-xs">{} as TxToken</span> and an inert <span class="font-mono text-xs">origin: 'user'</span> changeset to drive the store outside the commit sequence, while Field-source normalization is re-derived in three modules and the "silent" name lies about what it mints.</p>
+          <p class="text-sm"><span class="font-semibold">Solution:</span> a named store method for committed rows without notification, plus one source normalizer in <span class="font-mono text-xs">data/fields/</span> that the schema-2 codec consumes instead of re-deriving.</p>
+          <ul class="text-sm space-y-1 list-disc pl-5">
+            <li>depth: one honest way into the store per reason</li>
+            <li>kills the forgeable-token hole</li>
+            <li>locality: the Field declaration lifecycle normalizes once</li>
+            <li>codec becomes a pure encoder over resolved Fields</li>
+          </ul>
+        </article>
+
+        <!-- 4 -->
+        <article id="c4" class="rounded-lg border border-slate-200 bg-white p-6 space-y-4">
+          <div class="flex items-center gap-2 flex-wrap">
+            <h3 class="text-lg font-serif font-semibold">4 · Split the GanttShell before S5 lands</h3>
+            <span class="px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800">Strong</span>
+            <span class="px-2 py-0.5 rounded-full text-xs bg-slate-100 text-slate-600">in-process</span>
+          </div>
+          <p class="font-mono text-sm text-slate-600">src/view/gantt-shell.ts (889 lines) · src/data/transaction.ts (310 lines)</p>
+          <div class="grid grid-cols-2 gap-4">
+            <div class="rounded-lg border border-slate-200 bg-white p-4">
+              <p class="text-xs uppercase tracking-wider text-slate-400 mb-2">Before — cross-section of one file</p>
+              <div class="space-y-1">
+                <div class="h-10 border-l-4 border-slate-400 bg-slate-100 px-3 flex items-center text-xs">10 constructor attachments</div>
+                <div class="h-10 border-l-4 border-slate-400 bg-slate-100 px-3 flex items-center text-xs">~15 live config axes</div>
+                <div class="h-10 border-l-4 border-red-400 bg-red-50 px-3 flex items-center text-xs">today-landing policy (panToToday)</div>
+                <div class="h-10 border-l-4 border-red-400 bg-red-50 px-3 flex items-center text-xs">collapse + twisty DOM delegation</div>
+                <div class="h-10 border-l-4 border-slate-400 bg-slate-100 px-3 flex items-center text-xs">column binding · selection</div>
+                <div class="h-10 border-l-4 border-amber-400 bg-amber-50 px-3 flex items-center text-xs text-amber-800">+ S7 scheduling stage edits the same file</div>
+              </div>
+            </div>
+            <div class="rounded-lg border border-slate-200 bg-white p-4">
+              <p class="text-xs uppercase tracking-wider text-slate-400 mb-2">After — shell delegates</p>
+              <div class="relative h-[290px] text-sm">
+                <div class="border-2 border-slate-800 rounded-lg p-3 mx-4 mt-3">
+                  <p class="text-xs uppercase tracking-wider">GanttShell</p>
+                  <p class="text-xs text-slate-500">wires modules · owns #phase</p>
+                </div>
+                <div class="mx-4 mt-3 grid grid-cols-2 gap-2">
+                  <div class="deep text-white rounded p-2 text-xs">today-landing policy</div>
+                  <div class="deep text-white rounded p-2 text-xs">collapse controller<br/>(twisty delegation)</div>
+                  <div class="deep text-white rounded p-2 text-xs">transaction stages<br/>(pipeline module)</div>
+                  <div class="deep text-white rounded p-2 text-xs">column binder</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <p class="text-sm"><span class="font-semibold">Problem:</span> the GanttShell module is shallow by mass — a wide implementation surface with ≥5 independent reasons to change — and <span class="font-mono text-xs">runTransaction</span> is a 5-stage pipeline inlined in one function; S7 scheduling will edit both files again.</p>
+          <p class="text-sm"><span class="font-semibold">Solution:</span> extract the today-landing policy and the collapse/twisty delegation into view modules with small interfaces, and lift the commit pipeline into a staged module in <span class="font-mono text-xs">data/</span> so S7 plugs in as a stage, not a diff.</p>
+          <ul class="text-sm space-y-1 list-disc pl-5">
+            <li>locality: S7 changes one stage module, not 310-line files</li>
+            <li>interface shrinks; implementation absorbs the wiring</li>
+            <li>each stage testable through its own seam</li>
+          </ul>
+          <p class="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded px-3 py-2">Also absorbs: <span class="font-mono">#runner</span>/<span class="font-mono">#phase</span> temporal coupling (bind-order enforced only at runtime) belongs behind these small interfaces, where construction order becomes one module's concern.</p>
+        </article>
+
+        <!-- 5 -->
+        <article id="c5" class="rounded-lg border border-slate-200 bg-white p-6 space-y-4">
+          <div class="flex items-center gap-2 flex-wrap">
+            <h3 class="text-lg font-serif font-semibold">5 · Ship no dead seams: FieldCompare and the S4.9 knobs</h3>
+            <span class="px-2 py-0.5 rounded-full text-xs font-semibold bg-slate-200 text-slate-700">Speculative</span>
+            <span class="px-2 py-0.5 rounded-full text-xs bg-slate-100 text-slate-600">in-process</span>
+          </div>
+          <p class="font-mono text-sm text-slate-600">src/view/grid-columns.ts:84-109 · src/layout/column.ts:20 · src/layout/rows/row-source.ts:7-34 · src/api/index.ts:105-115</p>
+          <div class="grid grid-cols-2 gap-4">
+            <div class="rounded-lg border border-slate-200 bg-white p-4">
+              <p class="text-xs uppercase tracking-wider text-slate-400 mb-2">Before — producers without consumers</p>
+              <pre class="mermaid">
+flowchart LR
+  BG["bindGanttFields"] -->|"computes every<br/>dataset change"| FC["fieldCompares"]
+  FC -->|"discarded"| SHELL["GanttShell"]
+  API["api export"] -->|"published"| KNOBS["filter · sort ·<br/>filterPolicy"]
+  KNOBS -->|"read by: nobody<br/>(S4.9)"| VOID["∅"]
+  classDef leak stroke:#dc2626,stroke-width:2px;
+  class FC,KNOBS leak
+              </pre>
+            </div>
+            <div class="rounded-lg border border-slate-200 bg-white p-4">
+              <p class="text-xs uppercase tracking-wider text-slate-400 mb-2">After — the seam appears with its consumer</p>
+              <div class="relative h-[290px] text-sm">
+                <div class="border border-slate-300 rounded-lg p-3 mx-4 mt-6 bg-white text-center">
+                  <p class="font-mono text-xs">bindGanttFields → fieldCompares</p>
+                  <p class="text-xs text-slate-500 mt-1">lands in the same slice as S4.9 sort, its first consumer</p>
+                </div>
+                <div class="border border-slate-300 rounded-lg p-3 mx-4 mt-3 bg-white text-center">
+                  <p class="font-mono text-xs">filter · sort · filterPolicy</p>
+                  <p class="text-xs text-slate-500 mt-1">types ship with S4.9, live-reconfigurable from day one</p>
+                </div>
+                <p class="absolute bottom-4 inset-x-4 text-xs text-slate-500 text-center">one adapter = a hypothetical seam; two adapters = a real one. Neither is real yet.</p>
+              </div>
+            </div>
+          </div>
+          <p class="text-sm"><span class="font-semibold">Problem:</span> two pieces of surface outrun their consumers — <span class="font-mono text-xs">fieldCompares</span> is computed and discarded on every dataset change, and three row-source config keys are public but unread — so the public interface advertises behaviour that does not exist.</p>
+          <p class="text-sm"><span class="font-semibold">Solution:</span> move the types into the S4.9 slice; if the S4.9 seam changes shape, no public surface has to be retracted first.</p>
+          <ul class="text-sm space-y-1 list-disc pl-5">
+            <li>interface honesty: every published key does something</li>
+            <li>zero wasted <span class="font-mono text-xs">Intl.Collator</span> construction per data change</li>
+            <li>no retraction cost when S4.9 reshapes the seam</li>
+          </ul>
+          <p class="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded px-3 py-2">Also fold in: rename <span class="font-mono text-xs">bindGanttFields</span> (it binds nothing — *Binding* is layout/viewport's term) when touching this file.</p>
+        </article>
+
+        <!-- 6 -->
+        <article id="c6" class="rounded-lg border border-slate-200 bg-white p-6 space-y-4">
+          <div class="flex items-center gap-2 flex-wrap">
+            <h3 class="text-lg font-serif font-semibold">6 · Close the extension seams the hard-coded lists left open</h3>
+            <span class="px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800">Worth exploring</span>
+            <span class="px-2 py-0.5 rounded-full text-xs bg-slate-100 text-slate-600">in-process</span>
+          </div>
+          <p class="font-mono text-sm text-slate-600">src/data/fields/field-access.ts:175-193 · src/layout/frame.ts (cellsForRow) · src/data/rollup.ts:190-192 · src/view/grid-columns.ts:6-7</p>
+          <div class="grid grid-cols-2 gap-4">
+            <div class="rounded-lg border border-slate-200 bg-white p-4">
+              <p class="text-xs uppercase tracking-wider text-slate-400 mb-2">Before — adding one core field touches 4 files</p>
+              <pre class="mermaid">
+flowchart TB
+  NEW["new entry-sourced<br/>core field"] --> F1["core-fields"]
+  NEW --> F2["field-access<br/>overlayStoredEdit<br/>(hard-coded list)"]
+  NEW --> F3["entry-reader"]
+  NEW --> F4["serialization"]
+  F2 -.->|"swallowed cause"| ERR["AggregatorFailedError<br/>no .cause"]
+  classDef leak stroke:#dc2626,stroke-width:2px;
+  class F2 leak
+              </pre>
+            </div>
+            <div class="rounded-lg border border-slate-200 bg-white p-4">
+              <p class="text-xs uppercase tracking-wider text-slate-400 mb-2">After — the declaration carries the overlay</p>
+              <div class="relative h-[290px] text-sm">
+                <div class="deep text-white rounded-lg p-4 mx-4 mt-6">
+                  <p class="text-xs uppercase tracking-wider text-emerald-300">core-fields declaration</p>
+                  <p class="mt-2 font-mono text-xs">each Field states its overlay & stored-source shape</p>
+                  <p class="mt-2 text-xs text-slate-400">field-access walks the declaration, not a hand-list</p>
+                </div>
+                <p class="absolute bottom-6 inset-x-4 text-center text-xs text-slate-500">new core field = 1 file · error cause preserved · FieldLookup module ends the view→data-internal import</p>
+              </div>
+            </div>
+          </div>
+          <p class="text-sm"><span class="font-semibold">Problem:</span> <span class="font-mono text-xs">overlayStoredEdit</span> hard-codes the core key list (open/closed hole: 4 files per new field), the rollup catch swallows the original error, and <span class="font-mono text-xs">view/</span> imports <span class="font-mono text-xs">data/fields/</span> internals to reach <span class="font-mono text-xs">FieldLookup</span>.</p>
+          <p class="text-sm"><span class="font-semibold">Solution:</span> let each core Field declaration carry its overlay contribution; attach <span class="font-mono text-xs">cause</span> on <span class="font-mono text-xs">AggregatorFailedError</span>; give <span class="font-mono text-xs">FieldLookup</span> its own tiny module as the seam view/ imports; name the header test in <span class="font-mono text-xs">cellsForRow</span> after <span class="font-mono text-xs">PlannedRow.kind</span>.</p>
+          <ul class="text-sm space-y-1 list-disc pl-5">
+            <li>open/closed: new core field = 1 file, not 4</li>
+            <li>leverage: one declaration, every consumer follows</li>
+            <li>seam discipline: view imports the named seam, not internals</li>
+          </ul>
+        </article>
+      </section>
+
+      <!-- ============ TOP RECOMMENDATION ============ -->
+      <section id="top-recommendation" class="space-y-4">
+        <h2 class="text-xl font-serif font-semibold">Top recommendation</h2>
+        <div class="rounded-lg border-2 border-emerald-300 bg-emerald-50 p-6 space-y-3">
+          <p class="font-serif text-lg font-semibold"><a href="#c1" class="underline decoration-emerald-400">Candidate 1 — one module reads the tree as of this commit</a>, then <a href="#c2" class="underline decoration-emerald-400">candidate 2 — proposed fields in the edit interface</a>.</p>
+          <p class="text-sm">Candidate 1 is the smallest change with the widest reach: it deletes two copies, fixes the quadratic promotion walk, and gives S7 scheduling the tree-read interface it will need anyway. Candidate 2 is the strongest mud-preventer: the Symbol side-channel is hidden temporal coupling in the commit path, and the commit path is exactly where S7 arrives next. Candidates 4 and 3 follow before the first S5/S7 commit touches <span class="font-mono text-xs">gantt-shell.ts</span> or <span class="font-mono text-xs">transaction.ts</span> again.</p>
+          <p class="text-xs text-slate-600">Quick fixes worth batching with any of the above: mis-wired S4.5 harness button (spec), inert row-source keys and the <span class="font-mono text-xs">reveal()</span> fallback (standards), missing <span class="font-mono text-xs">cause</span>, duplicated doc block, <span class="font-mono text-xs">rowResolutionInput</span> name, and the five repeated <span class="font-mono text-xs">catch (MutationCancelledError)</span> blocks in <span class="font-mono text-xs">harness/main.ts</span>.</p>
+        </div>
+      </section>
+
+      <footer class="text-xs text-slate-400 pt-4 border-t border-slate-200">
+        Generated by GLM · branch <span class="font-mono">s4-implement</span> · diff base <span class="font-mono">80e0717</span> · plans/reviews/2026-08-31-s4-implement-glm.html
+      </footer>
+    </main>
+  </body>
+</html>
