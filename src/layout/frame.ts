@@ -7,13 +7,14 @@ import { dedupeHeaderFormats, formatDate, formatEndInclusive, resolveDateFormat 
 import { resolveDateLines } from './date-line.js';
 import type { DateLine, DateLineSpec } from './date-line.js';
 import { PrefixSumHeightIndex } from './row-height-index.js';
-import type { RowHeightIndex } from './row-height-index.js';
+import { FrameMemory } from './frame-memory.js';
 import type { FrameColumn, ResolvedColumn } from './column.js';
 import type { PlannedRow, RowSource } from './rows/row-source.js';
 import { resolveRows, rowResolutionInput } from './rows/resolve-rows.js';
 import type { Item, ItemProducerRegistry } from './items/produce-items.js';
 import { createItemProducerRegistry, produceItemsForRow } from './items/produce-items.js';
-import { packRow } from './lanes/pack-lanes.js';
+import { DEFAULT_LANE_GAP_PX, packRow, packedRowHeight, yForLane } from './lanes/pack-lanes.js';
+import type { LanePacking, PackedRow } from './lanes/pack-lanes.js';
 
 /** Shipped Tick box floor (CONTEXT.md) — `--fg-tick-box-floor` fallback and CSS padding calc. */
 export const DEFAULT_TICK_BOX_FLOOR_PX = 9;
@@ -179,6 +180,8 @@ export interface LayoutInput {
   collapsed?: readonly string[];
   /** Per-Gantt Item producer registry (D-S4-24). Omitted → the three shipped producers. */
   itemProducerRegistry?: ItemProducerRegistry;
+  /** Gap between packed lanes in px. Omitted → `DEFAULT_LANE_GAP_PX`. View reads `--fg-lane-gap`. */
+  laneGapPx?: number;
 }
 
 function cellsForRow(
@@ -222,15 +225,50 @@ function barA11yLabel(
   return `${item.label}, part ${segmentIndexOfItem(item.id) + 1} of ${partCount}, ${span}`;
 }
 
+function fixedLanes(items: readonly Item[]): LanePacking {
+  const laneByItem = new Map<ItemId, number>();
+  for (const item of items) laneByItem.set(item.id, 0);
+  return { laneByItem, laneCount: 1 };
+}
+
+function packedItemsForRow(
+  row: PlannedRow,
+  entryById: ReadonlyMap<EntryId, Entry>,
+  registry: ItemProducerRegistry,
+  memory: FrameMemory,
+): PackedRow {
+  if (row.heightMode !== 'pack') {
+    const items = produceItemsForRow(row, entryById, registry);
+    return { items, packing: fixedLanes(items) };
+  }
+  return memory.packedRow(row.id, () => {
+    const items = produceItemsForRow(row, entryById, registry);
+    return { items, packing: packRow(items) };
+  });
+}
+
 /** Composition over resolve → produce → pack → place (D-S4-19). Culling still windows after resolve
- * (D-S4-20). Pure: `heights` is the row-top index this pass reads — `FrameLayout` keeps one alive
- * across renders; a one-shot caller omits it and gets an index built and discarded here. */
-export function computeFrame(input: LayoutInput, heights?: RowHeightIndex): GeometryFrame {
+ * (D-S4-20). Pure: `memory` is what this pass remembers — `FrameLayout` keeps one alive across
+ * renders; a one-shot caller omits it and gets memory built and discarded here. */
+export function computeFrame(input: LayoutInput, memory?: FrameMemory): GeometryFrame {
   const { scale, preset, visible, rowHeight, revision, locale } = input;
   const plan = resolveRows(rowResolutionInput(input));
-  const index = heights ?? new PrefixSumHeightIndex(plan.length, () => rowHeight);
   const entryById = new Map(input.entries.map((entry) => [entry.id, entry]));
   const itemProducerRegistry = input.itemProducerRegistry ?? createItemProducerRegistry();
+  const laneGap = input.laneGapPx ?? DEFAULT_LANE_GAP_PX;
+
+  function heightOf(index: number): number {
+    const row = plan[index];
+    if (row === undefined || row.heightMode !== 'pack') return rowHeight;
+    return packedRowHeight(
+      packedItemsForRow(row, entryById, itemProducerRegistry, mem).packing.laneCount,
+      rowHeight,
+      laneGap,
+    );
+  }
+
+  const mem = memory ?? new FrameMemory(new PrefixSumHeightIndex(plan.length, heightOf));
+  const index = mem.heights;
   const tickBoxFloorPx = input.tickBoxFloorPx ?? DEFAULT_TICK_BOX_FLOOR_PX;
   const verticalRows = input.overscan?.verticalRows ?? DEFAULT_OVERSCAN.verticalRows;
   const horizontalPx = input.overscan?.horizontalPx ?? DEFAULT_OVERSCAN.horizontalPx;
@@ -269,14 +307,16 @@ export function computeFrame(input: LayoutInput, heights?: RowHeightIndex): Geom
       overflowCount++;
     }
 
-    const items = produceItemsForRow(planned, entryById, itemProducerRegistry);
-    const packing = packRow(items);
+    const packed = packedItemsForRow(planned, entryById, itemProducerRegistry, mem);
+    const items = packed.items;
+    const packing = packed.packing;
+    const height = index.heightAt(rowIndex);
     const parts = segmentCountByEntry(items);
     rows.push({
       id: planned.id,
       index: planned.index,
       top,
-      height: rowHeight,
+      height,
       laneCount: packing.laneCount,
       depth: planned.depth,
       expandable: planned.expandable,
@@ -287,6 +327,7 @@ export function computeFrame(input: LayoutInput, heights?: RowHeightIndex): Geom
     for (const item of items) {
       const { x, width } = barSpan(item, scale);
       if (!intersectsHorizontally(x, width)) continue;
+      const lane = packing.laneByItem.get(item.id) ?? 0;
       bars.push({
         id: item.id,
         entryId: item.entryId,
@@ -294,10 +335,10 @@ export function computeFrame(input: LayoutInput, heights?: RowHeightIndex): Geom
         kind: item.kind,
         label: item.label,
         x,
-        y: top,
+        y: yForLane(top, lane, rowHeight, laneGap),
         width,
         height: rowHeight,
-        lane: packing.laneByItem.get(item.id) ?? 0,
+        lane,
         flags: {},
         a11yLabel: barA11yLabel(item, parts.get(item.entryId) ?? 1, scale, locale),
       });

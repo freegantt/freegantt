@@ -8,6 +8,7 @@ import {
   TimeScaleModel,
   Viewport,
   DEFAULT_TICK_BOX_FLOOR_PX,
+  DEFAULT_LANE_GAP_PX,
   DEFAULT_ROW_SOURCE,
   createItemProducerRegistry,
 } from '../layout/index.js';
@@ -116,6 +117,10 @@ const ROW_HEIGHT_POLICY = { fallback: DEFAULT_ROW_HEIGHT, accepts: 'positive' } 
 const TICK_BOX_FLOOR_PROPERTY = '--fg-tick-box-floor';
 /** A zero floor would re-open thin straddles painting at the CSS box minimum. */
 const TICK_BOX_FLOOR_POLICY = { fallback: DEFAULT_TICK_BOX_FLOOR_PX, accepts: 'positive' } as const;
+
+const LANE_GAP_PROPERTY = '--fg-lane-gap';
+/** Zero gap is authored: packed bars may sit flush. */
+const LANE_GAP_POLICY = { fallback: DEFAULT_LANE_GAP_PX, accepts: 'zeroOrMore' } as const;
 
 /** Default for `todayLineMarginTicks` below: how many of the current preset's own ticks sit between
  *  the pane's left edge and `panToToday`'s landing (S1.13 follow-up) — enough that the today line
@@ -265,6 +270,7 @@ export class GanttShell {
    * states what to draw and holds no layout bookkeeping of its own. */
   #layout = new FrameLayout();
   #rowHeight: number = DEFAULT_ROW_HEIGHT;
+  #laneGapPx: number = DEFAULT_LANE_GAP_PX;
   #tickBoxFloorPx: number = DEFAULT_TICK_BOX_FLOOR_PX;
   #options: GanttShellOptions;
   /** Construction phase (issue #91 §9-B): bind() notifies synchronously before pane size is wired, so
@@ -362,7 +368,8 @@ export class GanttShell {
     // the bound viewport and request a frame — the changeset mechanism's own fan-out, not a second
     // reactivity path (#33's `setEntries()` warning is against a *public* one; see dataset-change-
     // subscription.ts).
-    this.#datasetChanges = subscribeToDatasetChanges(options.dataset, () => {
+    this.#datasetChanges = subscribeToDatasetChanges(options.dataset, (changeSet) => {
+      this.#layout.invalidateForChange(changeSet);
       this.#bindColumns();
       this.#viewportHandle.setEntries(options.dataset.entries.all);
       this.#frames.request();
@@ -843,6 +850,7 @@ export class GanttShell {
    *  first place. */
   #applyPaneMeasurement(size: Size): void {
     this.#rowHeight = readPixelProperty(this.#container, ROW_HEIGHT_PROPERTY, ROW_HEIGHT_POLICY);
+    this.#laneGapPx = readPixelProperty(this.#container, LANE_GAP_PROPERTY, LANE_GAP_POLICY);
     this.#tickBoxFloorPx = readPixelProperty(this.#container, TICK_BOX_FLOOR_PROPERTY, TICK_BOX_FLOOR_POLICY);
     this.#viewportHandle.setPaneSize(size);
   }
@@ -855,6 +863,7 @@ export class GanttShell {
       visible: this.#viewport.visible,
       overscan: this.#viewport.overscan,
       rowHeight: this.#rowHeight,
+      laneGapPx: this.#laneGapPx,
       tickBoxFloorPx: this.#tickBoxFloorPx,
       revision: this.#revision++,
       locale: this.#locale,

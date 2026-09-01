@@ -1803,3 +1803,48 @@ describe('Gantt rows and collapse (S4.6)', () => {
     gantt.destroy();
   });
 });
+
+describe('Gantt pack-mode scroll (S4.8, [S4-A5])', () => {
+  it('keeps the pixel scroll offset and re-clamps it; never resets to 0', async () => {
+    FakeResizeObserver.instances = [];
+    vi.stubGlobal('ResizeObserver', FakeResizeObserver);
+    const container = document.createElement('div');
+    const scroll = new ScrollModel();
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      entries: sampleEntries.map((entry, i) =>
+        i === 0
+          ? {
+              ...entry,
+              segments: [
+                { start: entry.start, end: entry.end },
+                { start: entry.start, end: entry.end },
+              ],
+            }
+          : entry,
+      ),
+    });
+    const gantt = new Gantt({
+      container,
+      dataset,
+      scroll,
+      rowSource: { source: 'entries', heightMode: 'pack' },
+    });
+    FakeResizeObserver.instances[0]!.fire({ width: 300, height: 100 });
+    scroll.panTo({ x: 0, y: 80 });
+    const yBefore = scroll.state.position.y;
+    expect(yBefore).toBe(80);
+
+    dataset.entries.update(sampleEntries[0]!.id, {
+      segments: [{ start: sampleEntries[0]!.start, end: sampleEntries[0]!.end }],
+    });
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+
+    expect(scroll.state.position.y).not.toBe(0);
+    expect(scroll.state.position.y).toBeLessThanOrEqual(scroll.state.max.y);
+    expect(scroll.state.position.y).toBeLessThanOrEqual(yBefore);
+
+    gantt.destroy();
+    vi.unstubAllGlobals();
+  });
+});
