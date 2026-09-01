@@ -21,6 +21,7 @@ import type { EventBus } from './event-bus.js';
 import { promoteNewParents } from './hierarchy.js';
 import { rollUpFields } from './rollup.js';
 import type { FieldRegistry } from './fields/field-registry.js';
+import { isDevMode } from './dev-mode.js';
 
 /** Only `runTransaction` produces one. Store mutators require it, so a mutation outside a transaction
  *  does not typecheck — the belt to `docs/02` §3.6's `no-store-mutation-outside-transaction` braces.
@@ -114,8 +115,6 @@ export function applyConstructionRollUp(data: TransactionData): void {
   const updated = rollUpFields(byId, undefined, data.fields, data.rollUpKinds, data.fieldContext);
   writeConstructionUpdates(data, updated);
 }
-
-const isDevMode = (): boolean => (import.meta as { env?: { DEV?: boolean } }).env?.DEV ?? false;
 
 /**
  * Applies an already-complete `ChangeSet` straight to the store and fans it out through

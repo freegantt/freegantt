@@ -35,11 +35,30 @@ function produceRows(input: RowPassInput): UnindexedRow[] {
   return PRODUCE_ROWS[input.source.source](input);
 }
 
-function stampIndex(rows: readonly UnindexedRow[]): readonly PlannedRow[] {
+export function stampIndex(rows: readonly UnindexedRow[]): readonly PlannedRow[] {
   return rows.map((row, index) => {
     const { parentRowId: _parent, ...planned } = row;
     return { ...planned, index };
   });
+}
+
+/** Produce, filter, and sort — collapse is a later pass so ancestry still has `parentRowId` (D4). */
+export function resolveOpenRows(input: {
+  entries: readonly Entry[];
+  rows?: RowSource;
+  fieldCompares?: readonly FieldCompare[];
+}): UnindexedRow[] {
+  const pass: RowPassInput = {
+    entries: input.entries,
+    source: input.rows ?? DEFAULT_ROW_SOURCE,
+    collapsed: new Set(),
+    ...(input.fieldCompares !== undefined ? { fieldCompares: input.fieldCompares } : {}),
+  };
+  const built = produceRows(pass);
+  const { source, entries, fieldCompares = [] } = pass;
+  if (source.source === 'custom') return built;
+  const filtered = applyFilter(built, entries, source.filter, filterPolicyOf(source));
+  return applySort(filtered, entries, source.sort, fieldCompares);
 }
 
 function filterPolicyOf(source: Exclude<RowSource, CustomRowSource>): FilterPolicy {
@@ -53,18 +72,6 @@ export function resolveRows(input: {
   collapsed?: readonly string[];
   fieldCompares?: readonly FieldCompare[];
 }): readonly PlannedRow[] {
-  const pass: RowPassInput = {
-    entries: input.entries,
-    source: input.rows ?? DEFAULT_ROW_SOURCE,
-    collapsed: new Set(input.collapsed ?? []),
-    ...(input.fieldCompares !== undefined ? { fieldCompares: input.fieldCompares } : {}),
-  };
-  const built = produceRows(pass);
-  const { source, entries, collapsed, fieldCompares = [] } = pass;
-  if (source.source === 'custom') {
-    return stampIndex(applyCollapse(built, collapsed));
-  }
-  const filtered = applyFilter(built, entries, source.filter, filterPolicyOf(source));
-  const sorted = applySort(filtered, entries, source.sort, fieldCompares);
-  return stampIndex(applyCollapse(sorted, collapsed));
+  const open = resolveOpenRows(input);
+  return stampIndex(applyCollapse(open, new Set(input.collapsed ?? [])));
 }

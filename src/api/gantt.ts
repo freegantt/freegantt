@@ -110,6 +110,18 @@ export type GanttScaleOptions =
 
 export type GanttOptions = GanttOptionsBase & GanttScaleOptions;
 
+function pickDefined<T extends object, K extends keyof T>(
+  options: T,
+  keys: readonly K[],
+): Partial<Pick<T, K>> {
+  const picked: Partial<Pick<T, K>> = {};
+  for (const key of keys) {
+    const value = options[key];
+    if (value !== undefined) picked[key] = value;
+  }
+  return picked;
+}
+
 export class Gantt {
   #shell: GanttShell;
   #dataset: Dataset;
@@ -120,25 +132,25 @@ export class Gantt {
     this.#shell = new GanttShell({
       container: options.container,
       dataset: options.dataset,
+      ...pickDefined(options, [
+        'scroll',
+        'gridWidth',
+        'preset',
+        'fit',
+        'theme',
+        'a11yLabel',
+        'locale',
+        'todayLineMarginTicks',
+        'interactions',
+        'viewportGestures',
+        'gridColumns',
+        'rowSource',
+        'collapsed',
+      ]),
       ...(options.scale ? { scale: options.scale } : {}),
-      ...(options.scroll ? { scroll: options.scroll } : {}),
-      ...(options.gridWidth !== undefined ? { gridWidth: options.gridWidth } : {}),
-      ...(options.preset !== undefined ? { preset: options.preset } : {}),
       ...(options.range !== undefined ? { range: this.#toRange(options.range) } : {}),
-      ...(options.fit !== undefined ? { fit: options.fit } : {}),
-      ...(options.theme !== undefined ? { theme: options.theme } : {}),
-      ...(options.a11yLabel !== undefined ? { a11yLabel: options.a11yLabel } : {}),
-      ...(options.locale !== undefined ? { locale: options.locale } : {}),
       ...(options.todayLine !== undefined ? { todayLine: this.#toTodayLine(options.todayLine) } : {}),
       ...(options.dateLines !== undefined ? { dateLines: this.#toDateLines(options.dateLines) } : {}),
-      ...(options.todayLineMarginTicks !== undefined
-        ? { todayLineMarginTicks: options.todayLineMarginTicks }
-        : {}),
-      ...(options.interactions !== undefined ? { interactions: options.interactions } : {}),
-      ...(options.viewportGestures !== undefined ? { viewportGestures: options.viewportGestures } : {}),
-      ...(options.gridColumns !== undefined ? { gridColumns: options.gridColumns } : {}),
-      ...(options.rowSource !== undefined ? { rowSource: options.rowSource } : {}),
-      ...(options.collapsed !== undefined ? { collapsed: options.collapsed } : {}),
       entryGestures: attachEntryGestures,
       keyboardEditing: attachKeyboardEditing,
       // S3.3, D-S3-16: `GanttShell`'s own `dataset` option is `model/`'s narrow `Dataset` interface

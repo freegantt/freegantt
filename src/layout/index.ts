@@ -18,6 +18,7 @@ export type {
 } from './rows/row-source.js';
 export { DEFAULT_ROW_SOURCE, isPlannedHeaderRow } from './rows/row-source.js';
 export { FrameLayout } from './frame-layout.js';
+export { FrameMemory } from './frame-memory.js';
 export { resolveDateLines } from './date-line.js';
 export type { DateLine, DateLineSpec, ResolveDateLinesInput } from './date-line.js';
 export type {

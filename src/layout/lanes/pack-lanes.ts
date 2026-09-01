@@ -31,6 +31,13 @@ export function yForLane(rowTop: number, lane: number, rowHeight: number, laneGa
   return rowTop + lane * (rowHeight + laneGap);
 }
 
+/** Call: `singleLane(items)` — every item sits on lane 0 (fixed-height rows). */
+export function singleLane(items: readonly Item[]): LanePacking {
+  const laneByItem = new Map<ItemId, number>();
+  for (const item of items) laneByItem.set(item.id, 0);
+  return { laneByItem, laneCount: 1 };
+}
+
 export function packRow(items: readonly Item[]): LanePacking {
   const laneByItem = new Map<ItemId, number>();
   if (items.length === 0) return { laneByItem, laneCount: 1 };
