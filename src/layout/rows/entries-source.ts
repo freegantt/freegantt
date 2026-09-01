@@ -5,7 +5,7 @@ import type { Entry, EntryId } from '../../model/index.js';
 import type { EntriesRowSource, RowHeightMode, UnindexedRow } from './row-source.js';
 import { heightModeOf } from './row-source.js';
 
-function childrenByParent(entries: readonly Entry[]): {
+export function childrenByParent(entries: readonly Entry[]): {
   roots: readonly Entry[];
   childrenOf: ReadonlyMap<EntryId, readonly Entry[]>;
 } {
@@ -43,11 +43,7 @@ function entryRow(
   };
 }
 
-export function resolveEntriesSource(
-  entries: readonly Entry[],
-  source: EntriesRowSource,
-  collapsed: ReadonlySet<string>,
-): UnindexedRow[] {
+export function resolveEntriesSource(entries: readonly Entry[], source: EntriesRowSource): UnindexedRow[] {
   const heightMode = heightModeOf(source);
   if (source.tree !== true) {
     return entries.map((entry) => entryRow(entry, 0, false, false, heightMode));
@@ -68,10 +64,8 @@ export function resolveEntriesSource(
     frame.index += 1;
     const children = childrenOf.get(entry.id) ?? [];
     const expandable = children.length > 0;
-    const id = rowId(entry.id);
-    const expanded = expandable && !collapsed.has(id);
-    rows.push(entryRow(entry, frame.depth, expandable, expanded, heightMode));
-    if (expanded) stack.push({ list: children, index: 0, depth: frame.depth + 1 });
+    rows.push(entryRow(entry, frame.depth, expandable, expandable, heightMode));
+    stack.push({ list: children, index: 0, depth: frame.depth + 1 });
   }
   return rows;
 }

@@ -32,6 +32,7 @@ const LIGHT_COLOR_TOKENS = `
   --fg-row-even-bg: transparent;
   --fg-row-odd-bg: rgba(26, 24, 21, 0.028);
   --fg-row-label-color: #1A1815;
+  --fg-row-unmatched-label-color: #9A958B;
   --fg-bar-fill: oklch(0.55 0.13 245);
   --fg-bar-label-color: #FFFFFF;
   --fg-warn: #D97706;
@@ -52,6 +53,7 @@ const DARK_COLOR_TOKENS = `
   --fg-row-even-bg: transparent;
   --fg-row-odd-bg: rgba(255, 255, 255, 0.032);
   --fg-row-label-color: #ECEAE3;
+  --fg-row-unmatched-label-color: #6E6A62;
   --fg-bar-fill: oklch(0.72 0.13 245);
   --fg-bar-label-color: #1A1815;
   --fg-warn: #FBBF24;
@@ -112,6 +114,7 @@ ${DARK_COLOR_TOKENS}
 .fg-row { background: var(--fg-row-even-bg); position: absolute; top: 0; left: 0; width: 100%; display: flex; align-items: stretch; --fg-row-depth: 0; }
 .fg-row:nth-child(odd) { background: var(--fg-row-odd-bg); }
 .fg-row-label, .fg-row-cell { color: var(--fg-row-label-color); display: flex; align-items: center; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; box-sizing: border-box; flex: var(--fg-col-flex, 1) 1 0; }
+.fg-row[data-matched='false'] .fg-row-label, .fg-row[data-matched='false'] .fg-row-cell { color: var(--fg-row-unmatched-label-color); }
 .fg-row-label { padding-inline-start: calc(var(--fg-row-depth, 0) * var(--fg-indent-width, 12px)); }
 .fg-row-label-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .fg-row-twisty { flex: 0 0 var(--fg-indent-width, 12px); width: var(--fg-indent-width, 12px); border: 0; background: transparent; padding: 0; cursor: pointer; color: inherit; }

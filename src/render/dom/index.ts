@@ -53,6 +53,7 @@ type RowGeom = {
   depth: number;
   expandable: boolean;
   expanded: boolean;
+  matched?: boolean;
 };
 type BarGeom = Pick<FrameBar, 'kind' | 'label' | 'x' | 'y' | 'width' | 'height' | 'flags' | 'a11yLabel'>;
 /** Shape class from `data-kind` (D-S4-24) — a lookup, never `if (kind === …)`. */
@@ -398,16 +399,20 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
         node.dataset['rowId'] = key;
         return node;
       },
-      toGeom: (row) => ({
-        top: row.top,
-        height: row.height,
-        cells: row.cells,
-        index: row.index,
-        rowCount,
-        depth: row.depth,
-        expandable: row.expandable,
-        expanded: row.expanded,
-      }),
+      toGeom: (row) => {
+        const geom: RowGeom = {
+          top: row.top,
+          height: row.height,
+          cells: row.cells,
+          index: row.index,
+          rowCount,
+          depth: row.depth,
+          expandable: row.expandable,
+          expanded: row.expanded,
+        };
+        if (row.matched === false) geom.matched = false;
+        return geom;
+      },
       patch: (node, geom) => {
         node.style.transform = `translateY(${geom.top}px)`;
         node.style.height = `${geom.height}px`;
@@ -415,6 +420,8 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
         node.setAttribute('aria-posinset', String(geom.index + 1));
         node.setAttribute('aria-setsize', String(geom.rowCount));
         node.setAttribute('aria-level', String(geom.depth + 1));
+        if (geom.matched === false) node.dataset['matched'] = 'false';
+        else delete node.dataset['matched'];
       },
     });
 

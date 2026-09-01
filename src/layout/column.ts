@@ -19,5 +19,6 @@ export interface ResolvedColumn extends FrameColumn {
 /** Default sort order for one declared Field. Bound with this Gantt's locale. Not a Grid column. */
 export interface FieldCompare {
   key: FieldKey;
+  readStored(entry: Entry): unknown;
   compareStored(a: unknown, b: unknown): number;
 }

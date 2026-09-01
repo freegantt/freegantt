@@ -1,13 +1,27 @@
 // layout/ — row-source types. Pure data: no pixels, no Dataset, no FieldSource (D-S4-19, D-S4-21).
 
-import type { Entry, EntryId, RowId } from '../../model/index.js';
+import type { Entry, EntryId, FieldKey, RowId } from '../../model/index.js';
+import type { FieldCompare } from '../column.js';
 
 export type RowHeightMode = 'fixed' | 'pack';
+
+export type FilterPolicy = 'keepAncestors' | 'matchOnly';
+
+export type RowFilter = (entry: Entry) => boolean;
+
+export interface RowSort {
+  field: FieldKey;
+  direction?: 'asc' | 'desc';
+  compare?(a: unknown, b: unknown): number;
+}
 
 /** Shared by every row source that walks Entries directly — `'custom'` resolves its own rows, so it
  *  does not take these (D-S4-21). */
 export interface RowSourceCommon {
   heightMode?: RowHeightMode;
+  filter?: RowFilter;
+  sort?: RowSort;
+  filterPolicy?: FilterPolicy;
 }
 
 export interface EntriesRowSource extends RowSourceCommon {
@@ -52,7 +66,7 @@ const PLANNED_ROW_KIND = Object.freeze({
 
 /** True when the row stands for no Entry (D-S4-23). Compares through a frozen lookup so `layout/`
  *  never branches on a kind string literal inline (`no-kind-literal`). */
-export function isPlannedHeaderRow(row: PlannedRow): boolean {
+export function isPlannedHeaderRow(row: Pick<PlannedRow, 'kind'>): boolean {
   return row.kind === PLANNED_ROW_KIND.header;
 }
 
@@ -67,6 +81,8 @@ export interface PlannedRow {
   expanded: boolean;
   heightMode: RowHeightMode;
   headerLabel?: string;
+  /** `true` when this row's entry matched the active filter; `false` when kept only for descendants. */
+  matched?: boolean;
 }
 
 /** What a row source builds before `resolveRows` stamps the real `index` (St6) — `index` has one
@@ -77,6 +93,7 @@ export interface RowResolutionInput {
   entries: readonly Entry[];
   source: RowSource;
   collapsed: ReadonlySet<string>;
+  fieldCompares?: readonly FieldCompare[];
 }
 
 export function heightModeOf(source: RowSource): RowHeightMode {

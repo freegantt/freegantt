@@ -74,10 +74,12 @@ describe('resolveColumns (D-S4-12)', () => {
 
 describe('resolveFieldCompares (D-S4-13)', () => {
   it('includes a Field that is not in gridColumns', () => {
-    const compares = resolveFieldCompares(costRegistry().all, { locale });
+    const registry = costRegistry();
+    const compares = resolveFieldCompares(registry, registry.all, { timeZone: zone, locale });
     expect(compares.some((c) => c.key === 'cost')).toBe(true);
     expect(compares.some((c) => c.key === 'name')).toBe(true);
     expect(compares.find((c) => c.key === 'cost')?.compareStored(1, 2)).toBeLessThan(0);
+    expect(compares.find((c) => c.key === 'cost')?.readStored(entry)).toBe(500);
   });
 });
 
@@ -85,7 +87,7 @@ describe('bindGanttFields (D-S4-13)', () => {
   it('one bind returns visible columns and every Field compare', () => {
     const registry = costRegistry();
     const bound = bindGanttFields(
-      { field: (key) => registry.get(key), fields: { all: registry.all } },
+      { field: (key) => registry.get(key), fields: { all: registry.all }, timeZone: zone },
       ['name'],
       { timeZone: zone, locale },
     );

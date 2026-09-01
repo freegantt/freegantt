@@ -34,9 +34,18 @@ function splitIntoOverlappingSegments(
 const dataset = new Dataset({
   entries: demoEntryInputs.map((entry, i) => {
     const parentId = demoNestedParent[entry.id ?? ''];
+    const team =
+      entry.id === 'entry-1' || parentId === 'entry-1'
+        ? 'core'
+        : entry.id === 'entry-5' || parentId === 'entry-5'
+          ? 'edge'
+          : undefined;
+    const meta: Record<string, unknown> = {};
+    if (i === 0) meta['cost'] = 12_000;
+    if (team !== undefined) meta['team'] = team;
     return {
       ...entry,
-      ...(i === 0 ? { meta: { cost: 12_000 } } : {}),
+      ...(Object.keys(meta).length > 0 ? { meta } : {}),
       ...(parentId !== undefined ? { parentId } : {}),
       ...(entry.id === 'entry-4' ? { kind: 'milestone' as const } : {}),
       ...(entry.id === 'entry-16' && entry.start !== undefined && entry.end !== undefined
@@ -89,17 +98,30 @@ reparentBtn.addEventListener('click', () => {
 
 const rowsSourceBtn = document.querySelector<HTMLButtonElement>('#rows-source-btn')!;
 const packRowsBtn = document.querySelector<HTMLButtonElement>('#pack-rows-btn')!;
+const filterTeamBtn = document.querySelector<HTMLButtonElement>('#filter-team-btn')!;
+const sortNameBtn = document.querySelector<HTMLButtonElement>('#sort-name-btn')!;
 let grouped = false;
 let pack = false;
+let filterTeam: 'core' | 'edge' | null = null;
+let sortByName = false;
 
 function applyRowSource(): void {
-  const heightMode = pack ? 'pack' : 'fixed';
+  const heightMode: 'fixed' | 'pack' = pack ? 'pack' : 'fixed';
+  const shared = {
+    heightMode,
+    ...(filterTeam !== null && !grouped
+      ? { filter: (entry: Entry) => (entry.meta as { team?: string } | undefined)?.team === filterTeam }
+      : {}),
+    ...(sortByName && !grouped ? { sort: { field: 'name' as const } } : {}),
+  };
   const next: RowSource = grouped
-    ? { source: 'group', groupBy: (entry: Entry) => entry.kind, heightMode }
-    : { source: 'entries', tree: true, heightMode };
+    ? { source: 'group', groupBy: (entry: Entry) => entry.kind, ...shared }
+    : { source: 'entries', tree: true, ...shared };
   gantt.rowSource = next;
   rowsSourceBtn.textContent = grouped ? 'Show tree' : 'Group by kind';
   packRowsBtn.textContent = pack ? 'Stack bars (fixed rows)' : 'Pack overlapping bars';
+  filterTeamBtn.textContent = filterTeam === null ? 'Filter team: off' : `Filter team: ${filterTeam}`;
+  sortNameBtn.textContent = sortByName ? 'Sort by name: on' : 'Sort by name: off';
 }
 
 rowsSourceBtn.addEventListener('click', () => {
@@ -109,6 +131,18 @@ rowsSourceBtn.addEventListener('click', () => {
 
 packRowsBtn.addEventListener('click', () => {
   pack = !pack;
+  applyRowSource();
+});
+
+filterTeamBtn.addEventListener('click', () => {
+  if (grouped) return;
+  filterTeam = filterTeam === null ? 'core' : filterTeam === 'core' ? 'edge' : null;
+  applyRowSource();
+});
+
+sortNameBtn.addEventListener('click', () => {
+  if (grouped) return;
+  sortByName = !sortByName;
   applyRowSource();
 });
 

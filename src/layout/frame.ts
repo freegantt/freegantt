@@ -8,7 +8,7 @@ import { resolveDateLines } from './date-line.js';
 import type { DateLine, DateLineSpec } from './date-line.js';
 import { PrefixSumHeightIndex } from './row-height-index.js';
 import { FrameMemory } from './frame-memory.js';
-import type { FrameColumn, ResolvedColumn } from './column.js';
+import type { FrameColumn, ResolvedColumn, FieldCompare } from './column.js';
 import type { PlannedRow, PlannedRowKind, RowSource } from './rows/row-source.js';
 import { isPlannedHeaderRow } from './rows/row-source.js';
 import { resolveRows, rowResolutionInput } from './rows/resolve-rows.js';
@@ -49,6 +49,8 @@ export interface FrameRow {
   depth: number;
   expandable: boolean;
   expanded: boolean;
+  /** `false` when the row was kept only because a descendant matched the filter. */
+  matched?: boolean;
   /** One library-formatted string per configured grid column, in column order (ADR 0005). */
   cells: readonly string[];
 }
@@ -182,6 +184,8 @@ export interface LayoutInput {
   collapsed?: readonly string[];
   /** Per-Gantt Item producer registry (D-S4-24). The shell passes one per Gantt (I2). */
   itemProducerRegistry: ItemProducerRegistry;
+  /** Every declared Field's stored-value read and compare, bound at this Gantt's locale (D-S4-13). */
+  fieldCompares?: readonly FieldCompare[];
   /** Gap between packed lanes in px. Omitted → `DEFAULT_LANE_GAP_PX`. View reads `--fg-lane-gap`. */
   laneGapPx?: number;
 }
@@ -254,7 +258,14 @@ function packedItemsForRow(
  * renders; a one-shot caller omits it and gets memory built and discarded here. */
 export function computeFrame(input: LayoutInput, memory?: FrameMemory): GeometryFrame {
   const { scale, preset, visible, rowHeight, revision, locale } = input;
-  const plan = resolveRows(rowResolutionInput(input));
+  const plan = resolveRows(
+    rowResolutionInput({
+      entries: input.entries,
+      ...(input.rows !== undefined ? { rows: input.rows } : {}),
+      ...(input.collapsed !== undefined ? { collapsed: input.collapsed } : {}),
+      ...(input.fieldCompares !== undefined ? { fieldCompares: input.fieldCompares } : {}),
+    }),
+  );
   const entryById = new Map(input.entries.map((entry) => [entry.id, entry]));
   const itemProducerRegistry = input.itemProducerRegistry;
   const laneGap = input.laneGapPx ?? DEFAULT_LANE_GAP_PX;
@@ -324,6 +335,7 @@ export function computeFrame(input: LayoutInput, memory?: FrameMemory): Geometry
       depth: planned.depth,
       expandable: planned.expandable,
       expanded: planned.expanded,
+      ...(planned.matched !== undefined ? { matched: planned.matched } : {}),
       cells: cellsForRow(planned, input.columns, entryById),
     });
 

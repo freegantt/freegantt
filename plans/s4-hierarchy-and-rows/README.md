@@ -1,6 +1,6 @@
 # S4 — Hierarchy, grouping, multi-item rows
 
-**Slice:** S4 (`plans/03` §S4) · **Position:** after S3, before S5 · **Status:** S4.1–S4.8 done; continue at **S4.9**
+**Slice:** S4 (`plans/03` §S4) · **Position:** after S3, before S5 · **Status:** S4.1–S4.9 done; continue at **S4.10**
 **Form:** the same settled-spec form as [`plans/s3-direct-manipulation/README.md`](../s3-direct-manipulation/README.md) — this file is the tracker and the shared context; each step file holds the decisions it implements and its TODO boxes.
 **Tick as you go:** When you finish a TODO item, tick its box in that step file. Tick it in the same change as the code. Tick each item when it lands. Do not wait for S4.11 or the slice gate.
 **Last review:** [`plans/reviews/2026-08-31-s4.3-s4.4.html`](../reviews/2026-08-31-s4.3-s4.4.html) — S4.3/S4.4 branch review. Spec-review findings already landed in this spec (2026-08-31): sort binds `FieldCompare` from declared Fields; `produceItemsForRow`/`packRow`; X2 is `'header'`; `CustomRow` is the public custom-source DTO.
