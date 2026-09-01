@@ -253,17 +253,30 @@ function packedItemsForRow(
   });
 }
 
-/** Composition over resolve → produce → pack → place (D-S4-19). Culling still windows after resolve
- * (D-S4-20). Pure: `memory` is what this pass remembers — `FrameLayout` keeps one alive across
- * renders; a one-shot caller omits it and gets memory built and discarded here. */
-export function computeFrame(input: LayoutInput, memory?: FrameMemory): GeometryFrame {
-  const { scale, preset, visible, rowHeight, revision, locale } = input;
-  const plan = resolveRows({
+/** Call: `resolveLayoutRows(input)`. One row plan from a `LayoutInput`. */
+export function resolveLayoutRows(input: LayoutInput): readonly PlannedRow[] {
+  return resolveRows({
     entries: input.entries,
     ...(input.rows !== undefined ? { rows: input.rows } : {}),
     ...(input.collapsed !== undefined ? { collapsed: input.collapsed } : {}),
     ...(input.fieldCompares !== undefined ? { fieldCompares: input.fieldCompares } : {}),
   });
+}
+
+/** Composition over resolve → produce → pack → place (D-S4-19). Culling still windows after resolve
+ * (D-S4-20). Pure: `memory` is what this pass remembers — `FrameLayout` keeps one alive across
+ * renders; a one-shot caller omits it and gets memory built and discarded here. */
+export function computeFrame(input: LayoutInput, memory?: FrameMemory): GeometryFrame {
+  return placeFrame(input, resolveLayoutRows(input), memory);
+}
+
+/** Call: `placeFrame(input, plan, memory)`. Geometry only — the caller already resolved rows. */
+export function placeFrame(
+  input: LayoutInput,
+  plan: readonly PlannedRow[],
+  memory?: FrameMemory,
+): GeometryFrame {
+  const { scale, preset, visible, rowHeight, revision, locale } = input;
   const entryById = new Map(input.entries.map((entry) => [entry.id, entry]));
   const itemProducerRegistry = input.itemProducerRegistry;
   const laneGap = input.laneGapPx ?? DEFAULT_LANE_GAP_PX;

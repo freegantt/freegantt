@@ -5,6 +5,7 @@ import { createItemProducerRegistry } from './items/produce-items.js';
 import { sampleEntries } from '../../fixtures/sample-dataset.js';
 import { createTimeScale, dayPreset } from '../time/index.js';
 import * as packLanes from './lanes/pack-lanes.js';
+import * as resolveRowsMod from './rows/resolve-rows.js';
 import type { Entry } from '../model/index.js';
 import { changeSetId, entryId } from '../model/index.js';
 import type { ChangeSet } from '../model/index.js';
@@ -90,6 +91,15 @@ describe('FrameLayout', () => {
   it('produces exactly what computeFrame produces for the same input', () => {
     const layout = new FrameLayout();
     expect(layout.computeFrame(input())).toEqual(computeFrame(input()));
+  });
+
+  it('resolves the row plan once per pass', () => {
+    const spy = vi.spyOn(resolveRowsMod, 'resolveRows');
+    const layout = new FrameLayout();
+    spy.mockClear();
+    layout.computeFrame(input());
+    expect(spy).toHaveBeenCalledTimes(1);
+    spy.mockRestore();
   });
 
   it('rowTop(index) matches the row top computeFrame reports for the same index', () => {

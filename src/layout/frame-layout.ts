@@ -5,11 +5,10 @@
 // lives, so that no caller has to hold it: a caller states what to draw, and the index, its cache
 // key and its invalidation never cross the seam into `view/`.
 
-import { computeFrame } from './frame.js';
+import { placeFrame, resolveLayoutRows } from './frame.js';
 import type { GeometryFrame, LayoutInput } from './frame.js';
 import { PrefixSumHeightIndex } from './row-height-index.js';
 import { FrameMemory } from './frame-memory.js';
-import { resolveRows } from './rows/resolve-rows.js';
 import type { PlannedRow } from './rows/row-source.js';
 import type { ChangeSet, Entry, EntryId } from '../model/index.js';
 import { createItemProducerRegistry, produceItemsForRow } from './items/produce-items.js';
@@ -35,17 +34,12 @@ export class FrameLayout {
   heightIndexRevision = 0;
 
   computeFrame(input: LayoutInput): GeometryFrame {
-    this.#plan = resolveRows({
-      entries: input.entries,
-      ...(input.rows !== undefined ? { rows: input.rows } : {}),
-      ...(input.collapsed !== undefined ? { collapsed: input.collapsed } : {}),
-      ...(input.fieldCompares !== undefined ? { fieldCompares: input.fieldCompares } : {}),
-    });
+    this.#plan = resolveLayoutRows(input);
     this.#rowHeight = input.rowHeight;
     this.#laneGap = input.laneGapPx ?? DEFAULT_LANE_GAP_PX;
     this.#entryById = new Map(input.entries.map((entry) => [entry.id, entry]));
     this.#registry = input.itemProducerRegistry;
-    return computeFrame(input, this.#memoryFor(this.#plan.length, this.#rowHeight, this.#laneGap));
+    return placeFrame(input, this.#plan, this.#memoryFor(this.#plan.length, this.#rowHeight, this.#laneGap));
   }
 
   /** The row-height index's own `topAt`, exposed so `reveal` can ask for a row's position without a
