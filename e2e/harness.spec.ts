@@ -64,14 +64,11 @@ test('grid pane rows are actually painted after scrolling, not just correctly po
   });
   await expect(page.locator('.fg-grid-pane .fg-row').first()).toBeVisible();
 
-  // The last row scrolled into view must have a hit-test inside it land on that same row
-  // element — proof it is really painted there, not clipped away by an ancestor whose clip
-  // window rode off with the transform. The target row is whichever one is currently lowest in
-  // the DOM (not a hardcoded fixture name, so this survives fixture edits), and the hit point is
-  // the middle of that row's overlap with the grid pane's own box, not the row's own center:
-  // `scrollTop = scrollHeight` can leave the last row only partly inside the pane, and its own
-  // center would then legitimately fall in the clipped-off sliver — a false failure that has
-  // nothing to do with this regression.
+  // A row scrolled into view must have a hit-test inside it land on that same row — proof it is
+  // really painted there, not clipped away by an ancestor whose clip window rode off with the
+  // transform. The target is the last row fully inside `.fg-rows-clip` (not a fixture name).
+  // `scrollTop = scrollHeight` can leave the last tree row only a sliver inside the pane; that
+  // sliver's center hits the clip layer, which is not this regression.
   //
   // Polled, not read once: the scroll fires a re-render through FrameScheduler's rAF coalescing
   // (S1.12), so the row set/positions can still be mid-update for a frame or two after the
@@ -79,17 +76,30 @@ test('grid pane rows are actually painted after scrolling, not just correctly po
   // settled — polling this whole hit-test is what actually waits for that settling.
   const computeHit = () =>
     page.evaluate(() => {
-      const gridPane = document.querySelector('.fg-grid-pane')!;
-      const gridPaneRect = gridPane.getBoundingClientRect();
+      const clip = document.querySelector('.fg-rows-clip')!;
+      const clipRect = clip.getBoundingClientRect();
       const rows = Array.from(document.querySelectorAll<HTMLElement>('.fg-grid-pane .fg-row'));
-      const lastRow = rows.reduce<HTMLElement | undefined>((lowest, row) => {
-        if (!lowest) return row;
-        return row.getBoundingClientRect().top > lowest.getBoundingClientRect().top ? row : lowest;
-      }, undefined);
+      // Hit-test a row that sits fully inside the clip, not the last sliver at scrollHeight.
+      // Tree rows (S4.6) leave that last row only a few pixels inside the pane; elementFromPoint
+      // at the clip edge lands on `.fg-rows-clip` even when the rest of the window is painted.
+      const fullyInside = rows.filter((row) => {
+        const rect = row.getBoundingClientRect();
+        return rect.top >= clipRect.top && rect.bottom <= clipRect.bottom && rect.height > 0;
+      });
+      const lastRow =
+        fullyInside.at(-1) ??
+        rows.reduce<HTMLElement | undefined>((lowest, row) => {
+          const rect = row.getBoundingClientRect();
+          const top = Math.max(rect.top, clipRect.top);
+          const bottom = Math.min(rect.bottom, clipRect.bottom);
+          if (bottom - top < 8) return lowest;
+          if (!lowest) return row;
+          return rect.top > lowest.getBoundingClientRect().top ? row : lowest;
+        }, undefined);
       if (!lastRow) return { found: false as const, overlapsPane: false, isSameElement: false };
       const rect = lastRow.getBoundingClientRect();
-      const top = Math.max(rect.top, gridPaneRect.top);
-      const bottom = Math.min(rect.bottom, gridPaneRect.bottom);
+      const top = Math.max(rect.top, clipRect.top);
+      const bottom = Math.min(rect.bottom, clipRect.bottom);
       if (bottom <= top) return { found: true as const, overlapsPane: false, isSameElement: false };
       const cx = rect.x + rect.width / 2;
       const cy = (top + bottom) / 2;
