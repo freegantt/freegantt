@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Architecture review — S4 consolidated: hierarchy &amp; rows</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script type="module">
+      import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+      mermaid.initialize({ startOnLoad: true, theme: "neutral", securityLevel: "loose" });
+    </script>
+    <style>
+      .seam { stroke-dasharray: 4 4; }
+      .leak { stroke: #dc2626; }
+      .deep { background: linear-gradient(135deg, #0f172a, #1e293b); }
+      .badge-strong { background:#fce7f3; color:#9d174d; border:1px solid #fbcfe8; }
+      .badge-worth { background:#fef3c7; color:#78350f; border:1px solid #fde68a; }
+      .badge-spec { background:#e0e7ff; color:#312e81; border:1px solid #c7d2fe; }
+      .badge-hard { background:#fee2e2; color:#7f1d1d; border:1px solid #fecaca; }
+      .badge-judge { background:#fef3c7; color:#78350f; border:1px solid #fde68a; }
+      .badge-hold { background:#d1fae5; color:#064e3b; border:1px solid #a7f3d0; }
+    </style>
+  </head>
+  <body class="bg-stone-50 text-slate-900 font-sans">
+    <main class="max-w-5xl mx-auto px-6 py-12 space-y-12">
+
+      <header class="space-y-4">
+        <p class="text-xs uppercase tracking-widest text-slate-500">FreeGantt — pk-branch-review · consolidated (3 loops)</p>
+        <h1 class="font-serif text-3xl">S4 — Hierarchy, grouping, multi-item rows: consolidated architecture review</h1>
+        <p class="text-sm text-slate-500">
+          2026-08-31 · <span class="font-mono">origin/main...HEAD</span> (24 commits) on
+          <span class="font-mono">s4-implement</span> · S4.1–S4.7 done, S4.8 next
+        </p>
+        <p class="text-xs font-mono text-slate-500 max-w-3xl">
+          Roll-up of three loops: loop 1 (naming, standards, spec), loop 2 (API surface, data-core
+          hook, row dispatch), loop 3 (verification, settled <span class="font-mono">emit</span> name).
+          Vocabulary: module / interface / implementation / depth / seam / adapter / leverage /
+          locality. Smell baseline Fowler ch.3. Per-loop files: <span class="font-mono">2026-08-31-{
+          s4.1-s4.7-clean-code, s4-loop2-api-hook-rows, s4-loop3-verification}.html</span>.
+        </p>
+        <div class="flex flex-wrap gap-3 text-xs text-slate-600">
+          <span class="inline-flex items-center gap-1"><span class="inline-block w-4 h-3 border border-slate-500 bg-white"></span> module</span>
+          <span class="inline-flex items-center gap-1"><svg width="24" height="8"><line x1="0" y1="4" x2="24" y2="4" stroke="#475569" stroke-width="2" class="seam"/></svg> seam</span>
+          <span class="inline-flex items-center gap-1"><span class="inline-block w-4 h-3 deep rounded-sm"></span> deep module</span>
+          <span class="inline-flex items-center gap-1"><span class="inline-block w-4 h-3 bg-red-200 rounded-sm"></span> shallow</span>
+        </div>
+        <p class="text-sm text-slate-600 max-w-3xl">
+          The S4 slice lands the field registry / rollup, grid columns / schema 2, row sources / tree,
+          and per-kind item emission. The deep design holds: <span class="font-mono">layout/</span>
+          never imports <span class="font-mono">data/</span> or the DOM; registries are per-Gantt
+          (no module singletons, I2); the row-source dispatcher is the one OCP switch. This report
+          surfaces the seams worth deepening so S5’s registration and S7’s scheduler slot in without
+          editing the core.
+        </p>
+      </header>
+
+      <!-- ============ CANDIDATES ============ -->
+
+      <!-- C1 -->
+      <section class="rounded-2xl border bg-white overflow-hidden">
+        <div class="px-6 py-4 border-b flex items-center justify-between bg-gradient-to-r from-violet-50 to-fuchsia-50">
+          <h2 class="font-serif text-xl">C1 — One deep item-production seam</h2>
+          <span class="badge-strong text-xs px-2 py-1 rounded">STRONG</span>
+        </div>
+        <div class="p-6 space-y-5">
+          <p class="text-sm"><strong>Files.</strong> <span class="font-mono">layout/items/</span>: <span class="font-mono">item.ts</span> (types), <span class="font-mono">item-emitter.ts</span> (registry), <span class="font-mono">emit-items.ts</span> (<span class="font-mono">emitRow</span>), <span class="font-mono">span/group/milestone-emitter.ts</span>.</p>
+          <div class="grid md:grid-cols-2 gap-5">
+            <div>
+              <p class="text-xs uppercase tracking-wider text-slate-400 mb-2">Problem</p>
+              <p class="text-sm text-slate-700">Six files form one interface (a Kind → Items producer), spread with no semantic reason. The exported <span class="font-mono">ItemEmissionContext</span> is unused by every emitter (speculative generality), and <span class="font-mono">emitRow</span> defaults to a fresh registry per call, hiding the per-Gantt invariant. <span class="font-mono">"emit"</span> also collides with the event-bus <span class="font-mono">emit</span> (rule #7).</p>
+              <p class="text-sm mt-2"><strong>Solution.</strong> One deep seam <span class="font-mono">produceItemsForRow</span> (or <span class="font-mono">ItemProducer</span>) that owns type + registry + fallback; the per-kind producers stay private behind it; drop <span class="font-mono">ctx</span>; make the registry required.</p>
+              <p class="text-sm mt-2"><strong>Benefit (locality, leverage).</strong> A caller and an agent learn one name; the fallback rule, the three shipped producers, and the seam live in one place; one test surface. Deleting the split concentrates rather than spreads.</p>
+            </div>
+            <div class="mermaid">
+flowchart LR
+  subgraph NOW[C1 layout/items - 6 shallow files]
+    E1[emit-items emitRow] --> IT[item-emitter registry]
+    IT --> SP[span] & GR[group] & MI[milestone]
+    IT --> T[item types + unused ctx]
+  end
+  subgraph THEN[C1 one deep seam]
+    P[produceItemsForRow<br/>type + registry + fallback]
+    P -. private .-> S[span] & G[group] & M[milestone]
+  end
+            </div>
+          </div>
+          <p class="text-xs text-slate-500">Folds up: N1 (emit overload), St1 (unused ctx), St4 (registry default), St5 (3 near-copy emitters), A1 (6-file split), N2 (file/function mismatch).</p>
+        </div>
+      </section>
+
+      <!-- C2 -->
+      <section class="rounded-2xl border bg-white overflow-hidden">
+        <div class="px-6 py-4 border-b flex items-center justify-between bg-gradient-to-r from-indigo-50 to-sky-50">
+          <h2 class="font-serif text-xl">C2 — Restore the four <span class="font-mono">computeFrame</span> stages as real seams</h2>
+          <span class="badge-worth text-xs px-2 py-1 rounded">WORTH EXPLORING</span>
+        </div>
+        <div class="p-6 space-y-5">
+          <p class="text-sm"><strong>Files.</strong> <span class="font-mono">layout/frame.ts</span>.</p>
+          <div class="grid md:grid-cols-2 gap-5">
+            <div>
+              <p class="text-xs uppercase tracking-wider text-slate-400 mb-2">Problem</p>
+              <p class="text-sm text-slate-700">The spec (D-S4-19) and the comment present resolve → emit → pack → place as named stages, but in the code they are inline statements inside one interlocked loop; row and bar construction are not independently testable. S4.8 next packs lanes — it will grow this loop unless the stage is a seam.</p>
+              <p class="text-sm mt-2"><strong>Solution.</strong> Extract <span class="font-mono">placeRow(planned, items, scale, …): { row, bars }</span> so each stage is a function with one reason to change.</p>
+              <p class="text-sm mt-2"><strong>Benefit (locality, leverage).</strong> S4.8 packs height inside one function, not the loop; each stage’s test is one call; <span class="font-mono">computeFrame</span> becomes thin orchestration.</p>
+            </div>
+            <div class="mermaid">
+flowchart TB
+  subgraph NOW2[computeFrame - one loop]
+    R[resolve] --> E[emit] --> P[pack] --> PL[place row AND bars inline]
+    style PL fill:#fee2e2,stroke:#dc2626,stroke-width:1
+  end
+  subgraph THEN2[four seams]
+    R2[resolveRows] --> E2[produceItemsForRow] --> P2[packRow] --> PL2[placeRow -> row + bars]
+  end
+            </div>
+          </div>
+          <p class="text-xs text-slate-500">Folds up: St2 (stages are prose), A2, A6 (pack-height insertion point), A9 (watch runTransaction growth, analogous).</p>
+        </div>
+      </section>
+
+      <!-- C3 -->
+      <section class="rounded-2xl border bg-white overflow-hidden">
+        <div class="px-6 py-4 border-b flex items-center justify-between bg-gradient-to-r from-emerald-50 to-teal-50">
+          <h2 class="font-serif text-xl">C3 — Keep the row-source dispatch the single OCP seam</h2>
+          <span class="badge-hold text-xs px-2 py-1 rounded">HOLD (verified)</span>
+        </div>
+        <div class="p-6 space-y-5">
+          <p class="text-sm"><strong>Files.</strong> <span class="font-mono">layout/rows/resolve-rows.ts</span>, <span class="font-mono">row-source.ts</span>.</p>
+          <div class="grid md:grid-cols-2 gap-5">
+            <div>
+              <p class="text-xs uppercase tracking-wider text-slate-400 mb-2">What already deepens</p>
+              <p class="text-sm text-slate-700"><span class="font-mono">RowSource</span> is a discriminated union; <span class="font-mono">resolveSource</span> (<span class="font-mono">resolve-rows.ts:30–34</span>) is the <em>only</em> switch on <span class="font-mono">source.source</span>. <span class="font-mono">gantt-shell</span> forwards it opaquely; <span class="font-mono">heightModeOf</span> needs no switch. A 4th source touches the type + one dispatcher — the branch stays closed for modification.</p>
+              <p class="text-sm mt-2"><strong>Minor tightening.</strong> Drop the <span class="font-mono">PlannedRow.index: 0</span> placeholder (St6) since <span class="font-mono">stampIndex</span> owns the field; dead authored <span class="font-mono">PlannedRow.kind</span> is a 3rd <span class="font-mono">kind</span> colliding with <span class="font-mono">Entry.kind</span>/<span class="font-mono">Item.kind</span> — derive header-ness from <span class="font-mono">entryIds.length === 0</span>.</p>
+            </div>
+            <div class="mermaid">
+flowchart TB
+  RS[RowSource union] --> D[resolveSource - ONE switch]
+  D --> EN[entries] & GP[group] & CU[custom]
+  subgraph FOUR[adding a 4th source]
+    T4[type] --> D4[+one arm of the dispatcher]
+  end
+            </div>
+          </div>
+          <p class="text-xs text-slate-500">Folds up: A10 (drop PlannedRow.kind), St6 (drop index placeholder), the repeated-switch check (holds).</p>
+        </div>
+      </section>
+
+      <!-- C4 -->
+      <section class="rounded-2xl border bg-white overflow-hidden">
+        <div class="px-6 py-4 border-b flex items-center justify-between bg-gradient-to-r from-amber-50 to-orange-50">
+          <h2 class="font-serif text-xl">C4 — Record the S7 post-rollup hook now; do not wire it in S4</h2>
+          <span class="badge-judge text-xs px-2 py-1 rounded">JUDGEMENT / FLAG</span>
+        </div>
+        <div class="p-6 space-y-5">
+          <p class="text-sm"><strong>Files.</strong> <span class="font-mono">data/transaction.ts:242</span> (extender hook), <span class="font-mono">:277</span> (rollup).</p>
+          <div class="grid md:grid-cols-2 gap-5">
+            <div>
+              <p class="text-xs uppercase tracking-wider text-slate-400 mb-2">Problem</p>
+              <p class="text-sm text-slate-700">Today the commit sequence is extender → rollup, fixed order, and every invariant holds (one hook call structural, single rollup importer, no-silent-rewrite at <span class="font-mono">rollup.ts:182</span>). But S7’s <span class="font-mono">schedule()</span> occupies the extender slot and can only write <em>before</em> the rollup. If scheduling must propagate dependency-caused shifts onto already-rolled-up parents, <span class="font-mono">transaction.ts</span> becomes the file S7 edits — an OCP breach this slice promised to avoid.</p>
+              <p class="text-sm mt-2"><strong>Solution.</strong> Record the need for a <span class="font-mono">postRollup</span> hook (or explicit commit sequence) as an S7 prerequisite ADR <em>now</em>, so S7 does not re-derive it by editing the transaction.</p>
+              <p class="text-sm mt-2"><strong>Benefit.</strong> The single-write contract keeps one owner; S7 slots behind the rollup without touching core.</p>
+            </div>
+            <div class="mermaid">
+sequenceDiagram
+  participant T as transaction.ts
+  participant E as EditExtender (S7 schedule)
+  participant R as rollUpFields
+  T->>E: hook (before)
+  E-->>T: EntryEdits
+  T->>R: roll up (fixed step)
+  Note over T,R: schedule() cannot run AFTER rollup today
+            </div>
+          </div>
+          <p class="text-xs text-slate-500">Folds up: A8, A9 (runTransaction growth), St3 (unknown-kind span fallback → diagnostics at S7).</p>
+        </div>
+      </section>
+
+      <!-- ============ SURFACE / SIMPLICITY FINDINGS ============ -->
+
+      <section>
+        <h2 class="font-serif text-2xl mb-4">Surface and simplicity findings (rolled up)</h2>
+        <div class="grid md:grid-cols-2 gap-4 text-sm">
+          <div class="rounded-xl border border-red-200 bg-white p-4">
+            <p class="font-semibold text-red-800 mb-2">Hard — small, real, cheap to fix in S4</p>
+            <ul class="list-disc pl-5 space-y-1">
+              <li><strong>A4</strong> — <span class="font-mono">RowHeightMode</span> referenced by public types but never re-exported (<span class="font-mono">ae-forgotten-export</span>). Agents cannot name it. Export from <span class="font-mono">layout/index.ts</span> + <span class="font-mono">api/index.ts</span> and doc-comment <span class="font-mono">'pack'</span>.</li>
+              <li><strong>A5</strong> — <span class="font-mono">gantt.rows</span> returns <span class="font-mono">RowSource</span>, not rows: concept collision with the derived <span class="font-mono">Row</span> (the #7 “chart” pattern). Prefer <span class="font-mono">rowSource</span>, freeing <span class="font-mono">rows</span> for a real getter.</li>
+              <li><strong>A6</strong> — <span class="font-mono">heightMode: 'pack'</span> buried in each row source and untyped (via A4); not discoverable. Export the type; consider a top-level <span class="font-mono">heightMode</span>.</li>
+              <li><strong>A7</strong> — <span class="font-mono">sort/filter/filterPolicy/heightMode</span> duplicated across two row-source variants; share a <span class="font-mono">RowSourceCommon</span> block.</li>
+            </ul>
+          </div>
+          <div class="rounded-xl border border-amber-200 bg-white p-4">
+            <p class="font-semibold text-amber-800 mb-2">Naming / judgement</p>
+            <ul class="list-disc pl-5 space-y-1">
+              <li><strong>N1 (settled)</strong> — rename layout production to <span class="font-mono">produce</span>; keep <span class="font-mono">emit</span> for Gantt events.</li>
+              <li><strong>N3</strong> — <span class="font-mono">partCountByEntry</span> → <span class="font-mono">segmentCountByEntry</span> (one word: Segment).</li>
+              <li><strong>N4</strong> — <span class="font-mono">segmentIndexOfItem</span> doc cites <span class="font-mono">bar.id</span>; should cite <span class="font-mono">item.id</span>.</li>
+              <li><strong>St3</strong> — unknown-kind span fallback is quiet; make it a diagnostic when S7’s channel lands.</li>
+              <li><strong>Spec</strong> — S4.1–S4.7 honored; inert S4.9 filter/sort fields are a dead-but-correct plug; <span class="font-mono">Item.lane</span> vs <span class="font-mono">FrameBar.lane</span> divergence is cosmetic.</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ TOP RECOMMENDATION ============ -->
+      <section class="rounded-2xl border-2 border-violet-300 bg-gradient-to-br from-violet-50 to-fuchsia-50 p-6">
+        <h2 class="font-serif text-2xl mb-3">Top recommendation</h2>
+        <p class="text-sm text-slate-800 max-w-3xl">
+          Do the three cheap real breaks first — <strong>A4 (export <span class="font-mono">RowHeightMode</span>),
+          A5 (<span class="font-mono">rows</span> → <span class="font-mono">rowSource</span>), A10 (drop
+          <span class="font-mono">PlannedRow.kind</span>)</strong> — then <strong>C1</strong>: collapse the six
+          item files into one deep <span class="font-mono">produce</span> seam, dropping the unused
+          <span class="font-mono">ItemEmissionContext</span> and making the registry required. This is the newest
+          code, still settling, and the cheapest place to set the shape before S5 starts registering emitters from
+          outside the library. It buys the most <em>leverage</em> (one seam a caller and an agent learn) for the
+          least churn, and it removes a genuine concept collision now rather than after S5 hardens the surface.
+        </p>
+      </section>
+
+      <footer class="border-t pt-6 text-xs text-slate-500 space-y-1">
+        <p>Rolled up from loop 1, loop 2, and loop 3. Axes kept separate throughout; consolidated here by module. Modules/adapters/deepening per the codebase-design vocabulary.</p>
+        <p class="font-mono">plans/reviews/2026-08-31-s4-hierarchy-rows.html · sibling per-loop files in the same directory.</p>
+      </footer>
+
+    </main>
+  </body>
+</html>
