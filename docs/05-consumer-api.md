@@ -31,6 +31,7 @@ These landed in slice S4. Details and examples live in `plans/02-public-api.md` 
 - `rowSource.heightMode: 'pack'` — stack overlaps into lanes (on the row source, not on `Gantt`)
 - `collapsed`, `collapse()`, `expand()`, `toggleCollapse()`, `collapseAll()`, `expandAll()` — per-Gantt view state
 - Events: `beforeCollapseChange` / `collapseChange`
+- `scroll` — pass the same `ScrollModel` into a new `Gantt` after `destroy()` so pane scroll survives remount (for example after `Dataset.fromJSON`). Do not copy `scrollTop` off the pane.
 
 ### Naming
 

@@ -66,11 +66,11 @@ Pre-push of `187ce7f` failed: `src/view/styles.test.ts` still asserts the sheet 
 
 **Done when:** import remount reuses a consumer-held `ScrollModel`; `preservePaneScroll` is gone; `docs/05` names the call; `pnpm verify && pnpm gate`; commit and push.
 
-- [ ] `GanttOptions.scroll` already exists and the shell already forwards it. Do not invent a second knob.
-- [ ] `harness/hierarchy.ts`: `const paneScroll = new ScrollModel()`. Pass `scroll: paneScroll` on every `new Gantt(...)`.
-- [ ] Delete `preservePaneScroll` (pane `querySelector` + forged `scroll` Event).
-- [ ] Import still remounts (new Dataset from JSON). Reuse the same `ScrollModel`.
-- [ ] Document in `docs/05-consumer-api.md`: pass the same `ScrollModel` into a new `Gantt` after destroy so scroll survives remount.
+- [x] `GanttOptions.scroll` already exists and the shell already forwards it. Do not invent a second knob.
+- [x] `harness/hierarchy.ts`: `const paneScroll = new ScrollModel()`. Pass `scroll: paneScroll` on every `new Gantt(...)`.
+- [x] Delete `preservePaneScroll` (pane `querySelector` + forged `scroll` Event).
+- [x] Import still remounts (new Dataset from JSON). Reuse the same `ScrollModel`.
+- [x] Document in `docs/05-consumer-api.md`: pass the same `ScrollModel` into a new `Gantt` after destroy so scroll survives remount.
 
 **Files:** `harness/hierarchy.ts`, `docs/05-consumer-api.md`. Review `harness/main.ts` on the commit, changed or not.
 

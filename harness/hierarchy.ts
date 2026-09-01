@@ -3,7 +3,7 @@
 // reader sees the rows each edit produced.
 
 import './harness-nav.ts';
-import { Dataset, Gantt, attemptMutation } from '../src/api/index.js';
+import { Dataset, Gantt, ScrollModel, attemptMutation } from '../src/api/index.js';
 import type {
   DatasetDocument,
   DatasetEventMap,
@@ -55,6 +55,7 @@ const selectionReadout = document.querySelector<HTMLParagraphElement>('#selectio
 let autoGroup = true;
 let costColumnVisible = true;
 let filterTeam: 'alpha' | 'beta' | null = null;
+const paneScroll = new ScrollModel();
 let dataset = createDataset(autoGroup);
 let gantt = mountGantt(dataset);
 
@@ -80,6 +81,7 @@ function mountGantt(next: Dataset<{ cost: number }, { cost: number }>): Gantt {
     gridColumns: costColumnVisible ? GRID_WITH_COST : GRID_WITHOUT_COST,
     rowSource: buildRowSource(),
     range: 'fitDataset',
+    scroll: paneScroll,
   });
 }
 
@@ -158,18 +160,6 @@ function bindGantt(): void {
   });
 }
 
-function preservePaneScroll(run: () => void): void {
-  const pane = document.querySelector<HTMLElement>('#gantt .fg-timeline-pane');
-  const scrollTop = pane?.scrollTop ?? 0;
-  const scrollLeft = pane?.scrollLeft ?? 0;
-  run();
-  const nextPane = document.querySelector<HTMLElement>('#gantt .fg-timeline-pane');
-  if (nextPane === null) return;
-  nextPane.scrollTop = scrollTop;
-  nextPane.scrollLeft = scrollLeft;
-  nextPane.dispatchEvent(new Event('scroll'));
-}
-
 function remountGantt(): void {
   const collapsed = [...gantt.collapsed];
   gantt.destroy();
@@ -179,11 +169,6 @@ function remountGantt(): void {
   applyRowSource();
   mountTimelineToolbar({ gantt, container: toolbar });
   bindGantt();
-}
-
-function rebuildGantt(preserveScroll = false): void {
-  if (preserveScroll) preservePaneScroll(remountGantt);
-  else remountGantt();
 }
 
 bindDataset();
@@ -263,7 +248,7 @@ importBtn.addEventListener('click', () => {
     dataset = imported;
     window.__dataset = dataset;
     bindDataset();
-    rebuildGantt(false);
+    remountGantt();
     refreshHistoryButtons();
     renderSelection();
     logLine('[load] imported document');
