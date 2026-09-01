@@ -1717,3 +1717,88 @@ describe('Gantt viewport gestures (S3.7, [S3-A7], D-S3-14)', () => {
     }
   });
 });
+
+describe('Gantt rows and collapse (S4.6)', () => {
+  it('[S4-A3] switching rows re-resolves with no remount and keeps the scroll position', async () => {
+    FakeResizeObserver.instances = [];
+    vi.stubGlobal('ResizeObserver', FakeResizeObserver);
+    const container = document.createElement('div');
+    const scroll = new ScrollModel();
+    const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
+    const gantt = new Gantt({
+      container,
+      dataset,
+      scroll,
+      rows: { source: 'entries', tree: true },
+    });
+    FakeResizeObserver.instances[0]!.fire({ width: 300, height: 100 });
+    scroll.panTo({ x: 0, y: 80 });
+    const yBefore = scroll.state.position.y;
+    const bar = container.querySelector<HTMLElement>('.fg-bar')!;
+    const itemId = bar.dataset['itemId'];
+
+    gantt.rows = { source: 'group', groupBy: (entry) => entry.kind };
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+
+    expect(container.querySelector(`[data-item-id="${itemId}"]`)).toBe(bar);
+    expect(scroll.state.position.y).toBe(yBefore);
+
+    gantt.destroy();
+    vi.unstubAllGlobals();
+  });
+
+  it('[S4-A6] collapse survives add/update/remove, a veto restores, and two Gantts stay independent', () => {
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      entries: [
+        { id: 'p', name: 'p', start: '2026-01-01', end: '2026-01-02', kind: 'group' },
+        { id: 'c', name: 'c', start: '2026-01-03', end: '2026-01-04', parentId: 'p' },
+      ],
+    });
+    const a = new Gantt({
+      container: document.createElement('div'),
+      dataset,
+      rows: { source: 'entries', tree: true },
+    });
+    const b = new Gantt({
+      container: document.createElement('div'),
+      dataset,
+      rows: { source: 'entries', tree: true },
+    });
+    a.collapse('p');
+    expect(a.collapsed).toEqual([entryId('p')]);
+    expect(b.collapsed).toEqual([]);
+
+    dataset.entries.remove('c');
+    dataset.entries.update('p', { name: 'still p' });
+    dataset.entries.add({ id: 'n', name: 'n', start: '2026-01-05', end: '2026-01-06' });
+    expect(a.collapsed).toEqual([entryId('p')]);
+
+    a.on('beforeCollapseChange', () => false);
+    a.expand('p');
+    expect(a.collapsed).toEqual([entryId('p')]);
+
+    a.destroy();
+    b.destroy();
+  });
+
+  it('[S4-A11] a custom source produces the resolver rows', () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({ entries: sampleEntries.slice(0, 2), timeZone: 'UTC' });
+    const gantt = new Gantt({
+      container,
+      dataset,
+      rows: {
+        source: 'custom',
+        resolve: ({ entries }) => [
+          { id: 'h', label: 'All' },
+          { id: 'r0', entryIds: [entries[0]!.id] },
+        ],
+      },
+    });
+    expect(container.querySelector('[data-row-id="h"]')?.textContent).toContain('All');
+    expect(container.querySelector(`[data-row-id="${sampleEntries[0]!.id}"]`)).toBeNull();
+    expect(container.querySelector('[data-row-id="r0"]')).not.toBeNull();
+    gantt.destroy();
+  });
+});

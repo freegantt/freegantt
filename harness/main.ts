@@ -21,7 +21,29 @@ const COST_TYPE = {
 };
 
 const dataset = new Dataset({
-  entries: demoEntryInputs.map((entry, i) => (i === 0 ? { ...entry, meta: { cost: 12_000 } } : entry)),
+  entries: demoEntryInputs.map((entry, i) => {
+    const nested: Record<string, string> = {
+      'entry-2': 'entry-1',
+      'entry-3': 'entry-1',
+      'entry-4': 'entry-1',
+      'entry-6': 'entry-5',
+      'entry-7': 'entry-5',
+      'entry-8': 'entry-5',
+      'entry-9': 'entry-5',
+      'entry-11': 'entry-10',
+      'entry-12': 'entry-10',
+      'entry-13': 'entry-10',
+      'entry-15': 'entry-14',
+      'entry-16': 'entry-14',
+      'entry-17': 'entry-14',
+    };
+    const parentId = nested[entry.id ?? ''];
+    return {
+      ...entry,
+      ...(i === 0 ? { meta: { cost: 12_000 } } : {}),
+      ...(parentId !== undefined ? { parentId } : {}),
+    };
+  }),
   timeZone: 'UTC',
   fieldTypes: COST_TYPE,
   fields: [{ key: 'cost', type: 'money' }],
@@ -35,7 +57,12 @@ const GRID_WITH_BUDGET: readonly GridColumnInput[] = [
 ];
 const GRID_WITHOUT_BUDGET: readonly GridColumnInput[] = ['name', 'start', 'duration'];
 
-const gantt = new Gantt({ container: '#gantt', dataset, gridColumns: GRID_WITH_BUDGET });
+const gantt = new Gantt({
+  container: '#gantt',
+  dataset,
+  gridColumns: GRID_WITH_BUDGET,
+  rows: { source: 'entries', tree: true },
+});
 // Zero-interaction visibility for the today line (S1.12, D-S1.12-14) — header readability follow-up
 // pass 4. Needs no ResizeObserver measurement first: panToToday reads the already-resolved
 // TimeScale, and the pane re-measures/re-renders on its own right after mount. `panToToday()`'s
@@ -58,6 +85,16 @@ reparentBtn.addEventListener('click', () => {
   } catch (error) {
     if (!(error instanceof MutationCancelledError)) throw error;
   }
+});
+
+const rowsSourceBtn = document.querySelector<HTMLButtonElement>('#rows-source-btn')!;
+let grouped = false;
+rowsSourceBtn.addEventListener('click', () => {
+  grouped = !grouped;
+  gantt.rows = grouped
+    ? { source: 'group', groupBy: (entry) => entry.kind }
+    : { source: 'entries', tree: true };
+  rowsSourceBtn.textContent = grouped ? 'Show tree' : 'Group by kind';
 });
 
 mountTimelineToolbar({ gantt, container: document.querySelector<HTMLDivElement>('#toolbar')! });

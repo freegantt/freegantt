@@ -557,3 +557,39 @@ describe(
     });
   },
 );
+
+describe('computeFrame row sources (S4.6)', () => {
+  it('rowCount counts resolved rows, not entries, and collapse shrinks the plan', () => {
+    const parent = sampleEntries[0]!;
+    const child = { ...sampleEntries[1]!, parentId: parent.id };
+    const rest = sampleEntries.slice(2);
+    const entries = [parent, child, ...rest];
+    const tree = computeFrame({
+      entries,
+      scale,
+      preset,
+      visible: { x: 0, y: 0, width: 0, height: 64 },
+      overscan: { verticalRows: 0, horizontalPx: 0 },
+      rowHeight: 32,
+      revision: 0,
+      rows: { source: 'entries', tree: true },
+    });
+    expect(tree.rowCount).toBe(entries.length);
+    expect(tree.rows.length).toBeLessThan(tree.rowCount);
+    expect(tree.rows[0]?.depth).toBe(0);
+    expect(tree.rows[0]?.expandable).toBe(true);
+
+    const collapsed = computeFrame({
+      entries,
+      scale,
+      preset,
+      visible,
+      rowHeight: 32,
+      revision: 0,
+      rows: { source: 'entries', tree: true },
+      collapsed: [parent.id],
+    });
+    expect(collapsed.rowCount).toBe(entries.length - 1);
+    expect(collapsed.rows.some((r) => String(r.id) === String(child.id))).toBe(false);
+  });
+});

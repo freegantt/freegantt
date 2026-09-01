@@ -9,23 +9,27 @@ import { computeFrame } from './frame.js';
 import type { GeometryFrame, LayoutInput } from './frame.js';
 import { PrefixSumHeightIndex } from './row-height-index.js';
 import type { RowHeightIndex } from './row-height-index.js';
+import { resolveRows, rowResolutionInput } from './rows/resolve-rows.js';
+import type { PlannedRow } from './rows/row-source.js';
+import type { EntryId } from '../model/index.js';
 
 /** One Gantt's layout pass, with the row-height index kept alive between passes. One instance per
  * Gantt: the cached index describes that Gantt's rows, and nothing about it is shareable. */
 export class FrameLayout {
   #heights: RowHeightIndex | undefined;
   /** The two inputs the cached index is built from. Row heights are uniform today, so they are the
-   * whole invalidation surface; S5's variable per-row heights bring `invalidateFrom` calls here —
-   * inside `layout/`, where the height index and its tests already are. */
+   * whole invalidation surface; pack mode's per-row heights bring `invalidateFrom` calls here. */
   #rowCount = -1;
   #rowHeight = -1;
+  #plan: readonly PlannedRow[] = [];
   /** Bumped whenever `#heightsFor` builds a fresh index (D-S2-16) — what turns "a changeset with
    *  only `updated` rows never rebuilds the row-height index" from a property of the cache key
    *  into something `[S2-A3]` can assert. */
   heightIndexRevision = 0;
 
   computeFrame(input: LayoutInput): GeometryFrame {
-    return computeFrame(input, this.#heightsFor(input.entries.length, input.rowHeight));
+    this.#plan = resolveRows(rowResolutionInput(input));
+    return computeFrame(input, this.#heightsFor(this.#plan.length, input.rowHeight));
   }
 
   /** The row-height index's own `topAt`, exposed so `reveal` can ask for a row's position without a
@@ -33,6 +37,15 @@ export class FrameLayout {
    * has completed construction, which is the only caller. */
   rowTop(index: number): number {
     return this.#heights?.topAt(index) ?? 0;
+  }
+
+  /** Index of the first planned row that carries this entry, or `-1` when collapse hid it. */
+  rowIndexForEntry(id: EntryId): number {
+    return this.#plan.findIndex((row) => row.entryIds.includes(id));
+  }
+
+  invalidateFrom(index: number): void {
+    this.#heights?.invalidateFrom(index);
   }
 
   #heightsFor(rowCount: number, rowHeight: number): RowHeightIndex {

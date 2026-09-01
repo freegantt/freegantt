@@ -10,7 +10,7 @@ import type {
   ViewportGestures,
 } from '../view/index.js';
 import { ScrollModel, TimeScaleModel } from '../layout/index.js';
-import type { PresetRef, TimeScaleFit, ViewPreset } from '../layout/index.js';
+import type { PresetRef, TimeScaleFit, ViewPreset, RowSource } from '../layout/index.js';
 import type { DateLineSpec } from '../layout/index.js';
 import type {
   Entry,
@@ -19,6 +19,7 @@ import type {
   GridColumnInput,
   Instant,
   InstantInput,
+  RowId,
   TimeSpan,
 } from '../model/index.js';
 import { MutationCancelledError } from '../model/index.js';
@@ -79,6 +80,10 @@ interface GanttOptionsBase {
   viewportGestures?: ViewportGestures;
   /** Live (S4.3, D-S4-12). Field keys in display order, plus per-Gantt overrides. Default `['name']`. */
   gridColumns?: readonly GridColumnInput[];
+  /** Live (S4.6, D-S4-21). Default `{ source: 'entries', tree: false }`. */
+  rows?: RowSource;
+  /** Live (S4.6, D-S4-22). Collapsed row ids, loose on the way in. Default `[]`. */
+  collapsed?: readonly (RowId | string)[];
 }
 
 /** Two ways to set the axis, made mutually exclusive at the type level (issue #84 — the prior shape
@@ -132,6 +137,8 @@ export class Gantt {
       ...(options.interactions !== undefined ? { interactions: options.interactions } : {}),
       ...(options.viewportGestures !== undefined ? { viewportGestures: options.viewportGestures } : {}),
       ...(options.gridColumns !== undefined ? { gridColumns: options.gridColumns } : {}),
+      ...(options.rows !== undefined ? { rows: options.rows } : {}),
+      ...(options.collapsed !== undefined ? { collapsed: options.collapsed } : {}),
       entryGestures: attachEntryGestures,
       keyboardEditing: attachKeyboardEditing,
       // S3.3, D-S3-16: `GanttShell`'s own `dataset` option is `model/`'s narrow `Dataset` interface
@@ -210,6 +217,35 @@ export class Gantt {
 
   set gridColumns(columns: readonly GridColumnInput[]) {
     this.#shell.gridColumns = columns;
+  }
+
+  /** Live (S4.6, D-S4-21). Assigning re-resolves rows with no remount. */
+  get rows(): RowSource {
+    return this.#shell.rows;
+  }
+
+  set rows(next: RowSource) {
+    this.#shell.rows = next;
+  }
+
+  get collapsed(): readonly RowId[] {
+    return this.#shell.collapsed;
+  }
+
+  set collapsed(ids: readonly (RowId | string)[]) {
+    this.#shell.collapsed = ids;
+  }
+
+  collapse(id: RowId | string): void {
+    this.#shell.collapse(id);
+  }
+
+  expand(id: RowId | string): void {
+    this.#shell.expand(id);
+  }
+
+  toggleCollapse(id: RowId | string): void {
+    this.#shell.toggleCollapse(id);
   }
 
   get preset(): ViewPreset {

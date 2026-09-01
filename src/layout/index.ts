@@ -1,5 +1,17 @@
 export { computeFrame, barSpan, DEFAULT_TICK_BOX_FLOOR_PX } from './frame.js';
 export type { FrameColumn, ResolvedColumn, FieldCompare } from './column.js';
+export type {
+  RowSource,
+  EntriesRowSource,
+  GroupRowSource,
+  CustomRowSource,
+  CustomRow,
+  RowFilter,
+  RowSort,
+  FilterPolicy,
+  RowResolveInput,
+} from './rows/row-source.js';
+export { DEFAULT_ROW_SOURCE } from './rows/row-source.js';
 export { FrameLayout } from './frame-layout.js';
 export { resolveDateLines } from './date-line.js';
 export type { DateLine, DateLineSpec, ResolveDateLinesInput } from './date-line.js';

@@ -8,12 +8,14 @@ import {
   TimeScaleModel,
   Viewport,
   DEFAULT_TICK_BOX_FLOOR_PX,
+  DEFAULT_ROW_SOURCE,
 } from '../layout/index.js';
 import type {
   DateLineSpec,
   Overscan,
   PresetRef,
   ResolvedColumn,
+  RowSource,
   TimeScaleFit,
   ViewportHandle,
   ViewPreset,
@@ -39,7 +41,7 @@ import { resolveViewportGestures } from './viewport-gestures.js';
 import type { ViewportGestures } from './viewport-gestures.js';
 import { ensureBaseStyles } from './styles.js';
 import type { InteractionState, RenderBackend } from '../render/backend.js';
-import { EntryNotFoundError, ContainerNotFoundError, entryId, itemId } from '../model/index.js';
+import { EntryNotFoundError, ContainerNotFoundError, entryId, itemId, rowId } from '../model/index.js';
 import type {
   Dataset,
   Entry,
@@ -48,6 +50,7 @@ import type {
   GridColumnInput,
   ItemId,
   Instant,
+  RowId,
   Size,
   TimeSpan,
 } from '../model/index.js';
@@ -61,6 +64,7 @@ import { projectAffordances } from './affordance-projection.js';
 import { GesturePipeline } from './gesture-pipeline.js';
 import type { EntryGestureContext } from './entry-gesture-context.js';
 import { DEFAULT_GRID_COLUMNS, bindGanttFields } from './grid-columns.js';
+import { CollapseState } from './collapse-state.js';
 
 /** One `{ detach() }` for every inject slot. `view/` may not import `interaction/` (plans/01 §1:
  *  `INT --> VIEW`, not the reverse), so the shell takes pointer and keyboard attachments by
@@ -154,6 +158,10 @@ export interface GanttShellOptions {
   viewportGestures?: ViewportGestures;
   /** Live (S4.3, D-S4-12). Field keys in display order, plus per-Gantt overrides. Default `['name']`. */
   gridColumns?: readonly GridColumnInput[];
+  /** Live (S4.6, D-S4-21). Default `{ source: 'entries', tree: false }`. */
+  rows?: RowSource;
+  /** Live (S4.6, D-S4-22). Collapsed `RowId`s, loose on the way in. Default `[]`. */
+  collapsed?: readonly (RowId | string)[];
   /** Expert knob, not on `GanttOptions` (plans/02 "two callers, two surfaces") — a test naming its
    * own `RenderBackend<HTMLElement>` in place of the DOM one (§9-I: the seam had two implementations
    * and one hardcoded call site, so nothing could reach the other short of mocking the module).
@@ -250,10 +258,9 @@ export class GanttShell {
   #rowHeight: number = DEFAULT_ROW_HEIGHT;
   #tickBoxFloorPx: number = DEFAULT_TICK_BOX_FLOOR_PX;
   #options: GanttShellOptions;
-  /** True until pane-size wiring completes. `Viewport.bind()` notifies the newcomer synchronously
-   * per D-S1.5-4 (once for scale, once for scroll) — those calls land before pane size is wired, so
-   * they are not real renders yet and are dropped while this is true. */
-  #wiring = true;
+  /** Construction phase (issue #91 §9-B): bind() notifies synchronously before pane size is wired, so
+   *  those calls are not real renders yet. Becomes `'live'` after the first measurement. */
+  #phase: 'constructing' | 'live' = 'constructing';
   /** Set by the most recent `render()` — `frame.contentWidth`/`contentHeight` (S1.5 README §3.2,
    * D-S1.5-9). No gutter added (S1.8, D-S1.8-2): the grid pane's own width is the gutter now, and the
    * timeline pane's content is `contentWidth` wide, full stop. */
@@ -266,6 +273,9 @@ export class GanttShell {
   #todayLineMarginTicks: number = DEFAULT_TODAY_LINE_MARGIN_TICKS;
   #gridColumnInput: readonly GridColumnInput[] = DEFAULT_GRID_COLUMNS;
   #resolvedColumns: readonly ResolvedColumn[] = [];
+  #rows: RowSource = DEFAULT_ROW_SOURCE;
+  #collapse = new CollapseState();
+  #onTwistyClick: ((event: Event) => void) | undefined;
 
   constructor(options: GanttShellOptions) {
     this.#options = options;
@@ -308,6 +318,7 @@ export class GanttShell {
     this.#todayLine = options.todayLine ?? true;
     this.#dateLines = options.dateLines ?? [];
     this.#gridColumnInput = options.gridColumns ?? DEFAULT_GRID_COLUMNS;
+    this.#rows = options.rows ?? DEFAULT_ROW_SOURCE;
     this.#bindColumns();
 
     // Mount before binding (#22): the render target exists by the time the binding's own onChange
@@ -327,12 +338,12 @@ export class GanttShell {
 
     // bind() fires its own onChange synchronously, once per sub-model (D-S1.5-4: bind always
     // notifies the newcomer) — before this call returns and #viewportHandle is assigned. Those
-    // premature calls are dropped by #wiring; the deliberate first render below runs once
-    // everything, including the initial pane-size measurement, is wired.
+    // premature calls are dropped while `#phase === 'constructing'`; the deliberate first render
+    // below runs once everything, including the initial pane-size measurement, is wired.
     this.#viewportHandle = this.#viewport.bind(
       { entries: options.dataset.entries.all, timeZone: options.dataset.timeZone },
       () => {
-        if (this.#wiring) return;
+        if (this.#phase === 'constructing') return;
         this.#frames.request();
         this.#emitNavigationChange();
       },
@@ -424,7 +435,21 @@ export class GanttShell {
       pageStepY: () => this.#viewport.visible.height,
       scrollMaxX: () => this.#viewport.scroll.state.max.x,
     });
-    this.#wiring = false;
+    this.#onTwistyClick = (event: Event) => {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      const twisty = target.closest('.fg-row-twisty');
+      if (twisty === null || !this.#panes.grid.contains(twisty)) return;
+      const row = twisty.closest('.fg-row');
+      const id = row instanceof HTMLElement ? row.dataset['rowId'] : undefined;
+      if (id !== undefined) this.toggleCollapse(id);
+    };
+    this.#panes.grid.addEventListener('click', this.#onTwistyClick);
+    if (options.collapsed !== undefined) {
+      const proposed = this.#collapse.propose(options.collapsed);
+      if (proposed !== undefined) this.#collapse.commit(proposed.to);
+    }
+    this.#phase = 'live';
     this.#frames.flush();
 
     this.#todayLineMarginTicks = options.todayLineMarginTicks ?? DEFAULT_TODAY_LINE_MARGIN_TICKS;
@@ -454,6 +479,51 @@ export class GanttShell {
     this.#gridColumnInput = columns;
     this.#bindColumns();
     this.#frames.request();
+  }
+
+  get rows(): RowSource {
+    return this.#rows;
+  }
+
+  set rows(next: RowSource) {
+    this.#rows = next;
+    this.#layout.invalidateFrom(0);
+    this.#frames.request();
+  }
+
+  get collapsed(): readonly RowId[] {
+    return this.#collapse.ids;
+  }
+
+  set collapsed(ids: readonly (RowId | string)[]) {
+    this.#applyCollapsed(ids);
+  }
+
+  collapse(id: RowId | string): void {
+    const branded = rowId(String(id));
+    if (this.#collapse.ids.includes(branded)) return;
+    this.#applyCollapsed([...this.#collapse.ids, branded]);
+  }
+
+  expand(id: RowId | string): void {
+    const branded = rowId(String(id));
+    this.#applyCollapsed(this.#collapse.ids.filter((current) => current !== branded));
+  }
+
+  toggleCollapse(id: RowId | string): void {
+    const branded = rowId(String(id));
+    if (this.#collapse.ids.includes(branded)) this.expand(branded);
+    else this.collapse(branded);
+  }
+
+  #applyCollapsed(next: readonly string[]): void {
+    const proposed = this.#collapse.propose(next);
+    if (proposed === undefined) return;
+    if (this.#events.emit('beforeCollapseChange', proposed) === false) return;
+    this.#collapse.commit(proposed.to);
+    this.#layout.invalidateFrom(0);
+    this.#frames.request();
+    this.#events.emit('collapseChange', proposed);
   }
 
   get todayLine(): boolean | Instant {
@@ -656,7 +726,7 @@ export class GanttShell {
 
   set zoomPresets(refs: readonly PresetRef[]) {
     this.#viewport.zoomPresets = refs;
-    if (!this.#wiring) this.#emitNavigationChange();
+    if (this.#phase === 'live') this.#emitNavigationChange();
   }
 
   get canZoomIn(): boolean {
@@ -714,12 +784,12 @@ export class GanttShell {
    * two can never drift apart — and hands the resulting `Rect` to `Viewport.reveal` (S1.9, D-S1.9-6).
    * Throws `EntryNotFoundError` for an id the dataset has no entry for. */
   reveal(entryId: EntryId): void {
-    const entries = this.#options.dataset.entries.all;
-    const index = entries.findIndex((e) => e.id === entryId);
-    if (index === -1) throw new EntryNotFoundError(entryId, 'reveal');
-    const entry = entries[index]!;
+    const entry = this.#options.dataset.entries.get(entryId);
+    if (entry === undefined) throw new EntryNotFoundError(entryId, 'reveal');
     const { x, width } = barSpan(entry, this.#viewport.timeScale);
-    this.#viewport.reveal({ x, y: this.#layout.rowTop(index), width, height: this.#rowHeight });
+    const rowIndex = this.#layout.rowIndexForEntry(entryId);
+    const y = rowIndex >= 0 ? this.#layout.rowTop(rowIndex) : 0;
+    this.#viewport.reveal({ x, y, width, height: this.#rowHeight });
   }
 
   on<K extends keyof GanttEventMap>(name: K, handler: GanttEventHandler<K>): void {
@@ -783,6 +853,8 @@ export class GanttShell {
       todayLine: this.#todayLine,
       dateLines: this.#dateLines,
       columns: this.#resolvedColumns,
+      rows: this.#rows,
+      collapsed: this.#collapse.ids,
     });
     this.#backend.sync(frame);
     // D-S3-10: rebuilt every render from the frame layout just computed — item ids are deterministic
@@ -804,6 +876,7 @@ export class GanttShell {
     this.#keyboardEditing?.detach();
     this.#wheelNavigation?.detach();
     this.#keyboardNavigation?.detach();
+    if (this.#onTwistyClick) this.#panes.grid.removeEventListener('click', this.#onTwistyClick);
     this.#datasetChanges.unsubscribe();
     this.#scrollAttachment.detach();
     this.#paneSizeAttachment.detach();
