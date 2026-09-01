@@ -82,10 +82,10 @@ Pre-push of `187ce7f` failed: `src/view/styles.test.ts` still asserts the sheet 
 
 **Done when:** README matches the code; barrel prune is recorded as deferred; this file's CO.3 boxes are ticked; `pnpm verify && pnpm gate`; commit and push.
 
-- [ ] `plans/s4-hierarchy-and-rows/README.md` §9: collapse tests are `view/tree-collapse.test.ts` (not `collapse-state.test.ts`).
-- [ ] README §7 gotcha 3: Field source routes through `SOURCE_STRATEGY`, not "one switch in field-access.ts".
-- [ ] README: Last close-out line pointing at this file and `187ce7f` / remaining CO steps.
-- [ ] §11 Deferred: barrel prune of `ClientPoint` and similar public types (`etc/freegantt.api.md`). Optional later. Not this close-out.
+- [x] `plans/s4-hierarchy-and-rows/README.md` §9: collapse tests are `view/tree-collapse.test.ts` (not `collapse-state.test.ts`).
+- [x] README §7 gotcha 3: Field source routes through `SOURCE_STRATEGY`, not "one switch in field-access.ts".
+- [x] README: Last close-out line pointing at this file and `187ce7f` / remaining CO steps.
+- [x] §11 Deferred: barrel prune of `ClientPoint` and similar public types (`etc/freegantt.api.md`). Optional later. Not this close-out.
 
 **Files:** `plans/s4-hierarchy-and-rows/README.md` only.
 

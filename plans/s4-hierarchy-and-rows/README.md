@@ -1,6 +1,7 @@
 # S4 — Hierarchy, grouping, multi-item rows
 
 **Slice:** S4 (`plans/03` §S4) · **Position:** after S3, before S5 · **Status:** S4 done
+**Last close-out:** [`s4-closeout.md`](./s4-closeout.md) — leftover after P0–P3. P4 S1–S3 landed in `187ce7f`. CO.0–CO.2 are on origin. Remaining after this README pass: CO.4 gate.
 **Form:** the same settled-spec form as [`plans/s3-direct-manipulation/README.md`](../s3-direct-manipulation/README.md) — this file is the tracker and the shared context; each step file holds the decisions it implements and its TODO boxes.
 **Tick as you go:** When you finish a TODO item, tick its box in that step file. Tick it in the same change as the code. Tick each item when it lands. Do not wait for S4.11 or the slice gate.
 **Last review:** [`plans/reviews/2026-08-31-s4.3-s4.4.html`](../reviews/2026-08-31-s4.3-s4.4.html) — S4.3/S4.4 branch review. Spec-review findings already landed in this spec (2026-08-31): sort binds `FieldCompare` from declared Fields; `produceItemsForRow`/`packRow`; X2 is `'header'`; `CustomRow` is the public custom-source DTO.
@@ -129,7 +130,7 @@ Eleven steps, in order. The Field context lands first, because the row cells and
 | `[S4-A3]` | Switching `gantt.rowSource` re-resolves rows with no remount; scroll survives | S4.6 | `api/gantt.test.ts`, `layout/rows/*.test.ts` |
 | `[S4-A4]` | A segmented entry renders N bars on one row; one segment drags transactionally | S4.7, S4.10 | `layout/items/*.test.ts`, `interaction/entry-gestures.test.ts` |
 | `[S4-A5]` | Pack-mode rows change height as overlaps come and go; scroll stays stable | S4.8 | `layout/lanes/*.test.ts`, `layout/frame-layout.test.ts` |
-| `[S4-A6]` | Collapse state survives data edits and is independent per Gantt | S4.6 | `view/collapse-state.test.ts`, `api/gantt.test.ts` |
+| `[S4-A6]` | Collapse state survives data edits and is independent per Gantt | S4.6 | `view/tree-collapse.test.ts`, `api/gantt.test.ts` |
 | `[S4-A7]` | Filter with keep-ancestors shows a matching deep child under its parents | S4.9 | `layout/rows/filter.test.ts` |
 | `[S4-A8]` | An empty `'group'` renders as a group, accepts children, and gains a span — no special-casing | S4.7 | `layout/items/*.test.ts`, `data/rollup.test.ts` |
 | `[S4-A9]` | `autoGroup` promotes in the same undo step; losing the last child demotes nothing | S4.5 | `data/hierarchy.test.ts`, `data/history.property.test.ts` |
@@ -244,7 +245,7 @@ Read these before you touch `src/`.
 
 1. **`layout/` must not import `data/`.** The Field registry lives in `data/`; the resolved columns reach `layout/` as plain data on `LayoutInput`. `depcruise` catches a direct import; `LayoutInput.columns` is the fix.
 2. **`data/` must not import `view/` or `layout/`.** A `Field.column` sub-object is plain data that `data/` carries and never interprets. A renderer is code that `data/` must never hold — keep it on the Gantt (S5).
-3. **One `switch` over `FieldSource`, in `data/fields/field-access.ts`.** A second one anywhere is the finding, not a style nit.
+3. **Field source routes through `SOURCE_STRATEGY` in `data/fields/source-strategy.ts`.** A second routing table anywhere is the finding, not a style nit.
 4. **`computeFrame` is composition after S4.6.** Do not add a branch to it. Add a stage, or change the stage that owns the concern.
 5. **Never split an `ItemId` inline.** Use `model/ids.ts`'s builder and its new reader. S3's `entryFor(itemId)` already depends on this.
 6. **Collapse, filter and sort are view state.** None of them may reach the Rollup, the changeset, or the Document. `[S4-A6]` and D-S4-11 both test this.
@@ -303,7 +304,7 @@ Read these before you touch `src/`.
 | Lanes and heights | `layout/lanes/pack-lanes.test.ts`, `layout/frame-layout.test.ts` |
 | Frame composition | `layout/frame.test.ts` |
 | Columns and paint | `view/grid-columns.test.ts`, `render/dom/index.test.ts` (dom) |
-| Collapse | `view/collapse-state.test.ts` |
+| Collapse | `view/tree-collapse.test.ts` |
 | Gestures | `interaction/entry-gestures.test.ts`, `keyboard-editing.test.ts` |
 | Integration | `api/dataset.test.ts`, `api/gantt.test.ts` |
 | E2E | `e2e/hierarchy.spec.ts` |
@@ -337,6 +338,7 @@ Read these before you touch `src/`.
 | Link endpoints on a multi-item row (`links.endpoints`) | S7 | Link emission (#16) |
 | Rest of the `GanttShell` split (GLM C4 minus today-landing) | landed | [`c4-split-gantt-shell.md`](./c4-split-gantt-shell.md) — `TreeCollapse`, `collapseAll` / `expandAll`; `layoutInputFromShell` and `#phase` left in the shell |
 | Staged commit pipeline + unify construction with commit promote/rollup | S7 | `plans/03` §S7; S4.11 review C3 |
+| Barrel prune of `ClientPoint` and similar public types listed in `etc/freegantt.api.md` | later | Optional. Not this close-out. |
 
 ---
 
