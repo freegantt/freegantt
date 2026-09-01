@@ -3,6 +3,7 @@ import { entryId } from '../../model/index.js';
 import type { Entry } from '../../model/index.js';
 import {
   createFieldContext,
+  createRollUpContext,
   editProposesField,
   mergeStoredEdits,
   overlayStoredEdit,
@@ -86,5 +87,36 @@ describe('readField / writeField (D-S4-2)', () => {
     expect(spread.proposedKeys?.has('cost')).toBe(true);
     const merged = mergeStoredEdits({ name: 'x' }, authored);
     expect(editProposesField(merged, cost)).toBe(true);
+  });
+});
+
+describe('createRollUpContext values/numericValues (issue #124)', () => {
+  const registry = new FieldRegistry({
+    fieldTypes: { money: { rollUp: 'sum' } },
+    fields: [{ key: 'cost', type: 'money' }],
+  });
+  const fieldCtx = createFieldContext(registry, 'UTC');
+  const cost = registry.get('cost')!;
+
+  const children = [span({ cost: 1 }), span({ cost: 'not a number' }), span({ cost: 3 }), span()];
+
+  it('values reads the rolling field off each child, in order, holes included', () => {
+    const rollUpCtx = createRollUpContext(fieldCtx, cost.key);
+    expect(rollUpCtx.values(children)).toEqual([1, 'not a number', 3, undefined]);
+  });
+
+  it('numericValues keeps only finite numbers, dropping holes and non-numeric values', () => {
+    const rollUpCtx = createRollUpContext(fieldCtx, cost.key);
+    expect(rollUpCtx.numericValues(children)).toEqual([1, 3]);
+  });
+
+  it('numericValues is empty, not thrown, when no child has a numeric value', () => {
+    const rollUpCtx = createRollUpContext(fieldCtx, cost.key);
+    expect(rollUpCtx.numericValues([span(), span({ cost: 'x' })])).toEqual([]);
+  });
+
+  it('routes through the same read path as ctx.read (D-S4-8)', () => {
+    const rollUpCtx = createRollUpContext(fieldCtx, cost.key);
+    expect(rollUpCtx.values([children[0]!])).toEqual([rollUpCtx.read(children[0]!, cost.key)]);
   });
 });

@@ -2,6 +2,16 @@
 
 **Reported:** 2026-08-31. Not stale.
 
+**Status (2026-09-01):** Done. `RollUpContext.values`/`numericValues` added
+(`src/model/field.ts`), built once via `createRollUpContext` in
+`src/data/fields/field-access.ts`, and `rollup.ts` now calls that instead of
+the old inline `{ ...ctx, field: field.key }` spread. Shipped `sum`/`min`/
+`max`/`count` in `src/data/fields/aggregators.ts` were refactored onto the
+same helpers — `weightedMeanByDuration` keeps its own loop since it needs
+value and duration paired per child, which a filtered array can't preserve.
+Doc example added to `plans/02-public-api.md` §2.6-equivalent (aggregator
+levels section). All steps below are complete; kept for the research trail.
+
 ## Current shape (researched)
 
 - `src/model/field.ts`: `RollUpContext` (lines 68-72) extends

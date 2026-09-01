@@ -2,6 +2,7 @@ import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 import { DatasetState } from './dataset-state.js';
 import { SHIPPED_AGGREGATORS } from './fields/aggregators.js';
+import { createRollUpContext } from './fields/field-access.js';
 import type { EntryInput } from '../model/index.js';
 
 const ROLLUP_AGGREGATORS = [
@@ -34,10 +35,7 @@ function assertParentsMatchAggregator(
     if (!state.isRollUpKind(parent.kind)) continue;
     const children = state.entries.childrenOf(parent.id);
     if (children.length === 0) continue;
-    const expected = aggregator?.(children, parent, {
-      ...state.fieldContext,
-      field: 'cost',
-    });
+    const expected = aggregator?.(children, parent, createRollUpContext(state.fieldContext, 'cost'));
     expect(state.fieldContext.read(parent, 'cost')).toBe(expected);
   }
 }

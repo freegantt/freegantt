@@ -302,6 +302,20 @@ fieldTypes: { risk: { rollUp: 'riskWeighted', formatValue: asRisk } }
 
 Levels 1–3 are plain data on the Field declaration, so they serialize, they diff in review, and a document can carry them. Level 4 adds a function in `DatasetOptions.aggregators` (and the same map in `fromJSON`'s second argument on reload). `rollUp` on the Field or Field type is always an **Aggregator name** — shipped (`'sum'`) or yours (`'riskWeighted'`). It never takes a bare function: a name can be refused when it is not registered, and a function cannot travel with a document. The Aggregator signature is `01` §2.6 (`children`, `parent`, `ctx.read(fieldKey)`); return `undefined` to leave the parent's stored value alone. Write `source: { from: 'meta', key: 'budget' }` only when the Document key is not the Field key. `formatValue` is display: money stays a number in the store; the cell shows currency text. Sort reads the stored value (`01` §2.6, S4.9).
 
+A custom Aggregator that only needs the field it is rolling up skips the manual child loop: `ctx.numericValues(children)` reads `ctx.field` off every child, in order, dropping holes and non-numeric values the same way shipped `sum`/`min`/`max` do.
+
+```ts
+// A single-field numeric Aggregator, in a few lines — no manual child loop, no manual hole-skipping.
+aggregators: {
+  average: (children, parent, ctx) => {
+    const values = ctx.numericValues(children);
+    return values.length === 0 ? undefined : values.reduce((a, b) => a + b) / values.length;
+  },
+}
+```
+
+`ctx.values(children)` is the same read, without the numeric filter — use it when a hole itself is meaningful (e.g. `count`). A multi-field Aggregator like `riskWeighted` above still reads each field it needs through `ctx.read(child, fieldKey)` directly; `values`/`numericValues` only cover "one field off my children."
+
 **Because a field carries its own column defaults, `gridColumns` is mostly ordering:**
 
 ```ts

@@ -16,7 +16,7 @@ function child(id: string, values: Record<string, unknown>, duration = 1): Entry
 }
 
 function ctx(field: FieldKey, extras: Record<string, Record<string, unknown>> = {}): RollUpContext {
-  return {
+  const rollUpCtx: RollUpContext = {
     field,
     timeZone: 'UTC',
     read<T>(entry: Entry, key: FieldKey): T | undefined {
@@ -28,7 +28,16 @@ function ctx(field: FieldKey, extras: Record<string, Record<string, unknown>> = 
     durationOf(entry: Entry) {
       return { value: diffMs(entry.end, entry.start), unit: 'millisecond' };
     },
+    values(children: readonly Entry[]) {
+      return children.map((child) => rollUpCtx.read(child, field));
+    },
+    numericValues(children: readonly Entry[]) {
+      return rollUpCtx
+        .values(children)
+        .filter((value): value is number => typeof value === 'number' && Number.isFinite(value));
+    },
   };
+  return rollUpCtx;
 }
 
 const parent: Entry = {
