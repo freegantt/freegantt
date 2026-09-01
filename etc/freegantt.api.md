@@ -448,10 +448,10 @@ export interface FormatContext extends FieldContext {
 }
 
 // @public
-export function formatDate(zone: string, i: Instant, locale?: Intl.LocalesArgument): string;
+export function formatDate(zone: string, i: Instant, locale?: Intl.LocalesArgument, options?: Intl.DateTimeFormatOptions): string;
 
 // @public
-export function formatEndInclusive(zone: string, end: Instant, locale?: Intl.LocalesArgument): string;
+export function formatEndInclusive(zone: string, end: Instant, locale?: Intl.LocalesArgument, options?: Intl.DateTimeFormatOptions): string;
 
 // @public
 export const formatHour: HeaderFormat;
