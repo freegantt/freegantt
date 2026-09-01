@@ -1,24 +1,12 @@
 // layout/ — per-Kind Item emission (D-S4-24). The registry is built per Gantt, never module-level (I2).
 
-import type { Entry, EntryId, EntryKind, Instant, ItemId } from '../../model/index.js';
+import type { EntryKind } from '../../model/index.js';
+import type { ItemEmitter } from './item.js';
 import { emitGroup } from './group-emitter.js';
 import { emitMilestone } from './milestone-emitter.js';
 import { emitSpan } from './span-emitter.js';
 
-export interface Item {
-  id: ItemId;
-  entryId: EntryId;
-  kind: EntryKind;
-  label: string;
-  start: Instant;
-  end: Instant;
-}
-
-export interface ItemEmissionContext {
-  entryById: ReadonlyMap<EntryId, Entry>;
-}
-
-export type ItemEmitter = (entry: Entry, ctx: ItemEmissionContext) => readonly Item[];
+export type { Item, ItemEmissionContext, ItemEmitter } from './item.js';
 
 export interface ItemEmitterRegistry {
   /** The emitter for `kind`, or the `'span'` emitter when nothing is registered. Never throws. */

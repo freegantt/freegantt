@@ -2,7 +2,7 @@
 
 import { itemId } from '../../model/index.js';
 import type { Entry } from '../../model/index.js';
-import type { Item, ItemEmissionContext } from './item-emitter.js';
+import type { Item, ItemEmissionContext } from './item.js';
 
 export function emitSpan(entry: Entry, _ctx: ItemEmissionContext): readonly Item[] {
   const segments = entry.segments;
