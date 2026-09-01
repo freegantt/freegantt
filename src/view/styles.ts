@@ -67,6 +67,8 @@ ${LIGHT_COLOR_TOKENS}
 }
 .fg-container {
 ${LIGHT_COLOR_TOKENS}
+  --fg-indent-width: 12px;
+  --fg-lane-gap: 2px;
 }
 @media (prefers-color-scheme: dark) {
   .fg-container:not([data-fg-theme]) {
