@@ -1,0 +1,1300 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Branch review — s4-implement (final)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script type="module">
+      import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+      mermaid.initialize({ startOnLoad: true, theme: 'neutral', securityLevel: 'loose' });
+    </script>
+    <style>
+      .seam {
+        stroke-dasharray: 4 4;
+      }
+      .leak {
+        stroke: #dc2626;
+      }
+      .deep {
+        background: linear-gradient(135deg, #0f172a, #1e293b);
+      }
+      .badge {
+        display: inline-block;
+        padding: 0.1rem 0.55rem;
+        border-radius: 9999px;
+        font-size: 0.68rem;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        font-weight: 600;
+      }
+      .badge-strong {
+        background: #d1fae5;
+        color: #065f46;
+        border: 1px solid #a7f3d0;
+      }
+      .badge-worth {
+        background: #fef3c7;
+        color: #78350f;
+        border: 1px solid #fde68a;
+      }
+      .badge-spec {
+        background: #e2e8f0;
+        color: #334155;
+        border: 1px solid #cbd5e1;
+      }
+      .badge-defect {
+        background: #fee2e2;
+        color: #7f1d1d;
+        border: 1px solid #fecaca;
+      }
+      .badge-hard {
+        background: #ffe4e6;
+        color: #881337;
+        border: 1px solid #fecdd3;
+      }
+      .badge-judge {
+        background: #fef3c7;
+        color: #78350f;
+        border: 1px solid #fde68a;
+      }
+      .badge-ok {
+        background: #dcfce7;
+        color: #14532d;
+        border: 1px solid #bbf7d0;
+      }
+      table.find {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      table.find th {
+        text-align: left;
+        font-size: 0.68rem;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: #64748b;
+        padding: 0.5rem 0.75rem;
+        border-bottom: 1px solid #e2e8f0;
+      }
+      table.find td {
+        vertical-align: top;
+        padding: 0.7rem 0.75rem;
+        border-bottom: 1px solid #f1f5f9;
+        font-size: 0.86rem;
+      }
+      table.find tr:last-child td {
+        border-bottom: 0;
+      }
+      .lbl {
+        font-size: 0.62rem;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        color: #64748b;
+      }
+      .box {
+        border: 1px solid #94a3b8;
+        background: #fff;
+        border-radius: 0.25rem;
+        padding: 0.4rem 0.5rem;
+        font-size: 0.7rem;
+        text-align: center;
+      }
+      .box-thin {
+        border-color: #cbd5e1;
+        color: #64748b;
+      }
+      .box-hot {
+        border-color: #fca5a5;
+        background: #fef2f2;
+        color: #991b1b;
+      }
+      .box-deep {
+        border: 2px solid #0f172a;
+        background: #0f172a;
+        color: #f8fafc;
+      }
+    </style>
+  </head>
+  <body class="bg-stone-50 text-slate-900 font-sans">
+    <main class="max-w-5xl mx-auto px-6 py-12 space-y-14">
+      <header class="space-y-4">
+        <p class="text-xs uppercase tracking-widest text-slate-500">FreeGantt — pk-branch-review · final pass</p>
+        <h1 class="font-serif text-3xl leading-tight">S4 — Hierarchy, grouping, multi-item rows</h1>
+        <p class="text-sm text-slate-500">
+          2026-09-01 · <span class="font-mono">80e0717…29a36f8</span> — 55 commits, 199 files, +17846/−4786 on
+          <span class="font-mono">s4-implement</span> vs <span class="font-mono">main</span>
+        </p>
+        <p class="text-sm text-slate-600 max-w-3xl">
+          Seven passes: <strong>standards</strong> (CLAUDE.md, CONTEXT.md, <span class="font-mono">plans/00–04</span>,
+          ADRs, plus Fowler ch.3 smells), <strong>spec</strong> (<span class="font-mono">plans/s4-hierarchy-and-rows/</span>),
+          <strong>reuse</strong>, <strong>simplification</strong>, <strong>efficiency</strong>, <strong>altitude</strong>,
+          and <strong>architecture</strong> (deepening opportunities). Architecture vocabulary: module, interface,
+          implementation, depth, seam, adapter, leverage, locality.
+        </p>
+        <p class="text-sm text-slate-600 max-w-3xl">
+          <span class="font-mono">harness/index.html</span> is out of scope at the author's request. The rest of
+          <span class="font-mono">harness/</span> is in scope, because CLAUDE.md makes harness code that re-derives a
+          library computation an API gap to record against the slice.
+        </p>
+        <div class="flex flex-wrap gap-3 text-xs text-slate-600 pt-1">
+          <span class="inline-flex items-center gap-1"
+            ><span class="inline-block w-4 h-3 border border-slate-500 bg-white"></span> module</span
+          >
+          <span class="inline-flex items-center gap-1"
+            ><svg width="24" height="8">
+              <line x1="0" y1="4" x2="24" y2="4" stroke="#475569" stroke-width="2" class="seam" /></svg
+            > seam</span
+          >
+          <span class="inline-flex items-center gap-1"
+            ><span class="inline-block w-4 h-3 deep rounded-sm"></span> deep module</span
+          >
+          <span class="inline-flex items-center gap-1"
+            ><span class="inline-block w-4 h-3 bg-red-200 rounded-sm"></span> shallow / leaking</span
+          >
+        </div>
+      </header>
+
+      <!-- ─────────────────────────── GATES ─────────────────────────── -->
+      <section class="rounded-2xl border bg-white p-6 space-y-4">
+        <h2 class="font-serif text-xl">Gates — green</h2>
+        <div class="grid md:grid-cols-2 gap-4 text-sm">
+          <div class="rounded-lg border border-emerald-300 bg-emerald-50 p-4">
+            <p class="lbl text-emerald-800 mb-2">pnpm verify · exit 0</p>
+            <p class="text-slate-700">
+              format, typecheck, lint, dependency-cruiser, guards, 92 + 447 + 311 tests, vendor-names, disables,
+              build, api-report — all pass, run clean on this branch.
+            </p>
+          </div>
+          <div class="rounded-lg border border-emerald-300 bg-emerald-50 p-4">
+            <p class="lbl text-emerald-800 mb-2">pnpm gate · exit 0</p>
+            <p class="text-slate-700">
+              <span class="font-mono">.slice = S4</span>. Eleven green checks
+              <span class="font-mono">[S4-A1]</span>–<span class="font-mono">[S4-A11]</span>, one open HUMAN row
+              (poke <span class="font-mono">harness/hierarchy.html</span>).
+            </p>
+          </div>
+        </div>
+        <div class="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-slate-700">
+          <p class="lbl text-amber-800 mb-1">What the gate does not reach</p>
+          Every assertion tests one axis. <span class="font-mono">[S4-A10]</span> covers
+          <span class="font-mono">matchOnly</span>; <span class="font-mono">[S4-A6]</span> covers collapse. Nothing
+          runs the two together — which is exactly where defect <a class="underline" href="#d2">D2</a> lives. The
+          same holds for <span class="font-mono">[S4-A3]</span> (row-source switching) and the tree keyboard,
+          defect <a class="underline" href="#d1">D1</a>.
+        </div>
+      </section>
+
+      <!-- ─────────────────────────── DEFECTS ─────────────────────────── -->
+      <section id="defects" class="space-y-5">
+        <div class="flex items-baseline gap-3">
+          <h2 class="font-serif text-2xl">Confirmed defects</h2>
+          <span class="badge badge-defect">7 · reproduced or unambiguous in source</span>
+        </div>
+        <p class="text-sm text-slate-600 max-w-3xl">
+          Every row below was verified in the source; D1, D2 and D3 were reproduced by running the code. These are
+          behavioural, not stylistic — they belong on the S4 close-out list before S5 starts.
+        </p>
+
+        <article id="d1" class="rounded-2xl border-2 border-red-300 bg-white p-6 space-y-3">
+          <div class="flex flex-wrap items-center gap-3">
+            <span class="badge badge-defect">D1 · reproduced</span>
+            <h3 class="font-serif text-lg"><span class="font-mono text-base">rowSource</span> is not live for the tree keyboard</h3>
+          </div>
+          <p class="text-sm text-slate-700">
+            <span class="font-mono text-xs">src/view/gantt-shell.ts:450–455</span> spreads
+            <span class="font-mono text-xs">tryTreeArrow</span> / <span class="font-mono text-xs">expandAllRows</span> into
+            <span class="font-mono text-xs">gestureContext</span> only when
+            <span class="font-mono text-xs">#treeKeyboardEnabled()</span> is true — evaluated once, in the constructor. The
+            <span class="font-mono text-xs">rowSource</span> setter (<span class="font-mono text-xs">:519</span>) invalidates
+            rows and requests a frame; it never rebuilds the context.
+          </p>
+          <div class="rounded-lg bg-slate-900 text-slate-100 p-4 font-mono text-xs leading-relaxed">
+            constructed with tree:false → tryTreeArrow present? <span class="text-red-300">false</span><br />
+            after rowSource = tree:true → tryTreeArrow present? <span class="text-red-300">false</span>
+          </div>
+          <p class="text-sm text-slate-700">
+            Breaks <span class="font-mono text-xs">plans/02</span>: “Every config key is live-reconfigurable.” Also the
+            mirror case — constructing with <span class="font-mono text-xs">tree: true</span> then switching to
+            <span class="font-mono text-xs">{ source: 'group' }</span> leaves the arrows live on rows that are not a tree.
+          </p>
+          <p class="text-sm"><strong>Fix:</strong> always install both handlers.
+            <span class="font-mono text-xs">TreeCollapse.handleArrow</span> already returns
+            <span class="font-mono text-xs">false</span> when the focused row is not expandable — that is the real question,
+            and it is asked of the resolved rows rather than of the config discriminant.</p>
+        </article>
+
+        <article id="d2" class="rounded-2xl border-2 border-red-300 bg-white p-6 space-y-3">
+          <div class="flex flex-wrap items-center gap-3">
+            <span class="badge badge-defect">D2 · reproduced</span>
+            <h3 class="font-serif text-lg">
+              <span class="font-mono text-base">filterPolicy: 'matchOnly'</span> + collapse paints a twisty that hides nothing
+            </h3>
+          </div>
+          <p class="text-sm text-slate-700">
+            <span class="font-mono text-xs">src/layout/rows/filter.ts:53</span> flattens
+            <span class="font-mono text-xs">depth</span> to 0 under <span class="font-mono text-xs">matchOnly</span> but leaves
+            <span class="font-mono text-xs">expandable: true</span>.
+            <span class="font-mono text-xs">src/layout/rows/collapse.ts:18–28</span> hides descendants purely by depth. With
+            every row at depth 0, nothing is a descendant.
+          </p>
+          <div class="rounded-lg bg-slate-900 text-slate-100 p-4 font-mono text-xs leading-relaxed overflow-x-auto">
+            resolveRows({ tree: true, filterPolicy: 'matchOnly', filter: () =&gt; true }, collapsed: ['a'])<br />
+            → a: <span class="text-red-300">expandable:true, expanded:false</span>, depth 0<br />
+            → b: <span class="text-red-300">expandable:true</span>, depth 0 &nbsp;&nbsp;&nbsp;// still visible<br />
+            → c: expandable:false, depth 0 &nbsp;&nbsp;&nbsp;// still visible
+          </div>
+          <p class="text-sm">
+            <strong>Fix:</strong> decide <span class="font-mono text-xs">matchOnly</span>'s contract once — a flattened row is
+            not a tree row, so clearing <span class="font-mono text-xs">depth</span> must also clear
+            <span class="font-mono text-xs">expandable</span>. Candidate <a class="underline" href="#a1">A1</a> is where that
+            contract should live.
+          </p>
+        </article>
+
+        <article id="d3" class="rounded-2xl border-2 border-red-300 bg-white p-6 space-y-3">
+          <div class="flex flex-wrap items-center gap-3">
+            <span class="badge badge-defect">D3 · reproduced</span>
+            <h3 class="font-serif text-lg">A one-segment entry cannot be dragged — the commit throws</h3>
+          </div>
+          <p class="text-sm text-slate-700">
+            Two guards disagree on what “has segments” means.
+            <span class="font-mono text-xs">src/layout/gesture-draft.ts:112</span> —
+            <span class="font-mono text-xs">usesSegmentEdit</span> requires
+            <span class="font-mono text-xs">segments.length &gt; 1</span>, so a one-segment entry drafts
+            <span class="font-mono text-xs">{ start, end }</span>.
+            <span class="font-mono text-xs">src/data/entry-reader.ts:106</span> refuses that write for
+            <span class="font-mono text-xs">segments.length &gt; 0</span>.
+          </p>
+          <div class="rounded-lg bg-slate-900 text-slate-100 p-4 font-mono text-xs leading-relaxed overflow-x-auto">
+            1 segment → <span class="text-red-300">SegmentsOutOfSyncError</span>: entries.update: "t1" has segments — write
+            segments, not start/end alone<br />
+            2 segments → SegmentsOutOfSyncError &nbsp;&nbsp;<span class="text-emerald-300">// correct: draft writes segments</span>
+          </div>
+          <p class="text-sm text-slate-700">
+            Spec <span class="font-mono text-xs">s4.10</span> D-S4-30 states the store rule in terms of “an entry that has
+            Segments”, so the drafting side is the half that is wrong. The store's guard also fires for every
+            <em>other</em> selected segmented entry in a multi-selection drag, which D-S4-30 says must move as a whole
+            span. <span class="font-mono text-xs">attemptMutation</span> only catches
+            <span class="font-mono text-xs">MutationCancelledError</span>, so this escapes a pointer handler.
+          </p>
+          <p class="text-sm">
+            <strong>Fix:</strong> <span class="font-mono text-xs">usesSegmentEdit</span> fires on
+            <span class="font-mono text-xs">segments !== undefined &amp;&amp; length &gt; 0</span>, with index defaulting to 0
+            for a non-grabbed entry.
+          </p>
+        </article>
+
+        <article id="d4" class="rounded-2xl border border-red-200 bg-white p-6 space-y-3">
+          <div class="flex flex-wrap items-center gap-3">
+            <span class="badge badge-defect">D4</span>
+            <h3 class="font-serif text-lg">
+              <span class="font-mono text-base">reveal()</span> cannot expand ancestors under group or custom rows
+            </h3>
+          </div>
+          <p class="text-sm text-slate-700">
+            <span class="font-mono text-xs">src/view/tree-collapse.ts:142</span> asks
+            <span class="font-mono text-xs">String(current.parentId) === candidateRowId</span>. That identity holds only for
+            <span class="font-mono text-xs">entries-source.ts:37</span>, which mints
+            <span class="font-mono text-xs">rowId(entry.id)</span>.
+            <span class="font-mono text-xs">group-source.ts:25</span> mints
+            <span class="font-mono text-xs">rowId(`group:${key}`)</span> and a custom source mints whatever the consumer
+            returns. Nothing in <span class="font-mono text-xs">TreeCollapseRow</span> states the assumption.
+          </p>
+          <p class="text-sm">
+            <strong>Fix:</strong> put <span class="font-mono text-xs">rowIdForEntry(id)</span> on
+            <span class="font-mono text-xs">TreeCollapseContext</span>, backed by
+            <span class="font-mono text-xs">FrameLayout</span>'s resolved plan — the row plan already knows which row carries
+            which entry.
+          </p>
+        </article>
+
+        <article class="rounded-2xl border border-red-200 bg-white p-6 space-y-4">
+          <div class="flex flex-wrap items-center gap-3">
+            <span class="badge badge-defect">D5–D7</span>
+            <h3 class="font-serif text-lg">Sort does three things the spec says it must not</h3>
+          </div>
+          <table class="find">
+            <thead>
+              <tr>
+                <th style="width: 22%">Where</th>
+                <th style="width: 39%">What the spec says</th>
+                <th>What the code does</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="font-mono text-xs">view/grid-columns.ts:28</td>
+                <td><span class="font-mono text-xs">s4.9</span> D-S4-28: “… strings by <span class="font-mono text-xs">localeCompare</span>, <strong>undefined last</strong>.”</td>
+                <td>
+                  <span class="font-mono text-xs">if (a === undefined || a === null) return -1;</span> — undefined sorts
+                  <strong>first</strong>. Swap the two returns.
+                </td>
+              </tr>
+              <tr>
+                <td class="font-mono text-xs">data/fields/core-fields.ts:88</td>
+                <td><span class="font-mono text-xs">s4.9</span> D-S4-28: “A computed Field sorts too, with no stored column to sort on.”</td>
+                <td>
+                  <span class="font-mono text-xs">duration</span> is the one shipped compute Field and declares no
+                  <span class="font-mono text-xs">compare</span>; the fallback returns 0 for two
+                  <span class="font-mono text-xs">Duration</span> objects, so
+                  <span class="font-mono text-xs">sort: { field: 'duration' }</span> silently no-ops. No test covers it.
+                </td>
+              </tr>
+              <tr>
+                <td class="font-mono text-xs">layout/rows/sort.ts:133</td>
+                <td><span class="font-mono text-xs">s4.9</span> D-S4-28: “An unregistered key is <span class="font-mono text-xs">UnknownFieldError</span>.”</td>
+                <td>
+                  <span class="font-mono text-xs">fieldCompares.length === 0</span> returns before
+                  <span class="font-mono text-xs">comparerFor</span> can throw, so the sort is dropped with no diagnostic.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </article>
+      </section>
+
+      <!-- ─────────────────────────── STANDARDS ─────────────────────────── -->
+      <section id="standards" class="space-y-5">
+        <div class="flex items-baseline gap-3">
+          <h2 class="font-serif text-2xl">Standards axis</h2>
+          <span class="badge badge-hard">6 hard</span>
+          <span class="badge badge-judge">smells rolled into cleanup</span>
+        </div>
+        <p class="text-sm text-slate-600 max-w-3xl">
+          A documented repo standard always wins; anything tooling already enforces is skipped. Six breaches of a rule
+          this repo writes down, most severe first.
+        </p>
+        <div class="rounded-2xl border bg-white overflow-hidden">
+          <table class="find">
+            <thead>
+              <tr>
+                <th style="width: 4%"></th>
+                <th style="width: 24%">Where</th>
+                <th style="width: 34%">Rule</th>
+                <th>Breach &amp; fix</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><span class="badge badge-hard">S1</span></td>
+                <td class="font-mono text-xs">src/view/styles.ts (new Parts + State attrs)</td>
+                <td>
+                  CONTEXT.md <strong>Part</strong>: the vocabulary is “closed and un-renamed (D-S1.10-1), with one
+                  exception before 1.0”.
+                </td>
+                <td>
+                  <span class="font-mono text-xs">.fg-grid-header</span>, <span class="font-mono text-xs">.fg-col-header</span>,
+                  <span class="font-mono text-xs">.fg-row-label-text</span>, <span class="font-mono text-xs">.fg-row-twisty</span>,
+                  <span class="font-mono text-xs">.fg-bar-bracket</span>, <span class="font-mono text-xs">.fg-bar-diamond</span>
+                  and the State attributes <span class="font-mono text-xs">data-matched</span>/<span class="font-mono text-xs">data-align</span>/<span class="font-mono text-xs">data-fixed</span>/<span class="font-mono text-xs">data-field</span>
+                  appear nowhere in <span class="font-mono text-xs">CONTEXT.md</span>, <span class="font-mono text-xs">plans/</span> or
+                  <span class="font-mono text-xs">docs/</span>. These are the public theming surface; undocumented, they are
+                  un-themeable. <strong>Fix:</strong> extend the Part and State entries in this slice.
+                </td>
+              </tr>
+              <tr>
+                <td><span class="badge badge-hard">S2</span></td>
+                <td class="font-mono text-xs">src/view/styles.ts:83</td>
+                <td>
+                  CONTEXT.md <strong>Token</strong>: “the shipped default is always the fallback in
+                  <span class="font-mono text-xs">var(--fg-x, default)</span>, never the winner once a consumer has authored a
+                  value.”
+                </td>
+                <td>
+                  <span class="font-mono text-xs">:root, .fg-container { --fg-indent-width: 12px; --fg-lane-gap: 2px; }</span>
+                  declares both as winning rules, so the <span class="font-mono text-xs">var(…, 12px)</span> fallbacks at
+                  <span class="font-mono text-xs">:118/:120</span> can never fire and a consumer's own
+                  <span class="font-mono text-xs">:root</span> rule wins or loses on source order. The
+                  <span class="font-mono text-xs">2px</span> also restates
+                  <span class="font-mono text-xs">DEFAULT_LANE_GAP_PX</span>, which
+                  <span class="font-mono text-xs">LANE_GAP_POLICY</span> already supplies. <strong>Fix:</strong> delete the rule.
+                </td>
+              </tr>
+              <tr>
+                <td><span class="badge badge-hard">S3</span></td>
+                <td class="font-mono text-xs">src/render/dom/index.ts (cellSpec.patch)</td>
+                <td>
+                  CLAUDE.md: “Reconciler scope is hard-bounded: attr/class/style/text + keyed children.”
+                </td>
+                <td>
+                  <span class="font-mono text-xs">patch</span> runs two
+                  <span class="font-mono text-xs">querySelector(':scope &gt; …')</span> calls per row per frame and
+                  creates/removes a <span class="font-mono text-xs">&lt;button class="fg-row-twisty"&gt;</span> and a
+                  <span class="font-mono text-xs">&lt;span class="fg-row-label-text"&gt;</span>. That is structure, in the frame
+                  path, in the file that owns the general mechanism. <strong>Fix:</strong> build both children in
+                  <span class="font-mono text-xs">create</span> and let <span class="font-mono text-xs">patch</span> toggle
+                  <span class="font-mono text-xs">hidden</span>/<span class="font-mono text-xs">aria-expanded</span>/text only.
+                </td>
+              </tr>
+              <tr>
+                <td><span class="badge badge-hard">S4</span></td>
+                <td class="font-mono text-xs">harness/hierarchy.ts:167–177</td>
+                <td>
+                  <span class="font-mono text-xs">plans/01</span> §8 / I12: “all scroll via the bound
+                  <span class="font-mono text-xs">ScrollModel</span>. No exceptions.”
+                </td>
+                <td>
+                  <span class="font-mono text-xs">preservePaneScroll</span> queries the library-private
+                  <span class="font-mono text-xs">.fg-timeline-pane</span>, writes
+                  <span class="font-mono text-xs">scrollTop</span>/<span class="font-mono text-xs">scrollLeft</span>, and forges a
+                  <span class="font-mono text-xs">new Event('scroll')</span> so the library notices. Per CLAUDE.md this is an
+                  <strong>API gap</strong> to close in <span class="font-mono text-xs">src/</span>, not to tidy in the harness:
+                  there is no supported way to keep scroll across a remount.
+                  <strong>Fix:</strong> pass one consumer-held <span class="font-mono text-xs">ScrollModel</span> through the
+                  remount (<span class="font-mono text-xs">GanttOptions.scroll</span> already exists) — and say so in
+                  <span class="font-mono text-xs">docs/05-consumer-api.md</span>.
+                </td>
+              </tr>
+              <tr>
+                <td><span class="badge badge-hard">S5</span></td>
+                <td class="font-mono text-xs">src/api/dataset.ts:94</td>
+                <td>
+                  <span class="font-mono text-xs">plans/02</span>: “Every config key is live-reconfigurable.”
+                </td>
+                <td>
+                  <span class="font-mono text-xs">rollUpKinds</span> gained a setter this slice;
+                  <span class="font-mono text-xs">hierarchy</span> is documented “Construction-time policy; not
+                  live-reconfigurable.” The harness pays for it:
+                  <span class="font-mono text-xs">harness/hierarchy.ts</span> destroys the Gantt, rebuilds the whole
+                  <span class="font-mono text-xs">Dataset</span> and remounts to flip one boolean — and that is what drags in
+                  S4 above. <strong>Fix:</strong> add <span class="font-mono text-xs">set hierarchy</span>, or record the
+                  exception in <span class="font-mono text-xs">plans/02</span> with its reason.
+                </td>
+              </tr>
+              <tr>
+                <td><span class="badge badge-hard">S6</span></td>
+                <td class="font-mono text-xs">harness/main.ts:147 · harness/hierarchy.ts:85</td>
+                <td>
+                  CLAUDE.md: harness code that re-derives what the library already computes is an API gap. CONTEXT.md: a
+                  consumer reads a Field “with no reach into <span class="font-mono text-xs">entry.meta</span>”.
+                </td>
+                <td>
+                  <span class="font-mono text-xs">teamOf(entry)</span> is byte-identical in both pages: six lines of
+                  hand-rolled <span class="font-mono text-xs">entry.meta</span> narrowing. The cause is upstream —
+                  <span class="font-mono text-xs">RowFilter</span>, <span class="font-mono text-xs">groupBy</span> and
+                  <span class="font-mono text-xs">RowSort.compare</span> all hand the consumer a bare
+                  <span class="font-mono text-xs">Entry</span> and no field reader. See candidate
+                  <a class="underline" href="#a5">A5</a>.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ─────────────────────────── SPEC ─────────────────────────── -->
+      <section id="spec" class="space-y-5">
+        <div class="flex items-baseline gap-3">
+          <h2 class="font-serif text-2xl">Spec axis</h2>
+          <span class="badge badge-ok">no S5 or S7 leakage</span>
+        </div>
+        <p class="text-sm text-slate-600 max-w-3xl">
+          Checked against <span class="font-mono">plans/s4-hierarchy-and-rows/</span>,
+          <span class="font-mono">plans/03</span> §S4 and ADR 0005. No scope creep found —
+          <span class="font-mono">cellRenderer</span>, <span class="font-mono">PluginContext</span>,
+          <span class="font-mono">register*</span>, <span class="font-mono">Dependency</span>,
+          <span class="font-mono">schedule()</span> and link geometry are all absent from the diff. “Status: S4 done”
+          broadly holds. The three implementation mismatches are D5–D7 above; what remains is documentation drift and
+          missing coverage.
+        </p>
+        <div class="rounded-2xl border bg-white overflow-hidden">
+          <table class="find">
+            <thead>
+              <tr>
+                <th style="width: 4%"></th>
+                <th style="width: 26%">Where</th>
+                <th>Finding</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><span class="badge badge-hard">SP1</span></td>
+                <td class="font-mono text-xs">plans/s4…/s4.2, s4.5, README gotcha 11</td>
+                <td>
+                  <strong>Stale spec, ticked box.</strong> D-S4-7 says <span class="font-mono text-xs">rollup.ts</span> “stays a
+                  leaf with exactly one importer (<span class="font-mono text-xs">data/transaction.ts</span>)”, and a TODO box
+                  is ticked saying so. Both <span class="font-mono text-xs">build-commit-change-set.ts:23</span> and
+                  <span class="font-mono text-xs">transaction.ts:22</span> import it — same for
+                  <span class="font-mono text-xs">hierarchy.ts</span> — and
+                  <span class="font-mono text-xs">.dependency-cruiser.cjs</span> was correctly widened to allow both. The
+                  guard is honest; four spec lines are not. <strong>Fix:</strong> correct the four lines.
+                </td>
+              </tr>
+              <tr>
+                <td><span class="badge badge-hard">SP2</span></td>
+                <td class="font-mono text-xs">etc/freegantt.api.md:129</td>
+                <td>
+                  <strong><span class="font-mono text-xs">RollUpKinds</span> is not on the public entry point.</strong> The API
+                  report carries <span class="font-mono text-xs">(ae-forgotten-export)</span> for it, so a TS consumer cannot
+                  name the type that <span class="font-mono text-xs">dataset.rollUpKinds</span>'s setter takes — while
+                  <span class="font-mono text-xs">README</span> §5 lists it as a promised export. <strong>Fix:</strong> re-export
+                  from <span class="font-mono text-xs">src/api/index.ts</span> and re-run the extractor.
+                </td>
+              </tr>
+              <tr>
+                <td><span class="badge badge-judge">SP3</span></td>
+                <td class="font-mono text-xs">src/layout/rows/</td>
+                <td>
+                  <strong>Two named test files never landed, and the pipeline is untested.</strong>
+                  <span class="font-mono text-xs">s4.9</span> §3 and README §9 name
+                  <span class="font-mono text-xs">sort.test.ts</span> and
+                  <span class="font-mono text-xs">resolve-rows.test.ts</span>; neither exists, and their content sits inside
+                  <span class="font-mono text-xs">filter.test.ts</span>. Three named assertions have no test anywhere: “a
+                  computed Field sorts”, “a Field-type <span class="font-mono text-xs">compare</span> flows into
+                  <span class="font-mono text-xs">FieldCompare</span>”, and “<span class="font-mono text-xs">sort: { field: 'cost' }</span>
+                  with <span class="font-mono text-xs">gridColumns: ['name']</span> still uses the cost comparer”.
+                  <span class="font-mono text-xs">collapse.ts</span>, <span class="font-mono text-xs">resolve-rows.ts</span> and
+                  <span class="font-mono text-xs">row-source.ts</span> have no direct tests at all — which is why D2 shipped.
+                </td>
+              </tr>
+              <tr>
+                <td><span class="badge badge-judge">SP4</span></td>
+                <td class="font-mono text-xs">README gotcha 3</td>
+                <td>
+                  <strong>“One <span class="font-mono text-xs">switch</span> over <span class="font-mono text-xs">FieldSource</span>” is no longer true.</strong>
+                  The gotcha calls a second one “the finding, not a style nit”. There are now six cascades:
+                  <span class="font-mono text-xs">readField</span>, <span class="font-mono text-xs">writeField</span>,
+                  <span class="font-mono text-xs">metaKeyOf</span>, <span class="font-mono text-xs">editProposesField</span>,
+                  <span class="font-mono text-xs">overlayStoredEdit</span> (all in
+                  <span class="font-mono text-xs">field-access.ts</span>), plus
+                  <span class="font-mono text-xs">normalize-source.ts:8</span> and
+                  <span class="font-mono text-xs">serialization/field-document.ts:93</span> in two other files. See candidate
+                  <a class="underline" href="#a4">A4</a>.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ─────────────────────────── CLEANUP ─────────────────────────── -->
+      <section id="cleanup" class="space-y-5">
+        <h2 class="font-serif text-2xl">Cleanup — reuse, simplification, efficiency, altitude</h2>
+        <p class="text-sm text-slate-600 max-w-3xl">
+          Quality only; no correctness hunting. Deduplicated across four passes and ranked by what it costs to leave.
+        </p>
+
+        <div class="rounded-2xl border bg-white overflow-hidden">
+          <table class="find">
+            <thead>
+              <tr>
+                <th style="width: 4%"></th>
+                <th style="width: 26%">Where</th>
+                <th>Finding &amp; cheaper form</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><span class="badge badge-hard">C1</span></td>
+                <td class="font-mono text-xs">layout/frame-layout.ts:37</td>
+                <td>
+                  <strong>The whole row plan is rebuilt on every frame, including pure scroll frames.</strong>
+                  <span class="font-mono text-xs">computeFrame</span> calls
+                  <span class="font-mono text-xs">resolveLayoutRows(input)</span> unconditionally, and
+                  <span class="font-mono text-xs">resolveRows</span> then makes five full-dataset passes with four full copies
+                  (<span class="font-mono text-xs">{…row, matched}</span>, <span class="font-mono text-xs">[…rows]</span>,
+                  <span class="font-mono text-xs">{…row, expanded}</span>, <span class="font-mono text-xs">{…row, index}</span>).
+                  <span class="font-mono text-xs">GanttShell:366</span> requests a frame on any viewport change, so this runs
+                  per scroll tick. On <span class="font-mono">main</span> no row objects existed outside the visible window.
+                  <strong>Cheaper:</strong> <span class="font-mono text-xs">FrameLayout</span> already holds per-Gantt memory
+                  and already receives every invalidation signal (<span class="font-mono text-xs">invalidateForChange</span>,
+                  <span class="font-mono text-xs">invalidateFrom(0)</span> on rowSource/collapse) — cache
+                  <span class="font-mono text-xs">#plan</span> against them.
+                </td>
+              </tr>
+              <tr>
+                <td><span class="badge badge-hard">C2</span></td>
+                <td class="font-mono text-xs">layout/frame-layout.ts:84–92<br />layout/frame.ts:240–292</td>
+                <td>
+                  <strong>Packed-row height is computed twice, in two files, from the same three lines.</strong>
+                  <span class="font-mono text-xs">FrameLayout.#heightAt</span> is a hand-copy of
+                  <span class="font-mono text-xs">heightOf</span> + <span class="font-mono text-xs">packedItemsForRow</span>,
+                  and to do it <span class="font-mono text-xs">FrameLayout</span> mirrors four fields
+                  (<span class="font-mono text-xs">#rowHeight</span>, <span class="font-mono text-xs">#laneGap</span>,
+                  <span class="font-mono text-xs">#entryById</span>, <span class="font-mono text-xs">#registry</span>) that
+                  <span class="font-mono text-xs">placeFrame</span> destructures from the same
+                  <span class="font-mono text-xs">LayoutInput</span>. This is the exact failure
+                  <span class="font-mono text-xs">barSpan</span> was extracted to prevent —
+                  <span class="font-mono text-xs">frame.ts:23–25</span> records that
+                  <span class="font-mono text-xs">reveal</span> already drifted this way once. See
+                  <a class="underline" href="#a2">A2</a>.
+                </td>
+              </tr>
+              <tr>
+                <td><span class="badge badge-judge">C3</span></td>
+                <td class="font-mono text-xs">layout/rows/filter.ts:35</td>
+                <td>
+                  <strong>Accidental quadratic in the default filter policy.</strong>
+                  <span class="font-mono text-xs">parentOf</span> does <span class="font-mono text-xs">entries.find(…)</span>
+                  inside the ancestor <span class="font-mono text-xs">while</span> loop — O(matched × depth × n) per frame,
+                  under <span class="font-mono text-xs">keepAncestors</span>, which is the default.
+                  <span class="font-mono text-xs">known</span> is already a full pass; make it a
+                  <span class="font-mono text-xs">Map</span> and index into it.
+                </td>
+              </tr>
+              <tr>
+                <td><span class="badge badge-judge">C4</span></td>
+                <td class="font-mono text-xs">frame-layout.ts:40 · frame.ts:280 · sort.ts:83,98</td>
+                <td>
+                  <strong><span class="font-mono text-xs">entryById</span> is built four times per frame</strong> —
+                  <span class="font-mono text-xs">new Map(entries.map(…))</span> each time.
+                  <span class="font-mono text-xs">EntryStore.committedById()</span> already is this map. Build it once and
+                  thread it.
+                </td>
+              </tr>
+              <tr>
+                <td><span class="badge badge-judge">C5</span></td>
+                <td class="font-mono text-xs">view/gantt-shell.ts:378</td>
+                <td>
+                  <strong><span class="font-mono text-xs">#bindColumns()</span> runs on every dataset change</strong> — rebuilding
+                  every <span class="font-mono text-xs">ResolvedColumn</span>, every
+                  <span class="font-mono text-xs">FieldCompare</span>, and a fresh
+                  <span class="font-mono text-xs">Intl.Collator</span> (the expensive part) per commit. None of it depends on
+                  entry values; the field set cannot change after construction until S5. A drag or keyboard nudge commits
+                  repeatedly. <strong>Cheaper:</strong> rebind on the three inputs that have setters, not on data change.
+                </td>
+              </tr>
+              <tr>
+                <td><span class="badge badge-judge">C6</span></td>
+                <td class="font-mono text-xs">layout/rows/sort.ts, filter.ts</td>
+                <td>
+                  <strong>Three hardcoded twins selected by sniffing the output.</strong> Both passes re-derive which source
+                  produced the rows (<span class="font-mono text-xs">rows.some(isPlannedHeaderRow)</span>), then run one of
+                  three (sort) or two (filter) near-identical algorithms.
+                  <span class="font-mono text-xs">sortFlatRows</span> and
+                  <span class="font-mono text-xs">sortGroupRows</span> also carry the same comparator body verbatim, and the
+                  “push header, collect members until the next header” loop appears in both files. See
+                  <a class="underline" href="#a1">A1</a>.
+                </td>
+              </tr>
+              <tr>
+                <td><span class="badge badge-judge">C7</span></td>
+                <td class="font-mono text-xs">layout/rows/resolve-rows.ts:40,42,55,61,66</td>
+                <td>
+                  <strong>The pipeline branches on the source discriminant five times</strong> instead of the source owning its
+                  behaviour — in the module whose sibling deliberately added
+                  <span class="font-mono text-xs">isPlannedHeaderRow</span> to stop exactly this. A consequence:
+                  <span class="font-mono text-xs">custom</span> permanently cannot use
+                  <span class="font-mono text-xs">filter</span>/<span class="font-mono text-xs">sort</span>, though
+                  <span class="font-mono text-xs">RowSourceCommon</span> sits one type away.
+                  <span class="font-mono text-xs">filterPolicyOf</span>'s custom branch is already dead —
+                  <span class="font-mono text-xs">custom</span> never reaches <span class="font-mono text-xs">applyFilter</span>.
+                </td>
+              </tr>
+              <tr>
+                <td><span class="badge badge-judge">C8</span></td>
+                <td class="font-mono text-xs">layout/gesture-draft.ts:40–176<br />view/gesture-pipeline.ts:158–172</td>
+                <td>
+                  <strong>The segment-anchor rule is written three times, and the draft loop four.</strong>
+                  <span class="font-mono text-xs">segmentEdgeInstant:127</span> is a verbatim alias of
+                  <span class="font-mono text-xs">segmentAnchorInstant</span> — delete it.
+                  <span class="font-mono text-xs">#stepPx</span> rebuilds the same rule as a four-deep nested ternary, and
+                  <span class="font-mono text-xs">grabbedSegmentIndex</span> is threaded through five signatures.
+                  <strong>Deeper:</strong> resolve the grabbed <span class="font-mono text-xs">Item</span>'s span once in
+                  <span class="font-mono text-xs">session()</span> — an <span class="font-mono text-xs">Item</span> already
+                  carries <span class="font-mono text-xs">start</span>/<span class="font-mono text-xs">end</span> — so nothing
+                  downstream re-resolves an index. <strong>Cost of leaving it:</strong> nudge and drag can size steps off
+                  different instants, and no test compares them. This is the same seam D3 falls through.
+                </td>
+              </tr>
+              <tr>
+                <td><span class="badge badge-judge">C9</span></td>
+                <td class="font-mono text-xs">data/hierarchy.ts:51,55</td>
+                <td>
+                  <strong>autoGroup hardcodes span→group behind a boolean, next to a configurable kinds set.</strong>
+                  <span class="font-mono text-xs">if (parent.kind !== 'span') continue;</span> then
+                  <span class="font-mono text-xs">{ kind: 'group' }</span> — two literals, while its sibling on the same commit
+                  path takes <span class="font-mono text-xs">rollUpKinds: EntryKind[]</span>. A consumer with a
+                  <span class="font-mono text-xs">'phase'</span> kind gets no promotion at all.
+                  <strong>Deeper:</strong> <span class="font-mono text-xs">hierarchy: { promote?: Record&lt;EntryKind, EntryKind&gt; }</span>,
+                  default <span class="font-mono text-xs">{ span: 'group' }</span>, resolved at construction the way
+                  <span class="font-mono text-xs">resolveRollUpKinds</span> already is.
+                </td>
+              </tr>
+              <tr>
+                <td><span class="badge badge-judge">C10</span></td>
+                <td class="font-mono text-xs">api/gantt.ts:123–141</td>
+                <td>
+                  <strong>Nineteen lines of <span class="font-mono text-xs">…(options.X !== undefined ? { X: options.X } : {})</span></strong>
+                  — <span class="font-mono text-xs">exactOptionalPropertyTypes</span> ceremony. One typed
+                  <span class="font-mono text-xs">pickDefined(options, […keys])</span> helper collapses it; the three keys that
+                  need conversion stay explicit and become visible instead of buried.
+                </td>
+              </tr>
+              <tr>
+                <td><span class="badge badge-judge">C11</span></td>
+                <td class="font-mono text-xs">data/fields/field-access.ts:23,64</td>
+                <td>
+                  <strong>Two parallel sources of truth about a Field.</strong>
+                  <span class="font-mono text-xs">isOptionalEntryKey</span> hardcodes
+                  <span class="font-mono text-xs">'parentId' | 'segments' | 'meta'</span>, duplicating knowledge that belongs on
+                  the declaration in <span class="font-mono text-xs">CORE_FIELDS</span>.
+                  <span class="font-mono text-xs">metaKeyOf</span> calls
+                  <span class="font-mono text-xs">storedSourceOf</span> again on a
+                  <span class="font-mono text-xs">ResolvedField</span> the registry already normalized — so a reader cannot tell
+                  whether <span class="font-mono text-xs">field.source</span> is trustworthy.
+                </td>
+              </tr>
+              <tr>
+                <td><span class="badge badge-judge">C12</span></td>
+                <td class="font-mono text-xs">layout/rows/row-source.ts:59–71</td>
+                <td>
+                  <strong>Lint ceremony that does not satisfy the rule's intent.</strong>
+                  <span class="font-mono text-xs">PLANNED_ROW_KIND</span> exists “so <span class="font-mono">layout/</span> never
+                  branches on a kind string literal inline” — but
+                  <span class="font-mono text-xs">PLANNED_ROW_KIND.header</span> <em>is</em> that literal, and
+                  <span class="font-mono text-xs">.entry</span> is never read. More to the point,
+                  <span class="font-mono text-xs">PlannedRow.kind</span> is fully derivable:
+                  <span class="font-mono text-xs">custom-source.ts:16</span> computes it from
+                  <span class="font-mono text-xs">entryIds.length === 0</span>, and every other source agrees.
+                  <strong>Simpler:</strong> drop the field and let
+                  <span class="font-mono text-xs">isPlannedHeaderRow(row)</span> be
+                  <span class="font-mono text-xs">row.entryIds.length === 0</span>.
+                </td>
+              </tr>
+              <tr>
+                <td><span class="badge badge-spec">C13</span></td>
+                <td class="font-mono text-xs">layout/rows/row-source.ts:79</td>
+                <td>
+                  <strong><span class="font-mono text-xs">PlannedRow.entryIds</span> is plural; every consumer but one reads
+                  <span class="font-mono text-xs">[0]</span>.</strong>
+                  <span class="font-mono text-xs">produceItemsForRow</span> honours the array; grid cells, filter and sort all
+                  take the first id and drop the rest. A <span class="font-mono text-xs">{ source: 'custom' }</span> row with
+                  several <span class="font-mono text-xs">entryIds</span> renders only the first entry's field values, with no
+                  diagnostic — and the plural type invites the next author to assume otherwise.
+                  <strong>Fix:</strong> state the contract (one <em>subject</em> entry plus additional item-bearing entries), or
+                  route cells and compare through a stated multi-entry policy.
+                </td>
+              </tr>
+              <tr>
+                <td><span class="badge badge-spec">C14</span></td>
+                <td class="font-mono text-xs">various</td>
+                <td>
+                  <strong>Dead or over-exported.</strong>
+                  <span class="font-mono text-xs">dataset-state.ts:184 get datasetRevision()</span> — no reader anywhere;
+                  <span class="font-mono text-xs">filter.ts:9 visibleEntryIds</span> and
+                  <span class="font-mono text-xs">dataset-state.ts:41 resolveRollUpKinds</span> — exported, used only in their own
+                  file; <span class="font-mono text-xs">collapse.ts:7–12</span> — a fast path that produces exactly what the
+                  general path produces; <span class="font-mono text-xs">group-source.ts:24,26</span> —
+                  <span class="font-mono text-xs">expandable</span> is always true and
+                  <span class="font-mono text-xs">?? []</span> cannot fire;
+                  <span class="font-mono text-xs">render/dom/index.ts:453</span> —
+                  <span class="font-mono text-xs">syncGridHeader</span> sets
+                  <span class="font-mono text-xs">first</span>/<span class="font-mono text-xs">expandable</span>/<span class="font-mono text-xs">expanded</span>
+                  that <span class="font-mono text-xs">headerCellSpec</span> never reads;
+                  <span class="font-mono text-xs">model/geometry.ts:12 ClientPoint</span> — structurally identical to
+                  <span class="font-mono text-xs">Point</span>, so mutually assignable and buying no safety (brand it or delete
+                  it); <span class="font-mono text-xs">field-registry.ts:29 resolveSource</span> and
+                  <span class="font-mono text-xs">field-document.ts:88 sourceForWrite</span> — two one-line aliases of
+                  <span class="font-mono text-xs">storedSourceOf</span>.
+                </td>
+              </tr>
+              <tr>
+                <td><span class="badge badge-spec">C15</span></td>
+                <td class="font-mono text-xs">4 sites</td>
+                <td>
+                  <strong><span class="font-mono text-xs">isDevMode</span> is copy-pasted four times</strong> —
+                  <span class="font-mono text-xs">build-commit-change-set.ts:34</span>,
+                  <span class="font-mono text-xs">transaction.ts:118</span>,
+                  <span class="font-mono text-xs">serialization/index.ts:60</span>, and inline at
+                  <span class="font-mono text-xs">gantt-shell.ts:314</span>. It reads a build-tool global, so it wants one home
+                  outside <span class="font-mono">model/</span> (types-only) that both <span class="font-mono">data/</span> and
+                  <span class="font-mono">view/</span> may import.
+                </td>
+              </tr>
+              <tr>
+                <td><span class="badge badge-spec">C16</span></td>
+                <td class="font-mono text-xs">tests, fixtures, tooling</td>
+                <td>
+                  <strong>Test-surface duplication.</strong> Three <span class="font-mono text-xs">entry()</span> builders and
+                  four <span class="font-mono text-xs">instant()</span> casts across
+                  <span class="font-mono text-xs">src/layout/rows/*.test.ts</span> (one is a strict superset of the others); the
+                  <span class="font-mono text-xs">money</span> field type is byte-identical in
+                  <span class="font-mono text-xs">fixtures/demo-dataset.ts</span> and
+                  <span class="font-mono text-xs">fixtures/hierarchy-dataset.ts</span>;
+                  <span class="font-mono text-xs">EntryStore</span>'s constructor defaults
+                  <span class="font-mono text-xs">registry</span>/<span class="font-mono text-xs">fieldContext</span>/<span class="font-mono text-xs">runner</span>
+                  for tests only, making <span class="font-mono text-xs">#mutate</span>'s “no transaction runner” throw
+                  unreachable in production. Also:
+                  <span class="font-mono text-xs">scripts/guard-red-test.mjs</span> writes temporary files into
+                  <span class="font-mono">src/</span>, which makes two concurrent
+                  <span class="font-mono text-xs">verify</span> runs flake on
+                  <span class="font-mono text-xs">format:check</span> (hit once during this review).
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ─────────────────────────── ARCHITECTURE ─────────────────────────── -->
+      <section id="candidates" class="space-y-10">
+        <h2 class="font-serif text-2xl">Deepening candidates</h2>
+        <p class="text-sm text-slate-600 max-w-3xl">
+          Where the interface is nearly as complex as the implementation, and what would concentrate it. Weighted toward
+          what S4 touched.
+        </p>
+
+        <!-- A1 -->
+        <article id="a1" class="rounded-2xl border bg-white p-6 space-y-5">
+          <div class="flex flex-wrap items-center gap-3">
+            <span class="badge badge-strong">Strong</span>
+            <span class="badge badge-spec">in-process</span>
+            <h3 class="font-serif text-xl">Deepen <span class="font-mono text-lg">resolveRows</span> into the row pipeline</h3>
+          </div>
+          <p class="font-mono text-xs text-slate-500">
+            src/layout/rows/resolve-rows.ts · filter.ts · sort.ts · collapse.ts · row-source.ts
+          </p>
+
+          <div class="grid md:grid-cols-2 gap-4">
+            <div class="rounded-lg border border-slate-200 bg-stone-50 p-4">
+              <p class="lbl mb-3">Before — four shallow stages re-sniffing each other</p>
+              <pre class="mermaid">
+flowchart TB
+  R[resolveRows] -->|source.source === custom?| S[resolveSource]
+  R -->|source.source === custom?| F[applyFilter]
+  R -->|tree: boolean| So[applySort]
+  R --> C[applyCollapse]
+  F -.re-derives shape.-> F2[rows.some isPlannedHeaderRow]
+  So -.re-derives shape.-> S2[rows.some isPlannedHeaderRow]
+  F -.depth=0, expandable kept.-> C
+  classDef leak stroke:#dc2626,stroke-width:2px,fill:#fef2f2;
+  class F,So,F2,S2 leak
+              </pre>
+              <p class="text-xs text-slate-600 mt-2">
+                Each stage's real interface is an undocumented contract about
+                <span class="font-mono">depth</span>, <span class="font-mono">expandable</span> and header adjacency. No test
+                reaches the composition. Defect <a class="underline" href="#d2">D2</a> is that contract, broken.
+              </p>
+            </div>
+            <div class="rounded-lg border border-slate-200 bg-stone-50 p-4">
+              <p class="lbl mb-3">After — one deep module, private stages</p>
+              <pre class="mermaid">
+flowchart TB
+  subgraph RP[resolveRows — one interface]
+    direction TB
+    P[build parent index once] --> Src[source produces rows + parentRowId]
+    Src --> Fi[filter: keep ancestors by parentRowId]
+    Fi --> Sr[sort: siblings under each parent]
+    Sr --> Co[collapse: hide by parentRowId]
+  end
+  In[entries · RowSource · collapsed · fieldCompares] --> RP --> Out[PlannedRow&#91;&#93;]
+  classDef deep fill:#0f172a,color:#f8fafc,stroke:#0f172a,stroke-width:2px;
+  class RP deep
+              </pre>
+              <p class="text-xs text-slate-600 mt-2">
+                One <span class="font-mono">parentRowId</span> on <span class="font-mono">UnindexedRow</span>, set by each
+                source, retires <span class="font-mono">hasHeaders</span>, the tunnelled
+                <span class="font-mono">tree</span> parameter, and five twin algorithms.
+              </p>
+            </div>
+          </div>
+
+          <div class="grid md:grid-cols-2 gap-6 text-sm">
+            <div>
+              <p class="lbl mb-1">Problem</p>
+              <p class="text-slate-700">
+                Four shallow modules whose composition nobody owns and no test covers.
+              </p>
+              <p class="lbl mb-1 mt-3">Solution</p>
+              <p class="text-slate-700">
+                Make <span class="font-mono text-xs">resolveRows</span> the deep module: one exported function, one input
+                type, stages private. Rows carry parentage instead of stages re-deriving it.
+              </p>
+            </div>
+            <div>
+              <p class="lbl mb-2">Wins</p>
+              <ul class="list-disc list-inside space-y-1 text-slate-700">
+                <li>locality: the four-stage contract lives in one file</li>
+                <li>interface shrinks; implementation absorbs the stages</li>
+                <li>one test surface, table-driven over source × policy × sort × collapsed</li>
+                <li>leverage: every row-shaped feature enters here</li>
+                <li>a fourth source stops needing five conditionals</li>
+                <li>fixes D2; retires C3, C6, C7</li>
+              </ul>
+            </div>
+          </div>
+          <p class="text-xs text-slate-500">
+            <strong>Deletion test:</strong> deleting <span class="font-mono">filter.ts</span>/<span class="font-mono">sort.ts</span>/<span class="font-mono">collapse.ts</span>
+            as files concentrates complexity in <span class="font-mono">resolve-rows.ts</span>, where it belongs. Concentrates.
+          </p>
+        </article>
+
+        <!-- A2 -->
+        <article id="a2" class="rounded-2xl border bg-white p-6 space-y-5">
+          <div class="flex flex-wrap items-center gap-3">
+            <span class="badge badge-strong">Strong</span>
+            <span class="badge badge-spec">in-process</span>
+            <h3 class="font-serif text-xl">Give <span class="font-mono text-lg">FrameMemory</span> the row height</h3>
+          </div>
+          <p class="font-mono text-xs text-slate-500">
+            src/layout/frame-memory.ts · frame-layout.ts · frame.ts · lanes/pack-lanes.ts
+          </p>
+
+          <div class="grid md:grid-cols-2 gap-4">
+            <div class="rounded-lg border border-slate-200 bg-stone-50 p-4">
+              <p class="lbl mb-3">Before — one formula, two owners</p>
+              <div class="space-y-2">
+                <div class="box box-hot">frame.ts · heightOf + packedItemsForRow</div>
+                <div class="text-center text-xs text-slate-400">produce → pack → packedRowHeight</div>
+                <div class="box box-hot">frame-layout.ts · #heightAt</div>
+                <div class="text-center text-xs text-slate-400">produce → pack → packedRowHeight</div>
+                <div class="mt-3 box box-thin">FrameMemory · packedRow(id, compute) only</div>
+                <p class="text-xs text-slate-600 pt-2">
+                  <span class="font-mono">FrameLayout</span> mirrors
+                  <span class="font-mono">#rowHeight</span>, <span class="font-mono">#laneGap</span>,
+                  <span class="font-mono">#entryById</span>, <span class="font-mono">#registry</span> purely to restate the
+                  formula. A data clump, kept in sync by hand.
+                </p>
+              </div>
+            </div>
+            <div class="rounded-lg border border-slate-200 bg-stone-50 p-4">
+              <p class="lbl mb-3">After — the memory owns produce, pack and height</p>
+              <div class="space-y-2">
+                <div class="box box-thin">frame.ts · placeFrame</div>
+                <div class="box box-thin">frame-layout.ts · computeFrame</div>
+                <div class="text-center text-xs text-slate-400">↓ both ask ↓</div>
+                <div class="box box-deep">FrameMemory · heightOfRow(index) · packedRow(id)</div>
+                <p class="text-xs text-slate-600 pt-2">
+                  Four mirrored fields disappear from <span class="font-mono">FrameLayout</span>. The formula has one
+                  owner, so the two cannot drift.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div class="grid md:grid-cols-2 gap-6 text-sm">
+            <div>
+              <p class="lbl mb-1">Problem</p>
+              <p class="text-slate-700">
+                <span class="font-mono text-xs">FrameMemory</span> is shallow — a map with a memo — while the rule it exists
+                to serve lives twice, outside it. And its cache key is
+                <span class="font-mono text-xs">(rowCount, rowHeight, laneGap)</span>, so “you must call
+                <span class="font-mono text-xs">invalidateForChange</span> first” is implicit knowledge the caller holds.
+              </p>
+              <p class="lbl mb-1 mt-3">Solution</p>
+              <p class="text-slate-700">
+                Move produce → pack → height inside <span class="font-mono text-xs">FrameMemory</span>, and key invalidation
+                on a dataset revision it receives, so the ordering rule leaves the interface.
+              </p>
+            </div>
+            <div>
+              <p class="lbl mb-2">Wins</p>
+              <ul class="list-disc list-inside space-y-1 text-slate-700">
+                <li>one formula, one owner — the <span class="font-mono text-xs">barSpan</span> lesson, applied</li>
+                <li>interface loses an ordering rule the caller had to know</li>
+                <li>test surface: heights testable without a frame</li>
+                <li>natural home for the row-index map (C4, and the O(u × rows) invalidation walk)</li>
+              </ul>
+            </div>
+          </div>
+        </article>
+
+        <!-- A3 -->
+        <article id="a3" class="rounded-2xl border bg-white p-6 space-y-5">
+          <div class="flex flex-wrap items-center gap-3">
+            <span class="badge badge-strong">Strong</span>
+            <span class="badge badge-spec">in-process</span>
+            <h3 class="font-serif text-xl">Let <span class="font-mono text-lg">TreeCollapse</span> finish its own change</h3>
+          </div>
+          <p class="font-mono text-xs text-slate-500">src/view/tree-collapse.ts · collapse-state.ts · gantt-shell.ts</p>
+
+          <div class="grid md:grid-cols-2 gap-4">
+            <div class="rounded-lg border border-slate-200 bg-stone-50 p-4">
+              <p class="lbl mb-3">Before — three hops for one click</p>
+              <pre class="mermaid">
+sequenceDiagram
+  participant U as twisty click
+  participant S as GanttShell
+  participant T as TreeCollapse
+  participant C as CollapseState
+  U->>S: toggleCollapse(id)
+  S->>T: toggleCollapse(id)
+  T->>S: ctx.applyCollapsed(ids)
+  S->>T: propose(ids)
+  T->>C: propose(ids)
+  S->>S: emit beforeCollapseChange
+  S->>T: commit(to)
+  T->>C: commit(to)
+  S->>S: invalidate + request frame + emit
+              </pre>
+            </div>
+            <div class="rounded-lg border border-slate-200 bg-stone-50 p-4">
+              <p class="lbl mb-3">After — one round trip, one owner</p>
+              <pre class="mermaid">
+sequenceDiagram
+  participant U as twisty click
+  participant S as GanttShell
+  participant T as TreeCollapse
+  U->>S: toggleCollapse(id)
+  S->>T: toggleCollapse(id)
+  T->>S: ctx.confirm({from, to}) : boolean
+  T->>T: commit
+  T-->>S: changed = true
+  S->>S: invalidate + request frame + emit
+              </pre>
+            </div>
+          </div>
+
+          <div class="grid md:grid-cols-2 gap-6 text-sm">
+            <div>
+              <p class="lbl mb-1">Problem</p>
+              <p class="text-slate-700">
+                <span class="font-mono text-xs">CollapseState</span> is 31 lines whose interface <em>is</em> its
+                implementation, and <span class="font-mono text-xs">TreeCollapse</span> cannot complete a change it started —
+                every mutator calls back out through <span class="font-mono text-xs">ctx.applyCollapsed</span> into the shell,
+                which calls <span class="font-mono text-xs">propose</span>/<span class="font-mono text-xs">commit</span> back
+                in. <span class="font-mono text-xs">propose</span> and
+                <span class="font-mono text-xs">commit</span> are public members with no legitimate outside caller.
+              </p>
+              <p class="lbl mb-1 mt-3">Solution</p>
+              <p class="text-slate-700">
+                Fold <span class="font-mono text-xs">CollapseState</span> in; replace
+                <span class="font-mono text-xs">applyCollapsed</span> with
+                <span class="font-mono text-xs">confirm(change): boolean</span>; add
+                <span class="font-mono text-xs">rowIdForEntry(id)</span> to the context so the module stops assuming
+                <span class="font-mono text-xs">RowId === EntryId</span> (defect <a class="underline" href="#d4">D4</a>).
+              </p>
+            </div>
+            <div>
+              <p class="lbl mb-2">Wins</p>
+              <ul class="list-disc list-inside space-y-1 text-slate-700">
+                <li>one module answers “what does collapsing do”</li>
+                <li>interface loses two members that exist only for the bounce</li>
+                <li><span class="font-mono text-xs">tree-collapse.test.ts</span> becomes the whole test surface</li>
+                <li>fixes D4; group and custom rows get <span class="font-mono text-xs">reveal()</span></li>
+              </ul>
+            </div>
+          </div>
+        </article>
+
+        <!-- A4 -->
+        <article id="a4" class="rounded-2xl border bg-white p-6 space-y-5">
+          <div class="flex flex-wrap items-center gap-3">
+            <span class="badge badge-worth">Worth exploring</span>
+            <span class="badge badge-spec">ports &amp; adapters</span>
+            <h3 class="font-serif text-xl">One <span class="font-mono text-lg">FieldSource</span> strategy table</h3>
+          </div>
+          <p class="font-mono text-xs text-slate-500">
+            src/data/fields/field-access.ts · normalize-source.ts · field-registry.ts · serialization/field-document.ts
+          </p>
+
+          <div class="grid md:grid-cols-2 gap-4">
+            <div class="rounded-lg border border-slate-200 bg-stone-50 p-4">
+              <p class="lbl mb-3">Before — interface as wide as implementation</p>
+              <div class="flex items-end gap-6 justify-center pt-2" style="height: 190px">
+                <div class="text-center">
+                  <div class="bg-red-200 border border-red-400 rounded-t" style="width: 84px; height: 120px"></div>
+                  <div class="bg-slate-200 border border-slate-400 rounded-b" style="width: 84px; height: 40px"></div>
+                  <p class="lbl mt-2">6 cascades</p>
+                </div>
+                <div class="text-xs text-slate-600 max-w-[15rem]">
+                  <p class="font-mono">readField · writeField · metaKeyOf · editProposesField · overlayStoredEdit</p>
+                  <p class="font-mono mt-1 text-red-700">+ normalize-source.ts · field-document.ts</p>
+                  <p class="mt-2">Two one-line aliases (<span class="font-mono">resolveSource</span>, <span class="font-mono">sourceForWrite</span>) hide a third and fourth caller.</p>
+                </div>
+              </div>
+            </div>
+            <div class="rounded-lg border border-slate-200 bg-stone-50 p-4">
+              <p class="lbl mb-3">After — one table, deep behind it</p>
+              <div class="flex items-end gap-6 justify-center pt-2" style="height: 190px">
+                <div class="text-center">
+                  <div class="bg-emerald-200 border border-emerald-500 rounded-t" style="width: 84px; height: 32px"></div>
+                  <div class="deep rounded-b" style="width: 84px; height: 128px"></div>
+                  <p class="lbl mt-2">1 record</p>
+                </div>
+                <div class="text-xs text-slate-600 max-w-[15rem]">
+                  <p class="font-mono">SOURCE_STRATEGY = { entry, meta, compute }</p>
+                  <p class="mt-2">Each variant supplies <span class="font-mono">read</span>, <span class="font-mono">write</span>, <span class="font-mono">storageKey</span>, <span class="font-mono">proposes</span>, <span class="font-mono">serialize</span>. A fourth variant is one entry.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="grid md:grid-cols-2 gap-6 text-sm">
+            <div>
+              <p class="lbl mb-1">Problem</p>
+              <p class="text-slate-700">
+                <span class="font-mono text-xs">README</span> gotcha 3 promises one switch; there are six across three files
+                (SP4). <span class="font-mono text-xs">ResolvedField.source</span> is normalized by the registry and then
+                re-normalized at read time, so nothing states whether it is trustworthy.
+              </p>
+              <p class="lbl mb-1 mt-3">Solution</p>
+              <p class="text-slate-700">
+                One frozen per-source record; delete both aliases; make “the registry normalizes
+                <span class="font-mono text-xs">source</span> once” a stated invariant checked in one place. Delete
+                <span class="font-mono text-xs">field-lookup.ts</span> — a four-line re-export with one importer is a
+                hypothetical seam, not a real one.
+              </p>
+            </div>
+            <div>
+              <p class="lbl mb-2">Wins</p>
+              <ul class="list-disc list-inside space-y-1 text-slate-700">
+                <li>S5's plugin-owned source becomes one table entry</li>
+                <li>the gotcha becomes true again, and stays lintable</li>
+                <li>fewer hops per concept; the invariant is checkable</li>
+                <li>names the two key namespaces apart: Field key vs meta slot</li>
+              </ul>
+            </div>
+          </div>
+        </article>
+
+        <!-- A5 -->
+        <article id="a5" class="rounded-2xl border bg-white p-6 space-y-5">
+          <div class="flex flex-wrap items-center gap-3">
+            <span class="badge badge-worth">Worth exploring</span>
+            <span class="badge badge-spec">API gap</span>
+            <h3 class="font-serif text-xl">Hand the row-source callbacks a field reader</h3>
+          </div>
+          <p class="font-mono text-xs text-slate-500">src/layout/rows/row-source.ts · harness/main.ts · harness/hierarchy.ts</p>
+
+          <div class="rounded-lg border border-slate-200 bg-stone-50 p-4">
+            <div class="grid md:grid-cols-2 gap-6 text-xs font-mono">
+              <div>
+                <p class="lbl mb-2" style="font-family: system-ui">Today — the consumer writes this, twice</p>
+                <pre class="bg-white border rounded p-3 overflow-x-auto text-[0.72rem] leading-relaxed">function teamOf(entry: Entry) {
+  const meta = entry.meta;
+  if (typeof meta !== 'object' || meta === null)
+    return undefined;
+  const team = (meta as { team?: unknown }).team;
+  return typeof team === 'string' ? team : undefined;
+}
+
+rowSource = { source: 'group',
+  groupBy: (e) =&gt; teamOf(e) ?? 'unassigned' };</pre>
+              </div>
+              <div>
+                <p class="lbl mb-2" style="font-family: system-ui">Published call site</p>
+                <pre class="bg-white border rounded p-3 overflow-x-auto text-[0.72rem] leading-relaxed">rowSource = { source: 'group',
+  groupBy: (e, fields) =&gt;
+    fields.read&lt;string&gt;(e, 'team') ?? 'unassigned' };
+
+rowSource = { source: 'entries', tree: true,
+  filter: (e, fields) =&gt;
+    fields.read(e, 'team') === 'core' };</pre>
+                <p class="text-[0.72rem] text-slate-600 mt-2" style="font-family: system-ui">
+                  <span class="font-mono">FieldContext</span> already exists, is already bound per Gantt, and already routes
+                  entry, meta and compute Fields through one call.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div class="grid md:grid-cols-2 gap-6 text-sm">
+            <div>
+              <p class="lbl mb-1">Problem</p>
+              <p class="text-slate-700">
+                <span class="font-mono text-xs">RowFilter</span>, <span class="font-mono text-xs">groupBy</span> and
+                <span class="font-mono text-xs">RowSort.compare</span> hand out a bare
+                <span class="font-mono text-xs">Entry</span>. Every consumer that declared a meta Field must then unpack
+                <span class="font-mono text-xs">meta</span> by hand — which is what CONTEXT.md says a Field exists to prevent,
+                and what the harness proves twice.
+              </p>
+              <p class="lbl mb-1 mt-3">Solution</p>
+              <p class="text-slate-700">
+                Pass the bound reader as a second argument. Existing one-argument callbacks keep working — JS ignores an
+                argument a callback never declares, the same precedent
+                <span class="font-mono text-xs">runTransaction</span>'s <span class="font-mono text-xs">TxToken</span> already
+                sets.
+              </p>
+            </div>
+            <div>
+              <p class="lbl mb-2">Wins</p>
+              <ul class="list-disc list-inside space-y-1 text-slate-700">
+                <li>closes the S4 harness gap in <span class="font-mono text-xs">src/</span>, not in the harness</li>
+                <li>consumer Fields and core Fields take one code path at the call site too</li>
+                <li>compute Fields become filterable and groupable</li>
+                <li>no breaking change; the long form stays available</li>
+              </ul>
+            </div>
+          </div>
+        </article>
+
+        <!-- A6 -->
+        <article id="a6" class="rounded-2xl border bg-white p-6 space-y-5">
+          <div class="flex flex-wrap items-center gap-3">
+            <span class="badge badge-worth">Worth exploring</span>
+            <span class="badge badge-spec">in-process</span>
+            <h3 class="font-serif text-xl">One <span class="font-mono text-lg">proposeChange</span> for the veto protocol</h3>
+          </div>
+          <p class="font-mono text-xs text-slate-500">src/view/gantt-shell.ts:553 · :618 · :872</p>
+          <div class="rounded-lg border border-slate-200 bg-stone-50 p-4">
+            <div class="grid md:grid-cols-3 gap-3 text-xs">
+              <div class="box box-hot">#applyCollapsed<br /><span class="text-slate-500">propose → veto → commit → emit</span></div>
+              <div class="box box-hot">#proposeSelection<br /><span class="text-slate-500">propose → veto → commit → emit</span></div>
+              <div class="box box-hot">#commitGridWidth<br /><span class="text-slate-500">propose → veto → rollback → emit</span></div>
+            </div>
+            <div class="text-center text-xs text-slate-400 my-3">↓</div>
+            <div class="box box-deep max-w-md mx-auto">
+              proposeChange(name, { from, to }, apply) : boolean
+            </div>
+          </div>
+          <div class="grid md:grid-cols-2 gap-6 text-sm">
+            <div>
+              <p class="lbl mb-1">Problem</p>
+              <p class="text-slate-700">
+                The cancelable-<span class="font-mono text-xs">before*</span> protocol that <span class="font-mono">plans/02</span>
+                makes universal is written out longhand three times, each subtly different — only
+                <span class="font-mono text-xs">gridWidth</span> rolls back on veto. A fourth event in S5 writes it a fourth
+                time.
+              </p>
+              <p class="lbl mb-1 mt-3">Solution</p>
+              <p class="text-slate-700">
+                One private helper. The shell's remaining width is then wiring, which is what a composition root should be.
+              </p>
+            </div>
+            <div>
+              <p class="lbl mb-2">Wins</p>
+              <ul class="list-disc list-inside space-y-1 text-slate-700">
+                <li>the veto protocol is tested once, not three times</li>
+                <li>leverage: every future <span class="font-mono text-xs">before*</span> event gets it free</li>
+                <li>shrinks the 941-line composition root without a new module</li>
+              </ul>
+            </div>
+          </div>
+          <div class="rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-slate-700">
+            <strong>Not a candidate:</strong> merging <span class="font-mono">Gantt</span> into
+            <span class="font-mono">GanttShell</span>. Issue #7 settled that, and
+            <span class="font-mono">plans/01</span> §1 keeps <span class="font-mono">api/</span> the only public layer. The
+            façade's ~28 forwarders are a real tax — a new config key costs four edits — but the answer is to keep extracting
+            stateful clusters out of the shell (as <span class="font-mono">TreeCollapse</span> and
+            <span class="font-mono">GesturePipeline</span> already were), not to remove the seam.
+          </div>
+        </article>
+      </section>
+
+      <!-- ─────────────────────────── TOP REC ─────────────────────────── -->
+      <section id="top-recommendation" class="rounded-2xl deep text-slate-100 p-8 space-y-4">
+        <p class="lbl text-slate-400">Top recommendation</p>
+        <h2 class="font-serif text-2xl">
+          Fix D1–D3, then do <a class="underline" href="#a1">A1 — deepen <span class="font-mono">resolveRows</span></a>
+        </h2>
+        <p class="text-sm text-slate-300 max-w-3xl">
+          D1, D2 and D3 are three lines of code between them and each one is a user-visible break of a rule this repo
+          writes down. Fix them first, with the tests that should have caught them.
+        </p>
+        <p class="text-sm text-slate-300 max-w-3xl">
+          Then A1. The row pipeline is where hierarchy, grouping, filtering and collapse actually meet, it is the highest-traffic
+          code S4 added, it costs no ADR — and it is the only candidate that fixes a confirmed defect (D2) as a side effect of
+          its own deepening. Four near-interface-sized modules become one deep one with private stages, and the
+          composition that today no test reaches becomes a single table-driven test surface. A2 follows naturally: with the
+          plan cached and parentage on the row, the height formula has one obvious home.
+        </p>
+        <p class="text-xs text-slate-400">
+          Sequencing note: A1 and A2 both touch <span class="font-mono">layout/</span> and both should land before S5 grows
+          the plugin registration surface on top of them.
+        </p>
+      </section>
+
+      <footer class="text-xs text-slate-500 border-t pt-6">
+        <p>
+          Reviewed with <span class="font-mono">/pk-branch-review</span> —
+          <span class="font-mono">/code-review</span> (standards + spec), <span class="font-mono">/simplify</span>
+          (reuse, simplification, efficiency, altitude), <span class="font-mono">/improve-codebase-architecture</span>.
+          Findings marked “reproduced” were run against the branch;
+          <span class="font-mono">pnpm verify</span> and <span class="font-mono">pnpm gate</span> both exit 0 as of
+          <span class="font-mono">29a36f8</span>. No source file was modified by this review.
+        </p>
+      </footer>
+    </main>
+  </body>
+</html>
