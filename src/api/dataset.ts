@@ -121,6 +121,11 @@ export class Dataset<TMeta = unknown, TFields extends Record<string, unknown> = 
     return this.#state.isRollUpKind(kind);
   }
 
+  /** Call: `layout.computeFrame({ datasetRevision: dataset.datasetRevision })`. */
+  get datasetRevision(): number {
+    return this.#state.datasetRevision;
+  }
+
   /** Batches `body`'s mutations into one changeset (D-S2-8). Nested calls join the open transaction.
    *  `'user'` is the only origin a public caller can produce in S2. */
   transaction<T>(body: () => T): T {

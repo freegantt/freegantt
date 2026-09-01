@@ -61,6 +61,9 @@ export interface Dataset<TMeta = unknown, TFields extends Record<string, unknown
   /** Resolved declaration for this key, or `undefined` when the key is not declared. */
   field(key: FieldKey): Field | undefined;
   isRollUpKind(kind: EntryKind): boolean;
+  /** Bumped on every committed changeset. Layout uses it as the pack-cache key (D-S4-26).
+   *  Optional so a test Dataset may omit it. */
+  readonly datasetRevision?: number;
   on<K extends keyof DatasetEventMap>(name: K, handler: (payload: DatasetEventMap[K]) => void | false): void;
   off<K extends keyof DatasetEventMap>(name: K, handler: (payload: DatasetEventMap[K]) => void | false): void;
 }
