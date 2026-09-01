@@ -25,8 +25,8 @@ function defaultCompareStored(locale: Intl.LocalesArgument): (a: unknown, b: unk
   const collator = new Intl.Collator(locale);
   return (a, b) => {
     if (Object.is(a, b)) return 0;
-    if (a === undefined || a === null) return -1;
-    if (b === undefined || b === null) return 1;
+    if (a === undefined || a === null) return 1;
+    if (b === undefined || b === null) return -1;
     if (typeof a === 'number' && typeof b === 'number') return a - b;
     if (typeof a === 'string' && typeof b === 'string') return collator.compare(a, b);
     return 0;

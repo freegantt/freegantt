@@ -81,6 +81,28 @@ describe('resolveFieldCompares (D-S4-13)', () => {
     expect(compares.find((c) => c.key === 'cost')?.compareStored(1, 2)).toBeLessThan(0);
     expect(compares.find((c) => c.key === 'cost')?.readStored(entry)).toBe(500);
   });
+
+  it('places undefined and null last', () => {
+    const compares = resolveFieldCompares(lookupFrom(CORE_FIELDS), CORE_FIELDS, {
+      timeZone: zone,
+      locale,
+    });
+    const nameCompare = compares.find((c) => c.key === 'name');
+    expect(nameCompare?.compareStored(undefined, 'a')).toBeGreaterThan(0);
+    expect(nameCompare?.compareStored('a', null)).toBeLessThan(0);
+  });
+
+  it('duration compareStored orders by Duration.value from the compute read', () => {
+    const compares = resolveFieldCompares(lookupFrom(CORE_FIELDS), CORE_FIELDS, {
+      timeZone: zone,
+      locale,
+    });
+    const duration = compares.find((c) => c.key === 'duration')!;
+    const short: Entry = { ...entry, end: 10 as Entry['end'] };
+    const long: Entry = { ...entry, end: 40 as Entry['end'] };
+    expect(duration.readStored(short)).toEqual({ value: 10, unit: 'millisecond' });
+    expect(duration.compareStored(duration.readStored(short), duration.readStored(long))).toBeLessThan(0);
+  });
 });
 
 describe('resolveGanttFields (D-S4-13)', () => {

@@ -70,7 +70,7 @@ export function applySort(
   sort: RowSort | undefined,
   fieldCompares: readonly FieldCompare[],
 ): UnindexedRow[] {
-  if (sort === undefined || fieldCompares.length === 0) return [...rows];
+  if (sort === undefined) return [...rows];
 
   const compare = comparerFor(sort, fieldCompares);
   const entriesById = new Map(entries.map((entry) => [entry.id, entry]));
