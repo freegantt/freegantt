@@ -97,6 +97,29 @@ h1 {
   margin: 0 0 1.25rem;
   max-width: 68ch;
 }
+.updated {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0 0 1.1rem;
+  padding: 0.55rem 1rem;
+  border: 1px solid var(--accent);
+  border-left: 5px solid var(--accent);
+  border-radius: 6px;
+  background: var(--api-bg);
+  color: var(--accent-ink);
+  font-family: var(--mono);
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.updated .k {
+  color: var(--faint);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-size: 0.72rem;
+}
 .meta {
   font-family: var(--mono);
   font-size: 0.78rem;
