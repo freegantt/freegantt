@@ -13,7 +13,7 @@ async function unobstructedBar(page: import('@playwright/test').Page) {
     const header = pane.querySelector('.fg-header');
     const headerBottom = header?.getBoundingClientRect().bottom ?? pane.getBoundingClientRect().top;
     const paneRect = pane.getBoundingClientRect();
-    for (const bar of pane.querySelectorAll<HTMLElement>('.fg-bar')) {
+    for (const bar of Array.from(pane.querySelectorAll<HTMLElement>('.fg-bar'))) {
       const rect = bar.getBoundingClientRect();
       if (rect.top < headerBottom + 1) continue;
       if (rect.bottom > paneRect.bottom) continue;
