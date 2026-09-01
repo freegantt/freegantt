@@ -66,6 +66,7 @@ export class Dataset<TMeta = unknown, TFields extends Record<string, unknown> = 
         readonly all: readonly Field[];
     };
     static fromJSON<TMeta = unknown, TFields extends Record<string, unknown> = Record<string, unknown>>(doc: DatasetDocument<TMeta>, options?: Pick<DatasetOptions, 'fields' | 'fieldTypes' | 'aggregators'>): Dataset<TMeta, TFields>;
+    get hierarchy(): DatasetHierarchy;
     isRollUpKind(kind: EntryKind): boolean;
     // (undocumented)
     off<K extends keyof DatasetEventMap>(name: K, handler: (payload: DatasetEventMap[K]) => void | false): void;
@@ -109,6 +110,12 @@ export interface DatasetEventMap {
     };
 }
 
+// @public
+export interface DatasetHierarchy {
+    // (undocumented)
+    readonly autoGroup: boolean;
+}
+
 // @public (undocumented)
 export interface DatasetOptions<TMeta = unknown> {
     aggregators?: Readonly<Record<string, Aggregator>>;
@@ -116,6 +123,7 @@ export interface DatasetOptions<TMeta = unknown> {
     entries: readonly EntryInput<TMeta>[];
     fields?: readonly Field[];
     fieldTypes?: Readonly<Record<string, FieldType>>;
+    hierarchy?: DatasetHierarchy;
     history?: {
         capacity?: number;
     };

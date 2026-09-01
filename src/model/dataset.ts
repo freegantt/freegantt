@@ -12,6 +12,12 @@ import type { DatasetEventMap } from './change-set.js';
  *  `[]` both mean no Kind derives. */
 export type RollUpKinds = readonly EntryKind[] | 'none';
 
+/** Parent/child Kind policy on a Dataset (`02` §2, D-S4-17). Default is on. Call:
+ *  `new Dataset({ hierarchy: { autoGroup: false }, entries })` to opt out. */
+export interface DatasetHierarchy {
+  readonly autoGroup: boolean;
+}
+
 /** The Dataset's own read view onto its entries (D-S2-2). `all` is the committed array — see D-S2-3
  *  for its cached-identity rule and D-S2-21 for what it does *not* show while a transaction is open
  *  (`get`/`has`/`size`/`childrenOf`/`fieldValue` see a transaction's own uncommitted writes; `all` does not). */

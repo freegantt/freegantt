@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { runTransaction } from './transaction.js';
 import { DatasetState } from './dataset-state.js';
 import { MutationCancelledError, MutationDuringNotificationError, entryId } from '../model/index.js';
+import { toEndInstant, toInstant } from '../time/index.js';
 import type { EntryEdits, StoredEdit } from './edit-extension.js';
 
 function dataset(entries: { id: string; parentId?: string }[] = []): DatasetState {
@@ -521,5 +522,22 @@ describe('runTransaction', () => {
     expect(updatedIds.has('other')).toBe(false);
     expect(updatedIds.has('kept')).toBe(false);
     expect(updatedIds.has('root')).toBe(true);
+  });
+
+  it('a parent promoted on this commit is inside the Rollup reach on the same commit (D-S4-17)', () => {
+    const state = new DatasetState({
+      entries: [
+        { id: 'p1', name: 'p1', start: '2026-01-01', end: '2026-01-02' },
+        { id: 'c1', name: 'c1', start: '2026-03-01', end: '2026-03-05' },
+      ],
+      timeZone: 'UTC',
+    });
+
+    state.entries.update('c1', { parentId: 'p1' });
+
+    const parent = state.entries.get('p1')!;
+    expect(parent.kind).toBe('group');
+    expect(parent.start).toBe(toInstant('UTC', '2026-03-01'));
+    expect(parent.end).toBe(toEndInstant('UTC', '2026-03-05', 'inclusive'));
   });
 });

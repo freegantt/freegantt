@@ -62,6 +62,11 @@ checkRedTestFile(
   'rollup-is-removable: second importer',
 );
 checkRedTestFile(
+  'src/data/__hierarchy_red_test__.ts',
+  "// Deliberate second importer of the autoGroup leaf — only transaction.ts may import it.\nimport './hierarchy.js';\nexport {};\n",
+  'autogroup-is-removable: second importer',
+);
+checkRedTestFile(
   'src/view/__dataset_change_subscription_red_test__.ts',
   "// Deliberate second importer of the dataset-change-subscription leaf — only gantt-shell.ts may import it.\nimport './dataset-change-subscription.js';\nexport {};\n",
   'dataset-change-subscription-is-removable: second importer',

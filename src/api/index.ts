@@ -1,5 +1,5 @@
 export { Dataset } from './dataset.js';
-export type { DatasetOptions } from './dataset.js';
+export type { DatasetOptions, DatasetHierarchy } from './dataset.js';
 export type {
   ChangeSet,
   ChangeSetId,

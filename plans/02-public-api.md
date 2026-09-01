@@ -28,7 +28,7 @@ const dataset = new Dataset<{ team: string }, { cost: number }>({
   dateOnlyEnd: 'inclusive',               // default; see §2.1
   rollUpKinds: ['group'],                 // default; `'none'` keeps caller-assigned parent values
   history: { capacity: 100 },             // default; undo/redo stack depth — see "Undo and redo" below
-  hierarchy: { autoGroup: true },         // first child promotes parent to kind 'group'; promote only
+  hierarchy: { autoGroup: true },         // default; first child promotes parent to kind 'group'; promote only
   entries: [
     { id: 'p1', name: 'Sitework', kind: 'group' },     // span derives from children (default policy)
     { id: 't1', parentId: 'p1', name: 'Groundwork', start: '2026-09-01', end: '2026-09-11' },

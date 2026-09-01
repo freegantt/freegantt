@@ -151,8 +151,11 @@ export function rollUpFields(
   const emptyEdits: EntryEdits = new Map();
   const body = pending?.edits.body ?? emptyEdits;
   const merged = pending?.edits.merged ?? emptyEdits;
-  const entries = pending === undefined ? committed : buildEffectiveEntries(committed, added, removed, body);
-  const touched = pending === undefined ? undefined : collectTouchedIds(committed, added, removed, body);
+  // Effective tree includes extender and autoGroup overlays so a parent promoted on this commit
+  // is already a roll-up Kind when `parentsToRecompute` reads `entry.kind` (D-S4-17).
+  const entries =
+    pending === undefined ? committed : buildEffectiveEntries(committed, added, removed, merged);
+  const touched = pending === undefined ? undefined : collectTouchedIds(committed, added, removed, merged);
 
   const byParent = childrenByParent(entries);
   const parents = parentsToRecompute(entries, rollUpKinds, touched);
