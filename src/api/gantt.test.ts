@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { Gantt } from './gantt.js';
 import { Dataset } from './dataset.js';
 import { EntryNotFoundError, ScrollModel, TimeScaleModel, entryId } from './index.js';
+import type { Entry } from './index.js';
 import { sampleEntries } from '../../fixtures/sample-dataset.js';
 import { instant } from '../time/index.js';
 
@@ -873,6 +874,84 @@ describe('Gantt gridWidth and events (S1.8, plans/02 §6)', () => {
   });
 });
 
+describe('Gantt gridColumns (S4.3, D-S4-12, [S4-A1] column half)', () => {
+  it('a declared cost shows beside start; assigning gridColumns re-renders with no remount', async () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      fieldTypes: {
+        money: {
+          rollUp: 'sum',
+          formatValue: (value) => (typeof value === 'number' ? `$${value}` : ''),
+          column: { header: 'Cost', align: 'end' },
+        },
+      },
+      fields: [{ key: 'cost', type: 'money' }],
+      entries: sampleEntries.map((entry, i) => (i === 0 ? { ...entry, meta: { cost: 500 } } : entry)),
+    });
+    const gantt = new Gantt({
+      container,
+      dataset,
+      gridColumns: ['name', 'start', 'cost'],
+    });
+
+    const firstRow = container.querySelector<HTMLElement>('.fg-row')!;
+    const cells = Array.from(firstRow.querySelectorAll('.fg-row-label, .fg-row-cell'));
+    expect(cells.map((c) => c.textContent)).toEqual([sampleEntries[0]?.name, expect.any(String), '$500']);
+    expect(cells[1]?.getAttribute('data-field')).toBe('start');
+    expect(cells[2]?.getAttribute('data-field')).toBe('cost');
+
+    const barsBefore = Array.from(container.querySelectorAll('.fg-bar'));
+    gantt.gridColumns = ['name', 'start'];
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    const barsAfter = Array.from(container.querySelectorAll('.fg-bar'));
+    expect(barsAfter).toEqual(barsBefore);
+    expect(firstRow.querySelector('[data-field="cost"]')).toBeNull();
+    expect(firstRow.querySelectorAll('.fg-row-label, .fg-row-cell')).toHaveLength(2);
+
+    gantt.destroy();
+  });
+
+  it('a Dataset change re-binds columns so a later cost edit paints the new cell text', async () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      fieldTypes: {
+        money: {
+          rollUp: 'sum',
+          formatValue: (value) => (typeof value === 'number' ? `$${value}` : ''),
+          column: { header: 'Cost', align: 'end' },
+        },
+      },
+      fields: [{ key: 'cost', type: 'money' }],
+      entries: sampleEntries.map((entry, i) => (i === 0 ? { ...entry, meta: { cost: 500 } } : entry)),
+    });
+    const gantt = new Gantt({
+      container,
+      dataset,
+      gridColumns: ['name', 'cost'],
+    });
+    const id = dataset.entries.all[0]!.id;
+    dataset.entries.update(id, { cost: 999 });
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    const costCell = container.querySelector('.fg-row [data-field="cost"]');
+    expect(costCell?.textContent).toBe('$999');
+    gantt.destroy();
+  });
+
+  it("default gridColumns is ['name']", () => {
+    const container = document.createElement('div');
+    const gantt = new Gantt({
+      container,
+      dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }),
+    });
+    expect(gantt.gridColumns).toEqual(['name']);
+    const row = container.querySelector('.fg-row')!;
+    expect(row.querySelectorAll('.fg-row-label, .fg-row-cell')).toHaveLength(1);
+    gantt.destroy();
+  });
+});
+
 describe('Gantt selection (S3.1, D-S3-10, [S3-A1])', () => {
   it('gantt.selection = [id] is live and loose in, branded out', () => {
     const container = document.createElement('div');
@@ -1012,7 +1091,7 @@ describe('Gantt interactions / capability hot path (S3.2, D-S3-9, [S3-A3]/[S3-A5
     gantt.destroy();
   });
 
-  it('a group entry (derivedSpanKinds) gets neither the grab cursor nor a handle', () => {
+  it('a group entry (rollUpKinds) gets neither the grab cursor nor a handle', () => {
     const container = document.createElement('div');
     const dataset = new Dataset({
       entries: [{ id: 'g1', kind: 'group', name: 'Group' }, ...sampleEntries],
@@ -1637,5 +1716,164 @@ describe('Gantt viewport gestures (S3.7, [S3-A7], D-S3-14)', () => {
     } finally {
       vi.unstubAllGlobals();
     }
+  });
+});
+
+describe('Gantt rows and collapse (S4.6)', () => {
+  it('[S4-A3] switching rows re-resolves with no remount and keeps the scroll position', async () => {
+    FakeResizeObserver.instances = [];
+    vi.stubGlobal('ResizeObserver', FakeResizeObserver);
+    const container = document.createElement('div');
+    const scroll = new ScrollModel();
+    const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
+    const gantt = new Gantt({
+      container,
+      dataset,
+      scroll,
+      rowSource: { source: 'entries', tree: true },
+    });
+    FakeResizeObserver.instances[0]!.fire({ width: 300, height: 100 });
+    scroll.panTo({ x: 0, y: 80 });
+    const yBefore = scroll.state.position.y;
+    const bar = container.querySelector<HTMLElement>('.fg-bar')!;
+    const itemId = bar.dataset['itemId'];
+
+    gantt.rowSource = { source: 'group', groupBy: (entry: Entry) => entry.kind };
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+
+    expect(container.querySelector(`[data-item-id="${itemId}"]`)).toBe(bar);
+    expect(scroll.state.position.y).toBe(yBefore);
+
+    gantt.destroy();
+    vi.unstubAllGlobals();
+  });
+
+  it('[S4-A6] collapse survives add/update/remove, a veto restores, and two Gantts stay independent', () => {
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      entries: [
+        { id: 'p', name: 'p', start: '2026-01-01', end: '2026-01-02', kind: 'group' },
+        { id: 'c', name: 'c', start: '2026-01-03', end: '2026-01-04', parentId: 'p' },
+      ],
+    });
+    const a = new Gantt({
+      container: document.createElement('div'),
+      dataset,
+      rowSource: { source: 'entries', tree: true },
+    });
+    const b = new Gantt({
+      container: document.createElement('div'),
+      dataset,
+      rowSource: { source: 'entries', tree: true },
+    });
+    a.collapse('p');
+    expect(a.collapsed).toEqual([entryId('p')]);
+    expect(b.collapsed).toEqual([]);
+
+    dataset.entries.remove('c');
+    dataset.entries.update('p', { name: 'still p' });
+    dataset.entries.add({ id: 'n', name: 'n', start: '2026-01-05', end: '2026-01-06' });
+    expect(a.collapsed).toEqual([entryId('p')]);
+
+    a.on('beforeCollapseChange', () => false);
+    a.expand('p');
+    expect(a.collapsed).toEqual([entryId('p')]);
+
+    a.destroy();
+    b.destroy();
+  });
+
+  it('collapseAll uses expandable planned row ids, including grouped headers', async () => {
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      entries: [
+        { id: 'p', name: 'p', start: '2026-01-01', end: '2026-01-02', kind: 'group' },
+        { id: 'c', name: 'c', start: '2026-01-03', end: '2026-01-04', parentId: 'p', kind: 'span' },
+        { id: 'solo', name: 'solo', start: '2026-01-05', end: '2026-01-06', kind: 'milestone' },
+      ],
+    });
+    const gantt = new Gantt({
+      container: document.createElement('div'),
+      dataset,
+      rowSource: { source: 'entries', tree: true },
+    });
+
+    gantt.collapseAll();
+    expect(gantt.collapsed.map(String)).toEqual(['p']);
+
+    gantt.expandAll();
+    expect(gantt.collapsed).toEqual([]);
+
+    gantt.rowSource = { source: 'group', groupBy: (item: Entry) => item.kind };
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    gantt.collapseAll();
+    expect(gantt.collapsed.map(String)).toEqual(['group:group', 'group:span', 'group:milestone']);
+
+    gantt.destroy();
+  });
+
+  it('[S4-A11] a custom source produces the resolver rows', () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({ entries: sampleEntries.slice(0, 2), timeZone: 'UTC' });
+    const gantt = new Gantt({
+      container,
+      dataset,
+      rowSource: {
+        source: 'custom',
+        resolve: ({ entries }: { entries: readonly Entry[] }) => [
+          { id: 'h', label: 'All' },
+          { id: 'r0', entryIds: [entries[0]!.id] },
+        ],
+      },
+    });
+    expect(container.querySelector('[data-row-id="h"]')?.textContent).toContain('All');
+    expect(container.querySelector(`[data-row-id="${sampleEntries[0]!.id}"]`)).toBeNull();
+    expect(container.querySelector('[data-row-id="r0"]')).not.toBeNull();
+    gantt.destroy();
+  });
+});
+
+describe('Gantt pack-mode scroll (S4.8, [S4-A5])', () => {
+  it('keeps the pixel scroll offset and re-clamps it; never resets to 0', async () => {
+    FakeResizeObserver.instances = [];
+    vi.stubGlobal('ResizeObserver', FakeResizeObserver);
+    const container = document.createElement('div');
+    const scroll = new ScrollModel();
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      entries: sampleEntries.map((entry, i) =>
+        i === 0
+          ? {
+              ...entry,
+              segments: [
+                { start: entry.start, end: entry.end },
+                { start: entry.start, end: entry.end },
+              ],
+            }
+          : entry,
+      ),
+    });
+    const gantt = new Gantt({
+      container,
+      dataset,
+      scroll,
+      rowSource: { source: 'entries', heightMode: 'pack' },
+    });
+    FakeResizeObserver.instances[0]!.fire({ width: 300, height: 100 });
+    scroll.panTo({ x: 0, y: 80 });
+    const yBefore = scroll.state.position.y;
+    expect(yBefore).toBe(80);
+
+    dataset.entries.update(sampleEntries[0]!.id, {
+      segments: [{ start: sampleEntries[0]!.start, end: sampleEntries[0]!.end }],
+    });
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+
+    expect(scroll.state.position.y).not.toBe(0);
+    expect(scroll.state.position.y).toBeLessThanOrEqual(scroll.state.max.y);
+    expect(scroll.state.position.y).toBeLessThanOrEqual(yBefore);
+
+    gantt.destroy();
+    vi.unstubAllGlobals();
   });
 });

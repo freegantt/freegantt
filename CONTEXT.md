@@ -35,8 +35,12 @@ One authored, dated record: a name, a start, an end, and a `kind`. Entries are p
 _Avoid_: **Task** (retired in ADR 0003 — it implies to-do work, and the whole point is that the record is domain-neutral), activity, event, bar (a bar is what an Item renders), record, row (a Row is a display track)
 
 **Kind**:
-The authored classification of an Entry (`'span' | 'group' | 'milestone'`, open to consumer-defined values) that selects its behavior at four seams: scheduling policy, item emission, rendering, and interaction capability. Kind is never derived from structure (e.g. from having children) — it is always explicitly set by whoever authored the Entry. `'span'` is the default: an Entry that simply occupies its start-to-end stretch, with no further meaning attached. `kind` is required on the stored Entry (issue #84) — every reader can trust it is present, since ingest applies the `'span'` default once, at the api/ boundary; it stays optional on Entry input, where a consumer may omit it. _Exception:_ `hierarchy.autoGroup` (`02` §2) promotes a `'span'` entry to `'group'` in the same transaction it gains its first child — an automated edit, not a derivation the store computes on the fly. It promotes `'span'` only, never a `'milestone'` or a consumer Kind, and it never demotes, so kind still can't silently flicker based on current structure. `rollUpKinds` (default `['group']`) names which Kinds get their values from the Rollup instead of authoring them directly — a consumer's own Kind opts in the same way `'group'` does by default. `rollUpKinds: 'none'` (stored as `[]`) opts every Kind out: the parent keeps the values the caller assigned.
+The authored classification of an Entry (`'span' | 'group' | 'milestone'`, open to consumer-defined values) that selects its behavior at four seams: scheduling policy, item emission, rendering, and interaction capability. Kind is never derived from structure (e.g. from having children) — it is always explicitly set by whoever authored the Entry. `'span'` is the default: an Entry that simply occupies its start-to-end stretch, with no further meaning attached. `kind` is required on the stored Entry (issue #84) — every reader can trust it is present, since ingest applies the `'span'` default once, at the api/ boundary; it stays optional on Entry input, where a consumer may omit it. _Exception:_ `hierarchy.autoGroup` (`02` §2, on by default) promotes a `'span'` entry to `'group'` in the same transaction it gains its first child — an automated edit, not a derivation the store computes on the fly. It promotes `'span'` only; any other Kind stays as authored. It never demotes, so kind still can't silently flicker based on current structure. `rollUpKinds` (default `['group']`) names which Kinds get their values from the Rollup instead of authoring them directly — a consumer's own Kind opts in the same way `'group'` does by default. `rollUpKinds: 'none'` (stored as `[]`) opts every Kind out: the parent keeps the values the caller assigned.
 _Avoid_: Type (reserved for `DependencyType`), category; and `'task'` as the default kind's name (ADR 0003 — a kind literal is data, so leaving the old word there would have kept it in every authored Entry)
+
+**Hierarchy**:
+The Dataset setting that governs first-child Kind promotion. Default is `{ autoGroup: true }`. Call: `new Dataset({ hierarchy: { autoGroup: false }, entries })` to opt out. When it is on, a `'span'` parent becomes `'group'` in the same transaction that gives it its first child — one changeset, one undo step. Construction promotes too, silently. It never demotes, and it never promotes a Kind that is not `'span'`.
+_Avoid_: deriving Kind from "has children" (that is the identity problem `01` §2.5 forbids)
 
 **Dependency**:
 A first-class entity linking a predecessor Entry to a successor Entry with a type (`FS`/`SS`/`FF`/`SF`) and optional lag. Never embedded as an array on an Entry. Scheduling-plugin-owned data, not `model/` (ADR 0002) — it exists only when a scheduling plugin is installed and lives in that plugin's reserved store, not on `Entry` or in core.
@@ -47,7 +51,7 @@ One contiguous stretch of an Entry's span, when that span is interrupted rather 
 _Avoid_: Split, interval, piece
 
 **Field**:
-One named, addressable value on an Entry — declared once and used by every layer that needs it. Core ships `name`, `start` (`min`), `end` (`max`), and the computed `duration` as declarations of exactly the shape a consumer adds to, which is what lets a consumer's `cost` be edited, compared, rolled up and shown by the same code as `start` (ADR 0005, `01` §2.6). `kind`, `parentId`, `segments` and `meta` are Fields too, so the changeset has one path, but only a Field that declares `column` is a Grid column candidate. **`progress` is not a core Field** — it is scheduling-plugin data (ADR 0008). Fields belong to the Dataset (`fields`), because the Rollup writes stored, undoable, serialized values and runs at construction, before any Gantt exists. **A Field is what a value _is_; a Grid column is where a Gantt _shows_ it** — the one sentence that separates the pair.
+One named, addressable value on an Entry — declared once and used by every layer that needs it. Core ships `name`, `start` (`min`), `end` (`max`), and the computed `duration` as declarations of exactly the shape a consumer adds to, which is what lets a consumer's `cost` be edited, compared, rolled up and shown by the same code as `start` (ADR 0005, `01` §2.6). A consumer writes a Field with `dataset.entries.update('t1', { cost: 500 })` and reads it with `dataset.entries.fieldValue('t1', 'cost')` — one call for an entry-sourced, meta-sourced, or compute-sourced Field, with no reach into `entry.meta`. `dataset.field('cost')` is the resolved declaration (type merge applied, `source` filled); `dataset.fields.all` lists every declared Field, core Fields included. `kind`, `parentId`, `segments` and `meta` are Fields too, so the changeset has one path, but only a Field that declares `column` is a Grid column candidate. **`progress` is not a core Field** — it is scheduling-plugin data (ADR 0008). Fields belong to the Dataset (`fields`), because the Rollup writes stored, undoable, serialized values and runs at construction, before any Gantt exists. **A Field is what a value _is_; a Grid column is where a Gantt _shows_ it** — the one sentence that separates the pair.
 _Avoid_: Attribute, property (both read as "a key on an object", which is the storage detail rather than the declaration), column (a Grid column names a Field and carries presentation only)
 
 **Field key**:
@@ -61,6 +65,10 @@ _Avoid_: Storage, backing, accessor; and note this is Row source's word applied 
 **Field type**:
 A named bundle of Field settings — a rollup **name**, an equality rule, a sort `compare`, text formatting, and column presentation defaults — applied with `type: 'money'` so one declaration serves many Fields. The bundle's `rollUp` is the default Aggregator name (shipped or a consumer name in `aggregators`) for Fields that name this type and omit `rollUp`; `formatValue` is the default display text; `compare` is the default sort order. The Field's own keys win, so `rollUp: 'none'` on the Field opts that Field out. The Aggregator function lives in `aggregators` under that name, never on the bundle. Core ships no primitive Field types. `api/` splits it: the data half reaches `data/`'s registry, the presentation half reaches `view/`, so the consumer writes it once and the layer boundary still holds.
 _Avoid_: Column type (the bundle is broader than a column), Kind (Kind classifies an Entry, not a value), putting a function on `rollUp` (ADR 0005 — a name serializes, a function does not)
+
+**Field registry**:
+The one `data/` module that holds every declared Field — core Fields and consumer Fields on the same code path — resolves `type` merge and `source`, and is the legal set for `update()` and `fieldValue`. `readField`/`writeField` are the only switch over `FieldSource`. `layout/` never imports it: resolved `columns` and `fieldCompares` arrive on `LayoutInput` as plain data (D-S4-13).
+_Avoid_: Field map, schema registry (this is not a separate persistence layer — the Document carries the data half of each Field)
 
 **Aggregator**:
 The function that turns a set of children's values into a parent's value for one Field — `min`, `max`, `sum`, `count`, `'none'`, a duration-weighted mean, or a consumer's own. Always referenced **by name**, never passed inline: a name is data that serializes into a Document and can be refused when it is not registered, and a function is neither. Returning `undefined` means "no opinion, leave the stored value alone". `'none'` always returns `undefined`, so that Field keeps the parent's authored value. A shipped Aggregator skips holes (`undefined`, non-numeric for `sum`/`min`/`max`, zero-duration children for the weighted mean) and never throws; if every child is skipped it returns `undefined`. The Aggregator is the function; the Rollup is the pass that runs it.
@@ -143,28 +151,52 @@ _Avoid_: Calendar alone (ambiguous with a UI date picker or an imported ICS cale
 
 ### Derived layout
 
+**Row plan**:
+The internal list `resolveRows` produces before placement — `PlannedRow` values with `entryIds`, tree `depth`, collapse flags, and filter `matched`. Not public: consumers use `RowSource` and receive derived `Row`s in the frame. `CustomRow` is the public DTO for `{ source: 'custom' }`.
+_Avoid_: PlannedRow as a glossary term (internal only), Row model (Row is what the frame carries after placement)
+
 **Row**:
 A horizontal track of a Gantt — the unit of vertical layout, and what the grid pane and the timeline pane both position against. Rows are derived on every layout pass and never persisted. A Row is not an Entry: one Row may carry the Items of many Entries, and a row source may produce Rows that correspond to no Entry at all. `Row.kind: 'header'` is a grouping header that stands for no Entry (`entryIds` is empty). An Entry of kind `'group'` produces a row of `Row.kind: 'entry'`. Collapse holds `RowId`s; for the entries source a `RowId` equals the `EntryId`. A grouping header uses a derived `RowId` from the group key. Its name cell is `headerLabel`; other cells are empty.
 _Avoid_: Line, track (a track is what a Lane is), record; reading `Row.kind: 'header'` as "a `'group'` Entry"; using `'group'` as a Row kind (that literal is `Entry.kind` only)
 
 **Row source**:
-The configuration that decides what the Rows are for a given Gantt — the Entries themselves (optionally as a tree), one Row per value of some grouping function, or a consumer-supplied resolver. Alternative views (workload, resources) are new row sources, not new rendering or interaction code. `{ source: 'custom', resolve }` returns `CustomRow` values (`id`, optional `entryIds`, optional `label`). Core adapts those to the internal row plan. This `custom` is the row-source occupant, not a custom ViewPreset object.
+The configuration that decides what the Rows are for a given Gantt — the Entries themselves (optionally as a tree), one Row per value of some grouping function, or a consumer-supplied resolver. Live on `gantt.rowSource` (and `GanttOptions.rowSource` at construction). Alternative views (workload, resources) are new row sources, not new rendering or interaction code. `{ source: 'custom', resolve }` returns `CustomRow` values (`id`, optional `entryIds`, optional `label`). Core adapts those to the internal row plan. This `custom` is the row-source occupant, not a custom ViewPreset object. `filter`, `sort`, and `filterPolicy` live here — never on the Store (D-S4-28).
 _Avoid_: Row provider, row model; treating `PlannedRow` as public
+
+**Custom row**:
+One row a `{ source: 'custom', resolve }` resolver returns — `id`, optional `entryIds`, optional `label`. Core maps it to a `PlannedRow` and then a frame `Row`. Not an Entry. The resolver receives `CustomRowInput` (`{ entries }`).
+_Avoid_: Custom RowSource (that is the config object; Custom row is one resolved row); `RowResolveInput` (retired — that name collided with the internal row pass input)
+
+**Row filter**:
+A predicate on `Entry` attached to a row source (`RowFilter`). Filtered-out children still count toward a parent's rollup; filter only affects which rows resolve (D-S4-11, D-S4-29).
+_Avoid_: Dataset filter, store filter (sort and filter never touch `entries.all`)
+
+**Row sort**:
+Per-parent ordering on a row source (`RowSort`). `field` names a declared Field; comparers bind from `fieldCompares`, not from visible `gridColumns` (D-S4-13, D-S4-28).
+_Avoid_: Column sort (sort is field-driven, not column-driven)
 
 **Item**:
 A derived, renderable piece of geometry produced from an Entry for one Segment of its span — most entries produce exactly one Item, but an Entry with Segments produces one Item per Segment. Items are recomputed on every layout pass and never persisted. `Item.id` is deterministic: `${entryId}:${segmentIndex}`.
 _Avoid_: Bar (an Item is what a bar renders; "bar" is a rendering detail, not the identity)
 
+**Item emitter**:
+The per-Kind seam that turns one Entry into its Item(s) for a row (`ItemProducer`). Shipped occupants cover `'span'`, `'group'`, and `'milestone'`; registration is internal in S4 (D-S4-24).
+_Avoid_: Item producer as two words in prose when naming the seam (the type is `ItemProducer`; the glossary term is Item emitter)
+
 **Lane**:
 A sub-track within a Row, assigned by the layout pass so that Items whose spans overlap on the same Row are stacked instead of drawn on top of each other. A Lane is a packing result — always derived, never authored.
 _Avoid_: Sub-row, level, stack
 
+**Lane packing**:
+The pass that assigns each Item on a row to a lane index and computes `laneCount` and row height under `heightMode: 'pack'` (`packRow`). Memoized per row per dataset revision (D-S4-26).
+_Avoid_: Stack layout, sub-row layout
+
 **Grouping**:
-The row-level nesting of the timeline grid (parent/child rows via `parentId`). Distinct from Kind: an Entry of kind `'group'` and an Entry with children are different things — a `'group'` Entry rolls up its schedule from children, while grouping is purely about row hierarchy in the grid and applies regardless of kind.
-_Avoid_: Group (ambiguous with the `'group'` kind — say "row grouping" or "the `'group'` kind" explicitly)
+The row-level nesting of the timeline grid (parent/child rows via `parentId`). Distinct from Kind: an Entry of kind `'group'` produces a `Row.kind: 'entry'` row; a grouping header is `Row.kind: 'header'` and stands for no Entry (`entryIds` empty, `headerLabel` in column 0, other cells blank — D-S4-23).
+_Avoid_: Group (ambiguous with the `'group'` kind — say "row grouping" or "the `'group'` kind" explicitly); reading `Row.kind: 'header'` as "a `'group'` Entry"
 
 **Rollup**:
-The bottom-up pass in the commit path that derives a parent's value for a Field from its children's, using that Field's Aggregator. It is a core step, not a resolver: it runs whether or not a plugin is installed, and nothing installable can displace it (D-S2-22). It is a leaf with one importer (`data/transaction.ts`). Default is on. `rollUpKinds: 'none'` (or `[]`) skips derivation so every parent keeps the values the caller assigned. After Field-type merge, a Field with `rollUp: 'none'` or with no `rollUp` skips that Field only. The pass yields to a field the caller proposed in the same transaction and wins over one the extension hook proposed. One pass settles nested parents, because the walk is bottom-up. The **Span rollup** is `start` as `min` and `end` as `max` over the children of a rolling-up Kind — not `sum` of Instants.
+The bottom-up pass in the commit path that derives a parent's value for a Field from its children's, using that Field's Aggregator. It is a core step, not a resolver: it runs whether or not a plugin is installed, and nothing installable can displace it (D-S2-22). It is a leaf with one importer (`data/transaction.ts`). Default is on. `rollUpKinds: 'none'` (or `[]`) skips derivation so every parent keeps the values the caller assigned. After Field-type merge, a Field with `rollUp: 'none'` or with no `rollUp` skips that Field only. The pass walks the ancestor chains of touched entries only, deepest first (D-S4-8) — one path for shipped and consumer Aggregators alike. It yields to a field the caller proposed in the same transaction and wins over one the extension hook proposed. One pass settles nested parents, because the walk is bottom-up. The **Span rollup** is `start` as `min` and `end` as `max` over the children of a rolling-up Kind — not `sum` of Instants.
 _Avoid_: Group rollup (the pass is not tied to the `'group'` Kind, nor to spans — it is per Field, over any rolling-up Kind), rollup pass (says "when," not "what"), aggregation (Aggregator is the function; Rollup is the pass)
 
 **Grid column**:
@@ -186,8 +218,12 @@ The DOM element (or a CSS selector naming one) a consumer hands to `new Gantt({ 
 _Avoid_: Host (retired, see Consumer), Mount target (a Render surface — a different, lower-level concept the Container is split into, see Render surface)
 
 **FrameLayout**:
-The `layout/` object that runs one Gantt's layout pass (`layout/frame-layout.ts`) and keeps what that pass must remember between renders — today the row-height index, tomorrow S5's finer-grained invalidation. `computeFrame` stays pure; FrameLayout is what makes the index O(log n) _across_ renders rather than per render. One instance per Gantt: the index describes that Gantt's rows and is not shareable, unlike a TimeScaleModel or a ScrollModel.
+The `layout/` object that runs one Gantt's layout pass (`layout/frame-layout.ts`) and keeps what that pass must remember between renders — the row-height index and `FrameMemory` (lane-pack caches). `computeFrame` stays pure; `FrameLayout` is what makes the index O(log n) _across_ renders rather than per render. One instance per Gantt: the index describes that Gantt's rows and is not shareable, unlike a TimeScaleModel or a ScrollModel.
 _Avoid_: Layout cache, frame builder (it computes the pass; the cache is how, not what)
+
+**Frame memory**:
+What one `computeFrame` pass remembers when `FrameLayout` calls it again — today the `RowHeightIndex` and per-row lane-pack results. Passed as the optional second argument to `computeFrame`; not public (D-S4-19).
+_Avoid_: Frame cache as a consumer term (internal lifetime object only)
 
 **Gantt**:
 The public entry point and a whole mounted instance: one `Gantt` wraps one `container` element, one Dataset, and everything needed to render and interact with it. This is the sense used everywhere the specs discuss the product as a whole — D9's "multi-Gantt sync", I2's "two Gantt instances coexist independently", a consumer page that mounts "two Gantts". A `Gantt` _is_ the class; it is also the name of the concept, so `new Gantt(...)` and "a Gantt" mean the same thing.
@@ -202,7 +238,7 @@ The DOM skeleton one Gantt's container is split into: a Grid pane, a Splitter, a
 _Avoid_: Layout (Layout, unqualified, is the `layout/` source directory and its pure geometry types — a different concept)
 
 **Grid pane**:
-The left-hand pane of a Pane layout: row labels and, from S6, columns. It has no scrollbar of its own — its row layer follows the Timeline pane's native scroll by one `translateY` transform per frame instead of a second real scroller (D-S1.8-1), which is what keeps I9's pixel identity structural rather than something a caller maintains by hand.
+The left-hand pane of a Pane layout: row labels and, from S4, Field-driven columns (`gridColumns`). It has no scrollbar of its own — its row layer follows the Timeline pane's native scroll by one `translateY` transform per frame instead of a second real scroller (D-S1.8-1), which is what keeps I9's pixel identity structural rather than something a caller maintains by hand.
 _Avoid_: Label column, gutter (gutter was the pre-S1.8 shape, where the row-label width lived inside the render backend's paint layer instead of being a pane in its own right — D-S1.8-2 retired it)
 
 **Timeline pane**:
@@ -423,11 +459,11 @@ A `--fg-*` CSS custom property — level 1 of the Customization ladder (`plans/0
 _Avoid_: Variable, custom property (accurate but not this project's term of art — say Token), theme variable
 
 **Part**:
-One of the `fg-*` class names the library's DOM structure carries — level 2 of the Customization ladder. The vocabulary is closed and un-renamed (D-S1.10-1), with one exception before 1.0 (S1.13, D-S1.13-8): `fg-container`, `fg-grid-pane`, `fg-grid-spacer`, `fg-rows-clip`, `fg-rows`, `fg-splitter`, `fg-timeline-pane`, `fg-header`, `fg-band`, `fg-tick`, `fg-row`, `fg-row-label`, `fg-bars`, `fg-bar`, `fg-bar-handle`, `fg-date-line`, `fg-date-line-label`, `fg-cursor-line`, `fg-cursor-line-label`. A consumer writes level-2 CSS against a Part directly (`.fg-bar { ... }`) or against a Part plus a State attribute (`.fg-bar[data-flag~="conflict"] { ... }`).
+One of the `fg-*` class names the library's DOM structure carries — level 2 of the Customization ladder. The vocabulary is closed and un-renamed (D-S1.10-1), with one exception before 1.0 (S1.13, D-S1.13-8): `fg-container`, `fg-grid-pane`, `fg-grid-spacer`, `fg-grid-header`, `fg-col-header`, `fg-rows-clip`, `fg-rows`, `fg-splitter`, `fg-timeline-pane`, `fg-header`, `fg-band`, `fg-tick`, `fg-row`, `fg-row-label`, `fg-row-label-text`, `fg-row-twisty`, `fg-bars`, `fg-bar`, `fg-bar-bracket`, `fg-bar-diamond`, `fg-bar-handle`, `fg-date-line`, `fg-date-line-label`, `fg-cursor-line`, `fg-cursor-line-label`. A consumer writes level-2 CSS against a Part directly (`.fg-bar { ... }`) or against a Part plus a State attribute (`.fg-bar[data-flag~="conflict"] { ... }`).
 _Avoid_: Pane (Grid pane/Timeline pane/Splitter are specific Parts, already named in "Mounted instances" — Part is the general term for the whole class vocabulary), BEM block (rejected, Q2 — renaming shipped classes to a BEM shape was churn with no behavior change)
 
 **State attribute**:
-A `data-*` attribute a Part carries so a consumer can select on state without JS — `data-flag` (space-joined, generated from `BarFlags`'/`LinkFlags`' own keys, D-S1.10-2: `conflict`, `cycle`; on `.fg-date-line` the Today line wrapper writes `today`), `data-kind` (an Entry's Kind), `data-state` on `.fg-bar` (`hovered`, `selected`, `pending`, `dragging`, `ghost`), `data-movable` (grab cursor), `data-testid`/`data-row-id`/`data-item-id` (stable E2E hooks, U6). Distinct from a Token (a value) and a Part (a structural class): a State attribute is level 2's other half, the thing a consumer's selector matches against rather than reads.
+A `data-*` attribute a Part carries so a consumer can select on state without JS — `data-flag` (space-joined, generated from `BarFlags`'/`LinkFlags`' own keys, D-S1.10-2: `conflict`, `cycle`; on `.fg-date-line` the Today line wrapper writes `today`), `data-kind` (an Entry's Kind), `data-state` on `.fg-bar` (`hovered`, `selected`, `pending`, `dragging`, `ghost`), `data-movable` (grab cursor), `aria-expanded` on `.fg-row-twisty` (collapsed vs expanded), `data-matched` on `.fg-row` (`false` when a filter kept the ancestor only), `data-testid`/`data-row-id`/`data-item-id` (stable E2E hooks, U6). Distinct from a Token (a value) and a Part (a structural class): a State attribute is level 2's other half, the thing a consumer's selector matches against rather than reads.
 _Avoid_: Data attribute (too generic — say State attribute when it's part of the level-2 vocabulary), modifier class (there is no modifier-class convention here — state lives in `data-*`, never a second class)
 
 **a11y label**:

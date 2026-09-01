@@ -3,6 +3,7 @@
 // in `data/` (`DatasetState`). `model/`'s `Dataset` is the smaller bindable surface a Gantt holds.
 
 import type {
+  Aggregator,
   ChangeSet,
   DatasetDocument,
   DatasetEventMap,
@@ -10,18 +11,23 @@ import type {
   EntryInput,
   EntryKind,
   EntryStore as EntryStoreContract,
+  Field,
+  FieldKey,
+  FieldType,
 } from '../model/index.js';
 import { DatasetState } from '../data/index.js';
 import {
   toJSON as writeDocument,
   readDocument,
-  warnIfDerivedSpansWereCorrected,
+  warnIfRollUpsWereCorrected,
 } from '../data/serialization/index.js';
+import type { DatasetHierarchy, RollUpKinds } from '../model/index.js';
+export type { DatasetHierarchy };
 
-export interface DatasetOptions {
+export interface DatasetOptions<TMeta = unknown> {
   /** What the consumer writes. Ids are plain strings and dates are any `InstantInput` — an ISO string,
    * a `Date`, epoch milliseconds, or an already-branded `Instant`. Read into `Entry` once, here. */
-  entries: readonly EntryInput[];
+  entries: readonly EntryInput<TMeta>[];
   /** IANA timeZone (D6, plans/02 §2) — all zone-aware date arithmetic (day boundaries, snapping,
    * week starts) resolves through it, so two users in different zones see identical day boundaries.
    * It is also the zone a Plain (zoneless) date in `entries` resolves through. */
@@ -30,10 +36,20 @@ export interface DatasetOptions {
    * covers through the 8th. `'exclusive'` reads it literally as the start of the 8th, matching
    * half-open storage exactly. Only date-only strings are affected — see `DateOnlyEndRule`. */
   dateOnlyEnd?: DateOnlyEndRule;
-  /** Kinds whose span the rollup derives from their children's spans — min start, max end — every
-   * commit (`01` §2.5/§2.6). Defaults to `['group']`. `derivedSpanKinds: []` opts every kind out of
-   * derivation, which is the supported way to ask for hand-set spans everywhere. */
-  derivedSpanKinds?: readonly EntryKind[];
+  /** Kinds whose rolling-up Fields the Rollup derives from their children every commit (`01` §2.5/§2.6).
+   *  Defaults to `['group']`. `rollUpKinds: 'none'` or `[]` opts every kind out of derivation, which is
+   *  the supported way to ask for hand-set values everywhere. */
+  rollUpKinds?: RollUpKinds;
+  /** Consumer Field declarations. Core Fields are already in the registry (D-S4-4). */
+  fields?: readonly Field[];
+  /** Named Field type bundles. A Field's own keys win over the bundle (D-S4-3). */
+  fieldTypes?: Readonly<Record<string, FieldType>>;
+  /** Consumer Aggregators by name. Shipped names (`min`, `sum`, …) are already registered. */
+  aggregators?: Readonly<Record<string, Aggregator>>;
+  /** First-child promotion (D-S4-17). Default is `{ autoGroup: true }`: a `'span'` parent
+   *  becomes `'group'` in the same transaction that gives it its first child. Pass
+   *  `{ autoGroup: false }` to keep Kind exactly as authored. Promotion never demotes. */
+  hierarchy?: DatasetHierarchy;
   /** Undo/redo History. `{ capacity: 200 }` keeps 200 undoable transactions; defaults to 100
    * (`plans/s2-data-core/s2.5-undo-redo.md` §1). */
   history?: { capacity?: number };
@@ -43,15 +59,20 @@ export interface DatasetOptions {
 // that clause would pull the model type into the public API report as an unexported `Dataset_2`, since
 // api-extractor inlines whatever an exported class's `implements`/`extends` names. Assignability where
 // it actually matters (`GanttOptions.dataset`, `GanttShell`) is still checked structurally.
-export class Dataset {
+//
+// TMeta is the documented generic (`plans/02` §1.6). TFields is the declared-key map
+// (`Dataset<{ team: string }, { cost: number }>`). TypeScript does not infer a later type
+// parameter once an earlier one is written, so Field keys cannot come from the `fields` array
+// at `new Dataset<{ team: string }>(...)` (#123).
+export class Dataset<TMeta = unknown, TFields extends Record<string, unknown> = Record<string, unknown>> {
   #state: DatasetState;
 
-  constructor(options: DatasetOptions) {
+  constructor(options: DatasetOptions<TMeta>) {
     this.#state = new DatasetState(options);
   }
 
-  get entries(): EntryStoreContract {
-    return this.#state.entries;
+  get entries(): EntryStoreContract<TMeta, TFields> {
+    return this.#state.entries as EntryStoreContract<TMeta, TFields>;
   }
 
   get timeZone(): string {
@@ -62,14 +83,47 @@ export class Dataset {
     return this.#state.dateOnlyEnd;
   }
 
-  get derivedSpanKinds(): readonly EntryKind[] {
-    return [...this.#state.derivedSpanKinds];
+  get rollUpKinds(): readonly EntryKind[] {
+    return [...this.#state.rollUpKinds];
   }
 
-  /** `model/`'s `Dataset` interface (S3, D-S3-9) — `GanttShell` asks this, never `derivedSpanKinds`
+  set rollUpKinds(value: RollUpKinds) {
+    this.#state.setRollUpKinds(value);
+  }
+
+  /** Call: `dataset.hierarchy = { autoGroup: false }`. Later first-child commits obey this.
+   *  Existing `'span'` parents do not promote until they gain a child under `autoGroup: true`. */
+  get hierarchy(): DatasetHierarchy {
+    return { autoGroup: this.#state.hierarchy.autoGroup };
+  }
+
+  set hierarchy(value: DatasetHierarchy) {
+    this.#state.setHierarchy(value);
+  }
+
+  /** The resolved Field for this key, or `undefined` when the key is not declared.
+   *  Resolution merges the named Field type and fills `source` (an omitted source becomes
+   *  `{ from: 'meta', key }` — D-S4-35). This is the declaration, not an Entry value;
+   *  `entries.fieldValue` reads the value. */
+  field(key: FieldKey): Field | undefined {
+    return this.#state.fields.get(key);
+  }
+
+  /** Resolved Field declarations this Dataset owns, core Fields included (D-S4-1).
+   *  Each item is post type-merge, with `source` filled. */
+  get fields(): { readonly all: readonly Field[] } {
+    return { all: this.#state.fields.all };
+  }
+
+  /** `model/`'s `Dataset` interface (S3, D-S3-9) — `GanttShell` asks this, never `rollUpKinds`
    *  itself, to resolve the per-kind capability default table. */
-  isDerivedSpanKind(kind: EntryKind): boolean {
-    return this.#state.isDerivedSpanKind(kind);
+  isRollUpKind(kind: EntryKind): boolean {
+    return this.#state.isRollUpKind(kind);
+  }
+
+  /** Call: `layout.computeFrame({ datasetRevision: dataset.datasetRevision })`. */
+  get datasetRevision(): number {
+    return this.#state.datasetRevision;
   }
 
   /** Batches `body`'s mutations into one changeset (D-S2-8). Nested calls join the open transaction.
@@ -124,15 +178,19 @@ export class Dataset {
 
   /** Whole-document write (D-S2-12). Byte-stable: declared key order, optional keys omitted, entries
    *  in insertion order, instants as `Z`-suffixed ISO. */
-  toJSON(): DatasetDocument {
-    return writeDocument(this);
+  toJSON(): DatasetDocument<TMeta> {
+    return writeDocument(this) as DatasetDocument<TMeta>;
   }
 
-  /** Whole-document read. Constructs a fresh Dataset through the public constructor, so the span
-   *  rollup runs on read. Unknown top-level keys are dropped; `meta` is carried as-is. */
-  static fromJSON(doc: DatasetDocument): Dataset {
-    const dataset = new Dataset(readDocument(doc));
-    warnIfDerivedSpansWereCorrected(doc, dataset);
+  /** Whole-document read. Constructs a fresh Dataset through the public constructor, so the Rollup
+   *  runs on read. The Document carries Field data keys; `options` supplies functions (D-S4-15).
+   *  Unknown top-level keys are dropped; `meta` is carried as-is. */
+  static fromJSON<TMeta = unknown, TFields extends Record<string, unknown> = Record<string, unknown>>(
+    doc: DatasetDocument<TMeta>,
+    options?: Pick<DatasetOptions, 'fields' | 'fieldTypes' | 'aggregators'>,
+  ): Dataset<TMeta, TFields> {
+    const dataset = new Dataset<TMeta, TFields>(readDocument(doc, options) as DatasetOptions<TMeta>);
+    warnIfRollUpsWereCorrected(doc, dataset);
     return dataset;
   }
 }

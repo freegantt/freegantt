@@ -31,24 +31,24 @@ export interface Capabilities {
 function defaultRule(
   capability: keyof Interactions,
   entry: Entry,
-  isDerivedSpanKind: (kind: EntryKind) => boolean,
+  isRollUpKind: (kind: EntryKind) => boolean,
 ): boolean {
   if (capability === 'select') return true;
-  if (isDerivedSpanKind(entry.kind)) return false;
+  if (isRollUpKind(entry.kind)) return false;
   if (capability === 'resize' && entry.kind === 'milestone') return false;
   return true;
 }
 
-/** `isDerivedSpanKind` comes from the bound `Dataset` (S3, D-S3-9) — `GanttShell` passes
- *  `dataset.isDerivedSpanKind` straight through, never `derivedSpanKinds` itself. */
+/** `isRollUpKind` comes from the bound `Dataset` (S3, D-S3-9) — `GanttShell` passes
+ *  `dataset.isRollUpKind` straight through, never `rollUpKinds` itself. */
 export function resolveCapabilities(
   interactions: Interactions | undefined,
-  isDerivedSpanKind: (kind: EntryKind) => boolean,
+  isRollUpKind: (kind: EntryKind) => boolean,
 ): Capabilities {
   return {
     can(capability, entry) {
       const rule = interactions?.[capability];
-      if (rule === undefined) return defaultRule(capability, entry, isDerivedSpanKind);
+      if (rule === undefined) return defaultRule(capability, entry, isRollUpKind);
       return typeof rule === 'function' ? rule(entry) : rule;
     },
   };

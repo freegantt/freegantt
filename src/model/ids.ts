@@ -23,3 +23,18 @@ export function changeSetId(counter: number): ChangeSetId {
 export function itemId(entry: EntryId, segmentIndex = 0): ItemId {
   return `${entry}:${segmentIndex}` as ItemId;
 }
+
+/** Call: `dataset.entries.get(entryIdOfItem(hit.itemId))`. Splits on the last colon so an EntryId that
+ *  itself contains a colon still round-trips with `itemId`. */
+export function entryIdOfItem(id: ItemId): EntryId {
+  const sep = id.lastIndexOf(':');
+  return entryId(sep < 0 ? id : id.slice(0, sep));
+}
+
+/** Call: `segmentIndexOfItem(item.id)` — the index `itemId` wrote. */
+export function segmentIndexOfItem(id: ItemId): number {
+  const sep = id.lastIndexOf(':');
+  if (sep < 0) return 0;
+  const index = Number(id.slice(sep + 1));
+  return Number.isFinite(index) ? index : 0;
+}

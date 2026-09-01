@@ -4,6 +4,8 @@
 
 `progress` is **not** on `Entry`, not in the Field registry, and not in the Document. A `schema: 1` key named `progress` is dropped on read, like any other unknown top-level entry key. S7's scheduling plugin stores Progress in plugin-owned data and registers it as a Field. `weightedMeanByDuration` still ships as a named Aggregator, because a consumer Field and that plugin both need it.
 
+**S4 landed this in source:** `Entry` no longer carries `progress`; `schema: 2` Documents omit it; `fromJSON` drops legacy `progress` keys (ADR 0005's core Field list and ADR 0008 align).
+
 ## Considered options
 
 - **Keep `progress` as a core Field with `rollUp: 'weightedMeanByDuration'`.** Rejected: it privileges percent-complete as universal, and D-S4-6 would overwrite authored group progress on every `rollUpKinds` parent with no per-Field escape.

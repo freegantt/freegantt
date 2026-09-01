@@ -76,10 +76,21 @@ module.exports = {
     // `AttachEntryGestures` comment), the same way it already wires view/, data/, model/, time/ and
     // layout/ together for a plain `new Gantt(...)`.
     forbid('api-boundary', 'api', ['view', 'data', 'model', 'time', 'layout', 'interaction']),
-    // D-S2-23: the first of the four removable-leaf rules. Only data/transaction.ts's own step-5
-    // call site may import the span rollup — delete src/data/span-rollup.ts and groups keep their
-    // authored span, the same result `derivedSpanKinds: []` already gives a consumer.
-    removable('span-rollup-is-removable', '^src/data/span-rollup\\.ts$', '^src/data/transaction\\.ts$'),
+    // D-S2-23: the first of the four removable-leaf rules. Only `build-commit-change-set.ts` (commit
+    // path) and `transaction.ts` (construction path) may import the Rollup — delete src/data/rollup.ts
+    // and groups keep their authored values, the same result `rollUpKinds: 'none'` already gives a
+    // consumer.
+    removable(
+      'rollup-is-removable',
+      '^src/data/rollup\\.ts$',
+      '^src/data/(build-commit-change-set|transaction)\\.ts$',
+    ),
+    // D-S4-17: delete src/data/hierarchy.ts and promotion never runs.
+    removable(
+      'autogroup-is-removable',
+      '^src/data/hierarchy\\.ts$',
+      '^src/data/(build-commit-change-set|transaction)\\.ts$',
+    ),
     // D-S2-23/D-S2-20: view/gantt-shell.ts's one call site, plus this file's own unit test — delete
     // src/view/dataset-change-subscription.ts and its one call site and the Gantt still constructs,
     // lays out, renders and scrolls; it just renders the data as it was at construction and never

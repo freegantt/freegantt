@@ -14,6 +14,15 @@ const DEFAULT_DATE_FORMAT: Intl.DateTimeFormatOptions = Object.freeze({
   day: 'numeric',
 });
 
+/** Date plus clock time. Grid start/end cells use this; `formatDate`'s default stays date-only. */
+export const DATE_TIME_FORMAT: Intl.DateTimeFormatOptions = Object.freeze({
+  year: 'numeric',
+  month: 'short',
+  day: 'numeric',
+  hour: 'numeric',
+  minute: '2-digit',
+});
+
 /** Formats a millisecond epoch (an `Instant`'s underlying value) in `zone` for `Intl.DateTimeFormat` —
  * the formatter takes a `Date`, so this is the one legal `new Date()`-adjacent conversion here (I10
  * scopes the ban to arithmetic and `Date.now()`, not to handing an already-resolved instant to Intl). */
@@ -63,16 +72,27 @@ export function resolveDateFormat(
   return (i) => formatter.format(toJsDate(i));
 }
 
-/** Plain display formatting for an instant needing no conversion — a start is already inclusive. */
-export function formatDate(zone: string, i: Instant, locale?: Intl.LocalesArgument): string {
-  return intlFormatter(zone, locale, DEFAULT_DATE_FORMAT).format(toJsDate(i));
+/** Plain display formatting for an instant needing no conversion — a start is already inclusive.
+ *  Pass `DATE_TIME_FORMAT` (or any `Intl.DateTimeFormatOptions`) to include clock time. */
+export function formatDate(
+  zone: string,
+  i: Instant,
+  locale?: Intl.LocalesArgument,
+  options: Intl.DateTimeFormatOptions = DEFAULT_DATE_FORMAT,
+): string {
+  return intlFormatter(zone, locale, options).format(toJsDate(i));
 }
 
 /** The one place half-open `end` becomes an inclusive display value: the last millisecond the span
  * actually covers, read back through the dataset zone. No `end - 1` anywhere else in the codebase
  * (plans/01 §5, promised since S0). */
-export function formatEndInclusive(zone: string, end: Instant, locale?: Intl.LocalesArgument): string {
-  return formatDate(zone, addMs(end, -1), locale);
+export function formatEndInclusive(
+  zone: string,
+  end: Instant,
+  locale?: Intl.LocalesArgument,
+  options?: Intl.DateTimeFormatOptions,
+): string {
+  return formatDate(zone, addMs(end, -1), locale, options);
 }
 
 /** `W37`. The escape-hatch callback shipped as a named value, because Intl has no week field

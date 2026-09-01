@@ -1,0 +1,332 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Branch review — s4-implement (full)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script type="module">
+      import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+      mermaid.initialize({ startOnLoad: true, theme: 'neutral', securityLevel: 'loose' });
+    </script>
+    <style>
+      .seam { stroke-dasharray: 4 4; }
+      .leak { stroke: #dc2626; }
+      .deep { background: linear-gradient(135deg, #0f172a, #1e293b); }
+      .badge {
+        display: inline-block; padding: 0.1rem 0.55rem; border-radius: 9999px;
+        font-size: 0.68rem; letter-spacing: 0.04em; text-transform: uppercase; font-weight: 600;
+      }
+      .badge-strong { background: #d1fae5; color: #065f46; border: 1px solid #a7f3d0; }
+      .badge-worth { background: #fef3c7; color: #78350f; border: 1px solid #fde68a; }
+      .badge-spec { background: #e2e8f0; color: #334155; border: 1px solid #cbd5e1; }
+      .badge-hard { background: #ffe4e6; color: #881337; border: 1px solid #fecdd3; }
+      .badge-judge { background: #fef3c7; color: #78350f; border: 1px solid #fde68a; }
+      .badge-ok { background: #dcfce7; color: #14532d; border: 1px solid #bbf7d0; }
+      table.find { width: 100%; border-collapse: collapse; }
+      table.find th {
+        text-align: left; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.08em;
+        color: #64748b; padding: 0.5rem 0.75rem; border-bottom: 1px solid #e2e8f0;
+      }
+      table.find td { vertical-align: top; padding: 0.7rem 0.75rem; border-bottom: 1px solid #f1f5f9; font-size: 0.86rem; }
+      table.find tr:last-child td { border-bottom: 0; }
+      .lbl { font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.1em; color: #64748b; }
+      .box { border: 1px solid #94a3b8; background: #fff; border-radius: 0.25rem; padding: 0.4rem 0.5rem; font-size: 0.7rem; text-align: center; }
+      .box-thin { border-color: #cbd5e1; color: #64748b; }
+      .box-hot { border-color: #fca5a5; background: #fef2f2; color: #991b1b; }
+      .box-deep { border: 2px solid #0f172a; background: #0f172a; color: #f8fafc; }
+      code { font-family: ui-monospace, monospace; }
+      .mono { font-family: ui-monospace, monospace; }
+    </style>
+  </head>
+  <body class="bg-stone-50 text-slate-900 font-sans">
+    <main class="max-w-5xl mx-auto px-6 py-12 space-y-14">
+
+      <header class="space-y-3 border-b border-slate-200 pb-6">
+        <div class="flex items-baseline justify-between flex-wrap gap-2">
+          <h1 class="font-serif text-3xl font-semibold">FreeGantt — <span class="mono">s4-implement</span> full review</h1>
+          <span class="lbl">2026-09-01</span>
+        </div>
+        <p class="text-sm text-slate-600">Diff: <code class="mono">main...s4-implement</code> (merge-base <code class="mono">80e0717</code>) · 77 commits · 206 files, +20550/-4874. Four axes run in one pass: Standards, Spec, Simplification, Architecture/deepening.</p>
+        <div class="flex gap-4 text-xs text-slate-500 flex-wrap">
+          <span><span class="box inline-block w-4 h-4 align-middle mr-1"></span>module</span>
+          <span><svg width="24" height="10" class="inline align-middle mr-1"><line x1="0" y1="5" x2="24" y2="5" stroke="#64748b" stroke-dasharray="4 4"/></svg>seam</span>
+          <span><svg width="24" height="10" class="inline align-middle mr-1"><line x1="0" y1="5" x2="24" y2="5" stroke="#dc2626" stroke-width="2"/></svg>leakage</span>
+          <span><span class="box-deep inline-block w-4 h-4 align-middle mr-1 rounded-sm"></span>deep module</span>
+        </div>
+      </header>
+
+      <section class="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div class="rounded-lg border border-slate-200 bg-white p-4">
+          <div class="lbl">Standards</div>
+          <div class="text-2xl font-semibold mt-1">5 judgement calls</div>
+          <div class="text-xs text-slate-500 mt-1">0 hard violations</div>
+        </div>
+        <div class="rounded-lg border border-slate-200 bg-white p-4">
+          <div class="lbl">Spec</div>
+          <div class="text-2xl font-semibold mt-1 text-emerald-700">11/11 acceptance</div>
+          <div class="text-xs text-slate-500 mt-1">no material gaps</div>
+        </div>
+        <div class="rounded-lg border border-slate-200 bg-white p-4">
+          <div class="lbl">Simplification</div>
+          <div class="text-2xl font-semibold mt-1">13 findings</div>
+          <div class="text-xs text-slate-500 mt-1">mostly minor, 1 real duplication</div>
+        </div>
+        <div class="rounded-lg border border-slate-200 bg-white p-4">
+          <div class="lbl">Architecture</div>
+          <div class="text-2xl font-semibold mt-1">0 strong</div>
+          <div class="text-xs text-slate-500 mt-1">top candidate already resolved by <code class="mono">c4-split</code></div>
+        </div>
+      </section>
+
+      <!-- STANDARDS -->
+      <section class="space-y-4">
+        <h2 class="font-serif text-2xl font-semibold">Standards</h2>
+        <p class="text-sm text-slate-600">CLAUDE.md rules plus the Fowler smell baseline (judgement calls only — a documented repo standard overrides the baseline). This slice is unusually disciplined: nearly every function carries a rule citation, layering holds throughout (no <code class="mono">scheduling/</code> imports, no <code class="mono">render/view/interaction</code> cross-imports outside the documented DI seams), no <code class="mono">if (kind === …)</code> chains outside the seams, no module-level singletons, no stray <code class="mono">as any</code>/TODOs. <strong>Zero hard violations.</strong></p>
+        <div class="rounded-lg border border-slate-200 bg-white overflow-x-auto">
+          <table class="find">
+            <thead><tr><th>File:line</th><th>Smell</th><th>Finding</th><th>Severity</th></tr></thead>
+            <tbody>
+              <tr>
+                <td class="mono">gesture-pipeline.ts:160-171</td>
+                <td>Mysterious Name</td>
+                <td>4-way nested ternary picks <code class="mono">anchorInstant</code> (resize/move × segmented × start/end) in one expression. A named helper with early returns would read as English.</td>
+                <td><span class="badge badge-ok">fixed</span></td>
+              </tr>
+              <tr>
+                <td class="mono">harness/main.ts:189-190</td>
+                <td>Mysterious Name</td>
+                <td>Triple-nested ternary cycles a 4-state <code class="mono">filterTeam</code> enum. A lookup table would match this same diff's own <code class="mono">BAR_SHAPE_CLASS</code> pattern.</td>
+                <td><span class="badge badge-ok">fixed</span></td>
+              </tr>
+              <tr>
+                <td class="mono">data/rollup.ts, data/hierarchy.ts</td>
+                <td>Duplicated Code (mild)</td>
+                <td><code class="mono">kindIsProposed</code> vs <code class="mono">editProposesField</code> answer the same question two ways. Each file's own doc comment argues for deliberate independence — may be intentional decoupling, not a smell.</td>
+                <td><span class="badge badge-judge">judgement, low priority</span></td>
+              </tr>
+              <tr>
+                <td class="mono">gantt-shell.ts:559-594</td>
+                <td>Repeated Switches (mild)</td>
+                <td><code class="mono">#proposeChange</code> has 4 overloads over one runtime impl — a deliberate type-safety pattern, not the "same conditional in several places" smell. Flagged only because it reads unusually at first glance.</td>
+                <td><span class="badge badge-judge">judgement, very low</span></td>
+              </tr>
+              <tr>
+                <td class="mono">entry-store.ts:222-226, 371-373</td>
+                <td>plain <code class="mono">Error</code></td>
+                <td>Programmer-error paths throw plain <code class="mono">Error</code> rather than a <code class="mono">FreeGanttError</code> subtype — consistent with pre-existing precedent (<code class="mono">scroll-model.ts</code>, <code class="mono">time-scale-model.ts</code>), not a new inconsistency.</td>
+                <td><span class="badge badge-ok">no action</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- SPEC -->
+      <section class="space-y-4">
+        <h2 class="font-serif text-2xl font-semibold">Spec</h2>
+        <p class="text-sm text-slate-600">Against <code class="mono">plans/03-slices.md</code> §S4 and <code class="mono">plans/s4-hierarchy-and-rows/</code>. All 11 acceptance criteria are directly tagged and covered by a test; the three explicit known-gap commitments (issue #91 §9-E/§9-G/§9-B) are resolved, not decoration.</p>
+        <div class="rounded-lg border border-slate-200 bg-white overflow-x-auto">
+          <table class="find">
+            <thead><tr><th>ID</th><th>Criterion</th><th>Evidence</th></tr></thead>
+            <tbody>
+              <tr><td class="mono">S4-A1</td><td>meta field rolls up, edits in same undo step, round-trips</td><td class="mono text-xs">data/rollup.test.ts:160, api/dataset.test.ts:220, api/gantt.test.ts:877</td></tr>
+              <tr><td class="mono">S4-A2</td><td>unknown field key throws <code class="mono">UnknownFieldError</code></td><td class="mono text-xs">data/entry-store.mutation.test.ts:112</td></tr>
+              <tr><td class="mono">S4-A3</td><td>rowSource swap, no remount, scroll kept</td><td class="mono text-xs">api/gantt.test.ts:1723, e2e/hierarchy.spec.ts:97</td></tr>
+              <tr><td class="mono">S4-A4</td><td>segmented entry → N bars, transactional drag</td><td class="mono text-xs">render/dom/index.test.ts:793, interaction/entry-gestures.test.ts:389</td></tr>
+              <tr><td class="mono">S4-A5</td><td>pack-mode height changes, scroll stable</td><td class="mono text-xs">layout/frame-layout.test.ts:115, api/gantt.test.ts:1836</td></tr>
+              <tr><td class="mono">S4-A6</td><td>collapse state survives edits, per-Gantt</td><td class="mono text-xs">api/gantt.test.ts:1751</td></tr>
+              <tr><td class="mono">S4-A7</td><td>filter keeps ancestor chain</td><td class="mono text-xs">layout/rows/filter.test.ts:40</td></tr>
+              <tr><td class="mono">S4-A8</td><td>empty group entry renders, gets span once populated</td><td class="mono text-xs">data/rollup.test.ts:98, layout/items/produce-items.test.ts:74</td></tr>
+              <tr><td class="mono">S4-A9</td><td>autoGroup promotes in same undo step, never demotes</td><td class="mono text-xs">data/hierarchy.test.ts:29,115, data/history.property.test.ts:185</td></tr>
+              <tr><td class="mono">S4-A10</td><td><code class="mono">matchOnly</code> returns matches only</td><td class="mono text-xs">layout/rows/filter.test.ts:54</td></tr>
+              <tr><td class="mono">S4-A11</td><td>custom row source produces resolver rows</td><td class="mono text-xs">layout/rows/custom-source.test.ts:20, api/gantt.test.ts:1815</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
+          <div class="rounded-lg border border-emerald-200 bg-emerald-50 p-3"><strong>§9-G ClientPoint</strong> — resolved. <code class="mono">model/geometry.ts:12</code> defines it; <code class="mono">render/backend.ts:56</code>, <code class="mono">render/dom/index.ts:632</code> use it.</div>
+          <div class="rounded-lg border border-emerald-200 bg-emerald-50 p-3"><strong>§9-E heightAt/applyState</strong> — resolved. Real callers in <code class="mono">frame-memory.ts</code> and <code class="mono">gantt-shell.ts:439,726</code> (hover/select/drag hot path).</div>
+          <div class="rounded-lg border border-emerald-200 bg-emerald-50 p-3"><strong>§9-B #wiring boolean</strong> — resolved. Replaced by <code class="mono">#phase: 'constructing' | 'live'</code> at <code class="mono">gantt-shell.ts:288</code>.</div>
+        </div>
+        <div class="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm">
+          <strong>Scope creep (harmless):</strong> a large harness-docs rewrite (5 new pages under <code class="mono">harness/docs/</code>) goes beyond the "one Gantt and a button" scope bullet; <code class="mono">.dependency-cruiser.cjs</code> and a new lint rule (<code class="mono">no-derived-in-json.cjs</code>) are opportunistic hardening not called for in S4 scope. Neither is harmful — docs and CI surface, not <code class="mono">src/</code> behavior.
+        </div>
+      </section>
+
+      <!-- SIMPLIFICATION -->
+      <section class="space-y-4">
+        <h2 class="font-serif text-2xl font-semibold">Simplification</h2>
+        <p class="text-sm text-slate-600">Reuse, simplification, efficiency, altitude. No dead code, unused exports, or leftover TODOs found; <code class="mono">harness/main.ts</code> does not restate a library default. Ranked worst-first.</p>
+        <div class="rounded-lg border border-slate-200 bg-white overflow-x-auto">
+          <table class="find">
+            <thead><tr><th>#</th><th>File:line</th><th>Problem</th><th>Fix direction</th></tr></thead>
+            <tbody>
+              <tr><td>1</td><td class="mono text-xs">frame.ts:290, rows/entries-source.ts:12, filter.ts:19, sort.ts:81</td><td>Four separate <code class="mono">entryById</code>-shaped maps rebuilt from scratch every frame.</td><td>Build one map per <code class="mono">computeFrame</code>/<code class="mono">resolveRows</code> call, thread it through, or cache keyed on <code class="mono">datasetRevision</code> in <code class="mono">FrameMemory</code>.</td></tr>
+              <tr class="bg-emerald-50/50"><td>2 <span class="badge badge-ok">fixed</span></td><td class="mono text-xs">data/fields/field-access.ts:28-41 vs source-strategy.ts:32-39</td><td><code class="mono">withProposedKeys</code>/<code class="mono">proposedKeysOf</code> duplicated <code class="mono">withKeys</code>/<code class="mono">keysOf</code> near line-for-line.</td><td>Kept one copy in <code class="mono">source-strategy.ts</code> (now exported), <code class="mono">field-access.ts</code> imports/re-exports it.</td></tr>
+              <tr><td>3</td><td class="mono text-xs">layout/rows/sort.ts:41-68</td><td><code class="mono">emitSorted</code> recurses per parent, spread-copying siblings at every level — repeated O(n log n) copies, and recursion where the repo's own convention elsewhere is a worklist loop.</td><td>Flag for a stack-based rewrite if row counts grow; fine at current scale.</td></tr>
+              <tr><td>4</td><td class="mono text-xs">rows/entries-source.ts:8-26 vs data/entry-tree.ts:22-31</td><td><code class="mono">entryTreeIndex</code> duplicates <code class="mono">childIdsByParent</code>'s shape, rebuilt on the layout side because <code class="mono">layout/</code> can't depend on <code class="mono">data/</code>.</td><td>Not mergeable given the layer boundary — add a one-line module-doc note so nobody "fixes" it by crossing the boundary.</td></tr>
+              <tr><td>5</td><td class="mono text-xs">view/gantt-shell.ts:306-497</td><td>190-line constructor wires container, viewport, dataset, tree-collapse, gesture-pipeline, DOM attach, theme/labels all in one method.</td><td>Same fix as Architecture #1 below — confirm <code class="mono">c4-split-gantt-shell.md</code> is scheduled, not dropped.</td></tr>
+              <tr><td>6</td><td class="mono text-xs">rows/collapse.ts:7-24 vs rows/filter.ts:59-81</td><td><code class="mono">applyFilter</code>/<code class="mono">applyCollapse</code> are near-identical single-pass row walks (~15 lines each).</td><td>Low priority; a shared <code class="mono">walkRowsWithAncestry(predicate)</code> would remove the duplication if a third pass is ever added.</td></tr>
+              <tr class="bg-emerald-50/50"><td>7 <span class="badge badge-ok">fixed</span></td><td class="mono text-xs">view/grid-columns.ts:24-34 vs data/fields/core-fields.ts:17-21</td><td><code class="mono">formatUnknown</code> and <code class="mono">asText</code> coerced primitives to display strings near-identically.</td><td>Hoisted one <code class="mono">stringifyPrimitive</code> helper in <code class="mono">core-fields.ts</code>, used in both places.</td></tr>
+              <tr><td>8</td><td class="mono text-xs">gantt-shell.ts:596-606</td><td><code class="mono">#selectableEntriesInRowOrder</code> re-walks all planned rows per keypress.</td><td>Likely fine (rows already memoized via <code class="mono">FrameLayout</code>) — confirm, don't change speculatively.</td></tr>
+              <tr><td>9</td><td class="mono text-xs">model/field.ts:12-15</td><td><code class="mono">FieldKey</code>/<code class="mono">AggregatorName</code>/<code class="mono">FieldTypeName</code> repeat the open-string-literal trick three times with slightly different comments.</td><td>One documented <code class="mono">OpenString&lt;T&gt;</code> alias instead of three ad hoc repeats. Small win.</td></tr>
+              <tr class="bg-emerald-50/50"><td>10 <span class="badge badge-ok">fixed</span></td><td class="mono text-xs">rows/row-source.ts:62-71</td><td><code class="mono">PLANNED_ROW_KIND</code>/<code class="mono">isPlannedHeaderRow</code> guarded the read side only; write sites (<code class="mono">custom-source.ts:16</code>, <code class="mono">group-source.ts:33</code>) still wrote raw <code class="mono">'header'</code>/<code class="mono">'entry'</code> literals.</td><td>Exported <code class="mono">PLANNED_ROW_KIND</code> and switched all three write sites (<code class="mono">entries-source.ts</code>, <code class="mono">group-source.ts</code>, <code class="mono">custom-source.ts</code>) to build through it.</td></tr>
+              <tr><td>11</td><td class="mono text-xs">tree-collapse.ts:129-136 vs gantt-shell.ts:559-594</td><td><code class="mono">TreeCollapse#confirmIds</code> re-implements the propose/confirm/rollback shape <code class="mono">#proposeChange</code> already generalizes, via an injected closure.</td><td>Check whether <code class="mono">TreeCollapseContext.confirm</code> could call <code class="mono">ctx.proposeChange</code> directly instead of wrapping it per row-collapse call.</td></tr>
+              <tr><td>12</td><td class="mono text-xs">data/rollup.ts:52-81</td><td><code class="mono">parentsToRecompute</code> makes three passes (Set → filtered Array → depth Map → sort) over what's usually a small set.</td><td>Inline into one loop pushing <code class="mono">{id, depth}</code> pairs directly. Minor — rollup only runs on commit.</td></tr>
+              <tr><td>13</td><td class="mono text-xs">harness/main.ts:152-175</td><td><code class="mono">applyRowSource</code> chains ternaries/spreads building a <code class="mono">RowSource</code> literal.</td><td>No action — legitimate consumer code, not a library gap.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ARCHITECTURE -->
+      <section class="space-y-8">
+        <h2 class="font-serif text-2xl font-semibold">Architecture &amp; deepening</h2>
+        <p class="text-sm text-slate-600">Ball-of-mud potential, module depth, API friendliness, self-documentation, SOLID/extensibility — one merged pass. Vocabulary: module, interface, depth, seam, adapter, leverage, locality. Deletion test applied throughout.</p>
+
+        <article id="candidate-1" class="rounded-xl border border-slate-200 bg-white p-6 space-y-4">
+          <div class="flex items-center gap-2 flex-wrap">
+            <h3 class="font-serif text-xl font-semibold"><code class="mono">GanttShell</code> constructor is doing five jobs</h3>
+            <span class="badge badge-spec">Correction: already decided</span>
+          </div>
+          <div class="lbl">Files</div>
+          <div class="mono text-sm text-slate-700">src/view/gantt-shell.ts:306-497, plans/s4-hierarchy-and-rows/c4-split-gantt-shell.md</div>
+
+          <div class="grid grid-cols-2 gap-6">
+            <div>
+              <div class="lbl mb-2 text-center">Before</div>
+              <div class="rounded-lg border border-slate-200 bg-white p-4">
+                <pre class="mermaid">
+flowchart TD
+  C["GanttShell constructor\n190 lines"]
+  C --> A[container resolution]
+  C --> B[viewport wiring]
+  C --> D[dataset subscription]
+  C --> E[TreeCollapse wiring]
+  C --> F[GesturePipeline wiring]
+  C --> G[DOM attach wiring]
+  C --> H[theme + a11y labels]
+  classDef leak stroke:#dc2626,stroke-width:2px;
+  class C leak
+                </pre>
+              </div>
+            </div>
+            <div>
+              <div class="lbl mb-2 text-center">After</div>
+              <div class="rounded-lg border-2 border-slate-900 bg-slate-900 text-slate-50 p-4 flex flex-col items-center justify-center" style="min-height:220px;">
+                <div class="box-deep w-4/5 py-6 text-center rounded">GanttShell</div>
+                <div class="text-xs text-slate-400 mt-3 text-center">construction split across cohesive collaborators;<br/>constructor becomes assembly, not wiring logic</div>
+              </div>
+            </div>
+          </div>
+
+          <div><span class="lbl">Problem</span><p class="text-sm">Every startup-order bug lives in one 190-line, 980-line-class constructor that already carries inline comments warning about ordering ("must exist before…").</p></div>
+          <div class="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm">
+            <strong>Correction after re-check:</strong> <code class="mono">plans/s4-hierarchy-and-rows/c4-split-gantt-shell.md</code> is not a pending plan — every item in its Order section is checked off, and its §3.3 explicitly decided <em>against</em> extracting construction further: "The shell is the composition root. That is correct." Tree collapse, grid columns, dataset subscription, gesture math, and twisty click already moved out (§1). The remaining constructor width is the deliberate cost of being a composition root, not an unaddressed finding. No further split taken — doing one now would re-litigate a documented, closed decision.
+          </div>
+          <div><span class="lbl">Wins (already realized, per §1 of the plan)</span>
+            <ul class="text-sm list-disc list-inside space-y-1">
+              <li>Locality: tree/collapse, columns, gesture math each moved to one owning module</li>
+              <li>Leverage: <code class="mono">gantt.collapseAll()</code>/<code class="mono">expandAll()</code> replaced ad hoc harness walks</li>
+              <li>What's left in the constructor has one job: assembly, by design</li>
+            </ul>
+          </div>
+        </article>
+
+        <article id="candidate-2" class="rounded-xl border border-slate-200 bg-white p-6 space-y-4">
+          <div class="flex items-center gap-2 flex-wrap">
+            <h3 class="font-serif text-xl font-semibold"><code class="mono">DatasetState</code> is a growing composition root</h3>
+            <span class="badge badge-worth">Worth exploring</span>
+          </div>
+          <div class="lbl">Files</div>
+          <div class="mono text-sm text-slate-700">src/data/dataset-state.ts</div>
+          <p class="text-sm">Entry store, undo history, rollUpKinds, hierarchy/autoGroup, FieldRegistry, FieldContext, computed-field cache, datasetRevision all construct here. Each sub-module passes the deletion test on its own — this reads as a composition root, not hidden logic — but the class has four independent reasons to change and will keep growing through S5/S6, mirroring candidate 1.</p>
+          <div><span class="lbl">Wins if split alongside #1</span><p class="text-sm">A clean split pattern on one composition root makes the other's growth more defensible — same fix shape, both sides.</p></div>
+        </article>
+
+        <article id="candidate-3" class="rounded-xl border border-slate-200 bg-white p-6 space-y-4">
+          <div class="flex items-center gap-2 flex-wrap">
+            <h3 class="font-serif text-xl font-semibold">Row pipeline is a legitimate seam, but dense on locality</h3>
+            <span class="badge badge-worth">Worth exploring</span>
+          </div>
+          <div class="lbl">Files</div>
+          <div class="mono text-sm text-slate-700">layout/rows/{entries-source,group-source,custom-source,filter,sort,collapse,resolve-rows}.ts</div>
+          <div class="rounded-lg border border-slate-200 bg-white p-4">
+            <pre class="mermaid">
+flowchart LR
+  A[entries/group/custom-source] --> B[filter]
+  B --> C[sort]
+  C --> D[collapse]
+  D --> E[resolve-rows]
+  E --> F["PlannedRow[]"]
+            </pre>
+          </div>
+          <p class="text-sm"><strong>Deletion test:</strong> each pass (source → filter → sort → collapse → index) genuinely concentrates one concern — deleting any one moves complexity to callers, doesn't just relocate it. Not ball-of-mud. But understanding "how does a row get its final index/expanded/matched" needs five files read in order — the densest locality cost in the slice for a newcomer.</p>
+          <div><span class="lbl">Solution</span><p class="text-sm">No structural change recommended; a short doc comment at <code class="mono">resolve-rows.ts</code> naming the pipeline order would cut the onboarding cost without touching the seam.</p></div>
+        </article>
+
+        <article id="candidate-4" class="rounded-xl border border-slate-200 bg-white p-6 space-y-3">
+          <div class="flex items-center gap-2 flex-wrap">
+            <h3 class="font-serif text-xl font-semibold">Optional <code class="mono">fields</code> param on <code class="mono">RowFilter</code>/<code class="mono">RowSort</code></h3>
+            <span class="badge badge-spec">Speculative</span>
+          </div>
+          <div class="mono text-sm text-slate-700">layout/rows/row-source.ts:10-16</div>
+          <p class="text-sm">Every call site inside <code class="mono">layout/</code> always has a <code class="mono">FieldContext</code> available, yet the type makes it optional — a consumer filter/sort silently loses field access with no type-level signal it was deliberate. Consider requiring it now that <code class="mono">resolveOpenRows</code> always threads one through.</p>
+        </article>
+
+        <article id="candidate-5" class="rounded-xl border border-slate-200 bg-white p-6 space-y-3">
+          <div class="flex items-center gap-2 flex-wrap">
+            <h3 class="font-serif text-xl font-semibold">Inline function on <code class="mono">FieldSource</code>'s compute variant</h3>
+            <span class="badge badge-spec">Speculative — confirm only</span>
+          </div>
+          <div class="mono text-sm text-slate-700">src/model/field.ts:18-21</div>
+          <p class="text-sm">ADR 0005 says a name serializes, a function doesn't — Aggregators are name-only. <code class="mono">{ from: 'compute', read(entry, ctx) }</code> puts a live function directly on <code class="mono">FieldSource</code>. Likely deliberate (a compute field never persists), but undocumented — a future reviewer will flag it as an ADR 0005 breach without a one-line note explaining the exception.</p>
+        </article>
+
+        <article id="candidate-6" class="rounded-xl border border-slate-200 bg-white p-6 space-y-3">
+          <div class="flex items-center gap-2 flex-wrap">
+            <h3 class="font-serif text-xl font-semibold">Row-literal construction duplicated across three sources</h3>
+            <span class="badge badge-spec">Speculative</span>
+          </div>
+          <div class="mono text-sm text-slate-700">rows/entries-source.ts:28-47, group-source.ts:26-53, custom-source.ts</div>
+          <p class="text-sm">Three near-identical <code class="mono">UnindexedRow</code> literal builders, no shared <code class="mono">makeRow()</code>. Low risk today; a plausible fourth row source (CONTEXT.md's own "resources" example) would re-invent this a fourth time.</p>
+        </article>
+
+        <article id="candidate-7" class="rounded-xl border border-slate-200 bg-white p-6 space-y-3">
+          <div class="flex items-center gap-2 flex-wrap">
+            <h3 class="font-serif text-xl font-semibold"><code class="mono">TreeCollapse.#firstChildOf</code> linear-scans on every keypress</h3>
+            <span class="badge badge-spec">Speculative — perf, not design</span>
+          </div>
+          <div class="mono text-sm text-slate-700">src/view/tree-collapse.ts:151-156</div>
+          <p class="text-sm">O(n) per right-arrow keystroke; fine at demo scale, but <code class="mono">entries-source.ts</code> already builds a <code class="mono">childrenOf</code> map elsewhere that could be threaded into <code class="mono">TreeCollapseContext</code> once row counts grow.</p>
+        </article>
+
+        <article id="candidate-8" class="rounded-xl border border-slate-200 bg-white p-6 space-y-3">
+          <div class="flex items-center gap-2 flex-wrap">
+            <h3 class="font-serif text-xl font-semibold">ADR 0007 spot-check on <code class="mono">DatasetState</code> setters</h3>
+            <span class="badge badge-worth">Worth exploring, not confirmed</span>
+          </div>
+          <div class="mono text-sm text-slate-700">src/data/dataset-state.ts (setRollUpKinds, setHierarchy, bumpDatasetRevision)</div>
+          <p class="text-sm">Plain public methods, not WeakMap-backed friend functions — legitimate since they're <code class="mono">DatasetState</code>'s own public-to-<code class="mono">data/</code> surface, not <code class="mono">layout/</code>-only access. No violation found; worth a second look that nothing in <code class="mono">render/</code>/<code class="mono">view/</code>/<code class="mono">interaction/</code> reaches these directly instead of through <code class="mono">Dataset</code>'s narrower interface.</p>
+        </article>
+
+        <div class="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm">
+          <strong>Positive note:</strong> <code class="mono">src/api/attempt-mutation.ts</code> pulled the <code class="mono">MutationCancelledError</code> catch/return-false pattern out of <code class="mono">gantt.ts</code>'s inline try/catch — exactly the shallow-adapter-turned-real-seam this review watches for, done well. <code class="mono">pickDefined</code> in <code class="mono">api/gantt.ts</code> collapsed ~15 conditional spreads into one call, a real simplification win, with the sole (harmless) tradeoff that a legitimately-meaningful <code class="mono">undefined</code> value would be dropped same as before.
+        </div>
+      </section>
+
+      <section id="top-recommendation" class="rounded-xl border-2 border-slate-900 bg-white p-6">
+        <div class="lbl mb-1">Top recommendation</div>
+        <h3 class="font-serif text-xl font-semibold mb-2">No structural action — the fixes applied close the loop</h3>
+        <p class="text-sm">
+          The one <span class="badge badge-strong">Strong</span> candidate from the first pass, <a href="#candidate-1" class="underline">candidate 1</a> (<code class="mono">GanttShell</code> constructor), turned out to already be closed: <code class="mono">plans/s4-hierarchy-and-rows/c4-split-gantt-shell.md</code>'s Order section is fully checked off and its §3.3 explicitly decides against extracting construction further. Corrected above — no code change taken there.
+          <a href="#candidate-2" class="underline">Candidate 2</a> (<code class="mono">DatasetState</code> growth) stays <span class="badge badge-worth">Worth exploring</span> for a future slice, not this pass.
+        </p>
+        <p class="text-sm mt-2">
+          What was actually fixed this pass: the <code class="mono">withProposedKeys</code>/<code class="mono">withKeys</code> duplication (Simplification #2), the <code class="mono">formatUnknown</code>/<code class="mono">asText</code> duplication (Simplification #7), the half-enforced <code class="mono">PLANNED_ROW_KIND</code> lookup (Simplification #10), and the two nested-ternary Mysterious Name findings in <code class="mono">gesture-pipeline.ts</code> and <code class="mono">harness/main.ts</code> (Standards). Full test suite, typecheck, lint, boundaries, and guards all pass after the changes.
+        </p>
+      </section>
+
+    </main>
+  </body>
+</html>

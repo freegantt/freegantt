@@ -1,47 +1,63 @@
 import { describe, expect, it } from 'vitest';
-import { diffEdit, fieldsEqual, foldChangeSet, invertChangeSet } from './change-set.js';
+import { diffEdit, foldChangeSet, invertChangeSet } from './change-set.js';
 import { changeSetId, entryId } from '../model/index.js';
 import type { Entry, EntryId, Instant } from '../model/index.js';
 import type { StoredEdit } from './edit-extension.js';
+import { createFieldContext, withProposedKeys, writeField } from './fields/field-access.js';
+import { FieldRegistry } from './fields/field-registry.js';
 
 function span(start: number, end: number): { start: Instant; end: Instant } {
   return { start: start as Instant, end: end as Instant };
 }
 
-function entry(id: string): Entry {
-  return { id: entryId(id), name: id, start: 0 as Entry['start'], end: 1 as Entry['end'], kind: 'span' };
+function entry(id: string, meta?: unknown): Entry {
+  const item: Entry = {
+    id: entryId(id),
+    name: id,
+    start: 0 as Entry['start'],
+    end: 1 as Entry['end'],
+    kind: 'span',
+  };
+  if (meta !== undefined) item.meta = meta;
+  return item;
 }
 
-describe('fieldsEqual', () => {
+const registry = new FieldRegistry({
+  fieldTypes: { money: { rollUp: 'sum' } },
+  fields: [{ key: 'cost', type: 'money' }],
+});
+const fieldCtx = createFieldContext(registry, 'UTC');
+
+describe('FieldRegistry.valuesEqual', () => {
   it('compares primitives by reference', () => {
-    expect(fieldsEqual('name', 'Roofing', 'Roofing')).toBe(true);
-    expect(fieldsEqual('name', 'Roofing', 'Framing')).toBe(false);
+    expect(registry.valuesEqual('name', 'Roofing', 'Roofing')).toBe(true);
+    expect(registry.valuesEqual('name', 'Roofing', 'Framing')).toBe(false);
   });
 
   it('compares start/end as exact Instant equality', () => {
-    expect(fieldsEqual('start', 0, 0)).toBe(true);
-    expect(fieldsEqual('start', 0, 1)).toBe(false);
+    expect(registry.valuesEqual('start', 0, 0)).toBe(true);
+    expect(registry.valuesEqual('start', 0, 1)).toBe(false);
   });
 
   it('compares meta by reference only, never deep', () => {
     const shared = { note: 'x' };
-    expect(fieldsEqual('meta', shared, shared)).toBe(true);
-    expect(fieldsEqual('meta', { note: 'x' }, { note: 'x' })).toBe(false);
+    expect(registry.valuesEqual('meta', shared, shared)).toBe(true);
+    expect(registry.valuesEqual('meta', { note: 'x' }, { note: 'x' })).toBe(false);
   });
 
   it('compares segments element-wise on start/end', () => {
     const a = [span(0, 1)];
     const b = [span(0, 1)];
     const c = [span(0, 2)];
-    expect(fieldsEqual('segments', a, b)).toBe(true);
-    expect(fieldsEqual('segments', a, c)).toBe(false);
-    expect(fieldsEqual('segments', undefined, undefined)).toBe(true);
-    expect(fieldsEqual('segments', a, undefined)).toBe(false);
+    expect(registry.valuesEqual('segments', a, b)).toBe(true);
+    expect(registry.valuesEqual('segments', a, c)).toBe(false);
+    expect(registry.valuesEqual('segments', undefined, undefined)).toBe(true);
+    expect(registry.valuesEqual('segments', a, undefined)).toBe(false);
   });
 
-  it('falls back to reference equality for a key outside the core table (S5 field)', () => {
-    expect(fieldsEqual('customField', 1, 1)).toBe(true);
-    expect(fieldsEqual('customField', 1, 2)).toBe(false);
+  it('falls back to Object.is for a declared Field without equals', () => {
+    expect(registry.valuesEqual('cost', 1, 1)).toBe(true);
+    expect(registry.valuesEqual('cost', 1, 2)).toBe(false);
   });
 });
 
@@ -53,7 +69,7 @@ describe('diffEdit', () => {
   it('produces a FieldUpdated row per changed field', () => {
     const t1 = entry('t1');
     const edit: StoredEdit = { name: 'Framing', kind: 'milestone' };
-    const rows = diffEdit(entries(t1), t1.id, edit);
+    const rows = diffEdit(entries(t1), t1.id, edit, registry, fieldCtx);
     expect(rows).toEqual([
       { store: 'entries', id: t1.id, field: 'name', from: 't1', to: 'Framing' },
       { store: 'entries', id: t1.id, field: 'kind', from: 'span', to: 'milestone' },
@@ -62,14 +78,31 @@ describe('diffEdit', () => {
 
   it('drops a field set back to its current value', () => {
     const t1 = entry('t1');
-    const rows = diffEdit(entries(t1), t1.id, { name: 't1' });
+    const rows = diffEdit(entries(t1), t1.id, { name: 't1' }, registry, fieldCtx);
     expect(rows).toEqual([]);
   });
 
   it('returns no rows for an id absent from entries', () => {
     const t1 = entry('t1');
-    const rows = diffEdit(entries(t1), entryId('missing'), { name: 'x' });
+    const rows = diffEdit(entries(t1), entryId('missing'), { name: 'x' }, registry, fieldCtx);
     expect(rows).toEqual([]);
+  });
+
+  it('{ cost: 500 } emits one cost row, not a meta row', () => {
+    const t1 = entry('t1', { cost: 400 });
+    const cost = registry.get('cost')!;
+    const edit = withProposedKeys(writeField({}, t1, cost, 500), ['cost']);
+    const rows = diffEdit(entries(t1), t1.id, edit, registry, fieldCtx);
+    expect(rows).toEqual([{ store: 'entries', id: t1.id, field: 'cost', from: 400, to: 500 }]);
+  });
+
+  it('a whole-meta write emits the meta row first, then declared rows', () => {
+    const t1 = entry('t1', { cost: 400, team: 'A' });
+    const nextMeta = { cost: 500, team: 'A' };
+    const edit = withProposedKeys({ meta: nextMeta }, ['meta']);
+    const rows = diffEdit(entries(t1), t1.id, edit, registry, fieldCtx);
+    expect(rows[0]).toEqual({ store: 'entries', id: t1.id, field: 'meta', from: t1.meta, to: nextMeta });
+    expect(rows).toContainEqual({ store: 'entries', id: t1.id, field: 'cost', from: 400, to: 500 });
   });
 });
 

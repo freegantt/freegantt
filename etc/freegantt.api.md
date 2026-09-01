@@ -8,7 +8,27 @@
 export function addMs(i: Instant, ms: number): Instant;
 
 // @public
+export type Aggregator<TValue = unknown> = (children: readonly Entry[], parent: Entry, ctx: RollUpContext) => TValue | undefined;
+
+// @public
+export class AggregatorFailedError extends FreeGanttError {
+    constructor(fieldKey: string, aggregatorName: string, entryId: EntryId, cause?: unknown);
+    // (undocumented)
+    readonly aggregatorName: string;
+    // (undocumented)
+    readonly entryId: EntryId;
+    // (undocumented)
+    readonly fieldKey: string;
+}
+
+// @public (undocumented)
+export type AggregatorName = 'min' | 'max' | 'sum' | 'count' | 'none' | (string & {});
+
+// @public
 export type AsyncCancelableEvent = 'beforeEntryMove' | 'beforeEntryResize';
+
+// @public
+export function attemptMutation(body: () => void): boolean;
 
 // @public
 export type CapabilityRule = boolean | ((entry: Entry) => boolean);
@@ -39,6 +59,22 @@ export type ChangeSetId = string & {
 export function changeSetId(counter: number): ChangeSetId;
 
 // @public
+export interface ClientPoint {
+    // (undocumented)
+    readonly x: number;
+    // (undocumented)
+    readonly y: number;
+}
+
+// @public (undocumented)
+export interface CollapseChange {
+    // (undocumented)
+    readonly from: readonly RowId[];
+    // (undocumented)
+    readonly to: readonly RowId[];
+}
+
+// @public
 export class ContainerNotFoundError extends FreeGanttError {
     constructor(container: string);
 }
@@ -46,19 +82,50 @@ export class ContainerNotFoundError extends FreeGanttError {
 // @public
 export type CoreFieldKey = keyof Omit<Entry, 'id'>;
 
+// @public
+export interface CustomRow {
+    // (undocumented)
+    entryIds?: readonly string[];
+    // (undocumented)
+    id: string;
+    // (undocumented)
+    label?: string;
+}
+
+// @public
+export interface CustomRowInput {
+    // (undocumented)
+    entries: readonly Entry[];
+}
+
 // @public (undocumented)
-export class Dataset {
-    constructor(options: DatasetOptions);
+export interface CustomRowSource {
+    // (undocumented)
+    heightMode?: RowHeightMode;
+    // (undocumented)
+    resolve(input: CustomRowInput): readonly CustomRow[];
+    // (undocumented)
+    source: 'custom';
+}
+
+// @public (undocumented)
+export class Dataset<TMeta = unknown, TFields extends Record<string, unknown> = Record<string, unknown>> {
+    constructor(options: DatasetOptions<TMeta>);
     get canRedo(): boolean;
     get canUndo(): boolean;
+    get datasetRevision(): number;
     // (undocumented)
     get dateOnlyEnd(): DateOnlyEndRule;
     // (undocumented)
-    get derivedSpanKinds(): readonly EntryKind[];
-    // (undocumented)
-    get entries(): EntryStore;
-    static fromJSON(doc: DatasetDocument): Dataset;
-    isDerivedSpanKind(kind: EntryKind): boolean;
+    get entries(): EntryStore<TMeta, TFields>;
+    field(key: FieldKey): Field | undefined;
+    get fields(): {
+        readonly all: readonly Field[];
+    };
+    static fromJSON<TMeta = unknown, TFields extends Record<string, unknown> = Record<string, unknown>>(doc: DatasetDocument<TMeta>, options?: Pick<DatasetOptions, 'fields' | 'fieldTypes' | 'aggregators'>): Dataset<TMeta, TFields>;
+    get hierarchy(): DatasetHierarchy;
+    set hierarchy(value: DatasetHierarchy);
+    isRollUpKind(kind: EntryKind): boolean;
     // (undocumented)
     off<K extends keyof DatasetEventMap>(name: K, handler: (payload: DatasetEventMap[K]) => void | false): void;
     // (undocumented)
@@ -66,8 +133,11 @@ export class Dataset {
     redo(): void;
     replay(changeSet: ChangeSet): void;
     // (undocumented)
+    get rollUpKinds(): readonly EntryKind[];
+    set rollUpKinds(value: RollUpKinds);
+    // (undocumented)
     get timeZone(): string;
-    toJSON(): DatasetDocument;
+    toJSON(): DatasetDocument<TMeta>;
     transaction<T>(body: () => T): T;
     undo(): void;
 }
@@ -77,11 +147,12 @@ export interface DatasetDocument<TMeta = unknown> {
     // (undocumented)
     dateOnlyEnd: DateOnlyEndRule;
     // (undocumented)
-    derivedSpanKinds: readonly EntryKind[];
-    // (undocumented)
     entries: readonly EntryDocument<TMeta>[];
+    fields?: readonly SerializedField[];
     // (undocumented)
-    schema: 1;
+    rollUpKinds: readonly EntryKind[];
+    // (undocumented)
+    schema: 1 | 2;
     // (undocumented)
     timeZone: string;
 }
@@ -98,14 +169,24 @@ export interface DatasetEventMap {
     };
 }
 
+// @public
+export interface DatasetHierarchy {
+    // (undocumented)
+    readonly autoGroup: boolean;
+}
+
 // @public (undocumented)
-export interface DatasetOptions {
+export interface DatasetOptions<TMeta = unknown> {
+    aggregators?: Readonly<Record<string, Aggregator>>;
     dateOnlyEnd?: DateOnlyEndRule;
-    derivedSpanKinds?: readonly EntryKind[];
-    entries: readonly EntryInput[];
+    entries: readonly EntryInput<TMeta>[];
+    fields?: readonly Field[];
+    fieldTypes?: Readonly<Record<string, FieldType>>;
+    hierarchy?: DatasetHierarchy;
     history?: {
         capacity?: number;
     };
+    rollUpKinds?: RollUpKinds;
     timeZone: string;
 }
 
@@ -130,6 +211,27 @@ export class DuplicateEntryIdError extends FreeGanttError {
     constructor(entryId: EntryId);
 }
 
+// @public
+export class DuplicateFieldKeyError extends FreeGanttError {
+    constructor(key: string);
+    // (undocumented)
+    readonly key: string;
+}
+
+// @public
+export class DuplicateFieldSourceError extends FreeGanttError {
+    constructor(metaKey: string);
+    // (undocumented)
+    readonly metaKey: string;
+}
+
+// @public
+export class DuplicateRowIdError extends FreeGanttError {
+    constructor(rowId: string);
+    // (undocumented)
+    readonly rowId: string;
+}
+
 // @public (undocumented)
 export interface Duration {
     // (undocumented)
@@ -152,6 +254,14 @@ export interface EntityRemoved {
     entity: Entry;
     // (undocumented)
     store: 'entries';
+}
+
+// @public (undocumented)
+export interface EntriesRowSource extends RowSourceCommon {
+    // (undocumented)
+    source: 'entries';
+    // (undocumented)
+    tree?: boolean;
 }
 
 // @public (undocumented)
@@ -191,7 +301,7 @@ export interface EntryDocument<TMeta = unknown> {
 }
 
 // @public
-export type EntryEdit<TMeta = unknown> = Partial<Omit<EntryInput<TMeta>, 'id'>>;
+export type EntryEdit<TMeta = unknown, TFields extends Record<string, unknown> = Record<string, unknown>> = Partial<Omit<EntryInput<TMeta>, 'id'>> & Partial<TFields>;
 
 // @public
 export interface EntryGestureEvent extends ProposedSpan {
@@ -206,6 +316,9 @@ export type EntryId = string & {
 
 // @public (undocumented)
 export function entryId(value: string): EntryId;
+
+// @public
+export function entryIdOfItem(id: ItemId): EntryId;
 
 // @public
 export interface EntryInput<TMeta = unknown> {
@@ -239,22 +352,23 @@ export interface EntryResize extends EntryGestureEvent {
 }
 
 // @public
-export interface EntryStore extends EntryStoreView {
+export interface EntryStore<TMeta = unknown, TFields extends Record<string, unknown> = Record<string, unknown>> extends EntryStoreView<TMeta> {
     // (undocumented)
-    add(input: EntryInput): Entry;
+    add(input: EntryInput<TMeta>): Entry<TMeta>;
     // (undocumented)
     remove(id: EntryId | string): void;
     // (undocumented)
-    update(id: EntryId | string, edit: EntryEdit): Entry;
+    update(id: EntryId | string, edit: EntryEdit<TMeta, TFields>): Entry<TMeta>;
 }
 
 // @public
-export interface EntryStoreView {
+export interface EntryStoreView<TMeta = unknown> {
     // (undocumented)
-    readonly all: readonly Entry[];
-    childrenOf(id: EntryId | string): readonly Entry[];
+    readonly all: readonly Entry<TMeta>[];
+    childrenOf(id: EntryId | string): readonly Entry<TMeta>[];
+    fieldValue<T>(id: EntryId | string, field: FieldKey): T | undefined;
     // (undocumented)
-    get(id: EntryId | string): Entry | undefined;
+    get(id: EntryId | string): Entry<TMeta> | undefined;
     // (undocumented)
     has(id: EntryId | string): boolean;
     // (undocumented)
@@ -262,7 +376,60 @@ export interface EntryStoreView {
 }
 
 // @public (undocumented)
+export interface Field<TValue = unknown> {
+    // (undocumented)
+    column?: Omit<GridColumn, 'field'>;
+    // (undocumented)
+    compare?(a: TValue | undefined, b: TValue | undefined): number;
+    // (undocumented)
+    equals?(a: TValue | undefined, b: TValue | undefined): boolean;
+    // (undocumented)
+    formatValue?(value: TValue | undefined, ctx: FormatContext): string;
+    // (undocumented)
+    key: FieldKey;
+    rollUp?: AggregatorName;
+    source?: FieldSource;
+    // (undocumented)
+    type?: FieldTypeName;
+}
+
+// @public
+export interface FieldContext {
+    // (undocumented)
+    durationOf(entry: Entry): Duration;
+    // (undocumented)
+    read<T>(entry: Entry, key: FieldKey): T | undefined;
+    // (undocumented)
+    readonly timeZone: string;
+}
+
+// @public
 export type FieldKey = CoreFieldKey | (string & {});
+
+// @public
+export class FieldNotColumnableError extends FreeGanttError {
+    constructor(key: string);
+    // (undocumented)
+    readonly key: string;
+}
+
+// @public
+export type FieldSource = {
+    from: 'entry';
+    field: CoreFieldKey;
+} | {
+    from: 'meta';
+    key?: string;
+} | {
+    from: 'compute';
+    read(entry: Entry, ctx: FieldContext): unknown;
+};
+
+// @public
+export type FieldType<TValue = unknown> = Omit<Field<TValue>, 'key' | 'source' | 'type'>;
+
+// @public (undocumented)
+export type FieldTypeName = string & {};
 
 // @public (undocumented)
 export interface FieldUpdated {
@@ -278,11 +445,20 @@ export interface FieldUpdated {
     to: unknown;
 }
 
-// @public
-export function formatDate(zone: string, i: Instant, locale?: Intl.LocalesArgument): string;
+// @public (undocumented)
+export type FilterPolicy = 'keepAncestors' | 'matchOnly';
 
 // @public
-export function formatEndInclusive(zone: string, end: Instant, locale?: Intl.LocalesArgument): string;
+export interface FormatContext extends FieldContext {
+    // (undocumented)
+    readonly locale: Intl.LocalesArgument;
+}
+
+// @public
+export function formatDate(zone: string, i: Instant, locale?: Intl.LocalesArgument, options?: Intl.DateTimeFormatOptions): string;
+
+// @public
+export function formatEndInclusive(zone: string, end: Instant, locale?: Intl.LocalesArgument, options?: Intl.DateTimeFormatOptions): string;
 
 // @public
 export const formatHour: HeaderFormat;
@@ -292,7 +468,7 @@ export const formatWeekNumber: HeaderFormat;
 
 // @public (undocumented)
 export class FreeGanttError extends Error {
-    constructor(code: string, message: string);
+    constructor(code: string, message: string, options?: ErrorOptions);
     // (undocumented)
     readonly code: string;
 }
@@ -307,13 +483,27 @@ export class Gantt {
     get canZoomIn(): boolean;
     // (undocumented)
     get canZoomOut(): boolean;
+    // (undocumented)
+    collapse(id: RowId | string): void;
+    // (undocumented)
+    collapseAll(): void;
+    // (undocumented)
+    get collapsed(): readonly RowId[];
+    set collapsed(ids: readonly (RowId | string)[]);
     get dateLines(): readonly DateLineInput[];
     set dateLines(lines: readonly DateLineInput[]);
     // (undocumented)
     destroy(): void;
     // (undocumented)
+    expand(id: RowId | string): void;
+    // (undocumented)
+    expandAll(): void;
+    // (undocumented)
     get fit(): TimeScaleFit;
     set fit(f: TimeScaleFit);
+    // (undocumented)
+    get gridColumns(): readonly GridColumnInput[];
+    set gridColumns(columns: readonly GridColumnInput[]);
     // (undocumented)
     get gridWidth(): number;
     set gridWidth(px: number);
@@ -338,6 +528,8 @@ export class Gantt {
     });
     // (undocumented)
     reveal(entryId: EntryId): void;
+    get rowSource(): RowSource;
+    set rowSource(next: RowSource);
     get selection(): readonly EntryId[];
     set selection(ids: readonly (EntryId | string)[]);
     get selectionEntries(): readonly Entry[];
@@ -349,6 +541,8 @@ export class Gantt {
     // (undocumented)
     get todayLineMarginTicks(): number;
     set todayLineMarginTicks(ticks: number);
+    // (undocumented)
+    toggleCollapse(id: RowId | string): void;
     get viewportGestures(): ViewportGestures;
     set viewportGestures(next: ViewportGestures);
     // (undocumented)
@@ -370,11 +564,14 @@ export type GanttEventHandler<K extends keyof GanttEventMap> = (payload: GanttEv
 
 // @public
 export interface GanttEventMap {
+    beforeCollapseChange: CollapseChange;
     beforeEntryMove: EntryMove;
     beforeEntryResize: EntryResize;
     // (undocumented)
     beforeGridWidthChange: GridWidthChange;
     beforeSelectionChange: SelectionChange;
+    // (undocumented)
+    collapseChange: CollapseChange;
     // (undocumented)
     entryMove: EntryMove;
     // (undocumented)
@@ -387,11 +584,63 @@ export interface GanttEventMap {
     selectionChange: SelectionChange;
 }
 
-// Warning: (ae-forgotten-export) The symbol "GanttOptionsBase" needs to be exported by the entry point index.d.ts
-// Warning: (ae-forgotten-export) The symbol "GanttScaleOptions" needs to be exported by the entry point index.d.ts
-//
 // @public (undocumented)
 export type GanttOptions = GanttOptionsBase & GanttScaleOptions;
+
+// @public (undocumented)
+export interface GanttOptionsBase {
+    a11yLabel?: string;
+    collapsed?: readonly (RowId | string)[];
+    container: HTMLElement | string;
+    // (undocumented)
+    dataset: Dataset;
+    dateLines?: readonly DateLineInput[];
+    gridColumns?: readonly GridColumnInput[];
+    gridWidth?: number;
+    interactions?: Interactions;
+    locale?: Intl.LocalesArgument;
+    rowSource?: RowSource;
+    scroll?: ScrollModel;
+    selection?: readonly (EntryId | string)[];
+    theme?: Theme;
+    todayLine?: boolean | InstantInput;
+    todayLineMarginTicks?: number;
+    viewportGestures?: ViewportGestures;
+    zoomPresets?: readonly PresetRef[];
+}
+
+// @public
+export type GanttScaleOptions = {
+    scale: TimeScaleModel;
+    preset?: never;
+    range?: never;
+    fit?: never;
+} | {
+    scale?: undefined;
+    preset?: PresetRef;
+    range?: 'fitDataset' | {
+        start: InstantInput;
+        end: InstantInput;
+    };
+    fit?: TimeScaleFit;
+};
+
+// @public
+export interface GridColumn {
+    // (undocumented)
+    align?: 'start' | 'end';
+    // (undocumented)
+    field: FieldKey;
+    // (undocumented)
+    flex?: number;
+    // (undocumented)
+    header?: string;
+    // (undocumented)
+    width?: number;
+}
+
+// @public
+export type GridColumnInput = FieldKey | GridColumn;
 
 // @public (undocumented)
 export interface GridWidthChange {
@@ -399,6 +648,14 @@ export interface GridWidthChange {
     readonly from: number;
     // (undocumented)
     readonly to: number;
+}
+
+// @public (undocumented)
+export interface GroupRowSource extends RowSourceCommon {
+    // (undocumented)
+    groupBy(entry: Entry, fields?: FieldContext): string;
+    // (undocumented)
+    source: 'group';
 }
 
 // @public
@@ -492,6 +749,14 @@ export class ParentCycleError extends FreeGanttError {
 }
 
 // @public
+export interface PixelSpan {
+    // (undocumented)
+    readonly width: number;
+    // (undocumented)
+    readonly x: number;
+}
+
+// @public
 export interface Point {
     // (undocumented)
     readonly x: number;
@@ -515,6 +780,51 @@ export interface ProposedSpan {
     readonly start: Instant;
 }
 
+// @public
+export interface RollUpContext extends FieldContext {
+    // (undocumented)
+    readonly field: FieldKey;
+}
+
+// @public
+export type RollUpKinds = readonly EntryKind[] | 'none';
+
+// @public (undocumented)
+export type RowFilter = (entry: Entry, fields?: FieldContext) => boolean;
+
+// @public (undocumented)
+export type RowHeightMode = 'fixed' | 'pack';
+
+// @public (undocumented)
+export type RowId = string & {
+    readonly __brand: 'RowId';
+};
+
+// @public (undocumented)
+export interface RowSort {
+    // (undocumented)
+    compare?(a: unknown, b: unknown, fields?: FieldContext): number;
+    // (undocumented)
+    direction?: 'asc' | 'desc';
+    // (undocumented)
+    field: FieldKey;
+}
+
+// @public (undocumented)
+export type RowSource = EntriesRowSource | GroupRowSource | CustomRowSource;
+
+// @public
+export interface RowSourceCommon {
+    // (undocumented)
+    filter?: RowFilter;
+    // (undocumented)
+    filterPolicy?: FilterPolicy;
+    // (undocumented)
+    heightMode?: RowHeightMode;
+    // (undocumented)
+    sort?: RowSort;
+}
+
 // @public (undocumented)
 export class ScrollModel {
     constructor(position?: Partial<ScrollPosition>);
@@ -533,12 +843,35 @@ export interface ScrollState {
 }
 
 // @public
+export function segmentIndexOfItem(id: ItemId): number;
+
+// @public
+export class SegmentsOutOfSyncError extends FreeGanttError {
+    constructor(entryId: EntryId);
+}
+
+// @public
 export interface SelectionChange {
     // (undocumented)
     readonly from: readonly EntryId[];
     // (undocumented)
     readonly to: readonly EntryId[];
 }
+
+// @public
+export type SerializedField = {
+    key: FieldKey;
+    type?: FieldTypeName;
+    source: {
+        from: 'entry';
+        field: CoreFieldKey;
+    } | {
+        from: 'meta';
+        key: string;
+    };
+    rollUp?: AggregatorName;
+    column?: Omit<GridColumn, 'field'>;
+};
 
 // @public (undocumented)
 export type ShippedPresetId = 'hour' | 'day' | 'week' | 'month' | 'year' | 'dayAndWeek' | 'weekAndMonth' | 'monthAndYear' | 'hourDayWeek' | 'dayWeekMonth' | 'weekMonthYear';
@@ -557,12 +890,37 @@ export type StoreName = 'entries';
 // @public
 export type Theme = 'auto' | 'light' | 'dark';
 
+// @public (undocumented)
+export interface Tick {
+    // (undocumented)
+    instant: Instant;
+    width: number;
+    // (undocumented)
+    x: number;
+}
+
 // @public
 export interface TickStep {
     // (undocumented)
     readonly increment: number;
     // (undocumented)
     readonly unit: TimeUnit;
+}
+
+// @public (undocumented)
+export interface TimeScale {
+    readonly contentWidth: number;
+    // (undocumented)
+    instantForX(x: number): Instant;
+    readonly pxPerMs: number;
+    // (undocumented)
+    readonly range: TimeSpan;
+    ticks(step: TickStep, span: PixelSpan): readonly Tick[];
+    readonly timeZone: string;
+    // (undocumented)
+    widthForDuration(d: Duration, at: Instant): number;
+    // (undocumented)
+    xForInstant(i: Instant): number;
 }
 
 // @public
@@ -581,8 +939,6 @@ export class TimeScaleModel {
     // (undocumented)
     get range(): 'fitDataset' | TimeSpan;
     set range(r: 'fitDataset' | TimeSpan);
-    // Warning: (ae-forgotten-export) The symbol "TimeScale" needs to be exported by the entry point index.d.ts
-    //
     // (undocumented)
     get scale(): TimeScale;
 }
@@ -614,8 +970,22 @@ export interface TimeSpanInput {
 export type TimeUnit = 'millisecond' | 'minute' | 'hour' | 'day' | 'week' | 'month' | 'year';
 
 // @public
+export class UnknownAggregatorError extends FreeGanttError {
+    constructor(aggregatorName: string);
+    // (undocumented)
+    readonly aggregatorName: string;
+}
+
+// @public
 export class UnknownFieldError extends FreeGanttError {
     constructor(field: string);
+}
+
+// @public
+export class UnknownFieldTypeError extends FreeGanttError {
+    constructor(typeName: string);
+    // (undocumented)
+    readonly typeName: string;
 }
 
 // @public

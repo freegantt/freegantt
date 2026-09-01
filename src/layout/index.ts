@@ -1,5 +1,24 @@
-export { computeFrame, barSpan, DEFAULT_TICK_BOX_FLOOR_PX } from './frame.js';
+export { computeFrame, placeFrame, resolveLayoutRows, barSpan, DEFAULT_TICK_BOX_FLOOR_PX } from './frame.js';
+export { DEFAULT_LANE_GAP_PX } from './lanes/pack-lanes.js';
+export { createItemProducerRegistry } from './items/produce-items.js';
+export type { Item, ItemProducerRegistry } from './items/produce-items.js';
+export type { FrameColumn, ResolvedColumn, FieldCompare } from './column.js';
+export type {
+  RowSource,
+  EntriesRowSource,
+  GroupRowSource,
+  CustomRowSource,
+  CustomRow,
+  RowSourceCommon,
+  RowHeightMode,
+  CustomRowInput,
+  RowFilter,
+  RowSort,
+  FilterPolicy,
+} from './rows/row-source.js';
+export { DEFAULT_ROW_SOURCE, isPlannedHeaderRow } from './rows/row-source.js';
 export { FrameLayout } from './frame-layout.js';
+export { FrameMemory } from './frame-memory.js';
 export { resolveDateLines } from './date-line.js';
 export type { DateLine, DateLineSpec, ResolveDateLinesInput } from './date-line.js';
 export type {
@@ -21,7 +40,7 @@ export type {
 } from './frame.js';
 // Re-exported so render/ (layout-only import per plans/01 §1) can type item/row identity as
 // ItemId/RowId rather than a bare string — render already receives both via GeometryFrame (#35).
-export type { ItemId, RowId } from '../model/index.js';
+export type { ItemId, RowId, ClientPoint } from '../model/index.js';
 export { TimeScaleModel } from './viewport/time-scale-model.js';
 export type {
   TimeScaleModelOptions,

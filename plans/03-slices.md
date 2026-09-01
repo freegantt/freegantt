@@ -172,44 +172,46 @@ Slices are scope, not calendar estimates. Within a slice, entries are ordered so
 
 ## S4 — Hierarchy, grouping, multi-item rows
 
-**Position:** after S3, before S5. Tracker: [`plans/s4-hierarchy-and-rows/README.md`](./s4-hierarchy-and-rows/README.md); work splits into [`s4.1-field-registry.md`](./s4-hierarchy-and-rows/s4.1-field-registry.md)–[`s4.11-harness-and-gate.md`](./s4-hierarchy-and-rows/s4.11-harness-and-gate.md). That spec settles scope calls, closes ADR 0005's two open questions, and renames `derivedSpanKinds` to `rollUpKinds` as the Rollup gate widens from spans to every rolling-up field. The acceptance boxes below become `[S4-A1]`–`[S4-A11]` when S4.11's spec edits land.
+**Position:** after S3, before S5. **Done, gate passing.** Tracker: [`plans/s4-hierarchy-and-rows/README.md`](./s4-hierarchy-and-rows/README.md); work splits into [`s4.1-field-registry.md`](./s4-hierarchy-and-rows/s4.1-field-registry.md)–[`s4.11-harness-and-gate.md`](./s4-hierarchy-and-rows/s4.11-harness-and-gate.md). That spec settled scope calls, closed ADR 0005's two open questions, and renamed `derivedSpanKinds` to `rollUpKinds` as the Rollup gate widened from spans to every rolling-up field.
 
 **Goal:** the Row ≠ Entry payoff (principle 1). Tree view with collapse/expand, grouped row sources, entry segments as multiple bars on one row, lane packing with variable row heights.
 
 **Scope**
 
 - Field registry (`01` §2.6, ADR 0005): core fields (`name`, `start`, `end`, `duration`) ship as declarations in the registry a consumer adds to; `fields` / `fieldTypes` / `aggregators` on `Dataset`; a declared `meta` key becomes addressable for editing, comparison and rollup. A field is a Grid column candidate only when it declares `column`, so `gantt.gridColumns` is names in display order plus per-Gantt overrides. `progress` is not a core field (ADR 0008).
-- Per-field rollup (#80): `rollUpDerivedSpans` becomes `rollUpFields`, a leaf with one importer `data/transaction.ts` (D-S4-7). Default is on. `rollUpKinds: 'none'` (or `[]`) keeps the values the caller assigned on the parent. `start` is `min`, `end` is `max`, a declared `cost` sums, `name` does not roll up. Same precedence (yields to the body, wins over the resolver), still bottom-up. Scheduling cannot occupy this slot. Source decides stored vs. computed: `entry`/`meta` fields store the parent's aggregate, computed fields never reach the document.
+- Per-field rollup (#80): `rollUpFields` is a leaf with one importer `data/transaction.ts` (D-S4-7). Default is on. `rollUpKinds: 'none'` (or `[]`) keeps the values the caller assigned on the parent. `start` is `min`, `end` is `max`, a declared `cost` sums, `name` does not roll up. Same precedence (yields to the body, wins over the resolver), still bottom-up. Scheduling cannot occupy this slot. Source decides stored vs. computed: `entry`/`meta` fields store the parent's aggregate, computed fields never reach the document.
 - Frame rows carry `cells` (one library-formatted string per configured grid column) instead of one `label` — the S1 shape that assumed a single-column grid (#81).
 - Tree UI: indent + expand/collapse in the grid's name column; collapse state is view state (per Gantt, `RowId`s, not in dataset data).
 - Kind-driven item emission (`01` §2.5): `group` → summary bracket (span rollup from S2), `milestone` → diamond, consumer-registered kinds via the emitter seam; empty groups render as groups.
 - `hierarchy: { autoGroup: true }` on `Dataset`: first child promotes a `'span'` parent to `group` within the triggering transaction; promote `'span'` only, never demote (`02` §2).
 - Row sources: `{ source: 'group', groupBy }` and `{ source: 'custom', resolve }` (`01` §2.3); group header rows.
-- Sort and filter on the row source (`rows.filter`, `rows.sort`, `rows.filterPolicy`) with tree-aware policies (filter keeps ancestors by default; `filterPolicy: 'matchOnly'` for flat match lists; sort stays within parent).
+- Sort and filter on the row source (`rowSource.filter`, `rowSource.sort`, `rowSource.filterPolicy`) with tree-aware policies (filter keeps ancestors by default; `filterPolicy: 'matchOnly'` for flat match lists; sort stays within parent).
 - Item emission: `entry.segments` → multiple items on one row; overlap auto-packing into sub-lanes; `heightMode: 'pack'` variable row heights through the height index.
 - Interaction with lanes: drag/resize on packed items; collapse/expand by keyboard.
-- Harness: tree fixture, with **one** Gantt and a button that switches `gantt.rows` between the tree and a grouped source. That proves the Row ≠ Entry payoff and proves live reconfiguration (`02` §2) in the same demo. Two Gantts on one dataset is not the demo: D9 is about a shared axis and scroll between charts with **different** data (`02` §5), and a shared `Dataset` — while free, since a second Gantt is only a second `change` subscriber — is not a case the library designs around or tests.
+- Harness: tree fixture, with **one** Gantt and a button that switches `gantt.rowSource` between the tree and a grouped source. That proves the Row ≠ Entry payoff and proves live reconfiguration (`02` §2) in the same demo. Two Gantts on one dataset is not the demo: D9 is about a shared axis and scroll between charts with **different** data (`02` §5), and a shared `Dataset` — while free, since a second Gantt is only a second `change` subscriber — is not a case the library designs around or tests.
 - **Known gaps due this slice (issue #91 §9):** §9-E is a bet on `RowHeightIndex.heightAt`/`invalidateFrom` and `RenderBackend.applyState` finally getting production callers — pack-mode row heights above and the hover/selection/drag hot path are exactly that; if either lands and still does not use the methods, remove them rather than leave decoration. §9-G: `render/backend.ts`'s `hitTest(x, y)` does not name its coordinate space (DOM backend takes client coords, `GeometryFrame` is content coords) — this slice's gesture controllers are its first callers, so give it a named `ClientPoint` type before wiring them up, not after. §9-B (`view/gantt-shell.ts`'s `#wiring` boolean) is worth revisiting too: tree UI and lane interaction both add more to wire during construction.
 
 **Acceptance**
 
-- [ ] A consumer-declared `meta` field sums up the tree, shows in a grid column beside `start`, edits in the same `update()` call and the same undo step as a core field, and round-trips through `toJSON`/`fromJSON`.
-- [ ] An edit naming an unregistered field key throws `UnknownFieldError` — it is never written silently.
-- [ ] Switching `gantt.rows` between the tree and a grouped source re-resolves rows without a remount, and scroll position survives it.
-- [ ] A segmented entry renders N bars on one row; drag of one segment behaves sanely and transactionally.
-- [ ] Pack-mode rows change height correctly as overlaps come and go; scroll position stays stable (height index invalidation test).
-- [ ] Collapse state survives data edits and is independent per Gantt.
-- [ ] Filter with keep-ancestors shows a matching deep child under its chain of parents.
-- [ ] `filterPolicy: 'matchOnly'` returns only matching entries — no ancestor rows.
-- [ ] An empty `kind: 'group'` entry renders as a group, accepts children, and its span appears once children exist — no special-casing.
-- [ ] With `autoGroup` on: reparenting an entry under a plain entry promotes that parent to `group` in the same undo step; removing all children demotes nothing.
-- [ ] `{ source: 'custom', resolve }` produces the resolver's rows.
+- [x] `[S4-A1]` A consumer-declared `meta` field sums up the tree, shows in a grid column beside `start`, edits in the same `update()` call and the same undo step as a core field, and round-trips through `toJSON`/`fromJSON`.
+- [x] `[S4-A2]` An edit naming an unregistered field key throws `UnknownFieldError` — it is never written silently.
+- [x] `[S4-A3]` Switching `gantt.rowSource` between the tree and a grouped source re-resolves rows without a remount, and scroll position survives it.
+- [x] `[S4-A4]` A segmented entry renders N bars on one row; drag of one segment behaves sanely and transactionally.
+- [x] `[S4-A5]` Pack-mode rows change height correctly as overlaps come and go; scroll position stays stable (height index invalidation test).
+- [x] `[S4-A6]` Collapse state survives data edits and is independent per Gantt.
+- [x] `[S4-A7]` Filter with keep-ancestors shows a matching deep child under its chain of parents.
+- [x] `[S4-A8]` An empty `kind: 'group'` entry renders as a group, accepts children, and its span appears once children exist — no special-casing.
+- [x] `[S4-A9]` With `autoGroup` on: reparenting an entry under a plain entry promotes that parent to `group` in the same undo step; removing all children demotes nothing.
+- [x] `[S4-A10]` `filterPolicy: 'matchOnly'` returns only matching entries — no ancestor rows.
+- [x] `[S4-A11]` `{ source: 'custom', resolve }` produces the resolver's rows.
 
 ---
 
 ## S5 — Extensibility, editing surfaces, a11y completion
 
 **Goal:** the library's extension story is real and dogfooded (gate: a non-trivial built-in feature uses only the public plugin API), the grid grows into a proper editable table, and accessibility reaches its full committed level (D11).
+
+**Start constraint:** the remaining `GanttShell` split in [`plans/s4-hierarchy-and-rows/c4-split-gantt-shell.md`](./s4-hierarchy-and-rows/c4-split-gantt-shell.md) has landed (`TreeCollapse`, `collapseAll` / `expandAll`). Plugin wiring must not grow tree-collapse policy back into `gantt-shell.ts`. Do not name a new extract `GanttViewport` — `layout/` already owns `Viewport`.
 
 **Scope**
 
@@ -267,6 +269,7 @@ Slices are scope, not calendar estimates. Within a slice, entries are ordered so
 - `SchedulingPolicy` seam + `defaultPolicy` (`01` §7): `resolveEdit` (proposed fields decide what moves), precedence (`pinned > dependency`), dev-assert that a proposed field is never overwritten (I4).
 - Plugin registration: this plugin occupies the core extension hook via the **public** plugin contract shipped in S5. Its extender body is the only place that calls `schedule()`. `data/` stays generic. `interaction/` and `view/` still do not import `scheduling/`.
 - `data/` integration: the extender builds a `schedule()` call from `proposed`; extra writes merge into the same changeset (`origin: 'engine'`). I7 now includes engine patches. Drag preview already calls that extender (S3), so successor ghosts appear with no S3/S4 code change.
+- **Staged commit pipeline (parked from the 2026-08-31 `s4-implement` GLM review, candidate 4).** `runTransaction` still runs the body, then `buildCommitChangeSet` (body diff → extension hook → autoGroup promotion → Rollup → fold), then `commitChangeSet` (notify and apply). Construction already writes through `writeCommittedFieldRows` and does not mint a fake `'user'` changeset. S7 must not grow a sixth inline block inside `transaction.ts`. The scheduling plugin occupies the existing extension-hook stage (D4, ADR 0002). If S7 needs extra commit work (diagnostics fan-out, `origin: 'engine'` rows that the extender cannot own), add a named stage in `data/build-commit-change-set.ts` (or a sibling pipeline module), with one test per stage. Unify the construction promote/rollup pass with that pipeline in the same change (S4.11 review C3) so S7 does not keep two orchestrators.
 - `layout/`: link emission seam (#16) — orthogonal paths from bar edges, rendered as SVG; link flags (inactive, in-cycle). Multi-item endpoint rule: links attach to the earliest item by default (`links.endpoints: 'first' | 'all' | 'none'`).
 - `interaction/`: `LinkCreate` controller; `beforeLinkCreate` / `linkCreate`; link ports on the capability resolver (I14).
 - Diagnostics surface: `scheduleDiagnostics` event; bars flagged via `data-flag`. **Hot-path note:** `flagTokens()` in `render/dom/index.ts` does `Object.keys(flags).filter().join(' ')` per bar per frame. Pre-compute flag tokens in `computeFrame` (same as `a11yLabel`) so the render path is a string copy once flags are live.

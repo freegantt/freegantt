@@ -1,13 +1,30 @@
 // layout/ is headless geometry — no DOM, no drawing calls (plans/01 §4). DOM-free by construction.
 
-import type { RowId, ItemId, EntryId, EntryKind, Entry, Instant, Rect, TimeUnit } from '../model/index.js';
-import { itemId, rowId } from '../model/index.js';
+import type {
+  RowId,
+  ItemId,
+  EntryId,
+  EntryKind,
+  Entry,
+  Instant,
+  Rect,
+  TimeUnit,
+  FieldContext,
+} from '../model/index.js';
+import { segmentIndexOfItem } from '../model/index.js';
 import type { TimeScale, ViewPreset } from '../time/index.js';
 import { dedupeHeaderFormats, formatDate, formatEndInclusive, resolveDateFormat } from '../time/index.js';
 import { resolveDateLines } from './date-line.js';
 import type { DateLine, DateLineSpec } from './date-line.js';
-import { PrefixSumHeightIndex } from './row-height-index.js';
-import type { RowHeightIndex } from './row-height-index.js';
+import { FrameMemory } from './frame-memory.js';
+import type { FrameColumn, ResolvedColumn, FieldCompare } from './column.js';
+import type { PlannedRow, PlannedRowKind, RowSource } from './rows/row-source.js';
+import { isPlannedHeaderRow } from './rows/row-source.js';
+import { resolveRows } from './rows/resolve-rows.js';
+import type { Item } from './items/produce-items.js';
+import type { ItemProducerRegistry } from './items/produce-items.js';
+import { DEFAULT_LANE_GAP_PX, yForLane } from './lanes/pack-lanes.js';
+import type { PackedRow } from './lanes/pack-lanes.js';
 
 /** Shipped Tick box floor (CONTEXT.md) — `--fg-tick-box-floor` fallback and CSS padding calc. */
 export const DEFAULT_TICK_BOX_FLOOR_PX = 9;
@@ -33,12 +50,17 @@ export interface LinkFlags {
 
 export interface FrameRow {
   id: RowId;
+  kind: PlannedRowKind;
   index: number;
   top: number;
   height: number;
   laneCount: number;
-  /** One library-formatted string per configured grid column, in column order (ADR 0005). Until S4
-   * supplies the field registry, this is always one entry: `entry.name`. */
+  depth: number;
+  expandable: boolean;
+  expanded: boolean;
+  /** `false` when the row was kept only because a descendant matched the filter. */
+  matched?: boolean;
+  /** One library-formatted string per configured grid column, in column order (ADR 0005). */
   cells: readonly string[];
 }
 
@@ -136,6 +158,8 @@ export interface GeometryFrame {
   bars: FrameBar[];
   links: readonly FrameLink[];
   decorations: readonly FrameDecoration[];
+  /** Paint description for Grid columns, in display order. Matches `rows[].cells` 1:1 (D-S4-13). */
+  columns: readonly FrameColumn[];
 }
 
 export interface LayoutInput {
@@ -161,20 +185,112 @@ export interface LayoutInput {
   /** Tick box floor in px (CONTEXT.md). Default `DEFAULT_TICK_BOX_FLOOR_PX`. View reads
    *  `--fg-tick-box-floor` and passes it; layout never restates the stylesheet. */
   tickBoxFloorPx?: number;
+  /** Visible Grid columns. Omitted or empty → no cells. The Gantt default `['name']` lives in view/. */
+  columns?: readonly ResolvedColumn[];
+  /** Which rows to draw. Omitted → `{ source: 'entries', tree: false }` (S1's flat list). */
+  rows?: RowSource;
+  /** Collapsed `RowId`s. Omitted → none. A stale id matches nothing (D-S4-22). */
+  collapsed?: readonly string[];
+  /** Per-Gantt Item producer registry (D-S4-24). The shell passes one per Gantt (I2). */
+  itemProducerRegistry: ItemProducerRegistry;
+  /** Every declared Field's stored-value read and compare, bound at this Gantt's locale (D-S4-13). */
+  fieldCompares?: readonly FieldCompare[];
+  /** Gap between packed lanes in px. Omitted → `DEFAULT_LANE_GAP_PX`. View reads `--fg-lane-gap`. */
+  laneGapPx?: number;
+  /** Dataset commit generation. FrameMemory keys packed-row invalidation on this (A2). */
+  datasetRevision?: number;
+  /** Bound Field reader for row-source `filter` / `groupBy` / `sort.compare` (A5). */
+  fieldContext?: FieldContext;
 }
 
-/** S0/S1 scope: flat row-per-entry, one bar per entry, fixed row height (plans/03 S0-S1).
- *
- * Pure and stateless: `heights` is the row-top index this pass reads from — and sizes the culling
- * window's start against, via `indexAtY` (#47) — never one this call builds up for the next.
- * `FrameLayout` is what keeps one index alive across a Gantt's renders and is the only production
- * caller that passes it; a caller with nothing to remember (every test here, one-shot geometry)
- * omits it and gets an index built and discarded within this call. */
-export function computeFrame(
+function cellsForRow(
+  row: PlannedRow,
+  columns: readonly ResolvedColumn[] | undefined,
+  entryById: ReadonlyMap<EntryId, Entry>,
+): readonly string[] {
+  if (columns === undefined) return [];
+  if (isPlannedHeaderRow(row)) {
+    return columns.map((_, i) => (i === 0 ? (row.headerLabel ?? '') : ''));
+  }
+  const entry = entryById.get(row.entryIds[0]!);
+  if (entry === undefined) return columns.map(() => '');
+  return columns.map((column) => column.format(entry));
+}
+
+function columnsForFrame(columns: readonly ResolvedColumn[] | undefined): readonly FrameColumn[] {
+  if (columns === undefined) return [];
+  return columns.map((column) => {
+    const painted: FrameColumn = { key: column.key, header: column.header, align: column.align };
+    if (column.width !== undefined) painted.width = column.width;
+    if (column.flex !== undefined) painted.flex = column.flex;
+    return painted;
+  });
+}
+
+function segmentCountByEntry(items: readonly Item[]): ReadonlyMap<EntryId, number> {
+  const counts = new Map<EntryId, number>();
+  for (const item of items) counts.set(item.entryId, (counts.get(item.entryId) ?? 0) + 1);
+  return counts;
+}
+
+function barA11yLabel(
+  item: Item,
+  partCount: number,
+  scale: TimeScale,
+  locale: Intl.LocalesArgument | undefined,
+): string {
+  const span = `${formatDate(scale.timeZone, item.start, locale)} – ${formatEndInclusive(scale.timeZone, item.end, locale)}`;
+  if (partCount <= 1) return `${item.label}, ${span}`;
+  return `${item.label}, part ${segmentIndexOfItem(item.id) + 1} of ${partCount}, ${span}`;
+}
+
+function packedItemsForRow(row: PlannedRow, memory: FrameMemory): PackedRow {
+  return memory.packedRow(row.id);
+}
+
+/** Call: `resolveLayoutRows(input)`. One row plan from a `LayoutInput`. */
+export function resolveLayoutRows(input: LayoutInput): readonly PlannedRow[] {
+  return resolveRows({
+    entries: input.entries,
+    ...(input.rows !== undefined ? { rows: input.rows } : {}),
+    ...(input.collapsed !== undefined ? { collapsed: input.collapsed } : {}),
+    ...(input.fieldCompares !== undefined ? { fieldCompares: input.fieldCompares } : {}),
+    ...(input.fieldContext !== undefined ? { fieldContext: input.fieldContext } : {}),
+  });
+}
+
+function memoryFor(input: LayoutInput, plan: readonly PlannedRow[], memory?: FrameMemory): FrameMemory {
+  const mem = memory ?? new FrameMemory();
+  mem.sync({
+    plan,
+    rowHeight: input.rowHeight,
+    laneGap: input.laneGapPx ?? DEFAULT_LANE_GAP_PX,
+    entries: input.entries,
+    registry: input.itemProducerRegistry,
+    ...(input.datasetRevision !== undefined ? { datasetRevision: input.datasetRevision } : {}),
+  });
+  return mem;
+}
+
+/** Composition over resolve → produce → pack → place (D-S4-19). Culling still windows after resolve
+ * (D-S4-20). Pure: `memory` is what this pass remembers — `FrameLayout` keeps one alive across
+ * renders; a one-shot caller omits it and gets memory built and discarded here. */
+export function computeFrame(input: LayoutInput, memory?: FrameMemory): GeometryFrame {
+  const plan = resolveLayoutRows(input);
+  return placeFrame(input, plan, memoryFor(input, plan, memory));
+}
+
+/** Call: `placeFrame(input, plan, memory)`. Geometry only — the caller already resolved rows. */
+export function placeFrame(
   input: LayoutInput,
-  heights: RowHeightIndex = new PrefixSumHeightIndex(input.entries.length, () => input.rowHeight),
+  plan: readonly PlannedRow[],
+  memory?: FrameMemory,
 ): GeometryFrame {
-  const { entries, scale, preset, visible, rowHeight, revision, locale } = input;
+  const { scale, preset, visible, rowHeight, revision, locale } = input;
+  const entryById = new Map(input.entries.map((entry) => [entry.id, entry]));
+  const laneGap = input.laneGapPx ?? DEFAULT_LANE_GAP_PX;
+  const mem = memory ?? memoryFor(input, plan);
+  const index = mem.heights;
   const tickBoxFloorPx = input.tickBoxFloorPx ?? DEFAULT_TICK_BOX_FLOOR_PX;
   const verticalRows = input.overscan?.verticalRows ?? DEFAULT_OVERSCAN.verticalRows;
   const horizontalPx = input.overscan?.horizontalPx ?? DEFAULT_OVERSCAN.horizontalPx;
@@ -196,42 +312,61 @@ export function computeFrame(
     return !cullHorizontally || (x <= hRight && x + width >= hLeft);
   }
 
-  // Bound the scan with indexAtY instead of walking every entry from 0 (#47): start at the row that
+  // Bound the scan with indexAtY instead of walking every row from 0 (#47): start at the row that
   // actually contains windowTop, expanded by verticalRows in INDEX space (#20's index-space fix) so
-  // the buffer stays correct once S4 makes row heights vary. Rows stay vertical-only (D-B): a row
-  // whose bar is off-screen horizontally is still emitted — the grid pane needs its label.
-  const baseStart = entries.length > 0 ? heights.indexAtY(windowTop) : 0;
+  // the buffer stays correct once pack mode makes row heights vary. Rows stay vertical-only (D-B): a
+  // row whose bar is off-screen horizontally is still emitted — the grid pane needs its label.
+  const baseStart = plan.length > 0 ? index.indexAtY(windowTop) : 0;
   const startIndex = Math.max(0, baseStart - verticalRows);
   // Counts rows already emitted past windowBottom; stops once verticalRows of them have gone by, so
   // verticalRows: 0 reduces to the pre-overscan "stop at the first row past the bottom" rule exactly.
   let overflowCount = 0;
-  for (let index = startIndex; index < entries.length; index++) {
-    const entry = entries[index]!;
-    const top = heights.topAt(index);
+  for (let rowIndex = startIndex; rowIndex < plan.length; rowIndex++) {
+    const planned = plan[rowIndex]!;
+    const top = index.topAt(rowIndex);
     if (top >= windowBottom) {
       if (overflowCount >= verticalRows) break;
       overflowCount++;
     }
 
-    const id = rowId(`row:${entry.id}`);
-    rows.push({ id, index, top, height: rowHeight, laneCount: 1, cells: [entry.name] });
-
-    const { x, width } = barSpan(entry, scale);
-    if (!intersectsHorizontally(x, width)) continue;
-    bars.push({
-      id: itemId(entry.id),
-      entryId: entry.id,
-      rowId: id,
-      kind: entry.kind,
-      label: entry.name,
-      x,
-      y: top,
-      width,
-      height: rowHeight,
-      lane: 0,
-      flags: {},
-      a11yLabel: `${entry.name}, ${formatDate(scale.timeZone, entry.start, locale)} – ${formatEndInclusive(scale.timeZone, entry.end, locale)}`,
+    const packed = packedItemsForRow(planned, mem);
+    const items = packed.items;
+    const packing = packed.packing;
+    const height = index.heightAt(rowIndex);
+    const parts = segmentCountByEntry(items);
+    rows.push({
+      id: planned.id,
+      kind: planned.kind,
+      index: planned.index,
+      top,
+      height,
+      laneCount: packing.laneCount,
+      depth: planned.depth,
+      expandable: planned.expandable,
+      expanded: planned.expanded,
+      ...(planned.matched !== undefined ? { matched: planned.matched } : {}),
+      cells: cellsForRow(planned, input.columns, entryById),
     });
+
+    for (const item of items) {
+      const { x, width } = barSpan(item, scale);
+      if (!intersectsHorizontally(x, width)) continue;
+      const lane = packing.laneByItem.get(item.id) ?? 0;
+      bars.push({
+        id: item.id,
+        entryId: item.entryId,
+        rowId: planned.id,
+        kind: item.kind,
+        label: item.label,
+        x,
+        y: yForLane(top, lane, rowHeight, laneGap),
+        width,
+        height: rowHeight,
+        lane,
+        flags: {},
+        a11yLabel: barA11yLabel(item, parts.get(item.entryId) ?? 1, scale, locale),
+      });
+    }
   }
 
   const horizontalSpan = cullHorizontally
@@ -283,11 +418,12 @@ export function computeFrame(
     visible,
     header: { bands },
     rows,
-    rowCount: entries.length,
-    contentHeight: heights.totalHeight,
+    rowCount: plan.length,
+    contentHeight: index.totalHeight,
     contentWidth: scale.contentWidth,
     bars,
     links: [],
     decorations,
+    columns: columnsForFrame(input.columns),
   };
 }

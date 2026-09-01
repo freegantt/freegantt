@@ -1,0 +1,116 @@
+/* Nav between the docs pages themselves. Kept apart from `doc.css` so `diagram.html`, which owns
+   its own palette, gets the same nav with no second definition. Colours come from `--docs-nav-*`
+   custom properties with light defaults, so neither palette has to know about this file. */
+
+nav.harness-docs-nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem;
+  margin: 0 0 1.5rem;
+  padding: 0;
+  font-size: 0.85rem;
+  grid-template-columns: unset;
+}
+
+nav.harness-docs-nav a {
+  color: var(--docs-nav-link, #55596b);
+  text-decoration: none;
+  padding: 0.25rem 0.7rem;
+  border: 1px solid var(--docs-nav-border, #d8dae2);
+  border-radius: 999px;
+  font-size: inherit;
+  line-height: 1.5;
+}
+
+nav.harness-docs-nav a:hover {
+  color: var(--docs-nav-link-hover, #1c1e26);
+  border-color: var(--docs-nav-border-hover, #8b8fa3);
+  background: var(--docs-nav-hover-bg, rgba(0, 0, 0, 0.04));
+}
+
+nav.harness-docs-nav a[aria-current='page'] {
+  color: var(--docs-nav-current-ink, #ffffff);
+  background: var(--docs-nav-current-bg, #3a5a99);
+  border-color: var(--docs-nav-current-bg, #3a5a99);
+  font-weight: 600;
+  cursor: default;
+  pointer-events: none;
+}
+
+nav.harness-docs-pager {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin: 4rem 0 0;
+  padding: 1.25rem 0 0;
+  border-top: 1px solid var(--docs-nav-border, #d8dae2);
+  grid-template-columns: unset;
+}
+
+nav.harness-docs-pager a {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  max-width: 22rem;
+  padding: 0.6rem 1rem;
+  border: 1px solid var(--docs-nav-border, #d8dae2);
+  border-radius: 8px;
+  color: var(--docs-nav-link-hover, #1c1e26);
+  text-decoration: none;
+}
+
+nav.harness-docs-pager a:hover {
+  border-color: var(--docs-nav-border-hover, #8b8fa3);
+  background: var(--docs-nav-hover-bg, rgba(0, 0, 0, 0.04));
+}
+
+nav.harness-docs-pager a.pager-next {
+  margin-left: auto;
+  text-align: right;
+}
+
+nav.harness-docs-pager .dir {
+  font-size: 0.72rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--docs-nav-link, #55596b);
+}
+
+nav.harness-docs-pager .name {
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --docs-nav-link: #9498ab;
+    --docs-nav-link-hover: #e7e8ee;
+    --docs-nav-border: #33364a;
+    --docs-nav-border-hover: #6d7185;
+    --docs-nav-hover-bg: rgba(255, 255, 255, 0.05);
+    --docs-nav-current-ink: #12141b;
+    --docs-nav-current-bg: #7f9fd8;
+  }
+}
+
+:root[data-theme='light'] {
+  --docs-nav-link: #55596b;
+  --docs-nav-link-hover: #1c1e26;
+  --docs-nav-border: #d8dae2;
+  --docs-nav-border-hover: #8b8fa3;
+  --docs-nav-hover-bg: rgba(0, 0, 0, 0.04);
+  --docs-nav-current-ink: #ffffff;
+  --docs-nav-current-bg: #3a5a99;
+}
+
+:root[data-theme='dark'] {
+  --docs-nav-link: #9498ab;
+  --docs-nav-link-hover: #e7e8ee;
+  --docs-nav-border: #33364a;
+  --docs-nav-border-hover: #6d7185;
+  --docs-nav-hover-bg: rgba(255, 255, 255, 0.05);
+  --docs-nav-current-ink: #12141b;
+  --docs-nav-current-bg: #7f9fd8;
+}

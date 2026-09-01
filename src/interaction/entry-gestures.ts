@@ -6,7 +6,7 @@
 // until the drag threshold (or a touch long-press) is crossed. `mousedown` is only there so a
 // double-click cannot start a native text range; it writes no Gantt state.
 
-import type { EntryId } from '../model/index.js';
+import type { EntryId, ItemId } from '../model/index.js';
 import { itemId } from '../model/index.js';
 import { createPointerGesture } from './pointer-gesture.js';
 import type { Detachable, EntryGestureContext, EntryGesture, EntryGestureSession } from '../view/index.js';
@@ -14,7 +14,7 @@ import type { Detachable, EntryGestureContext, EntryGesture, EntryGestureSession
 export type { EntryGestureContext, EntryGesture, DraftOptions, EntryHit } from '../view/index.js';
 
 /** Pointer semantics (D-S3-10): plain click replaces, ctrl/⌘-click toggles, shift-click extends over
- *  `rowOrder()`, a click on empty timeline clears, Escape clears. A click on an incapable bar leaves
+ *  `selectableEntriesInRowOrder()`, a click on empty timeline clears, Escape clears. A click on an incapable bar leaves
  *  the selection untouched (it is not an empty-timeline clear); ctrl/⌘-click on one is a no-op;
  *  shift-click omits incapable entries from the range and writes nothing if that empties the range.
  *
@@ -41,6 +41,8 @@ export function attachEntryGestures(
   /** Set on pointerdown when the hit is a `move`-capable bar or a `resize`-capable handle; cleared
    *  once the pointer stream for that gesture ends (commit or cancel), never read past that point. */
   let grabbedId: EntryId | undefined;
+  /** Set alongside `grabbedId` when the pointer hit a bar — which segment index `session()` uses (D-S4-30). */
+  let grabbedItemId: ItemId | undefined;
   /** Set alongside `grabbedId` only for a handle grab (S3.4) — its presence is what distinguishes a
    *  resize gesture from a move gesture everywhere below. */
   let grabbedEdge: 'start' | 'end' | undefined;
@@ -56,7 +58,7 @@ export function attachEntryGestures(
   const drag = createPointerGesture(pane, {
     start(): boolean {
       if (grabbedId === undefined) return false;
-      session = ctx.session(grabbedId, currentGesture());
+      session = ctx.session(grabbedId, currentGesture(), grabbedItemId);
       return session !== undefined;
     },
     move(e, dxPx): void {
@@ -76,17 +78,19 @@ export function attachEntryGestures(
       session = undefined;
       grabbedId = undefined;
       grabbedEdge = undefined;
+      grabbedItemId = undefined;
     },
     cancel(): void {
       session!.cancel();
       session = undefined;
       grabbedId = undefined;
       grabbedEdge = undefined;
+      grabbedItemId = undefined;
     },
   });
 
   function selectRange(to: EntryId): readonly EntryId[] {
-    const order = ctx.rowOrder();
+    const order = ctx.selectableEntriesInRowOrder();
     const fromIndex = anchor !== undefined ? order.indexOf(anchor) : -1;
     const toIndex = order.indexOf(to);
     if (fromIndex === -1 || toIndex === -1) return [to].filter((id) => canSelect(id));
@@ -103,17 +107,20 @@ export function attachEntryGestures(
   }
 
   function onPointerDown(e: PointerEvent): void {
-    const hit = ctx.hitTest(e.clientX, e.clientY);
+    const hit = ctx.hitTest({ x: e.clientX, y: e.clientY });
     const entry = hit !== undefined ? ctx.entryFor(hit.itemId) : undefined;
     if (entry !== undefined && hit?.edge !== undefined && ctx.can('resize', entry)) {
       grabbedId = entry.id;
       grabbedEdge = hit.edge;
-    } else if (entry !== undefined && ctx.can('move', entry)) {
+      grabbedItemId = hit.itemId;
+    } else if (entry !== undefined && hit !== undefined && ctx.can('move', entry)) {
       grabbedId = entry.id;
       grabbedEdge = undefined;
+      grabbedItemId = hit.itemId;
     } else {
       grabbedId = undefined;
       grabbedEdge = undefined;
+      grabbedItemId = undefined;
     }
     drag.down(e);
   }
@@ -121,14 +128,20 @@ export function attachEntryGestures(
   function onPointerUp(e: PointerEvent): void {
     if (drag.up(e)) return; // was a drag — commit/cancel already ran inside pointer-gesture's callbacks
 
-    const hit = ctx.hitTest(e.clientX, e.clientY);
-    const entry = hit !== undefined ? ctx.entryFor(hit.itemId) : undefined;
+    const hit = ctx.hitTest({ x: e.clientX, y: e.clientY });
+    if (hit === undefined) {
+      anchor = undefined;
+      if (ctx.selection.get().length > 0) ctx.selection.propose([]);
+      return;
+    }
+    const entry = ctx.entryFor(hit.itemId);
 
     if (entry === undefined) {
       anchor = undefined;
       if (ctx.selection.get().length > 0) ctx.selection.propose([]);
       return;
     }
+    const hitItemId = hit.itemId;
 
     if (e.shiftKey) {
       const next = selectRange(entry.id);
@@ -149,7 +162,7 @@ export function attachEntryGestures(
     }
 
     anchor = entry.id;
-    ctx.selection.propose([entry.id]);
+    ctx.selection.propose([entry.id], [hitItemId]);
   }
 
   function onKeyDown(e: KeyboardEvent): void {
@@ -175,7 +188,7 @@ export function attachEntryGestures(
    *  independent listeners racing each other. */
   function onPointerMove(e: PointerEvent): void {
     drag.move(e);
-    ctx.setHovered(ctx.hitTest(e.clientX, e.clientY)?.itemId);
+    ctx.setHovered(ctx.hitTest({ x: e.clientX, y: e.clientY })?.itemId);
   }
 
   function onPointerLeave(): void {

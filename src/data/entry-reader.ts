@@ -5,7 +5,7 @@
 // zone, and what a date-only `end` means against half-open storage — belongs to `time/input.ts`
 // (I10); anything resembling date math here is a bug.
 
-import { entryId, InvalidInstantError } from '../model/index.js';
+import { entryId, InvalidInstantError, SegmentsOutOfSyncError } from '../model/index.js';
 import type {
   DateOnlyEndRule,
   Entry,
@@ -18,18 +18,20 @@ import type {
 } from '../model/index.js';
 import { toEndInstant, toInstant } from '../time/index.js';
 import type { StoredEdit } from './edit-extension.js';
+import { withProposedKeys, writeDeclaredMetaFields } from './fields/field-access.js';
+import type { FieldRegistry } from './fields/field-registry.js';
 
 /** The Dataset context every entry is read against: one zone, one end rule, for the whole list, plus
- * what `01` §2.5's span rollup needs to fill in a deriving-kind entry's initial span (S2.3 §1.5). */
+ * what the Rollup needs to fill in a roll-up-kind entry's initial span (S2.3 §1.5). */
 export interface EntryReadContext {
   timeZone: string;
   dateOnlyEnd: DateOnlyEndRule;
   /** The one `Date.now()` read the owning Dataset performed — used as a deriving-kind entry's
    * zero-length span until the rollup gives it a real one (CONTEXT.md, Reference date). */
   referenceDate: Instant;
-  /** Kinds whose span the rollup derives from children (`01` §2.5, default `['group']`) — an entry
-   * of one of these kinds may omit `start`/`end`. */
-  derivedSpanKinds: ReadonlySet<EntryKind>;
+  /** Kinds whose rolling-up Fields the Rollup derives from children (`01` §2.5, default `['group']`)
+   * — an entry of one of these kinds may omit `start`/`end`. */
+  rollUpKinds: ReadonlySet<EntryKind>;
 }
 
 function readSpan(span: TimeSpanInput, context: EntryReadContext): TimeSpan {
@@ -67,7 +69,7 @@ export function readEntry(input: EntryInput, context: EntryReadContext): Entry {
  * half-specified span is not a span the rollup or a non-deriving kind can make sense of. */
 function readEntrySpan(input: EntryInput, kind: EntryKind, context: EntryReadContext): TimeSpan {
   if (input.start === undefined && input.end === undefined) {
-    if (context.derivedSpanKinds.has(kind)) {
+    if (context.rollUpKinds.has(kind)) {
       return { start: context.referenceDate, end: context.referenceDate };
     }
     throw new InvalidInstantError(
@@ -87,18 +89,29 @@ export function readEntries(inputs: readonly EntryInput[], context: EntryReadCon
   return inputs.map((input) => readEntry(input, context));
 }
 
-/** Reads an `entries.update()` edit into `StoredEdit` (S2.3 §1.1) — every present field goes through
- * `time/` the way `readEntry` reads a whole `Entry`, but each field is independent: unlike `add`,
- * an update may set `start` without `end` (it is patching one field of an already-complete `Entry`,
- * not constructing a new one), so there is no both-or-neither rule here. */
-export function readEdit(edit: EntryEdit, context: EntryReadContext): StoredEdit {
-  const stored: StoredEdit = {};
+/** Reads an `entries.update()` edit into `StoredEdit` (S2.3 §1.1) — every present core date field
+ * goes through `time/` the way `readEntry` reads a whole `Entry`. Declared Field keys fold through
+ * `writeField` so the write set stays entry-shaped (D-S4-2). An update may set `start` without `end`. */
+export function readEdit(
+  edit: EntryEdit,
+  context: EntryReadContext,
+  entry: Entry,
+  registry: FieldRegistry,
+): StoredEdit {
+  let stored: StoredEdit = {};
   if (edit.parentId !== undefined) stored.parentId = entryId(edit.parentId);
   if (edit.kind !== undefined) stored.kind = edit.kind;
   if (edit.name !== undefined) stored.name = edit.name;
+  if (edit.start !== undefined || edit.end !== undefined) {
+    if (entry.segments !== undefined && entry.segments.length > 0 && edit.segments === undefined) {
+      throw new SegmentsOutOfSyncError(entry.id);
+    }
+  }
   if (edit.start !== undefined) stored.start = toInstant(context.timeZone, edit.start);
   if (edit.end !== undefined) stored.end = toEndInstant(context.timeZone, edit.end, context.dateOnlyEnd);
   if (edit.segments !== undefined) stored.segments = edit.segments.map((s) => readSpan(s, context));
   if (edit.meta !== undefined) stored.meta = edit.meta;
-  return stored;
+
+  stored = writeDeclaredMetaFields(stored, entry, edit, registry);
+  return withProposedKeys(stored, Object.keys(edit));
 }

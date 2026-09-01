@@ -1,5 +1,7 @@
 export { Dataset } from './dataset.js';
-export type { DatasetOptions } from './dataset.js';
+export type { DatasetOptions, DatasetHierarchy } from './dataset.js';
+export type { RollUpKinds } from '../model/index.js';
+export { attemptMutation } from './attempt-mutation.js';
 export type {
   ChangeSet,
   ChangeSetId,
@@ -7,6 +9,17 @@ export type {
   StoreName,
   CoreFieldKey,
   FieldKey,
+  Field,
+  FieldType,
+  FieldSource,
+  FieldContext,
+  FormatContext,
+  RollUpContext,
+  Aggregator,
+  AggregatorName,
+  FieldTypeName,
+  GridColumn,
+  GridColumnInput,
   EntityAdded,
   EntityRemoved,
   FieldUpdated,
@@ -19,7 +32,7 @@ export type {
 // matches `api/dataset.ts`'s own import of `data/serialization/index.js`.
 export { invertChangeSet } from '../data/change-set.js';
 export { Gantt } from './gantt.js';
-export type { GanttOptions, DateLineInput } from './gantt.js';
+export type { GanttOptions, GanttOptionsBase, GanttScaleOptions, DateLineInput } from './gantt.js';
 export type { Theme, ViewportGestures, ViewportGestureFlags } from '../view/index.js';
 export type {
   GanttEventMap,
@@ -28,6 +41,7 @@ export type {
   GridWidthChange,
   NavigationChange,
   SelectionChange,
+  CollapseChange,
   ProposedSpan,
   EntryGestureEvent,
   EntryMove,
@@ -40,6 +54,7 @@ export type { CapabilityRule, Interactions } from '../view/index.js';
 // view/, which has no other interest in them (issue #91 §9-I).
 export { TimeScaleModel, ScrollModel } from '../layout/index.js';
 export type {
+  TimeScale,
   TimeScaleModelOptions,
   TimeScaleFit,
   PresetRef,
@@ -58,7 +73,15 @@ export {
   EntryNotFoundError,
   DuplicateEntryIdError,
   ParentCycleError,
+  SegmentsOutOfSyncError,
   UnknownFieldError,
+  DuplicateFieldKeyError,
+  DuplicateFieldSourceError,
+  UnknownAggregatorError,
+  AggregatorFailedError,
+  UnknownFieldTypeError,
+  FieldNotColumnableError,
+  DuplicateRowIdError,
   MutationDuringNotificationError,
   MutationCancelledError,
   InvalidReplayOriginError,
@@ -66,11 +89,12 @@ export {
 } from '../model/index.js';
 
 // model/ types the public surface re-exports. A consumer building entries or catching errors names these.
-export { entryId, itemId, changeSetId } from '../model/index.js';
+export { entryId, itemId, entryIdOfItem, segmentIndexOfItem, changeSetId } from '../model/index.js';
 export type {
   Entry,
   EntryKind,
   EntryId,
+  RowId,
   ItemId,
   Instant,
   TimeUnit,
@@ -82,10 +106,23 @@ export type {
 // The input twins of the stored types: what a consumer writes, as opposed to what the library stores.
 // Public because a consumer that types its own entry builder needs to name them.
 export type { EntryInput, InstantInput, TimeSpanInput, DateOnlyEndRule } from '../model/index.js';
-export type { DatasetDocument, EntryDocument } from '../model/index.js';
+export type { DatasetDocument, EntryDocument, SerializedField } from '../model/index.js';
+export type {
+  RowSource,
+  EntriesRowSource,
+  GroupRowSource,
+  CustomRowSource,
+  CustomRow,
+  RowSourceCommon,
+  RowHeightMode,
+  CustomRowInput,
+  RowFilter,
+  RowSort,
+  FilterPolicy,
+} from '../layout/index.js';
 // Point/Size are the S1.5 ScrollModel's own vocabulary (S1.5 README §5) — a consumer building
 // `new ScrollModel({ x, y })` or reading `ScrollState` needs the shape in the public surface too.
-export type { Point, Size } from '../model/index.js';
+export type { Point, Size, ClientPoint, PixelSpan } from '../model/index.js';
 
 // Time helpers a caller needs: `instant` for a pinned `TimeSpan`, `now` for "this Instant",
 // `addMs`/`MS` to shift one by a duration (S2.7 harness-review — `harness/data.ts`'s move-by-a-day
@@ -103,4 +140,11 @@ export {
   formatWeekNumber,
   formatHour,
 } from '../time/index.js';
-export type { ViewPreset, ViewPresetHeader, TickStep, DateFormat, HeaderFormat } from '../time/index.js';
+export type {
+  ViewPreset,
+  ViewPresetHeader,
+  Tick,
+  TickStep,
+  DateFormat,
+  HeaderFormat,
+} from '../time/index.js';

@@ -1,0 +1,1115 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>FreeGantt — Class map, layer by layer</title>
+    <link rel="stylesheet" href="./doc.css" />
+    <link rel="stylesheet" href="../harness-nav.css" />
+  </head>
+  <body>
+    <div class="wrap">
+      <header>
+        <nav class="harness-site-nav" aria-label="Harness pages"></nav>
+        <nav class="harness-docs-nav" aria-label="Harness docs"></nav>
+        <script type="module" src="../harness-nav.ts"></script>
+        <h1>Class map, layer by layer</h1>
+        <p class="tagline">
+          What each class owns, what it exposes, and who calls it — grouped by layer, DOM-free layers
+          first. For when these run, read <a href="./lifecycle.html">Lifecycle</a>; for the file each one
+          lives in, read <a href="./files.html">File inventory</a>.
+        </p>
+        <div class="updated"><span class="k">updated</span> 2026-08-31 — slice S4</div>
+        <div class="meta">
+          <span>slice: S4</span>
+          <span>layout/ · view/ · time/ · model/ · render/ · api/</span>
+          <span>harness/main.ts reviewed every commit</span>
+        </div>
+        <nav aria-label="Sections on this page">
+          <a href="#s1"><b>1</b><code>layout/</code> &amp; <code>view/</code></a>
+          <a href="#s2"><b>2</b><code>time/</code> &amp; <code>model/</code></a>
+          <a href="#s3"><b>3</b><code>render/</code> &amp; <code>api/</code></a>
+        </nav>
+      </header>
+
+      <!-- ══════════════════════════════════════════════════════════ 1 -->
+      <section id="s1">
+        <h2><span class="num">1</span><code>layout/</code> &amp; <code>view/</code></h2>
+        <p class="src"><b>derived from</b> src/layout/**, src/view/**</p>
+
+        <h3>layout/ <span class="tag pure">pure</span></h3>
+        <div class="cards">
+          <div class="card">
+            <h5>Viewport <span class="tag pure">class</span></h5>
+            <div class="path">layout/viewport/viewport.ts</div>
+            <p>
+              One Gantt's whole view state: which slice of content is on screen, at what zoom, with what
+              buffer. The single object <code>view/</code> holds.
+            </p>
+            <dl>
+              <dt>scale / scroll</dt>
+              <dd>The two models, public and readonly — supplied, or private defaults.</dd>
+              <dt>bind(dataset, onChange)</dt>
+              <dd>
+                Binds both models with one shared <code>#notify</code>. Throws
+                <code>FreeGanttError('viewport-already-bound')</code> on a second call.
+              </dd>
+              <dt>get visible: Rect</dt>
+              <dd>
+                The culling window, clamped against <em>this</em> Gantt's extents — not the shared
+                <code>scroll.state.max</code>.
+              </dd>
+              <dt>get timeScale / preset</dt>
+              <dd>
+                Resolved and ready for <code>LayoutInput</code>; the shell never reaches through to
+                <code>scale.scale</code>.
+              </dd>
+              <dt>get/set overscan</dt>
+              <dd>
+                Live-reconfigurable, notifies iff actually changed. Not on public <code>GanttOptions</code>
+                (issue #84).
+              </dd>
+              <dt>batch(run)</dt>
+              <dd>Nests all three notifiers.</dd>
+            </dl>
+          </div>
+
+          <div class="card">
+            <h5>TimeScaleModel <span class="tag pure">class</span></h5>
+            <div class="path">layout/viewport/time-scale-model.ts</div>
+            <p>
+              Shareable x-axis. Takes <em>intent</em>; derives zone, span and pixel density from whoever binds
+              to it. Two Gantts, one instance ⇒ x-synced with no event plumbing.
+            </p>
+            <dl>
+              <dt>#resolve(bindings)</dt>
+              <dd>
+                One pass accumulating three things: zone (first binding wins), the <em>narrowest</em> measured
+                pane, and — for <code>range: 'fitDataset'</code> — min start / max end across every bound
+                dataset.
+              </dd>
+              <dt>get scale: TimeScale</dt>
+              <dd>
+                Memoized on the <em>identity</em> of the resolved options object.
+              </dd>
+              <dt>bind() → ScaleBindingHandle</dt>
+              <dd><code>unbind()</code>, <code>setPaneWidth(w)</code>. Copy-at-bind.</dd>
+            </dl>
+          </div>
+
+          <div class="card">
+            <h5>ScrollModel <span class="tag pure">class</span></h5>
+            <div class="path">layout/viewport/scroll-model.ts</div>
+            <p>
+              Shareable scroll position. Owns <em>one</em> shared position; each bound Gantt clamps it locally
+              to its own content.
+            </p>
+            <dl>
+              <dt>panTo(partial)</dt>
+              <dd>
+                Clamps to <code>[0, max]</code> at write time and nowhere else.
+              </dd>
+              <dt>get state: ScrollState</dt>
+              <dd>
+                <code>{ position, max }</code> together, frozen.
+              </dd>
+              <dt>bind() → ScrollBindingHandle</dt>
+              <dd><code>unbind()</code>, <code>setContentSize()</code>, <code>setPaneSize()</code>.</dd>
+            </dl>
+          </div>
+
+          <div class="card">
+            <h5>BoundValue&lt;B, V&gt; <span class="tag pure">class</span></h5>
+            <div class="path">layout/viewport/bound-value.ts</div>
+            <p>
+              The binding side both models share. Scoped to <code>layout/viewport/</code> on purpose — it must
+              not grow into a general reactivity primitive.
+            </p>
+            <dl>
+              <dt>#bindings: Map&lt;B, () =&gt; void&gt;</dt>
+              <dd>One collection for both jobs: iterate keys to resolve, values to notify.</dd>
+              <dt>#notified: { value: V } | undefined</dt>
+              <dd>Boxed so "nothing has been notified yet" is distinguishable from every possible <code>V</code>.</dd>
+            </dl>
+          </div>
+
+          <div class="card">
+            <h5>FrameLayout <span class="tag pure">class</span></h5>
+            <div class="path">layout/frame-layout.ts</div>
+            <p>
+              The stateful wrapper that keeps the row-height index and per-row pack memo alive across renders.
+              The shell states what to draw; the memory never crosses into <code>view/</code>.
+            </p>
+            <dl>
+              <dt>#memory: FrameMemory</dt>
+              <dd>
+                Holds one layout pass's cross-render memory — the <code>RowHeightIndex</code> plus the packed-row
+                memo <code>Map</code>.
+              </dd>
+            </dl>
+          </div>
+
+          <div class="card">
+            <h5>FrameMemory <span class="tag pure">class</span></h5>
+            <div class="path">layout/frame-memory.ts</div>
+            <p>
+              The cross-render memory of one layout pass. Kept behind <code>FrameLayout</code> so a later frame
+              reuses row-height sums and packed lanes where the inputs did not change.
+            </p>
+            <dl>
+              <dt>RowHeightIndex</dt>
+              <dd>Lazy prefix sums with binary search for <code>indexAtY</code>.</dd>
+              <dt>Map of packed-row memo</dt>
+              <dd>Per-row pack results, reused when the row's content is unchanged.</dd>
+            </dl>
+          </div>
+
+          <div class="card">
+            <h5>PrefixSumHeightIndex <span class="tag pure">class</span></h5>
+            <div class="path">layout/row-height-index.ts</div>
+            <p>
+              Lazy prefix sums, cached, with binary search for <code>indexAtY</code>. <code>#validUpTo</code>
+              tracks how far the sums are computed, so a partial invalidation recomputes only the suffix.
+            </p>
+            <dl>
+              <dt>topAt(i) / totalHeight</dt>
+              <dd>Fill the cache up to what was asked and no further.</dd>
+              <dt>indexAtY(y)</dt>
+              <dd>
+                Binary search. This is what bounds <code>computeFrame</code>'s row scan.
+              </dd>
+              <dt>heightAt / invalidateFrom</dt>
+              <dd>Interface complete, zero production callers today.</dd>
+            </dl>
+          </div>
+
+          <div class="card">
+            <h5>computeFrame() <span class="tag pure">function</span></h5>
+            <div class="path">layout/frame.ts</div>
+            <p>
+              The full layout pass. Pure, stateless. Resolves rows → produces items → packs lanes → culls to
+              the window → emits header ticks and date-line decorations.
+            </p>
+            <dl>
+              <dt>heights = new PrefixSumHeightIndex(…)</dt>
+              <dd>
+                A default parameter, so a caller with nothing to remember gets an index built and discarded
+                within the call. <code>FrameLayout</code> is the only production caller that passes one.
+              </dd>
+              <dt>overflowCount</dt>
+              <dd>
+                Counts rows already emitted past the window bottom and stops after
+                <code>verticalRows</code> of them.
+              </dd>
+            </dl>
+          </div>
+
+          <div class="card">
+            <h5>produceItemsForRow() <span class="tag pure">function</span></h5>
+            <div class="path">layout/items/produce-items.ts</div>
+            <p>
+              Per-row item production, dispatched by <code>EntryKind</code> through the shipped registry:
+              span→segments or bar, group→bracket, milestone→diamond. Unknown kinds fall back to span.
+            </p>
+            <dl>
+              <dt>createItemProducerRegistry()</dt>
+              <dd>
+                Builds the per-kind producer map. A consumer-supplied kind with no producer lands on the span
+                producer — behavior per kind goes through this seam, not an <code>if (kind === …)</code> chain.
+              </dd>
+            </dl>
+          </div>
+
+          <div class="card">
+            <h5>packRow() / packLanes <span class="tag pure">function</span></h5>
+            <div class="path">layout/lanes/pack-lanes.ts</div>
+            <p>
+              Greedy first-fit lane packing. Each item takes the first lane whose last occupant ends at or
+              before the item starts; <code>packedRowHeight</code> and <code>yForLane</code> turn the lanes
+              into geometry.
+            </p>
+            <dl>
+              <dt>heightMode: 'pack'</dt>
+              <dd>
+                When the row source sets it, overlapping items stack into lanes instead of clipping. Fixed mode
+                keeps the 32px default.
+              </dd>
+            </dl>
+          </div>
+
+          <div class="card">
+            <h5>resolveRows() <span class="tag pure">function</span></h5>
+            <div class="path">layout/rows/resolve-rows.ts</div>
+            <p>
+              Dispatches to the correct row source based on <code>source.source</code>: entries (flat or tree),
+              group (<code>groupBy</code> buckets), or custom (consumer <code>resolve()</code> callback). Each
+              resolved row gets a sequential index.
+            </p>
+            <dl>
+              <dt>EntriesRowSource</dt>
+              <dd>
+                Flat maps each entry one-to-one; tree does a depth-first walk using <code>parentId</code>
+                (<code>entries-source.ts</code>).
+              </dd>
+              <dt>GroupRowSource</dt>
+              <dd>Buckets entries by a consumer <code>groupBy</code>, emitting header rows then members (<code>group-source.ts</code>).</dd>
+              <dt>CustomRowSource</dt>
+              <dd>Adapts a consumer <code>CustomRow[]</code> (<code>custom-source.ts</code>).</dd>
+            </dl>
+          </div>
+
+          <div class="card">
+            <h5>draftForMove() / draftForResize() <span class="tag pure">function</span></h5>
+            <div class="path">layout/gesture-draft.ts</div>
+            <p>
+              Pure gesture math for drag previews — <code>draftForMove</code>, <code>draftForResize</code>,
+              <code>previewOffsets</code>, <code>cursorLabelForX</code>. All date computation stays here so
+              <code>interaction/</code> performs no arithmetic.
+            </p>
+          </div>
+
+          <div class="card">
+            <h5>resolveDateLines() <span class="tag pure">function</span></h5>
+            <div class="path">layout/date-line.ts</div>
+            <p>
+              Resolves the today-line and authored date lines into positioned <code>DateLine</code>
+              decorations, consumed by the render backend.
+            </p>
+          </div>
+
+          <div class="card">
+            <h5>ResolvedColumn <span class="tag pure">types</span></h5>
+            <div class="path">layout/column.ts</div>
+            <p>
+              Pure data types for the grid-column paint shape (<code>FrameColumn</code>,
+              <code>ResolvedColumn</code>, <code>FieldCompare</code>) and its locale-bound formatter. Carries
+              presentation only — grid columns show fields; they do not declare them (ADR 0005).
+            </p>
+          </div>
+        </div>
+
+        <h3>view/ <span class="tag dom">DOM</span></h3>
+        <div class="cards">
+          <div class="card">
+            <h5>GanttShell <span class="tag dom">class</span></h5>
+            <div class="path">view/gantt-shell.ts</div>
+            <p>
+              The composition root, and the only class in <code>src/</code> that holds references to the
+              backend, viewport, layout, gesture pipeline, collapse state, and the event bus.
+            </p>
+            <dl>
+              <dt>#phase: 'constructing' | 'live'</dt>
+              <dd>
+                <code>'constructing'</code> until pane-size wiring completes; drops the two synchronous
+                <code>onChange</code>s from <code>scale.bind</code> and <code>scroll.bind</code> and
+                short-circuits premature <code>render()</code> calls. Becomes <code>'live'</code> when wiring
+                is done.
+              </dd>
+              <dt>#applyPaneMeasurement(size)</dt>
+              <dd>
+                One measurement pushed to everything it feeds.
+              </dd>
+              <dt>render()</dt>
+              <dd>
+                Gather → <code>computeFrame</code> → <code>backend.sync</code> → <code>setContentSize</code> →
+                <code>writePosition</code>. One pass per call.
+              </dd>
+              <dt>live properties</dt>
+              <dd>
+                Every config key a live-reconfigurable property: preset, range, gridColumns, rowSource,
+                collapsed, selection, locale, theme, todayLine, interactions, viewportGestures, …
+              </dd>
+              <dt>destroy()</dt>
+              <dd>
+                Idempotent. Detaches the attachments, unbinds the viewport, destroys the backend, clears the
+                container.
+              </dd>
+            </dl>
+          </div>
+
+          <div class="card">
+            <h5>attachScroll() <span class="tag dom">function</span></h5>
+            <div class="path">view/scroll-attachment.ts</div>
+            <p>
+              The one file exempted from <code>no-scroll-outside-scroll-model</code>. Owns no binding — it
+              only reads <code>viewport.visible</code> and reads/writes the element.
+            </p>
+            <dl>
+              <dt>EPSILON = 1</dt>
+              <dd>
+                Tolerates fractional <code>scrollTop</code> and filters the echo so a model-driven write does
+                not bounce back as another <code>panTo</code>.
+              </dd>
+              <dt>writePosition()</dt>
+              <dd>
+                Called by <code>render()</code> <strong>after</strong> <code>backend.sync()</code>.
+              </dd>
+            </dl>
+          </div>
+
+          <div class="card">
+            <h5>attachPaneSize() <span class="tag dom">function</span></h5>
+            <div class="path">view/pane-size-attachment.ts</div>
+            <p>
+              The only file that observes element size. Reports a box and stops — no pixel math, no scale
+              awareness, which is what keeps I12 whole.
+            </p>
+            <dl>
+              <dt>entries[entries.length - 1]</dt>
+              <dd>
+                A resize burst can deliver several entries for one target; only the last reflects the settled
+                box.
+              </dd>
+            </dl>
+          </div>
+
+          <div class="card">
+            <h5>attachSplitter() <span class="tag dom">function</span></h5>
+            <div class="path">view/splitter.ts</div>
+            <p>
+              Pointer-drag handler on the splitter chrome that resizes the grid pane relative to the timeline
+              pane. Dispatches through the shell's <code>setGridWidth</code> live property.
+            </p>
+          </div>
+
+          <div class="card">
+            <h5>ensureBaseStyles() <span class="tag dom">function</span></h5>
+            <div class="path">view/styles.ts</div>
+            <p>
+              Idempotently injects the library's base stylesheet once per <code>document</code>, scoped to the
+              <code>--fg-*</code> token set plus the <code>prefers-color-scheme</code> dark arm. A consumer
+              overrides tokens in their own CSS; they never edit this sheet.
+            </p>
+          </div>
+
+          <div class="card">
+            <h5>FrameScheduler <span class="tag dom">class</span></h5>
+            <div class="path">view/frame-scheduler.ts</div>
+            <p>
+              Coalesces render requests into at most one <code>requestAnimationFrame</code> per tick. The
+              throttle between "a change happened" and "a frame drew"; keeps bursty commits off the hot path.
+            </p>
+          </div>
+
+          <div class="card">
+            <h5>subscribeToDatasetChanges() <span class="tag dom">function</span></h5>
+            <div class="path">view/dataset-change-subscription.ts</div>
+            <p>
+              Bridges the dataset's <code>change</code> event into the shell's render pipeline —
+              <code>FrameScheduler.request()</code>. Editing after mount renders on the next frame with no
+              extra call.
+            </p>
+          </div>
+
+          <div class="card">
+            <h5>resolveCapabilities() <span class="tag dom">function</span></h5>
+            <div class="path">view/capability.ts</div>
+            <p>
+              Merges the consumer's <code>Interactions</code> overrides with the per-kind default table and
+              returns a <code>Capabilities</code> object with <code>can(capability, entry)</code>. One
+              resolution gates both gestures and affordances (invariant I14).
+            </p>
+          </div>
+
+          <div class="card">
+            <h5>projectAffordances() <span class="tag dom">function</span></h5>
+            <div class="path">view/affordance-projection.ts</div>
+            <p>
+              Pure projection of hovered/movable/resizable paint tokens from hover, selection, and capability
+              resolution. Feeds the hot path's class toggles — never a frame rebuild.
+            </p>
+          </div>
+
+          <div class="card">
+            <h5>GesturePipeline <span class="tag dom">class</span></h5>
+            <div class="path">view/gesture-pipeline.ts</div>
+            <p>
+              Owns the full gesture lifecycle for move/resize — entry resolution, draft math from
+              <code>layout/gesture-draft.ts</code>, preview rAF coalescing, snap resolution, and a commit
+              pipeline with sync/async veto. Implements <code>EntryGestureContext</code> for
+              <code>interaction/</code> to drive.
+            </p>
+          </div>
+
+          <div class="card">
+            <h5>CollapseState <span class="tag dom">class</span></h5>
+            <div class="path">view/collapse-state.ts</div>
+            <p>
+              Holds collapsed <code>RowId</code>s as per-Gantt view state. Propose/commit two-step so a
+              <code>beforeCollapseChange</code> veto can cancel the commit.
+            </p>
+          </div>
+
+          <div class="card">
+            <h5>attachRowTwisty() <span class="tag dom">function</span></h5>
+            <div class="path">view/attach-row-twisty.ts</div>
+            <p>
+              Grid-pane click on a row twisty toggles collapse (S4.6). Lives here, not in
+              <code>interaction/</code>: collapse is viewport state, not a data gesture. Delegates hit
+              testing to <code>render/dom/row-twisty.ts</code>'s <code>rowIdFromTwistyClick</code>.
+            </p>
+          </div>
+
+          <div class="card">
+            <h5>attachKeyboardNavigation() / attachWheelNavigation() <span class="tag dom">functions</span></h5>
+            <div class="path">view/keyboard-navigation.ts · view/wheel-navigation.ts</div>
+            <p>
+              Keydown handler for viewport navigation when nothing is selected; ctrl/cmd+wheel zoom and
+              shift+wheel pan via <code>resolveViewportGestures()</code>'s on/off flags.
+            </p>
+          </div>
+
+          <div class="card">
+            <h5>EventBus / GanttEventMap <span class="tag dom">types</span></h5>
+            <div class="path">view/event-bus.ts</div>
+            <p>
+              Declares the ten-plus Gantt event names and payload types (<code>entryMove</code>,
+              <code>selectionChange</code>, <code>collapseChange</code>, <code>navigationChange</code>, …) and
+              re-exports the generic <code>EventBus</code> mechanism from <code>data/event-bus.ts</code>.
+            </p>
+          </div>
+
+          <div class="card">
+            <h5>EntryGestureContext <span class="tag dom">interface</span></h5>
+            <div class="path">view/entry-gesture-context.ts</div>
+            <p>
+              The type-seam between <code>view/</code> (the shell realises it) and <code>interaction/</code>
+              (which drives it). <code>interaction/</code> names pointer events and session lifecycle only —
+              no layout or arithmetic.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══════════════════════════════════════════════════════════ 2 -->
+      <section id="s2">
+        <h2><span class="num">2</span><code>time/</code> &amp; <code>model/</code></h2>
+        <p class="src"><b>derived from</b> src/time/**, src/model/**, docs/adr/0001</p>
+
+        <h3>The time pipeline</h3>
+        <p class="lede">
+          Everything that turns a date into a pixel goes left to right through here. Nothing outside
+          <code>time/</code> is allowed to shortcut it.
+        </p>
+
+        <figure>
+          <div class="scroller">
+            <svg
+              class="d"
+              viewBox="0 0 960 400"
+              role="img"
+              aria-labelledby="cls-time-title cls-time-desc"
+              preserveAspectRatio="xMidYMid meet"
+            >
+              <title id="cls-time-title">The time subsystem</title>
+              <desc id="cls-time-desc">
+                Pipeline from temporal-polyfill through zone operations to scale and preset resolution.
+              </desc>
+              <defs>
+                <marker
+                  id="a7"
+                  viewBox="0 0 10 10"
+                  refX="9"
+                  refY="5"
+                  markerWidth="7"
+                  markerHeight="7"
+                  orient="auto-start-reverse"
+                >
+                  <path d="M0,1 L9,5 L0,9 z" fill="currentColor" />
+                </marker>
+              </defs>
+
+              <rect class="bx" x="16" y="24" width="184" height="100" />
+              <text class="t" x="28" y="42">temporal-polyfill/fns</text>
+              <text class="s" x="28" y="58">Instant · PlainDate ·</text>
+              <text class="s" x="28" y="71">ZonedDateTime</text>
+              <text class="xs" x="28" y="90">One of exactly TWO runtime</text>
+              <text class="xs" x="28" y="102">deps. Confined to zone.ts —</text>
+              <text class="xs" x="28" y="114">no other file may import it.</text>
+
+              <path class="edge" d="M200,74 H222" marker-end="url(#a7)" style="color: var(--sub)" />
+
+              <rect class="bx pure" x="228" y="24" width="268" height="196" />
+              <text class="t" x="240" y="42">time/zone.ts</text>
+              <text class="s" x="240" y="58">UNITS: Record&lt;TimeUnit, UnitOps&gt;</text>
+              <rect class="bx" x="240" y="66" width="244" height="100" />
+              <text class="s" x="250" y="82">ms addMs identity</text>
+              <text class="s" x="250" y="96">m addMs·MINUTE startOfMinute</text>
+              <text class="s" x="250" y="110">h addMs·HOUR startOfHour</text>
+              <text class="s" x="250" y="124">d addDays startOfDay</text>
+              <text class="s" x="250" y="138">w addDays×7 startOfWeek</text>
+              <text class="s" x="250" y="152">M/y addMonths/Years startOfMonth/Year</text>
+              <text class="s" x="240" y="182">stepBy() ↑step startOf() ↑floor</text>
+              <text class="xs" x="240" y="200">One table ⇒ the two can never disagree on</text>
+              <text class="xs" x="240" y="212">which units are supported.</text>
+
+              <path class="edge" d="M496,110 H518" marker-end="url(#a7)" style="color: var(--sub)" />
+
+              <rect class="bx pure" x="524" y="24" width="236" height="196" />
+              <text class="t" x="536" y="42">time/scale.ts — createTimeScale</text>
+              <text class="s" x="536" y="60">xForInstant(i) → px</text>
+              <text class="s" x="536" y="74">instantForX(x) → Instant</text>
+              <text class="s" x="536" y="88">widthForDuration(d, at)</text>
+              <text class="s" x="536" y="102">ticks(step, span) → Tick[]</text>
+              <text class="s" x="536" y="116">contentWidth</text>
+              <text class="xs" x="536" y="136">instantForX ROUNDS: pixels do not</text>
+              <text class="xs" x="536" y="148">divide evenly into ms, and Temporal</text>
+              <text class="xs" x="536" y="160">rejects a fractional epoch ms.</text>
+              <text class="xs" x="536" y="180">ticks() emits the cell COVERING span.x</text>
+              <text class="xs" x="536" y="192">even when its own x is left of it.</text>
+
+              <path class="edge" d="M760,74 H782" marker-end="url(#a7)" style="color: var(--sub)" />
+
+              <rect class="bx pure" x="788" y="24" width="156" height="130" />
+              <text class="t" x="800" y="42">ViewPreset ×9</text>
+              <text class="s" x="800" y="60">ZOOM_PRESETS ladder</text>
+              <text class="s" x="800" y="74">finest hour → coarsest year</text>
+              <text class="s" x="800" y="88">plus 5 single-band ids</text>
+              <text class="xs" x="800" y="108">Deep-FROZEN: a shipped</text>
+              <text class="xs" x="800" y="120">preset is a value, not a</text>
+              <text class="xs" x="800" y="132">shared mutable singleton</text>
+              <text class="xs" x="800" y="144">(I2).</text>
+
+              <path
+                class="edge soft"
+                d="M580,220 V234 H160 V252"
+                marker-end="url(#a7)"
+                style="color: var(--line)"
+              />
+              <path class="edge soft" d="M362,220 V252" marker-end="url(#a7)" style="color: var(--line)" />
+              <path
+                class="edge soft"
+                d="M440,220 V244 H800 V252"
+                marker-end="url(#a7)"
+                style="color: var(--line)"
+              />
+
+              <rect class="bx" x="16" y="256" width="288" height="120" />
+              <text class="t" x="28" y="276">pxPerMsForPreset(zone, preset, at)</text>
+              <text class="s" x="28" y="294">tickWidthPx / (one tick's real ms)</text>
+              <text class="xs" x="28" y="314">The zoom a preset implies ON ITS OWN — what</text>
+              <text class="xs" x="28" y="326">a scale resolves to when there is no measured</text>
+              <text class="xs" x="28" y="338">viewport to fit into. An unmeasured container is</text>
+              <text class="xs" x="28" y="350">therefore not a special case needing an</text>
+              <text class="xs" x="28" y="362">invented minimum width.</text>
+
+              <rect class="bx" x="336" y="256" width="288" height="120" />
+              <text class="t" x="348" y="276">Calendar stepping is not 86 400 000</text>
+              <text class="xs" x="348" y="296">A day tick is 23 or 25 hours across a DST</text>
+              <text class="xs" x="348" y="308">transition. Jan 31 + 1 month clamps to Feb 28.</text>
+              <text class="xs" x="348" y="328">DST fold and gap resolve via Temporal's explicit</text>
+              <text class="xs" x="348" y="340">'compatible' rule — the earlier offset for an</text>
+              <text class="xs" x="348" y="352">ambiguous time, shift-forward for a nonexistent</text>
+              <text class="xs" x="348" y="364">one. Both were undefined before.</text>
+
+              <rect class="bx warn" x="656" y="256" width="288" height="120" />
+              <text class="warnink" x="668" y="276">diffDays goes through PlainDate</text>
+              <text class="xs" x="668" y="296">temporal-polyfill@1.0.4's ZONED day-unit diff</text>
+              <text class="xs" x="668" y="308">throws for EVERY zone — a packaging bug in that</text>
+              <text class="xs" x="668" y="320">build, not an environment quirk.</text>
+              <text class="xs" x="668" y="340">PlainDate.diffDays is unaffected, and is exact</text>
+              <text class="xs" x="668" y="352">here because both operands are already calendar</text>
+              <text class="xs" x="668" y="364">day-starts. Re-check on upgrade.</text>
+            </svg>
+          </div>
+          <figcaption>
+            Diagram 4 — <code>time/</code>. Amber = a vendored workaround with an expiry condition.
+          </figcaption>
+        </figure>
+
+        <p class="lede">
+          Two additions round out the layer without touching the pipeline above: <code>time/presets.ts</code>
+          (the deep-frozen preset ladder this diagram references top-right) and
+          <code>time/snap.ts</code> (where a drag's committed value snaps, pure and driven by the live
+          preset).
+        </p>
+
+        <h3>model/ <span class="tag pure">pure</span></h3>
+        <p>
+          Ten files, all types, plus three id helpers and the <code>FreeGanttError</code> family. That is the
+          entire runtime — the layer exists so <code>layout/</code>, <code>data/</code>, <code>render/</code>
+          and <code>view/</code> share one vocabulary without depending on each other.
+        </p>
+        <table>
+          <tr>
+            <th class="mono">type</th>
+            <th>shape</th>
+            <th>the rule it encodes</th>
+          </tr>
+          <tr>
+            <td class="mono">Instant</td>
+            <td class="mono">number &amp; {__brand}</td>
+            <td>Epoch ms. Branded so a naked number cannot be passed as a date by accident.</td>
+          </tr>
+          <tr>
+            <td class="mono">TimeSpan</td>
+            <td class="mono">{ start, end }</td>
+            <td>
+              Half-open <code>[start, end)</code> in storage. Display is inclusive, via one formatting helper
+              — never an inline <code>end - 1</code>.
+            </td>
+          </tr>
+          <tr>
+            <td class="mono">EntryId / RowId / ItemId</td>
+            <td class="mono">string &amp; {__brand}</td>
+            <td>
+              Three distinct brands over <code>string</code>, so a row id cannot be used where an item id
+              belongs.
+            </td>
+          </tr>
+          <tr>
+            <td class="mono">Entry</td>
+            <td class="mono">id, parentId?, kind?, name, start, end, progress?, segments?, meta?</td>
+            <td>
+              <code>kind</code> is authored, never derived from having children. <code>meta</code> is
+              consumer-owned and typed through the generic.
+            </td>
+          </tr>
+          <tr>
+            <td class="mono">EntryKind</td>
+            <td class="mono">'span' | 'group' | 'milestone' | (string &amp; {})</td>
+            <td>
+              Open union: the <code>(string &amp; {})</code> arm keeps editor autocomplete on the three
+              shipped kinds while still accepting consumer-defined ones.
+            </td>
+          </tr>
+          <tr>
+            <td class="mono">Field</td>
+            <td class="mono">{ key, source?, rollUp?, formatValue?, column?, … }</td>
+            <td>
+              What a value <em>is</em> (ADR 0005). A core field and a consumer field are the same declaration
+              shape, so one code path serves both. A <code>column</code> present makes it columnable.
+            </td>
+          </tr>
+          <tr>
+            <td class="mono">FieldSource</td>
+            <td class="mono">'entry' | 'meta' | 'compute'</td>
+            <td>
+              Decides which side a rolled-up parent value falls on: an <code>entry</code>- or
+              <code>meta</code>-sourced field's aggregate is stored and undoable; a <code>compute</code>-
+              sourced one is computed on read and never reaches the document.
+            </td>
+          </tr>
+          <tr>
+            <td class="mono">ChangeSet</td>
+            <td class="mono">{ added, removed, updated }</td>
+            <td>
+              The <em>one write shape</em> emitted on <code>change</code>, with <code>updated</code> carrying
+              <code>{ entryId, field, from, to }</code> per field. What undo and redo replay.
+            </td>
+          </tr>
+          <tr>
+            <td class="mono">DatasetDocument</td>
+            <td class="mono">schema-2 serialization shape</td>
+            <td>The full document a <code>Dataset.toJSON()</code> produces and <code>fromJSON</code> reads.</td>
+          </tr>
+          <tr>
+            <td class="mono">Dataset</td>
+            <td class="mono">{ entries, timeZone }</td>
+            <td>
+              The structural contract. <code>api/dataset.ts</code>'s class <code>implements</code> it, which
+              is what lets <code>layout/</code> bind against a dataset without an illegal import.
+            </td>
+          </tr>
+          <tr>
+            <td class="mono">Rect / Size / Point / PixelSpan</td>
+            <td class="mono">readonly numbers</td>
+            <td>One geometry vocabulary for four layers.</td>
+          </tr>
+          <tr>
+            <td class="mono">InstantInput</td>
+            <td class="mono">Instant | Date | number | string</td>
+            <td>
+              The input twin of <code>Instant</code>: what a consumer may <em>write</em> where the library
+              <em>stores</em> an <code>Instant</code>. A string is either absolute (explicit <code>Z</code> or
+              numeric offset) or a Plain time that names no instant until the Dataset's zone resolves it.
+            </td>
+          </tr>
+          <tr>
+            <td class="mono">EntryInput / TimeSpanInput</td>
+            <td class="mono">the loose twins</td>
+            <td>
+              Same fields, looser types: plain-string ids, <code>InstantInput</code> dates. Because
+              <code>EntryId</code> is <code>string &amp; brand</code> and <code>Instant</code> is
+              <code>number &amp; brand</code>, a stored <code>Entry</code> is itself a valid
+              <code>EntryInput</code> — the pass-through case costs nothing.
+            </td>
+          </tr>
+          <tr>
+            <td class="mono">DateOnlyEndRule</td>
+            <td class="mono">'inclusive' | 'exclusive'</td>
+            <td>
+              Reconciles half-open storage with what a consumer means by a bare date on <code>end</code>. A
+              consumer writing <code>end: '2026-09-08'</code> means "through the 8th"; storage needs the
+              boundary <em>after</em> the span. <code>'inclusive'</code> (default) advances such an end by one
+              calendar day; <code>'exclusive'</code> reads it literally. Only date-only strings are affected —
+              anything carrying a time of day is already a boundary.
+            </td>
+          </tr>
+        </table>
+      </section>
+
+      <!-- ══════════════════════════════════════════════════════════ 3 -->
+      <section id="s3">
+        <h2><span class="num">3</span><code>render/</code> &amp; <code>api/</code></h2>
+        <p class="src"><b>derived from</b> src/render/**, src/api/**, harness/main.ts</p>
+
+        <h3>Reading what a consumer writes: <code>EntryInput</code> → <code>Entry</code></h3>
+        <p class="src">
+          <b>derived from</b> src/model/time.ts, src/time/input.ts, src/data/entry-reader.ts
+        </p>
+        <p class="lede">
+          The library stores branded, absolute values; a consumer writes loose ones. Exactly one crossing
+          turns the second into the first, and it happens once, in the <code>Dataset</code> constructor.
+        </p>
+
+        <figure>
+          <div class="scroller">
+            <svg
+              class="d"
+              viewBox="0 0 960 340"
+              role="img"
+              aria-labelledby="cls-bound-title cls-bound-desc"
+              preserveAspectRatio="xMidYMid meet"
+            >
+              <title id="cls-bound-title">Consumer input to stored entries</title>
+              <desc id="cls-bound-desc">How EntryInput becomes a stored Entry via readEntries and time conversion</desc>
+              <defs>
+                <marker
+                  id="a8"
+                  viewBox="0 0 10 10"
+                  refX="9"
+                  refY="5"
+                  markerWidth="7"
+                  markerHeight="7"
+                  orient="auto-start-reverse"
+                >
+                  <path d="M0,1 L9,5 L0,9 z" fill="currentColor" />
+                </marker>
+              </defs>
+
+              <rect class="bx api" x="16" y="24" width="196" height="120" />
+              <text class="t" x="28" y="42">what the consumer writes</text>
+              <text class="s" x="28" y="60">{ id: 'a',</text>
+              <text class="s" x="28" y="74">name: 'Survey',</text>
+              <text class="s" x="28" y="88">start: '2026-09-01',</text>
+              <text class="s" x="28" y="102">end: '2026-09-08' }</text>
+              <text class="xs" x="28" y="122">EntryInput — plain strings,</text>
+              <text class="xs" x="28" y="134">no brands, no zone</text>
+
+              <path class="edge" d="M212,84 H246" marker-end="url(#a8)" style="color: var(--sub)" />
+
+              <rect class="bx api" x="252" y="24" width="216" height="120" />
+              <text class="t" x="264" y="42">api/dataset.ts</text>
+              <text class="s" x="264" y="60">new Dataset({ entries,</text>
+              <text class="s" x="264" y="74">timeZone, dateOnlyEnd? })</text>
+              <text class="xs" x="264" y="94">Resolves dateOnlyEnd to its</text>
+              <text class="xs" x="264" y="106">'inclusive' default, then calls</text>
+              <text class="xs" x="264" y="118">readEntries ONCE at construct,</text>
+              <text class="xs" x="264" y="130">and again on every add/update.</text>
+
+              <path class="edge" d="M360,144 V176" marker-end="url(#a8)" style="color: var(--sub)" />
+
+              <rect class="bx api" x="252" y="182" width="216" height="106" />
+              <text class="t" x="264" y="200">data/entry-reader.ts</text>
+              <text class="s" x="264" y="216">readEntries(inputs, context)</text>
+              <text class="xs" x="264" y="236">Field mapping ONLY: applies the</text>
+              <text class="xs" x="264" y="248">entryId brand, copies optionals</text>
+              <text class="xs" x="264" y="260">only when present. Anything here</text>
+              <text class="xs" x="264" y="272">resembling date math is a bug.</text>
+
+              <path class="edge" d="M468,232 H502" marker-end="url(#a8)" style="color: var(--sub)" />
+
+              <rect class="bx pure" x="508" y="182" width="238" height="106" />
+              <text class="t" x="520" y="200">time/input.ts</text>
+              <text class="s" x="520" y="216">toInstant(zone, input)</text>
+              <text class="s" x="520" y="230">toEndInstant(zone, input, rule)</text>
+              <text class="xs" x="520" y="250">Every date decision lives here —</text>
+              <text class="xs" x="520" y="262">it is the only layer allowed the</text>
+              <text class="xs" x="520" y="274">zone lookup and the day arithmetic.</text>
+
+              <path class="edge" d="M627,182 V150" marker-end="url(#a8)" style="color: var(--sub)" />
+
+              <rect class="bx pure" x="508" y="24" width="238" height="120" />
+              <text class="t" x="520" y="42">the four readings</text>
+              <text class="xs" x="520" y="60">Z / ±hh:mm string → absolute, zone ignored</text>
+              <text class="xs" x="520" y="74">Plain date-time → resolved through zone</text>
+              <text class="xs" x="520" y="88">date-only → that day's start</text>
+              <text class="xs" x="520" y="102">Date / number → epoch ms, as-is</text>
+              <text class="xs" x="520" y="122">A date the calendar lacks ('2026-02-31')</text>
+              <text class="xs" x="520" y="134">throws InvalidInstantError.</text>
+
+              <path class="edge" d="M746,84 H780" marker-end="url(#a8)" style="color: var(--sub)" />
+
+              <rect class="bx pure" x="786" y="24" width="158" height="120" />
+              <text class="t" x="798" y="42">what is stored</text>
+              <text class="s" x="798" y="60">{ id: EntryId,</text>
+              <text class="s" x="798" y="74">start: Instant,</text>
+              <text class="s" x="798" y="88">end: Instant }</text>
+              <text class="xs" x="798" y="108">Entry — branded, absolute.</text>
+              <text class="xs" x="798" y="120">Nothing downstream ever</text>
+              <text class="xs" x="798" y="132">sees a loose value again.</text>
+
+              <rect class="bx warn" x="16" y="182" width="216" height="106" />
+              <text class="warnink" x="28" y="200">the date-only end rule</text>
+              <text class="xs" x="28" y="220">A bare date on `end` means the</text>
+              <text class="xs" x="28" y="232">last day the consumer wants INCLUDED,</text>
+              <text class="xs" x="28" y="244">but storage wants the boundary</text>
+              <text class="xs" x="28" y="256">AFTER it. 'inclusive' (default)</text>
+              <text class="xs" x="28" y="268">advances one calendar day; only</text>
+              <text class="xs" x="28" y="280">date-only strings are touched.</text>
+
+              <path class="edge soft" d="M232,236 H246" marker-end="url(#a8)" style="color: var(--line)" />
+
+              <text class="xs" x="16" y="312">
+                Read once, at construction. Every layer downstream — layout/, render/, view/ — sees only
+                branded
+              </text>
+              <text class="xs" x="16" y="326">
+                absolute values, which is what lets computeFrame stay pure arithmetic with no parsing in the
+                hot path.
+              </text>
+            </svg>
+          </div>
+          <figcaption>
+            Diagram 5 — the consumer boundary. Amber = the one rule that is a policy choice rather than a
+            mechanical conversion.
+          </figcaption>
+        </figure>
+
+        <div class="note">
+          <strong>Why the split is where it is.</strong> <code>data/entry-reader.ts</code> may see both
+          <code>model/</code> (for the brand helpers) and <code>time/</code> (for the reading). It does no
+          date math itself: resolving a Plain time needs the zone and the DST fold/gap policy, and advancing a
+          date-only <code>end</code> by "one day" is zone-aware arithmetic that is not always 86 400 000 ms.
+          Both belong to <code>time/</code> under I10. The rule to carry forward:
+          <em>data/ maps fields, time/ decides dates.</em>
+        </div>
+
+        <h3>What the DOM backend builds</h3>
+        <div class="tree">
+          container.fg-container <span class="c">role=group; not the scroller</span> ├─ div.fg-grid-pane
+          <span class="c">width = gridWidth</span> │ ├─ div.fg-grid-spacer
+          <span class="c">one empty .fg-band per header band</span> │ └─ div.fg-rows-clip
+          <span class="c">clip; not transformed</span> │ └─ div.fg-rows
+          <span class="c">RenderSurfaces.grid; translateY(−visible.y)</span> │ └─ div.fg-row
+          <span class="c">keyed by RowId; cells inside</span> ├─ div.fg-splitter ├─ div.fg-timeline-pane
+          <span class="c">the single native scroller</span> │ ├─ div.fg-header
+          <span class="c">width = contentWidth</span> │ │ └─ div.fg-band
+          <span class="c">keyed by index</span> │ │ └─ div.fg-tick
+          <span class="c">keyed by index within the band</span> │ ├─ div.fg-bars │ │ └─ div.fg-bar
+          <span class="c">keyed by ItemId</span> │ ├─ div.fg-content-sizer
+          <span class="c">1×1px, translated to content extent − 1px</span> │ └─ div.fg-date-line
+          <span class="c">today + authored lines, keyed by date-line id</span>
+        </div>
+        <div class="note">
+          <strong>One detail that is load-bearing, not incidental.</strong> The content sizer must land its
+          <em>far</em> edge on the content extent, hence the <code>− 1</code>: it is 1×1px, so translating its
+          origin to the extent would make the browser's native scroll range one pixel longer than what
+          <code>ScrollModel</code> computed. Header, bars and sizer sit at x=0 in the timeline pane — the grid
+          pane owns the label width, so there is no gutter offset in this backend.
+        </div>
+
+        <div class="cards">
+          <div class="card">
+            <h5>createDomBackend() <span class="tag dom">factory</span></h5>
+            <div class="path">render/dom/index.ts</div>
+            <p>
+              A closure, not a class — the ten caches and the layer references are private by construction.
+              Implements <code>RenderBackend&lt;HTMLElement&gt;</code>.
+            </p>
+            <dl>
+              <dt>mount(surfaces)</dt>
+              <dd>
+                Takes <code>{ grid, timeline }</code>. Builds header, bars, content sizer and date-line
+                layer inside the timeline pane.
+              </dd>
+              <dt>sync(frame)</dt>
+              <dd>
+                Keyed header/rows/cells/items, date-line, grid <code>translateY</code>, sizer transform. No
+                layout reads.
+              </dd>
+              <dt>applyState(state)</dt>
+              <dd>
+                Hot-path class toggles and transforms only — hover/selection/drag preview, zero allocation,
+                never a frame rebuild (I13).
+              </dd>
+              <dt>hitTest(x, y)</dt>
+              <dd>
+                <code>document.elementFromPoint</code> → <code>closest('.fg-bar')</code> →
+                <code>dataset.itemId</code>. No materialized hit-region array; the bars array <em>is</em> the
+                hit index.
+              </dd>
+            </dl>
+          </div>
+
+          <div class="card">
+            <h5>syncKeyed() <span class="tag dom">function</span></h5>
+            <div class="path">render/dom/sync-keyed.ts</div>
+            <p>
+              The entire reconciler, in 30 lines. Three phases per call: look-up-or-create by key → patch only
+              if <code>toGeom</code> differs from the cached geometry → prune keys no longer present.
+            </p>
+            <dl>
+              <dt>nodes / geoms</dt>
+              <dd>
+                The caller's persistent per-layer caches, owned by one <code>KeyedLayer</code> instance.
+              </dd>
+              <dt>create(item, key)</dt>
+              <dd>
+                Called once per key. Attributes fixed for the node's lifetime belong here.
+              </dd>
+              <dt>shallowEqual(a, b)</dt>
+              <dd>
+                Compares both directions (issue #91).
+              </dd>
+            </dl>
+          </div>
+
+          <div class="card">
+            <h5>readPixelProperty() <span class="tag dom">function</span></h5>
+            <div class="path">render/dom/pixel-property.ts</div>
+            <p>
+              Level 1 of the customization ladder: read a <code>--fg-*</code> custom property off the
+              container, parse to px, validate against what the library can actually draw with.
+            </p>
+            <dl>
+              <dt>policy.accepts</dt>
+              <dd>
+                <code>'positive'</code> — zero is nonsense. <code>'zeroOrMore'</code> — zero is a real choice.
+              </dd>
+              <dt>re-read cadence</dt>
+              <dd>The caller's, and each states it — neither is per render.</dd>
+            </dl>
+          </div>
+
+          <div class="card">
+            <h5>syncDateLine() <span class="tag dom">function</span></h5>
+            <div class="path">render/dom/date-line.ts</div>
+            <p>
+              Renders the today-line and authored date lines as positioned decoration elements, keyed by
+              date-line id. The decoration geometry comes from <code>layout/date-line.ts</code>'s
+              <code>resolveDateLines</code>.
+            </p>
+          </div>
+
+          <div class="card">
+            <h5>rowIdFromTwistyClick() <span class="tag dom">function</span></h5>
+            <div class="path">render/dom/row-twisty.ts</div>
+            <p>
+              When a click lands on a <code>.fg-row-twisty</code> inside the grid pane, returns that row's
+              id. Keeps the twisty markup and <code>data-row-id</code> out of <code>view/</code> so a second
+              backend owns its own control geometry. Wired by <code>view/attach-row-twisty.ts</code> (S4.6).
+            </p>
+          </div>
+
+          <div class="card">
+            <h5>createNullBackend() <span class="tag dom">factory</span></h5>
+            <div class="path">render/null/index.ts</div>
+            <p>
+              <code>RenderBackend&lt;void&gt;</code> that records the last frame and does nothing else. For
+              tests, SSR-of-data, and the future export seam.
+            </p>
+            <dl>
+              <dt>lastFrame()</dt>
+              <dd>The whole added surface over the seam.</dd>
+            </dl>
+            <p style="margin-top: 0.6rem; font-size: 0.8rem">
+              Still unreachable from <code>view/</code>: <code>GanttShellOptions.backend</code> is typed to
+              <code>THost</code> <code>HTMLElement</code>, so this <code>THost={}</code> backend, and
+              <code>PaneLayout</code>'s real-element mounting, keep the whole stack DOM-free testing out of
+              reach.
+            </p>
+          </div>
+
+          <div class="card">
+            <h5>Gantt <span class="tag api">public class</span></h5>
+            <div class="path">api/gantt.ts</div>
+            <p>
+              The public <code>Gantt</code> class. Constructs one <code>GanttShell</code> and forwards, and
+              delegates every live-reconfigurable property to it.
+            </p>
+            <dl>
+              <dt>GanttOptions</dt>
+              <dd>
+                <code>container</code>, <code>dataset</code>, optional shared <code>scale</code> <em>or</em>
+                <code>preset</code>/<code>range</code>/<code>fit</code>, optional <code>scroll</code>,
+                <code>gridColumns</code>, <code>rowSource</code>, <code>interactions</code>,
+                <code>viewportGestures</code>, <code>theme</code>, <code>locale</code>, <code>todayLine</code>,
+                …
+              </dd>
+              <dt>live properties</dt>
+              <dd>
+                <code>preset</code>, <code>range</code>, <code>fit</code>, <code>zoomIn</code>/<code
+                  >zoomOut</code
+                >, <code>zoomPresets</code>, <code>panToDate</code>/<code>panToToday</code>,
+                <code>gridColumns</code>, <code>rowSource</code>, <code>collapsed</code>,
+                <code>collapse</code>/<code>expand</code>, <code>selection</code>,
+                <code>selectionEntries</code>, <code>interactions</code>, <code>viewportGestures</code>,
+                <code>theme</code>, <code>locale</code>, <code>todayLine</code>, <code>gridWidth</code>, …
+              </dd>
+              <dt>destroy()</dt>
+              <dd>Idempotent, delegates. No module-level singletons anywhere in <code>src/</code> (I2).</dd>
+            </dl>
+          </div>
+
+          <div class="card">
+            <h5>Dataset <span class="tag api">public class</span></h5>
+            <div class="path">api/dataset.ts</div>
+            <p>
+              Everything is delegated into <code>data/</code> — the public class is a thin façade over
+              <code>DatasetState</code>.
+            </p>
+            <dl>
+              <dt>entries CRUD</dt>
+              <dd><code>entries.all</code>, <code>entries.add/update/remove</code>, <code>childrenOf</code>, <code>fieldValue</code>.</dd>
+              <dt>transactions</dt>
+              <dd><code>transaction(fn)</code> batches several edits into one changeset, one render.</dd>
+              <dt>events</dt>
+              <dd><code>on('beforeChange', vetoable)</code>, <code>on('change', { changeSet })</code>.</dd>
+              <dt>fields</dt>
+              <dd><code>field(key)</code>, <code>fields.all</code>, <code>fieldTypes</code>, <code>aggregators</code>.</dd>
+              <dt>serialization</dt>
+              <dd><code>toJSON()</code>, <code>Dataset.fromJSON(doc, { aggregators })</code>.</dd>
+              <dt>undo / redo</dt>
+              <dd><code>undo()</code>, <code>redo()</code>, <code>canUndo</code>, <code>canRedo</code>, <code>replay(changeSet)</code>.</dd>
+              <dt>implements DatasetContract</dt>
+              <dd>
+                States the relationship to <code>model/dataset.ts</code> instead of leaving it
+                structural-by-coincidence.
+              </dd>
+            </dl>
+          </div>
+        </div>
+
+        <h3>The harness, reviewed</h3>
+        <p>
+          <code>harness/main.ts</code> is the library's first consumer and gets reviewed on every commit,
+          changed or not: code there that re-derives what the library already computes is an API gap even when
+          no lint fires. At S4 it demos tree rows, grid columns, field rollups, live <code>rowSource</code>
+          switching, selection, and timeline controls; <code>harness/data.html</code> demos transactions and
+          undo. It still reads clean —
+        </p>
+        <pre><code>import { Gantt, Dataset } from '../src/api/index.js';
+import { sampleEntries } from '../fixtures/sample-dataset.js';
+
+const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
+
+const gantt = new Gantt({ container: '#gantt', dataset });
+gantt.rowSource = { source: 'entries', tree: true };</code></pre>
+        <p>
+          — no restated <code>rowHeight</code>, no hand-built <code>TimeScaleModel</code> standing in for
+          <code>range: 'fitDataset'</code>. <code>harness/scroll-sync.ts</code> is the S1.5 e2e fixture: two
+          Gantts sharing one <code>ScrollModel</code> and one <code>TimeScaleModel</code>.
+        </p>
+      </section>
+
+      <nav class="harness-docs-pager" aria-label="Other docs pages"></nav>
+    </div>
+
+    <footer class="wrap">
+      Import rules for every layer named here are on <a href="./layers.html">Layers</a>. The public
+      surface an app author actually writes is <code>README.md</code> and <code>plans/02-public-api.md</code>.
+    </footer>
+  </body>
+</html>

@@ -10,10 +10,19 @@ import type {
   ViewportGestures,
 } from '../view/index.js';
 import { ScrollModel, TimeScaleModel } from '../layout/index.js';
-import type { PresetRef, TimeScaleFit, ViewPreset } from '../layout/index.js';
+import type { PresetRef, TimeScaleFit, ViewPreset, RowSource } from '../layout/index.js';
 import type { DateLineSpec } from '../layout/index.js';
-import type { Entry, EntryEdits, EntryId, Instant, InstantInput, TimeSpan } from '../model/index.js';
-import { MutationCancelledError } from '../model/index.js';
+import type {
+  Entry,
+  EntryEdits,
+  EntryId,
+  GridColumnInput,
+  Instant,
+  InstantInput,
+  RowId,
+  TimeSpan,
+} from '../model/index.js';
+import { attemptMutation } from './attempt-mutation.js';
 import { now, toInstant } from '../time/index.js';
 import type { Dataset } from './dataset.js';
 // api/ is the composition root that reaches interaction/ in (plans/01 §1: `API --> INT`,
@@ -28,7 +37,7 @@ export interface DateLineInput {
   className?: string;
 }
 
-interface GanttOptionsBase {
+export interface GanttOptionsBase {
   /** Element or CSS selector (plans/02 §2) — resolved by GanttShell; a selector matching nothing
    * throws (#38). */
   container: HTMLElement | string;
@@ -69,13 +78,19 @@ interface GanttOptionsBase {
   /** Live (S3.7, D-S3-14). Wheel zoom, shift+wheel pan, and keyboard pan. Default `{}`: every
    *  viewport gesture is on. `false` turns them all off. Does not gate `zoomBy` / `panToDate`. */
   viewportGestures?: ViewportGestures;
+  /** Live (S4.3, D-S4-12). Field keys in display order, plus per-Gantt overrides. Default `['name']`. */
+  gridColumns?: readonly GridColumnInput[];
+  /** Live (S4.6, D-S4-21). Default `{ source: 'entries', tree: false }`. */
+  rowSource?: RowSource;
+  /** Live (S4.6, D-S4-22). Collapsed row ids, loose on the way in. Default `[]`. */
+  collapsed?: readonly (RowId | string)[];
 }
 
 /** Two ways to set the axis, made mutually exclusive at the type level (issue #84 — the prior shape
  * accepted both and silently ignored `preset`/`range`/`fit` in favor of `scale`, with a dev-mode-only
  * warning). Sharing an axis and building a private one from `preset`/`range`/`fit` are not two knobs
  * for the same job; a caller states one or the other. */
-type GanttScaleOptions =
+export type GanttScaleOptions =
   | {
       /** Bound viewport object (D9, plans/02 §5) — pass the same instance to two Gantt instances to
        * x-sync them. */
@@ -95,6 +110,18 @@ type GanttScaleOptions =
 
 export type GanttOptions = GanttOptionsBase & GanttScaleOptions;
 
+function pickDefined<T extends object, K extends keyof T>(
+  options: T,
+  keys: readonly K[],
+): Partial<Pick<T, K>> {
+  const picked: Partial<Pick<T, K>> = {};
+  for (const key of keys) {
+    const value = options[key];
+    if (value !== undefined) picked[key] = value;
+  }
+  return picked;
+}
+
 export class Gantt {
   #shell: GanttShell;
   #dataset: Dataset;
@@ -105,38 +132,36 @@ export class Gantt {
     this.#shell = new GanttShell({
       container: options.container,
       dataset: options.dataset,
+      ...pickDefined(options, [
+        'scroll',
+        'gridWidth',
+        'preset',
+        'fit',
+        'theme',
+        'a11yLabel',
+        'locale',
+        'todayLineMarginTicks',
+        'interactions',
+        'viewportGestures',
+        'gridColumns',
+        'rowSource',
+        'collapsed',
+      ]),
       ...(options.scale ? { scale: options.scale } : {}),
-      ...(options.scroll ? { scroll: options.scroll } : {}),
-      ...(options.gridWidth !== undefined ? { gridWidth: options.gridWidth } : {}),
-      ...(options.preset !== undefined ? { preset: options.preset } : {}),
       ...(options.range !== undefined ? { range: this.#toRange(options.range) } : {}),
-      ...(options.fit !== undefined ? { fit: options.fit } : {}),
-      ...(options.theme !== undefined ? { theme: options.theme } : {}),
-      ...(options.a11yLabel !== undefined ? { a11yLabel: options.a11yLabel } : {}),
-      ...(options.locale !== undefined ? { locale: options.locale } : {}),
       ...(options.todayLine !== undefined ? { todayLine: this.#toTodayLine(options.todayLine) } : {}),
       ...(options.dateLines !== undefined ? { dateLines: this.#toDateLines(options.dateLines) } : {}),
-      ...(options.todayLineMarginTicks !== undefined
-        ? { todayLineMarginTicks: options.todayLineMarginTicks }
-        : {}),
-      ...(options.interactions !== undefined ? { interactions: options.interactions } : {}),
-      ...(options.viewportGestures !== undefined ? { viewportGestures: options.viewportGestures } : {}),
       entryGestures: attachEntryGestures,
       keyboardEditing: attachKeyboardEditing,
       // S3.3, D-S3-16: `GanttShell`'s own `dataset` option is `model/`'s narrow `Dataset` interface
       // ("a view never opens a transaction") — this class holds the full `api/Dataset`, so a
       // committed gesture draft reaches the store through here, not through the shell itself.
-      commitEntryEdits: (edits: EntryEdits) => {
-        try {
+      commitEntryEdits: (edits: EntryEdits) =>
+        attemptMutation(() => {
           options.dataset.transaction(() => {
             for (const [id, edit] of edits) options.dataset.entries.update(id, edit);
           });
-          return true;
-        } catch (error) {
-          if (error instanceof MutationCancelledError) return false;
-          throw error;
-        }
-      },
+        }),
     });
     if (options.zoomPresets !== undefined) this.#shell.zoomPresets = options.zoomPresets;
     if (options.selection !== undefined) this.#shell.selection = options.selection;
@@ -191,6 +216,51 @@ export class Gantt {
 
   set gridWidth(px: number) {
     this.#shell.gridWidth = px;
+  }
+
+  get gridColumns(): readonly GridColumnInput[] {
+    return this.#shell.gridColumns;
+  }
+
+  set gridColumns(columns: readonly GridColumnInput[]) {
+    this.#shell.gridColumns = columns;
+  }
+
+  /** Live (S4.6, D-S4-21). Assigning re-resolves rows with no remount. */
+  get rowSource(): RowSource {
+    return this.#shell.rowSource;
+  }
+
+  set rowSource(next: RowSource) {
+    this.#shell.rowSource = next;
+  }
+
+  get collapsed(): readonly RowId[] {
+    return this.#shell.collapsed;
+  }
+
+  set collapsed(ids: readonly (RowId | string)[]) {
+    this.#shell.collapsed = ids;
+  }
+
+  collapse(id: RowId | string): void {
+    this.#shell.collapse(id);
+  }
+
+  expand(id: RowId | string): void {
+    this.#shell.expand(id);
+  }
+
+  toggleCollapse(id: RowId | string): void {
+    this.#shell.toggleCollapse(id);
+  }
+
+  collapseAll(): void {
+    this.#shell.collapseAll();
+  }
+
+  expandAll(): void {
+    this.#shell.expandAll();
   }
 
   get preset(): ViewPreset {

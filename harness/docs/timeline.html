@@ -6,21 +6,26 @@
     <title>FreeGantt — Timeline render</title>
     <link rel="stylesheet" href="./doc.css" />
     <link rel="stylesheet" href="../harness-nav.css" />
+    <link rel="stylesheet" href="./docs-nav.css" />
   </head>
   <body>
     <div class="wrap">
       <header>
         <nav class="harness-site-nav" aria-label="Harness pages"></nav>
+        <nav class="harness-docs-nav" aria-label="Harness docs"></nav>
         <script type="module" src="../harness-nav.ts"></script>
+        <script type="module" src="./docs-nav.ts"></script>
         <h1>How the timeline paints</h1>
         <p class="tagline">
-          The timeline is a bound <code>TimeScale</code> plus a header of absolutely positioned ticks. This
-          branch adds a density floor, sticky coarse labels, format dedupe across bands, unpadded hour
-          labels, and a today line that only draws inside the scale range.
+          The timeline is a bound <code>TimeScale</code> plus a header of absolutely positioned ticks. On
+          top of that sit five behaviours worth their own explanation: a density floor, sticky coarse
+          labels, format dedupe across bands, unpadded hour labels, and a today line that only draws inside
+          the scale range.
         </p>
+        <div class="updated"><span class="k">updated</span> 2026-08-31 — slice S4</div>
         <div class="meta">
-          <span>branch vs <code>origin/main</code></span>
-          <span>S1.12 + header readability</span>
+          <span>slice: S4</span>
+          <span>src: time/scale.ts · time/presets.ts · render/dom/</span>
           <span>open <a href="../zoom.html">zoom.html</a> while you read this</span>
         </div>
         <nav>
@@ -153,7 +158,7 @@
               <rect class="bx dom" x="320" y="378" width="16" height="16" />
               <text class="xs" x="344" y="390">view / render</text>
               <rect class="bx hot" x="480" y="378" width="16" height="16" />
-              <text class="xs" x="504" y="390">this branch’s header work</text>
+              <text class="xs" x="504" y="390">header layout and label clamping</text>
             </svg>
           </div>
           <figcaption>
@@ -295,7 +300,7 @@
                 fill="rgba(90,106,154,0.15)"
                 stroke="var(--dom-line)"
               />
-              <text class="xs" x="420" y="482">other shipped floors (this branch)</text>
+              <text class="xs" x="420" y="482">other shipped floors</text>
             </svg>
           </div>
           <figcaption>
@@ -309,8 +314,9 @@
       <section id="s3">
         <h2><span class="num">3</span>Header bands and format dedupe</h2>
         <p class="lede">
-          A preset lists bands coarsest first. Each band used to carry the same full date format, so
-          <code>weekAndMonth</code> wrote “Sep 2026” on the month row and “Sep 1, 2026” on the week row.
+          A preset lists bands coarsest first. Left alone, every band carries its own full date format, so
+          <code>weekAndMonth</code> would write “Sep 2026” on the month row and “Sep 1, 2026” on the week
+          row — the month named twice.
         </p>
         <p>
           <code>dedupeHeaderFormats(headers)</code> walks that list once. When an earlier band already
@@ -346,7 +352,7 @@
               <rect class="bx warn" x="328" y="80" width="112" height="36" />
               <text class="s" x="340" y="102">Sep 22, 2026</text>
 
-              <text class="t" x="500" y="28">after — this branch</text>
+              <text class="t" x="500" y="28">after dedupe — what ships</text>
               <rect class="bx pure" x="500" y="44" width="420" height="36" />
               <text class="t" x="512" y="66">Sep 2026</text>
               <rect class="bx pure" x="500" y="80" width="96" height="36" />
@@ -409,7 +415,7 @@
               <text class="t warnink" x="52" y="104">2025</text>
               <text class="xs" x="40" y="156">true x is left of the clip · the reader never sees the year</text>
 
-              <text class="t" x="24" y="196">clamped — this branch</text>
+              <text class="t" x="24" y="196">clamped — what ships</text>
               <rect x="200" y="216" width="720" height="88" fill="none" stroke="var(--line)" stroke-dasharray="4 3" />
               <text class="xs" x="208" y="232">visible pane</text>
               <rect class="bx" x="40" y="248" width="760" height="40" />
@@ -489,10 +495,13 @@
           only what the timeline shows after those passes.
         </p>
       </section>
+
+      <nav class="harness-docs-pager" aria-label="Other docs pages"></nav>
     </div>
     <footer>
-      Sources: <code>plans/s1.12-timeline-navigation/</code>,
-      <code>header-readability-followup.md</code>. Spec wins if this page goes stale.
+      Derived from <code>time/scale.ts</code>, <code>time/presets.ts</code>, <code>render/dom/</code> and
+      <code>view/styles.ts</code>; the design record is <code>plans/s1.12-timeline-navigation/</code>. Open
+      <a href="../zoom.html">zoom.html</a> next to this page. Spec wins if this page goes stale.
     </footer>
   </body>
 </html>

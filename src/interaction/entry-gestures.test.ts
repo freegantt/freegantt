@@ -1,14 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
 import { attachEntryGestures } from './entry-gestures.js';
 import type { DraftOptions, EntryGestureContext, EntryGesture } from '../view/index.js';
-import { entryId, itemId } from '../model/index.js';
+import { entryId, entryIdOfItem, itemId } from '../model/index.js';
 import type { Entry, EntryEdits, EntryId, Instant, ItemId } from '../model/index.js';
 
 const A = entryId('a');
 const B = entryId('b');
 const C = entryId('c');
 const ORDER: readonly EntryId[] = [A, B, C];
-const ITEMS: Record<string, EntryId> = { [itemId(A)]: A, [itemId(B)]: B, [itemId(C)]: C };
 
 /** `interaction/` may not import `time/` (I1) — this suite is about pointer semantics, never real
  *  dates, so a bare number stands in for an `Instant` at this one call site. */
@@ -46,6 +45,7 @@ interface SessionOverrides {
 function makeContext(overrides: Partial<EntryGestureContext> & SessionOverrides = {}): {
   ctx: EntryGestureContext;
   proposals: (readonly EntryId[])[];
+  proposalItemIds: (readonly ItemId[] | undefined)[];
   previews: (EntryEdits | undefined)[];
   commits: [EntryGesture, EntryEdits][];
 } {
@@ -58,17 +58,18 @@ function makeContext(overrides: Partial<EntryGestureContext> & SessionOverrides 
 
   let selection: readonly EntryId[] = [];
   const proposals: (readonly EntryId[])[] = [];
+  const proposalItemIds: (readonly ItemId[] | undefined)[] = [];
   const previews: (EntryEdits | undefined)[] = [];
   const commits: [EntryGesture, EntryEdits][] = [];
 
   const ctx: EntryGestureContext = {
-    hitTest: (x) => (x >= 0 && x < ORDER.length ? { itemId: itemId(ORDER[x]!) } : undefined),
+    hitTest: (at) => (at.x >= 0 && at.x < ORDER.length ? { itemId: itemId(ORDER[at.x]!) } : undefined),
     entryFor: (item: ItemId) => {
-      const id = ITEMS[item];
-      return id !== undefined ? entryFor(id) : undefined;
+      const id = entryIdOfItem(item);
+      return ORDER.includes(id) ? entryFor(id) : undefined;
     },
     can: () => true,
-    rowOrder: () => ORDER,
+    selectableEntriesInRowOrder: () => ORDER,
     setHovered: () => {},
     contentXAtPaneOffset: (offsetX) => offsetX,
     session: (grabbed, gesture) => {
@@ -98,14 +99,15 @@ function makeContext(overrides: Partial<EntryGestureContext> & SessionOverrides 
     },
     selection: {
       get: () => selection,
-      propose: (next) => {
+      propose: (next, itemIds) => {
         selection = next;
         proposals.push(next);
+        proposalItemIds.push(itemIds);
       },
     },
     ...ctxOverrides,
   };
-  return { ctx, proposals, previews, commits };
+  return { ctx, proposals, proposalItemIds, previews, commits };
 }
 
 function mockPointerCapture(el: HTMLElement): void {
@@ -368,7 +370,7 @@ describe('attachEntryGestures — resize (S3.4)', () => {
     const container = document.createElement('div');
     const commit = vi.fn(() => Promise.resolve(true));
     const { ctx, proposals } = makeContext({
-      hitTest: (x) => (x === 0 ? { itemId: itemId(A), edge: 'start' } : { itemId: itemId(ORDER[x]!) }),
+      hitTest: (at) => (at.x === 0 ? { itemId: itemId(A), edge: 'start' } : { itemId: itemId(ORDER[at.x]!) }),
       can: (capability) => capability === 'select', // resize refused (e.g. milestone)
       commit,
     });
@@ -380,5 +382,70 @@ describe('attachEntryGestures — resize (S3.4)', () => {
 
     expect(commit).not.toHaveBeenCalled();
     expect(proposals).toEqual([[A]]);
+  });
+});
+
+describe('attachEntryGestures — segments and visible row order (S4.10)', () => {
+  it('[S4-A4] passes the grabbed item id into session when a segment bar is armed', () => {
+    const pane = document.createElement('div');
+    const container = document.createElement('div');
+    mockPointerCapture(pane);
+    const middle = itemId(A, 1);
+    const grabbedItems: (ItemId | undefined)[] = [];
+    const segmented: Entry = {
+      ...entryFor(A),
+      segments: [
+        { start: toInstant(0), end: toInstant(1) },
+        { start: toInstant(2), end: toInstant(3) },
+        { start: toInstant(4), end: toInstant(5) },
+      ],
+    };
+    const { ctx } = makeContext({
+      hitTest: () => ({ itemId: middle }),
+      entryFor: (item) => (item === middle ? segmented : entryFor(entryIdOfItem(item))),
+      session: (grabbed, gesture, grabbedItemId) => {
+        grabbedItems.push(grabbedItemId);
+        return {
+          preview: () => {},
+          commit: () => Promise.resolve(true),
+          nudge: () => Promise.resolve(true),
+          cancel: () => {},
+        };
+      },
+    });
+    attachEntryGestures(pane, container, ctx);
+
+    pane.dispatchEvent(down(0));
+    pane.dispatchEvent(move(DRAG_THRESHOLD_PX + 1));
+
+    expect(grabbedItems).toEqual([middle]);
+  });
+
+  it('plain click proposes the touched segment item id, not only segment 0', () => {
+    const pane = document.createElement('div');
+    const container = document.createElement('div');
+    const middle = itemId(A, 1);
+    const { ctx, proposals, proposalItemIds } = makeContext({
+      hitTest: () => ({ itemId: middle }),
+    });
+    attachEntryGestures(pane, container, ctx);
+
+    pane.dispatchEvent(up(1000)); // hit resolves to segment 1 of A
+
+    expect(proposals).toEqual([[A]]);
+    expect(proposalItemIds[proposalItemIds.length - 1]).toEqual([middle]);
+  });
+
+  it('shift-click ranges over selectableEntriesInRowOrder, skipping rows not shown', () => {
+    const pane = document.createElement('div');
+    const container = document.createElement('div');
+    const visible: readonly EntryId[] = [B, C];
+    const { ctx, proposals } = makeContext({ selectableEntriesInRowOrder: () => visible });
+    attachEntryGestures(pane, container, ctx);
+
+    pane.dispatchEvent(up(1)); // select B
+    pane.dispatchEvent(up(2, { shiftKey: true })); // range to C
+
+    expect(proposals).toEqual([[B], [B, C]]);
   });
 });

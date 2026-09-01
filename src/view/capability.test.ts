@@ -34,7 +34,7 @@ describe('resolveCapabilities', () => {
     expect(caps.can('select', e)).toBe(true);
   });
 
-  it('defaults a derivedSpanKinds kind to move/resize false, select true', () => {
+  it('defaults a rollUpKinds kind to move/resize false, select true', () => {
     const caps = resolveCapabilities(undefined, isGroup);
     const e = entry({ kind: 'group' });
     expect(caps.can('move', e)).toBe(false);

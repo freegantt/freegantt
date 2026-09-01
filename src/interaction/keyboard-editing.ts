@@ -15,11 +15,11 @@ function canSelect(ctx: EntryGestureContext, id: EntryId): boolean {
 }
 
 /** D-S3-13: `↑`/`↓` move the selection to the nearest `select`-capable row in `direction` over
- *  `rowOrder()`; a row with no capable neighbour that way leaves the selection untouched — same
+ *  `selectableEntriesInRowOrder()`; a row with no capable neighbour that way leaves the selection untouched — same
  *  "incapable rows are skipped, not blocking" shape `entry-gestures.ts`'s shift-click range already
  *  uses. */
 function moveSelectionRow(ctx: EntryGestureContext, current: EntryId, direction: 1 | -1): void {
-  const order = ctx.rowOrder();
+  const order = ctx.selectableEntriesInRowOrder();
   let index = order.indexOf(current) + direction;
   while (index >= 0 && index < order.length) {
     const candidate = order[index]!;
@@ -44,7 +44,20 @@ export function attachKeyboardEditing(container: HTMLElement, ctx: EntryGestureC
       moveSelectionRow(ctx, grabbed, e.key === 'ArrowDown' ? 1 : -1);
       return;
     }
+
+    if (e.key === '*' || (e.key === '8' && e.shiftKey)) {
+      ctx.expandAllRows?.();
+      e.preventDefault();
+      return;
+    }
+
     if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+
+    const treeDirection = e.key === 'ArrowRight' ? 'right' : 'left';
+    if (ctx.tryTreeArrow?.(treeDirection)) {
+      e.preventDefault();
+      return;
+    }
 
     e.preventDefault();
     const direction = e.key === 'ArrowRight' ? 1 : -1;

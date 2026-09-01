@@ -2,11 +2,13 @@ import { describe, expect, it, vi } from 'vitest';
 import { GanttShell } from './gantt-shell.js';
 import type { GanttShellOptions } from './gantt-shell.js';
 import { FrameLayout, ScrollModel, TimeScaleModel } from '../layout/index.js';
-import { entryId, EntryNotFoundError, ContainerNotFoundError } from '../model/index.js';
-import type { Entry, Instant, ItemId } from '../model/index.js';
+import { entryId, rowId, itemId, EntryNotFoundError, ContainerNotFoundError } from '../model/index.js';
+import type { Entry, EntryId, Instant, ItemId } from '../model/index.js';
 import { DatasetState, EntryStore } from '../data/index.js';
+import { CORE_FIELDS } from '../data/fields/core-fields.js';
 import { createDomBackend } from '../render/dom/index.js';
 import type { RenderBackend } from '../render/backend.js';
+import type { EntryGestureContext } from './entry-gesture-context.js';
 
 // [S2-A3]: counts `RenderBackend.sync` calls, one test's own instance (§9-I's `GanttShellOptions.backend`
 // injection point) rather than a module-wide mock every other test in this file would otherwise pay for.
@@ -29,14 +31,16 @@ function fakeDataset(entries: readonly Entry[]): GanttShellOptions['dataset'] {
     timeZone,
     dateOnlyEnd: 'inclusive' as const,
     referenceDate: 0 as Instant,
-    derivedSpanKinds: new Set(['group']),
+    rollUpKinds: new Set(['group']),
   };
   // No changes ever land on this store, so on/off are stubs — none of these tests mutate the
   // dataset, so no handler this file registers is ever called.
   return {
     entries: new EntryStore(entries, context),
     timeZone,
-    isDerivedSpanKind: () => false,
+    isRollUpKind: () => false,
+    fields: { all: CORE_FIELDS },
+    field: (key) => CORE_FIELDS.find((field) => String(field.key) === String(key)),
     on: () => {},
     off: () => {},
   };
@@ -536,6 +540,84 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
       vi.unstubAllGlobals();
     }
   });
+
+  it('reveal expands a collapsed ancestor instead of scrolling to y 0', () => {
+    FakeResizeObserver.instances = [];
+    vi.stubGlobal('ResizeObserver', FakeResizeObserver);
+
+    try {
+      const container = document.createElement('div');
+      const scroll = new ScrollModel();
+      const parent: Entry = {
+        id: entryId('p'),
+        name: 'p',
+        kind: 'span',
+        start: rangeStart,
+        end: instant('2026-09-03T00:00:00Z'),
+      };
+      const child: Entry = {
+        id: entryId('c'),
+        name: 'c',
+        kind: 'span',
+        parentId: entryId('p'),
+        start: rangeStart,
+        end: instant('2026-09-03T00:00:00Z'),
+      };
+      const shell = new GanttShell({
+        container,
+        dataset: fakeDataset([parent, child]),
+        scroll,
+        rowSource: { source: 'entries', tree: true },
+        collapsed: [rowId('p')],
+      });
+      FakeResizeObserver.instances[0]!.fire({ width: 500, height: 100 });
+
+      expect(shell.collapsed.map(String)).toContain('p');
+      shell.reveal(entryId('c'));
+      expect(shell.collapsed.map(String)).not.toContain('p');
+
+      shell.destroy();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('reveal expands a collapsed group header (D4)', () => {
+    FakeResizeObserver.instances = [];
+    vi.stubGlobal('ResizeObserver', FakeResizeObserver);
+
+    try {
+      const container = document.createElement('div');
+      const scroll = new ScrollModel();
+      const alpha: Entry = {
+        id: entryId('a'),
+        name: 'a',
+        kind: 'span',
+        start: rangeStart,
+        end: instant('2026-09-03T00:00:00Z'),
+        meta: { team: 'red' },
+      };
+      const shell = new GanttShell({
+        container,
+        dataset: fakeDataset([alpha]),
+        scroll,
+        rowSource: {
+          source: 'group',
+          groupBy: (row) => String((row.meta as { team: string }).team),
+        },
+        collapsed: [rowId('group:red')],
+      });
+      FakeResizeObserver.instances[0]!.fire({ width: 500, height: 100 });
+
+      expect(shell.collapsed.map(String)).toContain('group:red');
+      shell.reveal(entryId('a'));
+      expect(shell.collapsed.map(String)).not.toContain('group:red');
+
+      shell.destroy();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
 });
 
 describe('a11y roles and the one honest tab stop (S1.10, D-S1.10-5)', () => {
@@ -701,6 +783,85 @@ describe('GanttShell hot path (S3.2, D-S3-6/D-S3-9, [S3-A3])', () => {
     shell.selection = [entries[0]!.id];
     const start = container.querySelector<HTMLElement>('.fg-bar-handle[data-edge="start"]')!;
     expect(start.hidden).toBe(false);
+
+    shell.destroy();
+  });
+
+  it('clicking a later segment paints that bar, not segment 0', () => {
+    const segmented: Entry = {
+      id: entryId('seg'),
+      name: 'segmented',
+      start: rangeStart,
+      end: instant('2026-09-05T00:00:00Z'),
+      kind: 'span',
+      segments: [
+        { start: rangeStart, end: instant('2026-09-02T00:00:00Z') },
+        { start: instant('2026-09-03T00:00:00Z'), end: instant('2026-09-04T00:00:00Z') },
+      ],
+    };
+    const container = document.createElement('div');
+    let propose: ((next: readonly EntryId[], items?: readonly ItemId[]) => void) | undefined;
+    const shell = new GanttShell({
+      container,
+      dataset: fakeDataset([segmented]),
+      entryGestures: (_pane, _host, ctx) => {
+        propose = (next, items) => ctx.selection.propose(next, items);
+        return { detach() {} };
+      },
+    });
+
+    const first = itemId(segmented.id, 0);
+    const second = itemId(segmented.id, 1);
+    propose?.([segmented.id], [second]);
+
+    expect(container.querySelector(`[data-item-id="${second}"]`)?.getAttribute('data-state')).toContain(
+      'selected',
+    );
+    expect(
+      container.querySelector(`[data-item-id="${first}"]`)?.getAttribute('data-state') ?? '',
+    ).not.toContain('selected');
+
+    shell.destroy();
+  });
+});
+
+describe('GanttShell tree keyboard (D1)', () => {
+  it('rowSource stays live for tryTreeArrow after construction', () => {
+    const parent: Entry = {
+      id: entryId('p'),
+      name: 'p',
+      kind: 'span',
+      start: rangeStart,
+      end: instant('2026-09-03T00:00:00Z'),
+    };
+    const child: Entry = {
+      id: entryId('c'),
+      name: 'c',
+      kind: 'span',
+      parentId: parent.id,
+      start: rangeStart,
+      end: instant('2026-09-03T00:00:00Z'),
+    };
+    const container = document.createElement('div');
+    let ctx: EntryGestureContext | undefined;
+    const shell = new GanttShell({
+      container,
+      dataset: fakeDataset([parent, child]),
+      rowSource: { source: 'entries', tree: false },
+      entryGestures: (_pane, _host, gestureCtx) => {
+        ctx = gestureCtx;
+        return { detach() {} };
+      },
+    });
+    shell.selection = [parent.id];
+
+    expect(typeof ctx?.tryTreeArrow).toBe('function');
+    expect(ctx!.tryTreeArrow!('right')).toBe(false);
+
+    shell.rowSource = { source: 'entries', tree: true };
+    shell.render();
+    expect(ctx!.tryTreeArrow!('right')).toBe(true);
+    expect(shell.collapsed).toEqual([]);
 
     shell.destroy();
   });

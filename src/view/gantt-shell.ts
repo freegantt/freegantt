@@ -8,14 +8,22 @@ import {
   TimeScaleModel,
   Viewport,
   DEFAULT_TICK_BOX_FLOOR_PX,
+  DEFAULT_LANE_GAP_PX,
+  DEFAULT_ROW_SOURCE,
+  createItemProducerRegistry,
+  isPlannedHeaderRow,
 } from '../layout/index.js';
 import type {
   DateLineSpec,
   Overscan,
   PresetRef,
+  ResolvedColumn,
+  RowSource,
   TimeScaleFit,
   ViewportHandle,
   ViewPreset,
+  ItemProducerRegistry,
+  FieldCompare,
 } from '../layout/index.js';
 
 import { createDomBackend } from '../render/dom/index.js';
@@ -26,6 +34,8 @@ import { attachSplitter } from './splitter.js';
 import type { SplitterAttachment } from './splitter.js';
 import { EventBus } from './event-bus.js';
 import type { AsyncCancelableEvent, GanttEventHandler, GanttEventMap } from './event-bus.js';
+import type { GridWidthChange, SelectionChange } from './event-bus.js';
+import type { CollapseChange } from './collapse-state.js';
 import { attachScroll } from './scroll-attachment.js';
 import type { ScrollAttachment } from './scroll-attachment.js';
 import { attachPaneSize } from './pane-size-attachment.js';
@@ -34,12 +44,33 @@ import { attachWheelNavigation } from './wheel-navigation.js';
 import type { WheelNavigationAttachment } from './wheel-navigation.js';
 import { attachKeyboardNavigation } from './keyboard-navigation.js';
 import type { KeyboardNavigationAttachment } from './keyboard-navigation.js';
+import { attachRowTwisty } from './attach-row-twisty.js';
+import type { RowTwistyAttachment } from './attach-row-twisty.js';
+import { panToTodayLine } from './today-landing.js';
 import { resolveViewportGestures } from './viewport-gestures.js';
 import type { ViewportGestures } from './viewport-gestures.js';
 import { ensureBaseStyles } from './styles.js';
 import type { InteractionState, RenderBackend } from '../render/backend.js';
-import { EntryNotFoundError, ContainerNotFoundError, entryId, itemId } from '../model/index.js';
-import type { Dataset, Entry, EntryEdits, EntryId, ItemId, Instant, Size, TimeSpan } from '../model/index.js';
+import {
+  EntryNotFoundError,
+  ContainerNotFoundError,
+  entryId,
+  entryIdOfItem,
+  itemId,
+} from '../model/index.js';
+import type {
+  Dataset,
+  Entry,
+  EntryEdits,
+  EntryId,
+  FieldContext,
+  GridColumnInput,
+  ItemId,
+  Instant,
+  RowId,
+  Size,
+  TimeSpan,
+} from '../model/index.js';
 import type { EditExtender } from '../data/edit-extension.js';
 import { resolveCapabilities } from './capability.js';
 import type { Capabilities, Interactions } from './capability.js';
@@ -49,6 +80,10 @@ import { FrameScheduler } from './frame-scheduler.js';
 import { projectAffordances } from './affordance-projection.js';
 import { GesturePipeline } from './gesture-pipeline.js';
 import type { EntryGestureContext } from './entry-gesture-context.js';
+import { DEFAULT_GRID_COLUMNS, resolveGanttFields } from './grid-columns.js';
+import { TreeCollapse } from './tree-collapse.js';
+import { createFieldContext } from '../data/fields/field-access.js';
+import { isDevMode } from '../data/dev-mode.js';
 
 /** One `{ detach() }` for every inject slot. `view/` may not import `interaction/` (plans/01 §1:
  *  `INT --> VIEW`, not the reverse), so the shell takes pointer and keyboard attachments by
@@ -67,7 +102,7 @@ export type AttachEntryGestures = (
 
 /** S3.5, D-S3-13: same DI shape as `AttachEntryGestures` just above, and the same `ctx` instance —
  *  `interaction/keyboard-editing.ts`'s `attachKeyboardEditing` needs `session()`/`selection`/
- *  `rowOrder`/`entryFor`/`can` only, not `hitTest`/`setHovered`, but there is no value in a second,
+ *  `selectableEntriesInRowOrder`/`entryFor`/`can` only, not `hitTest`/`setHovered`, but there is no value in a second,
  *  narrower context type for one caller. */
 export type AttachKeyboardEditing = (container: HTMLElement, ctx: EntryGestureContext) => Detachable;
 
@@ -91,6 +126,10 @@ const ROW_HEIGHT_POLICY = { fallback: DEFAULT_ROW_HEIGHT, accepts: 'positive' } 
 const TICK_BOX_FLOOR_PROPERTY = '--fg-tick-box-floor';
 /** A zero floor would re-open thin straddles painting at the CSS box minimum. */
 const TICK_BOX_FLOOR_POLICY = { fallback: DEFAULT_TICK_BOX_FLOOR_PX, accepts: 'positive' } as const;
+
+const LANE_GAP_PROPERTY = '--fg-lane-gap';
+/** Zero gap is authored: packed bars may sit flush. */
+const LANE_GAP_POLICY = { fallback: DEFAULT_LANE_GAP_PX, accepts: 'zeroOrMore' } as const;
 
 /** Default for `todayLineMarginTicks` below: how many of the current preset's own ticks sit between
  *  the pane's left edge and `panToToday`'s landing (S1.13 follow-up) — enough that the today line
@@ -140,6 +179,12 @@ export interface GanttShellOptions {
    *  is on. `false` turns them all off. The imperative `zoomBy`/`panToDate` surface does not
    *  consult this. */
   viewportGestures?: ViewportGestures;
+  /** Live (S4.3, D-S4-12). Field keys in display order, plus per-Gantt overrides. Default `['name']`. */
+  gridColumns?: readonly GridColumnInput[];
+  /** Live (S4.6, D-S4-21). Default `{ source: 'entries', tree: false }`. */
+  rowSource?: RowSource;
+  /** Live (S4.6, D-S4-22). Collapsed `RowId`s, loose on the way in. Default `[]`. */
+  collapsed?: readonly (RowId | string)[];
   /** Expert knob, not on `GanttOptions` (plans/02 "two callers, two surfaces") — a test naming its
    * own `RenderBackend<HTMLElement>` in place of the DOM one (§9-I: the seam had two implementations
    * and one hardcoded call site, so nothing could reach the other short of mocking the module).
@@ -168,6 +213,9 @@ export interface GanttShellOptions {
    *  function, if a caller passes the identical reference to both — still runs again, for real, inside
    *  `data/transaction.ts`'s own commit; this option never writes anything itself. */
   editExtender?: EditExtender;
+  /** Internal (D-S4-24). One registry per Gantt, seeded with span/group/milestone. Tests inject a
+   *  replacement; `GanttOptions` has no such field (public registration is S5). */
+  itemProducerRegistry?: ItemProducerRegistry;
 }
 
 /** `exactOptionalPropertyTypes` treats `obj.key = undefined` as a type error when `key` is declared
@@ -204,6 +252,7 @@ export class GanttShell {
   #keyboardEditing: Detachable | undefined;
   #wheelNavigation: WheelNavigationAttachment | undefined;
   #keyboardNavigation: KeyboardNavigationAttachment | undefined;
+  #rowTwistyAttachment: RowTwistyAttachment;
   /** D-S3-6: one long-lived, mutable per-Gantt object — `applyState` diffs against what it painted
    *  last, so writing into this and calling `#backend.applyState` allocates nothing per hover/select
    *  step (I5). Never rebuilt per call. */
@@ -221,10 +270,7 @@ export class GanttShell {
   /** D-GH-2: owns draft math, preview rAF coalescing and the commit pipeline for a move/resize
    *  gesture — built once, from this shell's own primitives, right after `#capabilities` below. */
   #gesturePipeline!: GesturePipeline;
-  /** `id:0` today (segments are not yet laid out as separate items, `layout/frame.ts`), rebuilt every
-   *  render from `frame.bars` so this stays correct the moment segments do land — the shell reads the
-   *  frame it already computed rather than re-deriving item ids of its own (D-S3-10). */
-  #itemEntryIds = new Map<ItemId, EntryId>();
+  #itemProducerRegistry!: ItemProducerRegistry;
   /** The single rAF owner (B10, D-S2-15): every render request past construction goes through
    *  this, so N mutations in one tick become one frame. */
   #frames = new FrameScheduler(() => this.render());
@@ -234,12 +280,12 @@ export class GanttShell {
    * states what to draw and holds no layout bookkeeping of its own. */
   #layout = new FrameLayout();
   #rowHeight: number = DEFAULT_ROW_HEIGHT;
+  #laneGapPx: number = DEFAULT_LANE_GAP_PX;
   #tickBoxFloorPx: number = DEFAULT_TICK_BOX_FLOOR_PX;
   #options: GanttShellOptions;
-  /** True until pane-size wiring completes. `Viewport.bind()` notifies the newcomer synchronously
-   * per D-S1.5-4 (once for scale, once for scroll) — those calls land before pane size is wired, so
-   * they are not real renders yet and are dropped while this is true. */
-  #wiring = true;
+  /** Construction phase (issue #91 §9-B): bind() notifies synchronously before pane size is wired, so
+   *  those calls are not real renders yet. Becomes `'live'` after the first measurement. */
+  #phase: 'constructing' | 'live' = 'constructing';
   /** Set by the most recent `render()` — `frame.contentWidth`/`contentHeight` (S1.5 README §3.2,
    * D-S1.5-9). No gutter added (S1.8, D-S1.8-2): the grid pane's own width is the gutter now, and the
    * timeline pane's content is `contentWidth` wide, full stop. */
@@ -250,6 +296,12 @@ export class GanttShell {
   #todayLine: boolean | Instant = true;
   #dateLines: readonly DateLineSpec[] = [];
   #todayLineMarginTicks: number = DEFAULT_TODAY_LINE_MARGIN_TICKS;
+  #gridColumnInput: readonly GridColumnInput[] = DEFAULT_GRID_COLUMNS;
+  #resolvedColumns: readonly ResolvedColumn[] = [];
+  #fieldCompares: readonly FieldCompare[] = [];
+  #fieldContext: FieldContext | undefined;
+  #rowSource: RowSource = DEFAULT_ROW_SOURCE;
+  #treeCollapse!: TreeCollapse;
 
   constructor(options: GanttShellOptions) {
     this.#options = options;
@@ -265,8 +317,7 @@ export class GanttShell {
 
     const hasOwnOptions =
       options.preset !== undefined || options.range !== undefined || options.fit !== undefined;
-    const isDev = (import.meta as { env?: { DEV?: boolean } }).env?.DEV ?? false;
-    if (options.scale && hasOwnOptions && isDev) {
+    if (options.scale && hasOwnOptions && isDevMode()) {
       console.warn(
         "FreeGantt: GanttOptions.preset/range/fit are ignored when 'scale' is also supplied. " +
           'The shared TimeScaleModel already carries its own options — set preset/range/fit on it directly.',
@@ -291,12 +342,20 @@ export class GanttShell {
     this.#locale = options.locale;
     this.#todayLine = options.todayLine ?? true;
     this.#dateLines = options.dateLines ?? [];
+    this.#gridColumnInput = options.gridColumns ?? DEFAULT_GRID_COLUMNS;
+    this.#rowSource = options.rowSource ?? DEFAULT_ROW_SOURCE;
+    this.#itemProducerRegistry = options.itemProducerRegistry ?? createItemProducerRegistry();
+    this.#bindColumns();
 
     // Mount before binding (#22): the render target exists by the time the binding's own onChange
     // — which IS this shell's first render — fires, so there is no construction-order exception to
     // document and no separate explicit render() call after bind().
     this.#backend = options.backend ?? createDomBackend();
-    this.#backend.mount({ grid: this.#panes.grid, timeline: this.#panes.timeline });
+    this.#backend.mount({
+      grid: this.#panes.grid,
+      timeline: this.#panes.timeline,
+      gridHeader: this.#panes.gridHeader,
+    });
 
     // The timeline pane is the single native scroller (D-D, D-S1.8-1); the grid pane follows it by
     // transform, in render/dom's sync(). Constructed before either bind (Viewport's fan-in,
@@ -305,12 +364,12 @@ export class GanttShell {
 
     // bind() fires its own onChange synchronously, once per sub-model (D-S1.5-4: bind always
     // notifies the newcomer) — before this call returns and #viewportHandle is assigned. Those
-    // premature calls are dropped by #wiring; the deliberate first render below runs once
-    // everything, including the initial pane-size measurement, is wired.
+    // premature calls are dropped while `#phase === 'constructing'`; the deliberate first render
+    // below runs once everything, including the initial pane-size measurement, is wired.
     this.#viewportHandle = this.#viewport.bind(
       { entries: options.dataset.entries.all, timeZone: options.dataset.timeZone },
       () => {
-        if (this.#wiring) return;
+        if (this.#phase === 'constructing') return;
         this.#frames.request();
         this.#emitNavigationChange();
       },
@@ -319,7 +378,9 @@ export class GanttShell {
     // the bound viewport and request a frame — the changeset mechanism's own fan-out, not a second
     // reactivity path (#33's `setEntries()` warning is against a *public* one; see dataset-change-
     // subscription.ts).
-    this.#datasetChanges = subscribeToDatasetChanges(options.dataset, () => {
+    this.#datasetChanges = subscribeToDatasetChanges(options.dataset, (changeSet) => {
+      this.#layout.invalidateForChange(changeSet);
+      this.#bindColumns();
       this.#viewportHandle.setEntries(options.dataset.entries.all);
       this.#frames.request();
     });
@@ -341,8 +402,23 @@ export class GanttShell {
     this.#viewportGestures = options.viewportGestures ?? {};
     this.#resolvedViewportGestures = resolveViewportGestures(this.#viewportGestures);
     this.#capabilities = resolveCapabilities(this.#interactions, (kind) =>
-      this.#options.dataset.isDerivedSpanKind(kind),
+      this.#options.dataset.isRollUpKind(kind),
     );
+    this.#treeCollapse = new TreeCollapse({
+      plannedRows: () => this.#layout.plannedRows(),
+      entries: () => this.#options.dataset.entries.all,
+      entry: (id) => this.#options.dataset.entries.get(id),
+      canSelect: (id) => this.#canGesture('select', id),
+      selected: () => this.#selection[0],
+      proposeSelection: (ids) => this.#proposeSelection(ids),
+      confirm: (change) =>
+        this.#proposeChange('beforeCollapseChange', 'collapseChange', change, () => {
+          this.#layout.invalidateFrom(0);
+          this.#frames.request();
+        }),
+      rowIdForEntry: (id) => this.#layout.rowIdForEntry(id),
+      ancestorRowIds: (id) => this.#layout.ancestorRowIds(id),
+    });
     this.#gesturePipeline = new GesturePipeline({
       timeZone: () => this.#options.dataset.timeZone,
       timeScale: () => this.#viewport.timeScale,
@@ -366,21 +442,24 @@ export class GanttShell {
     // D-S3-13: one `EntryGestureContext`, shared by the pointer attachment and the keyboard one —
     // both drive the same `#gesturePipeline.session()`, so there is no value in building two.
     const gestureContext: EntryGestureContext = {
-      hitTest: (x, y) => {
-        const hit = this.#backend.hitTest(x, y);
+      hitTest: (at) => {
+        const hit = this.#backend.hitTest(at);
         if (!hit) return undefined;
         return hit.edge !== undefined ? { itemId: hit.itemId, edge: hit.edge } : { itemId: hit.itemId };
       },
       entryFor: (item) => this.#entryFor(item),
       can: (capability, entry) => this.#capabilities.can(capability, entry),
-      rowOrder: () => this.#options.dataset.entries.all.map((e) => e.id),
+      selectableEntriesInRowOrder: () => this.#selectableEntriesInRowOrder(),
       selection: {
         get: () => this.#selection,
-        propose: (next) => this.#proposeSelection(next),
+        propose: (next, itemIds) => this.#proposeSelection(next, itemIds),
       },
       setHovered: (item) => this.#setHovered(item),
       contentXAtPaneOffset: (offsetX) => offsetX + this.#viewport.scroll.state.position.x,
-      session: (grabbed, gesture) => this.#gesturePipeline.session(grabbed, gesture),
+      session: (grabbed, gesture, grabbedItemId) =>
+        this.#gesturePipeline.session(grabbed, gesture, grabbedItemId),
+      tryTreeArrow: (direction) => this.#treeCollapse.handleArrow(direction),
+      expandAllRows: () => this.expandAll(),
     };
     this.#entryGestures = options.entryGestures?.(this.#panes.timeline, this.#container, gestureContext);
     this.#keyboardEditing = options.keyboardEditing?.(this.#container, gestureContext);
@@ -401,7 +480,13 @@ export class GanttShell {
       pageStepY: () => this.#viewport.visible.height,
       scrollMaxX: () => this.#viewport.scroll.state.max.x,
     });
-    this.#wiring = false;
+    this.#rowTwistyAttachment = attachRowTwisty(this.#panes.grid, {
+      toggleCollapse: (id) => this.toggleCollapse(id),
+    });
+    if (options.collapsed !== undefined) {
+      this.#treeCollapse.hydrate(options.collapsed);
+    }
+    this.#phase = 'live';
     this.#frames.flush();
 
     this.#todayLineMarginTicks = options.todayLineMarginTicks ?? DEFAULT_TODAY_LINE_MARGIN_TICKS;
@@ -419,7 +504,105 @@ export class GanttShell {
    *  remount — it flows straight through `LayoutInput.locale` on the next render. */
   set locale(l: Intl.LocalesArgument | undefined) {
     this.#locale = l;
+    this.#bindColumns();
     this.#frames.request();
+  }
+
+  get gridColumns(): readonly GridColumnInput[] {
+    return this.#gridColumnInput;
+  }
+
+  set gridColumns(columns: readonly GridColumnInput[]) {
+    this.#gridColumnInput = columns;
+    this.#bindColumns();
+    this.#frames.request();
+  }
+
+  get rowSource(): RowSource {
+    return this.#rowSource;
+  }
+
+  set rowSource(next: RowSource) {
+    this.#rowSource = next;
+    this.#layout.invalidateFrom(0);
+    this.#frames.request();
+  }
+
+  get collapsed(): readonly RowId[] {
+    return this.#treeCollapse.ids;
+  }
+
+  set collapsed(ids: readonly (RowId | string)[]) {
+    this.#treeCollapse.replace(ids);
+  }
+
+  collapse(id: RowId | string): void {
+    this.#treeCollapse.collapse(id);
+  }
+
+  expand(id: RowId | string): void {
+    this.#treeCollapse.expand(id);
+  }
+
+  toggleCollapse(id: RowId | string): void {
+    this.#treeCollapse.toggleCollapse(id);
+  }
+
+  collapseAll(): void {
+    this.#treeCollapse.collapseAll();
+  }
+
+  expandAll(): void {
+    this.#treeCollapse.expandAll();
+  }
+
+  #proposeChange(
+    before: 'beforeCollapseChange',
+    after: 'collapseChange',
+    change: CollapseChange,
+    apply: () => void,
+    rollback?: () => void,
+  ): boolean;
+  #proposeChange(
+    before: 'beforeSelectionChange',
+    after: 'selectionChange',
+    change: SelectionChange,
+    apply: () => void,
+    rollback?: () => void,
+  ): boolean;
+  #proposeChange(
+    before: 'beforeGridWidthChange',
+    after: 'gridWidthChange',
+    change: GridWidthChange,
+    apply: () => void,
+    rollback?: () => void,
+  ): boolean;
+  #proposeChange(
+    before: 'beforeCollapseChange' | 'beforeSelectionChange' | 'beforeGridWidthChange',
+    after: 'collapseChange' | 'selectionChange' | 'gridWidthChange',
+    change: CollapseChange | SelectionChange | GridWidthChange,
+    apply: () => void,
+    rollback?: () => void,
+  ): boolean {
+    if (this.#events.emit(before, change) === false) {
+      rollback?.();
+      return false;
+    }
+    apply();
+    this.#events.emit(after, change);
+    return true;
+  }
+
+  #selectableEntriesInRowOrder(): readonly EntryId[] {
+    const out: EntryId[] = [];
+    for (const row of this.#layout.plannedRows()) {
+      if (isPlannedHeaderRow(row)) continue;
+      for (const id of row.entryIds) {
+        const entry = this.#options.dataset.entries.get(id);
+        if (entry !== undefined && this.#capabilities.can('select', entry)) out.push(id);
+      }
+    }
+    return out;
   }
 
   get todayLine(): boolean | Instant {
@@ -461,16 +644,26 @@ export class GanttShell {
     this.#proposeSelection(ids.map((id) => entryId(id)));
   }
 
-  #proposeSelection(next: readonly EntryId[]): void {
+  #proposeSelection(next: readonly EntryId[], selectedItemIds?: readonly ItemId[]): void {
     const from = this.#selection;
-    if (from.length === next.length && from.every((id, i) => id === next[i])) return;
-    if (this.#events.emit('beforeSelectionChange', { from, to: next }) === false) return;
-    this.#selection = next;
-    this.#interactionState.selectedItemIds = next.map((id) => itemId(id));
-    // D-S3-6: resizableItemId falls back to the single selected entry when nothing is hovered, so a
-    // selection change can move the handles even with the pointer sitting still.
-    this.#refreshAffordances();
-    this.#events.emit('selectionChange', { from, to: next });
+    const entriesEqual = from.length === next.length && from.every((id, i) => id === next[i]);
+    if (entriesEqual && selectedItemIds !== undefined) {
+      const current = this.#interactionState.selectedItemIds;
+      const itemsEqual =
+        current !== undefined &&
+        current.length === selectedItemIds.length &&
+        current.every((id, i) => id === selectedItemIds[i]!);
+      if (itemsEqual) return;
+      this.#interactionState.selectedItemIds = selectedItemIds;
+      this.#refreshAffordances();
+      return;
+    }
+    if (entriesEqual) return;
+    this.#proposeChange('beforeSelectionChange', 'selectionChange', { from, to: next }, () => {
+      this.#selection = next;
+      this.#interactionState.selectedItemIds = selectedItemIds ?? next.map((id) => itemId(id));
+      this.#refreshAffordances();
+    });
   }
 
   get interactions(): Interactions {
@@ -483,7 +676,7 @@ export class GanttShell {
   set interactions(next: Interactions) {
     this.#interactions = next;
     this.#capabilities = resolveCapabilities(this.#interactions, (kind) =>
-      this.#options.dataset.isDerivedSpanKind(kind),
+      this.#options.dataset.isRollUpKind(kind),
     );
     this.#refreshAffordances();
   }
@@ -524,7 +717,7 @@ export class GanttShell {
     const ids = projectAffordances({
       hoveredItemId: this.#hoveredItemId,
       selection: this.#selection,
-      itemEntryIds: this.#itemEntryIds,
+      selectedItemIds: this.#interactionState.selectedItemIds,
       canGesture: (capability, id) => this.#canGesture(capability, id),
     });
     setOptional(this.#interactionState, 'hoveredItemId', ids.hoveredItemId);
@@ -534,8 +727,7 @@ export class GanttShell {
   }
 
   #entryFor(item: ItemId): Entry | undefined {
-    const id = this.#itemEntryIds.get(item);
-    return id !== undefined ? this.#options.dataset.entries.get(id) : undefined;
+    return this.#options.dataset.entries.get(entryIdOfItem(item));
   }
 
   get theme(): Theme {
@@ -622,7 +814,7 @@ export class GanttShell {
 
   set zoomPresets(refs: readonly PresetRef[]) {
     this.#viewport.zoomPresets = refs;
-    if (!this.#wiring) this.#emitNavigationChange();
+    if (this.#phase === 'live') this.#emitNavigationChange();
   }
 
   get canZoomIn(): boolean {
@@ -656,36 +848,25 @@ export class GanttShell {
    *  own to make. The margin is today-landing policy, not a general `Viewport` pan option, so it is
    *  applied here rather than threaded through `panToInstant` (S1.13 follow-up, candidate 2). */
   panToToday(at: Instant, align: 'start' | 'center' = 'start'): void {
-    if (align === 'center') {
-      this.#viewport.panToInstant(at, align);
-      return;
-    }
-    const x = this.#viewport.timeScale.xForInstant(at) - this.#todayLineMarginPx(at);
-    this.#viewport.scroll.panTo({ x });
-  }
-
-  /** Px width of `todayLineMarginTicks` ticks of the CURRENT preset, evaluated at `at` — calendar
-   *  ticks (day/week/month) vary in duration (DST, month length), so this is a live read off
-   *  `timeScale`/`preset`, never a cached constant. */
-  #todayLineMarginPx(at: Instant): number {
-    const preset = this.#viewport.preset;
-    return this.#viewport.timeScale.widthForDuration(
-      { unit: preset.tickUnit, value: preset.tickIncrement * this.#todayLineMarginTicks },
-      at,
-    );
+    panToTodayLine(this.#viewport, at, align, this.#todayLineMarginTicks);
   }
 
   /** Finds the entry's row via the bound dataset, asks `FrameLayout` for its top and `barSpan` for
    * its x/width off the bound `TimeScale` — the same formula `computeFrame` builds bars from, so the
    * two can never drift apart — and hands the resulting `Rect` to `Viewport.reveal` (S1.9, D-S1.9-6).
-   * Throws `EntryNotFoundError` for an id the dataset has no entry for. */
+   * Throws `EntryNotFoundError` for an id the dataset has no entry for. A collapsed ancestor expands
+   * so the row exists. A still-hidden row (filter) keeps the current y — it does not jump to 0. */
   reveal(entryId: EntryId): void {
-    const entries = this.#options.dataset.entries.all;
-    const index = entries.findIndex((e) => e.id === entryId);
-    if (index === -1) throw new EntryNotFoundError(entryId, 'reveal');
-    const entry = entries[index]!;
+    const entry = this.#options.dataset.entries.get(entryId);
+    if (entry === undefined) throw new EntryNotFoundError(entryId, 'reveal');
     const { x, width } = barSpan(entry, this.#viewport.timeScale);
-    this.#viewport.reveal({ x, y: this.#layout.rowTop(index), width, height: this.#rowHeight });
+    let rowIndex = this.#layout.rowIndexForEntry(entryId);
+    if (rowIndex < 0 && this.#treeCollapse.expandAncestorsOf(entryId)) {
+      this.#frames.flush();
+      rowIndex = this.#layout.rowIndexForEntry(entryId);
+    }
+    const y = rowIndex >= 0 ? this.#layout.rowTop(rowIndex) : this.#viewport.scroll.state.position.y;
+    this.#viewport.reveal({ x, y, width, height: this.#rowHeight });
   }
 
   on<K extends keyof GanttEventMap>(name: K, handler: GanttEventHandler<K>): void {
@@ -705,15 +886,34 @@ export class GanttShell {
     });
   }
 
+  #bindColumns(): void {
+    const bind =
+      this.#locale !== undefined
+        ? { timeZone: this.#options.dataset.timeZone, locale: this.#locale }
+        : { timeZone: this.#options.dataset.timeZone };
+    const bound = resolveGanttFields(this.#options.dataset, this.#gridColumnInput, bind);
+    this.#resolvedColumns = bound.columns;
+    this.#fieldCompares = bound.fieldCompares;
+    this.#fieldContext = createFieldContext(
+      { get: (key) => this.#options.dataset.field(key) },
+      this.#options.dataset.timeZone,
+    );
+  }
+
   #commitGridWidth(px: number): void {
     const from = this.#paneLayout.gridWidth;
     const to = px;
-    if (this.#events.emit('beforeGridWidthChange', { from, to }) === false) {
-      this.#paneLayout.gridWidth = from; // veto: the boundary goes back (D-S1.8-3)
-      return;
-    }
-    this.#paneLayout.gridWidth = to;
-    this.#events.emit('gridWidthChange', { from, to });
+    this.#proposeChange(
+      'beforeGridWidthChange',
+      'gridWidthChange',
+      { from, to },
+      () => {
+        this.#paneLayout.gridWidth = to;
+      },
+      () => {
+        this.#paneLayout.gridWidth = from;
+      },
+    );
   }
 
   /** One measurement, pushed to everything it feeds (#8, #49): `--fg-row-height`, `--fg-tick-box-floor`,
@@ -723,11 +923,13 @@ export class GanttShell {
    *  first place. */
   #applyPaneMeasurement(size: Size): void {
     this.#rowHeight = readPixelProperty(this.#container, ROW_HEIGHT_PROPERTY, ROW_HEIGHT_POLICY);
+    this.#laneGapPx = readPixelProperty(this.#container, LANE_GAP_PROPERTY, LANE_GAP_POLICY);
     this.#tickBoxFloorPx = readPixelProperty(this.#container, TICK_BOX_FLOOR_PROPERTY, TICK_BOX_FLOOR_POLICY);
     this.#viewportHandle.setPaneSize(size);
   }
 
   render(): void {
+    const datasetRevision = this.#options.dataset.datasetRevision;
     const frame = this.#layout.computeFrame({
       entries: this.#options.dataset.entries.all,
       scale: this.#viewport.timeScale,
@@ -735,17 +937,21 @@ export class GanttShell {
       visible: this.#viewport.visible,
       overscan: this.#viewport.overscan,
       rowHeight: this.#rowHeight,
+      laneGapPx: this.#laneGapPx,
       tickBoxFloorPx: this.#tickBoxFloorPx,
       revision: this.#revision++,
       locale: this.#locale,
       todayLine: this.#todayLine,
       dateLines: this.#dateLines,
+      columns: this.#resolvedColumns,
+      fieldCompares: this.#fieldCompares,
+      ...(this.#fieldContext !== undefined ? { fieldContext: this.#fieldContext } : {}),
+      rows: this.#rowSource,
+      collapsed: this.#treeCollapse.ids,
+      itemProducerRegistry: this.#itemProducerRegistry,
+      ...(typeof datasetRevision === 'number' ? { datasetRevision } : {}),
     });
     this.#backend.sync(frame);
-    // D-S3-10: rebuilt every render from the frame layout just computed — item ids are deterministic
-    // (`itemId`, plans/01 §2.4) but this is the one place that already walks every mounted bar.
-    this.#itemEntryIds.clear();
-    for (const bar of frame.bars) this.#itemEntryIds.set(bar.id, bar.entryId);
     // D-S1.12-9: the grid pane's spacer mirrors the header's own band count, so both panes resolve
     // their header height from the same `--fg-band-height` expression and cannot drift.
     this.#paneLayout.setHeaderBandCount(frame.header.bands.length);
@@ -761,6 +967,7 @@ export class GanttShell {
     this.#keyboardEditing?.detach();
     this.#wheelNavigation?.detach();
     this.#keyboardNavigation?.detach();
+    this.#rowTwistyAttachment.detach();
     this.#datasetChanges.unsubscribe();
     this.#scrollAttachment.detach();
     this.#paneSizeAttachment.detach();

@@ -141,6 +141,7 @@ export default tseslint.config(
   {
     // plans/01 §1, docs/02 §3.7: model/ is types only.
     files: ['src/model/**/*.ts'],
+    ignores: ['src/model/**/*.test.ts'],
     plugins: { freegantt },
     rules: {
       'freegantt/model-is-types-only': 'error',
@@ -208,14 +209,7 @@ export default tseslint.config(
     // only — a Row/Item/GeometryFrame type reference here would be derived data leaking into JSON.
     files: ['src/data/serialization/**/*.ts'],
     rules: {
-      'no-restricted-syntax': [
-        'error',
-        {
-          selector: 'TSTypeReference[typeName.name=/^(Row|Item|GeometryFrame)$/]',
-          message:
-            'B9: derived types (Row/Item/GeometryFrame) never appear in serialization — only authored fields persist.',
-        },
-      ],
+      'freegantt/no-derived-in-json': 'error',
     },
   },
   {

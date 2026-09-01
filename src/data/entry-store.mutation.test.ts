@@ -20,7 +20,7 @@ interface Seed extends Partial<Omit<EntryInput, 'id'>> {
   id: string;
 }
 
-function dataset(entries: Seed[] = [], options: { derivedSpanKinds?: readonly string[] } = {}): DatasetState {
+function dataset(entries: Seed[] = [], options: { rollUpKinds?: readonly string[] } = {}): DatasetState {
   return new DatasetState({
     entries: entries.map((e) => ({ start: 0, end: 1, ...e, name: e.name ?? e.id })),
     timeZone: 'UTC',
@@ -105,11 +105,16 @@ describe('entries.update', () => {
 
   it('an edit naming a key that is not a field throws UnknownFieldError', () => {
     const state = dataset([{ id: 't1' }]);
-    expect(() =>
-      state.entries.update('t1', { notAField: true } as unknown as Parameters<
-        typeof state.entries.update
-      >[1]),
-    ).toThrow(UnknownFieldError);
+    expect(() => state.entries.update('t1', { notAField: true })).toThrow(UnknownFieldError);
+    expect(state.entries.get('t1')?.name).toBe('t1');
+  });
+
+  it('[S4-A2] an unregistered key throws and stages nothing', () => {
+    const state = dataset([{ id: 't1' }]);
+    const seen = changeSets(state);
+    expect(() => state.entries.update('t1', { cost: 500 })).toThrow(UnknownFieldError);
+    expect(seen).toHaveLength(0);
+    expect(state.entries.get('t1')?.meta).toBeUndefined();
   });
 });
 
@@ -178,8 +183,8 @@ describe('auto-wrap (D-S2-8)', () => {
   });
 });
 
-describe('derived-span kinds (§1.5)', () => {
-  it('a derived-span kind with no dates gets a zero-length span at the reference date', () => {
+describe('roll-up kinds (§1.5)', () => {
+  it('a roll-up kind with no dates gets a zero-length span at the reference date', () => {
     const state = dataset();
     const group = state.entries.add({ id: 'p1', name: 'Sitework', kind: 'group' });
 
@@ -299,13 +304,13 @@ describe('rollup (§1.5)', () => {
     expect(group.end).toBe(state.referenceDate);
   });
 
-  it('with derivedSpanKinds: [], nothing rolls up at all', () => {
+  it('with rollUpKinds: [], nothing rolls up at all', () => {
     const state = dataset(
       [
         { id: 'p1', kind: 'group', start: '2026-01-01', end: '2026-01-05' },
         { id: 'c1', parentId: 'p1', start: '2026-06-01', end: '2026-06-05' },
       ],
-      { derivedSpanKinds: [] },
+      { rollUpKinds: [] },
     );
 
     state.entries.update('c1', { start: '2026-09-01', end: '2026-09-05' });

@@ -5,18 +5,21 @@ import type { GanttShellOptions } from './gantt-shell.js';
 import { entryId } from '../model/index.js';
 import type { Entry, Instant } from '../model/index.js';
 import { EntryStore } from '../data/index.js';
+import { CORE_FIELDS } from '../data/fields/core-fields.js';
 
 function fakeDataset(list: readonly Entry[]): GanttShellOptions['dataset'] {
   const context = {
     timeZone,
     dateOnlyEnd: 'inclusive' as const,
     referenceDate: 0 as Instant,
-    derivedSpanKinds: new Set(['group']),
+    rollUpKinds: new Set(['group']),
   };
   return {
     entries: new EntryStore(list, context),
     timeZone,
-    isDerivedSpanKind: () => false,
+    isRollUpKind: () => false,
+    fields: { all: CORE_FIELDS },
+    field: (key) => CORE_FIELDS.find((field) => String(field.key) === String(key)),
     on: () => {},
     off: () => {},
   };
@@ -115,6 +118,9 @@ describe('ensureBaseStyles', () => {
     const css = document.head.querySelector('style[data-freegantt-styles]')?.textContent ?? '';
     expect(css).toContain('--fg-band-height');
     expect(css).toContain('--fg-tick-box-floor');
+    expect(css).toContain('--fg-indent-width');
+    expect(css).toContain('--fg-lane-gap');
+    expect(css).not.toContain(':root, .fg-container');
     expect(css).not.toContain('--fg-header-height');
   });
 

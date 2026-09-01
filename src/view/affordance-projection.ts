@@ -2,14 +2,15 @@
 // to decide which item ids get hover/move/resize paint before it writes `InteractionState` and calls
 // `applyState` — no DOM, no shell, no `InteractionState` knowledge here, only the resolution rule.
 
-import { itemId } from '../model/index.js';
+import { entryIdOfItem, itemId } from '../model/index.js';
 import type { EntryId, ItemId } from '../model/index.js';
 import type { Interactions } from './capability.js';
 
 export interface AffordanceInputs {
   hoveredItemId: ItemId | undefined;
   selection: readonly EntryId[];
-  itemEntryIds: ReadonlyMap<ItemId, EntryId>;
+  /** Paint-side selection. When set, the sole-selection resize fallback uses the painted Item. */
+  selectedItemIds: readonly ItemId[] | undefined;
   canGesture: (capability: keyof Interactions, id: EntryId) => boolean;
 }
 
@@ -23,8 +24,8 @@ export interface AffordanceIds {
  *  wins over the selection fallback. Only when nothing is hovered does the single selected entry, if
  *  there is exactly one, get a turn. */
 export function projectAffordances(inputs: AffordanceInputs): AffordanceIds {
-  const { hoveredItemId, selection, itemEntryIds, canGesture } = inputs;
-  const hoveredEntryId = hoveredItemId !== undefined ? itemEntryIds.get(hoveredItemId) : undefined;
+  const { hoveredItemId, selection, selectedItemIds, canGesture } = inputs;
+  const hoveredEntryId = hoveredItemId !== undefined ? entryIdOfItem(hoveredItemId) : undefined;
 
   const out: AffordanceIds = {};
   if (hoveredItemId !== undefined) out.hoveredItemId = hoveredItemId;
@@ -33,7 +34,13 @@ export function projectAffordances(inputs: AffordanceInputs): AffordanceIds {
     out.movableItemId = hoveredItemId;
   }
 
-  const resizableItemId = resolveResizableItemId({ hoveredItemId, hoveredEntryId, selection, canGesture });
+  const resizableItemId = resolveResizableItemId({
+    hoveredItemId,
+    hoveredEntryId,
+    selection,
+    selectedItemIds,
+    canGesture,
+  });
   if (resizableItemId !== undefined) out.resizableItemId = resizableItemId;
   return out;
 }
@@ -42,13 +49,16 @@ function resolveResizableItemId(inputs: {
   hoveredItemId: ItemId | undefined;
   hoveredEntryId: EntryId | undefined;
   selection: readonly EntryId[];
+  selectedItemIds: readonly ItemId[] | undefined;
   canGesture: (capability: keyof Interactions, id: EntryId) => boolean;
 }): ItemId | undefined {
-  const { hoveredItemId, hoveredEntryId, selection, canGesture } = inputs;
+  const { hoveredItemId, hoveredEntryId, selection, selectedItemIds, canGesture } = inputs;
   if (hoveredItemId !== undefined) {
     return hoveredEntryId !== undefined && canGesture('resize', hoveredEntryId) ? hoveredItemId : undefined;
   }
   if (selection.length !== 1) return undefined;
   const soleId = selection[0]!;
-  return canGesture('resize', soleId) ? itemId(soleId) : undefined;
+  if (!canGesture('resize', soleId)) return undefined;
+  const painted = selectedItemIds?.find((id) => entryIdOfItem(id) === soleId);
+  return painted ?? itemId(soleId);
 }

@@ -1,7 +1,7 @@
 // render/ backend contract (plans/01 §8.1). Shared by dom and null backends; DOM types are structural only —
 // this file itself never touches document/window.
 
-import type { GeometryFrame, ItemId, ItemPreview } from '../layout/index.js';
+import type { GeometryFrame, ItemId, ItemPreview, ClientPoint } from '../layout/index.js';
 
 export interface InteractionState {
   hoveredItemId?: ItemId;
@@ -42,6 +42,8 @@ export interface HitResult {
 export interface RenderSurfaces<THost> {
   grid: THost;
   timeline: THost;
+  /** Column header row in the grid pane. Omitted by tests that only paint body cells. */
+  gridHeader?: THost;
 }
 
 /** `THost` is the seam's only DOM-shaped type parameter — `backend.ts` itself still names no DOM
@@ -51,6 +53,6 @@ export interface RenderBackend<THost = unknown> {
   mount(surfaces: RenderSurfaces<THost>): void;
   sync(frame: GeometryFrame): void;
   applyState(state: InteractionState): void;
-  hitTest(x: number, y: number): HitResult | null;
+  hitTest(at: ClientPoint): HitResult | null;
   destroy(): void;
 }

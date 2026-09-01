@@ -10,7 +10,9 @@ function fakeDataset(): { dataset: Dataset; emit: (changeSet: ChangeSet) => void
   const dataset: Dataset = {
     entries: undefined as unknown as Dataset['entries'],
     timeZone: 'UTC',
-    isDerivedSpanKind: () => false,
+    isRollUpKind: () => false,
+    fields: { all: [] },
+    field: () => undefined,
     on: (_name, handler) => {
       handlers.add(handler);
     },

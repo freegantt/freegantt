@@ -3,6 +3,7 @@
 
 import type { DateOnlyEndRule } from './time.js';
 import type { EntryKind } from './entry.js';
+import type { AggregatorName, CoreFieldKey, FieldKey, FieldTypeName, GridColumn } from './field.js';
 
 /** One Entry as it appears in a Document. Instants are `Z`-suffixed ISO strings; brands are gone.
  *  Optional keys are omitted when absent, never written as `null`. */
@@ -19,12 +20,25 @@ export interface EntryDocument<TMeta = unknown> {
   meta?: TMeta;
 }
 
+/** A `Field` minus its function-valued keys. `type` and `rollUp` travel as names (D-S4-15).
+ *  `source` is always the resolved entry-or-meta slot — a `compute` Field is not written. */
+export type SerializedField = {
+  key: FieldKey;
+  type?: FieldTypeName;
+  source: { from: 'entry'; field: CoreFieldKey } | { from: 'meta'; key: string };
+  rollUp?: AggregatorName;
+  column?: Omit<GridColumn, 'field'>;
+};
+
 /** The whole-document half of D7. Key order is a contract: `schema`, `timeZone`, `dateOnlyEnd`,
- *  `derivedSpanKinds`, `entries`. */
+ *  `rollUpKinds`, `fields`, `entries`. This build writes `schema: 2` and still reads `schema: 1`
+ *  (D-S4-16). */
 export interface DatasetDocument<TMeta = unknown> {
-  schema: 1;
+  schema: 1 | 2;
   timeZone: string;
   dateOnlyEnd: DateOnlyEndRule;
-  derivedSpanKinds: readonly EntryKind[];
+  rollUpKinds: readonly EntryKind[];
+  /** Declaration order. Core Fields are never written — the reader seeds them itself. */
+  fields?: readonly SerializedField[];
   entries: readonly EntryDocument<TMeta>[];
 }

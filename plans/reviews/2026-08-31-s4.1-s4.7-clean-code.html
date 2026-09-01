@@ -1,0 +1,282 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Architecture review — S4.1–S4.7 clean code &amp; naming</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script type="module">
+      import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+      mermaid.initialize({ startOnLoad: true, theme: "neutral", securityLevel: "loose" });
+    </script>
+    <style>
+      .seam { stroke-dasharray: 4 4; }
+      .leak { stroke: #dc2626; }
+      .deep { background: linear-gradient(135deg, #0f172a, #1e293b); }
+      .badge-hard { background:#fee2e2; color:#7f1d1d; border:1px solid #fecaca; }
+      .badge-judge { background:#fef3c7; color:#78350f; border:1px solid #fde68a; }
+      .badge-worth { background:#e0e7ff; color:#312e81; border:1px solid #c7d2fe; }
+      .badge-strong { background:#fce7f3; color:#9d174d; border:1px solid #fbcfe8; }
+      .badge-spec { background:#d1fae5; color:#064e3b; border:1px solid #a7f3d0; }
+    </style>
+  </head>
+  <body class="bg-stone-50 text-slate-900 font-sans">
+    <main class="max-w-5xl mx-auto px-6 py-12 space-y-12">
+
+      <header class="space-y-4">
+        <p class="text-xs uppercase tracking-widest text-slate-500">FreeGantt — pk-branch-review · loop 1 of 3</p>
+        <h1 class="font-serif text-3xl">S4.1–S4.7 — Hierarchy, rows, item emission: clean code, naming, SOLID</h1>
+        <p class="text-sm text-slate-500">
+          2026-08-31 · <span class="font-mono">origin/main...HEAD</span> (24 commits) on
+          <span class="font-mono">s4-implement</span> · S4.1–S4.7 done, S4.8 next
+        </p>
+        <p class="text-xs font-mono text-slate-500 max-w-3xl">
+          Scope: field registry &amp; rollup (S4.1–S4.2), grid columns &amp; schema 2 (S4.3–S4.4,
+          review-affirmed here), autogroup &amp; hierarchy edits (S4.5), row sources &amp; tree
+          (S4.6), item emission (S4.7, in the working tree). Axes stay separate: Standards, Spec,
+          Naming, then Architecture candidates. Smell baseline is Fowler ch.3 (judgement only).
+        </p>
+        <div class="text-sm rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-emerald-950 max-w-3xl">
+          <strong>Already deep.</strong> Layer boundaries hold: <span class="font-mono">layout/</span>
+          never imports <span class="font-mono">data/</span> or the DOM; registries are per-Gantt
+          (no module singletons, I2). <span class="font-mono">BAR_SHAPE_CLASS</span> is a lookup, not
+          a kind switch. <span class="font-mono">computeFrame</span> reads as resolve → emit → pack →
+          place. This pass is a hardening review, not a rebuild review.
+        </div>
+      </header>
+
+      <section id="axes" class="grid md:grid-cols-4 gap-4">
+        <div class="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-2">
+          <p class="text-xs uppercase tracking-widest text-amber-700 font-semibold">Naming</p>
+          <p class="text-xs text-amber-900">1 hard (<span class="font-mono">emit</span> overloaded), 3 judgement. Rest of the new surface names clean.</p>
+        </div>
+        <div class="rounded-xl border border-red-200 bg-red-50 p-4 space-y-2">
+          <p class="text-xs uppercase tracking-widest text-red-700 font-semibold">Standards</p>
+          <p class="text-xs text-red-900">2 hard (speculative <span class="font-mono">ItemEmissionContext</span>; stages are prose not seams), 5 judgement.</p>
+        </div>
+        <div class="rounded-xl border border-sky-200 bg-sky-50 p-4 space-y-2">
+          <p class="text-xs uppercase tracking-widest text-sky-700 font-semibold">Spec</p>
+          <p class="text-xs text-sky-900">S4.1–S4.7 honored. 1 inert surface (S4.9 filter/sort types), 1 minor divergence (Item.lane).</p>
+        </div>
+        <div class="rounded-xl border border-emerald-200 bg-emerald-50 p-4 space-y-2">
+          <p class="text-xs uppercase tracking-widest text-emerald-700 font-semibold">Architecture</p>
+          <p class="text-xs text-emerald-900">5 deepening candidates, 2 worth strong attention (item seam, computeFrame stage split).</p>
+        </div>
+      </section>
+
+      <!-- Naming -->
+      <section>
+        <h2 class="font-serif text-2xl mb-4">Naming</h2>
+
+        <div class="rounded-xl border border-red-200 bg-white overflow-hidden">
+          <div class="px-5 py-3 bg-red-50 flex items-center justify-between">
+            <h3 class="font-semibold">N1 — “emit” has two meanings in the codebase</h3>
+            <span class="badge-hard text-xs px-2 py-1 rounded">HARD</span>
+          </div>
+          <div class="p-5 space-y-3 text-sm">
+            <p><span class="font-mono">emitRow</span>/<span class="font-mono">emitSpan</span>… and the file <span class="font-mono">emit-items.ts</span> use “emit” to mean <em>produce layout Items</em>. <span class="font-mono">bus.emit()</span> (<span class="font-mono">data/event-bus.ts:52</span>) and <span class="font-mono">this.#events.emit()</span> (<span class="font-mono">view/gantt-shell.ts</span>) use “emit” to mean <em>fire a Gantt event</em>. One word, two unrelated operations.</p>
+            <p class="font-mono text-xs bg-stone-100 p-2 rounded">emitRow(planned, { entryById }, registry)  // “emit row” ≠ fire an event</p>
+            <p><strong>Call site read aloud:</strong> “emit the row” reads false against every other “emit” = “send an event”. A search for <span class="font-mono">emit</span> returns layout producers, the event bus, and its test doubles together.</p>
+            <p><strong>Fix:</strong> rename the layout side to <span class="font-mono">produceItemsForRow</span> / <span class="font-mono">produceSpanItems</span> / <span class="font-mono">ItemProducer</span> and the file to <span class="font-mono">produce-items.ts</span> — or rename the event-bus method to <span class="font-mono">fire</span>. Either split works; do not keep both senses of “emit”. (CLAUDE.md naming rule #7 / #54 precedent.)</p>
+          </div>
+        </div>
+
+        <div class="mt-4 rounded-xl border border-amber-200 bg-white overflow-hidden">
+          <div class="px-5 py-3 bg-amber-50 flex items-center justify-between">
+            <h3 class="font-semibold">N2 — <span class="font-mono">emit-items.ts</span> exports <span class="font-mono">emitRow</span> while <span class="font-mono">item-emitter.ts</span> holds the registry</h3>
+            <span class="badge-judge text-xs px-2 py-1 rounded">JUDGEMENT</span>
+          </div>
+          <div class="p-5 space-y-3 text-sm">
+            <p>Two files cover one concept — the item-production seam. A caller imports <span class="font-mono">emitRow</span> from <span class="font-mono">emit-items</span> and <span class="font-mono">createItemEmitterRegistry</span> from <span class="font-mono">item-emitter</span>. The split has no semantic reason today (the working tree already extracts <span class="font-mono">Item</span>/<span class="font-mono">ItemEmitter</span> into <span class="font-mono">item.ts</span>, which is the right shape — finish it: fold <span class="font-mono">emitRow</span> into the same seam).</p>
+          </div>
+        </div>
+
+        <div class="mt-4 rounded-xl border border-amber-200 bg-white overflow-hidden">
+          <div class="px-5 py-3 bg-amber-50 flex items-center justify-between">
+            <h3 class="font-semibold">N3 — <span class="font-mono">partCountByEntry</span> calls completed segments “parts”</h3>
+            <span class="badge-judge text-xs px-2 py-1 rounded">JUDGEMENT</span>
+          </div>
+          <div class="p-5 space-y-3 text-sm">
+            <p>CONTEXT.md defines <span class="font-mono">Segment</span>. The emitter and a11y label are consistent with it, but <span class="font-mono">partCountByEntry</span> (<span class="font-mono">frame.ts</span>) and the a11y string “part N of M” introduce “part” as an undocumented synonym. <span class="font-mono">segmentCountByEntry</span> would keep one word. Minor.</p>
+          </div>
+        </div>
+
+        <div class="mt-4 rounded-xl border border-amber-200 bg-white overflow-hidden">
+          <div class="px-5 py-3 bg-amber-50 flex items-center justify-between">
+            <h3 class="font-semibold">N4 — <span class="font-mono">segmentIndexOfItem</span> doc example names the wrong type</h3>
+            <span class="badge-judge text-xs px-2 py-1 rounded">JUDGEMENT</span>
+          </div>
+          <div class="p-5 space-y-3 text-sm">
+            <p>JSDoc reads “<span class="font-mono">segmentIndexOfItem(bar.id)</span>” but the call site passes an <span class="font-mono">Item.id</span>, not a <span class="font-mono">FrameBar.id</span>. The example points a reader at the wrong type.</p>
+          </div>
+        </div>
+
+        <div class="mt-4 text-sm text-slate-600 bg-white rounded-xl border border-emerald-200 p-4">
+          <strong>Names that pass.</strong> <span class="font-mono">PlannedRow</span> vs public <span class="font-mono">Row</span>; <span class="font-mono">RowResolutionInput</span>/<span class="font-mono">rowResolutionInput</span>/<span class="font-mono">resolveRows</span> pair; <span class="font-mono">RowHeightMode</span> ('fixed'|'pack'); <span class="font-mono">heightModeOf</span>; <span class="font-mono">DEFAULT_ROW_SOURCE</span>; <span class="font-mono">RowFilter</span>/<span class="font-mono">RowSort</span>/<span class="font-mono">FilterPolicy</span>; <span class="font-mono">CollapseState</span>/<span class="font-mono">CollapseChange</span> (propose/commit); render-side <span class="font-mono">barA11yLabel</span>/<span class="font-mono">barClassName</span>/<span class="font-mono">BAR_SHAPE_CLASS</span>. <span class="font-mono">Item</span> vs <span class="font-mono">Entry</span> stay glossary-separate. These pass the five calls.</p>
+        </div>
+      </section>
+
+      <!-- Standards -->
+      <section>
+        <h2 class="font-serif text-2xl mb-4">Standards (simplicity + SOLID)</h2>
+
+        <div class="rounded-xl border border-red-200 bg-white overflow-hidden">
+          <div class="px-5 py-3 bg-red-50 flex items-center justify-between">
+            <h3 class="font-semibold">St1 — <span class="font-mono">ItemEmissionContext</span> is speculative generality: no emitter reads it</h3>
+            <span class="badge-hard text-xs px-2 py-1 rounded">HARD</span>
+          </div>
+          <div class="p-5 space-y-3 text-sm">
+            <p>All three shipped emitters declare <span class="font-mono">ctx: ItemEmissionContext</span> and ignore it (<span class="font-mono">_ctx</span>). <span class="font-mono">emitRow</span> already resolved the entry (<span class="font-mono">emit-items.ts:18</span>), so <span class="font-mono">entryById</span> on the context is dead through the whole public seam — it threads into the exported <span class="font-mono">ItemEmitter</span> type, the registry, and every signature.</p>
+            <p><strong>Speculative Generality</strong> (Fowler ch.3) carried into a public contract. The deletion test: delete the parameter and nothing changes anywhere.</p>
+            <p><strong>Fix:</strong> drop <span class="font-mono">ctx</span> (and the interface) now; re-add it only when an emitter genuinely needs a sibling lookup. A public seam that takes an always-empty argument is a lever every caller and agent must learn for no behaviour.</p>
+          </div>
+        </div>
+
+        <div class="mt-4 rounded-xl border border-red-200 bg-white overflow-hidden">
+          <div class="px-5 py-3 bg-red-50 flex items-center justify-between">
+            <h3 class="font-semibold">St2 — <span class="font-mono">computeFrame</span>’s “four stages” are prose, not seams</h3>
+            <span class="badge-hard text-xs px-2 py-1 rounded">HARD</span>
+          </div>
+          <div class="p-5 space-y-3 text-sm">
+            <p>The spec (D-S4-19) and the code comment present resolve → emit → pack → place as named stages. In the code they are inline statements inside one coordinative loop (<span class="font-mono">frame.ts</span>): resolve (<span class="font-mono">:231</span>), emit (<span class="font-mono">:273</span>), pack (<span class="font-mono">:274</span>), then a single loop that interlocks bar and row construction (<span class="font-mono">:288–305</span>). Only leaf helpers are extracted.</p>
+            <p><strong>Fix:</strong> extract <span class="font-mono">placeRow(planned, items, …): { row, bars }</span> so emit → pack → place become real functions with one reason to change. Small and low-risk; it is the difference between “reads as stages” and “is stages”, and the measured contract a test can hang on.</p>
+          </div>
+        </div>
+
+        <div class="mt-4 rounded-xl border border-amber-200 bg-white overflow-hidden">
+          <div class="px-5 py-3 bg-amber-50 flex items-center justify-between">
+            <h3 class="font-semibold">St3 — <span class="font-mono">emitterFor</span> silently falls back to span for an unknown Kind</h3>
+            <span class="badge-judge text-xs px-2 py-1 rounded">JUDGEMENT</span>
+          </div>
+          <div class="p-5 space-y-3 text-sm">
+            <p><span class="font-mono">emitterFor(kind)</span> returns <span class="font-mono">emitSpan</span> when nothing is registered (<span class="font-mono">item-emitter.ts:28</span>); the test asserts it never throws. This is OCP-correct and quiet, but it masks an <em>authored</em> unknown kind — a typo or a forgotten registration silently renders as a span bar with no diagnostic. That sits in tension with AGENTS.md §7 “conflicts become diagnostics; never silently rewrite”.</p>
+            <p><strong>Fix (when S7’s diagnostics channel lands):</strong> throw for unregistered kinds, keep the span default only for the three shipped kinds; or expose <span class="font-mono">has(kind)</span>. Flag for S7, not now.</p>
+          </div>
+        </div>
+
+        <div class="mt-4 rounded-xl border border-amber-200 bg-white overflow-hidden">
+          <div class="px-5 py-3 bg-amber-50 flex items-center justify-between">
+            <h3 class="font-semibold">St4 — <span class="font-mono">emitRow</span>’s optional registry default is a hidden per-call registry</h3>
+            <span class="badge-judge text-xs px-2 py-1 rounded">JUDGEMENT</span>
+          </div>
+          <div class="p-5 space-y-3 text-sm">
+            <p><span class="font-mono">emitRow(row, ctx, registry = createItemEmitterRegistry())</span> (<span class="font-mono">emit-items.ts:14</span>): a caller who forgets the registry silently builds a <em>per-call</em> one — contradicting “one registry per Gantt, never module-level”. The shell always passes one. Make the registry <strong>required</strong>; let tests construct theirs explicitly. The default hides a real invariant.</p>
+          </div>
+        </div>
+
+        <div class="mt-4 rounded-xl border border-amber-200 bg-white overflow-hidden">
+          <div class="px-5 py-3 bg-amber-50 flex items-center justify-between">
+            <h3 class="font-semibold">St5 — three near-copy emitters (Duplicated Code)</h3>
+            <span class="badge-judge text-xs px-2 py-1 rounded">JUDGEMENT</span>
+          </div>
+          <div class="p-5 space-y-3 text-sm">
+            <p><span class="font-mono">group-emitter</span> and <span class="font-mono">milestone-emitter</span> (18 lines each) are near-copies of <span class="font-mono">emitSpan</span>’s no-segment branch, differing by one expression (<span class="font-mono">end: entry.start</span> vs <span class="font-mono">end: entry.end</span>). The per-kind split is spec-mandated (D-S4-24, replacable seams) so it stays; but the bodies could collapse to one parameterized producer plus a small kind→producer table, keeping the registry as the real OCP seam. Defer until St1 lands so the shape is proven.</p>
+          </div>
+        </div>
+
+        <div class="mt-4 rounded-xl border border-amber-200 bg-white overflow-hidden">
+          <div class="px-5 py-3 bg-amber-50 flex items-center justify-between">
+            <h3 class="font-semibold">St6 — <span class="font-mono">PlannedRow.index</span> is a dead placeholder</h3>
+            <span class="badge-judge text-xs px-2 py-1 rounded">JUDGEMENT</span>
+          </div>
+          <div class="p-5 space-y-3 text-sm">
+            <p>All three sources write <span class="font-mono">index: 0</span>; <span class="font-mono">stampIndex</span> unconditionally overwrites it (<span class="font-mono">resolve-rows.ts:26–28</span>). The authored <span class="font-mono">index: 0</span> is mystifying — drop it from construction and let <span class="font-mono">stampIndex</span> own the field. Also do a quick check of <span class="font-mono">group-source.ts:29</span> (<span class="font-mono">rowId('group:'+key)</span>) and <span class="font-mono">custom-source.ts:18</span> for <span class="font-mono">RowId</span> collision with consumer ids (Primitive Obsession) — a namespaced row-id constructor is cleaner.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Spec -->
+      <section>
+        <h2 class="font-serif text-2xl mb-4">Spec (S4.1–S4.7 fidelity)</h2>
+        <div class="rounded-xl border border-sky-200 bg-white overflow-hidden">
+          <div class="px-5 py-3 bg-sky-50 flex items-center justify-between">
+            <h3 class="font-semibold">Spec verdict: S4.1–S4.7 honored</h3>
+            <span class="badge-spec text-xs px-2 py-1 rounded">PASS</span>
+          </div>
+          <div class="p-5 space-y-3 text-sm">
+            <p>Every Q1–Q21 scope call lands in the implemented steps. Verified highlights: <span class="font-mono">transaction.ts</span> is the sole rollup importer (Q15); no public registration (Q1); <span class="font-mono">rollUpKinds</span> rename (Q2); omit-source → <span class="font-mono">meta</span> + <span class="font-mono">DuplicateFieldSourceError</span> (Q17); <span class="font-mono">autoGroup</span> default true, span-only (Q8/Q13); emissions stay internal (D-S4-24) until S5.</p>
+            <p class="mt-3"><strong>Gap A (inert surface).</strong> <span class="font-mono">RowFilter</span> / <span class="font-mono">RowSort</span> / <span class="font-mono">filterPolicy</span> are already declared and frozen on <span class="font-mono">RowSource</span> (<span class="font-mono">row-source.ts:7–17,25,33</span>) but no resolver applies them — S4.9’s sort/filter is not implemented, so the types are speculative surface today. The plug is right (they belong on the row source, Q4), but calling the slots dead API this slice. Leave the fields, note them, do not wire.</p>
+            <p class="mt-3"><strong>Gap B (minor divergence).</strong> D-S4-25 says the emitted <span class="font-mono">Item</span> carries <span class="font-mono">lane: 0</span> and S4.8’s <span class="font-mono">packRow</span> overwrites it. Shipped <span class="font-mono">Item</span> has no <span class="font-mono">lane</span> field; lane lives on <span class="font-mono">FrameBar</span>, assigned from <span class="font-mono">packing.laneByItem</span>. The emission/packing separation holds, so intent lands — the divergence is in the literal contract wording, not behaviour.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Architecture candidates -->
+      <section>
+        <h2 class="font-serif text-2xl mb-4">Architecture — deepening candidates</h2>
+        <p class="text-sm text-slate-600 max-w-3xl mb-6">Vocabulary: module / interface / implementation / depth / seam / adapter / leverage / locality. Candidates are for the final consolidated report; each shows what deepens and why.</p>
+
+        <div class="rounded-xl border bg-white overflow-hidden">
+          <div class="px-5 py-3 flex items-center justify-between">
+            <h3 class="font-semibold">A1 — Make the item seam the single <span class="font-mono">Item</span> producer module</h3>
+            <span class="badge-strong text-xs px-2 py-1 rounded">STRONG</span>
+          </div>
+          <div class="p-5 grid md:grid-cols-2 gap-4 text-sm">
+            <div class="space-y-2">
+              <p><strong>Files</strong>: <span class="font-mono">layout/items/</span> (item.ts, item-emitter.ts, emit-items.ts, 3 emitters)</p>
+              <p><strong>Problem</strong>: 6 files form one interface (a Kind → Items producer) with the type scattered from the registry and the row walk, and a `ctx` no consumer uses. Understand one concept → bounce across modules.</p>
+              <p><strong>Solution</strong>: one seam <span class="font-mono">ItemProducer</span> (or <span class="font-mono">produceItemsForRow</span>) that owns type + registry + fallback, with the per-kind producers private; drop <span class="font-mono">ItemEmissionContext</span>.</p>
+              <p><strong>Benefit</strong>: deeper seam (a caller learns one name), locality for the fallback rule, and one test surface. Deleting the split concentrates, not spreads.</p>
+            </div>
+            <div class="mermaid">
+flowchart LR
+  subgraph NOW[layout/items/ - 6 shallow files]
+    E1[emit-items.ts<br/>emitRow] --> IT[item-emitter.ts<br/>registry]
+    IT --> SP[span-emitter] & GR[group-emitter] & MI[milestone-emitter]
+    IT --> T[item.ts<br/>types, ctx unused]
+  end
+  subgraph THEN[One deep seam]
+    P[produceItemsForRow<br/>type + registry + fallback]
+    P -. private .-> S[span producer] & G[group producer] & M[milestone producer]
+  end
+  NOW -. hollow -..-> THEN
+            </div>
+          </div>
+        </div>
+
+        <div class="mt-4 rounded-xl border bg-white overflow-hidden">
+          <div class="px-5 py-3 flex items-center justify-between">
+            <h3 class="font-semibold">A2 — Restore the four computeFrame stages as real functions</h3>
+            <span class="badge-strong text-xs px-2 py-1 rounded">STRONG</span>
+          </div>
+          <div class="p-5 grid md:grid-cols-2 gap-4 text-sm">
+            <div class="space-y-2">
+              <p><strong>Files</strong>: <span class="font-mono">layout/frame.ts</span></p>
+              <p><strong>Problem</strong>: resolve → emit → pack → place is prose over one interlocked loop; the row and its bars are placed together, so lane/height and geometry are not independently testable.</p>
+              <p><strong>Solution</strong>: <span class="font-mono">placeRow(planned, items, scale, …): { row, bars }</span>; keep <span class="font-mono">computeFrame</span> as thin orchestration.</p>
+              <p><strong>Benefit</strong>: locality (S4.8 packs lanes inside <span class="font-mono">placeRow</span>, not a growing loop), leverage (each stage’s test is one call), and a clear seam where S4.8 inserts packed height.</p>
+            </div>
+            <div class="mermaid">
+flowchart TB
+  subgraph NOW2[computeFrame - one loop]
+    R[resolve] --> E[emit] --> P[pack]
+    P --> PL[place row AND bars inline]
+  end
+  subgraph THEN2[Four seams]
+    R2[resolveRows] --> E2[produceItemsForRow] --> P2[packRow] --> PL2[placeRow -> row + bars]
+  end
+            </div>
+          </div>
+        </div>
+
+        <div class="mt-4 rounded-xl border bg-white overflow-hidden">
+          <div class="px-5 py-3 flex items-center justify-between">
+            <h3 class="font-semibold">A3 — Commit-delimited transaction seam: one rollup importer today, growth guarded</h3>
+            <span class="badge-worth text-xs px-2 py-1 rounded">WORTH EXPLORING</span>
+          </div>
+          <div class="p-5 text-sm space-y-2">
+            <p><strong>Files</strong>: <span class="font-mono">data/transaction.ts</span> (sole rollup importer, Q15), <span class="font-mono">data/rollup.ts</span></p>
+            <p><strong>Problem</strong>: the “transaction → extension hook → one changeset” invariant (AGENTS.md §6) is the deepest rule in the data core, but its enforcement point today is a single static import. As <span class="font-mono">schedule()</span> (S7) lands behind the same hook, keep the one-importer discipline explicit to avoid the hook becoming a second rollup path.</p>
+            <p><strong>Solution</strong>: a named extension-hook adapter in <span class="font-mono">data/</span> (identity when no plugin) so the hook is a real seam with one owner, not scattered call sites.</p>
+            <p><strong>Benefit</strong>: locality for the single-write contract; a seam S7 fills. Worth exploring, not urgent.</p>
+          </div>
+        </div>
+      </section>
+
+      <footer class="border-t pt-6 text-xs text-slate-500 space-y-1">
+        <p><strong>Top recommendation for loop 2</strong>: A1 + St1 — collapse the 6 item files into one deep producer seam and drop the unused context. It is the newest code, still in the working tree, and the cheapest place to set the shape before S5 starts registering emitters from outside.</p>
+        <p>Loop 1 of 3. Next loops re-check these findings, chase the hot spots (row sources, data core hook), and revise this plan.</p>
+      </footer>
+
+    </main>
+  </body>
+</html>

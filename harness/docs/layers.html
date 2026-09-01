@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>FreeGantt — Layers & import rules</title>
+    <link rel="stylesheet" href="./doc.css" />
+    <link rel="stylesheet" href="../harness-nav.css" />
+    <link rel="stylesheet" href="./docs-nav.css" />
+  </head>
+  <body>
+    <div class="wrap">
+      <header>
+        <nav class="harness-site-nav" aria-label="Harness pages"></nav>
+        <nav class="harness-docs-nav" aria-label="Harness docs"></nav>
+        <script type="module" src="../harness-nav.ts"></script>
+        <script type="module" src="./docs-nav.ts"></script>
+        <h1>Layers &amp; import rules</h1>
+        <p class="tagline">
+          Which directories may import which, and the lint rules that hold the line, as the tree stands at
+          slice&nbsp;S4. The rule itself lives in
+          <a href="../../plans/01-domain-architecture.md"><code>plans/01</code></a> §1 — where that document
+          and this page disagree, it is right and this page is stale.
+        </p>
+        <div class="updated"><span class="k">updated</span> 2026-08-31 — slice S4</div>
+        <div class="meta">
+          <span>slice: S4</span>
+          <span>10 layers, 8 with code</span>
+          <span>enforced by .dependency-cruiser.cjs + 5 lint rules</span>
+        </div>
+      </header>
+
+      <!-- ══════════════════════════════════════════════════════════ 1 -->
+      <section id="s1">
+        <p class="lede">
+          Ten directories under <code>src/</code>. Four of them (<code>model</code>, <code>time</code>,
+          <code>data</code>, <code>layout</code>) are the mandatory DOM-free core; <code>scheduling</code> is
+          DOM-free too but optional. Only <code>render</code>, <code>view</code>, <code>interaction</code>,
+          <code>extensions</code> may name <code>document</code> or <code>window</code>.
+        </p>
+        <p class="src">
+          <b>derived from</b> src/**, .dependency-cruiser.cjs, plans/01-domain-architecture.md §1
+        </p>
+
+        <div class="layermap">
+          <div class="tier">
+            <div class="box api">
+              <div class="name">harness/</div>
+              <div class="sub">
+                main.ts · data.html · scroll-sync.ts — the library's first consumer, outside the src lint scope
+              </div>
+            </div>
+          </div>
+          <div class="arrow-v">↓</div>
+          <div class="tier">
+            <div class="box api">
+              <div class="name">api/</div>
+              <div class="sub">
+                <code>Gantt</code> · <code>Dataset</code> · <code>readEntries</code> — the only import a
+                consumer makes; sealed <code>exports</code> map
+              </div>
+            </div>
+          </div>
+          <div class="arrow-v">↓</div>
+          <div class="tier">
+            <div class="box dom">
+              <div class="name">view/</div>
+              <div class="sub">
+                <code>GanttShell</code> · <code>GesturePipeline</code> · <code>FrameScheduler</code> ·
+                capabilities · navigation · <code>attachRowTwisty</code>
+              </div>
+            </div>
+            <div class="box dom">
+              <div class="name">render/</div>
+              <div class="sub">
+                <code>RenderBackend</code> seam · dom backend · null backend · <code>syncKeyed</code> ·
+                date-line · row-twisty
+              </div>
+            </div>
+            <div class="box dom">
+              <div class="name">interaction/</div>
+              <div class="sub">
+                <code>attachEntryGestures</code> · <code>attachKeyboardEditing</code> ·
+                <code>attachPointerGesture</code>
+              </div>
+            </div>
+            <div class="box stub">
+              <div class="name">extensions/</div>
+              <div class="sub">stub — S6</div>
+            </div>
+          </div>
+          <div class="tier-label">touches the DOM</div>
+          <div class="arrow-v">↓</div>
+          <div class="tier">
+            <div class="box pure">
+              <div class="name">layout/</div>
+              <div class="sub">
+                <code>computeFrame</code> · <code>FrameLayout</code> · rows/items/lanes ·
+                <code>TimeScaleModel</code> · <code>ScrollModel</code>
+              </div>
+            </div>
+            <div class="box pure">
+              <div class="name">data/</div>
+              <div class="sub">
+                <code>DatasetState</code> · <code>EntryStore</code> · transactions · history · fields ·
+                rollup
+              </div>
+            </div>
+            <div class="box stub">
+              <div class="name">scheduling/</div>
+              <div class="sub">stub — S7, optional plugin (ADR 0002)</div>
+            </div>
+          </div>
+          <div class="arrow-v">↓</div>
+          <div class="tier">
+            <div class="box pure">
+              <div class="name">time/</div>
+              <div class="sub">
+                <code>Instant</code> arithmetic · IANA zones · <code>TimeScale</code> · view presets · snap
+              </div>
+            </div>
+          </div>
+          <div class="arrow-v">↓</div>
+          <div class="tier">
+            <div class="box pure">
+              <div class="name">model/</div>
+              <div class="sub">
+                entity types, ids, brands, <code>FreeGanttError</code>, Field, ChangeSet — zero deps,
+                near-zero runtime
+              </div>
+            </div>
+          </div>
+          <div class="tier-label">pure — no DOM, unit-tested in plain Node</div>
+        </div>
+
+        <h4>Who may import whom</h4>
+        <p>
+          <code>.dependency-cruiser.cjs</code> transcribes the diagram literally: one
+          <code>forbid()</code> rule per layer, listing its <em>only</em> legal targets. Anything not listed
+          fails the build (invariant I1).
+        </p>
+        <table>
+          <tr>
+            <th class="mono">layer</th>
+            <th class="mono">may import</th>
+            <th>note</th>
+          </tr>
+          <tr>
+            <td class="mono">model</td>
+            <td class="mono">— nothing —</td>
+            <td>Leaf. Types plus <code>entryId/rowId/itemId</code> and <code>FreeGanttError</code>.</td>
+          </tr>
+          <tr>
+            <td class="mono">time</td>
+            <td class="mono">model</td>
+            <td>
+              Plus the one runtime dep <code>temporal-polyfill</code>, confined to <code>zone.ts</code>.
+            </td>
+          </tr>
+          <tr>
+            <td class="mono">layout</td>
+            <td class="mono">time, model</td>
+            <td>
+              Where the shareable viewport models live — the only DOM-free layer both allowed
+              <code>time/</code> and reachable from <code>view/</code>.
+            </td>
+          </tr>
+          <tr>
+            <td class="mono">scheduling</td>
+            <td class="mono">time, model</td>
+            <td>Stub. Never imported by <code>data/</code> statically — they meet at the extension hook.</td>
+          </tr>
+          <tr>
+            <td class="mono">data</td>
+            <td class="mono">time, model</td>
+            <td>
+              Fully built. Deliberately no <code>scheduling</code> edge: mutations resolve through
+              the generic <code>EditExtender</code> hook (identity function when no plugin is installed).
+            </td>
+          </tr>
+          <tr>
+            <td class="mono">render</td>
+            <td class="mono">layout</td>
+            <td>
+              Consumes <code>GeometryFrame</code> and nothing else. Reaches <code>ItemId</code>/<code
+                >RowId</code
+              >
+              through <code>layout/index.ts</code>'s re-export, not <code>model/</code> directly.
+            </td>
+          </tr>
+          <tr>
+            <td class="mono">view</td>
+            <td class="mono">render, layout, data, model</td>
+            <td>
+              <code>data/</code> and <code>model</code> enter as type and dataset surfaces the shell
+              orchestrates; the Gantt's own event bus is <code>view/event-bus.ts</code>, owned by
+              <code>GanttShell</code>. Still no <code>time</code> edge — every date/pixel computation a gesture
+              needs is a pure <code>layout/</code> function the shell hands back through
+              <code>EntryGestureContext</code>.
+            </td>
+          </tr>
+          <tr>
+            <td class="mono">interaction</td>
+            <td class="mono">view, data, model</td>
+            <td>
+              Built now. Drives the <code>EntryGestureContext</code> seam typed in <code>view/</code>;
+              <code>model</code> enters as type-only params (Entry/EntryId/ItemId). Never reaches
+              <code>time/</code>, <code>layout/</code> or <code>render/</code>, and never imports
+              <code>scheduling/</code>.
+            </td>
+          </tr>
+          <tr>
+            <td class="mono">extensions</td>
+            <td class="mono">view, interaction</td>
+            <td>Stub.</td>
+          </tr>
+          <tr>
+            <td class="mono">api</td>
+            <td class="mono">view, data, model, time, layout, interaction</td>
+            <td>
+              <code>model</code>, <code>time</code> and <code>layout</code> are type/primitive re-export
+              edges, not behavioural ones. <code>interaction</code> arrives by constructor injection — the
+              shell takes the gesture attachments structurally-typed rather than importing
+              <code>interaction/</code> itself. <code>layout</code> widened by issue #91 to reach
+              <code>TimeScaleModel</code>/<code>ScrollModel</code> directly instead of laundering them
+              through <code>view/</code>.
+            </td>
+          </tr>
+        </table>
+
+        <div class="note">
+          <strong>The five custom lint rules.</strong> <code>eslint/rules/</code> holds what
+          dependency-cruiser cannot see, all scoped to <code>src/**</code>: <code>no-date-outside-time</code>,
+          <code>no-magic-time-constants</code>, <code>no-instant-arithmetic</code> (I10 —
+          <code>time/</code> is the only place <code>Date.now()</code>, <code>86400000</code>, or
+          <code>a - b</code> on two <code>Instant</code>s is legal), <code>no-time-to-pixel-math</code> and
+          <code>no-scroll-outside-scroll-model</code> (I12 — <code>view/scroll-attachment.ts</code> is the
+          single exempted file). Each rule ships a violation fixture under <code>test/fixtures/</code> so the
+          rule itself is proven to bite.
+        </div>
+      </section>
+
+      <nav class="harness-docs-pager" aria-label="Other docs pages"></nav>
+    </div>
+
+    <footer class="wrap">
+      The layer graph as a picture is on <a href="./diagram.html">Diagrams</a>; what each file in a
+      layer is for is on <a href="./files.html">File inventory</a>. Spec: <code>plans/01</code> §1. Guards:
+      <code>docs/01-invariant-guard-matrix.md</code>.
+    </footer>
+  </body>
+</html>
