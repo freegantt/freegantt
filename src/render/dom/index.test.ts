@@ -779,8 +779,11 @@ describe('render/dom backend', () => {
     expect(childRow.getAttribute('aria-level')).toBe('2');
     const twisty = parentRow.querySelector<HTMLElement>('.fg-row-twisty');
     expect(twisty).not.toBeNull();
+    expect(twisty?.hidden).toBe(false);
     expect(twisty?.getAttribute('aria-expanded')).toBe('true');
-    expect(childRow.querySelector('.fg-row-twisty')).toBeNull();
+    const childTwisty = childRow.querySelector<HTMLButtonElement>('.fg-row-twisty');
+    expect(childTwisty).not.toBeNull();
+    expect(childTwisty?.hidden).toBe(true);
 
     backend.destroy();
     grid.remove();
