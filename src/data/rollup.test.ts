@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { DatasetState } from './dataset-state.js';
-import { AggregatorFailedError } from '../model/index.js';
+import { AggregatorFailedError, entryId } from '../model/index.js';
+import type { ChangeSet } from '../model/index.js';
 import { toEndInstant, toInstant } from '../time/index.js';
 
 function treeDataset(
@@ -193,18 +194,101 @@ describe('rollUpFields (S4.2)', () => {
     expect(costOf(state, 'b')).toBe(20);
   });
 
-  it('removing a child recomputes the parent rolled-up cost', () => {
-    const state = treeDataset([
-      { id: 'p', kind: 'group' },
-      { id: 'a', parentId: 'p', meta: { cost: 10 } },
-      { id: 'b', parentId: 'p', meta: { cost: 5 } },
-    ]);
+  describe('D-S4-8 / P1 — rollup after child removal', () => {
+    it('[P1 regression] the review probe: parent cost drops when the cheaper child is removed', () => {
+      const state = treeDataset([
+        { id: 'p', kind: 'group' },
+        { id: 'a', parentId: 'p', meta: { cost: 10 } },
+        { id: 'b', parentId: 'p', meta: { cost: 5 } },
+      ]);
 
-    expect(costOf(state, 'p')).toBe(15);
+      expect(costOf(state, 'p')).toBe(15);
 
-    state.entries.remove('b');
+      state.entries.remove('b');
 
-    expect(costOf(state, 'p')).toBe(10);
+      expect(costOf(state, 'p')).toBe(10);
+      expect((state.entries.get('p')!.meta as { cost: number }).cost).toBe(10);
+    });
+
+    it('[P1 regression] removing the child that extended the parent span shrinks start/end', () => {
+      const state = treeDataset([
+        { id: 'p', kind: 'group', start: '2026-01-01', end: '2026-01-10' },
+        { id: 'a', parentId: 'p', start: '2026-01-01', end: '2026-01-05', meta: { cost: 10 } },
+        { id: 'b', parentId: 'p', start: '2026-06-01', end: '2026-06-10', meta: { cost: 5 } },
+      ]);
+
+      const before = state.entries.get('p')!;
+      expect(before.end).toBe(toEndInstant('UTC', '2026-06-10', 'inclusive'));
+
+      state.entries.remove('b');
+
+      const after = state.entries.get('p')!;
+      expect(costOf(state, 'p')).toBe(10);
+      expect(after.end).toBe(toEndInstant('UTC', '2026-01-05', 'inclusive'));
+      expect(after.start).toBe(toInstant('UTC', '2026-01-01'));
+    });
+
+    it('[P1 / D-S4-8] removing a grandchild recomputes every roll-up ancestor in one commit', () => {
+      const state = treeDataset([
+        { id: 'root', kind: 'group' },
+        { id: 'mid', parentId: 'root', kind: 'group' },
+        { id: 'leaf', parentId: 'mid', meta: { cost: 100 } },
+        { id: 'sibling', parentId: 'mid', meta: { cost: 25 } },
+      ]);
+
+      expect(costOf(state, 'mid')).toBe(125);
+      expect(costOf(state, 'root')).toBe(125);
+
+      state.entries.remove('leaf');
+
+      expect(costOf(state, 'mid')).toBe(25);
+      expect(costOf(state, 'root')).toBe(25);
+    });
+
+    it('[P1] undo restores the parent aggregate with the removed child', () => {
+      const state = treeDataset([
+        { id: 'p', kind: 'group' },
+        { id: 'a', parentId: 'p', meta: { cost: 10 } },
+        { id: 'b', parentId: 'p', meta: { cost: 5 } },
+      ]);
+
+      state.entries.remove('b');
+      expect(costOf(state, 'p')).toBe(10);
+      expect(state.entries.has('b')).toBe(false);
+
+      state.undo();
+
+      expect(state.entries.has('b')).toBe(true);
+      expect(costOf(state, 'p')).toBe(15);
+      expect(costOf(state, 'b')).toBe(5);
+    });
+
+    it('[P1] removal records the parent rollup in the changeset', () => {
+      const state = treeDataset([
+        { id: 'p', kind: 'group' },
+        { id: 'a', parentId: 'p', meta: { cost: 10 } },
+        { id: 'b', parentId: 'p', meta: { cost: 5 } },
+      ]);
+
+      let changeSet: ChangeSet | undefined;
+      state.on('change', ({ changeSet: cs }) => {
+        changeSet = cs;
+      });
+
+      state.entries.remove('b');
+
+      expect(changeSet).toBeDefined();
+      const parentCost = changeSet!.updated.find(
+        (row) => row.store === 'entries' && row.id === entryId('p') && row.field === 'cost',
+      );
+      expect(parentCost).toEqual({
+        store: 'entries',
+        id: entryId('p'),
+        field: 'cost',
+        from: 15,
+        to: 10,
+      });
+    });
   });
 
   it('D-S4-11: every store child counts toward the parent, including one a view would hide', () => {
