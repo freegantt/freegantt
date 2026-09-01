@@ -479,6 +479,8 @@ export class Gantt {
     // (undocumented)
     collapse(id: RowId | string): void;
     // (undocumented)
+    collapseAll(): void;
+    // (undocumented)
     get collapsed(): readonly RowId[];
     set collapsed(ids: readonly (RowId | string)[]);
     get dateLines(): readonly DateLineInput[];
@@ -487,6 +489,8 @@ export class Gantt {
     destroy(): void;
     // (undocumented)
     expand(id: RowId | string): void;
+    // (undocumented)
+    expandAll(): void;
     // (undocumented)
     get fit(): TimeScaleFit;
     set fit(f: TimeScaleFit);

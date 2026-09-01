@@ -28,7 +28,7 @@ These landed in slice S4. Details and examples live in `plans/02-public-api.md` 
 - `gridColumns` — which columnable Fields this view shows, in order
 - `rowSource` — what rows are (`entries` tree, `group` by value, or `custom` resolve)
 - `rowSource.heightMode: 'pack'` — stack overlaps into lanes (on the row source, not on `Gantt`)
-- `collapsed`, `collapse()`, `expand()`, `toggleCollapse()` — per-Gantt view state
+- `collapsed`, `collapse()`, `expand()`, `toggleCollapse()`, `collapseAll()`, `expandAll()` — per-Gantt view state
 - Events: `beforeCollapseChange` / `collapseChange`
 
 ### Naming

@@ -290,6 +290,8 @@ Assigning `gantt.rowSource` re-resolves rows live with no remount; scroll positi
 gantt.collapsed = ['p1'];
 gantt.collapse('p1');
 gantt.expand('p1');
+gantt.collapseAll();
+gantt.expandAll();
 gantt.on('collapseChange', ({ to }) => save(to));
 ```
 

@@ -89,14 +89,6 @@ function teamOf(entry: Entry): string | undefined {
   return typeof team === 'string' ? team : undefined;
 }
 
-function parentIdsWithChildren(): string[] {
-  const parents = new Set<string>();
-  for (const entry of dataset.entries.all) {
-    if (entry.parentId !== undefined) parents.add(entry.parentId);
-  }
-  return [...parents];
-}
-
 function buildRowSource(): RowSource {
   const heightMode: RowHeightMode = heightModeSelect.value === 'pack' ? 'pack' : 'fixed';
   const rowsMode = rowsModeSelect.value;
@@ -240,11 +232,11 @@ filterTeamBtn.addEventListener('click', () => {
 sortFieldSelect.addEventListener('change', () => applyRowSource());
 
 expandAllBtn.addEventListener('click', () => {
-  gantt.collapsed = [];
+  gantt.expandAll();
 });
 
 collapseAllBtn.addEventListener('click', () => {
-  gantt.collapsed = parentIdsWithChildren();
+  gantt.collapseAll();
 });
 
 autoGroupCheckbox.addEventListener('change', () => {
