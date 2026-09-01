@@ -126,6 +126,29 @@ describe('new Dataset()', () => {
   });
 });
 
+describe('Dataset timeZone omission (#129)', () => {
+  it('new Dataset({ entries }) works with no timeZone and resolves a concrete IANA string', () => {
+    const dataset = new Dataset({ entries: [oneEntry()] });
+    expect(typeof dataset.timeZone).toBe('string');
+    expect(dataset.timeZone.length).toBeGreaterThan(0);
+  });
+
+  it('an explicit timeZone still overrides the resolved default', () => {
+    const dataset = new Dataset({ timeZone: 'America/Chicago', entries: [oneEntry()] });
+    expect(dataset.timeZone).toBe('America/Chicago');
+  });
+
+  it('toJSON/fromJSON round-trips the resolved zone, not a sentinel', () => {
+    const dataset = new Dataset({ entries: [oneEntry()] });
+    const doc = dataset.toJSON();
+    expect(doc.timeZone).toBe(dataset.timeZone);
+    expect(doc.timeZone).not.toBe('local');
+
+    const restored = Dataset.fromJSON(doc);
+    expect(restored.timeZone).toBe(dataset.timeZone);
+  });
+});
+
 describe('Dataset transaction/on/off delegation', () => {
   it('transaction() returns the body value; an empty body emits no change', () => {
     const dataset = new Dataset({ timeZone: 'UTC', entries: [oneEntry()] });

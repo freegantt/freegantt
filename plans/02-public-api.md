@@ -24,7 +24,7 @@ import { Dataset, Gantt } from 'freegantt';
 
 // ── Data: headless, works in Node ───────────────────────────────
 const dataset = new Dataset<{ team: string }, { cost: number }>({
-  timeZone: 'America/Chicago',            // explicit; 'local' is opt-in
+  timeZone: 'America/Chicago',            // optional (#129); omit it to author in the viewer's own zone
   dateOnlyEnd: 'inclusive',               // default; see §2.1
   rollUpKinds: ['group'],                 // default; `'none'` keeps caller-assigned parent values
   history: { capacity: 100 },             // default; undo/redo stack depth — see "Undo and redo" below
@@ -127,6 +127,8 @@ Every config key is a live property. Setting one triggers exactly the invalidati
 Ids and dates are loose on the way in and strict everywhere behind the boundary. `Dataset` reads an `EntryInput` into an `Entry` once, at construction: ids are plain strings that gain the `EntryId` brand here, and dates are any `InstantInput` — an ISO string, a `Date`, epoch milliseconds, or an already-branded `Instant`. A consumer never has to call `entryId()` or `instant()`. An `Entry` is itself a valid `EntryInput`, so a consumer holding branded values passes them through unchanged.
 
 A string with an explicit `Z` or numeric offset is absolute. Every other string is a Plain time and resolves through the dataset's `timeZone`, so one entry list renders identically for every viewer. A value naming no instant — including a date the calendar does not have, such as `'2026-02-31'` — throws `InvalidInstantError`; it never slides to a nearby date.
+
+`timeZone` is optional (#129). Passed explicitly, it is what the paragraph above describes: one zone, so a Plain time in `entries` reads identically for every viewer, in any timezone. Omitted, `Dataset` resolves the current environment's own zone once, at construction (`Intl.DateTimeFormat().resolvedOptions().timeZone`, falling back to `'UTC'` when that reports nothing, e.g. a bare Node process) and stores the resolved IANA string — `dataset.timeZone` is always a concrete zone after construction, never a sentinel. This trades cross-viewer consistency for ergonomics: a dataset built this way authors Plain times in *this* viewer's calendar, so the same entry list can read differently for a viewer in a different zone. Reach for it for single-viewer or demo use; pass `timeZone` explicitly whenever the dataset is shared across viewers, such as a project plan multiple people open.
 
 `dateOnlyEnd` names how a *date-only* `end` is read against half-open `[start, end)` storage. `'inclusive'` (the default) reads `end: '2026-09-08'` as "through the 8th" and stores the start of the 9th; `'exclusive'` reads it literally. It applies to nothing else: an `end` carrying a time of day, a `Date`, epoch milliseconds, or an `Instant` is a boundary already, and `start` is never adjusted.
 
