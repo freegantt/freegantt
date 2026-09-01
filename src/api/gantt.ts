@@ -81,7 +81,7 @@ interface GanttOptionsBase {
   /** Live (S4.3, D-S4-12). Field keys in display order, plus per-Gantt overrides. Default `['name']`. */
   gridColumns?: readonly GridColumnInput[];
   /** Live (S4.6, D-S4-21). Default `{ source: 'entries', tree: false }`. */
-  rows?: RowSource;
+  rowSource?: RowSource;
   /** Live (S4.6, D-S4-22). Collapsed row ids, loose on the way in. Default `[]`. */
   collapsed?: readonly (RowId | string)[];
 }
@@ -137,7 +137,7 @@ export class Gantt {
       ...(options.interactions !== undefined ? { interactions: options.interactions } : {}),
       ...(options.viewportGestures !== undefined ? { viewportGestures: options.viewportGestures } : {}),
       ...(options.gridColumns !== undefined ? { gridColumns: options.gridColumns } : {}),
-      ...(options.rows !== undefined ? { rows: options.rows } : {}),
+      ...(options.rowSource !== undefined ? { rowSource: options.rowSource } : {}),
       ...(options.collapsed !== undefined ? { collapsed: options.collapsed } : {}),
       entryGestures: attachEntryGestures,
       keyboardEditing: attachKeyboardEditing,
@@ -220,12 +220,12 @@ export class Gantt {
   }
 
   /** Live (S4.6, D-S4-21). Assigning re-resolves rows with no remount. */
-  get rows(): RowSource {
-    return this.#shell.rows;
+  get rowSource(): RowSource {
+    return this.#shell.rowSource;
   }
 
-  set rows(next: RowSource) {
-    this.#shell.rows = next;
+  set rowSource(next: RowSource) {
+    this.#shell.rowSource = next;
   }
 
   get collapsed(): readonly RowId[] {

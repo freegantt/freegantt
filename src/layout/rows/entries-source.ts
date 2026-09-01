@@ -2,7 +2,7 @@
 
 import { entryId, rowId } from '../../model/index.js';
 import type { Entry, EntryId } from '../../model/index.js';
-import type { EntriesRowSource, PlannedRow, RowHeightMode } from './row-source.js';
+import type { EntriesRowSource, RowHeightMode, UnindexedRow } from './row-source.js';
 import { heightModeOf } from './row-source.js';
 
 function childrenByParent(entries: readonly Entry[]): {
@@ -31,11 +31,9 @@ function entryRow(
   expandable: boolean,
   expanded: boolean,
   heightMode: RowHeightMode,
-): PlannedRow {
+): UnindexedRow {
   return {
     id: rowId(entry.id),
-    kind: 'entry',
-    index: 0,
     depth,
     entryIds: [entryId(entry.id)],
     expandable,
@@ -48,14 +46,14 @@ export function resolveEntriesSource(
   entries: readonly Entry[],
   source: EntriesRowSource,
   collapsed: ReadonlySet<string>,
-): PlannedRow[] {
+): UnindexedRow[] {
   const heightMode = heightModeOf(source);
   if (source.tree !== true) {
     return entries.map((entry) => entryRow(entry, 0, false, false, heightMode));
   }
 
   const { roots, childrenOf } = childrenByParent(entries);
-  const rows: PlannedRow[] = [];
+  const rows: UnindexedRow[] = [];
   const stack: { list: readonly Entry[]; index: number; depth: number }[] = [
     { list: roots, index: 0, depth: 0 },
   ];

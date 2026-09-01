@@ -1,6 +1,6 @@
 export { computeFrame, barSpan, DEFAULT_TICK_BOX_FLOOR_PX } from './frame.js';
-export { createItemEmitterRegistry } from './items/item-emitter.js';
-export type { Item, ItemEmitter, ItemEmitterRegistry, ItemEmissionContext } from './items/item-emitter.js';
+export { createItemProducerRegistry } from './items/produce-items.js';
+export type { Item, ItemProducerRegistry } from './items/produce-items.js';
 export type { FrameColumn, ResolvedColumn, FieldCompare } from './column.js';
 export type {
   RowSource,
@@ -11,6 +11,8 @@ export type {
   RowFilter,
   RowSort,
   FilterPolicy,
+  RowSourceCommon,
+  RowHeightMode,
   RowResolveInput,
 } from './rows/row-source.js';
 export { DEFAULT_ROW_SOURCE } from './rows/row-source.js';

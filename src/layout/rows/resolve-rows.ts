@@ -5,7 +5,7 @@ import type { Entry } from '../../model/index.js';
 import { resolveEntriesSource } from './entries-source.js';
 import { resolveGroupSource } from './group-source.js';
 import { resolveCustomSource } from './custom-source.js';
-import type { PlannedRow, RowResolutionInput, RowSource } from './row-source.js';
+import type { PlannedRow, RowResolutionInput, RowSource, UnindexedRow } from './row-source.js';
 import { DEFAULT_ROW_SOURCE } from './row-source.js';
 
 export type { RowResolutionInput, PlannedRow, RowSource };
@@ -23,11 +23,11 @@ export function rowResolutionInput(input: {
   };
 }
 
-function stampIndex(rows: readonly PlannedRow[]): readonly PlannedRow[] {
-  return rows.map((row, index) => (row.index === index ? row : { ...row, index }));
+function stampIndex(rows: readonly UnindexedRow[]): readonly PlannedRow[] {
+  return rows.map((row, index) => ({ ...row, index }));
 }
 
-function resolveSource(input: RowResolutionInput, source: RowSource): PlannedRow[] {
+function resolveSource(input: RowResolutionInput, source: RowSource): UnindexedRow[] {
   if (source.source === 'group') return resolveGroupSource(input.entries, source, input.collapsed);
   if (source.source === 'custom') return resolveCustomSource(source, { entries: input.entries });
   return resolveEntriesSource(input.entries, source, input.collapsed);

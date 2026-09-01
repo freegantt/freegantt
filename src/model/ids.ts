@@ -31,7 +31,7 @@ export function entryIdOfItem(id: ItemId): EntryId {
   return entryId(sep < 0 ? id : id.slice(0, sep));
 }
 
-/** Call: `segmentIndexOfItem(bar.id)` — the index `itemId` wrote. */
+/** Call: `segmentIndexOfItem(item.id)` — the index `itemId` wrote. */
 export function segmentIndexOfItem(id: ItemId): number {
   const sep = id.lastIndexOf(':');
   if (sep < 0) return 0;

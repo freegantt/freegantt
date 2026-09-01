@@ -9,7 +9,7 @@ import {
   Viewport,
   DEFAULT_TICK_BOX_FLOOR_PX,
   DEFAULT_ROW_SOURCE,
-  createItemEmitterRegistry,
+  createItemProducerRegistry,
 } from '../layout/index.js';
 import type {
   DateLineSpec,
@@ -20,7 +20,7 @@ import type {
   TimeScaleFit,
   ViewportHandle,
   ViewPreset,
-  ItemEmitterRegistry,
+  ItemProducerRegistry,
 } from '../layout/index.js';
 
 import { createDomBackend } from '../render/dom/index.js';
@@ -168,7 +168,7 @@ export interface GanttShellOptions {
   /** Live (S4.3, D-S4-12). Field keys in display order, plus per-Gantt overrides. Default `['name']`. */
   gridColumns?: readonly GridColumnInput[];
   /** Live (S4.6, D-S4-21). Default `{ source: 'entries', tree: false }`. */
-  rows?: RowSource;
+  rowSource?: RowSource;
   /** Live (S4.6, D-S4-22). Collapsed `RowId`s, loose on the way in. Default `[]`. */
   collapsed?: readonly (RowId | string)[];
   /** Expert knob, not on `GanttOptions` (plans/02 "two callers, two surfaces") — a test naming its
@@ -201,7 +201,7 @@ export interface GanttShellOptions {
   editExtender?: EditExtender;
   /** Internal (D-S4-24). One registry per Gantt, seeded with span/group/milestone. Tests inject a
    *  replacement; `GanttOptions` has no such field (public registration is S5). */
-  itemEmitterRegistry?: ItemEmitterRegistry;
+  itemProducerRegistry?: ItemProducerRegistry;
 }
 
 /** `exactOptionalPropertyTypes` treats `obj.key = undefined` as a type error when `key` is declared
@@ -255,7 +255,7 @@ export class GanttShell {
   /** D-GH-2: owns draft math, preview rAF coalescing and the commit pipeline for a move/resize
    *  gesture — built once, from this shell's own primitives, right after `#capabilities` below. */
   #gesturePipeline!: GesturePipeline;
-  #itemEmitterRegistry!: ItemEmitterRegistry;
+  #itemProducerRegistry!: ItemProducerRegistry;
   /** The single rAF owner (B10, D-S2-15): every render request past construction goes through
    *  this, so N mutations in one tick become one frame. */
   #frames = new FrameScheduler(() => this.render());
@@ -282,7 +282,7 @@ export class GanttShell {
   #todayLineMarginTicks: number = DEFAULT_TODAY_LINE_MARGIN_TICKS;
   #gridColumnInput: readonly GridColumnInput[] = DEFAULT_GRID_COLUMNS;
   #resolvedColumns: readonly ResolvedColumn[] = [];
-  #rows: RowSource = DEFAULT_ROW_SOURCE;
+  #rowSource: RowSource = DEFAULT_ROW_SOURCE;
   #collapse = new CollapseState();
   #onTwistyClick: ((event: Event) => void) | undefined;
 
@@ -327,8 +327,8 @@ export class GanttShell {
     this.#todayLine = options.todayLine ?? true;
     this.#dateLines = options.dateLines ?? [];
     this.#gridColumnInput = options.gridColumns ?? DEFAULT_GRID_COLUMNS;
-    this.#rows = options.rows ?? DEFAULT_ROW_SOURCE;
-    this.#itemEmitterRegistry = options.itemEmitterRegistry ?? createItemEmitterRegistry();
+    this.#rowSource = options.rowSource ?? DEFAULT_ROW_SOURCE;
+    this.#itemProducerRegistry = options.itemProducerRegistry ?? createItemProducerRegistry();
     this.#bindColumns();
 
     // Mount before binding (#22): the render target exists by the time the binding's own onChange
@@ -491,12 +491,12 @@ export class GanttShell {
     this.#frames.request();
   }
 
-  get rows(): RowSource {
-    return this.#rows;
+  get rowSource(): RowSource {
+    return this.#rowSource;
   }
 
-  set rows(next: RowSource) {
-    this.#rows = next;
+  set rowSource(next: RowSource) {
+    this.#rowSource = next;
     this.#layout.invalidateFrom(0);
     this.#frames.request();
   }
@@ -861,9 +861,9 @@ export class GanttShell {
       todayLine: this.#todayLine,
       dateLines: this.#dateLines,
       columns: this.#resolvedColumns,
-      rows: this.#rows,
+      rows: this.#rowSource,
       collapsed: this.#collapse.ids,
-      itemEmitterRegistry: this.#itemEmitterRegistry,
+      itemProducerRegistry: this.#itemProducerRegistry,
     });
     this.#backend.sync(frame);
     // D-S1.12-9: the grid pane's spacer mirrors the header's own band count, so both panes resolve

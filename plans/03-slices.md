@@ -185,17 +185,17 @@ Slices are scope, not calendar estimates. Within a slice, entries are ordered so
 - Kind-driven item emission (`01` §2.5): `group` → summary bracket (span rollup from S2), `milestone` → diamond, consumer-registered kinds via the emitter seam; empty groups render as groups.
 - `hierarchy: { autoGroup: true }` on `Dataset`: first child promotes a `'span'` parent to `group` within the triggering transaction; promote `'span'` only, never demote (`02` §2).
 - Row sources: `{ source: 'group', groupBy }` and `{ source: 'custom', resolve }` (`01` §2.3); group header rows.
-- Sort and filter on the row source (`rows.filter`, `rows.sort`, `rows.filterPolicy`) with tree-aware policies (filter keeps ancestors by default; `filterPolicy: 'matchOnly'` for flat match lists; sort stays within parent).
+- Sort and filter on the row source (`rowSource.filter`, `rowSource.sort`, `rowSource.filterPolicy`) with tree-aware policies (filter keeps ancestors by default; `filterPolicy: 'matchOnly'` for flat match lists; sort stays within parent).
 - Item emission: `entry.segments` → multiple items on one row; overlap auto-packing into sub-lanes; `heightMode: 'pack'` variable row heights through the height index.
 - Interaction with lanes: drag/resize on packed items; collapse/expand by keyboard.
-- Harness: tree fixture, with **one** Gantt and a button that switches `gantt.rows` between the tree and a grouped source. That proves the Row ≠ Entry payoff and proves live reconfiguration (`02` §2) in the same demo. Two Gantts on one dataset is not the demo: D9 is about a shared axis and scroll between charts with **different** data (`02` §5), and a shared `Dataset` — while free, since a second Gantt is only a second `change` subscriber — is not a case the library designs around or tests.
+- Harness: tree fixture, with **one** Gantt and a button that switches `gantt.rowSource` between the tree and a grouped source. That proves the Row ≠ Entry payoff and proves live reconfiguration (`02` §2) in the same demo. Two Gantts on one dataset is not the demo: D9 is about a shared axis and scroll between charts with **different** data (`02` §5), and a shared `Dataset` — while free, since a second Gantt is only a second `change` subscriber — is not a case the library designs around or tests.
 - **Known gaps due this slice (issue #91 §9):** §9-E is a bet on `RowHeightIndex.heightAt`/`invalidateFrom` and `RenderBackend.applyState` finally getting production callers — pack-mode row heights above and the hover/selection/drag hot path are exactly that; if either lands and still does not use the methods, remove them rather than leave decoration. §9-G: `render/backend.ts`'s `hitTest(x, y)` does not name its coordinate space (DOM backend takes client coords, `GeometryFrame` is content coords) — this slice's gesture controllers are its first callers, so give it a named `ClientPoint` type before wiring them up, not after. §9-B (`view/gantt-shell.ts`'s `#wiring` boolean) is worth revisiting too: tree UI and lane interaction both add more to wire during construction.
 
 **Acceptance**
 
 - [ ] A consumer-declared `meta` field sums up the tree, shows in a grid column beside `start`, edits in the same `update()` call and the same undo step as a core field, and round-trips through `toJSON`/`fromJSON`.
 - [ ] An edit naming an unregistered field key throws `UnknownFieldError` — it is never written silently.
-- [ ] Switching `gantt.rows` between the tree and a grouped source re-resolves rows without a remount, and scroll position survives it.
+- [ ] Switching `gantt.rowSource` between the tree and a grouped source re-resolves rows without a remount, and scroll position survives it.
 - [ ] A segmented entry renders N bars on one row; drag of one segment behaves sanely and transactionally.
 - [ ] Pack-mode rows change height correctly as overlaps come and go; scroll position stays stable (height index invalidation test).
 - [ ] Collapse state survives data edits and is independent per Gantt.

@@ -1,7 +1,7 @@
 import './harness-nav.ts';
 import { Gantt, Dataset, MutationCancelledError } from '../src/api/index.js';
 import type { GridColumnInput, Theme } from '../src/api/index.js';
-import type { TimeUnit } from '../src/model/index.js';
+import type { Entry, TimeUnit } from '../src/model/index.js';
 import { demoEntryInputs } from '../fixtures/demo-dataset.js';
 import { mountTimelineToolbar } from './timeline-toolbar.js';
 
@@ -79,7 +79,7 @@ const gantt = new Gantt({
   container: '#gantt',
   dataset,
   gridColumns: GRID_WITH_BUDGET,
-  rows: { source: 'entries', tree: true },
+  rowSource: { source: 'entries', tree: true },
 });
 // Zero-interaction visibility for the today line (S1.12, D-S1.12-14) — header readability follow-up
 // pass 4. Needs no ResizeObserver measurement first: panToToday reads the already-resolved
@@ -109,8 +109,8 @@ const rowsSourceBtn = document.querySelector<HTMLButtonElement>('#rows-source-bt
 let grouped = false;
 rowsSourceBtn.addEventListener('click', () => {
   grouped = !grouped;
-  gantt.rows = grouped
-    ? { source: 'group', groupBy: (entry) => entry.kind }
+  gantt.rowSource = grouped
+    ? { source: 'group', groupBy: (entry: Entry) => entry.kind }
     : { source: 'entries', tree: true };
   rowsSourceBtn.textContent = grouped ? 'Show tree' : 'Group by kind';
 });
