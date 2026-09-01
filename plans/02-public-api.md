@@ -113,7 +113,7 @@ Single mutations outside an explicit transaction are auto-wrapped in one — con
 
 ```ts
 gantt.preset = 'dayAndWeek';
-gantt.rowSource = { source: 'group', groupBy: t => t.meta.team };
+gantt.rowSource = { source: 'group', groupBy: (entry, fields) => fields?.read<string>(entry, 'team') ?? 'unassigned' };
 gantt.gridColumns = [...gantt.gridColumns, 'cost'];
 gantt.gridWidth = 220;                  // S1.8 — same cancelable commit sequence a splitter drag runs
 ```
@@ -347,8 +347,9 @@ Default: `{ source: 'entries', tree: false }` — a flat list, exactly what S1 d
 // Entries, optionally as a tree over parentId
 rowSource: { source: 'entries', tree: true }
 
-// One header row per groupBy value, then that group's entries
-rowSource: { source: 'group', groupBy: (entry) => entry.meta.team }
+// One header row per groupBy value, then that group's entries.
+// groupBy (and filter / sort.compare) receive the bound Field reader as a second argument.
+rowSource: { source: 'group', groupBy: (entry, fields) => fields?.read<string>(entry, 'team') ?? 'unassigned' }
 
 // Consumer-supplied rows — id, optional entryIds, optional label
 rowSource: {

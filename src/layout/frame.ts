@@ -1,6 +1,16 @@
 // layout/ is headless geometry — no DOM, no drawing calls (plans/01 §4). DOM-free by construction.
 
-import type { RowId, ItemId, EntryId, EntryKind, Entry, Instant, Rect, TimeUnit } from '../model/index.js';
+import type {
+  RowId,
+  ItemId,
+  EntryId,
+  EntryKind,
+  Entry,
+  Instant,
+  Rect,
+  TimeUnit,
+  FieldContext,
+} from '../model/index.js';
 import { segmentIndexOfItem } from '../model/index.js';
 import type { TimeScale, ViewPreset } from '../time/index.js';
 import { dedupeHeaderFormats, formatDate, formatEndInclusive, resolveDateFormat } from '../time/index.js';
@@ -189,6 +199,8 @@ export interface LayoutInput {
   laneGapPx?: number;
   /** Dataset commit generation. FrameMemory keys packed-row invalidation on this (A2). */
   datasetRevision?: number;
+  /** Bound Field reader for row-source `filter` / `groupBy` / `sort.compare` (A5). */
+  fieldContext?: FieldContext;
 }
 
 function cellsForRow(
@@ -243,6 +255,7 @@ export function resolveLayoutRows(input: LayoutInput): readonly PlannedRow[] {
     ...(input.rows !== undefined ? { rows: input.rows } : {}),
     ...(input.collapsed !== undefined ? { collapsed: input.collapsed } : {}),
     ...(input.fieldCompares !== undefined ? { fieldCompares: input.fieldCompares } : {}),
+    ...(input.fieldContext !== undefined ? { fieldContext: input.fieldContext } : {}),
   });
 }
 

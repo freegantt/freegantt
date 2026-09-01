@@ -63,6 +63,7 @@ import type {
   Entry,
   EntryEdits,
   EntryId,
+  FieldContext,
   GridColumnInput,
   ItemId,
   Instant,
@@ -81,6 +82,7 @@ import { GesturePipeline } from './gesture-pipeline.js';
 import type { EntryGestureContext } from './entry-gesture-context.js';
 import { DEFAULT_GRID_COLUMNS, resolveGanttFields } from './grid-columns.js';
 import { TreeCollapse } from './tree-collapse.js';
+import { createFieldContext } from '../data/fields/field-access.js';
 import { isDevMode } from '../data/dev-mode.js';
 
 /** One `{ detach() }` for every inject slot. `view/` may not import `interaction/` (plans/01 §1:
@@ -297,6 +299,7 @@ export class GanttShell {
   #gridColumnInput: readonly GridColumnInput[] = DEFAULT_GRID_COLUMNS;
   #resolvedColumns: readonly ResolvedColumn[] = [];
   #fieldCompares: readonly FieldCompare[] = [];
+  #fieldContext: FieldContext | undefined;
   #rowSource: RowSource = DEFAULT_ROW_SOURCE;
   #treeCollapse!: TreeCollapse;
 
@@ -891,6 +894,10 @@ export class GanttShell {
     const bound = resolveGanttFields(this.#options.dataset, this.#gridColumnInput, bind);
     this.#resolvedColumns = bound.columns;
     this.#fieldCompares = bound.fieldCompares;
+    this.#fieldContext = createFieldContext(
+      { get: (key) => this.#options.dataset.field(key) },
+      this.#options.dataset.timeZone,
+    );
   }
 
   #commitGridWidth(px: number): void {
@@ -937,6 +944,7 @@ export class GanttShell {
       dateLines: this.#dateLines,
       columns: this.#resolvedColumns,
       fieldCompares: this.#fieldCompares,
+      ...(this.#fieldContext !== undefined ? { fieldContext: this.#fieldContext } : {}),
       rows: this.#rowSource,
       collapsed: this.#treeCollapse.ids,
       itemProducerRegistry: this.#itemProducerRegistry,

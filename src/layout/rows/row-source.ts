@@ -1,18 +1,18 @@
 // layout/ — row-source types. Pure data: no pixels, no Dataset, no FieldSource (D-S4-19, D-S4-21).
 
-import type { Entry, EntryId, FieldKey, RowId } from '../../model/index.js';
+import type { Entry, EntryId, FieldContext, FieldKey, RowId } from '../../model/index.js';
 import type { FieldCompare } from '../column.js';
 
 export type RowHeightMode = 'fixed' | 'pack';
 
 export type FilterPolicy = 'keepAncestors' | 'matchOnly';
 
-export type RowFilter = (entry: Entry) => boolean;
+export type RowFilter = (entry: Entry, fields?: FieldContext) => boolean;
 
 export interface RowSort {
   field: FieldKey;
   direction?: 'asc' | 'desc';
-  compare?(a: unknown, b: unknown): number;
+  compare?(a: unknown, b: unknown, fields?: FieldContext): number;
 }
 
 /** Shared by every row source that walks Entries directly — `'custom'` resolves its own rows, so it
@@ -31,7 +31,7 @@ export interface EntriesRowSource extends RowSourceCommon {
 
 export interface GroupRowSource extends RowSourceCommon {
   source: 'group';
-  groupBy(entry: Entry): string;
+  groupBy(entry: Entry, fields?: FieldContext): string;
 }
 
 /** What `{ source: 'custom', resolve }` receives. Entries only — no pixels, no Gantt. */
@@ -98,6 +98,7 @@ export interface RowPassInput {
   source: RowSource;
   collapsed: ReadonlySet<string>;
   fieldCompares?: readonly FieldCompare[];
+  fieldContext?: FieldContext;
 }
 
 export function heightModeOf(source: RowSource): RowHeightMode {

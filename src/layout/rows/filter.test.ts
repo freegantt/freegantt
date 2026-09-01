@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { entryId, rowId } from '../../model/index.js';
-import type { Entry, Instant } from '../../model/index.js';
+import type { Entry, FieldContext, Instant } from '../../model/index.js';
 import { applyFilter } from './filter.js';
 import { resolveEntriesSource } from './entries-source.js';
 
@@ -62,6 +62,26 @@ describe('applyFilter (S4.9)', () => {
     expect(filtered.map((row) => row.id)).toEqual([rowId('grand')]);
     expect(filtered[0]?.depth).toBe(0);
     expect(filtered[0]?.expandable).toBe(false);
+  });
+
+  it('passes the Field reader so a filter can read a declared key', () => {
+    const built = resolveEntriesSource(entries, { source: 'entries', tree: true });
+    const fields: FieldContext = {
+      timeZone: 'UTC',
+      read<T>(row: Entry, key: string): T | undefined {
+        if (key !== 'team') return undefined;
+        return (row.meta as { team?: string } | undefined)?.team as T | undefined;
+      },
+      durationOf: () => ({ value: 1, unit: 'millisecond' }),
+    };
+    const filtered = applyFilter(
+      built,
+      entries,
+      (_row, reader) => reader?.read(_row, 'team') === 'B',
+      'keepAncestors',
+      fields,
+    );
+    expect(filtered.map((row) => row.id)).toEqual([rowId('root'), rowId('child'), rowId('grand')]);
   });
 
   it('a filter matching nothing yields no rows and no crash', () => {

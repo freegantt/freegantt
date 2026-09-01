@@ -1,4 +1,4 @@
-// data/ — the one `switch` over `FieldSource` in `src/` (D-S4-2). Every other layer asks by Field
+// data/ — Field read/write over the SOURCE_STRATEGY table (A4). Every other layer asks by Field
 // key and never learns where the value sits.
 
 import type {
@@ -13,21 +13,15 @@ import type {
   StoredEdit,
 } from '../../model/index.js';
 import { diffMs } from '../../time/index.js';
-import type { ComputedFieldCache } from '../computed-cache.js';
 import { CORE_FIELDS } from './core-fields.js';
-import { storedSourceOf } from './normalize-source.js';
+import { strategyFor } from './source-strategy.js';
+import type { FieldReadMemo } from './source-strategy.js';
 import type { FieldRegistry, ResolvedField } from './field-registry.js';
 
-export type { FieldLookup };
+export type { FieldLookup, FieldReadMemo };
 
 function isOptionalEntryKey(key: string): boolean {
   return key === 'parentId' || key === 'segments' || key === 'meta';
-}
-
-/** Memo for compute-sourced Fields (D-S4-10). Stored Fields ignore it. */
-export interface FieldReadMemo {
-  readonly cache: ComputedFieldCache;
-  readonly datasetRevision: number;
 }
 
 /** Call: `withProposedKeys(stored, Object.keys(edit))`. */
@@ -52,19 +46,6 @@ export function mergeEntryEdits(base: EntryEdits, extra: EntryEdits): EntryEdits
   const merged = new Map<EntryId, StoredEdit>(base);
   for (const [id, edit] of extra) merged.set(id, mergeStoredEdits(merged.get(id), edit));
   return merged;
-}
-
-function metaRecord(meta: unknown): Record<string, unknown> {
-  if (meta !== undefined && meta !== null && typeof meta === 'object' && !Array.isArray(meta)) {
-    return { ...(meta as Record<string, unknown>) };
-  }
-  return {};
-}
-
-function metaKeyOf(field: ResolvedField): string {
-  const source = storedSourceOf(field);
-  if (source.from !== 'meta') return String(field.key);
-  return source.key ?? String(field.key);
 }
 
 function storesInMeta(field: ResolvedField): boolean {
@@ -97,36 +78,12 @@ export function readField(
   ctx: FieldContext,
   memo?: FieldReadMemo,
 ): unknown {
-  const source = field.source;
-  if (source.from === 'entry') return (entry as unknown as Record<string, unknown>)[source.field];
-  if (source.from === 'meta') {
-    const record = metaRecord(entry.meta);
-    return record[metaKeyOf(field)];
-  }
-  const compute = (): unknown => source.read(entry, ctx);
-  if (!memo) return compute();
-  return memo.cache.read(entry.id, field.key, memo.datasetRevision, compute);
+  return strategyFor(field.source).read(entry, field, ctx, memo);
 }
 
 /** Folds one field write into an entry-shaped `StoredEdit`, merging `meta` rather than replacing it. */
 export function writeField(edit: StoredEdit, entry: Entry, field: ResolvedField, value: unknown): StoredEdit {
-  const source = field.source;
-  if (source.from === 'compute') return edit;
-  if (source.from === 'entry') {
-    const next: StoredEdit = { ...edit };
-    (next as Record<string, unknown>)[source.field] = value;
-    return withProposedKeys(next, proposedKeysOf(edit));
-  }
-
-  const key = metaKeyOf(field);
-  const baseMeta = 'meta' in edit ? edit.meta : entry.meta;
-  const record = metaRecord(baseMeta);
-  if (value === undefined) delete record[key];
-  else record[key] = value;
-  const next: StoredEdit = { ...edit };
-  if (Object.keys(record).length === 0) (next as Record<string, unknown>)['meta'] = undefined;
-  else next.meta = record;
-  return withProposedKeys(next, proposedKeysOf(edit));
+  return strategyFor(field.source).write(edit, entry, field, value);
 }
 
 /** Writes `value` onto a copy of `entry`. Call: `writeOntoEntry(parent, costField, 300)`. */
@@ -153,14 +110,7 @@ export function writeDeclaredMetaFields(
 
 export function editProposesField(edit: StoredEdit | undefined, field: ResolvedField): boolean {
   if (!edit) return false;
-  const source = field.source;
-  if (source.from === 'entry') {
-    return (edit as Record<string, unknown>)[source.field] !== undefined;
-  }
-  if (source.from === 'meta') {
-    return proposedKeysOf(edit).has(String(field.key));
-  }
-  return false;
+  return strategyFor(field.source).proposes(edit, field);
 }
 
 /** Applies a stored overlay the way `EntryStore.get` must: core keys only, never proposedKeys. */

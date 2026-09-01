@@ -3,7 +3,7 @@ import { FieldRegistry } from '../data/fields/field-registry.js';
 import { FieldNotColumnableError, UnknownFieldError } from '../model/index.js';
 import { CORE_FIELDS } from '../data/fields/core-fields.js';
 import { resolveGanttFields, resolveColumns, resolveFieldCompares } from './grid-columns.js';
-import type { FieldLookup } from '../data/fields/field-lookup.js';
+import type { FieldLookup } from '../model/index.js';
 import type { Entry, Field, FieldKey } from '../model/index.js';
 import { entryId } from '../model/index.js';
 

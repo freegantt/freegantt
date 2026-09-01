@@ -88,5 +88,5 @@ export const hierarchyFieldOptions = {
       column: { align: 'end' as const, header: 'Cost' },
     },
   },
-  fields: [{ key: 'cost' as const, type: 'money' }],
+  fields: [{ key: 'cost' as const, type: 'money' }, { key: 'team' as const }],
 } as const;

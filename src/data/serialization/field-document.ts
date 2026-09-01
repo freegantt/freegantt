@@ -5,6 +5,7 @@ import type { SerializedField } from '../../model/index.js';
 import type { DatasetStateOptions } from '../dataset-state.js';
 import { CORE_FIELDS } from '../fields/core-fields.js';
 import { storedSourceOf } from '../fields/normalize-source.js';
+import { strategyFor } from '../fields/source-strategy.js';
 
 /** The code half a reader supplies. Same three keys `Dataset.fromJSON` already picks. */
 export type FromJSONOptions = Pick<DatasetStateOptions, 'fields' | 'fieldTypes' | 'aggregators'>;
@@ -86,15 +87,8 @@ function seedMissingFieldTypes(
   return undefined;
 }
 
-function sourceForWrite(field: Field): FieldSource {
-  return storedSourceOf(field);
-}
-
 function writeStoredSource(source: FieldSource): SerializedField['source'] | undefined {
-  if (source.from === 'compute') return undefined;
-  if (source.from === 'entry') return { from: 'entry', field: source.field };
-  if (source.key === undefined) return undefined;
-  return { from: 'meta', key: source.key };
+  return strategyFor(source).serialize(source);
 }
 
 function writeColumn(column: Omit<GridColumn, 'field'>): Omit<GridColumn, 'field'> {
@@ -108,7 +102,7 @@ function writeColumn(column: Omit<GridColumn, 'field'>): Omit<GridColumn, 'field
 
 function encodeDeclaredField(field: Field): SerializedField | undefined {
   if (isCoreFieldKey(String(field.key))) return undefined;
-  const stored = writeStoredSource(sourceForWrite(field));
+  const stored = writeStoredSource(storedSourceOf(field));
   if (stored === undefined) return undefined;
   const column = field.column === undefined ? undefined : writeColumn(field.column);
   return {

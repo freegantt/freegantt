@@ -1,7 +1,7 @@
 // layout/ — row-source sort. Reads stored values through bound FieldCompare (D-S4-28, D-S4-29).
 
 import { UnknownFieldError } from '../../model/index.js';
-import type { Entry, RowId } from '../../model/index.js';
+import type { Entry, FieldContext, RowId } from '../../model/index.js';
 import type { FieldCompare } from '../column.js';
 import type { RowSort, UnindexedRow } from './row-source.js';
 
@@ -9,7 +9,11 @@ export type { RowSort } from './row-source.js';
 
 type EntryComparer = (left: Entry, right: Entry) => number;
 
-function comparerFor(sort: RowSort, fieldCompares: readonly FieldCompare[]): EntryComparer {
+function comparerFor(
+  sort: RowSort,
+  fieldCompares: readonly FieldCompare[],
+  fields?: FieldContext,
+): EntryComparer {
   const fieldCompare = fieldCompares.find((compare) => compare.key === sort.field);
   if (fieldCompare === undefined) throw new UnknownFieldError(String(sort.field));
 
@@ -18,7 +22,7 @@ function comparerFor(sort: RowSort, fieldCompares: readonly FieldCompare[]): Ent
   return (left, right) => {
     const a = fieldCompare.readStored(left);
     const b = fieldCompare.readStored(right);
-    const order = sort.compare !== undefined ? sort.compare(a, b) : fieldCompare.compareStored(a, b);
+    const order = sort.compare !== undefined ? sort.compare(a, b, fields) : fieldCompare.compareStored(a, b);
     return direction * order;
   };
 }
@@ -69,10 +73,11 @@ export function applySort(
   entries: readonly Entry[],
   sort: RowSort | undefined,
   fieldCompares: readonly FieldCompare[],
+  fields?: FieldContext,
 ): UnindexedRow[] {
   if (sort === undefined) return [...rows];
 
-  const compare = comparerFor(sort, fieldCompares);
+  const compare = comparerFor(sort, fieldCompares, fields);
   const entriesById = new Map(entries.map((entry) => [entry.id, entry]));
   return emitSorted(undefined, siblingsByParentRow(rows), entriesById, compare);
 }
