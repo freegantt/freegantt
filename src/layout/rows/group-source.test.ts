@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { entryId, rowId } from '../../model/index.js';
 import type { Entry, Instant } from '../../model/index.js';
 import { resolveGroupSource } from './group-source.js';
-import { resolveRows, rowResolutionInput } from './resolve-rows.js';
+import { resolveRows } from './resolve-rows.js';
 
 function instant(n: number): Instant {
   return n as Instant;
@@ -41,13 +41,11 @@ describe('resolveGroupSource', () => {
 
 describe('resolveRows collapse (group)', () => {
   it('a collapsed header omits its entry rows', () => {
-    const rows = resolveRows(
-      rowResolutionInput({
-        entries: [entry('a', 'red'), entry('b', 'blue')],
-        rows: { source: 'group', groupBy: (e) => String((e.meta as { team: string }).team) },
-        collapsed: [rowId('group:red')],
-      }),
-    );
+    const rows = resolveRows({
+      entries: [entry('a', 'red'), entry('b', 'blue')],
+      rows: { source: 'group', groupBy: (e) => String((e.meta as { team: string }).team) },
+      collapsed: [rowId('group:red')],
+    });
     expect(rows.map((r) => r.id)).toEqual([rowId('group:red'), rowId('group:blue'), rowId('b')]);
     expect(rows[0]?.expanded).toBe(false);
   });

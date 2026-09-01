@@ -5,7 +5,7 @@ import type { FieldCompare } from '../column.js';
 import { applyFilter } from './filter.js';
 import { resolveEntriesSource } from './entries-source.js';
 import { applySort } from './sort.js';
-import { resolveRows, rowResolutionInput } from './resolve-rows.js';
+import { resolveRows } from './resolve-rows.js';
 
 function instant(n: number): Instant {
   return n as Instant;
@@ -148,19 +148,17 @@ describe('resolveRows order (S4.9)', () => {
       entry('c2', { parentId: 'p', team: 'A', start: 10 }),
       entry('q'),
     ];
-    const rows = resolveRows(
-      rowResolutionInput({
-        entries,
-        rows: {
-          source: 'entries',
-          tree: true,
-          filter: (row) => (row.meta as { team?: string } | undefined)?.team === 'A',
-          sort: { field: 'start' },
-        },
-        collapsed: [rowId('p')],
-        fieldCompares: costCompares(),
-      }),
-    );
+    const rows = resolveRows({
+      entries,
+      rows: {
+        source: 'entries',
+        tree: true,
+        filter: (row) => (row.meta as { team?: string } | undefined)?.team === 'A',
+        sort: { field: 'start' },
+      },
+      collapsed: [rowId('p')],
+      fieldCompares: costCompares(),
+    });
     expect(rows.map((row) => row.id)).toEqual([rowId('p')]);
     expect(rows[0]?.expanded).toBe(false);
   });

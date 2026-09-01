@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { FieldRegistry } from '../data/fields/field-registry.js';
 import { FieldNotColumnableError, UnknownFieldError } from '../model/index.js';
 import { CORE_FIELDS } from '../data/fields/core-fields.js';
-import { bindGanttFields, resolveColumns, resolveFieldCompares } from './grid-columns.js';
-import type { FieldLookup } from '../data/fields/field-access.js';
+import { resolveGanttFields, resolveColumns, resolveFieldCompares } from './grid-columns.js';
+import type { FieldLookup } from '../data/fields/field-lookup.js';
 import type { Entry, Field, FieldKey } from '../model/index.js';
 import { entryId } from '../model/index.js';
 
@@ -83,10 +83,10 @@ describe('resolveFieldCompares (D-S4-13)', () => {
   });
 });
 
-describe('bindGanttFields (D-S4-13)', () => {
-  it('one bind returns visible columns and every Field compare', () => {
+describe('resolveGanttFields (D-S4-13)', () => {
+  it('one locale resolve returns visible columns and every Field compare', () => {
     const registry = costRegistry();
-    const bound = bindGanttFields(
+    const bound = resolveGanttFields(
       { field: (key) => registry.get(key), fields: { all: registry.all }, timeZone: zone },
       ['name'],
       { timeZone: zone, locale },

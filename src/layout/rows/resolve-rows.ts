@@ -1,5 +1,6 @@
 // layout/ — dispatch to the three row sources, then filter → sort → collapse (D-S4-19, D-S4-28).
 
+import type { Entry } from '../../model/index.js';
 import type { FieldCompare } from '../column.js';
 import { applyCollapse } from './collapse.js';
 import { applyFilter } from './filter.js';
@@ -20,18 +21,29 @@ export type {
 } from './row-source.js';
 export { DEFAULT_ROW_SOURCE };
 
-export function rowResolutionInput(input: {
-  entries: readonly import('../../model/index.js').Entry[];
+/** Call: `resolveRows({ entries, rows: gantt.rowSource, collapsed })`. */
+export function resolveRows(input: {
+  entries: readonly Entry[];
   rows?: RowSource;
   collapsed?: readonly string[];
   fieldCompares?: readonly FieldCompare[];
-}): RowResolutionInput {
-  return {
+}): readonly PlannedRow[] {
+  const resolution: RowResolutionInput = {
     entries: input.entries,
     source: input.rows ?? DEFAULT_ROW_SOURCE,
     collapsed: new Set(input.collapsed ?? []),
     ...(input.fieldCompares !== undefined ? { fieldCompares: input.fieldCompares } : {}),
   };
+  const { source, entries, collapsed, fieldCompares = [] } = resolution;
+  const built = resolveSource(resolution);
+  const filtered =
+    source.source === 'custom' ? built : applyFilter(built, entries, source.filter, filterPolicyOf(source));
+  const sorted =
+    source.source === 'custom'
+      ? filtered
+      : applySort(filtered, entries, source.sort, fieldCompares, treeModeOf(source));
+  const collapsedRows = applyCollapse(sorted, collapsed);
+  return stampIndex(collapsedRows);
 }
 
 function stampIndex(rows: readonly UnindexedRow[]): readonly PlannedRow[] {
@@ -52,17 +64,4 @@ function filterPolicyOf(source: RowSource): 'keepAncestors' | 'matchOnly' {
 
 function treeModeOf(source: RowSource): boolean {
   return source.source === 'entries' && source.tree === true;
-}
-
-export function resolveRows(input: RowResolutionInput): readonly PlannedRow[] {
-  const { source, entries, collapsed, fieldCompares = [] } = input;
-  const built = resolveSource(input);
-  const filtered =
-    source.source === 'custom' ? built : applyFilter(built, entries, source.filter, filterPolicyOf(source));
-  const sorted =
-    source.source === 'custom'
-      ? filtered
-      : applySort(filtered, entries, source.sort, fieldCompares, treeModeOf(source));
-  const collapsedRows = applyCollapse(sorted, collapsed);
-  return stampIndex(collapsedRows);
 }

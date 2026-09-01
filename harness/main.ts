@@ -1,5 +1,5 @@
 import './harness-nav.ts';
-import { Gantt, Dataset, MutationCancelledError } from '../src/api/index.js';
+import { Gantt, Dataset, attemptMutation } from '../src/api/index.js';
 import type { Theme, TimeUnit } from '../src/api/index.js';
 import { demoEntryInputs } from '../fixtures/demo-dataset.js';
 import { mountTimelineToolbar } from './timeline-toolbar.js';
@@ -67,41 +67,29 @@ dataset.on('change', () => {
 renameBtn.addEventListener('click', () => {
   const entries = gantt.selectionEntries;
   if (entries.length === 0) return;
-  try {
+  attemptMutation(() => {
     dataset.transaction(() => {
       for (const entry of entries) dataset.entries.update(entry.id, { name: nameInput.value });
     });
-  } catch (error) {
-    if (!(error instanceof MutationCancelledError)) throw error;
-  }
+  });
 });
 
 removeBtn.addEventListener('click', () => {
   const entries = gantt.selectionEntries;
   if (entries.length === 0) return;
-  try {
+  attemptMutation(() => {
     dataset.transaction(() => {
       for (const entry of entries) dataset.entries.remove(entry.id);
     });
-  } catch (error) {
-    if (!(error instanceof MutationCancelledError)) throw error;
-  }
+  });
 });
 
 undoBtn.addEventListener('click', () => {
-  try {
-    dataset.undo();
-  } catch (error) {
-    if (!(error instanceof MutationCancelledError)) throw error;
-  }
+  attemptMutation(() => dataset.undo());
 });
 
 redoBtn.addEventListener('click', () => {
-  try {
-    dataset.redo();
-  } catch (error) {
-    if (!(error instanceof MutationCancelledError)) throw error;
-  }
+  attemptMutation(() => dataset.redo());
 });
 
 refreshHistoryButtons();

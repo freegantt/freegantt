@@ -151,8 +151,8 @@ export function rollUpFields(
       let value: unknown;
       try {
         value = aggregator(children, effectiveParent, { ...ctx, field: field.key });
-      } catch {
-        throw new AggregatorFailedError(field.key, field.rollUp, parentId);
+      } catch (cause) {
+        throw new AggregatorFailedError(field.key, field.rollUp, parentId, cause);
       }
 
       if (value === undefined) continue;

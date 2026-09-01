@@ -19,7 +19,7 @@ import {
 import type { EntryStore as EntryStoreContract } from '../model/index.js';
 import { computed, signal } from './reactivity.js';
 import type { EntryEdits, StoredEdit } from './edit-extension.js';
-import type { ChangeSet } from '../model/index.js';
+import type { ChangeSet, FieldUpdated } from '../model/index.js';
 import { readEdit, readEntry } from './entry-reader.js';
 import type { EntryReadContext } from './entry-reader.js';
 import { runTransaction } from './transaction.js';
@@ -66,11 +66,7 @@ export class EntryStore implements EntryStoreContract {
    *  the wrong insertion order). A `'user'` add is always a fresh object, so it never collides here. */
   #removedAtIndex = new Map<Entry, number>();
   #context: EntryReadContext;
-  /** Set once, right after construction, by whoever owns this store's transactions
-   *  (`DatasetState`, `data/dataset-state.ts`) — `EntryStore` and its runner construct in a fixed
-   *  order, so the reference cannot pass through the constructor without a cycle. `add`/`update`/
-   *  `remove` are the only callers. */
-  #runner: TransactionData | undefined;
+  readonly #runner: TransactionData | undefined;
   readonly #registry: FieldRegistry;
   readonly #fieldContext: FieldContext;
 
@@ -79,10 +75,12 @@ export class EntryStore implements EntryStoreContract {
     context: EntryReadContext,
     registry: FieldRegistry = new FieldRegistry(),
     fieldContext: FieldContext = createFieldContext(registry, context.timeZone),
+    runner?: TransactionData,
   ) {
     this.#context = context;
     this.#registry = registry;
     this.#fieldContext = fieldContext;
+    this.#runner = runner;
     this.#byId = new Map(entries.map((entry) => [entry.id, entry]));
     // D-S2-3: rebuilt on commit, not on every read — one array identity per revision, so
     // `ScaleBinding`'s reference comparison and `BoundValue`'s equality half (D-S1.5-4) hold.
@@ -177,12 +175,6 @@ export class EntryStore implements EntryStoreContract {
    *  Distinct from Snapshot (`entries.all`), which is the cached array. */
   committedById(): ReadonlyMap<EntryId, Entry> {
     return this.#byId;
-  }
-
-  /** Sets the transaction runner `add`/`update`/`remove` auto-wrap into (S2.3 §1.2). Called once,
-   *  by `data/dataset-state.ts`, right after both it and this store exist. */
-  setTransactionRunner(runner: TransactionData): void {
-    this.#runner = runner;
   }
 
   // ---- Public mutators (S2.3 §1.1): validate against the write set, then stage; each auto-wraps in
@@ -310,6 +302,12 @@ export class EntryStore implements EntryStoreContract {
     return this.#writeSet?.edits ?? new Map();
   }
 
+  writeCommittedFieldRows(updated: readonly FieldUpdated[]): void {
+    if (updated.length === 0) return;
+    this.#applyUpdatedRows(updated);
+    this.#revision.set(this.#revision.get() + 1);
+  }
+
   /** Applies the committed `ChangeSet` (`undefined` for an empty net effect or a vetoed commit — the
    *  write set is simply discarded) and closes the write set. */
   endTransaction(_token: TxToken, changeSet: ChangeSet | undefined): void {
@@ -317,14 +315,17 @@ export class EntryStore implements EntryStoreContract {
       this.#rememberRemovedIndexes(changeSet);
       for (const { entity } of changeSet.removed) this.#byId.delete(entity.id);
       this.#restoreAdded(changeSet);
-
-      for (const row of changeSet.updated) {
-        const current = this.#byId.get(row.id);
-        if (current) this.#byId.set(row.id, applyFieldRow(current, row.field, row.to, this.#registry));
-      }
+      this.#applyUpdatedRows(changeSet.updated);
       this.#revision.set(this.#revision.get() + 1);
     }
     this.#writeSet = null;
+  }
+
+  #applyUpdatedRows(updated: readonly FieldUpdated[]): void {
+    for (const row of updated) {
+      const current = this.#byId.get(row.id);
+      if (current) this.#byId.set(row.id, applyFieldRow(current, row.field, row.to, this.#registry));
+    }
   }
 
   /** Records where each removed object sat, keyed by that exact object (D-S2-3). A `'user'` add of

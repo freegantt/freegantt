@@ -2,8 +2,8 @@
 
 import type { Dataset, Entry, Field, FormatContext, GridColumn, GridColumnInput } from '../model/index.js';
 import { FieldNotColumnableError, UnknownFieldError } from '../model/index.js';
-import { createFieldContext } from '../data/fields/field-access.js';
-import type { FieldLookup } from '../data/fields/field-access.js';
+import { createFieldContext } from '../data/fields/field-lookup.js';
+import type { FieldLookup } from '../data/fields/field-lookup.js';
 import type { FieldCompare, ResolvedColumn } from '../layout/index.js';
 
 export const DEFAULT_GRID_COLUMNS: readonly GridColumnInput[] = Object.freeze(['name']);
@@ -98,9 +98,9 @@ export function resolveFieldCompares(
   }));
 }
 
-/** Call: `bindGanttFields(dataset, gantt.gridColumns, { timeZone, locale })`.
- *  One locale bind. Two lists leave: visible columns, and every Field's compare (D-S4-13). */
-export function bindGanttFields(
+/** Call: `resolveGanttFields(dataset, gantt.gridColumns, { timeZone, locale })`.
+ *  One locale. Two lists leave: visible columns, and every Field's compare (D-S4-13). */
+export function resolveGanttFields(
   dataset: Pick<Dataset, 'field' | 'fields' | 'timeZone'>,
   gridColumns: readonly GridColumnInput[],
   bind: ResolveColumnsBind,

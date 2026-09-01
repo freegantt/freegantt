@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { GanttShell } from './gantt-shell.js';
 import type { GanttShellOptions } from './gantt-shell.js';
 import { FrameLayout, ScrollModel, TimeScaleModel } from '../layout/index.js';
-import { entryId, EntryNotFoundError, ContainerNotFoundError } from '../model/index.js';
+import { entryId, rowId, EntryNotFoundError, ContainerNotFoundError } from '../model/index.js';
 import type { Entry, Instant, ItemId } from '../model/index.js';
 import { DatasetState, EntryStore } from '../data/index.js';
 import { CORE_FIELDS } from '../data/fields/core-fields.js';
@@ -533,6 +533,47 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
       expect(scroll.state.position.y).toBeGreaterThan(0);
 
       expect(() => shell.reveal(entryId('does-not-exist'))).toThrow(EntryNotFoundError);
+
+      shell.destroy();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('reveal expands a collapsed ancestor instead of scrolling to y 0', () => {
+    FakeResizeObserver.instances = [];
+    vi.stubGlobal('ResizeObserver', FakeResizeObserver);
+
+    try {
+      const container = document.createElement('div');
+      const scroll = new ScrollModel();
+      const parent: Entry = {
+        id: entryId('p'),
+        name: 'p',
+        kind: 'span',
+        start: rangeStart,
+        end: instant('2026-09-03T00:00:00Z'),
+      };
+      const child: Entry = {
+        id: entryId('c'),
+        name: 'c',
+        kind: 'span',
+        parentId: entryId('p'),
+        start: rangeStart,
+        end: instant('2026-09-03T00:00:00Z'),
+      };
+      const shell = new GanttShell({
+        container,
+        dataset: fakeDataset([parent, child]),
+        scroll,
+        rowSource: { source: 'entries', tree: true },
+        collapsed: [rowId('p')],
+      });
+      FakeResizeObserver.instances[0]!.fire({ width: 500, height: 100 });
+
+      expect(shell.collapsed.map(String)).toContain('p');
+      shell.reveal(entryId('c'));
+      expect(shell.collapsed.map(String)).not.toContain('p');
 
       shell.destroy();
     } finally {

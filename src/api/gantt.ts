@@ -22,7 +22,7 @@ import type {
   RowId,
   TimeSpan,
 } from '../model/index.js';
-import { MutationCancelledError } from '../model/index.js';
+import { attemptMutation } from './attempt-mutation.js';
 import { now, toInstant } from '../time/index.js';
 import type { Dataset } from './dataset.js';
 // api/ is the composition root that reaches interaction/ in (plans/01 §1: `API --> INT`,
@@ -144,17 +144,12 @@ export class Gantt {
       // S3.3, D-S3-16: `GanttShell`'s own `dataset` option is `model/`'s narrow `Dataset` interface
       // ("a view never opens a transaction") — this class holds the full `api/Dataset`, so a
       // committed gesture draft reaches the store through here, not through the shell itself.
-      commitEntryEdits: (edits: EntryEdits) => {
-        try {
+      commitEntryEdits: (edits: EntryEdits) =>
+        attemptMutation(() => {
           options.dataset.transaction(() => {
             for (const [id, edit] of edits) options.dataset.entries.update(id, edit);
           });
-          return true;
-        } catch (error) {
-          if (error instanceof MutationCancelledError) return false;
-          throw error;
-        }
-      },
+        }),
     });
     if (options.zoomPresets !== undefined) this.#shell.zoomPresets = options.zoomPresets;
     if (options.selection !== undefined) this.#shell.selection = options.selection;

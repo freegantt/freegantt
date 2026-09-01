@@ -3,7 +3,7 @@
 // reader sees the rows each edit produced.
 
 import './harness-nav.ts';
-import { Dataset, Gantt, MutationCancelledError } from '../src/api/index.js';
+import { Dataset, Gantt, attemptMutation } from '../src/api/index.js';
 import type {
   ChangeSet,
   DatasetDocument,
@@ -267,39 +267,27 @@ autoGroupCheckbox.addEventListener('change', () => {
 });
 
 reparentBtn.addEventListener('click', () => {
-  try {
+  attemptMutation(() => {
     dataset.entries.update('task-beta', { parentId: 'plain-parent' });
-  } catch (error) {
-    if (!(error instanceof MutationCancelledError)) throw error;
-  }
+  });
 });
 
 costBtn.addEventListener('click', () => {
   const entries = gantt.selectionEntries;
   if (entries.length === 0) return;
-  try {
+  attemptMutation(() => {
     dataset.transaction(() => {
       for (const selected of entries) dataset.entries.update(selected.id, { cost: 500 });
     });
-  } catch (error) {
-    if (!(error instanceof MutationCancelledError)) throw error;
-  }
+  });
 });
 
 undoBtn.addEventListener('click', () => {
-  try {
-    dataset.undo();
-  } catch (error) {
-    if (!(error instanceof MutationCancelledError)) throw error;
-  }
+  attemptMutation(() => dataset.undo());
 });
 
 redoBtn.addEventListener('click', () => {
-  try {
-    dataset.redo();
-  } catch (error) {
-    if (!(error instanceof MutationCancelledError)) throw error;
-  }
+  attemptMutation(() => dataset.redo());
 });
 
 exportBtn.addEventListener('click', () => {

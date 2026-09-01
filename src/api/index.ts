@@ -1,5 +1,6 @@
 export { Dataset } from './dataset.js';
 export type { DatasetOptions, DatasetHierarchy } from './dataset.js';
+export { attemptMutation } from './attempt-mutation.js';
 export type {
   ChangeSet,
   ChangeSetId,

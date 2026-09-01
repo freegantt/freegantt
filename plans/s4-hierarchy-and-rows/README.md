@@ -125,7 +125,7 @@ Eleven steps, in order. The Field context lands first, because the row cells and
 | Id | Box | Owning step | Primary tests |
 |---|---|---|---|
 | `[S4-A1]` | A declared `meta` Field sums up the tree, shows beside `start`, edits in the same `update()` and undo step as a core Field, and round-trips | S4.1–S4.4 | `data/rollup.test.ts`, `data/serialization/*.test.ts`, `api/dataset.test.ts` |
-| `[S4-A2]` | An edit naming an unregistered key throws `UnknownFieldError` — never a silent write | S4.1 | `data/entry-store.test.ts` |
+| `[S4-A2]` | An edit naming an unregistered key throws `UnknownFieldError` — never a silent write | S4.1 | `data/entry-store.mutation.test.ts` |
 | `[S4-A3]` | Switching `gantt.rowSource` re-resolves rows with no remount; scroll survives | S4.6 | `api/gantt.test.ts`, `layout/rows/*.test.ts` |
 | `[S4-A4]` | A segmented entry renders N bars on one row; one segment drags transactionally | S4.7, S4.10 | `layout/items/*.test.ts`, `interaction/entry-gestures.test.ts` |
 | `[S4-A5]` | Pack-mode rows change height as overlaps come and go; scroll stays stable | S4.8 | `layout/lanes/*.test.ts`, `layout/frame-layout.test.ts` |
@@ -335,6 +335,8 @@ Read these before you touch `src/`.
 | Row reorder and reparent **by drag** | when an authored order Field exists | That Field, plus a drop-target vocabulary (D-S4-31). S4 ships the data half: `update(id, { parentId })` |
 | Moving a `'group'` moves its subtree | S7 | The extension hook writes children |
 | Link endpoints on a multi-item row (`links.endpoints`) | S7 | Link emission (#16) |
+| Rest of the `GanttShell` split (GLM C4 minus today-landing) | before S5 plugin wiring | [`c4-split-gantt-shell.md`](./c4-split-gantt-shell.md) |
+| Staged commit pipeline + unify construction with commit promote/rollup | S7 | `plans/03` §S7; S4.11 review C3 |
 
 ---
 

@@ -7,10 +7,10 @@ import {
   mergeStoredEdits,
   overlayStoredEdit,
   readField,
+  withProposedKeys,
   writeField,
   writeOntoEntry,
 } from './field-access.js';
-import { markAuthoredFieldKeys } from './field-access.js';
 import { FieldRegistry } from './field-registry.js';
 
 const span = (meta?: unknown): Entry => {
@@ -80,8 +80,10 @@ describe('readField / writeField (D-S4-2)', () => {
     expect(readField(next, cost, fieldCtx)).toBe(300);
   });
 
-  it('mergeStoredEdits keeps authored keys', () => {
-    const authored = markAuthoredFieldKeys(writeField({}, span(), cost, 3), ['cost']);
+  it('mergeStoredEdits keeps proposed keys through a spread', () => {
+    const authored = withProposedKeys(writeField({}, span(), cost, 3), ['cost']);
+    const spread = { ...authored };
+    expect(spread.proposedKeys?.has('cost')).toBe(true);
     const merged = mergeStoredEdits({ name: 'x' }, authored);
     expect(editProposesField(merged, cost)).toBe(true);
   });

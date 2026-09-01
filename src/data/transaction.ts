@@ -39,6 +39,8 @@ export interface TransactionalEntryStore {
   pendingRemoved(): readonly { store: 'entries'; entity: Entry }[];
   pendingEdits(): EntryEdits;
   endTransaction(token: TxToken, changeSet: ChangeSet | undefined): void;
+  /** Writes Field rows into committed entries with no `beforeChange`/`change` and no history. */
+  writeCommittedFieldRows(updated: readonly FieldUpdated[]): void;
 }
 
 /** What `runTransaction` needs from a Dataset's live state. Structural, not `DatasetState` itself, for
@@ -72,21 +74,12 @@ export interface TransactionData {
 
 /**
  * Writes rolled-up or promoted Field rows straight into the store, with no `beforeChange`/`change`
- * and no history record. Construction and the commit path use this after a pure pass produces
- * corrections that must land before anyone reads the dataset.
+ * and no history record. Construction uses this after a pure pass produces corrections that must
+ * land before anyone reads the dataset.
  */
-function applySilentUpdates(data: TransactionData, updated: readonly FieldUpdated[]): void {
+function writeConstructionUpdates(data: TransactionData, updated: readonly FieldUpdated[]): void {
   if (updated.length === 0) return;
-
-  const token: TxToken = {} as TxToken;
-  data.entries.beginTransaction(token);
-  data.entries.endTransaction(token, {
-    id: data.nextChangeSetId(),
-    origin: 'user',
-    added: [],
-    removed: [],
-    updated,
-  });
+  data.entries.writeCommittedFieldRows(updated);
   data.bumpDatasetRevision();
 }
 
@@ -95,7 +88,7 @@ function applyConstructionPromote(data: TransactionData): void {
   const edits = promoteNewParents(byId, undefined, data.hierarchy);
   if (edits.size === 0) return;
 
-  applySilentUpdates(data, diffEdits(byId, edits, data.fields, data.fieldContext));
+  writeConstructionUpdates(data, diffEdits(byId, edits, data.fields, data.fieldContext));
 }
 
 /**
@@ -107,8 +100,7 @@ function applyConstructionPromote(data: TransactionData): void {
  * Writes any correction straight into the store and returns early if there is none. There is no
  * `beforeChange`/`change` here and no history record (S2.5) — construction emits nothing (`01` §2.6),
  * so this bypasses `runTransaction` entirely rather than opening a transaction only to suppress its
- * notifications. `origin: 'user'` is inert: the changeset this builds is never emitted or returned,
- * so nothing reads it — a `'load'` origin arrives with its own producer later (D-S2-11).
+ * notifications. A `'load'` origin arrives with its own producer later (D-S2-11).
  *
  * Promotion runs first (D-S4-17): a constructed `'span'` with children becomes `'group'` before
  * the Rollup walks, so the same construction also fills the envelope. The second and last caller
@@ -120,7 +112,7 @@ export function applyConstructionRollUp(data: TransactionData): void {
   applyConstructionPromote(data);
   const byId = data.entries.committedById();
   const updated = rollUpFields(byId, undefined, data.fields, data.rollUpKinds, data.fieldContext);
-  applySilentUpdates(data, updated);
+  writeConstructionUpdates(data, updated);
 }
 
 const isDevMode = (): boolean => (import.meta as { env?: { DEV?: boolean } }).env?.DEV ?? false;

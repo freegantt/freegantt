@@ -48,6 +48,11 @@ export interface Field<TValue = unknown> {
 /** A `Field` with `key` and `source` omitted — one bundle applied by name to many Fields. */
 export type FieldType<TValue = unknown> = Omit<Field<TValue>, 'key' | 'source' | 'type'>;
 
+/** What `createFieldContext` and column resolve need — `FieldRegistry.get` and `dataset.field` both satisfy this. */
+export type FieldLookup = {
+  get(key: FieldKey): Field | undefined;
+};
+
 /** Compute and store access. No locale — a headless Dataset does not format. */
 export interface FieldContext {
   readonly timeZone: string;
