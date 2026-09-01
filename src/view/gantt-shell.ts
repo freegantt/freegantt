@@ -447,12 +447,8 @@ export class GanttShell {
       contentXAtPaneOffset: (offsetX) => offsetX + this.#viewport.scroll.state.position.x,
       session: (grabbed, gesture, grabbedItemId) =>
         this.#gesturePipeline.session(grabbed, gesture, grabbedItemId),
-      ...(this.#treeKeyboardEnabled()
-        ? {
-            tryTreeArrow: (direction) => this.#treeCollapse.handleArrow(direction),
-            expandAllRows: () => this.expandAll(),
-          }
-        : {}),
+      tryTreeArrow: (direction) => this.#treeCollapse.handleArrow(direction),
+      expandAllRows: () => this.expandAll(),
     };
     this.#entryGestures = options.entryGestures?.(this.#panes.timeline, this.#container, gestureContext);
     this.#keyboardEditing = options.keyboardEditing?.(this.#container, gestureContext);
@@ -558,10 +554,6 @@ export class GanttShell {
     this.#layout.invalidateFrom(0);
     this.#frames.request();
     this.#events.emit('collapseChange', proposed);
-  }
-
-  #treeKeyboardEnabled(): boolean {
-    return this.#rowSource.source === 'entries' && this.#rowSource.tree === true;
   }
 
   #selectableEntriesInRowOrder(): readonly EntryId[] {
