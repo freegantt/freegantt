@@ -8,35 +8,46 @@
 import { computeFrame } from './frame.js';
 import type { GeometryFrame, LayoutInput } from './frame.js';
 import { PrefixSumHeightIndex } from './row-height-index.js';
-import type { RowHeightIndex } from './row-height-index.js';
+import { FrameMemory } from './frame-memory.js';
 import { resolveRows, rowResolutionInput } from './rows/resolve-rows.js';
 import type { PlannedRow } from './rows/row-source.js';
-import type { EntryId } from '../model/index.js';
+import type { ChangeSet, Entry, EntryId } from '../model/index.js';
+import { createItemProducerRegistry, produceItemsForRow } from './items/produce-items.js';
+import type { ItemProducerRegistry } from './items/produce-items.js';
+import { DEFAULT_LANE_GAP_PX, packRow, packedRowHeight } from './lanes/pack-lanes.js';
 
 /** One Gantt's layout pass, with the row-height index kept alive between passes. One instance per
  * Gantt: the cached index describes that Gantt's rows, and nothing about it is shareable. */
 export class FrameLayout {
-  #heights: RowHeightIndex | undefined;
-  /** The two inputs the cached index is built from. Row heights are uniform today, so they are the
-   * whole invalidation surface; pack mode's per-row heights bring `invalidateFrom` calls here. */
-  #rowCount = -1;
+  #memory: FrameMemory | undefined;
+  /** Cache key for the live index. Distinct from `#rowHeight` / `#laneGap`, which `getHeight` reads. */
+  #cachedRowCount = -1;
+  #cachedRowHeight = -1;
+  #cachedLaneGap = -1;
   #rowHeight = -1;
+  #laneGap = -1;
   #plan: readonly PlannedRow[] = [];
-  /** Bumped whenever `#heightsFor` builds a fresh index (D-S2-16) — what turns "a changeset with
+  #entryById = new Map<EntryId, Entry>();
+  #registry: ItemProducerRegistry = createItemProducerRegistry();
+  /** Bumped whenever `#memoryFor` builds a fresh index (D-S2-16) — what turns "a changeset with
    *  only `updated` rows never rebuilds the row-height index" from a property of the cache key
    *  into something `[S2-A3]` can assert. */
   heightIndexRevision = 0;
 
   computeFrame(input: LayoutInput): GeometryFrame {
     this.#plan = resolveRows(rowResolutionInput(input));
-    return computeFrame(input, this.#heightsFor(this.#plan.length, input.rowHeight));
+    this.#rowHeight = input.rowHeight;
+    this.#laneGap = input.laneGapPx ?? DEFAULT_LANE_GAP_PX;
+    this.#entryById = new Map(input.entries.map((entry) => [entry.id, entry]));
+    this.#registry = input.itemProducerRegistry ?? createItemProducerRegistry();
+    return computeFrame(input, this.#memoryFor(this.#plan.length, this.#rowHeight, this.#laneGap));
   }
 
   /** The row-height index's own `topAt`, exposed so `reveal` can ask for a row's position without a
    * full layout pass. Available once `computeFrame` has run at least once — true for any Gantt that
    * has completed construction, which is the only caller. */
   rowTop(index: number): number {
-    return this.#heights?.topAt(index) ?? 0;
+    return this.#memory?.heights.topAt(index) ?? 0;
   }
 
   /** Index of the first planned row that carries this entry, or `-1` when collapse hid it. */
@@ -45,17 +56,51 @@ export class FrameLayout {
   }
 
   invalidateFrom(index: number): void {
-    this.#heights?.invalidateFrom(index);
+    this.#memory?.heights.invalidateFrom(index);
+    for (let i = index; i < this.#plan.length; i++) {
+      this.#memory?.forgetPacked(this.#plan[i]!.id);
+    }
   }
 
-  #heightsFor(rowCount: number, rowHeight: number): RowHeightIndex {
-    if (this.#heights && this.#rowCount === rowCount && this.#rowHeight === rowHeight) {
-      return this.#heights;
+  /** Field-only updates invalidate from the lowest changed row; add/remove rebuilds from 0 (D-S2-16). */
+  invalidateForChange(changeSet: ChangeSet): void {
+    this.invalidateFrom(this.#indexToInvalidate(changeSet));
+  }
+
+  #indexToInvalidate(changeSet: ChangeSet): number {
+    if (changeSet.added.length > 0 || changeSet.removed.length > 0) return 0;
+    let lowest = Infinity;
+    for (const update of changeSet.updated) {
+      const index = this.rowIndexForEntry(update.id);
+      if (index >= 0 && index < lowest) lowest = index;
     }
-    this.#heights = new PrefixSumHeightIndex(rowCount, () => rowHeight);
-    this.#rowCount = rowCount;
-    this.#rowHeight = rowHeight;
+    return Number.isFinite(lowest) ? lowest : 0;
+  }
+
+  #heightAt(index: number): number {
+    const row = this.#plan[index];
+    if (row === undefined || row.heightMode !== 'pack') return this.#rowHeight;
+    const packed = this.#memory!.packedRow(row.id, () => {
+      const items = produceItemsForRow(row, this.#entryById, this.#registry);
+      return { items, packing: packRow(items) };
+    });
+    return packedRowHeight(packed.packing.laneCount, this.#rowHeight, this.#laneGap);
+  }
+
+  #memoryFor(rowCount: number, rowHeight: number, laneGap: number): FrameMemory {
+    if (
+      this.#memory &&
+      this.#cachedRowCount === rowCount &&
+      this.#cachedRowHeight === rowHeight &&
+      this.#cachedLaneGap === laneGap
+    ) {
+      return this.#memory;
+    }
+    this.#memory = new FrameMemory(new PrefixSumHeightIndex(rowCount, (i) => this.#heightAt(i)));
+    this.#cachedRowCount = rowCount;
+    this.#cachedRowHeight = rowHeight;
+    this.#cachedLaneGap = laneGap;
     this.heightIndexRevision++;
-    return this.#heights;
+    return this.#memory;
   }
 }

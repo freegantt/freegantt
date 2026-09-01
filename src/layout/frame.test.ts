@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import { computeFrame } from './frame.js';
+import { FrameMemory } from './frame-memory.js';
 import { PrefixSumHeightIndex } from './row-height-index.js';
+import * as packLanes from './lanes/pack-lanes.js';
 import { sampleEntries } from '../../fixtures/sample-dataset.js';
 import { seededEntryInputs } from '../../fixtures/seeded-dataset.js';
 import {
@@ -197,7 +199,7 @@ describe('computeFrame', () => {
         rowHeight: 10,
         revision: 0,
       },
-      heights,
+      new FrameMemory(heights),
     );
     expect(windowed.rows.map((r) => r.index)).toEqual([1, 2, 3]);
   });
@@ -284,7 +286,7 @@ describe('computeFrame', () => {
         rowHeight: 32,
         revision: 0,
       },
-      heights,
+      new FrameMemory(heights),
     );
 
     expect(windowed.rows.map((r) => r.index)).toEqual([1]);
@@ -638,5 +640,50 @@ describe('computeFrame row sources (S4.6)', () => {
     });
     expect(collapsed.rowCount).toBe(entries.length - 1);
     expect(collapsed.rows.some((r) => String(r.id) === String(child.id))).toBe(false);
+  });
+});
+
+describe('computeFrame lanes (S4.8)', () => {
+  const overlapping: Entry = {
+    ...sampleEntries[0]!,
+    segments: [
+      { start: sampleEntries[0]!.start, end: sampleEntries[0]!.end },
+      { start: sampleEntries[0]!.start, end: sampleEntries[0]!.end },
+      { start: sampleEntries[0]!.start, end: sampleEntries[0]!.end },
+    ],
+  };
+
+  it("a 'fixed' source never calls the packer", () => {
+    const spy = vi.spyOn(packLanes, 'packRow');
+    computeFrame({
+      entries: [overlapping],
+      scale,
+      preset,
+      visible,
+      rowHeight: 32,
+      revision: 0,
+      rows: { source: 'entries', heightMode: 'fixed' },
+    });
+    expect(spy).not.toHaveBeenCalled();
+    spy.mockRestore();
+  });
+
+  it('culls through the height index when pack-mode rows have different heights', () => {
+    const short: Entry = { ...sampleEntries[1]!, id: sampleEntries[1]!.id };
+    const frame = computeFrame({
+      entries: [overlapping, short],
+      scale,
+      preset,
+      visible: { x: 0, y: 0, width: 0, height: 32 },
+      overscan: TIGHT,
+      rowHeight: 32,
+      laneGapPx: 2,
+      revision: 0,
+      rows: { source: 'entries', heightMode: 'pack' },
+    });
+    expect(frame.rows).toHaveLength(1);
+    expect(frame.rows[0]?.laneCount).toBe(3);
+    expect(frame.rows[0]?.height).toBe(32 * 3 + 2 * 2);
+    expect(frame.contentHeight).toBe(32 * 3 + 2 * 2 + 32);
   });
 });

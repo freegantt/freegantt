@@ -1,6 +1,6 @@
 import './harness-nav.ts';
 import { Gantt, Dataset, MutationCancelledError } from '../src/api/index.js';
-import type { GridColumnInput, Theme } from '../src/api/index.js';
+import type { GridColumnInput, Theme, RowSource } from '../src/api/index.js';
 import type { Entry, TimeUnit } from '../src/model/index.js';
 import { demoEntryInputs } from '../fixtures/demo-dataset.js';
 import { mountTimelineToolbar } from './timeline-toolbar.js';
@@ -36,15 +36,15 @@ const NESTED_PARENT: Record<string, string> = {
   'entry-17': 'entry-14',
 };
 
-function splitIntoThreeSegments(
+function splitIntoOverlappingSegments(
   start: NonNullable<(typeof demoEntryInputs)[number]['start']>,
   end: NonNullable<(typeof demoEntryInputs)[number]['end']>,
 ) {
   const startMs = start instanceof Date ? start.getTime() : new Date(`${String(start)}T00:00:00Z`).getTime();
   const dayMs = 24 * 60 * 60 * 1000;
   return [
-    { start: new Date(startMs), end: new Date(startMs + dayMs) },
-    { start: new Date(startMs + dayMs), end: new Date(startMs + 2 * dayMs) },
+    { start: new Date(startMs), end: new Date(startMs + 4 * dayMs) },
+    { start: new Date(startMs + dayMs), end: new Date(startMs + 5 * dayMs) },
     { start: new Date(startMs + 2 * dayMs), end },
   ];
 }
@@ -58,7 +58,7 @@ const dataset = new Dataset({
       ...(parentId !== undefined ? { parentId } : {}),
       ...(entry.id === 'entry-4' ? { kind: 'milestone' as const } : {}),
       ...(entry.id === 'entry-16' && entry.start !== undefined && entry.end !== undefined
-        ? { segments: splitIntoThreeSegments(entry.start, entry.end) }
+        ? { segments: splitIntoOverlappingSegments(entry.start, entry.end) }
         : {}),
     };
   }),
@@ -106,13 +106,28 @@ reparentBtn.addEventListener('click', () => {
 });
 
 const rowsSourceBtn = document.querySelector<HTMLButtonElement>('#rows-source-btn')!;
+const packRowsBtn = document.querySelector<HTMLButtonElement>('#pack-rows-btn')!;
 let grouped = false;
+let pack = false;
+
+function applyRowSource(): void {
+  const heightMode = pack ? 'pack' : 'fixed';
+  const next: RowSource = grouped
+    ? { source: 'group', groupBy: (entry: Entry) => entry.kind, heightMode }
+    : { source: 'entries', tree: true, heightMode };
+  gantt.rowSource = next;
+  rowsSourceBtn.textContent = grouped ? 'Show tree' : 'Group by kind';
+  packRowsBtn.textContent = pack ? 'Stack bars (fixed rows)' : 'Pack overlapping bars';
+}
+
 rowsSourceBtn.addEventListener('click', () => {
   grouped = !grouped;
-  gantt.rowSource = grouped
-    ? { source: 'group', groupBy: (entry: Entry) => entry.kind }
-    : { source: 'entries', tree: true };
-  rowsSourceBtn.textContent = grouped ? 'Show tree' : 'Group by kind';
+  applyRowSource();
+});
+
+packRowsBtn.addEventListener('click', () => {
+  pack = !pack;
+  applyRowSource();
 });
 
 mountTimelineToolbar({ gantt, container: document.querySelector<HTMLDivElement>('#toolbar')! });

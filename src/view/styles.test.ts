@@ -119,6 +119,7 @@ describe('ensureBaseStyles', () => {
     expect(css).toContain('--fg-band-height');
     expect(css).toContain('--fg-tick-box-floor');
     expect(css).toContain('--fg-indent-width');
+    expect(css).toContain('--fg-lane-gap');
     expect(css).not.toContain('--fg-header-height');
   });
 
