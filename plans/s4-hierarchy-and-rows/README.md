@@ -1,8 +1,9 @@
 # S4 — Hierarchy, grouping, multi-item rows
 
-**Slice:** S4 (`plans/03` §S4) · **Position:** after S3, before S5 · **Status:** specified, not started
+**Slice:** S4 (`plans/03` §S4) · **Position:** after S3, before S5 · **Status:** S4.1–S4.4 done; continue at **S4.5**
 **Form:** the same settled-spec form as [`plans/s3-direct-manipulation/README.md`](../s3-direct-manipulation/README.md) — this file is the tracker and the shared context; each step file holds the decisions it implements and its TODO boxes.
-**Last spec review:** [`plans/reviews/2026-08-30-s4-spec.html`](../reviews/2026-08-30-s4-spec.html) — findings landed in this spec (2026-08-31): sort binds `FieldCompare` from declared Fields; `emitRow`/`packRow`; X2 is `'header'`; `CustomRow` is the public custom-source DTO.
+**Tick as you go:** When you finish a TODO item, tick its box in that step file. Tick it in the same change as the code. Tick each item when it lands. Do not wait for S4.11 or the slice gate.
+**Last review:** [`plans/reviews/2026-08-31-s4.3-s4.4.html`](../reviews/2026-08-31-s4.3-s4.4.html) — S4.3/S4.4 branch review. Spec-review findings already landed in this spec (2026-08-31): sort binds `FieldCompare` from declared Fields; `emitRow`/`packRow`; X2 is `'header'`; `CustomRow` is the public custom-source DTO.
 **Governed by:** `plans/00` D2/D7/D8, `plans/01` §2.3/§2.5/§2.6/§4/§6, `plans/02` §2/§4.1/§4.2/§6, ADR [0005](../../docs/adr/0005-fields-are-declared-and-grid-columns-reference-them.md).
 **Builds on:** S2 data core (transactions, changesets, undo, JSON), S3 gestures, S1's height index and `FrameLayout`.
 **Closes:** issue #80 (per-field rollup), #81 (row cells), ADR 0005's two open questions, `plans/03` §S4's three known gaps (#91 §9-B, §9-E, §9-G).
@@ -99,7 +100,7 @@ flowchart TB
 
 ## 3. Step map
 
-Eleven steps, in order. The Field context lands first, because the row cells and the grid columns read from it. Open the step file for decisions, files, tests and checkboxes.
+Eleven steps, in order. The Field context lands first, because the row cells and the grid columns read from it. Open the step file for decisions, files, tests and checkboxes. When an item in that file is done, tick its box in the same change.
 
 | Step | Plan | Ends with |
 |---|---|---|
