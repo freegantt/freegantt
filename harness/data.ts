@@ -3,7 +3,7 @@
 // `dataset.entries.add/update/remove`, and a changeset log built from each `ChangeSet`, never a
 // re-read (D-S2-17). Rename/move/remove target `gantt.selection` (S3.1), not a parallel entry picker.
 // The lock checkbox is D-S2-25's `beforeChange` veto, made visible: the bar does
-// not move and the calling button's own `catch` reads `MutationCancelledError`.
+// not move and `attemptMutation` returns `false` instead of throwing.
 //
 // S2.5 (plans/s2-data-core/s2.5-undo-redo.md §5) adds the undo/redo buttons, `disabled` bound to
 // `dataset.canUndo`/`canRedo`, and the log line's origin tag — a reader watches a cascade go away in
@@ -14,7 +14,7 @@
 // rebind (or the finding against destroy() if it does not).
 
 import './harness-nav.ts';
-import { Dataset, Gantt, MS, MutationCancelledError, addMs, now } from '../src/api/index.js';
+import { Dataset, Gantt, MS, attemptMutation, addMs, now } from '../src/api/index.js';
 import type { ChangeSet, DatasetDocument, DatasetEventMap } from '../src/api/index.js';
 import { mountTimelineToolbar } from './timeline-toolbar.js';
 
@@ -179,19 +179,17 @@ addBtn.addEventListener('click', () => {
 renameBtn.addEventListener('click', () => {
   const entries = gantt.selectionEntries;
   if (entries.length === 0) return;
-  try {
+  attemptMutation(() => {
     dataset.transaction(() => {
       for (const entry of entries) dataset.entries.update(entry.id, { name: nameInput.value });
     });
-  } catch (error) {
-    if (!(error instanceof MutationCancelledError)) throw error;
-  }
+  });
 });
 
 function move(deltaMs: number): void {
   const entries = gantt.selectionEntries;
   if (entries.length === 0) return;
-  try {
+  attemptMutation(() => {
     dataset.transaction(() => {
       for (const entry of entries) {
         dataset.entries.update(entry.id, {
@@ -200,9 +198,7 @@ function move(deltaMs: number): void {
         });
       }
     });
-  } catch (error) {
-    if (!(error instanceof MutationCancelledError)) throw error;
-  }
+  });
 }
 
 moveBackBtn.addEventListener('click', () => move(-MS.DAY));
@@ -211,41 +207,29 @@ moveFwdBtn.addEventListener('click', () => move(MS.DAY));
 costBtn.addEventListener('click', () => {
   const entries = gantt.selectionEntries;
   if (entries.length === 0) return;
-  try {
+  attemptMutation(() => {
     dataset.transaction(() => {
       for (const selected of entries) dataset.entries.update(selected.id, { cost: 500 });
     });
-  } catch (error) {
-    if (!(error instanceof MutationCancelledError)) throw error;
-  }
+  });
 });
 
 removeBtn.addEventListener('click', () => {
   const entries = gantt.selectionEntries;
   if (entries.length === 0) return;
-  try {
+  attemptMutation(() => {
     dataset.transaction(() => {
       for (const entry of entries) dataset.entries.remove(entry.id);
     });
-  } catch (error) {
-    if (!(error instanceof MutationCancelledError)) throw error;
-  }
+  });
 });
 
 undoBtn.addEventListener('click', () => {
-  try {
-    dataset.undo();
-  } catch (error) {
-    if (!(error instanceof MutationCancelledError)) throw error;
-  }
+  attemptMutation(() => dataset.undo());
 });
 
 redoBtn.addEventListener('click', () => {
-  try {
-    dataset.redo();
-  } catch (error) {
-    if (!(error instanceof MutationCancelledError)) throw error;
-  }
+  attemptMutation(() => dataset.redo());
 });
 
 exportBtn.addEventListener('click', () => {

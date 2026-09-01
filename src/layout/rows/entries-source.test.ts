@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { entryId, rowId } from '../../model/index.js';
 import type { Entry, Instant } from '../../model/index.js';
 import { resolveEntriesSource } from './entries-source.js';
-import { resolveRows, rowResolutionInput } from './resolve-rows.js';
+import { resolveRows } from './resolve-rows.js';
 
 function instant(n: number): Instant {
   return n as Instant;
@@ -42,13 +42,11 @@ describe('resolveEntriesSource', () => {
 
 describe('resolveRows collapse', () => {
   it('a collapsed parent omits descendants — they are absent, not hidden', () => {
-    const rows = resolveRows(
-      rowResolutionInput({
-        entries: [entry('p'), entry('c1', 'p'), entry('g', 'c1'), entry('q')],
-        rows: { source: 'entries', tree: true },
-        collapsed: [rowId('p')],
-      }),
-    );
+    const rows = resolveRows({
+      entries: [entry('p'), entry('c1', 'p'), entry('g', 'c1'), entry('q')],
+      rows: { source: 'entries', tree: true },
+      collapsed: [rowId('p')],
+    });
     expect(rows.map((r) => r.id)).toEqual([rowId('p'), rowId('q')]);
     expect(rows[0]?.expandable).toBe(true);
     expect(rows[0]?.expanded).toBe(false);

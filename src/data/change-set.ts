@@ -14,7 +14,7 @@ import type {
   FieldUpdated,
 } from '../model/index.js';
 import type { StoredEdit } from './edit-extension.js';
-import { authoredFieldKeysOf, overlayStoredEdit } from './fields/field-access.js';
+import { proposedKeysOf, overlayStoredEdit } from './fields/field-access.js';
 import type { FieldRegistry } from './fields/field-registry.js';
 
 function pushRow(
@@ -54,7 +54,7 @@ export function diffEdit(
   if (!current) return [];
 
   const next = overlayStoredEdit(current, edit);
-  const authored = authoredFieldKeysOf(edit);
+  const authored = proposedKeysOf(edit);
   const rows: FieldUpdated[] = [];
   const seen = new Set<string>();
 
@@ -75,7 +75,7 @@ export function diffEdit(
   }
 
   for (const field of Object.keys(edit) as (keyof StoredEdit)[]) {
-    if (field === 'meta') continue;
+    if (field === 'meta' || field === 'proposedKeys') continue;
     const declared = registry.get(field);
     if (declared) {
       emit(field, ctx.read(current, field), ctx.read(next, field));

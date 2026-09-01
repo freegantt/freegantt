@@ -30,10 +30,6 @@ export function childrenByParent(entries: ReadonlyMap<EntryId, Entry>): Map<Entr
   return byParent;
 }
 
-export function childrenOf(parentId: EntryId, entries: ReadonlyMap<EntryId, Entry>): readonly EntryId[] {
-  return childrenByParent(entries).get(parentId) ?? [];
-}
-
 export function childCountByParent(entries: ReadonlyMap<EntryId, Entry>): Map<EntryId, number> {
   const counts = new Map<EntryId, number>();
   for (const entry of entries.values()) {

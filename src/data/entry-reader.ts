@@ -18,7 +18,7 @@ import type {
 } from '../model/index.js';
 import { toEndInstant, toInstant } from '../time/index.js';
 import type { StoredEdit } from './edit-extension.js';
-import { markAuthoredFieldKeys, writeDeclaredMetaFields } from './fields/field-access.js';
+import { withProposedKeys, writeDeclaredMetaFields } from './fields/field-access.js';
 import type { FieldRegistry } from './fields/field-registry.js';
 
 /** The Dataset context every entry is read against: one zone, one end rule, for the whole list, plus
@@ -113,5 +113,5 @@ export function readEdit(
   if (edit.meta !== undefined) stored.meta = edit.meta;
 
   stored = writeDeclaredMetaFields(stored, entry, edit, registry);
-  return markAuthoredFieldKeys(stored, Object.keys(edit));
+  return withProposedKeys(stored, Object.keys(edit));
 }

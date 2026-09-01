@@ -4,6 +4,7 @@ import type { Field, FieldSource, FieldType, GridColumn } from '../../model/inde
 import type { SerializedField } from '../../model/index.js';
 import type { DatasetStateOptions } from '../dataset-state.js';
 import { CORE_FIELDS } from '../fields/core-fields.js';
+import { storedSourceOf } from '../fields/normalize-source.js';
 
 /** The code half a reader supplies. Same three keys `Dataset.fromJSON` already picks. */
 export type FromJSONOptions = Pick<DatasetStateOptions, 'fields' | 'fieldTypes' | 'aggregators'>;
@@ -86,10 +87,7 @@ function seedMissingFieldTypes(
 }
 
 function sourceForWrite(field: Field): FieldSource {
-  const source = field.source;
-  if (source === undefined) return { from: 'meta', key: String(field.key) };
-  if (source.from === 'meta') return { from: 'meta', key: source.key ?? String(field.key) };
-  return source;
+  return storedSourceOf(field);
 }
 
 function writeStoredSource(source: FieldSource): SerializedField['source'] | undefined {

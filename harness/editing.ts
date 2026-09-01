@@ -1,5 +1,5 @@
 import './harness-nav.ts';
-import { Gantt, Dataset, MutationCancelledError, now } from '../src/api/index.js';
+import { Gantt, Dataset, attemptMutation, now } from '../src/api/index.js';
 import type { ChangeSet, DatasetEventMap } from '../src/api/index.js';
 import type { TimeUnit } from '../src/model/index.js';
 import { demoEntryInputs } from '../fixtures/demo-dataset.js';
@@ -94,19 +94,11 @@ dataset.on('change', ({ changeSet }: DatasetEventMap['change']) => {
 });
 
 function undo(): void {
-  try {
-    dataset.undo();
-  } catch (error) {
-    if (!(error instanceof MutationCancelledError)) throw error;
-  }
+  attemptMutation(() => dataset.undo());
 }
 
 function redo(): void {
-  try {
-    dataset.redo();
-  } catch (error) {
-    if (!(error instanceof MutationCancelledError)) throw error;
-  }
+  attemptMutation(() => dataset.redo());
 }
 
 undoBtn.addEventListener('click', undo);

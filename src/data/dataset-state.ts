@@ -141,8 +141,8 @@ export class DatasetState implements Dataset {
       this.#entryContext,
       this.fields,
       this.fieldContext,
+      this,
     );
-    this.entries.setTransactionRunner(this);
     // `01` §2.6 / README.md D-S2-22: a roll-up-kind entry given children only through the initial
     // array gets real rolled-up values before anyone reads it, not just after the first later
     // transaction touches one of those children. `fromJSON` gets this for free, being construction

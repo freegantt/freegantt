@@ -10,6 +10,7 @@ import {
 } from '../../model/index.js';
 import { SHIPPED_AGGREGATORS } from './aggregators.js';
 import { CORE_FIELDS } from './core-fields.js';
+import { storedSourceOf } from './normalize-source.js';
 
 export interface ResolvedField extends Field {
   readonly source: FieldSource;
@@ -26,10 +27,7 @@ export interface FieldRegistryOptions {
 }
 
 function resolveSource(field: Field): FieldSource {
-  const source = field.source;
-  if (source === undefined) return { from: 'meta', key: String(field.key) };
-  if (source.from === 'meta') return { from: 'meta', key: source.key ?? String(field.key) };
-  return source;
+  return storedSourceOf(field);
 }
 
 function metaSlot(source: FieldSource): string | undefined {

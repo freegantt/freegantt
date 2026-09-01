@@ -7,25 +7,22 @@ import type {
   EntryEdit,
   EntryEdits,
   EntryId,
-  Field,
   FieldContext,
   FieldKey,
+  FieldLookup,
   StoredEdit,
 } from '../../model/index.js';
 import { diffMs } from '../../time/index.js';
 import type { ComputedFieldCache } from '../computed-cache.js';
+import { CORE_FIELDS } from './core-fields.js';
+import { storedSourceOf } from './normalize-source.js';
 import type { FieldRegistry, ResolvedField } from './field-registry.js';
 
-/** What `createFieldContext` needs — `FieldRegistry.get` and `dataset.field` both satisfy this. */
-export type FieldLookup = {
-  get(key: FieldKey): Field | undefined;
-};
+export type { FieldLookup };
 
-const authoredFieldKeys = Symbol('authoredFieldKeys');
-
-type StoredEditWithAuthoredKeys = StoredEdit & {
-  [authoredFieldKeys]?: ReadonlySet<string>;
-};
+function isOptionalEntryKey(key: string): boolean {
+  return key === 'parentId' || key === 'segments' || key === 'meta';
+}
 
 /** Memo for compute-sourced Fields (D-S4-10). Stored Fields ignore it. */
 export interface FieldReadMemo {
@@ -33,28 +30,23 @@ export interface FieldReadMemo {
   readonly datasetRevision: number;
 }
 
-export function markAuthoredFieldKeys(edit: StoredEdit, keys: Iterable<string>): StoredEdit {
-  Object.defineProperty(edit, authoredFieldKeys, {
-    value: new Set(keys),
-    enumerable: false,
-    configurable: true,
-    writable: true,
-  });
-  return edit;
+/** Call: `withProposedKeys(stored, Object.keys(edit))`. */
+export function withProposedKeys(edit: StoredEdit, keys: Iterable<string>): StoredEdit {
+  return { ...edit, proposedKeys: new Set(keys) };
 }
 
-export function authoredFieldKeysOf(edit: StoredEdit | undefined): ReadonlySet<string> {
+export function proposedKeysOf(edit: StoredEdit | undefined): ReadonlySet<string> {
   if (!edit) return new Set();
-  return (edit as StoredEditWithAuthoredKeys)[authoredFieldKeys] ?? new Set();
+  return edit.proposedKeys ?? new Set();
 }
 
 export function mergeStoredEdits(base: StoredEdit | undefined, extra: StoredEdit): StoredEdit {
   const merged: StoredEdit = { ...base, ...extra };
-  const keys = new Set([...authoredFieldKeysOf(base), ...authoredFieldKeysOf(extra)]);
-  return markAuthoredFieldKeys(merged, keys);
+  const keys = new Set([...proposedKeysOf(base), ...proposedKeysOf(extra)]);
+  return withProposedKeys(merged, keys);
 }
 
-/** Merges two edit maps. Object spread is not a legal merge — authored keys would drop. */
+/** Merges two edit maps. Object spread is not a legal merge — proposed keys would drop. */
 export function mergeEntryEdits(base: EntryEdits, extra: EntryEdits): EntryEdits {
   if (extra.size === 0) return base;
   const merged = new Map<EntryId, StoredEdit>(base);
@@ -70,7 +62,7 @@ function metaRecord(meta: unknown): Record<string, unknown> {
 }
 
 function metaKeyOf(field: ResolvedField): string {
-  const source = field.source;
+  const source = storedSourceOf(field);
   if (source.from !== 'meta') return String(field.key);
   return source.key ?? String(field.key);
 }
@@ -123,7 +115,7 @@ export function writeField(edit: StoredEdit, entry: Entry, field: ResolvedField,
   if (source.from === 'entry') {
     const next: StoredEdit = { ...edit };
     (next as Record<string, unknown>)[source.field] = value;
-    return markAuthoredFieldKeys(next, authoredFieldKeysOf(edit));
+    return withProposedKeys(next, proposedKeysOf(edit));
   }
 
   const key = metaKeyOf(field);
@@ -134,7 +126,7 @@ export function writeField(edit: StoredEdit, entry: Entry, field: ResolvedField,
   const next: StoredEdit = { ...edit };
   if (Object.keys(record).length === 0) (next as Record<string, unknown>)['meta'] = undefined;
   else next.meta = record;
-  return markAuthoredFieldKeys(next, authoredFieldKeysOf(edit));
+  return withProposedKeys(next, proposedKeysOf(edit));
 }
 
 /** Writes `value` onto a copy of `entry`. Call: `writeOntoEntry(parent, costField, 300)`. */
@@ -166,29 +158,26 @@ export function editProposesField(edit: StoredEdit | undefined, field: ResolvedF
     return (edit as Record<string, unknown>)[source.field] !== undefined;
   }
   if (source.from === 'meta') {
-    return authoredFieldKeysOf(edit).has(String(field.key));
+    return proposedKeysOf(edit).has(String(field.key));
   }
   return false;
 }
 
-/** Applies a stored overlay the way `EntryStore.get` must: core keys only, never authored extras. */
+/** Applies a stored overlay the way `EntryStore.get` must: core keys only, never proposedKeys. */
 export function overlayStoredEdit(entry: Entry, edit: StoredEdit): Entry {
   const next: Record<string, unknown> = { ...entry };
-  if ('parentId' in edit) {
-    if (edit.parentId === undefined) delete next['parentId'];
-    else next['parentId'] = edit.parentId;
-  }
-  if (edit.kind !== undefined) next['kind'] = edit.kind;
-  if (edit.name !== undefined) next['name'] = edit.name;
-  if (edit.start !== undefined) next['start'] = edit.start;
-  if (edit.end !== undefined) next['end'] = edit.end;
-  if ('segments' in edit) {
-    if (edit.segments === undefined) delete next['segments'];
-    else next['segments'] = edit.segments;
-  }
-  if ('meta' in edit) {
-    if (edit.meta === undefined) delete next['meta'];
-    else next['meta'] = edit.meta;
+  const bag = edit as Record<string, unknown>;
+  for (const field of CORE_FIELDS) {
+    const source = field.source;
+    if (source === undefined || source.from !== 'entry') continue;
+    const key = source.field;
+    if (!(key in edit)) continue;
+    const value = bag[key];
+    if (value === undefined && isOptionalEntryKey(key)) {
+      delete next[key];
+      continue;
+    }
+    if (value !== undefined) next[key] = value;
   }
   return next as unknown as Entry;
 }

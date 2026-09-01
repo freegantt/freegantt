@@ -145,6 +145,13 @@ describe('rollUpFields (S4.2)', () => {
     });
 
     expect(() => state.entries.update('c1', { cost: 2 })).toThrow(AggregatorFailedError);
+    try {
+      state.entries.update('c1', { cost: 2 });
+    } catch (error) {
+      expect(error).toBeInstanceOf(AggregatorFailedError);
+      expect((error as AggregatorFailedError).cause).toBeInstanceOf(Error);
+      expect(((error as AggregatorFailedError).cause as Error).message).toBe('boom');
+    }
     expect(fired).toBe(false);
     expect(costOf(state, 'c1')).toBe(1);
     expect(state.canUndo).toBe(false);

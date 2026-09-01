@@ -44,6 +44,7 @@ import { attachKeyboardNavigation } from './keyboard-navigation.js';
 import type { KeyboardNavigationAttachment } from './keyboard-navigation.js';
 import { attachRowTwisty } from './attach-row-twisty.js';
 import type { RowTwistyAttachment } from './attach-row-twisty.js';
+import { panToTodayLine } from './today-landing.js';
 import { resolveViewportGestures } from './viewport-gestures.js';
 import type { ViewportGestures } from './viewport-gestures.js';
 import { ensureBaseStyles } from './styles.js';
@@ -77,7 +78,7 @@ import { FrameScheduler } from './frame-scheduler.js';
 import { projectAffordances } from './affordance-projection.js';
 import { GesturePipeline } from './gesture-pipeline.js';
 import type { EntryGestureContext } from './entry-gesture-context.js';
-import { DEFAULT_GRID_COLUMNS, bindGanttFields } from './grid-columns.js';
+import { DEFAULT_GRID_COLUMNS, resolveGanttFields } from './grid-columns.js';
 import { CollapseState } from './collapse-state.js';
 
 /** One `{ detach() }` for every inject slot. `view/` may not import `interaction/` (plans/01 §1:
@@ -843,36 +844,38 @@ export class GanttShell {
    *  own to make. The margin is today-landing policy, not a general `Viewport` pan option, so it is
    *  applied here rather than threaded through `panToInstant` (S1.13 follow-up, candidate 2). */
   panToToday(at: Instant, align: 'start' | 'center' = 'start'): void {
-    if (align === 'center') {
-      this.#viewport.panToInstant(at, align);
-      return;
-    }
-    const x = this.#viewport.timeScale.xForInstant(at) - this.#todayLineMarginPx(at);
-    this.#viewport.scroll.panTo({ x });
-  }
-
-  /** Px width of `todayLineMarginTicks` ticks of the CURRENT preset, evaluated at `at` — calendar
-   *  ticks (day/week/month) vary in duration (DST, month length), so this is a live read off
-   *  `timeScale`/`preset`, never a cached constant. */
-  #todayLineMarginPx(at: Instant): number {
-    const preset = this.#viewport.preset;
-    return this.#viewport.timeScale.widthForDuration(
-      { unit: preset.tickUnit, value: preset.tickIncrement * this.#todayLineMarginTicks },
-      at,
-    );
+    panToTodayLine(this.#viewport, at, align, this.#todayLineMarginTicks);
   }
 
   /** Finds the entry's row via the bound dataset, asks `FrameLayout` for its top and `barSpan` for
    * its x/width off the bound `TimeScale` — the same formula `computeFrame` builds bars from, so the
    * two can never drift apart — and hands the resulting `Rect` to `Viewport.reveal` (S1.9, D-S1.9-6).
-   * Throws `EntryNotFoundError` for an id the dataset has no entry for. */
+   * Throws `EntryNotFoundError` for an id the dataset has no entry for. A collapsed ancestor expands
+   * so the row exists. A still-hidden row (filter) keeps the current y — it does not jump to 0. */
   reveal(entryId: EntryId): void {
     const entry = this.#options.dataset.entries.get(entryId);
     if (entry === undefined) throw new EntryNotFoundError(entryId, 'reveal');
     const { x, width } = barSpan(entry, this.#viewport.timeScale);
-    const rowIndex = this.#layout.rowIndexForEntry(entryId);
-    const y = rowIndex >= 0 ? this.#layout.rowTop(rowIndex) : 0;
+    let rowIndex = this.#layout.rowIndexForEntry(entryId);
+    if (rowIndex < 0) {
+      const keep = this.#collapse.ids.filter((id) => !this.#isAncestorRow(entryId, String(id)));
+      if (keep.length !== this.#collapse.ids.length) {
+        this.#applyCollapsed(keep);
+        this.#frames.flush();
+        rowIndex = this.#layout.rowIndexForEntry(entryId);
+      }
+    }
+    const y = rowIndex >= 0 ? this.#layout.rowTop(rowIndex) : this.#viewport.scroll.state.position.y;
     this.#viewport.reveal({ x, y, width, height: this.#rowHeight });
+  }
+
+  #isAncestorRow(entryId: EntryId, rowId: string): boolean {
+    let current = this.#options.dataset.entries.get(entryId);
+    while (current?.parentId !== undefined) {
+      if (String(current.parentId) === rowId) return true;
+      current = this.#options.dataset.entries.get(current.parentId);
+    }
+    return false;
   }
 
   on<K extends keyof GanttEventMap>(name: K, handler: GanttEventHandler<K>): void {
@@ -897,7 +900,7 @@ export class GanttShell {
       this.#locale !== undefined
         ? { timeZone: this.#options.dataset.timeZone, locale: this.#locale }
         : { timeZone: this.#options.dataset.timeZone };
-    const bound = bindGanttFields(this.#options.dataset, this.#gridColumnInput, bind);
+    const bound = resolveGanttFields(this.#options.dataset, this.#gridColumnInput, bind);
     this.#resolvedColumns = bound.columns;
     this.#fieldCompares = bound.fieldCompares;
   }

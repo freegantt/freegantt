@@ -73,6 +73,10 @@ export type EntryEdit<
  *  public (`plans/s3-direct-manipulation/README.md`) — an internal write/gesture shape only, moved
  *  here (from `data/edit-extension.ts`) in S3.3 (D-S3-4) so `layout/gesture-draft.ts` can build one
  *  without reaching into `data/`. */
-export type StoredEdit<TMeta = unknown> = Partial<Omit<Entry<TMeta>, 'id'>>;
+/** Storage-shaped patch plus the Field keys the caller proposed. `proposedKeys` is part of the edit,
+ *  not a side channel — spread keeps it, overlay never copies it onto an Entry. */
+export type StoredEdit<TMeta = unknown> = Partial<Omit<Entry<TMeta>, 'id'>> & {
+  readonly proposedKeys?: ReadonlySet<string>;
+};
 
 export type EntryEdits = ReadonlyMap<EntryId, StoredEdit>;

@@ -8,8 +8,8 @@ import type { ChangeSet } from './change-set.js';
 export class FreeGanttError extends Error {
   readonly code: string;
 
-  constructor(code: string, message: string) {
-    super(message);
+  constructor(code: string, message: string, options?: ErrorOptions) {
+    super(message, options);
     this.name = 'FreeGanttError';
     this.code = code;
   }
@@ -164,11 +164,19 @@ export class AggregatorFailedError extends FreeGanttError {
   readonly aggregatorName: string;
   readonly entryId: EntryId;
 
-  constructor(fieldKey: string, aggregatorName: string, entryId: EntryId) {
-    super(
-      'aggregator-failed',
-      `rollup: aggregator "${aggregatorName}" failed on field "${fieldKey}" for entry "${String(entryId)}"`,
-    );
+  constructor(fieldKey: string, aggregatorName: string, entryId: EntryId, cause?: unknown) {
+    if (cause === undefined) {
+      super(
+        'aggregator-failed',
+        `rollup: aggregator "${aggregatorName}" failed on field "${fieldKey}" for entry "${String(entryId)}"`,
+      );
+    } else {
+      super(
+        'aggregator-failed',
+        `rollup: aggregator "${aggregatorName}" failed on field "${fieldKey}" for entry "${String(entryId)}"`,
+        { cause },
+      );
+    }
     this.name = 'AggregatorFailedError';
     this.fieldKey = fieldKey;
     this.aggregatorName = aggregatorName;

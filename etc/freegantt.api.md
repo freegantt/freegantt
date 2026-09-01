@@ -12,7 +12,7 @@ export type Aggregator<TValue = unknown> = (children: readonly Entry[], parent: 
 
 // @public
 export class AggregatorFailedError extends FreeGanttError {
-    constructor(fieldKey: string, aggregatorName: string, entryId: EntryId);
+    constructor(fieldKey: string, aggregatorName: string, entryId: EntryId, cause?: unknown);
     // (undocumented)
     readonly aggregatorName: string;
     // (undocumented)
@@ -26,6 +26,9 @@ export type AggregatorName = 'min' | 'max' | 'sum' | 'count' | 'none' | (string 
 
 // @public
 export type AsyncCancelableEvent = 'beforeEntryMove' | 'beforeEntryResize';
+
+// @public
+export function attemptMutation(body: () => void): boolean;
 
 // @public
 export type CapabilityRule = boolean | ((entry: Entry) => boolean);
@@ -458,7 +461,7 @@ export const formatWeekNumber: HeaderFormat;
 
 // @public (undocumented)
 export class FreeGanttError extends Error {
-    constructor(code: string, message: string);
+    constructor(code: string, message: string, options?: ErrorOptions);
     // (undocumented)
     readonly code: string;
 }

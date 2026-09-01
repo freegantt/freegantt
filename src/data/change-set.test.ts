@@ -3,9 +3,8 @@ import { diffEdit, foldChangeSet, invertChangeSet } from './change-set.js';
 import { changeSetId, entryId } from '../model/index.js';
 import type { Entry, EntryId, Instant } from '../model/index.js';
 import type { StoredEdit } from './edit-extension.js';
-import { createFieldContext, writeField } from './fields/field-access.js';
+import { createFieldContext, withProposedKeys, writeField } from './fields/field-access.js';
 import { FieldRegistry } from './fields/field-registry.js';
-import { markAuthoredFieldKeys } from './fields/field-access.js';
 
 function span(start: number, end: number): { start: Instant; end: Instant } {
   return { start: start as Instant, end: end as Instant };
@@ -92,8 +91,7 @@ describe('diffEdit', () => {
   it('{ cost: 500 } emits one cost row, not a meta row', () => {
     const t1 = entry('t1', { cost: 400 });
     const cost = registry.get('cost')!;
-    const edit = writeField({}, t1, cost, 500);
-    markAuthoredFieldKeys(edit, ['cost']);
+    const edit = withProposedKeys(writeField({}, t1, cost, 500), ['cost']);
     const rows = diffEdit(entries(t1), t1.id, edit, registry, fieldCtx);
     expect(rows).toEqual([{ store: 'entries', id: t1.id, field: 'cost', from: 400, to: 500 }]);
   });
@@ -101,7 +99,7 @@ describe('diffEdit', () => {
   it('a whole-meta write emits the meta row first, then declared rows', () => {
     const t1 = entry('t1', { cost: 400, team: 'A' });
     const nextMeta = { cost: 500, team: 'A' };
-    const edit = markAuthoredFieldKeys({ meta: nextMeta }, ['meta']);
+    const edit = withProposedKeys({ meta: nextMeta }, ['meta']);
     const rows = diffEdit(entries(t1), t1.id, edit, registry, fieldCtx);
     expect(rows[0]).toEqual({ store: 'entries', id: t1.id, field: 'meta', from: t1.meta, to: nextMeta });
     expect(rows).toContainEqual({ store: 'entries', id: t1.id, field: 'cost', from: 400, to: 500 });

@@ -9,7 +9,7 @@ import { computeFrame } from './frame.js';
 import type { GeometryFrame, LayoutInput } from './frame.js';
 import { PrefixSumHeightIndex } from './row-height-index.js';
 import { FrameMemory } from './frame-memory.js';
-import { resolveRows, rowResolutionInput } from './rows/resolve-rows.js';
+import { resolveRows } from './rows/resolve-rows.js';
 import type { PlannedRow } from './rows/row-source.js';
 import type { ChangeSet, Entry, EntryId } from '../model/index.js';
 import { createItemProducerRegistry, produceItemsForRow } from './items/produce-items.js';
@@ -35,7 +35,12 @@ export class FrameLayout {
   heightIndexRevision = 0;
 
   computeFrame(input: LayoutInput): GeometryFrame {
-    this.#plan = resolveRows(rowResolutionInput(input));
+    this.#plan = resolveRows({
+      entries: input.entries,
+      ...(input.rows !== undefined ? { rows: input.rows } : {}),
+      ...(input.collapsed !== undefined ? { collapsed: input.collapsed } : {}),
+      ...(input.fieldCompares !== undefined ? { fieldCompares: input.fieldCompares } : {}),
+    });
     this.#rowHeight = input.rowHeight;
     this.#laneGap = input.laneGapPx ?? DEFAULT_LANE_GAP_PX;
     this.#entryById = new Map(input.entries.map((entry) => [entry.id, entry]));

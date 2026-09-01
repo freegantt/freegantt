@@ -11,7 +11,7 @@ import { FrameMemory } from './frame-memory.js';
 import type { FrameColumn, ResolvedColumn, FieldCompare } from './column.js';
 import type { PlannedRow, PlannedRowKind, RowSource } from './rows/row-source.js';
 import { isPlannedHeaderRow } from './rows/row-source.js';
-import { resolveRows, rowResolutionInput } from './rows/resolve-rows.js';
+import { resolveRows } from './rows/resolve-rows.js';
 import type { Item, ItemProducerRegistry } from './items/produce-items.js';
 import { produceItemsForRow } from './items/produce-items.js';
 import { DEFAULT_LANE_GAP_PX, packRow, packedRowHeight, yForLane } from './lanes/pack-lanes.js';
@@ -258,14 +258,12 @@ function packedItemsForRow(
  * renders; a one-shot caller omits it and gets memory built and discarded here. */
 export function computeFrame(input: LayoutInput, memory?: FrameMemory): GeometryFrame {
   const { scale, preset, visible, rowHeight, revision, locale } = input;
-  const plan = resolveRows(
-    rowResolutionInput({
-      entries: input.entries,
-      ...(input.rows !== undefined ? { rows: input.rows } : {}),
-      ...(input.collapsed !== undefined ? { collapsed: input.collapsed } : {}),
-      ...(input.fieldCompares !== undefined ? { fieldCompares: input.fieldCompares } : {}),
-    }),
-  );
+  const plan = resolveRows({
+    entries: input.entries,
+    ...(input.rows !== undefined ? { rows: input.rows } : {}),
+    ...(input.collapsed !== undefined ? { collapsed: input.collapsed } : {}),
+    ...(input.fieldCompares !== undefined ? { fieldCompares: input.fieldCompares } : {}),
+  });
   const entryById = new Map(input.entries.map((entry) => [entry.id, entry]));
   const itemProducerRegistry = input.itemProducerRegistry;
   const laneGap = input.laneGapPx ?? DEFAULT_LANE_GAP_PX;
