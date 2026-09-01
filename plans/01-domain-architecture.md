@@ -608,6 +608,7 @@ The shipped `defaultPolicy` is deliberately minimal and neutral: dependencies pu
 interface RenderSurfaces<THost> {
   grid: THost;      // the grid pane's row layer
   timeline: THost;  // the timeline pane's content layer: header bands, bars, links, decorations
+  gridHeader?: THost; // column header row in the grid pane; omitted by tests that only paint body cells
 }
 
 interface RenderBackend {
@@ -619,7 +620,7 @@ interface RenderBackend {
 }
 ```
 
-`mount` takes two surfaces, not one container (S1.8, D-S1.8-1/D-S1.8-2): the grid pane's row layer and the timeline pane's content layer are two elements `view/pane-layout.ts` builds, not one container this backend reserves a gutter inside. `render/dom` puts rows in `grid` and header/bar/sizer layers in `timeline`, at `x = 0` — no gutter offset; the grid pane's own width is the gutter now. `render/null` takes the same signature and ignores both.
+`mount` takes two required surfaces plus an optional grid header (S1.8, D-S1.8-1/D-S1.8-2): the grid pane's row layer, the timeline pane's content layer, and — when column headers are shown — the grid pane's header row. They are elements `view/pane-layout.ts` builds, not one container this backend reserves a gutter inside. `render/dom` puts body rows in `grid`, column headers in `gridHeader` when present, and header/bar/sizer layers in `timeline`, at `x = 0` — no gutter offset; the grid pane's own width is the gutter now. `render/null` takes the same signature and ignores all three.
 
 Backends: `dom` (default — absolutely-positioned virtualized rows, SVG for link paths), `null` (tests, SSR of data, future export path). A dense canvas backend is a *possible future implementation* of this interface, built only if measurement demands it (D2).
 

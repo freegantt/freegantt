@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createDomBackend } from './index.js';
-import { computeFrame } from '../../layout/index.js';
+import { computeFrame, createItemProducerRegistry } from '../../layout/index.js';
 import type { TimeScale, ViewPreset } from '../../layout/index.js';
 import { sampleEntries } from '../../../fixtures/sample-dataset.js';
 
@@ -21,6 +21,7 @@ const preset: ViewPreset = {
   headers: [{ unit: 'day', increment: 1, format: () => 'tick' }],
   preferredTickWidthPx: 24,
 };
+const itemProducerRegistry = createItemProducerRegistry();
 
 function mountSurfaces(): { grid: HTMLElement; timeline: HTMLElement } {
   const grid = document.createElement('div');
@@ -42,6 +43,7 @@ describe('render/dom backend', () => {
       visible: { x: 0, y: 0, width: 0, height: 0 },
       rowHeight: 32,
       revision: 0,
+      itemProducerRegistry,
     });
     backend.sync(frame);
 
@@ -70,6 +72,7 @@ describe('render/dom backend', () => {
       visible: { x: 0, y: 0, width: 0, height: 0 },
       rowHeight: 32,
       revision: 0,
+      itemProducerRegistry,
       columns: [{ key: 'name', header: 'Name', align: 'start', format: (e) => e.name }],
     });
     backend.sync(frame);
@@ -93,6 +96,7 @@ describe('render/dom backend', () => {
         visible: { x: 0, y: 0, width: 0, height: 0 },
         rowHeight: 32,
         revision: 0,
+        itemProducerRegistry,
       }),
     );
 
@@ -120,6 +124,7 @@ describe('render/dom backend', () => {
         visible: { x: 0, y: 40, width: 0, height: 0 },
         rowHeight: 32,
         revision: 0,
+        itemProducerRegistry,
       }),
     );
 
@@ -140,6 +145,7 @@ describe('render/dom backend', () => {
         visible: { x: 0, y: 0, width: 0, height: 0 },
         rowHeight: 32,
         revision: 0,
+        itemProducerRegistry,
       }),
     );
 
@@ -161,6 +167,7 @@ describe('render/dom backend', () => {
       visible: { x: 0, y: 0, width: 0, height: 0 },
       rowHeight: 32,
       revision: 0,
+      itemProducerRegistry,
     });
     // computeFrame never sets a flag true today (no scheduling plugin wired yet) — mutate the frame's
     // own bar object, same shape a future scheduling plugin would produce, to prove the generator path.
@@ -184,6 +191,7 @@ describe('render/dom backend', () => {
       visible: { x: 0, y: 0, width: 0, height: 0 },
       rowHeight: 32,
       revision: 0,
+      itemProducerRegistry,
     });
     (frame.bars[0]!.flags as Record<string, boolean>)['late'] = true;
     backend.sync(frame);
@@ -206,6 +214,7 @@ describe('render/dom backend', () => {
         visible: { x: 0, y: 0, width: 0, height: 0 },
         rowHeight: 32,
         revision: 0,
+        itemProducerRegistry,
         columns: [{ key: 'name', header: 'Name', align: 'start', format: (e) => e.name }],
       }),
     );
@@ -229,6 +238,7 @@ describe('render/dom backend', () => {
       visible: { x: 0, y: 0, width: 0, height: 0 },
       rowHeight: 32,
       revision: 0,
+      itemProducerRegistry,
     });
     backend.sync({ ...base, rows: base.rows.map((row) => ({ ...row, cells: ['Discovery', '5 d'] })) });
 
@@ -255,6 +265,7 @@ describe('render/dom backend', () => {
       visible: { x: 0, y: 0, width: 0, height: 0 },
       rowHeight: 32,
       revision: 0,
+      itemProducerRegistry,
       columns: [
         { key: 'name', header: 'Name', align: 'start', format: (e) => e.name },
         { key: 'start', header: 'Start', align: 'start', width: 80, format: () => 'Sep 1' },
@@ -303,6 +314,7 @@ describe('render/dom backend', () => {
         visible: { x: 0, y: 0, width: 0, height: 32 },
         rowHeight: 32,
         revision: 0,
+        itemProducerRegistry,
       }),
     );
 
@@ -324,6 +336,7 @@ describe('render/dom backend', () => {
       visible: { x: 0, y: 0, width: 0, height: 0 },
       rowHeight: 32,
       revision: 0,
+      itemProducerRegistry,
     });
     backend.sync(frame);
 
@@ -345,6 +358,7 @@ describe('render/dom backend', () => {
       visible: { x: 0, y: 0, width: 0, height: 0 },
       rowHeight: 32,
       revision: 0,
+      itemProducerRegistry,
     });
     backend.sync(frame);
 
@@ -371,6 +385,7 @@ describe('render/dom backend', () => {
       visible: { x: 0, y: 0, width: 0, height: 200 },
       rowHeight: 32,
       revision: 0,
+      itemProducerRegistry,
     });
 
     // A dataset far taller than the pane's own visible window: `.fg-timeline-pane` is both the
@@ -406,6 +421,7 @@ describe('render/dom backend', () => {
       visible: { x: 0, y: 0, width: 0, height: 200 },
       rowHeight: 32,
       revision: 0,
+      itemProducerRegistry,
     });
 
     backend.sync({
@@ -446,6 +462,7 @@ describe('render/dom backend', () => {
       visible: { x: 0, y: 0, width: 0, height: 200 },
       rowHeight: 32,
       revision: 0,
+      itemProducerRegistry,
     });
 
     backend.sync({
@@ -476,6 +493,7 @@ describe('render/dom backend', () => {
       visible: { x: 0, y: 0, width: 0, height: 200 },
       rowHeight: 32,
       revision: 0,
+      itemProducerRegistry,
     });
 
     backend.sync({
@@ -509,6 +527,7 @@ describe('render/dom backend', () => {
       visible: { x: 0, y: 0, width: 0, height: 0 },
       rowHeight: 32,
       revision: 0,
+      itemProducerRegistry,
     });
     backend.sync(frame);
     const [a, b] = frame.bars;
@@ -542,6 +561,7 @@ describe('render/dom backend', () => {
       visible: { x: 0, y: 0, width: 0, height: 0 },
       rowHeight: 32,
       revision: 0,
+      itemProducerRegistry,
     });
     backend.sync(frame);
     const [a, b] = frame.bars;
@@ -578,6 +598,7 @@ describe('render/dom backend', () => {
       visible: { x: 0, y: 0, width: 0, height: 0 },
       rowHeight: 32,
       revision: 0,
+      itemProducerRegistry,
     });
     backend.sync(frame);
     const [a] = frame.bars;
@@ -614,6 +635,7 @@ describe('render/dom backend', () => {
       visible: { x: 0, y: 0, width: 0, height: 0 },
       rowHeight: 32,
       revision: 0,
+      itemProducerRegistry,
     });
     backend.sync(frame);
     backend.applyState({ resizableItemId: frame.bars[0]!.id });
@@ -642,6 +664,7 @@ describe('render/dom backend', () => {
       visible: { x: 0, y: 0, width: 0, height: 0 },
       rowHeight: 32,
       revision: 0,
+      itemProducerRegistry,
     });
     backend.sync(frame);
     // resizableItemId never set — handles stay hidden.
@@ -670,6 +693,7 @@ describe('render/dom backend', () => {
       visible: { x: 0, y: 0, width: 0, height: 0 },
       rowHeight: 32,
       revision: 0,
+      itemProducerRegistry,
     });
     backend.sync(frame);
     const [a, b] = frame.bars;
@@ -701,6 +725,7 @@ describe('render/dom backend', () => {
       visible: { x: 0, y: 0, width: 0, height: 0 },
       rowHeight: 32,
       revision: 0,
+      itemProducerRegistry,
     });
     backend.sync(frame);
 
@@ -738,6 +763,7 @@ describe('render/dom backend', () => {
       visible: { x: 0, y: 0, width: 0, height: 0 },
       rowHeight: 32,
       revision: 0,
+      itemProducerRegistry,
       rows: { source: 'entries', tree: true },
       columns: [{ key: 'name', header: 'Name', align: 'start', format: (e) => e.name }],
     });
@@ -780,6 +806,7 @@ describe('render/dom backend', () => {
       visible: { x: 0, y: 0, width: 0, height: 0 },
       rowHeight: 32,
       revision: 0,
+      itemProducerRegistry,
     });
     backend.sync(frame);
 
@@ -805,6 +832,7 @@ describe('render/dom backend', () => {
         visible: { x: 0, y: 0, width: 0, height: 0 },
         rowHeight: 32,
         revision: 0,
+        itemProducerRegistry,
       }),
     );
 

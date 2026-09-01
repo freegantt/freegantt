@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { computeFrame } from './frame.js';
 import { FrameLayout } from './frame-layout.js';
+import { createItemProducerRegistry } from './items/produce-items.js';
 import { sampleEntries } from '../../fixtures/sample-dataset.js';
 import { createTimeScale, dayPreset } from '../time/index.js';
 import * as packLanes from './lanes/pack-lanes.js';
@@ -30,6 +31,7 @@ vi.mock('./row-height-index.js', async (importOriginal) => {
 const scale = createTimeScale({ timeZone: 'UTC', range: sampleEntries[0]!, pxPerMs: 1 / 1000 });
 const preset = dayPreset;
 const visible = { x: 0, y: 0, width: 0, height: 0 };
+const itemProducerRegistry = createItemProducerRegistry();
 
 function input(overrides: Partial<LayoutInput> = {}): LayoutInput {
   return {
@@ -40,6 +42,7 @@ function input(overrides: Partial<LayoutInput> = {}): LayoutInput {
     rowHeight: 32,
     revision: 0,
     todayLine: false as const,
+    itemProducerRegistry,
     ...overrides,
   };
 }

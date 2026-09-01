@@ -193,6 +193,20 @@ describe('rollUpFields (S4.2)', () => {
     expect(costOf(state, 'b')).toBe(20);
   });
 
+  it('removing a child recomputes the parent rolled-up cost', () => {
+    const state = treeDataset([
+      { id: 'p', kind: 'group' },
+      { id: 'a', parentId: 'p', meta: { cost: 10 } },
+      { id: 'b', parentId: 'p', meta: { cost: 5 } },
+    ]);
+
+    expect(costOf(state, 'p')).toBe(15);
+
+    state.entries.remove('b');
+
+    expect(costOf(state, 'p')).toBe(10);
+  });
+
   it('D-S4-11: every store child counts toward the parent, including one a view would hide', () => {
     const state = treeDataset([
       { id: 'root', kind: 'group' },

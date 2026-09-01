@@ -34,6 +34,7 @@ function entryRow(
 ): UnindexedRow {
   return {
     id: rowId(entry.id),
+    kind: 'entry',
     depth,
     entryIds: [entryId(entry.id)],
     expandable,

@@ -1,10 +1,11 @@
 // layout/ — the one deep seam that turns a PlannedRow's entries into Items (D-S4-19, D-S4-24, D-S4-25).
 // Type, per-Gantt registry, per-Kind producers, and the row-level fallback all live here so a caller
-// and an agent learn one name. Header rows (empty entryIds) produce no Items.
+// and an agent learn one name. Header rows (`kind: 'header'`) produce no Items.
 
 import { itemId } from '../../model/index.js';
 import type { Entry, EntryId, EntryKind, ItemId, Instant } from '../../model/index.js';
 import type { PlannedRow } from '../rows/row-source.js';
+import { isPlannedHeaderRow } from '../rows/row-source.js';
 
 export interface Item {
   id: ItemId;
@@ -16,6 +17,17 @@ export interface Item {
 }
 
 type ItemProducer = (entry: Entry) => readonly Item[];
+
+function wholeEntryItem(entry: Entry, end: Instant): Item {
+  return {
+    id: itemId(entry.id, 0),
+    entryId: entry.id,
+    kind: entry.kind,
+    label: entry.name,
+    start: entry.start,
+    end,
+  };
+}
 
 export interface ItemProducerRegistry {
   /** The producer for `kind`, or the `'span'` producer when nothing is registered. Never throws. */
@@ -34,44 +46,17 @@ function produceSpanItems(entry: Entry): readonly Item[] {
       end: segment.end,
     }));
   }
-  return [
-    {
-      id: itemId(entry.id, 0),
-      entryId: entry.id,
-      kind: entry.kind,
-      label: entry.name,
-      start: entry.start,
-      end: entry.end,
-    },
-  ];
+  return [wholeEntryItem(entry, entry.end)];
 }
 
 // render/ draws the bracket off data-kind (D-S4-24).
 function produceGroupItems(entry: Entry): readonly Item[] {
-  return [
-    {
-      id: itemId(entry.id, 0),
-      entryId: entry.id,
-      kind: entry.kind,
-      label: entry.name,
-      start: entry.start,
-      end: entry.end,
-    },
-  ];
+  return [wholeEntryItem(entry, entry.end)];
 }
 
 // render/ draws the diamond off data-kind (D-S4-24).
 function produceMilestoneItems(entry: Entry): readonly Item[] {
-  return [
-    {
-      id: itemId(entry.id, 0),
-      entryId: entry.id,
-      kind: entry.kind,
-      label: entry.name,
-      start: entry.start,
-      end: entry.start,
-    },
-  ];
+  return [wholeEntryItem(entry, entry.start)];
 }
 
 /** Call: `createItemProducerRegistry()` once in the Gantt constructor; tests pass extras for a Kind. */
@@ -98,6 +83,7 @@ export function produceItemsForRow(
   entryById: ReadonlyMap<EntryId, Entry>,
   registry: ItemProducerRegistry,
 ): readonly Item[] {
+  if (isPlannedHeaderRow(row)) return [];
   const items: Item[] = [];
   for (const id of row.entryIds) {
     const entry = entryById.get(id);

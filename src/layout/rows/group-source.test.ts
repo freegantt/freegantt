@@ -25,9 +25,10 @@ describe('resolveGroupSource', () => {
       { source: 'group', groupBy: (e) => String((e.meta as { team: string }).team) },
       new Set(),
     );
-    expect(rows.map((r) => r.entryIds.length === 0)).toEqual([true, false, false, true, false]);
+    expect(rows.map((r) => r.kind)).toEqual(['header', 'entry', 'entry', 'header', 'entry']);
     expect(rows[0]).toMatchObject({
       id: rowId('group:red'),
+      kind: 'header',
       entryIds: [],
       headerLabel: 'red',
       expandable: true,

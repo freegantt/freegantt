@@ -19,7 +19,7 @@
       .badge-judge   { background:#fef3c7; color:#78350f; border:1px solid #fde68a; }
       .badge-hold    { background:#d1fae5; color:#064e3b; border:1px solid #a7f3d0; }
       .badge-ok      { background:#dcfce7; color:#14532d; border:1px solid #bbf7d0; }
-      .badge-off     { background:#f1f5f9; color:#334155; border:1px solid #e2e8f0; }
+      .badge-done   { background:#dcfce7; color:#14532d; border:1px solid #bbf7d0; }
       table.find td, table.find th { vertical-align: top; }
     </style>
   </head>
@@ -53,6 +53,10 @@
           Vocabulary is the <span class="font-mono">/codebase-design</span> glossary: module,
           interface, implementation, depth, seam, adapter, leverage, locality.
         </p>
+        <div class="rounded-lg border border-emerald-300 bg-emerald-50 p-4 text-sm">
+          <p class="text-xs uppercase tracking-wider text-emerald-800 mb-2">Remediation — 2026-08-31</p>
+          <p class="text-slate-700">P1, S1–S5, S7–S17, C1–C3, P2–P5, and C4 (registry fallback) are fixed on <span class="font-mono">s4-implement</span>. <strong>S6</strong> (authored-field Symbol channel) and <strong>C4</strong> (full <span class="font-mono">computeFrame</span> split) stay open — judgement / worth-exploring only.</p>
+        </div>
         <div class="flex flex-wrap gap-3 text-xs text-slate-600 pt-1">
           <span class="inline-flex items-center gap-1"><span class="inline-block w-4 h-3 border border-slate-500 bg-white"></span> module</span>
           <span class="inline-flex items-center gap-1"><svg width="24" height="8"><line x1="0" y1="4" x2="24" y2="4" stroke="#475569" stroke-width="2" class="seam"/></svg> seam</span>
@@ -84,7 +88,7 @@
       <section class="rounded-2xl border bg-white p-6 space-y-4">
         <h2 class="font-serif text-xl">What this pass found</h2>
         <div class="rounded-lg border-2 border-red-400 bg-red-50 p-4 text-sm mb-4">
-          <p class="text-xs uppercase tracking-wider text-red-700 mb-1">One confirmed bug</p>
+          <p class="text-xs uppercase tracking-wider text-red-700 mb-1">One confirmed bug — <span class="badge-done text-xs px-2 py-1 rounded">FIXED</span></p>
           <p class="text-slate-800"><strong>Removing a child never recomputes its parent's rolled-up Fields</strong> — <a href="#spec-axis" class="underline">P1</a>. Reproduced against HEAD with a probe: a parent's <span class="font-mono">cost</span> stays at 15 after the child worth 5 is removed. It is a regression against <span class="font-mono">main</span>, and D-S4-8 names the exact case that was dropped.</p>
         </div>
         <div class="grid md:grid-cols-3 gap-4 text-sm">
@@ -122,6 +126,7 @@
         <div class="px-6 py-4 border-b flex items-center gap-3 bg-gradient-to-r from-violet-50 to-fuchsia-50">
           <h2 class="font-serif text-xl flex-1">C1 — Give the commit pipeline a module</h2>
           <span class="badge-strong text-xs px-2 py-1 rounded">STRONG</span>
+          <span class="badge-done text-xs px-2 py-1 rounded">DONE</span>
           <span class="badge-off text-xs px-2 py-1 rounded">in-process</span>
         </div>
         <div class="p-6 space-y-5">
@@ -187,6 +192,7 @@
         <div class="px-6 py-4 border-b flex items-center gap-3 bg-gradient-to-r from-sky-50 to-cyan-50">
           <h2 class="font-serif text-xl flex-1">C2 — One module owns the Entry tree</h2>
           <span class="badge-strong text-xs px-2 py-1 rounded">STRONG</span>
+          <span class="badge-done text-xs px-2 py-1 rounded">DONE</span>
           <span class="badge-off text-xs px-2 py-1 rounded">in-process</span>
         </div>
         <div class="p-6 space-y-5">
@@ -240,6 +246,7 @@ flowchart TB
         <div class="px-6 py-4 border-b flex items-center gap-3 bg-gradient-to-r from-rose-50 to-orange-50">
           <h2 class="font-serif text-xl flex-1">C3 — The twisty needs a seam, not a selector</h2>
           <span class="badge-strong text-xs px-2 py-1 rounded">STRONG</span>
+          <span class="badge-done text-xs px-2 py-1 rounded">DONE</span>
           <span class="badge-off text-xs px-2 py-1 rounded">ports &amp; adapters</span>
         </div>
         <div class="p-6 space-y-5">
@@ -306,6 +313,7 @@ flowchart LR
         <div class="px-6 py-4 border-b flex items-center gap-3 bg-gradient-to-r from-emerald-50 to-teal-50">
           <h2 class="font-serif text-xl flex-1">C4 — <span class="font-mono text-lg">computeFrame</span> is doing two jobs</h2>
           <span class="badge-worth text-xs px-2 py-1 rounded">WORTH EXPLORING</span>
+          <span class="badge-done text-xs px-2 py-1 rounded">PARTIAL</span>
           <span class="badge-off text-xs px-2 py-1 rounded">in-process</span>
         </div>
         <div class="p-6 space-y-5">
@@ -363,6 +371,7 @@ flowchart LR
         <article id="s1" class="rounded-2xl border-2 border-red-200 bg-white overflow-hidden">
           <div class="px-6 py-3 border-b bg-red-50 flex items-center gap-3">
             <span class="badge-hard text-xs px-2 py-1 rounded">HARD</span>
+            <span class="badge-done text-xs px-2 py-1 rounded">DONE</span>
             <h3 class="font-serif text-lg flex-1">S1 — Three published knobs silently do nothing</h3>
           </div>
           <div class="p-6 space-y-3 text-sm">
@@ -379,6 +388,7 @@ flowchart LR
         <article class="rounded-2xl border-2 border-red-200 bg-white overflow-hidden">
           <div class="px-6 py-3 border-b bg-red-50 flex items-center gap-3">
             <span class="badge-hard text-xs px-2 py-1 rounded">HARD</span>
+            <span class="badge-done text-xs px-2 py-1 rounded">DONE</span>
             <h3 class="font-serif text-lg flex-1">S2 — A consumer can cause <span class="font-mono text-base">AggregatorFailedError</span> but cannot catch it</h3>
           </div>
           <div class="p-6 space-y-3 text-sm">
@@ -394,6 +404,7 @@ flowchart LR
         <article class="rounded-2xl border-2 border-red-200 bg-white overflow-hidden">
           <div class="px-6 py-3 border-b bg-red-50 flex items-center gap-3">
             <span class="badge-hard text-xs px-2 py-1 rounded">HARD</span>
+            <span class="badge-done text-xs px-2 py-1 rounded">DONE</span>
             <h3 class="font-serif text-lg flex-1">S3 — <span class="font-mono text-base">buildEffectiveEntries</span> exists twice, byte for byte</h3>
           </div>
           <div class="p-6 space-y-3 text-sm">
@@ -408,6 +419,7 @@ flowchart LR
         <article class="rounded-2xl border-2 border-red-200 bg-white overflow-hidden">
           <div class="px-6 py-3 border-b bg-red-50 flex items-center gap-3">
             <span class="badge-hard text-xs px-2 py-1 rounded">HARD</span>
+            <span class="badge-done text-xs px-2 py-1 rounded">DONE</span>
             <h3 class="font-serif text-lg flex-1">S4 — The harness hand-rolls time arithmetic the library already exports</h3>
           </div>
           <div class="p-6 space-y-3 text-sm">
@@ -437,79 +449,79 @@ flowchart LR
               </thead>
               <tbody class="divide-y">
                 <tr>
-                  <td class="py-3 pr-3 font-mono text-xs">S5</td>
+                  <td class="py-3 pr-3 font-mono text-xs">S5 <span class="badge-done text-[10px] px-1 rounded">DONE</span></td>
                   <td class="py-3 pr-3 font-mono text-xs">view/grid-columns.ts:101–110<br/>view/gantt-shell.ts:825</td>
                   <td class="py-3 pr-3 text-xs">Speculative Generality</td>
                   <td class="py-3"><span class="font-mono">bindGanttFields</span> returns <span class="font-mono">{ columns, fieldCompares }</span>; the one production caller takes <span class="font-mono">.columns</span> and drops the rest. <span class="font-mono">fieldCompares</span> has no reader outside tests, yet every dataset change, locale set and column set builds an <span class="font-mono">Intl.Collator</span> and maps every declared Field for it. Call <span class="font-mono">resolveColumns</span> directly until S4.9's sort needs the pair.</td>
                 </tr>
                 <tr>
-                  <td class="py-3 pr-3 font-mono text-xs">S6</td>
+                  <td class="py-3 pr-3 font-mono text-xs">S6 <span class="badge-off text-[10px] px-1 rounded">OPEN</span></td>
                   <td class="py-3 pr-3 font-mono text-xs">data/fields/field-access.ts:24, 36–55</td>
                   <td class="py-3 pr-3 text-xs">Hidden channel</td>
                   <td class="py-3"><span class="font-mono">authoredFieldKeys</span> rides on <span class="font-mono">StoredEdit</span> as a non-enumerable Symbol, so any plain spread silently drops it — which is why <span class="font-mono">mergeStoredEdits</span> and the <span class="font-mono">entry-store.ts</span> special case exist. Two channels for one write shape sits against plans/02's "One write shape". An explicit <span class="font-mono">{ edit, authoredKeys }</span> pair makes the second channel visible to the type system.</td>
                 </tr>
                 <tr>
-                  <td class="py-3 pr-3 font-mono text-xs">S7</td>
+                  <td class="py-3 pr-3 font-mono text-xs">S7 <span class="badge-done text-[10px] px-1 rounded">DONE</span></td>
                   <td class="py-3 pr-3 font-mono text-xs">data/hierarchy.ts:33–39, 72</td>
                   <td class="py-3 pr-3 text-xs">Dead guard + O(n²)</td>
                   <td class="py-3">Line 72's <span class="font-mono">childCount(parentId, effective) === 0</span> can never be true — <span class="font-mono">parentId</span> was read off a child that is in <span class="font-mono">effective</span>. And <span class="font-mono">childCount</span> scans every entry, once or twice per distinct parent: quadratic on the commit path. Build the parent→count index once.</td>
                 </tr>
                 <tr>
-                  <td class="py-3 pr-3 font-mono text-xs">S8</td>
+                  <td class="py-3 pr-3 font-mono text-xs">S8 <span class="badge-done text-[10px] px-1 rounded">DONE</span></td>
                   <td class="py-3 pr-3 font-mono text-xs">data/rollup.ts:111–117</td>
                   <td class="py-3 pr-3 text-xs">Efficiency</td>
                   <td class="py-3"><span class="font-mono">parentsToRecompute</span> sorts with <span class="font-mono">depthOf</span> in the comparator — an O(depth) map walk called O(n log n) times, every commit. The neighbouring S7 scheduling work sets a 5,000-link bar for exactly this class of loop. Memoize depth per id before sorting.</td>
                 </tr>
                 <tr>
-                  <td class="py-3 pr-3 font-mono text-xs">S9</td>
+                  <td class="py-3 pr-3 font-mono text-xs">S9 <span class="badge-done text-[10px] px-1 rounded">DONE</span></td>
                   <td class="py-3 pr-3 font-mono text-xs">data/computed-cache.ts:14</td>
                   <td class="py-3 pr-3 text-xs">Primitive Obsession</td>
                   <td class="py-3">The memo keys on <span class="font-mono">`${entryId}:${fieldKey}`</span>. Entry <span class="font-mono">a:b</span> + field <span class="font-mono">c</span> collides with entry <span class="font-mono">a</span> + field <span class="font-mono">b:c</span> — and <span class="font-mono">model/ids.ts:27</span> states outright that a colon-bearing <span class="font-mono">EntryId</span> is legal. A nested Map removes the class of bug and the per-read string allocation.</td>
                 </tr>
                 <tr>
-                  <td class="py-3 pr-3 font-mono text-xs">S10</td>
+                  <td class="py-3 pr-3 font-mono text-xs">S10 <span class="badge-done text-[10px] px-1 rounded">DONE</span></td>
                   <td class="py-3 pr-3 font-mono text-xs">data/transaction.ts:238–240, 256, 266–267</td>
                   <td class="py-3 pr-3 text-xs">Duplicated Code</td>
                   <td class="py-3">Three copies of <span class="font-mono">for (const [id, edit] of X) push(...diffEdit(byId, id, edit, data.fields, data.fieldContext))</span>. Extract <span class="font-mono">diffEdits(byId, edits, fields, ctx)</span> — see <a href="#c1" class="underline">C1</a>.</td>
                 </tr>
                 <tr>
-                  <td class="py-3 pr-3 font-mono text-xs">S11</td>
+                  <td class="py-3 pr-3 font-mono text-xs">S11 <span class="badge-done text-[10px] px-1 rounded">DONE</span></td>
                   <td class="py-3 pr-3 font-mono text-xs">data/transaction.ts:74–88</td>
                   <td class="py-3 pr-3 text-xs">Doc drift</td>
                   <td class="py-3"><span class="font-mono">applySilentUpdates</span>'s docblock is a verbatim copy of <span class="font-mono">applyConstructionRollUp</span>'s (lines 114–130) and opens "Runs the Rollup once against <span class="font-mono">data</span>'s freshly built entries" — which this function does not do. It applies rows it is handed. Rewrite to say that.</td>
                 </tr>
                 <tr>
-                  <td class="py-3 pr-3 font-mono text-xs">S12</td>
+                  <td class="py-3 pr-3 font-mono text-xs">S12 <span class="badge-done text-[10px] px-1 rounded">DONE</span></td>
                   <td class="py-3 pr-3 font-mono text-xs">data/change-set.ts:68–79</td>
                   <td class="py-3 pr-3 text-xs">Duplicated Code</td>
                   <td class="py-3">In the <span class="font-mono">authored.size &gt; 0</span> branch, the second loop over <span class="font-mono">registry.all</span> is a superset of the first. <span class="font-mono">seen</span> keeps it correct, but the rule is stated twice and the registry is walked twice. One scope selection: <span class="font-mono">authored.has('meta') ? registry.all : registry.all.filter(…)</span>.</td>
                 </tr>
                 <tr>
-                  <td class="py-3 pr-3 font-mono text-xs">S13</td>
+                  <td class="py-3 pr-3 font-mono text-xs">S13 <span class="badge-done text-[10px] px-1 rounded">DONE</span></td>
                   <td class="py-3 pr-3 font-mono text-xs">data/hierarchy.ts:24–25<br/>data/rollup.ts:34–35, 81–82</td>
                   <td class="py-3 pr-3 text-xs">Mysterious Name</td>
                   <td class="py-3">Loop variables named <span class="font-mono">entity</span> over maps of <span class="font-mono">Entry</span>. <span class="font-mono">entity</span> is ChangeSet vocabulary (<span class="font-mono">EntityAdded.entity</span>); the glossary word for the record itself is <span class="font-mono">Entry</span> (CONTEXT.md, ADR 0003). One meaning per word.</td>
                 </tr>
                 <tr>
-                  <td class="py-3 pr-3 font-mono text-xs">S14</td>
+                  <td class="py-3 pr-3 font-mono text-xs">S14 <span class="badge-done text-[10px] px-1 rounded">DONE</span></td>
                   <td class="py-3 pr-3 font-mono text-xs">data/fields/field-registry.ts:101–103<br/>data/rollup.ts:184, 191</td>
                   <td class="py-3 pr-3 text-xs">Lost guarantee</td>
                   <td class="py-3"><span class="font-mono">rollingUpFields()</span> filters on <span class="font-mono">rollUp !== undefined</span> and then returns a type that has forgotten it, forcing two <span class="font-mono">field.rollUp!</span> assertions at the call site. Return <span class="font-mono">readonly (ResolvedField &amp; { rollUp: AggregatorName })[]</span> and both assertions go.</td>
                 </tr>
                 <tr>
-                  <td class="py-3 pr-3 font-mono text-xs">S15</td>
+                  <td class="py-3 pr-3 font-mono text-xs">S15 <span class="badge-done text-[10px] px-1 rounded">DONE</span></td>
                   <td class="py-3 pr-3 font-mono text-xs">model/document.ts:25–33</td>
                   <td class="py-3 pr-3 text-xs">Dead type</td>
                   <td class="py-3">Every key of <span class="font-mono">Pick&lt;Field, 'key' | 'type' | 'source' | 'rollUp' | 'column'&gt;</span> is re-declared by the intersection that follows it, so the <span class="font-mono">Pick</span> contributes nothing but a false link to <span class="font-mono">Field</span>. Delete it.</td>
                 </tr>
                 <tr>
-                  <td class="py-3 pr-3 font-mono text-xs">S16</td>
+                  <td class="py-3 pr-3 font-mono text-xs">S16 <span class="badge-done text-[10px] px-1 rounded">DONE</span></td>
                   <td class="py-3 pr-3 font-mono text-xs">layout/rows/resolve-rows.ts:30–34</td>
                   <td class="py-3 pr-3 text-xs">Redundant parameter</td>
                   <td class="py-3"><span class="font-mono">resolveSource(input, source)</span> takes a value it already owns — the only call passes <span class="font-mono">input.source</span>. Drop the second parameter.</td>
                 </tr>
                 <tr>
-                  <td class="py-3 pr-3 font-mono text-xs">S17</td>
+                  <td class="py-3 pr-3 font-mono text-xs">S17 <span class="badge-done text-[10px] px-1 rounded">DONE</span></td>
                   <td class="py-3 pr-3 font-mono text-xs">layout/items/produce-items.ts:37–75</td>
                   <td class="py-3 pr-3 text-xs">Duplicated Code</td>
                   <td class="py-3">The span fallback, <span class="font-mono">produceGroupItems</span> and <span class="font-mono">produceMilestoneItems</span> are the same six-key literal three times, differing only in <span class="font-mono">end</span>. One private <span class="font-mono">wholeEntryItem(entry, end)</span> makes the milestone's <span class="font-mono">end: entry.start</span> the visible difference it is.</td>
@@ -542,6 +554,7 @@ flowchart LR
         <article class="rounded-2xl border-2 border-red-400 bg-white overflow-hidden">
           <div class="px-6 py-3 border-b bg-red-100 flex items-center gap-3">
             <span class="badge-hard text-xs px-2 py-1 rounded">BUG · CONFIRMED</span>
+            <span class="badge-done text-xs px-2 py-1 rounded">FIXED</span>
             <h3 class="font-serif text-lg flex-1">P1 — Removing a child never recomputes its parent</h3>
           </div>
           <div class="p-6 space-y-4 text-sm">
@@ -600,6 +613,7 @@ sequenceDiagram
         <article class="rounded-2xl border bg-white overflow-hidden">
           <div class="px-6 py-3 border-b bg-amber-50 flex items-center gap-3">
             <span class="badge-judge text-xs px-2 py-1 rounded">PARTIAL</span>
+            <span class="badge-done text-xs px-2 py-1 rounded">DONE</span>
             <h3 class="font-serif text-lg flex-1">P2 — <span class="font-mono text-base">PlannedRow.kind</span> was dropped from a settled decision</h3>
           </div>
           <div class="p-6 space-y-3 text-sm">
@@ -614,6 +628,7 @@ sequenceDiagram
         <article class="rounded-2xl border bg-white overflow-hidden">
           <div class="px-6 py-3 border-b bg-amber-50 flex items-center gap-3">
             <span class="badge-judge text-xs px-2 py-1 rounded">MISSING</span>
+            <span class="badge-done text-xs px-2 py-1 rounded">DONE</span>
             <h3 class="font-serif text-lg flex-1">P3 — <span class="font-mono text-base">rollUpKinds</span> ships a getter with no setter</h3>
           </div>
           <div class="p-6 space-y-3 text-sm">
@@ -627,6 +642,7 @@ sequenceDiagram
         <article class="rounded-2xl border bg-white overflow-hidden">
           <div class="px-6 py-3 border-b bg-sky-50 flex items-center gap-3">
             <span class="badge-spec text-xs px-2 py-1 rounded">SPEC LAGS CODE</span>
+            <span class="badge-done text-xs px-2 py-1 rounded">DONE</span>
             <h3 class="font-serif text-lg flex-1">P4 — Three renames landed in code and not in the spec</h3>
           </div>
           <div class="p-6 space-y-3 text-sm">
@@ -643,6 +659,7 @@ sequenceDiagram
         <article class="rounded-2xl border bg-white overflow-hidden">
           <div class="px-6 py-3 border-b bg-amber-50 flex items-center gap-3">
             <span class="badge-judge text-xs px-2 py-1 rounded">GATE EVIDENCE</span>
+            <span class="badge-done text-xs px-2 py-1 rounded">DONE</span>
             <h3 class="font-serif text-lg flex-1">P5 — The harness reparent button is a no-op</h3>
           </div>
           <div class="p-6 space-y-3 text-sm">
@@ -658,7 +675,7 @@ sequenceDiagram
             <span class="badge-ok px-2 py-1 rounded">field registry live ✓</span>
             <span class="badge-ok px-2 py-1 rounded">tree + grouped sources ✓</span>
             <span class="badge-ok px-2 py-1 rounded">item identity deterministic ✓</span>
-            <span class="badge-hard px-2 py-1 rounded">rollup correct on remove ✗ (P1)</span>
+          <span class="badge-done text-xs px-2 py-1 rounded">rollup correct on remove ✓ (P1 fixed)</span>
             <span class="badge-off px-2 py-1 rounded">pack-mode heights — S4.8, not started</span>
           </div>
         </div>

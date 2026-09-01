@@ -31,11 +31,13 @@ describe('resolveCustomSource [S4-A11]', () => {
     );
     expect(rows[0]).toMatchObject({
       id: rowId('h'),
+      kind: 'header',
       entryIds: [],
       headerLabel: 'Phase',
     });
     expect(rows[1]).toMatchObject({
       id: rowId('a'),
+      kind: 'entry',
       entryIds: [entryId('a')],
     });
   });
@@ -45,7 +47,7 @@ describe('resolveCustomSource [S4-A11]', () => {
       { source: 'custom', resolve: () => [{ id: 'empty', entryIds: [] }] },
       { entries },
     );
-    expect(rows[0]?.entryIds).toEqual([]);
+    expect(rows[0]).toMatchObject({ kind: 'header', entryIds: [] });
   });
 
   it('a duplicate id throws DuplicateRowIdError', () => {

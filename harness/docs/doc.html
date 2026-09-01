@@ -14,7 +14,7 @@
         <script type="module" src="../harness-nav.ts"></script>
         <h1>FreeGantt — Module &amp; Class Map</h1>
         <p class="tagline">
-          What the code in <code>src/</code> actually is today, at slice&nbsp;S1: every module, every class,
+          What the code in <code>src/</code> actually is today, at slice&nbsp;S4: every module, every class,
           how they call each other, and where the seams creak. This is a map of the code as built. The spec is
           <code>plans/00</code>–<code>04</code>; the glossary is <code>CONTEXT.md</code>. Where this document
           and those disagree, they are right and this is stale — see §10.
@@ -23,10 +23,10 @@
           <a href="../../docs/05-consumer-api.md"><code>docs/05-consumer-api.md</code></a> instead of this page.
         </p>
         <div class="meta">
-          <span>slice: S1</span>
-          <span>38 source files in <code>src/</code></span>
-          <span>10 layers, 6 with code</span>
-          <span>generated 2026-08-28</span>
+          <span>slice: S4</span>
+          <span>97 source files in <code>src/</code></span>
+          <span>10 layers, 8 with code</span>
+          <span>generated 2026-08-31</span>
           <span>§9 smells triaged @ issue #91 (2026-08-29) · page first written 2026-08-25 @ 522bf7f</span>
         </div>
         <nav>
@@ -61,7 +61,7 @@
             <div class="box api">
               <div class="name">harness/</div>
               <div class="sub">
-                main.ts · scroll-sync.ts — the library's first consumer, outside the src lint scope
+                main.ts · data.html · scroll-sync.ts — the library's first consumer, outside the src lint scope
               </div>
             </div>
           </div>
@@ -80,18 +80,23 @@
             <div class="box dom">
               <div class="name">view/</div>
               <div class="sub">
-                <code>GanttShell</code> · <code>attachScroll</code> · <code>attachPaneSize</code>
+                <code>GanttShell</code> · <code>GesturePipeline</code> · <code>FrameScheduler</code> ·
+                capabilities · navigation · <code>attachRowTwisty</code>
               </div>
             </div>
             <div class="box dom">
               <div class="name">render/</div>
               <div class="sub">
-                <code>RenderBackend</code> seam · dom backend · null backend · <code>syncKeyed</code>
+                <code>RenderBackend</code> seam · dom backend · null backend · <code>syncKeyed</code> ·
+                date-line · row-twisty
               </div>
             </div>
-            <div class="box stub">
+            <div class="box dom">
               <div class="name">interaction/</div>
-              <div class="sub">stub — S4</div>
+              <div class="sub">
+                <code>attachEntryGestures</code> · <code>attachKeyboardEditing</code> ·
+                <code>attachPointerGesture</code>
+              </div>
             </div>
             <div class="box stub">
               <div class="name">extensions/</div>
@@ -104,17 +109,20 @@
             <div class="box pure">
               <div class="name">layout/</div>
               <div class="sub">
-                <code>Viewport</code> · <code>FrameLayout</code> · <code>TimeScaleModel</code> ·
-                <code>ScrollModel</code> · <code>BoundValue</code>
+                <code>computeFrame</code> · <code>FrameLayout</code> · rows/items/lanes ·
+                <code>TimeScaleModel</code> · <code>ScrollModel</code>
+              </div>
+            </div>
+            <div class="box pure">
+              <div class="name">data/</div>
+              <div class="sub">
+                <code>DatasetState</code> · <code>EntryStore</code> · transactions · history · fields ·
+                rollup
               </div>
             </div>
             <div class="box stub">
-              <div class="name">data/</div>
-              <div class="sub">stub — S2 (stores, transactions, resolve hook)</div>
-            </div>
-            <div class="box stub">
               <div class="name">scheduling/</div>
-              <div class="sub">stub — S3, optional plugin (ADR 0002)</div>
+              <div class="sub">stub — S7, optional plugin (ADR 0002)</div>
             </div>
           </div>
           <div class="arrow-v">↓</div>
@@ -122,7 +130,7 @@
             <div class="box pure">
               <div class="name">time/</div>
               <div class="sub">
-                <code>Instant</code> arithmetic · IANA zones · <code>TimeScale</code> · view presets
+                <code>Instant</code> arithmetic · IANA zones · <code>TimeScale</code> · view presets · snap
               </div>
             </div>
           </div>
@@ -131,7 +139,8 @@
             <div class="box pure">
               <div class="name">model/</div>
               <div class="sub">
-                entity types, ids, brands, <code>FreeGanttError</code> — zero deps, near-zero runtime
+                entity types, ids, brands, <code>FreeGanttError</code>, Field, ChangeSet — zero deps,
+                near-zero runtime
               </div>
             </div>
           </div>
@@ -173,12 +182,15 @@
           <tr>
             <td class="mono">scheduling</td>
             <td class="mono">time, model</td>
-            <td>Stub. Never imported by <code>data/</code> statically — they meet at the resolve hook.</td>
+            <td>Stub. Never imported by <code>data/</code> statically — they meet at the extension hook.</td>
           </tr>
           <tr>
             <td class="mono">data</td>
-            <td class="mono">model</td>
-            <td>Stub. Deliberately no <code>scheduling</code> edge.</td>
+            <td class="mono">time, model</td>
+            <td>
+              Now built, not a stub. Deliberately no <code>scheduling</code> edge: mutations resolve through
+              the generic <code>EditExtender</code> hook (identity function when no plugin is installed).
+            </td>
           </tr>
           <tr>
             <td class="mono">render</td>
@@ -194,14 +206,22 @@
             <td class="mono">view</td>
             <td class="mono">render, layout, data, model</td>
             <td>
-              No <code>time</code> edge — that is why <code>gantt-shell.test.ts</code> hand-rolls its own
-              <code>instant()</code>.
+              <code>data/</code> and <code>model</code> enter as type and dataset surfaces the shell
+              orchestrates; the Gantt's own event bus is <code>view/event-bus.ts</code>, owned by
+              <code>GanttShell</code>. Still no <code>time</code> edge — every date/pixel computation a gesture
+              needs is a pure <code>layout/</code> function the shell hands back through
+              <code>EntryGestureContext</code>.
             </td>
           </tr>
           <tr>
             <td class="mono">interaction</td>
-            <td class="mono">view, data</td>
-            <td>Stub.</td>
+            <td class="mono">view, data, model</td>
+            <td>
+              Built now. Drives the <code>EntryGestureContext</code> seam typed in <code>view/</code>;
+              <code>model</code> enters as type-only params (Entry/EntryId/ItemId). Never reaches
+              <code>time/</code>, <code>layout/</code> or <code>render/</code>, and never imports
+              <code>scheduling/</code>.
+            </td>
           </tr>
           <tr>
             <td class="mono">extensions</td>
@@ -210,12 +230,14 @@
           </tr>
           <tr>
             <td class="mono">api</td>
-            <td class="mono">view, data, model, time, layout</td>
+            <td class="mono">view, data, model, time, layout, interaction</td>
             <td>
               <code>model</code>, <code>time</code> and <code>layout</code> are type/primitive re-export
-              edges, not behavioural ones — <code>layout</code> widened by issue #91 §9-I to reach
+              edges, not behavioural ones. <code>interaction</code> arrives by constructor injection — the
+              shell takes the gesture attachments structurally-typed rather than importing
+              <code>interaction/</code> itself. <code>layout</code> widened by issue #91 §9-I to reach
               <code>TimeScaleModel</code>/<code>ScrollModel</code> directly instead of laundering them
-              through <code>view/</code>, which had no other interest in them.
+              through <code>view/</code>.
             </td>
           </tr>
         </table>
@@ -284,7 +306,7 @@
             </tr>
             <tr>
               <td class="mono">model/entry.ts</td>
-              <td class="mono">Entry, EntryKind</td>
+              <td class="mono">Entry, EntryKind, EntryInput</td>
               <td>
                 The authored record. <code>EntryKind</code> is an open union (<code
                   >'span' | 'group' | 'milestone' | (string &amp; {})</code
@@ -313,12 +335,40 @@
             </tr>
             <tr>
               <td class="mono">model/errors.ts</td>
-              <td class="mono">FreeGanttError, UnsupportedUnitError</td>
+              <td class="mono">FreeGanttError, UnsupportedUnitError, InvalidInstantError, UnknownFieldError, MutationCancelledError, FieldNotColumnableError</td>
               <td>
                 The public error base, carrying a stable <code>code</code>. Errors are part of the API
-                surface, so they live where the public surface lives. Three today: the base,
-                <code>'unsupported-unit'</code>, and <code>'invalid-instant'</code>.
+                surface, so they live where the public surface lives. The subclasses each name a failure a
+                consumer can hit and recover from.
               </td>
+            </tr>
+            <tr>
+              <td class="mono">model/change-set.ts</td>
+              <td class="mono">ChangeSet, FieldUpdated</td>
+              <td>
+                The <em>one write shape</em>: <code>{ added, removed, updated }</code>, where an update is
+                <code>{ entryId, field: FieldKey, from, to }</code> per field. Emitted on
+                <code>change</code>; the shape undo and redo replay.
+              </td>
+            </tr>
+            <tr>
+              <td class="mono">model/field.ts</td>
+              <td class="mono">Field, FieldSource, FieldColumnAlign</td>
+              <td>
+                What a value <em>is</em> (ADR 0005). <code>FieldSource</code> is
+                <code>'entry' | 'meta' | 'compute'</code> and decides which side a rolled-up parent value
+                falls on.
+              </td>
+            </tr>
+            <tr>
+              <td class="mono">model/document.ts</td>
+              <td class="mono">DatasetDocument</td>
+              <td>The schema-2 serialization shape — the field half plus entries, version-dispatched on read.</td>
+            </tr>
+            <tr>
+              <td class="mono">model/index.ts</td>
+              <td class="mono">barrel</td>
+              <td>Public types only; brands and error helpers re-exported.</td>
             </tr>
 
             <tr>
@@ -379,6 +429,35 @@
                 step from looping forever.
               </td>
             </tr>
+            <tr>
+              <td class="mono">time/format.ts</td>
+              <td class="mono">formatDate(), formatDuration(), formatInstant()</td>
+              <td>
+                The display-side formatting helpers — inclusive ends, locale-bound labels. Kept small and
+                pure so any consumer-facing text goes through one path.
+              </td>
+            </tr>
+            <tr>
+              <td class="mono">time/presets.ts</td>
+              <td class="mono">the shipped view presets, ZOOM_PRESETS</td>
+              <td>
+                Deep-frozen preset ladder from finest hour to coarsest year, plus single-band ids. A preset
+                is a value, never a shared mutable singleton (I2).
+              </td>
+            </tr>
+            <tr>
+              <td class="mono">time/snap.ts</td>
+              <td class="mono">snapInstant(), SnapSpec, resolveSnapForPreset()</td>
+              <td>
+                Snap resolution for gestures: where a drag's committed value lands, driven by the live preset's
+                <code>snap</code> field. Pure — the gesture pipeline calls this, never arithmetic of its own.
+              </td>
+            </tr>
+            <tr>
+              <td class="mono">time/index.ts</td>
+              <td class="mono">barrel</td>
+              <td>Public entry points; the façade that keeps the deps confined.</td>
+            </tr>
 
             <tr>
               <td
@@ -391,37 +470,317 @@
                   color: var(--pure-ink);
                 "
               >
-                layout/ &nbsp;<span class="tag pure">pure</span> &nbsp;headless geometry + the shareable
-                viewport objects
+                data/ &nbsp;<span class="tag pure">pure</span> &nbsp;live state, transactions, fields — no DOM
+              </td>
+            </tr>
+            <tr>
+              <td class="mono">data/dataset-state.ts</td>
+              <td class="mono">DatasetState, DatasetStateOptions</td>
+              <td>
+                The live state one <code>Dataset</code> instance owns — a façade holding the entry store,
+                event bus, field registry, history and edit-extender. Exposes <code>transaction()</code> as
+                the sole commit entry point.
+              </td>
+            </tr>
+            <tr>
+              <td class="mono">data/entry-store.ts</td>
+              <td class="mono">EntryStore</td>
+              <td>
+                Committed entry map plus per-transaction write-set overlay. Exposes
+                <code>add/update/remove</code> and a token-gated staging/apply surface so a transaction can
+                stage edits it does not want to leak mid-flight.
+              </td>
+            </tr>
+            <tr>
+              <td class="mono">data/entry-reader.ts</td>
+              <td class="mono">readEntries(), readEntry(), readEdit()</td>
+              <td>
+                Maps <code>EntryInput</code>/<code>EntryEdit</code> through <code>time/</code>'s zone
+                conversion into stored <code>Entry</code>/<code>StoredEdit</code> shapes — the single place
+                field reading and date normalization meet.
+              </td>
+            </tr>
+            <tr>
+              <td class="mono">data/change-set.ts</td>
+              <td class="mono">diffEdit(), foldChangeSet(), invertChangeSet()</td>
+              <td>
+                Field-aware changeset building: diffs a <code>StoredEdit</code> against committed state, folds
+                a transaction's edits into one <code>ChangeSet</code>, and inverts it for undo.
+              </td>
+            </tr>
+            <tr>
+              <td class="mono">data/transaction.ts</td>
+              <td class="mono">runTransaction(), commitChangeSet(), applyConstructionRollUp()</td>
+              <td>
+                The transaction runner. Mints a <code>TxToken</code>, runs the body, calls the edit-extender
+                once, runs hierarchy promotion, runs rollup, folds the changeset, and emits
+                <code>beforeChange</code>/<code>change</code>.
+              </td>
+            </tr>
+            <tr>
+              <td class="mono">data/build-commit-change-set.ts</td>
+              <td class="mono">buildCommitChangeSet()</td>
+              <td>
+                The five-stage commit pipeline (C1): body edits → extension hook → autoGroup promotion →
+                rollup → fold. The only module that imports <code>rollup.ts</code> and
+                <code>hierarchy.ts</code> on the commit path (<code>rollup-is-removable</code>,
+                <code>autogroup-is-removable</code>).
+              </td>
+            </tr>
+            <tr>
+              <td class="mono">data/entry-tree.ts</td>
+              <td class="mono">buildEffectiveEntries()</td>
+              <td>
+                Shared entry-tree helpers for the hierarchy and rollup passes (S4 review C2): overlays
+                proposed edits on committed state so both passes read the same effective tree.
+              </td>
+            </tr>
+            <tr>
+              <td class="mono">data/hierarchy.ts</td>
+              <td class="mono">promoteNewParents()</td>
+              <td>
+                First-child promotion (<code>autoGroup</code>): a span that just gained its first child
+                becomes a group in the same commit.
+              </td>
+            </tr>
+            <tr>
+              <td class="mono">data/history.ts</td>
+              <td class="mono">History, HistoryOptions</td>
+              <td>
+                The undo/redo stack. Subscribes to <code>change</code>, records user changesets, and replays
+                inverted/copied changesets through <code>replayChangeSet</code>.
+              </td>
+            </tr>
+            <tr>
+              <td class="mono">data/rollup.ts</td>
+              <td class="mono">rollUpFields()</td>
+              <td>
+                Gives every roll-up-kind parent every rolling-up field from its children, bottom-up, on every
+                commit. Yields to the body-proposed field — a user value is never overwritten.
+              </td>
+            </tr>
+            <tr>
+              <td class="mono">data/computed-cache.ts</td>
+              <td class="mono">ComputedFieldCache</td>
+              <td>
+                Revision-keyed memo for compute-sourced fields; cleared once per committed changeset.
+              </td>
+            </tr>
+            <tr>
+              <td class="mono">data/edit-extension.ts</td>
+              <td class="mono">EditRequest, EditExtender, identityExtender</td>
+              <td>
+                The extension hook shape. <code>identityExtender</code> returns an empty map (the unoccupied
+                default); a scheduling plugin occupies this slot in S7.
+              </td>
+            </tr>
+            <tr>
+              <td class="mono">data/event-bus.ts</td>
+              <td class="mono">EventBus</td>
+              <td>
+                Generic typed pub/sub with sync veto. The <code>beforeChange</code>/<code>change</code>
+                fan-out channel shared by dataset and view.
+              </td>
+            </tr>
+            <tr>
+              <td class="mono">data/reactivity.ts</td>
+              <td class="mono">signal(), computed(), batch()</td>
+              <td>
+                The façade over <code>alien-signals</code> — the only file touching the reactive dependency.
+                One of exactly two runtime deps, each confined to one façade file.
+              </td>
+            </tr>
+            <tr>
+              <td class="mono">data/replay.ts</td>
+              <td class="mono">replayChangeSet()</td>
+              <td>
+                Applies an undo/redo changeset through <code>commitChangeSet</code> with no extension hook and
+                no rollup — the replay path is narrower than the live one by design.
+              </td>
+            </tr>
+            <tr>
+              <td class="mono">data/fields/aggregators.ts</td>
+              <td class="mono">SHIPPED_AGGREGATORS</td>
+              <td>
+                Built-in aggregator functions — min, max, sum, count, none, weightedMeanByDuration —
+                registered by name so a function reference can serialize into a document.
+              </td>
+            </tr>
+            <tr>
+              <td class="mono">data/fields/core-fields.ts</td>
+              <td class="mono">CORE_FIELDS</td>
+              <td>
+                Declares the eight core fields — name, start, end, kind, parentId, segments, meta, duration —
+                as <code>Field</code> declarations of the same shape a consumer writes.
+              </td>
+            </tr>
+            <tr>
+              <td class="mono">data/fields/field-access.ts</td>
+              <td class="mono">readField(), writeField(), writeOntoEntry(), etc.</td>
+              <td>
+                The one switch over <code>FieldSource</code>: reads, writes, merges and overlays field values
+                on entries/stored-edits.
+              </td>
+            </tr>
+            <tr>
+              <td class="mono">data/fields/field-registry.ts</td>
+              <td class="mono">FieldRegistry</td>
+              <td>
+                One registry per dataset. Resolves field types, merges core + consumer declarations,
+                validates uniqueness, and provides lookup by key.
+              </td>
+            </tr>
+            <tr>
+              <td class="mono">data/serialization/field-document.ts</td>
+              <td class="mono">encodeFieldDocument(), decodeFieldDocument()</td>
+              <td>Encodes and decodes the field half of a <code>DatasetDocument</code>.</td>
+            </tr>
+            <tr>
+              <td class="mono">data/serialization/index.ts</td>
+              <td class="mono">toJSON()</td>
+              <td>
+                Serializes a dataset to a schema-2 <code>DatasetDocument</code> with Z-suffixed ISO instants.
+              </td>
+            </tr>
+            <tr>
+              <td class="mono">data/serialization/read.ts</td>
+              <td class="mono">readDocument()</td>
+              <td>Version-dispatches, converts stored ISO strings back to <code>Instant</code>, decodes fields.</td>
+            </tr>
+            <tr>
+              <td class="mono">data/index.ts</td>
+              <td class="mono">barrel</td>
+              <td>Re-exports <code>DatasetState</code>, <code>DatasetStateOptions</code>, <code>HistoryOptions</code>, <code>EntryStore</code>; everything else internal.</td>
+            </tr>
+
+            <tr>
+              <td
+                colspan="3"
+                style="
+                  background: var(--pure-bg);
+                  font-weight: 600;
+                  font-family: var(--mono);
+                  font-size: 0.78rem;
+                  color: var(--pure-ink);
+                "
+              >
+                layout/ &nbsp;<span class="tag pure">pure</span> &nbsp;headless geometry — rows, items,
+                lanes, frame
               </td>
             </tr>
             <tr>
               <td class="mono">layout/frame.ts</td>
               <td class="mono">
-                computeFrame(), GeometryFrame, LayoutInput, FrameRow/Bar/Link/Header*, Overscan,
-                DEFAULT_OVERSCAN
+                computeFrame(), GeometryFrame, LayoutInput, FrameRow/Item/Header*, Overscan, DEFAULT_OVERSCAN
               </td>
               <td>
-                The layout pass itself: pure, stateless, one call in → one <code>GeometryFrame</code> out.
-                Owns culling (vertical in whole rows via the height index, horizontal in px) and header-band
-                emission.
+                The full pure layout pass: resolves rows, produces items per row, packs lanes, culls to the
+                visible window, and computes header ticks and date-line decorations. One call in → one
+                <code>GeometryFrame</code> out.
               </td>
             </tr>
             <tr>
               <td class="mono">layout/frame-layout.ts</td>
               <td class="mono">FrameLayout</td>
               <td>
-                The thin stateful wrapper that keeps one <code>RowHeightIndex</code> alive
-                <em>across</em> renders, so "top of row i" is not rebuilt every pass. One instance per Gantt.
+                The stateful wrapper that keeps a <code>RowHeightIndex</code> and per-row pack memo alive
+                across renders. One instance per Gantt.
+              </td>
+            </tr>
+            <tr>
+              <td class="mono">layout/frame-memory.ts</td>
+              <td class="mono">FrameMemory</td>
+              <td>
+                Holds one layout pass's cross-render memory — the <code>RowHeightIndex</code> plus a
+                <code>Map</code> of packed-row memos — so a later frame reuses geometry where the inputs did
+                not change.
               </td>
             </tr>
             <tr>
               <td class="mono">layout/row-height-index.ts</td>
               <td class="mono">RowHeightIndex, PrefixSumHeightIndex</td>
               <td>
-                Lazy prefix sums with binary search for <code>indexAtY</code>. Behind an interface from S1 so
-                S5's variable row heights can swap the implementation without touching
-                <code>computeFrame</code>.
+                O(log n) prefix sums with binary search for <code>indexAtY</code>. Behind an interface so
+                variable row heights can swap the implementation without touching <code>computeFrame</code>.
+              </td>
+            </tr>
+            <tr>
+              <td class="mono">layout/column.ts</td>
+              <td class="mono">FrameColumn, ResolvedColumn, FieldCompare</td>
+              <td>
+                Pure data types for the grid-column paint shape and its locale-bound formatter.
+              </td>
+            </tr>
+            <tr>
+              <td class="mono">layout/date-line.ts</td>
+              <td class="mono">resolveDateLines()</td>
+              <td>
+                Resolves the today-line and authored date lines into positioned <code>DateLine</code>
+                decorations.
+              </td>
+            </tr>
+            <tr>
+              <td class="mono">layout/gesture-draft.ts</td>
+              <td class="mono">draftForMove(), draftForResize(), previewOffsets(), cursorLabelForX()</td>
+              <td>
+                Pure gesture math for drag previews. All date computation stays here so
+                <code>interaction/</code> performs no arithmetic.
+              </td>
+            </tr>
+            <tr>
+              <td class="mono">layout/items/produce-items.ts</td>
+              <td class="mono">produceItemsForRow(), createItemProducerRegistry()</td>
+              <td>
+                Three shipped per-<code>EntryKind</code> item producers — span→segments or bar,
+                group→bracket, milestone→diamond — with unknown kinds falling back to span.
+              </td>
+            </tr>
+            <tr>
+              <td class="mono">layout/lanes/pack-lanes.ts</td>
+              <td class="mono">packRow(), packedRowHeight(), yForLane()</td>
+              <td>
+                Greedy first-fit lane packing: each item takes the first lane whose last occupant ends at or
+                before the item starts.
+              </td>
+            </tr>
+            <tr>
+              <td class="mono">layout/rows/resolve-rows.ts</td>
+              <td class="mono">resolveRows()</td>
+              <td>
+                Dispatches to the correct row source based on <code>source.source</code>, stamping each row
+                with a sequential index.
+              </td>
+            </tr>
+            <tr>
+              <td class="mono">layout/rows/row-source.ts</td>
+              <td class="mono">RowSource, EntriesRowSource, GroupRowSource, CustomRowSource, PlannedRow, etc.</td>
+              <td>
+                Pure data types defining the three row-source configs and their shared options
+                (<code>heightMode</code>, <code>filter</code>, <code>sort</code>, <code>filterPolicy</code>).
+              </td>
+            </tr>
+            <tr>
+              <td class="mono">layout/rows/entries-source.ts</td>
+              <td class="mono">resolveEntriesSource()</td>
+              <td>
+                Flat mode maps each entry one-to-one; tree mode does a depth-first walk using
+                <code>parentId</code>.
+              </td>
+            </tr>
+            <tr>
+              <td class="mono">layout/rows/group-source.ts</td>
+              <td class="mono">resolveGroupSource()</td>
+              <td>
+                Buckets entries by the consumer-supplied <code>groupBy</code> function, emitting header rows
+                then member rows.
+              </td>
+            </tr>
+            <tr>
+              <td class="mono">layout/rows/custom-source.ts</td>
+              <td class="mono">resolveCustomSource()</td>
+              <td>
+                Adapts a consumer-supplied <code>resolve()</code> callback's <code>CustomRow[]</code> into
+                <code>UnindexedRow[]</code>.
               </td>
             </tr>
             <tr>
@@ -429,18 +788,15 @@
               <td class="mono">BatchedNotifier</td>
               <td>
                 Depth counter + pending flag + <code>finally</code> flush. Several writes, at most one
-                notification, no observer ever sees an intermediate state. Deliberately knows nothing about
-                bindings or values.
+                notification, no observer ever sees an intermediate state.
               </td>
             </tr>
             <tr>
               <td class="mono">layout/viewport/bound-value.ts</td>
               <td class="mono">BoundValue, BoundValueContract, BoundValueHandle</td>
               <td>
-                The whole binding side of a shareable model: one
-                <code>Map&lt;Binding, onChange&gt;</code> serving both membership and notification, a memoized
-                resolved value, and the notify-iff-changed rule. Each model supplies only
-                <code>resolve</code> and <code>equals</code>.
+                The binding side of a shareable model: one <code>Map&lt;Binding, onChange&gt;</code> serving
+                both membership and notification, a memoized resolved value, and the notify-iff-changed rule.
               </td>
             </tr>
             <tr>
@@ -456,7 +812,6 @@
               <td class="mono">ScrollModel, ScrollIntent, ScrollBinding, ScrollState, ScrollBindingHandle</td>
               <td>
                 Shareable scroll position. Owns one shared position; each bound Gantt clamps it locally.
-                <code>max</code> is the loosest bound any binding needs, not any one chart's.
               </td>
             </tr>
             <tr>
@@ -464,9 +819,13 @@
               <td class="mono">Viewport, ViewportOptions, ViewportHandle</td>
               <td>
                 The fan-in: one bind, one handle, one reaction over both models plus this Gantt's own pane
-                size, content size and overscan. Single-subscriber on purpose — a second
-                <code>bind()</code> throws.
+                size, content size and overscan.
               </td>
+            </tr>
+            <tr>
+              <td class="mono">layout/index.ts</td>
+              <td class="mono">barrel</td>
+              <td>Public layout entry points; the re-export that reaches <code>model/</code> types.</td>
             </tr>
 
             <tr>
@@ -487,9 +846,7 @@
               <td class="mono">render/backend.ts</td>
               <td class="mono">RenderBackend&lt;TSurface&gt;, InteractionState, HitResult</td>
               <td>
-                The backend seam. Names no DOM type itself — <code>TSurface</code> carries that, so a canvas
-                backend is <code>RenderBackend&lt;HTMLCanvasElement&gt;</code> and the mismatch is caught at
-                the call site.
+                The backend seam. Names no DOM type itself — <code>TSurface</code> carries that.
               </td>
             </tr>
             <tr>
@@ -497,12 +854,12 @@
               <td class="mono">createDomBackend()</td>
               <td>
                 The default backend: four absolutely-positioned layers plus a 1×1 content sizer, driven by
-                <code>syncKeyed</code>. Owns the row-label gutter width for the life of the mount.
+                <code>syncKeyed</code>.
               </td>
             </tr>
             <tr>
               <td class="mono">render/dom/sync-keyed.ts</td>
-              <td class="mono">syncKeyed(), SyncKeyedSpec</td>
+              <td class="mono">syncKeyed(), SyncKeyedSpec, KeyedLayer, NestedKeyedLayers</td>
               <td>
                 The whole reconciler. Look-up-or-create per key → patch only if geometry changed → prune
                 vanished keys. Scope is hard-bounded to attr/class/style/text + keyed children.
@@ -513,8 +870,23 @@
               <td class="mono">readPixelProperty(), PixelPropertyPolicy</td>
               <td>
                 One reader for every <code>--fg-*</code> pixel custom property, with an explicit validity
-                policy (<code>'positive'</code> vs <code>'zeroOrMore'</code>) so "zero is nonsense" and "zero
-                is a choice" are stated, not implied.
+                policy so "zero is nonsense" and "zero is a choice" are stated, not implied.
+              </td>
+            </tr>
+            <tr>
+              <td class="mono">render/dom/date-line.ts</td>
+              <td class="mono">syncDateLine() / renderDateLine()</td>
+              <td>
+                Renders the today-line and authored date lines as positioned decoration elements.
+              </td>
+            </tr>
+            <tr>
+              <td class="mono">render/dom/row-twisty.ts</td>
+              <td class="mono">rowIdFromTwistyClick()</td>
+              <td>
+                Row twisty hit target (S4.6). Keeps <code>.fg-row-twisty</code>,
+                <code>.fg-row</code> and <code>data-row-id</code> out of <code>view/</code> so a second
+                backend owns its own control geometry.
               </td>
             </tr>
             <tr>
@@ -536,33 +908,184 @@
                   color: var(--dom-ink);
                 "
               >
-                view/ &nbsp;<span class="tag dom">DOM</span> &nbsp;the shell and its two DOM attachments
+                view/ &nbsp;<span class="tag dom">DOM</span> &nbsp;the shell, gestures, capabilities, navigation
               </td>
             </tr>
             <tr>
               <td class="mono">view/gantt-shell.ts</td>
               <td class="mono">GanttShell, GanttShellOptions</td>
               <td>
-                The composition root. Resolves the container, builds the <code>Viewport</code>, mounts the
-                backend, wires both attachments, and owns <code>render()</code> — the one place pure and
-                DOM-touching code meet.
+                The composition root. Constructs the <code>Viewport</code>, <code>FrameLayout</code>,
+                <code>PaneLayout</code>, <code>RenderBackend</code>, <code>EventBus</code>,
+                <code>FrameScheduler</code>, <code>GesturePipeline</code>, <code>CollapseState</code> and
+                every attachment; exposes live-reconfigurable properties.
+              </td>
+            </tr>
+            <tr>
+              <td class="mono">view/pane-layout.ts</td>
+              <td class="mono">PaneLayout</td>
+              <td>
+                Builds the three-pane DOM skeleton — grid, splitter, timeline.
               </td>
             </tr>
             <tr>
               <td class="mono">view/scroll-attachment.ts</td>
               <td class="mono">attachScroll(), ScrollAttachment</td>
               <td>
-                The only file allowed to touch <code>scrollTop</code>/<code>scrollLeft</code> (I12). Two
-                directions, both epsilon-filtered so a model-driven write cannot bounce back as a user scroll.
+                The only file allowed to touch <code>scrollTop</code>/<code>scrollLeft</code> (I12). ε-filtered
+                so a model-driven write cannot bounce back as a user scroll.
               </td>
             </tr>
             <tr>
               <td class="mono">view/pane-size-attachment.ts</td>
               <td class="mono">attachPaneSize(), PaneSizeAttachment</td>
               <td>
-                The only file that observes element size. Reports a box and stops — no pixel math, no scale
-                awareness. Takes a <code>ResizeObserverCtor</code> test seam.
+                The only file that observes element size. Reports a box and stops.
               </td>
+            </tr>
+            <tr>
+              <td class="mono">view/splitter.ts</td>
+              <td class="mono">attachSplitter()</td>
+              <td>Pointer-drag handler on the splitter chrome that resizes the grid pane.</td>
+            </tr>
+            <tr>
+              <td class="mono">view/styles.ts</td>
+              <td class="mono">ensureBaseStyles()</td>
+              <td>Idempotently injects the library's base stylesheet once per <code>document</code>.</td>
+            </tr>
+            <tr>
+              <td class="mono">view/frame-scheduler.ts</td>
+              <td class="mono">FrameScheduler</td>
+              <td>
+                Coalesces render requests into at most one <code>requestAnimationFrame</code> per tick — the
+                throttle between "a change happened" and "a frame drew".
+              </td>
+            </tr>
+            <tr>
+              <td class="mono">view/dataset-change-subscription.ts</td>
+              <td class="mono">subscribeToDatasetChanges()</td>
+              <td>Bridges the dataset's <code>change</code> event into the shell's render pipeline.</td>
+            </tr>
+            <tr>
+              <td class="mono">view/grid-columns.ts</td>
+              <td class="mono">resolveColumns(), resolveFieldCompares(), bindGanttFields()</td>
+              <td>
+                Bridges the consumer's <code>gridColumns</code> input and field declarations to layout's
+                <code>ResolvedColumn[]</code> model.
+              </td>
+            </tr>
+            <tr>
+              <td class="mono">view/capability.ts</td>
+              <td class="mono">resolveCapabilities()</td>
+              <td>
+                Merges the consumer's <code>Interactions</code> overrides with the per-kind default table;
+                returns <code>Capabilities</code> with a <code>can(capability, entry)</code> method (invariant
+                I14).
+              </td>
+            </tr>
+            <tr>
+              <td class="mono">view/affordance-projection.ts</td>
+              <td class="mono">projectAffordances()</td>
+              <td>
+                Pure projection of hovered/movable/resizable paint tokens from hover, selection, and
+                capability resolution.
+              </td>
+            </tr>
+            <tr>
+              <td class="mono">view/entry-gesture-context.ts</td>
+              <td class="mono">EntryGestureContext, EntryGestureSession, EntryHit</td>
+              <td>
+                The type-seam between <code>view/</code> (which implements it) and <code>interaction/</code>
+                (which drives it).
+              </td>
+            </tr>
+            <tr>
+              <td class="mono">view/gesture-pipeline.ts</td>
+              <td class="mono">GesturePipeline</td>
+              <td>
+                Owns the full gesture lifecycle for move/resize — entry resolution, draft math, preview rAF
+                coalescing, snap resolution, and a commit pipeline with sync/async veto.
+              </td>
+            </tr>
+            <tr>
+              <td class="mono">view/viewport-gestures.ts</td>
+              <td class="mono">resolveViewportGestures()</td>
+              <td>Resolves per-gesture on/off flags for wheel zoom/pan and keyboard pan.</td>
+            </tr>
+            <tr>
+              <td class="mono">view/collapse-state.ts</td>
+              <td class="mono">CollapseState, CollapseChange</td>
+              <td>
+                Holds collapsed <code>RowId</code>s; propose/commit two-step for cancelable
+                before/after events.
+              </td>
+            </tr>
+            <tr>
+              <td class="mono">view/attach-row-twisty.ts</td>
+              <td class="mono">attachRowTwisty()</td>
+              <td>
+                Grid-pane click on a row twisty toggles collapse (S4.6). Lives here, not in
+                <code>interaction/</code>: collapse is viewport state, not a data gesture.
+              </td>
+            </tr>
+            <tr>
+              <td class="mono">view/keyboard-navigation.ts</td>
+              <td class="mono">attachKeyboardNavigation()</td>
+              <td>Keydown handler for viewport navigation when nothing is selected.</td>
+            </tr>
+            <tr>
+              <td class="mono">view/wheel-navigation.ts</td>
+              <td class="mono">attachWheelNavigation()</td>
+              <td>ctrl/cmd+wheel zoom and shift+wheel pan.</td>
+            </tr>
+            <tr>
+              <td class="mono">view/event-bus.ts</td>
+              <td class="mono">GanttEventMap</td>
+              <td>
+                Declares the ten-plus event names and payload types, re-exporting the generic
+                <code>EventBus</code> mechanism from <code>data/event-bus.ts</code>.
+              </td>
+            </tr>
+            <tr>
+              <td class="mono">view/index.ts</td>
+              <td class="mono">public barrel</td>
+              <td>Re-exports the shell and the view-surface types <code>api/</code> needs.</td>
+            </tr>
+
+            <tr>
+              <td
+                colspan="3"
+                style="
+                  background: var(--dom-bg);
+                  font-weight: 600;
+                  font-family: var(--mono);
+                  font-size: 0.78rem;
+                  color: var(--dom-ink);
+                "
+              >
+                interaction/ &nbsp;<span class="tag dom">DOM</span> &nbsp;drives the gesture seam, no layout
+                math
+              </td>
+            </tr>
+            <tr>
+              <td class="mono">interaction/entry-gestures.ts</td>
+              <td class="mono">attachEntryGestures()</td>
+              <td>Wires pointer events on entries into the <code>EntryGestureContext</code>'s session lifecycle.</td>
+            </tr>
+            <tr>
+              <td class="mono">interaction/keyboard-editing.ts</td>
+              <td class="mono">attachKeyboardEditing()</td>
+              <td>Handles Delete/arrow-key edits on selected entries.</td>
+            </tr>
+            <tr>
+              <td class="mono">interaction/pointer-gesture.ts</td>
+              <td class="mono">attachPointerGesture()</td>
+              <td>Low-level pointer capture/release and move/up dispatch.</td>
+            </tr>
+            <tr>
+              <td class="mono">interaction/index.ts</td>
+              <td class="mono">barrel</td>
+              <td>Re-exports the three attach functions.</td>
             </tr>
 
             <tr>
@@ -583,40 +1106,25 @@
               <td class="mono">api/dataset.ts</td>
               <td class="mono">Dataset, DatasetOptions</td>
               <td>
-                Reads the consumer's <code>EntryInput[]</code> into stored <code>Entry[]</code> once, at
-                construction, in its own zone. <code>implements</code> <code>model/</code>'s structural
-                contract, so the relationship is stated rather than structural-by-coincidence. Keeps
-                <code>dateOnlyEnd</code> rather than just consuming it — S2's mutations have to read later
-                entries the same way this constructor read these.
+                The public data store. Entries CRUD, transactions, events, fields, serialization, undo/redo —
+                all delegated into <code>data/</code>.
               </td>
             </tr>
             <tr>
               <td class="mono">api/gantt.ts</td>
               <td class="mono">Gantt, GanttOptions</td>
               <td>
-                The public class. Constructs exactly one <code>GanttShell</code> and forwards. Two methods
-                total today: <code>constructor</code>, <code>destroy()</code>.
-              </td>
-            </tr>
-            <tr>
-              <td class="mono">api/entry-input.ts</td>
-              <td class="mono">readEntries(), EntryReadContext</td>
-              <td>
-                Maps fields and nothing else: <code>EntryInput</code> → <code>Entry</code>, applying the
-                <code>entryId</code> brand and delegating every date decision to <code>time/input.ts</code>.
-                Copies an optional field only when present, so an <code>Entry</code> never gains a key its
-                input did not have — under <code>exactOptionalPropertyTypes</code> an explicit
-                <code>undefined</code> is a different thing from an absent key.
+                The public chart class. Constructs one <code>GanttShell</code> and forwards; now exposes many
+                live properties (preset, range, gridColumns, rowSource, collapsed, selection, …).
               </td>
             </tr>
             <tr>
               <td class="mono">api/index.ts</td>
               <td class="mono">the public surface</td>
               <td>
-                The allow-list. Re-exports <code>Gantt</code>/<code>Dataset</code>/the two viewport models,
-                plus the <code>model/</code> types and <code>time/</code> presets a consumer needs to build
-                inputs. <code>TimeScaleOptions</code> stays internal — it is resolved geometry, not a caller's
-                to state.
+                The allow-list with a sealed <code>exports</code> map. Re-exports
+                <code>Gantt</code>/<code>Dataset</code>/the two viewport models plus the <code>model/</code>
+                types and <code>time/</code> presets a consumer needs.
               </td>
             </tr>
 
@@ -635,19 +1143,9 @@
               </td>
             </tr>
             <tr>
-              <td class="mono">data/index.ts</td>
-              <td class="mono">—</td>
-              <td>S2. Stores, transactions, changesets, undo/redo, and the generic resolve hook.</td>
-            </tr>
-            <tr>
               <td class="mono">scheduling/index.ts</td>
               <td class="mono">—</td>
-              <td>S3. The first-party default plugin's pure engine + policy seam.</td>
-            </tr>
-            <tr>
-              <td class="mono">interaction/index.ts</td>
-              <td class="mono">—</td>
-              <td>S4. Drag, Resize, LinkCreate, Select as gesture controllers.</td>
+              <td>S7. The first-party default plugin's pure engine + the <code>EditExtender</code> occupancy.</td>
             </tr>
             <tr>
               <td class="mono">extensions/index.ts</td>
@@ -664,17 +1162,19 @@
         <p class="lede">
           <code>new Gantt({ container, dataset })</code> forwards into one long <code>GanttShell</code>
           constructor. Everything below happens synchronously, in this order, before that constructor returns.
+          Beyond the diagram's steps, the shell now also builds the capability resolver, the gesture pipeline,
+          the collapse state, and the keyboard and wheel navigation attachments.
         </p>
         <p class="src">
           <b>derived from</b> harness/main.ts, api/gantt.ts, view/gantt-shell.ts, layout/viewport/viewport.ts,
-          render/dom/index.ts
+          render/dom/index.ts, view/capability.ts, view/gesture-pipeline.ts, view/collapse-state.ts
         </p>
 
         <figure>
           <div class="scroller">
             <svg
               class="d"
-              viewBox="0 0 960 740"
+              viewBox="0 0 960 760"
               role="img"
               aria-label="Sequence diagram of Gantt construction"
             >
@@ -721,12 +1221,12 @@
 
               <!-- lifelines -->
               <g class="life">
-                <line x1="71" y1="52" x2="71" y2="720" />
-                <line x1="210" y1="52" x2="210" y2="720" />
-                <line x1="372" y1="52" x2="372" y2="720" />
-                <line x1="546" y1="52" x2="546" y2="720" />
-                <line x1="701" y1="52" x2="701" y2="720" />
-                <line x1="867" y1="52" x2="867" y2="720" />
+                <line x1="71" y1="52" x2="71" y2="740" />
+                <line x1="210" y1="52" x2="210" y2="740" />
+                <line x1="372" y1="52" x2="372" y2="740" />
+                <line x1="546" y1="52" x2="546" y2="740" />
+                <line x1="701" y1="52" x2="701" y2="740" />
+                <line x1="867" y1="52" x2="867" y2="740" />
               </g>
 
               <!-- 1 -->
@@ -743,7 +1243,7 @@
                 marker-end="url(#a3)"
                 style="color: var(--sub)"
               />
-              <text x="138" y="78" text-anchor="middle">new Gantt({container, dataset})</text>
+              <text x="138" y="78" text-anchor="middle">new Gantt({container, dataset, …options})</text>
 
               <!-- 2 -->
               <g class="num">
@@ -899,7 +1399,7 @@
                 onChange() ×2 — one from each bind, not batched
               </text>
               <text class="s" x="620" y="456" text-anchor="middle">
-                dropped: #wiring, so #frames.request() is not called
+                dropped: #phase, so #frames.request() is not called
               </text>
 
               <!-- 13 self -->
@@ -945,19 +1445,34 @@
 
               <!-- 17 self -->
               <g class="num">
-                <circle cx="8" cy="628" r="8" />
-                <text x="8" y="631" text-anchor="middle">17</text>
+                <circle cx="8" cy="620" r="8" />
+                <text x="8" y="623" text-anchor="middle">17</text>
               </g>
-              <rect class="bx" x="292" y="612" width="330" height="34" />
-              <text class="t" x="304" y="626">#wiring = false; #frames.flush()</text>
-              <text class="s" x="304" y="639">→ §4. One layout pass (measured).</text>
+              <path class="edge" d="M372,614 h44 v14 h-38" marker-end="url(#a3)" style="color: var(--sub)" />
+              <text x="424" y="618">resolveCapabilities; new GesturePipeline + attachEntryGestures</text>
+
+              <!-- 18 self -->
+              <g class="num">
+                <circle cx="8" cy="652" r="8" />
+                <text x="8" y="655" text-anchor="middle">18</text>
+              </g>
+              <path class="edge" d="M372,646 h44 v14 h-38" marker-end="url(#a3)" style="color: var(--sub)" />
+              <text x="424" y="650">new CollapseState; attachKeyboardNavigation; attachWheelNavigation</text>
+
+              <!-- 19 self -->
+              <g class="num">
+                <circle cx="8" cy="688" r="8" />
+                <text x="8" y="691" text-anchor="middle">19</text>
+              </g>
+              <rect class="bx" x="292" y="672" width="330" height="34" />
+              <text class="t" x="304" y="686">#phase = 'live'; #frames.flush()</text>
+              <text class="s" x="304" y="699">→ §4. One layout pass (measured).</text>
             </svg>
           </div>
           <figcaption>
             Diagram 1 — <code>new Gantt(...)</code>, synchronous, top to bottom. Amber = the two bind notifies
-            that <code>#wiring</code> drops (§9-B). ×2 means <code>TimeScaleModel.bind</code> and
-            <code>ScrollModel.bind</code> each call <code>Viewport.#notify</code> immediately;
-            <code>Viewport</code> does not batch those two.
+            that <code>#phase</code> drops (§9-B). Steps 17–18 build the capability resolver, gesture
+            pipeline, collapse state and navigation — new since S1.
           </figcaption>
         </figure>
 
@@ -980,7 +1495,7 @@
             <td>
               <strong>Mount before bind.</strong> Each model's <code>bind</code> notifies the newcomer at
               once. Those calls are dropped while wiring, but the render target must already exist for the
-              deliberate first <code>flush()</code> at step 17.
+              deliberate first <code>flush()</code> at step 19.
             </td>
           </tr>
           <tr>
@@ -993,10 +1508,10 @@
           <tr>
             <td class="mono">10–12</td>
             <td>
-              <code>bind()</code> always notifies the newcomer (D-S1.5-4), once per sub-model, with no
+              <code>bind()</code> always notifies the newcomer, once per sub-model, with no
               <code>Viewport</code> batch around the pair. Those two <code>onChange</code>s land before
-              <code>#viewportHandle</code> is assigned. <code>#wiring</code> drops them so they do not
-              <code>request()</code> a frame. The first real frame is step 17.
+              <code>#viewportHandle</code> is assigned. <code>#phase</code> drops them so they do not
+              <code>request()</code> a frame. The first real frame is step 19.
             </td>
           </tr>
           <tr>
@@ -1005,6 +1520,15 @@
               One synchronous measurement, because a real <code>ResizeObserver</code>'s first callback is
               queued, not immediate. The size is the timeline pane's own box — the grid pane never overlapped
               it, so nothing is subtracted. <code>--fg-row-height</code> is re-read here, not per render.
+            </td>
+          </tr>
+          <tr>
+            <td class="mono">17–18</td>
+            <td>
+              <strong>Capabilities and gestures after the viewport.</strong> The gesture pipeline needs the
+              viewport's scale for draft math, and the capability resolver needs the consumer's
+              <code>interactions</code> options which the shell has by then. Keyboard and wheel navigation sit
+              at the end so the elements they attach to exist.
             </td>
           </tr>
         </table>
@@ -1019,12 +1543,13 @@
         </p>
         <p class="src">
           <b>derived from</b> view/gantt-shell.ts <code>render()</code>, layout/frame.ts,
-          layout/frame-layout.ts, render/dom/index.ts <code>sync()</code>, view/scroll-attachment.ts
+          layout/frame-layout.ts, layout/rows/*, layout/items/produce-items.ts, layout/lanes/pack-lanes.ts,
+          render/dom/index.ts <code>sync()</code>, view/scroll-attachment.ts
         </p>
 
         <figure>
           <div class="scroller">
-            <svg class="d" viewBox="0 0 960 560" role="img" aria-label="Data flow of one render pass">
+            <svg class="d" viewBox="0 0 960 580" role="img" aria-label="Data flow of one render pass">
               <defs>
                 <marker
                   id="a4"
@@ -1044,16 +1569,17 @@
               <text class="t" x="28" y="38">GanttShell.render()</text>
               <text class="s" x="28" y="51">view/ — the only DOM/pure meeting point</text>
 
-              <rect class="bx pure" x="16" y="86" width="182" height="176" />
+              <rect class="bx pure" x="16" y="86" width="182" height="200" />
               <text class="t" x="28" y="104">LayoutInput</text>
               <text class="s" x="28" y="121">entries ← dataset.entries.all</text>
-              <text class="s" x="28" y="136">scale ← viewport.timeScale</text>
-              <text class="s" x="28" y="151">preset ← viewport.preset</text>
-              <text class="s" x="28" y="166">visible ← viewport.visible</text>
-              <text class="s" x="28" y="181">overscan ← viewport.overscan</text>
-              <text class="s" x="28" y="196">rowHeight ← --fg-row-height</text>
-              <text class="s" x="28" y="211">locale · todayLine · revision</text>
-              <text class="xs" x="28" y="232">read fresh, every pass</text>
+              <text class="s" x="28" y="136">rowSource ← gantt.rowSource</text>
+              <text class="s" x="28" y="151">columns ← resolveColumns</text>
+              <text class="s" x="28" y="166">scale ← viewport.timeScale</text>
+              <text class="s" x="28" y="181">visible ← viewport.visible</text>
+              <text class="s" x="28" y="196">overscan ← viewport.overscan</text>
+              <text class="s" x="28" y="211">rowHeight ← --fg-row-height</text>
+              <text class="s" x="28" y="226">locale · todayLine · revision · collapsed</text>
+              <text class="xs" x="28" y="252">read fresh, every pass</text>
 
               <line
                 class="edge"
@@ -1069,9 +1595,9 @@
               <line
                 class="edge"
                 x1="198"
-                y1="120"
+                y1="140"
                 x2="228"
-                y2="120"
+                y2="140"
                 marker-end="url(#a4)"
                 style="color: var(--sub)"
               />
@@ -1089,34 +1615,36 @@
                 style="color: var(--sub)"
               />
               <rect class="bx pure" x="234" y="158" width="176" height="70" />
-              <text class="t" x="246" y="176">#heightsFor(count, h)</text>
-              <text class="s" x="246" y="190">cache hit → reuse index</text>
-              <text class="s" x="246" y="203">miss → new PrefixSumHeightIndex</text>
-              <text class="xs" x="246" y="219">key = (rowCount, rowHeight) only</text>
+              <text class="t" x="246" y="176">FrameMemory</text>
+              <text class="s" x="246" y="190">RowHeightIndex + per-row pack memo</text>
+              <text class="s" x="246" y="206">reused across renders when inputs</text>
+              <text class="xs" x="246" y="220">did not change</text>
 
               <line
                 class="edge"
                 x1="322"
                 y1="228"
                 x2="322"
-                y2="248"
+                y2="250"
                 marker-end="url(#a4)"
                 style="color: var(--sub)"
               />
-              <rect class="bx pure" x="234" y="254" width="176" height="86" />
-              <text class="t" x="246" y="272">computeFrame(input, heights)</text>
-              <text class="s" x="246" y="287">indexAtY → first visible row</text>
-              <text class="s" x="246" y="300">walk rows, cull v + h</text>
-              <text class="s" x="246" y="313">scale.xForInstant per bar</text>
-              <text class="s" x="246" y="326">scale.ticks per header band</text>
+              <rect class="bx pure" x="234" y="256" width="176" height="128" />
+              <text class="t" x="246" y="274">computeFrame(input, heights)</text>
+              <text class="s" x="246" y="290">1) resolveRows — entries/group/custom</text>
+              <text class="s" x="246" y="305">2) produceItems — per kind</text>
+              <text class="s" x="246" y="320">3) packLanes — first-fit, per row</text>
+              <text class="s" x="246" y="335">4) cull v + h to the window</text>
+              <text class="s" x="246" y="350">5) header ticks; date-lines</text>
+              <text class="xs" x="246" y="372">rows → items → lanes, in order</text>
 
               <!-- col C -->
               <line
                 class="edge"
                 x1="410"
-                y1="296"
+                y1="320"
                 x2="446"
-                y2="296"
+                y2="320"
                 marker-end="url(#a4)"
                 style="color: var(--sub)"
               />
@@ -1126,11 +1654,11 @@
               <text class="s" x="464" y="177">visible: Rect</text>
               <text class="s" x="464" y="191">header.bands[]</text>
               <text class="s" x="464" y="205">rows[] ← windowed</text>
-              <text class="s" x="464" y="219">bars[] ← windowed</text>
-              <text class="s" x="464" y="233">contentWidth ← FULL</text>
-              <text class="s" x="464" y="247">contentHeight ← FULL</text>
-              <text class="s" x="464" y="261">links[] ← [] (S3)</text>
-              <text class="s" x="464" y="275">decorations[] ← todayLine</text>
+              <text class="s" x="464" y="219">items[] ← produced + packed</text>
+              <text class="s" x="464" y="233">columns[] ← resolved</text>
+              <text class="s" x="464" y="247">contentWidth ← FULL</text>
+              <text class="s" x="464" y="261">contentHeight ← FULL</text>
+              <text class="s" x="464" y="275">decorations[] ← dateLines</text>
               <text class="xs" x="464" y="296">plain numbers only —</text>
               <text class="xs" x="464" y="309">no DOM, no consumer output,</text>
               <text class="xs" x="464" y="322">no hit-region index</text>
@@ -1162,8 +1690,8 @@
               <text class="t" x="664" y="214">sync() keyed layers</text>
               <text class="s" x="664" y="229">bands + ticks per band</text>
               <text class="s" x="664" y="242">rows + cells per row</text>
-              <text class="s" x="664" y="255">bars (by ItemId)</text>
-              <text class="s" x="664" y="268">todayLine; grid translateY</text>
+              <text class="s" x="664" y="255">items (by ItemId)</text>
+              <text class="s" x="664" y="268">date-line; grid translateY</text>
 
               <line
                 class="edge"
@@ -1208,21 +1736,53 @@
               <text class="s" x="312" y="472">element.scrollLeft/Top ← visible.x/y, ε-filtered</text>
               <text class="xs" x="312" y="500">the last statement of render() — after sync(), by design</text>
 
-              <text class="xs" x="652" y="450">This pass is synchronous.</text>
-              <text class="xs" x="652" y="464">A content-size notify schedules the next</text>
-              <text class="xs" x="652" y="478">frame through FrameScheduler (rAF).</text>
+              <!-- gesture preview -->
+              <rect class="bx dom" x="16" y="508" width="182" height="56" />
+              <text class="t" x="28" y="526">GesturePipeline.preview()</text>
+              <text class="s" x="28" y="540">class toggles + transforms only</text>
+              <text class="s" x="28" y="552">never builds a frame (I13)</text>
+
+              <text class="xs" x="652" y="470">This pass is synchronous.</text>
+              <text class="xs" x="652" y="484">A content-size notify schedules the next</text>
+              <text class="xs" x="652" y="498">frame through FrameScheduler (rAF).</text>
             </svg>
           </div>
           <figcaption>
             Diagram 2 — one <code>render()</code>. Green = pure, blue = DOM. A content-size notify requests a
-            later frame; it does not re-enter this pass.
+            later frame; it does not re-enter this pass. The hot gesture path (bottom-left) never touches the
+            frame pipeline.
           </figcaption>
         </figure>
+
+        <h4>The pipeline inside <code>computeFrame</code></h4>
+        <p>
+          The layout pass is no longer a flat row-per-entry walk. Between input and culling it now resolves
+          rows from a row source, produces items per <code>EntryKind</code>, and packs overlaps into lanes:
+        </p>
+        <ol class="steps">
+          <li>
+            <strong>resolveRows</strong> turns the configured <code>rowSource</code> (entries, group, custom)
+            into an ordered list of rows, each stamped with a sequential index (<code>resolve-rows.ts</code>).
+          </li>
+          <li>
+            <strong>produceItems</strong> maps each row's entries to <code>Item</code>s by
+            <code>EntryKind</code> — a span yields segments or one bar, a group yields a bracket, a milestone
+            yields a diamond (<code>items/produce-items.ts</code>).
+          </li>
+          <li>
+            <strong>packLanes</strong> greedy first-fit packs each row's items into lanes so overlapping bars
+            do not collide when <code>heightMode: 'pack'</code> (<code>lanes/pack-lanes.ts</code>).
+          </li>
+          <li>
+            <strong>Cull</strong> then trims to the visible window, and <strong>header/date-line</strong>
+            emission closes the pass.
+          </li>
+        </ol>
 
         <h4>The two coordinate rules <code>computeFrame</code> keeps</h4>
         <ul class="plain">
           <li>
-            <strong>Windowed vs. full.</strong> <code>rows</code> and <code>bars</code> hold only what
+            <strong>Windowed vs. full.</strong> <code>rows</code> and <code>items</code> hold only what
             survived culling; <code>contentWidth</code>/<code>contentHeight</code> are <em>always</em> the
             full extent. That split is what lets the scroll model compute a real maximum from a frame that
             drew twelve rows out of two thousand.
@@ -1234,11 +1794,11 @@
           </li>
           <li>
             <strong>Overscan is in index space vertically, pixels horizontally.</strong> Vertical overscan
-            counts <em>rows</em> and goes through the height index, so it stays correct when S5 makes row
-            heights vary. Horizontal has no rows to count, so it is a pixel buffer.
+            counts <em>rows</em> and goes through the height index, so it stays correct as row heights vary
+            with packing. Horizontal has no rows to count, so it is a pixel buffer.
           </li>
           <li>
-            <strong>Rows are culled vertically only.</strong> A row whose bar is off-screen horizontally is
+            <strong>Rows are culled vertically only.</strong> A row whose item is off-screen horizontally is
             still emitted — the grid pane needs its label.
           </li>
         </ul>
@@ -1288,7 +1848,7 @@
               <!-- shells -->
               <rect class="bx dom" x="16" y="16" width="168" height="44" />
               <text class="t" x="28" y="34">GanttShell A</text>
-              <text class="s" x="28" y="48">if (!#wiring) #frames.request()</text>
+              <text class="s" x="28" y="48">if (#phase is live) #frames.request()</text>
 
               <rect class="bx dom" x="776" y="16" width="168" height="44" />
               <text class="t" x="788" y="34">GanttShell B</text>
@@ -1471,8 +2031,7 @@ Viewport.setPaneSize(size)                   // one measurement, two models
               <dt>get visible: Rect</dt>
               <dd>
                 The culling window, clamped against <em>this</em> Gantt's extents — not the shared
-                <code>scroll.state.max</code>. Feeds <code>LayoutInput.visible</code> and
-                <code>attachScroll</code> alike.
+                <code>scroll.state.max</code>.
               </dd>
               <dt>get timeScale / preset</dt>
               <dd>
@@ -1481,12 +2040,11 @@ Viewport.setPaneSize(size)                   // one measurement, two models
               </dd>
               <dt>get/set overscan</dt>
               <dd>
-                Live-reconfigurable, notifies iff actually changed. On <code>GanttShell</code> and
-                <code>Viewport</code>; not on public <code>GanttOptions</code> (issue #84 — an app author does
-                not think in these units).
+                Live-reconfigurable, notifies iff actually changed. Not on public <code>GanttOptions</code>
+                (issue #84).
               </dd>
               <dt>batch(run)</dt>
-              <dd>Nests all three notifiers. First real caller is S1.9's <code>zoomTo</code>.</dd>
+              <dd>Nests all three notifiers.</dd>
             </dl>
           </div>
 
@@ -1501,22 +2059,16 @@ Viewport.setPaneSize(size)                   // one measurement, two models
               <dt>#resolve(bindings)</dt>
               <dd>
                 One pass accumulating three things: zone (first binding wins), the <em>narrowest</em> measured
-                pane (so the span fits every bound Gantt), and — for <code>range: 'fitDataset'</code> — min
-                start / max end across every bound dataset.
+                pane, and — for <code>range: 'fitDataset'</code> — min start / max end across every bound
+                dataset.
               </dd>
               <dt>get scale: TimeScale</dt>
               <dd>
                 Memoized on the <em>identity</em> of the resolved options object.
-                <code>BoundValue</code> hands back the same object until invalidated, so identity is the
-                entire cache key.
               </dd>
               <dt>bind() → ScaleBindingHandle</dt>
               <dd><code>unbind()</code>, <code>setPaneWidth(w)</code>. Copy-at-bind.</dd>
             </dl>
-            <p style="margin-top: 0.6rem; font-size: 0.8rem">
-              Unmeasured (<code>paneWidth === 0</code>) is not degenerate: the zoom falls back to
-              <code>pxPerMsForPreset</code>, since a preset already states an intended density.
-            </p>
           </div>
 
           <div class="card">
@@ -1529,21 +2081,15 @@ Viewport.setPaneSize(size)                   // one measurement, two models
             <dl>
               <dt>panTo(partial)</dt>
               <dd>
-                Clamps to <code>[0, max]</code> at write time and nowhere else, so a later shrink of
-                <code>max</code> leaves the position exactly where a caller last asked.
+                Clamps to <code>[0, max]</code> at write time and nowhere else.
               </dd>
               <dt>get state: ScrollState</dt>
               <dd>
-                <code>{ position, max }</code> together, frozen — <code>state</code> hands out the model's own
-                objects, and <code>readonly</code> is only a compile-time claim.
+                <code>{ position, max }</code> together, frozen.
               </dd>
               <dt>bind() → ScrollBindingHandle</dt>
               <dd><code>unbind()</code>, <code>setContentSize()</code>, <code>setPaneSize()</code>.</dd>
             </dl>
-            <p style="margin-top: 0.6rem; font-size: 0.8rem">
-              Two charts of different heights sharing one model is the designed fallback, not an error: the
-              shorter pins at its last row and picks up where it stopped, with zero remembered state.
-            </p>
           </div>
 
           <div class="card">
@@ -1551,18 +2097,13 @@ Viewport.setPaneSize(size)                   // one measurement, two models
             <div class="path">layout/viewport/bound-value.ts</div>
             <p>
               The binding side both models share. Scoped to <code>layout/viewport/</code> on purpose — it must
-              not grow into a general reactivity primitive. When a shareable model needs more than "call my
-              reaction when I might be stale", that is the signal to consolidate under <code>data/</code>'s
-              <code>alien-signals</code> façade instead.
+              not grow into a general reactivity primitive.
             </p>
             <dl>
               <dt>#bindings: Map&lt;B, () =&gt; void&gt;</dt>
               <dd>One collection for both jobs: iterate keys to resolve, values to notify.</dd>
               <dt>#notified: { value: V } | undefined</dt>
-              <dd>
-                Boxed so "nothing has been notified yet" is distinguishable from every possible
-                <code>V</code> — including <code>undefined</code>.
-              </dd>
+              <dd>Boxed so "nothing has been notified yet" is distinguishable from every possible <code>V</code>.</dd>
             </dl>
           </div>
 
@@ -1570,15 +2111,30 @@ Viewport.setPaneSize(size)                   // one measurement, two models
             <h5>FrameLayout <span class="tag pure">class</span></h5>
             <div class="path">layout/frame-layout.ts</div>
             <p>
-              All 26 lines of it. Exists so no caller has to hold the row-height index: the shell states what
-              to draw, and the index, its cache key and its invalidation never cross into <code>view/</code>.
+              The stateful wrapper that keeps the row-height index and per-row pack memo alive across renders.
+              The shell states what to draw; the memory never crosses into <code>view/</code>.
             </p>
             <dl>
-              <dt>#heightsFor(rowCount, rowHeight)</dt>
+              <dt>#memory: FrameMemory</dt>
               <dd>
-                Rebuilds the index when either changes. Row heights are uniform today, so that pair is the
-                entire invalidation surface. <span class="tag smell">§9-E</span>
+                Holds one layout pass's cross-render memory — the <code>RowHeightIndex</code> plus the packed-row
+                memo <code>Map</code>.
               </dd>
+            </dl>
+          </div>
+
+          <div class="card">
+            <h5>FrameMemory <span class="tag pure">class</span></h5>
+            <div class="path">layout/frame-memory.ts</div>
+            <p>
+              The cross-render memory of one layout pass. Kept behind <code>FrameLayout</code> so a later frame
+              reuses row-height sums and packed lanes where the inputs did not change.
+            </p>
+            <dl>
+              <dt>RowHeightIndex</dt>
+              <dd>Lazy prefix sums with binary search for <code>indexAtY</code>.</dd>
+              <dt>Map of packed-row memo</dt>
+              <dd>Per-row pack results, reused when the row's content is unchanged.</dd>
             </dl>
           </div>
 
@@ -1594,8 +2150,7 @@ Viewport.setPaneSize(size)                   // one measurement, two models
               <dd>Fill the cache up to what was asked and no further.</dd>
               <dt>indexAtY(y)</dt>
               <dd>
-                Binary search. This is what bounds <code>computeFrame</code>'s row scan — without it a
-                two-thousand-row dataset walks from index 0 on every pass.
+                Binary search. This is what bounds <code>computeFrame</code>'s row scan.
               </dd>
               <dt>heightAt / invalidateFrom</dt>
               <dd>Interface complete, zero production callers today. <span class="tag smell">§9-E</span></dd>
@@ -1606,23 +2161,104 @@ Viewport.setPaneSize(size)                   // one measurement, two models
             <h5>computeFrame() <span class="tag pure">function</span></h5>
             <div class="path">layout/frame.ts</div>
             <p>
-              The layout pass. Pure, stateless, no allocation beyond the arrays it returns. S0/S1 scope: flat
-              row-per-entry, one bar per entry, fixed row height — S5 brings lanes, grouping and segments.
+              The full layout pass. Pure, stateless. Resolves rows → produces items → packs lanes → culls to
+              the window → emits header ticks and date-line decorations.
             </p>
             <dl>
               <dt>heights = new PrefixSumHeightIndex(…)</dt>
               <dd>
-                A default parameter, so a caller with nothing to remember (every test, one-shot geometry) gets
-                an index built and discarded within the call. <code>FrameLayout</code> is the only production
-                caller that passes one.
+                A default parameter, so a caller with nothing to remember gets an index built and discarded
+                within the call. <code>FrameLayout</code> is the only production caller that passes one.
               </dd>
               <dt>overflowCount</dt>
               <dd>
                 Counts rows already emitted past the window bottom and stops after
-                <code>verticalRows</code> of them — so <code>verticalRows: 0</code> reduces exactly to "stop
-                at the first row past the bottom".
+                <code>verticalRows</code> of them.
               </dd>
             </dl>
+          </div>
+
+          <div class="card">
+            <h5>produceItemsForRow() <span class="tag pure">function</span></h5>
+            <div class="path">layout/items/produce-items.ts</div>
+            <p>
+              Per-row item production, dispatched by <code>EntryKind</code> through the shipped registry:
+              span→segments or bar, group→bracket, milestone→diamond. Unknown kinds fall back to span.
+            </p>
+            <dl>
+              <dt>createItemProducerRegistry()</dt>
+              <dd>
+                Builds the per-kind producer map. A consumer-supplied kind with no producer lands on the span
+                producer — behavior per kind goes through this seam, not an <code>if (kind === …)</code> chain.
+              </dd>
+            </dl>
+          </div>
+
+          <div class="card">
+            <h5>packRow() / packLanes <span class="tag pure">function</span></h5>
+            <div class="path">layout/lanes/pack-lanes.ts</div>
+            <p>
+              Greedy first-fit lane packing. Each item takes the first lane whose last occupant ends at or
+              before the item starts; <code>packedRowHeight</code> and <code>yForLane</code> turn the lanes
+              into geometry.
+            </p>
+            <dl>
+              <dt>heightMode: 'pack'</dt>
+              <dd>
+                When the row source sets it, overlapping items stack into lanes instead of clipping. Fixed mode
+                keeps the 32px default.
+              </dd>
+            </dl>
+          </div>
+
+          <div class="card">
+            <h5>resolveRows() <span class="tag pure">function</span></h5>
+            <div class="path">layout/rows/resolve-rows.ts</div>
+            <p>
+              Dispatches to the correct row source based on <code>source.source</code>: entries (flat or tree),
+              group (<code>groupBy</code> buckets), or custom (consumer <code>resolve()</code> callback). Each
+              resolved row gets a sequential index.
+            </p>
+            <dl>
+              <dt>EntriesRowSource</dt>
+              <dd>
+                Flat maps each entry one-to-one; tree does a depth-first walk using <code>parentId</code>
+                (<code>entries-source.ts</code>).
+              </dd>
+              <dt>GroupRowSource</dt>
+              <dd>Buckets entries by a consumer <code>groupBy</code>, emitting header rows then members (<code>group-source.ts</code>).</dd>
+              <dt>CustomRowSource</dt>
+              <dd>Adapts a consumer <code>CustomRow[]</code> (<code>custom-source.ts</code>).</dd>
+            </dl>
+          </div>
+
+          <div class="card">
+            <h5>draftForMove() / draftForResize() <span class="tag pure">function</span></h5>
+            <div class="path">layout/gesture-draft.ts</div>
+            <p>
+              Pure gesture math for drag previews — <code>draftForMove</code>, <code>draftForResize</code>,
+              <code>previewOffsets</code>, <code>cursorLabelForX</code>. All date computation stays here so
+              <code>interaction/</code> performs no arithmetic.
+            </p>
+          </div>
+
+          <div class="card">
+            <h5>resolveDateLines() <span class="tag pure">function</span></h5>
+            <div class="path">layout/date-line.ts</div>
+            <p>
+              Resolves the today-line and authored date lines into positioned <code>DateLine</code>
+              decorations, consumed by the render backend.
+            </p>
+          </div>
+
+          <div class="card">
+            <h5>ResolvedColumn <span class="tag pure">types</span></h5>
+            <div class="path">layout/column.ts</div>
+            <p>
+              Pure data types for the grid-column paint shape (<code>FrameColumn</code>,
+              <code>ResolvedColumn</code>, <code>FieldCompare</code>) and its locale-bound formatter. Carries
+              presentation only — grid columns show fields; they do not declare them (ADR 0005).
+            </p>
           </div>
         </div>
 
@@ -1632,30 +2268,34 @@ Viewport.setPaneSize(size)                   // one measurement, two models
             <h5>GanttShell <span class="tag dom">class</span></h5>
             <div class="path">view/gantt-shell.ts</div>
             <p>
-              The composition root, and the only class in <code>src/</code> that holds references to all four
-              of backend, viewport, layout and both DOM attachments.
+              The composition root, and the only class in <code>src/</code> that holds references to the
+              backend, viewport, layout, gesture pipeline, collapse state, and the event bus.
             </p>
             <dl>
-              <dt>#wiring: boolean</dt>
+              <dt>#phase: 'constructing' | 'live'</dt>
               <dd>
-                True until pane-size wiring completes; drops the two synchronous <code>onChange</code>s from
-                <code>scale.bind</code> and <code>scroll.bind</code> so they do not <code>request()</code> a
-                frame. <span class="tag smell">§9-B</span>
+                <code>'constructing'</code> until pane-size wiring completes; drops the two synchronous
+                <code>onChange</code>s from <code>scale.bind</code> and <code>scroll.bind</code> and
+                short-circuits premature <code>render()</code> calls. Becomes <code>'live'</code> when wiring
+                is done. <span class="tag smell">§9-B</span>
               </dd>
               <dt>#applyPaneMeasurement(size)</dt>
               <dd>
-                One measurement pushed to everything it feeds — <code>--fg-row-height</code> and pane size
-                change for the same reason. The size is the timeline pane's own box; nothing is subtracted.
+                One measurement pushed to everything it feeds.
               </dd>
               <dt>render()</dt>
               <dd>
                 Gather → <code>computeFrame</code> → <code>backend.sync</code> → <code>setContentSize</code> →
-                <code>writePosition</code>. One pass per call; later work goes through
-                <code>FrameScheduler</code>.
+                <code>writePosition</code>. One pass per call.
+              </dd>
+              <dt>live properties</dt>
+              <dd>
+                Every config key a live-reconfigurable property: preset, range, gridColumns, rowSource,
+                collapsed, selection, locale, theme, todayLine, interactions, viewportGestures, …
               </dd>
               <dt>destroy()</dt>
               <dd>
-                Idempotent. Detaches both attachments, unbinds the viewport, destroys the backend, clears the
+                Idempotent. Detaches the attachments, unbinds the viewport, destroys the backend, clears the
                 container.
               </dd>
             </dl>
@@ -1666,20 +2306,17 @@ Viewport.setPaneSize(size)                   // one measurement, two models
             <div class="path">view/scroll-attachment.ts</div>
             <p>
               The one file exempted from <code>no-scroll-outside-scroll-model</code>. Owns no binding — it
-              only reads <code>viewport.visible</code> (already locally clamped) and reads/writes the element.
+              only reads <code>viewport.visible</code> and reads/writes the element.
             </p>
             <dl>
               <dt>EPSILON = 1</dt>
               <dd>
-                Tolerates the fractional <code>scrollTop</code> Chrome and Safari return under fractional
-                device-pixel ratios, <em>and</em> filters the echo: a model-driven write lands exactly on
-                target, so the resulting <code>scroll</code> event is recognised and does not bounce back as
-                another <code>panTo</code>.
+                Tolerates fractional <code>scrollTop</code> and filters the echo so a model-driven write does
+                not bounce back as another <code>panTo</code>.
               </dd>
               <dt>writePosition()</dt>
               <dd>
-                Called by <code>render()</code> <strong>after</strong> <code>backend.sync()</code> — the
-                content layer must already be the new size for a position write to mean anything.
+                Called by <code>render()</code> <strong>after</strong> <code>backend.sync()</code>.
               </dd>
             </dl>
           </div>
@@ -1688,22 +2325,132 @@ Viewport.setPaneSize(size)                   // one measurement, two models
             <h5>attachPaneSize() <span class="tag dom">function</span></h5>
             <div class="path">view/pane-size-attachment.ts</div>
             <p>
-              The only file that observes element size. Reports a box and stops: no pixel math, no scale
-              awareness, no knowledge of <code>layout/</code> internals — which is what keeps I12 whole.
+              The only file that observes element size. Reports a box and stops — no pixel math, no scale
+              awareness, which is what keeps I12 whole.
             </p>
             <dl>
               <dt>entries[entries.length - 1]</dt>
               <dd>
-                A resize burst can deliver several entries for one target in a single tick; only the last
-                reflects the box the browser settled on, so earlier ones are dropped, not summed.
-              </dd>
-              <dt>ResizeObserverCtor param</dt>
-              <dd>
-                The test seam — happy-dom does no layout, so a real <code>ResizeObserver</code> never fires.
-                No deduping here: notify-iff-changed is the models' contract, and a second copy of that check
-                could disagree with the first.
+                A resize burst can deliver several entries for one target; only the last reflects the settled
+                box.
               </dd>
             </dl>
+          </div>
+
+          <div class="card">
+            <h5>attachSplitter() <span class="tag dom">function</span></h5>
+            <div class="path">view/splitter.ts</div>
+            <p>
+              Pointer-drag handler on the splitter chrome that resizes the grid pane relative to the timeline
+              pane. Dispatches through the shell's <code>setGridWidth</code> live property.
+            </p>
+          </div>
+
+          <div class="card">
+            <h5>ensureBaseStyles() <span class="tag dom">function</span></h5>
+            <div class="path">view/styles.ts</div>
+            <p>
+              Idempotently injects the library's base stylesheet once per <code>document</code>, scoped to the
+              <code>--fg-*</code> token set plus the <code>prefers-color-scheme</code> dark arm. A consumer
+              overrides tokens in their own CSS; they never edit this sheet.
+            </p>
+          </div>
+
+          <div class="card">
+            <h5>FrameScheduler <span class="tag dom">class</span></h5>
+            <div class="path">view/frame-scheduler.ts</div>
+            <p>
+              Coalesces render requests into at most one <code>requestAnimationFrame</code> per tick. The
+              throttle between "a change happened" and "a frame drew"; keeps bursty commits off the hot path.
+            </p>
+          </div>
+
+          <div class="card">
+            <h5>subscribeToDatasetChanges() <span class="tag dom">function</span></h5>
+            <div class="path">view/dataset-change-subscription.ts</div>
+            <p>
+              Bridges the dataset's <code>change</code> event into the shell's render pipeline —
+              <code>FrameScheduler.request()</code>. Editing after mount renders on the next frame with no
+              extra call.
+            </p>
+          </div>
+
+          <div class="card">
+            <h5>resolveCapabilities() <span class="tag dom">function</span></h5>
+            <div class="path">view/capability.ts</div>
+            <p>
+              Merges the consumer's <code>Interactions</code> overrides with the per-kind default table and
+              returns a <code>Capabilities</code> object with <code>can(capability, entry)</code>. One
+              resolution gates both gestures and affordances (invariant I14).
+            </p>
+          </div>
+
+          <div class="card">
+            <h5>projectAffordances() <span class="tag dom">function</span></h5>
+            <div class="path">view/affordance-projection.ts</div>
+            <p>
+              Pure projection of hovered/movable/resizable paint tokens from hover, selection, and capability
+              resolution. Feeds the hot path's class toggles — never a frame rebuild.
+            </p>
+          </div>
+
+          <div class="card">
+            <h5>GesturePipeline <span class="tag dom">class</span></h5>
+            <div class="path">view/gesture-pipeline.ts</div>
+            <p>
+              Owns the full gesture lifecycle for move/resize — entry resolution, draft math from
+              <code>layout/gesture-draft.ts</code>, preview rAF coalescing, snap resolution, and a commit
+              pipeline with sync/async veto. Implements <code>EntryGestureContext</code> for
+              <code>interaction/</code> to drive.
+            </p>
+          </div>
+
+          <div class="card">
+            <h5>CollapseState <span class="tag dom">class</span></h5>
+            <div class="path">view/collapse-state.ts</div>
+            <p>
+              Holds collapsed <code>RowId</code>s as per-Gantt view state. Propose/commit two-step so a
+              <code>beforeCollapseChange</code> veto can cancel the commit.
+            </p>
+          </div>
+
+          <div class="card">
+            <h5>attachRowTwisty() <span class="tag dom">function</span></h5>
+            <div class="path">view/attach-row-twisty.ts</div>
+            <p>
+              Grid-pane click on a row twisty toggles collapse (S4.6). Lives here, not in
+              <code>interaction/</code>: collapse is viewport state, not a data gesture. Delegates hit
+              testing to <code>render/dom/row-twisty.ts</code>'s <code>rowIdFromTwistyClick</code>.
+            </p>
+          </div>
+
+          <div class="card">
+            <h5>attachKeyboardNavigation() / attachWheelNavigation() <span class="tag dom">functions</span></h5>
+            <div class="path">view/keyboard-navigation.ts · view/wheel-navigation.ts</div>
+            <p>
+              Keydown handler for viewport navigation when nothing is selected; ctrl/cmd+wheel zoom and
+              shift+wheel pan via <code>resolveViewportGestures()</code>'s on/off flags.
+            </p>
+          </div>
+
+          <div class="card">
+            <h5>EventBus / GanttEventMap <span class="tag dom">types</span></h5>
+            <div class="path">view/event-bus.ts</div>
+            <p>
+              Declares the ten-plus Gantt event names and payload types (<code>entryMove</code>,
+              <code>selectionChange</code>, <code>collapseChange</code>, <code>navigationChange</code>, …) and
+              re-exports the generic <code>EventBus</code> mechanism from <code>data/event-bus.ts</code>.
+            </p>
+          </div>
+
+          <div class="card">
+            <h5>EntryGestureContext <span class="tag dom">interface</span></h5>
+            <div class="path">view/entry-gesture-context.ts</div>
+            <p>
+              The type-seam between <code>view/</code> (the shell realises it) and <code>interaction/</code>
+              (which drives it). <code>interaction/</code> names pointer events and session lifecycle only —
+              no layout or arithmetic.
+            </p>
           </div>
         </div>
       </section>
@@ -1834,11 +2581,18 @@ Viewport.setPaneSize(size)                   // one measurement, two models
           </figcaption>
         </figure>
 
+        <p class="lede">
+          Two additions round out the layer without touching the pipeline above: <code>time/presets.ts</code>
+          (the deep-frozen preset ladder this diagram references top-right) and
+          <code>time/snap.ts</code> (where a drag's committed value snaps, pure and driven by the live
+          preset).
+        </p>
+
         <h3>model/ <span class="tag pure">pure</span></h3>
         <p>
-          Six files, all types, plus three id helpers and two error classes. That is the entire runtime — the
-          layer exists so <code>layout/</code>, <code>render/</code> and <code>view/</code> share one
-          vocabulary without depending on each other.
+          Ten files, all types, plus three id helpers and the <code>FreeGanttError</code> family. That is the
+          entire runtime — the layer exists so <code>layout/</code>, <code>data/</code>, <code>render/</code>
+          and <code>view/</code> share one vocabulary without depending on each other.
         </p>
         <table>
           <tr>
@@ -1882,6 +2636,36 @@ Viewport.setPaneSize(size)                   // one measurement, two models
               Open union: the <code>(string &amp; {})</code> arm keeps editor autocomplete on the three
               shipped kinds while still accepting consumer-defined ones.
             </td>
+          </tr>
+          <tr>
+            <td class="mono">Field</td>
+            <td class="mono">{ key, source?, rollUp?, formatValue?, column?, … }</td>
+            <td>
+              What a value <em>is</em> (ADR 0005). A core field and a consumer field are the same declaration
+              shape, so one code path serves both. A <code>column</code> present makes it columnable.
+            </td>
+          </tr>
+          <tr>
+            <td class="mono">FieldSource</td>
+            <td class="mono">'entry' | 'meta' | 'compute'</td>
+            <td>
+              Decides which side a rolled-up parent value falls on: an <code>entry</code>- or
+              <code>meta</code>-sourced field's aggregate is stored and undoable; a <code>compute</code>-
+              sourced one is computed on read and never reaches the document.
+            </td>
+          </tr>
+          <tr>
+            <td class="mono">ChangeSet</td>
+            <td class="mono">{ added, removed, updated }</td>
+            <td>
+              The <em>one write shape</em> emitted on <code>change</code>, with <code>updated</code> carrying
+              <code>{ entryId, field, from, to }</code> per field. What undo and redo replay.
+            </td>
+          </tr>
+          <tr>
+            <td class="mono">DatasetDocument</td>
+            <td class="mono">schema-2 serialization shape</td>
+            <td>The full document a <code>Dataset.toJSON()</code> produces and <code>fromJSON</code> reads.</td>
           </tr>
           <tr>
             <td class="mono">Dataset</td>
@@ -1937,7 +2721,7 @@ Viewport.setPaneSize(size)                   // one measurement, two models
         <h3>Reading what a consumer writes: <code>EntryInput</code> → <code>Entry</code></h3>
         <p class="src">
           <b>ahead of main</b> this subsection describes src/model/time.ts, src/time/input.ts and
-          src/api/entry-input.ts as they stand on branch host-input-dates-and-ids (de5d755) — not yet merged
+          src/data/entry-reader.ts as they stand on branch host-input-dates-and-ids (de5d755) — not yet merged
         </p>
         <p class="lede">
           The library stores branded, absolute values; a consumer writes loose ones. Exactly one crossing
@@ -2077,7 +2861,8 @@ Viewport.setPaneSize(size)                   // one measurement, two models
           <span class="c">keyed by index</span> │ │ └─ div.fg-tick
           <span class="c">keyed by index within the band</span> │ ├─ div.fg-bars │ │ └─ div.fg-bar
           <span class="c">keyed by ItemId</span> │ ├─ div.fg-content-sizer
-          <span class="c">1×1px, translated to content extent − 1px</span> │ └─ div.fg-today-line
+          <span class="c">1×1px, translated to content extent − 1px</span> │ └─ div.fg-date-line
+          <span class="c">today + authored lines, keyed by date-line id</span>
         </div>
         <div class="note">
           <strong>One detail that is load-bearing, not incidental.</strong> The content sizer must land its
@@ -2098,25 +2883,24 @@ Viewport.setPaneSize(size)                   // one measurement, two models
             <dl>
               <dt>mount(surfaces)</dt>
               <dd>
-                Takes <code>{ grid, timeline }</code>. Builds header, bars, content sizer and today-line
-                inside the timeline pane. Does not read a gutter width.
+                Takes <code>{ grid, timeline }</code>. Builds header, bars, content sizer and date-line
+                layer inside the timeline pane.
               </dd>
               <dt>sync(frame)</dt>
               <dd>
-                Keyed header/rows/cells/bars, today-line, grid <code>translateY</code>, sizer transform. No
+                Keyed header/rows/cells/items, date-line, grid <code>translateY</code>, sizer transform. No
                 layout reads.
               </dd>
               <dt>applyState(state)</dt>
               <dd>
-                Empty. The hot path (hover/selection/drag preview) lands in S4: class toggles and transforms
-                only, zero allocation, never a frame rebuild.
+                Hot-path class toggles and transforms only — hover/selection/drag preview, zero allocation,
+                never a frame rebuild (I13).
               </dd>
               <dt>hitTest(x, y)</dt>
               <dd>
                 <code>document.elementFromPoint</code> → <code>closest('.fg-bar')</code> →
-                <code>dataset.itemId</code>. No materialized hit-region array: the bars array <em>is</em> the
-                hit index, and DOM backends get hit-testing from event delegation.
-                <span class="tag smell">§9-G</span>
+                <code>dataset.itemId</code>. No materialized hit-region array; the bars array <em>is</em> the
+                hit index. <span class="tag smell">§9-G</span>
               </dd>
             </dl>
           </div>
@@ -2127,27 +2911,19 @@ Viewport.setPaneSize(size)                   // one measurement, two models
             <p>
               The entire reconciler, in 30 lines. Three phases per call: look-up-or-create by key → patch only
               if <code>toGeom</code> differs from the cached geometry → prune keys no longer present.
-              Also exports <code>KeyedLayer</code>/<code>NestedKeyedLayers</code> (issue #91 §9-D) — the
-              node/geom cache pair a caller needs, and one such pair per parent key for a nested list (a
-              band's ticks, a row's cells), so <code>render/dom/index.ts</code> holds five layer fields with
-              one <code>clear()</code> each instead of ten parallel <code>Map</code>s.
             </p>
             <dl>
               <dt>nodes / geoms</dt>
               <dd>
-                The caller's persistent per-layer caches, now owned by one <code>KeyedLayer</code> instance
-                rather than kept in sync by hand. They must survive across calls for reconciliation to do
-                anything — a fresh <code>Map</code> per call would patch every node and never prune.
+                The caller's persistent per-layer caches, owned by one <code>KeyedLayer</code> instance.
               </dd>
               <dt>create(item, key)</dt>
               <dd>
-                Called once per key. Attributes fixed for the node's lifetime (a bar's
-                <code>data-item-id</code>) belong here, not in <code>patch</code>.
+                Called once per key. Attributes fixed for the node's lifetime belong here.
               </dd>
               <dt>shallowEqual(a, b)</dt>
               <dd>
-                Both directions now (issue #91 §9-C): a key-count check catches a field that dropped out of
-                <code>b</code> even when every key still in both sides matches.
+                Compares both directions (issue #91 §9-C).
               </dd>
             </dl>
           </div>
@@ -2162,19 +2938,30 @@ Viewport.setPaneSize(size)                   // one measurement, two models
             <dl>
               <dt>policy.accepts</dt>
               <dd>
-                <code>'positive'</code> — zero is nonsense (a zero-height row is not a row).
-                <code>'zeroOrMore'</code> — zero is a real choice (a consumer turning the label gutter off).
-                Before this, the two properties were the same routine with silently different validity rules.
+                <code>'positive'</code> — zero is nonsense. <code>'zeroOrMore'</code> — zero is a real choice.
               </dd>
               <dt>re-read cadence</dt>
-              <dd>
-                The caller's, and each states it: gutter width once at mount; row height on every pane
-                measurement. Neither per render — <code>getComputedStyle</code> can force a style
-                recalculation.
-              </dd>
+              <dd>The caller's, and each states it — neither is per render.</dd>
             </dl>
-            <p style="margin-top: 0.6rem; font-size: 0.8rem">
-              <code>view/</code> reads through this too; <code>view → render</code> is an allowed edge.
+          </div>
+
+          <div class="card">
+            <h5>syncDateLine() <span class="tag dom">function</span></h5>
+            <div class="path">render/dom/date-line.ts</div>
+            <p>
+              Renders the today-line and authored date lines as positioned decoration elements, keyed by
+              date-line id. The decoration geometry comes from <code>layout/date-line.ts</code>'s
+              <code>resolveDateLines</code>.
+            </p>
+          </div>
+
+          <div class="card">
+            <h5>rowIdFromTwistyClick() <span class="tag dom">function</span></h5>
+            <div class="path">render/dom/row-twisty.ts</div>
+            <p>
+              When a click lands on a <code>.fg-row-twisty</code> inside the grid pane, returns that row's
+              id. Keeps the twisty markup and <code>data-row-id</code> out of <code>view/</code> so a second
+              backend owns its own control geometry. Wired by <code>view/attach-row-twisty.ts</code> (S4.6).
             </p>
           </div>
 
@@ -2190,14 +2977,10 @@ Viewport.setPaneSize(size)                   // one measurement, two models
               <dd>The whole added surface over the seam.</dd>
             </dl>
             <p style="margin-top: 0.6rem; font-size: 0.8rem">
-              Zero production callers. <code>GanttShellOptions.backend</code> (issue #91 §9-I) closed the
-              hardcoded <code>createDomBackend()</code> call — a test can now inject its own
-              <code>RenderBackend&lt;HTMLElement&gt;</code> — but it is still typed to <code>THost</code>
-              <code>HTMLElement</code>, so this backend, whose <code>THost</code> is <code>void</code>, stays
-              unreachable from
-              <code>view/</code>: <code>PaneLayout</code> mounts real elements regardless of which backend
-              paints them, so driving the whole <code>view/</code>+<code>layout/</code> stack DOM-free needs a
-              change there too. <span class="tag smell">§9-I</span>
+              Still unreachable from <code>view/</code>: <code>GanttShellOptions.backend</code> is typed to
+              <code>THost</code> <code>HTMLElement</code>, so this <code>THost={}</code> backend, and
+              <code>PaneLayout</code>'s real-element mounting, keep the whole stack DOM-free testing out of
+              reach. <span class="tag smell">§9-I</span>
             </p>
           </div>
 
@@ -2205,21 +2988,30 @@ Viewport.setPaneSize(size)                   // one measurement, two models
             <h5>Gantt <span class="tag api">public class</span></h5>
             <div class="path">api/gantt.ts</div>
             <p>
-              The entire public runtime surface today: a constructor and <code>destroy()</code>. It resolves
-              nothing itself — it builds one <code>GanttShell</code> and forwards.
+              The public chart class. Constructs one <code>GanttShell</code> and forwards. Unlike S1, it is no
+              longer a two-method stub — it now delegates many live-reconfigurable properties.
             </p>
             <dl>
               <dt>GanttOptions</dt>
               <dd>
                 <code>container</code>, <code>dataset</code>, optional shared <code>scale</code> <em>or</em>
-                <code>preset</code>/<code>range</code>/<code>fit</code>, optional <code>scroll</code>, plus
-                live keys (<code>theme</code>, <code>gridWidth</code>, <code>locale</code>, …).
+                <code>preset</code>/<code>range</code>/<code>fit</code>, optional <code>scroll</code>,
+                <code>gridColumns</code>, <code>rowSource</code>, <code>interactions</code>,
+                <code>viewportGestures</code>, <code>theme</code>, <code>locale</code>, <code>todayLine</code>,
+                …
+              </dd>
+              <dt>live properties</dt>
+              <dd>
+                <code>preset</code>, <code>range</code>, <code>fit</code>, <code>zoomIn</code>/<code
+                  >zoomOut</code
+                >, <code>zoomPresets</code>, <code>panToDate</code>/<code>panToToday</code>,
+                <code>gridColumns</code>, <code>rowSource</code>, <code>collapsed</code>,
+                <code>collapse</code>/<code>expand</code>, <code>selection</code>,
+                <code>selectionEntries</code>, <code>interactions</code>, <code>viewportGestures</code>,
+                <code>theme</code>, <code>locale</code>, <code>todayLine</code>, <code>gridWidth</code>, …
               </dd>
               <dt>destroy()</dt>
-              <dd>
-                Idempotent, delegates. No module-level singletons anywhere in <code>src/</code> (I2), so two
-                Gantts on one page are fully independent unless they were <em>handed</em> a shared model.
-              </dd>
+              <dd>Idempotent, delegates. No module-level singletons anywhere in <code>src/</code> (I2).</dd>
             </dl>
           </div>
 
@@ -2227,15 +3019,26 @@ Viewport.setPaneSize(size)                   // one measurement, two models
             <h5>Dataset <span class="tag api">public class</span></h5>
             <div class="path">api/dataset.ts</div>
             <p>
-              <code>entries</code> + IANA <code>timeZone</code>, readonly, no computation. Two zones' worth of
-              users see identical day boundaries because every zone-aware operation resolves through this one
-              string.
+              Much richer now than S1's read-only pair. Everything is delegated into <code>data/</code> — the
+              public class is a thin façade over <code>DatasetState</code>.
             </p>
             <dl>
+              <dt>entries CRUD</dt>
+              <dd><code>entries.all</code>, <code>entries.add/update/remove</code>, <code>childrenOf</code>, <code>fieldValue</code>.</dd>
+              <dt>transactions</dt>
+              <dd><code>transaction(fn)</code> batches several edits into one changeset, one render.</dd>
+              <dt>events</dt>
+              <dd><code>on('beforeChange', vetoable)</code>, <code>on('change', { changeSet })</code>.</dd>
+              <dt>fields</dt>
+              <dd><code>field(key)</code>, <code>fields.all</code>, <code>fieldTypes</code>, <code>aggregators</code>.</dd>
+              <dt>serialization</dt>
+              <dd><code>toJSON()</code>, <code>Dataset.fromJSON(doc, { aggregators })</code>.</dd>
+              <dt>undo / redo</dt>
+              <dd><code>undo()</code>, <code>redo()</code>, <code>canUndo</code>, <code>canRedo</code>, <code>replay(changeSet)</code>.</dd>
               <dt>implements DatasetContract</dt>
               <dd>
-                States the relationship instead of leaving it structural-by-coincidence — the same
-                structural/façade pairing as <code>Gantt</code>/<code>GanttShell</code>.
+                States the relationship to <code>model/dataset.ts</code> instead of leaving it
+                structural-by-coincidence.
               </dd>
             </dl>
           </div>
@@ -2245,20 +3048,21 @@ Viewport.setPaneSize(size)                   // one measurement, two models
         <p>
           <code>harness/main.ts</code> is the library's first consumer and gets reviewed on every commit,
           changed or not: code there that re-derives what the library already computes is an API gap even when
-          no lint fires. It currently reads clean —
+          no lint fires. At S4 it demos tree rows, grid columns, field rollups, live <code>rowSource</code>
+          switching, selection, and timeline controls; <code>harness/data.html</code> demos transactions and
+          undo. It still reads clean —
         </p>
         <pre><code>import { Gantt, Dataset } from '../src/api/index.js';
 import { sampleEntries } from '../fixtures/sample-dataset.js';
 
 const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
 
-new Gantt({ container: '#gantt', dataset });</code></pre>
+const gantt = new Gantt({ container: '#gantt', dataset });
+gantt.rowSource = { source: 'entries', tree: true };</code></pre>
         <p>
           — no restated <code>rowHeight</code>, no hand-built <code>TimeScaleModel</code> standing in for
-          <code>range: 'fitDataset'</code>. Both of those were real gaps that this file exposed and that were
-          closed in <code>src/</code>. <code>harness/scroll-sync.ts</code> is the S1.5 e2e fixture: two Gantts
-          sharing one <code>ScrollModel</code> and one <code>TimeScaleModel</code>, the second holding far
-          fewer rows — the clamp-and-pin case happy-dom cannot express.
+          <code>range: 'fitDataset'</code>. <code>harness/scroll-sync.ts</code> is the S1.5 e2e fixture: two
+          Gantts sharing one <code>ScrollModel</code> and one <code>TimeScaleModel</code>.
         </p>
       </section>
 
@@ -2273,27 +3077,26 @@ new Gantt({ container: '#gantt', dataset });</code></pre>
           them do not silently point at a new finding.
         </p>
         <p class="src">
-          <b>derived from</b> a full read of src/**; former §9-A pass count re-measured 2026-08-28; §9-C/D/I
-          re-verified against issue #91's fix 2026-08-29
+          <b>derived from</b> a full read of src/**; re-verified 2026-08-31 against the S4 tree
         </p>
 
         <div class="smell">
           <h5><span class="id">§9-B</span> Boot ordering is held by a boolean, not by structure</h5>
-          <p class="where">view/gantt-shell.ts <code>#wiring</code></p>
+          <p class="where">view/gantt-shell.ts <code>#wiring</code> — <span class="tag smell">now #phase</span></p>
           <p>
             The invariant is "no render happens until backend, scroll, viewport and the first pane measurement
-            are all wired". It is enforced by one field that is <code>true</code> for the length of the
-            constructor. The field is now well named — it says what phase it guards, which the older
-            <code>ready</code> did not — but it is still a flag: reordering two constructor statements would
-            produce a render against a half-built shell, or a dropped first render, with nothing failing
-            loudly. Premature <code>bind()</code> notifies now hit
-            <code>FrameScheduler.request()</code> rather than <code>render()</code> directly, so the flag's
-            job is smaller than it was, but it is still what drops those two calls.
+            are all wired". It is enforced by one field that guards the length of the constructor. It is now
+            named <code>#phase</code> rather than <code>#wiring</code> — it says which phase it guards — but it
+            is still a flag: reordering two constructor statements would produce a render against a half-built
+            shell, or a dropped first render, with nothing failing loudly. Premature <code>bind()</code>
+            notifies now hit <code>FrameScheduler.request()</code> rather than <code>render()</code> directly,
+            so the flag's job is smaller than it was, but it is still what drops those two calls.
           </p>
           <p>
             The structural fix is the usual one — a private <code>#wire()</code> that returns the fully-built
             collaborators, with <code>render()</code> unreachable until it has returned — but it is worth
-            doing only when a later slice adds a fourth thing to wire, not before.
+            doing only when a later slice adds a fourth thing to wire, not before. Partially addressed in S3
+            (the flag now guards a phase rather than a boolean state), still open structurally.
           </p>
         </div>
 
@@ -2310,9 +3113,10 @@ new Gantt({ container: '#gantt', dataset });</code></pre>
             backends.
           </p>
           <p>
-            This is a deliberate bet on S5 and S4, and the comments say so. It is listed here because a bet
-            has a due date: if S5 arrives and variable row heights still rebuild the whole index, the
-            interface method should go rather than stay as permanent decoration.
+            This was a deliberate bet on S5 — and S5 arrived with lane packing, which exercises a different
+            kind of row-height variability (per-row pack height) than suffix invalidation. The bet is still
+            open: if a later slice needs variable row heights, the interface method should go rather than stay
+            as permanent decoration.
           </p>
         </div>
 
@@ -2327,10 +3131,11 @@ new Gantt({ container: '#gantt', dataset });</code></pre>
             pane's scroll position. Two spaces, one signature, nothing stating which.
           </p>
           <p>
-            Nothing calls it yet, so nothing is wrong today. S4's gesture controllers are the first callers,
-            and this is precisely the kind of ambiguity that produces an off-by-scroll-offset bug that only
-            shows up once the chart is scrolled. The fix is a named parameter type (<code>ClientPoint</code>
-            vs the existing <code>Point</code>) rather than a comment.
+            This was predicted to bite in S4 — and S4's <code>GesturePipeline</code> is now a real caller,
+            so the ambiguity has a live victim. So far the pipeline converts to content coordinates before
+            calling back, avoiding the bug, but the seam still does not state the space it means. The fix is a
+            named parameter type (<code>ClientPoint</code> vs the existing <code>Point</code>) rather than a
+            comment. Now actively the nearest-to-bite finding.
           </p>
         </div>
 
@@ -2340,32 +3145,17 @@ new Gantt({ container: '#gantt', dataset });</code></pre>
             layout/index.ts · view/index.ts · api/index.ts · time/index.ts · view/gantt-shell.ts
           </p>
           <p>
-            <b>Resolved (issue #91):</b> <code>TimeScaleModel</code> was reachable as
-            <code>layout/viewport/time-scale-model.ts</code>, <code>layout/index.ts</code>,
-            <code>view/index.ts</code> and <code>api/index.ts</code> — four paths to one symbol.
-            <code>api/index.ts</code>'s own comment recorded that laundering <code>dayPreset</code> through
-            <code>layout</code> and <code>view</code> was the bug worth fixing, and it was fixed there;
-            <code>layout/index.ts</code> and <code>view/index.ts</code> still laundered the models. The fix:
-            <code>api/</code> gained a direct <code>layout</code> edge (same rationale as the earlier
-            <code>time</code> widening — both are public, consumer-constructed objects per D9), so
-            <code>api/index.ts</code> and <code>api/gantt.ts</code> now import
-            <code>TimeScaleModel</code>/<code>ScrollModel</code> straight from <code>layout/index.ts</code>,
-            and <code>view/index.ts</code> dropped the re-export entirely (§1's import table). Separately,
-            <code>time/index.ts</code> now exports <code>addMonths</code>, <code>addYears</code> and
-            <code>SUPPORTED_TIME_UNITS</code>, which <code>zone.ts</code> always had.
+            <b>Resolved (issue #91):</b> <code>TimeScaleModel</code> is no longer reachable through four
+            paths. <code>api/index.ts</code> imports it straight from <code>layout/index.ts</code> and
+            <code>view/index.ts</code> dropped the re-export. <code>time/index.ts</code> now exports what
+            <code>zone.ts</code> always had.
           </p>
           <p>
-            <b>Still open:</b> the same shape showed up in <code>GanttShell</code>:
-            <code>RenderBackend&lt;TSurface&gt;</code> is a proper seam with two implementations, and the
-            constructor hardcoded <code>createDomBackend()</code>. <code>GanttShellOptions</code> now takes an
-            expert <code>backend</code> knob (not on the public <code>GanttOptions</code> — plans/02 "two
-            callers, two surfaces") defaulting to <code>createDomBackend()</code>, so a caller can inject its
-            own <code>RenderBackend&lt;HTMLElement&gt;</code> — <code>gantt-shell.test.ts</code>'s [S2-A3]
-            sync-count test uses this instead of the module mock it used to need. But the null backend is
-            <code>RenderBackend&lt;void&gt;</code>, a different <code>THost</code>, so it still cannot be
-            swapped in this way; <code>PaneLayout</code> mounts real <code>HTMLElement</code>s regardless of
-            which backend paints them, so driving the whole <code>view/</code>+<code>layout/</code> stack
-            DOM-free needs a change there too. The hardcoded-call-site half of this finding is closed; the
+            <b>Still open:</b> the null backend is <code>RenderBackend&lt;void&gt;</code>, a different
+            <code>THost</code> from the shell's <code>HTMLElement</code>, so it still cannot be swapped in via
+            <code>GanttShellOptions.backend</code>; <code>PaneLayout</code> mounts real <code>HTMLElement</code>s
+            regardless of which backend paints them, so driving the whole <code>view/</code>+<code>layout/</code>
+            stack DOM-free needs a change there too. The hardcoded-call-site half is closed; the
             DOM-free-testing half is not.
           </p>
         </div>
@@ -2384,8 +3174,7 @@ new Gantt({ container: '#gantt', dataset });</code></pre>
           </li>
           <li>
             <strong>The empty <code>BandGeom</code></strong> — an always-equal geom means
-            <code>syncKeyed</code> patches a band node once, at creation, and never again. That is the
-            intended effect, not an oversight; bands gain real geometry in S1.9.
+            <code>syncKeyed</code> patches a band node once, at creation, and never again.
           </li>
           <li>
             <strong>Three copies of pane width</strong> (Viewport's <code>#paneSize</code>,
@@ -2404,6 +3193,12 @@ new Gantt({ container: '#gantt', dataset });</code></pre>
             <code>GanttShell</code>/<code>Viewport</code>; withheld from the app-author surface (issue #84).
             Pan goes through <code>panToDate</code>/<code>panToNow</code>, not a raw
             <code>ScrollModel.panTo</code>.
+          </li>
+          <li>
+            <strong><code>interaction/</code> never importing <code>scheduling/</code></strong> — the gesture
+            layer drives gestures and nothing else; scheduling enters only through <code>data/</code>'s
+            extension hook in S7. That boundary is deliberate and is not to be crossed by editing
+            <code>interaction/</code> to reach the engine.
           </li>
         </ul>
       </section>
@@ -2458,19 +3253,26 @@ grep -n 'class="src"' harness/docs/doc.html     # the full source index</code></
           </tr>
           <tr>
             <td class="mono">view/gantt-shell.ts constructor</td>
-            <td>§3 (Diagram 1 + the "why the order" table), §6, and §9-B if the wiring flag changed</td>
+            <td>§3 (Diagram 1 + the "why the order" table), §6, and §9-B if the phase flag changed</td>
           </tr>
           <tr>
             <td class="mono">view/gantt-shell.ts render()</td>
             <td>§4 (Diagram 2) — and <em>re-measure</em> the pass count (recipe below)</td>
           </tr>
           <tr>
-            <td class="mono">layout/frame.ts</td>
-            <td>§4 (the GeometryFrame box and the coordinate rules), §6</td>
+            <td class="mono">layout/frame.ts or layout/rows/* or items or lanes</td>
+            <td>§4 (the pipeline list, the GeometryFrame box, the coordinate rules), §6</td>
           </tr>
           <tr>
             <td class="mono">layout/viewport/*</td>
             <td>§5 (Diagram 3, the four-layer table, the batch nesting), §6</td>
+          </tr>
+          <tr>
+            <td class="mono">data/*</td>
+            <td>
+              §1 (the import table), §2 (inventory), and §8's consumer boundary if the reader or the
+              transaction flow changed
+            </td>
           </tr>
           <tr>
             <td class="mono">time/*</td>
@@ -2484,7 +3286,7 @@ grep -n 'class="src"' harness/docs/doc.html     # the full source index</code></
             <td>§7 (the type table)</td>
           </tr>
           <tr>
-            <td class="mono">time/input.ts or api/entry-input.ts</td>
+            <td class="mono">time/input.ts or data/entry-reader.ts</td>
             <td>§8's consumer-boundary subsection (Diagram 5), §7's type table</td>
           </tr>
           <tr>
@@ -2532,9 +3334,10 @@ grep -n 'class="src"' harness/docs/doc.html     # the full source index</code></
           </li>
           <li>
             <strong>Vocabulary is <code>CONTEXT.md</code>'s.</strong> Entry, not Task. Dataset, not its
-            pre-ADR-0004 name. Item, not bar (a bar is what an Item renders). Row, not line. No scheduling
-            framing in core descriptions — a shift roster and units-sold-per-week are as much the intended use
-            as a project plan. No vendor Gantt product names, anywhere.
+            pre-ADR-0004 name. Item, not bar (a bar is what an Item renders). Row, not line. Field is what a
+            value <em>is</em>; a grid column is where a Gantt <em>shows</em> it. No scheduling framing in core
+            descriptions — a shift roster and units-sold-per-week are as much the intended use as a project
+            plan. No vendor Gantt product names, anywhere.
           </li>
           <li>
             <strong>Match the existing structure.</strong> Sections are numbered and self-linking; class
@@ -2560,8 +3363,8 @@ grep -n 'class="src"' harness/docs/doc.html     # the full source index</code></
           </li>
           <li>
             Each SVG defines its own arrowhead marker with a unique id (<code>a3</code>, <code>a4</code>,
-            <code>a5</code>, <code>a7</code>) — marker ids are document-global, so a new diagram needs a new
-            one. The marker uses <code>fill="currentColor"</code> and each edge sets
+            <code>a5</code>, <code>a7</code>, <code>a8</code>) — marker ids are document-global, so a new
+            diagram needs a new one. The marker uses <code>fill="currentColor"</code> and each edge sets
             <code>style="color: …"</code>, which is how one marker serves grey, amber and red arrows.
           </li>
           <li>
@@ -2607,15 +3410,10 @@ rm test/dom/tmp-render-count.test.ts</code></pre>
     </div>
 
     <footer class="wrap">
-      Map of <code>src/</code>, smells re-checked on <b>2026-08-29</b> against issue #91's fix. Closed
-      and removed: <b>§9-A</b> (construction is one <code>computeFrame</code>;
-      <code>FrameScheduler</code> stops nested re-entry), <b>§9-C</b> (<code>shallowEqual</code> now compares
-      both directions), <b>§9-D</b> (<code>KeyedLayer</code>/<code>NestedKeyedLayers</code> replace the ten
-      parallel <code>Map</code>s), <b>§9-F</b> (<code>GanttShell.overscan</code>,
-      <code>panToDate</code>, and the <code>GanttOptions</code> scale union),
-      <b>§9-H</b> (<code>ContainerNotFoundError</code>), <b>§9-J</b> (epoch-ms contract is on
-      <code>InstantInput</code>'s docstring — moved to "explicitly not smells"). Remaining: §9-B, §9-E, §9-G,
-      and half of §9-I (the barrel laundering closed; the null-backend injection point did not). The spec is
+      Map of <code>src/</code>, rewritten for slice S4 on <b>2026-08-31</b>. Smells still open from S1: §9-B
+      (boot-order flag), §9-E (ahead-of-consumer interfaces), §9-G (hit-test coordinate space — now with a live
+      caller), and half of §9-I (barrel laundering closed; the null-backend injection point did not). Closed
+      and removed: <b>§9-A</b>, <b>§9-C</b>, <b>§9-D</b>, <b>§9-F</b>, <b>§9-H</b>, <b>§9-J</b>. The spec is
       <code>plans/00</code>–<code>04</code>; the glossary is <code>CONTEXT.md</code>; the decisions are in
       <code>docs/adr/</code>. This page is a map, and maps go stale — §10 says how to keep this one honest.
     </footer>

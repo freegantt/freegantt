@@ -27,12 +27,13 @@ function stampIndex(rows: readonly UnindexedRow[]): readonly PlannedRow[] {
   return rows.map((row, index) => ({ ...row, index }));
 }
 
-function resolveSource(input: RowResolutionInput, source: RowSource): UnindexedRow[] {
+function resolveSource(input: RowResolutionInput): UnindexedRow[] {
+  const { source } = input;
   if (source.source === 'group') return resolveGroupSource(input.entries, source, input.collapsed);
   if (source.source === 'custom') return resolveCustomSource(source, { entries: input.entries });
   return resolveEntriesSource(input.entries, source, input.collapsed);
 }
 
 export function resolveRows(input: RowResolutionInput): readonly PlannedRow[] {
-  return stampIndex(resolveSource(input, input.source));
+  return stampIndex(resolveSource(input));
 }

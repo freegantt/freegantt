@@ -87,6 +87,10 @@ export class Dataset<TMeta = unknown, TFields extends Record<string, unknown> = 
     return [...this.#state.rollUpKinds];
   }
 
+  set rollUpKinds(value: RollUpKinds) {
+    this.#state.setRollUpKinds(value);
+  }
+
   /** Call: `dataset.hierarchy.autoGroup`. Construction-time policy; not live-reconfigurable. */
   get hierarchy(): DatasetHierarchy {
     return { autoGroup: this.#state.hierarchy.autoGroup };

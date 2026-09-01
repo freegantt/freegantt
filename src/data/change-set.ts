@@ -67,15 +67,9 @@ export function diffEdit(
 
   if (authored.size > 0) {
     for (const field of registry.all) {
-      if (!authored.has(String(field.key))) continue;
       if (field.key === 'meta') continue;
+      if (!authored.has(String(field.key)) && !authored.has('meta')) continue;
       emit(field.key, ctx.read(current, field.key), ctx.read(next, field.key));
-    }
-    if (authored.has('meta')) {
-      for (const field of registry.all) {
-        if (field.key === 'meta') continue;
-        emit(field.key, ctx.read(current, field.key), ctx.read(next, field.key));
-      }
     }
     return rows;
   }

@@ -15,10 +15,9 @@ import type {
   FieldUpdated,
 } from '../model/index.js';
 import { MutationCancelledError, MutationDuringNotificationError } from '../model/index.js';
-import { diffEdit, foldChangeSet } from './change-set.js';
+import { buildCommitChangeSet, diffEdits } from './build-commit-change-set.js';
 import type { EditExtender, EntryEdits } from './edit-extension.js';
 import type { EventBus } from './event-bus.js';
-import { mergeEntryEdits, overlayStoredEdit } from './fields/field-access.js';
 import { promoteNewParents } from './hierarchy.js';
 import { rollUpFields } from './rollup.js';
 import type { FieldRegistry } from './fields/field-registry.js';
@@ -59,12 +58,12 @@ export interface TransactionData {
   nextChangeSetId(): ChangeSetId;
   readonly bus: EventBus<DatasetEventMap>;
   /** Kinds whose rolling-up Fields the Rollup derives from their children, every commit (`01` §2.5,
-   *  D-S4-7). This file is the only one that turns it into a rollup call — `rollup-is-removable`
-   *  (`.dependency-cruiser.cjs`) says so, which is what makes deleting `rollup.ts` a provable
-   *  degradation to `rollUpKinds: 'none'`'s own behavior rather than a break. */
+   *  D-S4-7). `build-commit-change-set.ts` is the only one that turns it into a rollup call on the
+   *  commit path — `rollup-is-removable` (`.dependency-cruiser.cjs`) says so. Construction rollup
+   *  below is the second call site in this file. */
   readonly rollUpKinds: ReadonlySet<EntryKind>;
-  /** First-child promotion (D-S4-17). This file is the only importer of `hierarchy.ts`
-   *  (`autogroup-is-removable`). */
+  /** First-child promotion (D-S4-17). `build-commit-change-set.ts` imports `hierarchy.ts` on the
+   *  commit path (`autogroup-is-removable`); construction promotion below is the second call site. */
   readonly hierarchy: DatasetHierarchy;
   readonly fields: FieldRegistry;
   readonly fieldContext: FieldContext;
@@ -72,19 +71,9 @@ export interface TransactionData {
 }
 
 /**
- * Runs the Rollup once against `data`'s freshly built entries, with no proposed edits — what a
- * fresh `Dataset(...)` and `Dataset.fromJSON(...)` share (`01` §2.6, D-S2-22): a `{ kind: 'group' }`
- * given children only through the initial array gets real rolled-up values before anyone reads it,
- * not just after the first later transaction touches one of those children.
- *
- * Writes any correction straight into the store and returns early if there is none. There is no
- * `beforeChange`/`change` here and no history record (S2.5) — construction emits nothing (`01` §2.6),
- * so this bypasses `runTransaction` entirely rather than opening a transaction only to suppress its
- * notifications. `origin: 'user'` is inert: the changeset this builds is never emitted or returned,
- * so nothing reads it — a `'load'` origin arrives with its own producer later (D-S2-11).
- *
- * The second and last caller of `rollUpFields` in `src/**`, alongside `runTransaction` below —
- * both in this file, which keeps `rollup-is-removable` (D-S4-7) honest.
+ * Writes rolled-up or promoted Field rows straight into the store, with no `beforeChange`/`change`
+ * and no history record. Construction and the commit path use this after a pure pass produces
+ * corrections that must land before anyone reads the dataset.
  */
 function applySilentUpdates(data: TransactionData, updated: readonly FieldUpdated[]): void {
   if (updated.length === 0) return;
@@ -106,9 +95,7 @@ function applyConstructionPromote(data: TransactionData): void {
   const edits = promoteNewParents(byId, undefined, data.hierarchy);
   if (edits.size === 0) return;
 
-  const updated: FieldUpdated[] = [];
-  for (const [id, edit] of edits) updated.push(...diffEdit(byId, id, edit, data.fields, data.fieldContext));
-  applySilentUpdates(data, updated);
+  applySilentUpdates(data, diffEdits(byId, edits, data.fields, data.fieldContext));
 }
 
 /**
@@ -125,8 +112,9 @@ function applyConstructionPromote(data: TransactionData): void {
  *
  * Promotion runs first (D-S4-17): a constructed `'span'` with children becomes `'group'` before
  * the Rollup walks, so the same construction also fills the envelope. The second and last caller
- * of `rollUpFields` in `src/**`, alongside `runTransaction` below — both in this file, which keeps
- * `rollup-is-removable` (D-S4-7) honest. The same for `promoteNewParents` / `autogroup-is-removable`.
+ * of `rollUpFields` in `src/**`, alongside `build-commit-change-set.ts` on the commit path — both
+ * keep `rollup-is-removable` (D-S4-7) honest. The same for `promoteNewParents` /
+ * `autogroup-is-removable`.
  */
 export function applyConstructionRollUp(data: TransactionData): void {
   applyConstructionPromote(data);
@@ -228,70 +216,7 @@ export function runTransaction<T>(
   if (!outermost) return result; // nested: joins the outer transaction, commits nothing itself (D-S2-8)
 
   try {
-    const byId = data.entries.committedById();
-    const proposed = data.entries.pendingEdits();
-    const addedEntities = data.entries.pendingAdded();
-    const removedEntities = data.entries.pendingRemoved();
-    const added = addedEntities.map((row) => row.entity);
-    const removed = removedEntities.map((row) => row.entity);
-
-    const bodyUpdated: FieldUpdated[] = [];
-    for (const [id, edit] of proposed)
-      bodyUpdated.push(...diffEdit(byId, id, edit, data.fields, data.fieldContext));
-
-    const extenderEdits = data.editExtender({ entries: byId, proposed });
-    const extenderUpdated: FieldUpdated[] = [];
-    for (const [id, edit] of extenderEdits) {
-      const bodyEdit = proposed.get(id);
-      if (bodyEdit && isDevMode()) {
-        for (const field of Object.keys(edit)) {
-          if (field in bodyEdit) {
-            throw new Error(
-              `runTransaction: the extension hook proposed field "${field}" on entry "${String(id)}", ` +
-                'which the transaction body already proposed (I4)',
-            );
-          }
-        }
-      }
-      extenderUpdated.push(...diffEdit(byId, id, edit, data.fields, data.fieldContext));
-    }
-
-    const mergedBodyAndExtender = mergeEntryEdits(proposed, extenderEdits);
-    const hierarchyEdits = promoteNewParents(
-      byId,
-      { added, removed, edits: mergedBodyAndExtender },
-      data.hierarchy,
-    );
-    const hierarchyUpdated: FieldUpdated[] = [];
-    for (const [id, edit] of hierarchyEdits)
-      hierarchyUpdated.push(...diffEdit(byId, id, edit, data.fields, data.fieldContext));
-
-    const addedEntitiesForFold =
-      hierarchyEdits.size === 0
-        ? addedEntities
-        : addedEntities.map((row) => {
-            const extra = hierarchyEdits.get(row.entity.id);
-            return extra === undefined ? row : { ...row, entity: overlayStoredEdit(row.entity, extra) };
-          });
-
-    const rollupUpdated = rollUpFields(
-      byId,
-      {
-        added: addedEntitiesForFold.map((row) => row.entity),
-        removed,
-        edits: { body: proposed, merged: mergeEntryEdits(mergedBodyAndExtender, hierarchyEdits) },
-      },
-      data.fields,
-      data.rollUpKinds,
-      data.fieldContext,
-    );
-
-    const changeSet = foldChangeSet(data.nextChangeSetId(), origin, addedEntitiesForFold, removedEntities, [
-      ...bodyUpdated,
-      ...extenderUpdated,
-      ...hierarchyUpdated,
-      ...rollupUpdated,
-    ]);
+    const changeSet = buildCommitChangeSet(data, origin);
 
     if (!changeSet) {
       data.entries.endTransaction(token, undefined);

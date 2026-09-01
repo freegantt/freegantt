@@ -3,7 +3,7 @@
 
 import type { DateOnlyEndRule } from './time.js';
 import type { EntryKind } from './entry.js';
-import type { AggregatorName, CoreFieldKey, Field, FieldKey, FieldTypeName, GridColumn } from './field.js';
+import type { AggregatorName, CoreFieldKey, FieldKey, FieldTypeName, GridColumn } from './field.js';
 
 /** One Entry as it appears in a Document. Instants are `Z`-suffixed ISO strings; brands are gone.
  *  Optional keys are omitted when absent, never written as `null`. */
@@ -22,7 +22,7 @@ export interface EntryDocument<TMeta = unknown> {
 
 /** A `Field` minus its function-valued keys. `type` and `rollUp` travel as names (D-S4-15).
  *  `source` is always the resolved entry-or-meta slot — a `compute` Field is not written. */
-export type SerializedField = Pick<Field, 'key' | 'type' | 'source' | 'rollUp' | 'column'> & {
+export type SerializedField = {
   key: FieldKey;
   type?: FieldTypeName;
   source: { from: 'entry'; field: CoreFieldKey } | { from: 'meta'; key: string };

@@ -20,9 +20,10 @@ function spanEntry(id: string, extras: Partial<Entry> = {}): Entry {
   };
 }
 
-function planned(entryIds: readonly EntryId[]): PlannedRow {
+function planned(entryIds: readonly EntryId[], kind: 'entry' | 'header' = 'entry'): PlannedRow {
   return {
     id: rowId(entryIds[0] !== undefined ? String(entryIds[0]) : 'header'),
+    kind: entryIds.length === 0 ? 'header' : kind,
     index: 0,
     depth: 0,
     entryIds,
@@ -93,9 +94,20 @@ describe('produceItemsForRow', () => {
     expect(filledItems[0]?.start).not.toBe(filledItems[0]?.end);
   });
 
-  it('a header row (empty entryIds) produces no Items', () => {
+  it('a header row (kind: header) produces no Items', () => {
     const t1 = spanEntry('t1');
-    const items = produceItemsForRow(planned([]), entryByIdFor([t1]), registry);
+    const header: PlannedRow = {
+      id: rowId('header'),
+      kind: 'header',
+      index: 0,
+      depth: 0,
+      entryIds: [],
+      expandable: false,
+      expanded: true,
+      heightMode: 'fixed',
+      headerLabel: 'Team',
+    };
+    const items = produceItemsForRow(header, entryByIdFor([t1]), registry);
     expect(items).toEqual([]);
   });
 });

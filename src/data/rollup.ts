@@ -1,12 +1,14 @@
 // data/ — the Rollup: `data/`'s own commit step (never an extender occupant, D-S2-22), giving a
 // roll-up-kind parent every rolling-up Field from its children, bottom-up, on every commit
-// (`01` §2.5/§2.6, S4.2). A leaf module — only `data/transaction.ts` names it (D-S4-7,
-// `rollup-is-removable`); delete this file and every entry keeps its authored values — the same stored
-// result a consumer gets from `rollUpKinds: 'none'`.
+// (`01` §2.5/§2.6, S4.2). A leaf module — only `data/build-commit-change-set.ts` (commit path) and
+// `data/transaction.ts` (construction path) name it (D-S4-7, `rollup-is-removable`); delete this file
+// and every entry keeps its authored values — the same stored result a consumer gets from
+// `rollUpKinds: 'none'`.
 
 import type { Entry, EntryId, EntryKind, FieldContext, FieldUpdated } from '../model/index.js';
 import { AggregatorFailedError } from '../model/index.js';
 import type { EntryEdits } from './edit-extension.js';
+import { ancestorsOf, buildEffectiveEntries, childrenByParent, depthOf } from './entry-tree.js';
 import { editProposesField, overlayStoredEdit, readField, writeOntoEntry } from './fields/field-access.js';
 import type { FieldRegistry } from './fields/field-registry.js';
 
@@ -24,53 +26,6 @@ export interface PendingRollUp {
   readonly edits: RollUpEditSets;
 }
 
-function buildEffectiveEntries(
-  committed: ReadonlyMap<EntryId, Entry>,
-  added: readonly Entry[],
-  removed: readonly Entry[],
-  proposed: EntryEdits,
-): ReadonlyMap<EntryId, Entry> {
-  const map = new Map(committed);
-  for (const entity of removed) map.delete(entity.id);
-  for (const entity of added) map.set(entity.id, entity);
-  for (const [id, edit] of proposed) {
-    const current = map.get(id);
-    if (current) map.set(id, overlayStoredEdit(current, edit));
-  }
-  return map;
-}
-
-function depthOf(id: EntryId, entries: ReadonlyMap<EntryId, Entry>): number {
-  let depth = 0;
-  let current = entries.get(id);
-  while (current?.parentId !== undefined) {
-    depth += 1;
-    current = entries.get(current.parentId);
-  }
-  return depth;
-}
-
-function childrenByParent(entries: ReadonlyMap<EntryId, Entry>): Map<EntryId, EntryId[]> {
-  const byParent = new Map<EntryId, EntryId[]>();
-  for (const entry of entries.values()) {
-    if (entry.parentId === undefined) continue;
-    const siblings = byParent.get(entry.parentId);
-    if (siblings) siblings.push(entry.id);
-    else byParent.set(entry.parentId, [entry.id]);
-  }
-  return byParent;
-}
-
-function ancestorsOf(id: EntryId, entries: ReadonlyMap<EntryId, Entry>): readonly EntryId[] {
-  const result: EntryId[] = [];
-  let current = entries.get(id)?.parentId;
-  while (current !== undefined) {
-    result.push(current);
-    current = entries.get(current)?.parentId;
-  }
-  return result;
-}
-
 function collectTouchedIds(
   entries: ReadonlyMap<EntryId, Entry>,
   added: readonly Entry[],
@@ -78,8 +33,12 @@ function collectTouchedIds(
   proposed: EntryEdits,
 ): ReadonlySet<EntryId> {
   const touched = new Set<EntryId>();
-  for (const entity of added) touched.add(entity.id);
-  for (const entity of removed) touched.add(entity.id);
+  for (const entry of added) touched.add(entry.id);
+  for (const entry of removed) {
+    touched.add(entry.id);
+    const parentId = entries.get(entry.id)?.parentId;
+    if (parentId !== undefined) touched.add(parentId);
+  }
   for (const id of proposed.keys()) touched.add(id);
   for (const [id, edit] of proposed) {
     if ('parentId' in edit) {
@@ -105,15 +64,20 @@ function parentsToRecompute(
   } else {
     for (const id of touched) {
       for (const ancestor of ancestorsOf(id, entries)) parents.add(ancestor);
+      const entry = entries.get(id);
+      if (entry !== undefined && kinds.has(entry.kind)) parents.add(id);
     }
   }
 
-  return Array.from(parents)
-    .filter((id) => {
-      const entry = entries.get(id);
-      return entry !== undefined && kinds.has(entry.kind);
-    })
-    .sort((a, b) => depthOf(b, entries) - depthOf(a, entries));
+  const filtered = Array.from(parents).filter((id) => {
+    const entry = entries.get(id);
+    return entry !== undefined && kinds.has(entry.kind);
+  });
+
+  const depthById = new Map<EntryId, number>();
+  for (const id of filtered) depthById.set(id, depthOf(id, entries));
+
+  return filtered.sort((a, b) => depthById.get(b)! - depthById.get(a)!);
 }
 
 function effectiveEntry(
@@ -181,14 +145,14 @@ export function rollUpFields(
     for (const field of rollingFields) {
       if (editProposesField(body.get(parentId), field)) continue;
 
-      const aggregator = registry.aggregator(field.rollUp!);
+      const aggregator = registry.aggregator(field.rollUp);
       if (!aggregator) continue;
 
       let value: unknown;
       try {
         value = aggregator(children, effectiveParent, { ...ctx, field: field.key });
       } catch {
-        throw new AggregatorFailedError(field.key, field.rollUp!, parentId);
+        throw new AggregatorFailedError(field.key, field.rollUp, parentId);
       }
 
       if (value === undefined) continue;

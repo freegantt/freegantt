@@ -1,9 +1,10 @@
 // data/ — autoGroup promotion: a `'span'` that gains its first child becomes `'group'` in the same
-// commit (D-S4-17). A leaf — only `data/transaction.ts` names it (`autogroup-is-removable`); delete
-// this file and autoGroup never runs — the consumer must set Kind themselves (D-S4-18).
+// commit (D-S4-17). A leaf — only `data/build-commit-change-set.ts` (commit path) and
+// `data/transaction.ts` (construction path) name it (`autogroup-is-removable`); delete this file and
+// autoGroup never runs — the consumer must set Kind themselves (D-S4-18).
 
 import type { DatasetHierarchy, Entry, EntryEdits, EntryId, StoredEdit } from '../model/index.js';
-import { overlayStoredEdit } from './fields/field-access.js';
+import { buildEffectiveEntries, childCountByParent } from './entry-tree.js';
 
 const EMPTY_EDITS: EntryEdits = Object.freeze(new Map());
 
@@ -12,30 +13,6 @@ export interface PendingHierarchy {
   readonly added: readonly Entry[];
   readonly removed: readonly Entry[];
   readonly edits: EntryEdits;
-}
-
-function buildEffectiveEntries(
-  committed: ReadonlyMap<EntryId, Entry>,
-  added: readonly Entry[],
-  removed: readonly Entry[],
-  proposed: EntryEdits,
-): ReadonlyMap<EntryId, Entry> {
-  const map = new Map(committed);
-  for (const entity of removed) map.delete(entity.id);
-  for (const entity of added) map.set(entity.id, entity);
-  for (const [id, edit] of proposed) {
-    const current = map.get(id);
-    if (current) map.set(id, overlayStoredEdit(current, edit));
-  }
-  return map;
-}
-
-function childCount(parentId: EntryId, entries: ReadonlyMap<EntryId, Entry>): number {
-  let count = 0;
-  for (const entry of entries.values()) {
-    if (entry.parentId === parentId) count += 1;
-  }
-  return count;
 }
 
 function kindIsProposed(edits: EntryEdits, id: EntryId): boolean {
@@ -60,6 +37,9 @@ export function promoteNewParents(
       ? entries
       : buildEffectiveEntries(entries, proposed.added, proposed.removed, proposed.edits);
 
+  const committedCounts =
+    proposed === undefined ? childCountByParent(effective) : childCountByParent(entries);
+
   const result = new Map<EntryId, StoredEdit>();
   const seen = new Set<EntryId>();
   for (const entry of effective.values()) {
@@ -69,8 +49,7 @@ export function promoteNewParents(
 
     const parent = effective.get(parentId);
     if (!parent || parent.kind !== 'span') continue;
-    if (childCount(parentId, effective) === 0) continue;
-    if (proposed !== undefined && childCount(parentId, entries) !== 0) continue;
+    if (proposed !== undefined && (committedCounts.get(parentId) ?? 0) !== 0) continue;
     if (proposed !== undefined && kindIsProposed(proposed.edits, parentId)) continue;
 
     result.set(parentId, { kind: 'group' });

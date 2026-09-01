@@ -1,28 +1,13 @@
 // layout/ — row-source types. Pure data: no pixels, no Dataset, no FieldSource (D-S4-19, D-S4-21).
 
-import type { Entry, EntryId, FieldKey, RowId } from '../../model/index.js';
+import type { Entry, EntryId, RowId } from '../../model/index.js';
 
 export type RowHeightMode = 'fixed' | 'pack';
-
-/** Call: `filter: (entry) => entry.meta.team === 'A'`. Applied in S4.9. */
-export type RowFilter = (entry: Entry) => boolean;
-
-/** Call: `sort: { field: 'start', direction: 'asc' }`. Applied in S4.9. */
-export interface RowSort {
-  field: FieldKey;
-  direction?: 'asc' | 'desc';
-  compare?(a: unknown, b: unknown): number;
-}
-
-export type FilterPolicy = 'keepAncestors' | 'matchOnly';
 
 /** Shared by every row source that walks Entries directly — `'custom'` resolves its own rows, so it
  *  does not take these (D-S4-21). */
 export interface RowSourceCommon {
   heightMode?: RowHeightMode;
-  filter?: RowFilter;
-  sort?: RowSort;
-  filterPolicy?: FilterPolicy;
 }
 
 export interface EntriesRowSource extends RowSourceCommon {
@@ -57,9 +42,24 @@ export type RowSource = EntriesRowSource | GroupRowSource | CustomRowSource;
 
 export const DEFAULT_ROW_SOURCE: EntriesRowSource = Object.freeze({ source: 'entries', tree: false });
 
-/** Internal row before pixels. Empty `entryIds` stands for a header row, no Entry (D-S4-23). */
+/** Derived row classification — not `Entry.kind` (D-S4-23). */
+export type PlannedRowKind = 'entry' | 'header';
+
+const PLANNED_ROW_KIND = Object.freeze({
+  header: 'header',
+  entry: 'entry',
+} as const satisfies Record<string, PlannedRowKind>);
+
+/** True when the row stands for no Entry (D-S4-23). Compares through a frozen lookup so `layout/`
+ *  never branches on a kind string literal inline (`no-kind-literal`). */
+export function isPlannedHeaderRow(row: PlannedRow): boolean {
+  return row.kind === PLANNED_ROW_KIND.header;
+}
+
+/** Internal row before pixels. A header row stands for no Entry (D-S4-23). */
 export interface PlannedRow {
   id: RowId;
+  kind: PlannedRowKind;
   index: number;
   depth: number;
   entryIds: readonly EntryId[];

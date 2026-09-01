@@ -356,20 +356,17 @@ rowSource: {
 }
 ```
 
-`{ source: 'entries' }` and `{ source: 'group' }` share a common block (`RowSourceCommon`): `heightMode`, `filter`, `sort`, and `filterPolicy`. `{ source: 'custom' }` takes `heightMode` only — the resolver owns row membership.
+`{ source: 'entries' }` and `{ source: 'group' }` share a common block (`RowSourceCommon`): `heightMode` today. `{ source: 'custom' }` takes `heightMode` only — the resolver owns row membership.
 
 ```ts
 rowSource: {
   source: 'entries',
   tree: true,
-  heightMode: 'pack',                              // 'fixed' (default) or 'pack' — stack overlaps into lanes
-  filter: (entry) => entry.meta.team === 'A',
-  filterPolicy: 'keepAncestors',                   // default; 'matchOnly' for a flat match list
-  sort: { field: 'start', direction: 'asc' },
+  heightMode: 'pack', // 'fixed' (default) or 'pack' — stack overlaps into lanes
 }
 ```
 
-Sort and filter are view knobs: they never reorder `dataset.entries.all` or change what the Rollup sees. Filter keeps ancestors by default so a matching deep child still appears under its parents; `filterPolicy: 'matchOnly'` drops non-matching branches entirely. Sort reorders siblings under each parent only — it never lifts a child past its parent.
+**Sort and filter (S4.9, not yet published).** `filter`, `sort`, and `filterPolicy` land on the row source in S4.9 — view knobs that never reorder `dataset.entries.all` or change what the Rollup sees. They are withheld from the published surface until that slice ships (`plans/s4-hierarchy-and-rows/s4.9-sort-and-filter.md`).
 
 **Collapse is Gantt state**, not Dataset state — no transaction, no changeset:
 
@@ -389,7 +386,7 @@ For `{ source: 'entries' }`, a `RowId` equals the `EntryId`, so `collapse('p1')`
 
 Group header rows show the `groupBy` label in column 0 and blank cells elsewhere. Per-group aggregates are the caller's data — declare a computed Field or write through a group entry; the grid does not invent them (D-S4-11).
 
-Published types: `RowSource`, `EntriesRowSource`, `GroupRowSource`, `CustomRowSource`, `CustomRow`, `RowFilter`, `RowSort`, `FilterPolicy`, `RowHeightMode`, `RowSourceCommon`, `RowResolveInput`, `RowId`, `CollapseChange`.
+Published types: `RowSource`, `EntriesRowSource`, `GroupRowSource`, `CustomRowSource`, `CustomRow`, `RowHeightMode`, `RowSourceCommon`, `RowResolveInput`, `RowId`, `CollapseChange`. (`RowFilter`, `RowSort`, `FilterPolicy` publish with S4.9.)
 
 ---
 
