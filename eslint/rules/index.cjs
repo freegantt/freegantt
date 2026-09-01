@@ -14,5 +14,6 @@ module.exports = {
     'no-store-mutation-outside-transaction': require('./no-store-mutation-outside-transaction.cjs'),
     'require-invariant-header': require('./require-invariant-header.cjs'),
     'no-kind-literal': require('./no-kind-literal.cjs'),
+    'no-derived-in-json': require('./no-derived-in-json.cjs'),
   },
 };

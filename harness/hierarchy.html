@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>FreeGantt harness — S4 hierarchy, rows &amp; rollup</title>
+    <link rel="stylesheet" href="./harness-nav.css" />
+    <style>
+      body {
+        font-family: system-ui, sans-serif;
+        margin: 2rem;
+      }
+      #gantt {
+        --fg-row-height: 32px;
+        --fg-grid-pane-width: 420px;
+        border: 1px solid #ccc;
+        height: 60vh;
+      }
+      .fg-tick {
+        font-size: 10px;
+      }
+      .fg-row {
+        font-size: 11px;
+        line-height: var(--fg-row-height);
+        padding: 0 6px;
+        box-sizing: border-box;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .fg-bar {
+        font-size: 11px;
+        line-height: var(--fg-row-height);
+        padding: 0 6px;
+        box-sizing: border-box;
+        white-space: nowrap;
+        overflow: hidden;
+      }
+      #toolbar,
+      #controls,
+      #document-controls {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.5rem 1rem;
+        margin: 1rem 0;
+        font-size: 0.9rem;
+      }
+      #toolbar select,
+      #toolbar button,
+      #controls select,
+      #controls button {
+        font: inherit;
+      }
+      #selection-readout {
+        margin: 0;
+        font-size: 0.85rem;
+        color: #555;
+      }
+      #log {
+        margin-top: 1rem;
+        max-height: 220px;
+        overflow-y: auto;
+        border: 1px solid #ccc;
+        font-family: ui-monospace, monospace;
+        font-size: 0.8rem;
+        padding: 0.5rem;
+      }
+      #log div {
+        padding: 1px 0;
+      }
+      #document-json {
+        flex: 1 1 100%;
+        font-family: ui-monospace, monospace;
+        font-size: 0.8rem;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>FreeGantt — S4 hierarchy, row sources, pack lanes &amp; rollup</h1>
+    <nav class="harness-site-nav" aria-label="Harness pages"></nav>
+    <p>
+      One Gantt, one fixture (<code>fixtures/hierarchy-dataset.ts</code>). The controls below exercise live
+      row re-resolution, pack-mode heights, tree collapse, declared-field rollup, and JSON round-trip — with
+      every committed changeset logged the same way <code>data.html</code> does (D-S2-17).
+    </p>
+    <div id="controls">
+      <label>
+        Rows
+        <select id="rows-mode" aria-label="Row source">
+          <option value="tree" selected>Tree</option>
+          <option value="grouped">Grouped by team</option>
+          <option value="flat">Flat</option>
+        </select>
+      </label>
+      <label>
+        Height
+        <select id="height-mode" aria-label="Row height mode">
+          <option value="fixed" selected>Fixed</option>
+          <option value="pack">Pack</option>
+        </select>
+      </label>
+      <button id="toggle-cost-col" type="button">Hide cost column</button>
+      <button id="filter-team-btn" type="button">Filter team: off</button>
+      <label>
+        Sort
+        <select id="sort-field" aria-label="Sort field">
+          <option value="none" selected>Off</option>
+          <option value="start">Start</option>
+          <option value="cost">Cost</option>
+          <option value="name">Name</option>
+        </select>
+      </label>
+      <button id="expand-all-btn" type="button">Expand all</button>
+      <button id="collapse-all-btn" type="button">Collapse all</button>
+      <label><input id="autogroup-checkbox" type="checkbox" checked /> autoGroup (rebuild on change)</label>
+      <button id="reparent-btn" type="button">Reparent beta under plain parent</button>
+      <p id="selection-readout">Selection: (none)</p>
+      <button id="cost-btn" type="button">Set cost 500</button>
+      <button id="undo-btn" type="button">Undo</button>
+      <button id="redo-btn" type="button">Redo</button>
+    </div>
+    <div id="toolbar"></div>
+    <div id="gantt"></div>
+    <div id="document-controls">
+      <button id="export-btn" type="button">Export</button>
+      <button id="import-btn" type="button">Import</button>
+      <textarea id="document-json" rows="8" cols="80" aria-label="Dataset document JSON"></textarea>
+    </div>
+    <div id="log" aria-label="Changeset log"></div>
+    <script type="module" src="./hierarchy.ts"></script>
+  </body>
+</html>

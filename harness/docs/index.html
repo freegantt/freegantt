@@ -6,66 +6,275 @@
     <title>FreeGantt — Harness docs</title>
     <link rel="stylesheet" href="./doc.css" />
     <link rel="stylesheet" href="../harness-nav.css" />
+    <link rel="stylesheet" href="./docs-nav.css" />
   </head>
   <body>
     <div class="wrap">
       <header>
         <nav class="harness-site-nav" aria-label="Harness pages"></nav>
+        <nav class="harness-docs-nav" aria-label="Harness docs"></nav>
         <script type="module" src="../harness-nav.ts"></script>
+        <script type="module" src="./docs-nav.ts"></script>
         <h1>Harness docs</h1>
         <p class="tagline">
           Maps of the library as the harness demos run it today. These pages sit next to the demos so a
-          maintainer can open the Gantt and the explanation in one session. For the <strong>consumer API</strong>,
-          start with <a href="../../README.md"><code>README.md</code></a>,
-          <a href="../../plans/02-public-api.md"><code>plans/02-public-api.md</code></a>, and
-          <a href="../../docs/05-consumer-api.md"><code>docs/05-consumer-api.md</code></a>.
+          maintainer can open the Gantt and the explanation in one session. Start below with how to run the
+          harness and what the smallest working Gantt looks like, then follow a page from §3.
         </p>
         <div class="updated"><span class="k">updated</span> 2026-08-31 — slice S4</div>
         <div class="meta">
           <span>location: <code>harness/docs/</code></span>
-          <span>maintainer maps — may lag current slice (see §10 in doc.html)</span>
+          <span>maintainer maps — may lag the current slice</span>
+          <span>keeping them true: <a href="./maintaining.html">Maintaining</a></span>
         </div>
+        <nav aria-label="Sections on this page">
+          <a href="#s1"><b>1</b>Run the harness</a>
+          <a href="#s2"><b>2</b>Basic usage</a>
+          <a href="#s3"><b>3</b>The pages here</a>
+        </nav>
       </header>
 
-      <div class="cards">
-        <article class="card">
-          <h5><a href="../../docs/05-consumer-api.md">Consumer API index</a></h5>
-          <p class="path">docs/05-consumer-api.md</p>
-          <p>
-            Links to the README, <code>plans/02</code>, <code>CONTEXT.md</code>, and the generated export
-            report. Summarizes the S4 surface (fields, <code>gridColumns</code>, <code>rowSource</code>,
-            collapse).
-          </p>
-        </article>
-        <article class="card">
-          <h5><a href="./timeline.html">Timeline render</a></h5>
-          <p class="path">timeline.html</p>
-          <p>
-            How the header, density floor, sticky tick labels, and today line paint on this branch. Includes
-            a pipeline graph and a density chart of shipped presets.
-          </p>
-        </article>
-        <article class="card">
-          <h5><a href="./doc.html">Module &amp; class map</a></h5>
-          <p class="path">doc.html</p>
-          <p>
-            Every module and class in <code>src/</code>, construction order, one render pass, and the
-            notification machine.
-          </p>
-        </article>
-        <article class="card">
-          <h5><a href="./diagram.html">Module map</a></h5>
-          <p class="path">diagram.html</p>
-          <p>
-            Layer graph of <code>src/</code>: the DOM-free core on the left, the DOM column on the right, and
-            the forbidden scheduling shortcut.
-          </p>
-        </article>
-      </div>
+      <!-- ══════════════════════════════════════════════════════════ 1 -->
+      <section id="s1">
+        <h2><span class="num">1</span>Run the harness</h2>
+        <p class="lede">
+          The harness is the library's first consumer: plain TypeScript against
+          <code>src/api/index.ts</code>, with no framework and no build step of its own. One command serves
+          every page below, this one included.
+        </p>
+        <p class="src"><b>derived from</b> package.json, vite.config.ts, harness/*.html, harness/*.ts</p>
+
+        <pre><code>pnpm install
+pnpm dev            # serves harness/ — open the printed URL
+pnpm build          # production build of the same pages into dist-harness/</code></pre>
+
+        <table>
+          <tr>
+            <th class="mono">page</th>
+            <th>what it shows</th>
+            <th>read alongside</th>
+          </tr>
+          <tr>
+            <td class="mono">index.html</td>
+            <td>
+              The general demo: timeline, viewport, selection, snap, and theme. Driven by
+              <code>harness/main.ts</code>.
+            </td>
+            <td><a href="./lifecycle.html">Lifecycle</a></td>
+          </tr>
+          <tr>
+            <td class="mono">hierarchy.html</td>
+            <td>
+              S4: tree and grouped row sources, pack-mode heights, filter and sort, collapse, declared-field
+              rollup, and JSON round-trip. Driven by <code>harness/hierarchy.ts</code>.
+            </td>
+            <td><a href="./classes.html">Class map</a> §3</td>
+          </tr>
+          <tr>
+            <td class="mono">scroll-sync.html</td>
+            <td>Two Gantts sharing one <code>ScrollModel</code> and one <code>TimeScaleModel</code> (D9).</td>
+            <td><a href="./classes.html">Class map</a> §1</td>
+          </tr>
+          <tr>
+            <td class="mono">zoom.html</td>
+            <td>Presets, zoom in/out, pan to a date, pan to today, and the header bands.</td>
+            <td><a href="./timeline.html">Timeline render</a></td>
+          </tr>
+          <tr>
+            <td class="mono">large-dataset.html</td>
+            <td>Row virtualization under a large entry count.</td>
+            <td><a href="./lifecycle.html">Lifecycle</a> §2</td>
+          </tr>
+          <tr>
+            <td class="mono">data.html</td>
+            <td>Mutation, live binding, undo/redo, and JSON export/import.</td>
+            <td><a href="./classes.html">Class map</a> §3</td>
+          </tr>
+          <tr>
+            <td class="mono">editing.html</td>
+            <td>Direct manipulation: drag to move, resize, keyboard editing, snapping.</td>
+            <td><a href="./lifecycle.html">Lifecycle</a> §3</td>
+          </tr>
+        </table>
+
+        <div class="note">
+          <strong>The harness is reviewed like library code.</strong> It sits outside the
+          <code>src/**</code> lint scope on purpose, so a rule it breaks fires no lint. Code here that
+          re-derives what the library already computes is an API gap — record it against the current slice
+          and close it in <code>src/</code> rather than tidying the harness. See
+          <a href="./classes.html">Class map</a> §3 for the current reading of
+          <code>harness/main.ts</code>.
+        </div>
+      </section>
+
+      <!-- ══════════════════════════════════════════════════════════ 2 -->
+      <section id="s2">
+        <h2><span class="num">2</span>Basic usage</h2>
+        <p class="lede">
+          What an app author writes. Two classes carry the whole surface: a <code>Dataset</code> owns the
+          entries and every edit to them; a <code>Gantt</code> mounts one view of that dataset. This is a
+          summary — <code>README.md</code> is the full and current consumer API.
+        </p>
+        <p class="src">
+          <b>derived from</b> README.md, docs/05-consumer-api.md, src/api/index.ts, harness/main.ts
+        </p>
+
+        <h3>The smallest Gantt</h3>
+        <pre><code>import { Gantt, Dataset } from 'freegantt';
+
+const dataset = new Dataset({
+  timeZone: 'America/Chicago', // IANA zone, required — every date below is read through it (D6)
+  entries: [
+    { id: 't1', name: 'Design', start: '2026-09-01', end: '2026-09-07' },
+    { id: 't2', name: 'Build', start: '2026-09-08', end: '2026-09-21' },
+  ],
+});
+
+const gantt = new Gantt({ container: '#gantt', dataset });
+gantt.destroy(); // tears the view down; the dataset outlives it</code></pre>
+        <p>
+          Ids are plain strings and dates are plain strings, a <code>Date</code>, epoch milliseconds, or an
+          <code>Instant</code>. Nothing has to be constructed first. <code>container</code> takes an
+          <code>HTMLElement</code> or a CSS selector.
+        </p>
+
+        <h3>Editing</h3>
+        <p>
+          Every mutator auto-wraps in its own transaction, and a bound <code>Gantt</code> renders the result
+          on the next frame — there is no second render path and no remount.
+        </p>
+        <pre><code>dataset.entries.add({ id: 't9', name: 'Roofing', start: '2026-10-01', end: '2026-10-15' });
+dataset.entries.update('t2', { name: 'Framing — north wing' });
+dataset.entries.remove('t9'); // and every descendant, in the same changeset
+
+dataset.transaction(() => {
+  dataset.entries.update('t1', { start: '2026-10-05' });
+  dataset.entries.update('t2', { start: '2026-10-12' });
+}); // one changeset, one render
+
+dataset.undo(); // what it did arrives on 'change', tagged origin: 'undo'
+dataset.redo();</code></pre>
+
+        <h3>Fields, columns, rows</h3>
+        <p>
+          A <strong>field</strong> is what a value <em>is</em>, and it is declared on the dataset. A
+          <strong>grid column</strong> is where a Gantt <em>shows</em> a field, and it is declared on the
+          Gantt. Declaring a field does not put it on screen.
+        </p>
+        <pre><code>const dataset = new Dataset({
+  timeZone: 'UTC',
+  entries,
+  fieldTypes: { money: { rollUp: 'sum', formatValue: asCurrency, column: { align: 'end' } } },
+  fields: [{ key: 'cost', type: 'money' }],
+});
+
+gantt.gridColumns = ['name', 'start', 'duration', { field: 'cost', header: 'Budget' }];
+gantt.rowSource = { source: 'entries', tree: true };          // parentId as a tree
+gantt.rowSource = { source: 'group', groupBy: (e) => e.kind }; // one header row per value
+gantt.collapse('p1'); // per-Gantt view state, never in the dataset</code></pre>
+        <p>
+          Every config key is a live property: assign <code>gantt.preset</code>,
+          <code>gantt.gridColumns</code>, <code>gantt.rowSource</code>, <code>gantt.theme</code> and the
+          rest without remounting. Two Gantts on one page stay independent (I2); give them the same
+          <code>scale</code> or <code>scroll</code> and they x-sync (D9).
+        </p>
+
+        <h3>Events</h3>
+        <pre><code>dataset.on('change', ({ changeSet }) =&gt; save(changeSet)); // data events on the Dataset
+gantt.on('selectionChange', () =&gt; render(gantt.selectionEntries)); // view events on the Gantt
+gantt.on('beforeEntryMove', () =&gt; false); // every mutating interaction has a cancelable before* pair</code></pre>
+
+        <div class="note">
+          <strong>Where the full surface lives.</strong>
+          <a href="../../README.md"><code>README.md</code></a> documents the public API as it lands,
+          <a href="../../plans/02-public-api.md"><code>plans/02-public-api.md</code></a> is the defended
+          spec, <a href="../../docs/05-consumer-api.md"><code>docs/05-consumer-api.md</code></a> is the
+          index, and <code>CONTEXT.md</code> is the glossary. The pages in §3 describe the
+          <em>inside</em> of the library and are not a consumer reference.
+        </div>
+      </section>
+
+      <!-- ══════════════════════════════════════════════════════════ 3 -->
+      <section id="s3">
+        <h2><span class="num">3</span>The pages here</h2>
+        <p class="lede">
+          Maintainer maps of <code>src/</code>, in reading order. Each page names the files it was derived
+          from, so a change to a file says which page to update.
+        </p>
+
+        <div class="cards">
+          <article class="card">
+            <h5><a href="./layers.html">Layers &amp; import rules</a></h5>
+            <p class="path">layers.html</p>
+            <p>
+              The ten directories under <code>src/</code>, which of them may import which, and the five
+              custom lint rules that hold the line.
+            </p>
+          </article>
+          <article class="card">
+            <h5><a href="./files.html">File inventory</a></h5>
+            <p class="path">files.html</p>
+            <p>Every non-test file in <code>src/</code>, with the one thing it is for.</p>
+          </article>
+          <article class="card">
+            <h5><a href="./lifecycle.html">Construction, render, notification</a></h5>
+            <p class="path">lifecycle.html</p>
+            <p>
+              What <code>new Gantt(…)</code> builds, what one <code>render()</code> does, and how an edit
+              reaches the screen. With measured pass counts.
+            </p>
+          </article>
+          <article class="card">
+            <h5><a href="./classes.html">Class map</a></h5>
+            <p class="path">classes.html</p>
+            <p>
+              Every class in the built layers — <code>layout/</code>, <code>view/</code>,
+              <code>time/</code>, <code>model/</code>, <code>render/</code>, <code>api/</code> — plus the
+              consumer boundary and the harness reading.
+            </p>
+          </article>
+          <article class="card">
+            <h5><a href="./timeline.html">Timeline render</a></h5>
+            <p class="path">timeline.html</p>
+            <p>
+              How the header, density floor, sticky tick labels, and today line paint. Includes a pipeline
+              graph and a density chart of the shipped presets.
+            </p>
+          </article>
+          <article class="card">
+            <h5><a href="./diagram.html">Module map diagrams</a></h5>
+            <p class="path">diagram.html</p>
+            <p>
+              The layer graph as a picture: the DOM-free core on the left, the DOM column on the right, the
+              transaction pipeline, and the public API surface.
+            </p>
+          </article>
+          <article class="card">
+            <h5><a href="./maintaining.html">Maintaining these pages</a></h5>
+            <p class="path">maintaining.html</p>
+            <p>
+              What to update when a file changes, the rules for the content, and the recipe that re-measures
+              the construction pass count. Read this before editing any page here.
+            </p>
+          </article>
+          <article class="card">
+            <h5><a href="../../docs/05-consumer-api.md">Consumer API index</a></h5>
+            <p class="path">docs/05-consumer-api.md</p>
+            <p>
+              Outside this folder: links to the README, <code>plans/02</code>, <code>CONTEXT.md</code>, and
+              the generated export report.
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <nav class="harness-docs-pager" aria-label="Other docs pages"></nav>
     </div>
-    <footer>
-      Spec: <code>plans/00</code>–<code>04</code>. Consumer API: <code>docs/05-consumer-api.md</code>.
-      Glossary: <code>CONTEXT.md</code>. Demos live one folder up in <code>harness/</code>.
+
+    <footer class="wrap">
+      Spec: <code>plans/00</code>–<code>04</code>. Consumer API: <code>README.md</code> and
+      <code>docs/05-consumer-api.md</code>. Glossary: <code>CONTEXT.md</code>. Decisions:
+      <code>docs/adr/</code>. Demos live one folder up in <code>harness/</code>.
     </footer>
   </body>
 </html>
