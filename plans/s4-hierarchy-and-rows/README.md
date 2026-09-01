@@ -19,7 +19,7 @@
 | **Q1** | Does S4 ship the **public** way to register a Field, a Grid column or an Item emitter? | **No — only the registries and the shipped occupants.** A consumer declares Fields through `DatasetOptions.fields` (data, not code registration) and orders columns through `Gantt.gridColumns`. Registering an *emitter* or a *renderer* needs `PluginContext`, which is S5's. S4 ships `ItemEmitter` with three occupants and no way in from outside; tests inject through an internal option. Same posture S2 took for the extender slot (D-S2-6). §S4.7, D-S4-24. |
 | **Q2** | Does the Rollup gate stay `derivedSpanKinds`? | **No — it widens and it is renamed `rollUpKinds`.** Once `cost` rolls up, a gate whose name says "span" governs values that are not spans. Widening the meaning under the old name is the drift CLAUDE.md's naming rule forbids (#7). The rule itself is the one that reads correctly: a parent of a rolling-up Kind derives **every** rolling-up Field; a parent of any other Kind keeps its authored values. §S4.2, D-S4-6. |
 | **Q3** | Does the Document carry Field declarations? | **The data half, yes; the code half, no.** Without them, `fromJSON(toJSON(d))` returns a Dataset that still holds rolled-up values but no longer maintains them — a silent corruption on the next edit. `fields` joins the Document; `equals`, `compare`, `formatValue`, `fieldTypes` and `aggregators` are code the reading application supplies, through a second `fromJSON` parameter. Omitted `source` is written **resolved**. `schema` goes to 2. §S4.4, D-S4-15, D-S4-16, D-S4-35. |
-| **Q4** | Where do sort and filter live? `plans/03` §S4 says "store-level view specs". | **On the row source, not on the Store.** Sorting the Store would reorder `entries.all`, and that order is what makes `toJSON` byte-stable (D-S2-12). A view knob must not rewrite the Document. `rows: { source: 'entries', tree: true, sort, filter }` is one config tree for one job (`plans/02` §1). `plans/03` §S4 is edited to match. §S4.9, D-S4-28. |
+| **Q4** | Where do sort and filter live? `plans/03` §S4 says "store-level view specs". | **On the row source, not on the Store.** Sorting the Store would reorder `entries.all`, and that order is what makes `toJSON` byte-stable (D-S2-12). A view knob must not rewrite the Document. `rowSource: { source: 'entries', tree: true, sort, filter }` is one config tree for one job (`plans/02` §1). `plans/03` §S4 is edited to match. §S4.9, D-S4-28. |
 | **Q5** | Does an Aggregator that throws roll the transaction back, or keep the stored value? (ADR 0005's open question) | **It rolls the transaction back**, with a named `AggregatorFailedError`. Keeping the stored value leaves a parent whose value no longer follows its children, with nothing said — principle 6 ("diagnostics over silent fixes") forbids exactly that, and a diagnostics channel does not exist before S7. §S4.2, D-S4-9. |
 | **Q6** | Are shipped Aggregators maintained incrementally while consumer ones force a full walk? (ADR 0005's other open question) | **No — one path for both.** Every Aggregator recomputes the ancestor chains of the touched entries. A two-speed design would give a consumer field different commit semantics from `start`, which is the second code path ADR 0005 exists to remove. §S4.2, D-S4-8. |
 | **Q7** | Does `computeFrame` grow row sources, trees, emitters and packing inside its current loop? | **No.** It becomes composition over four named stages, each its own module with one reason to change. The function is 293 lines and already carries culling, header bands and decorations; four more concerns inside it is the ball of mud this slice is most likely to produce. §S4.6, D-S4-19. |
@@ -50,7 +50,7 @@ Each story names the step that owns it. Acceptance boxes live in the step files.
 - **U4.** (consumer) I set `gantt.gridColumns = ['name', 'start', 'duration', 'cost']`. Four columns appear, each formatted by its Field. → S4.3
 - **U5.** (consumer) I save `toJSON()`, reload with `fromJSON(doc, { aggregators })`, and my parents keep summing. → S4.4
 - **U6.** (consumer) I see a tree in the grid pane. I click a twisty and the subtree collapses. The data does not change. → S4.6
-- **U7.** (consumer) I switch `gantt.rows` from the tree to `{ source: 'group', groupBy }`. The same Gantt re-resolves rows and keeps its scroll position. → S4.6
+- **U7.** (consumer) I switch `gantt.rowSource` from the tree to `{ source: 'group', groupBy }`. The same Gantt re-resolves rows and keeps its scroll position. → S4.6
 - **U8.** (consumer) An entry with `segments` draws several bars on one row. I drag one of them and only that segment moves. → S4.7, S4.10
 - **U9.** (consumer) I turn on `heightMode: 'pack'`. Overlapping items stack into lanes and the row grows to fit them. → S4.8
 - **U10.** (consumer) I filter to one team. A matching deep child still appears under its chain of parents. → S4.9
@@ -109,7 +109,7 @@ Eleven steps, in order. The Field context lands first, because the row cells and
 | S4.3 | [`s4.3-grid-columns-and-cells.md`](./s4.3-grid-columns-and-cells.md) | four columns in the grid pane, live-reconfigurable |
 | S4.4 | [`s4.4-serialization.md`](./s4.4-serialization.md) | `schema: 2` round-trips a declared Field |
 | S4.5 | [`s4.5-autogroup-and-hierarchy-edits.md`](./s4.5-autogroup-and-hierarchy-edits.md) | reparenting promotes a parent in one undo step |
-| S4.6 | [`s4.6-row-sources.md`](./s4.6-row-sources.md) | a tree with twisties; `gantt.rows` switches sources live |
+| S4.6 | [`s4.6-row-sources.md`](./s4.6-row-sources.md) | a tree with twisties; `gantt.rowSource` switches sources live |
 | S4.7 | [`s4.7-item-emission.md`](./s4.7-item-emission.md) | brackets, diamonds, and N bars for N segments |
 | S4.8 | [`s4.8-lane-packing-and-heights.md`](./s4.8-lane-packing-and-heights.md) | pack-mode rows grow to fit their lanes |
 | S4.9 | [`s4.9-sort-and-filter.md`](./s4.9-sort-and-filter.md) | filter keeps ancestors; sort stays within a parent |
@@ -126,7 +126,7 @@ Eleven steps, in order. The Field context lands first, because the row cells and
 |---|---|---|---|
 | `[S4-A1]` | A declared `meta` Field sums up the tree, shows beside `start`, edits in the same `update()` and undo step as a core Field, and round-trips | S4.1–S4.4 | `data/rollup.test.ts`, `data/serialization/*.test.ts`, `api/dataset.test.ts` |
 | `[S4-A2]` | An edit naming an unregistered key throws `UnknownFieldError` — never a silent write | S4.1 | `data/entry-store.test.ts` |
-| `[S4-A3]` | Switching `gantt.rows` re-resolves rows with no remount; scroll survives | S4.6 | `api/gantt.test.ts`, `layout/rows/*.test.ts` |
+| `[S4-A3]` | Switching `gantt.rowSource` re-resolves rows with no remount; scroll survives | S4.6 | `api/gantt.test.ts`, `layout/rows/*.test.ts` |
 | `[S4-A4]` | A segmented entry renders N bars on one row; one segment drags transactionally | S4.7, S4.10 | `layout/items/*.test.ts`, `interaction/entry-gestures.test.ts` |
 | `[S4-A5]` | Pack-mode rows change height as overlaps come and go; scroll stays stable | S4.8 | `layout/lanes/*.test.ts`, `layout/frame-layout.test.ts` |
 | `[S4-A6]` | Collapse state survives data edits and is independent per Gantt | S4.6 | `view/collapse-state.test.ts`, `api/gantt.test.ts` |
@@ -162,10 +162,10 @@ dataset.entries.update('t1', { start: '2026-10-05', cost: 12_000 });   // one ch
 const gantt = new Gantt({
   container, dataset,
   gridColumns: ['name', 'start', 'duration', { field: 'cost', header: 'Budget' }],
-  rows: { source: 'entries', tree: true, heightMode: 'pack', filter: byTeam, sort: { field: 'start' } },
+  rowSource: { source: 'entries', tree: true, heightMode: 'pack', filter: byTeam, sort: { field: 'start' } },
 });
 
-gantt.rows = { source: 'group', groupBy: (entry) => entry.meta.team };
+gantt.rowSource = { source: 'group', groupBy: (entry) => entry.meta.team };
 ```
 
 Group headers render the `groupBy` label in column 0 and **blank cells** elsewhere. Per-team aggregates are the caller's data — declare a computed Field or write through a group entry (D-S4-11). The grid does not invent them.
@@ -183,9 +183,9 @@ gantt.on('collapseChange', ({ to }) => save(to));
 | `DatasetOptions.hierarchy`, `Dataset.hierarchy` | S4.5 |
 | `GridColumn`, `GridColumnInput`, `Gantt.gridColumns` | S4.3 |
 | `Dataset.fromJSON(doc, options?)`, `schema: 2` | S4.4 |
-| `RowSource`, `EntriesRowSource`, `GroupRowSource`, `CustomRowSource`, `CustomRow`, `Gantt.rows` | S4.6 |
+| `RowSource`, `EntriesRowSource`, `GroupRowSource`, `CustomRowSource`, `CustomRow`, `RowSourceCommon`, `RowHeightMode`, `Gantt.rowSource` | S4.6 |
 | `Gantt.collapsed`, `collapse`, `expand`, `toggleCollapse`, `beforeCollapseChange`/`collapseChange`, `CollapseChange` | S4.6 |
-| `RowFilter`, `RowSort` | S4.9 |
+| `RowFilter`, `RowSort`, `FilterPolicy` | S4.9 |
 | Parts: `fg-row-cell`, `fg-row-twisty`, `fg-bar-bracket`, `fg-bar-diamond`; tokens `--fg-indent-width`, `--fg-lane-gap` | S4.3, S4.6, S4.7, S4.8 |
 
 **Not public:** `FieldRegistry`, `readField`/`writeField`, `ItemEmitter` registration, `PlannedRow`, `LanePacking`, `FrameMemory` — internal registry and pipeline shapes.

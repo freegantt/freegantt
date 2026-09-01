@@ -11,9 +11,8 @@ import type { RowHeightIndex } from './row-height-index.js';
 import type { FrameColumn, ResolvedColumn } from './column.js';
 import type { PlannedRow, RowSource } from './rows/row-source.js';
 import { resolveRows, rowResolutionInput } from './rows/resolve-rows.js';
-import { emitRow } from './items/emit-items.js';
-import type { Item, ItemEmitterRegistry } from './items/item-emitter.js';
-import { createItemEmitterRegistry } from './items/item-emitter.js';
+import type { Item, ItemProducerRegistry } from './items/produce-items.js';
+import { createItemProducerRegistry, produceItemsForRow } from './items/produce-items.js';
 import { packRow } from './lanes/pack-lanes.js';
 
 /** Shipped Tick box floor (CONTEXT.md) — `--fg-tick-box-floor` fallback and CSS padding calc. */
@@ -178,8 +177,8 @@ export interface LayoutInput {
   rows?: RowSource;
   /** Collapsed `RowId`s. Omitted → none. A stale id matches nothing (D-S4-22). */
   collapsed?: readonly string[];
-  /** Per-Gantt ItemEmitter registry (D-S4-24). Omitted → the three shipped emitters. */
-  itemEmitterRegistry?: ItemEmitterRegistry;
+  /** Per-Gantt Item producer registry (D-S4-24). Omitted → the three shipped producers. */
+  itemProducerRegistry?: ItemProducerRegistry;
 }
 
 function cellsForRow(
@@ -206,7 +205,7 @@ function columnsForFrame(columns: readonly ResolvedColumn[] | undefined): readon
   });
 }
 
-function partCountByEntry(items: readonly Item[]): ReadonlyMap<EntryId, number> {
+function segmentCountByEntry(items: readonly Item[]): ReadonlyMap<EntryId, number> {
   const counts = new Map<EntryId, number>();
   for (const item of items) counts.set(item.entryId, (counts.get(item.entryId) ?? 0) + 1);
   return counts;
@@ -223,7 +222,7 @@ function barA11yLabel(
   return `${item.label}, part ${segmentIndexOfItem(item.id) + 1} of ${partCount}, ${span}`;
 }
 
-/** Composition over resolve → emit → pack → place (D-S4-19). Culling still windows after resolve
+/** Composition over resolve → produce → pack → place (D-S4-19). Culling still windows after resolve
  * (D-S4-20). Pure: `heights` is the row-top index this pass reads — `FrameLayout` keeps one alive
  * across renders; a one-shot caller omits it and gets an index built and discarded here. */
 export function computeFrame(input: LayoutInput, heights?: RowHeightIndex): GeometryFrame {
@@ -231,7 +230,7 @@ export function computeFrame(input: LayoutInput, heights?: RowHeightIndex): Geom
   const plan = resolveRows(rowResolutionInput(input));
   const index = heights ?? new PrefixSumHeightIndex(plan.length, () => rowHeight);
   const entryById = new Map(input.entries.map((entry) => [entry.id, entry]));
-  const itemEmitterRegistry = input.itemEmitterRegistry ?? createItemEmitterRegistry();
+  const itemProducerRegistry = input.itemProducerRegistry ?? createItemProducerRegistry();
   const tickBoxFloorPx = input.tickBoxFloorPx ?? DEFAULT_TICK_BOX_FLOOR_PX;
   const verticalRows = input.overscan?.verticalRows ?? DEFAULT_OVERSCAN.verticalRows;
   const horizontalPx = input.overscan?.horizontalPx ?? DEFAULT_OVERSCAN.horizontalPx;
@@ -270,9 +269,9 @@ export function computeFrame(input: LayoutInput, heights?: RowHeightIndex): Geom
       overflowCount++;
     }
 
-    const items = emitRow(planned, { entryById }, itemEmitterRegistry);
+    const items = produceItemsForRow(planned, entryById, itemProducerRegistry);
     const packing = packRow(items);
-    const parts = partCountByEntry(items);
+    const parts = segmentCountByEntry(items);
     rows.push({
       id: planned.id,
       index: planned.index,

@@ -18,6 +18,8 @@
       .badge-hard { background:#fee2e2; color:#7f1d1d; border:1px solid #fecaca; }
       .badge-judge { background:#fef3c7; color:#78350f; border:1px solid #fde68a; }
       .badge-hold { background:#d1fae5; color:#064e3b; border:1px solid #a7f3d0; }
+      .badge-fixed { background:#dcfce7; color:#14532d; border:1px solid #bbf7d0; }
+      .badge-deferred { background:#f1f5f9; color:#334155; border:1px solid #e2e8f0; }
     </style>
   </head>
   <body class="bg-stone-50 text-slate-900 font-sans">
@@ -60,6 +62,7 @@
         <div class="px-6 py-4 border-b flex items-center justify-between bg-gradient-to-r from-violet-50 to-fuchsia-50">
           <h2 class="font-serif text-xl">C1 — One deep item-production seam</h2>
           <span class="badge-strong text-xs px-2 py-1 rounded">STRONG</span>
+          <span class="badge-fixed text-xs px-2 py-1 rounded">FIXED 2026-08-31</span>
         </div>
         <div class="p-6 space-y-5">
           <p class="text-sm"><strong>Files.</strong> <span class="font-mono">layout/items/</span>: <span class="font-mono">item.ts</span> (types), <span class="font-mono">item-emitter.ts</span> (registry), <span class="font-mono">emit-items.ts</span> (<span class="font-mono">emitRow</span>), <span class="font-mono">span/group/milestone-emitter.ts</span>.</p>
@@ -84,6 +87,7 @@ flowchart LR
             </div>
           </div>
           <p class="text-xs text-slate-500">Folds up: N1 (emit overload), St1 (unused ctx), St4 (registry default), St5 (3 near-copy emitters), A1 (6-file split), N2 (file/function mismatch).</p>
+          <p class="text-xs text-emerald-700 font-mono">Fixed: layout/items/ collapsed to produce-items.ts (+ .test.ts) — item.ts, item-emitter.ts, emit-items.ts, span/group/milestone-emitter.ts deleted. emit* renamed to produce* (N1 settled); ItemEmissionContext dropped (unused everywhere); createItemProducerRegistry has no default arg at the call site — frame.ts and gantt-shell.ts each build one registry once and pass it through.</p>
         </div>
       </section>
 
@@ -92,6 +96,7 @@ flowchart LR
         <div class="px-6 py-4 border-b flex items-center justify-between bg-gradient-to-r from-indigo-50 to-sky-50">
           <h2 class="font-serif text-xl">C2 — Restore the four <span class="font-mono">computeFrame</span> stages as real seams</h2>
           <span class="badge-worth text-xs px-2 py-1 rounded">WORTH EXPLORING</span>
+          <span class="badge-deferred text-xs px-2 py-1 rounded">NOT DONE — deferred to S4.8</span>
         </div>
         <div class="p-6 space-y-5">
           <p class="text-sm"><strong>Files.</strong> <span class="font-mono">layout/frame.ts</span>.</p>
@@ -114,6 +119,7 @@ flowchart TB
             </div>
           </div>
           <p class="text-xs text-slate-500">Folds up: St2 (stages are prose), A2, A6 (pack-height insertion point), A9 (watch runTransaction growth, analogous).</p>
+          <p class="text-xs text-slate-500 font-mono">Not done: real extraction (resolveRows/produceItemsForRow/packRow/placeRow) is a bigger structural change than this pass; left for S4.8, which is exactly where the review says the loop would otherwise grow.</p>
         </div>
       </section>
 
@@ -122,6 +128,7 @@ flowchart TB
         <div class="px-6 py-4 border-b flex items-center justify-between bg-gradient-to-r from-emerald-50 to-teal-50">
           <h2 class="font-serif text-xl">C3 — Keep the row-source dispatch the single OCP seam</h2>
           <span class="badge-hold text-xs px-2 py-1 rounded">HOLD (verified)</span>
+          <span class="badge-fixed text-xs px-2 py-1 rounded">Minor tightening FIXED 2026-08-31</span>
         </div>
         <div class="p-6 space-y-5">
           <p class="text-sm"><strong>Files.</strong> <span class="font-mono">layout/rows/resolve-rows.ts</span>, <span class="font-mono">row-source.ts</span>.</p>
@@ -141,6 +148,7 @@ flowchart TB
             </div>
           </div>
           <p class="text-xs text-slate-500">Folds up: A10 (drop PlannedRow.kind), St6 (drop index placeholder), the repeated-switch check (holds).</p>
+          <p class="text-xs text-emerald-700 font-mono">Fixed: PlannedRow.kind dropped everywhere (dead field — nothing read it; header-ness was already derived from entryIds.length === 0 at every call site). row-source.ts now exports UnindexedRow = Omit&lt;PlannedRow, 'index'&gt;; the three sources build UnindexedRow and stampIndex is the only place that writes index.</p>
         </div>
       </section>
 
@@ -149,6 +157,7 @@ flowchart TB
         <div class="px-6 py-4 border-b flex items-center justify-between bg-gradient-to-r from-amber-50 to-orange-50">
           <h2 class="font-serif text-xl">C4 — Record the S7 post-rollup hook now; do not wire it in S4</h2>
           <span class="badge-judge text-xs px-2 py-1 rounded">JUDGEMENT / FLAG</span>
+          <span class="badge-deferred text-xs px-2 py-1 rounded">NOT DONE — record as S7 prerequisite ADR</span>
         </div>
         <div class="p-6 space-y-5">
           <p class="text-sm"><strong>Files.</strong> <span class="font-mono">data/transaction.ts:242</span> (extender hook), <span class="font-mono">:277</span> (rollup).</p>
@@ -182,21 +191,23 @@ sequenceDiagram
           <div class="rounded-xl border border-red-200 bg-white p-4">
             <p class="font-semibold text-red-800 mb-2">Hard — small, real, cheap to fix in S4</p>
             <ul class="list-disc pl-5 space-y-1">
-              <li><strong>A4</strong> — <span class="font-mono">RowHeightMode</span> referenced by public types but never re-exported (<span class="font-mono">ae-forgotten-export</span>). Agents cannot name it. Export from <span class="font-mono">layout/index.ts</span> + <span class="font-mono">api/index.ts</span> and doc-comment <span class="font-mono">'pack'</span>.</li>
-              <li><strong>A5</strong> — <span class="font-mono">gantt.rows</span> returns <span class="font-mono">RowSource</span>, not rows: concept collision with the derived <span class="font-mono">Row</span> (the #7 “chart” pattern). Prefer <span class="font-mono">rowSource</span>, freeing <span class="font-mono">rows</span> for a real getter.</li>
-              <li><strong>A6</strong> — <span class="font-mono">heightMode: 'pack'</span> buried in each row source and untyped (via A4); not discoverable. Export the type; consider a top-level <span class="font-mono">heightMode</span>.</li>
-              <li><strong>A7</strong> — <span class="font-mono">sort/filter/filterPolicy/heightMode</span> duplicated across two row-source variants; share a <span class="font-mono">RowSourceCommon</span> block.</li>
+              <li><strong>A4</strong> — <span class="font-mono">RowHeightMode</span> referenced by public types but never re-exported (<span class="font-mono">ae-forgotten-export</span>). Agents cannot name it. Export from <span class="font-mono">layout/index.ts</span> + <span class="font-mono">api/index.ts</span> and doc-comment <span class="font-mono">'pack'</span>. <span class="badge-fixed text-xs px-1.5 py-0.5 rounded">FIXED</span></li>
+              <li><strong>A5</strong> — <span class="font-mono">gantt.rows</span> returns <span class="font-mono">RowSource</span>, not rows: concept collision with the derived <span class="font-mono">Row</span> (the #7 “chart” pattern). Prefer <span class="font-mono">rowSource</span>, freeing <span class="font-mono">rows</span> for a real getter. <span class="badge-fixed text-xs px-1.5 py-0.5 rounded">FIXED</span></li>
+              <li><strong>A6</strong> — <span class="font-mono">heightMode: 'pack'</span> buried in each row source and untyped (via A4); not discoverable. Export the type; consider a top-level <span class="font-mono">heightMode</span>. <span class="badge-fixed text-xs px-1.5 py-0.5 rounded">FIXED via A4</span></li>
+              <li><strong>A7</strong> — <span class="font-mono">sort/filter/filterPolicy/heightMode</span> duplicated across two row-source variants; share a <span class="font-mono">RowSourceCommon</span> block. <span class="badge-fixed text-xs px-1.5 py-0.5 rounded">FIXED</span></li>
             </ul>
+            <p class="text-xs text-emerald-700 font-mono mt-2">A4/A6: RowHeightMode now exported from layout/index.ts and api/index.ts. A5: Gantt.rows / GanttOptions.rows / GanttShell.rows renamed to rowSource everywhere (api/gantt.ts, view/gantt-shell.ts, harness/main.ts, tests, plans docs). A7: EntriesRowSource/GroupRowSource now extend a shared RowSourceCommon { heightMode, filter, sort, filterPolicy }.</p>
           </div>
           <div class="rounded-xl border border-amber-200 bg-white p-4">
             <p class="font-semibold text-amber-800 mb-2">Naming / judgement</p>
             <ul class="list-disc pl-5 space-y-1">
-              <li><strong>N1 (settled)</strong> — rename layout production to <span class="font-mono">produce</span>; keep <span class="font-mono">emit</span> for Gantt events.</li>
-              <li><strong>N3</strong> — <span class="font-mono">partCountByEntry</span> → <span class="font-mono">segmentCountByEntry</span> (one word: Segment).</li>
-              <li><strong>N4</strong> — <span class="font-mono">segmentIndexOfItem</span> doc cites <span class="font-mono">bar.id</span>; should cite <span class="font-mono">item.id</span>.</li>
-              <li><strong>St3</strong> — unknown-kind span fallback is quiet; make it a diagnostic when S7’s channel lands.</li>
+              <li><strong>N1 (settled)</strong> — rename layout production to <span class="font-mono">produce</span>; keep <span class="font-mono">emit</span> for Gantt events. <span class="badge-fixed text-xs px-1.5 py-0.5 rounded">FIXED</span></li>
+              <li><strong>N3</strong> — <span class="font-mono">partCountByEntry</span> → <span class="font-mono">segmentCountByEntry</span> (one word: Segment). <span class="badge-fixed text-xs px-1.5 py-0.5 rounded">FIXED</span></li>
+              <li><strong>N4</strong> — <span class="font-mono">segmentIndexOfItem</span> doc cites <span class="font-mono">bar.id</span>; should cite <span class="font-mono">item.id</span>. <span class="badge-fixed text-xs px-1.5 py-0.5 rounded">FIXED</span></li>
+              <li><strong>St3</strong> — unknown-kind span fallback is quiet; make it a diagnostic when S7’s channel lands. <span class="badge-deferred text-xs px-1.5 py-0.5 rounded">NOT DONE — S7</span></li>
               <li><strong>Spec</strong> — S4.1–S4.7 honored; inert S4.9 filter/sort fields are a dead-but-correct plug; <span class="font-mono">Item.lane</span> vs <span class="font-mono">FrameBar.lane</span> divergence is cosmetic.</li>
             </ul>
+            <p class="text-xs text-emerald-700 font-mono mt-2">N1: layout/items/produce-items.ts exports produceItemsForRow/createItemProducerRegistry/ItemProducerRegistry; every emit* symbol removed. N3/N4 renamed and re-cited.</p>
           </div>
         </div>
       </section>
@@ -214,6 +225,11 @@ sequenceDiagram
           outside the library. It buys the most <em>leverage</em> (one seam a caller and an agent learn) for the
           least churn, and it removes a genuine concept collision now rather than after S5 hardens the surface.
         </p>
+        <div class="mt-4 pt-4 border-t border-violet-200 text-sm text-slate-800 max-w-3xl space-y-1">
+          <p><strong>Status (2026-08-31):</strong> <span class="badge-fixed text-xs px-2 py-1 rounded">A4, A5, A6, A7, A10, St6, C1, N1, N3, N4 — FIXED</span></p>
+          <p><span class="badge-deferred text-xs px-2 py-1 rounded">C2, C4, St3 — deferred</span> — C2 (extract <span class="font-mono">placeRow</span>) is a bigger structural change, left for S4.8 where lane packing lands anyway; C4 is documentation-only (record an S7 ADR, do not wire a hook in S4); St3 needs S7's diagnostics channel, which does not exist yet.</p>
+          <p>Full run after the fix: <span class="font-mono">tsc --noEmit</span> clean, <span class="font-mono">eslint</span> clean, 72 test files / 790 tests passing.</p>
+        </div>
       </section>
 
       <footer class="border-t pt-6 text-xs text-slate-500 space-y-1">

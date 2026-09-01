@@ -152,7 +152,7 @@ A horizontal track of a Gantt — the unit of vertical layout, and what the grid
 _Avoid_: Line, track (a track is what a Lane is), record; reading `Row.kind: 'header'` as "a `'group'` Entry"; using `'group'` as a Row kind (that literal is `Entry.kind` only)
 
 **Row source**:
-The configuration that decides what the Rows are for a given Gantt — the Entries themselves (optionally as a tree), one Row per value of some grouping function, or a consumer-supplied resolver. Alternative views (workload, resources) are new row sources, not new rendering or interaction code. `{ source: 'custom', resolve }` returns `CustomRow` values (`id`, optional `entryIds`, optional `label`). Core adapts those to the internal row plan. This `custom` is the row-source occupant, not a custom ViewPreset object.
+The configuration that decides what the Rows are for a given Gantt — the Entries themselves (optionally as a tree), one Row per value of some grouping function, or a consumer-supplied resolver. Live on `gantt.rowSource` (and `GanttOptions.rowSource` at construction). Alternative views (workload, resources) are new row sources, not new rendering or interaction code. `{ source: 'custom', resolve }` returns `CustomRow` values (`id`, optional `entryIds`, optional `label`). Core adapts those to the internal row plan. This `custom` is the row-source occupant, not a custom ViewPreset object.
 _Avoid_: Row provider, row model; treating `PlannedRow` as public
 
 **Item**:

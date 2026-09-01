@@ -31,13 +31,11 @@ describe('resolveCustomSource [S4-A11]', () => {
     );
     expect(rows[0]).toMatchObject({
       id: rowId('h'),
-      kind: 'header',
       entryIds: [],
       headerLabel: 'Phase',
     });
     expect(rows[1]).toMatchObject({
       id: rowId('a'),
-      kind: 'entry',
       entryIds: [entryId('a')],
     });
   });
@@ -47,7 +45,6 @@ describe('resolveCustomSource [S4-A11]', () => {
       { source: 'custom', resolve: () => [{ id: 'empty', entryIds: [] }] },
       { entries },
     );
-    expect(rows[0]?.kind).toBe('header');
     expect(rows[0]?.entryIds).toEqual([]);
   });
 

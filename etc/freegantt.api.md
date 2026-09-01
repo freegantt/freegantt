@@ -72,8 +72,6 @@ export interface CustomRow {
 
 // @public (undocumented)
 export interface CustomRowSource {
-    // Warning: (ae-forgotten-export) The symbol "RowHeightMode" needs to be exported by the entry point index.d.ts
-    //
     // (undocumented)
     heightMode?: RowHeightMode;
     // (undocumented)
@@ -229,15 +227,7 @@ export interface EntityRemoved {
 }
 
 // @public (undocumented)
-export interface EntriesRowSource {
-    // (undocumented)
-    filter?: RowFilter;
-    // (undocumented)
-    filterPolicy?: FilterPolicy;
-    // (undocumented)
-    heightMode?: RowHeightMode;
-    // (undocumented)
-    sort?: RowSort;
+export interface EntriesRowSource extends RowSourceCommon {
     // (undocumented)
     source: 'entries';
     // (undocumented)
@@ -504,8 +494,8 @@ export class Gantt {
     });
     // (undocumented)
     reveal(entryId: EntryId): void;
-    get rows(): RowSource;
-    set rows(next: RowSource);
+    get rowSource(): RowSource;
+    set rowSource(next: RowSource);
     get selection(): readonly EntryId[];
     set selection(ids: readonly (EntryId | string)[]);
     get selectionEntries(): readonly Entry[];
@@ -592,17 +582,9 @@ export interface GridWidthChange {
 }
 
 // @public (undocumented)
-export interface GroupRowSource {
-    // (undocumented)
-    filter?: RowFilter;
-    // (undocumented)
-    filterPolicy?: FilterPolicy;
+export interface GroupRowSource extends RowSourceCommon {
     // (undocumented)
     groupBy(entry: Entry): string;
-    // (undocumented)
-    heightMode?: RowHeightMode;
-    // (undocumented)
-    sort?: RowSort;
     // (undocumented)
     source: 'group';
 }
@@ -731,6 +713,9 @@ export interface RollUpContext extends FieldContext {
 export type RowFilter = (entry: Entry) => boolean;
 
 // @public (undocumented)
+export type RowHeightMode = 'fixed' | 'pack';
+
+// @public (undocumented)
 export type RowId = string & {
     readonly __brand: 'RowId';
 };
@@ -753,6 +738,18 @@ export interface RowSort {
 
 // @public (undocumented)
 export type RowSource = EntriesRowSource | GroupRowSource | CustomRowSource;
+
+// @public
+export interface RowSourceCommon {
+    // (undocumented)
+    filter?: RowFilter;
+    // (undocumented)
+    filterPolicy?: FilterPolicy;
+    // (undocumented)
+    heightMode?: RowHeightMode;
+    // (undocumented)
+    sort?: RowSort;
+}
 
 // @public (undocumented)
 export class ScrollModel {

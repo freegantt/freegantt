@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { Gantt } from './gantt.js';
 import { Dataset } from './dataset.js';
 import { EntryNotFoundError, ScrollModel, TimeScaleModel, entryId } from './index.js';
+import type { Entry } from './index.js';
 import { sampleEntries } from '../../fixtures/sample-dataset.js';
 import { instant } from '../time/index.js';
 
@@ -1729,7 +1730,7 @@ describe('Gantt rows and collapse (S4.6)', () => {
       container,
       dataset,
       scroll,
-      rows: { source: 'entries', tree: true },
+      rowSource: { source: 'entries', tree: true },
     });
     FakeResizeObserver.instances[0]!.fire({ width: 300, height: 100 });
     scroll.panTo({ x: 0, y: 80 });
@@ -1737,7 +1738,7 @@ describe('Gantt rows and collapse (S4.6)', () => {
     const bar = container.querySelector<HTMLElement>('.fg-bar')!;
     const itemId = bar.dataset['itemId'];
 
-    gantt.rows = { source: 'group', groupBy: (entry) => entry.kind };
+    gantt.rowSource = { source: 'group', groupBy: (entry: Entry) => entry.kind };
     await new Promise((resolve) => requestAnimationFrame(resolve));
 
     expect(container.querySelector(`[data-item-id="${itemId}"]`)).toBe(bar);
@@ -1758,12 +1759,12 @@ describe('Gantt rows and collapse (S4.6)', () => {
     const a = new Gantt({
       container: document.createElement('div'),
       dataset,
-      rows: { source: 'entries', tree: true },
+      rowSource: { source: 'entries', tree: true },
     });
     const b = new Gantt({
       container: document.createElement('div'),
       dataset,
-      rows: { source: 'entries', tree: true },
+      rowSource: { source: 'entries', tree: true },
     });
     a.collapse('p');
     expect(a.collapsed).toEqual([entryId('p')]);
@@ -1788,9 +1789,9 @@ describe('Gantt rows and collapse (S4.6)', () => {
     const gantt = new Gantt({
       container,
       dataset,
-      rows: {
+      rowSource: {
         source: 'custom',
-        resolve: ({ entries }) => [
+        resolve: ({ entries }: { entries: readonly Entry[] }) => [
           { id: 'h', label: 'All' },
           { id: 'r0', entryIds: [entries[0]!.id] },
         ],

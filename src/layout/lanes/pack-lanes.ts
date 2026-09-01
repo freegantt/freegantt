@@ -1,7 +1,7 @@
 // layout/ — how one row's items stack into lanes (D-S4-19). S4.8 replaces this with overlap packing.
 
 import type { ItemId } from '../../model/index.js';
-import type { Item } from '../items/emit-items.js';
+import type { Item } from '../items/produce-items.js';
 
 export interface LanePacking {
   laneByItem: ReadonlyMap<ItemId, number>;

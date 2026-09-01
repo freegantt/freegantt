@@ -111,6 +111,8 @@ export type {
   RowFilter,
   RowSort,
   FilterPolicy,
+  RowSourceCommon,
+  RowHeightMode,
   RowResolveInput,
 } from '../layout/index.js';
 // Point/Size are the S1.5 ScrollModel's own vocabulary (S1.5 README §5) — a consumer building

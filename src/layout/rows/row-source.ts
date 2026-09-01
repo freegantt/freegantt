@@ -16,22 +16,23 @@ export interface RowSort {
 
 export type FilterPolicy = 'keepAncestors' | 'matchOnly';
 
-export interface EntriesRowSource {
-  source: 'entries';
-  tree?: boolean;
+/** Shared by every row source that walks Entries directly — `'custom'` resolves its own rows, so it
+ *  does not take these (D-S4-21). */
+export interface RowSourceCommon {
   heightMode?: RowHeightMode;
   filter?: RowFilter;
   sort?: RowSort;
   filterPolicy?: FilterPolicy;
 }
 
-export interface GroupRowSource {
+export interface EntriesRowSource extends RowSourceCommon {
+  source: 'entries';
+  tree?: boolean;
+}
+
+export interface GroupRowSource extends RowSourceCommon {
   source: 'group';
   groupBy(entry: Entry): string;
-  heightMode?: RowHeightMode;
-  filter?: RowFilter;
-  sort?: RowSort;
-  filterPolicy?: FilterPolicy;
 }
 
 /** What `{ source: 'custom', resolve }` receives. Entries only — no pixels, no Gantt. */
@@ -56,10 +57,9 @@ export type RowSource = EntriesRowSource | GroupRowSource | CustomRowSource;
 
 export const DEFAULT_ROW_SOURCE: EntriesRowSource = Object.freeze({ source: 'entries', tree: false });
 
-/** Internal row before pixels. `kind: 'header'` stands for no Entry (D-S4-23). */
+/** Internal row before pixels. Empty `entryIds` stands for a header row, no Entry (D-S4-23). */
 export interface PlannedRow {
   id: RowId;
-  kind: 'entry' | 'header';
   index: number;
   depth: number;
   entryIds: readonly EntryId[];
@@ -68,6 +68,10 @@ export interface PlannedRow {
   heightMode: RowHeightMode;
   headerLabel?: string;
 }
+
+/** What a row source builds before `resolveRows` stamps the real `index` (St6) — `index` has one
+ *  owner, so a source never invents a placeholder for it. */
+export type UnindexedRow = Omit<PlannedRow, 'index'>;
 
 export interface RowResolutionInput {
   entries: readonly Entry[];
