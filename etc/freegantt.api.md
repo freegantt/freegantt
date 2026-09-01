@@ -123,6 +123,7 @@ export class Dataset<TMeta = unknown, TFields extends Record<string, unknown> = 
     };
     static fromJSON<TMeta = unknown, TFields extends Record<string, unknown> = Record<string, unknown>>(doc: DatasetDocument<TMeta>, options?: Pick<DatasetOptions, 'fields' | 'fieldTypes' | 'aggregators'>): Dataset<TMeta, TFields>;
     get hierarchy(): DatasetHierarchy;
+    set hierarchy(value: DatasetHierarchy);
     isRollUpKind(kind: EntryKind): boolean;
     // (undocumented)
     off<K extends keyof DatasetEventMap>(name: K, handler: (payload: DatasetEventMap[K]) => void | false): void;

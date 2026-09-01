@@ -49,12 +49,12 @@ Pre-push of `187ce7f` failed: `src/view/styles.test.ts` still asserts the sheet 
 
 **Done when:** `dataset.hierarchy = { autoGroup: false }` changes later commits only; the Dataset instance stays alive; `pnpm verify && pnpm gate`; commit and push.
 
-- [ ] `DatasetState`: `#hierarchy` + `setHierarchy(value)` through `resolveHierarchy` (same shape as `setRollUpKinds`).
-- [ ] `api/dataset.ts`: `set hierarchy`. Drop the "construction-time only" comment.
-- [ ] Test in `src/api/dataset.test.ts`: assign `{ autoGroup: false }`, then add a first child to a `'span'` parent — Kind stays `'span'`. Assign `{ autoGroup: true }`, add a first child — parent becomes `'group'` in that transaction.
-- [ ] `harness/hierarchy.ts`: keep the Dataset. `dataset.hierarchy = { autoGroup: next }`. Remove `rebuildDataset` destroy-rebuild.
-- [ ] Live toggle does **not** re-promote existing span parents. That is intended.
-- [ ] `pnpm exec api-extractor run --local` if `etc/freegantt.api.md` diffs. Note the additive setter in the commit.
+- [x] `DatasetState`: `#hierarchy` + `setHierarchy(value)` through `resolveHierarchy` (same shape as `setRollUpKinds`).
+- [x] `api/dataset.ts`: `set hierarchy`. Drop the "construction-time only" comment.
+- [x] Test in `src/api/dataset.test.ts`: assign `{ autoGroup: false }`, then add a first child to a `'span'` parent — Kind stays `'span'`. Assign `{ autoGroup: true }`, add a first child — parent becomes `'group'` in that transaction.
+- [x] `harness/hierarchy.ts`: keep the Dataset. `dataset.hierarchy = { autoGroup: next }`. Remove `rebuildDataset` destroy-rebuild.
+- [x] Live toggle does **not** re-promote existing span parents. That is intended.
+- [x] `pnpm exec api-extractor run --local` if `etc/freegantt.api.md` diffs. Note the additive setter in the commit.
 
 **Files:** `src/data/dataset-state.ts`, `src/api/dataset.ts`, `src/api/dataset.test.ts`, `harness/hierarchy.ts`, maybe `etc/freegantt.api.md`.
 

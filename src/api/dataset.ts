@@ -91,9 +91,14 @@ export class Dataset<TMeta = unknown, TFields extends Record<string, unknown> = 
     this.#state.setRollUpKinds(value);
   }
 
-  /** Call: `dataset.hierarchy.autoGroup`. Construction-time policy; not live-reconfigurable. */
+  /** Call: `dataset.hierarchy = { autoGroup: false }`. Later first-child commits obey this.
+   *  Existing `'span'` parents do not promote until they gain a child under `autoGroup: true`. */
   get hierarchy(): DatasetHierarchy {
     return { autoGroup: this.#state.hierarchy.autoGroup };
+  }
+
+  set hierarchy(value: DatasetHierarchy) {
+    this.#state.setHierarchy(value);
   }
 
   /** The resolved Field for this key, or `undefined` when the key is not declared.

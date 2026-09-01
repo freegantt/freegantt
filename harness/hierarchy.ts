@@ -186,20 +186,6 @@ function rebuildGantt(preserveScroll = false): void {
   else remountGantt();
 }
 
-function rebuildDataset(nextAutoGroup: boolean): void {
-  const entries = dataset.entries.all;
-  dataset.off('change', onChange);
-  gantt.destroy();
-  autoGroup = nextAutoGroup;
-  dataset = createDataset(autoGroup, entries);
-  window.__dataset = dataset;
-  bindDataset();
-  rebuildGantt(true);
-  refreshHistoryButtons();
-  renderSelection();
-  logLine(`[load] autoGroup ${autoGroup ? 'on' : 'off'}`);
-}
-
 bindDataset();
 bindGantt();
 mountTimelineToolbar({ gantt, container: toolbar });
@@ -234,14 +220,9 @@ collapseAllBtn.addEventListener('click', () => {
 });
 
 autoGroupCheckbox.addEventListener('change', () => {
-  const next = autoGroupCheckbox.checked;
-  autoGroupCheckbox.disabled = true;
-  try {
-    rebuildDataset(next);
-  } finally {
-    autoGroupCheckbox.disabled = false;
-    autoGroupCheckbox.checked = autoGroup;
-  }
+  dataset.hierarchy = { autoGroup: autoGroupCheckbox.checked };
+  autoGroup = dataset.hierarchy.autoGroup;
+  logLine(`[load] autoGroup ${autoGroup ? 'on' : 'off'}`);
 });
 
 reparentBtn.addEventListener('click', () => {
@@ -277,10 +258,8 @@ importBtn.addEventListener('click', () => {
     const doc = JSON.parse(documentJson.value) as DatasetDocument<{ cost: number }>;
     dataset.off('change', onChange);
     gantt.destroy();
-    let imported = Dataset.fromJSON<{ cost: number }, { cost: number }>(doc, hierarchyFieldOptions);
-    if (!autoGroup) {
-      imported = createDataset(false, imported.entries.all);
-    }
+    const imported = Dataset.fromJSON<{ cost: number }, { cost: number }>(doc, hierarchyFieldOptions);
+    imported.hierarchy = { autoGroup };
     dataset = imported;
     window.__dataset = dataset;
     bindDataset();
