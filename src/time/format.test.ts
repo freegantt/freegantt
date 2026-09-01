@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { instant } from './instant.js';
 import { startOfDay } from './zone.js';
-import { dedupeHeaderFormats, formatDate, formatEndInclusive, formatWeekNumber } from './format.js';
+import {
+  DATE_TIME_FORMAT,
+  dedupeHeaderFormats,
+  formatDate,
+  formatEndInclusive,
+  formatWeekNumber,
+} from './format.js';
 import type { ViewPresetHeader } from './scale.js';
 
 const ZONE = 'America/New_York';
@@ -10,6 +16,13 @@ describe('formatDate', () => {
   it('formats a start with no conversion', () => {
     const start = instant('2026-08-26T14:30:00Z'); // 10:30 EDT
     expect(formatDate(ZONE, start)).toBe('Aug 26, 2026');
+  });
+
+  it('includes clock time when DATE_TIME_FORMAT is passed', () => {
+    const start = instant('2026-08-26T14:30:00Z'); // 10:30 EDT
+    const text = formatDate(ZONE, start, 'en-US', DATE_TIME_FORMAT);
+    expect(text).toContain('Aug 26, 2026');
+    expect(text).toMatch(/10:30/);
   });
 });
 

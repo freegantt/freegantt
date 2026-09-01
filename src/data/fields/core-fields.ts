@@ -2,7 +2,7 @@
 // omitted-source cannot steal `start` into `meta.start`. `progress` is not declared (ADR 0008).
 
 import type { Duration, Entry, Field, Instant } from '../../model/index.js';
-import { formatDate, formatEndInclusive, MS } from '../../time/index.js';
+import { DATE_TIME_FORMAT, formatDate, formatEndInclusive, MS } from '../../time/index.js';
 
 const byReference = (from: unknown, to: unknown): boolean => from === to;
 
@@ -22,12 +22,12 @@ function asText(value: unknown): string {
 
 function formatStart(value: unknown, ctx: { timeZone: string; locale: Intl.LocalesArgument }): string {
   if (value === undefined || value === null) return '';
-  return formatDate(ctx.timeZone, value as Instant, ctx.locale);
+  return formatDate(ctx.timeZone, value as Instant, ctx.locale, DATE_TIME_FORMAT);
 }
 
 function formatEnd(value: unknown, ctx: { timeZone: string; locale: Intl.LocalesArgument }): string {
   if (value === undefined || value === null) return '';
-  return formatEndInclusive(ctx.timeZone, value as Instant, ctx.locale);
+  return formatEndInclusive(ctx.timeZone, value as Instant, ctx.locale, DATE_TIME_FORMAT);
 }
 
 function formatDuration(value: unknown): string {

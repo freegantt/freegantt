@@ -152,3 +152,42 @@ test('the timeline pane has no row-label gutter in its scrollable content (D1)',
   // enough to prove the gutter isn't folded into the scrollable content.
   expect(Math.abs(scrollWidth - sizerRight)).toBeLessThan(gridPaneWidth / 2);
 });
+
+test('generic demo shows Budget column, deep tree indent, and grouped rows', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
+  await expect(page.locator('#gantt .fg-row [data-field="cost"]').first()).toBeVisible();
+  await expect(page.locator('#gantt .fg-row [data-field="end"]').first()).toBeVisible();
+  await expect
+    .poll(async () => page.locator('#gantt .fg-row [data-field="start"]').first().textContent())
+    .toMatch(/\d{1,2}:\d{2}/);
+  await expect
+    .poll(async () => page.locator('#gantt .fg-row [data-field="end"]').first().textContent())
+    .toMatch(/\d{1,2}:\d{2}/);
+
+  const maxDepth = () =>
+    page
+      .locator('#gantt .fg-row')
+      .evaluateAll((nodes) =>
+        Math.max(
+          0,
+          ...nodes.map((node) => Number((node as HTMLElement).style.getPropertyValue('--fg-row-depth'))),
+        ),
+      );
+  // Program → workstream → work → grandchild is four levels (depth 0..3).
+  await expect.poll(maxDepth).toBeGreaterThanOrEqual(3);
+
+  const treeIds = await page
+    .locator('#gantt .fg-row')
+    .evaluateAll((nodes) => nodes.map((node) => (node as HTMLElement).dataset['rowId'] ?? ''));
+
+  await page.getByRole('button', { name: 'Group by team' }).click();
+  await expect(page.getByRole('button', { name: 'Show tree' })).toBeVisible();
+  await expect
+    .poll(async () =>
+      page
+        .locator('#gantt .fg-row')
+        .evaluateAll((nodes) => nodes.map((node) => (node as HTMLElement).dataset['rowId'] ?? '')),
+    )
+    .not.toEqual(treeIds);
+});
