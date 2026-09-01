@@ -88,7 +88,7 @@ export class GesturePipeline {
     if (entries.length === 0) return undefined;
     const anchor = entries[0]!;
     const grabbedSegmentIndex =
-      grabbedItemId !== undefined && anchor.segments !== undefined && anchor.segments.length > 1
+      grabbedItemId !== undefined && anchor.segments !== undefined && anchor.segments.length > 0
         ? segmentIndexOfItem(grabbedItemId)
         : undefined;
     return {
@@ -159,14 +159,14 @@ export class GesturePipeline {
     const increment = snap === 'none' ? preset.tickIncrement : snap.increment;
     const anchorInstant =
       gesture.kind === 'resize'
-        ? segmentIndex !== undefined && anchor.segments && anchor.segments.length > 1
+        ? segmentIndex !== undefined && anchor.segments && anchor.segments.length > 0
           ? gesture.edge === 'start'
             ? anchor.segments[segmentIndex]!.start
             : anchor.segments[segmentIndex]!.end
           : gesture.edge === 'start'
             ? anchor.start
             : anchor.end
-        : segmentIndex !== undefined && anchor.segments && anchor.segments.length > 1
+        : segmentIndex !== undefined && anchor.segments && anchor.segments.length > 0
           ? anchor.segments[segmentIndex]!.start
           : anchor.start;
     return this.#deps.timeScale().widthForDuration({ unit, value: increment }, anchorInstant);

@@ -108,8 +108,8 @@ export function draftForResize(input: DraftInput & { edge: 'start' | 'end' }): E
   return edits;
 }
 
-function usesSegmentEdit(entry: Entry, segmentIndex: number | undefined): segmentIndex is number {
-  return entry.segments !== undefined && entry.segments.length > 1 && segmentIndex !== undefined;
+function hasSegments(entry: Entry): entry is Entry & { segments: readonly TimeSpan[] } {
+  return entry.segments !== undefined && entry.segments.length > 0;
 }
 
 function segmentAnchorInstant(
@@ -117,10 +117,11 @@ function segmentAnchorInstant(
   segmentIndex: number | undefined,
   edge: 'start' | 'end' = 'start',
 ): Instant {
-  if (!usesSegmentEdit(entry, segmentIndex)) {
+  if (!hasSegments(entry)) {
     return edge === 'start' ? entry.start : entry.end;
   }
-  const segment = entry.segments![segmentIndex]!;
+  const index = segmentIndex ?? 0;
+  const segment = entry.segments[index] ?? entry.segments[0]!;
   return edge === 'start' ? segment.start : segment.end;
 }
 
@@ -140,13 +141,13 @@ function envelopeOfSegments(segments: readonly TimeSpan[]): { start: Instant; en
 }
 
 function moveEdit(entry: Entry, deltaMs: number, segmentIndex: number | undefined): StoredEdit {
-  if (!usesSegmentEdit(entry, segmentIndex)) {
+  if (!hasSegments(entry)) {
     return { start: addMs(entry.start, deltaMs), end: addMs(entry.end, deltaMs) };
   }
-  const segments = entry.segments!.map((segment, index) =>
-    index === segmentIndex
-      ? { start: addMs(segment.start, deltaMs), end: addMs(segment.end, deltaMs) }
-      : segment,
+  const segments = entry.segments.map((segment, index) =>
+    segmentIndex !== undefined && index !== segmentIndex
+      ? segment
+      : { start: addMs(segment.start, deltaMs), end: addMs(segment.end, deltaMs) },
   );
   return { segments, ...envelopeOfSegments(segments) };
 }
@@ -158,19 +159,19 @@ function stepMoveEdit(
   amount: number,
   segmentIndex: number | undefined,
 ): StoredEdit {
-  if (!usesSegmentEdit(entry, segmentIndex)) {
+  if (!hasSegments(entry)) {
     return {
       start: stepBy(zone, entry.start, unit, amount),
       end: stepBy(zone, entry.end, unit, amount),
     };
   }
-  const segments = entry.segments!.map((segment, index) =>
-    index === segmentIndex
-      ? {
+  const segments = entry.segments.map((segment, index) =>
+    segmentIndex !== undefined && index !== segmentIndex
+      ? segment
+      : {
           start: stepBy(zone, segment.start, unit, amount),
           end: stepBy(zone, segment.end, unit, amount),
-        }
-      : segment,
+        },
   );
   return { segments, ...envelopeOfSegments(segments) };
 }
@@ -181,11 +182,12 @@ function resizeEdit(
   moved: Instant,
   segmentIndex: number | undefined,
 ): StoredEdit {
-  if (!usesSegmentEdit(entry, segmentIndex)) {
+  if (!hasSegments(entry)) {
     return clampedEdgeEdit(entry, edge, moved);
   }
-  const segments = entry.segments!.map((segment, index) => {
-    if (index !== segmentIndex) return segment;
+  const index = segmentIndex ?? 0;
+  const segments = entry.segments.map((segment, i) => {
+    if (i !== index) return segment;
     if (edge === 'start') {
       const start = moved > segment.end ? segment.end : moved;
       return { start, end: segment.end };
