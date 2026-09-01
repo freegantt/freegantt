@@ -55,6 +55,14 @@ export type ChangeSetId = string & {
 // @public
 export function changeSetId(counter: number): ChangeSetId;
 
+// @public
+export interface ClientPoint {
+    // (undocumented)
+    readonly x: number;
+    // (undocumented)
+    readonly y: number;
+}
+
 // @public (undocumented)
 export interface CollapseChange {
     // (undocumented)
@@ -782,6 +790,11 @@ export interface ScrollState {
 
 // @public
 export function segmentIndexOfItem(id: ItemId): number;
+
+// @public
+export class SegmentsOutOfSyncError extends FreeGanttError {
+    constructor(entryId: EntryId);
+}
 
 // @public
 export interface SelectionChange {

@@ -51,7 +51,7 @@ function makeContext(
       return ORDER.includes(id) ? entryFor(id) : undefined;
     },
     can: (capability, entry) => (capability === 'select' ? !incapableRows.includes(entry.id) : true),
-    rowOrder: () => ORDER,
+    selectableEntriesInRowOrder: () => ORDER,
     setHovered: () => {},
     contentXAtPaneOffset: (offsetX) => offsetX,
     selection: {
@@ -197,5 +197,51 @@ describe('attachKeyboardEditing (S3.5, D-S3-13)', () => {
     container.dispatchEvent(key('keydown', { key: 'ArrowRight' }));
 
     expect(nudges).toEqual([]);
+  });
+});
+
+describe('attachKeyboardEditing — tree keyboard (S4.10, D-S4-33)', () => {
+  it('ArrowRight calls tryTreeArrow before nudge when the tree handler claims the key', () => {
+    const container = document.createElement('div');
+    let treeDirection: 'left' | 'right' | undefined;
+    const { ctx, nudges } = makeContext([A]);
+    attachKeyboardEditing(container, {
+      ...ctx,
+      tryTreeArrow: (direction) => {
+        treeDirection = direction;
+        return true;
+      },
+    });
+
+    container.dispatchEvent(key('keydown', { key: 'ArrowRight' }));
+
+    expect(treeDirection).toBe('right');
+    expect(nudges).toEqual([]);
+  });
+
+  it('ArrowLeft nudges when tryTreeArrow does not handle the key', () => {
+    const container = document.createElement('div');
+    const { ctx, nudges } = makeContext([A]);
+    attachKeyboardEditing(container, { ...ctx, tryTreeArrow: () => false });
+
+    container.dispatchEvent(key('keydown', { key: 'ArrowLeft' }));
+
+    expect(nudges).toEqual([[-1, undefined]]);
+  });
+
+  it('Shift+8 expands every row through expandAllRows', () => {
+    const container = document.createElement('div');
+    let expanded = false;
+    const { ctx } = makeContext([A]);
+    attachKeyboardEditing(container, {
+      ...ctx,
+      expandAllRows: () => {
+        expanded = true;
+      },
+    });
+
+    container.dispatchEvent(key('keydown', { key: '8', shiftKey: true }));
+
+    expect(expanded).toBe(true);
   });
 });

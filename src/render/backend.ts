@@ -1,7 +1,7 @@
 // render/ backend contract (plans/01 §8.1). Shared by dom and null backends; DOM types are structural only —
 // this file itself never touches document/window.
 
-import type { GeometryFrame, ItemId, ItemPreview } from '../layout/index.js';
+import type { GeometryFrame, ItemId, ItemPreview, ClientPoint } from '../layout/index.js';
 
 export interface InteractionState {
   hoveredItemId?: ItemId;
@@ -53,6 +53,6 @@ export interface RenderBackend<THost = unknown> {
   mount(surfaces: RenderSurfaces<THost>): void;
   sync(frame: GeometryFrame): void;
   applyState(state: InteractionState): void;
-  hitTest(x: number, y: number): HitResult | null;
+  hitTest(at: ClientPoint): HitResult | null;
   destroy(): void;
 }

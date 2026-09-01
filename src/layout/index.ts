@@ -16,7 +16,7 @@ export type {
   RowSort,
   FilterPolicy,
 } from './rows/row-source.js';
-export { DEFAULT_ROW_SOURCE } from './rows/row-source.js';
+export { DEFAULT_ROW_SOURCE, isPlannedHeaderRow } from './rows/row-source.js';
 export { FrameLayout } from './frame-layout.js';
 export { resolveDateLines } from './date-line.js';
 export type { DateLine, DateLineSpec, ResolveDateLinesInput } from './date-line.js';
@@ -39,7 +39,7 @@ export type {
 } from './frame.js';
 // Re-exported so render/ (layout-only import per plans/01 §1) can type item/row identity as
 // ItemId/RowId rather than a bare string — render already receives both via GeometryFrame (#35).
-export type { ItemId, RowId } from '../model/index.js';
+export type { ItemId, RowId, ClientPoint } from '../model/index.js';
 export { TimeScaleModel } from './viewport/time-scale-model.js';
 export type {
   TimeScaleModelOptions,

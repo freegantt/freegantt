@@ -4,7 +4,16 @@
 // Every date computation goes through `time/` (I10); this file never touches an Instant except by
 // calling one of those functions.
 
-import type { Entry, EntryEdits, EntryId, Instant, ItemId, StoredEdit } from '../model/index.js';
+import type {
+  Entry,
+  EntryEdits,
+  EntryId,
+  Instant,
+  ItemId,
+  StoredEdit,
+  TimeSpan,
+  TimeUnit,
+} from '../model/index.js';
 import { itemId } from '../model/index.js';
 import { addMs, diffMs, formatDate, stepBy, snapInstant, stepsBetween } from '../time/index.js';
 import type { SnapUnit } from '../time/index.js';
@@ -22,34 +31,38 @@ export interface DraftInput {
   entries: readonly Entry[];
   /** Horizontal pointer travel since the gesture armed, in content px (D-S3-11: vertical is ignored). */
   dxPx: number;
+  /** When the anchor entry has multiple segments, the grabbed segment index (D-S4-30). */
+  grabbedSegmentIndex?: number;
 }
 
 /** A move draft: `{ start, end }` for every grabbed entry, snapped and stepped as one rigid group
  *  (D-S3-3, D-S3-19). Empty when `input.entries` is empty — a gesture with nothing capable to move. */
 export function draftForMove(input: DraftInput): EntryEdits {
-  const { zone, scale, snap, entries, dxPx } = input;
+  const { zone, scale, snap, entries, dxPx, grabbedSegmentIndex } = input;
   const anchor = entries[0];
   if (!anchor) return new Map();
 
-  const anchorX = scale.xForInstant(anchor.start);
+  const anchorInstant = segmentAnchorInstant(anchor, grabbedSegmentIndex);
+  const anchorX = scale.xForInstant(anchorInstant);
   const rawCandidate = scale.instantForX(anchorX + dxPx);
   const snappedCandidate = snapInstant(zone, rawCandidate, snap);
 
   const edits = new Map<EntryId, StoredEdit>();
   if (snap === 'none') {
-    const deltaMs = diffMs(snappedCandidate, anchor.start);
-    for (const entry of entries) {
-      edits.set(entry.id, { start: addMs(entry.start, deltaMs), end: addMs(entry.end, deltaMs) });
+    const deltaMs = diffMs(snappedCandidate, anchorInstant);
+    for (let i = 0; i < entries.length; i++) {
+      const entry = entries[i]!;
+      const segmentIndex = i === 0 ? grabbedSegmentIndex : undefined;
+      edits.set(entry.id, moveEdit(entry, deltaMs, segmentIndex));
     }
     return edits;
   }
 
-  const steps = stepsBetween(zone, snap.unit, snap.increment, anchor.start, snappedCandidate);
-  for (const entry of entries) {
-    edits.set(entry.id, {
-      start: stepBy(zone, entry.start, snap.unit, steps * snap.increment),
-      end: stepBy(zone, entry.end, snap.unit, steps * snap.increment),
-    });
+  const steps = stepsBetween(zone, snap.unit, snap.increment, anchorInstant, snappedCandidate);
+  for (let i = 0; i < entries.length; i++) {
+    const entry = entries[i]!;
+    const segmentIndex = i === 0 ? grabbedSegmentIndex : undefined;
+    edits.set(entry.id, stepMoveEdit(zone, entry, snap.unit, steps * snap.increment, segmentIndex));
   }
   return edits;
 }
@@ -59,34 +72,128 @@ export function draftForMove(input: DraftInput): EntryEdits {
  *  dragged edge never crosses the fixed one — an inverted span is refused right here, in the layout
  *  layer, before it ever reaches a changeset (D-S3-4). */
 export function draftForResize(input: DraftInput & { edge: 'start' | 'end' }): EntryEdits {
-  const { zone, scale, snap, entries, dxPx, edge } = input;
+  const { zone, scale, snap, entries, dxPx, edge, grabbedSegmentIndex } = input;
   const anchor = entries[0];
   if (!anchor) return new Map();
 
-  const anchorInstant = edge === 'start' ? anchor.start : anchor.end;
+  const anchorInstant = segmentAnchorInstant(anchor, grabbedSegmentIndex, edge);
   const anchorX = scale.xForInstant(anchorInstant);
   const rawCandidate = scale.instantForX(anchorX + dxPx);
   const snappedCandidate = snapInstant(zone, rawCandidate, snap);
 
   const edits = new Map<EntryId, StoredEdit>();
 
-  function place(entry: Entry, moved: Instant): void {
-    edits.set(entry.id, clampedEdgeEdit(entry, edge, moved));
+  function place(entry: Entry, moved: Instant, segmentIndex: number | undefined): void {
+    edits.set(entry.id, resizeEdit(entry, edge, moved, segmentIndex));
   }
 
   if (snap === 'none') {
     const deltaMs = diffMs(snappedCandidate, anchorInstant);
-    for (const entry of entries) {
-      place(entry, addMs(edge === 'start' ? entry.start : entry.end, deltaMs));
+    for (let i = 0; i < entries.length; i++) {
+      const entry = entries[i]!;
+      const segmentIndex = i === 0 ? grabbedSegmentIndex : undefined;
+      const current = segmentEdgeInstant(entry, segmentIndex, edge);
+      place(entry, addMs(current, deltaMs), segmentIndex);
     }
     return edits;
   }
 
   const steps = stepsBetween(zone, snap.unit, snap.increment, anchorInstant, snappedCandidate);
-  for (const entry of entries) {
-    place(entry, stepBy(zone, edge === 'start' ? entry.start : entry.end, snap.unit, steps * snap.increment));
+  for (let i = 0; i < entries.length; i++) {
+    const entry = entries[i]!;
+    const segmentIndex = i === 0 ? grabbedSegmentIndex : undefined;
+    const current = segmentEdgeInstant(entry, segmentIndex, edge);
+    place(entry, stepBy(zone, current, snap.unit, steps * snap.increment), segmentIndex);
   }
   return edits;
+}
+
+function usesSegmentEdit(entry: Entry, segmentIndex: number | undefined): segmentIndex is number {
+  return entry.segments !== undefined && entry.segments.length > 1 && segmentIndex !== undefined;
+}
+
+function segmentAnchorInstant(
+  entry: Entry,
+  segmentIndex: number | undefined,
+  edge: 'start' | 'end' = 'start',
+): Instant {
+  if (!usesSegmentEdit(entry, segmentIndex)) {
+    return edge === 'start' ? entry.start : entry.end;
+  }
+  const segment = entry.segments![segmentIndex]!;
+  return edge === 'start' ? segment.start : segment.end;
+}
+
+function segmentEdgeInstant(entry: Entry, segmentIndex: number | undefined, edge: 'start' | 'end'): Instant {
+  return segmentAnchorInstant(entry, segmentIndex, edge);
+}
+
+function envelopeOfSegments(segments: readonly TimeSpan[]): { start: Instant; end: Instant } {
+  let start = segments[0]!.start;
+  let end = segments[0]!.end;
+  for (let i = 1; i < segments.length; i++) {
+    const segment = segments[i]!;
+    if (segment.start < start) start = segment.start;
+    if (segment.end > end) end = segment.end;
+  }
+  return { start, end };
+}
+
+function moveEdit(entry: Entry, deltaMs: number, segmentIndex: number | undefined): StoredEdit {
+  if (!usesSegmentEdit(entry, segmentIndex)) {
+    return { start: addMs(entry.start, deltaMs), end: addMs(entry.end, deltaMs) };
+  }
+  const segments = entry.segments!.map((segment, index) =>
+    index === segmentIndex
+      ? { start: addMs(segment.start, deltaMs), end: addMs(segment.end, deltaMs) }
+      : segment,
+  );
+  return { segments, ...envelopeOfSegments(segments) };
+}
+
+function stepMoveEdit(
+  zone: string,
+  entry: Entry,
+  unit: TimeUnit,
+  amount: number,
+  segmentIndex: number | undefined,
+): StoredEdit {
+  if (!usesSegmentEdit(entry, segmentIndex)) {
+    return {
+      start: stepBy(zone, entry.start, unit, amount),
+      end: stepBy(zone, entry.end, unit, amount),
+    };
+  }
+  const segments = entry.segments!.map((segment, index) =>
+    index === segmentIndex
+      ? {
+          start: stepBy(zone, segment.start, unit, amount),
+          end: stepBy(zone, segment.end, unit, amount),
+        }
+      : segment,
+  );
+  return { segments, ...envelopeOfSegments(segments) };
+}
+
+function resizeEdit(
+  entry: Entry,
+  edge: 'start' | 'end',
+  moved: Instant,
+  segmentIndex: number | undefined,
+): StoredEdit {
+  if (!usesSegmentEdit(entry, segmentIndex)) {
+    return clampedEdgeEdit(entry, edge, moved);
+  }
+  const segments = entry.segments!.map((segment, index) => {
+    if (index !== segmentIndex) return segment;
+    if (edge === 'start') {
+      const start = moved > segment.end ? segment.end : moved;
+      return { start, end: segment.end };
+    }
+    const end = moved < segment.start ? segment.start : moved;
+    return { start: segment.start, end };
+  });
+  return { segments, ...envelopeOfSegments(segments) };
 }
 
 function clampedEdgeEdit(entry: Entry, edge: 'start' | 'end', moved: Instant): StoredEdit {
@@ -124,7 +231,21 @@ export function previewOffsets(input: PreviewOffsetsInput): readonly ItemPreview
 
   function pushOffset(id: EntryId, edit: StoredEdit, isExtra: boolean): void {
     const original = byId.get(id);
-    if (!original || edit.start === undefined || edit.end === undefined) return;
+    if (!original) return;
+    if (edit.segments !== undefined && original.segments !== undefined) {
+      for (let index = 0; index < edit.segments.length; index++) {
+        const from = original.segments[index];
+        const to = edit.segments[index];
+        if (from === undefined || to === undefined) continue;
+        const x0 = scale.xForInstant(from.start);
+        const x1 = scale.xForInstant(to.start);
+        const width0 = scale.xForInstant(from.end) - x0;
+        const width1 = scale.xForInstant(to.end) - x1;
+        out.push({ itemId: itemId(id, index), dx: x1 - x0, dWidth: width1 - width0, extra: isExtra });
+      }
+      return;
+    }
+    if (edit.start === undefined || edit.end === undefined) return;
     const x0 = scale.xForInstant(original.start);
     const x1 = scale.xForInstant(edit.start);
     const width0 = scale.xForInstant(original.end) - x0;

@@ -55,6 +55,11 @@ export class FrameLayout {
     return this.#plan.findIndex((row) => row.entryIds.includes(id));
   }
 
+  /** Resolved rows after the latest `computeFrame` — filter, sort, and collapse already applied. */
+  plannedRows(): readonly PlannedRow[] {
+    return this.#plan;
+  }
+
   invalidateFrom(index: number): void {
     this.#memory?.heights.invalidateFrom(index);
     for (let i = index; i < this.#plan.length; i++) {

@@ -11,6 +11,7 @@ import {
   DEFAULT_LANE_GAP_PX,
   DEFAULT_ROW_SOURCE,
   createItemProducerRegistry,
+  isPlannedHeaderRow,
 } from '../layout/index.js';
 import type {
   DateLineSpec,
@@ -421,21 +422,28 @@ export class GanttShell {
     // D-S3-13: one `EntryGestureContext`, shared by the pointer attachment and the keyboard one —
     // both drive the same `#gesturePipeline.session()`, so there is no value in building two.
     const gestureContext: EntryGestureContext = {
-      hitTest: (x, y) => {
-        const hit = this.#backend.hitTest(x, y);
+      hitTest: (at) => {
+        const hit = this.#backend.hitTest(at);
         if (!hit) return undefined;
         return hit.edge !== undefined ? { itemId: hit.itemId, edge: hit.edge } : { itemId: hit.itemId };
       },
       entryFor: (item) => this.#entryFor(item),
       can: (capability, entry) => this.#capabilities.can(capability, entry),
-      rowOrder: () => this.#options.dataset.entries.all.map((e) => e.id),
+      selectableEntriesInRowOrder: () => this.#selectableEntriesInRowOrder(),
       selection: {
         get: () => this.#selection,
         propose: (next) => this.#proposeSelection(next),
       },
       setHovered: (item) => this.#setHovered(item),
       contentXAtPaneOffset: (offsetX) => offsetX + this.#viewport.scroll.state.position.x,
-      session: (grabbed, gesture) => this.#gesturePipeline.session(grabbed, gesture),
+      session: (grabbed, gesture, grabbedItemId) =>
+        this.#gesturePipeline.session(grabbed, gesture, grabbedItemId),
+      ...(this.#treeKeyboardEnabled()
+        ? {
+            tryTreeArrow: (direction) => this.#tryTreeArrow(direction),
+            expandAllRows: () => this.#expandAllRows(),
+          }
+        : {}),
     };
     this.#entryGestures = options.entryGestures?.(this.#panes.timeline, this.#container, gestureContext);
     this.#keyboardEditing = options.keyboardEditing?.(this.#container, gestureContext);
@@ -538,6 +546,69 @@ export class GanttShell {
     this.#layout.invalidateFrom(0);
     this.#frames.request();
     this.#events.emit('collapseChange', proposed);
+  }
+
+  #treeKeyboardEnabled(): boolean {
+    return this.#rowSource.source === 'entries' && this.#rowSource.tree === true;
+  }
+
+  #selectableEntriesInRowOrder(): readonly EntryId[] {
+    const out: EntryId[] = [];
+    for (const row of this.#layout.plannedRows()) {
+      if (isPlannedHeaderRow(row)) continue;
+      for (const id of row.entryIds) {
+        const entry = this.#options.dataset.entries.get(id);
+        if (entry !== undefined && this.#capabilities.can('select', entry)) out.push(id);
+      }
+    }
+    return out;
+  }
+
+  #firstChildOf(parentId: EntryId): EntryId | undefined {
+    for (const entry of this.#options.dataset.entries.all) {
+      if (entry.parentId === parentId) return entry.id;
+    }
+    return undefined;
+  }
+
+  #tryTreeArrow(direction: 'left' | 'right'): boolean {
+    const selected = this.#selection[0];
+    if (selected === undefined) return false;
+    const row = this.#layout.plannedRows().find((planned) => planned.entryIds.includes(selected));
+    if (row === undefined) return false;
+    const entry = this.#options.dataset.entries.get(selected);
+    if (entry === undefined) return false;
+
+    if (direction === 'right') {
+      if (row.expandable && !row.expanded) {
+        this.expand(row.id);
+        return true;
+      }
+      if (row.expandable && row.expanded) {
+        const child = this.#firstChildOf(selected);
+        if (child !== undefined && this.#canGesture('select', child)) {
+          this.#proposeSelection([child]);
+          return true;
+        }
+      }
+      return false;
+    }
+
+    if (row.expandable && row.expanded) {
+      this.collapse(row.id);
+      return true;
+    }
+    const parentId = entry.parentId;
+    if (parentId !== undefined && this.#canGesture('select', parentId)) {
+      this.#proposeSelection([parentId]);
+      return true;
+    }
+    return false;
+  }
+
+  #expandAllRows(): void {
+    if (this.#collapse.ids.length === 0) return;
+    this.#applyCollapsed([]);
   }
 
   get todayLine(): boolean | Instant {

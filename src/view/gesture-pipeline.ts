@@ -8,7 +8,7 @@
 import { cursorLabelForX, draftForMove, draftForResize, previewOffsets } from '../layout/index.js';
 import type { ItemPreview, SnapUnit, TimeScale, ViewPreset } from '../layout/index.js';
 import type { Entry, EntryEdits, EntryId, ItemId } from '../model/index.js';
-import { itemId } from '../model/index.js';
+import { itemId, segmentIndexOfItem } from '../model/index.js';
 import { identityExtender, type EditExtender } from '../data/edit-extension.js';
 import type { EventBus } from './event-bus.js';
 import type { AsyncCancelableEvent, EntryMove, EntryResize, GanttEventMap } from './event-bus.js';
@@ -81,25 +81,26 @@ export class GesturePipeline {
    *  session closed over exactly those entries and this one `gesture` shape — `undefined` when
    *  nothing capable is grabbed, replacing the length check a caller used to make by hand against
    *  `entriesForGesture()`'s result. */
-  session(grabbed: EntryId, gesture: EntryGesture): EntryGestureSession | undefined {
-    // D-S3-17: no new gesture arms while a prior one's async veto is still unsettled — one choke
-    // point, so both the pointer path and `interaction/keyboard-editing.ts`'s `ctx.session()` call
-    // refuse the same way (I14).
+  session(grabbed: EntryId, gesture: EntryGesture, grabbedItemId?: ItemId): EntryGestureSession | undefined {
     if (this.#heldItemIds !== undefined) return undefined;
     const capability: keyof Interactions = gesture.kind === 'resize' ? 'resize' : 'move';
     const entries = this.#entriesForGesture(grabbed, capability);
     if (entries.length === 0) return undefined;
     const anchor = entries[0]!;
+    const grabbedSegmentIndex =
+      grabbedItemId !== undefined && anchor.segments !== undefined && anchor.segments.length > 1
+        ? segmentIndexOfItem(grabbedItemId)
+        : undefined;
     return {
       preview: (dxPx, options) => {
-        this.#preview(this.#draftFor(gesture, entries, dxPx, options), options?.cursorX);
+        this.#preview(this.#draftFor(gesture, entries, dxPx, options, grabbedSegmentIndex), options?.cursorX);
       },
       commit: (dxPx, options) => {
-        return this.#commit(gesture, this.#draftFor(gesture, entries, dxPx, options));
+        return this.#commit(gesture, this.#draftFor(gesture, entries, dxPx, options, grabbedSegmentIndex));
       },
       nudge: (direction, options) => {
-        const dxPx = this.#stepPx(gesture, anchor, options?.suspendSnap) * direction;
-        return this.#commit(gesture, this.#draftFor(gesture, entries, dxPx, options));
+        const dxPx = this.#stepPx(gesture, anchor, options?.suspendSnap, grabbedSegmentIndex) * direction;
+        return this.#commit(gesture, this.#draftFor(gesture, entries, dxPx, options, grabbedSegmentIndex));
       },
       cancel: () => {
         this.#preview(undefined);
@@ -146,13 +147,28 @@ export class GesturePipeline {
    *  same pixel-then-snap math a mouse drag's `commit()` already runs, instead of a second, parallel
    *  calendar-stepping path. Falls back to the preset's own tick when `suspendSnap` clears `snap` to
    *  `'none'` — a keyboard nudge always has *some* unit to size a step by, even unsnapped. */
-  #stepPx(gesture: EntryGesture, anchor: Entry, suspendSnap: boolean | undefined): number {
+  #stepPx(
+    gesture: EntryGesture,
+    anchor: Entry,
+    suspendSnap: boolean | undefined,
+    segmentIndex?: number,
+  ): number {
     const snap = this.#resolveSnap(suspendSnap);
     const preset = this.#deps.preset();
     const unit = snap === 'none' ? preset.tickUnit : snap.unit;
     const increment = snap === 'none' ? preset.tickIncrement : snap.increment;
     const anchorInstant =
-      gesture.kind === 'resize' ? (gesture.edge === 'start' ? anchor.start : anchor.end) : anchor.start;
+      gesture.kind === 'resize'
+        ? segmentIndex !== undefined && anchor.segments && anchor.segments.length > 1
+          ? gesture.edge === 'start'
+            ? anchor.segments[segmentIndex]!.start
+            : anchor.segments[segmentIndex]!.end
+          : gesture.edge === 'start'
+            ? anchor.start
+            : anchor.end
+        : segmentIndex !== undefined && anchor.segments && anchor.segments.length > 1
+          ? anchor.segments[segmentIndex]!.start
+          : anchor.start;
     return this.#deps.timeScale().widthForDuration({ unit, value: increment }, anchorInstant);
   }
 
@@ -161,25 +177,21 @@ export class GesturePipeline {
     entries: readonly Entry[],
     dxPx: number,
     options: DraftOptions | undefined,
+    grabbedSegmentIndex?: number,
   ): EntryEdits {
     const snap = this.#resolveSnap(options?.suspendSnap);
-    if (gesture.kind === 'resize') {
-      return draftForResize({
-        zone: this.#deps.timeZone(),
-        scale: this.#deps.timeScale(),
-        snap,
-        entries,
-        dxPx,
-        edge: gesture.edge,
-      });
-    }
-    return draftForMove({
+    const base = {
       zone: this.#deps.timeZone(),
       scale: this.#deps.timeScale(),
       snap,
       entries,
       dxPx,
-    });
+      ...(grabbedSegmentIndex !== undefined ? { grabbedSegmentIndex } : {}),
+    };
+    if (gesture.kind === 'resize') {
+      return draftForResize({ ...base, edge: gesture.edge });
+    }
+    return draftForMove(base);
   }
 
   /** `beforeEntryMove`/`beforeEntryResize` → one commit → `entryMove`/`entryResize` (D-S3-16,

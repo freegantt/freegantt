@@ -61,13 +61,13 @@ function makeContext(overrides: Partial<EntryGestureContext> & SessionOverrides 
   const commits: [EntryGesture, EntryEdits][] = [];
 
   const ctx: EntryGestureContext = {
-    hitTest: (x) => (x >= 0 && x < ORDER.length ? { itemId: itemId(ORDER[x]!) } : undefined),
+    hitTest: (at) => (at.x >= 0 && at.x < ORDER.length ? { itemId: itemId(ORDER[at.x]!) } : undefined),
     entryFor: (item: ItemId) => {
       const id = entryIdOfItem(item);
       return ORDER.includes(id) ? entryFor(id) : undefined;
     },
     can: () => true,
-    rowOrder: () => ORDER,
+    selectableEntriesInRowOrder: () => ORDER,
     setHovered: () => {},
     contentXAtPaneOffset: (offsetX) => offsetX,
     session: (grabbed, gesture) => {
@@ -367,7 +367,7 @@ describe('attachEntryGestures — resize (S3.4)', () => {
     const container = document.createElement('div');
     const commit = vi.fn(() => Promise.resolve(true));
     const { ctx, proposals } = makeContext({
-      hitTest: (x) => (x === 0 ? { itemId: itemId(A), edge: 'start' } : { itemId: itemId(ORDER[x]!) }),
+      hitTest: (at) => (at.x === 0 ? { itemId: itemId(A), edge: 'start' } : { itemId: itemId(ORDER[at.x]!) }),
       can: (capability) => capability === 'select', // resize refused (e.g. milestone)
       commit,
     });
@@ -379,5 +379,55 @@ describe('attachEntryGestures — resize (S3.4)', () => {
 
     expect(commit).not.toHaveBeenCalled();
     expect(proposals).toEqual([[A]]);
+  });
+});
+
+describe('attachEntryGestures — segments and visible row order (S4.10)', () => {
+  it('[S4-A4] passes the grabbed item id into session when a segment bar is armed', () => {
+    const pane = document.createElement('div');
+    const container = document.createElement('div');
+    mockPointerCapture(pane);
+    const middle = itemId(A, 1);
+    const grabbedItems: (ItemId | undefined)[] = [];
+    const segmented: Entry = {
+      ...entryFor(A),
+      segments: [
+        { start: toInstant(0), end: toInstant(1) },
+        { start: toInstant(2), end: toInstant(3) },
+        { start: toInstant(4), end: toInstant(5) },
+      ],
+    };
+    const { ctx } = makeContext({
+      hitTest: () => ({ itemId: middle }),
+      entryFor: (item) => (item === middle ? segmented : entryFor(entryIdOfItem(item))),
+      session: (grabbed, gesture, grabbedItemId) => {
+        grabbedItems.push(grabbedItemId);
+        return {
+          preview: () => {},
+          commit: () => Promise.resolve(true),
+          nudge: () => Promise.resolve(true),
+          cancel: () => {},
+        };
+      },
+    });
+    attachEntryGestures(pane, container, ctx);
+
+    pane.dispatchEvent(down(0));
+    pane.dispatchEvent(move(DRAG_THRESHOLD_PX + 1));
+
+    expect(grabbedItems).toEqual([middle]);
+  });
+
+  it('shift-click ranges over selectableEntriesInRowOrder, skipping rows not shown', () => {
+    const pane = document.createElement('div');
+    const container = document.createElement('div');
+    const visible: readonly EntryId[] = [B, C];
+    const { ctx, proposals } = makeContext({ selectableEntriesInRowOrder: () => visible });
+    attachEntryGestures(pane, container, ctx);
+
+    pane.dispatchEvent(up(1)); // select B
+    pane.dispatchEvent(up(2, { shiftKey: true })); // range to C
+
+    expect(proposals).toEqual([[B], [B, C]]);
   });
 });

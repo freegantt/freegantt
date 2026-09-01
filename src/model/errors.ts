@@ -87,6 +87,18 @@ export class ParentCycleError extends FreeGanttError {
   }
 }
 
+/** `code: 'segments-out-of-sync'` — a `start`/`end` write on an entry that stores `segments` (D-S4-30).
+ *  Write `segments` instead; the envelope updates in the same transaction. */
+export class SegmentsOutOfSyncError extends FreeGanttError {
+  constructor(entryId: EntryId) {
+    super(
+      'segments-out-of-sync',
+      `entries.update: "${entryId}" has segments — write segments, not start/end alone`,
+    );
+    this.name = 'SegmentsOutOfSyncError';
+  }
+}
+
 /** `code: 'unknown-field'` — an edit or `entries.fieldValue` naming a key that is not a declared
  *  Field. The registry is the legal set: core Fields plus the consumer's (D-S4-5, D-S2-26). */
 export class UnknownFieldError extends FreeGanttError {

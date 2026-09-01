@@ -4,6 +4,8 @@ import { computeFrame, createItemProducerRegistry } from '../../layout/index.js'
 import type { TimeScale, ViewPreset } from '../../layout/index.js';
 import { sampleEntries } from '../../../fixtures/sample-dataset.js';
 
+const point = (x: number, y: number) => ({ x, y });
+
 const scale: TimeScale = {
   range: sampleEntries[0]!,
   timeZone: 'UTC',
@@ -51,8 +53,8 @@ describe('render/dom backend', () => {
     const original = document.elementFromPoint.bind(document);
     document.elementFromPoint = (x: number, y: number) => (x === 5 && y === 5 ? bar : original(x, y));
 
-    expect(backend.hitTest(5, 5)).toEqual({ itemId: frame.bars[0]!.id });
-    expect(backend.hitTest(999, 999)).toBeNull();
+    expect(backend.hitTest(point(5, 5))).toEqual({ itemId: frame.bars[0]!.id });
+    expect(backend.hitTest(point(999, 999))).toBeNull();
 
     document.elementFromPoint = original;
     backend.destroy();
@@ -644,7 +646,7 @@ describe('render/dom backend', () => {
     const original = document.elementFromPoint.bind(document);
     document.elementFromPoint = (x: number, y: number) => (x === 5 && y === 5 ? end : original(x, y));
 
-    expect(backend.hitTest(5, 5)).toEqual({ itemId: frame.bars[0]!.id, edge: 'end' });
+    expect(backend.hitTest(point(5, 5))).toEqual({ itemId: frame.bars[0]!.id, edge: 'end' });
 
     document.elementFromPoint = original;
     backend.destroy();
@@ -673,7 +675,7 @@ describe('render/dom backend', () => {
     const original = document.elementFromPoint.bind(document);
     document.elementFromPoint = (x: number, y: number) => (x === 5 && y === 5 ? bar : original(x, y));
 
-    expect(backend.hitTest(5, 5)).toEqual({ itemId: frame.bars[0]!.id });
+    expect(backend.hitTest(point(5, 5))).toEqual({ itemId: frame.bars[0]!.id });
 
     document.elementFromPoint = original;
     backend.destroy();

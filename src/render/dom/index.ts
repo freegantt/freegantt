@@ -11,6 +11,7 @@ import type {
   ItemId,
   ItemPreview,
   RowId,
+  ClientPoint,
 } from '../../layout/index.js';
 import type { FrameColumn } from '../../layout/index.js';
 import type { RenderBackend, RenderSurfaces, InteractionState, HitResult } from '../backend.js';
@@ -638,11 +639,11 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
       paintPreview(state.preview);
       paintCursorLine(state.cursorX, state.cursorLabel);
     },
-    hitTest(x: number, y: number): HitResult | null {
+    hitTest(at: ClientPoint): HitResult | null {
       // "The bars array is the hit index; DOM backends get hit-testing from event delegation"
       // (plans/01 §4) — no materialized hit-region array (#31).
       if (!barLayer) return null;
-      const el = document.elementFromPoint(x, y);
+      const el = document.elementFromPoint(at.x, at.y);
       // S3.4, D-S3-4: the shared handle pair sits above the bar layer in paint order, so a hit on a
       // handle is checked first — `paintedResizable` is the one entry the handle pair currently
       // belongs to (D-S3-8), a parked (hidden) handle is never returned by elementFromPoint.
