@@ -59,7 +59,9 @@ export const DEFAULT_ROW_SOURCE: EntriesRowSource = Object.freeze({ source: 'ent
 /** Derived row classification — not `Entry.kind` (D-S4-23). */
 export type PlannedRowKind = 'entry' | 'header';
 
-const PLANNED_ROW_KIND = Object.freeze({
+/** Row sources build rows through this lookup, never a bare `'header'`/`'entry'` literal, so the
+ *  kind used to construct a row and the kind `isPlannedHeaderRow` reads back stay the same guard. */
+export const PLANNED_ROW_KIND = Object.freeze({
   header: 'header',
   entry: 'entry',
 } as const satisfies Record<string, PlannedRowKind>);

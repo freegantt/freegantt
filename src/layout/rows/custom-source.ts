@@ -2,7 +2,7 @@
 
 import { DuplicateRowIdError, entryId, rowId } from '../../model/index.js';
 import type { CustomRowInput, CustomRowSource, UnindexedRow } from './row-source.js';
-import { heightModeOf } from './row-source.js';
+import { heightModeOf, PLANNED_ROW_KIND } from './row-source.js';
 
 export function resolveCustomSource(source: CustomRowSource, input: CustomRowInput): UnindexedRow[] {
   const heightMode = heightModeOf(source);
@@ -13,7 +13,7 @@ export function resolveCustomSource(source: CustomRowSource, input: CustomRowInp
     if (seen.has(custom.id)) throw new DuplicateRowIdError(custom.id);
     seen.add(custom.id);
     const entryIds = (custom.entryIds ?? []).map((id) => entryId(id));
-    const kind = entryIds.length === 0 ? 'header' : 'entry';
+    const kind = entryIds.length === 0 ? PLANNED_ROW_KIND.header : PLANNED_ROW_KIND.entry;
     rows.push({
       id: rowId(custom.id),
       kind,
@@ -22,7 +22,7 @@ export function resolveCustomSource(source: CustomRowSource, input: CustomRowInp
       expandable: false,
       expanded: false,
       heightMode,
-      ...(kind === 'header' ? { headerLabel: custom.label ?? '' } : {}),
+      ...(kind === PLANNED_ROW_KIND.header ? { headerLabel: custom.label ?? '' } : {}),
     });
   }
   return rows;

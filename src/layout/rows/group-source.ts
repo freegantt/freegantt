@@ -3,7 +3,7 @@
 import { entryId, rowId } from '../../model/index.js';
 import type { Entry, FieldContext } from '../../model/index.js';
 import type { GroupRowSource, UnindexedRow } from './row-source.js';
-import { heightModeOf } from './row-source.js';
+import { heightModeOf, PLANNED_ROW_KIND } from './row-source.js';
 
 export function resolveGroupSource(
   entries: readonly Entry[],
@@ -30,7 +30,7 @@ export function resolveGroupSource(
     const expandable = members.length > 0;
     rows.push({
       id: headerId,
-      kind: 'header',
+      kind: PLANNED_ROW_KIND.header,
       depth: 0,
       entryIds: [],
       expandable,
@@ -41,7 +41,7 @@ export function resolveGroupSource(
     for (const entry of members) {
       rows.push({
         id: rowId(entry.id),
-        kind: 'entry',
+        kind: PLANNED_ROW_KIND.entry,
         depth: 1,
         entryIds: [entryId(entry.id)],
         expandable: false,

@@ -3,7 +3,7 @@
 import { entryId, rowId } from '../../model/index.js';
 import type { Entry, EntryId, RowId } from '../../model/index.js';
 import type { EntriesRowSource, RowHeightMode, UnindexedRow } from './row-source.js';
-import { heightModeOf } from './row-source.js';
+import { heightModeOf, PLANNED_ROW_KIND } from './row-source.js';
 
 export function entryTreeIndex(entries: readonly Entry[]): {
   roots: readonly Entry[];
@@ -36,7 +36,7 @@ function entryRow(
 ): UnindexedRow {
   return {
     id: rowId(entry.id),
-    kind: 'entry',
+    kind: PLANNED_ROW_KIND.entry,
     depth: fields.depth,
     entryIds: [entryId(entry.id)],
     expandable: fields.expandable,
