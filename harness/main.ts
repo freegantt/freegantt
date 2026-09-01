@@ -1,17 +1,28 @@
 import './harness-nav.ts';
 import { Gantt, Dataset, attemptMutation } from '../src/api/index.js';
-import type { Theme, TimeUnit } from '../src/api/index.js';
-import { demoEntryInputs } from '../fixtures/demo-dataset.js';
+import type { Entry, GridColumnInput, RowSource, Theme, TimeUnit } from '../src/api/index.js';
+import { demoFieldOptions, demoTreeEntryInputs } from '../fixtures/demo-dataset.js';
 import { mountTimelineToolbar } from './timeline-toolbar.js';
 
-const dataset = new Dataset({
-  entries: demoEntryInputs,
+const GRID_WITH_BUDGET: readonly GridColumnInput[] = [
+  'name',
+  'start',
+  'end',
+  'duration',
+  { field: 'cost', header: 'Budget' },
+];
+const GRID_WITHOUT_BUDGET: readonly GridColumnInput[] = ['name', 'start', 'end', 'duration'];
+
+const dataset = new Dataset<{ cost?: number; team?: string }, { cost: number }>({
+  entries: demoTreeEntryInputs,
   timeZone: 'UTC',
+  ...demoFieldOptions,
 });
 
 const gantt = new Gantt({
   container: '#gantt',
   dataset,
+  gridColumns: GRID_WITH_BUDGET,
   rowSource: { source: 'entries', tree: true },
 });
 gantt.panToToday();
@@ -24,6 +35,14 @@ const removeBtn = document.querySelector<HTMLButtonElement>('#remove-btn')!;
 const undoBtn = document.querySelector<HTMLButtonElement>('#undo-btn')!;
 const redoBtn = document.querySelector<HTMLButtonElement>('#redo-btn')!;
 const selectionReadout = document.querySelector<HTMLParagraphElement>('#selection-readout')!;
+const toggleBudgetBtn = document.querySelector<HTMLButtonElement>('#toggle-budget-btn')!;
+const reparentBtn = document.querySelector<HTMLButtonElement>('#reparent-btn')!;
+const rowsSourceBtn = document.querySelector<HTMLButtonElement>('#rows-source-btn')!;
+const packRowsBtn = document.querySelector<HTMLButtonElement>('#pack-rows-btn')!;
+const filterTeamBtn = document.querySelector<HTMLButtonElement>('#filter-team-btn')!;
+const sortNameBtn = document.querySelector<HTMLButtonElement>('#sort-name-btn')!;
+const expandAllBtn = document.querySelector<HTMLButtonElement>('#expand-all-btn')!;
+const collapseAllBtn = document.querySelector<HTMLButtonElement>('#collapse-all-btn')!;
 
 function refreshNameInput(): void {
   const entries = gantt.selectionEntries;
@@ -111,6 +130,83 @@ function applySnapChoice(): void {
 snapUnitSelect.addEventListener('change', applySnapChoice);
 snapIncrementInput.addEventListener('change', applySnapChoice);
 applySnapChoice();
+
+let budgetVisible = true;
+toggleBudgetBtn.addEventListener('click', () => {
+  budgetVisible = !budgetVisible;
+  gantt.gridColumns = budgetVisible ? GRID_WITH_BUDGET : GRID_WITHOUT_BUDGET;
+  toggleBudgetBtn.textContent = budgetVisible ? 'Hide Budget' : 'Show Budget';
+});
+
+reparentBtn.addEventListener('click', () => {
+  attemptMutation(() => {
+    dataset.entries.update('entry-18', { parentId: 'entry-1' });
+  });
+});
+
+function teamOf(entry: Entry): string | undefined {
+  const meta = entry.meta;
+  if (typeof meta !== 'object' || meta === null) return undefined;
+  const team = (meta as { team?: unknown }).team;
+  return typeof team === 'string' ? team : undefined;
+}
+
+let grouped = false;
+let pack = false;
+let filterTeam: 'core' | 'edge' | 'launch' | null = null;
+let sortByName = false;
+
+function applyRowSource(): void {
+  const heightMode: 'fixed' | 'pack' = pack ? 'pack' : 'fixed';
+  const shared = {
+    heightMode,
+    ...(filterTeam !== null && !grouped ? { filter: (entry: Entry) => teamOf(entry) === filterTeam } : {}),
+    ...(sortByName && !grouped ? { sort: { field: 'name' as const } } : {}),
+  };
+  const next: RowSource = grouped
+    ? { source: 'group', groupBy: (entry: Entry) => teamOf(entry) ?? 'unassigned', ...shared }
+    : { source: 'entries', tree: true, ...shared };
+  gantt.rowSource = next;
+  rowsSourceBtn.textContent = grouped ? 'Show tree' : 'Group by team';
+  packRowsBtn.textContent = pack ? 'Stack bars (fixed rows)' : 'Pack overlapping bars';
+  filterTeamBtn.disabled = grouped;
+  sortNameBtn.disabled = grouped;
+  filterTeamBtn.textContent = filterTeam === null ? 'Filter team: off' : `Filter team: ${filterTeam}`;
+  sortNameBtn.textContent = sortByName ? 'Sort by name: on' : 'Sort by name: off';
+}
+
+rowsSourceBtn.addEventListener('click', () => {
+  grouped = !grouped;
+  applyRowSource();
+});
+
+packRowsBtn.addEventListener('click', () => {
+  pack = !pack;
+  applyRowSource();
+});
+
+filterTeamBtn.addEventListener('click', () => {
+  if (grouped) return;
+  filterTeam =
+    filterTeam === null ? 'core' : filterTeam === 'core' ? 'edge' : filterTeam === 'edge' ? 'launch' : null;
+  applyRowSource();
+});
+
+sortNameBtn.addEventListener('click', () => {
+  if (grouped) return;
+  sortByName = !sortByName;
+  applyRowSource();
+});
+
+expandAllBtn.addEventListener('click', () => {
+  gantt.expandAll();
+});
+
+collapseAllBtn.addEventListener('click', () => {
+  gantt.collapseAll();
+});
+
+applyRowSource();
 
 const THEME_STORAGE_KEY = 'freegantt-harness-theme';
 
