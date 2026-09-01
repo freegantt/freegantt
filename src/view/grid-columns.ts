@@ -3,6 +3,7 @@
 import type { Dataset, Entry, Field, FormatContext, GridColumn, GridColumnInput } from '../model/index.js';
 import { FieldNotColumnableError, UnknownFieldError } from '../model/index.js';
 import { createFieldContext } from '../data/fields/field-access.js';
+import { stringifyPrimitive } from '../data/fields/core-fields.js';
 import type { FieldLookup } from '../model/index.js';
 import type { FieldCompare, ResolvedColumn } from '../layout/index.js';
 
@@ -11,14 +12,6 @@ export const DEFAULT_GRID_COLUMNS: readonly GridColumnInput[] = Object.freeze(['
 export interface ResolveColumnsBind {
   timeZone: string;
   locale?: Intl.LocalesArgument;
-}
-
-function formatUnknown(value: unknown): string {
-  if (value === undefined || value === null) return '';
-  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
-    return String(value);
-  }
-  return '';
 }
 
 function defaultCompareStored(locale: Intl.LocalesArgument): (a: unknown, b: unknown) => number {
@@ -73,7 +66,7 @@ export function resolveColumns(
       format: (entry: Entry) => {
         const value = formatCtx.read(entry, field.key);
         if (field.formatValue) return field.formatValue(value, formatCtx);
-        return formatUnknown(value);
+        return stringifyPrimitive(value);
       },
     };
   });

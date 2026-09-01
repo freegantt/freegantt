@@ -14,9 +14,11 @@ const segmentsEqual = (from: unknown, to: unknown): boolean => {
   return a.every((span, index) => span.start === b[index]?.start && span.end === b[index]?.end);
 };
 
-function asText(value: unknown): string {
-  if (typeof value === 'string') return value;
-  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+/** Stringifies a primitive Field value for display; anything else (undefined, object) renders empty. */
+export function stringifyPrimitive(value: unknown): string {
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+    return String(value);
+  }
   return '';
 }
 
@@ -49,7 +51,7 @@ export const CORE_FIELDS: readonly Field[] = Object.freeze([
     key: 'name',
     source: { from: 'entry', field: 'name' },
     equals: byReference,
-    formatValue: asText,
+    formatValue: stringifyPrimitive,
     column: { header: 'Name' },
   },
   {
@@ -72,7 +74,7 @@ export const CORE_FIELDS: readonly Field[] = Object.freeze([
     key: 'kind',
     source: { from: 'entry', field: 'kind' },
     equals: byReference,
-    formatValue: asText,
+    formatValue: stringifyPrimitive,
     column: { header: 'Kind' },
   },
   {

@@ -73,8 +73,8 @@
         </div>
         <div class="rounded-lg border border-slate-200 bg-white p-4">
           <div class="lbl">Architecture</div>
-          <div class="text-2xl font-semibold mt-1">1 strong</div>
-          <div class="text-xs text-slate-500 mt-1"><code class="mono">GanttShell</code> constructor</div>
+          <div class="text-2xl font-semibold mt-1">0 strong</div>
+          <div class="text-xs text-slate-500 mt-1">top candidate already resolved by <code class="mono">c4-split</code></div>
         </div>
       </section>
 
@@ -90,13 +90,13 @@
                 <td class="mono">gesture-pipeline.ts:160-171</td>
                 <td>Mysterious Name</td>
                 <td>4-way nested ternary picks <code class="mono">anchorInstant</code> (resize/move × segmented × start/end) in one expression. A named helper with early returns would read as English.</td>
-                <td><span class="badge badge-judge">judgement</span></td>
+                <td><span class="badge badge-ok">fixed</span></td>
               </tr>
               <tr>
                 <td class="mono">harness/main.ts:189-190</td>
                 <td>Mysterious Name</td>
                 <td>Triple-nested ternary cycles a 4-state <code class="mono">filterTeam</code> enum. A lookup table would match this same diff's own <code class="mono">BAR_SHAPE_CLASS</code> pattern.</td>
-                <td><span class="badge badge-judge">judgement</span></td>
+                <td><span class="badge badge-ok">fixed</span></td>
               </tr>
               <tr>
                 <td class="mono">data/rollup.ts, data/hierarchy.ts</td>
@@ -162,15 +162,15 @@
             <thead><tr><th>#</th><th>File:line</th><th>Problem</th><th>Fix direction</th></tr></thead>
             <tbody>
               <tr><td>1</td><td class="mono text-xs">frame.ts:290, rows/entries-source.ts:12, filter.ts:19, sort.ts:81</td><td>Four separate <code class="mono">entryById</code>-shaped maps rebuilt from scratch every frame.</td><td>Build one map per <code class="mono">computeFrame</code>/<code class="mono">resolveRows</code> call, thread it through, or cache keyed on <code class="mono">datasetRevision</code> in <code class="mono">FrameMemory</code>.</td></tr>
-              <tr><td>2</td><td class="mono text-xs">data/fields/field-access.ts:28-41 vs source-strategy.ts:32-39</td><td><code class="mono">withProposedKeys</code>/<code class="mono">proposedKeysOf</code> duplicate <code class="mono">withKeys</code>/<code class="mono">keysOf</code> near line-for-line.</td><td>Keep one copy in <code class="mono">source-strategy.ts</code>, import/re-export from <code class="mono">field-access.ts</code>.</td></tr>
+              <tr class="bg-emerald-50/50"><td>2 <span class="badge badge-ok">fixed</span></td><td class="mono text-xs">data/fields/field-access.ts:28-41 vs source-strategy.ts:32-39</td><td><code class="mono">withProposedKeys</code>/<code class="mono">proposedKeysOf</code> duplicated <code class="mono">withKeys</code>/<code class="mono">keysOf</code> near line-for-line.</td><td>Kept one copy in <code class="mono">source-strategy.ts</code> (now exported), <code class="mono">field-access.ts</code> imports/re-exports it.</td></tr>
               <tr><td>3</td><td class="mono text-xs">layout/rows/sort.ts:41-68</td><td><code class="mono">emitSorted</code> recurses per parent, spread-copying siblings at every level — repeated O(n log n) copies, and recursion where the repo's own convention elsewhere is a worklist loop.</td><td>Flag for a stack-based rewrite if row counts grow; fine at current scale.</td></tr>
               <tr><td>4</td><td class="mono text-xs">rows/entries-source.ts:8-26 vs data/entry-tree.ts:22-31</td><td><code class="mono">entryTreeIndex</code> duplicates <code class="mono">childIdsByParent</code>'s shape, rebuilt on the layout side because <code class="mono">layout/</code> can't depend on <code class="mono">data/</code>.</td><td>Not mergeable given the layer boundary — add a one-line module-doc note so nobody "fixes" it by crossing the boundary.</td></tr>
               <tr><td>5</td><td class="mono text-xs">view/gantt-shell.ts:306-497</td><td>190-line constructor wires container, viewport, dataset, tree-collapse, gesture-pipeline, DOM attach, theme/labels all in one method.</td><td>Same fix as Architecture #1 below — confirm <code class="mono">c4-split-gantt-shell.md</code> is scheduled, not dropped.</td></tr>
               <tr><td>6</td><td class="mono text-xs">rows/collapse.ts:7-24 vs rows/filter.ts:59-81</td><td><code class="mono">applyFilter</code>/<code class="mono">applyCollapse</code> are near-identical single-pass row walks (~15 lines each).</td><td>Low priority; a shared <code class="mono">walkRowsWithAncestry(predicate)</code> would remove the duplication if a third pass is ever added.</td></tr>
-              <tr><td>7</td><td class="mono text-xs">view/grid-columns.ts:24-34 vs data/fields/core-fields.ts:17-21</td><td><code class="mono">formatUnknown</code> and <code class="mono">asText</code> coerce primitives to display strings near-identically.</td><td>Hoist one <code class="mono">stringifyPrimitive</code> helper, use in both places.</td></tr>
+              <tr class="bg-emerald-50/50"><td>7 <span class="badge badge-ok">fixed</span></td><td class="mono text-xs">view/grid-columns.ts:24-34 vs data/fields/core-fields.ts:17-21</td><td><code class="mono">formatUnknown</code> and <code class="mono">asText</code> coerced primitives to display strings near-identically.</td><td>Hoisted one <code class="mono">stringifyPrimitive</code> helper in <code class="mono">core-fields.ts</code>, used in both places.</td></tr>
               <tr><td>8</td><td class="mono text-xs">gantt-shell.ts:596-606</td><td><code class="mono">#selectableEntriesInRowOrder</code> re-walks all planned rows per keypress.</td><td>Likely fine (rows already memoized via <code class="mono">FrameLayout</code>) — confirm, don't change speculatively.</td></tr>
               <tr><td>9</td><td class="mono text-xs">model/field.ts:12-15</td><td><code class="mono">FieldKey</code>/<code class="mono">AggregatorName</code>/<code class="mono">FieldTypeName</code> repeat the open-string-literal trick three times with slightly different comments.</td><td>One documented <code class="mono">OpenString&lt;T&gt;</code> alias instead of three ad hoc repeats. Small win.</td></tr>
-              <tr><td>10</td><td class="mono text-xs">rows/row-source.ts:62-71</td><td><code class="mono">PLANNED_ROW_KIND</code>/<code class="mono">isPlannedHeaderRow</code> guard the read side only; write sites (<code class="mono">custom-source.ts:16</code>, <code class="mono">group-source.ts:33</code>) still write raw <code class="mono">'header'</code>/<code class="mono">'entry'</code> literals — half the abstraction is bypassed.</td><td>Enforce the lookup at construction sites too, or drop it since <code class="mono">PlannedRowKind</code> is already an exhaustively-checked 2-value union.</td></tr>
+              <tr class="bg-emerald-50/50"><td>10 <span class="badge badge-ok">fixed</span></td><td class="mono text-xs">rows/row-source.ts:62-71</td><td><code class="mono">PLANNED_ROW_KIND</code>/<code class="mono">isPlannedHeaderRow</code> guarded the read side only; write sites (<code class="mono">custom-source.ts:16</code>, <code class="mono">group-source.ts:33</code>) still wrote raw <code class="mono">'header'</code>/<code class="mono">'entry'</code> literals.</td><td>Exported <code class="mono">PLANNED_ROW_KIND</code> and switched all three write sites (<code class="mono">entries-source.ts</code>, <code class="mono">group-source.ts</code>, <code class="mono">custom-source.ts</code>) to build through it.</td></tr>
               <tr><td>11</td><td class="mono text-xs">tree-collapse.ts:129-136 vs gantt-shell.ts:559-594</td><td><code class="mono">TreeCollapse#confirmIds</code> re-implements the propose/confirm/rollback shape <code class="mono">#proposeChange</code> already generalizes, via an injected closure.</td><td>Check whether <code class="mono">TreeCollapseContext.confirm</code> could call <code class="mono">ctx.proposeChange</code> directly instead of wrapping it per row-collapse call.</td></tr>
               <tr><td>12</td><td class="mono text-xs">data/rollup.ts:52-81</td><td><code class="mono">parentsToRecompute</code> makes three passes (Set → filtered Array → depth Map → sort) over what's usually a small set.</td><td>Inline into one loop pushing <code class="mono">{id, depth}</code> pairs directly. Minor — rollup only runs on commit.</td></tr>
               <tr><td>13</td><td class="mono text-xs">harness/main.ts:152-175</td><td><code class="mono">applyRowSource</code> chains ternaries/spreads building a <code class="mono">RowSource</code> literal.</td><td>No action — legitimate consumer code, not a library gap.</td></tr>
@@ -187,7 +187,7 @@
         <article id="candidate-1" class="rounded-xl border border-slate-200 bg-white p-6 space-y-4">
           <div class="flex items-center gap-2 flex-wrap">
             <h3 class="font-serif text-xl font-semibold"><code class="mono">GanttShell</code> constructor is doing five jobs</h3>
-            <span class="badge badge-strong">Strong</span>
+            <span class="badge badge-spec">Correction: already decided</span>
           </div>
           <div class="lbl">Files</div>
           <div class="mono text-sm text-slate-700">src/view/gantt-shell.ts:306-497, plans/s4-hierarchy-and-rows/c4-split-gantt-shell.md</div>
@@ -221,12 +221,14 @@ flowchart TD
           </div>
 
           <div><span class="lbl">Problem</span><p class="text-sm">Every startup-order bug lives in one 190-line, 980-line-class constructor that already carries inline comments warning about ordering ("must exist before…").</p></div>
-          <div><span class="lbl">Solution</span><p class="text-sm">Execute the split the team already planned in <code class="mono">c4-split-gantt-shell.md</code> — confirm it is scheduled for S5, not silently dropped.</p></div>
-          <div><span class="lbl">Wins</span>
+          <div class="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm">
+            <strong>Correction after re-check:</strong> <code class="mono">plans/s4-hierarchy-and-rows/c4-split-gantt-shell.md</code> is not a pending plan — every item in its Order section is checked off, and its §3.3 explicitly decided <em>against</em> extracting construction further: "The shell is the composition root. That is correct." Tree collapse, grid columns, dataset subscription, gesture math, and twisty click already moved out (§1). The remaining constructor width is the deliberate cost of being a composition root, not an unaddressed finding. No further split taken — doing one now would re-litigate a documented, closed decision.
+          </div>
+          <div><span class="lbl">Wins (already realized, per §1 of the plan)</span>
             <ul class="text-sm list-disc list-inside space-y-1">
-              <li>Locality: startup order stops needing one file read</li>
-              <li>Interface shrinks; implementation absorbs the wrappers</li>
-              <li>Leverage: one seam per concern, testable alone</li>
+              <li>Locality: tree/collapse, columns, gesture math each moved to one owning module</li>
+              <li>Leverage: <code class="mono">gantt.collapseAll()</code>/<code class="mono">expandAll()</code> replaced ad hoc harness walks</li>
+              <li>What's left in the constructor has one job: assembly, by design</li>
             </ul>
           </div>
         </article>
@@ -315,12 +317,13 @@ flowchart LR
 
       <section id="top-recommendation" class="rounded-xl border-2 border-slate-900 bg-white p-6">
         <div class="lbl mb-1">Top recommendation</div>
-        <h3 class="font-serif text-xl font-semibold mb-2">Execute the already-planned <code class="mono">GanttShell</code> split</h3>
+        <h3 class="font-serif text-xl font-semibold mb-2">No structural action — the fixes applied close the loop</h3>
         <p class="text-sm">
-          <a href="#candidate-1" class="underline">Candidate 1</a> is the largest file in the slice, is already named by the team's own
-          <code class="mono">plans/s4-hierarchy-and-rows/c4-split-gantt-shell.md</code>, and every other row/field/tree seam in S4 is well-designed except for how they all funnel through this one constructor and 980-line class.
-          Fixing it also reduces the surface area of <a href="#candidate-2" class="underline">candidate 2</a> (<code class="mono">DatasetState</code>), since the two are mirror-image composition roots and a clean split pattern on one makes the other's growth more defensible.
-          Everything else on this page — Standards, Spec, Simplification, and candidates 3-8 — is low-severity or judgement-call; this is the one structural item worth scheduling.
+          The one <span class="badge badge-strong">Strong</span> candidate from the first pass, <a href="#candidate-1" class="underline">candidate 1</a> (<code class="mono">GanttShell</code> constructor), turned out to already be closed: <code class="mono">plans/s4-hierarchy-and-rows/c4-split-gantt-shell.md</code>'s Order section is fully checked off and its §3.3 explicitly decides against extracting construction further. Corrected above — no code change taken there.
+          <a href="#candidate-2" class="underline">Candidate 2</a> (<code class="mono">DatasetState</code> growth) stays <span class="badge badge-worth">Worth exploring</span> for a future slice, not this pass.
+        </p>
+        <p class="text-sm mt-2">
+          What was actually fixed this pass: the <code class="mono">withProposedKeys</code>/<code class="mono">withKeys</code> duplication (Simplification #2), the <code class="mono">formatUnknown</code>/<code class="mono">asText</code> duplication (Simplification #7), the half-enforced <code class="mono">PLANNED_ROW_KIND</code> lookup (Simplification #10), and the two nested-ternary Mysterious Name findings in <code class="mono">gesture-pipeline.ts</code> and <code class="mono">harness/main.ts</code> (Standards). Full test suite, typecheck, lint, boundaries, and guards all pass after the changes.
         </p>
       </section>
 

@@ -29,11 +29,12 @@ function metaKey(field: Pick<Field, 'key' | 'source'>): string {
   return String(field.key);
 }
 
-function withKeys(edit: StoredEdit, keys: Iterable<string>): StoredEdit {
+/** Call: `withProposedKeys(stored, Object.keys(edit))`. */
+export function withProposedKeys(edit: StoredEdit, keys: Iterable<string>): StoredEdit {
   return { ...edit, proposedKeys: new Set(keys) };
 }
 
-function keysOf(edit: StoredEdit | undefined): ReadonlySet<string> {
+export function proposedKeysOf(edit: StoredEdit | undefined): ReadonlySet<string> {
   if (!edit) return new Set();
   return edit.proposedKeys ?? new Set();
 }
@@ -67,7 +68,7 @@ const entryStrategy = {
     if (source.from !== 'entry') return edit;
     const next: StoredEdit = { ...edit };
     (next as Record<string, unknown>)[source.field] = value;
-    return withKeys(next, keysOf(edit));
+    return withProposedKeys(next, proposedKeysOf(edit));
   },
   proposes(edit, field) {
     const source = field.source;
@@ -96,10 +97,10 @@ const metaStrategy = {
     const next: StoredEdit = { ...edit };
     if (Object.keys(record).length === 0) (next as Record<string, unknown>)['meta'] = undefined;
     else next.meta = record;
-    return withKeys(next, keysOf(edit));
+    return withProposedKeys(next, proposedKeysOf(edit));
   },
   proposes(edit, field) {
-    return keysOf(edit).has(String(field.key));
+    return proposedKeysOf(edit).has(String(field.key));
   },
   serialize(source) {
     if (source.from !== 'meta' || source.key === undefined) return undefined;

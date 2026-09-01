@@ -147,6 +147,12 @@ reparentBtn.addEventListener('click', () => {
 let grouped = false;
 let pack = false;
 let filterTeam: 'core' | 'edge' | 'launch' | null = null;
+const NEXT_FILTER_TEAM: Record<'core' | 'edge' | 'launch' | 'off', 'core' | 'edge' | 'launch' | null> = {
+  off: 'core',
+  core: 'edge',
+  edge: 'launch',
+  launch: null,
+};
 let sortByName = false;
 
 function applyRowSource(): void {
@@ -186,8 +192,7 @@ packRowsBtn.addEventListener('click', () => {
 
 filterTeamBtn.addEventListener('click', () => {
   if (grouped) return;
-  filterTeam =
-    filterTeam === null ? 'core' : filterTeam === 'core' ? 'edge' : filterTeam === 'edge' ? 'launch' : null;
+  filterTeam = NEXT_FILTER_TEAM[filterTeam ?? 'off'];
   applyRowSource();
 });
 

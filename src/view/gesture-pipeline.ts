@@ -7,7 +7,7 @@
 
 import { cursorLabelForX, draftForMove, draftForResize, previewOffsets } from '../layout/index.js';
 import type { ItemPreview, SnapUnit, TimeScale, ViewPreset } from '../layout/index.js';
-import type { Entry, EntryEdits, EntryId, ItemId } from '../model/index.js';
+import type { Entry, EntryEdits, EntryId, ItemId, TimeSpan } from '../model/index.js';
 import { itemId, segmentIndexOfItem } from '../model/index.js';
 import { identityExtender, type EditExtender } from '../data/edit-extension.js';
 import type { EventBus } from './event-bus.js';
@@ -47,6 +47,15 @@ export interface GesturePipelineDeps {
     pendingItemIds: readonly ItemId[] | undefined,
     cursor?: { x: number; label: string },
   ): void;
+}
+
+/** The span `#stepPx` measures a snap unit against: the grabbed segment when one is grabbed and the
+ *  entry actually has segments, the whole entry otherwise. */
+function grabbedSpanOf(anchor: Entry, segmentIndex: number | undefined): TimeSpan {
+  if (segmentIndex !== undefined && anchor.segments && anchor.segments.length > 0) {
+    return anchor.segments[segmentIndex]!;
+  }
+  return anchor;
 }
 
 /** Owns entry resolution, draft math, preview coalescing and the commit pipeline for move/resize
@@ -157,18 +166,9 @@ export class GesturePipeline {
     const preset = this.#deps.preset();
     const unit = snap === 'none' ? preset.tickUnit : snap.unit;
     const increment = snap === 'none' ? preset.tickIncrement : snap.increment;
+    const span = grabbedSpanOf(anchor, segmentIndex);
     const anchorInstant =
-      gesture.kind === 'resize'
-        ? segmentIndex !== undefined && anchor.segments && anchor.segments.length > 0
-          ? gesture.edge === 'start'
-            ? anchor.segments[segmentIndex]!.start
-            : anchor.segments[segmentIndex]!.end
-          : gesture.edge === 'start'
-            ? anchor.start
-            : anchor.end
-        : segmentIndex !== undefined && anchor.segments && anchor.segments.length > 0
-          ? anchor.segments[segmentIndex]!.start
-          : anchor.start;
+      gesture.kind === 'resize' ? (gesture.edge === 'start' ? span.start : span.end) : span.start;
     return this.#deps.timeScale().widthForDuration({ unit, value: increment }, anchorInstant);
   }
 

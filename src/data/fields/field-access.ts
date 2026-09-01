@@ -14,24 +14,15 @@ import type {
 } from '../../model/index.js';
 import { diffMs } from '../../time/index.js';
 import { CORE_FIELDS } from './core-fields.js';
-import { strategyFor } from './source-strategy.js';
+import { strategyFor, withProposedKeys, proposedKeysOf } from './source-strategy.js';
 import type { FieldReadMemo } from './source-strategy.js';
 import type { FieldRegistry, ResolvedField } from './field-registry.js';
 
 export type { FieldLookup, FieldReadMemo };
+export { withProposedKeys, proposedKeysOf };
 
 function isOptionalEntryKey(key: string): boolean {
   return key === 'parentId' || key === 'segments' || key === 'meta';
-}
-
-/** Call: `withProposedKeys(stored, Object.keys(edit))`. */
-export function withProposedKeys(edit: StoredEdit, keys: Iterable<string>): StoredEdit {
-  return { ...edit, proposedKeys: new Set(keys) };
-}
-
-export function proposedKeysOf(edit: StoredEdit | undefined): ReadonlySet<string> {
-  if (!edit) return new Set();
-  return edit.proposedKeys ?? new Set();
 }
 
 export function mergeStoredEdits(base: StoredEdit | undefined, extra: StoredEdit): StoredEdit {
