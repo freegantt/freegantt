@@ -12,6 +12,9 @@ export type {
   RowSourceCommon,
   RowHeightMode,
   RowResolveInput,
+  RowFilter,
+  RowSort,
+  FilterPolicy,
 } from './rows/row-source.js';
 export { DEFAULT_ROW_SOURCE } from './rows/row-source.js';
 export { FrameLayout } from './frame-layout.js';

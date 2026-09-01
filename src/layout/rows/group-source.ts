@@ -5,11 +5,7 @@ import type { Entry } from '../../model/index.js';
 import type { GroupRowSource, UnindexedRow } from './row-source.js';
 import { heightModeOf } from './row-source.js';
 
-export function resolveGroupSource(
-  entries: readonly Entry[],
-  source: GroupRowSource,
-  collapsed: ReadonlySet<string>,
-): UnindexedRow[] {
+export function resolveGroupSource(entries: readonly Entry[], source: GroupRowSource): UnindexedRow[] {
   const heightMode = heightModeOf(source);
   const order: string[] = [];
   const grouped = new Map<string, Entry[]>();
@@ -28,18 +24,16 @@ export function resolveGroupSource(
     const members = grouped.get(key) ?? [];
     const headerId = rowId(`group:${key}`);
     const expandable = members.length > 0;
-    const expanded = expandable && !collapsed.has(headerId);
     rows.push({
       id: headerId,
       kind: 'header',
       depth: 0,
       entryIds: [],
       expandable,
-      expanded,
+      expanded: expandable,
       heightMode,
       headerLabel: key,
     });
-    if (!expanded) continue;
     for (const entry of members) {
       rows.push({
         id: rowId(entry.id),

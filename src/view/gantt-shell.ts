@@ -22,6 +22,7 @@ import type {
   ViewportHandle,
   ViewPreset,
   ItemProducerRegistry,
+  FieldCompare,
 } from '../layout/index.js';
 
 import { createDomBackend } from '../render/dom/index.js';
@@ -75,7 +76,7 @@ import { FrameScheduler } from './frame-scheduler.js';
 import { projectAffordances } from './affordance-projection.js';
 import { GesturePipeline } from './gesture-pipeline.js';
 import type { EntryGestureContext } from './entry-gesture-context.js';
-import { DEFAULT_GRID_COLUMNS, resolveColumns } from './grid-columns.js';
+import { DEFAULT_GRID_COLUMNS, bindGanttFields } from './grid-columns.js';
 import { CollapseState } from './collapse-state.js';
 
 /** One `{ detach() }` for every inject slot. `view/` may not import `interaction/` (plans/01 §1:
@@ -291,6 +292,7 @@ export class GanttShell {
   #todayLineMarginTicks: number = DEFAULT_TODAY_LINE_MARGIN_TICKS;
   #gridColumnInput: readonly GridColumnInput[] = DEFAULT_GRID_COLUMNS;
   #resolvedColumns: readonly ResolvedColumn[] = [];
+  #fieldCompares: readonly FieldCompare[] = [];
   #rowSource: RowSource = DEFAULT_ROW_SOURCE;
   #collapse = new CollapseState();
 
@@ -824,11 +826,9 @@ export class GanttShell {
       this.#locale !== undefined
         ? { timeZone: this.#options.dataset.timeZone, locale: this.#locale }
         : { timeZone: this.#options.dataset.timeZone };
-    this.#resolvedColumns = resolveColumns(
-      this.#gridColumnInput,
-      { get: (key) => this.#options.dataset.field(key) },
-      bind,
-    );
+    const bound = bindGanttFields(this.#options.dataset, this.#gridColumnInput, bind);
+    this.#resolvedColumns = bound.columns;
+    this.#fieldCompares = bound.fieldCompares;
   }
 
   #commitGridWidth(px: number): void {
@@ -869,6 +869,7 @@ export class GanttShell {
       todayLine: this.#todayLine,
       dateLines: this.#dateLines,
       columns: this.#resolvedColumns,
+      fieldCompares: this.#fieldCompares,
       rows: this.#rowSource,
       collapsed: this.#collapse.ids,
       itemProducerRegistry: this.#itemProducerRegistry,

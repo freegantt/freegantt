@@ -1,7 +1,6 @@
 // view/ — binds this Gantt's locale to declared Fields (D-S4-13). layout/ never learns FieldSource.
 
-import type { Entry, Field, FormatContext, GridColumn, GridColumnInput } from '../model/index.js';
-import type { Dataset } from '../model/index.js';
+import type { Dataset, Entry, Field, FormatContext, GridColumn, GridColumnInput } from '../model/index.js';
 import { FieldNotColumnableError, UnknownFieldError } from '../model/index.js';
 import { createFieldContext } from '../data/fields/field-access.js';
 import type { FieldLookup } from '../data/fields/field-access.js';
@@ -80,15 +79,18 @@ export function resolveColumns(
   });
 }
 
-/** Call: `resolveFieldCompares(dataset.fields.all, { locale })` — every declared Field, not the Grid. */
+/** Call: `resolveFieldCompares(lookup, fields, { timeZone, locale })` — every declared Field, not the Grid. */
 export function resolveFieldCompares(
+  lookup: FieldLookup,
   fields: readonly Field[],
-  bind: { locale?: Intl.LocalesArgument },
+  bind: ResolveColumnsBind,
 ): readonly FieldCompare[] {
+  const fieldCtx = createFieldContext(lookup, bind.timeZone);
   const locale: Intl.LocalesArgument = bind.locale ?? [];
   const fallback = defaultCompareStored(locale);
   return fields.map((field) => ({
     key: field.key,
+    readStored: (entry: Entry) => fieldCtx.read(entry, field.key),
     compareStored: (a, b) => {
       if (field.compare === undefined) return fallback(a, b);
       return field.compare(a, b);
@@ -99,12 +101,13 @@ export function resolveFieldCompares(
 /** Call: `bindGanttFields(dataset, gantt.gridColumns, { timeZone, locale })`.
  *  One locale bind. Two lists leave: visible columns, and every Field's compare (D-S4-13). */
 export function bindGanttFields(
-  dataset: Pick<Dataset, 'field' | 'fields'>,
+  dataset: Pick<Dataset, 'field' | 'fields' | 'timeZone'>,
   gridColumns: readonly GridColumnInput[],
   bind: ResolveColumnsBind,
 ): { columns: readonly ResolvedColumn[]; fieldCompares: readonly FieldCompare[] } {
+  const lookup = lookupOf(dataset);
   return {
-    columns: resolveColumns(gridColumns, lookupOf(dataset), bind),
-    fieldCompares: resolveFieldCompares(dataset.fields.all, bind),
+    columns: resolveColumns(gridColumns, lookup, bind),
+    fieldCompares: resolveFieldCompares(lookup, dataset.fields.all, bind),
   };
 }
