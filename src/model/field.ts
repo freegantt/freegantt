@@ -66,9 +66,18 @@ export interface FormatContext extends FieldContext {
 }
 
 /** FieldContext plus the Field currently rolling up. Shipped Aggregators (`sum`, `min`) read
- *  `ctx.field`; a consumer Aggregator reads any declared key through the same `ctx.read`. */
+ *  `ctx.field`; a consumer Aggregator reads any declared key through the same `ctx.read`.
+ *
+ *  `values`/`numericValues` cover the common "one field off my children" case (issue #124) — read
+ *  `ctx.field` off each child in order. A multi-field or non-numeric Aggregator still reads each
+ *  field it needs through `ctx.read` directly. */
 export interface RollUpContext extends FieldContext {
   readonly field: FieldKey;
+  /** `ctx.field` read off each child, in order. A child with no value is a hole (`undefined`). */
+  values(children: readonly Entry[]): readonly unknown[];
+  /** Like `values`, but keeps only finite numbers — holes and non-numeric values drop, same rule
+   *  shipped `sum`/`min`/`max` already follow. */
+  numericValues(children: readonly Entry[]): readonly number[];
 }
 
 /** Registered by name, never passed inline. `undefined` means no opinion — keep the stored value. */

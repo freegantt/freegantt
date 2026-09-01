@@ -9,19 +9,22 @@ whose most recent commit is from today.
 |---|---|---|---|
 | [#127](https://github.com/Pawel-IT/FreeGantt/issues/127) | Left pane min size, columns resize weird | Bug + small enhancement | [127-pane-min-width-and-collapse.md](127-pane-min-width-and-collapse.md) |
 | [#128](https://github.com/Pawel-IT/FreeGantt/issues/128) | Tools | Needs clarification | [128-tools-needs-clarification.md](128-tools-needs-clarification.md) |
-| [#124](https://github.com/Pawel-IT/FreeGantt/issues/124) | Aggregator callback ergonomics for custom rollUp functions | Enhancement | [124-aggregator-context-helpers.md](124-aggregator-context-helpers.md) |
 | [#129](https://github.com/Pawel-IT/FreeGantt/issues/129) | Default Dataset timeZone to the browser zone when omitted | Enhancement, needs a design decision first | [129-default-dataset-timezone.md](129-default-dataset-timezone.md) |
 
-**Closed:** [#112](https://github.com/Pawel-IT/FreeGantt/issues/112) — DI
-seams: PaneLayout host + DatasetState reference date. Seam A landed
-(`33b72c5`); Seam B folded into S6's scope in `plans/03-slices.md`. See
-[../closed/112-di-seams.md](../closed/112-di-seams.md).
+**Closed:**
+- [#112](https://github.com/Pawel-IT/FreeGantt/issues/112) — DI seams:
+  PaneLayout host + DatasetState reference date. Seam A landed
+  (`33b72c5`); Seam B folded into S6's scope in `plans/03-slices.md`. See
+  [../closed/112-di-seams.md](../closed/112-di-seams.md).
+- [#124](https://github.com/Pawel-IT/FreeGantt/issues/124) — Aggregator
+  callback ergonomics. `RollUpContext.values`/`numericValues` shipped, shipped
+  aggregators refactored onto them. See
+  [../closed/124-aggregator-context-helpers.md](../closed/124-aggregator-context-helpers.md).
 
 ## Suggested order
 
 1. ~~**#112 (reference date only)**~~ — done, `33b72c5`.
-2. **#124** is next-lowest-risk — a pure additive helper on `RollUpContext`,
-   no public API breakage.
+2. ~~**#124**~~ — done.
 3. **#127** is a real bug (drag-to-zero) with a small, well-scoped fix; the
    collapse-toggle half is an optional follow-up.
 4. **#129** needs one design decision made first (Node/headless fallback —
