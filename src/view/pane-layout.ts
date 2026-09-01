@@ -119,6 +119,16 @@ export class PaneLayout {
     this.#gridPane.style.width = `${clamped}px`;
   }
 
+  get minGridWidth(): number {
+    return this.#minGridWidth;
+  }
+
+  /** Live (#127). Storage only — `GanttShell` re-clamps a now-out-of-range `gridWidth` itself, so
+   *  that goes through the same cancelable commit sequence a splitter drag runs. */
+  set minGridWidth(px: number) {
+    this.#minGridWidth = px;
+  }
+
   /** The timeline pane's client box — the one measurement everything downstream is sized from. */
   measureTimelinePane(): Size {
     return { width: this.panes.timeline.clientWidth, height: this.panes.timeline.clientHeight };

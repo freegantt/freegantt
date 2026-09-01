@@ -1,6 +1,28 @@
 # #127 — Left pane min size, columns resize weird
 
-**Reported:** 2026-09-01. Not stale.
+**Reported:** 2026-09-01. **Closed:** 2026-09-01, Step 1 shipped.
+
+## Resolution
+
+`minGridWidth` is now a public, live-reconfigurable `GanttOptions`/`GanttShellOptions` property
+(`src/api/gantt.ts`, `src/view/gantt-shell.ts`, `src/view/pane-layout.ts`), threaded down to
+`PaneLayout`'s existing clamp. Default stays `0`, matching the doc comment `PaneLayout` already
+carried ("Zero is authored, not nonsense") — a consumer opts a floor in explicitly, rather than
+the library changing today's default behavior. `gantt.gridWidth = 0` stays a legal, explicit way
+to collapse the pane; only the splitter drag (and any other assignment) is stopped from reaching
+it by accident.
+
+Raising `minGridWidth` above the current `gridWidth` re-clamps it through the same
+`beforeGridWidthChange`/`gridWidthChange` commit sequence a splitter drag runs (`GanttShell`), so
+a veto is still respected and the floor invariant holds even through a rollback. Documented in
+`plans/02-public-api.md` §2/§3. Tests: `pane-layout.test.ts`, `gantt.test.ts`
+("Gantt minGridWidth (#127)").
+
+Step 3 (a collapse-toggle affordance) was **not** built — the issue only said "maybe," and the
+plan below flagged it as a separate product/UX call needing confirmation first. Left as a future
+follow-up if wanted; `gantt.gridWidth = 0` already covers the underlying mechanism.
+
+## Original plan
 
 ## Current behavior (researched)
 

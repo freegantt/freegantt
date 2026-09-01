@@ -874,6 +874,115 @@ describe('Gantt gridWidth and events (S1.8, plans/02 §6)', () => {
   });
 });
 
+describe('Gantt minGridWidth (#127)', () => {
+  it('the splitter cannot drag gridWidth below minGridWidth', () => {
+    const container = document.createElement('div');
+    const gantt = new Gantt({
+      container,
+      dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }),
+      gridWidth: 200,
+      minGridWidth: 120,
+    });
+
+    gantt.gridWidth = 40;
+
+    expect(gantt.gridWidth).toBe(120);
+    gantt.destroy();
+  });
+
+  it('an explicit gridWidth = 0 still collapses the pane on purpose', () => {
+    const container = document.createElement('div');
+    const gantt = new Gantt({
+      container,
+      dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }),
+      gridWidth: 200,
+      minGridWidth: 120,
+    });
+
+    gantt.gridWidth = 0;
+
+    expect(gantt.gridWidth).toBe(120);
+    gantt.destroy();
+  });
+
+  it('minGridWidth defaults to 0 and is live-reconfigurable', () => {
+    const container = document.createElement('div');
+    const gantt = new Gantt({
+      container,
+      dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }),
+      gridWidth: 160,
+    });
+
+    expect(gantt.minGridWidth).toBe(0);
+    gantt.minGridWidth = 200;
+    expect(gantt.minGridWidth).toBe(200);
+
+    gantt.destroy();
+  });
+
+  it('raising minGridWidth above the current gridWidth re-clamps it through the same before/after pair a drag would fire', () => {
+    const container = document.createElement('div');
+    const gantt = new Gantt({
+      container,
+      dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }),
+      gridWidth: 160,
+    });
+
+    const before: Array<{ from: number; to: number }> = [];
+    const after: Array<{ from: number; to: number }> = [];
+    gantt.on('beforeGridWidthChange', (payload) => {
+      before.push(payload);
+    });
+    gantt.on('gridWidthChange', (payload) => {
+      after.push(payload);
+    });
+
+    gantt.minGridWidth = 200;
+
+    expect(before).toEqual([{ from: 160, to: 200 }]);
+    expect(after).toEqual([{ from: 160, to: 200 }]);
+    expect(gantt.gridWidth).toBe(200);
+
+    gantt.destroy();
+  });
+
+  it('a vetoed re-clamp still respects the new floor once the rollback runs', () => {
+    const container = document.createElement('div');
+    const gantt = new Gantt({
+      container,
+      dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }),
+      gridWidth: 160,
+    });
+
+    gantt.on('beforeGridWidthChange', () => false);
+    gantt.minGridWidth = 200;
+
+    expect(gantt.gridWidth).toBe(200);
+    gantt.destroy();
+  });
+
+  it('lowering minGridWidth below the current gridWidth fires no gridWidthChange', () => {
+    const container = document.createElement('div');
+    const gantt = new Gantt({
+      container,
+      dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }),
+      gridWidth: 160,
+      minGridWidth: 100,
+    });
+
+    const after: Array<{ from: number; to: number }> = [];
+    gantt.on('gridWidthChange', (payload) => {
+      after.push(payload);
+    });
+    gantt.minGridWidth = 50;
+
+    expect(after).toEqual([]);
+    expect(gantt.gridWidth).toBe(160);
+
+    gantt.destroy();
+  });
+});
+
 describe('Gantt gridColumns (S4.3, D-S4-12, [S4-A1] column half)', () => {
   it('a declared cost shows beside start; assigning gridColumns re-renders with no remount', async () => {
     const container = document.createElement('div');

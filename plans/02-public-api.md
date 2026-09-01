@@ -116,6 +116,7 @@ gantt.preset = 'dayAndWeek';
 gantt.rowSource = { source: 'group', groupBy: (entry, fields) => fields?.read<string>(entry, 'team') ?? 'unassigned' };
 gantt.gridColumns = [...gantt.gridColumns, 'cost'];
 gantt.gridWidth = 220;                  // S1.8 — same cancelable commit sequence a splitter drag runs
+gantt.minGridWidth = 80;                // #127 — floor the Splitter (and any assignment) clamps gridWidth to
 ```
 
 Every config key is a live property. Setting one triggers exactly the invalidation it needs (a preset change rebuilds the axis; a row-source change re-resolves rows) — never a full remount.
@@ -153,6 +154,8 @@ The reading itself lives in `time/` (`toInstant`, `toEndInstant`) — resolving 
 `navigationChange` (S1.12) fires once per Viewport Batch after Preset, Fit, Range, Pan, or Anchored zoom actually change. There is no `before*` pair: those writes are reconfiguration (S1.9), not a vetoable gesture. Chrome reads `presetId` / `canZoom*` from the payload, or re-reads the live Gantt getters.
 
 `beforeGridWidthChange`/`gridWidthChange` (S1.8) carry `{ from, to }` in px. Fired by both a Splitter drag's commit and a direct `gantt.gridWidth = px` assignment — one commit sequence, one place it lives (`GanttShell`). A veto restores the width the drag started from, so a rejected drag leaves nothing behind.
+
+`minGridWidth` (#127) is a live, plain-reconfiguration property — not a gesture, so it carries no `before*`/`*Change` pair of its own. It floors what the Splitter drag (and any `gridWidth` assignment) can reach; `gantt.gridWidth = 0` stays a legal way to collapse the grid pane on purpose, since that goes through `gridWidth` directly rather than through the floor. Default `0` matches `gridWidth`'s own unclamped default — a consumer opts into a floor explicitly. Raising `minGridWidth` above the current `gridWidth` fires `beforeGridWidthChange`/`gridWidthChange` to re-clamp it — the same commit sequence a drag would use, so a veto leaves the width where it was.
 
 `beforeCollapseChange`/`collapseChange` (S4.6, D-S4-22) carry `{ from, to }` as `RowId[]` — Gantt view state, no Dataset transaction. Fired by a twisty click, keyboard collapse/expand, and a direct `gantt.collapsed = ids` assignment. A veto restores the set the interaction started from. Collapse is per Gantt: two Gantts on one Dataset collapse independently, the same way `selection` already does.
 

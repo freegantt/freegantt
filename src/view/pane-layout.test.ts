@@ -91,6 +91,24 @@ describe('PaneLayout', () => {
     paneLayout.destroy();
   });
 
+  it('minGridWidth defaults to 0 and is readable back', () => {
+    const container = el();
+    const paneLayout = new PaneLayout({ container });
+    expect(paneLayout.minGridWidth).toBe(0);
+    paneLayout.destroy();
+  });
+
+  it('minGridWidth is a live setter — it stores the floor without touching the current gridWidth itself', () => {
+    const container = el();
+    const paneLayout = new PaneLayout({ container, gridWidth: 200 });
+
+    paneLayout.minGridWidth = 120;
+
+    expect(paneLayout.minGridWidth).toBe(120);
+    expect(paneLayout.gridWidth).toBe(200);
+    paneLayout.destroy();
+  });
+
   it('measureTimelinePane() reports the timeline pane, not the container', () => {
     const container = el();
     const paneLayout = new PaneLayout({ container });
