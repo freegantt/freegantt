@@ -17,7 +17,10 @@ This is the leftover from the 2026-09-01 close-out plan after P0–P3. Do not re
 | P2 | A2 FrameMemory owns height; A3 TreeCollapse `confirm`; D4 reveal under group/custom; A6 one veto; C15 `isDevMode`; C10 `pickDefined` | `b7621d3` |
 | P3 | A4 `SOURCE_STRATEGY`; A5 Field reader on `filter` / `groupBy` / `sort.compare`; harness `teamOf` gone | `114de56` |
 | P4 S1–S3 | Parts + State attrs in `CONTEXT.md`; delete `:root, .fg-container` indent/lane-gap winning rule; twisty+label in `create`, patch toggles only | `187ce7f` |
-| CO.0 | `--fg-indent-width` and `--fg-lane-gap` on `.fg-container` only; e2e hits the visible twisty | `6066877` |
+| CO.0 | `--fg-indent-width` and `--fg-lane-gap` on `.fg-container` only; e2e hits the visible twisty | `6066877`, `3967c9d` |
+| CO.1 | Live `Dataset.hierarchy` setter; harness toggles `autoGroup` without remount | `5c2e4c4` |
+| CO.2 | Shared `ScrollModel` across harness remount; drop pane-scroll forging | `f02dd40` |
+| CO.3 | README close-out, collapse tests, deferred barrel prune | `0ed8839` |
 
 `SOURCE_STRATEGY` lives in `src/data/fields/source-strategy.ts`. `field-lookup.ts` is gone. Row callbacks take optional `FieldContext`. `{ key: 'team' }` is declared on the demo and hierarchy fixtures.
 
@@ -97,7 +100,7 @@ Pre-push of `187ce7f` failed: `src/view/styles.test.ts` still asserts the sheet 
 
 **Done when:** `pnpm verify && pnpm gate` is green after CO.1–CO.3 are on origin. No extra product change. Tick this box in a docs-only commit only if the README still needs a "close-out complete" line; otherwise tick it in CO.3's commit if all three product steps already landed.
 
-- [ ] `pnpm verify && pnpm gate`
+- [x] `pnpm verify && pnpm gate`
 - [ ] Human box `[S4]` harness/hierarchy.html still pokeable (row sources, pack, filter, collapse, cost + undo, autoGroup without remount, import keeps scroll)
 
 ---
