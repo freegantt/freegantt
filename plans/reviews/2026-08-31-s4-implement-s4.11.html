@@ -1,0 +1,301 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Branch review — s4-implement (S4.11 close-out)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script type="module">
+      import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+      mermaid.initialize({ startOnLoad: true, theme: "neutral", securityLevel: "loose" });
+    </script>
+    <style>
+      .seam { stroke-dasharray: 4 4; }
+      .leak { stroke: #dc2626; }
+      .deep { background: linear-gradient(135deg, #0f172a, #1e293b); }
+      .badge-strong  { background:#fce7f3; color:#9d174d; border:1px solid #fbcfe8; }
+      .badge-worth   { background:#fef3c7; color:#78350f; border:1px solid #fde68a; }
+      .badge-spec    { background:#e0e7ff; color:#312e81; border:1px solid #c7d2fe; }
+      .badge-hard    { background:#fee2e2; color:#7f1d1d; border:1px solid #fecaca; }
+      .badge-judge   { background:#fef3c7; color:#78350f; border:1px solid #fde68a; }
+      .badge-ok      { background:#dcfce7; color:#14532d; border:1px solid #bbf7d0; }
+      table.find td, table.find th { vertical-align: top; }
+    </style>
+  </head>
+  <body class="bg-stone-50 text-slate-900 font-sans">
+    <main class="max-w-5xl mx-auto px-6 py-12 space-y-14">
+
+      <header class="space-y-4">
+        <p class="text-xs uppercase tracking-widest text-slate-500">FreeGantt — pk-branch-review · S4 close-out</p>
+        <h1 class="font-serif text-3xl leading-tight">S4 — Hierarchy, rows, harness, gate</h1>
+        <p class="text-sm text-slate-500">
+          2026-08-31 · <span class="font-mono">80e0717…df934aa</span> (33 commits, 183 files, +16400/−4602)
+          on <span class="font-mono">s4-implement</span> · S4.11 lands at <span class="font-mono">df934aa</span>
+        </p>
+        <p class="text-sm text-slate-600 max-w-3xl">
+          Four passes — <strong>standards</strong> (documented rules + Fowler ch.3 smells),
+          <strong>spec</strong> (<span class="font-mono">plans/s4-hierarchy-and-rows/</span>),
+          <strong>simplify</strong> (harness and e2e surface),
+          <strong>architecture</strong> (deepening opportunities).
+          Vocabulary: module, interface, implementation, depth, seam, adapter, leverage, locality.
+        </p>
+        <div class="rounded-lg border border-emerald-300 bg-emerald-50 p-4 text-sm">
+          <p class="text-xs uppercase tracking-wider text-emerald-800 mb-2">Slice status</p>
+          <p class="text-slate-700">
+            <span class="font-mono">.slice</span> is <strong>S4</strong>.
+            <span class="font-mono">pnpm gate</span> prints eleven green checks for
+            <span class="font-mono">[S4-A1]</span>–<span class="font-mono">[S4-A11]</span>.
+            Loop-4 rollup-on-remove (P1) is fixed in <span class="font-mono">9dc4461</span>.
+            This pass reviews what remains after the close-out commit.
+          </p>
+        </div>
+        <div class="flex flex-wrap gap-3 text-xs text-slate-600 pt-1">
+          <span class="inline-flex items-center gap-1"><span class="inline-block w-4 h-3 border border-slate-500 bg-white"></span> module</span>
+          <span class="inline-flex items-center gap-1"><svg width="24" height="8"><line x1="0" y1="4" x2="24" y2="4" stroke="#475569" stroke-width="2" class="seam"/></svg> seam</span>
+          <span class="inline-flex items-center gap-1"><span class="inline-block w-4 h-3 deep rounded-sm"></span> deep module</span>
+          <span class="inline-flex items-center gap-1"><span class="inline-block w-4 h-3 bg-red-200 rounded-sm"></span> shallow / leaking</span>
+        </div>
+      </header>
+
+      <section class="rounded-2xl border bg-white p-6 space-y-3">
+        <h2 class="font-serif text-xl">Gates</h2>
+        <div class="flex flex-wrap gap-2 text-xs font-mono">
+          <span class="badge-ok px-2 py-1 rounded">verify ✓</span>
+          <span class="badge-ok px-2 py-1 rounded">gate 11/11 ✓</span>
+          <span class="badge-ok px-2 py-1 rounded">e2e 46/46 ✓</span>
+        </div>
+        <p class="text-xs text-slate-500">
+          One e2e drag test flaked once on push (bar undo); retry passed.
+          Nothing below is a build break.
+        </p>
+      </section>
+
+      <section class="rounded-2xl border bg-white p-6 space-y-4">
+        <h2 class="font-serif text-xl">What this pass found</h2>
+        <div class="grid md:grid-cols-3 gap-4 text-sm">
+          <div class="rounded-lg border border-red-200 bg-red-50 p-4">
+            <p class="text-xs uppercase tracking-wider text-red-700 mb-1">Hard · 2</p>
+            <p class="text-slate-700">A new <span class="font-mono">emitTreeRows</span> name collides with the produce-vs-emit split. S4.11 e2e header claims segment drag but tests a leaf span.</p>
+          </div>
+          <div class="rounded-lg border border-amber-200 bg-amber-50 p-4">
+            <p class="text-xs uppercase tracking-wider text-amber-800 mb-1">Judgement · 8</p>
+            <p class="text-slate-700">Harness duplication, <span class="font-mono">applyRowSource</span> mixing jobs, partial e2e assertions, fixed sleeps, wide <span class="font-mono">GanttShell</span>.</p>
+          </div>
+          <div class="rounded-lg border border-violet-200 bg-violet-50 p-4">
+            <p class="text-xs uppercase tracking-wider text-violet-800 mb-1">Deepening · 4</p>
+            <p class="text-slate-700">Double row resolve, collapse API gap, commit-pipeline fork, shell orchestration width.</p>
+          </div>
+        </div>
+        <p class="text-sm text-slate-600">
+          The slice closes honestly: hierarchy harness, fixture, gate, and spec ticks match D-S4-34.
+          Remaining work is polish — naming, harness API gaps, e2e fidelity — not missing core behaviour.
+          Unit and gate tests cover segment drag and rollup; the harness story is thinner than the spec prose.
+        </p>
+      </section>
+
+      <!-- ═══════════════ AXES ═══════════════ -->
+      <section class="space-y-6">
+        <h2 class="font-serif text-2xl">Review axes</h2>
+
+        <article id="standards-axis" class="rounded-2xl border bg-white p-6 space-y-4">
+          <h3 class="font-serif text-lg">Standards — naming, smells, SOLID</h3>
+          <table class="find w-full text-sm border-collapse">
+            <thead><tr class="border-b text-left text-xs uppercase tracking-wider text-slate-500">
+              <th class="py-2 pr-3 w-16">Kind</th><th class="py-2">Finding</th>
+            </tr></thead>
+            <tbody class="divide-y">
+              <tr>
+                <td><span class="badge-hard text-xs px-2 py-0.5 rounded">Hard</span></td>
+                <td><strong><span class="font-mono">emitTreeRows</span></strong> in <span class="font-mono">layout/rows/sort.ts:32</span> — naming skill / CONTEXT: layout output uses <strong>produce</strong> (<span class="font-mono">produceItemsForRow</span>); <strong>emit</strong> is reserved for events. Reopens the emit→produce rename from loop 1.</td>
+              </tr>
+              <tr>
+                <td><span class="badge-hard text-xs px-2 py-0.5 rounded">Hard</span></td>
+                <td><strong><span class="font-mono">applyRowSource</span></strong> in <span class="font-mono">harness/hierarchy.ts:139</span> — name says row source only; it also rewrites cost-column button text. One function, two reasons to change (SRP / Uncle Bob).</td>
+              </tr>
+              <tr>
+                <td><span class="badge-judge text-xs px-2 py-0.5 rounded">Judge</span></td>
+                <td><strong>Duplicated Code</strong> — <span class="font-mono">entryInputsFromDataset</span> and the import handler (<span class="font-mono">hierarchy.ts:65–75</span>, <span class="font-mono">316–325</span>) share the same Entry→EntryInput projection.</td>
+              </tr>
+              <tr>
+                <td><span class="badge-judge text-xs px-2 py-0.5 rounded">Judge</span></td>
+                <td><strong>Duplicated Code</strong> — <span class="font-mono">logChangeSet</span> copied across <span class="font-mono">hierarchy.ts</span>, <span class="font-mono">data.ts</span>, <span class="font-mono">editing.ts</span>. Acceptable for harness pages until a shared harness helper exists.</td>
+              </tr>
+              <tr>
+                <td><span class="badge-judge text-xs px-2 py-0.5 rounded">Judge</span></td>
+                <td><strong>Divergent Change</strong> — <span class="font-mono">gantt-shell.ts</span> (~975 lines) now owns columns, collapse, row source, item registry, lane gap, tree keyboard. Shell interface is wide; each S5 touch risks unrelated edits.</td>
+              </tr>
+              <tr>
+                <td><span class="badge-judge text-xs px-2 py-0.5 rounded">Judge</span></td>
+                <td><strong>Data Clumps</strong> — <span class="font-mono">parentIdsWithChildren()</span> in harness re-derives expandable ids from raw entries; collapse targets should come from the Gantt / planned rows (see C2).</td>
+              </tr>
+              <tr>
+                <td><span class="badge-ok text-xs px-2 py-0.5 rounded">Clean</span></td>
+                <td><span class="font-mono">fixtures/hierarchy-dataset.ts</span>, <span class="font-mono">no-derived-in-json.cjs</span>, <span class="font-mono">slice-gate.mjs</span> S4 block — deterministic fixture, B9 rule registered, gate ids match spec.</td>
+              </tr>
+            </tbody>
+          </table>
+          <p class="text-xs text-slate-500">Worst within axis: <span class="font-mono">emitTreeRows</span> — a documented rename direction already landed elsewhere.</p>
+        </article>
+
+        <article id="spec-axis" class="rounded-2xl border bg-white p-6 space-y-4">
+          <h3 class="font-serif text-lg">Spec — <span class="font-mono">plans/s4-hierarchy-and-rows/</span></h3>
+          <p class="text-sm text-emerald-700 mb-3">
+            S4.1–S4.11 acceptance boxes are ticked. Gate and unit tests back every automated box.
+            Gaps are in e2e fidelity and visible harness proof, not in core library behaviour.
+          </p>
+          <table class="find w-full text-sm border-collapse">
+            <thead><tr class="border-b text-left text-xs uppercase tracking-wider text-slate-500">
+              <th class="py-2 pr-3 w-28">Section</th><th class="py-2">Finding</th>
+            </tr></thead>
+            <tbody class="divide-y">
+              <tr>
+                <td>Missing / partial</td>
+                <td>S4.11 §2: <em>"a Segment drag moves one bar; Undo restores it"</em> — <span class="font-mono">e2e/hierarchy.spec.ts:101</span> drags <span class="font-mono">task-beta:0</span> (leaf span), not a segment bar. S4.10 §4 visible segment drag is absent from harness and e2e.</td>
+              </tr>
+              <tr>
+                <td>Missing / partial</td>
+                <td>S4.11 §2: row-source switch should change the row set — test only asserts scroll offset (<span class="font-mono">[S4-A3]</span> test). Pack test checks row height, not bars below shifting.</td>
+              </tr>
+              <tr>
+                <td>Missing / partial</td>
+                <td>S4.11 §2: keyboard <em>"focus follows"</em> — test reads <span class="font-mono">#selection-readout</span>, not focused element.</td>
+              </tr>
+              <tr>
+                <td>Scope creep</td>
+                <td>S4.11 §5 asks to link hierarchy from index and docs gallery. Diff also splits <span class="font-mono">harness/docs/doc.html</span> into many new pages — useful, but beyond the slice close-out ask.</td>
+              </tr>
+              <tr>
+                <td>Nit</td>
+                <td>Gate table names <span class="font-mono">entry-store.test.ts</span> for <span class="font-mono">[S4-A2]</span>; tagged test is in <span class="font-mono">entry-store.mutation.test.ts</span>.</td>
+              </tr>
+              <tr>
+                <td>Wrong story</td>
+                <td><span class="font-mono">e2e/hierarchy.spec.ts:3</span> header says <em>"segmented drag + undo"</em> while the test body uses a non-segment entry — misleading relative to §2 prose.</td>
+              </tr>
+            </tbody>
+          </table>
+          <p class="text-xs text-slate-500">Worst within axis: segment drag visible proof — spec asks for it; gate passes via unit tests only.</p>
+        </article>
+
+        <article id="simplify-axis" class="rounded-2xl border bg-white p-6 space-y-4">
+          <h3 class="font-serif text-lg">Simplify — harness and e2e surface</h3>
+          <ul class="text-sm space-y-2 list-disc pl-5 text-slate-700">
+            <li>Split <span class="font-mono">applyRowSource</span> into <span class="font-mono">syncRowSourceControls</span> (disable filter/sort when grouped) and keep cost-column label on its own click path only.</li>
+            <li>Extract <span class="font-mono">entryToInput(entry)</span> once; call from export round-trip and autoGroup-off import.</li>
+            <li>Replace <span class="font-mono">waitForTimeout(200/300)</span> in e2e with <span class="font-mono">expect.poll</span> or bar visibility waits — bar undo already flaked once.</li>
+            <li>Factor <span class="font-mono">gotoHierarchyShort</span> scroll helper shared by pack and <span class="font-mono">[S4-A3]</span> tests.</li>
+            <li>Rename e2e file header comment to match what the drag test actually proves, or pan to the segmented entry and drag one segment.</li>
+            <li><span class="font-mono">rebuildGantt</span> + <span class="font-mono">rebuildDataset</span> duplicate scroll preservation — one <span class="font-mono">preservePaneScroll(fn)</span> wrapper would shrink both.</li>
+          </ul>
+        </article>
+      </section>
+
+      <!-- ═══════════════ DEEPENING ═══════════════ -->
+      <section class="space-y-3">
+        <h2 class="font-serif text-2xl">Deepening candidates</h2>
+        <p class="text-sm text-slate-600">Four places where an interface is nearly as wide as its implementation, or where callers leak across a seam.</p>
+      </section>
+
+      <article id="c1" class="rounded-2xl border bg-white overflow-hidden">
+        <div class="px-6 py-4 border-b flex items-center gap-3 bg-gradient-to-r from-violet-50 to-fuchsia-50">
+          <h2 class="font-serif text-xl flex-1">C1 — Resolve rows once per frame</h2>
+          <span class="badge-strong text-xs px-2 py-1 rounded">STRONG</span>
+          <span class="text-xs text-slate-500">in-process</span>
+        </div>
+        <div class="p-6 space-y-4">
+          <p class="text-sm font-mono text-slate-600">layout/frame-layout.ts · layout/frame.ts · layout/rows/resolve-rows.ts</p>
+          <div class="grid md:grid-cols-2 gap-4">
+            <div class="rounded-lg border p-3">
+              <p class="text-xs uppercase tracking-wider text-slate-400 mb-2">Before</p>
+              <pre class="mermaid text-xs">flowchart TB
+  FL[FrameLayout] --> R1[resolveRows]
+  CF[computeFrame] --> R2[resolveRows again]
+  FL --> H[#heightAt duplicates pack math]</pre>
+            </div>
+            <div class="rounded-lg border p-3 deep text-white">
+              <p class="text-xs uppercase tracking-wider text-slate-300 mb-2">After</p>
+              <pre class="mermaid text-xs">flowchart TB
+  FL[FrameLayout] --> R[resolveRows once]
+  R --> P[placeFrame plan + memory]
+  P --> CF[computeFrame geometry only]</pre>
+            </div>
+          </div>
+          <p class="text-sm"><strong>Problem.</strong> Shallow seam — row plan computed twice; pack height logic split across modules.</p>
+          <p class="text-sm"><strong>Solution.</strong> Split resolve from place; pass <span class="font-mono">readonly PlannedRow[]</span> into geometry.</p>
+          <ul class="text-sm list-disc pl-5 text-slate-700">
+            <li>One row-resolution pass on hot path</li>
+            <li>Single owner for pack-height math</li>
+            <li>Invalidation and geometry share one plan</li>
+          </ul>
+        </div>
+      </article>
+
+      <article id="c2" class="rounded-2xl border bg-white overflow-hidden">
+        <div class="px-6 py-4 border-b flex items-center gap-3 bg-gradient-to-r from-violet-50 to-fuchsia-50">
+          <h2 class="font-serif text-xl flex-1">C2 — Collapse-all on the Gantt interface</h2>
+          <span class="badge-strong text-xs px-2 py-1 rounded">STRONG</span>
+          <span class="text-xs text-slate-500">local-substitutable</span>
+        </div>
+        <div class="p-6 space-y-4">
+          <p class="text-sm font-mono text-slate-600">harness/hierarchy.ts · view/gantt-shell.ts · view/collapse-state.ts</p>
+          <div class="grid md:grid-cols-2 gap-4 text-xs">
+            <div class="rounded-lg border border-red-200 bg-red-50 p-3 space-y-1">
+              <p class="uppercase tracking-wider text-red-700">Before — leakage</p>
+              <div class="font-mono">harness → entries.all → parentId walk</div>
+              <div class="font-mono text-red-600">collapse targets Entry ids, not Row ids</div>
+            </div>
+            <div class="rounded-lg border deep text-white p-3 space-y-1">
+              <p class="uppercase tracking-wider text-slate-300">After — deep interface</p>
+              <div class="font-mono">Gantt.collapseAll() / expandAll()</div>
+              <div class="font-mono text-slate-300">targets expandable planned rows</div>
+            </div>
+          </div>
+          <p class="text-sm"><strong>Problem.</strong> Harness re-derives tree shape the layout module already resolved.</p>
+          <p class="text-sm"><strong>Solution.</strong> Publish collapse-all on <span class="font-mono">Gantt</span>; keyboard and toolbar share it.</p>
+        </div>
+      </article>
+
+      <article id="c3" class="rounded-2xl border bg-white overflow-hidden">
+        <div class="px-6 py-4 border-b flex items-center gap-3">
+          <h2 class="font-serif text-xl flex-1">C3 — One post-edit pass module</h2>
+          <span class="badge-worth text-xs px-2 py-1 rounded">WORTH EXPLORING</span>
+        </div>
+        <div class="p-6 space-y-3 text-sm">
+          <p class="font-mono text-slate-600">data/build-commit-change-set.ts · data/transaction.ts · data/hierarchy.ts · data/rollup.ts</p>
+          <p><strong>Problem.</strong> promote→rollup stage order lives in two orchestrators; S7 will add a third hook stage.</p>
+          <p><strong>Solution.</strong> Pure <span class="font-mono">postEditPasses(committed, ctx)</span>; commit folds, construction applies silently.</p>
+          <p class="text-xs text-amber-700">Does not challenge ADR 0006 or removable-leaf guards — unifies orchestration inside <span class="font-mono">data/</span> only.</p>
+        </div>
+      </article>
+
+      <article id="c4" class="rounded-2xl border bg-white overflow-hidden">
+        <div class="px-6 py-4 border-b flex items-center gap-3">
+          <h2 class="font-serif text-xl flex-1">C4 — Extract GanttViewport from shell</h2>
+          <span class="badge-worth text-xs px-2 py-1 rounded">WORTH EXPLORING</span>
+        </div>
+        <div class="p-6 space-y-3 text-sm">
+          <p class="font-mono text-slate-600">view/gantt-shell.ts · view/grid-columns.ts · view/attach-row-twisty.ts</p>
+          <p><strong>Problem.</strong> Shell module is shallow at ~975 lines — interface nearly matches implementation breadth.</p>
+          <p><strong>Solution.</strong> Viewport module owns collapse, rowSource invalidation, planned-row navigation; shell composes.</p>
+        </div>
+      </article>
+
+      <section id="top-recommendation" class="rounded-2xl border-2 border-emerald-400 bg-emerald-50 p-6 space-y-2">
+        <h2 class="font-serif text-xl">Top recommendation</h2>
+        <p class="text-sm text-slate-800">
+          Tackle <a href="#c2" class="underline font-semibold">C2 — Collapse-all on the Gantt interface</a> first.
+          It closes the harness API gap behind <span class="font-mono">parentIdsWithChildren</span>,
+          fixes grouped-row collapse targets, and gives e2e a stable hook —
+          with small surface area and no ADR conflict.
+        </p>
+        <p class="text-xs text-slate-600">
+          Follow with <a href="#c1" class="underline">C1</a> before S5 hot-path work.
+          Rename <span class="font-mono">emitTreeRows</span> → <span class="font-mono">produceTreeRows</span> in the same pass as any sort touch.
+        </p>
+      </section>
+
+      <footer class="text-xs text-slate-400 pt-8 border-t">
+        Generated by pk-branch-review · fixed point <span class="font-mono">80e0717</span> · HEAD <span class="font-mono">df934aa</span>
+      </footer>
+    </main>
+  </body>
+</html>
