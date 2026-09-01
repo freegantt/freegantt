@@ -51,6 +51,15 @@ toggleBudgetBtn.addEventListener('click', () => {
   toggleBudgetBtn.textContent = budgetVisible ? 'Hide Budget' : 'Show Budget';
 });
 
+const reparentBtn = document.querySelector<HTMLButtonElement>('#reparent-btn')!;
+reparentBtn.addEventListener('click', () => {
+  try {
+    dataset.entries.update('entry-2', { parentId: 'entry-1' });
+  } catch (error) {
+    if (!(error instanceof MutationCancelledError)) throw error;
+  }
+});
+
 mountTimelineToolbar({ gantt, container: document.querySelector<HTMLDivElement>('#toolbar')! });
 
 const nameInput = document.querySelector<HTMLInputElement>('#rename-input')!;

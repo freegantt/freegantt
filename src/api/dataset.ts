@@ -21,7 +21,8 @@ import {
   readDocument,
   warnIfRollUpsWereCorrected,
 } from '../data/serialization/index.js';
-import type { RollUpKinds } from '../model/index.js';
+import type { DatasetHierarchy, RollUpKinds } from '../model/index.js';
+export type { DatasetHierarchy };
 
 export interface DatasetOptions<TMeta = unknown> {
   /** What the consumer writes. Ids are plain strings and dates are any `InstantInput` — an ISO string,
@@ -45,6 +46,10 @@ export interface DatasetOptions<TMeta = unknown> {
   fieldTypes?: Readonly<Record<string, FieldType>>;
   /** Consumer Aggregators by name. Shipped names (`min`, `sum`, …) are already registered. */
   aggregators?: Readonly<Record<string, Aggregator>>;
+  /** First-child promotion (D-S4-17). Default is `{ autoGroup: true }`: a `'span'` parent
+   *  becomes `'group'` in the same transaction that gives it its first child. Pass
+   *  `{ autoGroup: false }` to keep Kind exactly as authored. Promotion never demotes. */
+  hierarchy?: DatasetHierarchy;
   /** Undo/redo History. `{ capacity: 200 }` keeps 200 undoable transactions; defaults to 100
    * (`plans/s2-data-core/s2.5-undo-redo.md` §1). */
   history?: { capacity?: number };
@@ -80,6 +85,11 @@ export class Dataset<TMeta = unknown, TFields extends Record<string, unknown> = 
 
   get rollUpKinds(): readonly EntryKind[] {
     return [...this.#state.rollUpKinds];
+  }
+
+  /** Call: `dataset.hierarchy.autoGroup`. Construction-time policy; not live-reconfigurable. */
+  get hierarchy(): DatasetHierarchy {
+    return { autoGroup: this.#state.hierarchy.autoGroup };
   }
 
   /** The resolved Field for this key, or `undefined` when the key is not declared.

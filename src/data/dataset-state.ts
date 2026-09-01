@@ -9,6 +9,7 @@ import type {
   DateOnlyEndRule,
   Dataset,
   DatasetEventMap,
+  DatasetHierarchy,
   EntryInput,
   EntryKind,
   Field,
@@ -44,6 +45,10 @@ function resolveRollUpKinds(input: RollUpKinds | undefined): ReadonlySet<EntryKi
   return new Set(list);
 }
 
+function resolveHierarchy(input: DatasetHierarchy | undefined): DatasetHierarchy {
+  return { autoGroup: input?.autoGroup !== false };
+}
+
 export interface DatasetStateOptions {
   entries: readonly EntryInput[];
   timeZone: string;
@@ -59,6 +64,9 @@ export interface DatasetStateOptions {
   fields?: readonly Field[];
   fieldTypes?: Readonly<Record<string, FieldType>>;
   aggregators?: Readonly<Record<string, Aggregator>>;
+  /** First-child promotion (D-S4-17). Defaults to `{ autoGroup: true }`. Pass
+   *  `{ autoGroup: false }` to keep `'span'` parents as authored. */
+  hierarchy?: DatasetHierarchy;
   /** The extension hook a transaction calls once per commit (D-S2-6). Internal only — `data/` is
    *  unreachable through the package's `exports` map, so a plugin-facing install API lands in **S5**
    *  with the plugin runtime (#15), not on this option; the first-party scheduler occupies the slot in
@@ -95,6 +103,8 @@ export class DatasetState implements Dataset {
    *  `data/transaction.ts`'s commit step, the only file allowed to import the rollup itself
    *  (`rollup-is-removable`, D-S4-7) — this class hands over the *kinds*, never the function. */
   readonly rollUpKinds: ReadonlySet<EntryKind>;
+  /** Resolved once at construction. Promotion reads this; it does not live-reconfigure. */
+  readonly hierarchy: DatasetHierarchy;
   readonly fields: FieldRegistry;
   readonly fieldContext: FieldContext;
   readonly computedCache = new ComputedFieldCache();
@@ -110,6 +120,7 @@ export class DatasetState implements Dataset {
     this.referenceDate = now();
     this.editExtender = options.editExtender ?? identityExtender;
     this.rollUpKinds = resolveRollUpKinds(options.rollUpKinds);
+    this.hierarchy = resolveHierarchy(options.hierarchy);
     this.fields = new FieldRegistry({
       fields: options.fields ?? [],
       fieldTypes: options.fieldTypes ?? {},

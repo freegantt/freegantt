@@ -12,7 +12,7 @@ function treeDataset(
     end?: string;
     meta?: { cost?: number };
   }[],
-  options: { rollUpKinds?: readonly string[] | 'none' } = {},
+  options: { rollUpKinds?: readonly string[] | 'none'; hierarchy?: { autoGroup: boolean } } = {},
 ) {
   return new DatasetState({
     entries: entries.map((e) => ({
@@ -65,7 +65,7 @@ describe('rollUpFields (S4.2)', () => {
         { id: 'p1', kind: 'span', meta: { cost: 99 } },
         { id: 'c1', parentId: 'p1', meta: { cost: 10 } },
       ],
-      { rollUpKinds: ['group'] },
+      { rollUpKinds: ['group'], hierarchy: { autoGroup: false } },
     );
 
     state.entries.update('c1', { cost: 50 });

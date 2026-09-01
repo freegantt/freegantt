@@ -146,6 +146,7 @@ describe('Dataset transaction/on/off delegation', () => {
       entries: [{ id: 'p1', name: 'Sitework', kind: 'group' }, oneEntry({ id: 't1', parentId: 'p1' })],
     });
     expect(dataset.rollUpKinds).toEqual(['group']);
+    expect(dataset.hierarchy).toEqual({ autoGroup: true });
     expect(dataset.entries.childrenOf('p1').map((e) => e.id)).toEqual([entryId('t1')]);
   });
 

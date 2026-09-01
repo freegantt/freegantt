@@ -1,6 +1,6 @@
 # S4 — Hierarchy, grouping, multi-item rows
 
-**Slice:** S4 (`plans/03` §S4) · **Position:** after S3, before S5 · **Status:** S4.1–S4.4 done; continue at **S4.5**
+**Slice:** S4 (`plans/03` §S4) · **Position:** after S3, before S5 · **Status:** S4.1–S4.5 done; continue at **S4.6**
 **Form:** the same settled-spec form as [`plans/s3-direct-manipulation/README.md`](../s3-direct-manipulation/README.md) — this file is the tracker and the shared context; each step file holds the decisions it implements and its TODO boxes.
 **Tick as you go:** When you finish a TODO item, tick its box in that step file. Tick it in the same change as the code. Tick each item when it lands. Do not wait for S4.11 or the slice gate.
 **Last review:** [`plans/reviews/2026-08-31-s4.3-s4.4.html`](../reviews/2026-08-31-s4.3-s4.4.html) — S4.3/S4.4 branch review. Spec-review findings already landed in this spec (2026-08-31): sort binds `FieldCompare` from declared Fields; `emitRow`/`packRow`; X2 is `'header'`; `CustomRow` is the public custom-source DTO.
@@ -23,12 +23,12 @@
 | **Q5** | Does an Aggregator that throws roll the transaction back, or keep the stored value? (ADR 0005's open question) | **It rolls the transaction back**, with a named `AggregatorFailedError`. Keeping the stored value leaves a parent whose value no longer follows its children, with nothing said — principle 6 ("diagnostics over silent fixes") forbids exactly that, and a diagnostics channel does not exist before S7. §S4.2, D-S4-9. |
 | **Q6** | Are shipped Aggregators maintained incrementally while consumer ones force a full walk? (ADR 0005's other open question) | **No — one path for both.** Every Aggregator recomputes the ancestor chains of the touched entries. A two-speed design would give a consumer field different commit semantics from `start`, which is the second code path ADR 0005 exists to remove. §S4.2, D-S4-8. |
 | **Q7** | Does `computeFrame` grow row sources, trees, emitters and packing inside its current loop? | **No.** It becomes composition over four named stages, each its own module with one reason to change. The function is 293 lines and already carries culling, header bands and decorations; four more concerns inside it is the ball of mud this slice is most likely to produce. §S4.6, D-S4-19. |
-| **Q8** | Is `hierarchy: { autoGroup: true }` the default? | **No — the default is `false`.** Promotion writes `kind` into the Document, and `kind` is authored (`01` §2.5). A library that rewrites an authored field nobody asked it to touch is not honest. The harness turns it on; the demo is the argument for it. §S4.5, D-S4-17. |
+| **Q8** | Is `hierarchy: { autoGroup: true }` the default? | **Yes.** Nesting is the common case. Pass `{ autoGroup: false }` to keep a `'span'` parent as authored. §S4.5, D-S4-17. |
 | **Q9** | Is `progress` a core Field? | **No — it is scheduling-plugin data (ADR 0008).** It is not on `Entry`. `weightedMeanByDuration` still ships as an Aggregator. |
 | **Q10** | How does a Field become a Grid column? | **It declares `column`.** Same split AG Grid uses (row data vs `columnDefs`), except aggregation stays on the Field, not on the column. `gridColumns` lists which columnable Fields this Gantt shows. Default is still `['name']`. `parentId` / `segments` / `meta` have no `column`. Naming them throws `FieldNotColumnableError`. §S4.3, D-S4-12. |
 | **Q11** | What does a shipped Aggregator do with holes? | **It skips them** and never throws. All skipped → `undefined` (keep stored). §S4.1, D-S4-3. |
 | **Q12** | After a Segment write, who owns `start`/`end`? | **The envelope, in the same transaction.** A `start`/`end` write on a segmented entry throws `SegmentsOutOfSyncError`. §S4.10, D-S4-30. |
-| **Q13** | Does `autoGroup` promote a `'milestone'`? | **No.** `'span'` only. Already-`'group'` is a no-op. No throw. §S4.5, D-S4-17. |
+| **Q13** | Does `autoGroup` promote a Kind that is not `'span'`? | **No.** `'span'` only. Already-`'group'` is a no-op. No throw. §S4.5, D-S4-17. |
 | **Q14** | What is in `gantt.collapsed`, and what does a grouping-header cell show? | **`RowId`s.** Entries-source ids equal `EntryId`. Header `cells[0]` is `headerLabel`; the rest are empty. §S4.6, D-S4-22, D-S4-23. |
 | **Q15** | Does `transaction.ts` keep a static import of the Rollup? | **Yes — it is the one importer**, same as S2's span leaf. Default is on. `rollUpKinds: 'none'` (or `[]`) keeps the values the caller assigned on the parent. Delete `rollup.ts` is that same stored result. No public `rollUp` function. §S4.2, D-S4-6, D-S4-7. |
 | **Q16** | If a Field omits `rollUp`, what happens? | **After Field-type merge, it does not participate — unless the type supplied a name.** A Field type's `rollUp` is the default Aggregator name (shipped or a consumer name in `aggregators`). The Field's own keys win, so `rollUp: 'none'` opts that Field out. There is no global default Aggregator and no shipped `number`/`instant` types. Dates use `min`/`max`, not `sum`. §S4.1, D-S4-3. |
@@ -54,7 +54,7 @@ Each story names the step that owns it. Acceptance boxes live in the step files.
 - **U8.** (consumer) An entry with `segments` draws several bars on one row. I drag one of them and only that segment moves. → S4.7, S4.10
 - **U9.** (consumer) I turn on `heightMode: 'pack'`. Overlapping items stack into lanes and the row grows to fit them. → S4.8
 - **U10.** (consumer) I filter to one team. A matching deep child still appears under its chain of parents. → S4.9
-- **U11.** (consumer) I turn on `autoGroup`. Reparenting an entry promotes its new parent to `'group'` in the same undo step. Removing the last child demotes nothing. → S4.5
+- **U11.** (consumer) I reparent an entry under a plain entry. The parent becomes `'group'` in the same undo step. Removing the last child demotes nothing. → S4.5
 - **U12.** (reviewer) I run `pnpm gate` on `.slice` = `S4` and read eleven lines, each naming an acceptance box from `plans/03` and each backed by a test that ran. → S4.11
 - **U13.** (consumer) I set `rollUpKinds: 'none'` and assign `start`/`end`/`cost` on the parent. A child edit leaves those values. → S4.2
 - **U14.** (consumer) I set `filterPolicy: 'matchOnly'`. Only matching entries appear — no ancestor rows. → S4.9
@@ -150,7 +150,7 @@ import { Dataset, Gantt } from 'freegantt';
 const dataset = new Dataset({
   timeZone: 'America/Chicago',
   rollUpKinds: ['group'],                     // default; `'none'` keeps caller-assigned parent values
-  hierarchy: { autoGroup: true },             // default false
+  hierarchy: { autoGroup: true },             // default; `{ autoGroup: false }` keeps span parents
   fieldTypes: { money: { rollUp: 'sum', formatValue: asCurrency, column: { align: 'end' } } },
   aggregators: { riskWeighted: (children, parent, ctx) => /* … */ },
   fields: [{ key: 'cost', type: 'money' }],
@@ -217,7 +217,7 @@ Full prose lives in the step file that implements each decision.
 | D-S4-14 | `formatValue` is text; renderers stay out of `data/` | S4.3 |
 | D-S4-15 | The Document carries the data half of a Field | S4.4 |
 | D-S4-16 | `schema: 2`, and `schema: 1` still reads | S4.4 |
-| D-S4-17 | `autoGroup` defaults to `false`; promotes `'span'` only | S4.5 |
+| D-S4-17 | `autoGroup` defaults to `true`; promotes `'span'` only | S4.5 |
 | D-S4-18 | Promote only, never demote | S4.5 |
 | D-S4-19 | `computeFrame` becomes four stages; `emitRow` / `packRow` | S4.6 |
 | D-S4-20 | Rows resolve whole-dataset; placement windowed; emit/pack on-demand | S4.6 |
@@ -248,7 +248,7 @@ Read these before you touch `src/`.
 4. **`computeFrame` is composition after S4.6.** Do not add a branch to it. Add a stage, or change the stage that owns the concern.
 5. **Never split an `ItemId` inline.** Use `model/ids.ts`'s builder and its new reader. S3's `entryFor(itemId)` already depends on this.
 6. **Collapse, filter and sort are view state.** None of them may reach the Rollup, the changeset, or the Document. `[S4-A6]` and D-S4-11 both test this.
-7. **`kind` stays authored.** The only automated write to it is `autoGroup`'s promotion, and only when the consumer turned it on.
+7. **`kind` stays authored.** The only automated write to it is `autoGroup`'s promotion, on by default; `{ autoGroup: false }` turns that write off.
 8. **Review `harness/main.ts` on every commit**, changed or not (CLAUDE.md). Code there that re-derives what the library computes is an API gap to close in `src/`.
 9. **Run the full check sequence** after each step: `pnpm vitest run`, `tsc --noEmit`, `eslint src harness`, `depcruise`, `node scripts/guard-red-test.mjs`.
 10. **`.slice` bumps only at S4.11** — not before the gate is green.
