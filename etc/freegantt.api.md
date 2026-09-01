@@ -427,6 +427,9 @@ export interface FieldUpdated {
     to: unknown;
 }
 
+// @public (undocumented)
+export type FilterPolicy = 'keepAncestors' | 'matchOnly';
+
 // @public
 export interface FormatContext extends FieldContext {
     // (undocumented)
@@ -719,6 +722,9 @@ export interface RollUpContext extends FieldContext {
 }
 
 // @public (undocumented)
+export type RowFilter = (entry: Entry) => boolean;
+
+// @public (undocumented)
 export type RowHeightMode = 'fixed' | 'pack';
 
 // @public (undocumented)
@@ -733,12 +739,28 @@ export interface RowResolveInput {
 }
 
 // @public (undocumented)
+export interface RowSort {
+    // (undocumented)
+    compare?(a: unknown, b: unknown): number;
+    // (undocumented)
+    direction?: 'asc' | 'desc';
+    // (undocumented)
+    field: FieldKey;
+}
+
+// @public (undocumented)
 export type RowSource = EntriesRowSource | GroupRowSource | CustomRowSource;
 
 // @public
 export interface RowSourceCommon {
     // (undocumented)
+    filter?: RowFilter;
+    // (undocumented)
+    filterPolicy?: FilterPolicy;
+    // (undocumented)
     heightMode?: RowHeightMode;
+    // (undocumented)
+    sort?: RowSort;
 }
 
 // @public (undocumented)
