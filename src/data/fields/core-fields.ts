@@ -38,6 +38,12 @@ function formatDuration(value: unknown): string {
   return `${days.toFixed(1)} d`;
 }
 
+function compareDuration(a: Duration | undefined, b: Duration | undefined): number {
+  if (a === undefined || a === null) return 1;
+  if (b === undefined || b === null) return -1;
+  return a.value - b.value;
+}
+
 export const CORE_FIELDS: readonly Field[] = Object.freeze([
   {
     key: 'name',
@@ -90,6 +96,7 @@ export const CORE_FIELDS: readonly Field[] = Object.freeze([
       from: 'compute',
       read: (entry, ctx) => ctx.durationOf(entry),
     },
+    compare: compareDuration,
     formatValue: formatDuration,
     column: { header: 'Duration', align: 'end' },
   },

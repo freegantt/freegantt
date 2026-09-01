@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { entryId, rowId, UnknownFieldError } from '../../model/index.js';
 import type { Entry, Instant } from '../../model/index.js';
 import type { FieldCompare } from '../column.js';
+import type { RowSource } from './row-source.js';
 import { resolveRows } from './resolve-rows.js';
 
 function instant(n: number): Instant {
@@ -58,6 +59,15 @@ function costCompares(): readonly FieldCompare[] {
   ];
 }
 
+const treeEntries = [
+  entry('p', { team: 'A', start: 0 }),
+  entry('c1', { parentId: 'p', team: 'A', start: 20 }),
+  entry('c2', { parentId: 'p', team: 'A', start: 10 }),
+  entry('q', { team: 'B', start: 5 }),
+];
+
+const teamA = (row: Entry) => (row.meta as { team?: string } | undefined)?.team === 'A';
+
 describe('resolveRows (D2, S4.9)', () => {
   it('matchOnly plus collapse does not paint a twisty that hides nothing', () => {
     const entries = [entry('a'), entry('b', { parentId: 'a' }), entry('c', { parentId: 'b' })];
@@ -102,5 +112,96 @@ describe('resolveRows (D2, S4.9)', () => {
         fieldCompares: costCompares(),
       }),
     ).toThrow(UnknownFieldError);
+  });
+
+  it('filter, then sort, then collapse — a collapsed parent that survives the filter still hides descendants', () => {
+    const rows = resolveRows({
+      entries: treeEntries,
+      rows: {
+        source: 'entries',
+        tree: true,
+        filter: teamA,
+        sort: { field: 'start' },
+      },
+      collapsed: [rowId('p')],
+      fieldCompares: costCompares(),
+    });
+    expect(rows.map((row) => row.id)).toEqual([rowId('p')]);
+    expect(rows[0]?.expanded).toBe(false);
+  });
+});
+
+describe('resolveRows source × policy × sort × collapsed', () => {
+  const cases: {
+    name: string;
+    rows: RowSource;
+    collapsed?: readonly string[];
+    ids: readonly string[];
+  }[] = [
+    {
+      name: 'entries tree keepAncestors sort collapsed',
+      rows: { source: 'entries', tree: true, filter: teamA, sort: { field: 'start' } },
+      collapsed: [rowId('p')],
+      ids: ['p'],
+    },
+    {
+      name: 'entries tree keepAncestors sort expanded',
+      rows: { source: 'entries', tree: true, filter: teamA, sort: { field: 'start' } },
+      ids: ['p', 'c2', 'c1'],
+    },
+    {
+      name: 'entries tree matchOnly sort',
+      rows: {
+        source: 'entries',
+        tree: true,
+        filter: teamA,
+        filterPolicy: 'matchOnly',
+        sort: { field: 'start' },
+      },
+      ids: ['p', 'c2', 'c1'],
+    },
+    {
+      name: 'entries flat sort',
+      rows: { source: 'entries', tree: false, sort: { field: 'start' } },
+      ids: ['p', 'q', 'c2', 'c1'],
+    },
+    {
+      name: 'group sort collapsed',
+      rows: {
+        source: 'group',
+        groupBy: (row) => String((row.meta as { team?: string }).team),
+        sort: { field: 'start' },
+      },
+      collapsed: [rowId('group:A')],
+      ids: ['group:A', 'group:B', 'q'],
+    },
+    {
+      name: 'group sort expanded',
+      rows: {
+        source: 'group',
+        groupBy: (row) => String((row.meta as { team?: string }).team),
+        sort: { field: 'start' },
+      },
+      ids: ['group:A', 'p', 'c2', 'c1', 'group:B', 'q'],
+    },
+    {
+      name: 'custom ignores filter sort collapsed',
+      rows: {
+        source: 'custom',
+        resolve: () => [{ id: 'only', entryIds: ['q'] }],
+      },
+      collapsed: [rowId('only')],
+      ids: ['only'],
+    },
+  ];
+
+  it.each(cases)('$name', ({ rows, collapsed, ids }) => {
+    const planned = resolveRows({
+      entries: treeEntries,
+      rows,
+      ...(collapsed !== undefined ? { collapsed } : {}),
+      fieldCompares: costCompares(),
+    });
+    expect(planned.map((row) => String(row.id))).toEqual(ids);
   });
 });
