@@ -1,13 +1,13 @@
 # FreeGantt
 
 Framework-free TypeScript Gantt/timeline library. Library-first: the API, docs, and packaging are
-designed for external consumers from day one. See `plans/00-overview.md` for the full spec and
-`plans/03-slices.md` for the delivery roadmap; this file documents the public surface as it lands,
-slice by slice.
+designed for external consumers from day one. See `plans/00-overview.md` for the full spec,
+`plans/03-slices.md` for the delivery roadmap, and `docs/05-consumer-api.md` for a consumer API index;
+this file documents the public surface as it lands, slice by slice.
 
-**Status:** pre-release, slice `S1` in progress (`.slice`). Nothing here is published yet. The
-public API below is a work in progress and will change — names, options, and defaults are not
-stable across slices until S1 closes (`plans/03-slices.md`).
+**Status:** pre-release, slice **S4** in progress (hierarchy, fields, row sources — see `plans/03-slices.md`).
+The public API below reflects what ships on this branch; names and options may still change until S4
+closes. The full, defended spec is `plans/02-public-api.md`; `CONTEXT.md` is the glossary.
 
 ## Quick start
 
@@ -175,7 +175,7 @@ boundary already and is read literally under either setting. `start` is never ad
 
 Everything importable by a consumer lives under `src/api/` and `src/model/` (types only). Internal
 layers (`time/`, `data/`, `scheduling/`, `layout/`, `render/`, `view/`) are not part of the public
-surface.
+surface. The authoritative design doc is `plans/02-public-api.md`.
 
 ### `Dataset`
 
@@ -186,61 +186,133 @@ const dataset = new Dataset({
   entries, // readonly EntryInput[] — see "Dates and ids a consumer can write"
   timeZone, // IANA zone, required (D6)
   dateOnlyEnd, // optional, 'inclusive' (default) | 'exclusive'
+  rollUpKinds: ['group'], // default; 'none' keeps caller-assigned parent values
+  hierarchy: { autoGroup: true }, // default; first child promotes parent to kind 'group'
+  fieldTypes: { money: { rollUp: 'sum', formatValue: asCurrency, column: { align: 'end' } } },
+  fields: [{ key: 'cost', type: 'money' }, { key: 'team' }],
 });
 
 dataset.entries.all; // readonly Entry[] — ids branded, dates resolved to Instant
+dataset.entries.childrenOf('p1'); // direct children in store order
 
 dataset.entries.add({ id: 't9', name: 'Roofing', start: '2026-10-01', end: '2026-10-15' });
-dataset.entries.update('t2', { name: 'Framing — north wing' });
-dataset.entries.remove('t9');
+dataset.entries.update('t2', { name: 'Framing — north wing', cost: 12_000 });
+dataset.entries.remove('t9'); // and every descendant, in the same changeset
+dataset.entries.fieldValue('t2', 'cost'); // reads through the Field registry
+
+dataset.field('cost'); // resolved Field | undefined
+dataset.fields.all; // every declared Field, core included
 
 dataset.transaction(() => {
   /* several entries.add/update/remove calls, one changeset */
 });
 
+dataset.on('beforeChange', ({ changeSet }) => false); // veto — throws MutationCancelledError
 dataset.on('change', ({ changeSet }) => {
   /* changeSet.added / .removed / .updated — a bound Gantt reacts to this itself */
 });
 
 dataset.undo(); // origin: 'undo' on the change event it emits
 dataset.redo(); // origin: 'redo'
-dataset.canUndo; // false once the stack (default capacity 100) is exhausted
+dataset.canUndo;
 dataset.canRedo;
+
+const doc = dataset.toJSON(); // schema: 2
+const copy = Dataset.fromJSON(doc, { aggregators }); // function keys travel with the app
 
 // The write path undo()/redo() are built on, published for a consumer's own History:
 dataset.replay(invertChangeSet(recordedChangeSet)); // origin must be 'undo' or 'redo'
 ```
 
-`Dataset` is a headless, DOM-free wrapper around an entry list. It reads each `EntryInput` into an
-`Entry` once, at construction, and never mutates what the consumer handed it. Every mutator
-auto-wraps in a transaction (D-S2-8); `dataset.transaction(() => { ... })` batches several into one
-changeset. A `Gantt` bound to the dataset subscribes to `change` itself — editing after mount renders
-on the next frame with no extra call. `beforeChange` can veto a changeset (returning `false` throws
-`MutationCancelledError` from the mutator that triggered it); `undo()`/`redo()` revert or replay a
-committed changeset exactly, cascades included, without re-running the extension hook. `replay` and
-`invertChangeSet` are that same write path, published — a consumer can write their own History against
-`on('change')`, `invertChangeSet`, and `replay` alone, with no internal import. Dependencies land in a
-later slice — see `plans/03-slices.md`.
+`Dataset` is headless and DOM-free. It reads each `EntryInput` into an `Entry` once, at
+construction. Every mutator auto-wraps in a transaction; `dataset.transaction(() => { ... })` batches
+several into one changeset. A `Gantt` bound to the dataset subscribes to `change` itself — editing
+after mount renders on the next frame with no extra call.
 
-### `TimeScaleModel` (S1)
+**Fields** declare what values _are_ (`fields`, `fieldTypes`, `aggregators` on the Dataset). A Field
+key on `entries.update` and `entries.fieldValue` is the one write/read path for entry-sourced,
+meta-sourced, and compute-sourced values. An unregistered key throws `UnknownFieldError`.
+
+Dependencies land in slice S7 — see `plans/03-slices.md`.
+
+### Fields and grid columns
+
+**A field is what a value _is_; a grid column is where a Gantt _shows_ it.** Fields live on the
+`Dataset`; grid columns live on the `Gantt` (`gridColumns`). A Field with a `column` declaration is
+columnable; naming a non-columnable Field in `gridColumns` throws `FieldNotColumnableError`.
 
 ```ts
-import { TimeScaleModel } from 'freegantt';
-
-const scale = new TimeScaleModel({
-  zone: 'America/Chicago', // IANA zone; all civil (day/week) stepping resolves through it
-  range: { start, end }, // Instant, Instant — half-open [start, end)
-  pxPerMs: 1 / (1000 * 60 * 60), // linear scale for now; non-linear scales are a future TimeScale impl
-});
+gantt.gridColumns = ['name', 'start', 'duration', 'cost'];
+gantt.gridColumns = [
+  'name',
+  'start',
+  { field: 'cost', header: 'Budget — site A' }, // per-Gantt presentation override only
+];
 ```
 
-The standalone, shareable object a `Gantt` binds to for time↔pixel mapping (`plans/01` §8.2, D9).
-Pass the **same instance** to two `Gantt`s and their x-axis stays in sync by construction — no
-event plumbing, no link manager. Omit `scale` on `Gantt` and it builds a private default sized to
-the dataset's entry range — single-Gantt usage never has to meet this concept.
+Default `gridColumns` is `['name']`. Declaring a Field does not add it to the grid — only names it
+in `gridColumns`.
 
-Preset switching, zoom, and named presets (`'weekAndMonth'` etc.) land later in S1; today
-`TimeScaleModel` only takes an explicit `zone`/`range`/`pxPerMs`.
+### Row sources and collapse
+
+**`gantt.rowSource`** names the config that decides what rows this Gantt draws. Default:
+`{ source: 'entries', tree: false }`.
+
+```ts
+// Entries as a tree (parentId)
+gantt.rowSource = { source: 'entries', tree: true };
+
+// One header row per groupBy value
+gantt.rowSource = { source: 'group', groupBy: (entry) => entry.meta.team };
+
+// Consumer-supplied rows
+gantt.rowSource = {
+  source: 'custom',
+  resolve: ({ entries }) => [{ id: 'a', entryIds: ['t1'] }],
+};
+
+// Sort, filter, and pack mode live on the row source (entries and group only)
+gantt.rowSource = {
+  source: 'entries',
+  tree: true,
+  heightMode: 'pack', // 'fixed' (default) stacks overlaps into lanes
+  filter: (entry) => entry.meta.team === 'A',
+  filterPolicy: 'keepAncestors', // or 'matchOnly'
+  sort: { field: 'start', direction: 'asc' },
+};
+```
+
+Assigning `gantt.rowSource` re-resolves rows live with no remount; scroll position survives.
+
+**Collapse** is per-Gantt view state (not in the Dataset):
+
+```ts
+gantt.collapsed = ['p1'];
+gantt.collapse('p1');
+gantt.expand('p1');
+gantt.on('collapseChange', ({ to }) => save(to));
+```
+
+For `{ source: 'entries' }`, a `RowId` equals the `EntryId`. Group headers use derived ids from the
+`groupBy` value.
+
+### `TimeScaleModel` and `ScrollModel`
+
+```ts
+import { TimeScaleModel, ScrollModel } from 'freegantt';
+
+const scale = new TimeScaleModel({ preset: 'weekAndMonth', range: 'fitDataset' });
+const scroll = new ScrollModel();
+
+const gantt = new Gantt({ container, dataset, scale, scroll });
+```
+
+Pass the **same** `TimeScaleModel` and/or `ScrollModel` to two `Gantt` instances to x-sync them (D9).
+Omit both and the Gantt builds private defaults — single-chart usage never has to meet the concept.
+
+On `Gantt` directly (when no shared `scale` is passed): `preset`, `range`, `fit`, `zoomIn`/`zoomOut`,
+`zoomPresets`, `panToDate`, `panToToday`, and `navigationChange`. Supplying `scale` alongside
+`preset`/`range`/`fit` is a type error — set axis intent on the shared model instead.
 
 ### `Gantt`
 
@@ -248,30 +320,31 @@ Preset switching, zoom, and named presets (`'weekAndMonth'` etc.) land later in 
 import { Gantt } from 'freegantt';
 
 const gantt = new Gantt({
-  container: element, // HTMLElement
-  dataset, // Dataset
+  container: element, // HTMLElement or CSS selector
+  dataset,
   scale, // optional TimeScaleModel — omit for a private default
-  preset, // optional ViewPreset — omit for dayPreset (see below)
-  rowHeight: 32, // optional, defaults to 32
+  scroll, // optional ScrollModel
+  preset: 'weekAndMonth', // when scale is omitted
+  range: 'fitDataset', // or { start, end } — InstantInput
+  gridColumns: ['name', 'start', 'duration'],
+  rowSource: { source: 'entries', tree: true },
+  theme: 'auto', // 'light' | 'dark'
+  todayLine: true,
+  locale: 'de-DE',
+  interactions: { move: true, resize: (e) => e.kind !== 'group' },
+  viewportGestures: { wheelZoom: true },
 });
 
 gantt.destroy();
 ```
 
-Mounts a Gantt into `container` and renders `dataset.entries` as positioned bars under a header band of
-time ticks, one row per entry (flat list; hierarchy/grouping land in S5). Two `Gantt` instances on
-one page are fully independent (no shared module state — I2); two given the same `scale` x-sync
-(D9, proven in `src/api/gantt.test.ts`).
+Mounts a Gantt into `container`: a grid pane (configurable columns), a splitter, and a timeline pane
+with header bands and bars. Row height comes from `--fg-row-height` (default 32px) unless
+`heightMode: 'pack'` is set on the row source. Two `Gantt` instances on one page are fully
+independent (I2); two given the same `scale`/`scroll` x-sync (D9).
 
-### `dayPreset` (S1)
-
-```ts
-import { dayPreset } from 'freegantt';
-```
-
-The shipped default `ViewPreset`: one header tick per civil day, labeled `YYYY-MM-DD` in the
-scale's zone. Presets are plain config objects, never a switch statement (`plans/01` §5.1) — more
-shipped presets (hour→year) and preset switching land later in S1.
+Every config key is a live property — assign `gantt.preset`, `gantt.gridColumns`, `gantt.rowSource`,
+and so on without remounting.
 
 ### Selection (S3)
 
@@ -333,6 +406,12 @@ Holding **Alt** during a drag suspends snapping for that one gesture, regardless
 has a "Snap" control (Auto / Off / Hour / Day / Week, plus an increment) wired to this same
 `gantt.preset` assignment — try it against a live drag at `pnpm dev`.
 
+## Events
+
+Gantt events (`entryMove`, `selectionChange`, `collapseChange`, `navigationChange`, …) fire on the
+`Gantt`. Data events (`change`, `beforeChange`) fire on the `Dataset`. Every mutating interaction has
+a cancelable `before*` pair where veto applies — see `plans/02-public-api.md` §3 for the full table.
+
 ## Styling and theming
 
 `Gantt` injects its own default stylesheet once per `document` (`<style data-freegantt-styles>`),
@@ -348,7 +427,8 @@ properties it defines, in the consumer app's own `.css`:
 ```
 
 The full set of overridable tokens (`--fg-pane-bg`, `--fg-header-bg`, `--fg-bar-fill`,
-`--fg-warn`, and so on) is listed in `src/view/styles.ts`. Any selector the library renders
+`--fg-warn`, `--fg-indent-width`, `--fg-lane-gap`, and so on) is listed in `plans/02-public-api.md`
+§4.1 and `src/view/styles.ts`. Any selector the library renders
 (`.fg-bar`, `.fg-row`, `.fg-header`, …) can also be targeted directly for changes a token doesn't
 cover.
 
@@ -379,26 +459,16 @@ To customize dark mode instead of just light mode, scope the override to the dar
 }
 ```
 
-## Internal building blocks (not yet public, documented here as they're built)
+## Further reading
 
-### `time/TimeScale`
-
-Pure, DOM-free mapping between `Instant` (epoch ms) and pixels, plus tick generation for a
-`ViewPreset`. Lives in `src/time/scale.ts`; `TimeScaleModel` (above) is the public wrapper around
-it. Arithmetic on an `Instant` is only legal inside `time/` (I10) — `TimeScale.xForInstant` /
-`instantForX` / `widthForDuration` are the only sanctioned way to convert time to pixels elsewhere
-(I12).
-
-Supported step units today: `ms`, `m`, `h`, `d`, `w` (month/year presets land once `time/` grows
-civil month arithmetic). A `ViewPreset` is plain config (`tickUnit`, `tickIncrement`, `headers`,
-`tickWidthPx`, `snap`) — never a switch statement in the library; custom presets are just objects.
-
-`TimeScaleModel` itself lives in `src/layout/time-scale-model.ts`, not `time/` — it's the only
-DOM-free layer both allowed to import `time/` and reachable from `view/`→`api/` through the
-layer-boundary rules (I1), so that's where the public wrapper is defined and re-exported through.
-
-Next up in S1: `ScrollModel` + virtualization, the grid pane with shared row geometry (I9), and
-anchored zoom/preset switching — see `plans/03-slices.md` S1.
+| Doc                       | Audience                                                                |
+| ------------------------- | ----------------------------------------------------------------------- |
+| `plans/02-public-api.md`  | Full consumer API — events, errors, serialization, customization ladder |
+| `docs/05-consumer-api.md` | Consumer API index and S4 surface summary                               |
+| `CONTEXT.md`              | Glossary (Entry, Field, Row, Row source, Rollup, …)                     |
+| `plans/03-slices.md`      | Delivery roadmap and acceptance criteria                                |
+| `etc/freegantt.api.md`    | Generated TypeScript export report (api-extractor)                      |
+| `harness/docs/`           | Internal module maps for maintainers (may lag the current slice)        |
 
 ## Development
 
@@ -409,5 +479,7 @@ pnpm verify     # format/typecheck/lint/boundaries/guards/unit tests/vendor-name
 pnpm test:e2e   # Playwright smoke test against the harness
 ```
 
-The dev harness (`harness/`) is a living page: every slice adds to it, and it's the place to
-visually confirm a slice's acceptance criteria (see `plans/03-slices.md`).
+The dev harness (`harness/`) is the library's first consumer. Open `http://localhost:5173` after
+`pnpm dev` — the main page demos tree rows, grid columns, field rollups, live `rowSource` switching,
+selection, and timeline controls. `harness/data.html` demos transactions and undo. Every slice adds
+to the harness; acceptance criteria live in `plans/03-slices.md`.
