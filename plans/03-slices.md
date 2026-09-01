@@ -211,7 +211,7 @@ Slices are scope, not calendar estimates. Within a slice, entries are ordered so
 
 **Goal:** the library's extension story is real and dogfooded (gate: a non-trivial built-in feature uses only the public plugin API), the grid grows into a proper editable table, and accessibility reaches its full committed level (D11).
 
-**Start constraint:** finish the remaining `GanttShell` split in [`plans/s4-hierarchy-and-rows/c4-split-gantt-shell.md`](./s4-hierarchy-and-rows/c4-split-gantt-shell.md) before plugin wiring grows that file. Today-landing policy already sits in `view/today-landing.ts`. Do not name the extract `GanttViewport` — `layout/` already owns `Viewport`.
+**Start constraint:** the remaining `GanttShell` split in [`plans/s4-hierarchy-and-rows/c4-split-gantt-shell.md`](./s4-hierarchy-and-rows/c4-split-gantt-shell.md) has landed (`TreeCollapse`, `collapseAll` / `expandAll`). Plugin wiring must not grow tree-collapse policy back into `gantt-shell.ts`. Do not name a new extract `GanttViewport` — `layout/` already owns `Viewport`.
 
 **Scope**
 

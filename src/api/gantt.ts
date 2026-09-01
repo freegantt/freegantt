@@ -243,6 +243,14 @@ export class Gantt {
     this.#shell.toggleCollapse(id);
   }
 
+  collapseAll(): void {
+    this.#shell.collapseAll();
+  }
+
+  expandAll(): void {
+    this.#shell.expandAll();
+  }
+
   get preset(): ViewPreset {
     return this.#shell.preset;
   }

@@ -10,12 +10,13 @@
 |---|---|
 | Today-landing policy (`panToToday` margin) | `view/today-landing.ts` — call `panToTodayLine(viewport, at, align, todayLineMarginTicks)` |
 | Column lists and Field compares | `view/grid-columns.ts` — call `resolveGanttFields(dataset, gridColumns, bind)` |
-| Collapse set | `view/collapse-state.ts` |
+| Collapse set | `view/collapse-state.ts` — owned by `TreeCollapse` |
+| Tree collapse (keyboard, collapse-all, ancestor expand) | `view/tree-collapse.ts` — call `this.#treeCollapse.handleArrow('right')`, `expandAncestorsOf(entryId)`, `gantt.collapseAll()` / `gantt.expandAll()` |
 | Twisty click | `view/attach-row-twisty.ts` — call `attachRowTwisty(panes.grid, { toggleCollapse })` |
 | Gesture commit math | `view/gesture-pipeline.ts` |
 | Dataset `change` subscription | `view/dataset-change-subscription.ts` |
 
-`GanttShell` still owns construction, live config, tree keyboard, reveal-and-expand, selection, render input, and `#phase`.
+`GanttShell` still owns construction, live config, `reveal()` geometry, selection, render input, and `#phase`.
 
 Do not name a new module `GanttViewport`. `layout/` already owns `Viewport`. A search for `viewport` must keep one meaning.
 
@@ -83,10 +84,10 @@ The store already takes its transaction runner in the constructor. That half of 
 
 ## 5. Order
 
-1. Publish `collapseAll` / `expandAll` on `Gantt` / `GanttShell`. Point the hierarchy harness at them. Drop `parentIdsWithChildren`.
-2. Move tree-arrow handling and reveal's ancestor expand into `TreeCollapse`. Keep `reveal()` on the shell: it still needs `barSpan`, `FrameLayout.rowTop`, and `Viewport.reveal`.
-3. Only then consider a `layoutInputFromShell` helper.
-4. Leave `#phase` until a second constructing-vs-live caller exists.
+1. [x] Publish `collapseAll` / `expandAll` on `Gantt` / `GanttShell`. Point the hierarchy harness at them. Drop `parentIdsWithChildren`.
+2. [x] Move tree-arrow handling and reveal's ancestor expand into `TreeCollapse`. Keep `reveal()` on the shell: it still needs `barSpan`, `FrameLayout.rowTop`, and `Viewport.reveal`.
+3. [x] Only then consider a `layoutInputFromShell` helper. **Left in `render()`** — no extra rule.
+4. [x] Leave `#phase` until a second constructing-vs-live caller exists.
 
 Each step is its own commit. Do not mix S7 pipeline files into these diffs.
 
@@ -99,6 +100,8 @@ Each step is its own commit. Do not mix S7 pipeline files into these diffs.
 
 ## 7. Done when
 
-- S5 plugin attach points edit a small wiring list in `GanttShell`, not tree-collapse policy.
-- `gantt.collapseAll()` is the call the harness writes.
-- `transaction.ts` / `build-commit-change-set.ts` are unchanged by this work.
+- [x] S5 plugin attach points edit a small wiring list in `GanttShell`, not tree-collapse policy.
+- [x] `gantt.collapseAll()` is the call the harness writes.
+- [x] `transaction.ts` / `build-commit-change-set.ts` are unchanged by this work.
+
+`layoutInputFromShell` was not extracted: `render()` is still a field list with no extra rule. `#phase` stays on the shell.

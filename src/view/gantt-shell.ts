@@ -55,7 +55,6 @@ import {
   entryId,
   entryIdOfItem,
   itemId,
-  rowId,
 } from '../model/index.js';
 import type {
   Dataset,
@@ -79,7 +78,7 @@ import { projectAffordances } from './affordance-projection.js';
 import { GesturePipeline } from './gesture-pipeline.js';
 import type { EntryGestureContext } from './entry-gesture-context.js';
 import { DEFAULT_GRID_COLUMNS, resolveGanttFields } from './grid-columns.js';
-import { CollapseState } from './collapse-state.js';
+import { TreeCollapse } from './tree-collapse.js';
 
 /** One `{ detach() }` for every inject slot. `view/` may not import `interaction/` (plans/01 §1:
  *  `INT --> VIEW`, not the reverse), so the shell takes pointer and keyboard attachments by
@@ -296,7 +295,7 @@ export class GanttShell {
   #resolvedColumns: readonly ResolvedColumn[] = [];
   #fieldCompares: readonly FieldCompare[] = [];
   #rowSource: RowSource = DEFAULT_ROW_SOURCE;
-  #collapse = new CollapseState();
+  #treeCollapse!: TreeCollapse;
 
   constructor(options: GanttShellOptions) {
     this.#options = options;
@@ -400,6 +399,15 @@ export class GanttShell {
     this.#capabilities = resolveCapabilities(this.#interactions, (kind) =>
       this.#options.dataset.isRollUpKind(kind),
     );
+    this.#treeCollapse = new TreeCollapse({
+      plannedRows: () => this.#layout.plannedRows(),
+      entries: () => this.#options.dataset.entries.all,
+      entry: (id) => this.#options.dataset.entries.get(id),
+      canSelect: (id) => this.#canGesture('select', id),
+      selected: () => this.#selection[0],
+      proposeSelection: (ids) => this.#proposeSelection(ids),
+      applyCollapsed: (ids) => this.#applyCollapsed(ids),
+    });
     this.#gesturePipeline = new GesturePipeline({
       timeZone: () => this.#options.dataset.timeZone,
       timeScale: () => this.#viewport.timeScale,
@@ -433,7 +441,7 @@ export class GanttShell {
       selectableEntriesInRowOrder: () => this.#selectableEntriesInRowOrder(),
       selection: {
         get: () => this.#selection,
-        propose: (next) => this.#proposeSelection(next),
+        propose: (next, itemIds) => this.#proposeSelection(next, itemIds),
       },
       setHovered: (item) => this.#setHovered(item),
       contentXAtPaneOffset: (offsetX) => offsetX + this.#viewport.scroll.state.position.x,
@@ -441,8 +449,8 @@ export class GanttShell {
         this.#gesturePipeline.session(grabbed, gesture, grabbedItemId),
       ...(this.#treeKeyboardEnabled()
         ? {
-            tryTreeArrow: (direction) => this.#tryTreeArrow(direction),
-            expandAllRows: () => this.#expandAllRows(),
+            tryTreeArrow: (direction) => this.#treeCollapse.handleArrow(direction),
+            expandAllRows: () => this.expandAll(),
           }
         : {}),
     };
@@ -469,8 +477,8 @@ export class GanttShell {
       toggleCollapse: (id) => this.toggleCollapse(id),
     });
     if (options.collapsed !== undefined) {
-      const proposed = this.#collapse.propose(options.collapsed);
-      if (proposed !== undefined) this.#collapse.commit(proposed.to);
+      const proposed = this.#treeCollapse.propose(options.collapsed);
+      if (proposed !== undefined) this.#treeCollapse.commit(proposed.to);
     }
     this.#phase = 'live';
     this.#frames.flush();
@@ -515,7 +523,7 @@ export class GanttShell {
   }
 
   get collapsed(): readonly RowId[] {
-    return this.#collapse.ids;
+    return this.#treeCollapse.ids;
   }
 
   set collapsed(ids: readonly (RowId | string)[]) {
@@ -523,27 +531,30 @@ export class GanttShell {
   }
 
   collapse(id: RowId | string): void {
-    const branded = rowId(String(id));
-    if (this.#collapse.ids.includes(branded)) return;
-    this.#applyCollapsed([...this.#collapse.ids, branded]);
+    this.#treeCollapse.collapse(id);
   }
 
   expand(id: RowId | string): void {
-    const branded = rowId(String(id));
-    this.#applyCollapsed(this.#collapse.ids.filter((current) => current !== branded));
+    this.#treeCollapse.expand(id);
   }
 
   toggleCollapse(id: RowId | string): void {
-    const branded = rowId(String(id));
-    if (this.#collapse.ids.includes(branded)) this.expand(branded);
-    else this.collapse(branded);
+    this.#treeCollapse.toggleCollapse(id);
+  }
+
+  collapseAll(): void {
+    this.#treeCollapse.collapseAll();
+  }
+
+  expandAll(): void {
+    this.#treeCollapse.expandAll();
   }
 
   #applyCollapsed(next: readonly string[]): void {
-    const proposed = this.#collapse.propose(next);
+    const proposed = this.#treeCollapse.propose(next);
     if (proposed === undefined) return;
     if (this.#events.emit('beforeCollapseChange', proposed) === false) return;
-    this.#collapse.commit(proposed.to);
+    this.#treeCollapse.commit(proposed.to);
     this.#layout.invalidateFrom(0);
     this.#frames.request();
     this.#events.emit('collapseChange', proposed);
@@ -563,53 +574,6 @@ export class GanttShell {
       }
     }
     return out;
-  }
-
-  #firstChildOf(parentId: EntryId): EntryId | undefined {
-    for (const entry of this.#options.dataset.entries.all) {
-      if (entry.parentId === parentId) return entry.id;
-    }
-    return undefined;
-  }
-
-  #tryTreeArrow(direction: 'left' | 'right'): boolean {
-    const selected = this.#selection[0];
-    if (selected === undefined) return false;
-    const row = this.#layout.plannedRows().find((planned) => planned.entryIds.includes(selected));
-    if (row === undefined) return false;
-    const entry = this.#options.dataset.entries.get(selected);
-    if (entry === undefined) return false;
-
-    if (direction === 'right') {
-      if (row.expandable && !row.expanded) {
-        this.expand(row.id);
-        return true;
-      }
-      if (row.expandable && row.expanded) {
-        const child = this.#firstChildOf(selected);
-        if (child !== undefined && this.#canGesture('select', child)) {
-          this.#proposeSelection([child]);
-          return true;
-        }
-      }
-      return false;
-    }
-
-    if (row.expandable && row.expanded) {
-      this.collapse(row.id);
-      return true;
-    }
-    const parentId = entry.parentId;
-    if (parentId !== undefined && this.#canGesture('select', parentId)) {
-      this.#proposeSelection([parentId]);
-      return true;
-    }
-    return false;
-  }
-
-  #expandAllRows(): void {
-    if (this.#collapse.ids.length === 0) return;
-    this.#applyCollapsed([]);
   }
 
   get todayLine(): boolean | Instant {
@@ -651,12 +615,24 @@ export class GanttShell {
     this.#proposeSelection(ids.map((id) => entryId(id)));
   }
 
-  #proposeSelection(next: readonly EntryId[]): void {
+  #proposeSelection(next: readonly EntryId[], selectedItemIds?: readonly ItemId[]): void {
     const from = this.#selection;
-    if (from.length === next.length && from.every((id, i) => id === next[i])) return;
+    const entriesEqual = from.length === next.length && from.every((id, i) => id === next[i]);
+    if (entriesEqual && selectedItemIds !== undefined) {
+      const current = this.#interactionState.selectedItemIds;
+      const itemsEqual =
+        current !== undefined &&
+        current.length === selectedItemIds.length &&
+        current.every((id, i) => id === selectedItemIds[i]!);
+      if (itemsEqual) return;
+      this.#interactionState.selectedItemIds = selectedItemIds;
+      this.#refreshAffordances();
+      return;
+    }
+    if (entriesEqual) return;
     if (this.#events.emit('beforeSelectionChange', { from, to: next }) === false) return;
     this.#selection = next;
-    this.#interactionState.selectedItemIds = next.map((id) => itemId(id));
+    this.#interactionState.selectedItemIds = selectedItemIds ?? next.map((id) => itemId(id));
     // D-S3-6: resizableItemId falls back to the single selected entry when nothing is hovered, so a
     // selection change can move the handles even with the pointer sitting still.
     this.#refreshAffordances();
@@ -857,25 +833,12 @@ export class GanttShell {
     if (entry === undefined) throw new EntryNotFoundError(entryId, 'reveal');
     const { x, width } = barSpan(entry, this.#viewport.timeScale);
     let rowIndex = this.#layout.rowIndexForEntry(entryId);
-    if (rowIndex < 0) {
-      const keep = this.#collapse.ids.filter((id) => !this.#isAncestorRow(entryId, String(id)));
-      if (keep.length !== this.#collapse.ids.length) {
-        this.#applyCollapsed(keep);
-        this.#frames.flush();
-        rowIndex = this.#layout.rowIndexForEntry(entryId);
-      }
+    if (rowIndex < 0 && this.#treeCollapse.expandAncestorsOf(entryId)) {
+      this.#frames.flush();
+      rowIndex = this.#layout.rowIndexForEntry(entryId);
     }
     const y = rowIndex >= 0 ? this.#layout.rowTop(rowIndex) : this.#viewport.scroll.state.position.y;
     this.#viewport.reveal({ x, y, width, height: this.#rowHeight });
-  }
-
-  #isAncestorRow(entryId: EntryId, rowId: string): boolean {
-    let current = this.#options.dataset.entries.get(entryId);
-    while (current?.parentId !== undefined) {
-      if (String(current.parentId) === rowId) return true;
-      current = this.#options.dataset.entries.get(current.parentId);
-    }
-    return false;
   }
 
   on<K extends keyof GanttEventMap>(name: K, handler: GanttEventHandler<K>): void {
@@ -945,7 +908,7 @@ export class GanttShell {
       columns: this.#resolvedColumns,
       fieldCompares: this.#fieldCompares,
       rows: this.#rowSource,
-      collapsed: this.#collapse.ids,
+      collapsed: this.#treeCollapse.ids,
       itemProducerRegistry: this.#itemProducerRegistry,
     });
     this.#backend.sync(frame);

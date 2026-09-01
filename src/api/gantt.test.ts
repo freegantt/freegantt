@@ -1783,6 +1783,35 @@ describe('Gantt rows and collapse (S4.6)', () => {
     b.destroy();
   });
 
+  it('collapseAll uses expandable planned row ids, including grouped headers', async () => {
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      entries: [
+        { id: 'p', name: 'p', start: '2026-01-01', end: '2026-01-02', kind: 'group' },
+        { id: 'c', name: 'c', start: '2026-01-03', end: '2026-01-04', parentId: 'p', kind: 'span' },
+        { id: 'solo', name: 'solo', start: '2026-01-05', end: '2026-01-06', kind: 'milestone' },
+      ],
+    });
+    const gantt = new Gantt({
+      container: document.createElement('div'),
+      dataset,
+      rowSource: { source: 'entries', tree: true },
+    });
+
+    gantt.collapseAll();
+    expect(gantt.collapsed.map(String)).toEqual(['p']);
+
+    gantt.expandAll();
+    expect(gantt.collapsed).toEqual([]);
+
+    gantt.rowSource = { source: 'group', groupBy: (item: Entry) => item.kind };
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    gantt.collapseAll();
+    expect(gantt.collapsed.map(String)).toEqual(['group:group', 'group:span', 'group:milestone']);
+
+    gantt.destroy();
+  });
+
   it('[S4-A11] a custom source produces the resolver rows', () => {
     const container = document.createElement('div');
     const dataset = new Dataset({ entries: sampleEntries.slice(0, 2), timeZone: 'UTC' });

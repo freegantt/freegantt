@@ -379,6 +379,8 @@ gantt.collapsed = ['p1'];           // live; RowIds, loose on the way in
 gantt.collapse('p1');
 gantt.expand('p1');
 gantt.toggleCollapse('p1');
+gantt.collapseAll();
+gantt.expandAll();
 
 gantt.on('beforeCollapseChange', ({ from, to }) => false);  // veto
 gantt.on('collapseChange', ({ to }) => saveCollapsed(to));
