@@ -246,7 +246,7 @@ Slices are scope, not calendar estimates. Within a slice, entries are ordered so
 - Performance budgets in CI on reference hardware; regressions fail the build.
 - Linked-Gantt demo: a delivery-schedule Gantt + a workforce Gantt bound to the same `TimeScaleModel`/`ScrollModel` (x, y, and both variants) — the D9 acceptance demo. Neither Gantt needs the scheduling plugin.
 - Hardening: error-path audit (typed errors everywhere), memory-leak pass (mount/destroy cycles), `exports` map sealing internals, semver/API-report tooling (I11 automated), bundle-size budget in CI.
-- **Known gap (issue #91 §9-I, remaining half):** `GanttShellOptions.backend` closed the hardcoded `createDomBackend()` call site, but `render/null`'s backend is still unreachable from `view/` — `PaneLayout` mounts real `HTMLElement`s regardless of which backend paints them. If this slice's measurement/hardening work wants a DOM-free `view/`+`layout/` harness, `PaneLayout` (or an equivalent) needs to accept a non-DOM surface too, not just a swappable backend.
+- **Known gap (issue #91 §9-I, remaining half; tracked as issue #112 seam B):** `GanttShellOptions.backend` closed the hardcoded `createDomBackend()` call site, but `render/null`'s backend is still unreachable from `view/` — `PaneLayout` mounts real `HTMLElement`s regardless of which backend paints them. If this slice's measurement/hardening work wants a DOM-free `view/`+`layout/` harness, `PaneLayout` (or an equivalent) needs to accept a non-DOM surface too, not just a swappable backend. Plan and current code shape: `plans/issues/open/112-di-seams.md` (Seam B).
 - Release plumbing: versioned docs from the harness gallery, CHANGELOG, publishing pipeline. Product 1.0 waits for S7 (D3).
 
 **Acceptance**

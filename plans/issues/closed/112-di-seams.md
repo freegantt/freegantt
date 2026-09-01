@@ -3,10 +3,13 @@
 **Reported:** 2026-08-30. Not stale. Two independent seams in one issue —
 plan them and land them separately.
 
-**Status (2026-09-01):** Seam A landed. Seam B is intentionally deferred —
-it's S6-scoped prep work per `plans/03-slices.md:249`, and the repo is
-currently on S4. The GitHub issue stays open, scoped down to Seam B only,
-with a comment explaining the split and pointing at S6.
+**Status (2026-09-01):** Seam A landed (`33b72c5`). Seam B is intentionally
+deferred — it's S6-scoped prep work, now cross-referenced from
+`plans/03-slices.md`'s S6 write-up (the "Known gap" bullet, which already
+covered this from issue #91 §9-I, now also names #112). GitHub issue #112
+is closed; Seam B is tracked as part of S6's scope, not as a standalone
+open issue, since it has no independent acceptance criteria outside the
+S6 harness work it feeds.
 
 ## Seam A — `DatasetState` reference date (small, do first) — ✅ done
 
