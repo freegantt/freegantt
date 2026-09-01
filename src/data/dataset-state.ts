@@ -67,6 +67,9 @@ export interface DatasetStateOptions {
   /** First-child promotion (D-S4-17). Defaults to `{ autoGroup: true }`. Pass
    *  `{ autoGroup: false }` to keep `'span'` parents as authored. */
   hierarchy?: DatasetHierarchy;
+  /** Frozen `referenceDate` for tests (issue #112) — mirrors `ResolveDateLinesInput.now`
+   *  (`layout/date-line.ts`). Defaults to `now()`, the real clock. */
+  referenceDate?: Instant;
   /** The extension hook a transaction calls once per commit (D-S2-6). Internal only — `data/` is
    *  unreachable through the package's `exports` map, so a plugin-facing install API lands in **S5**
    *  with the plugin runtime (#15), not on this option; the first-party scheduler occupies the slot in
@@ -85,8 +88,9 @@ export class DatasetState implements Dataset {
   readonly timeZone: string;
   readonly dateOnlyEnd: DateOnlyEndRule;
   /** The one `Date.now()` read this Dataset performs, via time/'s `now()` (CONTEXT.md, Reference
-   *  date). Fixed for the Dataset's lifetime — not re-derived on every layout pass. Used to
-   *  initialize a roll-up-kind entry's zero-length span before the Rollup gives it a real one. */
+   *  date) — unless `DatasetStateOptions.referenceDate` freezes it for a test. Fixed for the
+   *  Dataset's lifetime — not re-derived on every layout pass. Used to initialize a roll-up-kind
+   *  entry's zero-length span before the Rollup gives it a real one. */
   readonly referenceDate: Instant;
   readonly editExtender: EditExtender;
   /** `runTransaction`'s notification channel (D-S2-5, D-S2-24). Internal only, same reasoning as
@@ -117,7 +121,7 @@ export class DatasetState implements Dataset {
   constructor(options: DatasetStateOptions) {
     this.timeZone = options.timeZone;
     this.dateOnlyEnd = options.dateOnlyEnd ?? 'inclusive';
-    this.referenceDate = now();
+    this.referenceDate = options.referenceDate ?? now();
     this.editExtender = options.editExtender ?? identityExtender;
     this.#rollUpKinds = resolveRollUpKinds(options.rollUpKinds);
     this.#hierarchy = resolveHierarchy(options.hierarchy);
