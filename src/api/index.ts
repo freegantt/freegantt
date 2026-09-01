@@ -39,6 +39,7 @@ export type {
   GridWidthChange,
   NavigationChange,
   SelectionChange,
+  CollapseChange,
   ProposedSpan,
   EntryGestureEvent,
   EntryMove,
@@ -75,6 +76,7 @@ export {
   UnknownAggregatorError,
   UnknownFieldTypeError,
   FieldNotColumnableError,
+  DuplicateRowIdError,
   MutationDuringNotificationError,
   MutationCancelledError,
   InvalidReplayOriginError,
@@ -87,6 +89,7 @@ export type {
   Entry,
   EntryKind,
   EntryId,
+  RowId,
   ItemId,
   Instant,
   TimeUnit,
@@ -99,6 +102,17 @@ export type {
 // Public because a consumer that types its own entry builder needs to name them.
 export type { EntryInput, InstantInput, TimeSpanInput, DateOnlyEndRule } from '../model/index.js';
 export type { DatasetDocument, EntryDocument, SerializedField } from '../model/index.js';
+export type {
+  RowSource,
+  EntriesRowSource,
+  GroupRowSource,
+  CustomRowSource,
+  CustomRow,
+  RowFilter,
+  RowSort,
+  FilterPolicy,
+  RowResolveInput,
+} from '../layout/index.js';
 // Point/Size are the S1.5 ScrollModel's own vocabulary (S1.5 README §5) — a consumer building
 // `new ScrollModel({ x, y })` or reading `ScrollState` needs the shape in the public surface too.
 export type { Point, Size } from '../model/index.js';

@@ -26,8 +26,8 @@ test('every grid pane row lines up with its own bar in the timeline pane (I9)', 
   const pairs = await page.evaluate(() => {
     const rowTopByEntryId = new Map<string, number>();
     for (const row of Array.from(document.querySelectorAll<HTMLElement>('.fg-grid-pane .fg-row'))) {
-      const rowId = row.dataset['rowId']; // "row:<entryId>"
-      const entryId = rowId?.slice('row:'.length);
+      const rowId = row.dataset['rowId'];
+      const entryId = rowId;
       if (entryId) rowTopByEntryId.set(entryId, row.getBoundingClientRect().top);
     }
     const matched: Array<{ entryId: string; rowTop: number; barTop: number }> = [];

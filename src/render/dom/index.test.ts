@@ -723,4 +723,39 @@ describe('render/dom backend', () => {
     grid.remove();
     timeline.remove();
   });
+
+  it('indents from depth, puts aria-expanded on the twisty, and omits a twisty on a leaf (S4.6)', () => {
+    const backend = createDomBackend();
+    const { grid, timeline } = mountSurfaces();
+    backend.mount({ grid, timeline });
+
+    const parent = sampleEntries[0]!;
+    const child = { ...sampleEntries[1]!, parentId: parent.id };
+    const frame = computeFrame({
+      entries: [parent, child],
+      scale,
+      preset,
+      visible: { x: 0, y: 0, width: 0, height: 0 },
+      rowHeight: 32,
+      revision: 0,
+      rows: { source: 'entries', tree: true },
+      columns: [{ key: 'name', header: 'Name', align: 'start', format: (e) => e.name }],
+    });
+    backend.sync(frame);
+
+    const parentRow = grid.querySelector<HTMLElement>(`[data-row-id="${parent.id}"]`)!;
+    const childRow = grid.querySelector<HTMLElement>(`[data-row-id="${child.id}"]`)!;
+    expect(parentRow.style.getPropertyValue('--fg-row-depth')).toBe('0');
+    expect(childRow.style.getPropertyValue('--fg-row-depth')).toBe('1');
+    expect(parentRow.getAttribute('aria-level')).toBe('1');
+    expect(childRow.getAttribute('aria-level')).toBe('2');
+    const twisty = parentRow.querySelector<HTMLElement>('.fg-row-twisty');
+    expect(twisty).not.toBeNull();
+    expect(twisty?.getAttribute('aria-expanded')).toBe('true');
+    expect(childRow.querySelector('.fg-row-twisty')).toBeNull();
+
+    backend.destroy();
+    grid.remove();
+    timeline.remove();
+  });
 });

@@ -26,6 +26,8 @@ type CellItem = {
   align: 'start' | 'end';
   width?: number;
   flex?: number;
+  expandable: boolean;
+  expanded: boolean;
 };
 type CellGeom = {
   text: string;
@@ -33,14 +35,24 @@ type CellGeom = {
   align: 'start' | 'end';
   width: number;
   flex: number;
+  expandable: boolean;
+  expanded: boolean;
 };
-type HeaderCellGeom = Omit<CellGeom, 'first' | 'text'> & { text: string };
+type HeaderCellGeom = {
+  text: string;
+  align: 'start' | 'end';
+  width: number;
+  flex: number;
+};
 type RowGeom = {
   top: number;
   height: number;
   cells: readonly string[];
   index: number;
   rowCount: number;
+  depth: number;
+  expandable: boolean;
+  expanded: boolean;
 };
 type BarGeom = Pick<FrameBar, 'kind' | 'label' | 'x' | 'y' | 'width' | 'height' | 'flags' | 'a11yLabel'>;
 /** What the shared handle pair (D-S3-8) needs to place itself over a committed bar — a narrower slice
@@ -57,7 +69,12 @@ function flagTokens(flags: BarFlags): string {
   return (Object.keys(flags) as (keyof BarFlags)[]).filter((k) => flags[k]).join(' ');
 }
 
-function cellItemsFor(cells: readonly string[], columns: readonly FrameColumn[]): readonly CellItem[] {
+function cellItemsFor(
+  cells: readonly string[],
+  columns: readonly FrameColumn[],
+  expandable: boolean,
+  expanded: boolean,
+): readonly CellItem[] {
   return cells.map((text, i) => {
     const column = columns[i];
     const item: CellItem = {
@@ -65,6 +82,8 @@ function cellItemsFor(cells: readonly string[], columns: readonly FrameColumn[])
       text,
       first: i === 0,
       align: column?.align ?? 'start',
+      expandable: i === 0 && expandable,
+      expanded,
     };
     if (column?.width !== undefined) item.width = column.width;
     if (column?.flex !== undefined) item.flex = column.flex;
@@ -95,6 +114,8 @@ function cellGeom(item: CellItem): CellGeom {
     align: item.align,
     width: item.width ?? 0,
     flex: item.flex ?? 0,
+    expandable: item.expandable,
+    expanded: item.expanded,
   };
 }
 
@@ -307,8 +328,31 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
     toGeom: (cell: CellItem): CellGeom => cellGeom(cell),
     patch: (node: HTMLElement, geom: CellGeom): void => {
       node.className = geom.first ? 'fg-row-label' : 'fg-row-cell';
-      node.textContent = geom.text;
       paintColumnBox(node, geom);
+      if (!geom.first) {
+        node.textContent = geom.text;
+        return;
+      }
+      let twisty = node.querySelector<HTMLButtonElement>(':scope > .fg-row-twisty');
+      if (geom.expandable) {
+        if (twisty === null) {
+          twisty = document.createElement('button');
+          twisty.type = 'button';
+          twisty.className = 'fg-row-twisty';
+          twisty.setAttribute('aria-label', 'Toggle row');
+          node.prepend(twisty);
+        }
+        twisty.setAttribute('aria-expanded', geom.expanded ? 'true' : 'false');
+      } else if (twisty !== null) {
+        twisty.remove();
+      }
+      let label = node.querySelector<HTMLElement>(':scope > .fg-row-label-text');
+      if (label === null) {
+        label = document.createElement('span');
+        label.className = 'fg-row-label-text';
+        node.append(label);
+      }
+      label.textContent = geom.text;
     },
   };
 
@@ -344,12 +388,23 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
         node.dataset['rowId'] = key;
         return node;
       },
-      toGeom: (row) => ({ top: row.top, height: row.height, cells: row.cells, index: row.index, rowCount }),
+      toGeom: (row) => ({
+        top: row.top,
+        height: row.height,
+        cells: row.cells,
+        index: row.index,
+        rowCount,
+        depth: row.depth,
+        expandable: row.expandable,
+        expanded: row.expanded,
+      }),
       patch: (node, geom) => {
         node.style.transform = `translateY(${geom.top}px)`;
         node.style.height = `${geom.height}px`;
+        node.style.setProperty('--fg-row-depth', String(geom.depth));
         node.setAttribute('aria-posinset', String(geom.index + 1));
         node.setAttribute('aria-setsize', String(geom.rowCount));
+        node.setAttribute('aria-level', String(geom.depth + 1));
       },
     });
 
@@ -363,7 +418,9 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
     rows.forEach((row) => {
       const rowNode = rowLayer.node(row.id);
       if (!rowNode) return;
-      rowCellLayers.layerFor(row.id).sync(rowNode, cellItemsFor(row.cells, columns), cellSpec);
+      rowCellLayers
+        .layerFor(row.id)
+        .sync(rowNode, cellItemsFor(row.cells, columns, row.expandable, row.expanded), cellSpec);
     });
 
     rowCellLayers.prune(new Set(rows.map((row) => row.id)));
@@ -377,6 +434,8 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
         text: column.header,
         first: i === 0,
         align: column.align,
+        expandable: false,
+        expanded: false,
       };
       if (column.width !== undefined) item.width = column.width;
       if (column.flex !== undefined) item.flex = column.flex;

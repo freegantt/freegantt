@@ -10,6 +10,7 @@ export type {
   GridWidthChange,
   NavigationChange,
   SelectionChange,
+  CollapseChange,
   ProposedSpan,
   EntryGestureEvent,
   EntryMove,

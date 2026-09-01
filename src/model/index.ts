@@ -46,6 +46,7 @@ export {
   UnknownAggregatorError,
   UnknownFieldTypeError,
   FieldNotColumnableError,
+  DuplicateRowIdError,
   AggregatorFailedError,
   MutationDuringNotificationError,
   MutationCancelledError,

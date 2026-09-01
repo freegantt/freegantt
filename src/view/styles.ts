@@ -78,6 +78,8 @@ ${LIGHT_COLOR_TOKENS}
 ${DARK_COLOR_TOKENS}
 }
 
+:root, .fg-container { --fg-indent-width: 12px; }
+
 /* S3.1: a click selects an Entry. Native text highlight on a bar or row label is a different
    action and it also lets a double-click take text from outside the Gantt. S5's editor overlay
    sets user-select: text on the editor itself. */
@@ -107,9 +109,14 @@ ${DARK_COLOR_TOKENS}
    --fg-tick-box-floor is the Tick box floor (CONTEXT.md): padding-inline derives from it so the
    CSS box and layout's clamp input stay one Token. The 1px in the calc is this rule's border-left. */
 .fg-tick { color: var(--fg-header-subtext); position: absolute; top: 0; left: 0; height: var(--fg-band-height, 20px); line-height: var(--fg-band-height, 20px); box-sizing: border-box; padding: 0 calc((var(--fg-tick-box-floor, ${DEFAULT_TICK_BOX_FLOOR_PX}px) - 1px) / 2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-left: 1px solid var(--fg-header-divider-color); }
-.fg-row { background: var(--fg-row-even-bg); position: absolute; top: 0; left: 0; width: 100%; display: flex; align-items: stretch; }
+.fg-row { background: var(--fg-row-even-bg); position: absolute; top: 0; left: 0; width: 100%; display: flex; align-items: stretch; --fg-row-depth: 0; }
 .fg-row:nth-child(odd) { background: var(--fg-row-odd-bg); }
 .fg-row-label, .fg-row-cell { color: var(--fg-row-label-color); display: flex; align-items: center; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; box-sizing: border-box; flex: var(--fg-col-flex, 1) 1 0; }
+.fg-row-label { padding-inline-start: calc(var(--fg-row-depth, 0) * var(--fg-indent-width, 12px)); }
+.fg-row-label-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.fg-row-twisty { flex: 0 0 var(--fg-indent-width, 12px); width: var(--fg-indent-width, 12px); border: 0; background: transparent; padding: 0; cursor: pointer; color: inherit; }
+.fg-row-twisty::before { content: '▸'; }
+.fg-row-twisty[aria-expanded='true']::before { content: '▾'; }
 .fg-row-label[data-fixed], .fg-row-cell[data-fixed] { flex: 0 0 auto; }
 .fg-row-label[data-align='end'], .fg-row-cell[data-align='end'] { justify-content: flex-end; text-align: end; }
 .fg-bars { position: relative; }

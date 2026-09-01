@@ -210,6 +210,17 @@ export class InvalidReplayOriginError extends FreeGanttError {
   }
 }
 
+/** `code: 'duplicate-row-id'` — `{ source: 'custom' }` returned two `CustomRow`s with the same `id`. */
+export class DuplicateRowIdError extends FreeGanttError {
+  readonly rowId: string;
+
+  constructor(rowId: string) {
+    super('duplicate-row-id', `rows: custom source returned duplicate id "${rowId}"`);
+    this.name = 'DuplicateRowIdError';
+    this.rowId = rowId;
+  }
+}
+
 /** `code: 'unsupported-schema'` — `fromJSON` given a `schema` this build has no reader for
  *  (D-S2-12, `plans/s2-data-core/s2.6-serialization.md` §1.3). Names the version it found and the
  *  versions it reads, so a caller can tell a future document from a corrupt one. */
