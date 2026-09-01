@@ -208,20 +208,20 @@ test('ArrowRight expands and ArrowLeft collapses; focus stays on the Gantt', asy
   await twisty.click();
   await expect(page.locator(`[data-row-id="${childId}"]`)).toHaveCount(0);
 
-  const host = page.locator('#gantt');
+  const ganttRoot = page.locator('#gantt');
   const parentId = await parentRow.getAttribute('data-row-id');
   expect(parentId).toBeTruthy();
   await page.locator(`#gantt .fg-bar[data-item-id^="${parentId}:"]`).first().click();
-  await host.focus();
-  await expect(host).toBeFocused();
+  await ganttRoot.focus();
+  await expect(ganttRoot).toBeFocused();
 
   await page.keyboard.press('ArrowRight');
   await expect(page.locator(`[data-row-id="${childId}"]`)).toBeVisible();
   await expect(twisty).toHaveAttribute('aria-expanded', 'true');
-  await expect(host).toBeFocused();
+  await expect(ganttRoot).toBeFocused();
 
   await page.keyboard.press('ArrowLeft');
   await expect(page.locator(`[data-row-id="${childId}"]`)).toHaveCount(0);
   await expect(twisty).toHaveAttribute('aria-expanded', 'false');
-  await expect(host).toBeFocused();
+  await expect(ganttRoot).toBeFocused();
 });
