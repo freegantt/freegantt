@@ -4,21 +4,37 @@ import { DatasetState } from './dataset-state.js';
 import { SHIPPED_AGGREGATORS } from './fields/aggregators.js';
 import type { EntryInput } from '../model/index.js';
 
-function moneyDataset(entries: readonly EntryInput[]): DatasetState {
+const ROLLUP_AGGREGATORS = [
+  'sum',
+  'min',
+  'max',
+  'count',
+  'weightedMeanByDuration',
+  'none',
+] as const satisfies readonly (keyof typeof SHIPPED_AGGREGATORS)[];
+
+function metricDataset(
+  entries: readonly EntryInput[],
+  rollUp: (typeof ROLLUP_AGGREGATORS)[number],
+): DatasetState {
   return new DatasetState({
     entries,
     timeZone: 'UTC',
-    fieldTypes: { money: { rollUp: 'sum' } },
+    fieldTypes: { money: { rollUp } },
     fields: [{ key: 'cost', type: 'money' }],
   });
 }
 
-function assertParentsMatchCostSum(state: DatasetState): void {
+function assertParentsMatchAggregator(
+  state: DatasetState,
+  rollUp: (typeof ROLLUP_AGGREGATORS)[number],
+): void {
+  const aggregator = SHIPPED_AGGREGATORS[rollUp];
   for (const parent of state.entries.all) {
     if (!state.isRollUpKind(parent.kind)) continue;
     const children = state.entries.childrenOf(parent.id);
     if (children.length === 0) continue;
-    const expected = SHIPPED_AGGREGATORS.sum?.(children, parent, {
+    const expected = aggregator?.(children, parent, {
       ...state.fieldContext,
       field: 'cost',
     });
@@ -28,7 +44,7 @@ function assertParentsMatchCostSum(state: DatasetState): void {
 
 const treeArb = fc.record({
   nest: fc.boolean(),
-  costs: fc.array(fc.integer({ min: 0, max: 100 }), { minLength: 1, maxLength: 6 }),
+  costs: fc.array(fc.integer({ min: 0, max: 100 }), { minLength: 2, maxLength: 6 }),
   edits: fc.array(
     fc.record({
       index: fc.nat(),
@@ -36,35 +52,45 @@ const treeArb = fc.record({
     }),
     { maxLength: 5 },
   ),
+  removes: fc.array(fc.nat(), { maxLength: 3 }),
 });
 
 describe('rollUpFields property (S4.2 §3)', () => {
-  it('every rolling-up parent equals its Aggregator over its children after commit', () => {
-    fc.assert(
-      fc.property(treeArb, ({ nest, costs, edits }) => {
-        const parentId = nest ? 'mid' : 'root';
-        const entries: EntryInput[] = [
-          { id: 'root', kind: 'group', name: 'root' },
-          ...(nest ? [{ id: 'mid', parentId: 'root', kind: 'group' as const, name: 'mid' }] : []),
-          ...costs.map((cost, i) => ({
-            id: `l${i}`,
-            parentId,
-            name: `l${i}`,
-            start: '2026-01-01',
-            end: '2026-01-02',
-            meta: { cost },
-          })),
-        ];
-        const state = moneyDataset(entries);
-        assertParentsMatchCostSum(state);
+  it.each(ROLLUP_AGGREGATORS)(
+    'every rolling-up parent equals its %s Aggregator over its children after commit',
+    (rollUp) => {
+      fc.assert(
+        fc.property(treeArb, ({ nest, costs, edits, removes }) => {
+          const parentId = nest ? 'mid' : 'root';
+          const entries: EntryInput[] = [
+            { id: 'root', kind: 'group', name: 'root' },
+            ...(nest ? [{ id: 'mid', parentId: 'root', kind: 'group' as const, name: 'mid' }] : []),
+            ...costs.map((cost, i) => ({
+              id: `l${i}`,
+              parentId,
+              name: `l${i}`,
+              start: '2026-01-01',
+              end: `2026-01-${String(2 + (i % 4)).padStart(2, '0')}`,
+              meta: { cost },
+            })),
+          ];
+          const state = metricDataset(entries, rollUp);
+          assertParentsMatchAggregator(state, rollUp);
 
-        for (const edit of edits) {
-          const id = `l${edit.index % costs.length}`;
-          state.entries.update(id, { cost: edit.cost });
-        }
-        assertParentsMatchCostSum(state);
-      }),
-      { numRuns: 40 },
-    );
-  });
+          for (const edit of edits) {
+            const id = `l${edit.index % costs.length}`;
+            if (state.entries.has(id)) state.entries.update(id, { cost: edit.cost });
+          }
+          assertParentsMatchAggregator(state, rollUp);
+
+          for (const removeIndex of removes) {
+            const id = `l${removeIndex % costs.length}`;
+            if (state.entries.has(id)) state.entries.remove(id);
+            assertParentsMatchAggregator(state, rollUp);
+          }
+        }),
+        { numRuns: 40 },
+      );
+    },
+  );
 });
