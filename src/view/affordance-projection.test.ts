@@ -11,6 +11,7 @@ describe('projectAffordances (D-S3-6)', () => {
     const result = projectAffordances({
       hoveredItemId: ITEM_A,
       selection: [B],
+      selectedItemIds: undefined,
       canGesture: (capability, id) => capability === 'move' && id === A,
     });
 
@@ -24,6 +25,7 @@ describe('projectAffordances (D-S3-6)', () => {
     const oneSelected = projectAffordances({
       hoveredItemId: undefined,
       selection: [A],
+      selectedItemIds: undefined,
       canGesture: () => true,
     });
     expect(oneSelected.resizableItemId).toBe(ITEM_A);
@@ -31,6 +33,7 @@ describe('projectAffordances (D-S3-6)', () => {
     const twoSelected = projectAffordances({
       hoveredItemId: undefined,
       selection: [A, B],
+      selectedItemIds: undefined,
       canGesture: () => true,
     });
     expect(twoSelected.resizableItemId).toBeUndefined();
@@ -38,6 +41,7 @@ describe('projectAffordances (D-S3-6)', () => {
     const noneSelected = projectAffordances({
       hoveredItemId: undefined,
       selection: [],
+      selectedItemIds: undefined,
       canGesture: () => true,
     });
     expect(noneSelected.resizableItemId).toBeUndefined();
@@ -47,6 +51,7 @@ describe('projectAffordances (D-S3-6)', () => {
     const result = projectAffordances({
       hoveredItemId: ITEM_A,
       selection: [],
+      selectedItemIds: undefined,
       canGesture: () => false,
     });
     expect(result.hoveredItemId).toBe(ITEM_A);
@@ -58,6 +63,7 @@ describe('projectAffordances (D-S3-6)', () => {
     const result = projectAffordances({
       hoveredItemId: undefined,
       selection: [A],
+      selectedItemIds: undefined,
       canGesture: () => false,
     });
     expect(result.resizableItemId).toBeUndefined();
@@ -67,10 +73,22 @@ describe('projectAffordances (D-S3-6)', () => {
     const result = projectAffordances({
       hoveredItemId: undefined,
       selection: [],
+      selectedItemIds: undefined,
       canGesture: () => true,
     });
     expect(result.hoveredItemId).toBeUndefined();
     expect(result.movableItemId).toBeUndefined();
     expect(result.resizableItemId).toBeUndefined();
+  });
+
+  it('sole-selection resize fallback uses the painted item, not only segment 0', () => {
+    const segment1 = itemId(A, 1);
+    const result = projectAffordances({
+      hoveredItemId: undefined,
+      selection: [A],
+      selectedItemIds: [segment1],
+      canGesture: () => true,
+    });
+    expect(result.resizableItemId).toBe(segment1);
   });
 });

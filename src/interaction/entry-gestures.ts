@@ -129,13 +129,19 @@ export function attachEntryGestures(
     if (drag.up(e)) return; // was a drag — commit/cancel already ran inside pointer-gesture's callbacks
 
     const hit = ctx.hitTest({ x: e.clientX, y: e.clientY });
-    const entry = hit !== undefined ? ctx.entryFor(hit.itemId) : undefined;
+    if (hit === undefined) {
+      anchor = undefined;
+      if (ctx.selection.get().length > 0) ctx.selection.propose([]);
+      return;
+    }
+    const entry = ctx.entryFor(hit.itemId);
 
     if (entry === undefined) {
       anchor = undefined;
       if (ctx.selection.get().length > 0) ctx.selection.propose([]);
       return;
     }
+    const hitItemId = hit.itemId;
 
     if (e.shiftKey) {
       const next = selectRange(entry.id);
@@ -156,7 +162,7 @@ export function attachEntryGestures(
     }
 
     anchor = entry.id;
-    ctx.selection.propose([entry.id]);
+    ctx.selection.propose([entry.id], [hitItemId]);
   }
 
   function onKeyDown(e: KeyboardEvent): void {

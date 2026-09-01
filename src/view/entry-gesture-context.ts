@@ -61,7 +61,12 @@ export interface EntryGestureContext {
   can(capability: keyof Interactions, entry: Entry): boolean;
   /** The selectable entries in resolved row order — shift-click ranges over this list (D-S4-32). */
   selectableEntriesInRowOrder(): readonly EntryId[];
-  selection: { get(): readonly EntryId[]; propose(next: readonly EntryId[]): void };
+  selection: {
+    get(): readonly EntryId[];
+    /** `selectedItemIds` is paint: which Items show the selected token. Omit it to paint
+     *  segment 0 of each entry. A click on a later segment of the same row passes the hit Item. */
+    propose(next: readonly EntryId[], selectedItemIds?: readonly ItemId[]): void;
+  };
   /** S3.2 (D-S3-6): the item id under the pointer, or undefined on pointerleave. */
   setHovered(itemId: ItemId | undefined): void;
   /** S3.8: pane-local `offsetX` (`clientX - pane left`) plus the bound `ScrollModel`'s x — content
