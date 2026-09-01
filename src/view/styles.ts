@@ -80,8 +80,6 @@ ${LIGHT_COLOR_TOKENS}
 ${DARK_COLOR_TOKENS}
 }
 
-:root, .fg-container { --fg-indent-width: 12px; --fg-lane-gap: 2px; }
-
 /* S3.1: a click selects an Entry. Native text highlight on a bar or row label is a different
    action and it also lets a double-click take text from outside the Gantt. S5's editor overlay
    sets user-select: text on the editor itself. */

@@ -335,35 +335,25 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
     create: (_cell: CellItem, key: string): HTMLElement => {
       const node = document.createElement('div');
       node.dataset['field'] = key;
+      const twisty = document.createElement('button');
+      twisty.type = 'button';
+      twisty.className = 'fg-row-twisty';
+      twisty.hidden = true;
+      twisty.setAttribute('aria-label', 'Toggle row');
+      const label = document.createElement('span');
+      label.className = 'fg-row-label-text';
+      node.append(twisty, label);
       return node;
     },
     toGeom: (cell: CellItem): CellGeom => cellGeom(cell),
     patch: (node: HTMLElement, geom: CellGeom): void => {
       node.className = geom.first ? 'fg-row-label' : 'fg-row-cell';
       paintColumnBox(node, geom);
-      if (!geom.first) {
-        node.textContent = geom.text;
-        return;
-      }
-      let twisty = node.querySelector<HTMLButtonElement>(':scope > .fg-row-twisty');
-      if (geom.expandable) {
-        if (twisty === null) {
-          twisty = document.createElement('button');
-          twisty.type = 'button';
-          twisty.className = 'fg-row-twisty';
-          twisty.setAttribute('aria-label', 'Toggle row');
-          node.prepend(twisty);
-        }
-        twisty.setAttribute('aria-expanded', geom.expanded ? 'true' : 'false');
-      } else if (twisty !== null) {
-        twisty.remove();
-      }
-      let label = node.querySelector<HTMLElement>(':scope > .fg-row-label-text');
-      if (label === null) {
-        label = document.createElement('span');
-        label.className = 'fg-row-label-text';
-        node.append(label);
-      }
+      const twisty = node.firstElementChild as HTMLButtonElement;
+      const label = node.lastElementChild as HTMLElement;
+      twisty.hidden = !geom.first || !geom.expandable;
+      if (twisty.hidden) twisty.removeAttribute('aria-expanded');
+      else twisty.setAttribute('aria-expanded', geom.expanded ? 'true' : 'false');
       label.textContent = geom.text;
     },
   };
