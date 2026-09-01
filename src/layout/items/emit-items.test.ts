@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { Dataset } from '../../api/dataset.js';
+import { emptyGroupDataset } from '../../../fixtures/empty-group-dataset.js';
 import { entryId, itemId, rowId } from '../../model/index.js';
 import type { Entry, EntryId, Instant } from '../../model/index.js';
 import type { PlannedRow } from '../rows/row-source.js';
@@ -70,10 +70,7 @@ describe('emitRow', () => {
   });
 
   it('[S4-A8] an empty group emits one Item; a child gives the group a real span', () => {
-    const dataset = new Dataset({
-      entries: [{ id: 'g1', kind: 'group', name: 'g1' }],
-      timeZone: 'UTC',
-    });
+    const dataset = emptyGroupDataset();
     const empty = dataset.entries.get('g1')!;
     const emptyItems = emitRow(planned([empty.id]), ctxFor([empty]));
     expect(emptyItems).toHaveLength(1);

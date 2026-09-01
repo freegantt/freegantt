@@ -2,7 +2,7 @@
 
 import { itemId } from '../../model/index.js';
 import type { Entry } from '../../model/index.js';
-import type { Item, ItemEmissionContext } from './item-emitter.js';
+import type { Item, ItemEmissionContext } from './item.js';
 
 export function emitMilestone(entry: Entry, _ctx: ItemEmissionContext): readonly Item[] {
   return [
