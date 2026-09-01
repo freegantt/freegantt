@@ -35,7 +35,7 @@ export interface GroupRowSource extends RowSourceCommon {
 }
 
 /** What `{ source: 'custom', resolve }` receives. Entries only — no pixels, no Gantt. */
-export interface RowResolveInput {
+export interface CustomRowInput {
   entries: readonly Entry[];
 }
 
@@ -48,7 +48,7 @@ export interface CustomRow {
 
 export interface CustomRowSource {
   source: 'custom';
-  resolve(input: RowResolveInput): readonly CustomRow[];
+  resolve(input: CustomRowInput): readonly CustomRow[];
   heightMode?: RowHeightMode;
 }
 
@@ -86,10 +86,14 @@ export interface PlannedRow {
 }
 
 /** What a row source builds before `resolveRows` stamps the real `index` (St6) — `index` has one
- *  owner, so a source never invents a placeholder for it. */
-export type UnindexedRow = Omit<PlannedRow, 'index'>;
+ *  owner, so a source never invents a placeholder for it. `parentRowId` is pipeline-only: filter,
+ *  sort, and collapse walk it, then `stampIndex` drops it. */
+export type UnindexedRow = Omit<PlannedRow, 'index'> & {
+  parentRowId?: RowId;
+};
 
-export interface RowResolutionInput {
+/** One pass over the rows: source production plus filter, sort, and collapse. */
+export interface RowPassInput {
   entries: readonly Entry[];
   source: RowSource;
   collapsed: ReadonlySet<string>;

@@ -145,7 +145,13 @@
           <p>
             Landed on this branch:
             <span class="badge badge-ok">D1</span>
+            <span class="badge badge-ok">D2</span>
             <span class="badge badge-ok">D3</span>
+            <span class="badge badge-ok">A1</span>
+            <span class="badge badge-ok">SP2</span>
+            <span class="badge badge-ok">SP3</span>
+            <span class="badge badge-ok">ae-forgotten-export</span>
+            <span class="badge badge-ok">names</span>
           </p>
         </div>
         <p class="text-sm text-slate-600 max-w-3xl">
@@ -240,9 +246,9 @@
             and it is asked of the resolved rows rather than of the config discriminant.</p>
         </article>
 
-        <article id="d2" class="rounded-2xl border-2 border-red-300 bg-white p-6 space-y-3">
+        <article id="d2" class="rounded-2xl border-2 border-emerald-300 bg-white p-6 space-y-3">
           <div class="flex flex-wrap items-center gap-3">
-            <span class="badge badge-defect">D2 · reproduced</span>
+            <span class="badge badge-ok">D2 · fixed</span>
             <h3 class="font-serif text-lg">
               <span class="font-mono text-base">filterPolicy: 'matchOnly'</span> + collapse paints a twisty that hides nothing
             </h3>
@@ -538,7 +544,7 @@
                 </td>
               </tr>
               <tr>
-                <td><span class="badge badge-hard">SP2</span></td>
+                <td><span class="badge badge-ok">SP2 · fixed</span></td>
                 <td class="font-mono text-xs">etc/freegantt.api.md:129</td>
                 <td>
                   <strong><span class="font-mono text-xs">RollUpKinds</span> is not on the public entry point.</strong> The API
@@ -549,7 +555,7 @@
                 </td>
               </tr>
               <tr>
-                <td><span class="badge badge-judge">SP3</span></td>
+                <td><span class="badge badge-ok">SP3 · fixed</span></td>
                 <td class="font-mono text-xs">src/layout/rows/</td>
                 <td>
                   <strong>Two named test files never landed, and the pipeline is untested.</strong>
@@ -638,7 +644,7 @@
                 </td>
               </tr>
               <tr>
-                <td><span class="badge badge-judge">C3</span></td>
+                <td><span class="badge badge-ok">C3 · fixed</span></td>
                 <td class="font-mono text-xs">layout/rows/filter.ts:35</td>
                 <td>
                   <strong>Accidental quadratic in the default filter policy.</strong>
@@ -672,7 +678,7 @@
                 </td>
               </tr>
               <tr>
-                <td><span class="badge badge-judge">C6</span></td>
+                <td><span class="badge badge-ok">C6 · fixed</span></td>
                 <td class="font-mono text-xs">layout/rows/sort.ts, filter.ts</td>
                 <td>
                   <strong>Three hardcoded twins selected by sniffing the output.</strong> Both passes re-derive which source
@@ -685,7 +691,7 @@
                 </td>
               </tr>
               <tr>
-                <td><span class="badge badge-judge">C7</span></td>
+                <td><span class="badge badge-ok">C7 · fixed</span></td>
                 <td class="font-mono text-xs">layout/rows/resolve-rows.ts:40,42,55,61,66</td>
                 <td>
                   <strong>The pipeline branches on the source discriminant five times</strong> instead of the source owning its
@@ -855,7 +861,7 @@
         <!-- A1 -->
         <article id="a1" class="rounded-2xl border bg-white p-6 space-y-5">
           <div class="flex flex-wrap items-center gap-3">
-            <span class="badge badge-strong">Strong</span>
+            <span class="badge badge-ok">A1 · landed</span>
             <span class="badge badge-spec">in-process</span>
             <h3 class="font-serif text-xl">Deepen <span class="font-mono text-lg">resolveRows</span> into the row pipeline</h3>
           </div>
@@ -1282,7 +1288,7 @@ rowSource = { source: 'entries', tree: true,
 
       <!-- ─────────────────────────── TOP REC ─────────────────────────── -->
       <section id="top-recommendation" class="rounded-2xl deep text-slate-100 p-8 space-y-4">
-        <p class="lbl text-slate-400">Top recommendation</p>
+        <p class="lbl text-slate-400">Top recommendation · landed</p>
         <h2 class="font-serif text-2xl">
           Fix D1–D3, then do <a class="underline" href="#a1">A1 — deepen <span class="font-mono">resolveRows</span></a>
         </h2>
@@ -1377,13 +1383,11 @@ rowSource = { source: 'entries', tree: true,
                 <li><span class="font-mono">api/index.ts</span> — public barrel</li>
                 <li><span class="font-mono">etc/freegantt.api.md</span> — re-run the extractor</li>
               </ol>
-              <div class="mt-3 rounded border border-red-300 bg-red-50 p-3 text-xs text-slate-700">
-                <strong>Proof the ritual gets missed:</strong> the API report carries four
-                <span class="font-mono">ae-forgotten-export</span> warnings —
+              <div class="mt-3 rounded border border-emerald-300 bg-emerald-50 p-3 text-xs text-slate-700">
+                <strong>Closed:</strong> <span class="font-mono">ae-forgotten-export</span> is now an extractor error.
                 <span class="font-mono">RollUpKinds</span>, <span class="font-mono">TimeScale</span>,
-                <span class="font-mono">GanttOptionsBase</span>, <span class="font-mono">GanttScaleOptions</span>. Each is a
-                type a consumer meets in a signature and cannot name. They are warnings, so
-                <span class="font-mono">pnpm verify</span> stays green.
+                <span class="font-mono">GanttOptionsBase</span>, <span class="font-mono">GanttScaleOptions</span>,
+                <span class="font-mono">Tick</span>, and <span class="font-mono">PixelSpan</span> are on the public entry point.
               </div>
             </div>
           </div>
@@ -1430,7 +1434,7 @@ rowSource = { source: 'entries', tree: true,
               </thead>
               <tbody>
                 <tr>
-                  <td class="font-mono text-xs">resolveSource</td>
+                  <td class="font-mono text-xs">resolveSource<br /><span class="badge badge-ok">fixed</span></td>
                   <td>
                     <span class="font-mono text-xs">field-registry.ts:29</span> — takes a
                     <span class="font-mono text-xs">Field</span>, returns a
@@ -1445,7 +1449,7 @@ rowSource = { source: 'entries', tree: true,
                   </td>
                 </tr>
                 <tr>
-                  <td class="font-mono text-xs">childrenByParent</td>
+                  <td class="font-mono text-xs">childrenByParent<br /><span class="badge badge-ok">fixed</span></td>
                   <td>
                     <span class="font-mono text-xs">data/entry-tree.ts:22</span> — returns
                     <span class="font-mono text-xs">Map&lt;EntryId, EntryId[]&gt;</span>.<br />
@@ -1463,7 +1467,7 @@ rowSource = { source: 'entries', tree: true,
                   </td>
                 </tr>
                 <tr>
-                  <td class="font-mono text-xs">RowResolveInput<br />RowResolutionInput</td>
+                  <td class="font-mono text-xs">RowResolveInput<br />RowResolutionInput<br /><span class="badge badge-ok">fixed</span></td>
                   <td>
                     Both in <span class="font-mono text-xs">row-source.ts</span>, 54 lines apart, one letter of stem apart.
                     <span class="font-mono text-xs">RowResolveInput</span> is the <strong>published</strong> DTO handed to

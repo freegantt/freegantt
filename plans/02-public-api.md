@@ -392,7 +392,7 @@ For `{ source: 'entries' }`, a `RowId` equals the `EntryId`, so `collapse('p1')`
 
 Group header rows show the `groupBy` label in column 0 and blank cells elsewhere. Per-group aggregates are the caller's data — declare a computed Field or write through a group entry; the grid does not invent them (D-S4-11).
 
-Published types: `RowSource`, `EntriesRowSource`, `GroupRowSource`, `CustomRowSource`, `CustomRow`, `RowHeightMode`, `RowSourceCommon`, `RowResolveInput`, `RowId`, `CollapseChange`, `RowFilter`, `RowSort`, `FilterPolicy`.
+Published types: `RowSource`, `EntriesRowSource`, `GroupRowSource`, `CustomRowSource`, `CustomRow`, `CustomRowInput`, `RowHeightMode`, `RowSourceCommon`, `RowId`, `CollapseChange`, `RowFilter`, `RowSort`, `FilterPolicy`.
 
 ---
 

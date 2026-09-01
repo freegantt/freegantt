@@ -41,7 +41,7 @@ of resolved rows.
 
 `Field`, `FieldSource`, `FieldType`, `FieldKey`, `Aggregator`, `GridColumn`, `GridColumnInput`,
 `RowSource`, `EntriesRowSource`, `GroupRowSource`, `CustomRowSource`, `CustomRow`,
-`RowSourceCommon`, `RowHeightMode`, `RowResolveInput`,
+`RowSourceCommon`, `RowHeightMode`, `CustomRowInput`,
 `CollapseChange`, `DatasetHierarchy`, `SerializedField`, and the S4 error classes re-exported from
 `freegantt`.
 

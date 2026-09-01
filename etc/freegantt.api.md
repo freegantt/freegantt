@@ -92,12 +92,18 @@ export interface CustomRow {
     label?: string;
 }
 
+// @public
+export interface CustomRowInput {
+    // (undocumented)
+    entries: readonly Entry[];
+}
+
 // @public (undocumented)
 export interface CustomRowSource {
     // (undocumented)
     heightMode?: RowHeightMode;
     // (undocumented)
-    resolve(input: RowResolveInput): readonly CustomRow[];
+    resolve(input: CustomRowInput): readonly CustomRow[];
     // (undocumented)
     source: 'custom';
 }
@@ -126,7 +132,6 @@ export class Dataset<TMeta = unknown, TFields extends Record<string, unknown> = 
     replay(changeSet: ChangeSet): void;
     // (undocumented)
     get rollUpKinds(): readonly EntryKind[];
-    // Warning: (ae-forgotten-export) The symbol "RollUpKinds" needs to be exported by the entry point index.d.ts
     set rollUpKinds(value: RollUpKinds);
     // (undocumented)
     get timeZone(): string;
@@ -577,11 +582,46 @@ export interface GanttEventMap {
     selectionChange: SelectionChange;
 }
 
-// Warning: (ae-forgotten-export) The symbol "GanttOptionsBase" needs to be exported by the entry point index.d.ts
-// Warning: (ae-forgotten-export) The symbol "GanttScaleOptions" needs to be exported by the entry point index.d.ts
-//
 // @public (undocumented)
 export type GanttOptions = GanttOptionsBase & GanttScaleOptions;
+
+// @public (undocumented)
+export interface GanttOptionsBase {
+    a11yLabel?: string;
+    collapsed?: readonly (RowId | string)[];
+    container: HTMLElement | string;
+    // (undocumented)
+    dataset: Dataset;
+    dateLines?: readonly DateLineInput[];
+    gridColumns?: readonly GridColumnInput[];
+    gridWidth?: number;
+    interactions?: Interactions;
+    locale?: Intl.LocalesArgument;
+    rowSource?: RowSource;
+    scroll?: ScrollModel;
+    selection?: readonly (EntryId | string)[];
+    theme?: Theme;
+    todayLine?: boolean | InstantInput;
+    todayLineMarginTicks?: number;
+    viewportGestures?: ViewportGestures;
+    zoomPresets?: readonly PresetRef[];
+}
+
+// @public
+export type GanttScaleOptions = {
+    scale: TimeScaleModel;
+    preset?: never;
+    range?: never;
+    fit?: never;
+} | {
+    scale?: undefined;
+    preset?: PresetRef;
+    range?: 'fitDataset' | {
+        start: InstantInput;
+        end: InstantInput;
+    };
+    fit?: TimeScaleFit;
+};
 
 // @public
 export interface GridColumn {
@@ -707,6 +747,14 @@ export class ParentCycleError extends FreeGanttError {
 }
 
 // @public
+export interface PixelSpan {
+    // (undocumented)
+    readonly width: number;
+    // (undocumented)
+    readonly x: number;
+}
+
+// @public
 export interface Point {
     // (undocumented)
     readonly x: number;
@@ -736,6 +784,9 @@ export interface RollUpContext extends FieldContext {
     readonly field: FieldKey;
 }
 
+// @public
+export type RollUpKinds = readonly EntryKind[] | 'none';
+
 // @public (undocumented)
 export type RowFilter = (entry: Entry) => boolean;
 
@@ -746,12 +797,6 @@ export type RowHeightMode = 'fixed' | 'pack';
 export type RowId = string & {
     readonly __brand: 'RowId';
 };
-
-// @public
-export interface RowResolveInput {
-    // (undocumented)
-    entries: readonly Entry[];
-}
 
 // @public (undocumented)
 export interface RowSort {
@@ -843,12 +888,37 @@ export type StoreName = 'entries';
 // @public
 export type Theme = 'auto' | 'light' | 'dark';
 
+// @public (undocumented)
+export interface Tick {
+    // (undocumented)
+    instant: Instant;
+    width: number;
+    // (undocumented)
+    x: number;
+}
+
 // @public
 export interface TickStep {
     // (undocumented)
     readonly increment: number;
     // (undocumented)
     readonly unit: TimeUnit;
+}
+
+// @public (undocumented)
+export interface TimeScale {
+    readonly contentWidth: number;
+    // (undocumented)
+    instantForX(x: number): Instant;
+    readonly pxPerMs: number;
+    // (undocumented)
+    readonly range: TimeSpan;
+    ticks(step: TickStep, span: PixelSpan): readonly Tick[];
+    readonly timeZone: string;
+    // (undocumented)
+    widthForDuration(d: Duration, at: Instant): number;
+    // (undocumented)
+    xForInstant(i: Instant): number;
 }
 
 // @public
@@ -867,8 +937,6 @@ export class TimeScaleModel {
     // (undocumented)
     get range(): 'fitDataset' | TimeSpan;
     set range(r: 'fitDataset' | TimeSpan);
-    // Warning: (ae-forgotten-export) The symbol "TimeScale" needs to be exported by the entry point index.d.ts
-    //
     // (undocumented)
     get scale(): TimeScale;
 }

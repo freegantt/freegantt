@@ -19,7 +19,7 @@ export function buildEffectiveEntries(
   return map;
 }
 
-export function childrenByParent(entries: ReadonlyMap<EntryId, Entry>): Map<EntryId, EntryId[]> {
+export function childIdsByParent(entries: ReadonlyMap<EntryId, Entry>): Map<EntryId, EntryId[]> {
   const byParent = new Map<EntryId, EntryId[]>();
   for (const entry of entries.values()) {
     if (entry.parentId === undefined) continue;

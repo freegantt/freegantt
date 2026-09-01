@@ -8,7 +8,7 @@
 import type { Entry, EntryId, EntryKind, FieldContext, FieldUpdated } from '../model/index.js';
 import { AggregatorFailedError } from '../model/index.js';
 import type { EntryEdits } from './edit-extension.js';
-import { ancestorsOf, buildEffectiveEntries, childrenByParent, depthOf } from './entry-tree.js';
+import { ancestorsOf, buildEffectiveEntries, childIdsByParent, depthOf } from './entry-tree.js';
 import { editProposesField, overlayStoredEdit, readField, writeOntoEntry } from './fields/field-access.js';
 import type { FieldRegistry } from './fields/field-registry.js';
 
@@ -121,7 +121,7 @@ export function rollUpFields(
     pending === undefined ? committed : buildEffectiveEntries(committed, added, removed, merged);
   const touched = pending === undefined ? undefined : collectTouchedIds(committed, added, removed, merged);
 
-  const byParent = childrenByParent(entries);
+  const byParent = childIdsByParent(entries);
   const parents = parentsToRecompute(entries, rollUpKinds, touched);
   const computed = new Map<EntryId, Entry>();
   const updated: FieldUpdated[] = [];

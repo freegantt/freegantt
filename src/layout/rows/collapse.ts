@@ -1,31 +1,23 @@
 // layout/ — remove collapsed subtrees after filter and sort (D-S4-29).
 
+import type { RowId } from '../../model/index.js';
 import type { UnindexedRow } from './row-source.js';
 
 /** Drops descendants of collapsed expandable rows and stamps `expanded` from `collapsed`. */
 export function applyCollapse(rows: readonly UnindexedRow[], collapsed: ReadonlySet<string>): UnindexedRow[] {
-  if (collapsed.size === 0) {
-    return rows.map((row) => ({
-      ...row,
-      expanded: row.expandable,
-    }));
-  }
-
+  const hidden = new Set<RowId>();
   const out: UnindexedRow[] = [];
-  const hiddenBelowDepth: number[] = [];
 
   for (const row of rows) {
-    while (hiddenBelowDepth.length > 0 && row.depth <= hiddenBelowDepth[hiddenBelowDepth.length - 1]!) {
-      hiddenBelowDepth.pop();
-    }
-    if (hiddenBelowDepth.length > 0 && row.depth > hiddenBelowDepth[hiddenBelowDepth.length - 1]!) {
+    const parentHidden = row.parentRowId !== undefined && hidden.has(row.parentRowId);
+    if (parentHidden) {
+      hidden.add(row.id);
       continue;
     }
 
     const isCollapsed = row.expandable && collapsed.has(row.id);
-    const expanded = row.expandable && !isCollapsed;
-    out.push({ ...row, expanded });
-    if (isCollapsed) hiddenBelowDepth.push(row.depth);
+    out.push({ ...row, expanded: row.expandable && !isCollapsed });
+    if (isCollapsed) hidden.add(row.id);
   }
 
   return out;

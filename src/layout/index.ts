@@ -11,7 +11,7 @@ export type {
   CustomRow,
   RowSourceCommon,
   RowHeightMode,
-  RowResolveInput,
+  CustomRowInput,
   RowFilter,
   RowSort,
   FilterPolicy,
