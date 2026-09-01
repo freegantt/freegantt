@@ -2,14 +2,13 @@
 // to decide which item ids get hover/move/resize paint before it writes `InteractionState` and calls
 // `applyState` — no DOM, no shell, no `InteractionState` knowledge here, only the resolution rule.
 
-import { itemId } from '../model/index.js';
+import { entryIdOfItem, itemId } from '../model/index.js';
 import type { EntryId, ItemId } from '../model/index.js';
 import type { Interactions } from './capability.js';
 
 export interface AffordanceInputs {
   hoveredItemId: ItemId | undefined;
   selection: readonly EntryId[];
-  itemEntryIds: ReadonlyMap<ItemId, EntryId>;
   canGesture: (capability: keyof Interactions, id: EntryId) => boolean;
 }
 
@@ -23,8 +22,8 @@ export interface AffordanceIds {
  *  wins over the selection fallback. Only when nothing is hovered does the single selected entry, if
  *  there is exactly one, get a turn. */
 export function projectAffordances(inputs: AffordanceInputs): AffordanceIds {
-  const { hoveredItemId, selection, itemEntryIds, canGesture } = inputs;
-  const hoveredEntryId = hoveredItemId !== undefined ? itemEntryIds.get(hoveredItemId) : undefined;
+  const { hoveredItemId, selection, canGesture } = inputs;
+  const hoveredEntryId = hoveredItemId !== undefined ? entryIdOfItem(hoveredItemId) : undefined;
 
   const out: AffordanceIds = {};
   if (hoveredItemId !== undefined) out.hoveredItemId = hoveredItemId;

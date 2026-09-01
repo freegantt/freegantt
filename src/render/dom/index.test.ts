@@ -758,4 +758,66 @@ describe('render/dom backend', () => {
     grid.remove();
     timeline.remove();
   });
+
+  it('[S4-A4] paints N bars on one row for N segments', () => {
+    const backend = createDomBackend();
+    const { grid, timeline } = mountSurfaces();
+    backend.mount({ grid, timeline });
+    const entry = sampleEntries[0]!;
+    const frame = computeFrame({
+      entries: [
+        {
+          ...entry,
+          segments: [
+            { start: entry.start, end: entry.end },
+            { start: entry.start, end: entry.end },
+            { start: entry.start, end: entry.end },
+          ],
+        },
+      ],
+      scale,
+      preset,
+      visible: { x: 0, y: 0, width: 0, height: 0 },
+      rowHeight: 32,
+      revision: 0,
+    });
+    backend.sync(frame);
+
+    expect(grid.querySelectorAll('.fg-row')).toHaveLength(1);
+    expect(timeline.querySelectorAll('.fg-bar')).toHaveLength(3);
+    expect(frame.bars.every((bar) => String(bar.rowId) === String(frame.rows[0]?.id))).toBe(true);
+
+    backend.destroy();
+    grid.remove();
+    timeline.remove();
+  });
+
+  it('applies bracket and diamond classes off data-kind', () => {
+    const backend = createDomBackend();
+    const { grid, timeline } = mountSurfaces();
+    backend.mount({ grid, timeline });
+    const [span, groupSeed, mileSeed] = sampleEntries;
+    backend.sync(
+      computeFrame({
+        entries: [span!, { ...groupSeed!, kind: 'group' }, { ...mileSeed!, kind: 'milestone' }],
+        scale,
+        preset,
+        visible: { x: 0, y: 0, width: 0, height: 0 },
+        rowHeight: 32,
+        revision: 0,
+      }),
+    );
+
+    const groupBar = timeline.querySelector<HTMLElement>('[data-kind="group"]')!;
+    const mileBar = timeline.querySelector<HTMLElement>('[data-kind="milestone"]')!;
+    const spanBar = timeline.querySelector<HTMLElement>('[data-kind="span"]')!;
+    expect(groupBar.className.split(' ')).toContain('fg-bar-bracket');
+    expect(mileBar.className.split(' ')).toContain('fg-bar-diamond');
+    expect(spanBar.className.split(' ')).not.toContain('fg-bar-bracket');
+    expect(spanBar.className.split(' ')).not.toContain('fg-bar-diamond');
+
+    backend.destroy();
+    grid.remove();
+    timeline.remove();
+  });
 });

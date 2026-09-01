@@ -141,6 +141,7 @@ export default tseslint.config(
   {
     // plans/01 §1, docs/02 §3.7: model/ is types only.
     files: ['src/model/**/*.ts'],
+    ignores: ['src/model/**/*.test.ts'],
     plugins: { freegantt },
     rules: {
       'freegantt/model-is-types-only': 'error',

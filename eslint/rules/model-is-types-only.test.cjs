@@ -12,6 +12,7 @@ ruleTester.run('model-is-types-only', rule, {
   valid: [
     'export type EntryId = string & { readonly __brand: "EntryId" };',
     'export function entryId(value: string): EntryId { return value as EntryId; }',
+    'export function entryIdOfItem(id: ItemId): EntryId { const sep = id.lastIndexOf(":"); return entryId(sep < 0 ? id : id.slice(0, sep)); }',
     'import type { Entry } from "./entry.js";',
     'import { type Entry } from "./entry.js";',
     {

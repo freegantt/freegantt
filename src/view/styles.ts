@@ -123,6 +123,9 @@ ${DARK_COLOR_TOKENS}
 /* D-S3-21: touch-action: none on the bar itself, not just the resize handles — a touch drag must
    never fight the browser's own pan/scroll gesture over the same surface. */
 .fg-bar { background: var(--fg-bar-fill); color: var(--fg-bar-label-color); border-radius: var(--fg-bar-radius, 3px); position: absolute; top: 0; left: 0; touch-action: none; }
+.fg-bar-bracket { background: transparent; border: 2px solid var(--fg-bar-fill); border-bottom: none; border-radius: 2px 2px 0 0; color: var(--fg-bar-fill); }
+.fg-bar-diamond { background: transparent; overflow: visible; color: transparent; }
+.fg-bar-diamond::before { content: ''; position: absolute; top: 50%; left: 0; width: 10px; height: 10px; background: var(--fg-bar-fill); transform: translate(-50%, -50%) rotate(45deg); }
 .fg-bar[data-flag~="conflict"] { outline: 2px solid var(--fg-warn); }
 /* D-S3-7: data-state is a fixed five-token projection of InteractionState, painted once here — not a
    per-bar modifier class (CONTEXT.md's State attribute entry). 'hovered' has no rule of its own yet

@@ -1,4 +1,6 @@
 export { computeFrame, barSpan, DEFAULT_TICK_BOX_FLOOR_PX } from './frame.js';
+export { createItemEmitterRegistry } from './items/item-emitter.js';
+export type { Item, ItemEmitter, ItemEmitterRegistry, ItemEmissionContext } from './items/item-emitter.js';
 export type { FrameColumn, ResolvedColumn, FieldCompare } from './column.js';
 export type {
   RowSource,

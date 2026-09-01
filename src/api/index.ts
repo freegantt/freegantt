@@ -84,7 +84,7 @@ export {
 } from '../model/index.js';
 
 // model/ types the public surface re-exports. A consumer building entries or catching errors names these.
-export { entryId, itemId, changeSetId } from '../model/index.js';
+export { entryId, itemId, entryIdOfItem, segmentIndexOfItem, changeSetId } from '../model/index.js';
 export type {
   Entry,
   EntryKind,

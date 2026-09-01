@@ -4,7 +4,7 @@
 
 'use strict';
 
-const ALLOWED_HELPERS = new Set([
+const IDENTITY_CAST_HELPERS = new Set([
   'brand',
   'unbrand',
   'entryId',
@@ -13,6 +13,25 @@ const ALLOWED_HELPERS = new Set([
   'itemId',
   'changeSetId',
 ]);
+
+/** Readers of an ItemId (D-S4-25). They parse; they are not identity casts. */
+const ITEM_ID_READERS = new Set(['entryIdOfItem', 'segmentIndexOfItem']);
+
+function isAllowedHelperName(name) {
+  return IDENTITY_CAST_HELPERS.has(name) || ITEM_ID_READERS.has(name);
+}
+
+function isInsideAllowedHelper(node) {
+  let current = node.parent;
+  while (current) {
+    if (current.type === 'FunctionDeclaration') {
+      const name = current.id?.name;
+      return Boolean(name && isAllowedHelperName(name));
+    }
+    current = current.parent;
+  }
+  return false;
+}
 
 function isOneLineIdentityCast(node) {
   // `export function entryId(value: string): EntryId { return value as EntryId; }` — single
@@ -51,7 +70,8 @@ module.exports = {
       },
       FunctionDeclaration(node) {
         const name = node.id?.name;
-        if (name && ALLOWED_HELPERS.has(name) && isOneLineIdentityCast(node)) return;
+        if (name && IDENTITY_CAST_HELPERS.has(name) && isOneLineIdentityCast(node)) return;
+        if (name && ITEM_ID_READERS.has(name)) return;
         context.report({ node, messageId: 'valueDeclaration' });
       },
       ClassDeclaration(node) {
@@ -60,6 +80,7 @@ module.exports = {
       },
       'VariableDeclaration > VariableDeclarator'(node) {
         if (node.init === null) return; // ambient `declare const x: T` has no runtime value
+        if (isInsideAllowedHelper(node)) return;
         context.report({ node, messageId: 'valueDeclaration' });
       },
     };

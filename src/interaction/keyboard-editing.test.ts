@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { attachKeyboardEditing } from './keyboard-editing.js';
 import type { EntryGesture, EntryGestureContext, EntryGestureSession } from '../view/index.js';
-import { entryId, itemId } from '../model/index.js';
+import { entryId, entryIdOfItem } from '../model/index.js';
 import type { Entry, EntryId, Instant, ItemId } from '../model/index.js';
 
 const A = entryId('a');
@@ -47,8 +47,8 @@ function makeContext(
   const ctx: EntryGestureContext = {
     hitTest: () => undefined,
     entryFor: (item: ItemId) => {
-      const id = ORDER.find((candidate) => itemId(candidate) === item);
-      return id !== undefined ? entryFor(id) : undefined;
+      const id = entryIdOfItem(item);
+      return ORDER.includes(id) ? entryFor(id) : undefined;
     },
     can: (capability, entry) => (capability === 'select' ? !incapableRows.includes(entry.id) : true),
     rowOrder: () => ORDER,
