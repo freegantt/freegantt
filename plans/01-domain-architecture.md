@@ -392,7 +392,12 @@ interface GeometryFrame {
    *  library-formatted string per configured grid column, in column order, produced by each field's
    *  `formatValue` (§2.6). It is derived text on the `a11yLabel` precedent, not consumer render
    *  output — a `cellRenderer` is applied by `render/`, never here. */
-  rows: Array<{ id: RowId; index: number; top: number; height: number; laneCount: number; cells: readonly string[] }>;
+  rows: Array<{
+    id: RowId; kind: PlannedRowKind; index: number; top: number; height: number; laneCount: number;
+    depth: number; expandable: boolean; expanded: boolean;
+    matched?: boolean;   // false when kept only because a descendant matched the filter
+    cells: readonly string[];
+  }>;
   /** Total row count across the whole dataset (`entries.length`), not the windowed `rows.length` —
    *  feeds `aria-setsize` (S1.10, D-S1.10-5): virtualization without it announces "row 3" with no
    *  "of 30" over a large dataset. */
@@ -430,11 +435,19 @@ interface LayoutInput {
   rowHeight: number;
   tickBoxFloorPx?: number;        // Tick box floor; default DEFAULT_TICK_BOX_FLOOR_PX (S1.12)
   revision: number;
+  /** Visible Grid columns — resolved in `view/`, plain data here (D-S4-13). Default `['name']` lives on the Gantt. */
+  columns?: readonly ResolvedColumn[];
+  /** Which rows to draw. Omitted → `{ source: 'entries', tree: false }` (S1's flat list). */
+  rows?: RowSource;
+  /** Collapsed `RowId`s. Omitted → none (D-S4-22). */
+  collapsed?: readonly RowId[];
+  itemProducerRegistry: ItemProducerRegistry;
+  fieldCompares?: readonly FieldCompare[];
 }
 
-/** Pure and stateless. `heights` is the row-top index this pass reads from; omitted, one is built
- *  and discarded within the call. Production callers never pass it — `FrameLayout` does. */
-function computeFrame(input: LayoutInput, heights?: RowHeightIndex): GeometryFrame;
+/** Pure and stateless. `memory` is what this pass remembers between calls — `FrameLayout` keeps one
+ *  alive across renders. Production callers never pass it — `FrameLayout` does. */
+function computeFrame(input: LayoutInput, memory?: FrameMemory): GeometryFrame;
 
 /** One Gantt's layout pass, and the one thing that pass must remember between renders: the row-height
  *  index. `view/` states what to draw and holds no layout bookkeeping — the index, its cache key and
@@ -495,7 +508,7 @@ Shipped presets cover hour→year zoom levels; custom presets are config objects
 
 ## 6. `data/` — stores, transactions, changesets
 
-- **`DatasetState`** (named `DatasetData` in earlier drafts of this doc; renamed in S2.1, OQ5) owns normalized stores (`entries`, plus reserved stores for scheduling-plugin-owned data such as `dependencies` — S3 adds these; S2 has `entries` alone) with indexes (`byId`, `byParent`, `byPredecessor`, `bySuccessor` — the latter two populated only when a plugin uses them), the dataset timezone, and the generic edit-extension binding (identity when unoccupied; §1). Fully headless (D4): constructible and usable in Node with no view. `api/Dataset` is a thin façade delegating every read and the `transaction`/`on`/`off` trio to it.
+- **`DatasetState`** (named `DatasetData` in earlier drafts of this doc; renamed in S2.1, OQ5) owns normalized stores (`entries`, plus reserved stores for scheduling-plugin-owned data such as `dependencies` — S5's plugin runtime; S7's `Dependency` store) with indexes (`byId`, `byParent`, `byPredecessor`, `bySuccessor` — the latter two populated only when a plugin uses them), the dataset timezone, and the generic edit-extension binding (identity when unoccupied; §1). Fully headless (D4): constructible and usable in Node with no view. `api/Dataset` is a thin façade delegating every read and the `transaction`/`on`/`off` trio to it.
 - **Transactions**: `dataset.transaction(() => { ...mutations })` batches mutations, runs the extension hook once, emits **one changeset**. Every mutation path — API and gesture — goes through a transaction. No exceptions.
 - **Changesets** are the universal delta (D7, principle 4) — an open-by-construction discriminated union, per store entity kind, so a `field` typo on `updated` and a stray property on `added`/`removed` are both caught at the type level rather than only at runtime:
 
@@ -505,7 +518,7 @@ type ChangeOrigin = 'user' | 'undo' | 'redo'; // 'engine' and 'load' arrive with
 
 // FieldKey stays open (D-S2-26): the core Entry keys are named for autocomplete and the
 // per-field comparator table's exhaustiveness check, but a consumer- or plugin-declared field
-// (S5's field registry) is equally legal and validated at runtime, not by the type.
+// (S4's field registry, `01` §2.6, ADR 0005) is equally legal and validated at runtime, not by the type.
 type FieldKey = keyof Omit<Entry, 'id'> | (string & {});
 
 interface EntityAdded   { store: 'entries'; entity: Entry; }

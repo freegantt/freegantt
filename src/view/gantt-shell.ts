@@ -97,7 +97,7 @@ export type AttachEntryGestures = (
 
 /** S3.5, D-S3-13: same DI shape as `AttachEntryGestures` just above, and the same `ctx` instance —
  *  `interaction/keyboard-editing.ts`'s `attachKeyboardEditing` needs `session()`/`selection`/
- *  `rowOrder`/`entryFor`/`can` only, not `hitTest`/`setHovered`, but there is no value in a second,
+ *  `selectableEntriesInRowOrder`/`entryFor`/`can` only, not `hitTest`/`setHovered`, but there is no value in a second,
  *  narrower context type for one caller. */
 export type AttachKeyboardEditing = (container: HTMLElement, ctx: EntryGestureContext) => Detachable;
 

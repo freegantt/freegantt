@@ -15,6 +15,7 @@ const CASES: Array<{ file: string; ruleId: string }> = [
   { file: 'no-magic-time-constants.ts', ruleId: 'freegantt/no-magic-time-constants' },
   { file: 'no-date-outside-time.ts', ruleId: 'freegantt/no-date-outside-time' },
   { file: 'no-scroll-outside-scroll-model.ts', ruleId: 'freegantt/no-scroll-outside-scroll-model' },
+  { file: 'no-derived-in-json-b9.ts', ruleId: 'freegantt/no-derived-in-json' },
 ];
 
 describe('lint fixture violations', () => {
@@ -30,6 +31,7 @@ describe('lint fixture violations', () => {
           'freegantt/no-magic-time-constants': 'error',
           'freegantt/no-date-outside-time': 'error',
           'freegantt/no-scroll-outside-scroll-model': 'error',
+          'freegantt/no-derived-in-json': 'error',
         },
       },
     ],
@@ -67,16 +69,6 @@ const BUILTIN_CASES: Array<{ file: string; ruleId: string; config: Linter.RulesR
             "ThrowStatement NewExpression[callee.name='Error'] > Literal[value=/not.implemented|TODO|unsupported/i]",
           message: 'B8',
         },
-      ],
-    },
-  },
-  {
-    file: 'no-derived-in-json-b9.ts',
-    ruleId: 'no-restricted-syntax',
-    config: {
-      'no-restricted-syntax': [
-        'error',
-        { selector: 'TSTypeReference[typeName.name=/^(Row|Item|GeometryFrame)$/]', message: 'B9' },
       ],
     },
   },

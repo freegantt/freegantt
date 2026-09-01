@@ -49,7 +49,7 @@ export interface EntryGestureSession {
 }
 
 /** Grown from S3.1/S3.2's `EntrySelectionContext` into the full gesture context (D-S3-5/D-GH-1): the
- *  selection half (`hitTest`/`rowOrder`/`selection`/`setHovered`) is unchanged; `entryFor`/`can`
+ *  selection half (`hitTest`/`selectableEntriesInRowOrder`/`selection`/`setHovered`) is unchanged; `entryFor`/`can`
  *  replace `entryIdFor`/`canSelect` (one capability resolution serves both selection and gesture
  *  checks, I14); `session` replaces `entriesForGesture`/`draftFor`/`commit`/`preview`. */
 export interface EntryGestureContext {

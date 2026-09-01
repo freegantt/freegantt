@@ -1,150 +1,20 @@
 import './harness-nav.ts';
-import { Gantt, Dataset, MutationCancelledError, addMs, MS, instant } from '../src/api/index.js';
-import type { GridColumnInput, Theme, RowSource, Entry, TimeUnit } from '../src/api/index.js';
-import { demoEntryInputs, demoNestedParent } from '../fixtures/demo-dataset.js';
+import { Gantt, Dataset, MutationCancelledError } from '../src/api/index.js';
+import type { Theme, TimeUnit } from '../src/api/index.js';
+import { demoEntryInputs } from '../fixtures/demo-dataset.js';
 import { mountTimelineToolbar } from './timeline-toolbar.js';
 
-const COST_TYPE = {
-  money: {
-    rollUp: 'sum' as const,
-    formatValue: (value: unknown, ctx: { locale: Intl.LocalesArgument }) =>
-      typeof value === 'number'
-        ? new Intl.NumberFormat(ctx.locale, {
-            style: 'currency',
-            currency: 'USD',
-            maximumFractionDigits: 0,
-          }).format(value)
-        : '',
-    column: { align: 'end' as const, header: 'Cost' },
-  },
-};
-
-function splitIntoOverlappingSegments(
-  start: NonNullable<(typeof demoEntryInputs)[number]['start']>,
-  end: NonNullable<(typeof demoEntryInputs)[number]['end']>,
-) {
-  const startMs = instant(start);
-  return [
-    { start: startMs, end: addMs(startMs, 4 * MS.DAY) },
-    { start: addMs(startMs, MS.DAY), end: addMs(startMs, 5 * MS.DAY) },
-    { start: addMs(startMs, 2 * MS.DAY), end: instant(end) },
-  ];
-}
-
 const dataset = new Dataset({
-  entries: demoEntryInputs.map((entry, i) => {
-    const parentId = demoNestedParent[entry.id ?? ''];
-    const team =
-      entry.id === 'entry-1' || parentId === 'entry-1'
-        ? 'core'
-        : entry.id === 'entry-5' || parentId === 'entry-5'
-          ? 'edge'
-          : undefined;
-    const meta: Record<string, unknown> = {};
-    if (i === 0) meta['cost'] = 12_000;
-    if (team !== undefined) meta['team'] = team;
-    return {
-      ...entry,
-      ...(Object.keys(meta).length > 0 ? { meta } : {}),
-      ...(parentId !== undefined ? { parentId } : {}),
-      ...(entry.id === 'entry-4' ? { kind: 'milestone' as const } : {}),
-      ...(entry.id === 'entry-16' && entry.start !== undefined && entry.end !== undefined
-        ? { segments: splitIntoOverlappingSegments(entry.start, entry.end) }
-        : {}),
-    };
-  }),
+  entries: demoEntryInputs,
   timeZone: 'UTC',
-  fieldTypes: COST_TYPE,
-  fields: [{ key: 'cost', type: 'money' }],
 });
-
-const GRID_WITH_BUDGET: readonly GridColumnInput[] = [
-  'name',
-  'start',
-  'duration',
-  { field: 'cost', header: 'Budget' },
-];
-const GRID_WITHOUT_BUDGET: readonly GridColumnInput[] = ['name', 'start', 'duration'];
 
 const gantt = new Gantt({
   container: '#gantt',
   dataset,
-  gridColumns: GRID_WITH_BUDGET,
   rowSource: { source: 'entries', tree: true },
 });
-// Zero-interaction visibility for the today line (S1.12, D-S1.12-14) — header readability follow-up
-// pass 4. Needs no ResizeObserver measurement first: panToToday reads the already-resolved
-// TimeScale, and the pane re-measures/re-renders on its own right after mount. `panToToday()`'s
-// default `align: 'start'` leaves `todayLineMarginTicks`' worth of the timeline visible to the left
-// of the line, the same landing a later "Today" button click reuses (S1.13 follow-up).
 gantt.panToToday();
-
-const toggleBudgetBtn = document.querySelector<HTMLButtonElement>('#toggle-budget-btn')!;
-let budgetVisible = true;
-toggleBudgetBtn.addEventListener('click', () => {
-  budgetVisible = !budgetVisible;
-  gantt.gridColumns = budgetVisible ? GRID_WITH_BUDGET : GRID_WITHOUT_BUDGET;
-  toggleBudgetBtn.textContent = budgetVisible ? 'Hide Budget' : 'Show Budget';
-});
-
-const reparentBtn = document.querySelector<HTMLButtonElement>('#reparent-btn')!;
-reparentBtn.addEventListener('click', () => {
-  try {
-    dataset.entries.update('entry-18', { parentId: 'entry-1' });
-  } catch (error) {
-    if (!(error instanceof MutationCancelledError)) throw error;
-  }
-});
-
-const rowsSourceBtn = document.querySelector<HTMLButtonElement>('#rows-source-btn')!;
-const packRowsBtn = document.querySelector<HTMLButtonElement>('#pack-rows-btn')!;
-const filterTeamBtn = document.querySelector<HTMLButtonElement>('#filter-team-btn')!;
-const sortNameBtn = document.querySelector<HTMLButtonElement>('#sort-name-btn')!;
-let grouped = false;
-let pack = false;
-let filterTeam: 'core' | 'edge' | null = null;
-let sortByName = false;
-
-function applyRowSource(): void {
-  const heightMode: 'fixed' | 'pack' = pack ? 'pack' : 'fixed';
-  const shared = {
-    heightMode,
-    ...(filterTeam !== null && !grouped
-      ? { filter: (entry: Entry) => (entry.meta as { team?: string } | undefined)?.team === filterTeam }
-      : {}),
-    ...(sortByName && !grouped ? { sort: { field: 'name' as const } } : {}),
-  };
-  const next: RowSource = grouped
-    ? { source: 'group', groupBy: (entry: Entry) => entry.kind, ...shared }
-    : { source: 'entries', tree: true, ...shared };
-  gantt.rowSource = next;
-  rowsSourceBtn.textContent = grouped ? 'Show tree' : 'Group by kind';
-  packRowsBtn.textContent = pack ? 'Stack bars (fixed rows)' : 'Pack overlapping bars';
-  filterTeamBtn.textContent = filterTeam === null ? 'Filter team: off' : `Filter team: ${filterTeam}`;
-  sortNameBtn.textContent = sortByName ? 'Sort by name: on' : 'Sort by name: off';
-}
-
-rowsSourceBtn.addEventListener('click', () => {
-  grouped = !grouped;
-  applyRowSource();
-});
-
-packRowsBtn.addEventListener('click', () => {
-  pack = !pack;
-  applyRowSource();
-});
-
-filterTeamBtn.addEventListener('click', () => {
-  if (grouped) return;
-  filterTeam = filterTeam === null ? 'core' : filterTeam === 'core' ? 'edge' : null;
-  applyRowSource();
-});
-
-sortNameBtn.addEventListener('click', () => {
-  if (grouped) return;
-  sortByName = !sortByName;
-  applyRowSource();
-});
 
 mountTimelineToolbar({ gantt, container: document.querySelector<HTMLDivElement>('#toolbar')! });
 
@@ -237,10 +107,6 @@ redoBtn.addEventListener('click', () => {
 refreshHistoryButtons();
 syncSelectionUi();
 
-// Snap demo (D-S3-12): a drag always previews at full pixel resolution — this only controls where
-// the *committed* start/end lands. 'tick' defers to whatever the active preset already steps by;
-// 'none' matches holding Alt for every drag, not just the current one; hour/day/week let a visitor
-// pick a coarser or finer grid than the preset's own tick, at any increment.
 const snapUnitSelect = document.querySelector<HTMLSelectElement>('#snap-unit')!;
 const snapIncrementInput = document.querySelector<HTMLInputElement>('#snap-increment')!;
 

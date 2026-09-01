@@ -331,6 +331,10 @@ dataset.fields.all;                            // every declared Field, core inc
 
 An unregistered key is an `UnknownFieldError`, never a silent write. A missing id on `fieldValue` is an `EntryNotFoundError`. The read goes through the same Field registry path as the write: a consumer who declared `{ key: 'cost' }` does not reach into `entry.meta`. `dataset.field` and `dataset.fields.all` return **resolved** declarations (type merge applied, `source` filled). They are not the raw `DatasetOptions.fields` array.
 
+**Default `gridColumns` is `['name']`.** Naming a Field does not add it to the grid by itself.
+
+**Row-source sort** names a declared Field, not a visible column — `sort: { field: 'cost' }` orders by the stored value through `FieldCompare`, even when `gridColumns` is `['name']` only (`01` §2.6, S4.9, D-S4-13/D-S4-28).
+
 ---
 
 ### 4.3 Row sources, collapse, and tree
@@ -366,7 +370,7 @@ rowSource: {
 }
 ```
 
-**Sort and filter (S4.9, not yet published).** `filter`, `sort`, and `filterPolicy` land on the row source in S4.9 — view knobs that never reorder `dataset.entries.all` or change what the Rollup sees. They are withheld from the published surface until that slice ships (`plans/s4-hierarchy-and-rows/s4.9-sort-and-filter.md`).
+**Sort and filter** live on the row source (`rowSource.filter`, `rowSource.sort`, `rowSource.filterPolicy`) — view knobs that never reorder `dataset.entries.all` or change what the Rollup sees (D-S4-28). `sort.field` names a declared Field; sort reads `fieldCompares`, not visible `gridColumns`.
 
 **Collapse is Gantt state**, not Dataset state — no transaction, no changeset:
 
@@ -386,7 +390,7 @@ For `{ source: 'entries' }`, a `RowId` equals the `EntryId`, so `collapse('p1')`
 
 Group header rows show the `groupBy` label in column 0 and blank cells elsewhere. Per-group aggregates are the caller's data — declare a computed Field or write through a group entry; the grid does not invent them (D-S4-11).
 
-Published types: `RowSource`, `EntriesRowSource`, `GroupRowSource`, `CustomRowSource`, `CustomRow`, `RowHeightMode`, `RowSourceCommon`, `RowResolveInput`, `RowId`, `CollapseChange`. (`RowFilter`, `RowSort`, `FilterPolicy` publish with S4.9.)
+Published types: `RowSource`, `EntriesRowSource`, `GroupRowSource`, `CustomRowSource`, `CustomRow`, `RowHeightMode`, `RowSourceCommon`, `RowResolveInput`, `RowId`, `CollapseChange`, `RowFilter`, `RowSort`, `FilterPolicy`.
 
 ---
 
@@ -412,7 +416,7 @@ Omit `scale`/`scroll` and the Gantt creates private ones — single-Gantt users 
 
 ```ts
 const doc = dataset.toJSON();
-const p2  = Dataset.fromJSON(doc, { aggregators });
+const p2  = Dataset.fromJSON(doc, { aggregators, fieldTypes, fields });
 ```
 
 ```ts

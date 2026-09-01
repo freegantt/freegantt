@@ -172,14 +172,14 @@ Slices are scope, not calendar estimates. Within a slice, entries are ordered so
 
 ## S4 — Hierarchy, grouping, multi-item rows
 
-**Position:** after S3, before S5. Tracker: [`plans/s4-hierarchy-and-rows/README.md`](./s4-hierarchy-and-rows/README.md); work splits into [`s4.1-field-registry.md`](./s4-hierarchy-and-rows/s4.1-field-registry.md)–[`s4.11-harness-and-gate.md`](./s4-hierarchy-and-rows/s4.11-harness-and-gate.md). That spec settles scope calls, closes ADR 0005's two open questions, and renames `derivedSpanKinds` to `rollUpKinds` as the Rollup gate widens from spans to every rolling-up field. The acceptance boxes below become `[S4-A1]`–`[S4-A11]` when S4.11's spec edits land.
+**Position:** after S3, before S5. **Done, gate passing.** Tracker: [`plans/s4-hierarchy-and-rows/README.md`](./s4-hierarchy-and-rows/README.md); work splits into [`s4.1-field-registry.md`](./s4-hierarchy-and-rows/s4.1-field-registry.md)–[`s4.11-harness-and-gate.md`](./s4-hierarchy-and-rows/s4.11-harness-and-gate.md). That spec settled scope calls, closed ADR 0005's two open questions, and renamed `derivedSpanKinds` to `rollUpKinds` as the Rollup gate widened from spans to every rolling-up field.
 
 **Goal:** the Row ≠ Entry payoff (principle 1). Tree view with collapse/expand, grouped row sources, entry segments as multiple bars on one row, lane packing with variable row heights.
 
 **Scope**
 
 - Field registry (`01` §2.6, ADR 0005): core fields (`name`, `start`, `end`, `duration`) ship as declarations in the registry a consumer adds to; `fields` / `fieldTypes` / `aggregators` on `Dataset`; a declared `meta` key becomes addressable for editing, comparison and rollup. A field is a Grid column candidate only when it declares `column`, so `gantt.gridColumns` is names in display order plus per-Gantt overrides. `progress` is not a core field (ADR 0008).
-- Per-field rollup (#80): `rollUpDerivedSpans` becomes `rollUpFields`, a leaf with one importer `data/transaction.ts` (D-S4-7). Default is on. `rollUpKinds: 'none'` (or `[]`) keeps the values the caller assigned on the parent. `start` is `min`, `end` is `max`, a declared `cost` sums, `name` does not roll up. Same precedence (yields to the body, wins over the resolver), still bottom-up. Scheduling cannot occupy this slot. Source decides stored vs. computed: `entry`/`meta` fields store the parent's aggregate, computed fields never reach the document.
+- Per-field rollup (#80): `rollUpFields` is a leaf with one importer `data/transaction.ts` (D-S4-7). Default is on. `rollUpKinds: 'none'` (or `[]`) keeps the values the caller assigned on the parent. `start` is `min`, `end` is `max`, a declared `cost` sums, `name` does not roll up. Same precedence (yields to the body, wins over the resolver), still bottom-up. Scheduling cannot occupy this slot. Source decides stored vs. computed: `entry`/`meta` fields store the parent's aggregate, computed fields never reach the document.
 - Frame rows carry `cells` (one library-formatted string per configured grid column) instead of one `label` — the S1 shape that assumed a single-column grid (#81).
 - Tree UI: indent + expand/collapse in the grid's name column; collapse state is view state (per Gantt, `RowId`s, not in dataset data).
 - Kind-driven item emission (`01` §2.5): `group` → summary bracket (span rollup from S2), `milestone` → diamond, consumer-registered kinds via the emitter seam; empty groups render as groups.
@@ -193,17 +193,17 @@ Slices are scope, not calendar estimates. Within a slice, entries are ordered so
 
 **Acceptance**
 
-- [ ] A consumer-declared `meta` field sums up the tree, shows in a grid column beside `start`, edits in the same `update()` call and the same undo step as a core field, and round-trips through `toJSON`/`fromJSON`.
-- [ ] An edit naming an unregistered field key throws `UnknownFieldError` — it is never written silently.
-- [ ] Switching `gantt.rowSource` between the tree and a grouped source re-resolves rows without a remount, and scroll position survives it.
-- [ ] A segmented entry renders N bars on one row; drag of one segment behaves sanely and transactionally.
-- [ ] Pack-mode rows change height correctly as overlaps come and go; scroll position stays stable (height index invalidation test).
-- [ ] Collapse state survives data edits and is independent per Gantt.
-- [ ] Filter with keep-ancestors shows a matching deep child under its chain of parents.
-- [ ] `filterPolicy: 'matchOnly'` returns only matching entries — no ancestor rows.
-- [ ] An empty `kind: 'group'` entry renders as a group, accepts children, and its span appears once children exist — no special-casing.
-- [ ] With `autoGroup` on: reparenting an entry under a plain entry promotes that parent to `group` in the same undo step; removing all children demotes nothing.
-- [ ] `{ source: 'custom', resolve }` produces the resolver's rows.
+- [x] `[S4-A1]` A consumer-declared `meta` field sums up the tree, shows in a grid column beside `start`, edits in the same `update()` call and the same undo step as a core field, and round-trips through `toJSON`/`fromJSON`.
+- [x] `[S4-A2]` An edit naming an unregistered field key throws `UnknownFieldError` — it is never written silently.
+- [x] `[S4-A3]` Switching `gantt.rowSource` between the tree and a grouped source re-resolves rows without a remount, and scroll position survives it.
+- [x] `[S4-A4]` A segmented entry renders N bars on one row; drag of one segment behaves sanely and transactionally.
+- [x] `[S4-A5]` Pack-mode rows change height correctly as overlaps come and go; scroll position stays stable (height index invalidation test).
+- [x] `[S4-A6]` Collapse state survives data edits and is independent per Gantt.
+- [x] `[S4-A7]` Filter with keep-ancestors shows a matching deep child under its chain of parents.
+- [x] `[S4-A8]` An empty `kind: 'group'` entry renders as a group, accepts children, and its span appears once children exist — no special-casing.
+- [x] `[S4-A9]` With `autoGroup` on: reparenting an entry under a plain entry promotes that parent to `group` in the same undo step; removing all children demotes nothing.
+- [x] `[S4-A10]` `filterPolicy: 'matchOnly'` returns only matching entries — no ancestor rows.
+- [x] `[S4-A11]` `{ source: 'custom', resolve }` produces the resolver's rows.
 
 ---
 
