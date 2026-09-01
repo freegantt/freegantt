@@ -33,6 +33,7 @@ function input(overrides: { entries?: readonly (typeof sampleEntries)[number][];
     visible,
     rowHeight: overrides.rowHeight ?? 32,
     revision: 0,
+    todayLine: false as const,
   };
 }
 
