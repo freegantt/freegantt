@@ -103,8 +103,8 @@ export class DatasetState implements Dataset {
    *  the function (`rollup-is-removable`, D-S4-7). */
   #rollUpKinds: ReadonlySet<EntryKind>;
   readonly #entryContext: EntryReadContext;
-  /** Resolved once at construction. Promotion reads this; it does not live-reconfigure. */
-  readonly hierarchy: DatasetHierarchy;
+  /** First-child promotion (D-S4-17). Live — later commits read this; existing Kind stays. */
+  #hierarchy: DatasetHierarchy;
   readonly fields: FieldRegistry;
   readonly fieldContext: FieldContext;
   readonly computedCache = new ComputedFieldCache();
@@ -120,7 +120,7 @@ export class DatasetState implements Dataset {
     this.referenceDate = now();
     this.editExtender = options.editExtender ?? identityExtender;
     this.#rollUpKinds = resolveRollUpKinds(options.rollUpKinds);
-    this.hierarchy = resolveHierarchy(options.hierarchy);
+    this.#hierarchy = resolveHierarchy(options.hierarchy);
     this.fields = new FieldRegistry({
       fields: options.fields ?? [],
       fieldTypes: options.fieldTypes ?? {},
@@ -168,6 +168,15 @@ export class DatasetState implements Dataset {
     const next = resolveRollUpKinds(value);
     this.#rollUpKinds = next;
     this.#entryContext.rollUpKinds = next;
+  }
+
+  get hierarchy(): DatasetHierarchy {
+    return this.#hierarchy;
+  }
+
+  /** Call: `state.setHierarchy({ autoGroup: false })`. Later first-child commits obey this. */
+  setHierarchy(value: DatasetHierarchy): void {
+    this.#hierarchy = resolveHierarchy(value);
   }
 
   /** `model/`'s `Dataset` interface (S3, D-S3-9) — a predicate rather than exposing `rollUpKinds`

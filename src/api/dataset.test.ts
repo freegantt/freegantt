@@ -165,6 +165,36 @@ describe('Dataset transaction/on/off delegation', () => {
     expect(dataset.isRollUpKind('group')).toBe(true);
   });
 
+  it('live hierarchy.autoGroup changes later first-child promotions only', () => {
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      entries: [
+        { id: 'p-off', name: 'Off', start: '2026-01-01', end: '2026-01-05' },
+        { id: 'p-on', name: 'On', start: '2026-01-01', end: '2026-01-05' },
+      ],
+    });
+    dataset.hierarchy = { autoGroup: false };
+    dataset.entries.add({
+      id: 'c-off',
+      parentId: 'p-off',
+      name: 'Child off',
+      start: '2026-02-01',
+      end: '2026-02-05',
+    });
+    expect(dataset.entries.get('p-off')!.kind).toBe('span');
+
+    dataset.hierarchy = { autoGroup: true };
+    dataset.entries.add({
+      id: 'c-on',
+      parentId: 'p-on',
+      name: 'Child on',
+      start: '2026-03-01',
+      end: '2026-03-05',
+    });
+    expect(dataset.entries.get('p-on')!.kind).toBe('group');
+    expect(dataset.entries.get('p-off')!.kind).toBe('span');
+  });
+
   it('off() stops a handler from seeing further events', () => {
     const dataset = new Dataset({ timeZone: 'UTC', entries: [oneEntry()] });
     let calls = 0;
