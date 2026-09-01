@@ -152,6 +152,10 @@ export interface GanttShellOptions {
   scroll?: ScrollModel;
   /** Initial grid pane width in px (S1.8, D-S1.8-3). Default: `--fg-grid-pane-width`, fallback 160. */
   gridWidth?: number;
+  /** Live (#127). The splitter (and any assignment) clamps `gridWidth` to this floor. Default `0` —
+   *  an explicit `gridWidth = 0` stays a legal way to collapse the grid pane; this only stops the
+   *  splitter drag from reaching it by accident. */
+  minGridWidth?: number;
   /** Build the private default `TimeScaleModel` only (D-S1.9-9) — a no-op, with a dev-mode warning,
    * when `scale` is also supplied: the shared model already carries its own options. */
   preset?: PresetRef;
@@ -312,6 +316,7 @@ export class GanttShell {
     this.#paneLayout = new PaneLayout({
       container: this.#container,
       ...(options.gridWidth !== undefined ? { gridWidth: options.gridWidth } : {}),
+      ...(options.minGridWidth !== undefined ? { minGridWidth: options.minGridWidth } : {}),
     });
     this.#panes = this.#paneLayout.panes;
 
@@ -766,6 +771,19 @@ export class GanttShell {
    *  cancelable commit sequence a splitter drag runs — one write path, one place the veto lives. */
   set gridWidth(px: number) {
     this.#commitGridWidth(px);
+  }
+
+  get minGridWidth(): number {
+    return this.#paneLayout.minGridWidth;
+  }
+
+  /** Live (#127). Raising the floor above the current `gridWidth` re-clamps it through
+   *  `#commitGridWidth` — the same cancelable commit sequence a splitter drag runs, so a veto
+   *  leaves `gridWidth` where it was (still respecting the new floor, since `PaneLayout.gridWidth`
+   *  clamps on every write, including the veto's rollback). */
+  set minGridWidth(px: number) {
+    this.#paneLayout.minGridWidth = px;
+    if (this.#paneLayout.gridWidth < px) this.#commitGridWidth(px);
   }
 
   get preset(): ViewPreset {
