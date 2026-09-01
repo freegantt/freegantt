@@ -44,6 +44,14 @@ export type ChangeSetId = string & {
 // @public
 export function changeSetId(counter: number): ChangeSetId;
 
+// @public (undocumented)
+export interface CollapseChange {
+    // (undocumented)
+    readonly from: readonly RowId[];
+    // (undocumented)
+    readonly to: readonly RowId[];
+}
+
 // @public
 export class ContainerNotFoundError extends FreeGanttError {
     constructor(container: string);
@@ -51,6 +59,28 @@ export class ContainerNotFoundError extends FreeGanttError {
 
 // @public
 export type CoreFieldKey = keyof Omit<Entry, 'id'>;
+
+// @public
+export interface CustomRow {
+    // (undocumented)
+    entryIds?: readonly string[];
+    // (undocumented)
+    id: string;
+    // (undocumented)
+    label?: string;
+}
+
+// @public (undocumented)
+export interface CustomRowSource {
+    // Warning: (ae-forgotten-export) The symbol "RowHeightMode" needs to be exported by the entry point index.d.ts
+    //
+    // (undocumented)
+    heightMode?: RowHeightMode;
+    // (undocumented)
+    resolve(input: RowResolveInput): readonly CustomRow[];
+    // (undocumented)
+    source: 'custom';
+}
 
 // @public (undocumented)
 export class Dataset<TMeta = unknown, TFields extends Record<string, unknown> = Record<string, unknown>> {
@@ -167,6 +197,13 @@ export class DuplicateFieldSourceError extends FreeGanttError {
     readonly metaKey: string;
 }
 
+// @public
+export class DuplicateRowIdError extends FreeGanttError {
+    constructor(rowId: string);
+    // (undocumented)
+    readonly rowId: string;
+}
+
 // @public (undocumented)
 export interface Duration {
     // (undocumented)
@@ -189,6 +226,22 @@ export interface EntityRemoved {
     entity: Entry;
     // (undocumented)
     store: 'entries';
+}
+
+// @public (undocumented)
+export interface EntriesRowSource {
+    // (undocumented)
+    filter?: RowFilter;
+    // (undocumented)
+    filterPolicy?: FilterPolicy;
+    // (undocumented)
+    heightMode?: RowHeightMode;
+    // (undocumented)
+    sort?: RowSort;
+    // (undocumented)
+    source: 'entries';
+    // (undocumented)
+    tree?: boolean;
 }
 
 // @public (undocumented)
@@ -369,6 +422,9 @@ export interface FieldUpdated {
     to: unknown;
 }
 
+// @public (undocumented)
+export type FilterPolicy = 'keepAncestors' | 'matchOnly';
+
 // @public
 export interface FormatContext extends FieldContext {
     // (undocumented)
@@ -404,10 +460,17 @@ export class Gantt {
     get canZoomIn(): boolean;
     // (undocumented)
     get canZoomOut(): boolean;
+    // (undocumented)
+    collapse(id: RowId | string): void;
+    // (undocumented)
+    get collapsed(): readonly RowId[];
+    set collapsed(ids: readonly (RowId | string)[]);
     get dateLines(): readonly DateLineInput[];
     set dateLines(lines: readonly DateLineInput[]);
     // (undocumented)
     destroy(): void;
+    // (undocumented)
+    expand(id: RowId | string): void;
     // (undocumented)
     get fit(): TimeScaleFit;
     set fit(f: TimeScaleFit);
@@ -438,6 +501,8 @@ export class Gantt {
     });
     // (undocumented)
     reveal(entryId: EntryId): void;
+    get rows(): RowSource;
+    set rows(next: RowSource);
     get selection(): readonly EntryId[];
     set selection(ids: readonly (EntryId | string)[]);
     get selectionEntries(): readonly Entry[];
@@ -449,6 +514,8 @@ export class Gantt {
     // (undocumented)
     get todayLineMarginTicks(): number;
     set todayLineMarginTicks(ticks: number);
+    // (undocumented)
+    toggleCollapse(id: RowId | string): void;
     get viewportGestures(): ViewportGestures;
     set viewportGestures(next: ViewportGestures);
     // (undocumented)
@@ -470,11 +537,14 @@ export type GanttEventHandler<K extends keyof GanttEventMap> = (payload: GanttEv
 
 // @public
 export interface GanttEventMap {
+    beforeCollapseChange: CollapseChange;
     beforeEntryMove: EntryMove;
     beforeEntryResize: EntryResize;
     // (undocumented)
     beforeGridWidthChange: GridWidthChange;
     beforeSelectionChange: SelectionChange;
+    // (undocumented)
+    collapseChange: CollapseChange;
     // (undocumented)
     entryMove: EntryMove;
     // (undocumented)
@@ -516,6 +586,22 @@ export interface GridWidthChange {
     readonly from: number;
     // (undocumented)
     readonly to: number;
+}
+
+// @public (undocumented)
+export interface GroupRowSource {
+    // (undocumented)
+    filter?: RowFilter;
+    // (undocumented)
+    filterPolicy?: FilterPolicy;
+    // (undocumented)
+    groupBy(entry: Entry): string;
+    // (undocumented)
+    heightMode?: RowHeightMode;
+    // (undocumented)
+    sort?: RowSort;
+    // (undocumented)
+    source: 'group';
 }
 
 // @public
@@ -637,6 +723,33 @@ export interface RollUpContext extends FieldContext {
     // (undocumented)
     readonly field: FieldKey;
 }
+
+// @public
+export type RowFilter = (entry: Entry) => boolean;
+
+// @public (undocumented)
+export type RowId = string & {
+    readonly __brand: 'RowId';
+};
+
+// @public
+export interface RowResolveInput {
+    // (undocumented)
+    entries: readonly Entry[];
+}
+
+// @public
+export interface RowSort {
+    // (undocumented)
+    compare?(a: unknown, b: unknown): number;
+    // (undocumented)
+    direction?: 'asc' | 'desc';
+    // (undocumented)
+    field: FieldKey;
+}
+
+// @public (undocumented)
+export type RowSource = EntriesRowSource | GroupRowSource | CustomRowSource;
 
 // @public (undocumented)
 export class ScrollModel {
