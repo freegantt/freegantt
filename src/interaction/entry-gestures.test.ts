@@ -45,6 +45,7 @@ interface SessionOverrides {
 function makeContext(overrides: Partial<EntryGestureContext> & SessionOverrides = {}): {
   ctx: EntryGestureContext;
   proposals: (readonly EntryId[])[];
+  proposalItemIds: (readonly ItemId[] | undefined)[];
   previews: (EntryEdits | undefined)[];
   commits: [EntryGesture, EntryEdits][];
 } {
@@ -57,6 +58,7 @@ function makeContext(overrides: Partial<EntryGestureContext> & SessionOverrides 
 
   let selection: readonly EntryId[] = [];
   const proposals: (readonly EntryId[])[] = [];
+  const proposalItemIds: (readonly ItemId[] | undefined)[] = [];
   const previews: (EntryEdits | undefined)[] = [];
   const commits: [EntryGesture, EntryEdits][] = [];
 
@@ -97,14 +99,15 @@ function makeContext(overrides: Partial<EntryGestureContext> & SessionOverrides 
     },
     selection: {
       get: () => selection,
-      propose: (next) => {
+      propose: (next, itemIds) => {
         selection = next;
         proposals.push(next);
+        proposalItemIds.push(itemIds);
       },
     },
     ...ctxOverrides,
   };
-  return { ctx, proposals, previews, commits };
+  return { ctx, proposals, proposalItemIds, previews, commits };
 }
 
 function mockPointerCapture(el: HTMLElement): void {
@@ -416,6 +419,21 @@ describe('attachEntryGestures — segments and visible row order (S4.10)', () =>
     pane.dispatchEvent(move(DRAG_THRESHOLD_PX + 1));
 
     expect(grabbedItems).toEqual([middle]);
+  });
+
+  it('plain click proposes the touched segment item id, not only segment 0', () => {
+    const pane = document.createElement('div');
+    const container = document.createElement('div');
+    const middle = itemId(A, 1);
+    const { ctx, proposals, proposalItemIds } = makeContext({
+      hitTest: () => ({ itemId: middle }),
+    });
+    attachEntryGestures(pane, container, ctx);
+
+    pane.dispatchEvent(up(1000)); // hit resolves to segment 1 of A
+
+    expect(proposals).toEqual([[A]]);
+    expect(proposalItemIds[proposalItemIds.length - 1]).toEqual([middle]);
   });
 
   it('shift-click ranges over selectableEntriesInRowOrder, skipping rows not shown', () => {

@@ -2,8 +2,8 @@ import { describe, expect, it, vi } from 'vitest';
 import { GanttShell } from './gantt-shell.js';
 import type { GanttShellOptions } from './gantt-shell.js';
 import { FrameLayout, ScrollModel, TimeScaleModel } from '../layout/index.js';
-import { entryId, rowId, EntryNotFoundError, ContainerNotFoundError } from '../model/index.js';
-import type { Entry, Instant, ItemId } from '../model/index.js';
+import { entryId, rowId, itemId, EntryNotFoundError, ContainerNotFoundError } from '../model/index.js';
+import type { Entry, EntryId, Instant, ItemId } from '../model/index.js';
 import { DatasetState, EntryStore } from '../data/index.js';
 import { CORE_FIELDS } from '../data/fields/core-fields.js';
 import { createDomBackend } from '../render/dom/index.js';
@@ -745,6 +745,43 @@ describe('GanttShell hot path (S3.2, D-S3-6/D-S3-9, [S3-A3])', () => {
     shell.selection = [entries[0]!.id];
     const start = container.querySelector<HTMLElement>('.fg-bar-handle[data-edge="start"]')!;
     expect(start.hidden).toBe(false);
+
+    shell.destroy();
+  });
+
+  it('clicking a later segment paints that bar, not segment 0', () => {
+    const segmented: Entry = {
+      id: entryId('seg'),
+      name: 'segmented',
+      start: rangeStart,
+      end: instant('2026-09-05T00:00:00Z'),
+      kind: 'span',
+      segments: [
+        { start: rangeStart, end: instant('2026-09-02T00:00:00Z') },
+        { start: instant('2026-09-03T00:00:00Z'), end: instant('2026-09-04T00:00:00Z') },
+      ],
+    };
+    const container = document.createElement('div');
+    let propose: ((next: readonly EntryId[], items?: readonly ItemId[]) => void) | undefined;
+    const shell = new GanttShell({
+      container,
+      dataset: fakeDataset([segmented]),
+      entryGestures: (_pane, _host, ctx) => {
+        propose = (next, items) => ctx.selection.propose(next, items);
+        return { detach() {} };
+      },
+    });
+
+    const first = itemId(segmented.id, 0);
+    const second = itemId(segmented.id, 1);
+    propose?.([segmented.id], [second]);
+
+    expect(container.querySelector(`[data-item-id="${second}"]`)?.getAttribute('data-state')).toContain(
+      'selected',
+    );
+    expect(
+      container.querySelector(`[data-item-id="${first}"]`)?.getAttribute('data-state') ?? '',
+    ).not.toContain('selected');
 
     shell.destroy();
   });

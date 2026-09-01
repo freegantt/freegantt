@@ -690,6 +690,7 @@ export class GanttShell {
     const ids = projectAffordances({
       hoveredItemId: this.#hoveredItemId,
       selection: this.#selection,
+      selectedItemIds: this.#interactionState.selectedItemIds,
       canGesture: (capability, id) => this.#canGesture(capability, id),
     });
     setOptional(this.#interactionState, 'hoveredItemId', ids.hoveredItemId);
