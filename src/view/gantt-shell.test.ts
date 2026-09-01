@@ -8,6 +8,7 @@ import { DatasetState, EntryStore } from '../data/index.js';
 import { CORE_FIELDS } from '../data/fields/core-fields.js';
 import { createDomBackend } from '../render/dom/index.js';
 import type { RenderBackend } from '../render/backend.js';
+import type { EntryGestureContext } from './entry-gesture-context.js';
 
 // [S2-A3]: counts `RenderBackend.sync` calls, one test's own instance (§9-I's `GanttShellOptions.backend`
 // injection point) rather than a module-wide mock every other test in this file would otherwise pay for.
@@ -782,6 +783,48 @@ describe('GanttShell hot path (S3.2, D-S3-6/D-S3-9, [S3-A3])', () => {
     expect(
       container.querySelector(`[data-item-id="${first}"]`)?.getAttribute('data-state') ?? '',
     ).not.toContain('selected');
+
+    shell.destroy();
+  });
+});
+
+describe('GanttShell tree keyboard (D1)', () => {
+  it('rowSource stays live for tryTreeArrow after construction', () => {
+    const parent: Entry = {
+      id: entryId('p'),
+      name: 'p',
+      kind: 'span',
+      start: rangeStart,
+      end: instant('2026-09-03T00:00:00Z'),
+    };
+    const child: Entry = {
+      id: entryId('c'),
+      name: 'c',
+      kind: 'span',
+      parentId: parent.id,
+      start: rangeStart,
+      end: instant('2026-09-03T00:00:00Z'),
+    };
+    const container = document.createElement('div');
+    let ctx: EntryGestureContext | undefined;
+    const shell = new GanttShell({
+      container,
+      dataset: fakeDataset([parent, child]),
+      rowSource: { source: 'entries', tree: false },
+      entryGestures: (_pane, _host, gestureCtx) => {
+        ctx = gestureCtx;
+        return { detach() {} };
+      },
+    });
+    shell.selection = [parent.id];
+
+    expect(typeof ctx?.tryTreeArrow).toBe('function');
+    expect(ctx!.tryTreeArrow!('right')).toBe(false);
+
+    shell.rowSource = { source: 'entries', tree: true };
+    shell.render();
+    expect(ctx!.tryTreeArrow!('right')).toBe(true);
+    expect(shell.collapsed).toEqual([]);
 
     shell.destroy();
   });
