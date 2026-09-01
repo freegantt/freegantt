@@ -21,6 +21,7 @@ import { mergeEntryEdits, overlayStoredEdit } from './fields/field-access.js';
 import type { FieldRegistry } from './fields/field-registry.js';
 import { promoteNewParents } from './hierarchy.js';
 import { rollUpFields } from './rollup.js';
+import { isDevMode } from './dev-mode.js';
 
 /** Staged entry-store state the commit pipeline reads — mirrors `TransactionalEntryStore` without
  *  importing `transaction.ts` (cycle avoidance). */
@@ -30,8 +31,6 @@ export interface CommitChangeSetEntryStore {
   pendingRemoved(): readonly EntityRemoved[];
   pendingEdits(): EntryEdits;
 }
-
-const isDevMode = (): boolean => (import.meta as { env?: { DEV?: boolean } }).env?.DEV ?? false;
 
 /** What `buildCommitChangeSet` reads off a transaction's staged state. */
 export interface CommitChangeSetInput {

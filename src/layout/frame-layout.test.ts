@@ -94,7 +94,7 @@ describe('FrameLayout', () => {
   });
 
   it('resolves the row plan once per pass', () => {
-    const spy = vi.spyOn(resolveRowsMod, 'resolveRows');
+    const spy = vi.spyOn(resolveRowsMod, 'resolveOpenRows');
     const layout = new FrameLayout();
     spy.mockClear();
     layout.computeFrame(input());

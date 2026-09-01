@@ -3,7 +3,6 @@
 
 import { rowId } from '../model/index.js';
 import type { Entry, EntryId, RowId } from '../model/index.js';
-import { CollapseState } from './collapse-state.js';
 import type { CollapseChange } from './collapse-state.js';
 
 /** The PlannedRow fields this module reads. Layout keeps the full row. */
@@ -22,11 +21,18 @@ export interface TreeCollapseContext {
   canSelect(id: EntryId): boolean;
   selected(): EntryId | undefined;
   proposeSelection(ids: readonly EntryId[]): void;
-  applyCollapsed(ids: readonly string[]): void;
+  /** Call: `confirm(change)` — the shell vetoes or applies; this module then stores `change.to`. */
+  confirm(change: CollapseChange): boolean;
+  rowIdForEntry(id: EntryId): RowId | undefined;
+  ancestorRowIds(id: EntryId): readonly RowId[];
+}
+
+function sameIds(a: readonly string[], b: readonly string[]): boolean {
+  return a.length === b.length && a.every((id, i) => id === b[i]);
 }
 
 export class TreeCollapse {
-  #state = new CollapseState();
+  #ids: readonly RowId[] = [];
   #ctx: TreeCollapseContext;
 
   constructor(ctx: TreeCollapseContext) {
@@ -34,42 +40,44 @@ export class TreeCollapse {
   }
 
   get ids(): readonly RowId[] {
-    return this.#state.ids;
+    return this.#ids;
   }
 
-  propose(next: readonly string[]): CollapseChange | undefined {
-    return this.#state.propose(next);
+  /** Constructor-only: write the initial set with no event. */
+  hydrate(next: readonly string[]): void {
+    this.#ids = Object.freeze(next.map((id) => rowId(id)));
   }
 
-  commit(to: readonly RowId[]): void {
-    this.#state.commit(to);
+  /** Call: `tree.replace(gantt.collapsed)` — the live setter; vetoable through `confirm`. */
+  replace(next: readonly string[]): void {
+    this.#confirmIds(next);
   }
 
   collapse(id: RowId | string): void {
     const branded = rowId(String(id));
-    if (this.#state.ids.includes(branded)) return;
-    this.#ctx.applyCollapsed([...this.#state.ids, branded]);
+    if (this.#ids.includes(branded)) return;
+    this.#confirmIds([...this.#ids, branded]);
   }
 
   expand(id: RowId | string): void {
     const branded = rowId(String(id));
-    this.#ctx.applyCollapsed(this.#state.ids.filter((current) => current !== branded));
+    this.#confirmIds(this.#ids.filter((current) => current !== branded));
   }
 
   toggleCollapse(id: RowId | string): void {
     const branded = rowId(String(id));
-    if (this.#state.ids.includes(branded)) this.expand(branded);
+    if (this.#ids.includes(branded)) this.expand(branded);
     else this.collapse(branded);
   }
 
   /** Collapses every expandable row in the current plan, and keeps ids already in the set. */
   collapseAll(): void {
-    this.#ctx.applyCollapsed(this.#idsForCollapseAll());
+    this.#confirmIds(this.#idsForCollapseAll());
   }
 
   expandAll(): void {
-    if (this.#state.ids.length === 0) return;
-    this.#ctx.applyCollapsed([]);
+    if (this.#ids.length === 0) return;
+    this.#confirmIds([]);
   }
 
   /** Call: `this.#treeCollapse.handleArrow('right')`. */
@@ -110,15 +118,26 @@ export class TreeCollapse {
 
   /** Drops collapsed ancestors of `entryId`. Returns true when the set changed. */
   expandAncestorsOf(entryId: EntryId): boolean {
-    const keep = this.#state.ids.filter((id) => !this.#isAncestorRow(entryId, String(id)));
-    if (keep.length === this.#state.ids.length) return false;
-    this.#ctx.applyCollapsed(keep);
+    const hiding = new Set(this.#ctx.ancestorRowIds(entryId).map(String));
+    const own = this.#ctx.rowIdForEntry(entryId);
+    if (own !== undefined) hiding.add(String(own));
+    const keep = this.#ids.filter((id) => !hiding.has(String(id)));
+    if (keep.length === this.#ids.length) return false;
+    return this.#confirmIds(keep);
+  }
+
+  #confirmIds(next: readonly string[]): boolean {
+    const to = Object.freeze(next.map((id) => rowId(id)));
+    if (sameIds(this.#ids, to)) return false;
+    const change: CollapseChange = { from: this.#ids, to };
+    if (!this.#ctx.confirm(change)) return false;
+    this.#ids = to;
     return true;
   }
 
   #idsForCollapseAll(): readonly string[] {
-    const seen = new Set(this.#state.ids.map(String));
-    const next = this.#state.ids.map(String);
+    const seen = new Set(this.#ids.map(String));
+    const next = this.#ids.map(String);
     for (const row of this.#ctx.plannedRows()) {
       if (!row.expandable) continue;
       const id = String(row.id);
@@ -134,14 +153,5 @@ export class TreeCollapse {
       if (entry.parentId === parentId) return entry.id;
     }
     return undefined;
-  }
-
-  #isAncestorRow(entryId: EntryId, candidateRowId: string): boolean {
-    let current = this.#ctx.entry(entryId);
-    while (current?.parentId !== undefined) {
-      if (String(current.parentId) === candidateRowId) return true;
-      current = this.#ctx.entry(current.parentId);
-    }
-    return false;
   }
 }

@@ -6,16 +6,15 @@ import type { TimeScale, ViewPreset } from '../time/index.js';
 import { dedupeHeaderFormats, formatDate, formatEndInclusive, resolveDateFormat } from '../time/index.js';
 import { resolveDateLines } from './date-line.js';
 import type { DateLine, DateLineSpec } from './date-line.js';
-import { PrefixSumHeightIndex } from './row-height-index.js';
 import { FrameMemory } from './frame-memory.js';
 import type { FrameColumn, ResolvedColumn, FieldCompare } from './column.js';
 import type { PlannedRow, PlannedRowKind, RowSource } from './rows/row-source.js';
 import { isPlannedHeaderRow } from './rows/row-source.js';
 import { resolveRows } from './rows/resolve-rows.js';
-import type { Item, ItemProducerRegistry } from './items/produce-items.js';
-import { produceItemsForRow } from './items/produce-items.js';
-import { DEFAULT_LANE_GAP_PX, packRow, packedRowHeight, yForLane } from './lanes/pack-lanes.js';
-import type { LanePacking, PackedRow } from './lanes/pack-lanes.js';
+import type { Item } from './items/produce-items.js';
+import type { ItemProducerRegistry } from './items/produce-items.js';
+import { DEFAULT_LANE_GAP_PX, yForLane } from './lanes/pack-lanes.js';
+import type { PackedRow } from './lanes/pack-lanes.js';
 
 /** Shipped Tick box floor (CONTEXT.md) — `--fg-tick-box-floor` fallback and CSS padding calc. */
 export const DEFAULT_TICK_BOX_FLOOR_PX = 9;
@@ -188,6 +187,8 @@ export interface LayoutInput {
   fieldCompares?: readonly FieldCompare[];
   /** Gap between packed lanes in px. Omitted → `DEFAULT_LANE_GAP_PX`. View reads `--fg-lane-gap`. */
   laneGapPx?: number;
+  /** Dataset commit generation. FrameMemory keys packed-row invalidation on this (A2). */
+  datasetRevision?: number;
 }
 
 function cellsForRow(
@@ -231,26 +232,8 @@ function barA11yLabel(
   return `${item.label}, part ${segmentIndexOfItem(item.id) + 1} of ${partCount}, ${span}`;
 }
 
-function fixedLanes(items: readonly Item[]): LanePacking {
-  const laneByItem = new Map<ItemId, number>();
-  for (const item of items) laneByItem.set(item.id, 0);
-  return { laneByItem, laneCount: 1 };
-}
-
-function packedItemsForRow(
-  row: PlannedRow,
-  entryById: ReadonlyMap<EntryId, Entry>,
-  registry: ItemProducerRegistry,
-  memory: FrameMemory,
-): PackedRow {
-  if (row.heightMode !== 'pack') {
-    const items = produceItemsForRow(row, entryById, registry);
-    return { items, packing: fixedLanes(items) };
-  }
-  return memory.packedRow(row.id, () => {
-    const items = produceItemsForRow(row, entryById, registry);
-    return { items, packing: packRow(items) };
-  });
+function packedItemsForRow(row: PlannedRow, memory: FrameMemory): PackedRow {
+  return memory.packedRow(row.id);
 }
 
 /** Call: `resolveLayoutRows(input)`. One row plan from a `LayoutInput`. */
@@ -263,11 +246,25 @@ export function resolveLayoutRows(input: LayoutInput): readonly PlannedRow[] {
   });
 }
 
+function memoryFor(input: LayoutInput, plan: readonly PlannedRow[], memory?: FrameMemory): FrameMemory {
+  const mem = memory ?? new FrameMemory();
+  mem.sync({
+    plan,
+    rowHeight: input.rowHeight,
+    laneGap: input.laneGapPx ?? DEFAULT_LANE_GAP_PX,
+    entries: input.entries,
+    registry: input.itemProducerRegistry,
+    ...(input.datasetRevision !== undefined ? { datasetRevision: input.datasetRevision } : {}),
+  });
+  return mem;
+}
+
 /** Composition over resolve → produce → pack → place (D-S4-19). Culling still windows after resolve
  * (D-S4-20). Pure: `memory` is what this pass remembers — `FrameLayout` keeps one alive across
  * renders; a one-shot caller omits it and gets memory built and discarded here. */
 export function computeFrame(input: LayoutInput, memory?: FrameMemory): GeometryFrame {
-  return placeFrame(input, resolveLayoutRows(input), memory);
+  const plan = resolveLayoutRows(input);
+  return placeFrame(input, plan, memoryFor(input, plan, memory));
 }
 
 /** Call: `placeFrame(input, plan, memory)`. Geometry only — the caller already resolved rows. */
@@ -278,20 +275,8 @@ export function placeFrame(
 ): GeometryFrame {
   const { scale, preset, visible, rowHeight, revision, locale } = input;
   const entryById = new Map(input.entries.map((entry) => [entry.id, entry]));
-  const itemProducerRegistry = input.itemProducerRegistry;
   const laneGap = input.laneGapPx ?? DEFAULT_LANE_GAP_PX;
-
-  function heightOf(index: number): number {
-    const row = plan[index];
-    if (row === undefined || row.heightMode !== 'pack') return rowHeight;
-    return packedRowHeight(
-      packedItemsForRow(row, entryById, itemProducerRegistry, mem).packing.laneCount,
-      rowHeight,
-      laneGap,
-    );
-  }
-
-  const mem = memory ?? new FrameMemory(new PrefixSumHeightIndex(plan.length, heightOf));
+  const mem = memory ?? memoryFor(input, plan);
   const index = mem.heights;
   const tickBoxFloorPx = input.tickBoxFloorPx ?? DEFAULT_TICK_BOX_FLOOR_PX;
   const verticalRows = input.overscan?.verticalRows ?? DEFAULT_OVERSCAN.verticalRows;
@@ -331,7 +316,7 @@ export function placeFrame(
       overflowCount++;
     }
 
-    const packed = packedItemsForRow(planned, entryById, itemProducerRegistry, mem);
+    const packed = packedItemsForRow(planned, mem);
     const items = packed.items;
     const packing = packed.packing;
     const height = index.heightAt(rowIndex);

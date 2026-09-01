@@ -581,6 +581,43 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
       vi.unstubAllGlobals();
     }
   });
+
+  it('reveal expands a collapsed group header (D4)', () => {
+    FakeResizeObserver.instances = [];
+    vi.stubGlobal('ResizeObserver', FakeResizeObserver);
+
+    try {
+      const container = document.createElement('div');
+      const scroll = new ScrollModel();
+      const alpha: Entry = {
+        id: entryId('a'),
+        name: 'a',
+        kind: 'span',
+        start: rangeStart,
+        end: instant('2026-09-03T00:00:00Z'),
+        meta: { team: 'red' },
+      };
+      const shell = new GanttShell({
+        container,
+        dataset: fakeDataset([alpha]),
+        scroll,
+        rowSource: {
+          source: 'group',
+          groupBy: (row) => String((row.meta as { team: string }).team),
+        },
+        collapsed: [rowId('group:red')],
+      });
+      FakeResizeObserver.instances[0]!.fire({ width: 500, height: 100 });
+
+      expect(shell.collapsed.map(String)).toContain('group:red');
+      shell.reveal(entryId('a'));
+      expect(shell.collapsed.map(String)).not.toContain('group:red');
+
+      shell.destroy();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
 });
 
 describe('a11y roles and the one honest tab stop (S1.10, D-S1.10-5)', () => {

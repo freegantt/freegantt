@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
-import { computeFrame } from './frame.js';
+import { computeFrame, placeFrame, resolveLayoutRows } from './frame.js';
 import { FrameMemory } from './frame-memory.js';
 import { PrefixSumHeightIndex } from './row-height-index.js';
+import { DEFAULT_LANE_GAP_PX } from './lanes/pack-lanes.js';
 import * as packLanes from './lanes/pack-lanes.js';
 import { createItemProducerRegistry } from './items/produce-items.js';
 import { sampleEntries } from '../../fixtures/sample-dataset.js';
@@ -197,23 +198,28 @@ describe('computeFrame', () => {
 
   it('honours verticalRows through the index, not through pixels, when row heights vary', () => {
     const rowHeights = [100, 10, 10, 10, 10, 10];
-    const heights = new PrefixSumHeightIndex(rowHeights.length, (i) => rowHeights[i]!);
     const entries = sampleEntries.slice(0, rowHeights.length);
-    // Window covers row index 2 (top 110, height 10); verticalRows=1 buffers exactly one row of
-    // whatever height it has on each side, not a fixed px amount.
-    const windowed = computeFrame(
-      {
-        entries,
-        scale,
-        preset,
-        visible: { x: 0, y: 110, width: 0, height: 10 },
-        overscan: { verticalRows: 1, horizontalPx: 0 },
-        rowHeight: 10,
-        revision: 0,
-        itemProducerRegistry,
-      },
-      new FrameMemory(heights),
-    );
+    const input = {
+      entries,
+      scale,
+      preset,
+      visible: { x: 0, y: 110, width: 0, height: 10 },
+      overscan: { verticalRows: 1, horizontalPx: 0 },
+      rowHeight: 10,
+      revision: 0,
+      itemProducerRegistry,
+    };
+    const plan = resolveLayoutRows(input);
+    const memory = new FrameMemory();
+    memory.sync({
+      plan,
+      rowHeight: 10,
+      laneGap: DEFAULT_LANE_GAP_PX,
+      entries,
+      registry: itemProducerRegistry,
+      heightAt: (i) => rowHeights[i]!,
+    });
+    const windowed = placeFrame(input, plan, memory);
     expect(windowed.rows.map((r) => r.index)).toEqual([1, 2, 3]);
   });
 
@@ -297,26 +303,23 @@ describe('computeFrame', () => {
     expect(frame.header.bands[1]?.ticks.length).toBeGreaterThan(0);
   });
 
-  it('accepts a caller-supplied RowHeightIndex and reads windowing off it (#47)', () => {
-    const heights = new PrefixSumHeightIndex(sampleEntries.length, () => 32);
-    const spy = vi.spyOn(heights, 'indexAtY');
+  it('windows through the live height index (#47)', () => {
+    const spy = vi.spyOn(PrefixSumHeightIndex.prototype, 'indexAtY');
 
-    const windowed = computeFrame(
-      {
-        entries: sampleEntries,
-        scale,
-        preset,
-        visible: { x: 0, y: 32, width: 0, height: 32 },
-        overscan: TIGHT,
-        rowHeight: 32,
-        revision: 0,
-        itemProducerRegistry,
-      },
-      new FrameMemory(heights),
-    );
+    const windowed = computeFrame({
+      entries: sampleEntries,
+      scale,
+      preset,
+      visible: { x: 0, y: 32, width: 0, height: 32 },
+      overscan: TIGHT,
+      rowHeight: 32,
+      revision: 0,
+      itemProducerRegistry,
+    });
 
     expect(windowed.rows.map((r) => r.index)).toEqual([1]);
     expect(spy).toHaveBeenCalledWith(32);
+    spy.mockRestore();
   });
 
   it('matches the golden snapshot for the fixture dataset', () => {

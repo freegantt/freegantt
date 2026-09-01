@@ -34,6 +34,8 @@ import { attachSplitter } from './splitter.js';
 import type { SplitterAttachment } from './splitter.js';
 import { EventBus } from './event-bus.js';
 import type { AsyncCancelableEvent, GanttEventHandler, GanttEventMap } from './event-bus.js';
+import type { GridWidthChange, SelectionChange } from './event-bus.js';
+import type { CollapseChange } from './collapse-state.js';
 import { attachScroll } from './scroll-attachment.js';
 import type { ScrollAttachment } from './scroll-attachment.js';
 import { attachPaneSize } from './pane-size-attachment.js';
@@ -79,6 +81,7 @@ import { GesturePipeline } from './gesture-pipeline.js';
 import type { EntryGestureContext } from './entry-gesture-context.js';
 import { DEFAULT_GRID_COLUMNS, resolveGanttFields } from './grid-columns.js';
 import { TreeCollapse } from './tree-collapse.js';
+import { isDevMode } from '../data/dev-mode.js';
 
 /** One `{ detach() }` for every inject slot. `view/` may not import `interaction/` (plans/01 §1:
  *  `INT --> VIEW`, not the reverse), so the shell takes pointer and keyboard attachments by
@@ -311,8 +314,7 @@ export class GanttShell {
 
     const hasOwnOptions =
       options.preset !== undefined || options.range !== undefined || options.fit !== undefined;
-    const isDev = (import.meta as { env?: { DEV?: boolean } }).env?.DEV ?? false;
-    if (options.scale && hasOwnOptions && isDev) {
+    if (options.scale && hasOwnOptions && isDevMode()) {
       console.warn(
         "FreeGantt: GanttOptions.preset/range/fit are ignored when 'scale' is also supplied. " +
           'The shared TimeScaleModel already carries its own options — set preset/range/fit on it directly.',
@@ -406,7 +408,13 @@ export class GanttShell {
       canSelect: (id) => this.#canGesture('select', id),
       selected: () => this.#selection[0],
       proposeSelection: (ids) => this.#proposeSelection(ids),
-      applyCollapsed: (ids) => this.#applyCollapsed(ids),
+      confirm: (change) =>
+        this.#proposeChange('beforeCollapseChange', 'collapseChange', change, () => {
+          this.#layout.invalidateFrom(0);
+          this.#frames.request();
+        }),
+      rowIdForEntry: (id) => this.#layout.rowIdForEntry(id),
+      ancestorRowIds: (id) => this.#layout.ancestorRowIds(id),
     });
     this.#gesturePipeline = new GesturePipeline({
       timeZone: () => this.#options.dataset.timeZone,
@@ -473,8 +481,7 @@ export class GanttShell {
       toggleCollapse: (id) => this.toggleCollapse(id),
     });
     if (options.collapsed !== undefined) {
-      const proposed = this.#treeCollapse.propose(options.collapsed);
-      if (proposed !== undefined) this.#treeCollapse.commit(proposed.to);
+      this.#treeCollapse.hydrate(options.collapsed);
     }
     this.#phase = 'live';
     this.#frames.flush();
@@ -523,7 +530,7 @@ export class GanttShell {
   }
 
   set collapsed(ids: readonly (RowId | string)[]) {
-    this.#applyCollapsed(ids);
+    this.#treeCollapse.replace(ids);
   }
 
   collapse(id: RowId | string): void {
@@ -546,14 +553,41 @@ export class GanttShell {
     this.#treeCollapse.expandAll();
   }
 
-  #applyCollapsed(next: readonly string[]): void {
-    const proposed = this.#treeCollapse.propose(next);
-    if (proposed === undefined) return;
-    if (this.#events.emit('beforeCollapseChange', proposed) === false) return;
-    this.#treeCollapse.commit(proposed.to);
-    this.#layout.invalidateFrom(0);
-    this.#frames.request();
-    this.#events.emit('collapseChange', proposed);
+  #proposeChange(
+    before: 'beforeCollapseChange',
+    after: 'collapseChange',
+    change: CollapseChange,
+    apply: () => void,
+    rollback?: () => void,
+  ): boolean;
+  #proposeChange(
+    before: 'beforeSelectionChange',
+    after: 'selectionChange',
+    change: SelectionChange,
+    apply: () => void,
+    rollback?: () => void,
+  ): boolean;
+  #proposeChange(
+    before: 'beforeGridWidthChange',
+    after: 'gridWidthChange',
+    change: GridWidthChange,
+    apply: () => void,
+    rollback?: () => void,
+  ): boolean;
+  #proposeChange(
+    before: 'beforeCollapseChange' | 'beforeSelectionChange' | 'beforeGridWidthChange',
+    after: 'collapseChange' | 'selectionChange' | 'gridWidthChange',
+    change: CollapseChange | SelectionChange | GridWidthChange,
+    apply: () => void,
+    rollback?: () => void,
+  ): boolean {
+    if (this.#events.emit(before, change) === false) {
+      rollback?.();
+      return false;
+    }
+    apply();
+    this.#events.emit(after, change);
+    return true;
   }
 
   #selectableEntriesInRowOrder(): readonly EntryId[] {
@@ -622,13 +656,11 @@ export class GanttShell {
       return;
     }
     if (entriesEqual) return;
-    if (this.#events.emit('beforeSelectionChange', { from, to: next }) === false) return;
-    this.#selection = next;
-    this.#interactionState.selectedItemIds = selectedItemIds ?? next.map((id) => itemId(id));
-    // D-S3-6: resizableItemId falls back to the single selected entry when nothing is hovered, so a
-    // selection change can move the handles even with the pointer sitting still.
-    this.#refreshAffordances();
-    this.#events.emit('selectionChange', { from, to: next });
+    this.#proposeChange('beforeSelectionChange', 'selectionChange', { from, to: next }, () => {
+      this.#selection = next;
+      this.#interactionState.selectedItemIds = selectedItemIds ?? next.map((id) => itemId(id));
+      this.#refreshAffordances();
+    });
   }
 
   get interactions(): Interactions {
@@ -864,12 +896,17 @@ export class GanttShell {
   #commitGridWidth(px: number): void {
     const from = this.#paneLayout.gridWidth;
     const to = px;
-    if (this.#events.emit('beforeGridWidthChange', { from, to }) === false) {
-      this.#paneLayout.gridWidth = from; // veto: the boundary goes back (D-S1.8-3)
-      return;
-    }
-    this.#paneLayout.gridWidth = to;
-    this.#events.emit('gridWidthChange', { from, to });
+    this.#proposeChange(
+      'beforeGridWidthChange',
+      'gridWidthChange',
+      { from, to },
+      () => {
+        this.#paneLayout.gridWidth = to;
+      },
+      () => {
+        this.#paneLayout.gridWidth = from;
+      },
+    );
   }
 
   /** One measurement, pushed to everything it feeds (#8, #49): `--fg-row-height`, `--fg-tick-box-floor`,
@@ -903,6 +940,13 @@ export class GanttShell {
       rows: this.#rowSource,
       collapsed: this.#treeCollapse.ids,
       itemProducerRegistry: this.#itemProducerRegistry,
+      ...(typeof (this.#options.dataset as unknown as { datasetRevision?: number }).datasetRevision ===
+      'number'
+        ? {
+            datasetRevision: (this.#options.dataset as unknown as { datasetRevision: number })
+              .datasetRevision,
+          }
+        : {}),
     });
     this.#backend.sync(frame);
     // D-S1.12-9: the grid pane's spacer mirrors the header's own band count, so both panes resolve

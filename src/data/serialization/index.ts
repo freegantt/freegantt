@@ -7,6 +7,7 @@ import type { DateOnlyEndRule, Entry, EntryKind, Field } from '../../model/index
 import type { DatasetDocument, EntryDocument } from '../../model/index.js';
 import { instant, toISO } from '../../time/index.js';
 import { encodeFieldDocument } from './field-document.js';
+import { isDevMode } from '../dev-mode.js';
 
 export { readDocument, readers } from './read.js';
 export type { DatasetDocumentRead, FromJSONOptions } from './read.js';
@@ -56,8 +57,6 @@ export function toJSON(dataset: DatasetDocumentSource): DatasetDocument {
     entries: dataset.entries.all.map(writeEntry),
   };
 }
-
-const isDevMode = (): boolean => (import.meta as { env?: { DEV?: boolean } }).env?.DEV ?? false;
 
 /** A document whose stored roll-up values disagree with its children is corrected by construction
  *  (D-S2-22). In dev mode, name the entry so the rewrite is not silent. */
