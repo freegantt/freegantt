@@ -38,7 +38,7 @@ import { ComputedFieldCache } from './computed-cache.js';
 export type { HistoryOptions };
 
 /** `'none'` and `[]` both disable derivation; omitted defaults to `['group']`. */
-function resolveRollUpKinds(input: RollUpKinds | undefined): ReadonlySet<EntryKind> {
+export function resolveRollUpKinds(input: RollUpKinds | undefined): ReadonlySet<EntryKind> {
   if (input === 'none') return new Set();
   const list = input ?? ['group'];
   if (list.length === 0) return new Set();
@@ -98,11 +98,11 @@ export class DatasetState implements Dataset {
   /** Set while `beforeChange`/`change` handlers are fanning out (D-S2-9, D-S2-25). Read and written
    *  only by `runTransaction` and `commitChangeSet`. */
   notifying = false;
-  /** Kinds whose rolling-up Fields the Rollup derives from their children (`01` §2.5). Set once, at
-   *  construction — live-reconfiguring which kinds derive is not part of S4. Read by
-   *  `data/transaction.ts`'s commit step, the only file allowed to import the rollup itself
-   *  (`rollup-is-removable`, D-S4-7) — this class hands over the *kinds*, never the function. */
-  readonly rollUpKinds: ReadonlySet<EntryKind>;
+  /** Kinds whose rolling-up Fields the Rollup derives from their children (`01` §2.5). Live-reconfigurable
+   *  (D-S4-6). Read by `data/transaction.ts`'s commit step — this class hands over the *kinds*, never
+   *  the function (`rollup-is-removable`, D-S4-7). */
+  #rollUpKinds: ReadonlySet<EntryKind>;
+  readonly #entryContext: EntryReadContext;
   /** Resolved once at construction. Promotion reads this; it does not live-reconfigure. */
   readonly hierarchy: DatasetHierarchy;
   readonly fields: FieldRegistry;
@@ -119,7 +119,7 @@ export class DatasetState implements Dataset {
     this.dateOnlyEnd = options.dateOnlyEnd ?? 'inclusive';
     this.referenceDate = now();
     this.editExtender = options.editExtender ?? identityExtender;
-    this.rollUpKinds = resolveRollUpKinds(options.rollUpKinds);
+    this.#rollUpKinds = resolveRollUpKinds(options.rollUpKinds);
     this.hierarchy = resolveHierarchy(options.hierarchy);
     this.fields = new FieldRegistry({
       fields: options.fields ?? [],
@@ -130,15 +130,15 @@ export class DatasetState implements Dataset {
       cache: this.computedCache,
       datasetRevision: this.#datasetRevision,
     }));
-    const context: EntryReadContext = {
+    this.#entryContext = {
       timeZone: this.timeZone,
       dateOnlyEnd: this.dateOnlyEnd,
       referenceDate: this.referenceDate,
-      rollUpKinds: this.rollUpKinds,
+      rollUpKinds: this.#rollUpKinds,
     };
     this.entries = new EntryStore(
-      readEntries(options.entries, context),
-      context,
+      readEntries(options.entries, this.#entryContext),
+      this.#entryContext,
       this.fields,
       this.fieldContext,
     );
@@ -157,6 +157,17 @@ export class DatasetState implements Dataset {
   nextChangeSetId(): ChangeSetId {
     this.#changeSetCounter += 1;
     return changeSetId(this.#changeSetCounter);
+  }
+
+  get rollUpKinds(): ReadonlySet<EntryKind> {
+    return this.#rollUpKinds;
+  }
+
+  /** Live assignment of `'none'` or `[]` opts every kind out (D-S4-6). */
+  setRollUpKinds(value: RollUpKinds): void {
+    const next = resolveRollUpKinds(value);
+    this.#rollUpKinds = next;
+    this.#entryContext.rollUpKinds = next;
   }
 
   /** `model/`'s `Dataset` interface (S3, D-S3-9) — a predicate rather than exposing `rollUpKinds`

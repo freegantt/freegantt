@@ -1,8 +1,7 @@
 import './harness-nav.ts';
-import { Gantt, Dataset, MutationCancelledError } from '../src/api/index.js';
-import type { GridColumnInput, Theme, RowSource } from '../src/api/index.js';
-import type { Entry, TimeUnit } from '../src/model/index.js';
-import { demoEntryInputs } from '../fixtures/demo-dataset.js';
+import { Gantt, Dataset, MutationCancelledError, addMs, MS, instant } from '../src/api/index.js';
+import type { GridColumnInput, Theme, RowSource, Entry, TimeUnit } from '../src/api/index.js';
+import { demoEntryInputs, demoNestedParent } from '../fixtures/demo-dataset.js';
 import { mountTimelineToolbar } from './timeline-toolbar.js';
 
 const COST_TYPE = {
@@ -20,38 +19,21 @@ const COST_TYPE = {
   },
 };
 
-const NESTED_PARENT: Record<string, string> = {
-  'entry-2': 'entry-1',
-  'entry-3': 'entry-1',
-  'entry-4': 'entry-1',
-  'entry-6': 'entry-5',
-  'entry-7': 'entry-5',
-  'entry-8': 'entry-5',
-  'entry-9': 'entry-5',
-  'entry-11': 'entry-10',
-  'entry-12': 'entry-10',
-  'entry-13': 'entry-10',
-  'entry-15': 'entry-14',
-  'entry-16': 'entry-14',
-  'entry-17': 'entry-14',
-};
-
 function splitIntoOverlappingSegments(
   start: NonNullable<(typeof demoEntryInputs)[number]['start']>,
   end: NonNullable<(typeof demoEntryInputs)[number]['end']>,
 ) {
-  const startMs = start instanceof Date ? start.getTime() : new Date(`${String(start)}T00:00:00Z`).getTime();
-  const dayMs = 24 * 60 * 60 * 1000;
+  const startMs = instant(start);
   return [
-    { start: new Date(startMs), end: new Date(startMs + 4 * dayMs) },
-    { start: new Date(startMs + dayMs), end: new Date(startMs + 5 * dayMs) },
-    { start: new Date(startMs + 2 * dayMs), end },
+    { start: startMs, end: addMs(startMs, 4 * MS.DAY) },
+    { start: addMs(startMs, MS.DAY), end: addMs(startMs, 5 * MS.DAY) },
+    { start: addMs(startMs, 2 * MS.DAY), end: instant(end) },
   ];
 }
 
 const dataset = new Dataset({
   entries: demoEntryInputs.map((entry, i) => {
-    const parentId = NESTED_PARENT[entry.id ?? ''];
+    const parentId = demoNestedParent[entry.id ?? ''];
     return {
       ...entry,
       ...(i === 0 ? { meta: { cost: 12_000 } } : {}),
@@ -99,7 +81,7 @@ toggleBudgetBtn.addEventListener('click', () => {
 const reparentBtn = document.querySelector<HTMLButtonElement>('#reparent-btn')!;
 reparentBtn.addEventListener('click', () => {
   try {
-    dataset.entries.update('entry-2', { parentId: 'entry-1' });
+    dataset.entries.update('entry-18', { parentId: 'entry-1' });
   } catch (error) {
     if (!(error instanceof MutationCancelledError)) throw error;
   }

@@ -9,10 +9,11 @@ import type { DateLine, DateLineSpec } from './date-line.js';
 import { PrefixSumHeightIndex } from './row-height-index.js';
 import { FrameMemory } from './frame-memory.js';
 import type { FrameColumn, ResolvedColumn } from './column.js';
-import type { PlannedRow, RowSource } from './rows/row-source.js';
+import type { PlannedRow, PlannedRowKind, RowSource } from './rows/row-source.js';
+import { isPlannedHeaderRow } from './rows/row-source.js';
 import { resolveRows, rowResolutionInput } from './rows/resolve-rows.js';
 import type { Item, ItemProducerRegistry } from './items/produce-items.js';
-import { createItemProducerRegistry, produceItemsForRow } from './items/produce-items.js';
+import { produceItemsForRow } from './items/produce-items.js';
 import { DEFAULT_LANE_GAP_PX, packRow, packedRowHeight, yForLane } from './lanes/pack-lanes.js';
 import type { LanePacking, PackedRow } from './lanes/pack-lanes.js';
 
@@ -40,6 +41,7 @@ export interface LinkFlags {
 
 export interface FrameRow {
   id: RowId;
+  kind: PlannedRowKind;
   index: number;
   top: number;
   height: number;
@@ -178,8 +180,8 @@ export interface LayoutInput {
   rows?: RowSource;
   /** Collapsed `RowId`s. Omitted → none. A stale id matches nothing (D-S4-22). */
   collapsed?: readonly string[];
-  /** Per-Gantt Item producer registry (D-S4-24). Omitted → the three shipped producers. */
-  itemProducerRegistry?: ItemProducerRegistry;
+  /** Per-Gantt Item producer registry (D-S4-24). The shell passes one per Gantt (I2). */
+  itemProducerRegistry: ItemProducerRegistry;
   /** Gap between packed lanes in px. Omitted → `DEFAULT_LANE_GAP_PX`. View reads `--fg-lane-gap`. */
   laneGapPx?: number;
 }
@@ -190,7 +192,7 @@ function cellsForRow(
   entryById: ReadonlyMap<EntryId, Entry>,
 ): readonly string[] {
   if (columns === undefined) return [];
-  if (row.entryIds.length === 0) {
+  if (isPlannedHeaderRow(row)) {
     return columns.map((_, i) => (i === 0 ? (row.headerLabel ?? '') : ''));
   }
   const entry = entryById.get(row.entryIds[0]!);
@@ -254,7 +256,7 @@ export function computeFrame(input: LayoutInput, memory?: FrameMemory): Geometry
   const { scale, preset, visible, rowHeight, revision, locale } = input;
   const plan = resolveRows(rowResolutionInput(input));
   const entryById = new Map(input.entries.map((entry) => [entry.id, entry]));
-  const itemProducerRegistry = input.itemProducerRegistry ?? createItemProducerRegistry();
+  const itemProducerRegistry = input.itemProducerRegistry;
   const laneGap = input.laneGapPx ?? DEFAULT_LANE_GAP_PX;
 
   function heightOf(index: number): number {
@@ -314,6 +316,7 @@ export function computeFrame(input: LayoutInput, memory?: FrameMemory): Geometry
     const parts = segmentCountByEntry(items);
     rows.push({
       id: planned.id,
+      kind: planned.kind,
       index: planned.index,
       top,
       height,

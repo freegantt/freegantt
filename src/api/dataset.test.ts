@@ -150,6 +150,21 @@ describe('Dataset transaction/on/off delegation', () => {
     expect(dataset.entries.childrenOf('p1').map((e) => e.id)).toEqual([entryId('t1')]);
   });
 
+  it("rollUpKinds setter accepts 'none' and [] as empty-list sugar (D-S4-6)", () => {
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      entries: [{ id: 'p1', name: 'Sitework', kind: 'group', start: '2026-01-01', end: '2026-01-05' }],
+    });
+    dataset.rollUpKinds = 'none';
+    expect(dataset.rollUpKinds).toEqual([]);
+    expect(dataset.isRollUpKind('group')).toBe(false);
+    dataset.rollUpKinds = [];
+    expect(dataset.rollUpKinds).toEqual([]);
+    dataset.rollUpKinds = ['group'];
+    expect(dataset.rollUpKinds).toEqual(['group']);
+    expect(dataset.isRollUpKind('group')).toBe(true);
+  });
+
   it('off() stops a handler from seeing further events', () => {
     const dataset = new Dataset({ timeZone: 'UTC', entries: [oneEntry()] });
     let calls = 0;

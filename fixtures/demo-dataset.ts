@@ -37,3 +37,20 @@ export const demoEntryInputs: EntryInput[] = sampleEntryInputs.map((entry) => ({
   start: shift(entry.start!),
   end: shift(entry.end!),
 }));
+
+/** Demo tree parent ids — harness nests a slice of `sampleEntryInputs` for S4 hierarchy/rollup. */
+export const demoNestedParent: Record<string, string> = {
+  'entry-2': 'entry-1',
+  'entry-3': 'entry-1',
+  'entry-4': 'entry-1',
+  'entry-6': 'entry-5',
+  'entry-7': 'entry-5',
+  'entry-8': 'entry-5',
+  'entry-9': 'entry-5',
+  'entry-11': 'entry-10',
+  'entry-12': 'entry-10',
+  'entry-13': 'entry-10',
+  'entry-15': 'entry-14',
+  'entry-16': 'entry-14',
+  'entry-17': 'entry-14',
+};

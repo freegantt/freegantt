@@ -13,15 +13,16 @@ export function resolveCustomSource(source: CustomRowSource, input: RowResolveIn
     if (seen.has(custom.id)) throw new DuplicateRowIdError(custom.id);
     seen.add(custom.id);
     const entryIds = (custom.entryIds ?? []).map((id) => entryId(id));
-    const isHeader = entryIds.length === 0;
+    const kind = entryIds.length === 0 ? 'header' : 'entry';
     rows.push({
       id: rowId(custom.id),
+      kind,
       depth: 0,
       entryIds,
       expandable: false,
       expanded: false,
       heightMode,
-      ...(isHeader ? { headerLabel: custom.label ?? '' } : {}),
+      ...(kind === 'header' ? { headerLabel: custom.label ?? '' } : {}),
     });
   }
   return rows;

@@ -10,6 +10,17 @@ export function addMs(i: Instant, ms: number): Instant;
 // @public
 export type Aggregator<TValue = unknown> = (children: readonly Entry[], parent: Entry, ctx: RollUpContext) => TValue | undefined;
 
+// @public
+export class AggregatorFailedError extends FreeGanttError {
+    constructor(fieldKey: string, aggregatorName: string, entryId: EntryId);
+    // (undocumented)
+    readonly aggregatorName: string;
+    // (undocumented)
+    readonly entryId: EntryId;
+    // (undocumented)
+    readonly fieldKey: string;
+}
+
 // @public (undocumented)
 export type AggregatorName = 'min' | 'max' | 'sum' | 'count' | 'none' | (string & {});
 
@@ -104,6 +115,8 @@ export class Dataset<TMeta = unknown, TFields extends Record<string, unknown> = 
     replay(changeSet: ChangeSet): void;
     // (undocumented)
     get rollUpKinds(): readonly EntryKind[];
+    // Warning: (ae-forgotten-export) The symbol "RollUpKinds" needs to be exported by the entry point index.d.ts
+    set rollUpKinds(value: RollUpKinds);
     // (undocumented)
     get timeZone(): string;
     toJSON(): DatasetDocument<TMeta>;
@@ -155,7 +168,6 @@ export interface DatasetOptions<TMeta = unknown> {
     history?: {
         capacity?: number;
     };
-    // Warning: (ae-forgotten-export) The symbol "RollUpKinds" needs to be exported by the entry point index.d.ts
     rollUpKinds?: RollUpKinds;
     timeZone: string;
 }
@@ -414,9 +426,6 @@ export interface FieldUpdated {
     // (undocumented)
     to: unknown;
 }
-
-// @public (undocumented)
-export type FilterPolicy = 'keepAncestors' | 'matchOnly';
 
 // @public
 export interface FormatContext extends FieldContext {
@@ -709,9 +718,6 @@ export interface RollUpContext extends FieldContext {
     readonly field: FieldKey;
 }
 
-// @public
-export type RowFilter = (entry: Entry) => boolean;
-
 // @public (undocumented)
 export type RowHeightMode = 'fixed' | 'pack';
 
@@ -726,29 +732,13 @@ export interface RowResolveInput {
     entries: readonly Entry[];
 }
 
-// @public
-export interface RowSort {
-    // (undocumented)
-    compare?(a: unknown, b: unknown): number;
-    // (undocumented)
-    direction?: 'asc' | 'desc';
-    // (undocumented)
-    field: FieldKey;
-}
-
 // @public (undocumented)
 export type RowSource = EntriesRowSource | GroupRowSource | CustomRowSource;
 
 // @public
 export interface RowSourceCommon {
     // (undocumented)
-    filter?: RowFilter;
-    // (undocumented)
-    filterPolicy?: FilterPolicy;
-    // (undocumented)
     heightMode?: RowHeightMode;
-    // (undocumented)
-    sort?: RowSort;
 }
 
 // @public (undocumented)
@@ -780,7 +770,7 @@ export interface SelectionChange {
 }
 
 // @public
-export type SerializedField = Pick<Field, 'key' | 'type' | 'source' | 'rollUp' | 'column'> & {
+export type SerializedField = {
     key: FieldKey;
     type?: FieldTypeName;
     source: {

@@ -39,7 +39,7 @@ export class FrameLayout {
     this.#rowHeight = input.rowHeight;
     this.#laneGap = input.laneGapPx ?? DEFAULT_LANE_GAP_PX;
     this.#entryById = new Map(input.entries.map((entry) => [entry.id, entry]));
-    this.#registry = input.itemProducerRegistry ?? createItemProducerRegistry();
+    this.#registry = input.itemProducerRegistry;
     return computeFrame(input, this.#memoryFor(this.#plan.length, this.#rowHeight, this.#laneGap));
   }
 

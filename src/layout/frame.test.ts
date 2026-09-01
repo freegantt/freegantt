@@ -3,6 +3,7 @@ import { computeFrame } from './frame.js';
 import { FrameMemory } from './frame-memory.js';
 import { PrefixSumHeightIndex } from './row-height-index.js';
 import * as packLanes from './lanes/pack-lanes.js';
+import { createItemProducerRegistry } from './items/produce-items.js';
 import { sampleEntries } from '../../fixtures/sample-dataset.js';
 import { seededEntryInputs } from '../../fixtures/seeded-dataset.js';
 import {
@@ -20,6 +21,7 @@ const scale = createTimeScale({ timeZone: 'UTC', range: sampleEntries[0]!, pxPer
 const preset = dayPreset;
 const visible = { x: 0, y: 0, width: 0, height: 0 };
 const TIGHT = { verticalRows: 0, horizontalPx: 0 };
+const itemProducerRegistry = createItemProducerRegistry();
 
 describe('computeFrame', () => {
   it('emits one row and one bar per entry, positioned by time (S0 scope)', () => {
@@ -30,6 +32,7 @@ describe('computeFrame', () => {
       visible,
       rowHeight: 32,
       revision: 0,
+      itemProducerRegistry,
     });
     expect(frame.rows).toHaveLength(sampleEntries.length);
     expect(frame.bars).toHaveLength(sampleEntries.length);
@@ -46,6 +49,7 @@ describe('computeFrame', () => {
       overscan: { verticalRows: 0, horizontalPx: 0 },
       rowHeight: 32,
       revision: 0,
+      itemProducerRegistry,
     });
     expect(frame.rows.length).toBeLessThan(sampleEntries.length);
     expect(frame.rowCount).toBe(sampleEntries.length);
@@ -59,6 +63,7 @@ describe('computeFrame', () => {
       visible,
       rowHeight: 32,
       revision: 0,
+      itemProducerRegistry,
     });
     const entry = sampleEntries[1]!; // Stakeholder interviews
     const bar = frame.bars.find((b) => b.entryId === entry.id);
@@ -75,6 +80,7 @@ describe('computeFrame', () => {
       visible,
       rowHeight: 32,
       revision: 0,
+      itemProducerRegistry,
     });
     const second = computeFrame({
       entries: sampleEntries,
@@ -83,6 +89,7 @@ describe('computeFrame', () => {
       visible,
       rowHeight: 32,
       revision: 1,
+      itemProducerRegistry,
     });
     expect(first.bars.map((b) => b.id)).toEqual(second.bars.map((b) => b.id));
     expect(new Set(first.bars.map((b) => b.id)).size).toBe(sampleEntries.length);
@@ -96,6 +103,7 @@ describe('computeFrame', () => {
       visible,
       rowHeight: 32,
       revision: 0,
+      itemProducerRegistry,
     });
     expect(frame.bars[0]?.label).toBe(sampleEntries[0]?.name);
     expect(frame.rows[0]?.cells).toEqual([]);
@@ -116,6 +124,7 @@ describe('computeFrame', () => {
       visible,
       rowHeight: 32,
       revision: 0,
+      itemProducerRegistry,
       columns: [
         {
           key: 'name',
@@ -145,6 +154,7 @@ describe('computeFrame', () => {
       visible,
       rowHeight: 32,
       revision: 0,
+      itemProducerRegistry,
       columns: [
         { key: 'name', header: 'Name', align: 'start', format: (entry) => entry.name },
         { key: 'kind', header: 'Kind', align: 'start', format: (entry) => entry.kind },
@@ -163,6 +173,7 @@ describe('computeFrame', () => {
       overscan: TIGHT,
       rowHeight: 32,
       revision: 0,
+      itemProducerRegistry,
     });
     expect(windowed.rows.map((r) => r.index)).toEqual([1]);
     // contentHeight still covers every row, from the height index — not just the windowed ones.
@@ -179,6 +190,7 @@ describe('computeFrame', () => {
       visible: { x: 0, y: 64, width: 0, height: 32 },
       rowHeight: 32,
       revision: 0,
+      itemProducerRegistry,
     });
     expect(windowed.rows.map((r) => r.index)).toEqual([0, 1, 2, 3, 4]);
   });
@@ -198,6 +210,7 @@ describe('computeFrame', () => {
         overscan: { verticalRows: 1, horizontalPx: 0 },
         rowHeight: 10,
         revision: 0,
+        itemProducerRegistry,
       },
       new FrameMemory(heights),
     );
@@ -213,12 +226,21 @@ describe('computeFrame', () => {
       overscan: TIGHT,
       rowHeight: 32,
       revision: 0,
+      itemProducerRegistry,
     });
     expect(windowed.rows).toHaveLength(sampleEntries.length);
   });
 
   it('contentHeight/contentWidth stay the full extent regardless of the window', () => {
-    const full = computeFrame({ entries: sampleEntries, scale, preset, visible, rowHeight: 32, revision: 0 });
+    const full = computeFrame({
+      entries: sampleEntries,
+      scale,
+      preset,
+      visible,
+      rowHeight: 32,
+      revision: 0,
+      itemProducerRegistry,
+    });
     const windowed = computeFrame({
       entries: sampleEntries,
       scale,
@@ -227,6 +249,7 @@ describe('computeFrame', () => {
       overscan: TIGHT,
       rowHeight: 32,
       revision: 0,
+      itemProducerRegistry,
     });
     expect(windowed.contentHeight).toBe(full.contentHeight);
     expect(windowed.contentWidth).toBe(full.contentWidth);
@@ -241,6 +264,7 @@ describe('computeFrame', () => {
       visible,
       rowHeight: 32,
       revision: 0,
+      itemProducerRegistry,
     });
     expect(frame.header.bands).toHaveLength(1);
     expect(frame.header.bands[0]?.ticks.length).toBeGreaterThan(0);
@@ -264,6 +288,7 @@ describe('computeFrame', () => {
       visible,
       rowHeight: 32,
       revision: 0,
+      itemProducerRegistry,
     });
     expect(frame.header.bands).toHaveLength(2);
     expect(frame.header.bands[0]?.unit).toBe('week');
@@ -285,6 +310,7 @@ describe('computeFrame', () => {
         overscan: TIGHT,
         rowHeight: 32,
         revision: 0,
+        itemProducerRegistry,
       },
       new FrameMemory(heights),
     );
@@ -301,6 +327,7 @@ describe('computeFrame', () => {
       visible,
       rowHeight: 32,
       revision: 0,
+      itemProducerRegistry,
     });
     expect(frame.bars).toMatchSnapshot();
   });
@@ -314,6 +341,7 @@ describe('computeFrame', () => {
       overscan: TIGHT,
       rowHeight: 32,
       revision: 0,
+      itemProducerRegistry,
     });
     const after = computeFrame({
       entries: sampleEntries,
@@ -323,6 +351,7 @@ describe('computeFrame', () => {
       overscan: TIGHT,
       rowHeight: 32,
       revision: 0,
+      itemProducerRegistry,
     });
     // The overlap of [0, 64) and [32, 96) is [32, 64) — row index 1 only.
     const idsInOverlap = (frame: ReturnType<typeof computeFrame>): string[] =>
@@ -344,6 +373,7 @@ describe('computeFrame', () => {
       visible,
       rowHeight: 32,
       revision: 0,
+      itemProducerRegistry,
     };
     const tree = computeFrame({ ...base, rows: { source: 'entries', tree: true } });
     const grouped = computeFrame({
@@ -374,6 +404,7 @@ describe('computeFrame', () => {
       visible,
       rowHeight: 32,
       revision: 0,
+      itemProducerRegistry,
     });
     expect(frame.bars).toHaveLength(2);
     expect(frame.bars[0]?.a11yLabel).toMatch(/, part 1 of 2, /);
@@ -410,6 +441,7 @@ describe('computeFrame — horizontal culling', () => {
       overscan: { verticalRows: 0, horizontalPx: 0 },
       rowHeight: 10,
       revision: 0,
+      itemProducerRegistry,
     });
     expect(frame.rows).toHaveLength(entries.length);
     expect(frame.bars.map((b) => b.entryId)).toEqual([
@@ -428,6 +460,7 @@ describe('computeFrame — horizontal culling', () => {
       overscan: { verticalRows: 0, horizontalPx: 110 },
       rowHeight: 10,
       revision: 0,
+      itemProducerRegistry,
     });
     expect(frame.bars).toHaveLength(entries.length);
   });
@@ -441,6 +474,7 @@ describe('computeFrame — horizontal culling', () => {
       overscan: { verticalRows: 0, horizontalPx: 0 },
       rowHeight: 10,
       revision: 0,
+      itemProducerRegistry,
     });
     expect(frame.bars).toHaveLength(entries.length);
   });
@@ -456,6 +490,7 @@ describe('computeFrame — Date lines (S1.13)', () => {
       visible,
       rowHeight: 32,
       revision: 0,
+      itemProducerRegistry,
       todayLine: false,
       dateLines: [{ placeAt, label: 'Ship', className: 'fg-deadline-line' }],
     });
@@ -473,6 +508,7 @@ describe('computeFrame — Date lines (S1.13)', () => {
       visible,
       rowHeight: 32,
       revision: 0,
+      itemProducerRegistry,
       todayLine: outside,
     });
     expect(frame.decorations).toEqual([]);
@@ -506,6 +542,7 @@ describe('computeFrame — sticky label clamp (finding 3, header readability fol
       overscan,
       rowHeight: 32,
       revision: 0,
+      itemProducerRegistry,
     });
     const ticks = frame.header.bands[0]!.ticks;
 
@@ -534,6 +571,7 @@ describe('computeFrame — sticky label clamp (finding 3, header readability fol
       overscan,
       rowHeight: 32,
       revision: 0,
+      itemProducerRegistry,
     });
     const ticks = frame.header.bands[0]!.ticks;
     // Tick at 120 has remainder 8 (< shipped floor 9) — keeps true x.
@@ -550,6 +588,7 @@ describe('computeFrame — sticky label clamp (finding 3, header readability fol
       overscan,
       rowHeight: 32,
       revision: 0,
+      itemProducerRegistry,
     });
     const ticks = frame.header.bands[0]!.ticks;
     expect(ticks.find((t) => t.width === 9)).toMatchObject({ x: 171, width: 9 });
@@ -565,6 +604,7 @@ describe('computeFrame — sticky label clamp (finding 3, header readability fol
       overscan,
       rowHeight: 32,
       revision: 0,
+      itemProducerRegistry,
     };
     const atDefault = computeFrame(input);
     expect(atDefault.header.bands[0]!.ticks.find((t) => t.width === 50)).toMatchObject({ x: 130, width: 50 });
@@ -599,6 +639,7 @@ describe(
         overscan: { verticalRows: 2, horizontalPx: 128 },
         rowHeight: 32,
         revision: 0,
+        itemProducerRegistry,
       });
       expect(frame.rows.length).toBeLessThan(large.length);
       expect(frame.rowCount).toBe(large.length);
@@ -621,6 +662,7 @@ describe('computeFrame row sources (S4.6)', () => {
       overscan: { verticalRows: 0, horizontalPx: 0 },
       rowHeight: 32,
       revision: 0,
+      itemProducerRegistry,
       rows: { source: 'entries', tree: true },
     });
     expect(tree.rowCount).toBe(entries.length);
@@ -635,6 +677,7 @@ describe('computeFrame row sources (S4.6)', () => {
       visible,
       rowHeight: 32,
       revision: 0,
+      itemProducerRegistry,
       rows: { source: 'entries', tree: true },
       collapsed: [parent.id],
     });
@@ -662,6 +705,7 @@ describe('computeFrame lanes (S4.8)', () => {
       visible,
       rowHeight: 32,
       revision: 0,
+      itemProducerRegistry,
       rows: { source: 'entries', heightMode: 'fixed' },
     });
     expect(spy).not.toHaveBeenCalled();
@@ -679,6 +723,7 @@ describe('computeFrame lanes (S4.8)', () => {
       rowHeight: 32,
       laneGapPx: 2,
       revision: 0,
+      itemProducerRegistry,
       rows: { source: 'entries', heightMode: 'pack' },
     });
     expect(frame.rows).toHaveLength(1);

@@ -28,7 +28,6 @@ These landed in slice S4. Details and examples live in `plans/02-public-api.md` 
 - `gridColumns` — which columnable Fields this view shows, in order
 - `rowSource` — what rows are (`entries` tree, `group` by value, or `custom` resolve)
 - `rowSource.heightMode: 'pack'` — stack overlaps into lanes (on the row source, not on `Gantt`)
-- `rowSource.filter`, `rowSource.sort`, `rowSource.filterPolicy` — view knobs; never reorder the Store
 - `collapsed`, `collapse()`, `expand()`, `toggleCollapse()` — per-Gantt view state
 - Events: `beforeCollapseChange` / `collapseChange`
 
@@ -42,7 +41,7 @@ of resolved rows.
 
 `Field`, `FieldSource`, `FieldType`, `FieldKey`, `Aggregator`, `GridColumn`, `GridColumnInput`,
 `RowSource`, `EntriesRowSource`, `GroupRowSource`, `CustomRowSource`, `CustomRow`,
-`RowSourceCommon`, `RowHeightMode`, `RowFilter`, `RowSort`, `FilterPolicy`, `RowResolveInput`,
+`RowSourceCommon`, `RowHeightMode`, `RowResolveInput`,
 `CollapseChange`, `DatasetHierarchy`, `SerializedField`, and the S4 error classes re-exported from
 `freegantt`.
 

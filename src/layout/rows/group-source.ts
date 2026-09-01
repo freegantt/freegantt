@@ -31,6 +31,7 @@ export function resolveGroupSource(
     const expanded = expandable && !collapsed.has(headerId);
     rows.push({
       id: headerId,
+      kind: 'header',
       depth: 0,
       entryIds: [],
       expandable,
@@ -42,6 +43,7 @@ export function resolveGroupSource(
     for (const entry of members) {
       rows.push({
         id: rowId(entry.id),
+        kind: 'entry',
         depth: 1,
         entryIds: [entryId(entry.id)],
         expandable: false,

@@ -15,6 +15,10 @@ export interface ResolvedField extends Field {
   readonly source: FieldSource;
 }
 
+export interface RollingUpField extends ResolvedField {
+  readonly rollUp: Exclude<string, 'none'>;
+}
+
 export interface FieldRegistryOptions {
   fields?: readonly Field[];
   fieldTypes?: Readonly<Record<string, FieldType>>;
@@ -94,8 +98,10 @@ export class FieldRegistry {
   }
 
   /** Fields that participate in the Rollup after type merge (D-S4-3). */
-  rollingUpFields(): readonly ResolvedField[] {
-    return this.all.filter((field) => field.rollUp !== undefined && field.rollUp !== 'none');
+  rollingUpFields(): readonly RollingUpField[] {
+    return this.all.filter(
+      (field): field is RollingUpField => field.rollUp !== undefined && field.rollUp !== 'none',
+    );
   }
 
   valuesEqual(key: string, from: unknown, to: unknown): boolean {

@@ -40,6 +40,8 @@ import { attachWheelNavigation } from './wheel-navigation.js';
 import type { WheelNavigationAttachment } from './wheel-navigation.js';
 import { attachKeyboardNavigation } from './keyboard-navigation.js';
 import type { KeyboardNavigationAttachment } from './keyboard-navigation.js';
+import { attachRowTwisty } from './attach-row-twisty.js';
+import type { RowTwistyAttachment } from './attach-row-twisty.js';
 import { resolveViewportGestures } from './viewport-gestures.js';
 import type { ViewportGestures } from './viewport-gestures.js';
 import { ensureBaseStyles } from './styles.js';
@@ -73,7 +75,7 @@ import { FrameScheduler } from './frame-scheduler.js';
 import { projectAffordances } from './affordance-projection.js';
 import { GesturePipeline } from './gesture-pipeline.js';
 import type { EntryGestureContext } from './entry-gesture-context.js';
-import { DEFAULT_GRID_COLUMNS, bindGanttFields } from './grid-columns.js';
+import { DEFAULT_GRID_COLUMNS, resolveColumns } from './grid-columns.js';
 import { CollapseState } from './collapse-state.js';
 
 /** One `{ detach() }` for every inject slot. `view/` may not import `interaction/` (plans/01 §1:
@@ -243,6 +245,7 @@ export class GanttShell {
   #keyboardEditing: Detachable | undefined;
   #wheelNavigation: WheelNavigationAttachment | undefined;
   #keyboardNavigation: KeyboardNavigationAttachment | undefined;
+  #rowTwistyAttachment: RowTwistyAttachment;
   /** D-S3-6: one long-lived, mutable per-Gantt object — `applyState` diffs against what it painted
    *  last, so writing into this and calling `#backend.applyState` allocates nothing per hover/select
    *  step (I5). Never rebuilt per call. */
@@ -290,7 +293,6 @@ export class GanttShell {
   #resolvedColumns: readonly ResolvedColumn[] = [];
   #rowSource: RowSource = DEFAULT_ROW_SOURCE;
   #collapse = new CollapseState();
-  #onTwistyClick: ((event: Event) => void) | undefined;
 
   constructor(options: GanttShellOptions) {
     this.#options = options;
@@ -452,16 +454,9 @@ export class GanttShell {
       pageStepY: () => this.#viewport.visible.height,
       scrollMaxX: () => this.#viewport.scroll.state.max.x,
     });
-    this.#onTwistyClick = (event: Event) => {
-      const target = event.target;
-      if (!(target instanceof Element)) return;
-      const twisty = target.closest('.fg-row-twisty');
-      if (twisty === null || !this.#panes.grid.contains(twisty)) return;
-      const row = twisty.closest('.fg-row');
-      const id = row instanceof HTMLElement ? row.dataset['rowId'] : undefined;
-      if (id !== undefined) this.toggleCollapse(id);
-    };
-    this.#panes.grid.addEventListener('click', this.#onTwistyClick);
+    this.#rowTwistyAttachment = attachRowTwisty(this.#panes.grid, {
+      toggleCollapse: (id) => this.toggleCollapse(id),
+    });
     if (options.collapsed !== undefined) {
       const proposed = this.#collapse.propose(options.collapsed);
       if (proposed !== undefined) this.#collapse.commit(proposed.to);
@@ -829,7 +824,11 @@ export class GanttShell {
       this.#locale !== undefined
         ? { timeZone: this.#options.dataset.timeZone, locale: this.#locale }
         : { timeZone: this.#options.dataset.timeZone };
-    this.#resolvedColumns = bindGanttFields(this.#options.dataset, this.#gridColumnInput, bind).columns;
+    this.#resolvedColumns = resolveColumns(
+      this.#gridColumnInput,
+      { get: (key) => this.#options.dataset.field(key) },
+      bind,
+    );
   }
 
   #commitGridWidth(px: number): void {
@@ -890,7 +889,7 @@ export class GanttShell {
     this.#keyboardEditing?.detach();
     this.#wheelNavigation?.detach();
     this.#keyboardNavigation?.detach();
-    if (this.#onTwistyClick) this.#panes.grid.removeEventListener('click', this.#onTwistyClick);
+    this.#rowTwistyAttachment.detach();
     this.#datasetChanges.unsubscribe();
     this.#scrollAttachment.detach();
     this.#paneSizeAttachment.detach();

@@ -3,7 +3,7 @@
 **Slice:** S4 (`plans/03` §S4) · **Position:** after S3, before S5 · **Status:** S4.1–S4.8 done; continue at **S4.9**
 **Form:** the same settled-spec form as [`plans/s3-direct-manipulation/README.md`](../s3-direct-manipulation/README.md) — this file is the tracker and the shared context; each step file holds the decisions it implements and its TODO boxes.
 **Tick as you go:** When you finish a TODO item, tick its box in that step file. Tick it in the same change as the code. Tick each item when it lands. Do not wait for S4.11 or the slice gate.
-**Last review:** [`plans/reviews/2026-08-31-s4.3-s4.4.html`](../reviews/2026-08-31-s4.3-s4.4.html) — S4.3/S4.4 branch review. Spec-review findings already landed in this spec (2026-08-31): sort binds `FieldCompare` from declared Fields; `emitRow`/`packRow`; X2 is `'header'`; `CustomRow` is the public custom-source DTO.
+**Last review:** [`plans/reviews/2026-08-31-s4.3-s4.4.html`](../reviews/2026-08-31-s4.3-s4.4.html) — S4.3/S4.4 branch review. Spec-review findings already landed in this spec (2026-08-31): sort binds `FieldCompare` from declared Fields; `produceItemsForRow`/`packRow`; X2 is `'header'`; `CustomRow` is the public custom-source DTO.
 **Governed by:** `plans/00` D2/D7/D8, `plans/01` §2.3/§2.5/§2.6/§4/§6, `plans/02` §2/§4.1/§4.2/§6, ADR [0005](../../docs/adr/0005-fields-are-declared-and-grid-columns-reference-them.md).
 **Builds on:** S2 data core (transactions, changesets, undo, JSON), S3 gestures, S1's height index and `FrameLayout`.
 **Closes:** issue #80 (per-field rollup), #81 (row cells), ADR 0005's two open questions, `plans/03` §S4's three known gaps (#91 §9-B, §9-E, §9-G).
@@ -16,7 +16,7 @@
 
 | # | Question | Answer |
 |---|---|---|
-| **Q1** | Does S4 ship the **public** way to register a Field, a Grid column or an Item emitter? | **No — only the registries and the shipped occupants.** A consumer declares Fields through `DatasetOptions.fields` (data, not code registration) and orders columns through `Gantt.gridColumns`. Registering an *emitter* or a *renderer* needs `PluginContext`, which is S5's. S4 ships `ItemEmitter` with three occupants and no way in from outside; tests inject through an internal option. Same posture S2 took for the extender slot (D-S2-6). §S4.7, D-S4-24. |
+| **Q1** | Does S4 ship the **public** way to register a Field, a Grid column or an Item producer? | **No — only the registries and the shipped occupants.** A consumer declares Fields through `DatasetOptions.fields` (data, not code registration) and orders columns through `Gantt.gridColumns`. Registering a *producer* or a *renderer* needs `PluginContext`, which is S5's. S4 ships `ItemProducer` with three occupants and no way in from outside; tests inject through an internal option. Same posture S2 took for the extender slot (D-S2-6). §S4.7, D-S4-24. |
 | **Q2** | Does the Rollup gate stay `derivedSpanKinds`? | **No — it widens and it is renamed `rollUpKinds`.** Once `cost` rolls up, a gate whose name says "span" governs values that are not spans. Widening the meaning under the old name is the drift CLAUDE.md's naming rule forbids (#7). The rule itself is the one that reads correctly: a parent of a rolling-up Kind derives **every** rolling-up Field; a parent of any other Kind keeps its authored values. §S4.2, D-S4-6. |
 | **Q3** | Does the Document carry Field declarations? | **The data half, yes; the code half, no.** Without them, `fromJSON(toJSON(d))` returns a Dataset that still holds rolled-up values but no longer maintains them — a silent corruption on the next edit. `fields` joins the Document; `equals`, `compare`, `formatValue`, `fieldTypes` and `aggregators` are code the reading application supplies, through a second `fromJSON` parameter. Omitted `source` is written **resolved**. `schema` goes to 2. §S4.4, D-S4-15, D-S4-16, D-S4-35. |
 | **Q4** | Where do sort and filter live? `plans/03` §S4 says "store-level view specs". | **On the row source, not on the Store.** Sorting the Store would reorder `entries.all`, and that order is what makes `toJSON` byte-stable (D-S2-12). A view knob must not rewrite the Document. `rowSource: { source: 'entries', tree: true, sort, filter }` is one config tree for one job (`plans/02` §1). `plans/03` §S4 is edited to match. §S4.9, D-S4-28. |
@@ -80,7 +80,7 @@ flowchart TB
   subgraph rowctx["ROW context — what a Gantt DRAWS (layout/, view/)"]
     direction TB
     R1["resolveRows<br/>row source: entries | group | custom"]
-    R2["emitRow<br/>per-kind ItemEmitter"]
+    R2["produceItemsForRow<br/>per-kind ItemProducer"]
     R3["packRow<br/>lane per item, laneCount per row"]
     R4["placeGeometry<br/>x/y/width/height, cells"]
     R1 --> R2 --> R3 --> R4
@@ -188,7 +188,7 @@ gantt.on('collapseChange', ({ to }) => save(to));
 | `RowFilter`, `RowSort`, `FilterPolicy` | S4.9 |
 | Parts: `fg-row-cell`, `fg-row-twisty`, `fg-bar-bracket`, `fg-bar-diamond`; tokens `--fg-indent-width`, `--fg-lane-gap` | S4.3, S4.6, S4.7, S4.8 |
 
-**Not public:** `FieldRegistry`, `readField`/`writeField`, `ItemEmitter` registration, `PlannedRow`, `LanePacking`, `FrameMemory` — internal registry and pipeline shapes.
+**Not public:** `FieldRegistry`, `readField`/`writeField`, `ItemProducer` registration, `PlannedRow`, `LanePacking`, `FrameMemory` — internal registry and pipeline shapes.
 
 **Retired by this slice:** `DatasetOptions.derivedSpanKinds`, `Dataset.derivedSpanKinds`, `Dataset.isDerivedSpanKind` (→ `rollUpKinds`, `isRollUpKind`). Pre-1.0, no released consumers, so the rename ships with no alias — ADR 0003's own precedent.
 
@@ -219,12 +219,12 @@ Full prose lives in the step file that implements each decision.
 | D-S4-16 | `schema: 2`, and `schema: 1` still reads | S4.4 |
 | D-S4-17 | `autoGroup` defaults to `true`; promotes `'span'` only | S4.5 |
 | D-S4-18 | Promote only, never demote | S4.5 |
-| D-S4-19 | `computeFrame` becomes four stages; `emitRow` / `packRow` | S4.6 |
+| D-S4-19 | `computeFrame` becomes four stages; `produceItemsForRow` / `packRow` | S4.6 |
 | D-S4-20 | Rows resolve whole-dataset; placement windowed; emit/pack on-demand | S4.6 |
 | D-S4-21 | One `RowSource` interface, three occupants; public `CustomRow` | S4.6 |
 | D-S4-22 | Collapse is Gantt state; ids are `RowId`s | S4.6 |
 | D-S4-23 | `Row.kind: 'header'` stands for no Entry; `headerLabel` | S4.6 |
-| D-S4-24 | `ItemEmitter` seam, three occupants, no public registration | S4.7 |
+| D-S4-24 | `ItemProducer` seam, three occupants, no public registration | S4.7 |
 | D-S4-25 | One Item per Segment; one id builder | S4.7 |
 | D-S4-26 | Lane packing memoized; the height index forces it | S4.8 |
 | D-S4-27 | `heightMode` on the row source; scroll is a pixel position | S4.8 |
@@ -299,7 +299,7 @@ Read these before you touch `src/`.
 | Serialization | `data/serialization/read.test.ts`, `write.test.ts` |
 | Hierarchy | `data/hierarchy.test.ts` |
 | Row resolution | `layout/rows/entries-source.test.ts`, `group-source.test.ts`, `custom-source.test.ts`, `filter.test.ts`, `sort.test.ts` |
-| Item emission | `layout/items/emit-items.test.ts` |
+| Item emission | `layout/items/produce-items.test.ts` |
 | Lanes and heights | `layout/lanes/pack-lanes.test.ts`, `layout/frame-layout.test.ts` |
 | Frame composition | `layout/frame.test.ts` |
 | Columns and paint | `view/grid-columns.test.ts`, `render/dom/index.test.ts` (dom) |
@@ -325,7 +325,7 @@ Read these before you touch `src/`.
 
 | Deferred | Returns at | Needs |
 |---|---|---|
-| `PluginContext.data.registerField` / `view.registerGridColumn` / `layout.registerItemEmitter` | S5 | Plugin runtime |
+| `PluginContext.data.registerField` / `view.registerGridColumn` / `layout.registerItemProducer` | S5 | Plugin runtime |
 | `cellRenderer`, inline cell editing, `beforeEntryEdit` | S5 | Editor host and overlay |
 | Column resize and reorder | S5 | Grid chrome |
 | Consumer-defined Kind end-to-end (`[S5]` box) | S5 | Public registration at all four seams |
@@ -342,7 +342,7 @@ Read these before you touch `src/`.
 
 Parked 2026-08-30 after the Field-type / omit-`source` / formatter / sort pass. Updated 2026-08-31 after landing the final spec-review findings. Grill to try to break the settled answers; do not reopen them casually.
 
-**Settled** (do not reopen casually): Q16–Q21; X2 (`Row.kind: 'header'`); D-S4-3; D-S4-12; D-S4-13 (`columns` vs `fieldCompares`); D-S4-15 same-key merge table; D-S4-19 `emitRow`/`packRow`; D-S4-20; D-S4-21 `CustomRow`; D-S4-23; D-S4-28; D-S4-35; `[S4-A10]` / `[S4-A11]`.
+**Settled** (do not reopen casually): Q16–Q21; X2 (`Row.kind: 'header'`); D-S4-3; D-S4-12; D-S4-13 (`columns` vs `fieldCompares`); D-S4-15 same-key merge table; D-S4-19 `produceItemsForRow`/`packRow`; D-S4-20; D-S4-21 `CustomRow`; D-S4-23; D-S4-28; D-S4-35; `[S4-A10]` / `[S4-A11]`.
 
 ---
 
