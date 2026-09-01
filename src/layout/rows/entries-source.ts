@@ -1,11 +1,11 @@
 // layout/ — `{ source: 'entries' }`. Flat list matches S1; tree is depth-first in insertion order.
 
 import { entryId, rowId } from '../../model/index.js';
-import type { Entry, EntryId } from '../../model/index.js';
+import type { Entry, EntryId, RowId } from '../../model/index.js';
 import type { EntriesRowSource, RowHeightMode, UnindexedRow } from './row-source.js';
 import { heightModeOf } from './row-source.js';
 
-export function childrenByParent(entries: readonly Entry[]): {
+export function entryTreeIndex(entries: readonly Entry[]): {
   roots: readonly Entry[];
   childrenOf: ReadonlyMap<EntryId, readonly Entry[]>;
 } {
@@ -27,31 +27,34 @@ export function childrenByParent(entries: readonly Entry[]): {
 
 function entryRow(
   entry: Entry,
-  depth: number,
-  expandable: boolean,
-  expanded: boolean,
-  heightMode: RowHeightMode,
+  fields: {
+    depth: number;
+    expandable: boolean;
+    heightMode: RowHeightMode;
+    parentRowId?: RowId;
+  },
 ): UnindexedRow {
   return {
     id: rowId(entry.id),
     kind: 'entry',
-    depth,
+    depth: fields.depth,
     entryIds: [entryId(entry.id)],
-    expandable,
-    expanded,
-    heightMode,
+    expandable: fields.expandable,
+    expanded: false,
+    heightMode: fields.heightMode,
+    ...(fields.parentRowId !== undefined ? { parentRowId: fields.parentRowId } : {}),
   };
 }
 
 export function resolveEntriesSource(entries: readonly Entry[], source: EntriesRowSource): UnindexedRow[] {
   const heightMode = heightModeOf(source);
   if (source.tree !== true) {
-    return entries.map((entry) => entryRow(entry, 0, false, false, heightMode));
+    return entries.map((entry) => entryRow(entry, { depth: 0, expandable: false, heightMode }));
   }
 
-  const { roots, childrenOf } = childrenByParent(entries);
+  const { roots, childrenOf } = entryTreeIndex(entries);
   const rows: UnindexedRow[] = [];
-  const stack: { list: readonly Entry[]; index: number; depth: number }[] = [
+  const stack: { list: readonly Entry[]; index: number; depth: number; parentRowId?: RowId }[] = [
     { list: roots, index: 0, depth: 0 },
   ];
   while (stack.length > 0) {
@@ -63,9 +66,15 @@ export function resolveEntriesSource(entries: readonly Entry[], source: EntriesR
     const entry = frame.list[frame.index]!;
     frame.index += 1;
     const children = childrenOf.get(entry.id) ?? [];
-    const expandable = children.length > 0;
-    rows.push(entryRow(entry, frame.depth, expandable, expandable, heightMode));
-    stack.push({ list: children, index: 0, depth: frame.depth + 1 });
+    rows.push(
+      entryRow(entry, {
+        depth: frame.depth,
+        expandable: children.length > 0,
+        heightMode,
+        ...(frame.parentRowId !== undefined ? { parentRowId: frame.parentRowId } : {}),
+      }),
+    );
+    stack.push({ list: children, index: 0, depth: frame.depth + 1, parentRowId: rowId(entry.id) });
   }
   return rows;
 }

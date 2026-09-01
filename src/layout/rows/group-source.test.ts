@@ -32,7 +32,7 @@ describe('resolveGroupSource', () => {
       entryIds: [],
       headerLabel: 'red',
       expandable: true,
-      expanded: true,
+      expanded: false,
     });
     expect(rows[1]?.entryIds).toEqual([entryId('a')]);
     expect(rows[3]?.id).toBe(rowId('group:blue'));

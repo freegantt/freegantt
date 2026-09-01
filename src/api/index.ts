@@ -1,5 +1,6 @@
 export { Dataset } from './dataset.js';
 export type { DatasetOptions, DatasetHierarchy } from './dataset.js';
+export type { RollUpKinds } from '../model/index.js';
 export { attemptMutation } from './attempt-mutation.js';
 export type {
   ChangeSet,
@@ -31,7 +32,7 @@ export type {
 // matches `api/dataset.ts`'s own import of `data/serialization/index.js`.
 export { invertChangeSet } from '../data/change-set.js';
 export { Gantt } from './gantt.js';
-export type { GanttOptions, DateLineInput } from './gantt.js';
+export type { GanttOptions, GanttOptionsBase, GanttScaleOptions, DateLineInput } from './gantt.js';
 export type { Theme, ViewportGestures, ViewportGestureFlags } from '../view/index.js';
 export type {
   GanttEventMap,
@@ -53,6 +54,7 @@ export type { CapabilityRule, Interactions } from '../view/index.js';
 // view/, which has no other interest in them (issue #91 §9-I).
 export { TimeScaleModel, ScrollModel } from '../layout/index.js';
 export type {
+  TimeScale,
   TimeScaleModelOptions,
   TimeScaleFit,
   PresetRef,
@@ -113,14 +115,14 @@ export type {
   CustomRow,
   RowSourceCommon,
   RowHeightMode,
-  RowResolveInput,
+  CustomRowInput,
   RowFilter,
   RowSort,
   FilterPolicy,
 } from '../layout/index.js';
 // Point/Size are the S1.5 ScrollModel's own vocabulary (S1.5 README §5) — a consumer building
 // `new ScrollModel({ x, y })` or reading `ScrollState` needs the shape in the public surface too.
-export type { Point, Size, ClientPoint } from '../model/index.js';
+export type { Point, Size, ClientPoint, PixelSpan } from '../model/index.js';
 
 // Time helpers a caller needs: `instant` for a pinned `TimeSpan`, `now` for "this Instant",
 // `addMs`/`MS` to shift one by a duration (S2.7 harness-review — `harness/data.ts`'s move-by-a-day
@@ -138,4 +140,11 @@ export {
   formatWeekNumber,
   formatHour,
 } from '../time/index.js';
-export type { ViewPreset, ViewPresetHeader, TickStep, DateFormat, HeaderFormat } from '../time/index.js';
+export type {
+  ViewPreset,
+  ViewPresetHeader,
+  Tick,
+  TickStep,
+  DateFormat,
+  HeaderFormat,
+} from '../time/index.js';

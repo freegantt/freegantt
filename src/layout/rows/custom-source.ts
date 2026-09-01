@@ -1,10 +1,10 @@
 // layout/ — `{ source: 'custom' }`. Adapts public CustomRow once; PlannedRow stays internal (D-S4-21).
 
 import { DuplicateRowIdError, entryId, rowId } from '../../model/index.js';
-import type { CustomRowSource, RowResolveInput, UnindexedRow } from './row-source.js';
+import type { CustomRowInput, CustomRowSource, UnindexedRow } from './row-source.js';
 import { heightModeOf } from './row-source.js';
 
-export function resolveCustomSource(source: CustomRowSource, input: RowResolveInput): UnindexedRow[] {
+export function resolveCustomSource(source: CustomRowSource, input: CustomRowInput): UnindexedRow[] {
   const heightMode = heightModeOf(source);
   const customRows = source.resolve(input);
   const seen = new Set<string>();

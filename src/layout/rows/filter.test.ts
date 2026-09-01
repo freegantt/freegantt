@@ -88,6 +88,7 @@ describe('applyFilter (S4.9)', () => {
     );
     expect(filtered.map((row) => row.id)).toEqual([rowId('grand')]);
     expect(filtered[0]?.depth).toBe(0);
+    expect(filtered[0]?.expandable).toBe(false);
   });
 
   it('a filter matching nothing yields no rows and no crash', () => {
@@ -107,7 +108,7 @@ describe('applySort (S4.9)', () => {
       entry('a', { parentId: 'p', start: 10 }),
     ];
     const built = resolveEntriesSource(entries, { source: 'entries', tree: true });
-    const sorted = applySort(built, entries, { field: 'start' }, compares, true);
+    const sorted = applySort(built, entries, { field: 'start' }, compares);
     expect(sorted.map((row) => row.id)).toEqual([rowId('p'), rowId('a'), rowId('b')]);
     expect(sorted.find((row) => row.id === rowId('a'))?.depth).toBe(1);
   });
@@ -115,28 +116,28 @@ describe('applySort (S4.9)', () => {
   it('desc reverses sibling order', () => {
     const entries = [entry('a', { start: 1 }), entry('b', { start: 2 }), entry('c', { start: 3 })];
     const built = resolveEntriesSource(entries, { source: 'entries' });
-    const sorted = applySort(built, entries, { field: 'start', direction: 'desc' }, compares, false);
+    const sorted = applySort(built, entries, { field: 'start', direction: 'desc' }, compares);
     expect(sorted.map((row) => row.id)).toEqual([rowId('c'), rowId('b'), rowId('a')]);
   });
 
   it('sorts money by the stored number, not the formatted string', () => {
     const entries = [entry('low', { cost: 500 }), entry('high', { cost: 12_000 })];
     const built = resolveEntriesSource(entries, { source: 'entries' });
-    const sorted = applySort(built, entries, { field: 'cost' }, compares, false);
+    const sorted = applySort(built, entries, { field: 'cost' }, compares);
     expect(sorted.map((row) => row.id)).toEqual([rowId('low'), rowId('high')]);
   });
 
   it('RowSort.compare beats FieldCompare.compareStored', () => {
     const entries = [entry('a', { cost: 1 }), entry('b', { cost: 2 })];
     const built = resolveEntriesSource(entries, { source: 'entries' });
-    const sorted = applySort(built, entries, { field: 'cost', compare: () => -1 }, compares, false);
+    const sorted = applySort(built, entries, { field: 'cost', compare: () => -1 }, compares);
     expect(sorted.map((row) => row.id)).toEqual([rowId('b'), rowId('a')]);
   });
 
   it('an unregistered sort field throws UnknownFieldError', () => {
     const entries = [entry('a')];
     const built = resolveEntriesSource(entries, { source: 'entries' });
-    expect(() => applySort(built, entries, { field: 'nope' }, compares, false)).toThrow(UnknownFieldError);
+    expect(() => applySort(built, entries, { field: 'nope' }, compares)).toThrow(UnknownFieldError);
   });
 });
 

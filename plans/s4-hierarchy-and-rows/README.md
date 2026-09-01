@@ -94,7 +94,7 @@ flowchart TB
   class R1,R2,R3,R4 r
 ```
 
-**Cells meet Fields at `LayoutInput.columns`.** Sort meets Fields at `RowResolutionInput.fieldCompares`. `view/` binds both with this Gantt's locale. `layout/` never imports `data/`, and `data/` never learns that a Gantt exists. Everything else in the two contexts is independent, which is why the step order can interleave them freely.
+**Cells meet Fields at `LayoutInput.columns`.** Sort meets Fields at `RowPassInput.fieldCompares`. `view/` binds both with this Gantt's locale. `layout/` never imports `data/`, and `data/` never learns that a Gantt exists. Everything else in the two contexts is independent, which is why the step order can interleave them freely.
 
 ---
 

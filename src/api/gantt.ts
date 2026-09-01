@@ -37,7 +37,7 @@ export interface DateLineInput {
   className?: string;
 }
 
-interface GanttOptionsBase {
+export interface GanttOptionsBase {
   /** Element or CSS selector (plans/02 §2) — resolved by GanttShell; a selector matching nothing
    * throws (#38). */
   container: HTMLElement | string;
@@ -90,7 +90,7 @@ interface GanttOptionsBase {
  * accepted both and silently ignored `preset`/`range`/`fit` in favor of `scale`, with a dev-mode-only
  * warning). Sharing an axis and building a private one from `preset`/`range`/`fit` are not two knobs
  * for the same job; a caller states one or the other. */
-type GanttScaleOptions =
+export type GanttScaleOptions =
   | {
       /** Bound viewport object (D9, plans/02 §5) — pass the same instance to two Gantt instances to
        * x-sync them. */

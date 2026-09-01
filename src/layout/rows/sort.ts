@@ -1,11 +1,9 @@
 // layout/ — row-source sort. Reads stored values through bound FieldCompare (D-S4-28, D-S4-29).
 
 import { UnknownFieldError } from '../../model/index.js';
-import type { Entry, EntryId } from '../../model/index.js';
+import type { Entry, RowId } from '../../model/index.js';
 import type { FieldCompare } from '../column.js';
 import type { RowSort, UnindexedRow } from './row-source.js';
-import { isPlannedHeaderRow } from './row-source.js';
-import { childrenByParent } from './entries-source.js';
 
 export type { RowSort } from './row-source.js';
 
@@ -25,116 +23,56 @@ function comparerFor(sort: RowSort, fieldCompares: readonly FieldCompare[]): Ent
   };
 }
 
-function sortEntries(entries: readonly Entry[], compare: EntryComparer): Entry[] {
-  return [...entries].sort(compare);
-}
-
-function produceTreeRows(
-  list: readonly Entry[],
-  depth: number,
-  childrenOf: ReadonlyMap<EntryId, readonly Entry[]>,
-  visibleIds: ReadonlySet<EntryId>,
-  rowByEntryId: ReadonlyMap<EntryId, UnindexedRow>,
-  compare: EntryComparer,
-): UnindexedRow[] {
-  const out: UnindexedRow[] = [];
-  for (const entry of sortEntries(list, compare)) {
-    if (!visibleIds.has(entry.id)) continue;
-    const row = rowByEntryId.get(entry.id);
-    if (row === undefined) continue;
-    out.push({ ...row, depth });
-    const children = (childrenOf.get(entry.id) ?? []).filter((child) => visibleIds.has(child.id));
-    out.push(...produceTreeRows(children, depth + 1, childrenOf, visibleIds, rowByEntryId, compare));
-  }
-  return out;
-}
-
-function sortTreeRows(
-  rows: readonly UnindexedRow[],
-  entries: readonly Entry[],
-  compare: EntryComparer,
-): UnindexedRow[] {
-  const visibleIds = new Set<EntryId>();
-  const rowByEntryId = new Map<EntryId, UnindexedRow>();
+function siblingsByParentRow(rows: readonly UnindexedRow[]): Map<RowId | undefined, UnindexedRow[]> {
+  const childrenOf = new Map<RowId | undefined, UnindexedRow[]>();
   for (const row of rows) {
-    if (isPlannedHeaderRow(row)) continue;
-    const entryId = row.entryIds[0];
-    if (entryId === undefined) continue;
-    visibleIds.add(entryId);
-    rowByEntryId.set(entryId, row);
+    const parent = row.parentRowId;
+    const siblings = childrenOf.get(parent);
+    if (siblings) siblings.push(row);
+    else childrenOf.set(parent, [row]);
   }
-
-  const known = visibleIds;
-  const { roots, childrenOf } = childrenByParent(entries);
-  const treeRoots = roots.filter((entry) => {
-    if (!visibleIds.has(entry.id)) return false;
-    const parent = entry.parentId;
-    return parent === undefined || !known.has(parent);
-  });
-
-  return produceTreeRows(treeRoots, 0, childrenOf, visibleIds, rowByEntryId, compare);
+  return childrenOf;
 }
 
-function sortFlatRows(
-  rows: readonly UnindexedRow[],
-  entries: readonly Entry[],
+function sortSiblings(
+  siblings: readonly UnindexedRow[],
+  entriesById: ReadonlyMap<Entry['id'], Entry>,
   compare: EntryComparer,
 ): UnindexedRow[] {
-  const entryById = new Map(entries.map((entry) => [entry.id, entry]));
-  const entryRows = rows.filter((row) => !isPlannedHeaderRow(row));
-  return [...entryRows].sort((left, right) => {
-    const leftEntry = entryById.get(left.entryIds[0]!);
-    const rightEntry = entryById.get(right.entryIds[0]!);
+  return [...siblings].sort((left, right) => {
+    const leftEntry = left.entryIds[0] !== undefined ? entriesById.get(left.entryIds[0]) : undefined;
+    const rightEntry = right.entryIds[0] !== undefined ? entriesById.get(right.entryIds[0]) : undefined;
     if (leftEntry === undefined || rightEntry === undefined) return 0;
     return compare(leftEntry, rightEntry);
   });
 }
 
-function sortGroupRows(
-  rows: readonly UnindexedRow[],
-  entries: readonly Entry[],
+function emitSorted(
+  parentId: RowId | undefined,
+  childrenOf: ReadonlyMap<RowId | undefined, readonly UnindexedRow[]>,
+  entriesById: ReadonlyMap<Entry['id'], Entry>,
   compare: EntryComparer,
 ): UnindexedRow[] {
-  const entryById = new Map(entries.map((entry) => [entry.id, entry]));
+  const siblings = childrenOf.get(parentId) ?? [];
+  const sorted = sortSiblings(siblings, entriesById, compare);
   const out: UnindexedRow[] = [];
-  let index = 0;
-  while (index < rows.length) {
-    const header = rows[index]!;
-    if (!isPlannedHeaderRow(header)) {
-      index += 1;
-      continue;
-    }
-    out.push(header);
-    index += 1;
-    const members: UnindexedRow[] = [];
-    while (index < rows.length && !isPlannedHeaderRow(rows[index]!)) {
-      members.push(rows[index]!);
-      index += 1;
-    }
-    const sorted = [...members].sort((left, right) => {
-      const leftEntry = entryById.get(left.entryIds[0]!);
-      const rightEntry = entryById.get(right.entryIds[0]!);
-      if (leftEntry === undefined || rightEntry === undefined) return 0;
-      return compare(leftEntry, rightEntry);
-    });
-    out.push(...sorted);
+  for (const row of sorted) {
+    out.push(row);
+    out.push(...emitSorted(row.id, childrenOf, entriesById, compare));
   }
   return out;
 }
 
-/** Reorders rows. Tree mode sorts siblings under each parent; group mode sorts within each header block. */
+/** Reorders sibling rows that share a `parentRowId`. Tree, group, and flat lists use this one walk. */
 export function applySort(
   rows: readonly UnindexedRow[],
   entries: readonly Entry[],
   sort: RowSort | undefined,
   fieldCompares: readonly FieldCompare[],
-  tree: boolean,
 ): UnindexedRow[] {
   if (sort === undefined || fieldCompares.length === 0) return [...rows];
 
   const compare = comparerFor(sort, fieldCompares);
-  const hasHeaders = rows.some(isPlannedHeaderRow);
-  if (hasHeaders) return sortGroupRows(rows, entries, compare);
-  if (tree) return sortTreeRows(rows, entries, compare);
-  return sortFlatRows(rows, entries, compare);
+  const entriesById = new Map(entries.map((entry) => [entry.id, entry]));
+  return emitSorted(undefined, siblingsByParentRow(rows), entriesById, compare);
 }

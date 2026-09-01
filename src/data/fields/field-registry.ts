@@ -26,10 +26,6 @@ export interface FieldRegistryOptions {
   aggregators?: Readonly<Record<string, Aggregator>>;
 }
 
-function resolveSource(field: Field): FieldSource {
-  return storedSourceOf(field);
-}
-
 function metaSlot(source: FieldSource): string | undefined {
   if (source.from !== 'meta') return undefined;
   return source.key ?? undefined;
@@ -37,7 +33,7 @@ function metaSlot(source: FieldSource): string | undefined {
 
 function mergeField(field: Field, bundle: FieldType | undefined): ResolvedField {
   const merged: Field = bundle === undefined ? { ...field } : { ...bundle, ...field };
-  return { ...merged, source: resolveSource(field) };
+  return { ...merged, source: storedSourceOf(field) };
 }
 
 export class FieldRegistry {

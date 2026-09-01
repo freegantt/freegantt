@@ -30,7 +30,7 @@ export function resolveGroupSource(entries: readonly Entry[], source: GroupRowSo
       depth: 0,
       entryIds: [],
       expandable,
-      expanded: expandable,
+      expanded: false,
       heightMode,
       headerLabel: key,
     });
@@ -43,6 +43,7 @@ export function resolveGroupSource(entries: readonly Entry[], source: GroupRowSo
         expandable: false,
         expanded: false,
         heightMode,
+        parentRowId: headerId,
       });
     }
   }

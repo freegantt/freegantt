@@ -164,8 +164,8 @@ The configuration that decides what the Rows are for a given Gantt — the Entri
 _Avoid_: Row provider, row model; treating `PlannedRow` as public
 
 **Custom row**:
-One row a `{ source: 'custom', resolve }` resolver returns — `id`, optional `entryIds`, optional `label`. Core maps it to a `PlannedRow` and then a frame `Row`. Not an Entry.
-_Avoid_: Custom RowSource (that is the config object; Custom row is one resolved row)
+One row a `{ source: 'custom', resolve }` resolver returns — `id`, optional `entryIds`, optional `label`. Core maps it to a `PlannedRow` and then a frame `Row`. Not an Entry. The resolver receives `CustomRowInput` (`{ entries }`).
+_Avoid_: Custom RowSource (that is the config object; Custom row is one resolved row); `RowResolveInput` (retired — that name collided with the internal row pass input)
 
 **Row filter**:
 A predicate on `Entry` attached to a row source (`RowFilter`). Filtered-out children still count toward a parent's rollup; filter only affects which rows resolve (D-S4-11, D-S4-29).

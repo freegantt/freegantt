@@ -30,6 +30,9 @@
       },
       "ae-setter-with-docs": {
         "logLevel": "none"
+      },
+      "ae-forgotten-export": {
+        "logLevel": "error"
       }
     },
     "tsdocMessageReporting": {
