@@ -1,6 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { FieldRegistry } from '../../data/fields/field-registry.js';
-import { CORE_FIELDS } from '../../data/fields/core-fields.js';
 import { entryId, rowId, UnknownFieldError } from '../../model/index.js';
 import type { Entry, Instant } from '../../model/index.js';
 import type { FieldCompare } from '../column.js';
@@ -35,31 +33,27 @@ function entry(
 }
 
 function costCompares(): readonly FieldCompare[] {
-  const registry = new FieldRegistry({
-    fieldTypes: {
-      money: {
-        rollUp: 'sum',
-        formatValue: (value) => (typeof value === 'number' ? `$${value}` : ''),
-        column: { align: 'end' },
+  const readMetaCost = (row: Entry) => (row.meta as { cost?: number } | undefined)?.cost;
+  return [
+    {
+      key: 'name',
+      readStored: (row) => row.name,
+      compareStored: (a, b) => String(a).localeCompare(String(b)),
+    },
+    {
+      key: 'start',
+      readStored: (row) => row.start,
+      compareStored: (a, b) => Number(a) - Number(b),
+    },
+    {
+      key: 'cost',
+      readStored: readMetaCost,
+      compareStored: (a, b) => {
+        if (typeof a === 'number' && typeof b === 'number') return a - b;
+        return 0;
       },
     },
-    fields: [{ key: 'cost', type: 'money' }],
-  });
-  const all = [...CORE_FIELDS, ...registry.all];
-  return all.map((field) => ({
-    key: field.key,
-    readStored: (row: Entry) => {
-      if (field.key === 'cost') return (row.meta as { cost?: number } | undefined)?.cost;
-      if (field.key === 'name') return row.name;
-      if (field.key === 'start') return row.start;
-      if (field.key === 'end') return row.end;
-      return undefined;
-    },
-    compareStored: (a, b) => {
-      if (typeof a === 'number' && typeof b === 'number') return a - b;
-      return 0;
-    },
-  }));
+  ];
 }
 
 describe('applyFilter (S4.9)', () => {
