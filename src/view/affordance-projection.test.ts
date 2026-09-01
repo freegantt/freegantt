@@ -1,26 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import { projectAffordances } from './affordance-projection.js';
 import { entryId, itemId } from '../model/index.js';
-import type { EntryId, ItemId } from '../model/index.js';
 
 const A = entryId('a');
 const B = entryId('b');
 const ITEM_A = itemId(A);
-const ITEM_B = itemId(B);
-
-function itemEntryIds(): ReadonlyMap<ItemId, EntryId> {
-  return new Map([
-    [ITEM_A, A],
-    [ITEM_B, B],
-  ]);
-}
 
 describe('projectAffordances (D-S3-6)', () => {
   it('hover wins over selection, including a hover that resolves to no handles', () => {
     const result = projectAffordances({
       hoveredItemId: ITEM_A,
       selection: [B],
-      itemEntryIds: itemEntryIds(),
       canGesture: (capability, id) => capability === 'move' && id === A,
     });
 
@@ -34,7 +24,6 @@ describe('projectAffordances (D-S3-6)', () => {
     const oneSelected = projectAffordances({
       hoveredItemId: undefined,
       selection: [A],
-      itemEntryIds: itemEntryIds(),
       canGesture: () => true,
     });
     expect(oneSelected.resizableItemId).toBe(ITEM_A);
@@ -42,7 +31,6 @@ describe('projectAffordances (D-S3-6)', () => {
     const twoSelected = projectAffordances({
       hoveredItemId: undefined,
       selection: [A, B],
-      itemEntryIds: itemEntryIds(),
       canGesture: () => true,
     });
     expect(twoSelected.resizableItemId).toBeUndefined();
@@ -50,7 +38,6 @@ describe('projectAffordances (D-S3-6)', () => {
     const noneSelected = projectAffordances({
       hoveredItemId: undefined,
       selection: [],
-      itemEntryIds: itemEntryIds(),
       canGesture: () => true,
     });
     expect(noneSelected.resizableItemId).toBeUndefined();
@@ -60,7 +47,6 @@ describe('projectAffordances (D-S3-6)', () => {
     const result = projectAffordances({
       hoveredItemId: ITEM_A,
       selection: [],
-      itemEntryIds: itemEntryIds(),
       canGesture: () => false,
     });
     expect(result.hoveredItemId).toBe(ITEM_A);
@@ -72,7 +58,6 @@ describe('projectAffordances (D-S3-6)', () => {
     const result = projectAffordances({
       hoveredItemId: undefined,
       selection: [A],
-      itemEntryIds: itemEntryIds(),
       canGesture: () => false,
     });
     expect(result.resizableItemId).toBeUndefined();
@@ -82,7 +67,6 @@ describe('projectAffordances (D-S3-6)', () => {
     const result = projectAffordances({
       hoveredItemId: undefined,
       selection: [],
-      itemEntryIds: itemEntryIds(),
       canGesture: () => true,
     });
     expect(result.hoveredItemId).toBeUndefined();

@@ -330,6 +330,53 @@ describe('computeFrame', () => {
     expect(idsInOverlap(before)).toEqual(idsInOverlap(after));
     expect(idsInOverlap(before)).toHaveLength(1);
   });
+
+  it('I8: item ids stay stable across a row-source switch', () => {
+    const parent = sampleEntries[0]!;
+    const child = { ...sampleEntries[1]!, parentId: parent.id };
+    const entries = [parent, child, ...sampleEntries.slice(2, 5)];
+    const base = {
+      entries,
+      scale,
+      preset,
+      visible,
+      rowHeight: 32,
+      revision: 0,
+    };
+    const tree = computeFrame({ ...base, rows: { source: 'entries', tree: true } });
+    const grouped = computeFrame({
+      ...base,
+      revision: 1,
+      rows: { source: 'group', groupBy: (entry) => entry.kind },
+    });
+    const idsFor = (frame: ReturnType<typeof computeFrame>, id: typeof child.id) =>
+      frame.bars.filter((bar) => String(bar.entryId) === String(id)).map((bar) => bar.id);
+    expect(idsFor(tree, child.id)).toEqual(idsFor(grouped, child.id));
+    expect(idsFor(tree, child.id)).toEqual([`${child.id}:0`]);
+    expect(new Set(tree.bars.map((bar) => bar.id)).size).toBe(tree.bars.length);
+    expect(new Set(grouped.bars.map((bar) => bar.id)).size).toBe(grouped.bars.length);
+  });
+
+  it("names a segmented bar as 'part N of M'", () => {
+    const entry = {
+      ...sampleEntries[0]!,
+      segments: [
+        { start: sampleEntries[0]!.start, end: sampleEntries[1]!.end },
+        { start: sampleEntries[1]!.end, end: sampleEntries[2]!.end },
+      ],
+    };
+    const frame = computeFrame({
+      entries: [entry],
+      scale,
+      preset,
+      visible,
+      rowHeight: 32,
+      revision: 0,
+    });
+    expect(frame.bars).toHaveLength(2);
+    expect(frame.bars[0]?.a11yLabel).toMatch(/, part 1 of 2, /);
+    expect(frame.bars[1]?.a11yLabel).toMatch(/, part 2 of 2, /);
+  });
 });
 
 describe('computeFrame — horizontal culling', () => {

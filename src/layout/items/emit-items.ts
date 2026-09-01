@@ -1,35 +1,23 @@
-// layout/ — what one PlannedRow carries as Items (D-S4-19). S4.7 replaces this with the ItemEmitter seam.
+// layout/ — Items for one PlannedRow (D-S4-19, D-S4-24). Header rows (empty entryIds) emit none.
 
-import { itemId } from '../../model/index.js';
-import type { Entry, EntryId, EntryKind, Instant, ItemId } from '../../model/index.js';
 import type { PlannedRow } from '../rows/row-source.js';
+import type { Item, ItemEmissionContext, ItemEmitterRegistry } from './item-emitter.js';
+import { createItemEmitterRegistry } from './item-emitter.js';
 
-export interface Item {
-  id: ItemId;
-  entryId: EntryId;
-  kind: EntryKind;
-  label: string;
-  start: Instant;
-  end: Instant;
-}
+export type { Item, ItemEmissionContext, ItemEmitter, ItemEmitterRegistry } from './item-emitter.js';
+export { createItemEmitterRegistry } from './item-emitter.js';
 
-export interface ItemEmissionContext {
-  entryById: ReadonlyMap<EntryId, Entry>;
-}
-
-export function emitRow(row: PlannedRow, ctx: ItemEmissionContext): readonly Item[] {
+/** Call: `emitRow(planned, { entryById }, registry)`. */
+export function emitRow(
+  row: PlannedRow,
+  ctx: ItemEmissionContext,
+  registry: ItemEmitterRegistry = createItemEmitterRegistry(),
+): readonly Item[] {
   const items: Item[] = [];
   for (const id of row.entryIds) {
     const entry = ctx.entryById.get(id);
     if (entry === undefined) continue;
-    items.push({
-      id: itemId(entry.id),
-      entryId: entry.id,
-      kind: entry.kind,
-      label: entry.name,
-      start: entry.start,
-      end: entry.end,
-    });
+    items.push(...registry.emitterFor(entry.kind)(entry, ctx));
   }
   return items;
 }

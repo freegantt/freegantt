@@ -9,6 +9,7 @@ import {
   Viewport,
   DEFAULT_TICK_BOX_FLOOR_PX,
   DEFAULT_ROW_SOURCE,
+  createItemEmitterRegistry,
 } from '../layout/index.js';
 import type {
   DateLineSpec,
@@ -19,6 +20,7 @@ import type {
   TimeScaleFit,
   ViewportHandle,
   ViewPreset,
+  ItemEmitterRegistry,
 } from '../layout/index.js';
 
 import { createDomBackend } from '../render/dom/index.js';
@@ -41,7 +43,14 @@ import { resolveViewportGestures } from './viewport-gestures.js';
 import type { ViewportGestures } from './viewport-gestures.js';
 import { ensureBaseStyles } from './styles.js';
 import type { InteractionState, RenderBackend } from '../render/backend.js';
-import { EntryNotFoundError, ContainerNotFoundError, entryId, itemId, rowId } from '../model/index.js';
+import {
+  EntryNotFoundError,
+  ContainerNotFoundError,
+  entryId,
+  entryIdOfItem,
+  itemId,
+  rowId,
+} from '../model/index.js';
 import type {
   Dataset,
   Entry,
@@ -190,6 +199,9 @@ export interface GanttShellOptions {
    *  function, if a caller passes the identical reference to both — still runs again, for real, inside
    *  `data/transaction.ts`'s own commit; this option never writes anything itself. */
   editExtender?: EditExtender;
+  /** Internal (D-S4-24). One registry per Gantt, seeded with span/group/milestone. Tests inject a
+   *  replacement; `GanttOptions` has no such field (public registration is S5). */
+  itemEmitterRegistry?: ItemEmitterRegistry;
 }
 
 /** `exactOptionalPropertyTypes` treats `obj.key = undefined` as a type error when `key` is declared
@@ -243,10 +255,7 @@ export class GanttShell {
   /** D-GH-2: owns draft math, preview rAF coalescing and the commit pipeline for a move/resize
    *  gesture — built once, from this shell's own primitives, right after `#capabilities` below. */
   #gesturePipeline!: GesturePipeline;
-  /** `id:0` today (segments are not yet laid out as separate items, `layout/frame.ts`), rebuilt every
-   *  render from `frame.bars` so this stays correct the moment segments do land — the shell reads the
-   *  frame it already computed rather than re-deriving item ids of its own (D-S3-10). */
-  #itemEntryIds = new Map<ItemId, EntryId>();
+  #itemEmitterRegistry!: ItemEmitterRegistry;
   /** The single rAF owner (B10, D-S2-15): every render request past construction goes through
    *  this, so N mutations in one tick become one frame. */
   #frames = new FrameScheduler(() => this.render());
@@ -319,6 +328,7 @@ export class GanttShell {
     this.#dateLines = options.dateLines ?? [];
     this.#gridColumnInput = options.gridColumns ?? DEFAULT_GRID_COLUMNS;
     this.#rows = options.rows ?? DEFAULT_ROW_SOURCE;
+    this.#itemEmitterRegistry = options.itemEmitterRegistry ?? createItemEmitterRegistry();
     this.#bindColumns();
 
     // Mount before binding (#22): the render target exists by the time the binding's own onChange
@@ -628,7 +638,6 @@ export class GanttShell {
     const ids = projectAffordances({
       hoveredItemId: this.#hoveredItemId,
       selection: this.#selection,
-      itemEntryIds: this.#itemEntryIds,
       canGesture: (capability, id) => this.#canGesture(capability, id),
     });
     setOptional(this.#interactionState, 'hoveredItemId', ids.hoveredItemId);
@@ -638,8 +647,7 @@ export class GanttShell {
   }
 
   #entryFor(item: ItemId): Entry | undefined {
-    const id = this.#itemEntryIds.get(item);
-    return id !== undefined ? this.#options.dataset.entries.get(id) : undefined;
+    return this.#options.dataset.entries.get(entryIdOfItem(item));
   }
 
   get theme(): Theme {
@@ -855,12 +863,9 @@ export class GanttShell {
       columns: this.#resolvedColumns,
       rows: this.#rows,
       collapsed: this.#collapse.ids,
+      itemEmitterRegistry: this.#itemEmitterRegistry,
     });
     this.#backend.sync(frame);
-    // D-S3-10: rebuilt every render from the frame layout just computed — item ids are deterministic
-    // (`itemId`, plans/01 §2.4) but this is the one place that already walks every mounted bar.
-    this.#itemEntryIds.clear();
-    for (const bar of frame.bars) this.#itemEntryIds.set(bar.id, bar.entryId);
     // D-S1.12-9: the grid pane's spacer mirrors the header's own band count, so both panes resolve
     // their header height from the same `--fg-band-height` expression and cannot drift.
     this.#paneLayout.setHeaderBandCount(frame.header.bands.length);

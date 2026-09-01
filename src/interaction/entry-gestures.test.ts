@@ -1,14 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
 import { attachEntryGestures } from './entry-gestures.js';
 import type { DraftOptions, EntryGestureContext, EntryGesture } from '../view/index.js';
-import { entryId, itemId } from '../model/index.js';
+import { entryId, entryIdOfItem, itemId } from '../model/index.js';
 import type { Entry, EntryEdits, EntryId, Instant, ItemId } from '../model/index.js';
 
 const A = entryId('a');
 const B = entryId('b');
 const C = entryId('c');
 const ORDER: readonly EntryId[] = [A, B, C];
-const ITEMS: Record<string, EntryId> = { [itemId(A)]: A, [itemId(B)]: B, [itemId(C)]: C };
 
 /** `interaction/` may not import `time/` (I1) — this suite is about pointer semantics, never real
  *  dates, so a bare number stands in for an `Instant` at this one call site. */
@@ -64,8 +63,8 @@ function makeContext(overrides: Partial<EntryGestureContext> & SessionOverrides 
   const ctx: EntryGestureContext = {
     hitTest: (x) => (x >= 0 && x < ORDER.length ? { itemId: itemId(ORDER[x]!) } : undefined),
     entryFor: (item: ItemId) => {
-      const id = ITEMS[item];
-      return id !== undefined ? entryFor(id) : undefined;
+      const id = entryIdOfItem(item);
+      return ORDER.includes(id) ? entryFor(id) : undefined;
     },
     can: () => true,
     rowOrder: () => ORDER,

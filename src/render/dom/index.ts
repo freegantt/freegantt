@@ -55,6 +55,16 @@ type RowGeom = {
   expanded: boolean;
 };
 type BarGeom = Pick<FrameBar, 'kind' | 'label' | 'x' | 'y' | 'width' | 'height' | 'flags' | 'a11yLabel'>;
+/** Shape class from `data-kind` (D-S4-24) — a lookup, never `if (kind === …)`. */
+const BAR_SHAPE_CLASS = Object.freeze({
+  group: 'fg-bar-bracket',
+  milestone: 'fg-bar-diamond',
+}) as Readonly<Record<string, string>>;
+
+function barClassName(kind: string): string {
+  const shape = BAR_SHAPE_CLASS[kind];
+  return shape === undefined ? 'fg-bar' : `fg-bar ${shape}`;
+}
 /** What the shared handle pair (D-S3-8) needs to place itself over a committed bar — a narrower slice
  *  than `BarGeom`, which also carries paint fields the handles don't read. */
 type HandleGeom = Pick<FrameBar, 'x' | 'y' | 'width' | 'height'>;
@@ -454,7 +464,7 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
       key: (bar) => bar.id,
       create: (bar) => {
         const node = document.createElement('div');
-        node.className = 'fg-bar';
+        node.className = barClassName(bar.kind);
         node.dataset['itemId'] = bar.id;
         node.dataset['testid'] = 'fg-bar';
         node.setAttribute('role', 'img');
@@ -471,6 +481,7 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
         a11yLabel: bar.a11yLabel,
       }),
       patch: (node, geom) => {
+        node.className = barClassName(geom.kind);
         node.dataset['kind'] = geom.kind;
         node.dataset['flag'] = flagTokens(geom.flags);
         node.textContent = geom.label;

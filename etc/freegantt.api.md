@@ -298,6 +298,9 @@ export type EntryId = string & {
 export function entryId(value: string): EntryId;
 
 // @public
+export function entryIdOfItem(id: ItemId): EntryId;
+
+// @public
 export interface EntryInput<TMeta = unknown> {
     end?: InstantInput;
     // (undocumented)
@@ -767,6 +770,9 @@ export interface ScrollState {
     readonly max: ScrollPosition;
     readonly position: ScrollPosition;
 }
+
+// @public
+export function segmentIndexOfItem(id: ItemId): number;
 
 // @public
 export interface SelectionChange {

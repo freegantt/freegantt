@@ -20,28 +20,46 @@ const COST_TYPE = {
   },
 };
 
+const NESTED_PARENT: Record<string, string> = {
+  'entry-2': 'entry-1',
+  'entry-3': 'entry-1',
+  'entry-4': 'entry-1',
+  'entry-6': 'entry-5',
+  'entry-7': 'entry-5',
+  'entry-8': 'entry-5',
+  'entry-9': 'entry-5',
+  'entry-11': 'entry-10',
+  'entry-12': 'entry-10',
+  'entry-13': 'entry-10',
+  'entry-15': 'entry-14',
+  'entry-16': 'entry-14',
+  'entry-17': 'entry-14',
+};
+
+function splitIntoThreeSegments(
+  start: NonNullable<(typeof demoEntryInputs)[number]['start']>,
+  end: NonNullable<(typeof demoEntryInputs)[number]['end']>,
+) {
+  const startMs = start instanceof Date ? start.getTime() : new Date(`${String(start)}T00:00:00Z`).getTime();
+  const dayMs = 24 * 60 * 60 * 1000;
+  return [
+    { start: new Date(startMs), end: new Date(startMs + dayMs) },
+    { start: new Date(startMs + dayMs), end: new Date(startMs + 2 * dayMs) },
+    { start: new Date(startMs + 2 * dayMs), end },
+  ];
+}
+
 const dataset = new Dataset({
   entries: demoEntryInputs.map((entry, i) => {
-    const nested: Record<string, string> = {
-      'entry-2': 'entry-1',
-      'entry-3': 'entry-1',
-      'entry-4': 'entry-1',
-      'entry-6': 'entry-5',
-      'entry-7': 'entry-5',
-      'entry-8': 'entry-5',
-      'entry-9': 'entry-5',
-      'entry-11': 'entry-10',
-      'entry-12': 'entry-10',
-      'entry-13': 'entry-10',
-      'entry-15': 'entry-14',
-      'entry-16': 'entry-14',
-      'entry-17': 'entry-14',
-    };
-    const parentId = nested[entry.id ?? ''];
+    const parentId = NESTED_PARENT[entry.id ?? ''];
     return {
       ...entry,
       ...(i === 0 ? { meta: { cost: 12_000 } } : {}),
       ...(parentId !== undefined ? { parentId } : {}),
+      ...(entry.id === 'entry-4' ? { kind: 'milestone' as const } : {}),
+      ...(entry.id === 'entry-16' && entry.start !== undefined && entry.end !== undefined
+        ? { segments: splitIntoThreeSegments(entry.start, entry.end) }
+        : {}),
     };
   }),
   timeZone: 'UTC',
