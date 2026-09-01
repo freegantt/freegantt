@@ -29,7 +29,7 @@ function sortEntries(entries: readonly Entry[], compare: EntryComparer): Entry[]
   return [...entries].sort(compare);
 }
 
-function emitTreeRows(
+function produceTreeRows(
   list: readonly Entry[],
   depth: number,
   childrenOf: ReadonlyMap<EntryId, readonly Entry[]>,
@@ -44,7 +44,7 @@ function emitTreeRows(
     if (row === undefined) continue;
     out.push({ ...row, depth });
     const children = (childrenOf.get(entry.id) ?? []).filter((child) => visibleIds.has(child.id));
-    out.push(...emitTreeRows(children, depth + 1, childrenOf, visibleIds, rowByEntryId, compare));
+    out.push(...produceTreeRows(children, depth + 1, childrenOf, visibleIds, rowByEntryId, compare));
   }
   return out;
 }
@@ -72,7 +72,7 @@ function sortTreeRows(
     return parent === undefined || !known.has(parent);
   });
 
-  return emitTreeRows(treeRoots, 0, childrenOf, visibleIds, rowByEntryId, compare);
+  return produceTreeRows(treeRoots, 0, childrenOf, visibleIds, rowByEntryId, compare);
 }
 
 function sortFlatRows(

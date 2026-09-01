@@ -1,9 +1,10 @@
 import './harness-nav.ts';
 import { Gantt, Dataset, attemptMutation, now } from '../src/api/index.js';
-import type { ChangeSet, DatasetEventMap } from '../src/api/index.js';
+import type { DatasetEventMap } from '../src/api/index.js';
 import type { TimeUnit } from '../src/model/index.js';
 import { demoEntryInputs } from '../fixtures/demo-dataset.js';
 import { mountTimelineToolbar } from './timeline-toolbar.js';
+import { prependChangeSet } from './change-log.js';
 
 const dataset = new Dataset({ entries: demoEntryInputs, timeZone: 'UTC' });
 const mobilization = now();
@@ -35,21 +36,6 @@ function renderSelection(): void {
 function refreshHistoryButtons(): void {
   undoBtn.disabled = !dataset.canUndo;
   redoBtn.disabled = !dataset.canRedo;
-}
-
-function logLine(text: string): void {
-  const row = document.createElement('div');
-  row.textContent = text;
-  log.prepend(row);
-}
-
-function logChangeSet(changeSet: ChangeSet): void {
-  const tag = `[${changeSet.origin}]`;
-  for (const { store, entity } of changeSet.added) logLine(`${tag} ${store} · ${entity.id} · added`);
-  for (const { store, entity } of changeSet.removed) logLine(`${tag} ${store} · ${entity.id} · removed`);
-  for (const { store, id, field, from, to } of changeSet.updated) {
-    logLine(`${tag} ${store} · ${id} · ${field} · ${String(from)} → ${String(to)}`);
-  }
 }
 
 function showToast(message: string): void {
@@ -88,7 +74,7 @@ holdDrop.addEventListener('change', () => {
 });
 
 dataset.on('change', ({ changeSet }: DatasetEventMap['change']) => {
-  logChangeSet(changeSet);
+  prependChangeSet(log, changeSet);
   renderSelection();
   refreshHistoryButtons();
 });

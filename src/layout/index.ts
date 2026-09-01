@@ -1,4 +1,4 @@
-export { computeFrame, barSpan, DEFAULT_TICK_BOX_FLOOR_PX } from './frame.js';
+export { computeFrame, placeFrame, resolveLayoutRows, barSpan, DEFAULT_TICK_BOX_FLOOR_PX } from './frame.js';
 export { DEFAULT_LANE_GAP_PX } from './lanes/pack-lanes.js';
 export { createItemProducerRegistry } from './items/produce-items.js';
 export type { Item, ItemProducerRegistry } from './items/produce-items.js';

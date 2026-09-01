@@ -5,7 +5,6 @@
 import './harness-nav.ts';
 import { Dataset, Gantt, attemptMutation } from '../src/api/index.js';
 import type {
-  ChangeSet,
   DatasetDocument,
   DatasetEventMap,
   Entry,
@@ -16,6 +15,7 @@ import type {
 } from '../src/api/index.js';
 import { hierarchyEntryInputs, hierarchyFieldOptions } from '../fixtures/hierarchy-dataset.js';
 import { mountTimelineToolbar } from './timeline-toolbar.js';
+import { prependChangeSet, prependLogLine } from './change-log.js';
 
 declare global {
   interface Window {
@@ -23,8 +23,6 @@ declare global {
     __gantt: Gantt;
   }
 }
-
-type HierarchyMeta = { cost: number; team: string };
 
 const GRID_WITH_COST: readonly GridColumnInput[] = [
   'name',
@@ -62,25 +60,12 @@ let gantt = mountGantt(dataset);
 window.__dataset = dataset;
 window.__gantt = gantt;
 
-function entryInputsFromDataset(): EntryInput<HierarchyMeta>[] {
-  return dataset.entries.all.map((entry) => ({
-    id: entry.id,
-    name: entry.name,
-    ...(entry.parentId !== undefined ? { parentId: entry.parentId } : {}),
-    ...(entry.kind !== 'span' ? { kind: entry.kind } : {}),
-    start: entry.start,
-    end: entry.end,
-    ...(entry.segments !== undefined ? { segments: entry.segments } : {}),
-    ...(entry.meta !== undefined ? { meta: entry.meta as HierarchyMeta } : {}),
-  }));
-}
-
 function createDataset(
   autoGroupOn: boolean,
-  entries: readonly EntryInput<HierarchyMeta>[] = hierarchyEntryInputs,
+  entries: readonly EntryInput<{ cost: number }>[] = hierarchyEntryInputs,
 ): Dataset<{ cost: number }, { cost: number }> {
   return new Dataset<{ cost: number }, { cost: number }>({
-    entries: structuredClone(entries),
+    entries: structuredClone([...entries]),
     timeZone: 'UTC',
     hierarchy: { autoGroup: autoGroupOn },
     ...hierarchyFieldOptions,
@@ -98,7 +83,10 @@ function mountGantt(next: Dataset<{ cost: number }, { cost: number }>): Gantt {
 }
 
 function teamOf(entry: Entry): string | undefined {
-  return (entry.meta as HierarchyMeta | undefined)?.team;
+  const meta = entry.meta;
+  if (typeof meta !== 'object' || meta === null) return undefined;
+  const team = (meta as { team?: unknown }).team;
+  return typeof team === 'string' ? team : undefined;
 }
 
 function parentIdsWithChildren(): string[] {
@@ -136,27 +124,24 @@ function buildRowSource(): RowSource {
   return { source: 'entries', tree: true, ...shared };
 }
 
-function applyRowSource(): void {
-  gantt.rowSource = buildRowSource();
-  filterTeamBtn.disabled = rowsModeSelect.value === 'grouped';
-  sortFieldSelect.disabled = rowsModeSelect.value === 'grouped';
+function syncFilterSortControls(): void {
+  const grouped = rowsModeSelect.value === 'grouped';
+  filterTeamBtn.disabled = grouped;
+  sortFieldSelect.disabled = grouped;
   filterTeamBtn.textContent = filterTeam === null ? 'Filter team: off' : `Filter team: ${filterTeam}`;
+}
+
+function syncCostColumnLabel(): void {
   toggleCostBtn.textContent = costColumnVisible ? 'Hide cost column' : 'Show cost column';
 }
 
-function logLine(text: string): void {
-  const row = document.createElement('div');
-  row.textContent = text;
-  log.prepend(row);
+function applyRowSource(): void {
+  gantt.rowSource = buildRowSource();
+  syncFilterSortControls();
 }
 
-function logChangeSet(changeSet: ChangeSet): void {
-  const tag = `[${changeSet.origin}]`;
-  for (const { store, entity } of changeSet.added) logLine(`${tag} ${store} · ${entity.id} · added`);
-  for (const { store, entity } of changeSet.removed) logLine(`${tag} ${store} · ${entity.id} · removed`);
-  for (const { store, id, field, from, to } of changeSet.updated) {
-    logLine(`${tag} ${store} · ${id} · ${field} · ${String(from)} → ${String(to)}`);
-  }
+function logLine(text: string): void {
+  prependLogLine(log, text);
 }
 
 function renderSelection(): void {
@@ -171,7 +156,7 @@ function refreshHistoryButtons(): void {
 }
 
 function onChange({ changeSet }: DatasetEventMap['change']): void {
-  logChangeSet(changeSet);
+  prependChangeSet(log, changeSet);
   renderSelection();
   refreshHistoryButtons();
 }
@@ -187,12 +172,20 @@ function bindGantt(): void {
   });
 }
 
-function rebuildGantt(preserveScroll = false): void {
+function preservePaneScroll(run: () => void): void {
   const pane = document.querySelector<HTMLElement>('#gantt .fg-timeline-pane');
-  const scrollTop = preserveScroll && pane ? pane.scrollTop : 0;
-  const scrollLeft = preserveScroll && pane ? pane.scrollLeft : 0;
-  const collapsed = [...gantt.collapsed];
+  const scrollTop = pane?.scrollTop ?? 0;
+  const scrollLeft = pane?.scrollLeft ?? 0;
+  run();
+  const nextPane = document.querySelector<HTMLElement>('#gantt .fg-timeline-pane');
+  if (nextPane === null) return;
+  nextPane.scrollTop = scrollTop;
+  nextPane.scrollLeft = scrollLeft;
+  nextPane.dispatchEvent(new Event('scroll'));
+}
 
+function remountGantt(): void {
+  const collapsed = [...gantt.collapsed];
   gantt.destroy();
   gantt = mountGantt(dataset);
   window.__gantt = gantt;
@@ -200,17 +193,15 @@ function rebuildGantt(preserveScroll = false): void {
   applyRowSource();
   mountTimelineToolbar({ gantt, container: toolbar });
   bindGantt();
+}
 
-  const nextPane = document.querySelector<HTMLElement>('#gantt .fg-timeline-pane');
-  if (nextPane && preserveScroll) {
-    nextPane.scrollTop = scrollTop;
-    nextPane.scrollLeft = scrollLeft;
-    nextPane.dispatchEvent(new Event('scroll'));
-  }
+function rebuildGantt(preserveScroll = false): void {
+  if (preserveScroll) preservePaneScroll(remountGantt);
+  else remountGantt();
 }
 
 function rebuildDataset(nextAutoGroup: boolean): void {
-  const entries = entryInputsFromDataset();
+  const entries = dataset.entries.all;
   dataset.off('change', onChange);
   gantt.destroy();
   autoGroup = nextAutoGroup;
@@ -227,6 +218,7 @@ bindDataset();
 bindGantt();
 mountTimelineToolbar({ gantt, container: toolbar });
 applyRowSource();
+syncCostColumnLabel();
 refreshHistoryButtons();
 renderSelection();
 
@@ -301,17 +293,7 @@ importBtn.addEventListener('click', () => {
     gantt.destroy();
     let imported = Dataset.fromJSON<{ cost: number }, { cost: number }>(doc, hierarchyFieldOptions);
     if (!autoGroup) {
-      const entries = imported.entries.all.map((entry) => ({
-        id: entry.id,
-        name: entry.name,
-        ...(entry.parentId !== undefined ? { parentId: entry.parentId } : {}),
-        ...(entry.kind !== 'span' ? { kind: entry.kind } : {}),
-        start: entry.start,
-        end: entry.end,
-        ...(entry.segments !== undefined ? { segments: entry.segments } : {}),
-        ...(entry.meta !== undefined ? { meta: entry.meta as HierarchyMeta } : {}),
-      }));
-      imported = createDataset(false, entries);
+      imported = createDataset(false, imported.entries.all);
     }
     dataset = imported;
     window.__dataset = dataset;

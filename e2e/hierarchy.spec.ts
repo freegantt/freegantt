@@ -8,27 +8,50 @@ async function gotoHierarchy(page: import('@playwright/test').Page): Promise<voi
   await expect(page.locator('#gantt .fg-row').first()).toBeVisible();
 }
 
+function timelinePane(page: import('@playwright/test').Page) {
+  return page.locator('#gantt .fg-timeline-pane');
+}
+
 async function gotoHierarchyShort(page: import('@playwright/test').Page): Promise<void> {
   await gotoHierarchy(page);
+  const pane = timelinePane(page);
   await page.locator('#gantt').evaluate((el) => {
     (el as HTMLElement).style.height = '220px';
   });
-  await page.waitForTimeout(300);
-  await page.locator('#gantt .fg-timeline-pane').evaluate((el) => {
+  // 220px is the demo short pane; wait until layout has applied it, then scroll to the bottom.
+  await expect.poll(async () => pane.evaluate((el) => el.clientHeight)).toBeLessThanOrEqual(220);
+  await pane.evaluate((el) => {
     el.scrollTop = el.scrollHeight;
     el.dispatchEvent(new Event('scroll'));
   });
+  await expect.poll(async () => pane.evaluate((el) => el.scrollTop)).toBeGreaterThan(0);
 }
 
-async function showAprilBars(page: import('@playwright/test').Page): Promise<void> {
-  await page.evaluate(() => {
-    window.__gantt.panToDate('2026-04-10', 'center');
+async function entryWithSegments(page: import('@playwright/test').Page): Promise<string> {
+  const id = await page.evaluate(() => {
+    const entry = window.__dataset.entries.all.find(
+      (candidate) => candidate.segments !== undefined && candidate.segments.length > 1,
+    );
+    return entry === undefined ? undefined : String(entry.id);
   });
-  await page.waitForTimeout(200);
+  if (id === undefined) throw new Error('the dataset has no multi-segment entry');
+  return id;
 }
 
-function timelinePane(page: import('@playwright/test').Page) {
-  return page.locator('#gantt .fg-timeline-pane');
+function barsForEntry(page: import('@playwright/test').Page, entryId: string) {
+  return page.locator(`#gantt .fg-bar[data-item-id^="${entryId}:"]`);
+}
+
+async function showSegmentedSpan(page: import('@playwright/test').Page): Promise<void> {
+  await page.evaluate(() => {
+    const entry = window.__dataset.entries.all.find(
+      (candidate) => candidate.segments !== undefined && candidate.segments.length > 1,
+    );
+    if (entry === undefined) throw new Error('the dataset has no multi-segment entry');
+    window.__gantt.zoomToSpan({ start: entry.start, end: entry.end });
+  });
+  const entryId = await entryWithSegments(page);
+  await expect(barsForEntry(page, entryId).nth(1)).toBeVisible();
 }
 
 async function dragBarBy(
@@ -46,22 +69,32 @@ async function dragBarBy(
   await page.mouse.up();
 }
 
+async function rowIds(page: import('@playwright/test').Page): Promise<string[]> {
+  return page
+    .locator('#gantt .fg-row')
+    .evaluateAll((nodes) => nodes.map((node) => (node as HTMLElement).dataset['rowId'] ?? ''));
+}
+
 test('twisty collapses a subtree and aria-expanded flips', async ({ page }) => {
   await gotoHierarchy(page);
 
-  const parentRow = page.locator('[data-row-id="phase-a"]');
+  const parentRow = page
+    .locator('#gantt .fg-row')
+    .filter({ has: page.locator('.fg-row-twisty') })
+    .first();
   const twisty = parentRow.locator('.fg-row-twisty');
   await expect(twisty).toHaveAttribute('aria-expanded', 'true');
-  const childRow = page.locator('[data-row-id="task-alpha-1"]');
+  const childRow = page.locator('#gantt .fg-row').nth(1);
   await expect(childRow).toBeVisible();
+  const childId = await childRow.getAttribute('data-row-id');
 
   await twisty.click();
 
   await expect(twisty).toHaveAttribute('aria-expanded', 'false');
-  await expect(childRow).toBeHidden();
+  await expect(page.locator(`[data-row-id="${childId}"]`)).toHaveCount(0);
 });
 
-test('[S4-A3] switching row source keeps the scroll offset', async ({ page }) => {
+test('[S4-A3] switching row source changes the row set and keeps the scroll offset', async ({ page }) => {
   await gotoHierarchyShort(page);
 
   const pane = timelinePane(page);
@@ -72,43 +105,71 @@ test('[S4-A3] switching row source keeps the scroll offset', async ({ page }) =>
   });
   const before = await pane.evaluate((el) => el.scrollTop);
   expect(before).toBeGreaterThan(0);
+  const treeIds = await rowIds(page);
 
   await page.selectOption('#rows-mode', 'grouped');
   await expect.poll(async () => pane.evaluate((el) => el.scrollTop)).toBe(before);
+  await expect.poll(async () => rowIds(page)).not.toEqual(treeIds);
 
   await page.selectOption('#rows-mode', 'tree');
   await expect.poll(async () => pane.evaluate((el) => el.scrollTop)).toBe(before);
 });
 
-test('pack mode grows a packed row', async ({ page }) => {
+test('pack mode grows a packed row and shifts the rows below', async ({ page }) => {
   await gotoHierarchyShort(page);
-  await showAprilBars(page);
 
-  const segmentedRow = page.locator('[data-row-id="segmented"]');
-  const beforeSeg = await segmentedRow.boundingBox();
-  expect(beforeSeg).not.toBeNull();
+  const entryId = await entryWithSegments(page);
+  const packedRow = page.locator(`[data-row-id="${entryId}"]`);
+  const beforePacked = await packedRow.boundingBox();
+  expect(beforePacked).not.toBeNull();
+
+  const rows = page.locator('#gantt .fg-row');
+  const count = await rows.count();
+  let below: import('@playwright/test').Locator | undefined;
+  for (let i = 0; i < count; i++) {
+    const box = await rows.nth(i).boundingBox();
+    if (box !== null && box.y > beforePacked!.y + beforePacked!.height - 1) {
+      below = rows.nth(i);
+      break;
+    }
+  }
+  expect(below).toBeDefined();
+  const beforeBelow = await below!.boundingBox();
+  expect(beforeBelow).not.toBeNull();
 
   await page.selectOption('#height-mode', 'pack');
 
   await expect
     .poll(async () => {
-      const afterSeg = await segmentedRow.boundingBox();
-      return afterSeg !== null && afterSeg.height > beforeSeg!.height;
+      const afterPacked = await packedRow.boundingBox();
+      return afterPacked !== null && afterPacked.height > beforePacked!.height;
+    })
+    .toBe(true);
+
+  await expect
+    .poll(async () => {
+      const afterBelow = await below!.boundingBox();
+      return afterBelow !== null && afterBelow.y > beforeBelow!.y;
     })
     .toBe(true);
 });
 
-test('a bar drag moves one entry and Undo restores it', async ({ page }) => {
+test('a segment drag moves one bar and Undo restores it', async ({ page }) => {
   await gotoHierarchy(page);
   await page.evaluate(() => {
-    window.__gantt.panToDate('2026-03-12', 'center');
     window.__gantt.preset = { ...window.__gantt.preset, snap: 'none' };
   });
+  await showSegmentedSpan(page);
 
-  const bar = page.locator('#gantt .fg-bar[data-item-id="task-beta:0"]');
+  const entryId = await entryWithSegments(page);
+  const bars = barsForEntry(page, entryId);
+  const bar = bars.nth(1);
+  const sibling = bars.first();
   await expect(bar).toBeVisible();
   const before = await bar.boundingBox();
+  const siblingBefore = await sibling.boundingBox();
   expect(before).not.toBeNull();
+  expect(siblingBefore).not.toBeNull();
 
   await dragBarBy(page, bar, 120);
 
@@ -118,6 +179,10 @@ test('a bar drag moves one entry and Undo restores it', async ({ page }) => {
       return after !== null && Math.abs(after.x - before!.x) > 8;
     })
     .toBe(true);
+
+  const siblingAfter = await sibling.boundingBox();
+  expect(siblingAfter).not.toBeNull();
+  expect(Math.abs(siblingAfter!.x - siblingBefore!.x)).toBeLessThan(2);
 
   await page.click('#undo-btn');
 
@@ -129,27 +194,34 @@ test('a bar drag moves one entry and Undo restores it', async ({ page }) => {
     .toBeLessThan(2);
 });
 
-test('ArrowRight expands and ArrowLeft collapses with focus on the selected row', async ({ page }) => {
+test('ArrowRight expands and ArrowLeft collapses; focus stays on the Gantt', async ({ page }) => {
   await gotoHierarchy(page);
 
-  await page.locator('[data-row-id="phase-a"] .fg-row-twisty').click();
-  await expect(page.locator('[data-row-id="task-alpha-1"]')).toBeHidden();
+  const parentRow = page
+    .locator('#gantt .fg-row')
+    .filter({ has: page.locator('.fg-row-twisty') })
+    .first();
+  const twisty = parentRow.locator('.fg-row-twisty');
+  const childRow = page.locator('#gantt .fg-row').nth(1);
+  const childId = await childRow.getAttribute('data-row-id');
 
-  const phaseBar = page.locator('#gantt .fg-bar[data-item-id^="phase-a:"]').first();
-  await phaseBar.click();
-  await expect(page.locator('#selection-readout')).toContainText('phase-a');
+  await twisty.click();
+  await expect(page.locator(`[data-row-id="${childId}"]`)).toHaveCount(0);
+
+  const host = page.locator('#gantt');
+  const parentId = await parentRow.getAttribute('data-row-id');
+  expect(parentId).toBeTruthy();
+  await page.locator(`#gantt .fg-bar[data-item-id^="${parentId}:"]`).first().click();
+  await host.focus();
+  await expect(host).toBeFocused();
 
   await page.keyboard.press('ArrowRight');
-  await expect(page.locator('[data-row-id="task-alpha-1"]')).toBeVisible();
-  await expect(page.locator('[data-row-id="phase-a"] .fg-row-twisty')).toHaveAttribute(
-    'aria-expanded',
-    'true',
-  );
+  await expect(page.locator(`[data-row-id="${childId}"]`)).toBeVisible();
+  await expect(twisty).toHaveAttribute('aria-expanded', 'true');
+  await expect(host).toBeFocused();
 
   await page.keyboard.press('ArrowLeft');
-  await expect(page.locator('[data-row-id="task-alpha-1"]')).toBeHidden();
-  await expect(page.locator('[data-row-id="phase-a"] .fg-row-twisty')).toHaveAttribute(
-    'aria-expanded',
-    'false',
-  );
+  await expect(page.locator(`[data-row-id="${childId}"]`)).toHaveCount(0);
+  await expect(twisty).toHaveAttribute('aria-expanded', 'false');
+  await expect(host).toBeFocused();
 });

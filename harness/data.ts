@@ -15,8 +15,9 @@
 
 import './harness-nav.ts';
 import { Dataset, Gantt, MS, attemptMutation, addMs, now } from '../src/api/index.js';
-import type { ChangeSet, DatasetDocument, DatasetEventMap } from '../src/api/index.js';
+import type { DatasetDocument, DatasetEventMap } from '../src/api/index.js';
 import { mountTimelineToolbar } from './timeline-toolbar.js';
+import { prependChangeSet, prependLogLine } from './change-log.js';
 
 declare global {
   interface Window {
@@ -117,21 +118,7 @@ function syncSelectionUi(): void {
 }
 
 function logLine(text: string): void {
-  const row = document.createElement('div');
-  row.textContent = text;
-  log.prepend(row);
-}
-
-/** Built from the changeset alone (D-S2-17) — `from` is not a value a re-read of the dataset could
- *  ever produce. Every row is tagged with the changeset's own origin, so an undo's row reads
- *  `[undo]` right next to the field it reverted (S2.5 §5). */
-function logChangeSet(changeSet: ChangeSet): void {
-  const tag = `[${changeSet.origin}]`;
-  for (const { store, entity } of changeSet.added) logLine(`${tag} ${store} · ${entity.id} · added`);
-  for (const { store, entity } of changeSet.removed) logLine(`${tag} ${store} · ${entity.id} · removed`);
-  for (const { store, id, field, from, to } of changeSet.updated) {
-    logLine(`${tag} ${store} · ${id} · ${field} · ${String(from)} → ${String(to)}`);
-  }
+  prependLogLine(log, text);
 }
 
 function refreshHistoryButtons(): void {
@@ -140,7 +127,7 @@ function refreshHistoryButtons(): void {
 }
 
 function onChange({ changeSet }: DatasetEventMap['change']): void {
-  logChangeSet(changeSet);
+  prependChangeSet(log, changeSet);
   syncSelectionUi();
   refreshHistoryButtons();
 }
