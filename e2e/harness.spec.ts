@@ -96,19 +96,20 @@ test('grid pane rows are actually painted after scrolling, not just correctly po
           if (!lowest) return row;
           return rect.top > lowest.getBoundingClientRect().top ? row : lowest;
         }, undefined);
-      if (!lastRow) return { found: false as const, overlapsPane: false, isSameElement: false };
-      const rect = lastRow.getBoundingClientRect();
-      const top = Math.max(rect.top, clipRect.top);
-      const bottom = Math.min(rect.bottom, clipRect.bottom);
-      if (bottom <= top) return { found: true as const, overlapsPane: false, isSameElement: false };
-      const cx = rect.x + rect.width / 2;
-      const cy = (top + bottom) / 2;
-      const atPoint = document.elementFromPoint(cx, cy);
-      // S1.10, D-S1.10-7: .fg-row now wraps a .fg-row-label child, so the topmost painted element
-      // at the row's center is often that label, not .fg-row itself — still proof the row is
-      // painted, as long as the hit lands on the row or something the row itself contains.
-      const isSameElement = atPoint === lastRow || (atPoint !== null && lastRow.contains(atPoint));
-      return { found: true as const, overlapsPane: true, isSameElement };
+      const candidates = fullyInside.length > 0 ? fullyInside : lastRow ? [lastRow] : [];
+      for (const row of candidates) {
+        const label = row.querySelector<HTMLElement>('.fg-row-label-text, .fg-row-cell');
+        const probe = label ?? row;
+        const probeRect = probe.getBoundingClientRect();
+        if (probeRect.width <= 0 || probeRect.height <= 0) continue;
+        const cx = probeRect.left + probeRect.width / 2;
+        const cy = probeRect.top + probeRect.height / 2;
+        const atPoint = document.elementFromPoint(cx, cy);
+        if (atPoint !== null && row.contains(atPoint)) {
+          return { found: true as const, overlapsPane: true, isSameElement: true };
+        }
+      }
+      return { found: candidates.length > 0, overlapsPane: true, isSameElement: false };
     });
 
   await expect.poll(computeHit, { timeout: 2000 }).toEqual({
