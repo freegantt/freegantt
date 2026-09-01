@@ -15,6 +15,15 @@ import * as InstantFns from 'temporal-polyfill/fns/Instant';
 import * as PlainDateFns from 'temporal-polyfill/fns/PlainDate';
 import * as ZonedDateTimeFns from 'temporal-polyfill/fns/ZonedDateTime';
 
+/** Resolves the environment's own IANA zone (#129) — the one place `Intl` is read for this purpose
+ *  (I10). A browser always reports one; a bare-Node/test environment that reports nothing falls
+ *  back to `'UTC'` rather than throwing, so `new Dataset({ entries })` never requires an explicit
+ *  `timeZone` just to run under Vitest. Called once, at `Dataset` construction — the resolved
+ *  string is what gets stored, never a `'local'` token. */
+export function resolveDefaultTimeZone(): string {
+  return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+}
+
 export interface PlainParts {
   year: number;
   month: number; // 1-12

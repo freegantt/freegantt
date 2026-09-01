@@ -1,14 +1,10 @@
 # Open issue plans
 
-Plans for GitHub issues #127, #124, #112, #129. Each file has the research
-findings (current code shape) and a step breakdown. None are stale — all
-were opened 2026-08-30 to 2026-09-01, on a repo whose most recent commit is
-from today. (#128 "Tools" was considered but dropped from this set — its
-body is just an unexplained external link, with no actionable scope.)
-
-| Issue | Title | Status | File |
-|---|---|---|---|
-| [#129](https://github.com/Pawel-IT/FreeGantt/issues/129) | Default Dataset timeZone to the browser zone when omitted | Enhancement, needs a design decision first | [129-default-dataset-timezone.md](129-default-dataset-timezone.md) |
+All four tracked issues (#112, #124, #127, #129) are closed as of
+2026-09-01. (#128 "Tools" was considered but dropped from this set — its
+body is just an unexplained external link, with no actionable scope.) This
+directory is currently empty of open plans; new issue plans land here as
+they're opened.
 
 **Closed:**
 - [#112](https://github.com/Pawel-IT/FreeGantt/issues/112) — DI seams:
@@ -24,14 +20,12 @@ body is just an unexplained external link, with no actionable scope.)
   `GanttOptions` property; the optional collapse-toggle affordance was left
   for a future follow-up. See
   [../closed/127-pane-min-width-and-collapse.md](../closed/127-pane-min-width-and-collapse.md).
-
-## Suggested order
-
-1. ~~**#112 (reference date only)**~~ — done, `33b72c5`.
-2. ~~**#124**~~ — done.
-3. ~~**#127**~~ — done.
-4. **#129** needs one design decision made first (Node/headless fallback —
-   see the "Decision needed" step in its file) before implementation starts.
+- [#129](https://github.com/Pawel-IT/FreeGantt/issues/129) — Default Dataset
+  timeZone to the browser zone when omitted. `timeZone` is now optional;
+  omitted, it resolves the environment's zone once at construction
+  (`'UTC'` fallback in bare Node), stored as a concrete IANA string, never a
+  sentinel. See
+  [../closed/129-default-dataset-timezone.md](../closed/129-default-dataset-timezone.md).
 
 `#112`'s other half (`PaneLayout` host injection) is closed out of this
 list — it's now S6 scope, tracked in `plans/03-slices.md` and

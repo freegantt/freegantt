@@ -8,6 +8,8 @@ A framework-free TypeScript Gantt library: layout and rendering of dated Entries
 
 **Dataset**:
 The body of authored data — its Entries, plus whatever scheduling-plugin-owned data (e.g. Dependencies) an installed scheduling plugin contributes — together with the settings that give it meaning, above all the IANA zone in which all zone-aware date arithmetic is performed. "The dataset's zone" and "the dataset's reference date" are properties of this, not of the runtime environment. A Dataset with no scheduling plugin installed has Entries and no Dependencies at all (ADR 0002). Renamed from Project in ADR 0004 — read every historical "Project" as "Dataset". `model/dataset.ts`'s `Dataset` is the structural contract `api/dataset.ts`'s `Dataset` class satisfies (`implements`) — the same structural/façade relationship the Gantt entry states, and the type `layout/` binds against without importing `view/` or `api/` (S1.7 §3.2; formerly `DatasetLike` in `view/gantt-shell.ts`).
+
+`timeZone` is optional on construction (#129): omitted, the Dataset resolves the environment's own zone once, at construction, and stores that resolved string — the zone is still, always, a property of the Dataset, read from `dataset.timeZone` like any explicit value. Omission is a one-time authoring convenience, not a live link to the runtime environment; the Dataset never re-reads the environment afterward.
 _Avoid_: Project (retired in ADR 0004 — see that ADR for why; the word smuggled scheduling/PM assumptions into a domain-neutral concept the same way `Task` once did for `Entry`), Plan, schedule (a schedule is an output of scheduling a Dataset, not the Dataset itself)
 
 **Document**:

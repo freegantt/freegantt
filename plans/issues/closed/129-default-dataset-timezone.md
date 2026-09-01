@@ -1,7 +1,36 @@
 # #129 — Default Dataset timeZone to the browser zone when omitted
 
-**Reported:** 2026-09-01. Not stale. The issue itself lists open questions
-that block implementation — resolve those first, they're Step 0 below.
+**Reported:** 2026-09-01. **Closed:** 2026-09-01, shipped.
+
+## Resolution
+
+Step 0's two questions were brought to the maintainer and answered:
+1. **Node/headless fallback**: resolve via
+   `Intl.DateTimeFormat().resolvedOptions().timeZone` at construction time;
+   fall back to `'UTC'` when that reports nothing (bare Node). No `'local'`
+   token is ever stored — the resolved IANA string is what `dataset.timeZone`
+   and the serialized Document both carry, always.
+2. **Cross-viewer consistency vs. ergonomics**: accepted. Omission means
+   "author in the viewer's local calendar"; an explicit `timeZone` stays
+   fully portable, as documented in `plans/02-public-api.md` §2.1.
+
+Implementation: `src/time/zone.ts` gained `resolveDefaultTimeZone()` (the one
+new `Intl` touch point, per I10), exported from `src/time/index.ts`.
+`DatasetOptions.timeZone` (`src/api/dataset.ts`) is now optional; the `Dataset`
+constructor resolves the default and passes a concrete string down to
+`DatasetState`, which keeps its required-string invariant unchanged.
+Serialization (`DatasetDocument.timeZone`) needed no change — it already
+persisted whatever concrete string the Dataset held. Docs: `plans/02-public-api.md`
+§2/§2.1, `CONTEXT.md`'s Dataset glossary entry. Tests: `time/zone.test.ts`
+("resolveDefaultTimeZone (#129)"), `api/dataset.test.ts` ("Dataset timeZone
+omission (#129)"). Harness fixtures keep their explicit `timeZone: 'UTC'` —
+that pins e2e determinism across CI runners, it does not restate a library
+default.
+
+## Original plan
+
+The issue listed open questions that blocked implementation — Step 0 below,
+now resolved above.
 
 ## Current shape (researched)
 

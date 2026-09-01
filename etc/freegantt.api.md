@@ -187,7 +187,7 @@ export interface DatasetOptions<TMeta = unknown> {
         capacity?: number;
     };
     rollUpKinds?: RollUpKinds;
-    timeZone: string;
+    timeZone?: string;
 }
 
 // @public

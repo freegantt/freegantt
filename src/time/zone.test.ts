@@ -9,6 +9,7 @@ import {
   fromPlain,
   startOf,
   stepBy,
+  resolveDefaultTimeZone,
   SUPPORTED_TIME_UNITS,
 } from './zone.js';
 import { UnsupportedUnitError } from '../model/index.js';
@@ -112,5 +113,35 @@ describe('zone-aware date arithmetic', () => {
     const badUnit = 'q' as TimeUnit;
     expect(() => startOf(ZONE, instant('2026-01-01T00:00:00Z'), badUnit)).toThrow(UnsupportedUnitError);
     expect(() => stepBy(ZONE, instant('2026-01-01T00:00:00Z'), badUnit, 1)).toThrow(UnsupportedUnitError);
+  });
+});
+
+function stubResolvedTimeZone(timeZone: string): () => void {
+  const original = Intl.DateTimeFormat;
+  Intl.DateTimeFormat = (() => ({
+    resolvedOptions: () => ({ timeZone }) as Intl.ResolvedDateTimeFormatOptions,
+  })) as unknown as typeof Intl.DateTimeFormat;
+  return () => {
+    Intl.DateTimeFormat = original;
+  };
+}
+
+describe('resolveDefaultTimeZone (#129)', () => {
+  it("reads the environment's own zone from Intl.DateTimeFormat", () => {
+    const restore = stubResolvedTimeZone(ZONE);
+    try {
+      expect(resolveDefaultTimeZone()).toBe(ZONE);
+    } finally {
+      restore();
+    }
+  });
+
+  it("falls back to 'UTC' when the environment reports no zone", () => {
+    const restore = stubResolvedTimeZone('');
+    try {
+      expect(resolveDefaultTimeZone()).toBe('UTC');
+    } finally {
+      restore();
+    }
   });
 });
