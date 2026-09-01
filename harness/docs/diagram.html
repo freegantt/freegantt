@@ -1,5 +1,11 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>FreeGantt Module Map</title>
 <link rel="stylesheet" href="../harness-nav.css" />
+<link rel="stylesheet" href="./docs-nav.css" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link
@@ -16,6 +22,9 @@
     --border: #c9c1a9;
     --border-strong: #a89f88;
     --accent: #b8541f;
+    --link: #9a4416;
+    --link-visited: #7c5a2e;
+    --link-hover: #6d2f0d;
     --accent-ink: #ffffff;
     --core: #276a63;
     --core-bg: rgba(39, 106, 99, 0.06);
@@ -27,6 +36,7 @@
       rgba(114, 107, 89, 0.09) 7px,
       rgba(114, 107, 89, 0.09) 8px
     );
+    --stub-fill: #e4e0d2;
     --forbid: #8a3b3b;
     font-synthesis: none;
   }
@@ -40,6 +50,9 @@
       --border: #363b3a;
       --border-strong: #4b514e;
       --accent: #e2874a;
+      --link: #f0a469;
+      --link-visited: #d9bd94;
+      --link-hover: #ffc79a;
       --accent-ink: #1a1006;
       --core: #5fb0a5;
       --core-bg: rgba(95, 176, 165, 0.08);
@@ -51,6 +64,7 @@
         rgba(154, 146, 124, 0.09) 7px,
         rgba(154, 146, 124, 0.09) 8px
       );
+      --stub-fill: #1e2124;
       --forbid: #c67a7a;
     }
   }
@@ -63,6 +77,9 @@
     --border: #363b3a;
     --border-strong: #4b514e;
     --accent: #e2874a;
+    --link: #f0a469;
+    --link-visited: #d9bd94;
+    --link-hover: #ffc79a;
     --accent-ink: #1a1006;
     --core: #5fb0a5;
     --core-bg: rgba(95, 176, 165, 0.08);
@@ -74,6 +91,7 @@
       rgba(154, 146, 124, 0.09) 7px,
       rgba(154, 146, 124, 0.09) 8px
     );
+    --stub-fill: #1e2124;
     --forbid: #c67a7a;
   }
 
@@ -87,6 +105,22 @@
     font-family: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
     margin: 0;
     padding: 2.5rem 1.5rem 4rem;
+  }
+  /* Prose links. Without these the browser defaults (#0000ee / #551a8b) sit unreadably on the
+     dark background; both states stay inside this page's own accent family. */
+  a {
+    color: var(--link);
+    text-decoration-color: color-mix(in srgb, var(--link) 45%, transparent);
+    text-underline-offset: 0.18em;
+  }
+  a:visited {
+    color: var(--link-visited);
+    text-decoration-color: color-mix(in srgb, var(--link-visited) 45%, transparent);
+  }
+  a:hover,
+  a:focus-visible {
+    color: var(--link-hover);
+    text-decoration-color: currentColor;
   }
 
   .page {
@@ -143,9 +177,11 @@
     overflow-x: auto;
   }
 
-  svg {
+  figure svg {
     display: block;
-    min-width: 880px;
+    width: 100%;
+    height: auto;
+    max-width: 100%;
   }
 
   figcaption {
@@ -318,10 +354,14 @@
   }
 </style>
 
+  </head>
+  <body>
 <div class="page">
   <header>
     <nav class="harness-site-nav" aria-label="Harness pages"></nav>
+    <nav class="harness-docs-nav" aria-label="Harness docs"></nav>
     <script type="module" src="../harness-nav.ts"></script>
+    <script type="module" src="./docs-nav.ts"></script>
     <p class="eyebrow">Architecture snapshot — slice S4</p>
     <div class="updated"><span class="k">updated</span> 2026-08-31 — slice S4</div>
     <h1>FreeGantt module map</h1>
@@ -556,7 +596,7 @@
         width="210"
         height="64"
         rx="7"
-        fill="var(--stub-bg)"
+        fill="var(--stub-fill)"
         stroke="var(--border-strong)"
         stroke-width="1.5"
         stroke-dasharray="5 4"
@@ -641,7 +681,7 @@
         width="200"
         height="76"
         rx="7"
-        fill="var(--stub-bg)"
+        fill="var(--stub-fill)"
         stroke="var(--border-strong)"
         stroke-width="1.5"
         stroke-dasharray="5 4"
@@ -2234,5 +2274,9 @@
     </figure>
   </section>
 
+  <nav class="harness-docs-pager" aria-label="Other docs pages"></nav>
+
   <footer>src/ · 97 non-test files · 10 layers, 8 with code · plans/03-slices.md — slice S4</footer>
 </div>
+  </body>
+</html>
