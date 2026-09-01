@@ -2,8 +2,8 @@
 
 import type { Dataset, Entry, Field, FormatContext, GridColumn, GridColumnInput } from '../model/index.js';
 import { FieldNotColumnableError, UnknownFieldError } from '../model/index.js';
-import { createFieldContext } from '../data/fields/field-lookup.js';
-import type { FieldLookup } from '../data/fields/field-lookup.js';
+import { createFieldContext } from '../data/fields/field-access.js';
+import type { FieldLookup } from '../model/index.js';
 import type { FieldCompare, ResolvedColumn } from '../layout/index.js';
 
 export const DEFAULT_GRID_COLUMNS: readonly GridColumnInput[] = Object.freeze(['name']);

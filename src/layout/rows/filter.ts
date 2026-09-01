@@ -1,6 +1,6 @@
 // layout/ — row-source filter policies. Pure: no Dataset, no FieldSource (D-S4-28, D-S4-29).
 
-import type { Entry, EntryId, RowId } from '../../model/index.js';
+import type { Entry, EntryId, FieldContext, RowId } from '../../model/index.js';
 import type { FilterPolicy, RowFilter, UnindexedRow } from './row-source.js';
 
 export type { RowFilter } from './row-source.js';
@@ -14,6 +14,7 @@ export function visibleRowIds(
   entries: readonly Entry[],
   filter: RowFilter,
   policy: FilterPolicy,
+  fields?: FieldContext,
 ): { visible: ReadonlySet<RowId>; matched: ReadonlySet<RowId> } {
   const entryById = new Map(entries.map((entry) => [entry.id, entry]));
   const matched = new Set<RowId>();
@@ -21,7 +22,7 @@ export function visibleRowIds(
     const id = entryIdOf(row);
     if (id === undefined) continue;
     const entry = entryById.get(id);
-    if (entry !== undefined && filter(entry)) matched.add(row.id);
+    if (entry !== undefined && filter(entry, fields)) matched.add(row.id);
   }
 
   if (policy === 'matchOnly') {
@@ -60,12 +61,13 @@ export function applyFilter(
   entries: readonly Entry[],
   filter: RowFilter | undefined,
   policy: FilterPolicy,
+  fields?: FieldContext,
 ): UnindexedRow[] {
   if (filter === undefined) {
     return rows.map((row) => ({ ...row, matched: true }));
   }
 
-  const { visible, matched } = visibleRowIds(rows, entries, filter, policy);
+  const { visible, matched } = visibleRowIds(rows, entries, filter, policy, fields);
   const out: UnindexedRow[] = [];
   for (const row of rows) {
     if (!visible.has(row.id)) continue;

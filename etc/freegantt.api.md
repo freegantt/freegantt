@@ -651,7 +651,7 @@ export interface GridWidthChange {
 // @public (undocumented)
 export interface GroupRowSource extends RowSourceCommon {
     // (undocumented)
-    groupBy(entry: Entry): string;
+    groupBy(entry: Entry, fields?: FieldContext): string;
     // (undocumented)
     source: 'group';
 }
@@ -788,7 +788,7 @@ export interface RollUpContext extends FieldContext {
 export type RollUpKinds = readonly EntryKind[] | 'none';
 
 // @public (undocumented)
-export type RowFilter = (entry: Entry) => boolean;
+export type RowFilter = (entry: Entry, fields?: FieldContext) => boolean;
 
 // @public (undocumented)
 export type RowHeightMode = 'fixed' | 'pack';
@@ -801,7 +801,7 @@ export type RowId = string & {
 // @public (undocumented)
 export interface RowSort {
     // (undocumented)
-    compare?(a: unknown, b: unknown): number;
+    compare?(a: unknown, b: unknown, fields?: FieldContext): number;
     // (undocumented)
     direction?: 'asc' | 'desc';
     // (undocumented)

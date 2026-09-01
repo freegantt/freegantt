@@ -1,6 +1,6 @@
 import './harness-nav.ts';
 import { Gantt, Dataset, attemptMutation } from '../src/api/index.js';
-import type { Entry, GridColumnInput, RowSource, Theme, TimeUnit } from '../src/api/index.js';
+import type { Entry, FieldContext, GridColumnInput, RowSource, Theme, TimeUnit } from '../src/api/index.js';
 import { demoFieldOptions, demoTreeEntryInputs } from '../fixtures/demo-dataset.js';
 import { mountTimelineToolbar } from './timeline-toolbar.js';
 
@@ -13,7 +13,7 @@ const GRID_WITH_BUDGET: readonly GridColumnInput[] = [
 ];
 const GRID_WITHOUT_BUDGET: readonly GridColumnInput[] = ['name', 'start', 'end', 'duration'];
 
-const dataset = new Dataset<{ cost?: number; team?: string }, { cost: number }>({
+const dataset = new Dataset<{ cost?: number; team?: string }, { cost: number; team?: string }>({
   entries: demoTreeEntryInputs,
   timeZone: 'UTC',
   ...demoFieldOptions,
@@ -144,13 +144,6 @@ reparentBtn.addEventListener('click', () => {
   });
 });
 
-function teamOf(entry: Entry): string | undefined {
-  const meta = entry.meta;
-  if (typeof meta !== 'object' || meta === null) return undefined;
-  const team = (meta as { team?: unknown }).team;
-  return typeof team === 'string' ? team : undefined;
-}
-
 let grouped = false;
 let pack = false;
 let filterTeam: 'core' | 'edge' | 'launch' | null = null;
@@ -160,11 +153,17 @@ function applyRowSource(): void {
   const heightMode: 'fixed' | 'pack' = pack ? 'pack' : 'fixed';
   const shared = {
     heightMode,
-    ...(filterTeam !== null && !grouped ? { filter: (entry: Entry) => teamOf(entry) === filterTeam } : {}),
+    ...(filterTeam !== null && !grouped
+      ? { filter: (entry: Entry, fields?: FieldContext) => fields?.read(entry, 'team') === filterTeam }
+      : {}),
     ...(sortByName && !grouped ? { sort: { field: 'name' as const } } : {}),
   };
   const next: RowSource = grouped
-    ? { source: 'group', groupBy: (entry: Entry) => teamOf(entry) ?? 'unassigned', ...shared }
+    ? {
+        source: 'group',
+        groupBy: (entry: Entry, fields?: FieldContext) => fields?.read<string>(entry, 'team') ?? 'unassigned',
+        ...shared,
+      }
     : { source: 'entries', tree: true, ...shared };
   gantt.rowSource = next;
   rowsSourceBtn.textContent = grouped ? 'Show tree' : 'Group by team';

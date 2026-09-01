@@ -9,6 +9,7 @@ import type {
   DatasetEventMap,
   Entry,
   EntryInput,
+  FieldContext,
   GridColumnInput,
   RowHeightMode,
   RowSource,
@@ -82,13 +83,6 @@ function mountGantt(next: Dataset<{ cost: number }, { cost: number }>): Gantt {
   });
 }
 
-function teamOf(entry: Entry): string | undefined {
-  const meta = entry.meta;
-  if (typeof meta !== 'object' || meta === null) return undefined;
-  const team = (meta as { team?: unknown }).team;
-  return typeof team === 'string' ? team : undefined;
-}
-
 function buildRowSource(): RowSource {
   const heightMode: RowHeightMode = heightModeSelect.value === 'pack' ? 'pack' : 'fixed';
   const rowsMode = rowsModeSelect.value;
@@ -96,7 +90,7 @@ function buildRowSource(): RowSource {
   const shared = {
     heightMode,
     ...(filterTeam !== null && rowsMode !== 'grouped'
-      ? { filter: (entry: Entry) => teamOf(entry) === filterTeam }
+      ? { filter: (entry: Entry, fields?: FieldContext) => fields?.read(entry, 'team') === filterTeam }
       : {}),
     ...(sortField !== 'none' && rowsMode !== 'grouped'
       ? { sort: { field: sortField as 'start' | 'cost' | 'name' } }
@@ -106,7 +100,7 @@ function buildRowSource(): RowSource {
   if (rowsMode === 'grouped') {
     return {
       source: 'group',
-      groupBy: (entry: Entry) => teamOf(entry) ?? 'unassigned',
+      groupBy: (entry: Entry, fields?: FieldContext) => fields?.read<string>(entry, 'team') ?? 'unassigned',
       ...shared,
     };
   }

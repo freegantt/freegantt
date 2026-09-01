@@ -134,7 +134,7 @@ export const demoFieldOptions = {
       column: { align: 'end' as const, header: 'Cost' },
     },
   },
-  fields: [{ key: 'cost' as const, type: 'money' }],
+  fields: [{ key: 'cost' as const, type: 'money' }, { key: 'team' as const }],
 } as const;
 
 /** Root spans that sit beside Program — not in the nested work tree. */

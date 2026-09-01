@@ -1,6 +1,6 @@
 // layout/ — one row pass: produce, filter, sort, collapse (D-S4-19, D-S4-28).
 
-import type { Entry } from '../../model/index.js';
+import type { Entry, FieldContext } from '../../model/index.js';
 import type { FieldCompare } from '../column.js';
 import { applyCollapse } from './collapse.js';
 import { applyFilter } from './filter.js';
@@ -27,7 +27,7 @@ type RowProducer = (input: RowPassInput) => UnindexedRow[];
 
 const PRODUCE_ROWS = {
   entries: (input) => resolveEntriesSource(input.entries, input.source as EntriesRowSource),
-  group: (input) => resolveGroupSource(input.entries, input.source as GroupRowSource),
+  group: (input) => resolveGroupSource(input.entries, input.source as GroupRowSource, input.fieldContext),
   custom: (input) => resolveCustomSource(input.source as CustomRowSource, { entries: input.entries }),
 } as const satisfies Record<RowSource['source'], RowProducer>;
 
@@ -47,18 +47,20 @@ export function resolveOpenRows(input: {
   entries: readonly Entry[];
   rows?: RowSource;
   fieldCompares?: readonly FieldCompare[];
+  fieldContext?: FieldContext;
 }): UnindexedRow[] {
   const pass: RowPassInput = {
     entries: input.entries,
     source: input.rows ?? DEFAULT_ROW_SOURCE,
     collapsed: new Set(),
     ...(input.fieldCompares !== undefined ? { fieldCompares: input.fieldCompares } : {}),
+    ...(input.fieldContext !== undefined ? { fieldContext: input.fieldContext } : {}),
   };
   const built = produceRows(pass);
-  const { source, entries, fieldCompares = [] } = pass;
+  const { source, entries, fieldCompares = [], fieldContext } = pass;
   if (source.source === 'custom') return built;
-  const filtered = applyFilter(built, entries, source.filter, filterPolicyOf(source));
-  return applySort(filtered, entries, source.sort, fieldCompares);
+  const filtered = applyFilter(built, entries, source.filter, filterPolicyOf(source), fieldContext);
+  return applySort(filtered, entries, source.sort, fieldCompares, fieldContext);
 }
 
 function filterPolicyOf(source: Exclude<RowSource, CustomRowSource>): FilterPolicy {
@@ -71,6 +73,7 @@ export function resolveRows(input: {
   rows?: RowSource;
   collapsed?: readonly string[];
   fieldCompares?: readonly FieldCompare[];
+  fieldContext?: FieldContext;
 }): readonly PlannedRow[] {
   const open = resolveOpenRows(input);
   return stampIndex(applyCollapse(open, new Set(input.collapsed ?? [])));

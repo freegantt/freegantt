@@ -31,6 +31,7 @@ export class FrameLayout {
       entries: input.entries,
       ...(input.rows !== undefined ? { rows: input.rows } : {}),
       ...(input.fieldCompares !== undefined ? { fieldCompares: input.fieldCompares } : {}),
+      ...(input.fieldContext !== undefined ? { fieldContext: input.fieldContext } : {}),
     });
     this.#indexOpenRows(open);
     this.#plan = stampIndex(applyCollapse(open, new Set(input.collapsed ?? [])));
