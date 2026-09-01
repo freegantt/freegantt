@@ -16,8 +16,8 @@ This is the leftover from the 2026-09-01 close-out plan after P0–P3. Do not re
 | P1 | D5 undefined/null sort last; D7 unregistered sort key throws; D6 duration compare; SP3 `sort.test.ts` + `resolve-rows.test.ts` | `0def75c` |
 | P2 | A2 FrameMemory owns height; A3 TreeCollapse `confirm`; D4 reveal under group/custom; A6 one veto; C15 `isDevMode`; C10 `pickDefined` | `b7621d3` |
 | P3 | A4 `SOURCE_STRATEGY`; A5 Field reader on `filter` / `groupBy` / `sort.compare`; harness `teamOf` gone | `114de56` |
-| P4 S1–S3 | Parts + State attrs in `CONTEXT.md`; delete `:root, .fg-container` indent/lane-gap winning rule; twisty+label in `create`, patch toggles only | `187ce7f` **local only** — pre-push failed (see CO.0) |
-| CO.0 | `--fg-indent-width` and `--fg-lane-gap` on `.fg-container` only | pending push |
+| P4 S1–S3 | Parts + State attrs in `CONTEXT.md`; delete `:root, .fg-container` indent/lane-gap winning rule; twisty+label in `create`, patch toggles only | `187ce7f` |
+| CO.0 | `--fg-indent-width` and `--fg-lane-gap` on `.fg-container` only; e2e hits the visible twisty | `6066877` |
 
 `SOURCE_STRATEGY` lives in `src/data/fields/source-strategy.ts`. `field-lookup.ts` is gone. Row callbacks take optional `FieldContext`. `{ key: 'team' }` is declared on the demo and hierarchy fixtures.
 
@@ -39,7 +39,7 @@ Pre-push of `187ce7f` failed: `src/view/styles.test.ts` still asserts the sheet 
 - [x] `styles.test.ts` still finds both names; optionally assert the sheet does **not** contain `:root, .fg-container`
 - [x] `pnpm verify && pnpm gate` → commit if the Tokens were not in `187ce7f` → `git push` (this also publishes `187ce7f`)
 
-**Files:** `src/view/styles.ts`, maybe `src/view/styles.test.ts`.
+**Files:** `src/view/styles.ts`, `src/view/styles.test.ts`. `e2e/hierarchy.spec.ts` locates `.fg-row-twisty:not([hidden])` because each cell now owns a parked twisty.
 
 **Commit (if needed):** `Set indent and lane-gap Tokens on the container, not on :root.`
 
