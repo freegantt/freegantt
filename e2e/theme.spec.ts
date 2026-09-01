@@ -6,11 +6,11 @@ test.describe('theme (system dark)', () => {
   test('Light pins the Gantt pane to the light tokens, Dark pins the dark tokens', async ({ page }) => {
     await page.addInitScript(() => localStorage.removeItem('freegantt-harness-theme'));
     await page.goto('/');
-    await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
+    const bar = page.locator('#gantt .fg-bar:not(.fg-bar-bracket):not(.fg-bar-diamond)').first();
+    await expect(bar).toBeVisible();
 
     const pane = page.locator('#gantt .fg-timeline-pane');
     const rowLabel = page.locator('#gantt .fg-grid-pane .fg-row-label').first();
-    const bar = page.locator('#gantt .fg-bar').first();
 
     await page.getByRole('button', { name: 'Light' }).click();
     await expect(page.locator('#gantt')).toHaveAttribute('data-fg-theme', 'light');
