@@ -80,9 +80,9 @@ test('twisty collapses a subtree and aria-expanded flips', async ({ page }) => {
 
   const parentRow = page
     .locator('#gantt .fg-row')
-    .filter({ has: page.locator('.fg-row-twisty') })
+    .filter({ has: page.locator('.fg-row-twisty:not([hidden])') })
     .first();
-  const twisty = parentRow.locator('.fg-row-twisty');
+  const twisty = parentRow.locator('.fg-row-twisty:not([hidden])');
   await expect(twisty).toHaveAttribute('aria-expanded', 'true');
   const childRow = page.locator('#gantt .fg-row').nth(1);
   await expect(childRow).toBeVisible();
@@ -199,9 +199,9 @@ test('ArrowRight expands and ArrowLeft collapses; focus stays on the Gantt', asy
 
   const parentRow = page
     .locator('#gantt .fg-row')
-    .filter({ has: page.locator('.fg-row-twisty') })
+    .filter({ has: page.locator('.fg-row-twisty:not([hidden])') })
     .first();
-  const twisty = parentRow.locator('.fg-row-twisty');
+  const twisty = parentRow.locator('.fg-row-twisty:not([hidden])');
   const childRow = page.locator('#gantt .fg-row').nth(1);
   const childId = await childRow.getAttribute('data-row-id');
 
