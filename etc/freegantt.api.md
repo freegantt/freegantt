@@ -513,6 +513,9 @@ export class Gantt {
     get locale(): Intl.LocalesArgument | undefined;
     set locale(l: Intl.LocalesArgument | undefined);
     // (undocumented)
+    get minGridWidth(): number;
+    set minGridWidth(px: number);
+    // (undocumented)
     off<K extends keyof GanttEventMap>(name: K, handler: GanttEventHandler<K>): void;
     // (undocumented)
     on<K extends keyof GanttEventMap>(name: K, handler: GanttEventHandler<K>): void;
@@ -599,6 +602,7 @@ export interface GanttOptionsBase {
     gridWidth?: number;
     interactions?: Interactions;
     locale?: Intl.LocalesArgument;
+    minGridWidth?: number;
     rowSource?: RowSource;
     scroll?: ScrollModel;
     selection?: readonly (EntryId | string)[];
@@ -784,6 +788,8 @@ export interface ProposedSpan {
 export interface RollUpContext extends FieldContext {
     // (undocumented)
     readonly field: FieldKey;
+    numericValues(children: readonly Entry[]): readonly number[];
+    values(children: readonly Entry[]): readonly unknown[];
 }
 
 // @public
