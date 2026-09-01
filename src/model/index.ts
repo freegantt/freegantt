@@ -3,7 +3,7 @@ export { entryId, rowId, itemId, entryIdOfItem, segmentIndexOfItem, changeSetId 
 export type { Instant, TimeUnit, TimeSpan, Duration } from './time.js';
 export type { InstantInput, TimeSpanInput, DateOnlyEndRule } from './time.js';
 export type { Entry, EntryKind, EntryInput, EntryEdit, StoredEdit, EntryEdits } from './entry.js';
-export type { Point, Size, PixelSpan, Rect } from './geometry.js';
+export type { Point, Size, PixelSpan, Rect, ClientPoint } from './geometry.js';
 export type { Dataset, DatasetHierarchy, EntryStore, EntryStoreView, RollUpKinds } from './dataset.js';
 export type { DatasetDocument, EntryDocument, SerializedField } from './document.js';
 export type {
@@ -40,6 +40,7 @@ export {
   EntryNotFoundError,
   DuplicateEntryIdError,
   ParentCycleError,
+  SegmentsOutOfSyncError,
   UnknownFieldError,
   DuplicateFieldKeyError,
   DuplicateFieldSourceError,

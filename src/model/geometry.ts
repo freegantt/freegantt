@@ -8,6 +8,12 @@ export interface Point {
   readonly y: number;
 }
 
+/** Viewport coordinates from a pointer event (`clientX` / `clientY`) — issue #91 §9-G. */
+export interface ClientPoint {
+  readonly x: number;
+  readonly y: number;
+}
+
 /** A box in pixels. */
 export interface Size {
   readonly width: number;

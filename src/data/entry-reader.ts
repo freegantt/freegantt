@@ -5,7 +5,7 @@
 // zone, and what a date-only `end` means against half-open storage — belongs to `time/input.ts`
 // (I10); anything resembling date math here is a bug.
 
-import { entryId, InvalidInstantError } from '../model/index.js';
+import { entryId, InvalidInstantError, SegmentsOutOfSyncError } from '../model/index.js';
 import type {
   DateOnlyEndRule,
   Entry,
@@ -102,6 +102,11 @@ export function readEdit(
   if (edit.parentId !== undefined) stored.parentId = entryId(edit.parentId);
   if (edit.kind !== undefined) stored.kind = edit.kind;
   if (edit.name !== undefined) stored.name = edit.name;
+  if (edit.start !== undefined || edit.end !== undefined) {
+    if (entry.segments !== undefined && entry.segments.length > 0 && edit.segments === undefined) {
+      throw new SegmentsOutOfSyncError(entry.id);
+    }
+  }
   if (edit.start !== undefined) stored.start = toInstant(context.timeZone, edit.start);
   if (edit.end !== undefined) stored.end = toEndInstant(context.timeZone, edit.end, context.dateOnlyEnd);
   if (edit.segments !== undefined) stored.segments = edit.segments.map((s) => readSpan(s, context));

@@ -70,6 +70,7 @@ export {
   EntryNotFoundError,
   DuplicateEntryIdError,
   ParentCycleError,
+  SegmentsOutOfSyncError,
   UnknownFieldError,
   DuplicateFieldKeyError,
   DuplicateFieldSourceError,
@@ -118,7 +119,7 @@ export type {
 } from '../layout/index.js';
 // Point/Size are the S1.5 ScrollModel's own vocabulary (S1.5 README §5) — a consumer building
 // `new ScrollModel({ x, y })` or reading `ScrollState` needs the shape in the public surface too.
-export type { Point, Size } from '../model/index.js';
+export type { Point, Size, ClientPoint } from '../model/index.js';
 
 // Time helpers a caller needs: `instant` for a pinned `TimeSpan`, `now` for "this Instant",
 // `addMs`/`MS` to shift one by a duration (S2.7 harness-review — `harness/data.ts`'s move-by-a-day
