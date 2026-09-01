@@ -113,6 +113,7 @@ export class Dataset<TMeta = unknown, TFields extends Record<string, unknown> = 
     constructor(options: DatasetOptions<TMeta>);
     get canRedo(): boolean;
     get canUndo(): boolean;
+    get datasetRevision(): number;
     // (undocumented)
     get dateOnlyEnd(): DateOnlyEndRule;
     // (undocumented)

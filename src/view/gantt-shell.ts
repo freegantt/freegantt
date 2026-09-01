@@ -929,6 +929,7 @@ export class GanttShell {
   }
 
   render(): void {
+    const datasetRevision = this.#options.dataset.datasetRevision;
     const frame = this.#layout.computeFrame({
       entries: this.#options.dataset.entries.all,
       scale: this.#viewport.timeScale,
@@ -948,13 +949,7 @@ export class GanttShell {
       rows: this.#rowSource,
       collapsed: this.#treeCollapse.ids,
       itemProducerRegistry: this.#itemProducerRegistry,
-      ...(typeof (this.#options.dataset as unknown as { datasetRevision?: number }).datasetRevision ===
-      'number'
-        ? {
-            datasetRevision: (this.#options.dataset as unknown as { datasetRevision: number })
-              .datasetRevision,
-          }
-        : {}),
+      ...(typeof datasetRevision === 'number' ? { datasetRevision } : {}),
     });
     this.#backend.sync(frame);
     // D-S1.12-9: the grid pane's spacer mirrors the header's own band count, so both panes resolve
