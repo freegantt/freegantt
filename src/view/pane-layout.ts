@@ -3,9 +3,12 @@
 // data, no frame, no events — who is allowed to change gridWidth is decided one layer up
 // (GanttShell, D-S1.8-3).
 //
-// The timeline pane is the only scroller (D-D, D-S1.8-1). The grid pane has none: its row layer is
-// what `RenderSurfaces.grid` mounts into, and follows the timeline pane's scroll by one transform
-// per frame instead of a second real scrollbar (render/dom/index.ts).
+// The timeline pane is the only *vertical* scroller (D-D, D-S1.8-1): the grid pane has none of its
+// own — its row layer is what `RenderSurfaces.grid` mounts into, and follows the timeline pane's
+// vertical scroll by one transform per frame instead of a second real scrollbar (render/dom/index.ts).
+// Horizontally the grid pane is its own, independent native scroller (D-S1.8-8, #126) — its content
+// only widens past `gridWidth` when fixed-width columns overflow it, unsynced with the timeline's
+// own (time-axis) horizontal scroll.
 
 import { readPixelProperty } from '../render/dom/pixel-property.js';
 import type { Size } from '../model/index.js';
@@ -28,8 +31,9 @@ export interface PaneLayoutOptions {
 }
 
 export interface Panes {
-  /** The grid pane's row layer. Row labels and Grid cells. No scrollbar — it follows the
-   *  scroll owner by transform (D-S1.8-1). */
+  /** The grid pane's row layer. Row labels and Grid cells. No *vertical* scrollbar — it follows
+   *  the scroll owner by transform (D-S1.8-1). The grid pane itself is a real horizontal
+   *  scroller when its content overflows (D-S1.8-8, #126). */
   readonly grid: HTMLElement;
   /** Column headers, overlaid on the grid spacer so they match the timeline header height. */
   readonly gridHeader: HTMLElement;
@@ -144,6 +148,15 @@ export class PaneLayout {
    *  current `gridWidth` goes through the same cancelable commit sequence a splitter drag runs. */
   set minGridWidth(px: number) {
     this.#minGridWidth = px;
+  }
+
+  /** #126: the grid pane's own content width in px (`layout/`'s `gridContentWidth`, computed from
+   *  the resolved columns and this same `gridWidth`). Equal to `gridWidth` when nothing overflows —
+   *  `.fg-grid-spacer`/`.fg-rows-clip` fall back to `100%` and the pane stays byte-identical to
+   *  before. Wider only when fixed-width columns alone exceed `gridWidth`, which is what gives the
+   *  pane a horizontal scrollbar reaching them (D-S1.8-1's horizontal half, revisited). */
+  set contentWidth(px: number) {
+    this.#gridPane.style.setProperty('--fg-grid-content-width', `${px}px`);
   }
 
   /** The timeline pane's client box — the one measurement everything downstream is sized from. */

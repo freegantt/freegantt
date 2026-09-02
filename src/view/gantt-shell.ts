@@ -12,6 +12,7 @@ import {
   DEFAULT_ROW_SOURCE,
   createItemProducerRegistry,
   isPlannedHeaderRow,
+  gridContentWidth,
 } from '../layout/index.js';
 import type {
   DateLineSpec,
@@ -50,7 +51,7 @@ import type { ScrollAttachment } from './scroll-attachment.js';
 import { attachPaneSize } from './pane-size-attachment.js';
 import type { PaneSizeAttachment } from './pane-size-attachment.js';
 import { attachWheelNavigation } from './wheel-navigation.js';
-import type { WheelNavigationAttachment } from './wheel-navigation.js';
+import type { WheelNavigationAttachment, WheelNavigationContext } from './wheel-navigation.js';
 import { attachRowTwisty } from './attach-row-twisty.js';
 import type { RowTwistyAttachment } from './attach-row-twisty.js';
 import { panToTodayLine } from './today-landing.js';
@@ -289,6 +290,7 @@ export class GanttShell {
   #entryGestures: Detachable | undefined;
   #keyboardEditing: Detachable | undefined;
   #wheelNavigation: WheelNavigationAttachment | undefined;
+  #wheelNavigationGrid: WheelNavigationAttachment | undefined;
   #rowTwistyAttachment: RowTwistyAttachment;
   /** D-S3-6: one long-lived, mutable per-Gantt object — `applyState` diffs against what it painted
    *  last, so writing into this and calling `#backend.applyState` allocates nothing per hover/select
@@ -567,12 +569,20 @@ export class GanttShell {
 
     this.#entryGestures = options.entryGestures?.(this.#panes.timeline, this.#container, gestureContext);
     this.#keyboardEditing = options.keyboardEditing?.(this.#container, gestureContext);
-    this.#wheelNavigation = attachWheelNavigation(this.#panes.timeline, {
+    const wheelNavigationCtx: WheelNavigationContext = {
       wheelZoomEnabled: () => this.#resolvedViewportGestures.wheelZoom,
       wheelPanEnabled: () => this.#resolvedViewportGestures.wheelPan,
       zoomIn: (offsetX) => this.zoomIn(offsetX),
       zoomOut: (offsetX) => this.zoomOut(offsetX),
       panBy: (dx, dy) => this.#panBy(dx, dy),
+    };
+    this.#wheelNavigation = attachWheelNavigation(this.#panes.timeline, wheelNavigationCtx);
+    // #126: the grid pane has no scroll of its own (D-S1.8-1) — forward its wheel input into the
+    // same shared scroll the timeline pane already writes into. `anchorPane` keeps ctrl/⌘+wheel
+    // zoom anchored on the timeline's time axis, since the grid pane's own x-axis isn't time.
+    this.#wheelNavigationGrid = attachWheelNavigation(this.#panes.grid, wheelNavigationCtx, {
+      anchorPane: this.#panes.timeline,
+      forwardPlainWheel: true,
     });
     this.#rowTwistyAttachment = attachRowTwisty(this.#panes.grid, {
       toggleCollapse: (id) => this.toggleCollapse(id),
@@ -1250,6 +1260,9 @@ export class GanttShell {
     this.#contentSize = { width: frame.contentWidth, height: frame.contentHeight };
     this.#viewportHandle.setContentSize(this.#contentSize);
     this.#scrollAttachment.writePosition();
+    // #126: independent of the timeline's content width above — the grid pane's own horizontal
+    // scroller reaches fixed-width columns that overflow `gridWidth`, unrelated to the time axis.
+    this.#paneLayout.contentWidth = gridContentWidth(this.#resolvedColumns, this.#paneLayout.gridWidth);
   }
 
   destroy(): void {
@@ -1263,6 +1276,7 @@ export class GanttShell {
     this.#entryGestures?.detach();
     this.#keyboardEditing?.detach();
     this.#wheelNavigation?.detach();
+    this.#wheelNavigationGrid?.detach();
     this.#rowTwistyAttachment.detach();
     this.#datasetChanges.unsubscribe();
     this.#scrollAttachment.detach();

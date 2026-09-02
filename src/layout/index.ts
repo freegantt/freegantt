@@ -3,6 +3,7 @@ export { DEFAULT_LANE_GAP_PX } from './lanes/pack-lanes.js';
 export { createItemProducerRegistry } from './items/produce-items.js';
 export type { Item, ItemProducerRegistry } from './items/produce-items.js';
 export type { FrameColumn, ResolvedColumn, FieldCompare } from './column.js';
+export { gridContentWidth } from './column.js';
 export type {
   RowSource,
   EntriesRowSource,

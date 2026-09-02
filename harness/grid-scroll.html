@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>FreeGantt harness — #126 grid pane scroll</title>
+    <link rel="stylesheet" href="./harness-nav.css" />
+    <style>
+      body {
+        font-family: system-ui, sans-serif;
+        margin: 2rem;
+      }
+      .fg-gantt {
+        --fg-row-height: 32px;
+        --fg-grid-pane-width: 220px;
+        height: 320px;
+        border: 1px solid #ccc;
+      }
+      .fg-tick {
+        font-size: 10px;
+      }
+      .fg-row,
+      .fg-bar {
+        font-size: 11px;
+        line-height: var(--fg-row-height);
+        padding: 0 6px;
+        box-sizing: border-box;
+        white-space: nowrap;
+        overflow: hidden;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>FreeGantt — #126 grid pane scroll</h1>
+    <nav class="harness-site-nav" aria-label="Harness pages"></nav>
+    <p>
+      Four fixed-width columns (120px each) in a 220px grid pane: the pane's content is wider than itself, so
+      <code>.fg-grid-pane</code> is a real horizontal scroller (D-S1.8-13). Hovering either pane and using a
+      plain mouse wheel also scrolls rows vertically.
+    </p>
+    <div id="gantt" class="fg-gantt"></div>
+    <script type="module" src="./grid-scroll.ts"></script>
+  </body>
+</html>

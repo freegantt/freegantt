@@ -109,6 +109,17 @@ describe('PaneLayout', () => {
     paneLayout.destroy();
   });
 
+  it('#126: contentWidth writes --fg-grid-content-width onto the grid pane', () => {
+    const container = el();
+    const paneLayout = new PaneLayout({ container });
+    const gridPane = container.querySelector<HTMLElement>('.fg-grid-pane')!;
+
+    paneLayout.contentWidth = 240;
+
+    expect(getComputedStyle(gridPane).getPropertyValue('--fg-grid-content-width').trim()).toBe('240px');
+    paneLayout.destroy();
+  });
+
   it('measureTimelinePane() reports the timeline pane, not the container', () => {
     const container = el();
     const paneLayout = new PaneLayout({ container });

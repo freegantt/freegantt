@@ -22,3 +22,13 @@ export interface FieldCompare {
   readStored(entry: Entry): unknown;
   compareStored(a: unknown, b: unknown): number;
 }
+
+/** #126: the grid pane's own content width, in px. Fixed-width columns (`width` set) never
+ *  shrink; flex columns (`width` unset) fill whatever room is left and shrink to fit, so they
+ *  never force overflow on their own. When fixed columns alone already exceed `paneWidth`, the
+ *  pane must widen to hold them (and gains a horizontal scrollbar) — otherwise it stays exactly
+ *  `paneWidth`, which is today's byte-identical layout. */
+export function gridContentWidth(columns: readonly FrameColumn[], paneWidth: number): number {
+  const fixedWidth = columns.reduce((sum, column) => sum + (column.width ?? 0), 0);
+  return Math.max(paneWidth, fixedWidth);
+}

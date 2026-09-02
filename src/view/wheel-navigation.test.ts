@@ -3,10 +3,19 @@ import { resolveViewportGestures } from './viewport-gestures.js';
 import { attachWheelNavigation } from './wheel-navigation.js';
 import type { WheelNavigationContext } from './wheel-navigation.js';
 
-function pane(): HTMLElement {
+function pane(left = 10): HTMLElement {
   const node = document.createElement('div');
   node.getBoundingClientRect = () =>
-    ({ left: 10, top: 0, right: 310, bottom: 100, width: 300, height: 100, x: 10, y: 0 }) as DOMRect;
+    ({
+      left,
+      top: 0,
+      right: left + 300,
+      bottom: 100,
+      width: 300,
+      height: 100,
+      x: left,
+      y: 0,
+    }) as DOMRect;
   document.body.append(node);
   return node;
 }
@@ -109,6 +118,20 @@ describe('attachWheelNavigation (S3.7, D-S3-14)', () => {
     node.remove();
   });
 
+  it("#126: an explicit anchorPane anchors ctrl+wheel zoom on its rect, not the listening pane's", () => {
+    const grid = pane(0);
+    const timeline = pane(100);
+    const { ctx, zoomIns } = makeCtx();
+    attachWheelNavigation(grid, ctx, { anchorPane: timeline });
+
+    grid.dispatchEvent(wheel({ ctrlKey: true, deltaY: -100, clientX: 150 }));
+
+    // 150 - timeline.left(100) = 50, not 150 - grid.left(0) = 150.
+    expect(zoomIns).toEqual([50]);
+    grid.remove();
+    timeline.remove();
+  });
+
   it('metaKey (⌘) zooms out the same way as ctrlKey', () => {
     const node = pane();
     const { ctx, zoomIns, zoomOuts } = makeCtx();
@@ -182,6 +205,46 @@ describe('attachWheelNavigation (S3.7, D-S3-14)', () => {
     expect(event.defaultPrevented).toBe(false);
     expect(zoomIns).toEqual([]);
     expect(zoomOuts).toEqual([]);
+    expect(pans).toEqual([]);
+    node.remove();
+  });
+
+  it('#126: forwardPlainWheel pans by deltaY when nothing else claims the event', () => {
+    const node = pane();
+    const { ctx, pans } = makeCtx();
+    attachWheelNavigation(node, ctx, { forwardPlainWheel: true });
+
+    const event = wheel({ deltaY: 80 });
+    node.dispatchEvent(event);
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(pans).toEqual([[0, 80]]);
+    node.remove();
+  });
+
+  it('#126: forwardPlainWheel still lets shift+wheel and ctrl+wheel take priority', () => {
+    const node = pane();
+    const { ctx, zoomIns, pans } = makeCtx();
+    attachWheelNavigation(node, ctx, { forwardPlainWheel: true });
+
+    node.dispatchEvent(wheel({ ctrlKey: true, deltaY: -100, clientX: 10 }));
+    expect(zoomIns).toEqual([0]);
+    expect(pans).toEqual([]);
+
+    node.dispatchEvent(wheel({ shiftKey: true, deltaY: 40 }));
+    expect(pans).toEqual([[40, 0]]);
+    node.remove();
+  });
+
+  it('#126: forwardPlainWheel respects wheelPanEnabled() === false', () => {
+    const node = pane();
+    const { ctx, pans } = makeCtx({ wheelPanEnabled: () => false });
+    attachWheelNavigation(node, ctx, { forwardPlainWheel: true });
+
+    const event = wheel({ deltaY: 80 });
+    node.dispatchEvent(event);
+
+    expect(event.defaultPrevented).toBe(false);
     expect(pans).toEqual([]);
     node.remove();
   });
