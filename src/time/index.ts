@@ -11,6 +11,7 @@ export {
   startOf,
   stepBy,
   weekOfYear,
+  resolveDefaultTimeZone,
   SUPPORTED_TIME_UNITS,
 } from './zone.js';
 export type { PlainParts } from './zone.js';

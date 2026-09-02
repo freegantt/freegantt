@@ -209,6 +209,8 @@ Slices are scope, not calendar estimates. Within a slice, entries are ordered so
 
 ## S5 — Extensibility, editing surfaces, a11y completion
 
+**Position:** after S4, before S6. **Spec drafted, not started.** Tracker: [`plans/s5-extensibility-and-editing/README.md`](./s5-extensibility-and-editing/README.md); work splits into [`s5.1-plugin-runtime.md`](./s5-extensibility-and-editing/s5.1-plugin-runtime.md)–[`s5.12-gallery-and-gate.md`](./s5-extensibility-and-editing/s5.12-gallery-and-gate.md). That spec settles seventeen scope calls, including OQ8 — `setExtender` composes rather than replaces (answered 2026-09-01), which rewords locked D4 in the same change as S5.10's code.
+
 **Goal:** the library's extension story is real and dogfooded (gate: a non-trivial built-in feature uses only the public plugin API), the grid grows into a proper editable table, and accessibility reaches its full committed level (D11).
 
 **Start constraint:** the remaining `GanttShell` split in [`plans/s4-hierarchy-and-rows/c4-split-gantt-shell.md`](./s4-hierarchy-and-rows/c4-split-gantt-shell.md) has landed (`TreeCollapse`, `collapseAll` / `expandAll`). Plugin wiring must not grow tree-collapse policy back into `gantt-shell.ts`. Do not name a new extract `GanttViewport` — `layout/` already owns `Viewport`.
@@ -226,12 +228,12 @@ Slices are scope, not calendar estimates. Within a slice, entries are ordered so
 
 **Acceptance**
 
-- [ ] Context menu and tooltips are plugins with zero private imports (lint-proven — the dogfood gate).
-- [ ] A harness-only third-party-style plugin (e.g., a "weekend shading" plugin) is written against the public contract only. (Was "weekend shading + jump-to-today"; the today line and `panToToday` ship in core at S1.12, so shading alone carries the gate.)
-- [ ] A consumer-defined entry kind (custom renderer + capabilities + context-menu `when` items, registered via config/plugin only) renders and behaves correctly with zero core edits — the §2.5 open-set claim, proven.
-- [ ] Every S3 pointer capability has a keyboard path; axe reports no violations on harness pages.
-- [ ] Consumer replaces the entry editor via `beforeEntryEdit` (demo in harness).
-- [ ] Unused features are absent from a consumer bundle (tree-shaking test in CI).
+- [ ] `[S5-A1]` Context menu and tooltips are plugins with zero private imports (lint-proven — the dogfood gate).
+- [ ] `[S5-A2]` A harness-only third-party-style plugin (e.g., a "weekend shading" plugin) is written against the public contract only. (Was "weekend shading + jump-to-today"; the today line and `panToToday` ship in core at S1.12, so shading alone carries the gate.)
+- [ ] `[S5-A3]` A consumer-defined entry kind (custom renderer + capabilities + context-menu `when` items, registered via config/plugin only) renders and behaves correctly with zero core edits — the §2.5 open-set claim, proven.
+- [ ] `[S5-A4]` Every S3 pointer capability has a keyboard path; axe reports no violations on harness pages.
+- [ ] `[S5-A5]` Consumer replaces the entry editor via `beforeEntryEdit` (demo in harness).
+- [ ] `[S5-A6]` Unused features are absent from a consumer bundle (tree-shaking test in CI).
 
 ---
 
@@ -246,7 +248,7 @@ Slices are scope, not calendar estimates. Within a slice, entries are ordered so
 - Performance budgets in CI on reference hardware; regressions fail the build.
 - Linked-Gantt demo: a delivery-schedule Gantt + a workforce Gantt bound to the same `TimeScaleModel`/`ScrollModel` (x, y, and both variants) — the D9 acceptance demo. Neither Gantt needs the scheduling plugin.
 - Hardening: error-path audit (typed errors everywhere), memory-leak pass (mount/destroy cycles), `exports` map sealing internals, semver/API-report tooling (I11 automated), bundle-size budget in CI.
-- **Known gap (issue #91 §9-I, remaining half):** `GanttShellOptions.backend` closed the hardcoded `createDomBackend()` call site, but `render/null`'s backend is still unreachable from `view/` — `PaneLayout` mounts real `HTMLElement`s regardless of which backend paints them. If this slice's measurement/hardening work wants a DOM-free `view/`+`layout/` harness, `PaneLayout` (or an equivalent) needs to accept a non-DOM surface too, not just a swappable backend.
+- **Known gap (issue #91 §9-I, remaining half; tracked as issue #112 seam B):** `GanttShellOptions.backend` closed the hardcoded `createDomBackend()` call site, but `render/null`'s backend is still unreachable from `view/` — `PaneLayout` mounts real `HTMLElement`s regardless of which backend paints them. If this slice's measurement/hardening work wants a DOM-free `view/`+`layout/` harness, `PaneLayout` (or an equivalent) needs to accept a non-DOM surface too, not just a swappable backend. Plan and current code shape: `plans/issues/open/112-di-seams.md` (Seam B).
 - Release plumbing: versioned docs from the harness gallery, CHANGELOG, publishing pipeline. Product 1.0 waits for S7 (D3).
 
 **Acceptance**
@@ -263,6 +265,8 @@ Slices are scope, not calendar estimates. Within a slice, entries are ordered so
 
 **Goal:** links drawn, and FreeGantt's first-party default scheduling plugin (D3) occupying the extension hook `data/` already exposes (D4; `01` §1; contract #12 / install API from S5). Policy seam: propagation with lag, cycle detection with named members, diagnostics, pinned entries. Cascades visible live in the harness. Core itself does not require this plugin; S3–S6 already ran without it.
 
+**Split, settled since this section was written (2026-09-02):** the S5.0 grill on #111 split "this plugin" into two, one-way — `entryDependencies()` (the `Dependency` store, the link-create gesture, link rendering) and `scheduling()` (propagation, pins, `SchedulingPolicy`, diagnostics), with `scheduling()` requiring `entryDependencies()` and never the reverse (`plans/s5-extensibility-and-editing/s5.10-dataset-plugins.md` D-S5-30/D-S5-31). The scope below still reads as one plugin; #136 carries the reusable design forward and re-splitting this section across the two factories is scoped work for whoever opens S7. #136 also has an **open, undecided proposal** for the link-emitter boundary (a Gantt-side plugin reading a Dataset-side plugin's store) — settle that before writing the `layout/` line below.
+
 **Scope**
 
 - `scheduling/`: `schedule(request) → { patch, diagnostics }` — pure, deterministic; worklist-loop propagation (I3) with the 5,000-link chain fixture; lag per dependency type (FS/SS/FF/SF, negative legal); cycle diagnostics naming members; pinned-entry semantics (report, never move — the pin flag lives in the plugin's own per-entry storage per the #12 contract, not on `Entry`). Kind semantics owned by the policy per `01` §2.5. The engine moves children and stops; span rollup stays `data/`'s commit step (D-S2-22).
@@ -270,7 +274,7 @@ Slices are scope, not calendar estimates. Within a slice, entries are ordered so
 - Plugin registration: this plugin occupies the core extension hook via the **public** plugin contract shipped in S5. Its extender body is the only place that calls `schedule()`. `data/` stays generic. `interaction/` and `view/` still do not import `scheduling/`.
 - `data/` integration: the extender builds a `schedule()` call from `proposed`; extra writes merge into the same changeset (`origin: 'engine'`). I7 now includes engine patches. Drag preview already calls that extender (S3), so successor ghosts appear with no S3/S4 code change.
 - **Staged commit pipeline (parked from the 2026-08-31 `s4-implement` GLM review, candidate 4).** `runTransaction` still runs the body, then `buildCommitChangeSet` (body diff → extension hook → autoGroup promotion → Rollup → fold), then `commitChangeSet` (notify and apply). Construction already writes through `writeCommittedFieldRows` and does not mint a fake `'user'` changeset. S7 must not grow a sixth inline block inside `transaction.ts`. The scheduling plugin occupies the existing extension-hook stage (D4, ADR 0002). If S7 needs extra commit work (diagnostics fan-out, `origin: 'engine'` rows that the extender cannot own), add a named stage in `data/build-commit-change-set.ts` (or a sibling pipeline module), with one test per stage. Unify the construction promote/rollup pass with that pipeline in the same change (S4.11 review C3) so S7 does not keep two orchestrators.
-- `layout/`: link emission seam (#16) — orthogonal paths from bar edges, rendered as SVG; link flags (inactive, in-cycle). Multi-item endpoint rule: links attach to the earliest item by default (`links.endpoints: 'first' | 'all' | 'none'`).
+- `layout/`: link emission seam — **design open at #136** (supersedes #16; a `registerLinkEmitter` seam is proposed but the Gantt-side-reads-Dataset-side-store question isn't settled) — orthogonal paths from bar edges, rendered as SVG; link flags (inactive, in-cycle). Multi-item endpoint rule: links attach to the earliest item by default (`links.endpoints: 'first' | 'all' | 'none'`).
 - `interaction/`: `LinkCreate` controller; `beforeLinkCreate` / `linkCreate`; link ports on the capability resolver (I14).
 - Diagnostics surface: `scheduleDiagnostics` event; bars flagged via `data-flag`. **Hot-path note:** `flagTokens()` in `render/dom/index.ts` does `Object.keys(flags).filter().join(' ')` per bar per frame. Pre-compute flag tokens in `computeFrame` (same as `a11yLabel`) so the render path is a string copy once flags are live.
 - Golden fixtures: hand-built scenario files with expected `ScheduleResult` JSON — lag combinations, all four types, pinned conflicts, cycles, deep chains.

@@ -8,6 +8,8 @@ A framework-free TypeScript Gantt library: layout and rendering of dated Entries
 
 **Dataset**:
 The body of authored data — its Entries, plus whatever scheduling-plugin-owned data (e.g. Dependencies) an installed scheduling plugin contributes — together with the settings that give it meaning, above all the IANA zone in which all zone-aware date arithmetic is performed. "The dataset's zone" and "the dataset's reference date" are properties of this, not of the runtime environment. A Dataset with no scheduling plugin installed has Entries and no Dependencies at all (ADR 0002). Renamed from Project in ADR 0004 — read every historical "Project" as "Dataset". `model/dataset.ts`'s `Dataset` is the structural contract `api/dataset.ts`'s `Dataset` class satisfies (`implements`) — the same structural/façade relationship the Gantt entry states, and the type `layout/` binds against without importing `view/` or `api/` (S1.7 §3.2; formerly `DatasetLike` in `view/gantt-shell.ts`).
+
+`timeZone` is optional on construction (#129). Omitted, the Dataset resolves the environment's own zone once, at construction, and stores that resolved string. The zone is still a property of the Dataset, read from `dataset.timeZone` like any explicit value. Omission is a one-time authoring convenience, not a live link to the runtime environment. The Dataset never re-reads the environment afterward.
 _Avoid_: Project (retired in ADR 0004 — see that ADR for why; the word smuggled scheduling/PM assumptions into a domain-neutral concept the same way `Task` once did for `Entry`), Plan, schedule (a schedule is an output of scheduling a Dataset, not the Dataset itself)
 
 **Document**:
@@ -43,8 +45,12 @@ The Dataset setting that governs first-child Kind promotion. Default is `{ autoG
 _Avoid_: deriving Kind from "has children" (that is the identity problem `01` §2.5 forbids)
 
 **Dependency**:
-A first-class entity linking a predecessor Entry to a successor Entry with a type (`FS`/`SS`/`FF`/`SF`) and optional lag. Never embedded as an array on an Entry. Scheduling-plugin-owned data, not `model/` (ADR 0002) — it exists only when a scheduling plugin is installed and lives in that plugin's reserved store, not on `Entry` or in core.
+A first-class entity linking a predecessor Entry to a successor Entry with a type (`FS`/`SS`/`FF`/`SF`) and optional lag. Never embedded as an array on an Entry. Owned by the `entryDependencies()` plugin, not `model/` (ADR 0002; S5.0 grill, issue #111) — it exists only when that plugin is installed and lives in its reserved store, not on `Entry` or in core. The default scheduling plugin reads it through a read-only cross-plugin store view; it does not own it.
 _Avoid_: Link (reserved for the rendered geometry of a dependency, i.e. what appears in `GeometryFrame.links`), Relationship
+
+**`entryDependencies()`**:
+The first-party plugin that owns the `Dependency` store, the link-create gesture, and dependency-arrow rendering. It runs standalone — installed with no scheduling plugin, it gives arrows with no auto-move. The default scheduling plugin `requires` it and reads its store one-way; `entryDependencies()` never names the scheduling plugin (S5.0 grill, issue #111; `plans/s5-extensibility-and-editing/s5.10-dataset-plugins.md` D-S5-31).
+_Avoid_: `dependencies()` (collides with npm's "dependencies" at the call site), Link (see Dependency)
 
 **Segment**:
 One contiguous stretch of an Entry's span, when that span is interrupted rather than continuous (`Entry.segments`). Segments are authored — an Entry without them is simply one unbroken stretch — and each one emits its own Item. When Segments are present, `start`/`end` are the envelope of those Segments and stay in the same transaction as any Segment write. A direct `start`/`end` write on an entry that has Segments is refused; the consumer writes `segments` instead.
@@ -126,8 +132,8 @@ The generic, synchronous hook `data/` calls once per transaction, letting one in
 _Avoid_: Scheduling hook (the hook itself is scheduling-agnostic — it's generic, and a non-scheduling plugin could occupy it)
 
 **Scheduling plugin**:
-Whatever plugin occupies the extension hook, if any. FreeGantt ships an official bars + dependencies engine as its first-party default (D3) — described in §7 below — but core does not require it or any scheduling plugin to function (D4, ADR 0002).
-_Avoid_: The scheduling engine (ambiguous between "the seam" and "FreeGantt's default implementation of it" — say "the extension hook" or "the default scheduling plugin" explicitly)
+Whatever plugin occupies the extension hook, if any. FreeGantt ships an official propagation-and-calendar engine as its first-party default (D3) — described in §7 below. It `requires` and reads the `entryDependencies()` plugin rather than owning `Dependency` data itself (S5.0 grill, issue #111) — the two ship as separate plugins so a consumer can keep FreeGantt's arrows and swap in their own engine. Core does not require either plugin to function (D4, ADR 0002).
+_Avoid_: The scheduling engine (ambiguous between "the seam" and "FreeGantt's default implementation of it" — say "the extension hook" or "the default scheduling plugin" explicitly); calling this plugin the owner of `Dependency` (see `entryDependencies()`)
 
 **SchedulingPolicy**:
 The pluggable seam, within the default scheduling plugin, that resolves how a proposed edit interacts with an Entry's kind and existing schedule (e.g. whether the engine may move it, how a `'group'` Entry rolls up from children). Kind-specific scheduling semantics live in the policy, never in the engine itself.

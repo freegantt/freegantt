@@ -22,6 +22,7 @@ import {
   warnIfRollUpsWereCorrected,
 } from '../data/serialization/index.js';
 import type { DatasetHierarchy, RollUpKinds } from '../model/index.js';
+import { resolveDefaultTimeZone } from '../time/index.js';
 export type { DatasetHierarchy };
 
 export interface DatasetOptions<TMeta = unknown> {
@@ -30,8 +31,15 @@ export interface DatasetOptions<TMeta = unknown> {
   entries: readonly EntryInput<TMeta>[];
   /** IANA timeZone (D6, plans/02 §2) — all zone-aware date arithmetic (day boundaries, snapping,
    * week starts) resolves through it, so two users in different zones see identical day boundaries.
-   * It is also the zone a Plain (zoneless) date in `entries` resolves through. */
-  timeZone: string;
+   * It is also the zone a Plain (zoneless) date in `entries` resolves through.
+   *
+   * Optional (#129). Omit it to author in the current viewer's own zone — resolved once, at
+   * construction, from the environment (`Intl`, `'UTC'` if that reports nothing) and then fixed
+   * for this Dataset's lifetime, same as an explicit value. Omitting it trades cross-viewer
+   * consistency for ergonomics: a Plain date then reads differently for a viewer in a different
+   * zone. Pass it explicitly whenever the dataset must render identically for every viewer, such
+   * as a shared project plan. */
+  timeZone?: string;
   /** How a date-only `end` such as `'2026-09-08'` is read. Defaults to `'inclusive'`: the entry
    * covers through the 8th. `'exclusive'` reads it literally as the start of the 8th, matching
    * half-open storage exactly. Only date-only strings are affected — see `DateOnlyEndRule`. */
@@ -68,7 +76,10 @@ export class Dataset<TMeta = unknown, TFields extends Record<string, unknown> = 
   #state: DatasetState;
 
   constructor(options: DatasetOptions<TMeta>) {
-    this.#state = new DatasetState(options);
+    this.#state = new DatasetState({
+      ...options,
+      timeZone: options.timeZone ?? resolveDefaultTimeZone(),
+    });
   }
 
   get entries(): EntryStoreContract<TMeta, TFields> {

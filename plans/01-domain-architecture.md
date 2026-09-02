@@ -418,10 +418,12 @@ interface GeometryFrame {
      *  (S1.10, D-S1.10-5). Library-derived text, not consumer render output — same precedent as `label`. */
     a11yLabel: string;
   }>;
-  /** `id` was `DependencyId` (a `model/` brand) pre-#13; `Dependency` is now scheduling-plugin-owned
-   *  (§7, #13), so link geometry needs a plugin-contributed emission seam mirroring `registerItemEmitter`
-   *  above — exact registration contract (a `registerLinkEmitter`-shaped seam) and `id`'s brand type are
-   *  tracked in #16, not yet settled here. Shape lands in S1 (#30), contents in S7. */
+  /** `id` was `DependencyId` (a `model/` brand) pre-#13; `Dependency` is now owned by the
+   *  `entryDependencies()` plugin, not `scheduling()` (S5.0 grill, #111), so link geometry needs a
+   *  plugin-contributed emission seam mirroring `registerItemProducer` above — exact registration
+   *  contract (a `registerLinkEmitter`-shaped seam) and `id`'s brand type are tracked in #136
+   *  (supersedes #16). #136 has an open, undecided proposal for how the Gantt-side emitter reads the
+   *  Dataset-side plugin's store; not settled here. Shape lands in S1 (#30), contents in S7. */
   links: readonly Array<{ id: string; path: PathCommand[]; flags: LinkFlags }>;
   decorations: readonly Array<DateLine | RangeBand | RowStripe>;
 }

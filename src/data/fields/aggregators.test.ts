@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { Entry, FieldKey, RollUpContext } from '../../model/index.js';
 import { entryId } from '../../model/index.js';
-import { diffMs } from '../../time/index.js';
 import { SHIPPED_AGGREGATORS } from './aggregators.js';
+import { createFieldContext, createRollUpContext } from './field-access.js';
+import { FieldRegistry } from './field-registry.js';
 
 function child(id: string, values: Record<string, unknown>, duration = 1): Entry {
   return {
@@ -15,20 +16,14 @@ function child(id: string, values: Record<string, unknown>, duration = 1): Entry
   };
 }
 
-function ctx(field: FieldKey, extras: Record<string, Record<string, unknown>> = {}): RollUpContext {
-  return {
-    field,
-    timeZone: 'UTC',
-    read<T>(entry: Entry, key: FieldKey): T | undefined {
-      const extra = extras[entry.id];
-      if (extra && key in extra) return extra[key] as T;
-      const meta = entry.meta as Record<string, unknown> | undefined;
-      return meta?.[key] as T | undefined;
-    },
-    durationOf(entry: Entry) {
-      return { value: diffMs(entry.end, entry.start), unit: 'millisecond' };
-    },
-  };
+/** The real context the Rollup builds, not a hand-rolled stand-in: a shipped Aggregator must read
+ *  through the same `values`/`numericValues` a consumer's Aggregator gets (D-S4-8, one path). */
+function ctx(field: FieldKey): RollUpContext {
+  const registry = new FieldRegistry({
+    fieldTypes: { money: { rollUp: 'sum' } },
+    fields: [{ key: field, type: 'money' }],
+  });
+  return createRollUpContext(createFieldContext(registry, 'UTC'), field);
 }
 
 const parent: Entry = {
