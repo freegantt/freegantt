@@ -36,6 +36,10 @@ export interface Panes {
   /** The single native scroller: header bands, bars, links, decorations. */
   readonly timeline: HTMLElement;
   readonly splitter: HTMLElement;
+  /** S5.3, D-S5-8: the overlay layer a `Popup` mounts into — one absolutely positioned element on
+   *  top of both panes, owned by `view/overlay.ts`. Structure only; `Overlay` owns its
+   *  content and stacking. */
+  readonly overlay: HTMLElement;
 }
 
 export class PaneLayout {
@@ -107,9 +111,16 @@ export class PaneLayout {
     const timelinePane = document.createElement('div');
     timelinePane.className = 'fg-timeline-pane';
 
-    this.#container.append(this.#gridPane, splitter, timelinePane);
+    // S5.3, D-S5-8: sits above both panes in DOM order (and stacking, `view/styles.ts`'s
+    // `.fg-overlay`) — the container's one absolutely positioned overlay layer, spanning it edge to
+    // edge. Structure only: `Overlay` (constructed one layer up, in `GanttShell`) owns everything
+    // that gets mounted into it.
+    const overlay = document.createElement('div');
+    overlay.className = 'fg-overlay';
 
-    this.panes = { grid: rowLayer, gridHeader: headerRow, splitter, timeline: timelinePane };
+    this.#container.append(this.#gridPane, splitter, timelinePane, overlay);
+
+    this.panes = { grid: rowLayer, gridHeader: headerRow, splitter, timeline: timelinePane, overlay };
   }
 
   get gridWidth(): number {
@@ -138,6 +149,22 @@ export class PaneLayout {
   /** The timeline pane's client box — the one measurement everything downstream is sized from. */
   measureTimelinePane(): Size {
     return { width: this.panes.timeline.clientWidth, height: this.panes.timeline.clientHeight };
+  }
+
+  /** `Overlay.bounds` (S5.3, D-S5-8): the container's own client rect, the outer clamp a popup
+   *  anchored outside both panes still clamps to. */
+  containerBounds(): DOMRect {
+    return this.#container.getBoundingClientRect();
+  }
+
+  /** `Overlay.paneBounds` (S5.3, D-S5-8, issue #137 F8): the grid pane's own client rect — not
+   *  `panes.grid`, which is the row layer moved by transform every frame and would report a stale or
+   *  scrolled-away box — alongside the timeline pane's. */
+  paneRects(): { grid: DOMRect; timeline: DOMRect } {
+    return {
+      grid: this.#gridPane.getBoundingClientRect(),
+      timeline: this.panes.timeline.getBoundingClientRect(),
+    };
   }
 
   /** D-S1.12-9: the grid pane's spacer renders one empty `.fg-band` per header band, so both panes

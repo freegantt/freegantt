@@ -40,7 +40,9 @@ export type {
 } from './frame.js';
 // Re-exported so render/ (layout-only import per plans/01 §1) can type item/row identity as
 // ItemId/RowId rather than a bare string — render already receives both via GeometryFrame (#35).
-export type { ItemId, RowId, ClientPoint } from '../model/index.js';
+// ElementDescription joins them the same way (S5.3, D-S5-10): render/dom/element-description.ts
+// builds DOM from it and may not import model/ directly.
+export type { ItemId, RowId, ClientPoint, ElementDescription } from '../model/index.js';
 export { TimeScaleModel } from './viewport/time-scale-model.js';
 export type {
   TimeScaleModelOptions,

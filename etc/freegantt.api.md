@@ -282,6 +282,25 @@ export interface Duration {
     value: number;
 }
 
+// @public
+export interface ElementDescription {
+    // (undocumented)
+    attrs?: Readonly<Record<string, string>>;
+    // (undocumented)
+    children?: readonly (ElementDescription & {
+        key?: string;
+    })[];
+    // (undocumented)
+    class?: Readonly<Record<string, boolean>>;
+    // (undocumented)
+    html?: string;
+    // (undocumented)
+    style?: Readonly<Record<string, string>>;
+    tag?: string;
+    // (undocumented)
+    text?: string;
+}
+
 // @public (undocumented)
 export interface EntityAdded {
     // (undocumented)
@@ -813,6 +832,23 @@ export interface NavigationChange {
 
 // @public (undocumented)
 export function now(): Instant;
+
+// @public (undocumented)
+export interface Overlay {
+    readonly bounds: DOMRect;
+    onResize(callback: () => void): () => void;
+    readonly paneBounds: {
+        grid: DOMRect;
+        timeline: DOMRect;
+    };
+    present(content: HTMLElement): OverlayHandle;
+    render(description: ElementDescription): HTMLElement;
+}
+
+// @public (undocumented)
+export interface OverlayHandle {
+    detach(): void;
+}
 
 // @public
 export class ParentCycleError extends FreeGanttError {

@@ -1,6 +1,6 @@
 import './harness-nav.ts';
-import { Gantt, Dataset } from '../src/api/index.js';
-import type { GanttPlugin } from '../src/api/index.js';
+import { Gantt, Dataset, createPopup, itemId } from '../src/api/index.js';
+import type { GanttPlugin, Popup } from '../src/api/index.js';
 import { sampleEntries } from '../fixtures/sample-dataset.js';
 
 const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
@@ -68,3 +68,40 @@ function selectionShortcuts(): GanttPlugin {
 }
 
 gantt.plugins = [...gantt.plugins, selectionShortcuts()];
+
+// S5.3, D-S5-8: a plugin's `setup()` is the only place `ctx.view.overlay` reaches this scope — stash
+// it once, live for the plugin's whole lifetime, so the button below can build a `Popup` from it.
+let overlayPopup: Popup | undefined;
+function popupDemo(): GanttPlugin {
+  return {
+    id: 'harness.popupDemo',
+    setup(ctx) {
+      overlayPopup = createPopup(ctx.view.overlay);
+      return () => {
+        overlayPopup = undefined;
+      };
+    },
+  };
+}
+gantt.plugins = [...gantt.plugins, popupDemo()];
+
+const popupBtn = document.querySelector<HTMLButtonElement>('#open-popup-btn')!;
+popupBtn.addEventListener('click', () => {
+  const selected = gantt.selection[0];
+  if (selected === undefined) {
+    writeLog('popup demo: select a bar first');
+    return;
+  }
+  const anchor = document.querySelector<HTMLElement>(`#gantt .fg-bar[data-item-id="${itemId(selected)}"]`);
+  if (!anchor || !overlayPopup) return;
+  overlayPopup.open({
+    anchor,
+    placement: 'end',
+    dismissOn: ['escape', 'outsidePointer', 'scroll'],
+    content: {
+      style: { padding: '6px 10px', font: 'inherit' },
+      text: `Entry: ${selected}`,
+    },
+  });
+  writeLog(`popup demo: opened on ${selected}`);
+});

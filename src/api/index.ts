@@ -62,6 +62,14 @@ export type {
 } from '../view/index.js';
 // S3, D-S3-9: `Gantt.interactions`'s own type and the per-gesture rule shape (`view/capability.ts`).
 export type { CapabilityRule, Interactions } from '../view/index.js';
+// S5.3, D-S5-8: `PluginContext.view.overlay`'s own type — a plugin builds a `Popup` (or its own
+// primitive) against this alone, never against `view/` or `render/` directly.
+export type { Overlay, OverlayHandle } from '../view/index.js';
+// S5.3, D-S5-8: the anchoring/flipping/clamping/dismissal primitive tooltips, the context menu and
+// the cell editor (S5.5+) all build on — built from `Overlay` alone, so a plugin author reaches the
+// same thing by calling `createPopup(ctx.view.overlay)` rather than reinventing it.
+export { createPopup } from '../extensions/popup.js';
+export type { Popup, PopupOptions, PopupPlacement, DismissTrigger, Anchor } from '../extensions/popup.js';
 // TimeScaleModel/ScrollModel are layout/'s own — both are public, consumer-constructed objects
 // (D9), so this re-exports straight from their owning layer rather than laundering them through
 // view/, which has no other interest in them (issue #91 §9-I).
@@ -143,6 +151,8 @@ export type {
 // Point/Size are the S1.5 ScrollModel's own vocabulary (S1.5 README §5) — a consumer building
 // `new ScrollModel({ x, y })` or reading `ScrollState` needs the shape in the public surface too.
 export type { Point, Size, ClientPoint, PixelSpan } from '../model/index.js';
+// S5.3, D-S5-10: `Overlay.render()`'s own input type — the reconciler's vocabulary as plain data.
+export type { ElementDescription } from '../model/index.js';
 
 // Time helpers a caller needs: `instant` for a pinned `TimeSpan`, `now` for "this Instant",
 // `addMs`/`MS` to shift one by a duration (S2.7 harness-review — `harness/data.ts`'s move-by-a-day

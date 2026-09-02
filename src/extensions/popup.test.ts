@@ -1,0 +1,237 @@
+import { describe, expect, it, vi } from 'vitest';
+import { createPopup } from './popup.js';
+import type { Overlay, OverlayHandle } from '../api/index.js';
+
+function rect(partial: Partial<DOMRect>): DOMRect {
+  return { top: 0, left: 0, right: 0, bottom: 0, width: 0, height: 0, x: 0, y: 0, toJSON() {}, ...partial };
+}
+
+/** A minimal `Overlay` fake — the same seam a third-party plugin gets (D-S5-8) — so `Popup` can be
+ *  driven with no `PaneLayout`/DOM measurement at all. `present` mounts into a plain container;
+ *  `render` mirrors `render/dom/element-description.ts`'s own text-only behaviour, enough for these
+ *  tests' content. */
+function fakeHost(options: {
+  bounds: DOMRect;
+  grid: DOMRect;
+  timeline: DOMRect;
+}): Overlay & { container: HTMLElement; resizeListeners: Set<() => void> } {
+  const container = document.createElement('div');
+  document.body.append(container);
+  const resizeListeners = new Set<() => void>();
+  return {
+    container,
+    resizeListeners,
+    present(content: HTMLElement): OverlayHandle {
+      container.append(content);
+      return { detach: () => content.remove() };
+    },
+    render(description) {
+      const node = document.createElement(description.tag ?? 'div');
+      if (description.text !== undefined) node.textContent = description.text;
+      return node;
+    },
+    get bounds() {
+      return options.bounds;
+    },
+    get paneBounds() {
+      return { grid: options.grid, timeline: options.timeline };
+    },
+    onResize(callback: () => void) {
+      resizeListeners.add(callback);
+      return () => resizeListeners.delete(callback);
+    },
+  };
+}
+
+/** Stubs `offsetWidth`/`offsetHeight` for every `.fg-popup` node — happy-dom does no layout, so
+ *  `Popup`'s own size measurement needs a fixed box to place and flip against. A prototype getter,
+ *  not a per-node `Object.defineProperty` after mount: `Popup.open()` measures synchronously, right
+ *  after `overlay.present()` returns, so a `MutationObserver`-based stub (queued as a microtask) would
+ *  never run in time. */
+function withFixedPopupSize(
+  overlay: ReturnType<typeof fakeHost>,
+  size: { width: number; height: number },
+): void {
+  void overlay;
+  Object.defineProperty(HTMLElement.prototype, 'offsetWidth', {
+    configurable: true,
+    get(this: HTMLElement) {
+      return this.classList.contains('fg-popup') ? size.width : 0;
+    },
+  });
+  Object.defineProperty(HTMLElement.prototype, 'offsetHeight', {
+    configurable: true,
+    get(this: HTMLElement) {
+      return this.classList.contains('fg-popup') ? size.height : 0;
+    },
+  });
+}
+
+describe('Popup', () => {
+  it('opens at the requested placement and reports isOpen', () => {
+    const overlay = fakeHost({
+      bounds: rect({ left: 0, top: 0, right: 1000, bottom: 500 }),
+      grid: rect({ left: 0, top: 0, right: 160, bottom: 500 }),
+      timeline: rect({ left: 160, top: 0, right: 1000, bottom: 500 }),
+    });
+    withFixedPopupSize(overlay, { width: 100, height: 40 });
+    const popup = createPopup(overlay);
+
+    expect(popup.isOpen).toBe(false);
+    popup.open({ anchor: rect({ left: 300, top: 100, right: 340, bottom: 120 }), content: { text: 'hi' } });
+    expect(popup.isOpen).toBe(true);
+    expect(overlay.container.querySelector('.fg-popup')).not.toBeNull();
+    expect(overlay.container.textContent).toBe('hi');
+
+    popup.close();
+    expect(popup.isOpen).toBe(false);
+    expect(overlay.container.querySelector('.fg-popup')).toBeNull();
+  });
+
+  it('flips to the opposite side when the requested side does not fit its pane, and clamps the cross axis', () => {
+    const overlay = fakeHost({
+      bounds: rect({ left: 0, top: 0, right: 1000, bottom: 500 }),
+      grid: rect({ left: 0, top: 0, right: 160, bottom: 500 }),
+      timeline: rect({ left: 160, top: 0, right: 1000, bottom: 500 }),
+    });
+    withFixedPopupSize(overlay, { width: 100, height: 40 });
+    const popup = createPopup(overlay);
+
+    // Anchored right at the timeline pane's right edge, requesting 'end' (opens to the right) — a
+    // 100px-wide popup does not fit before the pane's own right bound at 1000, so it flips to 'start'.
+    popup.open({
+      anchor: rect({ left: 950, top: 200, right: 990, bottom: 220 }),
+      placement: 'end',
+      content: { text: 'x' },
+    });
+    const node = overlay.container.querySelector<HTMLElement>('.fg-popup')!;
+    const transform = node.style.transform;
+    const match = /translate\(([-\d.]+)px, ([-\d.]+)px\)/.exec(transform);
+    expect(match).not.toBeNull();
+    const left = Number(match![1]);
+    // Flipped to 'start': placed to the left of the anchor (anchor.left - width = 950 - 100 = 850).
+    expect(left).toBe(850);
+  });
+
+  it('Escape closes the popup and calls stopPropagation, so an outer keydown listener never sees it', () => {
+    const overlay = fakeHost({
+      bounds: rect({ right: 1000, bottom: 500 }),
+      grid: rect({ right: 160, bottom: 500 }),
+      timeline: rect({ left: 160, right: 1000, bottom: 500 }),
+    });
+    withFixedPopupSize(overlay, { width: 100, height: 40 });
+    const popup = createPopup(overlay);
+    popup.open({ anchor: rect({ left: 300, top: 100, right: 340, bottom: 120 }), content: { text: 'x' } });
+
+    const outerListener = vi.fn();
+    document.addEventListener('keydown', outerListener);
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+
+    expect(popup.isOpen).toBe(false);
+    expect(outerListener).not.toHaveBeenCalled();
+    document.removeEventListener('keydown', outerListener);
+  });
+
+  it('an outside pointerdown closes the popup; one inside the anchor does not', () => {
+    const overlay = fakeHost({
+      bounds: rect({ right: 1000, bottom: 500 }),
+      grid: rect({ right: 160, bottom: 500 }),
+      timeline: rect({ left: 160, right: 1000, bottom: 500 }),
+    });
+    withFixedPopupSize(overlay, { width: 100, height: 40 });
+    const popup = createPopup(overlay);
+    const anchor = document.createElement('button');
+    document.body.append(anchor);
+    popup.open({ anchor, content: { text: 'x' } });
+
+    anchor.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+    expect(popup.isOpen).toBe(true);
+
+    document.body.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+    expect(popup.isOpen).toBe(false);
+  });
+
+  it('a scroll anywhere in the document closes the popup', () => {
+    const overlay = fakeHost({
+      bounds: rect({ right: 1000, bottom: 500 }),
+      grid: rect({ right: 160, bottom: 500 }),
+      timeline: rect({ left: 160, right: 1000, bottom: 500 }),
+    });
+    withFixedPopupSize(overlay, { width: 100, height: 40 });
+    const popup = createPopup(overlay);
+    popup.open({ anchor: rect({ left: 300, top: 100, right: 340, bottom: 120 }), content: { text: 'x' } });
+
+    document.body.dispatchEvent(new Event('scroll'));
+    expect(popup.isOpen).toBe(false);
+  });
+
+  it('focus: "trap" cycles Tab inside and restores focus on close; focus: "none" never moves it', () => {
+    const overlay = fakeHost({
+      bounds: rect({ right: 1000, bottom: 500 }),
+      grid: rect({ right: 160, bottom: 500 }),
+      timeline: rect({ left: 160, right: 1000, bottom: 500 }),
+    });
+    const outside = document.createElement('button');
+    outside.textContent = 'outside';
+    document.body.append(outside);
+    outside.focus();
+
+    // focus: 'none' (the default) never moves focus (the tooltip's own policy).
+    withFixedPopupSize(overlay, { width: 100, height: 40 });
+    const tooltip = createPopup(overlay);
+    tooltip.open({
+      anchor: rect({ left: 300, top: 100, right: 340, bottom: 120 }),
+      content: { text: 'hover text' },
+    });
+    expect(document.activeElement).toBe(outside);
+    tooltip.close();
+
+    // focus: 'trap' moves focus into the popup's first focusable node and restores it on close.
+    const menu = createPopup(overlay);
+    menu.open({
+      anchor: rect({ left: 300, top: 100, right: 340, bottom: 120 }),
+      focus: 'trap',
+      content: { tag: 'button', attrs: { type: 'button' }, text: 'item' },
+    });
+    expect(document.activeElement).not.toBe(outside);
+    expect(document.activeElement?.tagName).toBe('BUTTON');
+    menu.close();
+    expect(document.activeElement).toBe(outside);
+  });
+
+  it('a container resize repositions an open popup against the fresh rects (issue #137 F9)', () => {
+    let timelineRight = 1000;
+    const overlay = fakeHost({
+      bounds: rect({ right: 1000, bottom: 500 }),
+      grid: rect({ right: 160, bottom: 500 }),
+      timeline: rect({ left: 160, right: 1000, bottom: 500 }),
+    });
+    // Read live so a resize can change what the overlay reports without a new fakeHost().
+    Object.defineProperty(overlay, 'paneBounds', {
+      get: () => ({
+        grid: rect({ right: 160, bottom: 500 }),
+        timeline: rect({ left: 160, right: timelineRight, bottom: 500 }),
+      }),
+    });
+    withFixedPopupSize(overlay, { width: 100, height: 40 });
+    const popup = createPopup(overlay);
+    // 'bottom' fits its (vertical) placement axis either way; the pane shrink instead moves the
+    // cross-axis clamp — the popup's left edge is pinned at the pane's own right bound minus its
+    // width, so a narrower pane pushes it further left. The anchor (850..890) stays inside the
+    // timeline pane both before and after the shrink (right: 1000 → 900), so `paneRectFor` keeps
+    // resolving the same pane — only the clamp moves.
+    popup.open({
+      anchor: rect({ left: 850, top: 200, right: 890, bottom: 220 }),
+      placement: 'bottom',
+      content: { text: 'x' },
+    });
+    const node = overlay.container.querySelector<HTMLElement>('.fg-popup')!;
+    const before = node.style.transform;
+
+    timelineRight = 900;
+    for (const listener of overlay.resizeListeners) listener();
+
+    expect(node.style.transform).not.toBe(before);
+  });
+});

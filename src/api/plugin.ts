@@ -10,8 +10,13 @@
 import type { Disposer, PluginId } from '../model/index.js';
 import type { Dataset } from './dataset.js';
 import type { DisposableStore } from '../extensions/disposables.js';
-import type { GanttEvents } from '../view/index.js';
+import type { GanttEvents, Overlay, OverlayHandle } from '../view/index.js';
 import type { CommandRegistryOf, KeyBindingOf } from './command.js';
+
+// Re-exported so `extensions/popup.ts` can import this file directly instead of the `api/index.js`
+// barrel (which itself re-exports `createPopup` from `extensions/popup.ts` — importing the barrel
+// back would close that edge into a cycle, `no-circular`).
+export type { Overlay, OverlayHandle };
 
 /** What a `GanttPlugin`'s `setup()` receives, once, after the Gantt mounts. S5.1 ships `dataset`,
  *  `gantt`, `events` and `disposables` only — every other member (`commands`, `view`, `layout`,
@@ -35,6 +40,13 @@ export interface PluginContext<TGantt = unknown> {
     /** S5.2, D-S5-7: adds one `KeyBinding`. Legal only while `setup` runs (D-S5-4) — removed
      *  automatically when this plugin is disposed, the same lifetime every other `register*` gets. */
     registerKeybinding(binding: KeyBindingOf<TGantt>): void;
+  };
+  view: {
+    /** S5.3, D-S5-8: the overlay layer a plugin's own popup, tooltip or menu mounts into — the same
+     *  primitive `extensions/popup.ts`'s `Popup` is built on. Live for the plugin's whole lifetime,
+     *  not gated by `RegistrationGate` (D-S5-4 only gates one-shot `register*` calls; presenting and
+     *  dismissing overlay content happens for as long as the plugin runs). */
+    overlay: Overlay;
   };
 }
 
