@@ -74,6 +74,31 @@ export interface CollapseChange {
     readonly to: readonly RowId[];
 }
 
+// Warning: (ae-forgotten-export) The symbol "CommandOf" needs to be exported by the entry point index.d.ts
+//
+// @public
+export type Command = CommandOf<Gantt>;
+
+// Warning: (ae-forgotten-export) The symbol "CommandContextOf" needs to be exported by the entry point index.d.ts
+//
+// @public (undocumented)
+export type CommandContext = CommandContextOf<Gantt>;
+
+// Warning: (ae-forgotten-export) The symbol "CommandRegistryOf" needs to be exported by the entry point index.d.ts
+//
+// @public (undocumented)
+export type CommandRegistry = CommandRegistryOf<Gantt>;
+
+// @public
+export interface CommandTarget {
+    // (undocumented)
+    columnKey?: FieldKey;
+    // (undocumented)
+    kind: 'row' | 'cell' | 'bar' | 'header' | 'splitter';
+    // (undocumented)
+    rowId?: EntryId;
+}
+
 // @public
 export class ContainerNotFoundError extends FreeGanttError {
     constructor(container: string);
@@ -507,6 +532,7 @@ export class Gantt {
     // (undocumented)
     get collapsed(): readonly RowId[];
     set collapsed(ids: readonly (RowId | string)[]);
+    get commands(): CommandRegistry;
     get dateLines(): readonly DateLineInput[];
     set dateLines(lines: readonly DateLineInput[]);
     // (undocumented)
@@ -744,6 +770,14 @@ export type ItemId = string & {
 
 // @public
 export function itemId(entry: EntryId, segmentIndex?: number): ItemId;
+
+// Warning: (ae-forgotten-export) The symbol "KeyBindingOf" needs to be exported by the entry point index.d.ts
+//
+// @public (undocumented)
+export type KeyBinding = KeyBindingOf<Gantt>;
+
+// @public
+export type KeyChord = string;
 
 // @public (undocumented)
 export const MS: {
@@ -1035,6 +1069,13 @@ export class UnknownAggregatorError extends FreeGanttError {
     constructor(aggregatorName: string);
     // (undocumented)
     readonly aggregatorName: string;
+}
+
+// @public
+export class UnknownCommandError extends FreeGanttError {
+    constructor(commandId: string);
+    // (undocumented)
+    readonly commandId: string;
 }
 
 // @public

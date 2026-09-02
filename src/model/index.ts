@@ -6,6 +6,7 @@ export type { Entry, EntryKind, EntryInput, EntryEdit, StoredEdit, EntryEdits } 
 export type { Point, Size, PixelSpan, Rect, ClientPoint } from './geometry.js';
 export type { Dataset, DatasetHierarchy, EntryStore, EntryStoreView, RollUpKinds } from './dataset.js';
 export type { PluginId, Disposer } from './plugin.js';
+export type { KeyChord } from './command.js';
 export type { DatasetDocument, EntryDocument, SerializedField } from './document.js';
 export type {
   StoreName,
@@ -58,4 +59,5 @@ export {
   DuplicatePluginIdError,
   RegistrationClosedError,
   PluginSetupError,
+  UnknownCommandError,
 } from './errors.js';

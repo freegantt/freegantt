@@ -11,6 +11,7 @@ import type { Disposer, PluginId } from '../model/index.js';
 import type { Dataset } from './dataset.js';
 import type { DisposableStore } from '../extensions/disposables.js';
 import type { GanttEvents } from '../view/index.js';
+import type { CommandRegistryOf, KeyBindingOf } from './command.js';
 
 /** What a `GanttPlugin`'s `setup()` receives, once, after the Gantt mounts. S5.1 ships `dataset`,
  *  `gantt`, `events` and `disposables` only — every other member (`commands`, `view`, `layout`,
@@ -27,6 +28,14 @@ export interface PluginContext<TGantt = unknown> {
   /** This plugin's own cleanup list — add a listener or a timer here instead of closing over it by
    *  hand in the returned `Disposer`. Disposed in reverse order, ahead of that returned `Disposer`. */
   disposables: DisposableStore;
+  /** S5.2, D-S5-6: the one command registry — `register` here is legal only while `setup` runs
+   *  (D-S5-4); `run`/`available` work any time, including after this plugin's own setup returns. */
+  commands: CommandRegistryOf<TGantt>;
+  interaction: {
+    /** S5.2, D-S5-7: adds one `KeyBinding`. Legal only while `setup` runs (D-S5-4) — removed
+     *  automatically when this plugin is disposed, the same lifetime every other `register*` gets. */
+    registerKeybinding(binding: KeyBindingOf<TGantt>): void;
+  };
 }
 
 export interface GanttPlugin<TGantt = unknown> {

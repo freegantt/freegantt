@@ -45,3 +45,26 @@ toggleBtn.addEventListener('click', () => {
     toggleBtn.textContent = 'Remove logging plugin';
   }
 });
+
+// S5.2, D-S5-6/D-S5-7: a plugin registers its own command and binds a chord to it — `Mod+K` clears
+// the selection, through the same `ctx.commands.register`/`ctx.interaction.registerKeybinding` seam
+// every built-in feature uses (no back door). Installed from the start, alongside `logEverything`.
+function selectionShortcuts(): GanttPlugin {
+  return {
+    id: 'harness.selectionShortcuts',
+    setup(ctx) {
+      ctx.commands.register({
+        id: 'demo.clearSelection',
+        label: 'Clear selection (demo)',
+        run: () => {
+          ctx.gantt.selection = [];
+          writeLog('demo.clearSelection: selection cleared (Mod+K)');
+        },
+      });
+      ctx.interaction.registerKeybinding({ chord: 'Mod+K', command: 'demo.clearSelection' });
+      return () => {};
+    },
+  };
+}
+
+gantt.plugins = [...gantt.plugins, selectionShortcuts()];

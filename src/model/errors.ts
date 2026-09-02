@@ -281,6 +281,19 @@ export class PluginSetupError extends FreeGanttError {
   }
 }
 
+/** `code: 'unknown-command'` — `CommandRegistry.run(id)` given an id nothing registered (D-S5-6). A
+ *  binding whose `command` names an id nothing owns is not this: the keymap resolver treats an
+ *  unresolved binding as a non-match and falls through, rather than surfacing the mistake mid-key-press. */
+export class UnknownCommandError extends FreeGanttError {
+  readonly commandId: string;
+
+  constructor(commandId: string) {
+    super('unknown-command', `commands: no command is registered with id "${commandId}"`);
+    this.name = 'UnknownCommandError';
+    this.commandId = commandId;
+  }
+}
+
 /** `code: 'unsupported-schema'` — `fromJSON` given a `schema` this build has no reader for
  *  (D-S2-12, `plans/s2-data-core/s2.6-serialization.md` §1.3). Names the version it found and the
  *  versions it reads, so a caller can tell a future document from a corrupt one. */

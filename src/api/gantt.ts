@@ -26,6 +26,13 @@ import { attemptMutation } from './attempt-mutation.js';
 import { now, toInstant } from '../time/index.js';
 import type { Dataset } from './dataset.js';
 import type { GanttPlugin as GanttPluginOf, PluginContext as PluginContextOf } from './plugin.js';
+import type {
+  CommandOf,
+  CommandContextOf,
+  CommandRegistryOf,
+  KeyBindingOf,
+  CommandTarget,
+} from './command.js';
 // api/ is the composition root that reaches interaction/ in (plans/01 §1: `API --> INT`,
 // `plans/s3-direct-manipulation/README.md` §0) — `view/` cannot, so `GanttShell` takes this by
 // constructor injection rather than importing it itself (see `AttachEntryGestures` in gantt-shell.ts).
@@ -125,6 +132,16 @@ export type GanttOptions = GanttOptionsBase & GanttScaleOptions;
 export type GanttPlugin = GanttPluginOf<Gantt>;
 export type PluginContext = PluginContextOf<Gantt>;
 
+/** S5.2, D-S5-6: `Command`/`CommandContext`/`CommandRegistry`/`KeyBinding` bound to this class — see
+ *  `api/command.ts`'s file header for why the generic form lives there and the binding happens here.
+ *  This is the shape a plugin author, or a `gantt.commands`/`gantt.commands.run(id)` caller, actually
+ *  sees; `api/index.ts` re-exports these bound names, never the generic ones. */
+export type Command = CommandOf<Gantt>;
+export type CommandContext = CommandContextOf<Gantt>;
+export type CommandRegistry = CommandRegistryOf<Gantt>;
+export type KeyBinding = KeyBindingOf<Gantt>;
+export type { CommandTarget };
+
 function pickDefined<T extends object, K extends keyof T>(
   options: T,
   keys: readonly K[],
@@ -188,7 +205,15 @@ export class Gantt {
         gantt: this,
         events: parts.events,
         disposables: parts.disposables,
+        commands: parts.commands,
+        interaction: { registerKeybinding: parts.registerKeybinding },
       }),
+      buildCommandContext: (parts): CommandContext => ({
+        dataset: options.dataset,
+        gantt: this,
+        ...parts,
+      }),
+      now,
     });
     if (options.zoomPresets !== undefined) this.#shell.zoomPresets = options.zoomPresets;
     if (options.selection !== undefined) this.#shell.selection = options.selection;
@@ -485,6 +510,15 @@ export class Gantt {
 
   set plugins(next: readonly GanttPlugin[]) {
     this.#shell.plugins = next;
+  }
+
+  /** S5.2, D-S5-6: the one command registry. Core registers `freegantt.collapseAll`,
+   *  `freegantt.expandAll`, `freegantt.collapseRow`, `freegantt.expandRow`, `freegantt.zoomIn`,
+   *  `freegantt.zoomOut`, `freegantt.panToToday`, `freegantt.selectAll`, `freegantt.clearSelection`,
+   *  `freegantt.undo` and `freegantt.redo` before any plugin, so a plugin's own registration always
+   *  wins (D-S5-7). Read-only — `register` lives on the registry itself. */
+  get commands(): CommandRegistry {
+    return this.#shell.commands;
   }
 
   on<K extends keyof GanttEventMap>(name: K, handler: GanttEventHandler<K>): void {

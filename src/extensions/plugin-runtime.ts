@@ -27,10 +27,14 @@ interface Installed<TContext> {
 /** Built fresh for each plugin's own `setup()` call — `context` is whatever `view/gantt-shell.ts`
  *  composed (its own `events`, a fresh `disposables`, and the api-level `dataset`/`gantt` it was
  *  handed); `disposables` is that same store, kept here so `PluginRuntime` can dispose it without
- *  knowing anything about `context`'s shape. */
+ *  knowing anything about `context`'s shape. `registrationGate` is optional so S5.1's own tests (no
+ *  `register*` surface at all yet) need not supply one; a step that ships a `register*` — S5.2's
+ *  `registerKeybinding` first — opens one alongside `context` and this class closes it right after
+ *  `setup()` returns (D-S5-4). */
 export interface BuiltPluginContext<TContext> {
   context: TContext;
   disposables: DisposableStore;
+  registrationGate?: RegistrationGate;
 }
 
 function isDevMode(): boolean {
@@ -73,9 +77,9 @@ function assertNoDuplicateIds<TContext>(plugins: readonly ShellPlugin<TContext>[
  *  `GanttShell` — never shared across Gantt instances (I2). */
 export class PluginRuntime<TContext> {
   #installed: Installed<TContext>[] = [];
-  #buildContext: () => BuiltPluginContext<TContext>;
+  #buildContext: (pluginId: PluginId) => BuiltPluginContext<TContext>;
 
-  constructor(buildContext: () => BuiltPluginContext<TContext>) {
+  constructor(buildContext: (pluginId: PluginId) => BuiltPluginContext<TContext>) {
     this.#buildContext = buildContext;
   }
 
@@ -107,8 +111,11 @@ export class PluginRuntime<TContext> {
     const justInstalled: Installed<TContext>[] = [];
     try {
       for (const plugin of toAdd) {
-        const built = this.#buildContext();
+        const built = this.#buildContext(plugin.id);
         const ownDispose = plugin.setup(built.context);
+        // D-S5-4: registration is legal while setup() runs only — closing the gate the moment it
+        // returns is what turns a register* reached afterward into RegistrationClosedError.
+        built.registrationGate?.close();
         justInstalled.push({
           plugin,
           dispose: () => {
