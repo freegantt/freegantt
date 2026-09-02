@@ -15,12 +15,15 @@ const GRID_PANE_WIDTH_PROPERTY = '--fg-grid-pane-width';
 const GRID_PANE_WIDTH_POLICY = { fallback: 160, accepts: 'zeroOrMore' } as const;
 const SPLITTER_WIDTH_PROPERTY = '--fg-splitter-width';
 const SPLITTER_WIDTH_POLICY = { fallback: 4, accepts: 'positive' } as const;
+/** #127: wide enough for one narrow column, so a splitter drag cannot take the pane to nothing by
+ *  accident. A consumer who wants the old no-floor behaviour passes `minGridWidth: 0`. */
+const DEFAULT_MIN_GRID_WIDTH = 40;
 
 export interface PaneLayoutOptions {
   container: HTMLElement;
   /** Initial grid pane width in px. Default: `--fg-grid-pane-width`, fallback 160. */
   gridWidth?: number;
-  /** Default 0. The splitter clamps to it; nothing else may. */
+  /** Default 40. The splitter drag clamps to it; a direct `gridWidth` write never does. */
   minGridWidth?: number;
 }
 
@@ -56,13 +59,14 @@ export class PaneLayout {
     // (GanttShell.a11yLabel) and set separately, not here.
     this.#container.setAttribute('role', 'group');
     this.#container.setAttribute('tabindex', '0');
-    this.#minGridWidth = options.minGridWidth ?? 0;
+    this.#minGridWidth = options.minGridWidth ?? DEFAULT_MIN_GRID_WIDTH;
 
     const splitterWidth = readPixelProperty(this.#container, SPLITTER_WIDTH_PROPERTY, SPLITTER_WIDTH_POLICY);
-    const initialGridWidth =
+    // An authored width is authored: the floor bounds the splitter drag, never a written width
+    // (#127). A container that asks for a narrow — or collapsed — grid pane gets one.
+    this.#gridWidth =
       options.gridWidth ??
       readPixelProperty(this.#container, GRID_PANE_WIDTH_PROPERTY, GRID_PANE_WIDTH_POLICY);
-    this.#gridWidth = Math.max(this.#minGridWidth, initialGridWidth);
 
     // D-S1.10-6: display/flexDirection/flexShrink/overflow/position/flex/minWidth/cursor are all
     // structural — the base stylesheet's class rules own them now (`view/styles.ts`). Only the live
@@ -112,19 +116,21 @@ export class PaneLayout {
     return this.#gridWidth;
   }
 
+  /** Writes the width as given — `minGridWidth` does not clamp here (#127). The floor bounds the
+   *  splitter drag, which `GanttShell` applies before it previews or commits a proposal, so an
+   *  explicit `gridWidth = 0` still collapses the pane on purpose. */
   set gridWidth(px: number) {
-    const clamped = Math.max(this.#minGridWidth, px);
-    if (clamped === this.#gridWidth) return;
-    this.#gridWidth = clamped;
-    this.#gridPane.style.width = `${clamped}px`;
+    if (px === this.#gridWidth) return;
+    this.#gridWidth = px;
+    this.#gridPane.style.width = `${px}px`;
   }
 
   get minGridWidth(): number {
     return this.#minGridWidth;
   }
 
-  /** Live (#127). Storage only — `GanttShell` re-clamps a now-out-of-range `gridWidth` itself, so
-   *  that goes through the same cancelable commit sequence a splitter drag runs. */
+  /** Live (#127). Storage only — `GanttShell` owns every use of the floor, so raising it above the
+   *  current `gridWidth` goes through the same cancelable commit sequence a splitter drag runs. */
   set minGridWidth(px: number) {
     this.#minGridWidth = px;
   }

@@ -5,18 +5,20 @@
 ## Resolution
 
 `minGridWidth` is now a public, live-reconfigurable `GanttOptions`/`GanttShellOptions` property
-(`src/api/gantt.ts`, `src/view/gantt-shell.ts`, `src/view/pane-layout.ts`), threaded down to
-`PaneLayout`'s existing clamp. Default stays `0`, matching the doc comment `PaneLayout` already
-carried ("Zero is authored, not nonsense") — a consumer opts a floor in explicitly, rather than
-the library changing today's default behavior. `gantt.gridWidth = 0` stays a legal, explicit way
-to collapse the pane; only the splitter drag (and any other assignment) is stopped from reaching
-it by accident.
+(`src/api/gantt.ts`, `src/view/gantt-shell.ts`, `src/view/pane-layout.ts`). The default is `40` —
+wide enough for one narrow column — so the reported drag-to-zero accident is fixed out of the box,
+not only for a consumer who opts a floor in. `minGridWidth: 0` restores an unfloored splitter.
 
-Raising `minGridWidth` above the current `gridWidth` re-clamps it through the same
-`beforeGridWidthChange`/`gridWidthChange` commit sequence a splitter drag runs (`GanttShell`), so
-a veto is still respected and the floor invariant holds even through a rollback. Documented in
-`plans/02-public-api.md` §2/§3. Tests: `pane-layout.test.ts`, `gantt.test.ts`
-("Gantt minGridWidth (#127)").
+The floor bounds the Splitter drag and nothing else. `GanttShell` applies it where the drag comes
+in (`#aboveMinGridWidth`, one place), and `PaneLayout.gridWidth` writes what it is given. That is
+what keeps the two documented promises honest: `gantt.gridWidth = 0` collapses the pane on purpose,
+and a vetoed change rolls back to the width it started from.
+
+Raising `minGridWidth` above the current `gridWidth` lifts it through the same
+`beforeGridWidthChange`/`gridWidthChange` commit sequence a splitter drag runs, so a veto leaves
+the width exactly where it was. Documented in `plans/02-public-api.md` §2/§3. Tests:
+`pane-layout.test.ts`, `gantt.test.ts` ("Gantt minGridWidth (#127)" — the drag case drives the
+real splitter element, not an assignment standing in for one).
 
 Step 3 (a collapse-toggle affordance) was **not** built — the issue only said "maybe," and the
 plan below flagged it as a separate product/UX call needing confirmation first. Left as a future

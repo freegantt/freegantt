@@ -875,6 +875,18 @@ describe('Gantt gridWidth and events (S1.8, plans/02 §6)', () => {
 });
 
 describe('Gantt minGridWidth (#127)', () => {
+  /** Drags the real splitter from `fromX` to `toX` and releases. happy-dom does no layout, so
+   *  pointer capture is stubbed the way every other pointer suite here stubs it. */
+  function dragSplitter(container: HTMLElement, fromX: number, toX: number): void {
+    const splitter = container.querySelector<HTMLElement>('.fg-splitter');
+    if (splitter === null) throw new Error('no splitter');
+    splitter.setPointerCapture = vi.fn();
+    splitter.releasePointerCapture = vi.fn();
+    splitter.dispatchEvent(new PointerEvent('pointerdown', { clientX: fromX, pointerId: 1 }));
+    splitter.dispatchEvent(new PointerEvent('pointermove', { clientX: toX, pointerId: 1 }));
+    splitter.dispatchEvent(new PointerEvent('pointerup', { clientX: toX, pointerId: 1 }));
+  }
+
   it('the splitter cannot drag gridWidth below minGridWidth', () => {
     const container = document.createElement('div');
     const gantt = new Gantt({
@@ -884,7 +896,7 @@ describe('Gantt minGridWidth (#127)', () => {
       minGridWidth: 120,
     });
 
-    gantt.gridWidth = 40;
+    dragSplitter(container, 200, 0);
 
     expect(gantt.gridWidth).toBe(120);
     gantt.destroy();
@@ -901,11 +913,11 @@ describe('Gantt minGridWidth (#127)', () => {
 
     gantt.gridWidth = 0;
 
-    expect(gantt.gridWidth).toBe(120);
+    expect(gantt.gridWidth).toBe(0);
     gantt.destroy();
   });
 
-  it('minGridWidth defaults to 0 and is live-reconfigurable', () => {
+  it('minGridWidth defaults to 40 and is live-reconfigurable', () => {
     const container = document.createElement('div');
     const gantt = new Gantt({
       container,
@@ -913,7 +925,7 @@ describe('Gantt minGridWidth (#127)', () => {
       gridWidth: 160,
     });
 
-    expect(gantt.minGridWidth).toBe(0);
+    expect(gantt.minGridWidth).toBe(40);
     gantt.minGridWidth = 200;
     expect(gantt.minGridWidth).toBe(200);
 
@@ -946,7 +958,7 @@ describe('Gantt minGridWidth (#127)', () => {
     gantt.destroy();
   });
 
-  it('a vetoed re-clamp still respects the new floor once the rollback runs', () => {
+  it('a vetoed re-clamp leaves gridWidth exactly where it was', () => {
     const container = document.createElement('div');
     const gantt = new Gantt({
       container,
@@ -957,7 +969,7 @@ describe('Gantt minGridWidth (#127)', () => {
     gantt.on('beforeGridWidthChange', () => false);
     gantt.minGridWidth = 200;
 
-    expect(gantt.gridWidth).toBe(200);
+    expect(gantt.gridWidth).toBe(160);
     gantt.destroy();
   });
 
