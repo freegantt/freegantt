@@ -214,7 +214,7 @@ Full prose for each decision lives in the step file that implements it. Use this
 | `progress` drag handle | S7 | Scheduling-plugin Field (ADR 0008) |
 | Inline editing (`beforeEntryEdit`) | S5 | Editor + overlay host |
 | Context menu, tooltips | S5 | Plugin `commands` / `overlay` |
-| `linkCreate`, link ports | S7 | Plugin `Dependency` data |
+| `linkCreate`, link ports | S7 | Plugin `Dependency` data; link emission seam design open at #136 |
 | Full grid a11y, axe in CI | S5 | `plans/03` §S5 a11y block |
 | Remappable keymap | S5 | `CommandRegistry`, `registerKeybinding` |
 | Multi-Gantt gesture sync | when asked | Shared selection seam |

@@ -37,6 +37,8 @@ Q2 needs the user's sign-off before S5.10 starts; it rewords a locked decision. 
 | **Q15** | Does `StoreName` widen this slice? | **Yes, with a shipped occupant.** `PluginStore` gives a `DatasetPlugin` reserved per-entry data (ADR 0002: not `Entry.meta`, to stop host/plugin collisions). The harness lock plugin is its first occupant, so the mechanism ships with a user, not as decoration (I11). S7's `Dependency` store is the second. §S5.10, D-S5-24. |
 | **Q16** | Does `registerItemEmitter` keep that name? | **No — `registerItemProducer`.** S4 named the seam `ItemProducer` and the call `produceItemsForRow`. `plans/01` §10 still says emitter; one concept keeps one name (CLAUDE.md, #7). §S5.9, D-S5-22. |
 | **Q17** | What proves "zero private imports"? | **A dependency-cruiser rule, not a review note.** `src/extensions/**` may import `src/api/**` and `src/model/**` and nothing else in `src/`. The built-ins live there, so the gate fails the build the moment a back-door appears. §S5.1, D-S5-5. |
+| **Q18** | Can a `DatasetPlugin` read another plugin's `PluginStore`? | **Yes, read-only.** The S5.0 grill on #111 found this gap while splitting S7's scheduling engine from its dependency data: the engine has to read the edges. `ctx.store.read<T>(pluginId)` returns a `PluginStoreView` — `get`/`all`, no `set`/`remove` — or `undefined` if that plugin never reserved a store. The owner still writes through `reserve()`. §S5.10, D-S5-30. |
+| **Q19** | Does the `plugins` array's own order matter for setup? | **No.** A `DatasetPlugin` declares `requires: readonly PluginId[]`; the host topologically sorts the installed set by that graph before running any `setup`, so `[a, b]` and `[b, a]` behave the same. A missing prerequisite throws `MissingPluginError` naming both ids — there is no `PluginOrderError`, because there is no wrong order left to write. Considered and rejected: a plugin supplying its own default for a missing `requires` entry — that would install a second plugin's real behaviour (e.g. dependency arrows) without it ever appearing in the caller's array, which is the same silent-composition problem D-S5-23 already ruled out. §S5.10, D-S5-31. |
 
 ---
 
@@ -220,7 +222,7 @@ export function lockEntries(lockedIds: readonly string[]): DatasetPlugin {
 | `GridColumn.cellRenderer` / `.editable` / `.resizable` / `.movable`, `beforeGridColumnsChange`/`gridColumnsChange`, `GridColumnsChange` | S5.7 |
 | `inlineEditing()`, `InlineEditingOptions`, `DateInputFactory`, `DateInput`, `beforeEntryEdit`/`entryEdit`, `EntryFieldEdit`, `FieldType.parseValue`, `Interactions.edit` | S5.8 |
 | `ItemProducer`, `ItemProducerContext`, `KindDefaults`, `Interactions` per-kind registration | S5.9 |
-| `DatasetPlugin`, `DatasetPluginContext`, `DatasetOptions.plugins`, `EditExtender`, `ExtenderWrapper`, `PluginStore`, `PluginStoreView`, `StoreName` widened | S5.10 |
+| `DatasetPlugin` (with `requires`), `DatasetPluginContext`, `DatasetOptions.plugins`, `EditExtender`, `ExtenderWrapper`, `PluginStore`, `PluginStoreView`, `StoreName` widened, `MissingPluginError` | S5.10 |
 | Parts: `fg-popup`, `fg-menu`, `fg-menu-item`, `fg-cell-editor`, `fg-column-resizer`, `fg-overlay`; tokens `--fg-popup-bg`, `--fg-popup-border`, `--fg-popup-shadow`, `--fg-focus-ring` | S5.3, S5.7, S5.11 |
 
 **Not public:** `PluginHost`, `RendererRegistry`, `KeymapResolver`, `OverlayLayer`'s node handles, `extensions/features/*`'s internal state — the runtime's own shapes. A consumer names the factory, never the host.
@@ -264,6 +266,8 @@ Full prose lives in the step file that implements each decision.
 | D-S5-27 | Axe runs on every harness page in CI | S5.11 |
 | D-S5-28 | The tree-shaking budget is a probe plus a size limit | S5.12 |
 | D-S5-29 | The API reference renders the existing API report — no new dependency | S5.12 |
+| D-S5-30 | `PluginStore` gets a read-only cross-plugin view, `store.read()` | S5.10 |
+| D-S5-31 | `requires` orders setup; the `plugins` array's own order never matters | S5.10 |
 
 ---
 
@@ -301,6 +305,8 @@ Read these before you touch `src/`.
 | A weekend-shading plugin computes days with `86400000` | I10 forbids it in `src/`, and a consumer has `dataset.time` instead. The harness plugin uses the façade (D-S5-16) |
 | Column reorder rewrites the Dataset | It cannot. Columns are Gantt view state; the Field registry never changes (ADR 0005, D-S5-18) |
 | A consumer kind needs a core edit for its capabilities | It does not. `registerKindDefaults` is the fourth seam, beside producer, renderer and commands (D-S5-22) |
+| Two plugins are listed in the "wrong" order because one `requires` the other | There is no wrong order. The host sorts by `requires` before `setup` runs; array position is not the install order (D-S5-31) |
+| A plugin reserves a store and another plugin writes into it through `store.read()` | It cannot. `PluginStoreView` has no `set`/`remove` — only the reserving plugin's own `store.reserve()` handle can write (D-S5-30) |
 | Installing a Dataset plugin turns off the Rollup | It cannot. The Rollup is step 5 of the commit sequence, not the hook (D-S2-22) |
 | A second Dataset plugin overwrites the first one's extender | It wraps it. Order is the `plugins` array order, read top to bottom (D-S5-23, pending sign-off) |
 | A plugin writes its per-entry flag into `entry.meta` | It must not — that is the host/plugin collision ADR 0002 named. Reserve a `PluginStore` (D-S5-24) |
@@ -334,7 +340,7 @@ Read these before you touch `src/`.
 
 | Deferred | Returns at | Needs |
 |---|---|---|
-| `Interactions.linkCreate`, link endpoints, link renderer | S7 | `Dependency` data and link emission (#16) |
+| `Interactions.linkCreate`, link endpoints, link renderer | S7 | `Dependency` data and link emission — design open at #136 (supersedes #16) |
 | The first-party scheduling plugin as the extender's occupant | S7 | This slice's install API (#15) |
 | Performance budget on plugin-heavy frames | S6 | The measured spike (D2) |
 | Named multi-preset theme picker (`registerThemePreset`) | after S5 if asked | This slice's plugin runtime is the seam it needs (D-S1.10-9) |
@@ -357,10 +363,11 @@ The wording change to locked **D4** (`plans/00`), `CLAUDE.md`, `plans/01` §7, `
 
 ## 12. Spec edits
 
-Landed in the step that proves each one, except the batch at S5.12. Full list in [`s5.12-gallery-and-gate.md`](./s5.12-gallery-and-gate.md) §4. The five that change settled text rather than adding to it:
+Landed in the step that proves each one, except the batch at S5.12. Full list in [`s5.12-gallery-and-gate.md`](./s5.12-gallery-and-gate.md) §4. The six that change settled text rather than adding to it:
 
 1. `plans/03` §S5 — the six acceptance boxes gain ids `[S5-A1]`–`[S5-A6]` and a tracker pointer. **Landed with this spec.**
 2. `plans/01` §10 and `plans/02` §2 — `features: { … }` becomes `plugins: [ … ]` (Q3, D-S5-2).
 3. `plans/01` §10 — `registerItemEmitter` becomes `registerItemProducer`; `data.registerField` moves to the Dataset plugin context (Q4, Q16).
 4. `plans/00` D4, `CLAUDE.md`, `plans/01` §7, `plans/03` §S3, ADR 0002 — exclusivity is arity, not ownership (Q2, answered; the edit lands in S5.10).
 5. `src/view/capability.ts` — the comment says `edit` waits for S5; this slice is S5, so the key ships with the editor (S5.8).
+6. `CONTEXT.md` — the **Dependency** and **Scheduling plugin** entries, plus a new **`entryDependencies()`** entry: `Dependency` is owned by `entryDependencies()`, not the scheduling plugin, which `requires` and reads it (S5.0 grill, issue #111; Q18, Q19). **Landed with this spec.**
