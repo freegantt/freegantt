@@ -81,20 +81,20 @@ describe('PaneLayout', () => {
     paneLayout.destroy();
   });
 
-  it('gridWidth never goes below minGridWidth', () => {
+  it('a written gridWidth is honoured as given — minGridWidth does not clamp it (#127)', () => {
     const container = el();
     const paneLayout = new PaneLayout({ container, gridWidth: 200, minGridWidth: 120 });
 
     paneLayout.gridWidth = 40;
 
-    expect(paneLayout.gridWidth).toBe(120);
+    expect(paneLayout.gridWidth).toBe(40);
     paneLayout.destroy();
   });
 
-  it('minGridWidth defaults to 0 and is readable back', () => {
+  it('minGridWidth defaults to 40 and is readable back', () => {
     const container = el();
     const paneLayout = new PaneLayout({ container });
-    expect(paneLayout.minGridWidth).toBe(0);
+    expect(paneLayout.minGridWidth).toBe(40);
     paneLayout.destroy();
   });
 

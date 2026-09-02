@@ -17,8 +17,8 @@ they're opened.
   [../closed/124-aggregator-context-helpers.md](../closed/124-aggregator-context-helpers.md).
 - [#127](https://github.com/Pawel-IT/FreeGantt/issues/127) — Left pane min
   size, columns resize weird. `minGridWidth` shipped as a live, wired-through
-  `GanttOptions` property; the optional collapse-toggle affordance was left
-  for a future follow-up. See
+  `GanttOptions` property, default `40`, bounding the splitter drag only; the
+  optional collapse-toggle affordance was left for a future follow-up. See
   [../closed/127-pane-min-width-and-collapse.md](../closed/127-pane-min-width-and-collapse.md).
 - [#129](https://github.com/Pawel-IT/FreeGantt/issues/129) — Default Dataset
   timeZone to the browser zone when omitted. `timeZone` is now optional;

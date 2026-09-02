@@ -48,9 +48,9 @@ export interface GanttOptionsBase {
   scroll?: ScrollModel;
   /** Initial grid pane width in px (S1.8). Default: `--fg-grid-pane-width`, fallback 160. */
   gridWidth?: number;
-  /** Live (#127). The splitter (and any assignment) clamps `gridWidth` to this floor. Default `0` —
-   *  an explicit `gridWidth = 0` stays a legal way to collapse the grid pane; this only stops the
-   *  splitter drag from reaching it by accident. */
+  /** Live (#127). The floor a splitter drag clamps `gridWidth` to. Default `40` — wide enough for
+   *  one narrow column, so a drag cannot take the pane to nothing by accident. It bounds the drag
+   *  only: an explicit `gridWidth = 0` still collapses the grid pane on purpose. */
   minGridWidth?: number;
   /** Live (S1.10). Default `'auto'`: follows `prefers-color-scheme`. */
   theme?: Theme;
