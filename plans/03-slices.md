@@ -209,6 +209,8 @@ Slices are scope, not calendar estimates. Within a slice, entries are ordered so
 
 ## S5 — Extensibility, editing surfaces, a11y completion
 
+**Position:** after S4, before S6. **Spec drafted, not started.** Tracker: [`plans/s5-extensibility-and-editing/README.md`](./s5-extensibility-and-editing/README.md); work splits into [`s5.1-plugin-runtime.md`](./s5-extensibility-and-editing/s5.1-plugin-runtime.md)–[`s5.12-gallery-and-gate.md`](./s5-extensibility-and-editing/s5.12-gallery-and-gate.md). That spec settles seventeen scope calls, including OQ8 — `setExtender` composes rather than replaces (answered 2026-09-01), which rewords locked D4 in the same change as S5.10's code.
+
 **Goal:** the library's extension story is real and dogfooded (gate: a non-trivial built-in feature uses only the public plugin API), the grid grows into a proper editable table, and accessibility reaches its full committed level (D11).
 
 **Start constraint:** the remaining `GanttShell` split in [`plans/s4-hierarchy-and-rows/c4-split-gantt-shell.md`](./s4-hierarchy-and-rows/c4-split-gantt-shell.md) has landed (`TreeCollapse`, `collapseAll` / `expandAll`). Plugin wiring must not grow tree-collapse policy back into `gantt-shell.ts`. Do not name a new extract `GanttViewport` — `layout/` already owns `Viewport`.
@@ -226,12 +228,12 @@ Slices are scope, not calendar estimates. Within a slice, entries are ordered so
 
 **Acceptance**
 
-- [ ] Context menu and tooltips are plugins with zero private imports (lint-proven — the dogfood gate).
-- [ ] A harness-only third-party-style plugin (e.g., a "weekend shading" plugin) is written against the public contract only. (Was "weekend shading + jump-to-today"; the today line and `panToToday` ship in core at S1.12, so shading alone carries the gate.)
-- [ ] A consumer-defined entry kind (custom renderer + capabilities + context-menu `when` items, registered via config/plugin only) renders and behaves correctly with zero core edits — the §2.5 open-set claim, proven.
-- [ ] Every S3 pointer capability has a keyboard path; axe reports no violations on harness pages.
-- [ ] Consumer replaces the entry editor via `beforeEntryEdit` (demo in harness).
-- [ ] Unused features are absent from a consumer bundle (tree-shaking test in CI).
+- [ ] `[S5-A1]` Context menu and tooltips are plugins with zero private imports (lint-proven — the dogfood gate).
+- [ ] `[S5-A2]` A harness-only third-party-style plugin (e.g., a "weekend shading" plugin) is written against the public contract only. (Was "weekend shading + jump-to-today"; the today line and `panToToday` ship in core at S1.12, so shading alone carries the gate.)
+- [ ] `[S5-A3]` A consumer-defined entry kind (custom renderer + capabilities + context-menu `when` items, registered via config/plugin only) renders and behaves correctly with zero core edits — the §2.5 open-set claim, proven.
+- [ ] `[S5-A4]` Every S3 pointer capability has a keyboard path; axe reports no violations on harness pages.
+- [ ] `[S5-A5]` Consumer replaces the entry editor via `beforeEntryEdit` (demo in harness).
+- [ ] `[S5-A6]` Unused features are absent from a consumer bundle (tree-shaking test in CI).
 
 ---
 
