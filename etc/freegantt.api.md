@@ -25,6 +25,9 @@ export class AggregatorFailedError extends FreeGanttError {
 export type AggregatorName = 'min' | 'max' | 'sum' | 'count' | 'none' | (string & {});
 
 // @public
+export type Anchor = DOMRect | HTMLElement;
+
+// @public
 export type AsyncCancelableEvent = 'beforeEntryMove' | 'beforeEntryResize';
 
 // @public
@@ -106,6 +109,9 @@ export class ContainerNotFoundError extends FreeGanttError {
 
 // @public
 export type CoreFieldKey = keyof Omit<Entry, 'id'>;
+
+// @public
+export function createPopup(overlay: Overlay): Popup;
 
 // @public
 export interface CustomRow {
@@ -230,6 +236,9 @@ export interface DateLineInput {
 
 // @public
 export type DateOnlyEndRule = 'inclusive' | 'exclusive';
+
+// @public (undocumented)
+export type DismissTrigger = 'escape' | 'outsidePointer' | 'scroll' | 'blur';
 
 // @public
 export class DisposableStore {
@@ -885,6 +894,30 @@ export interface Point {
     // (undocumented)
     readonly y: number;
 }
+
+// @public (undocumented)
+export interface Popup {
+    // (undocumented)
+    close(): void;
+    // (undocumented)
+    readonly isOpen: boolean;
+    // (undocumented)
+    open(options: PopupOptions): void;
+}
+
+// @public (undocumented)
+export interface PopupOptions {
+    // (undocumented)
+    anchor: Anchor;
+    // (undocumented)
+    content: ElementDescription;
+    dismissOn?: readonly DismissTrigger[];
+    focus?: 'trap' | 'none';
+    placement?: PopupPlacement;
+}
+
+// @public (undocumented)
+export type PopupPlacement = 'top' | 'bottom' | 'start' | 'end';
 
 // @public
 export type PresetRef = ShippedPresetId | ViewPreset;
