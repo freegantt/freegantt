@@ -21,7 +21,7 @@ Q2 needs the user's sign-off before S5.10 starts; it rewords a locked decision. 
 | # | Question | Answer |
 |---|---|---|
 | **Q1** | One plugin contract, or two? | **Two contracts, two hosts.** `GanttPlugin` installs on a `Gantt`, sees DOM seams, and lives as long as that Gantt. `DatasetPlugin` installs on a `Dataset`, is DOM-free, and owns the extension hook and per-plugin storage. A headless `Dataset` in Node must be able to run the scheduling plugin with no Gantt in the process (D4), which one merged contract cannot give. §S5.1, D-S5-1. |
-| **Q2** | Does installing an extender **replace** the current one or **compose** over it? | **Compose — answered 2026-09-01.** `setExtender((next) => (request) => …)` takes a wrapper, so `data/` still holds one field and one call site (D-S2-6), and composition order is written at the install site instead of inferred from priorities. This is OQ8 reading (b), and it rewords locked **D4** ("occupies that hook exclusively" → "the hook has one occupant at a time"). S5.10 carries that edit to `plans/00`, `CLAUDE.md`, `plans/01` §7, `plans/03` §S3 and ADR 0002. §S5.10, D-S5-23. |
+| **Q2** | Does installing an extender **replace** the current one or **compose** over it? | **Compose — answered 2026-09-01.** `setExtender((next) => (request) => …)` takes a wrapper, so `data/` still holds one field and one call site (D-S2-6). This is OQ8 reading (b), and it rewords locked **D4** ("occupies that hook exclusively" → "the hook has one occupant at a time"). S5.10 carries that edit to `plans/00`, `CLAUDE.md`, `plans/01` §7, `plans/03` §S3 and ADR 0002. §S5.10, D-S5-23. Composition **order** is a separate question, settled by D-S5-31: `requires` orders setup, not the `plugins` array position (issue #137 F2 — D-S5-23's own text used to claim array order; that line is wrong and is corrected there). |
 | **Q3** | Does `features: { tooltips: true }` survive? | **No — it becomes `plugins: [tooltips()]`.** A name-keyed feature table forces the Gantt to import every built-in, which the tree-shaking box (`[S5-A6]`) forbids. A factory the consumer imports is tree-shakeable by construction. `plans/01` §10 and `plans/02` §2 are edited. §S5.1, D-S5-2. |
 | **Q4** | Who registers a Field — the Gantt plugin or the Dataset plugin? | **The Dataset plugin.** Fields are Dataset data, and the Rollup runs at construction before any Gantt exists (ADR 0005). `plans/01` §10's `PluginContext.data.registerField` moves to `DatasetPluginContext.fields.register`. A Gantt plugin still registers the **column** that shows it. §S5.9, D-S5-21. |
 | **Q5** | When may a plugin register anything? | **During `setup` only.** A later `register*` call throws `RegistrationClosedError`. Registration during setup keeps one resolution per seam and keeps a Field declaration ahead of the first Rollup. A plugin that must change behaviour later changes it through the public API, like any consumer. §S5.1, D-S5-4. |
@@ -204,7 +204,14 @@ export function lockEntries(lockedIds: readonly string[]): DatasetPlugin {
     setup(ctx) {
       const locks = ctx.store.reserve<{ locked: boolean }>();     // PluginStore, not Entry.meta
       for (const id of lockedIds) locks.set(id, { locked: true });
-      ctx.edits.setExtender((next) => (request) => refuseLocked(next(request), locks, request));
+      // The extender only ever adds cascade edits — it never refuses. During drag preview
+      // it still runs, so the locked neighbour still ghosts alongside the dragged bar.
+      ctx.edits.setExtender((next) => (request) => cascadeToLocked(next(request), locks, request));
+      // Refusal is a `beforeChange` veto, not an extender concern (issue #137 F3): the
+      // extender's `EditRequest` has no preview/commit distinction to refuse correctly on,
+      // but `beforeChange` fires once, only at commit, on the finished changeset — exactly
+      // where a refusal belongs.
+      ctx.events.on('beforeChange', ({ changeSet }) => !touchesLocked(changeSet, locks));
       return () => {};
     },
   };
@@ -213,7 +220,7 @@ export function lockEntries(lockedIds: readonly string[]): DatasetPlugin {
 
 | Export | Step |
 |---|---|
-| `GanttPlugin`, `PluginContext`, `PluginId`, `Disposer`, `DisposableStore`, `GanttOptions.plugins`, `Gantt.plugins`, `DuplicatePluginIdError`, `RegistrationClosedError` | S5.1 |
+| `GanttPlugin`, `PluginContext`, `PluginId`, `Disposer`, `DisposableStore`, `GanttOptions.plugins`, `Gantt.plugins`, `DuplicatePluginIdError`, `RegistrationClosedError`, `PluginSetupError` | S5.1 |
 | `Command`, `CommandRegistry`, `CommandContext`, `Gantt.commands`, `KeyBinding`, `KeyChord`, `UnknownCommandError` | S5.2 |
 | `OverlayHost`, `Popup`, `PopupOptions`, `PopupPlacement`, `Anchor` | S5.3 |
 | `ElementDescription`, `Renderer`, `BarRenderer`, `CellRenderer`, `HeaderRenderer`, `TooltipRenderer`, `RendererByKind`, `GanttOptions.barRenderer` / `.cellRenderer` / `.headerRenderer` / `.tooltipRenderer`, `RendererAlreadyRegisteredError` | S5.4 |
@@ -308,7 +315,11 @@ Read these before you touch `src/`.
 | Two plugins are listed in the "wrong" order because one `requires` the other | There is no wrong order. The host sorts by `requires` before `setup` runs; array position is not the install order (D-S5-31) |
 | A plugin reserves a store and another plugin writes into it through `store.read()` | It cannot. `PluginStoreView` has no `set`/`remove` — only the reserving plugin's own `store.reserve()` handle can write (D-S5-30) |
 | Installing a Dataset plugin turns off the Rollup | It cannot. The Rollup is step 5 of the commit sequence, not the hook (D-S2-22) |
-| A second Dataset plugin overwrites the first one's extender | It wraps it. Order is the `plugins` array order, read top to bottom (D-S5-23, pending sign-off) |
+| An extender throws to refuse a write | It never does — the extender only ever returns cascade edits, including during drag preview. Refusal is a `beforeChange` veto on the finished changeset, which fires once, at commit only (D-S5-23; issue #137 F3) |
+| Reassigning `plugins` with a freshly constructed same-`id` plugin silently does nothing | Correct, and dev builds warn: same `id`, new instance, config likely changed and was dropped. Reconfigure with two assignments (remove, then add) or two distinct ids (D-S5-3; issue #137 F5) |
+| A chord fires while the user is typing in the cell editor | It does not. The keymap resolver ignores key events whose target is editable (`input`, `textarea`, `contenteditable`) or mid-IME-composition, unless the binding opts in (D-S5-7; issue #137 F7) |
+| A `GanttPlugin` needs another `GanttPlugin`'s registration and lists itself first | Nothing enforces order for Gantt plugins — unlike `DatasetPlugin`, there is no `requires`. Setup runs in `plugins` array order; a plugin documents its own prerequisite and the consumer orders the array (D-S5-1; issue #137 F18) |
+| A second Dataset plugin overwrites the first one's extender | It wraps it. Composition order follows `requires`-resolved setup order, never the `plugins` array position (D-S5-23, D-S5-31) |
 | A plugin writes its per-entry flag into `entry.meta` | It must not — that is the host/plugin collision ADR 0002 named. Reserve a `PluginStore` (D-S5-24) |
 | `role="row"` on both panes makes a screen reader read every row twice | It would. Only the grid pane carries row and cell roles (D-S5-25) |
 | The built-ins ship in every bundle | They must not. They are values a consumer imports; `[S5-A6]` probes the built output (D-S5-2, D-S5-28) |
