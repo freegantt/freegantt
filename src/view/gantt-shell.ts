@@ -33,7 +33,10 @@ import type { Panes } from './pane-layout.js';
 import { attachSplitter } from './splitter.js';
 import type { SplitterAttachment } from './splitter.js';
 import { EventBus } from './event-bus.js';
-import type { AsyncCancelableEvent, GanttEventHandler, GanttEventMap } from './event-bus.js';
+import type { AsyncCancelableEvent, GanttEventHandler, GanttEventMap, GanttEvents } from './event-bus.js';
+import { PluginRuntime } from '../extensions/plugin-runtime.js';
+import type { ShellPlugin } from '../extensions/plugin-runtime.js';
+import { DisposableStore } from '../extensions/disposables.js';
 import type { GridWidthChange, SelectionChange } from './event-bus.js';
 import type { CollapseChange } from './collapse-state.js';
 import { attachScroll } from './scroll-attachment.js';
@@ -220,6 +223,15 @@ export interface GanttShellOptions {
   /** Internal (D-S4-24). One registry per Gantt, seeded with span/group/milestone. Tests inject a
    *  replacement; `GanttOptions` has no such field (public registration is S5). */
   itemProducerRegistry?: ItemProducerRegistry;
+  /** S5.1, D-S5-1: fills the api-level pieces of a plugin's `PluginContext` that `view/` cannot type
+   *  without reaching past its own boundary (D-S5-5) — the full api `Dataset` (`model/dataset.ts`'s
+   *  narrow interface hides `.transaction()`, same reason `commitEntryEdits` above exists) and the
+   *  public `Gantt` façade, which does not exist yet when this constructor runs. Returns `unknown`
+   *  because the concrete `PluginContext` type is bound in `api/gantt.ts`, which alone may import
+   *  both `Gantt` and this generic contract without closing an import cycle (`api/plugin.ts`'s file
+   *  header). `api/gantt.ts` always supplies this; omitted only by tests exercising the shell with no
+   *  plugins. */
+  buildPluginContext?: (parts: { events: GanttEvents; disposables: DisposableStore }) => unknown;
 }
 
 /** `exactOptionalPropertyTypes` treats `obj.key = undefined` as a type error when `key` is declared
@@ -279,6 +291,14 @@ export class GanttShell {
    *  this, so N mutations in one tick become one frame. */
   #frames = new FrameScheduler(() => this.render());
   #events = new EventBus<GanttEventMap, AsyncCancelableEvent>();
+  /** S5.1, D-S5-1: the plain `{ on, off }` a plugin's `ctx.events` actually is — built once, from
+   *  this shell's own `on`/`off` below, so a plugin never sees the rest of this class's public
+   *  surface the way handing it `this` directly would. */
+  #pluginEvents: GanttEvents = {
+    on: (name, handler) => this.on(name, handler),
+    off: (name, handler) => this.off(name, handler),
+  };
+  #pluginRuntime!: PluginRuntime<unknown>;
   #destroyed = false;
   /** This Gantt's layout pass. It keeps the row-height index alive across renders (#47) — the shell
    * states what to draw and holds no layout bookkeeping of its own. */
@@ -360,6 +380,21 @@ export class GanttShell {
       grid: this.#panes.grid,
       timeline: this.#panes.timeline,
       gridHeader: this.#panes.gridHeader,
+    });
+
+    // S5.1, D-S5-1: constructed once panes exist — a plugin's disposer may still need its overlay
+    // node (a later step's `ctx.view.overlay`), so this must outlive them either way. `destroy()`
+    // disposes it first, before any pane teardown, for the same reason. No plugin is actually set up
+    // yet: `Gantt.plugins`'s live setter runs `#pluginRuntime.install(...)` only once `api/gantt.ts` has
+    // finished assigning its own `#shell` field, so `buildPluginContext`'s `gantt` value is real by
+    // the time any `setup()` reads it.
+    this.#pluginRuntime = new PluginRuntime<unknown>(() => {
+      const disposables = new DisposableStore();
+      const context = (options.buildPluginContext ?? (() => ({})))({
+        events: this.#pluginEvents,
+        disposables,
+      });
+      return { context, disposables };
     });
 
     // The timeline pane is the single native scroller (D-D, D-S1.8-1); the grid pane follows it by
@@ -897,6 +932,17 @@ export class GanttShell {
     this.#events.off(name, handler);
   }
 
+  /** Live (D-S5-3): assignment diffs by `id` against what is already installed — a plugin present in
+   *  both lists is left alone, only the difference is set up or disposed. `api/gantt.ts` is the only
+   *  caller with a `Gantt` façade to hand `setup()`, so it alone writes here. */
+  get plugins(): readonly ShellPlugin<unknown>[] {
+    return this.#pluginRuntime.plugins;
+  }
+
+  set plugins(next: readonly ShellPlugin<unknown>[]) {
+    this.#pluginRuntime.install(next);
+  }
+
   #emitNavigationChange(): void {
     this.#events.emit('navigationChange', {
       presetId: this.#viewport.preset.id,
@@ -989,6 +1035,9 @@ export class GanttShell {
 
   destroy(): void {
     if (this.#destroyed) return;
+    // S5.1, D-S5-3: plugins first — a disposer may still need its overlay node or another pane-owned
+    // resource, so it must run before any pane below is torn down.
+    this.#pluginRuntime.disposeAll();
     this.#frames.cancel();
     this.#entryGestures?.detach();
     this.#keyboardEditing?.detach();

@@ -25,6 +25,7 @@ import type {
 import { attemptMutation } from './attempt-mutation.js';
 import { now, toInstant } from '../time/index.js';
 import type { Dataset } from './dataset.js';
+import type { GanttPlugin as GanttPluginOf, PluginContext as PluginContextOf } from './plugin.js';
 // api/ is the composition root that reaches interaction/ in (plans/01 §1: `API --> INT`,
 // `plans/s3-direct-manipulation/README.md` §0) — `view/` cannot, so `GanttShell` takes this by
 // constructor injection rather than importing it itself (see `AttachEntryGestures` in gantt-shell.ts).
@@ -88,6 +89,10 @@ export interface GanttOptionsBase {
   rowSource?: RowSource;
   /** Live (S4.6, D-S4-22). Collapsed row ids, loose on the way in. Default `[]`. */
   collapsed?: readonly (RowId | string)[];
+  /** Live (S5.1, D-S5-1, D-S5-3). Values a consumer imports (`tooltips()`, `contextMenu({...})`),
+   *  never names in a table. Assignment diffs by `id`: a plugin present before and after is left
+   *  alone, even when the new array holds a fresh object for that `id`. Default `[]`. */
+  plugins?: readonly GanttPlugin[];
 }
 
 /** Two ways to set the axis, made mutually exclusive at the type level (issue #84 — the prior shape
@@ -113,6 +118,12 @@ export type GanttScaleOptions =
     };
 
 export type GanttOptions = GanttOptionsBase & GanttScaleOptions;
+
+/** S5.1, D-S5-1: `GanttPlugin`/`PluginContext` bound to this class — see `api/plugin.ts`'s file
+ *  header for why the generic form lives there and the binding happens here. This is the type a
+ *  plugin author actually sees: `api/index.ts` re-exports these two names, never the generic ones. */
+export type GanttPlugin = GanttPluginOf<Gantt>;
+export type PluginContext = PluginContextOf<Gantt>;
 
 function pickDefined<T extends object, K extends keyof T>(
   options: T,
@@ -167,9 +178,21 @@ export class Gantt {
             for (const [id, edit] of edits) options.dataset.entries.update(id, edit);
           });
         }),
+      // S5.1, D-S5-1: the only place `dataset` (full `api/Dataset`) and `gantt` (`this`) can be
+      // bound into a `PluginContext` — see `api/plugin.ts`'s file header. `this` is captured, not
+      // read, here: by the time a plugin's `setup()` actually runs, `#shell` below is assigned (see
+      // the `plugins` live-property assignment after this call), the same ordering `zoomPresets`/
+      // `selection` already rely on.
+      buildPluginContext: (parts): PluginContext => ({
+        dataset: options.dataset,
+        gantt: this,
+        events: parts.events,
+        disposables: parts.disposables,
+      }),
     });
     if (options.zoomPresets !== undefined) this.#shell.zoomPresets = options.zoomPresets;
     if (options.selection !== undefined) this.#shell.selection = options.selection;
+    if (options.plugins !== undefined) this.#shell.plugins = options.plugins;
   }
 
   /** Reads a loose `range` through the dataset's zone (S1.12, D-S1.12-8) — the one place `Gantt`
@@ -453,6 +476,15 @@ export class Gantt {
 
   reveal(entryId: EntryId): void {
     this.#shell.reveal(entryId);
+  }
+
+  /** Live (S5.1, D-S5-1, D-S5-3). See `GanttOptions.plugins`. */
+  get plugins(): readonly GanttPlugin[] {
+    return this.#shell.plugins;
+  }
+
+  set plugins(next: readonly GanttPlugin[]) {
+    this.#shell.plugins = next;
   }
 
   on<K extends keyof GanttEventMap>(name: K, handler: GanttEventHandler<K>): void {

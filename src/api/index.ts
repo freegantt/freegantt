@@ -32,11 +32,19 @@ export type {
 // matches `api/dataset.ts`'s own import of `data/serialization/index.js`.
 export { invertChangeSet } from '../data/change-set.js';
 export { Gantt } from './gantt.js';
-export type { GanttOptions, GanttOptionsBase, GanttScaleOptions, DateLineInput } from './gantt.js';
+export type {
+  GanttOptions,
+  GanttOptionsBase,
+  GanttScaleOptions,
+  DateLineInput,
+  GanttPlugin,
+  PluginContext,
+} from './gantt.js';
 export type { Theme, ViewportGestures, ViewportGestureFlags } from '../view/index.js';
 export type {
   GanttEventMap,
   GanttEventHandler,
+  GanttEvents,
   AsyncCancelableEvent,
   GridWidthChange,
   NavigationChange,
@@ -86,10 +94,16 @@ export {
   MutationCancelledError,
   InvalidReplayOriginError,
   UnsupportedSchemaError,
+  DuplicatePluginIdError,
+  RegistrationClosedError,
+  PluginSetupError,
 } from '../model/index.js';
 
 // model/ types the public surface re-exports. A consumer building entries or catching errors names these.
 export { entryId, itemId, entryIdOfItem, segmentIndexOfItem, changeSetId } from '../model/index.js';
+export type { PluginId, Disposer } from '../model/index.js';
+// S5.1, D-S5-1: `PluginContext.disposables`'s own type — a plugin author's cleanup list.
+export type { DisposableStore } from '../extensions/disposables.js';
 export type {
   Entry,
   EntryKind,

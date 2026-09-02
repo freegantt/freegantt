@@ -72,11 +72,13 @@ const gantt = new Gantt({
   },
   viewportGestures: { wheelZoom: true },  // or `false` to turn wheel/keyboard pan+zoom off
 
-  features: {
-    links: { allowCreate: true },
-    tooltips: true,
-    contextMenu: { items: ({ entry, defaults }) => [...defaults, myItem(entry)] },
-  },
+  // Values a consumer imports and lists, never names in a table (S5.1, D-S5-2 — supersedes the
+  // `features: { tooltips: true, ... }` sketch this example originally showed; a name-keyed table
+  // would force the Gantt to import every built-in it can name, so an unused one still shipped).
+  plugins: [
+    tooltips(),
+    contextMenu({ items: ({ entry, defaults }) => [...defaults, myItem(entry)] }),
+  ],
 });
 ```
 

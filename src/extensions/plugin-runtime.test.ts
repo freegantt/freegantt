@@ -1,0 +1,185 @@
+import { describe, expect, it, vi } from 'vitest';
+import { PluginRuntime, RegistrationGate, type ShellPlugin } from './plugin-runtime.js';
+import { DisposableStore } from './disposables.js';
+import { DuplicatePluginIdError, PluginSetupError, RegistrationClosedError } from '../model/index.js';
+
+interface TestContext {
+  disposables: DisposableStore;
+  log: string[];
+}
+
+function makeRuntime(log: string[]) {
+  return new PluginRuntime<TestContext>(() => {
+    const disposables = new DisposableStore();
+    return { context: { disposables, log }, disposables };
+  });
+}
+
+function plugin(
+  id: string,
+  onSetup: (ctx: TestContext) => void,
+  onDispose?: (ctx: TestContext) => void,
+): ShellPlugin<TestContext> {
+  let capturedCtx: TestContext | undefined;
+  return {
+    id,
+    setup(ctx) {
+      capturedCtx = ctx;
+      onSetup(ctx);
+      return () => onDispose?.(capturedCtx!);
+    },
+  };
+}
+
+describe('PluginRuntime', () => {
+  it('runs setup once per plugin, in list order', () => {
+    const log: string[] = [];
+    const runtime = makeRuntime(log);
+    runtime.install([plugin('a', () => log.push('setup a')), plugin('b', () => log.push('setup b'))]);
+
+    expect(log).toEqual(['setup a', 'setup b']);
+  });
+
+  it('runs a disposer on removal', () => {
+    const log: string[] = [];
+    const runtime = makeRuntime(log);
+    runtime.install([
+      plugin(
+        'a',
+        () => {},
+        () => log.push('dispose a'),
+      ),
+    ]);
+
+    runtime.install([]);
+
+    expect(log).toEqual(['dispose a']);
+  });
+
+  it('assigning a list with the same ids sets nothing up again', () => {
+    const log: string[] = [];
+    const runtime = makeRuntime(log);
+    const a = plugin('a', () => log.push('setup a'));
+    runtime.install([a]);
+    runtime.install([a]);
+
+    expect(log).toEqual(['setup a']);
+  });
+
+  it('a duplicate id throws DuplicatePluginIdError', () => {
+    const log: string[] = [];
+    const runtime = makeRuntime(log);
+
+    expect(() => runtime.install([plugin('a', () => {}), plugin('a', () => {})])).toThrow(
+      DuplicatePluginIdError,
+    );
+  });
+
+  it('disposeAll() disposes every plugin in reverse registration order', () => {
+    const log: string[] = [];
+    const runtime = makeRuntime(log);
+    runtime.install([
+      plugin(
+        'a',
+        () => {},
+        () => log.push('dispose a'),
+      ),
+      plugin(
+        'b',
+        () => {},
+        () => log.push('dispose b'),
+      ),
+    ]);
+
+    runtime.disposeAll();
+
+    expect(log).toEqual(['dispose b', 'dispose a']);
+  });
+
+  it("disposes a plugin's own ctx.disposables ahead of its returned Disposer", () => {
+    const log: string[] = [];
+    const runtime = makeRuntime(log);
+    runtime.install([
+      plugin(
+        'a',
+        (ctx) => ctx.disposables.add(() => log.push('ctx disposable')),
+        () => log.push('own disposer'),
+      ),
+    ]);
+
+    runtime.install([]);
+
+    expect(log).toEqual(['ctx disposable', 'own disposer']);
+  });
+
+  it('a setup() throw unwinds the already-set-up plugins from that batch, in reverse, and rethrows PluginSetupError', () => {
+    const log: string[] = [];
+    const runtime = makeRuntime(log);
+
+    expect(() =>
+      runtime.install([
+        plugin(
+          'a',
+          () => {},
+          () => log.push('dispose a'),
+        ),
+        plugin('b', () => {
+          throw new Error('boom');
+        }),
+      ]),
+    ).toThrow(PluginSetupError);
+
+    expect(log).toEqual(['dispose a']);
+    expect(runtime.plugins).toEqual([]);
+  });
+
+  it('a disposer throw is logged and disposal continues', () => {
+    const log: string[] = [];
+    const runtime = makeRuntime(log);
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    runtime.install([
+      plugin(
+        'a',
+        () => {},
+        () => log.push('dispose a'),
+      ),
+      plugin(
+        'b',
+        () => {},
+        () => {
+          throw new Error('disposer boom');
+        },
+      ),
+    ]);
+
+    runtime.disposeAll();
+
+    expect(log).toEqual(['dispose a']);
+    expect(errorSpy).toHaveBeenCalledTimes(1);
+    errorSpy.mockRestore();
+  });
+
+  it('a same-id, new-instance reassignment warns in dev mode', () => {
+    const log: string[] = [];
+    const runtime = makeRuntime(log);
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    runtime.install([plugin('a', () => {})]);
+
+    runtime.install([plugin('a', () => {})]);
+
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    expect(warnSpy.mock.calls[0]?.[0]).toContain('"a"');
+    warnSpy.mockRestore();
+  });
+});
+
+describe('RegistrationGate', () => {
+  it('is open during setup and throws RegistrationClosedError once closed', () => {
+    const gate = new RegistrationGate('demo.plugin');
+    expect(() => gate.assertOpen()).not.toThrow();
+
+    gate.close();
+
+    expect(() => gate.assertOpen()).toThrow(RegistrationClosedError);
+  });
+});

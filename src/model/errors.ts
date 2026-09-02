@@ -4,6 +4,7 @@
 
 import type { EntryId } from './ids.js';
 import type { ChangeSet } from './change-set.js';
+import type { PluginId } from './plugin.js';
 
 export class FreeGanttError extends Error {
   readonly code: string;
@@ -238,6 +239,45 @@ export class DuplicateRowIdError extends FreeGanttError {
     super('duplicate-row-id', `rows: custom source returned duplicate id "${rowId}"`);
     this.name = 'DuplicateRowIdError';
     this.rowId = rowId;
+  }
+}
+
+/** `code: 'duplicate-plugin-id'` — two entries of a `plugins` list (a `GanttPlugin[]`, or a
+ *  `DatasetPlugin[]` in S5.10) share one `PluginId` (D-S5-3). */
+export class DuplicatePluginIdError extends FreeGanttError {
+  readonly pluginId: PluginId;
+
+  constructor(pluginId: PluginId) {
+    super('duplicate-plugin-id', `plugins: "${pluginId}" is installed twice in one list`);
+    this.name = 'DuplicatePluginIdError';
+    this.pluginId = pluginId;
+  }
+}
+
+/** `code: 'registration-closed'` — a `ctx.*.register*` call reached after that plugin's `setup()`
+ *  already returned (D-S5-4). Registration is legal only while `setup` is running. */
+export class RegistrationClosedError extends FreeGanttError {
+  readonly pluginId: PluginId;
+
+  constructor(pluginId: PluginId) {
+    super(
+      'registration-closed',
+      `plugins: "${pluginId}" tried to register after setup — registration is legal during setup only`,
+    );
+    this.name = 'RegistrationClosedError';
+    this.pluginId = pluginId;
+  }
+}
+
+/** `code: 'plugin-setup-failed'` — a plugin's `setup()` threw. Every plugin already set up in this
+ *  install batch is disposed, in reverse order, before this is thrown (issue #137 F4). */
+export class PluginSetupError extends FreeGanttError {
+  readonly pluginId: PluginId;
+
+  constructor(pluginId: PluginId, cause: unknown) {
+    super('plugin-setup-failed', `plugins: "${pluginId}" threw during setup`, { cause });
+    this.name = 'PluginSetupError';
+    this.pluginId = pluginId;
   }
 }
 

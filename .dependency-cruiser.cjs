@@ -55,13 +55,30 @@ module.exports = {
     forbid('data-boundary', 'data', ['time', 'model']),
     forbid('render-boundary', 'render', ['layout']),
     // model: Entry types flow through view as type-only params (same rationale as api, above).
-    forbid('view-boundary', 'view', ['render', 'layout', 'data', 'model']),
+    // extensions: S5.1, D-S5-5 — `view/gantt-shell.ts` constructs the `PluginHost` and hands it the
+    // public `Gantt` façade; the arrow is view/ -> extensions/, never the reverse (see the
+    // `extensions-public-only` rule below — extensions/ may not import view/ back).
+    forbid('view-boundary', 'view', ['render', 'layout', 'data', 'model', 'extensions']),
     // model: Entry/EntryId/ItemId types flow through interaction/ as type-only params (S3, D-S3-4/
     // D-S3-5, plans/s3-direct-manipulation/README.md P3 — landed with S3.2). One arrow, nothing else:
     // interaction/ still may not reach time/, layout/ or render/ — every date/pixel computation a
     // gesture needs is a pure layout/ function the shell hands back through EntryGestureContext.
     forbid('interaction-boundary', 'interaction', ['view', 'data', 'model']),
-    forbid('extensions-boundary', 'extensions', ['view', 'interaction']),
+    // S5.1, D-S5-5: the dogfood gate as a lint rule, not a review note — replaces the old placeholder
+    // extensions-boundary rule (which allowed view/interaction and forbade api/model, backwards from
+    // what this slice needs). `extensions/` (the plugin runtime plus every built-in feature) may see
+    // only what a third-party plugin author can import — `api/` and `model/`. When a built-in cannot
+    // do its job through that surface, the public API has a gap: close the gap, never widen this
+    // rule. `scripts/guard-red-test.mjs` proves it actually blocks a violation.
+    {
+      name: 'extensions-public-only',
+      severity: 'error',
+      comment:
+        'plans/s5-extensibility-and-editing/s5.1-plugin-runtime.md D-S5-5: src/extensions may only ' +
+        'import src/api and src/model.',
+      from: { path: '^src/extensions' },
+      to: { path: '^src/(?!extensions|api|model)' },
+    },
     // model and time are the type/primitive surface api/ re-exports (plans/01 §1: "api/ and model/
     // types are public", widened to time/'s public primitives and presets by #25, and to layout/'s
     // TimeScaleModel/ScrollModel by issue #91 §9-I — D9 names both as public, consumer-constructed
@@ -75,7 +92,10 @@ module.exports = {
     // itself takes it structurally-typed, no import of its own — see gantt-shell.ts's
     // `AttachEntryGestures` comment), the same way it already wires view/, data/, model/, time/ and
     // layout/ together for a plain `new Gantt(...)`.
-    forbid('api-boundary', 'api', ['view', 'data', 'model', 'time', 'layout', 'interaction']),
+    // extensions: S5.1, D-S5-1/D-S5-5 — `api/plugin.ts` types `PluginContext.disposables` against
+    // `extensions/disposables.ts`'s `DisposableStore` (a leaf with no further imports of its own, so
+    // this one addition carries no risk of routing api/ through the DOM-touching parts of extensions/).
+    forbid('api-boundary', 'api', ['view', 'data', 'model', 'time', 'layout', 'interaction', 'extensions']),
     // D-S2-23: the first of the four removable-leaf rules. Only `build-commit-change-set.ts` (commit
     // path) and `transaction.ts` (construction path) may import the Rollup — delete src/data/rollup.ts
     // and groups keep their authored values, the same result `rollUpKinds: 'none'` already gives a
