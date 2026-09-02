@@ -40,6 +40,9 @@ const LIGHT_COLOR_TOKENS = `
   /* Distinct hue from --fg-bar-fill (S3, D-S3-7): the same colour as the bar's own fill would make the
      selection outline invisible against it. */
   --fg-selection-color: oklch(0.55 0.19 25);
+  --fg-popup-bg: #FFFFFF;
+  --fg-popup-border: #E6E2D9;
+  --fg-popup-shadow: 0 2px 8px rgba(26, 24, 21, 0.16);
 `.trimEnd();
 
 const DARK_COLOR_TOKENS = `
@@ -59,6 +62,9 @@ const DARK_COLOR_TOKENS = `
   --fg-warn: #FBBF24;
   --fg-date-line-color: #F87171;
   --fg-selection-color: oklch(0.75 0.19 25);
+  --fg-popup-bg: #1B1D22;
+  --fg-popup-border: #2B2F36;
+  --fg-popup-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
 `.trimEnd();
 
 const BASE_STYLESHEET = `
@@ -85,7 +91,9 @@ ${DARK_COLOR_TOKENS}
 /* S3.1: a click selects an Entry. Native text highlight on a bar or row label is a different
    action and it also lets a double-click take text from outside the Gantt. S5's editor overlay
    sets user-select: text on the editor itself. */
-.fg-container { display: flex; overflow: hidden; user-select: none; }
+/* position: relative so .fg-overlay's inset: 0 (below) anchors to the container's own box, not an
+   outer one — the container had no positioned ancestor of its own to need before S5.3. */
+.fg-container { display: flex; overflow: hidden; user-select: none; position: relative; }
 .fg-grid-pane { display: flex; flex-direction: column; flex-shrink: 0; overflow: hidden; background: var(--fg-pane-bg); }
 /* S1.12, D-S1.12-9: mirrors .fg-header's own band stack — one .fg-band per header band
    (setHeaderBandCount), sized from the same --fg-band-height expression. */
@@ -159,6 +167,11 @@ ${DARK_COLOR_TOKENS}
 /* S3.8, D-S3-15: hot-path Cursor line — same stroke token as Date lines, never a frame decoration. */
 .fg-cursor-line { position: absolute; top: 0; z-index: 2; border-left: 1px solid var(--fg-date-line-color); pointer-events: none; }
 .fg-cursor-line-label { position: absolute; left: 0; top: 0; z-index: 2; white-space: nowrap; color: var(--fg-date-line-color); pointer-events: none; }
+/* S5.3, D-S5-8: the one overlay layer, above both panes (DOM order alone gives it the top of the
+   stack — no z-index needed against them). pointer-events: none so an empty overlay never blocks the
+   panes underneath; a mounted .fg-popup opts back in. */
+.fg-overlay { position: absolute; inset: 0; pointer-events: none; overflow: visible; }
+.fg-popup { position: absolute; top: 0; left: 0; pointer-events: auto; background: var(--fg-popup-bg); border: 1px solid var(--fg-popup-border); box-shadow: var(--fg-popup-shadow); border-radius: 4px; }
 `.trim();
 
 /** Injects the library's base stylesheet into `doc` exactly once. Safe to call from every Gantt

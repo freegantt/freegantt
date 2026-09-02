@@ -30,6 +30,8 @@ import { createDomBackend } from '../render/dom/index.js';
 import { readPixelProperty } from '../render/dom/pixel-property.js';
 import { PaneLayout } from './pane-layout.js';
 import type { Panes } from './pane-layout.js';
+import { DomOverlay } from './overlay.js';
+import type { Overlay } from './overlay.js';
 import { attachSplitter } from './splitter.js';
 import type { SplitterAttachment } from './splitter.js';
 import { EventBus } from './event-bus.js';
@@ -238,6 +240,7 @@ export interface GanttShellOptions {
     disposables: DisposableStore;
     commands: CommandRegistry<unknown>;
     registerKeybinding: (binding: KeyBinding<unknown>) => void;
+    overlay: Overlay;
   }) => unknown;
   /** S5.2, D-S5-6: fills the api-level pieces of a `CommandContext` for the same reason
    *  `buildPluginContext` above fills `PluginContext`'s — the full api `Dataset` (with `undo`/`redo`)
@@ -349,6 +352,9 @@ export class GanttShell {
   #fieldContext: FieldContext | undefined;
   #rowSource: RowSource = DEFAULT_ROW_SOURCE;
   #treeCollapse!: TreeCollapse;
+  /** S5.3, D-S5-8: constructed once panes exist — see the plugin runtime's own comment just below for
+   *  why. */
+  #overlay: DomOverlay;
 
   constructor(options: GanttShellOptions) {
     this.#options = options;
@@ -362,6 +368,9 @@ export class GanttShell {
       ...(options.minGridWidth !== undefined ? { minGridWidth: options.minGridWidth } : {}),
     });
     this.#panes = this.#paneLayout.panes;
+    // S5.3, D-S5-8: constructed right after the panes it measures, so it is ready by the time the
+    // plugin runtime (just below) builds its first `PluginContext`.
+    this.#overlay = new DomOverlay(this.#container, this.#panes.overlay, this.#paneLayout);
 
     const hasOwnOptions =
       options.preset !== undefined || options.range !== undefined || options.fit !== undefined;
@@ -431,6 +440,7 @@ export class GanttShell {
         disposables,
         commands: this.#commandRegistry,
         registerKeybinding,
+        overlay: this.#overlay,
       });
       return { context, disposables, registrationGate: gate };
     });
@@ -1247,6 +1257,7 @@ export class GanttShell {
     // S5.1, D-S5-3: plugins first — a disposer may still need its overlay node or another pane-owned
     // resource, so it must run before any pane below is torn down.
     this.#pluginRuntime.disposeAll();
+    this.#overlay.destroy();
     this.#container.removeEventListener('keydown', this.#keymapListener);
     this.#frames.cancel();
     this.#entryGestures?.detach();

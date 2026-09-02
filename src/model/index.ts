@@ -4,6 +4,7 @@ export type { Instant, TimeUnit, TimeSpan, Duration } from './time.js';
 export type { InstantInput, TimeSpanInput, DateOnlyEndRule } from './time.js';
 export type { Entry, EntryKind, EntryInput, EntryEdit, StoredEdit, EntryEdits } from './entry.js';
 export type { Point, Size, PixelSpan, Rect, ClientPoint } from './geometry.js';
+export type { ElementDescription } from './render.js';
 export type { Dataset, DatasetHierarchy, EntryStore, EntryStoreView, RollUpKinds } from './dataset.js';
 export type { PluginId, Disposer } from './plugin.js';
 export type { KeyChord } from './command.js';

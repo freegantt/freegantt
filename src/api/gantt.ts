@@ -207,6 +207,7 @@ export class Gantt {
         disposables: parts.disposables,
         commands: parts.commands,
         interaction: { registerKeybinding: parts.registerKeybinding },
+        view: { overlay: parts.overlay },
       }),
       buildCommandContext: (parts): CommandContext => ({
         dataset: options.dataset,
