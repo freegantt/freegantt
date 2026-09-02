@@ -18,6 +18,7 @@ export default defineConfig({
       input: {
         index: page('index.html'),
         'scroll-sync': page('scroll-sync.html'),
+        'grid-scroll': page('grid-scroll.html'),
         zoom: page('zoom.html'),
         'large-dataset': page('large-dataset.html'),
         data: page('data.html'),

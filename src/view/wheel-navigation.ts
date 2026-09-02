@@ -31,16 +31,32 @@ function deltaPx(e: WheelEvent, axis: 'x' | 'y'): number {
   return delta;
 }
 
+export interface WheelNavigationOptions {
+  /** The pane whose rect anchors a ctrl/⌘+wheel zoom's offsetX. Default `pane` — pass the
+   *  timeline pane explicitly when `pane` is the grid pane, whose own x-axis is not time and so
+   *  cannot anchor a time-scale zoom. */
+  anchorPane?: HTMLElement;
+  /** #126: `pane` has no native scroll of its own (the grid pane, D-S1.8-1) and so needs a plain,
+   *  unmodified wheel forwarded into `ctx.panBy` — the timeline pane does not set this: it is a
+   *  real native scroller, and a plain wheel there is already the browser's own `scroll` event
+   *  (`scroll-attachment.ts`), so forwarding it too would double-handle the same gesture. Default
+   *  `false`. */
+  forwardPlainWheel?: boolean;
+}
+
 export function attachWheelNavigation(
   pane: HTMLElement,
   ctx: WheelNavigationContext,
+  options: WheelNavigationOptions = {},
 ): WheelNavigationAttachment {
+  const anchorPane = options.anchorPane ?? pane;
+  const forwardPlainWheel = options.forwardPlainWheel ?? false;
   let zoomRemainderPx = 0;
 
   function onWheel(e: WheelEvent): void {
     if ((e.ctrlKey || e.metaKey) && ctx.wheelZoomEnabled()) {
       e.preventDefault();
-      const offsetX = e.clientX - pane.getBoundingClientRect().left;
+      const offsetX = e.clientX - anchorPane.getBoundingClientRect().left;
       const dy = deltaPx(e, 'y');
       if (dy === 0) return;
       if (zoomRemainderPx !== 0 && Math.sign(dy) !== Math.sign(zoomRemainderPx)) {
@@ -62,6 +78,11 @@ export function attachWheelNavigation(
       e.preventDefault();
       const alongX = deltaPx(e, 'x');
       ctx.panBy(alongX !== 0 ? alongX : deltaPx(e, 'y'), 0);
+      return;
+    }
+    if (forwardPlainWheel && ctx.wheelPanEnabled()) {
+      e.preventDefault();
+      ctx.panBy(0, deltaPx(e, 'y'));
     }
   }
 
