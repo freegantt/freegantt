@@ -335,7 +335,7 @@ Read these before you touch `src/`.
 | Log-time height index | S6 | The measured spike (D2) |
 | Row reorder and reparent **by drag** | when an authored order Field exists | That Field, plus a drop-target vocabulary (D-S4-31). S4 ships the data half: `update(id, { parentId })` |
 | Moving a `'group'` moves its subtree | S7 | The extension hook writes children |
-| Link endpoints on a multi-item row (`links.endpoints`) | S7 | Link emission (#16) |
+| Link endpoints on a multi-item row (`links.endpoints`) | S7 | Link emission — design open at #136 (supersedes #16) |
 | Rest of the `GanttShell` split (GLM C4 minus today-landing) | landed | [`c4-split-gantt-shell.md`](./c4-split-gantt-shell.md) — `TreeCollapse`, `collapseAll` / `expandAll`; `layoutInputFromShell` and `#phase` left in the shell |
 | Staged commit pipeline + unify construction with commit promote/rollup | S7 | `plans/03` §S7; S4.11 review C3 |
 | Barrel prune of `ClientPoint` and similar public types listed in `etc/freegantt.api.md` | later | Optional. Not this close-out. |
