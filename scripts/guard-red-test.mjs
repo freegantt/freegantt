@@ -82,4 +82,12 @@ checkRedTestFile(
   'serialization-is-removable: second importer',
 );
 
+// D-S5-5 (plans/s5-extensibility-and-editing/s5.1-plugin-runtime.md): extensions/ may import only
+// api/ and model/ — the dogfood gate that proves a built-in feature took no back door.
+checkRedTestFile(
+  'src/extensions/__boundary_red_test__.ts',
+  "// Deliberate boundary violation — extensions/ may import api/ and model/ only (D-S5-5).\nimport '../view/styles.js';\nexport {};\n",
+  'extensions/ -> view/ boundary violation (D-S5-5, the dogfood gate)',
+);
+
 console.log('guard-red-test: all boundary and removable-leaf rules correctly blocked their violations.');

@@ -30,6 +30,7 @@ export default defineWorkspace([
         'src/render/dom/**/*.test.ts',
         'src/view/**/*.test.ts',
         'src/interaction/**/*.test.ts',
+        'src/extensions/**/*.test.ts',
         'src/api/**/*.test.ts',
         'test/dom/**/*.test.ts',
       ],

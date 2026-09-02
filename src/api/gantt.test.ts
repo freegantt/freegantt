@@ -1998,3 +1998,120 @@ describe('Gantt pack-mode scroll (S4.8, [S4-A5])', () => {
     vi.unstubAllGlobals();
   });
 });
+
+describe('Gantt.plugins (S5.1, D-S5-1/D-S5-3)', () => {
+  function makeGantt(container: HTMLElement, plugins?: import('./gantt.js').GanttPlugin[]) {
+    return new Gantt({
+      container,
+      dataset: new Dataset({ entries: sampleEntries.slice(0, 2), timeZone: 'UTC' }),
+      ...(plugins !== undefined ? { plugins } : {}),
+    });
+  }
+
+  it('sets up on construction and disposes on destroy()', () => {
+    const log: string[] = [];
+    const container = document.createElement('div');
+    let seenGantt: unknown;
+    const gantt = makeGantt(container, [
+      {
+        id: 'demo.log',
+        setup(ctx) {
+          seenGantt = ctx.gantt;
+          log.push('setup');
+          return () => log.push('dispose');
+        },
+      },
+    ]);
+
+    expect(log).toEqual(['setup']);
+    expect(seenGantt).toBe(gantt);
+
+    gantt.destroy();
+
+    expect(log).toEqual(['setup', 'dispose']);
+  });
+
+  it('a plugin reads the real Dataset and event bus off its context', () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({ entries: sampleEntries.slice(0, 2), timeZone: 'UTC' });
+    let sawEntryCount = -1;
+    let firedGridWidthChange = false;
+    const gantt = new Gantt({
+      container,
+      dataset,
+      plugins: [
+        {
+          id: 'demo.reader',
+          setup(ctx) {
+            sawEntryCount = ctx.dataset.entries.all.length;
+            ctx.events.on('gridWidthChange', () => {
+              firedGridWidthChange = true;
+            });
+            return () => {};
+          },
+        },
+      ],
+    });
+
+    expect(sawEntryCount).toBe(2);
+
+    gantt.gridWidth = gantt.gridWidth + 10;
+    expect(firedGridWidthChange).toBe(true);
+
+    gantt.destroy();
+  });
+
+  it('gantt.plugins = [...] adds and removes without a remount (bar nodes keep identity, I8)', () => {
+    const container = document.createElement('div');
+    const gantt = makeGantt(container, []);
+    const barBefore = container.querySelector('.fg-bar');
+
+    let disposed = false;
+    gantt.plugins = [...gantt.plugins, { id: 'demo.added', setup: () => () => (disposed = true) }];
+    expect(gantt.plugins.map((p) => p.id)).toEqual(['demo.added']);
+    expect(container.querySelector('.fg-bar')).toBe(barBefore);
+
+    gantt.plugins = gantt.plugins.filter((p) => p.id !== 'demo.added');
+    expect(disposed).toBe(true);
+    expect(gantt.plugins).toEqual([]);
+
+    gantt.destroy();
+  });
+
+  it('destroy() disposes plugins before panes', () => {
+    const container = document.createElement('div');
+    let containerHadChildrenAtDispose = false;
+    const gantt = makeGantt(container, [
+      {
+        id: 'demo.check',
+        setup: () => () => {
+          containerHadChildrenAtDispose = container.children.length > 0;
+        },
+      },
+    ]);
+
+    gantt.destroy();
+
+    expect(containerHadChildrenAtDispose).toBe(true);
+  });
+
+  it('two Gantts install independent plugin instances (I2)', () => {
+    const containerA = document.createElement('div');
+    const containerB = document.createElement('div');
+    const setups: string[] = [];
+    const plugin = (label: string): import('./gantt.js').GanttPlugin => ({
+      id: 'demo.shared-id',
+      setup: () => {
+        setups.push(label);
+        return () => {};
+      },
+    });
+    const ganttA = makeGantt(containerA, [plugin('a')]);
+    const ganttB = makeGantt(containerB, [plugin('b')]);
+
+    expect(setups).toEqual(['a', 'b']);
+
+    ganttA.destroy();
+    ganttB.destroy();
+  });
+});

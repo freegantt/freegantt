@@ -5,6 +5,7 @@ export type { InstantInput, TimeSpanInput, DateOnlyEndRule } from './time.js';
 export type { Entry, EntryKind, EntryInput, EntryEdit, StoredEdit, EntryEdits } from './entry.js';
 export type { Point, Size, PixelSpan, Rect, ClientPoint } from './geometry.js';
 export type { Dataset, DatasetHierarchy, EntryStore, EntryStoreView, RollUpKinds } from './dataset.js';
+export type { PluginId, Disposer } from './plugin.js';
 export type { DatasetDocument, EntryDocument, SerializedField } from './document.js';
 export type {
   StoreName,
@@ -54,4 +55,7 @@ export {
   MutationCancelledError,
   InvalidReplayOriginError,
   UnsupportedSchemaError,
+  DuplicatePluginIdError,
+  RegistrationClosedError,
+  PluginSetupError,
 } from './errors.js';

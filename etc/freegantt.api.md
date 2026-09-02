@@ -207,6 +207,16 @@ export interface DateLineInput {
 export type DateOnlyEndRule = 'inclusive' | 'exclusive';
 
 // @public
+export class DisposableStore {
+    // (undocumented)
+    add(dispose: Disposer): void;
+    disposeAll(): void;
+}
+
+// @public
+export type Disposer = () => void;
+
+// @public
 export class DuplicateEntryIdError extends FreeGanttError {
     constructor(entryId: EntryId);
 }
@@ -223,6 +233,13 @@ export class DuplicateFieldSourceError extends FreeGanttError {
     constructor(metaKey: string);
     // (undocumented)
     readonly metaKey: string;
+}
+
+// @public
+export class DuplicatePluginIdError extends FreeGanttError {
+    constructor(pluginId: PluginId);
+    // (undocumented)
+    readonly pluginId: PluginId;
 }
 
 // @public
@@ -521,6 +538,8 @@ export class Gantt {
     on<K extends keyof GanttEventMap>(name: K, handler: GanttEventHandler<K>): void;
     panToDate(date: InstantInput, align?: 'start' | 'center'): void;
     panToToday(align?: 'start' | 'center'): void;
+    get plugins(): readonly GanttPlugin[];
+    set plugins(next: readonly GanttPlugin[]);
     // (undocumented)
     get preset(): ViewPreset;
     set preset(ref: PresetRef);
@@ -587,6 +606,14 @@ export interface GanttEventMap {
     selectionChange: SelectionChange;
 }
 
+// @public
+export interface GanttEvents {
+    // (undocumented)
+    off<K extends keyof GanttEventMap>(name: K, handler: GanttEventHandler<K>): void;
+    // (undocumented)
+    on<K extends keyof GanttEventMap>(name: K, handler: GanttEventHandler<K>): void;
+}
+
 // @public (undocumented)
 export type GanttOptions = GanttOptionsBase & GanttScaleOptions;
 
@@ -603,6 +630,7 @@ export interface GanttOptionsBase {
     interactions?: Interactions;
     locale?: Intl.LocalesArgument;
     minGridWidth?: number;
+    plugins?: readonly GanttPlugin[];
     rowSource?: RowSource;
     scroll?: ScrollModel;
     selection?: readonly (EntryId | string)[];
@@ -612,6 +640,11 @@ export interface GanttOptionsBase {
     viewportGestures?: ViewportGestures;
     zoomPresets?: readonly PresetRef[];
 }
+
+// Warning: (ae-forgotten-export) The symbol "GanttPlugin_2" needs to be exported by the entry point index.d.ts
+//
+// @public
+export type GanttPlugin = GanttPlugin_2<Gantt>;
 
 // @public
 export type GanttScaleOptions = {
@@ -760,6 +793,21 @@ export interface PixelSpan {
     readonly x: number;
 }
 
+// Warning: (ae-forgotten-export) The symbol "PluginContext_2" needs to be exported by the entry point index.d.ts
+//
+// @public (undocumented)
+export type PluginContext = PluginContext_2<Gantt>;
+
+// @public
+export type PluginId = string;
+
+// @public
+export class PluginSetupError extends FreeGanttError {
+    constructor(pluginId: PluginId, cause: unknown);
+    // (undocumented)
+    readonly pluginId: PluginId;
+}
+
 // @public
 export interface Point {
     // (undocumented)
@@ -782,6 +830,13 @@ export interface ProposedSpan {
     readonly entry: EntryId;
     // (undocumented)
     readonly start: Instant;
+}
+
+// @public
+export class RegistrationClosedError extends FreeGanttError {
+    constructor(pluginId: PluginId);
+    // (undocumented)
+    readonly pluginId: PluginId;
 }
 
 // @public

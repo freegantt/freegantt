@@ -94,3 +94,13 @@ export interface GanttEventMap {
 export type GanttEventHandler<K extends keyof GanttEventMap> = (
   payload: GanttEventMap[K],
 ) => void | false | (K extends AsyncCancelableEvent ? Promise<void | false> : never);
+
+/** S5.1, D-S5-1: `PluginContext.events` is this pair, so a plugin author's autocomplete reads the
+ *  same as a consumer's own `gantt.on(...)` (one name, one concept — CLAUDE.md) rather than a second,
+ *  differently-shaped events surface. `GanttShell`'s own `on`/`off` below already satisfy this shape;
+ *  a plugin gets a plain object built from them, not the shell itself (no back-door to its other
+ *  public methods). */
+export interface GanttEvents {
+  on<K extends keyof GanttEventMap>(name: K, handler: GanttEventHandler<K>): void;
+  off<K extends keyof GanttEventMap>(name: K, handler: GanttEventHandler<K>): void;
+}

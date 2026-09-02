@@ -748,7 +748,7 @@ interface PluginContext {
 
 Rules:
 
-- Plugins are configured declaratively (`features: { tooltips: true, contextMenu: {...} }`) and are tree-shakeable — an unused feature costs zero bytes.
+- Plugins are values a consumer imports and lists (`plugins: [tooltips(), contextMenu({...})]`, S5.1 D-S5-2 — supersedes the `features: { tooltips: true, ... }` name table sketched here originally) and are tree-shakeable — an unused feature costs zero bytes because nothing names it.
 - Setup order = registration order; plugins must not depend on sibling load order (communicate via events/commands only).
 - A plugin may not reach into another plugin or any internal module — the `PluginContext` is its entire world. Enforced by the same import-boundary lint.
 - **Dogfooding is the test:** built-in features (tooltips, context menu, editors) use this contract with no private back-doors. If a built-in needs a back-door, the contract is wrong — fix the contract (gate S5 → S6). The first-party scheduling plugin (S7) is a second consumer of the same contract.
