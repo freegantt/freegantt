@@ -243,14 +243,14 @@ Colour defaults are sourced from an existing, unnamed palette this team maintain
 
 S3 Parts: `.fg-bar-handle` (shared resize-handle pair), `.fg-cursor-line`, `.fg-cursor-line-label`. S3 State attribute: `data-state` on `.fg-bar` (`hovered`, `selected`, `pending`, `dragging`, `ghost`) and `data-movable` (grab cursor).
 
-Renderers return **plain serializable element descriptions** (tag/class/style/text/children), applied by the engine's reconciler — never live DOM nodes (nodes are recycled by virtualization) and never framework components in core (D5). Text by default; HTML by explicit opt-in only.
+Renderers return **plain serializable element descriptions** (tag/class/style/text/children), applied by the engine's reconciler — never live DOM nodes (nodes are recycled by virtualization) and never framework components in core (D5). Text by default; HTML by explicit opt-in only. `class` is `Readonly<Record<string, boolean>>` everywhere on `ElementDescription`, including its `children` (S5.4, D-S5-10) — this sample used a bare string until issue #137 F15 caught that it did not typecheck against its own referenced type.
 
 ```ts
 barRenderer: ({ entry, item }) => ({
   class: { 'my-bar': true, 'my-bar--late': isLate(entry) },
   children: [
-    { tag: 'span', class: 'my-bar__label', text: entry.name },
-    { tag: 'span', class: 'my-bar__team',  text: entry.meta.team },
+    { tag: 'span', class: { 'my-bar__label': true }, text: entry.name },
+    { tag: 'span', class: { 'my-bar__team': true },  text: entry.meta.team },
   ],
 })
 ```
