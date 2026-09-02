@@ -9,7 +9,13 @@ import type { Entry, EntryId, EntryKind, FieldContext, FieldUpdated } from '../m
 import { AggregatorFailedError } from '../model/index.js';
 import type { EntryEdits } from './edit-extension.js';
 import { ancestorsOf, buildEffectiveEntries, childIdsByParent, depthOf } from './entry-tree.js';
-import { editProposesField, overlayStoredEdit, readField, writeOntoEntry } from './fields/field-access.js';
+import {
+  createRollUpContext,
+  editProposesField,
+  overlayStoredEdit,
+  readField,
+  writeOntoEntry,
+} from './fields/field-access.js';
 import type { FieldRegistry } from './fields/field-registry.js';
 
 export interface RollUpEditSets {
@@ -150,7 +156,7 @@ export function rollUpFields(
 
       let value: unknown;
       try {
-        value = aggregator(children, effectiveParent, { ...ctx, field: field.key });
+        value = aggregator(children, effectiveParent, createRollUpContext(ctx, field.key));
       } catch (cause) {
         throw new AggregatorFailedError(field.key, field.rollUp, parentId, cause);
       }

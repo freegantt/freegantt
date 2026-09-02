@@ -10,6 +10,7 @@ import type {
   FieldContext,
   FieldKey,
   FieldLookup,
+  RollUpContext,
   StoredEdit,
 } from '../../model/index.js';
 import { diffMs } from '../../time/index.js';
@@ -61,6 +62,28 @@ export function createFieldContext(
     },
   };
   return ctx;
+}
+
+/** Call: `createRollUpContext(fieldCtx, field.key)` — the one place a `RollUpContext` is built, so
+ *  `values`/`numericValues` route through the same `ctx.read` every other Field access uses (issue
+ *  #124, D-S4-8: one path for shipped and consumer Aggregators). */
+export function createRollUpContext(ctx: FieldContext, field: FieldKey): RollUpContext {
+  const rollUpCtx: RollUpContext = {
+    ...ctx,
+    field,
+    values(children: readonly Entry[]): readonly unknown[] {
+      return children.map((child) => rollUpCtx.read(child, field));
+    },
+    numericValues(children: readonly Entry[]): readonly number[] {
+      const out: number[] = [];
+      for (const child of children) {
+        const value = rollUpCtx.read<unknown>(child, field);
+        if (typeof value === 'number' && Number.isFinite(value)) out.push(value);
+      }
+      return out;
+    },
+  };
+  return rollUpCtx;
 }
 
 export function readField(

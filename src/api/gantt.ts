@@ -48,6 +48,10 @@ export interface GanttOptionsBase {
   scroll?: ScrollModel;
   /** Initial grid pane width in px (S1.8). Default: `--fg-grid-pane-width`, fallback 160. */
   gridWidth?: number;
+  /** Live (#127). The floor a splitter drag clamps `gridWidth` to. Default `40` — wide enough for
+   *  one narrow column, so a drag cannot take the pane to nothing by accident. It bounds the drag
+   *  only: an explicit `gridWidth = 0` still collapses the grid pane on purpose. */
+  minGridWidth?: number;
   /** Live (S1.10). Default `'auto'`: follows `prefers-color-scheme`. */
   theme?: Theme;
   /** Live (S1.10). Default `'Gantt'`; sets `aria-label` on the container. */
@@ -135,6 +139,7 @@ export class Gantt {
       ...pickDefined(options, [
         'scroll',
         'gridWidth',
+        'minGridWidth',
         'preset',
         'fit',
         'theme',
@@ -216,6 +221,14 @@ export class Gantt {
 
   set gridWidth(px: number) {
     this.#shell.gridWidth = px;
+  }
+
+  get minGridWidth(): number {
+    return this.#shell.minGridWidth;
+  }
+
+  set minGridWidth(px: number) {
+    this.#shell.minGridWidth = px;
   }
 
   get gridColumns(): readonly GridColumnInput[] {

@@ -152,6 +152,10 @@ export interface GanttShellOptions {
   scroll?: ScrollModel;
   /** Initial grid pane width in px (S1.8, D-S1.8-3). Default: `--fg-grid-pane-width`, fallback 160. */
   gridWidth?: number;
+  /** Live (#127). The floor a splitter drag clamps `gridWidth` to. Default `40` — wide enough for
+   *  one narrow column, so a drag cannot take the pane to nothing by accident. It bounds the drag
+   *  only: an explicit `gridWidth = 0` still collapses the grid pane on purpose. */
+  minGridWidth?: number;
   /** Build the private default `TimeScaleModel` only (D-S1.9-9) — a no-op, with a dev-mode warning,
    * when `scale` is also supplied: the shared model already carries its own options. */
   preset?: PresetRef;
@@ -312,6 +316,7 @@ export class GanttShell {
     this.#paneLayout = new PaneLayout({
       container: this.#container,
       ...(options.gridWidth !== undefined ? { gridWidth: options.gridWidth } : {}),
+      ...(options.minGridWidth !== undefined ? { minGridWidth: options.minGridWidth } : {}),
     });
     this.#panes = this.#paneLayout.panes;
 
@@ -391,12 +396,14 @@ export class GanttShell {
     this.#paneSizeAttachment = attachPaneSize(this.#panes.timeline, (size) =>
       this.#applyPaneMeasurement(size),
     );
+    // #127: the splitter proposes a raw px delta; the floor applies here, on the way in, so a drag
+    // cannot reach below `minGridWidth` while a direct `gridWidth` write still says what it means.
     this.#splitterAttachment = attachSplitter(this.#panes.splitter, {
       readGridWidth: () => this.#paneLayout.gridWidth,
       previewGridWidth: (px) => {
-        this.#paneLayout.gridWidth = px;
+        this.#paneLayout.gridWidth = this.#aboveMinGridWidth(px);
       },
-      commitGridWidth: (px) => this.#commitGridWidth(px),
+      commitGridWidth: (px) => this.#commitGridWidth(this.#aboveMinGridWidth(px)),
     });
     this.#interactions = options.interactions ?? {};
     this.#viewportGestures = options.viewportGestures ?? {};
@@ -768,6 +775,19 @@ export class GanttShell {
     this.#commitGridWidth(px);
   }
 
+  get minGridWidth(): number {
+    return this.#paneLayout.minGridWidth;
+  }
+
+  /** Live (#127). Raising the floor above the current `gridWidth` lifts it through
+   *  `#commitGridWidth` — the same cancelable commit sequence a splitter drag runs, so a veto
+   *  leaves `gridWidth` exactly where it was. */
+  set minGridWidth(px: number) {
+    this.#paneLayout.minGridWidth = px;
+    const lifted = this.#aboveMinGridWidth(this.#paneLayout.gridWidth);
+    if (lifted !== this.#paneLayout.gridWidth) this.#commitGridWidth(lifted);
+  }
+
   get preset(): ViewPreset {
     return this.#viewport.preset;
   }
@@ -898,6 +918,13 @@ export class GanttShell {
       { get: (key) => this.#options.dataset.field(key) },
       this.#options.dataset.timeZone,
     );
+  }
+
+  /** The one place `minGridWidth` is applied (#127). The floor bounds what a splitter drag can
+   *  reach, and lifts the width when the floor itself rises — nothing else consults it, so an
+   *  explicit `gridWidth = 0` collapses the pane and a vetoed change rolls back to its own width. */
+  #aboveMinGridWidth(px: number): number {
+    return Math.max(this.#paneLayout.minGridWidth, px);
   }
 
   #commitGridWidth(px: number): void {

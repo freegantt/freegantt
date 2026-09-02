@@ -126,6 +126,48 @@ describe('new Dataset()', () => {
   });
 });
 
+describe('Dataset timeZone omission (#129)', () => {
+  it('new Dataset({ entries }) works with no timeZone and resolves a concrete IANA string', () => {
+    const dataset = new Dataset({ entries: [oneEntry()] });
+    expect(typeof dataset.timeZone).toBe('string');
+    expect(dataset.timeZone.length).toBeGreaterThan(0);
+  });
+
+  it('an explicit timeZone still overrides the resolved default', () => {
+    const dataset = new Dataset({ timeZone: 'America/Chicago', entries: [oneEntry()] });
+    expect(dataset.timeZone).toBe('America/Chicago');
+  });
+
+  it('a Plain date in entries ingests through the resolved zone, not through UTC', () => {
+    // The whole point of resolving a zone: the omitted path must feed the same ingest the explicit
+    // path feeds. `2026-09-01` in New York is 04:00Z, five hours after the same date read as UTC.
+    const original = Intl.DateTimeFormat;
+    Intl.DateTimeFormat = (() => ({
+      resolvedOptions: () => ({ timeZone: 'America/New_York' }) as Intl.ResolvedDateTimeFormatOptions,
+    })) as unknown as typeof Intl.DateTimeFormat;
+    try {
+      const resolved = new Dataset({ entries: [oneEntry()] });
+      const explicit = new Dataset({ timeZone: 'America/New_York', entries: [oneEntry()] });
+
+      expect(resolved.timeZone).toBe('America/New_York');
+      expect(first(resolved).start).toBe(utc('2026-09-01T04:00:00Z'));
+      expect(first(resolved).start).toBe(first(explicit).start);
+    } finally {
+      Intl.DateTimeFormat = original;
+    }
+  });
+
+  it('toJSON/fromJSON round-trips the resolved zone, not a sentinel', () => {
+    const dataset = new Dataset({ entries: [oneEntry()] });
+    const doc = dataset.toJSON();
+    expect(doc.timeZone).toBe(dataset.timeZone);
+    expect(doc.timeZone).not.toBe('local');
+
+    const restored = Dataset.fromJSON(doc);
+    expect(restored.timeZone).toBe(dataset.timeZone);
+  });
+});
+
 describe('Dataset transaction/on/off delegation', () => {
   it('transaction() returns the body value; an empty body emits no change', () => {
     const dataset = new Dataset({ timeZone: 'UTC', entries: [oneEntry()] });
