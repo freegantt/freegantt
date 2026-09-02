@@ -12,6 +12,15 @@ value and duration paired per child, which a filtered array can't preserve.
 Doc example added to `plans/02-public-api.md` §2.6-equivalent (aggregator
 levels section). All steps below are complete; kept for the research trail.
 
+**Compatibility:** `values` and `numericValues` are *required* members of the
+public `RollUpContext` (`etc/freegantt.api.md`), so anyone who implements that
+interface by hand must add them. Core builds every `RollUpContext` through
+`createRollUpContext`, and an Aggregator only ever *consumes* one, so the break
+reaches test doubles and nothing else — pre-1.0, that is the right trade against
+two optional members every Aggregator would have to guard. `src/data/fields/
+aggregators.test.ts` was the one such double in-tree; it now calls
+`createRollUpContext` rather than restating the shape.
+
 ## Current shape (researched)
 
 - `src/model/field.ts`: `RollUpContext` (lines 68-72) extends
