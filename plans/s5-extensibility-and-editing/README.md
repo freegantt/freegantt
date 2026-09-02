@@ -8,6 +8,7 @@
 **Closes:** issue #15 (the install API for the extension hook), `plans/s2-data-core/OPEN-QUESTIONS.md` OQ8, `plans/03` §S5's six acceptance boxes, S4's deferred list rows 1–5.
 
 **Start constraint (from `plans/03` §S5):** the `GanttShell` split in [`c4-split-gantt-shell.md`](../s4-hierarchy-and-rows/c4-split-gantt-shell.md) has landed. Plugin wiring must not grow tree-collapse policy back into `view/gantt-shell.ts`. Do not name a new extract `GanttViewport` — `layout/` already owns `Viewport`. The shell gains **one** wiring list (S5.1, D-S5-5); every attach point goes in it.
+**Blocking pre-step (user, 2026-09-01):** the grill on issue [#111](https://github.com/Pawel-IT/FreeGantt/issues/111) — split schedule and dependency — is S5.0 and blocks the slice. No S5 step starts until it settles ([`s5.0-grill-issue-111.md`](./s5.0-grill-issue-111.md)).
 
 > **What this slice is not.** No `Dependency`, no `schedule()`, no link geometry, no link-create gesture — S7. No performance budget and no linked-Gantt demo — S6. No framework wrapper (`plans/02` §8). `extensions/` never imports `data/`, `layout/`, `render/` or `interaction/` internals: it reaches the library the way a third party does, through `api/` and `model/` only (D-S5-5). That rule is what makes the dogfood gate real rather than declared.
 
@@ -15,7 +16,7 @@
 
 ## 0. Scope calls — proposed
 
-Q2 needs the user's sign-off before S5.10 starts; it rewords a locked decision. Everything else is settled by this spec.
+Q2 needs the user's sign-off before S5.10 starts; it rewords a locked decision. Everything else is settled by this spec. The S5.0 grill on issue #111 may add rows here before S5.1 starts.
 
 | # | Question | Answer |
 |---|---|---|
@@ -106,10 +107,11 @@ flowchart TB
 
 ## 3. Step map
 
-Twelve steps, in order. The runtime lands first because every surface registers into it. The a11y pass lands late because it needs the popups and the editor to exist before it can put focus policy on them.
+Thirteen steps, in order. S5.0 is the blocking pre-step: the grill on issue #111 settles before any S5 code starts. The runtime lands first after that because every surface registers into it. The a11y pass lands late because it needs the popups and the editor to exist before it can put focus policy on them.
 
 | Step | Plan | Ends with |
 |---|---|---|
+| S5.0 | [`s5.0-grill-issue-111.md`](./s5.0-grill-issue-111.md) | issue #111 (split schedule and dependency) is grilled and settled — **blocks S5.1** |
 | S5.1 | [`s5.1-plugin-runtime.md`](./s5.1-plugin-runtime.md) | `plugins: [logEverything()]` sets up, disposes, and cannot import a private module |
 | S5.2 | [`s5.2-commands-and-keybindings.md`](./s5.2-commands-and-keybindings.md) | a named command runs from a chord and from `gantt.commands.run(id)` |
 | S5.3 | [`s5.3-overlay-and-popup.md`](./s5.3-overlay-and-popup.md) | a popup anchors to a bar, flips at the pane edge, and returns focus |
