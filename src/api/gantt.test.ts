@@ -2115,3 +2115,70 @@ describe('Gantt.plugins (S5.1, D-S5-1/D-S5-3)', () => {
     ganttB.destroy();
   });
 });
+
+describe('Gantt.commands (S5.2, D-S5-6/D-S5-7)', () => {
+  it("gantt.commands.run('freegantt.collapseAll') collapses", () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({
+      entries: [
+        { id: 'p', kind: 'group', name: 'Parent', start: '2024-01-01', end: '2024-01-05' },
+        { id: 'c', name: 'Child', parentId: 'p', start: '2024-01-01', end: '2024-01-02' },
+      ],
+      timeZone: 'UTC',
+    });
+    const gantt = new Gantt({ container, dataset, rowSource: { source: 'entries', tree: true } });
+
+    expect(gantt.collapsed).toEqual([]);
+
+    gantt.commands.run('freegantt.collapseAll');
+
+    expect(gantt.collapsed).not.toEqual([]);
+
+    gantt.destroy();
+  });
+
+  it('a plugin binding on ArrowRight wins over core only while its when passes', () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({ entries: sampleEntries.slice(0, 2), timeZone: 'UTC' });
+    let overrideEnabled = false;
+    let overrideRuns = 0;
+    const gantt = new Gantt({
+      container,
+      dataset,
+      plugins: [
+        {
+          id: 'demo.override-arrow',
+          setup(ctx) {
+            ctx.commands.register({
+              id: 'demo.arrowOverride',
+              label: 'Demo override',
+              when: () => overrideEnabled,
+              run: () => {
+                overrideRuns += 1;
+              },
+            });
+            ctx.interaction.registerKeybinding({ chord: 'ArrowRight', command: 'demo.arrowOverride' });
+            return () => {};
+          },
+        },
+      ],
+    });
+
+    // The plugin's own `when` declines: falls through to core's ArrowRight pan, which still runs
+    // and still prevents the browser's own default (a matched-but-declined binding is not a miss).
+    const notOverridden = container.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, cancelable: true }),
+    );
+    expect(notOverridden).toBe(false);
+    expect(overrideRuns).toBe(0);
+
+    // Once the plugin's `when` passes, its own, newer binding wins over core — and only it runs.
+    overrideEnabled = true;
+    container.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, cancelable: true }),
+    );
+    expect(overrideRuns).toBe(1);
+
+    gantt.destroy();
+  });
+});

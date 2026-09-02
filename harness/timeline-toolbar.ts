@@ -113,7 +113,9 @@ export function mountTimelineToolbar(options: TimelineToolbarOptions): void {
   presetSelect.addEventListener('change', () => {
     gantt.preset = presetSelect.value as PresetRef;
   });
-  todayBtn.addEventListener('click', () => gantt.panToToday());
+  // S5.2, D-S5-6: the toolbar's own button is the command, not a second call to `panToToday()` —
+  // the same call `gantt.commands.run(id)` a keybinding or a menu item (S5.5) makes.
+  todayBtn.addEventListener('click', () => gantt.commands.run('freegantt.panToToday'));
   fitSelect?.addEventListener('change', () => {
     gantt.fit = fitSelect!.value as 'pane' | 'preset';
   });

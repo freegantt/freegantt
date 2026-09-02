@@ -34,9 +34,13 @@ import { attachSplitter } from './splitter.js';
 import type { SplitterAttachment } from './splitter.js';
 import { EventBus } from './event-bus.js';
 import type { AsyncCancelableEvent, GanttEventHandler, GanttEventMap, GanttEvents } from './event-bus.js';
-import { PluginRuntime } from '../extensions/plugin-runtime.js';
+import { PluginRuntime, RegistrationGate } from '../extensions/plugin-runtime.js';
 import type { ShellPlugin } from '../extensions/plugin-runtime.js';
 import { DisposableStore } from '../extensions/disposables.js';
+import { CommandRegistry } from '../extensions/commands.js';
+import type { Command, CommandContext } from '../extensions/commands.js';
+import { Keymap } from '../extensions/keymap.js';
+import type { KeyBinding } from '../extensions/keymap.js';
 import type { GridWidthChange, SelectionChange } from './event-bus.js';
 import type { CollapseChange } from './collapse-state.js';
 import { attachScroll } from './scroll-attachment.js';
@@ -45,8 +49,6 @@ import { attachPaneSize } from './pane-size-attachment.js';
 import type { PaneSizeAttachment } from './pane-size-attachment.js';
 import { attachWheelNavigation } from './wheel-navigation.js';
 import type { WheelNavigationAttachment } from './wheel-navigation.js';
-import { attachKeyboardNavigation } from './keyboard-navigation.js';
-import type { KeyboardNavigationAttachment } from './keyboard-navigation.js';
 import { attachRowTwisty } from './attach-row-twisty.js';
 import type { RowTwistyAttachment } from './attach-row-twisty.js';
 import { panToTodayLine } from './today-landing.js';
@@ -231,7 +233,24 @@ export interface GanttShellOptions {
    *  both `Gantt` and this generic contract without closing an import cycle (`api/plugin.ts`'s file
    *  header). `api/gantt.ts` always supplies this; omitted only by tests exercising the shell with no
    *  plugins. */
-  buildPluginContext?: (parts: { events: GanttEvents; disposables: DisposableStore }) => unknown;
+  buildPluginContext?: (parts: {
+    events: GanttEvents;
+    disposables: DisposableStore;
+    commands: CommandRegistry<unknown>;
+    registerKeybinding: (binding: KeyBinding<unknown>) => void;
+  }) => unknown;
+  /** S5.2, D-S5-6: fills the api-level pieces of a `CommandContext` for the same reason
+   *  `buildPluginContext` above fills `PluginContext`'s — the full api `Dataset` (with `undo`/`redo`)
+   *  and the public `Gantt` façade are both api-level, and `view/` may not name either type
+   *  (D-S5-5's mirror on the `view/` side). Called fresh on every command invocation, never cached,
+   *  so a command always reads the invocation's current selection. `api/gantt.ts` always supplies
+   *  this; omitted only by tests exercising the shell with no commands. */
+  buildCommandContext?: (parts: { entry?: Entry }) => unknown;
+  /** S5.2: `freegantt.panToToday`'s own clock read. `view/` may not call `time/`'s `now()` itself
+   *  (I10) — `api/gantt.ts` supplies `now` from `time/index.js`, the same function `Gantt.panToToday`
+   *  already reads for the identical reason. Omitted only by tests exercising the shell with no
+   *  commands. */
+  now?: () => Instant;
 }
 
 /** `exactOptionalPropertyTypes` treats `obj.key = undefined` as a type error when `key` is declared
@@ -267,7 +286,6 @@ export class GanttShell {
   #entryGestures: Detachable | undefined;
   #keyboardEditing: Detachable | undefined;
   #wheelNavigation: WheelNavigationAttachment | undefined;
-  #keyboardNavigation: KeyboardNavigationAttachment | undefined;
   #rowTwistyAttachment: RowTwistyAttachment;
   /** D-S3-6: one long-lived, mutable per-Gantt object — `applyState` diffs against what it painted
    *  last, so writing into this and calling `#backend.applyState` allocates nothing per hover/select
@@ -299,6 +317,11 @@ export class GanttShell {
     off: (name, handler) => this.off(name, handler),
   };
   #pluginRuntime!: PluginRuntime<unknown>;
+  /** S5.2, D-S5-6/D-S5-7: one registry and one keymap per Gantt (I2) — core commands and core
+   *  bindings register here first, so a plugin's own registration always wins (D-S5-7). */
+  #commandRegistry!: CommandRegistry<unknown>;
+  #keymap = new Keymap<unknown>();
+  #keymapListener!: (event: KeyboardEvent) => void;
   #destroyed = false;
   /** This Gantt's layout pass. It keeps the row-height index alive across renders (#47) — the shell
    * states what to draw and holds no layout bookkeeping of its own. */
@@ -382,19 +405,34 @@ export class GanttShell {
       gridHeader: this.#panes.gridHeader,
     });
 
+    // S5.2, D-S5-6: built before the plugin runtime — core commands register into this during this
+    // same constructor, and a plugin's own `ctx.commands`/`ctx.interaction.registerKeybinding` (below)
+    // close over it too. `#buildCommandContext` is called fresh per invocation (never cached), so a
+    // command always reads the current selection.
+    this.#commandRegistry = new CommandRegistry<unknown>(() => this.#buildCommandContext());
+
     // S5.1, D-S5-1: constructed once panes exist — a plugin's disposer may still need its overlay
     // node (a later step's `ctx.view.overlay`), so this must outlive them either way. `destroy()`
     // disposes it first, before any pane teardown, for the same reason. No plugin is actually set up
     // yet: `Gantt.plugins`'s live setter runs `#pluginRuntime.install(...)` only once `api/gantt.ts` has
     // finished assigning its own `#shell` field, so `buildPluginContext`'s `gantt` value is real by
     // the time any `setup()` reads it.
-    this.#pluginRuntime = new PluginRuntime<unknown>(() => {
+    this.#pluginRuntime = new PluginRuntime<unknown>((pluginId) => {
       const disposables = new DisposableStore();
+      // D-S5-4: one gate per plugin, closed the moment its own setup() returns (PluginRuntime.install
+      // does the closing) — a `registerKeybinding` reached afterward throws RegistrationClosedError.
+      const gate = new RegistrationGate(pluginId);
+      const registerKeybinding = (binding: KeyBinding<unknown>): void => {
+        gate.assertOpen();
+        disposables.add(this.#keymap.register(binding));
+      };
       const context = (options.buildPluginContext ?? (() => ({})))({
         events: this.#pluginEvents,
         disposables,
+        commands: this.#commandRegistry,
+        registerKeybinding,
       });
-      return { context, disposables };
+      return { context, disposables, registrationGate: gate };
     });
 
     // The timeline pane is the single native scroller (D-D, D-S1.8-1); the grid pane follows it by
@@ -503,6 +541,20 @@ export class GanttShell {
       tryTreeArrow: (direction) => this.#treeCollapse.handleArrow(direction),
       expandAllRows: () => this.expandAll(),
     };
+    // S5.2, D-S5-6/D-S5-7: core commands, then the keymap listener — attached ahead of
+    // `entryGestures`/`keyboardEditing`/`keyboardNavigation` below, so every plugin binding and every
+    // core command gets first refusal on a key event before this shell's own pointer-editing and
+    // pan/page/home/end handling ever sees it (an unmatched chord is left untouched either way — the
+    // resolver never calls `preventDefault()` on a miss).
+    this.#registerCoreCommands();
+    this.#registerNavigationCommands();
+    this.#keymapListener = (event: KeyboardEvent) => {
+      if (this.#keymap.resolve(event, this.#commandRegistry, () => this.#buildCommandContext())) {
+        event.preventDefault();
+      }
+    };
+    this.#container.addEventListener('keydown', this.#keymapListener);
+
     this.#entryGestures = options.entryGestures?.(this.#panes.timeline, this.#container, gestureContext);
     this.#keyboardEditing = options.keyboardEditing?.(this.#container, gestureContext);
     this.#wheelNavigation = attachWheelNavigation(this.#panes.timeline, {
@@ -511,16 +563,6 @@ export class GanttShell {
       zoomIn: (offsetX) => this.zoomIn(offsetX),
       zoomOut: (offsetX) => this.zoomOut(offsetX),
       panBy: (dx, dy) => this.#panBy(dx, dy),
-    });
-    this.#keyboardNavigation = attachKeyboardNavigation(this.#container, {
-      keyboardPanEnabled: () => this.#resolvedViewportGestures.keyboardPan,
-      hasSelection: () => this.#selection.length > 0,
-      panBy: (dx, dy) => this.#panBy(dx, dy),
-      panTo: (to) => this.#viewport.scroll.panTo(to),
-      arrowStepX: () => this.#viewport.preset.preferredTickWidthPx,
-      arrowStepY: () => this.#rowHeight,
-      pageStepY: () => this.#viewport.visible.height,
-      scrollMaxX: () => this.#viewport.scroll.state.max.x,
     });
     this.#rowTwistyAttachment = attachRowTwisty(this.#panes.grid, {
       toggleCollapse: (id) => this.toggleCollapse(id),
@@ -733,6 +775,167 @@ export class GanttShell {
     this.#resolvedViewportGestures = resolveViewportGestures(next);
   }
 
+  /** S5.2, D-S5-6: the live `CommandContext` builder — `entry` is the first selected entry, or
+   *  `undefined` when nothing is selected (the doc's "the focused row, or none"; `target`'s richer
+   *  focus tracking is S5.7/S5.11's own job, left `undefined` here). `api/gantt.ts`'s injected
+   *  `buildCommandContext` fills `dataset`/`gantt` — `view/` may not name either type (D-S5-5's
+   *  mirror). Omitted `buildCommandContext` (a test with no commands wiring) makes every command's
+   *  context an empty object; fine, since no core command reads `ctx.dataset`/`ctx.gantt` without
+   *  first checking `ctx.entry`, and no such test runs a command that needs them. */
+  #buildCommandContext(): CommandContext<unknown> {
+    const id = this.#selection[0];
+    const entry = id !== undefined ? this.#options.dataset.entries.get(id) : undefined;
+    // `view/` may not name `CommandContextOf`'s api-level fields (`dataset: Dataset`, `gantt`) —
+    // D-S5-5's mirror — so this cast trusts `api/gantt.ts`'s injected `buildCommandContext` to fill
+    // them, the same trust `buildPluginContext` above already gets for `PluginContext`.
+    return (this.#options.buildCommandContext ?? (() => ({})))(
+      entry !== undefined ? { entry } : {},
+    ) as CommandContext<unknown>;
+  }
+
+  /** D-S5-6: the eleven commands every consumer already has as a public method, named. Registered
+   *  before any plugin, so a plugin can override any of them (D-S5-7). */
+  #registerCoreCommands(): void {
+    const asCtx = (ctx: unknown): CommandContext<unknown> => ctx as CommandContext<unknown>;
+    const register = (command: Command<unknown>): void => this.#commandRegistry.register(command);
+
+    register({ id: 'freegantt.collapseAll', label: 'Collapse all', run: () => this.collapseAll() });
+    register({ id: 'freegantt.expandAll', label: 'Expand all', run: () => this.expandAll() });
+    register({
+      id: 'freegantt.collapseRow',
+      label: 'Collapse row',
+      when: (ctx) => asCtx(ctx).entry !== undefined,
+      run: (ctx) => {
+        const entry = asCtx(ctx).entry;
+        if (entry !== undefined) this.collapse(entry.id);
+      },
+    });
+    register({
+      id: 'freegantt.expandRow',
+      label: 'Expand row',
+      when: (ctx) => asCtx(ctx).entry !== undefined,
+      run: (ctx) => {
+        const entry = asCtx(ctx).entry;
+        if (entry !== undefined) this.expand(entry.id);
+      },
+    });
+    register({
+      id: 'freegantt.zoomIn',
+      label: 'Zoom in',
+      when: () => this.canZoomIn,
+      run: () => this.zoomIn(),
+    });
+    register({
+      id: 'freegantt.zoomOut',
+      label: 'Zoom out',
+      when: () => this.canZoomOut,
+      run: () => this.zoomOut(),
+    });
+    register({
+      id: 'freegantt.panToToday',
+      label: 'Pan to today',
+      run: () => {
+        const now = this.#options.now;
+        if (now !== undefined) this.panToToday(now());
+      },
+    });
+    register({
+      id: 'freegantt.selectAll',
+      label: 'Select all',
+      run: () => this.#proposeSelection(this.#selectableEntriesInRowOrder()),
+    });
+    register({
+      id: 'freegantt.clearSelection',
+      label: 'Clear selection',
+      when: () => this.#selection.length > 0,
+      run: () => this.#proposeSelection([]),
+    });
+    register({
+      id: 'freegantt.undo',
+      label: 'Undo',
+      when: (ctx) => asCtx(ctx).dataset?.canUndo === true,
+      run: (ctx) => asCtx(ctx).dataset?.undo(),
+    });
+    register({
+      id: 'freegantt.redo',
+      label: 'Redo',
+      when: (ctx) => asCtx(ctx).dataset?.canRedo === true,
+      run: (ctx) => asCtx(ctx).dataset?.redo(),
+    });
+  }
+
+  /** S3.7's Page/Home/End/arrow pan (D-S3-14), reshaped as core commands + default bindings
+   *  (S5.2, D-S5-6/D-S5-7) — `view/keyboard-navigation.ts`'s own standalone `attachKeyboardNavigation`
+   *  is superseded here; this shell no longer calls it, so a plugin can override any of these chords
+   *  the same way it overrides `freegantt.collapseAll`. No behaviour change (D-S3-13's "nothing
+   *  selected" column, and the un-pannable-while-editing guard, both carry over as `when`). */
+  #registerNavigationCommands(): void {
+    const register = (command: Command<unknown>): void => this.#commandRegistry.register(command);
+    const bind = (chord: string, command: string): void => {
+      this.#keymap.register({ chord, command });
+    };
+    const panEnabled = (): boolean => this.#resolvedViewportGestures.keyboardPan;
+    const nothingSelected = (): boolean => this.#selection.length === 0;
+
+    register({
+      id: 'freegantt.pageDown',
+      label: 'Page down',
+      when: panEnabled,
+      run: () => this.#panBy(0, this.#viewport.visible.height),
+    });
+    register({
+      id: 'freegantt.pageUp',
+      label: 'Page up',
+      when: panEnabled,
+      run: () => this.#panBy(0, -this.#viewport.visible.height),
+    });
+    register({
+      id: 'freegantt.panToStart',
+      label: 'Pan to start',
+      when: panEnabled,
+      run: () => this.#viewport.scroll.panTo({ x: 0 }),
+    });
+    register({
+      id: 'freegantt.panToEnd',
+      label: 'Pan to end',
+      when: panEnabled,
+      run: () => this.#viewport.scroll.panTo({ x: this.#viewport.scroll.state.max.x }),
+    });
+    register({
+      id: 'freegantt.panRight',
+      label: 'Pan right',
+      when: () => panEnabled() && nothingSelected(),
+      run: () => this.#panBy(this.#viewport.preset.preferredTickWidthPx, 0),
+    });
+    register({
+      id: 'freegantt.panLeft',
+      label: 'Pan left',
+      when: () => panEnabled() && nothingSelected(),
+      run: () => this.#panBy(-this.#viewport.preset.preferredTickWidthPx, 0),
+    });
+    register({
+      id: 'freegantt.panDown',
+      label: 'Pan down',
+      when: () => panEnabled() && nothingSelected(),
+      run: () => this.#panBy(0, this.#rowHeight),
+    });
+    register({
+      id: 'freegantt.panUp',
+      label: 'Pan up',
+      when: () => panEnabled() && nothingSelected(),
+      run: () => this.#panBy(0, -this.#rowHeight),
+    });
+
+    bind('PageDown', 'freegantt.pageDown');
+    bind('PageUp', 'freegantt.pageUp');
+    bind('Home', 'freegantt.panToStart');
+    bind('End', 'freegantt.panToEnd');
+    bind('ArrowRight', 'freegantt.panRight');
+    bind('ArrowLeft', 'freegantt.panLeft');
+    bind('ArrowDown', 'freegantt.panDown');
+    bind('ArrowUp', 'freegantt.panUp');
+  }
+
   #panBy(dx: number, dy: number): void {
     const { x, y } = this.#viewport.scroll.state.position;
     this.#viewport.scroll.panTo({ x: x + dx, y: y + dy });
@@ -943,6 +1146,12 @@ export class GanttShell {
     this.#pluginRuntime.install(next);
   }
 
+  /** S5.2, D-S5-6: `Gantt.commands`'s own backing registry — read-only, the registry object itself
+   *  is mutated in place by `register`. */
+  get commands(): CommandRegistry<unknown> {
+    return this.#commandRegistry;
+  }
+
   #emitNavigationChange(): void {
     this.#events.emit('navigationChange', {
       presetId: this.#viewport.preset.id,
@@ -1038,11 +1247,11 @@ export class GanttShell {
     // S5.1, D-S5-3: plugins first — a disposer may still need its overlay node or another pane-owned
     // resource, so it must run before any pane below is torn down.
     this.#pluginRuntime.disposeAll();
+    this.#container.removeEventListener('keydown', this.#keymapListener);
     this.#frames.cancel();
     this.#entryGestures?.detach();
     this.#keyboardEditing?.detach();
     this.#wheelNavigation?.detach();
-    this.#keyboardNavigation?.detach();
     this.#rowTwistyAttachment.detach();
     this.#datasetChanges.unsubscribe();
     this.#scrollAttachment.detach();

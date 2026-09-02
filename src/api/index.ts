@@ -39,6 +39,11 @@ export type {
   DateLineInput,
   GanttPlugin,
   PluginContext,
+  Command,
+  CommandContext,
+  CommandRegistry,
+  CommandTarget,
+  KeyBinding,
 } from './gantt.js';
 export type { Theme, ViewportGestures, ViewportGestureFlags } from '../view/index.js';
 export type {
@@ -97,11 +102,12 @@ export {
   DuplicatePluginIdError,
   RegistrationClosedError,
   PluginSetupError,
+  UnknownCommandError,
 } from '../model/index.js';
 
 // model/ types the public surface re-exports. A consumer building entries or catching errors names these.
 export { entryId, itemId, entryIdOfItem, segmentIndexOfItem, changeSetId } from '../model/index.js';
-export type { PluginId, Disposer } from '../model/index.js';
+export type { PluginId, Disposer, KeyChord } from '../model/index.js';
 // S5.1, D-S5-1: `PluginContext.disposables`'s own type — a plugin author's cleanup list.
 export type { DisposableStore } from '../extensions/disposables.js';
 export type {
