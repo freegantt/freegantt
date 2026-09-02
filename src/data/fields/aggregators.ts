@@ -4,27 +4,37 @@
 
 import type { Aggregator, Entry, RollUpContext } from '../../model/index.js';
 
+/** The one place this rule is written: a value counts only when it is a finite number.
+ *  `ctx.numericValues` applies the same rule to a whole child list (issue #124). */
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value);
+}
+
 function durationMs(ctx: RollUpContext, entry: Entry): number | undefined {
   const duration = ctx.durationOf(entry);
-  if (typeof duration.value !== 'number' || !Number.isFinite(duration.value)) return undefined;
-  if (duration.value === 0) return undefined;
+  if (!isFiniteNumber(duration.value) || duration.value === 0) return undefined;
   return duration.value;
 }
 
-const min: Aggregator<number> = (children, _parent, ctx) => {
+/** `min`, `max` and `sum` are one shape: fold this Field's numbers across the children, and keep the
+ *  stored value (`undefined`) when every child is a hole. */
+function foldNumbers(
+  ctx: RollUpContext,
+  children: readonly Entry[],
+  fold: (found: number, value: number) => number,
+): number | undefined {
   const values = ctx.numericValues(children);
-  return values.length === 0 ? undefined : values.reduce((found, value) => Math.min(found, value));
-};
+  return values.length === 0 ? undefined : values.reduce(fold);
+}
 
-const max: Aggregator<number> = (children, _parent, ctx) => {
-  const values = ctx.numericValues(children);
-  return values.length === 0 ? undefined : values.reduce((found, value) => Math.max(found, value));
-};
+const min: Aggregator<number> = (children, _parent, ctx) =>
+  foldNumbers(ctx, children, (found, value) => Math.min(found, value));
 
-const sum: Aggregator<number> = (children, _parent, ctx) => {
-  const values = ctx.numericValues(children);
-  return values.length === 0 ? undefined : values.reduce((found, value) => found + value);
-};
+const max: Aggregator<number> = (children, _parent, ctx) =>
+  foldNumbers(ctx, children, (found, value) => Math.max(found, value));
+
+const sum: Aggregator<number> = (children, _parent, ctx) =>
+  foldNumbers(ctx, children, (found, value) => found + value);
 
 const count: Aggregator<number> = (children, _parent, ctx) => {
   const n = ctx.values(children).filter((value) => value !== undefined).length;
@@ -39,7 +49,7 @@ const weightedMeanByDuration: Aggregator<number> = (children, _parent, ctx) => {
   for (const child of children) {
     const value = ctx.read<unknown>(child, ctx.field);
     const duration = durationMs(ctx, child);
-    if (typeof value !== 'number' || !Number.isFinite(value) || duration === undefined) continue;
+    if (!isFiniteNumber(value) || duration === undefined) continue;
     total += value * duration;
     weight += duration;
   }
