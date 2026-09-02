@@ -123,7 +123,7 @@ pnpm build          # production build of the same pages into dist-harness/</cod
         <pre><code>import { Gantt, Dataset } from 'freegantt';
 
 const dataset = new Dataset({
-  timeZone: 'America/Chicago', // IANA zone, required — every date below is read through it (D6)
+  timeZone: 'America/Chicago', // IANA zone — every date below is read through it (D6)
   entries: [
     { id: 't1', name: 'Design', start: '2026-09-01', end: '2026-09-07' },
     { id: 't2', name: 'Build', start: '2026-09-08', end: '2026-09-21' },
@@ -136,6 +136,17 @@ gantt.destroy(); // tears the view down; the dataset outlives it</code></pre>
           Ids are plain strings and dates are plain strings, a <code>Date</code>, epoch milliseconds, or an
           <code>Instant</code>. Nothing has to be constructed first. <code>container</code> takes an
           <code>HTMLElement</code> or a CSS selector.
+        </p>
+        <p>
+          <code>timeZone</code> is optional. Omit it and the Dataset resolves the environment's own zone
+          once, at construction, then stores that IANA string:
+        </p>
+        <pre><code>const dataset = new Dataset({ entries }); // no timeZone
+dataset.timeZone; // → 'America/Chicago' — resolved, concrete, never a sentinel</code></pre>
+        <p>
+          Omission reads the dates in <em>this</em> viewer's calendar, so the same entries can render
+          differently for a viewer in another zone. Pass <code>timeZone</code> whenever more than one
+          person opens the dataset.
         </p>
 
         <h3>Editing</h3>

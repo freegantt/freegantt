@@ -138,6 +138,25 @@ describe('Dataset timeZone omission (#129)', () => {
     expect(dataset.timeZone).toBe('America/Chicago');
   });
 
+  it('a Plain date in entries ingests through the resolved zone, not through UTC', () => {
+    // The whole point of resolving a zone: the omitted path must feed the same ingest the explicit
+    // path feeds. `2026-09-01` in New York is 04:00Z, five hours after the same date read as UTC.
+    const original = Intl.DateTimeFormat;
+    Intl.DateTimeFormat = (() => ({
+      resolvedOptions: () => ({ timeZone: 'America/New_York' }) as Intl.ResolvedDateTimeFormatOptions,
+    })) as unknown as typeof Intl.DateTimeFormat;
+    try {
+      const resolved = new Dataset({ entries: [oneEntry()] });
+      const explicit = new Dataset({ timeZone: 'America/New_York', entries: [oneEntry()] });
+
+      expect(resolved.timeZone).toBe('America/New_York');
+      expect(first(resolved).start).toBe(utc('2026-09-01T04:00:00Z'));
+      expect(first(resolved).start).toBe(first(explicit).start);
+    } finally {
+      Intl.DateTimeFormat = original;
+    }
+  });
+
   it('toJSON/fromJSON round-trips the resolved zone, not a sentinel', () => {
     const dataset = new Dataset({ entries: [oneEntry()] });
     const doc = dataset.toJSON();
