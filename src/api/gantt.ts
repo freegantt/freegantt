@@ -98,7 +98,9 @@ export interface GanttOptionsBase {
   collapsed?: readonly (RowId | string)[];
   /** Live (S5.1, D-S5-1, D-S5-3). Values a consumer imports (`tooltips()`, `contextMenu({...})`),
    *  never names in a table. Assignment diffs by `id`: a plugin present before and after is left
-   *  alone, even when the new array holds a fresh object for that `id`. Default `[]`. */
+   *  alone, even when the new array holds a fresh object for that `id` — same id, new object is
+   *  ignored (a dev build warns; production stays silent). Reconfigure with two assignments
+   *  (remove, then add) or a distinct id. Default `[]`. */
   plugins?: readonly GanttPlugin[];
 }
 
@@ -513,11 +515,11 @@ export class Gantt {
     this.#shell.plugins = next;
   }
 
-  /** S5.2, D-S5-6: the one command registry. Core registers `freegantt.collapseAll`,
-   *  `freegantt.expandAll`, `freegantt.collapseRow`, `freegantt.expandRow`, `freegantt.zoomIn`,
-   *  `freegantt.zoomOut`, `freegantt.panToToday`, `freegantt.selectAll`, `freegantt.clearSelection`,
-   *  `freegantt.undo` and `freegantt.redo` before any plugin, so a plugin's own registration always
-   *  wins (D-S5-7). Read-only — `register` lives on the registry itself. */
+  /** S5.2, D-S5-6: the one command registry. `freegantt.*` is the core namespace — core registers
+   *  its own commands (collapse/expand, zoom, pan, selection, undo/redo, and keyboard navigation)
+   *  before any plugin, so a plugin's own registration always wins for a shared id (D-S5-7).
+   *  `run(id)` silently no-ops when the command's `when` declines, the same posture as a disabled
+   *  menu item. Read-only — `register` lives on the registry itself. */
   get commands(): CommandRegistry {
     return this.#shell.commands;
   }

@@ -33,6 +33,8 @@ export interface PopupOptions {
 }
 
 export interface Popup {
+  /** Calling `open()` while a popup is already open replaces it — the previous popup is closed
+   *  first, then the new one opens at its own placement. */
   open(options: PopupOptions): void;
   close(): void;
   readonly isOpen: boolean;
