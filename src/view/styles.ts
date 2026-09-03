@@ -176,6 +176,15 @@ ${DARK_COLOR_TOKENS}
    panes underneath; a mounted .fg-popup opts back in. */
 .fg-overlay { position: absolute; inset: 0; pointer-events: none; overflow: visible; }
 .fg-popup { position: absolute; top: 0; left: 0; pointer-events: auto; background: var(--fg-popup-bg); border: 1px solid var(--fg-popup-border); box-shadow: var(--fg-popup-shadow); border-radius: 4px; }
+/* S5.5, D-S5-13: tooltips()'s own content, mounted inside .fg-popup. */
+.fg-tooltip { padding: 6px 10px; font: inherit; max-width: 280px; }
+.fg-tooltip-title { font-weight: 600; }
+.fg-tooltip-dates { color: var(--fg-header-subtext); font-size: 0.9em; }
+/* S5.5, D-S5-14: contextMenu()'s own content, mounted inside .fg-popup. */
+.fg-menu { padding: 4px 0; min-width: 160px; }
+.fg-menu-item { display: block; width: 100%; padding: 4px 12px; border: none; background: none; text-align: start; font: inherit; color: inherit; cursor: pointer; white-space: nowrap; }
+.fg-menu-item:hover, .fg-menu-item:focus { background: var(--fg-row-odd-bg); outline: none; }
+.fg-menu-separator { height: 1px; margin: 4px 0; background: var(--fg-splitter-color); }
 `.trim();
 
 /** Injects the library's base stylesheet into `doc` exactly once. Safe to call from every Gantt

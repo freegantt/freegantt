@@ -7,3 +7,10 @@ export { CommandRegistry } from './commands.js';
 export type { Command, CommandContext, CommandTarget } from './commands.js';
 export { Keymap, normalizeChord, isEditableTarget } from './keymap.js';
 export type { KeyBinding, KeyEventLike } from './keymap.js';
+// S5.5, D-S5-13/14: the two shipped built-ins — ordinary plugins in `extensions/features/`, zero
+// private imports (the `extensions-public-only` depcruise rule already confines this whole
+// directory to `api/`/`model/`), the dogfood gate `[S5-A1]` proves.
+export { tooltips } from './features/tooltips.js';
+export type { TooltipsOptions } from './features/tooltips.js';
+export { contextMenu } from './features/context-menu.js';
+export type { ContextMenuOptions, MenuItem, MenuEntry } from './features/context-menu.js';

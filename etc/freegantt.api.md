@@ -163,6 +163,17 @@ export class ContainerNotFoundError extends FreeGanttError {
 }
 
 // @public
+export function contextMenu(options?: ContextMenuOptions): GanttPlugin;
+
+// @public (undocumented)
+export interface ContextMenuOptions {
+    items?(ctx: {
+        entry?: Entry;
+        defaults: readonly MenuEntry[];
+    }): readonly MenuEntry[];
+}
+
+// @public
 export type CoreFieldKey = keyof Omit<Entry, 'id'>;
 
 // @public
@@ -990,6 +1001,17 @@ export interface KeyHandlerRegistrar {
 }
 
 // @public (undocumented)
+export type MenuEntry = MenuItem | {
+    separator: true;
+};
+
+// @public (undocumented)
+export interface MenuItem {
+    command: string;
+    label?: string;
+}
+
+// @public (undocumented)
 export const MS: {
     readonly SECOND: 1000;
     readonly MINUTE: number;
@@ -1027,6 +1049,7 @@ export function now(): Instant;
 // @public (undocumented)
 export interface Overlay {
     readonly bounds: DOMRect;
+    elementForEntry(id: EntryId): HTMLElement | undefined;
     onResize(callback: () => void): () => void;
     readonly paneBounds: {
         grid: DOMRect;
@@ -1078,6 +1101,7 @@ export interface PluginContextOf<TGantt = unknown> {
     view: {
         overlay: Overlay;
         registerRenderer<P extends RendererPoint>(point: P, renderer: RendererFor<P>): void;
+        resolveTooltip(entryId: EntryId): ElementDescription | undefined;
     };
 }
 
@@ -1371,6 +1395,15 @@ export interface TooltipRendererContext {
     entry: Entry;
     // (undocumented)
     item: FrameBar;
+}
+
+// @public
+export function tooltips(options?: TooltipsOptions): GanttPlugin;
+
+// @public (undocumented)
+export interface TooltipsOptions {
+    delayMs?: number;
+    placement?: PopupPlacement;
 }
 
 // @public
