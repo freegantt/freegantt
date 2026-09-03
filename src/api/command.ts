@@ -1,12 +1,12 @@
 // api/ — the public command and keybinding contract (S5.2, D-S5-6, D-S5-7). Generic over `TGantt`
-// here for the same reason `api/plugin.ts`'s `GanttPlugin`/`PluginContext` are (S5.1 file header):
+// here for the same reason `api/plugin.ts`'s `GanttPluginOf`/`PluginContextOf` are (S5.1 file header):
 // `api/gantt.ts` already imports this file for the generic shape, and if this file also imported
 // `Gantt` the two would close an import cycle (`extensions/commands.ts` needs the generic form too,
 // and `api/gantt.ts` imports `extensions/commands.ts` to build the real registry). `api/gantt.ts`
 // binds the type argument once, locally — `export type CommandContext = CommandContextOf<Gantt>` —
-// and that bound alias is what `api/index.ts` re-exports; a plugin author's
-// `import type { CommandContext } from 'freegantt'` always resolves to it, never to the generic
-// declared here.
+// and `api/index.ts` re-exports the bound aliases alongside the generic shapes. A plugin author
+// writing against `Gantt` names the bound `Command`/`CommandContext`/`CommandRegistry`/`KeyBinding`;
+// code that parameterizes over its own Gantt type names the `*Of` forms declared here.
 
 import type { Entry, EntryId, FieldKey, KeyChord } from '../model/index.js';
 import type { Dataset } from './dataset.js';

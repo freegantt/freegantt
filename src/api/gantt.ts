@@ -25,7 +25,7 @@ import type {
 import { attemptMutation } from './attempt-mutation.js';
 import { now, toInstant } from '../time/index.js';
 import type { Dataset } from './dataset.js';
-import type { GanttPlugin as GanttPluginOf, PluginContext as PluginContextOf } from './plugin.js';
+import type { GanttPluginOf, PluginContextOf } from './plugin.js';
 import type {
   CommandOf,
   CommandContextOf,
@@ -130,14 +130,15 @@ export type GanttOptions = GanttOptionsBase & GanttScaleOptions;
 
 /** S5.1, D-S5-1: `GanttPlugin`/`PluginContext` bound to this class — see `api/plugin.ts`'s file
  *  header for why the generic form lives there and the binding happens here. This is the type a
- *  plugin author actually sees: `api/index.ts` re-exports these two names, never the generic ones. */
+ *  plugin author actually sees: `api/index.ts` re-exports these bound names alongside the generic
+ *  `GanttPluginOf`/`PluginContextOf` shapes. */
 export type GanttPlugin = GanttPluginOf<Gantt>;
 export type PluginContext = PluginContextOf<Gantt>;
 
 /** S5.2, D-S5-6: `Command`/`CommandContext`/`CommandRegistry`/`KeyBinding` bound to this class — see
  *  `api/command.ts`'s file header for why the generic form lives there and the binding happens here.
  *  This is the shape a plugin author, or a `gantt.commands`/`gantt.commands.run(id)` caller, actually
- *  sees; `api/index.ts` re-exports these bound names, never the generic ones. */
+ *  sees; `api/index.ts` re-exports these bound names alongside the generic `*Of` shapes. */
 export type Command = CommandOf<Gantt>;
 export type CommandContext = CommandContextOf<Gantt>;
 export type CommandRegistry = CommandRegistryOf<Gantt>;

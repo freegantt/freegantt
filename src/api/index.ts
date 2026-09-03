@@ -45,6 +45,11 @@ export type {
   CommandTarget,
   KeyBinding,
 } from './gantt.js';
+// The generic shapes behind the Gantt-bound aliases above (S5.1/S5.2). A plugin author writing
+// against `Gantt` names the bound forms; code parameterizing over its own Gantt type names these —
+// the same `*Of` pairing `api/command.ts`'s and `api/plugin.ts`'s file headers describe.
+export type { GanttPluginOf, PluginContextOf } from './plugin.js';
+export type { CommandOf, CommandContextOf, CommandRegistryOf, KeyBindingOf } from './command.js';
 export type { Theme, ViewportGestures, ViewportGestureFlags } from '../view/index.js';
 export type {
   GanttEventMap,

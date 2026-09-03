@@ -88,19 +88,25 @@ describe('Popup', () => {
     expect(overlay.container.querySelector('.fg-popup')).toBeNull();
   });
 
-  it('flips to the opposite side when the requested side does not fit its pane, and clamps the cross axis', () => {
+  it('flips to the opposite side when the requested side does not fit its pane, and clamps the cross axis to the pane, not the wider container', () => {
+    // The timeline pane's right and bottom sit strictly inside the overlay's own `bounds` (900/400
+    // vs. 1000/500) — if flip or clamp read `bounds` instead of the resolved pane, the assertions
+    // below would come out different (no flip; no vertical clamp), so this fixture actually proves
+    // pane-scoped math rather than merely restating it.
     const overlay = fakeAnchor({
       bounds: rect({ left: 0, top: 0, right: 1000, bottom: 500 }),
       grid: rect({ left: 0, top: 0, right: 160, bottom: 500 }),
-      timeline: rect({ left: 160, top: 0, right: 1000, bottom: 500 }),
+      timeline: rect({ left: 160, top: 0, right: 900, bottom: 400 }),
     });
     withFixedPopupSize(overlay, { width: 100, height: 40 });
     const popup = createPopup(overlay);
 
-    // Anchored right at the timeline pane's right edge, requesting 'end' (opens to the right) — a
-    // 100px-wide popup does not fit before the pane's own right bound at 1000, so it flips to 'start'.
+    // Anchored near the timeline pane's right and bottom edges, requesting 'end' (opens to the
+    // right) — a 100px-wide popup does not fit before the pane's own right bound at 900, so it flips
+    // to 'start'. The flipped box then overshoots the pane's bottom (400) on the cross axis, so it
+    // gets clamped there too.
     popup.open({
-      anchor: rect({ left: 950, top: 200, right: 990, bottom: 220 }),
+      anchor: rect({ left: 850, top: 380, right: 890, bottom: 400 }),
       placement: 'end',
       content: { text: 'x' },
     });
@@ -109,8 +115,12 @@ describe('Popup', () => {
     const match = /translate\(([-\d.]+)px, ([-\d.]+)px\)/.exec(transform);
     expect(match).not.toBeNull();
     const left = Number(match![1]);
-    // Flipped to 'start': placed to the left of the anchor (anchor.left - width = 950 - 100 = 850).
-    expect(left).toBe(850);
+    const top = Number(match![2]);
+    // Flipped to 'start': placed to the left of the anchor (anchor.left - width = 850 - 100 = 750).
+    expect(left).toBe(750);
+    // Clamped to the pane's bottom, not the container's: pane.bottom(400) - height(40) = 360, not
+    // the unclamped 380 the container's own bottom (500) would have allowed through.
+    expect(top).toBe(360);
   });
 
   it('Escape closes the popup and calls stopPropagation, so an outer keydown listener never sees it', () => {

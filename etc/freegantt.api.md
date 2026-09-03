@@ -77,20 +77,42 @@ export interface CollapseChange {
     readonly to: readonly RowId[];
 }
 
-// Warning: (ae-forgotten-export) The symbol "CommandOf" needs to be exported by the entry point index.d.ts
-//
 // @public
 export type Command = CommandOf<Gantt>;
 
-// Warning: (ae-forgotten-export) The symbol "CommandContextOf" needs to be exported by the entry point index.d.ts
-//
 // @public (undocumented)
 export type CommandContext = CommandContextOf<Gantt>;
 
-// Warning: (ae-forgotten-export) The symbol "CommandRegistryOf" needs to be exported by the entry point index.d.ts
-//
+// @public
+export interface CommandContextOf<TGantt = unknown> {
+    dataset: Dataset;
+    entry?: Entry;
+    gantt: TGantt;
+    // (undocumented)
+    target?: CommandTarget;
+}
+
+// @public
+export interface CommandOf<TGantt = unknown> {
+    // (undocumented)
+    id: string;
+    label: string;
+    // (undocumented)
+    run(ctx: CommandContextOf<TGantt>): void;
+    when?(ctx: CommandContextOf<TGantt>): boolean;
+}
+
 // @public (undocumented)
 export type CommandRegistry = CommandRegistryOf<Gantt>;
+
+// @public
+export interface CommandRegistryOf<TGantt = unknown> {
+    available(ctx: CommandContextOf<TGantt>): readonly CommandOf<TGantt>[];
+    // (undocumented)
+    register(command: CommandOf<TGantt>): void;
+    // (undocumented)
+    run(id: string): void;
+}
 
 // @public
 export interface CommandTarget {
@@ -695,10 +717,15 @@ export interface GanttOptionsBase {
     zoomPresets?: readonly PresetRef[];
 }
 
-// Warning: (ae-forgotten-export) The symbol "GanttPlugin_2" needs to be exported by the entry point index.d.ts
-//
 // @public
-export type GanttPlugin = GanttPlugin_2<Gantt>;
+export type GanttPlugin = GanttPluginOf<Gantt>;
+
+// @public (undocumented)
+export interface GanttPluginOf<TGantt = unknown> {
+    // (undocumented)
+    id: PluginId;
+    setup(ctx: PluginContextOf<TGantt>): Disposer;
+}
 
 // @public
 export type GanttScaleOptions = {
@@ -799,10 +826,18 @@ export type ItemId = string & {
 // @public
 export function itemId(entry: EntryId, segmentIndex?: number): ItemId;
 
-// Warning: (ae-forgotten-export) The symbol "KeyBindingOf" needs to be exported by the entry point index.d.ts
-//
 // @public (undocumented)
 export type KeyBinding = KeyBindingOf<Gantt>;
+
+// @public
+export interface KeyBindingOf<TGantt = unknown> {
+    captureInEditable?: boolean;
+    // (undocumented)
+    chord: KeyChord;
+    // (undocumented)
+    command: string;
+    when?(ctx: CommandContextOf<TGantt>): boolean;
+}
 
 // @public
 export type KeyChord = string;
@@ -872,10 +907,25 @@ export interface PixelSpan {
     readonly x: number;
 }
 
-// Warning: (ae-forgotten-export) The symbol "PluginContext_2" needs to be exported by the entry point index.d.ts
-//
 // @public (undocumented)
-export type PluginContext = PluginContext_2<Gantt>;
+export type PluginContext = PluginContextOf<Gantt>;
+
+// @public
+export interface PluginContextOf<TGantt = unknown> {
+    commands: CommandRegistryOf<TGantt>;
+    dataset: Dataset;
+    disposables: DisposableStore;
+    events: GanttEvents;
+    gantt: TGantt;
+    // (undocumented)
+    interaction: {
+        registerKeybinding(binding: KeyBindingOf<TGantt>): void;
+    };
+    // (undocumented)
+    view: {
+        overlay: Overlay;
+    };
+}
 
 // @public
 export type PluginId = string;

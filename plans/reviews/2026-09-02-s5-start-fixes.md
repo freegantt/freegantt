@@ -92,7 +92,7 @@ Highest leverage: both bugs live in the seam every later slice's `register*` reu
 - [ ] Adopt `DisposableStore` in `createPopup` instead of the hand-rolled `unsubscribers` array
       (`DisposableStore` already used by `plugin-runtime.ts` in the same layer).
       `src/extensions/popup.ts:149-156`
-- [ ] Fix the flip/clamp test fixture: `popup.test.ts:92-96` sets the timeline pane's `right`
+- [x] Fix the flip/clamp test fixture: `popup.test.ts:92-96` sets the timeline pane's `right`
       equal to the overlay's outer `bounds.right`, so container-clamping and pane-clamping are
       indistinguishable. Give the pane a right edge strictly inside the container bounds.
 - [x] Document `Popup.open()`: calling it while already open replaces the current popup (closes it
@@ -134,7 +134,7 @@ Highest leverage: both bugs live in the seam every later slice's `register*` reu
 
 ## Slice 5 — API surface (C5) + small naming/citation fixes
 
-- [ ] **C5 — export the six generic shapes** (`CommandOf<TGantt>`, `CommandContextOf<TGantt>`,
+- [x] **C5 — export the six generic shapes** (`CommandOf<TGantt>`, `CommandContextOf<TGantt>`,
       `CommandRegistryOf<TGantt>`, `GanttPlugin<TGantt>`, `KeyBindingOf<TGantt>`,
       `PluginContext<TGantt>`) from `src/api/index.ts` alongside their `<Gantt>`-bound aliases
       (pure types, zero runtime cost). Regenerate `etc/freegantt.api.md` via `pnpm api-report` —
@@ -146,7 +146,7 @@ Highest leverage: both bugs live in the seam every later slice's `register*` reu
       `src/view/styles.ts:97,102`, `src/view/pane-layout.ts:9,36`
 - [x] Rename `buildElement(desc)`'s parameter to `description`.
       `src/render/dom/element-description.ts:13`
-- [ ] `pnpm api-report` diff shows only the six new exports, no unrelated churn.
+- [x] `pnpm api-report` diff shows only the six new exports, no unrelated churn.
 
 ## Slice 6 — glossary and doc gaps
 
