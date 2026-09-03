@@ -10,6 +10,7 @@ import type {
   Entry,
   EntryInput,
   FieldContext,
+  GridColumnsChange,
   GridColumnInput,
   RowHeightMode,
   RowSource,
@@ -51,6 +52,7 @@ const importBtn = document.querySelector<HTMLButtonElement>('#import-btn')!;
 const documentJson = document.querySelector<HTMLTextAreaElement>('#document-json')!;
 const log = document.querySelector<HTMLDivElement>('#log')!;
 const selectionReadout = document.querySelector<HTMLParagraphElement>('#selection-readout')!;
+const gridColumnsReadout = document.querySelector<HTMLParagraphElement>('#grid-columns-readout')!;
 
 let autoGroup = true;
 let costColumnVisible = true;
@@ -137,6 +139,14 @@ function renderSelection(): void {
   selectionReadout.textContent = ids.length === 0 ? 'Selection: (none)' : `Selection: ${ids.join(', ')}`;
 }
 
+/** S5.7, D-S5-18: one status line for every `gridColumnsChange` — a resize drag, a reorder drop, and
+ *  the `toggle-cost-col` button's own `gantt.gridColumns = […]` assignment all fire it through the
+ *  same commit sequence, so this one line covers all three. */
+function renderGridColumns({ to }: GridColumnsChange): void {
+  gridColumnsReadout.textContent = `Columns: ${to.map((column) => `${String(column.field)} (${column.width ?? 'flex'}px)`).join(', ')}`;
+  logLine(`[gridColumnsChange] ${to.map((column) => String(column.field)).join(', ')}`);
+}
+
 function refreshHistoryButtons(): void {
   undoBtn.disabled = !dataset.canUndo;
   redoBtn.disabled = !dataset.canRedo;
@@ -158,6 +168,7 @@ function bindGantt(): void {
     renderSelection();
     refreshHistoryButtons();
   });
+  gantt.on('gridColumnsChange', renderGridColumns);
 }
 
 function remountGantt(): void {
