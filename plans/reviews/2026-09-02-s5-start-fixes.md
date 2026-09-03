@@ -243,7 +243,11 @@ Highest leverage: both bugs live in the seam every later slice's `register*` reu
 - [x] `pnpm tsc` clean.
 - [x] `pnpm boundaries` (depcruise) clean — no new violations from the command-catalog extraction or
       the new API exports.
-- [x] `pnpm api-report` — no diff; this pass's changes were all internal, no public surface moved.
+- [x] `pnpm api-report` — clean (regenerated, no drift from the committed `etc/freegantt.api.md`).
+      **Correction (QC review F8, `plans/reviews/2026-09-03-s5-start-fixes-qc.md`):** the diff against
+      the pre-pass baseline is not empty — it adds the six Slice 5/6 generics plus
+      `KeyHandlerRegistrar`/`KeyEventLike` to the public surface. "No diff" above meant "no *unreviewed*
+      diff", not "no diff at all"; the committed `etc/freegantt.api.md` already reflects these additions.
 - [x] Manual harness check (`harness/plugins.html`, driven with a throwaway Playwright script — the
       harness has no popup e2e spec): open two popups in sequence — stays at exactly one `.fg-popup`
       (replace-on-reopen), PASS. Scroll the grid pane while a popup anchored in the timeline pane is

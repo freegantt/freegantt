@@ -358,6 +358,7 @@ export class GanttShell {
   #commandRegistry!: CommandRegistry<unknown>;
   #keymap!: Keymap<unknown>;
   #keymapListener!: (event: KeyboardEvent) => void;
+  #documentKeymapListener!: (event: KeyboardEvent) => void;
   #destroyed = false;
   /** This Gantt's layout pass. It keeps the row-height index alive across renders (#47) — the shell
    * states what to draw and holds no layout bookkeeping of its own. */
@@ -654,6 +655,22 @@ export class GanttShell {
       }
     };
     this.#container.addEventListener('keydown', this.#keymapListener);
+    // Document-level capture-phase fallback (issue #137 F1,
+    // `plans/reviews/2026-09-03-s5-start-fixes-qc.md`): the bubble listener above only ever sees a
+    // key event whose target sits inside `#container`. A popup opened from an outside trigger (a
+    // toolbar button in the consumer's own page, say) has no path into that listener at all, so its Escape
+    // dismissal would never fire. Routing through the same `#keymap.resolve()` — not a second,
+    // independent listener — keeps one newest-first resolution order instead of reintroducing the
+    // bespoke document-capture stack C3 removed. Skipped whenever the target is already inside
+    // `#container`, so an in-container key event is resolved exactly once, by the bubble listener.
+    this.#documentKeymapListener = (event: KeyboardEvent) => {
+      const target = event.target;
+      if (target instanceof Node && this.#container.contains(target)) return;
+      if (this.#keymap.resolve(event)) {
+        event.preventDefault();
+      }
+    };
+    this.#container.ownerDocument.addEventListener('keydown', this.#documentKeymapListener, true);
 
     this.#entryGestures = options.entryGestures?.(this.#panes.timeline, this.#container, gestureContext);
     this.#keyboardEditing = options.keyboardEditing?.(this.#container, gestureContext);
@@ -1308,6 +1325,7 @@ export class GanttShell {
     this.#pluginRuntime.disposeAll();
     this.#overlay.destroy();
     this.#container.removeEventListener('keydown', this.#keymapListener);
+    this.#container.ownerDocument.removeEventListener('keydown', this.#documentKeymapListener, true);
     this.#frames.cancel();
     this.#entryGestures?.detach();
     this.#keyboardEditing?.detach();

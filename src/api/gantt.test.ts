@@ -2305,3 +2305,48 @@ describe('Gantt.commands (S5.2, D-S5-6/D-S5-7)', () => {
     gantt.destroy();
   });
 });
+
+describe('Gantt.interaction.registerKeyHandler out-of-container dismissal (issue #137 F1)', () => {
+  it('a chord registered through ctx.interaction.registerKeyHandler still fires for a key event whose target sits outside the container', () => {
+    // A popup opened from a trigger that lives outside the Gantt's own container (a toolbar button
+    // in the consumer's own page, say) has no path through the container's own bubble-phase listener — this is
+    // exactly the second regression the QC review found (F1): the old document-wide capture listener
+    // C3 removed used to catch this, and nothing replaced it. `plans/reviews/2026-09-03-s5-start-fixes-qc.md`.
+    const container = document.createElement('div');
+    document.body.append(container);
+    const outsideTrigger = document.createElement('button');
+    document.body.append(outsideTrigger);
+
+    const dataset = new Dataset({ entries: sampleEntries.slice(0, 2), timeZone: 'UTC' });
+    let handlerRuns = 0;
+    const gantt = new Gantt({
+      container,
+      dataset,
+      plugins: [
+        {
+          id: 'demo.outside-escape',
+          setup(ctx) {
+            const unregister = ctx.interaction.registerKeyHandler('Escape', () => {
+              handlerRuns += 1;
+            });
+            return () => unregister();
+          },
+        },
+      ],
+    });
+
+    outsideTrigger.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
+    );
+    expect(handlerRuns).toBe(1);
+
+    // The container's own bubble-phase listener still resolves an in-container key event exactly
+    // once — the document-level fallback does not double-fire it.
+    container.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+    expect(handlerRuns).toBe(2);
+
+    gantt.destroy();
+    outsideTrigger.remove();
+    container.remove();
+  });
+});

@@ -140,26 +140,58 @@ describe('Popup', () => {
     });
     withFixedPopupSize(overlay, { width: 100, height: 40 });
     const keymap = makeKeymap();
-    // `GanttShell`'s own equivalent: a capture-phase listener that resolves every key event against
-    // this Gantt's keymap. This test stands in for that shell, driving `keymap.resolve` directly, so
-    // the popup's own `registerHandler('Escape', ...)` (its `stopPropagation` call included) is
-    // exercised the same way it would be for real.
+    // `GanttShell`'s own production wiring (`gantt-shell.ts`'s `#keymapListener`): a bubble-phase
+    // listener on the container, resolving every key event that reaches it against this Gantt's
+    // keymap. Bubble, not capture — the popup's own `registerHandler('Escape', ...)` (its
+    // `stopPropagation` call included) is exercised the same way it runs for real, and
+    // `stopPropagation` stops the event before an outer bubble listener on `document` ever sees it.
     const keymapListener = (event: KeyboardEvent): void => {
       keymap.resolve(event);
     };
-    document.addEventListener('keydown', keymapListener, true);
+    overlay.container.addEventListener('keydown', keymapListener);
     const popup = createPopup(overlay, keymap);
     popup.open({ anchor: rect({ left: 300, top: 100, right: 340, bottom: 120 }), content: { text: 'x' } });
 
     const outerListener = vi.fn();
     document.addEventListener('keydown', outerListener);
 
-    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+    overlay.container.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
+    );
 
     expect(popup.isOpen).toBe(false);
     expect(outerListener).not.toHaveBeenCalled();
     document.removeEventListener('keydown', outerListener);
-    document.removeEventListener('keydown', keymapListener, true);
+    overlay.container.removeEventListener('keydown', keymapListener);
+  });
+
+  it('Escape typed inside the popup content own input still closes it (issue #137 F1 regression)', () => {
+    // The editable-target gate (issue #137 F7) exists to protect a *page-level* editable from a
+    // stray keybinding, not to protect a popup's own input from the popup's own close key — so this
+    // registration must opt in with `captureInEditable: true`. Modeled on the same bubble-phase
+    // container wiring as the test above: the input sits inside the popup, which is mounted inside
+    // `overlay.container`, the stand-in for `GanttShell`'s `#container`.
+    const overlay = fakeAnchor({
+      bounds: rect({ right: 1000, bottom: 500 }),
+      grid: rect({ right: 160, bottom: 500 }),
+      timeline: rect({ left: 160, right: 1000, bottom: 500 }),
+    });
+    withFixedPopupSize(overlay, { width: 100, height: 40 });
+    const keymap = makeKeymap();
+    const keymapListener = (event: KeyboardEvent): void => {
+      keymap.resolve(event);
+    };
+    overlay.container.addEventListener('keydown', keymapListener);
+    const popup = createPopup(overlay, keymap);
+    popup.open({ anchor: rect({ left: 300, top: 100, right: 340, bottom: 120 }), content: { text: 'x' } });
+
+    const input = document.createElement('input');
+    overlay.container.querySelector('.fg-popup')!.append(input);
+
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+
+    expect(popup.isOpen).toBe(false);
+    overlay.container.removeEventListener('keydown', keymapListener);
   });
 
   it('an outside pointerdown closes the popup; one inside the anchor does not', () => {
