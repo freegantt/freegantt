@@ -1,11 +1,12 @@
-// api/ — the public plugin contract (S5.1, D-S5-1, issue #137 F1). `GanttPlugin`/`PluginContext` stay
-// generic over `TGantt` here so this file never imports `./gantt.js` for the concrete `Gantt` class:
-// `api/gantt.ts` already imports this file for the generic shape, and if this file also imported
-// `Gantt` the two would close an import cycle (dependency-cruiser's `no-circular` rule treats a
-// type-only edge the same as a runtime one). `api/gantt.ts` binds the type argument once, locally —
-// `export type GanttPlugin = GanttPluginOf<Gantt>` — and that bound alias is what `api/index.ts`
-// re-exports; a plugin author's `import type { GanttPlugin } from 'freegantt'` always resolves to it,
-// never to the generic declared here.
+// api/ — the public plugin contract (S5.1, D-S5-1, issue #137 F1). `GanttPluginOf`/`PluginContextOf`
+// stay generic over `TGantt` here so this file never imports `./gantt.js` for the concrete `Gantt`
+// class: `api/gantt.ts` already imports this file for the generic shape, and if this file also
+// imported `Gantt` the two would close an import cycle (dependency-cruiser's `no-circular` rule
+// treats a type-only edge the same as a runtime one). `api/gantt.ts` binds the type argument once,
+// locally — `export type GanttPlugin = GanttPluginOf<Gantt>` — and `api/index.ts` re-exports the
+// bound aliases alongside the generic shapes. A plugin author writing against `Gantt` names the
+// bound `GanttPlugin`/`PluginContext`; code that parameterizes over its own Gantt type names the
+// `*Of` forms, the same pairing `api/command.ts` uses.
 
 import type { Disposer, PluginId } from '../model/index.js';
 import type { Dataset } from './dataset.js';
@@ -18,12 +19,12 @@ import type { CommandRegistryOf, KeyBindingOf } from './command.js';
 // back would close that edge into a cycle, `no-circular`).
 export type { Overlay, OverlayHandle };
 
-/** What a `GanttPlugin`'s `setup()` receives, once, after the Gantt mounts. S5.1 ships `dataset`,
+/** What a plugin's `setup()` receives, once, after the Gantt mounts. S5.1 ships `dataset`,
  *  `gantt`, `events` and `disposables` only — every other member (`commands`, `view`, `layout`,
  *  `interaction`) arrives in the step that ships the code honouring it (I11): a `register*` that does
  *  nothing is exactly the dishonest surface `no-not-implemented` catches. See
  *  `plans/s5-extensibility-and-editing/s5.1-plugin-runtime.md` §1 for the full shape this grows into. */
-export interface PluginContext<TGantt = unknown> {
+export interface PluginContextOf<TGantt = unknown> {
   /** The public Dataset. No privileged access, no second surface. */
   dataset: Dataset;
   /** The public Gantt, for reading live config and calling public methods. */
@@ -50,8 +51,8 @@ export interface PluginContext<TGantt = unknown> {
   };
 }
 
-export interface GanttPlugin<TGantt = unknown> {
+export interface GanttPluginOf<TGantt = unknown> {
   id: PluginId;
   /** Called once, after the Gantt mounts. Returns a disposer for the plugin's own resources. */
-  setup(ctx: PluginContext<TGantt>): Disposer;
+  setup(ctx: PluginContextOf<TGantt>): Disposer;
 }
