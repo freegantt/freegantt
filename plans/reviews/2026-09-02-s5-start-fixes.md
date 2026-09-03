@@ -143,21 +143,21 @@ Highest leverage: both bugs live in the seam every later slice's `register*` reu
 
 ## Slice 4 — keymap double-evaluation cleanup
 
-- [ ] `Keymap.resolve` builds a `CommandContext` and evaluates `command.when`
-      (`keymap.ts:107-126`), then `CommandRegistry.run()` independently rebuilds the context and
-      re-evaluates `when` again (`commands.ts:45-50`) — two builds, two guard checks per keypress.
-      Resolve once, run once: either have `resolve()` hand its built context to a `run`-with-context
-      variant, or let `commands.run()` accept an optional prebuilt context. (Still open — the
-      constructor-injection item below removed the *argument* clump, not this double work; `resolve()`
-      still calls `this.#buildContext()` itself and `commands.run()` still rebuilds and re-checks
-      `when` independently.)
+- [x] `Keymap.resolve` built a `CommandContext` and evaluated `command.when`, then `CommandRegistry
+      .run()` independently rebuilt the context and re-evaluated `when` again — two builds, two guard
+      checks per keypress. Added `CommandRegistry.runResolved(id, ctx)` — not part of the public
+      `CommandRegistryOf` contract, `resolve()` is its only caller — which trusts the `when` checks
+      `resolve()` already made and just runs the command with the context already built. `resolve()`
+      still calls `this.#buildContext()` once itself; `run(id)` (the public direct-call path, e.g.
+      `gantt.commands.run(...)`) is unchanged and still builds and checks on its own.
+      `src/extensions/commands.ts`, `src/extensions/keymap.ts`, `src/extensions/keymap.test.ts`
 - [x] Move `Keymap.resolve(event, commands, buildContext)`'s trailing two arguments to constructor
       injection (its only caller passes the same two every time) so call sites read `resolve(event)`.
       `Keymap` now takes `(commands, buildContext)` in its constructor; `GanttShell` builds it right
       after `#commandRegistry` exists (field default moved into the constructor body, since it can no
       longer default-initialize before `#commandRegistry` is assigned) and calls `keymap.resolve(event)`.
       `src/extensions/keymap.ts`, `src/view/gantt-shell.ts`, `src/extensions/keymap.test.ts`
-- [ ] `pnpm test && pnpm tsc` clean before moving on.
+- [x] `pnpm test:node && pnpm test:dom && pnpm tsc && pnpm boundaries` clean before moving on.
 
 ## Slice 5 — API surface (C5) + small naming/citation fixes
 

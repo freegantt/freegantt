@@ -51,6 +51,17 @@ export class CommandRegistry<TGantt = unknown> implements CommandRegistryOf<TGan
     command.run(ctx);
   }
 
+  /** `extensions/keymap.ts`'s `resolve()` already built `ctx` and checked both the binding's and the
+   *  command's own `when` before picking this id — running through `run(id)` here would rebuild the
+   *  context and re-check `when` a second time for the same keystroke. Not part of the public
+   *  `CommandRegistryOf` contract; `resolve()` is the only caller, and only once it has already
+   *  confirmed `find(id)` returns a command. */
+  runResolved(id: string, ctx: CommandContextOf<TGantt>): void {
+    const command = this.#commands.get(id);
+    if (command === undefined) throw new UnknownCommandError(id);
+    command.run(ctx);
+  }
+
   available(ctx: CommandContextOf<TGantt>): readonly CommandOf<TGantt>[] {
     return [...this.#commands.values()].filter((command) => command.when === undefined || command.when(ctx));
   }

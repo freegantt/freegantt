@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { Keymap, normalizeChord, isEditableTarget } from './keymap.js';
 import type { KeyEventLike } from './keymap.js';
 import { CommandRegistry } from './commands.js';
@@ -163,5 +163,21 @@ describe('Keymap.resolve (D-S5-7)', () => {
 
     expect(handled).toBe(false);
     expect(ran).toEqual([]);
+  });
+
+  it('resolves once and runs once per keystroke — no second buildContext or when re-check (D-S5-7)', () => {
+    const buildContext = vi.fn(() => ({}) as CommandContext<unknown>);
+    const registry = new CommandRegistry<unknown>(buildContext);
+    const when = vi.fn(() => true);
+    const run = vi.fn();
+    registry.register({ id: 'freegantt.a', label: 'A', when, run });
+    const keymap = new Keymap<unknown>(registry, buildContext);
+    keymap.register({ chord: 'Mod+K', command: 'freegantt.a' });
+
+    keymap.resolve(event({ key: 'k', ctrlKey: true }));
+
+    expect(buildContext).toHaveBeenCalledOnce();
+    expect(when).toHaveBeenCalledOnce();
+    expect(run).toHaveBeenCalledOnce();
   });
 });
