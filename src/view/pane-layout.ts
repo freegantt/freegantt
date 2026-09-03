@@ -166,14 +166,14 @@ export class PaneLayout {
 
   /** `Overlay.bounds` (S5.3, D-S5-8): the container's own client rect, the outer clamp a popup
    *  anchored outside both panes still clamps to. */
-  containerBounds(): DOMRect {
+  bounds(): DOMRect {
     return this.#container.getBoundingClientRect();
   }
 
   /** `Overlay.paneBounds` (S5.3, D-S5-8, issue #137 F8): the grid pane's own client rect — not
    *  `panes.grid`, which is the row layer moved by transform every frame and would report a stale or
    *  scrolled-away box — alongside the timeline pane's. */
-  paneRects(): { grid: DOMRect; timeline: DOMRect } {
+  paneBounds(): { grid: DOMRect; timeline: DOMRect } {
     return {
       grid: this.#gridPane.getBoundingClientRect(),
       timeline: this.panes.timeline.getBoundingClientRect(),

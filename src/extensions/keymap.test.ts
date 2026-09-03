@@ -65,11 +65,11 @@ describe('isEditableTarget (issue #137 F7)', () => {
 describe('Keymap.resolve (D-S5-7)', () => {
   it('runs the newest matching binding first', () => {
     const { registry, ctx, ran } = makeCommands();
-    const keymap = new Keymap<unknown>();
+    const keymap = new Keymap<unknown>(registry, () => ctx);
     keymap.register({ chord: 'Mod+K', command: 'freegantt.a' });
     keymap.register({ chord: 'Mod+K', command: 'freegantt.b' });
 
-    const handled = keymap.resolve(event({ key: 'k', ctrlKey: true }), registry, () => ctx);
+    const handled = keymap.resolve(event({ key: 'k', ctrlKey: true }));
 
     expect(handled).toBe(true);
     expect(ran).toEqual(['b']);
@@ -77,11 +77,11 @@ describe('Keymap.resolve (D-S5-7)', () => {
 
   it('a declining when falls through to an older binding', () => {
     const { registry, ctx, ran } = makeCommands();
-    const keymap = new Keymap<unknown>();
+    const keymap = new Keymap<unknown>(registry, () => ctx);
     keymap.register({ chord: 'Mod+K', command: 'freegantt.a' });
     keymap.register({ chord: 'Mod+K', command: 'freegantt.b', when: () => false });
 
-    const handled = keymap.resolve(event({ key: 'k', ctrlKey: true }), registry, () => ctx);
+    const handled = keymap.resolve(event({ key: 'k', ctrlKey: true }));
 
     expect(handled).toBe(true);
     expect(ran).toEqual(['a']);
@@ -89,10 +89,10 @@ describe('Keymap.resolve (D-S5-7)', () => {
 
   it('an unmatched chord leaves the event untouched', () => {
     const { registry, ctx, ran } = makeCommands();
-    const keymap = new Keymap<unknown>();
+    const keymap = new Keymap<unknown>(registry, () => ctx);
     keymap.register({ chord: 'Mod+K', command: 'freegantt.a' });
 
-    const handled = keymap.resolve(event({ key: 'z' }), registry, () => ctx);
+    const handled = keymap.resolve(event({ key: 'z' }));
 
     expect(handled).toBe(false);
     expect(ran).toEqual([]);
@@ -100,12 +100,12 @@ describe('Keymap.resolve (D-S5-7)', () => {
 
   it('a chord typed in an editable target is ignored unless captureInEditable is set', () => {
     const { registry, ctx, ran } = makeCommands();
-    const keymap = new Keymap<unknown>();
+    const keymap = new Keymap<unknown>(registry, () => ctx);
     keymap.register({ chord: 'Mod+K', command: 'freegantt.a' });
     keymap.register({ chord: 'Mod+K', command: 'freegantt.b', captureInEditable: true });
     const input = document.createElement('input');
 
-    const handled = keymap.resolve(event({ key: 'k', ctrlKey: true, target: input }), registry, () => ctx);
+    const handled = keymap.resolve(event({ key: 'k', ctrlKey: true, target: input }));
 
     expect(handled).toBe(true);
     expect(ran).toEqual(['b']);
@@ -113,11 +113,11 @@ describe('Keymap.resolve (D-S5-7)', () => {
 
   it('register() returns a disposer that removes the binding', () => {
     const { registry, ctx, ran } = makeCommands();
-    const keymap = new Keymap<unknown>();
+    const keymap = new Keymap<unknown>(registry, () => ctx);
     const remove = keymap.register({ chord: 'Mod+K', command: 'freegantt.a' });
     remove();
 
-    const handled = keymap.resolve(event({ key: 'k', ctrlKey: true }), registry, () => ctx);
+    const handled = keymap.resolve(event({ key: 'k', ctrlKey: true }));
 
     expect(handled).toBe(false);
     expect(ran).toEqual([]);

@@ -120,9 +120,16 @@ Highest leverage: both bugs live in the seam every later slice's `register*` reu
       (`keymap.ts:107-126`), then `CommandRegistry.run()` independently rebuilds the context and
       re-evaluates `when` again (`commands.ts:45-50`) — two builds, two guard checks per keypress.
       Resolve once, run once: either have `resolve()` hand its built context to a `run`-with-context
-      variant, or let `commands.run()` accept an optional prebuilt context.
-- [ ] Move `Keymap.resolve(event, commands, buildContext)`'s trailing two arguments to constructor
+      variant, or let `commands.run()` accept an optional prebuilt context. (Still open — the
+      constructor-injection item below removed the *argument* clump, not this double work; `resolve()`
+      still calls `this.#buildContext()` itself and `commands.run()` still rebuilds and re-checks
+      `when` independently.)
+- [x] Move `Keymap.resolve(event, commands, buildContext)`'s trailing two arguments to constructor
       injection (its only caller passes the same two every time) so call sites read `resolve(event)`.
+      `Keymap` now takes `(commands, buildContext)` in its constructor; `GanttShell` builds it right
+      after `#commandRegistry` exists (field default moved into the constructor body, since it can no
+      longer default-initialize before `#commandRegistry` is assigned) and calls `keymap.resolve(event)`.
+      `src/extensions/keymap.ts`, `src/view/gantt-shell.ts`, `src/extensions/keymap.test.ts`
 - [ ] `pnpm test && pnpm tsc` clean before moving on.
 
 ## Slice 5 — API surface (C5) + small naming/citation fixes
@@ -149,9 +156,12 @@ Highest leverage: both bugs live in the seam every later slice's `register*` reu
       (spec-mandated name — document the distinction, don't rename).
 - [x] Update the `PaneLayout` glossary line ("structure and one number only — grid width") to
       cover the second owned number, `contentWidth`.
-- [ ] Unify "bounds" naming across the Overlay seam: pick "bounds" on both sides of
+- [x] Unify "bounds" naming across the Overlay seam: pick "bounds" on both sides of
       `Overlay.paneBounds` vs `PaneLayout.paneRects()`, and `Overlay.bounds` vs
-      `containerBounds()`.
+      `containerBounds()`. Renamed `PaneLayout.paneRects()` → `paneBounds()` and
+      `PaneLayout.containerBounds()` → `bounds()`, matching the `Overlay` getters of the same names
+      that already wrap them 1:1. Only caller was `overlay.ts`; no test named either old method.
+      `src/view/pane-layout.ts`, `src/view/overlay.ts`
 - [x] Doc: `GanttOptions.plugins` — add "same id, new object → ignored (dev: warns)".
       `src/api/gantt.ts` (the `plugins?` option doc)
 - [x] Doc: public `Gantt.commands` alias — carry the same "no-ops when `when` declines" sentence
