@@ -232,5 +232,6 @@ export type {
   HeaderFormat,
 } from '../time/index.js';
 // S5.6, D-S5-16: `Dataset.time`'s own type — a plugin author names this when it writes a function
-// that takes a `ZonedTime` rather than reading `ctx.time`/`dataset.time` inline.
-export type { ZonedTime } from '../time/index.js';
+// that takes a `ZonedTime` rather than reading `ctx.time`/`dataset.time` inline. `PlainParts` rides
+// along: `ZonedTime.toPlain`/`.fromPlain` both name it.
+export type { ZonedTime, PlainParts } from '../time/index.js';
