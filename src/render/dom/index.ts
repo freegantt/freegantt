@@ -3,6 +3,10 @@
 
 import type {
   BarFlags,
+  BarRenderer,
+  ElementDescription,
+  Entry,
+  EntryId,
   FrameBar,
   FrameHeaderBand,
   FrameHeaderTick,
@@ -10,6 +14,7 @@ import type {
   GeometryFrame,
   ItemId,
   ItemPreview,
+  ResolvedRenderer,
   RowId,
   ClientPoint,
 } from '../../layout/index.js';
@@ -18,6 +23,45 @@ import type { RenderBackend, RenderSurfaces, InteractionState, HitResult } from 
 import { attachDateLines } from './date-line.js';
 import type { DateLineAttachment } from './date-line.js';
 import { KeyedLayer, NestedKeyedLayers } from './sync-keyed.js';
+import { applyElementDescription } from './element-description.js';
+
+/** `render/dom` cannot import `data/dev-mode.ts` (render-boundary: layout only) — repeats that
+ *  file's one-line check, the same carve-out `extensions/plugin-runtime.ts` already takes. */
+function isDevMode(): boolean {
+  return (import.meta as { env?: { DEV?: boolean } }).env?.DEV ?? false;
+}
+
+/** A cell's renderer, already bound to its `ResolvedColumn` (render/dom never receives that type —
+ *  `column.format` "stays on `ResolvedColumn` and never reaches a backend", `layout/column.ts`) and
+ *  keyed by `GanttShell` per `FrameColumn.key` (S5.4, D-S5-11). */
+type BoundCellRenderer = (ctx: {
+  entry?: Entry;
+  row: FrameRow;
+  value: string;
+}) => ElementDescription | undefined;
+
+export interface DomBackendOptions {
+  entryById: (id: EntryId) => Entry | undefined;
+  resolveBarRenderer: (kind: string) => ResolvedRenderer<BarRenderer> | undefined;
+  resolveCellRenderer: (columnKey: string) => ResolvedRenderer<BoundCellRenderer> | undefined;
+}
+
+function callRenderer<TCtx>(
+  point: string,
+  resolved: ResolvedRenderer<(ctx: TCtx) => ElementDescription | undefined>,
+  ctx: TCtx,
+): ElementDescription | undefined {
+  try {
+    return resolved.renderer(ctx);
+  } catch (error) {
+    // Issue #137 F14: one bad renderer degrades one bar or cell, never the paint pass.
+    if (isDevMode()) {
+      const plugin = resolved.pluginId !== undefined ? ` from plugin "${resolved.pluginId}"` : '';
+      console.error(`FreeGantt: ${point}Renderer${plugin} threw — falling back to the default output`, error);
+    }
+    return undefined;
+  }
+}
 
 type TickGeom = Pick<FrameHeaderTick, 'x' | 'width' | 'label'>;
 type CellItem = {
@@ -29,6 +73,8 @@ type CellItem = {
   flex?: number;
   expandable: boolean;
   expanded: boolean;
+  /** S5.4, D-S5-11: a resolved `cellRenderer`'s output for this one cell — undefined keeps `text`. */
+  content?: ElementDescription;
 };
 type CellGeom = {
   text: string;
@@ -38,6 +84,7 @@ type CellGeom = {
   flex: number;
   expandable: boolean;
   expanded: boolean;
+  content?: ElementDescription;
 };
 type HeaderCellGeom = {
   text: string;
@@ -56,7 +103,10 @@ type RowGeom = {
   expanded: boolean;
   matched?: boolean;
 };
-type BarGeom = Pick<FrameBar, 'kind' | 'label' | 'x' | 'y' | 'width' | 'height' | 'flags' | 'a11yLabel'>;
+type BarGeom = Pick<FrameBar, 'kind' | 'label' | 'x' | 'y' | 'width' | 'height' | 'flags' | 'a11yLabel'> & {
+  /** S5.4, D-S5-11: a resolved `barRenderer`'s output for this one bar — undefined keeps `label`. */
+  content?: ElementDescription;
+};
 /** Shape class from `data-kind` (D-S4-24) — a lookup, never `if (kind === …)`. */
 const BAR_SHAPE_CLASS = Object.freeze({
   group: 'fg-bar-bracket',
@@ -128,10 +178,14 @@ function cellGeom(item: CellItem): CellGeom {
     flex: item.flex ?? 0,
     expandable: item.expandable,
     expanded: item.expanded,
+    ...(item.content !== undefined ? { content: item.content } : {}),
   };
 }
 
-export function createDomBackend(): RenderBackend<HTMLElement> {
+export function createDomBackend(options?: DomBackendOptions): RenderBackend<HTMLElement> {
+  const entryById = options?.entryById ?? ((): undefined => undefined);
+  const resolveBarRenderer = options?.resolveBarRenderer ?? ((): undefined => undefined);
+  const resolveCellRenderer = options?.resolveCellRenderer ?? ((): undefined => undefined);
   // The grid pane's row layer (RenderSurfaces.grid) — created by `view/pane-layout.ts`, not this
   // backend (S1.8, D-S1.8-2). No scrollbar of its own: it follows the timeline pane's scroll
   // position by one `translateY(-visible.y)` per frame (D-S1.8-1), written in `sync()` below.
@@ -354,7 +408,7 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
       twisty.hidden = !geom.first || !geom.expandable;
       if (twisty.hidden) twisty.removeAttribute('aria-expanded');
       else twisty.setAttribute('aria-expanded', geom.expanded ? 'true' : 'false');
-      label.textContent = geom.text;
+      applyElementDescription(label, geom.content ?? { text: geom.text });
     },
   };
 
@@ -422,13 +476,27 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
   /** Each row owns a nested keyed list of cells (one per configured column), the same "keyed list
    * inside a keyed list" pattern `syncHeader` uses for ticks inside bands. Split out from `syncRows`
    * because it needs its own per-row layer lookup and its own prune pass. */
+  function cellItemsForRow(row: FrameRow, columns: readonly FrameColumn[]): readonly CellItem[] {
+    const entry = row.entryId !== undefined ? entryById(row.entryId) : undefined;
+    return cellItemsFor(row.cells, columns, row.expandable, row.expanded).map((item, i) => {
+      const column = columns[i];
+      if (column === undefined) return item;
+      const resolved = resolveCellRenderer(String(column.key));
+      if (resolved === undefined) return item;
+      const content = callRenderer('cell', resolved, {
+        ...(entry !== undefined ? { entry } : {}),
+        row,
+        value: item.text,
+      });
+      return content === undefined ? item : { ...item, content };
+    });
+  }
+
   function syncCellsForEachRow(rows: readonly FrameRow[], columns: readonly FrameColumn[]): void {
     rows.forEach((row) => {
       const rowNode = rowLayer.node(row.id);
       if (!rowNode) return;
-      rowCellLayers
-        .layerFor(row.id)
-        .sync(rowNode, cellItemsFor(row.cells, columns, row.expandable, row.expanded), cellSpec);
+      rowCellLayers.layerFor(row.id).sync(rowNode, cellItemsForRow(row, columns), cellSpec);
     });
 
     rowCellLayers.prune(new Set(rows.map((row) => row.id)));
@@ -468,25 +536,34 @@ export function createDomBackend(): RenderBackend<HTMLElement> {
         node.setAttribute('role', 'img');
         return node;
       },
-      toGeom: (bar) => ({
-        kind: bar.kind,
-        label: bar.label,
-        x: bar.x,
-        y: bar.y,
-        width: bar.width,
-        height: bar.height,
-        flags: bar.flags,
-        a11yLabel: bar.a11yLabel,
-      }),
+      toGeom: (bar) => {
+        const resolved = resolveBarRenderer(bar.kind);
+        let content: ElementDescription | undefined;
+        if (resolved !== undefined) {
+          const entry = entryById(bar.entryId);
+          if (entry !== undefined) content = callRenderer('bar', resolved, { entry, item: bar });
+        }
+        return {
+          kind: bar.kind,
+          label: bar.label,
+          x: bar.x,
+          y: bar.y,
+          width: bar.width,
+          height: bar.height,
+          flags: bar.flags,
+          a11yLabel: bar.a11yLabel,
+          ...(content !== undefined ? { content } : {}),
+        };
+      },
       patch: (node, geom) => {
         node.className = barClassName(geom.kind);
         node.dataset['kind'] = geom.kind;
         node.dataset['flag'] = flagTokens(geom.flags);
-        node.textContent = geom.label;
         node.setAttribute('aria-label', geom.a11yLabel);
         node.style.transform = `translate(${geom.x}px, ${geom.y}px)`;
         node.style.width = `${geom.width}px`;
         node.style.height = `${geom.height}px`;
+        applyElementDescription(node, geom.content ?? { text: geom.label });
       },
     });
   }

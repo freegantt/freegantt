@@ -1,6 +1,6 @@
 # S5 — Extensibility, editing surfaces, a11y completion
 
-**Slice:** S5 (`plans/03` §S5) · **Position:** after S4, before S6 · **Status:** in progress — S5.0/S5.1/S5.2/S5.3 done, S5.4 next
+**Slice:** S5 (`plans/03` §S5) · **Position:** after S4, before S6 · **Status:** in progress — S5.0/S5.1/S5.2/S5.3 done, S5.4 library code done and green (harness demo + visible-acceptance sign-off still open, see [`handoff-s5.4-harness.md`](./handoff-s5.4-harness.md))
 **Form:** the same settled-spec form as [`plans/s4-hierarchy-and-rows/README.md`](../s4-hierarchy-and-rows/README.md) — this file is the tracker and the shared context; each step file holds the decisions it implements and its TODO boxes.
 **Tick as you go:** When you finish a TODO item, tick its box in that step file. Tick it in the same change as the code. Do not wait for S5.12 or the slice gate.
 **Governed by:** `plans/00` D3/D4/D5/D11/D12, `plans/01` §2.5/§2.6/§8/§9/§10, `plans/02` §3/§4/§4.1/§4.2/§7, ADR [0002](../../docs/adr/0002-scheduling-is-a-plugin-not-a-core-layer.md), ADR [0005](../../docs/adr/0005-fields-are-declared-and-grid-columns-reference-them.md).

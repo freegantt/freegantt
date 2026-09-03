@@ -61,4 +61,5 @@ export {
   RegistrationClosedError,
   PluginSetupError,
   UnknownCommandError,
+  RendererAlreadyRegisteredError,
 } from './errors.js';

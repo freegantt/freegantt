@@ -62,6 +62,10 @@ export interface FrameRow {
   matched?: boolean;
   /** One library-formatted string per configured grid column, in column order (ADR 0005). */
   cells: readonly string[];
+  /** The row's own Entry (undefined for a header row, D-S4-23, or a custom row with none). What a
+   *  `cellRenderer` resolves its `entry` context from (S5.4, D-S5-11) — the same primary entry
+   *  `cellsForRow` already reads to format `cells` above, just carried out to the paint step too. */
+  entryId?: EntryId;
 }
 
 export interface FrameBar {
@@ -346,6 +350,9 @@ export function placeFrame(
       expanded: planned.expanded,
       ...(planned.matched !== undefined ? { matched: planned.matched } : {}),
       cells: cellsForRow(planned, input.columns, entryById),
+      ...(!isPlannedHeaderRow(planned) && planned.entryIds[0] !== undefined
+        ? { entryId: planned.entryIds[0] }
+        : {}),
     });
 
     for (const item of items) {

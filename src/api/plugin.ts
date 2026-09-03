@@ -14,6 +14,7 @@ import type { DisposableStore } from '../extensions/disposables.js';
 import type { KeyEventLike } from '../extensions/keymap.js';
 import type { GanttEvents, Overlay, OverlayHandle } from '../view/index.js';
 import type { CommandRegistryOf, KeyBindingOf } from './command.js';
+import type { RendererPoint, RendererFor } from '../layout/index.js';
 
 // Re-exported for the same reason `Overlay`/`OverlayHandle` are, just below: a plugin author typing
 // a `registerKeyHandler` callback names this.
@@ -66,6 +67,12 @@ export interface PluginContextOf<TGantt = unknown> {
      *  not gated by `RegistrationGate` (D-S5-4 only gates one-shot `register*` calls; presenting and
      *  dismissing overlay content happens for as long as the plugin runs). */
     overlay: Overlay;
+    /** S5.4, D-S5-11: claims one of the four renderer points — `bar`, `cell`, `header`, `tooltip`.
+     *  One slot per point: a consumer's own `GanttOptions.*Renderer` always wins over this (a
+     *  consumer that wants a plugin's renderer to win removes its own instead); two plugins claiming
+     *  the same point throws `RendererAlreadyRegisteredError`, naming both plugin ids. Legal only
+     *  while `setup` runs (D-S5-4). */
+    registerRenderer<P extends RendererPoint>(point: P, renderer: RendererFor<P>): void;
   };
 }
 

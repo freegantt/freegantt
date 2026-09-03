@@ -25,7 +25,15 @@ import type {
   ViewPreset,
   ItemProducerRegistry,
   FieldCompare,
+  BarRenderer,
+  CellRenderer,
+  HeaderRenderer,
+  TooltipRenderer,
+  RendererByKind,
+  RendererPoint,
+  RendererFor,
 } from '../layout/index.js';
+import { RendererRegistry } from './renderer-registry.js';
 
 import { createDomBackend } from '../render/dom/index.js';
 import { readPixelProperty } from '../render/dom/pixel-property.js';
@@ -199,6 +207,19 @@ export interface GanttShellOptions {
   rowSource?: RowSource;
   /** Live (S4.6, D-S4-22). Collapsed `RowId`s, loose on the way in. Default `[]`. */
   collapsed?: readonly (RowId | string)[];
+  /** Live (S5.4, D-S5-11). A function, or a per-kind map (D-S5-12) — undefined and "no per-kind
+   *  entry" both keep the library's own bar output. Always loses to a plugin's own `registerRenderer`
+   *  only when this is itself undefined; wins over a plugin's the rest of the time. */
+  barRenderer?: BarRenderer | RendererByKind;
+  /** Live (S5.4, D-S5-11). Gantt-wide; a per-column `GridColumn.cellRenderer` (S5.7) wins over this
+   *  for its own column. */
+  cellRenderer?: CellRenderer;
+  /** Live (S5.4, D-S5-11). Not painted until a later step consumes it (S5.7's grid header chrome) —
+   *  the resolution slot exists now so a plugin's `registerRenderer('header', …)` has somewhere to
+   *  register into and this option is honest about not being a no-op forever. */
+  headerRenderer?: HeaderRenderer;
+  /** Live (S5.4, D-S5-11). Replaces a tooltip's body (S5.5's `tooltips()` feature reads this). */
+  tooltipRenderer?: TooltipRenderer;
   /** Expert knob, not on `GanttOptions` (plans/02 "two callers, two surfaces") — a test naming its
    * own `RenderBackend<HTMLElement>` in place of the DOM one (§9-I: the seam had two implementations
    * and one hardcoded call site, so nothing could reach the other short of mocking the module).
@@ -249,6 +270,9 @@ export interface GanttShellOptions {
       options?: { captureInEditable?: boolean },
     ) => () => void;
     overlay: Overlay;
+    /** S5.4, D-S5-11: `ctx.view.registerRenderer`. Legal only while `setup` runs (D-S5-4), the same
+     *  gate `registerKeybinding` above already takes. */
+    registerRenderer: <P extends RendererPoint>(point: P, renderer: RendererFor<P>) => void;
   }) => unknown;
   /** S5.2, D-S5-6: fills the api-level pieces of a `CommandContext` for the same reason
    *  `buildPluginContext` above fills `PluginContext`'s — the full api `Dataset` (with `undo`/`redo`)
@@ -361,6 +385,13 @@ export class GanttShell {
   #fieldContext: FieldContext | undefined;
   #rowSource: RowSource = DEFAULT_ROW_SOURCE;
   #treeCollapse!: TreeCollapse;
+  /** S5.4, D-S5-11: plugin-side renderer registrations. The consumer's own `#barRenderer`/etc. below
+   *  are read live at resolve time, never stored here — see `renderer-registry.ts`'s file header. */
+  #rendererRegistry = new RendererRegistry();
+  #barRenderer: BarRenderer | RendererByKind | undefined;
+  #cellRenderer: CellRenderer | undefined;
+  #headerRenderer: HeaderRenderer | undefined;
+  #tooltipRenderer: TooltipRenderer | undefined;
   /** S5.3, D-S5-8: constructed once panes exist — see the plugin runtime's own comment just below for
    *  why. */
   #overlay: DomOverlay;
@@ -410,13 +441,37 @@ export class GanttShell {
     this.#dateLines = options.dateLines ?? [];
     this.#gridColumnInput = options.gridColumns ?? DEFAULT_GRID_COLUMNS;
     this.#rowSource = options.rowSource ?? DEFAULT_ROW_SOURCE;
+    this.#barRenderer = options.barRenderer;
+    this.#cellRenderer = options.cellRenderer;
+    this.#headerRenderer = options.headerRenderer;
+    this.#tooltipRenderer = options.tooltipRenderer;
     this.#itemProducerRegistry = options.itemProducerRegistry ?? createItemProducerRegistry();
     this.#bindColumns();
 
     // Mount before binding (#22): the render target exists by the time the binding's own onChange
     // — which IS this shell's first render — fires, so there is no construction-order exception to
     // document and no separate explicit render() call after bind().
-    this.#backend = options.backend ?? createDomBackend();
+    this.#backend =
+      options.backend ??
+      createDomBackend({
+        entryById: (id) => this.#options.dataset.entries.get(id),
+        resolveBarRenderer: (kind) => this.#rendererRegistry.resolveBar(kind, this.#barRenderer),
+        // S5.4, D-S5-11: `render/dom` never receives `ResolvedColumn` (`column.format` "never
+        // reaches a backend", `layout/column.ts`) — bind it in here instead, so render/dom only
+        // ever calls an already-column-bound function keyed by the same `FrameColumn.key` string
+        // it already threads through `CellItem.key`.
+        resolveCellRenderer: (columnKey) => {
+          const resolved = this.#rendererRegistry.resolveCell(this.#cellRenderer);
+          if (resolved === undefined) return undefined;
+          const column = this.#resolvedColumns.find((c) => String(c.key) === columnKey);
+          if (column === undefined) return undefined;
+          const cellRenderer = resolved.renderer;
+          return {
+            renderer: (ctx) => cellRenderer({ ...ctx, column }),
+            ...(resolved.pluginId !== undefined ? { pluginId: resolved.pluginId } : {}),
+          };
+        },
+      });
     this.#backend.mount({
       grid: this.#panes.grid,
       timeline: this.#panes.timeline,
@@ -463,6 +518,12 @@ export class GanttShell {
         handler: (event: KeyEventLike) => void,
         keyOptions?: { captureInEditable?: boolean },
       ): (() => void) => this.#keymap.registerHandler(chord, handler, keyOptions);
+      // Not wrapped through `gate.guard` (which erases the point<->renderer type link a generic
+      // signature needs) — `gate.assertOpen()` called directly instead, same check, same D-S5-4 gate.
+      const registerRenderer = <P extends RendererPoint>(point: P, renderer: RendererFor<P>): void => {
+        gate.assertOpen();
+        this.#rendererRegistry.register(point, renderer, pluginId);
+      };
       const context = (options.buildPluginContext ?? (() => ({})))({
         events: this.#pluginEvents,
         disposables,
@@ -470,6 +531,7 @@ export class GanttShell {
         registerKeybinding,
         registerKeyHandler,
         overlay: this.#overlay,
+        registerRenderer,
       });
       return { context, disposables, registrationGate: gate };
     });
@@ -645,6 +707,44 @@ export class GanttShell {
   set gridColumns(columns: readonly GridColumnInput[]) {
     this.#gridColumnInput = columns;
     this.#bindColumns();
+    this.#frames.request();
+  }
+
+  /** Live (S5.4, D-S5-11). Reassigning repaints every bar with no remount (I8) — the same
+   *  `#frames.request()` every other live paint-only property already uses. */
+  get barRenderer(): BarRenderer | RendererByKind | undefined {
+    return this.#barRenderer;
+  }
+
+  set barRenderer(renderer: BarRenderer | RendererByKind | undefined) {
+    this.#barRenderer = renderer;
+    this.#frames.request();
+  }
+
+  get cellRenderer(): CellRenderer | undefined {
+    return this.#cellRenderer;
+  }
+
+  set cellRenderer(renderer: CellRenderer | undefined) {
+    this.#cellRenderer = renderer;
+    this.#frames.request();
+  }
+
+  get headerRenderer(): HeaderRenderer | undefined {
+    return this.#headerRenderer;
+  }
+
+  set headerRenderer(renderer: HeaderRenderer | undefined) {
+    this.#headerRenderer = renderer;
+    this.#frames.request();
+  }
+
+  get tooltipRenderer(): TooltipRenderer | undefined {
+    return this.#tooltipRenderer;
+  }
+
+  set tooltipRenderer(renderer: TooltipRenderer | undefined) {
+    this.#tooltipRenderer = renderer;
     this.#frames.request();
   }
 

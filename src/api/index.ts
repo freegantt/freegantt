@@ -120,6 +120,7 @@ export {
   RegistrationClosedError,
   PluginSetupError,
   UnknownCommandError,
+  RendererAlreadyRegisteredError,
 } from '../model/index.js';
 
 // model/ types the public surface re-exports. A consumer building entries or catching errors names these.
@@ -162,6 +163,30 @@ export type {
 export type { Point, Size, ClientPoint, PixelSpan } from '../model/index.js';
 // S5.3, D-S5-10: `Overlay.render()`'s own input type — the reconciler's vocabulary as plain data.
 export type { ElementDescription } from '../model/index.js';
+// S5.4, D-S5-11/12: renderer callback vocabulary — `GanttOptions.barRenderer`/etc. and
+// `ctx.view.registerRenderer(point, renderer)` both type against these. `FrameBar`/`FrameRow`/
+// `ResolvedColumn` ride along because the context types name them (`BarRendererContext.item`,
+// `CellRendererContext.row`/`column`) — a consumer writing its own named `BarRenderer` needs them
+// importable, not just structurally inferred.
+export type {
+  RendererPoint,
+  RendererFor,
+  BarRenderer,
+  BarRendererContext,
+  RendererByKind,
+  CellRenderer,
+  CellRendererContext,
+  HeaderRenderer,
+  HeaderRendererContext,
+  TooltipRenderer,
+  TooltipRendererContext,
+  FrameBar,
+  FrameRow,
+  ResolvedColumn,
+  FrameColumn,
+  BarFlags,
+  PlannedRowKind,
+} from '../layout/index.js';
 
 // Time helpers a caller needs: `instant` for a pinned `TimeSpan`, `now` for "this Instant",
 // `addMs`/`MS` to shift one by a duration (S2.7 harness-review — `harness/data.ts`'s move-by-a-day

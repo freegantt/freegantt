@@ -33,8 +33,41 @@ export type AsyncCancelableEvent = 'beforeEntryMove' | 'beforeEntryResize';
 // @public
 export function attemptMutation(body: () => void): boolean;
 
+// @public (undocumented)
+export interface BarFlags {
+    // (undocumented)
+    conflict?: boolean;
+    // (undocumented)
+    cycle?: boolean;
+}
+
+// @public
+export type BarRenderer = (ctx: BarRendererContext) => ElementDescription | undefined;
+
+// @public (undocumented)
+export interface BarRendererContext {
+    // (undocumented)
+    entry: Entry;
+    // (undocumented)
+    item: FrameBar;
+}
+
 // @public
 export type CapabilityRule = boolean | ((entry: Entry) => boolean);
+
+// @public (undocumented)
+export type CellRenderer = (ctx: CellRendererContext) => ElementDescription | undefined;
+
+// @public (undocumented)
+export interface CellRendererContext {
+    // (undocumented)
+    column: ResolvedColumn;
+    entry?: Entry;
+    // (undocumented)
+    row: FrameRow;
+    // (undocumented)
+    value: string;
+}
 
 // @public (undocumented)
 export type ChangeOrigin = 'user' | 'undo' | 'redo';
@@ -559,6 +592,71 @@ export const formatHour: HeaderFormat;
 export const formatWeekNumber: HeaderFormat;
 
 // @public (undocumented)
+export interface FrameBar {
+    a11yLabel: string;
+    // (undocumented)
+    entryId: EntryId;
+    // (undocumented)
+    flags: BarFlags;
+    // (undocumented)
+    height: number;
+    // (undocumented)
+    id: ItemId;
+    // (undocumented)
+    kind: EntryKind;
+    label: string;
+    // (undocumented)
+    lane: number;
+    // (undocumented)
+    rowId: RowId;
+    // (undocumented)
+    width: number;
+    // (undocumented)
+    x: number;
+    // (undocumented)
+    y: number;
+}
+
+// @public
+export interface FrameColumn {
+    // (undocumented)
+    align: 'start' | 'end';
+    // (undocumented)
+    flex?: number;
+    // (undocumented)
+    header: string;
+    // (undocumented)
+    key: FieldKey;
+    // (undocumented)
+    width?: number;
+}
+
+// @public (undocumented)
+export interface FrameRow {
+    cells: readonly string[];
+    // (undocumented)
+    depth: number;
+    entryId?: EntryId;
+    // (undocumented)
+    expandable: boolean;
+    // (undocumented)
+    expanded: boolean;
+    // (undocumented)
+    height: number;
+    // (undocumented)
+    id: RowId;
+    // (undocumented)
+    index: number;
+    // (undocumented)
+    kind: PlannedRowKind;
+    // (undocumented)
+    laneCount: number;
+    matched?: boolean;
+    // (undocumented)
+    top: number;
+}
+
+// @public (undocumented)
 export class FreeGanttError extends Error {
     constructor(code: string, message: string, options?: ErrorOptions);
     // (undocumented)
@@ -571,10 +669,14 @@ export class Gantt {
     // (undocumented)
     get a11yLabel(): string;
     set a11yLabel(value: string);
+    get barRenderer(): BarRenderer | RendererByKind | undefined;
+    set barRenderer(renderer: BarRenderer | RendererByKind | undefined);
     // (undocumented)
     get canZoomIn(): boolean;
     // (undocumented)
     get canZoomOut(): boolean;
+    get cellRenderer(): CellRenderer | undefined;
+    set cellRenderer(renderer: CellRenderer | undefined);
     // (undocumented)
     collapse(id: RowId | string): void;
     // (undocumented)
@@ -600,6 +702,8 @@ export class Gantt {
     // (undocumented)
     get gridWidth(): number;
     set gridWidth(px: number);
+    get headerRenderer(): HeaderRenderer | undefined;
+    set headerRenderer(renderer: HeaderRenderer | undefined);
     get interactions(): Interactions;
     set interactions(next: Interactions);
     // (undocumented)
@@ -641,6 +745,8 @@ export class Gantt {
     set todayLineMarginTicks(ticks: number);
     // (undocumented)
     toggleCollapse(id: RowId | string): void;
+    get tooltipRenderer(): TooltipRenderer | undefined;
+    set tooltipRenderer(renderer: TooltipRenderer | undefined);
     get viewportGestures(): ViewportGestures;
     set viewportGestures(next: ViewportGestures);
     // (undocumented)
@@ -696,6 +802,8 @@ export type GanttOptions = GanttOptionsBase & GanttScaleOptions;
 // @public (undocumented)
 export interface GanttOptionsBase {
     a11yLabel?: string;
+    barRenderer?: BarRenderer | RendererByKind;
+    cellRenderer?: CellRenderer;
     collapsed?: readonly (RowId | string)[];
     container: HTMLElement | string;
     // (undocumented)
@@ -703,6 +811,7 @@ export interface GanttOptionsBase {
     dateLines?: readonly DateLineInput[];
     gridColumns?: readonly GridColumnInput[];
     gridWidth?: number;
+    headerRenderer?: HeaderRenderer;
     interactions?: Interactions;
     locale?: Intl.LocalesArgument;
     minGridWidth?: number;
@@ -713,6 +822,7 @@ export interface GanttOptionsBase {
     theme?: Theme;
     todayLine?: boolean | InstantInput;
     todayLineMarginTicks?: number;
+    tooltipRenderer?: TooltipRenderer;
     viewportGestures?: ViewportGestures;
     zoomPresets?: readonly PresetRef[];
 }
@@ -778,6 +888,15 @@ export interface GroupRowSource extends RowSourceCommon {
 
 // @public
 export type HeaderFormat = (i: Instant, zone: string, locale: Intl.LocalesArgument | undefined) => string;
+
+// @public (undocumented)
+export type HeaderRenderer = (ctx: HeaderRendererContext) => ElementDescription | undefined;
+
+// @public (undocumented)
+export interface HeaderRendererContext {
+    // (undocumented)
+    column: ResolvedColumn;
+}
 
 // @public
 export type Instant = number & {
@@ -935,6 +1054,9 @@ export interface PixelSpan {
     readonly x: number;
 }
 
+// @public
+export type PlannedRowKind = 'entry' | 'header';
+
 // @public (undocumented)
 export type PluginContext = PluginContextOf<Gantt>;
 
@@ -955,6 +1077,7 @@ export interface PluginContextOf<TGantt = unknown> {
     // (undocumented)
     view: {
         overlay: Overlay;
+        registerRenderer<P extends RendererPoint>(point: P, renderer: RendererFor<P>): void;
     };
 }
 
@@ -1020,6 +1143,32 @@ export class RegistrationClosedError extends FreeGanttError {
     constructor(pluginId: PluginId);
     // (undocumented)
     readonly pluginId: PluginId;
+}
+
+// @public
+export class RendererAlreadyRegisteredError extends FreeGanttError {
+    constructor(point: string, firstPluginId: PluginId, secondPluginId: PluginId);
+    // (undocumented)
+    readonly firstPluginId: PluginId;
+    // (undocumented)
+    readonly point: string;
+    // (undocumented)
+    readonly secondPluginId: PluginId;
+}
+
+// @public
+export type RendererByKind = Readonly<Record<string, BarRenderer>>;
+
+// @public
+export type RendererFor<P extends RendererPoint> = P extends 'bar' ? BarRenderer | RendererByKind : P extends 'cell' ? CellRenderer : P extends 'header' ? HeaderRenderer : TooltipRenderer;
+
+// @public
+export type RendererPoint = 'bar' | 'cell' | 'header' | 'tooltip';
+
+// @public
+export interface ResolvedColumn extends FrameColumn {
+    // (undocumented)
+    format(entry: Entry): string;
 }
 
 // @public
@@ -1212,6 +1361,17 @@ export interface TimeSpanInput {
 
 // @public (undocumented)
 export type TimeUnit = 'millisecond' | 'minute' | 'hour' | 'day' | 'week' | 'month' | 'year';
+
+// @public (undocumented)
+export type TooltipRenderer = (ctx: TooltipRendererContext) => ElementDescription | undefined;
+
+// @public (undocumented)
+export interface TooltipRendererContext {
+    // (undocumented)
+    entry: Entry;
+    // (undocumented)
+    item: FrameBar;
+}
 
 // @public
 export class UnknownAggregatorError extends FreeGanttError {
