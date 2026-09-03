@@ -1,9 +1,18 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createPopup } from './popup.js';
+import { Keymap } from './keymap.js';
+import { CommandRegistry } from './commands.js';
 import type { Overlay, OverlayHandle } from '../api/index.js';
 
 function rect(partial: Partial<DOMRect>): DOMRect {
   return { top: 0, left: 0, right: 0, bottom: 0, width: 0, height: 0, x: 0, y: 0, toJSON() {}, ...partial };
+}
+
+/** `createPopup`'s own `Keymap` dependency (C3) — no commands are ever registered on it in these
+ *  tests, so `find`/`when` never run; only `registerHandler` (Escape's own path) exercises it. */
+function makeKeymap(): Keymap<unknown> {
+  const registry = new CommandRegistry<unknown>(() => ({}) as never);
+  return new Keymap<unknown>(registry, () => ({}) as never);
 }
 
 /** A minimal `Overlay` fake — the same seam a third-party plugin gets (D-S5-8) — so `Popup` can be
@@ -75,7 +84,7 @@ describe('Popup', () => {
       timeline: rect({ left: 160, top: 0, right: 1000, bottom: 500 }),
     });
     withFixedPopupSize(overlay, { width: 100, height: 40 });
-    const popup = createPopup(overlay);
+    const popup = createPopup(overlay, makeKeymap());
 
     expect(popup.isOpen).toBe(false);
     popup.open({ anchor: rect({ left: 300, top: 100, right: 340, bottom: 120 }), content: { text: 'hi' } });
@@ -99,7 +108,7 @@ describe('Popup', () => {
       timeline: rect({ left: 160, top: 0, right: 900, bottom: 400 }),
     });
     withFixedPopupSize(overlay, { width: 100, height: 40 });
-    const popup = createPopup(overlay);
+    const popup = createPopup(overlay, makeKeymap());
 
     // Anchored near the timeline pane's right and bottom edges, requesting 'end' (opens to the
     // right) — a 100px-wide popup does not fit before the pane's own right bound at 900, so it flips
@@ -130,7 +139,16 @@ describe('Popup', () => {
       timeline: rect({ left: 160, right: 1000, bottom: 500 }),
     });
     withFixedPopupSize(overlay, { width: 100, height: 40 });
-    const popup = createPopup(overlay);
+    const keymap = makeKeymap();
+    // `GanttShell`'s own equivalent: a capture-phase listener that resolves every key event against
+    // this Gantt's keymap. This test stands in for that shell, driving `keymap.resolve` directly, so
+    // the popup's own `registerHandler('Escape', ...)` (its `stopPropagation` call included) is
+    // exercised the same way it would be for real.
+    const keymapListener = (event: KeyboardEvent): void => {
+      keymap.resolve(event);
+    };
+    document.addEventListener('keydown', keymapListener, true);
+    const popup = createPopup(overlay, keymap);
     popup.open({ anchor: rect({ left: 300, top: 100, right: 340, bottom: 120 }), content: { text: 'x' } });
 
     const outerListener = vi.fn();
@@ -141,6 +159,7 @@ describe('Popup', () => {
     expect(popup.isOpen).toBe(false);
     expect(outerListener).not.toHaveBeenCalled();
     document.removeEventListener('keydown', outerListener);
+    document.removeEventListener('keydown', keymapListener, true);
   });
 
   it('an outside pointerdown closes the popup; one inside the anchor does not', () => {
@@ -150,7 +169,7 @@ describe('Popup', () => {
       timeline: rect({ left: 160, right: 1000, bottom: 500 }),
     });
     withFixedPopupSize(overlay, { width: 100, height: 40 });
-    const popup = createPopup(overlay);
+    const popup = createPopup(overlay, makeKeymap());
     const anchor = document.createElement('button');
     document.body.append(anchor);
     popup.open({ anchor, content: { text: 'x' } });
@@ -169,7 +188,7 @@ describe('Popup', () => {
       timeline: rect({ left: 160, right: 1000, bottom: 500 }),
     });
     withFixedPopupSize(overlay, { width: 100, height: 40 });
-    const popup = createPopup(overlay);
+    const popup = createPopup(overlay, makeKeymap());
     popup.open({ anchor: rect({ left: 300, top: 100, right: 340, bottom: 120 }), content: { text: 'x' } });
 
     document.body.dispatchEvent(new Event('scroll'));
@@ -189,7 +208,8 @@ describe('Popup', () => {
 
     // focus: 'none' (the default) never moves focus (the tooltip's own policy).
     withFixedPopupSize(overlay, { width: 100, height: 40 });
-    const tooltip = createPopup(overlay);
+    const keymap = makeKeymap();
+    const tooltip = createPopup(overlay, keymap);
     tooltip.open({
       anchor: rect({ left: 300, top: 100, right: 340, bottom: 120 }),
       content: { text: 'hover text' },
@@ -198,7 +218,7 @@ describe('Popup', () => {
     tooltip.close();
 
     // focus: 'trap' moves focus into the popup's first focusable node and restores it on close.
-    const menu = createPopup(overlay);
+    const menu = createPopup(overlay, keymap);
     menu.open({
       anchor: rect({ left: 300, top: 100, right: 340, bottom: 120 }),
       focus: 'trap',
@@ -225,7 +245,7 @@ describe('Popup', () => {
       }),
     });
     withFixedPopupSize(overlay, { width: 100, height: 40 });
-    const popup = createPopup(overlay);
+    const popup = createPopup(overlay, makeKeymap());
     // 'bottom' fits its (vertical) placement axis either way; the pane shrink instead moves the
     // cross-axis clamp — the popup's left edge is pinned at the pane's own right bound minus its
     // width, so a narrower pane pushes it further left. The anchor (850..890) stays inside the

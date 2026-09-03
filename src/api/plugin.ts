@@ -8,11 +8,16 @@
 // bound `GanttPlugin`/`PluginContext`; code that parameterizes over its own Gantt type names the
 // `*Of` forms, the same pairing `api/command.ts` uses.
 
-import type { Disposer, PluginId } from '../model/index.js';
+import type { Disposer, KeyChord, PluginId } from '../model/index.js';
 import type { Dataset } from './dataset.js';
 import type { DisposableStore } from '../extensions/disposables.js';
+import type { KeyEventLike } from '../extensions/keymap.js';
 import type { GanttEvents, Overlay, OverlayHandle } from '../view/index.js';
 import type { CommandRegistryOf, KeyBindingOf } from './command.js';
+
+// Re-exported for the same reason `Overlay`/`OverlayHandle` are, just below: a plugin author typing
+// a `registerKeyHandler` callback names this.
+export type { KeyEventLike };
 
 // Re-exported so `extensions/popup.ts` can import this file directly instead of the `api/index.js`
 // barrel (which itself re-exports `createPopup` from `extensions/popup.ts` — importing the barrel
@@ -41,6 +46,19 @@ export interface PluginContextOf<TGantt = unknown> {
     /** S5.2, D-S5-7: adds one `KeyBinding`. Legal only while `setup` runs (D-S5-4) — removed
      *  automatically when this plugin is disposed, the same lifetime every other `register*` gets. */
     registerKeybinding(binding: KeyBindingOf<TGantt>): void;
+    /** C3, `plans/reviews/2026-09-02-s5-start-fixes.md`: binds `chord` straight to `handler` through
+     *  the same keymap `registerKeybinding` uses, for a caller with no `Command` to run — a plugin
+     *  building its own `Popup` (over `view.overlay` below) so its Escape dismissal wins by the
+     *  keymap's own newest-first order (D-S5-9), the same way `extensions/popup.ts`'s own dismissal
+     *  does. Unlike `registerKeybinding`, callable any time this plugin is installed, not only while
+     *  `setup` runs — a popup opens and closes for as long as the plugin does, not once at startup —
+     *  and returns its own disposer instead of auto-removing on plugin disposal, because a popup adds
+     *  and removes its handler on every `open()`/`close()`, not once. */
+    registerKeyHandler(
+      chord: KeyChord,
+      handler: (event: KeyEventLike) => void,
+      options?: { captureInEditable?: boolean },
+    ): () => void;
   };
   view: {
     /** S5.3, D-S5-8: the overlay layer a plugin's own popup, tooltip or menu mounts into — the same

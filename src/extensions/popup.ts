@@ -10,6 +10,13 @@ import type { ElementDescription } from '../model/index.js';
 import type { Overlay, OverlayHandle } from '../api/plugin.js';
 import { activateFocusTrap } from './focus-trap.js';
 import type { FocusTrap } from './focus-trap.js';
+// `./keymap.js` is a sibling `extensions/` module, not a `view/`/`render/` back door (D-S5-5 only
+// forbids those) — see `KeyHandlerRegistrar`'s own doc for why Escape folds into it (C3,
+// `plans/reviews/2026-09-02-s5-start-fixes.md`). The narrow structural type, not the concrete
+// `Keymap` class: a third-party plugin has no `Keymap` instance, only the one bound method
+// `ctx.interaction.registerKeyHandler` gives it, so requiring the whole class here would make
+// `createPopup` uncallable from `ctx.view.overlay` alone (D-S5-8).
+import type { KeyHandlerRegistrar } from './keymap.js';
 
 export type PopupPlacement = 'top' | 'bottom' | 'start' | 'end';
 export type DismissTrigger = 'escape' | 'outsidePointer' | 'scroll' | 'blur';
@@ -104,47 +111,14 @@ function clamp(side: PopupPlacement, box: Box, size: { width: number; height: nu
   return { ...box, top: Math.min(Math.max(box.top, pane.top), maxTop) };
 }
 
-/** LIFO "innermost open thing wins" (D-S5-9): one shared, capture-phase `document` Escape listener
- *  per `Overlay`, added on the overlay's first open popup and removed once its last one closes.
- *  Capture fires before the container's own (bubble-phase) keydown listener ever sees the event, so
- *  a popup's Escape always beats S3's Escape-clears-selection; `stopPropagation` during capture halts
- *  that bubble phase entirely. Keyed by `Overlay` (not global), so two Gantt instances never
- *  share a stack (I2) — `WeakMap` is the ADR 0007 sanctioned shape for friend-only per-instance state
- *  attached without a public method. */
-const escapeStacks = new WeakMap<Overlay, { stack: (() => void)[]; listener: (e: KeyboardEvent) => void }>();
-
-function pushEscapeHandler(overlay: Overlay, onEscape: () => void): () => void {
-  let entry = escapeStacks.get(overlay);
-  if (!entry) {
-    const created: { stack: (() => void)[]; listener: (e: KeyboardEvent) => void } = {
-      stack: [],
-      listener: (event) => {
-        if (event.key !== 'Escape') return;
-        const top = created.stack[created.stack.length - 1];
-        if (!top) return;
-        event.stopPropagation();
-        top();
-      },
-    };
-    document.addEventListener('keydown', created.listener, true);
-    escapeStacks.set(overlay, created);
-    entry = created;
-  }
-  entry.stack.push(onEscape);
-  const settled = entry;
-  return () => {
-    const index = settled.stack.indexOf(onEscape);
-    if (index >= 0) settled.stack.splice(index, 1);
-    if (settled.stack.length === 0) {
-      document.removeEventListener('keydown', settled.listener, true);
-      escapeStacks.delete(overlay);
-    }
-  };
-}
-
-/** `Popup`'s one implementation (D-S5-8). `overlay` is the only thing this reaches past plain DOM APIs —
- *  the same `ctx.view.overlay` a third-party plugin gets. */
-export function createPopup(overlay: Overlay): Popup {
+/** `Popup`'s one implementation (D-S5-8). `overlay` and `keymap` are the only things this reaches
+ *  past plain DOM APIs. Escape folds into `keymap` (C3, `plans/reviews/2026-09-02-s5-start-fixes.md`)
+ *  instead of a bespoke document-capture listener + per-`Overlay` `WeakMap` LIFO stack: `Keymap`
+ *  already resolves newest-registration-first (D-S5-7), so a popup registering its Escape handler on
+ *  `open()` and unregistering it on `close()` gets "innermost open thing wins" (D-S5-9) for free, and
+ *  the shared `isEditableTarget` gate (S5.2, issue #137 F7) restores the IME-composition rule this
+ *  primitive was missing — a lone document listener with no gate closed a popup mid-IME-cancel too. */
+export function createPopup(overlay: Overlay, keymap: KeyHandlerRegistrar): Popup {
   let wrapper: HTMLElement | undefined;
   let handle: OverlayHandle | undefined;
   let focusTrap: FocusTrap | undefined;
@@ -196,7 +170,15 @@ export function createPopup(overlay: Overlay): Popup {
 
       const dismissOn = options.dismissOn ?? DEFAULT_DISMISS_ON;
       if (dismissOn.includes('escape')) {
-        unsubscribers.push(pushEscapeHandler(overlay, close));
+        // `stopPropagation` here, not in `Keymap.resolve` itself: only this dismissal needs "never
+        // seen past this popup" (the same guarantee the old document-capture listener gave), and
+        // scoping it to the handler keeps every other keybinding's propagation behaviour untouched.
+        unsubscribers.push(
+          keymap.registerHandler('Escape', (event) => {
+            event.stopPropagation();
+            close();
+          }),
+        );
       }
       if (dismissOn.includes('outsidePointer')) {
         const onPointerDown = (event: PointerEvent): void => {

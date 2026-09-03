@@ -71,9 +71,13 @@ export type { CapabilityRule, Interactions } from '../view/index.js';
 // primitive) against this alone, never against `view/` or `render/` directly.
 export type { Overlay, OverlayHandle } from '../view/index.js';
 // S5.3, D-S5-8: the anchoring/flipping/clamping/dismissal primitive tooltips, the context menu and
-// the cell editor (S5.5+) all build on — built from `Overlay` alone, so a plugin author reaches the
-// same thing by calling `createPopup(ctx.view.overlay)` rather than reinventing it.
+// the cell editor (S5.5+) all build on. C3 (`plans/reviews/2026-09-02-s5-start-fixes.md`) folded its
+// Escape dismissal into the shared keymap (D-S5-9's "the innermost popup wins" needs the same
+// newest-first resolver core commands and plugin keybindings use) — `createPopup` now takes a
+// `KeyHandlerRegistrar` as a second argument, and a plugin author builds one from the same seam it
+// already had: `{ registerHandler: ctx.interaction.registerKeyHandler }`.
 export { createPopup } from '../extensions/popup.js';
+export type { KeyHandlerRegistrar, KeyEventLike } from '../extensions/keymap.js';
 export type { Popup, PopupOptions, PopupPlacement, DismissTrigger, Anchor } from '../extensions/popup.js';
 // TimeScaleModel/ScrollModel are layout/'s own — both are public, consumer-constructed objects
 // (D9), so this re-exports straight from their owning layer rather than laundering them through

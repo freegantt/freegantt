@@ -209,7 +209,10 @@ export class Gantt {
         events: parts.events,
         disposables: parts.disposables,
         commands: parts.commands,
-        interaction: { registerKeybinding: parts.registerKeybinding },
+        interaction: {
+          registerKeybinding: parts.registerKeybinding,
+          registerKeyHandler: parts.registerKeyHandler,
+        },
         view: { overlay: parts.overlay },
       }),
       buildCommandContext: (parts): CommandContext => ({

@@ -77,12 +77,21 @@ Highest leverage: both bugs live in the seam every later slice's `register*` reu
 
 ## Slice 2 — popup: collapse three mechanisms to one
 
-- [ ] **C3 — fold Escape into the keymap.** Replace the document-level capture listener + module
-      `WeakMap` LIFO stack with a keymap registration (`{ chord: 'Escape', ... }` registered on
-      open, unregistered on close). Restores the editable-target/IME rule for Escape; keymap's
-      newest-first order already gives innermost-wins, so the stack/WeakMap/document listener can
-      be deleted outright.
-      `src/extensions/popup.ts:112-141`
+- [x] **C3 — fold Escape into the keymap.** Design call (session 2, user-approved): added
+      `Keymap.registerHandler(chord, handler, options?)` — a command-less sibling to `register()`,
+      resolved by the same newest-first pass (so a popup registering last still wins D-S5-9's
+      innermost-open-thing-wins) and gated by the same `isEditableTarget` rule (restores the
+      editable-target/IME check the old ad-hoc listener never had). `createPopup(overlay, keymap)`
+      now takes a `KeyHandlerRegistrar` (the one-method structural type `Keymap` satisfies) as a
+      required second argument; the document-capture listener + module `WeakMap` LIFO stack are
+      deleted outright. Also closed the gap this created: `PluginContext.interaction` gained
+      `registerKeyHandler` (ungated, unlike `registerKeybinding` — a popup opens/closes for the
+      plugin's whole lifetime, not once at `setup()`), wired through `GanttShell`/`api/gantt.ts`, so
+      `harness/plugins.ts`'s popup demo (a real caller, not hypothetical) still builds a working
+      `Popup` from `ctx.view.overlay` alone plus this one new method — D-S5-8's "same primitive a
+      third party reaches" promise stays true.
+      `src/extensions/keymap.ts`, `src/extensions/popup.ts`, `src/api/plugin.ts`, `src/api/gantt.ts`,
+      `src/view/gantt-shell.ts`, `harness/plugins.ts`
 - [ ] **D-S5-9 — scope scroll-dismiss to the anchor's pane**, not any scroll anywhere in the
       document.
       `src/extensions/popup.ts:210-218`
