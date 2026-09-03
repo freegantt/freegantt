@@ -66,17 +66,20 @@ Highest leverage: both bugs live in the seam every later slice's `register*` reu
       the dropped plugin is not disposed and stays listed right after the throw, then a follow-up
       `install([])` disposes it exactly once (not the old double-dispose).
       `src/extensions/plugin-runtime.test.ts`
-- [ ] **C2 — gate every `register*`, not just `registerKeybinding`.** `ctx.commands` is handed to
-      plugins as the raw `CommandRegistry`, so `ctx.commands.register()` after `setup()` returns
-      silently succeeds — D-S5-4 says it must throw `RegistrationClosedError`. Wrap `ctx.commands`
-      the same way `registerKeybinding` is already wrapped (`gate.assertOpen()` first), ideally by
-      deepening `PluginRuntime`/`BuiltPluginContext` so future S5.4+ registration surfaces
-      (`registerRenderer`, `registerDecoration`, `registerGridColumn`) inherit the gate instead of
-      each call site re-deriving it by hand.
-      `src/view/gantt-shell.ts:443` (leak) vs `:436-438` (correct pattern)
-- [ ] Regression test for C2: `ctx.commands.register()` called after `setup()` returns throws
-      `RegistrationClosedError`, mirroring the existing `registerKeybinding` gate test.
-- [ ] `pnpm test && pnpm tsc && pnpm depcruise` clean before moving on.
+- [x] **C2 — gate every `register*`, not just `registerKeybinding`.** Added `RegistrationGate.guard(fn)`
+      — wraps any `register*` function with `assertOpen()` first, written once so a future
+      registration surface (`registerRenderer`, `registerDecoration`, `registerGridColumn`) inherits
+      it instead of re-deriving the check. `registerKeybinding` now uses it; `ctx.commands` is no
+      longer the raw `CommandRegistry` handed to plugins — `gantt-shell.ts` builds a
+      `CommandRegistryOf<unknown>` object whose `register` is `gate.guard(...)`-wrapped and whose
+      `run`/`available` pass through unguarded (they are not registration). `CommandRegistryOf` is
+      now re-exported from `extensions/commands.ts` so `view/` (which may not import `api/`) can name
+      the interface.
+      `src/extensions/plugin-runtime.ts`, `src/extensions/commands.ts`, `src/view/gantt-shell.ts`
+- [x] Regression test for C2: `ctx.commands.register()` called after `setup()` returns throws
+      `RegistrationClosedError`.
+      `src/api/gantt.test.ts`
+- [x] `pnpm test && pnpm tsc && pnpm depcruise` clean before moving on.
 
 ## Slice 2 — popup: collapse three mechanisms to one
 

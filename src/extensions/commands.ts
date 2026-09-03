@@ -15,6 +15,7 @@ import type {
 export type Command<TGantt = unknown> = CommandOf<TGantt>;
 export type CommandContext<TGantt = unknown> = CommandContextOf<TGantt>;
 export type CommandTarget = CommandTargetType;
+export type { CommandRegistryOf };
 
 /** D-S5-6's registry. Built once per `GanttShell` (or per test) with a live context builder — called
  *  fresh on every `run()`, so a command always sees the invocation's current selection/target, never

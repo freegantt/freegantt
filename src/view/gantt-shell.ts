@@ -41,7 +41,7 @@ import { PluginRuntime, RegistrationGate } from '../extensions/plugin-runtime.js
 import type { ShellPlugin } from '../extensions/plugin-runtime.js';
 import { DisposableStore } from '../extensions/disposables.js';
 import { CommandRegistry } from '../extensions/commands.js';
-import type { Command, CommandContext } from '../extensions/commands.js';
+import type { Command, CommandContext, CommandRegistryOf } from '../extensions/commands.js';
 import { Keymap } from '../extensions/keymap.js';
 import type { KeyBinding, KeyEventLike } from '../extensions/keymap.js';
 import type { GridWidthChange, SelectionChange } from './event-bus.js';
@@ -239,7 +239,7 @@ export interface GanttShellOptions {
   buildPluginContext?: (parts: {
     events: GanttEvents;
     disposables: DisposableStore;
-    commands: CommandRegistry<unknown>;
+    commands: CommandRegistryOf<unknown>;
     registerKeybinding: (binding: KeyBinding<unknown>) => void;
     registerKeyHandler: (
       chord: string,
@@ -437,11 +437,19 @@ export class GanttShell {
     this.#pluginRuntime = new PluginRuntime<unknown>((pluginId) => {
       const disposables = new DisposableStore();
       // D-S5-4: one gate per plugin, closed the moment its own setup() returns (PluginRuntime.install
-      // does the closing) — a `registerKeybinding` reached afterward throws RegistrationClosedError.
+      // does the closing) — a `registerKeybinding` or `ctx.commands.register` reached afterward
+      // throws RegistrationClosedError. Both wrap through `gate.guard` (C2) so a future registration
+      // surface (S5.4's `registerRenderer`, `registerDecoration`, `registerGridColumn`) inherits the
+      // same check instead of re-deriving it at its own call site.
       const gate = new RegistrationGate(pluginId);
-      const registerKeybinding = (binding: KeyBinding<unknown>): void => {
-        gate.assertOpen();
+      const registerKeybinding = gate.guard((binding: KeyBinding<unknown>): void => {
         disposables.add(this.#keymap.register(binding));
+      });
+      const commandRegistry = this.#commandRegistry;
+      const commands: CommandRegistryOf<unknown> = {
+        register: gate.guard((command) => commandRegistry.register(command)),
+        run: (id) => commandRegistry.run(id),
+        available: (ctx) => commandRegistry.available(ctx),
       };
       // Not gated: unlike `registerKeybinding` above (one-shot, setup()-only, D-S5-4), a popup opens
       // and closes for as long as the plugin itself is installed — see `PluginContextOf.interaction
@@ -456,7 +464,7 @@ export class GanttShell {
       const context = (options.buildPluginContext ?? (() => ({})))({
         events: this.#pluginEvents,
         disposables,
-        commands: this.#commandRegistry,
+        commands,
         registerKeybinding,
         registerKeyHandler,
         overlay: this.#overlay,
