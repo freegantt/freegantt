@@ -32,7 +32,7 @@ import type {
   RendererByKind,
   RendererPoint,
   RendererFor,
-  TooltipRendererContext,
+  FrameBar,
 } from '../layout/index.js';
 import type { ElementDescription } from '../model/index.js';
 import { RendererRegistry } from './renderer-registry.js';
@@ -278,7 +278,7 @@ export interface GanttShellOptions {
     /** S5.5 (API gap, `s5.5-tooltips-and-context-menu.md` §5): `ctx.view.resolveTooltip`. Not gated
      *  by `RegistrationGate` — like `overlay` above, a plugin reads this for as long as it runs, not
      *  only during `setup`. */
-    resolveTooltip: (ctx: TooltipRendererContext) => ElementDescription | undefined;
+    resolveTooltip: (id: EntryId) => ElementDescription | undefined;
   }) => unknown;
   /** S5.2, D-S5-6: fills the api-level pieces of a `CommandContext` for the same reason
    *  `buildPluginContext` above fills `PluginContext`'s — the full api `Dataset` (with `undo`/`redo`)
@@ -343,6 +343,12 @@ export class GanttShell {
   /** The raw hit under the pointer, reported by `EntrySelectionContext.setHovered` — undefined on
    *  pointerleave or when nothing is wired (no `entryGestures` attachment). */
   #hoveredItemId: ItemId | undefined;
+  /** S5.5 (API gap, `s5.5-tooltips-and-context-menu.md` §5): the last-rendered frame's bars, indexed
+   *  by item id — `resolveTooltip`'s only reader, so a hover plugin working from the DOM after the
+   *  fact can still build a real `TooltipRendererContext` (a bar's `x`/`y`/`width`/`height`/`flags`
+   *  are not reachable from a DOM element alone). Rebuilt once per `render()`, not on the hover path
+   *  itself — same cost `#backend.sync(frame)` already pays iterating `frame.bars`. */
+  #lastBarById = new Map<ItemId, FrameBar>();
   /** D-GH-2: owns draft math, preview rAF coalescing and the commit pipeline for a move/resize
    *  gesture — built once, from this shell's own primitives, right after `#capabilities` below. */
   #gesturePipeline!: GesturePipeline;
@@ -534,11 +540,18 @@ export class GanttShell {
       // S5.5 (API gap, `s5.5-tooltips-and-context-menu.md` §5): same resolve-then-call-with-fallback
       // shape `render/dom/index.ts`'s own `callRenderer` gives `bar`/`cell` (issue #137 F14) — a
       // throwing tooltip renderer degrades to the library's default content, never to a broken popup.
-      const resolveTooltip = (rendererCtx: TooltipRendererContext): ElementDescription | undefined => {
+      // `#lastBarById` supplies the `FrameBar` a hover plugin has no other way to reach (it works
+      // from the DOM after the fact, not from inside the render pass) — no bar in the current frame
+      // (scrolled out, or no such entry) resolves the same as "no renderer": undefined.
+      const resolveTooltip = (id: EntryId): ElementDescription | undefined => {
         const resolved = this.#rendererRegistry.resolveTooltip(this.#tooltipRenderer);
         if (resolved === undefined) return undefined;
+        const bar = this.#lastBarById.get(itemId(id));
+        if (bar === undefined) return undefined;
+        const entry = this.#options.dataset.entries.get(id);
+        if (entry === undefined) return undefined;
         try {
-          return resolved.renderer(rendererCtx);
+          return resolved.renderer({ entry, item: bar });
         } catch (error) {
           if (isDevMode()) {
             const plugin = resolved.pluginId !== undefined ? ` from plugin "${resolved.pluginId}"` : '';
@@ -1333,6 +1346,8 @@ export class GanttShell {
       ...(typeof datasetRevision === 'number' ? { datasetRevision } : {}),
     });
     this.#backend.sync(frame);
+    this.#lastBarById.clear();
+    for (const bar of frame.bars) this.#lastBarById.set(bar.id, bar);
     // D-S1.12-9: the grid pane's spacer mirrors the header's own band count, so both panes resolve
     // their header height from the same `--fg-band-height` expression and cannot drift.
     this.#paneLayout.setHeaderBandCount(frame.header.bands.length);

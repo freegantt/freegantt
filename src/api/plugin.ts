@@ -14,8 +14,8 @@ import type { DisposableStore } from '../extensions/disposables.js';
 import type { KeyEventLike } from '../extensions/keymap.js';
 import type { GanttEvents, Overlay, OverlayHandle } from '../view/index.js';
 import type { CommandRegistryOf, KeyBindingOf } from './command.js';
-import type { RendererPoint, RendererFor, TooltipRendererContext } from '../layout/index.js';
-import type { ElementDescription } from '../model/index.js';
+import type { RendererPoint, RendererFor } from '../layout/index.js';
+import type { ElementDescription, EntryId } from '../model/index.js';
 
 // Re-exported for the same reason `Overlay`/`OverlayHandle` are, just below: a plugin author typing
 // a `registerKeyHandler` callback names this.
@@ -74,15 +74,18 @@ export interface PluginContextOf<TGantt = unknown> {
      *  the same point throws `RendererAlreadyRegisteredError`, naming both plugin ids. Legal only
      *  while `setup` runs (D-S5-4). */
     registerRenderer<P extends RendererPoint>(point: P, renderer: RendererFor<P>): void;
-    /** S5.5 (API gap found while building `tooltips()`): resolves what should paint a tooltip's body
-     *  right now, the same precedence `registerRenderer('tooltip', …)`'s slot resolves at paint time
-     *  (D-S5-11: the consumer's own `GanttOptions.tooltipRenderer` always wins over a plugin's).
-     *  `undefined` means "the library's own default content" — `tooltips()` is this method's first
+    /** S5.5 (API gap found while building `tooltips()`): resolves what should paint `entryId`'s
+     *  tooltip body right now — the same precedence `registerRenderer('tooltip', …)`'s slot resolves
+     *  at paint time (D-S5-11: the consumer's own `GanttOptions.tooltipRenderer` always wins over a
+     *  plugin's). `undefined` means "paint the library's own default content instead", which covers
+     *  three cases alike: no renderer is registered at either level, the entry has no bar in the
+     *  current frame (so there is no `FrameBar` to build a `TooltipRendererContext` from — a hover
+     *  plugin works from the DOM after the fact, unlike `bar`/`cell`'s render-pass callers), or the
+     *  resolved renderer threw (caught here, logged in dev mode, same fallback `render/dom/index.ts`'s
+     *  own `callRenderer` gives `bar`/`cell`, issue #137 F14). `tooltips()` is this method's first
      *  caller, so a feature that owns a renderer point reads the same resolution the render backend
-     *  would, without reaching `view/renderer-registry.ts` directly (D-S5-5). A renderer that throws
-     *  is caught here, logged in dev mode, and resolves to `undefined` — the same fallback
-     *  `render/dom/index.ts`'s own `callRenderer` gives `bar`/`cell` (issue #137 F14). */
-    resolveTooltip(ctx: TooltipRendererContext): ElementDescription | undefined;
+     *  would, without reaching `view/renderer-registry.ts` directly (D-S5-5). */
+    resolveTooltip(entryId: EntryId): ElementDescription | undefined;
   };
 }
 
