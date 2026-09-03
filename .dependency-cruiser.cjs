@@ -6,7 +6,13 @@
 
 const layer = (name) => `^src/${name}(/|$)`;
 
-function forbid(name, from, allowedTargets) {
+// Leaf-only widenings (plans/01-domain-architecture.md §1, "render/ --> data/dev-mode.ts" and
+// "extensions/ --> data/dev-mode.ts"): names one file, not a whole layer — `pathNot` excludes it from
+// the forbidden set below without opening a general edge to the rest of that layer. Every other file
+// in `data/` stays unreachable from `render/`/`extensions/`.
+const DEV_MODE_LEAF = '^src/data/dev-mode\\.ts$';
+
+function forbid(name, from, allowedTargets, allowedLeaves = []) {
   const others = [
     'model',
     'time',
@@ -23,9 +29,11 @@ function forbid(name, from, allowedTargets) {
   return {
     name,
     severity: 'error',
-    comment: `plans/01 §1: src/${from} may only import ${allowedTargets.length ? allowedTargets.join(', ') : 'nothing in src/'}.`,
+    comment: `plans/01 §1: src/${from} may only import ${allowedTargets.length ? allowedTargets.join(', ') : 'nothing in src/'}${allowedLeaves.length ? `, plus the named leaf(s): ${allowedLeaves.join(', ')}` : ''}.`,
     from: { path: layer(from) },
-    to: { path: others.map(layer) },
+    to: allowedLeaves.length
+      ? { path: others.map(layer), pathNot: allowedLeaves }
+      : { path: others.map(layer) },
   };
 }
 
@@ -53,7 +61,10 @@ module.exports = {
     // time: D-S2-1 (plans/s2-data-core/README.md) — serialization (Instant<->ISO, time/instant.ts's
     // toISO) and mutation-time input reading (time/input.ts's toInstant/toEndInstant) both need it.
     forbid('data-boundary', 'data', ['time', 'model']),
-    forbid('render-boundary', 'render', ['layout']),
+    // data/dev-mode.ts: S5.4 QC — render/dom/index.ts and extensions/plugin-runtime.ts each hand-
+    // copied this one-line import.meta.env.DEV check because neither may reach data/ generally; this
+    // names the single zero-dependency file both may import instead (plans/01 §1).
+    forbid('render-boundary', 'render', ['layout'], [DEV_MODE_LEAF]),
     // model: Entry types flow through view as type-only params (same rationale as api, above).
     // extensions: S5.1, D-S5-5 — `view/gantt-shell.ts` constructs the `PluginRuntime` and hands it the
     // public `Gantt` façade; the arrow is view/ -> extensions/, never the reverse (see the
@@ -70,14 +81,16 @@ module.exports = {
     // only what a third-party plugin author can import — `api/` and `model/`. When a built-in cannot
     // do its job through that surface, the public API has a gap: close the gap, never widen this
     // rule. `scripts/guard-red-test.mjs` proves it actually blocks a violation.
+    // data/dev-mode.ts is the one named exception (S5.4 QC, see render-boundary above): a zero-
+    // dependency leaf, not a `data/` edge — every other file under `data/` stays unreachable here.
     {
       name: 'extensions-public-only',
       severity: 'error',
       comment:
         'plans/s5-extensibility-and-editing/s5.1-plugin-runtime.md D-S5-5: src/extensions may only ' +
-        'import src/api and src/model.',
+        'import src/api and src/model, plus the named leaf src/data/dev-mode.ts.',
       from: { path: '^src/extensions' },
-      to: { path: '^src/(?!extensions|api|model)' },
+      to: { path: '^src/(?!extensions|api|model)', pathNot: DEV_MODE_LEAF },
     },
     // model and time are the type/primitive surface api/ re-exports (plans/01 §1: "api/ and model/
     // types are public", widened to time/'s public primitives and presets by #25, and to layout/'s

@@ -41,6 +41,15 @@ describe('RendererRegistry (S5.4, D-S5-11/12)', () => {
     expect(registry.resolveBar('span', { milestone })).toBeUndefined();
   });
 
+  it('resolveBar: a consumer per-kind map miss falls to the default, never to a plugin (D-S5-11)', () => {
+    const registry = new RendererRegistry();
+    const pluginRenderer: BarRenderer = () => ({ text: 'plugin' });
+    registry.register('bar', pluginRenderer, pluginA);
+    const milestone: BarRenderer = () => ({ text: 'milestone' });
+
+    expect(registry.resolveBar('span', { milestone })).toBeUndefined();
+  });
+
   it('register: a second plugin claiming the same point throws, naming both plugin ids', () => {
     const registry = new RendererRegistry();
     const first: BarRenderer = () => undefined;

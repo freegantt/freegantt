@@ -24,12 +24,7 @@ import { attachDateLines } from './date-line.js';
 import type { DateLineAttachment } from './date-line.js';
 import { KeyedLayer, NestedKeyedLayers } from './sync-keyed.js';
 import { applyElementDescription } from './element-description.js';
-
-/** `render/dom` cannot import `data/dev-mode.ts` (render-boundary: layout only) — repeats that
- *  file's one-line check, the same carve-out `extensions/plugin-runtime.ts` already takes. */
-function isDevMode(): boolean {
-  return (import.meta as { env?: { DEV?: boolean } }).env?.DEV ?? false;
-}
+import { isDevMode } from '../../data/dev-mode.js';
 
 /** A cell's renderer, already bound to its `ResolvedColumn` (render/dom never receives that type —
  *  `column.format` "stays on `ResolvedColumn` and never reaches a backend", `layout/column.ts`) and
