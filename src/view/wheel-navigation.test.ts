@@ -236,6 +236,19 @@ describe('attachWheelNavigation (S3.7, D-S3-14)', () => {
     node.remove();
   });
 
+  it("#126: forwardPlainWheel leaves a pure horizontal wheel to the grid pane's own native scroller", () => {
+    const node = pane();
+    const { ctx, pans } = makeCtx();
+    attachWheelNavigation(node, ctx, { forwardPlainWheel: true });
+
+    const event = wheel({ deltaX: 40 });
+    node.dispatchEvent(event);
+
+    expect(event.defaultPrevented).toBe(false);
+    expect(pans).toEqual([]);
+    node.remove();
+  });
+
   it('#126: forwardPlainWheel respects wheelPanEnabled() === false', () => {
     const node = pane();
     const { ctx, pans } = makeCtx({ wheelPanEnabled: () => false });

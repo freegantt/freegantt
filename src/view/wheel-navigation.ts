@@ -36,11 +36,13 @@ export interface WheelNavigationOptions {
    *  timeline pane explicitly when `pane` is the grid pane, whose own x-axis is not time and so
    *  cannot anchor a time-scale zoom. */
   anchorPane?: HTMLElement;
-  /** #126: `pane` has no native scroll of its own (the grid pane, D-S1.8-1) and so needs a plain,
-   *  unmodified wheel forwarded into `ctx.panBy` — the timeline pane does not set this: it is a
-   *  real native scroller, and a plain wheel there is already the browser's own `scroll` event
-   *  (`scroll-attachment.ts`), so forwarding it too would double-handle the same gesture. Default
-   *  `false`. */
+  /** #126: `pane` has no native *vertical* scroll of its own (the grid pane, D-S1.8-1) and so
+   *  needs a plain, unmodified wheel's vertical component forwarded into `ctx.panBy` — the
+   *  timeline pane does not set this: it is a real native scroller, and a plain wheel there is
+   *  already the browser's own `scroll` event (`scroll-attachment.ts`), so forwarding it too would
+   *  double-handle the same gesture. A pure horizontal delta (deltaY === 0) is left alone even
+   *  when this is `true`: the grid pane is its own real horizontal scroller (D-S1.8-13), so plain
+   *  horizontal wheel already reaches it as the browser's native `scroll` event. Default `false`. */
   forwardPlainWheel?: boolean;
 }
 
@@ -81,8 +83,10 @@ export function attachWheelNavigation(
       return;
     }
     if (forwardPlainWheel && ctx.wheelPanEnabled()) {
+      const dy = deltaPx(e, 'y');
+      if (dy === 0) return;
       e.preventDefault();
-      ctx.panBy(0, deltaPx(e, 'y'));
+      ctx.panBy(0, dy);
     }
   }
 
