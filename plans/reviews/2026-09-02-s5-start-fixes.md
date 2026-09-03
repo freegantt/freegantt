@@ -126,14 +126,20 @@ Highest leverage: both bugs live in the seam every later slice's `register*` reu
 
 ## Slice 3 — `GanttShell`: extract the command catalog (C4)
 
-- [ ] Move the 19 inline `register({...})` command calls (~`gantt-shell.ts:816-950`) into a new
-      `src/view/core-commands.ts` exporting `registerCoreCommands(registry, ports)`, where `ports`
-      names the shell verbs commands call (pan, zoom, select, collapse/expand, undo/redo, …).
-      Mechanical extraction — keep ids, labels, `when` clauses, and default bindings identical;
-      existing command/keybinding tests should catch any regression.
-- [ ] Give the new module its own test file, testing the catalog through `registerCoreCommands`
-      rather than through the shell.
-- [ ] `pnpm test && pnpm tsc && pnpm depcruise` clean before moving on.
+- [x] Moved the 19 inline `register({...})` command calls into a new `src/view/core-commands.ts`
+      exporting `registerCoreCommands(registry, ports)`. `ports` (`CoreCommandPorts`) names the
+      shell verbs the catalog calls — collapse/expand, zoom, pan, select; undo/redo read
+      `CommandContext.dataset` directly, no port needed. `GanttShell` builds the ports object
+      (`#coreCommandPorts()`) closing over its own private fields and calls
+      `registerCoreCommands(this.#commandRegistry, this.#coreCommandPorts())` from
+      `#registerCoreCommands()`, which also still owns the eight default keybindings (a separate
+      concern from the catalog, left in the shell). Mechanical: ids, labels, `when` clauses and
+      default bindings unchanged.
+      `src/view/core-commands.ts`, `src/view/gantt-shell.ts`
+- [x] New module's own test file, testing the catalog through `registerCoreCommands` with a fake
+      `CoreCommandPorts` rather than through the shell.
+      `src/view/core-commands.test.ts`
+- [x] `pnpm test:node && pnpm test:dom && pnpm tsc && pnpm boundaries` clean before moving on.
 
 ## Slice 4 — keymap double-evaluation cleanup
 
