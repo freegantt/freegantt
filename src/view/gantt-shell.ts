@@ -32,7 +32,9 @@ import type {
   RendererByKind,
   RendererPoint,
   RendererFor,
+  TooltipRendererContext,
 } from '../layout/index.js';
+import type { ElementDescription } from '../model/index.js';
 import { RendererRegistry } from './renderer-registry.js';
 
 import { createDomBackend } from '../render/dom/index.js';
@@ -273,6 +275,10 @@ export interface GanttShellOptions {
     /** S5.4, D-S5-11: `ctx.view.registerRenderer`. Legal only while `setup` runs (D-S5-4), the same
      *  gate `registerKeybinding` above already takes. */
     registerRenderer: <P extends RendererPoint>(point: P, renderer: RendererFor<P>) => void;
+    /** S5.5 (API gap, `s5.5-tooltips-and-context-menu.md` §5): `ctx.view.resolveTooltip`. Not gated
+     *  by `RegistrationGate` — like `overlay` above, a plugin reads this for as long as it runs, not
+     *  only during `setup`. */
+    resolveTooltip: (ctx: TooltipRendererContext) => ElementDescription | undefined;
   }) => unknown;
   /** S5.2, D-S5-6: fills the api-level pieces of a `CommandContext` for the same reason
    *  `buildPluginContext` above fills `PluginContext`'s — the full api `Dataset` (with `undo`/`redo`)
@@ -525,6 +531,25 @@ export class GanttShell {
         gate.assertOpen();
         this.#rendererRegistry.register(point, renderer, pluginId);
       };
+      // S5.5 (API gap, `s5.5-tooltips-and-context-menu.md` §5): same resolve-then-call-with-fallback
+      // shape `render/dom/index.ts`'s own `callRenderer` gives `bar`/`cell` (issue #137 F14) — a
+      // throwing tooltip renderer degrades to the library's default content, never to a broken popup.
+      const resolveTooltip = (rendererCtx: TooltipRendererContext): ElementDescription | undefined => {
+        const resolved = this.#rendererRegistry.resolveTooltip(this.#tooltipRenderer);
+        if (resolved === undefined) return undefined;
+        try {
+          return resolved.renderer(rendererCtx);
+        } catch (error) {
+          if (isDevMode()) {
+            const plugin = resolved.pluginId !== undefined ? ` from plugin "${resolved.pluginId}"` : '';
+            console.error(
+              `FreeGantt: tooltipRenderer${plugin} threw — falling back to the default content`,
+              error,
+            );
+          }
+          return undefined;
+        }
+      };
       const context = (options.buildPluginContext ?? (() => ({})))({
         events: this.#pluginEvents,
         disposables,
@@ -533,6 +558,7 @@ export class GanttShell {
         registerKeyHandler,
         overlay: this.#overlay,
         registerRenderer,
+        resolveTooltip,
       });
       return { context, disposables, registrationGate: gate };
     });

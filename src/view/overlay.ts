@@ -6,6 +6,8 @@
 import { buildElement } from '../render/dom/element-description.js';
 import type { ElementDescription } from '../layout/index.js';
 import type { PaneLayout } from './pane-layout.js';
+import { itemId } from '../model/index.js';
+import type { EntryId } from '../model/index.js';
 
 export interface OverlayHandle {
   /** Removes the presented content and frees nothing else — the overlay's own layer, bounds and resize
@@ -33,6 +35,12 @@ export interface Overlay {
   /** Notifies on every container resize the overlay observes (issue #137 F9) — an open `Popup` rereads
    *  `bounds`/`paneBounds` and repositions itself. Returns an unsubscribe function. */
   onResize(callback: () => void): () => void;
+  /** S5.5 (API gap, `s5.5-tooltips-and-context-menu.md` §5): the rendered bar element for `id`'s
+   *  primary segment (segment 0), scoped to this Gantt's own container (I2: never reaches past it) —
+   *  `undefined` when that entry has no bar in the current frame (scrolled out of the virtualized
+   *  viewport, or the entry has no bar at all). `contextMenu()`'s keyboard opener uses this to anchor
+   *  at "the focused row" (D-S5-13) with no pointer event to read a target from. */
+  elementForEntry(id: EntryId): HTMLElement | undefined;
 }
 
 /** Test seam, the same shape `attachPaneSize`'s own `ResizeObserverCtor` parameter already uses:
@@ -97,6 +105,12 @@ export class DomOverlay implements Overlay {
         this.#observer = undefined;
       }
     };
+  }
+
+  elementForEntry(id: EntryId): HTMLElement | undefined {
+    const want = itemId(id, 0);
+    const bars = Array.from(this.#container.querySelectorAll<HTMLElement>('[data-item-id]'));
+    return bars.find((bar) => bar.dataset['itemId'] === want);
   }
 
   /** `GanttShell.destroy()`'s own call — stops observing; the layer itself is torn down with the
