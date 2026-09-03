@@ -242,6 +242,7 @@ export class Gantt {
           registerRenderer: <P extends RendererPoint>(point: P, renderer: RendererFor<P>): void =>
             parts.registerRenderer(point, renderer),
           resolveTooltip: parts.resolveTooltip,
+          registerDecoration: parts.registerDecoration,
         },
       }),
       buildCommandContext: (parts): CommandContext => ({

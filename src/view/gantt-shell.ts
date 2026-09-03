@@ -33,6 +33,9 @@ import type {
   RendererPoint,
   RendererFor,
   FrameBar,
+  DecorationLayer,
+  DecorationProvider,
+  RegisteredDecorationProvider,
 } from '../layout/index.js';
 import type { ElementDescription } from '../model/index.js';
 import { RendererRegistry } from './renderer-registry.js';
@@ -279,6 +282,11 @@ export interface GanttShellOptions {
      *  by `RegistrationGate` — like `overlay` above, a plugin reads this for as long as it runs, not
      *  only during `setup`. */
     resolveTooltip: (id: EntryId) => ElementDescription | undefined;
+    /** S5.6, D-S5-15: `ctx.view.registerDecoration`. Legal only while `setup` runs (D-S5-4), the
+     *  same gate `registerKeybinding`/`registerRenderer` above already take — but unlike those, a
+     *  provider is removed automatically when this plugin disposes (its own `disposables.add`
+     *  entry), not by the plugin itself. */
+    registerDecoration: (layer: DecorationLayer, provider: DecorationProvider) => void;
   }) => unknown;
   /** S5.2, D-S5-6: fills the api-level pieces of a `CommandContext` for the same reason
    *  `buildPluginContext` above fills `PluginContext`'s — the full api `Dataset` (with `undo`/`redo`)
@@ -401,6 +409,9 @@ export class GanttShell {
   /** S5.4, D-S5-11: plugin-side renderer registrations. The consumer's own `#barRenderer`/etc. below
    *  are read live at resolve time, never stored here — see `renderer-registry.ts`'s file header. */
   #rendererRegistry = new RendererRegistry();
+  /** S5.6, D-S5-15: `ctx.view.registerDecoration`'s own record — every plugin's provider, in
+   *  registration order, threaded into `#layout.computeFrame` as `LayoutInput.decorationProviders`. */
+  #decorationProviders: RegisteredDecorationProvider[] = [];
   #barRenderer: BarRenderer | RendererByKind | undefined;
   #cellRenderer: CellRenderer | undefined;
   #headerRenderer: HeaderRenderer | undefined;
@@ -563,6 +574,21 @@ export class GanttShell {
           return undefined;
         }
       };
+      // S5.6, D-S5-15: same one-shot-registration gate `registerRenderer` above already takes, but
+      // removal is automatic — a decoration provider has no "run once at setup" analogue to a
+      // renderer slot; it lives for as long as the plugin does, so `disposables.add` (not the
+      // plugin itself) is what takes it back out of `#decorationProviders`.
+      const registerDecoration = (layer: DecorationLayer, provider: DecorationProvider): void => {
+        gate.assertOpen();
+        const registered: RegisteredDecorationProvider = { layer, provider };
+        this.#decorationProviders.push(registered);
+        this.#frames.request();
+        disposables.add(() => {
+          const index = this.#decorationProviders.indexOf(registered);
+          if (index >= 0) this.#decorationProviders.splice(index, 1);
+          this.#frames.request();
+        });
+      };
       const context = (options.buildPluginContext ?? (() => ({})))({
         events: this.#pluginEvents,
         disposables,
@@ -572,6 +598,7 @@ export class GanttShell {
         overlay: this.#overlay,
         registerRenderer,
         resolveTooltip,
+        registerDecoration,
       });
       return { context, disposables, registrationGate: gate };
     });
@@ -1343,6 +1370,7 @@ export class GanttShell {
       rows: this.#rowSource,
       collapsed: this.#treeCollapse.ids,
       itemProducerRegistry: this.#itemProducerRegistry,
+      decorationProviders: this.#decorationProviders,
       ...(typeof datasetRevision === 'number' ? { datasetRevision } : {}),
     });
     this.#backend.sync(frame);

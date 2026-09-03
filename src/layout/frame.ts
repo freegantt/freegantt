@@ -18,13 +18,20 @@ import { resolveDateLines } from './date-line.js';
 import type { DateLine, DateLineSpec } from './date-line.js';
 import { FrameMemory } from './frame-memory.js';
 import type { FrameColumn, ResolvedColumn, FieldCompare } from './column.js';
-import type { PlannedRow, PlannedRowKind, RowSource } from './rows/row-source.js';
+import type { PlannedRow, RowSource } from './rows/row-source.js';
 import { isPlannedHeaderRow } from './rows/row-source.js';
 import { resolveRows } from './rows/resolve-rows.js';
 import type { Item } from './items/produce-items.js';
 import type { ItemProducerRegistry } from './items/produce-items.js';
 import { DEFAULT_LANE_GAP_PX, yForLane } from './lanes/pack-lanes.js';
 import type { PackedRow } from './lanes/pack-lanes.js';
+import type { FrameRow } from './frame-row.js';
+export type { FrameRow };
+import type { RangeBand, RowStripe } from './decoration.js';
+export type { RangeBand, RowStripe } from './decoration.js';
+import { DecorationRunner } from './decorations.js';
+import type { RegisteredDecorationProvider } from './decorations.js';
+export type { RegisteredDecorationProvider } from './decorations.js';
 
 /** Shipped Tick box floor (CONTEXT.md) — `--fg-tick-box-floor` fallback and CSS padding calc. */
 export const DEFAULT_TICK_BOX_FLOOR_PX = 9;
@@ -46,26 +53,6 @@ export interface BarFlags {
 export interface LinkFlags {
   inactive?: boolean;
   cycle?: boolean;
-}
-
-export interface FrameRow {
-  id: RowId;
-  kind: PlannedRowKind;
-  index: number;
-  top: number;
-  height: number;
-  laneCount: number;
-  depth: number;
-  expandable: boolean;
-  expanded: boolean;
-  /** `false` when the row was kept only because a descendant matched the filter. */
-  matched?: boolean;
-  /** One library-formatted string per configured grid column, in column order (ADR 0005). */
-  cells: readonly string[];
-  /** The row's own Entry (undefined for a header row, D-S4-23, or a custom row with none). What a
-   *  `cellRenderer` resolves its `entry` context from (S5.4, D-S5-11) — the same primary entry
-   *  `cellsForRow` already reads to format `cells` above, just carried out to the paint step too. */
-  entryId?: EntryId;
 }
 
 export interface FrameBar {
@@ -98,17 +85,6 @@ export interface FrameLink {
   id: string;
   path: readonly PathCommand[];
   flags: LinkFlags;
-}
-
-export interface RangeBand {
-  kind: 'rangeBand';
-  x: number;
-  width: number;
-}
-
-export interface RowStripe {
-  kind: 'rowStripe';
-  rowId: RowId;
 }
 
 export type FrameDecoration = DateLine | RangeBand | RowStripe;
@@ -162,6 +138,10 @@ export interface GeometryFrame {
   bars: FrameBar[];
   links: readonly FrameLink[];
   decorations: readonly FrameDecoration[];
+  /** Registered decoration providers' output, painted below the bar layer (D-S5-15). */
+  underBars: readonly (RangeBand | RowStripe)[];
+  /** Registered decoration providers' output, painted above the bar layer (D-S5-15). */
+  overBars: readonly (RangeBand | RowStripe)[];
   /** Paint description for Grid columns, in display order. Matches `rows[].cells` 1:1 (D-S4-13). */
   columns: readonly FrameColumn[];
 }
@@ -205,6 +185,9 @@ export interface LayoutInput {
   datasetRevision?: number;
   /** Bound Field reader for row-source `filter` / `groupBy` / `sort.compare` (A5). */
   fieldContext?: FieldContext;
+  /** Registered decoration providers (S5.6, D-S5-15), `ctx.view.registerDecoration`'s own record.
+   *  Omitted or empty → both `underBars`/`overBars` are `[]`. */
+  decorationProviders?: readonly RegisteredDecorationProvider[];
 }
 
 function cellsForRow(
@@ -278,17 +261,24 @@ function memoryFor(input: LayoutInput, plan: readonly PlannedRow[], memory?: Fra
 
 /** Composition over resolve → produce → pack → place (D-S4-19). Culling still windows after resolve
  * (D-S4-20). Pure: `memory` is what this pass remembers — `FrameLayout` keeps one alive across
- * renders; a one-shot caller omits it and gets memory built and discarded here. */
-export function computeFrame(input: LayoutInput, memory?: FrameMemory): GeometryFrame {
+ * renders; a one-shot caller omits it and gets memory built and discarded here. `decorations` is the
+ * matching per-Gantt memory for registered decoration providers (D-S5-15) — same one-shot-default rule. */
+export function computeFrame(
+  input: LayoutInput,
+  memory?: FrameMemory,
+  decorations?: DecorationRunner,
+): GeometryFrame {
   const plan = resolveLayoutRows(input);
-  return placeFrame(input, plan, memoryFor(input, plan, memory));
+  return placeFrame(input, plan, memoryFor(input, plan, memory), decorations);
 }
 
-/** Call: `placeFrame(input, plan, memory)`. Geometry only — the caller already resolved rows. */
+/** Call: `placeFrame(input, plan, memory, decorations)`. Geometry only — the caller already
+ *  resolved rows. */
 export function placeFrame(
   input: LayoutInput,
   plan: readonly PlannedRow[],
   memory?: FrameMemory,
+  decorations?: DecorationRunner,
 ): GeometryFrame {
   const { scale, preset, visible, rowHeight, revision, locale } = input;
   const entryById = new Map(input.entries.map((entry) => [entry.id, entry]));
@@ -414,10 +404,22 @@ export function placeFrame(
     };
   });
 
-  const decorations: FrameDecoration[] = resolveDateLines({
+  const dateLineDecorations: FrameDecoration[] = resolveDateLines({
     scale,
     todayLine: input.todayLine ?? true,
     ...(input.dateLines ? { dateLines: input.dateLines } : {}),
+  });
+
+  const decorationRunner = decorations ?? new DecorationRunner();
+  const { underBars, overBars } = decorationRunner.run({
+    providers: input.decorationProviders ?? [],
+    span: {
+      start: scale.instantForX(horizontalSpan.x),
+      end: scale.instantForX(horizontalSpan.x + horizontalSpan.width),
+    },
+    rows,
+    timeZone: scale.timeZone,
+    xForInstant: (at) => scale.xForInstant(at),
   });
 
   return {
@@ -430,7 +432,9 @@ export function placeFrame(
     contentWidth: scale.contentWidth,
     bars,
     links: [],
-    decorations,
+    decorations: dateLineDecorations,
+    underBars,
+    overBars,
     columns: columnsForFrame(input.columns),
   };
 }

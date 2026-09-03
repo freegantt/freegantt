@@ -168,6 +168,29 @@ describe('Dataset timeZone omission (#129)', () => {
   });
 });
 
+describe('Dataset.time (S5.6, D-S5-16)', () => {
+  it("is bound to this Dataset's own zone", () => {
+    const dataset = new Dataset({ timeZone: 'America/Chicago', entries: [oneEntry()] });
+    expect(dataset.time.zone).toBe('America/Chicago');
+  });
+
+  it('a Dataset with no explicit timeZone binds the resolved one (#129)', () => {
+    const dataset = new Dataset({ entries: [oneEntry()] });
+    expect(dataset.time.zone).toBe(dataset.timeZone);
+    expect(dataset.time.zone.length).toBeGreaterThan(0);
+  });
+
+  it('forwards zone-aware date arithmetic — eachDay/dayOfWeek pick out a week of weekends', () => {
+    const dataset = new Dataset({ timeZone: 'UTC', entries: [oneEntry()] });
+    const start = dataset.time.startOfDay(instant('2026-06-15T00:00:00Z')); // a Monday
+    const end = dataset.time.addDays(start, 7);
+    const weekendDays = dataset.time
+      .eachDay({ start, end })
+      .filter((day) => dataset.time.dayOfWeek(day) >= 6);
+    expect(weekendDays).toHaveLength(2);
+  });
+});
+
 describe('Dataset transaction/on/off delegation', () => {
   it('transaction() returns the body value; an empty body emits no change', () => {
     const dataset = new Dataset({ timeZone: 'UTC', entries: [oneEntry()] });

@@ -1018,4 +1018,78 @@ describe('render/dom backend', () => {
     grid.remove();
     timeline.remove();
   });
+
+  // S5.6, D-S5-15: an underBars decoration paints below the bar layer, an overBars one above it —
+  // DOM order alone gives the stacking, so this asserts document position, not a z-index.
+  it('paints an underBars decoration below the bar layer and an overBars one above it', () => {
+    const backend = createDomBackend();
+    const { grid, timeline } = mountSurfaces();
+    backend.mount({ grid, timeline });
+
+    const base = computeFrame({
+      entries: sampleEntries.slice(0, 1),
+      scale,
+      preset,
+      visible: { x: 0, y: 0, width: 0, height: 200 },
+      rowHeight: 32,
+      revision: 0,
+      itemProducerRegistry,
+    });
+
+    backend.sync({
+      ...base,
+      underBars: [{ kind: 'rangeBand', x: 10, width: 20 }],
+      overBars: [{ kind: 'rangeBand', x: 30, width: 20, class: 'flag' }],
+    });
+
+    const bars = timeline.querySelector('.fg-bars')!;
+    const under = timeline.querySelector<HTMLElement>('.fg-range-band:not(.flag)')!;
+    const over = timeline.querySelector<HTMLElement>('.fg-range-band.flag')!;
+    expect(under).not.toBeNull();
+    expect(over).not.toBeNull();
+    expect(under.style.transform).toBe('translateX(10px)');
+    expect(under.style.width).toBe('20px');
+    expect(over.style.transform).toBe('translateX(30px)');
+    expect(over.classList.contains('fg-range-band')).toBe(true);
+
+    // DOCUMENT_POSITION_PRECEDING (2): the under-decoration's own layer comes before .fg-bars.
+    expect(under.compareDocumentPosition(bars) & Node.DOCUMENT_POSITION_PRECEDING).toBe(0);
+    expect(bars.compareDocumentPosition(under) & Node.DOCUMENT_POSITION_PRECEDING).toBeGreaterThan(0);
+    // DOCUMENT_POSITION_FOLLOWING (4): the over-decoration's own layer comes after .fg-bars.
+    expect(bars.compareDocumentPosition(over) & Node.DOCUMENT_POSITION_FOLLOWING).toBeGreaterThan(0);
+
+    backend.sync({ ...base, underBars: [], overBars: [] });
+    expect(timeline.querySelector('.fg-range-band')).toBeNull();
+
+    backend.destroy();
+    grid.remove();
+    timeline.remove();
+  });
+
+  it("resolves a rowStripe against the row it paints, at that row's top/height", () => {
+    const backend = createDomBackend();
+    const { grid, timeline } = mountSurfaces();
+    backend.mount({ grid, timeline });
+
+    const frame = computeFrame({
+      entries: sampleEntries.slice(0, 1),
+      scale,
+      preset,
+      visible: { x: 0, y: 0, width: 0, height: 200 },
+      rowHeight: 32,
+      revision: 0,
+      itemProducerRegistry,
+    });
+    const row = frame.rows[0]!;
+
+    backend.sync({ ...frame, underBars: [{ kind: 'rowStripe', rowId: row.id }], overBars: [] });
+
+    const stripe = timeline.querySelector<HTMLElement>('.fg-row-stripe')!;
+    expect(stripe.style.transform).toBe(`translateY(${row.top}px)`);
+    expect(stripe.style.height).toBe(`${row.height}px`);
+
+    backend.destroy();
+    grid.remove();
+    timeline.remove();
+  });
 });

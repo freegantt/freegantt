@@ -22,7 +22,8 @@ import {
   warnIfRollUpsWereCorrected,
 } from '../data/serialization/index.js';
 import type { DatasetHierarchy, RollUpKinds } from '../model/index.js';
-import { resolveDefaultTimeZone } from '../time/index.js';
+import { createZonedTime, resolveDefaultTimeZone } from '../time/index.js';
+import type { ZonedTime } from '../time/index.js';
 export type { DatasetHierarchy };
 
 export interface DatasetOptions<TMeta = unknown> {
@@ -74,12 +75,15 @@ export interface DatasetOptions<TMeta = unknown> {
 // at `new Dataset<{ team: string }>(...)` (#123).
 export class Dataset<TMeta = unknown, TFields extends Record<string, unknown> = Record<string, unknown>> {
   #state: DatasetState;
+  /** Bound once, at construction — `timeZone` is fixed for this Dataset's lifetime either way. */
+  #time: ZonedTime;
 
   constructor(options: DatasetOptions<TMeta>) {
     this.#state = new DatasetState({
       ...options,
       timeZone: options.timeZone ?? resolveDefaultTimeZone(),
     });
+    this.#time = createZonedTime(this.#state.timeZone);
   }
 
   get entries(): EntryStoreContract<TMeta, TFields> {
@@ -88,6 +92,13 @@ export class Dataset<TMeta = unknown, TFields extends Record<string, unknown> = 
 
   get timeZone(): string {
     return this.#state.timeZone;
+  }
+
+  /** Zone-aware date math bound to this Dataset's own zone (D-S5-16) — the one way a plugin author
+   *  reaches `time/` (the `exports` map seals it against a direct import). Call:
+   *  `dataset.time.eachDay(span).filter((day) => dataset.time.dayOfWeek(day) >= 6)`. */
+  get time(): ZonedTime {
+    return this.#time;
   }
 
   get dateOnlyEnd(): DateOnlyEndRule {

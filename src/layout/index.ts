@@ -40,6 +40,14 @@ export type {
   LinkFlags,
   LayoutInput,
 } from './frame.js';
+export { DecorationRunner } from './decorations.js';
+export type { RegisteredDecorationProvider, DecorationsByLayer } from './decorations.js';
+export type {
+  DecorationLayer,
+  DecorationContext,
+  DecorationProvider,
+  DecorationInput,
+} from './decoration.js';
 // Re-exported so render/ (layout-only import per plans/01 §1) can type item/row identity as
 // ItemId/RowId rather than a bare string — render already receives both via GeometryFrame (#35).
 // ElementDescription joins them the same way (S5.3, D-S5-10): render/dom/element-description.ts

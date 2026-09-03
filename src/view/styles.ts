@@ -134,6 +134,11 @@ ${DARK_COLOR_TOKENS}
 .fg-row-twisty[aria-expanded='true']::before { content: '▾'; }
 .fg-row-label[data-fixed], .fg-row-cell[data-fixed] { flex: 0 0 auto; }
 .fg-row-label[data-align='end'], .fg-row-cell[data-align='end'] { justify-content: flex-end; text-align: end; }
+/* S5.6, D-S5-15: registered decoration providers' own layers — one mounted below .fg-bars, one
+   above. DOM order alone gives the paint order (no z-index needed against .fg-bars either). */
+.fg-decorations-under, .fg-decorations-over { position: relative; }
+.fg-range-band { position: absolute; top: 0; left: 0; pointer-events: none; }
+.fg-row-stripe { position: absolute; left: 0; width: 100%; pointer-events: none; }
 .fg-bars { position: relative; }
 /* D-S3-21: touch-action: none on the bar itself, not just the resize handles — a touch drag must
    never fight the browser's own pan/scroll gesture over the same surface. */

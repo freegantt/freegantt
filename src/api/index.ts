@@ -195,6 +195,17 @@ export type {
   BarFlags,
   PlannedRowKind,
 } from '../layout/index.js';
+// S5.6, D-S5-15: a decoration provider's own vocabulary — a plugin author writes `ctx.view
+// .registerDecoration('underBars', (ctx) => [...])` against these alone. `RangeBand`/`RowStripe`
+// are the same pixel-resolved shapes `GeometryFrame.underBars`/`.overBars` carry.
+export type {
+  DecorationLayer,
+  DecorationContext,
+  DecorationProvider,
+  DecorationInput,
+  RangeBand,
+  RowStripe,
+} from '../layout/index.js';
 
 // Time helpers a caller needs: `instant` for a pinned `TimeSpan`, `now` for "this Instant",
 // `addMs`/`MS` to shift one by a duration (S2.7 harness-review — `harness/data.ts`'s move-by-a-day
@@ -220,3 +231,6 @@ export type {
   DateFormat,
   HeaderFormat,
 } from '../time/index.js';
+// S5.6, D-S5-16: `Dataset.time`'s own type — a plugin author names this when it writes a function
+// that takes a `ZonedTime` rather than reading `ctx.time`/`dataset.time` inline.
+export type { ZonedTime } from '../time/index.js';

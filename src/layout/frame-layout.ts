@@ -8,6 +8,7 @@
 import { placeFrame } from './frame.js';
 import type { GeometryFrame, LayoutInput } from './frame.js';
 import { FrameMemory } from './frame-memory.js';
+import { DecorationRunner } from './decorations.js';
 import type { PlannedRow, UnindexedRow } from './rows/row-source.js';
 import { resolveOpenRows, stampIndex } from './rows/resolve-rows.js';
 import { applyCollapse } from './rows/collapse.js';
@@ -18,6 +19,9 @@ import { DEFAULT_LANE_GAP_PX } from './lanes/pack-lanes.js';
  * Gantt: the cached index describes that Gantt's rows, and nothing about it is shareable. */
 export class FrameLayout {
   #memory = new FrameMemory();
+  /** D-S5-15: registered decoration providers' own memory, kept alive the same way `#memory` is —
+   *  `run()` recomputes only when the window actually changed since the last `computeFrame` call. */
+  #decorations = new DecorationRunner();
   #plan: readonly PlannedRow[] = [];
   #rowOfEntry = new Map<EntryId, RowId>();
   #parentOfRow = new Map<RowId, RowId>();
@@ -43,7 +47,7 @@ export class FrameLayout {
       registry: input.itemProducerRegistry,
       ...(input.datasetRevision !== undefined ? { datasetRevision: input.datasetRevision } : {}),
     });
-    return placeFrame(input, this.#plan, this.#memory);
+    return placeFrame(input, this.#plan, this.#memory, this.#decorations);
   }
 
   /** The row-height index's own `topAt`, exposed so `reveal` can ask for a row's position without a
