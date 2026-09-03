@@ -10,7 +10,7 @@ function rect(partial: Partial<DOMRect>): DOMRect {
  *  driven with no `PaneLayout`/DOM measurement at all. `present` mounts into a plain container;
  *  `render` mirrors `render/dom/element-description.ts`'s own text-only behaviour, enough for these
  *  tests' content. */
-function fakeHost(options: {
+function fakeAnchor(options: {
   bounds: DOMRect;
   grid: DOMRect;
   timeline: DOMRect;
@@ -49,7 +49,7 @@ function fakeHost(options: {
  *  after `overlay.present()` returns, so a `MutationObserver`-based stub (queued as a microtask) would
  *  never run in time. */
 function withFixedPopupSize(
-  overlay: ReturnType<typeof fakeHost>,
+  overlay: ReturnType<typeof fakeAnchor>,
   size: { width: number; height: number },
 ): void {
   void overlay;
@@ -69,7 +69,7 @@ function withFixedPopupSize(
 
 describe('Popup', () => {
   it('opens at the requested placement and reports isOpen', () => {
-    const overlay = fakeHost({
+    const overlay = fakeAnchor({
       bounds: rect({ left: 0, top: 0, right: 1000, bottom: 500 }),
       grid: rect({ left: 0, top: 0, right: 160, bottom: 500 }),
       timeline: rect({ left: 160, top: 0, right: 1000, bottom: 500 }),
@@ -89,7 +89,7 @@ describe('Popup', () => {
   });
 
   it('flips to the opposite side when the requested side does not fit its pane, and clamps the cross axis', () => {
-    const overlay = fakeHost({
+    const overlay = fakeAnchor({
       bounds: rect({ left: 0, top: 0, right: 1000, bottom: 500 }),
       grid: rect({ left: 0, top: 0, right: 160, bottom: 500 }),
       timeline: rect({ left: 160, top: 0, right: 1000, bottom: 500 }),
@@ -114,7 +114,7 @@ describe('Popup', () => {
   });
 
   it('Escape closes the popup and calls stopPropagation, so an outer keydown listener never sees it', () => {
-    const overlay = fakeHost({
+    const overlay = fakeAnchor({
       bounds: rect({ right: 1000, bottom: 500 }),
       grid: rect({ right: 160, bottom: 500 }),
       timeline: rect({ left: 160, right: 1000, bottom: 500 }),
@@ -134,7 +134,7 @@ describe('Popup', () => {
   });
 
   it('an outside pointerdown closes the popup; one inside the anchor does not', () => {
-    const overlay = fakeHost({
+    const overlay = fakeAnchor({
       bounds: rect({ right: 1000, bottom: 500 }),
       grid: rect({ right: 160, bottom: 500 }),
       timeline: rect({ left: 160, right: 1000, bottom: 500 }),
@@ -153,7 +153,7 @@ describe('Popup', () => {
   });
 
   it('a scroll anywhere in the document closes the popup', () => {
-    const overlay = fakeHost({
+    const overlay = fakeAnchor({
       bounds: rect({ right: 1000, bottom: 500 }),
       grid: rect({ right: 160, bottom: 500 }),
       timeline: rect({ left: 160, right: 1000, bottom: 500 }),
@@ -167,7 +167,7 @@ describe('Popup', () => {
   });
 
   it('focus: "trap" cycles Tab inside and restores focus on close; focus: "none" never moves it', () => {
-    const overlay = fakeHost({
+    const overlay = fakeAnchor({
       bounds: rect({ right: 1000, bottom: 500 }),
       grid: rect({ right: 160, bottom: 500 }),
       timeline: rect({ left: 160, right: 1000, bottom: 500 }),
@@ -202,12 +202,12 @@ describe('Popup', () => {
 
   it('a container resize repositions an open popup against the fresh rects (issue #137 F9)', () => {
     let timelineRight = 1000;
-    const overlay = fakeHost({
+    const overlay = fakeAnchor({
       bounds: rect({ right: 1000, bottom: 500 }),
       grid: rect({ right: 160, bottom: 500 }),
       timeline: rect({ left: 160, right: 1000, bottom: 500 }),
     });
-    // Read live so a resize can change what the overlay reports without a new fakeHost().
+    // Read live so a resize can change what the overlay reports without a new fakeAnchor().
     Object.defineProperty(overlay, 'paneBounds', {
       get: () => ({
         grid: rect({ right: 160, bottom: 500 }),

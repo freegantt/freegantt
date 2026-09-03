@@ -2,6 +2,11 @@
 // column plus the keys that never re-bind). Writes no dataset. `attachKeyboardEditing` in
 // interaction/ owns the "something selected" column of the same table; both listen on the
 // container and split work by selection, the same per-module pattern S3.5 already shipped.
+//
+// Superseded, not deleted: since S5.2 the shell wires these keys through core commands + default
+// bindings (`view/core-commands.ts` / `view/gantt-shell.ts`) instead of calling this function.
+// No production caller remains — kept, and tested, per the S5.2 TODO in case a future slice needs
+// a keymap-free navigation attachment again.
 
 export interface KeyboardNavigationAttachment {
   detach(): void;

@@ -55,7 +55,7 @@ module.exports = {
     forbid('data-boundary', 'data', ['time', 'model']),
     forbid('render-boundary', 'render', ['layout']),
     // model: Entry types flow through view as type-only params (same rationale as api, above).
-    // extensions: S5.1, D-S5-5 — `view/gantt-shell.ts` constructs the `PluginHost` and hands it the
+    // extensions: S5.1, D-S5-5 — `view/gantt-shell.ts` constructs the `PluginRuntime` and hands it the
     // public `Gantt` façade; the arrow is view/ -> extensions/, never the reverse (see the
     // `extensions-public-only` rule below — extensions/ may not import view/ back).
     forbid('view-boundary', 'view', ['render', 'layout', 'data', 'model', 'extensions']),

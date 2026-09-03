@@ -240,7 +240,7 @@ The internal `view/` class a `Gantt` constructs and owns: the composition root t
 _Avoid_: Chart, ChartShell (rejected in #7 — "shell" alone doesn't say what it's a shell _of_; `GanttShell` reads correctly even far from its definition)
 
 **Pane layout**:
-The DOM skeleton one Gantt's container is split into: a Grid pane, a Splitter, and a Timeline pane, built and owned by `view/pane-layout.ts`'s `PaneLayout` class (plans/01 §8.3, S1.8). Structure and one number only — Grid width — no geometry, no scale, no data, no frame, no events. `GanttShell` composes a Pane layout; it does not build panes itself.
+The DOM skeleton one Gantt's container is split into: a Grid pane, a Splitter, and a Timeline pane, built and owned by `view/pane-layout.ts`'s `PaneLayout` class (plans/01 §8.3, S1.8). Structure and its own numbers only — Grid width and, since #126, the grid pane's content width (`contentWidth`, driving its horizontal scroller) — no geometry, no scale, no data, no frame, no events. `GanttShell` composes a Pane layout; it does not build panes itself.
 _Avoid_: Layout (Layout, unqualified, is the `layout/` source directory and its pure geometry types — a different concept)
 
 **Grid pane**:
