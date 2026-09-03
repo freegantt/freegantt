@@ -56,6 +56,18 @@
       #log div {
         padding: 1px 0;
       }
+      /* .fg-bar-diamond's own shape stays (structural, from entry.kind — D-S4-24); the demo
+         renderer only sets --fg-bar-fill, which its `::before` already reads, and widens the
+         diamond a little so the recolor reads clearly against the default fill. */
+      .demo-milestone::before {
+        width: 14px;
+        height: 14px;
+      }
+      .demo-over-budget {
+        background: #ffe0e0;
+        color: #b3261e;
+        font-weight: 600;
+      }
     </style>
   </head>
   <body>
@@ -66,9 +78,15 @@
       editing/s5.1-plugin-runtime.md`). The button below installs and removes a two-line logging plugin — the
       bars keep their identity across both (I8); nothing remounts.
     </p>
+    <p>
+      <code>barRenderer</code>/<code>cellRenderer</code> (S5.4, D-S5-10/11/12): a milestone entry paints as a
+      diamond and an over-budget cost cell paints red, both through <code>ElementDescription</code> alone —
+      the toggle below switches both off live, no remount (I8).
+    </p>
     <div id="controls">
       <button id="toggle-plugin-btn" type="button">Install logging plugin</button>
       <button id="open-popup-btn" type="button">Open popup on selected bar</button>
+      <label><input id="renderers-toggle" type="checkbox" checked /> Custom milestone + cost renderers</label>
     </div>
     <div id="gantt"></div>
     <div id="log" aria-label="Plugin event log"></div>

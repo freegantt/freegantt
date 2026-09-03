@@ -1,11 +1,35 @@
 import './harness-nav.ts';
-import { Gantt, Dataset, createPopup, itemId } from '../src/api/index.js';
-import type { GanttPlugin, Popup } from '../src/api/index.js';
+import { Gantt, Dataset, createPopup, itemId, entryId } from '../src/api/index.js';
+import type { GanttPlugin, Popup, RendererByKind, CellRenderer } from '../src/api/index.js';
 import { sampleEntries } from '../fixtures/sample-dataset.js';
 
-const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
-const gantt = new Gantt({ container: '#gantt', dataset });
-gantt.panToToday();
+// S5.4's visible-acceptance box (s5.4-renderers.md §4, D-S5-10/11/12): a milestone diamond and a
+// red over-budget cost cell, painted through `barRenderer`/`cellRenderer` alone — no bespoke
+// paint path — with a toggle that switches both off live, no remount.
+const BUDGET_THRESHOLD = 1000;
+// Adjacent rows and adjacent days (`fixtures/sample-dataset.ts`) — one `reveal()` below brings
+// both into view together, no scrolling needed to see the acceptance box's two renderers at once.
+const MILESTONE_ENTRY_ID = 'entry-39'; // "Launch" — already a single-day span, a natural milestone.
+const OVER_BUDGET_ENTRY_ID = 'entry-38'; // "Go/no-go review" — given a cost above the threshold below.
+
+const dataset = new Dataset({
+  timeZone: 'UTC',
+  fieldTypes: {
+    money: {
+      rollUp: 'sum',
+      formatValue: (value) => (typeof value === 'number' ? `$${value}` : ''),
+      column: { header: 'Cost', align: 'end' },
+    },
+  },
+  fields: [{ key: 'cost', type: 'money' }],
+  entries: sampleEntries.map((entry) => {
+    if (entry.id === MILESTONE_ENTRY_ID) return { ...entry, kind: 'milestone' as const };
+    if (entry.id === OVER_BUDGET_ENTRY_ID) return { ...entry, meta: { cost: 1500 } };
+    return entry;
+  }),
+});
+const gantt = new Gantt({ container: '#gantt', dataset, gridColumns: ['name', 'cost'] });
+gantt.reveal(entryId(MILESTONE_ENTRY_ID));
 
 const log = document.querySelector<HTMLDivElement>('#log')!;
 const toggleBtn = document.querySelector<HTMLButtonElement>('#toggle-plugin-btn')!;
@@ -109,3 +133,45 @@ popupBtn.addEventListener('click', () => {
   });
   writeLog(`popup demo: opened on ${selected}`);
 });
+
+// S5.4, D-S5-10/11/12: `barRenderer`/`cellRenderer` are `GanttOptions.*` — the consumer's own,
+// level 3 of the ladder (D-S5-11) — so setting them here needs no plugin at all. `overBudget`
+// reads `ctx.value` (already formatted through the `money` field's `formatValue`, e.g. `'$1500'`)
+// rather than `ctx.entry`'s `meta`, exactly as the handoff doc's own sketch does: `cellRenderer`
+// is Gantt-wide, so it has to decide which column it is painting via `ctx.column` regardless, and
+// reading the same string every consumer sees keeps this renderer honest about the value it
+// actually renders, not a second, parallel read of the raw number.
+function overBudget(formatted: string): boolean {
+  const amount = Number(formatted.replace(/[^0-9.-]/g, ''));
+  return Number.isFinite(amount) && amount > BUDGET_THRESHOLD;
+}
+
+// `fg-bar-diamond`'s own shape is structural, from `entry.kind` alone (D-S4-24), outside a
+// renderer's bounded scope (attr/class/style/text/children, I13) — it stays applied underneath
+// whatever a `barRenderer` paints. Its `::before` reads the `--fg-bar-fill` custom property, which
+// inherits from this bar node, so recoloring the diamond (rather than fighting its shape) is what a
+// `style` write actually reaches; `demo-milestone`'s own class carries the rest (the label below).
+const demoBarRenderer: RendererByKind = {
+  milestone: () => ({
+    class: { 'demo-milestone': true },
+    style: { '--fg-bar-fill': '#7b2cbf' },
+  }),
+};
+const demoCellRenderer: CellRenderer = ({ column, value }) =>
+  column.key === 'cost' && overBudget(value)
+    ? { class: { 'demo-over-budget': true }, text: value }
+    : undefined;
+
+const renderersToggle = document.querySelector<HTMLInputElement>('#renderers-toggle')!;
+renderersToggle.addEventListener('change', () => {
+  if (renderersToggle.checked) {
+    gantt.barRenderer = demoBarRenderer;
+    gantt.cellRenderer = demoCellRenderer;
+    writeLog('renderers demo: custom milestone diamond + over-budget cost cell on');
+  } else {
+    gantt.barRenderer = undefined;
+    gantt.cellRenderer = undefined;
+    writeLog('renderers demo: back to the library default, no remount (I8)');
+  }
+});
+renderersToggle.dispatchEvent(new Event('change'));
