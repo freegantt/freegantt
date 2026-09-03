@@ -11,6 +11,7 @@
 import { DuplicatePluginIdError, PluginSetupError, RegistrationClosedError } from '../model/index.js';
 import type { Disposer, PluginId } from '../model/index.js';
 import { DisposableStore } from './disposables.js';
+import { isDevMode } from '../data/dev-mode.js';
 
 /** What `PluginRuntime` installs — structurally the public `GanttPlugin`, kept generic here (see
  *  file header). Not exported past `view/gantt-shell.ts`'s own use of it. */
@@ -35,12 +36,6 @@ export interface BuiltPluginContext<TContext> {
   context: TContext;
   disposables: DisposableStore;
   registrationGate?: RegistrationGate;
-}
-
-function isDevMode(): boolean {
-  // extensions/ may import api/ and model/ only (D-S5-5) — data/dev-mode.ts is neither, so this
-  // repeats that file's one-line check rather than reaching past the boundary for it.
-  return (import.meta as { env?: { DEV?: boolean } }).env?.DEV ?? false;
 }
 
 /** D-S5-4: every `ctx.*.register*` a later step ships (S5.2's `registerKeybinding`, S5.4's

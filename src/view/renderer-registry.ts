@@ -29,47 +29,50 @@ function forKind(renderer: BarRenderer | RendererByKind, kind: string): BarRende
   return typeof renderer === 'function' ? renderer : pickByKind(renderer, kind);
 }
 
+interface Registration {
+  renderer: AnyRenderer;
+  pluginId: PluginId;
+}
+
 /** Built once per `GanttShell` (or per test), the same lifetime `CommandRegistry` has. */
 export class RendererRegistry {
-  #renderers = new Map<RendererPoint, AnyRenderer>();
-  #owners = new Map<RendererPoint, PluginId>();
+  #registrations = new Map<RendererPoint, Registration>();
 
   /** `ctx.view.registerRenderer(point, renderer)`. One slot per point (D-S5-11) — a second plugin
    *  claiming a point already taken throws, naming both plugin ids. */
   register<P extends RendererPoint>(point: P, renderer: RendererFor<P>, pluginId: PluginId): void {
-    const existing = this.#owners.get(point);
-    if (existing !== undefined) throw new RendererAlreadyRegisteredError(point, existing, pluginId);
-    this.#renderers.set(point, renderer);
-    this.#owners.set(point, pluginId);
+    const existing = this.#registrations.get(point);
+    if (existing !== undefined) {
+      throw new RendererAlreadyRegisteredError(point, existing.pluginId, pluginId);
+    }
+    this.#registrations.set(point, { renderer, pluginId });
   }
 
+  /** D-S5-11: the consumer's own renderer always wins over a plugin's; with neither, "nothing" (the
+   *  caller's own default). */
   #resolve<TRenderer>(
     point: RendererPoint,
     consumerRenderer: TRenderer | undefined,
   ): ResolvedRenderer<TRenderer> | undefined {
     if (consumerRenderer !== undefined) return { renderer: consumerRenderer };
-    const plugin = this.#renderers.get(point) as TRenderer | undefined;
-    const pluginId = this.#owners.get(point);
-    if (plugin === undefined || pluginId === undefined) return undefined;
-    return { renderer: plugin, pluginId };
+    const registration = this.#registrations.get(point);
+    if (registration === undefined) return undefined;
+    return { renderer: registration.renderer as TRenderer, pluginId: registration.pluginId };
   }
 
-  /** D-S5-11: the consumer's own `barRenderer` always wins over a plugin's. D-S5-12: whichever side
-   *  supplies the renderer, its per-kind map (if it is one) resolves against `kind` right here — the
-   *  caller only ever sees one already-resolved `BarRenderer` function, or nothing. */
+  /** D-S5-11 picks whichever side wins via `#resolve`; D-S5-12 then resolves that side's per-kind map
+   *  (if it is one) against `kind` — a map that misses `kind` (and has no `'*'`) resolves to nothing,
+   *  never falling through to the other side. The caller only ever sees one already-resolved
+   *  `BarRenderer` function, or nothing. */
   resolveBar(
     kind: string,
     consumerRenderer: BarRenderer | RendererByKind | undefined,
   ): ResolvedRenderer<BarRenderer> | undefined {
-    if (consumerRenderer !== undefined) {
-      const renderer = forKind(consumerRenderer, kind);
-      if (renderer !== undefined) return { renderer };
-    }
-    const plugin = this.#renderers.get('bar') as BarRenderer | RendererByKind | undefined;
-    const pluginId = this.#owners.get('bar');
-    if (plugin === undefined || pluginId === undefined) return undefined;
-    const renderer = forKind(plugin, kind);
-    return renderer === undefined ? undefined : { renderer, pluginId };
+    const resolved = this.#resolve<BarRenderer | RendererByKind>('bar', consumerRenderer);
+    if (resolved === undefined) return undefined;
+    const renderer = forKind(resolved.renderer, kind);
+    if (renderer === undefined) return undefined;
+    return resolved.pluginId !== undefined ? { renderer, pluginId: resolved.pluginId } : { renderer };
   }
 
   resolveCell(consumerRenderer: CellRenderer | undefined): ResolvedRenderer<CellRenderer> | undefined {

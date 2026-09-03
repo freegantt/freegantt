@@ -928,6 +928,62 @@ describe('render/dom backend', () => {
     timeline.remove();
   });
 
+  it('a barRenderer returning undefined keeps the default label for that bar (D-S5-10)', () => {
+    const renderer: BarRenderer = () => undefined;
+    const backend = createDomBackend({
+      entryById: entryLookup,
+      resolveBarRenderer: () => ({ renderer }),
+      resolveCellRenderer: () => undefined,
+    });
+    const { grid, timeline } = mountSurfaces();
+    backend.mount({ grid, timeline });
+    const frame = computeFrame({
+      entries: sampleEntries.slice(0, 1),
+      scale,
+      preset,
+      visible: { x: 0, y: 0, width: 0, height: 0 },
+      rowHeight: 32,
+      revision: 0,
+      itemProducerRegistry,
+    });
+    backend.sync(frame);
+
+    const bar = timeline.querySelector<HTMLElement>('.fg-bar')!;
+    expect(bar.textContent).toBe(frame.bars[0]!.label);
+
+    backend.destroy();
+    grid.remove();
+    timeline.remove();
+  });
+
+  it('a cellRenderer returning undefined keeps the default cell text (D-S5-10)', () => {
+    const backend = createDomBackend({
+      entryById: entryLookup,
+      resolveBarRenderer: () => undefined,
+      resolveCellRenderer: () => ({ renderer: () => undefined }),
+    });
+    const { grid, timeline } = mountSurfaces();
+    backend.mount({ grid, timeline });
+    const frame = computeFrame({
+      entries: sampleEntries.slice(0, 1),
+      scale,
+      preset,
+      visible: { x: 0, y: 0, width: 0, height: 0 },
+      rowHeight: 32,
+      revision: 0,
+      itemProducerRegistry,
+      columns: [{ key: 'name', header: 'Name', align: 'start', format: (e) => e.name }],
+    });
+    backend.sync(frame);
+
+    const cell = grid.querySelector<HTMLElement>('.fg-row-label')!;
+    expect(cell.textContent).toBe(sampleEntries[0]!.name);
+
+    backend.destroy();
+    grid.remove();
+    timeline.remove();
+  });
+
   it("a resolved cellRenderer paints inside the cell, receiving the row's entry, row and formatted value", () => {
     const seen: { entry?: { id: string }; value: string }[] = [];
     const backend = createDomBackend({
