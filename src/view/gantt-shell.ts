@@ -41,7 +41,9 @@ import { PluginRuntime, RegistrationGate } from '../extensions/plugin-runtime.js
 import type { ShellPlugin } from '../extensions/plugin-runtime.js';
 import { DisposableStore } from '../extensions/disposables.js';
 import { CommandRegistry } from '../extensions/commands.js';
-import type { Command, CommandContext, CommandRegistryOf } from '../extensions/commands.js';
+import type { CommandContext, CommandRegistryOf } from '../extensions/commands.js';
+import { registerCoreCommands } from './core-commands.js';
+import type { CoreCommandPorts } from './core-commands.js';
 import { Keymap } from '../extensions/keymap.js';
 import type { KeyBinding, KeyEventLike } from '../extensions/keymap.js';
 import type { GridWidthChange, SelectionChange } from './event-bus.js';
@@ -584,7 +586,6 @@ export class GanttShell {
     // pan/page/home/end handling ever sees it (an unmatched chord is left untouched either way — the
     // resolver never calls `preventDefault()` on a miss).
     this.#registerCoreCommands();
-    this.#registerNavigationCommands();
     this.#keymapListener = (event: KeyboardEvent) => {
       if (this.#keymap.resolve(event)) {
         event.preventDefault();
@@ -838,139 +839,49 @@ export class GanttShell {
     ) as CommandContext<unknown>;
   }
 
-  /** D-S5-6: the eleven commands every consumer already has as a public method, named. Registered
-   *  before any plugin, so a plugin can override any of them (D-S5-7). */
-  #registerCoreCommands(): void {
-    const asCtx = (ctx: unknown): CommandContext<unknown> => ctx as CommandContext<unknown>;
-    const register = (command: Command<unknown>): void => this.#commandRegistry.register(command);
-
-    register({ id: 'freegantt.collapseAll', label: 'Collapse all', run: () => this.collapseAll() });
-    register({ id: 'freegantt.expandAll', label: 'Expand all', run: () => this.expandAll() });
-    register({
-      id: 'freegantt.collapseRow',
-      label: 'Collapse row',
-      when: (ctx) => asCtx(ctx).entry !== undefined,
-      run: (ctx) => {
-        const entry = asCtx(ctx).entry;
-        if (entry !== undefined) this.collapse(entry.id);
-      },
-    });
-    register({
-      id: 'freegantt.expandRow',
-      label: 'Expand row',
-      when: (ctx) => asCtx(ctx).entry !== undefined,
-      run: (ctx) => {
-        const entry = asCtx(ctx).entry;
-        if (entry !== undefined) this.expand(entry.id);
-      },
-    });
-    register({
-      id: 'freegantt.zoomIn',
-      label: 'Zoom in',
-      when: () => this.canZoomIn,
-      run: () => this.zoomIn(),
-    });
-    register({
-      id: 'freegantt.zoomOut',
-      label: 'Zoom out',
-      when: () => this.canZoomOut,
-      run: () => this.zoomOut(),
-    });
-    register({
-      id: 'freegantt.panToToday',
-      label: 'Pan to today',
-      run: () => {
+  /** D-S5-6: the shell verbs `core-commands.ts`'s catalog calls, closing over this shell's own
+   *  private state. `registerCoreCommands` never touches a shell field directly — this is the one
+   *  seam between the two. */
+  #coreCommandPorts(): CoreCommandPorts {
+    return {
+      collapseAll: () => this.collapseAll(),
+      expandAll: () => this.expandAll(),
+      collapseRow: (id) => this.collapse(id),
+      expandRow: (id) => this.expand(id),
+      canZoomIn: () => this.canZoomIn,
+      canZoomOut: () => this.canZoomOut,
+      zoomIn: () => this.zoomIn(),
+      zoomOut: () => this.zoomOut(),
+      panToToday: () => {
         const now = this.#options.now;
         if (now !== undefined) this.panToToday(now());
       },
-    });
-    register({
-      id: 'freegantt.selectAll',
-      label: 'Select all',
-      run: () => this.#proposeSelection(this.#selectableEntriesInRowOrder()),
-    });
-    register({
-      id: 'freegantt.clearSelection',
-      label: 'Clear selection',
-      when: () => this.#selection.length > 0,
-      run: () => this.#proposeSelection([]),
-    });
-    register({
-      id: 'freegantt.undo',
-      label: 'Undo',
-      when: (ctx) => asCtx(ctx).dataset?.canUndo === true,
-      run: (ctx) => asCtx(ctx).dataset?.undo(),
-    });
-    register({
-      id: 'freegantt.redo',
-      label: 'Redo',
-      when: (ctx) => asCtx(ctx).dataset?.canRedo === true,
-      run: (ctx) => asCtx(ctx).dataset?.redo(),
-    });
+      selectAll: () => this.#proposeSelection(this.#selectableEntriesInRowOrder()),
+      clearSelection: () => this.#proposeSelection([]),
+      hasSelection: () => this.#selection.length > 0,
+      keyboardPanEnabled: () => this.#resolvedViewportGestures.keyboardPan,
+      nothingSelected: () => this.#selection.length === 0,
+      pageDown: () => this.#panBy(0, this.#viewport.visible.height),
+      pageUp: () => this.#panBy(0, -this.#viewport.visible.height),
+      panToStart: () => this.#viewport.scroll.panTo({ x: 0 }),
+      panToEnd: () => this.#viewport.scroll.panTo({ x: this.#viewport.scroll.state.max.x }),
+      panRight: () => this.#panBy(this.#viewport.preset.preferredTickWidthPx, 0),
+      panLeft: () => this.#panBy(-this.#viewport.preset.preferredTickWidthPx, 0),
+      panDown: () => this.#panBy(0, this.#rowHeight),
+      panUp: () => this.#panBy(0, -this.#rowHeight),
+    };
   }
 
-  /** S3.7's Page/Home/End/arrow pan (D-S3-14), reshaped as core commands + default bindings
-   *  (S5.2, D-S5-6/D-S5-7) — `view/keyboard-navigation.ts`'s own standalone `attachKeyboardNavigation`
-   *  is superseded here; this shell no longer calls it, so a plugin can override any of these chords
-   *  the same way it overrides `freegantt.collapseAll`. No behaviour change (D-S3-13's "nothing
-   *  selected" column, and the un-pannable-while-editing guard, both carry over as `when`). */
-  #registerNavigationCommands(): void {
-    const register = (command: Command<unknown>): void => this.#commandRegistry.register(command);
+  /** S3.7's Page/Home/End/arrow pan (D-S3-14) binds here, alongside the eleven other core commands
+   *  registered through `core-commands.ts` — a plugin can override any of them (D-S5-7). The old
+   *  standalone `attachKeyboardNavigation` (`view/keyboard-navigation.ts`) is superseded by this;
+   *  this shell no longer calls it. */
+  #registerCoreCommands(): void {
+    registerCoreCommands(this.#commandRegistry, this.#coreCommandPorts());
+
     const bind = (chord: string, command: string): void => {
       this.#keymap.register({ chord, command });
     };
-    const panEnabled = (): boolean => this.#resolvedViewportGestures.keyboardPan;
-    const nothingSelected = (): boolean => this.#selection.length === 0;
-
-    register({
-      id: 'freegantt.pageDown',
-      label: 'Page down',
-      when: panEnabled,
-      run: () => this.#panBy(0, this.#viewport.visible.height),
-    });
-    register({
-      id: 'freegantt.pageUp',
-      label: 'Page up',
-      when: panEnabled,
-      run: () => this.#panBy(0, -this.#viewport.visible.height),
-    });
-    register({
-      id: 'freegantt.panToStart',
-      label: 'Pan to start',
-      when: panEnabled,
-      run: () => this.#viewport.scroll.panTo({ x: 0 }),
-    });
-    register({
-      id: 'freegantt.panToEnd',
-      label: 'Pan to end',
-      when: panEnabled,
-      run: () => this.#viewport.scroll.panTo({ x: this.#viewport.scroll.state.max.x }),
-    });
-    register({
-      id: 'freegantt.panRight',
-      label: 'Pan right',
-      when: () => panEnabled() && nothingSelected(),
-      run: () => this.#panBy(this.#viewport.preset.preferredTickWidthPx, 0),
-    });
-    register({
-      id: 'freegantt.panLeft',
-      label: 'Pan left',
-      when: () => panEnabled() && nothingSelected(),
-      run: () => this.#panBy(-this.#viewport.preset.preferredTickWidthPx, 0),
-    });
-    register({
-      id: 'freegantt.panDown',
-      label: 'Pan down',
-      when: () => panEnabled() && nothingSelected(),
-      run: () => this.#panBy(0, this.#rowHeight),
-    });
-    register({
-      id: 'freegantt.panUp',
-      label: 'Pan up',
-      when: () => panEnabled() && nothingSelected(),
-      run: () => this.#panBy(0, -this.#rowHeight),
-    });
-
     bind('PageDown', 'freegantt.pageDown');
     bind('PageUp', 'freegantt.pageUp');
     bind('Home', 'freegantt.panToStart');
