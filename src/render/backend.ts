@@ -26,6 +26,12 @@ export interface InteractionState {
   cursorX?: number;
   /** S3.8, D-S3-15: snapped `formatDate` caption for `cursorX`. Empty parks the label node. */
   cursorLabel?: string;
+  /** S5.7, D-S5-18: a resize drag's live px width for one column, keyed by its `FrameColumn.key`
+   *  string. Undefined outside a resize drag — a hot-path paint only, no frame recompute. */
+  columnResizePreview?: { columnKey: string; widthPx: number };
+  /** S5.7, D-S5-18: a reorder drag's live drop position — the column key (as a string) it would land
+   *  before, or `null` for "at the end". Undefined outside a reorder drag. */
+  columnDropIndicator?: string | null;
 }
 
 export interface HitResult {

@@ -3,6 +3,7 @@
 
 import type { Duration } from './time.js';
 import type { Entry } from './entry.js';
+import type { ElementDescription } from './render.js';
 
 /** The shipped subset — keys of `Entry` except `id`. The comparator exhaustiveness check stays over
  *  this set (ADR 0005 §28). */
@@ -20,13 +21,37 @@ export type FieldSource =
   | { from: 'meta'; key?: string }
   | { from: 'compute'; read(entry: Entry, ctx: FieldContext): unknown };
 
-/** Presentation only. Never carries an aggregate. `cellRenderer` and `editable` arrive in S5. */
+/** What a per-column `cellRenderer` receives (S5.7, D-S5-17). Narrower than the Gantt-wide
+ *  `CellRenderer` (`layout/renderer.ts`): a per-column renderer already knows which column it paints
+ *  — the consumer wrote it right there in the same `GridColumn` — so it needs no `column` argument to
+ *  branch on, and no `row` either (the sample in D-S5-17 reads only `value`/`entry`). This also keeps
+ *  `GridColumn` a `model/` type with zero dependencies (`model-is-leaf`): the Gantt-wide `CellRenderer`
+ *  lives in `layout/` because its context names `FrameRow`/`ResolvedColumn`, and `model/` may not
+ *  import `layout/`. */
+export interface ColumnCellRendererContext {
+  /** Undefined for a row with no backing Entry — a group or custom row. */
+  entry?: Entry;
+  value: string;
+}
+export type ColumnCellRenderer = (ctx: ColumnCellRendererContext) => ElementDescription | undefined;
+
+/** Presentation only. Never carries an aggregate — `data/` never holds a renderer; `toJSON` never
+ *  sees one (D-S5-17). */
 export interface GridColumn {
   field: FieldKey;
   header?: string;
   width?: number;
   flex?: number;
   align?: 'start' | 'end';
+  /** S5.7 — per-column, more specific than `GanttOptions.cellRenderer` (D-S5-11). */
+  cellRenderer?: ColumnCellRenderer;
+  /** S5.8 — this column's cells open the inline editor. Default `false`. Listed here because it
+   *  shares the type (I11); S5.8 honours it. */
+  editable?: boolean;
+  /** Default `true`. A fixed column refuses the resize drag and the resize chord. */
+  resizable?: boolean;
+  /** Default `true`. A pinned column refuses the reorder drag and the move chord. */
+  movable?: boolean;
 }
 
 /** What a consumer writes: a Field key, or a column object. */

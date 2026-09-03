@@ -227,6 +227,8 @@ function columnsForFrame(columns: readonly ResolvedColumn[] | undefined): readon
     const painted: FrameColumn = { key: column.key, header: column.header, align: column.align };
     if (column.width !== undefined) painted.width = column.width;
     if (column.flex !== undefined) painted.flex = column.flex;
+    if (column.resizable !== undefined) painted.resizable = column.resizable;
+    if (column.movable !== undefined) painted.movable = column.movable;
     return painted;
   });
 }

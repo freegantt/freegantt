@@ -33,6 +33,8 @@ export type {
   Aggregator,
   GridColumn,
   GridColumnInput,
+  ColumnCellRenderer,
+  ColumnCellRendererContext,
 } from './field.js';
 export {
   FreeGanttError,
