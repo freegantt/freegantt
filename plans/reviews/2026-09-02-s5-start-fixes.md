@@ -1,5 +1,14 @@
 # Fix plan — s5-start branch review findings
 
+## Closed — 2026-09-02, session 3
+
+All slices done: Slice 1 (C1 atomic `install()`, C2 the `RegistrationGate.guard()` seam covering
+`ctx.commands.register` too), Slice 3 (C4, the 19-command catalog extracted to
+`view/core-commands.ts`), Slice 4 (`CommandRegistry.runResolved` — resolve once, run once), and
+Slice 6's last item (the seven glossary entries). Every checkbox in this file is now `[x]`; the
+Verification section at the bottom ran clean, popup behavior re-verified live in the harness. This
+plan is closed — a follow-up review would start a fresh file.
+
 ## Handoff — 2026-09-02, session 1
 
 Done this session: every purely mechanical item across Slices 2, 5, and 6 (comment/citation
@@ -177,10 +186,11 @@ Highest leverage: both bugs live in the seam every later slice's `register*` reu
 
 ## Slice 6 — glossary and doc gaps
 
-- [ ] Add `CONTEXT.md` glossary entries: `Overlay`, `Popup`, Command registry, `Keymap`,
-      `PluginRuntime`, `DisposableStore`, `ElementDescription`. For `DisposableStore`, record that
-      it deliberately reuses "Store" outside data/'s normalized-entity-collection sense
-      (spec-mandated name — document the distinction, don't rename).
+- [x] Added `CONTEXT.md` glossary entries: `PluginRuntime`, Command registry, `Keymap`, `Overlay`,
+      `Popup`, `DisposableStore`, `ElementDescription` (Extension section). `DisposableStore`'s entry
+      records that it deliberately reuses "Store" outside `data/`'s normalized-entity-collection
+      sense (spec-mandated name, S5.1) — documented, not renamed.
+      `CONTEXT.md`
 - [x] Update the `PaneLayout` glossary line ("structure and one number only — grid width") to
       cover the second owned number, `contentWidth`.
 - [x] Unify "bounds" naming across the Overlay seam: pick "bounds" on both sides of
@@ -227,12 +237,17 @@ Highest leverage: both bugs live in the seam every later slice's `register*` reu
 
 ## Verification (run at the end of the whole pass)
 
-- [ ] `pnpm test` — 868 tests today; expect the count to grow (new C1/C2/popup/keymap tests), not
-      shrink.
-- [ ] `pnpm tsc` clean.
-- [ ] `pnpm depcruise` clean (no new violations from the command-catalog extraction or the new
-      API exports).
-- [ ] `pnpm api-report` — zero `ae-forgotten-export` warnings.
-- [ ] Manual harness check: open two popups in sequence (replace-on-reopen); open a popup and
-      scroll an unrelated pane (stays open) vs. its own pane (closes); press Escape with a popup
-      open and with an editable field focused (editable-target rule still holds).
+- [x] `pnpm test:node && pnpm test:dom` — 881 tests (484 + 397), up from 868; grew as expected
+      (new C1/C2/core-commands/keymap tests), nothing shrank. (No single `pnpm test` script exists
+      — `test:node`/`test:dom` are the two projects, per session 1's handoff note.)
+- [x] `pnpm tsc` clean.
+- [x] `pnpm boundaries` (depcruise) clean — no new violations from the command-catalog extraction or
+      the new API exports.
+- [x] `pnpm api-report` — no diff; this pass's changes were all internal, no public surface moved.
+- [x] Manual harness check (`harness/plugins.html`, driven with a throwaway Playwright script — the
+      harness has no popup e2e spec): open two popups in sequence — stays at exactly one `.fg-popup`
+      (replace-on-reopen), PASS. Scroll the grid pane while a popup anchored in the timeline pane is
+      open — stays open, PASS; scroll the popup's own (timeline) pane — closes, PASS. Escape with a
+      popup open — closes, PASS. Escape with an editable `<input>` focused — stays open (editable-
+      target rule holds), PASS. Full pre-push gate (typecheck/lint/boundaries/guards/tests/build/
+      api-report/e2e) also green on every commit this session.

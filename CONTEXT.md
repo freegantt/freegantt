@@ -494,6 +494,34 @@ _Avoid_: Treating this as settled — the plugin system (`GanttPlugin`/`DatasetP
 Names from the extension hook's contract design (ADR 0002's consequences, issue #15, built on #12): a `DatasetPlugin` occupies the extension hook via an `EditExtender`, and per-plugin per-entry data (e.g. the scheduling plugin's pin flag, `Dependency`) lives in a reserved `PluginStore` rather than on `Entry` or in a consumer/plugin-shared field. Design proposals only — not yet implemented or landed in `src/`; do not treat as existing API until #15 lands. Named `ProjectPlugin` before ADR 0004.
 _Avoid_: Treating these as settled — the exact shapes are still open design work
 
+**PluginRuntime**:
+The `extensions/plugin-runtime.ts` class that installs, diffs (by `id`) and disposes one Gantt's `GanttPlugin` list (S5.1, D-S5-1/D-S5-3). One instance per `GanttShell`, never shared across Gantt instances (I2). Owns each plugin's `RegistrationGate` — closed the moment that plugin's own `setup()` returns, so a `register*` call reached afterward throws `RegistrationClosedError` (D-S5-4) — and commits an `install()` atomically: a `setup()` throw unwinds only the batch just added, leaving the previously installed set untouched.
+_Avoid_: PluginHost (retired — "Host" is repo-wide retired vocabulary, see Consumer)
+
+**Command registry**:
+The `extensions/commands.ts` class (`CommandRegistry`) a `GanttShell` builds once and holds privately: `register`/`run`/`available`, keyed by a command's own `id` under the `freegantt.*`-namespaced core catalog (`view/core-commands.ts`) or a plugin's own id (D-S5-6). Public as `Gantt.commands`, typed against the api-level `CommandRegistryOf`. `run()` on a command whose `when` declines is a silent no-op, the same posture a disabled menu item takes; `run()` on an unknown id throws.
+_Avoid_: Command palette (a UI a consumer could build on top of `available()`; no such UI ships)
+
+**Keymap**:
+The `extensions/keymap.ts` class that resolves a `KeyboardEvent` against every registered chord, newest-first (D-S5-7): the innermost, most-recently-registered binding wins, which is why a plugin's binding beats core's and a popup's own Escape dismissal beats an outer binding (D-S5-9). Chords are parsed once at registration, never per event. Holds two kinds of entry — a `KeyBinding` naming a Command registry id, and a command-less `registerHandler` callback (C3) — resolved by the same pass and gated by the same editable-target/IME rule either way.
+_Avoid_: Key handler (that names one registered entry, not the resolver that owns all of them)
+
+**Overlay**:
+The `view/overlay.ts` seam (`DomOverlay`, S5.3, D-S5-8): one absolutely positioned layer over the Gantt's Container, owning its own stacking order and lifetime. Knows nothing about tooltips, menus, or Popup's own placement math — it only presents an `HTMLElement`, renders an `ElementDescription` into a live node, and reports `bounds`/`paneBounds` for a Popup to clamp against. `PluginContext.view.overlay` hands a third-party plugin the exact same seam a built-in Popup is built over.
+_Avoid_: Layer (too generic — Overlay is this one specific layer, not the render/dom layer stack)
+
+**Popup**:
+The `extensions/popup.ts` anchoring/flipping/clamping/dismissal primitive (S5.3, D-S5-8/D-S5-9) built on Overlay alone. One implementation serves the tooltip, the context menu and the cell editor. `open()` while already open replaces the current popup (closes it first). Dismisses on Escape (folded into the shared Keymap, C3), an outside pointer, a scroll of the anchor's own pane, or blur, per its `dismissOn` option.
+_Avoid_: Tooltip, Menu (both are one consumer of this shared primitive, not the primitive itself)
+
+**DisposableStore**:
+The `extensions/disposables.ts` collection of cleanup callbacks a `PluginRuntime` or a Popup accumulates and frees together with one `disposeAll()` call; latches after disposal (cannot be reused — a fresh instance replaces it instead, e.g. `Popup.close()`). Deliberately reuses "Store" outside `data/`'s own sense (a normalized entity collection like `Dataset.entries`) — spec-mandated name (S5.1); the two senses do not overlap in any one file, so no rename is planned.
+_Avoid_: Confusing with `data/`'s Store sense — see above
+
+**ElementDescription**:
+The plain, DOM-free data shape (`layout/` — `render/dom/element-description.ts`'s `buildElement` is its one-shot build function, S5.3/D-S5-10) describing a node's tag, attrs/class/style, and text-or-`html`-or-keyed-children content. The one seam `extensions/` has into the reconciler, since it may not import `render/dom` itself (D-S5-5): a Popup or a plugin builds one and hands it to `Overlay.render()`. Raw `html` is explicit opt-in only (I13); `text` is always `textContent`.
+_Avoid_: Vnode, template (both imply a framework-shaped diffing/compilation step this plain data shape does not have)
+
 ### Process
 
 **Acceptance id**:
