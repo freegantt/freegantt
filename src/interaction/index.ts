@@ -2,6 +2,8 @@
 // Never writes model/selection state on pointerdown; one transaction per gesture, at commit (I6).
 export { attachEntryGestures } from './entry-gestures.js';
 export { attachKeyboardEditing } from './keyboard-editing.js';
+export { attachColumnGestures } from './column-gestures.js';
 export type { EntryGestureContext, EntryGesture, DraftOptions, EntryHit } from '../view/index.js';
+export type { ColumnGestureContext } from '../view/index.js';
 export { createPointerGesture } from './pointer-gesture.js';
 export type { PointerGestureCallbacks, PointerGestureController } from './pointer-gesture.js';

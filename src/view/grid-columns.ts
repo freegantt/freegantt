@@ -34,12 +34,39 @@ function columnFrom(item: GridColumnInput, field: Field): Omit<ResolvedColumn, '
     key: field.key,
     header: input.header ?? defaults.header ?? String(field.key),
     align: input.align ?? defaults.align ?? 'start',
+    // S5.7, D-S5-18: default `true`, same merge order (this Gantt's own column, then the Field's
+    // own `column` default) every other key here already follows.
+    resizable: input.resizable ?? defaults.resizable ?? true,
+    movable: input.movable ?? defaults.movable ?? true,
   };
   const width = input.width ?? defaults.width;
   if (width !== undefined) column.width = width;
   const flex = input.flex ?? defaults.flex;
   if (flex !== undefined) column.flex = flex;
+  // S5.7, D-S5-17: per-column `cellRenderer` — assign a function only when one resolved (loose input
+  // with `exactOptionalPropertyTypes` on, same pattern `width`/`flex` already follow above).
+  const cellRenderer = input.cellRenderer ?? defaults.cellRenderer;
+  if (cellRenderer !== undefined) column.cellRenderer = cellRenderer;
+  // S5.8 honours this; S5.7 only carries it through resolution (spec's own I11 exemption — `editable`
+  // shares `GridColumn`'s type ahead of the step that reads it).
+  const editable = input.editable ?? defaults.editable;
+  if (editable !== undefined) column.editable = editable;
   return column;
+}
+
+/** S5.7, D-S5-18: `GridColumnsChange`'s payload shape — the public `GridColumn`, not the layout-only
+ *  `ResolvedColumn` (`format` is a render-time closure with no public type of its own, and never
+ *  reaches a consumer). `key` becomes `field`; everything else a consumer might have authored rides
+ *  straight through. */
+export function toGridColumn(column: ResolvedColumn): GridColumn {
+  const out: GridColumn = { field: column.key, header: column.header, align: column.align };
+  if (column.width !== undefined) out.width = column.width;
+  if (column.flex !== undefined) out.flex = column.flex;
+  if (column.cellRenderer !== undefined) out.cellRenderer = column.cellRenderer;
+  if (column.editable !== undefined) out.editable = column.editable;
+  if (column.resizable !== undefined) out.resizable = column.resizable;
+  if (column.movable !== undefined) out.movable = column.movable;
+  return out;
 }
 
 function lookupOf(dataset: Pick<Dataset, 'field'>): FieldLookup {

@@ -30,6 +30,10 @@ function fakePorts(): { [K in keyof CoreCommandPorts]: ReturnType<typeof vi.fn> 
     panLeft: vi.fn(),
     panDown: vi.fn(),
     panUp: vi.fn(),
+    isColumnResizable: vi.fn(() => true),
+    isColumnMovable: vi.fn(() => true),
+    resizeColumnStep: vi.fn(),
+    moveColumnStep: vi.fn(),
   };
 }
 
