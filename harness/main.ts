@@ -1,8 +1,22 @@
 import './harness-nav.ts';
-import { Gantt, Dataset, attemptMutation } from '../src/api/index.js';
-import type { Entry, FieldContext, GridColumnInput, RowSource, Theme, TimeUnit } from '../src/api/index.js';
+import { Gantt, Dataset, attemptMutation, createPopup, itemId, now, addMs, MS } from '../src/api/index.js';
+import type {
+  Entry,
+  FieldContext,
+  GridColumnInput,
+  RowSource,
+  Theme,
+  TimeUnit,
+  DatasetDocument,
+  DatasetEventMap,
+  GanttPlugin,
+  Popup,
+  RendererByKind,
+  CellRenderer,
+} from '../src/api/index.js';
 import { demoFieldOptions, demoTreeEntryInputs } from '../fixtures/demo-dataset.js';
 import { mountTimelineToolbar } from './timeline-toolbar.js';
+import { prependChangeSet, prependLogLine } from './change-log.js';
 
 const GRID_WITH_BUDGET: readonly GridColumnInput[] = [
   'name',
@@ -19,15 +33,26 @@ const dataset = new Dataset<{ cost?: number; team?: string }, { cost: number; te
   ...demoFieldOptions,
 });
 
+// S3 direct manipulation demo (editing.html's own `mobilization` date line): a hard boundary a
+// `beforeEntryMove` veto below enforces — dropping a bar before it is refused.
+const mobilization = now();
+
 const gantt = new Gantt({
   container: '#gantt',
   dataset,
   gridColumns: GRID_WITH_BUDGET,
   rowSource: { source: 'entries', tree: true },
+  dateLines: [{ placeAt: mobilization, label: 'Mobilization', className: 'fg-mobilization-line' }],
 });
 gantt.panToToday();
 
-mountTimelineToolbar({ gantt, container: document.querySelector<HTMLDivElement>('#toolbar')! });
+mountTimelineToolbar({
+  gantt,
+  container: document.querySelector<HTMLDivElement>('#toolbar')!,
+  showFit: true,
+  showLocale: true,
+  showTodayLineToggle: true,
+});
 
 const nameInput = document.querySelector<HTMLInputElement>('#rename-input')!;
 const renameBtn = document.querySelector<HTMLButtonElement>('#rename-btn')!;
@@ -77,8 +102,11 @@ function refreshHistoryButtons(): void {
   redoBtn.disabled = !dataset.canRedo;
 }
 
+const log = document.querySelector<HTMLDivElement>('#log')!;
+
 gantt.on('selectionChange', syncSelectionUi);
-dataset.on('change', () => {
+dataset.on('change', ({ changeSet }: DatasetEventMap['change']) => {
+  prependChangeSet(log, changeSet);
   syncSelectionUi();
   refreshHistoryButtons();
 });
@@ -240,3 +268,235 @@ document.querySelectorAll<HTMLButtonElement>('[data-theme-choice]').forEach((but
     if (isTheme(choice)) applyTheme(choice);
   });
 });
+
+// ---- Mutation extras (S2): add entry, set cost, lock/veto, export/import (data.ts's own demo) ----
+
+const addEntryBtn = document.querySelector<HTMLButtonElement>('#add-entry')!;
+const costBtn = document.querySelector<HTMLButtonElement>('#cost-btn')!;
+const lockCheckbox = document.querySelector<HTMLInputElement>('#lock-checkbox')!;
+const exportBtn = document.querySelector<HTMLButtonElement>('#export-btn')!;
+const importBtn = document.querySelector<HTMLButtonElement>('#import-btn')!;
+const documentJson = document.querySelector<HTMLTextAreaElement>('#document-json')!;
+
+let nextNewId = 1;
+
+addEntryBtn.addEventListener('click', () => {
+  const id = `new-${nextNewId++}`;
+  const start = now();
+  attemptMutation(() => dataset.entries.add({ id, name: 'New entry', start, end: addMs(start, MS.DAY) }));
+});
+
+costBtn.addEventListener('click', () => {
+  const entries = gantt.selectionEntries;
+  if (entries.length === 0) return;
+  attemptMutation(() => {
+    dataset.transaction(() => {
+      for (const entry of entries) dataset.entries.update(entry.id, { cost: 500 });
+    });
+  });
+});
+
+// D-S2-25: while checked, refuse any changeset touching the dataset's current first entry — the
+// veto stays visible on the same page as everything else, not walled off on data.html alone.
+function firstEntryId(): string | undefined {
+  return dataset.entries.all[0]?.id;
+}
+
+dataset.on('beforeChange', ({ changeSet }: DatasetEventMap['beforeChange']) => {
+  if (!lockCheckbox.checked) return undefined;
+  const lockedId = firstEntryId();
+  const touchesLocked =
+    changeSet.updated.some((u) => u.id === lockedId) ||
+    changeSet.removed.some((r) => r.entity.id === lockedId);
+  if (!touchesLocked) return undefined;
+  prependLogLine(log, `entries · ${lockedId} · refused (locked)`);
+  return false;
+});
+
+exportBtn.addEventListener('click', () => {
+  documentJson.value = JSON.stringify(dataset.toJSON(), null, 2);
+});
+
+// Proves the round trip through the public `toJSON()`/`fromJSON()` surface alone (D-S2-6's own
+// shape) without swapping this page's live `Gantt` — this page already wires a dozen other features
+// straight to the one `gantt`/`dataset` pair, so a live rebind-on-import would mean re-attaching
+// every one of those listeners to a fresh instance for one narrow proof. `data.html` already owns
+// that fuller "swap the whole page" demo; this button stays a lighter, honest check: parse, rebuild
+// a `Dataset` from the document, and log what came back — a `fromJSON` that throws (malformed JSON,
+// a field the current `fieldTypes` doesn't declare) surfaces here exactly as it would for a consumer.
+importBtn.addEventListener('click', () => {
+  try {
+    const doc = JSON.parse(documentJson.value) as DatasetDocument<{ cost?: number; team?: string }>;
+    const imported = Dataset.fromJSON<{ cost?: number; team?: string }, { cost: number; team?: string }>(
+      doc,
+      demoFieldOptions,
+    );
+    prependLogLine(
+      log,
+      `[import] parsed ${imported.entries.all.length} entries — see data.html to load them live`,
+    );
+  } catch (error) {
+    prependLogLine(log, `import failed: ${error instanceof Error ? error.message : String(error)}`);
+  }
+});
+
+// ---- Direct manipulation extras (S3): mobilization veto, async hold, resize lock ----
+
+const holdDropCheckbox = document.querySelector<HTMLInputElement>('#hold-drop')!;
+const lockResizeCheckbox = document.querySelector<HTMLInputElement>('#lock-resize')!;
+const toast = document.querySelector<HTMLDivElement>('#toast')!;
+
+function showToast(message: string): void {
+  toast.textContent = message;
+  toast.hidden = false;
+}
+
+function hideToast(): void {
+  toast.hidden = true;
+  toast.textContent = '';
+}
+
+let releaseHold: ((allow: boolean) => void) | undefined;
+
+gantt.on('beforeEntryMove', ({ start }) => {
+  if (start < mobilization) {
+    showToast('Too early — drop is before mobilization');
+    releaseHold?.(false);
+    releaseHold = undefined;
+    return false;
+  }
+  hideToast();
+  if (!holdDropCheckbox.checked) return undefined;
+  showToast('Holding drop — uncheck Hold drop to confirm');
+  return new Promise<void | false>((resolve) => {
+    releaseHold = (allow) => resolve(allow ? undefined : false);
+  });
+});
+
+holdDropCheckbox.addEventListener('change', () => {
+  if (holdDropCheckbox.checked || releaseHold === undefined) return;
+  releaseHold(true);
+  releaseHold = undefined;
+  hideToast();
+});
+
+lockResizeCheckbox.addEventListener('change', () => {
+  gantt.interactions = lockResizeCheckbox.checked ? { resize: false } : {};
+});
+
+// ---- Plugins, commands, popups, renderers (S5) — plugins.html's own demo, over this same Gantt ----
+
+const toggleLoggingBtn = document.querySelector<HTMLButtonElement>('#toggle-plugin-btn')!;
+
+function logEverything(): GanttPlugin {
+  return {
+    id: 'harness.logEverything',
+    setup(ctx) {
+      const onSelectionChange = (): void =>
+        prependLogLine(log, `selectionChange: ${ctx.gantt.selection.length} selected`);
+      ctx.events.on('selectionChange', onSelectionChange);
+      prependLogLine(log, 'logEverything: installed');
+      return () => {
+        ctx.events.off('selectionChange', onSelectionChange);
+        prependLogLine(log, 'logEverything: disposed');
+      };
+    },
+  };
+}
+
+toggleLoggingBtn.addEventListener('click', () => {
+  const installed = gantt.plugins.some((plugin) => plugin.id === 'harness.logEverything');
+  if (installed) {
+    gantt.plugins = gantt.plugins.filter((plugin) => plugin.id !== 'harness.logEverything');
+    toggleLoggingBtn.textContent = 'Install logging plugin';
+  } else {
+    gantt.plugins = [...gantt.plugins, logEverything()];
+    toggleLoggingBtn.textContent = 'Remove logging plugin';
+  }
+});
+
+// S5.2, D-S5-6/D-S5-7: a plugin registers its own command and binds a chord to it.
+function selectionShortcuts(): GanttPlugin {
+  return {
+    id: 'harness.selectionShortcuts',
+    setup(ctx) {
+      ctx.commands.register({
+        id: 'demo.clearSelection',
+        label: 'Clear selection (demo)',
+        run: () => {
+          ctx.gantt.selection = [];
+          prependLogLine(log, 'demo.clearSelection: selection cleared (Mod+K)');
+        },
+      });
+      ctx.interaction.registerKeybinding({ chord: 'Mod+K', command: 'demo.clearSelection' });
+      return () => {};
+    },
+  };
+}
+
+gantt.plugins = [...gantt.plugins, selectionShortcuts()];
+
+// S5.3, D-S5-8: a plugin's `setup()` is the only place `ctx.view.overlay` reaches this scope.
+let overlayPopup: Popup | undefined;
+function popupDemo(): GanttPlugin {
+  return {
+    id: 'harness.popupDemo',
+    setup(ctx) {
+      overlayPopup = createPopup(ctx.view.overlay, { registerHandler: ctx.interaction.registerKeyHandler });
+      return () => {
+        overlayPopup = undefined;
+      };
+    },
+  };
+}
+gantt.plugins = [...gantt.plugins, popupDemo()];
+
+const popupBtn = document.querySelector<HTMLButtonElement>('#open-popup-btn')!;
+popupBtn.addEventListener('click', () => {
+  const selected = gantt.selection[0];
+  if (selected === undefined) {
+    prependLogLine(log, 'popup demo: select a bar first');
+    return;
+  }
+  const anchor = document.querySelector<HTMLElement>(`#gantt .fg-bar[data-item-id="${itemId(selected)}"]`);
+  if (!anchor || !overlayPopup) return;
+  overlayPopup.open({
+    anchor,
+    placement: 'end',
+    dismissOn: ['escape', 'outsidePointer', 'scroll'],
+    content: { style: { padding: '6px 10px', font: 'inherit' }, text: `Entry: ${selected}` },
+  });
+  prependLogLine(log, `popup demo: opened on ${selected}`);
+});
+
+// S5.4, D-S5-10/11/12: `barRenderer`/`cellRenderer` as plain `GanttOptions.*` — no plugin needed.
+// The demo tree's own "Requirements review" (`entry-4`) is already `kind: 'milestone'`, and every
+// leaf entry already carries a `cost` (`fixtures/demo-dataset.ts`), so this reuses the existing
+// dataset rather than adding renderer-only fixture data. `fg-bar-diamond`'s own shape is structural,
+// from `entry.kind` alone (D-S4-24), outside a renderer's bounded scope (I13) — the demo renderer
+// recolors it via the `--fg-bar-fill` custom property its own `::before` already reads.
+const BUDGET_THRESHOLD = 5000;
+function overBudget(formatted: string): boolean {
+  const amount = Number(formatted.replace(/[^0-9.-]/g, ''));
+  return Number.isFinite(amount) && amount > BUDGET_THRESHOLD;
+}
+
+const demoBarRenderer: RendererByKind = {
+  milestone: () => ({ class: { 'demo-milestone': true }, style: { '--fg-bar-fill': '#7b2cbf' } }),
+};
+const demoCellRenderer: CellRenderer = ({ column, value }) =>
+  column.key === 'cost' && overBudget(value)
+    ? { class: { 'demo-over-budget': true }, text: value }
+    : undefined;
+
+const renderersToggle = document.querySelector<HTMLInputElement>('#renderers-toggle')!;
+renderersToggle.addEventListener('change', () => {
+  if (renderersToggle.checked) {
+    gantt.barRenderer = demoBarRenderer;
+    gantt.cellRenderer = demoCellRenderer;
+  } else {
+    gantt.barRenderer = undefined;
+    gantt.cellRenderer = undefined;
+  }
+});
+renderersToggle.dispatchEvent(new Event('change'));

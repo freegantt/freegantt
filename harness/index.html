@@ -131,6 +131,58 @@
       #controls input {
         font: inherit;
       }
+      h2 {
+        font-size: 1rem;
+        margin: 1.5rem 0 0.25rem;
+      }
+      #log {
+        margin-top: 0.5rem;
+        max-height: 180px;
+        overflow-y: auto;
+        border: 1px solid var(--page-border);
+        font-family: ui-monospace, monospace;
+        font-size: 0.8rem;
+        padding: 0.5rem;
+      }
+      #log div {
+        padding: 1px 0;
+      }
+      #toast {
+        margin: 0.5rem 0;
+        padding: 0.4rem 0.6rem;
+        border: 1px solid var(--page-border);
+        background: #fff3cd;
+        color: #664d03;
+        font-size: 0.85rem;
+        border-radius: 4px;
+      }
+      #document-controls {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-start;
+        gap: 0.5rem;
+        margin: 0.5rem 0;
+      }
+      #document-json {
+        flex: 1 1 100%;
+        font-family: ui-monospace, monospace;
+        font-size: 0.8rem;
+      }
+      /* .fg-bar-diamond's own shape stays (structural, from entry.kind — D-S4-24); the demo
+         renderer only sets --fg-bar-fill, which its `::before` already reads. */
+      .demo-milestone::before {
+        width: 14px;
+        height: 14px;
+      }
+      .demo-over-budget {
+        background: #ffe0e0;
+        color: #b3261e;
+        font-weight: 600;
+      }
+      .fg-mobilization-line {
+        border-left-style: dashed;
+        border-left-width: 2px;
+      }
     </style>
   </head>
   <body>
@@ -178,6 +230,45 @@
     </div>
     <div id="toolbar"></div>
     <div id="gantt"></div>
+
+    <h2>Mutation, undo/redo, export/import (S2)</h2>
+    <div id="controls">
+      <button id="add-entry" type="button">Add entry</button>
+      <button id="cost-btn" type="button">Set cost 500</button>
+      <label><input id="lock-checkbox" type="checkbox" /> Lock the first entry (D-S2-25 veto demo)</label>
+      <button id="export-btn" type="button">Export</button>
+      <button id="import-btn" type="button">Import</button>
+    </div>
+    <div id="document-controls">
+      <textarea id="document-json" rows="6" cols="80" aria-label="Dataset document JSON"></textarea>
+    </div>
+
+    <h2>Direct manipulation (S3): drag or resize a bar</h2>
+    <p>
+      A "Mobilization" date line marks a hard boundary — <code>beforeEntryMove</code> vetoes a drop before it.
+      <strong>Hold drop</strong> demonstrates the async (Promise) veto path;
+      <strong>Lock resize</strong> demonstrates <code>gantt.interactions</code>.
+    </p>
+    <div id="controls">
+      <label><input id="hold-drop" type="checkbox" /> Hold drop (async veto demo)</label>
+      <label><input id="lock-resize" type="checkbox" /> Lock resize</label>
+    </div>
+    <div id="toast" hidden></div>
+
+    <h2>Plugins, commands, popups, renderers (S5)</h2>
+    <p>
+      Every control below is a plugin over the public plugin contract alone (D-S5-1) — no private import.
+      <code>Mod+K</code> clears the selection through a plugin-registered command (D-S5-6/7). The renderer
+      toggle repaints the milestone bar and any over-budget cost cell live, with no remount (I8,
+      D-S5-10/11/12).
+    </p>
+    <div id="controls">
+      <button id="toggle-plugin-btn" type="button">Install logging plugin</button>
+      <button id="open-popup-btn" type="button">Open popup on selected bar</button>
+      <label><input id="renderers-toggle" type="checkbox" checked /> Custom milestone + cost renderers</label>
+    </div>
+
+    <div id="log" aria-label="Event log"></div>
     <script type="module" src="./main.ts"></script>
   </body>
 </html>
