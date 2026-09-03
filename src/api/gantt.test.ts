@@ -1,8 +1,14 @@
 import { describe, expect, it, vi } from 'vitest';
 import { Gantt } from './gantt.js';
 import { Dataset } from './dataset.js';
-import { EntryNotFoundError, ScrollModel, TimeScaleModel, entryId } from './index.js';
-import type { Entry } from './index.js';
+import {
+  EntryNotFoundError,
+  RegistrationClosedError,
+  ScrollModel,
+  TimeScaleModel,
+  entryId,
+} from './index.js';
+import type { Entry, PluginContext } from './index.js';
 import { sampleEntries } from '../../fixtures/sample-dataset.js';
 import { instant } from '../time/index.js';
 
@@ -2178,6 +2184,31 @@ describe('Gantt.commands (S5.2, D-S5-6/D-S5-7)', () => {
       new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, cancelable: true }),
     );
     expect(overrideRuns).toBe(1);
+
+    gantt.destroy();
+  });
+
+  it('ctx.commands.register() called after setup() returns throws RegistrationClosedError (C2)', () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({ entries: sampleEntries.slice(0, 2), timeZone: 'UTC' });
+    let capturedCommands: PluginContext['commands'] | undefined;
+    const gantt = new Gantt({
+      container,
+      dataset,
+      plugins: [
+        {
+          id: 'demo.late-register',
+          setup(ctx) {
+            capturedCommands = ctx.commands;
+            return () => {};
+          },
+        },
+      ],
+    });
+
+    expect(() =>
+      capturedCommands!.register({ id: 'demo.tooLate', label: 'Too late', run: () => {} }),
+    ).toThrow(RegistrationClosedError);
 
     gantt.destroy();
   });
