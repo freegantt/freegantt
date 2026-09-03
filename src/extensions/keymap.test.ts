@@ -13,6 +13,7 @@ function event(overrides: Partial<KeyEventLike> = {}): KeyEventLike {
     metaKey: false,
     isComposing: false,
     target: null,
+    stopPropagation: () => {},
     ...overrides,
   };
 }
@@ -109,6 +110,47 @@ describe('Keymap.resolve (D-S5-7)', () => {
 
     expect(handled).toBe(true);
     expect(ran).toEqual(['b']);
+  });
+
+  it('registerHandler runs its callback directly, newest-first alongside registered commands', () => {
+    const { registry, ctx, ran } = makeCommands();
+    const keymap = new Keymap<unknown>(registry, () => ctx);
+    keymap.register({ chord: 'Escape', command: 'freegantt.a' });
+    const removeHandler = keymap.registerHandler('Escape', () => ran.push('handler'));
+
+    const handled = keymap.resolve(event({ key: 'Escape' }));
+
+    expect(handled).toBe(true);
+    // The handler was registered last, so it wins over the earlier command binding.
+    expect(ran).toEqual(['handler']);
+
+    removeHandler();
+    const handledAfterRemove = keymap.resolve(event({ key: 'Escape' }));
+    expect(handledAfterRemove).toBe(true);
+    expect(ran).toEqual(['handler', 'a']);
+  });
+
+  it('registerHandler is gated by the same editable-target/IME rule as a command binding', () => {
+    const { registry, ctx } = makeCommands();
+    const keymap = new Keymap<unknown>(registry, () => ctx);
+    const fired: string[] = [];
+    // Registered oldest-first so the newest-first resolve order checks 'default' before 'captures'.
+    keymap.registerHandler('Escape', () => fired.push('captures'), { captureInEditable: true });
+    keymap.registerHandler('Escape', () => fired.push('default'));
+    const input = document.createElement('input');
+
+    // Editable target, not composing: the default handler is skipped (same `isEditableTarget`
+    // gate a command binding uses); resolution falls through to the opted-in one.
+    keymap.resolve(event({ key: 'Escape', target: input }));
+    expect(fired).toEqual(['captures']);
+
+    fired.length = 0;
+    // Mid-IME-composition: `isEditableTarget` reports composing the same as an editable target, so
+    // the default handler stays silent here too — only `captureInEditable: true` reaches Escape
+    // during composition, the same trade-off `Keymap.resolve`'s single editable/composing flag
+    // already makes for command bindings.
+    keymap.resolve(event({ key: 'Escape', isComposing: true }));
+    expect(fired).toEqual(['captures']);
   });
 
   it('register() returns a disposer that removes the binding', () => {

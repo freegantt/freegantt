@@ -133,7 +133,7 @@ export class ContainerNotFoundError extends FreeGanttError {
 export type CoreFieldKey = keyof Omit<Entry, 'id'>;
 
 // @public
-export function createPopup(overlay: Overlay): Popup;
+export function createPopup(overlay: Overlay, keymap: KeyHandlerRegistrar): Popup;
 
 // @public
 export interface CustomRow {
@@ -842,6 +842,34 @@ export interface KeyBindingOf<TGantt = unknown> {
 // @public
 export type KeyChord = string;
 
+// @public
+export interface KeyEventLike {
+    // (undocumented)
+    altKey: boolean;
+    // (undocumented)
+    ctrlKey: boolean;
+    // (undocumented)
+    isComposing: boolean;
+    // (undocumented)
+    key: string;
+    // (undocumented)
+    metaKey: boolean;
+    // (undocumented)
+    shiftKey: boolean;
+    // (undocumented)
+    stopPropagation(): void;
+    // (undocumented)
+    target: EventTarget | null;
+}
+
+// @public
+export interface KeyHandlerRegistrar {
+    // (undocumented)
+    registerHandler(chord: string, handler: (event: KeyEventLike) => void, options?: {
+        captureInEditable?: boolean;
+    }): () => void;
+}
+
 // @public (undocumented)
 export const MS: {
     readonly SECOND: 1000;
@@ -920,6 +948,9 @@ export interface PluginContextOf<TGantt = unknown> {
     // (undocumented)
     interaction: {
         registerKeybinding(binding: KeyBindingOf<TGantt>): void;
+        registerKeyHandler(chord: KeyChord, handler: (event: KeyEventLike) => void, options?: {
+            captureInEditable?: boolean;
+        }): () => void;
     };
     // (undocumented)
     view: {

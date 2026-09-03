@@ -43,7 +43,7 @@ import { DisposableStore } from '../extensions/disposables.js';
 import { CommandRegistry } from '../extensions/commands.js';
 import type { Command, CommandContext } from '../extensions/commands.js';
 import { Keymap } from '../extensions/keymap.js';
-import type { KeyBinding } from '../extensions/keymap.js';
+import type { KeyBinding, KeyEventLike } from '../extensions/keymap.js';
 import type { GridWidthChange, SelectionChange } from './event-bus.js';
 import type { CollapseChange } from './collapse-state.js';
 import { attachScroll } from './scroll-attachment.js';
@@ -241,6 +241,11 @@ export interface GanttShellOptions {
     disposables: DisposableStore;
     commands: CommandRegistry<unknown>;
     registerKeybinding: (binding: KeyBinding<unknown>) => void;
+    registerKeyHandler: (
+      chord: string,
+      handler: (event: KeyEventLike) => void,
+      options?: { captureInEditable?: boolean },
+    ) => () => void;
     overlay: Overlay;
   }) => unknown;
   /** S5.2, D-S5-6: fills the api-level pieces of a `CommandContext` for the same reason
@@ -438,11 +443,22 @@ export class GanttShell {
         gate.assertOpen();
         disposables.add(this.#keymap.register(binding));
       };
+      // Not gated: unlike `registerKeybinding` above (one-shot, setup()-only, D-S5-4), a popup opens
+      // and closes for as long as the plugin itself is installed — see `PluginContextOf.interaction
+      // .registerKeyHandler`'s own doc (api/plugin.ts) for why. Returns the keymap's own disposer
+      // directly rather than auto-adding it to `disposables`, so the caller (a `Popup`) controls its
+      // own add/remove cycle per `open()`/`close()`.
+      const registerKeyHandler = (
+        chord: string,
+        handler: (event: KeyEventLike) => void,
+        keyOptions?: { captureInEditable?: boolean },
+      ): (() => void) => this.#keymap.registerHandler(chord, handler, keyOptions);
       const context = (options.buildPluginContext ?? (() => ({})))({
         events: this.#pluginEvents,
         disposables,
         commands: this.#commandRegistry,
         registerKeybinding,
+        registerKeyHandler,
         overlay: this.#overlay,
       });
       return { context, disposables, registrationGate: gate };
