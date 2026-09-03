@@ -325,7 +325,7 @@ export class GanttShell {
   /** S5.2, D-S5-6/D-S5-7: one registry and one keymap per Gantt (I2) — core commands and core
    *  bindings register here first, so a plugin's own registration always wins (D-S5-7). */
   #commandRegistry!: CommandRegistry<unknown>;
-  #keymap = new Keymap<unknown>();
+  #keymap!: Keymap<unknown>;
   #keymapListener!: (event: KeyboardEvent) => void;
   #destroyed = false;
   /** This Gantt's layout pass. It keeps the row-height index alive across renders (#47) — the shell
@@ -421,6 +421,7 @@ export class GanttShell {
     // close over it too. `#buildCommandContext` is called fresh per invocation (never cached), so a
     // command always reads the current selection.
     this.#commandRegistry = new CommandRegistry<unknown>(() => this.#buildCommandContext());
+    this.#keymap = new Keymap<unknown>(this.#commandRegistry, () => this.#buildCommandContext());
 
     // S5.1, D-S5-1: constructed once panes exist — a plugin's disposer may still need its overlay
     // node (a later step's `ctx.view.overlay`), so this must outlive them either way. `destroy()`
@@ -561,7 +562,7 @@ export class GanttShell {
     this.#registerCoreCommands();
     this.#registerNavigationCommands();
     this.#keymapListener = (event: KeyboardEvent) => {
-      if (this.#keymap.resolve(event, this.#commandRegistry, () => this.#buildCommandContext())) {
+      if (this.#keymap.resolve(event)) {
         event.preventDefault();
       }
     };

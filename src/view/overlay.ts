@@ -72,11 +72,11 @@ export class DomOverlay implements Overlay {
   }
 
   get bounds(): DOMRect {
-    return this.#paneLayout.containerBounds();
+    return this.#paneLayout.bounds();
   }
 
   get paneBounds(): { grid: DOMRect; timeline: DOMRect } {
-    return this.#paneLayout.paneRects();
+    return this.#paneLayout.paneBounds();
   }
 
   /** Observes lazily — only while at least one `Popup` is actually open. A Gantt that never opens
