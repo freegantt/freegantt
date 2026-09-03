@@ -133,6 +133,41 @@ describe('PluginRuntime', () => {
     expect(runtime.plugins).toEqual([]);
   });
 
+  it('a same-batch setup() throw leaves a dropped plugin installed and undisposed, not primed for a double dispose (C1)', () => {
+    const log: string[] = [];
+    const runtime = makeRuntime(log);
+    runtime.install([
+      plugin(
+        'a',
+        () => {},
+        () => log.push('dispose a'),
+      ),
+    ]);
+
+    // `next` drops 'a' and adds a throwing 'b' in the same install() call. Atomic install() means
+    // this whole call is rejected as one unit: 'a' is not disposed as a side effect of a batch that
+    // never actually lands — it stays exactly as installed as it was before this call.
+    expect(() =>
+      runtime.install([
+        plugin('b', () => {
+          throw new Error('boom');
+        }),
+      ]),
+    ).toThrow(PluginSetupError);
+
+    expect(log).toEqual([]);
+    expect(runtime.plugins.map((p) => p.id)).toEqual(['a']);
+
+    // The bug this guards against: disposing `removed` before `toAdd`'s setup() had succeeded left
+    // `#installed` still holding 'a' after the throw above (the final reassignment was skipped), so
+    // this next install() disposed it a *second* time. With the fix, 'a' was never disposed above,
+    // so this is its only dispose.
+    runtime.install([]);
+
+    expect(log).toEqual(['dispose a']);
+    expect(runtime.plugins).toEqual([]);
+  });
+
   it('a disposer throw is logged and disposal continues', () => {
     const log: string[] = [];
     const runtime = makeRuntime(log);

@@ -53,16 +53,19 @@ each slice below before moving to the next.
 
 Highest leverage: both bugs live in the seam every later slice's `register*` reuses.
 
-- [ ] **C1 — make `install()` atomic.** Reorder so `toAdd` plugins are set up *before* `removed`
-      plugins are disposed (unwind only the new batch on a `setup()` throw, as today); dispose
-      `removed` only after every addition's `setup()` succeeded; commit
-      `this.#installed = [...kept, ...justInstalled]` last. Today a thrown `setup()` skips that
-      final reassignment, so `#installed` still holds the just-disposed `removed` plugins — primed
-      to be disposed a second time on the next `install()` call.
-      `src/extensions/plugin-runtime.ts:95-133`
-- [ ] Regression test for C1: install a set with a real removal *and* a throwing addition; assert
-      the removed plugin's `dispose()` ran exactly once and it is gone from `.plugins` after the
-      throw (not silently re-listed).
+- [x] **C1 — make `install()` atomic.** Reordered so `toAdd` plugins are set up *before* `removed`
+      plugins are disposed (unwind only the new batch on a `setup()` throw, as before); `removed`
+      is now disposed only after every addition's `setup()` succeeded; `this.#installed =
+      [...kept, ...justInstalled]` commits last. A thrown `setup()` now leaves the previous
+      installed set — dropped plugins included — completely untouched (not disposed, still
+      listed), instead of the old bug where `removed` was disposed up front and then the final
+      reassignment was skipped, leaving `#installed` primed to dispose the same plugin a second
+      time on the next `install()` call.
+      `src/extensions/plugin-runtime.ts`
+- [x] Regression test for C1: install a set with a real removal *and* a throwing addition; assert
+      the dropped plugin is not disposed and stays listed right after the throw, then a follow-up
+      `install([])` disposes it exactly once (not the old double-dispose).
+      `src/extensions/plugin-runtime.test.ts`
 - [ ] **C2 — gate every `register*`, not just `registerKeybinding`.** `ctx.commands` is handed to
       plugins as the raw `CommandRegistry`, so `ctx.commands.register()` after `setup()` returns
       silently succeeds — D-S5-4 says it must throw `RegistrationClosedError`. Wrap `ctx.commands`
