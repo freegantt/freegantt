@@ -156,3 +156,79 @@ describe('registerCoreCommands (S5.2, D-S5-6)', () => {
     expect(redo).not.toHaveBeenCalled();
   });
 });
+
+describe('column commands — Alt/Shift+Arrow over a focused header cell (S5.7, D-S5-18/D-S5-26)', () => {
+  function makeHeaderRegistry(columnKey?: string): {
+    registry: CommandRegistry<unknown>;
+    ctx: CommandContext<unknown>;
+  } {
+    const ctx = {
+      dataset: {} as CommandContext<unknown>['dataset'],
+      gantt: {},
+      ...(columnKey !== undefined ? { target: { kind: 'header' as const, columnKey } } : {}),
+    } as CommandContext<unknown>;
+    return { registry: new CommandRegistry<unknown>(() => ctx), ctx };
+  }
+
+  it('resizeColumnWider/Narrower and moveColumnLeft/Right forward the focused column key and a direction', () => {
+    const ports = fakePorts();
+    const { registry } = makeHeaderRegistry('cost');
+    registerCoreCommands(registry, ports);
+
+    registry.run('freegantt.resizeColumnWider');
+    registry.run('freegantt.resizeColumnNarrower');
+    registry.run('freegantt.moveColumnRight');
+    registry.run('freegantt.moveColumnLeft');
+
+    expect(ports.resizeColumnStep).toHaveBeenNthCalledWith(1, 'cost', 1);
+    expect(ports.resizeColumnStep).toHaveBeenNthCalledWith(2, 'cost', -1);
+    expect(ports.moveColumnStep).toHaveBeenNthCalledWith(1, 'cost', 1);
+    expect(ports.moveColumnStep).toHaveBeenNthCalledWith(2, 'cost', -1);
+  });
+
+  it('every column command is unavailable with no focused header cell', () => {
+    const ports = fakePorts();
+    const { registry, ctx } = makeHeaderRegistry();
+    registerCoreCommands(registry, ports);
+
+    const available = registry.available(ctx).map((command) => command.id);
+    expect(available).not.toContain('freegantt.resizeColumnWider');
+    expect(available).not.toContain('freegantt.resizeColumnNarrower');
+    expect(available).not.toContain('freegantt.moveColumnRight');
+    expect(available).not.toContain('freegantt.moveColumnLeft');
+  });
+
+  it('resizable: false refuses both resize commands for that column, movable: false refuses both move commands', () => {
+    const ports = fakePorts();
+    ports.isColumnResizable.mockReturnValue(false);
+    ports.isColumnMovable.mockReturnValue(false);
+    const { registry, ctx } = makeHeaderRegistry('cost');
+    registerCoreCommands(registry, ports);
+
+    const available = registry.available(ctx).map((command) => command.id);
+    expect(available).not.toContain('freegantt.resizeColumnWider');
+    expect(available).not.toContain('freegantt.resizeColumnNarrower');
+    expect(available).not.toContain('freegantt.moveColumnRight');
+    expect(available).not.toContain('freegantt.moveColumnLeft');
+
+    registry.run('freegantt.resizeColumnWider');
+    registry.run('freegantt.moveColumnRight');
+    expect(ports.resizeColumnStep).not.toHaveBeenCalled();
+    expect(ports.moveColumnStep).not.toHaveBeenCalled();
+  });
+
+  it('a target of a different kind (not "header") also leaves every column command unavailable', () => {
+    const ports = fakePorts();
+    const ctx = {
+      dataset: {} as CommandContext<unknown>['dataset'],
+      gantt: {},
+      target: { kind: 'bar' as const },
+    } as CommandContext<unknown>;
+    const registry = new CommandRegistry<unknown>(() => ctx);
+    registerCoreCommands(registry, ports);
+
+    const available = registry.available(ctx).map((command) => command.id);
+    expect(available).not.toContain('freegantt.resizeColumnWider');
+    expect(available).not.toContain('freegantt.moveColumnLeft');
+  });
+});
