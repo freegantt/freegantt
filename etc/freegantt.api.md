@@ -901,7 +901,6 @@ export interface Popup {
     close(): void;
     // (undocumented)
     readonly isOpen: boolean;
-    // (undocumented)
     open(options: PopupOptions): void;
 }
 
