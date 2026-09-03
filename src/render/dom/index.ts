@@ -22,6 +22,8 @@ import type { FrameColumn } from '../../layout/index.js';
 import type { RenderBackend, RenderSurfaces, InteractionState, HitResult } from '../backend.js';
 import { attachDateLines } from './date-line.js';
 import type { DateLineAttachment } from './date-line.js';
+import { attachDecorations } from './decorations.js';
+import type { DecorationsAttachment } from './decorations.js';
 import { KeyedLayer, NestedKeyedLayers } from './sync-keyed.js';
 import { applyElementDescription } from './element-description.js';
 import { isDevMode } from '../../data/dev-mode.js';
@@ -193,6 +195,7 @@ export function createDomBackend(options?: DomBackendOptions): RenderBackend<HTM
   let barLayer: HTMLElement | undefined;
   let contentSizer: HTMLElement | undefined;
   let dateLines: DateLineAttachment | undefined;
+  let decorations: DecorationsAttachment | undefined;
   // D-S3-8: one shared handle pair, created once at mount() and moved/parked by applyState — never
   // one pair per bar.
   let startHandle: HTMLElement | undefined;
@@ -608,6 +611,9 @@ export function createDomBackend(options?: DomBackendOptions): RenderBackend<HTM
       cursorLineLabel.setAttribute('aria-hidden', 'true');
       cursorLineLabel.hidden = true;
       timelineHost.append(headerLayer, barLayer, contentSizer);
+      // S5.6, D-S5-15: mounted before Date lines, so a registered decoration paints below the
+      // today wrapper and any authored Date line — those stay the topmost stroke either way.
+      decorations = attachDecorations(timelineHost, barLayer);
       dateLines = attachDateLines(timelineHost, headerLayer);
       timelineHost.append(cursorLine);
       headerLayer.append(cursorLineLabel);
@@ -632,6 +638,13 @@ export function createDomBackend(options?: DomBackendOptions): RenderBackend<HTM
       // identity change.
       if (paintedResizable !== undefined) paintResizeHandles(barGeomByItemId.get(paintedResizable));
       dateLines?.sync(frame.decorations, frame.contentHeight, frame.visible.height);
+      decorations?.sync(
+        frame.underBars,
+        frame.overBars,
+        frame.rows,
+        frame.contentHeight,
+        frame.visible.height,
+      );
       cursorLineHeight = Math.max(frame.contentHeight, frame.visible.height);
       if (cursorLine && !cursorLine.hidden) cursorLine.style.height = `${cursorLineHeight}px`;
       if (gridLayer) {
@@ -722,6 +735,8 @@ export function createDomBackend(options?: DomBackendOptions): RenderBackend<HTM
     destroy() {
       dateLines?.destroy();
       dateLines = undefined;
+      decorations?.destroy();
+      decorations = undefined;
       gridLayer?.replaceChildren();
       timelineHost?.replaceChildren();
       bandLayer.clear();

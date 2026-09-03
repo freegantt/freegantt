@@ -8,7 +8,7 @@
 // it. The word is Temporal's own (PlainDate, PlainDateTime), which is what this module will become when
 // native Temporal ships. See CONTEXT.md.
 
-import type { Instant, TimeUnit } from '../model/index.js';
+import type { Instant, TimeSpan, TimeUnit } from '../model/index.js';
 import { UnsupportedUnitError } from '../model/index.js';
 import { instant, addMs, MS } from './instant.js';
 import * as InstantFns from 'temporal-polyfill/fns/Instant';
@@ -31,6 +31,9 @@ export interface PlainParts {
   hour: number;
   minute: number;
   second: number;
+  /** ISO day of week: 1 = Monday … 7 = Sunday (D-S5-16). `toPlain` always fills this; `fromPlain`
+   *  never reads it — a caller building a `PlainParts` to write may omit it. */
+  dayOfWeek?: number;
 }
 
 function toZoned(zone: string, i: Instant): ZonedDateTimeFns.Record {
@@ -51,7 +54,13 @@ export function toPlain(zone: string, i: Instant): PlainParts {
     hour: zdt.hour,
     minute: zdt.minute,
     second: zdt.second,
+    dayOfWeek: ZonedDateTimeFns.dayOfWeek(zdt),
   };
+}
+
+/** ISO day of week of `i` in `zone`: 1 = Monday … 7 = Sunday (D-S5-16). */
+export function dayOfWeek(zone: string, i: Instant): number {
+  return ZonedDateTimeFns.dayOfWeek(toZoned(zone, i));
 }
 
 /** The instant whose wall-clock reading in `zone` equals `plain` (DST fold/gap resolved via 'compatible'). */
@@ -74,6 +83,19 @@ export function weekOfYear(zone: string, i: Instant): number {
 
 export function addDays(zone: string, i: Instant, days: number): Instant {
   return fromZoned(ZonedDateTimeFns.addDays(toZoned(zone, i), days));
+}
+
+/** Each day boundary in `[span.start, span.end)`, ascending, in `zone` (D-S5-16). Steps by
+ * `addDays`, so a spring-forward day still advances exactly one calendar day. */
+export function eachDay(zone: string, span: TimeSpan): readonly Instant[] {
+  const days: Instant[] = [];
+  let cursor = startOfDay(zone, span.start);
+  if (cursor < span.start) cursor = addDays(zone, cursor, 1);
+  while (cursor < span.end) {
+    days.push(cursor);
+    cursor = addDays(zone, cursor, 1);
+  }
+  return days;
 }
 
 /** Calendar-month stepping (e.g. Jan 31 + 1 month clamps to Feb 28/29, per Temporal's default 'constrain'). */

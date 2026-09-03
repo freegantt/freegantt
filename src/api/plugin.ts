@@ -15,6 +15,7 @@ import type { KeyEventLike } from '../extensions/keymap.js';
 import type { GanttEvents, Overlay, OverlayHandle } from '../view/index.js';
 import type { CommandRegistryOf, KeyBindingOf } from './command.js';
 import type { RendererPoint, RendererFor } from '../layout/index.js';
+import type { DecorationLayer, DecorationProvider } from '../layout/index.js';
 import type { ElementDescription, EntryId } from '../model/index.js';
 
 // Re-exported for the same reason `Overlay`/`OverlayHandle` are, just below: a plugin author typing
@@ -86,6 +87,13 @@ export interface PluginContextOf<TGantt = unknown> {
      *  caller, so a feature that owns a renderer point reads the same resolution the render backend
      *  would, without reaching `view/renderer-registry.ts` directly (D-S5-5). */
     resolveTooltip(entryId: EntryId): ElementDescription | undefined;
+    /** S5.6, D-S5-15: registers a pure decoration provider into `layer` (`underBars` below the bar
+     *  layer, `overBars` above). Legal only while `setup` runs (D-S5-4); removed automatically when
+     *  this plugin is disposed — a provider has no `close()`/`unregister()` of its own, the plugin's
+     *  own lifetime is its lifetime. Call: `ctx.view.registerDecoration('underBars', (ctx) =>
+     *  ctx.time.eachDay(ctx.span).filter((day) => ctx.time.dayOfWeek(day) >= 6).map((day) => ({
+     *  kind: 'rangeBand', start: day, end: ctx.time.addDays(day, 1) })))`. */
+    registerDecoration(layer: DecorationLayer, provider: DecorationProvider): void;
   };
 }
 

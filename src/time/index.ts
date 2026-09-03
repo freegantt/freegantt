@@ -8,6 +8,8 @@ export {
   addMonths,
   addYears,
   diffDays,
+  dayOfWeek,
+  eachDay,
   startOf,
   stepBy,
   weekOfYear,
@@ -15,6 +17,8 @@ export {
   SUPPORTED_TIME_UNITS,
 } from './zone.js';
 export type { PlainParts } from './zone.js';
+export { createZonedTime } from './zoned-time.js';
+export type { ZonedTime } from './zoned-time.js';
 export {
   formatDate,
   formatEndInclusive,
