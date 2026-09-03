@@ -185,7 +185,9 @@ export class Keymap<TGantt = unknown> implements KeyHandlerRegistrar {
       const ctx = this.#buildContext();
       if (entry.binding.when !== undefined && !entry.binding.when(ctx)) continue;
       if (command.when !== undefined && !command.when(ctx)) continue;
-      this.#commands.run(entry.binding.command);
+      // D-S5-7: resolve once, run once — `runResolved` trusts the `when` checks just made above
+      // instead of `run(id)` rebuilding `ctx` and re-running both checks for the same keystroke.
+      this.#commands.runResolved(entry.binding.command, ctx);
       return true;
     }
     return false;
