@@ -89,9 +89,12 @@ export class PluginRuntime<TContext> {
 
   /** Diffs `next` against what is installed by `id` (D-S5-3): a plugin present in both lists is left
    *  alone, even when the new array holds a fresh object for that `id` — only the `id`-level
-   *  difference is disposed and set up. A `setup()` throw unwinds this batch's own already-set-up
-   *  plugins, in reverse, before rethrowing `PluginSetupError`; the previous installed set is
-   *  untouched either way (issue #137 F4). */
+   *  difference is disposed and set up. New plugins are set up *before* any dropped plugin is
+   *  disposed, and `#installed` is committed last, so a `setup()` throw unwinds only this batch's
+   *  own already-set-up plugins (in reverse) before rethrowing `PluginSetupError` — the previous
+   *  installed set, dropped plugins included, is untouched either way (issue #137 F4, C1). Disposing
+   *  `removed` before every addition's `setup()` had succeeded left `#installed` holding plugins
+   *  already disposed once, primed to be disposed again on the next `install()` call. */
   install(next: readonly ShellPlugin<TContext>[]): void {
     assertNoDuplicateIds(next);
 
@@ -101,7 +104,6 @@ export class PluginRuntime<TContext> {
     for (const installed of this.#installed) {
       (nextIds.has(installed.plugin.id) ? kept : removed).push(installed);
     }
-    for (let i = removed.length - 1; i >= 0; i--) this.#disposeOne(removed[i]!);
 
     if (isDevMode()) this.#warnAboutDroppedReconfigures(next, kept);
 
@@ -128,6 +130,8 @@ export class PluginRuntime<TContext> {
       for (let i = justInstalled.length - 1; i >= 0; i--) this.#disposeOne(justInstalled[i]!);
       throw new PluginSetupError(toAdd[justInstalled.length]!.id, cause);
     }
+
+    for (let i = removed.length - 1; i >= 0; i--) this.#disposeOne(removed[i]!);
 
     this.#installed = [...kept, ...justInstalled];
   }
