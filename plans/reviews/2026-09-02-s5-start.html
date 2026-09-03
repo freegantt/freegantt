@@ -325,8 +325,59 @@ flowchart LR
         </div>
       </section>
 
+      <!-- ============ SECOND PASS ============ -->
+      <section class="space-y-6">
+        <h2 class="text-2xl font-serif font-bold">Second pass — ball of mud, API friendliness, self-documentation, extensibility</h2>
+        <p class="text-sm text-slate-600">Re-read after the first review landed, with four questions: where could the mud pool, what reads awkwardly at the call site, what doesn't document itself, and what will S5.4–S5.12 hit first.</p>
+
+        <article class="rounded-lg border border-slate-200 bg-white p-5 space-y-3">
+          <h3 class="font-bold">Ball-of-mud verdict, per area</h3>
+          <ul class="text-sm space-y-1.5 list-disc pl-5">
+            <li><span class="mono">plugin-runtime</span> — <span class="text-emerald-700 font-semibold">healthy and deep</span>. One interface, diff/unwind/gate semantics inside. Only fix: <a class="underline" href="#c1">C1's ordering</a>. The gate extension (<a class="underline" href="#c2">C2</a>) is what keeps it deep as S5.4–S5.9 add seams — without it, per-seam gate bookkeeping spreads back across <span class="mono">gantt-shell.ts</span>, and that is how this layer starts to mud.</li>
+            <li><span class="mono">popup</span> — <span class="text-red-700 font-semibold">the main mud risk</span>. Two keyboard-resolution mechanisms (keymap + escape stack), a document-wide scroll listener broader than its spec line, and a module-level <span class="mono">WeakMap</span> — three mechanisms where <a class="underline" href="#c3">C3</a> needs one. The placement/flip/clamp math itself is clean and well-factored.</li>
+            <li><span class="mono">gantt-shell</span> — <span class="text-amber-700 font-semibold">divergent-change pressure</span>. 19 commands + 8 default bindings + the S5 context builders now live inline; the shell is still the composition root, but every future command and every S5.5 menu hook edits it. <a class="underline" href="#c4">C4</a> is the release valve.</li>
+            <li><span class="mono">api ↔ view ↔ extensions</span> type binding — <span class="text-emerald-700 font-semibold">accepted knot, verified not emergent</span>. The <span class="mono">*Of&lt;TGantt&gt;</span> generics, the <span class="mono">ShellPlugin</span> seam, and the two casts are one seam in each direction, and all four file headers (<span class="mono">api/plugin.ts</span>, <span class="mono">api/command.ts</span>, <span class="mono">extensions/plugin-runtime.ts</span>, <span class="mono">extensions/commands.ts</span>) explain the same cycle story. No action beyond <a class="underline" href="#c5">C5</a> (publish the generics so the report can name them).</li>
+            <li><span class="mono">overlay</span> / <span class="mono">pane-layout</span> — healthy. Structure-only pane layout holding; overlay is a thin adapter over it. Two naming unifications below.</li>
+          </ul>
+        </article>
+
+        <article class="rounded-lg border border-slate-200 bg-white p-5 space-y-3">
+          <h3 class="font-bold">API that could read friendlier at the call site</h3>
+          <ul class="text-sm space-y-1.5 list-disc pl-5">
+            <li><span class="mono">Overlay.present(HTMLElement)</span> + <span class="mono">Overlay.render(ElementDescription)</span> is a two-step mount: a plugin with described content writes <span class="mono">overlay.present(overlay.render(desc))</span>. When S5.4 makes <span class="mono">ElementDescription</span> the renderer output, consider <span class="mono">present(content: ElementDescription | HTMLElement)</span> — one call, the reconciler seam stays hidden. Not a pre-S5.4 change.</li>
+            <li><span class="mono">plugins</span>' id-diff semantics are correct but subtle: a same-id new instance is a silent no-op in production and a console warning in dev. That is the spec's chosen posture (D-S5-3) — keep it, but the <span class="mono">GanttOptions.plugins</span> doc should say "same id, new object → ignored (dev: warns)" in one sentence where the consumer reads it.</li>
+            <li><span class="mono">commands.run(id)</span> silently no-ops when the command's <span class="mono">when</span> declines — spec posture ("a disabled menu item"), and the doc comment on the registry says so. The public <span class="mono">Gantt.commands</span> doc should carry the same sentence, since consumers read the alias, not the class.</li>
+            <li><span class="mono">Gantt.commands</span>' public doc lists the eleven D-S5-6 commands; the shell registers nineteen (the eight navigation commands included). Either list all nineteen or state the rule ("<span class="mono">freegantt.*</span> is the core namespace; register order is overridden newest-first").</li>
+          </ul>
+        </article>
+
+        <article class="rounded-lg border border-slate-200 bg-white p-5 space-y-3">
+          <h3 class="font-bold">Self-documentation gaps (small, each one line)</h3>
+          <ul class="text-sm space-y-1.5 list-disc pl-5">
+            <li><span class="mono">createPopup</span> hand-rolls an <span class="mono">unsubscribers</span> array while <span class="mono">DisposableStore</span> sits in the same layer — one disposal mechanism per layer reads better and deletes six lines. <span class="mono text-xs">src/extensions/popup.ts:149–156</span></li>
+            <li><span class="mono">Keymap.resolve(event, commands, buildContext)</span> carries the same two arguments on every call from the only caller — constructor injection turns it into <span class="mono">resolve(event)</span> and removes the clump. <span class="mono text-xs">src/extensions/keymap.ts:107–111</span></li>
+            <li>Related: <span class="mono">resolve</span> evaluates <span class="mono">command.when</span>, then <span class="mono">run()</span> rebuilds the context and evaluates it again. Resolving to a command and running once removes the double work and the duplicated guard.</li>
+            <li>The <span class="mono">Popup</span> interface doesn't state that <span class="mono">open()</span> while open replaces the open popup (it calls <span class="mono">close()</span> first) — one sentence on <span class="mono">open</span> documents the contract.</li>
+            <li><span class="mono">buildElement(desc)</span> — spell the parameter <span class="mono">description</span>; the abbreviation saves nothing in a 40-line file. <span class="mono text-xs">src/render/dom/element-description.ts:13</span></li>
+            <li><span class="mono">attachKeyboardNavigation</span> has zero production callers (verified by search) — still exported and tested. Fine to keep per the S5.2 TODO's own rule, but mark it in its header as superseded by the command bindings, or the next reader wires it back in.</li>
+            <li>The flip test's fixture cannot distinguish pane-clamping from container-clamping (<span class="mono">pane.right === bounds.right</span>, <span class="mono">popup.test.ts:91–114</span>) — give the timeline pane a right edge inside the container's so the test proves D-S5-8's pane rect, not the outer clamp.</li>
+          </ul>
+        </article>
+
+        <article class="rounded-lg border border-slate-200 bg-white p-5 space-y-3">
+          <h3 class="font-bold">Extensibility forward-check — what S5.4–S5.12 hits first</h3>
+          <ul class="text-sm space-y-1.5 list-disc pl-5">
+            <li><span class="mono">registerRenderer</span> (S5.4), <span class="mono">registerDecoration</span> (S5.6), <span class="mono">registerGridColumn</span> (S5.7) all need the gate — <a class="underline" href="#c2">C2</a> is load-bearing for the whole slice. Shipping each seam ungated, then gating later, is the path that turns <span class="mono">PluginContext</span> into an audit.</li>
+            <li>S5.8's cell editor needs Escape while an editable target has focus — today's document-capture Escape path ignores the editable-target rule, so the editor's Escape and the popup's will race. <a class="underline" href="#c3">C3</a> fixes it by construction.</li>
+            <li>S5.5's context menu is <span class="mono">available(ctx)</span>'s first real consumer — the registry shape is ready; the double-evaluation note above is the only friction.</li>
+            <li><span class="mono">ElementDescription</span> is positioned as the reconciler's one shape with <span class="mono">buildElement</span> as S5.4's diffing sibling's building block — correct placement in <span class="mono">model/render.ts</span>, no change needed.</li>
+            <li><span class="mono">DisposableStore</span> after-dispose semantics (add → immediate dispose) make plugin teardown races safe — keep that guarantee when S5.10's <span class="mono">DatasetPlugin</span> reuses the store.</li>
+          </ul>
+        </article>
+      </section>
+
       <footer class="text-xs text-slate-400 pt-4 border-t border-slate-200">
-        Branch review · s5-start · 2026-09-02 · axes: Spec, Standards, Naming, Simplicity/SOLID · verification green at review time
+        Branch review · s5-start · 2026-09-02 · axes: Spec, Standards, Naming, Simplicity/SOLID, second pass · verification green at review time
       </footer>
     </main>
   </body>
