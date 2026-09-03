@@ -79,6 +79,14 @@ export type { Overlay, OverlayHandle } from '../view/index.js';
 export { createPopup } from '../extensions/popup.js';
 export type { KeyHandlerRegistrar, KeyEventLike } from '../extensions/keymap.js';
 export type { Popup, PopupOptions, PopupPlacement, DismissTrigger, Anchor } from '../extensions/popup.js';
+// S5.5, D-S5-13/14: the two shipped built-ins — values a consumer imports (`plugins: [tooltips(),
+// contextMenu({ items })]`), never names in a config table (Q3, README §0). Both live in
+// `src/extensions/features/`, confined to this same public surface by the `extensions-public-only`
+// depcruise rule — `[S5-A1]`'s dogfood gate.
+export { tooltips } from '../extensions/features/tooltips.js';
+export type { TooltipsOptions } from '../extensions/features/tooltips.js';
+export { contextMenu } from '../extensions/features/context-menu.js';
+export type { ContextMenuOptions, MenuItem, MenuEntry } from '../extensions/features/context-menu.js';
 // TimeScaleModel/ScrollModel are layout/'s own — both are public, consumer-constructed objects
 // (D9), so this re-exports straight from their owning layer rather than laundering them through
 // view/, which has no other interest in them (issue #91 §9-I).
