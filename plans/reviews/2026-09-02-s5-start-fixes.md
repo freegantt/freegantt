@@ -95,8 +95,9 @@ Highest leverage: both bugs live in the seam every later slice's `register*` reu
 - [ ] Fix the flip/clamp test fixture: `popup.test.ts:92-96` sets the timeline pane's `right`
       equal to the overlay's outer `bounds.right`, so container-clamping and pane-clamping are
       indistinguishable. Give the pane a right edge strictly inside the container bounds.
-- [ ] Document `Popup.open()`: calling it while already open replaces the current popup (closes it
-      first) — currently true in code, not stated on the interface.
+- [x] Document `Popup.open()`: calling it while already open replaces the current popup (closes it
+      first) — currently true in code, not stated on the interface. (Done in the doc-sentences
+      pass, session 2 — see Slice 6.)
 - [x] Rename `fakeHost` → e.g. `fakeAnchor`/`stubAnchor` ("host" is repo-retired vocabulary,
       D-S1.11-6, #64 — this same branch renamed `PluginHost`→`PluginRuntime` for the same reason).
       `src/extensions/popup.test.ts:13`
@@ -151,12 +152,20 @@ Highest leverage: both bugs live in the seam every later slice's `register*` reu
 - [ ] Unify "bounds" naming across the Overlay seam: pick "bounds" on both sides of
       `Overlay.paneBounds` vs `PaneLayout.paneRects()`, and `Overlay.bounds` vs
       `containerBounds()`.
-- [ ] Doc: `GanttOptions.plugins` — add "same id, new object → ignored (dev: warns)".
-- [ ] Doc: public `Gantt.commands` alias — carry the same "no-ops when `when` declines" sentence
+- [x] Doc: `GanttOptions.plugins` — add "same id, new object → ignored (dev: warns)".
+      `src/api/gantt.ts` (the `plugins?` option doc)
+- [x] Doc: public `Gantt.commands` alias — carry the same "no-ops when `when` declines" sentence
       already on the internal registry doc.
-- [ ] Doc: resolve `Gantt.commands`'s public doc listing eleven (D-S5-6) vs the shell's actual
-      nineteen registered commands — list all nineteen, or state the rule (`freegantt.*` is the
-      core namespace; register order is overridden newest-first).
+      `src/api/gantt.ts` (the `get commands()` doc)
+- [x] Doc: resolve `Gantt.commands`'s public doc listing eleven (D-S5-6) vs the shell's actual
+      nineteen registered commands — went with the rule (`freegantt.*` is the core namespace,
+      plugin registration wins on a shared id), not a hardcoded list: the eleven-item list had
+      already drifted once when S5.2 added 8 navigation commands, and a literal id list is exactly
+      the kind of thing that drifts again next slice. Folded into the same edit as the row above.
+      `src/api/gantt.ts` (the `get commands()` doc)
+- [x] Document `Popup.open()`'s replace-on-reopen behavior (moved up from the self-documentation
+      list below — same session, same file).
+      `src/extensions/popup.ts` (the `Popup` interface)
 - [x] Mark `attachKeyboardNavigation` (`src/view/keyboard-navigation.ts`) as superseded-but-kept
       in its header comment — zero production callers today, kept intentionally per the S5.2 TODO.
 
