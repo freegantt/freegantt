@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { FieldRegistry } from '../data/fields/field-registry.js';
 import { FieldNotColumnableError, UnknownFieldError } from '../model/index.js';
 import { CORE_FIELDS } from '../data/fields/core-fields.js';
-import { resolveGanttFields, resolveColumns, resolveFieldCompares } from './grid-columns.js';
+import { resolveGanttFields, resolveColumns, resolveFieldCompares, toGridColumn } from './grid-columns.js';
 import type { FieldLookup } from '../model/index.js';
 import type { Entry, Field, FieldKey } from '../model/index.js';
 import { entryId } from '../model/index.js';
@@ -102,6 +102,66 @@ describe('resolveFieldCompares (D-S4-13)', () => {
     const long: Entry = { ...entry, end: 40 as Entry['end'] };
     expect(duration.readStored(short)).toEqual({ value: 10, unit: 'millisecond' });
     expect(duration.compareStored(duration.readStored(short), duration.readStored(long))).toBeLessThan(0);
+  });
+});
+
+describe('resolveColumns — cellRenderer/editable/resizable/movable (S5.7, D-S5-17/D-S5-18)', () => {
+  it('resolve and merge like the existing keys: this Gantt beats the Field default, which beats the built-in default', () => {
+    const registry = new FieldRegistry({
+      fieldTypes: {
+        money: {
+          rollUp: 'sum',
+          column: { width: 90, align: 'end', header: 'Cost', resizable: false },
+        },
+      },
+      fields: [{ key: 'cost', type: 'money' }],
+    });
+    const renderer = () => ({ text: 'x' });
+    const columns = resolveColumns(
+      [{ field: 'cost', cellRenderer: renderer, editable: true, movable: false }],
+      registry,
+      { timeZone: zone, locale },
+    );
+    expect(columns[0]?.cellRenderer).toBe(renderer);
+    expect(columns[0]?.editable).toBe(true);
+    // this Gantt's own gridColumns entry never set resizable — the Field's own column default (false) wins.
+    expect(columns[0]?.resizable).toBe(false);
+    // this Gantt's own gridColumns entry sets movable directly, over no Field default.
+    expect(columns[0]?.movable).toBe(false);
+  });
+
+  it('resizable/movable default true when neither this Gantt nor the Field says otherwise', () => {
+    const columns = resolveColumns(['cost'], costRegistry(), { timeZone: zone, locale });
+    expect(columns[0]?.resizable).toBe(true);
+    expect(columns[0]?.movable).toBe(true);
+  });
+
+  it('cellRenderer/editable stay absent when nothing set them', () => {
+    const columns = resolveColumns(['cost'], costRegistry(), { timeZone: zone, locale });
+    expect(columns[0]).not.toHaveProperty('cellRenderer');
+    expect(columns[0]).not.toHaveProperty('editable');
+  });
+});
+
+describe('toGridColumn (S5.7, D-S5-18)', () => {
+  it('maps a resolved column back to the public GridColumn shape, dropping format', () => {
+    const renderer = () => ({ text: 'x' });
+    const [resolved] = resolveColumns(
+      [{ field: 'cost', header: 'Budget', cellRenderer: renderer, resizable: false }],
+      costRegistry(),
+      { timeZone: zone, locale },
+    );
+    const column = toGridColumn(resolved!);
+    expect(column).toEqual({
+      field: 'cost',
+      header: 'Budget',
+      align: 'end',
+      width: 90,
+      resizable: false,
+      movable: true,
+      cellRenderer: renderer,
+    });
+    expect(column).not.toHaveProperty('format');
   });
 });
 

@@ -1080,6 +1080,160 @@ describe('Gantt gridColumns (S4.3, D-S4-12, [S4-A1] column half)', () => {
   });
 });
 
+describe('Gantt gridColumnsChange — one commit sequence (S5.7, D-S5-18)', () => {
+  it('a plain gridColumns assignment fires beforeGridColumnsChange then gridColumnsChange, payload is resolved GridColumns', () => {
+    const container = document.createElement('div');
+    const gantt = new Gantt({
+      container,
+      dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }),
+      gridColumns: ['name'],
+    });
+
+    const before: { from: unknown; to: unknown }[] = [];
+    const after: { from: unknown; to: unknown }[] = [];
+    gantt.on('beforeGridColumnsChange', (payload) => {
+      before.push(payload);
+    });
+    gantt.on('gridColumnsChange', (payload) => {
+      after.push(payload);
+    });
+
+    gantt.gridColumns = ['name', 'start'];
+
+    expect(before).toHaveLength(1);
+    expect(after).toHaveLength(1);
+    // Resolved columns: the public GridColumn shape (`.field`), not the layout-only ResolvedColumn
+    // (`.key`) — a consumer keeps `to` and passes it straight back as `gridColumns`.
+    expect(before[0]!.from).toEqual([expect.objectContaining({ field: 'name' })]);
+    expect(before[0]!.to).toEqual([
+      expect.objectContaining({ field: 'name' }),
+      expect.objectContaining({ field: 'start' }),
+    ]);
+    expect(after[0]).toEqual(before[0]);
+
+    gantt.destroy();
+  });
+
+  it('beforeGridColumnsChange returning false vetoes the assignment: gridColumns stays put', () => {
+    const container = document.createElement('div');
+    const gantt = new Gantt({
+      container,
+      dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }),
+      gridColumns: ['name'],
+    });
+    gantt.on('beforeGridColumnsChange', () => false);
+
+    gantt.gridColumns = ['name', 'start'];
+
+    expect(gantt.gridColumns).toEqual(['name']);
+    expect(container.querySelector('[data-field="start"]')).toBeNull();
+
+    gantt.destroy();
+  });
+
+  it('a resize drag fires the same gridColumnsChange pair a plain assignment fires', () => {
+    const container = document.createElement('div');
+    const gantt = new Gantt({
+      container,
+      dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }),
+      gridColumns: ['name'],
+    });
+
+    const changes: { from: unknown; to: unknown }[] = [];
+    gantt.on('gridColumnsChange', (payload) => {
+      changes.push(payload);
+    });
+
+    const grip = container.querySelector<HTMLElement>(
+      '.fg-col-header[data-field="name"] .fg-column-resizer',
+    )!;
+    const headerPane = container.querySelector<HTMLElement>('.fg-grid-header')!;
+    headerPane.setPointerCapture = vi.fn();
+    headerPane.releasePointerCapture = vi.fn();
+    grip.dispatchEvent(
+      new PointerEvent('pointerdown', { clientX: 100, clientY: 0, pointerId: 1, bubbles: true }),
+    );
+    headerPane.dispatchEvent(
+      new PointerEvent('pointermove', { clientX: 250, clientY: 0, pointerId: 1, bubbles: true }),
+    );
+    grip.dispatchEvent(
+      new PointerEvent('pointerup', { clientX: 250, clientY: 0, pointerId: 1, bubbles: true }),
+    );
+
+    expect(changes).toHaveLength(1);
+    expect(changes[0]!.to).toEqual([expect.objectContaining({ field: 'name', width: 150 })]);
+    // Same payload shape a plain `gantt.gridColumns = […]` assignment fires above — resolved
+    // GridColumns, not the layout-only ResolvedColumn.
+    expect(changes[0]!.from).toEqual([expect.objectContaining({ field: 'name' })]);
+
+    gantt.destroy();
+  });
+
+  it('resizable: false on a column refuses the pointer drag — no gridColumnsChange', () => {
+    const container = document.createElement('div');
+    const gantt = new Gantt({
+      container,
+      dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }),
+      gridColumns: [{ field: 'name', resizable: false }],
+    });
+
+    const changes: unknown[] = [];
+    gantt.on('gridColumnsChange', (payload) => {
+      changes.push(payload);
+    });
+
+    const grip = container.querySelector<HTMLElement>(
+      '.fg-col-header[data-field="name"] .fg-column-resizer',
+    )!;
+    const headerPane = container.querySelector<HTMLElement>('.fg-grid-header')!;
+    headerPane.setPointerCapture = vi.fn();
+    grip.dispatchEvent(
+      new PointerEvent('pointerdown', { clientX: 100, clientY: 0, pointerId: 1, bubbles: true }),
+    );
+    headerPane.dispatchEvent(
+      new PointerEvent('pointermove', { clientX: 250, clientY: 0, pointerId: 1, bubbles: true }),
+    );
+    grip.dispatchEvent(
+      new PointerEvent('pointerup', { clientX: 250, clientY: 0, pointerId: 1, bubbles: true }),
+    );
+
+    expect(changes).toEqual([]);
+
+    gantt.destroy();
+  });
+
+  it('movable: false on a column refuses the pointer reorder drag — no gridColumnsChange', () => {
+    const container = document.createElement('div');
+    const gantt = new Gantt({
+      container,
+      dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }),
+      gridColumns: [{ field: 'name', movable: false }, 'start'],
+    });
+
+    const changes: unknown[] = [];
+    gantt.on('gridColumnsChange', (payload) => {
+      changes.push(payload);
+    });
+
+    const nameHeader = container.querySelector<HTMLElement>('.fg-col-header[data-field="name"]')!;
+    const headerPane = container.querySelector<HTMLElement>('.fg-grid-header')!;
+    headerPane.setPointerCapture = vi.fn();
+    nameHeader.dispatchEvent(
+      new PointerEvent('pointerdown', { clientX: 10, clientY: 0, pointerId: 1, bubbles: true }),
+    );
+    headerPane.dispatchEvent(
+      new PointerEvent('pointermove', { clientX: 300, clientY: 0, pointerId: 1, bubbles: true }),
+    );
+    nameHeader.dispatchEvent(
+      new PointerEvent('pointerup', { clientX: 300, clientY: 0, pointerId: 1, bubbles: true }),
+    );
+
+    expect(changes).toEqual([]);
+
+    gantt.destroy();
+  });
+});
+
 describe('Gantt renderer callbacks (S5.4, D-S5-10/11/12)', () => {
   it('barRenderer/cellRenderer/headerRenderer/tooltipRenderer are live properties', () => {
     const container = document.createElement('div');
