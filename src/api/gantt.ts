@@ -13,6 +13,15 @@ import { ScrollModel, TimeScaleModel } from '../layout/index.js';
 import type { PresetRef, TimeScaleFit, ViewPreset, RowSource } from '../layout/index.js';
 import type { DateLineSpec } from '../layout/index.js';
 import type {
+  BarRenderer,
+  CellRenderer,
+  HeaderRenderer,
+  TooltipRenderer,
+  RendererByKind,
+  RendererPoint,
+  RendererFor,
+} from '../layout/index.js';
+import type {
   Entry,
   EntryEdits,
   EntryId,
@@ -96,6 +105,17 @@ export interface GanttOptionsBase {
   rowSource?: RowSource;
   /** Live (S4.6, D-S4-22). Collapsed row ids, loose on the way in. Default `[]`. */
   collapsed?: readonly (RowId | string)[];
+  /** Live (S5.4, D-S5-11/12). Customization ladder level 3 (`plans/02` §4). A function, or a
+   *  per-kind map — `{ milestone: (…) => …, '*': (…) => … }` — so the common case needs no
+   *  branching. `undefined` returned from either form keeps the library's own bar output. */
+  barRenderer?: BarRenderer | RendererByKind;
+  /** Live (S5.4, D-S5-11). Gantt-wide; a per-column `GridColumn.cellRenderer` (S5.7) wins over this
+   *  for its own column. `ctx.column.field` lets one function branch per column. */
+  cellRenderer?: CellRenderer;
+  /** Live (S5.4, D-S5-11). Grid column header chrome (S5.7 paints through it). */
+  headerRenderer?: HeaderRenderer;
+  /** Live (S5.4, D-S5-11). Replaces a tooltip's body (S5.5's `tooltips()` feature). */
+  tooltipRenderer?: TooltipRenderer;
   /** Live (S5.1, D-S5-1, D-S5-3). Values a consumer imports (`tooltips()`, `contextMenu({...})`),
    *  never names in a table. Assignment diffs by `id`: a plugin present before and after is left
    *  alone, even when the new array holds a fresh object for that `id` — same id, new object is
@@ -182,6 +202,10 @@ export class Gantt {
         'gridColumns',
         'rowSource',
         'collapsed',
+        'barRenderer',
+        'cellRenderer',
+        'headerRenderer',
+        'tooltipRenderer',
       ]),
       ...(options.scale ? { scale: options.scale } : {}),
       ...(options.range !== undefined ? { range: this.#toRange(options.range) } : {}),
@@ -213,7 +237,11 @@ export class Gantt {
           registerKeybinding: parts.registerKeybinding,
           registerKeyHandler: parts.registerKeyHandler,
         },
-        view: { overlay: parts.overlay },
+        view: {
+          overlay: parts.overlay,
+          registerRenderer: <P extends RendererPoint>(point: P, renderer: RendererFor<P>): void =>
+            parts.registerRenderer(point, renderer),
+        },
       }),
       buildCommandContext: (parts): CommandContext => ({
         dataset: options.dataset,
@@ -292,6 +320,42 @@ export class Gantt {
 
   set gridColumns(columns: readonly GridColumnInput[]) {
     this.#shell.gridColumns = columns;
+  }
+
+  /** Live (S5.4, D-S5-11/12). Assigning repaints every bar with no remount (I8). */
+  get barRenderer(): BarRenderer | RendererByKind | undefined {
+    return this.#shell.barRenderer;
+  }
+
+  set barRenderer(renderer: BarRenderer | RendererByKind | undefined) {
+    this.#shell.barRenderer = renderer;
+  }
+
+  /** Live (S5.4, D-S5-11). Assigning repaints every cell with no remount (I8). */
+  get cellRenderer(): CellRenderer | undefined {
+    return this.#shell.cellRenderer;
+  }
+
+  set cellRenderer(renderer: CellRenderer | undefined) {
+    this.#shell.cellRenderer = renderer;
+  }
+
+  /** Live (S5.4, D-S5-11). */
+  get headerRenderer(): HeaderRenderer | undefined {
+    return this.#shell.headerRenderer;
+  }
+
+  set headerRenderer(renderer: HeaderRenderer | undefined) {
+    this.#shell.headerRenderer = renderer;
+  }
+
+  /** Live (S5.4, D-S5-11). */
+  get tooltipRenderer(): TooltipRenderer | undefined {
+    return this.#shell.tooltipRenderer;
+  }
+
+  set tooltipRenderer(renderer: TooltipRenderer | undefined) {
+    this.#shell.tooltipRenderer = renderer;
   }
 
   /** Live (S4.6, D-S4-21). Assigning re-resolves rows with no remount. */

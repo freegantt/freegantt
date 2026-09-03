@@ -4,6 +4,7 @@ import { Dataset } from './dataset.js';
 import {
   EntryNotFoundError,
   RegistrationClosedError,
+  RendererAlreadyRegisteredError,
   ScrollModel,
   TimeScaleModel,
   entryId,
@@ -1076,6 +1077,97 @@ describe('Gantt gridColumns (S4.3, D-S4-12, [S4-A1] column half)', () => {
     const row = container.querySelector('.fg-row')!;
     expect(row.querySelectorAll('.fg-row-label, .fg-row-cell')).toHaveLength(1);
     gantt.destroy();
+  });
+});
+
+describe('Gantt renderer callbacks (S5.4, D-S5-10/11/12)', () => {
+  it('barRenderer/cellRenderer/headerRenderer/tooltipRenderer are live properties', () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({ entries: sampleEntries.slice(0, 1), timeZone: 'UTC' });
+    const gantt = new Gantt({ container, dataset });
+
+    expect(gantt.barRenderer).toBeUndefined();
+    expect(gantt.cellRenderer).toBeUndefined();
+    expect(gantt.headerRenderer).toBeUndefined();
+    expect(gantt.tooltipRenderer).toBeUndefined();
+
+    const barRenderer = () => ({ text: 'bar' });
+    const cellRenderer = () => ({ text: 'cell' });
+    const headerRenderer = () => ({ text: 'header' });
+    const tooltipRenderer = () => ({ text: 'tooltip' });
+    gantt.barRenderer = barRenderer;
+    gantt.cellRenderer = cellRenderer;
+    gantt.headerRenderer = headerRenderer;
+    gantt.tooltipRenderer = tooltipRenderer;
+
+    expect(gantt.barRenderer).toBe(barRenderer);
+    expect(gantt.cellRenderer).toBe(cellRenderer);
+    expect(gantt.headerRenderer).toBe(headerRenderer);
+    expect(gantt.tooltipRenderer).toBe(tooltipRenderer);
+
+    gantt.destroy();
+  });
+
+  it('a custom milestone barRenderer paints a diamond, and reassigning it repaints with no bar remount (I8)', async () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({
+      entries: [{ ...sampleEntries[0]!, kind: 'milestone' }],
+      timeZone: 'UTC',
+    });
+    const gantt = new Gantt({
+      container,
+      dataset,
+      barRenderer: {
+        milestone: () => ({ class: { 'my-diamond': true }, text: '◆' }),
+      },
+    });
+
+    const bar = container.querySelector<HTMLElement>('.fg-bar')!;
+    expect(bar.classList.contains('my-diamond')).toBe(true);
+    expect(bar.textContent).toBe('◆');
+
+    gantt.barRenderer = undefined;
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    expect(container.querySelector('.fg-bar')).toBe(bar);
+    expect(bar.classList.contains('my-diamond')).toBe(false);
+    expect(bar.textContent).toBe(sampleEntries[0]!.name);
+
+    gantt.destroy();
+  });
+
+  it('ctx.view.registerRenderer claims a point; a second plugin claiming the same point throws RendererAlreadyRegisteredError', () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({ entries: sampleEntries.slice(0, 1), timeZone: 'UTC' });
+
+    // PluginRuntime.install() wraps a setup() throw in PluginSetupError (C1) — the collision itself
+    // is the wrapped cause.
+    let cause: unknown;
+    try {
+      new Gantt({
+        container,
+        dataset,
+        plugins: [
+          {
+            id: 'demo.renderer-one',
+            setup(ctx) {
+              ctx.view.registerRenderer('cell', () => undefined);
+              return () => {};
+            },
+          },
+          {
+            id: 'demo.renderer-two',
+            setup(ctx) {
+              ctx.view.registerRenderer('cell', () => undefined);
+              return () => {};
+            },
+          },
+        ],
+      });
+      expect.unreachable();
+    } catch (error) {
+      cause = (error as { cause?: unknown }).cause;
+    }
+    expect(cause).toBeInstanceOf(RendererAlreadyRegisteredError);
   });
 });
 

@@ -1,8 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { createDomBackend } from './index.js';
 import { computeFrame, createItemProducerRegistry } from '../../layout/index.js';
-import type { TimeScale, ViewPreset } from '../../layout/index.js';
+import type { BarRenderer, TimeScale, ViewPreset } from '../../layout/index.js';
 import { sampleEntries } from '../../../fixtures/sample-dataset.js';
+
+function entryLookup(id: string): (typeof sampleEntries)[number] | undefined {
+  return sampleEntries.find((e) => e.id === id);
+}
 
 const point = (x: number, y: number) => ({ x, y });
 
@@ -848,6 +852,111 @@ describe('render/dom backend', () => {
     expect(mileBar.className.split(' ')).toContain('fg-bar-diamond');
     expect(spanBar.className.split(' ')).not.toContain('fg-bar-bracket');
     expect(spanBar.className.split(' ')).not.toContain('fg-bar-diamond');
+
+    backend.destroy();
+    grid.remove();
+    timeline.remove();
+  });
+
+  it('a resolved barRenderer paints inside .fg-bar, and reassigning it repaints the same node with no remount (S5.4, I8)', () => {
+    let currentRenderer: BarRenderer = () => ({ text: 'first' });
+    const backend = createDomBackend({
+      entryById: entryLookup,
+      resolveBarRenderer: () => ({ renderer: currentRenderer }),
+      resolveCellRenderer: () => undefined,
+    });
+    const { grid, timeline } = mountSurfaces();
+    backend.mount({ grid, timeline });
+    const frame = computeFrame({
+      entries: sampleEntries.slice(0, 1),
+      scale,
+      preset,
+      visible: { x: 0, y: 0, width: 0, height: 0 },
+      rowHeight: 32,
+      revision: 0,
+      itemProducerRegistry,
+    });
+    backend.sync(frame);
+
+    const bar = timeline.querySelector<HTMLElement>('.fg-bar')!;
+    expect(bar.textContent).toBe('first');
+
+    currentRenderer = () => ({ class: { 'my-bar': true }, text: 'second' });
+    backend.sync(frame);
+
+    expect(timeline.querySelector('.fg-bar')).toBe(bar);
+    expect(bar.textContent).toBe('second');
+    expect(bar.classList.contains('my-bar')).toBe(true);
+    // The library's own base attrs still apply underneath the renderer's own content.
+    expect(bar.dataset['itemId']).toBe(frame.bars[0]!.id);
+
+    backend.destroy();
+    grid.remove();
+    timeline.remove();
+  });
+
+  it('a barRenderer that throws falls back to the default label for that bar only, and does not break the rest of the frame (issue #137 F14)', () => {
+    const backend = createDomBackend({
+      entryById: entryLookup,
+      resolveBarRenderer: () => ({
+        renderer: () => {
+          throw new Error('boom');
+        },
+      }),
+      resolveCellRenderer: () => undefined,
+    });
+    const { grid, timeline } = mountSurfaces();
+    backend.mount({ grid, timeline });
+    const frame = computeFrame({
+      entries: sampleEntries.slice(0, 2),
+      scale,
+      preset,
+      visible: { x: 0, y: 0, width: 0, height: 0 },
+      rowHeight: 32,
+      revision: 0,
+      itemProducerRegistry,
+    });
+
+    expect(() => backend.sync(frame)).not.toThrow();
+    const bars = timeline.querySelectorAll<HTMLElement>('.fg-bar');
+    expect(bars).toHaveLength(2);
+    expect(bars[0]?.textContent).toBe(frame.bars[0]!.label);
+    expect(bars[1]?.textContent).toBe(frame.bars[1]!.label);
+
+    backend.destroy();
+    grid.remove();
+    timeline.remove();
+  });
+
+  it("a resolved cellRenderer paints inside the cell, receiving the row's entry, row and formatted value", () => {
+    const seen: { entry?: { id: string }; value: string }[] = [];
+    const backend = createDomBackend({
+      entryById: entryLookup,
+      resolveBarRenderer: () => undefined,
+      resolveCellRenderer: () => ({
+        renderer: (ctx) => {
+          seen.push({ ...(ctx.entry ? { entry: { id: ctx.entry.id } } : {}), value: ctx.value });
+          return { text: `[${ctx.value}]` };
+        },
+      }),
+    });
+    const { grid, timeline } = mountSurfaces();
+    backend.mount({ grid, timeline });
+    const frame = computeFrame({
+      entries: sampleEntries.slice(0, 1),
+      scale,
+      preset,
+      visible: { x: 0, y: 0, width: 0, height: 0 },
+      rowHeight: 32,
+      revision: 0,
+      itemProducerRegistry,
+      columns: [{ key: 'name', header: 'Name', align: 'start', format: (e) => e.name }],
+    });
+    backend.sync(frame);
+
+    const cell = grid.querySelector<HTMLElement>('.fg-row-label')!;
+    expect(cell.textContent).toBe(`[${sampleEntries[0]!.name}]`);
+    expect(seen).toEqual([{ entry: { id: sampleEntries[0]!.id }, value: sampleEntries[0]!.name }]);
 
     backend.destroy();
     grid.remove();

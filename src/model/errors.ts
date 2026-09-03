@@ -281,6 +281,28 @@ export class PluginSetupError extends FreeGanttError {
   }
 }
 
+/** `code: 'renderer-already-registered'` — two plugins both call `ctx.view.registerRenderer` for the
+ *  same point (S5.4, D-S5-11). One slot per point; a consumer who wants a plugin's renderer to win
+ *  removes its own `GanttOptions` renderer instead — this error is only for two *plugins* colliding.
+ *  `point` stays a bare `string` here (not layout/'s `RendererPoint`) — model/ is a leaf and may
+ *  import nothing (model-is-leaf). */
+export class RendererAlreadyRegisteredError extends FreeGanttError {
+  readonly point: string;
+  readonly firstPluginId: PluginId;
+  readonly secondPluginId: PluginId;
+
+  constructor(point: string, firstPluginId: PluginId, secondPluginId: PluginId) {
+    super(
+      'renderer-already-registered',
+      `view.registerRenderer: "${point}" is already registered by plugin "${firstPluginId}" (attempted again by "${secondPluginId}")`,
+    );
+    this.name = 'RendererAlreadyRegisteredError';
+    this.point = point;
+    this.firstPluginId = firstPluginId;
+    this.secondPluginId = secondPluginId;
+  }
+}
+
 /** `code: 'unknown-command'` — `CommandRegistry.run(id)` given an id nothing registered (D-S5-6). A
  *  binding whose `command` names an id nothing owns is not this: the keymap resolver treats an
  *  unresolved binding as a non-match and falls through, rather than surfacing the mistake mid-key-press. */

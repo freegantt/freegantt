@@ -16,6 +16,7 @@ export type {
   RowFilter,
   RowSort,
   FilterPolicy,
+  PlannedRowKind,
 } from './rows/row-source.js';
 export { DEFAULT_ROW_SOURCE, isPlannedHeaderRow } from './rows/row-source.js';
 export { FrameLayout } from './frame-layout.js';
@@ -43,7 +44,23 @@ export type {
 // ItemId/RowId rather than a bare string — render already receives both via GeometryFrame (#35).
 // ElementDescription joins them the same way (S5.3, D-S5-10): render/dom/element-description.ts
 // builds DOM from it and may not import model/ directly.
-export type { ItemId, RowId, ClientPoint, ElementDescription } from '../model/index.js';
+export type { ItemId, RowId, EntryId, ClientPoint, ElementDescription, Entry } from '../model/index.js';
+// S5.4, D-S5-10/11/12: renderer callback vocabulary — the same "layout owns the paint-facing shape,
+// render/dom reaches it through this one seam" pattern ElementDescription above already set.
+export type {
+  RendererPoint,
+  BarRenderer,
+  BarRendererContext,
+  RendererByKind,
+  CellRenderer,
+  CellRendererContext,
+  HeaderRenderer,
+  HeaderRendererContext,
+  TooltipRenderer,
+  TooltipRendererContext,
+  RendererFor,
+  ResolvedRenderer,
+} from './renderer.js';
 export { TimeScaleModel } from './viewport/time-scale-model.js';
 export type {
   TimeScaleModelOptions,
