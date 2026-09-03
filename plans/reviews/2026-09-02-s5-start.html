@@ -1,0 +1,333 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Branch review — s5-start (S5.1–S5.3)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script type="module">
+      import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+      mermaid.initialize({ startOnLoad: true, theme: "neutral", securityLevel: "loose" });
+    </script>
+    <style>
+      .seam { stroke-dasharray: 4 4; }
+      .leak { stroke: #dc2626; }
+      .deep { background: linear-gradient(135deg, #0f172a, #1e293b); }
+      .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+    </style>
+  </head>
+  <body class="bg-stone-50 text-slate-900 font-sans">
+    <main class="max-w-5xl mx-auto px-6 py-12 space-y-12">
+
+      <header class="space-y-3">
+        <h1 class="text-3xl font-serif font-bold">Branch review — <span class="mono">s5-start</span></h1>
+        <p class="text-slate-600">FreeGantt · 2026-09-02 · S5.1 plugin runtime, S5.2 commands &amp; keybindings, S5.3 overlay &amp; popup, plus #126 grid scroll. Base <span class="mono">main</span> (0411e2d), 5 commits, 57 files, +3,329/−76.</p>
+        <p class="text-sm text-slate-600">Verified on review: <span class="mono">tsc</span> clean · <span class="mono">depcruise</span> clean (225 modules) · 868 tests green (484 pure + 384 dom) · harness pages present.</p>
+        <div class="text-xs text-slate-500 flex gap-4 pt-1">
+          <span><span class="inline-block w-3 h-3 border border-slate-400 align-middle"></span> module</span>
+          <span><span class="inline-block w-6 border-t border-dashed border-slate-500 align-middle"></span> seam</span>
+          <span><span class="inline-block w-6 border-t-2 border-red-600 align-middle"></span> leakage</span>
+          <span><span class="inline-block w-3 h-3 deep align-middle"></span> deep module</span>
+        </div>
+      </header>
+
+      <!-- ============ FINDINGS ROLLUP ============ -->
+      <section class="space-y-6">
+        <h2 class="text-2xl font-serif font-bold">Findings rollup — four review axes</h2>
+
+        <article class="rounded-lg border border-slate-200 bg-white p-5 space-y-3">
+          <h3 class="font-bold">Spec axis <span class="text-xs font-normal text-slate-500">(plans/s5 §s5.1–s5.3, D-S5-1…D-S5-9)</span></h3>
+          <ul class="text-sm space-y-1.5 list-disc pl-5">
+            <li><span class="mono text-red-700 font-semibold">WRONG</span> — D-S5-3: a live <span class="mono">gantt.plugins</span> assignment whose new plugin's <span class="mono">setup()</span> throws must leave "the Gantt on its previous plugin list". <span class="mono">PluginRuntime.install</span> disposes removed plugins <em>before</em> setting up additions, so a throw leaves already-disposed plugins still listed — and their disposers will run a second time on the next install. <span class="mono text-xs">src/extensions/plugin-runtime.ts:104 vs :132</span></li>
+            <li><span class="mono text-red-700 font-semibold">WRONG</span> — D-S5-4: "every <span class="mono">ctx.*.register*</span> call … throws <span class="mono">RegistrationClosedError</span> afterwards". Only <span class="mono">registerKeybinding</span> is gated; <span class="mono">ctx.commands</span> is the raw registry, so <span class="mono">ctx.commands.register()</span> after setup silently succeeds. <span class="mono text-xs">src/view/gantt-shell.ts:443, src/extensions/plugin-runtime.test.ts:180</span></li>
+            <li><span class="mono text-red-700 font-semibold">WRONG</span> — S5.3 TODO: "Escape registered <em>through the keymap</em> so the innermost popup wins". Implementation uses its own document-level capture listener + module <span class="mono">WeakMap</span> stack — bypassing the keymap's editable-target/IME rule the spec says the keymap provides. <span class="mono text-xs">src/extensions/popup.ts:112–141</span></li>
+            <li><span class="mono text-red-700 font-semibold">WRONG</span> — D-S5-9 table: "<span class="mono">scroll</span> | any scroll of <em>a pane the anchor lives in</em>". Implementation dismisses on any scroll anywhere in the document, and a test codifies it. <span class="mono text-xs">src/extensions/popup.ts:210–218</span></li>
+            <li><span class="mono text-red-700 font-semibold">WRONG</span> — S5.1 TODO <span class="mono">pnpm api-report</span>: report regenerated but carries 6 error-class <span class="mono">ae-forgotten-export</span> warnings (<span class="mono">CommandOf</span>, <span class="mono">CommandContextOf</span>, <span class="mono">CommandRegistryOf</span>, <span class="mono">GanttPlugin_2</span>, <span class="mono">KeyBindingOf</span>, <span class="mono">PluginContext_2</span>); <span class="mono">main</span> had zero. The committed public contract is not clean. <span class="mono text-xs">etc/freegantt.api.md:80–875</span></li>
+            <li><span class="mono text-amber-700 font-semibold">PARTIAL</span> — S5.3 §3 test: the edge-flip fixture sets <span class="mono">pane.right === bounds.right</span>, so a container-clamping implementation passes too; clamp-inside-pane has no direct test. <span class="mono text-xs">src/extensions/popup.test.ts</span></li>
+            <li><span class="mono text-slate-600 font-semibold">SCOPE</span> — commit 67c79dc (grid-pane horizontal scroller, #126, its own decision D-S1.8-13) is not S5.1–S5.3 work; it is documented in <span class="mono">plans/s1.8</span>, but it rides on this branch. Same for 8 extra navigation commands beyond D-S5-6's canonical eleven (documented in the shell, not in <span class="mono">Gantt.commands</span>' public doc).</li>
+          </ul>
+        </article>
+
+        <article class="rounded-lg border border-slate-200 bg-white p-5 space-y-3">
+          <h3 class="font-bold">Standards axis <span class="text-xs font-normal text-slate-500">(AGENTS.md, plans/01 §11 I1–I14, plans/02, CONTEXT.md)</span></h3>
+          <ul class="text-sm space-y-1.5 list-disc pl-5">
+            <li><span class="mono text-red-700 font-semibold">HARD</span> — retired word: <span class="mono">fakeHost</span> in <span class="mono">src/extensions/popup.test.ts:13</span>. "host" is retired repo-wide (D-S1.11-6, #64); S5.1 itself renamed <span class="mono">PluginHost</span>→<span class="mono">PluginRuntime</span> for this. The retired-words guard's <span class="mono">\bhosts?\b</span> regex cannot see camelCase compounds.</li>
+            <li><span class="mono text-red-700 font-semibold">HARD</span> — plans/02 §3 posture: the committed <span class="mono">etc/freegantt.api.md</span> ships with 6 unresolved <span class="mono">ae-forgotten-export</span> messages (same finding as spec axis).</li>
+            <li><span class="mono text-amber-700 font-semibold">JUDGEMENT</span> — D-S1.8-13 contradicted by its own wiring: <span class="mono">forwardPlainWheel</span> calls <span class="mono">preventDefault()</span> then pans <span class="mono">deltaY</span> only, so a plain horizontal wheel over the grid pane is swallowed and the pane's new horizontal scroller cannot be wheel-driven; the e2e must set <span class="mono">scrollLeft</span> by hand. <span class="mono text-xs">src/view/wheel-navigation.ts:81–84</span></li>
+            <li><span class="mono text-amber-700 font-semibold">JUDGEMENT</span> — stale comment: <span class="mono">.dependency-cruiser.cjs</span> still says "view/gantt-shell.ts constructs the <span class="mono">PluginHost</span>" — a symbol renamed out of existence before merge.</li>
+            <li><span class="mono text-amber-700 font-semibold">JUDGEMENT</span> — code comments cite "D-S1.8-8" for the grid scroller; the actual decision id is D-S1.8-13 (D-S1.8-8 is <span class="mono">no-flow-layout-rows</span>, unrelated). <span class="mono text-xs">src/view/styles.ts, src/view/pane-layout.ts</span></li>
+            <li><span class="mono text-amber-700 font-semibold">JUDGEMENT</span> — <span class="mono">Keymap.resolve</span> builds a <span class="mono">CommandContext</span> per candidate binding and evaluates <span class="mono">command.when</span>, then <span class="mono">commands.run()</span> builds it again and re-evaluates — two builds + double guard per keypress. <span class="mono text-xs">src/extensions/keymap.ts:106–124</span></li>
+            <li><span class="mono text-amber-700 font-semibold">JUDGEMENT</span> — accepted: <span class="mono">isDevMode()</span> re-derives <span class="mono">data/dev-mode.ts</span>'s check because extensions/ may import api/ + model/ only (D-S5-5) — repo standard overrides the duplication smell.</li>
+            <li><span class="mono text-amber-700 font-semibold">JUDGEMENT</span> — <span class="mono">as CommandContext&lt;unknown&gt;</span> cast repeated at every command registration site in the shell; documented trust in <span class="mono">api/gantt.ts</span>'s injected builder, but the cast is the shape's tax. <span class="mono text-xs">src/view/gantt-shell.ts:811,819</span></li>
+            <li><span class="mono text-slate-600 font-semibold">NOTE</span> — doc drift: the closed Part list (D-S1.10-1, CONTEXT.md) does not yet name <span class="mono">.fg-overlay</span>/<span class="mono">.fg-popup</span>.</li>
+          </ul>
+        </article>
+
+        <article class="rounded-lg border border-slate-200 bg-white p-5 space-y-3">
+          <h3 class="font-bold">Naming axis <span class="text-xs font-normal text-slate-500">(naming skill, five checks)</span></h3>
+          <ul class="text-sm space-y-1.5 list-disc pl-5">
+            <li><span class="mono text-red-700 font-semibold">CHECK 1 FAIL</span> — CONTEXT.md untouched: Overlay, Popup, Command registry, Keymap, PluginRuntime, DisposableStore, ElementDescription ship without glossary entries. The naming rule is glossary term first, name second; the Part vocabulary (D-S1.10-1) is closed and un-renamed and now lags the DOM.</li>
+            <li><span class="mono text-amber-700 font-semibold">CHECK 4</span> — <span class="mono">DisposableStore</span> re-uses "Store", which the glossary reserves for data/'s normalized entity collections (EntryStore, PluginStore). A cleanup list is not a Store in that sense. Spec-mandated name — record the distinction in the glossary rather than rename.</li>
+            <li><span class="mono text-amber-700 font-semibold">CHECK 4</span> — one concept, two names across the Overlay seam: <span class="mono">Overlay.paneBounds</span> vs <span class="mono">PaneLayout.paneRects()</span>; <span class="mono">Overlay.bounds</span> vs <span class="mono">containerBounds()</span>. Pick "bounds" on both sides.</li>
+            <li><span class="mono text-emerald-700 font-semibold">PASS</span> — <span class="mono">PluginRuntime</span>, <span class="mono">RegistrationGate</span>, <span class="mono">DomOverlay</span>/`Overlay`, <span class="mono">Popup</span>/<span class="mono">PopupPlacement</span>/<span class="mono">DismissTrigger</span>, <span class="mono">Keymap</span>/<span class="mono">normalizeChord</span>/<span class="mono">isEditableTarget</span>, <span class="mono">buildElement</span>/<span class="mono">ElementDescription</span>, <span class="mono">gridContentWidth</span> all read true at their call sites and survive the search test. The <span class="mono">PluginHost</span>→<span class="mono">PluginRuntime</span> and <span class="mono">OverlayHost</span>→<span class="mono">Overlay</span> renames both honoured the retired-word rule.</li>
+          </ul>
+        </article>
+
+        <article class="rounded-lg border border-slate-200 bg-white p-5 space-y-3">
+          <h3 class="font-bold">Simplicity &amp; SOLID axis</h3>
+          <ul class="text-sm space-y-1.5 list-disc pl-5">
+            <li><span class="mono text-emerald-700 font-semibold">GOOD</span> — <span class="mono">PluginRuntime</span> is a deep module: one interface (<span class="mono">install</span>/<span class="mono">plugins</span>/<span class="mono">disposeAll</span>) hides id-diffing, reverse-order unwind, and gate closing. Deletion test passes.</li>
+            <li><span class="mono text-emerald-700 font-semibold">GOOD</span> — the dogfood gate is structural: <span class="mono">extensions-public-only</span> depcruise rule + red test in <span class="mono">scripts/guard-red-test.mjs</span>, not a review note.</li>
+            <li><span class="mono text-emerald-700 font-semibold">GOOD</span> — one Popup placement/flip/clamp implementation for tooltip, menu and editor (D-S5-8's "three positioners would be three sets of edge-case bugs" honoured); <span class="mono">RegistrationGate</span> does one job.</li>
+            <li><span class="mono text-amber-700 font-semibold">SRP</span> — <span class="mono">GanttShell</span> now registers a 19-command catalog inline (+160 lines). Adding a command edits the composition root — divergent change. Candidate C4.</li>
+            <li><span class="mono text-amber-700 font-semibold">OCP</span> — two keyboard-resolution mechanisms (keymap newest-first; popup escape-stack LIFO). The keymap's own newest-first order already gives innermost-wins. Candidate C3.</li>
+            <li><span class="mono text-amber-700 font-semibold">DRIFT</span> — <span class="mono">attachKeyboardNavigation</span> stays exported and tested but the shell no longer calls it: two implementations of keyboard pan can now diverge silently. Delete once S5.5+ proves nothing re-needs it.</li>
+            <li><span class="mono text-slate-600 font-semibold">NOTE</span> — <span class="mono">PaneLayout</span> now owns a second number (<span class="mono">contentWidth</span>); the glossary still says "structure and one number only". Small glossary edit.</li>
+          </ul>
+        </article>
+      </section>
+
+      <!-- ============ CANDIDATES ============ -->
+      <section id="candidates" class="space-y-10">
+        <h2 class="text-2xl font-serif font-bold">Deepening candidates</h2>
+
+        <!-- C1 -->
+        <article id="c1" class="rounded-lg border border-slate-200 bg-white p-6 space-y-4">
+          <div class="flex items-center gap-3">
+            <h3 class="text-xl font-serif font-bold">Make <span class="mono">install()</span> atomic</h3>
+            <span class="text-xs px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-semibold">Strong</span>
+            <span class="text-xs px-2 py-0.5 rounded bg-slate-100 text-slate-600">in-process</span>
+          </div>
+          <p class="mono text-sm text-slate-600">src/extensions/plugin-runtime.ts, src/extensions/plugin-runtime.test.ts</p>
+          <p class="text-sm"><strong>Problem.</strong> D-S5-3's promise — a failed assignment leaves the previous plugin list alive — is broken by ordering: removals are disposed before additions are set up, so a <span class="mono">setup()</span> throw strands disposed-but-listed plugins whose disposers will fire twice.</p>
+          <p class="text-sm"><strong>Solution.</strong> Set additions up first (unwinding only the batch on failure leaves the old set untouched), dispose removals only after every <span class="mono">setup()</span> succeeded, commit the merged list last.</p>
+          <div class="grid md:grid-cols-2 gap-4">
+            <div class="rounded-lg border border-slate-200 bg-white p-4">
+              <p class="text-xs uppercase tracking-wider text-slate-500 mb-2">Before — dispose runs first</p>
+              <pre class="mermaid">
+sequenceDiagram
+  participant C as caller
+  participant R as PluginRuntime
+  participant Old as removed plugin
+  participant New as added plugin
+  C->>R: install(next)
+  R->>Old: dispose()
+  Note over Old: gone
+  R->>New: setup(ctx)
+  New--xR: throws
+  R->>C: PluginSetupError
+  Note over R: #installed still lists Old — disposed, never re-alive
+              </pre>
+            </div>
+            <div class="rounded-lg border border-slate-200 bg-white p-4">
+              <p class="text-xs uppercase tracking-wider text-slate-500 mb-2">After — setup runs first</p>
+              <pre class="mermaid">
+sequenceDiagram
+  participant C as caller
+  participant R as PluginRuntime
+  participant Old as removed plugin
+  participant New as added plugin
+  C->>R: install(next)
+  R->>New: setup(ctx)
+  New--xR: throws
+  R->>C: PluginSetupError
+  Note over Old: untouched — previous list fully alive
+              </pre>
+            </div>
+          </div>
+          <ul class="text-sm grid md:grid-cols-2 gap-x-6 gap-y-1 list-disc pl-5">
+            <li>locality: one ordering rule, one module</li>
+            <li>interface unchanged; implementation absorbs the fix</li>
+            <li>spec promise D-S5-3 becomes testable</li>
+            <li>disposers run at most once</li>
+          </ul>
+        </article>
+
+        <!-- C2 -->
+        <article id="c2" class="rounded-lg border border-slate-200 bg-white p-6 space-y-4">
+          <div class="flex items-center gap-3">
+            <h3 class="text-xl font-serif font-bold">One gate for every <span class="mono">register*</span></h3>
+            <span class="text-xs px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-semibold">Strong</span>
+            <span class="text-xs px-2 py-0.5 rounded bg-slate-100 text-slate-600">local-substitutable</span>
+          </div>
+          <p class="mono text-sm text-slate-600">src/extensions/plugin-runtime.ts, src/api/plugin.ts, src/view/gantt-shell.ts</p>
+          <p class="text-sm"><strong>Problem.</strong> D-S5-4 ("registration is legal during setup only") is enforced seam by seam by hand — and the commands seam already leaked: <span class="mono">ctx.commands</span> is the raw registry, so its <span class="mono">register</span> outlives setup. Every future <span class="mono">register*</span> (S5.4 renderers, S5.6 decorations, S5.7 columns) re-derives the same check or repeats the leak.</p>
+          <p class="text-sm"><strong>Solution.</strong> Deepen the registration seam inside the runtime: hand each plugin registration views whose <span class="mono">register</span> asserts the plugin's own gate, and stop exporting raw registrables on the context. The gate closes once, in <span class="mono">install()</span>, for every seam at once.</p>
+          <div class="grid md:grid-cols-2 gap-4">
+            <div class="rounded-lg border border-slate-200 bg-white p-4">
+              <p class="text-xs uppercase tracking-wider text-slate-500 mb-2">Before — per-seam gates, one leaks</p>
+              <pre class="mermaid">
+flowchart LR
+  P["plugin setup(ctx)"] --> K["registerKeybinding"]
+  K --> G["RegistrationGate"]
+  P -->|"raw registry"| CR["CommandRegistry.register"]
+  CR -.leak.-> L["works after setup"]
+  classDef leak stroke:#dc2626,stroke-width:2px;
+  class CR,L leak
+              </pre>
+            </div>
+            <div class="rounded-lg border border-slate-200 bg-white p-4">
+              <p class="text-xs uppercase tracking-wider text-slate-500 mb-2">After — the runtime owns the gate</p>
+              <pre class="mermaid">
+flowchart LR
+  P["plugin setup(ctx)"] --> V["registration views<br/>(keybinding, command, renderer, …)"]
+  V --> G["RegistrationGate"]
+  G --> R["seams: keymap, commands, …"]
+  classDef deep fill:#0f172a,color:#fff;
+  class V,G deep
+              </pre>
+            </div>
+          </div>
+          <ul class="text-sm grid md:grid-cols-2 gap-x-6 gap-y-1 list-disc pl-5">
+            <li>leverage: one gate, N seams, zero re-derivations</li>
+            <li>locality: D-S5-4 lives in one module</li>
+            <li>interface shrinks: no raw registry on the context</li>
+            <li>the S5.4–S5.9 seams inherit the rule free</li>
+          </ul>
+        </article>
+
+        <!-- C3 -->
+        <article id="c3" class="rounded-lg border border-slate-200 bg-white p-6 space-y-4">
+          <div class="flex items-center gap-3">
+            <h3 class="text-xl font-serif font-bold">Fold popup Escape into the keymap</h3>
+            <span class="text-xs px-2 py-0.5 rounded bg-amber-100 text-amber-800 font-semibold">Worth exploring</span>
+            <span class="text-xs px-2 py-0.5 rounded bg-slate-100 text-slate-600">in-process</span>
+          </div>
+          <p class="mono text-sm text-slate-600">src/extensions/popup.ts, src/extensions/keymap.ts, src/view/gantt-shell.ts</p>
+          <p class="text-sm"><strong>Problem.</strong> Two keyboard-resolution mechanisms now coexist: the keymap (newest-first, editable-target aware) and popup's own capture-phase Escape stack on a module <span class="mono">WeakMap</span> — a second resolver that bypasses the editable-target rule and gives two Gantts registration-order-dependent Escape handling. The spec asked for the keymap path; newest-first already <em>is</em> innermost-wins.</p>
+          <p class="text-sm"><strong>Solution.</strong> On open, the popup registers <span class="mono">{ chord: 'Escape', command }/run-close</span> through the keymap and unregisters on close; the LIFO stack, the WeakMap and the document listener disappear.</p>
+          <div class="grid md:grid-cols-2 gap-4">
+            <div class="rounded-lg border border-slate-200 bg-white p-4">
+              <p class="text-xs uppercase tracking-wider text-slate-500 mb-2">Before — two resolvers, one seam</p>
+              <pre class="mermaid">
+flowchart TD
+  KE["document keydown (capture)"] --> ES["escapeStacks WeakMap<br/>LIFO per Overlay"]
+  KC["container keydown"] --> KM["Keymap<br/>newest-first, editable-aware"]
+  ES --> P["popup close"]
+  KM --> C["commands"]
+  classDef leak stroke:#dc2626,stroke-width:2px;
+  class ES,KE leak
+              </pre>
+            </div>
+            <div class="rounded-lg border border-slate-200 bg-white p-4">
+              <p class="text-xs uppercase tracking-wider text-slate-500 mb-2">After — one resolver</p>
+              <pre class="mermaid">
+flowchart TD
+  KC["container keydown"] --> KM["Keymap<br/>newest-first, editable-aware"]
+  KM -->|"Escape binding<br/>(registered on open,<br/>unregistered on close)"| P["popup close"]
+  KM --> C["commands"]
+  classDef deep fill:#0f172a,color:#fff;
+  class KM deep
+              </pre>
+            </div>
+          </div>
+          <ul class="text-sm grid md:grid-cols-2 gap-x-6 gap-y-1 list-disc pl-5">
+            <li>one seam for keyboard resolution</li>
+            <li>editable-target rule holds for Escape</li>
+            <li>delete the WeakMap + document listener</li>
+            <li>two-Gantt Escape order becomes defined</li>
+          </ul>
+        </article>
+
+        <!-- C4 -->
+        <article id="c4" class="rounded-lg border border-slate-200 bg-white p-6 space-y-4">
+          <div class="flex items-center gap-3">
+            <h3 class="text-xl font-serif font-bold">Move the core command catalog out of <span class="mono">GanttShell</span></h3>
+            <span class="text-xs px-2 py-0.5 rounded bg-amber-100 text-amber-800 font-semibold">Worth exploring</span>
+            <span class="text-xs px-2 py-0.5 rounded bg-slate-100 text-slate-600">in-process</span>
+          </div>
+          <p class="mono text-sm text-slate-600">src/view/gantt-shell.ts (+160 lines inline), src/extensions/commands.ts</p>
+          <p class="text-sm"><strong>Problem.</strong> The shell is the composition root and, since S5.2, also the command catalog. Every new command edits <span class="mono">gantt-shell.ts</span> — divergent change in the file every other slice also touches.</p>
+          <p class="text-sm"><strong>Solution.</strong> A <span class="mono">view/core-commands.ts</span> module: <span class="mono">registerCoreCommands(registry, ports)</span> where <span class="mono">ports</span> names the shell verbs commands call. The shell keeps wiring; the catalog gets its own module, its own tests, its own reason to change.</p>
+          <div class="grid md:grid-cols-2 gap-4">
+            <div class="rounded-lg border border-slate-200 bg-white p-4">
+              <p class="text-xs uppercase tracking-wider text-slate-500 mb-2">Before — interface ≈ implementation</p>
+              <div class="flex gap-3 items-end justify-center h-56">
+                <div class="w-24 bg-white border border-slate-300 rounded flex flex-col">
+                  <div class="bg-amber-200 text-center text-xs py-1 border-b border-slate-300">interface<br/>~15 methods</div>
+                  <div class="bg-amber-50 text-center text-xs py-1 flex-1">command catalog<br/>+160 lines</div>
+                </div>
+                <div class="text-slate-400 self-center">→</div>
+                <div class="w-24 bg-white border border-slate-300 rounded flex flex-col h-full">
+                  <div class="bg-slate-200 text-center text-xs py-1 border-b border-slate-300">GanttShell</div>
+                  <div class="text-center text-xs py-1 flex-1">panes, viewport, gestures, overlay, plugins…</div>
+                </div>
+              </div>
+            </div>
+            <div class="rounded-lg border border-slate-200 bg-white p-4">
+              <p class="text-xs uppercase tracking-wider text-slate-500 mb-2">After — deep catalog module</p>
+              <div class="flex gap-3 items-end justify-center h-56">
+                <div class="w-24 bg-white border border-slate-300 rounded flex flex-col h-16">
+                  <div class="bg-emerald-200 text-center text-xs py-1 border-b border-slate-300">registerCoreCommands<br/>(registry, ports)</div>
+                </div>
+                <div class="text-slate-400 self-center">→</div>
+                <div class="w-28 deep text-white rounded p-2 text-xs h-full">
+                  <div class="text-center uppercase tracking-wider mb-1">core-commands</div>
+                  <div class="opacity-70">19 commands · labels · whens · default bindings — tested here, not through the shell</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <ul class="text-sm grid md:grid-cols-2 gap-x-6 gap-y-1 list-disc pl-5">
+            <li>shell changes for one reason again</li>
+            <li>catalog tested through its own interface</li>
+            <li>S5.5 menu work reads one module</li>
+            <li>leverage: ports make verbs explicit</li>
+          </ul>
+        </article>
+
+        <!-- C5 -->
+        <article id="c5" class="rounded-lg border border-slate-200 bg-white p-6 space-y-4">
+          <div class="flex items-center gap-3">
+            <h3 class="text-xl font-serif font-bold">Publish the generic shapes; clean the public report</h3>
+            <span class="text-xs px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-semibold">Strong</span>
+            <span class="text-xs px-2 py-0.5 rounded bg-slate-100 text-slate-600">ports &amp; adapters</span>
+          </div>
+          <p class="mono text-sm text-slate-600">src/api/index.ts, src/api/command.ts, src/api/plugin.ts, etc/freegantt.api.md</p>
+          <p class="text-sm"><strong>Problem.</strong> The bound aliases (<span class="mono">Command</span>, <span class="mono">GanttPlugin</span>, …) resolve to <span class="mono">*Of&lt;TGantt&gt;</span> generics the entry point never exports, so the committed API report carries 6 error-class <span class="mono">ae-forgotten-export</span> messages — the reviewed public surface artifact documents a broken cross-reference.</p>
+          <p class="text-sm"><strong>Solution.</strong> Export the six generic shapes from <span class="mono">api/index.ts</span> (they are pure types; the sealed-exports rule is about reachability, and these are the reachable definitions). The report goes back to zero warnings.</p>
+          <div class="grid md:grid-cols-2 gap-4">
+            <div class="rounded-lg border border-slate-200 bg-white p-4">
+              <p class="text-xs uppercase tracking-wider text-slate-500 mb-2">Before — alias resolves to nothing exported</p>
+              <pre class="mermaid">
+flowchart LR
+  A["export type Command =<br/>CommandOf&lt;Gantt&gt;"] --> B["CommandOf&lt;TGantt&gt;"]
+  B -.leak.-> X["not in api/index.ts<br/>ae-forgotten-export"]
+  classDef leak stroke:#dc2626,stroke-width:2px;
+  class B,X leak
+              </pre>
+            </div>
+            <div class="rounded-lg border border-slate-200 bg-white p-4">
+              <p class="text-xs uppercase tracking-wider text-slate-500 mb-2">After — generic exported beside its binding</p>
+              <pre class="mermaid">
+flowchart LR
+  A["export type Command =<br/>CommandOf&lt;Gantt&gt;"] --> B["export type CommandOf&lt;TGantt&gt;"]
+  B --> E["api/index.ts — report clean"]
+  classDef deep fill:#0f172a,color:#fff;
+  class E deep
+              </pre>
+            </div>
+          </div>
+          <ul class="text-sm grid md:grid-cols-2 gap-x-6 gap-y-1 list-disc pl-5">
+            <li>public report back to zero warnings</li>
+            <li>type-only change, zero runtime cost</li>
+            <li>interface the report can name</li>
+            <li>unblocks S5.10's DatasetPlugin shapes</li>
+          </ul>
+        </article>
+      </section>
+
+      <!-- ============ TOP RECOMMENDATION ============ -->
+      <section id="top-recommendation" class="space-y-4">
+        <h2 class="text-2xl font-serif font-bold">Top recommendation</h2>
+        <div class="rounded-lg border-2 border-emerald-600 bg-emerald-50 p-6 space-y-2">
+          <p class="font-bold text-lg"><a class="underline decoration-emerald-600" href="#c2">One gate for every <span class="mono">register*</span></a> — with <a class="underline decoration-emerald-600" href="#c1"><span class="mono">install()</span> atomicity</a> in the same pass.</p>
+          <p class="text-sm">Both live in <span class="mono">plugin-runtime.ts</span>, both are spec promises already broken once each, and the plugin seam is the foundation S5.4–S5.12 build on — every later <span class="mono">register*</span> either inherits the gate for free or copies the leak. The popup Escape and command-catalog moves are follow-ups, not prerequisites.</p>
+        </div>
+      </section>
+
+      <footer class="text-xs text-slate-400 pt-4 border-t border-slate-200">
+        Branch review · s5-start · 2026-09-02 · axes: Spec, Standards, Naming, Simplicity/SOLID · verification green at review time
+      </footer>
+    </main>
+  </body>
+</html>
