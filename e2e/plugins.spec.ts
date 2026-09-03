@@ -21,3 +21,46 @@ test('hovering a bar opens a tooltip with the entry name and dates', async ({ pa
   await page.mouse.move(0, 0);
   await expect(tooltip).toHaveCount(0);
 });
+
+// [S5-A2]: harness/plugins.html installs weekendShading() — harness/plugins/weekend-shading.ts,
+// written against the public 'freegantt' entry alone (D-S5-15/D-S5-16). Bands appear, follow a
+// pan, and the page's own checkbox removes the plugin live (no core edit either way).
+test('weekend bands appear, follow a pan, and a checkbox removes the plugin live', async ({ page }) => {
+  await page.goto('/plugins.html');
+  await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
+
+  const bands = page.locator('#gantt .fg-range-band.demo-weekend-band');
+  await expect(bands.first()).toBeVisible();
+  const bandCountBefore = await bands.count();
+  expect(bandCountBefore).toBeGreaterThan(0);
+
+  const firstBandBefore = await bands.first().boundingBox();
+  if (!firstBandBefore) throw new Error('missing bounding box');
+
+  // Pans the visible window right, through the same core command (freegantt.panRight) a pointer
+  // gesture binds to — real keyboard interaction, not an imperative call into the Gantt. Focus
+  // must land on the container itself (the one honest tab stop, view/pane-layout.ts) for the
+  // shell's keydown listener to see it — same pattern e2e/hierarchy.spec.ts's own ArrowRight test uses.
+  const ganttRoot = page.locator('#gantt');
+  await ganttRoot.focus();
+  await expect(ganttRoot).toBeFocused();
+
+  // Presses inside the poll itself (not once, up front): a worker under load can still be settling
+  // the page's own initial today-line pan when `firstBandBefore` above was captured, so a single
+  // burst of key presses can race that settle. Pressing again on every retry is self-healing either way.
+  await expect
+    .poll(async () => {
+      await page.keyboard.press('ArrowRight');
+      const box = await bands.first().boundingBox();
+      return box?.x ?? null;
+    })
+    .not.toBe(firstBandBefore.x);
+
+  // The checkbox removes the plugin live — every band disappears, no remount of anything else.
+  const toggle = page.locator('#weekend-shading-toggle');
+  await toggle.uncheck();
+  await expect(bands).toHaveCount(0);
+
+  await toggle.check();
+  await expect(bands.first()).toBeVisible();
+});
