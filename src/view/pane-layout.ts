@@ -6,7 +6,7 @@
 // The timeline pane is the only *vertical* scroller (D-D, D-S1.8-1): the grid pane has none of its
 // own — its row layer is what `RenderSurfaces.grid` mounts into, and follows the timeline pane's
 // vertical scroll by one transform per frame instead of a second real scrollbar (render/dom/index.ts).
-// Horizontally the grid pane is its own, independent native scroller (D-S1.8-8, #126) — its content
+// Horizontally the grid pane is its own, independent native scroller (D-S1.8-13, #126) — its content
 // only widens past `gridWidth` when fixed-width columns overflow it, unsynced with the timeline's
 // own (time-axis) horizontal scroll.
 
@@ -33,7 +33,7 @@ export interface PaneLayoutOptions {
 export interface Panes {
   /** The grid pane's row layer. Row labels and Grid cells. No *vertical* scrollbar — it follows
    *  the scroll owner by transform (D-S1.8-1). The grid pane itself is a real horizontal
-   *  scroller when its content overflows (D-S1.8-8, #126). */
+   *  scroller when its content overflows (D-S1.8-13, #126). */
   readonly grid: HTMLElement;
   /** Column headers, overlaid on the grid spacer so they match the timeline header height. */
   readonly gridHeader: HTMLElement;

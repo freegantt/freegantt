@@ -10,33 +10,33 @@ import type { ElementDescription } from '../../layout/index.js';
 /** Builds a fresh node for one `ElementDescription`, recursing into `children`. `text` is set as
  *  `textContent` (I13 — markup in it stays text); `html` is the explicit, separate opt-in and skips
  *  `children` when both are given, since the two text channels never combine. */
-export function buildElement(desc: ElementDescription): HTMLElement {
-  const node = document.createElement(desc.tag ?? 'div');
+export function buildElement(description: ElementDescription): HTMLElement {
+  const node = document.createElement(description.tag ?? 'div');
 
-  if (desc.class) {
-    for (const [name, on] of Object.entries(desc.class)) {
+  if (description.class) {
+    for (const [name, on] of Object.entries(description.class)) {
       if (on) node.classList.add(name);
     }
   }
-  if (desc.style) {
-    for (const [prop, value] of Object.entries(desc.style)) {
+  if (description.style) {
+    for (const [prop, value] of Object.entries(description.style)) {
       node.style.setProperty(prop, value);
     }
   }
-  if (desc.attrs) {
-    for (const [name, value] of Object.entries(desc.attrs)) {
+  if (description.attrs) {
+    for (const [name, value] of Object.entries(description.attrs)) {
       node.setAttribute(name, value);
     }
   }
-  if (desc.html !== undefined) {
-    node.innerHTML = desc.html;
+  if (description.html !== undefined) {
+    node.innerHTML = description.html;
     return node;
   }
-  if (desc.text !== undefined) {
-    node.textContent = desc.text;
+  if (description.text !== undefined) {
+    node.textContent = description.text;
   }
-  if (desc.children) {
-    for (const child of desc.children) {
+  if (description.children) {
+    for (const child of description.children) {
       node.append(buildElement(child));
     }
   }

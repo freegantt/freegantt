@@ -94,12 +94,12 @@ ${DARK_COLOR_TOKENS}
 /* position: relative so .fg-overlay's inset: 0 (below) anchors to the container's own box, not an
    outer one — the container had no positioned ancestor of its own to need before S5.3. */
 .fg-container { display: flex; overflow: hidden; user-select: none; position: relative; }
-/* D-S1.8-8, #126: horizontal is a real, independent native scroller — vertical stays hidden here
+/* D-S1.8-13, #126: horizontal is a real, independent native scroller — vertical stays hidden here
    and transform-driven (.fg-rows-clip below owns that clip; D-S1.8-1 unchanged for that axis). */
 .fg-grid-pane { display: flex; flex-direction: column; flex-shrink: 0; overflow-x: auto; overflow-y: hidden; background: var(--fg-pane-bg); }
 /* S1.12, D-S1.12-9: mirrors .fg-header's own band stack — one .fg-band per header band
    (setHeaderBandCount), sized from the same --fg-band-height expression.
-   width: --fg-grid-content-width (D-S1.8-8, #126) — falls back to 100% (today's layout, unchanged)
+   width: --fg-grid-content-width (D-S1.8-13, #126) — falls back to 100% (today's layout, unchanged)
    and only widens past the pane when fixed-width columns overflow it (PaneLayout#contentWidth). */
 .fg-grid-spacer { flex-shrink: 0; display: flex; flex-direction: column; position: relative; width: var(--fg-grid-content-width, 100%); }
 .fg-grid-header { position: absolute; inset: 0; display: flex; align-items: stretch; z-index: 1; color: var(--fg-row-label-color); }
