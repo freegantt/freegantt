@@ -232,6 +232,7 @@ export class Dataset<TMeta = unknown, TFields extends Record<string, unknown> = 
     // (undocumented)
     get rollUpKinds(): readonly EntryKind[];
     set rollUpKinds(value: RollUpKinds);
+    get time(): ZonedTime;
     // (undocumented)
     get timeZone(): string;
     toJSON(): DatasetDocument<TMeta>;
@@ -302,6 +303,31 @@ export interface DateLineInput {
 
 // @public
 export type DateOnlyEndRule = 'inclusive' | 'exclusive';
+
+// @public (undocumented)
+export interface DecorationContext {
+    rows: readonly FrameRow[];
+    span: TimeSpan;
+    time: ZonedTime;
+}
+
+// @public
+export type DecorationInput = {
+    kind: 'rangeBand';
+    start: Instant;
+    end: Instant;
+    class?: string;
+} | {
+    kind: 'rowStripe';
+    rowId: RowId;
+    class?: string;
+};
+
+// @public
+export type DecorationLayer = 'underBars' | 'overBars';
+
+// @public (undocumented)
+export type DecorationProvider = (ctx: DecorationContext) => readonly DecorationInput[];
 
 // @public (undocumented)
 export type DismissTrigger = 'escape' | 'outsidePointer' | 'scroll' | 'blur';
@@ -1077,6 +1103,23 @@ export interface PixelSpan {
     readonly x: number;
 }
 
+// @public (undocumented)
+export interface PlainParts {
+    // (undocumented)
+    day: number;
+    dayOfWeek?: number;
+    // (undocumented)
+    hour: number;
+    // (undocumented)
+    minute: number;
+    // (undocumented)
+    month: number;
+    // (undocumented)
+    second: number;
+    // (undocumented)
+    year: number;
+}
+
 // @public
 export type PlannedRowKind = 'entry' | 'header';
 
@@ -1102,6 +1145,7 @@ export interface PluginContextOf<TGantt = unknown> {
         overlay: Overlay;
         registerRenderer<P extends RendererPoint>(point: P, renderer: RendererFor<P>): void;
         resolveTooltip(entryId: EntryId): ElementDescription | undefined;
+        registerDecoration(layer: DecorationLayer, provider: DecorationProvider): void;
     };
 }
 
@@ -1160,6 +1204,18 @@ export interface ProposedSpan {
     readonly entry: EntryId;
     // (undocumented)
     readonly start: Instant;
+}
+
+// @public
+export interface RangeBand {
+    // (undocumented)
+    class?: string;
+    // (undocumented)
+    kind: 'rangeBand';
+    // (undocumented)
+    width: number;
+    // (undocumented)
+    x: number;
 }
 
 // @public
@@ -1240,6 +1296,16 @@ export interface RowSourceCommon {
     heightMode?: RowHeightMode;
     // (undocumented)
     sort?: RowSort;
+}
+
+// @public
+export interface RowStripe {
+    // (undocumented)
+    class?: string;
+    // (undocumented)
+    kind: 'rowStripe';
+    // (undocumented)
+    rowId: RowId;
 }
 
 // @public (undocumented)
@@ -1485,6 +1551,26 @@ export interface ViewPresetHeader extends TickStep {
     // (undocumented)
     format: DateFormat;
     repeatCoarserUnits?: boolean;
+}
+
+// @public
+export interface ZonedTime {
+    // (undocumented)
+    addDays(at: Instant, days: number): Instant;
+    dayOfWeek(at: Instant): number;
+    // (undocumented)
+    diffDays(a: Instant, b: Instant): number;
+    eachDay(span: TimeSpan): readonly Instant[];
+    // (undocumented)
+    fromPlain(plain: PlainParts): Instant;
+    // (undocumented)
+    startOf(at: Instant, unit: TimeUnit): Instant;
+    // (undocumented)
+    startOfDay(at: Instant): Instant;
+    // (undocumented)
+    toPlain(at: Instant): PlainParts;
+    // (undocumented)
+    readonly zone: string;
 }
 
 // (No @packageDocumentation comment for this package)
