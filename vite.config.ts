@@ -11,6 +11,15 @@ export default defineConfig({
   server: {
     host: true,
   },
+  resolve: {
+    alias: {
+      // S5.6, [S5-A2]: same alias as tsconfig.json's own "paths" entry — see that file's comment.
+      // A published `freegantt` package resolves this specifier through its own `exports` map
+      // (dist/api/index.js); this points at the same public entry, unbuilt, so the harness dev
+      // server and `pnpm build` both work with no separate lib build step first.
+      freegantt: fileURLToPath(new URL('./src/api/index.ts', import.meta.url)),
+    },
+  },
   build: {
     outDir: '../dist-harness',
     emptyOutDir: true,

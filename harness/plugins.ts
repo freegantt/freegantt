@@ -2,6 +2,7 @@ import './harness-nav.ts';
 import { Gantt, Dataset, createPopup, itemId, entryId } from '../src/api/index.js';
 import type { GanttPlugin, Popup, RendererByKind, CellRenderer } from '../src/api/index.js';
 import { sampleEntries } from '../fixtures/sample-dataset.js';
+import { weekendShading } from './plugins/weekend-shading.js';
 
 // S5.4's visible-acceptance box (s5.4-renderers.md §4, D-S5-10/11/12): a milestone diamond and a
 // red over-budget cost cell, painted through `barRenderer`/`cellRenderer` alone — no bespoke
@@ -175,3 +176,20 @@ renderersToggle.addEventListener('change', () => {
   }
 });
 renderersToggle.dispatchEvent(new Event('change'));
+
+// S5.6, D-S5-15/D-S5-16, [S5-A2]: weekendShading() is written against the public surface alone
+// ('freegantt', harness/plugins/weekend-shading.ts) — no core edit, no private import. Installed
+// from the start; the checkbox removes it live through the same gantt.plugins assignment every
+// other plugin toggle on this page already uses (I8: no remount).
+gantt.plugins = [...gantt.plugins, weekendShading()];
+
+const weekendToggle = document.querySelector<HTMLInputElement>('#weekend-shading-toggle')!;
+weekendToggle.addEventListener('change', () => {
+  if (weekendToggle.checked) {
+    gantt.plugins = [...gantt.plugins, weekendShading()];
+    writeLog('weekendShading: installed');
+  } else {
+    gantt.plugins = gantt.plugins.filter((plugin) => plugin.id !== 'demo.weekendShading');
+    writeLog('weekendShading: removed');
+  }
+});

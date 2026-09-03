@@ -68,6 +68,11 @@
         color: #b3261e;
         font-weight: 600;
       }
+      /* S5.6, [S5-A2]: weekendShading()'s own band class (D-S5-15 — "the library never invents
+         one"). Applied to .fg-range-band, painted below .fg-bars (render/dom/decorations.ts). */
+      .demo-weekend-band {
+        background: rgba(0, 0, 0, 0.06);
+      }
     </style>
   </head>
   <body>
@@ -83,10 +88,18 @@
       diamond and an over-budget cost cell paints red, both through <code>ElementDescription</code> alone —
       the toggle below switches both off live, no remount (I8).
     </p>
+    <p>
+      <code>weekendShading()</code> (S5.6, D-S5-15/D-S5-16, [S5-A2]): a harness-only, third-party-style plugin
+      — <code>harness/plugins/weekend-shading.ts</code> imports from <code>'freegantt'</code> alone, never a
+      path inside the library. It shades Saturday/Sunday under the bars through
+      <code>ctx.view.registerDecoration</code> and <code>dataset.time</code>. The checkbox below removes it
+      live.
+    </p>
     <div id="controls">
       <button id="toggle-plugin-btn" type="button">Install logging plugin</button>
       <button id="open-popup-btn" type="button">Open popup on selected bar</button>
       <label><input id="renderers-toggle" type="checkbox" checked /> Custom milestone + cost renderers</label>
+      <label><input id="weekend-shading-toggle" type="checkbox" checked /> Weekend shading</label>
     </div>
     <div id="gantt"></div>
     <div id="log" aria-label="Plugin event log"></div>
