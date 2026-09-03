@@ -186,11 +186,19 @@ export function createPopup(overlay: Overlay, keymap: KeyHandlerRegistrar): Popu
         // `stopPropagation` here, not in `Keymap.resolve` itself: only this dismissal needs "never
         // seen past this popup" (the same guarantee the old document-capture listener gave), and
         // scoping it to the handler keeps every other keybinding's propagation behaviour untouched.
+        // `captureInEditable: true` (issue #137 F1, `plans/reviews/2026-09-03-s5-start-fixes-qc.md`):
+        // the editable-target gate exists to protect page-level editables from a stray keybinding,
+        // not to protect a popup's own `<input>` from its own close button. Without this, Escape
+        // typed inside the popup's own input never reaches this handler at all.
         disposables.add(
-          keymap.registerHandler('Escape', (event) => {
-            event.stopPropagation();
-            close();
-          }),
+          keymap.registerHandler(
+            'Escape',
+            (event) => {
+              event.stopPropagation();
+              close();
+            },
+            { captureInEditable: true },
+          ),
         );
       }
       if (dismissOn.includes('outsidePointer')) {
