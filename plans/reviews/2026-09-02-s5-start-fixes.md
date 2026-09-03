@@ -178,17 +178,20 @@ Highest leverage: both bugs live in the seam every later slice's `register*` reu
       `src/extensions/popup.ts` (the `Popup` interface)
 - [x] Mark `attachKeyboardNavigation` (`src/view/keyboard-navigation.ts`) as superseded-but-kept
       in its header comment — zero production callers today, kept intentionally per the S5.2 TODO.
+- [x] **`forwardPlainWheel` swallows horizontal wheel** — design call made (session 2): the fix is
+      scoped to the grid pane's `forwardPlainWheel` branch only, not a pan-vs-scroll policy change
+      for every pane. `preventDefault()`+`ctx.panBy` now fire only when the wheel event carries a
+      vertical component (`deltaY !== 0`); a pure horizontal delta is left untouched so the grid
+      pane's own native `overflow-x: auto` scroller (D-S1.8-13) handles it directly, the same way
+      the timeline pane's plain wheel already reaches the browser's native `scroll` event. Added a
+      regression test asserting `defaultPrevented === false` and no `panBy` call for a pure
+      horizontal wheel.
+      `src/view/wheel-navigation.ts:83-88`, `src/view/wheel-navigation.test.ts`
 
 ---
 
 ## Flagged, not scheduled (needs a decision first, not mechanical)
 
-- **`forwardPlainWheel` swallows horizontal wheel** (`src/view/wheel-navigation.ts:81-84`):
-  `preventDefault()` fires unconditionally and only `deltaY` is used, so the grid pane's new
-  horizontal scroller (#126, D-S1.8-13) can't be wheel-driven. Fixing it touches pan-vs-scroll
-  wheel policy for *all* panes, not just the grid pane — needs a design decision (does plain
-  horizontal wheel scroll the grid pane, or does something else drive it?) before it's a slice
-  item.
 - **`as CommandContext<unknown>` cast** (`gantt-shell.ts:813,819`): review marks this accepted
   (documented trust in the injected builder) — no action planned.
 - **Scope-only items**: commit 67c79dc (#126 grid scroller) and the 8 extra navigation commands
