@@ -241,6 +241,7 @@ export class Gantt {
           overlay: parts.overlay,
           registerRenderer: <P extends RendererPoint>(point: P, renderer: RendererFor<P>): void =>
             parts.registerRenderer(point, renderer),
+          resolveTooltip: parts.resolveTooltip,
         },
       }),
       buildCommandContext: (parts): CommandContext => ({

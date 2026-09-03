@@ -49,6 +49,9 @@ function fakeAnchor(options: {
       resizeListeners.add(callback);
       return () => resizeListeners.delete(callback);
     },
+    elementForEntry() {
+      return undefined;
+    },
   };
 }
 
