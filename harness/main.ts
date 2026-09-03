@@ -1,5 +1,16 @@
 import './harness-nav.ts';
-import { Gantt, Dataset, attemptMutation, createPopup, itemId, now, addMs, MS } from '../src/api/index.js';
+import {
+  Gantt,
+  Dataset,
+  attemptMutation,
+  createPopup,
+  itemId,
+  now,
+  addMs,
+  MS,
+  tooltips,
+  contextMenu,
+} from '../src/api/index.js';
 import type {
   Entry,
   FieldContext,
@@ -500,3 +511,8 @@ renderersToggle.addEventListener('change', () => {
   }
 });
 renderersToggle.dispatchEvent(new Event('change'));
+
+// S5.5, D-S5-13/14: the two shipped built-ins, installed straight from `plugins: [...]` — no config
+// table, no core edit (`[S5-A1]`'s dogfood gate). Hover a bar for its name and dates; right-click a
+// bar (or the timeline canvas) and run "Collapse all" from the menu, or `Shift+F10` on a selected row.
+gantt.plugins = [...gantt.plugins, tooltips(), contextMenu()];
