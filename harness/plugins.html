@@ -69,9 +69,17 @@
         font-weight: 600;
       }
       /* S5.6, [S5-A2]: weekendShading()'s own band class (D-S5-15 — "the library never invents
-         one"). Applied to .fg-range-band, painted below .fg-bars (render/dom/decorations.ts). */
+         one"). Applied to .fg-range-band, painted below .fg-bars (render/dom/decorations.ts).
+         A dark-tinted color and a light-tinted color: this Gantt sets no `theme` option, so it
+         follows the system scheme (view/styles.ts's own default), and a fixed rgba(0,0,0,…) reads
+         as black-on-black once the system scheme is dark. */
       .demo-weekend-band {
         background: rgba(0, 0, 0, 0.06);
+      }
+      @media (prefers-color-scheme: dark) {
+        .demo-weekend-band {
+          background: rgba(255, 255, 255, 0.08);
+        }
       }
     </style>
   </head>
