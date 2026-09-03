@@ -10,6 +10,7 @@ import type { ElementDescription } from '../model/index.js';
 import type { Overlay, OverlayHandle } from '../api/plugin.js';
 import { activateFocusTrap } from './focus-trap.js';
 import type { FocusTrap } from './focus-trap.js';
+import { DisposableStore } from './disposables.js';
 // `./keymap.js` is a sibling `extensions/` module, not a `view/`/`render/` back door (D-S5-5 only
 // forbids those) — see `KeyHandlerRegistrar`'s own doc for why Escape folds into it (C3,
 // `plans/reviews/2026-09-02-s5-start-fixes.md`). The narrow structural type, not the concrete
@@ -51,16 +52,25 @@ function anchorRect(anchor: Anchor): DOMRect {
   return anchor instanceof HTMLElement ? anchor.getBoundingClientRect() : anchor;
 }
 
-/** Which of the two pane rects `anchor` sits in — geometric, not a class-name sniff, since `Anchor`
- *  may be a bare `DOMRect` with no element to walk (D-S5-8: "bounds remains the outer clamp for a
- *  popup whose anchor is not inside either pane"). */
-function paneRectFor(rect: DOMRect, paneBounds: Overlay['paneBounds'], bounds: DOMRect): DOMRect {
+type PaneName = 'grid' | 'timeline';
+
+/** Which of the two panes `rect` sits in — geometric, not a class-name sniff, since neither `Anchor`
+ *  nor a scroll event's target is guaranteed to carry one (D-S5-8: "bounds remains the outer clamp
+ *  for a popup whose anchor is not inside either pane"). `undefined` means neither pane. */
+function paneNameFor(rect: DOMRect, paneBounds: Overlay['paneBounds']): PaneName | undefined {
   const cx = rect.left + rect.width / 2;
   const cy = rect.top + rect.height / 2;
   const inside = (r: DOMRect): boolean => cx >= r.left && cx <= r.right && cy >= r.top && cy <= r.bottom;
-  if (inside(paneBounds.timeline)) return paneBounds.timeline;
-  if (inside(paneBounds.grid)) return paneBounds.grid;
-  return bounds;
+  if (inside(paneBounds.timeline)) return 'timeline';
+  if (inside(paneBounds.grid)) return 'grid';
+  return undefined;
+}
+
+/** Which of the two pane rects `anchor` sits in — falls back to the outer `bounds` clamp when
+ *  `anchor` sits in neither pane. */
+function paneRectFor(rect: DOMRect, paneBounds: Overlay['paneBounds'], bounds: DOMRect): DOMRect {
+  const name = paneNameFor(rect, paneBounds);
+  return name ? paneBounds[name] : bounds;
 }
 
 interface Box {
@@ -122,13 +132,16 @@ export function createPopup(overlay: Overlay, keymap: KeyHandlerRegistrar): Popu
   let wrapper: HTMLElement | undefined;
   let handle: OverlayHandle | undefined;
   let focusTrap: FocusTrap | undefined;
-  let unsubscribers: (() => void)[] = [];
+  let disposables = new DisposableStore();
   let currentOptions: PopupOptions | undefined;
 
   const close = (): void => {
     if (!wrapper) return;
-    for (const off of unsubscribers) off();
-    unsubscribers = [];
+    disposables.disposeAll();
+    // A fresh store, not the same one reused: `DisposableStore.disposeAll()` latches — a store that
+    // has already disposed once ignores every later `add()` (fires it immediately instead), so the
+    // next `open()` needs its own store rather than one already spent.
+    disposables = new DisposableStore();
     focusTrap?.deactivate();
     focusTrap = undefined;
     handle?.detach();
@@ -173,7 +186,7 @@ export function createPopup(overlay: Overlay, keymap: KeyHandlerRegistrar): Popu
         // `stopPropagation` here, not in `Keymap.resolve` itself: only this dismissal needs "never
         // seen past this popup" (the same guarantee the old document-capture listener gave), and
         // scoping it to the handler keeps every other keybinding's propagation behaviour untouched.
-        unsubscribers.push(
+        disposables.add(
           keymap.registerHandler('Escape', (event) => {
             event.stopPropagation();
             close();
@@ -189,16 +202,26 @@ export function createPopup(overlay: Overlay, keymap: KeyHandlerRegistrar): Popu
           close();
         };
         document.addEventListener('pointerdown', onPointerDown, true);
-        unsubscribers.push(() => document.removeEventListener('pointerdown', onPointerDown, true));
+        disposables.add(() => document.removeEventListener('pointerdown', onPointerDown, true));
       }
       if (dismissOn.includes('scroll')) {
         // Scroll does not bubble (only its target fires it), so this listens on the capture phase of
-        // `document` to hear every pane's own scroll, the same reasoning `scroll-attachment.ts`'s own
-        // caller-facing doc gives for D-D's single scroll owner not applying here — a Popup dismisses
-        // on ANY pane scrolling, not just the one it is anchored in.
-        const onScroll = (): void => close();
+        // `document` to hear every pane's own scroll. Scoped to the anchor's own pane (D-S5-9): a
+        // popup anchored in the timeline pane stays open while the grid pane scrolls, and vice versa.
+        // An anchor sitting in neither pane (a toolbar button, say) has no pane to scope to, so any
+        // scroll still dismisses it — the same fallback `paneRectFor` gives the outer `bounds` clamp.
+        const anchorPane = paneNameFor(anchorRect(options.anchor), overlay.paneBounds);
+        const onScroll = (event: Event): void => {
+          const target = event.target;
+          if (anchorPane === undefined) {
+            close();
+            return;
+          }
+          if (!(target instanceof Element)) return;
+          if (paneNameFor(target.getBoundingClientRect(), overlay.paneBounds) === anchorPane) close();
+        };
         document.addEventListener('scroll', onScroll, true);
-        unsubscribers.push(() => document.removeEventListener('scroll', onScroll, true));
+        disposables.add(() => document.removeEventListener('scroll', onScroll, true));
       }
       if (dismissOn.includes('blur')) {
         const onFocusOut = (event: FocusEvent): void => {
@@ -207,9 +230,9 @@ export function createPopup(overlay: Overlay, keymap: KeyHandlerRegistrar): Popu
           close();
         };
         node.addEventListener('focusout', onFocusOut);
-        unsubscribers.push(() => node.removeEventListener('focusout', onFocusOut));
+        disposables.add(() => node.removeEventListener('focusout', onFocusOut));
       }
-      unsubscribers.push(overlay.onResize(reposition));
+      disposables.add(overlay.onResize(reposition));
 
       if (options.focus === 'trap') {
         focusTrap = activateFocusTrap(node);

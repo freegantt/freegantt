@@ -181,7 +181,7 @@ describe('Popup', () => {
     expect(popup.isOpen).toBe(false);
   });
 
-  it('a scroll anywhere in the document closes the popup', () => {
+  it("a scroll inside the anchor's own pane closes the popup", () => {
     const overlay = fakeAnchor({
       bounds: rect({ right: 1000, bottom: 500 }),
       grid: rect({ right: 160, bottom: 500 }),
@@ -189,10 +189,40 @@ describe('Popup', () => {
     });
     withFixedPopupSize(overlay, { width: 100, height: 40 });
     const popup = createPopup(overlay, makeKeymap());
+    // Anchored inside the timeline pane (left: 160..1000).
     popup.open({ anchor: rect({ left: 300, top: 100, right: 340, bottom: 120 }), content: { text: 'x' } });
 
-    document.body.dispatchEvent(new Event('scroll'));
+    // The scroll's own target sits inside the same (timeline) pane — happy-dom does no layout, so
+    // its rect is stubbed directly, the same way `withFixedPopupSize` stubs `offsetWidth`.
+    const timelineScroller = document.createElement('div');
+    document.body.append(timelineScroller);
+    Object.defineProperty(timelineScroller, 'getBoundingClientRect', {
+      value: () => rect({ left: 160, top: 0, right: 1000, bottom: 500 }),
+    });
+    timelineScroller.dispatchEvent(new Event('scroll', { bubbles: false }));
     expect(popup.isOpen).toBe(false);
+  });
+
+  it('a scroll in an unrelated pane does not close the popup', () => {
+    const overlay = fakeAnchor({
+      bounds: rect({ right: 1000, bottom: 500 }),
+      grid: rect({ right: 160, bottom: 500 }),
+      timeline: rect({ left: 160, right: 1000, bottom: 500 }),
+    });
+    withFixedPopupSize(overlay, { width: 100, height: 40 });
+    const popup = createPopup(overlay, makeKeymap());
+    // Anchored inside the timeline pane (left: 160..1000).
+    popup.open({ anchor: rect({ left: 300, top: 100, right: 340, bottom: 120 }), content: { text: 'x' } });
+
+    // The scroll's own target sits in the grid pane instead — geometrically unrelated to the
+    // anchor's own (timeline) pane, so the popup stays open.
+    const gridScroller = document.createElement('div');
+    document.body.append(gridScroller);
+    Object.defineProperty(gridScroller, 'getBoundingClientRect', {
+      value: () => rect({ left: 0, top: 0, right: 160, bottom: 500 }),
+    });
+    gridScroller.dispatchEvent(new Event('scroll', { bubbles: false }));
+    expect(popup.isOpen).toBe(true);
   });
 
   it('focus: "trap" cycles Tab inside and restores focus on close; focus: "none" never moves it', () => {

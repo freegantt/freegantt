@@ -92,15 +92,20 @@ Highest leverage: both bugs live in the seam every later slice's `register*` reu
       third party reaches" promise stays true.
       `src/extensions/keymap.ts`, `src/extensions/popup.ts`, `src/api/plugin.ts`, `src/api/gantt.ts`,
       `src/view/gantt-shell.ts`, `harness/plugins.ts`
-- [ ] **D-S5-9 — scope scroll-dismiss to the anchor's pane**, not any scroll anywhere in the
-      document.
-      `src/extensions/popup.ts:210-218`
-- [ ] Update `popup.test.ts:155-167` ("a scroll anywhere in the document closes the popup") to
+- [x] **D-S5-9 — scope scroll-dismiss to the anchor's pane**, not any scroll anywhere in the
+      document. Added `paneNameFor` (a name-returning sibling of `paneRectFor`) and scoped the
+      `scroll` listener's `onScroll` to compare the anchor's own pane against the scroll event's
+      `target` pane; an anchor sitting in neither pane still dismisses on any scroll (no pane to
+      scope to, same fallback `paneRectFor` gives the outer `bounds` clamp).
+      `src/extensions/popup.ts`
+- [x] Update `popup.test.ts:155-167` ("a scroll anywhere in the document closes the popup") to
       assert pane-scoped dismissal; add a case proving a scroll in an unrelated pane does *not*
       close the popup.
-- [ ] Adopt `DisposableStore` in `createPopup` instead of the hand-rolled `unsubscribers` array
-      (`DisposableStore` already used by `plugin-runtime.ts` in the same layer).
-      `src/extensions/popup.ts:149-156`
+- [x] Adopt `DisposableStore` in `createPopup` instead of the hand-rolled `unsubscribers` array
+      (`DisposableStore` already used by `plugin-runtime.ts` in the same layer). `close()` now
+      calls `disposeAll()` and swaps in a fresh store (the store latches after disposal, so it
+      cannot be reused across `open()` calls the way the old array was reset in place).
+      `src/extensions/popup.ts`
 - [x] Fix the flip/clamp test fixture: `popup.test.ts:92-96` sets the timeline pane's `right`
       equal to the overlay's outer `bounds.right`, so container-clamping and pane-clamping are
       indistinguishable. Give the pane a right edge strictly inside the container bounds.
@@ -110,7 +115,8 @@ Highest leverage: both bugs live in the seam every later slice's `register*` reu
 - [x] Rename `fakeHost` → e.g. `fakeAnchor`/`stubAnchor` ("host" is repo-retired vocabulary,
       D-S1.11-6, #64 — this same branch renamed `PluginHost`→`PluginRuntime` for the same reason).
       `src/extensions/popup.test.ts:13`
-- [ ] `pnpm test && pnpm tsc && pnpm depcruise` clean before moving on.
+- [x] `pnpm test && pnpm tsc && pnpm depcruise` clean before moving on. (`pnpm test:dom` 388/388,
+      `pnpm test:node` 484/484 — no `test` script exists; `pnpm tsc`/`pnpm boundaries` clean.)
 
 ## Slice 3 — `GanttShell`: extract the command catalog (C4)
 
