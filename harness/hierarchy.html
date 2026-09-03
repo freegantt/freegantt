@@ -51,7 +51,8 @@
       #controls button {
         font: inherit;
       }
-      #selection-readout {
+      #selection-readout,
+      #grid-columns-readout {
         margin: 0;
         font-size: 0.85rem;
         color: #555;
@@ -81,7 +82,9 @@
     <p>
       One Gantt, one fixture (<code>fixtures/hierarchy-dataset.ts</code>). The controls below exercise live
       row re-resolution, pack-mode heights, tree collapse, declared-field rollup, and JSON round-trip — with
-      every committed changeset logged the same way <code>data.html</code> does (D-S2-17).
+      every committed changeset logged the same way <code>data.html</code> does (D-S2-17). Drag a column edge
+      to resize it or a header cell to reorder it (S5.7, D-S5-18) — a focused header cell also takes
+      <kbd>Shift+Arrow</kbd> to resize and <kbd>Alt+Arrow</kbd> to move.
     </p>
     <div id="controls">
       <label>
@@ -115,6 +118,7 @@
       <label><input id="autogroup-checkbox" type="checkbox" checked /> autoGroup (rebuild on change)</label>
       <button id="reparent-btn" type="button">Reparent beta under plain parent</button>
       <p id="selection-readout">Selection: (none)</p>
+      <p id="grid-columns-readout">Columns: (drag a column edge to resize, drag a header to reorder)</p>
       <button id="cost-btn" type="button">Set cost 500</button>
       <button id="undo-btn" type="button">Undo</button>
       <button id="redo-btn" type="button">Redo</button>

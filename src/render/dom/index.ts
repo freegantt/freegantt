@@ -72,6 +72,9 @@ type CellItem = {
   expanded: boolean;
   /** S5.4, D-S5-11: a resolved `cellRenderer`'s output for this one cell — undefined keeps `text`. */
   content?: ElementDescription;
+  /** S5.7, D-S5-18: header cells only — `cellItemsForRow`'s row cells never set these. */
+  resizable?: boolean;
+  movable?: boolean;
 };
 type CellGeom = {
   text: string;
@@ -88,6 +91,10 @@ type HeaderCellGeom = {
   align: 'start' | 'end';
   width: number;
   flex: number;
+  /** S5.7, D-S5-18: default `true` when absent — painted as an attribute so the base stylesheet can
+   *  hide the resizer grip / drop the movable cursor for a fixed or pinned column. */
+  resizable: boolean;
+  movable: boolean;
 };
 type RowGeom = {
   top: number;
@@ -188,6 +195,13 @@ export function createDomBackend(options?: DomBackendOptions): RenderBackend<HTM
   // position by one `translateY(-visible.y)` per frame (D-S1.8-1), written in `sync()` below.
   let gridLayer: HTMLElement | undefined;
   let gridHeaderLayer: HTMLElement | undefined;
+  /** S5.7, D-S5-18: written by `syncGridHeader`, read by `applyState`'s drop-indicator paint for the
+   *  `columnDropIndicator: null` ("at the end") case. */
+  let lastHeaderColumnKeys: readonly string[] = [];
+  /** What `applyState`'s resize-preview paint last touched (S5.7, D-S5-18) — diff-and-touch-only,
+   *  the same posture every other `paintedX` field in this file already takes (I5). */
+  let paintedColumnResize: { columnKey: string; widthPx: number } | undefined;
+  let paintedColumnDropKey: string | undefined;
   // The timeline pane's content layer (RenderSurfaces.timeline) — this backend's own header, bar
   // and sizer layers mount inside it, at x=0: no gutter to offset by, the grid pane owns that width.
   let timelineHost: HTMLElement | undefined;
@@ -268,6 +282,57 @@ export function createDomBackend(options?: DomBackendOptions): RenderBackend<HTM
     cursorLineLabel.hidden = label === undefined || label === '';
     cursorLineLabel.style.transform = `translateX(${x}px)`;
     cursorLineLabel.textContent = label ?? '';
+  }
+
+  function cssEscapeAttr(value: string): string {
+    return typeof CSS !== 'undefined' && typeof CSS.escape === 'function' ? CSS.escape(value) : value;
+  }
+
+  /** S5.7, D-S5-18: a resize drag's live width, painted on the header cell and every currently
+   *  mounted body cell for that column — the same `data-field` attribute `cellSpec`/`headerCellSpec`
+   *  already stamp, so no second index is needed to find them. Diffs against what was last painted
+   *  (I5): a no-op when neither the column nor the width actually changed. */
+  function paintColumnResizePreview(preview: { columnKey: string; widthPx: number } | undefined): void {
+    if (
+      preview !== undefined &&
+      paintedColumnResize !== undefined &&
+      paintedColumnResize.columnKey === preview.columnKey &&
+      paintedColumnResize.widthPx === preview.widthPx
+    ) {
+      return;
+    }
+    paintedColumnResize = preview;
+    if (preview === undefined) return;
+    const px = `${preview.widthPx}px`;
+    const header = headerCellLayer.node(preview.columnKey);
+    if (header) {
+      header.style.width = px;
+      header.setAttribute('data-fixed', '');
+    }
+    if (gridLayer) {
+      const selector = `[data-field="${cssEscapeAttr(preview.columnKey)}"]`;
+      gridLayer.querySelectorAll<HTMLElement>(selector).forEach((node) => {
+        node.style.width = px;
+        node.setAttribute('data-fixed', '');
+      });
+    }
+  }
+
+  /** S5.7, D-S5-18: `.fg-column-drop` on the header cell a reorder would land before — or, for `null`
+   *  ("at the end"), on the last header cell with `data-drop="after"` instead of `"before"`, so the
+   *  stylesheet can paint the indicator on the correct edge. */
+  function paintColumnDropIndicator(beforeColumnKey: string | null | undefined): void {
+    if (paintedColumnDropKey !== undefined) {
+      headerCellLayer.node(paintedColumnDropKey)?.removeAttribute('data-drop');
+      paintedColumnDropKey = undefined;
+    }
+    if (beforeColumnKey === undefined) return;
+    const targetKey = beforeColumnKey ?? lastHeaderColumnKeys[lastHeaderColumnKeys.length - 1];
+    if (targetKey === undefined) return;
+    const node = headerCellLayer.node(targetKey);
+    if (!node) return;
+    node.setAttribute('data-drop', beforeColumnKey === null ? 'after' : 'before');
+    paintedColumnDropKey = targetKey;
   }
 
   /** Applies the base committed transform (`syncBars`'s own geometry) to one bar — what a previewed
@@ -416,6 +481,16 @@ export function createDomBackend(options?: DomBackendOptions): RenderBackend<HTM
       const node = document.createElement('div');
       node.className = 'fg-col-header';
       node.dataset['field'] = key;
+      // S5.7, D-S5-18/D-S5-26: no `tabIndex` — D-S1.10-5 keeps the container the one honest tab stop
+      // until S5.11's roving pattern lands. A plain click still sets this cell "focused" for
+      // `Alt+Arrow`/`Shift+Arrow` (`interaction/column-gestures.ts`'s pointerup fallback), the same way
+      // clicking a bar sets the *selection* without moving real DOM focus off the container.
+      const label = document.createElement('span');
+      label.className = 'fg-col-header-label';
+      const resizer = document.createElement('div');
+      resizer.className = 'fg-column-resizer';
+      resizer.setAttribute('aria-hidden', 'true');
+      node.append(label, resizer);
       return node;
     },
     toGeom: (cell: CellItem): HeaderCellGeom => ({
@@ -423,10 +498,17 @@ export function createDomBackend(options?: DomBackendOptions): RenderBackend<HTM
       align: cell.align,
       width: cell.width ?? 0,
       flex: cell.flex ?? 0,
+      resizable: cell.resizable ?? true,
+      movable: cell.movable ?? true,
     }),
     patch: (node: HTMLElement, geom: HeaderCellGeom): void => {
-      node.textContent = geom.text;
+      const label = node.firstElementChild as HTMLElement;
+      label.textContent = geom.text;
       paintColumnBox(node, geom);
+      if (geom.resizable) node.removeAttribute('data-resizable-off');
+      else node.setAttribute('data-resizable-off', '');
+      if (geom.movable) node.removeAttribute('data-movable-off');
+      else node.setAttribute('data-movable-off', '');
     },
   };
 
@@ -513,9 +595,14 @@ export function createDomBackend(options?: DomBackendOptions): RenderBackend<HTM
       };
       if (column.width !== undefined) item.width = column.width;
       if (column.flex !== undefined) item.flex = column.flex;
+      if (column.resizable !== undefined) item.resizable = column.resizable;
+      if (column.movable !== undefined) item.movable = column.movable;
       return item;
     });
     headerCellLayer.sync(gridHeaderLayer, items, headerCellSpec);
+    // S5.7, D-S5-18: `applyState`'s drop-indicator paint needs "the last column" for the `null`
+    // ("at the end") case — the only place that order is known outside `syncGridHeader` itself.
+    lastHeaderColumnKeys = items.map((item) => item.key);
   }
 
   function syncBars(bars: readonly FrameBar[]): void {
@@ -713,6 +800,8 @@ export function createDomBackend(options?: DomBackendOptions): RenderBackend<HTM
 
       paintPreview(state.preview);
       paintCursorLine(state.cursorX, state.cursorLabel);
+      paintColumnResizePreview(state.columnResizePreview);
+      paintColumnDropIndicator(state.columnDropIndicator);
     },
     hitTest(at: ClientPoint): HitResult | null {
       // "The bars array is the hit index; DOM backends get hit-testing from event delegation"
@@ -754,6 +843,9 @@ export function createDomBackend(options?: DomBackendOptions): RenderBackend<HTM
       paintedPreview = new Set();
       paintedDragging = new Set();
       paintedGhost = new Set();
+      lastHeaderColumnKeys = [];
+      paintedColumnResize = undefined;
+      paintedColumnDropKey = undefined;
       gridLayer = undefined;
       gridHeaderLayer = undefined;
       timelineHost = undefined;

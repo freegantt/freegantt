@@ -7,7 +7,7 @@
 // there rather than owning a second copy.
 
 import type { TimeScaleFit } from '../layout/index.js';
-import type { EntryId, Instant } from '../model/index.js';
+import type { EntryId, GridColumn, Instant } from '../model/index.js';
 import type { CollapseChange } from './collapse-state.js';
 
 export type { CollapseChange };
@@ -17,6 +17,18 @@ export { EventBus } from '../data/event-bus.js';
 export interface GridWidthChange {
   readonly from: number;
   readonly to: number;
+}
+
+/** S5.7, D-S5-18: what a resize drag, a reorder drop, and a plain `gantt.gridColumns = […]`
+ *  assignment all fire, through one commit sequence in `GanttShell`. Payload columns are **resolved**
+ *  — what the Gantt actually shows, Field defaults already merged (D-S4-12) — but shaped as `GridColumn`
+ *  (not the layout-only `ResolvedColumn`): a consumer keeps `to` in memory and passes it straight back
+ *  as `gridColumns` within the same session, so the payload must be the same public shape that
+ *  property already takes. `grid-columns.ts`'s `toGridColumn` builds one from a `ResolvedColumn`,
+ *  dropping `format` (a render-time closure with no public type of its own). */
+export interface GridColumnsChange {
+  readonly from: readonly GridColumn[];
+  readonly to: readonly GridColumn[];
 }
 
 /** S3, D-S3-10/D-S3-22. Fires on the Gantt, never the Dataset — selection is Gantt state, so two
@@ -86,6 +98,10 @@ export interface GanttEventMap {
    *  `false` commits nothing. A returned Promise holds the commit-draft ghost until it settles. */
   beforeEntryResize: EntryResize;
   entryResize: EntryResize;
+  /** S5.7, D-S5-18. Sync veto: returning `false` leaves `gridColumns` (and whatever was live-painted
+   *  during the drag that proposed this change) untouched. */
+  beforeGridColumnsChange: GridColumnsChange;
+  gridColumnsChange: GridColumnsChange;
 }
 
 /** The one handler shape `Gantt.on`/`Gantt.off` and `GanttShell.on`/`GanttShell.off` all share

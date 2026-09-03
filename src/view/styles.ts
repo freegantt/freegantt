@@ -103,9 +103,27 @@ ${DARK_COLOR_TOKENS}
    and only widens past the pane when fixed-width columns overflow it (PaneLayout#contentWidth). */
 .fg-grid-spacer { flex-shrink: 0; display: flex; flex-direction: column; position: relative; width: var(--fg-grid-content-width, 100%); }
 .fg-grid-header { position: absolute; inset: 0; display: flex; align-items: stretch; z-index: 1; color: var(--fg-row-label-color); }
-.fg-col-header { display: flex; align-items: center; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; box-sizing: border-box; flex: var(--fg-col-flex, 1) 1 0; }
+/* position: relative so .fg-column-resizer (below) anchors to this cell's own box, not the header row's. */
+.fg-col-header { display: flex; align-items: center; min-width: 0; overflow: hidden; box-sizing: border-box; flex: var(--fg-col-flex, 1) 1 0; position: relative; cursor: pointer; }
 .fg-col-header[data-fixed] { flex: 0 0 auto; }
 .fg-col-header[data-align='end'] { justify-content: flex-end; text-align: end; }
+/* S5.7, D-S5-18: a fixed/pinned column's cursor stays a plain pointer — no resize/reorder affordance
+   to promise. */
+.fg-col-header[data-movable-off] { cursor: default; }
+.fg-col-header-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1 1 auto; }
+/* S5.7, D-S5-18: the resize grip. 6px wide visually; --fg-column-resizer-hit (default 12px, via the
+   ::before overlay below) widens only the pointer hit target, so adjacent cells' text never loses
+   space to it. --fg-column-min-width (default 40, read by GanttShell, no rule of its own here — same
+   posture --fg-splitter-width/--fg-grid-pane-width already take) floors how far a drag can shrink the
+   column it grips. */
+.fg-column-resizer { position: absolute; top: 0; right: 0; height: 100%; width: 6px; cursor: col-resize; touch-action: none; }
+.fg-column-resizer::before { content: ''; position: absolute; inset-block: 0; left: 50%; width: var(--fg-column-resizer-hit, 12px); transform: translateX(-50%); }
+.fg-col-header[data-resizable-off] .fg-column-resizer { display: none; }
+/* S5.7, D-S5-18: the reorder drop indicator — an inset border on the edge a drop would land against,
+   painted on the target header cell rather than a floating element (render/dom/index.ts's own
+   data-drop attribute, "before" or "after"). */
+.fg-col-header[data-drop='before'] { box-shadow: inset 2px 0 0 0 var(--fg-selection-color); }
+.fg-col-header[data-drop='after'] { box-shadow: inset -2px 0 0 0 var(--fg-selection-color); }
 .fg-rows-clip { position: relative; flex: 1 1 auto; overflow: hidden; width: var(--fg-grid-content-width, 100%); }
 .fg-rows { position: relative; height: 100%; }
 .fg-splitter { flex-shrink: 0; cursor: col-resize; background: var(--fg-splitter-color); }

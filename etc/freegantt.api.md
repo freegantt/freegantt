@@ -110,6 +110,16 @@ export interface CollapseChange {
     readonly to: readonly RowId[];
 }
 
+// @public (undocumented)
+export type ColumnCellRenderer = (ctx: ColumnCellRendererContext) => ElementDescription | undefined;
+
+// @public
+export interface ColumnCellRendererContext {
+    entry?: Entry;
+    // (undocumented)
+    value: string;
+}
+
 // @public
 export type Command = CommandOf<Gantt>;
 
@@ -665,6 +675,10 @@ export interface FrameColumn {
     // (undocumented)
     key: FieldKey;
     // (undocumented)
+    movable?: boolean;
+    // (undocumented)
+    resizable?: boolean;
+    // (undocumented)
     width?: number;
 }
 
@@ -808,6 +822,7 @@ export interface GanttEventMap {
     beforeCollapseChange: CollapseChange;
     beforeEntryMove: EntryMove;
     beforeEntryResize: EntryResize;
+    beforeGridColumnsChange: GridColumnsChange;
     // (undocumented)
     beforeGridWidthChange: GridWidthChange;
     beforeSelectionChange: SelectionChange;
@@ -817,6 +832,8 @@ export interface GanttEventMap {
     entryMove: EntryMove;
     // (undocumented)
     entryResize: EntryResize;
+    // (undocumented)
+    gridColumnsChange: GridColumnsChange;
     // (undocumented)
     gridWidthChange: GridWidthChange;
     // (undocumented)
@@ -894,18 +911,30 @@ export type GanttScaleOptions = {
 export interface GridColumn {
     // (undocumented)
     align?: 'start' | 'end';
+    cellRenderer?: ColumnCellRenderer;
+    editable?: boolean;
     // (undocumented)
     field: FieldKey;
     // (undocumented)
     flex?: number;
     // (undocumented)
     header?: string;
+    movable?: boolean;
+    resizable?: boolean;
     // (undocumented)
     width?: number;
 }
 
 // @public
 export type GridColumnInput = FieldKey | GridColumn;
+
+// @public
+export interface GridColumnsChange {
+    // (undocumented)
+    readonly from: readonly GridColumn[];
+    // (undocumented)
+    readonly to: readonly GridColumn[];
+}
 
 // @public (undocumented)
 export interface GridWidthChange {
@@ -1248,7 +1277,14 @@ export type RendererPoint = 'bar' | 'cell' | 'header' | 'tooltip';
 // @public
 export interface ResolvedColumn extends FrameColumn {
     // (undocumented)
+    cellRenderer?: ColumnCellRenderer;
+    editable?: boolean;
+    // (undocumented)
     format(entry: Entry): string;
+    // (undocumented)
+    movable?: boolean;
+    // (undocumented)
+    resizable?: boolean;
 }
 
 // @public

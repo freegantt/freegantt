@@ -1092,4 +1092,43 @@ describe('render/dom backend', () => {
     grid.remove();
     timeline.remove();
   });
+
+  it("a per-column cellRenderer's own resolved output beats the Gantt-wide one for that column only (S5.7, D-S5-17)", () => {
+    // GanttShell's own `resolveCellRenderer` binding (view/gantt-shell.ts) is what actually decides
+    // "per-column wins over Gantt-wide" — this stands in for that resolution the way every other test
+    // in this file already fakes `resolveCellRenderer` rather than constructing a real GanttShell.
+    // What this backend must prove instead: the resolution is per-column-key, not per-frame — one
+    // column paints its own renderer's output while a sibling column keeps the library default.
+    const backend = createDomBackend({
+      entryById: entryLookup,
+      resolveBarRenderer: () => undefined,
+      resolveCellRenderer: (columnKey) =>
+        columnKey === 'cost' ? { renderer: (ctx) => ({ text: `per-column:${ctx.value}` }) } : undefined,
+    });
+    const { grid, timeline } = mountSurfaces();
+    backend.mount({ grid, timeline });
+    const frame = computeFrame({
+      entries: sampleEntries.slice(0, 1),
+      scale,
+      preset,
+      visible: { x: 0, y: 0, width: 0, height: 0 },
+      rowHeight: 32,
+      revision: 0,
+      itemProducerRegistry,
+      columns: [
+        { key: 'name', header: 'Name', align: 'start', format: (e) => e.name },
+        { key: 'cost', header: 'Cost', align: 'end', format: () => '500' },
+      ],
+    });
+    backend.sync(frame);
+
+    const nameCell = grid.querySelector<HTMLElement>('[data-field="name"]')!;
+    const costCell = grid.querySelector<HTMLElement>('[data-field="cost"]')!;
+    expect(nameCell.textContent).toBe(sampleEntries[0]!.name);
+    expect(costCell.textContent).toBe('per-column:500');
+
+    backend.destroy();
+    grid.remove();
+    timeline.remove();
+  });
 });
