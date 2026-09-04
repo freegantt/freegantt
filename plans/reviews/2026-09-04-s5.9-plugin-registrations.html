@@ -42,6 +42,7 @@
             <li><span class="mono text-amber-700 font-semibold">PARTIAL</span> — spec §3: <span class="mono">src/api/dataset.test.ts</span> plugin-registered Field — correctly out of this commit, still listed in §3 as a test for this step.</li>
             <li><span class="mono text-amber-700 font-semibold">WRONG (judgement)</span> — D-S5-22 "removed automatically when this plugin is disposed" for kind defaults is implemented as <span class="mono">Map.delete(kind)</span>. <span class="mono">ItemProducerRegistry.register</span> restores the previous producer. Two plugins that claim the same kind: disposing the later plugin drops the earlier plugin's defaults too. Spec is silent on two plugins; the two seams now disagree. <span class="mono text-xs">gantt-shell.ts registerKindDefaults vs produce-items.ts register</span></li>
             <li><span class="mono text-slate-600 font-semibold">SCOPE</span> — [S5-A3] behavioural test re-implements the four seams inline in <span class="mono">gantt.test.ts</span> instead of installing <span class="mono">bufferKind()</span>. The harness plugin is not the object the named acceptance test runs.</li>
+            <li><span class="mono text-red-700 font-semibold">WRONG</span> — second pass: <span class="mono">PluginContext</span> says a registered column is "removed automatically when this plugin is disposed". <span class="mono">ColumnChrome.commit</span> writes <span class="mono">effectiveInput()</span> into <span class="mono">#gridColumnInput</span>. After any resize, reorder, or keyboard chrome step, the plugin field is now authored. Disposal only splices <span class="mono">#pluginColumns</span>, so the column stays. The disposal test never gestures first. Slice "Landed" notes call the bake-in intentional; the public comment and D-S5-4 lifetime do not. <span class="mono text-xs">column-chrome.ts:220–221 vs plugin.ts:148</span></li>
           </ul>
         </article>
 
@@ -283,7 +284,7 @@ flowchart LR
         <h2 class="text-2xl font-serif font-bold">Top recommendation</h2>
         <div class="rounded-lg border-2 border-emerald-600 bg-emerald-50 p-6 space-y-2">
           <p class="font-bold text-lg"><a class="underline decoration-emerald-600" href="#c1">One dispose contract for every <span class="mono">register*</span></a>, with <a class="underline decoration-emerald-600" href="#c4">glossary Item producer</a> in the same pass.</p>
-          <p class="text-sm">S5.9 proved the open-kind claim. The remaining risk is not missing seams — it is three seams that look alike and unwind unlike. S5.10 will add Field / aggregator / type registers on the Dataset side; if dispose stays bespoke, the ball of mud is the registration tables, not the Gantt. The mapped <span class="mono">KindDefaults</span> type and the late-register tests are cheap follow-ups, not prerequisites.</p>
+          <p class="text-sm">S5.9 proved the open-kind claim. The remaining risk is not missing seams — it is three seams that look alike and unwind unlike, plus plugin columns that stop being plugin-owned after the first chrome commit. S5.10 will add Field / aggregator / type registers on the Dataset side; if dispose stays bespoke, the ball of mud is the registration tables, not the Gantt. The mapped <span class="mono">KindDefaults</span> type and the late-register tests are cheap follow-ups, not prerequisites.</p>
         </div>
       </section>
 
@@ -300,13 +301,38 @@ flowchart LR
 
       <section id="second-pass" class="space-y-6">
         <h2 class="text-2xl font-serif font-bold">Second pass</h2>
-        <p class="text-sm text-slate-600">Filled after the first commit of this file. Checks: ball-of-mud potential, friendlier public interface, self-documentation, SOLID / extensibility.</p>
-        <p class="text-sm italic text-slate-400">Pending post-commit pass.</p>
+        <p class="text-sm text-slate-600">After commit <span class="mono">2b89377</span>. Checks: ball-of-mud potential, friendlier public interface, self-documentation, SOLID / extensibility. A later type-quality commit (<span class="mono">5680ec2</span>, #141 Phase 1) did not touch S5.9's <span class="mono">KindDefaults</span> or producer-map types.</p>
+
+        <article class="rounded-lg border border-red-200 bg-white p-5 space-y-2">
+          <h3 class="font-bold">Ball of mud — column lifetime</h3>
+          <p class="text-sm">The authored / effective split is the right seam. The mud is the first chrome commit crossing it. After that, three facts fight: (1) <span class="mono">gantt.gridColumns</span> is "the consumer's list", (2) a resize of <em>any</em> column copies plugin fields into that list, (3) plugin disposal still only edits <span class="mono">#pluginColumns</span>. A consumer who resizes Name then removes the plugin keeps Risk. That is not extensible; it is two ownership models in one module. Fix: commit width/order onto whichever list currently owns the field — authored stays authored, plugin stays plugin — or document that a chrome commit adopts the column and drop the dispose promise.</p>
+        </article>
+
+        <article class="rounded-lg border border-slate-200 bg-white p-5 space-y-2">
+          <h3 class="font-bold">Friendlier public interface</h3>
+          <p class="text-sm">Do <em>not</em> add <span class="mono">registerKind({ producer, renderer, defaults, commands })</span>. D-S5-22 wants four seams so a plugin can fill one. The call sites already read as English. The unfriendly part is silent: <span class="mono">gantt.gridColumns</span> can grow a field the consumer never assigned, with no event that says "a plugin column was adopted". If adoption stays, raise <span class="mono">gridColumnsChange</span> with a <span class="mono">from</span> that the consumer actually authored, and say so on <span class="mono">registerGridColumn</span>.</p>
+        </article>
+
+        <article class="rounded-lg border border-slate-200 bg-white p-5 space-y-2">
+          <h3 class="font-bold">Self-documentation</h3>
+          <p class="text-sm"><span class="mono">api/plugin.ts</span> comments are the best interface docs in the slice. They still omit adoption-on-commit and last-write-wins-without-stack for kind defaults. <span class="mono">CONTEXT.md</span> still teaches "Item emitter". The stale cell-renderer comment in the shell still talks as if S5.9 has not shipped. Three docs, three ages. Edit those before S5.10; do not add more comment surface on the closures.</p>
+        </article>
+
+        <article class="rounded-lg border border-slate-200 bg-white p-5 space-y-2">
+          <h3 class="font-bold">SOLID / extensibility</h3>
+          <ul class="text-sm space-y-1.5 list-disc pl-5">
+            <li><strong>OCP holds</strong> for kinds: [S5-A3] is real. A fifth kind does not edit <span class="mono">src/</span>.</li>
+            <li><strong>LSP fails</strong> across <span class="mono">register*</span>: dispose does not mean one thing. Plugin authors will copy the producer mental model onto defaults and columns and get it wrong.</li>
+            <li><strong>ISP is fine</strong>: nested <span class="mono">view</span> / <span class="mono">layout</span> / <span class="mono">interaction</span> already split the context. Do not flatten. Do not genericise over kind.</li>
+            <li><strong>DIP is fine</strong>: chrome talks through ports; producers stay in <span class="mono">layout/</span>.</li>
+            <li>S5.10 should copy <span class="mono">ItemProducerRegistry.register</span>'s stacked disposer, not <span class="mono">#kindDefaults.set</span> / <span class="mono">delete</span>.</li>
+          </ul>
+        </article>
       </section>
 
       <section>
         <h2 class="text-2xl font-serif font-bold">Summary</h2>
-        <p class="text-sm">Spec: 6 findings, 0 hard breaches of D-S5-21/22 as landed; worst is kind-defaults dispose vs producer restore, plus missing late-<span class="mono">register*</span> tests. Standards: 1 hard (glossary Item emitter). TypeScript: 0 compile errors; worst smell is hand-copied <span class="mono">KindDefaults</span> and <span class="mono">Map&lt;string&gt;</span> in the producer registry. Architecture: the four seams exist and [S5-A3] holds; deepen dispose before S5.10 copies the split.</p>
+        <p class="text-sm">Spec: 7 findings; worst is plugin-column dispose after a chrome commit (hard), then kind-defaults dispose vs producer restore. Standards: 1 hard (glossary Item emitter). TypeScript: 0 compile errors; worst smell is hand-copied <span class="mono">KindDefaults</span> and <span class="mono">Map&lt;string&gt;</span> in the producer registry. Architecture: the four seams exist and [S5-A3] holds; deepen one dispose contract before S5.10, and decide whether a chrome commit adopts a plugin column or only paints it.</p>
       </section>
     </main>
   </body>

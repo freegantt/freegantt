@@ -36,6 +36,7 @@ export type {
   ColumnCellRenderer,
   ColumnAlign,
   ColumnCellRendererContext,
+  TooltipColumn,
 } from './field.js';
 export {
   FreeGanttError,
