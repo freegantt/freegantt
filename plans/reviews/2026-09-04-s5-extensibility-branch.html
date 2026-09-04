@@ -1,0 +1,512 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Branch review — S5 extensibility and editing</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script type="module">
+      import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+      mermaid.initialize({ startOnLoad: true, theme: "neutral", securityLevel: "loose" });
+    </script>
+    <style>
+      .seam { stroke-dasharray: 4 4; }
+      .leak { stroke: #dc2626; }
+      .deep { background: linear-gradient(135deg, #0f172a, #1e293b); }
+      .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+      .lbl { font-size: 10px; letter-spacing: .08em; text-transform: uppercase; }
+    </style>
+  </head>
+  <body class="bg-stone-50 text-slate-900 font-sans">
+    <main class="max-w-5xl mx-auto px-6 py-12 space-y-14">
+
+      <header class="space-y-3">
+        <h1 class="text-3xl font-serif font-bold">Branch review — S5 extensibility and editing</h1>
+        <p class="text-slate-600">FreeGantt · 2026-09-04 · branch <span class="mono">s5-start</span> against <span class="mono">main</span>. 105 commits, 185 files, +17,068 / −565. Steps S5.0–S5.9 landed; S5.10–S5.12 not started.</p>
+        <div class="text-xs text-slate-500 flex gap-4 pt-1 flex-wrap">
+          <span><span class="inline-block w-3 h-3 border border-slate-400 align-middle"></span> module</span>
+          <span><span class="inline-block w-6 border-t border-dashed border-slate-500 align-middle"></span> seam</span>
+          <span><span class="inline-block w-6 border-t-2 border-red-600 align-middle"></span> leakage</span>
+          <span><span class="inline-block w-3 h-3 deep align-middle"></span> deep module</span>
+        </div>
+      </header>
+
+      <section class="space-y-4">
+        <h2 class="text-2xl font-serif font-bold">Gate status</h2>
+        <div class="rounded-lg border border-emerald-200 bg-emerald-50 p-5">
+          <p class="text-sm text-emerald-900 font-semibold mb-3">Every gate passes on the committed tree.</p>
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+            <div><span class="mono text-emerald-700">PASS</span> <span class="text-slate-600">typecheck</span></div>
+            <div><span class="mono text-emerald-700">PASS</span> <span class="text-slate-600">eslint</span></div>
+            <div><span class="mono text-emerald-700">PASS</span> <span class="text-slate-600">depcruise</span></div>
+            <div><span class="mono text-emerald-700">PASS</span> <span class="text-slate-600">api-report</span></div>
+            <div><span class="mono text-emerald-700">PASS</span> <span class="text-slate-600">513 pure tests</span></div>
+            <div><span class="mono text-emerald-700">PASS</span> <span class="text-slate-600">572 dom tests</span></div>
+            <div><span class="mono text-emerald-700">PASS</span> <span class="text-slate-600">guards (10 red-tests)</span></div>
+            <div><span class="mono text-emerald-700">PASS</span> <span class="text-slate-600">vendor-names, disables</span></div>
+          </div>
+          <p class="text-xs text-emerald-800 mt-3">The findings below are all quality, design and API-shape calls. None of them is caught by tooling — that is why they are here.</p>
+        </div>
+        <div class="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+          <strong>Review scope note.</strong> The working tree carried uncommitted work on #139 (default Grid column width) throughout this review, and it changed while the review ran. Everything below was read from <span class="mono">HEAD</span> only. The #139 work is out of scope.
+        </div>
+      </section>
+
+      <section class="space-y-6">
+        <h2 class="text-2xl font-serif font-bold">What is good</h2>
+        <div class="rounded-lg border border-slate-200 bg-white p-5 text-sm space-y-2">
+          <p>The slice earns its structure. Worth naming before the criticism, because the findings below are refinements of a design that already holds:</p>
+          <ul class="list-disc pl-5 space-y-1.5 text-slate-700">
+            <li><strong>The dogfood gate is real.</strong> <span class="mono">extensions-public-only</span> is a dependency-cruiser rule with a red-test behind it, so <span class="mono">tooltips()</span>, <span class="mono">contextMenu()</span> and <span class="mono">inlineEditing()</span> genuinely cannot reach a back door. That is what makes <span class="mono">[S5-A1]</span> a proof and not a claim.</li>
+            <li><strong>One registration mechanism, not five.</strong> <span class="mono">layout/registration-table.ts</span> (#154) is a stack per key with a per-registration disposer. Commands, renderers, item producers, kind defaults and plugin columns all sit on it, which is why "disposing one plugin never disturbs another's registration on the same key" is one property tested once, rather than five near-misses.</li>
+            <li><strong>Precedence is stated once per axis.</strong> <span class="mono">resolveCapabilities</span> holds consumer → plugin → library in three lines. <span class="mono">RendererRegistry#resolve</span> holds consumer → plugin in two. Neither is re-derived at a call site.</li>
+            <li><strong>Escape folded into the keymap.</strong> Newest-first resolution gives "the innermost popup wins" for free, and deletes the bespoke document-capture stack it replaced.</li>
+            <li><strong>The comments carry design rationale, not restatement.</strong> Nearly every non-obvious line says which decision it implements and what broke without it.</li>
+          </ul>
+        </div>
+      </section>
+
+      <section class="space-y-6">
+        <h2 class="text-2xl font-serif font-bold">Correctness</h2>
+        <p class="text-sm text-slate-600">Two confirmed defects and one design gap. Both defects are in <span class="mono">extensions/features/inline-editing.ts</span>, the largest new plugin (458 lines, one <span class="mono">setup()</span> closure).</p>
+
+        <article class="rounded-lg border border-red-200 bg-white p-5 space-y-3">
+          <div class="flex items-center gap-3">
+            <span class="px-2 py-0.5 rounded text-xs font-semibold bg-red-600 text-white">C1 · confirmed</span>
+            <h3 class="font-bold">The cell editor never repositions on resize</h3>
+          </div>
+          <p class="mono text-xs text-slate-500">src/extensions/features/inline-editing.ts:287 · findCell at :78</p>
+          <pre class="bg-slate-900 text-slate-100 text-xs p-3 rounded overflow-x-auto mono">function findCell(container, entryId, field) {
+  const row = container.querySelector(`.fg-row[data-entry-id="${...}"]`);   // descendants only
+  ...
+}
+// the one call site passes the .fg-row element itself as `container`:
+const detachResize = ctx.view.overlay.onResize(() => {
+  const cell = findCell(row, entryId, field);      // always undefined
+  if (cell) position(wrapper, cell);               // never runs
+});</pre>
+          <p class="text-sm"><strong>Why.</strong> <span class="mono">Element.querySelector</span> matches descendants, never the element itself, and <span class="mono">.fg-row</span> never nests (<span class="mono">render/dom/index.ts:643</span>). So <span class="mono">findCell(row, …)</span> returns <span class="mono">undefined</span> for every call and the resize reposition is dead code. Verified with a happy-dom test.</p>
+          <p class="text-sm"><strong>Effect.</strong> Resize the window, or change a column width, while a cell editor is open: the editor stays at its old offset, floating away from its cell.</p>
+          <p class="text-sm"><strong>Fix.</strong> The row is already the scope — <span class="mono">row.querySelector(`[data-field="…"]`)</span> is the whole lookup. The <span class="mono">entryId</span> parameter is not needed here. Note the name and the doc also disagree with the use: <span class="mono">findCell</span>'s doc says "scoped to this Gantt's own container", and its one caller passes a row.</p>
+        </article>
+
+        <article class="rounded-lg border border-red-200 bg-white p-5 space-y-3">
+          <div class="flex items-center gap-3">
+            <span class="px-2 py-0.5 rounded text-xs font-semibold bg-red-600 text-white">C2 · confirmed</span>
+            <h3 class="font-bold">An invalid value plus a double-click orphans a live editor</h3>
+          </div>
+          <p class="mono text-xs text-slate-500">src/extensions/features/inline-editing.ts:391, :342, :351, :368</p>
+          <pre class="bg-slate-900 text-slate-100 text-xs p-3 rounded overflow-x-auto mono">// openFor assumes closeSession always closes:
+if (session) closeSession('commit');        // :391
+...
+session = current;                          // :368  — overwrites, no teardown
+
+// but commit() declines when the value will not parse:
+const result = control.read();
+if (!result.ok) {
+  markInvalid(wrapper, control.focusTarget);
+  this.settled = false;                     // :342  — session stays open
+  return;                                   //        teardown() never runs
+}</pre>
+          <p class="text-sm"><strong>Repro.</strong> Open the editor on cell A. Type a value the Field's <span class="mono">parseValue</span> rejects. Double-click cell B. <span class="mono">closeSession('commit')</span> declines, <span class="mono">session</span> is then reassigned to B's, and A's wrapper stays presented in the overlay with its <span class="mono">focusout</span> listener, its Escape handler and its focus trap all live.</p>
+          <p class="text-sm"><strong>Effect.</strong> A ghost editor on screen, two Escape handlers racing, and a focus trap with no owner. The plugin's own disposer only closes <span class="mono">session</span>, so the orphan survives uninstall.</p>
+          <p class="text-sm"><strong>Fix.</strong> Make the refusal legible at the call site: <span class="mono">closeSession</span> should return whether it closed, and <span class="mono">openFor</span> should bail when it did not. The deeper cause is <strong>C2b</strong> below.</p>
+        </article>
+
+        <article class="rounded-lg border border-amber-300 bg-white p-5 space-y-3">
+          <div class="flex items-center gap-3">
+            <span class="px-2 py-0.5 rounded text-xs font-semibold bg-amber-500 text-white">C2b · design</span>
+            <h3 class="font-bold"><span class="mono">settled</span> is a latch the caller sets and the callee clears</h3>
+          </div>
+          <p class="text-sm"><span class="mono">closeSession</span> writes <span class="mono">current.settled = true</span>, then calls <span class="mono">commit()</span>, which may write <span class="mono">this.settled = false</span> to stay open. One flag, two owners, opposite directions. The name says "this session is finished" and the code uses it as "a close is in flight". Both C2 and any future "did it actually close?" question come from that inversion. A <span class="mono">commit(): boolean</span> that owns its own outcome removes the flag entirely.</p>
+        </article>
+
+        <article class="rounded-lg border border-amber-300 bg-white p-5 space-y-3">
+          <div class="flex items-center gap-3">
+            <span class="px-2 py-0.5 rounded text-xs font-semibold bg-amber-500 text-white">C3 · API gap</span>
+            <h3 class="font-bold"><span class="mono">Popup</span> has no way to tell its owner it closed</h3>
+          </div>
+          <p class="mono text-xs text-slate-500">src/extensions/popup.ts · src/extensions/features/context-menu.ts:113</p>
+          <p class="text-sm">The code says so itself: <em>"Popup dismisses itself (Escape, an outside pointer, scroll) with no callback out (a real gap this step found no need to close…)"</em>. The consequence is visible one screen up: after a self-dismiss, <span class="mono">contextMenu()</span>'s <span class="mono">onDocumentClick</span> and <span class="mono">onDocumentKeydown</span> stay attached to <span class="mono">document</span> until the next <span class="mono">openAt()</span> or plugin disposal, guarded only by an <span class="mono">isOpen</span> poll on every click and keystroke in the page.</p>
+          <p class="text-sm"><strong>Why it matters beyond this file.</strong> <span class="mono">createPopup</span> is public (<span class="mono">api/index.ts</span>). Every third-party plugin that builds a popup with side state inherits the same choice: leak the listeners, or poll <span class="mono">isOpen</span>. One <span class="mono">onDismiss?: (trigger: DismissTrigger) =&gt; void</span> on <span class="mono">PopupOptions</span> closes it for everyone, and lets <span class="mono">contextMenu()</span> drop the <span class="mono">isOpen</span> guards.</p>
+        </article>
+      </section>
+
+      <section class="space-y-6">
+        <h2 class="text-2xl font-serif font-bold">Naming</h2>
+
+        <article class="rounded-lg border border-red-200 bg-white p-5 space-y-3">
+          <div class="flex items-center gap-3">
+            <span class="px-2 py-0.5 rounded text-xs font-semibold bg-red-600 text-white">N1 · check 4 fail</span>
+            <h3 class="font-bold"><span class="mono">Overlay</span> now names two concepts</h3>
+          </div>
+          <p class="text-sm">Read the call sites aloud, which is the repo's own test:</p>
+          <table class="text-sm w-full">
+            <tr class="border-b border-slate-200"><td class="mono py-1.5 pr-4 text-xs">overlay.present(node)</td><td class="text-emerald-700">"present this in the overlay" — true</td></tr>
+            <tr class="border-b border-slate-200"><td class="mono py-1.5 pr-4 text-xs">overlay.render(desc)</td><td class="text-emerald-700">true</td></tr>
+            <tr class="border-b border-slate-200"><td class="mono py-1.5 pr-4 text-xs">overlay.contains(target)</td><td class="text-red-700">asks the <strong>container</strong>, not the overlay layer</td></tr>
+            <tr class="border-b border-slate-200"><td class="mono py-1.5 pr-4 text-xs">overlay.elementForEntry(id)</td><td class="text-red-700">returns a <strong>timeline bar</strong>, which is not in the overlay</td></tr>
+            <tr class="border-b border-slate-200"><td class="mono py-1.5 pr-4 text-xs">overlay.paneBounds.timeline</td><td class="text-red-700">the <strong>pane's</strong> rect</td></tr>
+            <tr><td class="mono py-1.5 pr-4 text-xs">overlay.bounds</td><td class="text-red-700">the <strong>container's</strong> rect</td></tr>
+          </table>
+          <p class="text-sm">Two of six members are overlay work. Four are "this Gantt's own DOM geometry and identity" — the thing a document-level listener asks about. This is the #7 precedent exactly: one word covering two concepts, and nothing at the call site saying which.</p>
+          <p class="text-sm"><strong>Split, do not rename.</strong> Keep <span class="mono">Overlay</span> as <span class="mono">{ present, render }</span> — the mount layer, and honest. Move the other four onto a second member whose name is the question they answer, e.g. <span class="mono">ctx.view.dom</span>. Then <span class="mono">ctx.view.dom.owns(target)</span> and <span class="mono">ctx.view.dom.barFor(entryId)</span> read true, and the harness gains a legal way to reach <span class="mono">barFor</span> without a raw selector (see H2).</p>
+        </article>
+
+        <article class="rounded-lg border border-slate-200 bg-white p-5 space-y-3">
+          <div class="flex items-center gap-3">
+            <span class="px-2 py-0.5 rounded text-xs font-semibold bg-amber-500 text-white">N2 · check 1</span>
+            <h3 class="font-bold"><span class="mono">emit</span> is one verb doing two jobs</h3>
+          </div>
+          <pre class="bg-slate-900 text-slate-100 text-xs p-3 rounded overflow-x-auto mono">emitBeforeEntryEdit(payload): boolean | Promise&lt;boolean&gt;   // asks, and the answer is a veto
+emitEntryEdit(payload): void                              // tells, nothing comes back</pre>
+          <p class="text-sm">"Emit" says a thing went out. It does not say a decision comes back, and a plugin author reading the first line has no reason to check the return value. The codebase already has a word for the returned refusal — <strong>Veto</strong> (CONTEXT.md), and <strong>Propose</strong> for the sequence (<span class="mono">GanttShell#proposeChange</span>). <span class="mono">proposeEntryEdit</span> / <span class="mono">announceEntryEdit</span> reads true and reuses vocabulary the glossary already owns.</p>
+        </article>
+
+        <article class="rounded-lg border border-slate-200 bg-white p-5 space-y-2">
+          <div class="flex items-center gap-3">
+            <span class="px-2 py-0.5 rounded text-xs font-semibold bg-slate-400 text-white">N3–N5 · minor</span>
+            <h3 class="font-bold">Three smaller name drifts</h3>
+          </div>
+          <ul class="text-sm list-disc pl-5 space-y-1.5">
+            <li><span class="mono">ctx.view.resolveTooltip(entryId)</span> returns an <span class="mono">ElementDescription</span> — the tooltip's <em>body</em>, not a tooltip. Its sibling is already <span class="mono">resolveTooltipColumns</span>. <span class="mono">resolveTooltipContent</span> makes the pair read straight.</li>
+            <li><span class="mono">findCell</span>'s doc says "scoped to this Gantt's own container"; its one caller passes a row (see C1). The name outlived its use.</li>
+            <li><span class="mono">date-input.ts</span>'s <span class="mono">onCommit</span> doc names <em>"its own <span class="mono">onceCommitted</span> guard"</em> in <span class="mono">inlineEditing()</span>. That guard is called <span class="mono">settled</span>. A comment naming a symbol that does not exist is the kind of drift the repo's own #7 rule exists to stop.</li>
+          </ul>
+        </article>
+      </section>
+
+      <section class="space-y-6">
+        <h2 class="text-2xl font-serif font-bold">The harness, reviewed as CLAUDE.md requires</h2>
+        <p class="text-sm text-slate-600">"Review <span class="mono">harness/main.ts</span> on every commit, changed or not, because code there that breaks a library rule or re-derives what the library already computes is an API gap even when no lint fires." Three findings, two of them real gaps.</p>
+
+        <article class="rounded-lg border border-red-200 bg-white p-5 space-y-3">
+          <div class="flex items-center gap-3">
+            <span class="px-2 py-0.5 rounded text-xs font-semibold bg-red-600 text-white">H2 · API gap</span>
+            <h3 class="font-bold">The harness re-derives <span class="mono">elementForEntry</span> with a raw selector</h3>
+          </div>
+          <p class="mono text-xs text-slate-500">harness/main.ts · harness/plugins.ts, both in the popup demo</p>
+          <pre class="bg-slate-900 text-slate-100 text-xs p-3 rounded overflow-x-auto mono">const anchor = document.querySelector(`#gantt .fg-bar[data-item-id="${itemId(selected)}"]`);</pre>
+          <p class="text-sm">The library already computes exactly this — <span class="mono">Overlay.elementForEntry(id)</span>, added in S5.5 for <span class="mono">contextMenu()</span>'s keyboard opener. The harness cannot reach it: <span class="mono">popupDemo()</span> stashes the <span class="mono">Popup</span> out of <span class="mono">setup()</span> but not the <span class="mono">Overlay</span>, so the button handler has no door. It reaches for <span class="mono">.fg-bar</span> and <span class="mono">data-item-id</span> instead — two internal DOM contracts, from consumer code.</p>
+          <p class="text-sm"><strong>This is the evidence, not the bug.</strong> Fixing the harness alone hides it. The gap is that "the DOM node for this entry" is only reachable from inside a plugin's <span class="mono">setup()</span>, when it is a perfectly ordinary thing for app code to want. It is the same gap N1's split would close.</p>
+        </article>
+
+        <article class="rounded-lg border border-amber-300 bg-white p-5 space-y-3">
+          <div class="flex items-center gap-3">
+            <span class="px-2 py-0.5 rounded text-xs font-semibold bg-amber-500 text-white">H3 · API gap</span>
+            <h3 class="font-bold">A cell renderer can only see the formatted string</h3>
+          </div>
+          <pre class="bg-slate-900 text-slate-100 text-xs p-3 rounded overflow-x-auto mono">// harness/plugins.ts — un-formatting the library's own output to get a number back
+function overBudget(formatted: string): boolean {
+  const amount = Number(formatted.replace(/[^0-9.-]/g, ''));
+  return Number.isFinite(amount) &amp;&amp; amount &gt; BUDGET_THRESHOLD;
+}</pre>
+          <p class="text-sm"><span class="mono">CellRendererContext</span> carries <span class="mono">{ entry?, row, column, value: string }</span>. <span class="mono">value</span> is already through <span class="mono">formatValue</span>, so a renderer that wants to branch on magnitude has to parse <span class="mono">'$1500'</span> back with a regex. The in-repo comment defends this as "honest about the value it actually renders", and that argument holds for what is <em>painted</em> — but it is not an argument for withholding the number.</p>
+          <p class="text-sm">The context already reaches <span class="mono">entry</span>, yet reading <span class="mono">entry.meta.cost</span> is not the answer either: a <span class="mono">compute</span>-sourced Field has no stored home, and the whole point of ADR 0005 is that a consumer never reaches into <span class="mono">meta</span>. Add the resolved value the Field registry already produced: <span class="mono">rawValue: unknown</span> beside <span class="mono">value: string</span>. The library computes it either way.</p>
+        </article>
+
+        <article class="rounded-lg border border-slate-200 bg-white p-5 space-y-2">
+          <div class="flex items-center gap-3">
+            <span class="px-2 py-0.5 rounded text-xs font-semibold bg-slate-400 text-white">H1 · duplication</span>
+            <h3 class="font-bold">Three demo plugins are copied verbatim between two harness pages</h3>
+          </div>
+          <p class="text-sm"><span class="mono">logEverything()</span>, <span class="mono">selectionShortcuts()</span> and <span class="mono">popupDemo()</span> appear character-for-character in both <span class="mono">harness/main.ts</span> and <span class="mono">harness/plugins.ts</span> — about 70 lines. <span class="mono">harness/plugins/</span> already exists and already holds <span class="mono">weekend-shading.ts</span> and <span class="mono">buffer-kind.ts</span>; these three belong beside them. Harness-only, no library change.</p>
+        </article>
+      </section>
+
+      <section class="space-y-6">
+        <h2 class="text-2xl font-serif font-bold">Spec</h2>
+        <p class="text-sm text-slate-600">S5.1–S5.9 against their own step files. One real divergence, one overstated tick, one scope note. Everything else matched, including the parts most likely to drift: the plugin runtime's disposal and diff rules, the keymap's newest-first resolution and IME gate, the renderer try/catch, and the S5.7 keyboard chords.</p>
+
+        <article class="rounded-lg border border-red-200 bg-white p-5 space-y-3">
+          <div class="flex items-center gap-3">
+            <span class="px-2 py-0.5 rounded text-xs font-semibold bg-red-600 text-white">SP1 · wrong</span>
+            <h3 class="font-bold">Four different refusals all look like "nothing happened"</h3>
+          </div>
+          <p class="mono text-xs text-slate-500">s5.8-inline-editing.md §1 (F11, F12) vs src/extensions/features/inline-editing.ts</p>
+          <p class="text-sm">The spec is unusually specific here:</p>
+          <blockquote class="border-l-4 border-red-300 pl-4 text-sm text-slate-700 italic">"…the cell refuses to open the default editor at all, <strong>with the invalid state and a reason naming it</strong> (<span class="mono">data-state~="invalid"</span>, "this field carries a time of day; the default date editor cannot show it")."</blockquote>
+          <blockquote class="border-l-4 border-red-300 pl-4 text-sm text-slate-700 italic">"…every other shipped type <strong>falls back to the invalid state on open</strong>, refusing to edit inline rather than silently parsing wrong."</blockquote>
+          <pre class="bg-slate-900 text-slate-100 text-xs p-3 rounded overflow-x-auto mono">// openDate — F11
+if (ctx.dataset.time.startOfDay(raw) !== raw) return;      // bare return
+// openFor — F12
+if (!date &amp;&amp; !canOpenGeneric(field)) return;               // bare return</pre>
+          <p class="text-sm">No wrapper mounts, no <span class="mono">data-state="invalid"</span>, and the reason text appears nowhere in the source. The tests encode the shipped behaviour rather than the spec's: both assert <span class="mono">querySelector('.fg-cell-editor')</span> is <strong>null</strong> — while the neighbouring <span class="mono">parseValue</span>-fails-on-commit test correctly asserts <span class="mono">.fg-cell-editor[data-state="invalid"]</span> is present. The mechanism exists; the two open-time paths do not use it.</p>
+          <p class="text-sm"><strong>Why this is more than a spec nit.</strong> A user double-clicks a cell and gets nothing, with four indistinguishable causes: the column is not <span class="mono">editable</span>, the entry's kind is rolled up, the instant carries a time of day, or the Field has no <span class="mono">parseValue</span>. Two of those are "this cell is not editable" and two are "this cell is editable but this editor cannot show it" — the difference is exactly what the spec asked to be visible. It is also the S5.11 a11y pass's problem to inherit: a silent no-op announces nothing.</p>
+        </article>
+
+        <article class="rounded-lg border border-amber-300 bg-white p-5 space-y-2">
+          <div class="flex items-center gap-3">
+            <span class="px-2 py-0.5 rounded text-xs font-semibold bg-amber-500 text-white">SP2 · tracker</span>
+            <h3 class="font-bold">Two ticked boxes claim what did not land</h3>
+          </div>
+          <p class="mono text-xs text-slate-500">s5.8-inline-editing.md TODO, lines 104–105</p>
+          <pre class="bg-slate-900 text-slate-100 text-xs p-3 rounded overflow-x-auto mono">[x] Default dateInput factory … refuses a non-midnight instant <strong>with a named reason</strong> (#137 F11)
+[x] parseValue on FieldType; <strong>invalid state</strong> refuses the commit; no parseValue + non-text type
+    refuses to open, not a guessed parse (#137 F12)</pre>
+          <p class="text-sm">"Refuses to open" is true. "With a named reason" and the open-time invalid state are not. The README's rule is "tick it in the same change as the code" — the value of that rule is that a tick can be trusted, so a half-tick costs more than an untick. Split each box, or untick the half that did not land.</p>
+        </article>
+
+        <article class="rounded-lg border border-slate-200 bg-white p-5 space-y-2">
+          <div class="flex items-center gap-3">
+            <span class="px-2 py-0.5 rounded text-xs font-semibold bg-slate-400 text-white">SP3 · scope</span>
+            <h3 class="font-bold">A pane-scroll fix rode in on the S5 branch</h3>
+          </div>
+          <p class="text-sm"><span class="mono">67c79dc</span> ("Fix vertical scroll in the left column pane, add horizontal grid scroll", #126) touches <span class="mono">wheel-navigation.ts</span> and <span class="mono">layout/column.ts</span>, adds <span class="mono">harness/grid-scroll.*</span> and an e2e spec, and amends <span class="mono">plans/s1.8-pane-layout/README.md</span> and <span class="mono">plans/01</span>. No S5 decision or user story asks for it — it is an S1.8 defect that S5.7's resizable columns made visible. Harmless and clearly a real fix; recorded so the slice gate's "what did S5 change" answer stays honest.</p>
+        </article>
+      </section>
+
+      <section class="space-y-6">
+        <h2 class="text-2xl font-serif font-bold">Standards</h2>
+
+        <article class="rounded-lg border border-red-200 bg-white p-5 space-y-3">
+          <div class="flex items-center gap-3">
+            <span class="px-2 py-0.5 rounded text-xs font-semibold bg-red-600 text-white">ST1 · hard</span>
+            <h3 class="font-bold">Comment prose has drifted well past the ASD-STE100 rule</h3>
+          </div>
+          <p class="text-sm"><span class="mono">CLAUDE.md</span> is explicit and unconditional: <em>"Short sentences: keep sentences to 20 words for instructions and 25 words for descriptions"</em> and <em>"One instruction per sentence."</em> Most new doc comments on this branch break both, often by a factor of three:</p>
+          <pre class="bg-slate-900 text-slate-100 text-xs p-3 rounded overflow-x-auto mono">// api/plugin.ts — one sentence, ~50 words, three ideas
+"S5.1 ships `dataset`, `gantt`, `events` and `disposables` only — every other member
+ (`commands`, `view`, `layout`, `interaction`) arrives in the step that ships the code
+ honouring it (I11): a `register*` that does nothing is exactly the dishonest surface
+ `no-not-implemented` catches."</pre>
+          <p class="text-sm">The <span class="mono">inline-editing.ts</span> file header runs one clause chain past 80 words. <span class="mono">registerGridColumn</span>, <span class="mono">registerDecoration</span>, <span class="mono">registerItemProducer</span> and <span class="mono">resolveTooltip</span> all follow the pattern. This is systemic across <span class="mono">api/plugin.ts</span> and <span class="mono">extensions/features/</span>, not a handful of slips.</p>
+          <p class="text-sm"><strong>The content is not the problem.</strong> These comments carry real design rationale — which decision, what broke without it, why the alternative was rejected. That is the good part and it should stay. The rule is about <em>sentence shape</em>: the same rationale in four short sentences reads faster, for a human and for an agent, than in one 50-word sentence with three parentheticals. This is the one HARD standards violation on the branch, and it is a mechanical fix.</p>
+        </article>
+
+        <article class="rounded-lg border border-slate-200 bg-white p-5 space-y-2">
+          <div class="flex items-center gap-3">
+            <span class="px-2 py-0.5 rounded text-xs font-semibold bg-emerald-600 text-white">clean</span>
+            <h3 class="font-bold">What the standards pass did <em>not</em> find</h3>
+          </div>
+          <ul class="text-sm list-disc pl-5 space-y-1">
+            <li>No <span class="mono">if (kind === …)</span> outside the four seams (plans/01 §2.5).</li>
+            <li>No <span class="mono">new Date()</span>, <span class="mono">Date.now()</span> or magic time constant outside <span class="mono">time/</span> (I10).</li>
+            <li>No module-level mutable state — I2 holds; two Gantts stay independent.</li>
+            <li>No <span class="mono">scheduling/</span> ↔ <span class="mono">render/view/interaction</span> import in either direction.</li>
+            <li>Nothing on the public surface throws "not implemented" (I11).</li>
+            <li>No CONTEXT.md gaps: <span class="mono">PluginContext</span>, <span class="mono">GanttPlugin</span>, <span class="mono">Overlay</span>, <span class="mono">Popup</span>, <span class="mono">Command</span>, <span class="mono">GridColumn</span>, <span class="mono">RegistrationGate</span> and the decoration vocabulary all resolve.</li>
+          </ul>
+        </article>
+
+        <article class="rounded-lg border border-slate-200 bg-white p-5 space-y-2">
+          <div class="flex items-center gap-3">
+            <span class="px-2 py-0.5 rounded text-xs font-semibold bg-slate-400 text-white">ST2 · note</span>
+            <h3 class="font-bold"><span class="mono">ColumnChromePorts</span> is a data clump, and that is fine</h3>
+          </div>
+          <p class="text-sm">Seven members travel together from <span class="mono">GanttShell</span> into <span class="mono">ColumnChrome</span>. Read on its own that is a Data Clump; read against <span class="mono">CoreCommandPorts</span> and <span class="mono">ColumnGestureContext</span> it is the branch's established idiom for "this module borrows the shell's machinery instead of owning it", and the idiom is what keeps <span class="mono">column-chrome.ts</span> testable. Recorded so a later reviewer does not re-raise it. Candidate <a href="#cand-2" class="underline">A2</a> extends the same idiom rather than inventing a new one.</p>
+        </article>
+      </section>
+
+      <section class="space-y-8">
+        <h2 class="text-2xl font-serif font-bold">Architecture — deepening candidates</h2>
+        <p class="text-sm text-slate-600">Where the shape, not the code, is what will cost later. Ordered by leverage.</p>
+
+        <article id="cand-1" class="rounded-lg border-2 border-slate-800 bg-white p-6 space-y-4">
+          <div class="flex items-center gap-3 flex-wrap">
+            <span class="px-2 py-0.5 rounded text-xs font-semibold bg-emerald-600 text-white">Strong</span>
+            <span class="px-2 py-0.5 rounded text-xs font-semibold bg-slate-200 text-slate-700">in-process</span>
+            <h3 class="text-xl font-bold">A1 · One plugin seam costs three edits in three layers</h3>
+          </div>
+          <p class="mono text-xs text-slate-500">src/api/plugin.ts · src/view/gantt-shell.ts:643–830 · src/api/gantt.ts:217</p>
+
+          <div class="grid md:grid-cols-2 gap-5">
+            <div class="rounded border border-slate-200 p-4">
+              <p class="lbl text-slate-500 mb-3">Before — three stops, one of them empty</p>
+              <pre class="mermaid">
+flowchart TB
+  A["api/plugin.ts<br/>declare on PluginContextOf"] --> B["view/gantt-shell.ts<br/>build the closure<br/>(inside a 505-line ctor)"]
+  B --> C["parts: flat bag<br/>17 members"]
+  C --> D["api/gantt.ts<br/>buildPluginContext<br/>17 lines of x: parts.x"]
+  D --> E["PluginContext<br/>grouped"]
+  classDef mid stroke:#dc2626,stroke-width:2px,fill:#fef2f2;
+  class D mid
+              </pre>
+              <p class="text-xs text-slate-600 mt-2">Red box is a Middle Man: every key is <span class="mono">x: parts.x</span>. It exists only to regroup a flat bag.</p>
+            </div>
+            <div class="rounded border-2 border-slate-800 p-4 bg-slate-50">
+              <p class="lbl text-slate-500 mb-3">After — two stops, the third deleted</p>
+              <pre class="mermaid">
+flowchart TB
+  A["api/plugin.ts<br/>declare on PluginContextOf"] --> B["view/plugin-ports.ts<br/>build the GROUPED shape"]
+  B --> E["PluginContext"]
+  F["api/gantt.ts<br/>{ dataset, gantt: this, ...parts }"] --> E
+  classDef deep fill:#0f172a,color:#fff,stroke:#0f172a,stroke-width:2px;
+  class B deep
+              </pre>
+              <p class="text-xs text-slate-600 mt-2"><span class="mono">api/gantt.ts</span> binds the two things only it has — <span class="mono">dataset</span> and <span class="mono">gantt</span> — and spreads the rest. One line, forever.</p>
+            </div>
+          </div>
+
+          <p class="text-sm"><strong>Problem.</strong> <span class="mono">GanttShell</span> builds a flat 17-member <span class="mono">parts</span> bag, and <span class="mono">api/gantt.ts</span> re-shapes it into the four groups a plugin actually sees. The grouping is plugin-facing presentation, and the module that owns the ports does not own it.</p>
+          <p class="text-sm"><strong>Solution.</strong> Have the shell build <span class="mono">{ commands, interaction: {…}, view: {…}, layout: {…} }</span> directly. <span class="mono">buildPluginContext</span> collapses to <span class="mono">(parts) =&gt; ({ dataset, gantt: this, ...parts })</span>. Nothing crosses a layer that did not already cross it — the shell already types every port.</p>
+          <ul class="text-sm grid md:grid-cols-2 gap-x-6 gap-y-1 list-disc pl-5">
+            <li>locality: a seam is one edit, not three</li>
+            <li>interface shrinks; the Middle Man is deleted</li>
+            <li>leverage: S5.10 adds four more seams</li>
+            <li>the grouping stops drifting from the type</li>
+          </ul>
+        </article>
+
+        <article id="cand-2" class="rounded-lg border-2 border-slate-800 bg-white p-6 space-y-4">
+          <div class="flex items-center gap-3 flex-wrap">
+            <span class="px-2 py-0.5 rounded text-xs font-semibold bg-emerald-600 text-white">Strong</span>
+            <span class="px-2 py-0.5 rounded text-xs font-semibold bg-slate-200 text-slate-700">in-process</span>
+            <h3 class="text-xl font-bold">A2 · <span class="mono">GanttShell</span>'s constructor holds a module</h3>
+          </div>
+          <p class="mono text-xs text-slate-500">src/view/gantt-shell.ts — 1,740 lines (+866 this branch), ~50 private fields, ~90 members, constructor 523–1028</p>
+
+          <div class="grid md:grid-cols-2 gap-5">
+            <div class="rounded border border-slate-200 p-4">
+              <p class="lbl text-slate-500 mb-3">Before — mass diagram</p>
+              <svg viewBox="0 0 300 260" class="w-full">
+                <rect x="20" y="20" width="110" height="30" fill="#e2e8f0" stroke="#94a3b8"/>
+                <text x="75" y="39" text-anchor="middle" class="lbl" fill="#334155">interface ~90</text>
+                <rect x="20" y="54" width="110" height="186" fill="#f1f5f9" stroke="#94a3b8"/>
+                <text x="75" y="100" text-anchor="middle" font-size="9" fill="#475569">ctor 505 lines</text>
+                <rect x="30" y="110" width="90" height="70" fill="#fee2e2" stroke="#dc2626" stroke-width="2"/>
+                <text x="75" y="140" text-anchor="middle" font-size="8" fill="#991b1b">plugin ports</text>
+                <text x="75" y="152" text-anchor="middle" font-size="8" fill="#991b1b">~200 lines</text>
+                <text x="75" y="205" text-anchor="middle" font-size="9" fill="#475569">+ 90 getters</text>
+                <text x="75" y="218" text-anchor="middle" font-size="9" fill="#475569">and setters</text>
+                <text x="75" y="256" text-anchor="middle" class="lbl" fill="#64748b">GanttShell</text>
+              </svg>
+            </div>
+            <div class="rounded border-2 border-slate-800 p-4 bg-slate-50">
+              <p class="lbl text-slate-500 mb-3">After — the ports are their own module</p>
+              <svg viewBox="0 0 300 260" class="w-full">
+                <rect x="15" y="20" width="100" height="18" fill="#e2e8f0" stroke="#94a3b8"/>
+                <text x="65" y="33" text-anchor="middle" class="lbl" fill="#334155">interface</text>
+                <rect x="15" y="42" width="100" height="150" fill="#f1f5f9" stroke="#94a3b8"/>
+                <text x="65" y="120" text-anchor="middle" font-size="9" fill="#475569">ctor ~300</text>
+                <text x="65" y="208" text-anchor="middle" class="lbl" fill="#64748b">GanttShell</text>
+                <line x1="120" y1="115" x2="165" y2="115" stroke="#64748b" stroke-dasharray="4 4"/>
+                <rect x="170" y="42" width="110" height="18" fill="#334155"/>
+                <text x="225" y="55" text-anchor="middle" class="lbl" fill="#fff">buildPorts()</text>
+                <rect x="170" y="60" width="110" height="132" fill="#0f172a"/>
+                <text x="225" y="115" text-anchor="middle" font-size="9" fill="#cbd5e1">15 ports</text>
+                <text x="225" y="130" text-anchor="middle" font-size="9" fill="#cbd5e1">1 gate helper</text>
+                <text x="225" y="208" text-anchor="middle" class="lbl" fill="#64748b">plugin-ports</text>
+              </svg>
+            </div>
+          </div>
+
+          <p class="text-sm"><strong>Problem.</strong> The 200-line closure that builds a plugin's ports is a module living inside a constructor: it has one job, one set of collaborators, and no test that reaches it except through a whole mounted <span class="mono">Gantt</span>. Six of its fifteen ports are the same six lines with different nouns:</p>
+          <pre class="bg-slate-900 text-slate-100 text-xs p-3 rounded overflow-x-auto mono">gate.assertOpen();
+const remove = &lt;table&gt;.register(&lt;key&gt;, &lt;value&gt;);
+&lt;invalidate&gt;();
+const dispose = () =&gt; { remove(); &lt;invalidate&gt;(); };
+disposables.add(dispose);
+return dispose;
+// written out for: registerRenderer, registerDecoration, registerItemProducer,
+//                  registerKindDefaults, registerGridColumn, commands.register</pre>
+          <p class="text-sm"><strong>Solution.</strong> Move the closure to <span class="mono">view/plugin-ports.ts</span> as <span class="mono">buildPluginPorts(deps, pluginId)</span>, taking the shell's collaborators through a ports interface — the shape <span class="mono">core-commands.ts</span> and <span class="mono">column-chrome.ts</span> already established on this branch. Give it one internal helper for the six-line shape, so a new seam is a declaration rather than a transcription.</p>
+          <div class="rounded bg-amber-50 border border-amber-300 p-3 text-sm text-amber-900">
+            <strong>Precedent, not a new idea.</strong> S5 already did this twice — <span class="mono">core-commands.ts</span> ("split out of GanttShell so the nineteen commands are reviewable as a table") and <span class="mono">column-chrome.ts</span> ("split out of GanttShell so column-chrome behaviour is reviewable and testable on its own"). The plugin ports are the third and largest instance and were left behind. The slice's own start constraint says the shell gains <em>one</em> wiring list; it has grown a second, unnamed one.
+          </div>
+          <ul class="text-sm grid md:grid-cols-2 gap-x-6 gap-y-1 list-disc pl-5">
+            <li>the interface becomes the test surface</li>
+            <li>six transcriptions collapse to six declarations</li>
+            <li>locality: gate + invalidate + disposal in one place</li>
+            <li>constructor drops ~200 lines</li>
+          </ul>
+        </article>
+
+        <article id="cand-3" class="rounded-lg border-2 border-slate-800 bg-white p-6 space-y-4">
+          <div class="flex items-center gap-3 flex-wrap">
+            <span class="px-2 py-0.5 rounded text-xs font-semibold bg-emerald-600 text-white">Strong</span>
+            <span class="px-2 py-0.5 rounded text-xs font-semibold bg-slate-200 text-slate-700">ports &amp; adapters</span>
+            <h3 class="text-xl font-bold">A3 · The plugin ↔ DOM contract is undeclared</h3>
+          </div>
+          <p class="mono text-xs text-slate-500">src/extensions/features/*.ts · src/extensions/popup.ts · harness/main.ts · harness/plugins.ts</p>
+
+          <div class="grid md:grid-cols-2 gap-5">
+            <div class="rounded border border-slate-200 p-4">
+              <p class="lbl text-slate-500 mb-3">Before — every plugin spells the selectors</p>
+              <pre class="mermaid">
+flowchart LR
+  T["tooltips()"] -.->|".fg-bar"| D[("live DOM")]
+  C["contextMenu()"] -.->|".fg-bar .fg-row"| D
+  I["inlineEditing()"] -.->|".fg-row .fg-row-cell<br/>.fg-row-label-text<br/>data-field data-entry-id"| D
+  H["harness"] -.->|".fg-bar[data-item-id]"| D
+  R["render/dom<br/>writes the classes"] --> D
+  classDef leak stroke:#dc2626,stroke-width:2px,fill:#fef2f2;
+  class T,C,I,H leak
+              </pre>
+            </div>
+            <div class="rounded border-2 border-slate-800 p-4 bg-slate-50">
+              <p class="lbl text-slate-500 mb-3">After — one seam answers the one question</p>
+              <pre class="mermaid">
+flowchart LR
+  T["tooltips()"] --> S["ctx.view.dom<br/>owns() targetUnder() barFor()"]
+  C["contextMenu()"] --> S
+  I["inlineEditing()"] --> S
+  H["harness"] --> S
+  S --> D[("live DOM")]
+  R["render/dom"] --> D
+  classDef deep fill:#0f172a,color:#fff,stroke:#0f172a,stroke-width:2px;
+  class S deep
+              </pre>
+            </div>
+          </div>
+
+          <p class="text-sm"><strong>Problem.</strong> <span class="mono">extensions/</span> may not import <span class="mono">render/</span> — that rule is what makes the dogfood gate real. The cost is that the contract between them is <em>string literals</em>: eight <span class="mono">.fg-*</span> selectors and three <span class="mono">data-*</span> keys, in non-test plugin code, plus two more in the harness. Nothing versions them, nothing tests that <span class="mono">render/dom</span> still emits them, and a third-party plugin author must read the rendered DOM to discover them. Rename a class in <span class="mono">render/dom</span> and every plugin breaks silently, with a green build.</p>
+          <p class="text-sm"><strong>The half-step is already there.</strong> <span class="mono">bar-under.ts</span> exists precisely because <span class="mono">tooltips()</span> and <span class="mono">contextMenu()</span> were duplicating one walk — <em>"kept in one place so it can't drift between the two callers"</em>. It covers two of the six walks. <span class="mono">inlineEditing()</span> reimplements four more, and answers "is this event mine?" a <em>different</em> way (<span class="mono">stillAnchored</span>) from the way the other two answer it (<span class="mono">overlay.contains</span>) — two answers to one question is the drift <span class="mono">bar-under.ts</span> was created to prevent.</p>
+          <p class="text-sm"><strong>Solution.</strong> One seam on <span class="mono">ctx.view</span> that resolves a node to what it means: <span class="mono">targetUnder(node): { entry?, field?, kind } | undefined</span>, plus <span class="mono">owns(node)</span> and <span class="mono">barFor(entryId)</span>. The library already has the pieces — <span class="mono">render/dom</span>'s own <span class="mono">hitTest</span> does the bar-then-row walk, and <span class="mono">CommandTarget</span> already names <span class="mono">'row' | 'cell' | 'bar' | 'header' | 'splitter'</span> as the vocabulary. Plugins stop naming DOM; <span class="mono">render/dom</span> is free to change its class names again.</p>
+          <ul class="text-sm grid md:grid-cols-2 gap-x-6 gap-y-1 list-disc pl-5">
+            <li>the contract becomes typed and testable</li>
+            <li>one answer to "is this mine?", not three</li>
+            <li>leverage: closes H2's harness gap too</li>
+            <li>a third-party plugin stops guessing</li>
+          </ul>
+        </article>
+
+        <article id="cand-4" class="rounded-lg border border-slate-300 bg-white p-6 space-y-4">
+          <div class="flex items-center gap-3 flex-wrap">
+            <span class="px-2 py-0.5 rounded text-xs font-semibold bg-amber-500 text-white">Worth exploring</span>
+            <span class="px-2 py-0.5 rounded text-xs font-semibold bg-slate-200 text-slate-700">in-process</span>
+            <h3 class="text-xl font-bold">A4 · Every feature plugin re-invents scoped document listening</h3>
+          </div>
+          <p class="mono text-xs text-slate-500">12 <span class="mono">document.addEventListener</span> calls across <span class="mono">src/extensions/</span></p>
+          <p class="text-sm"><strong>Problem.</strong> A plugin must listen on <span class="mono">document</span> (its targets are nodes it never created), then decide whether the event is its Gantt's. Three plugins and <span class="mono">popup.ts</span> each write that guard by hand, each remembers its own <span class="mono">removeEventListener</span> with the matching capture flag, and one of them forgets the guard entirely. Two Gantts on one page is the failure mode, and B1 in the bug hunt already found it once.</p>
+          <p class="text-sm"><strong>Solution.</strong> <span class="mono">ctx.view.onDomEvent(type, handler, opts)</span> — listens on <span class="mono">document</span>, filters to this Gantt, and registers its own removal in <span class="mono">ctx.disposables</span>. Twelve pairs of add/remove plus four hand-written guards become twelve one-liners that cannot be got wrong. Pairs naturally with A3: the handler receives the resolved target, not a raw node.</p>
+          <div class="rounded bg-slate-50 border border-slate-200 p-3 text-xs text-slate-600">Sequence it after A3 — on its own it is a convenience; with A3 it is the whole plugin-to-DOM story in one seam.</div>
+        </article>
+
+        <article id="cand-5" class="rounded-lg border border-slate-300 bg-white p-6 space-y-3">
+          <div class="flex items-center gap-3 flex-wrap">
+            <span class="px-2 py-0.5 rounded text-xs font-semibold bg-amber-500 text-white">Worth exploring</span>
+            <h3 class="text-xl font-bold">A5 · <span class="mono">inlineEditing()</span>'s session wants to be an object</h3>
+          </div>
+          <p class="mono text-xs text-slate-500">src/extensions/features/inline-editing.ts — 458 lines, one <span class="mono">setup()</span> closure, 15 nested functions</p>
+          <p class="text-sm"><strong>Problem.</strong> <span class="mono">OpenSession</span> is a data record with methods that reach back out to closure-scope functions (<span class="mono">teardown(this)</span>), and the <span class="mono">settled</span> flag is written from both sides (C2b). Both confirmed defects on this branch live in this file, and both are locality failures: the state that decides whether an editor is open is spread across a module-level <span class="mono">let</span>, a record field, and two functions that each half-own it.</p>
+          <p class="text-sm"><strong>Solution.</strong> A <span class="mono">CellEditorSession</span> class owning <span class="mono">mount</span> / <span class="mono">commit(): boolean</span> / <span class="mono">revert()</span> / <span class="mono">reposition()</span>, and <span class="mono">setup()</span> holding one <span class="mono">session: CellEditorSession | undefined</span>. <span class="mono">commit()</span> returning its own outcome removes <span class="mono">settled</span>, which removes C2. The class is testable without a mounted Gantt, which the closure is not.</p>
+        </article>
+
+        <article id="cand-6" class="rounded-lg border border-slate-300 bg-white p-6 space-y-3">
+          <div class="flex items-center gap-3 flex-wrap">
+            <span class="px-2 py-0.5 rounded text-xs font-semibold bg-slate-400 text-white">Speculative</span>
+            <h3 class="text-xl font-bold">A6 · Cheap wins</h3>
+          </div>
+          <ul class="text-sm list-disc pl-5 space-y-2">
+            <li><strong>Column lookup is O(rows × columns²) per frame.</strong> <span class="mono">gantt-shell.ts</span>'s <span class="mono">resolveCellRenderer</span> does <span class="mono">resolvedColumns.find(c =&gt; String(c.key) === columnKey)</span>, and <span class="mono">render/dom/index.ts:699</span> calls it once per visible cell. A <span class="mono">Map&lt;string, ResolvedColumn&gt;</span> built in <span class="mono">ColumnChrome.setResolvedColumns</span> makes it O(1) and serves <span class="mono">isColumnEditable</span> / <span class="mono">isResizable</span> / <span class="mono">isMovable</span> / <span class="mono">resolvedColumn</span> at the same time. Not a hot-path invariant breach — this is the full render pass, not hover — but it is free.</li>
+            <li><strong>Repeated switches in <span class="mono">column-gestures.ts</span>.</strong> <span class="mono">if (grabbedKind === 'resize') … else if (grabbedKind === 'reorder')</span> appears in <span class="mono">move</span>, <span class="mono">commit</span> and <span class="mono">cancel</span>. Two small strategy objects, one <span class="mono">grabbed</span> reference, and the cascade disappears — the same shape <span class="mono">core-commands.ts</span>'s own <span class="mono">registerColumnStepCommand</span> already uses to collapse four near-identical commands into one.</li>
+            <li><strong>A four-arm nested ternary</strong> seeds <span class="mono">input.value</span> in <span class="mono">openGeneric</span>. A named <span class="mono">seedText(field, raw, cell)</span> reads as a sentence.</li>
+            <li><strong><span class="mono">createPopup</span>'s <span class="mono">open()</span></strong> is ~70 lines of four inline <span class="mono">if (dismissOn.includes(…))</span> blocks. A table keyed by <span class="mono">DismissTrigger</span> makes adding a fifth trigger a row, and pairs with C3's <span class="mono">onDismiss</span>.</li>
+          </ul>
+        </article>
+      </section>
+
+      <section id="top-recommendation" class="space-y-4">
+        <h2 class="text-2xl font-serif font-bold">Top recommendation</h2>
+        <div class="rounded-lg border-2 border-slate-800 deep text-slate-100 p-7 space-y-3">
+          <p class="lbl text-slate-400">Do this first</p>
+          <h3 class="text-2xl font-serif font-bold"><a href="#cand-2" class="underline decoration-slate-500">A2 — lift the plugin ports out of the constructor</a>, then <a href="#cand-1" class="underline decoration-slate-500">A1</a> on top of it.</h3>
+          <p class="text-slate-300 text-sm">They are one refactor in two moves, and S5.10 is the reason to do them now rather than after. S5.10 adds a second plugin contract (<span class="mono">DatasetPlugin</span>) with four more seams — <span class="mono">fields.register</span>, <span class="mono">store.reserve</span>, <span class="mono">store.read</span>, <span class="mono">setExtender</span>. Land them on today's shape and each costs three edits, two of which are transcription, in a constructor that is already 505 lines. Land A2 first and the shell's plugin surface has a name, a file and a test seam; land A1 and the third edit is gone for good.</p>
+          <p class="text-slate-300 text-sm">The repo has already made this call twice on this same branch — <span class="mono">core-commands.ts</span> and <span class="mono">column-chrome.ts</span> both say "split out of GanttShell so it is reviewable and testable on its own". The plugin ports are the same argument, on the largest remaining piece.</p>
+          <p class="text-slate-400 text-xs pt-1">Fix C1 and C2 alongside — both are small, both are in <span class="mono">inlineEditing()</span>, and C2's real fix is A5.</p>
+        </div>
+      </section>
+
+    </main>
+  </body>
+</html>
