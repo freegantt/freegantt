@@ -40,7 +40,10 @@ const GRID_COLUMNS: readonly GridColumnInput[] = [
   { field: 'quantity', editable: true }, // no `type`, `inputType: 'number'` only
 ];
 
-function makeGantt(options?: InlineEditingOptions): {
+function makeGantt(
+  options?: InlineEditingOptions,
+  ganttOptions?: { locale?: Intl.LocalesArgument },
+): {
   container: HTMLElement;
   gantt: Gantt;
   dataset: Dataset<Meta>;
@@ -77,6 +80,7 @@ function makeGantt(options?: InlineEditingOptions): {
     dataset,
     gridColumns: GRID_COLUMNS,
     plugins: [inlineEditing(options)],
+    ...ganttOptions,
   });
   return { container, gantt, dataset };
 }
@@ -285,6 +289,31 @@ describe('inlineEditing() (S5.8, D-S5-19/D-S5-20)', () => {
     dblclick(cellFor(container, 'e2', 'start')); // e2's start is not midnight
     expect(container.querySelector('.fg-cell-editor-control')).not.toBeNull();
     expect(input(container).type).toBe('datetime-local');
+    gantt.destroy();
+    container.remove();
+  });
+
+  it("a consumer dateInput factory receives this Gantt's locale, not just the zone (#144)", () => {
+    const seen: { zone: string; locale?: Intl.LocalesArgument }[] = [];
+    const { container, gantt } = makeGantt(
+      {
+        dateInput: (dateCtx) => {
+          seen.push(dateCtx);
+          const el = document.createElement('input');
+          el.type = 'datetime-local';
+          return {
+            element: el,
+            read: () => undefined,
+            write: () => {},
+            onCommit: () => () => {},
+            destroy: () => el.remove(),
+          };
+        },
+      },
+      { locale: 'de-DE' },
+    );
+    dblclick(cellFor(container, 'e2', 'start'));
+    expect(seen).toEqual([{ zone: 'UTC', locale: 'de-DE' }]);
     gantt.destroy();
     container.remove();
   });
