@@ -12,7 +12,7 @@ export { DEFAULT_LANE_GAP_PX } from './lanes/pack-lanes.js';
 // `ColumnAlign` crosses this same boundary (#54).
 export { itemId, entryIdOfItem } from '../model/index.js';
 export { createItemProducerRegistry } from './items/produce-items.js';
-export type { Item, ItemProducerRegistry } from './items/produce-items.js';
+export type { Item, ItemProducer, ItemProducerRegistry } from './items/produce-items.js';
 export type { FrameColumn, ResolvedColumn, FieldCompare, ColumnAlign } from './column.js';
 export { gridContentWidth } from './column.js';
 export type {

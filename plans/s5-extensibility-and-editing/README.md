@@ -1,6 +1,6 @@
 # S5 — Extensibility, editing surfaces, a11y completion
 
-**Slice:** S5 (`plans/03` §S5) · **Position:** after S4, before S6 · **Status:** in progress — S5.0–S5.8 done, S5.9 next (plugin registrations)
+**Slice:** S5 (`plans/03` §S5) · **Position:** after S4, before S6 · **Status:** in progress — S5.0–S5.9 done, S5.10 next (dataset plugins)
 **Form:** the same settled-spec form as [`plans/s4-hierarchy-and-rows/README.md`](../s4-hierarchy-and-rows/README.md) — this file is the tracker and the shared context; each step file holds the decisions it implements and its TODO boxes.
 **Tick as you go:** When you finish a TODO item, tick its box in that step file. Tick it in the same change as the code. Do not wait for S5.12 or the slice gate.
 **Governed by:** `plans/00` D3/D4/D5/D11/D12, `plans/01` §2.5/§2.6/§8/§9/§10, `plans/02` §3/§4/§4.1/§4.2/§7, ADR [0002](../../docs/adr/0002-scheduling-is-a-plugin-not-a-core-layer.md), ADR [0005](../../docs/adr/0005-fields-are-declared-and-grid-columns-reference-them.md).
@@ -137,7 +137,7 @@ Thirteen steps, in order. S5.0 is the blocking pre-step: the grill on issue #111
 |---|---|---|---|
 | `[S5-A1]` | Context menu and tooltips are plugins with zero private imports (lint-proven — the dogfood gate) | S5.5 | `.dependency-cruiser.cjs` rule + `scripts/guard-red-test.mjs`, `extensions/features/*.test.ts` |
 | `[S5-A2]` | A harness-only third-party-style plugin (weekend shading) is written against the public contract only | S5.6 | `harness/plugins/weekend-shading.ts`, `e2e/plugins.spec.ts` |
-| `[S5-A3]` | A consumer-defined kind (renderer + capabilities + `when` menu items, registered by config or plugin) works with zero core edits | S5.9 | `extensions/plugin-host.test.ts`, `api/gantt.test.ts` |
+| `[S5-A3]` | A consumer-defined kind (renderer + capabilities + `when` menu items, registered by config or plugin) works with zero core edits | S5.9 | `api/gantt.test.ts`, `layout/items/produce-items.test.ts`, `view/capability.test.ts` |
 | `[S5-A4]` | Every S3 pointer capability has a keyboard path; axe reports no violations on harness pages | S5.11 | `view/keyboard-navigation.test.ts`, `e2e/a11y.spec.ts` |
 | `[S5-A5]` | A consumer replaces the entry editor through `beforeEntryEdit` (harness demo) | S5.8 | `extensions/features/inline-editing.test.ts`, `e2e/editing.spec.ts` |
 | `[S5-A6]` | Unused features are absent from a consumer bundle (tree-shaking test in CI) | S5.12 | `size-limit` budgets + a string probe over the built bundle |

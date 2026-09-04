@@ -80,4 +80,33 @@ describe('resolveCapabilities', () => {
     caps = resolveCapabilities({ select: false }, isNeverDerived);
     expect(caps.can('select', entry())).toBe(false);
   });
+
+  describe('registered kind defaults (S5.9, D-S5-22)', () => {
+    it('a registered default answers a kind the library table would otherwise resolve', () => {
+      const caps = resolveCapabilities(undefined, isNeverDerived, (kind) =>
+        kind === 'buffer' ? { resize: false } : undefined,
+      );
+      expect(caps.can('resize', entry({ kind: 'buffer' }))).toBe(false);
+      expect(caps.can('move', entry({ kind: 'buffer' }))).toBe(true);
+    });
+
+    it("the consumer's own interactions still wins over a registered default", () => {
+      const caps = resolveCapabilities({ resize: true }, isNeverDerived, (kind) =>
+        kind === 'buffer' ? { resize: false } : undefined,
+      );
+      expect(caps.can('resize', entry({ kind: 'buffer' }))).toBe(true);
+    });
+
+    it('a registered default still loses to the consumer for an unrelated kind — the library table applies instead', () => {
+      const caps = resolveCapabilities(undefined, isGroup, (kind) =>
+        kind === 'buffer' ? { resize: false } : undefined,
+      );
+      expect(caps.can('resize', entry({ kind: 'group' }))).toBe(false);
+    });
+
+    it('an unregistered kind falls straight through to the library table', () => {
+      const caps = resolveCapabilities(undefined, isNeverDerived, () => undefined);
+      expect(caps.can('resize', entry({ kind: 'span' }))).toBe(true);
+    });
+  });
 });

@@ -229,10 +229,10 @@ rowSource: { source: 'custom', resolve: myRowResolver }           // consumer-de
 
 Item emission then places entries (or entry segments) onto rows; overlapping items on one row auto-pack into sub-lanes. Future workload/resource views are simply another row source — no new rendering or interaction code.
 
-Item emission is itself a per-kind seam, mirroring rendering (§10): the pipeline maps `Entry.kind` to an `ItemEmitter` that turns one Entry into its Item(s). Shipped kinds (`span`, `group`, `milestone`) ship a default emitter; a consumer-defined kind registers its own via `layout.registerItemEmitter` (§10) — unregistered kinds fall back to the `span` emitter (§2.5).
+Item emission is itself a per-kind seam, mirroring rendering (§10): the pipeline maps `Entry.kind` to an `ItemProducer` that turns one Entry into its Item(s). Shipped kinds (`span`, `group`, `milestone`) ship a default producer; a consumer-defined kind registers its own via `layout.registerItemProducer` (§10, S5.9, D-S5-22) — unregistered kinds fall back to the `span` producer (§2.5).
 
 ```ts
-type ItemEmitter = (entry: Entry) => readonly Item[];
+type ItemProducer = (entry: Entry) => readonly Item[];
 ```
 
 ### 2.4 Item identity is deterministic
@@ -246,7 +246,7 @@ type ItemEmitter = (entry: Entry) => readonly Item[];
 | Layer | What `kind` selects | Seam |
 |---|---|---|
 | `scheduling/` | schedule semantics, *when a scheduling plugin is installed* — e.g. a `group` spans its children via rollup (default) vs. directly schedulable | `SchedulingPolicy` (§7), plugin-owned |
-| `layout/` | item emission — bar vs. summary bracket vs. milestone diamond; whether items are emitted at all | kind → item-emitter registration in the §2.3 pipeline |
+| `layout/` | item emission — bar vs. summary bracket vs. milestone diamond; whether items are emitted at all | kind → `ItemProducer` registration in the §2.3 pipeline |
 | `render/` | appearance — per-kind default renderer; `data-kind` on the element for CSS | renderer registry (`02` §4) |
 | `interaction/` | which gestures the entry affords (move / resize / link / edit …) | capability resolver (§9) |
 
@@ -736,7 +736,7 @@ interface PluginContext {
     registerField(field: Field): void;   // §2.6 — a plugin's field rolls up like a core one
   };
   layout: {
-    registerItemEmitter(kind: string, emitter: ItemEmitter): void;
+    registerItemProducer(kind: string, producer: ItemProducer): void;   // S5.9, D-S5-22: the way in from outside — S4 shipped the ItemProducer seam itself (§9) with no external caller
   };
   interaction: {
     registerController(c: InteractionControllerSpec): void;

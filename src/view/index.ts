@@ -19,7 +19,7 @@ export type {
   EntryResize,
   EntryFieldEdit,
 } from './event-bus.js';
-export type { CapabilityRule, Interactions } from './capability.js';
+export type { CapabilityRule, Interactions, KindDefaults } from './capability.js';
 export type { Overlay, OverlayHandle } from './overlay.js';
 export type { ViewportGestures, ViewportGestureFlags } from './viewport-gestures.js';
 export type {

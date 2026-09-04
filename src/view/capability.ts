@@ -27,6 +27,17 @@ export interface Capabilities {
   can(capability: keyof Interactions, entry: Entry): boolean;
 }
 
+/** S5.9, D-S5-22: `ctx.interaction.registerKindDefaults(kind, defaults)` — a plugin's per-kind
+ *  answer, one level below a consumer's own `interactions` and one level above the library table
+ *  below. Same four gestures as `Interactions`, but a plain boolean only (no predicate) — the
+ *  registering plugin does not see a per-entry `entry`, only the `kind` it registered against. */
+export interface KindDefaults {
+  move?: boolean;
+  resize?: boolean;
+  select?: boolean;
+  edit?: boolean;
+}
+
 /** The per-kind default table (D-S3-9), read when `interactions` says nothing for that gesture:
  *  `select` always defaults true — I14's hide half is a vacant no-op for it (D-S3-9/D-S3-10); a
  *  Rollup-derived kind (the 'group' row) refuses `move`/`resize` because the identity extender has
@@ -46,16 +57,22 @@ function defaultRule(
 }
 
 /** `isRollUpKind` comes from the bound `Dataset` (S3, D-S3-9) — `GanttShell` passes
- *  `dataset.isRollUpKind` straight through, never `rollUpKinds` itself. */
+ *  `dataset.isRollUpKind` straight through, never `rollUpKinds` itself. `registeredDefaultsFor`
+ *  (S5.9, D-S5-22) is the middle layer: the consumer's own `interactions` still wins over it, and
+ *  it still wins over the library table, precedence stated once, here — `defaultRule` never sees a
+ *  registered plugin default, so an unregistered kind still falls to its own row untouched. */
 export function resolveCapabilities(
   interactions: Interactions | undefined,
   isRollUpKind: (kind: EntryKind) => boolean,
+  registeredDefaultsFor?: (kind: EntryKind) => KindDefaults | undefined,
 ): Capabilities {
   return {
     can(capability, entry) {
       const rule = interactions?.[capability];
-      if (rule === undefined) return defaultRule(capability, entry, isRollUpKind);
-      return typeof rule === 'function' ? rule(entry) : rule;
+      if (rule !== undefined) return typeof rule === 'function' ? rule(entry) : rule;
+      const registered = registeredDefaultsFor?.(entry.kind)?.[capability];
+      if (registered !== undefined) return registered;
+      return defaultRule(capability, entry, isRollUpKind);
     },
   };
 }

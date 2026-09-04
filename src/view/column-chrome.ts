@@ -6,7 +6,7 @@
 // closes over `CoreCommandPorts` (D-S5-6's precedent) and `interaction/column-gestures.ts` closes
 // over `ColumnGestureContext` (this file's own `column-gesture-context.ts` sibling).
 
-import type { Dataset, FieldKey, GridColumn, GridColumnInput } from '../model/index.js';
+import type { Dataset, Disposer, FieldKey, GridColumn, GridColumnInput } from '../model/index.js';
 import type { ResolvedColumn } from '../layout/index.js';
 import { readPixelProperty } from '../render/dom/pixel-property.js';
 import { cssEscapeAttr } from '../render/dom/css-escape.js';
@@ -52,6 +52,12 @@ export class ColumnChrome {
   readonly #container: HTMLElement;
   readonly #ports: ColumnChromePorts;
   #gridColumnInput: readonly GridColumnInput[];
+  /** S5.9, D-S5-21: `ctx.view.registerGridColumn` — appended after the consumer's own
+   *  `gridColumnInput` by `effectiveInput()`, in registration order, never stored into
+   *  `gridColumnInput` itself (the public `gridColumns` getter stays the consumer's own authored
+   *  list; a plugin column reaches the getter only once a resize/reorder/plain assignment commits
+   *  it, the same "config beats a plugin" posture `barRenderer`/`cellRenderer` already take). */
+  #pluginColumns: readonly GridColumnInput[] = [];
   #resolvedColumns: readonly ResolvedColumn[] = [];
   #focusedHeaderColumnKey: FieldKey | undefined;
 
@@ -63,6 +69,30 @@ export class ColumnChrome {
 
   get gridColumnInput(): readonly GridColumnInput[] {
     return this.#gridColumnInput;
+  }
+
+  /** S5.9, D-S5-21: the consumer's own `gridColumnInput`, plus every plugin-registered column
+   *  whose `field` it does not already name, in registration order — what actually resolves and
+   *  renders. A duplicate `field` is dropped from the plugin side: config beats a plugin. */
+  effectiveInput(): readonly GridColumnInput[] {
+    const base = this.#asGridColumns(this.#gridColumnInput);
+    const baseKeys = new Set(base.map((column) => column.field));
+    const extra = this.#asGridColumns(this.#pluginColumns).filter((column) => !baseKeys.has(column.field));
+    return [...this.#gridColumnInput, ...extra];
+  }
+
+  /** S5.9, D-S5-21: `ctx.view.registerGridColumn`. Legal only while `setup` runs (D-S5-4), the same
+   *  gate every other `register*` takes — enforced by the caller (`GanttShell`), not here. Returns a
+   *  `Disposer` that removes it again, same lifetime a decoration provider gets. */
+  registerPluginColumn(column: GridColumnInput): Disposer {
+    this.#pluginColumns = [...this.#pluginColumns, column];
+    this.#ports.rebindFields();
+    this.#ports.requestFrame();
+    return () => {
+      this.#pluginColumns = this.#pluginColumns.filter((c) => c !== column);
+      this.#ports.rebindFields();
+      this.#ports.requestFrame();
+    };
   }
 
   get resolvedColumns(): readonly ResolvedColumn[] {
@@ -150,20 +180,22 @@ export class ColumnChrome {
     this.#ports.paintColumnDropIndicator(undefined);
   }
 
-  #asColumns(): GridColumn[] {
-    return this.#gridColumnInput.map((item) => (typeof item === 'string' ? { field: item } : { ...item }));
+  #asGridColumns(input: readonly GridColumnInput[]): GridColumn[] {
+    return input.map((item) => (typeof item === 'string' ? { field: item } : { ...item }));
   }
 
+  /** A resize/reorder gesture reaches every column actually on screen (S5.9: `effectiveInput()`
+   *  includes a plugin-registered column), not only `gridColumnInput`'s own list. */
   #withWidth(columnKey: FieldKey, widthPx: number): readonly GridColumnInput[] {
-    return this.#asColumns().map((column) =>
+    return this.#asGridColumns(this.effectiveInput()).map((column) =>
       column.field === columnKey ? { ...column, width: widthPx } : column,
     );
   }
 
   #reordered(columnKey: FieldKey, beforeColumnKey: FieldKey | null): readonly GridColumnInput[] {
-    const columns = this.#asColumns();
+    const columns = this.#asGridColumns(this.effectiveInput());
     const from = columns.findIndex((column) => column.field === columnKey);
-    if (from === -1) return this.#gridColumnInput;
+    if (from === -1) return this.effectiveInput();
     const [moved] = columns.splice(from, 1);
     const to =
       beforeColumnKey === null
