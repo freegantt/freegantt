@@ -736,7 +736,7 @@ interface PluginContext {
     registerField(field: Field): void;   // §2.6 — a plugin's field rolls up like a core one
   };
   layout: {
-    registerItemProducer(kind: string, producer: ItemProducer): void;   // S5.9, D-S5-22: the way in from outside — S4 shipped the ItemProducer seam itself (§9) with no external caller
+    registerItemProducer(kind: EntryKind, producer: ItemProducer): void;   // S5.9, D-S5-22: the way in from outside — S4 shipped the ItemProducer seam itself (§9) with no external caller
   };
   interaction: {
     registerController(c: InteractionControllerSpec): void;

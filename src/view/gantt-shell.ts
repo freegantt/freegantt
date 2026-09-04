@@ -424,9 +424,9 @@ export class GanttShell {
   #capabilities: Capabilities;
   /** S5.9, D-S5-22: `ctx.interaction.registerKindDefaults` — the middle precedence layer
    *  `resolveCapabilities` reads between the consumer's own `interactions` and the library table.
-   *  One plugin's registration per kind (the last write for a kind wins, mirroring
-   *  `#itemProducerRegistry`'s own `register` — a second plugin re-registering the same kind is a
-   *  deliberate override, not an error). */
+   *  A second plugin registering the same kind overrides the first while both stay installed;
+   *  disposal restores whichever registration (if any) held the kind before it, the same
+   *  stack-and-restore contract `#itemProducerRegistry.register` uses (#146). */
   #kindDefaults = new Map<EntryKind, KindDefaults>();
   /** The raw hit under the pointer, reported by `EntrySelectionContext.setHovered` — undefined on
    *  pointerleave or when nothing is wired (no `entryGestures` attachment). */
@@ -739,15 +739,19 @@ export class GanttShell {
           this.#frames.request();
         });
       };
-      // S5.9, D-S5-22: same gate; disposal drops `kind` back out of `#kindDefaults` and re-resolves
-      // capabilities, the same way `set interactions` already does for a live config change.
+      // S5.9, D-S5-22: same gate; disposal restores whatever `kind` held before this registration
+      // (its own re-resolve, the same way `ItemProducerRegistry.register` stacks and restores) so a
+      // second plugin registering the same kind does not lose the first plugin's defaults on dispose
+      // (#146).
       const registerKindDefaults = (kind: EntryKind, defaults: KindDefaults): void => {
         gate.assertOpen();
+        const previous = this.#kindDefaults.get(kind);
         this.#kindDefaults.set(kind, defaults);
         this.#capabilities = this.#resolveCapabilities();
         this.#refreshAffordances();
         disposables.add(() => {
-          this.#kindDefaults.delete(kind);
+          if (previous === undefined) this.#kindDefaults.delete(kind);
+          else this.#kindDefaults.set(kind, previous);
           this.#capabilities = this.#resolveCapabilities();
           this.#refreshAffordances();
         });
