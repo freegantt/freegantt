@@ -4,7 +4,7 @@
 // class adds `transaction()` and the construction-time options a view never reads.
 
 import type { Entry, EntryEdit, EntryInput, EntryKind } from './entry.js';
-import type { Field, FieldKey } from './field.js';
+import type { Field, FieldKey, FieldValue } from './field.js';
 import type { EntryId } from './ids.js';
 import type { DatasetEventMap } from './change-set.js';
 
@@ -21,7 +21,10 @@ export interface DatasetHierarchy {
 /** The Dataset's own read view onto its entries (D-S2-2). `all` is the committed array — see D-S2-3
  *  for its cached-identity rule and D-S2-21 for what it does *not* show while a transaction is open
  *  (`get`/`has`/`size`/`childrenOf`/`fieldValue` see a transaction's own uncommitted writes; `all` does not). */
-export interface EntryStoreView<TMeta = unknown> {
+export interface EntryStoreView<
+  TMeta = unknown,
+  TFields extends Record<string, unknown> = Record<string, unknown>,
+> {
   readonly all: readonly Entry<TMeta>[];
   get(id: EntryId | string): Entry<TMeta> | undefined;
   has(id: EntryId | string): boolean;
@@ -30,8 +33,12 @@ export interface EntryStoreView<TMeta = unknown> {
   childrenOf(id: EntryId | string): readonly Entry<TMeta>[];
   /** The value of `field` on this entry. Routes through the Field registry, so a meta Field and
    *  a compute Field take the same call as `start`. An unregistered key throws `UnknownFieldError`.
-   *  A missing id throws `EntryNotFoundError`. */
-  fieldValue<T>(id: EntryId | string, field: FieldKey): T | undefined;
+   *  A missing id throws `EntryNotFoundError`.
+   *
+   *  The return type comes from the key: `'start'` reads as an `Instant`, and a key `TFields`
+   *  declares reads as the type the consumer wrote (ADR 0005). This is the far end of the
+   *  `Dataset<TMeta, TFields>` generics, and where they stop. */
+  fieldValue<K extends FieldKey>(id: EntryId | string, field: K): FieldValue<TFields, K> | undefined;
 }
 
 /** The Dataset's entries, read and write — `dataset.entries.add/update/remove`. Each
@@ -40,7 +47,7 @@ export interface EntryStoreView<TMeta = unknown> {
 export interface EntryStore<
   TMeta = unknown,
   TFields extends Record<string, unknown> = Record<string, unknown>,
-> extends EntryStoreView<TMeta> {
+> extends EntryStoreView<TMeta, TFields> {
   add(input: EntryInput<TMeta>): Entry<TMeta>;
   update(id: EntryId | string, edit: EntryEdit<TMeta, TFields>): Entry<TMeta>;
   remove(id: EntryId | string): void;

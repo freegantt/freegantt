@@ -31,7 +31,7 @@ describe('ComputedFieldCache (D-S4-10)', () => {
             from: 'compute',
             read(entry, ctx) {
               calls += 1;
-              return `${ctx.read<string>(entry, 'name')}:${calls}`;
+              return `${ctx.read(entry, 'name')}:${calls}`;
             },
           },
         },
@@ -58,7 +58,7 @@ describe('ComputedFieldCache (D-S4-10)', () => {
             from: 'compute',
             read(entry, ctx) {
               calls += 1;
-              return `${ctx.read<string>(entry, 'name')}:${calls}`;
+              return `${ctx.read(entry, 'name')}:${calls}`;
             },
           },
         },

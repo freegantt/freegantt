@@ -2,6 +2,7 @@
 // key and never learns where the value sits.
 
 import type {
+  CoreFieldValue,
   Duration,
   Entry,
   EntryEdit,
@@ -52,10 +53,12 @@ export function createFieldContext(
 ): FieldContext {
   const ctx: FieldContext = {
     timeZone,
-    read<T>(entry: Entry, key: FieldKey): T | undefined {
+    read<K extends FieldKey>(entry: Entry, key: K): CoreFieldValue<K> | undefined {
       const field = fields.get(key);
       if (field === undefined || field.source === undefined) return undefined;
-      return readField(entry, field as ResolvedField, ctx, memo?.()) as T | undefined;
+      // The registry is heterogeneous and string-keyed (ADR 0005), so nothing here narrows the
+      // stored value to the key's declared type — the cast is where the Field key's type is claimed.
+      return readField(entry, field as ResolvedField, ctx, memo?.()) as CoreFieldValue<K> | undefined;
     },
     durationOf(entry: Entry): Duration {
       return { value: diffMs(entry.end, entry.start), unit: 'millisecond' };
@@ -77,7 +80,7 @@ export function createRollUpContext(ctx: FieldContext, field: FieldKey): RollUpC
     numericValues(children: readonly Entry[]): readonly number[] {
       const out: number[] = [];
       for (const child of children) {
-        const value = rollUpCtx.read<unknown>(child, field);
+        const value = rollUpCtx.read(child, field);
         if (typeof value === 'number' && Number.isFinite(value)) out.push(value);
       }
       return out;

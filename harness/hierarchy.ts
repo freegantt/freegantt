@@ -114,7 +114,7 @@ function buildRowSource(): RowSource {
   if (rowsMode === 'grouped') {
     return {
       source: 'group',
-      groupBy: (entry: Entry, fields?: FieldContext) => fields?.read<string>(entry, 'team') ?? 'unassigned',
+      groupBy: (entry: Entry, fields?: FieldContext) => String(fields?.read(entry, 'team') ?? 'unassigned'),
       ...shared,
     };
   }

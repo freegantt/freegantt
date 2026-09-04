@@ -29,7 +29,10 @@ export type {
 } from './change-set.js';
 export type {
   CoreFieldKey,
+  CoreFieldValues,
+  CoreFieldValue,
   FieldKey,
+  FieldValue,
   AggregatorName,
   FieldTypeName,
   FieldSource,

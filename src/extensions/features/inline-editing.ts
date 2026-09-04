@@ -16,7 +16,15 @@
 import type { GanttPlugin, PluginContext } from '../../api/gantt.js';
 import type { EntryFieldEdit, Overlay } from '../../api/plugin.js';
 import { EntryNotFoundError, MutationCancelledError } from '../../model/index.js';
-import type { Entry, EntryId, Field, FieldContext, FieldKey, Instant } from '../../model/index.js';
+import type {
+  CoreFieldValue,
+  Entry,
+  EntryId,
+  Field,
+  FieldContext,
+  FieldKey,
+  Instant,
+} from '../../model/index.js';
 import { activateFocusTrap } from '../focus-trap.js';
 import type { FocusTrap } from '../focus-trap.js';
 import { createDefaultDateInput } from './date-input.js';
@@ -104,7 +112,8 @@ function cellDisplayText(cell: HTMLElement): string {
 function fieldContextFor(ctx: PluginContext): FieldContext {
   return {
     timeZone: ctx.dataset.timeZone,
-    read: <T>(entry: Entry, key: FieldKey): T | undefined => ctx.dataset.entries.fieldValue<T>(entry.id, key),
+    read: <K extends FieldKey>(entry: Entry, key: K): CoreFieldValue<K> | undefined =>
+      ctx.dataset.entries.fieldValue(entry.id, key),
     durationOf: (entry: Entry) => ({
       value: ctx.dataset.time.diffDays(entry.start, entry.end),
       unit: 'day',
@@ -187,7 +196,7 @@ export function inlineEditing(options: InlineEditingOptions = {}): GanttPlugin {
       document.addEventListener('scroll', onScroll, true);
 
       function openGeneric(entry: Entry, field: Field, cell: HTMLElement, row: HTMLElement): void {
-        const raw = ctx.dataset.entries.fieldValue<unknown>(entry.id, field.key);
+        const raw = ctx.dataset.entries.fieldValue(entry.id, field.key);
         const input = document.createElement('input');
         input.type = field.inputType ?? 'text';
         input.className = 'fg-cell-editor-control';
@@ -223,7 +232,9 @@ export function inlineEditing(options: InlineEditingOptions = {}): GanttPlugin {
       }
 
       function openDate(entry: Entry, field: Field, cell: HTMLElement, row: HTMLElement): void {
-        const raw = ctx.dataset.entries.fieldValue<Instant>(entry.id, field.key);
+        // `isDateField` already vouched for this Field's type; `fieldValue` types core keys only,
+        // so a consumer-declared date Field reads back as `unknown` without this.
+        const raw = ctx.dataset.entries.fieldValue(entry.id, field.key) as Instant | undefined;
         if (raw === undefined) return;
         const factory = options.dateInput;
         let dateInput: DateInput;
@@ -331,7 +342,7 @@ export function inlineEditing(options: InlineEditingOptions = {}): GanttPlugin {
               this.settled = false;
               return;
             }
-            const from = ctx.dataset.entries.fieldValue<unknown>(entryId, field);
+            const from = ctx.dataset.entries.fieldValue(entryId, field);
             try {
               ctx.dataset.entries.update(entryId, { [field]: result.value });
             } catch (error) {
@@ -346,7 +357,7 @@ export function inlineEditing(options: InlineEditingOptions = {}): GanttPlugin {
               }
               throw error;
             }
-            const to = ctx.dataset.entries.fieldValue<unknown>(entryId, field);
+            const to = ctx.dataset.entries.fieldValue(entryId, field);
             ctx.interaction.emitEntryEdit({ entry, field, from, to });
             teardown(this);
           },
@@ -380,7 +391,7 @@ export function inlineEditing(options: InlineEditingOptions = {}): GanttPlugin {
         if (session) closeSession('commit');
 
         const requestId = ++openRequestId;
-        const currentValue = ctx.dataset.entries.fieldValue<unknown>(entry.id, field.key);
+        const currentValue = ctx.dataset.entries.fieldValue(entry.id, field.key);
         const payload: EntryFieldEdit = { entry, field: field.key, from: currentValue, to: currentValue };
         const result = ctx.interaction.emitBeforeEntryEdit(payload);
         const openNow = (): void => {
