@@ -1071,6 +1071,9 @@ export type ItemId = string & {
 // @public
 export function itemId(entry: EntryId, segmentIndex?: number): ItemId;
 
+// @public
+export function itemIdFromDataset(value: string | undefined): ItemId | undefined;
+
 // @public (undocumented)
 export type ItemProducer = (entry: Entry) => readonly Item[];
 

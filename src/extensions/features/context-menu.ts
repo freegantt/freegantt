@@ -7,8 +7,8 @@
 import { createPopup } from '../popup.js';
 import type { Anchor, Popup } from '../popup.js';
 import type { Command, GanttPlugin, PluginContext, CommandContext } from '../../api/gantt.js';
-import { entryIdOfItem } from '../../model/index.js';
-import type { Entry, ItemId } from '../../model/index.js';
+import { entryIdOfItem, itemIdFromDataset } from '../../model/index.js';
+import type { Entry } from '../../model/index.js';
 import { buildMenu, resolveMenuEntries } from './menu-view.js';
 import type { MenuEntry } from './menu-view.js';
 
@@ -125,9 +125,9 @@ export function contextMenu(options: ContextMenuOptions = {}): GanttPlugin {
       };
 
       const entryForBar = (bar: HTMLElement): Entry | undefined => {
-        const rawItemId = bar.dataset['itemId'];
-        if (rawItemId === undefined) return undefined;
-        return ctx.dataset.entries.get(entryIdOfItem(rawItemId as ItemId));
+        const itemId = itemIdFromDataset(bar.dataset['itemId']);
+        if (itemId === undefined) return undefined;
+        return ctx.dataset.entries.get(entryIdOfItem(itemId));
       };
 
       const onContextMenu = (event: MouseEvent): void => {

@@ -7,8 +7,8 @@
 import { createPopup } from '../popup.js';
 import type { Popup, PopupPlacement } from '../popup.js';
 import type { GanttPlugin, PluginContext } from '../../api/gantt.js';
-import { entryIdOfItem } from '../../model/index.js';
-import type { Entry, ItemId, TooltipColumn } from '../../model/index.js';
+import { entryIdOfItem, itemIdFromDataset } from '../../model/index.js';
+import type { Entry, TooltipColumn } from '../../model/index.js';
 import { formatDate, formatEndInclusive } from '../../api/time-facade.js';
 
 export interface TooltipsOptions {
@@ -100,9 +100,9 @@ export function tooltips(options: TooltipsOptions = {}): GanttPlugin {
       };
 
       const openFor = (bar: HTMLElement): void => {
-        const rawItemId = bar.dataset['itemId'];
-        if (rawItemId === undefined) return;
-        const entryId = entryIdOfItem(rawItemId as ItemId);
+        const itemId = itemIdFromDataset(bar.dataset['itemId']);
+        if (itemId === undefined) return;
+        const entryId = entryIdOfItem(itemId);
         const entry = ctx.dataset.entries.get(entryId);
         if (entry === undefined) return;
         const content =

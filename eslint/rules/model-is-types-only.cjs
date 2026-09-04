@@ -11,6 +11,7 @@ const IDENTITY_CAST_HELPERS = new Set([
   'dependencyId',
   'rowId',
   'itemId',
+  'itemIdFromDataset',
   'changeSetId',
 ]);
 
