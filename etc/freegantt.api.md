@@ -1206,7 +1206,7 @@ export interface PixelSpan {
     readonly x: number;
 }
 
-// @public (undocumented)
+// @public
 export interface PlainParts {
     // (undocumented)
     day: number;
@@ -1215,7 +1215,6 @@ export interface PlainParts {
     hour: number;
     // (undocumented)
     minute: number;
-    // (undocumented)
     month: number;
     // (undocumented)
     second: number;

@@ -8,7 +8,7 @@
 // `DateInputFactory` a consumer writes stays narrower still (`{ zone, locale }` only, D-S5-20's own
 // signature) — a consumer's own factory owns its own zone math, outside `src/`'s I10 scope.
 
-import type { Disposer, Instant } from '../../model/index.js';
+import type { Disposer, Instant, PlainParts } from '../../model/index.js';
 
 /** What the inline editor mounts in a date cell. */
 export interface DateInput {
@@ -26,20 +26,14 @@ export interface DateInput {
 /** `inlineEditing({ dateInput: myPickerFactory })` — a consumer's own zone math, not `time/`'s. */
 export type DateInputFactory = (ctx: { zone: string; locale?: Intl.LocalesArgument }) => DateInput;
 
-interface PlainDateParts {
-  year: number;
-  month: number;
-  day: number;
-  hour: number;
-  minute: number;
-  second: number;
-}
-
 /** The structural slice of `time/`'s `ZonedTime` this file needs — not that type itself (sealed from
- *  `extensions/`, see file header). */
+ *  `extensions/`, see file header). `PlainParts` is `model/`'s (#144): the wall-clock shape is domain
+ *  vocabulary, so it is named once there rather than hand-copied here, where a later field added to
+ *  it would not have reached this file. `time/` re-exports the same type; its optional `dayOfWeek` is
+ *  derived on read, which this control neither reads nor writes. */
 export interface ZoneDateMath {
-  toPlain(at: Instant): PlainDateParts;
-  fromPlain(plain: PlainDateParts): Instant;
+  toPlain(at: Instant): PlainParts;
+  fromPlain(plain: PlainParts): Instant;
 }
 
 function pad(value: number, width: number): string {
