@@ -1066,6 +1066,7 @@ describe('render/dom backend', () => {
       entryById: entryLookup,
       resolveBarRenderer: () => ({ renderer: currentRenderer }),
       resolveCellRenderer: () => undefined,
+      resolveHeaderRenderer: () => undefined,
     });
     const { grid, timeline } = mountSurfaces();
     backend.mount({ grid, timeline });
@@ -1106,6 +1107,7 @@ describe('render/dom backend', () => {
         },
       }),
       resolveCellRenderer: () => undefined,
+      resolveHeaderRenderer: () => undefined,
     });
     const { grid, timeline } = mountSurfaces();
     backend.mount({ grid, timeline });
@@ -1136,6 +1138,7 @@ describe('render/dom backend', () => {
       entryById: entryLookup,
       resolveBarRenderer: () => ({ renderer }),
       resolveCellRenderer: () => undefined,
+      resolveHeaderRenderer: () => undefined,
     });
     const { grid, timeline } = mountSurfaces();
     backend.mount({ grid, timeline });
@@ -1163,6 +1166,7 @@ describe('render/dom backend', () => {
       entryById: entryLookup,
       resolveBarRenderer: () => undefined,
       resolveCellRenderer: () => ({ renderer: () => undefined }),
+      resolveHeaderRenderer: () => undefined,
     });
     const { grid, timeline } = mountSurfaces();
     backend.mount({ grid, timeline });
@@ -1197,6 +1201,7 @@ describe('render/dom backend', () => {
           return { text: `[${ctx.value}]` };
         },
       }),
+      resolveHeaderRenderer: () => undefined,
     });
     const { grid, timeline } = mountSurfaces();
     backend.mount({ grid, timeline });
@@ -1306,6 +1311,7 @@ describe('render/dom backend', () => {
       resolveBarRenderer: () => undefined,
       resolveCellRenderer: (columnKey) =>
         columnKey === 'cost' ? { renderer: (ctx) => ({ text: `per-column:${ctx.value}` }) } : undefined,
+      resolveHeaderRenderer: () => undefined,
     });
     const { grid, timeline } = mountSurfaces();
     backend.mount({ grid, timeline });

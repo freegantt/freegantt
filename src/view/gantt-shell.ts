@@ -591,6 +591,20 @@ export class GanttShell {
             ...(resolved.pluginId !== undefined ? { pluginId: resolved.pluginId } : {}),
           };
         },
+        // S5.4, D-S5-11: same bind-in-here posture as `resolveCellRenderer` just above — a
+        // `GridColumn` has no per-column `headerRenderer` slot (`layout/column.ts`), so this only
+        // ever resolves the Gantt-wide/plugin one, bound to its column.
+        resolveHeaderRenderer: (columnKey) => {
+          const column = this.#columnChrome.resolvedColumns.find((c) => String(c.key) === columnKey);
+          if (column === undefined) return undefined;
+          const resolved = this.#rendererRegistry.resolveHeader(this.#headerRenderer);
+          if (resolved === undefined) return undefined;
+          const headerRenderer = resolved.renderer;
+          return {
+            renderer: () => headerRenderer({ column }),
+            ...(resolved.pluginId !== undefined ? { pluginId: resolved.pluginId } : {}),
+          };
+        },
       });
     this.#backend.mount({
       grid: this.#panes.grid,

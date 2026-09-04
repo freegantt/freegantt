@@ -39,10 +39,16 @@ type BoundCellRenderer = (ctx: {
   value: string;
 }) => ElementDescription | undefined;
 
+/** A header renderer, already bound to its `ResolvedColumn` the same way `BoundCellRenderer` above
+ *  is bound (render/dom never receives `ResolvedColumn` either) — nothing else varies per header
+ *  cell, so the bound form takes no context at all. */
+type BoundHeaderRenderer = () => ElementDescription | undefined;
+
 export interface DomBackendOptions {
   entryById: (id: EntryId) => Entry | undefined;
   resolveBarRenderer: (kind: string) => ResolvedRenderer<BarRenderer> | undefined;
   resolveCellRenderer: (columnKey: string) => ResolvedRenderer<BoundCellRenderer> | undefined;
+  resolveHeaderRenderer: (columnKey: string) => ResolvedRenderer<BoundHeaderRenderer> | undefined;
 }
 
 function callRenderer<TCtx>(
@@ -97,6 +103,9 @@ type HeaderCellGeom = {
    *  hide the resizer grip / drop the movable cursor for a fixed or pinned column. */
   resizable: boolean;
   movable: boolean;
+  /** Bug hunt (S5 fixes): a resolved `headerRenderer`'s output for this one header cell — undefined
+   *  keeps `text`, same posture `content` already takes on `CellGeom` above. */
+  content?: ElementDescription;
 };
 type RowGeom = {
   top: number;
@@ -189,6 +198,7 @@ export function createDomBackend(options?: DomBackendOptions): RenderBackend<HTM
   const entryById = options?.entryById ?? ((): undefined => undefined);
   const resolveBarRenderer = options?.resolveBarRenderer ?? ((): undefined => undefined);
   const resolveCellRenderer = options?.resolveCellRenderer ?? ((): undefined => undefined);
+  const resolveHeaderRenderer = options?.resolveHeaderRenderer ?? ((): undefined => undefined);
   // The grid pane's row layer (RenderSurfaces.grid) — created by `view/pane-layout.ts`, not this
   // backend (S1.8, D-S1.8-2). No scrollbar of its own: it follows the timeline pane's scroll
   // position by one `translateY(-visible.y)` per frame (D-S1.8-1), written in `sync()` below.
@@ -537,10 +547,13 @@ export function createDomBackend(options?: DomBackendOptions): RenderBackend<HTM
       flex: cell.flex ?? 0,
       resizable: cell.resizable ?? true,
       movable: cell.movable ?? true,
+      ...(cell.content !== undefined ? { content: cell.content } : {}),
     }),
     patch: (node: HTMLElement, geom: HeaderCellGeom): void => {
+      // `create` above always appends `label` first — the same structural guarantee the row-cell
+      // spec's own twisty/label pair relies on just above.
       const label = node.firstElementChild as HTMLElement;
-      label.textContent = geom.text;
+      applyElementDescription(label, geom.content ?? { text: geom.text });
       paintColumnBox(node, geom);
       if (geom.resizable) node.removeAttribute('data-resizable-off');
       else node.setAttribute('data-resizable-off', '');
@@ -648,6 +661,11 @@ export function createDomBackend(options?: DomBackendOptions): RenderBackend<HTM
       if (column.flex !== undefined) item.flex = column.flex;
       if (column.resizable !== undefined) item.resizable = column.resizable;
       if (column.movable !== undefined) item.movable = column.movable;
+      const resolved = resolveHeaderRenderer(String(column.key));
+      if (resolved !== undefined) {
+        const content = callRenderer('header', resolved, undefined);
+        if (content !== undefined) item.content = content;
+      }
       return item;
     });
     headerCellLayer.sync(gridHeaderLayer, items, headerCellSpec);
