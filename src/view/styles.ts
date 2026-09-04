@@ -217,7 +217,10 @@ ${DARK_COLOR_TOKENS}
    than one pair per bar. Parked with the hidden DOM property (render/dom/index.ts), which the UA's
    own [hidden] { display: none } default already covers. */
 .fg-bar-handle { position: absolute; top: 0; left: -4px; width: 8px; cursor: ew-resize; touch-action: none; z-index: 1; }
-.fg-content-sizer { position: absolute; top: 0; left: 0; width: 1px; height: 1px; visibility: hidden; }
+/* In flow, below the sticky header — the same origin .fg-bars and .fg-row-bands sit at. Absolute at
+   the pane's own top-left instead, the sizer declared a scroll extent one header short of where the
+   content it sizes actually ends, and the last row could never scroll fully into view. */
+.fg-content-sizer { position: relative; width: 1px; height: 1px; visibility: hidden; }
 /* height is set inline per frame (render/dom/date-line.ts), not bottom: 0: .fg-timeline-pane is both
    this element's positioned ancestor and its own overflow: auto scroll container, so bottom: 0
    would resolve against the pane's visible clientHeight and cut the line off at the first

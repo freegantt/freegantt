@@ -454,6 +454,7 @@ describe('render/dom backend', () => {
       scrolled.rows.map((row) => (row.index % 2 === 0 ? 'odd' : 'even')),
     );
     expect(bands.map((band) => band.dataset['parity'])).toEqual(rows.map((row) => row.dataset['parity']));
+    expect(bands.map((band) => band.dataset['rowId'])).toEqual(rows.map((row) => row.dataset['rowId']));
 
     backend.destroy();
   });

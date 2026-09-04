@@ -803,10 +803,13 @@ export function createDomBackend(options?: DomBackendOptions): RenderBackend<HTM
     rowBandLayer.style.width = `${Math.max(contentWidth, paneWidth)}px`;
     rowBandLayerCache.sync(rowBandLayer, rows, {
       key: (row) => row.id,
-      create: () => {
+      create: (_row, key) => {
         const node = document.createElement('div');
         node.className = 'fg-row-band';
         node.setAttribute('aria-hidden', 'true');
+        // The row this band paints — the same `data-row-id` the grid pane's own `.fg-row` carries,
+        // so a viewer (or a test) can line the two panes up row by row.
+        node.dataset['rowId'] = key;
         return node;
       },
       toGeom: (row) => ({ top: row.top, height: row.height, parity: rowParity(row.index) }),
