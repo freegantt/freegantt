@@ -6,6 +6,7 @@ import { createFieldContext } from '../data/fields/field-access.js';
 import { stringifyPrimitive } from '../data/fields/core-fields.js';
 import type { FieldLookup } from '../model/index.js';
 import type { FieldCompare, ResolvedColumn } from '../layout/index.js';
+import { pickDefined } from '../layout/index.js';
 
 export const DEFAULT_GRID_COLUMNS: readonly GridColumnInput[] = Object.freeze(['name']);
 
@@ -39,21 +40,21 @@ function columnFrom(item: GridColumnInput, field: Field): Omit<ResolvedColumn, '
     resizable: input.resizable ?? defaults.resizable ?? true,
     movable: input.movable ?? defaults.movable ?? true,
   };
-  const width = input.width ?? defaults.width;
-  if (width !== undefined) column.width = width;
-  const flex = input.flex ?? defaults.flex;
-  if (flex !== undefined) column.flex = flex;
-  // S5.7, D-S5-17: per-column `cellRenderer` comes only from this Gantt's own column — `Field.column`
-  // (`defaults`) cannot carry one (`model/field.ts`'s narrower default set).
-  const cellRenderer = input.cellRenderer;
-  if (cellRenderer !== undefined) column.cellRenderer = cellRenderer;
-  const tooltip = input.tooltip ?? defaults.tooltip;
-  if (tooltip !== undefined) column.tooltip = tooltip;
-  // S5.8 honours this; S5.7 only carries it through resolution (spec's own I11 exemption — `editable`
-  // shares `GridColumn`'s type ahead of the step that reads it).
-  const editable = input.editable ?? defaults.editable;
-  if (editable !== undefined) column.editable = editable;
-  return column;
+  const candidates = {
+    width: input.width ?? defaults.width,
+    flex: input.flex ?? defaults.flex,
+    // S5.7, D-S5-17: per-column `cellRenderer` comes only from this Gantt's own column —
+    // `Field.column` (`defaults`) cannot carry one (`model/field.ts`'s narrower default set).
+    cellRenderer: input.cellRenderer,
+    tooltip: input.tooltip ?? defaults.tooltip,
+    // S5.8 honours this; S5.7 only carries it through resolution (spec's own I11 exemption —
+    // `editable` shares `GridColumn`'s type ahead of the step that reads it).
+    editable: input.editable ?? defaults.editable,
+  };
+  return {
+    ...column,
+    ...pickDefined(candidates, ['width', 'flex', 'cellRenderer', 'tooltip', 'editable']),
+  };
 }
 
 /** S5.7, D-S5-18: `GridColumnsChange`'s payload shape — the public `GridColumn`, not the layout-only

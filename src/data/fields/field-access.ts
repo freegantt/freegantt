@@ -22,7 +22,7 @@ import type { FieldRegistry, ResolvedField } from './field-registry.js';
 export type { FieldLookup, FieldReadMemo };
 export { withProposedKeys, proposedKeysOf };
 
-function isOptionalEntryKey(key: string): boolean {
+function isOptionalEntryKey(key: string): key is 'parentId' | 'segments' | 'meta' {
   return key === 'parentId' || key === 'segments' || key === 'meta';
 }
 
@@ -129,7 +129,7 @@ export function editProposesField(edit: StoredEdit | undefined, field: ResolvedF
 
 /** Applies a stored overlay the way `EntryStore.get` must: core keys only, never proposedKeys. */
 export function overlayStoredEdit(entry: Entry, edit: StoredEdit): Entry {
-  const next: Record<string, unknown> = { ...entry };
+  const next: Entry = { ...entry };
   const bag = edit as Record<string, unknown>;
   for (const field of CORE_FIELDS) {
     const source = field.source;
@@ -141,7 +141,10 @@ export function overlayStoredEdit(entry: Entry, edit: StoredEdit): Entry {
       delete next[key];
       continue;
     }
-    if (value !== undefined) next[key] = value;
+    // `key` is `CoreFieldKey`, but `value` is untyped `unknown` here — this cast is load-bearing,
+    // the same way entry-store.ts's `applyFieldRow` cast is: nothing narrows `value` to the field's
+    // real value union at this point.
+    if (value !== undefined) (next as unknown as Record<string, unknown>)[key] = value;
   }
-  return next as unknown as Entry;
+  return next;
 }

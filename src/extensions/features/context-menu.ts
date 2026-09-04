@@ -99,12 +99,13 @@ export function contextMenu(options: ContextMenuOptions = {}): GanttPlugin {
           const commandId = button.getAttribute('data-command');
           const commands = openCommands;
           closeMenu();
+          if (commandId === null || commands === undefined) return;
           // B2: run the command found in *this menu's own* `available` list, against *this menu's
           // own* `commandCtx` (the right-clicked bar, or the focused row) — not
           // `ctx.commands.run(commandId)`, which would rebuild context from the current selection and
           // silently no-op when that selection is not the entry the menu was opened for.
-          const command = commands?.available.find((c) => c.id === commandId);
-          if (command !== undefined && commands !== undefined) command.run(commands.ctx);
+          const command = commands.available.find((c) => c.id === commandId);
+          command?.run(commands.ctx);
         };
         onDocumentKeydown = (event) => {
           if (!popup.isOpen) return;

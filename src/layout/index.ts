@@ -7,6 +7,7 @@ export {
   DEFAULT_DIAMOND_SIZE_PX,
 } from './frame.js';
 export { DEFAULT_LANE_GAP_PX } from './lanes/pack-lanes.js';
+export { pickDefined } from './pick-defined.js';
 // `render/dom` never imports `model/` directly (render-boundary, plans/01 §1) — these two id
 // helpers are pure id-string math with no model runtime behind them, re-exported here the same way
 // `ColumnAlign` crosses this same boundary (#54).
