@@ -290,7 +290,7 @@ interface GridColumn {
   field: FieldKey;
   header?: string;
   width?: number; flex?: number;
-  align?: 'start' | 'end';
+  align?: 'start' | 'end' | 'center';
   // cellRenderer and editable arrive in S5, on the Gantt column, when code honours them (I11).
 }
 
