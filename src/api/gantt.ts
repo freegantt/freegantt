@@ -90,7 +90,7 @@ export interface GanttOptionsBase {
   zoomPresets?: readonly PresetRef[];
   /** Live (S3, D-S3-10). Entry ids, loose on the way in; assignment runs the same cancelable
    *  sequence a click runs. Default `[]`. */
-  selection?: readonly (EntryId | string)[];
+  selectedIds?: readonly (EntryId | string)[];
   /** Live (S3, D-S3-9). Per-gesture, boolean or per-entry predicate, over the per-kind default
    *  table. Default `{}`: every gesture resolves off the default table alone. */
   interactions?: Interactions;
@@ -249,7 +249,7 @@ export class Gantt {
       now,
     });
     if (options.zoomPresets !== undefined) this.#shell.zoomPresets = options.zoomPresets;
-    if (options.selection !== undefined) this.#shell.selection = options.selection;
+    if (options.selectedIds !== undefined) this.#shell.selection = options.selectedIds;
     if (options.plugins !== undefined) this.#shell.plugins = options.plugins;
   }
 
@@ -472,24 +472,25 @@ export class Gantt {
     this.#shell.zoomPresets = refs;
   }
 
-  /** Loose in, branded out — the same asymmetry `dataset.entries.get/update/remove` already ship
-   *  (D-S3-10). Live: assignment runs the same cancelable `beforeSelectionChange` → `selectionChange`
-   *  sequence a click runs. */
-  get selection(): readonly EntryId[] {
+  /** The Selection as ids — which entries a click, the keyboard, or an assignment selected
+   *  (D-S3-10). Loose in, branded out — the same asymmetry `dataset.entries.get/update/remove`
+   *  already ship. Live: assignment runs the same cancelable `beforeSelectionChange` →
+   *  `selectionChange` sequence a click runs. Pairs with `selectedEntries`, which reads the same
+   *  Selection as `Entry` records. */
+  get selectedIds(): readonly EntryId[] {
     return this.#shell.selection;
   }
 
-  set selection(ids: readonly (EntryId | string)[]) {
+  set selectedIds(ids: readonly (EntryId | string)[]) {
     this.#shell.selection = ids;
   }
 
-  /** The bound dataset's `Entry` records for each id in `selection`, in the same order.
-   *  Re-reads the store on every access, so field edits show up without a selection change. An id
-   *  in `selection` that no longer exists in the store is skipped — for example after
+  /** The Selection as records — the bound dataset's `Entry` for each id in `selectedIds`, in the
+   *  same order. Re-reads the store on every access, so field edits show up without a selection
+   *  change. An id that no longer exists in the store is skipped — for example after
    *  `dataset.entries.remove` left a stale id in the selection set. To change which entries are
-   *  selected, assign `selection`; this getter is read-only. See README — `selection` vs
-   *  `selectionEntries`. */
-  get selectionEntries(): readonly Entry[] {
+   *  selected, assign `selectedIds`; this getter is read-only. */
+  get selectedEntries(): readonly Entry[] {
     const entries: Entry[] = [];
     for (const id of this.#shell.selection) {
       const entry = this.#dataset.entries.get(id);

@@ -828,9 +828,9 @@ export class Gantt {
     reveal(entryId: EntryId): void;
     get rowSource(): RowSource;
     set rowSource(next: RowSource);
-    get selection(): readonly EntryId[];
-    set selection(ids: readonly (EntryId | string)[]);
-    get selectionEntries(): readonly Entry[];
+    get selectedEntries(): readonly Entry[];
+    get selectedIds(): readonly EntryId[];
+    set selectedIds(ids: readonly (EntryId | string)[]);
     // (undocumented)
     get theme(): Theme;
     set theme(value: Theme);
@@ -919,7 +919,7 @@ export interface GanttOptionsBase {
     plugins?: readonly GanttPlugin[];
     rowSource?: RowSource;
     scroll?: ScrollModel;
-    selection?: readonly (EntryId | string)[];
+    selectedIds?: readonly (EntryId | string)[];
     theme?: Theme;
     todayLine?: boolean | InstantInput;
     todayLineMarginTicks?: number;

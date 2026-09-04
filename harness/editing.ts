@@ -29,7 +29,7 @@ const toast = document.querySelector<HTMLDivElement>('#toast')!;
 const snapUnitSelect = document.querySelector<HTMLSelectElement>('#snap-unit')!;
 
 function renderSelection(): void {
-  const ids = gantt.selection;
+  const ids = gantt.selectedIds;
   selectionReadout.textContent = ids.length === 0 ? 'Selection: (none)' : `Selection: ${ids.join(', ')}`;
 }
 

@@ -431,8 +431,8 @@ _Avoid_: min-width (that is Tick width's `minTickWidthPx`), sticky min width, ST
 ### Direct manipulation
 
 **Selection**:
-The set of Entry ids a `Gantt` currently highlights — `Gantt.selection` (loose in, branded out, live) — never Item ids, since "this Segment is selected but its siblings are not" means nothing yet (S3, D-S3-10). Per-Gantt, not per-Dataset: two Gantts bound to one Dataset can select differently. Written on pointerup, never pointerdown, and not at all when the gesture armed into a drag. `Gantt.selectionEntries` re-reads the bound Dataset for each id in `selection`, in order, on every access — skipping an id the store no longer has (e.g. after a `remove`) rather than throwing.
-_Avoid_: highlight (paint detail, not the authored concept), `selectedItemIds` unqualified (that is `InteractionState`'s paint-side mirror, Item-keyed, never the public word)
+The set of Entry ids a `Gantt` currently highlights — never Item ids, since "this Segment is selected but its siblings are not" means nothing yet (S3, D-S3-10). Per-Gantt, not per-Dataset: two Gantts bound to one Dataset can select differently. Written on pointerup, never pointerdown, and not at all when the gesture armed into a drag. The event pair keeps the concept word (`beforeSelectionChange`/`selectionChange`); the two public getters name the two readings of it, and the suffix is the only difference between them (#113): `Gantt.selectedIds` is the ids (loose in, branded out, live, writable), and `Gantt.selectedEntries` re-reads the bound Dataset for each id in `selectedIds`, in order, on every access — skipping an id the store no longer has (e.g. after a `remove`) rather than throwing. Internal holders of the id list keep the concept word (`GanttShell#selection`), because no second reading exists there to tell apart.
+_Avoid_: highlight (paint detail, not the authored concept), `Gantt.selection` / `Gantt.selectionEntries` (retired in #113 — a public name with no axis word left the reader to learn from the types which side was ids), `selectedItemIds` unqualified (that is `InteractionState`'s paint-side mirror, Item-keyed, never the public word)
 
 **EntryGesture**:
 The kind of data edit a drag is making — `{ kind: 'move' }` or `{ kind: 'resize', edge }` — the shape `interaction/entry-gesture-context.ts`'s `EntryGestureContext` carries through `draftFor`/`commit`. Distinct from the pointer machine itself (`createPointerGesture`, `pointer-gesture.ts`), which knows nothing about entries, drafts, or kinds — only threshold, capture, Escape, and long-press over plain `start`/`move`/`commit`/`cancel` callbacks.
@@ -452,7 +452,7 @@ _Avoid_: Step (that is Tick stepping), keyboard drag
 
 **Interaction state**:
 The one long-lived, mutable per-Gantt object `RenderBackend.applyState` diffs against (`hoveredItemId`, `selectedItemIds`, `resizableItemId`, `movableItemId`, `preview`, `pendingItemIds`, `cursorX`, `cursorLabel`). Hot path: class toggles and transforms only, no frame rebuild (I5, D-S3-6).
-_Avoid_: Selection (that is the public `Gantt.selection` Entry-id set; this is the paint-side mirror)
+_Avoid_: Selection (that is the public `Gantt.selectedIds` Entry-id set; this is the paint-side mirror)
 
 ### Theming and accessibility
 
@@ -479,7 +479,7 @@ _Avoid_: aria-label (that is the DOM attribute `render/dom` maps this to — `a1
 ### Extension
 
 **Capability**:
-Whether a specific gesture (move, resize, select, link) is permitted on a given Entry, resolved once per Entry from its Kind and gating both the gesture itself and any affordance that hints at it (e.g. a resize handle only renders if resize is capable). `select` is a Capability with no visual affordance — I14's refuse half still applies (pointer and keyboard skip an incapable entry); the public `Gantt.selection` setter does not consult it (D-S3-9).
+Whether a specific gesture (move, resize, select, link) is permitted on a given Entry, resolved once per Entry from its Kind and gating both the gesture itself and any affordance that hints at it (e.g. a resize handle only renders if resize is capable). `select` is a Capability with no visual affordance — I14's refuse half still applies (pointer and keyboard skip an incapable entry); the public `Gantt.selectedIds` setter does not consult it (D-S3-9).
 _Avoid_: Permission, ability
 
 **KindDefaults**:

@@ -351,38 +351,39 @@ and so on without remounting.
 ### Selection (S3)
 
 Selection is **Gantt state**, not **Dataset** state — two `Gantt` instances on one `Dataset` can
-hold different selections. The library exposes two getters; they answer different questions:
+hold different selections. The library exposes the same selection two ways. The suffix says which
+one you get: ids or `Entry` records.
 
-| Getter                   | Type                 | Writable                    | What it is                                        |
-| ------------------------ | -------------------- | --------------------------- | ------------------------------------------------- |
-| `gantt.selection`        | `readonly EntryId[]` | yes (`gantt.selection = …`) | Which entry ids are selected                      |
-| `gantt.selectionEntries` | `readonly Entry[]`   | no                          | The bound dataset's `Entry` records for those ids |
+| Getter                  | Type                 | Writable                      | What it is                                        |
+| ----------------------- | -------------------- | ----------------------------- | ------------------------------------------------- |
+| `gantt.selectedIds`     | `readonly EntryId[]` | yes (`gantt.selectedIds = …`) | Which entry ids are selected                      |
+| `gantt.selectedEntries` | `readonly Entry[]`   | no                            | The bound dataset's `Entry` records for those ids |
 
-Use **`selection`** when you only need ids, or when you want to **set** selection (click parity:
-assignment runs `beforeSelectionChange` → `selectionChange` and opens no transaction).
+Use **`selectedIds`** when you only need ids, or when you want to **set** the selection (click
+parity: assignment runs `beforeSelectionChange` → `selectionChange` and opens no transaction).
 
-Use **`selectionEntries`** when you need entry **fields** — `name`, `start`, `end`, and so on — for
+Use **`selectedEntries`** when you need entry **fields** — `name`, `start`, `end`, and so on — for
 a toolbar, bulk rename, or any "act on the selected rows" control:
 
 ```ts
 gantt.on('selectionChange', () => {
-  const names = gantt.selectionEntries.map((entry) => entry.name);
+  const names = gantt.selectedEntries.map((entry) => entry.name);
   toolbar.textContent = names.join(', ');
 });
 
 renameBtn.addEventListener('click', () => {
   dataset.transaction(() => {
-    for (const entry of gantt.selectionEntries) {
+    for (const entry of gantt.selectedEntries) {
       dataset.entries.update(entry.id, { name: input.value });
     }
   });
 });
 ```
 
-`selectionEntries` re-reads the store on every access, so field edits show up without a selection
-change. It keeps `selection` order and **skips** ids that no longer exist — for example after
-`dataset.entries.remove` left a stale id in `selection`. To change which entries are selected,
-assign `selection`; `selectionEntries` is read-only.
+`selectedEntries` re-reads the store on every access, so field edits show up without a selection
+change. It keeps `selectedIds` order and **skips** ids that no longer exist — for example after
+`dataset.entries.remove` left a stale id in `selectedIds`. To change which entries are selected,
+assign `selectedIds`; `selectedEntries` is read-only.
 
 `selectionDataset` was not used: **`Dataset`** is already the name of the entry store (`new
 Dataset({ … })`), so a getter named `selectionDataset` reads like a second `Dataset` instance rather

@@ -110,14 +110,14 @@ const gantt = new Gantt({
   selection: ['t1'],
 });
 gantt.on('beforeEntryMove', ({ entry, start }) => start < mobilization ? false : undefined);
-gantt.selection = ['t1', 't2'];
+gantt.selectedIds = ['t1', 't2'];
 ```
 
 | Export | Step |
 |---|---|
 | `Gantt.interactions`, `Interactions`, `CapabilityRule` | S3.2 |
 | `Gantt.viewportGestures`, `ViewportGestures`, `ViewportGestureFlags` | S3.7 |
-| `Gantt.selection`, `Gantt.selectionEntries` | S3.1 |
+| `Gantt.selectedIds`, `Gantt.selectedEntries` | S3.1 |
 | `beforeEntryMove`/`entryMove`, `beforeEntryResize`/`entryResize` | S3.3, S3.4 |
 | `beforeSelectionChange`/`selectionChange`, `SelectionChange` | S3.1 |
 | `ProposedSpan`, `EntryMove`, `EntryResize` | S3.3, S3.4 |
@@ -183,7 +183,7 @@ Full prose for each decision lives in the step file that implements it. Use this
 | Ten nudges need ten undo | True — coalescing needs History merge policy (§9) |
 | Two Gantts fight over selection | Selection is per-Gantt (D-S3-10) |
 | Handler expects extender cascade in move payload | User edit only; cascade is `beforeChange` on Dataset |
-| `gantt.selection = ['t1']` type error | Setter accepts `EntryId \| string` |
+| `gantt.selectedIds = ['t1']` type error | Setter accepts `EntryId \| string` |
 
 ---
 

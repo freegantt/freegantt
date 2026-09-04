@@ -145,7 +145,7 @@ function logLine(text: string): void {
 }
 
 function renderSelection(): void {
-  const ids = gantt.selection;
+  const ids = gantt.selectedIds;
   selectionReadout.textContent = ids.length === 0 ? 'Selection: (none)' : `Selection: ${ids.join(', ')}`;
 }
 
@@ -160,7 +160,7 @@ function renderGridColumns({ to }: GridColumnsChange): void {
 function refreshHistoryButtons(): void {
   undoBtn.disabled = !dataset.canUndo;
   redoBtn.disabled = !dataset.canRedo;
-  costBtn.disabled = gantt.selectionEntries.length === 0;
+  costBtn.disabled = gantt.selectedEntries.length === 0;
 }
 
 function onChange({ changeSet }: DatasetEventMap['change']): void {
@@ -254,7 +254,7 @@ reparentBtn.addEventListener('click', () => {
 });
 
 costBtn.addEventListener('click', () => {
-  const entries = gantt.selectionEntries;
+  const entries = gantt.selectedEntries;
   if (entries.length === 0) return;
   attemptMutation(() => {
     dataset.transaction(() => {

@@ -1,7 +1,7 @@
 // e2e fixture for S2.4 (plans/s2-data-core/s2.4-live-binding.md §5): the mutation half of the live
 // binding, exercised the way an app author would — add/rename/move/remove buttons calling
 // `dataset.entries.add/update/remove`, and a changeset log built from each `ChangeSet`, never a
-// re-read (D-S2-17). Rename/move/remove target `gantt.selection` (S3.1), not a parallel entry picker.
+// re-read (D-S2-17). Rename/move/remove target `gantt.selectedIds` (S3.1), not a parallel entry picker.
 // The lock checkbox is D-S2-25's `beforeChange` veto, made visible: the bar does
 // not move and `attemptMutation` returns `false` instead of throwing.
 //
@@ -87,7 +87,7 @@ function firstEntryId(): string | undefined {
 }
 
 function refreshNameInput(): void {
-  const entries = gantt.selectionEntries;
+  const entries = gantt.selectedEntries;
   if (entries.length === 0) {
     nameInput.value = '';
     return;
@@ -97,7 +97,7 @@ function refreshNameInput(): void {
 }
 
 function refreshMutationButtons(): void {
-  const none = gantt.selectionEntries.length === 0;
+  const none = gantt.selectedEntries.length === 0;
   nameInput.disabled = none;
   renameBtn.disabled = none;
   moveBackBtn.disabled = none;
@@ -107,7 +107,7 @@ function refreshMutationButtons(): void {
 }
 
 function renderSelectionReadout(): void {
-  const ids = gantt.selection;
+  const ids = gantt.selectedIds;
   selectionReadout.textContent = ids.length === 0 ? 'Selection: (none)' : `Selection: ${ids.join(', ')}`;
 }
 
@@ -164,7 +164,7 @@ addBtn.addEventListener('click', () => {
 });
 
 renameBtn.addEventListener('click', () => {
-  const entries = gantt.selectionEntries;
+  const entries = gantt.selectedEntries;
   if (entries.length === 0) return;
   attemptMutation(() => {
     dataset.transaction(() => {
@@ -174,7 +174,7 @@ renameBtn.addEventListener('click', () => {
 });
 
 function move(deltaMs: number): void {
-  const entries = gantt.selectionEntries;
+  const entries = gantt.selectedEntries;
   if (entries.length === 0) return;
   attemptMutation(() => {
     dataset.transaction(() => {
@@ -192,7 +192,7 @@ moveBackBtn.addEventListener('click', () => move(-MS.DAY));
 moveFwdBtn.addEventListener('click', () => move(MS.DAY));
 
 costBtn.addEventListener('click', () => {
-  const entries = gantt.selectionEntries;
+  const entries = gantt.selectedEntries;
   if (entries.length === 0) return;
   attemptMutation(() => {
     dataset.transaction(() => {
@@ -202,7 +202,7 @@ costBtn.addEventListener('click', () => {
 });
 
 removeBtn.addEventListener('click', () => {
-  const entries = gantt.selectionEntries;
+  const entries = gantt.selectedEntries;
   if (entries.length === 0) return;
   attemptMutation(() => {
     dataset.transaction(() => {

@@ -56,7 +56,7 @@ describe('contextMenu() (S5.5, D-S5-13/14)', () => {
 
   it('Shift+F10 opens at the focused row (the current selection, D-S5-6 precedent)', () => {
     const { container, gantt } = makeGantt();
-    gantt.selection = [sampleEntries[0]!.id];
+    gantt.selectedIds = [sampleEntries[0]!.id];
 
     container.dispatchEvent(
       new KeyboardEvent('keydown', { key: 'F10', shiftKey: true, bubbles: true, cancelable: true }),
@@ -106,7 +106,7 @@ describe('contextMenu() (S5.5, D-S5-13/14)', () => {
 
   it('Enter/click runs the command and closes the menu', () => {
     const { container, gantt } = makeGantt();
-    gantt.selection = [sampleEntries[0]!.id];
+    gantt.selectedIds = [sampleEntries[0]!.id];
     let ran = false;
     gantt.commands.register({ id: 'demo.run', label: 'Run me', run: () => (ran = true) });
 
@@ -234,7 +234,7 @@ describe('contextMenu() (S5.5, D-S5-13/14)', () => {
     const { container, gantt } = makeGantt();
     // Selection is empty; right-clicking a bar must still run a command whose `when` needs `ctx.entry`
     // against *that* bar's entry, not against `#buildCommandContext`'s own (empty) selection.
-    expect(gantt.selection).toEqual([]);
+    expect(gantt.selectedIds).toEqual([]);
     let ranFor: string | undefined;
     gantt.commands.register({
       id: 'demo.needsEntry',

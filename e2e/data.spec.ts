@@ -5,7 +5,7 @@ import { test, expect } from '@playwright/test';
 // by re-reading the dataset. `from` is what makes this falsifiable — a log built from a re-read can
 // produce `to` but never `from`, since the dataset has already moved on by the time it is read.
 //
-// Rename/move/remove act on `gantt.selection`. The test clicks a rendered bar rather than a fixture
+// Rename/move/remove act on `gantt.selectedIds`. The test clicks a rendered bar rather than a fixture
 // id, so a fixture edit does not break the log assertion.
 
 function logLines(page: import('@playwright/test').Page) {
