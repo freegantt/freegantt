@@ -276,6 +276,19 @@ describe('attachEntryGestures — grid row click', () => {
     expect(ctx.selection.get()).toEqual([A]);
   });
 
+  it('a grid miss does not drop the shift-anchor — a later shift-click still ranges from it', () => {
+    const pane = document.createElement('div');
+    const container = document.createElement('div');
+    const gridPane = document.createElement('div');
+    const { ctx, proposals } = makeContext();
+    attachEntryGestures(pane, gridPane, container, ctx);
+
+    gridPane.dispatchEvent(up(0)); // anchor = A
+    gridPane.dispatchEvent(up(99)); // grid miss — clearOnMiss is false, must not drop the anchor either
+    gridPane.dispatchEvent(up(2, { shiftKey: true })); // extend from A to C
+    expect(proposals.at(-1)).toEqual([A, B, C]);
+  });
+
   it('an empty timeline click still clears, even after a grid miss', () => {
     const pane = document.createElement('div');
     const container = document.createElement('div');
