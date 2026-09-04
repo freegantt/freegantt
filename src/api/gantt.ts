@@ -18,8 +18,6 @@ import type {
   HeaderRenderer,
   TooltipRenderer,
   RendererByKind,
-  RendererPoint,
-  RendererFor,
 } from '../layout/index.js';
 import type {
   Entry,
@@ -232,8 +230,7 @@ export class Gantt {
         },
         view: {
           overlay: parts.overlay,
-          registerRenderer: <P extends RendererPoint>(point: P, renderer: RendererFor<P>): void =>
-            parts.registerRenderer(point, renderer),
+          registerRenderer: parts.registerRenderer,
           resolveTooltip: parts.resolveTooltip,
           resolveTooltipColumns: parts.resolveTooltipColumns,
           registerDecoration: parts.registerDecoration,
