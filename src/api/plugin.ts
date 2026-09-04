@@ -100,7 +100,9 @@ export interface PluginContextOf<TGantt = unknown, TDataset = Dataset> {
     /** S5.9, D-S5-22: fills the middle precedence layer `capability.ts` resolves — below the
      *  consumer's own `interactions`, above the library's per-kind table. `defaults` answers only
      *  the kinds it names; an omitted gesture still falls through to the library table for `kind`.
-     *  Legal only while `setup` runs (D-S5-4); removed automatically when this plugin is disposed. */
+     *  Legal only while `setup` runs (D-S5-4); removed automatically when this plugin is disposed.
+     *  When two plugins register defaults for the same Kind, the newest registration wins, and
+     *  disposing one plugin never disturbs the other plugin's registration. */
     registerKindDefaults(kind: EntryKind, defaults: KindDefaults): void;
   };
   view: {
@@ -149,7 +151,9 @@ export interface PluginContextOf<TGantt = unknown, TDataset = Dataset> {
      *  `gridColumns` in registration order — a duplicate `field` the consumer's own list already
      *  names is dropped (config beats a plugin). The Field it names still resolves through the
      *  ordinary Field registry (`UnknownFieldError`/`FieldNotColumnableError` apply unchanged). Legal
-     *  only while `setup` runs (D-S5-4); removed automatically when this plugin is disposed. */
+     *  only while `setup` runs (D-S5-4); removed automatically when this plugin is disposed. When two
+     *  plugins register the same field, the newest registration wins, and disposing one plugin never
+     *  disturbs the other plugin's registration. */
     registerGridColumn(column: GridColumnInput): void;
   };
   /** S5.9, D-S5-22: the pure layout side of the four-seam kind contract — what shape a
@@ -159,7 +163,9 @@ export interface PluginContextOf<TGantt = unknown, TDataset = Dataset> {
     /** Claims the item-shaping producer for `kind`, replacing whichever one `kind` resolved to
      *  before (the shipped `'span'`/`'group'`/`'milestone'` producers included). `producer` is pure —
      *  it runs in `layout/`, the same DOM-free pass every other item producer runs in. Legal only
-     *  while `setup` runs (D-S5-4); removed automatically on disposal, restoring the prior producer. */
+     *  while `setup` runs (D-S5-4); removed automatically on disposal, restoring whichever
+     *  registration is newest among the rest — disposing one plugin never disturbs another
+     *  plugin's registration on the same Kind. */
     registerItemProducer(kind: EntryKind, producer: ItemProducer): void;
   };
 }

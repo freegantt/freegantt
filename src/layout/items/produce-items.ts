@@ -6,6 +6,7 @@ import { itemId } from '../../model/index.js';
 import type { Disposer, Entry, EntryId, EntryKind, ItemId, Instant } from '../../model/index.js';
 import type { PlannedRow } from '../rows/row-source.js';
 import { isPlannedHeaderRow } from '../rows/row-source.js';
+import { createRegistrationTable } from '../registration-table.js';
 
 export interface Item {
   id: ItemId;
@@ -35,8 +36,9 @@ export interface ItemProducerRegistry {
   /** S5.9, D-S5-22: `ctx.layout.registerItemProducer(kind, producer)` — a plugin claiming what
    *  shape a consumer-defined kind draws. Replaces whichever producer `kind` resolved to before
    *  (the shipped three included — a plugin may re-skin `'span'` itself). The returned `Disposer`
-   *  restores that prior producer, the same "undo on plugin disposal" every other `register*`
-   *  gives (D-S5-4). */
+   *  restores whichever registration is newest among the rest, the same "undo on plugin disposal"
+   *  every other `register*` gives (D-S5-4). Disposing one plugin's producer never disturbs
+   *  another plugin's registration on the same Kind. */
   register(kind: EntryKind, producer: ItemProducer): Disposer;
 }
 
@@ -65,30 +67,28 @@ function produceMilestoneItems(entry: Entry): readonly Item[] {
   return [wholeEntryItem(entry, entry.start)];
 }
 
+/** `Object.entries` types a value as `ItemProducer | undefined` under `noUncheckedIndexedAccess` —
+ *  a partial record's key can be absent even though its declared value type says otherwise. This
+ *  narrows to the pairs that are actually there. */
+function definedProducers(
+  extras: Readonly<Partial<Record<EntryKind, ItemProducer>>>,
+): ReadonlyArray<readonly [EntryKind, ItemProducer]> {
+  return Object.entries(extras).filter((entry): entry is [EntryKind, ItemProducer] => entry[1] !== undefined);
+}
+
 /** Call: `createItemProducerRegistry()` once in the Gantt constructor; tests pass extras for a Kind. */
 export function createItemProducerRegistry(
   extras: Readonly<Partial<Record<EntryKind, ItemProducer>>> = {},
 ): ItemProducerRegistry {
-  const producers = new Map<EntryKind, ItemProducer>([
+  const producers = createRegistrationTable<EntryKind, ItemProducer>([
     ['span', produceSpanItems],
     ['group', produceGroupItems],
     ['milestone', produceMilestoneItems],
+    ...definedProducers(extras),
   ]);
-  for (const [kind, producer] of Object.entries(extras)) {
-    if (producer !== undefined) producers.set(kind, producer);
-  }
   return {
-    producerFor(kind) {
-      return producers.get(kind) ?? produceSpanItems;
-    },
-    register(kind, producer) {
-      const previous = producers.get(kind);
-      producers.set(kind, producer);
-      return () => {
-        if (previous === undefined) producers.delete(kind);
-        else producers.set(kind, previous);
-      };
-    },
+    producerFor: (kind) => producers.get(kind) ?? produceSpanItems,
+    register: (kind, producer) => producers.register(kind, producer),
   };
 }
 

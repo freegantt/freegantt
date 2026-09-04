@@ -6,12 +6,17 @@ body is just an unexplained external link, with no actionable scope.) New
 issue plans land here as they're opened.
 
 **Open:**
-- [#154](https://github.com/Pawel-IT/FreeGantt/issues/154) — one
-  registration table behind the plugin `register*` seams, closing #146,
-  #147 and the two-plugin half of #152 in the same change. See
-  [154-registration-table.md](./154-registration-table.md).
+- _(none)_
 
 **Closed:**
+- [#154](https://github.com/Pawel-IT/FreeGantt/issues/154) — one
+  registration table behind the plugin `register*` seams. `layout/`'s
+  `createRegistrationTable` holds a stack of live registrations per key: the
+  newest wins, and a disposer removes exactly its own registration, in any
+  disposal order. The three Gantt-side seams (item producer, kind defaults,
+  plugin grid column) all adopt it, which closes #146, #147 and the
+  two-plugin half of #152. See
+  [../closed/154-registration-table.md](../closed/154-registration-table.md).
 - [#112](https://github.com/Pawel-IT/FreeGantt/issues/112) — DI seams:
   PaneLayout host + DatasetState reference date. Seam A landed
   (`33b72c5`); Seam B folded into S6's scope in `plans/03-slices.md`. See

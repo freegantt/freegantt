@@ -12,6 +12,7 @@ import {
   DEFAULT_LANE_GAP_PX,
   DEFAULT_ROW_SOURCE,
   createItemProducerRegistry,
+  createRegistrationTable,
   isPlannedHeaderRow,
   gridContentWidth,
 } from '../layout/index.js';
@@ -425,9 +426,9 @@ export class GanttShell {
   /** S5.9, D-S5-22: `ctx.interaction.registerKindDefaults` — the middle precedence layer
    *  `resolveCapabilities` reads between the consumer's own `interactions` and the library table.
    *  A second plugin registering the same kind overrides the first while both stay installed;
-   *  disposal restores whichever registration (if any) held the kind before it, the same
-   *  stack-and-restore contract `#itemProducerRegistry.register` uses (#146). */
-  #kindDefaults = new Map<EntryKind, KindDefaults>();
+   *  disposing one registration never disturbs another plugin's live registration on the same
+   *  kind, in any disposal order (#146). */
+  #kindDefaults = createRegistrationTable<EntryKind, KindDefaults>();
   /** The raw hit under the pointer, reported by `EntrySelectionContext.setHovered` — undefined on
    *  pointerleave or when nothing is wired (no `entryGestures` attachment). */
   #hoveredItemId: ItemId | undefined;
@@ -739,21 +740,17 @@ export class GanttShell {
           this.#frames.request();
         });
       };
-      // S5.9, D-S5-22: same gate; disposal restores whatever `kind` held before this registration
-      // (its own re-resolve, the same way `ItemProducerRegistry.register` stacks and restores) so a
-      // second plugin registering the same kind does not lose the first plugin's defaults on dispose
-      // (#146).
+      // S5.9, D-S5-22: same gate; registers through the shared table (#154), so a second plugin
+      // registering the same kind overrides the first while both stay installed, and disposing
+      // one registration never disturbs another plugin's live registration on the same kind, in
+      // any disposal order (#146).
       const registerKindDefaults = (kind: EntryKind, defaults: KindDefaults): void => {
         gate.assertOpen();
-        const previous = this.#kindDefaults.get(kind);
-        this.#kindDefaults.set(kind, defaults);
-        this.#capabilities = this.#resolveCapabilities();
-        this.#refreshAffordances();
+        const remove = this.#kindDefaults.register(kind, defaults);
+        this.#refreshCapabilities();
         disposables.add(() => {
-          if (previous === undefined) this.#kindDefaults.delete(kind);
-          else this.#kindDefaults.set(kind, previous);
-          this.#capabilities = this.#resolveCapabilities();
-          this.#refreshAffordances();
+          remove();
+          this.#refreshCapabilities();
         });
       };
       // S5.9, D-S5-21: same gate; disposal removes `column` from `ColumnChrome`'s own plugin list
@@ -1183,8 +1180,7 @@ export class GanttShell {
    *  waiting for the next pointer move. */
   set interactions(next: Interactions) {
     this.#interactions = next;
-    this.#capabilities = this.#resolveCapabilities();
-    this.#refreshAffordances();
+    this.#refreshCapabilities();
   }
 
   /** S5.9, D-S5-22: the one place `resolveCapabilities` is called — the constructor, `set
@@ -1196,6 +1192,16 @@ export class GanttShell {
       (kind) => this.#options.dataset.isRollUpKind(kind),
       (kind) => this.#kindDefaults.get(kind),
     );
+  }
+
+  /** `set interactions` and `registerKindDefaults`'s register/dispose pair both change an input
+   *  `#resolveCapabilities` reads, so both re-resolve the capability table and re-derive the
+   *  affordance ids the same way (#154) — written once here instead of three times. The
+   *  constructor's own first resolve (above) runs before `#refreshAffordances` has anything to
+   *  refresh, so it calls `#resolveCapabilities()` directly and skips this. */
+  #refreshCapabilities(): void {
+    this.#capabilities = this.#resolveCapabilities();
+    this.#refreshAffordances();
   }
 
   get viewportGestures(): ViewportGestures {
