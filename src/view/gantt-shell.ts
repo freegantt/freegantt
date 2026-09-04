@@ -198,6 +198,62 @@ interface ProposableChange {
   beforeGridColumnsChange: { after: 'gridColumnsChange'; change: GridColumnsChange };
 }
 
+/** What `GanttShell` hands to `options.buildPluginContext` so it can build one plugin's
+ *  `PluginContext` (S5.1, D-S5-1) — one closure or value per capability the shell owns. `view/`
+ *  types every member here once; `api/gantt.ts` nests them into `PluginContext`'s `interaction`/
+ *  `view`/`layout` groups instead of retyping each one itself (#150). The same named-ports pattern as
+ *  `ColumnChromePorts` (`column-chrome.ts`), with the definer flipped: there the callee
+ *  (`ColumnChrome`) names what it needs from `GanttShell`; here `GanttShell` itself names what it
+ *  hands to `options.buildPluginContext`'s callback. */
+export interface PluginContextPorts {
+  events: GanttEvents;
+  disposables: DisposableStore;
+  commands: CommandRegistryOf<unknown>;
+  registerKeybinding: (binding: KeyBinding<unknown>) => void;
+  registerKeyHandler: (
+    chord: string,
+    handler: (event: KeyEventLike) => void,
+    options?: { captureInEditable?: boolean },
+  ) => () => void;
+  overlay: Overlay;
+  /** S5.4, D-S5-11: `ctx.view.registerRenderer`. Legal only while `setup` runs (D-S5-4), the same
+   *  gate `registerKeybinding` above already takes. */
+  registerRenderer: <P extends RendererPoint>(point: P, renderer: RendererFor<P>) => void;
+  /** S5.5 (API gap, `s5.5-tooltips-and-context-menu.md` §5): `ctx.view.resolveTooltip`. Not gated
+   *  by `RegistrationGate` — like `overlay` above, a plugin reads this for as long as it runs, not
+   *  only during `setup`. */
+  resolveTooltip: (id: EntryId) => ElementDescription | undefined;
+  /** D-S5-13: `ctx.view.resolveTooltipColumns`. Every currently resolved Grid column marked
+   *  `tooltip: true`, header and this entry's formatted value — the default tooltip body's own
+   *  extra-columns clause. Not gated by `RegistrationGate`, same posture as `resolveTooltip`. */
+  resolveTooltipColumns: (entry: Entry) => readonly TooltipColumn[];
+  /** S5.6, D-S5-15: `ctx.view.registerDecoration`. Legal only while `setup` runs (D-S5-4), the
+   *  same gate `registerKeybinding`/`registerRenderer` above already take — but unlike those, a
+   *  provider is removed automatically when this plugin disposes (its own `disposables.add`
+   *  entry), not by the plugin itself. */
+  registerDecoration: (layer: DecorationLayer, provider: DecorationProvider) => void;
+  /** S5.8, D-S5-19: `ctx.view.isColumnEditable`. */
+  isColumnEditable: (field: FieldKey) => boolean | undefined;
+  /** S5.8, D-S5-19: `ctx.interaction.canEdit`. */
+  canEdit: (entry: Entry) => boolean;
+  /** S5.8, D-S5-19: `ctx.interaction.emitBeforeEntryEdit`. */
+  emitBeforeEntryEdit: (payload: EntryFieldEdit) => boolean | Promise<boolean>;
+  /** S5.8, D-S5-19: `ctx.interaction.emitEntryEdit`. */
+  emitEntryEdit: (payload: EntryFieldEdit) => void;
+  /** S5.9, D-S5-22: `ctx.layout.registerItemProducer`. Legal only while `setup` runs (D-S5-4).
+   *  Disposal removes this registration through `ItemProducerRegistry.register`'s own `Disposer`.
+   *  The newest registration left then wins (#154). */
+  registerItemProducer: (kind: EntryKind, producer: ItemProducer) => void;
+  /** S5.9, D-S5-22: `ctx.interaction.registerKindDefaults` — the middle precedence layer between
+   *  the consumer's own `interactions` and the library table (`capability.ts`). Legal only while
+   *  `setup` runs. Disposal removes this registration, and never another plugin's (#154). */
+  registerKindDefaults: (kind: EntryKind, defaults: KindDefaults) => void;
+  /** S5.9, D-S5-21: `ctx.view.registerGridColumn` — appended after the consumer's own
+   *  `gridColumns`, in registration order. Legal only while `setup` runs. Disposal removes this
+   *  registration, and never another plugin's (#154). */
+  registerGridColumn: (column: GridColumnInput) => void;
+}
+
 export interface GanttShellOptions {
   /** Element or CSS selector (plans/02 §2); a selector that matches nothing throws (#38). */
   container: HTMLElement | string;
@@ -305,54 +361,7 @@ export interface GanttShellOptions {
    *  both `Gantt` and this generic contract without closing an import cycle (`api/plugin.ts`'s file
    *  header). `api/gantt.ts` always supplies this; omitted only by tests exercising the shell with no
    *  plugins. */
-  buildPluginContext?: (parts: {
-    events: GanttEvents;
-    disposables: DisposableStore;
-    commands: CommandRegistryOf<unknown>;
-    registerKeybinding: (binding: KeyBinding<unknown>) => void;
-    registerKeyHandler: (
-      chord: string,
-      handler: (event: KeyEventLike) => void,
-      options?: { captureInEditable?: boolean },
-    ) => () => void;
-    overlay: Overlay;
-    /** S5.4, D-S5-11: `ctx.view.registerRenderer`. Legal only while `setup` runs (D-S5-4), the same
-     *  gate `registerKeybinding` above already takes. */
-    registerRenderer: <P extends RendererPoint>(point: P, renderer: RendererFor<P>) => void;
-    /** S5.5 (API gap, `s5.5-tooltips-and-context-menu.md` §5): `ctx.view.resolveTooltip`. Not gated
-     *  by `RegistrationGate` — like `overlay` above, a plugin reads this for as long as it runs, not
-     *  only during `setup`. */
-    resolveTooltip: (id: EntryId) => ElementDescription | undefined;
-    /** D-S5-13: `ctx.view.resolveTooltipColumns`. Every currently resolved Grid column marked
-     *  `tooltip: true`, header and this entry's formatted value — the default tooltip body's own
-     *  extra-columns clause. Not gated by `RegistrationGate`, same posture as `resolveTooltip`. */
-    resolveTooltipColumns: (entry: Entry) => readonly TooltipColumn[];
-    /** S5.6, D-S5-15: `ctx.view.registerDecoration`. Legal only while `setup` runs (D-S5-4), the
-     *  same gate `registerKeybinding`/`registerRenderer` above already take — but unlike those, a
-     *  provider is removed automatically when this plugin disposes (its own `disposables.add`
-     *  entry), not by the plugin itself. */
-    registerDecoration: (layer: DecorationLayer, provider: DecorationProvider) => void;
-    /** S5.8, D-S5-19: `ctx.view.isColumnEditable`. */
-    isColumnEditable: (field: FieldKey) => boolean | undefined;
-    /** S5.8, D-S5-19: `ctx.interaction.canEdit`. */
-    canEdit: (entry: Entry) => boolean;
-    /** S5.8, D-S5-19: `ctx.interaction.emitBeforeEntryEdit`. */
-    emitBeforeEntryEdit: (payload: EntryFieldEdit) => boolean | Promise<boolean>;
-    /** S5.8, D-S5-19: `ctx.interaction.emitEntryEdit`. */
-    emitEntryEdit: (payload: EntryFieldEdit) => void;
-    /** S5.9, D-S5-22: `ctx.layout.registerItemProducer`. Legal only while `setup` runs (D-S5-4);
-     *  removed automatically on disposal, restoring whichever producer `kind` resolved to before
-     *  (`ItemProducerRegistry.register`'s own `Disposer`). */
-    registerItemProducer: (kind: EntryKind, producer: ItemProducer) => void;
-    /** S5.9, D-S5-22: `ctx.interaction.registerKindDefaults` — the middle precedence layer between
-     *  the consumer's own `interactions` and the library table (`capability.ts`). Legal only while
-     *  `setup` runs; removed automatically on disposal. */
-    registerKindDefaults: (kind: EntryKind, defaults: KindDefaults) => void;
-    /** S5.9, D-S5-21: `ctx.view.registerGridColumn` — appended after the consumer's own
-     *  `gridColumns`, in registration order. Legal only while `setup` runs; removed automatically
-     *  on disposal. */
-    registerGridColumn: (column: GridColumnInput) => void;
-  }) => unknown;
+  buildPluginContext?: (parts: PluginContextPorts) => unknown;
   /** S5.2, D-S5-6: fills the api-level pieces of a `CommandContext` for the same reason
    *  `buildPluginContext` above fills `PluginContext`'s — the full api `Dataset` (with `undo`/`redo`)
    *  and the public `Gantt` façade are both api-level, and `view/` may not name either type
