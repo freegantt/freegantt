@@ -20,7 +20,7 @@ import type {
 } from '../../layout/index.js';
 import type { ColumnAlign, FrameColumn } from '../../layout/index.js';
 import type { RenderBackend, RenderSurfaces, InteractionState, HitResult } from '../backend.js';
-import { entryIdOfItem, itemId } from '../../layout/index.js';
+import { entryIdOfItem, itemId, itemIdFromDataset } from '../../layout/index.js';
 import { attachDateLines } from './date-line.js';
 import type { DateLineAttachment } from './date-line.js';
 import { attachDecorations } from './decorations.js';
@@ -888,8 +888,8 @@ export function createDomBackend(options?: DomBackendOptions): RenderBackend<HTM
       }
       const bar = el instanceof Element ? el.closest<HTMLElement>('.fg-bar') : null;
       if (bar && barLayer.contains(bar)) {
-        const id = bar.dataset['itemId'];
-        return id ? { itemId: id as ItemId } : null;
+        const id = itemIdFromDataset(bar.dataset['itemId']);
+        return id ? { itemId: id } : null;
       }
       // Bug hunt (S5 fixes, "grid row highlight and row click"): a miss on the bar layer falls
       // through to the grid pane — a row click selects the row's primary entry the same way a bar
