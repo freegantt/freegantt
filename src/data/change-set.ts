@@ -81,6 +81,8 @@ export function diffEdit(
       emit(field, ctx.read(current, field), ctx.read(next, field));
       continue;
     }
+    // `field` is `keyof StoredEdit` narrowed to "not a declared Field" here — genuinely open, so
+    // this cast is load-bearing, the same as entry-store.ts's `applyFieldRow` cast.
     emit(field, (current as unknown as Record<string, unknown>)[field], edit[field]);
   }
   return rows;

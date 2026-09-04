@@ -61,7 +61,7 @@ const entryStrategy = {
   read(entry, field) {
     const source = field.source;
     if (source.from !== 'entry') return undefined;
-    return (entry as unknown as Record<string, unknown>)[source.field];
+    return entry[source.field];
   },
   write(edit, _entry, field, value) {
     const source = field.source;
@@ -73,7 +73,7 @@ const entryStrategy = {
   proposes(edit, field) {
     const source = field.source;
     if (source.from !== 'entry') return false;
-    return (edit as Record<string, unknown>)[source.field] !== undefined;
+    return edit[source.field] !== undefined;
   },
   serialize(source) {
     if (source.from !== 'entry') return undefined;
@@ -95,6 +95,8 @@ const metaStrategy = {
     if (value === undefined) delete record[key];
     else record[key] = value;
     const next: StoredEdit = { ...edit };
+    // Deliberate exactOptionalPropertyTypes escape: an explicit `undefined` clears a prior meta
+    // write, which is not the same as the key being absent.
     if (Object.keys(record).length === 0) (next as Record<string, unknown>)['meta'] = undefined;
     else next.meta = record;
     return withProposedKeys(next, proposedKeysOf(edit));

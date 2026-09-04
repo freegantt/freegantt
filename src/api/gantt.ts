@@ -9,7 +9,7 @@ import type {
   Theme,
   ViewportGestures,
 } from '../view/index.js';
-import { ScrollModel, TimeScaleModel } from '../layout/index.js';
+import { ScrollModel, TimeScaleModel, pickDefined } from '../layout/index.js';
 import type { PresetRef, TimeScaleFit, ViewPreset, RowSource } from '../layout/index.js';
 import type { DateLineSpec } from '../layout/index.js';
 import type {
@@ -164,18 +164,6 @@ export type CommandContext = CommandContextOf<Gantt>;
 export type CommandRegistry = CommandRegistryOf<Gantt>;
 export type KeyBinding = KeyBindingOf<Gantt>;
 export type { CommandTarget };
-
-function pickDefined<T extends object, K extends keyof T>(
-  options: T,
-  keys: readonly K[],
-): Partial<Pick<T, K>> {
-  const picked: Partial<Pick<T, K>> = {};
-  for (const key of keys) {
-    const value = options[key];
-    if (value !== undefined) picked[key] = value;
-  }
-  return picked;
-}
 
 export class Gantt {
   #shell: GanttShell;
