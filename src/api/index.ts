@@ -149,6 +149,7 @@ export {
   entryId,
   itemId,
   itemIdFromDataset,
+  entryIdFromDataset,
   entryIdOfItem,
   segmentIndexOfItem,
   changeSetId,

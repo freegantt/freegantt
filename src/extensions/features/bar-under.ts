@@ -11,3 +11,12 @@ export function barUnder(node: Node): HTMLElement | undefined {
   const el = node instanceof Element ? node.closest<HTMLElement>('.fg-bar') : null;
   return el ?? undefined;
 }
+
+/** Finds the nearest ancestor-or-self `.fg-row` element, or `undefined` when `node` is outside one
+ *  (e.g. a click on the header row or an empty stretch below the last row). `context-menu.ts` uses
+ *  this so a right-click on a grid cell resolves the same entry a right-click on that entry's bar
+ *  would — the same target `render/dom/index.ts`'s own `hitTest` grid-row fallback already selects. */
+export function rowUnder(node: Node): HTMLElement | undefined {
+  const el = node instanceof Element ? node.closest<HTMLElement>('.fg-row') : null;
+  return el ?? undefined;
+}
