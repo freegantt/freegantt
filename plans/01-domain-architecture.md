@@ -718,7 +718,7 @@ Attachments talk to `data/` only through drafts and transactions (the shell's `c
 
 ```ts
 interface GanttPlugin {
-  id: string;
+  id: PluginId;
   /** Called once after the Gantt mounts. Returns a disposer. */
   setup(ctx: PluginContext): () => void;
 }
