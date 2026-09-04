@@ -94,6 +94,11 @@ export function contextMenu(options: ContextMenuOptions = {}): GanttPlugin {
         onDocumentClick = (event) => {
           if (!popup.isOpen) return;
           const target = event.target;
+          // B1 was incomplete here: this listener is document-wide (menu items live outside
+          // `ctx.view.overlay`'s DOM subtree once presented, same as `onContextMenu`'s own reasoning
+          // below), so a click on a *different* Gantt's open menu item must not run a command against
+          // this Gantt's `openCommands`. Scope the same way `onContextMenu` already does.
+          if (!(target instanceof Node) || !ctx.view.overlay.contains(target)) return;
           const button = target instanceof Element ? target.closest<HTMLElement>('.fg-menu-item') : null;
           if (button === null) return;
           const commandId = button.getAttribute('data-command');
@@ -110,10 +115,16 @@ export function contextMenu(options: ContextMenuOptions = {}): GanttPlugin {
         onDocumentKeydown = (event) => {
           if (!popup.isOpen) return;
           if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
-          const items = Array.from(document.querySelectorAll<HTMLElement>('.fg-menu-item'));
+          // Scoped to this Gantt's own overlay for the same reason `onDocumentClick` is above — a
+          // document-wide query would also walk a second open Gantt's menu items (I2: `contains` is
+          // the one seam this plugin has to ask "is this mine?", same as `onContextMenu`).
+          const items = Array.from(document.querySelectorAll<HTMLElement>('.fg-menu-item')).filter((item) =>
+            ctx.view.overlay.contains(item),
+          );
           if (items.length === 0) return;
           event.preventDefault();
-          const activeIndex = items.indexOf(document.activeElement as HTMLElement);
+          const active = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+          const activeIndex = active !== null ? items.indexOf(active) : -1;
           const nextIndex =
             event.key === 'ArrowDown'
               ? (activeIndex + 1) % items.length

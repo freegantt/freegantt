@@ -65,6 +65,20 @@ export function attachColumnGestures(
   let grabbedKey: FieldKey | undefined;
   let grabbedStartWidthPx = 0;
   let grabbedDropTargets: readonly DropTarget[] = [];
+  // `pointer-gesture.ts` tracks at most one pointer at a time (`onPointerDown`'s "already dragging"
+  // branch below refuses a second one), so this always names the pointer `grabbedKind` belongs to —
+  // it lets `onPointerCancel` tell "my grab was interrupted" from "an unrelated pointer cancelled".
+  let grabbedPointerId: number | undefined;
+
+  // `pointer-gesture.ts` only calls `cancel()` for an armed drag (movement past the threshold) — an
+  // Escape or pointercancel that lands before arming leaves `grabbedKind`/`grabbedKey` untouched at
+  // that layer. Without this, the next pointerdown on a *different* grip would hit the "already
+  // dragging" branch below and resize/reorder the wrong column using this stale grab.
+  function clearGrabbedState(): void {
+    grabbedKind = undefined;
+    grabbedKey = undefined;
+    grabbedPointerId = undefined;
+  }
 
   const drag = createPointerGesture(headerPane, {
     start(): boolean {
@@ -88,16 +102,14 @@ export function attachColumnGestures(
         const before = dropTargetAt(grabbedDropTargets, e.clientX);
         if (!ctx.commitColumnReorder(grabbedKey, before)) ctx.cancelColumnReorder();
       }
-      grabbedKind = undefined;
-      grabbedKey = undefined;
+      clearGrabbedState();
     },
     cancel(): void {
       if (grabbedKey !== undefined) {
         if (grabbedKind === 'resize') ctx.cancelColumnResize();
         else if (grabbedKind === 'reorder') ctx.cancelColumnReorder();
       }
-      grabbedKind = undefined;
-      grabbedKey = undefined;
+      clearGrabbedState();
     },
   });
 
@@ -114,19 +126,19 @@ export function attachColumnGestures(
     const key = cell !== undefined ? columnKeyOf(cell) : undefined;
     const onGrip = target?.closest(RESIZER_SELECTOR) != null;
     if (cell === undefined || key === undefined) {
-      grabbedKind = undefined;
-      grabbedKey = undefined;
+      clearGrabbedState();
     } else if (onGrip && ctx.isResizable(key)) {
       grabbedKind = 'resize';
       grabbedKey = key;
       grabbedStartWidthPx = cell.getBoundingClientRect().width;
+      grabbedPointerId = e.pointerId;
     } else if (!onGrip && ctx.isMovable(key)) {
       grabbedKind = 'reorder';
       grabbedKey = key;
       grabbedDropTargets = computeDropTargets(headerPane, key);
+      grabbedPointerId = e.pointerId;
     } else {
-      grabbedKind = undefined;
-      grabbedKey = undefined;
+      clearGrabbedState();
     }
     drag.down(e);
   }
@@ -147,10 +159,14 @@ export function attachColumnGestures(
 
   function onKeyDown(e: KeyboardEvent): void {
     if (e.key !== 'Escape') return;
+    const wasArmed = drag.escape();
+    // An unarmed Escape does not run `cancel()` above — clear the grab here too, or the next
+    // pointerdown on a different grip would reuse this stale grab (see `clearGrabbedState`).
+    clearGrabbedState();
     // A column drag was cancelled — swallow the key so it does not also reach
     // `entry-gestures.ts`'s own Escape handler (same container, sibling `keydown` listener) and clear
     // the entry selection as a side effect of dismissing an unrelated gesture.
-    if (drag.escape()) e.stopImmediatePropagation();
+    if (wasArmed) e.stopImmediatePropagation();
   }
 
   // B3: a plain click on a header cell sets "the focused header column" for `Shift+Arrow` (D-S5-18/
@@ -170,6 +186,10 @@ export function attachColumnGestures(
   // call mirrors `escape()`'s own shape without needing one.
   function onPointerCancel(e: PointerEvent): void {
     drag.pointercancel(e);
+    // Same unarmed-cancel gap as `onKeyDown`: `pointercancel` only runs `cancel()` above once armed.
+    // Gate on `grabbedPointerId` (not just "some grab is pending") so an unrelated pointer's cancel
+    // does not wipe out a grab this event has nothing to do with.
+    if (e.pointerId === grabbedPointerId) clearGrabbedState();
   }
 
   headerPane.addEventListener('pointerdown', onPointerDown);
