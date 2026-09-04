@@ -8,7 +8,7 @@ import { createPopup } from '../popup.js';
 import type { Popup, PopupPlacement } from '../popup.js';
 import type { GanttPlugin, PluginContext } from '../../api/gantt.js';
 import { entryIdOfItem } from '../../model/index.js';
-import type { Entry, ItemId } from '../../model/index.js';
+import type { Entry, ItemId, TooltipColumn } from '../../model/index.js';
 import { formatDate, formatEndInclusive } from '../../api/time-facade.js';
 
 export interface TooltipsOptions {
@@ -33,7 +33,7 @@ function defaultContent(
   entry: Entry,
   timeZone: string,
   locale: Intl.LocalesArgument | undefined,
-  columns: readonly { header: string; value: string }[],
+  columns: readonly TooltipColumn[],
 ) {
   const start = formatDate(timeZone, entry.start, locale);
   const end = formatEndInclusive(timeZone, entry.end, locale);

@@ -38,7 +38,7 @@ import type {
   DecorationProvider,
   RegisteredDecorationProvider,
 } from '../layout/index.js';
-import type { ElementDescription } from '../model/index.js';
+import type { ElementDescription, TooltipColumn } from '../model/index.js';
 import { RendererRegistry } from './renderer-registry.js';
 
 import { createDomBackend } from '../render/dom/index.js';
@@ -325,7 +325,7 @@ export interface GanttShellOptions {
     /** D-S5-13: `ctx.view.resolveTooltipColumns`. Every currently resolved Grid column marked
      *  `tooltip: true`, header and this entry's formatted value — the default tooltip body's own
      *  extra-columns clause. Not gated by `RegistrationGate`, same posture as `resolveTooltip`. */
-    resolveTooltipColumns: (entry: Entry) => readonly { header: string; value: string }[];
+    resolveTooltipColumns: (entry: Entry) => readonly TooltipColumn[];
     /** S5.6, D-S5-15: `ctx.view.registerDecoration`. Legal only while `setup` runs (D-S5-4), the
      *  same gate `registerKeybinding`/`registerRenderer` above already take — but unlike those, a
      *  provider is removed automatically when this plugin disposes (its own `disposables.add`
@@ -673,7 +673,7 @@ export class GanttShell {
       // D-S5-13: `tooltips()`'s default body reads this to append every column marked `tooltip: true`
       // — the same resolved list the grid itself paints from (`ColumnChrome`), so a column's header/
       // format stays in one place.
-      const resolveTooltipColumns = (entry: Entry): readonly { header: string; value: string }[] =>
+      const resolveTooltipColumns = (entry: Entry): readonly TooltipColumn[] =>
         this.#columnChrome.resolvedColumns
           .filter((column) => column.tooltip === true)
           .map((column) => ({ header: column.header, value: column.format(entry) }));

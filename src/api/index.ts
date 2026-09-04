@@ -183,7 +183,7 @@ export type {
 // `new ScrollModel({ x, y })` or reading `ScrollState` needs the shape in the public surface too.
 export type { Point, Size, ClientPoint, PixelSpan } from '../model/index.js';
 // S5.3, D-S5-10: `Overlay.render()`'s own input type — the reconciler's vocabulary as plain data.
-export type { ElementDescription } from '../model/index.js';
+export type { ElementDescription, TooltipColumn } from '../model/index.js';
 // S5.4, D-S5-11/12: renderer callback vocabulary — `GanttOptions.barRenderer`/etc. and
 // `ctx.view.registerRenderer(point, renderer)` both type against these. `FrameBar`/`FrameRow`/
 // `ResolvedColumn` ride along because the context types name them (`BarRendererContext.item`,

@@ -1257,10 +1257,7 @@ export interface PluginContextOf<TGantt = unknown> {
         overlay: Overlay;
         registerRenderer<P extends RendererPoint>(point: P, renderer: RendererFor<P>): void;
         resolveTooltip(entryId: EntryId): ElementDescription | undefined;
-        resolveTooltipColumns(entry: Entry): readonly {
-            header: string;
-            value: string;
-        }[];
+        resolveTooltipColumns(entry: Entry): readonly TooltipColumn[];
         isColumnEditable(field: FieldKey): boolean | undefined;
         registerDecoration(layer: DecorationLayer, provider: DecorationProvider): void;
         registerGridColumn(column: GridColumnInput): void;
@@ -1577,6 +1574,14 @@ export interface TimeSpanInput {
 
 // @public (undocumented)
 export type TimeUnit = 'millisecond' | 'minute' | 'hour' | 'day' | 'week' | 'month' | 'year';
+
+// @public
+export interface TooltipColumn {
+    // (undocumented)
+    header: string;
+    // (undocumented)
+    value: string;
+}
 
 // @public (undocumented)
 export type TooltipRenderer = (ctx: TooltipRendererContext) => ElementDescription | undefined;

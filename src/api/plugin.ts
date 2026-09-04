@@ -25,6 +25,7 @@ import type {
   EntryKind,
   FieldKey,
   GridColumnInput,
+  TooltipColumn,
 } from '../model/index.js';
 
 // Re-exported for the same reason `Overlay`/`OverlayHandle` are, just below: a plugin author typing
@@ -127,7 +128,7 @@ export interface PluginContextOf<TGantt = unknown> {
      *  default body appends these after name/dates; a consumer building its own tooltip content reads
      *  the same list instead of re-resolving columns itself (D-S5-5: `view/grid-columns.ts` stays out
      *  of reach). Empty when no column is marked `tooltip: true`. */
-    resolveTooltipColumns(entry: Entry): readonly { header: string; value: string }[];
+    resolveTooltipColumns(entry: Entry): readonly TooltipColumn[];
     /** S5.8, D-S5-19: whether the currently resolved Grid column for `field` allows inline editing —
      *  `GridColumn.editable` merged with the Field's own `column.editable` default, the same
      *  resolution the grid pane itself paints from (`ColumnChrome`). `undefined` when `field` names
