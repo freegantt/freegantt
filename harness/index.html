@@ -192,6 +192,11 @@
         color: #b3261e;
         font-weight: 600;
       }
+      /* Bug hunt (S5 fixes): headerRenderer's own demo — letter-spacing is the visible tell that
+         this text came through the renderer, not straight from GridColumn.header. */
+      .demo-header {
+        letter-spacing: 0.04em;
+      }
       .fg-mobilization-line {
         border-left-style: dashed;
         border-left-width: 2px;

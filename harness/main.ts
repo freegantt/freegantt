@@ -25,6 +25,7 @@ import type {
   Popup,
   RendererByKind,
   CellRenderer,
+  HeaderRenderer,
 } from '../src/api/index.js';
 import { demoFieldOptions, demoTreeEntryInputs } from '../fixtures/demo-dataset.js';
 import { mountTimelineToolbar } from './timeline-toolbar.js';
@@ -527,15 +528,23 @@ const demoCellRenderer: CellRenderer = ({ column, value }) =>
   column.key === 'cost' && overBudget(value)
     ? { class: { 'demo-over-budget': true }, text: value }
     : undefined;
+// Bug hunt (S5 fixes): headerRenderer had a live setter with nothing painting it — this demo is the
+// harness's own manual check that the wiring fix reaches a real Gantt, not just the test suite.
+const demoHeaderRenderer: HeaderRenderer = ({ column }) => ({
+  class: { 'demo-header': true },
+  text: column.header.toUpperCase(),
+});
 
 const renderersToggle = document.querySelector<HTMLInputElement>('#renderers-toggle')!;
 renderersToggle.addEventListener('change', () => {
   if (renderersToggle.checked) {
     gantt.barRenderer = demoBarRenderer;
     gantt.cellRenderer = demoCellRenderer;
+    gantt.headerRenderer = demoHeaderRenderer;
   } else {
     gantt.barRenderer = undefined;
     gantt.cellRenderer = undefined;
+    gantt.headerRenderer = undefined;
   }
 });
 renderersToggle.dispatchEvent(new Event('change'));
