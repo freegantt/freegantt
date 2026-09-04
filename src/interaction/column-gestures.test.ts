@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { attachColumnGestures } from './column-gestures.js';
-import type { ColumnGestureContext } from '../view/index.js';
+import type { ColumnGestureContext, ColumnReorderPreview } from '../view/index.js';
 import type { FieldKey } from '../model/index.js';
 
 // happy-dom's pointer-capture methods are not layout-backed; stubbed the same way other DOM suites
@@ -71,7 +71,7 @@ function makeCtx(overrides: Partial<ColumnGestureContext> = {}): {
   ctx: ColumnGestureContext;
   previews: { columnKey: FieldKey; widthPx: number }[];
   commits: { columnKey: FieldKey; widthPx: number }[];
-  dropPreviews: (FieldKey | null)[];
+  reorderPreviews: ColumnReorderPreview[];
   reorders: { columnKey: FieldKey; beforeColumnKey: FieldKey | null }[];
   focused: (FieldKey | undefined)[];
   cancels: number[];
@@ -79,7 +79,7 @@ function makeCtx(overrides: Partial<ColumnGestureContext> = {}): {
 } {
   const previews: { columnKey: FieldKey; widthPx: number }[] = [];
   const commits: { columnKey: FieldKey; widthPx: number }[] = [];
-  const dropPreviews: (FieldKey | null)[] = [];
+  const reorderPreviews: ColumnReorderPreview[] = [];
   const reorders: { columnKey: FieldKey; beforeColumnKey: FieldKey | null }[] = [];
   const focused: (FieldKey | undefined)[] = [];
   const cancels: number[] = [];
@@ -96,7 +96,7 @@ function makeCtx(overrides: Partial<ColumnGestureContext> = {}): {
     cancelColumnResize: () => {
       cancels.push(1);
     },
-    previewColumnDrop: (beforeColumnKey) => dropPreviews.push(beforeColumnKey),
+    previewColumnReorder: (preview) => reorderPreviews.push(preview),
     commitColumnReorder: (columnKey, beforeColumnKey) => {
       reorders.push({ columnKey, beforeColumnKey });
       return true;
@@ -107,7 +107,7 @@ function makeCtx(overrides: Partial<ColumnGestureContext> = {}): {
     setFocusedColumn: (columnKey) => focused.push(columnKey),
     ...overrides,
   };
-  return { ctx, previews, commits, dropPreviews, reorders, focused, cancels, reorderCancels };
+  return { ctx, previews, commits, reorderPreviews, reorders, focused, cancels, reorderCancels };
 }
 
 describe('attachColumnGestures — resize (S5.7, D-S5-18)', () => {
@@ -274,7 +274,7 @@ describe('attachColumnGestures — reorder (S5.7, D-S5-18)', () => {
       cost: { left: 100, width: 100 },
       start: { left: 200, width: 100 },
     });
-    const { ctx, reorders, dropPreviews } = makeCtx();
+    const { ctx, reorders, reorderPreviews } = makeCtx();
     attachColumnGestures(pane, document.createElement('div'), ctx);
 
     down(cell('name'), 10); // grabs "name" body, not the grip
@@ -283,8 +283,27 @@ describe('attachColumnGestures — reorder (S5.7, D-S5-18)', () => {
 
     // One preview while dragging; the landed commit clears the indicator itself (`ColumnChrome#commit`),
     // so the gesture layer has no reason to paint a redundant "at the end" indicator on the way out.
-    expect(dropPreviews).toEqual(['start']);
+    expect(reorderPreviews).toEqual([{ columnKey: 'name', offsetPx: 210, beforeColumnKey: 'start' }]);
     expect(reorders).toEqual([{ columnKey: 'name', beforeColumnKey: 'start' }]);
+  });
+
+  it('the grabbed header cell follows the pointer: every move reports its own px offset (#140)', () => {
+    const { pane, cell } = makeHeaderPane({
+      name: { left: 0, width: 100 },
+      cost: { left: 100, width: 100 },
+      start: { left: 200, width: 100 },
+    });
+    const { ctx, reorderPreviews } = makeCtx();
+    attachColumnGestures(pane, document.createElement('div'), ctx);
+
+    down(cell('name'), 50);
+    move(pane, 120); // +70px from the grab point
+    move(pane, 260); // +210px
+
+    // `offsetPx` is the travel since the grab, not the pointer's own clientX: the cell rides that far
+    // from the slot it keeps, so the drop midpoints read at arm time stay true (`computeDropTargets`).
+    expect(reorderPreviews.map((preview) => preview.offsetPx)).toEqual([70, 210]);
+    expect(reorderPreviews.map((preview) => preview.columnKey)).toEqual(['name', 'name']);
   });
 
   it('a veto (commitColumnReorder returns false) cancels the drop indicator', () => {
@@ -342,14 +361,14 @@ describe('attachColumnGestures — reorder (S5.7, D-S5-18)', () => {
       name: { left: 0, width: 100 },
       cost: { left: 100, width: 100 },
     });
-    const { ctx, dropPreviews, reorders } = makeCtx({ isMovable: () => false });
+    const { ctx, reorderPreviews, reorders } = makeCtx({ isMovable: () => false });
     attachColumnGestures(pane, document.createElement('div'), ctx);
 
     down(cell('name'), 10);
     move(pane, 190);
     up(cell('name'), 190);
 
-    expect(dropPreviews).toEqual([]);
+    expect(reorderPreviews).toEqual([]);
     expect(reorders).toEqual([]);
   });
 });

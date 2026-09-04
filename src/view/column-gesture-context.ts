@@ -12,6 +12,21 @@ import type { FieldKey } from '../model/index.js';
  *  drag start. */
 export type ColumnGestureCommit = boolean;
 
+/** One in-flight reorder drag, as the screen shows it (S5.7, D-S5-18): the grabbed header cell rides
+ *  `offsetPx` from its own slot, and the drop indicator marks where the drop would land. Both halves
+ *  travel together because both change on the same `pointermove` — a cell that follows the pointer
+ *  while the indicator lags a frame behind would read as two separate gestures. */
+export interface ColumnReorderPreview {
+  /** The header cell the pointer grabbed. */
+  readonly columnKey: FieldKey;
+  /** How far the pointer has travelled since the grab, in px — the grabbed cell's horizontal offset
+   *  from the slot it still occupies. A transform only: the cell never leaves its slot in the flow,
+   *  so no neighbour reflows and no other cell's on-screen position changes mid-drag. */
+  readonly offsetPx: number;
+  /** The column this drop would land before — `null` for "at the end". */
+  readonly beforeColumnKey: FieldKey | null;
+}
+
 /** What `interaction/column-gestures.ts`'s pointer sequences and `GanttShell`'s own keyboard chords
  *  (Alt+Arrow move, Shift+Arrow resize, D-S5-26) both run through — one place decides whether a
  *  column may be dragged/nudged and what a gesture actually commits. */
@@ -33,14 +48,16 @@ export interface ColumnGestureContext {
    *  `data-fixed`/inline-width override on the DOM node even when the column was flex-sized before
    *  the drag started. */
   cancelColumnResize(): void;
-  /** Live paint only: `null` means "at the end" — everywhere else names the column this key would
-   *  land before. Toggles `.fg-column-drop` on the target header cell. Never means "clear" — that is
-   *  `cancelColumnReorder`'s job, since `null` already carries its own on-screen meaning. */
-  previewColumnDrop(beforeColumnKey: FieldKey | null): void;
+  /** Live paint only, no event, no commit — the grabbed header cell follows the pointer and the drop
+   *  indicator marks the target edge. Never means "clear": every field of `ColumnReorderPreview`
+   *  carries an on-screen meaning of its own (`beforeColumnKey: null` is "at the end", `offsetPx: 0`
+   *  is "back at its own slot"), so clearing is `cancelColumnReorder`'s job. */
+  previewColumnReorder(preview: ColumnReorderPreview): void;
   /** The one commit sequence, for a reorder. Returns `false` when vetoed. */
   commitColumnReorder(columnKey: FieldKey, beforeColumnKey: FieldKey | null): ColumnGestureCommit;
-  /** Escape, or a vetoed commit (D-S5-18): clears the live drop indicator entirely — a refused
-   *  reorder must leave nothing behind, the same contract `cancelColumnResize` holds for a resize. */
+  /** Escape, or a vetoed commit (D-S5-18): clears the drop indicator and parks the grabbed cell back
+   *  on its own slot — a refused reorder must leave nothing behind, the same contract
+   *  `cancelColumnResize` holds for a resize. */
   cancelColumnReorder(): void;
   /** A plain click (not a drag) on a header cell — or `undefined` for a click that missed every
    *  header cell. D-S1.10-5 keeps the container the one real tab stop until S5.11's roving pattern

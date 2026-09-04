@@ -11,6 +11,7 @@ import type { ResolvedColumn } from '../layout/index.js';
 import { createRegistrationTable } from '../layout/index.js';
 import { readPixelProperty } from '../render/dom/pixel-property.js';
 import { cssEscapeAttr } from '../render/dom/css-escape.js';
+import type { ColumnReorderPreview } from './column-gesture-context.js';
 import { resolveGanttFields, toGridColumn } from './grid-columns.js';
 import type { ResolveColumnsBind } from './grid-columns.js';
 
@@ -33,8 +34,11 @@ export interface ColumnChromePorts {
   /** Live paint only, no event, no commit — mirrors `SplitterContext.previewGridWidth`.
    *  `undefined` clears the preview. */
   paintColumnResizePreview(preview: { columnKey: string; widthPx: number } | undefined): void;
-  /** Live paint only: `null` means "at the end", `undefined` clears the indicator entirely. */
-  paintColumnDropIndicator(beforeColumnKey: string | null | undefined): void;
+  /** Live paint only: the grabbed header cell's follow transform plus the drop indicator, which move
+   *  together. `undefined` parks both. */
+  paintColumnReorderPreview(
+    preview: { columnKey: string; offsetPx: number; beforeColumnKey: string | null } | undefined,
+  ): void;
   /** Queues a real frame — the only way a live paint's DOM override (`data-fixed`, inline width)
    *  gets undone by the real geometry a `render()` computes (D-S5-18: "a veto restores the state the
    *  drag started from"). */
@@ -197,15 +201,22 @@ export class ColumnChrome {
     this.#ports.requestFrame();
   }
 
-  previewDrop(beforeColumnKey: FieldKey | null): void {
-    this.#ports.paintColumnDropIndicator(beforeColumnKey === null ? null : String(beforeColumnKey));
+  /** Live paint only (S5.7, D-S5-18), the reorder twin of `previewWidth`: the grabbed header cell
+   *  rides `offsetPx` and the drop indicator marks the target edge. */
+  previewReorder(preview: ColumnReorderPreview): void {
+    this.#ports.paintColumnReorderPreview({
+      columnKey: String(preview.columnKey),
+      offsetPx: preview.offsetPx,
+      beforeColumnKey: preview.beforeColumnKey === null ? null : String(preview.beforeColumnKey),
+    });
   }
 
-  /** Escape / a vetoed commit (D-S5-18): clears the live drop indicator entirely. A reorder has no
-   *  continuously-drawn geometry to restore the way a resize's width has — `paintColumnDropIndicator`
-   *  only ever adds one attribute, `undefined` removes it — so no `requestFrame()` is needed here. */
-  cancelDrop(): void {
-    this.#ports.paintColumnDropIndicator(undefined);
+  /** Escape / a vetoed commit (D-S5-18): parks the grabbed cell and clears the drop indicator. A
+   *  reorder has no continuously-drawn geometry to restore the way a resize's width has — the paint
+   *  only ever adds one transform and one attribute, and `undefined` removes both — so no
+   *  `requestFrame()` is needed here. */
+  cancelReorder(): void {
+    this.#ports.paintColumnReorderPreview(undefined);
   }
 
   #asGridColumns(input: readonly GridColumnInput[]): GridColumn[] {
@@ -257,7 +268,7 @@ export class ColumnChrome {
       // verbatim the next time something unrelated repaints before then.
       this.#ports.rebindFields();
       this.#ports.paintColumnResizePreview(undefined);
-      this.#ports.paintColumnDropIndicator(undefined);
+      this.#ports.paintColumnReorderPreview(undefined);
       this.#ports.requestFrame();
     });
   }

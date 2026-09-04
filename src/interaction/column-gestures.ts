@@ -30,8 +30,9 @@ interface DropTarget {
  *  of a reorder drag, only the drop indicator does, so one `querySelectorAll` + one
  *  `getBoundingClientRect` per cell at arm time is enough for the whole gesture, not one pair per
  *  `pointermove`. Excludes `draggedKey` itself: a column cannot drop before/after its own cell.
- *  Revisit if a future drag ever re-parents the grabbed cell mid-gesture (#140) — that would move
- *  every other cell's rect too, invalidating this snapshot partway through. */
+ *  The grabbed cell follows the pointer by transform alone (#140) — it keeps its slot in the header's
+ *  flex flow, so no neighbour moves and this snapshot stays true for the whole gesture. Revisit if a
+ *  drag ever re-parents that cell instead: that would reflow every other cell's rect mid-drag. */
 function computeDropTargets(headerPane: HTMLElement, draggedKey: FieldKey): readonly DropTarget[] {
   const targets: DropTarget[] = [];
   for (const cell of Array.from(headerPane.querySelectorAll<HTMLElement>(HEADER_CELL_SELECTOR))) {
@@ -90,7 +91,11 @@ export function attachColumnGestures(
         const widthPx = Math.max(ctx.minColumnWidthPx(), grabbedStartWidthPx + dxPx);
         ctx.previewColumnWidth(grabbedKey, widthPx);
       } else if (grabbedKind === 'reorder') {
-        ctx.previewColumnDrop(dropTargetAt(grabbedDropTargets, e.clientX));
+        ctx.previewColumnReorder({
+          columnKey: grabbedKey,
+          offsetPx: dxPx,
+          beforeColumnKey: dropTargetAt(grabbedDropTargets, e.clientX),
+        });
       }
     },
     commit(e, dxPx): void {

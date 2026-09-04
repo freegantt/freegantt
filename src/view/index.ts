@@ -29,4 +29,8 @@ export type {
   EntryGestureSession,
   EntryHit,
 } from './entry-gesture-context.js';
-export type { ColumnGestureContext, ColumnGestureCommit } from './column-gesture-context.js';
+export type {
+  ColumnGestureContext,
+  ColumnGestureCommit,
+  ColumnReorderPreview,
+} from './column-gesture-context.js';

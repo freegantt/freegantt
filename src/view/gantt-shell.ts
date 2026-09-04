@@ -970,10 +970,10 @@ export class GanttShell {
       previewColumnWidth: (columnKey, widthPx) => this.#columnChrome.previewWidth(columnKey, widthPx),
       commitColumnWidth: (columnKey, widthPx) => this.#columnChrome.commitWidth(columnKey, widthPx),
       cancelColumnResize: () => this.#columnChrome.cancelResize(),
-      previewColumnDrop: (beforeColumnKey) => this.#columnChrome.previewDrop(beforeColumnKey),
+      previewColumnReorder: (preview) => this.#columnChrome.previewReorder(preview),
       commitColumnReorder: (columnKey, beforeColumnKey) =>
         this.#columnChrome.commitReorder(columnKey, beforeColumnKey),
-      cancelColumnReorder: () => this.#columnChrome.cancelDrop(),
+      cancelColumnReorder: () => this.#columnChrome.cancelReorder(),
       setFocusedColumn: (columnKey) => this.#columnChrome.setFocusedColumn(columnKey),
     };
     this.#columnGestures = options.columnGestures?.(
@@ -1327,8 +1327,8 @@ export class GanttShell {
         setOptional(this.#interactionState, 'columnResizePreview', preview);
         this.#backend.applyState(this.#interactionState);
       },
-      paintColumnDropIndicator: (beforeColumnKey) => {
-        setOptional(this.#interactionState, 'columnDropIndicator', beforeColumnKey);
+      paintColumnReorderPreview: (preview) => {
+        setOptional(this.#interactionState, 'columnReorderPreview', preview);
         this.#backend.applyState(this.#interactionState);
       },
       requestFrame: () => this.#frames.request(),

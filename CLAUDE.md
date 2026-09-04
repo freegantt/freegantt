@@ -71,6 +71,6 @@ Name functions and classes in friendly easy to understand for humans and agents 
 
 ## Workflow
 
-- TS strict (with `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`), pnpm, Vite, Vitest (pure tests run in Node with no DOM env), fast-check for property tests.
+- TS strict (with `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`), pnpm, Vite, Vitest (pure tests run in Node with no DOM env), fast-check for property tests. Dont do lie generics
 - The invariants table (`plans/01` §11, I1–I14) is the review checklist; every invariant maps to a CI job.
 - Slice gates (`plans/00` §4) must pass before the next slice starts.

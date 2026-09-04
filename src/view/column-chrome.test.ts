@@ -8,7 +8,7 @@ function makePorts(overrides: Partial<ColumnChromePorts> = {}): ColumnChromePort
     dataset: () => ({}) as never,
     columnBind: () => ({ timeZone: 'UTC' }),
     paintColumnResizePreview: vi.fn(),
-    paintColumnDropIndicator: vi.fn(),
+    paintColumnReorderPreview: vi.fn(),
     requestFrame: vi.fn(),
     rebindFields: vi.fn(),
     proposeColumnsChange: () => true,
@@ -46,5 +46,32 @@ describe('ColumnChrome.isResizable/isMovable (bug hunt B3)', () => {
 
     expect(chrome.isResizable('cost')).toBe(false);
     expect(chrome.isMovable('cost')).toBe(false);
+  });
+});
+
+describe('ColumnChrome reorder preview (S5.7, D-S5-18, #140)', () => {
+  it('paints the grabbed cell offset and the drop target together, and parks both on cancel', () => {
+    const paintColumnReorderPreview = vi.fn();
+    const chrome = new ColumnChrome(document.createElement('div'), makePorts({ paintColumnReorderPreview }), [
+      'cost',
+    ]);
+
+    chrome.previewReorder({ columnKey: 'cost', offsetPx: 24, beforeColumnKey: 'name' });
+    expect(paintColumnReorderPreview).toHaveBeenCalledWith({
+      columnKey: 'cost',
+      offsetPx: 24,
+      beforeColumnKey: 'name',
+    });
+
+    // `null` keeps its own on-screen meaning ("at the end") — only `cancelReorder` clears.
+    chrome.previewReorder({ columnKey: 'cost', offsetPx: 24, beforeColumnKey: null });
+    expect(paintColumnReorderPreview).toHaveBeenLastCalledWith({
+      columnKey: 'cost',
+      offsetPx: 24,
+      beforeColumnKey: null,
+    });
+
+    chrome.cancelReorder();
+    expect(paintColumnReorderPreview).toHaveBeenLastCalledWith(undefined);
   });
 });
