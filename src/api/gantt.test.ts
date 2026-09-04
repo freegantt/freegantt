@@ -6,6 +6,7 @@ import {
   RegistrationClosedError,
   RendererAlreadyRegisteredError,
   ScrollModel,
+  UnknownCommandError,
   TimeScaleModel,
   entryId,
   itemId,
@@ -1933,7 +1934,7 @@ describe('Gantt plugin kind registrations (S5.9, D-S5-21/D-S5-22)', () => {
     gantt.destroy();
   });
 
-  it('a resize commit bakes the winning plugin column in; disposing that plugin keeps the field but loses the width (#147)', async () => {
+  it('a resize commit bakes the winning plugin column in; the width survives while another plugin still asks for the field (#155)', async () => {
     const container = document.createElement('div');
     const dataset = new Dataset({
       timeZone: 'UTC',
@@ -1986,16 +1987,22 @@ describe('Gantt plugin kind registrations (S5.9, D-S5-21/D-S5-22)', () => {
       '200px',
     );
 
-    // Dropping B (the winner whose content was baked in) strips the baked copy — but A is still
-    // registered, so A's own registration re-supplies the column at A's position. Per plan §2.4 row
-    // 2 this legitimately loses the committed width: the baked column was B's content, not A's, so
-    // only the field and A's header are asserted here.
+    // #155: dropping B leaves A registered on `risk`, so the field is still asked for and the baked
+    // column stays exactly as the resize committed it — 200px, B's committed content. A commit
+    // writes the consumer's own list (D-S5-21: config beats a plugin), and a resize is a gesture the
+    // consumer performed, so a plugin leaving never takes that width with it. Only the last
+    // registration on a field takes the baked column out.
     gantt.plugins = [pluginA];
     await new Promise((resolve) => requestAnimationFrame(resolve));
 
     const riskHeader = container.querySelector<HTMLElement>('.fg-col-header[data-field="risk"]')!;
     expect(riskHeader).not.toBeNull();
-    expect(riskHeader.textContent).toBe('Risk A');
+    expect(riskHeader.style.width).toBe('200px');
+
+    // Dropping the last registration takes the baked column with it.
+    gantt.plugins = [];
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    expect(container.querySelector('.fg-col-header[data-field="risk"]')).toBeNull();
 
     gantt.destroy();
   });
@@ -3297,5 +3304,113 @@ describe('Gantt.interaction.registerKeyHandler out-of-container dismissal (issue
     gantt.destroy();
     outsideTrigger.remove();
     container.remove();
+  });
+});
+
+describe('plugin registrations live exactly as long as their plugin (#155)', () => {
+  it('a plugin renderer stops painting on uninstall, and the same plugin re-installs without colliding with itself', async () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({ timeZone: 'UTC', entries: sampleEntries.slice(0, 1) });
+    const plugin = {
+      id: 'demo.cellRenderer',
+      setup(ctx: PluginContext) {
+        ctx.view.registerRenderer('cell', () => ({ text: 'from the plugin' }));
+        return () => {};
+      },
+    };
+    const gantt = new Gantt({ container, dataset, plugins: [plugin] });
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    const cell = (): string | null =>
+      container.querySelector<HTMLElement>('.fg-row-label[data-field="name"]')!.textContent;
+    expect(cell()).toBe('from the plugin');
+
+    gantt.plugins = [];
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    expect(cell()).toBe(sampleEntries[0]!.name);
+
+    // The point is free again, so re-installing the same plugin is an ordinary install — not a
+    // collision with the registration its own earlier installation left behind.
+    gantt.plugins = [plugin];
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    expect(cell()).toBe('from the plugin');
+
+    gantt.destroy();
+  });
+
+  it('a plugin command is gone on uninstall, and a core command it overrode answers again', async () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({ timeZone: 'UTC', entries: sampleEntries.slice(0, 1) });
+    let hijacked = 0;
+    const plugin = {
+      id: 'demo.commands',
+      setup(ctx: PluginContext) {
+        ctx.commands.register({
+          id: 'freegantt.selectAll',
+          label: 'Select all, the plugin way',
+          run: () => {
+            hijacked += 1;
+          },
+        });
+        ctx.commands.register({ id: 'demo.own', label: 'Plugin only', run: () => {} });
+        return () => {};
+      },
+    };
+    const gantt = new Gantt({ container, dataset, plugins: [plugin] });
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+
+    // D-S5-7: while the plugin is installed, its override wins — core's own select-all never runs.
+    gantt.commands.run('freegantt.selectAll');
+    expect(hijacked).toBe(1);
+    expect(gantt.selection).toEqual([]);
+
+    gantt.plugins = [];
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+
+    // Core's own select-all answers the id again — the override went out with its plugin.
+    gantt.commands.run('freegantt.selectAll');
+    expect(hijacked).toBe(1);
+    expect(gantt.selection).toEqual([sampleEntries[0]!.id]);
+    expect(() => gantt.commands.run('demo.own')).toThrow(UnknownCommandError);
+
+    gantt.destroy();
+  });
+
+  it('a plugin retracts its own registrations mid-life through the Disposer each register* returns', async () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      fieldTypes: { risk: { rollUp: 'max', column: { header: 'Risk' } } },
+      fields: [{ key: 'risk', type: 'risk' }],
+      entries: [{ ...sampleEntries[0]!, meta: { risk: 'high' } }],
+    });
+    let retract = (): void => {};
+    const gantt = new Gantt({
+      container,
+      dataset,
+      gridColumns: ['name'],
+      plugins: [
+        {
+          id: 'demo.retractable',
+          setup(ctx: PluginContext) {
+            retract = ctx.view.registerGridColumn({ field: 'risk', header: 'Risk' });
+            return () => {};
+          },
+        },
+      ],
+    });
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    expect(container.querySelector('.fg-col-header[data-field="risk"]')).not.toBeNull();
+
+    retract();
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    expect(container.querySelector('.fg-col-header[data-field="risk"]')).toBeNull();
+
+    // The plugin is still installed, and disposing it later must not double-remove anything.
+    retract();
+    gantt.plugins = [];
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    expect(container.querySelector('.fg-col-header[data-field="risk"]')).toBeNull();
+
+    gantt.destroy();
   });
 });

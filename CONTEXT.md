@@ -486,12 +486,26 @@ _Avoid_: Permission, ability
 The middle precedence layer `resolveCapabilities` reads between the consumer's own `interactions` config and the library's built-in table — a plugin's per-Kind gesture defaults, registered via `ctx.interaction.registerKindDefaults` (S5.9, D-S5-22). A second registration for the same Kind overrides the first while both plugins stay installed. Disposing one removes exactly that registration, in any order. The newest registration still standing then wins.
 _Avoid_: Interactions (that is the consumer's own per-entry config, one precedence layer above this)
 
+**Registration table**:
+The one mechanism behind every `register*` seam a plugin reaches (`layout/registration-table.ts`,
+#154/#155). A key holds a **stack** of live registrations, not one remembered value: the newest
+registration answers `get`, and the `Disposer` a registration hands back removes exactly that
+registration — never a sibling on the same key, in any disposal order. What answers next is the
+newest registration left, and where the table was built with initial pairs (the shipped item
+producers, the core command catalog) that floor is what a key falls back to. It is what lets
+`gantt.plugins` drop one plugin without disturbing another that claimed the same key. The **initial
+pairs** are the floor nothing disposes; **`active()`** is one value per key — the winning ones — in
+first-registration order, which is why it is not called `values()`.
+_Avoid_: Registry (a Registry is a named seam a plugin registers _into_ — `CommandRegistry`,
+`RendererRegistry`, `ItemProducerRegistry`; the table is the mechanism each of them holds), Map,
+Stack (one key holds a stack; the table holds many)
+
 **GanttPlugin**:
 The public extension contract: an `id` plus a `setup(ctx)` that returns a disposer. Built-in features (tooltips, context menu, editors) are themselves GanttPlugins using the same `PluginContext` a third party would use — no back-door capabilities reserved for first-party code.
 _Avoid_: Extension (Extensions is the name of the source layer that runs plugins; GanttPlugin is the unit within it)
 
 **PluginContext**:
-The object `setup(ctx)` receives — a GanttPlugin's entire world: dataset access, the event bus (including cancelable `before*` events), registration for decorations/columns/renderers/item-producers/interaction-controllers/keybindings, the command registry, and a disposable store. A plugin may not reach into anything outside it (enforced by the import-boundary lint).
+The object `setup(ctx)` receives — a GanttPlugin's entire world: dataset access, the event bus (including cancelable `before*` events), registration for decorations/columns/renderers/item-producers/interaction-controllers/keybindings, the command registry, and a disposable store. A plugin may not reach into anything outside it (enforced by the import-boundary lint). Every `register*` on it returns a `Disposer` and lives exactly as long as the plugin does; collisions resolve by one policy per seam shape (`plans/02` §4.4, and the Registration table entry above).
 _Avoid_: Treating this as settled — the plugin system (`GanttPlugin`/`DatasetPlugin`/`PluginContext`) is still design work in progress; the shape, and possibly this name, may change before it lands
 
 **DatasetPlugin**, **EditExtender**, **PluginStore**:

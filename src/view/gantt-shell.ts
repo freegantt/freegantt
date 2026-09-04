@@ -91,6 +91,7 @@ import {
 } from '../model/index.js';
 import type {
   Dataset,
+  Disposer,
   Entry,
   EntryEdits,
   EntryId,
@@ -209,7 +210,11 @@ export interface PluginContextPorts {
   events: GanttEvents;
   disposables: DisposableStore;
   commands: CommandRegistryOf<unknown>;
-  registerKeybinding: (binding: KeyBinding<unknown>) => void;
+  /** #155: every `register*` below returns a `Disposer` that removes exactly its own registration.
+   *  The plugin's own `DisposableStore` already holds a copy, so a plugin that never calls it still
+   *  disposes cleanly on uninstall; the return value is what lets a plugin retract a registration
+   *  while it is still installed (a column it shows only in one mode). Calling it twice is safe. */
+  registerKeybinding: (binding: KeyBinding<unknown>) => Disposer;
   registerKeyHandler: (
     chord: string,
     handler: (event: KeyEventLike) => void,
@@ -218,7 +223,7 @@ export interface PluginContextPorts {
   overlay: Overlay;
   /** S5.4, D-S5-11: `ctx.view.registerRenderer`. Legal only while `setup` runs (D-S5-4), the same
    *  gate `registerKeybinding` above already takes. */
-  registerRenderer: <P extends RendererPoint>(point: P, renderer: RendererFor<P>) => void;
+  registerRenderer: <P extends RendererPoint>(point: P, renderer: RendererFor<P>) => Disposer;
   /** S5.5 (API gap, `s5.5-tooltips-and-context-menu.md` §5): `ctx.view.resolveTooltip`. Not gated
    *  by `RegistrationGate` — like `overlay` above, a plugin reads this for as long as it runs, not
    *  only during `setup`. */
@@ -231,7 +236,7 @@ export interface PluginContextPorts {
    *  same gate `registerKeybinding`/`registerRenderer` above already take — but unlike those, a
    *  provider is removed automatically when this plugin disposes (its own `disposables.add`
    *  entry), not by the plugin itself. */
-  registerDecoration: (layer: DecorationLayer, provider: DecorationProvider) => void;
+  registerDecoration: (layer: DecorationLayer, provider: DecorationProvider) => Disposer;
   /** S5.8, D-S5-19: `ctx.view.isColumnEditable`. */
   isColumnEditable: (field: FieldKey) => boolean | undefined;
   /** S5.8, D-S5-19: `ctx.interaction.canEdit`. */
@@ -243,15 +248,15 @@ export interface PluginContextPorts {
   /** S5.9, D-S5-22: `ctx.layout.registerItemProducer`. Legal only while `setup` runs (D-S5-4).
    *  Disposal removes this registration through `ItemProducerRegistry.register`'s own `Disposer`.
    *  The newest registration left then wins (#154). */
-  registerItemProducer: (kind: EntryKind, producer: ItemProducer) => void;
+  registerItemProducer: (kind: EntryKind, producer: ItemProducer) => Disposer;
   /** S5.9, D-S5-22: `ctx.interaction.registerKindDefaults` — the middle precedence layer between
    *  the consumer's own `interactions` and the library table (`capability.ts`). Legal only while
    *  `setup` runs. Disposal removes this registration, and never another plugin's (#154). */
-  registerKindDefaults: (kind: EntryKind, defaults: KindDefaults) => void;
+  registerKindDefaults: (kind: EntryKind, defaults: KindDefaults) => Disposer;
   /** S5.9, D-S5-21: `ctx.view.registerGridColumn` — appended after the consumer's own
    *  `gridColumns`, in registration order. Legal only while `setup` runs. Disposal removes this
    *  registration, and never another plugin's (#154). */
-  registerGridColumn: (column: GridColumnInput) => void;
+  registerGridColumn: (column: GridColumnInput) => Disposer;
 }
 
 export interface GanttShellOptions {
@@ -643,12 +648,21 @@ export class GanttShell {
       // surface (S5.4's `registerRenderer`, `registerDecoration`, `registerGridColumn`) inherits the
       // same check instead of re-deriving it at its own call site.
       const gate = new RegistrationGate(pluginId);
-      const registerKeybinding = gate.guard((binding: KeyBinding<unknown>): void => {
-        disposables.add(this.#keymap.register(binding));
+      const registerKeybinding = gate.guard((binding: KeyBinding<unknown>): Disposer => {
+        const remove = this.#keymap.register(binding);
+        disposables.add(remove);
+        return remove;
       });
       const commandRegistry = this.#commandRegistry;
       const commands: CommandRegistryOf<unknown> = {
-        register: gate.guard((command) => commandRegistry.register(command)),
+        // #155: a plugin's command lives exactly as long as the plugin. Its registration goes into
+        // `disposables`, so uninstalling restores whatever the id held before — the core catalog's
+        // own command, where the plugin had overridden one (D-S5-7).
+        register: gate.guard((command) => {
+          const remove = commandRegistry.register(command);
+          disposables.add(remove);
+          return remove;
+        }),
         run: (id) => commandRegistry.run(id),
         available: (ctx) => commandRegistry.available(ctx),
       };
@@ -664,9 +678,21 @@ export class GanttShell {
       ): (() => void) => this.#keymap.registerHandler(chord, handler, keyOptions);
       // Not wrapped through `gate.guard` (which erases the point<->renderer type link a generic
       // signature needs) — `gate.assertOpen()` called directly instead, same check, same D-S5-4 gate.
-      const registerRenderer = <P extends RendererPoint>(point: P, renderer: RendererFor<P>): void => {
+      const registerRenderer = <P extends RendererPoint>(point: P, renderer: RendererFor<P>): Disposer => {
         gate.assertOpen();
-        this.#rendererRegistry.register(point, renderer, pluginId);
+        // #155: the point is freed again when this plugin goes. Without that, uninstalling and
+        // re-installing one plugin made it collide with its own dead registration.
+        const remove = this.#rendererRegistry.register(point, renderer, pluginId);
+        // A renderer claim changes what every painted cell/bar/header shows, and nothing else marks
+        // the frame dirty for it — the first install only repainted because the shell's own first
+        // render came after `setup()`. Ask on the way in and on the way out alike (#155).
+        this.#frames.request();
+        const dispose = (): void => {
+          remove();
+          this.#frames.request();
+        };
+        disposables.add(dispose);
+        return dispose;
       };
       // S5.5 (API gap, `s5.5-tooltips-and-context-menu.md` §5): same resolve-then-call-with-fallback
       // shape `render/dom/index.ts`'s own `callRenderer` gives `bar`/`cell` (issue #137 F14) — a
@@ -705,16 +731,18 @@ export class GanttShell {
       // removal is automatic — a decoration provider has no "run once at setup" analogue to a
       // renderer slot; it lives for as long as the plugin does, so `disposables.add` (not the
       // plugin itself) is what takes it back out of `#decorationProviders`.
-      const registerDecoration = (layer: DecorationLayer, provider: DecorationProvider): void => {
+      const registerDecoration = (layer: DecorationLayer, provider: DecorationProvider): Disposer => {
         gate.assertOpen();
         const registered: RegisteredDecorationProvider = { layer, provider };
         this.#decorationProviders.push(registered);
         this.#frames.request();
-        disposables.add(() => {
+        const dispose = (): void => {
           const index = this.#decorationProviders.indexOf(registered);
           if (index >= 0) this.#decorationProviders.splice(index, 1);
           this.#frames.request();
-        });
+        };
+        disposables.add(dispose);
+        return dispose;
       };
       // S5.8, D-S5-19: `field` names the currently *resolved* column (Field default merged), the
       // same list `resolveTooltipColumns` above reads — not the raw `GridColumnInput[]` a consumer's
@@ -733,7 +761,7 @@ export class GanttShell {
       // S5.9, D-S5-22: same one-shot gate as `registerRenderer`/`registerDecoration`. Disposal
       // removes this registration through the registry's own `Disposer`
       // (`ItemProducerRegistry.register`), not a bespoke undo kept here.
-      const registerItemProducer = (kind: EntryKind, producer: ItemProducer): void => {
+      const registerItemProducer = (kind: EntryKind, producer: ItemProducer): Disposer => {
         gate.assertOpen();
         const remove = this.#itemProducerRegistry.register(kind, producer);
         // `#layout`'s own per-row item cache (`FrameMemory#packed`) only forgets a row on a dataset
@@ -743,30 +771,36 @@ export class GanttShell {
         // that wins after disposal actually repaints too.
         this.#layout.invalidateFrom(0);
         this.#frames.request();
-        disposables.add(() => {
+        const dispose = (): void => {
           remove();
           this.#layout.invalidateFrom(0);
           this.#frames.request();
-        });
+        };
+        disposables.add(dispose);
+        return dispose;
       };
       // S5.9, D-S5-22: same gate. This registers through the shared table (#154). A second plugin
       // registering the same kind overrides the first while both stay installed. Disposing one
       // registration never disturbs another plugin's live registration on the same kind, in any
       // disposal order (#146).
-      const registerKindDefaults = (kind: EntryKind, defaults: KindDefaults): void => {
+      const registerKindDefaults = (kind: EntryKind, defaults: KindDefaults): Disposer => {
         gate.assertOpen();
         const remove = this.#kindDefaults.register(kind, defaults);
         this.#refreshCapabilities();
-        disposables.add(() => {
+        const dispose = (): void => {
           remove();
           this.#refreshCapabilities();
-        });
+        };
+        disposables.add(dispose);
+        return dispose;
       };
       // S5.9, D-S5-21: same gate; disposal removes `column` from `ColumnChrome`'s own plugin list
       // via its `registerPluginColumn`'s `Disposer`.
-      const registerGridColumn = (column: GridColumnInput): void => {
+      const registerGridColumn = (column: GridColumnInput): Disposer => {
         gate.assertOpen();
-        disposables.add(this.#columnChrome.registerPluginColumn(column));
+        const remove = this.#columnChrome.registerPluginColumn(column);
+        disposables.add(remove);
+        return remove;
       };
       const context = (options.buildPluginContext ?? (() => ({})))({
         events: this.#pluginEvents,

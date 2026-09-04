@@ -154,8 +154,7 @@ export type CommandRegistry = CommandRegistryOf<Gantt>;
 // @public
 export interface CommandRegistryOf<TGantt = unknown, TDataset = Dataset> {
     available(ctx: CommandContextOf<TGantt, TDataset>): readonly CommandOf<TGantt, TDataset>[];
-    // (undocumented)
-    register(command: CommandOf<TGantt, TDataset>): void;
+    register(command: CommandOf<TGantt, TDataset>): Disposer;
     // (undocumented)
     run(id: string): void;
 }
@@ -1239,27 +1238,27 @@ export interface PluginContextOf<TGantt = unknown, TDataset = Dataset> {
     gantt: TGantt;
     // (undocumented)
     interaction: {
-        registerKeybinding(binding: KeyBindingOf<TGantt>): void;
+        registerKeybinding(binding: KeyBindingOf<TGantt>): Disposer;
         registerKeyHandler(chord: KeyChord, handler: (event: KeyEventLike) => void, options?: {
             captureInEditable?: boolean;
         }): () => void;
         canEdit(entry: Entry): boolean;
         emitBeforeEntryEdit(payload: EntryFieldEdit): boolean | Promise<boolean>;
         emitEntryEdit(payload: EntryFieldEdit): void;
-        registerKindDefaults(kind: EntryKind, defaults: KindDefaults): void;
+        registerKindDefaults(kind: EntryKind, defaults: KindDefaults): Disposer;
     };
     layout: {
-        registerItemProducer(kind: EntryKind, producer: ItemProducer): void;
+        registerItemProducer(kind: EntryKind, producer: ItemProducer): Disposer;
     };
     // (undocumented)
     view: {
         overlay: Overlay;
-        registerRenderer<P extends RendererPoint>(point: P, renderer: RendererFor<P>): void;
+        registerRenderer<P extends RendererPoint>(point: P, renderer: RendererFor<P>): Disposer;
         resolveTooltip(entryId: EntryId): ElementDescription | undefined;
         resolveTooltipColumns(entry: Entry): readonly TooltipColumn[];
         isColumnEditable(field: FieldKey): boolean | undefined;
-        registerDecoration(layer: DecorationLayer, provider: DecorationProvider): void;
-        registerGridColumn(column: GridColumnInput): void;
+        registerDecoration(layer: DecorationLayer, provider: DecorationProvider): Disposer;
+        registerGridColumn(column: GridColumnInput): Disposer;
     };
 }
 
