@@ -134,10 +134,11 @@ ${DARK_COLOR_TOKENS}
 /* S5.7, D-S5-18: the grabbed header cell during a reorder drag — it rides a translateX written by
    render/dom/index.ts (a transform only, so it keeps its slot in the flow and no neighbour reflows).
    z-index and --fg-popup-shadow (the same lifted-surface token .fg-popup uses) raise it over its
-   neighbours; the opaque --fg-header-bg ground is what makes it read as one carried cell — a
-   translucent cell shows the label it passes across straight through its own, which reads as two
-   overprinted headers rather than a drag. */
-.fg-col-header[data-dragging] { z-index: 2; cursor: grabbing; background: var(--fg-header-bg); box-shadow: var(--fg-popup-shadow); }
+   neighbours, and a --fg-header-bg wash gives it a panel of its own to read as one carried cell.
+   The wash stays part transparent on purpose: the drop indicator is painted on the target cell
+   *under* this one, and the pointer sits over that target for most of a drag — an opaque cell hides
+   the very line that says where the column lands. */
+.fg-col-header[data-dragging] { z-index: 2; cursor: grabbing; background: color-mix(in srgb, var(--fg-header-bg) 55%, transparent); box-shadow: var(--fg-popup-shadow); }
 .fg-rows-clip { position: relative; flex: 1 1 auto; overflow: hidden; width: var(--fg-grid-content-width, 100%); }
 .fg-rows { position: relative; height: 100%; }
 .fg-splitter { flex-shrink: 0; cursor: col-resize; background: var(--fg-splitter-color); }
