@@ -14,6 +14,9 @@ import {
 import type { Entry, PluginContext } from './index.js';
 import { sampleEntries } from '../../fixtures/sample-dataset.js';
 import { instant } from '../time/index.js';
+// [S5-A3]: the acceptance object is the harness plugin itself, not a re-implementation of its four
+// seams — a regression in bufferKind() must fail this test (issue #153).
+import { bufferKind } from '../../harness/plugins/buffer-kind.js';
 
 // happy-dom does no layout, so a real ResizeObserver never fires (same seam gantt-shell.test.ts
 // stubs globally — Gantt/GanttShell wire attachPaneSize themselves and take no ResizeObserverCtor
@@ -2031,33 +2034,7 @@ describe('Gantt plugin kind registrations (S5.9, D-S5-21/D-S5-22)', () => {
     const gantt = new Gantt({
       container,
       dataset,
-      plugins: [
-        contextMenu(),
-        {
-          id: 'demo.bufferKind',
-          setup(ctx) {
-            ctx.layout.registerItemProducer('buffer', (entry) => [
-              {
-                id: itemId(entry.id, 0),
-                entryId: entry.id,
-                kind: entry.kind,
-                label: entry.name,
-                start: entry.start,
-                end: entry.end,
-              },
-            ]);
-            ctx.view.registerRenderer('bar', { buffer: () => ({ class: { 'demo-buffer-bar': true } }) });
-            ctx.interaction.registerKindDefaults('buffer', { resize: false });
-            ctx.commands.register({
-              id: 'demo.bufferKind.markConsumed',
-              label: 'Mark buffer consumed',
-              when: ({ entry }) => entry?.kind === 'buffer',
-              run: () => {},
-            });
-            return () => {};
-          },
-        },
-      ],
+      plugins: [contextMenu(), bufferKind()],
     });
     await new Promise((resolve) => requestAnimationFrame(resolve));
 
