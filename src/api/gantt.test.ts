@@ -1607,6 +1607,46 @@ describe('Gantt plugin kind registrations (S5.9, D-S5-21/D-S5-22)', () => {
     gantt.destroy();
   });
 
+  it('two plugins registering the same grid-column field collapse to one column, the later registration winning (#147)', async () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      fieldTypes: {
+        risk: { rollUp: 'max', column: { header: 'Risk' } },
+      },
+      fields: [{ key: 'risk', type: 'risk' }],
+      entries: [{ ...sampleEntries[0]!, meta: { risk: 'high' } }],
+    });
+    const gantt = new Gantt({
+      container,
+      dataset,
+      gridColumns: ['name'],
+      plugins: [
+        {
+          id: 'demo.riskColumnA',
+          setup(ctx) {
+            ctx.view.registerGridColumn({ field: 'risk', header: 'Risk A' });
+            return () => {};
+          },
+        },
+        {
+          id: 'demo.riskColumnB',
+          setup(ctx) {
+            ctx.view.registerGridColumn({ field: 'risk', header: 'Risk B' });
+            return () => {};
+          },
+        },
+      ],
+    });
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+
+    const riskHeaders = container.querySelectorAll('.fg-col-header[data-field="risk"]');
+    expect(riskHeaders).toHaveLength(1);
+    expect(riskHeaders[0]!.textContent).toBe('Risk B');
+
+    gantt.destroy();
+  });
+
   it('a resize commit bakes a plugin column in, but disposing the plugin still removes it', async () => {
     const container = document.createElement('div');
     const dataset = new Dataset({

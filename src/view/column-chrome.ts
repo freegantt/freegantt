@@ -73,12 +73,18 @@ export class ColumnChrome {
 
   /** S5.9, D-S5-21: the consumer's own `gridColumnInput`, plus every plugin-registered column
    *  whose `field` it does not already name, in registration order — what actually resolves and
-   *  renders. A duplicate `field` is dropped from the plugin side: config beats a plugin. */
+   *  renders. A duplicate `field` is dropped from the plugin side: config beats a plugin. Two
+   *  plugins registering the same `field` also collapse to one column (#147) — the later
+   *  registration's content wins, at the earlier registration's position, so registration order
+   *  still decides where the column sits. */
   effectiveInput(): readonly GridColumnInput[] {
     const base = this.#asGridColumns(this.#gridColumnInput);
     const baseKeys = new Set(base.map((column) => column.field));
-    const extra = this.#asGridColumns(this.#pluginColumns).filter((column) => !baseKeys.has(column.field));
-    return [...this.#gridColumnInput, ...extra];
+    const extraByField = new Map<FieldKey, GridColumnInput>();
+    for (const column of this.#asGridColumns(this.#pluginColumns)) {
+      if (!baseKeys.has(column.field)) extraByField.set(column.field, column);
+    }
+    return [...this.#gridColumnInput, ...extraByField.values()];
   }
 
   /** S5.9, D-S5-21: `ctx.view.registerGridColumn`. Legal only while `setup` runs (D-S5-4), the same
