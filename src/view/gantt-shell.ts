@@ -417,6 +417,9 @@ export class GanttShell {
   #viewportHandle: ViewportHandle;
   #scrollAttachment: ScrollAttachment;
   #paneSizeAttachment: PaneSizeAttachment;
+  /** The timeline pane's last measured box, kept raw: the header height it has to be reduced by
+   *  changes on its own signal (a preset with a different band count), not on a pane resize. */
+  #paneBox: Size = { width: 0, height: 0 };
   #splitterAttachment: SplitterAttachment;
   #datasetChanges: DatasetChangeSubscription;
   #entryGestures: Detachable | undefined;
@@ -1641,11 +1644,24 @@ export class GanttShell {
    *  box; no gutter to subtract (S1.8, D-S1.8-2) — the grid pane's width never overlapped it in the
    *  first place. */
   #applyPaneMeasurement(size: Size): void {
+    this.#paneBox = size;
     this.#rowHeight = readPixelProperty(this.#container, ROW_HEIGHT_PROPERTY, ROW_HEIGHT_POLICY);
     this.#laneGapPx = readPixelProperty(this.#container, LANE_GAP_PROPERTY, LANE_GAP_POLICY);
     this.#tickBoxFloorPx = readPixelProperty(this.#container, TICK_BOX_FLOOR_PROPERTY, TICK_BOX_FLOOR_POLICY);
     this.#diamondSizePx = readPixelProperty(this.#container, DIAMOND_SIZE_PROPERTY, DIAMOND_SIZE_POLICY);
-    this.#viewportHandle.setPaneSize(size);
+    this.#applyRowsViewportSize();
+  }
+
+  /** The rows' own viewport is the pane box minus the header: the timeline pane's header sticks to
+   *  the pane's top and covers that band of rows for the whole scroll, and the grid pane's rows clip
+   *  below its spacer for the same reason. Reporting the full pane box left the scroll model one
+   *  header short of the true extent, so the last row could never scroll fully into view. */
+  #applyRowsViewportSize(): void {
+    const headerHeight = this.#paneLayout.measureHeaderHeight();
+    this.#viewportHandle.setPaneSize({
+      width: this.#paneBox.width,
+      height: Math.max(0, this.#paneBox.height - headerHeight),
+    });
   }
 
   render(): void {
@@ -1678,7 +1694,9 @@ export class GanttShell {
     for (const bar of frame.bars) this.#lastBarById.set(bar.id, bar);
     // D-S1.12-9: the grid pane's spacer mirrors the header's own band count, so both panes resolve
     // their header height from the same `--fg-band-height` expression and cannot drift.
-    this.#paneLayout.setHeaderBandCount(frame.header.bands.length);
+    // A changed band stack is a changed header height, and the rows' viewport is the pane box minus
+    // that — so the viewport is re-derived here rather than waiting for the next pane resize.
+    if (this.#paneLayout.setHeaderBandCount(frame.header.bands.length)) this.#applyRowsViewportSize();
     this.#contentSize = { width: frame.contentWidth, height: frame.contentHeight };
     this.#viewportHandle.setContentSize(this.#contentSize);
     this.#scrollAttachment.writePosition();

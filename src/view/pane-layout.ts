@@ -164,6 +164,13 @@ export class PaneLayout {
     return { width: this.panes.timeline.clientWidth, height: this.panes.timeline.clientHeight };
   }
 
+  /** The header's own height, read from the grid pane's spacer — D-S1.12-9 makes that stack of
+   *  `.fg-band` elements the same height as the timeline pane's own sticky header, so one read
+   *  answers for both panes. The rows a viewer can actually see are the pane box minus this. */
+  measureHeaderHeight(): number {
+    return this.#spacer.offsetHeight;
+  }
+
   /** `Overlay.bounds` (S5.3, D-S5-8): the container's own client rect, the outer clamp a popup
    *  anchored outside both panes still clamps to. */
   bounds(): DOMRect {
@@ -182,9 +189,11 @@ export class PaneLayout {
 
   /** D-S1.12-9: the grid pane's spacer renders one empty `.fg-band` per header band, so both panes
    *  resolve their header height from the same `--fg-band-height` CSS expression and cannot drift.
-   *  A no-op when the count is unchanged — the common case, every render. */
-  setHeaderBandCount(count: number): void {
-    if (count === this.#headerBandCount) return;
+   *  A no-op when the count is unchanged — the common case, every render. Returns whether the stack
+   *  changed, because the header height changed with it and the rows' own viewport height is the
+   *  pane box minus that (`GanttShell#applyPaneMeasurement`). */
+  setHeaderBandCount(count: number): boolean {
+    if (count === this.#headerBandCount) return false;
     this.#headerBandCount = count;
     this.#spacer.replaceChildren();
     for (let i = 0; i < count; i++) {
@@ -193,6 +202,7 @@ export class PaneLayout {
       this.#spacer.append(band);
     }
     this.#spacer.append(this.panes.gridHeader);
+    return true;
   }
 
   destroy(): void {

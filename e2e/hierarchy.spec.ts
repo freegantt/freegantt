@@ -91,7 +91,7 @@ test('twisty collapses a subtree and aria-expanded flips', async ({ page }) => {
   await twisty.click();
 
   await expect(twisty).toHaveAttribute('aria-expanded', 'false');
-  await expect(page.locator(`[data-row-id="${childId}"]`)).toHaveCount(0);
+  await expect(page.locator(`.fg-row[data-row-id="${childId}"]`)).toHaveCount(0);
 });
 
 test('[S4-A3] switching row source changes the row set and keeps the scroll offset', async ({ page }) => {
@@ -119,7 +119,7 @@ test('pack mode grows a packed row and shifts the rows below', async ({ page }) 
   await gotoHierarchyShort(page);
 
   const entryId = await entryWithSegments(page);
-  const packedRow = page.locator(`[data-row-id="${entryId}"]`);
+  const packedRow = page.locator(`.fg-row[data-row-id="${entryId}"]`);
   const beforePacked = await packedRow.boundingBox();
   expect(beforePacked).not.toBeNull();
 
@@ -206,7 +206,7 @@ test('ArrowRight expands and ArrowLeft collapses; focus stays on the Gantt', asy
   const childId = await childRow.getAttribute('data-row-id');
 
   await twisty.click();
-  await expect(page.locator(`[data-row-id="${childId}"]`)).toHaveCount(0);
+  await expect(page.locator(`.fg-row[data-row-id="${childId}"]`)).toHaveCount(0);
 
   const ganttRoot = page.locator('#gantt');
   const parentId = await parentRow.getAttribute('data-row-id');
@@ -216,12 +216,12 @@ test('ArrowRight expands and ArrowLeft collapses; focus stays on the Gantt', asy
   await expect(ganttRoot).toBeFocused();
 
   await page.keyboard.press('ArrowRight');
-  await expect(page.locator(`[data-row-id="${childId}"]`)).toBeVisible();
+  await expect(page.locator(`.fg-row[data-row-id="${childId}"]`)).toBeVisible();
   await expect(twisty).toHaveAttribute('aria-expanded', 'true');
   await expect(ganttRoot).toBeFocused();
 
   await page.keyboard.press('ArrowLeft');
-  await expect(page.locator(`[data-row-id="${childId}"]`)).toHaveCount(0);
+  await expect(page.locator(`.fg-row[data-row-id="${childId}"]`)).toHaveCount(0);
   await expect(twisty).toHaveAttribute('aria-expanded', 'false');
   await expect(ganttRoot).toBeFocused();
 });
