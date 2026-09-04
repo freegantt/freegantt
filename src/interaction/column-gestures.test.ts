@@ -74,12 +74,16 @@ function makeCtx(overrides: Partial<ColumnGestureContext> = {}): {
   dropPreviews: (FieldKey | null)[];
   reorders: { columnKey: FieldKey; beforeColumnKey: FieldKey | null }[];
   focused: (FieldKey | undefined)[];
+  cancels: number[];
+  reorderCancels: number[];
 } {
   const previews: { columnKey: FieldKey; widthPx: number }[] = [];
   const commits: { columnKey: FieldKey; widthPx: number }[] = [];
   const dropPreviews: (FieldKey | null)[] = [];
   const reorders: { columnKey: FieldKey; beforeColumnKey: FieldKey | null }[] = [];
   const focused: (FieldKey | undefined)[] = [];
+  const cancels: number[] = [];
+  const reorderCancels: number[] = [];
   const ctx: ColumnGestureContext = {
     isResizable: () => true,
     isMovable: () => true,
@@ -89,15 +93,21 @@ function makeCtx(overrides: Partial<ColumnGestureContext> = {}): {
       commits.push({ columnKey, widthPx });
       return true;
     },
+    cancelColumnResize: () => {
+      cancels.push(1);
+    },
     previewColumnDrop: (beforeColumnKey) => dropPreviews.push(beforeColumnKey),
     commitColumnReorder: (columnKey, beforeColumnKey) => {
       reorders.push({ columnKey, beforeColumnKey });
       return true;
     },
+    cancelColumnReorder: () => {
+      reorderCancels.push(1);
+    },
     setFocusedColumn: (columnKey) => focused.push(columnKey),
     ...overrides,
   };
-  return { ctx, previews, commits, dropPreviews, reorders, focused };
+  return { ctx, previews, commits, dropPreviews, reorders, focused, cancels, reorderCancels };
 }
 
 describe('attachColumnGestures — resize (S5.7, D-S5-18)', () => {
@@ -116,17 +126,18 @@ describe('attachColumnGestures — resize (S5.7, D-S5-18)', () => {
     expect(commits).toEqual([{ columnKey: 'cost', widthPx: 130 }]);
   });
 
-  it('a veto (commitColumnWidth returns false) restores the starting width', () => {
+  it('a veto (commitColumnWidth returns false) cancels the resize preview', () => {
     const { pane, cell } = makeHeaderPane({ cost: { left: 100, width: 90 } });
-    const { ctx, previews } = makeCtx({ commitColumnWidth: () => false });
+    const { ctx, cancels } = makeCtx({ commitColumnWidth: () => false });
     attachColumnGestures(pane, document.createElement('div'), ctx);
 
     down(gripOf(cell('cost')), 190);
     move(pane, 210);
     up(gripOf(cell('cost')), 230);
 
-    // Last preview call restores the pre-drag width (90), not the vetoed 130.
-    expect(previews.at(-1)).toEqual({ columnKey: 'cost', widthPx: 90 });
+    // A veto clears the preview entirely (`cancelColumnResize`) rather than repainting the pre-drag
+    // width, so a flex column's live-paint `data-fixed` override does not linger (D-S5-18).
+    expect(cancels).toHaveLength(1);
   });
 
   it('a drag below the floor clamps to minColumnWidthPx', () => {
@@ -141,18 +152,52 @@ describe('attachColumnGestures — resize (S5.7, D-S5-18)', () => {
     expect(commits).toEqual([{ columnKey: 'cost', widthPx: 40 }]);
   });
 
-  it('Escape cancels the drag and restores the starting width, committing nothing', () => {
+  it('Escape cancels the drag, clearing the preview and committing nothing', () => {
     const { pane, cell } = makeHeaderPane({ cost: { left: 100, width: 90 } });
     const container = document.createElement('div');
-    const { ctx, previews, commits } = makeCtx();
+    const { ctx, cancels, commits } = makeCtx();
     attachColumnGestures(pane, container, ctx);
 
     down(gripOf(cell('cost')), 190);
     move(pane, 210);
     escape(container);
 
-    expect(previews.at(-1)).toEqual({ columnKey: 'cost', widthPx: 90 });
+    expect(cancels).toHaveLength(1);
     expect(commits).toEqual([]);
+  });
+
+  it('Escape mid-resize swallows the key so a sibling keydown listener on the same container never sees it', () => {
+    const { pane, cell } = makeHeaderPane({ cost: { left: 100, width: 90 } });
+    const container = document.createElement('div');
+    const { ctx } = makeCtx();
+    attachColumnGestures(pane, container, ctx);
+    const sibling = vi.fn();
+    container.addEventListener('keydown', sibling);
+
+    down(gripOf(cell('cost')), 190);
+    move(pane, 210);
+    escape(container);
+
+    expect(sibling).not.toHaveBeenCalled();
+  });
+
+  it("a second pointerdown while a drag is armed does not clobber the first pointer's grabbed column", () => {
+    const { pane, cell } = makeHeaderPane({
+      cost: { left: 100, width: 90 },
+      start: { left: 300, width: 90 },
+    });
+    const { ctx, commits } = makeCtx();
+    attachColumnGestures(pane, document.createElement('div'), ctx);
+
+    down(gripOf(cell('cost')), 190); // pointerId 1 arms on "cost"'s grip
+    move(pane, 210);
+    // A second finger (pointerId 2) lands on an unrelated header cell mid-drag.
+    cell('start').dispatchEvent(
+      new PointerEvent('pointerdown', { clientX: 340, clientY: 0, pointerId: 2, bubbles: true }),
+    );
+    up(gripOf(cell('cost')), 230); // pointerId 1 releases — still the original drag
+
+    expect(commits).toEqual([{ columnKey: 'cost', widthPx: 130 }]);
   });
 
   it('resizable: false refuses the pointer drag — no preview, no commit', () => {
@@ -183,9 +228,45 @@ describe('attachColumnGestures — reorder (S5.7, D-S5-18)', () => {
     move(pane, 220); // past the threshold, now over "start"'s left half (midpoint at 250)
     up(cell('name'), 220);
 
-    // One preview while dragging, then a clear (null) at commit — the indicator never outlives the drop.
-    expect(dropPreviews).toEqual(['start', null]);
+    // One preview while dragging; the landed commit clears the indicator itself (`ColumnChrome#commit`),
+    // so the gesture layer has no reason to paint a redundant "at the end" indicator on the way out.
+    expect(dropPreviews).toEqual(['start']);
     expect(reorders).toEqual([{ columnKey: 'name', beforeColumnKey: 'start' }]);
+  });
+
+  it('a veto (commitColumnReorder returns false) cancels the drop indicator', () => {
+    const { pane, cell } = makeHeaderPane({
+      name: { left: 0, width: 100 },
+      cost: { left: 100, width: 100 },
+      start: { left: 200, width: 100 },
+    });
+    const { ctx, reorderCancels } = makeCtx({ commitColumnReorder: () => false });
+    attachColumnGestures(pane, document.createElement('div'), ctx);
+
+    down(cell('name'), 10);
+    move(pane, 220);
+    up(cell('name'), 220);
+
+    // A veto clears the indicator entirely (`cancelColumnReorder`) rather than leaving it painted
+    // where the drop would have landed (D-S5-18: "a refused drag must leave nothing behind").
+    expect(reorderCancels).toHaveLength(1);
+  });
+
+  it('Escape cancels a reorder drag, clearing the drop indicator and committing nothing', () => {
+    const { pane, cell } = makeHeaderPane({
+      name: { left: 0, width: 100 },
+      cost: { left: 100, width: 100 },
+    });
+    const container = document.createElement('div');
+    const { ctx, reorderCancels, reorders } = makeCtx();
+    attachColumnGestures(pane, container, ctx);
+
+    down(cell('name'), 10);
+    move(pane, 190);
+    escape(container);
+
+    expect(reorderCancels).toHaveLength(1);
+    expect(reorders).toEqual([]);
   });
 
   it('dropping past every column lands at the end (beforeColumnKey null)', () => {

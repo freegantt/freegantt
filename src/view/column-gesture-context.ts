@@ -27,11 +27,21 @@ export interface ColumnGestureContext {
   previewColumnWidth(columnKey: FieldKey, widthPx: number): void;
   /** The one commit sequence, for a resize. Returns `false` when vetoed. */
   commitColumnWidth(columnKey: FieldKey, widthPx: number): ColumnGestureCommit;
+  /** Escape, or a vetoed commit: drops the live resize paint and repaints the column's real geometry
+   *  — a refused drag must leave nothing behind (D-S5-18), so this does more than
+   *  `previewColumnWidth(columnKey, startWidthPx)` would: that call still leaves the preview's
+   *  `data-fixed`/inline-width override on the DOM node even when the column was flex-sized before
+   *  the drag started. */
+  cancelColumnResize(): void;
   /** Live paint only: `null` means "at the end" — everywhere else names the column this key would
-   *  land before. Toggles `.fg-column-drop` on the target header cell (or clears it). */
+   *  land before. Toggles `.fg-column-drop` on the target header cell. Never means "clear" — that is
+   *  `cancelColumnReorder`'s job, since `null` already carries its own on-screen meaning. */
   previewColumnDrop(beforeColumnKey: FieldKey | null): void;
   /** The one commit sequence, for a reorder. Returns `false` when vetoed. */
   commitColumnReorder(columnKey: FieldKey, beforeColumnKey: FieldKey | null): ColumnGestureCommit;
+  /** Escape, or a vetoed commit (D-S5-18): clears the live drop indicator entirely — a refused
+   *  reorder must leave nothing behind, the same contract `cancelColumnResize` holds for a resize. */
+  cancelColumnReorder(): void;
   /** A plain click (not a drag) on a header cell — or `undefined` for a click that missed every
    *  header cell. D-S1.10-5 keeps the container the one real tab stop until S5.11's roving pattern
    *  lands, so this is a JS-tracked "focused column" rather than a DOM focus move, the same way a bar

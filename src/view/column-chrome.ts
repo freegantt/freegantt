@@ -1,0 +1,229 @@
+// view/ — grid-column chrome: resolving `gridColumns` against the dataset's declared Fields, the
+// live resize/reorder preview paint, and the one commit sequence a pointer drag, a reorder drop, and
+// a plain `gantt.gridColumns = […]` assignment all share (S5.7, D-S5-18). Split out of `GanttShell`
+// so column-chrome behaviour is reviewable and testable on its own — `GanttShell` is the only caller,
+// closing over its own private state through `ColumnChromePorts` the same way `core-commands.ts`
+// closes over `CoreCommandPorts` (D-S5-6's precedent) and `interaction/column-gestures.ts` closes
+// over `ColumnGestureContext` (this file's own `column-gesture-context.ts` sibling).
+
+import type { Dataset, FieldKey, GridColumn, GridColumnInput } from '../model/index.js';
+import type { ResolvedColumn } from '../layout/index.js';
+import { readPixelProperty } from '../render/dom/pixel-property.js';
+import { cssEscapeAttr } from '../render/dom/css-escape.js';
+import { resolveGanttFields, toGridColumn } from './grid-columns.js';
+import type { ResolveColumnsBind } from './grid-columns.js';
+
+const MIN_COLUMN_WIDTH_PROPERTY = '--fg-column-min-width';
+const DEFAULT_MIN_COLUMN_WIDTH = 40;
+const MIN_COLUMN_WIDTH_POLICY = { fallback: DEFAULT_MIN_COLUMN_WIDTH, accepts: 'positive' } as const;
+/** One `Shift+Arrow` step (D-S5-18's keyboard parity) and the on-screen width read back when a flex
+ *  column (no explicit `width`) has never been resized. */
+const COLUMN_RESIZE_STEP_PX = 16;
+const DEFAULT_COLUMN_WIDTH_FALLBACK_PX = 120;
+
+/** What `ColumnChrome` calls back into `GanttShell` for — the shared machinery every other
+ *  cancelable Gantt-state change already goes through (`#proposeChange`, `#interactionState`,
+ *  `#frames`), so this module never owns any of it directly. */
+export interface ColumnChromePorts {
+  /** `dataset.field`/`dataset.fields`/`dataset.timeZone` — as much of `Dataset` as resolving columns
+   *  needs, re-read on every resolve/commit rather than cached (D-S4-12: always the live dataset). */
+  dataset(): Pick<Dataset, 'field' | 'fields' | 'timeZone'>;
+  columnBind(): ResolveColumnsBind;
+  /** Live paint only, no event, no commit — mirrors `SplitterContext.previewGridWidth`.
+   *  `undefined` clears the preview. */
+  paintColumnResizePreview(preview: { columnKey: string; widthPx: number } | undefined): void;
+  /** Live paint only: `null` means "at the end", `undefined` clears the indicator entirely. */
+  paintColumnDropIndicator(beforeColumnKey: string | null | undefined): void;
+  /** Queues a real frame — the only way a live paint's DOM override (`data-fixed`, inline width)
+   *  gets undone by the real geometry a `render()` computes (D-S5-18: "a veto restores the state the
+   *  drag started from"). */
+  requestFrame(): void;
+  /** Recomputes whatever else a `gridColumns` change feeds besides `ColumnChrome`'s own
+   *  `resolvedColumns` — `GanttShell#bindColumns()`'s `fieldCompares`/`fieldContext`. */
+  rebindFields(): void;
+  /** Runs the one `beforeGridColumnsChange` → apply → `gridColumnsChange` sequence
+   *  `GanttShell#proposeChange` already owns for every other cancelable Gantt-state change. */
+  proposeColumnsChange(from: readonly GridColumn[], to: readonly GridColumn[], apply: () => void): boolean;
+}
+
+/** One instance per Gantt (I2), owned by `GanttShell` alongside its other view state — never shared,
+ *  never a module-level singleton. */
+export class ColumnChrome {
+  readonly #container: HTMLElement;
+  readonly #ports: ColumnChromePorts;
+  #gridColumnInput: readonly GridColumnInput[];
+  #resolvedColumns: readonly ResolvedColumn[] = [];
+  #focusedHeaderColumnKey: FieldKey | undefined;
+
+  constructor(container: HTMLElement, ports: ColumnChromePorts, initialInput: readonly GridColumnInput[]) {
+    this.#container = container;
+    this.#ports = ports;
+    this.#gridColumnInput = initialInput;
+  }
+
+  get gridColumnInput(): readonly GridColumnInput[] {
+    return this.#gridColumnInput;
+  }
+
+  get resolvedColumns(): readonly ResolvedColumn[] {
+    return this.#resolvedColumns;
+  }
+
+  get focusedHeaderColumnKey(): FieldKey | undefined {
+    return this.#focusedHeaderColumnKey;
+  }
+
+  setFocusedColumn(columnKey: FieldKey | undefined): void {
+    this.#focusedHeaderColumnKey = columnKey;
+  }
+
+  /** `GanttShell#bindColumns()` resolves `gridColumnInput` against the dataset itself — one
+   *  `resolveGanttFields` call already covers its own `fieldCompares`/`fieldContext` too, so this
+   *  module does not repeat that resolution; it just adopts the result. */
+  setResolvedColumns(columns: readonly ResolvedColumn[]): void {
+    this.#resolvedColumns = columns;
+  }
+
+  resolvedColumn(columnKey: FieldKey): ResolvedColumn | undefined {
+    return this.#resolvedColumns.find((column) => column.key === columnKey);
+  }
+
+  isResizable(columnKey: FieldKey): boolean {
+    return this.resolvedColumn(columnKey)?.resizable ?? true;
+  }
+
+  isMovable(columnKey: FieldKey): boolean {
+    return this.resolvedColumn(columnKey)?.movable ?? true;
+  }
+
+  /** S5.7, D-S5-18: the same floor pattern `GanttShell#aboveMinGridWidth` applies to the splitter
+   *  (#127), read live off the container so a stylesheet change takes effect on the very next drag. */
+  minWidthPx(): number {
+    return readPixelProperty(this.#container, MIN_COLUMN_WIDTH_PROPERTY, MIN_COLUMN_WIDTH_POLICY);
+  }
+
+  /** A resolved column's own `width` when it has one (a column already resized, or authored fixed);
+   *  otherwise the flex column's actual on-screen width, so the first keyboard resize starts from what
+   *  the consumer currently sees rather than jumping to an arbitrary number. `getComputedStyle`, not
+   *  `getBoundingClientRect` (`no-flow-layout-rows`, I9 — scoped to `src/view/**`, this file included):
+   *  the header cell's own `box-sizing: border-box` width, not a row-height measurement.
+   *  `DEFAULT_COLUMN_WIDTH_FALLBACK_PX` only covers a header cell not yet mounted (a test with no
+   *  render pass). */
+  currentWidthPx(columnKey: FieldKey): number {
+    const column = this.resolvedColumn(columnKey);
+    if (column?.width !== undefined) return column.width;
+    const escaped = cssEscapeAttr(String(columnKey));
+    const cell = this.#container.querySelector<HTMLElement>(`.fg-col-header[data-field="${escaped}"]`);
+    if (cell === null) return DEFAULT_COLUMN_WIDTH_FALLBACK_PX;
+    const px = parseFloat(getComputedStyle(cell).width);
+    return Number.isFinite(px) ? px : DEFAULT_COLUMN_WIDTH_FALLBACK_PX;
+  }
+
+  /** Live paint only (S5.7, D-S5-18) — mirrors `previewGridWidth`'s posture (`SplitterContext`): no
+   *  event, no commit, painted straight through `InteractionState` the same way a bar drag preview is. */
+  previewWidth(columnKey: FieldKey, widthPx: number): void {
+    this.#ports.paintColumnResizePreview({ columnKey: String(columnKey), widthPx });
+  }
+
+  /** Escape / a vetoed commit (D-S5-18): clears the live resize paint and queues a real frame, whose
+   *  `render()` repaints the column from its actual resolved geometry — flex or fixed, whichever it
+   *  was before the drag — the same restoration a landed commit already gets for free by queuing a
+   *  frame of its own. */
+  cancelResize(): void {
+    this.#ports.paintColumnResizePreview(undefined);
+    this.#ports.requestFrame();
+  }
+
+  previewDrop(beforeColumnKey: FieldKey | null): void {
+    this.#ports.paintColumnDropIndicator(beforeColumnKey === null ? null : String(beforeColumnKey));
+  }
+
+  /** Escape / a vetoed commit (D-S5-18): clears the live drop indicator entirely. A reorder has no
+   *  continuously-drawn geometry to restore the way a resize's width has — `paintColumnDropIndicator`
+   *  only ever adds one attribute, `undefined` removes it — so no `requestFrame()` is needed here. */
+  cancelDrop(): void {
+    this.#ports.paintColumnDropIndicator(undefined);
+  }
+
+  #asColumns(): GridColumn[] {
+    return this.#gridColumnInput.map((item) => (typeof item === 'string' ? { field: item } : { ...item }));
+  }
+
+  #withWidth(columnKey: FieldKey, widthPx: number): readonly GridColumnInput[] {
+    return this.#asColumns().map((column) =>
+      column.field === columnKey ? { ...column, width: widthPx } : column,
+    );
+  }
+
+  #reordered(columnKey: FieldKey, beforeColumnKey: FieldKey | null): readonly GridColumnInput[] {
+    const columns = this.#asColumns();
+    const from = columns.findIndex((column) => column.field === columnKey);
+    if (from === -1) return this.#gridColumnInput;
+    const [moved] = columns.splice(from, 1);
+    const to =
+      beforeColumnKey === null
+        ? columns.length
+        : columns.findIndex((column) => column.field === beforeColumnKey);
+    columns.splice(to === -1 ? columns.length : to, 0, moved!);
+    return columns;
+  }
+
+  /** The one commit sequence D-S5-18 asks for: a resize drag, a reorder drop, and a plain
+   *  `gantt.gridColumns = […]` assignment all resolve `nextInput` into the columns they would show and
+   *  route through here. `from`/`to` are `GridColumn`s (`toGridColumn`), not the layout-only
+   *  `ResolvedColumn` — a consumer keeps `to` in memory and passes it straight back as `gridColumns`. */
+  commit(nextInput: readonly GridColumnInput[]): boolean {
+    const nextResolved = resolveGanttFields(
+      this.#ports.dataset(),
+      nextInput,
+      this.#ports.columnBind(),
+    ).columns;
+    const from = this.#resolvedColumns.map(toGridColumn);
+    const to = nextResolved.map(toGridColumn);
+    return this.#ports.proposeColumnsChange(from, to, () => {
+      this.#gridColumnInput = nextInput;
+      // A landed commit clears any live paint the drag that proposed it left behind — `render()`
+      // (queued by `requestFrame()` below) repaints the real geometry anyway, but that runs on the
+      // next frame, and a stale preview left in `InteractionState` would otherwise reapply itself
+      // verbatim the next time something unrelated repaints before then.
+      this.#ports.rebindFields();
+      this.#ports.paintColumnResizePreview(undefined);
+      this.#ports.paintColumnDropIndicator(undefined);
+      this.#ports.requestFrame();
+    });
+  }
+
+  /** Runs the commit sequence and returns whether it landed — the caller (a pointer drag, or a
+   *  keyboard chord) restores its own preview when it did not (D-S5-18: "a veto restores the state
+   *  the drag started from"). */
+  commitWidth(columnKey: FieldKey, widthPx: number): boolean {
+    return this.commit(this.#withWidth(columnKey, widthPx));
+  }
+
+  commitReorder(columnKey: FieldKey, beforeColumnKey: FieldKey | null): boolean {
+    return this.commit(this.#reordered(columnKey, beforeColumnKey));
+  }
+
+  /** `Shift+ArrowLeft`/`Shift+ArrowRight` (D-S5-18, D-S5-26) — the same `commitWidth` a resize
+   *  drag's pointerup runs. */
+  resizeStep(columnKey: FieldKey, direction: 1 | -1): void {
+    const widthPx = Math.max(
+      this.minWidthPx(),
+      this.currentWidthPx(columnKey) + direction * COLUMN_RESIZE_STEP_PX,
+    );
+    this.commitWidth(columnKey, widthPx);
+  }
+
+  /** `Alt+ArrowLeft`/`Alt+ArrowRight` (D-S5-18, D-S5-26) — the same `commitReorder` a reorder
+   *  drop runs. Already at that edge is a silent no-op, the same posture `zoomIn`/`zoomOut`'s own
+   *  `when` guard takes for the opposite edge (there, gated in `core-commands.ts`; here, because the
+   *  index math has nowhere left to point). */
+  moveStep(columnKey: FieldKey, direction: 1 | -1): void {
+    const keys = this.#resolvedColumns.map((column) => column.key);
+    const i = keys.indexOf(columnKey);
+    const j = i + direction;
+    if (i === -1 || j < 0 || j >= keys.length) return;
+    const beforeKey = direction === -1 ? keys[j]! : (keys[j + 1] ?? null);
+    this.commitReorder(columnKey, beforeKey);
+  }
+}

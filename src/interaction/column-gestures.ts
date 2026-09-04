@@ -20,22 +20,35 @@ function columnKeyOf(cell: HTMLElement): FieldKey | undefined {
   return cell.dataset['field'];
 }
 
-/** Header cells in their current DOM order — reading it fresh at every move keeps the drop
- *  computation correct across a reorder that already re-parented cells mid-drag (render/dom moves the
- *  grabbed header cell to follow the pointer). */
-function headerCells(headerPane: HTMLElement): readonly HTMLElement[] {
-  return Array.from(headerPane.querySelectorAll<HTMLElement>(HEADER_CELL_SELECTOR));
+interface DropTarget {
+  key: FieldKey;
+  midX: number;
 }
 
-/** Which column key `clientX` would drop `draggedKey` before — `null` for "at the end". Compares
- *  against each other header cell's own midpoint, so the indicator flips exactly halfway across a
- *  neighbour rather than at its far edge. */
-function dropTargetAt(cells: readonly HTMLElement[], draggedKey: FieldKey, clientX: number): FieldKey | null {
-  for (const cell of cells) {
+/** Every *other* header cell's key and horizontal midpoint, read once when a reorder arms (I5: a
+ *  prebuilt index, not a per-move DOM query) — column order and width do not change over the course
+ *  of a reorder drag, only the drop indicator does, so one `querySelectorAll` + one
+ *  `getBoundingClientRect` per cell at arm time is enough for the whole gesture, not one pair per
+ *  `pointermove`. Excludes `draggedKey` itself: a column cannot drop before/after its own cell.
+ *  Revisit if a future drag ever re-parents the grabbed cell mid-gesture (#140) — that would move
+ *  every other cell's rect too, invalidating this snapshot partway through. */
+function computeDropTargets(headerPane: HTMLElement, draggedKey: FieldKey): readonly DropTarget[] {
+  const targets: DropTarget[] = [];
+  for (const cell of Array.from(headerPane.querySelectorAll<HTMLElement>(HEADER_CELL_SELECTOR))) {
     const key = columnKeyOf(cell);
     if (key === undefined || key === draggedKey) continue;
     const rect = cell.getBoundingClientRect();
-    if (clientX < rect.left + rect.width / 2) return key;
+    targets.push({ key, midX: rect.left + rect.width / 2 });
+  }
+  return targets;
+}
+
+/** Which column key `clientX` would drop before — `null` for "at the end". Compares against each
+ *  target's own midpoint (`computeDropTargets`), so the indicator flips exactly halfway across a
+ *  neighbour rather than at its far edge. */
+function dropTargetAt(targets: readonly DropTarget[], clientX: number): FieldKey | null {
+  for (const target of targets) {
+    if (clientX < target.midX) return target.key;
   }
   return null;
 }
@@ -51,6 +64,7 @@ export function attachColumnGestures(
   let grabbedKind: 'resize' | 'reorder' | undefined;
   let grabbedKey: FieldKey | undefined;
   let grabbedStartWidthPx = 0;
+  let grabbedDropTargets: readonly DropTarget[] = [];
 
   const drag = createPointerGesture(headerPane, {
     start(): boolean {
@@ -62,27 +76,25 @@ export function attachColumnGestures(
         const widthPx = Math.max(ctx.minColumnWidthPx(), grabbedStartWidthPx + dxPx);
         ctx.previewColumnWidth(grabbedKey, widthPx);
       } else if (grabbedKind === 'reorder') {
-        ctx.previewColumnDrop(dropTargetAt(headerCells(headerPane), grabbedKey, e.clientX));
+        ctx.previewColumnDrop(dropTargetAt(grabbedDropTargets, e.clientX));
       }
     },
     commit(e, dxPx): void {
       if (grabbedKey === undefined) return;
       if (grabbedKind === 'resize') {
         const widthPx = Math.max(ctx.minColumnWidthPx(), grabbedStartWidthPx + dxPx);
-        if (!ctx.commitColumnWidth(grabbedKey, widthPx))
-          ctx.previewColumnWidth(grabbedKey, grabbedStartWidthPx);
+        if (!ctx.commitColumnWidth(grabbedKey, widthPx)) ctx.cancelColumnResize();
       } else if (grabbedKind === 'reorder') {
-        const before = dropTargetAt(headerCells(headerPane), grabbedKey, e.clientX);
-        ctx.previewColumnDrop(null);
-        ctx.commitColumnReorder(grabbedKey, before);
+        const before = dropTargetAt(grabbedDropTargets, e.clientX);
+        if (!ctx.commitColumnReorder(grabbedKey, before)) ctx.cancelColumnReorder();
       }
       grabbedKind = undefined;
       grabbedKey = undefined;
     },
     cancel(): void {
       if (grabbedKey !== undefined) {
-        if (grabbedKind === 'resize') ctx.previewColumnWidth(grabbedKey, grabbedStartWidthPx);
-        else if (grabbedKind === 'reorder') ctx.previewColumnDrop(null);
+        if (grabbedKind === 'resize') ctx.cancelColumnResize();
+        else if (grabbedKind === 'reorder') ctx.cancelColumnReorder();
       }
       grabbedKind = undefined;
       grabbedKey = undefined;
@@ -90,6 +102,13 @@ export function attachColumnGestures(
   });
 
   function onPointerDown(e: PointerEvent): void {
+    if (grabbedKind !== undefined) {
+      // A second pointer went down while a column drag is already tracked (e.g. two-finger touch on
+      // the header) — `drag`'s own `down()` already refuses a second pointer ("one gesture at a
+      // time"), so the first pointer's grabbed state must not be overwritten or cleared either.
+      drag.down(e);
+      return;
+    }
     const target = e.target instanceof Element ? e.target : null;
     const cell = headerCellFor(target);
     const key = cell !== undefined ? columnKeyOf(cell) : undefined;
@@ -104,6 +123,7 @@ export function attachColumnGestures(
     } else if (!onGrip && ctx.isMovable(key)) {
       grabbedKind = 'reorder';
       grabbedKey = key;
+      grabbedDropTargets = computeDropTargets(headerPane, key);
     } else {
       grabbedKind = undefined;
       grabbedKey = undefined;
@@ -126,7 +146,11 @@ export function attachColumnGestures(
   }
 
   function onKeyDown(e: KeyboardEvent): void {
-    if (e.key === 'Escape') drag.escape();
+    if (e.key !== 'Escape') return;
+    // A column drag was cancelled — swallow the key so it does not also reach
+    // `entry-gestures.ts`'s own Escape handler (same container, sibling `keydown` listener) and clear
+    // the entry selection as a side effect of dismissing an unrelated gesture.
+    if (drag.escape()) e.stopImmediatePropagation();
   }
 
   headerPane.addEventListener('pointerdown', onPointerDown);

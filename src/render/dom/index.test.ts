@@ -305,6 +305,88 @@ describe('render/dom backend', () => {
     backend.destroy();
   });
 
+  it('clearing a column-resize preview restores the header cell and every body cell to their committed geometry, not left mid-drag (D-S5-18)', () => {
+    const backend = createDomBackend();
+    const { grid, timeline } = mountSurfaces();
+    const gridHeader = document.createElement('div');
+    document.body.append(gridHeader);
+    backend.mount({ grid, timeline, gridHeader });
+
+    const base = computeFrame({
+      entries: sampleEntries.slice(0, 1),
+      scale,
+      preset,
+      visible: { x: 0, y: 0, width: 0, height: 0 },
+      rowHeight: 32,
+      revision: 0,
+      itemProducerRegistry,
+      columns: [
+        { key: 'name', header: 'Name', align: 'start', format: (e) => e.name },
+        { key: 'duration', header: 'Duration', align: 'end', flex: 2, format: () => '2 d' },
+      ],
+    });
+    backend.sync(base);
+
+    const headerCell = gridHeader.querySelector<HTMLElement>('[data-field="duration"]')!;
+    const bodyCell = grid.querySelector<HTMLElement>('[data-field="duration"]')!;
+    // Before the drag: a flex column, no inline width, no `data-fixed`.
+    expect(headerCell.style.width).toBe('');
+    expect(headerCell.hasAttribute('data-fixed')).toBe(false);
+
+    backend.applyState({ columnResizePreview: { columnKey: 'duration', widthPx: 300 } });
+    expect(headerCell.style.width).toBe('300px');
+    expect(headerCell.hasAttribute('data-fixed')).toBe(true);
+    expect(bodyCell.style.width).toBe('300px');
+    expect(bodyCell.hasAttribute('data-fixed')).toBe(true);
+
+    // A veto/Escape: the preview clears (`columnResizePreview: undefined`) but the underlying frame —
+    // the column's real, committed geometry — never changed. Without a restore, the keyed reconciler's
+    // own diff (`sync-keyed.ts`) sees no geometry change and skips patching, leaving the preview's
+    // inline style/attribute stuck even after a queued frame re-syncs the identical frame.
+    backend.applyState({});
+    backend.sync(base);
+
+    expect(headerCell.style.width).toBe('');
+    expect(headerCell.hasAttribute('data-fixed')).toBe(false);
+    expect(bodyCell.style.width).toBe('');
+    expect(bodyCell.hasAttribute('data-fixed')).toBe(false);
+    backend.destroy();
+  });
+
+  it('clearing the column-drop indicator removes it from whichever header cell it was painted on, not just the "before" target (D-S5-18)', () => {
+    const backend = createDomBackend();
+    const { grid, timeline } = mountSurfaces();
+    const gridHeader = document.createElement('div');
+    document.body.append(gridHeader);
+    backend.mount({ grid, timeline, gridHeader });
+
+    const base = computeFrame({
+      entries: sampleEntries.slice(0, 1),
+      scale,
+      preset,
+      visible: { x: 0, y: 0, width: 0, height: 0 },
+      rowHeight: 32,
+      revision: 0,
+      itemProducerRegistry,
+      columns: [
+        { key: 'name', header: 'Name', align: 'start', format: (e) => e.name },
+        { key: 'duration', header: 'Duration', align: 'end', format: () => '2 d' },
+      ],
+    });
+    backend.sync(base);
+
+    // `null` means "at the end": paints `data-drop="after"` on the last header cell.
+    backend.applyState({ columnDropIndicator: null });
+    const lastHeader = gridHeader.querySelector<HTMLElement>('[data-field="duration"]')!;
+    expect(lastHeader.getAttribute('data-drop')).toBe('after');
+
+    // `undefined` (a veto or Escape) must clear it — not repaint "after" again, and not leave it
+    // stuck (`ColumnGestureContext.cancelColumnReorder`, distinct from `previewColumnDrop(null)`).
+    backend.applyState({});
+    expect(lastHeader.hasAttribute('data-drop')).toBe(false);
+    backend.destroy();
+  });
+
   it("stamps .fg-row's aria-posinset/aria-setsize from the frame's absolute row index and total row count, not the windowed count (D-S1.10-5)", () => {
     const backend = createDomBackend();
     const { grid, timeline } = mountSurfaces();

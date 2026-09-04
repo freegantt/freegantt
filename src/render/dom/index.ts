@@ -26,6 +26,7 @@ import { attachDecorations } from './decorations.js';
 import type { DecorationsAttachment } from './decorations.js';
 import { KeyedLayer, NestedKeyedLayers } from './sync-keyed.js';
 import { applyElementDescription } from './element-description.js';
+import { cssEscapeAttr } from './css-escape.js';
 import { isDevMode } from '../../data/dev-mode.js';
 
 /** A cell's renderer, already bound to its `ResolvedColumn` (render/dom never receives that type —
@@ -284,14 +285,26 @@ export function createDomBackend(options?: DomBackendOptions): RenderBackend<HTM
     cursorLineLabel.textContent = label ?? '';
   }
 
-  function cssEscapeAttr(value: string): string {
-    return typeof CSS !== 'undefined' && typeof CSS.escape === 'function' ? CSS.escape(value) : value;
-  }
-
   /** S5.7, D-S5-18: a resize drag's live width, painted on the header cell and every currently
    *  mounted body cell for that column — the same `data-field` attribute `cellSpec`/`headerCellSpec`
    *  already stamp, so no second index is needed to find them. Diffs against what was last painted
    *  (I5): a no-op when neither the column nor the width actually changed. */
+  /** Puts the header cell and every mounted body cell for `columnKey` back to the geometry
+   *  `syncKeyed` last patched onto them — the real committed width/flex, not whatever a live resize
+   *  preview overwrote it with. Used only when a resize preview clears (D-S5-18: "a refused drag must
+   *  leave nothing behind") — the queued `requestFrame()` will still repaint on the next frame, but
+   *  that must not be the only thing standing between a veto and a stuck `width: …px` in the meantime. */
+  function restoreColumnBox(columnKey: string): void {
+    const headerGeom = headerCellLayer.geom(columnKey);
+    const header = headerCellLayer.node(columnKey);
+    if (header && headerGeom) paintColumnBox(header, headerGeom);
+    rowCellLayers.forEach((layer) => {
+      const geom = layer.geom(columnKey);
+      const node = layer.node(columnKey);
+      if (node && geom) paintColumnBox(node, geom);
+    });
+  }
+
   function paintColumnResizePreview(preview: { columnKey: string; widthPx: number } | undefined): void {
     if (
       preview !== undefined &&
@@ -301,8 +314,12 @@ export function createDomBackend(options?: DomBackendOptions): RenderBackend<HTM
     ) {
       return;
     }
+    const clearedColumnKey = paintedColumnResize?.columnKey;
     paintedColumnResize = preview;
-    if (preview === undefined) return;
+    if (preview === undefined) {
+      if (clearedColumnKey !== undefined) restoreColumnBox(clearedColumnKey);
+      return;
+    }
     const px = `${preview.widthPx}px`;
     const header = headerCellLayer.node(preview.columnKey);
     if (header) {

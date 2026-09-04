@@ -82,6 +82,13 @@ export class KeyedLayer<TItem, TKey, TGeom extends Record<string, unknown>> {
     return this.#nodes.get(key);
   }
 
+  /** The geometry last patched onto `key`'s node — what a live paint override (a resize preview's
+   * inline width, say) must restore to once cleared, since only `syncKeyed` itself knows the real
+   * committed geometry a plain re-render would recompute. */
+  geom(key: TKey): TGeom | undefined {
+    return this.#geoms.get(key);
+  }
+
   clear(): void {
     this.#nodes.clear();
     this.#geoms.clear();
@@ -109,6 +116,12 @@ export class NestedKeyedLayers<TParentKey, TItem, TKey, TGeom extends Record<str
     for (const key of this.#layers.keys()) {
       if (!liveParentKeys.has(key)) this.#layers.delete(key);
     }
+  }
+
+  /** Visits every child layer currently live — a row-cell preview restore (D-S5-18) needs to reach
+   * one column's cell node across every mounted row, and a row's own key is not what it's keyed by. */
+  forEach(visit: (layer: KeyedLayer<TItem, TKey, TGeom>) => void): void {
+    for (const layer of this.#layers.values()) visit(layer);
   }
 
   clear(): void {

@@ -171,52 +171,49 @@ export function registerCoreCommands(
     const target = asCtx(ctx).target;
     return target?.kind === 'header' ? target.columnKey : undefined;
   };
-  register({
-    id: 'freegantt.resizeColumnWider',
-    label: 'Widen column',
-    when: (ctx) => {
-      const key = columnKey(ctx);
-      return key !== undefined && ports.isColumnResizable(key);
-    },
-    run: (ctx) => {
-      const key = columnKey(ctx);
-      if (key !== undefined) ports.resizeColumnStep(key, 1);
-    },
-  });
-  register({
-    id: 'freegantt.resizeColumnNarrower',
-    label: 'Narrow column',
-    when: (ctx) => {
-      const key = columnKey(ctx);
-      return key !== undefined && ports.isColumnResizable(key);
-    },
-    run: (ctx) => {
-      const key = columnKey(ctx);
-      if (key !== undefined) ports.resizeColumnStep(key, -1);
-    },
-  });
-  register({
-    id: 'freegantt.moveColumnRight',
-    label: 'Move column right',
-    when: (ctx) => {
-      const key = columnKey(ctx);
-      return key !== undefined && ports.isColumnMovable(key);
-    },
-    run: (ctx) => {
-      const key = columnKey(ctx);
-      if (key !== undefined) ports.moveColumnStep(key, 1);
-    },
-  });
-  register({
-    id: 'freegantt.moveColumnLeft',
-    label: 'Move column left',
-    when: (ctx) => {
-      const key = columnKey(ctx);
-      return key !== undefined && ports.isColumnMovable(key);
-    },
-    run: (ctx) => {
-      const key = columnKey(ctx);
-      if (key !== undefined) ports.moveColumnStep(key, -1);
-    },
-  });
+  /** One shape for all four column chords: differ only in id/label, which capability gates them
+   *  (`resizable` vs `movable`), and which step they run. */
+  const registerColumnStepCommand = (
+    id: string,
+    label: string,
+    capable: (key: FieldKey) => boolean,
+    step: (key: FieldKey) => void,
+  ): void => {
+    register({
+      id,
+      label,
+      when: (ctx) => {
+        const key = columnKey(ctx);
+        return key !== undefined && capable(key);
+      },
+      run: (ctx) => {
+        const key = columnKey(ctx);
+        if (key !== undefined) step(key);
+      },
+    });
+  };
+  registerColumnStepCommand(
+    'freegantt.resizeColumnWider',
+    'Widen column',
+    (key) => ports.isColumnResizable(key),
+    (key) => ports.resizeColumnStep(key, 1),
+  );
+  registerColumnStepCommand(
+    'freegantt.resizeColumnNarrower',
+    'Narrow column',
+    (key) => ports.isColumnResizable(key),
+    (key) => ports.resizeColumnStep(key, -1),
+  );
+  registerColumnStepCommand(
+    'freegantt.moveColumnRight',
+    'Move column right',
+    (key) => ports.isColumnMovable(key),
+    (key) => ports.moveColumnStep(key, 1),
+  );
+  registerColumnStepCommand(
+    'freegantt.moveColumnLeft',
+    'Move column left',
+    (key) => ports.isColumnMovable(key),
+    (key) => ports.moveColumnStep(key, -1),
+  );
 }
