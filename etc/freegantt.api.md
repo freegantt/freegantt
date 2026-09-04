@@ -552,8 +552,7 @@ export interface EntryStoreView<TMeta = unknown> {
 
 // @public (undocumented)
 export interface Field<TValue = unknown> {
-    // (undocumented)
-    column?: Omit<GridColumn, 'field'>;
+    column?: Omit<GridColumn, 'field' | 'cellRenderer'>;
     // (undocumented)
     compare?(a: TValue | undefined, b: TValue | undefined): number;
     // (undocumented)
@@ -924,6 +923,7 @@ export interface GridColumn {
     header?: string;
     movable?: boolean;
     resizable?: boolean;
+    tooltip?: boolean;
     // (undocumented)
     width?: number;
 }
@@ -1107,6 +1107,7 @@ export function now(): Instant;
 // @public (undocumented)
 export interface Overlay {
     readonly bounds: DOMRect;
+    contains(node: Node): boolean;
     elementForEntry(id: EntryId): HTMLElement | undefined;
     onResize(callback: () => void): () => void;
     readonly paneBounds: {
@@ -1177,6 +1178,10 @@ export interface PluginContextOf<TGantt = unknown> {
         overlay: Overlay;
         registerRenderer<P extends RendererPoint>(point: P, renderer: RendererFor<P>): void;
         resolveTooltip(entryId: EntryId): ElementDescription | undefined;
+        resolveTooltipColumns(entry: Entry): readonly {
+            header: string;
+            value: string;
+        }[];
         registerDecoration(layer: DecorationLayer, provider: DecorationProvider): void;
     };
 }
@@ -1288,6 +1293,7 @@ export interface ResolvedColumn extends FrameColumn {
     movable?: boolean;
     // (undocumented)
     resizable?: boolean;
+    tooltip?: boolean;
 }
 
 // @public
