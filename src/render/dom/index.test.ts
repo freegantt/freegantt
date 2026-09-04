@@ -353,7 +353,7 @@ describe('render/dom backend', () => {
     backend.destroy();
   });
 
-  it('clearing the column-drop indicator removes it from whichever header cell it was painted on, not just the "before" target (D-S5-18)', () => {
+  it('a reorder preview moves the grabbed header cell and paints the drop edge; clearing parks both (D-S5-18, #140)', () => {
     const backend = createDomBackend();
     const { grid, timeline } = mountSurfaces();
     const gridHeader = document.createElement('div');
@@ -375,15 +375,31 @@ describe('render/dom backend', () => {
     });
     backend.sync(base);
 
-    // `null` means "at the end": paints `data-drop="after"` on the last header cell.
-    backend.applyState({ columnDropIndicator: null });
+    // `null` means "at the end": paints `data-drop="after"` on the last header cell, and the grabbed
+    // cell rides its own translateX (#140).
+    const grabbed = gridHeader.querySelector<HTMLElement>('[data-field="name"]')!;
+    backend.applyState({
+      columnReorderPreview: { columnKey: 'name', offsetPx: 42, beforeColumnKey: null },
+    });
     const lastHeader = gridHeader.querySelector<HTMLElement>('[data-field="duration"]')!;
     expect(lastHeader.getAttribute('data-drop')).toBe('after');
+    expect(grabbed.style.transform).toBe('translateX(42px)');
+    expect(grabbed.hasAttribute('data-dragging')).toBe(true);
 
-    // `undefined` (a veto or Escape) must clear it — not repaint "after" again, and not leave it
-    // stuck (`ColumnGestureContext.cancelColumnReorder`, distinct from `previewColumnDrop(null)`).
+    // The indicator moves off the old cell when the drop target changes — one cell wears it at a time.
+    backend.applyState({
+      columnReorderPreview: { columnKey: 'name', offsetPx: 10, beforeColumnKey: 'duration' },
+    });
+    expect(lastHeader.getAttribute('data-drop')).toBe('before');
+    expect(grabbed.style.transform).toBe('translateX(10px)');
+
+    // `undefined` (a veto or Escape) must clear both — not repaint "after" again, and not leave the
+    // grabbed cell stuck off its slot (`ColumnGestureContext.cancelColumnReorder`, which is distinct
+    // from a preview whose `beforeColumnKey` is `null`).
     backend.applyState({});
     expect(lastHeader.hasAttribute('data-drop')).toBe(false);
+    expect(grabbed.style.transform).toBe('');
+    expect(grabbed.hasAttribute('data-dragging')).toBe(false);
     backend.destroy();
   });
 

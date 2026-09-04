@@ -205,12 +205,16 @@ export function createDomBackend(options?: DomBackendOptions): RenderBackend<HTM
   let gridLayer: HTMLElement | undefined;
   let gridHeaderLayer: HTMLElement | undefined;
   /** S5.7, D-S5-18: written by `syncGridHeader`, read by `applyState`'s drop-indicator paint for the
-   *  `columnDropIndicator: null` ("at the end") case. */
+   *  `beforeColumnKey: null` ("at the end") case. */
   let lastHeaderColumnKeys: readonly string[] = [];
   /** What `applyState`'s resize-preview paint last touched (S5.7, D-S5-18) — diff-and-touch-only,
    *  the same posture every other `paintedX` field in this file already takes (I5). */
   let paintedColumnResize: { columnKey: string; widthPx: number } | undefined;
+  /** The two header cells a reorder preview last touched: the one wearing `data-drop`, and the
+   *  grabbed one wearing the follow transform. Kept apart because they clear on different keys — the
+   *  drop target changes on nearly every `pointermove`, the grabbed cell never does. */
   let paintedColumnDropKey: string | undefined;
+  let paintedColumnDragKey: string | undefined;
   // The timeline pane's content layer (RenderSurfaces.timeline) — this backend's own header, bar
   // and sizer layers mount inside it, at x=0: no gutter to offset by, the grid pane owns that width.
   let timelineHost: HTMLElement | undefined;
@@ -357,21 +361,67 @@ export function createDomBackend(options?: DomBackendOptions): RenderBackend<HTM
     }
   }
 
-  /** S5.7, D-S5-18: `.fg-column-drop` on the header cell a reorder would land before — or, for `null`
+  /** S5.7, D-S5-18: `data-drop` on the header cell a reorder would land before — or, for `null`
    *  ("at the end"), on the last header cell with `data-drop="after"` instead of `"before"`, so the
    *  stylesheet can paint the indicator on the correct edge. */
-  function paintColumnDropIndicator(beforeColumnKey: string | null | undefined): void {
-    if (paintedColumnDropKey !== undefined) {
-      headerCellLayer.node(paintedColumnDropKey)?.removeAttribute('data-drop');
-      paintedColumnDropKey = undefined;
-    }
-    if (beforeColumnKey === undefined) return;
+  function paintColumnDropIndicator(beforeColumnKey: string | null): void {
     const targetKey = beforeColumnKey ?? lastHeaderColumnKeys[lastHeaderColumnKeys.length - 1];
+    if (targetKey === paintedColumnDropKey && targetKey !== undefined) {
+      // Same cell as last move: only the edge can still differ, and setting the same value again is
+      // free — no attribute churn on the neighbours (I5).
+      headerCellLayer
+        .node(targetKey)
+        ?.setAttribute('data-drop', beforeColumnKey === null ? 'after' : 'before');
+      return;
+    }
+    clearColumnDropIndicator();
     if (targetKey === undefined) return;
     const node = headerCellLayer.node(targetKey);
     if (!node) return;
     node.setAttribute('data-drop', beforeColumnKey === null ? 'after' : 'before');
     paintedColumnDropKey = targetKey;
+  }
+
+  function clearColumnDropIndicator(): void {
+    if (paintedColumnDropKey === undefined) return;
+    headerCellLayer.node(paintedColumnDropKey)?.removeAttribute('data-drop');
+    paintedColumnDropKey = undefined;
+  }
+
+  /** S5.7, D-S5-18: the grabbed header cell follows the pointer. A `translateX` on the cell itself
+   *  plus one `data-dragging` attribute for the lifted look — a hot-path write only (I5): the cell
+   *  keeps its slot in the header's flex flow, so no neighbour reflows and every other cell's
+   *  on-screen position holds still for the whole drag. */
+  function paintColumnDrag(columnKey: string, offsetPx: number): void {
+    if (paintedColumnDragKey !== undefined && paintedColumnDragKey !== columnKey) clearColumnDrag();
+    const node = headerCellLayer.node(columnKey);
+    if (!node) return;
+    node.style.transform = `translateX(${offsetPx}px)`;
+    node.setAttribute('data-dragging', '');
+    paintedColumnDragKey = columnKey;
+  }
+
+  function clearColumnDrag(): void {
+    if (paintedColumnDragKey === undefined) return;
+    const node = headerCellLayer.node(paintedColumnDragKey);
+    if (node) {
+      node.style.removeProperty('transform');
+      node.removeAttribute('data-dragging');
+    }
+    paintedColumnDragKey = undefined;
+  }
+
+  /** S5.7, D-S5-18: one reorder drag's whole live paint — the grabbed cell's follow transform and
+   *  the drop indicator, which always move together. `undefined` (Escape, or a vetoed drop) parks
+   *  both: a refused reorder leaves nothing behind. */
+  function paintColumnReorderPreview(preview: InteractionState['columnReorderPreview']): void {
+    if (preview === undefined) {
+      clearColumnDrag();
+      clearColumnDropIndicator();
+      return;
+    }
+    paintColumnDrag(preview.columnKey, preview.offsetPx);
+    paintColumnDropIndicator(preview.beforeColumnKey);
   }
 
   /** Applies the base committed transform (`syncBars`'s own geometry) to one bar — what a previewed
@@ -889,7 +939,7 @@ export function createDomBackend(options?: DomBackendOptions): RenderBackend<HTM
       paintPreview(state.preview);
       paintCursorLine(state.cursorX, state.cursorLabel);
       paintColumnResizePreview(state.columnResizePreview);
-      paintColumnDropIndicator(state.columnDropIndicator);
+      paintColumnReorderPreview(state.columnReorderPreview);
     },
     hitTest(at: ClientPoint): HitResult | null {
       // "The bars array is the hit index; DOM backends get hit-testing from event delegation"
@@ -949,6 +999,7 @@ export function createDomBackend(options?: DomBackendOptions): RenderBackend<HTM
       lastHeaderColumnKeys = [];
       paintedColumnResize = undefined;
       paintedColumnDropKey = undefined;
+      paintedColumnDragKey = undefined;
       gridLayer = undefined;
       gridHeaderLayer = undefined;
       timelineHost = undefined;

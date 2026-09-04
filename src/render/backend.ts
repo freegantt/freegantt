@@ -29,9 +29,11 @@ export interface InteractionState {
   /** S5.7, D-S5-18: a resize drag's live px width for one column, keyed by its `FrameColumn.key`
    *  string. Undefined outside a resize drag — a hot-path paint only, no frame recompute. */
   columnResizePreview?: { columnKey: string; widthPx: number };
-  /** S5.7, D-S5-18: a reorder drag's live drop position — the column key (as a string) it would land
-   *  before, or `null` for "at the end". Undefined outside a reorder drag. */
-  columnDropIndicator?: string | null;
+  /** S5.7, D-S5-18: a reorder drag's live paint — the grabbed column key (as a string), how far its
+   *  header cell rides from its own slot, and the column key the drop would land before (`null` for
+   *  "at the end"). Undefined outside a reorder drag — a hot-path paint only (one transform, one
+   *  attribute), no frame recompute. */
+  columnReorderPreview?: { columnKey: string; offsetPx: number; beforeColumnKey: string | null };
 }
 
 export interface HitResult {
