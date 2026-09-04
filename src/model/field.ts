@@ -35,6 +35,9 @@ export interface ColumnCellRendererContext {
 }
 export type ColumnCellRenderer = (ctx: ColumnCellRendererContext) => ElementDescription | undefined;
 
+/** Where a cell's text and header sit within the column's width. Default `'start'`. */
+export type ColumnAlign = 'start' | 'center' | 'end';
+
 /** Presentation only. Never carries an aggregate — `data/` never holds a renderer; `toJSON` never
  *  sees one (D-S5-17). */
 export interface GridColumn {
@@ -42,7 +45,7 @@ export interface GridColumn {
   header?: string;
   width?: number;
   flex?: number;
-  align?: 'start' | 'end';
+  align?: ColumnAlign;
   /** S5.7 — per-column, more specific than `GanttOptions.cellRenderer` (D-S5-11). */
   cellRenderer?: ColumnCellRenderer;
   /** S5.8 — this column's cells open the inline editor. Default `false`. Listed here because it

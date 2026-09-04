@@ -110,6 +110,9 @@ export interface CollapseChange {
     readonly to: readonly RowId[];
 }
 
+// @public
+export type ColumnAlign = 'start' | 'center' | 'end';
+
 // @public (undocumented)
 export type ColumnCellRenderer = (ctx: ColumnCellRendererContext) => ElementDescription | undefined;
 
@@ -667,7 +670,7 @@ export interface FrameBar {
 // @public
 export interface FrameColumn {
     // (undocumented)
-    align: 'start' | 'end';
+    align: ColumnAlign;
     // (undocumented)
     flex?: number;
     // (undocumented)
@@ -910,7 +913,7 @@ export type GanttScaleOptions = {
 // @public
 export interface GridColumn {
     // (undocumented)
-    align?: 'start' | 'end';
+    align?: ColumnAlign;
     cellRenderer?: ColumnCellRenderer;
     editable?: boolean;
     // (undocumented)

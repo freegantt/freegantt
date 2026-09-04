@@ -104,9 +104,12 @@ ${DARK_COLOR_TOKENS}
 .fg-grid-spacer { flex-shrink: 0; display: flex; flex-direction: column; position: relative; width: var(--fg-grid-content-width, 100%); }
 .fg-grid-header { position: absolute; inset: 0; display: flex; align-items: stretch; z-index: 1; color: var(--fg-row-label-color); }
 /* position: relative so .fg-column-resizer (below) anchors to this cell's own box, not the header row's. */
-.fg-col-header { display: flex; align-items: center; min-width: 0; overflow: hidden; box-sizing: border-box; flex: var(--fg-col-flex, 1) 1 0; position: relative; cursor: pointer; }
+/* --fg-cell-padding-inline/-block: the one pair of tokens both a header cell and a row cell read, so
+   grid text never sits flush against a column's own edge or its neighbour's. */
+.fg-col-header { display: flex; align-items: center; min-width: 0; overflow: hidden; box-sizing: border-box; flex: var(--fg-col-flex, 1) 1 0; position: relative; cursor: pointer; padding-inline: var(--fg-cell-padding-inline, 8px); padding-block: var(--fg-cell-padding-block, 4px); }
 .fg-col-header[data-fixed] { flex: 0 0 auto; }
 .fg-col-header[data-align='end'] { justify-content: flex-end; text-align: end; }
+.fg-col-header[data-align='center'] { justify-content: center; text-align: center; }
 /* S5.7, D-S5-18: a fixed/pinned column's cursor stays a plain pointer — no resize/reorder affordance
    to promise. */
 .fg-col-header[data-movable-off] { cursor: default; }
@@ -117,6 +120,10 @@ ${DARK_COLOR_TOKENS}
    posture --fg-splitter-width/--fg-grid-pane-width already take) floors how far a drag can shrink the
    column it grips. */
 .fg-column-resizer { position: absolute; top: 0; right: 0; height: 100%; width: 6px; cursor: col-resize; touch-action: none; }
+/* A resting divider line marks the grip before the pointer ever reaches it; hover/focus swaps in the
+   splitter's own colour and widens the line so the drag target reads as clearly as .fg-splitter does. */
+.fg-column-resizer::after { content: ''; position: absolute; inset-block: 0; right: 2px; width: 1px; background: var(--fg-header-divider-color); }
+.fg-column-resizer:hover::after { right: 1px; width: 3px; background: var(--fg-splitter-color); }
 .fg-column-resizer::before { content: ''; position: absolute; inset-block: 0; left: 50%; width: var(--fg-column-resizer-hit, 12px); transform: translateX(-50%); }
 .fg-col-header[data-resizable-off] .fg-column-resizer { display: none; }
 /* S5.7, D-S5-18: the reorder drop indicator — an inset border on the edge a drop would land against,
@@ -143,15 +150,17 @@ ${DARK_COLOR_TOKENS}
 .fg-tick { color: var(--fg-header-subtext); position: absolute; top: 0; left: 0; height: var(--fg-band-height, 20px); line-height: var(--fg-band-height, 20px); box-sizing: border-box; padding: 0 calc((var(--fg-tick-box-floor, ${DEFAULT_TICK_BOX_FLOOR_PX}px) - 1px) / 2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-left: 1px solid var(--fg-header-divider-color); }
 .fg-row { background: var(--fg-row-even-bg); position: absolute; top: 0; left: 0; width: 100%; display: flex; align-items: stretch; --fg-row-depth: 0; }
 .fg-row:nth-child(odd) { background: var(--fg-row-odd-bg); }
-.fg-row-label, .fg-row-cell { color: var(--fg-row-label-color); display: flex; align-items: center; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; box-sizing: border-box; flex: var(--fg-col-flex, 1) 1 0; }
+.fg-row-label, .fg-row-cell { color: var(--fg-row-label-color); display: flex; align-items: center; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; box-sizing: border-box; flex: var(--fg-col-flex, 1) 1 0; padding-inline-end: var(--fg-cell-padding-inline, 8px); padding-block: var(--fg-cell-padding-block, 4px); }
 .fg-row[data-matched='false'] .fg-row-label, .fg-row[data-matched='false'] .fg-row-cell { color: var(--fg-row-unmatched-label-color); }
-.fg-row-label { padding-inline-start: calc(var(--fg-row-depth, 0) * var(--fg-indent-width, 12px)); }
+.fg-row-cell { padding-inline-start: var(--fg-cell-padding-inline, 8px); }
+.fg-row-label { padding-inline-start: calc(var(--fg-row-depth, 0) * var(--fg-indent-width, 12px) + var(--fg-cell-padding-inline, 8px)); }
 .fg-row-label-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .fg-row-twisty { flex: 0 0 var(--fg-indent-width, 12px); width: var(--fg-indent-width, 12px); border: 0; background: transparent; padding: 0; cursor: pointer; color: inherit; }
 .fg-row-twisty::before { content: '▸'; }
 .fg-row-twisty[aria-expanded='true']::before { content: '▾'; }
 .fg-row-label[data-fixed], .fg-row-cell[data-fixed] { flex: 0 0 auto; }
 .fg-row-label[data-align='end'], .fg-row-cell[data-align='end'] { justify-content: flex-end; text-align: end; }
+.fg-row-label[data-align='center'], .fg-row-cell[data-align='center'] { justify-content: center; text-align: center; }
 /* S5.6, D-S5-15: registered decoration providers' own layers — one mounted below .fg-bars, one
    above. DOM order alone gives the paint order (no z-index needed against .fg-bars either). */
 .fg-decorations-under, .fg-decorations-over { position: relative; }

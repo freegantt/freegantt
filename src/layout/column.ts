@@ -1,6 +1,6 @@
 // layout/ — plain-data column types. No registry, no Dataset, no FieldSource (D-S4-13).
 
-import type { ColumnCellRenderer, Entry, FieldKey } from '../model/index.js';
+import type { ColumnAlign, ColumnCellRenderer, Entry, FieldKey } from '../model/index.js';
 
 /** Paint description for one Grid column. `format` stays on `ResolvedColumn` and never reaches a
  *  backend. `resizable`/`movable` do reach a backend (S5.7, D-S5-18) — they paint the resizer grip's
@@ -11,7 +11,7 @@ export interface FrameColumn {
   header: string;
   width?: number;
   flex?: number;
-  align: 'start' | 'end';
+  align: ColumnAlign;
   resizable?: boolean;
   movable?: boolean;
 }

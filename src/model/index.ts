@@ -34,6 +34,7 @@ export type {
   GridColumn,
   GridColumnInput,
   ColumnCellRenderer,
+  ColumnAlign,
   ColumnCellRendererContext,
 } from './field.js';
 export {
