@@ -35,6 +35,12 @@ export interface PointerGestureController {
   /** Feed an Escape keydown. Returns `true` when a drag was in progress and is now cancelled — the
    *  caller should skip its own Escape handling (e.g. clearing the selection) for this event. */
   escape(): boolean;
+  /** Feed a `pointercancel` for the same pointer (a touch interrupt, a drag into a scrollbar) — the
+   *  one cancel path `start`/`move`/`commit`/`cancel`'s own doc comment already promises but that,
+   *  before this method, nothing fed. Same shape as `escape()`: releases capture, forgets state, and
+   *  calls `cancel()` only when a drag was actually armed. An unarmed or unrelated pointer is a
+   *  no-op. */
+  pointercancel(e: PointerEvent): void;
   /** Releases capture and forgets in-flight state, without calling `cancel`. */
   detach(): void;
 }
@@ -115,6 +121,14 @@ export function createPointerGesture(
       reset();
       callbacks.cancel();
       return true;
+    },
+
+    pointercancel(e: PointerEvent): void {
+      if (pointerId === undefined || e.pointerId !== pointerId) return;
+      const wasArmed = armed;
+      if (wasArmed) pane.releasePointerCapture(pointerId);
+      reset();
+      if (wasArmed) callbacks.cancel();
     },
 
     detach(): void {

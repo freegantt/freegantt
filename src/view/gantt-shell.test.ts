@@ -705,7 +705,7 @@ describe('GanttShell hot path (S3.2, D-S3-6/D-S3-9, [S3-A3])', () => {
         container,
         dataset: fakeDataset(tallEntries(1000)),
         overscan: { verticalRows: 200 },
-        entryGestures: (_pane, _container, ctx) => {
+        entryGestures: (_pane, _gridPane, _container, ctx) => {
           hover = (item) => ctx.setHovered(item);
           return { detach() {} };
         },
@@ -757,7 +757,7 @@ describe('GanttShell hot path (S3.2, D-S3-6/D-S3-9, [S3-A3])', () => {
       container,
       dataset,
       interactions: { resize: false },
-      entryGestures: (_pane, _container, ctx) => {
+      entryGestures: (_pane, _gridPane, _container, ctx) => {
         hover = (item) => ctx.setHovered(item);
         return { detach() {} };
       },
@@ -804,7 +804,7 @@ describe('GanttShell hot path (S3.2, D-S3-6/D-S3-9, [S3-A3])', () => {
     const shell = new GanttShell({
       container,
       dataset: fakeDataset([segmented]),
-      entryGestures: (_pane, _host, ctx) => {
+      entryGestures: (_pane, _gridPane, _host, ctx) => {
         propose = (next, items) => ctx.selection.propose(next, items);
         return { detach() {} };
       },
@@ -848,7 +848,7 @@ describe('GanttShell tree keyboard (D1)', () => {
       container,
       dataset: fakeDataset([parent, child]),
       rowSource: { source: 'entries', tree: false },
-      entryGestures: (_pane, _host, gestureCtx) => {
+      entryGestures: (_pane, _gridPane, _host, gestureCtx) => {
         ctx = gestureCtx;
         return { detach() {} };
       },

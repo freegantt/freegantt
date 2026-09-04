@@ -149,6 +149,20 @@ describe('resolveColumns — cellRenderer/editable/resizable/movable (S5.7, D-S5
     expect(columns[0]).not.toHaveProperty('cellRenderer');
     expect(columns[0]).not.toHaveProperty('editable');
   });
+
+  it("a Field's own column default never supplies cellRenderer, even set directly on the object (B5, D-S5-17)", () => {
+    const rogueRenderer = () => ({ text: 'x' });
+    const registry = new FieldRegistry({
+      fieldTypes: {
+        // `Field.column`'s type excludes `cellRenderer` (model/field.ts); this cast simulates the
+        // pre-fix bug's shape reaching `columnFrom` anyway, to prove the merge itself now refuses it.
+        money: { column: { width: 90, cellRenderer: rogueRenderer } as { width: number } },
+      },
+      fields: [{ key: 'cost', type: 'money' }],
+    });
+    const columns = resolveColumns(['cost'], registry, { timeZone: zone, locale });
+    expect(columns[0]).not.toHaveProperty('cellRenderer');
+  });
 });
 
 describe('toGridColumn (S5.7, D-S5-18)', () => {

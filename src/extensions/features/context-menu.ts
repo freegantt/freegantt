@@ -6,7 +6,7 @@
 
 import { createPopup } from '../popup.js';
 import type { Anchor, Popup } from '../popup.js';
-import type { GanttPlugin, PluginContext, CommandContext } from '../../api/gantt.js';
+import type { Command, GanttPlugin, PluginContext, CommandContext } from '../../api/gantt.js';
 import { entryIdOfItem } from '../../model/index.js';
 import type { Entry, ItemId } from '../../model/index.js';
 import { buildMenu, resolveMenuEntries } from './menu-view.js';
@@ -43,6 +43,12 @@ export function contextMenu(options: ContextMenuOptions = {}): GanttPlugin {
       });
       let onDocumentClick: ((event: MouseEvent) => void) | undefined;
       let onDocumentKeydown: ((event: KeyboardEvent) => void) | undefined;
+      // B2: the menu lists commands resolved for the right-clicked (or focused-row) target — `run()`
+      // below must invoke that same command against that same context, not against whatever
+      // `ctx.commands`'s own `#buildCommandContext` would rebuild from the current selection
+      // (D-S5-14: the mouse path and the keyboard path are one action). `CommandOf.run` is public
+      // (`api/command.ts`), so this needs no wider access than `available()` already returned.
+      let openCommands: { readonly available: readonly Command[]; readonly ctx: CommandContext } | undefined;
 
       const detachMenuListeners = (): void => {
         if (onDocumentClick !== undefined) {
@@ -57,6 +63,7 @@ export function contextMenu(options: ContextMenuOptions = {}): GanttPlugin {
 
       const closeMenu = (): void => {
         detachMenuListeners();
+        openCommands = undefined;
         popup.close();
       };
 
@@ -76,6 +83,7 @@ export function contextMenu(options: ContextMenuOptions = {}): GanttPlugin {
           ? options.items({ ...(entry !== undefined ? { entry } : {}), defaults })
           : defaults;
         const resolved = resolveMenuEntries(entries, available);
+        openCommands = { available, ctx: commandCtx };
 
         popup.open({ anchor, placement: 'bottom', focus: 'trap', content: buildMenu(resolved) });
 
@@ -88,9 +96,15 @@ export function contextMenu(options: ContextMenuOptions = {}): GanttPlugin {
           const target = event.target;
           const button = target instanceof Element ? target.closest<HTMLElement>('.fg-menu-item') : null;
           if (button === null) return;
-          const command = button.getAttribute('data-command');
+          const commandId = button.getAttribute('data-command');
+          const commands = openCommands;
           closeMenu();
-          if (command !== null) ctx.commands.run(command);
+          // B2: run the command found in *this menu's own* `available` list, against *this menu's
+          // own* `commandCtx` (the right-clicked bar, or the focused row) — not
+          // `ctx.commands.run(commandId)`, which would rebuild context from the current selection and
+          // silently no-op when that selection is not the entry the menu was opened for.
+          const command = commands?.available.find((c) => c.id === commandId);
+          if (command !== undefined && commands !== undefined) command.run(commands.ctx);
         };
         onDocumentKeydown = (event) => {
           if (!popup.isOpen) return;
@@ -116,8 +130,15 @@ export function contextMenu(options: ContextMenuOptions = {}): GanttPlugin {
       };
 
       const onContextMenu = (event: MouseEvent): void => {
+        // B1: this Gantt's menu owns only right-clicks that land inside its own container — a click
+        // on page chrome, a second widget, or a second Gantt must reach the browser's own menu (or
+        // that other Gantt's) untouched. `document`-level is still the right level: the header pane,
+        // grid pane and timeline pane are separate elements, and none of the built-in row/cell/bar DOM
+        // is a boundary a plugin may name (D-S5-5) — `overlay.contains` is the one seam this plugin
+        // has to ask "is this mine?" (I2).
+        if (!(event.target instanceof Node) || !ctx.view.overlay.contains(event.target)) return;
         event.preventDefault();
-        const bar = event.target instanceof Node ? barUnder(event.target) : undefined;
+        const bar = barUnder(event.target);
         openAt(new DOMRect(event.clientX, event.clientY, 0, 0), bar ? entryForBar(bar) : undefined);
       };
       document.addEventListener('contextmenu', onContextMenu);

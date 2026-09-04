@@ -1,5 +1,16 @@
-export { computeFrame, placeFrame, resolveLayoutRows, barSpan, DEFAULT_TICK_BOX_FLOOR_PX } from './frame.js';
+export {
+  computeFrame,
+  placeFrame,
+  resolveLayoutRows,
+  barSpan,
+  DEFAULT_TICK_BOX_FLOOR_PX,
+  DEFAULT_DIAMOND_SIZE_PX,
+} from './frame.js';
 export { DEFAULT_LANE_GAP_PX } from './lanes/pack-lanes.js';
+// `render/dom` never imports `model/` directly (render-boundary, plans/01 §1) — these two id
+// helpers are pure id-string math with no model runtime behind them, re-exported here the same way
+// `ColumnAlign` crosses this same boundary (#54).
+export { itemId, entryIdOfItem } from '../model/index.js';
 export { createItemProducerRegistry } from './items/produce-items.js';
 export type { Item, ItemProducerRegistry } from './items/produce-items.js';
 export type { FrameColumn, ResolvedColumn, FieldCompare, ColumnAlign } from './column.js';

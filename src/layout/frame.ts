@@ -36,12 +36,40 @@ export type { RegisteredDecorationProvider } from './decorations.js';
 /** Shipped Tick box floor (CONTEXT.md) — `--fg-tick-box-floor` fallback and CSS padding calc. */
 export const DEFAULT_TICK_BOX_FLOOR_PX = 9;
 
+/** Shipped diamond size (CONTEXT.md) — `--fg-diamond-size` fallback: the unrotated square's side, in
+ *  px. `barSpan`'s milestone floor is this rotated 45° (`diamondSizePx * √2`), so the painted diamond
+ *  and its outline always fit inside the bar box (bug hunt: a 0-width milestone bar left the diamond
+ *  and its selection outline hanging off the left edge). */
+export const DEFAULT_DIAMOND_SIZE_PX = 10;
+
 /** An entry's horizontal extent in content pixels, at the bound `TimeScale` (S1.9). The one formula
  * both `computeFrame` and `GanttShell.reveal` need — extracted so the two can never drift apart
- * (they briefly did: `reveal` had its own copy missing the zero-duration/inverted-entry clamp). */
-export function barSpan(entry: Pick<Entry, 'start' | 'end'>, scale: TimeScale): { x: number; width: number } {
+ * (they briefly did: `reveal` had its own copy missing the zero-duration/inverted-entry clamp).
+ *
+ * A milestone Item/Entry is authored zero-width (`start === end`) — that stays true; nothing here
+ * invents a duration. Painting a zero-width box still leaves the diamond glyph and its selection
+ * outline with nowhere to sit, so a milestone's *painted* span is floored to the diamond's
+ * axis-aligned bounding box (`diamondSizePx * √2`) and centred on the instant. Every other kind keeps
+ * its true `[x, x + width)` span. */
+/** Kind → painted-span floor, as a multiplier of `diamondSizePx` (a min-width lookup, not
+ *  `if (kind === 'milestone')` — plans/01 §2.5). Only `milestone` floors its span today; every other
+ *  kind falls through to its true `[x, x + width)` extent. */
+const KIND_SPAN_FLOOR_MULTIPLIER: Readonly<Partial<Record<EntryKind, number>>> = Object.freeze({
+  milestone: Math.SQRT2,
+});
+
+export function barSpan(
+  entry: Pick<Entry, 'start' | 'end' | 'kind'>,
+  scale: TimeScale,
+  diamondSizePx: number = DEFAULT_DIAMOND_SIZE_PX,
+): { x: number; width: number } {
   const x = scale.xForInstant(entry.start);
   const width = Math.max(0, scale.xForInstant(entry.end) - x);
+  const floorMultiplier = KIND_SPAN_FLOOR_MULTIPLIER[entry.kind];
+  if (floorMultiplier !== undefined) {
+    const floor = diamondSizePx * floorMultiplier;
+    if (width < floor) return { x: x - floor / 2, width: floor };
+  }
   return { x, width };
 }
 
@@ -169,6 +197,10 @@ export interface LayoutInput {
   /** Tick box floor in px (CONTEXT.md). Default `DEFAULT_TICK_BOX_FLOOR_PX`. View reads
    *  `--fg-tick-box-floor` and passes it; layout never restates the stylesheet. */
   tickBoxFloorPx?: number;
+  /** Diamond size in px (CONTEXT.md) — the unrotated square's side. Default `DEFAULT_DIAMOND_SIZE_PX`.
+   *  Drives a milestone bar's painted-span floor (`barSpan`). View reads `--fg-diamond-size` and
+   *  passes it; layout never restates the stylesheet. */
+  diamondSizePx?: number;
   /** Visible Grid columns. Omitted or empty → no cells. The Gantt default `['name']` lives in view/. */
   columns?: readonly ResolvedColumn[];
   /** Which rows to draw. Omitted → `{ source: 'entries', tree: false }` (S1's flat list). */
@@ -288,6 +320,7 @@ export function placeFrame(
   const mem = memory ?? memoryFor(input, plan);
   const index = mem.heights;
   const tickBoxFloorPx = input.tickBoxFloorPx ?? DEFAULT_TICK_BOX_FLOOR_PX;
+  const diamondSizePx = input.diamondSizePx ?? DEFAULT_DIAMOND_SIZE_PX;
   const verticalRows = input.overscan?.verticalRows ?? DEFAULT_OVERSCAN.verticalRows;
   const horizontalPx = input.overscan?.horizontalPx ?? DEFAULT_OVERSCAN.horizontalPx;
 
@@ -348,7 +381,7 @@ export function placeFrame(
     });
 
     for (const item of items) {
-      const { x, width } = barSpan(item, scale);
+      const { x, width } = barSpan(item, scale, diamondSizePx);
       if (!intersectsHorizontally(x, width)) continue;
       const lane = packing.laneByItem.get(item.id) ?? 0;
       bars.push({

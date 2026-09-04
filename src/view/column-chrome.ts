@@ -88,12 +88,17 @@ export class ColumnChrome {
     return this.#resolvedColumns.find((column) => column.key === columnKey);
   }
 
+  /** `false` for a key `gridColumns` no longer resolves (B3: a stale `#focusedHeaderColumnKey` from
+   *  before a `gridColumns` change must not still enable a resize chord); `resizable` unset on a
+   *  resolved column still defaults `true` (D-S5-18). */
   isResizable(columnKey: FieldKey): boolean {
-    return this.resolvedColumn(columnKey)?.resizable ?? true;
+    const column = this.resolvedColumn(columnKey);
+    return column === undefined ? false : (column.resizable ?? true);
   }
 
   isMovable(columnKey: FieldKey): boolean {
-    return this.resolvedColumn(columnKey)?.movable ?? true;
+    const column = this.resolvedColumn(columnKey);
+    return column === undefined ? false : (column.movable ?? true);
   }
 
   /** S5.7, D-S5-18: the same floor pattern `GanttShell#aboveMinGridWidth` applies to the splitter

@@ -41,6 +41,11 @@ export interface Overlay {
    *  viewport, or the entry has no bar at all). `contextMenu()`'s keyboard opener uses this to anchor
    *  at "the focused row" (D-S5-13) with no pointer event to read a target from. */
   elementForEntry(id: EntryId): HTMLElement | undefined;
+  /** I2: whether `node` sits inside this Gantt's own container. The seam a document-level listener
+   *  (`contextMenu()`'s `contextmenu`, `tooltips()`'s `pointerover`/`focusin`) needs to tell "this
+   *  Gantt's own bar" from "some other widget, or a second Gantt, that happens to share the page" —
+   *  closing the gap two independent Gantts otherwise fall into (bug hunt B1). */
+  contains(node: Node): boolean;
 }
 
 /** Test seam, the same shape `attachPaneSize`'s own `ResizeObserverCtor` parameter already uses:
@@ -111,6 +116,10 @@ export class DomOverlay implements Overlay {
     const want = itemId(id, 0);
     const bars = Array.from(this.#container.querySelectorAll<HTMLElement>('[data-item-id]'));
     return bars.find((bar) => bar.dataset['itemId'] === want);
+  }
+
+  contains(node: Node): boolean {
+    return this.#container.contains(node);
   }
 
   /** `GanttShell.destroy()`'s own call — stops observing; the layer itself is torn down with the

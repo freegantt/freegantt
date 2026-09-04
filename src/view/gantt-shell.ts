@@ -8,6 +8,7 @@ import {
   TimeScaleModel,
   Viewport,
   DEFAULT_TICK_BOX_FLOOR_PX,
+  DEFAULT_DIAMOND_SIZE_PX,
   DEFAULT_LANE_GAP_PX,
   DEFAULT_ROW_SOURCE,
   createItemProducerRegistry,
@@ -123,6 +124,7 @@ export interface Detachable {
 }
 export type AttachEntryGestures = (
   pane: HTMLElement,
+  gridPane: HTMLElement,
   container: HTMLElement,
   ctx: EntryGestureContext,
 ) => Detachable;
@@ -162,6 +164,10 @@ const ROW_HEIGHT_POLICY = { fallback: DEFAULT_ROW_HEIGHT, accepts: 'positive' } 
 const TICK_BOX_FLOOR_PROPERTY = '--fg-tick-box-floor';
 /** A zero floor would re-open thin straddles painting at the CSS box minimum. */
 const TICK_BOX_FLOOR_POLICY = { fallback: DEFAULT_TICK_BOX_FLOOR_PX, accepts: 'positive' } as const;
+
+const DIAMOND_SIZE_PROPERTY = '--fg-diamond-size';
+/** A zero size would re-open a zero-width milestone bar (bug hunt). */
+const DIAMOND_SIZE_POLICY = { fallback: DEFAULT_DIAMOND_SIZE_PX, accepts: 'positive' } as const;
 
 const LANE_GAP_PROPERTY = '--fg-lane-gap';
 /** Zero gap is authored: packed bars may sit flush. */
@@ -308,6 +314,10 @@ export interface GanttShellOptions {
      *  by `RegistrationGate` — like `overlay` above, a plugin reads this for as long as it runs, not
      *  only during `setup`. */
     resolveTooltip: (id: EntryId) => ElementDescription | undefined;
+    /** D-S5-13: `ctx.view.resolveTooltipColumns`. Every currently resolved Grid column marked
+     *  `tooltip: true`, header and this entry's formatted value — the default tooltip body's own
+     *  extra-columns clause. Not gated by `RegistrationGate`, same posture as `resolveTooltip`. */
+    resolveTooltipColumns: (entry: Entry) => readonly { header: string; value: string }[];
     /** S5.6, D-S5-15: `ctx.view.registerDecoration`. Legal only while `setup` runs (D-S5-4), the
      *  same gate `registerKeybinding`/`registerRenderer` above already take — but unlike those, a
      *  provider is removed automatically when this plugin disposes (its own `disposables.add`
@@ -422,6 +432,7 @@ export class GanttShell {
   #rowHeight: number = DEFAULT_ROW_HEIGHT;
   #laneGapPx: number = DEFAULT_LANE_GAP_PX;
   #tickBoxFloorPx: number = DEFAULT_TICK_BOX_FLOOR_PX;
+  #diamondSizePx: number = DEFAULT_DIAMOND_SIZE_PX;
   #options: GanttShellOptions;
   /** Construction phase (issue #91 §9-B): bind() notifies synchronously before pane size is wired, so
    *  those calls are not real renders yet. Becomes `'live'` after the first measurement. */
@@ -625,6 +636,13 @@ export class GanttShell {
           return undefined;
         }
       };
+      // D-S5-13: `tooltips()`'s default body reads this to append every column marked `tooltip: true`
+      // — the same resolved list the grid itself paints from (`ColumnChrome`), so a column's header/
+      // format stays in one place.
+      const resolveTooltipColumns = (entry: Entry): readonly { header: string; value: string }[] =>
+        this.#columnChrome.resolvedColumns
+          .filter((column) => column.tooltip === true)
+          .map((column) => ({ header: column.header, value: column.format(entry) }));
       // S5.6, D-S5-15: same one-shot-registration gate `registerRenderer` above already takes, but
       // removal is automatic — a decoration provider has no "run once at setup" analogue to a
       // renderer slot; it lives for as long as the plugin does, so `disposables.add` (not the
@@ -649,6 +667,7 @@ export class GanttShell {
         overlay: this.#overlay,
         registerRenderer,
         resolveTooltip,
+        resolveTooltipColumns,
         registerDecoration,
       });
       return { context, disposables, registrationGate: gate };
@@ -813,7 +832,12 @@ export class GanttShell {
       this.#container,
       columnGestureContext,
     );
-    this.#entryGestures = options.entryGestures?.(this.#panes.timeline, this.#container, gestureContext);
+    this.#entryGestures = options.entryGestures?.(
+      this.#panes.timeline,
+      this.#panes.grid,
+      this.#container,
+      gestureContext,
+    );
     this.#keyboardEditing = options.keyboardEditing?.(this.#container, gestureContext);
     const wheelNavigationCtx: WheelNavigationContext = {
       wheelZoomEnabled: () => this.#resolvedViewportGestures.wheelZoom,
@@ -1354,7 +1378,7 @@ export class GanttShell {
   reveal(entryId: EntryId): void {
     const entry = this.#options.dataset.entries.get(entryId);
     if (entry === undefined) throw new EntryNotFoundError(entryId, 'reveal');
-    const { x, width } = barSpan(entry, this.#viewport.timeScale);
+    const { x, width } = barSpan(entry, this.#viewport.timeScale, this.#diamondSizePx);
     let rowIndex = this.#layout.rowIndexForEntry(entryId);
     if (rowIndex < 0 && this.#treeCollapse.expandAncestorsOf(entryId)) {
       this.#frames.flush();
@@ -1450,6 +1474,7 @@ export class GanttShell {
     this.#rowHeight = readPixelProperty(this.#container, ROW_HEIGHT_PROPERTY, ROW_HEIGHT_POLICY);
     this.#laneGapPx = readPixelProperty(this.#container, LANE_GAP_PROPERTY, LANE_GAP_POLICY);
     this.#tickBoxFloorPx = readPixelProperty(this.#container, TICK_BOX_FLOOR_PROPERTY, TICK_BOX_FLOOR_POLICY);
+    this.#diamondSizePx = readPixelProperty(this.#container, DIAMOND_SIZE_PROPERTY, DIAMOND_SIZE_POLICY);
     this.#viewportHandle.setPaneSize(size);
   }
 
@@ -1464,6 +1489,7 @@ export class GanttShell {
       rowHeight: this.#rowHeight,
       laneGapPx: this.#laneGapPx,
       tickBoxFloorPx: this.#tickBoxFloorPx,
+      diamondSizePx: this.#diamondSizePx,
       revision: this.#revision++,
       locale: this.#locale,
       todayLine: this.#todayLine,

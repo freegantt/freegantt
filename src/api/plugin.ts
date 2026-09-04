@@ -16,7 +16,7 @@ import type { GanttEvents, Overlay, OverlayHandle } from '../view/index.js';
 import type { CommandRegistryOf, KeyBindingOf } from './command.js';
 import type { RendererPoint, RendererFor } from '../layout/index.js';
 import type { DecorationLayer, DecorationProvider } from '../layout/index.js';
-import type { ElementDescription, EntryId } from '../model/index.js';
+import type { ElementDescription, Entry, EntryId } from '../model/index.js';
 
 // Re-exported for the same reason `Overlay`/`OverlayHandle` are, just below: a plugin author typing
 // a `registerKeyHandler` callback names this.
@@ -87,6 +87,12 @@ export interface PluginContextOf<TGantt = unknown> {
      *  caller, so a feature that owns a renderer point reads the same resolution the render backend
      *  would, without reaching `view/renderer-registry.ts` directly (D-S5-5). */
     resolveTooltip(entryId: EntryId): ElementDescription | undefined;
+    /** D-S5-13: every Grid column marked `tooltip: true`, resolved against this Gantt's current
+     *  `gridColumns`/`fields` — header text and `entry`'s formatted value for each. `tooltips()`'s
+     *  default body appends these after name/dates; a consumer building its own tooltip content reads
+     *  the same list instead of re-resolving columns itself (D-S5-5: `view/grid-columns.ts` stays out
+     *  of reach). Empty when no column is marked `tooltip: true`. */
+    resolveTooltipColumns(entry: Entry): readonly { header: string; value: string }[];
     /** S5.6, D-S5-15: registers a pure decoration provider into `layer` (`underBars` below the bar
      *  layer, `overBars` above). Legal only while `setup` runs (D-S5-4); removed automatically when
      *  this plugin is disposed — a provider has no `close()`/`unregister()` of its own, the plugin's

@@ -153,9 +153,30 @@ export function attachColumnGestures(
     if (drag.escape()) e.stopImmediatePropagation();
   }
 
+  // B3: a plain click on a header cell sets "the focused header column" for `Shift+Arrow` (D-S5-18/
+  // D-S5-26, `onPointerUp` above). JS focus is not the same as "the header still has the user's
+  // attention" — a later pointerdown anywhere else in this Gantt (a bar, a body cell, empty timeline)
+  // must clear it, the same posture a click on empty timeline already takes for the entry selection.
+  function onContainerPointerDown(e: PointerEvent): void {
+    const target = e.target instanceof Node ? e.target : null;
+    if (target !== null && headerPane.contains(target)) return;
+    ctx.setFocusedColumn(undefined);
+  }
+
+  // B6: `createPointerGesture` documents `pointercancel` as a cancel path (Escape's own sibling), but
+  // nothing fed it — a browser cancel (touch interrupt, drag into a scrollbar) could leave
+  // `grabbedKind` set and a live width/drop preview stuck until the next successful gesture or
+  // Escape. Only `pointerup`/`pointermove` carry `pointerId`-scoped state today; a bare `cancel()`
+  // call mirrors `escape()`'s own shape without needing one.
+  function onPointerCancel(e: PointerEvent): void {
+    drag.pointercancel(e);
+  }
+
   headerPane.addEventListener('pointerdown', onPointerDown);
   headerPane.addEventListener('pointermove', onPointerMove);
   headerPane.addEventListener('pointerup', onPointerUp);
+  headerPane.addEventListener('pointercancel', onPointerCancel);
+  container.addEventListener('pointerdown', onContainerPointerDown);
   container.addEventListener('keydown', onKeyDown);
 
   return {
@@ -164,6 +185,8 @@ export function attachColumnGestures(
       headerPane.removeEventListener('pointerdown', onPointerDown);
       headerPane.removeEventListener('pointermove', onPointerMove);
       headerPane.removeEventListener('pointerup', onPointerUp);
+      headerPane.removeEventListener('pointercancel', onPointerCancel);
+      container.removeEventListener('pointerdown', onContainerPointerDown);
       container.removeEventListener('keydown', onKeyDown);
     },
   };
