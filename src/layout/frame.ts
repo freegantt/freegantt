@@ -103,13 +103,17 @@ export interface FrameBar {
   a11yLabel: string;
 }
 
-/** One segment of an SVG-style path, used by link geometry (§4, #16 settles `FrameLink.id`'s brand). */
+/** One segment of an SVG-style path, used by link geometry (§4). */
 export type PathCommand =
   | { cmd: 'M'; x: number; y: number }
   | { cmd: 'L'; x: number; y: number }
   | { cmd: 'C'; x1: number; y1: number; x2: number; y2: number; x: number; y: number };
 
 export interface FrameLink {
+  /** Plain `string`, never a brand (#136, supersedes #16): `Dependency`/`DependencyId` belong to the
+   *  `entryDependencies()` plugin, and `layout/` may import `time/` and `model/` only — a branded id
+   *  here would make the frame's own type depend on a plugin. The emitter that fills `links` names
+   *  the id; `layout/` only aggregates. */
   id: string;
   path: readonly PathCommand[];
   flags: LinkFlags;
