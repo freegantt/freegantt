@@ -9,7 +9,7 @@ export {
   segmentIndexOfItem,
   changeSetId,
 } from './ids.js';
-export type { Instant, TimeUnit, TimeSpan, Duration } from './time.js';
+export type { Instant, TimeUnit, TimeSpan, Duration, PlainParts } from './time.js';
 export type { InstantInput, TimeSpanInput, DateOnlyEndRule } from './time.js';
 export type { Entry, EntryKind, EntryInput, EntryEdit, StoredEdit, EntryEdits } from './entry.js';
 export type { Point, Size, PixelSpan, Rect, ClientPoint } from './geometry.js';

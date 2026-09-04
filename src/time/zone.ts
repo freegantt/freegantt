@@ -8,7 +8,7 @@
 // it. The word is Temporal's own (PlainDate, PlainDateTime), which is what this module will become when
 // native Temporal ships. See CONTEXT.md.
 
-import type { Instant, TimeSpan, TimeUnit } from '../model/index.js';
+import type { Instant, PlainParts, TimeSpan, TimeUnit } from '../model/index.js';
 import { UnsupportedUnitError } from '../model/index.js';
 import { instant, addMs, MS } from './instant.js';
 import * as InstantFns from 'temporal-polyfill/fns/Instant';
@@ -24,17 +24,10 @@ export function resolveDefaultTimeZone(): string {
   return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
 }
 
-export interface PlainParts {
-  year: number;
-  month: number; // 1-12
-  day: number;
-  hour: number;
-  minute: number;
-  second: number;
-  /** ISO day of week: 1 = Monday … 7 = Sunday (D-S5-16). `toPlain` always fills this; `fromPlain`
-   *  never reads it — a caller building a `PlainParts` to write may omit it. */
-  dayOfWeek?: number;
-}
+/** The plain wall-clock shape is `model/` vocabulary, not zone machinery, so it is declared there
+ *  and re-exported here — one name, one concept (#144). `extensions/` may import `model/` but not
+ *  `time/` (D-S5-5), which is why the declaration has to sit on that side. */
+export type { PlainParts };
 
 function toZoned(zone: string, i: Instant): ZonedDateTimeFns.Record {
   return InstantFns.toZonedDateTimeISO(InstantFns.fromEpochMilliseconds(i), zone);
