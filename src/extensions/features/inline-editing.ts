@@ -14,7 +14,7 @@
 // assumptions, e.g. `cellSpec.patch`'s `node.lastElementChild` reads).
 
 import type { GanttPlugin, PluginContext } from '../../api/gantt.js';
-import type { EntryFieldEdit } from '../../api/plugin.js';
+import type { EntryFieldEdit, Overlay } from '../../api/plugin.js';
 import { EntryNotFoundError, MutationCancelledError } from '../../model/index.js';
 import type { Entry, EntryId, Field, FieldContext, FieldKey, Instant } from '../../model/index.js';
 import { activateFocusTrap } from '../focus-trap.js';
@@ -73,6 +73,22 @@ function findCell(container: HTMLElement, entryId: EntryId, field: FieldKey): HT
   return row.querySelector<HTMLElement>(`[data-field="${CSS.escape(String(field))}"]`) ?? undefined;
 }
 
+/** Same lookup as `findCell`, but for a keyboard opener with no DOM node to start from (`onDblClick`
+ *  scopes through `ctx.view.overlay.contains(event.target)` instead) — `entryId` alone is not enough
+ *  to scope by when two Gantts share entry ids (I2), so this walks every `.fg-row` match in the
+ *  document and keeps the one this Gantt's own overlay actually contains. */
+function findOwnCell(overlay: Overlay, entryId: EntryId, field: FieldKey): HTMLElement | undefined {
+  const rows = Array.from(
+    document.querySelectorAll<HTMLElement>(`.fg-row[data-entry-id="${CSS.escape(entryId)}"]`),
+  );
+  for (const row of rows) {
+    if (!overlay.contains(row)) continue;
+    const cell = row.querySelector<HTMLElement>(`[data-field="${CSS.escape(String(field))}"]`);
+    if (cell) return cell;
+  }
+  return undefined;
+}
+
 /** The already-rendered cell text — reused as the generic editor's seed value instead of recomputing
  *  a `FormatContext` here (`extensions/` cannot reach `view/grid-columns.ts`, D-S5-5), the same
  *  formatted string `field.formatValue` already produced for the grid paint. */
@@ -119,6 +135,11 @@ export function inlineEditing(options: InlineEditingOptions = {}): GanttPlugin {
     id: 'freegantt.inlineEditing',
     setup(ctx: PluginContext) {
       let session: OpenSession | undefined;
+      // Bumped on every `openFor` call, captured locally by that call's own async veto continuation —
+      // a stale continuation (an *older* `openFor` whose `beforeEntryEdit` promise resolves after a
+      // *newer* `openFor` has already run) checks this before mounting, so it cannot mount a second,
+      // orphaned session over the newer one with no teardown of either.
+      let openRequestId = 0;
 
       function closeSession(action: 'commit' | 'revert'): void {
         const current = session;
@@ -358,6 +379,7 @@ export function inlineEditing(options: InlineEditingOptions = {}): GanttPlugin {
 
         if (session) closeSession('commit');
 
+        const requestId = ++openRequestId;
         const currentValue = ctx.dataset.entries.fieldValue<unknown>(entry.id, field.key);
         const payload: EntryFieldEdit = { entry, field: field.key, from: currentValue, to: currentValue };
         const result = ctx.interaction.emitBeforeEntryEdit(payload);
@@ -368,7 +390,10 @@ export function inlineEditing(options: InlineEditingOptions = {}): GanttPlugin {
         if (result === false) return;
         if (result instanceof Promise) {
           void result.then((allowed) => {
-            if (allowed !== false) openNow();
+            // A newer `openFor` ran while this veto was pending — that call has already closed
+            // whatever was open and may have mounted its own session; this stale request must not
+            // mount a second one over it (see `openRequestId`'s own doc comment).
+            if (allowed !== false && requestId === openRequestId) openNow();
           });
           return;
         }
@@ -400,7 +425,7 @@ export function inlineEditing(options: InlineEditingOptions = {}): GanttPlugin {
         for (const column of ctx.gantt.gridColumns) {
           const fieldKey = typeof column === 'string' ? column : column.field;
           if (ctx.view.isColumnEditable(fieldKey) !== true) continue;
-          const cell = findCell(document.body, entryId, fieldKey);
+          const cell = findOwnCell(ctx.view.overlay, entryId, fieldKey);
           const row = cell ? rowUnder(cell) : undefined;
           if (!cell || !row) continue;
           const field = ctx.dataset.field(fieldKey);

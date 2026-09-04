@@ -344,6 +344,54 @@ describe('inlineEditing() (S5.8, D-S5-19/D-S5-20)', () => {
     container.remove();
   });
 
+  it('a stale async veto does not mount a second, orphaned session over a newer open', async () => {
+    const { container, gantt } = makeGantt();
+    let resolveFirst!: (value: void | false) => void;
+    let vetoCall = 0;
+    gantt.on('beforeEntryEdit', () => {
+      vetoCall++;
+      // Only the first open (on "name") gets an async veto; the second (on "quantity") resolves
+      // synchronously, so it can mount before the first's promise ever settles.
+      return vetoCall === 1 ? new Promise<void | false>((r) => (resolveFirst = r)) : undefined;
+    });
+
+    dblclick(cellFor(container, 'e1', 'name')); // request #1 — veto pending
+    expect(container.querySelector('.fg-cell-editor')).toBeNull();
+
+    dblclick(cellFor(container, 'e1', 'quantity')); // request #2 — opens immediately
+    expect(container.querySelectorAll('.fg-cell-editor')).toHaveLength(1);
+    expect(input(container).value).toBe('3'); // quantity's own seed, not name's
+
+    resolveFirst(undefined); // request #1's veto now resolves — must not mount a second editor
+    await Promise.resolve();
+
+    expect(container.querySelectorAll('.fg-cell-editor')).toHaveLength(1);
+    expect(input(container).value).toBe('3');
+
+    gantt.destroy();
+    container.remove();
+  });
+
+  it("Enter opens this Gantt's own row, not an earlier-in-DOM Gantt's row sharing the same entry id (I2)", () => {
+    // containerA is appended to document.body first — an unscoped document-wide lookup by entry id
+    // would find *its* row first no matter which Gantt's own Enter handler actually fired, so B's own
+    // handler firing must still resolve to B's own row.
+    const { container: containerA, gantt: ganttA } = makeGantt();
+    const { container: containerB, gantt: ganttB } = makeGantt();
+
+    ganttA.selection = ['e1'];
+    ganttB.selection = ['e1'];
+
+    enter(containerB);
+    expect(containerB.querySelector('.fg-cell-editor')).not.toBeNull();
+    expect(containerA.querySelector('.fg-cell-editor')).toBeNull();
+
+    ganttA.destroy();
+    ganttB.destroy();
+    containerA.remove();
+    containerB.remove();
+  });
+
   it('the anchor entry disappearing mid-edit closes without committing (issue #137 F10)', () => {
     const { container, gantt, dataset } = makeGantt();
     dblclick(cellFor(container, 'e1', 'name'));

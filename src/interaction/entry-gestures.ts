@@ -141,15 +141,21 @@ export function attachEntryGestures(
     clearOnMiss: boolean,
   ): void {
     if (hit === undefined) {
-      anchor = undefined;
-      if (clearOnMiss && ctx.selection.get().length > 0) ctx.selection.propose([]);
+      // A grid miss (`clearOnMiss = false`, see the doc comment above) leaves the shift-anchor alone
+      // too — only a genuine miss-clears-everything surface (the timeline) drops it here.
+      if (clearOnMiss) {
+        anchor = undefined;
+        if (ctx.selection.get().length > 0) ctx.selection.propose([]);
+      }
       return;
     }
     const entry = ctx.entryFor(hit.itemId);
 
     if (entry === undefined) {
-      anchor = undefined;
-      if (clearOnMiss && ctx.selection.get().length > 0) ctx.selection.propose([]);
+      if (clearOnMiss) {
+        anchor = undefined;
+        if (ctx.selection.get().length > 0) ctx.selection.propose([]);
+      }
       return;
     }
     const hitItemId = hit.itemId;
