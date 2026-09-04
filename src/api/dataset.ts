@@ -73,6 +73,13 @@ export interface DatasetOptions<TMeta = unknown> {
 // (`Dataset<{ team: string }, { cost: number }>`). TypeScript does not infer a later type
 // parameter once an earlier one is written, so Field keys cannot come from the `fields` array
 // at `new Dataset<{ team: string }>(...)` (#123).
+// TMeta/TFields trust boundary (plans/02): the internal store (`DatasetState`, `data/`'s
+// `EntryStore`) is permanently monomorphic — it holds `Entry<unknown>` throughout, by design,
+// because `data/` has no static dependency on any one consumer's meta shape. `TMeta`/`TFields`
+// exist only at this façade; every cast below is where a caller's declared type meets that erased
+// internal shape, and none of them are checked at runtime. A wrong `fromJSON<TMeta>()` mis-types
+// every entry with no error anywhere — this is the documented loose-input/typed-output trade-off
+// (`plans/02`), not a gap to close with a runtime validator.
 export class Dataset<TMeta = unknown, TFields extends Record<string, unknown> = Record<string, unknown>> {
   #state: DatasetState;
   /** Bound once, at construction — `timeZone` is fixed for this Dataset's lifetime either way. */
@@ -86,6 +93,7 @@ export class Dataset<TMeta = unknown, TFields extends Record<string, unknown> = 
     this.#time = createZonedTime(this.#state.timeZone);
   }
 
+  // Trusted, unchecked TMeta/TFields cast — see the class-level note above.
   get entries(): EntryStoreContract<TMeta, TFields> {
     return this.#state.entries as EntryStoreContract<TMeta, TFields>;
   }
@@ -200,6 +208,7 @@ export class Dataset<TMeta = unknown, TFields extends Record<string, unknown> = 
 
   /** Whole-document write (D-S2-12). Byte-stable: declared key order, optional keys omitted, entries
    *  in insertion order, instants as `Z`-suffixed ISO. */
+  // Trusted, unchecked TMeta cast — see the class-level note above.
   toJSON(): DatasetDocument<TMeta> {
     return writeDocument(this) as DatasetDocument<TMeta>;
   }
@@ -211,7 +220,14 @@ export class Dataset<TMeta = unknown, TFields extends Record<string, unknown> = 
     doc: DatasetDocument<TMeta>,
     options?: Pick<DatasetOptions, 'fields' | 'fieldTypes' | 'aggregators'>,
   ): Dataset<TMeta, TFields> {
-    const dataset = new Dataset<TMeta, TFields>(readDocument(doc, options) as DatasetOptions<TMeta>);
+    // Trusted, unchecked TMeta cast — see the class-level note above. Narrowed to `entries`, the
+    // one field `readDocument`'s result actually needs it for: every other DatasetOptions member
+    // `readDocument` returns is already TMeta-independent.
+    const read = readDocument(doc, options);
+    const dataset = new Dataset<TMeta, TFields>({
+      ...read,
+      entries: read.entries as readonly EntryInput<TMeta>[],
+    });
     warnIfRollUpsWereCorrected(doc, dataset);
     return dataset;
   }
