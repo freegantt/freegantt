@@ -5,6 +5,11 @@
 // `CommandTarget`) through this file's own re-export, the same seam `ShellPlugin` already gives it.
 
 import { UnknownCommandError } from '../model/index.js';
+import type { Disposer } from '../model/index.js';
+// One named leaf, not a `layout/` edge (`.dependency-cruiser.cjs`, `extensions-public-only`): the
+// registration mechanism every `register*` seam shares (#154, #155). A command id keyed to a stack
+// is what makes a plugin's override of a core command undo itself on uninstall (D-S5-7).
+import { createRegistrationTable } from '../layout/registration-table.js';
 import type {
   CommandOf,
   CommandContextOf,
@@ -21,15 +26,23 @@ export type { CommandRegistryOf };
  *  fresh on every `run()`, so a command always sees the invocation's current selection/target, never
  *  a snapshot from registration time. */
 export class CommandRegistry<TGantt = unknown> implements CommandRegistryOf<TGantt> {
-  #commands = new Map<string, CommandOf<TGantt>>();
+  /** #155: a stack per command id, not one slot. The core catalog registers first and never
+   *  disposes, so it sits at the bottom of every id it owns; a plugin's override wins while that
+   *  plugin lives, and the command underneath comes back the moment the plugin is uninstalled. */
+  #commands = createRegistrationTable<string, CommandOf<TGantt>>();
   #buildContext: () => CommandContextOf<TGantt>;
 
   constructor(buildContext: () => CommandContextOf<TGantt>) {
     this.#buildContext = buildContext;
   }
 
-  register(command: CommandOf<TGantt>): void {
-    this.#commands.set(command.id, command);
+  /** #155: the returned `Disposer` removes exactly this registration, in any disposal order. The
+   *  command that then answers this id is the newest one still registered — the core catalog's own,
+   *  where a plugin had overridden one. `view/gantt-shell.ts` hands a plugin's disposer to that
+   *  plugin's `DisposableStore`; the core catalog drops its own, because core commands live as long
+   *  as the Gantt does. */
+  register(command: CommandOf<TGantt>): Disposer {
+    return this.#commands.register(command.id, command);
   }
 
   /** `extensions/keymap.ts`'s resolver peeks a binding's target command, to check the command's own
@@ -62,7 +75,9 @@ export class CommandRegistry<TGantt = unknown> implements CommandRegistryOf<TGan
     command.run(ctx);
   }
 
+  /** One command per id — the winning registration — in first-registration order, which is the
+   *  catalog order a menu reads (`available`'s own doc on `CommandRegistryOf`). */
   available(ctx: CommandContextOf<TGantt>): readonly CommandOf<TGantt>[] {
-    return [...this.#commands.values()].filter((command) => command.when === undefined || command.when(ctx));
+    return this.#commands.active().filter((command) => command.when === undefined || command.when(ctx));
   }
 }

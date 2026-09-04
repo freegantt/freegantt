@@ -79,6 +79,26 @@ describe('RendererRegistry (S5.4, D-S5-11/12)', () => {
     }).not.toThrow();
   });
 
+  it('register returns a Disposer that frees the point for the next claim (#155)', () => {
+    const registry = new RendererRegistry();
+    const first: CellRenderer = () => undefined;
+    const second: CellRenderer = () => undefined;
+    const free = registry.register('cell', first, pluginA);
+
+    // While it stands, the point is taken — for the same plugin as much as for any other.
+    expect(() => registry.register('cell', second, pluginB)).toThrow(RendererAlreadyRegisteredError);
+
+    free();
+    expect(registry.resolveCell(undefined)).toBeUndefined();
+    expect(() => registry.register('cell', second, pluginB)).not.toThrow();
+    expect(registry.resolveCell(undefined)).toEqual({ renderer: second, pluginId: pluginB });
+
+    // Idempotent: a plugin's `DisposableStore` disposes the same Disposer the plugin may have
+    // already called, and that must not free the point the next plugin now holds.
+    free();
+    expect(registry.resolveCell(undefined)).toEqual({ renderer: second, pluginId: pluginB });
+  });
+
   it('resolveCell/resolveHeader/resolveTooltip: config over plugin, same as resolveBar', () => {
     const registry = new RendererRegistry();
     const pluginCell: CellRenderer = () => undefined;

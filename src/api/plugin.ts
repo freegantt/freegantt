@@ -63,12 +63,16 @@ export interface PluginContextOf<TGantt = unknown, TDataset = Dataset> {
    *  hand in the returned `Disposer`. Disposed in reverse order, ahead of that returned `Disposer`. */
   disposables: DisposableStore;
   /** S5.2, D-S5-6: the one command registry — `register` here is legal only while `setup` runs
-   *  (D-S5-4); `run`/`available` work any time, including after this plugin's own setup returns. */
+   *  (D-S5-4); `run`/`available` work any time, including after this plugin's own setup returns.
+   *  A command this plugin registers lives exactly as long as the plugin: uninstalling restores
+   *  whatever the id held before, which for an overridden core command is core's own (#155). */
   commands: CommandRegistryOf<TGantt, TDataset>;
   interaction: {
     /** S5.2, D-S5-7: adds one `KeyBinding`. Legal only while `setup` runs (D-S5-4) — removed
-     *  automatically when this plugin is disposed, the same lifetime every other `register*` gets. */
-    registerKeybinding(binding: KeyBindingOf<TGantt>): void;
+     *  automatically when this plugin is disposed, the same lifetime every other `register*` gets.
+     *  The returned `Disposer` removes it sooner, for a plugin that binds a chord only in one mode
+     *  (#155). Ignoring the return value is the common case. */
+    registerKeybinding(binding: KeyBindingOf<TGantt>): Disposer;
     /** C3, `plans/reviews/2026-09-02-s5-start-fixes.md`: binds `chord` straight to `handler` through
      *  the same keymap `registerKeybinding` uses, for a caller with no `Command` to run — a plugin
      *  building its own `Popup` (over `view.overlay` below) so its Escape dismissal wins by the
@@ -102,8 +106,9 @@ export interface PluginContextOf<TGantt = unknown, TDataset = Dataset> {
      *  the kinds it names; an omitted gesture still falls through to the library table for `kind`.
      *  Legal only while `setup` runs (D-S5-4); removed automatically when this plugin is disposed.
      *  When two plugins register defaults for the same Kind, the newest registration wins, and
-     *  disposing one plugin never disturbs the other plugin's registration. */
-    registerKindDefaults(kind: EntryKind, defaults: KindDefaults): void;
+     *  disposing one plugin never disturbs the other plugin's registration. The returned `Disposer`
+     *  removes it sooner (#155). */
+    registerKindDefaults(kind: EntryKind, defaults: KindDefaults): Disposer;
   };
   view: {
     /** S5.3, D-S5-8: the overlay layer a plugin's own popup, tooltip or menu mounts into — the same
@@ -115,8 +120,10 @@ export interface PluginContextOf<TGantt = unknown, TDataset = Dataset> {
      *  One slot per point: a consumer's own `GanttOptions.*Renderer` always wins over this (a
      *  consumer that wants a plugin's renderer to win removes its own instead); two plugins claiming
      *  the same point throws `RendererAlreadyRegisteredError`, naming both plugin ids. Legal only
-     *  while `setup` runs (D-S5-4). */
-    registerRenderer<P extends RendererPoint>(point: P, renderer: RendererFor<P>): void;
+     *  while `setup` runs (D-S5-4); the point is freed again when this plugin is disposed, so
+     *  uninstalling and re-installing one plugin is a legal sequence and not a collision with its
+     *  own earlier registration (#155). The returned `Disposer` frees it sooner. */
+    registerRenderer<P extends RendererPoint>(point: P, renderer: RendererFor<P>): Disposer;
     /** S5.5 (API gap found while building `tooltips()`): resolves what should paint `entryId`'s
      *  tooltip body right now — the same precedence `registerRenderer('tooltip', …)`'s slot resolves
      *  at paint time (D-S5-11: the consumer's own `GanttOptions.tooltipRenderer` always wins over a
@@ -145,16 +152,18 @@ export interface PluginContextOf<TGantt = unknown, TDataset = Dataset> {
      *  this plugin is disposed — a provider has no `close()`/`unregister()` of its own, the plugin's
      *  own lifetime is its lifetime. Call: `ctx.view.registerDecoration('underBars', (ctx) =>
      *  ctx.time.eachDay(ctx.span).filter((day) => ctx.time.dayOfWeek(day) >= 6).map((day) => ({
-     *  kind: 'rangeBand', start: day, end: ctx.time.addDays(day, 1) })))`. */
-    registerDecoration(layer: DecorationLayer, provider: DecorationProvider): void;
+     *  kind: 'rangeBand', start: day, end: ctx.time.addDays(day, 1) })))`. The returned `Disposer`
+     *  removes the provider sooner (#155). */
+    registerDecoration(layer: DecorationLayer, provider: DecorationProvider): Disposer;
     /** S5.9, D-S5-21: registers `column` on this Gantt's grid, appended after the consumer's own
      *  `gridColumns` in registration order — a duplicate `field` the consumer's own list already
      *  names is dropped (config beats a plugin). The Field it names still resolves through the
      *  ordinary Field registry (`UnknownFieldError`/`FieldNotColumnableError` apply unchanged). Legal
      *  only while `setup` runs (D-S5-4); removed automatically when this plugin is disposed. When two
      *  plugins register the same field, the newest registration wins, and disposing one plugin never
-     *  disturbs the other plugin's registration. */
-    registerGridColumn(column: GridColumnInput): void;
+     *  disturbs the other plugin's registration. The returned `Disposer` removes the column sooner —
+     *  what a plugin showing its column in one mode only calls (#155). */
+    registerGridColumn(column: GridColumnInput): Disposer;
   };
   /** S5.9, D-S5-22: the pure layout side of the four-seam kind contract — what shape a
    *  consumer-defined kind draws. `interaction`/`view` above answer what you can do to it and how it
@@ -165,8 +174,8 @@ export interface PluginContextOf<TGantt = unknown, TDataset = Dataset> {
      *  it runs in `layout/`, the same DOM-free pass every other item producer runs in. Legal only
      *  while `setup` runs (D-S5-4); removed automatically on disposal, restoring whichever
      *  registration is newest among the rest — disposing one plugin never disturbs another
-     *  plugin's registration on the same Kind. */
-    registerItemProducer(kind: EntryKind, producer: ItemProducer): void;
+     *  plugin's registration on the same Kind. The returned `Disposer` removes it sooner (#155). */
+    registerItemProducer(kind: EntryKind, producer: ItemProducer): Disposer;
   };
 }
 

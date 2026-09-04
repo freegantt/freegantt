@@ -109,12 +109,13 @@ export class ColumnChrome {
       // A commit writes the whole of `effectiveInput()` into `#gridColumnInput` (D-S5-18: one commit
       // sequence, one write). Plugin columns go in too. So disposal must also strip the baked-in
       // copy, by field key. A resize rewrites the column object, so identity no longer matches once
-      // baked in. Strip it only when *this* registration is the one on screen. Another plugin's
-      // registration wins the field when it is newer. The baked column is then that plugin's, and a
-      // strip would delete a live plugin's column and the consumer's committed width.
-      const wasOnScreen = this.#pluginColumns.get(field) === registration;
+      // baked in. One question decides it: does any live registration still ask for this field?
+      // While one does, the field stays on screen, so the baked column — and the width the consumer
+      // committed to it — stays too, whether the plugin leaving was the winner or a loser (#155).
+      // Only the last registration on a field takes the column out with it.
       remove();
-      if (wasOnScreen) {
+      const fieldIsAbandoned = this.#pluginColumns.get(field) === undefined;
+      if (fieldIsAbandoned) {
         this.#gridColumnInput = this.#gridColumnInput.filter((c) => ColumnChrome.#fieldOf(c) !== field);
       }
       this.#ports.rebindFields();

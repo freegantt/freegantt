@@ -62,11 +62,13 @@ export class RegistrationGate {
   /** Wraps a `register*` function so every call checks `assertOpen()` first — the one place the
    *  close-after-setup check is written, so a new registration surface (S5.4's `registerRenderer`,
    *  `registerDecoration`, `registerGridColumn`, or `ctx.commands.register` below) gets it by
-   *  wrapping with this instead of re-deriving `assertOpen()` at its own call site (C2). */
-  guard<TArgs extends unknown[]>(fn: (...args: TArgs) => void): (...args: TArgs) => void {
+   *  wrapping with this instead of re-deriving `assertOpen()` at its own call site (C2). The wrapped
+   *  function's own return value passes straight through — every `register*` hands back a `Disposer`
+   *  (#155), and the gate must not swallow it. */
+  guard<TArgs extends unknown[], TResult>(fn: (...args: TArgs) => TResult): (...args: TArgs) => TResult {
     return (...args: TArgs) => {
       this.assertOpen();
-      fn(...args);
+      return fn(...args);
     };
   }
 }

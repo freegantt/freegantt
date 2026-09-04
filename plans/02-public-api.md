@@ -425,6 +425,32 @@ Group header rows show the `groupBy` label in column 0 and blank cells elsewhere
 
 Published types: `RowSource`, `EntriesRowSource`, `GroupRowSource`, `CustomRowSource`, `CustomRow`, `CustomRowInput`, `RowHeightMode`, `RowSourceCommon`, `RowId`, `CollapseChange`, `RowFilter`, `RowSort`, `FilterPolicy`.
 
+### 4.4 Plugin registrations: one collision policy, one lifetime (#155)
+
+A `PluginContext` hands a plugin six `register*` seams. They answer a collision the same way, so an
+app author installing two plugins meets one rule rather than one rule per seam.
+
+| Seam shape | Two plugins claim the same thing | Seams |
+|---|---|---|
+| **A single paint slot** | **Throws** `RendererAlreadyRegisteredError`, naming both plugin ids. Two plugins painting one point is an authoring mistake, and silence would make it look like the second plugin did nothing. | `view.registerRenderer` |
+| **Keyed by an identifier** | **The newest registration wins**, and the one it covered is still there. | `commands.register`, `interaction.registerKindDefaults`, `view.registerGridColumn`, `layout.registerItemProducer` |
+| **Additive, no key** | No collision to have — every registration runs. | `view.registerDecoration`, `interaction.registerKeybinding` (newest-first at resolve time) |
+
+**Lifetime is the same for all six: a registration lives exactly as long as the plugin that made it.**
+Uninstalling a plugin (`gantt.plugins = […]` without it) removes its registrations, whatever order
+plugins are dropped in. What answers next is the newest registration still standing — the library's
+own default where nothing else claimed the key, and core's own command where a plugin had overridden
+one. So `plugins = [p] → [] → [p]` is an ordinary sequence, not a plugin colliding with what its
+earlier installation left behind.
+
+**Every `register*` returns a `Disposer`.** Ignoring it is the common case, because the plugin's own
+teardown already holds a copy. A plugin that shows a column, a key binding or a decoration in one
+mode only calls it to retract that registration while the plugin keeps running. Calling it twice is
+safe.
+
+One shared mechanism implements all of this — see **Registration table** in `CONTEXT.md`. A seam that
+writes its own stack-and-restore bookkeeping is a bug, not a variation.
+
 ---
 
 ## 5. Shared axes and scroll (multi-Gantt, D9)

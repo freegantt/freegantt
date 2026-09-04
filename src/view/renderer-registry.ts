@@ -5,7 +5,8 @@
 // takes toward its own live `buildContext`.
 
 import { RendererAlreadyRegisteredError } from '../model/index.js';
-import type { PluginId } from '../model/index.js';
+import type { Disposer, PluginId } from '../model/index.js';
+import { createRegistrationTable } from '../layout/registration-table.js';
 import type {
   BarRenderer,
   CellRenderer,
@@ -36,16 +37,23 @@ interface Registration {
 
 /** Built once per `GanttShell` (or per test), the same lifetime `CommandRegistry` has. */
 export class RendererRegistry {
-  #registrations = new Map<RendererPoint, Registration>();
+  /** The shared registration table (#154, #155). A point holds at most one live registration here —
+   *  `register` refuses a second — so the stack is never deeper than one. It is still the right
+   *  home: the table is what makes a registration removable by identity, which is the whole of
+   *  #155's fix. */
+  #registrations = createRegistrationTable<RendererPoint, Registration>();
 
   /** `ctx.view.registerRenderer(point, renderer)`. One slot per point (D-S5-11) — a second plugin
-   *  claiming a point already taken throws, naming both plugin ids. */
-  register<P extends RendererPoint>(point: P, renderer: RendererFor<P>, pluginId: PluginId): void {
+   *  claiming a point already taken throws, naming both plugin ids. The returned `Disposer` frees
+   *  the point again: a plugin's registration lives exactly as long as the plugin does, so
+   *  uninstalling and re-installing the same plugin is a legal sequence, not a collision with its
+   *  own dead registration (#155). */
+  register<P extends RendererPoint>(point: P, renderer: RendererFor<P>, pluginId: PluginId): Disposer {
     const existing = this.#registrations.get(point);
     if (existing !== undefined) {
       throw new RendererAlreadyRegisteredError(point, existing.pluginId, pluginId);
     }
-    this.#registrations.set(point, { renderer, pluginId });
+    return this.#registrations.register(point, { renderer, pluginId });
   }
 
   /** D-S5-11: the consumer's own renderer always wins over a plugin's; with neither, "nothing" (the

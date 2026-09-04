@@ -8,7 +8,7 @@
 // writing against `Gantt` names the bound `Command`/`CommandContext`/`CommandRegistry`/`KeyBinding`;
 // code that parameterizes over its own Gantt type names the `*Of` forms declared here.
 
-import type { Entry, EntryId, FieldKey, KeyChord } from '../model/index.js';
+import type { Disposer, Entry, EntryId, FieldKey, KeyChord } from '../model/index.js';
 import type { Dataset } from './dataset.js';
 
 /** What focus a chord or a right-click landed on (issue #137 F6) — S5.7's and S5.11's chord scoping
@@ -54,7 +54,11 @@ export interface CommandOf<TGantt = unknown, TDataset = Dataset> {
  *  `UnknownCommandError` for an id nothing owns; a registered command whose `when` declines is a
  *  silent no-op, the same posture `available`'s own filter takes. */
 export interface CommandRegistryOf<TGantt = unknown, TDataset = Dataset> {
-  register(command: CommandOf<TGantt, TDataset>): void;
+  /** #155: registering an id a command already holds stacks on top of it rather than replacing it.
+   *  The newest registration answers `run`, and the returned `Disposer` removes exactly this one —
+   *  the command underneath then answers again, which is how a plugin's override of a core command
+   *  undoes itself when that plugin is uninstalled (D-S5-7). */
+  register(command: CommandOf<TGantt, TDataset>): Disposer;
   run(id: string): void;
   /** Commands whose `when` passes for this context, in registration order. */
   available(ctx: CommandContextOf<TGantt, TDataset>): readonly CommandOf<TGantt, TDataset>[];

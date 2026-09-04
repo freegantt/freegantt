@@ -11,6 +11,12 @@ const layer = (name) => `^src/${name}(/|$)`;
 // the forbidden set below without opening a general edge to the rest of that layer. Every other file
 // in `data/` stays unreachable from `render/`/`extensions/`.
 const DEV_MODE_LEAF = '^src/data/dev-mode\\.ts$';
+// The same widening for the one registration mechanism every `register*` seam shares (#154, #155):
+// a stack per key, a `Disposer` that removes exactly its own registration. It imports one type from
+// `model/` and nothing else, so naming it here routes no `layout/` behaviour into `extensions/` —
+// `extensions/commands.ts` is the only importer, and it needs the identical stack-and-restore the
+// three view-side seams already take. Duplicating the mechanism there is what this leaf prevents.
+const REGISTRATION_TABLE_LEAF = '^src/layout/registration-table\\.ts$';
 
 function forbid(name, from, allowedTargets, allowedLeaves = []) {
   const others = [
@@ -88,9 +94,13 @@ module.exports = {
       severity: 'error',
       comment:
         'plans/s5-extensibility-and-editing/s5.1-plugin-runtime.md D-S5-5: src/extensions may only ' +
-        'import src/api and src/model, plus the named leaf src/data/dev-mode.ts.',
+        'import src/api and src/model, plus the named leaves src/data/dev-mode.ts and ' +
+        'src/layout/registration-table.ts.',
       from: { path: '^src/extensions' },
-      to: { path: '^src/(?!extensions|api|model)', pathNot: DEV_MODE_LEAF },
+      to: {
+        path: '^src/(?!extensions|api|model)',
+        pathNot: [DEV_MODE_LEAF, REGISTRATION_TABLE_LEAF],
+      },
     },
     // model and time are the type/primitive surface api/ re-exports (plans/01 §1: "api/ and model/
     // types are public", widened to time/'s public primitives and presets by #25, and to layout/'s
