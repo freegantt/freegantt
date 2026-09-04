@@ -1315,6 +1315,53 @@ describe('Gantt renderer callbacks (S5.4, D-S5-10/11/12)', () => {
     gantt.destroy();
   });
 
+  it('a headerRenderer paints the grid header cell, and reassigning it repaints with no header remount (I11)', async () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({ entries: sampleEntries.slice(0, 1), timeZone: 'UTC' });
+    const gantt = new Gantt({
+      container,
+      dataset,
+      headerRenderer: ({ column }) => ({ class: { 'my-header': true }, text: `[${column.header}]` }),
+    });
+
+    const headerCell = container.querySelector<HTMLElement>('.fg-col-header')!;
+    const headerLabel = headerCell.querySelector<HTMLElement>('.fg-col-header-label')!;
+    expect(headerLabel.classList.contains('my-header')).toBe(true);
+    expect(headerCell.textContent).toBe('[Name]');
+
+    gantt.headerRenderer = undefined;
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    expect(container.querySelector('.fg-col-header')).toBe(headerCell);
+    expect(headerLabel.classList.contains('my-header')).toBe(false);
+    expect(headerCell.textContent).toBe('Name');
+
+    gantt.destroy();
+  });
+
+  it('a plugin-registered header renderer paints when no consumer headerRenderer is set (D-S5-11)', async () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({ entries: sampleEntries.slice(0, 1), timeZone: 'UTC' });
+    const gantt = new Gantt({
+      container,
+      dataset,
+      plugins: [
+        {
+          id: 'demo.header-renderer',
+          setup(ctx) {
+            ctx.view.registerRenderer('header', () => ({ text: 'plugin-header' }));
+            return () => {};
+          },
+        },
+      ],
+    });
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+
+    const headerCell = container.querySelector<HTMLElement>('.fg-col-header')!;
+    expect(headerCell.textContent).toBe('plugin-header');
+
+    gantt.destroy();
+  });
+
   it('ctx.view.registerRenderer claims a point; a second plugin claiming the same point throws RendererAlreadyRegisteredError', () => {
     const container = document.createElement('div');
     const dataset = new Dataset({ entries: sampleEntries.slice(0, 1), timeZone: 'UTC' });
