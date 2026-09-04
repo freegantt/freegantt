@@ -85,11 +85,20 @@ export class ColumnChrome {
    *  gate every other `register*` takes — enforced by the caller (`GanttShell`), not here. Returns a
    *  `Disposer` that removes it again, same lifetime a decoration provider gets. */
   registerPluginColumn(column: GridColumnInput): Disposer {
+    const field = ColumnChrome.#fieldOf(column);
     this.#pluginColumns = [...this.#pluginColumns, column];
     this.#ports.rebindFields();
     this.#ports.requestFrame();
     return () => {
-      this.#pluginColumns = this.#pluginColumns.filter((c) => c !== column);
+      // `commit()` (a resize, a reorder, or a plain `gridColumns` assignment) writes the *whole* of
+      // `effectiveInput()` — plugin columns included — straight into `#gridColumnInput` (D-S5-18: one
+      // commit sequence, one write). So after any commit since registration, this column no longer
+      // lives only in `#pluginColumns`; it has to be stripped from `#gridColumnInput` too, or it
+      // survives disposal — contradicting `api/plugin.ts`'s "removed automatically when this plugin is
+      // disposed". Filter by field key (not the object reference captured above): a resize/reorder
+      // rewrites the object itself (new width/position), so identity no longer matches once baked in.
+      this.#pluginColumns = this.#pluginColumns.filter((c) => ColumnChrome.#fieldOf(c) !== field);
+      this.#gridColumnInput = this.#gridColumnInput.filter((c) => ColumnChrome.#fieldOf(c) !== field);
       this.#ports.rebindFields();
       this.#ports.requestFrame();
     };
@@ -182,6 +191,10 @@ export class ColumnChrome {
 
   #asGridColumns(input: readonly GridColumnInput[]): GridColumn[] {
     return input.map((item) => (typeof item === 'string' ? { field: item } : { ...item }));
+  }
+
+  static #fieldOf(item: GridColumnInput): FieldKey {
+    return typeof item === 'string' ? item : item.field;
   }
 
   /** A resize/reorder gesture reaches every column actually on screen (S5.9: `effectiveInput()`

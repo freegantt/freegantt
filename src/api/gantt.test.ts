@@ -1512,6 +1512,60 @@ describe('Gantt plugin kind registrations (S5.9, D-S5-21/D-S5-22)', () => {
     gantt.destroy();
   });
 
+  it('a resize commit bakes a plugin column in, but disposing the plugin still removes it', async () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      fieldTypes: { risk: { rollUp: 'max', column: { header: 'Risk' } } },
+      fields: [{ key: 'risk', type: 'risk' }],
+      entries: [{ ...sampleEntries[0]!, meta: { risk: 'high' } }],
+    });
+    const gantt = new Gantt({
+      container,
+      dataset,
+      gridColumns: ['name'],
+      plugins: [
+        {
+          id: 'demo.riskColumn',
+          setup(ctx) {
+            ctx.view.registerGridColumn({ field: 'risk' });
+            return () => {};
+          },
+        },
+      ],
+    });
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+
+    // A resize drag on the plugin's own grip: `commitWidth`'s `nextInput` comes from
+    // `effectiveInput()` (base + plugin columns), so this bakes "risk" straight into
+    // `#gridColumnInput` — the same seam `api/plugin.ts`'s disposal promise has to reach through.
+    const grip = container.querySelector<HTMLElement>(
+      '.fg-col-header[data-field="risk"] .fg-column-resizer',
+    )!;
+    const headerPane = container.querySelector<HTMLElement>('.fg-grid-header')!;
+    headerPane.setPointerCapture = vi.fn();
+    headerPane.releasePointerCapture = vi.fn();
+    grip.dispatchEvent(
+      new PointerEvent('pointerdown', { clientX: 100, clientY: 0, pointerId: 1, bubbles: true }),
+    );
+    headerPane.dispatchEvent(
+      new PointerEvent('pointermove', { clientX: 250, clientY: 0, pointerId: 1, bubbles: true }),
+    );
+    grip.dispatchEvent(
+      new PointerEvent('pointerup', { clientX: 250, clientY: 0, pointerId: 1, bubbles: true }),
+    );
+
+    expect(container.querySelector('[data-field="risk"]')).not.toBeNull();
+
+    gantt.plugins = [];
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    // Without the fix, the resized "risk" column survives in `#gridColumnInput` even though the
+    // plugin that registered it is gone.
+    expect(container.querySelector('[data-field="risk"]')).toBeNull();
+
+    gantt.destroy();
+  });
+
   it('a duplicate field the consumer already names is dropped from the plugin side (config beats a plugin)', () => {
     const container = document.createElement('div');
     const dataset = new Dataset({ timeZone: 'UTC', entries: sampleEntries.slice(0, 1) });
