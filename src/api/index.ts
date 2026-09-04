@@ -20,6 +20,7 @@ export type {
   FieldTypeName,
   GridColumn,
   GridColumnInput,
+  ColumnAlign,
   ColumnCellRenderer,
   ColumnCellRendererContext,
   EntityAdded,

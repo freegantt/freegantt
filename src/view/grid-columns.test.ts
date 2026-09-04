@@ -49,6 +49,14 @@ describe('resolveColumns (D-S4-12)', () => {
     expect(columns[0]?.format(entry)).toBe('$500');
   });
 
+  it("an object's align: 'center' overrides the Field's column default", () => {
+    const columns = resolveColumns([{ field: 'cost', align: 'center' }], costRegistry(), {
+      timeZone: zone,
+      locale,
+    });
+    expect(columns[0]?.align).toBe('center');
+  });
+
   it("an object merges per-key over the Field's column defaults", () => {
     const columns = resolveColumns([{ field: 'cost', header: 'Budget' }], costRegistry(), {
       timeZone: zone,

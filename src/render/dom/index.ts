@@ -19,6 +19,7 @@ import type {
   ClientPoint,
 } from '../../layout/index.js';
 import type { FrameColumn } from '../../layout/index.js';
+import type { ColumnAlign } from '../../model/index.js';
 import type { RenderBackend, RenderSurfaces, InteractionState, HitResult } from '../backend.js';
 import { attachDateLines } from './date-line.js';
 import type { DateLineAttachment } from './date-line.js';
@@ -66,7 +67,7 @@ type CellItem = {
   key: string;
   text: string;
   first: boolean;
-  align: 'start' | 'end';
+  align: ColumnAlign;
   width?: number;
   flex?: number;
   expandable: boolean;
@@ -80,7 +81,7 @@ type CellItem = {
 type CellGeom = {
   text: string;
   first: boolean;
-  align: 'start' | 'end';
+  align: ColumnAlign;
   width: number;
   flex: number;
   expandable: boolean;
@@ -89,7 +90,7 @@ type CellGeom = {
 };
 type HeaderCellGeom = {
   text: string;
-  align: 'start' | 'end';
+  align: ColumnAlign;
   width: number;
   flex: number;
   /** S5.7, D-S5-18: default `true` when absent — painted as an attribute so the base stylesheet can
@@ -158,10 +159,7 @@ function cellItemsFor(
   });
 }
 
-function paintColumnBox(
-  node: HTMLElement,
-  geom: { width: number; flex: number; align: 'start' | 'end' },
-): void {
+function paintColumnBox(node: HTMLElement, geom: { width: number; flex: number; align: ColumnAlign }): void {
   node.dataset['align'] = geom.align;
   if (geom.width > 0) {
     node.style.width = `${geom.width}px`;

@@ -33,10 +33,15 @@ const GRID_WITH_BUDGET: readonly GridColumnInput[] = [
   'name',
   'start',
   'end',
-  'duration',
+  { field: 'duration', align: 'start' },
   { field: 'cost', header: 'Budget' },
 ];
-const GRID_WITHOUT_BUDGET: readonly GridColumnInput[] = ['name', 'start', 'end', 'duration'];
+const GRID_WITHOUT_BUDGET: readonly GridColumnInput[] = [
+  'name',
+  'start',
+  'end',
+  { field: 'duration', align: 'start' },
+];
 
 const dataset = new Dataset<{ cost?: number; team?: string }, { cost: number; team?: string }>({
   entries: demoTreeEntryInputs,
