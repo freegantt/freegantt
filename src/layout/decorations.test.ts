@@ -103,4 +103,30 @@ describe('DecorationRunner', () => {
     const result = runner.run(baseInput([]));
     expect(result).toEqual({ underBars: [], overBars: [] });
   });
+
+  it('recomputes when a same-count provider list swaps in a different provider', () => {
+    const runner = new DecorationRunner();
+    const first = vi.fn<DecorationProvider>(() => [{ kind: 'rangeBand', start, end: dayEnd, class: 'a' }]);
+    const second = vi.fn<DecorationProvider>(() => [{ kind: 'rangeBand', start, end: dayEnd, class: 'b' }]);
+    runner.run(baseInput([{ layer: 'underBars', provider: first }]));
+    const result = runner.run(baseInput([{ layer: 'underBars', provider: second }]));
+    expect(second).toHaveBeenCalledTimes(1);
+    expect(result.underBars).toEqual([
+      { kind: 'rangeBand', x: xForInstant(start), width: xForInstant(dayEnd), class: 'b' },
+    ]);
+  });
+
+  it('recomputes once the bound scale changes, even with the same span and row set', () => {
+    const runner = new DecorationRunner();
+    const provider: DecorationProvider = () => [{ kind: 'rangeBand', start, end: dayEnd }];
+    runner.run(baseInput([{ layer: 'underBars', provider }]));
+    const rescaled = createTimeScale({ timeZone: ZONE, range: { start, end }, pxPerMs: 0.002 });
+    const result = runner.run({
+      ...baseInput([{ layer: 'underBars', provider }]),
+      xForInstant: (at) => rescaled.xForInstant(at),
+    });
+    expect(result.underBars).toEqual([
+      { kind: 'rangeBand', x: rescaled.xForInstant(start), width: rescaled.xForInstant(dayEnd) },
+    ]);
+  });
 });

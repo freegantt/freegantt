@@ -46,9 +46,16 @@ function toPixels(input: DecorationInput, xForInstant: (at: Instant) => number):
   return band;
 }
 
-function memoKey(input: RunDecorationsInput): string {
+function memoKey(input: RunDecorationsInput, providerIds: ReadonlyMap<DecorationProvider, number>): string {
   const rowIds = input.rows.map((row) => row.id).join(',');
-  return `${input.timeZone}|${input.span.start}|${input.span.end}|${input.providers.length}|${rowIds}`;
+  const providers = input.providers
+    .map(({ layer, provider }) => `${layer}:${providerIds.get(provider)}`)
+    .join(',');
+  // Two calls into the bound `TimeScale` stand in for its revision: a container resize under
+  // `range: 'fitDataset'` keeps `span.start`/`span.end` unchanged but moves every pixel, so the key
+  // must sample the scale itself, not just the dates it maps.
+  const scaleSample = `${input.xForInstant(input.span.start)}|${input.xForInstant(input.span.end)}`;
+  return `${input.timeZone}|${input.span.start}|${input.span.end}|${scaleSample}|${providers}|${rowIds}`;
 }
 
 /** One instance per Gantt (I2), held alongside its `FrameLayout` — never shared. `run()` recomputes
@@ -57,6 +64,19 @@ function memoKey(input: RunDecorationsInput): string {
 export class DecorationRunner {
   #lastKey: string | undefined;
   #lastResult: DecorationsByLayer = EMPTY;
+  #nextProviderId = 0;
+  #providerIds = new WeakMap<DecorationProvider, number>();
+
+  /** A stable id per provider function, not its array position — two same-length provider lists
+   *  with different providers (or the same providers reordered) must not collide on one memo key. */
+  #idOf(provider: DecorationProvider): number {
+    let id = this.#providerIds.get(provider);
+    if (id === undefined) {
+      id = this.#nextProviderId++;
+      this.#providerIds.set(provider, id);
+    }
+    return id;
+  }
 
   run(input: RunDecorationsInput): DecorationsByLayer {
     if (input.providers.length === 0) {
@@ -65,7 +85,8 @@ export class DecorationRunner {
       return EMPTY;
     }
 
-    const key = memoKey(input);
+    const providerIds = new Map(input.providers.map(({ provider }) => [provider, this.#idOf(provider)]));
+    const key = memoKey(input, providerIds);
     if (key === this.#lastKey) return this.#lastResult;
 
     const time = createZonedTime(input.timeZone);
