@@ -75,7 +75,7 @@ export type EntryEdit<
  *  without reaching into `data/`. */
 /** Storage-shaped patch plus the Field keys the caller proposed. `proposedKeys` is part of the edit,
  *  not a side channel — spread keeps it, overlay never copies it onto an Entry. */
-export type StoredEdit<TMeta = unknown> = Partial<Omit<Entry<TMeta>, 'id'>> & {
+export type StoredEdit = Partial<Omit<Entry, 'id'>> & {
   readonly proposedKeys?: ReadonlySet<string>;
 };
 
