@@ -11,6 +11,7 @@ import { entryIdOfItem, itemIdFromDataset } from '../../model/index.js';
 import type { Entry } from '../../model/index.js';
 import { buildMenu, resolveMenuEntries } from './menu-view.js';
 import type { MenuEntry } from './menu-view.js';
+import { barUnder } from './bar-under.js';
 
 export type { MenuItem, MenuEntry } from './menu-view.js';
 
@@ -18,13 +19,6 @@ export interface ContextMenuOptions {
   /** Returns the final entry list; `defaults` is `commands.available(ctx)` mapped to items, in
    *  registration order. Append, remove, reorder or replace — the returned array is what renders. */
   items?(ctx: { entry?: Entry; defaults: readonly MenuEntry[] }): readonly MenuEntry[];
-}
-
-/** `.fg-bar` is the one DOM contract a hover/click plugin has (`render/dom/index.ts` writes
- *  `dataset.itemId` on every bar node) — same seam `tooltips.ts` reaches through. */
-function barUnder(node: Node): HTMLElement | undefined {
-  const el = node instanceof Element ? node.closest<HTMLElement>('.fg-bar') : null;
-  return el ?? undefined;
 }
 
 /** D-S5-13: right-click, or `Shift+F10`/the Menu key, opens a menu of the commands whose `when`
