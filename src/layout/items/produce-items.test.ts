@@ -115,7 +115,7 @@ describe('produceItemsForRow', () => {
     expect(spanItems[0]?.label).toBe('t2');
   });
 
-  it('register() returns a Disposer that restores the prior producer for that kind', () => {
+  it('register() returns a Disposer that falls back to the built-in producer for that kind', () => {
     const own = createItemProducerRegistry();
     const originalSpan = own.producerFor('span');
     const dispose = own.register('span', () => []);

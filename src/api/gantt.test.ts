@@ -1862,6 +1862,74 @@ describe('Gantt plugin kind registrations (S5.9, D-S5-21/D-S5-22)', () => {
     gantt.destroy();
   });
 
+  it('two plugins registering one field by the same bare string still dispose independently (#147)', async () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      fieldTypes: { risk: { rollUp: 'max', column: { header: 'Risk' } } },
+      fields: [{ key: 'risk', type: 'risk' }],
+      entries: [{ ...sampleEntries[0]!, meta: { risk: 'high' } }],
+    });
+    // `GridColumnInput` is `string | GridColumn`, so both plugins hand `registerGridColumn` the
+    // very same value. A disposer that asks "is the column on screen mine?" by comparing that
+    // value would answer `true` for both registrations, and the loser's disposal would then strip
+    // the winner's committed width. Each registration carries its own identity instead (#154).
+    const registerRisk = (ctx: PluginContext): void => {
+      ctx.view.registerGridColumn('risk');
+    };
+    const pluginA = {
+      id: 'demo.riskSharedA',
+      setup(ctx: PluginContext) {
+        registerRisk(ctx);
+        return () => {};
+      },
+    };
+    const pluginB = {
+      id: 'demo.riskSharedB',
+      setup(ctx: PluginContext) {
+        registerRisk(ctx);
+        return () => {};
+      },
+    };
+    const gantt = new Gantt({
+      container,
+      dataset,
+      gridColumns: ['name'],
+      plugins: [pluginA, pluginB],
+    });
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+
+    const grip = container.querySelector<HTMLElement>(
+      '.fg-col-header[data-field="risk"] .fg-column-resizer',
+    )!;
+    const headerPane = container.querySelector<HTMLElement>('.fg-grid-header')!;
+    headerPane.setPointerCapture = vi.fn();
+    headerPane.releasePointerCapture = vi.fn();
+    grip.dispatchEvent(
+      new PointerEvent('pointerdown', { clientX: 0, clientY: 0, pointerId: 1, bubbles: true }),
+    );
+    headerPane.dispatchEvent(
+      new PointerEvent('pointermove', { clientX: 200, clientY: 0, pointerId: 1, bubbles: true }),
+    );
+    grip.dispatchEvent(
+      new PointerEvent('pointerup', { clientX: 200, clientY: 0, pointerId: 1, bubbles: true }),
+    );
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+
+    let riskHeader = container.querySelector<HTMLElement>('.fg-col-header[data-field="risk"]')!;
+    expect(riskHeader.style.width).toBe('200px');
+
+    // Dropping A, a loser on this field, must leave B's baked-in column at its committed width.
+    gantt.plugins = [pluginB];
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+
+    riskHeader = container.querySelector<HTMLElement>('.fg-col-header[data-field="risk"]')!;
+    expect(riskHeader).not.toBeNull();
+    expect(riskHeader.style.width).toBe('200px');
+
+    gantt.destroy();
+  });
+
   it('a resize commit bakes the winning plugin column in; disposing that plugin keeps the field but loses the width (#147)', async () => {
     const container = document.createElement('div');
     const dataset = new Dataset({

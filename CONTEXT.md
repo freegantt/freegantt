@@ -483,7 +483,7 @@ Whether a specific gesture (move, resize, select, link) is permitted on a given 
 _Avoid_: Permission, ability
 
 **KindDefaults**:
-The middle precedence layer `resolveCapabilities` reads between the consumer's own `interactions` config and the library's built-in table — a plugin's per-Kind gesture defaults, registered via `ctx.interaction.registerKindDefaults` (S5.9, D-S5-22). A second registration for the same Kind overrides the first while both plugins stay installed; disposing one removes exactly that registration, in any order, so the newest registration still standing wins.
+The middle precedence layer `resolveCapabilities` reads between the consumer's own `interactions` config and the library's built-in table — a plugin's per-Kind gesture defaults, registered via `ctx.interaction.registerKindDefaults` (S5.9, D-S5-22). A second registration for the same Kind overrides the first while both plugins stay installed. Disposing one removes exactly that registration, in any order. The newest registration still standing then wins.
 _Avoid_: Interactions (that is the consumer's own per-entry config, one precedence layer above this)
 
 **GanttPlugin**:

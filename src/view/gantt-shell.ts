@@ -721,29 +721,29 @@ export class GanttShell {
       const emitEntryEdit = (payload: EntryFieldEdit): void => {
         this.#events.emit('entryEdit', payload);
       };
-      // S5.9, D-S5-22: same one-shot gate as `registerRenderer`/`registerDecoration`; disposal
-      // restores whichever producer `kind` resolved to before, via the registry's own `Disposer`
+      // S5.9, D-S5-22: same one-shot gate as `registerRenderer`/`registerDecoration`. Disposal
+      // removes this registration through the registry's own `Disposer`
       // (`ItemProducerRegistry.register`), not a bespoke undo kept here.
       const registerItemProducer = (kind: EntryKind, producer: ItemProducer): void => {
         gate.assertOpen();
-        const restore = this.#itemProducerRegistry.register(kind, producer);
+        const remove = this.#itemProducerRegistry.register(kind, producer);
         // `#layout`'s own per-row item cache (`FrameMemory#packed`) only forgets a row on a dataset
         // change, row-count change, or metrics change — none of which a producer registration is.
         // Force every row to re-produce on the next render, the same invalidation a collapse change
-        // or a gridColumns commit already asks for; the same on the way out, so disposal's own
-        // restored producer actually repaints too.
+        // or a gridColumns commit already asks for. Do the same on the way out, so the producer
+        // that wins after disposal actually repaints too.
         this.#layout.invalidateFrom(0);
         this.#frames.request();
         disposables.add(() => {
-          restore();
+          remove();
           this.#layout.invalidateFrom(0);
           this.#frames.request();
         });
       };
-      // S5.9, D-S5-22: same gate; registers through the shared table (#154), so a second plugin
-      // registering the same kind overrides the first while both stay installed, and disposing
-      // one registration never disturbs another plugin's live registration on the same kind, in
-      // any disposal order (#146).
+      // S5.9, D-S5-22: same gate. This registers through the shared table (#154). A second plugin
+      // registering the same kind overrides the first while both stay installed. Disposing one
+      // registration never disturbs another plugin's live registration on the same kind, in any
+      // disposal order (#146).
       const registerKindDefaults = (kind: EntryKind, defaults: KindDefaults): void => {
         gate.assertOpen();
         const remove = this.#kindDefaults.register(kind, defaults);
