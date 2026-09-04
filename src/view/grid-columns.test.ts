@@ -2,7 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { FieldRegistry } from '../data/fields/field-registry.js';
 import { FieldNotColumnableError, UnknownFieldError } from '../model/index.js';
 import { CORE_FIELDS } from '../data/fields/core-fields.js';
-import { resolveGanttFields, resolveColumns, resolveFieldCompares, toGridColumn } from './grid-columns.js';
+import {
+  DEFAULT_COLUMN_WIDTH_PX,
+  resolveGanttFields,
+  resolveColumns,
+  resolveFieldCompares,
+  toGridColumn,
+} from './grid-columns.js';
 import type { FieldLookup } from '../model/index.js';
 import type { Entry, Field, FieldKey } from '../model/index.js';
 import { entryId } from '../model/index.js';
@@ -65,6 +71,43 @@ describe('resolveColumns (D-S4-12)', () => {
     expect(columns[0]?.header).toBe('Budget');
     expect(columns[0]?.width).toBe(90);
     expect(columns[0]?.align).toBe('end');
+  });
+
+  it('a column that names no width takes DEFAULT_COLUMN_WIDTH_PX (#139)', () => {
+    const registry = new FieldRegistry({ fields: [{ key: 'team', column: { header: 'Team' } }] });
+    const columns = resolveColumns(['team'], registry, { timeZone: zone, locale });
+    expect(columns[0]?.width).toBe(DEFAULT_COLUMN_WIDTH_PX);
+    expect(columns[0]?.flex).toBeUndefined();
+  });
+
+  it('bind.defaultColumnWidth replaces the fallback for a column with no width of its own (#139)', () => {
+    const registry = new FieldRegistry({ fields: [{ key: 'team', column: { header: 'Team' } }] });
+    const columns = resolveColumns(['team'], registry, {
+      timeZone: zone,
+      locale,
+      defaultColumnWidth: 180,
+    });
+    expect(columns[0]?.width).toBe(180);
+  });
+
+  it('a column that asks to flex keeps no width (#139)', () => {
+    const registry = new FieldRegistry({ fields: [{ key: 'team', column: { header: 'Team' } }] });
+    const columns = resolveColumns([{ field: 'team', flex: 2 }], registry, {
+      timeZone: zone,
+      locale,
+      defaultColumnWidth: 180,
+    });
+    expect(columns[0]?.width).toBeUndefined();
+    expect(columns[0]?.flex).toBe(2);
+  });
+
+  it("an authored width beats both the Field's default and defaultColumnWidth (#139)", () => {
+    const columns = resolveColumns([{ field: 'cost', width: 200 }], costRegistry(), {
+      timeZone: zone,
+      locale,
+      defaultColumnWidth: 180,
+    });
+    expect(columns[0]?.width).toBe(200);
   });
 
   it('an unknown key throws UnknownFieldError', () => {

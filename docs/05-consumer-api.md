@@ -26,6 +26,7 @@ These landed in slice S4. Details and examples live in `plans/02-public-api.md` 
 ### Gantt
 
 - `gridColumns` — which columnable Fields this view shows, in order
+- Grid columns are fixed-width (#139). A column takes its own `width`, else its Field's `column.width`, else `--fg-column-width` (120). When the set outgrows the grid pane, the pane scrolls horizontally to reach it (#126). Give a column `flex` instead to have it share the pane's leftover room.
 - `rowSource` — what rows are (`entries` tree, `group` by value, or `custom` resolve)
 - `rowSource.filter` / `groupBy` / `sort.compare` — receive the bound Field reader as a second argument (`(entry, fields) => fields.read(entry, 'team')`). One-argument callbacks still work.
 - `rowSource.heightMode: 'pack'` — stack overlaps into lanes (on the row source, not on `Gantt`)

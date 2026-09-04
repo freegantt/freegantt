@@ -1610,9 +1610,14 @@ export class GanttShell {
   }
 
   #columnBind(): ResolveColumnsBind {
-    return this.#locale !== undefined
-      ? { timeZone: this.#options.dataset.timeZone, locale: this.#locale }
-      : { timeZone: this.#options.dataset.timeZone };
+    // #139: `defaultColumnWidth` makes a column fixed-width unless it names a `flex` of its own.
+    // `ColumnChrome` owns both column-width knobs, so both are read off the container the same way.
+    const bind: ResolveColumnsBind = {
+      timeZone: this.#options.dataset.timeZone,
+      defaultColumnWidth: this.#columnChrome.defaultWidthPx(),
+    };
+    if (this.#locale !== undefined) bind.locale = this.#locale;
+    return bind;
   }
 
   /** The one place `minGridWidth` is applied (#127). The floor bounds what a splitter drag can

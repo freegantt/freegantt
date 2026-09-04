@@ -52,7 +52,9 @@ export const CORE_FIELDS: readonly Field[] = Object.freeze([
     source: { from: 'entry', field: 'name' },
     equals: byReference,
     formatValue: stringifyPrimitive,
-    column: { header: 'Name' },
+    // #139: the Name column carries the tree indent and twisty on top of its text, so its natural
+    // width is wider than a date's.
+    column: { header: 'Name', width: 240 },
   },
   {
     key: 'start',
@@ -60,7 +62,7 @@ export const CORE_FIELDS: readonly Field[] = Object.freeze([
     rollUp: 'min',
     equals: byReference,
     formatValue: formatStart,
-    column: { header: 'Start' },
+    column: { header: 'Start', width: 120 },
   },
   {
     key: 'end',
@@ -68,14 +70,14 @@ export const CORE_FIELDS: readonly Field[] = Object.freeze([
     rollUp: 'max',
     equals: byReference,
     formatValue: formatEnd,
-    column: { header: 'End' },
+    column: { header: 'End', width: 120 },
   },
   {
     key: 'kind',
     source: { from: 'entry', field: 'kind' },
     equals: byReference,
     formatValue: stringifyPrimitive,
-    column: { header: 'Kind' },
+    column: { header: 'Kind', width: 100 },
   },
   {
     key: 'parentId',
@@ -100,6 +102,6 @@ export const CORE_FIELDS: readonly Field[] = Object.freeze([
     },
     compare: compareDuration,
     formatValue: formatDuration,
-    column: { header: 'Duration', align: 'end' },
+    column: { header: 'Duration', align: 'end', width: 100 },
   },
 ]);

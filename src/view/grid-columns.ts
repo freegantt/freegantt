@@ -10,9 +10,17 @@ import { pickDefined } from '../layout/index.js';
 
 export const DEFAULT_GRID_COLUMNS: readonly GridColumnInput[] = Object.freeze(['name']);
 
+/** #139: what a column measures when nobody names a width for it. A Grid column is fixed-width by
+ *  default — it keeps the width it was given, and the column set scrolls the pane once it outgrows
+ *  it (#126). `flex` is the opt-out: a column that names one shares the leftover room instead. */
+export const DEFAULT_COLUMN_WIDTH_PX = 120;
+
 export interface ResolveColumnsBind {
   timeZone: string;
   locale?: Intl.LocalesArgument;
+  /** #139: the fallback width for a column that names neither `width` nor `flex`. `GanttShell`
+   *  reads it off `--fg-column-width`; a caller that omits it gets `DEFAULT_COLUMN_WIDTH_PX`. */
+  defaultColumnWidth?: number;
 }
 
 function defaultCompareStored(locale: Intl.LocalesArgument): (a: unknown, b: unknown) => number {
@@ -27,7 +35,11 @@ function defaultCompareStored(locale: Intl.LocalesArgument): (a: unknown, b: unk
   };
 }
 
-function columnFrom(item: GridColumnInput, field: Field): Omit<ResolvedColumn, 'format'> {
+function columnFrom(
+  item: GridColumnInput,
+  field: Field,
+  defaultWidthPx: number,
+): Omit<ResolvedColumn, 'format'> {
   const input: GridColumn = typeof item === 'string' ? { field: item } : item;
   const defaults = field.column;
   if (defaults === undefined) throw new FieldNotColumnableError(String(field.key));
@@ -40,9 +52,18 @@ function columnFrom(item: GridColumnInput, field: Field): Omit<ResolvedColumn, '
     resizable: input.resizable ?? defaults.resizable ?? true,
     movable: input.movable ?? defaults.movable ?? true,
   };
+  // #139: a Grid column is fixed-width by default. `flex` is the one opt-out — a column that names
+  // one shares the pane's leftover room instead, and never falls back to `defaultWidthPx`.
+  // `width` and `flex` answer one question between them, so they merge as a pair rather than key by
+  // key: a column that sizes itself at all replaces the Field's sizing whole. Otherwise a Gantt
+  // asking for `flex: 1` would silently lose to a `width` the Field happened to declare. Naming
+  // both on one side keeps the width — `data-fixed` already wins in the stylesheet.
+  const sizedHere = input.width !== undefined || input.flex !== undefined;
+  const flex = sizedHere ? input.flex : defaults.flex;
+  const authoredWidth = sizedHere ? input.width : defaults.width;
   const candidates = {
-    width: input.width ?? defaults.width,
-    flex: input.flex ?? defaults.flex,
+    width: flex === undefined ? (authoredWidth ?? defaultWidthPx) : authoredWidth,
+    flex,
     // S5.7, D-S5-17: per-column `cellRenderer` comes only from this Gantt's own column —
     // `Field.column` (`defaults`) cannot carry one (`model/field.ts`'s narrower default set).
     cellRenderer: input.cellRenderer,
@@ -86,12 +107,13 @@ export function resolveColumns(
   const fieldCtx = createFieldContext(lookup, bind.timeZone);
   const locale: Intl.LocalesArgument = bind.locale ?? [];
   const formatCtx: FormatContext = { ...fieldCtx, locale };
+  const defaultWidthPx = bind.defaultColumnWidth ?? DEFAULT_COLUMN_WIDTH_PX;
 
   return gridColumns.map((item) => {
     const key = typeof item === 'string' ? item : item.field;
     const field = lookup.get(key);
     if (field === undefined) throw new UnknownFieldError(String(key));
-    const column = columnFrom(item, field);
+    const column = columnFrom(item, field, defaultWidthPx);
     return {
       ...column,
       format: (entry: Entry) => {
