@@ -8,8 +8,9 @@ import { createPopup } from '../popup.js';
 import type { Popup, PopupPlacement } from '../popup.js';
 import type { GanttPlugin, PluginContext } from '../../api/gantt.js';
 import { entryIdOfItem, itemIdFromDataset } from '../../model/index.js';
-import type { Entry, TooltipColumn } from '../../model/index.js';
+import type { ElementDescription, Entry, TooltipColumn } from '../../model/index.js';
 import { formatDate, formatEndInclusive } from '../../api/time-facade.js';
+import { barUnder } from './bar-under.js';
 
 export interface TooltipsOptions {
   /** Milliseconds of hover before the tooltip opens. Default `400`. */
@@ -21,20 +22,12 @@ export interface TooltipsOptions {
 const DEFAULT_DELAY_MS = 400;
 const DEFAULT_PLACEMENT: PopupPlacement = 'top';
 
-/** `.fg-bar` is the one DOM contract a hover plugin has (`render/dom/index.ts` writes
- *  `dataset.itemId` on every bar node) — the same seam `harness/plugins.ts`'s own popup demo already
- *  reaches through, not a back door (D-S5-5 only forbids `src/` imports, not plain DOM APIs). */
-function barUnder(node: Node): HTMLElement | undefined {
-  const el = node instanceof Element ? node.closest<HTMLElement>('.fg-bar') : null;
-  return el ?? undefined;
-}
-
 function defaultContent(
   entry: Entry,
   timeZone: string,
   locale: Intl.LocalesArgument | undefined,
   columns: readonly TooltipColumn[],
-) {
+): ElementDescription {
   const start = formatDate(timeZone, entry.start, locale);
   const end = formatEndInclusive(timeZone, entry.end, locale);
   const dates = start === end ? start : `${start} – ${end}`;
