@@ -1110,6 +1110,64 @@ describe('Gantt gridColumns (S4.3, D-S4-12, [S4-A1] column half)', () => {
   });
 });
 
+describe('Gantt grid columns are fixed-width by default (#139)', () => {
+  it('a column nobody sized paints a pixel width and refuses to flex', () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({ timeZone: 'UTC', entries: sampleEntries.slice(0, 1) });
+    const gantt = new Gantt({ container, dataset, gridColumns: ['name', 'start', 'end'] });
+
+    const headers = Array.from(container.querySelectorAll<HTMLElement>('.fg-col-header'));
+    expect(headers.map((cell) => cell.style.width)).toEqual(['240px', '120px', '120px']);
+    for (const cell of headers) expect(cell.hasAttribute('data-fixed')).toBe(true);
+
+    // The row cells carry the same geometry, so a row never drifts from its own header.
+    const cells = Array.from(container.querySelectorAll<HTMLElement>('.fg-row-label, .fg-row-cell'));
+    expect(cells.map((cell) => cell.style.width)).toEqual(['240px', '120px', '120px']);
+
+    gantt.destroy();
+  });
+
+  it('the grid pane widens past gridWidth so the overflowing columns are reachable', () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({ timeZone: 'UTC', entries: sampleEntries.slice(0, 1) });
+    const gantt = new Gantt({
+      container,
+      dataset,
+      gridWidth: 200,
+      gridColumns: ['name', 'start', 'end'],
+    });
+
+    const gridPane = container.querySelector<HTMLElement>('.fg-grid-pane')!;
+    // 240 + 120 + 120, well past the 200px pane — #126's horizontal scroller now has something to
+    // reach without the consumer sizing a single column by hand.
+    expect(gridPane.style.getPropertyValue('--fg-grid-content-width')).toBe('480px');
+
+    gantt.destroy();
+  });
+
+  it('a column that asks to flex still shares the leftover room', () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({ timeZone: 'UTC', entries: sampleEntries.slice(0, 1) });
+    const gantt = new Gantt({
+      container,
+      dataset,
+      gridWidth: 400,
+      gridColumns: [{ field: 'name', flex: 1 }, 'start'],
+    });
+
+    const [nameHeader, startHeader] = Array.from(container.querySelectorAll<HTMLElement>('.fg-col-header'));
+    expect(nameHeader?.hasAttribute('data-fixed')).toBe(false);
+    expect(nameHeader?.style.width).toBe('');
+    expect(startHeader?.style.width).toBe('120px');
+
+    const gridPane = container.querySelector<HTMLElement>('.fg-grid-pane')!;
+    // A flex column contributes nothing to the sum, so 120px alone never overflows a 400px pane.
+    expect(gridPane.style.getPropertyValue('--fg-grid-content-width')).toBe('400px');
+
+    gantt.destroy();
+  });
+});
+
 describe('Gantt gridColumnsChange — one commit sequence (S5.7, D-S5-18)', () => {
   it('a plain gridColumns assignment fires beforeGridColumnsChange then gridColumnsChange, payload is resolved GridColumns', () => {
     const container = document.createElement('div');

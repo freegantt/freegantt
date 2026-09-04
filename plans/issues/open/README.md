@@ -9,6 +9,13 @@ issue plans land here as they're opened.
 - _(none)_
 
 **Closed:**
+- [#139](https://github.com/Pawel-IT/FreeGantt/issues/139) — Grid columns
+  flex-resize instead of supporting fixed widths with overflow scroll. A Grid
+  column is fixed-width by default now: `resolveColumns` fills a width from
+  this Gantt's column, then the Field's `column.width`, then
+  `--fg-column-width` (fallback 120), which is what finally gives #126's
+  horizontal scroller something to reach. `flex` is the one opt-out. See
+  [../closed/139-fixed-width-grid-columns.md](../closed/139-fixed-width-grid-columns.md).
 - [#154](https://github.com/Pawel-IT/FreeGantt/issues/154) — one
   registration table behind the plugin `register*` seams. `layout/`'s
   `createRegistrationTable` holds a stack of live registrations per key: the

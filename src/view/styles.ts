@@ -107,6 +107,10 @@ ${DARK_COLOR_TOKENS}
 /* --fg-cell-padding-inline/-block: the one pair of tokens both a header cell and a row cell read, so
    grid text never sits flush against a column's own edge or its neighbour's. */
 .fg-col-header { display: flex; align-items: center; min-width: 0; overflow: hidden; box-sizing: border-box; flex: var(--fg-col-flex, 1) 1 0; position: relative; cursor: pointer; padding-inline: var(--fg-cell-padding-inline, 8px); padding-block: var(--fg-cell-padding-block, 4px); }
+/* #139: every column is fixed by default — data-fixed is the common case now, not the exception.
+   --fg-column-width (default 120, read by ColumnChrome, no rule of its own here — same posture
+   --fg-column-min-width takes) sets the width a column falls back to when neither this Gantt's own
+   column nor its Field names one. The flex path above stays for a column that asks to flex. */
 .fg-col-header[data-fixed] { flex: 0 0 auto; }
 .fg-col-header[data-align='end'] { justify-content: flex-end; text-align: end; }
 .fg-col-header[data-align='center'] { justify-content: center; text-align: center; }

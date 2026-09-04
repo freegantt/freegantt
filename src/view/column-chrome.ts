@@ -12,12 +12,14 @@ import { createRegistrationTable } from '../layout/index.js';
 import { readPixelProperty } from '../render/dom/pixel-property.js';
 import { cssEscapeAttr } from '../render/dom/css-escape.js';
 import type { ColumnReorderPreview } from './column-gesture-context.js';
-import { resolveGanttFields, toGridColumn } from './grid-columns.js';
+import { DEFAULT_COLUMN_WIDTH_PX, resolveGanttFields, toGridColumn } from './grid-columns.js';
 import type { ResolveColumnsBind } from './grid-columns.js';
 
 const MIN_COLUMN_WIDTH_PROPERTY = '--fg-column-min-width';
 const DEFAULT_MIN_COLUMN_WIDTH = 40;
 const MIN_COLUMN_WIDTH_POLICY = { fallback: DEFAULT_MIN_COLUMN_WIDTH, accepts: 'positive' } as const;
+const COLUMN_WIDTH_PROPERTY = '--fg-column-width';
+const COLUMN_WIDTH_POLICY = { fallback: DEFAULT_COLUMN_WIDTH_PX, accepts: 'positive' } as const;
 /** One `Shift+Arrow` step (D-S5-18's keyboard parity) and the on-screen width read back when a flex
  *  column (no explicit `width`) has never been resized. */
 const COLUMN_RESIZE_STEP_PX = 16;
@@ -167,6 +169,14 @@ export class ColumnChrome {
    *  (#127), read live off the container so a stylesheet change takes effect on the very next drag. */
   minWidthPx(): number {
     return readPixelProperty(this.#container, MIN_COLUMN_WIDTH_PROPERTY, MIN_COLUMN_WIDTH_POLICY);
+  }
+
+  /** #139: the width a column takes when neither this Gantt's own column nor its Field names one —
+   *  `--fg-column-width`, fallback 120, the same level-1 knob `--fg-column-min-width` above is.
+   *  Read on every rebind (a `gridColumns` write, a plugin column registering), never per render:
+   *  a theme change reaches the next resolve, and `getComputedStyle` stays off the frame path. */
+  defaultWidthPx(): number {
+    return readPixelProperty(this.#container, COLUMN_WIDTH_PROPERTY, COLUMN_WIDTH_POLICY);
   }
 
   /** A resolved column's own `width` when it has one (a column already resized, or authored fixed);
