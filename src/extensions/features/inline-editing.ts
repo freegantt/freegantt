@@ -168,7 +168,7 @@ export function inlineEditing(options: InlineEditingOptions = {}): GanttPlugin {
       function openGeneric(entry: Entry, field: Field, cell: HTMLElement, row: HTMLElement): void {
         const raw = ctx.dataset.entries.fieldValue<unknown>(entry.id, field.key);
         const input = document.createElement('input');
-        input.type = 'text';
+        input.type = field.inputType ?? 'text';
         input.className = 'fg-cell-editor-control';
         input.value =
           field.parseValue !== undefined

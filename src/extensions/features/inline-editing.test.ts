@@ -9,6 +9,7 @@ import type { InlineEditingOptions } from './inline-editing.js';
 interface Meta {
   cost?: number;
   budget?: number;
+  quantity?: number;
 }
 
 const ENTRIES: readonly EntryInput<Meta>[] = [
@@ -19,7 +20,7 @@ const ENTRIES: readonly EntryInput<Meta>[] = [
     parentId: 'root',
     start: '2026-01-01',
     end: '2026-01-05',
-    meta: { cost: 100, budget: 500 },
+    meta: { cost: 100, budget: 500, quantity: 3 },
   },
   {
     id: 'e2',
@@ -36,6 +37,7 @@ const GRID_COLUMNS: readonly GridColumnInput[] = [
   'end', // not editable — default false
   { field: 'cost', editable: true }, // money, no parseValue — F12 refuses to open
   { field: 'budget', editable: true }, // money, WITH parseValue — round-trips
+  { field: 'quantity', editable: true }, // no `type`, `inputType: 'number'` only
 ];
 
 function makeGantt(options?: InlineEditingOptions): {
@@ -67,6 +69,7 @@ function makeGantt(options?: InlineEditingOptions): {
     fields: [
       { key: 'cost', type: 'money' },
       { key: 'budget', type: 'budgetMoney' },
+      { key: 'quantity', inputType: 'number', column: { header: 'Quantity' } },
     ],
   });
   const gantt = new Gantt({
@@ -216,6 +219,23 @@ describe('inlineEditing() (S5.8, D-S5-19/D-S5-20)', () => {
     enter(el);
     expect(container.querySelector('.fg-cell-editor[data-state="invalid"]')).not.toBeNull();
     expect(dataset.entries.get('e1')!.meta?.budget).toBe(500);
+    gantt.destroy();
+    container.remove();
+  });
+
+  it("a Field's `inputType` sets the generic editor's native <input type>", () => {
+    const { container, gantt } = makeGantt();
+    dblclick(cellFor(container, 'e1', 'quantity'));
+    expect(input(container).type).toBe('number');
+    expect(input(container).value).toBe('3');
+    gantt.destroy();
+    container.remove();
+  });
+
+  it('with no `inputType`, the generic editor stays <input type="text"> (default)', () => {
+    const { container, gantt } = makeGantt();
+    dblclick(cellFor(container, 'e1', 'name'));
+    expect(input(container).type).toBe('text');
     gantt.destroy();
     container.remove();
   });

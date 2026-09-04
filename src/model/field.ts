@@ -82,6 +82,14 @@ export interface Field<TValue = unknown> {
    *  editor rather than parse wrong. A `type: 'date'` Field never reaches this — `inlineEditing()`
    *  routes it through the `dateInput` seam instead (D-S5-20). */
   parseValue?(text: string, ctx: FieldContext): TValue | undefined;
+  /** S5.8+: the generic inline editor's `<input type>` attribute. Default `'text'`. A
+   *  native HTML affordance only (a number stepper, a numeric mobile keyboard, `tel`/`email`
+   *  validation) — it does not change how a value is read back; pair it with `parseValue` when the
+   *  stored value is not itself a string (a `'number'` input's `.value` is still a string). Has no
+   *  effect on a `type: 'date'` Field — that never reaches the generic editor, routing through the
+   *  `dateInput` seam instead (D-S5-20). For a full widget swap, not just the native input type, veto
+   *  with `beforeEntryEdit` and mount your own control. */
+  inputType?: 'text' | 'number' | 'email' | 'tel' | 'url';
   /** D-S5-17: `cellRenderer` sits on the Gantt's `GridColumn`, never here — `data/` never holds a
    *  renderer, so this default set excludes it. */
   column?: Omit<GridColumn, 'field' | 'cellRenderer'>;

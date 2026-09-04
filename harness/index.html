@@ -120,6 +120,17 @@
         font-size: 0.9rem;
       }
       #selection-readout {
+        /* Always its own line, truncated instead of wrapped (bug hunt, S5.8) — "Selection: (none)"
+           growing to a longer entry name used to change #controls's flex-wrap height and reflow
+           #gantt down on first row select. flex-basis: 100% takes it out of the button row's own
+           wrap math; nowrap + ellipsis caps its own height regardless of text length. Harness-only:
+           the library owns nothing outside #gantt's own box (plans/01 §8), so this text sits in
+           harness page flow the same as any other page heading. */
+        flex-basis: 100%;
+        min-width: 0;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
         margin: 0;
         font-size: 0.85rem;
         color: var(--page-muted);
