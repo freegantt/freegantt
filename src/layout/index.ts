@@ -14,6 +14,8 @@ export { pickDefined } from './pick-defined.js';
 export { itemId, itemIdFromDataset, entryIdOfItem } from '../model/index.js';
 export { createItemProducerRegistry } from './items/produce-items.js';
 export type { Item, ItemProducer, ItemProducerRegistry } from './items/produce-items.js';
+export { createRegistrationTable } from './registration-table.js';
+export type { RegistrationTable } from './registration-table.js';
 export type { FrameColumn, ResolvedColumn, FieldCompare, ColumnAlign } from './column.js';
 export { gridContentWidth } from './column.js';
 export type {

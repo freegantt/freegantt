@@ -132,6 +132,35 @@ describe('produceItemsForRow', () => {
     expect(own.producerFor('buffer')).toBe(own.producerFor('span'));
   });
 
+  it('disposing the first of two registrations on one kind leaves the second producing', () => {
+    const own = createItemProducerRegistry();
+    const t1 = spanEntry('t1', { kind: 'buffer' });
+    const disposeFirst = own.register('buffer', (entry) => [
+      {
+        id: itemId(entry.id, 0),
+        entryId: entry.id,
+        kind: entry.kind,
+        label: `first:${entry.name}`,
+        start: entry.start,
+        end: entry.end,
+      },
+    ]);
+    own.register('buffer', (entry) => [
+      {
+        id: itemId(entry.id, 0),
+        entryId: entry.id,
+        kind: entry.kind,
+        label: `second:${entry.name}`,
+        start: entry.start,
+        end: entry.end,
+      },
+    ]);
+    disposeFirst();
+    const items = produceItemsForRow(planned([t1.id]), entryByIdFor([t1]), own);
+    expect(items).toHaveLength(1);
+    expect(items[0]?.label).toBe('second:t1');
+  });
+
   it('a header row (kind: header) produces no Items', () => {
     const t1 = spanEntry('t1');
     const header: PlannedRow = {
