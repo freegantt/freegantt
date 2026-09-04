@@ -289,6 +289,7 @@ Slices are scope, not calendar estimates. Within a slice, entries are ordered so
 - [ ] Dragging a predecessor shows successors' ghost positions live; cancel discards them — via the S3 extender preview, not a `schedule()` call in `interaction/`.
 - [ ] The plugin uses only the public plugin contract (zero private imports into `src/scheduling/` from `view/`/`render/`/`interaction/`, and the reverse).
 - [ ] `scheduling/` has zero imports from view/render/interaction (lint-proven), >90% coverage — it's pure; no excuse.
+- [ ] `AGENTS.md`/`CLAUDE.md` no longer says the API can change freely because nothing has shipped — this is the last slice, so drop that framing as the final step of S7 (the API is public now).
 
 ---
 
