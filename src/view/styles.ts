@@ -17,7 +17,7 @@
 // container, not on `:root`. A `:root:not([data-fg-theme])` media query never sees the pin, so Light
 // would leave the Gantt on the system dark tokens. `.fg-container[data-fg-theme='light']` always wins.
 
-import { DEFAULT_TICK_BOX_FLOOR_PX } from '../layout/index.js';
+import { DEFAULT_TICK_BOX_FLOOR_PX, DEFAULT_DIAMOND_SIZE_PX } from '../layout/index.js';
 
 const MARKER_ATTR = 'data-freegantt-styles';
 
@@ -152,6 +152,11 @@ ${DARK_COLOR_TOKENS}
 .fg-row:nth-child(odd) { background: var(--fg-row-odd-bg); }
 .fg-row-label, .fg-row-cell { color: var(--fg-row-label-color); display: flex; align-items: center; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; box-sizing: border-box; flex: var(--fg-col-flex, 1) 1 0; padding-inline-end: var(--fg-cell-padding-inline, 8px); padding-block: var(--fg-cell-padding-block, 4px); }
 .fg-row[data-matched='false'] .fg-row-label, .fg-row[data-matched='false'] .fg-row-cell { color: var(--fg-row-unmatched-label-color); }
+/* Bug hunt (S5 fixes): a grid row's own selection paint (CONTEXT.md Parts/State) — a background, not
+   an outline (an outline would fight the row's cell layout the way .fg-bar's never has to). Same
+   --fg-selection-color Token .fg-bar[data-state~="selected"] already uses, so a bar click and its
+   matching row read as one selection, not two colours. */
+.fg-row[data-state~='selected'] { background: color-mix(in oklab, var(--fg-selection-color) 16%, transparent); }
 .fg-row-cell { padding-inline-start: var(--fg-cell-padding-inline, 8px); }
 .fg-row-label { padding-inline-start: calc(var(--fg-row-depth, 0) * var(--fg-indent-width, 12px) + var(--fg-cell-padding-inline, 8px)); }
 .fg-row-label-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
@@ -171,8 +176,12 @@ ${DARK_COLOR_TOKENS}
    never fight the browser's own pan/scroll gesture over the same surface. */
 .fg-bar { background: var(--fg-bar-fill); color: var(--fg-bar-label-color); border-radius: var(--fg-bar-radius, 3px); position: absolute; top: 0; left: 0; touch-action: none; }
 .fg-bar-bracket { background: transparent; border: 2px solid var(--fg-bar-fill); border-bottom: none; border-radius: 2px 2px 0 0; color: var(--fg-bar-fill); }
+/* Bug hunt (S5 fixes): a milestone's painted span is floored and centred on the instant by
+   barSpan (layout/frame.ts) so the rotated diamond — and the selection outline on .fg-bar itself
+   — both fit inside the bar box. --fg-diamond-size is the one Token layout's floor and this glyph's
+   own size share (CONTEXT.md), read the same way as --fg-tick-box-floor. */
 .fg-bar-diamond { background: transparent; overflow: visible; color: transparent; }
-.fg-bar-diamond::before { content: ''; position: absolute; top: 50%; left: 0; width: 10px; height: 10px; background: var(--fg-bar-fill); transform: translate(-50%, -50%) rotate(45deg); }
+.fg-bar-diamond::before { content: ''; position: absolute; top: 50%; left: 50%; width: var(--fg-diamond-size, ${DEFAULT_DIAMOND_SIZE_PX}px); height: var(--fg-diamond-size, ${DEFAULT_DIAMOND_SIZE_PX}px); background: var(--fg-bar-fill); transform: translate(-50%, -50%) rotate(45deg); }
 .fg-bar[data-flag~="conflict"] { outline: 2px solid var(--fg-warn); }
 /* D-S3-7: data-state is a fixed five-token projection of InteractionState, painted once here — not a
    per-bar modifier class (CONTEXT.md's State attribute entry). 'hovered' has no rule of its own yet

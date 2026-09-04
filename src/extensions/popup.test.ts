@@ -52,6 +52,9 @@ function fakeAnchor(options: {
     elementForEntry() {
       return undefined;
     },
+    contains(node: Node) {
+      return container.contains(node);
+    },
   };
 }
 

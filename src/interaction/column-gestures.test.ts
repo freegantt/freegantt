@@ -200,6 +200,19 @@ describe('attachColumnGestures — resize (S5.7, D-S5-18)', () => {
     expect(commits).toEqual([{ columnKey: 'cost', widthPx: 130 }]);
   });
 
+  it('pointercancel cancels an armed resize the same as Escape (B6)', () => {
+    const { pane, cell } = makeHeaderPane({ cost: { left: 100, width: 90 } });
+    const { ctx, cancels, commits } = makeCtx();
+    attachColumnGestures(pane, document.createElement('div'), ctx);
+
+    down(gripOf(cell('cost')), 190);
+    move(pane, 210);
+    pane.dispatchEvent(new PointerEvent('pointercancel', { pointerId: 1, bubbles: true }));
+
+    expect(cancels).toHaveLength(1);
+    expect(commits).toEqual([]);
+  });
+
   it('resizable: false refuses the pointer drag — no preview, no commit', () => {
     const { pane, cell } = makeHeaderPane({ cost: { left: 100, width: 90 } });
     const { ctx, previews, commits } = makeCtx({ isResizable: () => false });
@@ -322,5 +335,33 @@ describe('attachColumnGestures — plain click sets the focused column (D-S5-26)
     up(pane, 500);
 
     expect(focused).toEqual([undefined]);
+  });
+
+  it('a pointerdown outside the header pane clears the focused column (B3)', () => {
+    const { pane, cell } = makeHeaderPane({ name: { left: 0, width: 100 } });
+    const container = document.createElement('div');
+    const { ctx, focused } = makeCtx();
+    attachColumnGestures(pane, container, ctx);
+
+    down(cell('name'), 10);
+    up(cell('name'), 10);
+    expect(focused).toEqual(['name']);
+
+    // A later pointerdown elsewhere in the Gantt (a bar, a body cell, empty timeline) — the header no
+    // longer has the user's attention, so `Shift+Arrow` must not still resize/reorder this column.
+    container.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+    expect(focused).toEqual(['name', undefined]);
+  });
+
+  it('a pointerdown inside the header pane does not clear the focused column', () => {
+    const { pane, cell } = makeHeaderPane({ name: { left: 0, width: 100 } });
+    const container = document.createElement('div');
+    container.append(pane);
+    const { ctx, focused } = makeCtx();
+    attachColumnGestures(pane, container, ctx);
+
+    down(cell('name'), 10);
+    up(cell('name'), 10);
+    expect(focused).toEqual(['name']);
   });
 });

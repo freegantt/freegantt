@@ -139,6 +139,64 @@ describe('contextMenu() (S5.5, D-S5-13/14)', () => {
     container.remove();
   });
 
+  it('right-click outside the container does not open the menu or cancel the browser default (B1)', () => {
+    const { container, gantt } = makeGantt();
+    const outside = document.createElement('div');
+    document.body.append(outside);
+
+    const event = new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 5, clientY: 5 });
+    outside.dispatchEvent(event);
+
+    expect(event.defaultPrevented).toBe(false);
+    expect(container.querySelector('.fg-menu')).toBeNull();
+
+    gantt.destroy();
+    container.remove();
+    outside.remove();
+  });
+
+  it('a second Gantt does not open its menu for a right-click on the first (B1, I2)', () => {
+    const { container: containerA, gantt: ganttA } = makeGantt();
+    const containerB = document.createElement('div');
+    document.body.append(containerB);
+    const datasetB = new Dataset({ entries: sampleEntries.slice(0, 3), timeZone: 'UTC' });
+    const ganttB = new Gantt({ container: containerB, dataset: datasetB, plugins: [contextMenu()] });
+
+    rightClick(bars(containerA)[0]!);
+    expect(containerA.querySelector('.fg-menu')).not.toBeNull();
+    expect(containerB.querySelector('.fg-menu')).toBeNull();
+
+    ganttA.destroy();
+    ganttB.destroy();
+    containerA.remove();
+    containerB.remove();
+  });
+
+  it('runs the command for the right-clicked bar, not the current selection (B2, D-S5-14)', () => {
+    const { container, gantt } = makeGantt();
+    // Selection is empty; right-clicking a bar must still run a command whose `when` needs `ctx.entry`
+    // against *that* bar's entry, not against `#buildCommandContext`'s own (empty) selection.
+    expect(gantt.selection).toEqual([]);
+    let ranFor: string | undefined;
+    gantt.commands.register({
+      id: 'demo.needsEntry',
+      label: 'Needs entry',
+      when: (ctx) => ctx.entry !== undefined,
+      run: (ctx) => (ranFor = ctx.entry?.id),
+    });
+
+    const bar = bars(container)[1]!;
+    rightClick(bar);
+    const item = menuItems(container).find((el) => el.getAttribute('data-command') === 'demo.needsEntry');
+    expect(item).toBeDefined();
+    item!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+    expect(ranFor).toBe(sampleEntries[1]!.id);
+
+    gantt.destroy();
+    container.remove();
+  });
+
   it('removing the plugin removes its listeners and any open menu', () => {
     const { container, gantt } = makeGantt();
 

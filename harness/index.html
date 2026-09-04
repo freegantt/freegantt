@@ -169,10 +169,12 @@
         font-size: 0.8rem;
       }
       /* .fg-bar-diamond's own shape stays (structural, from entry.kind — D-S4-24); the demo
-         renderer only sets --fg-bar-fill, which its `::before` already reads. */
-      .demo-milestone::before {
-        width: 14px;
-        height: 14px;
+         renderer only sets --fg-bar-fill, which its `::before` already reads. --fg-diamond-size
+         moves layout's own bar-span floor along with the glyph (bug hunt, S5 fixes) — a consumer
+         override of ::before width/height alone would still leave the bar box at the shipped
+         default and overflow it. */
+      .demo-milestone {
+        --fg-diamond-size: 14px;
       }
       .demo-over-budget {
         background: #ffe0e0;
@@ -182,6 +184,11 @@
       .fg-mobilization-line {
         border-left-style: dashed;
         border-left-width: 2px;
+      }
+      /* main.ts's stripedRows() plugin (S5.6's RowStripe decoration) — .fg-row-stripe itself is
+         structural only (position/width/pointer-events), so the demo owns its own background. */
+      .fg-row-stripe.demo-row-stripe {
+        background: rgba(26, 24, 21, 0.028);
       }
     </style>
   </head>

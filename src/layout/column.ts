@@ -31,6 +31,9 @@ export interface ResolvedColumn extends FrameColumn {
    *  honours it, not before, is about behaviour, not about the field existing on the resolved shape
    *  a later step reads). */
   editable?: boolean;
+  /** D-S5-13 — `true` marks this column for the default tooltip body. Not a paint concern, so it
+   *  stays off `FrameColumn`. */
+  tooltip?: boolean;
 }
 
 /** Default sort order for one declared Field. Bound with this Gantt's locale. Not a Grid column. */

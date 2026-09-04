@@ -635,6 +635,126 @@ describe('render/dom backend', () => {
     timeline.remove();
   });
 
+  // Bug hunt (S5 fixes, "grid row highlight and row click"): applyState paints .fg-row the same way
+  // it paints .fg-bar — same InteractionState.selectedItemIds, projected onto the row's own entryId.
+  it('applyState paints data-state~="selected" on the row matching a selected bar, and clears it', () => {
+    const backend = createDomBackend();
+    const { grid, timeline } = mountSurfaces();
+    backend.mount({ grid, timeline });
+
+    const frame = computeFrame({
+      entries: sampleEntries.slice(0, 2),
+      scale,
+      preset,
+      visible: { x: 0, y: 0, width: 0, height: 0 },
+      rowHeight: 32,
+      revision: 0,
+      itemProducerRegistry,
+    });
+    backend.sync(frame);
+    const [a, b] = frame.bars;
+    const rowA = grid.querySelector<HTMLElement>(`[data-row-id="${a!.rowId}"]`)!;
+    const rowB = grid.querySelector<HTMLElement>(`[data-row-id="${b!.rowId}"]`)!;
+
+    backend.applyState({ selectedItemIds: [a!.id] });
+    expect(rowA.dataset['state']).toBe('selected');
+    expect(rowB.dataset['state']).toBeUndefined();
+
+    backend.applyState({ selectedItemIds: [b!.id] });
+    expect(rowA.dataset['state']).toBe('');
+    expect(rowB.dataset['state']).toBe('selected');
+
+    backend.applyState({ selectedItemIds: [] });
+    expect(rowB.dataset['state']).toBe('');
+
+    backend.destroy();
+    grid.remove();
+    timeline.remove();
+  });
+
+  it('a freshly-mounted row is stamped from the current selection at create time, not the next applyState', () => {
+    const backend = createDomBackend();
+    const { grid, timeline } = mountSurfaces();
+    backend.mount({ grid, timeline });
+
+    const frame = computeFrame({
+      entries: sampleEntries.slice(0, 1),
+      scale,
+      preset,
+      visible: { x: 0, y: 0, width: 0, height: 0 },
+      rowHeight: 32,
+      revision: 0,
+      itemProducerRegistry,
+    });
+    backend.sync(frame);
+    backend.applyState({ selectedItemIds: [frame.bars[0]!.id] });
+    backend.sync({ ...frame, rows: [], rowCount: 0 }); // simulate virtualization dropping the row
+
+    backend.sync(frame); // and remounting it later
+    const row = grid.querySelector<HTMLElement>(`[data-row-id="${frame.bars[0]!.rowId}"]`)!;
+    expect(row.dataset['state']).toBe('selected');
+
+    backend.destroy();
+    grid.remove();
+    timeline.remove();
+  });
+
+  // Bug hunt (S5 fixes): hitTest's grid-row fallback — a click that misses the bar layer resolves
+  // against the grid pane's own .fg-row, segment 0 of that row's primary entry.
+  it("hitTest resolves a grid-row miss on the bar layer to segment 0 of the row's primary entry", () => {
+    const backend = createDomBackend();
+    const { grid, timeline } = mountSurfaces();
+    backend.mount({ grid, timeline });
+
+    const frame = computeFrame({
+      entries: sampleEntries.slice(0, 1),
+      scale,
+      preset,
+      visible: { x: 0, y: 0, width: 0, height: 0 },
+      rowHeight: 32,
+      revision: 0,
+      itemProducerRegistry,
+    });
+    backend.sync(frame);
+
+    const row = grid.querySelector<HTMLElement>('.fg-row')!;
+    const original = document.elementFromPoint.bind(document);
+    document.elementFromPoint = (x: number, y: number) => (x === 5 && y === 5 ? row : original(x, y));
+
+    expect(backend.hitTest(point(5, 5))).toEqual({ itemId: `${sampleEntries[0]!.id}:0` });
+
+    backend.destroy();
+    grid.remove();
+    timeline.remove();
+  });
+
+  it('hitTest reports no hit for a twisty click — collapse stays on the twisty, never selection', () => {
+    const backend = createDomBackend();
+    const { grid, timeline } = mountSurfaces();
+    backend.mount({ grid, timeline });
+
+    const frame = computeFrame({
+      entries: sampleEntries.slice(0, 1),
+      scale,
+      preset,
+      visible: { x: 0, y: 0, width: 0, height: 0 },
+      rowHeight: 32,
+      revision: 0,
+      itemProducerRegistry,
+    });
+    backend.sync(frame);
+
+    const twisty = grid.querySelector<HTMLElement>('.fg-row-twisty')!;
+    const original = document.elementFromPoint.bind(document);
+    document.elementFromPoint = (x: number, y: number) => (x === 5 && y === 5 ? twisty : original(x, y));
+
+    expect(backend.hitTest(point(5, 5))).toBeNull();
+
+    backend.destroy();
+    grid.remove();
+    timeline.remove();
+  });
+
   // S3.6, D-S3-18, U7: ItemPreview.extra distinguishes the caller's own gesture ('dragging') from an
   // installed extension hook's cascade ('ghost') — two entries offset in the same preview frame.
   it('applyState paints dragging/ghost data-state tokens off ItemPreview.extra and clears them once the preview drops', () => {

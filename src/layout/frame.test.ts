@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { computeFrame, placeFrame, resolveLayoutRows } from './frame.js';
+import { computeFrame, placeFrame, resolveLayoutRows, barSpan, DEFAULT_DIAMOND_SIZE_PX } from './frame.js';
 import { FrameMemory } from './frame-memory.js';
 import { PrefixSumHeightIndex } from './row-height-index.js';
 import { DEFAULT_LANE_GAP_PX } from './lanes/pack-lanes.js';
@@ -733,5 +733,49 @@ describe('computeFrame lanes (S4.8)', () => {
     expect(frame.rows[0]?.laneCount).toBe(3);
     expect(frame.rows[0]?.height).toBe(32 * 3 + 2 * 2);
     expect(frame.contentHeight).toBe(32 * 3 + 2 * 2 + 32);
+  });
+});
+
+describe('barSpan — milestone floor (bug hunt: milestone highlight box)', () => {
+  const milestone: Entry = { ...sampleEntries[0]!, kind: 'milestone', end: sampleEntries[0]!.start };
+
+  it('keeps the Entry itself zero-width — the painted span floors, not the instant', () => {
+    expect(milestone.start).toEqual(milestone.end);
+  });
+
+  it('floors a milestone bar to the rotated diamond bounding box, centred on the instant', () => {
+    const { x, width } = barSpan(milestone, scale);
+    const floor = DEFAULT_DIAMOND_SIZE_PX * Math.SQRT2;
+    expect(width).toBe(floor);
+    expect(width).toBeGreaterThan(0);
+    expect(x + width / 2).toBe(scale.xForInstant(milestone.start));
+  });
+
+  it('honours a custom diamondSizePx the same way --fg-diamond-size would', () => {
+    const { x, width } = barSpan(milestone, scale, 20);
+    expect(width).toBe(20 * Math.SQRT2);
+    expect(x + width / 2).toBe(scale.xForInstant(milestone.start));
+  });
+
+  it('never floors a non-milestone kind, even at zero width', () => {
+    const zeroWidthSpan: Entry = { ...sampleEntries[0]!, end: sampleEntries[0]!.start };
+    const { width } = barSpan(zeroWidthSpan, scale);
+    expect(width).toBe(0);
+  });
+
+  it("computeFrame's bar and GanttShell.reveal's span agree on the same floored box", () => {
+    const frame = computeFrame({
+      entries: [milestone],
+      scale,
+      preset,
+      visible,
+      rowHeight: 32,
+      revision: 0,
+      itemProducerRegistry,
+    });
+    const bar = frame.bars[0]!;
+    const revealSpan = barSpan(milestone, scale);
+    expect(bar.width).toBe(revealSpan.width);
+    expect(bar.x).toBe(revealSpan.x);
   });
 });

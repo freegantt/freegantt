@@ -20,6 +20,7 @@ import type {
 } from '../../layout/index.js';
 import type { ColumnAlign, FrameColumn } from '../../layout/index.js';
 import type { RenderBackend, RenderSurfaces, InteractionState, HitResult } from '../backend.js';
+import { entryIdOfItem, itemId } from '../../layout/index.js';
 import { attachDateLines } from './date-line.js';
 import type { DateLineAttachment } from './date-line.js';
 import { attachDecorations } from './decorations.js';
@@ -244,6 +245,20 @@ export function createDomBackend(options?: DomBackendOptions): RenderBackend<HTM
    *  only the items whose *token* actually changed, same diff-and-touch pattern as `paintedPending`. */
   let paintedDragging: ReadonlySet<ItemId> = new Set();
   let paintedGhost: ReadonlySet<ItemId> = new Set();
+  /** Bug hunt (S5 fixes): `Gantt.selection` is Entry ids — `applyState`'s own selection paint stays
+   *  keyed by `ItemId` (bars can select one segment), so this is the same selection projected onto
+   *  `EntryId` for `.fg-row`'s paint (`entryIdOfItem`, not a second selection model). Kept alongside
+   *  `paintedSelected` rather than derived inline every `applyState` call, so a syncRows remount
+   *  (below) can restamp a freshly-created row node without recomputing it. */
+  let paintedSelectedEntryIds: ReadonlySet<EntryId> = new Set();
+  /** What the last `applyState` call stamped `data-state~="selected"` on (D-S3-6/D-S3-7's own
+   *  diff-and-touch posture, applied to rows) — `syncRows` below is the only other writer, and only
+   *  for a row it just created. */
+  let paintedSelectedRows: ReadonlySet<RowId> = new Set();
+  /** `FrameRow.entryId` per mounted row (header rows carry none) — what both `applyState`'s row diff
+   *  and `hitTest`'s grid-row fallback (below) resolve a `RowId` against. `syncRows` is the only
+   *  writer, rebuilt from the frame's own rows every render — never grows stale across a prune. */
+  const rowEntryIds = new Map<RowId, EntryId>();
   // Committed geometry per mounted bar (D-S3-6): what the handle pair and the future preview offsets
   // (S3.3) both read. `syncBars` is the only writer.
   const barGeomByItemId = new Map<ItemId, HandleGeom>();
@@ -422,6 +437,14 @@ export function createDomBackend(options?: DomBackendOptions): RenderBackend<HTM
     node.dataset['state'] = tokens.join(' ');
   }
 
+  /** Bug hunt (S5 fixes): `.fg-row`'s own selection paint — one token, same shape as `paintDataState`
+   *  above but never the bar's five-token set (a row has no hover/pending/drag/ghost paint yet). */
+  function paintRowState(rowId: RowId, selected: boolean): void {
+    const node = rowLayer.node(rowId);
+    if (!node) return;
+    node.dataset['state'] = selected ? 'selected' : '';
+  }
+
   const tickSpec = {
     key: (_tick: FrameHeaderTick, i: number) => i,
     create: (): HTMLElement => {
@@ -528,14 +551,28 @@ export function createDomBackend(options?: DomBackendOptions): RenderBackend<HTM
 
   function syncRows(rows: readonly FrameRow[], rowCount: number, columns: readonly FrameColumn[]): void {
     if (!gridLayer) return;
+    rowEntryIds.clear();
+    for (const row of rows) if (row.entryId !== undefined) rowEntryIds.set(row.id, row.entryId);
     rowLayer.sync(gridLayer, rows, {
       key: (row) => row.id,
-      create: (_row, key) => {
+      create: (row, key) => {
         const node = document.createElement('div');
         node.className = 'fg-row';
         node.setAttribute('role', 'listitem');
         node.dataset['testid'] = 'fg-row';
         node.dataset['rowId'] = key;
+        // Bug hunt (S5 fixes): what `hitTest`'s grid-row fallback resolves a click against — a
+        // header row carries none, and never becomes selectable (`row.entryId === undefined` above).
+        if (row.entryId !== undefined) node.dataset['entryId'] = row.entryId;
+        // Bug hunt (S5 fixes): virtualization can create this node well after the selection that
+        // ought to paint it — a remounted row must not wait for the next selection change to catch
+        // up (D-S5's own "restamp on remount" fix). `paintedSelectedRows` (applyState's own diff
+        // set) gains this row too, or the next `applyState` call would see a spurious diff and
+        // repaint a node that is already correct.
+        if (row.entryId !== undefined && paintedSelectedEntryIds.has(row.entryId)) {
+          node.dataset['state'] = 'selected';
+          paintedSelectedRows = new Set(paintedSelectedRows).add(key);
+        }
         return node;
       },
       toGeom: (row) => {
@@ -795,6 +832,25 @@ export function createDomBackend(options?: DomBackendOptions): RenderBackend<HTM
       paintedHovered = nextHovered;
       paintedPending = nextPending;
 
+      // Bug hunt (S5 fixes): `.fg-row`'s own selection paint, projected off the same `nextSelected`
+      // ItemIds (`entryIdOfItem`, not a second selection). Still diff-and-touch-only (I5): only rows
+      // whose token actually flips get written, exactly like the bar loop above.
+      const nextSelectedEntryIds = new Set(Array.from(nextSelected, (id) => entryIdOfItem(id)));
+      const nextSelectedRows = new Set<RowId>();
+      rowEntryIds.forEach((entryId, rowId) => {
+        if (nextSelectedEntryIds.has(entryId)) nextSelectedRows.add(rowId);
+      });
+      const changedRows = new Set<RowId>();
+      paintedSelectedRows.forEach((rowId) => {
+        if (!nextSelectedRows.has(rowId)) changedRows.add(rowId);
+      });
+      nextSelectedRows.forEach((rowId) => {
+        if (!paintedSelectedRows.has(rowId)) changedRows.add(rowId);
+      });
+      changedRows.forEach((rowId) => paintRowState(rowId, nextSelectedRows.has(rowId)));
+      paintedSelectedEntryIds = nextSelectedEntryIds;
+      paintedSelectedRows = nextSelectedRows;
+
       // D-S3-8: the shared handle pair follows `resizableItemId`, positioned off the committed
       // geometry `syncBars` already recorded — never a per-item computation of its own.
       const nextResizable = state.resizableItemId;
@@ -831,9 +887,21 @@ export function createDomBackend(options?: DomBackendOptions): RenderBackend<HTM
         if (edge === 'start' || edge === 'end') return { itemId: paintedResizable, edge };
       }
       const bar = el instanceof Element ? el.closest<HTMLElement>('.fg-bar') : null;
-      if (!bar || !barLayer.contains(bar)) return null;
-      const id = bar.dataset['itemId'];
-      return id ? { itemId: id as ItemId } : null;
+      if (bar && barLayer.contains(bar)) {
+        const id = bar.dataset['itemId'];
+        return id ? { itemId: id as ItemId } : null;
+      }
+      // Bug hunt (S5 fixes, "grid row highlight and row click"): a miss on the bar layer falls
+      // through to the grid pane — a row click selects the row's primary entry the same way a bar
+      // click selects the bar's. A twisty click is not a row hit at all: collapse stays on the
+      // twisty, never selection, and a miss there still counts as a genuine grid miss (no clear).
+      if (el instanceof Element && el.closest('.fg-row-twisty')) return null;
+      const row = el instanceof Element ? el.closest<HTMLElement>('.fg-row') : null;
+      if (row && gridLayer?.contains(row)) {
+        const entryId = row.dataset['entryId'];
+        if (entryId) return { itemId: itemId(entryId as EntryId, 0) };
+      }
+      return null;
     },
     destroy() {
       dateLines?.destroy();
@@ -857,6 +925,9 @@ export function createDomBackend(options?: DomBackendOptions): RenderBackend<HTM
       paintedPreview = new Set();
       paintedDragging = new Set();
       paintedGhost = new Set();
+      paintedSelectedEntryIds = new Set();
+      paintedSelectedRows = new Set();
+      rowEntryIds.clear();
       lastHeaderColumnKeys = [];
       paintedColumnResize = undefined;
       paintedColumnDropKey = undefined;

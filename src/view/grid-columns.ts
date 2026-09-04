@@ -43,10 +43,12 @@ function columnFrom(item: GridColumnInput, field: Field): Omit<ResolvedColumn, '
   if (width !== undefined) column.width = width;
   const flex = input.flex ?? defaults.flex;
   if (flex !== undefined) column.flex = flex;
-  // S5.7, D-S5-17: per-column `cellRenderer` — assign a function only when one resolved (loose input
-  // with `exactOptionalPropertyTypes` on, same pattern `width`/`flex` already follow above).
-  const cellRenderer = input.cellRenderer ?? defaults.cellRenderer;
+  // S5.7, D-S5-17: per-column `cellRenderer` comes only from this Gantt's own column — `Field.column`
+  // (`defaults`) cannot carry one (`model/field.ts`'s narrower default set).
+  const cellRenderer = input.cellRenderer;
   if (cellRenderer !== undefined) column.cellRenderer = cellRenderer;
+  const tooltip = input.tooltip ?? defaults.tooltip;
+  if (tooltip !== undefined) column.tooltip = tooltip;
   // S5.8 honours this; S5.7 only carries it through resolution (spec's own I11 exemption — `editable`
   // shares `GridColumn`'s type ahead of the step that reads it).
   const editable = input.editable ?? defaults.editable;
@@ -66,6 +68,7 @@ export function toGridColumn(column: ResolvedColumn): GridColumn {
   if (column.editable !== undefined) out.editable = column.editable;
   if (column.resizable !== undefined) out.resizable = column.resizable;
   if (column.movable !== undefined) out.movable = column.movable;
+  if (column.tooltip !== undefined) out.tooltip = column.tooltip;
   return out;
 }
 

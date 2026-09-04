@@ -119,8 +119,9 @@ describe('attachEntryGestures — selection (S3.1)', () => {
   it('plain click on a bar replaces the selection', () => {
     const pane = document.createElement('div');
     const container = document.createElement('div');
+    const gridPane = document.createElement('div');
     const { ctx, proposals } = makeContext();
-    attachEntryGestures(pane, container, ctx);
+    attachEntryGestures(pane, gridPane, container, ctx);
 
     pane.dispatchEvent(up(0));
     expect(proposals).toEqual([[A]]);
@@ -132,8 +133,9 @@ describe('attachEntryGestures — selection (S3.1)', () => {
   it('ctrl/cmd-click toggles membership', () => {
     const pane = document.createElement('div');
     const container = document.createElement('div');
+    const gridPane = document.createElement('div');
     const { ctx, proposals } = makeContext();
-    attachEntryGestures(pane, container, ctx);
+    attachEntryGestures(pane, gridPane, container, ctx);
 
     pane.dispatchEvent(up(0));
     pane.dispatchEvent(up(1, { ctrlKey: true }));
@@ -146,8 +148,9 @@ describe('attachEntryGestures — selection (S3.1)', () => {
   it('shift-click extends over row order from the last plain/ctrl click', () => {
     const pane = document.createElement('div');
     const container = document.createElement('div');
+    const gridPane = document.createElement('div');
     const { ctx, proposals } = makeContext();
-    attachEntryGestures(pane, container, ctx);
+    attachEntryGestures(pane, gridPane, container, ctx);
 
     pane.dispatchEvent(up(0)); // anchor = A
     pane.dispatchEvent(up(2, { shiftKey: true })); // extend to C
@@ -157,10 +160,11 @@ describe('attachEntryGestures — selection (S3.1)', () => {
   it('shift-click omits incapable entries from the range; an empty result writes nothing', () => {
     const pane = document.createElement('div');
     const container = document.createElement('div');
+    const gridPane = document.createElement('div');
     const { ctx, proposals } = makeContext({
       can: (capability, entry) => capability !== 'select' || entry.id !== B,
     });
-    attachEntryGestures(pane, container, ctx);
+    attachEntryGestures(pane, gridPane, container, ctx);
 
     pane.dispatchEvent(up(0)); // anchor = A (capable)
     pane.dispatchEvent(up(2, { shiftKey: true })); // range A..C, B dropped
@@ -170,10 +174,11 @@ describe('attachEntryGestures — selection (S3.1)', () => {
   it('a click on an incapable bar leaves the selection untouched', () => {
     const pane = document.createElement('div');
     const container = document.createElement('div');
+    const gridPane = document.createElement('div');
     const { ctx, proposals } = makeContext({
       can: (capability, entry) => capability !== 'select' || entry.id !== B,
     });
-    attachEntryGestures(pane, container, ctx);
+    attachEntryGestures(pane, gridPane, container, ctx);
 
     pane.dispatchEvent(up(0));
     pane.dispatchEvent(up(1)); // B, incapable
@@ -183,8 +188,9 @@ describe('attachEntryGestures — selection (S3.1)', () => {
   it('click on empty timeline clears; Escape clears', () => {
     const pane = document.createElement('div');
     const container = document.createElement('div');
+    const gridPane = document.createElement('div');
     const { ctx, proposals } = makeContext();
-    attachEntryGestures(pane, container, ctx);
+    attachEntryGestures(pane, gridPane, container, ctx);
 
     pane.dispatchEvent(up(0));
     pane.dispatchEvent(up(99)); // no hit
@@ -198,8 +204,9 @@ describe('attachEntryGestures — selection (S3.1)', () => {
   it('detach() removes the pointer, key, and native-highlight listeners', () => {
     const pane = document.createElement('div');
     const container = document.createElement('div');
+    const gridPane = document.createElement('div');
     const { ctx, proposals } = makeContext();
-    const attachment = attachEntryGestures(pane, container, ctx);
+    const attachment = attachEntryGestures(pane, gridPane, container, ctx);
     attachment.detach();
 
     pane.dispatchEvent(up(0));
@@ -213,7 +220,8 @@ describe('attachEntryGestures — selection (S3.1)', () => {
   it('a second click of a double-click does not start a native text range (the first still focuses)', () => {
     const pane = document.createElement('div');
     const container = document.createElement('div');
-    attachEntryGestures(pane, container, makeContext().ctx);
+    const gridPane = document.createElement('div');
+    attachEntryGestures(pane, gridPane, container, makeContext().ctx);
 
     const first = new MouseEvent('mousedown', { bubbles: true, cancelable: true, detail: 1 });
     const second = new MouseEvent('mousedown', { bubbles: true, cancelable: true, detail: 2 });
@@ -228,13 +236,99 @@ describe('attachEntryGestures — selection (S3.1)', () => {
   });
 });
 
+// Bug hunt (S5 fixes, "grid row highlight and row click"): a row click selects the same way a bar
+// click does, but never arms move/resize, and a grid miss never clears (only an empty timeline
+// click does).
+describe('attachEntryGestures — grid row click', () => {
+  it('a click on a grid row selects the same way a bar click does', () => {
+    const pane = document.createElement('div');
+    const container = document.createElement('div');
+    const gridPane = document.createElement('div');
+    const { ctx, proposals } = makeContext();
+    attachEntryGestures(pane, gridPane, container, ctx);
+
+    gridPane.dispatchEvent(up(0));
+    expect(proposals).toEqual([[A]]);
+  });
+
+  it('shift-click on a grid row ranges, same as the timeline', () => {
+    const pane = document.createElement('div');
+    const container = document.createElement('div');
+    const gridPane = document.createElement('div');
+    const { ctx, proposals } = makeContext();
+    attachEntryGestures(pane, gridPane, container, ctx);
+
+    gridPane.dispatchEvent(up(0)); // anchor = A
+    gridPane.dispatchEvent(up(2, { shiftKey: true })); // extend to C
+    expect(proposals.at(-1)).toEqual([A, B, C]);
+  });
+
+  it('a miss on the grid pane does not clear the selection', () => {
+    const pane = document.createElement('div');
+    const container = document.createElement('div');
+    const gridPane = document.createElement('div');
+    const { ctx, proposals } = makeContext();
+    attachEntryGestures(pane, gridPane, container, ctx);
+
+    pane.dispatchEvent(up(0)); // select A off the timeline
+    gridPane.dispatchEvent(up(99)); // grid miss — header row, padding, a twisty
+    expect(proposals).toEqual([[A]]);
+    expect(ctx.selection.get()).toEqual([A]);
+  });
+
+  it('an empty timeline click still clears, even after a grid miss', () => {
+    const pane = document.createElement('div');
+    const container = document.createElement('div');
+    const gridPane = document.createElement('div');
+    const { ctx, proposals } = makeContext();
+    attachEntryGestures(pane, gridPane, container, ctx);
+
+    pane.dispatchEvent(up(0));
+    gridPane.dispatchEvent(up(99)); // no-op
+    pane.dispatchEvent(up(99)); // timeline miss — clears
+    expect(proposals.at(-1)).toEqual([]);
+  });
+
+  it('a grid-row pointerup never arms move/resize — no session() call, no drag', () => {
+    const pane = document.createElement('div');
+    const container = document.createElement('div');
+    const gridPane = document.createElement('div');
+    let sessionCalls = 0;
+    const { ctx } = makeContext();
+    const spiedCtx: EntryGestureContext = {
+      ...ctx,
+      session: (...args) => {
+        sessionCalls++;
+        return ctx.session(...args);
+      },
+    };
+    attachEntryGestures(pane, gridPane, container, spiedCtx);
+
+    gridPane.dispatchEvent(down(0));
+    gridPane.dispatchEvent(up(0));
+    expect(sessionCalls).toBe(0);
+  });
+
+  it('detach() removes the grid pointerup listener', () => {
+    const pane = document.createElement('div');
+    const container = document.createElement('div');
+    const gridPane = document.createElement('div');
+    const { ctx, proposals } = makeContext();
+    attachEntryGestures(pane, gridPane, container, ctx).detach();
+
+    gridPane.dispatchEvent(up(0));
+    expect(proposals).toEqual([]);
+  });
+});
+
 describe('attachEntryGestures — hover (S3.2)', () => {
   it('reports the raw hit under the pointer on pointermove, and undefined on pointerleave', () => {
     const pane = document.createElement('div');
     const container = document.createElement('div');
+    const gridPane = document.createElement('div');
     const hovered: (ItemId | undefined)[] = [];
     const { ctx } = makeContext({ setHovered: (id) => hovered.push(id) });
-    attachEntryGestures(pane, container, ctx);
+    attachEntryGestures(pane, gridPane, container, ctx);
 
     pane.dispatchEvent(move(1));
     pane.dispatchEvent(move(99)); // no hit
@@ -246,9 +340,10 @@ describe('attachEntryGestures — hover (S3.2)', () => {
   it('detach() stops reporting hover', () => {
     const pane = document.createElement('div');
     const container = document.createElement('div');
+    const gridPane = document.createElement('div');
     const hovered: (ItemId | undefined)[] = [];
     const { ctx } = makeContext({ setHovered: (id) => hovered.push(id) });
-    attachEntryGestures(pane, container, ctx).detach();
+    attachEntryGestures(pane, gridPane, container, ctx).detach();
 
     pane.dispatchEvent(move(1));
     expect(hovered).toEqual([]);
@@ -262,12 +357,13 @@ describe('attachEntryGestures — move (S3.3)', () => {
     const pane = document.createElement('div');
     mockPointerCapture(pane);
     const container = document.createElement('div');
+    const gridPane = document.createElement('div');
     const { ctx, proposals, previews, commits } = makeContext({
       can: (capability) => capability === 'move' || capability === 'select',
       draftFor: (_gesture, entries, dxPx) =>
         new Map(entries.map((e) => [e.id, { start: toInstant(dxPx), end: toInstant(dxPx) }])),
     });
-    attachEntryGestures(pane, container, ctx);
+    attachEntryGestures(pane, gridPane, container, ctx);
 
     pane.dispatchEvent(down(0));
     pane.dispatchEvent(move(0 + DRAG_THRESHOLD_PX + 1));
@@ -284,12 +380,13 @@ describe('attachEntryGestures — move (S3.3)', () => {
     const pane = document.createElement('div');
     mockPointerCapture(pane);
     const container = document.createElement('div');
+    const gridPane = document.createElement('div');
     const commit = vi.fn(() => Promise.resolve(true));
     const { ctx, previews, commits } = makeContext({
       can: (capability) => capability === 'move' || capability === 'select',
       commit,
     });
-    attachEntryGestures(pane, container, ctx);
+    attachEntryGestures(pane, gridPane, container, ctx);
 
     pane.dispatchEvent(down(0));
     pane.dispatchEvent(move(0 + DRAG_THRESHOLD_PX + 1));
@@ -304,9 +401,10 @@ describe('attachEntryGestures — move (S3.3)', () => {
     const pane = document.createElement('div');
     mockPointerCapture(pane);
     const container = document.createElement('div');
+    const gridPane = document.createElement('div');
     const commit = vi.fn(() => Promise.resolve(true));
     const { ctx, proposals } = makeContext({ can: (capability) => capability === 'select', commit });
-    attachEntryGestures(pane, container, ctx);
+    attachEntryGestures(pane, gridPane, container, ctx);
 
     pane.dispatchEvent(down(0));
     pane.dispatchEvent(move(0 + DRAG_THRESHOLD_PX + 1)); // never arms: not move-capable
@@ -320,6 +418,7 @@ describe('attachEntryGestures — move (S3.3)', () => {
     const pane = document.createElement('div');
     mockPointerCapture(pane);
     const container = document.createElement('div');
+    const gridPane = document.createElement('div');
     const seenEntries: Entry[][] = [];
     const { ctx } = makeContext({
       can: () => true,
@@ -329,7 +428,7 @@ describe('attachEntryGestures — move (S3.3)', () => {
         return new Map();
       },
     });
-    attachEntryGestures(pane, container, ctx);
+    attachEntryGestures(pane, gridPane, container, ctx);
 
     pane.dispatchEvent(down(0)); // grabs A
     pane.dispatchEvent(move(0 + DRAG_THRESHOLD_PX + 1));
@@ -343,6 +442,7 @@ describe('attachEntryGestures — resize (S3.4)', () => {
     const pane = document.createElement('div');
     mockPointerCapture(pane);
     const container = document.createElement('div');
+    const gridPane = document.createElement('div');
     const capabilities: ('move' | 'resize')[] = [];
     const { ctx, proposals, commits } = makeContext({
       hitTest: () => ({ itemId: itemId(A), edge: 'end' }),
@@ -352,7 +452,7 @@ describe('attachEntryGestures — resize (S3.4)', () => {
         return [entryFor(grabbed)];
       },
     });
-    attachEntryGestures(pane, container, ctx);
+    attachEntryGestures(pane, gridPane, container, ctx);
 
     pane.dispatchEvent(down(0));
     pane.dispatchEvent(move(0 + DRAG_THRESHOLD_PX + 1));
@@ -368,13 +468,14 @@ describe('attachEntryGestures — resize (S3.4)', () => {
     const pane = document.createElement('div');
     mockPointerCapture(pane);
     const container = document.createElement('div');
+    const gridPane = document.createElement('div');
     const commit = vi.fn(() => Promise.resolve(true));
     const { ctx, proposals } = makeContext({
       hitTest: (at) => (at.x === 0 ? { itemId: itemId(A), edge: 'start' } : { itemId: itemId(ORDER[at.x]!) }),
       can: (capability) => capability === 'select', // resize refused (e.g. milestone)
       commit,
     });
-    attachEntryGestures(pane, container, ctx);
+    attachEntryGestures(pane, gridPane, container, ctx);
 
     pane.dispatchEvent(down(0));
     pane.dispatchEvent(move(0 + DRAG_THRESHOLD_PX + 1)); // never arms: not resize-capable
@@ -389,6 +490,7 @@ describe('attachEntryGestures — segments and visible row order (S4.10)', () =>
   it('[S4-A4] passes the grabbed item id into session when a segment bar is armed', () => {
     const pane = document.createElement('div');
     const container = document.createElement('div');
+    const gridPane = document.createElement('div');
     mockPointerCapture(pane);
     const middle = itemId(A, 1);
     const grabbedItems: (ItemId | undefined)[] = [];
@@ -413,7 +515,7 @@ describe('attachEntryGestures — segments and visible row order (S4.10)', () =>
         };
       },
     });
-    attachEntryGestures(pane, container, ctx);
+    attachEntryGestures(pane, gridPane, container, ctx);
 
     pane.dispatchEvent(down(0));
     pane.dispatchEvent(move(DRAG_THRESHOLD_PX + 1));
@@ -424,11 +526,12 @@ describe('attachEntryGestures — segments and visible row order (S4.10)', () =>
   it('plain click proposes the touched segment item id, not only segment 0', () => {
     const pane = document.createElement('div');
     const container = document.createElement('div');
+    const gridPane = document.createElement('div');
     const middle = itemId(A, 1);
     const { ctx, proposals, proposalItemIds } = makeContext({
       hitTest: () => ({ itemId: middle }),
     });
-    attachEntryGestures(pane, container, ctx);
+    attachEntryGestures(pane, gridPane, container, ctx);
 
     pane.dispatchEvent(up(1000)); // hit resolves to segment 1 of A
 
@@ -439,9 +542,10 @@ describe('attachEntryGestures — segments and visible row order (S4.10)', () =>
   it('shift-click ranges over selectableEntriesInRowOrder, skipping rows not shown', () => {
     const pane = document.createElement('div');
     const container = document.createElement('div');
+    const gridPane = document.createElement('div');
     const visible: readonly EntryId[] = [B, C];
     const { ctx, proposals } = makeContext({ selectableEntriesInRowOrder: () => visible });
-    attachEntryGestures(pane, container, ctx);
+    attachEntryGestures(pane, gridPane, container, ctx);
 
     pane.dispatchEvent(up(1)); // select B
     pane.dispatchEvent(up(2, { shiftKey: true })); // range to C

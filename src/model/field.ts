@@ -55,6 +55,9 @@ export interface GridColumn {
   resizable?: boolean;
   /** Default `true`. A pinned column refuses the reorder drag and the move chord. */
   movable?: boolean;
+  /** D-S5-13 — `true` adds this column's header and formatted value to the default bar tooltip.
+   *  Default `false`. */
+  tooltip?: boolean;
 }
 
 /** What a consumer writes: a Field key, or a column object. */
@@ -70,7 +73,9 @@ export interface Field<TValue = unknown> {
   equals?(a: TValue | undefined, b: TValue | undefined): boolean;
   compare?(a: TValue | undefined, b: TValue | undefined): number;
   formatValue?(value: TValue | undefined, ctx: FormatContext): string;
-  column?: Omit<GridColumn, 'field'>;
+  /** D-S5-17: `cellRenderer` sits on the Gantt's `GridColumn`, never here — `data/` never holds a
+   *  renderer, so this default set excludes it. */
+  column?: Omit<GridColumn, 'field' | 'cellRenderer'>;
 }
 
 /** A `Field` with `key` and `source` omitted — one bundle applied by name to many Fields. */

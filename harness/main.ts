@@ -450,7 +450,26 @@ function selectionShortcuts(): GanttPlugin {
   };
 }
 
-gantt.plugins = [...gantt.plugins, selectionShortcuts()];
+// Bug hunt follow-up (S5 fixes, "grid row highlight and row click" — out of scope there, in scope
+// here): a zebra-striped timeline, demoing the `RowStripe` decoration S5.6 already shipped
+// (D-S5-15) — `.fg-row`'s own even/odd background (`--fg-row-odd-bg`) only covers the grid pane; the
+// timeline pane has no striping of its own until a plugin registers one, the same way any consumer
+// would.
+function stripedRows(): GanttPlugin {
+  return {
+    id: 'harness.stripedRows',
+    setup(ctx) {
+      ctx.view.registerDecoration('underBars', (decoCtx) =>
+        decoCtx.rows
+          .filter((row) => row.index % 2 === 1)
+          .map((row) => ({ kind: 'rowStripe', rowId: row.id, class: 'demo-row-stripe' })),
+      );
+      return () => {};
+    },
+  };
+}
+
+gantt.plugins = [...gantt.plugins, selectionShortcuts(), stripedRows()];
 
 // S5.3, D-S5-8: a plugin's `setup()` is the only place `ctx.view.overlay` reaches this scope.
 let overlayPopup: Popup | undefined;

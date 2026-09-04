@@ -125,6 +125,56 @@ describe('tooltips() (S5.5, D-S5-13)', () => {
     container.remove();
   });
 
+  it('a second Gantt does not open its tooltip for a hover on the first (B1, I2)', () => {
+    const { container: containerA, gantt: ganttA } = makeGantt();
+    const containerB = document.createElement('div');
+    document.body.append(containerB);
+    // Same entry ids in both Datasets — the failure mode B1 found: a document-level listener with no
+    // container check opens Gantt A's popup anchored on Gantt B's bar.
+    const datasetB = new Dataset({ entries: sampleEntries.slice(0, 3), timeZone: 'UTC' });
+    const ganttB = new Gantt({
+      container: containerB,
+      dataset: datasetB,
+      plugins: [tooltips({ delayMs: 100 })],
+    });
+
+    hover(bars(containerB)[0]!);
+    vi.advanceTimersByTime(100);
+
+    expect(containerB.querySelector('.fg-tooltip')).not.toBeNull();
+    expect(containerA.querySelector('.fg-tooltip')).toBeNull();
+
+    ganttA.destroy();
+    ganttB.destroy();
+    containerA.remove();
+    containerB.remove();
+  });
+
+  it('the default body includes every column marked tooltip: true (B4, D-S5-13)', () => {
+    const container = document.createElement('div');
+    document.body.append(container);
+    const dataset = new Dataset({
+      entries: [{ id: 'e1', name: 'Task', start: '2026-01-01', end: '2026-01-02', meta: { cost: 500 } }],
+      fields: [{ key: 'cost', column: {} }],
+      timeZone: 'UTC',
+    });
+    const gantt = new Gantt({
+      container,
+      dataset,
+      gridColumns: ['name', { field: 'cost', tooltip: true }],
+      plugins: [tooltips({ delayMs: 100 })],
+    });
+
+    hover(bars(container)[0]!);
+    vi.advanceTimersByTime(100);
+
+    expect(container.querySelector('.fg-tooltip-field-label')?.textContent).toBe('cost');
+    expect(container.querySelector('.fg-tooltip-field-value')?.textContent).toBe('500');
+
+    gantt.destroy();
+    container.remove();
+  });
+
   it('removing the plugin removes its listeners and any open tooltip', () => {
     const { container, gantt } = makeGantt();
 

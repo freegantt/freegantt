@@ -243,6 +243,7 @@ export class Gantt {
           registerRenderer: <P extends RendererPoint>(point: P, renderer: RendererFor<P>): void =>
             parts.registerRenderer(point, renderer),
           resolveTooltip: parts.resolveTooltip,
+          resolveTooltipColumns: parts.resolveTooltipColumns,
           registerDecoration: parts.registerDecoration,
         },
       }),

@@ -29,7 +29,12 @@ function barUnder(node: Node): HTMLElement | undefined {
   return el ?? undefined;
 }
 
-function defaultContent(entry: Entry, timeZone: string, locale: Intl.LocalesArgument | undefined) {
+function defaultContent(
+  entry: Entry,
+  timeZone: string,
+  locale: Intl.LocalesArgument | undefined,
+  columns: readonly { header: string; value: string }[],
+) {
   const start = formatDate(timeZone, entry.start, locale);
   const end = formatEndInclusive(timeZone, entry.end, locale);
   const dates = start === end ? start : `${start} – ${end}`;
@@ -38,6 +43,16 @@ function defaultContent(entry: Entry, timeZone: string, locale: Intl.LocalesArgu
     children: [
       { key: 'title', class: { 'fg-tooltip-title': true }, text: entry.name },
       { key: 'dates', class: { 'fg-tooltip-dates': true }, text: dates },
+      // D-S5-13: "and any column marked `tooltip: true`" — one row per such column, in `gridColumns`
+      // order (`ctx.view.resolveTooltipColumns` already filtered and formatted them).
+      ...columns.map((column, i) => ({
+        key: `column-${i}`,
+        class: { 'fg-tooltip-field': true },
+        children: [
+          { key: 'label', class: { 'fg-tooltip-field-label': true }, text: column.header },
+          { key: 'value', class: { 'fg-tooltip-field-value': true }, text: column.value },
+        ],
+      })),
     ],
   };
 }
@@ -63,6 +78,15 @@ export function tooltips(options: TooltipsOptions = {}): GanttPlugin {
       let timer: ReturnType<typeof setTimeout> | undefined;
       let openBar: HTMLElement | undefined;
 
+      // B1: these listeners are `document`-level (the pointer/focus target may be a descendant node
+      // the plugin never touched), so `.fg-bar` alone is not enough to tell "this Gantt's own bar"
+      // from a second Gantt's — two Datasets sharing an entry id would otherwise open Gantt A's
+      // tooltip anchored on Gantt B's bar (I2). `overlay.contains` is the seam that tells them apart.
+      const barInThisGantt = (node: Node): HTMLElement | undefined => {
+        const bar = barUnder(node);
+        return bar !== undefined && ctx.view.overlay.contains(bar) ? bar : undefined;
+      };
+
       const clearTimer = (): void => {
         if (timer === undefined) return;
         clearTimeout(timer);
@@ -82,32 +106,38 @@ export function tooltips(options: TooltipsOptions = {}): GanttPlugin {
         const entry = ctx.dataset.entries.get(entryId);
         if (entry === undefined) return;
         const content =
-          ctx.view.resolveTooltip(entryId) ?? defaultContent(entry, ctx.dataset.timeZone, ctx.gantt.locale);
+          ctx.view.resolveTooltip(entryId) ??
+          defaultContent(
+            entry,
+            ctx.dataset.timeZone,
+            ctx.gantt.locale,
+            ctx.view.resolveTooltipColumns(entry),
+          );
         openBar = bar;
         popup.open({ anchor: bar, placement, focus: 'none', content });
       };
 
       const onPointerOver = (event: PointerEvent): void => {
-        const bar = event.target instanceof Node ? barUnder(event.target) : undefined;
+        const bar = event.target instanceof Node ? barInThisGantt(event.target) : undefined;
         if (bar === undefined || bar === openBar) return;
         clearTimer();
         timer = setTimeout(() => openFor(bar), delayMs);
       };
       const onPointerOut = (event: PointerEvent): void => {
-        const bar = event.target instanceof Node ? barUnder(event.target) : undefined;
+        const bar = event.target instanceof Node ? barInThisGantt(event.target) : undefined;
         if (bar === undefined) return;
         const to = event.relatedTarget instanceof Node ? barUnder(event.relatedTarget) : undefined;
         if (to === bar) return;
         close();
       };
       const onFocusIn = (event: FocusEvent): void => {
-        const bar = event.target instanceof Node ? barUnder(event.target) : undefined;
+        const bar = event.target instanceof Node ? barInThisGantt(event.target) : undefined;
         if (bar === undefined) return;
         clearTimer();
         openFor(bar);
       };
       const onFocusOut = (event: FocusEvent): void => {
-        const bar = event.target instanceof Node ? barUnder(event.target) : undefined;
+        const bar = event.target instanceof Node ? barInThisGantt(event.target) : undefined;
         if (bar === undefined) return;
         close();
       };

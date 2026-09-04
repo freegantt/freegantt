@@ -27,9 +27,15 @@ export type { EntryGestureContext, EntryGesture, DraftOptions, EntryHit } from '
  *
  *  Resize (S3.4, D-S3-4): a pointerdown on the shared resize-handle pair (`ctx.hitTest`'s `edge`)
  *  arms the same drag machinery with a `{ kind: 'resize', edge }` gesture instead — one pointer
- *  stream, one state machine, only the grabbed gesture shape differs. */
+ *  stream, one state machine, only the grabbed gesture shape differs.
+ *
+ *  Grid row click (bug hunt, "grid row highlight and row click"): `gridPane` gets its own, narrower
+ *  pointerup listener — a row click selects with the same rules as a bar click (plain/ctrl/shift),
+ *  but it never arms move or resize (`ctx.hitTest`'s grid-row fallback never grabs `pane`'s own drag
+ *  machinery) and a miss on the grid never clears (only an empty *timeline* click does). */
 export function attachEntryGestures(
   pane: HTMLElement,
+  gridPane: HTMLElement,
   container: HTMLElement,
   ctx: EntryGestureContext,
 ): Detachable {
@@ -125,20 +131,25 @@ export function attachEntryGestures(
     drag.down(e);
   }
 
-  function onPointerUp(e: PointerEvent): void {
-    if (drag.up(e)) return; // was a drag — commit/cancel already ran inside pointer-gesture's callbacks
-
-    const hit = ctx.hitTest({ x: e.clientX, y: e.clientY });
+  /** Pointer semantics shared by a timeline click and a grid-row click (D-S3-10, bug hunt: "grid row
+   *  highlight and row click") — everything past "what did we hit". `clearOnMiss` is the one place
+   *  the two surfaces differ: an empty timeline click clears the selection; a grid miss (a header
+   *  row, padding, a twisty — `render/dom`'s `hitTest` already returns no hit for those) never does. */
+  function selectFromHit(
+    e: Pick<PointerEvent, 'shiftKey' | 'ctrlKey' | 'metaKey'>,
+    hit: ReturnType<EntryGestureContext['hitTest']>,
+    clearOnMiss: boolean,
+  ): void {
     if (hit === undefined) {
       anchor = undefined;
-      if (ctx.selection.get().length > 0) ctx.selection.propose([]);
+      if (clearOnMiss && ctx.selection.get().length > 0) ctx.selection.propose([]);
       return;
     }
     const entry = ctx.entryFor(hit.itemId);
 
     if (entry === undefined) {
       anchor = undefined;
-      if (ctx.selection.get().length > 0) ctx.selection.propose([]);
+      if (clearOnMiss && ctx.selection.get().length > 0) ctx.selection.propose([]);
       return;
     }
     const hitItemId = hit.itemId;
@@ -163,6 +174,18 @@ export function attachEntryGestures(
 
     anchor = entry.id;
     ctx.selection.propose([entry.id], [hitItemId]);
+  }
+
+  function onPointerUp(e: PointerEvent): void {
+    if (drag.up(e)) return; // was a drag — commit/cancel already ran inside pointer-gesture's callbacks
+    selectFromHit(e, ctx.hitTest({ x: e.clientX, y: e.clientY }), true);
+  }
+
+  /** The grid pane's own pointerup — never fed through `drag` (D-S3-19/22's move/resize machinery
+   *  is armed only from a timeline `pointerdown`, `onPointerDown` below), so a row click can only
+   *  ever be a click, never the start of a drag. */
+  function onGridPointerUp(e: PointerEvent): void {
+    selectFromHit(e, ctx.hitTest({ x: e.clientX, y: e.clientY }), false);
   }
 
   function onKeyDown(e: KeyboardEvent): void {
@@ -195,10 +218,18 @@ export function attachEntryGestures(
     ctx.setHovered(undefined);
   }
 
+  // Bug hunt B6: a browser-issued cancel (touch interrupt, drag into a scrollbar) has no other path
+  // to `cancel()` — Escape's own `drag.escape()` needs a keydown that a cancelled touch never sends.
+  function onPointerCancel(e: PointerEvent): void {
+    drag.pointercancel(e);
+  }
+
   pane.addEventListener('pointerdown', onPointerDown);
   pane.addEventListener('pointerup', onPointerUp);
   pane.addEventListener('pointermove', onPointerMove);
   pane.addEventListener('pointerleave', onPointerLeave);
+  pane.addEventListener('pointercancel', onPointerCancel);
+  gridPane.addEventListener('pointerup', onGridPointerUp);
   container.addEventListener('keydown', onKeyDown);
   container.addEventListener('mousedown', onMouseDown);
   container.addEventListener('selectstart', onSelectStart);
@@ -210,6 +241,8 @@ export function attachEntryGestures(
       pane.removeEventListener('pointerup', onPointerUp);
       pane.removeEventListener('pointermove', onPointerMove);
       pane.removeEventListener('pointerleave', onPointerLeave);
+      pane.removeEventListener('pointercancel', onPointerCancel);
+      gridPane.removeEventListener('pointerup', onGridPointerUp);
       container.removeEventListener('keydown', onKeyDown);
       container.removeEventListener('mousedown', onMouseDown);
       container.removeEventListener('selectstart', onSelectStart);
