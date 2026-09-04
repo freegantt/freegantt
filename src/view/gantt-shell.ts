@@ -18,7 +18,6 @@ import type {
   DateLineSpec,
   Overscan,
   PresetRef,
-  ResolvedColumn,
   RowSource,
   TimeScaleFit,
   ViewportHandle,
@@ -88,7 +87,6 @@ import type {
   EntryId,
   FieldContext,
   FieldKey,
-  GridColumn,
   GridColumnInput,
   ItemId,
   Instant,
@@ -106,8 +104,10 @@ import { projectAffordances } from './affordance-projection.js';
 import { GesturePipeline } from './gesture-pipeline.js';
 import type { EntryGestureContext } from './entry-gesture-context.js';
 import type { ColumnGestureContext } from './column-gesture-context.js';
-import { DEFAULT_GRID_COLUMNS, resolveGanttFields, toGridColumn } from './grid-columns.js';
+import { DEFAULT_GRID_COLUMNS, resolveGanttFields } from './grid-columns.js';
 import type { ResolveColumnsBind } from './grid-columns.js';
+import { ColumnChrome } from './column-chrome.js';
+import type { ColumnChromePorts } from './column-chrome.js';
 import { TreeCollapse } from './tree-collapse.js';
 import { createFieldContext } from '../data/fields/field-access.js';
 import { isDevMode } from '../data/dev-mode.js';
@@ -167,22 +167,21 @@ const LANE_GAP_PROPERTY = '--fg-lane-gap';
 /** Zero gap is authored: packed bars may sit flush. */
 const LANE_GAP_POLICY = { fallback: DEFAULT_LANE_GAP_PX, accepts: 'zeroOrMore' } as const;
 
-/** S5.7, D-S5-18: the same floor pattern `minGridWidth` applies to the pane splitter (#127), for one
- *  column instead of the whole grid pane — a CSS custom property rather than a constructor option,
- *  since `GridColumn` carries no `minWidth` field of its own. */
-const MIN_COLUMN_WIDTH_PROPERTY = '--fg-column-min-width';
-const DEFAULT_MIN_COLUMN_WIDTH = 40;
-const MIN_COLUMN_WIDTH_POLICY = { fallback: DEFAULT_MIN_COLUMN_WIDTH, accepts: 'positive' } as const;
-/** One `Shift+Arrow` step (D-S5-18's keyboard parity) and the on-screen width read back when a flex
- *  column (no explicit `width`) has never been resized. */
-const COLUMN_RESIZE_STEP_PX = 16;
-const DEFAULT_COLUMN_WIDTH_FALLBACK_PX = 120;
-
 /** Default for `todayLineMarginTicks` below: how many of the current preset's own ticks sit between
  *  the pane's left edge and `panToToday`'s landing (S1.13 follow-up) — enough that the today line
  *  reads as "near the start" without sitting flush on the edge, leaving a sliver of the timeline
  *  visible to its left. */
 const DEFAULT_TODAY_LINE_MARGIN_TICKS = 2;
+
+/** Every `before*` → `*` pair `#proposeChange` runs (D-S5-6): one entry per pair, not one overload
+ *  per pair — a future cancelable change adds a line here instead of a new `#proposeChange`
+ *  overload. */
+interface ProposableChange {
+  beforeCollapseChange: { after: 'collapseChange'; change: CollapseChange };
+  beforeSelectionChange: { after: 'selectionChange'; change: SelectionChange };
+  beforeGridWidthChange: { after: 'gridWidthChange'; change: GridWidthChange };
+  beforeGridColumnsChange: { after: 'gridColumnsChange'; change: GridColumnsChange };
+}
 
 export interface GanttShellOptions {
   /** Element or CSS selector (plans/02 §2); a selector that matches nothing throws (#38). */
@@ -367,13 +366,10 @@ export class GanttShell {
   #entryGestures: Detachable | undefined;
   #keyboardEditing: Detachable | undefined;
   #columnGestures: Detachable | undefined;
-  /** S5.7, D-S5-26: which header cell (if any) a plain click last landed on — `#buildCommandContext`'s
-   *  `target: { kind: 'header', columnKey }`, so `Alt+Arrow`/`Shift+Arrow` scope to it (issue #137 F6,
-   *  `CommandTarget`'s own doc comment). A JS-tracked "focused column", not real DOM focus (D-S1.10-5
-   *  keeps the container the one honest tab stop until S5.11's roving pattern lands) — set by
-   *  `ColumnGestureContext.setFocusedColumn`, the same way a bar click sets the *selection* without
-   *  moving focus off the container. */
-  #focusedHeaderColumnKey: FieldKey | undefined;
+  /** Grid-column resolution, live resize/reorder preview, and the `gridColumns` commit sequence
+   *  (S5.7, D-S5-18) — `column-chrome.ts`'s own module doc explains the split. Constructed in the
+   *  constructor body (needs `#container`, not yet assigned at field-init time). */
+  #columnChrome!: ColumnChrome;
   #wheelNavigation: WheelNavigationAttachment | undefined;
   #wheelNavigationGrid: WheelNavigationAttachment | undefined;
   #rowTwistyAttachment: RowTwistyAttachment;
@@ -440,8 +436,6 @@ export class GanttShell {
   #todayLine: boolean | Instant = true;
   #dateLines: readonly DateLineSpec[] = [];
   #todayLineMarginTicks: number = DEFAULT_TODAY_LINE_MARGIN_TICKS;
-  #gridColumnInput: readonly GridColumnInput[] = DEFAULT_GRID_COLUMNS;
-  #resolvedColumns: readonly ResolvedColumn[] = [];
   #fieldCompares: readonly FieldCompare[] = [];
   #fieldContext: FieldContext | undefined;
   #rowSource: RowSource = DEFAULT_ROW_SOURCE;
@@ -503,7 +497,11 @@ export class GanttShell {
     this.#locale = options.locale;
     this.#todayLine = options.todayLine ?? true;
     this.#dateLines = options.dateLines ?? [];
-    this.#gridColumnInput = options.gridColumns ?? DEFAULT_GRID_COLUMNS;
+    this.#columnChrome = new ColumnChrome(
+      this.#container,
+      this.#columnChromePorts(),
+      options.gridColumns ?? DEFAULT_GRID_COLUMNS,
+    );
     this.#rowSource = options.rowSource ?? DEFAULT_ROW_SOURCE;
     this.#barRenderer = options.barRenderer;
     this.#cellRenderer = options.cellRenderer;
@@ -525,7 +523,7 @@ export class GanttShell {
         // ever calls an already-column-bound function keyed by the same `FrameColumn.key` string
         // it already threads through `CellItem.key`.
         resolveCellRenderer: (columnKey) => {
-          const column = this.#resolvedColumns.find((c) => String(c.key) === columnKey);
+          const column = this.#columnChrome.resolvedColumns.find((c) => String(c.key) === columnKey);
           if (column === undefined) return undefined;
           // S5.7, D-S5-17: a per-column `cellRenderer` (this Gantt's own `gridColumns`) beats the
           // Gantt-wide one for that column — no `pluginId`, since a `GridColumn` only ever arrives
@@ -791,28 +789,32 @@ export class GanttShell {
     };
     this.#container.ownerDocument.addEventListener('keydown', this.#documentKeymapListener, true);
 
-    this.#entryGestures = options.entryGestures?.(this.#panes.timeline, this.#container, gestureContext);
-    this.#keyboardEditing = options.keyboardEditing?.(this.#container, gestureContext);
-    // S5.7, D-S5-18: same DI shape as `entryGestures`/`keyboardEditing` above — `view/` cannot import
-    // `interaction/`, so `api/gantt.ts` supplies `attachColumnGestures`.
+    // S5.7, D-S5-18: same DI shape as `entryGestures`/`keyboardEditing` below — `view/` cannot import
+    // `interaction/`, so `api/gantt.ts` supplies `attachColumnGestures`. Attached *before*
+    // `entryGestures`: both listen for `keydown` on this same `#container`, and an Escape that
+    // cancels a column drag must reach `column-gestures.ts`'s own handler — which swallows it via
+    // `stopImmediatePropagation()` — ahead of `entry-gestures.ts`'s handler, or the column drag's
+    // Escape would also clear the entry selection as an unrelated side effect.
     const columnGestureContext: ColumnGestureContext = {
-      isResizable: (columnKey) => this.#isColumnResizable(columnKey),
-      isMovable: (columnKey) => this.#isColumnMovable(columnKey),
-      minColumnWidthPx: () => this.#minColumnWidthPx(),
-      previewColumnWidth: (columnKey, widthPx) => this.#previewColumnWidth(columnKey, widthPx),
-      commitColumnWidth: (columnKey, widthPx) => this.#commitColumnWidth(columnKey, widthPx),
-      previewColumnDrop: (beforeColumnKey) => this.#previewColumnDrop(beforeColumnKey),
+      isResizable: (columnKey) => this.#columnChrome.isResizable(columnKey),
+      isMovable: (columnKey) => this.#columnChrome.isMovable(columnKey),
+      minColumnWidthPx: () => this.#columnChrome.minWidthPx(),
+      previewColumnWidth: (columnKey, widthPx) => this.#columnChrome.previewWidth(columnKey, widthPx),
+      commitColumnWidth: (columnKey, widthPx) => this.#columnChrome.commitWidth(columnKey, widthPx),
+      cancelColumnResize: () => this.#columnChrome.cancelResize(),
+      previewColumnDrop: (beforeColumnKey) => this.#columnChrome.previewDrop(beforeColumnKey),
       commitColumnReorder: (columnKey, beforeColumnKey) =>
-        this.#commitColumnReorder(columnKey, beforeColumnKey),
-      setFocusedColumn: (columnKey) => {
-        this.#focusedHeaderColumnKey = columnKey;
-      },
+        this.#columnChrome.commitReorder(columnKey, beforeColumnKey),
+      cancelColumnReorder: () => this.#columnChrome.cancelDrop(),
+      setFocusedColumn: (columnKey) => this.#columnChrome.setFocusedColumn(columnKey),
     };
     this.#columnGestures = options.columnGestures?.(
       this.#panes.gridHeader,
       this.#container,
       columnGestureContext,
     );
+    this.#entryGestures = options.entryGestures?.(this.#panes.timeline, this.#container, gestureContext);
+    this.#keyboardEditing = options.keyboardEditing?.(this.#container, gestureContext);
     const wheelNavigationCtx: WheelNavigationContext = {
       wheelZoomEnabled: () => this.#resolvedViewportGestures.wheelZoom,
       wheelPanEnabled: () => this.#resolvedViewportGestures.wheelPan,
@@ -857,14 +859,14 @@ export class GanttShell {
   }
 
   get gridColumns(): readonly GridColumnInput[] {
-    return this.#gridColumnInput;
+    return this.#columnChrome.gridColumnInput;
   }
 
   /** A plain reconfiguration still runs the same cancelable commit sequence a resize drag or a
    *  reorder drop runs (S5.7, D-S5-18) — one write path, one place the veto lives, same posture
    *  `set gridWidth` above already takes for the splitter. */
   set gridColumns(columns: readonly GridColumnInput[]) {
-    this.#commitGridColumns(columns);
+    this.#columnChrome.commit(columns);
   }
 
   /** Live (S5.4, D-S5-11). Reassigning repaints every bar with no remount (I8) — the same
@@ -943,48 +945,26 @@ export class GanttShell {
     this.#treeCollapse.expandAll();
   }
 
-  #proposeChange(
-    before: 'beforeCollapseChange',
-    after: 'collapseChange',
-    change: CollapseChange,
-    apply: () => void,
-    rollback?: () => void,
-  ): boolean;
-  #proposeChange(
-    before: 'beforeSelectionChange',
-    after: 'selectionChange',
-    change: SelectionChange,
-    apply: () => void,
-    rollback?: () => void,
-  ): boolean;
-  #proposeChange(
-    before: 'beforeGridWidthChange',
-    after: 'gridWidthChange',
-    change: GridWidthChange,
-    apply: () => void,
-    rollback?: () => void,
-  ): boolean;
-  #proposeChange(
-    before: 'beforeGridColumnsChange',
-    after: 'gridColumnsChange',
-    change: GridColumnsChange,
-    apply: () => void,
-    rollback?: () => void,
-  ): boolean;
-  #proposeChange(
-    before:
-      'beforeCollapseChange' | 'beforeSelectionChange' | 'beforeGridWidthChange' | 'beforeGridColumnsChange',
-    after: 'collapseChange' | 'selectionChange' | 'gridWidthChange' | 'gridColumnsChange',
-    change: CollapseChange | SelectionChange | GridWidthChange | GridColumnsChange,
+  /** One `before*` → apply → `*` sequence, for every cancelable Gantt-state change (D-S5-6):
+   *  collapse, selection, grid width, grid columns. `ProposableChange` pairs each `before*` name with
+   *  its `*` counterpart and shared payload type — adding a new pair (a future S5.8 event, say) is one
+   *  line there, not a new overload here. */
+  #proposeChange<B extends keyof ProposableChange>(
+    before: B,
+    after: ProposableChange[B]['after'],
+    change: ProposableChange[B]['change'],
     apply: () => void,
     rollback?: () => void,
   ): boolean {
-    if (this.#events.emit(before, change) === false) {
+    // `ProposableChange` pairs each `before*` key with the `*` key and payload type
+    // `GanttEventMap` already declares for that same pair (see the interface above) — the cast just
+    // restates that link for a generic `B` the compiler cannot chase through two separate maps.
+    if (this.#events.emit(before, change as GanttEventMap[B]) === false) {
       rollback?.();
       return false;
     }
     apply();
-    this.#events.emit(after, change);
+    this.#events.emit(after, change as GanttEventMap[ProposableChange[B]['after']]);
     return true;
   }
 
@@ -1097,7 +1077,7 @@ export class GanttShell {
   #buildCommandContext(): CommandContext<unknown> {
     const id = this.#selection[0];
     const entry = id !== undefined ? this.#options.dataset.entries.get(id) : undefined;
-    const columnKey = this.#focusedHeaderColumnKey;
+    const columnKey = this.#columnChrome.focusedHeaderColumnKey;
     // `view/` may not name `CommandContextOf`'s api-level fields (`dataset: Dataset`, `gantt`) —
     // D-S5-5's mirror — so this cast trusts `api/gantt.ts`'s injected `buildCommandContext` to fill
     // them, the same trust `buildPluginContext` above already gets for `PluginContext`.
@@ -1137,10 +1117,33 @@ export class GanttShell {
       panLeft: () => this.#panBy(-this.#viewport.preset.preferredTickWidthPx, 0),
       panDown: () => this.#panBy(0, this.#rowHeight),
       panUp: () => this.#panBy(0, -this.#rowHeight),
-      isColumnResizable: (key) => this.#isColumnResizable(key),
-      isColumnMovable: (key) => this.#isColumnMovable(key),
-      resizeColumnStep: (key, direction) => this.#resizeColumnStep(key, direction),
-      moveColumnStep: (key, direction) => this.#moveColumnStep(key, direction),
+      isColumnResizable: (key) => this.#columnChrome.isResizable(key),
+      isColumnMovable: (key) => this.#columnChrome.isMovable(key),
+      resizeColumnStep: (key, direction) => this.#columnChrome.resizeStep(key, direction),
+      moveColumnStep: (key, direction) => this.#columnChrome.moveStep(key, direction),
+    };
+  }
+
+  /** `ColumnChrome`'s one seam back into this shell's shared machinery (`column-chrome.ts`'s own doc
+   *  explains why it needs each of these): the same `#proposeChange`/`#interactionState`/`#frames`
+   *  every other cancelable Gantt-state change already goes through. Built once, in the constructor,
+   *  before `#backend`/`#frames` exist — every method here is a closure, called only later. */
+  #columnChromePorts(): ColumnChromePorts {
+    return {
+      dataset: () => this.#options.dataset,
+      columnBind: () => this.#columnBind(),
+      paintColumnResizePreview: (preview) => {
+        setOptional(this.#interactionState, 'columnResizePreview', preview);
+        this.#backend.applyState(this.#interactionState);
+      },
+      paintColumnDropIndicator: (beforeColumnKey) => {
+        setOptional(this.#interactionState, 'columnDropIndicator', beforeColumnKey);
+        this.#backend.applyState(this.#interactionState);
+      },
+      requestFrame: () => this.#frames.request(),
+      rebindFields: () => this.#bindColumns(),
+      proposeColumnsChange: (from, to, apply) =>
+        this.#proposeChange('beforeGridColumnsChange', 'gridColumnsChange', { from, to }, apply),
     };
   }
 
@@ -1396,8 +1399,12 @@ export class GanttShell {
   }
 
   #bindColumns(): void {
-    const bound = resolveGanttFields(this.#options.dataset, this.#gridColumnInput, this.#columnBind());
-    this.#resolvedColumns = bound.columns;
+    const bound = resolveGanttFields(
+      this.#options.dataset,
+      this.#columnChrome.gridColumnInput,
+      this.#columnBind(),
+    );
+    this.#columnChrome.setResolvedColumns(bound.columns);
     this.#fieldCompares = bound.fieldCompares;
     this.#fieldContext = createFieldContext(
       { get: (key) => this.#options.dataset.field(key) },
@@ -1434,140 +1441,6 @@ export class GanttShell {
     );
   }
 
-  #resolvedColumn(columnKey: FieldKey): ResolvedColumn | undefined {
-    return this.#resolvedColumns.find((column) => column.key === columnKey);
-  }
-
-  #isColumnResizable(columnKey: FieldKey): boolean {
-    return this.#resolvedColumn(columnKey)?.resizable ?? true;
-  }
-
-  #isColumnMovable(columnKey: FieldKey): boolean {
-    return this.#resolvedColumn(columnKey)?.movable ?? true;
-  }
-
-  /** S5.7, D-S5-18: the same floor pattern `#aboveMinGridWidth` applies to the splitter (#127), read
-   *  live off the container so a stylesheet change takes effect on the very next drag. */
-  #minColumnWidthPx(): number {
-    return readPixelProperty(this.#container, MIN_COLUMN_WIDTH_PROPERTY, MIN_COLUMN_WIDTH_POLICY);
-  }
-
-  /** A resolved column's own `width` when it has one (a column already resized, or authored fixed);
-   *  otherwise the flex column's actual on-screen width, so the first keyboard resize starts from what
-   *  the consumer currently sees rather than jumping to an arbitrary number. `getComputedStyle`, not
-   *  `getBoundingClientRect` (`no-flow-layout-rows`, I9 — scoped to `src/view/**`, this file included):
-   *  the header cell's own `box-sizing: border-box` width, not a row-height measurement.
-   *  `DEFAULT_COLUMN_WIDTH_FALLBACK_PX` only covers a header cell not yet mounted (a test with no
-   *  render pass). */
-  #currentColumnWidthPx(columnKey: FieldKey): number {
-    const column = this.#resolvedColumn(columnKey);
-    if (column?.width !== undefined) return column.width;
-    const escaped =
-      typeof CSS !== 'undefined' && CSS.escape ? CSS.escape(String(columnKey)) : String(columnKey);
-    const cell = this.#container.querySelector<HTMLElement>(`.fg-col-header[data-field="${escaped}"]`);
-    if (cell === null) return DEFAULT_COLUMN_WIDTH_FALLBACK_PX;
-    const px = parseFloat(getComputedStyle(cell).width);
-    return Number.isFinite(px) ? px : DEFAULT_COLUMN_WIDTH_FALLBACK_PX;
-  }
-
-  /** Live paint only (S5.7, D-S5-18) — mirrors `previewGridWidth`'s posture (`SplitterContext`): no
-   *  event, no commit, painted straight through `InteractionState` the same way a bar drag preview is. */
-  #previewColumnWidth(columnKey: FieldKey, widthPx: number): void {
-    setOptional(this.#interactionState, 'columnResizePreview', { columnKey: String(columnKey), widthPx });
-    this.#backend.applyState(this.#interactionState);
-  }
-
-  #previewColumnDrop(beforeColumnKey: FieldKey | null): void {
-    setOptional(
-      this.#interactionState,
-      'columnDropIndicator',
-      beforeColumnKey === null ? null : String(beforeColumnKey),
-    );
-    this.#backend.applyState(this.#interactionState);
-  }
-
-  #gridColumnInputAsColumns(): GridColumn[] {
-    return this.#gridColumnInput.map((item) => (typeof item === 'string' ? { field: item } : { ...item }));
-  }
-
-  #gridColumnInputWithWidth(columnKey: FieldKey, widthPx: number): readonly GridColumnInput[] {
-    return this.#gridColumnInputAsColumns().map((column) =>
-      column.field === columnKey ? { ...column, width: widthPx } : column,
-    );
-  }
-
-  #gridColumnInputReordered(
-    columnKey: FieldKey,
-    beforeColumnKey: FieldKey | null,
-  ): readonly GridColumnInput[] {
-    const columns = this.#gridColumnInputAsColumns();
-    const from = columns.findIndex((column) => column.field === columnKey);
-    if (from === -1) return this.#gridColumnInput;
-    const [moved] = columns.splice(from, 1);
-    const to =
-      beforeColumnKey === null
-        ? columns.length
-        : columns.findIndex((column) => column.field === beforeColumnKey);
-    columns.splice(to === -1 ? columns.length : to, 0, moved!);
-    return columns;
-  }
-
-  /** The one commit sequence D-S5-18 asks for: a resize drag, a reorder drop, and a plain
-   *  `gantt.gridColumns = […]` assignment all resolve `nextInput` into the columns they would show and
-   *  route through here. `from`/`to` are `GridColumn`s (`toGridColumn`), not the layout-only
-   *  `ResolvedColumn` — a consumer keeps `to` in memory and passes it straight back as `gridColumns`. */
-  #commitGridColumns(nextInput: readonly GridColumnInput[]): boolean {
-    const nextResolved = resolveGanttFields(this.#options.dataset, nextInput, this.#columnBind()).columns;
-    const from = this.#resolvedColumns.map(toGridColumn);
-    const to = nextResolved.map(toGridColumn);
-    return this.#proposeChange('beforeGridColumnsChange', 'gridColumnsChange', { from, to }, () => {
-      this.#gridColumnInput = nextInput;
-      this.#bindColumns();
-      // A landed commit clears any live paint the drag that proposed it left behind — `render()`
-      // (queued by `#frames.request()` below) repaints the real geometry anyway, but that runs on the
-      // next frame, and a stale preview object left in `#interactionState` would otherwise reapply
-      // itself verbatim the next time something unrelated calls `applyState` before then.
-      setOptional(this.#interactionState, 'columnResizePreview', undefined);
-      setOptional(this.#interactionState, 'columnDropIndicator', undefined);
-      this.#backend.applyState(this.#interactionState);
-      this.#frames.request();
-    });
-  }
-
-  /** Runs the commit sequence and returns whether it landed — the caller (a pointer drag, or a
-   *  keyboard chord) restores its own preview when it did not (D-S5-18: "a veto restores the state
-   *  the drag started from"). */
-  #commitColumnWidth(columnKey: FieldKey, widthPx: number): boolean {
-    return this.#commitGridColumns(this.#gridColumnInputWithWidth(columnKey, widthPx));
-  }
-
-  #commitColumnReorder(columnKey: FieldKey, beforeColumnKey: FieldKey | null): boolean {
-    return this.#commitGridColumns(this.#gridColumnInputReordered(columnKey, beforeColumnKey));
-  }
-
-  /** `Shift+ArrowLeft`/`Shift+ArrowRight` (D-S5-18, D-S5-26) — the same `#commitColumnWidth` a resize
-   *  drag's pointerup runs. */
-  #resizeColumnStep(columnKey: FieldKey, direction: 1 | -1): void {
-    const widthPx = Math.max(
-      this.#minColumnWidthPx(),
-      this.#currentColumnWidthPx(columnKey) + direction * COLUMN_RESIZE_STEP_PX,
-    );
-    this.#commitColumnWidth(columnKey, widthPx);
-  }
-
-  /** `Alt+ArrowLeft`/`Alt+ArrowRight` (D-S5-18, D-S5-26) — the same `#commitColumnReorder` a reorder
-   *  drop runs. Already at that edge is a silent no-op, the same posture `zoomIn`/`zoomOut`'s own
-   *  `when` guard takes for the opposite edge (there, gated in `core-commands.ts`; here, because the
-   *  index math has nowhere left to point). */
-  #moveColumnStep(columnKey: FieldKey, direction: 1 | -1): void {
-    const keys = this.#resolvedColumns.map((column) => column.key);
-    const i = keys.indexOf(columnKey);
-    const j = i + direction;
-    if (i === -1 || j < 0 || j >= keys.length) return;
-    const beforeKey = direction === -1 ? keys[j]! : (keys[j + 1] ?? null);
-    this.#commitColumnReorder(columnKey, beforeKey);
-  }
-
   /** One measurement, pushed to everything it feeds (#8, #49): `--fg-row-height`, `--fg-tick-box-floor`,
    *  and the pane size all change for the same reason — the timeline pane was just resized — so they
    *  are re-read on the same signal instead of going stale. `size` is the timeline pane's own client
@@ -1595,7 +1468,7 @@ export class GanttShell {
       locale: this.#locale,
       todayLine: this.#todayLine,
       dateLines: this.#dateLines,
-      columns: this.#resolvedColumns,
+      columns: this.#columnChrome.resolvedColumns,
       fieldCompares: this.#fieldCompares,
       ...(this.#fieldContext !== undefined ? { fieldContext: this.#fieldContext } : {}),
       rows: this.#rowSource,
@@ -1615,7 +1488,10 @@ export class GanttShell {
     this.#scrollAttachment.writePosition();
     // #126: independent of the timeline's content width above — the grid pane's own horizontal
     // scroller reaches fixed-width columns that overflow `gridWidth`, unrelated to the time axis.
-    this.#paneLayout.contentWidth = gridContentWidth(this.#resolvedColumns, this.#paneLayout.gridWidth);
+    this.#paneLayout.contentWidth = gridContentWidth(
+      this.#columnChrome.resolvedColumns,
+      this.#paneLayout.gridWidth,
+    );
   }
 
   destroy(): void {

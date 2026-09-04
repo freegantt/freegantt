@@ -1040,6 +1040,30 @@ describe('Gantt gridColumns (S4.3, D-S4-12, [S4-A1] column half)', () => {
     gantt.destroy();
   });
 
+  it('a per-column cellRenderer beats a plugin-registered cell renderer (D-S5-11/D-S5-17 combined order, s5.4-renderers.md)', () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({ timeZone: 'UTC', entries: sampleEntries.slice(0, 1) });
+    const gantt = new Gantt({
+      container,
+      dataset,
+      gridColumns: [{ field: 'name', cellRenderer: () => ({ text: 'per-column' }) }],
+      plugins: [
+        {
+          id: 'demo.cell-renderer',
+          setup(ctx) {
+            ctx.view.registerRenderer('cell', () => ({ text: 'plugin' }));
+            return () => {};
+          },
+        },
+      ],
+    });
+
+    const cell = container.querySelector<HTMLElement>('.fg-row-label[data-field="name"]')!;
+    expect(cell.textContent).toBe('per-column');
+
+    gantt.destroy();
+  });
+
   it('a Dataset change re-binds columns so a later cost edit paints the new cell text', async () => {
     const container = document.createElement('div');
     const dataset = new Dataset({
