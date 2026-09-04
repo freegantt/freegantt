@@ -578,7 +578,7 @@ export interface EntryStoreView<TMeta = unknown> {
     readonly size: number;
 }
 
-// @public (undocumented)
+// @public
 export interface Field<TValue = unknown> {
     column?: Omit<GridColumn, 'field' | 'cellRenderer'>;
     // (undocumented)

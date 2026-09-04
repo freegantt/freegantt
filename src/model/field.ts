@@ -73,6 +73,11 @@ export interface TooltipColumn {
   value: string;
 }
 
+/** `TValue` checks `equals`/`compare`/`formatValue`/`parseValue` against each other only where a
+ *  `Field` is declared — `FieldRegistry`, `DatasetOptions.fields` and `FieldLookup` all hold bare
+ *  `Field` (`Field<unknown>`), so nothing downstream of declaration re-checks it (ADR 0005, #141
+ *  item #4). This is deliberate, not a gap: the registry is heterogeneous and string-keyed by
+ *  design, and closing it over a compile-time schema would be a different library. */
 export interface Field<TValue = unknown> {
   key: FieldKey;
   type?: FieldTypeName;
