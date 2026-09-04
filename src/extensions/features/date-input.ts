@@ -1,0 +1,99 @@
+// extensions/features/ — the default `dateInput` seam (S5.8, D-S5-20). `plans/04` §1 budgets two
+// runtime dependencies and a picker is not one of them, so this wraps the platform's own
+// `<input type="date">`. `extensions/` may import only `api/` and `model/` (D-S5-5) — `time/` is
+// sealed from here the same way it is from a third-party plugin, so this file does no zone math of
+// its own. `createDefaultDateInput` instead takes a small structural subset of `time/`'s `ZonedTime`
+// (D-S5-16) as a plain argument: a real `ZonedTime` already satisfies it, so `inlineEditing()` can
+// pass `ctx.dataset.time` straight through with no import of `ZonedTime`'s own type. The *public*
+// `DateInputFactory` a consumer writes stays narrower still (`{ zone, locale }` only, D-S5-20's own
+// signature) — a consumer's own factory owns its own zone math, outside `src/`'s I10 scope.
+
+import type { Disposer, Instant } from '../../model/index.js';
+
+/** What the inline editor mounts in a date cell. */
+export interface DateInput {
+  /** The control to mount in the cell. */
+  readonly element: HTMLElement;
+  /** Reads what the user entered, in the dataset's zone. `undefined` means "not a date". */
+  read(): Instant | undefined;
+  /** Called when the editor opens. */
+  write(at: Instant): void;
+  /** The editor calls this to learn when the user is done (Enter, or the control's own commit). */
+  onCommit(handler: () => void): Disposer;
+  destroy(): void;
+}
+
+/** `inlineEditing({ dateInput: myPickerFactory })` — a consumer's own zone math, not `time/`'s. */
+export type DateInputFactory = (ctx: { zone: string; locale?: Intl.LocalesArgument }) => DateInput;
+
+interface PlainDateParts {
+  year: number;
+  month: number;
+  day: number;
+  hour: number;
+  minute: number;
+  second: number;
+}
+
+/** The structural slice of `time/`'s `ZonedTime` this file needs — not that type itself (sealed from
+ *  `extensions/`, see file header). */
+export interface ZoneDateMath {
+  toPlain(at: Instant): PlainDateParts;
+  fromPlain(plain: PlainDateParts): Instant;
+}
+
+function pad(value: number, width: number): string {
+  return String(value).padStart(width, '0');
+}
+
+/** `<input type="date">`'s own value shape (`YYYY-MM-DD`), read and written through `time`'s zone
+ *  math — never `Date` parsing, and never an inline `end - 1` (the inclusive-display rule, `plans/01`
+ *  §5 stays out of scope here: a date-only field's `end` is already the entry's own stored value by
+ *  the time this control opens, `inlineEditing()`'s job, not this one's). Callable only for an
+ *  Instant already known to fall at local midnight (`inlineEditing()` checks that before it ever
+ *  calls `write`, issue #137 F11) — this control assumes a valid date-only value throughout. */
+export function createDefaultDateInput(time: ZoneDateMath): DateInput {
+  const input = document.createElement('input');
+  input.type = 'date';
+  input.className = 'fg-cell-editor-control';
+
+  return {
+    element: input,
+    read(): Instant | undefined {
+      if (input.value === '') return undefined;
+      const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(input.value);
+      if (!match) return undefined;
+      const [, y, m, d] = match;
+      return time.fromPlain({
+        year: Number(y),
+        month: Number(m),
+        day: Number(d),
+        hour: 0,
+        minute: 0,
+        second: 0,
+      });
+    },
+    write(at: Instant): void {
+      const plain = time.toPlain(at);
+      input.value = `${pad(plain.year, 4)}-${pad(plain.month, 2)}-${pad(plain.day, 2)}`;
+    },
+    onCommit(handler: () => void): Disposer {
+      // `change` covers the native picker and a typed-then-blurred value; `keydown` Enter covers a
+      // typed value the browser has not yet turned into a `change` (some browsers fire `change` only
+      // on blur). `inlineEditing()`'s own commit is idempotent against a double call from both firing
+      // for the same keystroke (its own `onceCommitted` guard) — this control does not de-duplicate.
+      const onKeydown = (event: KeyboardEvent): void => {
+        if (event.key === 'Enter') handler();
+      };
+      input.addEventListener('keydown', onKeydown);
+      input.addEventListener('change', handler);
+      return () => {
+        input.removeEventListener('keydown', onKeydown);
+        input.removeEventListener('change', handler);
+      };
+    },
+    destroy(): void {
+      input.remove();
+    },
+  };
+}

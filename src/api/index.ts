@@ -68,6 +68,7 @@ export type {
   EntryGestureEvent,
   EntryMove,
   EntryResize,
+  EntryFieldEdit,
 } from '../view/index.js';
 // S3, D-S3-9: `Gantt.interactions`'s own type and the per-gesture rule shape (`view/capability.ts`).
 export type { CapabilityRule, Interactions } from '../view/index.js';
@@ -91,6 +92,14 @@ export { tooltips } from '../extensions/features/tooltips.js';
 export type { TooltipsOptions } from '../extensions/features/tooltips.js';
 export { contextMenu } from '../extensions/features/context-menu.js';
 export type { ContextMenuOptions, MenuItem, MenuEntry } from '../extensions/features/context-menu.js';
+// S5.8, D-S5-19/D-S5-20: the third shipped built-in, same posture as `tooltips()`/`contextMenu()`
+// above — a value a consumer imports, confined to the same `extensions-public-only` boundary.
+export { inlineEditing } from '../extensions/features/inline-editing.js';
+export type {
+  InlineEditingOptions,
+  DateInput,
+  DateInputFactory,
+} from '../extensions/features/inline-editing.js';
 // TimeScaleModel/ScrollModel are layout/'s own — both are public, consumer-constructed objects
 // (D9), so this re-exports straight from their owning layer rather than laundering them through
 // view/, which has no other interest in them (issue #91 §9-I).

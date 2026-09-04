@@ -3,7 +3,7 @@
 // reader sees the rows each edit produced.
 
 import './harness-nav.ts';
-import { Dataset, Gantt, ScrollModel, attemptMutation } from '../src/api/index.js';
+import { Dataset, Gantt, ScrollModel, attemptMutation, inlineEditing } from '../src/api/index.js';
 import type {
   DatasetDocument,
   DatasetEventMap,
@@ -26,13 +26,21 @@ declare global {
   }
 }
 
+// S5.8, D-S5-19: `editable: true` on every column but `end` — an unedited default (`end` stays
+// read-only) is a deliberate demo of D-S3-10's "you pick which columns edit" default, not an
+// oversight; the harness page's own copy above says "Name, Start, End or Cost" only because End is
+// worth showing refused (double-click it and nothing opens).
 const GRID_WITH_COST: readonly GridColumnInput[] = [
-  'name',
-  'start',
+  { field: 'name', editable: true },
+  { field: 'start', editable: true },
   'end',
-  { field: 'cost', header: 'Cost' },
+  { field: 'cost', header: 'Cost', editable: true },
 ];
-const GRID_WITHOUT_COST: readonly GridColumnInput[] = ['name', 'start', 'end'];
+const GRID_WITHOUT_COST: readonly GridColumnInput[] = [
+  { field: 'name', editable: true },
+  { field: 'start', editable: true },
+  'end',
+];
 
 const toolbar = document.querySelector<HTMLDivElement>('#toolbar')!;
 const rowsModeSelect = document.querySelector<HTMLSelectElement>('#rows-mode')!;
@@ -44,6 +52,7 @@ const expandAllBtn = document.querySelector<HTMLButtonElement>('#expand-all-btn'
 const collapseAllBtn = document.querySelector<HTMLButtonElement>('#collapse-all-btn')!;
 const autoGroupCheckbox = document.querySelector<HTMLInputElement>('#autogroup-checkbox')!;
 const reparentBtn = document.querySelector<HTMLButtonElement>('#reparent-btn')!;
+const customEditorCheckbox = document.querySelector<HTMLInputElement>('#custom-editor-checkbox')!;
 const costBtn = document.querySelector<HTMLButtonElement>('#cost-btn')!;
 const undoBtn = document.querySelector<HTMLButtonElement>('#undo-btn')!;
 const redoBtn = document.querySelector<HTMLButtonElement>('#redo-btn')!;
@@ -84,6 +93,7 @@ function mountGantt(next: Dataset<{ cost: number }, { cost: number }>): Gantt {
     rowSource: buildRowSource(),
     range: 'fitDataset',
     scroll: paneScroll,
+    plugins: [inlineEditing()],
   });
 }
 
@@ -169,6 +179,22 @@ function bindGantt(): void {
     refreshHistoryButtons();
   });
   gantt.on('gridColumnsChange', renderGridColumns);
+  // S5.8, D-S5-19, U8: with the checkbox on, a Name edit never opens the built-in editor — this
+  // opens `window.prompt` instead and writes through the ordinary `dataset.entries.update` path,
+  // so the change log shows one `[change]` row either way (D-S5-19: "there is no second write
+  // channel"). Only `field === 'name'` is intercepted — Start and Cost keep the built-in editor
+  // even with the checkbox on, so the page can show both paths side by side.
+  gantt.on('beforeEntryEdit', ({ entry, field }) => {
+    if (!customEditorCheckbox.checked || field !== 'name') return;
+    const next = window.prompt(`Rename "${entry.name}"`, entry.name);
+    if (next !== null && next !== entry.name) {
+      attemptMutation(() => dataset.entries.update(entry.id, { name: next }));
+    }
+    return false;
+  });
+  gantt.on('entryEdit', ({ entry, field, to }) => {
+    logLine(`[entryEdit] ${String(entry.id)}.${String(field)} -> ${JSON.stringify(to)}`);
+  });
 }
 
 function remountGantt(): void {

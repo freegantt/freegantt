@@ -131,6 +131,12 @@ export const demoFieldOptions = {
               maximumFractionDigits: 0,
             }).format(value)
           : '',
+      // S5.8, D-S5-20, issue #137 F12: the harness's own inverse of `formatValue` above, so the
+      // Budget column (`main.ts`'s own header for this field) is editable in the gallery demo.
+      parseValue: (text: string): number | undefined => {
+        const n = Number(text.replace(/[^0-9.-]/g, ''));
+        return Number.isFinite(n) ? n : undefined;
+      },
       column: { align: 'end' as const, header: 'Cost' },
     },
   },

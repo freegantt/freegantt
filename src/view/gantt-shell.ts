@@ -49,7 +49,13 @@ import type { Overlay } from './overlay.js';
 import { attachSplitter } from './splitter.js';
 import type { SplitterAttachment } from './splitter.js';
 import { EventBus } from './event-bus.js';
-import type { AsyncCancelableEvent, GanttEventHandler, GanttEventMap, GanttEvents } from './event-bus.js';
+import type {
+  AsyncCancelableEvent,
+  EntryFieldEdit,
+  GanttEventHandler,
+  GanttEventMap,
+  GanttEvents,
+} from './event-bus.js';
 import { PluginRuntime, RegistrationGate } from '../extensions/plugin-runtime.js';
 import type { ShellPlugin } from '../extensions/plugin-runtime.js';
 import { DisposableStore } from '../extensions/disposables.js';
@@ -323,6 +329,14 @@ export interface GanttShellOptions {
      *  provider is removed automatically when this plugin disposes (its own `disposables.add`
      *  entry), not by the plugin itself. */
     registerDecoration: (layer: DecorationLayer, provider: DecorationProvider) => void;
+    /** S5.8, D-S5-19: `ctx.view.isColumnEditable`. */
+    isColumnEditable: (field: FieldKey) => boolean | undefined;
+    /** S5.8, D-S5-19: `ctx.interaction.canEdit`. */
+    canEdit: (entry: Entry) => boolean;
+    /** S5.8, D-S5-19: `ctx.interaction.emitBeforeEntryEdit`. */
+    emitBeforeEntryEdit: (payload: EntryFieldEdit) => boolean | Promise<boolean>;
+    /** S5.8, D-S5-19: `ctx.interaction.emitEntryEdit`. */
+    emitEntryEdit: (payload: EntryFieldEdit) => void;
   }) => unknown;
   /** S5.2, D-S5-6: fills the api-level pieces of a `CommandContext` for the same reason
    *  `buildPluginContext` above fills `PluginContext`'s — the full api `Dataset` (with `undo`/`redo`)
@@ -658,6 +672,20 @@ export class GanttShell {
           this.#frames.request();
         });
       };
+      // S5.8, D-S5-19: `field` names the currently *resolved* column (Field default merged), the
+      // same list `resolveTooltipColumns` above reads — not the raw `GridColumnInput[]` a consumer's
+      // own `gridColumns` getter would return.
+      const isColumnEditable = (field: FieldKey): boolean | undefined =>
+        this.#columnChrome.resolvedColumns.find((column) => column.key === field)?.editable;
+      // S5.8, D-S5-19: the same `#capabilities` resolution `#canGesture` reads for `move`/`resize`
+      // (I14) — a plugin has no other way to ask it, since `interaction/`'s own `EntryGestureContext`
+      // is not reachable past `view/` (D-S5-5).
+      const canEdit = (entry: Entry): boolean => this.#capabilities.can('edit', entry);
+      const emitBeforeEntryEdit = (payload: EntryFieldEdit): boolean | Promise<boolean> =>
+        this.#events.emit('beforeEntryEdit', payload);
+      const emitEntryEdit = (payload: EntryFieldEdit): void => {
+        this.#events.emit('entryEdit', payload);
+      };
       const context = (options.buildPluginContext ?? (() => ({})))({
         events: this.#pluginEvents,
         disposables,
@@ -669,6 +697,10 @@ export class GanttShell {
         resolveTooltip,
         resolveTooltipColumns,
         registerDecoration,
+        isColumnEditable,
+        canEdit,
+        emitBeforeEntryEdit,
+        emitEntryEdit,
       });
       return { context, disposables, registrationGate: gate };
     });

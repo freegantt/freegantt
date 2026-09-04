@@ -17,6 +17,7 @@ export type {
   EntryGestureEvent,
   EntryMove,
   EntryResize,
+  EntryFieldEdit,
 } from './event-bus.js';
 export type { CapabilityRule, Interactions } from './capability.js';
 export type { Overlay, OverlayHandle } from './overlay.js';

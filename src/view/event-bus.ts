@@ -7,7 +7,7 @@
 // there rather than owning a second copy.
 
 import type { TimeScaleFit } from '../layout/index.js';
-import type { EntryId, GridColumn, Instant } from '../model/index.js';
+import type { Entry, EntryId, FieldKey, GridColumn, Instant } from '../model/index.js';
 import type { CollapseChange } from './collapse-state.js';
 
 export type { CollapseChange };
@@ -36,6 +36,18 @@ export interface GridColumnsChange {
 export interface SelectionChange {
   readonly from: readonly EntryId[];
   readonly to: readonly EntryId[];
+}
+
+/** S5.8, D-S5-19: what `beforeEntryEdit`/`entryEdit` carry — named `EntryFieldEdit`, not `EntryEdit`
+ *  (`EntryEdit` is already the write shape `update()` takes, `plans/02` §1 "one write shape", one
+ *  name one concept). `beforeEntryEdit` fires **before the editor opens**, not before the write, so
+ *  no candidate value exists yet at that point — `from` and `to` are both the entry's current stored
+ *  value for that field. `entryEdit` fires after the commit, with `to` the value actually written. */
+export interface EntryFieldEdit {
+  readonly entry: Entry;
+  readonly field: FieldKey;
+  readonly from: unknown;
+  readonly to: unknown;
 }
 
 /** One Viewport Batch completed. Chrome re-reads these, or reads the live Gantt getters. */
@@ -76,7 +88,7 @@ export interface EntryResize extends EntryGestureEvent {
  *  AsyncCancelableEvent>` is what actually grants that return shape at `on`/`off`/`emit`'s call sites
  *  (`data/event-bus.ts`'s `TAsyncKeys`). Every other event (grid width, selection) stays sync-only:
  *  `plans/02` §3's async-veto path is scoped to a data gesture's own before-event, not every veto. */
-export type AsyncCancelableEvent = 'beforeEntryMove' | 'beforeEntryResize';
+export type AsyncCancelableEvent = 'beforeEntryMove' | 'beforeEntryResize' | 'beforeEntryEdit';
 
 /** Declared events fire (I11). `navigationChange` has no `before*` pair: Preset/Fit/Pan writes are
  *  reconfiguration, not a vetoable gesture (S1.9). */
@@ -102,6 +114,12 @@ export interface GanttEventMap {
    *  during the drag that proposed this change) untouched. */
   beforeGridColumnsChange: GridColumnsChange;
   gridColumnsChange: GridColumnsChange;
+  /** S5.8, D-S5-19. Fires before the built-in editor opens, not before the write. Sync or async
+   *  veto (D-S3-17's same shape): returning `false`, or a Promise that settles `false`, suppresses
+   *  the built-in editor entirely — a consumer opens its own dialog instead (U8). */
+  beforeEntryEdit: EntryFieldEdit;
+  /** S5.8, D-S5-19. Fires after the commit, `to` the value actually written. */
+  entryEdit: EntryFieldEdit;
 }
 
 /** The one handler shape `Gantt.on`/`Gantt.off` and `GanttShell.on`/`GanttShell.off` all share

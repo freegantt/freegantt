@@ -42,6 +42,18 @@ describe('resolveCapabilities', () => {
     expect(caps.can('select', e)).toBe(true);
   });
 
+  it('defaults edit true for every kind, including a roll-up kind (S5.8, D-S5-19)', () => {
+    const caps = resolveCapabilities(undefined, isGroup);
+    expect(caps.can('edit', entry({ kind: 'group' }))).toBe(true);
+    expect(caps.can('edit', entry({ kind: 'span' }))).toBe(true);
+    expect(caps.can('edit', entry({ kind: 'milestone' }))).toBe(true);
+  });
+
+  it('an explicit edit rule overrides the default', () => {
+    const caps = resolveCapabilities({ edit: false }, isNeverDerived);
+    expect(caps.can('edit', entry())).toBe(false);
+  });
+
   it('defaults a consumer-defined kind the same as span', () => {
     const caps = resolveCapabilities(undefined, isGroup);
     const e = entry({ kind: 'phase' });

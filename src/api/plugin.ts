@@ -12,15 +12,21 @@ import type { Disposer, KeyChord, PluginId } from '../model/index.js';
 import type { Dataset } from './dataset.js';
 import type { DisposableStore } from '../extensions/disposables.js';
 import type { KeyEventLike } from '../extensions/keymap.js';
-import type { GanttEvents, Overlay, OverlayHandle } from '../view/index.js';
+import type { EntryFieldEdit, GanttEvents, Overlay, OverlayHandle } from '../view/index.js';
 import type { CommandRegistryOf, KeyBindingOf } from './command.js';
 import type { RendererPoint, RendererFor } from '../layout/index.js';
 import type { DecorationLayer, DecorationProvider } from '../layout/index.js';
-import type { ElementDescription, Entry, EntryId } from '../model/index.js';
+import type { ElementDescription, Entry, EntryId, FieldKey } from '../model/index.js';
 
 // Re-exported for the same reason `Overlay`/`OverlayHandle` are, just below: a plugin author typing
 // a `registerKeyHandler` callback names this.
 export type { KeyEventLike };
+
+// Re-exported so `extensions/features/inline-editing.ts` can import this file directly instead of
+// the `api/index.js` barrel (which itself re-exports `inlineEditing` from that very file — importing
+// the barrel back would close that edge into a cycle, `no-circular`), the same reason `Overlay`/
+// `OverlayHandle` just below are re-exported here rather than from `view/` directly.
+export type { EntryFieldEdit };
 
 // Re-exported so `extensions/popup.ts` can import this file directly instead of the `api/index.js`
 // barrel (which itself re-exports `createPopup` from `extensions/popup.ts` — importing the barrel
@@ -62,6 +68,21 @@ export interface PluginContextOf<TGantt = unknown> {
       handler: (event: KeyEventLike) => void,
       options?: { captureInEditable?: boolean },
     ): () => void;
+    /** S5.8, D-S5-19: the `edit` capability's one resolution (I14) — the same answer `move`/`resize`
+     *  already read through `interaction/entry-gestures.ts`'s `ctx.can`, exposed here because
+     *  `inlineEditing()` is the first *plugin* that needs to ask it (every other capability check
+     *  lives inside core's own gesture wiring, which a plugin cannot reach, D-S5-5). */
+    canEdit(entry: Entry): boolean;
+    /** S5.8, D-S5-19: raises `beforeEntryEdit` on this Gantt's own event bus and returns exactly
+     *  what its registered handlers return — `true`/`undefined` (no veto), `false`, or an unsettled
+     *  `Promise` (D-S3-17's async-veto shape, U8's `async (…) => { await myDialog.open(...); return
+     *  false }`). The one seam a plugin has to raise a `before*` pair it implements itself: every
+     *  other `before*` event is raised by core's own gesture pipeline, never by a plugin, so this is
+     *  scoped to this one event name rather than a generic `emit` a plugin could use to forge
+     *  `selectionChange` or any event core itself owns. */
+    emitBeforeEntryEdit(payload: EntryFieldEdit): boolean | Promise<boolean>;
+    /** S5.8, D-S5-19: raises `entryEdit` after the commit. No veto — nothing to return. */
+    emitEntryEdit(payload: EntryFieldEdit): void;
   };
   view: {
     /** S5.3, D-S5-8: the overlay layer a plugin's own popup, tooltip or menu mounts into — the same
@@ -93,6 +114,11 @@ export interface PluginContextOf<TGantt = unknown> {
      *  the same list instead of re-resolving columns itself (D-S5-5: `view/grid-columns.ts` stays out
      *  of reach). Empty when no column is marked `tooltip: true`. */
     resolveTooltipColumns(entry: Entry): readonly { header: string; value: string }[];
+    /** S5.8, D-S5-19: whether the currently resolved Grid column for `field` allows inline editing —
+     *  `GridColumn.editable` merged with the Field's own `column.editable` default, the same
+     *  resolution the grid pane itself paints from (`ColumnChrome`). `undefined` when `field` names
+     *  no column in the Gantt's current `gridColumns` (not shown right now). */
+    isColumnEditable(field: FieldKey): boolean | undefined;
     /** S5.6, D-S5-15: registers a pure decoration provider into `layer` (`underBars` below the bar
      *  layer, `overBars` above). Legal only while `setup` runs (D-S5-4); removed automatically when
      *  this plugin is disposed — a provider has no `close()`/`unregister()` of its own, the plugin's
