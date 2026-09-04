@@ -1,5 +1,5 @@
 // layout/ — the one table behind every plugin `register*` seam (S5.9, #154). A key holds a stack of
-// live registrations: the newest one wins, and disposing one removes exactly that registration, so
+// live registrations. The newest one wins. Disposing one removes exactly that registration, so
 // dropping an early plugin never disturbs a later one on the same key.
 
 import type { Disposer } from '../model/index.js';

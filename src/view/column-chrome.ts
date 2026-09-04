@@ -47,6 +47,14 @@ export interface ColumnChromePorts {
   proposeColumnsChange(from: readonly GridColumn[], to: readonly GridColumn[], apply: () => void): boolean;
 }
 
+/** One `registerPluginColumn` call, wrapped so the disposer can point at its own registration.
+ *  Two plugins may pass the same `GridColumnInput` for one field — a shared `const`, or the bare
+ *  string `'risk'` twice. A fresh cell per call keeps those two registrations distinct, the same
+ *  way `createRegistrationTable` keeps its own per-registration cells (#154). */
+interface PluginColumnRegistration {
+  readonly column: GridColumnInput;
+}
+
 /** One instance per Gantt (I2), owned by `GanttShell` alongside its other view state — never shared,
  *  never a module-level singleton. */
 export class ColumnChrome {
@@ -60,7 +68,7 @@ export class ColumnChrome {
    *  commits it, the same "config beats a plugin" posture `barRenderer`/`cellRenderer` already take).
    *  Two plugins registering the same field stack on one key: the newest registration wins, and
    *  disposing one never disturbs the other's. */
-  #pluginColumns = createRegistrationTable<FieldKey, GridColumnInput>();
+  #pluginColumns = createRegistrationTable<FieldKey, PluginColumnRegistration>();
   #resolvedColumns: readonly ResolvedColumn[] = [];
   #focusedHeaderColumnKey: FieldKey | undefined;
 
@@ -83,6 +91,7 @@ export class ColumnChrome {
     const baseKeys = new Set(this.#gridColumnInput.map(ColumnChrome.#fieldOf));
     const extras = this.#pluginColumns
       .active()
+      .map((registration) => registration.column)
       .filter((column) => !baseKeys.has(ColumnChrome.#fieldOf(column)));
     return [...this.#gridColumnInput, ...extras];
   }
@@ -92,18 +101,18 @@ export class ColumnChrome {
    *  `Disposer` that removes it again, same lifetime a decoration provider gets. */
   registerPluginColumn(column: GridColumnInput): Disposer {
     const field = ColumnChrome.#fieldOf(column);
-    const remove = this.#pluginColumns.register(field, column);
+    const registration: PluginColumnRegistration = { column };
+    const remove = this.#pluginColumns.register(field, registration);
     this.#ports.rebindFields();
     this.#ports.requestFrame();
     return () => {
-      // A commit (resize, reorder, or a plain `gridColumns` assignment) writes the whole of
-      // `effectiveInput()` — plugin columns included — into `#gridColumnInput` (D-S5-18: one commit
-      // sequence, one write), so disposal has to reach the baked-in copy too, by field key: a resize
-      // rewrites the object itself, so identity no longer matches once baked in. Strip it only when
-      // *this* registration is the one on screen. Another plugin's registration winning the field
-      // means the baked column is that plugin's, and stripping it would delete a live plugin's column
-      // (and the consumer's committed width) on a plugin removal that never owned it.
-      const wasOnScreen = this.#pluginColumns.get(field) === column;
+      // A commit writes the whole of `effectiveInput()` into `#gridColumnInput` (D-S5-18: one commit
+      // sequence, one write). Plugin columns go in too. So disposal must also strip the baked-in
+      // copy, by field key. A resize rewrites the column object, so identity no longer matches once
+      // baked in. Strip it only when *this* registration is the one on screen. Another plugin's
+      // registration wins the field when it is newer. The baked column is then that plugin's, and a
+      // strip would delete a live plugin's column and the consumer's committed width.
+      const wasOnScreen = this.#pluginColumns.get(field) === registration;
       remove();
       if (wasOnScreen) {
         this.#gridColumnInput = this.#gridColumnInput.filter((c) => ColumnChrome.#fieldOf(c) !== field);
