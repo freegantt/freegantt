@@ -43,6 +43,19 @@ export interface FieldCompare {
   compareStored(a: unknown, b: unknown): number;
 }
 
+/** #139: how wide the columns themselves are — where the last column's right edge falls. Every
+ *  column fixed means the sum answers it. A flex column has no width until the pane lays it out, so
+ *  a set holding one has no edge to name: `undefined`. `GanttShell` caps the splitter drag with
+ *  this, so dragging the grid pane wider than its own columns cannot open dead space beside them. */
+export function totalColumnWidth(columns: readonly FrameColumn[]): number | undefined {
+  let total = 0;
+  for (const column of columns) {
+    if (column.width === undefined) return undefined;
+    total += column.width;
+  }
+  return total;
+}
+
 /** #126: the grid pane's own content width, in px. Fixed-width columns (`width` set) never
  *  shrink; flex columns (`width` unset) fill whatever room is left and shrink to fit, so they
  *  never force overflow on their own. When fixed columns alone already exceed `paneWidth`, the

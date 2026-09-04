@@ -1,10 +1,25 @@
 import { describe, expect, it } from 'vitest';
-import { gridContentWidth } from './column.js';
+import { gridContentWidth, totalColumnWidth } from './column.js';
 import type { FrameColumn } from './column.js';
 
 function column(overrides: Partial<FrameColumn> = {}): FrameColumn {
   return { key: 'name', header: 'Name', align: 'start', ...overrides };
 }
+
+describe('totalColumnWidth (#139)', () => {
+  it("sums the fixed widths — where the last column's right edge falls", () => {
+    expect(totalColumnWidth([column({ width: 240 }), column({ key: 'start', width: 120 })])).toBe(360);
+  });
+
+  it('an empty column set has an edge of its own: zero', () => {
+    expect(totalColumnWidth([])).toBe(0);
+  });
+
+  it('a flex column leaves the set with no edge to name', () => {
+    const columns = [column({ width: 240 }), column({ key: 'start', flex: 1 })];
+    expect(totalColumnWidth(columns)).toBeUndefined();
+  });
+});
 
 describe('gridContentWidth (#126)', () => {
   it('returns paneWidth when there are no columns', () => {

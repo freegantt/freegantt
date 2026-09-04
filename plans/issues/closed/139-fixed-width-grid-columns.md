@@ -41,6 +41,31 @@ between them, so a column that sizes itself at all replaces the Field's sizing w
 Where one source names both, the width wins — `.fg-col-header[data-fixed]` already wins in the
 stylesheet, so reporting a flex the paint cannot honour would only lie to `gridColumnsChange`.
 
+## The pane never sits wider than its columns
+
+Follow-up in the same issue: "make sure you can't extend the frame past the last column." There is
+nothing to show past the last column's right edge, so a wider grid pane is dead space, not a wider
+view. `GanttShell#noWiderThanColumns` caps the pane at `totalColumnWidth(resolvedColumns)`
+(`layout/column.ts`) on every path that sets a width — the constructor option, a live
+`gantt.gridWidth = px`, and a splitter drag alike. Narrower stays legal: the columns then overflow
+and the pane scrolls to reach them (#126).
+
+A column set holding a `flex` column has **no** ceiling. A flex column has no width until the pane
+lays it out — filling whatever room it is given is the point of asking to flex — so there is no
+edge to stop at.
+
+The ceiling moves whenever the columns do, so `#bindColumns` re-applies it: hiding a column brings
+the pane in with it, through the same `beforeGridWidthChange`/`gridWidthChange` sequence a drag
+runs. The #127 floor still wins where the two disagree — a pane under `minGridWidth` is a collapsed
+pane, which is the accident #127 closed — but nothing floors a written width, so `gantt.gridWidth =
+0` still collapses the pane on purpose.
+
+**This deliberately overrides #127's "an authored width is authored" for the ceiling only.** The
+floor guards against a user accident, so an app author is allowed past it. The ceiling states a
+layout fact: past the last column there is nothing to draw. `gantt.gridWidth = 900` against 360px
+of columns therefore reads back `360`, and the `gridWidthChange` it fires carries `to: 360` — the
+width the pane can actually use, not the one that was asked for.
+
 ## What did not change
 
 - No new `GanttOptions` key. The default width is a level-1 `--fg-*` token, the same category
@@ -48,8 +73,8 @@ stylesheet, so reporting a flex the paint cannot honour would only lie to `gridC
 - No new public type. `GridColumn.width`/`flex` are the same two keys they were.
 - `layout/column.ts`'s `gridContentWidth` is untouched: fixed columns sum, flex columns contribute
   nothing, the pane widens only when the sum passes it. It simply has real widths to add up now.
-- The pane leaves empty space when its columns do not fill it, rather than stretching the last one.
-  A consumer who wants the fill behaviour asks the last column to `flex`.
+- A consumer who wants the last column to absorb leftover room asks it to `flex`. With the ceiling
+  above, a pane of fixed columns has no leftover room to absorb in the first place.
 
 ## Tests
 
@@ -61,3 +86,12 @@ stylesheet, so reporting a flex the paint cannot honour would only lie to `gridC
 - `e2e/grid-scroll.spec.ts` — in a real browser, four columns written as bare field names overflow
   the 220px pane and scroll to reach Duration, and a `flex` column fills the pane exactly instead.
   `harness/grid-scroll.html` carries both fixtures beside #126's hand-sized one.
+- `src/layout/column.test.ts` — `totalColumnWidth` sums the fixed widths and reports no edge at all
+  for a set holding a flex column.
+- `src/api/gantt.test.ts` ("Gantt minGridWidth (#127)") — the splitter drag stops at the columns'
+  edge; a flex column lifts the ceiling; a constructor width past the edge comes in before the
+  first paint; a live write past it is capped and reports the capped width; hiding a column brings
+  the pane in with it.
+- `e2e/pane-resize.spec.ts` — the real splitter, in a real browser: the demo page authors 720px
+  against 700px of columns and opens at 700; dragging left overflows and scrolls; dragging back out
+  stops hard against the columns' edge.
