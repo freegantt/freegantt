@@ -1,0 +1,313 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Branch review — S5.9 plugin registrations</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script type="module">
+      import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+      mermaid.initialize({ startOnLoad: true, theme: "neutral", securityLevel: "loose" });
+    </script>
+    <style>
+      .seam { stroke-dasharray: 4 4; }
+      .leak { stroke: #dc2626; }
+      .deep { background: linear-gradient(135deg, #0f172a, #1e293b); }
+      .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+    </style>
+  </head>
+  <body class="bg-stone-50 text-slate-900 font-sans">
+    <main class="max-w-5xl mx-auto px-6 py-12 space-y-12">
+
+      <header class="space-y-3">
+        <h1 class="text-3xl font-serif font-bold">Branch review — S5.9 plugin registrations</h1>
+        <p class="text-slate-600">FreeGantt · 2026-09-04 · slice S5.9 of 12 (<span class="mono">s5-start</span>). Base <span class="mono">cae9013</span> (S5.8), commits <span class="mono">a103f81</span> + <span class="mono">ffd8346</span>, 19 files, +737/−38.</p>
+        <p class="text-sm text-slate-600">Verified on review: <span class="mono">tsc --noEmit</span> clean · api-report carries <span class="mono">KindDefaults</span> / <span class="mono">ItemProducer</span> with no new <span class="mono">ae-forgotten-export</span> on those names. Working-tree edits outside this slice were ignored.</p>
+        <div class="text-xs text-slate-500 flex gap-4 pt-1">
+          <span><span class="inline-block w-3 h-3 border border-slate-400 align-middle"></span> module</span>
+          <span><span class="inline-block w-6 border-t border-dashed border-slate-500 align-middle"></span> seam</span>
+          <span><span class="inline-block w-6 border-t-2 border-red-600 align-middle"></span> leakage</span>
+          <span><span class="inline-block w-3 h-3 deep align-middle"></span> deep module</span>
+        </div>
+      </header>
+
+      <section class="space-y-6">
+        <h2 class="text-2xl font-serif font-bold">Findings rollup — five review axes</h2>
+
+        <article class="rounded-lg border border-slate-200 bg-white p-5 space-y-3">
+          <h3 class="font-bold">Spec axis <span class="text-xs font-normal text-slate-500">(s5.9-plugin-registrations.md, D-S5-21/22, [S5-A3], D-S5-4)</span></h3>
+          <ul class="text-sm space-y-1.5 list-disc pl-5">
+            <li><span class="mono text-emerald-700 font-semibold">PASS</span> — D-S5-22's four Gantt seams exist: <span class="mono">registerItemProducer</span>, <span class="mono">registerRenderer('bar', byKind)</span>, <span class="mono">registerKindDefaults</span>, <span class="mono">commands.register({ when })</span>. <span class="mono">bufferKind()</span> in <span class="mono">harness/plugins/buffer-kind.ts</span> imports <span class="mono">'freegantt'</span> only. The grep test asserts no <span class="mono">src/</span> non-test file names <span class="mono">'buffer'</span>.</li>
+            <li><span class="mono text-emerald-700 font-semibold">PASS</span> — D-S5-21's Gantt half: plugin columns append after the consumer list, a duplicate field is dropped, the public <span class="mono">gantt.gridColumns</span> getter stays the authored list. Field registration is deferred to S5.10 in the slice's own "Landed" notes — not a silent skip.</li>
+            <li><span class="mono text-amber-700 font-semibold">PARTIAL</span> — spec §3: <span class="mono">src/extensions/plugin-host.test.ts</span> — "a <span class="mono">register*</span> after <span class="mono">setup</span> throws <span class="mono">RegistrationClosedError</span>; disposal removes a registered producer, renderer, column and kind defaults". There is no <span class="mono">plugin-host.ts</span> (documented). Disposal is covered in <span class="mono">gantt.test.ts</span>. Late <span class="mono">registerItemProducer</span> / <span class="mono">registerKindDefaults</span> / <span class="mono">registerGridColumn</span> have no test; only <span class="mono">ctx.commands.register</span> after setup is asserted (C2, S5.1).</li>
+            <li><span class="mono text-amber-700 font-semibold">PARTIAL</span> — spec §3: <span class="mono">src/api/dataset.test.ts</span> plugin-registered Field — correctly out of this commit, still listed in §3 as a test for this step.</li>
+            <li><span class="mono text-amber-700 font-semibold">WRONG (judgement)</span> — D-S5-22 "removed automatically when this plugin is disposed" for kind defaults is implemented as <span class="mono">Map.delete(kind)</span>. <span class="mono">ItemProducerRegistry.register</span> restores the previous producer. Two plugins that claim the same kind: disposing the later plugin drops the earlier plugin's defaults too. Spec is silent on two plugins; the two seams now disagree. <span class="mono text-xs">gantt-shell.ts registerKindDefaults vs produce-items.ts register</span></li>
+            <li><span class="mono text-slate-600 font-semibold">SCOPE</span> — [S5-A3] behavioural test re-implements the four seams inline in <span class="mono">gantt.test.ts</span> instead of installing <span class="mono">bufferKind()</span>. The harness plugin is not the object the named acceptance test runs.</li>
+          </ul>
+        </article>
+
+        <article class="rounded-lg border border-slate-200 bg-white p-5 space-y-3">
+          <h3 class="font-bold">Standards axis <span class="text-xs font-normal text-slate-500">(AGENTS.md, plans/01 I1–I14, plans/02, Fowler smells)</span></h3>
+          <ul class="text-sm space-y-1.5 list-disc pl-5">
+            <li><span class="mono text-red-700 font-semibold">HARD</span> — glossary lag (naming check 1). <span class="mono">CONTEXT.md</span> still names the seam <strong>Item emitter</strong> and tells writers to avoid "Item producer" as two words; S5.9's public call is <span class="mono">registerItemProducer</span> and Q16 retired <span class="mono">registerItemEmitter</span>. The glossary now fights the code. Registration is also still "internal in S4".</li>
+            <li><span class="mono text-amber-700 font-semibold">JUDGEMENT — Shotgun Surgery</span> — one <span class="mono">register*</span> is three edits: <span class="mono">PluginContextOf</span>, <span class="mono">Gantt.buildPluginContext</span>, <span class="mono">GanttShell</span> constructor closures + <span class="mono">GanttShellOptions</span> bag. Pre-existing S5.1 shape; S5.9 adds three more members to the same clump.</li>
+            <li><span class="mono text-amber-700 font-semibold">JUDGEMENT — Duplicated Code</span> — <span class="mono">KindDefaults</span> restates <span class="mono">Interactions</span>' four keys as booleans. <span class="mono">#asGridColumns</span> runs twice inside <span class="mono">effectiveInput()</span>. Buffer producer in the harness re-builds the same Item object <span class="mono">wholeEntryItem</span> already builds (expected: D-S5-5, plugin cannot import <span class="mono">layout/</span> internals).</li>
+            <li><span class="mono text-amber-700 font-semibold">JUDGEMENT — Divergent Change</span> — <span class="mono">ColumnChrome</span> now owns authored input, plugin extras, resolve, resize, reorder, and commit. <span class="mono">effectiveInput()</span> is the right seam; the module still changes for chrome <em>and</em> plugin membership.</li>
+            <li><span class="mono text-amber-700 font-semibold">JUDGEMENT — Primitive Obsession</span> — <span class="mono">createItemProducerRegistry</span> stores <span class="mono">Map&lt;string, ItemProducer&gt;</span> and takes <span class="mono">Record&lt;string, ItemProducer&gt;</span> while the public <span class="mono">register</span> already takes <span class="mono">EntryKind</span>.</li>
+            <li><span class="mono text-slate-600 font-semibold">NOTE</span> — stale comment: <span class="mono">gantt-shell.ts</span> cell-renderer path still says a <span class="mono">GridColumn</span> "only ever arrives from the consumer's own config until S5.9's <span class="mono">registerGridColumn</span> exists".</li>
+            <li><span class="mono text-emerald-700 font-semibold">GOOD</span> — I11: no unimplemented <span class="mono">ctx.fields.register</span> on the Gantt context. I2: one registry / one <span class="mono">#kindDefaults</span> map per shell. I14: kind defaults re-resolve affordances through the same <span class="mono">#capabilities</span> the handles read. Layout stays DOM-free. Consumer <span class="mono">interactions</span> still beat a plugin (D-S5-11), tested.</li>
+          </ul>
+        </article>
+
+        <article class="rounded-lg border border-slate-200 bg-white p-5 space-y-3">
+          <h3 class="font-bold">Naming axis <span class="text-xs font-normal text-slate-500">(five checks)</span></h3>
+          <ul class="text-sm space-y-1.5 list-disc pl-5">
+            <li><span class="mono text-emerald-700 font-semibold">PASS</span> — call sites read true: <span class="mono">ctx.layout.registerItemProducer(kind, producer)</span>, <span class="mono">ctx.interaction.registerKindDefaults(kind, defaults)</span>, <span class="mono">ctx.view.registerGridColumn(column)</span>, <span class="mono">chrome.effectiveInput()</span>, <span class="mono">registry.producerFor(kind)</span>.</li>
+            <li><span class="mono text-emerald-700 font-semibold">PASS</span> — search test: <span class="mono">registerItemProducer</span> / <span class="mono">KindDefaults</span> / <span class="mono">registerGridColumn</span> hit the concept, not a pile of other "register" noise.</li>
+            <li><span class="mono text-red-700 font-semibold">CHECK 1 FAIL</span> — glossary term is still "Item emitter"; the shipped name is Item producer. One concept, two names across CONTEXT.md and the public interface.</li>
+            <li><span class="mono text-amber-700 font-semibold">CHECK 4</span> — <span class="mono">KindDefaults</span> vs <span class="mono">Interactions</span>: same four gesture names, different value types (boolean vs boolean-or-predicate). The split is real (plugin has no per-entry <span class="mono">entry</span>). Keep both names; derive the type (see TypeScript axis) so the keys cannot drift.</li>
+            <li><span class="mono text-amber-700 font-semibold">CHECK 4</span> — <span class="mono">effectiveInput()</span> is honest at the call site inside the shell, opaque to a plugin author (correct: not public). Inside <span class="mono">ColumnChrome</span> it is the only name for "what actually paints". Fine.</li>
+            <li><span class="mono text-slate-600 font-semibold">NOTE</span> — <span class="mono">KindDefaults</span> is not in <span class="mono">CONTEXT.md</span>. Add it next to Capabilities / Interactions when the glossary is edited.</li>
+          </ul>
+        </article>
+
+        <article class="rounded-lg border border-slate-200 bg-white p-5 space-y-3">
+          <h3 class="font-bold">TypeScript &amp; generics axis</h3>
+          <ul class="text-sm space-y-1.5 list-disc pl-5">
+            <li><span class="mono text-emerald-700 font-semibold">CLEAN</span> — <span class="mono">tsc --noEmit</span> on the landed tree. No <span class="mono">any</span>, no new <span class="mono">as</span> casts in the S5.9 hunks. <span class="mono">registerRenderer&lt;P extends RendererPoint&gt;</span> stays the one point that needs a generic; the new three members are correctly monomorphic.</li>
+            <li><span class="mono text-amber-700 font-semibold">SMELL 1</span> — <span class="mono">KindDefaults</span> is a hand-copied four-key interface. Use <span class="mono">type KindDefaults = { [K in keyof Interactions]?: boolean }</span> so a fifth gesture (S7 <span class="mono">linkCreate</span>) cannot land on <span class="mono">Interactions</span> and miss the plugin table.</li>
+            <li><span class="mono text-amber-700 font-semibold">SMELL 2</span> — <span class="mono">Map&lt;string, ItemProducer&gt;</span> + <span class="mono">extras: Record&lt;string, ItemProducer&gt;</span> in <span class="mono">produce-items.ts</span>. The interface already uses <span class="mono">EntryKind</span>. Prefer <span class="mono">Map&lt;EntryKind, ItemProducer&gt;</span> and <span class="mono">Readonly&lt;Partial&lt;Record&lt;EntryKind, ItemProducer&gt;&gt;&gt;</span>. <span class="mono">EntryKind</span> is <span class="mono">'span' \| 'group' \| 'milestone' \| (string &amp; {})</span>, so this is documentation, not a new runtime check — still the type the rest of the file speaks.</li>
+            <li><span class="mono text-amber-700 font-semibold">SMELL 3</span> — <span class="mono">resolveCapabilities</span>'s third argument is a callback <span class="mono">(kind) =&gt; KindDefaults \| undefined</span> wrapping a Map get. The shell already owns the Map. Passing <span class="mono">ReadonlyMap&lt;EntryKind, KindDefaults&gt;</span> (or keeping the callback as the seam so tests stay tiny) is a real choice; the callback is the shallower interface and is fine. Do not invent a second generic over kind.</li>
+            <li><span class="mono text-amber-700 font-semibold">SMELL 4</span> — <span class="mono">GanttShellOptions.buildPluginContext</span> parts bag is an anonymous inline type that must stay in lockstep with <span class="mono">PluginContextOf</span>. That is not a missing generic; it is a missing named type for the ports object (the same pattern <span class="mono">ColumnChromePorts</span> already uses). <span class="mono">TGantt</span> on <span class="mono">PluginContextOf</span> still does not flow into <span class="mono">layout</span> / <span class="mono">view.registerGridColumn</span> — correctly, those seams are not Gantt-typed.</li>
+            <li><span class="mono text-amber-700 font-semibold">SMELL 5</span> — <span class="mono">effectiveInput()</span> does not collapse two plugin columns that share a <span class="mono">field</span>. Types allow the duplicate; runtime will paint two cells with the same <span class="mono">data-field</span>. Renderers throw <span class="mono">RendererAlreadyRegisteredError</span> for the same collision on a point. Columns should throw or last-write-wins with a test.</li>
+            <li><span class="mono text-slate-600 font-semibold">NOTE</span> — exporting <span class="mono">Item</span> from the public surface is required for a plugin author to type a producer return. It stretches "only <span class="mono">api/</span> and <span class="mono">model/</span> types are public" the same way <span class="mono">FrameBar</span> did in S5.4 — defensible, and the report lists it.</li>
+          </ul>
+        </article>
+
+        <article class="rounded-lg border border-slate-200 bg-white p-5 space-y-3">
+          <h3 class="font-bold">Simplicity &amp; SOLID axis</h3>
+          <ul class="text-sm space-y-1.5 list-disc pl-5">
+            <li><span class="mono text-emerald-700 font-semibold">GOOD</span> — <span class="mono">ItemProducerRegistry.register</span> is a deep addition: one method hides previous-producer restore. Deletion test passes. The shipped three producers did not grow a fourth <span class="mono">if (kind === 'buffer')</span> — OCP held, [S5-A3] is the proof.</li>
+            <li><span class="mono text-emerald-700 font-semibold">GOOD</span> — capability precedence is one function, three layers, stated once. <span class="mono">#resolveCapabilities()</span> in the shell stops the three-argument call from repeating at constructor / setter / register.</li>
+            <li><span class="mono text-emerald-700 font-semibold">GOOD</span> — plugin columns never write the consumer's authored list until a gesture commits. That is the same "config beats a plugin" posture as renderers. DIP: chrome asks ports, does not own events.</li>
+            <li><span class="mono text-amber-700 font-semibold">SRP / ball of mud</span> — <span class="mono">GanttShell</span> constructor gained three more closures (~40 lines) that only forward to existing modules. The shell is still the composition root; the risk is that every S5 step adds another. S5.10 will add Dataset-side twins. Candidate C1.</li>
+            <li><span class="mono text-amber-700 font-semibold">LSP</span> — last-write-wins on kind defaults vs stacked restore on producers is two answers to "what does dispose mean?". Callers cannot treat <span class="mono">register*</span> as one contract.</li>
+          </ul>
+        </article>
+      </section>
+
+      <section id="candidates" class="space-y-10">
+        <h2 class="text-2xl font-serif font-bold">Deepening candidates</h2>
+
+        <article id="c1" class="rounded-lg border border-slate-200 bg-white p-6 space-y-4">
+          <div class="flex items-center gap-3">
+            <h3 class="text-xl font-serif font-bold">One dispose contract for every <span class="mono">register*</span></h3>
+            <span class="text-xs px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-semibold">Strong</span>
+            <span class="text-xs px-2 py-0.5 rounded bg-slate-100 text-slate-600">in-process</span>
+          </div>
+          <p class="mono text-sm text-slate-600">src/view/gantt-shell.ts, src/layout/items/produce-items.ts, src/view/capability.ts, src/view/column-chrome.ts</p>
+          <p class="text-sm"><strong>Problem.</strong> Producer registration stacks the previous adapter and restores it; kind defaults last-write then <span class="mono">delete</span> on dispose; two plugin columns with the same field both append. Three seams, three dispose stories, one plugin author.</p>
+          <p class="text-sm"><strong>Solution.</strong> Deepen a small in-process registration table: <span class="mono">register(key, value) → Disposer</span> that always restores the previous value (or absence). Producers already are this table. Kind defaults and plugin columns become two more adapters of the same interface.</p>
+          <div class="grid md:grid-cols-2 gap-4">
+            <div class="rounded-lg border border-slate-200 bg-white p-4">
+              <p class="text-xs uppercase tracking-wider text-slate-500 mb-2">Before — three dispose stories</p>
+              <pre class="mermaid">
+flowchart TD
+  P["registerItemProducer"] --> S["stack previous · restore"]
+  K["registerKindDefaults"] --> D["Map.set · Map.delete"]
+  C["registerGridColumn"] --> A["append · filter by reference"]
+  D -.leak.-> X["second plugin dispose<br/>drops the first"]
+  classDef leak stroke:#dc2626,stroke-width:2px;
+  class D,X leak
+              </pre>
+            </div>
+            <div class="rounded-lg border border-slate-200 bg-white p-4">
+              <p class="text-xs uppercase tracking-wider text-slate-500 mb-2">After — one table, three adapters</p>
+              <pre class="mermaid">
+flowchart TD
+  R["register(key, value): Disposer"] --> P["producers"]
+  R --> K["kind defaults"]
+  R --> C["plugin columns by field"]
+  classDef deep fill:#0f172a,color:#fff;
+  class R deep
+              </pre>
+            </div>
+          </div>
+          <ul class="text-sm grid md:grid-cols-2 gap-x-6 gap-y-1 list-disc pl-5">
+            <li>locality: dispose lives in one module</li>
+            <li>leverage: S5.10 field registers inherit it</li>
+            <li>interface: one sentence for plugin authors</li>
+            <li>duplicate field becomes last-write or throw, once</li>
+          </ul>
+        </article>
+
+        <article id="c2" class="rounded-lg border border-slate-200 bg-white p-6 space-y-4">
+          <div class="flex items-center gap-3">
+            <h3 class="text-xl font-serif font-bold">Name the plugin-context ports object</h3>
+            <span class="text-xs px-2 py-0.5 rounded bg-amber-100 text-amber-800 font-semibold">Worth exploring</span>
+            <span class="text-xs px-2 py-0.5 rounded bg-slate-100 text-slate-600">in-process</span>
+          </div>
+          <p class="mono text-sm text-slate-600">src/api/plugin.ts, src/api/gantt.ts, src/view/gantt-shell.ts</p>
+          <p class="text-sm"><strong>Problem.</strong> Each <span class="mono">register*</span> is typed three times: on <span class="mono">PluginContextOf</span>, on the anonymous <span class="mono">buildPluginContext</span> parts bag, and as a closure in the shell. The interface of the composition root is nearly as wide as its implementation — a shallow module growing by slice.</p>
+          <p class="text-sm"><strong>Solution.</strong> One named ports type (the <span class="mono">ColumnChromePorts</span> precedent). The shell fills it; <span class="mono">Gantt</span> maps it onto <span class="mono">PluginContext</span>. Do not extract a second <span class="mono">plugin-host.ts</span> — the slice already rejected that split.</p>
+          <div class="grid md:grid-cols-2 gap-4">
+            <div class="rounded-lg border border-slate-200 bg-white p-4">
+              <p class="text-xs uppercase tracking-wider text-slate-500 mb-2">Before — interface ≈ three copies</p>
+              <div class="flex gap-2 items-end justify-center h-48">
+                <div class="w-28 bg-white border border-slate-300 rounded flex flex-col h-full">
+                  <div class="bg-amber-200 text-center text-xs py-1 border-b">PluginContextOf</div>
+                  <div class="text-xs p-2 flex-1">view / layout / interaction bags</div>
+                </div>
+                <div class="w-28 bg-white border border-slate-300 rounded flex flex-col h-full">
+                  <div class="bg-amber-200 text-center text-xs py-1 border-b">GanttShellOptions bag</div>
+                  <div class="text-xs p-2 flex-1">same members, untyped name</div>
+                </div>
+                <div class="w-28 bg-white border border-slate-300 rounded flex flex-col h-full">
+                  <div class="bg-amber-200 text-center text-xs py-1 border-b">Gantt mapper</div>
+                  <div class="text-xs p-2 flex-1">parts.registerX: parts.registerX</div>
+                </div>
+              </div>
+            </div>
+            <div class="rounded-lg border border-slate-200 bg-white p-4">
+              <p class="text-xs uppercase tracking-wider text-slate-500 mb-2">After — one ports interface</p>
+              <div class="flex gap-3 items-end justify-center h-48">
+                <div class="w-28 bg-white border border-slate-300 rounded flex flex-col h-16">
+                  <div class="bg-emerald-200 text-center text-xs py-1">PluginContextPorts</div>
+                </div>
+                <div class="text-slate-400 self-center">→</div>
+                <div class="w-36 deep text-white rounded p-2 text-xs h-full">
+                  <div class="text-center uppercase tracking-wider mb-1">GanttShell fills ports</div>
+                  <div class="opacity-70">gate, dispose, invalidate — hidden. Gantt only nests them into PluginContext.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <ul class="text-sm grid md:grid-cols-2 gap-x-6 gap-y-1 list-disc pl-5">
+            <li>interface shrinks to one named type</li>
+            <li>locality: a new register* has one type home</li>
+            <li>deletion test: the mapper becomes a nest, not a re-type</li>
+            <li>do not split a second host module</li>
+          </ul>
+        </article>
+
+        <article id="c3" class="rounded-lg border border-slate-200 bg-white p-6 space-y-4">
+          <div class="flex items-center gap-3">
+            <h3 class="text-xl font-serif font-bold">Derive <span class="mono">KindDefaults</span> from <span class="mono">Interactions</span></h3>
+            <span class="text-xs px-2 py-0.5 rounded bg-amber-100 text-amber-800 font-semibold">Worth exploring</span>
+            <span class="text-xs px-2 py-0.5 rounded bg-slate-100 text-slate-600">in-process</span>
+          </div>
+          <p class="mono text-sm text-slate-600">src/view/capability.ts, src/api/index.ts, CONTEXT.md</p>
+          <p class="text-sm"><strong>Problem.</strong> Two interfaces list the same four gestures. S7 will add <span class="mono">linkCreate</span> to <span class="mono">Interactions</span> (I11 currently keeps it off). A hand-copied <span class="mono">KindDefaults</span> will miss the key unless a human remembers both.</p>
+          <p class="text-sm"><strong>Solution.</strong> <span class="mono">type KindDefaults = { [K in keyof Interactions]?: boolean }</span>. Keep the name — the call site <span class="mono">registerKindDefaults('buffer', { resize: false })</span> already reads true. Add the glossary entry. Point <span class="mono">Map&lt;EntryKind, …&gt;</span> at <span class="mono">EntryKind</span> in the producer registry in the same pass.</p>
+          <div class="grid md:grid-cols-2 gap-4">
+            <div class="rounded-lg border border-slate-200 bg-white p-4">
+              <p class="text-xs uppercase tracking-wider text-slate-500 mb-2">Before — two lists of keys</p>
+              <pre class="mermaid">
+flowchart LR
+  I["Interactions<br/>move? resize? select? edit?"] -.drift.-> K["KindDefaults<br/>move? resize? select? edit?"]
+  classDef leak stroke:#dc2626,stroke-width:2px;
+  class I,K leak
+              </pre>
+            </div>
+            <div class="rounded-lg border border-slate-200 bg-white p-4">
+              <p class="text-xs uppercase tracking-wider text-slate-500 mb-2">After — one mapped type</p>
+              <pre class="mermaid">
+flowchart LR
+  I["Interactions"] --> K["KindDefaults =<br/>boolean per key"]
+  classDef deep fill:#0f172a,color:#fff;
+  class I,K deep
+              </pre>
+            </div>
+          </div>
+          <ul class="text-sm grid md:grid-cols-2 gap-x-6 gap-y-1 list-disc pl-5">
+            <li>keys cannot drift when S7 lands</li>
+            <li>no new public name</li>
+            <li>type-only; tests unchanged</li>
+          </ul>
+        </article>
+
+        <article id="c4" class="rounded-lg border border-slate-200 bg-white p-6 space-y-4">
+          <div class="flex items-center gap-3">
+            <h3 class="text-xl font-serif font-bold">Retire "Item emitter" in the glossary</h3>
+            <span class="text-xs px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-semibold">Strong</span>
+            <span class="text-xs px-2 py-0.5 rounded bg-slate-100 text-slate-600">in-process</span>
+          </div>
+          <p class="mono text-sm text-slate-600">CONTEXT.md, plans/01 §10 sketch (<span class="mono">kind: string</span>)</p>
+          <p class="text-sm"><strong>Problem.</strong> Q16 and D-S5-22 made <span class="mono">registerItemProducer</span> the one name. The glossary still forbids saying "Item producer" and still says registration is S4-internal. Agents that follow CONTEXT.md will invent a second name.</p>
+          <p class="text-sm"><strong>Solution.</strong> Rename the glossary term to Item producer. Keep "Item emitter" under Avoid. Add KindDefaults. Fix the §10 sketch's <span class="mono">kind: string</span> to <span class="mono">EntryKind</span>.</p>
+          <div class="grid md:grid-cols-2 gap-4">
+            <div class="rounded-lg border border-slate-200 bg-white p-4">
+              <p class="text-xs uppercase tracking-wider text-slate-500 mb-2">Before — one concept, two names</p>
+              <pre class="mermaid">
+flowchart LR
+  G["CONTEXT.md<br/>Item emitter"] -.leak.-> C["code: ItemProducer"]
+  G -.leak.-> S["retired: registerItemEmitter"]
+  classDef leak stroke:#dc2626,stroke-width:2px;
+  class G,C leak
+              </pre>
+            </div>
+            <div class="rounded-lg border border-slate-200 bg-white p-4">
+              <p class="text-xs uppercase tracking-wider text-slate-500 mb-2">After — glossary matches the call</p>
+              <pre class="mermaid">
+flowchart LR
+  G["CONTEXT.md<br/>Item producer"] --> C["registerItemProducer"]
+  classDef deep fill:#0f172a,color:#fff;
+  class G,C deep
+              </pre>
+            </div>
+          </div>
+          <ul class="text-sm grid md:grid-cols-2 gap-x-6 gap-y-1 list-disc pl-5">
+            <li>one meaning per word</li>
+            <li>S5.10 agents will not revive emitter</li>
+            <li>KindDefaults gets a home before S7</li>
+          </ul>
+        </article>
+
+        <article id="c5" class="rounded-lg border border-slate-200 bg-white p-6 space-y-4">
+          <div class="flex items-center gap-3">
+            <h3 class="text-xl font-serif font-bold">Test the three new <span class="mono">register*</span> through the public interface</h3>
+            <span class="text-xs px-2 py-0.5 rounded bg-amber-100 text-amber-800 font-semibold">Worth exploring</span>
+            <span class="text-xs px-2 py-0.5 rounded bg-slate-100 text-slate-600">in-process</span>
+          </div>
+          <p class="mono text-sm text-slate-600">src/api/gantt.test.ts, harness/plugins/buffer-kind.ts</p>
+          <p class="text-sm"><strong>Problem.</strong> Late registration (D-S5-4) is untested for the three new members. [S5-A3] does not run <span class="mono">bufferKind()</span>. Two-plugin same-kind dispose and two-plugin same-field columns have no test. The interface is the test surface; those facts live only in comments.</p>
+          <p class="text-sm"><strong>Solution.</strong> Keep tests at <span class="mono">new Gantt({ plugins })</span>. Add three late-register throws, one stacked-dispose case, one duplicate-field case. Optionally install <span class="mono">bufferKind()</span> in the [S5-A3] test so the harness plugin is the acceptance object (the grep test still guards <span class="mono">src/</span>).</p>
+          <ul class="text-sm grid md:grid-cols-2 gap-x-6 gap-y-1 list-disc pl-5">
+            <li>interface is the test surface</li>
+            <li>D-S5-4 stops being inherited faith</li>
+            <li>bufferKind() has one caller in tests</li>
+          </ul>
+        </article>
+      </section>
+
+      <section id="top-recommendation" class="space-y-4">
+        <h2 class="text-2xl font-serif font-bold">Top recommendation</h2>
+        <div class="rounded-lg border-2 border-emerald-600 bg-emerald-50 p-6 space-y-2">
+          <p class="font-bold text-lg"><a class="underline decoration-emerald-600" href="#c1">One dispose contract for every <span class="mono">register*</span></a>, with <a class="underline decoration-emerald-600" href="#c4">glossary Item producer</a> in the same pass.</p>
+          <p class="text-sm">S5.9 proved the open-kind claim. The remaining risk is not missing seams — it is three seams that look alike and unwind unlike. S5.10 will add Field / aggregator / type registers on the Dataset side; if dispose stays bespoke, the ball of mud is the registration tables, not the Gantt. The mapped <span class="mono">KindDefaults</span> type and the late-register tests are cheap follow-ups, not prerequisites.</p>
+        </div>
+      </section>
+
+      <section class="space-y-6">
+        <h2 class="text-2xl font-serif font-bold">Simplify — what not to do</h2>
+        <ul class="text-sm space-y-1.5 list-disc pl-5">
+          <li>Do not add <span class="mono">plugin-host.ts</span>. The slice already recorded that a second module would split one closure block for no seam this codebase draws.</li>
+          <li>Do not introduce <span class="mono">ItemProducerContext</span>. S4 shipped <span class="mono">(entry) =&gt; readonly Item[]</span>; this step is the way in, not a redesign.</li>
+          <li>Do not genericise <span class="mono">PluginContextOf</span> over kind or field. <span class="mono">TGantt</span> exists to break the gantt ↔ plugin import cycle. Extra type parameters would be speculative generality.</li>
+          <li>Do not publish <span class="mono">wholeEntryItem</span> just so the buffer plugin can call it. A third-party plugin is supposed to build an <span class="mono">Item</span>; that is the interface.</li>
+          <li>Do not fold plugin columns into <span class="mono">gridColumnInput</span> on register. The authored-list vs effective-list split is the D-S5-21 rule working.</li>
+        </ul>
+      </section>
+
+      <section id="second-pass" class="space-y-6">
+        <h2 class="text-2xl font-serif font-bold">Second pass</h2>
+        <p class="text-sm text-slate-600">Filled after the first commit of this file. Checks: ball-of-mud potential, friendlier public interface, self-documentation, SOLID / extensibility.</p>
+        <p class="text-sm italic text-slate-400">Pending post-commit pass.</p>
+      </section>
+
+      <section>
+        <h2 class="text-2xl font-serif font-bold">Summary</h2>
+        <p class="text-sm">Spec: 6 findings, 0 hard breaches of D-S5-21/22 as landed; worst is kind-defaults dispose vs producer restore, plus missing late-<span class="mono">register*</span> tests. Standards: 1 hard (glossary Item emitter). TypeScript: 0 compile errors; worst smell is hand-copied <span class="mono">KindDefaults</span> and <span class="mono">Map&lt;string&gt;</span> in the producer registry. Architecture: the four seams exist and [S5-A3] holds; deepen dispose before S5.10 copies the split.</p>
+      </section>
+    </main>
+  </body>
+</html>
