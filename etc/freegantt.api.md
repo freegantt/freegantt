@@ -521,6 +521,9 @@ export type EntryId = string & {
 export function entryId(value: string): EntryId;
 
 // @public
+export function entryIdFromDataset(value: string | undefined): EntryId | undefined;
+
+// @public
 export function entryIdOfItem(id: ItemId): EntryId;
 
 // @public

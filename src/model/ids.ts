@@ -31,6 +31,13 @@ export function itemIdFromDataset(value: string | undefined): ItemId | undefined
   return value === undefined ? undefined : (value as ItemId);
 }
 
+/** Call: `entryIdFromDataset(row.dataset['entryId'])` — the DOM→brand trust boundary for a `.fg-row`
+ *  node's `data-entry-id` attribute (`render/dom/index.ts` is what writes it). `undefined` in,
+ *  `undefined` out, mirroring `itemIdFromDataset`. */
+export function entryIdFromDataset(value: string | undefined): EntryId | undefined {
+  return value === undefined ? undefined : entryId(value);
+}
+
 /** Call: `dataset.entries.get(entryIdOfItem(hit.itemId))`. Splits on the last colon so an EntryId that
  *  itself contains a colon still round-trips with `itemId`. */
 export function entryIdOfItem(id: ItemId): EntryId {

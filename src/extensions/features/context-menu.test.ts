@@ -255,6 +255,28 @@ describe('contextMenu() (S5.5, D-S5-13/14)', () => {
     container.remove();
   });
 
+  it('runs the command for the right-clicked grid row, not just the bar (grid/bar parity)', () => {
+    const { container, gantt } = makeGantt();
+    let ranFor: string | undefined;
+    gantt.commands.register({
+      id: 'demo.needsEntry',
+      label: 'Needs entry',
+      when: (ctx) => ctx.entry !== undefined,
+      run: (ctx) => (ranFor = ctx.entry?.id),
+    });
+
+    const row = container.querySelectorAll<HTMLElement>('.fg-row')[1]!;
+    rightClick(row);
+    const item = menuItems(container).find((el) => el.getAttribute('data-command') === 'demo.needsEntry');
+    expect(item).toBeDefined();
+    item!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+    expect(ranFor).toBe(sampleEntries[1]!.id);
+
+    gantt.destroy();
+    container.remove();
+  });
+
   it('removing the plugin removes its listeners and any open menu', () => {
     const { container, gantt } = makeGantt();
 

@@ -7,11 +7,11 @@
 import { createPopup } from '../popup.js';
 import type { Anchor, Popup } from '../popup.js';
 import type { Command, GanttPlugin, PluginContext, CommandContext } from '../../api/gantt.js';
-import { entryIdOfItem, itemIdFromDataset } from '../../model/index.js';
+import { entryIdFromDataset, entryIdOfItem, itemIdFromDataset } from '../../model/index.js';
 import type { Entry } from '../../model/index.js';
 import { buildMenu, resolveMenuEntries } from './menu-view.js';
 import type { MenuEntry } from './menu-view.js';
-import { barUnder } from './bar-under.js';
+import { barUnder, rowUnder } from './bar-under.js';
 
 export type { MenuItem, MenuEntry } from './menu-view.js';
 
@@ -135,6 +135,21 @@ export function contextMenu(options: ContextMenuOptions = {}): GanttPlugin {
         return ctx.dataset.entries.get(entryIdOfItem(itemId));
       };
 
+      const entryForRow = (row: HTMLElement): Entry | undefined => {
+        const entryId = entryIdFromDataset(row.dataset['entryId']);
+        if (entryId === undefined) return undefined;
+        return ctx.dataset.entries.get(entryId);
+      };
+
+      // A right-click resolves the same entry a click on that entry's bar *or* its grid row would —
+      // parity with `render/dom/index.ts`'s own `hitTest` grid-row fallback (bar first, row second).
+      const entryUnder = (node: Node): Entry | undefined => {
+        const bar = barUnder(node);
+        if (bar !== undefined) return entryForBar(bar);
+        const row = rowUnder(node);
+        return row !== undefined ? entryForRow(row) : undefined;
+      };
+
       const onContextMenu = (event: MouseEvent): void => {
         // B1: this Gantt's menu owns only right-clicks that land inside its own container — a click
         // on page chrome, a second widget, or a second Gantt must reach the browser's own menu (or
@@ -144,8 +159,7 @@ export function contextMenu(options: ContextMenuOptions = {}): GanttPlugin {
         // has to ask "is this mine?" (I2).
         if (!(event.target instanceof Node) || !ctx.view.overlay.contains(event.target)) return;
         event.preventDefault();
-        const bar = barUnder(event.target);
-        openAt(new DOMRect(event.clientX, event.clientY, 0, 0), bar ? entryForBar(bar) : undefined);
+        openAt(new DOMRect(event.clientX, event.clientY, 0, 0), entryUnder(event.target));
       };
       document.addEventListener('contextmenu', onContextMenu);
 

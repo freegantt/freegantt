@@ -549,8 +549,63 @@ renderersToggle.addEventListener('change', () => {
 });
 renderersToggle.dispatchEvent(new Event('change'));
 
+// S5.5, D-S5-13/14: demo commands that only show up for an entry — the right-clicked bar, or its
+// grid row (context-menu.ts resolves both the same way, bar-under.ts's `barUnder`/`rowUnder`).
+// Right-clicking empty timeline or an unpopulated grid stretch leaves `ctx.entry` undefined, so
+// these three never appear there — background right-clicks stay on "Collapse all"/"Expand all".
+const lockedEntryIds = new Set<string>();
+
+dataset.on('beforeChange', ({ changeSet }: DatasetEventMap['beforeChange']) => {
+  const touchesLocked =
+    changeSet.updated.some((u) => lockedEntryIds.has(u.id)) ||
+    changeSet.removed.some((r) => lockedEntryIds.has(r.entity.id));
+  if (!touchesLocked) return undefined;
+  prependLogLine(log, 'entries · refused (locked, right-click menu)');
+  return false;
+});
+
+function entryContextActions(): GanttPlugin {
+  return {
+    id: 'harness.entryContextActions',
+    setup(ctx) {
+      ctx.commands.register({
+        id: 'demo.deleteEntry',
+        label: 'Delete',
+        when: (cmdCtx) => cmdCtx.entry !== undefined,
+        run: (cmdCtx) => {
+          const entry = cmdCtx.entry;
+          if (entry === undefined) return;
+          attemptMutation(() => ctx.dataset.entries.remove(entry.id));
+        },
+      });
+      ctx.commands.register({
+        id: 'demo.lockEntry',
+        label: 'Lock',
+        when: (cmdCtx) => cmdCtx.entry !== undefined && !lockedEntryIds.has(cmdCtx.entry.id),
+        run: (cmdCtx) => {
+          if (cmdCtx.entry === undefined) return;
+          lockedEntryIds.add(cmdCtx.entry.id);
+          prependLogLine(log, `entries · ${cmdCtx.entry.id} · locked (right-click menu)`);
+        },
+      });
+      ctx.commands.register({
+        id: 'demo.unlockEntry',
+        label: 'Unlock',
+        when: (cmdCtx) => cmdCtx.entry !== undefined && lockedEntryIds.has(cmdCtx.entry.id),
+        run: (cmdCtx) => {
+          if (cmdCtx.entry === undefined) return;
+          lockedEntryIds.delete(cmdCtx.entry.id);
+          prependLogLine(log, `entries · ${cmdCtx.entry.id} · unlocked (right-click menu)`);
+        },
+      });
+      return () => {};
+    },
+  };
+}
+
 // S5.5, D-S5-13/14: the two shipped built-ins, installed straight from `plugins: [...]` — no config
 // table, no core edit (`[S5-A1]`'s dogfood gate). Hover a bar for its name and dates; right-click a
-// bar (or the timeline canvas) and run "Collapse all" from the menu, or `Shift+F10` on a selected row.
+// bar, its grid row, or the timeline canvas and run a command from the menu — "Delete"/"Lock"/
+// "Unlock" on an entry, "Collapse all"/"Expand all" on background — or `Shift+F10` on a selected row.
 // S5.8, D-S5-19: `inlineEditing()` joins them — double-click Name, Start or Budget to edit in place.
-gantt.plugins = [...gantt.plugins, tooltips(), contextMenu(), inlineEditing()];
+gantt.plugins = [...gantt.plugins, tooltips(), contextMenu(), inlineEditing(), entryContextActions()];
