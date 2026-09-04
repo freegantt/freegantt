@@ -28,7 +28,7 @@ export type AggregatorName = 'min' | 'max' | 'sum' | 'count' | 'none' | (string 
 export type Anchor = DOMRect | HTMLElement;
 
 // @public
-export type AsyncCancelableEvent = 'beforeEntryMove' | 'beforeEntryResize';
+export type AsyncCancelableEvent = 'beforeEntryMove' | 'beforeEntryResize' | 'beforeEntryEdit';
 
 // @public
 export function attemptMutation(body: () => void): boolean;
@@ -305,6 +305,22 @@ export interface DatasetOptions<TMeta = unknown> {
 export type DateFormat = Intl.DateTimeFormatOptions | HeaderFormat;
 
 // @public
+export interface DateInput {
+    // (undocumented)
+    destroy(): void;
+    readonly element: HTMLElement;
+    onCommit(handler: () => void): Disposer;
+    read(): Instant | undefined;
+    write(at: Instant): void;
+}
+
+// @public
+export type DateInputFactory = (ctx: {
+    zone: string;
+    locale?: Intl.LocalesArgument;
+}) => DateInput;
+
+// @public
 export interface DateLineInput {
     // (undocumented)
     className?: string;
@@ -479,6 +495,18 @@ export interface EntryDocument<TMeta = unknown> {
 export type EntryEdit<TMeta = unknown, TFields extends Record<string, unknown> = Record<string, unknown>> = Partial<Omit<EntryInput<TMeta>, 'id'>> & Partial<TFields>;
 
 // @public
+export interface EntryFieldEdit {
+    // (undocumented)
+    readonly entry: Entry;
+    // (undocumented)
+    readonly field: FieldKey;
+    // (undocumented)
+    readonly from: unknown;
+    // (undocumented)
+    readonly to: unknown;
+}
+
+// @public
 export interface EntryGestureEvent extends ProposedSpan {
     // (undocumented)
     readonly entries: readonly ProposedSpan[];
@@ -561,6 +589,7 @@ export interface Field<TValue = unknown> {
     formatValue?(value: TValue | undefined, ctx: FormatContext): string;
     // (undocumented)
     key: FieldKey;
+    parseValue?(text: string, ctx: FieldContext): TValue | undefined;
     rollUp?: AggregatorName;
     source?: FieldSource;
     // (undocumented)
@@ -822,6 +851,7 @@ export type GanttEventHandler<K extends keyof GanttEventMap> = (payload: GanttEv
 // @public
 export interface GanttEventMap {
     beforeCollapseChange: CollapseChange;
+    beforeEntryEdit: EntryFieldEdit;
     beforeEntryMove: EntryMove;
     beforeEntryResize: EntryResize;
     beforeGridColumnsChange: GridColumnsChange;
@@ -830,6 +860,7 @@ export interface GanttEventMap {
     beforeSelectionChange: SelectionChange;
     // (undocumented)
     collapseChange: CollapseChange;
+    entryEdit: EntryFieldEdit;
     // (undocumented)
     entryMove: EntryMove;
     // (undocumented)
@@ -968,6 +999,14 @@ export interface HeaderRendererContext {
 }
 
 // @public
+export function inlineEditing(options?: InlineEditingOptions): GanttPlugin;
+
+// @public (undocumented)
+export interface InlineEditingOptions {
+    dateInput?: DateInputFactory;
+}
+
+// @public
 export type Instant = number & {
     readonly __brand: 'Instant';
 };
@@ -980,6 +1019,7 @@ export type InstantInput = Instant | Date | number | string;
 
 // @public
 export interface Interactions {
+    edit?: CapabilityRule;
     // (undocumented)
     move?: CapabilityRule;
     // (undocumented)
@@ -1172,6 +1212,9 @@ export interface PluginContextOf<TGantt = unknown> {
         registerKeyHandler(chord: KeyChord, handler: (event: KeyEventLike) => void, options?: {
             captureInEditable?: boolean;
         }): () => void;
+        canEdit(entry: Entry): boolean;
+        emitBeforeEntryEdit(payload: EntryFieldEdit): boolean | Promise<boolean>;
+        emitEntryEdit(payload: EntryFieldEdit): void;
     };
     // (undocumented)
     view: {
@@ -1182,6 +1225,7 @@ export interface PluginContextOf<TGantt = unknown> {
             header: string;
             value: string;
         }[];
+        isColumnEditable(field: FieldKey): boolean | undefined;
         registerDecoration(layer: DecorationLayer, provider: DecorationProvider): void;
     };
 }
