@@ -185,9 +185,9 @@ _Avoid_: Column sort (sort is field-driven, not column-driven)
 A derived, renderable piece of geometry produced from an Entry for one Segment of its span — most entries produce exactly one Item, but an Entry with Segments produces one Item per Segment. Items are recomputed on every layout pass and never persisted. `Item.id` is deterministic: `${entryId}:${segmentIndex}`.
 _Avoid_: Bar (an Item is what a bar renders; "bar" is a rendering detail, not the identity)
 
-**Item emitter**:
-The per-Kind seam that turns one Entry into its Item(s) for a row (`ItemProducer`). Shipped occupants cover `'span'`, `'group'`, and `'milestone'`; registration is internal in S4 (D-S4-24).
-_Avoid_: Item producer as two words in prose when naming the seam (the type is `ItemProducer`; the glossary term is Item emitter)
+**Item producer**:
+The per-Kind seam that turns one Entry into its Item(s) for a row (`ItemProducer`). Shipped occupants cover `'span'`, `'group'`, and `'milestone'`; a plugin adds one for a consumer-defined kind via `ctx.layout.registerItemProducer` (S5.9, D-S5-22).
+_Avoid_: Item emitter (retired name — `registerItemEmitter` was renamed to `registerItemProducer`, Q16)
 
 **Lane**:
 A sub-track within a Row, assigned by the layout pass so that Items whose spans overlap on the same Row are stacked instead of drawn on top of each other. A Lane is a packing result — always derived, never authored.
@@ -482,12 +482,16 @@ _Avoid_: aria-label (that is the DOM attribute `render/dom` maps this to — `a1
 Whether a specific gesture (move, resize, select, link) is permitted on a given Entry, resolved once per Entry from its Kind and gating both the gesture itself and any affordance that hints at it (e.g. a resize handle only renders if resize is capable). `select` is a Capability with no visual affordance — I14's refuse half still applies (pointer and keyboard skip an incapable entry); the public `Gantt.selection` setter does not consult it (D-S3-9).
 _Avoid_: Permission, ability
 
+**KindDefaults**:
+The middle precedence layer `resolveCapabilities` reads between the consumer's own `interactions` config and the library's built-in table — a plugin's per-Kind gesture defaults, registered via `ctx.interaction.registerKindDefaults` (S5.9, D-S5-22). A second registration for the same Kind overrides the first while both plugins stay installed; disposing one restores whichever registration (if any) held that Kind before it.
+_Avoid_: Interactions (that is the consumer's own per-entry config, one precedence layer above this)
+
 **GanttPlugin**:
 The public extension contract: an `id` plus a `setup(ctx)` that returns a disposer. Built-in features (tooltips, context menu, editors) are themselves GanttPlugins using the same `PluginContext` a third party would use — no back-door capabilities reserved for first-party code.
 _Avoid_: Extension (Extensions is the name of the source layer that runs plugins; GanttPlugin is the unit within it)
 
 **PluginContext**:
-The object `setup(ctx)` receives — a GanttPlugin's entire world: dataset access, the event bus (including cancelable `before*` events), registration for decorations/columns/renderers/item-emitters/interaction-controllers/keybindings, the command registry, and a disposable store. A plugin may not reach into anything outside it (enforced by the import-boundary lint).
+The object `setup(ctx)` receives — a GanttPlugin's entire world: dataset access, the event bus (including cancelable `before*` events), registration for decorations/columns/renderers/item-producers/interaction-controllers/keybindings, the command registry, and a disposable store. A plugin may not reach into anything outside it (enforced by the import-boundary lint).
 _Avoid_: Treating this as settled — the plugin system (`GanttPlugin`/`DatasetPlugin`/`PluginContext`) is still design work in progress; the shape, and possibly this name, may change before it lands
 
 **DatasetPlugin**, **EditExtender**, **PluginStore**:

@@ -1481,6 +1481,54 @@ describe('Gantt plugin kind registrations (S5.9, D-S5-21/D-S5-22)', () => {
     gantt.destroy();
   });
 
+  it('disposing the second of two plugins registering the same kind restores the first (#146)', () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({
+      entries: [{ ...sampleEntries[0]!, kind: 'buffer' }],
+      timeZone: 'UTC',
+    });
+    const pluginA = {
+      id: 'demo.bufferDefaultsA',
+      setup(ctx: PluginContext) {
+        ctx.interaction.registerKindDefaults('buffer', { resize: false });
+        return () => {};
+      },
+    };
+    const pluginB = {
+      id: 'demo.bufferDefaultsB',
+      setup(ctx: PluginContext) {
+        ctx.interaction.registerKindDefaults('buffer', { resize: true });
+        return () => {};
+      },
+    };
+    const gantt = new Gantt({ container, dataset, plugins: [pluginA, pluginB] });
+
+    const bar = container.querySelector<HTMLElement>('.fg-bar')!;
+    const timeline = container.querySelector<HTMLElement>('.fg-timeline-pane')!;
+    const original = document.elementFromPoint.bind(document);
+    document.elementFromPoint = (x: number, y: number) => (x === 5 && y === 5 ? bar : original(x, y));
+    timeline.dispatchEvent(new PointerEvent('pointermove', { clientX: 5, clientY: 5 }));
+
+    // B is installed last and overrides A: resize affordance visible.
+    let start = container.querySelector<HTMLElement>('.fg-bar-handle[data-edge="start"]')!;
+    expect(start.hidden).toBe(false);
+
+    // Disposing only B must restore A's registration, not fall through to the library default.
+    gantt.plugins = [pluginA];
+    timeline.dispatchEvent(new PointerEvent('pointermove', { clientX: 5, clientY: 5 }));
+    start = container.querySelector<HTMLElement>('.fg-bar-handle[data-edge="start"]')!;
+    expect(start.hidden).toBe(true);
+
+    // Disposing A too falls back to the library default.
+    gantt.plugins = [];
+    timeline.dispatchEvent(new PointerEvent('pointermove', { clientX: 5, clientY: 5 }));
+    start = container.querySelector<HTMLElement>('.fg-bar-handle[data-edge="start"]')!;
+    expect(start.hidden).toBe(false);
+
+    document.elementFromPoint = original;
+    gantt.destroy();
+  });
+
   it("the consumer's own interactions still wins over a registered kind default", () => {
     const container = document.createElement('div');
     const dataset = new Dataset({
