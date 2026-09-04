@@ -587,6 +587,7 @@ export interface Field<TValue = unknown> {
     equals?(a: TValue | undefined, b: TValue | undefined): boolean;
     // (undocumented)
     formatValue?(value: TValue | undefined, ctx: FormatContext): string;
+    inputType?: 'text' | 'number' | 'email' | 'tel' | 'url';
     // (undocumented)
     key: FieldKey;
     parseValue?(text: string, ctx: FieldContext): TValue | undefined;
@@ -1047,12 +1048,31 @@ export class InvalidReplayOriginError extends FreeGanttError {
 export function invertChangeSet(changeSet: ChangeSet): ChangeSet;
 
 // @public (undocumented)
+export interface Item {
+    // (undocumented)
+    end: Instant;
+    // (undocumented)
+    entryId: EntryId;
+    // (undocumented)
+    id: ItemId;
+    // (undocumented)
+    kind: EntryKind;
+    // (undocumented)
+    label: string;
+    // (undocumented)
+    start: Instant;
+}
+
+// @public (undocumented)
 export type ItemId = string & {
     readonly __brand: 'ItemId';
 };
 
 // @public
 export function itemId(entry: EntryId, segmentIndex?: number): ItemId;
+
+// @public (undocumented)
+export type ItemProducer = (entry: Entry) => readonly Item[];
 
 // @public (undocumented)
 export type KeyBinding = KeyBindingOf<Gantt>;
@@ -1096,6 +1116,18 @@ export interface KeyHandlerRegistrar {
     registerHandler(chord: string, handler: (event: KeyEventLike) => void, options?: {
         captureInEditable?: boolean;
     }): () => void;
+}
+
+// @public
+export interface KindDefaults {
+    // (undocumented)
+    edit?: boolean;
+    // (undocumented)
+    move?: boolean;
+    // (undocumented)
+    resize?: boolean;
+    // (undocumented)
+    select?: boolean;
 }
 
 // @public (undocumented)
@@ -1215,6 +1247,10 @@ export interface PluginContextOf<TGantt = unknown> {
         canEdit(entry: Entry): boolean;
         emitBeforeEntryEdit(payload: EntryFieldEdit): boolean | Promise<boolean>;
         emitEntryEdit(payload: EntryFieldEdit): void;
+        registerKindDefaults(kind: EntryKind, defaults: KindDefaults): void;
+    };
+    layout: {
+        registerItemProducer(kind: EntryKind, producer: ItemProducer): void;
     };
     // (undocumented)
     view: {
@@ -1227,6 +1263,7 @@ export interface PluginContextOf<TGantt = unknown> {
         }[];
         isColumnEditable(field: FieldKey): boolean | undefined;
         registerDecoration(layer: DecorationLayer, provider: DecorationProvider): void;
+        registerGridColumn(column: GridColumnInput): void;
     };
 }
 
