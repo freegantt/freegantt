@@ -130,8 +130,8 @@ export type Command = CommandOf<Gantt>;
 export type CommandContext = CommandContextOf<Gantt>;
 
 // @public
-export interface CommandContextOf<TGantt = unknown> {
-    dataset: Dataset;
+export interface CommandContextOf<TGantt = unknown, TDataset = Dataset> {
+    dataset: TDataset;
     entry?: Entry;
     gantt: TGantt;
     // (undocumented)
@@ -139,23 +139,23 @@ export interface CommandContextOf<TGantt = unknown> {
 }
 
 // @public
-export interface CommandOf<TGantt = unknown> {
+export interface CommandOf<TGantt = unknown, TDataset = Dataset> {
     // (undocumented)
     id: string;
     label: string;
     // (undocumented)
-    run(ctx: CommandContextOf<TGantt>): void;
-    when?(ctx: CommandContextOf<TGantt>): boolean;
+    run(ctx: CommandContextOf<TGantt, TDataset>): void;
+    when?(ctx: CommandContextOf<TGantt, TDataset>): boolean;
 }
 
 // @public (undocumented)
 export type CommandRegistry = CommandRegistryOf<Gantt>;
 
 // @public
-export interface CommandRegistryOf<TGantt = unknown> {
-    available(ctx: CommandContextOf<TGantt>): readonly CommandOf<TGantt>[];
+export interface CommandRegistryOf<TGantt = unknown, TDataset = Dataset> {
+    available(ctx: CommandContextOf<TGantt, TDataset>): readonly CommandOf<TGantt, TDataset>[];
     // (undocumented)
-    register(command: CommandOf<TGantt>): void;
+    register(command: CommandOf<TGantt, TDataset>): void;
     // (undocumented)
     run(id: string): void;
 }
@@ -919,10 +919,10 @@ export interface GanttOptionsBase {
 export type GanttPlugin = GanttPluginOf<Gantt>;
 
 // @public (undocumented)
-export interface GanttPluginOf<TGantt = unknown> {
+export interface GanttPluginOf<TGantt = unknown, TDataset = Dataset> {
     // (undocumented)
     id: PluginId;
-    setup(ctx: PluginContextOf<TGantt>): Disposer;
+    setup(ctx: PluginContextOf<TGantt, TDataset>): Disposer;
 }
 
 // @public
@@ -1081,13 +1081,13 @@ export type ItemProducer = (entry: Entry) => readonly Item[];
 export type KeyBinding = KeyBindingOf<Gantt>;
 
 // @public
-export interface KeyBindingOf<TGantt = unknown> {
+export interface KeyBindingOf<TGantt = unknown, TDataset = Dataset> {
     captureInEditable?: boolean;
     // (undocumented)
     chord: KeyChord;
     // (undocumented)
     command: string;
-    when?(ctx: CommandContextOf<TGantt>): boolean;
+    when?(ctx: CommandContextOf<TGantt, TDataset>): boolean;
 }
 
 // @public
@@ -1235,9 +1235,9 @@ export type PlannedRowKind = 'entry' | 'header';
 export type PluginContext = PluginContextOf<Gantt>;
 
 // @public
-export interface PluginContextOf<TGantt = unknown> {
-    commands: CommandRegistryOf<TGantt>;
-    dataset: Dataset;
+export interface PluginContextOf<TGantt = unknown, TDataset = Dataset> {
+    commands: CommandRegistryOf<TGantt, TDataset>;
+    dataset: TDataset;
     disposables: DisposableStore;
     events: GanttEvents;
     gantt: TGantt;

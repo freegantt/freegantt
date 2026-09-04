@@ -48,9 +48,13 @@ export type { Overlay, OverlayHandle };
  *  `interaction`) arrives in the step that ships the code honouring it (I11): a `register*` that does
  *  nothing is exactly the dishonest surface `no-not-implemented` catches. See
  *  `plans/s5-extensibility-and-editing/s5.1-plugin-runtime.md` §1 for the full shape this grows into. */
-export interface PluginContextOf<TGantt = unknown> {
+/** `TDataset` defaults to the public, untyped `Dataset` the same way `TGantt` defaults to
+ *  `unknown` — a plugin author binding their own `Dataset<TMeta, TFields>` gets a typed
+ *  `ctx.dataset` throughout `setup()`; a plugin with no reason to bind either type argument sees
+ *  the exact surface it always has (#141 item #9). */
+export interface PluginContextOf<TGantt = unknown, TDataset = Dataset> {
   /** The public Dataset. No privileged access, no second surface. */
-  dataset: Dataset;
+  dataset: TDataset;
   /** The public Gantt, for reading live config and calling public methods. */
   gantt: TGantt;
   /** `on`/`off` over `GanttEventMap`, including the cancelable `before*` pairs. */
@@ -60,7 +64,7 @@ export interface PluginContextOf<TGantt = unknown> {
   disposables: DisposableStore;
   /** S5.2, D-S5-6: the one command registry — `register` here is legal only while `setup` runs
    *  (D-S5-4); `run`/`available` work any time, including after this plugin's own setup returns. */
-  commands: CommandRegistryOf<TGantt>;
+  commands: CommandRegistryOf<TGantt, TDataset>;
   interaction: {
     /** S5.2, D-S5-7: adds one `KeyBinding`. Legal only while `setup` runs (D-S5-4) — removed
      *  automatically when this plugin is disposed, the same lifetime every other `register*` gets. */
@@ -160,8 +164,8 @@ export interface PluginContextOf<TGantt = unknown> {
   };
 }
 
-export interface GanttPluginOf<TGantt = unknown> {
+export interface GanttPluginOf<TGantt = unknown, TDataset = Dataset> {
   id: PluginId;
   /** Called once, after the Gantt mounts. Returns a disposer for the plugin's own resources. */
-  setup(ctx: PluginContextOf<TGantt>): Disposer;
+  setup(ctx: PluginContextOf<TGantt, TDataset>): Disposer;
 }
