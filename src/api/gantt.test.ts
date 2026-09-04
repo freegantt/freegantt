@@ -2951,6 +2951,35 @@ describe('Gantt.commands (S5.2, D-S5-6/D-S5-7)', () => {
 
     gantt.destroy();
   });
+
+  it('registerItemProducer/registerKindDefaults/registerGridColumn called after setup() returns each throw RegistrationClosedError (#152)', () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({ entries: sampleEntries.slice(0, 2), timeZone: 'UTC' });
+    let capturedCtx: PluginContext | undefined;
+    const gantt = new Gantt({
+      container,
+      dataset,
+      plugins: [
+        {
+          id: 'demo.late-register-s5.9',
+          setup(ctx) {
+            capturedCtx = ctx;
+            return () => {};
+          },
+        },
+      ],
+    });
+
+    expect(() => capturedCtx!.layout.registerItemProducer('buffer', () => [])).toThrow(
+      RegistrationClosedError,
+    );
+    expect(() => capturedCtx!.interaction.registerKindDefaults('buffer', { resize: false })).toThrow(
+      RegistrationClosedError,
+    );
+    expect(() => capturedCtx!.view.registerGridColumn({ field: 'name' })).toThrow(RegistrationClosedError);
+
+    gantt.destroy();
+  });
 });
 
 describe('Gantt.interaction.registerKeyHandler out-of-container dismissal (issue #137 F1)', () => {
