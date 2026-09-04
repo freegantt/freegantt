@@ -67,14 +67,16 @@ function produceMilestoneItems(entry: Entry): readonly Item[] {
 
 /** Call: `createItemProducerRegistry()` once in the Gantt constructor; tests pass extras for a Kind. */
 export function createItemProducerRegistry(
-  extras: Readonly<Record<string, ItemProducer>> = {},
+  extras: Readonly<Partial<Record<EntryKind, ItemProducer>>> = {},
 ): ItemProducerRegistry {
-  const producers = new Map<string, ItemProducer>([
+  const producers = new Map<EntryKind, ItemProducer>([
     ['span', produceSpanItems],
     ['group', produceGroupItems],
     ['milestone', produceMilestoneItems],
   ]);
-  for (const [kind, producer] of Object.entries(extras)) producers.set(kind, producer);
+  for (const [kind, producer] of Object.entries(extras)) {
+    if (producer !== undefined) producers.set(kind, producer);
+  }
   return {
     producerFor(kind) {
       return producers.get(kind) ?? produceSpanItems;
