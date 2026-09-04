@@ -428,6 +428,61 @@ describe('render/dom backend', () => {
     backend.destroy();
   });
 
+  it('stripes both panes from the absolute row index, so a scrolled window keeps the same rows odd', () => {
+    const backend = createDomBackend();
+    const { grid, timeline } = mountSurfaces();
+    backend.mount({ grid, timeline });
+
+    // A window that starts one row down: the first row in the DOM is row index 1, so :nth-child
+    // striping would paint it 'odd' while the grid pane's unscrolled paint calls it 'even'.
+    const scrolled = computeFrame({
+      entries: sampleEntries,
+      scale,
+      preset,
+      visible: { x: 0, y: 64, width: 100, height: 32 },
+      rowHeight: 32,
+      revision: 0,
+      itemProducerRegistry,
+    });
+    backend.sync(scrolled);
+
+    const rows = Array.from(grid.querySelectorAll<HTMLElement>('.fg-row'));
+    const bands = Array.from(timeline.querySelectorAll<HTMLElement>('.fg-row-band'));
+    expect(rows.length).toBeGreaterThan(0);
+    expect(bands).toHaveLength(rows.length);
+    expect(rows.map((row) => row.dataset['parity'])).toEqual(
+      scrolled.rows.map((row) => (row.index % 2 === 0 ? 'odd' : 'even')),
+    );
+    expect(bands.map((band) => band.dataset['parity'])).toEqual(rows.map((row) => row.dataset['parity']));
+
+    backend.destroy();
+  });
+
+  it("gives each timeline row band its row's own top and height (I9: both panes, one geometry)", () => {
+    const backend = createDomBackend();
+    const { grid, timeline } = mountSurfaces();
+    backend.mount({ grid, timeline });
+
+    const frame = computeFrame({
+      entries: sampleEntries,
+      scale,
+      preset,
+      visible: { x: 0, y: 0, width: 100, height: 200 },
+      rowHeight: 32,
+      revision: 0,
+      itemProducerRegistry,
+    });
+    backend.sync(frame);
+
+    const bands = Array.from(timeline.querySelectorAll<HTMLElement>('.fg-row-band'));
+    expect(bands.map((band) => band.style.transform)).toEqual(
+      frame.rows.map((row) => `translateY(${row.top}px)`),
+    );
+    expect(bands.map((band) => band.style.height)).toEqual(frame.rows.map((row) => `${row.height}px`));
+
+    backend.destroy();
+  });
+
   it('gives .fg-bar role="img" and its a11yLabel, not role="gridcell" (D-S1.10-5, revised)', () => {
     const backend = createDomBackend();
     const { grid, timeline } = mountSurfaces();

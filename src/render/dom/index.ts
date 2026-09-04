@@ -118,6 +118,14 @@ type RowGeom = {
   expanded: boolean;
   matched?: boolean;
 };
+/** The timeline pane's own zebra band for one row — the same paint `.fg-row` carries in the grid
+ *  pane, from the same `FrameRow`, so both panes stripe the same rows (I9's pixel identity applies
+ *  to the row's background too, not just its top/height). */
+type RowBandGeom = {
+  top: number;
+  height: number;
+  parity: RowParity;
+};
 type BarGeom = Pick<FrameBar, 'kind' | 'label' | 'x' | 'y' | 'width' | 'height' | 'flags' | 'a11yLabel'> & {
   /** S5.4, D-S5-11: a resolved `barRenderer`'s output for this one bar — undefined keeps `label`. */
   content?: ElementDescription;
@@ -127,6 +135,16 @@ const BAR_SHAPE_CLASS = Object.freeze({
   group: 'fg-bar-bracket',
   milestone: 'fg-bar-diamond',
 }) as Readonly<Record<string, string>>;
+
+/** 1-based, so the first row reads 'odd' — the same counting `--fg-row-odd-bg` is named for. The
+ *  absolute frame row index drives it, never DOM child position: the row layer only holds the
+ *  windowed rows, so `:nth-child` flips the whole zebra one row out of phase as soon as the pane
+ *  scrolls. */
+type RowParity = 'odd' | 'even';
+
+function rowParity(index: number): RowParity {
+  return index % 2 === 0 ? 'odd' : 'even';
+}
 
 function barClassName(kind: string): string {
   const shape = BAR_SHAPE_CLASS[kind];
@@ -220,6 +238,7 @@ export function createDomBackend(options?: DomBackendOptions): RenderBackend<HTM
   let timelineHost: HTMLElement | undefined;
   let headerLayer: HTMLElement | undefined;
   let barLayer: HTMLElement | undefined;
+  let rowBandLayer: HTMLElement | undefined;
   let contentSizer: HTMLElement | undefined;
   let dateLines: DateLineAttachment | undefined;
   let decorations: DecorationsAttachment | undefined;
@@ -237,6 +256,7 @@ export function createDomBackend(options?: DomBackendOptions): RenderBackend<HTM
   // reconciler scope: attr/class/style/text + keyed children, nothing more).
   const bandTickLayers = new NestedKeyedLayers<number, FrameHeaderTick, number, TickGeom>();
   const rowLayer = new KeyedLayer<FrameRow, RowId, RowGeom>();
+  const rowBandLayerCache = new KeyedLayer<FrameRow, RowId, RowBandGeom>();
   // One cell layer per row id, same nested pattern as bandTickLayers above.
   const rowCellLayers = new NestedKeyedLayers<RowId, CellItem, string, CellGeom>();
   const headerCellLayer = new KeyedLayer<CellItem, string, HeaderCellGeom>();
@@ -659,6 +679,7 @@ export function createDomBackend(options?: DomBackendOptions): RenderBackend<HTM
         node.setAttribute('aria-posinset', String(geom.index + 1));
         node.setAttribute('aria-setsize', String(geom.rowCount));
         node.setAttribute('aria-level', String(geom.depth + 1));
+        node.dataset['parity'] = rowParity(geom.index);
         if (geom.matched === false) node.dataset['matched'] = 'false';
         else delete node.dataset['matched'];
       },
@@ -772,6 +793,31 @@ export function createDomBackend(options?: DomBackendOptions): RenderBackend<HTM
     });
   }
 
+  /** One band per windowed row, keyed by row id exactly like the grid pane's own row layer. Every
+   *  row gets a node — an even row paints `--fg-row-even-bg` (transparent by default), so the two
+   *  panes keep one rule set instead of one pane skipping nodes the other paints. */
+  function syncRowBands(rows: readonly FrameRow[], contentWidth: number, paneWidth: number): void {
+    if (!rowBandLayer) return;
+    // A band is as wide as the scrollable content, not as the pane: `width: 100%` alone would stop
+    // the zebra at the pane's right edge and leave bare background once the pane scrolls right.
+    rowBandLayer.style.width = `${Math.max(contentWidth, paneWidth)}px`;
+    rowBandLayerCache.sync(rowBandLayer, rows, {
+      key: (row) => row.id,
+      create: () => {
+        const node = document.createElement('div');
+        node.className = 'fg-row-band';
+        node.setAttribute('aria-hidden', 'true');
+        return node;
+      },
+      toGeom: (row) => ({ top: row.top, height: row.height, parity: rowParity(row.index) }),
+      patch: (node, geom) => {
+        node.style.transform = `translateY(${geom.top}px)`;
+        node.style.height = `${geom.height}px`;
+        node.dataset['parity'] = geom.parity;
+      },
+    });
+  }
+
   return {
     mount(surfaces: RenderSurfaces<HTMLElement>) {
       gridLayer = surfaces.grid;
@@ -785,6 +831,10 @@ export function createDomBackend(options?: DomBackendOptions): RenderBackend<HTM
       headerLayer.className = 'fg-header';
       barLayer = document.createElement('div');
       barLayer.className = 'fg-bars';
+      // Below the decoration layers `attachDecorations` mounts (it inserts them around `barLayer`),
+      // so a plugin's own rowStripe still paints on top of the pane's zebra.
+      rowBandLayer = document.createElement('div');
+      rowBandLayer.className = 'fg-row-bands';
       // Owns the native scrollable extent (S1.5 README D-S1.5-9): rows/bars are positioned absolutely,
       // so nothing else in this DOM makes `timelineHost` actually overflow — without this, ScrollModel's
       // `panTo` has nowhere real to write. Zero visual footprint; `sync()` moves it to the frame's
@@ -816,7 +866,7 @@ export function createDomBackend(options?: DomBackendOptions): RenderBackend<HTM
       cursorLineLabel.className = 'fg-cursor-line-label';
       cursorLineLabel.setAttribute('aria-hidden', 'true');
       cursorLineLabel.hidden = true;
-      timelineHost.append(headerLayer, barLayer, contentSizer);
+      timelineHost.append(headerLayer, rowBandLayer, barLayer, contentSizer);
       // S5.6, D-S5-15: mounted before Date lines, so a registered decoration paints below the
       // today wrapper and any authored Date line — those stay the topmost stroke either way.
       decorations = attachDecorations(timelineHost, barLayer);
@@ -835,6 +885,7 @@ export function createDomBackend(options?: DomBackendOptions): RenderBackend<HTM
       syncHeader(frame.header.bands);
       syncGridHeader(frame.columns);
       syncRows(frame.rows, frame.rowCount, frame.columns);
+      syncRowBands(frame.rows, frame.contentWidth, frame.visible.width);
       syncBars(frame.bars);
       // A resize commit repaints the resized bar with new geometry through this same `sync()`, but
       // `applyState`'s handle repaint is gated on `resizableItemId` actually changing — it stays the
@@ -981,6 +1032,7 @@ export function createDomBackend(options?: DomBackendOptions): RenderBackend<HTM
       bandLayer.clear();
       bandTickLayers.clear();
       rowLayer.clear();
+      rowBandLayerCache.clear();
       rowCellLayers.clear();
       headerCellLayer.clear();
       barLayerCache.clear();
@@ -1005,6 +1057,7 @@ export function createDomBackend(options?: DomBackendOptions): RenderBackend<HTM
       timelineHost = undefined;
       headerLayer = undefined;
       barLayer = undefined;
+      rowBandLayer = undefined;
       contentSizer = undefined;
       startHandle = undefined;
       endHandle = undefined;
