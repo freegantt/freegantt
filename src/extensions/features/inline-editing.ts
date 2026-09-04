@@ -228,7 +228,7 @@ export function inlineEditing(options: InlineEditingOptions = {}): GanttPlugin {
         const factory = options.dateInput;
         let dateInput: DateInput;
         if (factory !== undefined) {
-          dateInput = factory({ zone: ctx.dataset.timeZone });
+          dateInput = factory({ zone: ctx.dataset.timeZone, locale: ctx.gantt.locale });
         } else {
           // Issue #137 F11: the default `<input type="date">` has no time-of-day control. An
           // Instant that is not local midnight would silently round-trip to midnight on an
