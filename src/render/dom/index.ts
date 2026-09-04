@@ -18,8 +18,7 @@ import type {
   RowId,
   ClientPoint,
 } from '../../layout/index.js';
-import type { FrameColumn } from '../../layout/index.js';
-import type { ColumnAlign } from '../../model/index.js';
+import type { ColumnAlign, FrameColumn } from '../../layout/index.js';
 import type { RenderBackend, RenderSurfaces, InteractionState, HitResult } from '../backend.js';
 import { attachDateLines } from './date-line.js';
 import type { DateLineAttachment } from './date-line.js';

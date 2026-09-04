@@ -2,6 +2,8 @@
 
 import type { ColumnAlign, ColumnCellRenderer, Entry, FieldKey } from '../model/index.js';
 
+export type { ColumnAlign } from '../model/index.js';
+
 /** Paint description for one Grid column. `format` stays on `ResolvedColumn` and never reaches a
  *  backend. `resizable`/`movable` do reach a backend (S5.7, D-S5-18) — they paint the resizer grip's
  *  visibility and the header cell's cursor, so they travel the same path `width`/`flex` already take
