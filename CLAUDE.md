@@ -54,7 +54,7 @@ Name functions and classes in friendly easy to understand for humans and agents 
 - Reconciler scope is hard-bounded: attr/class/style/text + keyed children. Needing lifecycle hooks means the design is wrong — stop and discuss.
 
 **Entry kinds** (`plans/01` §2.5):
-- `Entry.kind` is authored, never derived from having children. Behavior per kind goes through the seams (policy, item emitter, renderer registry, capability resolver) — no `if (kind === ...)` chains outside them.
+- `Entry.kind` is authored, never derived from having children. Behavior per kind goes through the seams (policy, item producer, renderer registry, capability resolver) — no `if (kind === ...)` chains outside them.
 - Capabilities gate gestures *and* affordances from one resolution (I14).
 
 **Dependencies** (`plans/04` §1):
