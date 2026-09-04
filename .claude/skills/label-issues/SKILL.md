@@ -1,6 +1,6 @@
 ---
 name: label-issues
-description: Apply the correct repository labels to an issue. Use each time you create an issue, close an issue, reopen an issue, or change an issue's state or scope. Use also when you review the labels on an existing issue.
+description: Apply the correct repository labels to an issue. Use each time you finish work on an issue, create an issue, close an issue, reopen an issue, or change an issue's state or scope. Use also when you review the labels on an existing issue.
 ---
 
 # Label Issues
@@ -34,7 +34,20 @@ gh issue edit <number> --add-label "<label>" --remove-label "<label>"
 
 On close or reopen, correct the state labels in the same step. An issue that you close keeps only the labels that stay true after the close.
 
-## 4. Name a new label
+## 4. Hand finished work back
+
+Apply `fixed needs review` the moment you finish work on an issue and you judge the issue ready to close. You did the work, so a person still has to read it. The label carries that claim, and it stays on the issue — closed or open — until that person takes it off.
+
+Comment on the issue in the same step. Give the reader two things:
+
+- **The commits.** Name each commit that carries the work, by hash.
+- **A summary.** A few lines on what you did. Say what changed and why it changed.
+
+```bash
+gh issue comment <number> --body "Landed in <hash>. <summary>"
+```
+
+## 5. Name a new label
 
 Create a label only when the user asks for one. Follow the scheme the repository already uses:
 
