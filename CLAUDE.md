@@ -1,6 +1,8 @@
 # FreeGantt
 
-Framework-free TypeScript Gantt library, library-first. The spec is `plans/00`–`04` — read the relevant doc before changing anything it governs; locked decisions D1–D12 are in `plans/00-overview.md` and are not revisited casually. Work lands in vertical slices S0–S7 (`plans/03-slices.md`), in order, each ending with something visible in `harness/`. S3–S6 land with the identity extender. The first-party scheduling plugin, `schedule()`, `Dependency`, lag, and cycle diagnostics are **S7**. Extra field writes on commit and during drag come from `data/`'s `EditExtender`. `interaction/` never imports `scheduling/`. Follow Unlce Bob's (Robert C. Martin) clean code, and use well defined TypeScript types wherever possible and strong module boundries. Design for a clean easy to use API internally and externally.
+Framework-free TypeScript Gantt library, library-first. The spec is `plans/00`–`04` — read the relevant doc before changing anything it governs; locked decisions D1–D12 are in `plans/00-overview.md` and are not revisited casually. Work lands in vertical slices S0–S7 (`plans/03-slices.md`), in order, each ending with something visible in `harness/`. S3–S6 land with the identity extender. The first-party scheduling plugin, `schedule()`, `Dependency`, lag, and cycle diagnostics are **S7**. Extra field writes on commit and during drag come from `data/`'s `EditExtender`. `interaction/` never imports `scheduling/`.
+
+This project has never shipped to a user: the public API can change freely, and should whenever change makes it better or the code more resilient. Write as a senior TypeScript developer with experience shipping products like AG Grid, DHTMLX Gantt, and Bryntum, who trades development speed for a clean surface, not one racing to ship. Follow Uncle Bob's (Robert C. Martin) clean code, use well-defined TypeScript types wherever possible, and keep strong module boundaries. Design for a clean, easy-to-use API internally and externally — readability and maintainability beat quick code every time.
 
 ## Hard rules
 
@@ -11,8 +13,6 @@ Active voice: Writers use active sentences instead of passive ones (for example,
 Simple tenses: Use simple past, simple present, and simple future tenses.
 Short sentences: Keep sentences to 20 words for instructions and 25 words for descriptions.
 One instruction per sentence: Each step gets its own sentence or bullet point.
-
-Remember, **clean easy to use and understand api** is more important than quick code. Dont optimize for development speed, optimize for readability and maintainability.
 
 Functions should do one thing and do it well and should be clear on what they do from the name.
 
