@@ -554,6 +554,7 @@ renderersToggle.dispatchEvent(new Event('change'));
 // Right-clicking empty timeline or an unpopulated grid stretch leaves `ctx.entry` undefined, so
 // these three never appear there — background right-clicks stay on "Collapse all"/"Expand all".
 const lockedEntryIds = new Set<string>();
+const ENTRY_CONTEXT_COMMAND_IDS = ['demo.deleteEntry', 'demo.lockEntry', 'demo.unlockEntry'];
 
 dataset.on('beforeChange', ({ changeSet }: DatasetEventMap['beforeChange']) => {
   const touchesLocked =
@@ -605,7 +606,19 @@ function entryContextActions(): GanttPlugin {
 
 // S5.5, D-S5-13/14: the two shipped built-ins, installed straight from `plugins: [...]` — no config
 // table, no core edit (`[S5-A1]`'s dogfood gate). Hover a bar for its name and dates; right-click a
-// bar, its grid row, or the timeline canvas and run a command from the menu — "Delete"/"Lock"/
-// "Unlock" on an entry, "Collapse all"/"Expand all" on background — or `Shift+F10` on a selected row.
+// bar or its grid row for an entry-only menu ("Delete"/"Lock"/"Unlock" — `items` below drops the
+// background-only defaults for that target), or the timeline canvas for "Collapse all"/"Expand all";
+// `Shift+F10` opens the same entry menu for a selected row.
 // S5.8, D-S5-19: `inlineEditing()` joins them — double-click Name, Start or Budget to edit in place.
-gantt.plugins = [...gantt.plugins, tooltips(), contextMenu(), inlineEditing(), entryContextActions()];
+gantt.plugins = [
+  ...gantt.plugins,
+  tooltips(),
+  contextMenu({
+    items: ({ entry, defaults }) =>
+      entry !== undefined
+        ? defaults.filter((item) => 'command' in item && ENTRY_CONTEXT_COMMAND_IDS.includes(item.command))
+        : defaults,
+  }),
+  inlineEditing(),
+  entryContextActions(),
+];
