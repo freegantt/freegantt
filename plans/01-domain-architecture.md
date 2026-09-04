@@ -421,10 +421,12 @@ interface GeometryFrame {
   }>;
   /** `id` was `DependencyId` (a `model/` brand) pre-#13; `Dependency` is now owned by the
    *  `entryDependencies()` plugin, not `scheduling()` (S5.0 grill, #111), so link geometry needs a
-   *  plugin-contributed emission seam mirroring `registerItemProducer` above — exact registration
-   *  contract (a `registerLinkEmitter`-shaped seam) and `id`'s brand type are tracked in #136
-   *  (supersedes #16). #136 has an open, undecided proposal for how the Gantt-side emitter reads the
-   *  Dataset-side plugin's store; not settled here. Shape lands in S1 (#30), contents in S7. */
+   *  plugin-contributed emission seam — `ctx.layout.registerLinkEmitter(emitter)`, aggregating like
+   *  `decorationProviders` rather than replacing like `registerItemProducer`. `id` stays a plain
+   *  `string`: a brand would make `layout/` depend on plugin-owned types. The emitter reads the
+   *  Dataset-side plugin's store through the Gantt-side `ctx.store.read(pluginId)`, D-S5-30's own
+   *  name on the second surface. Full design in #136 (supersedes #16); it lands in S7, after S5.10
+   *  ships `PluginStore`. Shape lands in S1 (#30), contents in S7. */
   links: readonly Array<{ id: string; path: PathCommand[]; flags: LinkFlags }>;
   decorations: readonly Array<DateLine | RangeBand | RowStripe>;
 }
