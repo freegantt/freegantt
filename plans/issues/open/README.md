@@ -1,10 +1,15 @@
 # Open issue plans
 
-All four tracked issues (#112, #124, #127, #129) are closed as of
+The first four tracked issues (#112, #124, #127, #129) closed on
 2026-09-01. (#128 "Tools" was considered but dropped from this set — its
-body is just an unexplained external link, with no actionable scope.) This
-directory is currently empty of open plans; new issue plans land here as
-they're opened.
+body is just an unexplained external link, with no actionable scope.) New
+issue plans land here as they're opened.
+
+**Open:**
+- [#154](https://github.com/Pawel-IT/FreeGantt/issues/154) — one
+  registration table behind the plugin `register*` seams, closing #146,
+  #147 and the two-plugin half of #152 in the same change. See
+  [154-registration-table.md](./154-registration-table.md).
 
 **Closed:**
 - [#112](https://github.com/Pawel-IT/FreeGantt/issues/112) — DI seams:
