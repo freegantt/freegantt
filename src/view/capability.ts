@@ -10,12 +10,17 @@ import type { Entry, EntryKind } from '../model/index.js';
  *  (U4: `interactions: { resize: e => e.kind !== 'group' }`). */
 export type CapabilityRule = boolean | ((entry: Entry) => boolean);
 
-/** Live (S3, D-S3-9). `linkCreate`/`edit` stay off this type until S7/S5 (I11: no unimplemented
- *  public key). */
+/** Live (S3/S5, D-S3-9). `linkCreate` stays off this type until S7 (I11: no unimplemented public
+ *  key). */
 export interface Interactions {
   move?: CapabilityRule;
   resize?: CapabilityRule;
   select?: CapabilityRule;
+  /** S5.8, D-S5-19. Defaults `true` for every kind, including a roll-up kind — unlike `move`/
+   *  `resize`, a roll-up parent's own name/team/etc. cells are ordinary stored values; only its
+   *  *rolling-up* Fields (`start`/`end`, a consumer's own `rollUp` field) are derived, and
+   *  `inlineEditing()` refuses those per-cell, by asking the Field, not by asking the kind. */
+  edit?: CapabilityRule;
 }
 
 export interface Capabilities {
@@ -34,6 +39,7 @@ function defaultRule(
   isRollUpKind: (kind: EntryKind) => boolean,
 ): boolean {
   if (capability === 'select') return true;
+  if (capability === 'edit') return true;
   if (isRollUpKind(entry.kind)) return false;
   if (capability === 'resize' && entry.kind === 'milestone') return false;
   return true;

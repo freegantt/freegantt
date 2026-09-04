@@ -226,6 +226,13 @@ ${DARK_COLOR_TOKENS}
 .fg-menu-item { display: block; width: 100%; padding: 4px 12px; border: none; background: none; text-align: start; font: inherit; color: inherit; cursor: pointer; white-space: nowrap; }
 .fg-menu-item:hover, .fg-menu-item:focus { background: var(--fg-row-odd-bg); outline: none; }
 .fg-menu-separator { height: 1px; margin: 4px 0; background: var(--fg-splitter-color); }
+/* S5.8, D-S5-19: inlineEditing()'s own control — mounted through the overlay layer directly (not
+   wrapped in .fg-popup: the cell editor has no flip/clamp, it always sits at the cell's own rect,
+   Popup's own file header explains why it is built differently). data-state="invalid" is a failed
+   parseValue, a beforeChange veto, or the default dateInput's non-midnight refusal (issue #137 F11/F12). */
+.fg-cell-editor { position: absolute; top: 0; left: 0; pointer-events: auto; box-sizing: border-box; }
+.fg-cell-editor-control { width: 100%; height: 100%; box-sizing: border-box; font: inherit; padding-inline: var(--fg-cell-padding-inline, 8px); border: 1px solid var(--fg-selection-color); background: var(--fg-pane-bg); color: var(--fg-row-label-color); }
+.fg-cell-editor[data-state='invalid'] .fg-cell-editor-control { border-color: var(--fg-warn); }
 `.trim();
 
 /** Injects the library's base stylesheet into `doc` exactly once. Safe to call from every Gantt

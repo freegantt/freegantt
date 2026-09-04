@@ -85,6 +85,14 @@ export const hierarchyFieldOptions = {
               maximumFractionDigits: 0,
             }).format(value)
           : '',
+      // S5.8, D-S5-20, issue #137 F12: `formatValue` is not invertible in general (a
+      // currency-formatted "$1,234" cannot be parsed back without knowing the format that
+      // produced it) — the library ships no default. This is the harness's own inverse of the
+      // `formatValue` above, so `inlineEditing()`'s cost cell is editable in the demo.
+      parseValue: (text: string): number | undefined => {
+        const n = Number(text.replace(/[^0-9.-]/g, ''));
+        return Number.isFinite(n) ? n : undefined;
+      },
       column: { align: 'end' as const, header: 'Cost' },
     },
   },

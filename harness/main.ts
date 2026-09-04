@@ -10,6 +10,7 @@ import {
   MS,
   tooltips,
   contextMenu,
+  inlineEditing,
 } from '../src/api/index.js';
 import type {
   Entry,
@@ -29,16 +30,19 @@ import { demoFieldOptions, demoTreeEntryInputs } from '../fixtures/demo-dataset.
 import { mountTimelineToolbar } from './timeline-toolbar.js';
 import { prependChangeSet, prependLogLine } from './change-log.js';
 
+// S5.8, D-S5-19: Name, Start and Budget are editable (double-click, or Enter on the selected row's
+// first editable column); End and Duration stay read-only (Duration is `compute`-sourced and has no
+// stored home to write back to — D-S4-... the Rollup would overwrite an edit on the next commit).
 const GRID_WITH_BUDGET: readonly GridColumnInput[] = [
-  'name',
-  'start',
+  { field: 'name', editable: true },
+  { field: 'start', editable: true },
   'end',
   { field: 'duration', align: 'start' },
-  { field: 'cost', header: 'Budget' },
+  { field: 'cost', header: 'Budget', editable: true },
 ];
 const GRID_WITHOUT_BUDGET: readonly GridColumnInput[] = [
-  'name',
-  'start',
+  { field: 'name', editable: true },
+  { field: 'start', editable: true },
   'end',
   { field: 'duration', align: 'start' },
 ];
@@ -539,4 +543,5 @@ renderersToggle.dispatchEvent(new Event('change'));
 // S5.5, D-S5-13/14: the two shipped built-ins, installed straight from `plugins: [...]` — no config
 // table, no core edit (`[S5-A1]`'s dogfood gate). Hover a bar for its name and dates; right-click a
 // bar (or the timeline canvas) and run "Collapse all" from the menu, or `Shift+F10` on a selected row.
-gantt.plugins = [...gantt.plugins, tooltips(), contextMenu()];
+// S5.8, D-S5-19: `inlineEditing()` joins them — double-click Name, Start or Budget to edit in place.
+gantt.plugins = [...gantt.plugins, tooltips(), contextMenu(), inlineEditing()];

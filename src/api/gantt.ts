@@ -237,6 +237,9 @@ export class Gantt {
         interaction: {
           registerKeybinding: parts.registerKeybinding,
           registerKeyHandler: parts.registerKeyHandler,
+          canEdit: parts.canEdit,
+          emitBeforeEntryEdit: parts.emitBeforeEntryEdit,
+          emitEntryEdit: parts.emitEntryEdit,
         },
         view: {
           overlay: parts.overlay,
@@ -245,6 +248,7 @@ export class Gantt {
           resolveTooltip: parts.resolveTooltip,
           resolveTooltipColumns: parts.resolveTooltipColumns,
           registerDecoration: parts.registerDecoration,
+          isColumnEditable: parts.isColumnEditable,
         },
       }),
       buildCommandContext: (parts): CommandContext => ({

@@ -84,7 +84,9 @@
       row re-resolution, pack-mode heights, tree collapse, declared-field rollup, and JSON round-trip — with
       every committed changeset logged the same way <code>data.html</code> does (D-S2-17). Drag a column edge
       to resize it or a header cell to reorder it (S5.7, D-S5-18) — a focused header cell also takes
-      <kbd>Shift+Arrow</kbd> to resize and <kbd>Alt+Arrow</kbd> to move.
+      <kbd>Shift+Arrow</kbd> to resize and <kbd>Alt+Arrow</kbd> to move. Double-click Name, Start or Cost to
+      edit in place (S5.8, D-S5-19) — Enter or blur commits one transaction, Escape reverts. End stays
+      read-only on purpose: a column is editable only when you say so.
     </p>
     <div id="controls">
       <label>
@@ -117,6 +119,10 @@
       <button id="collapse-all-btn" type="button">Collapse all</button>
       <label><input id="autogroup-checkbox" type="checkbox" checked /> autoGroup (rebuild on change)</label>
       <button id="reparent-btn" type="button">Reparent beta under plain parent</button>
+      <label>
+        <input id="custom-editor-checkbox" type="checkbox" /> Bring your own editor (beforeEntryEdit, Name
+        only)
+      </label>
       <p id="selection-readout">Selection: (none)</p>
       <p id="grid-columns-readout">Columns: (drag a column edge to resize, drag a header to reorder)</p>
       <button id="cost-btn" type="button">Set cost 500</button>

@@ -73,6 +73,15 @@ export interface Field<TValue = unknown> {
   equals?(a: TValue | undefined, b: TValue | undefined): boolean;
   compare?(a: TValue | undefined, b: TValue | undefined): number;
   formatValue?(value: TValue | undefined, ctx: FormatContext): string;
+  /** S5.8, D-S5-20, issue #137 F12: reads what the user typed into the inline editor's `<input>`
+   *  back into a stored value. `undefined` means the text names no value — the editor stays open in
+   *  the invalid state and commits nothing. `formatValue` is not invertible in general (a
+   *  currency-formatted `"€1.234,56"` cannot be parsed back without knowing the format that produced
+   *  it), so the library ships no guessed default: with no `parseValue`, `type: 'text'` (or no `type`
+   *  at all) reads and writes the raw string, and every other named `type` refuses to open the
+   *  editor rather than parse wrong. A `type: 'date'` Field never reaches this — `inlineEditing()`
+   *  routes it through the `dateInput` seam instead (D-S5-20). */
+  parseValue?(text: string, ctx: FieldContext): TValue | undefined;
   /** D-S5-17: `cellRenderer` sits on the Gantt's `GridColumn`, never here — `data/` never holds a
    *  renderer, so this default set excludes it. */
   column?: Omit<GridColumn, 'field' | 'cellRenderer'>;
