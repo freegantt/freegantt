@@ -172,6 +172,64 @@ describe('contextMenu() (S5.5, D-S5-13/14)', () => {
     containerB.remove();
   });
 
+  it("a click on Gantt B's open menu item never runs against Gantt A's context, even while A's menu is also open (B1 follow-up)", () => {
+    const { container: containerA, gantt: ganttA } = makeGantt();
+    let ranOnA = false;
+    ganttA.commands.register({ id: 'demo.a', label: 'A action', run: () => (ranOnA = true) });
+
+    const containerB = document.createElement('div');
+    document.body.append(containerB);
+    const datasetB = new Dataset({ entries: sampleEntries.slice(0, 3), timeZone: 'UTC' });
+    const ganttB = new Gantt({ container: containerB, dataset: datasetB, plugins: [contextMenu()] });
+    let ranOnB = false;
+    ganttB.commands.register({ id: 'demo.b', label: 'B action', run: () => (ranOnB = true) });
+
+    rightClick(bars(containerA)[0]!); // A's menu opens (its own document click/keydown listeners attach)
+    rightClick(bars(containerB)[0]!); // B's menu also opens, independently
+    expect(containerA.querySelector('.fg-menu')).not.toBeNull();
+    expect(containerB.querySelector('.fg-menu')).not.toBeNull();
+
+    const itemInB = menuItems(containerB).find((el) => el.getAttribute('data-command') === 'demo.b');
+    itemInB!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+    // Without the fix, A's document-wide click listener also matches this click (it only checks
+    // `.closest('.fg-menu-item')`, not "is this mine") and would run/close against A's own menu.
+    expect(ranOnB).toBe(true);
+    expect(ranOnA).toBe(false);
+    expect(containerA.querySelector('.fg-menu')).not.toBeNull();
+
+    ganttA.destroy();
+    ganttB.destroy();
+    containerA.remove();
+    containerB.remove();
+  });
+
+  it("ArrowDown inside Gantt B's open menu only cycles B's own items (B1 follow-up)", () => {
+    const { container: containerA, gantt: ganttA } = makeGantt();
+    const containerB = document.createElement('div');
+    document.body.append(containerB);
+    const datasetB = new Dataset({ entries: sampleEntries.slice(0, 3), timeZone: 'UTC' });
+    const ganttB = new Gantt({ container: containerB, dataset: datasetB, plugins: [contextMenu()] });
+
+    rightClick(bars(containerA)[0]!);
+    rightClick(bars(containerB)[0]!);
+
+    const itemsB = menuItems(containerB);
+    itemsB[0]!.focus();
+    containerB.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }),
+    );
+
+    // Without the fix, the document-wide querySelectorAll('.fg-menu-item') mixes A's and B's items
+    // into one list, so the "next" index can land on an item that belongs to the wrong Gantt.
+    expect(itemsB).toContain(document.activeElement);
+
+    ganttA.destroy();
+    ganttB.destroy();
+    containerA.remove();
+    containerB.remove();
+  });
+
   it('runs the command for the right-clicked bar, not the current selection (B2, D-S5-14)', () => {
     const { container, gantt } = makeGantt();
     // Selection is empty; right-clicking a bar must still run a command whose `when` needs `ctx.entry`

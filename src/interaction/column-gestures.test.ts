@@ -200,6 +200,46 @@ describe('attachColumnGestures — resize (S5.7, D-S5-18)', () => {
     expect(commits).toEqual([{ columnKey: 'cost', widthPx: 130 }]);
   });
 
+  it('Escape before the drag arms clears the grab, so the next grip drags its own column', () => {
+    const { pane, cell } = makeHeaderPane({
+      cost: { left: 100, width: 90 },
+      start: { left: 300, width: 90 },
+    });
+    const container = document.createElement('div');
+    const { ctx, commits } = makeCtx();
+    attachColumnGestures(pane, container, ctx);
+
+    down(gripOf(cell('cost')), 190); // grabs "cost"'s grip
+    move(pane, 192); // +2px — below the 4px arm threshold, never arms
+    escape(container); // unarmed Escape: pointer-gesture's own cancel() never runs
+
+    down(gripOf(cell('start')), 340); // a later drag grabs "start"'s grip
+    move(pane, 360); // +20px, past threshold
+    up(gripOf(cell('start')), 380); // +40px total
+
+    // Without the fix this commits against "cost" (the stale grab) using "start"'s pointer travel.
+    expect(commits).toEqual([{ columnKey: 'start', widthPx: 130 }]);
+  });
+
+  it('pointercancel before the drag arms clears the grab, so the next grip drags its own column', () => {
+    const { pane, cell } = makeHeaderPane({
+      cost: { left: 100, width: 90 },
+      start: { left: 300, width: 90 },
+    });
+    const { ctx, commits } = makeCtx();
+    attachColumnGestures(pane, document.createElement('div'), ctx);
+
+    down(gripOf(cell('cost')), 190);
+    move(pane, 192); // below threshold, never arms
+    pane.dispatchEvent(new PointerEvent('pointercancel', { pointerId: 1, bubbles: true }));
+
+    down(gripOf(cell('start')), 340);
+    move(pane, 360);
+    up(gripOf(cell('start')), 380);
+
+    expect(commits).toEqual([{ columnKey: 'start', widthPx: 130 }]);
+  });
+
   it('pointercancel cancels an armed resize the same as Escape (B6)', () => {
     const { pane, cell } = makeHeaderPane({ cost: { left: 100, width: 90 } });
     const { ctx, cancels, commits } = makeCtx();
