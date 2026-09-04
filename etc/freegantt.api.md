@@ -1122,16 +1122,9 @@ export interface KeyHandlerRegistrar {
 }
 
 // @public
-export interface KindDefaults {
-    // (undocumented)
-    edit?: boolean;
-    // (undocumented)
-    move?: boolean;
-    // (undocumented)
-    resize?: boolean;
-    // (undocumented)
-    select?: boolean;
-}
+export type KindDefaults = {
+    [K in keyof Interactions]?: boolean;
+};
 
 // @public (undocumented)
 export type MenuEntry = MenuItem | {
