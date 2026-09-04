@@ -337,7 +337,7 @@ flowchart TB
             </div>
           </div>
 
-          <p class="text-sm"><strong>Problem.</strong> <span class="mono">GanttShell</span> builds a flat 17-member <span class="mono">parts</span> bag, and <span class="mono">api/gantt.ts</span> re-shapes it into the four groups a plugin actually sees. The grouping is plugin-facing presentation, and the module that owns the ports does not own it.</p>
+          <p class="text-sm"><strong>Problem.</strong> <span class="mono">GanttShell</span> builds a flat 17-member <span class="mono">parts</span> bag, and <span class="mono">api/gantt.ts</span> re-shapes it into the four groups a plugin actually sees. The grouping is plugin-facing presentation, and the module that owns the ports does not own it. #150 already took the first half of this step — the bag has a named type, <span class="mono">PluginContextPorts</span>, instead of three copies. It is still declared flat, which is what <a href="#pass2-p1" class="underline">P1</a> below turns into a self-documentation cost.</p>
           <p class="text-sm"><strong>Solution.</strong> Have the shell build <span class="mono">{ commands, interaction: {…}, view: {…}, layout: {…} }</span> directly. <span class="mono">buildPluginContext</span> collapses to <span class="mono">(parts) =&gt; ({ dataset, gantt: this, ...parts })</span>. Nothing crosses a layer that did not already cross it — the shell already types every port.</p>
           <ul class="text-sm grid md:grid-cols-2 gap-x-6 gap-y-1 list-disc pl-5">
             <li>locality: a seam is one edit, not three</li>
@@ -496,6 +496,103 @@ flowchart LR
         </article>
       </section>
 
+      <section class="space-y-6">
+        <h2 class="text-2xl font-serif font-bold">Second pass — ball of mud, friendlier API, self-documentation</h2>
+        <p class="text-sm text-slate-600">A re-read after the first report, looking only for: where does this become a ball of mud, where would an author be happier, where is a comment doing a type's job, and where does extensibility stop one plugin short.</p>
+
+        <article id="pass2-p1" class="rounded-lg border-2 border-slate-800 bg-white p-5 space-y-3">
+          <div class="flex items-center gap-3">
+            <span class="px-2 py-0.5 rounded text-xs font-semibold bg-emerald-600 text-white">P1 · strong</span>
+            <h3 class="font-bold">Eleven comments exist to restate what the type threw away</h3>
+          </div>
+          <p class="mono text-xs text-slate-500">src/view/gantt-shell.ts — <span class="mono">PluginContextPorts</span></p>
+          <pre class="bg-slate-900 text-slate-100 text-xs p-3 rounded overflow-x-auto mono">/** S5.8, D-S5-19: `ctx.interaction.canEdit`. */
+canEdit: (entry: Entry) =&gt; boolean;
+/** S5.8, D-S5-19: `ctx.view.isColumnEditable`. */
+isColumnEditable: (field: FieldKey) =&gt; boolean | undefined;
+/** S5.9, D-S5-22: `ctx.layout.registerItemProducer`. Legal only while `setup` runs … */
+registerItemProducer: (kind: EntryKind, producer: ItemProducer) =&gt; Disposer;</pre>
+          <p class="text-sm">Eleven of the seventeen members carry a doc comment whose first job is to name the group the member ends up in: <span class="mono">ctx.view.*</span> ×6, <span class="mono">ctx.interaction.*</span> ×4, <span class="mono">ctx.layout.*</span> ×1. The type is declared flat, so the structure is gone, and a comment is hired to carry it. Then <span class="mono">api/gantt.ts</span> is hired to rebuild it.</p>
+          <p class="text-sm"><strong>This is the sharpest argument for <a href="#cand-1" class="underline">A1</a>.</strong> Declare <span class="mono">PluginContextPorts</span> in the shape a plugin sees, and eleven comments become unnecessary because the code says it, <span class="mono">buildPluginContext</span>'s seventeen restatement lines go, and the grouping can no longer drift from the type — today a member added to the wrong group in <span class="mono">api/gantt.ts</span> still compiles.</p>
+          <p class="text-sm">CLAUDE.md's own standard is "code should be self-documenting". A comment that names a path is the clearest case of a type that should have carried it.</p>
+        </article>
+
+        <article id="pass2-p2" class="rounded-lg border-2 border-slate-800 bg-white p-5 space-y-3">
+          <div class="flex items-center gap-3">
+            <span class="px-2 py-0.5 rounded text-xs font-semibold bg-red-600 text-white">P2 · extensibility</span>
+            <h3 class="font-bold">Two plugins that each define a kind cannot both be installed</h3>
+          </div>
+          <p class="mono text-xs text-slate-500">src/view/renderer-registry.ts <span class="mono">register()</span> · D-S5-11 · U10</p>
+          <p class="text-sm">D-S5-22 names four seams for a consumer-defined kind. Three of them are keyed and compose across plugins, on the shared registration table (#154):</p>
+          <div class="overflow-x-auto"><table class="text-sm w-full">
+            <thead><tr class="border-b-2 border-slate-300 text-left"><th class="py-1.5 pr-4">Seam</th><th class="pr-4">Keyed by</th><th>Two plugins?</th></tr></thead>
+            <tr class="border-b border-slate-200"><td class="mono py-1.5 pr-4 text-xs">registerItemProducer</td><td class="pr-4 text-xs">EntryKind</td><td class="text-emerald-700 text-xs">compose</td></tr>
+            <tr class="border-b border-slate-200"><td class="mono py-1.5 pr-4 text-xs">registerKindDefaults</td><td class="pr-4 text-xs">EntryKind</td><td class="text-emerald-700 text-xs">compose</td></tr>
+            <tr class="border-b border-slate-200"><td class="mono py-1.5 pr-4 text-xs">commands.register</td><td class="pr-4 text-xs">command id</td><td class="text-emerald-700 text-xs">compose</td></tr>
+            <tr><td class="mono py-1.5 pr-4 text-xs">registerRenderer('bar', …)</td><td class="pr-4 text-xs">the point — one global slot</td><td class="text-red-700 text-xs font-semibold">throws</td></tr>
+          </table></div>
+          <pre class="bg-slate-900 text-slate-100 text-xs p-3 rounded overflow-x-auto mono">// bufferKind() — claims the ONE bar slot to paint one kind
+ctx.view.registerRenderer('bar', { [BUFFER_KIND]: () =&gt; ({ class: {'demo-buffer-bar': true} }) });
+// any second plugin painting its OWN kind:
+// -&gt; RendererAlreadyRegisteredError('bar', 'demo.bufferKind', 'demo.riskKind')</pre>
+          <p class="text-sm"><strong>Why it is a hole and not just a rule.</strong> One slot per point is the right call for <span class="mono">cell</span>, <span class="mono">header</span> and <span class="mono">tooltip</span> — those have no key to merge on, so last-wins would be a silent mystery and the error is a kindness. But <span class="mono">bar</span> is the one point that already takes a per-kind map (D-S5-12), which is a key. Two plugins registering <span class="mono">'buffer'</span> and <span class="mono">'risk'</span> are not in conflict at all; they are refused because the registry keys on the point instead of the kind.</p>
+          <p class="text-sm">U10 reads "I declare a <span class="mono">'buffer'</span> kind in one plugin: shape, renderer, capabilities and menu items." It holds exactly as long as nobody writes a second such plugin — which is the first thing an ecosystem does. The mechanism to fix it is already in the file: key the per-kind form on <span class="mono">`bar:${kind}`</span> in the same registration table, and keep the whole-point claim (a function, not a map) as the exclusive one it is today.</p>
+        </article>
+
+        <article class="rounded-lg border border-amber-300 bg-white p-5 space-y-3">
+          <div class="flex items-center gap-3">
+            <span class="px-2 py-0.5 rounded text-xs font-semibold bg-amber-500 text-white">P3 · friendlier</span>
+            <h3 class="font-bold">The commonest item producer costs eight lines of re-derivation</h3>
+          </div>
+          <pre class="bg-slate-900 text-slate-100 text-xs p-3 rounded overflow-x-auto mono">// harness/plugins/buffer-kind.ts — what a plugin author must write for "one bar, whole entry"
+ctx.layout.registerItemProducer(BUFFER_KIND, (entry) =&gt; [
+  { id: itemId(entry.id, 0), entryId: entry.id, kind: entry.kind,
+    label: entry.name, start: entry.start, end: entry.end },
+]);
+
+// layout/items/produce-items.ts — the library's own, internal, identical function
+function wholeEntryItem(entry: Entry, end: Instant): Item { /* the same six fields */ }</pre>
+          <p class="text-sm">The author must also get the <span class="mono">itemId(entry.id, 0)</span> segment-index convention right from documentation alone. <span class="mono">wholeEntryItem</span> is pure, DOM-free and carries no internals — there is nothing to protect. Exporting it (as <span class="mono">wholeEntryItem</span>, or <span class="mono">spanItems</span> alongside it) makes the common case <span class="mono">(entry) =&gt; [wholeEntryItem(entry)]</span> and removes the one place a plugin can silently get an id convention wrong.</p>
+        </article>
+
+        <article class="rounded-lg border border-amber-300 bg-white p-5 space-y-3">
+          <div class="flex items-center gap-3">
+            <span class="px-2 py-0.5 rounded text-xs font-semibold bg-amber-500 text-white">P4 · friendlier</span>
+            <h3 class="font-bold">Every plugin ends with <span class="mono">return () =&gt; {};</span></h3>
+          </div>
+          <p class="text-sm"><span class="mono">weekendShading()</span>, <span class="mono">bufferKind()</span> and <span class="mono">selectionShortcuts()</span> all close with an empty disposer, because <span class="mono">setup</span> is typed <span class="mono">(ctx) =&gt; Disposer</span>. None of them owns anything to dispose — every registration they make is already retracted by <span class="mono">ctx.disposables</span>. The type demands a ceremony the runtime does not need.</p>
+          <p class="text-sm"><span class="mono">setup(ctx): Disposer | void</span> costs one <span class="mono">?.()</span> in <span class="mono">PluginRuntime.install</span> and makes the smallest useful plugin genuinely small. It also stops the empty disposer reading, to a newcomer, as if something were missing.</p>
+        </article>
+
+        <article class="rounded-lg border border-slate-200 bg-white p-5 space-y-3">
+          <div class="flex items-center gap-3">
+            <span class="px-2 py-0.5 rounded text-xs font-semibold bg-amber-500 text-white">P5 · ISP</span>
+            <h3 class="font-bold"><span class="mono">GanttShellOptions</span> is three audiences in one bag</h3>
+          </div>
+          <p class="text-sm">Thirty-four members, mixing real configuration (<span class="mono">theme</span>, <span class="mono">locale</span>, <span class="mono">gridColumns</span>, <span class="mono">rowSource</span>…), layer-boundary wiring that <span class="mono">api/gantt.ts</span> <em>always</em> supplies (<span class="mono">entryGestures</span>, <span class="mono">keyboardEditing</span>, <span class="mono">columnGestures</span>, <span class="mono">buildPluginContext</span>, <span class="mono">buildCommandContext</span>, <span class="mono">commitEntryEdits</span>, <span class="mono">now</span>), and test seams (<span class="mono">backend</span>, <span class="mono">itemProducerRegistry</span>, <span class="mono">editExtender</span>).</p>
+          <p class="text-sm">The evidence is in the file: <em>"Omitted only by tests exercising the shell with no … wiring"</em> appears <strong>seven times</strong>. Seven identical comments are the type telling you what it failed to say. Every one of those members is optional purely so a test can skip it, which means the shell's real contract with <span class="mono">api/gantt.ts</span> — <em>these are always supplied</em> — is nowhere expressible.</p>
+          <p class="text-sm">One <span class="mono">wiring</span> member holding the seven always-supplied seams, required, makes the split visible, deletes the seven comments, and lets a test opt out by naming <span class="mono">wiring</span> once rather than by omitting seven keys. Same idiom as <a href="#cand-2" class="underline">A2</a>'s ports.</p>
+        </article>
+
+        <article class="rounded-lg border border-slate-200 bg-white p-5 space-y-3">
+          <div class="flex items-center gap-3">
+            <span class="px-2 py-0.5 rounded text-xs font-semibold bg-slate-400 text-white">P6 · middle man</span>
+            <h3 class="font-bold">Three of <span class="mono">RendererRegistry</span>'s four resolvers only forward</h3>
+          </div>
+          <pre class="bg-slate-900 text-slate-100 text-xs p-3 rounded overflow-x-auto mono">resolveCell(r)    { return this.#resolve('cell', r); }
+resolveHeader(r)  { return this.#resolve('header', r); }
+resolveTooltip(r) { return this.#resolve('tooltip', r); }
+resolveBar(kind, r) { /* the only one that does more: D-S5-12's per-kind pass */ }</pre>
+          <p class="text-sm">They exist to make a private method public one point at a time. One <span class="mono">resolve&lt;P extends RendererPoint&gt;(point, consumer)</span> — the shape <span class="mono">register</span> already has — replaces all three, and a fifth renderer point stops meaning a fifth method. <span class="mono">resolveBar</span> stays, because it genuinely does more.</p>
+        </article>
+
+        <article class="rounded-lg border border-emerald-200 bg-emerald-50 p-5 space-y-2">
+          <h3 class="font-bold text-emerald-900">Ball-of-mud verdict</h3>
+          <p class="text-sm text-emerald-900">One file, and it is the known one. Everything S5 added <em>outside</em> <span class="mono">gantt-shell.ts</span> is small, single-purpose and independently testable — <span class="mono">registration-table</span> 63 lines, <span class="mono">focus-trap</span> 59, <span class="mono">menu-view</span> 78, <span class="mono">bar-under</span> 22, <span class="mono">decorations</span> 105. The branch has good instincts and acted on them twice (<span class="mono">core-commands.ts</span>, <span class="mono">column-chrome.ts</span>).</p>
+          <p class="text-sm text-emerald-900">The risk is not that the shell is 1,740 lines today. It is that S5 added +866 to it while adding six well-shaped modules around it, which means the shell is where everything that does not fit a new module goes — and S5.10 through S7 all add wiring. The slice's own start constraint says the shell gains <strong>one</strong> wiring list. It has two: the constructor's attachment sequence, and the 200-line plugin-port factory nested inside it.</p>
+        </article>
+      </section>
+
       <section id="top-recommendation" class="space-y-4">
         <h2 class="text-2xl font-serif font-bold">Top recommendation</h2>
         <div class="rounded-lg border-2 border-slate-800 deep text-slate-100 p-7 space-y-3">
@@ -503,7 +600,8 @@ flowchart LR
           <h3 class="text-2xl font-serif font-bold"><a href="#cand-2" class="underline decoration-slate-500">A2 — lift the plugin ports out of the constructor</a>, then <a href="#cand-1" class="underline decoration-slate-500">A1</a> on top of it.</h3>
           <p class="text-slate-300 text-sm">They are one refactor in two moves, and S5.10 is the reason to do them now rather than after. S5.10 adds a second plugin contract (<span class="mono">DatasetPlugin</span>) with four more seams — <span class="mono">fields.register</span>, <span class="mono">store.reserve</span>, <span class="mono">store.read</span>, <span class="mono">setExtender</span>. Land them on today's shape and each costs three edits, two of which are transcription, in a constructor that is already 505 lines. Land A2 first and the shell's plugin surface has a name, a file and a test seam; land A1 and the third edit is gone for good.</p>
           <p class="text-slate-300 text-sm">The repo has already made this call twice on this same branch — <span class="mono">core-commands.ts</span> and <span class="mono">column-chrome.ts</span> both say "split out of GanttShell so it is reviewable and testable on its own". The plugin ports are the same argument, on the largest remaining piece.</p>
-          <p class="text-slate-400 text-xs pt-1">Fix C1 and C2 alongside — both are small, both are in <span class="mono">inlineEditing()</span>, and C2's real fix is A5.</p>
+          <p class="text-slate-300 text-sm"><a href="#pass2-p1" class="underline decoration-slate-500">P1</a> is the same refactor seen from the other side: eleven doc comments in <span class="mono">PluginContextPorts</span> exist only to name the group the flat type erased. Declaring it grouped deletes the comments, the regrouping and the drift together.</p>
+          <p class="text-slate-400 text-xs pt-1">Fix C1 and C2 alongside — both are small, both are in <span class="mono">inlineEditing()</span>, and C2's real fix is A5. Take <a href="#pass2-p2" class="underline decoration-slate-500">P2</a> before an ecosystem exists: today a second kind-defining plugin throws, and the fix is a key change in a table that is already there.</p>
         </div>
       </section>
 
