@@ -429,7 +429,7 @@ export function inlineEditing(options: InlineEditingOptions = {}): GanttPlugin {
        *  focus yet (S5.11 adds roving tabindex, D-S5-25), this opens the first `editable` column of
        *  the selected entry — a pragmatic simplification `s5.11-a11y-completion.md` supersedes. */
       const disposeEnter = ctx.interaction.registerKeyHandler('Enter', () => {
-        const entryId = ctx.gantt.selection[0];
+        const entryId = ctx.gantt.selectedIds[0];
         if (entryId === undefined) return;
         const entry = ctx.dataset.entries.get(entryId);
         if (entry === undefined) return;

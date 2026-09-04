@@ -2099,24 +2099,24 @@ describe('Gantt plugin kind registrations (S5.9, D-S5-21/D-S5-22)', () => {
 });
 
 describe('Gantt selection (S3.1, D-S3-10, [S3-A1])', () => {
-  it('gantt.selection = [id] is live and loose in, branded out', () => {
+  it('gantt.selectedIds = [id] is live and loose in, branded out', () => {
     const container = document.createElement('div');
     const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
     const gantt = new Gantt({ container, dataset });
 
-    gantt.selection = [sampleEntries[0]!.id];
-    expect(gantt.selection).toEqual([entryId(sampleEntries[0]!.id)]);
+    gantt.selectedIds = [sampleEntries[0]!.id];
+    expect(gantt.selectedIds).toEqual([entryId(sampleEntries[0]!.id)]);
 
     gantt.destroy();
   });
 
-  it('selectionEntries resolves selection ids through the bound dataset, in order', () => {
+  it('selectedEntries resolves selectedIds through the bound dataset, in order', () => {
     const container = document.createElement('div');
     const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
     const gantt = new Gantt({ container, dataset });
 
-    gantt.selection = [sampleEntries[1]!.id, sampleEntries[0]!.id];
-    expect(gantt.selectionEntries).toEqual([
+    gantt.selectedIds = [sampleEntries[1]!.id, sampleEntries[0]!.id];
+    expect(gantt.selectedEntries).toEqual([
       dataset.entries.get(sampleEntries[1]!.id),
       dataset.entries.get(sampleEntries[0]!.id),
     ]);
@@ -2124,17 +2124,17 @@ describe('Gantt selection (S3.1, D-S3-10, [S3-A1])', () => {
     gantt.destroy();
   });
 
-  it('selectionEntries skips ids no longer in the store and re-reads field edits', () => {
+  it('selectedEntries skips ids no longer in the store and re-reads field edits', () => {
     const container = document.createElement('div');
     const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
     const gantt = new Gantt({ container, dataset });
-    gantt.selection = [sampleEntries[0]!.id, sampleEntries[1]!.id];
+    gantt.selectedIds = [sampleEntries[0]!.id, sampleEntries[1]!.id];
 
     dataset.entries.remove(sampleEntries[1]!.id);
-    expect(gantt.selectionEntries).toEqual([dataset.entries.get(sampleEntries[0]!.id)]);
+    expect(gantt.selectedEntries).toEqual([dataset.entries.get(sampleEntries[0]!.id)]);
 
     dataset.entries.update(sampleEntries[0]!.id, { name: 'Renamed' });
-    expect(gantt.selectionEntries[0]!.name).toBe('Renamed');
+    expect(gantt.selectedEntries[0]!.name).toBe('Renamed');
 
     gantt.destroy();
   });
@@ -2157,7 +2157,7 @@ describe('Gantt selection (S3.1, D-S3-10, [S3-A1])', () => {
       datasetChanges.push(c);
     });
 
-    gantt.selection = [sampleEntries[0]!.id];
+    gantt.selectedIds = [sampleEntries[0]!.id];
 
     expect(before).toEqual([{ from: [], to: [entryId(sampleEntries[0]!.id)] }]);
     expect(after).toEqual([{ from: [], to: [entryId(sampleEntries[0]!.id)] }]);
@@ -2170,12 +2170,12 @@ describe('Gantt selection (S3.1, D-S3-10, [S3-A1])', () => {
     const container = document.createElement('div');
     const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
     const gantt = new Gantt({ container, dataset });
-    gantt.selection = [sampleEntries[0]!.id];
+    gantt.selectedIds = [sampleEntries[0]!.id];
 
     gantt.on('beforeSelectionChange', () => false);
-    gantt.selection = [sampleEntries[1]!.id];
+    gantt.selectedIds = [sampleEntries[1]!.id];
 
-    expect(gantt.selection).toEqual([entryId(sampleEntries[0]!.id)]);
+    expect(gantt.selectedIds).toEqual([entryId(sampleEntries[0]!.id)]);
 
     gantt.destroy();
   });
@@ -2184,13 +2184,13 @@ describe('Gantt selection (S3.1, D-S3-10, [S3-A1])', () => {
     const container = document.createElement('div');
     const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
     const gantt = new Gantt({ container, dataset });
-    gantt.selection = [sampleEntries[0]!.id];
+    gantt.selectedIds = [sampleEntries[0]!.id];
 
     const after: unknown[] = [];
     gantt.on('selectionChange', (p) => {
       after.push(p);
     });
-    gantt.selection = [sampleEntries[0]!.id];
+    gantt.selectedIds = [sampleEntries[0]!.id];
 
     expect(after).toEqual([]);
 
@@ -2209,7 +2209,7 @@ describe('Gantt selection (S3.1, D-S3-10, [S3-A1])', () => {
     const timeline = container.querySelector<HTMLElement>('.fg-timeline-pane')!;
     timeline.dispatchEvent(new PointerEvent('pointerup', { clientX: 5, clientY: 5 }));
 
-    expect(gantt.selection).toEqual([entryId(sampleEntries[0]!.id)]);
+    expect(gantt.selectedIds).toEqual([entryId(sampleEntries[0]!.id)]);
     expect(bar.dataset['state']).toBe('selected');
 
     document.elementFromPoint = original;
@@ -2259,13 +2259,13 @@ describe('Gantt interactions / capability hot path (S3.2, D-S3-9, [S3-A3]/[S3-A5
     gantt.destroy();
   });
 
-  it('gantt.selection = [id] still accepts a select-incapable id — the setter does not consult can("select") (D-S3-9)', () => {
+  it('gantt.selectedIds = [id] still accepts a select-incapable id — the setter does not consult can("select") (D-S3-9)', () => {
     const container = document.createElement('div');
     const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
     const gantt = new Gantt({ container, dataset, interactions: { select: false } });
 
-    gantt.selection = [sampleEntries[0]!.id];
-    expect(gantt.selection).toEqual([entryId(sampleEntries[0]!.id)]);
+    gantt.selectedIds = [sampleEntries[0]!.id];
+    expect(gantt.selectedIds).toEqual([entryId(sampleEntries[0]!.id)]);
 
     gantt.destroy();
   });
@@ -2281,7 +2281,7 @@ describe('Gantt interactions / capability hot path (S3.2, D-S3-9, [S3-A3]/[S3-A5
     const timeline = container.querySelector<HTMLElement>('.fg-timeline-pane')!;
     timeline.dispatchEvent(new PointerEvent('pointerup', { clientX: 5, clientY: 5 }));
 
-    expect(gantt.selection).toEqual([]);
+    expect(gantt.selectedIds).toEqual([]);
 
     document.elementFromPoint = original;
     gantt.destroy();
@@ -2541,7 +2541,7 @@ describe('Gantt keyboard nudge (S3.5, [S3-A1] keyboard half, D-S3-13)', () => {
 
     const id = entryId(sampleEntries[0]!.id);
     const before = dataset.entries.get(id)!;
-    gantt.selection = [id];
+    gantt.selectedIds = [id];
 
     const beforeEvents: unknown[] = [];
     const afterEvents: unknown[] = [];
@@ -2595,7 +2595,7 @@ describe('Gantt keyboard nudge (S3.5, [S3-A1] keyboard half, D-S3-13)', () => {
 
     const id = entryId(sampleEntries[0]!.id);
     const before = dataset.entries.get(id)!;
-    gantt.selection = [id];
+    gantt.selectedIds = [id];
 
     const afterEvents: { edge: string }[] = [];
     gantt.on('entryResize', (p) => {
@@ -2622,7 +2622,7 @@ describe('Gantt keyboard nudge (S3.5, [S3-A1] keyboard half, D-S3-13)', () => {
 
     const firstId = entryId(sampleEntries[0]!.id);
     const secondId = entryId(sampleEntries[1]!.id);
-    gantt.selection = [firstId];
+    gantt.selectedIds = [firstId];
 
     const datasetChanges: unknown[] = [];
     dataset.on('change', (c) => {
@@ -2631,7 +2631,7 @@ describe('Gantt keyboard nudge (S3.5, [S3-A1] keyboard half, D-S3-13)', () => {
 
     container.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
 
-    expect(gantt.selection).toEqual([secondId]);
+    expect(gantt.selectedIds).toEqual([secondId]);
     expect(datasetChanges).toEqual([]);
 
     gantt.destroy();
@@ -3361,7 +3361,7 @@ describe('plugin registrations live exactly as long as their plugin (#155)', () 
     // D-S5-7: while the plugin is installed, its override wins — core's own select-all never runs.
     gantt.commands.run('freegantt.selectAll');
     expect(hijacked).toBe(1);
-    expect(gantt.selection).toEqual([]);
+    expect(gantt.selectedIds).toEqual([]);
 
     gantt.plugins = [];
     await new Promise((resolve) => requestAnimationFrame(resolve));
@@ -3369,7 +3369,7 @@ describe('plugin registrations live exactly as long as their plugin (#155)', () 
     // Core's own select-all answers the id again — the override went out with its plugin.
     gantt.commands.run('freegantt.selectAll');
     expect(hijacked).toBe(1);
-    expect(gantt.selection).toEqual([sampleEntries[0]!.id]);
+    expect(gantt.selectedIds).toEqual([sampleEntries[0]!.id]);
     expect(() => gantt.commands.run('demo.own')).toThrow(UnknownCommandError);
 
     gantt.destroy();

@@ -164,7 +164,7 @@ export function contextMenu(options: ContextMenuOptions = {}): GanttPlugin {
       document.addEventListener('contextmenu', onContextMenu);
 
       const openAtFocusedRow = (): void => {
-        const selectedId = ctx.gantt.selection[0];
+        const selectedId = ctx.gantt.selectedIds[0];
         const entry = selectedId !== undefined ? ctx.dataset.entries.get(selectedId) : undefined;
         const anchorEl = entry !== undefined ? ctx.view.overlay.elementForEntry(entry.id) : undefined;
         const timeline = ctx.view.overlay.paneBounds.timeline;

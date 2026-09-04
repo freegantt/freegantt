@@ -52,7 +52,7 @@ function logEverything(): GanttPlugin {
     id: 'harness.logEverything',
     setup(ctx) {
       const onSelectionChange = (): void =>
-        writeLog(`selectionChange: ${ctx.gantt.selection.length} selected`);
+        writeLog(`selectionChange: ${ctx.gantt.selectedIds.length} selected`);
       ctx.events.on('selectionChange', onSelectionChange);
       writeLog('logEverything: installed');
       return () => {
@@ -85,7 +85,7 @@ function selectionShortcuts(): GanttPlugin {
         id: 'demo.clearSelection',
         label: 'Clear selection (demo)',
         run: () => {
-          ctx.gantt.selection = [];
+          ctx.gantt.selectedIds = [];
           writeLog('demo.clearSelection: selection cleared (Mod+K)');
         },
       });
@@ -119,7 +119,7 @@ gantt.plugins = [...gantt.plugins, popupDemo()];
 
 const popupBtn = document.querySelector<HTMLButtonElement>('#open-popup-btn')!;
 popupBtn.addEventListener('click', () => {
-  const selected = gantt.selection[0];
+  const selected = gantt.selectedIds[0];
   if (selected === undefined) {
     writeLog('popup demo: select a bar first');
     return;

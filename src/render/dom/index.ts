@@ -279,7 +279,7 @@ export function createDomBackend(options?: DomBackendOptions): RenderBackend<HTM
    *  only the items whose *token* actually changed, same diff-and-touch pattern as `paintedPending`. */
   let paintedDragging: ReadonlySet<ItemId> = new Set();
   let paintedGhost: ReadonlySet<ItemId> = new Set();
-  /** Bug hunt (S5 fixes): `Gantt.selection` is Entry ids — `applyState`'s own selection paint stays
+  /** Bug hunt (S5 fixes): `Gantt.selectedIds` is Entry ids — `applyState`'s own selection paint stays
    *  keyed by `ItemId` (bars can select one segment), so this is the same selection projected onto
    *  `EntryId` for `.fg-row`'s paint (`entryIdOfItem`, not a second selection model). Kept alongside
    *  `paintedSelected` rather than derived inline every `applyState` call, so a syncRows remount

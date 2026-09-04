@@ -408,8 +408,8 @@ describe('inlineEditing() (S5.8, D-S5-19/D-S5-20)', () => {
     const { container: containerA, gantt: ganttA } = makeGantt();
     const { container: containerB, gantt: ganttB } = makeGantt();
 
-    ganttA.selection = ['e1'];
-    ganttB.selection = ['e1'];
+    ganttA.selectedIds = ['e1'];
+    ganttB.selectedIds = ['e1'];
 
     enter(containerB);
     expect(containerB.querySelector('.fg-cell-editor')).not.toBeNull();

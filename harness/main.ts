@@ -91,7 +91,7 @@ const expandAllBtn = document.querySelector<HTMLButtonElement>('#expand-all-btn'
 const collapseAllBtn = document.querySelector<HTMLButtonElement>('#collapse-all-btn')!;
 
 function refreshNameInput(): void {
-  const entries = gantt.selectionEntries;
+  const entries = gantt.selectedEntries;
   if (entries.length === 0) {
     nameInput.value = '';
     return;
@@ -101,14 +101,14 @@ function refreshNameInput(): void {
 }
 
 function refreshMutationButtons(): void {
-  const none = gantt.selectionEntries.length === 0;
+  const none = gantt.selectedEntries.length === 0;
   nameInput.disabled = none;
   renameBtn.disabled = none;
   removeBtn.disabled = none;
 }
 
 function renderSelection(): void {
-  const ids = gantt.selection;
+  const ids = gantt.selectedIds;
   selectionReadout.textContent = ids.length === 0 ? 'Selection: (none)' : `Selection: ${ids.join(', ')}`;
 }
 
@@ -133,7 +133,7 @@ dataset.on('change', ({ changeSet }: DatasetEventMap['change']) => {
 });
 
 renameBtn.addEventListener('click', () => {
-  const entries = gantt.selectionEntries;
+  const entries = gantt.selectedEntries;
   if (entries.length === 0) return;
   attemptMutation(() => {
     dataset.transaction(() => {
@@ -143,7 +143,7 @@ renameBtn.addEventListener('click', () => {
 });
 
 removeBtn.addEventListener('click', () => {
-  const entries = gantt.selectionEntries;
+  const entries = gantt.selectedEntries;
   if (entries.length === 0) return;
   attemptMutation(() => {
     dataset.transaction(() => {
@@ -308,7 +308,7 @@ addEntryBtn.addEventListener('click', () => {
 });
 
 costBtn.addEventListener('click', () => {
-  const entries = gantt.selectionEntries;
+  const entries = gantt.selectedEntries;
   if (entries.length === 0) return;
   attemptMutation(() => {
     dataset.transaction(() => {
@@ -414,7 +414,7 @@ function logEverything(): GanttPlugin {
     id: 'harness.logEverything',
     setup(ctx) {
       const onSelectionChange = (): void =>
-        prependLogLine(log, `selectionChange: ${ctx.gantt.selection.length} selected`);
+        prependLogLine(log, `selectionChange: ${ctx.gantt.selectedIds.length} selected`);
       ctx.events.on('selectionChange', onSelectionChange);
       prependLogLine(log, 'logEverything: installed');
       return () => {
@@ -445,7 +445,7 @@ function selectionShortcuts(): GanttPlugin {
         id: 'demo.clearSelection',
         label: 'Clear selection (demo)',
         run: () => {
-          ctx.gantt.selection = [];
+          ctx.gantt.selectedIds = [];
           prependLogLine(log, 'demo.clearSelection: selection cleared (Mod+K)');
         },
       });
@@ -474,7 +474,7 @@ gantt.plugins = [...gantt.plugins, popupDemo()];
 
 const popupBtn = document.querySelector<HTMLButtonElement>('#open-popup-btn')!;
 popupBtn.addEventListener('click', () => {
-  const selected = gantt.selection[0];
+  const selected = gantt.selectedIds[0];
   if (selected === undefined) {
     prependLogLine(log, 'popup demo: select a bar first');
     return;
