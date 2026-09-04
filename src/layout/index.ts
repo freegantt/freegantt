@@ -17,7 +17,7 @@ export type { Item, ItemProducer, ItemProducerRegistry } from './items/produce-i
 export { createRegistrationTable } from './registration-table.js';
 export type { RegistrationTable } from './registration-table.js';
 export type { FrameColumn, ResolvedColumn, FieldCompare, ColumnAlign } from './column.js';
-export { gridContentWidth } from './column.js';
+export { gridContentWidth, totalColumnWidth } from './column.js';
 export type {
   RowSource,
   EntriesRowSource,

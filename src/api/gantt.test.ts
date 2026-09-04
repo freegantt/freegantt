@@ -868,6 +868,9 @@ describe('Gantt gridWidth and events (S1.8, plans/02 §6)', () => {
       container,
       dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }),
       gridWidth: 160,
+      // Name + Start end at 360, so the 300 below stays clear of #139's ceiling — this test is
+      // about the event pair, not about the cap.
+      gridColumns: ['name', 'start'],
     });
 
     const before: Array<{ from: number; to: number }> = [];
@@ -912,6 +915,89 @@ describe('Gantt minGridWidth (#127)', () => {
     dragSplitter(container, 200, 0);
 
     expect(gantt.gridWidth).toBe(120);
+    gantt.destroy();
+  });
+
+  it('the splitter cannot drag gridWidth past the last column (#139)', () => {
+    const container = document.createElement('div');
+    const gantt = new Gantt({
+      container,
+      dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }),
+      gridWidth: 200,
+      // 240 + 120: the columns end at 360, so that is where the drag stops.
+      gridColumns: ['name', 'start'],
+    });
+
+    dragSplitter(container, 200, 900);
+
+    expect(gantt.gridWidth).toBe(360);
+    gantt.destroy();
+  });
+
+  it('a flex column names no edge, so the splitter drag keeps going (#139)', () => {
+    const container = document.createElement('div');
+    const gantt = new Gantt({
+      container,
+      dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }),
+      gridWidth: 200,
+      gridColumns: [{ field: 'name', flex: 1 }, 'start'],
+    });
+
+    dragSplitter(container, 200, 900);
+
+    expect(gantt.gridWidth).toBe(900);
+    gantt.destroy();
+  });
+
+  it('an explicit gridWidth past the last column is capped to it (#139)', () => {
+    const container = document.createElement('div');
+    const gantt = new Gantt({
+      container,
+      dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }),
+      gridWidth: 200,
+      gridColumns: ['name', 'start'],
+    });
+
+    const changes: Array<{ from: number; to: number }> = [];
+    gantt.on('gridWidthChange', (payload) => {
+      changes.push(payload);
+    });
+    gantt.gridWidth = 900;
+
+    // The change carries the width the pane can actually use, not the one that was asked for.
+    expect(gantt.gridWidth).toBe(360);
+    expect(changes).toEqual([{ from: 200, to: 360 }]);
+    gantt.destroy();
+  });
+
+  it('a constructor gridWidth past the last column comes in before the first paint (#139)', () => {
+    const container = document.createElement('div');
+    const gantt = new Gantt({
+      container,
+      dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }),
+      gridWidth: 900,
+      gridColumns: ['name', 'start'],
+    });
+
+    expect(gantt.gridWidth).toBe(360);
+    expect(container.querySelector<HTMLElement>('.fg-grid-pane')!.style.width).toBe('360px');
+    gantt.destroy();
+  });
+
+  it('hiding a column brings the pane in with it (#139)', async () => {
+    const container = document.createElement('div');
+    const gantt = new Gantt({
+      container,
+      dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }),
+      gridWidth: 360,
+      gridColumns: ['name', 'start'],
+    });
+    expect(gantt.gridWidth).toBe(360);
+
+    gantt.gridColumns = ['name'];
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+
+    expect(gantt.gridWidth).toBe(240);
     gantt.destroy();
   });
 

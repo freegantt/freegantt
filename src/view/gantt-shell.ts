@@ -15,6 +15,7 @@ import {
   createRegistrationTable,
   isPlannedHeaderRow,
   gridContentWidth,
+  totalColumnWidth,
 } from '../layout/index.js';
 import type {
   DateLineSpec,
@@ -864,14 +865,15 @@ export class GanttShell {
     this.#paneSizeAttachment = attachPaneSize(this.#panes.timeline, (size) =>
       this.#applyPaneMeasurement(size),
     );
-    // #127: the splitter proposes a raw px delta; the floor applies here, on the way in, so a drag
-    // cannot reach below `minGridWidth` while a direct `gridWidth` write still says what it means.
+    // #127/#139: the splitter proposes a raw px delta; both bounds apply here, on the way in, so a
+    // drag can reach neither below `minGridWidth` nor past the last column's edge, while a direct
+    // `gridWidth` write still says what it means.
     this.#splitterAttachment = attachSplitter(this.#panes.splitter, {
       readGridWidth: () => this.#paneLayout.gridWidth,
       previewGridWidth: (px) => {
-        this.#paneLayout.gridWidth = this.#aboveMinGridWidth(px);
+        this.#paneLayout.gridWidth = this.#withinSplitterBounds(px);
       },
-      commitGridWidth: (px) => this.#commitGridWidth(this.#aboveMinGridWidth(px)),
+      commitGridWidth: (px) => this.#commitGridWidth(this.#withinSplitterBounds(px)),
     });
     this.#interactions = options.interactions ?? {};
     this.#viewportGestures = options.viewportGestures ?? {};
@@ -1440,9 +1442,12 @@ export class GanttShell {
   }
 
   /** A plain reconfiguration (`plans/02` "Reconfiguration is just assignment") still runs the same
-   *  cancelable commit sequence a splitter drag runs — one write path, one place the veto lives. */
+   *  cancelable commit sequence a splitter drag runs — one write path, one place the veto lives.
+   *  #139 caps it at the columns' own edge: a width past the last column would only be dead space,
+   *  so the change that fires carries the width the pane can actually use. Nothing floors it — an
+   *  explicit `gridWidth = 0` still collapses the pane on purpose (#127). */
   set gridWidth(px: number) {
-    this.#commitGridWidth(px);
+    this.#commitGridWidth(this.#noWiderThanColumns(px));
   }
 
   get minGridWidth(): number {
@@ -1607,6 +1612,8 @@ export class GanttShell {
       { get: (key) => this.#options.dataset.field(key) },
       this.#options.dataset.timeZone,
     );
+    // #139: the columns just changed, so the pane's own ceiling may have come down with them.
+    this.#keepGridWidthWithinColumns();
   }
 
   #columnBind(): ResolveColumnsBind {
@@ -1625,6 +1632,33 @@ export class GanttShell {
    *  explicit `gridWidth = 0` collapses the pane and a vetoed change rolls back to its own width. */
   #aboveMinGridWidth(px: number): number {
     return Math.max(this.#paneLayout.minGridWidth, px);
+  }
+
+  /** #139: the grid pane never sits wider than its own columns, whoever asked — a constructor
+   *  option, a live `gantt.gridWidth = px`, or a splitter drag. There is nothing to show past the
+   *  last column's right edge, so a wider pane is dead space, not a wider view. Narrower is always
+   *  legal: the columns then overflow and the pane scrolls to reach them (#126). A flex column
+   *  names no edge — it fills whatever room it is given, which is the point of asking to flex — so
+   *  a column set holding one has no ceiling at all. */
+  #noWiderThanColumns(px: number): number {
+    const lastColumnEdge = totalColumnWidth(this.#columnChrome.resolvedColumns);
+    return lastColumnEdge === undefined ? px : Math.min(lastColumnEdge, px);
+  }
+
+  /** What a splitter drag is allowed to reach: the #127 floor under the #139 ceiling. The floor
+   *  wins when the two disagree — a pane narrower than `minGridWidth` is a collapsed pane, which is
+   *  the accident #127 closed. */
+  #withinSplitterBounds(px: number): number {
+    return this.#aboveMinGridWidth(this.#noWiderThanColumns(px));
+  }
+
+  /** #139: the ceiling moves whenever the columns do — one is resized, one is hidden, a plugin
+   *  registers one — so it is re-applied after every rebind, through the same cancelable commit
+   *  sequence a splitter drag runs. A pane that already fits its columns is left alone, which is
+   *  every rebind that did not narrow the set. */
+  #keepGridWidthWithinColumns(): void {
+    const capped = this.#noWiderThanColumns(this.#paneLayout.gridWidth);
+    if (capped !== this.#paneLayout.gridWidth) this.#commitGridWidth(capped);
   }
 
   #commitGridWidth(px: number): void {
