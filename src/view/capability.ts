@@ -29,14 +29,11 @@ export interface Capabilities {
 
 /** S5.9, D-S5-22: `ctx.interaction.registerKindDefaults(kind, defaults)` — a plugin's per-kind
  *  answer, one level below a consumer's own `interactions` and one level above the library table
- *  below. Same four gestures as `Interactions`, but a plain boolean only (no predicate) — the
- *  registering plugin does not see a per-entry `entry`, only the `kind` it registered against. */
-export interface KindDefaults {
-  move?: boolean;
-  resize?: boolean;
-  select?: boolean;
-  edit?: boolean;
-}
+ *  below. Same gesture keys as `Interactions`, but a plain boolean only (no predicate) — the
+ *  registering plugin does not see a per-entry `entry`, only the `kind` it registered against.
+ *  Mapped from `Interactions` (#148) so a future gesture key (S7's `linkCreate`) cannot land on
+ *  one interface and be forgotten on the other. */
+export type KindDefaults = { [K in keyof Interactions]?: boolean };
 
 /** The per-kind default table (D-S3-9), read when `interactions` says nothing for that gesture:
  *  `select` always defaults true — I14's hide half is a vacant no-op for it (D-S3-9/D-S3-10); a
