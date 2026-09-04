@@ -67,8 +67,6 @@ import { registerCoreCommands } from './core-commands.js';
 import type { CoreCommandPorts } from './core-commands.js';
 import { Keymap } from '../extensions/keymap.js';
 import type { KeyBinding, KeyEventLike } from '../extensions/keymap.js';
-import type { GridWidthChange, GridColumnsChange, SelectionChange } from './event-bus.js';
-import type { CollapseChange } from './collapse-state.js';
 import { attachScroll } from './scroll-attachment.js';
 import type { ScrollAttachment } from './scroll-attachment.js';
 import { attachPaneSize } from './pane-size-attachment.js';
@@ -191,13 +189,18 @@ const DEFAULT_TODAY_LINE_MARGIN_TICKS = 2;
 
 /** Every `before*` → `*` pair `#proposeChange` runs (D-S5-6): one entry per pair, not one overload
  *  per pair — a future cancelable change adds a line here instead of a new `#proposeChange`
- *  overload. */
+ *  overload. Names only: each name's payload is `GanttEventMap`'s own, never restated here, so a
+ *  `GanttEventMap` edit that this map does not match fails to compile at the call site (#144). */
 interface ProposableChange {
-  beforeCollapseChange: { after: 'collapseChange'; change: CollapseChange };
-  beforeSelectionChange: { after: 'selectionChange'; change: SelectionChange };
-  beforeGridWidthChange: { after: 'gridWidthChange'; change: GridWidthChange };
-  beforeGridColumnsChange: { after: 'gridColumnsChange'; change: GridColumnsChange };
+  beforeCollapseChange: 'collapseChange';
+  beforeSelectionChange: 'selectionChange';
+  beforeGridWidthChange: 'gridWidthChange';
+  beforeGridColumnsChange: 'gridColumnsChange';
 }
+
+/** The `before*` names `#proposeChange` accepts — every key of `ProposableChange` is a
+ *  `GanttEventMap` key too, which is what lets the payload come from `GanttEventMap` alone. */
+type ProposableBefore = keyof ProposableChange & keyof GanttEventMap;
 
 /** What `GanttShell` hands to `options.buildPluginContext` so it can build one plugin's
  *  `PluginContext` (S5.1, D-S5-1) — one closure or value per capability the shell owns. `view/`
@@ -1120,24 +1123,22 @@ export class GanttShell {
 
   /** One `before*` → apply → `*` sequence, for every cancelable Gantt-state change (D-S5-6):
    *  collapse, selection, grid width, grid columns. `ProposableChange` pairs each `before*` name with
-   *  its `*` counterpart and shared payload type — adding a new pair (a future S5.8 event, say) is one
-   *  line there, not a new overload here. */
-  #proposeChange<B extends keyof ProposableChange>(
+   *  its `*` counterpart — adding a new pair (a future S5.8 event, say) is one line there, not a new
+   *  overload here. `change` is the intersection of both events' payloads, so both `emit` calls
+   *  typecheck with no cast: a mismatched pair stops compiling instead of drifting silently (#144). */
+  #proposeChange<B extends ProposableBefore, A extends ProposableChange[B] & keyof GanttEventMap>(
     before: B,
-    after: ProposableChange[B]['after'],
-    change: ProposableChange[B]['change'],
+    after: A,
+    change: GanttEventMap[B] & GanttEventMap[A],
     apply: () => void,
     rollback?: () => void,
   ): boolean {
-    // `ProposableChange` pairs each `before*` key with the `*` key and payload type
-    // `GanttEventMap` already declares for that same pair (see the interface above) — the cast just
-    // restates that link for a generic `B` the compiler cannot chase through two separate maps.
-    if (this.#events.emit(before, change as GanttEventMap[B]) === false) {
+    if (this.#events.emit(before, change) === false) {
       rollback?.();
       return false;
     }
     apply();
-    this.#events.emit(after, change as GanttEventMap[ProposableChange[B]['after']]);
+    this.#events.emit(after, change);
     return true;
   }
 
