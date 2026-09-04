@@ -94,6 +94,44 @@ describe('produceItemsForRow', () => {
     expect(filledItems[0]?.start).not.toBe(filledItems[0]?.end);
   });
 
+  it('[S5.9, D-S5-22] a registered producer draws its own kind; the shipped three are unchanged', () => {
+    const own = createItemProducerRegistry();
+    const t1 = spanEntry('t1', { kind: 'buffer' });
+    own.register('buffer', (entry) => [
+      {
+        id: itemId(entry.id, 0),
+        entryId: entry.id,
+        kind: entry.kind,
+        label: `buffer:${entry.name}`,
+        start: entry.start,
+        end: entry.end,
+      },
+    ]);
+    const items = produceItemsForRow(planned([t1.id]), entryByIdFor([t1]), own);
+    expect(items).toHaveLength(1);
+    expect(items[0]?.label).toBe('buffer:t1');
+    const span = spanEntry('t2');
+    const spanItems = produceItemsForRow(planned([span.id]), entryByIdFor([span]), own);
+    expect(spanItems[0]?.label).toBe('t2');
+  });
+
+  it('register() returns a Disposer that restores the prior producer for that kind', () => {
+    const own = createItemProducerRegistry();
+    const originalSpan = own.producerFor('span');
+    const dispose = own.register('span', () => []);
+    expect(own.producerFor('span')).not.toBe(originalSpan);
+    dispose();
+    expect(own.producerFor('span')).toBe(originalSpan);
+  });
+
+  it('register() on an unregistered kind restores the span fallback on dispose', () => {
+    const own = createItemProducerRegistry();
+    const dispose = own.register('buffer', () => []);
+    expect(own.producerFor('buffer')).not.toBe(own.producerFor('span'));
+    dispose();
+    expect(own.producerFor('buffer')).toBe(own.producerFor('span'));
+  });
+
   it('a header row (kind: header) produces no Items', () => {
     const t1 = spanEntry('t1');
     const header: PlannedRow = {

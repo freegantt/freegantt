@@ -16,7 +16,16 @@ import type { EntryFieldEdit, GanttEvents, Overlay, OverlayHandle } from '../vie
 import type { CommandRegistryOf, KeyBindingOf } from './command.js';
 import type { RendererPoint, RendererFor } from '../layout/index.js';
 import type { DecorationLayer, DecorationProvider } from '../layout/index.js';
-import type { ElementDescription, Entry, EntryId, FieldKey } from '../model/index.js';
+import type { ItemProducer } from '../layout/index.js';
+import type { KindDefaults } from '../view/index.js';
+import type {
+  ElementDescription,
+  Entry,
+  EntryId,
+  EntryKind,
+  FieldKey,
+  GridColumnInput,
+} from '../model/index.js';
 
 // Re-exported for the same reason `Overlay`/`OverlayHandle` are, just below: a plugin author typing
 // a `registerKeyHandler` callback names this.
@@ -83,6 +92,11 @@ export interface PluginContextOf<TGantt = unknown> {
     emitBeforeEntryEdit(payload: EntryFieldEdit): boolean | Promise<boolean>;
     /** S5.8, D-S5-19: raises `entryEdit` after the commit. No veto — nothing to return. */
     emitEntryEdit(payload: EntryFieldEdit): void;
+    /** S5.9, D-S5-22: fills the middle precedence layer `capability.ts` resolves — below the
+     *  consumer's own `interactions`, above the library's per-kind table. `defaults` answers only
+     *  the kinds it names; an omitted gesture still falls through to the library table for `kind`.
+     *  Legal only while `setup` runs (D-S5-4); removed automatically when this plugin is disposed. */
+    registerKindDefaults(kind: EntryKind, defaults: KindDefaults): void;
   };
   view: {
     /** S5.3, D-S5-8: the overlay layer a plugin's own popup, tooltip or menu mounts into — the same
@@ -126,6 +140,22 @@ export interface PluginContextOf<TGantt = unknown> {
      *  ctx.time.eachDay(ctx.span).filter((day) => ctx.time.dayOfWeek(day) >= 6).map((day) => ({
      *  kind: 'rangeBand', start: day, end: ctx.time.addDays(day, 1) })))`. */
     registerDecoration(layer: DecorationLayer, provider: DecorationProvider): void;
+    /** S5.9, D-S5-21: registers `column` on this Gantt's grid, appended after the consumer's own
+     *  `gridColumns` in registration order — a duplicate `field` the consumer's own list already
+     *  names is dropped (config beats a plugin). The Field it names still resolves through the
+     *  ordinary Field registry (`UnknownFieldError`/`FieldNotColumnableError` apply unchanged). Legal
+     *  only while `setup` runs (D-S5-4); removed automatically when this plugin is disposed. */
+    registerGridColumn(column: GridColumnInput): void;
+  };
+  /** S5.9, D-S5-22: the pure layout side of the four-seam kind contract — what shape a
+   *  consumer-defined kind draws. `interaction`/`view` above answer what you can do to it and how it
+   *  looks; `commands` (top of this interface) answers what actions it offers. */
+  layout: {
+    /** Claims the item-shaping producer for `kind`, replacing whichever one `kind` resolved to
+     *  before (the shipped `'span'`/`'group'`/`'milestone'` producers included). `producer` is pure —
+     *  it runs in `layout/`, the same DOM-free pass every other item producer runs in. Legal only
+     *  while `setup` runs (D-S5-4); removed automatically on disposal, restoring the prior producer. */
+    registerItemProducer(kind: EntryKind, producer: ItemProducer): void;
   };
 }
 

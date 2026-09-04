@@ -81,6 +81,11 @@
           background: rgba(255, 255, 255, 0.08);
         }
       }
+      /* S5.9, [S5-A3]: bufferKind()'s own hatched fill (D-S5-15's precedent — "the library never
+         invents one"). Painted by the plugin's own `bar` renderer, a class the plugin owns. */
+      .demo-buffer-bar {
+        background-image: repeating-linear-gradient(45deg, #b08968, #b08968 4px, #dcc9b6 4px, #dcc9b6 8px);
+      }
     </style>
   </head>
   <body>
@@ -103,11 +108,25 @@
       <code>ctx.view.registerDecoration</code> and <code>dataset.time</code>. The checkbox below removes it
       live.
     </p>
+    <p>
+      <code>bufferKind()</code> (S5.9, D-S5-21/D-S5-22, [S5-A3]): a consumer-defined
+      <code>'buffer'</code> kind — <code>harness/plugins/buffer-kind.ts</code>, zero core edits, zero private
+      imports. One plugin claims all four seams: <code>ctx.layout.registerItemProducer</code> (what shape it
+      draws), <code>ctx.view.registerRenderer('bar', …)</code> (the hatched fill),
+      <code>ctx.interaction.registerKindDefaults</code> (no resize handle), and
+      <code>ctx.commands.register</code> (its own right-click item, scoped to the kind by <code>when</code>).
+      Uncheck "Custom milestone + cost renderers" to see the hatch come from the plugin's own registration
+      rather than this page's <code>barRenderer</code> config — same pixels, D-S5-11's "one slot per point" is
+      what changes hands.
+    </p>
     <div id="controls">
       <button id="toggle-plugin-btn" type="button">Install logging plugin</button>
       <button id="open-popup-btn" type="button">Open popup on selected bar</button>
       <label><input id="renderers-toggle" type="checkbox" checked /> Custom milestone + cost renderers</label>
       <label><input id="weekend-shading-toggle" type="checkbox" checked /> Weekend shading</label>
+      <label
+        ><input id="buffer-kind-toggle" type="checkbox" checked /> Buffer kind (right-click for menu)</label
+      >
     </div>
     <div id="gantt"></div>
     <div id="log" aria-label="Plugin event log"></div>

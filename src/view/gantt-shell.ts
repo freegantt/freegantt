@@ -23,6 +23,7 @@ import type {
   TimeScaleFit,
   ViewportHandle,
   ViewPreset,
+  ItemProducer,
   ItemProducerRegistry,
   FieldCompare,
   BarRenderer,
@@ -92,6 +93,7 @@ import type {
   Entry,
   EntryEdits,
   EntryId,
+  EntryKind,
   FieldContext,
   FieldKey,
   GridColumnInput,
@@ -103,7 +105,7 @@ import type {
 } from '../model/index.js';
 import type { EditExtender } from '../data/edit-extension.js';
 import { resolveCapabilities } from './capability.js';
-import type { Capabilities, Interactions } from './capability.js';
+import type { Capabilities, Interactions, KindDefaults } from './capability.js';
 import { subscribeToDatasetChanges } from './dataset-change-subscription.js';
 import type { DatasetChangeSubscription } from './dataset-change-subscription.js';
 import { FrameScheduler } from './frame-scheduler.js';
@@ -337,6 +339,18 @@ export interface GanttShellOptions {
     emitBeforeEntryEdit: (payload: EntryFieldEdit) => boolean | Promise<boolean>;
     /** S5.8, D-S5-19: `ctx.interaction.emitEntryEdit`. */
     emitEntryEdit: (payload: EntryFieldEdit) => void;
+    /** S5.9, D-S5-22: `ctx.layout.registerItemProducer`. Legal only while `setup` runs (D-S5-4);
+     *  removed automatically on disposal, restoring whichever producer `kind` resolved to before
+     *  (`ItemProducerRegistry.register`'s own `Disposer`). */
+    registerItemProducer: (kind: EntryKind, producer: ItemProducer) => void;
+    /** S5.9, D-S5-22: `ctx.interaction.registerKindDefaults` — the middle precedence layer between
+     *  the consumer's own `interactions` and the library table (`capability.ts`). Legal only while
+     *  `setup` runs; removed automatically on disposal. */
+    registerKindDefaults: (kind: EntryKind, defaults: KindDefaults) => void;
+    /** S5.9, D-S5-21: `ctx.view.registerGridColumn` — appended after the consumer's own
+     *  `gridColumns`, in registration order. Legal only while `setup` runs; removed automatically
+     *  on disposal. */
+    registerGridColumn: (column: GridColumnInput) => void;
   }) => unknown;
   /** S5.2, D-S5-6: fills the api-level pieces of a `CommandContext` for the same reason
    *  `buildPluginContext` above fills `PluginContext`'s — the full api `Dataset` (with `undo`/`redo`)
@@ -408,6 +422,12 @@ export class GanttShell {
   #viewportGestures: ViewportGestures = {};
   #resolvedViewportGestures = resolveViewportGestures(undefined);
   #capabilities: Capabilities;
+  /** S5.9, D-S5-22: `ctx.interaction.registerKindDefaults` — the middle precedence layer
+   *  `resolveCapabilities` reads between the consumer's own `interactions` and the library table.
+   *  One plugin's registration per kind (the last write for a kind wins, mirroring
+   *  `#itemProducerRegistry`'s own `register` — a second plugin re-registering the same kind is a
+   *  deliberate override, not an error). */
+  #kindDefaults = new Map<EntryKind, KindDefaults>();
   /** The raw hit under the pointer, reported by `EntrySelectionContext.setHovered` — undefined on
    *  pointerleave or when nothing is wired (no `entryGestures` attachment). */
   #hoveredItemId: ItemId | undefined;
@@ -686,6 +706,44 @@ export class GanttShell {
       const emitEntryEdit = (payload: EntryFieldEdit): void => {
         this.#events.emit('entryEdit', payload);
       };
+      // S5.9, D-S5-22: same one-shot gate as `registerRenderer`/`registerDecoration`; disposal
+      // restores whichever producer `kind` resolved to before, via the registry's own `Disposer`
+      // (`ItemProducerRegistry.register`), not a bespoke undo kept here.
+      const registerItemProducer = (kind: EntryKind, producer: ItemProducer): void => {
+        gate.assertOpen();
+        const restore = this.#itemProducerRegistry.register(kind, producer);
+        // `#layout`'s own per-row item cache (`FrameMemory#packed`) only forgets a row on a dataset
+        // change, row-count change, or metrics change — none of which a producer registration is.
+        // Force every row to re-produce on the next render, the same invalidation a collapse change
+        // or a gridColumns commit already asks for; the same on the way out, so disposal's own
+        // restored producer actually repaints too.
+        this.#layout.invalidateFrom(0);
+        this.#frames.request();
+        disposables.add(() => {
+          restore();
+          this.#layout.invalidateFrom(0);
+          this.#frames.request();
+        });
+      };
+      // S5.9, D-S5-22: same gate; disposal drops `kind` back out of `#kindDefaults` and re-resolves
+      // capabilities, the same way `set interactions` already does for a live config change.
+      const registerKindDefaults = (kind: EntryKind, defaults: KindDefaults): void => {
+        gate.assertOpen();
+        this.#kindDefaults.set(kind, defaults);
+        this.#capabilities = this.#resolveCapabilities();
+        this.#refreshAffordances();
+        disposables.add(() => {
+          this.#kindDefaults.delete(kind);
+          this.#capabilities = this.#resolveCapabilities();
+          this.#refreshAffordances();
+        });
+      };
+      // S5.9, D-S5-21: same gate; disposal removes `column` from `ColumnChrome`'s own plugin list
+      // via its `registerPluginColumn`'s `Disposer`.
+      const registerGridColumn = (column: GridColumnInput): void => {
+        gate.assertOpen();
+        disposables.add(this.#columnChrome.registerPluginColumn(column));
+      };
       const context = (options.buildPluginContext ?? (() => ({})))({
         events: this.#pluginEvents,
         disposables,
@@ -701,6 +759,9 @@ export class GanttShell {
         canEdit,
         emitBeforeEntryEdit,
         emitEntryEdit,
+        registerItemProducer,
+        registerKindDefaults,
+        registerGridColumn,
       });
       return { context, disposables, registrationGate: gate };
     });
@@ -751,9 +812,7 @@ export class GanttShell {
     this.#interactions = options.interactions ?? {};
     this.#viewportGestures = options.viewportGestures ?? {};
     this.#resolvedViewportGestures = resolveViewportGestures(this.#viewportGestures);
-    this.#capabilities = resolveCapabilities(this.#interactions, (kind) =>
-      this.#options.dataset.isRollUpKind(kind),
-    );
+    this.#capabilities = this.#resolveCapabilities();
     this.#treeCollapse = new TreeCollapse({
       plannedRows: () => this.#layout.plannedRows(),
       entries: () => this.#options.dataset.entries.all,
@@ -1106,10 +1165,19 @@ export class GanttShell {
    *  waiting for the next pointer move. */
   set interactions(next: Interactions) {
     this.#interactions = next;
-    this.#capabilities = resolveCapabilities(this.#interactions, (kind) =>
-      this.#options.dataset.isRollUpKind(kind),
-    );
+    this.#capabilities = this.#resolveCapabilities();
     this.#refreshAffordances();
+  }
+
+  /** S5.9, D-S5-22: the one place `resolveCapabilities` is called — the constructor, `set
+   *  interactions`, and `registerKindDefaults`'s own gate all re-derive from here rather than
+   *  repeating the three-argument call. */
+  #resolveCapabilities(): Capabilities {
+    return resolveCapabilities(
+      this.#interactions,
+      (kind) => this.#options.dataset.isRollUpKind(kind),
+      (kind) => this.#kindDefaults.get(kind),
+    );
   }
 
   get viewportGestures(): ViewportGestures {
@@ -1457,7 +1525,9 @@ export class GanttShell {
   #bindColumns(): void {
     const bound = resolveGanttFields(
       this.#options.dataset,
-      this.#columnChrome.gridColumnInput,
+      // S5.9, D-S5-21: the consumer's own columns plus every plugin-registered one it does not
+      // already name — `ctx.view.registerGridColumn`'s own effect reaches rendering here.
+      this.#columnChrome.effectiveInput(),
       this.#columnBind(),
     );
     this.#columnChrome.setResolvedColumns(bound.columns);

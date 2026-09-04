@@ -240,6 +240,7 @@ export class Gantt {
           canEdit: parts.canEdit,
           emitBeforeEntryEdit: parts.emitBeforeEntryEdit,
           emitEntryEdit: parts.emitEntryEdit,
+          registerKindDefaults: parts.registerKindDefaults,
         },
         view: {
           overlay: parts.overlay,
@@ -249,6 +250,10 @@ export class Gantt {
           resolveTooltipColumns: parts.resolveTooltipColumns,
           registerDecoration: parts.registerDecoration,
           isColumnEditable: parts.isColumnEditable,
+          registerGridColumn: parts.registerGridColumn,
+        },
+        layout: {
+          registerItemProducer: parts.registerItemProducer,
         },
       }),
       buildCommandContext: (parts): CommandContext => ({

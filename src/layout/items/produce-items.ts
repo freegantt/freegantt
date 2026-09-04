@@ -3,7 +3,7 @@
 // and an agent learn one name. Header rows (`kind: 'header'`) produce no Items.
 
 import { itemId } from '../../model/index.js';
-import type { Entry, EntryId, EntryKind, ItemId, Instant } from '../../model/index.js';
+import type { Disposer, Entry, EntryId, EntryKind, ItemId, Instant } from '../../model/index.js';
 import type { PlannedRow } from '../rows/row-source.js';
 import { isPlannedHeaderRow } from '../rows/row-source.js';
 
@@ -16,7 +16,7 @@ export interface Item {
   end: Instant;
 }
 
-type ItemProducer = (entry: Entry) => readonly Item[];
+export type ItemProducer = (entry: Entry) => readonly Item[];
 
 function wholeEntryItem(entry: Entry, end: Instant): Item {
   return {
@@ -32,6 +32,12 @@ function wholeEntryItem(entry: Entry, end: Instant): Item {
 export interface ItemProducerRegistry {
   /** The producer for `kind`, or the `'span'` producer when nothing is registered. Never throws. */
   producerFor(kind: EntryKind): ItemProducer;
+  /** S5.9, D-S5-22: `ctx.layout.registerItemProducer(kind, producer)` — a plugin claiming what
+   *  shape a consumer-defined kind draws. Replaces whichever producer `kind` resolved to before
+   *  (the shipped three included — a plugin may re-skin `'span'` itself). The returned `Disposer`
+   *  restores that prior producer, the same "undo on plugin disposal" every other `register*`
+   *  gives (D-S5-4). */
+  register(kind: EntryKind, producer: ItemProducer): Disposer;
 }
 
 function produceSpanItems(entry: Entry): readonly Item[] {
@@ -72,6 +78,14 @@ export function createItemProducerRegistry(
   return {
     producerFor(kind) {
       return producers.get(kind) ?? produceSpanItems;
+    },
+    register(kind, producer) {
+      const previous = producers.get(kind);
+      producers.set(kind, producer);
+      return () => {
+        if (previous === undefined) producers.delete(kind);
+        else producers.set(kind, previous);
+      };
     },
   };
 }

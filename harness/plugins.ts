@@ -1,8 +1,9 @@
 import './harness-nav.ts';
-import { Gantt, Dataset, createPopup, itemId, entryId } from '../src/api/index.js';
+import { Gantt, Dataset, createPopup, itemId, entryId, contextMenu } from '../src/api/index.js';
 import type { GanttPlugin, Popup, RendererByKind, CellRenderer } from '../src/api/index.js';
 import { sampleEntries } from '../fixtures/sample-dataset.js';
 import { weekendShading } from './plugins/weekend-shading.js';
+import { bufferKind } from './plugins/buffer-kind.js';
 
 // S5.4's visible-acceptance box (s5.4-renderers.md §4, D-S5-10/11/12): a milestone diamond and a
 // red over-budget cost cell, painted through `barRenderer`/`cellRenderer` alone — no bespoke
@@ -12,6 +13,7 @@ const BUDGET_THRESHOLD = 1000;
 // both into view together, no scrolling needed to see the acceptance box's two renderers at once.
 const MILESTONE_ENTRY_ID = 'entry-39'; // "Launch" — already a single-day span, a natural milestone.
 const OVER_BUDGET_ENTRY_ID = 'entry-38'; // "Go/no-go review" — given a cost above the threshold below.
+const BUFFER_ENTRY_ID = 'entry-37'; // [S5-A3]: recast as bufferKind()'s own kind, below.
 
 const dataset = new Dataset({
   timeZone: 'UTC',
@@ -26,6 +28,7 @@ const dataset = new Dataset({
   entries: sampleEntries.map((entry) => {
     if (entry.id === MILESTONE_ENTRY_ID) return { ...entry, kind: 'milestone' as const };
     if (entry.id === OVER_BUDGET_ENTRY_ID) return { ...entry, meta: { cost: 1500 } };
+    if (entry.id === BUFFER_ENTRY_ID) return { ...entry, kind: 'buffer' };
     return entry;
   }),
 });
@@ -152,11 +155,17 @@ function overBudget(formatted: string): boolean {
 // whatever a `barRenderer` paints. Its `::before` reads the `--fg-bar-fill` custom property, which
 // inherits from this bar node, so recoloring the diamond (rather than fighting its shape) is what a
 // `style` write actually reaches; `demo-milestone`'s own class carries the rest (the label below).
+// S5.9: `buffer` paints the same hatch class `bufferKind()`'s own `ctx.view.registerRenderer('bar',
+// …)` registers (harness/plugins/buffer-kind.ts) — named here too because D-S5-11's "one slot per
+// point" means this Gantt-wide `barRenderer` (a consumer's own config) wins over *every* kind the
+// plugin's registration would otherwise paint, not only `milestone`. Uncheck this toggle to see the
+// plugin's own registration take over instead — same pixels, different source.
 const demoBarRenderer: RendererByKind = {
   milestone: () => ({
     class: { 'demo-milestone': true },
     style: { '--fg-bar-fill': '#7b2cbf' },
   }),
+  buffer: () => ({ class: { 'demo-buffer-bar': true } }),
 };
 const demoCellRenderer: CellRenderer = ({ column, value }) =>
   column.key === 'cost' && overBudget(value)
@@ -191,5 +200,25 @@ weekendToggle.addEventListener('change', () => {
   } else {
     gantt.plugins = gantt.plugins.filter((plugin) => plugin.id !== 'demo.weekendShading');
     writeLog('weekendShading: removed');
+  }
+});
+
+// S5.9, D-S5-21/D-S5-22, [S5-A3]: bufferKind() is written against the public surface alone
+// ('freegantt', harness/plugins/buffer-kind.ts) — no core edit, no private import. contextMenu()
+// installs alongside it so the plugin's own menu item is reachable by right-click. Installed from
+// the start; the checkbox removes both live through the same gantt.plugins assignment every other
+// plugin toggle on this page already uses (I8: no remount).
+gantt.plugins = [...gantt.plugins, contextMenu(), bufferKind()];
+
+const bufferKindToggle = document.querySelector<HTMLInputElement>('#buffer-kind-toggle')!;
+bufferKindToggle.addEventListener('change', () => {
+  if (bufferKindToggle.checked) {
+    gantt.plugins = [...gantt.plugins, contextMenu(), bufferKind()];
+    writeLog('bufferKind: installed');
+  } else {
+    gantt.plugins = gantt.plugins.filter(
+      (plugin) => plugin.id !== 'demo.bufferKind' && plugin.id !== 'freegantt.contextMenu',
+    );
+    writeLog('bufferKind: removed');
   }
 });

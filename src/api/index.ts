@@ -71,7 +71,7 @@ export type {
   EntryFieldEdit,
 } from '../view/index.js';
 // S3, D-S3-9: `Gantt.interactions`'s own type and the per-gesture rule shape (`view/capability.ts`).
-export type { CapabilityRule, Interactions } from '../view/index.js';
+export type { CapabilityRule, Interactions, KindDefaults } from '../view/index.js';
 // S5.3, D-S5-8: `PluginContext.view.overlay`'s own type — a plugin builds a `Popup` (or its own
 // primitive) against this alone, never against `view/` or `render/` directly.
 export type { Overlay, OverlayHandle } from '../view/index.js';
@@ -219,6 +219,10 @@ export type {
   RangeBand,
   RowStripe,
 } from '../layout/index.js';
+// S5.9, D-S5-22: `ctx.layout.registerItemProducer(kind, producer)`'s own vocabulary — a plugin
+// author naming `ItemProducer` explicitly, the same reason `BarRenderer`/`DecorationProvider` above
+// are exported rather than left to structural inference.
+export type { Item, ItemProducer } from '../layout/index.js';
 
 // Time helpers a caller needs: `instant` for a pinned `TimeSpan`, `now` for "this Instant",
 // `addMs`/`MS` to shift one by a duration (S2.7 harness-review — `harness/data.ts`'s move-by-a-day

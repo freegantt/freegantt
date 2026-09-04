@@ -8,6 +8,8 @@ import {
   ScrollModel,
   TimeScaleModel,
   entryId,
+  itemId,
+  contextMenu,
 } from './index.js';
 import type { Entry, PluginContext } from './index.js';
 import { sampleEntries } from '../../fixtures/sample-dataset.js';
@@ -1346,6 +1348,284 @@ describe('Gantt renderer callbacks (S5.4, D-S5-10/11/12)', () => {
       cause = (error as { cause?: unknown }).cause;
     }
     expect(cause).toBeInstanceOf(RendererAlreadyRegisteredError);
+  });
+});
+
+describe('Gantt plugin kind registrations (S5.9, D-S5-21/D-S5-22)', () => {
+  it("ctx.layout.registerItemProducer draws a registered kind's own shape; disposal restores the fallback", async () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({
+      entries: [{ ...sampleEntries[0]!, kind: 'buffer' }],
+      timeZone: 'UTC',
+    });
+    const gantt = new Gantt({
+      container,
+      dataset,
+      plugins: [
+        {
+          id: 'demo.bufferProducer',
+          setup(ctx) {
+            ctx.layout.registerItemProducer('buffer', (entry) => [
+              {
+                id: itemId(entry.id, 0),
+                entryId: entry.id,
+                kind: entry.kind,
+                label: `buffer: ${entry.name}`,
+                start: entry.start,
+                end: entry.end,
+              },
+            ]);
+            return () => {};
+          },
+        },
+      ],
+    });
+    // The plugin's own registration runs after GanttShell's first render (`Gantt.plugins`'s
+    // constructor-time assignment lands after `new GanttShell(...)` returns) — its own
+    // `#frames.request()` schedules the repaint, one rAF away.
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+
+    const bar = container.querySelector<HTMLElement>('.fg-bar')!;
+    expect(bar.textContent).toBe(`buffer: ${sampleEntries[0]!.name}`);
+
+    gantt.plugins = [];
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    expect(container.querySelector<HTMLElement>('.fg-bar')!.textContent).toBe(sampleEntries[0]!.name);
+
+    gantt.destroy();
+  });
+
+  it('ctx.interaction.registerKindDefaults refuses resize for its own kind; disposal restores the library default', () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({
+      entries: [{ ...sampleEntries[0]!, kind: 'buffer' }],
+      timeZone: 'UTC',
+    });
+    const gantt = new Gantt({
+      container,
+      dataset,
+      plugins: [
+        {
+          id: 'demo.bufferDefaults',
+          setup(ctx) {
+            ctx.interaction.registerKindDefaults('buffer', { resize: false });
+            return () => {};
+          },
+        },
+      ],
+    });
+
+    const bar = container.querySelector<HTMLElement>('.fg-bar')!;
+    const timeline = container.querySelector<HTMLElement>('.fg-timeline-pane')!;
+    const original = document.elementFromPoint.bind(document);
+    document.elementFromPoint = (x: number, y: number) => (x === 5 && y === 5 ? bar : original(x, y));
+    timeline.dispatchEvent(new PointerEvent('pointermove', { clientX: 5, clientY: 5 }));
+
+    let start = container.querySelector<HTMLElement>('.fg-bar-handle[data-edge="start"]')!;
+    expect(start.hidden).toBe(true);
+    expect(bar.hasAttribute('data-movable')).toBe(true);
+
+    gantt.plugins = [];
+    timeline.dispatchEvent(new PointerEvent('pointermove', { clientX: 5, clientY: 5 }));
+    start = container.querySelector<HTMLElement>('.fg-bar-handle[data-edge="start"]')!;
+    expect(start.hidden).toBe(false);
+
+    document.elementFromPoint = original;
+    gantt.destroy();
+  });
+
+  it("the consumer's own interactions still wins over a registered kind default", () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({
+      entries: [{ ...sampleEntries[0]!, kind: 'buffer' }],
+      timeZone: 'UTC',
+    });
+    const gantt = new Gantt({
+      container,
+      dataset,
+      interactions: { resize: true },
+      plugins: [
+        {
+          id: 'demo.bufferDefaults',
+          setup(ctx) {
+            ctx.interaction.registerKindDefaults('buffer', { resize: false });
+            return () => {};
+          },
+        },
+      ],
+    });
+
+    const bar = container.querySelector<HTMLElement>('.fg-bar')!;
+    const timeline = container.querySelector<HTMLElement>('.fg-timeline-pane')!;
+    const original = document.elementFromPoint.bind(document);
+    document.elementFromPoint = (x: number, y: number) => (x === 5 && y === 5 ? bar : original(x, y));
+    timeline.dispatchEvent(new PointerEvent('pointermove', { clientX: 5, clientY: 5 }));
+
+    const start = container.querySelector<HTMLElement>('.fg-bar-handle[data-edge="start"]')!;
+    expect(start.hidden).toBe(false);
+
+    document.elementFromPoint = original;
+    gantt.destroy();
+  });
+
+  it('ctx.view.registerGridColumn appends after the consumer’s own gridColumns; disposal removes it', async () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      fieldTypes: {
+        risk: { rollUp: 'max', column: { header: 'Risk' } },
+      },
+      fields: [{ key: 'risk', type: 'risk' }],
+      entries: [{ ...sampleEntries[0]!, meta: { risk: 'high' } }],
+    });
+    const gantt = new Gantt({
+      container,
+      dataset,
+      gridColumns: ['name'],
+      plugins: [
+        {
+          id: 'demo.riskColumn',
+          setup(ctx) {
+            ctx.view.registerGridColumn({ field: 'risk' });
+            return () => {};
+          },
+        },
+      ],
+    });
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+
+    const firstRow = container.querySelector<HTMLElement>('.fg-row')!;
+    const fields = Array.from(firstRow.querySelectorAll('.fg-row-label, .fg-row-cell')).map((cell) =>
+      cell.getAttribute('data-field'),
+    );
+    expect(fields).toEqual(['name', 'risk']);
+    // the raw, consumer-authored list is untouched by the plugin's append (D-S5-21).
+    expect(gantt.gridColumns).toEqual(['name']);
+
+    gantt.plugins = [];
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    const fieldsAfter = Array.from(container.querySelectorAll('.fg-row-label, .fg-row-cell')).map((cell) =>
+      cell.getAttribute('data-field'),
+    );
+    expect(fieldsAfter).toEqual(['name']);
+
+    gantt.destroy();
+  });
+
+  it('a duplicate field the consumer already names is dropped from the plugin side (config beats a plugin)', () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({ timeZone: 'UTC', entries: sampleEntries.slice(0, 1) });
+    const gantt = new Gantt({
+      container,
+      dataset,
+      gridColumns: ['name'],
+      plugins: [
+        {
+          id: 'demo.duplicateColumn',
+          setup(ctx) {
+            ctx.view.registerGridColumn({ field: 'name', header: 'Plugin name' });
+            return () => {};
+          },
+        },
+      ],
+    });
+
+    const firstRow = container.querySelector<HTMLElement>('.fg-row')!;
+    expect(firstRow.querySelectorAll('.fg-row-label, .fg-row-cell')).toHaveLength(1);
+
+    gantt.destroy();
+  });
+
+  it('[S5-A3] a consumer-defined kind renders, refuses resize, and offers its own menu item — one plugin, zero core edits', async () => {
+    const container = document.createElement('div');
+    document.body.append(container);
+    const dataset = new Dataset({
+      entries: [{ ...sampleEntries[0]!, kind: 'buffer' }, { ...sampleEntries[1]! }],
+      timeZone: 'UTC',
+    });
+    const gantt = new Gantt({
+      container,
+      dataset,
+      plugins: [
+        contextMenu(),
+        {
+          id: 'demo.bufferKind',
+          setup(ctx) {
+            ctx.layout.registerItemProducer('buffer', (entry) => [
+              {
+                id: itemId(entry.id, 0),
+                entryId: entry.id,
+                kind: entry.kind,
+                label: entry.name,
+                start: entry.start,
+                end: entry.end,
+              },
+            ]);
+            ctx.view.registerRenderer('bar', { buffer: () => ({ class: { 'demo-buffer-bar': true } }) });
+            ctx.interaction.registerKindDefaults('buffer', { resize: false });
+            ctx.commands.register({
+              id: 'demo.bufferKind.markConsumed',
+              label: 'Mark buffer consumed',
+              when: ({ entry }) => entry?.kind === 'buffer',
+              run: () => {},
+            });
+            return () => {};
+          },
+        },
+      ],
+    });
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+
+    const bars = Array.from(container.querySelectorAll<HTMLElement>('.fg-bar'));
+    const bufferBar = bars.find((bar) => bar.getAttribute('data-kind') === 'buffer')!;
+    const spanBar = bars.find((bar) => bar.getAttribute('data-kind') !== 'buffer')!;
+    expect(bufferBar.classList.contains('demo-buffer-bar')).toBe(true);
+
+    bufferBar.dispatchEvent(
+      new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 5, clientY: 5 }),
+    );
+    const bufferMenuLabels = Array.from(container.querySelectorAll('.fg-menu-item')).map(
+      (item) => item.textContent,
+    );
+    expect(bufferMenuLabels).toContain('Mark buffer consumed');
+
+    spanBar.dispatchEvent(
+      new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 5, clientY: 5 }),
+    );
+    const spanMenuLabels = Array.from(container.querySelectorAll('.fg-menu-item')).map(
+      (item) => item.textContent,
+    );
+    expect(spanMenuLabels).not.toContain('Mark buffer consumed');
+
+    const timeline = container.querySelector<HTMLElement>('.fg-timeline-pane')!;
+    const original = document.elementFromPoint.bind(document);
+    document.elementFromPoint = (x: number, y: number) => (x === 5 && y === 5 ? bufferBar : original(x, y));
+    timeline.dispatchEvent(new PointerEvent('pointermove', { clientX: 5, clientY: 5 }));
+    const start = container.querySelector<HTMLElement>('.fg-bar-handle[data-edge="start"]')!;
+    expect(start.hidden).toBe(true);
+
+    document.elementFromPoint = original;
+    gantt.destroy();
+    container.remove();
+  });
+
+  it("[S5-A3] the 'buffer' kind lives in harness/plugins/buffer-kind.ts alone — no src/ non-test file names it", async () => {
+    const { readFileSync, readdirSync, statSync } = await import('node:fs');
+    const path = await import('node:path');
+    const root = path.resolve(import.meta.dirname, '../..');
+    const files: string[] = [];
+    const walk = (dir: string): void => {
+      for (const entry of readdirSync(dir)) {
+        const full = path.join(dir, entry);
+        if (statSync(full).isDirectory()) walk(full);
+        else if (entry.endsWith('.ts') && !entry.endsWith('.test.ts')) files.push(full);
+      }
+    };
+    walk(path.join(root, 'src'));
+    // The bare word "buffer" is ordinary English (a culling buffer, a scroll buffer) — the claim is
+    // narrower: no file names the kind *as a string literal*, `'buffer'`/`"buffer"`.
+    const hits = files.filter((file) => /['"]buffer['"]/.test(readFileSync(file, 'utf8')));
+    expect(hits.map((file) => path.relative(root, file))).toEqual([]);
   });
 });
 
