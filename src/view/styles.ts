@@ -157,7 +157,14 @@ ${DARK_COLOR_TOKENS}
    CSS box and layout's clamp input stay one Token. The 1px in the calc is this rule's border-left. */
 .fg-tick { color: var(--fg-header-subtext); position: absolute; top: 0; left: 0; height: var(--fg-band-height, 20px); line-height: var(--fg-band-height, 20px); box-sizing: border-box; padding: 0 calc((var(--fg-tick-box-floor, ${DEFAULT_TICK_BOX_FLOOR_PX}px) - 1px) / 2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-left: 1px solid var(--fg-header-divider-color); }
 .fg-row { background: var(--fg-row-even-bg); position: absolute; top: 0; left: 0; width: 100%; display: flex; align-items: stretch; --fg-row-depth: 0; }
-.fg-row:nth-child(odd) { background: var(--fg-row-odd-bg); }
+/* Row parity comes from the frame's absolute row index (render/dom's rowParity), stamped as
+   data-parity — not from :nth-child, which counts only the windowed rows and slides the whole zebra
+   out of phase as soon as the pane scrolls. .fg-row-band is the timeline pane's copy of the same
+   paint, from the same FrameRow, so the two panes stripe the same rows in both themes. */
+.fg-row[data-parity='odd'], .fg-row-band[data-parity='odd'] { background: var(--fg-row-odd-bg); }
+.fg-row[data-parity='even'], .fg-row-band[data-parity='even'] { background: var(--fg-row-even-bg); }
+.fg-row-bands { position: relative; }
+.fg-row-band { position: absolute; top: 0; left: 0; width: 100%; pointer-events: none; }
 .fg-row-label, .fg-row-cell { color: var(--fg-row-label-color); display: flex; align-items: center; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; box-sizing: border-box; flex: var(--fg-col-flex, 1) 1 0; padding-inline-end: var(--fg-cell-padding-inline, 8px); padding-block: var(--fg-cell-padding-block, 4px); }
 .fg-row[data-matched='false'] .fg-row-label, .fg-row[data-matched='false'] .fg-row-cell { color: var(--fg-row-unmatched-label-color); }
 /* Bug hunt (S5 fixes): a grid row's own selection paint (CONTEXT.md Parts/State) — a background, not
