@@ -71,6 +71,11 @@ export default tseslint.config(
     // `build`, a second `verify` would otherwise lint the first one's output. `.gitignore` and
     // `.prettierignore` already exclude it; this closes the same gap for lint.
     //
+    // .claude/worktrees/** is a concurrent agent's own git worktree, checked out under the repo root
+    // (`.git/info/exclude` already keeps it out of git) — not ours to lint, and ESLint's flat config
+    // walks the filesystem directly, so a git-only ignore rule does not stop it from being scanned.
+    // Same gap `.prettierignore`'s own `.claude/worktrees` entry closes.
+    //
     // NOTE: these are ignore paths for non-source artifacts. No lint rule, layer allow-list, or
     // severity is relaxed by this entry — the I1/I10/I12 rule set below is unchanged.
     ignores: [
@@ -80,6 +85,7 @@ export default tseslint.config(
       'test/fixtures/violations/**',
       'eslint/rules/fixtures/**',
       '.agents/skills/**',
+      '.claude/worktrees/**',
     ],
   },
   js.configs.recommended,
