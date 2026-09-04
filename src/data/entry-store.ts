@@ -8,7 +8,15 @@
 // mint one themselves; they run their body through `runTransaction`, which auto-wraps when none is
 // open and joins one already open (D-S2-8) — the same entry point `DatasetState.transaction()` uses.
 
-import type { Entry, EntryId, EntryInput, EntryEdit, FieldContext, FieldKey } from '../model/index.js';
+import type {
+  Entry,
+  EntryId,
+  EntryInput,
+  EntryEdit,
+  FieldContext,
+  FieldKey,
+  FieldValue,
+} from '../model/index.js';
 import {
   entryId,
   DuplicateEntryIdError,
@@ -132,12 +140,18 @@ export class EntryStore implements EntryStoreContract {
     return size;
   }
 
-  fieldValue<T>(id: EntryId | string, field: FieldKey): T | undefined {
+  /** The store is monomorphic — it never learns one consumer's field map — so the open default
+   *  (`Record<string, unknown>`) is what it can promise here. `api/dataset.ts` re-types the whole
+   *  store to the caller's `TFields` at the façade, in the one trusted cast documented there. */
+  fieldValue<K extends FieldKey>(
+    id: EntryId | string,
+    field: K,
+  ): FieldValue<Record<string, unknown>, K> | undefined {
     const key = String(field);
     if (!this.#registry.has(key)) throw new UnknownFieldError(key);
     const entry = this.get(id);
     if (!entry) throw new EntryNotFoundError(entryId(id), 'entries.fieldValue');
-    return this.#fieldContext.read<T>(entry, field);
+    return this.#fieldContext.read(entry, field) as FieldValue<Record<string, unknown>, K> | undefined;
   }
 
   /** Children of an entry, in insertion order. An entry with no children returns an empty array. */

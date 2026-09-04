@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { entryId, rowId } from '../../model/index.js';
-import type { Entry, FieldContext, Instant } from '../../model/index.js';
+import type { CoreFieldValue, Entry, FieldContext, FieldKey, Instant } from '../../model/index.js';
 import { applyFilter } from './filter.js';
 import { resolveEntriesSource } from './entries-source.js';
 
@@ -68,9 +68,9 @@ describe('applyFilter (S4.9)', () => {
     const built = resolveEntriesSource(entries, { source: 'entries', tree: true });
     const fields: FieldContext = {
       timeZone: 'UTC',
-      read<T>(row: Entry, key: string): T | undefined {
+      read<K extends FieldKey>(row: Entry, key: K): CoreFieldValue<K> | undefined {
         if (key !== 'team') return undefined;
-        return (row.meta as { team?: string } | undefined)?.team as T | undefined;
+        return (row.meta as { team?: string } | undefined)?.team as CoreFieldValue<K> | undefined;
       },
       durationOf: () => ({ value: 1, unit: 'millisecond' }),
     };

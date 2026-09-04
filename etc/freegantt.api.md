@@ -189,6 +189,14 @@ export interface ContextMenuOptions {
 export type CoreFieldKey = keyof Omit<Entry, 'id'>;
 
 // @public
+export type CoreFieldValue<K extends FieldKey> = K extends keyof CoreFieldValues ? CoreFieldValues[K] : unknown;
+
+// @public
+export interface CoreFieldValues extends Omit<Entry, 'id'> {
+    duration: Duration;
+}
+
+// @public
 export function createPopup(overlay: Overlay, keymap: KeyHandlerRegistrar): Popup;
 
 // @public
@@ -557,7 +565,7 @@ export interface EntryResize extends EntryGestureEvent {
 }
 
 // @public
-export interface EntryStore<TMeta = unknown, TFields extends Record<string, unknown> = Record<string, unknown>> extends EntryStoreView<TMeta> {
+export interface EntryStore<TMeta = unknown, TFields extends Record<string, unknown> = Record<string, unknown>> extends EntryStoreView<TMeta, TFields> {
     // (undocumented)
     add(input: EntryInput<TMeta>): Entry<TMeta>;
     // (undocumented)
@@ -567,11 +575,11 @@ export interface EntryStore<TMeta = unknown, TFields extends Record<string, unkn
 }
 
 // @public
-export interface EntryStoreView<TMeta = unknown> {
+export interface EntryStoreView<TMeta = unknown, TFields extends Record<string, unknown> = Record<string, unknown>> {
     // (undocumented)
     readonly all: readonly Entry<TMeta>[];
     childrenOf(id: EntryId | string): readonly Entry<TMeta>[];
-    fieldValue<T>(id: EntryId | string, field: FieldKey): T | undefined;
+    fieldValue<K extends FieldKey>(id: EntryId | string, field: K): FieldValue<TFields, K> | undefined;
     // (undocumented)
     get(id: EntryId | string): Entry<TMeta> | undefined;
     // (undocumented)
@@ -604,7 +612,7 @@ export interface FieldContext {
     // (undocumented)
     durationOf(entry: Entry): Duration;
     // (undocumented)
-    read<T>(entry: Entry, key: FieldKey): T | undefined;
+    read<K extends FieldKey>(entry: Entry, key: K): CoreFieldValue<K> | undefined;
     // (undocumented)
     readonly timeZone: string;
 }
@@ -650,6 +658,9 @@ export interface FieldUpdated {
     // (undocumented)
     to: unknown;
 }
+
+// @public
+export type FieldValue<TFields, K extends FieldKey> = K extends keyof CoreFieldValues ? CoreFieldValues[K] : K extends keyof TFields ? TFields[K] : unknown;
 
 // @public (undocumented)
 export type FilterPolicy = 'keepAncestors' | 'matchOnly';

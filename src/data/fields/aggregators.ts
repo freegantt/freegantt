@@ -47,7 +47,7 @@ const weightedMeanByDuration: Aggregator<number> = (children, _parent, ctx) => {
   let total = 0;
   let weight = 0;
   for (const child of children) {
-    const value = ctx.read<unknown>(child, ctx.field);
+    const value = ctx.read(child, ctx.field);
     const duration = durationMs(ctx, child);
     if (!isFiniteNumber(value) || duration === undefined) continue;
     total += value * duration;

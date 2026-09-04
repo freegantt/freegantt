@@ -502,7 +502,7 @@ describe('runTransaction', () => {
     const costOf = (id: string): number | undefined => {
       const entry = state.entries.get(id);
       if (!entry) return undefined;
-      return state.fieldContext.read<number>(entry, 'cost');
+      return state.fieldContext.read(entry, 'cost') as number | undefined;
     };
 
     let changeCount = 0;

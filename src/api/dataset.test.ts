@@ -505,10 +505,9 @@ describe('entries.fieldValue', () => {
       dateOnlyEnd: 'exclusive',
       entries: [oneEntry({ start: 0, end: 1 })],
     });
-    expect(dataset.entries.fieldValue<Duration>('t1', 'duration')).toEqual({
-      value: 1,
-      unit: 'millisecond',
-    });
+    // `duration` computes its value and owns no `Entry` key, and still reads back as a `Duration`.
+    const duration: Duration | undefined = dataset.entries.fieldValue('t1', 'duration');
+    expect(duration).toEqual({ value: 1, unit: 'millisecond' });
   });
 
   it('throws UnknownFieldError for an unregistered key', () => {
@@ -556,7 +555,12 @@ describe('Dataset generics (#123)', () => {
 
     const updated = dataset.entries.update('t1', { cost: 500 });
     expect(updated.meta?.team).toBe('A');
-    expect(dataset.entries.fieldValue<number>('t1', 'cost')).toBe(500);
+
+    // The key types the read — no type argument at the call, and no `as` (#144, ADR 0005).
+    const cost: number | undefined = dataset.entries.fieldValue('t1', 'cost');
+    expect(cost).toBe(500);
+    const name: string | undefined = dataset.entries.fieldValue('t1', 'name');
+    expect(name).toBe('Design');
 
     const fromJson = Dataset.fromJSON<{ team: string }, { cost: number }>(dataset.toJSON());
     expect(fromJson.entries.get('t1')?.meta?.team).toBe('A');

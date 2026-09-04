@@ -12,6 +12,31 @@ export type CoreFieldKey = keyof Omit<Entry, 'id'>;
 /** A Field's name, and the changeset's `field`. Open by construction (D-S2-26, ADR 0005). */
 export type FieldKey = CoreFieldKey | (string & {});
 
+/** What each shipped Field reads as: the `Entry` keys, plus `duration` — the one core Field that
+ *  computes its value and owns no `Entry` key (`data/fields/core-fields.ts`). `meta` reads as
+ *  `unknown` here even on a `Dataset<TMeta>`; the typed way to a consumer's own meta is
+ *  `entries.get(id)?.meta`. */
+export interface CoreFieldValues extends Omit<Entry, 'id'> {
+  /** `end - start`, computed on read (`CORE_FIELDS`) — the one core Field with no `Entry` key. */
+  duration: Duration;
+}
+
+/** A core Field's value, and `unknown` for every other key. This is all a `FieldContext` can
+ *  promise: it flows into `layout/` and `view/`, and threading a consumer's field map through those
+ *  layers is the option ADR 0005 rejected. */
+export type CoreFieldValue<K extends FieldKey> = K extends keyof CoreFieldValues
+  ? CoreFieldValues[K]
+  : unknown;
+
+/** A Field's value on a Dataset that declared `TFields` — what `entries.fieldValue` answers. A core
+ *  key reads as its shipped type, a declared key as the type the consumer wrote, and any other key
+ *  as `unknown`. `TFields` stops at the Dataset (ADR 0005). */
+export type FieldValue<TFields, K extends FieldKey> = K extends keyof CoreFieldValues
+  ? CoreFieldValues[K]
+  : K extends keyof TFields
+    ? TFields[K]
+    : unknown;
+
 export type AggregatorName = 'min' | 'max' | 'sum' | 'count' | 'none' | (string & {});
 export type FieldTypeName = string & {};
 
@@ -118,10 +143,15 @@ export type FieldLookup = {
   get(key: FieldKey): Field | undefined;
 };
 
-/** Compute and store access. No locale — a headless Dataset does not format. */
+/** Compute and store access. No locale — a headless Dataset does not format.
+ *
+ *  `read` types core keys and answers `unknown` for the rest. It does not take the consumer's field
+ *  map: a `FieldContext` reaches `layout/` and `view/`, and making those layers generic over one
+ *  consumer's fields is what ADR 0005 rejected. Read a declared key through
+ *  `dataset.entries.fieldValue`, which the Dataset does type. */
 export interface FieldContext {
   readonly timeZone: string;
-  read<T>(entry: Entry, key: FieldKey): T | undefined;
+  read<K extends FieldKey>(entry: Entry, key: K): CoreFieldValue<K> | undefined;
   durationOf(entry: Entry): Duration;
 }
 

@@ -216,7 +216,7 @@ function applyRowSource(): void {
   const next: RowSource = grouped
     ? {
         source: 'group',
-        groupBy: (entry: Entry, fields?: FieldContext) => fields?.read<string>(entry, 'team') ?? 'unassigned',
+        groupBy: (entry: Entry, fields?: FieldContext) => String(fields?.read(entry, 'team') ?? 'unassigned'),
         ...shared,
       }
     : { source: 'entries', tree: true, ...shared };
