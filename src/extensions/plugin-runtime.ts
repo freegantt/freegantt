@@ -38,11 +38,11 @@ export interface BuiltPluginContext<TContext> {
   registrationGate?: RegistrationGate;
 }
 
-/** D-S5-4: every `ctx.*.register*` a later step ships (S5.2's `registerKeybinding`, S5.4's
- *  `registerRenderer`, …) opens one of these alongside its `PluginContext` and calls `assertOpen()`
- *  first. `PluginRuntime` closes every plugin's gate the moment that plugin's own `setup()` returns
- *  — a `register*` reached after is what turns into `RegistrationClosedError`. Ships now, with a
- *  direct test, so no future step re-derives the same close-after-setup bookkeeping (D-S5-4). */
+/** D-S5-4: every `ctx.*.register*` opens one of these alongside its `PluginContext`. `PluginRuntime`
+ *  closes every plugin's gate the moment that plugin's own `setup()` returns. A `register*` reached
+ *  after that is what turns into `RegistrationClosedError`. `view/plugin-ports.ts`'s
+ *  `registerWhileOpen` is the one place that calls `assertOpen()`, so a new seam inherits the check
+ *  instead of re-deriving it (C2). */
 export class RegistrationGate {
   #pluginId: PluginId;
   #open = true;
@@ -57,19 +57,6 @@ export class RegistrationGate {
 
   close(): void {
     this.#open = false;
-  }
-
-  /** Wraps a `register*` function so every call checks `assertOpen()` first — the one place the
-   *  close-after-setup check is written, so a new registration surface (S5.4's `registerRenderer`,
-   *  `registerDecoration`, `registerGridColumn`, or `ctx.commands.register` below) gets it by
-   *  wrapping with this instead of re-deriving `assertOpen()` at its own call site (C2). The wrapped
-   *  function's own return value passes straight through — every `register*` hands back a `Disposer`
-   *  (#155), and the gate must not swallow it. */
-  guard<TArgs extends unknown[], TResult>(fn: (...args: TArgs) => TResult): (...args: TArgs) => TResult {
-    return (...args: TArgs) => {
-      this.assertOpen();
-      return fn(...args);
-    };
   }
 }
 

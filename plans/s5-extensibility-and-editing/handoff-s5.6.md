@@ -12,7 +12,7 @@ ticked. Verified this session:
   built-ins present (`[S5-A1]`, the dogfood gate).
 - `pnpm lint`, `pnpm guards` — clean.
 - `pnpm build && pnpm api-report` — `etc/freegantt.api.md` regenerated and committed (the two new
-  factories, their option types, `Overlay.elementForEntry`, `PluginContextOf.view.resolveTooltip`).
+  factories, their option types, `Overlay.elementForEntry`, `PluginContextOf.view.resolveTooltipContent`).
 - `harness/main.ts` (the flagship demo, `index.html`) installs both plugins from the start.
   Screenshot/interaction-verified in a real Chromium session: hovering a bar shows a tooltip with
   its name and dates; right-clicking a bar opens a real menu built from `commands.available(ctx)`,
@@ -22,12 +22,12 @@ ticked. Verified this session:
 
 ## Two API gaps found and closed (both are real public surface now, not scoped to this step)
 
-1. **`PluginContextOf.view.resolveTooltip(entryId): ElementDescription | undefined`** (`api/plugin.ts`).
+1. **`PluginContextOf.view.resolveTooltipContent(entryId): ElementDescription | undefined`** (`api/plugin.ts`).
    `tooltips()` owns the `tooltip` renderer point but works from the DOM after the render pass (a
    hover handler, not a paint callback), so it has no `FrameBar` of its own to build a
    `TooltipRendererContext` from the way `bar`/`cell` renderers do. `GanttShell` now keeps
    `#lastBarById`, a `FrameBar` index rebuilt once per `render()` (same cost the backend's own
-   `frame.bars` iteration already pays), and `resolveTooltip` looks the bar up itself from an
+   `frame.bars` iteration already pays), and `resolveTooltipContent` looks the bar up itself from an
    `EntryId`. `undefined` covers three cases alike: no renderer registered at either level, the
    entry has no bar in the current frame (scrolled out), or the renderer threw (dev-mode logged,
    same fallback `render/dom/index.ts`'s own `callRenderer` gives `bar`/`cell`).

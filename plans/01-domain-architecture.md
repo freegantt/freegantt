@@ -727,29 +727,42 @@ interface GanttPlugin {
 
 interface PluginContext {
   dataset: DatasetApi;               // full data access via public API (transactions, queries)
+  gantt: Gantt;                     // the public façade: live config and public methods
   events: EventBus;                 // subscribe to everything, including before* (may veto)
+  commands: CommandRegistry;        // named, invokable actions (also powers context menus)
+  disposables: DisposableStore;     // everything registered auto-unregisters on dispose
   view: {
-    registerDecoration(layer: 'underBars' | 'overBars', d: DecorationProvider): void;
-    registerGridColumn(column: GridColumn): void;   // names a field (§2.6); presentation only
-    registerRenderer(kind: 'bar' | 'cell' | 'header' | 'tooltip', r: Renderer): void;
-    overlay: OverlayHost;           // positioned DOM (popups, tooltips) with anchoring/flipping
+    registerDecoration(layer: 'underBars' | 'overBars', d: DecorationProvider): Disposer;
+    registerGridColumn(column: GridColumn): Disposer;   // names a field (§2.6); presentation only
+    registerRenderer(point: 'bar' | 'cell' | 'header' | 'tooltip', r: Renderer): Disposer;
+    resolveTooltipContent(entryId: EntryId): ElementDescription | undefined;   // the body, not a tooltip
+    resolveTooltipColumns(entry: Entry): readonly TooltipColumn[];
+    isColumnEditable(field: FieldKey): boolean | undefined;
+    overlay: Overlay;               // positioned DOM (popups, tooltips) with anchoring/flipping
   };
   data: {
     registerField(field: Field): void;   // §2.6 — a plugin's field rolls up like a core one
   };
   layout: {
-    registerItemProducer(kind: EntryKind, producer: ItemProducer): void;   // S5.9, D-S5-22: the way in from outside — S4 shipped the ItemProducer seam itself (§9) with no external caller
+    registerItemProducer(kind: EntryKind, producer: ItemProducer): Disposer;   // S5.9, D-S5-22: the way in from outside — S4 shipped the ItemProducer seam itself (§9) with no external caller
   };
   interaction: {
     registerController(c: InteractionControllerSpec): void;
-    registerKeybinding(b: KeyBinding): void;
+    registerKeybinding(b: KeyBinding): Disposer;
+    registerKeyHandler(chord: KeyChord, handler: (e: KeyEventLike) => void): () => void;
+    registerKindDefaults(kind: EntryKind, defaults: KindDefaults): Disposer;
+    canEdit(entry: Entry): boolean;
+    proposeEntryEdit(payload: EntryFieldEdit): boolean | Promise<boolean>;   // asks; the answer is a Veto
+    announceEntryEdit(payload: EntryFieldEdit): void;                        // tells; nothing comes back
   };
-  commands: CommandRegistry;        // named, invokable actions (also powers context menus)
-  disposables: DisposableStore;     // everything registered auto-unregisters on dispose
 }
 ```
 
 Rules:
+
+- **One module declares the groups.** `view/plugin-ports.ts` types every member a plugin sees, in the group a plugin reads it in, and `buildPluginPorts(shellPorts, pluginId)` builds one set per installed plugin. `api/gantt.ts` adds `dataset` and `gantt` — the two api-level members `view/` may not name (D-S5-5) — and nothing else. So a new seam is one edit in one file, and a member declared in the wrong group does not compile.
+- **One gated shape, once.** `registerWhileOpen` in that same file asserts the gate, registers, invalidates, builds the `Disposer`, and files it with the plugin's own `DisposableStore`. A new `register*` names what registers and what must run again. It transcribes nothing.
+- **A verb says whether an answer comes back.** `propose*` asks, and the caller must read the Veto. `announce*` tells, and returns `void`. `emit*` said neither, so it is retired from the plugin surface.
 
 - Plugins are values a consumer imports and lists (`plugins: [tooltips(), contextMenu({...})]`, S5.1 D-S5-2 — supersedes the `features: { tooltips: true, ... }` name table sketched here originally) and are tree-shakeable — an unused feature costs zero bytes because nothing names it.
 - Setup order = registration order; plugins must not depend on sibling load order (communicate via events/commands only).

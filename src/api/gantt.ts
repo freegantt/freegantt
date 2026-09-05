@@ -213,38 +213,14 @@ export class Gantt {
             for (const [id, edit] of edits) options.dataset.entries.update(id, edit);
           });
         }),
-      // S5.1, D-S5-1: the only place `dataset` (full `api/Dataset`) and `gantt` (`this`) can be
-      // bound into a `PluginContext` — see `api/plugin.ts`'s file header. `this` is captured, not
-      // read, here: by the time a plugin's `setup()` actually runs, `#shell` below is assigned (see
-      // the `plugins` live-property assignment after this call), the same ordering `zoomPresets`/
-      // `selection` already rely on.
-      buildPluginContext: (parts): PluginContext => ({
-        dataset: options.dataset,
-        gantt: this,
-        events: parts.events,
-        disposables: parts.disposables,
-        commands: parts.commands,
-        interaction: {
-          registerKeybinding: parts.registerKeybinding,
-          registerKeyHandler: parts.registerKeyHandler,
-          canEdit: parts.canEdit,
-          emitBeforeEntryEdit: parts.emitBeforeEntryEdit,
-          emitEntryEdit: parts.emitEntryEdit,
-          registerKindDefaults: parts.registerKindDefaults,
-        },
-        view: {
-          overlay: parts.overlay,
-          registerRenderer: parts.registerRenderer,
-          resolveTooltip: parts.resolveTooltip,
-          resolveTooltipColumns: parts.resolveTooltipColumns,
-          registerDecoration: parts.registerDecoration,
-          isColumnEditable: parts.isColumnEditable,
-          registerGridColumn: parts.registerGridColumn,
-        },
-        layout: {
-          registerItemProducer: parts.registerItemProducer,
-        },
-      }),
+      // S5.1, D-S5-1: this file binds the two members it alone has. `dataset` is the full
+      // `api/Dataset` and `gantt` is `this` — see `api/plugin.ts`'s file header for why `view/` may
+      // name neither. `this` is captured, not read: by the time a plugin's `setup()` runs, `#shell`
+      // below is assigned (the `plugins` assignment after this call), the same ordering
+      // `zoomPresets`/`selection` already rely on. Every other member arrives already grouped from
+      // `view/plugin-ports.ts`, which owns the group a plugin reads it in. So a new seam is one edit
+      // there, and a member in the wrong group no longer compiles.
+      buildPluginContext: (parts): PluginContext => ({ dataset: options.dataset, gantt: this, ...parts }),
       buildCommandContext: (parts): CommandContext => ({
         dataset: options.dataset,
         gantt: this,
