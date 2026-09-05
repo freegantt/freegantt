@@ -81,6 +81,9 @@ export type { CapabilityRule, Interactions, KindDefaults } from '../view/index.j
 // S5.3, D-S5-8: `PluginContext.view.overlay`'s own type — a plugin builds a `Popup` (or its own
 // primitive) against this alone, never against `view/` or `render/` directly.
 export type { Overlay, OverlayHandle } from '../view/index.js';
+// #158: `PluginContext.view.rowLayer`'s own type — the mount seam for content that must scroll with
+// the rows instead of floating over them (the cell editor).
+export type { RowLayer } from '../view/index.js';
 // Review N1/A3: the plugin-to-DOM seam. `ctx.view.dom` carries `GanttDom`; `targetUnder` answers
 // with a `DomTarget`; `onDomEvent` takes a `DomEventHandler` and `DomEventOptions`.
 export type { GanttDom, DomTarget, DomEventHandler, DomEventOptions } from '../view/index.js';

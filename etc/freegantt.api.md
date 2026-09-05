@@ -890,6 +890,7 @@ export interface GanttDom {
         grid: DOMRect;
         timeline: DOMRect;
     };
+    readonly rowLayerBounds: DOMRect;
     targetUnder(node: Node): DomTarget | undefined;
 }
 
@@ -1293,6 +1294,7 @@ export interface PluginContextOf<TGantt = unknown, TDataset = Dataset> {
     // (undocumented)
     view: {
         overlay: Overlay;
+        rowLayer: RowLayer;
         dom: GanttDom;
         onDomEvent<K extends keyof DocumentEventMap>(type: K, handler: DomEventHandler<K>, options?: DomEventOptions): Disposer;
         registerRenderer<P extends RendererPoint>(point: P, renderer: RendererFor<P>): Disposer;
@@ -1444,6 +1446,11 @@ export type RowHeightMode = 'fixed' | 'pack';
 export type RowId = string & {
     readonly __brand: 'RowId';
 };
+
+// @public (undocumented)
+export interface RowLayer {
+    present(content: HTMLElement): Disposer;
+}
 
 // @public (undocumented)
 export interface RowSort {

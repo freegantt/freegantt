@@ -42,6 +42,7 @@ import { readPixelProperty } from '../render/dom/pixel-property.js';
 import { PaneLayout } from './pane-layout.js';
 import type { Panes } from './pane-layout.js';
 import { DomOverlay } from './overlay.js';
+import { DomRowLayer } from './row-layer.js';
 import { ContainerDom } from './gantt-dom.js';
 import { attachSplitter } from './splitter.js';
 import type { SplitterAttachment } from './splitter.js';
@@ -468,6 +469,9 @@ export class GanttShell {
   /** S5.3, D-S5-8: constructed once panes exist — see the plugin runtime's own comment just below for
    *  why. */
   #overlay: DomOverlay;
+  /** #158: the grid's own row layer, where a plugin mounts content that must scroll with the rows.
+   *  Constructed beside the overlay, and for the same reason. */
+  #rowLayer: DomRowLayer;
   /** Review N1/A3: this Gantt's own rendered DOM, as questions a plugin asks through `ctx.view.dom`.
    *  Constructed beside the overlay, and for the same reason. */
   #dom: ContainerDom;
@@ -491,6 +495,7 @@ export class GanttShell {
     // S5.3, D-S5-8: constructed right after the panes it measures, so it is ready by the time the
     // plugin runtime (just below) builds its first `PluginContext`.
     this.#overlay = new DomOverlay(this.#container, this.#panes.overlay);
+    this.#rowLayer = new DomRowLayer(this.#panes.grid);
     this.#dom = new ContainerDom(this.#container, this.#paneLayout, (id) =>
       this.#options.dataset.entries.get(id),
     );
@@ -1142,6 +1147,7 @@ export class GanttShell {
     return {
       events: this.#pluginEvents,
       overlay: this.#overlay,
+      rowLayer: this.#rowLayer,
       dom: this.#dom,
       commands: this.#commandRegistry,
       keymap: this.#keymap,

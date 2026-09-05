@@ -192,6 +192,14 @@ export class PaneLayout {
     };
   }
 
+  /** `GanttDom.rowLayerBounds` (#158): the row layer's own client rect — the frame content mounted beside
+   *  the rows positions itself in. Unlike `paneBounds().grid` this one *is* `panes.grid`, transform
+   *  and all: a sibling of the rows rides that same transform, so the box it must measure against is
+   *  the moved one, not the pane's fixed box. */
+  rowLayerBounds(): DOMRect {
+    return this.panes.grid.getBoundingClientRect();
+  }
+
   /** D-S1.12-9: the grid pane's spacer renders one empty `.fg-band` per header band, so both panes
    *  resolve their header height from the same `--fg-band-height` CSS expression and cannot drift.
    *  A no-op when the count is unchanged — the common case, every render. Returns whether the stack

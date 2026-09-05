@@ -480,6 +480,50 @@ describe('inlineEditing() (S5.8, D-S5-19/D-S5-20)', () => {
     container.remove();
   });
 
+  it('#158: the editor mounts in the grid row layer, so a scroll carries it with its cell', () => {
+    const { container, gantt, dataset } = makeGantt();
+    dataset.on('beforeChange', () => false);
+    const cell = cellFor(container, 'e1', 'name');
+    dblclick(cell);
+    const el = input(container);
+    el.value = 'Vetoed';
+    enter(el);
+
+    const wrapper = container.querySelector<HTMLElement>('.fg-cell-editor[data-state="invalid"]')!;
+    // Inside the layer the pane's own scroll already moves — not the overlay, which does not move.
+    expect(wrapper.parentElement).toBe(container.querySelector('.fg-rows'));
+    expect(container.querySelector('.fg-overlay')!.contains(wrapper)).toBe(false);
+    // Beside the rows, never inside one: a row is render/dom's reconciled DOM.
+    expect(wrapper.closest('.fg-row')).toBeNull();
+
+    // A scroll rewrites nothing: the layer's own transform carries the editor and its cell together.
+    const placed = wrapper.style.transform;
+    container.querySelector('.fg-grid-pane')!.dispatchEvent(new Event('scroll'));
+    expect(wrapper.style.transform).toBe(placed);
+    expect(container.querySelector('.fg-cell-editor')).toBe(wrapper); // still open, still invalid
+
+    gantt.destroy();
+    container.remove();
+  });
+
+  it('#158: a scroll that recycles the anchor row onto another entry closes without committing', () => {
+    const { container, gantt, dataset } = makeGantt();
+    const row = container.querySelector<HTMLElement>('.fg-row[data-entry-id="e1"]')!;
+    dblclick(cellFor(container, 'e1', 'name'));
+    const el = input(container);
+    el.value = 'Never written';
+
+    row.dataset['entryId'] = 'e2'; // virtualization repaints this node for another entry
+    container.querySelector('.fg-grid-pane')!.dispatchEvent(new Event('scroll'));
+
+    expect(container.querySelector('.fg-cell-editor')).toBeNull();
+    expect(dataset.entries.get('e1')!.name).toBe('Task One');
+    expect(dataset.entries.get('e2')!.name).toBe('Task Two');
+
+    gantt.destroy();
+    container.remove();
+  });
+
   it('a stale async veto does not mount a second, orphaned session over a newer open', async () => {
     const { container, gantt } = makeGantt();
     let resolveFirst!: (value: void | false) => void;
@@ -668,21 +712,17 @@ describe('CellEditorSession (S5.8, review A5/C2b)', () => {
     document.body.append(row, layer);
 
     const ports: CellEditorPorts = {
-      overlay: {
-        present: (content) => {
+      rowLayer: {
+        present: (content: HTMLElement) => {
           layer.append(content);
-          return {
-            detach: () => {
-              content.remove();
-            },
-          };
+          return () => content.remove();
         },
-        onResize: () => () => {},
       },
+      onResize: () => () => {},
       // Review A3: the session asks one seam where its cell is now. So the fake answers with the
       // cell this test built, while that cell is still in the document. A real Gantt answers from
       // the current frame, and stops answering once virtualization takes the row away.
-      dom: { bounds: rectAt(0, 0, 0, 0), cellFor: () => (cell.isConnected ? cell : undefined) },
+      dom: { rowLayerBounds: rectAt(0, 0, 0, 0), cellFor: () => (cell.isConnected ? cell : undefined) },
       bindEscape: () => () => {},
       entryById: () => entry,
       storedValue: () => 'Task One',
@@ -788,19 +828,17 @@ describe('presentRefusal() (S5.8, review SP1)', () => {
     document.body.append(cell, layer);
     let detaches = 0;
     const ports: RefusalNoticePorts = {
-      overlay: {
-        present: (content) => {
+      rowLayer: {
+        present: (content: HTMLElement) => {
           layer.append(content);
-          return {
-            detach: () => {
-              detaches++;
-              content.remove();
-            },
+          return () => {
+            detaches++;
+            content.remove();
           };
         },
-        onResize: () => () => {},
       },
-      dom: { bounds: rectAt(0, 0, 0, 0), cellFor: () => cell },
+      onResize: () => () => {},
+      dom: { rowLayerBounds: rectAt(0, 0, 0, 0), cellFor: () => cell },
       bindEscape: () => () => {},
     };
     const notice = presentRefusal(ports, cell, 'timeOfDay');

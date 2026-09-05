@@ -80,6 +80,10 @@ export interface GanttDom {
    *  the anchor's own pane rect instead. `bounds` stays the outer clamp for a popup whose anchor
    *  sits in neither pane (a toolbar button, say). */
   readonly paneBounds: { grid: DOMRect; timeline: DOMRect };
+  /** The grid row layer's own client rect — the frame content mounted through `ctx.view.rowLayer`
+   *  positions in (#158). Unlike `paneBounds.grid`, this box moves with the rows: a sibling of the
+   *  rows rides the same transform, so the box it measures against must be the moved one. */
+  readonly rowLayerBounds: DOMRect;
 }
 
 /** Ordered by nothing: `Element.closest` answers with the *nearest* ancestor that matches any of
@@ -169,6 +173,10 @@ export class ContainerDom implements GanttDom {
 
   get paneBounds(): { grid: DOMRect; timeline: DOMRect } {
     return this.#paneLayout.paneBounds();
+  }
+
+  get rowLayerBounds(): DOMRect {
+    return this.#paneLayout.rowLayerBounds();
   }
 
   /** Frozen, because plugin code reads this object and the memo keeps it. A caller that wrote to it
