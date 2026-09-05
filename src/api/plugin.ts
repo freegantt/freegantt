@@ -21,6 +21,7 @@ import type {
   GanttEvents,
   Overlay,
   OverlayHandle,
+  RowLayer,
 } from '../view/index.js';
 import type { CommandRegistryOf, KeyBindingOf } from './command.js';
 import type { RendererPoint, RendererFor } from '../layout/index.js';
@@ -51,7 +52,7 @@ export type { EntryFieldEdit };
 // barrel. That barrel re-exports `createPopup` from `extensions/popup.ts`. Importing the barrel
 // back would close that edge into a cycle (`no-circular`). `GanttDom` travels with them: a `Popup`
 // clamps against `bounds`/`paneBounds`, which review N1 moved off `Overlay`.
-export type { GanttDom, DomTarget, Overlay, OverlayHandle };
+export type { GanttDom, DomTarget, Overlay, OverlayHandle, RowLayer };
 
 /** What a plugin's `setup()` receives, once, after the Gantt mounts. S5.1 ships `dataset`,
  *  `gantt`, `events` and `disposables` only. Every other member (`commands`, `view`, `layout`,
@@ -134,6 +135,16 @@ export interface PluginContextOf<TGantt = unknown, TDataset = Dataset> {
      *  not gated by `RegistrationGate`. D-S5-4 only gates one-shot `register*` calls, and a plugin
      *  presents and dismisses overlay content for as long as it runs. */
     overlay: Overlay;
+    /** #158: the grid's own row layer, for content that must stay glued to a row or a cell while the
+     *  pane scrolls — an open cell editor is the case. The Grid pane has no vertical scrollbar of its
+     *  own: this layer follows the Timeline pane's scroll by one transform per frame (D-S1.8-1), and
+     *  the pane scrolls horizontally around it (D-S1.8-13). Content mounted here therefore travels
+     *  with the rows on both axes, in the same frame — no scroll listener, and no lag behind the
+     *  paint. Position it once against `dom.rowLayerBounds`. Use `overlay` instead for content that
+     *  must escape the pane box, a tooltip or a menu: this layer is clipped to the pane, and a popup
+     *  dismisses on a scroll rather than following it. Live for the plugin's whole lifetime, the same
+     *  posture as `overlay`. */
+    rowLayer: RowLayer;
     /** Review N1/A3: this Gantt's own rendered DOM, as three questions — `owns(node)`,
      *  `targetUnder(node)`, and `barFor(id)`/`cellFor(id, field)`. It is the whole plugin-to-DOM
      *  contract. `extensions/` may not import `render/` (D-S5-5), so before this seam every plugin

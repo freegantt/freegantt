@@ -38,6 +38,7 @@ import { isDevMode } from '../data/dev-mode.js';
 import type { KindDefaults } from './capability.js';
 import type { GanttEvents, EntryFieldEdit } from './event-bus.js';
 import type { Overlay } from './overlay.js';
+import type { RowLayer } from './row-layer.js';
 import type { DomTarget, GanttDom } from './gantt-dom.js';
 
 /** What `ctx.view.onDomEvent` hands a plugin: the browser event, plus what the node it landed on
@@ -66,6 +67,8 @@ export interface GanttShellPorts {
   events: GanttEvents;
   /** S5.3, D-S5-8. One layer per Gantt, alive as long as the plugin is. */
   overlay: Overlay;
+  /** #158. The grid's own row layer, alive as long as the plugin is. */
+  rowLayer: RowLayer;
   /** Review N1/A3. One resolver per Gantt. It owns every `.fg-*` class and `data-*` key a plugin
    *  used to retype, and it scopes `onDomEvent` to this Gantt (I2). */
   dom: GanttDom;
@@ -145,6 +148,14 @@ export interface PluginContextPorts {
   };
   view: {
     overlay: Overlay;
+    /** #158. The layer for content that must stay glued to a row or a cell while the pane scrolls —
+     *  an open cell editor is the case. The Grid pane has no vertical scrollbar of its own: this
+     *  layer follows the Timeline pane's scroll by one transform per frame (D-S1.8-1), and the pane
+     *  scrolls horizontally around it (D-S1.8-13). Content mounted here therefore travels with the
+     *  rows on both axes, in the same frame — no scroll listener, no lag. Position it once against
+     *  `dom.rowLayerBounds`. Use `overlay` instead for content that must escape the pane box: this
+     *  layer is clipped to it, and a popup dismisses on a scroll rather than following it. */
+    rowLayer: RowLayer;
     /** Review N1/A3. This Gantt's own rendered DOM, as questions. */
     dom: GanttDom;
     /** Review A4. Listens on `document`, keeps only what this Gantt owns, and hands the handler the
@@ -288,6 +299,7 @@ export function buildPluginPorts(
     },
     view: {
       overlay: shell.overlay,
+      rowLayer: shell.rowLayer,
       dom: shell.dom,
       onDomEvent: listenWhileInstalled,
       registerRenderer: (point, renderer) =>

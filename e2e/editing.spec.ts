@@ -63,3 +63,85 @@ test('a consumer replaces the editor through beforeEntryEdit (U8)', async ({ pag
   await expect(page.locator('#gantt .fg-cell-editor')).toHaveCount(0);
   await expect(cell).toHaveText('Renamed via prompt');
 });
+
+// #158: an open editor must stay glued to its own cell while the pane scrolls. It mounts in the grid
+// row layer (`ctx.view.rowLayer`), the element the pane's scroll already moves, so the browser
+// carries both boxes in one frame — the earlier overlay mount had to chase the cell from a `scroll`
+// listener, which lands a frame late and reads as jitter. jsdom cannot show that: this needs a real
+// scroll in a real browser. A vetoed edit is what keeps an editor open long enough to scroll at all
+// (#137 F5) — the harness has no veto, so an untouched editor left open serves the same purpose.
+test('an open editor stays over its cell while the pane scrolls (#158)', async ({ page }) => {
+  await page.goto('/');
+  const cell = page.locator('#gantt .fg-row [data-field="name"]').first();
+  await expect(cell).toBeVisible();
+  await cell.click(); // settle the #selection-readout reflow before the real double-click
+
+  await cell.dblclick();
+  const editor = page.locator('#gantt .fg-cell-editor');
+  await expect(editor).toBeVisible();
+
+  const offsetToCell = async (): Promise<{ x: number; y: number }> => {
+    const [a, b] = [await editor.boundingBox(), await cell.boundingBox()];
+    return { x: Math.round(a!.x - b!.x), y: Math.round(a!.y - b!.y) };
+  };
+  expect(await offsetToCell()).toEqual({ x: 0, y: 0 });
+
+  const timelinePane = page.locator('.fg-timeline-pane');
+  await timelinePane.evaluate((el) => {
+    el.scrollTop = 60;
+  });
+  await expect.poll(async () => timelinePane.evaluate((el) => el.scrollTop)).toBeGreaterThan(0);
+
+  // Still open, still exactly over its own cell — which has itself moved up with the scroll.
+  await expect(editor).toHaveCount(1);
+  expect(await offsetToCell()).toEqual({ x: 0, y: 0 });
+});
+
+// Review R4/SP1: a cell that offers an editor but cannot open one here names the reason, in a notice
+// mounted over the cell (`data-state="invalid"`, `data-reason`). Two of its properties need a real
+// browser, because happy-dom measures no layout. First, the notice must be pointer-transparent: the
+// next double-click has to reach the cell underneath it, or the grid soft-locks. `elementFromPoint`
+// over the cell's own centre is that assertion — a real hit test, which is the one thing a layout
+// engine answers and happy-dom cannot. (A second `dblclick` proves nothing here: the pointer press
+// dismisses the notice first, so Playwright's own actionability check passes either way.) Second,
+// the notice must land on its own cell rather than somewhere absurd.
+//
+// `program` is the reachable refusal on this page: it is the demo tree's one `kind: 'group'` row, and
+// Budget (the `cost` Field) declares both `editable` and a `sum` rollup. A span row with children is
+// not the same case — it has a twisty, but its own stored `cost`, and it edits normally.
+test('a refused cell names the reason, and the notice lets the next click through (R4)', async ({ page }) => {
+  await page.goto('/');
+  const groupRow = page.locator('#gantt .fg-row[data-entry-id="program"]');
+  const rolledUp = groupRow.locator('[data-field="cost"]');
+  await expect(rolledUp).toBeVisible();
+  await rolledUp.click(); // settle the #selection-readout reflow before the real double-click
+
+  await rolledUp.dblclick();
+  const notice = page.locator('#gantt .fg-cell-editor[data-state="invalid"][data-reason]');
+  await expect(notice).toHaveAttribute('data-reason', 'derivedValue');
+  await expect(notice).toContainText('comes from the rows below it');
+  await expect(page.locator('#gantt .fg-cell-editor-control')).toHaveCount(0);
+
+  // Over its own cell, not somewhere absurd.
+  const [noticeBox, cellBox] = [await notice.boundingBox(), await rolledUp.boundingBox()];
+  expect(Math.round(noticeBox!.x - cellBox!.x)).toBe(0);
+  expect(Math.round(noticeBox!.y - cellBox!.y)).toBe(0);
+
+  // The notice is over the cell and takes no pointer: a hit test at the cell's own centre answers
+  // with the cell, never with the notice. Without that the next double-click cannot reach any cell.
+  const hit = await page.evaluate(
+    ({ x, y }) => {
+      const node = document.elementFromPoint(x, y);
+      return {
+        isNotice: node?.closest('.fg-cell-editor') !== null,
+        isCell: node?.closest('[data-field="cost"]') !== null,
+      };
+    },
+    { x: cellBox!.x + cellBox!.width / 2, y: cellBox!.y + cellBox!.height / 2 },
+  );
+  expect(hit).toEqual({ isNotice: false, isCell: true });
+
+  // And a double-click still reaches an editable cell afterwards.
+  await groupRow.locator('[data-field="name"]').dblclick();
+  await expect(page.locator('#gantt .fg-cell-editor-control')).toBeVisible();
+});

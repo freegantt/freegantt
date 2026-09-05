@@ -10,17 +10,27 @@
 // which is exactly what an editable `<input>` needs.
 //
 // `Popup` stays the right primitive for declarative content, a tooltip or a menu. This file owns a
-// live control end-to-end instead. It mounts through the same `Overlay` layer
-// (`ctx.view.overlay.present`), so it never becomes a child of a recycled grid-row/cell node. Those
-// nodes are `render/dom`'s own reconciled DOM. Writing into one directly would corrupt its own
-// patch assumptions, `cellSpec.patch`'s `node.lastElementChild` reads for example.
+// live control end-to-end instead.
+//
+// It mounts through `ctx.view.rowLayer`, not the `Overlay` a popup uses (#158). A tooltip and a menu
+// *dismiss* on a scroll; an open editor must *follow* its cell. The row layer is the element the
+// pane's own scroll already moves — one transform per frame for the vertical axis (D-S1.8-1), native
+// horizontal scrolling of the pane around it (D-S1.8-13) — so a sibling of the rows travels with
+// them, in the same frame, and nothing repositions it on a scroll. Repositioning an overlay from a
+// `scroll` listener runs a frame behind the paint it chases, which reads as jitter. The clip is a
+// bonus: `.fg-rows-clip` keeps the editor inside the pane instead of over the timeline.
+//
+// Beside the rows, never inside one. A row and its cells are `render/dom`'s own reconciled DOM, and
+// writing into one would corrupt its patch assumptions — `cellSpec.patch`'s `node.lastElementChild`
+// reads, for example. `syncKeyed` prunes only the keys it created, so it leaves a foreign sibling of
+// the rows alone.
 //
 // One open editor is one `CellEditorSession`. The session owns the mount, the position, the commit
 // rules and its own teardown. The plugin below owns whether an editor is open at all. `commit()`
 // answers whether it closed, so no flag records that twice.
 
 import type { GanttPlugin, PluginContext } from '../../api/gantt.js';
-import type { EntryFieldEdit, GanttDom, Overlay, OverlayHandle } from '../../api/plugin.js';
+import type { EntryFieldEdit, GanttDom, Overlay, RowLayer } from '../../api/plugin.js';
 import { EntryNotFoundError, MutationCancelledError } from '../../model/index.js';
 import type {
   CoreFieldValue,
@@ -102,7 +112,8 @@ const REFUSAL_TEXT = {
 export type CellEditorRefusal = keyof typeof REFUSAL_TEXT;
 
 /** Puts `element` exactly over `cell`'s own rect — no flip and no clamp, unlike `Popup`. An editor
- *  and a refusal notice both sit exactly where the cell already is, so both position through this. */
+ *  and a refusal notice both sit exactly where the cell already is, so both position through this.
+ *  `bounds` is the row layer's own box (#158), the frame both are mounted in. */
 function positionOver(element: HTMLElement, cell: HTMLElement, bounds: DOMRect): void {
   const rect = cell.getBoundingClientRect();
   element.style.transform = `translate(${(rect.left - bounds.left).toFixed(2)}px, ${(rect.top - bounds.top).toFixed(2)}px)`;
@@ -138,12 +149,17 @@ export interface EditedCell {
  *  the machinery" idiom `view/column-chrome.ts` names `ColumnChromePorts`. A test builds these from
  *  plain objects, so a session runs with no mounted Gantt. */
 export interface CellEditorPorts {
-  /** The layer the editor mounts into (D-S5-8), and the resize it repositions on. */
-  readonly overlay: Pick<Overlay, 'present' | 'onResize'>;
+  /** The layer the editor mounts into (#158): the grid's own row layer, which the pane's scroll
+   *  already moves. That is what makes an open editor follow its cell with no scroll listener. */
+  readonly rowLayer: RowLayer;
+  /** The container resize the editor repositions on — a reflow (a column width change, say) moves a
+   *  cell without any scroll. The `Overlay` owns the one `ResizeObserver` per Gantt (issue #137 F9),
+   *  so this borrows it rather than starting a second. */
+  readonly onResize: Overlay['onResize'];
   /** Where the edited cell is now (`cellFor`), and the rect the wrapper's transform is relative to
-   *  (`bounds`). One seam answers both, so "is my editor still anchored?" and "where do I move it?"
-   *  are one question with one answer (review A3). */
-  readonly dom: Pick<GanttDom, 'bounds' | 'cellFor'>;
+   *  (`rowLayerBounds`). One seam answers both, so "is my editor still anchored?" and "where do I
+   *  move it?" are one question with one answer (review A3). */
+  readonly dom: Pick<GanttDom, 'rowLayerBounds' | 'cellFor'>;
   /** Binds Escape for as long as this editor is open. The plugin routes it through the shared
    *  Keymap, so the newest handler wins (D-S5-9). */
   bindEscape(onEscape: () => void): Disposer;
@@ -174,7 +190,7 @@ export class CellEditorSession {
   readonly #control: CellEditorControl;
   readonly #wrapper: HTMLElement;
   readonly #detachers: Disposer[] = [];
-  #handle: OverlayHandle | undefined;
+  #unmount: Disposer | undefined;
   #focusTrap: FocusTrap | undefined;
   /** `#close()` alone writes this, and `commit()`/`revert()` read it. It records this one session's
    *  lifetime. A re-entrant close never tears the same editor down twice — a `change` handler that
@@ -202,9 +218,9 @@ export class CellEditorSession {
   /** Presents the editor over `cell`, binds every trigger, and moves focus into the control. */
   mount(cell: HTMLElement): void {
     this.#open = true;
-    this.#handle = this.#ports.overlay.present(this.#wrapper);
+    this.#unmount = this.#ports.rowLayer.present(this.#wrapper);
     this.#positionOver(cell);
-    this.#detachers.push(this.#ports.overlay.onResize(() => this.reposition()));
+    this.#detachers.push(this.#ports.onResize(() => this.reposition()));
     this.#detachers.push(this.#ports.bindEscape(() => this.#ports.requestRevert()));
     this.#detachers.push(this.#control.bindCommitTriggers(() => this.#ports.requestCommit()));
     this.#wrapper.addEventListener('focusout', this.#onFocusOut);
@@ -256,9 +272,11 @@ export class CellEditorSession {
     this.#close();
   }
 
-  /** Follows the cell after a container resize. A resize can also bring a reflow (a column width
-   *  change, say), so this asks for the cell again. It never reuses the node `mount` received:
-   *  virtualization can recycle that node while the editor is open. */
+  /** Follows the cell after a container resize, which can bring a reflow (a column width change,
+   *  say) that moves the cell with no scroll at all. A scroll needs none of this: the row layer
+   *  carries the editor and the cell together (#158). This asks for the cell again rather than
+   *  reusing the node `mount` received: virtualization can recycle that node while the editor is
+   *  open. */
   reposition(): void {
     const cell = this.#currentCell();
     if (cell) this.#positionOver(cell);
@@ -282,7 +300,7 @@ export class CellEditorSession {
   };
 
   #positionOver(cell: HTMLElement): void {
-    positionOver(this.#wrapper, cell, this.#ports.dom.bounds);
+    positionOver(this.#wrapper, cell, this.#ports.dom.rowLayerBounds);
   }
 
   /** The one "this did not save" signal (D-S5-19). The editor stays open, the state names the
@@ -302,7 +320,7 @@ export class CellEditorSession {
     this.#wrapper.removeEventListener('focusout', this.#onFocusOut);
     this.#control.onClosed?.();
     this.#focusTrap?.deactivate();
-    this.#handle?.detach();
+    this.#unmount?.();
   }
 }
 
@@ -334,7 +352,7 @@ export interface RefusalNotice {
 
 /** What a refusal notice borrows: the same three members a `CellEditorSession` borrows, for the
  *  same three jobs. A test drives a notice with no mounted Gantt. */
-export type RefusalNoticePorts = Pick<CellEditorPorts, 'overlay' | 'dom' | 'bindEscape'>;
+export type RefusalNoticePorts = Pick<CellEditorPorts, 'rowLayer' | 'onResize' | 'dom' | 'bindEscape'>;
 
 /** Puts the refusal where the user acted: over the cell, in the same `data-state="invalid"` a refused
  *  commit already uses (D-S5-19, issue #137 F11/F12). It is a notice, not an editor. It mounts no
@@ -357,10 +375,10 @@ export function presentRefusal(
   element.title = text;
   element.setAttribute('role', 'status');
   paintRefusal(element);
-  positionOver(element, cell, ports.dom.bounds);
+  positionOver(element, cell, ports.dom.rowLayerBounds);
 
-  const handle = ports.overlay.present(element);
-  const detachers: Disposer[] = [ports.overlay.onResize(() => positionOver(element, cell, ports.dom.bounds))];
+  const unmount = ports.rowLayer.present(element);
+  const detachers: Disposer[] = [ports.onResize(() => positionOver(element, cell, ports.dom.rowLayerBounds))];
   let open = true;
   const notice: RefusalNotice = {
     element,
@@ -368,7 +386,7 @@ export function presentRefusal(
       if (!open) return;
       open = false;
       for (let i = detachers.length - 1; i >= 0; i--) detachers[i]!();
-      handle.detach();
+      unmount();
     },
   };
   detachers.push(ports.bindEscape(() => notice.dismiss()));
@@ -420,7 +438,10 @@ export function inlineEditing(options: InlineEditingOptions = {}): GanttPlugin {
       }
 
       const ports: CellEditorPorts = {
-        overlay: ctx.view.overlay,
+        rowLayer: ctx.view.rowLayer,
+        // Wrapped, not handed over: `onResize` reads the overlay's own listener set, so it must be
+        // called on the overlay.
+        onResize: (callback) => ctx.view.overlay.onResize(callback),
         dom: ctx.view.dom,
         bindEscape: (onEscape) =>
           ctx.interaction.registerKeyHandler(

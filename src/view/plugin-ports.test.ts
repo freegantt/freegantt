@@ -47,6 +47,7 @@ function makeDom(container: HTMLElement): GanttShellPorts['dom'] {
     cellText: () => '',
     bounds: new DOMRect(),
     paneBounds: { grid: new DOMRect(), timeline: new DOMRect() },
+    rowLayerBounds: new DOMRect(),
   };
 }
 
@@ -66,6 +67,7 @@ function makeHarness(overrides: Partial<GanttShellPorts> = {}): Harness {
   const shell: GanttShellPorts = {
     events: { on: vi.fn(), off: vi.fn() },
     overlay: { present: vi.fn() } as unknown as GanttShellPorts['overlay'],
+    rowLayer: { present: vi.fn() },
     dom: makeDom(container),
     commands: {
       register: (command) => registry.add(`command:${command.id}`),
