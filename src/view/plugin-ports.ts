@@ -148,13 +148,16 @@ export interface PluginContextPorts {
   };
   view: {
     overlay: Overlay;
-    /** #158. The layer for content that must stay glued to a row or a cell while the pane scrolls —
-     *  an open cell editor is the case. The Grid pane has no vertical scrollbar of its own: this
-     *  layer follows the Timeline pane's scroll by one transform per frame (D-S1.8-1), and the pane
-     *  scrolls horizontally around it (D-S1.8-13). Content mounted here therefore travels with the
-     *  rows on both axes, in the same frame — no scroll listener, no lag. Position it once against
-     *  `dom.rowLayerBounds`. Use `overlay` instead for content that must escape the pane box: this
-     *  layer is clipped to it, and a popup dismisses on a scroll rather than following it. */
+    /** #158. The layer for content that must stay glued to a row or a cell while the pane scrolls.
+     *  An open cell editor is the case.
+     *
+     *  The Grid pane has no vertical scrollbar of its own. This layer follows the Timeline pane's
+     *  scroll by one transform per frame (D-S1.8-1). The pane scrolls horizontally around it
+     *  (D-S1.8-13). Content mounted here therefore travels with the rows on both axes, in the same
+     *  frame — no scroll listener, no lag. Position it once against `dom.rowLayerBounds`.
+     *
+     *  Use `overlay` instead for content that must escape the pane box. This layer is clipped to
+     *  it, and a popup dismisses on a scroll rather than following it. */
     rowLayer: RowLayer;
     /** Review N1/A3. This Gantt's own rendered DOM, as questions. */
     dom: GanttDom;
@@ -203,8 +206,8 @@ export function buildPluginPorts(
 
   /** The one shape every gated `register*` takes. A new seam is a declaration, not a transcription:
    *  name what registers, and name what must run again because the registration changed. `refresh`
-   *  runs on both edges — on the way in, and on the way out — because the registration that wins
-   *  after disposal must paint too (#155). */
+   *  runs on both edges — on the way in, and on the way out. The registration that wins after
+   *  disposal must paint too (#155). */
   const registerWhileOpen = (register: () => Disposer, refresh?: () => void): Disposer => {
     gate.assertOpen();
     const remove = register();
@@ -217,10 +220,10 @@ export function buildPluginPorts(
     return dispose;
   };
 
-  /** Review A4: the one shape every document-level plugin listener takes. It answers "is this mine?"
-   *  once, from `shell.dom.owns`, so no plugin writes that guard again — and one of the twelve
-   *  hand-written listeners had forgotten to. It remembers the capture flag on both edges, which is
-   *  the other half a hand-written pair got wrong. Not gated by `RegistrationGate`: `contextMenu()`
+  /** Review A4: the one shape every document-level plugin listener takes. It answers "is this
+   *  mine?" once, from `shell.dom.owns`, so no plugin writes that guard again. One of the twelve
+   *  hand-written listeners forgot to. It remembers the capture flag on both edges, which is the
+   *  other half a hand-written pair got wrong. Not gated by `RegistrationGate`: `contextMenu()`
    *  attaches and detaches per open menu, the same lifetime `registerKeyHandler` already has. */
   const listenWhileInstalled = <K extends keyof DocumentEventMap>(
     type: K,

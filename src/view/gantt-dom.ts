@@ -82,7 +82,7 @@ export interface GanttDom {
    *  sits in neither pane (a toolbar button, say). */
   readonly paneBounds: { grid: DOMRect; timeline: DOMRect };
   /** The grid row layer's own client rect — the frame content mounted through `ctx.view.rowLayer`
-   *  positions in (#158). Unlike `paneBounds.grid`, this box moves with the rows: a sibling of the
+   *  positions in (#158). Unlike `paneBounds.grid`, this box moves with the rows. A sibling of the
    *  rows rides the same transform, so the box it measures against must be the moved one. */
   readonly rowLayerBounds: DOMRect;
 }
