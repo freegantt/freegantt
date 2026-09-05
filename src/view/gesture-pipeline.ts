@@ -7,7 +7,7 @@
 
 import { cursorLabelForX, draftForMove, draftForResize, previewOffsets } from '../layout/index.js';
 import type { ItemPreview, SnapSetting, SnapUnit, TimeScale, ViewPreset } from '../layout/index.js';
-import type { Entry, EntryEdits, EntryId, ItemId } from '../model/index.js';
+import type { Entry, EntryEdits, EntryId, ErrorCode, ItemId, RaiseError } from '../model/index.js';
 import { itemId } from '../model/index.js';
 import { identityExtender, type EditExtender } from '../data/edit-extension.js';
 import type { EventBus } from './event-bus.js';
@@ -31,6 +31,9 @@ export interface GesturePipelineDeps {
   canGesture(capability: keyof Interactions, id: EntryId): boolean;
   commitEntryEdits(edits: EntryEdits): boolean;
   emit: EventBus<GanttEventMap, AsyncCancelableEvent>['emit'];
+  /** S5.12, D-S5-35: a vetoed gesture still draws nothing and still throws nothing, and now it also
+   *  reports. `plans/02` §3's "a vetoed gesture is silent" stays true of the *UI*. */
+  raiseError: RaiseError;
   /** D-S3-18, S3.6, P1: an installed extension hook, read for **preview only** — the real hook still
    *  runs again, for real, inside `data/transaction.ts`'s own commit; this never writes anything.
    *  `undefined` previews no ghost extras, same as `data/edit-extension.ts`'s `identityExtender` —
@@ -51,6 +54,14 @@ export interface GesturePipelineDeps {
     pendingItemIds: readonly ItemId[] | undefined,
     cursor?: { x: number; label: string },
   ): void;
+}
+
+/** What one refused gesture reports — built once in `#commit`, where the gesture's own event name is
+ *  already in hand, and read by `#settle` on whichever of its two veto paths runs. */
+interface GestureRefusal {
+  code: ErrorCode;
+  message: string;
+  entryId: EntryId;
 }
 
 /** Owns entry resolution, draft math, preview coalescing and the commit pipeline for move/resize
@@ -209,7 +220,12 @@ export class GesturePipeline {
       event.before === 'beforeEntryResize'
         ? this.#deps.emit(event.before, event.payload)
         : this.#deps.emit(event.before, event.payload);
-    return this.#settle(before, draft, itemIds, () => {
+    const refusal: GestureRefusal = {
+      code: gesture.kind === 'resize' ? 'entry-resize-cancelled' : 'entry-move-cancelled',
+      message: `gesture: a ${event.before} handler refused this ${gesture.kind}`,
+      entryId: grabbed.entry,
+    };
+    return this.#settle(before, draft, itemIds, refusal, () => {
       const committed = this.#deps.commitEntryEdits(draft);
       if (committed) {
         if (event.after === 'entryResize') this.#deps.emit(event.after, event.payload);
@@ -226,10 +242,12 @@ export class GesturePipeline {
     result: boolean | Promise<boolean>,
     draft: EntryEdits,
     itemIds: readonly ItemId[],
+    refusal: GestureRefusal,
     finish: () => boolean,
   ): Promise<boolean> {
     if (result === false) {
       this.#preview(undefined);
+      this.#reportRefusal(refusal);
       return Promise.resolve(false);
     }
     if (result === true) {
@@ -244,7 +262,22 @@ export class GesturePipeline {
         return committed;
       }
       this.#releaseHold();
+      this.#reportRefusal(refusal);
       return false;
+    });
+  }
+
+  /** One report per refused gesture, sync veto and settled-`false` Promise alike (D-S5-35). A
+   *  refused *commit* reports from `data/transaction.ts` instead, so `commitEntryEdits` returning
+   *  `false` adds nothing here — one refusal is one record. `severity: 'info'`: the library said no
+   *  on purpose. No `fallback`, because this site printed nothing before and stays silent. */
+  #reportRefusal(refusal: GestureRefusal): void {
+    this.#deps.raiseError({
+      code: refusal.code,
+      message: refusal.message,
+      severity: 'info',
+      by: 'consumer',
+      entryId: refusal.entryId,
     });
   }
 

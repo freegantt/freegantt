@@ -9,9 +9,8 @@
 // shorthand permits it, the same latitude `Array.prototype.forEach`'s callback parameter relies on.
 
 import { DuplicatePluginIdError, PluginSetupError, RegistrationClosedError } from '../model/index.js';
-import type { Disposer, PluginId } from '../model/index.js';
+import type { Disposer, PluginId, RaiseError } from '../model/index.js';
 import { DisposableStore } from './disposables.js';
-import { isDevMode } from '../data/dev-mode.js';
 
 /** What `PluginRuntime` installs — structurally the public `GanttPlugin`, kept generic here (see
  *  file header). Not exported past `view/gantt-shell.ts`'s own use of it. */
@@ -73,9 +72,12 @@ function assertNoDuplicateIds<TContext>(plugins: readonly ShellPlugin<TContext>[
 export class PluginRuntime<TContext> {
   #installed: Installed<TContext>[] = [];
   #buildContext: (pluginId: PluginId) => BuiltPluginContext<TContext>;
+  /** S5.12, D-S5-35: where a dropped reconfigure and a throwing disposer are reported. */
+  #raiseError: RaiseError;
 
-  constructor(buildContext: (pluginId: PluginId) => BuiltPluginContext<TContext>) {
+  constructor(buildContext: (pluginId: PluginId) => BuiltPluginContext<TContext>, raiseError: RaiseError) {
     this.#buildContext = buildContext;
+    this.#raiseError = raiseError;
   }
 
   get plugins(): readonly ShellPlugin<TContext>[] {
@@ -100,7 +102,7 @@ export class PluginRuntime<TContext> {
       (nextIds.has(installed.plugin.id) ? kept : removed).push(installed);
     }
 
-    if (isDevMode()) this.#warnAboutDroppedReconfigures(next, kept);
+    this.#reportDroppedReconfigures(next, kept);
 
     const keptIds = new Set(kept.map((installed) => installed.plugin.id));
     const toAdd = next.filter((plugin) => !keptIds.has(plugin.id));
@@ -143,18 +145,23 @@ export class PluginRuntime<TContext> {
 
   /** Issue #137 F5: `gantt.plugins = [tooltips({ delayMs: 50 })]` after `tooltips()` is already
    *  installed matches by `id` and is silently a no-op — the new options never reach `setup()` again.
-   *  Dev builds warn so the mistake is visible; production stays silent, the same posture as every
-   *  other dev-only diagnostic in this codebase. */
-  #warnAboutDroppedReconfigures(
+   *
+   *  S5.12, D-S5-36: this used to sit behind `isDevMode()`, which reads a flag Vite resolves when
+   *  *this repo* builds `dist/`. The warning therefore reached nobody but our own harness. It now
+   *  reports every time, and the `console.warn` behind it fires only when nothing is subscribed. */
+  #reportDroppedReconfigures(
     next: readonly ShellPlugin<TContext>[],
     kept: readonly Installed<TContext>[],
   ): void {
     for (const plugin of next) {
       const existing = kept.find((installed) => installed.plugin.id === plugin.id);
       if (existing !== undefined && existing.plugin !== plugin) {
-        console.warn(
-          `FreeGantt: plugin "${plugin.id}" was reassigned with a new instance; its options were ` +
-            'not applied. Reconfigure with two assignments (remove, then add) or a distinct id.',
+        const message =
+          `plugin "${plugin.id}" was reassigned with a new instance; its options were ` +
+          'not applied. Reconfigure with two assignments (remove, then add) or a distinct id.';
+        this.#raiseError(
+          { code: 'plugin-reconfigure-dropped', message, severity: 'warning', by: plugin.id },
+          () => console.warn(`FreeGantt: ${message}`),
         );
       }
     }
@@ -166,7 +173,12 @@ export class PluginRuntime<TContext> {
     try {
       installed.dispose();
     } catch (cause) {
-      console.error(`FreeGantt: plugin "${installed.plugin.id}"'s disposer threw`, cause);
+      // S5.12, D-S5-36: report first, console only when nothing is subscribed.
+      const message = `plugin "${installed.plugin.id}"'s disposer threw`;
+      this.#raiseError(
+        { code: 'disposer-failed', message, severity: 'error', by: installed.plugin.id, cause },
+        () => console.error(`FreeGantt: ${message}`, cause),
+      );
     }
   }
 }

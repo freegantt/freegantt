@@ -9,7 +9,7 @@
 // because a plugin may declare a Field and a Field must exist before the first Rollup (D-S5-4).
 
 import { DuplicatePluginIdError, MissingPluginError, PluginRequirementCycleError } from '../model/index.js';
-import type { Disposer, PluginId } from '../model/index.js';
+import type { Disposer, PluginId, RaiseError } from '../model/index.js';
 import { PluginSetupError } from '../model/index.js';
 import { DisposableStore } from './disposables.js';
 import { RegistrationGate } from './plugin-runtime.js';
@@ -85,6 +85,7 @@ export function resolveSetupOrder<TContext>(
  */
 export function installDatasetPlugins<TContext>(
   plugins: readonly OrderedPlugin<TContext>[],
+  raiseError: RaiseError,
   buildContext: (pluginId: PluginId) => BuiltDatasetPluginContext<TContext>,
 ): Disposer {
   assertNoDuplicateIds(plugins);
@@ -95,7 +96,12 @@ export function installDatasetPlugins<TContext>(
     try {
       entry.dispose();
     } catch (cause) {
-      console.error(`FreeGantt: dataset plugin "${entry.id}"'s disposer threw`, cause);
+      // S5.12, D-S5-36: the report always goes out; the `console.error` behind it fires only when
+      // nothing is subscribed to `error`, so an unsubscribed consumer keeps today's output.
+      const message = `dataset plugin "${entry.id}"'s disposer threw`;
+      raiseError({ code: 'disposer-failed', message, severity: 'error', by: entry.id, cause }, () =>
+        console.error(`FreeGantt: ${message}`, cause),
+      );
     }
   };
 

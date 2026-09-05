@@ -257,7 +257,10 @@ ${DARK_COLOR_TOKENS}
 .fg-cell-editor[data-state='invalid'] .fg-cell-editor-control { border-color: var(--fg-warn); }
 /* The Refusal notice (#171): a .fg-cell-editor carrying a reason and no control. data-reason is what
    tells it from a refused editor, which is invalid but does hold one. pointer-events: none is
-   load-bearing — the notice sits over the cell, and the next double-click must reach the cell. */
+   load-bearing — the notice sits over the cell, and the next double-click must reach the cell.
+   S5.12, D-S5-35: data-reason now holds the kebab-case Error report code. This rule matches the
+   attribute and never one of its values, so the rename reaches no selector here. A consumer styling
+   one reason writes [data-reason='derived-value'], which is also the code they read off the report. */
 .fg-cell-editor[data-state='invalid'][data-reason] { pointer-events: none; display: flex; align-items: center; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font: inherit; padding-inline: var(--fg-cell-padding-inline, 8px); border: 1px solid var(--fg-warn); background: var(--fg-pane-bg); color: var(--fg-warn); }
 `.trim();
 
