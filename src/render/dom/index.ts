@@ -20,7 +20,7 @@ import type {
 } from '../../layout/index.js';
 import type { ColumnAlign, FrameColumn } from '../../layout/index.js';
 import type { RenderBackend, RenderSurfaces, InteractionState, HitResult } from '../backend.js';
-import { entryIdOfItem, itemId, itemIdFromDataset } from '../../layout/index.js';
+import { itemId, itemIdFromDataset } from '../../layout/index.js';
 import { attachDateLines } from './date-line.js';
 import type { DateLineAttachment } from './date-line.js';
 import { attachDecorations } from './decorations.js';
@@ -295,23 +295,26 @@ export function createDomBackend(options?: DomBackendOptions): RenderBackend<HTM
    *  only the items whose *token* actually changed, same diff-and-touch pattern as `paintedPending`. */
   let paintedDragging: ReadonlySet<ItemId> = new Set();
   let paintedGhost: ReadonlySet<ItemId> = new Set();
-  /** Bug hunt (S5 fixes): `Gantt.selectedIds` is Entry ids — `applyState`'s own selection paint stays
-   *  keyed by `ItemId` (bars can select one segment), so this is the same selection projected onto
-   *  `EntryId` for `.fg-row`'s paint (`entryIdOfItem`, not a second selection model). Kept alongside
-   *  `paintedSelected` rather than derived inline every `applyState` call, so a syncRows remount
-   *  (below) can restamp a freshly-created row node without recomputing it. */
+  /** The Selection this backend last painted (#185) — Entry ids, the same list the shell wrote.
+   *  `applyState` diffs against it, and both remount paths (`syncRows`, `syncBars`) restamp a
+   *  freshly-created node from it. `paintedSelected` above is its bar-side reading, and is derived
+   *  from `itemIdsByEntryId` rather than authored. */
   let paintedSelectedEntryIds: ReadonlySet<EntryId> = new Set();
   /** What the last `applyState` call stamped `data-state~="selected"` on (D-S3-6/D-S3-7's own
    *  diff-and-touch posture, applied to rows) — `syncRows` below is the only other writer, and only
    *  for a row it just created. */
   let paintedSelectedRows: ReadonlySet<RowId> = new Set();
-  /** `FrameRow.entryId` per mounted row (header rows carry none) — what both `applyState`'s row diff
-   *  and `hitTest`'s grid-row fallback (below) resolve a `RowId` against. `syncRows` is the only
-   *  writer, rebuilt from the frame's own rows every render — never grows stale across a prune. */
-  const rowEntryIds = new Map<RowId, EntryId>();
+  /** The Entries each mounted row owns (a header row owns none) — what `applyState`'s row diff
+   *  resolves a `RowId` against. `syncRows` is the only writer, rebuilt from the frame's own rows
+   *  every render — never grows stale across a prune. */
+  const rowEntryIds = new Map<RowId, readonly EntryId[]>();
   // Committed geometry per mounted bar (D-S3-6): what the handle pair and the future preview offsets
   // (S3.3) both read. `syncBars` is the only writer.
   const barGeomByItemId = new Map<ItemId, HandleGeom>();
+  /** The mounted bars of each Entry (#185) — the Entry→Items relation, read straight off the frame
+   *  `syncBars` synced. It is what turns the Entry-keyed Selection into the bars that paint, so no
+   *  paint step ever builds an Item id out of an Entry id. `syncBars` is the only writer. */
+  const itemIdsByEntryId = new Map<EntryId, ItemId[]>();
 
   /** Moves the shared handle pair onto `geom`, or parks both (D-S3-8) when it is undefined. `hidden`
    *  is a DOM property write, not `.style` — the base stylesheet owns `[hidden] { display: none }`. */
@@ -533,6 +536,22 @@ export function createDomBackend(options?: DomBackendOptions): RenderBackend<HTM
     node.dataset['state'] = tokens.join(' ');
   }
 
+  /** Adds the bars this Entry has mounted right now to `into` (#185). A bar the viewport culled is
+   *  simply absent, and `syncBars`'s own restamp paints it when it comes back. */
+  function addMountedBars(into: Set<ItemId>, entryId: EntryId): void {
+    const mounted = itemIdsByEntryId.get(entryId);
+    if (mounted === undefined) return;
+    for (const id of mounted) into.add(id);
+  }
+
+  /** The bars every one of these Entries has mounted (#185) — the Entry-keyed Selection read as the
+   *  Items that paint. */
+  function mountedBarsOf(entryIds: ReadonlySet<EntryId>): Set<ItemId> {
+    const ids = new Set<ItemId>();
+    entryIds.forEach((entryId) => addMountedBars(ids, entryId));
+    return ids;
+  }
+
   /** Bug hunt (S5 fixes): `.fg-row`'s own selection paint — one token, same shape as `paintDataState`
    *  above but never the bar's five-token set (a row has no hover/pending/drag/ghost paint yet). */
   function paintRowState(rowId: RowId, selected: boolean): void {
@@ -651,7 +670,7 @@ export function createDomBackend(options?: DomBackendOptions): RenderBackend<HTM
   function syncRows(rows: readonly FrameRow[], rowCount: number, columns: readonly FrameColumn[]): void {
     if (!gridLayer) return;
     rowEntryIds.clear();
-    for (const row of rows) if (row.entryId !== undefined) rowEntryIds.set(row.id, row.entryId);
+    for (const row of rows) if (row.entryId !== undefined) rowEntryIds.set(row.id, [row.entryId]);
     rowLayer.sync(gridLayer, rows, {
       key: (row) => row.id,
       create: (row, key) => {
@@ -774,8 +793,13 @@ export function createDomBackend(options?: DomBackendOptions): RenderBackend<HTM
   function syncBars(bars: readonly FrameBar[]): void {
     if (!barLayer) return;
     barGeomByItemId.clear();
+    itemIdsByEntryId.clear();
     for (const bar of bars) {
       barGeomByItemId.set(bar.id, { x: bar.x, y: bar.y, width: bar.width, height: bar.height });
+      // #185: the frame states which Entry drew this bar, so the paint side never parses an id.
+      const mounted = itemIdsByEntryId.get(bar.entryId);
+      if (mounted === undefined) itemIdsByEntryId.set(bar.entryId, [bar.id]);
+      else mounted.push(bar.id);
     }
     barLayerCache.sync(barLayer, bars, {
       key: (bar) => bar.id,
@@ -785,6 +809,15 @@ export function createDomBackend(options?: DomBackendOptions): RenderBackend<HTM
         node.dataset[ITEM_ID_KEY] = bar.id;
         node.dataset[TESTID_KEY] = BAR_TESTID;
         node.setAttribute('role', 'img');
+        // #185: virtualization can create this node well after the selection that ought to paint
+        // it — a bar scrolled back into view must not wait for the next selection change to catch
+        // up. `syncRows` has had this line since the last bug hunt; bars never did, so a remounted
+        // bar came back unpainted. `paintedSelected` gains it too, or the next `applyState` call
+        // would see a spurious diff and repaint a node that is already correct.
+        if (paintedSelectedEntryIds.has(bar.entryId)) {
+          node.dataset['state'] = 'selected';
+          paintedSelected = new Set(paintedSelected).add(bar.id);
+        }
         return node;
       },
       toGeom: (bar) => {
@@ -953,15 +986,18 @@ export function createDomBackend(options?: DomBackendOptions): RenderBackend<HTM
       // D-S3-6/D-S3-7: diff against what was last painted, touch only the bars whose token set
       // changed. No frame recompute, no node creation — `barLayerCache` already holds every mounted
       // bar's node from the last sync().
-      const nextSelected = new Set(state.selectedItemIds ?? []);
+      const nextSelectedEntryIds = new Set(state.selectedEntryIds ?? []);
+      const nextSelected = mountedBarsOf(nextSelectedEntryIds);
       const nextHovered = state.hoveredItemId;
       const nextPending = new Set(state.pendingItemIds ?? []);
       const changed = new Set<ItemId>();
-      paintedSelected.forEach((id) => {
-        if (!nextSelected.has(id)) changed.add(id);
+      // #185: the selection diff runs over Entries, then touches that Entry's bars. It is O(Entries
+      // whose selection flipped), never a scan of every mounted bar (I5).
+      paintedSelectedEntryIds.forEach((id) => {
+        if (!nextSelectedEntryIds.has(id)) addMountedBars(changed, id);
       });
-      nextSelected.forEach((id) => {
-        if (!paintedSelected.has(id)) changed.add(id);
+      nextSelectedEntryIds.forEach((id) => {
+        if (!paintedSelectedEntryIds.has(id)) addMountedBars(changed, id);
       });
       paintedPending.forEach((id) => {
         if (!nextPending.has(id)) changed.add(id);
@@ -980,13 +1016,12 @@ export function createDomBackend(options?: DomBackendOptions): RenderBackend<HTM
       paintedHovered = nextHovered;
       paintedPending = nextPending;
 
-      // Bug hunt (S5 fixes): `.fg-row`'s own selection paint, projected off the same `nextSelected`
-      // ItemIds (`entryIdOfItem`, not a second selection). Still diff-and-touch-only (I5): only rows
-      // whose token actually flips get written, exactly like the bar loop above.
-      const nextSelectedEntryIds = new Set(Array.from(nextSelected, (id) => entryIdOfItem(id)));
+      // Bug hunt (S5 fixes): `.fg-row`'s own selection paint, off the same Entry ids the bars paint
+      // from. A row paints selected when any Entry it owns is selected. Still diff-and-touch-only
+      // (I5): only rows whose token actually flips get written, exactly like the bar loop above.
       const nextSelectedRows = new Set<RowId>();
-      rowEntryIds.forEach((entryId, rowId) => {
-        if (nextSelectedEntryIds.has(entryId)) nextSelectedRows.add(rowId);
+      rowEntryIds.forEach((entryIds, rowId) => {
+        if (entryIds.some((id) => nextSelectedEntryIds.has(id))) nextSelectedRows.add(rowId);
       });
       const changedRows = new Set<RowId>();
       paintedSelectedRows.forEach((rowId) => {
@@ -1066,6 +1101,7 @@ export function createDomBackend(options?: DomBackendOptions): RenderBackend<HTM
       headerCellLayer.clear();
       barLayerCache.clear();
       barGeomByItemId.clear();
+      itemIdsByEntryId.clear();
       paintedHovered = undefined;
       paintedSelected = new Set();
       paintedPending = new Set();

@@ -32,6 +32,74 @@ async function unobstructedBar(page: import('@playwright/test').Page) {
   return page.locator(`#gantt .fg-bar[data-item-id="${itemId}"]`);
 }
 
+/** The first grid row whose Entry draws more than one bar, found at test time. The demo dataset
+ *  gives one Entry several Segments, and a fixed row packs them all onto one line. */
+async function rowWithSeveralBars(page: import('@playwright/test').Page): Promise<string> {
+  const entryId = await page.evaluate(() => {
+    const root = document.querySelector('#gantt');
+    if (root === null) return null;
+    for (const row of Array.from(root.querySelectorAll<HTMLElement>('.fg-row[data-entry-id]'))) {
+      const id = row.dataset['entryId'];
+      if (id === undefined) continue;
+      if (root.querySelectorAll(`.fg-bar[data-item-id^="${id}:"]`).length > 1) return id;
+    }
+    return null;
+  });
+  expect(entryId).not.toBeNull();
+  return entryId!;
+}
+
+/** `data-state` is a token list — the assertion asks for the token, never for the whole string. */
+async function barStates(page: import('@playwright/test').Page, entryId: string): Promise<string[]> {
+  return page.evaluate((id) => {
+    const bars = document.querySelectorAll<HTMLElement>(`#gantt .fg-bar[data-item-id^="${id}:"]`);
+    return Array.from(bars, (bar) => bar.dataset['state'] ?? '');
+  }, entryId);
+}
+
+test('a grid-row click paints every bar of that row (#185)', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
+
+  const entryId = await rowWithSeveralBars(page);
+  const row = page.locator(`#gantt .fg-row[data-entry-id="${entryId}"]`);
+  // A cell past the label cell: the twisty lives in the label cell, and a twisty click collapses
+  // the row instead of selecting it.
+  await row.locator('.fg-row-cell').first().click();
+
+  await expect
+    .poll(async () =>
+      (await barStates(page, entryId)).every((state) => state.split(' ').includes('selected')),
+    )
+    .toBe(true);
+});
+
+test('a selected bar keeps its paint when it remounts after a scroll (#185)', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
+
+  const bar = await unobstructedBar(page);
+  const itemId = (await bar.getAttribute('data-item-id'))!;
+  const box = await bar.boundingBox();
+  expect(box).not.toBeNull();
+  await bar.click({ position: { x: 12, y: box!.height / 2 } });
+  await expect(bar).toHaveAttribute('data-state', /\bselected\b/);
+
+  const pane = page.locator('#gantt .fg-timeline-pane');
+  const scrolledLeft = await pane.evaluate((el) => el.scrollLeft);
+  await pane.evaluate((el) => {
+    el.scrollLeft = el.scrollWidth;
+  });
+  await expect(page.locator(`#gantt .fg-bar[data-item-id="${itemId}"]`)).toHaveCount(0);
+
+  await pane.evaluate((el, left) => {
+    el.scrollLeft = left;
+  }, scrolledLeft);
+  const remounted = page.locator(`#gantt .fg-bar[data-item-id="${itemId}"]`);
+  await expect(remounted).toHaveCount(1);
+  await expect(remounted).toHaveAttribute('data-state', /\bselected\b/);
+});
+
 test('clicking a bar does not highlight bar or page text', async ({ page }) => {
   await page.goto('/');
   await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
