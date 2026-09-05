@@ -30,7 +30,6 @@ interface Harness {
   close(): void;
   shell: GanttShellPorts;
   registry: ReturnType<typeof makeRegistry>;
-  counts: { frames: number; items: number; capabilities: number };
   /** The node this fake Gantt owns. `onDomEvent` must answer for it and for nothing else. */
   container: HTMLElement;
 }
@@ -61,7 +60,6 @@ function makeBar(): FrameBar {
 
 function makeHarness(overrides: Partial<GanttShellPorts> = {}): Harness {
   const registry = makeRegistry();
-  const counts = { frames: 0, items: 0, capabilities: 0 };
   const container = document.createElement('div');
   document.body.append(container);
   const shell: GanttShellPorts = {
@@ -78,32 +76,28 @@ function makeHarness(overrides: Partial<GanttShellPorts> = {}): Harness {
       register: (binding) => registry.add(`keybinding:${binding.chord}`),
       registerHandler: (chord) => registry.add(`handler:${chord}`),
     },
-    registerRenderer: (point) => registry.add(`renderer:${point}`),
+    // #170: one object answers all five register seams now, and each carries the refresh it owes.
+    // What each one invalidates is `plugin-registrations.test.ts`'s subject. This file asks only what
+    // `buildPluginPorts` still decides: the gate, and who holds the disposer.
+    registrations: {
+      registerRenderer: (point) => registry.add(`renderer:${point}`),
+      registerDecoration: (layer) => registry.add(`decoration:${layer}`),
+      registerItemProducer: (kind) => registry.add(`producer:${kind}`),
+      registerKindDefaults: (kind) => registry.add(`defaults:${kind}`),
+      registerGridColumn: () => registry.add('column'),
+    },
     resolveTooltipRenderer: () => undefined,
     lastPaintedBar: () => makeBar(),
     entry: (id) => makeEntry(id),
     resolvedColumns: () => [],
     resolvedColumn: (field) => shell.resolvedColumns().find((column) => column.key === field),
-    addDecorationProvider: (layer) => registry.add(`decoration:${layer}`),
-    itemProducers: { register: (kind) => registry.add(`producer:${kind}`) },
-    kindDefaults: { register: (kind) => registry.add(`defaults:${kind}`) },
-    registerGridColumn: () => registry.add('column'),
     canEdit: () => true,
     proposeEntryEdit: () => true,
     announceEntryEdit: vi.fn(),
-    requestFrame: () => {
-      counts.frames += 1;
-    },
-    invalidateItems: () => {
-      counts.items += 1;
-    },
-    refreshCapabilities: () => {
-      counts.capabilities += 1;
-    },
     ...overrides,
   };
   const { ports, gate } = buildPluginPorts(shell, PLUGIN);
-  return { ports, close: () => gate.close(), shell, registry, counts, container };
+  return { ports, close: () => gate.close(), shell, registry, container };
 }
 
 /** Every seam that is legal only while `setup` runs (D-S5-4), named once. */
@@ -153,66 +147,6 @@ describe('buildPluginPorts — the D-S5-4 gate', () => {
     harness.ports.disposables.disposeAll();
 
     expect(harness.registry.live).toEqual(['handler:Escape']);
-  });
-});
-
-describe('buildPluginPorts — what a registration invalidates', () => {
-  it('a renderer claim repaints on the way in and on the way out (#155)', () => {
-    const harness = makeHarness();
-
-    const dispose = harness.ports.view.registerRenderer('cell', () => ({ text: '' }));
-    expect(harness.counts.frames).toBe(1);
-
-    dispose();
-    expect(harness.counts.frames).toBe(2);
-  });
-
-  it('a decoration provider repaints on both edges', () => {
-    const harness = makeHarness();
-
-    const dispose = harness.ports.view.registerDecoration('underBars', () => []);
-    expect(harness.counts.frames).toBe(1);
-
-    dispose();
-    expect(harness.counts.frames).toBe(2);
-  });
-
-  it('an item producer re-produces every row on both edges', () => {
-    const harness = makeHarness();
-
-    const dispose = harness.ports.layout.registerItemProducer('buffer', () => []);
-    expect(harness.counts).toMatchObject({ items: 1, frames: 1 });
-
-    dispose();
-    expect(harness.counts).toMatchObject({ items: 2, frames: 2 });
-  });
-
-  it('kind defaults re-resolve capabilities on both edges, and paint nothing themselves', () => {
-    const harness = makeHarness();
-
-    const dispose = harness.ports.interaction.registerKindDefaults('buffer', {});
-    expect(harness.counts).toMatchObject({ capabilities: 1, frames: 0 });
-
-    dispose();
-    expect(harness.counts).toMatchObject({ capabilities: 2, frames: 0 });
-  });
-
-  it('a grid column asks for no frame here — `ColumnChrome` already asks on both its own edges', () => {
-    const harness = makeHarness();
-
-    const dispose = harness.ports.view.registerGridColumn('cost');
-    dispose();
-
-    expect(harness.counts).toMatchObject({ frames: 0, items: 0, capabilities: 0 });
-  });
-
-  it('a command and a key binding paint nothing', () => {
-    const harness = makeHarness();
-
-    harness.ports.commands.register({ id: 'demo.run', label: 'Run', run: () => {} });
-    harness.ports.interaction.registerKeybinding({ chord: 'Mod+K', command: 'demo.run' });
-
-    expect(harness.counts).toMatchObject({ frames: 0, items: 0, capabilities: 0 });
   });
 });
 
