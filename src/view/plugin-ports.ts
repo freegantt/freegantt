@@ -317,7 +317,16 @@ export interface PluginContextParts<TGantt = unknown, TDataset = unknown> {
      *  `gantt.gridColumns`, and it never joins a `gridColumnsChange` payload. A resize or a reorder
      *  of it commits and repaints, and still changes neither. So a consumer who saves `gridColumns`
      *  saves their own columns only. Declare the column again on the next install: a Document carries
-     *  no plugin declaration to restore it from. */
+     *  no plugin declaration to restore it from.
+     *
+     *  **This plugin owns this column's width and its place (D-S5-38, #189).** The library reports
+     *  column geometry; it stores it for nobody, the consumer included. A user resize of this column
+     *  lives in session state and reaches no Document. To carry it across a reload, do what a
+     *  consumer does with `gridColumnsChange`. Listen for that same event. Read your own column back
+     *  from `ctx.view.resolvedColumns()`, by `field` — never from the payload, which reports the
+     *  consumer's columns alone. Save the `width` wherever this plugin's own options say. Then pass
+     *  it here on the next install. A plugin that skips this ships a column that resizes for the
+     *  session only, which is a legitimate choice to make on purpose. */
     registerGridColumn(column: GridColumnInput): Disposer;
   };
   /** S5.9, D-S5-22: the pure layout side of the four-seam kind contract — what shape a

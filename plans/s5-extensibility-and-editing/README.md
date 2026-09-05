@@ -279,6 +279,7 @@ Full prose lives in the step file that implements each decision.
 | D-S5-35 | One gesture's rule is written by a verb, not by restating `interactions` | S5.9 |
 | D-S5-36 | One plugin is installed by a verb, not by restating the set | S5.1 |
 | D-S5-37 | A column is named by its `field`, everywhere a column is named | S5.7 |
+| D-S5-38 | A plugin owns its own column's geometry; the library stores it for nobody | S5.9 |
 
 ---
 
