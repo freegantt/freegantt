@@ -183,6 +183,7 @@ The reading itself lives in `time/` (`toInstant`, `toEndInstant`) — resolving 
 | `beforeCollapseChange` | `collapseChange` |
 | — | `navigationChange` (one Viewport Batch: Preset, Fit, Range, Pan, Anchored zoom) |
 | `beforeChange` | `change` (every committed `ChangeSet`) |
+| — | `error` (every refusal and every recovered fault; **the one name on both buses**) |
 | — | `scheduleDiagnostics` (engine findings) |
 
 `navigationChange` (S1.12) fires once per Viewport Batch after Preset, Fit, Range, Pan, or Anchored zoom actually change. There is no `before*` pair: those writes are reconfiguration (S1.9), not a vetoable gesture. Chrome reads `presetId` / `canZoom*` from the payload, or re-reads the live Gantt getters.
@@ -194,6 +195,21 @@ The reading itself lives in `time/` (`toInstant`, `toEndInstant`) — resolving 
 `minGridWidth` (#127) is a live, plain-reconfiguration property — not a gesture, so it carries no `before*`/`*Change` pair of its own. It floors what the Splitter drag can reach, and nothing else: no floor applies to a written width, so `gantt.gridWidth = 0` collapses the grid pane on purpose. (#139's ceiling is the one bound that does reach a written width — a floor guards against a user accident, which an app author is allowed past; a ceiling states a layout fact.) Default `40` — wide enough for one narrow column, so a drag cannot take the pane to nothing by accident; `minGridWidth: 0` restores an unfloored splitter. Raising `minGridWidth` above the current `gridWidth` fires `beforeGridWidthChange`/`gridWidthChange` to lift it — the same commit sequence a drag would use, so a veto leaves the width exactly where it was.
 
 `beforeCollapseChange`/`collapseChange` (S4.6, D-S4-22) carry `{ from, to }` as `RowId[]` — Gantt view state, no Dataset transaction. Fired by a twisty click, keyboard collapse/expand, and a direct `gantt.collapsed = ids` assignment. A veto restores the set the interaction started from. Collapse is per Gantt: two Gantts on one Dataset collapse independently, the same way `selectedIds` already does.
+
+`error` (S5.12, D-S5-35/36/37) is the one event name that lives on **both** buses, and it carries the
+same `ErrorReport` on each. That is not the "every event name exists exactly once" rule breaking. The
+rule keeps one *concept* to one name, and a report is one concept: a Dataset raises what a Dataset
+observes, a Gantt raises what a Gantt observes, and neither forwards the other's. Two Gantts on one
+Dataset therefore deliver a Dataset report once, not twice, and a report raised inside
+`new Dataset(...)` is not lost for want of a Gantt to raise it on. A consumer who wants the two feeds
+as one calls `watchAllErrors([dataset, gantt], handler)`, which de-duplicates by emitter identity and
+returns one disposer. There is no `before*` pair: a report states what already happened.
+
+The payload is flat — `at`, `code`, `message`, `severity`, `by`, and the optional `entryId`, `field`
+and `cause` — so it renders and serializes with no type test. `severity` is `'info'` for a Refusal
+(the library said no on purpose), `'warning'` for something it recovered from, `'error'` for
+something it did not. Core raises and retains nothing: there is no `gantt.errors` array, because the
+cap, the overflow rule and the dedupe are the consumer's policy.
 
 S3 data-gesture payloads (D-S3-22): `beforeEntryMove`/`entryMove` carry `ProposedSpan` (`entry`, `start`, `end`) plus `entries` (grabbed first; extender extras never included). `beforeEntryResize`/`entryResize` add `edge: 'start' | 'end'`. `beforeSelectionChange`/`selectionChange` carry `{ from, to }` as `EntryId[]` — Gantt state, no Dataset transaction. `beforeEntryMove`/`beforeEntryResize` handlers may return `Promise<void | false>` (D-S3-17); every other Gantt event stays sync-only.
 
@@ -229,7 +245,10 @@ Rules:
 - Cancelable handlers may return `false` or `Promise<false>`; an async veto suspends the gesture with a visible pending state — it never commits optimistically. **`beforeChange` is the one exception: it is sync-only.** A data commit has nothing to suspend into — the store would have to hold its write set across an `await`, and every mutator would have to turn `async` to make that safe. The async path stays where gestures already are, one layer up in `interaction/`.
 - Pointer/gesture events fire on the `Gantt` (view concern); data events fire on the `Dataset` (data concern). Every event name exists exactly once.
 - Payloads are typed, stable, and carry entities plus context — no "re-read everything" events.
-- `change` is the only path out of a commit: the view's live binding and the undo history are both ordinary subscribers to it, not privileged internals with a second, private channel. `beforeChange` may refuse a changeset but never edit one — rewriting a proposed edit is the extension hook's job, and it has exactly one owner. A vetoed programmatic call (e.g. `entries.update()`) throws `MutationCancelledError` carrying the refused changeset, because a function with a return contract cannot quietly not honour it; a vetoed gesture is silent, the way `beforeGridWidthChange` already is.
+- `change` is the only path out of a commit: the view's live binding and the undo history are both ordinary subscribers to it, not privileged internals with a second, private channel. `beforeChange` may refuse a changeset but never edit one — rewriting a proposed edit is the extension hook's job, and it has exactly one owner. A vetoed programmatic call (e.g. `entries.update()`) throws `MutationCancelledError` carrying the refused changeset, because a function with a return contract cannot quietly not honour it; a vetoed gesture is silent, the way `beforeGridWidthChange` already is. **Silent in the UI, not
+unrecorded (S5.12, D-S5-35):** nothing is drawn and nothing throws, and one `ErrorReport` goes out on
+`error` at `severity: 'info'`, so a consumer can say what happened without reading a veto they did
+not write.
 
 ---
 
