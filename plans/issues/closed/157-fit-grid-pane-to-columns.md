@@ -20,7 +20,7 @@ too small and you silently get a scrolling pane instead, with nothing to say whi
 pane sits on the columns' edge and keeps sitting there.
 
 - **It is a standing instruction, not a width read once.** `GanttShell` remembers it
-  (`#gridWidthFollowsColumns`) and re-measures on every `#bindColumns` — a column resize, a hidden
+  (`#fitsColumns`) and re-measures on every `#bindColumns` — a column resize, a hidden
   column, a plugin-registered column all move the pane, *in both directions*. #139's ceiling only
   ever brought a pane in; a fitted pane widens with a widened set too.
 - **The getter still answers in px.** The consumer asked how wide the pane is, and that is a
