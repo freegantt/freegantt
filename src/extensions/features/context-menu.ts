@@ -1,8 +1,8 @@
 // extensions/features/ — the context menu built-in (S5.5, D-S5-13/14). An ordinary `GanttPlugin`,
 // confined by the `extensions-public-only` rule (D-S5-5) to `api/`/`model/` imports — the dogfood
 // gate this step proves (`[S5-A1]`). Every import below names its own narrow source file, never the
-// `api/index.ts` barrel (which re-exports `contextMenu` itself, D-S5-13) — the same reason
-// `extensions/popup.ts` imports `api/plugin.ts` directly instead of that barrel (no-circular).
+// `api/index.ts` barrel. That barrel re-exports `contextMenu` itself (D-S5-13). `extensions/popup.ts`
+// imports `api/plugin.ts` directly instead of that barrel, for the same reason (no-circular).
 //
 // Review A3/A4: this file names no `.fg-*` class and no `data-*` key of the rendered Gantt. It asks
 // `ctx.view.dom` what a node is, and `ctx.view.onDomEvent` scopes every document listener to this
@@ -38,11 +38,13 @@ function commandTargetOf(target: DomTarget): CommandTarget {
 }
 
 /** D-S5-13: right-click, or `Shift+F10`/the Menu key, opens a menu of the commands whose `when`
- *  passes for the target. `focus: 'trap'` (D-S5-9): arrow keys move between items, Enter/click runs
- *  one and closes, Escape closes and returns focus — the same primitive `tooltips()` builds on
- *  (`extensions/popup.ts`, reached through `createPopup` at `api/index.js`, never imported directly —
- *  D-S5-5). An item names a command and nothing else (D-S5-14): it carries no `run` of its own, so
- *  the mouse path and the keyboard path are one action, never two that can drift apart. */
+ *  passes for the target. `focus: 'trap'` (D-S5-9): arrow keys move between items. Enter or a click
+ *  runs one item and closes the menu. Escape closes the menu and returns focus. `tooltips()` builds
+ *  on the same primitive, `extensions/popup.ts`. This file reaches it through `createPopup` at
+ *  `api/index.js`, and never imports it directly (D-S5-5).
+ *
+ *  An item names a command and nothing else (D-S5-14). It carries no `run` of its own. The mouse
+ *  path and the keyboard path are one action, never two that can drift apart. */
 export function contextMenu(options: ContextMenuOptions = {}): GanttPlugin {
   return {
     id: 'freegantt.contextMenu',
@@ -51,14 +53,15 @@ export function contextMenu(options: ContextMenuOptions = {}): GanttPlugin {
         registerHandler: (chord, handler, handlerOptions) =>
           ctx.interaction.registerKeyHandler(chord, handler, handlerOptions),
       });
-      /** The listeners one open menu needs. They live exactly as long as that menu. Reassigned on
-       *  every close, because `DisposableStore.disposeAll()` latches: a spent store fires every
-       *  later `add` at once, which is the same trap `createPopup`'s own store avoids this way. */
+      /** The listeners one open menu needs. They live exactly as long as that menu. `forgetOpenMenu`
+       *  reassigns the store on every close, because `DisposableStore.disposeAll()` latches. A spent
+       *  store fires every later `add` at once. `createPopup`'s own store avoids that trap the same
+       *  way. */
       let menuListeners = new DisposableStore();
-      // B2: the menu lists commands resolved for the right-clicked (or focused-row) target — `run()`
-      // below must invoke that same command against that same context, not against whatever
-      // `ctx.commands`'s own `#buildCommandContext` would rebuild from the current selection
-      // (D-S5-14: the mouse path and the keyboard path are one action). `CommandOf.run` is public
+      // B2: the menu lists commands resolved for the right-clicked (or focused-row) target. `run()`
+      // below must invoke that same command against that same context. It must not use whatever
+      // `ctx.commands`'s own `#buildCommandContext` would rebuild from the current selection.
+      // D-S5-14: the mouse path and the keyboard path are one action. `CommandOf.run` is public
       // (`api/command.ts`), so this needs no wider access than `available()` already returned.
       let openCommands: { readonly available: readonly Command[]; readonly ctx: CommandContext } | undefined;
 
@@ -78,10 +81,10 @@ export function contextMenu(options: ContextMenuOptions = {}): GanttPlugin {
         const commands = openCommands;
         closeMenu();
         if (commandId === null || commands === undefined) return;
-        // B2: run the command found in *this menu's own* `available` list, against *this menu's
-        // own* `commandCtx` (the right-clicked bar, or the focused row) — not
-        // `ctx.commands.run(commandId)`, which would rebuild context from the current selection and
-        // silently no-op when that selection is not the entry the menu was opened for.
+        // B2: run the command found in *this menu's own* `available` list. Run it against *this
+        // menu's own* `commandCtx` — the right-clicked bar, or the focused row. Do not call
+        // `ctx.commands.run(commandId)`. That call rebuilds context from the current selection.
+        // It then no-ops silently when that selection is not the entry the menu opened for.
         const command = commands.available.find((c) => c.id === commandId);
         command?.run(commands.ctx);
       };
@@ -117,7 +120,7 @@ export function contextMenu(options: ContextMenuOptions = {}): GanttPlugin {
         });
 
         // A click runs the item's command. `onDomEvent` keeps this to nodes inside this Gantt's own
-        // container, so a click on a *second* Gantt's open menu never runs a command against this
+        // container. A click on a *second* Gantt's open menu never runs a command against this
         // Gantt's `openCommands` (I2, bug hunt B1).
         menuListeners.add(
           ctx.view.onDomEvent('click', (event) => {
@@ -149,10 +152,10 @@ export function contextMenu(options: ContextMenuOptions = {}): GanttPlugin {
       };
 
       // B1: this Gantt's menu owns only right-clicks that land inside its own container. A click on
-      // page chrome, a second widget, or a second Gantt reaches the browser's own menu (or that
-      // other Gantt's) untouched — `ctx.view.onDomEvent` is that scope, and the target it resolves
-      // names the same entry for a bar, a grid cell or a row alike (parity with `render/dom`'s own
-      // `hitTest` grid-row fallback).
+      // page chrome or a second widget reaches the browser's own menu untouched. A click on a
+      // second Gantt reaches that other Gantt's menu untouched. `ctx.view.onDomEvent` is that
+      // scope. The target it resolves names the same entry for a bar, a grid cell or a row alike.
+      // That is parity with `render/dom`'s own `hitTest` grid-row fallback.
       ctx.view.onDomEvent('contextmenu', (event, target) => {
         event.preventDefault();
         openAt(new DOMRect(event.clientX, event.clientY, 0, 0), target);

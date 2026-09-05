@@ -327,9 +327,13 @@ Files: `src/view/renderer-registry.ts`, `src/layout/items/produce-items.ts`, `sr
       `CONTEXT.md` was outside its owned files. Promote it, and link the seven-row table.
       **Refusal notice** sits beside **Popup** and **Dismiss trigger** in the Extension section, and
       links the seven-row table for which refusals speak.
-- [ ] **Carried from R3.** ST1's comment pass now covers three files R3 added or reworked:
+- [x] **Carried from R3.** ST1's comment pass now covers three files R3 added or reworked:
       `src/render/dom/dom-contract.ts`, `src/view/gantt-dom.ts`, and the new blocks in
       `src/view/plugin-ports.ts` and `src/extensions/features/context-menu.ts`.
+      All four files read at zero sentences over the ceiling. 25 sentences split: one in
+      `dom-contract.ts`, eleven in `gantt-dom.ts`, five in `plugin-ports.ts` and eight in
+      `context-menu.ts`. Every decision id, issue number, invariant and "what broke without it"
+      survives, including B1's two-Gantt scope and B2's rebuilt-context no-op.
 - [ ] **ST1 — the comment pass.** This is the branch's one hard standards breach.
       `CLAUDE.md` allows 20 words for an instruction and 25 for a description. One instruction per sentence.
       Split the long sentences in `src/api/plugin.ts`, `src/extensions/features/*.ts` and
