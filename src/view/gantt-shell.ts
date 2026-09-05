@@ -320,6 +320,16 @@ function setOptional<T, K extends keyof T>(target: T, key: K, value: T[K] | unde
   else target[key] = value;
 }
 
+/** Do two pick maps narrow the Selection paint the same way (#185)? It tells a repeat click on an
+ *  already-selected Entry from a click that moved the pick to another of its bars. */
+function samePicks(a: ReadonlyMap<EntryId, ItemId>, b: ReadonlyMap<EntryId, ItemId>): boolean {
+  if (a.size !== b.size) return false;
+  for (const [entryId, itemId] of a) {
+    if (b.get(entryId) !== itemId) return false;
+  }
+  return true;
+}
+
 function resolveContainer(container: HTMLElement | string): HTMLElement {
   if (typeof container !== 'string') return container;
   const el = document.querySelector(container);
@@ -364,6 +374,10 @@ export class GanttShell {
    *  select step (I5). Never rebuilt per call. */
   #interactionState: InteractionState = {};
   #selection: readonly EntryId[] = [];
+  /** How wide each selected Entry's paint runs (#185): the bar the pointer picked from it, or no
+   *  entry at all when the whole Entry paints. `#interactionState` carries the same map to the
+   *  backend, the way `#selection` carries the Selection itself. */
+  #pickedItemIdByEntryId: ReadonlyMap<EntryId, ItemId> = new Map();
   /** S3.2, D-S3-9: resolved once, re-resolved only when `interactions` is reassigned — never per
    *  hover step. `#refreshAffordances` reads it, it never calls `resolveCapabilities` itself. */
   #interactions: Interactions = {};
@@ -1007,33 +1021,48 @@ export class GanttShell {
 
   #proposeSelection(next: readonly EntryId[], pickedItemId?: ItemId): void {
     const from = this.#selection;
+    const picks = this.#resolvePicks(next, pickedItemId);
     const entriesEqual = from.length === next.length && from.every((id, i) => id === next[i]);
-    if (entriesEqual && pickedItemId !== undefined) {
-      if (this.#interactionState.pickedItemId === pickedItemId) return;
-      this.#writePickedItem(next, pickedItemId);
+    if (entriesEqual) {
+      // The same Entries, picked differently (#185). A click moved to another bar of the selected
+      // Entry, or a grid-row click widened the paint back to the whole Entry. The Selection itself
+      // did not change, so no `selectionChange` fires — only the paint and the handles catch up.
+      if (samePicks(picks, this.#pickedItemIdByEntryId)) return;
+      this.#writePicks(picks);
       this.#refreshAffordances();
       return;
     }
-    if (entriesEqual) return;
     this.#proposeChange('beforeSelectionChange', 'selectionChange', { from, to: next }, () => {
       this.#selection = next;
-      // #185: the Selection goes to the backend as it is. Which bars paint is the backend's own
-      // question, answered from the frame it synced — the shell names no Item here.
+      // #185: the Selection goes to the backend as it is. Which bars a selected Entry drew is the
+      // backend's own question, answered from the frame it synced — the shell names no Item here.
       this.#interactionState.selectedEntryIds = next;
-      this.#writePickedItem(next, pickedItemId);
+      this.#writePicks(picks);
       this.#refreshAffordances();
     });
   }
 
-  /** The bar the pointer landed on (#185). It survives only while the new selection still holds the
-   *  entry that drew it — the handle pair must never sit on a deselected bar. */
-  #writePickedItem(next: readonly EntryId[], pickedItemId: ItemId | undefined): void {
-    const picked = pickedItemId ?? this.#interactionState.pickedItemId;
-    const kept =
-      picked !== undefined && next.some((id) => this.#layout.itemIdsForEntry(id).includes(picked))
-        ? picked
-        : undefined;
-    setOptional(this.#interactionState, 'pickedItemId', kept);
+  /** Which bar the pointer picked from each selected Entry once this proposal lands (#185). A
+   *  proposal that names a bar keeps the picks of the Entries that stay selected and adds its own.
+   *  That is how a ctrl-click on a second bar leaves the first one narrowed. A proposal that names
+   *  none drops every pick, so a grid-row click, a keyboard select and `gantt.selectedIds = [...]`
+   *  all paint whole Entries. Which Entry drew the picked bar is the layout's answer, never a parse
+   *  of the Item id. */
+  #resolvePicks(next: readonly EntryId[], pickedItemId: ItemId | undefined): ReadonlyMap<EntryId, ItemId> {
+    const picks = new Map<EntryId, ItemId>();
+    if (pickedItemId === undefined) return picks;
+    for (const id of next) {
+      const kept = this.#pickedItemIdByEntryId.get(id);
+      if (kept !== undefined) picks.set(id, kept);
+    }
+    const drewIt = next.find((id) => this.#layout.itemIdsForEntry(id).includes(pickedItemId));
+    if (drewIt !== undefined) picks.set(drewIt, pickedItemId);
+    return picks;
+  }
+
+  #writePicks(picks: ReadonlyMap<EntryId, ItemId>): void {
+    this.#pickedItemIdByEntryId = picks;
+    this.#interactionState.pickedItemIdByEntryId = picks;
   }
 
   get interactions(): Interactions {
@@ -1318,7 +1347,7 @@ export class GanttShell {
     const ids = projectAffordances({
       hoveredItemId: this.#hoveredItemId,
       selection: this.#selection,
-      pickedItemId: this.#interactionState.pickedItemId,
+      pickedItemIdByEntryId: this.#pickedItemIdByEntryId,
       itemIdsForEntry: (id) => this.#layout.itemIdsForEntry(id),
       canGesture: (capability, id) => this.#canGesture(capability, id),
     });

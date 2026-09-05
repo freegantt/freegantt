@@ -90,6 +90,11 @@ function translateX(node: HTMLElement): number {
   return Number(/translate\((-?[\d.]+)px/u.exec(node.style.transform)?.[1] ?? NaN);
 }
 
+/** The `data-state` tokens one bar carries right now — `''` when it carries none. */
+function stateOf(container: HTMLElement, item: ItemId): string {
+  return container.querySelector(`[data-item-id="${item}"]`)?.getAttribute('data-state') ?? '';
+}
+
 function pxWidth(node: HTMLElement): number {
   return Number(node.style.width.replace('px', ''));
 }
@@ -827,7 +832,7 @@ describe('GanttShell hot path (S3.2, D-S3-6/D-S3-9, [S3-A3])', () => {
     shell.destroy();
   });
 
-  it('clicking one segment paints every bar of that entry, and the handle pair brackets its envelope (#185, #200)', () => {
+  it('clicking one segment paints that bar alone, and the handle pair still brackets the envelope (#185, #200)', () => {
     const segmented: Entry = {
       id: entryId('seg'),
       name: 'segmented',
@@ -856,13 +861,23 @@ describe('GanttShell hot path (S3.2, D-S3-6/D-S3-9, [S3-A3])', () => {
     const second = itemId(segmented.id, 1);
     propose?.([segmented.id], second);
 
-    // The Selection is the Entry, so both of its bars carry the token — "this Segment is selected
-    // but its sibling is not" means nothing (D-S3-10).
-    for (const item of [first, second]) {
-      expect(container.querySelector(`[data-item-id="${item}"]`)?.getAttribute('data-state')).toContain(
-        'selected',
-      );
-    }
+    // The pointer named one bar, so the paint runs that far and no further (#185). The Selection is
+    // still the Entry: `selectedIds` says so, and a drag on either bar moves both (#200).
+    expect(stateOf(container, second)).toContain('selected');
+    expect(stateOf(container, first)).not.toContain('selected');
+    expect(shell.selection).toEqual([segmented.id]);
+
+    // A proposal that names no bar — a grid-row click, or `gantt.selectedIds = [...]` — widens the
+    // paint back to every bar the Entry drew, without a second `selectionChange`.
+    propose?.([segmented.id]);
+    expect(stateOf(container, first)).toContain('selected');
+    expect(stateOf(container, second)).toContain('selected');
+
+    // And picking a bar again narrows it back.
+    propose?.([segmented.id], first);
+    expect(stateOf(container, first)).toContain('selected');
+    expect(stateOf(container, second)).not.toContain('selected');
+
     // A resize acts on the Entry's envelope (#200), so the pair straddles both bars: the start
     // handle on the earliest bar's left edge, the end handle on the latest bar's right edge.
     const start = container.querySelector<HTMLElement>('.fg-bar-handle[data-edge="start"]')!;
