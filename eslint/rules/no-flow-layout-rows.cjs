@@ -9,6 +9,13 @@
 // pane's left edge (`getBoundingClientRect().left`) so ctrl+wheel can pass a pane-relative
 // `offsetX` into `zoomBy` — also pane-box geometry, not a row height.
 //
+// Not exempt, and asked for once already: `mount-layer.ts` and `gantt-dom.ts`. Both need a layer's
+// or a pane's box, which is the same category the exemptions above cover. Both take a reader from
+// `PaneLayout` instead. Read `src/view/mount-layer.ts`'s header before you add either one here
+// (#163). Two rules of thumb for the next request. A file whose subject is a *pane* may join this
+// list. A file whose subject is a *layer*, a *row* or a *cell* takes a reader, because that is the
+// file where a row measurement would appear, and this rule is the only thing that would catch it.
+//
 // Syntactic, not type-aware (docs/01 §I9 is AUTO-PARTIAL, mirroring I12's own shape): this rule
 // bans reading `offsetHeight`/`clientHeight` and calling `getBoundingClientRect()`. It does not
 // catch an assignment to `style.height` sourced from something other than `frame.rows[i].height` —

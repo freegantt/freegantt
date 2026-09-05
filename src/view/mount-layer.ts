@@ -17,6 +17,15 @@
 // `PaneLayout` reads the rect, not this file. It builds both layer elements, and it is the one place
 // I9's lint scope lets `src/view/` measure a box at all. `view/gantt-dom.ts` delegates its own
 // `bounds`/`paneBounds` there for the same reason.
+//
+// Why a reader, and not an exemption? (#163 loose end (b), decided 2026-09-05.) A pane box is not a
+// row height, so I9 exempts `pane-layout.ts` for measuring one. This file could have joined that
+// list. It does not, on purpose. I9 is a per-file, syntactic ban. This file's whole subject is a
+// layer that content mounts into, and the row layer is the rows' own container. It is therefore the
+// `src/view/` file most likely to grow a row measurement by accident, which is the measurement I9
+// exists to stop. An exemption here would take the guard off that file for good, to save one
+// constructor parameter. `gantt-dom.ts` already delegates the same way, so keeping this reader keeps
+// one story rather than starting a second.
 
 import type { Disposer } from '../model/index.js';
 
@@ -80,7 +89,11 @@ export class ContainerResize {
 }
 
 /** One `MountLayer` over one element. `GanttShell` builds two: `panes.overlay` and `panes.rows`.
- *  `readBounds` is that element's own `PaneLayout` measurement. */
+ *
+ *  `readBounds` answers "who is allowed to measure a box", not "which box". It always reads the same
+ *  element this layer holds — `() => paneLayout.overlayBounds()` beside `paneLayout.panes.overlay`.
+ *  The reader keeps `PaneLayout` the one measuring point in `src/view/`, so I9 keeps guarding this
+ *  file. The file header says why that is worth a parameter. */
 export class DomMountLayer implements MountLayer {
   readonly #layer: HTMLElement;
   readonly #readBounds: () => DOMRect;
