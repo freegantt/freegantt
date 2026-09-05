@@ -322,10 +322,10 @@ export interface GanttShellOptions {
   backend?: RenderBackend<HTMLElement>;
   /** S3.6, D-S3-18, P1: an installed extension hook, read for **preview only** — ghosts its extras in
    *  the rAF-coalesced drag preview. `api/gantt.ts` passes the bound Dataset's own occupant here
-   *  (S5.10), which is the identity function until a Dataset plugin composes onto it (D-S5-23); a
-   *  test constructing `GanttShell` directly passes its own, the same shape `commitEntryEdits` already
-   *  uses. The real hook still runs again, for real, inside `data/transaction.ts`'s own commit. This
-   *  option never writes anything itself. */
+   *  (S5.10). That occupant is the identity function until a Dataset plugin composes onto it
+   *  (D-S5-23). A test that constructs `GanttShell` directly passes its own, the same shape
+   *  `commitEntryEdits` already uses. The real hook still runs again, for real, inside
+   *  `data/transaction.ts`'s own commit. This option never writes anything itself. */
   editExtender?: EditExtender;
   /** Internal (D-S4-24). One registry per Gantt, seeded with span/group/milestone. Tests inject a
    *  replacement; `GanttOptions` has no such field (public registration is S5). */
