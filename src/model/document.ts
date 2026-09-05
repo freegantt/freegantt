@@ -43,7 +43,10 @@ export interface DatasetDocument<TMeta = unknown> {
   timeZone: string;
   dateOnlyEnd: DateOnlyEndRule;
   rollUpKinds: readonly EntryKind[];
-  /** Declaration order. Core Fields are never written — the reader seeds them itself. */
+  /** Declaration order. Core Fields are never written — the reader seeds them itself, and neither is
+   *  a plugin's (D-S5-33). A row says nothing about who declared it, so every row here reads back as
+   *  the consumer's. A `schema: 3` Document written before D-S5-33 can still hold a plugin's
+   *  declaration, and it is not supported — `data/serialization/read.ts` says why (#192). */
   fields?: readonly SerializedField[];
   /** Written at `schema: 3` and above. Omitted when no plugin holds a row. */
   plugins?: PluginDocument;

@@ -208,7 +208,8 @@ export class Gantt {
       // S5.10, D-S5-23/D-S3-18: the drag preview ghosts whatever the installed extension hook would
       // add. Read live off the Dataset — every plugin composes onto that one occupant, so this stays
       // the identity function for a Dataset with no plugin installed. Preview only: the commit runs
-      // the same occupant again, for real, inside the transaction.
+      // the same occupant again, for real, inside the transaction. `api/gantt.test.ts`'s "#186"
+      // suite fails if this ever becomes a stored value.
       editExtender: (request) => options.dataset.editExtender(request),
       wiring: {
         entryGestures: attachEntryGestures,
@@ -339,7 +340,9 @@ export class Gantt {
     this.#shell.showGridColumn(field);
   }
 
-  /** Live (S5.4, D-S5-11/12). Assigning repaints every bar with no remount (I8). */
+  /** Live (S5.4, D-S5-11/12). Assigning repaints every bar with no remount (I8). A `RendererByKind`
+   *  map is a value, not a mutable object (#187): mutate the map you already assigned, assign it
+   *  again, and nothing repaints. Assign a copy — `{ ...map, milestone: paint }`, `plans/02` §2. */
   get barRenderer(): BarRenderer | RendererByKind | undefined {
     return this.#shell.barRenderer;
   }
@@ -375,7 +378,8 @@ export class Gantt {
     this.#shell.tooltipRenderer = renderer;
   }
 
-  /** Live (S4.6, D-S4-21). Assigning re-resolves rows with no remount. */
+  /** Live (S4.6, D-S4-21). Assigning re-resolves rows with no remount. The config object is a value
+   *  (#187): assign a copy after a change, not the object already held. */
   get rowSource(): RowSource {
     return this.#shell.rowSource;
   }
