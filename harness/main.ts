@@ -62,6 +62,9 @@ const gantt = new Gantt({
   container: '#gantt',
   dataset,
   gridColumns: GRID_WITH_BUDGET,
+  // #157: the pane is as wide as its columns, and stays that way when the budget column comes and
+  // goes below. The number this replaces was hand-tuned to one column set.
+  gridWidth: 'fitColumns',
   rowSource: { source: 'entries', tree: true },
   dateLines: [{ placeAt: mobilization, label: 'Mobilization', className: 'fg-mobilization-line' }],
 });

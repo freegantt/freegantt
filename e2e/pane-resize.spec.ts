@@ -77,8 +77,8 @@ test('the splitter stops at the last column instead of opening dead space (#139)
   const gridPane = page.locator('#gantt .fg-grid-pane');
   const paneWidth = async (): Promise<number> => gridPane.evaluate((el) => el.clientWidth);
 
-  // The page authors `--fg-grid-pane-width: 720px`, past its own columns — the pane comes in to
-  // their edge before the first paint rather than opening dead space beside them.
+  // The page asks for `gridWidth: 'fitColumns'` (#157), so the pane opens on its columns' edge
+  // before the first paint rather than on a number the page hand-computed.
   expect(await paneWidth()).toBe(columnsWidth);
 
   // Narrower is always legal: the columns overflow and the pane scrolls to reach them (#126).
@@ -90,6 +90,31 @@ test('the splitter stops at the last column instead of opening dead space (#139)
   await dragSplitterBy(page, 600);
   expect(await paneWidth()).toBe(columnsWidth);
   expect(await gridPane.evaluate((el) => el.scrollWidth - el.clientWidth)).toBe(0);
+});
+
+// #157: `gridWidth: 'fitColumns'` is a standing instruction, not a width read once. The harness
+// toggles its Budget column at runtime, which is the honest test — a real column set changing under
+// a pane that was never told a number.
+test("'fitColumns' re-measures when the column set changes (#157)", async ({ page }) => {
+  await page.goto('/');
+  await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
+
+  const gridPane = page.locator('#gantt .fg-grid-pane');
+  const paneWidth = async (): Promise<number> => gridPane.evaluate((el) => el.clientWidth);
+  const columnsWidth = async (): Promise<number> =>
+    page
+      .locator('#gantt .fg-col-header')
+      .evaluateAll((cells) => cells.reduce((sum, cell) => sum + cell.getBoundingClientRect().width, 0));
+
+  const withBudget = await paneWidth();
+  expect(withBudget).toBe(await columnsWidth());
+
+  await page.locator('#toggle-budget-btn').click();
+  await expect.poll(paneWidth, { timeout: 2000 }).toBeLessThan(withBudget);
+  expect(await paneWidth()).toBe(await columnsWidth());
+
+  await page.locator('#toggle-budget-btn').click();
+  await expect.poll(paneWidth, { timeout: 2000 }).toBe(withBudget);
 });
 
 // U1/U4 (plans/s1.8-pane-layout/README.md §0): dragging the splitter moves both panes live, and

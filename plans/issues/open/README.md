@@ -9,6 +9,12 @@ issue plans land here as they're opened.
 - _(none)_
 
 **Closed:**
+- [#157](https://github.com/Pawel-IT/FreeGantt/issues/157) — no way to say
+  "size the grid pane to its columns". `gridWidth` now takes `'fitColumns'`:
+  the pane sits on the columns' own edge and re-measures on every rebind, so
+  a consumer never restates a width the library already computes. The getter
+  still answers in px; a Splitter drag ends the instruction. See
+  [../closed/157-fit-grid-pane-to-columns.md](../closed/157-fit-grid-pane-to-columns.md).
 - [#139](https://github.com/Pawel-IT/FreeGantt/issues/139) — Grid columns
   flex-resize instead of supporting fixed widths with overflow scroll. A Grid
   column is fixed-width by default now: `resolveColumns` fills a width from

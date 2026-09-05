@@ -1001,6 +1001,120 @@ describe('Gantt minGridWidth (#127)', () => {
     gantt.destroy();
   });
 
+  it("gridWidth: 'fitColumns' opens the pane on the columns' own edge (#157)", () => {
+    const container = document.createElement('div');
+    const gantt = new Gantt({
+      container,
+      dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }),
+      gridWidth: 'fitColumns',
+      // 240 + 120: the consumer never says 360 anywhere.
+      gridColumns: ['name', 'start'],
+    });
+
+    expect(gantt.gridWidth).toBe(360);
+    expect(container.querySelector<HTMLElement>('.fg-grid-pane')!.style.width).toBe('360px');
+    gantt.destroy();
+  });
+
+  it("'fitColumns' widens with the columns, not only in (#157)", async () => {
+    const container = document.createElement('div');
+    const gantt = new Gantt({
+      container,
+      dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }),
+      gridWidth: 'fitColumns',
+      gridColumns: ['name'],
+    });
+    expect(gantt.gridWidth).toBe(240);
+
+    gantt.gridColumns = ['name', 'start'];
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    expect(gantt.gridWidth).toBe(360);
+
+    gantt.gridColumns = ['name'];
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    expect(gantt.gridWidth).toBe(240);
+
+    gantt.destroy();
+  });
+
+  it("assigning 'fitColumns' live fires the same change pair a px width fires (#157)", () => {
+    const container = document.createElement('div');
+    const gantt = new Gantt({
+      container,
+      dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }),
+      gridWidth: 200,
+      gridColumns: ['name', 'start'],
+    });
+
+    const changes: Array<{ from: number; to: number }> = [];
+    gantt.on('gridWidthChange', (payload) => {
+      changes.push(payload);
+    });
+    gantt.gridWidth = 'fitColumns';
+
+    expect(changes).toEqual([{ from: 200, to: 360 }]);
+    expect(gantt.gridWidth).toBe(360);
+    gantt.destroy();
+  });
+
+  it("a splitter drag ends 'fitColumns' — the consumer changed their mind (#157)", async () => {
+    const container = document.createElement('div');
+    const gantt = new Gantt({
+      container,
+      dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }),
+      gridWidth: 'fitColumns',
+      gridColumns: ['name', 'start'],
+    });
+    expect(gantt.gridWidth).toBe(360);
+
+    dragSplitter(container, 360, 300);
+    expect(gantt.gridWidth).toBe(300);
+
+    // A wider column set no longer moves the pane: 300 is a width the consumer asked for.
+    gantt.gridColumns = ['name', 'start', 'end'];
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    expect(gantt.gridWidth).toBe(300);
+
+    gantt.destroy();
+  });
+
+  it("a vetoed splitter drag leaves 'fitColumns' standing (#157)", async () => {
+    const container = document.createElement('div');
+    const gantt = new Gantt({
+      container,
+      dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }),
+      gridWidth: 'fitColumns',
+      gridColumns: ['name', 'start'],
+    });
+
+    const veto = (): false => false;
+    gantt.on('beforeGridWidthChange', veto);
+    dragSplitter(container, 360, 300);
+    gantt.off('beforeGridWidthChange', veto);
+
+    // The drag never committed, so the pane still answers to its columns.
+    gantt.gridColumns = ['name', 'start', 'end'];
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    expect(gantt.gridWidth).toBe(480);
+
+    gantt.destroy();
+  });
+
+  it("a flex column names no edge, so 'fitColumns' keeps the authored width (#157)", () => {
+    const container = document.createElement('div');
+    const gantt = new Gantt({
+      container,
+      dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }),
+      gridWidth: 'fitColumns',
+      gridColumns: [{ field: 'name', flex: 1 }, 'start'],
+    });
+
+    // `--fg-grid-pane-width`'s own fallback: a flex column fills whatever room it is given, so
+    // there is no column edge to sit on (#139).
+    expect(gantt.gridWidth).toBe(160);
+    gantt.destroy();
+  });
+
   it('an explicit gridWidth = 0 still collapses the pane on purpose', () => {
     const container = document.createElement('div');
     const gantt = new Gantt({

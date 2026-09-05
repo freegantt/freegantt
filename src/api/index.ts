@@ -56,7 +56,7 @@ export type {
 // the same `*Of` pairing `api/command.ts`'s and `api/plugin.ts`'s file headers describe.
 export type { GanttPluginOf, PluginContextOf } from './plugin.js';
 export type { CommandOf, CommandContextOf, CommandRegistryOf, KeyBindingOf } from './command.js';
-export type { Theme, ViewportGestures, ViewportGestureFlags } from '../view/index.js';
+export type { Theme, GridWidth, ViewportGestures, ViewportGestureFlags } from '../view/index.js';
 export type {
   GanttEventMap,
   GanttEventHandler,
