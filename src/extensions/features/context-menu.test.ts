@@ -99,13 +99,109 @@ describe('contextMenu() (S5.5, D-S5-13/14)', () => {
       run: () => {},
     });
 
-    // The row owns three, so the command declines and never reaches the menu.
+    // A bar draws one Entry, and nothing is selected, so the command offers itself there.
+    rightClick(bars(container)[0]!);
+    expect(commandIds(container)).toContain('demo.renameOne');
+
+    // The row owns three, so the command declines and never reaches the menu. The bar above is one
+    // of the three, so the row is not inside the Selection that right-click left behind.
     rightClick(container.querySelector<HTMLElement>('.fg-row')!);
     expect(commandIds(container)).not.toContain('demo.renameOne');
 
-    // A bar draws one Entry, so the same command offers itself there.
-    rightClick(bars(container)[0]!);
-    expect(commandIds(container)).toContain('demo.renameOne');
+    gantt.destroy();
+    container.remove();
+  });
+
+  it('a right-click on one bar of a multi-Entry row that is not selected reaches that bar alone (#199)', () => {
+    const { container, gantt } = makeGanttWithThreeOnOneRow();
+    let reached: readonly string[] | undefined;
+    gantt.commands.register({
+      id: 'demo.reached',
+      label: 'Reached',
+      run: (ctx) => (reached = ctx.target?.entryIds),
+    });
+
+    rightClick(bars(container)[1]!);
+    clickMenuItem(container, 'demo.reached');
+
+    expect(reached).toEqual([threeEntries[1]!.id]);
+
+    gantt.destroy();
+    container.remove();
+  });
+
+  it('a right-click on a bar inside the Selection reaches the whole Selection (#199)', () => {
+    const { container, gantt } = makeGanttWithThreeOnOneRow();
+    let reached: readonly string[] | undefined;
+    gantt.commands.register({
+      id: 'demo.reached',
+      label: 'Reached',
+      run: (ctx) => (reached = ctx.target?.entryIds),
+    });
+    gantt.selectedIds = threeEntries.map((entry) => entry.id);
+
+    rightClick(bars(container)[1]!);
+    clickMenuItem(container, 'demo.reached');
+
+    // The bar is part of the Selection, so the command acts on all three and not on the one bar.
+    expect(reached).toEqual(threeEntries.map((entry) => entry.id));
+
+    gantt.destroy();
+    container.remove();
+  });
+
+  it('a right-click outside the Selection replaces the Selection with what you clicked (#199)', () => {
+    const { container, gantt } = makeGanttWithThreeOnOneRow();
+    gantt.selectedIds = [threeEntries[0]!.id];
+
+    rightClick(bars(container)[2]!);
+
+    expect(gantt.selectedIds).toEqual([threeEntries[2]!.id]);
+
+    gantt.destroy();
+    container.remove();
+  });
+
+  it('a right-click on a header cell leaves the Selection alone and names no Entry (#199)', () => {
+    const { container, gantt } = makeGanttWithThreeOnOneRow();
+    let reached: readonly string[] | undefined;
+    gantt.commands.register({
+      id: 'demo.reached',
+      label: 'Reached',
+      run: (ctx) => (reached = ctx.target?.entryIds),
+    });
+    gantt.selectedIds = [threeEntries[0]!.id];
+
+    rightClick(container.querySelector<HTMLElement>('.fg-col-header')!);
+    clickMenuItem(container, 'demo.reached');
+
+    // A header cell stands for no Entry, so it is part of nothing: the Selection stays, and the
+    // command does not inherit it.
+    expect(reached).toEqual([]);
+    expect(gantt.selectedIds).toEqual([threeEntries[0]!.id]);
+
+    gantt.destroy();
+    container.remove();
+  });
+
+  it('Shift+F10 with three bars selected reaches all three (#205, D-S5-14)', () => {
+    const { container, gantt } = makeGanttWithThreeOnOneRow();
+    let reached: readonly string[] | undefined;
+    gantt.commands.register({
+      id: 'demo.reached',
+      label: 'Reached',
+      run: (ctx) => (reached = ctx.target?.entryIds),
+    });
+    gantt.selectedIds = threeEntries.map((entry) => entry.id);
+
+    container.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'F10', shiftKey: true, bubbles: true, cancelable: true }),
+    );
+    clickMenuItem(container, 'demo.reached');
+
+    // The keyboard path resolves through the bar of `selectedIds[0]`, and that bar is part of the
+    // Selection, so it names the same three a right-click on any of them names.
+    expect(reached).toEqual(threeEntries.map((entry) => entry.id));
 
     gantt.destroy();
     container.remove();
