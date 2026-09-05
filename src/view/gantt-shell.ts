@@ -33,8 +33,7 @@ import { createDomBackend } from '../render/dom/index.js';
 import { readPixelProperty } from '../render/dom/pixel-property.js';
 import { PaneLayout } from './pane-layout.js';
 import type { Panes } from './pane-layout.js';
-import { DomOverlay } from './overlay.js';
-import { DomRowLayer } from './row-layer.js';
+import { ContainerResize, DomMountLayer } from './mount-layer.js';
 import { ContainerDom } from './gantt-dom.js';
 import { attachSplitter } from './splitter.js';
 import type { SplitterAttachment } from './splitter.js';
@@ -415,12 +414,14 @@ export class GanttShell {
   #theme: Theme = DEFAULT_THEME;
   #a11yLabel: string = DEFAULT_A11Y_LABEL;
   #treeCollapse!: TreeCollapse;
+  /** Issue #137 F9: the one `ResizeObserver` per Gantt, which both mount layers below share. */
+  #containerResize: ContainerResize;
   /** S5.3, D-S5-8: constructed once panes exist — see the plugin runtime's own comment just below for
-   *  why. */
-  #overlay: DomOverlay;
+   *  why. This is the layer that escapes the pane box. */
+  #overlay: DomMountLayer;
   /** #158: the grid's own row layer, where a plugin mounts content that must scroll with the rows.
    *  Constructed beside the overlay, and for the same reason. */
-  #rowLayer: DomRowLayer;
+  #rowLayer: DomMountLayer;
   /** Review N1/A3: this Gantt's own rendered DOM, as questions a plugin asks through `ctx.view.dom`.
    *  Constructed beside the overlay, and for the same reason. */
   #dom: ContainerDom;
@@ -443,8 +444,17 @@ export class GanttShell {
     this.#panes = this.#paneLayout.panes;
     // S5.3, D-S5-8: constructed right after the panes it measures, so it is ready by the time the
     // plugin runtime (just below) builds its first `PluginContext`.
-    this.#overlay = new DomOverlay(this.#container, this.#panes.overlay);
-    this.#rowLayer = new DomRowLayer(this.#panes.rows);
+    this.#containerResize = new ContainerResize(this.#container);
+    this.#overlay = new DomMountLayer(
+      this.#panes.overlay,
+      () => this.#paneLayout.overlayBounds(),
+      this.#containerResize,
+    );
+    this.#rowLayer = new DomMountLayer(
+      this.#panes.rows,
+      () => this.#paneLayout.rowLayerBounds(),
+      this.#containerResize,
+    );
     this.#dom = new ContainerDom(this.#container, this.#paneLayout, (id) =>
       this.#options.dataset.entries.get(id),
     );
@@ -1596,7 +1606,7 @@ export class GanttShell {
     // S5.1, D-S5-3: plugins first. A disposer may still need its overlay node or another pane-owned
     // resource, so it must run before any pane below is torn down.
     this.#pluginRuntime.disposeAll();
-    this.#overlay.destroy();
+    this.#containerResize.destroy();
     this.#container.removeEventListener('keydown', this.#keymapListener);
     this.#container.ownerDocument.removeEventListener('keydown', this.#documentKeymapListener, true);
     this.#frames.cancel();

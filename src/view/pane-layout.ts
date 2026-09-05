@@ -46,8 +46,8 @@ export interface Panes {
   readonly timeline: HTMLElement;
   readonly splitter: HTMLElement;
   /** S5.3, D-S5-8: the overlay layer a `Popup` mounts into — one absolutely positioned element on
-   *  top of both panes, owned by `view/overlay.ts`. Structure only; `Overlay` owns its
-   *  content and stacking. */
+   *  top of both panes, wrapped by `view/mount-layer.ts`. Structure only; the `MountLayer` over it
+   *  owns its content. */
   readonly overlay: HTMLElement;
 }
 
@@ -122,8 +122,8 @@ export class PaneLayout {
 
     // S5.3, D-S5-8: sits above both panes in DOM order (and stacking, `view/styles.ts`'s
     // `.fg-overlay`) — the container's one absolutely positioned overlay layer, spanning it edge to
-    // edge. Structure only: `Overlay` (constructed one layer up, in `GanttShell`) owns everything
-    // that gets mounted into it.
+    // edge. Structure only: the `MountLayer` over it (constructed one layer up, in `GanttShell`)
+    // owns everything that gets mounted into it.
     const overlay = document.createElement('div');
     overlay.className = 'fg-overlay';
 
@@ -192,11 +192,18 @@ export class PaneLayout {
     };
   }
 
-  /** `GanttDom.rowLayerBounds` (#158): the Row layer's own client rect, transform and all — the box
-   *  frame content mounted beside the rows positions itself in. A sibling of the rows rides that
-   *  same transform, so it must measure against the moved box, not the pane's fixed one. */
+  /** `ctx.view.rowLayer.bounds` (#158, #168): the Row layer's own client rect, transform and all.
+   *  It is the box content mounted beside the rows positions itself in. A sibling of the rows rides
+   *  that same transform, so it must measure against the moved box, not the pane's fixed one. */
   rowLayerBounds(): DOMRect {
     return this.panes.rows.getBoundingClientRect();
+  }
+
+  /** `ctx.view.overlay.bounds` (#168): the overlay layer's own client rect. A popup sits at that
+   *  layer's origin, so this is the box its transform counts from. `bounds()` above stays the outer
+   *  clamp for placement, which is a question about the whole Gantt. */
+  overlayBounds(): DOMRect {
+    return this.panes.overlay.getBoundingClientRect();
   }
 
   /** D-S1.12-9: the grid pane's spacer renders one empty `.fg-band` per header band, so both panes

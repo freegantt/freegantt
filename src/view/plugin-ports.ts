@@ -39,8 +39,8 @@ import { isDevMode } from '../data/dev-mode.js';
 import type { PluginRegistrar } from './plugin-registrations.js';
 import type { KindDefaults } from './capability.js';
 import type { GanttEvents, EntryFieldEdit } from './event-bus.js';
-import type { Overlay } from './overlay.js';
-import type { RowLayer } from './row-layer.js';
+import { buildElement } from '../render/dom/element-description.js';
+import type { MountLayer } from './mount-layer.js';
 import type { DomTarget, GanttDom } from './gantt-dom.js';
 
 /** What `ctx.view.onDomEvent` hands a plugin: the browser event, plus what the node it landed on
@@ -69,9 +69,9 @@ export interface GanttShellPorts {
   /** The plain `{ on, off }` pair a plugin sees instead of the whole shell. */
   events: GanttEvents;
   /** S5.3, D-S5-8. One layer per Gantt, alive as long as the plugin is. */
-  overlay: Overlay;
+  overlay: MountLayer;
   /** #158. The grid's own row layer, alive as long as the plugin is. */
-  rowLayer: RowLayer;
+  rowLayer: MountLayer;
   /** Review N1/A3. One resolver per Gantt. It owns every `.fg-*` class and `data-*` key a plugin
    *  used to retype, and it scopes `onDomEvent` to this Gantt (I2). */
   dom: GanttDom;
@@ -175,11 +175,14 @@ export interface PluginContextPorts {
     registerKindDefaults(kind: EntryKind, defaults: KindDefaults): Disposer;
   };
   view: {
-    /** S5.3, D-S5-8: the overlay layer a plugin's own popup, tooltip or menu mounts into — the same
-     *  primitive `extensions/popup.ts`'s `Popup` is built on. Live for the plugin's whole lifetime,
-     *  not gated by `RegistrationGate`. D-S5-4 only gates one-shot `register*` calls, and a plugin
-     *  presents and dismisses overlay content for as long as it runs. */
-    overlay: Overlay;
+    /** S5.3, D-S5-8: the layer a plugin's own popup, tooltip or menu mounts into — the same
+     *  primitive `extensions/popup.ts`'s `Popup` is built on. It escapes the pane box, so content
+     *  here may spill past a pane edge.
+     *
+     *  Live for the plugin's whole lifetime, not gated by `RegistrationGate`. D-S5-4 only gates
+     *  one-shot `register*` calls, and a plugin presents and dismisses content for as long as it
+     *  runs. */
+    overlay: MountLayer;
     /** #158: the grid's own row layer. It is for content that must stay glued to a row or a cell
      *  while the pane scrolls. An open cell editor is the case.
      *
@@ -187,12 +190,18 @@ export interface PluginContextPorts {
      *  scroll by one transform per frame (D-S1.8-1). The pane scrolls horizontally around it
      *  (D-S1.8-13). Content mounted here therefore travels with the rows on both axes, in the same
      *  frame — no scroll listener, and no lag behind the paint. Position it once against
-     *  `dom.rowLayerBounds`.
+     *  `rowLayer.bounds`.
      *
-     *  Use `overlay` instead for content that must escape the pane box, a tooltip or a menu. This
-     *  layer is clipped to the pane. A popup dismisses on a scroll rather than following it. Live
-     *  for the plugin's whole lifetime, the same posture as `overlay`. */
-    rowLayer: RowLayer;
+     *  Use `overlay` instead for content that must escape the pane box. This layer is clipped to
+     *  the pane. A popup dismisses on a scroll rather than following it. Live for the plugin's
+     *  whole lifetime, the same posture as `overlay`. */
+    rowLayer: MountLayer;
+    /** S5.3/S5.4, D-S5-10: builds a live node from an `ElementDescription` — the one seam
+     *  `extensions/` has to the reconciler. `extensions/` may not import `render/` itself (D-S5-5).
+     *  Never `innerHTML`d except the description's own explicit `html` opt-in (I13).
+     *
+     *  Call: `ctx.view.renderElement(description)`, then mount the node in either layer above. */
+    renderElement(description: ElementDescription): HTMLElement;
     /** Review N1/A3: this Gantt's own rendered DOM, as three questions — `owns(node)`,
      *  `targetUnder(node)`, and `barFor(id)`/`cellFor(id, field)`. It is the whole plugin-to-DOM
      *  contract. `extensions/` may not import `render/` (D-S5-5), so before this seam every plugin
@@ -390,6 +399,7 @@ export function buildPluginPorts(
     view: {
       overlay: shell.overlay,
       rowLayer: shell.rowLayer,
+      renderElement: (description) => buildElement(description),
       dom: shell.dom,
       onDomEvent: listenWhileInstalled,
       registerRenderer: (point, renderer) =>

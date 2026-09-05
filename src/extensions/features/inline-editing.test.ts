@@ -712,17 +712,19 @@ describe('CellEditorSession (S5.8, review A5/C2b)', () => {
     document.body.append(row, layer);
 
     const ports: CellEditorPorts = {
-      rowLayer: {
+      // #168: one `MountLayer` answers mount, resize and box. The fake is one object now, not two.
+      mountLayer: {
         present: (content: HTMLElement) => {
           layer.append(content);
           return () => content.remove();
         },
+        onResize: () => () => {},
+        bounds: rectAt(0, 0, 0, 0),
       },
-      onResize: () => () => {},
       // Review A3: the session asks one seam where its cell is now. So the fake answers with the
       // cell this test built, while that cell is still in the document. A real Gantt answers from
       // the current frame, and stops answering once virtualization takes the row away.
-      dom: { rowLayerBounds: rectAt(0, 0, 0, 0), cellFor: () => (cell.isConnected ? cell : undefined) },
+      dom: { cellFor: () => (cell.isConnected ? cell : undefined) },
       bindEscape: () => () => {},
       entryById: () => entry,
       storedValue: () => 'Task One',
@@ -828,7 +830,7 @@ describe('presentRefusal() (S5.8, review SP1)', () => {
     document.body.append(cell, layer);
     let detaches = 0;
     const ports: RefusalNoticePorts = {
-      rowLayer: {
+      mountLayer: {
         present: (content: HTMLElement) => {
           layer.append(content);
           return () => {
@@ -836,9 +838,10 @@ describe('presentRefusal() (S5.8, review SP1)', () => {
             content.remove();
           };
         },
+        onResize: () => () => {},
+        bounds: rectAt(0, 0, 0, 0),
       },
-      onResize: () => () => {},
-      dom: { rowLayerBounds: rectAt(0, 0, 0, 0), cellFor: () => cell },
+      dom: { cellFor: () => cell },
       bindEscape: () => () => {},
     };
     const notice = presentRefusal(ports, cell, 'timeOfDay');
