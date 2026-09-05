@@ -42,7 +42,7 @@ export function draftForMove(input: DraftInput): EntryEdits {
   const anchor = entries[0];
   if (!anchor) return new Map();
 
-  const anchorInstant = anchor.start;
+  const anchorInstant = envelopeEdgeInstant(anchor, 'start');
   const anchorX = scale.xForInstant(anchorInstant);
   const rawCandidate = scale.instantForX(anchorX + dxPx);
   const snappedCandidate = snapInstant(zone, rawCandidate, snap);
