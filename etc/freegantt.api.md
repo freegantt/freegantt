@@ -161,11 +161,10 @@ export interface CommandRegistryOf<TGantt = unknown, TDataset = Dataset> {
 
 // @public
 export interface CommandTarget {
+    entryIds: readonly EntryId[];
     field?: FieldKey;
     // (undocumented)
     kind: TargetKind;
-    // (undocumented)
-    rowId?: EntryId;
 }
 
 // @public
@@ -460,6 +459,7 @@ export interface DomTarget {
     element: HTMLElement;
     // (undocumented)
     entry?: Entry;
+    entryIds: readonly EntryId[];
     // (undocumented)
     field?: FieldKey;
     // (undocumented)

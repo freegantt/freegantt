@@ -28,12 +28,13 @@ import {
   ITEM_ID_KEY,
   ROW_CELL_CLASS,
   ROW_CLASS,
+  ROW_ID_KEY,
   ROW_LABEL_CLASS,
   ROW_LABEL_TEXT_CLASS,
 } from '../render/dom/dom-contract.js';
 import { cssEscapeAttr } from '../render/dom/css-escape.js';
-import { entryIdOfItem, itemIdFromDataset } from '../model/index.js';
-import type { Entry, EntryId, FieldKey, ItemId, TargetKind } from '../model/index.js';
+import { entryIdOfItem, itemIdFromDataset, rowIdFromDataset } from '../model/index.js';
+import type { Entry, EntryId, FieldKey, ItemId, RowId, TargetKind } from '../model/index.js';
 import { SPLITTER_CLASS } from './pane-layout.js';
 import type { PaneLayout, PaneName } from './pane-layout.js';
 
@@ -41,15 +42,23 @@ import type { PaneLayout, PaneName } from './pane-layout.js';
  *  words `CommandTarget` already uses. One vocabulary, so a plugin that resolves a right-click and
  *  a command that filters on `when` say the same thing.
  *
- *  `entry` is filled for `'bar'`, `'row'` and `'cell'`. It is left out when the row stands for no
- *  Entry (a grouping header row), or when the Entry is gone from the Dataset. `field` is filled for
- *  `'cell'` and `'header'`. */
+ *  It answers two different questions about Entries, because a Row may own several of them (#185,
+ *  #199). `entry` is the node's **subject** — the one Entry whose Fields this node's content shows.
+ *  A tooltip describes that Entry, and the cell editor anchors on it. `entryIds` is everything the
+ *  node stands for, which is what an action on the node acts on. For a bar the two agree. For a
+ *  row, and for a cell of that row, `entry` is the row's first Entry and `entryIds` is all of them.
+ *
+ *  `entry` is left out when the row stands for no Entry (a grouping header row), or when the Entry
+ *  is gone from the Dataset. `field` is filled for `'cell'` and `'header'`. */
 export interface DomTarget {
   kind: TargetKind;
   /** The node the walk stopped on — the bar, the cell, the row, the header cell or the splitter.
    *  A popup anchors to it; the cell editor positions over it. */
   element: HTMLElement;
   entry?: Entry;
+  /** Every Entry this node stands for, in row order. Empty for a header cell, for the splitter, and
+   *  for a grouping header row. Never `undefined`, so a reader counts it without a fallback. */
+  entryIds: readonly EntryId[];
   field?: FieldKey;
 }
 
@@ -113,6 +122,9 @@ export class ContainerDom implements GanttDom {
   /** Which Items one entry draws — `FrameLayout.itemIdsForEntry`, the layout's own answer (#185).
    *  `barFor` walks it in order and stops at the first Item the frame actually mounted. */
   readonly #itemIdsForEntry: (id: EntryId) => readonly ItemId[];
+  /** Which Entries one row owns — `FrameLayout.entryIdsForRow`, the layout's own answer (#199). A
+   *  row node carries only its subject in `data-entry-id`, so the set is asked for, never guessed. */
+  readonly #entryIdsForRow: (id: RowId) => readonly EntryId[];
   /** One-slot memo, so a pointer resting on one node allocates no target per event. The three
    *  stamps go stale together with the node. Virtualization recycles a row node under a new entry,
    *  and the stamps say so before this seam hands the cached object back. */
@@ -127,11 +139,13 @@ export class ContainerDom implements GanttDom {
     paneLayout: PaneLayout,
     entryById: (id: EntryId) => Entry | undefined,
     itemIdsForEntry: (id: EntryId) => readonly ItemId[],
+    entryIdsForRow: (id: RowId) => readonly EntryId[],
   ) {
     this.#container = container;
     this.#paneLayout = paneLayout;
     this.#entryById = entryById;
     this.#itemIdsForEntry = itemIdsForEntry;
+    this.#entryIdsForRow = entryIdsForRow;
   }
 
   owns(node: Node): boolean {
@@ -200,34 +214,57 @@ export class ContainerDom implements GanttDom {
   #resolve(element: HTMLElement, itemIdAttr: string | undefined, fieldAttr: string | undefined): DomTarget {
     if (element.classList.contains(BAR_CLASS)) {
       const id = itemIdFromDataset(itemIdAttr);
+      const entry = id === undefined ? undefined : this.#entryById(entryIdOfItem(id));
+      // A bar draws one Entry, so the subject and the set it stands for are the same one Entry.
       return freezeTarget({
         kind: 'bar',
         element,
-        ...entryPart(id === undefined ? undefined : this.#entryById(entryIdOfItem(id))),
+        entryIds: entry === undefined ? NO_ENTRY_IDS : [entry.id],
+        ...entryPart(entry),
       });
     }
-    if (element.classList.contains(SPLITTER_CLASS)) return freezeTarget({ kind: 'splitter', element });
+    if (element.classList.contains(SPLITTER_CLASS)) {
+      return freezeTarget({ kind: 'splitter', element, entryIds: NO_ENTRY_IDS });
+    }
     if (element.classList.contains(COLUMN_HEADER_CLASS)) {
-      return freezeTarget({ kind: 'header', element, ...fieldPart(fieldAttr) });
+      return freezeTarget({ kind: 'header', element, entryIds: NO_ENTRY_IDS, ...fieldPart(fieldAttr) });
     }
     if (element.classList.contains(ROW_CLASS)) {
-      return freezeTarget({ kind: 'row', element, ...entryPart(this.#entryOfRow(element)) });
+      return freezeTarget({
+        kind: 'row',
+        element,
+        entryIds: this.#entryIdsOfRow(element),
+        ...entryPart(this.#subjectOfRow(element)),
+      });
     }
-    // A name cell or an ordinary cell: the row above it names the entry, the cell names the Field.
+    // A name cell or an ordinary cell: the row above it names the Entries, the cell names the Field.
+    // A click anywhere in a row selects every Entry the row owns (#185), so a cell target names the
+    // same set the row does. Only the subject stays per-cell: these cells format that Entry's Fields.
     const row = element.closest<HTMLElement>(`.${ROW_CLASS}`);
     return freezeTarget({
       kind: 'cell',
       element,
-      ...entryPart(row === null ? undefined : this.#entryOfRow(row)),
+      entryIds: row === null ? NO_ENTRY_IDS : this.#entryIdsOfRow(row),
+      ...entryPart(row === null ? undefined : this.#subjectOfRow(row)),
       ...fieldPart(fieldAttr),
     });
   }
 
-  #entryOfRow(row: HTMLElement): Entry | undefined {
+  /** The Entry whose Fields this row's cells format. `data-entry-id` names it, and nothing else. */
+  #subjectOfRow(row: HTMLElement): Entry | undefined {
     const raw = row.dataset[ENTRY_ID_KEY];
     return raw === undefined ? undefined : this.#entryById(raw as EntryId);
   }
+
+  /** Every Entry this row owns. The layout answers, because the row node carries its subject only. */
+  #entryIdsOfRow(row: HTMLElement): readonly EntryId[] {
+    const id = rowIdFromDataset(row.dataset[ROW_ID_KEY]);
+    return id === undefined ? NO_ENTRY_IDS : this.#entryIdsForRow(id);
+  }
 }
+
+/** Shared and frozen, so a target that stands for no Entry allocates nothing (I5). */
+const NO_ENTRY_IDS: readonly EntryId[] = Object.freeze([]);
 
 /** One `[name="value"]` selector clause, with the value escaped for the quoted string it sits in.
  *  Both id lookups above are one `querySelector` over these, because the CSS engine already indexes

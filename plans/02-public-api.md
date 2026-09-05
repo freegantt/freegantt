@@ -550,10 +550,17 @@ const bar = ctx.view.dom.barFor(entryId);       // this entry's bar in the curre
 const cell = ctx.view.dom.cellFor(entryId, 'cost');
 ```
 
-- **`targetUnder(node)` answers `{ kind, element, entry?, field? }`.** `kind` is `TargetKind` —
-  `'row' | 'cell' | 'bar' | 'header' | 'splitter'`, the same union `CommandTarget.kind` uses. One
-  vocabulary, so a resolved right-click fills a `CommandContext.target` with no translation table.
-  `undefined` means the node is outside this Gantt, or inside it and on none of the five.
+- **`targetUnder(node)` answers `{ kind, element, entry?, entryIds, field? }`.** `kind` is
+  `TargetKind` — `'row' | 'cell' | 'bar' | 'header' | 'splitter'`, the same union
+  `CommandTarget.kind` uses. One vocabulary, so a resolved right-click fills a
+  `CommandContext.target` with no translation table. `undefined` means the node is outside this
+  Gantt, or inside it and on none of the five.
+- **A target answers two questions about Entries, because a Row may own several** (#185, #199).
+  `entry` is the node's **subject**: the one Entry whose Fields the node's content shows. A tooltip
+  describes it, and the cell editor anchors on it. `entryIds` is everything the node stands for, and
+  is what an action on the node acts on. For a bar the two agree. For a row, and for every cell of
+  that row, `entry` is the row's first Entry and `entryIds` is all of them. `entryIds` is always
+  present, and empty for a header cell, for the splitter, and for a grouping header row.
 - **`owns(node)` is the one answer to "is this event mine?"** (I2). `onDomEvent` asks it for every
   listener, so no plugin writes that guard again.
 - **`onDomEvent(type, handler, options?)` listens on `document`, filtered to this Gantt.** It hands
@@ -565,6 +572,25 @@ const cell = ctx.view.dom.cellFor(entryId, 'cost');
   mount layer, and nothing else.
 - **`createPopup(ctx.view, keymap)`** takes the whole view surface now, because a `Popup` needs the
   overlay to mount in and `ctx.view.dom` to place against.
+
+**`CommandTarget` carries the same two answers, as ids** (#199). A command's `when` and `run` read
+`ctx.target`:
+
+```ts
+gantt.commands.register({
+  id: 'app.lockRow',
+  label: 'Lock',
+  run: (ctx) => ctx.target?.entryIds.forEach((id) => locks.lock(id)),
+});
+```
+
+- **`entryIds: readonly EntryId[]`** is every Entry the invocation landed on, in row order. A
+  right-click on a row acts on all of them, because a left-click on that row already selects all of
+  them. The set arrives resolved, so no command asks the row what it holds.
+- **A command that wants exactly one Entry says so**: `when: (ctx) => ctx.target?.entryIds.length
+  === 1`, and reads `ctx.entry` for it. `ctx.entry` is the subject, never the set.
+- `kind` and `field` are the same two words `DomTarget` uses. There is no `rowId`: a row's identity
+  is a `RowId`, and this always named Entries.
 
 **`PopupOptions.onDismiss(trigger)`** tells a popup's owner that the popup closed *itself* —
 `'escape' | 'outsidePointer' | 'scroll' | 'blur'`. It runs after the close, so `isOpen` reads

@@ -24,6 +24,7 @@ export class FrameLayout {
   #decorations = new DecorationRunner();
   #plan: readonly PlannedRow[] = [];
   #rowOfEntry = new Map<EntryId, RowId>();
+  #entryIdsOfRow = new Map<RowId, readonly EntryId[]>();
   #parentOfRow = new Map<RowId, RowId>();
 
   get heightIndexRevision(): number {
@@ -65,6 +66,14 @@ export class FrameLayout {
   /** Row that currently displays this entry, including a row collapse later hid (D4). */
   rowIdForEntry(id: EntryId): RowId | undefined {
     return this.#rowOfEntry.get(id);
+  }
+
+  /** Every Entry this row owns, in row order — the answer `rowIdForEntry` gives, read the other way
+   * round (#199). A row source may put several Entries on one Row, so a caller that acts on "the
+   * row" needs all of them and must not guess from the row's subject. Empty for a grouping header
+   * row, and for a `RowId` no current frame planned. */
+  entryIdsForRow(id: RowId): readonly EntryId[] {
+    return this.#entryIdsOfRow.get(id) ?? NO_ENTRY_IDS;
   }
 
   /** Every Item this entry draws, in the packed order its row produced them (#185). It answers from
@@ -120,10 +129,15 @@ export class FrameLayout {
 
   #indexOpenRows(open: readonly UnindexedRow[]): void {
     this.#rowOfEntry.clear();
+    this.#entryIdsOfRow.clear();
     this.#parentOfRow.clear();
     for (const row of open) {
+      this.#entryIdsOfRow.set(row.id, row.entryIds);
       for (const id of row.entryIds) this.#rowOfEntry.set(id, row.id);
       if (row.parentRowId !== undefined) this.#parentOfRow.set(row.id, row.parentRowId);
     }
   }
 }
+
+/** Shared, so a row that owns nothing costs no allocation on the pointer path (I5). */
+const NO_ENTRY_IDS: readonly EntryId[] = Object.freeze([]);
