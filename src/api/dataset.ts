@@ -16,17 +16,38 @@ import type {
   FieldType,
 } from '../model/index.js';
 import { DatasetState } from '../data/index.js';
+import { installDatasetPlugins } from '../extensions/install-dataset-plugins.js';
+import { DisposableStore } from '../extensions/disposables.js';
+import { RegistrationGate } from '../extensions/plugin-runtime.js';
+import type { DatasetPluginContextOf, DatasetPluginOf } from './dataset-plugin.js';
 import {
   toJSON as writeDocument,
   readDocument,
   warnIfRollUpsWereCorrected,
 } from '../data/serialization/index.js';
-import type { DatasetHierarchy, RollUpKinds } from '../model/index.js';
+import type { DatasetHierarchy, PluginId, RollUpKinds } from '../model/index.js';
 import { createZonedTime, resolveDefaultTimeZone } from '../time/index.js';
 import type { ZonedTime } from '../time/index.js';
 export type { DatasetHierarchy };
 
-export interface DatasetOptions<TMeta = unknown> {
+// The Dataset-bound aliases behind `api/dataset-plugin.ts`'s generic shapes (the `*Of` pairing
+// `api/plugin.ts` and `api/command.ts` already use). A plugin author writing against the concrete
+// `Dataset` names these two; code parameterizing over its own Dataset type names the `*Of` forms.
+// `TMeta`/`TFields` default here for the same reason `Dataset`'s own do: a plugin that does not care
+// about the consumer's meta shape writes `DatasetPlugin` and nothing more.
+export type DatasetPlugin<
+  TMeta = unknown,
+  TFields extends Record<string, unknown> = Record<string, unknown>,
+> = DatasetPluginOf<Dataset<TMeta, TFields>>;
+export type DatasetPluginContext<
+  TMeta = unknown,
+  TFields extends Record<string, unknown> = Record<string, unknown>,
+> = DatasetPluginContextOf<Dataset<TMeta, TFields>>;
+
+export interface DatasetOptions<
+  TMeta = unknown,
+  TFields extends Record<string, unknown> = Record<string, unknown>,
+> {
   /** What the consumer writes. Ids are plain strings and dates are any `InstantInput` — an ISO string,
    * a `Date`, epoch milliseconds, or an already-branded `Instant`. Read into `Entry` once, here. */
   entries: readonly EntryInput<TMeta>[];
@@ -62,6 +83,11 @@ export interface DatasetOptions<TMeta = unknown> {
   /** Undo/redo History. `{ capacity: 200 }` keeps 200 undoable transactions; defaults to 100
    * (`plans/s2-data-core/s2.5-undo-redo.md` §1). */
   history?: { capacity?: number };
+  /** Dataset plugins to install (D-S5-24). An unordered set: installation resolves setup order from each
+   *  plugin's `requires`, so `[scheduling(), entryDependencies()]` and the reverse install the same
+   *  way (D-S5-31). Every plugin sets up during this constructor, so a Field one declares is in the
+   *  registry before the first Rollup walks — which is why `Dataset.plugins` is read-only. */
+  plugins?: readonly DatasetPluginOf<Dataset<TMeta, TFields>>[];
 }
 
 // Structurally satisfies model/'s `Dataset` (entries/timeZone/on/off) without an `implements` clause —
@@ -84,13 +110,73 @@ export class Dataset<TMeta = unknown, TFields extends Record<string, unknown> = 
   #state: DatasetState;
   /** Bound once, at construction — `timeZone` is fixed for this Dataset's lifetime either way. */
   #time: ZonedTime;
+  readonly #plugins: readonly DatasetPluginOf<Dataset<TMeta, TFields>>[];
 
-  constructor(options: DatasetOptions<TMeta>) {
+  constructor(options: DatasetOptions<TMeta, TFields>) {
+    this.#plugins = options.plugins ?? [];
     this.#state = new DatasetState({
       ...options,
       timeZone: options.timeZone ?? resolveDefaultTimeZone(),
+      ...(this.#plugins.length > 0
+        ? { installPlugins: (state: DatasetState) => this.#installPlugins(state) }
+        : {}),
     });
     this.#time = createZonedTime(this.#state.timeZone);
+  }
+
+  /** Runs inside `DatasetState`'s constructor, at the one moment a plugin may set up: the entry store
+   *  exists and the construction Rollup has not run (D-S5-4). `this.#state` is not assigned yet, so
+   *  every context member below reads `state` — the same instance, one line earlier. */
+  #installPlugins(state: DatasetState): () => void {
+    return installDatasetPlugins(this.#plugins, (pluginId: PluginId) => {
+      const disposables = new DisposableStore();
+      const gate = new RegistrationGate(pluginId);
+      const context: DatasetPluginContextOf<Dataset<TMeta, TFields>> = {
+        dataset: this,
+        events: {
+          on: (name, handler) => state.on(name, handler),
+          off: (name, handler) => state.off(name, handler),
+        },
+        fields: {
+          register: (field) => {
+            gate.assertOpen();
+            state.fields.register(field);
+          },
+          registerType: (name, type) => {
+            gate.assertOpen();
+            state.fields.registerType(name, type);
+          },
+          registerAggregator: (name, fn) => {
+            gate.assertOpen();
+            state.fields.registerAggregator(name, fn);
+          },
+        },
+        edits: {
+          setExtender: (wrap) => {
+            gate.assertOpen();
+            state.setExtender(wrap);
+          },
+        },
+        store: {
+          reserve: <T extends object>() => state.pluginStores.reserve<T>(pluginId),
+          read: <T extends object>(otherId: PluginId) => state.pluginStores.read<T>(otherId),
+        },
+        disposables,
+      };
+      return { context, disposables, registrationGate: gate };
+    });
+  }
+
+  /** The plugins this Dataset installed, in the order the caller wrote them. Read-only — see
+   *  `DatasetOptions.plugins` for why a Dataset cannot take a new set after construction. */
+  get plugins(): readonly DatasetPluginOf<Dataset<TMeta, TFields>>[] {
+    return this.#plugins;
+  }
+
+  /** Releases every installed plugin, in reverse setup order. A Dataset with no plugins needs no
+   *  `destroy()` call — nothing holds a resource. */
+  destroy(): void {
+    this.#state.destroy();
   }
 
   // Trusted, unchecked TMeta/TFields cast — see the class-level note above.
@@ -210,7 +296,9 @@ export class Dataset<TMeta = unknown, TFields extends Record<string, unknown> = 
    *  in insertion order, instants as `Z`-suffixed ISO. */
   // Trusted, unchecked TMeta cast — see the class-level note above.
   toJSON(): DatasetDocument<TMeta> {
-    return writeDocument(this) as DatasetDocument<TMeta>;
+    // `DatasetState`, not `this`: the writer reads the plugin stores, which are library internals and
+    // have no place on the public façade (D-S5-24).
+    return writeDocument(this.#state) as DatasetDocument<TMeta>;
   }
 
   /** Whole-document read. Constructs a fresh Dataset through the public constructor, so the Rollup

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { runTransaction } from './transaction.js';
 import { DatasetState } from './dataset-state.js';
+import { fieldRowsOf } from './change-set.js';
 import { MutationCancelledError, MutationDuringNotificationError, entryId } from '../model/index.js';
 import { toEndInstant, toInstant } from '../time/index.js';
 import type { EntryEdits, StoredEdit } from './edit-extension.js';
@@ -417,7 +418,7 @@ describe('runTransaction', () => {
     });
     let seenFields: readonly string[] = [];
     state.on('beforeChange', ({ changeSet }) => {
-      seenFields = changeSet.updated.map((row) => row.field);
+      seenFields = fieldRowsOf(changeSet).map((row) => row.field);
     });
 
     runTransaction(state, (token) => state.entries.stageUpdate(token, entryId('t1'), { name: 'a' }), 'user');

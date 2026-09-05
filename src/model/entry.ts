@@ -80,3 +80,17 @@ export type StoredEdit = Partial<Omit<Entry, 'id'>> & {
 };
 
 export type EntryEdits = ReadonlyMap<EntryId, StoredEdit>;
+
+/** What the extension hook reads (D4, D-S2-6). It carries the same two members on a preview call and
+ *  on the real commit call, which is why an extender can never refuse a write — see D-S5-24's
+ *  refusal note: a lock plugin vetoes in `beforeChange`, never here. */
+export interface EditRequest {
+  /** Current store snapshot, before this transaction's edits. */
+  entries: ReadonlyMap<EntryId, Entry>;
+  /** What the caller asked to change. */
+  proposed: EntryEdits;
+}
+
+/** Extra writes only; an empty map means no cascade. Lives in `model/` (not `data/`) so
+ *  `ExtenderWrapper` — the type a plugin author writes against — can name it (D-S5-23). */
+export type EditExtender = (request: EditRequest) => EntryEdits;

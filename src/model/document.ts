@@ -30,15 +30,22 @@ export type SerializedField = {
   column?: Omit<GridColumn, 'field'>;
 };
 
+/** Every plugin's own per-entry rows, keyed first by `PluginId` and then by `EntryId` (D-S5-24).
+ *  Rows are passenger data: a Document read by an application that no longer installs that plugin
+ *  keeps them untouched and writes them back, the same posture an undeclared `meta` key already has. */
+export type PluginDocument = Readonly<Record<string, Readonly<Record<string, unknown>>>>;
+
 /** The whole-document half of D7. Key order is a contract: `schema`, `timeZone`, `dateOnlyEnd`,
- *  `rollUpKinds`, `fields`, `entries`. This build writes `schema: 2` and still reads `schema: 1`
- *  (D-S4-16). */
+ *  `rollUpKinds`, `fields`, `plugins`, `entries`. This build writes `schema: 3` and still reads
+ *  `schema: 1` and `2` (D-S4-16, D-S5-24). */
 export interface DatasetDocument<TMeta = unknown> {
-  schema: 1 | 2;
+  schema: 1 | 2 | 3;
   timeZone: string;
   dateOnlyEnd: DateOnlyEndRule;
   rollUpKinds: readonly EntryKind[];
   /** Declaration order. Core Fields are never written — the reader seeds them itself. */
   fields?: readonly SerializedField[];
+  /** Written at `schema: 3` and above. Omitted when no plugin holds a row. */
+  plugins?: PluginDocument;
   entries: readonly EntryDocument<TMeta>[];
 }

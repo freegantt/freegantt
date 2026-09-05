@@ -1,5 +1,5 @@
-// data/ — Document reader (D-S2-12, D-S4-15, D-S4-16). A `readers` map keyed by schema version;
-// this build writes `schema: 2` and reads `1` and `2`. An unknown schema throws
+// data/ — Document reader (D-S2-12, D-S4-15, D-S4-16, D-S5-24). A `readers` map keyed by schema
+// version; this build writes `schema: 3` and reads `1`, `2` and `3`. An unknown schema throws
 // `UnsupportedSchemaError`. Keys the reader does not know are dropped: top level belongs to the
 // schema, `meta` is the consumer's namespace.
 
@@ -12,7 +12,7 @@ import type {
   FieldType,
   Instant,
 } from '../../model/index.js';
-import type { DatasetDocument, EntryDocument, SerializedField } from '../../model/index.js';
+import type { DatasetDocument, EntryDocument, PluginDocument, SerializedField } from '../../model/index.js';
 import { InvalidInstantError, UnsupportedSchemaError } from '../../model/index.js';
 import { instant } from '../../time/index.js';
 import { decodeFieldDocument } from './field-document.js';
@@ -28,9 +28,12 @@ export interface DatasetDocumentRead {
   fields?: readonly Field[];
   fieldTypes?: Readonly<Record<string, FieldType>>;
   aggregators?: Readonly<Record<string, Aggregator>>;
+  /** Plugin rows the Document carried. Rows whose plugin the reading application does not install are
+   *  kept untouched and written back — passenger data (D-S5-24). */
+  pluginRows?: PluginDocument;
 }
 
-type SchemaRead = Omit<DatasetDocumentRead, 'fields' | 'fieldTypes' | 'aggregators'>;
+type SchemaRead = Omit<DatasetDocumentRead, 'fields' | 'fieldTypes' | 'aggregators' | 'pluginRows'>;
 
 type Reader = (doc: DatasetDocument) => SchemaRead;
 
@@ -88,10 +91,15 @@ function readSchema2(doc: DatasetDocument): SchemaRead {
   };
 }
 
+/** `schema: 3` adds the `plugins` key and changes nothing else, so it reads exactly as `2` does —
+ *  `readDocument` picks the `plugins` key up separately, the same way it picks up `fields`. */
+const readSchema3: Reader = readSchema2;
+
 /** The migration seam. A second schema is a map addition, not a rewrite (`plans/02` §6). */
 export const readers: Record<number, Reader> = Object.freeze({
   1: readSchema1,
   2: readSchema2,
+  3: readSchema3,
 });
 
 export function readDocument(doc: DatasetDocument, options?: FromJSONOptions): DatasetDocumentRead {
@@ -100,8 +108,9 @@ export function readDocument(doc: DatasetDocument, options?: FromJSONOptions): D
     throw new UnsupportedSchemaError(doc.schema, Object.keys(readers).map(Number));
   }
   const base = reader(doc);
-  const documentRows: readonly SerializedField[] | undefined = doc.schema === 2 ? doc.fields : undefined;
+  const documentRows: readonly SerializedField[] | undefined = doc.schema >= 2 ? doc.fields : undefined;
   const { fields, fieldTypes } = decodeFieldDocument(documentRows, options);
+  const pluginRows = doc.schema >= 3 ? doc.plugins : undefined;
   return {
     timeZone: base.timeZone,
     dateOnlyEnd: base.dateOnlyEnd,
@@ -110,5 +119,6 @@ export function readDocument(doc: DatasetDocument, options?: FromJSONOptions): D
     ...(fields.length > 0 ? { fields } : {}),
     ...(fieldTypes !== undefined ? { fieldTypes } : {}),
     ...(options?.aggregators !== undefined ? { aggregators: options.aggregators } : {}),
+    ...(pluginRows !== undefined ? { pluginRows } : {}),
   };
 }

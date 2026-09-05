@@ -14,10 +14,11 @@ function span(id: string, overrides: Partial<EntryInput> = {}): EntryInput {
 }
 
 describe('toJSON fields (S4.4, D-S4-15)', () => {
-  it('writes schema: 2 and omits fields when none are declared', () => {
+  it('writes schema: 3 and omits fields and plugins when neither is present', () => {
     const doc = toJSON(new DatasetState({ timeZone: 'UTC', entries: [span('t1')] }));
-    expect(doc.schema).toBe(2);
+    expect(doc.schema).toBe(3);
     expect('fields' in doc).toBe(false);
+    expect('plugins' in doc).toBe(false);
     expect(Object.keys(doc)).toEqual(['schema', 'timeZone', 'dateOnlyEnd', 'rollUpKinds', 'entries']);
   });
 

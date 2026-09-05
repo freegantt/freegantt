@@ -11,19 +11,31 @@ export {
 } from './ids.js';
 export type { Instant, TimeUnit, TimeSpan, Duration, PlainParts } from './time.js';
 export type { InstantInput, TimeSpanInput, DateOnlyEndRule } from './time.js';
-export type { Entry, EntryKind, EntryInput, EntryEdit, StoredEdit, EntryEdits } from './entry.js';
+export type {
+  Entry,
+  EntryKind,
+  EntryInput,
+  EntryEdit,
+  StoredEdit,
+  EntryEdits,
+  EditRequest,
+  EditExtender,
+} from './entry.js';
 export type { Point, Size, PixelSpan, Rect, ClientPoint } from './geometry.js';
 export type { ElementDescription } from './render.js';
 export type { Dataset, DatasetHierarchy, EntryStore, EntryStoreView, RollUpKinds } from './dataset.js';
-export type { PluginId, Disposer } from './plugin.js';
+export type { PluginId, Disposer, ExtenderWrapper, PluginStore, PluginStoreView } from './plugin.js';
 export type { KeyChord, TargetKind } from './command.js';
-export type { DatasetDocument, EntryDocument, SerializedField } from './document.js';
+export type { DatasetDocument, EntryDocument, SerializedField, PluginDocument } from './document.js';
 export type {
   StoreName,
+  PluginStoreName,
   ChangeOrigin,
   EntityAdded,
   EntityRemoved,
   FieldUpdated,
+  StoreRowUpdated,
+  UpdatedRow,
   ChangeSet,
   DatasetEventMap,
 } from './change-set.js';
@@ -74,6 +86,8 @@ export {
   InvalidReplayOriginError,
   UnsupportedSchemaError,
   DuplicatePluginIdError,
+  MissingPluginError,
+  PluginRequirementCycleError,
   RegistrationClosedError,
   PluginSetupError,
   UnknownCommandError,

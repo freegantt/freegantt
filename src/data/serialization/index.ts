@@ -4,7 +4,7 @@
 // the data core does not notice a document format exists.
 
 import type { DateOnlyEndRule, Entry, EntryKind, Field } from '../../model/index.js';
-import type { DatasetDocument, EntryDocument } from '../../model/index.js';
+import type { DatasetDocument, EntryDocument, PluginDocument } from '../../model/index.js';
 import { instant, toISO } from '../../time/index.js';
 import { encodeFieldDocument } from './field-document.js';
 import { isDevMode } from '../dev-mode.js';
@@ -23,6 +23,8 @@ export interface DatasetDocumentSource {
     readonly all: readonly Entry[];
     get(id: string): Entry | undefined;
   };
+  /** Every plugin's own rows (D-S5-24), the rows of plugins this Dataset never installed included. */
+  readonly pluginStores: { toDocument(): PluginDocument | undefined };
 }
 
 function writeSegments(entry: Entry): EntryDocument['segments'] {
@@ -45,22 +47,27 @@ function writeEntry(entry: Entry): EntryDocument {
 }
 
 /** `toJSON(dataset)` — write the Dataset as a Document. Keys are declared in order; `Object.keys`
- *  over a store entity is never used. Always `schema: 2` (D-S4-16). */
+ *  over a store entity is never used. Always `schema: 3` (D-S4-16, D-S5-24). */
 export function toJSON(dataset: DatasetDocumentSource): DatasetDocument {
   const fields = encodeFieldDocument(dataset.fields.all);
+  const plugins = dataset.pluginStores.toDocument();
   return {
-    schema: 2,
+    schema: 3,
     timeZone: dataset.timeZone,
     dateOnlyEnd: dataset.dateOnlyEnd,
     rollUpKinds: Array.from(dataset.rollUpKinds),
     ...(fields !== undefined ? { fields } : {}),
+    ...(plugins !== undefined ? { plugins } : {}),
     entries: dataset.entries.all.map(writeEntry),
   };
 }
 
 /** A document whose stored roll-up values disagree with its children is corrected by construction
  *  (D-S2-22). In dev mode, name the entry so the rewrite is not silent. */
-export function warnIfRollUpsWereCorrected(doc: DatasetDocument, dataset: DatasetDocumentSource): void {
+export function warnIfRollUpsWereCorrected(
+  doc: DatasetDocument,
+  dataset: Pick<DatasetDocumentSource, 'rollUpKinds' | 'entries'>,
+): void {
   if (!isDevMode()) return;
   const kinds = new Set(dataset.rollUpKinds);
   for (const row of doc.entries) {

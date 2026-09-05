@@ -4,6 +4,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { DatasetState } from './dataset-state.js';
+import { fieldRowsOf } from './change-set.js';
 import { identityExtender } from './edit-extension.js';
 import {
   DuplicateEntryIdError,
@@ -236,8 +237,8 @@ describe('rollup (§1.5)', () => {
     state.entries.update('c1', { start: '2026-02-01', end: '2026-02-15' });
 
     expect(seen).toHaveLength(1);
-    const parentRows = seen[0]?.updated.filter((row) => row.id === entryId('p1'));
-    expect(parentRows?.map((row) => row.field).sort()).toEqual(['end', 'start']);
+    const parentRows = fieldRowsOf(seen[0]!).filter((row) => row.id === entryId('p1'));
+    expect(parentRows.map((row) => row.field).sort()).toEqual(['end', 'start']);
     const after = state.entries.get('p1')!;
     expect(after.start).not.toBe(before.start);
     expect(after.end).not.toBe(before.end);
@@ -245,7 +246,7 @@ describe('rollup (§1.5)', () => {
     // "one undo restores both": reverting via the changeset's own `from` values, in one transaction,
     // brings the parent back to its pre-move span — there is no history module yet to call directly.
     state.transaction(() => {
-      for (const row of parentRows ?? []) {
+      for (const row of parentRows) {
         state.entries.update('p1', { [row.field]: row.from });
       }
     });

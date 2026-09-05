@@ -114,7 +114,7 @@ describe('readDocument (S4.4, D-S4-16)', () => {
 
   it('throws UnsupportedSchemaError for a schema this build does not read', () => {
     const doc = {
-      schema: 3,
+      schema: 4,
       timeZone: 'UTC',
       dateOnlyEnd: 'inclusive' as const,
       rollUpKinds: [],
@@ -126,8 +126,8 @@ describe('readDocument (S4.4, D-S4-16)', () => {
     } catch (error) {
       expect(error).toBeInstanceOf(UnsupportedSchemaError);
       if (error instanceof UnsupportedSchemaError) {
-        expect(error.schema).toBe(3);
-        expect(error.supported).toEqual([1, 2]);
+        expect(error.schema).toBe(4);
+        expect(error.supported).toEqual([1, 2, 3]);
       }
     }
   });

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { Dataset } from './dataset.js';
+import { fieldRowsOf } from '../data/change-set.js';
 import {
   changeSetId,
   entryId,
@@ -410,7 +411,9 @@ describe('Dataset fields (S4.1)', () => {
 
     expect(changes).toHaveLength(1);
     expect(updated.meta).toEqual({ cost: 500 });
-    const fields = changes[0]?.updated.map((row) => row.field).sort();
+    const fields = fieldRowsOf(changes[0]!)
+      .map((row) => row.field)
+      .sort();
     expect(fields).toEqual(['cost', 'start']);
     expect(changes[0]?.updated).toContainEqual(
       expect.objectContaining({ field: 'cost', from: 400, to: 500 }),
@@ -442,7 +445,7 @@ describe('Dataset fields (S4.1)', () => {
     dataset.entries.update('leaf', { cost: 500 });
 
     expect(changes).toHaveLength(1);
-    const costRows = changes[0]!.updated.filter((row) => row.field === 'cost');
+    const costRows = fieldRowsOf(changes[0]!).filter((row) => row.field === 'cost');
     expect(costRows.map((row) => row.id)).toEqual(expect.arrayContaining(['root', 'leaf']));
   });
 

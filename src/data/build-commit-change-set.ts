@@ -14,6 +14,7 @@ import type {
   EntryKind,
   FieldContext,
   FieldUpdated,
+  StoreRowUpdated,
 } from '../model/index.js';
 import { diffEdit, foldChangeSet } from './change-set.js';
 import type { EditExtender, EntryEdits } from './edit-extension.js';
@@ -32,9 +33,16 @@ export interface CommitChangeSetEntryStore {
   pendingEdits(): EntryEdits;
 }
 
+/** Staged plugin-store state the commit pipeline reads — mirrors `TransactionalPluginStores` without
+ *  importing `transaction.ts` (cycle avoidance). */
+export interface CommitChangeSetPluginStores {
+  pendingRows(removedEntryIds: readonly EntryId[]): readonly StoreRowUpdated[];
+}
+
 /** What `buildCommitChangeSet` reads off a transaction's staged state. */
 export interface CommitChangeSetInput {
   readonly entries: CommitChangeSetEntryStore;
+  readonly pluginStores: CommitChangeSetPluginStores;
   readonly editExtender: EditExtender;
   readonly hierarchy: DatasetHierarchy;
   readonly fields: FieldRegistry;
@@ -73,6 +81,11 @@ function guardExtensionHookDoesNotOverwriteBody(proposed: EntryEdits, extenderEd
 /**
  * Runs the five commit stages against staged store state and returns a folded `ChangeSet`, or
  * `undefined` when the net effect is empty (D-S2-24 step 6).
+ *
+ * A plugin-store row counts toward "empty" exactly as a Field row does (D-S5-24, #156). Collecting the
+ * rows here, rather than only where entries are diffed, is what lets a transaction whose only write is
+ * a plugin row still commit: it builds a changeset, so `runTransaction` does not return early, and the
+ * ordinary commit emits `change`, records one undo step, and bumps `datasetRevision` once.
  */
 export function buildCommitChangeSet(
   data: CommitChangeSetInput,
@@ -119,10 +132,14 @@ export function buildCommitChangeSet(
     data.fieldContext,
   );
 
+  // Removing an entry removes its plugin rows in the same changeset, so the removed ids go in here.
+  const pluginRows = data.pluginStores.pendingRows(removed.map((entry) => entry.id));
+
   return foldChangeSet(data.nextChangeSetId(), origin, addedEntitiesForFold, removedEntities, [
     ...bodyUpdated,
     ...extenderUpdated,
     ...hierarchyUpdated,
     ...rollupUpdated,
+    ...pluginRows,
   ]);
 }
