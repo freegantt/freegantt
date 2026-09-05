@@ -373,6 +373,48 @@ describe('inlineEditing() (S5.8, D-S5-19/D-S5-20)', () => {
     container.remove();
   });
 
+  it('#158: a vetoed editor follows its cell on scroll instead of drifting out of the pane', () => {
+    const { container, gantt, dataset } = makeGantt();
+    dataset.on('beforeChange', () => false);
+    const cell = cellFor(container, 'e1', 'name');
+    dblclick(cell);
+    const el = input(container);
+    el.value = 'Vetoed';
+    enter(el);
+
+    const wrapper = container.querySelector<HTMLElement>('.fg-cell-editor[data-state="invalid"]')!;
+    const before = wrapper.style.transform;
+
+    // The pane scrolls: the cell moves, the Overlay the editor lives in does not.
+    vi.spyOn(cell, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, -60, 120, 24));
+    container.querySelector('.fg-grid-pane')!.dispatchEvent(new Event('scroll'));
+
+    expect(wrapper.style.transform).not.toBe(before);
+    expect(wrapper.style.transform).toContain('-60.00px');
+    expect(container.querySelector('.fg-cell-editor')).toBe(wrapper); // still open, still invalid
+
+    gantt.destroy();
+    container.remove();
+  });
+
+  it('#158: a scroll that recycles the anchor row onto another entry closes without committing', () => {
+    const { container, gantt, dataset } = makeGantt();
+    const row = container.querySelector<HTMLElement>('.fg-row[data-entry-id="e1"]')!;
+    dblclick(cellFor(container, 'e1', 'name'));
+    const el = input(container);
+    el.value = 'Never written';
+
+    row.dataset['entryId'] = 'e2'; // virtualization repaints this node for another entry
+    container.querySelector('.fg-grid-pane')!.dispatchEvent(new Event('scroll'));
+
+    expect(container.querySelector('.fg-cell-editor')).toBeNull();
+    expect(dataset.entries.get('e1')!.name).toBe('Task One');
+    expect(dataset.entries.get('e2')!.name).toBe('Task Two');
+
+    gantt.destroy();
+    container.remove();
+  });
+
   it('a stale async veto does not mount a second, orphaned session over a newer open', async () => {
     const { container, gantt } = makeGantt();
     let resolveFirst!: (value: void | false) => void;
