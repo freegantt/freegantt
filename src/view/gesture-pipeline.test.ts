@@ -45,6 +45,7 @@ function makeDeps(overrides: Partial<GesturePipelineDeps> = {}): {
     snap: () => 'none',
     selection: () => [],
     entryById: (id) => entries.get(id),
+    pickedItemIdByEntryId: () => new Map(),
     canGesture: () => true,
     commitEntryEdits: () => true,
     emit: (name, payload) => {
@@ -145,7 +146,7 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
     expect(preview[0]?.dWidth).toBe(50);
   });
 
-  it('moves every bar of a segmented entry, whichever bar the pointer grabbed (#200)', async () => {
+  it('moves every bar of a segmented entry with no pick (#211, D-S4-30)', async () => {
     const segmented: Entry = {
       ...entry('seg', 0, 300),
       segments: [
@@ -161,7 +162,7 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
       },
     });
     const pipeline = new GesturePipeline(deps);
-    // Whichever bar the pointer grabbed, the Selection names the Entry, so both Segments step.
+    // A row click named the Entry with no pick — every Segment steps (#211).
     const session = pipeline.session(segmented.id, { kind: 'move' })!;
 
     session.preview(40);
@@ -177,6 +178,115 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
       ],
       start: 40,
       end: 340,
+    });
+  });
+
+  it('moves only the picked bar of a segmented entry, envelope follows (#211, D-S4-30)', async () => {
+    const segmented: Entry = {
+      ...entry('seg', 0, 300),
+      segments: [
+        { start: 0 as Instant, end: 100 as Instant },
+        { start: 200 as Instant, end: 300 as Instant },
+      ],
+    };
+    const committed: EntryEdits[] = [];
+    const { deps, applied } = withRoster([segmented], {
+      pickedItemIdByEntryId: () => new Map([[segmented.id, itemId(segmented.id, 1)]]),
+      commitEntryEdits: (edits) => {
+        committed.push(edits);
+        return true;
+      },
+    });
+    const pipeline = new GesturePipeline(deps);
+    const session = pipeline.session(segmented.id, { kind: 'move' })!;
+
+    session.preview(40);
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    // Both bars preview — but only the picked one (Segment 1) carries a dx; Segment 0 stays put.
+    const preview = applied.at(-1) as readonly { itemId: string; dx: number }[];
+    expect(preview).toEqual([
+      { itemId: itemId(segmented.id, 0), dx: 0, dWidth: 0, extra: false },
+      { itemId: itemId(segmented.id, 1), dx: 40, dWidth: 0, extra: false },
+    ]);
+
+    await session.commit(40);
+    expect(committed[0]?.get(segmented.id)).toEqual({
+      segments: [
+        { start: 0, end: 100 },
+        { start: 240, end: 340 },
+      ],
+      start: 0,
+      end: 340,
+    });
+  });
+
+  it('a multi-Entry drag moves each Entry’s own picked Segment, or whole with no pick (#211)', async () => {
+    const picked: Entry = {
+      ...entry('picked', 0, 200),
+      segments: [
+        { start: 0 as Instant, end: 100 as Instant },
+        { start: 100 as Instant, end: 200 as Instant },
+      ],
+    };
+    const unpicked: Entry = {
+      ...entry('unpicked', 300, 500),
+      segments: [
+        { start: 300 as Instant, end: 400 as Instant },
+        { start: 400 as Instant, end: 500 as Instant },
+      ],
+    };
+    const committed: EntryEdits[] = [];
+    const { deps } = withRoster([picked, unpicked], {
+      selection: () => [picked.id, unpicked.id],
+      pickedItemIdByEntryId: () => new Map([[picked.id, itemId(picked.id, 1)]]),
+      commitEntryEdits: (edits) => {
+        committed.push(edits);
+        return true;
+      },
+    });
+    const pipeline = new GesturePipeline(deps);
+    const session = pipeline.session(picked.id, { kind: 'move' })!;
+
+    await session.commit(40);
+    expect(committed[0]?.get(picked.id)?.segments).toEqual([
+      { start: 0, end: 100 },
+      { start: 140, end: 240 },
+    ]);
+    // `unpicked` has no pick, so both of its Segments move by the same rigid-group delta (D-S3-19).
+    expect(committed[0]?.get(unpicked.id)?.segments).toEqual([
+      { start: 340, end: 440 },
+      { start: 440, end: 540 },
+    ]);
+  });
+
+  it('a resize on a picked Segment writes only that Segment’s edge (#211, D-S4-30)', async () => {
+    const segmented: Entry = {
+      ...entry('seg', 0, 300),
+      segments: [
+        { start: 0 as Instant, end: 100 as Instant },
+        { start: 200 as Instant, end: 300 as Instant },
+      ],
+    };
+    const committed: EntryEdits[] = [];
+    const { deps } = withRoster([segmented], {
+      pickedItemIdByEntryId: () => new Map([[segmented.id, itemId(segmented.id, 0)]]),
+      commitEntryEdits: (edits) => {
+        committed.push(edits);
+        return true;
+      },
+    });
+    const pipeline = new GesturePipeline(deps);
+    const session = pipeline.session(segmented.id, { kind: 'resize', edge: 'end' })!;
+
+    await session.commit(40);
+    // The picked Segment (0) grows; the envelope-latest Segment (1) never moves.
+    expect(committed[0]?.get(segmented.id)).toEqual({
+      segments: [
+        { start: 0, end: 140 },
+        { start: 200, end: 300 },
+      ],
+      start: 0,
+      end: 300,
     });
   });
 

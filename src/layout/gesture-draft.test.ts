@@ -373,6 +373,149 @@ describe('draftForMove — segments (S4.10, D-S4-30)', () => {
   });
 });
 
+describe('draftForMove/draftForResize — picked Segment (#211, D-S4-30)', () => {
+  const segmented: Entry = {
+    ...entry('seg', '2026-06-15T14:00:00Z', '2026-06-20T00:00:00Z'),
+    segments: [
+      { start: instant('2026-06-15T14:00:00Z'), end: instant('2026-06-16T00:00:00Z') },
+      { start: instant('2026-06-16T09:00:00Z'), end: instant('2026-06-17T00:00:00Z') },
+      { start: instant('2026-06-17T12:00:00Z'), end: instant('2026-06-20T00:00:00Z') },
+    ],
+  };
+
+  it('move: one Entry picked moves that Segment only and rewrites the envelope', () => {
+    const draft = draftForMove({
+      zone: ZONE,
+      scale,
+      snap: 'none',
+      entries: [segmented],
+      dxPx: 30,
+      pickedSegmentIndexByEntryId: new Map([[segmented.id, 1]]),
+    });
+    const edit = draft.get(segmented.id)!;
+    expect(edit.segments).toEqual([
+      segmented.segments![0],
+      { start: instant('2026-06-16T09:30:00Z'), end: instant('2026-06-17T00:30:00Z') },
+      segmented.segments![2],
+    ]);
+    // The envelope follows the moved Segment's new end, the untouched Segments' own extent.
+    expect(edit.start).toEqual(instant('2026-06-15T14:00:00Z'));
+    expect(edit.end).toEqual(instant('2026-06-20T00:00:00Z'));
+  });
+
+  it('move: several Entries each move their own picked Segment, or whole with no pick', () => {
+    const other: Entry = {
+      ...entry('other', '2026-06-15T14:00:00Z', '2026-06-18T00:00:00Z'),
+      segments: [
+        { start: instant('2026-06-15T14:00:00Z'), end: instant('2026-06-16T00:00:00Z') },
+        { start: instant('2026-06-17T00:00:00Z'), end: instant('2026-06-18T00:00:00Z') },
+      ],
+    };
+    // A ctrl-click multi-selection: `segmented` has a pick on Segment 0, `other` has no pick at all.
+    const draft = draftForMove({
+      zone: ZONE,
+      scale,
+      snap: 'none',
+      entries: [segmented, other],
+      dxPx: 30,
+      pickedSegmentIndexByEntryId: new Map([[segmented.id, 0]]),
+    });
+    expect(draft.get(segmented.id)?.segments).toEqual([
+      { start: instant('2026-06-15T14:30:00Z'), end: instant('2026-06-16T00:30:00Z') },
+      segmented.segments![1],
+      segmented.segments![2],
+    ]);
+    // `other` has no pick, so every one of its Segments moves by the same rigid-group delta (D-S3-19).
+    expect(draft.get(other.id)?.segments).toEqual([
+      { start: instant('2026-06-15T14:30:00Z'), end: instant('2026-06-16T00:30:00Z') },
+      { start: instant('2026-06-17T00:30:00Z'), end: instant('2026-06-18T00:30:00Z') },
+    ]);
+  });
+
+  it('move: two segmented Entries each with their own picked Segment move only those two bars', () => {
+    // The exact case a ctrl-click multi-selection paints: exactly one bar per Entry lights up, so
+    // exactly one bar per Entry must move — never the other four Segments across the two Entries.
+    const other: Entry = {
+      ...entry('other', '2026-06-15T14:00:00Z', '2026-06-18T00:00:00Z'),
+      segments: [
+        { start: instant('2026-06-15T14:00:00Z'), end: instant('2026-06-16T00:00:00Z') },
+        { start: instant('2026-06-17T00:00:00Z'), end: instant('2026-06-18T00:00:00Z') },
+      ],
+    };
+    const draft = draftForMove({
+      zone: ZONE,
+      scale,
+      snap: 'none',
+      entries: [segmented, other],
+      dxPx: 30,
+      pickedSegmentIndexByEntryId: new Map([
+        [segmented.id, 1],
+        [other.id, 0],
+      ]),
+    });
+    expect(draft.get(segmented.id)?.segments).toEqual([
+      segmented.segments![0],
+      { start: instant('2026-06-16T09:30:00Z'), end: instant('2026-06-17T00:30:00Z') },
+      segmented.segments![2],
+    ]);
+    expect(draft.get(other.id)?.segments).toEqual([
+      { start: instant('2026-06-15T14:30:00Z'), end: instant('2026-06-16T00:30:00Z') },
+      other.segments![1],
+    ]);
+  });
+
+  it('resize: one Entry picked writes that Segment edge, never the envelope edge', () => {
+    const draft = draftForResize({
+      zone: ZONE,
+      scale,
+      snap: 'none',
+      entries: [segmented],
+      dxPx: 30,
+      edge: 'end',
+      pickedSegmentIndexByEntryId: new Map([[segmented.id, 0]]),
+    });
+    expect(draft.get(segmented.id)).toEqual({
+      segments: [
+        { start: instant('2026-06-15T14:00:00Z'), end: instant('2026-06-16T00:30:00Z') },
+        segmented.segments![1],
+        segmented.segments![2],
+      ],
+      start: instant('2026-06-15T14:00:00Z'),
+      end: instant('2026-06-20T00:00:00Z'),
+    });
+  });
+
+  it('resize: several Entries use each own pick edge, else the envelope edge, same delta', () => {
+    const other: Entry = {
+      ...entry('other', '2026-06-15T14:00:00Z', '2026-06-18T00:00:00Z'),
+      segments: [
+        { start: instant('2026-06-15T14:00:00Z'), end: instant('2026-06-16T00:00:00Z') },
+        { start: instant('2026-06-17T00:00:00Z'), end: instant('2026-06-18T00:00:00Z') },
+      ],
+    };
+    const draft = draftForResize({
+      zone: ZONE,
+      scale,
+      snap: 'none',
+      entries: [segmented, other],
+      dxPx: 30,
+      edge: 'end',
+      pickedSegmentIndexByEntryId: new Map([[segmented.id, 0]]),
+    });
+    // `segmented` has a pick on Segment 0 — its own edge moves, not the envelope's latest Segment.
+    expect(draft.get(segmented.id)?.segments).toEqual([
+      { start: instant('2026-06-15T14:00:00Z'), end: instant('2026-06-16T00:30:00Z') },
+      segmented.segments![1],
+      segmented.segments![2],
+    ]);
+    // `other` has no pick — the envelope edge (its latest Segment's end) moves instead.
+    expect(draft.get(other.id)?.segments).toEqual([
+      other.segments![0],
+      { start: instant('2026-06-17T00:00:00Z'), end: instant('2026-06-18T00:30:00Z') },
+    ]);
+  });
+});
+
 describe('previewOffsets — segments (S4.10)', () => {
   it('offsets each segment item independently', () => {
     const segmented: Entry = {
