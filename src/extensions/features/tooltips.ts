@@ -1,8 +1,8 @@
 // extensions/features/ — the tooltip built-in (S5.5, D-S5-13). An ordinary `GanttPlugin`, confined
 // by the `extensions-public-only` rule (D-S5-5) to `api/`/`model/` imports — the dogfood gate this
 // step proves (`[S5-A1]`). Every import below names its own narrow source file, never the
-// `api/index.ts` barrel (which re-exports `tooltips` itself, D-S5-13) — the same reason
-// `extensions/popup.ts` imports `api/plugin.ts` directly instead of that barrel (no-circular).
+// `api/index.ts` barrel. That barrel re-exports `tooltips` itself (D-S5-13). `extensions/popup.ts`
+// imports `api/plugin.ts` directly instead of that barrel, for the same reason (no-circular).
 
 import { createPopup } from '../popup.js';
 import type { Popup, PopupPlacement } from '../popup.js';
@@ -49,9 +49,9 @@ function defaultContent(
   };
 }
 
-/** D-S5-13: hover a bar (or focus it — `role="img"` bars gain a real tabindex in S5.11's a11y pass;
- *  this plugin listens for `focusin`/`focusout` now so it needs no change once they do) and a popup
- *  shows the entry's name and dates. `focus: 'none'` (D-S5-9) — the pointer path never steals focus,
+/** D-S5-13: hover a bar, or focus it, and a popup shows the entry's name and dates. `role="img"`
+ *  bars gain a real tabindex in S5.11's a11y pass. This plugin listens for `focusin`/`focusout`
+ *  now, so it needs no change once they do. `focus: 'none'` (D-S5-9) — the pointer path never steals focus,
  *  and the keyboard path is `role="img"`'s own accessible label (`FrameBar.a11yLabel`, S5.11) rather
  *  than this popup. Content resolves through the `tooltip` renderer point (S5.4) via
  *  `ctx.view.resolveTooltipContent`, so a consumer's `tooltipRenderer` replaces the body with no change to
@@ -98,9 +98,9 @@ export function tooltips(options: TooltipsOptions = {}): GanttPlugin {
       };
 
       /** A tooltip belongs to a bar, so every other resolved target is a miss. `ctx.view.onDomEvent`
-       *  has already answered "is this Gantt mine?" (I2, bug hunt B1), which a hand-written
-       *  `.fg-bar` walk could not: two Datasets sharing an entry id used to open Gantt A's tooltip
-       *  anchored on Gantt B's bar. */
+       *  has already answered "is this Gantt mine?" (I2, bug hunt B1). A hand-written `.fg-bar` walk
+       *  could not. Two Datasets sharing an entry id used to open Gantt A's tooltip anchored on
+       *  Gantt B's bar. */
       const barTarget = (target: DomTarget | undefined): DomTarget | undefined =>
         target?.kind === 'bar' ? target : undefined;
 

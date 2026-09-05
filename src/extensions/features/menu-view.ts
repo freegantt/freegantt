@@ -42,11 +42,11 @@ function isSeparator(entry: MenuEntry): entry is { separator: true } {
   return 'separator' in entry;
 }
 
-/** D-S5-14: menu items come from commands, filtered by `when`. `defaults` (built by `context-menu.ts`
- *  from `commands.available(ctx)`) embeds each available command's own label, so `items()` can pass
- *  them through unchanged; a caller-supplied `MenuItem` with no `label` still resolves to the
- *  command's own, and a `MenuItem` naming a command that is not currently available renders nothing —
- *  the same posture `when` already takes on the keybinding path. */
+/** D-S5-14: menu items come from commands, filtered by `when`. `defaults` embeds each available
+ *  command's own label, so `items()` can pass them through unchanged. `context-menu.ts` builds
+ *  `defaults` from `commands.available(ctx)`. A caller-supplied `MenuItem` with no `label` still
+ *  resolves to the command's own. A `MenuItem` naming a command that is not currently available
+ *  renders nothing, the same posture `when` already takes on the keybinding path. */
 export function resolveMenuEntries(
   entries: readonly MenuEntry[],
   available: readonly Command[],
@@ -65,13 +65,17 @@ export function resolveMenuEntries(
   return resolved;
 }
 
-/** One `<button>` per command (real DOM focus, in `extensions/focus-trap.ts`'s own `FOCUSABLE_SELECTOR`
- *  — the trap's `focusFirst()` lands on the first one with no extra wiring) and one `<div>` per
- *  separator. `data-command` is the only channel `context-menu.ts` needs back — a delegated `click`
- *  listener reads it off `event.target.closest('.fg-menu-item')` (D-S5-10: `ElementDescription` never
- *  carries event handlers, so a container-level listener plus a data attribute is the read path every
- *  interactive `ElementDescription` in this codebase already uses, e.g. `render/dom/index.ts`'s own
- *  `data-item-id`). Every `ResolvedMenuEntry` reaching this function already has its final `label` —
+/** One `<button>` per command, and one `<div>` per separator. A `<button>` takes real DOM focus,
+ *  and sits in `extensions/focus-trap.ts`'s own `FOCUSABLE_SELECTOR`. The trap's `focusFirst()`
+ *  lands on the first one with no extra wiring.
+ *
+ *  `data-command` is the only channel `context-menu.ts` needs back. A delegated `click` listener
+ *  reads it off `event.target.closest('.fg-menu-item')`. D-S5-10: an `ElementDescription` never
+ *  carries event handlers. So a container-level listener plus a data attribute is the read path
+ *  every interactive `ElementDescription` in this codebase already uses, `render/dom/index.ts`'s own
+ *  `data-item-id` for example.
+ *
+ *  Every `ResolvedMenuEntry` reaching this function already has its final `label`. That is
  *  `resolveMenuEntries`'s job, not this one's. */
 export function buildMenu(entries: readonly ResolvedMenuEntry[]): ElementDescription {
   return {

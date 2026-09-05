@@ -1,12 +1,16 @@
 // extensions/features/ — the default `dateInput` seam (S5.8, D-S5-20). `plans/04` §1 budgets two
 // runtime dependencies and a picker is not one of them, so this wraps the platform's own
-// `<input type="date">`. `extensions/` may import only `api/` and `model/` (D-S5-5) — `time/` is
+// `<input type="date">`. `extensions/` may import only `api/` and `model/` (D-S5-5). `time/` is
 // sealed from here the same way it is from a third-party plugin, so this file does no zone math of
-// its own. `createDefaultDateInput` instead takes a small structural subset of `time/`'s `ZonedTime`
-// (D-S5-16) as a plain argument: a real `ZonedTime` already satisfies it, so `inlineEditing()` can
-// pass `ctx.dataset.time` straight through with no import of `ZonedTime`'s own type. The *public*
-// `DateInputFactory` a consumer writes stays narrower still (`{ zone, locale }` only, D-S5-20's own
-// signature) — a consumer's own factory owns its own zone math, outside `src/`'s I10 scope.
+// its own.
+//
+// `createDefaultDateInput` instead takes a small structural subset of `time/`'s `ZonedTime`
+// (D-S5-16) as a plain argument. A real `ZonedTime` already satisfies it. So `inlineEditing()` can
+// pass `ctx.dataset.time` straight through, with no import of `ZonedTime`'s own type.
+//
+// The *public* `DateInputFactory` a consumer writes stays narrower still — `{ zone, locale }` only,
+// D-S5-20's own signature. A consumer's own factory owns its own zone math, outside `src/`'s I10
+// scope.
 
 import type { Disposer, Instant, PlainParts } from '../../model/index.js';
 
@@ -27,9 +31,10 @@ export interface DateInput {
 export type DateInputFactory = (ctx: { zone: string; locale?: Intl.LocalesArgument }) => DateInput;
 
 /** The structural slice of `time/`'s `ZonedTime` this file needs — not that type itself (sealed from
- *  `extensions/`, see file header). `PlainParts` is `model/`'s (#144): the wall-clock shape is domain
- *  vocabulary, so it is named once there rather than hand-copied here, where a later field added to
- *  it would not have reached this file. `time/` re-exports the same type; its optional `dayOfWeek` is
+ *  `extensions/`, see file header). `PlainParts` is `model/`'s (#144). The wall-clock shape is
+ *  domain vocabulary, so `model/` names it once rather than this file hand-copying it. A later
+ *  field added to a hand-copied shape would never have reached this file.
+ *  `time/` re-exports the same type; its optional `dayOfWeek` is
  *  derived on read, which this control neither reads nor writes. */
 export interface ZoneDateMath {
   toPlain(at: Instant): PlainParts;
@@ -41,11 +46,13 @@ function pad(value: number, width: number): string {
 }
 
 /** `<input type="date">`'s own value shape (`YYYY-MM-DD`), read and written through `time`'s zone
- *  math — never `Date` parsing, and never an inline `end - 1` (the inclusive-display rule, `plans/01`
- *  §5 stays out of scope here: a date-only field's `end` is already the entry's own stored value by
- *  the time this control opens, `inlineEditing()`'s job, not this one's). Callable only for an
- *  Instant already known to fall at local midnight (`inlineEditing()` checks that before it ever
- *  calls `write`, issue #137 F11) — this control assumes a valid date-only value throughout. */
+ *  math. Never `Date` parsing, and never an inline `end - 1`. The inclusive-display rule
+ *  (`plans/01` §5) stays out of scope here. A date-only field's `end` is already the entry's own
+ *  stored value by the time this control opens. That is `inlineEditing()`'s job, not this one's.
+ *
+ *  Callable only for an Instant already known to fall at local midnight. `inlineEditing()` checks
+ *  that before it ever calls `write` (issue #137 F11). So this control assumes a valid date-only
+ *  value throughout. */
 export function createDefaultDateInput(time: ZoneDateMath): DateInput {
   const input = document.createElement('input');
   input.type = 'date';
@@ -71,9 +78,9 @@ export function createDefaultDateInput(time: ZoneDateMath): DateInput {
       input.value = `${pad(plain.year, 4)}-${pad(plain.month, 2)}-${pad(plain.day, 2)}`;
     },
     onCommit(handler: () => void): Disposer {
-      // `change` covers the native picker and a typed-then-blurred value; `keydown` Enter covers a
-      // typed value the browser has not yet turned into a `change` (some browsers fire `change` only
-      // on blur). Both can fire for one keystroke. `inlineEditing()`'s own commit closes its
+      // `change` covers the native picker and a typed-then-blurred value. `keydown` Enter covers a
+      // typed value the browser has not yet turned into a `change`. Some browsers fire `change`
+      // only on blur. Both can fire for one keystroke. `inlineEditing()`'s own commit closes its
       // `CellEditorSession`, so the second call finds no open editor and writes nothing — this
       // control does not de-duplicate.
       const onKeydown = (event: KeyboardEvent): void => {

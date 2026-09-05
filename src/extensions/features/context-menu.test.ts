@@ -141,8 +141,8 @@ describe('contextMenu() (S5.5, D-S5-13/14)', () => {
 
   it('a self-dismissal detaches the menu listeners, so nothing polls isOpen afterwards (review C3)', () => {
     // Before `PopupOptions.onDismiss`, Escape closed the popup and left this plugin's `click` and
-    // `keydown` listeners on `document` until the next open or plugin disposal — guarded only by an
-    // `isOpen` read on every click and keystroke in the page.
+    // `keydown` listeners on `document`. They stayed until the next open or plugin disposal. An
+    // `isOpen` read on every click and keystroke in the page was the only guard.
     const added: string[] = [];
     const removed: string[] = [];
     type Listen = (type: string, listener: EventListener, options?: boolean) => void;
@@ -225,8 +225,8 @@ describe('contextMenu() (S5.5, D-S5-13/14)', () => {
     const itemInB = menuItems(containerB).find((el) => el.getAttribute('data-command') === 'demo.b');
     itemInB!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
 
-    // Without the fix, A's document-wide click listener also matches this click (it only checks
-    // `.closest('.fg-menu-item')`, not "is this mine") and would run/close against A's own menu.
+    // Without the fix, A's document-wide click listener also matches this click. It only checks
+    // `.closest('.fg-menu-item')`, not "is this mine". It would run and close against A's own menu.
     expect(ranOnB).toBe(true);
     expect(ranOnA).toBe(false);
     expect(containerA.querySelector('.fg-menu')).not.toBeNull();
@@ -254,7 +254,7 @@ describe('contextMenu() (S5.5, D-S5-13/14)', () => {
     );
 
     // Without the fix, the document-wide querySelectorAll('.fg-menu-item') mixes A's and B's items
-    // into one list, so the "next" index can land on an item that belongs to the wrong Gantt.
+    // into one list. The "next" index can then land on an item that belongs to the wrong Gantt.
     expect(itemsB).toContain(document.activeElement);
 
     ganttA.destroy();
