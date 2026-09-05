@@ -20,7 +20,7 @@ import type {
 } from '../../layout/index.js';
 import type { ColumnAlign, FrameColumn } from '../../layout/index.js';
 import type { RenderBackend, RenderSurfaces, InteractionState, HitResult } from '../backend.js';
-import { itemId, itemIdFromDataset } from '../../layout/index.js';
+import { itemIdFromDataset, rowIdFromDataset } from '../../layout/index.js';
 import { attachDateLines } from './date-line.js';
 import type { DateLineAttachment } from './date-line.js';
 import { attachDecorations } from './decorations.js';
@@ -670,7 +670,7 @@ export function createDomBackend(options?: DomBackendOptions): RenderBackend<HTM
   function syncRows(rows: readonly FrameRow[], rowCount: number, columns: readonly FrameColumn[]): void {
     if (!gridLayer) return;
     rowEntryIds.clear();
-    for (const row of rows) if (row.entryId !== undefined) rowEntryIds.set(row.id, [row.entryId]);
+    for (const row of rows) if (row.entryIds.length > 0) rowEntryIds.set(row.id, row.entryIds);
     rowLayer.sync(gridLayer, rows, {
       key: (row) => row.id,
       create: (row, key) => {
@@ -679,15 +679,16 @@ export function createDomBackend(options?: DomBackendOptions): RenderBackend<HTM
         node.setAttribute('role', 'listitem');
         node.dataset[TESTID_KEY] = ROW_TESTID;
         node.dataset['rowId'] = key;
-        // Bug hunt (S5 fixes): what `hitTest`'s grid-row fallback resolves a click against — a
-        // header row carries none, and never becomes selectable (`row.entryId === undefined` above).
-        if (row.entryId !== undefined) node.dataset[ENTRY_ID_KEY] = row.entryId;
+        // The Entry this row's cells describe (#185) — the row's subject, not the set it owns. A
+        // header row describes none, so it carries no `data-entry-id` at all.
+        const subject = row.entryIds[0];
+        if (subject !== undefined) node.dataset[ENTRY_ID_KEY] = subject;
         // Bug hunt (S5 fixes): virtualization can create this node well after the selection that
         // ought to paint it — a remounted row must not wait for the next selection change to catch
         // up (D-S5's own "restamp on remount" fix). `paintedSelectedRows` (applyState's own diff
         // set) gains this row too, or the next `applyState` call would see a spurious diff and
         // repaint a node that is already correct.
-        if (row.entryId !== undefined && paintedSelectedEntryIds.has(row.entryId)) {
+        if (row.entryIds.some((id) => paintedSelectedEntryIds.has(id))) {
           node.dataset['state'] = 'selected';
           paintedSelectedRows = new Set(paintedSelectedRows).add(key);
         }
@@ -733,7 +734,8 @@ export function createDomBackend(options?: DomBackendOptions): RenderBackend<HTM
     columns: readonly FrameColumn[],
     renderers: readonly (ResolvedRenderer<BoundCellRenderer> | undefined)[],
   ): readonly CellItem[] {
-    const entry = row.entryId !== undefined ? entryById(row.entryId) : undefined;
+    const subject = row.entryIds[0];
+    const entry = subject !== undefined ? entryById(subject) : undefined;
     return cellItemsFor(row.cells, columns, row.expandable, row.expanded).map((item, i) => {
       const resolved = renderers[i];
       if (resolved === undefined) return item;
@@ -1067,22 +1069,25 @@ export function createDomBackend(options?: DomBackendOptions): RenderBackend<HTM
       const handle = el instanceof Element ? el.closest<HTMLElement>(`.${BAR_HANDLE_CLASS}`) : null;
       if (handle && paintedResizable !== undefined) {
         const edge = handle.dataset['edge'];
-        if (edge === 'start' || edge === 'end') return { itemId: paintedResizable, edge };
+        if (edge === 'start' || edge === 'end') return { kind: 'bar', itemId: paintedResizable, edge };
       }
       const bar = el instanceof Element ? el.closest<HTMLElement>(`.${BAR_CLASS}`) : null;
       if (bar && barLayer.contains(bar)) {
         const id = itemIdFromDataset(bar.dataset[ITEM_ID_KEY]);
-        return id ? { itemId: id } : null;
+        return id ? { kind: 'bar', itemId: id } : null;
       }
       // Bug hunt (S5 fixes, "grid row highlight and row click"): a miss on the bar layer falls
-      // through to the grid pane — a row click selects the row's primary entry the same way a bar
-      // click selects the bar's. A twisty click is not a row hit at all: collapse stays on the
-      // twisty, never selection, and a miss there still counts as a genuine grid miss (no clear).
+      // through to the grid pane — a row click selects the same way a bar click does. The hit names
+      // the row itself (#185): which Entries that row owns is the caller's question, and a row that
+      // owns several used to lose all but the first to a made-up Item id. A twisty click is not a
+      // row hit at all: collapse stays on the twisty, never selection, and a miss there still counts
+      // as a genuine grid miss (no clear).
       if (el instanceof Element && el.closest(`.${ROW_TWISTY_CLASS}`)) return null;
       const row = el instanceof Element ? el.closest<HTMLElement>(`.${ROW_CLASS}`) : null;
       if (row && gridLayer?.contains(row)) {
-        const entryId = row.dataset[ENTRY_ID_KEY];
-        if (entryId) return { itemId: itemId(entryId as EntryId, 0) };
+        const id = rowIdFromDataset(row.dataset['rowId']);
+        // A header row carries no Entry, so it is never selectable — `entriesForRow` answers none.
+        if (id !== undefined) return { kind: 'row', rowId: id };
       }
       return null;
     },

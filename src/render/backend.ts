@@ -1,7 +1,7 @@
 // render/ backend contract (plans/01 §8.1). Shared by dom and null backends; DOM types are structural only —
 // this file itself never touches document/window.
 
-import type { EntryId, GeometryFrame, ItemId, ItemPreview, ClientPoint } from '../layout/index.js';
+import type { EntryId, GeometryFrame, ItemId, ItemPreview, ClientPoint, RowId } from '../layout/index.js';
 
 export interface InteractionState {
   hoveredItemId?: ItemId;
@@ -43,11 +43,21 @@ export interface InteractionState {
   columnReorderPreview?: { columnKey: string; offsetPx: number; beforeColumnKey: string | null };
 }
 
-export interface HitResult {
+/** What `hitTest` found: a bar in the timeline pane, or a row in the grid pane (#185). A row hit
+ *  names the row, and the row is what owns Entries — a backend never invents an Item id for it. */
+export type HitResult = BarHit | RowHit;
+
+export interface BarHit {
+  kind: 'bar';
   itemId: ItemId;
   /** S3.4, D-S3-4: set when the hit landed on a resize handle rather than the bar body — which edge
    *  a resize gesture should grab. Sourced from the handle's own `data-edge` attribute (D-S3-8). */
   edge?: 'start' | 'end';
+}
+
+export interface RowHit {
+  kind: 'row';
+  rowId: RowId;
 }
 
 /** The two paint surfaces a backend mounts into (S1.8, D-S1.8-1): the grid pane's row layer, and the

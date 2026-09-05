@@ -861,6 +861,39 @@ describe('GanttShell hot path (S3.2, D-S3-6/D-S3-9, [S3-A3])', () => {
 
     shell.destroy();
   });
+
+  it('entriesForRow answers every selectable Entry a packed row owns (#185)', () => {
+    const owned: Entry[] = [
+      { id: entryId('one'), name: 'one', start: rangeStart, end: rangeEnd, kind: 'span' },
+      { id: entryId('two'), name: 'two', start: rangeStart, end: rangeEnd, kind: 'span' },
+      { id: entryId('three'), name: 'three', start: rangeStart, end: rangeEnd, kind: 'span' },
+    ];
+    const container = document.createElement('div');
+    let ctx: EntryGestureContext | undefined;
+    const shell = new GanttShell({
+      container,
+      dataset: fakeDataset(owned),
+      rowSource: {
+        source: 'custom',
+        resolve: () => [{ id: 'packed', entryIds: owned.map((entry) => String(entry.id)) }],
+      },
+      // The middle Entry refuses `select`, so the row keeps the other two (I14: one resolution).
+      interactions: { select: (entry) => entry.id !== owned[1]!.id },
+      wiring: {
+        entryGestures: (_pane, _rowLayer, _host, gestureCtx) => {
+          ctx = gestureCtx;
+          return { detach() {} };
+        },
+      },
+    });
+
+    const row = container.querySelector<HTMLElement>('.fg-row')!;
+    expect(ctx!.entriesForRow(rowId(row.dataset['rowId']!))).toEqual([owned[0]!.id, owned[2]!.id]);
+    // A row id no frame carries answers nothing, rather than throwing.
+    expect(ctx!.entriesForRow(rowId('absent'))).toEqual([]);
+
+    shell.destroy();
+  });
 });
 
 describe('GanttShell tree keyboard (D1)', () => {

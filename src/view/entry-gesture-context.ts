@@ -5,7 +5,7 @@
 // The sole declaration (C5): `interaction/` may import `view/` (the legal edge, plans/01 §1), so this
 // type lives here once instead of being mirrored on both sides of that edge.
 
-import type { Entry, EntryId, ItemId, ClientPoint } from '../model/index.js';
+import type { Entry, EntryId, ItemId, RowId, ClientPoint } from '../model/index.js';
 import type { Interactions } from './capability.js';
 
 /** What kind of data gesture is in flight — `'move'` (S3.3) or `'resize'` with the grabbed edge (S3.4). */
@@ -21,12 +21,15 @@ export interface DraftOptions {
   cursorX?: number;
 }
 
-/** S3.4, D-S3-4: what `hitTest` found. `edge` is set only for a hit on the shared resize-handle pair
- *  — sourced from the handle's own `data-edge` attribute (D-S3-8) — never for a hit on the bar body. */
-export interface EntryHit {
-  itemId: ItemId;
-  edge?: 'start' | 'end';
-}
+/** What `hitTest` found: a bar in the timeline pane, or a row in the grid pane (#185).
+ *
+ *  On a bar hit, `edge` is set only for a hit on the shared resize-handle pair — sourced from the
+ *  handle's own `data-edge` attribute (D-S3-8) — never for a hit on the bar body (S3.4, D-S3-4).
+ *
+ *  A row hit names the row alone. Which Entries the row owns is `entriesForRow`'s answer, so
+ *  `interaction/` never turns a row into an Entry by itself. */
+export type EntryHit =
+  { kind: 'bar'; itemId: ItemId; edge?: 'start' | 'end' } | { kind: 'row'; rowId: RowId };
 
 /** One armed gesture (D-GH-1): `session()` resolves what moves once, at arm time, so
  *  `interaction/entry-gestures.ts`'s pointer machine holds this one object instead of separately
@@ -61,6 +64,10 @@ export interface EntryGestureContext {
   can(capability: keyof Interactions, entry: Entry): boolean;
   /** The selectable entries in resolved row order — shift-click ranges over this list (D-S4-32). */
   selectableEntriesInRowOrder(): readonly EntryId[];
+  /** The selectable Entries one row owns, in the row's own order (#185). A row click selects all of
+   *  them. Empty for a header row, and for a row whose every Entry refuses `select` — the capability
+   *  is resolved here, once (I14), so `interaction/` still performs no lookups of its own. */
+  entriesForRow(rowId: RowId): readonly EntryId[];
   selection: {
     get(): readonly EntryId[];
     /** `pickedItemId` is the one bar the pointer landed on (#185) — where the shared resize-handle

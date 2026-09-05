@@ -63,7 +63,7 @@ describe('render/dom backend', () => {
     const original = document.elementFromPoint.bind(document);
     document.elementFromPoint = (x: number, y: number) => (x === 5 && y === 5 ? bar : original(x, y));
 
-    expect(backend.hitTest(point(5, 5))).toEqual({ itemId: frame.bars[0]!.id });
+    expect(backend.hitTest(point(5, 5))).toEqual({ kind: 'bar', itemId: frame.bars[0]!.id });
     expect(backend.hitTest(point(999, 999))).toBeNull();
 
     document.elementFromPoint = original;
@@ -880,8 +880,8 @@ describe('render/dom backend', () => {
   });
 
   // Bug hunt (S5 fixes): hitTest's grid-row fallback — a click that misses the bar layer resolves
-  // against the grid pane's own .fg-row, segment 0 of that row's primary entry.
-  it("hitTest resolves a grid-row miss on the bar layer to segment 0 of the row's primary entry", () => {
+  // against the grid pane's own .fg-row. It names the row (#185), never an Item id of its own.
+  it('hitTest resolves a grid-row miss on the bar layer to that row (#185)', () => {
     const backend = createDomBackend();
     const { grid, timeline } = mountSurfaces();
     backend.mount({ grid, timeline });
@@ -901,7 +901,7 @@ describe('render/dom backend', () => {
     const original = document.elementFromPoint.bind(document);
     document.elementFromPoint = (x: number, y: number) => (x === 5 && y === 5 ? row : original(x, y));
 
-    expect(backend.hitTest(point(5, 5))).toEqual({ itemId: `${sampleEntries[0]!.id}:0` });
+    expect(backend.hitTest(point(5, 5))).toEqual({ kind: 'row', rowId: frame.rows[0]!.id });
 
     backend.destroy();
     grid.remove();
@@ -1032,7 +1032,11 @@ describe('render/dom backend', () => {
     const original = document.elementFromPoint.bind(document);
     document.elementFromPoint = (x: number, y: number) => (x === 5 && y === 5 ? end : original(x, y));
 
-    expect(backend.hitTest(point(5, 5))).toEqual({ itemId: frame.bars[0]!.id, edge: 'end' });
+    expect(backend.hitTest(point(5, 5))).toEqual({
+      kind: 'bar',
+      itemId: frame.bars[0]!.id,
+      edge: 'end',
+    });
 
     document.elementFromPoint = original;
     backend.destroy();
@@ -1061,7 +1065,7 @@ describe('render/dom backend', () => {
     const original = document.elementFromPoint.bind(document);
     document.elementFromPoint = (x: number, y: number) => (x === 5 && y === 5 ? bar : original(x, y));
 
-    expect(backend.hitTest(point(5, 5))).toEqual({ itemId: frame.bars[0]!.id });
+    expect(backend.hitTest(point(5, 5))).toEqual({ kind: 'bar', itemId: frame.bars[0]!.id });
 
     document.elementFromPoint = original;
     backend.destroy();
