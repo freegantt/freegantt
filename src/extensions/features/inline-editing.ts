@@ -80,6 +80,34 @@ function fieldContextFor(ctx: PluginContext): FieldContext {
 const EDITOR_CLASS = 'fg-cell-editor';
 const EDITOR_CONTROL_CLASS = 'fg-cell-editor-control';
 
+/** Every refusal the user can see, with the words the user reads. One table, because the wording is
+ *  user-visible and belongs in one place — the four `return` sites below decide *which* refusal
+ *  applies, never *how it reads* (review SP1).
+ *
+ *  Which refusals speak, and which stay silent, is stated once in `s5.8-inline-editing.md` §1:
+ *  a cell that offers no editor at all refuses silently, and a cell that offers one but cannot open
+ *  it here names the reason. */
+const REFUSAL_TEXT = {
+  derivedValue: 'this value comes from the rows below it; edit a child row instead',
+  noParseValue: 'this field has no parseValue; the default editor cannot read the text back',
+  noDateValue: 'this field holds no date yet; the default date editor needs one',
+  timeOfDay: 'this field carries a time of day; the default date editor cannot show it',
+  unsavedValue: 'another cell still holds a value that did not save; fix it or press Escape',
+} as const;
+
+/** Why the editor refused a cell that does offer one. The key is the machine-readable half — it goes
+ *  on the notice's own `data-reason` — and `REFUSAL_TEXT` holds the half the user reads. */
+export type CellEditorRefusal = keyof typeof REFUSAL_TEXT;
+
+/** Puts `element` exactly over `cell`'s own rect — no flip and no clamp, unlike `Popup`. An editor
+ *  and a refusal notice both sit exactly where the cell already is, so both position through this. */
+function positionOver(element: HTMLElement, cell: HTMLElement, bounds: DOMRect): void {
+  const rect = cell.getBoundingClientRect();
+  element.style.transform = `translate(${(rect.left - bounds.left).toFixed(2)}px, ${(rect.top - bounds.top).toFixed(2)}px)`;
+  element.style.width = `${rect.width}px`;
+  element.style.height = `${rect.height}px`;
+}
+
 /** What the user typed, read back through the control's own rules. `ok: false` means the control
  *  makes no value from what is there now — a `parseValue` that refused, or an empty date. */
 export type CellEditorValue = { ok: true; value: unknown } | { ok: false };
@@ -251,14 +279,8 @@ export class CellEditorSession {
     this.#ports.requestCommit();
   };
 
-  /** Puts the wrapper over `cell`'s own rect — no flip and no clamp, unlike `Popup`. A cell editor
-   *  always sits exactly where the cell already is. */
   #positionOver(cell: HTMLElement): void {
-    const rect = cell.getBoundingClientRect();
-    const bounds = this.#ports.dom.bounds;
-    this.#wrapper.style.transform = `translate(${(rect.left - bounds.left).toFixed(2)}px, ${(rect.top - bounds.top).toFixed(2)}px)`;
-    this.#wrapper.style.width = `${rect.width}px`;
-    this.#wrapper.style.height = `${rect.height}px`;
+    positionOver(this.#wrapper, cell, this.#ports.dom.bounds);
   }
 
   /** The one "this did not save" signal (D-S5-19). The editor stays open, the state names the
@@ -282,6 +304,75 @@ export class CellEditorSession {
   }
 }
 
+/** The refusal notice paints itself, because it is the one thing this plugin mounts that carries no
+ *  `.fg-cell-editor-control`. It reads only published level-1 tokens, and it falls back to a sane
+ *  value for each, so a consumer stylesheet that sets none of them still gets a legible box.
+ *  `pointer-events: none` is the load-bearing line: the notice sits over the cell, and the next
+ *  double-click must reach the cell, not the notice. */
+function paintRefusal(element: HTMLElement): void {
+  const style = element.style;
+  style.pointerEvents = 'none';
+  style.display = 'flex';
+  style.alignItems = 'center';
+  style.overflow = 'hidden';
+  style.whiteSpace = 'nowrap';
+  style.textOverflow = 'ellipsis';
+  style.paddingInline = 'var(--fg-cell-padding-inline, 8px)';
+  style.border = '1px solid var(--fg-warn, #D97706)';
+  style.background = 'var(--fg-pane-bg, #FAFAF7)';
+  style.color = 'var(--fg-warn, #D97706)';
+  style.font = 'inherit';
+}
+
+/** One mounted refusal, dismissed exactly once. */
+export interface RefusalNotice {
+  readonly element: HTMLElement;
+  dismiss(): void;
+}
+
+/** What a refusal notice borrows — the same three members a `CellEditorSession` borrows for the same
+ *  three jobs, so a test drives a notice with no mounted Gantt. */
+export type RefusalNoticePorts = Pick<CellEditorPorts, 'overlay' | 'dom' | 'bindEscape'>;
+
+/** Puts the refusal where the user acted: over the cell, in the same `data-state="invalid"` a refused
+ *  commit already uses (D-S5-19, issue #137 F11/F12). It is a notice, not an editor — it mounts no
+ *  control and it takes no focus, so it never becomes a sixth thing the user must close.
+ *
+ *  `role="status"` is the strongest thing a plugin can say on its own node today. S5.11 owes the
+ *  real announcement, through the per-Gantt polite live region D-S5-27 adds. */
+export function presentRefusal(
+  ports: RefusalNoticePorts,
+  cell: HTMLElement,
+  reason: CellEditorRefusal,
+): RefusalNotice {
+  const element = document.createElement('div');
+  element.className = EDITOR_CLASS;
+  element.dataset['state'] = 'invalid';
+  element.dataset['reason'] = reason;
+  const text = REFUSAL_TEXT[reason];
+  element.textContent = text;
+  // A cell is often narrower than the sentence, so the same words are the hover text too.
+  element.title = text;
+  element.setAttribute('role', 'status');
+  paintRefusal(element);
+  positionOver(element, cell, ports.dom.bounds);
+
+  const handle = ports.overlay.present(element);
+  const detachers: Disposer[] = [ports.overlay.onResize(() => positionOver(element, cell, ports.dom.bounds))];
+  let open = true;
+  const notice: RefusalNotice = {
+    element,
+    dismiss(): void {
+      if (!open) return;
+      open = false;
+      for (let i = detachers.length - 1; i >= 0; i--) detachers[i]!();
+      handle.detach();
+    },
+  };
+  detachers.push(ports.bindEscape(() => notice.dismiss()));
+  return notice;
+}
+
 /** D-S5-19/D-S5-20: a cost cell edits in place, in one transaction, and a consumer replaces the whole
  *  editor through `beforeEntryEdit` (`[S5-A5]`). Call: `new Gantt({ plugins: [inlineEditing()] })`. */
 export function inlineEditing(options: InlineEditingOptions = {}): GanttPlugin {
@@ -289,6 +380,7 @@ export function inlineEditing(options: InlineEditingOptions = {}): GanttPlugin {
     id: 'freegantt.inlineEditing',
     setup(ctx: PluginContext) {
       let session: CellEditorSession | undefined;
+      let notice: RefusalNotice | undefined;
       // Bumped on every `openFor` call, captured locally by that call's own async veto continuation —
       // a stale continuation (an *older* `openFor` whose `beforeEntryEdit` promise resolves after a
       // *newer* `openFor` has already run) checks this before mounting, so it cannot mount a second,
@@ -309,6 +401,19 @@ export function inlineEditing(options: InlineEditingOptions = {}): GanttPlugin {
         const closed = current.commit();
         if (closed) session = undefined;
         return closed;
+      }
+
+      /** The one place a refusal becomes something the user can see (review SP1). Every refusal of a
+       *  cell that *does* offer an editor goes through here, so no two of them look alike. */
+      function refuse(cell: HTMLElement, reason: CellEditorRefusal): void {
+        dismissRefusal();
+        notice = presentRefusal(ports, cell, reason);
+      }
+
+      /** A notice answers one action, so the next action clears it. */
+      function dismissRefusal(): void {
+        notice?.dismiss();
+        notice = undefined;
       }
 
       const ports: CellEditorPorts = {
@@ -340,6 +445,7 @@ export function inlineEditing(options: InlineEditingOptions = {}): GanttPlugin {
       };
 
       function onDatasetChange(): void {
+        dismissRefusal();
         const current = session;
         if (current && !ctx.dataset.entries.has(current.entryId)) closeSession('revert');
       }
@@ -353,11 +459,21 @@ export function inlineEditing(options: InlineEditingOptions = {}): GanttPlugin {
       ctx.view.onDomEvent(
         'scroll',
         () => {
+          // The notice does not follow a scroll — it answers one action, and the scroll is the next
+          // action. The editor follows its own cell instead, until that cell leaves the frame.
+          dismissRefusal();
           const current = session;
           if (current && !current.stillAnchored()) closeSession('revert');
         },
         { capture: true },
       );
+
+      // A pointer press anywhere in this Gantt is the user's next action, so it clears the notice.
+      // `pointerdown` runs before the `dblclick` below, so a second double-click on a refused cell
+      // clears the old notice and then presents the new one.
+      ctx.view.onDomEvent('pointerdown', () => {
+        dismissRefusal();
+      });
 
       function openGeneric(entry: Entry, field: Field, cell: HTMLElement): void {
         const raw = ctx.dataset.entries.fieldValue(entry.id, field.key);
@@ -399,7 +515,12 @@ export function inlineEditing(options: InlineEditingOptions = {}): GanttPlugin {
         // `isDateField` already vouched for this Field's type; `fieldValue` types core keys only,
         // so a consumer-declared date Field reads back as `unknown` without this.
         const raw = ctx.dataset.entries.fieldValue(entry.id, field.key) as Instant | undefined;
-        if (raw === undefined) return;
+        if (raw === undefined) {
+          // A date control needs a date to seed. Nothing here is broken, so the cell says so rather
+          // than looking like a dead double-click (review SP1).
+          refuse(cell, 'noDateValue');
+          return;
+        }
         const factory = options.dateInput;
         let dateInput: DateInput;
         if (factory !== undefined) {
@@ -409,7 +530,10 @@ export function inlineEditing(options: InlineEditingOptions = {}): GanttPlugin {
           // Instant that is not local midnight would silently round-trip to midnight on an
           // unchanged Enter — refuse to open the *default* editor rather than lose data. A
           // consumer's own `dateInput` factory (a `datetime-local` control, say) owns this instead.
-          if (ctx.dataset.time.startOfDay(raw) !== raw) return;
+          if (ctx.dataset.time.startOfDay(raw) !== raw) {
+            refuse(cell, 'timeOfDay');
+            return;
+          }
           dateInput = createDefaultDateInput(ctx.dataset.time);
         }
         dateInput.write(raw);
@@ -439,15 +563,31 @@ export function inlineEditing(options: InlineEditingOptions = {}): GanttPlugin {
        *  consumer's `beforeEntryEdit` handler opens its own dialog and returns `false` to suppress
        *  the built-in editor entirely (U8). */
       function openFor(entry: Entry, field: Field, cell: HTMLElement): void {
+        dismissRefusal();
+        // The next two refusals stay silent by decision (`s5.8-inline-editing.md` §1, "Which
+        // refusals speak"). Neither cell offers an editor at all, and I14 already hides the
+        // affordance from the same resolution that refuses the gesture — there is nothing to
+        // explain. Every refusal below them is about a cell that *does* offer an editor, so each
+        // one names itself.
         if (!ctx.interaction.canEdit(entry)) return;
         if (ctx.view.isColumnEditable(field.key) !== true) return;
-        if (ctx.dataset.isRollUpKind(entry.kind) && field.rollUp !== undefined) return;
+        if (ctx.dataset.isRollUpKind(entry.kind) && field.rollUp !== undefined) {
+          refuse(cell, 'derivedValue');
+          return;
+        }
         const date = isDateField(field);
-        if (!date && !canOpenGeneric(field)) return;
+        if (!date && !canOpenGeneric(field)) {
+          refuse(cell, 'noParseValue');
+          return;
+        }
 
         // An open editor whose value the Field refuses declines to close. A second editor mounted
         // over it would orphan the first one, its listeners and its focus trap included (review C2).
-        if (!closeSession('commit')) return;
+        // The refusal lands on the cell the user asked for, and names the cell they must fix first.
+        if (!closeSession('commit')) {
+          refuse(cell, 'unsavedValue');
+          return;
+        }
 
         const requestId = ++openRequestId;
         const currentValue = ctx.dataset.entries.fieldValue(entry.id, field.key);
@@ -505,6 +645,7 @@ export function inlineEditing(options: InlineEditingOptions = {}): GanttPlugin {
       // The two `onDomEvent` listeners above remove themselves through `ctx.disposables`, which
       // runs ahead of this disposer (S5.1, D-S5-3).
       return () => {
+        dismissRefusal();
         closeSession('revert');
         ctx.dataset.off('change', onDatasetChange);
         disposeEnter();
