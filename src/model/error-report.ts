@@ -102,3 +102,10 @@ export type ErrorReportInput = Omit<ErrorReport, 'at'>;
  *  a consumer who does not keeps exactly the output they have today. A refusal that was always silent
  *  passes none. */
 export type RaiseError = (report: ErrorReportInput, fallback?: () => void) => void;
+
+/** What a plugin raises through `PluginContext.raiseError` (S5.12, D-S5-35). Core fills `by` with
+ *  that plugin's own id, so `by` is a fact the runtime knows and never a claim a plugin makes about
+ *  itself — the same "core fills what core knows" split `plans/02` already draws. No `fallback`
+ *  either: the fallback exists to preserve a `console` line core printed before this seam, and a
+ *  plugin has none to preserve. */
+export type PluginErrorReport = Omit<ErrorReportInput, 'by'>;

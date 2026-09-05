@@ -18,13 +18,14 @@ import type {
 } from '../model/index.js';
 import { DatasetState } from '../data/index.js';
 import { installDatasetPlugins } from '../extensions/install-dataset-plugins.js';
+import { createErrorRaiser } from '../data/error-reporting.js';
 import { DisposableStore } from '../extensions/disposables.js';
 import { RegistrationGate } from '../extensions/plugin-runtime.js';
 import type { DatasetPluginContextOf, DatasetPluginOf } from './dataset-plugin.js';
 import {
   toJSON as writeDocument,
   readDocument,
-  warnIfRollUpsWereCorrected,
+  reportCorrectedRollUps,
 } from '../data/serialization/index.js';
 import type { DatasetHierarchy, PluginId, RollUpKinds } from '../model/index.js';
 import { createZonedTime, resolveDefaultTimeZone } from '../time/index.js';
@@ -129,7 +130,7 @@ export class Dataset<TMeta = unknown, TFields extends Record<string, unknown> = 
    *  exists and the construction Rollup has not run (D-S5-4). `this.#state` is not assigned yet, so
    *  every context member below reads `state` — the same instance, one line earlier. */
   #installPlugins(state: DatasetState): () => void {
-    return installDatasetPlugins(this.#plugins, (pluginId: PluginId) => {
+    return installDatasetPlugins(this.#plugins, createErrorRaiser(state.bus), (pluginId: PluginId) => {
       const disposables = new DisposableStore();
       const gate = new RegistrationGate(pluginId);
       const context: DatasetPluginContextOf<Dataset<TMeta, TFields>> = {
@@ -334,7 +335,7 @@ export class Dataset<TMeta = unknown, TFields extends Record<string, unknown> = 
       entries: read.entries as readonly EntryInput<TMeta>[],
       ...(options?.plugins !== undefined ? { plugins: options.plugins } : {}),
     });
-    warnIfRollUpsWereCorrected(doc, dataset);
+    reportCorrectedRollUps(doc, dataset, createErrorRaiser(dataset.#state.bus));
     return dataset;
   }
 }

@@ -106,4 +106,5 @@ export type {
   ErrorSeverity,
   ErrorReporter,
   RaiseError,
+  PluginErrorReport,
 } from './error-report.js';

@@ -33,6 +33,7 @@ export type {
   ErrorSeverity,
   ErrorReporter,
   RaiseError,
+  PluginErrorReport,
 } from '../model/index.js';
 export type {
   ChangeSet,
