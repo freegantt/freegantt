@@ -150,6 +150,24 @@ describe('ensureBaseStyles', () => {
     expect(css).toContain('outline: 2px dotted var(--fg-selection-color)');
   });
 
+  // #171: the Refusal notice used to write eleven inline declarations over this sheet, so a consumer
+  // stylesheet could not reach it and the two token fallbacks were pinned to the light theme.
+  it('styles the refusal notice from the sheet, on published tokens with no light-theme fallback', () => {
+    clearStyles();
+    ensureBaseStyles(document);
+    const css = document.head.querySelector('style[data-freegantt-styles]')?.textContent ?? '';
+    const rule = css
+      .split('\n')
+      .find((line) => line.startsWith(".fg-cell-editor[data-state='invalid'][data-reason]"));
+
+    expect(rule).toBeDefined();
+    // Load-bearing: the notice sits over the cell, and the next double-click must reach the cell.
+    expect(rule).toContain('pointer-events: none');
+    expect(rule).toContain('border: 1px solid var(--fg-warn)');
+    expect(rule).toContain('background: var(--fg-pane-bg)');
+    expect(rule).not.toContain('#D97706');
+  });
+
   it('dark theme paints bar labels in warm ink so they read on the light blue fill', () => {
     clearStyles();
     const container = makeContainer();

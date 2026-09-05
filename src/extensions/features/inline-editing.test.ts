@@ -348,8 +348,11 @@ describe('inlineEditing() (S5.8, D-S5-19/D-S5-20)', () => {
     const cell = cellFor(container, 'e1', 'cost');
     dblclick(cell);
     const notice = refusal(container)!;
-    // It sits over the cell, so it must never swallow the click that retries the cell.
-    expect(notice.style.pointerEvents).toBe('none');
+    // It sits over the cell, so it must never swallow the click that retries the cell. #171 moved
+    // that rule into the stylesheet, so `styles.test.ts` asserts the declaration and this asserts
+    // the two attributes the rule keys on.
+    expect(notice.dataset['state']).toBe('invalid');
+    expect(notice.dataset['reason']).toBe('noParseValue');
 
     cell.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, cancelable: true }));
     expect(refusal(container)).toBeNull();

@@ -328,26 +328,6 @@ export class CellEditorSession {
   }
 }
 
-/** The refusal notice paints itself, because it is the one thing this plugin mounts that carries no
- *  `.fg-cell-editor-control`. It reads only published level-1 tokens, and it falls back to a sane
- *  value for each. A consumer stylesheet that sets none of them still gets a legible box.
- *  `pointer-events: none` is the load-bearing line: the notice sits over the cell, and the next
- *  double-click must reach the cell, not the notice. */
-function paintRefusal(element: HTMLElement): void {
-  const style = element.style;
-  style.pointerEvents = 'none';
-  style.display = 'flex';
-  style.alignItems = 'center';
-  style.overflow = 'hidden';
-  style.whiteSpace = 'nowrap';
-  style.textOverflow = 'ellipsis';
-  style.paddingInline = 'var(--fg-cell-padding-inline, 8px)';
-  style.border = '1px solid var(--fg-warn, #D97706)';
-  style.background = 'var(--fg-pane-bg, #FAFAF7)';
-  style.color = 'var(--fg-warn, #D97706)';
-  style.font = 'inherit';
-}
-
 /** One mounted refusal, dismissed exactly once. */
 export interface RefusalNotice {
   readonly element: HTMLElement;
@@ -370,6 +350,10 @@ function repositionNotice(ports: RefusalNoticePorts, element: HTMLElement, edite
  *  commit already uses (D-S5-19, issue #137 F11/F12). It is a notice, not an editor. It mounts no
  *  control and it takes no focus, so it never becomes a sixth thing the user must close.
  *
+ *  It paints nothing of its own (#171). `view/styles.ts` styles
+ *  `.fg-cell-editor[data-state='invalid'][data-reason]`, so a consumer stylesheet can still win. An
+ *  inline declaration would outrank one, which is the opposite of what level-1 tokens are for.
+ *
  *  `role="status"` is the strongest thing a plugin can say on its own node today. S5.11 owes the
  *  real announcement, through the per-Gantt polite live region D-S5-27 adds. */
 export function presentRefusal(
@@ -387,7 +371,6 @@ export function presentRefusal(
   // A cell is often narrower than the sentence, so the same words are the hover text too.
   element.title = text;
   element.setAttribute('role', 'status');
-  paintRefusal(element);
   positionOver(element, cell, ports.mountLayer.bounds);
 
   // One store, freed in reverse and exactly once — the latch a hand-rolled `open` flag used to
