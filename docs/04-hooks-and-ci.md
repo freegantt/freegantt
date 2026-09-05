@@ -84,8 +84,16 @@ Enabled by `git config core.hooksPath .githooks`, set by a `prepare` script so i
 
 | Hook | Runs | Rationale |
 |---|---|---|
-| `pre-commit` | `format` (auto-fix) on all staged files + `lint` on staged `*.ts` + `vendor-names` | Fast (<5s), catches the trivia; auto-fixes formatting instead of blocking on something `pnpm verify` would just fix anyway |
+| `pre-commit` | `format` (auto-fix) on staged files, **except partially staged ones** + `lint` on staged `*.ts` + `vendor-names` | Fast (<5s), catches the trivia; auto-fixes formatting instead of blocking on something `pnpm verify` would just fix anyway |
 | `pre-push` | `pnpm verify`, then `pnpm test:e2e` | The full gate before it becomes anyone else's problem — and, while CI is dispatch-only, the *only* gate |
+
+### 3.0 A partially staged file is never formatted (#203)
+
+`prettier --write` edits the working tree, so the hook must re-stage what it formatted. `git add -- <file>` stages that file **whole**. On a file the author staged in part — `git add -p`, `git apply --cached`, an editor's stage-this-hunk — that commits the hunks they left out, under their message.
+
+So the hook skips any file that is both staged and unstaged-modified, and says which on stderr. That file commits unformatted; `pnpm format:check` in `verify` still catches it. Losing a format pass is a nuisance. Committing someone else's sentence under your name is a correctness failure.
+
+The warning names the **intersection** only, never every dirty file. A warning that fires on most commits is a warning people stop reading.
 
 `--no-verify` exists and is not fought. But the old rationale for that ("CI is the authority; hooks buy latency, not enforcement") does not currently hold: `.github/workflows/ci.yml` is `workflow_dispatch:` only — its `push`/`pull_request` triggers are commented out — so no check runs on the server unless a human clicks the button. Until those triggers come back, `pre-push` *is* the enforcement, and skipping it is a decision rather than a shortcut.
 
