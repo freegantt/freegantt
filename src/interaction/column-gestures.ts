@@ -54,6 +54,18 @@ function dropTargetAt(targets: readonly DropTarget[], clientX: number): FieldKey
   return null;
 }
 
+/** One column gesture's three moves. `resize` and `reorder` differ in exactly these three and in
+ *  nothing else, so the pointer state machine below holds one grabbed gesture. A `pointermove`
+ *  previews, a `pointerup` commits, and an Escape or a veto cancels. `commit` reports whether the
+ *  commit landed; the caller cancels when it did not (D-S5-18: "a veto restores the state the drag
+ *  started from"). `clientX` is the pointer's page position, which only the reorder drop indicator
+ *  reads. */
+interface ColumnGesture {
+  preview(key: FieldKey, dxPx: number, clientX: number): void;
+  commit(key: FieldKey, dxPx: number, clientX: number): boolean;
+  cancel(): void;
+}
+
 /** Pointerdown on `.fg-column-resizer` arms a resize; pointerdown anywhere else on `.fg-col-header`
  *  arms a reorder — `resizable`/`movable` (D-S5-18) refuse arming the same way `EntryGestureContext`'s
  *  own capability checks refuse a data gesture. */
@@ -62,64 +74,69 @@ export function attachColumnGestures(
   container: HTMLElement,
   ctx: ColumnGestureContext,
 ): Detachable {
-  let grabbedKind: 'resize' | 'reorder' | undefined;
+  let grabbedGesture: ColumnGesture | undefined;
   let grabbedKey: FieldKey | undefined;
   let grabbedStartWidthPx = 0;
   let grabbedDropTargets: readonly DropTarget[] = [];
   // `pointer-gesture.ts` tracks at most one pointer at a time (`onPointerDown`'s "already dragging"
-  // branch below refuses a second one), so this always names the pointer `grabbedKind` belongs to —
-  // it lets `onPointerCancel` tell "my grab was interrupted" from "an unrelated pointer cancelled".
+  // branch below refuses a second one), so this always names the pointer `grabbedGesture` belongs to
+  // — it lets `onPointerCancel` tell "my grab was interrupted" from "an unrelated pointer cancelled".
   let grabbedPointerId: number | undefined;
 
   // `pointer-gesture.ts` only calls `cancel()` for an armed drag (movement past the threshold) — an
-  // Escape or pointercancel that lands before arming leaves `grabbedKind`/`grabbedKey` untouched at
-  // that layer. Without this, the next pointerdown on a *different* grip would hit the "already
+  // Escape or pointercancel that lands before arming leaves `grabbedGesture`/`grabbedKey` untouched
+  // at that layer. Without this, the next pointerdown on a *different* grip would hit the "already
   // dragging" branch below and resize/reorder the wrong column using this stale grab.
   function clearGrabbedState(): void {
-    grabbedKind = undefined;
+    grabbedGesture = undefined;
     grabbedKey = undefined;
     grabbedPointerId = undefined;
   }
 
+  /** The width a resize is asking for, from where the grabbed cell started and how far the pointer
+   *  has travelled, floored by the same `--fg-column-min-width` a keyboard step honours. */
+  function widthFrom(dxPx: number): number {
+    return Math.max(ctx.minColumnWidthPx(), grabbedStartWidthPx + dxPx);
+  }
+
+  const resizeGesture: ColumnGesture = {
+    preview: (key, dxPx) => ctx.previewColumnWidth(key, widthFrom(dxPx)),
+    commit: (key, dxPx) => ctx.commitColumnWidth(key, widthFrom(dxPx)),
+    cancel: () => ctx.cancelColumnResize(),
+  };
+
+  const reorderGesture: ColumnGesture = {
+    preview: (key, dxPx, clientX) =>
+      ctx.previewColumnReorder({
+        columnKey: key,
+        offsetPx: dxPx,
+        beforeColumnKey: dropTargetAt(grabbedDropTargets, clientX),
+      }),
+    commit: (key, _dxPx, clientX) => ctx.commitColumnReorder(key, dropTargetAt(grabbedDropTargets, clientX)),
+    cancel: () => ctx.cancelColumnReorder(),
+  };
+
   const drag = createPointerGesture(headerPane, {
     start(): boolean {
-      return grabbedKind !== undefined;
+      return grabbedGesture !== undefined;
     },
     move(e, dxPx): void {
       if (grabbedKey === undefined) return;
-      if (grabbedKind === 'resize') {
-        const widthPx = Math.max(ctx.minColumnWidthPx(), grabbedStartWidthPx + dxPx);
-        ctx.previewColumnWidth(grabbedKey, widthPx);
-      } else if (grabbedKind === 'reorder') {
-        ctx.previewColumnReorder({
-          columnKey: grabbedKey,
-          offsetPx: dxPx,
-          beforeColumnKey: dropTargetAt(grabbedDropTargets, e.clientX),
-        });
-      }
+      grabbedGesture?.preview(grabbedKey, dxPx, e.clientX);
     },
     commit(e, dxPx): void {
-      if (grabbedKey === undefined) return;
-      if (grabbedKind === 'resize') {
-        const widthPx = Math.max(ctx.minColumnWidthPx(), grabbedStartWidthPx + dxPx);
-        if (!ctx.commitColumnWidth(grabbedKey, widthPx)) ctx.cancelColumnResize();
-      } else if (grabbedKind === 'reorder') {
-        const before = dropTargetAt(grabbedDropTargets, e.clientX);
-        if (!ctx.commitColumnReorder(grabbedKey, before)) ctx.cancelColumnReorder();
-      }
+      if (grabbedKey === undefined || grabbedGesture === undefined) return;
+      if (!grabbedGesture.commit(grabbedKey, dxPx, e.clientX)) grabbedGesture.cancel();
       clearGrabbedState();
     },
     cancel(): void {
-      if (grabbedKey !== undefined) {
-        if (grabbedKind === 'resize') ctx.cancelColumnResize();
-        else if (grabbedKind === 'reorder') ctx.cancelColumnReorder();
-      }
+      if (grabbedKey !== undefined) grabbedGesture?.cancel();
       clearGrabbedState();
     },
   });
 
   function onPointerDown(e: PointerEvent): void {
-    if (grabbedKind !== undefined) {
+    if (grabbedGesture !== undefined) {
       // A second pointer went down while a column drag is already tracked (e.g. two-finger touch on
       // the header) — `drag`'s own `down()` already refuses a second pointer ("one gesture at a
       // time"), so the first pointer's grabbed state must not be overwritten or cleared either.
@@ -133,12 +150,12 @@ export function attachColumnGestures(
     if (cell === undefined || key === undefined) {
       clearGrabbedState();
     } else if (onGrip && ctx.isResizable(key)) {
-      grabbedKind = 'resize';
+      grabbedGesture = resizeGesture;
       grabbedKey = key;
       grabbedStartWidthPx = cell.getBoundingClientRect().width;
       grabbedPointerId = e.pointerId;
     } else if (!onGrip && ctx.isMovable(key)) {
-      grabbedKind = 'reorder';
+      grabbedGesture = reorderGesture;
       grabbedKey = key;
       grabbedDropTargets = computeDropTargets(headerPane, key);
       grabbedPointerId = e.pointerId;
@@ -186,7 +203,7 @@ export function attachColumnGestures(
 
   // B6: `createPointerGesture` documents `pointercancel` as a cancel path (Escape's own sibling), but
   // nothing fed it — a browser cancel (touch interrupt, drag into a scrollbar) could leave
-  // `grabbedKind` set and a live width/drop preview stuck until the next successful gesture or
+  // `grabbedGesture` set and a live width/drop preview stuck until the next successful gesture or
   // Escape. Only `pointerup`/`pointermove` carry `pointerId`-scoped state today; a bare `cancel()`
   // call mirrors `escape()`'s own shape without needing one.
   function onPointerCancel(e: PointerEvent): void {

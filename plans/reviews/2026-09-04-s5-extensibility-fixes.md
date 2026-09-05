@@ -344,22 +344,35 @@ Files: `src/view/renderer-registry.ts`, `src/layout/items/produce-items.ts`, `sr
       `logEverything()`, `selectionShortcuts()` and `popupDemo()`
       are copied character-for-character into `harness/main.ts` and `harness/plugins.ts`.
       `harness/plugins/` already holds `weekend-shading.ts` and `buffer-kind.ts`. Put them beside those.
-- [ ] **A6 — index the resolved columns.** `gantt-shell.ts` runs
+- [x] **A6 — index the resolved columns.** `gantt-shell.ts` runs
       `resolvedColumns.find(…)` once per visible cell, so column lookup is O(rows × columns²) per frame.
       Build a `Map<string, ResolvedColumn>` in `ColumnChrome.setResolvedColumns`.
       It serves `resolveCellRenderer`, `isColumnEditable`, `isResizable`, `isMovable` and `resolvedColumn`.
-- [ ] **A6 — collapse the column-gesture cascade.** `if (grabbedKind === 'resize') … else if (… 'reorder')`
+      `ColumnChrome#adoptColumns` is the one writer of the array and the map, so neither can go stale
+      on its own. `GanttShellPorts` gained `resolvedColumn(field)` beside `resolvedColumns()`, so
+      `isColumnEditable` reads the index too, and the two `gantt-shell.ts` renderer resolvers call
+      `columnChrome.resolvedColumn(columnKey)`.
+- [x] **A6 — collapse the column-gesture cascade.** `if (grabbedKind === 'resize') … else if (… 'reorder')`
       repeats in `move`, `commit` and `cancel`.
       Use two small strategy objects and one grabbed reference.
       `registerColumnStepCommand` in `core-commands.ts` already uses that shape.
+      `ColumnGesture` is `{ preview, commit, cancel }`; `resizeGesture` and `reorderGesture` occupy
+      it, and `grabbedGesture` replaces `grabbedKind`. `commit` answers whether it landed, so the
+      caller cancels on a veto in one place. The duplicated width math is `widthFrom(dxPx)` now.
 - [x] **Carried from R1.** `entryIdOfRow` in `inline-editing.ts` hand-cast `id as EntryId`.
       R3 closed this as a side effect: `ctx.view.dom.cellFor(id, field)` replaced the walk, so the
       function and its cast are both gone. Verified — the file names neither symbol now.
-- [ ] **A6 — name the seed.** `openGeneric` seeds `input.value` from a four-arm nested ternary.
+- [x] **A6 — name the seed.** `openGeneric` seeds `input.value` from a four-arm nested ternary.
       A named `seedText(field, raw, cell)` reads as a sentence.
-- [ ] **A6 — table the popup dismiss triggers.** `createPopup`'s `open()` runs ~70 lines of four inline
+      It is `seedText(field, fieldValue, cell)`: the local was called `raw`, and `raw*` is on two
+      `CONTEXT.md` avoid lists (R5's own H3 note). Four arms became four early returns.
+- [x] **A6 — table the popup dismiss triggers.** `createPopup`'s `open()` runs ~70 lines of four inline
       `if (dismissOn.includes(…))` blocks. A table keyed by `DismissTrigger` makes a fifth trigger a row.
       Pairs with R3's `onDismiss`.
+      `DISMISS_LISTENERS` is that table, and `DismissContext` is what one row works from. Not
+      `ARM_DISMISS`: "arm" already names a pointer drag passing its movement threshold, and one word
+      may not mean two things. `popup.ts` keeps its two unscoped `document` listeners, and the table's
+      own doc says why neither may move to `ctx.view.onDomEvent` (R3 handoff §4).
 
 **Verify:** `pnpm gate`. Then review `harness/main.ts` end to end, the way `CLAUDE.md` requires.
 

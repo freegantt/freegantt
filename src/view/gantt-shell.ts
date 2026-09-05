@@ -539,7 +539,7 @@ export class GanttShell {
         // ever calls an already-column-bound function keyed by the same `FrameColumn.key` string
         // it already threads through `CellItem.key`.
         resolveCellRenderer: (columnKey) => {
-          const column = this.#columnChrome.resolvedColumns.find((c) => String(c.key) === columnKey);
+          const column = this.#columnChrome.resolvedColumn(columnKey);
           if (column === undefined) return undefined;
           // S5.7, D-S5-17: a per-column `cellRenderer` (this Gantt's own `gridColumns`) beats the
           // Gantt-wide one for that column — no `pluginId`, since a `GridColumn` only ever arrives
@@ -568,7 +568,7 @@ export class GanttShell {
         // `GridColumn` has no per-column `headerRenderer` slot (`layout/column.ts`), so this only
         // ever resolves the Gantt-wide/plugin one, bound to its column.
         resolveHeaderRenderer: (columnKey) => {
-          const column = this.#columnChrome.resolvedColumns.find((c) => String(c.key) === columnKey);
+          const column = this.#columnChrome.resolvedColumn(columnKey);
           if (column === undefined) return undefined;
           const resolved = this.#rendererRegistry.resolve('header', this.#headerRenderer);
           if (resolved === undefined) return undefined;
@@ -1140,6 +1140,7 @@ export class GanttShell {
       lastPaintedBar: (id) => this.#lastBarById.get(itemId(id)),
       entry: (id) => this.#options.dataset.entries.get(id),
       resolvedColumns: () => this.#columnChrome.resolvedColumns,
+      resolvedColumn: (field) => this.#columnChrome.resolvedColumn(field),
       addDecorationProvider: (layer, provider) => {
         const registered: RegisteredDecorationProvider = { layer, provider };
         this.#decorationProviders.push(registered);

@@ -475,18 +475,22 @@ export function inlineEditing(options: InlineEditingOptions = {}): GanttPlugin {
         dismissRefusal();
       });
 
+      /** The text a generic editor opens with. A Field that declares `parseValue` owns both
+       *  directions of its own text, so the seed is the string the grid already painted — the user
+       *  edits what they see, and `parseValue` reads it back. A Field without one stores a
+       *  primitive, so the stored value is the text. Anything else opens empty. */
+      function seedText(field: Field, fieldValue: unknown, cell: HTMLElement): string {
+        if (field.parseValue !== undefined) return ctx.view.dom.cellText(cell);
+        if (typeof fieldValue === 'string') return fieldValue;
+        if (typeof fieldValue === 'number' || typeof fieldValue === 'boolean') return String(fieldValue);
+        return '';
+      }
+
       function openGeneric(entry: Entry, field: Field, cell: HTMLElement): void {
-        const raw = ctx.dataset.entries.fieldValue(entry.id, field.key);
+        const fieldValue = ctx.dataset.entries.fieldValue(entry.id, field.key);
         const input = document.createElement('input');
         input.type = field.inputType ?? 'text';
-        input.value =
-          field.parseValue !== undefined
-            ? ctx.view.dom.cellText(cell)
-            : typeof raw === 'string'
-              ? raw
-              : typeof raw === 'number' || typeof raw === 'boolean'
-                ? String(raw)
-                : '';
+        input.value = seedText(field, fieldValue, cell);
 
         mountSession(
           cell,

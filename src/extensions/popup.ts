@@ -4,7 +4,7 @@
 // and the rects `ctx.view.dom` measures — the same seam a third-party plugin reaches, with no back
 // door into `view/` or `render/` (D-S5-5).
 
-import type { ElementDescription } from '../model/index.js';
+import type { Disposer, ElementDescription } from '../model/index.js';
 // `../api/plugin.js` directly, not the `api/index.js` barrel: `api/index.ts` re-exports
 // `createPopup` from this very file (D-S5-8's "a third party reaches the same primitive we do"), and
 // importing the barrel back would close that edge into a cycle (no-circular).
@@ -137,6 +137,87 @@ function clamp(side: PopupPlacement, box: Box, size: { width: number; height: nu
   return { ...box, top: Math.min(Math.max(box.top, pane.top), maxTop) };
 }
 
+/** What one dismiss listener works from: the popup that just opened, the seams it listens through,
+ *  and the one call that closes it. `node` is the popup's own wrapper, so a listener can ask whether
+ *  an event landed inside the popup. `dom` is the object, never a captured rect — `paneBounds` reads
+ *  live geometry on every call. */
+interface DismissContext {
+  readonly node: HTMLElement;
+  readonly options: PopupOptions;
+  readonly dom: Pick<GanttDom, 'paneBounds'>;
+  readonly keymap: KeyHandlerRegistrar;
+  dismiss(trigger: DismissTrigger): void;
+}
+
+/** One row per `DismissTrigger`. A row starts its own listener and hands back its own removal, so a
+ *  fifth trigger is a fifth row here — not a fifth `if` block inside `open()`.
+ *
+ *  Two rows listen on `document` on purpose, and neither may move to `ctx.view.onDomEvent`:
+ *  `outsidePointer` exists to hear a pointer *outside* this Gantt, which that seam filters away, and
+ *  `scroll` scopes itself geometrically by pane rect instead. */
+const DISMISS_LISTENERS: Readonly<Record<DismissTrigger, (ctx: DismissContext) => Disposer>> = Object.freeze({
+  // `stopPropagation` here, not in `Keymap.resolve` itself: only this dismissal needs "never seen
+  // past this popup" (the same guarantee the old document-capture listener gave). Scoping it to the
+  // handler keeps every other keybinding's propagation behaviour untouched.
+  // `captureInEditable: true` (issue #137 F1, `plans/reviews/2026-09-03-s5-start-fixes-qc.md`): the
+  // editable-target gate protects page-level editables from a stray keybinding. It does not exist to
+  // protect a popup's own `<input>` from its own close button. Without this flag, Escape typed
+  // inside the popup's own input never reaches this handler at all.
+  escape: (ctx) =>
+    ctx.keymap.registerHandler(
+      'Escape',
+      (event) => {
+        event.stopPropagation();
+        ctx.dismiss('escape');
+      },
+      { captureInEditable: true },
+    ),
+
+  outsidePointer: (ctx) => {
+    const onPointerDown = (event: PointerEvent): void => {
+      const target = event.target;
+      if (!(target instanceof Node)) return;
+      if (ctx.node.contains(target)) return;
+      if (ctx.options.anchor instanceof HTMLElement && ctx.options.anchor.contains(target)) return;
+      ctx.dismiss('outsidePointer');
+    };
+    document.addEventListener('pointerdown', onPointerDown, true);
+    return () => document.removeEventListener('pointerdown', onPointerDown, true);
+  },
+
+  // Scroll does not bubble — only its own target fires it — so this listens on the capture phase of
+  // `document` to hear every pane's own scroll. It scopes to the anchor's own pane (D-S5-9): a popup
+  // anchored in the timeline pane stays open while the grid pane scrolls, and the other way round.
+  // An anchor sitting in neither pane (a toolbar button, say) has no pane to scope to, so any scroll
+  // dismisses it — the same fallback `paneRectFor` gives the outer `bounds` clamp.
+  scroll: (ctx) => {
+    const anchorPane = paneNameFor(anchorRect(ctx.options.anchor), ctx.dom.paneBounds);
+    const onScroll = (event: Event): void => {
+      const target = event.target;
+      if (anchorPane === undefined) {
+        ctx.dismiss('scroll');
+        return;
+      }
+      if (!(target instanceof Element)) return;
+      if (paneNameFor(target.getBoundingClientRect(), ctx.dom.paneBounds) === anchorPane) {
+        ctx.dismiss('scroll');
+      }
+    };
+    document.addEventListener('scroll', onScroll, true);
+    return () => document.removeEventListener('scroll', onScroll, true);
+  },
+
+  blur: (ctx) => {
+    const onFocusOut = (event: FocusEvent): void => {
+      const next = event.relatedTarget;
+      if (next instanceof Node && ctx.node.contains(next)) return;
+      ctx.dismiss('blur');
+    };
+    ctx.node.addEventListener('focusout', onFocusOut);
+    return () => ctx.node.removeEventListener('focusout', onFocusOut);
+  },
+});
+
 /** `Popup`'s one implementation (D-S5-8). `view` and `keymap` are the only things this reaches
  *  past plain DOM APIs. Escape folds into `keymap` (C3, `plans/reviews/2026-09-02-s5-start-fixes.md`)
  *  instead of a bespoke document-capture listener + per-`Overlay` `WeakMap` LIFO stack: `Keymap`
@@ -207,64 +288,11 @@ export function createPopup(view: PopupSurface, keymap: KeyHandlerRegistrar): Po
       handle = overlay.present(node);
       reposition();
 
-      const dismissOn = options.dismissOn ?? DEFAULT_DISMISS_ON;
-      if (dismissOn.includes('escape')) {
-        // `stopPropagation` here, not in `Keymap.resolve` itself: only this dismissal needs "never
-        // seen past this popup" (the same guarantee the old document-capture listener gave), and
-        // scoping it to the handler keeps every other keybinding's propagation behaviour untouched.
-        // `captureInEditable: true` (issue #137 F1, `plans/reviews/2026-09-03-s5-start-fixes-qc.md`):
-        // the editable-target gate exists to protect page-level editables from a stray keybinding,
-        // not to protect a popup's own `<input>` from its own close button. Without this, Escape
-        // typed inside the popup's own input never reaches this handler at all.
-        disposables.add(
-          keymap.registerHandler(
-            'Escape',
-            (event) => {
-              event.stopPropagation();
-              dismiss('escape');
-            },
-            { captureInEditable: true },
-          ),
-        );
-      }
-      if (dismissOn.includes('outsidePointer')) {
-        const onPointerDown = (event: PointerEvent): void => {
-          const target = event.target;
-          if (!(target instanceof Node)) return;
-          if (wrapper?.contains(target)) return;
-          if (options.anchor instanceof HTMLElement && options.anchor.contains(target)) return;
-          dismiss('outsidePointer');
-        };
-        document.addEventListener('pointerdown', onPointerDown, true);
-        disposables.add(() => document.removeEventListener('pointerdown', onPointerDown, true));
-      }
-      if (dismissOn.includes('scroll')) {
-        // Scroll does not bubble (only its target fires it), so this listens on the capture phase of
-        // `document` to hear every pane's own scroll. Scoped to the anchor's own pane (D-S5-9): a
-        // popup anchored in the timeline pane stays open while the grid pane scrolls, and vice versa.
-        // An anchor sitting in neither pane (a toolbar button, say) has no pane to scope to, so any
-        // scroll still dismisses it — the same fallback `paneRectFor` gives the outer `bounds` clamp.
-        const anchorPane = paneNameFor(anchorRect(options.anchor), dom.paneBounds);
-        const onScroll = (event: Event): void => {
-          const target = event.target;
-          if (anchorPane === undefined) {
-            dismiss('scroll');
-            return;
-          }
-          if (!(target instanceof Element)) return;
-          if (paneNameFor(target.getBoundingClientRect(), dom.paneBounds) === anchorPane) dismiss('scroll');
-        };
-        document.addEventListener('scroll', onScroll, true);
-        disposables.add(() => document.removeEventListener('scroll', onScroll, true));
-      }
-      if (dismissOn.includes('blur')) {
-        const onFocusOut = (event: FocusEvent): void => {
-          const next = event.relatedTarget;
-          if (next instanceof Node && wrapper?.contains(next)) return;
-          dismiss('blur');
-        };
-        node.addEventListener('focusout', onFocusOut);
-        disposables.add(() => node.removeEventListener('focusout', onFocusOut));
+      // A trigger named twice arms once: `new Set` keeps `dismissOn` a set of triggers, which is
+      // what `includes` already made it.
+      const dismissContext: DismissContext = { node, options, dom, keymap, dismiss };
+      for (const trigger of new Set(options.dismissOn ?? DEFAULT_DISMISS_ON)) {
+        disposables.add(DISMISS_LISTENERS[trigger](dismissContext));
       }
       disposables.add(overlay.onResize(reposition));
 

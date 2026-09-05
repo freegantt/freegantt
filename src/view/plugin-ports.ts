@@ -84,6 +84,9 @@ export interface GanttShellPorts {
   entry(id: EntryId): Entry | undefined;
   /** The columns the grid pane actually paints — Field defaults already merged (S5.7). */
   resolvedColumns(): readonly ResolvedColumn[];
+  /** One of those columns, by Field key. `ColumnChrome` answers from its own index, so this never
+   *  scans the list (review A6). */
+  resolvedColumn(field: FieldKey): ResolvedColumn | undefined;
   /** S5.6, D-S5-15. The returned `Disposer` removes exactly this provider. */
   addDecorationProvider(layer: DecorationLayer, provider: DecorationProvider): Disposer;
   /** D-S4-24. One registry per Gantt, seeded with span/group/milestone. */
@@ -300,7 +303,7 @@ export function buildPluginPorts(
         registerWhileOpen(() => shell.addDecorationProvider(layer, provider), repaint),
       // S5.8, D-S5-19: `field` names the currently *resolved* column, not the raw `GridColumnInput[]`
       // a consumer's own `gridColumns` getter returns.
-      isColumnEditable: (field) => shell.resolvedColumns().find((column) => column.key === field)?.editable,
+      isColumnEditable: (field) => shell.resolvedColumn(field)?.editable,
       registerGridColumn: (column) => registerWhileOpen(() => shell.registerGridColumn(column)),
     },
     layout: {
