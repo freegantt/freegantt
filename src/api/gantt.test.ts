@@ -2667,6 +2667,114 @@ describe('Gantt interactions / capability hot path (S3.2, D-S3-9, [S3-A3]/[S3-A5
     document.elementFromPoint = original;
     gantt.destroy();
   });
+
+  // #195, D-S5-35: `gantt.interactions = { resize: false }` is the whole config, so a page that
+  // flips one gesture with it drops every other rule it holds. These six cover the two verbs that
+  // write one gesture instead.
+  it('setCapabilityRule writes one gesture and leaves every other rule standing (#195)', () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
+    const gantt = new Gantt({ container, dataset, interactions: { move: false, select: false } });
+
+    gantt.setCapabilityRule('resize', false);
+
+    expect(gantt.interactions).toEqual({ move: false, select: false, resize: false });
+
+    gantt.destroy();
+  });
+
+  it('setCapabilityRule never mutates the object the consumer assigned (#187, #195)', () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
+    const assigned = { move: false };
+    const gantt = new Gantt({ container, dataset, interactions: assigned });
+
+    gantt.setCapabilityRule('resize', false);
+
+    expect(assigned).toEqual({ move: false });
+    expect(gantt.interactions).not.toBe(assigned);
+
+    gantt.destroy();
+  });
+
+  it('setCapabilityRule takes a predicate, like the config key it writes (#195)', () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
+    const gantt = new Gantt({ container, dataset });
+
+    const bar = container.querySelector<HTMLElement>('.fg-bar')!;
+    const timeline = container.querySelector<HTMLElement>('.fg-timeline-pane')!;
+    const original = document.elementFromPoint.bind(document);
+    document.elementFromPoint = (x: number, y: number) => (x === 5 && y === 5 ? bar : original(x, y));
+    timeline.dispatchEvent(new PointerEvent('pointermove', { clientX: 5, clientY: 5 }));
+    expect(bar.hasAttribute('data-movable')).toBe(true);
+
+    gantt.setCapabilityRule('move', (entry) => entry.kind === 'milestone');
+    expect(bar.hasAttribute('data-movable')).toBe(false);
+
+    document.elementFromPoint = original;
+    gantt.destroy();
+  });
+
+  it('setCapabilityRule re-resolves the affordance ids without a new pointer move (#195)', () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
+    const gantt = new Gantt({ container, dataset });
+
+    const bar = container.querySelector<HTMLElement>('.fg-bar')!;
+    const timeline = container.querySelector<HTMLElement>('.fg-timeline-pane')!;
+    const original = document.elementFromPoint.bind(document);
+    document.elementFromPoint = (x: number, y: number) => (x === 5 && y === 5 ? bar : original(x, y));
+    timeline.dispatchEvent(new PointerEvent('pointermove', { clientX: 5, clientY: 5 }));
+
+    gantt.setCapabilityRule('resize', false);
+    const start = container.querySelector<HTMLElement>('.fg-bar-handle[data-edge="start"]')!;
+    expect(start.hidden).toBe(true);
+
+    document.elementFromPoint = original;
+    gantt.destroy();
+  });
+
+  it('clearCapabilityRule restores the per-kind table, which `true` would not (#195)', () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({
+      entries: [{ id: 'g1', kind: 'group', name: 'Group' }, ...sampleEntries],
+      timeZone: 'UTC',
+    });
+    const gantt = new Gantt({ container, dataset });
+
+    const groupBar = container.querySelector<HTMLElement>('[data-kind="group"]')!;
+    const timeline = container.querySelector<HTMLElement>('.fg-timeline-pane')!;
+    const original = document.elementFromPoint.bind(document);
+    document.elementFromPoint = () => groupBar;
+    timeline.dispatchEvent(new PointerEvent('pointermove', { clientX: 5, clientY: 5 }));
+
+    // A rolled-up parent refuses resize by default, and `true` overrides that default.
+    gantt.setCapabilityRule('resize', true);
+    expect(container.querySelector<HTMLElement>('.fg-bar-handle[data-edge="start"]')!.hidden).toBe(false);
+
+    gantt.clearCapabilityRule('resize');
+    expect(container.querySelector<HTMLElement>('.fg-bar-handle[data-edge="start"]')!.hidden).toBe(true);
+    expect(gantt.interactions).toEqual({});
+
+    document.elementFromPoint = original;
+    gantt.destroy();
+  });
+
+  it('clearCapabilityRule leaves the other rules alone, and a gesture with no rule is a no-op (#195)', () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
+    const gantt = new Gantt({ container, dataset, interactions: { move: false, resize: false } });
+
+    gantt.clearCapabilityRule('resize');
+    expect(gantt.interactions).toEqual({ move: false });
+
+    const before = gantt.interactions;
+    gantt.clearCapabilityRule('select');
+    expect(gantt.interactions).toBe(before);
+
+    gantt.destroy();
+  });
 });
 
 describe('Gantt entryMove (S3.3, [S3-A1] move half, [S3-A6])', () => {

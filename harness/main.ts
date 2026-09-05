@@ -407,8 +407,12 @@ holdDropCheckbox.addEventListener('change', () => {
   hideToast();
 });
 
+// #195, D-S5-35: the page writes the one gesture it owns. Assigning `gantt.interactions` would
+// restate the whole capability config, and drop any other rule this page had set. Unchecking the box
+// clears the rule rather than setting `resize: true`, so a group row stays unresizable.
 lockResizeCheckbox.addEventListener('change', () => {
-  gantt.interactions = lockResizeCheckbox.checked ? { resize: false } : {};
+  if (lockResizeCheckbox.checked) gantt.setCapabilityRule('resize', false);
+  else gantt.clearCapabilityRule('resize');
 });
 
 // ---- Plugins, commands, popups, renderers (S5) — plugins.html's own demo, over this same Gantt ----

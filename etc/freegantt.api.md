@@ -879,6 +879,7 @@ export class Gantt {
     get canZoomOut(): boolean;
     get cellRenderer(): CellRenderer | undefined;
     set cellRenderer(renderer: CellRenderer | undefined);
+    clearCapabilityRule(capability: keyof Interactions): void;
     // (undocumented)
     collapse(id: RowId | string): void;
     // (undocumented)
@@ -939,6 +940,7 @@ export class Gantt {
     get selectedEntries(): readonly Entry[];
     get selectedIds(): readonly EntryId[];
     set selectedIds(ids: readonly (EntryId | string)[]);
+    setCapabilityRule(capability: keyof Interactions, rule: CapabilityRule): void;
     showGridColumn(field: FieldKey): void;
     // (undocumented)
     get theme(): Theme;

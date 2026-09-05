@@ -3,6 +3,7 @@
 
 import { GanttShell } from '../view/index.js';
 import type {
+  CapabilityRule,
   GanttEventHandler,
   GanttEventMap,
   GridWidth,
@@ -97,7 +98,8 @@ export interface GanttOptionsBase {
    *  sequence a click runs. Default `[]`. */
   selectedIds?: readonly (EntryId | string)[];
   /** Live (S3, D-S3-9). Per-gesture, boolean or per-entry predicate, over the per-kind default
-   *  table. Default `{}`: every gesture resolves off the default table alone. */
+   *  table. Default `{}`: every gesture resolves off the default table alone. Assignment replaces
+   *  the whole config; `gantt.setCapabilityRule`/`clearCapabilityRule` write one gesture (D-S5-35). */
   interactions?: Interactions;
   /** Live (S3.7, D-S3-14). Wheel zoom, shift+wheel pan, and keyboard pan. Default `{}`: every
    *  viewport gesture is on. `false` turns them all off. Does not gate `zoomBy` / `panToDate`. */
@@ -530,6 +532,24 @@ export class Gantt {
 
   set interactions(next: Interactions) {
     this.#shell.interactions = next;
+  }
+
+  /** D-S5-35. Call: `gantt.setCapabilityRule('resize', false)`. It writes the rule for one gesture
+   *  and leaves the rules for the others exactly as they are. `gantt.interactions = { resize: false }`
+   *  drops them instead. The rule is a boolean, or a predicate the resolver runs per entry —
+   *  `gantt.setCapabilityRule('move', (entry) => entry.kind !== 'milestone')`. It re-resolves at
+   *  once, so a stricter rule hides a handle without waiting for the next pointer move. */
+  setCapabilityRule(capability: keyof Interactions, rule: CapabilityRule): void {
+    this.#shell.setCapabilityRule(capability, rule);
+  }
+
+  /** D-S5-35. Call: `gantt.clearCapabilityRule('resize')`. It takes this Gantt's own rule off one
+   *  gesture, so a plugin's kind defaults and the library's per-kind table answer it again. This is
+   *  not `setCapabilityRule('resize', true)`: `true` is a rule of its own, and it would also make a
+   *  rolled-up parent and a milestone resizable. Clearing a gesture that carries no rule does
+   *  nothing. */
+  clearCapabilityRule(capability: keyof Interactions): void {
+    this.#shell.clearCapabilityRule(capability);
   }
 
   /** Live (S3.7, D-S3-14): the next wheel or key reads the new flags; no remount. */

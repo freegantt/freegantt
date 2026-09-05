@@ -139,6 +139,19 @@ gantt.rowSource = { ...gantt.rowSource, groupBy: byTeam };                 // re
 
 One rule covers every config key, object-valued ones included. A per-key exemption would put the rule back in each setter, which is what `frame-settings.ts`'s one invalidation table exists to prevent. It also keeps a repeated assignment of an unchanged value off the frame path.
 
+**Assignment replaces the whole value. A verb writes one key (#184, #195).** The rule above says what assignment is, and the consequence is that a consumer who changes one key must restate the rest. Anything they forget to carry is dropped, with no error and no event. So where changing one key is the common case, the library ships a verb for that key:
+
+```ts
+gantt.setCapabilityRule('resize', false);   // this one gesture; every other rule stands
+gantt.clearCapabilityRule('resize');        // the per-kind table answers that gesture again
+gantt.hideGridColumn('cost');               // D-S5-34 — the widths and the order stay as the user set them
+gantt.installPlugin(tooltips());            // D-S5-36 — the installed set is not restated
+```
+
+**A verb does not merge into the value, and it never mutates it.** It reads the current value, computes the next one, and assigns that copy. So the paragraph above still holds in full: the object a consumer handed over is never written to, and the property still compares by identity. A merging setter was considered for `interactions` and rejected for the same reason — it would make assignment mean two things, and it would leave no way to *remove* a key.
+
+The setter is the long form: restate a whole config, reorder a whole list. The verb is the shorthand for the common case. That is CLAUDE.md's "common case is a shorthand; the long form is expert", and both write the same stored value.
+
 
 ### 2.1 What a consumer writes, and what the library stores
 
