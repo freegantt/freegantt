@@ -321,10 +321,12 @@ Files: `src/view/renderer-registry.ts`, `src/layout/items/produce-items.ts`, `sr
 
 **Ends with:** the branch reads as ASD-STE100, and the harness holds one copy of each demo plugin.
 
-- [ ] **Carried from R4.** `CONTEXT.md` needs the glossary entry for **refusal notice** — the
+- [x] **Carried from R4.** `CONTEXT.md` needs the glossary entry for **refusal notice** — the
       `.fg-cell-editor` wrapper that mounts with `data-state="invalid"` and `data-reason` to say why
       a cell will not open an editor. R4 defined the term in `s5.8-inline-editing.md` §1 because
       `CONTEXT.md` was outside its owned files. Promote it, and link the seven-row table.
+      **Refusal notice** sits beside **Popup** and **Dismiss trigger** in the Extension section, and
+      links the seven-row table for which refusals speak.
 - [ ] **Carried from R3.** ST1's comment pass now covers three files R3 added or reworked:
       `src/render/dom/dom-contract.ts`, `src/view/gantt-dom.ts`, and the new blocks in
       `src/view/plugin-ports.ts` and `src/extensions/features/context-menu.ts`.
@@ -333,10 +335,17 @@ Files: `src/view/renderer-registry.ts`, `src/layout/items/produce-items.ts`, `sr
       Split the long sentences in `src/api/plugin.ts`, `src/extensions/features/*.ts` and
       `src/view/gantt-shell.ts`. Keep every design rationale. Only the sentence shape changes.
       Do this pass **after** R2 and R3, so you do not reformat comments those slices delete.
-- [ ] **P5 — group `GanttShellOptions`' wiring.** Thirty-four members mix configuration, layer wiring
+- [x] **P5 — group `GanttShellOptions`' wiring.** Thirty-four members mix configuration, layer wiring
       and test seams. Seven members carry the same "omitted only by tests" comment.
       Add one required `wiring` member holding the seven always-supplied seams.
       A test then names `wiring` once instead of omitting seven keys. Seven comments go.
+      `GanttShellWiring` holds all seven, and `GanttShellOptions.wiring` is required. Its members
+      stay optional inside it, so `wiring: {}` is the whole of "this test drives the shell alone".
+      Thirty-three call sites changed: 31 in `gantt-shell.test.ts` and `styles.test.ts` write
+      `wiring: {}`, `extender-preview.test.ts` moves its two seams inside, and `api/gantt.ts` groups
+      all seven under one comment. `CONTEXT.md` gains **Shell wiring**. The three real test seams
+      (`backend`, `itemProducerRegistry`, `editExtender`) stay where they are: `api/gantt.ts` does
+      not supply them, so they are not wiring.
 - [ ] **H1 — move the three demo plugins.** Note from R3: `popupDemo()` must carry its
       `popupDemoView: { popup, dom }` stash with it — one stash, not two. Note from R5:
       `selectionShortcuts()` no longer returns an empty disposer, but `logEverything()` and

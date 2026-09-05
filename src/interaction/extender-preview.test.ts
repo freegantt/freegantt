@@ -77,12 +77,14 @@ function buildShell(overrides: Partial<GanttShellOptions> = {}): {
   const shell = new GanttShell({
     container,
     dataset: state,
-    entryGestures: attachEntryGestures,
-    commitEntryEdits: (edits) => {
-      state.transaction(() => {
-        for (const [id, edit] of edits) state.entries.update(id, edit);
-      });
-      return true;
+    wiring: {
+      entryGestures: attachEntryGestures,
+      commitEntryEdits: (edits) => {
+        state.transaction(() => {
+          for (const [id, edit] of edits) state.entries.update(id, edit);
+        });
+        return true;
+      },
     },
     ...overrides,
   });

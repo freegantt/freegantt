@@ -201,32 +201,41 @@ export class Gantt {
       ...(options.range !== undefined ? { range: this.#toRange(options.range) } : {}),
       ...(options.todayLine !== undefined ? { todayLine: this.#toTodayLine(options.todayLine) } : {}),
       ...(options.dateLines !== undefined ? { dateLines: this.#toDateLines(options.dateLines) } : {}),
-      entryGestures: attachEntryGestures,
-      keyboardEditing: attachKeyboardEditing,
-      columnGestures: attachColumnGestures,
-      // S3.3, D-S3-16: `GanttShell`'s own `dataset` option is `model/`'s narrow `Dataset` interface
-      // ("a view never opens a transaction") — this class holds the full `api/Dataset`, so a
-      // committed gesture draft reaches the store through here, not through the shell itself.
-      commitEntryEdits: (edits: EntryEdits) =>
-        attemptMutation(() => {
-          options.dataset.transaction(() => {
-            for (const [id, edit] of edits) options.dataset.entries.update(id, edit);
-          });
+      // Review P5: one member holds every seam that crosses the layer boundary. `view/` may not
+      // import `interaction/`, and it may not name the api `Dataset` or the public `Gantt` façade
+      // (D-S5-5), so this file supplies all seven.
+      wiring: {
+        entryGestures: attachEntryGestures,
+        keyboardEditing: attachKeyboardEditing,
+        columnGestures: attachColumnGestures,
+        // S3.3, D-S3-16: `GanttShell`'s own `dataset` option is `model/`'s narrow `Dataset`
+        // interface ("a view never opens a transaction"). This class holds the full `api/Dataset`,
+        // so a committed gesture draft reaches the store through here, not through the shell.
+        commitEntryEdits: (edits: EntryEdits) =>
+          attemptMutation(() => {
+            options.dataset.transaction(() => {
+              for (const [id, edit] of edits) options.dataset.entries.update(id, edit);
+            });
+          }),
+        // S5.1, D-S5-1: this file binds the two members it alone has. `dataset` is the full
+        // `api/Dataset` and `gantt` is `this`. See `api/plugin.ts`'s file header for why `view/` may
+        // name neither. `this` is captured, not read: by the time a plugin's `setup()` runs, `#shell`
+        // below is assigned — the `plugins` assignment after this call. `zoomPresets`/`selection`
+        // already rely on that same ordering. Every other member arrives already grouped from
+        // `view/plugin-ports.ts`, which owns the group a plugin reads it in. So a new seam is one
+        // edit there, and a member in the wrong group no longer compiles.
+        buildPluginContext: (parts): PluginContext => ({
+          dataset: options.dataset,
+          gantt: this,
+          ...parts,
         }),
-      // S5.1, D-S5-1: this file binds the two members it alone has. `dataset` is the full
-      // `api/Dataset` and `gantt` is `this` — see `api/plugin.ts`'s file header for why `view/` may
-      // name neither. `this` is captured, not read: by the time a plugin's `setup()` runs, `#shell`
-      // below is assigned (the `plugins` assignment after this call), the same ordering
-      // `zoomPresets`/`selection` already rely on. Every other member arrives already grouped from
-      // `view/plugin-ports.ts`, which owns the group a plugin reads it in. So a new seam is one edit
-      // there, and a member in the wrong group no longer compiles.
-      buildPluginContext: (parts): PluginContext => ({ dataset: options.dataset, gantt: this, ...parts }),
-      buildCommandContext: (parts): CommandContext => ({
-        dataset: options.dataset,
-        gantt: this,
-        ...parts,
-      }),
-      now,
+        buildCommandContext: (parts): CommandContext => ({
+          dataset: options.dataset,
+          gantt: this,
+          ...parts,
+        }),
+        now,
+      },
     });
     if (options.zoomPresets !== undefined) this.#shell.zoomPresets = options.zoomPresets;
     if (options.selectedIds !== undefined) this.#shell.selection = options.selectedIds;
