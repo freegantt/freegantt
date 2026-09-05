@@ -2,9 +2,53 @@ import { describe, expect, it, vi } from 'vitest';
 import { Gantt } from '../../api/gantt.js';
 import { Dataset } from '../../api/dataset.js';
 import type { EntryFieldEdit, EntryInput, GridColumnInput } from '../../api/index.js';
-import { instant } from '../../api/index.js';
-import { inlineEditing } from './inline-editing.js';
-import type { InlineEditingOptions } from './inline-editing.js';
+import { EntryNotFoundError, entryId, instant } from '../../api/index.js';
+import { contextMenu } from './context-menu.js';
+import { CellEditorSession, inlineEditing } from './inline-editing.js';
+import type {
+  CellEditorControl,
+  CellEditorPorts,
+  CellEditorValue,
+  InlineEditingOptions,
+} from './inline-editing.js';
+
+// happy-dom does no layout, so a real ResizeObserver never fires. This is the same fake seam
+// `api/gantt.test.ts` stubs globally: the overlay builds its own observer on the first `onResize`
+// call, which is the call an open editor makes (review C1).
+type ResizeObserverCallback = ConstructorParameters<typeof ResizeObserver>[0];
+
+class FakeResizeObserver {
+  static instances: FakeResizeObserver[] = [];
+  #callback: ResizeObserverCallback;
+
+  constructor(callback: ResizeObserverCallback) {
+    this.#callback = callback;
+    FakeResizeObserver.instances.push(this);
+  }
+
+  observe(): void {}
+  unobserve(): void {}
+  disconnect(): void {}
+
+  fire(): void {
+    this.#callback([], this);
+  }
+}
+
+/** happy-dom measures nothing, so every rect is zero until a test states one. */
+function rectAt(left: number, top: number, width: number, height: number): DOMRect {
+  return {
+    left,
+    top,
+    width,
+    height,
+    right: left + width,
+    bottom: top + height,
+    x: left,
+    y: top,
+    toJSON: () => ({}),
+  };
+}
 
 interface Meta {
   cost?: number;
@@ -439,5 +483,214 @@ describe('inlineEditing() (S5.8, D-S5-19/D-S5-20)', () => {
     expect(container.querySelector('.fg-cell-editor')).toBeNull();
     gantt.destroy();
     container.remove();
+  });
+
+  it('a container resize moves the open editor with its cell (review C1)', () => {
+    FakeResizeObserver.instances = [];
+    vi.stubGlobal('ResizeObserver', FakeResizeObserver);
+    try {
+      const { container, gantt } = makeGantt();
+      const cell = cellFor(container, 'e1', 'name');
+      // The overlay observes lazily, on the first `onResize` call — the one the editor's own mount
+      // makes. Every earlier instance belongs to the pane-size attachment.
+      const beforeOpen = FakeResizeObserver.instances.length;
+      dblclick(cell);
+      const wrapper = container.querySelector<HTMLElement>('.fg-cell-editor')!;
+      expect(wrapper.style.transform).toBe('translate(0.00px, 0.00px)');
+
+      // The resize brings a reflow that moves the cell. happy-dom measures nothing, so the test
+      // states the new rect the editor must follow.
+      cell.getBoundingClientRect = () => rectAt(40, 120, 200, 24);
+      FakeResizeObserver.instances[beforeOpen]!.fire();
+
+      expect(wrapper.style.transform).toBe('translate(40.00px, 120.00px)');
+      expect(wrapper.style.width).toBe('200px');
+      expect(wrapper.style.height).toBe('24px');
+
+      gantt.destroy();
+      container.remove();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('a refused commit keeps its own editor and opens no second one (review C2)', () => {
+    const { container, gantt, dataset } = makeGantt();
+    dblclick(cellFor(container, 'e1', 'budget'));
+    const el = input(container);
+    el.value = 'not a number'; // budgetMoney's parseValue refuses this
+    dblclick(cellFor(container, 'e1', 'name'));
+
+    const editors = container.querySelectorAll('.fg-cell-editor');
+    expect(editors).toHaveLength(1);
+    expect(editors[0]!.getAttribute('data-state')).toBe('invalid');
+    expect(input(container).value).toBe('not a number'); // still the budget editor
+    expect(dataset.entries.get('e1')!.meta?.budget).toBe(500);
+
+    gantt.destroy();
+    container.remove();
+  });
+
+  it('a blur commit lands before the context menu that caused it opens (S5.8 F10)', () => {
+    const container = document.createElement('div');
+    document.body.append(container);
+    const dataset = new Dataset<Meta>({ entries: structuredClone([...ENTRIES]), timeZone: 'UTC' });
+    const gantt = new Gantt({
+      container,
+      dataset,
+      gridColumns: [{ field: 'name', editable: true }],
+      plugins: [inlineEditing(), contextMenu()],
+    });
+
+    dblclick(cellFor(container, 'e1', 'name'));
+    const el = input(container);
+    el.value = 'Blurred rename';
+    // The browser's own order for a right-click on another row: the press blurs the editor first,
+    // then the `contextmenu` event opens the menu.
+    el.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
+    container
+      .querySelector<HTMLElement>('.fg-bar')!
+      .dispatchEvent(
+        new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 5, clientY: 5 }),
+      );
+
+    expect(dataset.entries.get('e1')!.name).toBe('Blurred rename');
+    expect(container.querySelector('.fg-cell-editor')).toBeNull();
+    expect(container.querySelector('.fg-menu')).not.toBeNull();
+
+    gantt.destroy();
+    container.remove();
+  });
+});
+
+// Review A5: the session is an object, so these run it with no mounted Gantt at all — plain ports,
+// a plain row, and a control that answers whatever the test needs.
+describe('CellEditorSession (S5.8, review A5/C2b)', () => {
+  const dataset = new Dataset({
+    entries: [{ id: 'e1', name: 'Task One', start: '2026-01-01', end: '2026-01-05' }],
+    timeZone: 'UTC',
+  });
+  const entry = dataset.entries.get('e1')!;
+
+  function textControl(read: () => CellEditorValue): CellEditorControl {
+    return { element: document.createElement('input'), read, bindCommitTriggers: () => () => {} };
+  }
+
+  function mountSession(
+    overrides: Partial<CellEditorPorts> = {},
+    control: CellEditorControl = textControl(() => ({ ok: true, value: 'Renamed' })),
+  ): { session: CellEditorSession; row: HTMLElement; cell: HTMLElement } {
+    const row = document.createElement('div');
+    row.className = 'fg-row';
+    row.dataset['entryId'] = 'e1';
+    const cell = document.createElement('div');
+    cell.className = 'fg-row-cell';
+    cell.dataset['field'] = 'name';
+    row.append(cell);
+    const layer = document.createElement('div');
+    document.body.append(row, layer);
+
+    const ports: CellEditorPorts = {
+      overlay: {
+        present: (content) => {
+          layer.append(content);
+          return {
+            detach: () => {
+              content.remove();
+            },
+          };
+        },
+        bounds: rectAt(0, 0, 0, 0),
+        onResize: () => () => {},
+      },
+      bindEscape: () => () => {},
+      entryById: () => entry,
+      storedValue: () => 'Task One',
+      writeValue: () => {},
+      announceEntryEdit: () => {},
+      requestCommit: () => {},
+      requestRevert: () => {},
+      ...overrides,
+    };
+    const session = new CellEditorSession(ports, { entryId: entryId('e1'), field: 'name', row }, control);
+    session.mount(cell);
+    return { session, row, cell };
+  }
+
+  it('reposition() re-finds the cell inside its own row and follows it (review C1)', () => {
+    const { session, cell } = mountSession();
+    expect(session.element.style.transform).toBe('translate(0.00px, 0.00px)');
+
+    cell.getBoundingClientRect = () => rectAt(40, 120, 200, 24);
+    session.reposition();
+
+    expect(session.element.style.transform).toBe('translate(40.00px, 120.00px)');
+    expect(session.element.style.width).toBe('200px');
+  });
+
+  it('commit() writes once, announces the edit, then closes', () => {
+    const writes: { field: string; value: unknown }[] = [];
+    const announced: EntryFieldEdit[] = [];
+    const values = ['Task One', 'Renamed'];
+    const { session } = mountSession({
+      writeValue: (_id, field, value) => writes.push({ field, value }),
+      storedValue: () => values.shift(),
+      announceEntryEdit: (payload) => announced.push(payload),
+    });
+
+    expect(session.commit()).toBe(true);
+
+    expect(writes).toEqual([{ field: 'name', value: 'Renamed' }]);
+    expect(announced).toHaveLength(1);
+    expect(announced[0]).toMatchObject({ field: 'name', from: 'Task One', to: 'Renamed' });
+    expect(session.element.isConnected).toBe(false);
+  });
+
+  it('commit() answers false and keeps the editor open when the control reads no value', () => {
+    const { session } = mountSession(
+      {
+        writeValue: () => {
+          throw new Error('a refused value must never reach the Dataset');
+        },
+      },
+      textControl(() => ({ ok: false })),
+    );
+
+    expect(session.commit()).toBe(false);
+    expect(session.element.dataset['state']).toBe('invalid');
+    expect(session.element.isConnected).toBe(true);
+
+    session.revert();
+    expect(session.element.isConnected).toBe(false);
+  });
+
+  it('commit() closes and reports no error when the entry goes away mid-write (issue #137 F10)', () => {
+    const { session } = mountSession({
+      writeValue: (id) => {
+        throw new EntryNotFoundError(id, 'entries.update');
+      },
+    });
+
+    expect(session.commit()).toBe(true);
+    expect(session.element.isConnected).toBe(false);
+  });
+
+  it('a second commit after the first one closed writes nothing', () => {
+    const writes: unknown[] = [];
+    const { session } = mountSession({ writeValue: (_id, _field, value) => writes.push(value) });
+
+    expect(session.commit()).toBe(true);
+    expect(session.commit()).toBe(true);
+
+    expect(writes).toEqual(['Renamed']);
+  });
+
+  it('stillAnchored() goes false once the row leaves the frame', () => {
+    const { session, row } = mountSession();
+    expect(session.stillAnchored()).toBe(true);
+
+    row.remove();
+
+    expect(session.stillAnchored()).toBe(false);
   });
 });

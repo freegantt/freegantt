@@ -1,7 +1,7 @@
 # Fix plan — S5 extensibility branch review
 
 **Source review:** [`2026-09-04-s5-extensibility-branch.html`](./2026-09-04-s5-extensibility-branch.html) — FreeGantt, 2026-09-04, branch `s5-start` against `main`, steps S5.0–S5.9 landed.
-**Slice:** S5 ([`plans/s5-extensibility-and-editing/README.md`](../s5-extensibility-and-editing/README.md)) · **Status:** open — no fix slice started.
+**Slice:** S5 ([`plans/s5-extensibility-and-editing/README.md`](../s5-extensibility-and-editing/README.md)) · **Status:** open — R1 landed; R2–R7 open.
 **Gate state at review time:** every gate passed. Each finding below is a quality, design or API-shape call. No tool catches them.
 
 > ## Delete the review when this plan closes
@@ -99,24 +99,31 @@ You type an invalid value, you double-click a second cell, and no ghost editor s
 
 Files: `src/extensions/features/inline-editing.ts`, `src/extensions/features/date-input.ts`, and their tests.
 
-- [ ] **C1 — fix the resize reposition.** The one call site passes the `.fg-row` element as `container`.
+- [x] **C1 — fix the resize reposition.** The one call site passes the `.fg-row` element as `container`.
       `Element.querySelector` matches descendants only, so the lookup always returns `undefined`.
       Replace it with `row.querySelector([data-field="…"])`. Drop the unused `entryId` parameter.
-- [ ] **C1 test.** Open an editor. Fire the overlay resize. Assert the wrapper moved with its cell.
-- [ ] **N4 — retire the stale doc.** `findCell`'s doc says "scoped to this Gantt's own container".
+- [x] **C1 test.** Open an editor. Fire the overlay resize. Assert the wrapper moved with its cell.
+      Landed twice: through the real overlay observer, and on `CellEditorSession.reposition()` alone.
+- [x] **N4 — retire the stale doc.** `findCell`'s doc says "scoped to this Gantt's own container".
       Its one caller passes a row. Rename or re-document it to match the row scope.
-- [ ] **A5 + C2b — give the session an object.** Add a `CellEditorSession` class.
+      It is `findCellInRow(row, field)` now. `findOwnCell` reuses it for its own per-row step.
+- [x] **A5 + C2b — give the session an object.** Add a `CellEditorSession` class.
       It owns `mount`, `commit(): boolean`, `revert()` and `reposition()`.
       `commit()` returns its own outcome, so the `settled` flag goes away.
       `setup()` then holds one `session: CellEditorSession | undefined`.
-- [ ] **C2 — make the refusal legible.** `closeSession` returns whether it closed.
+      The class takes `CellEditorPorts`, the idiom `ColumnChromePorts` already sets, so a test drives
+      a session with no mounted Gantt.
+- [x] **C2 — make the refusal legible.** `closeSession` returns whether it closed.
       `openFor` bails when it did not close. No second session overwrites a live one.
-- [ ] **C2 test.** Open cell A. Enter a value `parseValue` rejects. Double-click cell B.
+- [x] **C2 test.** Open cell A. Enter a value `parseValue` rejects. Double-click cell B.
       Assert exactly one `.fg-cell-editor` is in the DOM.
-- [ ] **N5 — fix the comment drift.** `date-input.ts`'s `onCommit` doc names an `onceCommitted` guard.
+- [x] **N5 — fix the comment drift.** `date-input.ts`'s `onCommit` doc names an `onceCommitted` guard.
       That symbol does not exist. Name the real one, or drop the clause if A5 removed it.
-- [ ] Add the two tests the S5.8 TODO already lists as untested, if A5 makes them cheap:
+      The doc now names the real answer: a commit closes the session, so the second call finds none.
+- [x] Add the two tests the S5.8 TODO already lists as untested, if A5 makes them cheap:
       blur-commit racing a context-menu open, and an entry removed mid-`commit()`.
+      Both landed. `s5.8-inline-editing.md`'s TODO keeps the third item, the `data/history.test.ts`
+      "an inline edit is one undo step" test, which sits outside this slice's files.
 
 **Verify:** `pnpm test:dom`, `pnpm test:node`, `pnpm typecheck`, `pnpm lint`. Then edit a cell in `harness/editing.html`.
 

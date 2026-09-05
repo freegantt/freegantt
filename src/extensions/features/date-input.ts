@@ -74,8 +74,9 @@ export function createDefaultDateInput(time: ZoneDateMath): DateInput {
     onCommit(handler: () => void): Disposer {
       // `change` covers the native picker and a typed-then-blurred value; `keydown` Enter covers a
       // typed value the browser has not yet turned into a `change` (some browsers fire `change` only
-      // on blur). `inlineEditing()`'s own commit is idempotent against a double call from both firing
-      // for the same keystroke (its own `onceCommitted` guard) — this control does not de-duplicate.
+      // on blur). Both can fire for one keystroke. `inlineEditing()`'s own commit closes its
+      // `CellEditorSession`, so the second call finds no open editor and writes nothing — this
+      // control does not de-duplicate.
       const onKeydown = (event: KeyboardEvent): void => {
         if (event.key === 'Enter') handler();
       };
