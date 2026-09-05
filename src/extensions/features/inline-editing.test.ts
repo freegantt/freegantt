@@ -81,6 +81,18 @@ const ENTRIES: readonly EntryInput<Meta>[] = [
     end: '2026-01-02T14:00:00Z',
     meta: { cost: 200, budget: 700 },
   },
+  {
+    // Stores `segments`, so `start`/`end` are the envelope those segments span (#212).
+    id: 'e3',
+    name: 'Segmented Task',
+    start: '2026-01-01',
+    end: '2026-01-10',
+    segments: [
+      { start: '2026-01-01', end: '2026-01-04' },
+      { start: '2026-01-06', end: '2026-01-10' },
+    ],
+    meta: { cost: 300, budget: 900 },
+  },
 ];
 
 const GRID_COLUMNS: readonly GridColumnInput[] = [
@@ -259,6 +271,31 @@ describe('inlineEditing() (S5.8, D-S5-19/D-S5-20)', () => {
     expect(notice.textContent).toContain('comes from the rows below it');
     expect(notice.title).toBe(notice.textContent);
     expect(container.querySelector('.fg-cell-editor-control')).toBeNull();
+    gantt.destroy();
+    container.remove();
+  });
+
+  it('a segmented entry refuses its start cell instead of throwing on commit (#212)', () => {
+    const { container, gantt } = makeGantt();
+    dblclick(cellFor(container, 'e3', 'start'));
+    const notice = refusal(container)!;
+    expect(notice).not.toBeNull();
+    expect(notice.dataset['reason']).toBe('segmented-entry');
+    expect(notice.textContent).toContain('span the segments below');
+    expect(container.querySelector('.fg-cell-editor-control')).toBeNull();
+    gantt.destroy();
+    container.remove();
+  });
+
+  it('a segmented entry still edits a field that is not its envelope (#212)', () => {
+    const { container, gantt, dataset } = makeGantt();
+    dblclick(cellFor(container, 'e3', 'name'));
+    const el = input(container);
+    el.value = 'Renamed Segmented';
+    el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+
+    expect(dataset.entries.get('e3')?.name).toBe('Renamed Segmented');
+    expect(refusal(container)).toBeNull();
     gantt.destroy();
     container.remove();
   });
@@ -965,6 +1002,7 @@ describe('CellEditing (S5.8, #169)', () => {
       'no-date-value',
       'time-of-day',
       'unsaved-value',
+      'segmented-entry',
     ];
 
     for (const reason of reasons) {

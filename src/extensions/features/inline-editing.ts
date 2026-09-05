@@ -68,6 +68,22 @@ function isDateField(field: Field): boolean {
   return field.type === 'date' || field.key === 'start' || field.key === 'end';
 }
 
+/** Would an edit of this cell write the `start`/`end` envelope of an Entry that stores `segments`?
+ *
+ *  Those two values span the segments; they are not authored on their own. `data/` refuses the write
+ *  and throws `SegmentsOutOfSyncError` (`data/entry-reader.ts`), so an editor over this cell can only
+ *  fail on commit. The cell says why instead, the same way a rolled-up parent cell does.
+ *
+ *  This names `start` and `end` by key, as `isDateField` above already does for the same two core
+ *  Fields. That repeats a rule `data/` also holds. One owner would be better. The library has no
+ *  public "can this Field be written on this Entry?" question yet. #212 adds a Segment-level edit.
+ *  #212 is the place to close this gap — the cell then opens instead of refusing. */
+function writesSegmentEnvelope(entry: Entry, field: Field): boolean {
+  const segments = entry.segments;
+  if (segments === undefined || segments.length === 0) return false;
+  return field.key === 'start' || field.key === 'end';
+}
+
 /** Issue #137 F12: with no `parseValue`, only `type: 'text'` reads and writes the raw string. A
  *  Field with no `type` at all reads and writes it too — a plain meta Field like the harness's
  *  `team`. Any other named `type` refuses to open rather than guess a parse. */
@@ -110,6 +126,7 @@ const REFUSAL_TEXT = {
   'no-date-value': 'this field holds no date yet; the default date editor needs one',
   'time-of-day': 'this field carries a time of day; the default date editor cannot show it',
   'unsaved-value': 'another cell still holds a value that did not save; fix it or press Escape',
+  'segmented-entry': 'these dates span the segments below; move a segment instead',
 } as const;
 
 /** Why the editor refused a cell that does offer one. The key is the machine-readable half — it goes
@@ -667,6 +684,10 @@ export function inlineEditing(options: InlineEditingOptions = {}): GanttPlugin {
         if (ctx.view.isColumnEditable(field.key) !== true) return;
         if (ctx.dataset.isRollUpKind(entry.kind) && field.rollUp !== undefined) {
           editing.refuse(edited, cell, 'derived-value');
+          return;
+        }
+        if (writesSegmentEnvelope(entry, field)) {
+          editing.refuse(edited, cell, 'segmented-entry');
           return;
         }
         const date = isDateField(field);
