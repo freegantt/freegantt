@@ -14,7 +14,7 @@ import type {
 } from './inline-editing.js';
 
 // happy-dom does no layout, so a real ResizeObserver never fires. This is the same fake seam
-// `api/gantt.test.ts` stubs globally: the overlay builds its own observer on the first `onResize`
+// `api/gantt.test.ts` stubs globally. The overlay builds its own observer on the first `onResize`
 // call, which is the call an open editor makes (review C1).
 type ResizeObserverCallback = ConstructorParameters<typeof ResizeObserver>[0];
 
@@ -486,7 +486,7 @@ describe('inlineEditing() (S5.8, D-S5-19/D-S5-20)', () => {
     let vetoCall = 0;
     gantt.on('beforeEntryEdit', () => {
       vetoCall++;
-      // Only the first open (on "name") gets an async veto; the second (on "quantity") resolves
+      // Only the first open (on "name") gets an async veto. The second (on "quantity") resolves
       // synchronously, so it can mount before the first's promise ever settles.
       return vetoCall === 1 ? new Promise<void | false>((r) => (resolveFirst = r)) : undefined;
     });
@@ -509,8 +509,8 @@ describe('inlineEditing() (S5.8, D-S5-19/D-S5-20)', () => {
   });
 
   it("Enter opens this Gantt's own row, not an earlier-in-DOM Gantt's row sharing the same entry id (I2)", () => {
-    // containerA is appended to document.body first — an unscoped document-wide lookup by entry id
-    // would find *its* row first no matter which Gantt's own Enter handler actually fired, so B's own
+    // containerA is appended to document.body first. An unscoped document-wide lookup by entry id
+    // would find *its* row first, whichever Gantt's own Enter handler actually fired. So B's own
     // handler firing must still resolve to B's own row.
     const { container: containerA, gantt: ganttA } = makeGantt();
     const { container: containerB, gantt: ganttB } = makeGantt();
@@ -640,8 +640,8 @@ describe('inlineEditing() (S5.8, D-S5-19/D-S5-20)', () => {
   });
 });
 
-// Review A5: the session is an object, so these run it with no mounted Gantt at all — plain ports,
-// a plain row, and a control that answers whatever the test needs.
+// Review A5: the session is an object, so these run it with no mounted Gantt at all. They pass
+// plain ports, a plain row, and a control that answers whatever the test needs.
 describe('CellEditorSession (S5.8, review A5/C2b)', () => {
   const dataset = new Dataset({
     entries: [{ id: 'e1', name: 'Task One', start: '2026-01-01', end: '2026-01-05' }],
@@ -679,8 +679,8 @@ describe('CellEditorSession (S5.8, review A5/C2b)', () => {
         },
         onResize: () => () => {},
       },
-      // Review A3: the session asks one seam where its cell is now, so the fake answers with the
-      // cell this test built — while that cell is still in the document. A real Gantt answers from
+      // Review A3: the session asks one seam where its cell is now. So the fake answers with the
+      // cell this test built, while that cell is still in the document. A real Gantt answers from
       // the current frame, and stops answering once virtualization takes the row away.
       dom: { bounds: rectAt(0, 0, 0, 0), cellFor: () => (cell.isConnected ? cell : undefined) },
       bindEscape: () => () => {},

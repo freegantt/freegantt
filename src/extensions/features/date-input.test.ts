@@ -4,8 +4,8 @@ import { Dataset } from '../../api/dataset.js';
 import { instant } from '../../api/index.js';
 
 // `dataset.time` (D-S5-16) is a real `ZonedTime`, and satisfies `date-input.ts`'s own narrower
-// `ZoneDateMath` structurally — the same real zone math a live plugin would pass, with no hand-rolled
-// Date/epoch arithmetic in this test file (I10 applies to `src/**`, tests included).
+// `ZoneDateMath` structurally. It is the same real zone math a live plugin would pass. This test
+// file holds no hand-rolled Date/epoch arithmetic (I10 applies to `src/**`, tests included).
 function zoneMath(timeZone: string): Dataset['time'] {
   return new Dataset({ entries: [], timeZone }).time;
 }

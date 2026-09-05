@@ -1,17 +1,19 @@
 // extensions/features/ — the inline cell editor (S5.8, D-S5-19/D-S5-20). An ordinary `GanttPlugin`,
 // confined by the `extensions-public-only` rule (D-S5-5) to `api/`/`model/` imports, same as
 // `tooltips()`/`contextMenu()`. Every import below names its own narrow source file, never the
-// `api/index.js` barrel (which itself re-exports `inlineEditing` — importing it back would close a
-// cycle, `no-circular`), the same reason `context-menu.ts`/`popup.ts` do the same.
+// `api/index.js` barrel. That barrel re-exports `inlineEditing` itself. Importing it back would
+// close a cycle (`no-circular`). `context-menu.ts` and `popup.ts` do the same, for the same reason.
 //
-// Unlike `tooltips()`/`contextMenu()`, the editor does not build on `createPopup` (`extensions/
-// popup.ts`): `Popup`'s `content` is a static `ElementDescription`, rendered once through the
-// reconciler with no way to hand the caller back a live, listener-attachable node — exactly what an
-// editable `<input>` needs. `Popup` stays the right primitive for declarative content (a tooltip, a
-// menu); this file owns a live control end-to-end instead, mounted through the same `Overlay` layer
-// (`ctx.view.overlay.present`) so it never becomes a child of a recycled grid-row/cell node (those
-// are `render/dom`'s own reconciled DOM — writing into one directly would corrupt its own patch
-// assumptions, e.g. `cellSpec.patch`'s `node.lastElementChild` reads).
+// Unlike `tooltips()`/`contextMenu()`, the editor does not build on `createPopup`
+// (`extensions/popup.ts`). `Popup`'s `content` is a static `ElementDescription`, rendered once
+// through the reconciler. It has no way to hand the caller back a live, listener-attachable node,
+// which is exactly what an editable `<input>` needs.
+//
+// `Popup` stays the right primitive for declarative content, a tooltip or a menu. This file owns a
+// live control end-to-end instead. It mounts through the same `Overlay` layer
+// (`ctx.view.overlay.present`), so it never becomes a child of a recycled grid-row/cell node. Those
+// nodes are `render/dom`'s own reconciled DOM. Writing into one directly would corrupt its own
+// patch assumptions, `cellSpec.patch`'s `node.lastElementChild` reads for example.
 //
 // One open editor is one `CellEditorSession`. The session owns the mount, the position, the commit
 // rules and its own teardown. The plugin below owns whether an editor is open at all. `commit()`
@@ -43,26 +45,26 @@ export interface InlineEditingOptions {
 }
 
 /** S5.8, D-S5-20: `field.type === 'date'` routes through the `dateInput` seam. The two shipped core
- *  date Fields (`start`/`end`) never declare `type` themselves (`type` must name a registered
- *  `fieldTypes` bundle, and shipping one just to spell "date" would be a bigger, riskier change than
- *  this slice needs) — so this also matches those two keys by name. A consumer's own date-valued
+ *  date Fields (`start`/`end`) never declare `type` themselves. `type` must name a registered
+ *  `fieldTypes` bundle, and shipping one just to spell "date" would be a bigger, riskier change
+ *  than this slice needs. So this guard also matches those two keys by name. A consumer's own date-valued
  *  Field opts in with `type: 'date'` plus a matching `fieldTypes.date` bundle (even an empty one). */
 function isDateField(field: Field): boolean {
   return field.type === 'date' || field.key === 'start' || field.key === 'end';
 }
 
-/** Issue #137 F12: with no `parseValue`, only `type: 'text'` (or no `type` at all — a plain meta
- *  Field like the harness's `team`) reads and writes the raw string. Any other named `type` refuses
- *  to open rather than guess a parse. */
+/** Issue #137 F12: with no `parseValue`, only `type: 'text'` reads and writes the raw string. A
+ *  Field with no `type` at all reads and writes it too — a plain meta Field like the harness's
+ *  `team`. Any other named `type` refuses to open rather than guess a parse. */
 function canOpenGeneric(field: Field): boolean {
   return field.parseValue !== undefined || field.type === undefined || field.type === 'text';
 }
 
 /** A real `FieldContext`, built from public reads alone — not a stub. A `parseValue` that reads a
- *  sibling field through `ctx.read` gets the true stored value (`entries.fieldValue`); `durationOf`
- *  goes through `dataset.time.diffDays` (I10: no arithmetic on an `Instant` outside `time/`) and
- *  approximates in whole days — a segmented entry's true duration is `layout/`'s own `durationOf`,
- *  not reachable from `extensions/`, and a `parseValue` calling this is expected to be rare. */
+ *  sibling field through `ctx.read` gets the true stored value (`entries.fieldValue`). `durationOf`
+ *  goes through `dataset.time.diffDays` (I10: no arithmetic on an `Instant` outside `time/`), and
+ *  approximates in whole days. A segmented entry's true duration is `layout/`'s own `durationOf`,
+ *  which `extensions/` cannot reach. A `parseValue` that calls this is expected to be rare. */
 function fieldContextFor(ctx: PluginContext): FieldContext {
   return {
     timeZone: ctx.dataset.timeZone,
@@ -81,12 +83,12 @@ const EDITOR_CLASS = 'fg-cell-editor';
 const EDITOR_CONTROL_CLASS = 'fg-cell-editor-control';
 
 /** Every refusal the user can see, with the words the user reads. One table, because the wording is
- *  user-visible and belongs in one place — the four `return` sites below decide *which* refusal
+ *  user-visible and belongs in one place. The four `return` sites below decide *which* refusal
  *  applies, never *how it reads* (review SP1).
  *
- *  Which refusals speak, and which stay silent, is stated once in `s5.8-inline-editing.md` §1:
- *  a cell that offers no editor at all refuses silently, and a cell that offers one but cannot open
- *  it here names the reason. */
+ *  `s5.8-inline-editing.md` §1 states once which refusals speak and which stay silent. A cell that
+ *  offers no editor at all refuses silently. A cell that offers one but cannot open it here names
+ *  the reason. */
 const REFUSAL_TEXT = {
   derivedValue: 'this value comes from the rows below it; edit a child row instead',
   noParseValue: 'this field has no parseValue; the default editor cannot read the text back',
@@ -164,7 +166,7 @@ export interface CellEditorPorts {
 /** One open cell editor: mounted over its cell, bound to its own triggers, closed exactly once.
  *
  *  `commit()` answers whether it closed. A refused commit keeps the editor open in the invalid
- *  state, and the owner reads that answer instead of a flag both sides write (review C2/C2b). */
+ *  state. The owner reads that answer instead of a flag both sides write (review C2/C2b). */
 export class CellEditorSession {
   readonly entryId: EntryId;
   readonly field: FieldKey;
@@ -175,8 +177,8 @@ export class CellEditorSession {
   #handle: OverlayHandle | undefined;
   #focusTrap: FocusTrap | undefined;
   /** `#close()` alone writes this, and `commit()`/`revert()` read it. It records this one session's
-   *  lifetime, so a re-entrant close (a `change` handler that removes the entry while `commit()`
-   *  still writes) never tears the same editor down twice. */
+   *  lifetime. A re-entrant close never tears the same editor down twice — a `change` handler that
+   *  removes the entry while `commit()` still writes. */
   #open = false;
 
   constructor(ports: CellEditorPorts, edited: EditedCell, control: CellEditorControl) {
@@ -210,9 +212,9 @@ export class CellEditorSession {
     this.#control.element.focus();
   }
 
-  /** Writes what the control holds, then closes. It answers `false` — and stays open in the invalid
-   *  state, with focus on the control — when the control reads no value, or when `beforeChange`
-   *  vetoes the changeset. Those are D-S5-19's two refusals. */
+  /** Writes what the control holds, then closes. It answers `false` when the control reads no
+   *  value, and when `beforeChange` vetoes the changeset. It then stays open in the invalid state,
+   *  with focus on the control. Those are D-S5-19's two refusals. */
   commit(): boolean {
     if (!this.#open) return true;
     const entry = this.#ports.entryById(this.entryId);
@@ -263,7 +265,7 @@ export class CellEditorSession {
   }
 
   /** Whether this editor's own cell is still on screen (issue #137 F10). It goes false once
-   *  virtualization scrolls the row away, or recycles it for another entry — `cellFor` answers for
+   *  virtualization scrolls the row away, or recycles it for another entry. `cellFor` answers for
    *  this entry and this Field, so a recycled node stops matching. */
   stillAnchored(): boolean {
     return this.#currentCell() !== undefined;
@@ -306,7 +308,7 @@ export class CellEditorSession {
 
 /** The refusal notice paints itself, because it is the one thing this plugin mounts that carries no
  *  `.fg-cell-editor-control`. It reads only published level-1 tokens, and it falls back to a sane
- *  value for each, so a consumer stylesheet that sets none of them still gets a legible box.
+ *  value for each. A consumer stylesheet that sets none of them still gets a legible box.
  *  `pointer-events: none` is the load-bearing line: the notice sits over the cell, and the next
  *  double-click must reach the cell, not the notice. */
 function paintRefusal(element: HTMLElement): void {
@@ -330,12 +332,12 @@ export interface RefusalNotice {
   dismiss(): void;
 }
 
-/** What a refusal notice borrows — the same three members a `CellEditorSession` borrows for the same
- *  three jobs, so a test drives a notice with no mounted Gantt. */
+/** What a refusal notice borrows: the same three members a `CellEditorSession` borrows, for the
+ *  same three jobs. A test drives a notice with no mounted Gantt. */
 export type RefusalNoticePorts = Pick<CellEditorPorts, 'overlay' | 'dom' | 'bindEscape'>;
 
 /** Puts the refusal where the user acted: over the cell, in the same `data-state="invalid"` a refused
- *  commit already uses (D-S5-19, issue #137 F11/F12). It is a notice, not an editor — it mounts no
+ *  commit already uses (D-S5-19, issue #137 F11/F12). It is a notice, not an editor. It mounts no
  *  control and it takes no focus, so it never becomes a sixth thing the user must close.
  *
  *  `role="status"` is the strongest thing a plugin can say on its own node today. S5.11 owes the
@@ -381,14 +383,15 @@ export function inlineEditing(options: InlineEditingOptions = {}): GanttPlugin {
     setup(ctx: PluginContext) {
       let session: CellEditorSession | undefined;
       let notice: RefusalNotice | undefined;
-      // Bumped on every `openFor` call, captured locally by that call's own async veto continuation —
-      // a stale continuation (an *older* `openFor` whose `beforeEntryEdit` promise resolves after a
-      // *newer* `openFor` has already run) checks this before mounting, so it cannot mount a second,
-      // orphaned session over the newer one with no teardown of either.
+      // Bumped on every `openFor` call, and captured locally by that call's own async veto
+      // continuation. A stale continuation is an *older* `openFor` whose `beforeEntryEdit` promise
+      // resolves after a *newer* `openFor` has already run. It checks this counter before mounting.
+      // So it cannot mount a second, orphaned session over the newer one, with no teardown of
+      // either.
       let openRequestId = 0;
 
       /** Closes whatever is open, and answers whether it closed. A commit declines on an unreadable
-       *  value, and on a `beforeChange` veto — the editor stays open then, and the caller must not
+       *  value, and on a `beforeChange` veto. The editor stays open then, and the caller must not
        *  open a second one over it (review C2). A revert always closes. */
       function closeSession(action: 'commit' | 'revert'): boolean {
         const current = session;
@@ -454,7 +457,7 @@ export function inlineEditing(options: InlineEditingOptions = {}): GanttPlugin {
       /** Issue #137 F1: the anchor cell disappears (removed, or virtualized out of frame) — close
        *  without committing. Checked on every scroll of this Gantt's own panes, and on every Dataset
        *  change just above. Capture phase, because `scroll` does not bubble. Review A4: this
-       *  listener was the one of the twelve with no "is this my Gantt?" guard at all — a scroll in a
+       *  listener was the one of the twelve with no "is this my Gantt?" guard at all. A scroll in a
        *  second Gantt used to reach it. `ctx.view.onDomEvent` answers that once, for every plugin. */
       ctx.view.onDomEvent(
         'scroll',
@@ -476,7 +479,7 @@ export function inlineEditing(options: InlineEditingOptions = {}): GanttPlugin {
       });
 
       /** The text a generic editor opens with. A Field that declares `parseValue` owns both
-       *  directions of its own text, so the seed is the string the grid already painted — the user
+       *  directions of its own text. So the seed is the string the grid already painted. The user
        *  edits what they see, and `parseValue` reads it back. A Field without one stores a
        *  primitive, so the stored value is the text. Anything else opens empty. */
       function seedText(field: Field, fieldValue: unknown, cell: HTMLElement): string {
@@ -532,7 +535,7 @@ export function inlineEditing(options: InlineEditingOptions = {}): GanttPlugin {
         } else {
           // Issue #137 F11: the default `<input type="date">` has no time-of-day control. An
           // Instant that is not local midnight would silently round-trip to midnight on an
-          // unchanged Enter — refuse to open the *default* editor rather than lose data. A
+          // unchanged Enter. So this refuses to open the *default* editor, rather than lose data. A
           // consumer's own `dateInput` factory (a `datetime-local` control, say) owns this instead.
           if (ctx.dataset.time.startOfDay(raw) !== raw) {
             refuse(cell, 'timeOfDay');
@@ -563,14 +566,14 @@ export function inlineEditing(options: InlineEditingOptions = {}): GanttPlugin {
         session = opened;
       }
 
-      /** D-S5-19: the veto question fires *before the editor opens*, not before the write — a
-       *  consumer's `beforeEntryEdit` handler opens its own dialog and returns `false` to suppress
+      /** D-S5-19: the veto question fires *before the editor opens*, not before the write. A
+       *  consumer's `beforeEntryEdit` handler opens its own dialog, and returns `false` to suppress
        *  the built-in editor entirely (U8). */
       function openFor(entry: Entry, field: Field, cell: HTMLElement): void {
         dismissRefusal();
         // The next two refusals stay silent by decision (`s5.8-inline-editing.md` §1, "Which
-        // refusals speak"). Neither cell offers an editor at all, and I14 already hides the
-        // affordance from the same resolution that refuses the gesture — there is nothing to
+        // refusals speak"). Neither cell offers an editor at all. I14 already hides the
+        // affordance from the same resolution that refuses the gesture, so there is nothing to
         // explain. Every refusal below them is about a cell that *does* offer an editor, so each
         // one names itself.
         if (!ctx.interaction.canEdit(entry)) return;
@@ -604,8 +607,8 @@ export function inlineEditing(options: InlineEditingOptions = {}): GanttPlugin {
         if (result === false) return;
         if (result instanceof Promise) {
           void result.then((allowed) => {
-            // A newer `openFor` ran while this veto was pending — that call has already closed
-            // whatever was open and may have mounted its own session; this stale request must not
+            // A newer `openFor` ran while this veto was pending. That call has already closed
+            // whatever was open, and may have mounted its own session. This stale request must not
             // mount a second one over it (see `openRequestId`'s own doc comment).
             if (allowed !== false && requestId === openRequestId) openNow();
           });
@@ -614,8 +617,8 @@ export function inlineEditing(options: InlineEditingOptions = {}): GanttPlugin {
         openNow();
       }
 
-      // Review A4: `ctx.view.onDomEvent` scopes this to this Gantt (I2) and resolves the node, so
-      // the whole "which cell, which entry, which Field" walk is one answer instead of four
+      // Review A4: `ctx.view.onDomEvent` scopes this to this Gantt (I2), and resolves the node.
+      // The whole "which cell, which entry, which Field" walk is one answer now, instead of four
       // hand-written `.fg-*` lookups.
       ctx.view.onDomEvent('dblclick', (_event, target) => {
         if (target?.kind !== 'cell') return;
@@ -626,9 +629,9 @@ export function inlineEditing(options: InlineEditingOptions = {}): GanttPlugin {
         openFor(entry, field, target.element);
       });
 
-      /** D-S3-13: `Enter` is reserved for opening the inline editor. With no established per-cell
-       *  focus yet (S5.11 adds roving tabindex, D-S5-25), this opens the first `editable` column of
-       *  the selected entry — a pragmatic simplification `s5.11-a11y-completion.md` supersedes. */
+      /** D-S3-13: `Enter` is reserved for opening the inline editor. No per-cell focus exists yet
+       *  (S5.11 adds roving tabindex, D-S5-25). So this opens the first `editable` column of the
+       *  selected entry. `s5.11-a11y-completion.md` supersedes that pragmatic simplification. */
       const disposeEnter = ctx.interaction.registerKeyHandler('Enter', () => {
         const entryId = ctx.gantt.selectedIds[0];
         if (entryId === undefined) return;

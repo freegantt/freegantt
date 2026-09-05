@@ -4,7 +4,7 @@ import { Dataset } from '../../api/dataset.js';
 import { sampleEntries } from '../../../fixtures/sample-dataset.js';
 import { tooltips } from './tooltips.js';
 
-// `container` must be attached to `document.body` (not just constructed) — `tooltips()` listens at
+// `container` must be attached to `document.body`, not just constructed. `tooltips()` listens at
 // the document level, and a bubbling event never reaches document from a detached tree.
 function makeGantt(): { container: HTMLElement; gantt: Gantt } {
   const container = document.createElement('div');
@@ -129,8 +129,8 @@ describe('tooltips() (S5.5, D-S5-13)', () => {
     const { container: containerA, gantt: ganttA } = makeGantt();
     const containerB = document.createElement('div');
     document.body.append(containerB);
-    // Same entry ids in both Datasets — the failure mode B1 found: a document-level listener with no
-    // container check opens Gantt A's popup anchored on Gantt B's bar.
+    // Same entry ids in both Datasets. That is the failure mode B1 found. A document-level listener
+    // with no container check opens Gantt A's popup anchored on Gantt B's bar.
     const datasetB = new Dataset({ entries: sampleEntries.slice(0, 3), timeZone: 'UTC' });
     const ganttB = new Gantt({
       container: containerB,
