@@ -7,15 +7,29 @@
 // times. A standard nothing measures is a standard nobody keeps.
 //
 // Scope is a declared list, not all of `src/`. `SCOPED_FILES` below holds every file a sentence
-// pass has actually been run over. The rest of `src/` has never had one. Widening the scope here
-// would turn one gate into a backlog. Adding a file to the list is how the scope grows: run the
-// pass over the file first, then add its path. That is the only way in, on purpose.
+// pass has actually been run over. The rest of `src/` has never had one. Adding a file to the list
+// is how the scope grows: run the pass over the file first, then add its path. That is the only way
+// in, on purpose.
+//
+// The scope stays a list because the rest of the tree is a backlog, not a near miss. Measured over
+// all of `src/` in September 2026 (#163 loose end (a)): 679 sentences over the ceiling, in 130 of
+// 246 files, 562 of them outside test files. Widening the gate would turn one gate into that
+// backlog, and a gate nobody can pass is a gate somebody turns off. So a green run here means the
+// declared files pass, never that the tree passes, and the run says so in as many words. Re-measure
+// with `for f in $(find src -name '*.ts'); do node scripts/check-sentence-length.mjs $f; done`.
+//
+// What it reads. Comment prose in three places: a comment line that starts with `//`, a comment
+// that follows code on the same line, and a block comment (`/* */` and `/** */`), continuation
+// lines included. It walks each line rather than matching one, so a `//` inside a string literal —
+// a URL, most often — stays code. It reads no string literal and no Markdown file.
 //
 // Counting. One backticked code span counts as one word. That is the generous reading, and it is
 // deliberate. A pair like the move events reads as one idea, and a rule that punished precise
-// references would push comments toward vaguer prose.
+// references would push comments toward vaguer prose. Comment lines that touch join into one
+// paragraph, so a wrapped sentence counts once. A trailing comment starts its own paragraph: it
+// sits beside its code, not under the prose above it.
 
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -62,42 +76,80 @@ function stripBlockMarkers(text) {
     .trim();
 }
 
-/** The comment prose in one TypeScript source, as `{ line, text }` per comment line. A string
- *  literal holding a comment marker is the one false positive this misses. None exists in scope. */
+/** Where the next comment on `line` opens, at or after `from`, or `-1`. It walks the line and
+ *  tracks the open quote, so a `//` inside a string literal is code and not prose. */
+function commentStart(line, from) {
+  let quote;
+  for (let i = from; i < line.length; i++) {
+    const character = line[i];
+    if (quote !== undefined) {
+      if (character === '\\') i++;
+      else if (character === quote) quote = undefined;
+      continue;
+    }
+    if (character === "'" || character === '"' || character === '`') {
+      quote = character;
+      continue;
+    }
+    if (character === '/' && (line[i + 1] === '/' || line[i + 1] === '*')) return i;
+  }
+  return -1;
+}
+
+/** The comment prose in one TypeScript source, as `{ line, text, trailing }` per comment line.
+ *  `trailing` marks a comment with code before it on its own line — the shape an earlier version of
+ *  this script read straight past, so a forty-word sentence after a semicolon passed (#163). */
 function commentLines(source) {
   const lines = source.split('\n');
   const found = [];
   let inBlock = false;
   for (let i = 0; i < lines.length; i++) {
-    const line = (lines[i] ?? '').trim();
-    if (inBlock) {
-      const end = line.indexOf('*/');
-      found.push({ line: i + 1, text: stripBlockMarkers(end === -1 ? line : line.slice(0, end)) });
-      if (end !== -1) inBlock = false;
-      continue;
+    const line = lines[i] ?? '';
+    let position = 0;
+    for (;;) {
+      if (inBlock) {
+        const end = line.indexOf('*/', position);
+        const body = end === -1 ? line.slice(position) : line.slice(position, end);
+        found.push({ line: i + 1, text: stripBlockMarkers(body), trailing: false });
+        if (end === -1) break;
+        inBlock = false;
+        position = end + 2;
+        continue;
+      }
+      const open = commentStart(line, position);
+      if (open === -1) break;
+      const trailing = line.slice(0, open).trim() !== '';
+      if (line[open + 1] === '/') {
+        found.push({ line: i + 1, text: line.slice(open + 2).trim(), trailing });
+        break;
+      }
+      const end = line.indexOf('*/', open + 2);
+      const body = end === -1 ? line.slice(open + 2) : line.slice(open + 2, end);
+      found.push({ line: i + 1, text: stripBlockMarkers(body), trailing });
+      if (end === -1) {
+        inBlock = true;
+        break;
+      }
+      position = end + 2;
     }
-    if (line.startsWith('//')) {
-      found.push({ line: i + 1, text: line.slice(2).trim() });
-      continue;
-    }
-    const open = line.indexOf('/*');
-    if (open === -1) continue;
-    const end = line.indexOf('*/', open + 2);
-    const body = end === -1 ? line.slice(open + 2) : line.slice(open + 2, end);
-    found.push({ line: i + 1, text: stripBlockMarkers(body) });
-    if (end === -1) inBlock = true;
   }
   return found;
 }
 
 /** Joins comment lines that touch into one paragraph, so a sentence wrapped over three lines is
- *  counted once. A blank comment line ends a paragraph, the way it does in prose. */
+ *  counted once. A blank comment line ends a paragraph, the way it does in prose. A trailing comment
+ *  opens a paragraph of its own: it belongs to the code on its line, not to the prose above it. */
 function paragraphs(lines) {
   const groups = [];
   let current;
-  for (const { line, text } of lines) {
+  for (const { line, text, trailing } of lines) {
     if (text === '') {
       current = undefined;
+      continue;
+    }
+    if (trailing) {
+      current = { line, lastLine: line, text };
+      groups.push(current);
       continue;
     }
     if (current !== undefined && line === current.lastLine + 1) {
@@ -150,6 +202,21 @@ function breachesIn(relativePath) {
   return breaches;
 }
 
+/** How many TypeScript files `src/` holds, so the clean line can name the scope against the tree
+ *  rather than against itself. */
+function countSourceFiles() {
+  let total = 0;
+  const walk = (directory) => {
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      const child = path.join(directory, entry.name);
+      if (entry.isDirectory()) walk(child);
+      else if (entry.name.endsWith('.ts')) total++;
+    }
+  };
+  walk(path.join(root, 'src'));
+  return total;
+}
+
 const argument = process.argv[2];
 const files = argument === undefined ? SCOPED_FILES : [path.relative(root, path.resolve(argument))];
 
@@ -168,4 +235,13 @@ if (total > 0) {
   process.exit(1);
 }
 
-console.log(`sentence-length: clean (${files.length} files in scope).`);
+// The run says what it covered, so nobody reads a green gate as "the whole tree passes". Only a
+// default run makes that claim: a run over one named file covers that file.
+if (argument === undefined) {
+  console.log(
+    `sentence-length: clean (${files.length} declared files of ${countSourceFiles()} in src/ — ` +
+      "the declared scope, not the whole tree; see this script's header).",
+  );
+} else {
+  console.log(`sentence-length: clean (${files.length} file).`);
+}

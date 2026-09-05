@@ -96,6 +96,32 @@ describe('the sentence-length guard', () => {
     expect(run.exitCode).toBe(1);
   });
 
+  it('reads a comment that follows code on the same line', () => {
+    // The red fixture for the blind spot the #163 review found: `commentLines` only accepted a line
+    // that started with `//`, so a breach after a semicolon reported clean.
+    const run = runOverSource(`export const a = 1; // ${TWENTY_SIX_WORDS}\n`);
+    expect(run.exitCode).toBe(1);
+    expect(run.output).toContain('fixture.ts:1:');
+    expect(run.output).toContain('26 words');
+  });
+
+  it('reads a `//` inside a string literal as code, not as prose', () => {
+    const url = `"https://example.com ${TWENTY_SIX_WORDS}"`;
+    const run = runOverSource(`export const a = ${url};\n`);
+    expect(run.exitCode).toBe(0);
+  });
+
+  it('keeps two trailing comments apart instead of joining them into one sentence', () => {
+    const half = 'one two three four five six seven eight nine ten eleven twelve thirteen';
+    const run = runOverSource(`export const a = 1; // ${half}\nexport const b = 2; // ${half}\n`);
+    expect(run.exitCode).toBe(0);
+  });
+
+  it('names its own scope on a clean default run, so green never reads as the whole tree', () => {
+    const run = runOver();
+    expect(run.output).toContain('declared scope, not the whole tree');
+  });
+
   it('does not split a sentence at an abbreviation or a dotted code reference', () => {
     // Both periods here end a word, not a sentence. Split at either one and the 26-word breach
     // below would read as two short sentences and pass.
