@@ -12,7 +12,7 @@ import type { Disposer, KeyChord, PluginId } from '../model/index.js';
 import type { Dataset } from './dataset.js';
 import type { DisposableStore } from '../extensions/disposables.js';
 import type { KeyEventLike } from '../extensions/keymap.js';
-import type { EntryFieldEdit, GanttEvents, Overlay, OverlayHandle } from '../view/index.js';
+import type { EntryFieldEdit, GanttEvents, Overlay, OverlayHandle, RowLayer } from '../view/index.js';
 import type { CommandRegistryOf, KeyBindingOf } from './command.js';
 import type { RendererPoint, RendererFor } from '../layout/index.js';
 import type { DecorationLayer, DecorationProvider } from '../layout/index.js';
@@ -41,7 +41,7 @@ export type { EntryFieldEdit };
 // Re-exported so `extensions/popup.ts` can import this file directly instead of the `api/index.js`
 // barrel (which itself re-exports `createPopup` from `extensions/popup.ts` — importing the barrel
 // back would close that edge into a cycle, `no-circular`).
-export type { Overlay, OverlayHandle };
+export type { Overlay, OverlayHandle, RowLayer };
 
 /** What a plugin's `setup()` receives, once, after the Gantt mounts. S5.1 ships `dataset`,
  *  `gantt`, `events` and `disposables` only — every other member (`commands`, `view`, `layout`,
@@ -116,6 +116,15 @@ export interface PluginContextOf<TGantt = unknown, TDataset = Dataset> {
      *  not gated by `RegistrationGate` (D-S5-4 only gates one-shot `register*` calls; presenting and
      *  dismissing overlay content happens for as long as the plugin runs). */
     overlay: Overlay;
+    /** #158: the grid's row layer, for content that must stay glued to a row or a cell while the
+     *  pane scrolls — an open cell editor is the case. The Grid pane has no vertical scrollbar of its
+     *  own: this layer follows the Timeline pane's scroll by one transform per frame (D-S1.8-1), and
+     *  the pane itself scrolls horizontally (D-S1.8-13), so content mounted here travels with the
+     *  rows on both axes in the same frame — no scroll listener, no lag. Position it once against
+     *  `bounds`. Use `overlay` instead for content that must escape the pane box (a tooltip, a menu):
+     *  this layer is clipped to the pane, and popups dismiss on scroll rather than follow it. Live for
+     *  the plugin's whole lifetime, same posture as `overlay`. */
+    rowLayer: RowLayer;
     /** S5.4, D-S5-11: claims one of the four renderer points — `bar`, `cell`, `header`, `tooltip`.
      *  One slot per point: a consumer's own `GanttOptions.*Renderer` always wins over this (a
      *  consumer that wants a plugin's renderer to win removes its own instead); two plugins claiming

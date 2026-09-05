@@ -21,6 +21,7 @@ export type {
 } from './event-bus.js';
 export type { CapabilityRule, Interactions, KindDefaults } from './capability.js';
 export type { Overlay, OverlayHandle } from './overlay.js';
+export type { RowLayer } from './row-layer.js';
 export type { ViewportGestures, ViewportGestureFlags } from './viewport-gestures.js';
 export type {
   DraftOptions,

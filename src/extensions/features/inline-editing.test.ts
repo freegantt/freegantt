@@ -373,7 +373,7 @@ describe('inlineEditing() (S5.8, D-S5-19/D-S5-20)', () => {
     container.remove();
   });
 
-  it('#158: a vetoed editor follows its cell on scroll instead of drifting out of the pane', () => {
+  it('#158: the editor mounts in the grid row layer, so a scroll carries it with its cell', () => {
     const { container, gantt, dataset } = makeGantt();
     dataset.on('beforeChange', () => false);
     const cell = cellFor(container, 'e1', 'name');
@@ -383,14 +383,16 @@ describe('inlineEditing() (S5.8, D-S5-19/D-S5-20)', () => {
     enter(el);
 
     const wrapper = container.querySelector<HTMLElement>('.fg-cell-editor[data-state="invalid"]')!;
-    const before = wrapper.style.transform;
+    // Inside the layer the pane's own scroll already moves — not the overlay, which does not move.
+    expect(wrapper.parentElement).toBe(container.querySelector('.fg-rows'));
+    expect(container.querySelector('.fg-overlay')!.contains(wrapper)).toBe(false);
+    // Beside the rows, never inside one: a row is render/dom's reconciled DOM.
+    expect(wrapper.closest('.fg-row')).toBeNull();
 
-    // The pane scrolls: the cell moves, the Overlay the editor lives in does not.
-    vi.spyOn(cell, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, -60, 120, 24));
+    // A scroll rewrites nothing: the layer's own transform carries the editor and its cell together.
+    const placed = wrapper.style.transform;
     container.querySelector('.fg-grid-pane')!.dispatchEvent(new Event('scroll'));
-
-    expect(wrapper.style.transform).not.toBe(before);
-    expect(wrapper.style.transform).toContain('-60.00px');
+    expect(wrapper.style.transform).toBe(placed);
     expect(container.querySelector('.fg-cell-editor')).toBe(wrapper); // still open, still invalid
 
     gantt.destroy();
