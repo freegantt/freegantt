@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { entryId } from '../../model/index.js';
-import type { Entry } from '../../model/index.js';
+import type { Entry, StoredEdit } from '../../model/index.js';
 import {
   createFieldContext,
   createRollUpContext,
   editProposesField,
   mergeStoredEdits,
   overlayStoredEdit,
+  proposedKeysOf,
   readField,
   withProposedKeys,
   writeField,
@@ -87,6 +88,27 @@ describe('readField / writeField (D-S4-2)', () => {
     expect(spread.proposedKeys?.has('cost')).toBe(true);
     const merged = mergeStoredEdits({ name: 'x' }, authored);
     expect(editProposesField(merged, cost)).toBe(true);
+  });
+
+  // #197: the two sides may state their writes differently. One extender proposes Field keys; another
+  // returns a raw storage patch. The merged edit must still show every write, or `diffEdit` emits no
+  // row for the raw side and that write is lost.
+  it('mergeStoredEdits states a raw patch keys when the other side proposes Field keys', () => {
+    const authored = withProposedKeys(writeField({}, span(), cost, 3), ['cost']);
+    const raw: StoredEdit = { name: 'Moved' };
+
+    const rawFirst = mergeStoredEdits(raw, authored);
+    expect([...proposedKeysOf(rawFirst)].sort()).toEqual(['cost', 'name']);
+
+    const authoredFirst = mergeStoredEdits(authored, raw);
+    expect([...proposedKeysOf(authoredFirst)].sort()).toEqual(['cost', 'name']);
+  });
+
+  it('mergeStoredEdits leaves two raw patches on the raw path, where an undeclared key survives', () => {
+    const merged = mergeStoredEdits({ name: 'a' }, { end: 9 as Entry['end'] });
+    expect(proposedKeysOf(merged).size).toBe(0);
+    expect(merged.name).toBe('a');
+    expect(merged.end).toBe(9);
   });
 });
 

@@ -20,8 +20,11 @@ export type Disposer = () => void;
  *
  * ```ts
  * ctx.edits.setExtender(() => myExtender);                                  // replace
- * ctx.edits.setExtender((next) => (request) => merge(next(request), mine(request)));  // tap in
+ * ctx.edits.setExtender((next) => (request) => mergeEntryEdits(next(request), mine(request)));  // tap in
  * ```
+ *
+ * `mergeEntryEdits` is exported from the package (#197). A spread merges the two maps wrongly: two
+ * extenders that write the same Entry lose the earlier write.
  *
  * `data/` still holds one field and calls it at one site (D-S2-6). Wrapping order is the order
  * `requires` resolves, never the `plugins` array's own order (D-S5-31).

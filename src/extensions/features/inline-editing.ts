@@ -44,6 +44,7 @@ import type {
   FieldContext,
   FieldKey,
   Instant,
+  PluginErrorReport,
 } from '../../model/index.js';
 import { DisposableStore } from '../disposables.js';
 import { activateFocusTrap } from '../focus-trap.js';
@@ -104,15 +105,19 @@ const EDITOR_CONTROL_CLASS = 'fg-cell-editor-control';
  *  offers no editor at all refuses silently. A cell that offers one but cannot open it here names
  *  the reason. */
 const REFUSAL_TEXT = {
-  derivedValue: 'this value comes from the rows below it; edit a child row instead',
-  noParseValue: 'this field has no parseValue; the default editor cannot read the text back',
-  noDateValue: 'this field holds no date yet; the default date editor needs one',
-  timeOfDay: 'this field carries a time of day; the default date editor cannot show it',
-  unsavedValue: 'another cell still holds a value that did not save; fix it or press Escape',
+  'derived-value': 'this value comes from the rows below it; edit a child row instead',
+  'no-parse-value': 'this field has no parseValue; the default editor cannot read the text back',
+  'no-date-value': 'this field holds no date yet; the default date editor needs one',
+  'time-of-day': 'this field carries a time of day; the default date editor cannot show it',
+  'unsaved-value': 'another cell still holds a value that did not save; fix it or press Escape',
 } as const;
 
 /** Why the editor refused a cell that does offer one. The key is the machine-readable half — it goes
- *  on the notice's own `data-reason` — and `REFUSAL_TEXT` holds the half the user reads. */
+ *  on the notice's own `data-reason` — and `REFUSAL_TEXT` holds the half the user reads.
+ *
+ *  S5.12, D-S5-35: the keys are kebab-case because each one is also the `code` of the Error report
+ *  this plugin raises. One refusal must not have two spellings, and kebab is the better value for a
+ *  DOM attribute anyway. */
 export type CellEditorRefusal = keyof typeof REFUSAL_TEXT;
 
 /** Puts `element` exactly over `cell`'s own rect — no flip and no clamp, unlike `Popup`. An editor
@@ -179,6 +184,10 @@ export interface CellEditorPorts {
    *  place alone knows whether an editor is open. */
   requestCommit(): void;
   requestRevert(): void;
+  /** S5.12, D-S5-35: reports one refusal on the Gantt's `error` event. A consumer can then toast it,
+   *  rather than rely on a notice the user may not look at. `ctx.raiseError` fills `by` with this
+   *  plugin's id. */
+  raiseError(report: PluginErrorReport): void;
 }
 
 /** One open cell editor: mounted over its cell, bound to its own triggers, closed exactly once.
@@ -475,6 +484,16 @@ export class CellEditing {
   refuse(edited: EditedCell, cell: HTMLElement, reason: CellEditorRefusal): void {
     this.dismissNotice();
     this.#notice = presentRefusal(this.#ports, edited, cell, reason);
+    // The notice and the report say the same thing, in the same words, under the same name: the
+    // notice's `data-reason` is this `code` (D-S5-35). `severity: 'info'` — the library said no on
+    // purpose and nothing is broken.
+    this.#ports.raiseError({
+      code: reason,
+      message: REFUSAL_TEXT[reason],
+      severity: 'info',
+      entryId: edited.entryId,
+      field: edited.field,
+    });
   }
 
   /** Starts one attempt to open `edited`. Every later call cancels this one — see `PendingOpen`. */
@@ -529,6 +548,9 @@ export function inlineEditing(options: InlineEditingOptions = {}): GanttPlugin {
         },
         requestRevert: () => {
           editing.revert();
+        },
+        raiseError: (report) => {
+          ctx.raiseError(report);
         },
       };
 
@@ -599,7 +621,7 @@ export function inlineEditing(options: InlineEditingOptions = {}): GanttPlugin {
         if (raw === undefined) {
           // A date control needs a date to seed. Nothing here is broken, so the cell says so rather
           // than looking like a dead double-click (review SP1).
-          pending.refuse('noDateValue');
+          pending.refuse('no-date-value');
           return;
         }
         const factory = options.dateInput;
@@ -612,7 +634,7 @@ export function inlineEditing(options: InlineEditingOptions = {}): GanttPlugin {
           // unchanged Enter. So this refuses to open the *default* editor, rather than lose data. A
           // consumer's own `dateInput` factory (a `datetime-local` control, say) owns this instead.
           if (ctx.dataset.time.startOfDay(raw) !== raw) {
-            pending.refuse('timeOfDay');
+            pending.refuse('time-of-day');
             return;
           }
           dateInput = createDefaultDateInput(ctx.dataset.time);
@@ -644,12 +666,12 @@ export function inlineEditing(options: InlineEditingOptions = {}): GanttPlugin {
         if (!ctx.interaction.canEdit(entry)) return;
         if (ctx.view.isColumnEditable(field.key) !== true) return;
         if (ctx.dataset.isRollUpKind(entry.kind) && field.rollUp !== undefined) {
-          editing.refuse(edited, cell, 'derivedValue');
+          editing.refuse(edited, cell, 'derived-value');
           return;
         }
         const date = isDateField(field);
         if (!date && !canOpenGeneric(field)) {
-          editing.refuse(edited, cell, 'noParseValue');
+          editing.refuse(edited, cell, 'no-parse-value');
           return;
         }
 
@@ -657,7 +679,7 @@ export function inlineEditing(options: InlineEditingOptions = {}): GanttPlugin {
         // over it would orphan the first one, its listeners and its focus trap included (review C2).
         // The refusal lands on the cell the user asked for, and names the cell they must fix first.
         if (!editing.commit()) {
-          editing.refuse(edited, cell, 'unsavedValue');
+          editing.refuse(edited, cell, 'unsaved-value');
           return;
         }
 

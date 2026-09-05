@@ -110,12 +110,19 @@ positive-integer guard rejected at the setter so the throw names the assignment 
 seconds later. Both loops in `src/time/snap.ts` get a guard, because `time/` is reachable from
 `layout/` and must not trust its caller. The issue is relabelled `bug`.
 
-## 6. Open with the repo owner
+## 6. Answered by the repo owner
 
-| Question | Blocks | Asked on |
-|---|---|---|
-| Who owns the uncommitted `plans/00-overview.md` S6 → S7 gate line? | that one file; every agent is told to leave it | #197 |
-| A code-health kind label for #198? | nothing | #198 |
-| #201 ships A + B + a positive-integer guard | nothing; recorded for veto | #201 |
+| Question | Answer |
+|---|---|
+| The `.githooks/pre-commit` fix (#203) | **Go.** Landed as `ddbae73`, with a scratch-repo test of both paths. |
+| Who owns the uncommitted `plans/00-overview.md` gate line? | The owner committed it — `11f8ac2`, on its own, citing #197. The file is clean again. |
+| A kind label for #198 | **`smell`** — *nothing misbehaves; the code teaches something false and will mislead the next reader.* Created and applied. |
+| #201's shape | A + B, plus a positive-integer guard. See §5.1 — it grew a hang. |
 
-The hook question (#203) was answered — go — and is done.
+**When to reach for `smell`.** Ask whether anything is observably wrong right now. If yes, it is a
+`bug`. If the code is correct and the *lesson it teaches* is wrong, it is a `smell` — a dead
+conversion, a comment describing a mechanism the code no longer uses, a name that outlived the
+concept it named. It is not a synonym for tidying: file a `smell` because leaving it costs the next
+reader, not because it offends the current one.
+
+Nothing is now blocked on a person.

@@ -7,7 +7,7 @@
 // there rather than owning a second copy.
 
 import type { TimeScaleFit } from '../layout/index.js';
-import type { Entry, EntryId, FieldKey, GridColumn, Instant } from '../model/index.js';
+import type { Entry, EntryId, ErrorReport, FieldKey, GridColumn, Instant } from '../model/index.js';
 import type { CollapseChange } from './collapse-state.js';
 
 export type { CollapseChange };
@@ -126,6 +126,12 @@ export interface GanttEventMap {
   beforeEntryEdit: EntryFieldEdit;
   /** S5.8, D-S5-19. Fires after the commit, `to` the value actually written. */
   entryEdit: EntryFieldEdit;
+  /** S5.12, D-S5-35: every refusal and every recovered fault a Gantt observes — a vetoed drag, a
+   *  renderer that threw, a plugin disposer that threw. The same name and the same payload the
+   *  Dataset raises (`DatasetEventMap.error`), because a consumer knows one shape either way; the
+   *  Gantt never forwards the Dataset's own reports, so nothing arrives twice (D-S5-37). Sync only,
+   *  and no `before*` pair: a report states what already happened. */
+  error: ErrorReport;
 }
 
 /** The one handler shape `Gantt.on`/`Gantt.off` and `GanttShell.on`/`GanttShell.off` all share

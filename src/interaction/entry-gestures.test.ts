@@ -70,9 +70,10 @@ function makeContext(overrides: Partial<EntryGestureContext> & SessionOverrides 
       return ORDER.includes(id) ? entryFor(id) : undefined;
     },
     can: () => true,
-    // #198: the shell resolves the `select` capability once and hands `interaction/` a list that is
-    // already filtered (I14). The fake answers the same question, so `selectRange` needs no second
-    // resolution of its own.
+    // #198: the shell filters this list by the `select` capability before `interaction/` ever sees it
+    // (`gantt-shell.ts#selectableEntriesInRowOrder`), and the capability resolves there once (I14).
+    // The fake answers the same question, so a test that makes an Entry incapable drops it from the
+    // order rather than expecting `interaction/` to filter a second time.
     selectableEntriesInRowOrder: () => ORDER.filter((id) => ctx.can('select', entryFor(id))),
     // #185: a row hit resolves through this seam — the fake maps one row id to the Entry of the
     // same name, so a test that wants a multi-entry row overrides it.

@@ -14,6 +14,7 @@ import type {
   GeometryFrame,
   ItemId,
   ItemPreview,
+  RaiseError,
   ResolvedRenderer,
   RowId,
   ClientPoint,
@@ -28,7 +29,6 @@ import type { DecorationsAttachment } from './decorations.js';
 import { KeyedLayer, NestedKeyedLayers } from './sync-keyed.js';
 import { applyElementDescription } from './element-description.js';
 import { cssEscapeAttr } from './css-escape.js';
-import { isDevMode } from '../../data/dev-mode.js';
 import {
   BAR_CLASS,
   BAR_HANDLE_CLASS,
@@ -62,6 +62,10 @@ type BoundHeaderRenderer = () => ElementDescription | undefined;
 
 export interface DomBackendOptions {
   entryById: (id: EntryId) => Entry | undefined;
+  /** S5.12, D-S5-35: where a renderer that threw is reported. `GanttShell` passes the raiser bound to
+   *  its own `error` bus. Omitted — a test backend built with no options — the console fallback runs
+   *  every time, which is the honest answer when there is no bus for anyone to subscribe to. */
+  raiseError?: RaiseError;
   resolveBarRenderer: (kind: string) => ResolvedRenderer<BarRenderer> | undefined;
   resolveCellRenderer: (columnKey: string) => ResolvedRenderer<BoundCellRenderer> | undefined;
   resolveHeaderRenderer: (columnKey: string) => ResolvedRenderer<BoundHeaderRenderer> | undefined;
@@ -71,15 +75,28 @@ function callRenderer<TCtx>(
   point: string,
   resolved: ResolvedRenderer<(ctx: TCtx) => ElementDescription | undefined>,
   ctx: TCtx,
+  raiseError: RaiseError,
 ): ElementDescription | undefined {
   try {
     return resolved.renderer(ctx);
   } catch (error) {
     // Issue #137 F14: one bad renderer degrades one bar or cell, never the paint pass.
-    if (isDevMode()) {
-      const plugin = resolved.pluginId !== undefined ? ` from plugin "${resolved.pluginId}"` : '';
-      console.error(`FreeGantt: ${point}Renderer${plugin} threw — falling back to the default output`, error);
-    }
+    // S5.12, D-S5-36: the report always goes out; the `console.error` behind it is a fallback that
+    // fires only when nothing is subscribed to `error`. It is no longer behind `isDevMode()` — that
+    // helper reads `import.meta.env.DEV`, which Vite resolves when *this repo* builds `dist/`, so the
+    // line was dead-code-eliminated out of every consumer's build, dev and production alike.
+    const plugin = resolved.pluginId !== undefined ? ` from plugin "${resolved.pluginId}"` : '';
+    const message = `${point}Renderer${plugin} threw — falling back to the default output`;
+    raiseError(
+      {
+        code: 'renderer-failed',
+        message,
+        severity: 'warning',
+        by: resolved.pluginId ?? 'core',
+        cause: error,
+      },
+      () => console.error(`FreeGantt: ${message}`, error),
+    );
     return undefined;
   }
 }
@@ -230,6 +247,8 @@ function cellGeom(item: CellItem): CellGeom {
 
 export function createDomBackend(options?: DomBackendOptions): RenderBackend<HTMLElement> {
   const entryById = options?.entryById ?? ((): undefined => undefined);
+  // No injected raiser means no bus, so nothing can be subscribed and the fallback always runs.
+  const raiseError: RaiseError = options?.raiseError ?? ((_report, fallback) => fallback?.());
   const resolveBarRenderer = options?.resolveBarRenderer ?? ((): undefined => undefined);
   const resolveCellRenderer = options?.resolveCellRenderer ?? ((): undefined => undefined);
   const resolveHeaderRenderer = options?.resolveHeaderRenderer ?? ((): undefined => undefined);
@@ -791,11 +810,16 @@ export function createDomBackend(options?: DomBackendOptions): RenderBackend<HTM
     return cellItemsFor(row.cells, columns, row.expandable, row.expanded).map((item, i) => {
       const resolved = renderers[i];
       if (resolved === undefined) return item;
-      const content = callRenderer('cell', resolved, {
-        ...(entry !== undefined ? { entry } : {}),
-        row,
-        value: item.text,
-      });
+      const content = callRenderer(
+        'cell',
+        resolved,
+        {
+          ...(entry !== undefined ? { entry } : {}),
+          row,
+          value: item.text,
+        },
+        raiseError,
+      );
       return content === undefined ? item : { ...item, content };
     });
   }
@@ -833,7 +857,7 @@ export function createDomBackend(options?: DomBackendOptions): RenderBackend<HTM
       if (column.movable !== undefined) item.movable = column.movable;
       const resolved = resolveHeaderRenderer(column.field);
       if (resolved !== undefined) {
-        const content = callRenderer('header', resolved, undefined);
+        const content = callRenderer('header', resolved, undefined, raiseError);
         if (content !== undefined) item.content = content;
       }
       return item;
@@ -879,7 +903,7 @@ export function createDomBackend(options?: DomBackendOptions): RenderBackend<HTM
         let content: ElementDescription | undefined;
         if (resolved !== undefined) {
           const entry = entryById(bar.entryId);
-          if (entry !== undefined) content = callRenderer('bar', resolved, { entry, item: bar });
+          if (entry !== undefined) content = callRenderer('bar', resolved, { entry, item: bar }, raiseError);
         }
         return {
           kind: bar.kind,

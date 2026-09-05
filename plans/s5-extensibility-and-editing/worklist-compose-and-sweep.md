@@ -24,18 +24,28 @@ S7 is the first slice with a second occupant on the hook (`scheduling()` compose
 `entryDependencies()`, D-S5-30/D-S5-31), and a cascade that moves an entry is the colliding case. Fix
 the seam before the first real consumer stands on it.
 
-- [ ] `mergeEntryEdits` reaches the public surface — decide *where* first: it is a plugin-author tool,
-      and CLAUDE.md's "two callers, two surfaces" says an app author must never meet it
-- [ ] Run the `naming` skill on the exported name. Write the plugin author's call site down and read
-      it in English. `merge` alone is almost certainly too generic for this codebase (#7's lesson)
-- [ ] Every doc example that composes with a `Map` spread now uses the exported function —
+- [x] `mergeEntryEdits` reaches the public surface — decide *where* first: it is a plugin-author tool,
+      and CLAUDE.md's "two callers, two surfaces" says an app author must never meet it.
+      **Where:** `src/api/dataset-plugin.ts`, beside `DatasetEditHook` — the contract that hands a
+      plugin the occupant it has to merge with — and one re-export line in `src/api/index.ts`
+- [x] Run the `naming` skill on the exported name. Write the plugin author's call site down and read
+      it in English. `merge` alone is almost certainly too generic for this codebase (#7's lesson).
+      **Kept `mergeEntryEdits`:** `EntryEdits` is the glossary term (`CONTEXT.md`), the call site
+      reads true, and a search for `merge` alone finds three other things
+- [x] Every doc example that composes with a `Map` spread now uses the exported function —
       `src/model/plugin.ts`, `src/data/dataset-state.ts`, and any `plans/` example
-- [ ] **The law test:** two extenders that write the **same** entry keep both writes, and both
+- [x] **The law test:** two extenders that write the **same** entry keep both writes, and both
       `proposedKeys` survive. Mutation-check it — break the merge, confirm red, restore
       (handoff-post-163 §5)
-- [ ] A second test pins that the Rollup does not overwrite a `meta`-sourced value a plugin proposed
-      through a composed extender
-- [ ] `plans/03-slices.md:270` updated to say the prerequisite is met
+- [x] ~~A second test pins that the Rollup does not overwrite a `meta`-sourced value a plugin proposed
+      through a composed extender~~ **The box was wrong.** `plans/s4-hierarchy-and-rows/s4.2-rollup.md`
+      §"Precedence is unchanged" states the opposite, and it is D-S2-22: *the Rollup yields to a Field
+      the body proposed, and wins over one the extension hook proposed.* A test pinning the box as
+      written would pin the reverse of a locked decision. The real Rollup damage the broken merge did
+      is that the Rollup reads effective **child** values from the merged edits, so a dropped write
+      made a parent roll up from a stale child. That is what the second test pins now, on a
+      `meta`-sourced Field, in `src/api/dataset.test.ts`
+- [x] `plans/03-slices.md:270` updated to say the prerequisite is met
 
 **Do not touch `plans/00-overview.md`.** Its S6 → S7 gate row holds an uncommitted line on this exact
 subject, by an unidentified author, and the repo owner has been asked who owns it (#197). Leave it.
@@ -54,11 +64,16 @@ if Item ids and Entry ids convert freely.
 Its one caller filters a list `selectableEntriesInRowOrder()` has already capability-filtered, so the
 filter is redundant too.
 
-- [ ] Delete `canSelect`; `selectRange` returns the slice unfiltered
-- [ ] Check whether `itemId` is still imported in `entry-gestures.ts` at all; drop the import if not
-- [ ] Fix the test fake in `entry-gestures.test.ts` — it answers `entryFor` from an **Item-keyed map**,
-      which is what keeps `canSelect` alive. Make the fake answer *"is this Entry selectable"*, the
-      question the shell actually answers
+- [x] Delete `canSelect`; `selectRange` returns the slice unfiltered
+- [x] Check whether `itemId` is still imported in `entry-gestures.ts` at all; drop the import if not.
+      It was not used anywhere else, so the import is gone too
+- [x] Fix the test fake in `entry-gestures.test.ts`. **The box named the wrong member.** `entryFor`
+      already resolves through `entryIdOfItem`, and nothing about it kept `canSelect` alive. The fake
+      member that did is `selectableEntriesInRowOrder`, which answered `ORDER` unfiltered while the
+      real `gantt-shell.ts#selectableEntriesInRowOrder` filters by the `select` capability. One test
+      therefore made an Entry incapable and expected `interaction/` to filter a second time. The fake
+      now answers the question the shell answers, and that test pins the range over the filtered
+      order instead
 
 **Do not** replace the filter with a second capability call. The capability resolves once, in the
 shell (I14).
@@ -70,11 +85,18 @@ shell (I14).
 `harness/` is the library's first consumer and a gallery page, so it teaches whatever it shows. It
 shows the call form that #195's `installPlugin`/`uninstallPlugin`/`hasPlugin` (D-S5-36) replaced.
 
-- [ ] Every install in `harness/plugins.ts` uses the verb form
-- [ ] Judge per line: a **batch** install is fair long form and may stay. Do not mechanically rewrite
-      what is already the clearer call
-- [ ] Read the file as a consumer afterwards. Anything left that re-derives what the library computes
-      is a new API gap — file it against S5, do not tidy it away (CLAUDE.md)
+- [x] Every install in `harness/plugins.ts` uses the verb form. No `gantt.plugins` read or assignment
+      is left in the file
+- [x] Judge per line: a **batch** install is fair long form and may stay. Do not mechanically rewrite
+      what is already the clearer call. **No line qualified.** Every one of them read
+      `[...gantt.plugins, x]` or `gantt.plugins.filter(...)` — an append or a removal stated by
+      restating the whole installed set, which is the re-derivation the verbs replace. A fair batch
+      is an array a caller *owns*, like `plugins: [locks]` at construction. There is none here
+- [x] Read the file as a consumer afterwards. Anything left that re-derives what the library computes
+      is a new API gap — file it against S5, do not tidy it away (CLAUDE.md). **Filed #208:**
+      `EntryInput` carries no declared Field value, so line 35 authors `cost` through the raw storage
+      key (`meta: { cost: 1500 }`) while `entries.update(id, { cost })` takes the Field by name. The
+      line stays as it is
 
 ---
 

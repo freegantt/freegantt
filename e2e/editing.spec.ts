@@ -118,7 +118,7 @@ test('a refused cell names the reason, and the notice lets the next click throug
 
   await rolledUp.dblclick();
   const notice = page.locator('#gantt .fg-cell-editor[data-state="invalid"][data-reason]');
-  await expect(notice).toHaveAttribute('data-reason', 'derivedValue');
+  await expect(notice).toHaveAttribute('data-reason', 'derived-value');
   await expect(notice).toContainText('comes from the rows below it');
   await expect(page.locator('#gantt .fg-cell-editor-control')).toHaveCount(0);
 
