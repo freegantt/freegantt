@@ -104,9 +104,16 @@ export interface GanttShellPorts {
   announceEntryEdit(payload: EntryFieldEdit): void;
 }
 
-/** What `GanttShell` hands to `options.buildPluginContext` so it can build one plugin's
- *  `PluginContext` (S5.1, D-S5-1). Declared in the groups a plugin reads, so `api/gantt.ts` adds the
- *  two api-level members and nothing else (#150).
+/** The parts of one plugin's `PluginContext` that `view/` owns — what `GanttShell` hands to
+ *  `options.buildPluginContext` so it can build the whole thing (S5.1, D-S5-1). Declared in the
+ *  groups a plugin reads, so `api/gantt.ts` adds the two api-level members and nothing else (#150).
+ *
+ *  #183: `Parts`, not `Ports`. Every other `*Ports` in this repo is one collaborator's seam back
+ *  into its owner (`ColumnChromePorts`, `GanttShellPorts` below). This is not that. It is the plugin's
+ *  own world, minus the two members `view/` may not name. It is also the one name here a consumer
+ *  reads, because `api/index.ts` exports it to keep the plugin surface member-by-member in
+ *  `etc/freegantt.api.md` (#166, I11). `PlainParts` sets the suffix: the pieces a composite is
+ *  made of.
  *
  *  #166: this is **the** member list for the plugin surface. `api/plugin.ts`'s public
  *  `PluginContextOf` is a projection of it — it adds `dataset`/`gantt` and re-types the three
@@ -118,7 +125,7 @@ export interface GanttShellPorts {
  *  plugin's own `DisposableStore` already holds a copy, so a plugin that never calls it still
  *  disposes cleanly on uninstall. The return value is what lets a plugin retract a registration
  *  while it is still installed — a column it shows in one mode only. Calling it twice is safe. */
-export interface PluginContextPorts {
+export interface PluginContextParts {
   /** `on`/`off` over `GanttEventMap`, including the cancelable `before*` pairs. */
   events: GanttEvents;
   /** This plugin's own cleanup list — add a listener or a timer here instead of closing over it by
@@ -319,13 +326,13 @@ export interface PluginContextPorts {
   };
 }
 
-/** Builds one plugin's ports, plus the `RegistrationGate` that closes them (D-S5-4). `PluginRuntime`
- *  calls this once per installed plugin, then closes the gate the moment that plugin's `setup()`
- *  returns. The plugin's own `DisposableStore` is `ports.disposables`. */
+/** Builds one plugin's context parts, plus the `RegistrationGate` that closes them (D-S5-4).
+ *  `PluginRuntime` calls this once per installed plugin, then closes the gate the moment that
+ *  plugin's `setup()` returns. The plugin's own `DisposableStore` is `parts.disposables`. */
 export function buildPluginPorts(
   shell: GanttShellPorts,
   pluginId: PluginId,
-): { ports: PluginContextPorts; gate: RegistrationGate } {
+): { parts: PluginContextParts; gate: RegistrationGate } {
   const disposables = new DisposableStore();
   // D-S5-4: one gate per plugin, closed the moment its own setup() returns. A `register*` reached
   // afterward throws `RegistrationClosedError`.
@@ -396,7 +403,7 @@ export function buildPluginPorts(
     }
   };
 
-  const ports: PluginContextPorts = {
+  const parts: PluginContextParts = {
     events: shell.events,
     disposables,
     commands,
@@ -441,5 +448,5 @@ export function buildPluginPorts(
     },
   };
 
-  return { ports, gate };
+  return { parts, gate };
 }

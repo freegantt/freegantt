@@ -216,7 +216,7 @@ export interface GanttShellWiring {
   keyboardEditing?: AttachKeyboardEditing;
   columnGestures?: AttachColumnGestures;
   commitEntryEdits?: (edits: EntryEdits) => boolean;
-  buildPluginContext?: (parts: PluginContextPorts) => unknown;
+  buildPluginContext?: (parts: PluginContextParts) => unknown;
   buildCommandContext?: (parts: { entry?: Entry; target?: { kind: 'header'; columnKey: FieldKey } }) => unknown;
   now?: () => Instant;
 }

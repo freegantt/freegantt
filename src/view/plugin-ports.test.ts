@@ -6,7 +6,7 @@ import { RegistrationClosedError } from '../model/index.js';
 import type { Disposer, Entry, EntryId, PluginId } from '../model/index.js';
 import type { FrameBar, ResolvedColumn, TooltipRenderer } from '../layout/index.js';
 import { buildPluginPorts } from './plugin-ports.js';
-import type { GanttShellPorts, PluginContextPorts } from './plugin-ports.js';
+import type { GanttShellPorts, PluginContextParts } from './plugin-ports.js';
 import type { DomTarget } from './gantt-dom.js';
 
 const PLUGIN: PluginId = 'demo.plugin';
@@ -26,7 +26,7 @@ function makeRegistry() {
 }
 
 interface Harness {
-  ports: PluginContextPorts;
+  parts: PluginContextParts;
   close(): void;
   shell: GanttShellPorts;
   registry: ReturnType<typeof makeRegistry>;
@@ -101,12 +101,12 @@ function makeHarness(overrides: Partial<GanttShellPorts> = {}): Harness {
     announceEntryEdit: vi.fn(),
     ...overrides,
   };
-  const { ports, gate } = buildPluginPorts(shell, PLUGIN);
-  return { ports, close: () => gate.close(), shell, registry, container };
+  const { parts, gate } = buildPluginPorts(shell, PLUGIN);
+  return { parts, close: () => gate.close(), shell, registry, container };
 }
 
 /** Every seam that is legal only while `setup` runs (D-S5-4), named once. */
-const gatedRegistrations: readonly (readonly [string, (ports: PluginContextPorts) => Disposer])[] = [
+const gatedRegistrations: readonly (readonly [string, (parts: PluginContextParts) => Disposer])[] = [
   ['commands.register', (p) => p.commands.register({ id: 'demo.run', label: 'Run', run: () => {} })],
   [
     'interaction.registerKeybinding',
@@ -123,7 +123,7 @@ describe('buildPluginPorts — the D-S5-4 gate', () => {
   it.each(gatedRegistrations)('%s registers while setup runs', (_name, register) => {
     const harness = makeHarness();
 
-    expect(() => register(harness.ports)).not.toThrow();
+    expect(() => register(harness.parts)).not.toThrow();
     expect(harness.registry.live).toHaveLength(1);
   });
 
@@ -131,25 +131,25 @@ describe('buildPluginPorts — the D-S5-4 gate', () => {
     const harness = makeHarness();
     harness.close();
 
-    expect(() => register(harness.ports)).toThrow(RegistrationClosedError);
+    expect(() => register(harness.parts)).toThrow(RegistrationClosedError);
     expect(harness.registry.live).toHaveLength(0);
   });
 
-  it('leaves the ungated ports open after setup returns', () => {
+  it('leaves the ungated parts open after setup returns', () => {
     const harness = makeHarness();
     harness.close();
 
-    expect(() => harness.ports.interaction.registerKeyHandler('Escape', () => {})).not.toThrow();
-    expect(harness.ports.interaction.canEdit(makeEntry('a'))).toBe(true);
-    expect(harness.ports.view.resolveTooltipContent('a' as EntryId)).toBeUndefined();
-    expect(harness.ports.view.resolveTooltipColumns(makeEntry('a'))).toEqual([]);
+    expect(() => harness.parts.interaction.registerKeyHandler('Escape', () => {})).not.toThrow();
+    expect(harness.parts.interaction.canEdit(makeEntry('a'))).toBe(true);
+    expect(harness.parts.view.resolveTooltipContent('a' as EntryId)).toBeUndefined();
+    expect(harness.parts.view.resolveTooltipColumns(makeEntry('a'))).toEqual([]);
   });
 
   it('keeps `registerKeyHandler` out of `disposables`, so a Popup owns its own cycle', () => {
     const harness = makeHarness();
 
-    harness.ports.interaction.registerKeyHandler('Escape', () => {});
-    harness.ports.disposables.disposeAll();
+    harness.parts.interaction.registerKeyHandler('Escape', () => {});
+    harness.parts.disposables.disposeAll();
 
     expect(harness.registry.live).toEqual(['handler:Escape']);
   });
@@ -159,9 +159,9 @@ describe('buildPluginPorts — disposal (#155)', () => {
   it('each Disposer removes exactly its own registration, in any order', () => {
     const harness = makeHarness();
 
-    const span = harness.ports.layout.registerItemProducer('span', () => []);
-    const buffer = harness.ports.layout.registerItemProducer('buffer', () => []);
-    const risk = harness.ports.layout.registerItemProducer('risk', () => []);
+    const span = harness.parts.layout.registerItemProducer('span', () => []);
+    const buffer = harness.parts.layout.registerItemProducer('buffer', () => []);
+    const risk = harness.parts.layout.registerItemProducer('risk', () => []);
 
     buffer();
     expect(harness.registry.live).toEqual(['producer:span', 'producer:risk']);
@@ -176,7 +176,7 @@ describe('buildPluginPorts — disposal (#155)', () => {
   it('calling a Disposer twice is safe', () => {
     const harness = makeHarness();
 
-    const dispose = harness.ports.view.registerDecoration('underBars', () => []);
+    const dispose = harness.parts.view.registerDecoration('underBars', () => []);
     dispose();
     dispose();
 
@@ -185,10 +185,10 @@ describe('buildPluginPorts — disposal (#155)', () => {
 
   it('`disposables.disposeAll()` frees every gated registration, so uninstall needs no plugin help', () => {
     const harness = makeHarness();
-    for (const [, register] of gatedRegistrations) register(harness.ports);
+    for (const [, register] of gatedRegistrations) register(harness.parts);
     expect(harness.registry.live).toHaveLength(gatedRegistrations.length);
 
-    harness.ports.disposables.disposeAll();
+    harness.parts.disposables.disposeAll();
 
     expect(harness.registry.live).toEqual([]);
   });
@@ -197,9 +197,9 @@ describe('buildPluginPorts — disposal (#155)', () => {
     const first = makeHarness();
     const second = makeHarness();
 
-    first.ports.view.registerDecoration('underBars', () => []);
-    second.ports.view.registerDecoration('underBars', () => []);
-    first.ports.disposables.disposeAll();
+    first.parts.view.registerDecoration('underBars', () => []);
+    second.parts.view.registerDecoration('underBars', () => []);
+    first.parts.disposables.disposeAll();
 
     expect(first.registry.live).toEqual([]);
     expect(second.registry.live).toEqual(['decoration:underBars']);
@@ -210,8 +210,8 @@ describe('buildPluginPorts — disposal (#155)', () => {
 // the one way `extensions/` reaches `render/dom` (D-S5-5), and it still refuses raw HTML (I13).
 describe('buildPluginPorts — renderElement (S5.3, D-S5-10)', () => {
   it('builds a live node from an ElementDescription, and never as HTML', () => {
-    const { ports } = makeHarness();
-    const node = ports.view.renderElement({ text: '<script>alert(1)</script>' });
+    const { parts } = makeHarness();
+    const node = parts.view.renderElement({ text: '<script>alert(1)</script>' });
 
     expect(node.textContent).toBe('<script>alert(1)</script>');
     expect(node.querySelector('script')).toBeNull();
@@ -224,7 +224,7 @@ describe('buildPluginPorts — resolveTooltipContent (S5.5)', () => {
   it('paints the resolved renderer’s own content', () => {
     const harness = makeHarness({ resolveTooltipRenderer: () => ({ renderer }) });
 
-    expect(harness.ports.view.resolveTooltipContent('a' as EntryId)).toEqual({ text: 'body' });
+    expect(harness.parts.view.resolveTooltipContent('a' as EntryId)).toEqual({ text: 'body' });
   });
 
   it('falls back to the default content when the entry has no bar in the current frame', () => {
@@ -233,7 +233,7 @@ describe('buildPluginPorts — resolveTooltipContent (S5.5)', () => {
       lastPaintedBar: () => undefined,
     });
 
-    expect(harness.ports.view.resolveTooltipContent('a' as EntryId)).toBeUndefined();
+    expect(harness.parts.view.resolveTooltipContent('a' as EntryId)).toBeUndefined();
   });
 
   it('falls back to the default content when the renderer throws (#137 F14)', () => {
@@ -246,7 +246,7 @@ describe('buildPluginPorts — resolveTooltipContent (S5.5)', () => {
       }),
     });
 
-    expect(harness.ports.view.resolveTooltipContent('a' as EntryId)).toBeUndefined();
+    expect(harness.parts.view.resolveTooltipContent('a' as EntryId)).toBeUndefined();
     errorSpy.mockRestore();
   });
 });
@@ -265,7 +265,7 @@ describe('buildPluginPorts — the resolved-column reads (S5.8, D-S5-13)', () =>
       resolvedColumns: () => [column({ tooltip: true }), column({ key: 'name', header: 'Name' })],
     });
 
-    expect(harness.ports.view.resolveTooltipColumns(makeEntry('a'))).toEqual([
+    expect(harness.parts.view.resolveTooltipColumns(makeEntry('a'))).toEqual([
       { header: 'Cost', value: '12' },
     ]);
   });
@@ -273,8 +273,8 @@ describe('buildPluginPorts — the resolved-column reads (S5.8, D-S5-13)', () =>
   it('isColumnEditable answers undefined for a field no resolved column names', () => {
     const harness = makeHarness({ resolvedColumns: () => [column({ editable: true })] });
 
-    expect(harness.ports.view.isColumnEditable('cost')).toBe(true);
-    expect(harness.ports.view.isColumnEditable('name')).toBeUndefined();
+    expect(harness.parts.view.isColumnEditable('cost')).toBe(true);
+    expect(harness.parts.view.isColumnEditable('name')).toBeUndefined();
   });
 });
 
@@ -283,7 +283,7 @@ describe('buildPluginPorts — onDomEvent, one scoped document listener (review 
     const harness = makeHarness();
     const seen: string[] = [];
 
-    harness.ports.view.onDomEvent('click', (_event, target) => seen.push(target?.kind ?? 'none'));
+    harness.parts.view.onDomEvent('click', (_event, target) => seen.push(target?.kind ?? 'none'));
     harness.container.dispatchEvent(new Event('click', { bubbles: true }));
 
     expect(seen).toEqual(['row']);
@@ -297,8 +297,8 @@ describe('buildPluginPorts — onDomEvent, one scoped document listener (review 
     const firstSaw: string[] = [];
     const secondSaw: string[] = [];
 
-    first.ports.view.onDomEvent('click', () => firstSaw.push('click'));
-    second.ports.view.onDomEvent('click', () => secondSaw.push('click'));
+    first.parts.view.onDomEvent('click', () => firstSaw.push('click'));
+    second.parts.view.onDomEvent('click', () => secondSaw.push('click'));
     second.container.dispatchEvent(new Event('click', { bubbles: true }));
 
     expect(firstSaw).toEqual([]);
@@ -309,7 +309,7 @@ describe('buildPluginPorts — onDomEvent, one scoped document listener (review 
     const harness = makeHarness();
     const seen: string[] = [];
 
-    const remove = harness.ports.view.onDomEvent('scroll', () => seen.push('scroll'), { capture: true });
+    const remove = harness.parts.view.onDomEvent('scroll', () => seen.push('scroll'), { capture: true });
     harness.container.dispatchEvent(new Event('scroll'));
     expect(seen).toHaveLength(1);
 
@@ -322,8 +322,8 @@ describe('buildPluginPorts — onDomEvent, one scoped document listener (review 
     const harness = makeHarness();
     const seen: string[] = [];
 
-    harness.ports.view.onDomEvent('click', () => seen.push('click'));
-    harness.ports.disposables.disposeAll();
+    harness.parts.view.onDomEvent('click', () => seen.push('click'));
+    harness.parts.disposables.disposeAll();
     harness.container.dispatchEvent(new Event('click', { bubbles: true }));
 
     expect(seen).toEqual([]);
@@ -333,6 +333,6 @@ describe('buildPluginPorts — onDomEvent, one scoped document listener (review 
     const harness = makeHarness();
     harness.close();
 
-    expect(() => harness.ports.view.onDomEvent('click', () => {})).not.toThrow();
+    expect(() => harness.parts.view.onDomEvent('click', () => {})).not.toThrow();
   });
 });
