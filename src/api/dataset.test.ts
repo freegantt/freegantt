@@ -6,6 +6,7 @@ import {
   entryId,
   instant,
   invertChangeSet,
+  mergeEntryEdits,
   InvalidReplayOriginError,
   EntryNotFoundError,
   MissingPluginError,
@@ -701,7 +702,7 @@ describe('Dataset plugins (S5.10)', () => {
       ...(id === 'demo.second' ? { requires: ['demo.first'] } : {}),
       setup(ctx) {
         ctx.edits.setExtender(
-          (next) => (request) => new Map([...next(request), [entryId(to), { name: to }]]),
+          (next) => (request) => mergeEntryEdits(next(request), new Map([[entryId(to), { name: to }]])),
         );
       },
     });
@@ -715,6 +716,60 @@ describe('Dataset plugins (S5.10)', () => {
     // Both wrappers ran: the second added to the first output instead of replacing it.
     expect(dataset.entries.get('a')?.name).toBe('a');
     expect(dataset.entries.get('b')?.name).toBe('b');
+  });
+
+  // #197: composing with a `Map` spread stayed green only because each wrapper wrote a different
+  // Entry. Two extenders on one Entry lost the earlier write, and the Rollup then read a stale child.
+  it('a second extender writing the same child still leaves the first write for the Rollup (#197)', () => {
+    const proposesCost: DatasetPlugin = {
+      id: 'demo.cost',
+      setup(ctx) {
+        ctx.edits.setExtender(
+          () => () => new Map([[entryId('leaf'), { meta: { cost: 500 }, proposedKeys: new Set(['cost']) }]]),
+        );
+      },
+    };
+    const movesLeaf: DatasetPlugin = {
+      id: 'demo.move',
+      requires: ['demo.cost'],
+      setup(ctx) {
+        ctx.edits.setExtender(
+          (next) => (request) =>
+            mergeEntryEdits(
+              next(request),
+              new Map([
+                [entryId('leaf'), { start: instant(utc('2026-02-01')), end: instant(utc('2026-02-05')) }],
+              ]),
+            ),
+        );
+      },
+    };
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      fieldTypes: { money: { rollUp: 'sum' } },
+      fields: [{ key: 'cost', type: 'money' }],
+      entries: [
+        { id: 'root', name: 'Root', kind: 'group' },
+        {
+          id: 'leaf',
+          name: 'Leaf',
+          parentId: 'root',
+          start: '2026-01-01',
+          end: '2026-01-05',
+          meta: { cost: 100 },
+        },
+      ],
+      plugins: [movesLeaf, proposesCost],
+    });
+
+    dataset.entries.update('leaf', { name: 'Renamed' });
+
+    // Both extender writes landed on the one child...
+    expect(dataset.entries.fieldValue('leaf', 'cost')).toBe(500);
+    expect(dataset.entries.get('leaf')?.start).toBe(instant(utc('2026-02-01')));
+    // ...and the Rollup read the child both of them wrote, not the one the last wrapper left.
+    expect(dataset.entries.fieldValue('root', 'cost')).toBe(500);
+    expect(dataset.entries.get('root')?.start).toBe(instant(utc('2026-02-01')));
   });
 
   it('releases every plugin on destroy()', () => {

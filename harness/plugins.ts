@@ -1,6 +1,6 @@
 import './harness-nav.ts';
 import { Gantt, Dataset, entryId, contextMenu } from '../src/api/index.js';
-import type { RendererByKind, CellRenderer } from '../src/api/index.js';
+import type { RendererByKind, CellRenderer, GanttPlugin } from '../src/api/index.js';
 import { sampleEntries } from '../fixtures/sample-dataset.js';
 import { weekendShading } from './plugins/weekend-shading.js';
 import { bufferKind } from './plugins/buffer-kind.js';
@@ -50,13 +50,14 @@ function writeLog(line: string): void {
   log.prepend(entry);
 }
 
+// D-S5-36: one verb per plugin, so the page never restates the installed set to change one of them.
+// `hasPlugin` is what a toggle reads before it decides which verb to call.
 toggleBtn.addEventListener('click', () => {
-  const installed = gantt.plugins.some((plugin) => plugin.id === 'harness.logEverything');
-  if (installed) {
-    gantt.plugins = gantt.plugins.filter((plugin) => plugin.id !== 'harness.logEverything');
+  if (gantt.hasPlugin('harness.logEverything')) {
+    gantt.uninstallPlugin('harness.logEverything');
     toggleBtn.textContent = 'Install logging plugin';
   } else {
-    gantt.plugins = [...gantt.plugins, logEverything(writeLog)];
+    gantt.installPlugin(logEverything(writeLog));
     toggleBtn.textContent = 'Remove logging plugin';
   }
 });
@@ -68,7 +69,8 @@ toggleBtn.addEventListener('click', () => {
 // how page scope reaches what the plugin built in `setup()` — it replaces a module-level stash the
 // plugin used to keep for its callers, which two Gantts on one page would have shared (I2).
 const demoPopup = popupDemo();
-gantt.plugins = [...gantt.plugins, selectionShortcuts(writeLog), demoPopup];
+gantt.installPlugin(selectionShortcuts(writeLog));
+gantt.installPlugin(demoPopup);
 
 const popupBtn = document.querySelector<HTMLButtonElement>('#open-popup-btn')!;
 popupBtn.addEventListener('click', () => {
@@ -126,17 +128,17 @@ renderersToggle.dispatchEvent(new Event('change'));
 
 // S5.6, D-S5-15/D-S5-16, [S5-A2]: weekendShading() is written against the public surface alone
 // ('freegantt', harness/plugins/weekend-shading.ts) — no core edit, no private import. Installed
-// from the start; the checkbox removes it live through the same gantt.plugins assignment every
+// from the start; the checkbox removes it live through the same `uninstallPlugin` verb every
 // other plugin toggle on this page already uses (I8: no remount).
-gantt.plugins = [...gantt.plugins, weekendShading()];
+gantt.installPlugin(weekendShading());
 
 const weekendToggle = document.querySelector<HTMLInputElement>('#weekend-shading-toggle')!;
 weekendToggle.addEventListener('change', () => {
   if (weekendToggle.checked) {
-    gantt.plugins = [...gantt.plugins, weekendShading()];
+    gantt.installPlugin(weekendShading());
     writeLog('weekendShading: installed');
   } else {
-    gantt.plugins = gantt.plugins.filter((plugin) => plugin.id !== 'demo.weekendShading');
+    gantt.uninstallPlugin('demo.weekendShading');
     writeLog('weekendShading: removed');
   }
 });
@@ -146,18 +148,34 @@ weekendToggle.addEventListener('change', () => {
 // riskKind() is a second plugin that defines a second kind, and both install — the `bar` point
 // keys on the kind, so neither refuses the other. contextMenu() installs alongside them so each
 // plugin's own menu item is reachable by right-click. Installed from the start; the checkbox
-// removes all three live through the same gantt.plugins assignment every other plugin toggle on
-// this page already uses (I8: no remount).
-gantt.plugins = [...gantt.plugins, contextMenu(), bufferKind(), riskKind()];
+// removes all three live, one `uninstallPlugin` per plugin, the same verbs every other plugin
+// toggle on this page already uses (I8: no remount).
+//
+// The page keeps what it installed, so it names those values back to `uninstallPlugin` and guesses
+// no plugin id — `contextMenu()`'s least of all, because that id belongs to the library.
+let kindPlugins: readonly GanttPlugin[] = [];
 
-const KIND_PLUGIN_IDS = ['demo.bufferKind', 'demo.riskKind', 'freegantt.contextMenu'];
+function installKindPlugins(): void {
+  kindPlugins = [contextMenu(), bufferKind(), riskKind()];
+  for (const plugin of kindPlugins) gantt.installPlugin(plugin);
+}
+
+/** `hasPlugin` first: the drop-risk button below can already have removed one of the three, and the
+ *  verbs are strict where the assignment form was quiet (D-S5-36). */
+function uninstallKindPlugins(): void {
+  for (const plugin of kindPlugins) if (gantt.hasPlugin(plugin)) gantt.uninstallPlugin(plugin);
+  kindPlugins = [];
+}
+
+installKindPlugins();
+
 const kindPluginsToggle = document.querySelector<HTMLInputElement>('#kind-plugins-toggle')!;
 kindPluginsToggle.addEventListener('change', () => {
   if (kindPluginsToggle.checked) {
-    gantt.plugins = [...gantt.plugins, contextMenu(), bufferKind(), riskKind()];
+    installKindPlugins();
     writeLog('bufferKind + riskKind: installed');
   } else {
-    gantt.plugins = gantt.plugins.filter((plugin) => !KIND_PLUGIN_IDS.includes(plugin.id));
+    uninstallKindPlugins();
     writeLog('bufferKind + riskKind: removed');
   }
 });
@@ -166,6 +184,10 @@ kindPluginsToggle.addEventListener('change', () => {
 // alone, so the page shows the claim rather than only asserting it in a test.
 const dropRiskBtn = document.querySelector<HTMLButtonElement>('#drop-risk-kind-btn')!;
 dropRiskBtn.addEventListener('click', () => {
-  gantt.plugins = gantt.plugins.filter((plugin) => plugin.id !== 'demo.riskKind');
+  if (!gantt.hasPlugin('demo.riskKind')) {
+    writeLog('riskKind: already removed');
+    return;
+  }
+  gantt.uninstallPlugin('demo.riskKind');
   writeLog('riskKind: removed — bufferKind still paints');
 });

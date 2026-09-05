@@ -2,8 +2,8 @@
 // package's own public entry, never a path inside 'freegantt/src' (S5.6, [S5-A2]). This is the
 // gate box's whole point — the plugin only compiles because the public surface is enough.
 
-import { addMs, diffMs, entryId, fieldRowsOf } from 'freegantt';
-import type { DatasetPlugin, EditRequest, EntryId, PluginStore } from 'freegantt';
+import { addMs, diffMs, entryId, fieldRowsOf, mergeEntryEdits } from 'freegantt';
+import type { DatasetPlugin, EditRequest, EntryId, Instant, PluginStore } from 'freegantt';
 
 /** What the store holds per locked entry. One key today; a real plugin's row grows without ever
  *  colliding with the application's own `meta` — that is what a store is for (ADR 0002, D-S5-24). */
@@ -56,16 +56,18 @@ export function lockEntries(initiallyLocked: readonly string[] = []): LockEntrie
       // What does a locked entry do while a neighbour moves? It moves too, so the drag preview shows
       // the cost of the lock before the drop.
       ctx.edits.setExtender((next) => (request) => {
-        const edits = new Map(next(request));
         const moved = movedBy(request);
-        if (moved === undefined) return edits;
+        if (moved === undefined) return next(request);
+        const mine = new Map<EntryId, { start: Instant; end: Instant }>();
         for (const [id] of lockedRows()) {
           if (request.proposed.has(id)) continue;
           const entry = request.entries.get(id);
           if (entry === undefined) continue;
-          edits.set(id, { start: addMs(entry.start, moved), end: addMs(entry.end, moved) });
+          mine.set(id, { start: addMs(entry.start, moved), end: addMs(entry.end, moved) });
         }
-        return edits;
+        // `mergeEntryEdits`, never a `Map` spread: another plugin may already have written one of
+        // these entries, and a spread drops that write (#197).
+        return mergeEntryEdits(next(request), mine);
       });
 
       // What refuses the drop? The finished changeset, once, at commit — never the extender above.
