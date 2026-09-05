@@ -64,11 +64,16 @@ if Item ids and Entry ids convert freely.
 Its one caller filters a list `selectableEntriesInRowOrder()` has already capability-filtered, so the
 filter is redundant too.
 
-- [ ] Delete `canSelect`; `selectRange` returns the slice unfiltered
-- [ ] Check whether `itemId` is still imported in `entry-gestures.ts` at all; drop the import if not
-- [ ] Fix the test fake in `entry-gestures.test.ts` — it answers `entryFor` from an **Item-keyed map**,
-      which is what keeps `canSelect` alive. Make the fake answer *"is this Entry selectable"*, the
-      question the shell actually answers
+- [x] Delete `canSelect`; `selectRange` returns the slice unfiltered
+- [x] Check whether `itemId` is still imported in `entry-gestures.ts` at all; drop the import if not.
+      It was not used anywhere else, so the import is gone too
+- [x] Fix the test fake in `entry-gestures.test.ts`. **The box named the wrong member.** `entryFor`
+      already resolves through `entryIdOfItem`, and nothing about it kept `canSelect` alive. The fake
+      member that did is `selectableEntriesInRowOrder`, which answered `ORDER` unfiltered while the
+      real `gantt-shell.ts#selectableEntriesInRowOrder` filters by the `select` capability. One test
+      therefore made an Entry incapable and expected `interaction/` to filter a second time. The fake
+      now answers the question the shell answers, and that test pins the range over the filtered
+      order instead
 
 **Do not** replace the filter with a second capability call. The capability resolves once, in the
 shell (I14).
