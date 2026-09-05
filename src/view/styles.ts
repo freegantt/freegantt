@@ -255,6 +255,10 @@ ${DARK_COLOR_TOKENS}
 .fg-cell-editor { position: absolute; top: 0; left: 0; pointer-events: auto; box-sizing: border-box; }
 .fg-cell-editor-control { width: 100%; height: 100%; box-sizing: border-box; font: inherit; padding-inline: var(--fg-cell-padding-inline, 8px); border: 1px solid var(--fg-selection-color); background: var(--fg-pane-bg); color: var(--fg-row-label-color); }
 .fg-cell-editor[data-state='invalid'] .fg-cell-editor-control { border-color: var(--fg-warn); }
+/* The Refusal notice (#171): a .fg-cell-editor carrying a reason and no control. data-reason is what
+   tells it from a refused editor, which is invalid but does hold one. pointer-events: none is
+   load-bearing — the notice sits over the cell, and the next double-click must reach the cell. */
+.fg-cell-editor[data-state='invalid'][data-reason] { pointer-events: none; display: flex; align-items: center; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font: inherit; padding-inline: var(--fg-cell-padding-inline, 8px); border: 1px solid var(--fg-warn); background: var(--fg-pane-bg); color: var(--fg-warn); }
 `.trim();
 
 /** Injects the library's base stylesheet into `doc` exactly once. Safe to call from every Gantt
