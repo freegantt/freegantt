@@ -1262,6 +1262,45 @@ describe('render/dom backend', () => {
     timeline.remove();
   });
 
+  // #175: `plans/01` §8 — the hot path allocates nothing, and frames fire on scroll. Which renderer
+  // paints a cell depends on the column alone, so asking once per painted cell was O(rows ×
+  // columns) resolutions per frame. Each answer is a fresh object holding a fresh closure.
+  it('resolves a cell renderer once per column per frame, whatever the row count', () => {
+    const columnKeysAsked: string[] = [];
+    const backend = createDomBackend({
+      entryById: entryLookup,
+      resolveBarRenderer: () => undefined,
+      resolveCellRenderer: (columnKey) => {
+        columnKeysAsked.push(columnKey);
+        return undefined;
+      },
+      resolveHeaderRenderer: () => undefined,
+    });
+    const { grid, timeline } = mountSurfaces();
+    backend.mount({ grid, timeline });
+    const frame = computeFrame({
+      entries: sampleEntries,
+      scale,
+      preset,
+      visible: { x: 0, y: 0, width: 1000, height: 1000 },
+      rowHeight: 32,
+      revision: 0,
+      itemProducerRegistry,
+      columns: [
+        { key: 'name', header: 'Name', align: 'start', format: (e) => e.name },
+        { key: 'start', header: 'Start', align: 'start', format: (e) => String(e.start) },
+      ],
+    });
+    backend.sync(frame);
+
+    expect(frame.rows.length).toBeGreaterThan(1);
+    expect(columnKeysAsked).toEqual(['name', 'start']);
+
+    backend.destroy();
+    grid.remove();
+    timeline.remove();
+  });
+
   it("a resolved cellRenderer paints inside the cell, receiving the row's entry, row and formatted value", () => {
     const seen: { entry?: { id: string }; value: string }[] = [];
     const backend = createDomBackend({
