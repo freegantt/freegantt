@@ -14,10 +14,10 @@
 //
 // It mounts through `ctx.view.rowLayer`, not the `Overlay` a popup uses (#158). A tooltip and a menu
 // *dismiss* on a scroll; an open editor must *follow* its cell. The row layer is the element the
-// pane's own scroll already moves — one transform per frame for the vertical axis (D-S1.8-1), native
-// horizontal scrolling of the pane around it (D-S1.8-13) — so a sibling of the rows travels with
-// them, in the same frame, and nothing repositions it on a scroll. Repositioning an overlay from a
-// `scroll` listener runs a frame behind the paint it chases, which reads as jitter. The clip is a
+// pane's own scroll already moves. That is one transform per frame for the vertical axis (D-S1.8-1),
+// and native horizontal scrolling of the pane around it (D-S1.8-13). A sibling of the rows therefore
+// travels with them, in the same frame, and nothing repositions it on a scroll. Repositioning an
+// overlay from a `scroll` listener runs a frame behind the paint it chases, which reads as jitter. The clip is a
 // bonus: `.fg-rows-clip` keeps the editor inside the pane instead of over the timeline.
 //
 // Beside the rows, never inside one. A row and its cells are `render/dom`'s own reconciled DOM, and
@@ -204,8 +204,8 @@ export class CellEditorSession {
     this.#control = control;
     this.#wrapper = document.createElement('div');
     this.#wrapper.className = EDITOR_CLASS;
-    // One place dresses the control, whichever control it is — the default `<input>`, the default
-    // date input, or a consumer's own from the `dateInput` factory (D-S5-20).
+    // One place dresses the control, whichever control it is. That is the default `<input>`, the
+    // default date input, or a consumer's own from the `dateInput` factory (D-S5-20).
     control.element.classList.add(EDITOR_CONTROL_CLASS);
     this.#wrapper.append(control.element);
   }
@@ -272,8 +272,8 @@ export class CellEditorSession {
     this.#close();
   }
 
-  /** Follows the cell after a container resize, which can bring a reflow (a column width change,
-   *  say) that moves the cell with no scroll at all. A scroll needs none of this: the row layer
+  /** Follows the cell after a container resize. A resize can bring a reflow that moves the cell
+   *  with no scroll at all — a column width change, say. A scroll needs none of this: the row layer
    *  carries the editor and the cell together (#158). This asks for the cell again rather than
    *  reusing the node `mount` received: virtualization can recycle that node while the editor is
    *  open. */

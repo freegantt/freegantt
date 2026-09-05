@@ -28,13 +28,14 @@
     "test:dom": "vitest run --project dom",
     "guards": "vitest run test/guards && node scripts/run-rule-tests.mjs && node scripts/guard-red-test.mjs",
     "vendor-names": "node scripts/check-vendor-names.mjs",
+    "sentence-length": "node scripts/check-sentence-length.mjs",
     "disables": "node scripts/audit-disables.mjs",
     "gate": "node scripts/slice-gate.mjs",
     "dev": "vite",
     "build": "node scripts/build.mjs",
     "api-report": "node scripts/api-report.mjs",
     "test:e2e": "playwright test",
-    "verify": "pnpm format:check && pnpm typecheck && pnpm lint && pnpm boundaries && pnpm guards && pnpm test:node && pnpm test:dom && pnpm vendor-names && pnpm disables && pnpm build && pnpm api-report"
+    "verify": "pnpm format:check && pnpm typecheck && pnpm lint && pnpm boundaries && pnpm guards && pnpm test:node && pnpm test:dom && pnpm vendor-names && pnpm sentence-length && pnpm disables && pnpm build && pnpm api-report"
   },
   "dependencies": {
     "alien-signals": "^1.0.0",

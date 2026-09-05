@@ -316,9 +316,9 @@ export interface GanttShellOptions {
   /** Expert knob, not on `GanttOptions` (plans/02 "two callers, two surfaces"). A test names its
    * own `RenderBackend<HTMLElement>` in place of the DOM one. §9-I: the seam had two implementations
    * and one hardcoded call site. Nothing could reach the other short of mocking the module.
-   * Still `RenderBackend<HTMLElement>`, not the null backend's `RenderBackend<void>` — `PaneLayout`
-   * mounts real elements regardless of which backend paints them, so this closes the hardcoding, not
-   * DOM-free `view/`. Defaults to `createDomBackend()`. */
+   * Still `RenderBackend<HTMLElement>`, not the null backend's `RenderBackend<void>`. `PaneLayout`
+   * mounts real elements regardless of which backend paints them. So this closes the hardcoding,
+   * not DOM-free `view/`. Defaults to `createDomBackend()`. */
   backend?: RenderBackend<HTMLElement>;
   /** S3.6, D-S3-18, P1: an installed extension hook, read for **preview only** — ghosts its extras in
    *  the rAF-coalesced drag preview. `api/gantt.ts` passes the bound Dataset's own occupant here
@@ -367,7 +367,8 @@ export class GanttShell {
   #scrollAttachment: ScrollAttachment;
   #paneSizeAttachment: PaneSizeAttachment;
   /** The timeline pane's last measured box, kept raw. The header height it has to be reduced by
-   *  changes on its own signal — a preset with a different band count, not a pane resize. */
+   *  changes on its own signal. That signal is a preset with a different band count, not a pane
+   *  resize. */
   #paneBox: Size = { width: 0, height: 0 };
   #splitterAttachment: SplitterAttachment;
   #datasetChanges: DatasetChangeSubscription;
@@ -707,8 +708,8 @@ export class GanttShell {
         this.#backend.applyState(this.#interactionState);
       },
     });
-    // D-S3-13: one `EntryGestureContext`, shared by the pointer attachment and the keyboard one —
-    // both drive the same `#gesturePipeline.session()`, so there is no value in building two.
+    // D-S3-13: one `EntryGestureContext`, shared by the pointer attachment and the keyboard one.
+    // Both drive the same `#gesturePipeline.session()`, so there is no value in building two.
     const gestureContext: EntryGestureContext = {
       hitTest: (at) => {
         const hit = this.#backend.hitTest(at);
@@ -745,9 +746,9 @@ export class GanttShell {
     // `plans/reviews/2026-09-03-s5-start-fixes-qc.md`): the bubble listener above only ever sees a
     // key event whose target sits inside `#container`. A popup opened from an outside trigger has
     // no path into that listener at all — a toolbar button in the consumer's own page, say. So its
-    // Escape dismissal would never fire. Routing through the same `#keymap.resolve()` — not a second,
-    // independent listener — keeps one newest-first resolution order instead of reintroducing the
-    // bespoke document-capture stack C3 removed. Skipped whenever the target is already inside
+    // Escape dismissal would never fire. So this routes through the same `#keymap.resolve()`, not a
+    // second, independent listener. That keeps one newest-first resolution order, instead of
+    // reintroducing the bespoke document-capture stack C3 removed. Skipped whenever the target is inside
     // `#container`, so an in-container key event is resolved exactly once, by the bubble listener.
     this.#documentKeymapListener = (event: KeyboardEvent) => {
       const target = event.target;
@@ -1056,7 +1057,7 @@ export class GanttShell {
     this.#resolvedViewportGestures = resolveViewportGestures(next);
   }
 
-  /** S5.2, D-S5-6: the live `CommandContext` builder — `entry` is the first selected entry, or
+  /** S5.2, D-S5-6: the live `CommandContext` builder. `entry` is the first selected entry, or
    *  `undefined` when nothing is selected (the doc's "the focused row, or none"). `target` fills in
    *  for a focused header cell (S5.7, D-S5-26, issue #137 F6) — the rest of `CommandTarget`'s kinds
    *  are still S5.11's own job. `api/gantt.ts`'s injected `buildCommandContext` fills `dataset`/`gantt`
@@ -1550,9 +1551,9 @@ export class GanttShell {
 
   /** One measurement, pushed to everything it feeds (#8, #49). `--fg-row-height`,
    *  `--fg-tick-box-floor` and the pane size all change for one reason: a resize of the timeline
-   *  pane. So one signal re-reads them all, and none of them goes stale. `size` is the timeline pane's own client
-   *  box; no gutter to subtract (S1.8, D-S1.8-2) — the grid pane's width never overlapped it in the
-   *  first place. */
+   *  pane. So one signal re-reads them all, and none of them goes stale. `size` is the timeline
+   *  pane's own client box, with no gutter to subtract (S1.8, D-S1.8-2). The grid pane's width never
+   *  overlapped it in the first place. */
   #applyPaneMeasurement(size: Size): void {
     this.#paneBox = size;
     this.#rowHeight = readPixelProperty(this.#container, ROW_HEIGHT_PROPERTY, ROW_HEIGHT_POLICY);
@@ -1610,7 +1611,7 @@ export class GanttShell {
     this.#contentSize = { width: frame.contentWidth, height: frame.contentHeight };
     this.#viewportHandle.setContentSize(this.#contentSize);
     this.#scrollAttachment.writePosition();
-    // #126: independent of the timeline's content width above — the grid pane's own horizontal
+    // #126: independent of the timeline's content width above. The grid pane's own horizontal
     // scroller reaches fixed-width columns that overflow `gridWidth`, unrelated to the time axis.
     this.#paneLayout.contentWidth = gridContentWidth(
       this.#columnChrome.resolvedColumns,
