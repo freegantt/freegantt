@@ -5,19 +5,40 @@
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
-staged_all="$(git diff --cached --name-only --diff-filter=ACM | while read -r f; do [[ -L "$f" ]] || echo "$f"; done)"
+# Which staged files may this hook re-add after formatting? (#203)
+# NUL-delimited: a path with a space stays one path, and -z bypasses core.quotePath,
+# which would otherwise hand back non-ASCII paths quoted and backslash-escaped so that
+# `git add --` matches nothing.
+mapfile -d '' -t staged_raw < <(git diff --cached --name-only -z --diff-filter=ACM)
+mapfile -d '' -t partial_raw < <(git diff --name-only -z --diff-filter=ACM)
 
-if [[ -n "$staged_all" ]]; then
+declare -A is_partial=()
+for f in "${partial_raw[@]}"; do is_partial["$f"]=1; done
+
+formattable=(); skipped=()
+for f in "${staged_raw[@]}"; do
+  [[ -L "$f" ]] && continue
+  # Staged AND unstaged-modified means the author split this file on purpose. Formatting it
+  # would have to re-add it whole, committing the half they left out — this bug.
+  if [[ -n "${is_partial["$f"]:-}" ]]; then skipped+=("$f"); else formattable+=("$f"); fi
+done
+
+if ((${#formattable[@]})); then
   echo "pre-commit: format (auto-fix) on all staged files"
-  pnpm exec prettier --write --ignore-unknown $staged_all
-  git add -- $staged_all
+  pnpm exec prettier --write --ignore-unknown -- "${formattable[@]}"
+  git add -- "${formattable[@]}"
 fi
 
-staged_ts="$(git diff --cached --name-only --diff-filter=ACM -- '*.ts')"
+# Name only the intersection: a warning that fires on most commits stops being read.
+if ((${#skipped[@]})); then
+  printf 'pre-commit: skipped formatting (partially staged): %s\n' "${skipped[*]}" >&2
+fi
 
-if [[ -n "$staged_ts" ]]; then
+mapfile -d '' -t staged_ts < <(git diff --cached --name-only -z --diff-filter=ACM -- '*.ts')
+
+if ((${#staged_ts[@]})); then
   echo "pre-commit: lint (check only — fails on any warning) on staged *.ts"
-  pnpm exec eslint --max-warnings 0 --no-warn-ignored $staged_ts
+  pnpm exec eslint --max-warnings 0 --no-warn-ignored -- "${staged_ts[@]}"
 fi
 
 echo "pre-commit: vendor-names"
