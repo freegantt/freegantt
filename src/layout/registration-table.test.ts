@@ -65,6 +65,17 @@ describe('createRegistrationTable', () => {
     expect(table.get('a')).toBeUndefined();
   });
 
+  it('keys() lists every key that still holds a registration, in first-registration order', () => {
+    const table = createRegistrationTable<string, number>();
+    table.register('a', 1);
+    const disposeB = table.register('b', 2);
+    table.register('a', 3);
+    expect(table.keys()).toEqual(['a', 'b']);
+
+    disposeB();
+    expect(table.keys()).toEqual(['a']);
+  });
+
   it('does nothing the second time a disposer is called', () => {
     const table = createRegistrationTable<string, number>();
     table.register('a', 1);

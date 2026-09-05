@@ -86,6 +86,11 @@
       .demo-buffer-bar {
         background-image: repeating-linear-gradient(45deg, #b08968, #b08968 4px, #dcc9b6 4px, #dcc9b6 8px);
       }
+      /* Review P2: riskKind()'s own fill, registered on the same `bar` point bufferKind() uses.
+         Both plugins install, and both paint — the point keys on the kind. */
+      .demo-risk-bar {
+        background-image: repeating-linear-gradient(-45deg, #b3261e, #b3261e 4px, #f2b8b5 4px, #f2b8b5 8px);
+      }
     </style>
   </head>
   <body>
@@ -116,8 +121,15 @@
       <code>ctx.interaction.registerKindDefaults</code> (no resize handle), and
       <code>ctx.commands.register</code> (its own right-click item, scoped to the kind by <code>when</code>).
       Uncheck "Custom milestone + cost renderers" to see the hatch come from the plugin's own registration
-      rather than this page's <code>barRenderer</code> config — same pixels, D-S5-11's "one slot per point" is
-      what changes hands.
+      rather than this page's <code>barRenderer</code> config — same pixels, D-S5-11's config-beats-a-plugin
+      rule is what changes hands.
+    </p>
+    <p>
+      <code>riskKind()</code> (review P2): a <em>second</em> kind-defining plugin —
+      <code>harness/plugins/risk-kind.ts</code>. It registers
+      <code>ctx.view.registerRenderer('bar', …)</code> for its own kind while <code>bufferKind()</code> holds
+      that point for its own. The <code>bar</code> point keys on the kind, so both plugins install and both
+      paint. "Drop riskKind" removes one of the two: the buffer hatch stays exactly as it was.
     </p>
     <div id="controls">
       <button id="toggle-plugin-btn" type="button">Install logging plugin</button>
@@ -125,8 +137,10 @@
       <label><input id="renderers-toggle" type="checkbox" checked /> Custom milestone + cost renderers</label>
       <label><input id="weekend-shading-toggle" type="checkbox" checked /> Weekend shading</label>
       <label
-        ><input id="buffer-kind-toggle" type="checkbox" checked /> Buffer kind (right-click for menu)</label
+        ><input id="kind-plugins-toggle" type="checkbox" checked /> Buffer + risk kinds (right-click for
+        menu)</label
       >
+      <button id="drop-risk-kind-btn" type="button">Drop riskKind</button>
     </div>
     <div id="gantt"></div>
     <div id="log" aria-label="Plugin event log"></div>

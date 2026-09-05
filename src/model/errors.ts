@@ -282,22 +282,23 @@ export class PluginSetupError extends FreeGanttError {
 }
 
 /** `code: 'renderer-already-registered'` — two plugins both call `ctx.view.registerRenderer` for the
- *  same point (S5.4, D-S5-11). One slot per point; a consumer who wants a plugin's renderer to win
- *  removes its own `GanttOptions` renderer instead — this error is only for two *plugins* colliding.
- *  `point` stays a bare `string` here (not layout/'s `RendererPoint`) — model/ is a leaf and may
- *  import nothing (model-is-leaf). */
+ *  same slot (S5.4, D-S5-11). A consumer who wants a plugin's renderer to win removes its own
+ *  `GanttOptions` renderer instead — this error is only for two *plugins* colliding.
+ *  `slot` names what collided: a renderer point (`'cell'`), or one kind of the `bar` point's
+ *  per-kind form (`'bar:buffer'`, D-S5-12, review P2). It stays a bare `string` here (not layout/'s
+ *  `RendererPoint`) — model/ is a leaf and may import nothing (model-is-leaf). */
 export class RendererAlreadyRegisteredError extends FreeGanttError {
-  readonly point: string;
+  readonly slot: string;
   readonly firstPluginId: PluginId;
   readonly secondPluginId: PluginId;
 
-  constructor(point: string, firstPluginId: PluginId, secondPluginId: PluginId) {
+  constructor(slot: string, firstPluginId: PluginId, secondPluginId: PluginId) {
     super(
       'renderer-already-registered',
-      `view.registerRenderer: "${point}" is already registered by plugin "${firstPluginId}" (attempted again by "${secondPluginId}")`,
+      `view.registerRenderer: "${slot}" is already registered by plugin "${firstPluginId}" (attempted again by "${secondPluginId}")`,
     );
     this.name = 'RendererAlreadyRegisteredError';
-    this.point = point;
+    this.slot = slot;
     this.firstPluginId = firstPluginId;
     this.secondPluginId = secondPluginId;
   }

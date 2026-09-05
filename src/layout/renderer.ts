@@ -30,7 +30,12 @@ export interface CellRendererContext {
   entry?: Entry;
   row: FrameRow;
   column: ResolvedColumn;
+  /** What the grid paints: the column's Field value, through the Field's own `formatValue`. */
   value: string;
+  /** The same Field value before formatting — what `dataset.entries.fieldValue(id, column.key)`
+   *  answers, for every Field source alike (review H3). A renderer that branches on magnitude reads
+   *  this; one that paints text reads `value`. `undefined` on a row with no Entry. */
+  fieldValue: unknown;
 }
 export type CellRenderer = (ctx: CellRendererContext) => ElementDescription | undefined;
 

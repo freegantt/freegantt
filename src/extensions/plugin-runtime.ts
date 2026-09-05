@@ -17,7 +17,7 @@ import { isDevMode } from '../data/dev-mode.js';
  *  file header). Not exported past `view/gantt-shell.ts`'s own use of it. */
 export interface ShellPlugin<TContext> {
   id: PluginId;
-  setup(ctx: TContext): Disposer;
+  setup(ctx: TContext): Disposer | void;
 }
 
 interface Installed<TContext> {
@@ -115,9 +115,12 @@ export class PluginRuntime<TContext> {
         built.registrationGate?.close();
         justInstalled.push({
           plugin,
+          // Review P4: `setup` may return nothing. Every registration is already retracted by
+          // `ctx.disposables`, so a plugin that owns no resource of its own writes no disposer —
+          // and an empty `return () => {};` no longer reads as if something were missing.
           dispose: () => {
             built.disposables.disposeAll();
-            ownDispose();
+            ownDispose?.();
           },
         });
       }

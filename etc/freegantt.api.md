@@ -63,9 +63,9 @@ export interface CellRendererContext {
     // (undocumented)
     column: ResolvedColumn;
     entry?: Entry;
+    fieldValue: unknown;
     // (undocumented)
     row: FrameRow;
-    // (undocumented)
     value: string;
 }
 
@@ -119,7 +119,7 @@ export type ColumnCellRenderer = (ctx: ColumnCellRendererContext) => ElementDesc
 // @public
 export interface ColumnCellRendererContext {
     entry?: Entry;
-    // (undocumented)
+    fieldValue: unknown;
     value: string;
 }
 
@@ -969,7 +969,7 @@ export type GanttPlugin = GanttPluginOf<Gantt>;
 export interface GanttPluginOf<TGantt = unknown, TDataset = Dataset> {
     // (undocumented)
     id: PluginId;
-    setup(ctx: PluginContextOf<TGantt, TDataset>): Disposer;
+    setup(ctx: PluginContextOf<TGantt, TDataset>): Disposer | void;
 }
 
 // @public
@@ -1391,13 +1391,13 @@ export class RegistrationClosedError extends FreeGanttError {
 
 // @public
 export class RendererAlreadyRegisteredError extends FreeGanttError {
-    constructor(point: string, firstPluginId: PluginId, secondPluginId: PluginId);
+    constructor(slot: string, firstPluginId: PluginId, secondPluginId: PluginId);
     // (undocumented)
     readonly firstPluginId: PluginId;
     // (undocumented)
-    readonly point: string;
-    // (undocumented)
     readonly secondPluginId: PluginId;
+    // (undocumented)
+    readonly slot: string;
 }
 
 // @public
@@ -1735,6 +1735,9 @@ export interface ViewPresetHeader extends TickStep {
     format: DateFormat;
     repeatCoarserUnits?: boolean;
 }
+
+// @public
+export function wholeEntryItem(entry: Entry): Item;
 
 // @public
 export interface ZonedTime {

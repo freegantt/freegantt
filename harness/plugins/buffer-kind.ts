@@ -2,7 +2,7 @@
 // package's own public entry, never a path inside 'freegantt/src' (S5.9, [S5-A3]). A grep over
 // `src/` for the string `'buffer'` finds nothing — the whole kind lives here, in one plugin.
 
-import { itemId } from 'freegantt';
+import { wholeEntryItem } from 'freegantt';
 import type { GanttPlugin } from 'freegantt';
 
 const BUFFER_KIND = 'buffer';
@@ -16,18 +16,10 @@ export function bufferKind(): GanttPlugin {
   return {
     id: 'demo.bufferKind',
     setup(ctx) {
-      // What shape does it draw? One whole-entry Item, same as a milestone or a span with no
-      // segments — a buffer has no internal structure to slice.
-      ctx.layout.registerItemProducer(BUFFER_KIND, (entry) => [
-        {
-          id: itemId(entry.id, 0),
-          entryId: entry.id,
-          kind: entry.kind,
-          label: entry.name,
-          start: entry.start,
-          end: entry.end,
-        },
-      ]);
+      // What shape does it draw? One whole-entry Item, same as a group or a span with no segments —
+      // a buffer has no internal structure to slice. `wholeEntryItem` is the library's own, so the
+      // Item id convention has one owner (review P3).
+      ctx.layout.registerItemProducer(BUFFER_KIND, (entry) => [wholeEntryItem(entry)]);
 
       // How does it look? A hatched fill, painted through the ordinary bar renderer seam — no
       // bespoke paint path.
@@ -51,7 +43,7 @@ export function bufferKind(): GanttPlugin {
         },
       });
 
-      return () => {};
+      // No disposer: `ctx.disposables` already retracts all four registrations (review P4).
     },
   };
 }

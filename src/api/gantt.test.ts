@@ -18,6 +18,7 @@ import { instant } from '../time/index.js';
 // [S5-A3]: the acceptance object is the harness plugin itself, not a re-implementation of its four
 // seams — a regression in bufferKind() must fail this test (issue #153).
 import { bufferKind } from '../../harness/plugins/buffer-kind.js';
+import { riskKind } from '../../harness/plugins/risk-kind.js';
 
 // happy-dom does no layout, so a real ResizeObserver never fires (same seam gantt-shell.test.ts
 // stubs globally — Gantt/GanttShell wire attachPaneSize themselves and take no ResizeObserverCtor
@@ -1270,6 +1271,64 @@ describe('Gantt gridColumns (S4.3, D-S4-12, [S4-A1] column half)', () => {
     gantt.destroy();
   });
 
+  it('a cellRenderer reads the Field value beside the formatted string (review H3)', () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      fieldTypes: {
+        money: {
+          formatValue: (value) => (typeof value === 'number' ? `$${value}` : ''),
+          column: { header: 'Cost', align: 'end' },
+        },
+      },
+      fields: [{ key: 'cost', type: 'money' }],
+      entries: sampleEntries.slice(0, 1).map((entry) => ({ ...entry, meta: { cost: 1500 } })),
+    });
+    const seen: { value: string; fieldValue: unknown }[] = [];
+    const gantt = new Gantt({
+      container,
+      dataset,
+      gridColumns: ['name', 'cost'],
+      cellRenderer: ({ column, value, fieldValue }) => {
+        if (column.key === 'cost') seen.push({ value, fieldValue });
+        return undefined;
+      },
+    });
+
+    // The renderer branches on the number the Field registry produced; it never parses "$1500" back.
+    expect(seen).toEqual([{ value: '$1500', fieldValue: 1500 }]);
+
+    gantt.destroy();
+  });
+
+  it('a per-column cellRenderer reads the same Field value (review H3)', () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      fieldTypes: {
+        money: { formatValue: (value) => (typeof value === 'number' ? `$${value}` : '') },
+      },
+      fields: [{ key: 'cost', type: 'money', column: { header: 'Cost' } }],
+      entries: sampleEntries.slice(0, 1).map((entry) => ({ ...entry, meta: { cost: 1500 } })),
+    });
+    const gantt = new Gantt({
+      container,
+      dataset,
+      gridColumns: [
+        'name',
+        {
+          field: 'cost',
+          cellRenderer: ({ value, fieldValue }) =>
+            typeof fieldValue === 'number' && fieldValue > 1000 ? { text: `over: ${value}` } : undefined,
+        },
+      ],
+    });
+
+    expect(container.querySelector('.fg-row [data-field="cost"]')?.textContent).toBe('over: $1500');
+
+    gantt.destroy();
+  });
+
   it('a Dataset change re-binds columns so a later cost edit paints the new cell text', async () => {
     const container = document.createElement('div');
     const dataset = new Dataset({
@@ -2332,6 +2391,50 @@ describe('Gantt plugin kind registrations (S5.9, D-S5-21/D-S5-22)', () => {
     expect(start.hidden).toBe(true);
 
     document.elementFromPoint = original;
+    gantt.destroy();
+    container.remove();
+  });
+
+  it('[review P2] two plugins that each define a kind both install, both paint, and dropping one leaves the other', async () => {
+    const container = document.createElement('div');
+    document.body.append(container);
+    const dataset = new Dataset({
+      entries: [
+        { ...sampleEntries[0]!, kind: 'buffer' },
+        { ...sampleEntries[1]!, kind: 'risk' },
+      ],
+      timeZone: 'UTC',
+    });
+    const buffer = bufferKind();
+    const risk = riskKind();
+    const gantt = new Gantt({ container, dataset, plugins: [buffer, risk] });
+    const paint = (): Promise<unknown> => new Promise((resolve) => requestAnimationFrame(resolve));
+    await paint();
+
+    const barFor = (kind: string): HTMLElement =>
+      Array.from(container.querySelectorAll<HTMLElement>('.fg-bar')).find(
+        (bar) => bar.getAttribute('data-kind') === kind,
+      )!;
+
+    // Both installed, and both painted their own class from their own `bar` registration.
+    expect(gantt.plugins.map((plugin) => plugin.id)).toEqual(['demo.bufferKind', 'demo.riskKind']);
+    expect(barFor('buffer').classList.contains('demo-buffer-bar')).toBe(true);
+    expect(barFor('risk').classList.contains('demo-risk-bar')).toBe(true);
+
+    // Dropping the first-registered plugin leaves the second painting.
+    gantt.plugins = [risk];
+    await paint();
+    expect(barFor('buffer').classList.contains('demo-buffer-bar')).toBe(false);
+    expect(barFor('risk').classList.contains('demo-risk-bar')).toBe(true);
+
+    // Re-installing is an ordinary sequence (#155), and the other disposal order behaves the same.
+    gantt.plugins = [buffer, risk];
+    await paint();
+    gantt.plugins = [buffer];
+    await paint();
+    expect(barFor('buffer').classList.contains('demo-buffer-bar')).toBe(true);
+    expect(barFor('risk').classList.contains('demo-risk-bar')).toBe(false);
+
     gantt.destroy();
     container.remove();
   });

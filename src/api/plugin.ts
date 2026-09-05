@@ -154,12 +154,20 @@ export interface PluginContextOf<TGantt = unknown, TDataset = Dataset> {
       options?: DomEventOptions,
     ): Disposer;
     /** S5.4, D-S5-11: claims one of the four renderer points — `bar`, `cell`, `header`, `tooltip`.
-     *  One slot per point: a consumer's own `GanttOptions.*Renderer` always wins over this (a
-     *  consumer that wants a plugin's renderer to win removes its own instead); two plugins claiming
-     *  the same point throws `RendererAlreadyRegisteredError`, naming both plugin ids. Legal only
-     *  while `setup` runs (D-S5-4); the point is freed again when this plugin is disposed, so
-     *  uninstalling and re-installing one plugin is a legal sequence and not a collision with its
-     *  own earlier registration (#155). The returned `Disposer` frees it sooner. */
+     *  A consumer's own `GanttOptions.*Renderer` always wins over this. A consumer that wants a
+     *  plugin's renderer to win removes its own instead.
+     *
+     *  `cell`, `header` and `tooltip` hold one slot each: a cell belongs to a column and a header to
+     *  a band, so neither has a key to merge on. The `bar` point's per-kind map form (D-S5-12) holds
+     *  one slot **per kind**, so a plugin that defines one kind and a plugin that defines another
+     *  both install (review P2). The whole-point form — a function, not a map — stays exclusive: it
+     *  answers every kind, so it refuses, and is refused by, any per-kind claim.
+     *
+     *  Two plugins claiming one slot throws `RendererAlreadyRegisteredError`, naming the slot and
+     *  both plugin ids. Legal only while `setup` runs (D-S5-4). Every slot this call claimed is
+     *  freed again when the plugin is disposed, so uninstalling and re-installing one plugin is a
+     *  legal sequence and not a collision with its own earlier registration (#155). The returned
+     *  `Disposer` frees them sooner. */
     registerRenderer<P extends RendererPoint>(point: P, renderer: RendererFor<P>): Disposer;
     /** S5.5 (API gap found while building `tooltips()`): resolves what should paint `entryId`'s
      *  tooltip body right now — the same precedence `registerRenderer('tooltip', …)`'s slot resolves
@@ -207,7 +215,10 @@ export interface PluginContextOf<TGantt = unknown, TDataset = Dataset> {
    *  looks; `commands` (top of this interface) answers what actions it offers. */
   layout: {
     /** Claims the item-shaping producer for `kind`, replacing whichever one `kind` resolved to
-     *  before (the shipped `'span'`/`'group'`/`'milestone'` producers included). `producer` is pure —
+     *  before (the shipped `'span'`/`'group'`/`'milestone'` producers included). The common producer
+     *  is `(entry) => [wholeEntryItem(entry)]` — one Item over the entry's whole span, built by the
+     *  library's own exported helper, so a plugin never restates the Item id convention (review P3).
+     *  `producer` is pure —
      *  it runs in `layout/`, the same DOM-free pass every other item producer runs in. Legal only
      *  while `setup` runs (D-S5-4); removed automatically on disposal, restoring whichever
      *  registration is newest among the rest — disposing one plugin never disturbs another
@@ -218,6 +229,9 @@ export interface PluginContextOf<TGantt = unknown, TDataset = Dataset> {
 
 export interface GanttPluginOf<TGantt = unknown, TDataset = Dataset> {
   id: PluginId;
-  /** Called once, after the Gantt mounts. Returns a disposer for the plugin's own resources. */
-  setup(ctx: PluginContextOf<TGantt, TDataset>): Disposer;
+  /** Called once, after the Gantt mounts. Returns a `Disposer` for the plugin's own resources, or
+   *  nothing at all (review P4). Every `register*` and every `onDomEvent` files its own removal in
+   *  `ctx.disposables`, so a plugin that owns no timer, socket or subscription of its own has
+   *  nothing left to return. */
+  setup(ctx: PluginContextOf<TGantt, TDataset>): Disposer | void;
 }

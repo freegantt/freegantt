@@ -10,6 +10,10 @@ export interface RegistrationTable<K, V> {
   /** Every key's winning registration, in first-registration order. Deliberately not `values()`:
    *  it answers one value per key, not every value ever registered. */
   active(): readonly V[];
+  /** Every key that still holds a registration, in first-registration order. A caller reads this to
+   *  refuse a claim that covers keys it does not name itself — `view/renderer-registry.ts`'s
+   *  whole-point `bar` claim is the one case (review P2). */
+  keys(): readonly K[];
   /** Adds `value` as the newest registration for `key`. The returned `Disposer` removes exactly
    *  this registration — never a sibling on the same key, in any disposal order — and is
    *  idempotent. `get(key)` then falls back to the newest registration left, or to the initial
@@ -36,6 +40,9 @@ export function createRegistrationTable<K, V>(
   return {
     get(key) {
       return winner(stacks.get(key))?.value;
+    },
+    keys() {
+      return [...stacks.keys()];
     },
     active() {
       const values: V[] = [];

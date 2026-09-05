@@ -56,7 +56,11 @@ export type FieldSource =
 export interface ColumnCellRendererContext {
   /** Undefined for a row with no backing Entry — a group or custom row. */
   entry?: Entry;
+  /** What the grid paints: this column's Field value, through the Field's own `formatValue`. */
   value: string;
+  /** The same Field value before formatting — what `dataset.entries.fieldValue(id, field)` answers
+   *  (review H3). One vocabulary with the Gantt-wide `CellRendererContext`. */
+  fieldValue: unknown;
 }
 export type ColumnCellRenderer = (ctx: ColumnCellRendererContext) => ElementDescription | undefined;
 
