@@ -27,6 +27,9 @@ export const BAR_HANDLE_CLASS = 'fg-bar-handle';
 /** `dataset` keys, spelled the way `HTMLElement.dataset` reads them (camelCase). */
 export const TESTID_KEY = 'testid';
 export const ITEM_ID_KEY = 'itemId';
+/** The Row this node is — the row's own identity, which `view/gantt-dom.ts` asks the layout about to
+ *  learn every Entry the row owns (#199). `ENTRY_ID_KEY` below is a different question. */
+export const ROW_ID_KEY = 'rowId';
 export const ENTRY_ID_KEY = 'entryId';
 export const FIELD_KEY = 'field';
 

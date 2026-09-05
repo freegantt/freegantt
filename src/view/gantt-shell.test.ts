@@ -534,8 +534,9 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
 
   it('a caller passing both scale and preset gets the shared scale, ignoring the constructor preset (D-S1.9-9)', () => {
     // The public `Gantt`/`GanttOptions` makes this combination a compile-time error (issue #84,
-    // finding #3); `GanttShellOptions` stays a plain interface, so the dev-mode warning is still
-    // reachable for a caller constructing `GanttShell` directly.
+    // finding #3); `GanttShellOptions` stays a plain interface, so the warning is still reachable for
+    // a caller constructing `GanttShell` directly. S5.12: nothing is subscribed to `error` here, so
+    // the report falls back to the same `console.warn` this test already read.
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const scale = new TimeScaleModel({ preset: 'week' });
     const container = document.createElement('div');

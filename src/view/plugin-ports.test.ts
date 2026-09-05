@@ -3,7 +3,7 @@
 // loop, so the gate, the repaint and the disposal were only ever tested through a whole Gantt.
 import { describe, expect, it, vi } from 'vitest';
 import { RegistrationClosedError } from '../model/index.js';
-import type { Disposer, Entry, EntryId, PluginId } from '../model/index.js';
+import type { Disposer, Entry, EntryId, ErrorReportInput, PluginId } from '../model/index.js';
 import type { FrameBar, ResolvedColumn, TooltipRenderer } from '../layout/index.js';
 import { buildPluginPorts } from './plugin-ports.js';
 import type { GanttShellPorts, PluginContextParts } from './plugin-ports.js';
@@ -37,7 +37,7 @@ interface Harness {
 /** A `GanttDom` over one plain element. It answers `owns` truthfully, which is the whole of what
  *  `onDomEvent`'s scoping needs, and resolves every owned node to one `'row'` target. */
 function makeDom(container: HTMLElement): GanttShellPorts['dom'] {
-  const target: DomTarget = { kind: 'row', element: container };
+  const target: DomTarget = { kind: 'row', element: container, entryIds: [] };
   return {
     owns: (node) => container.contains(node),
     targetUnder: (node) => (container.contains(node) ? target : undefined),
@@ -99,6 +99,9 @@ function makeHarness(overrides: Partial<GanttShellPorts> = {}): Harness {
     canEdit: () => true,
     proposeEntryEdit: () => true,
     announceEntryEdit: vi.fn(),
+    // S5.12: no bus behind the fake, so every report falls through to the site's own console line —
+    // which is what the `console.error` assertion below still reads.
+    raiseError: (_report, fallback) => fallback?.(),
     ...overrides,
   };
   const { parts, gate } = buildPluginPorts(shell, PLUGIN);
@@ -247,7 +250,40 @@ describe('buildPluginPorts — resolveTooltipContent (S5.5)', () => {
     });
 
     expect(harness.parts.view.resolveTooltipContent('a' as EntryId)).toBeUndefined();
+    expect(errorSpy).toHaveBeenCalledTimes(1);
     errorSpy.mockRestore();
+  });
+
+  it('a throwing tooltip renderer raises one report, and the console line then stays silent', () => {
+    const reported: ErrorReportInput[] = [];
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const harness = makeHarness({
+      resolveTooltipRenderer: () => ({
+        renderer: () => {
+          throw new Error('boom');
+        },
+      }),
+      raiseError: (report) => reported.push(report),
+    });
+
+    harness.parts.view.resolveTooltipContent('a' as EntryId);
+
+    expect(reported).toHaveLength(1);
+    expect(reported[0]?.code).toBe('renderer-failed');
+    expect(reported[0]?.by).toBe('core');
+    expect(errorSpy).not.toHaveBeenCalled();
+    errorSpy.mockRestore();
+  });
+
+  it('ctx.raiseError fills `by` with the plugin own id (D-S5-35)', () => {
+    const reported: ErrorReportInput[] = [];
+    const harness = makeHarness({ raiseError: (report) => reported.push(report) });
+
+    harness.parts.raiseError({ code: 'demo-refusal', message: 'the plugin said no', severity: 'info' });
+
+    expect(reported).toEqual([
+      { code: 'demo-refusal', message: 'the plugin said no', severity: 'info', by: PLUGIN },
+    ]);
   });
 });
 

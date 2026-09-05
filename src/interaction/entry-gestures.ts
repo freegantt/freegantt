@@ -104,8 +104,8 @@ export function attachEntryGestures(
     const toIndex = order.indexOf(to[to.length - 1]!);
     if (fromIndex === -1 || toIndex === -1) return to;
     const [lo, hi] = fromIndex <= toIndex ? [fromIndex, toIndex] : [toIndex, fromIndex];
-    // #198: no second capability call here. `selectableEntriesInRowOrder()` already dropped every
-    // Entry that refuses `select`, and the capability resolves once, in the shell (I14).
+    // No capability filter here: `selectableEntriesInRowOrder()` is already capability-filtered, and
+    // the capability resolves once, in the shell (I14).
     return order.slice(lo, hi + 1);
   }
 

@@ -165,7 +165,7 @@ describe('column commands — Alt/Shift+Arrow over a focused header cell (S5.7, 
     const ctx = {
       dataset: {} as CommandContext<unknown>['dataset'],
       gantt: {},
-      ...(field !== undefined ? { target: { kind: 'header' as const, field } } : {}),
+      ...(field !== undefined ? { target: { kind: 'header' as const, field, entryIds: [] } } : {}),
     } as CommandContext<unknown>;
     return { registry: new CommandRegistry<unknown>(() => ctx), ctx };
   }

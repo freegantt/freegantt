@@ -2,17 +2,23 @@ import { describe, expect, it, vi } from 'vitest';
 import { PluginRuntime, RegistrationGate, type ShellPlugin } from './plugin-runtime.js';
 import { DisposableStore } from './disposables.js';
 import { DuplicatePluginIdError, PluginSetupError, RegistrationClosedError } from '../model/index.js';
+import type { ErrorReportInput, RaiseError } from '../model/index.js';
 
 interface TestContext {
   disposables: DisposableStore;
   log: string[];
 }
 
-function makeRuntime(log: string[]) {
+/** S5.12: `PluginRuntime` reports before it prints. The default raiser here has no bus behind it, so
+ *  it runs the site's own `console` fallback every time — which is what the console assertions below
+ *  still read. A test that wants the report instead passes its own. */
+const consoleOnly: RaiseError = (_report, fallback) => fallback?.();
+
+function makeRuntime(log: string[], raiseError: RaiseError = consoleOnly) {
   return new PluginRuntime<TestContext>(() => {
     const disposables = new DisposableStore();
     return { context: { disposables, log }, disposables };
-  });
+  }, raiseError);
 }
 
 function plugin(
@@ -213,7 +219,32 @@ describe('PluginRuntime', () => {
     errorSpy.mockRestore();
   });
 
-  it('a same-id, new-instance reassignment warns in dev mode', () => {
+  it('a disposer throw raises one report, and the console line stays silent for a subscriber', () => {
+    const log: string[] = [];
+    const reported: ErrorReportInput[] = [];
+    const runtime = makeRuntime(log, (report) => reported.push(report));
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    runtime.install([
+      plugin(
+        'b',
+        () => {},
+        () => {
+          throw new Error('disposer boom');
+        },
+      ),
+    ]);
+
+    runtime.disposeAll();
+
+    expect(reported).toHaveLength(1);
+    expect(reported[0]?.code).toBe('disposer-failed');
+    expect(reported[0]?.severity).toBe('error');
+    expect(reported[0]?.by).toBe('b');
+    expect(errorSpy).not.toHaveBeenCalled();
+    errorSpy.mockRestore();
+  });
+
+  it('a same-id, new-instance reassignment reports and warns', () => {
     const log: string[] = [];
     const runtime = makeRuntime(log);
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
@@ -223,6 +254,23 @@ describe('PluginRuntime', () => {
 
     expect(warnSpy).toHaveBeenCalledTimes(1);
     expect(warnSpy.mock.calls[0]?.[0]).toContain('"a"');
+    warnSpy.mockRestore();
+  });
+
+  it('a dropped reconfigure raises at warning, no longer gated by the build (D-S5-36)', () => {
+    const log: string[] = [];
+    const reported: ErrorReportInput[] = [];
+    const runtime = makeRuntime(log, (report) => reported.push(report));
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    runtime.install([plugin('a', () => {})]);
+
+    runtime.install([plugin('a', () => {})]);
+
+    expect(reported).toHaveLength(1);
+    expect(reported[0]?.code).toBe('plugin-reconfigure-dropped');
+    expect(reported[0]?.severity).toBe('warning');
+    expect(reported[0]?.by).toBe('a');
+    expect(warnSpy).not.toHaveBeenCalled();
     warnSpy.mockRestore();
   });
 });

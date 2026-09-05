@@ -161,11 +161,10 @@ export interface CommandRegistryOf<TGantt = unknown, TDataset = Dataset> {
 
 // @public
 export interface CommandTarget {
+    entryIds: readonly EntryId[];
     field?: FieldKey;
     // (undocumented)
     kind: TargetKind;
-    // (undocumented)
-    rowId?: EntryId;
 }
 
 // @public
@@ -294,6 +293,7 @@ export interface DatasetEventMap {
     change: {
         changeSet: ChangeSet;
     };
+    error: ErrorReport;
 }
 
 // @public
@@ -460,6 +460,7 @@ export interface DomTarget {
     element: HTMLElement;
     // (undocumented)
     entry?: Entry;
+    entryIds: readonly EntryId[];
     // (undocumented)
     field?: FieldKey;
     // (undocumented)
@@ -686,6 +687,41 @@ export interface EntryStoreView<TMeta = unknown, TFields extends Record<string, 
     // (undocumented)
     readonly size: number;
 }
+
+// @public
+export type ErrorCode = 'mutation-cancelled' | 'entry-move-cancelled' | 'entry-resize-cancelled' | 'renderer-failed' | 'disposer-failed' | 'plugin-reconfigure-dropped' | 'scale-options-ignored' | 'rollup-corrected' | 'derived-value' | 'no-parse-value' | 'no-date-value' | 'time-of-day' | 'unsaved-value' | (string & {});
+
+// @public
+export interface ErrorFeed {
+    // (undocumented)
+    off(name: 'error', handler: (report: ErrorReport) => void): void;
+    // (undocumented)
+    on(name: 'error', handler: (report: ErrorReport) => void): void;
+}
+
+// @public
+export interface ErrorReport {
+    readonly at: Instant;
+    // (undocumented)
+    readonly by: ErrorReporter;
+    readonly cause?: unknown;
+    // (undocumented)
+    readonly code: ErrorCode;
+    readonly entryId?: EntryId;
+    readonly field?: FieldKey;
+    readonly message: string;
+    // (undocumented)
+    readonly severity: ErrorSeverity;
+}
+
+// @public
+export type ErrorReporter = 'core' | 'consumer' | (PluginId & {});
+
+// @public
+export type ErrorReportInput = Omit<ErrorReport, 'at'>;
+
+// @public
+export type ErrorSeverity = 'error' | 'warning' | 'info';
 
 // @public
 export type ExtenderWrapper = (next: EditExtender) => EditExtender;
@@ -1006,6 +1042,7 @@ export interface GanttEventMap {
     entryMove: EntryMove;
     // (undocumented)
     entryResize: EntryResize;
+    error: ErrorReport;
     // (undocumented)
     gridColumnsChange: GridColumnsChange;
     // (undocumented)
@@ -1292,6 +1329,9 @@ export interface MenuItem {
 }
 
 // @public
+export function mergeEntryEdits(base: EntryEdits, extra: EntryEdits): EntryEdits;
+
+// @public
 export class MissingPluginError extends FreeGanttError {
     constructor(pluginId: PluginId, requiredId: PluginId);
     // (undocumented)
@@ -1405,6 +1445,7 @@ export interface PluginContextParts<TGantt = unknown, TDataset = unknown> {
     layout: {
         registerItemProducer(kind: EntryKind, producer: ItemProducer): Disposer;
     };
+    raiseError(report: PluginErrorReport): void;
     // (undocumented)
     view: {
         overlay: MountLayer;
@@ -1424,6 +1465,9 @@ export interface PluginContextParts<TGantt = unknown, TDataset = unknown> {
 
 // @public
 export type PluginDocument = Readonly<Record<string, Readonly<Record<string, unknown>>>>;
+
+// @public
+export type PluginErrorReport = Omit<ErrorReportInput, 'by'>;
 
 // @public
 export type PluginId = string;
@@ -1525,6 +1569,9 @@ export interface ProposedSpan {
     // (undocumented)
     readonly start: Instant;
 }
+
+// @public
+export type RaiseError = (report: ErrorReportInput, fallback?: () => void) => void;
 
 // @public
 export interface RangeBand {
@@ -1912,6 +1959,9 @@ export interface ViewPresetHeader extends TickStep {
     format: DateFormat;
     repeatCoarserUnits?: boolean;
 }
+
+// @public
+export function watchAllErrors(feeds: readonly ErrorFeed[], handler: (report: ErrorReport) => void): Disposer;
 
 // @public
 export function wholeEntryItem(entry: Entry): Item;

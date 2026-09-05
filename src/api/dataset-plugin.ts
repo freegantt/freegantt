@@ -27,6 +27,11 @@ import type { DisposableStore } from '../extensions/disposables.js';
 // Re-exported so a plugin author names the store types from the same module as the contract that
 // hands them over, rather than hunting for the module they are declared in.
 export type { PluginStore, PluginStoreView, ExtenderWrapper };
+// The one legal way to compose two extenders' writes (#197), here for that same reason: it belongs
+// beside `DatasetEditHook`, the contract that hands a plugin the occupant it has to merge with. An
+// app author never meets it — it takes and returns `EntryEdits`, the storage-shaped map only an
+// extender produces.
+export { mergeEntryEdits } from '../data/fields/field-access.js';
 
 /** `beforeChange`/`change`, the two events a Dataset raises (D-S2-5, D-S2-25). Returning `false` from a
  *  `beforeChange` handler vetoes the whole changeset — the refusal path a lock plugin uses (D-S5-24). */
@@ -44,7 +49,8 @@ export interface DatasetFieldRegistrations {
 }
 
 /** The extension hook, as a plugin claims it (D-S5-23). Installing composes: the wrapper receives the
- *  current occupant, so a second plugin adds to the first's cascade instead of evicting it. */
+ *  current occupant, so a second plugin adds to the first's cascade instead of evicting it. Merge the
+ *  two results with `mergeEntryEdits`, never with a spread (#197). */
 export interface DatasetEditHook {
   setExtender(wrap: ExtenderWrapper): void;
 }

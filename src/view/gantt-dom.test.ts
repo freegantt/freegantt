@@ -8,7 +8,7 @@
 // rename at one paint site only does not.
 import { describe, expect, it } from 'vitest';
 import { FrameLayout, createItemProducerRegistry } from '../layout/index.js';
-import type { TimeScale, ViewPreset } from '../layout/index.js';
+import type { RowSource, TimeScale, ViewPreset } from '../layout/index.js';
 import { createDomBackend } from '../render/dom/index.js';
 import { ContainerDom } from './gantt-dom.js';
 import { PaneLayout } from './pane-layout.js';
@@ -34,10 +34,20 @@ const preset: ViewPreset = {
 };
 
 const entries = sampleEntries.slice(0, 2);
+/** A row that owns three Entries — the shape #199 is about. Only a `{ source: 'custom' }` resolver
+ *  can build one, so this is what the defect needed to be seen at all. */
+const threeOnOneRow = sampleEntries.slice(1, 4);
+const oneRowForAllThree: RowSource = {
+  source: 'custom',
+  resolve: ({ entries: all }) => [{ id: 'lane-1', entryIds: all.map((entry) => entry.id) }],
+};
 
 /** One mounted Gantt's worth of DOM: a `PaneLayout` for the panes and the splitter, and a real
  *  `render/dom` backend painting into its surfaces. */
-function paintOneGantt(painted: readonly Entry[] = entries): {
+function paintOneGantt(
+  painted: readonly Entry[] = entries,
+  rows?: RowSource,
+): {
   dom: ContainerDom;
   container: HTMLElement;
   destroy(): void;
@@ -56,6 +66,7 @@ function paintOneGantt(painted: readonly Entry[] = entries): {
   backend.sync(
     layout.computeFrame({
       entries: painted,
+      ...(rows !== undefined ? { rows } : {}),
       scale,
       preset,
       visible: { x: 0, y: 0, width: 200, height: 200 },
@@ -74,6 +85,7 @@ function paintOneGantt(painted: readonly Entry[] = entries): {
       paneLayout,
       (id) => painted.find((entry) => entry.id === id),
       (id) => layout.itemIdsForEntry(id),
+      (id) => layout.entryIdsForRow(id),
     ),
     container,
     destroy: () => {
@@ -149,6 +161,53 @@ describe('ContainerDom — what render/dom emits is what targetUnder reads', () 
 
     expect(target?.kind).toBe('row');
     expect(target?.entry?.id).toBe(entries[0]!.id);
+    expect(target?.entryIds).toEqual([entries[0]!.id]);
+    gantt.destroy();
+  });
+
+  it('names every Entry a row owns, and keeps the first as the row subject (#199)', () => {
+    const gantt = paintOneGantt(threeOnOneRow, oneRowForAllThree);
+    const row = gantt.container.querySelector<HTMLElement>('.fg-row')!;
+
+    const target = gantt.dom.targetUnder(row);
+
+    expect(target?.kind).toBe('row');
+    expect(target?.entryIds).toEqual(threeOnOneRow.map((entry) => entry.id));
+    // The subject is what the cells format, and it stays the one Entry `data-entry-id` names.
+    expect(target?.entry?.id).toBe(threeOnOneRow[0]!.id);
+    gantt.destroy();
+  });
+
+  it('a cell of a row that owns three names the same three (#199)', () => {
+    const gantt = paintOneGantt(threeOnOneRow, oneRowForAllThree);
+    const cell = gantt.container.querySelector<HTMLElement>('.fg-row [data-field="cost"]')!;
+
+    const target = gantt.dom.targetUnder(cell);
+
+    // A click anywhere in the row selects all three (#185), so a right-click there names all three.
+    expect(target?.kind).toBe('cell');
+    expect(target?.entryIds).toEqual(threeOnOneRow.map((entry) => entry.id));
+    gantt.destroy();
+  });
+
+  it('a bar of a row that owns three names only the Entry it draws (#199)', () => {
+    const gantt = paintOneGantt(threeOnOneRow, oneRowForAllThree);
+    const bar = gantt.container.querySelector<HTMLElement>('[data-item-id]')!;
+
+    const target = gantt.dom.targetUnder(bar);
+
+    expect(target?.kind).toBe('bar');
+    expect(target?.entryIds).toEqual([threeOnOneRow[0]!.id]);
+    gantt.destroy();
+  });
+
+  it('a header cell and the splitter stand for no Entry at all', () => {
+    const gantt = paintOneGantt();
+    const header = gantt.container.querySelector<HTMLElement>('.fg-grid-header [data-field="cost"]')!;
+    const splitter = gantt.container.querySelector<HTMLElement>('.fg-splitter')!;
+
+    expect(gantt.dom.targetUnder(header)?.entryIds).toEqual([]);
+    expect(gantt.dom.targetUnder(splitter)?.entryIds).toEqual([]);
     gantt.destroy();
   });
 

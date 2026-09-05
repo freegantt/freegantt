@@ -3,6 +3,7 @@ import { runTransaction } from './transaction.js';
 import { DatasetState } from './dataset-state.js';
 import { fieldRowsOf } from './change-set.js';
 import { MutationCancelledError, MutationDuringNotificationError, entryId } from '../model/index.js';
+import type { ErrorReport } from '../model/index.js';
 import { toEndInstant, toInstant } from '../time/index.js';
 import type { EntryEdits, StoredEdit } from './edit-extension.js';
 
@@ -307,6 +308,51 @@ describe('runTransaction', () => {
     ).toThrow(/I4/);
   });
 
+  // #197: `proposedKeys` is bookkeeping on a `StoredEdit`, not a Field. The body edit always carries
+  // it, so comparing raw object keys made I4 refuse any extender edit that carried one — which every
+  // extender composed with `mergeEntryEdits` now does.
+  it('I4 reads proposedKeys as the Fields proposed, not as a Field named "proposedKeys"', () => {
+    const state = new DatasetState({
+      entries: [{ id: 't1', name: 't1', start: 0, end: 1 }],
+      timeZone: 'UTC',
+      fieldTypes: { money: { rollUp: 'sum' } },
+      fields: [{ key: 'cost', type: 'money' }],
+      editExtender: (): EntryEdits =>
+        new Map<ReturnType<typeof entryId>, StoredEdit>([
+          [entryId('t1'), { meta: { cost: 500 }, proposedKeys: new Set(['cost']) }],
+        ]),
+    });
+
+    runTransaction(state, (token) => state.entries.stageUpdate(token, entryId('t1'), { name: 'a' }), 'user');
+
+    expect(state.entries.get(entryId('t1'))?.meta).toEqual({ cost: 500 });
+  });
+
+  it('I4 still fires when body and extender propose the same meta-sourced Field', () => {
+    const state = new DatasetState({
+      entries: [{ id: 't1', name: 't1', start: 0, end: 1 }],
+      timeZone: 'UTC',
+      fieldTypes: { money: { rollUp: 'sum' } },
+      fields: [{ key: 'cost', type: 'money' }],
+      editExtender: (): EntryEdits =>
+        new Map<ReturnType<typeof entryId>, StoredEdit>([
+          [entryId('t1'), { meta: { cost: 500 }, proposedKeys: new Set(['cost']) }],
+        ]),
+    });
+
+    expect(() =>
+      runTransaction(
+        state,
+        (token) =>
+          state.entries.stageUpdate(token, entryId('t1'), {
+            meta: { cost: 1 },
+            proposedKeys: new Set(['cost']),
+          }),
+        'user',
+      ),
+    ).toThrow(/I4/);
+  });
+
   it('the changeset is frozen in dev mode — a beforeChange handler cannot edit it', () => {
     const state = dataset([{ id: 't1' }]);
     let sawFrozen = false;
@@ -363,6 +409,33 @@ describe('runTransaction', () => {
 
     expect(changeFired).toBe(false);
     expect(state.entries.get(entryId('t1'))?.name).toBe('t1');
+  });
+
+  it('veto: the refusal also raises one Error report, carrying the MutationCancelledError (D-S5-35)', () => {
+    const state = dataset([{ id: 't1' }]);
+    const reports: ErrorReport[] = [];
+    state.on('beforeChange', () => false);
+    state.on('error', (report) => {
+      reports.push(report);
+    });
+
+    expect(() =>
+      runTransaction(
+        state,
+        (token) => state.entries.stageUpdate(token, entryId('t1'), { name: 'a' }),
+        'user',
+      ),
+    ).toThrow(MutationCancelledError);
+
+    expect(reports).toHaveLength(1);
+    const [report] = reports;
+    expect(report?.code).toBe('mutation-cancelled');
+    expect(report?.severity).toBe('info');
+    expect(report?.by).toBe('consumer');
+    expect(typeof report?.at).toBe('number');
+    const cause = report?.cause;
+    expect(cause).toBeInstanceOf(MutationCancelledError);
+    expect((cause as MutationCancelledError).changeSet.updated).toHaveLength(1);
   });
 
   it('a beforeChange handler that throws still discards the write set — not left open for the next transaction', () => {

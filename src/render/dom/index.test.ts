@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createDomBackend } from './index.js';
 import { computeFrame, createItemProducerRegistry } from '../../layout/index.js';
-import type { BarRenderer, ItemId, TimeScale, ViewPreset } from '../../layout/index.js';
+import type { BarRenderer, ErrorReportInput, ItemId, TimeScale, ViewPreset } from '../../layout/index.js';
 import { sampleEntries } from '../../../fixtures/sample-dataset.js';
 
 function entryLookup(id: string): (typeof sampleEntries)[number] | undefined {
@@ -1451,6 +1451,47 @@ describe('render/dom backend', () => {
     expect(bars).toHaveLength(2);
     expect(bars[0]?.textContent).toBe(frame.bars[0]!.label);
     expect(bars[1]?.textContent).toBe(frame.bars[1]!.label);
+
+    backend.destroy();
+    grid.remove();
+    timeline.remove();
+  });
+
+  it('a barRenderer that throws raises one report at warning, naming the plugin (D-S5-35)', () => {
+    const reported: ErrorReportInput[] = [];
+    const boom = new Error('boom');
+    const backend = createDomBackend({
+      entryById: entryLookup,
+      resolveBarRenderer: () => ({
+        pluginId: 'demo.plugin',
+        renderer: () => {
+          throw boom;
+        },
+      }),
+      resolveCellRenderer: () => undefined,
+      resolveHeaderRenderer: () => undefined,
+      raiseError: (report) => reported.push(report),
+    });
+    const { grid, timeline } = mountSurfaces();
+    backend.mount({ grid, timeline });
+    const frame = computeFrame({
+      entries: sampleEntries.slice(0, 1),
+      scale,
+      preset,
+      visible: { x: 0, y: 0, width: 0, height: 0 },
+      rowHeight: 32,
+      revision: 0,
+      itemProducerRegistry,
+    });
+
+    backend.sync(frame);
+
+    expect(reported).toHaveLength(1);
+    expect(reported[0]?.code).toBe('renderer-failed');
+    expect(reported[0]?.severity).toBe('warning');
+    expect(reported[0]?.by).toBe('demo.plugin');
+    expect(reported[0]?.cause).toBe(boom);
+    expect(reported[0]?.message).toContain('barRenderer from plugin "demo.plugin" threw');
 
     backend.destroy();
     grid.remove();
