@@ -1097,8 +1097,88 @@ flowchart LR
         </div>
       </section>
 
+      <!-- ══════════════════════════ S5.10 BLOCKING AUDIT ══════════════════════════ -->
+      <section class="space-y-6" id="audit">
+        <div class="space-y-1">
+          <div class="text-xs uppercase tracking-[0.2em] text-slate-400">S5.10 blocking audit</div>
+          <h2 class="font-serif text-3xl">Read again, one question: does it block S5.10?</h2>
+        </div>
+        <p class="text-slate-600 max-w-3xl text-sm">
+          Every finding above was re-checked against the source at
+          <code class="font-mono">afdafe9</code>. No finding blocks S5.10. The two documentation
+          findings whose fix is self-contained are done here. Everything else is recorded below,
+          with the reason it stays.
+        </p>
+
+        <div class="rounded-lg border border-emerald-200 bg-emerald-50 p-5 space-y-3 text-sm text-emerald-900">
+          <div class="font-semibold">Fixed in this pass</div>
+          <ul class="space-y-2">
+            <li><span class="font-mono">- [x]</span> <strong>H2 — the port block names the two new members.</strong>
+              <code class="font-mono">plans/01</code> §10 now lists
+              <code class="font-mono">rowLayer: RowLayer</code> in the <code class="font-mono">view</code> group and
+              <code class="font-mono">rowLayerBounds</code> on <code class="font-mono">GanttDom</code>. One rule line
+              says which of the two mount layers a plugin picks, and why the scroll decides.</li>
+            <li><span class="font-mono">- [x]</span> <strong>H3 — the three mount claims say the row layer.</strong>
+              <code class="font-mono">plans/02</code> §4 and
+              <code class="font-mono">plans/s5.8-inline-editing.md</code> §§ now name
+              <code class="font-mono">ctx.view.rowLayer</code>, not the Overlay.
+              <code class="font-mono">plans/reviews/2026-09-04-s5-extensibility-fixes.md</code> §6 records that
+              #158 superseded R4's mount claim.</li>
+          </ul>
+        </div>
+
+        <div class="rounded-lg border border-slate-200 bg-white overflow-hidden">
+          <div class="px-5 py-3 border-b border-slate-200 text-sm font-semibold text-slate-700">
+            Recorded, not fixed
+          </div>
+          <table class="w-full text-sm">
+            <thead class="bg-stone-100 text-slate-500 text-xs uppercase tracking-wider">
+              <tr><th class="text-left px-5 py-2">Finding</th><th class="text-left px-5 py-2">Why it stays</th></tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100 align-top">
+              <tr><td class="px-5 py-3 font-semibold">H1 — the ASD-STE100 pass regressed</td>
+                <td class="px-5 py-3 text-slate-600">A comment pass over six files, plus a detector in the gate. It is
+                  real, and it is a standards job with its own scope. S5.10 writes new prose in new files, so it
+                  inherits no sentence from the six.</td></tr>
+              <tr><td class="px-5 py-3 font-semibold">H4 — a second <code class="font-mono">CSS.escape</code> detect</td>
+                <td class="px-5 py-3 text-slate-600">Confirmed at <code class="font-mono">view/gantt-dom.ts:230</code>,
+                  and the two fallbacks do differ. It is a <code class="font-mono">src/</code> change in
+                  <code class="font-mono">view/</code>. S5.10 lands in
+                  <code class="font-mono">data/</code>, <code class="font-mono">model/</code> and
+                  <code class="font-mono">extensions/</code>, and touches neither file.</td></tr>
+              <tr><td class="px-5 py-3 font-semibold">Candidate 1 — the plugin surface is declared twice</td>
+                <td class="px-5 py-3 text-slate-600">The duplication is real. The ordering claim is not: S5.10's four
+                  seams are <code class="font-mono">DatasetPluginContext</code> in
+                  <code class="font-mono">model/plugin.ts</code>, a separate type from
+                  <code class="font-mono">PluginContextOf</code>, and they add no twin to it. So S5.10 doubles nothing,
+                  and the two changes are independent.</td></tr>
+              <tr><td class="px-5 py-3 font-semibold">Candidates 2–5</td>
+                <td class="px-5 py-3 text-slate-600">All in <code class="font-mono">view/</code> and
+                  <code class="font-mono">extensions/features/</code>. None of them is a premise S5.10 rests on.</td></tr>
+              <tr><td class="px-5 py-3 font-semibold">Q1–Q10</td>
+                <td class="px-5 py-3 text-slate-600">Judgement calls in the view and inline-editing files. Q8's API gap
+                  (a plugin cannot read its own <code class="font-mono">ctx.view</code> back from a Gantt) stays open
+                  against S5, and it is a Gantt-plugin gap, not a Dataset-plugin one.</td></tr>
+              <tr><td class="px-5 py-3 font-semibold">S1 — <code class="font-mono">gantt.gridColumns</code> bakes a plugin column</td>
+                <td class="px-5 py-3 text-slate-600">Confirmed: <code class="font-mono">#withWidth</code> and
+                  <code class="font-mono">#reordered</code> both build from
+                  <code class="font-mono">effectiveInput()</code>
+                  (<code class="font-mono">column-chrome.ts:253,259</code>), and
+                  <code class="font-mono">commit</code> writes that list into
+                  <code class="font-mono">#gridColumnInput</code> (<code class="font-mono">:284</code>). It is a
+                  <code class="font-mono">view/</code> fix and needs a decision on provenance, so it goes to an issue.
+                  S5.10 inherits no line of this code — but it meets the same question at
+                  <code class="font-mono">ctx.fields.register</code>, because
+                  <code class="font-mono">toJSON</code> writes every declared Field with no author on it
+                  (<code class="font-mono">serialization/index.ts:50</code>). Decide provenance once, for both.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
       <footer class="text-xs text-slate-400 pt-6 border-t border-slate-200">
-        Reviewed at <span class="font-mono">3977818</span>. Standards axis, spec axis, architecture walk, reuse ·
+        Reviewed at <span class="font-mono">3977818</span>. S5.10 blocking audit at
+        <span class="font-mono">afdafe9</span>. Standards axis, spec axis, architecture walk, reuse ·
         simplification, and efficiency · altitude passes, rolled up. Gate re-run at review time:
         <span class="font-mono">pnpm verify</span> exit 0.
       </footer>

@@ -467,6 +467,7 @@ Files: `src/view/renderer-registry.ts`, `src/layout/items/produce-items.ts`, `sr
 | Finding | Why it stays |
 |---|---|
 | **ST2** — `ColumnChromePorts` is a seven-member data clump | Read alone it is a Data Clump. Read against `CoreCommandPorts` and `ColumnGestureContext` it is the branch's idiom for "this module borrows the shell's machinery". The idiom is what keeps `column-chrome.ts` testable. R2's `buildPluginPorts` extends the same idiom. Recorded so a later reviewer does not re-raise it. |
+| **R4's mount claim** — the refusal notice mounts "on the same Overlay layer" | True when R4 closed, false at HEAD. #158 moved the Cell editor and its refusal notice to `ctx.view.rowLayer`, because the row layer travels with the rows and needs no scroll listener. The mechanism R4 asked for is unchanged; only the layer moved. `plans/02` §4 and `plans/s5.8` now say the row layer. |
 | **SP3** — commit `67c79dc` fixed pane scroll on the S5 branch | An S1.8 defect that S5.7's resizable columns made visible. The fix is real and harmless. Recorded so the slice gate's "what did S5 change" answer stays honest. Add one line to the S5 README §12. |
 
 Move any finding you decide not to fix into this table. Give the reason. Then §R7's delete is honest.
