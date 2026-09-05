@@ -1256,8 +1256,8 @@ export interface PluginContextOf<TGantt = unknown, TDataset = Dataset> {
             captureInEditable?: boolean;
         }): () => void;
         canEdit(entry: Entry): boolean;
-        emitBeforeEntryEdit(payload: EntryFieldEdit): boolean | Promise<boolean>;
-        emitEntryEdit(payload: EntryFieldEdit): void;
+        proposeEntryEdit(payload: EntryFieldEdit): boolean | Promise<boolean>;
+        announceEntryEdit(payload: EntryFieldEdit): void;
         registerKindDefaults(kind: EntryKind, defaults: KindDefaults): Disposer;
     };
     layout: {
@@ -1267,7 +1267,7 @@ export interface PluginContextOf<TGantt = unknown, TDataset = Dataset> {
     view: {
         overlay: Overlay;
         registerRenderer<P extends RendererPoint>(point: P, renderer: RendererFor<P>): Disposer;
-        resolveTooltip(entryId: EntryId): ElementDescription | undefined;
+        resolveTooltipContent(entryId: EntryId): ElementDescription | undefined;
         resolveTooltipColumns(entry: Entry): readonly TooltipColumn[];
         isColumnEditable(field: FieldKey): boolean | undefined;
         registerDecoration(layer: DecorationLayer, provider: DecorationProvider): Disposer;

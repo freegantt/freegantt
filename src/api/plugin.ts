@@ -91,16 +91,18 @@ export interface PluginContextOf<TGantt = unknown, TDataset = Dataset> {
      *  `inlineEditing()` is the first *plugin* that needs to ask it (every other capability check
      *  lives inside core's own gesture wiring, which a plugin cannot reach, D-S5-5). */
     canEdit(entry: Entry): boolean;
-    /** S5.8, D-S5-19: raises `beforeEntryEdit` on this Gantt's own event bus and returns exactly
-     *  what its registered handlers return — `true`/`undefined` (no veto), `false`, or an unsettled
-     *  `Promise` (D-S3-17's async-veto shape, U8's `async (…) => { await myDialog.open(...); return
-     *  false }`). The one seam a plugin has to raise a `before*` pair it implements itself: every
-     *  other `before*` event is raised by core's own gesture pipeline, never by a plugin, so this is
-     *  scoped to this one event name rather than a generic `emit` a plugin could use to forge
-     *  `selectionChange` or any event core itself owns. */
-    emitBeforeEntryEdit(payload: EntryFieldEdit): boolean | Promise<boolean>;
-    /** S5.8, D-S5-19: raises `entryEdit` after the commit. No veto — nothing to return. */
-    emitEntryEdit(payload: EntryFieldEdit): void;
+    /** S5.8, D-S5-19: proposes the edit, and the answer is a Veto. This raises `beforeEntryEdit` on
+     *  this Gantt's own event bus. It returns exactly what the registered handlers returned:
+     *  `true`/`undefined` (no veto), `false`, or an unsettled `Promise` (D-S3-17's async-veto shape,
+     *  U8's `async (…) => { await myDialog.open(...); return false }`). Read the answer — a plugin
+     *  that ignores it opens an editor the consumer refused. This is the one seam a plugin has to
+     *  raise a `before*` pair it implements itself. Core's own gesture pipeline raises every other
+     *  `before*` event, so this is scoped to one event name. A generic `emit` would let a plugin
+     *  forge `selectionChange`, or any other event core itself owns. */
+    proposeEntryEdit(payload: EntryFieldEdit): boolean | Promise<boolean>;
+    /** S5.8, D-S5-19: announces the committed edit. This raises `entryEdit` after the commit.
+     *  It tells, it does not ask — no veto, and nothing to return. */
+    announceEntryEdit(payload: EntryFieldEdit): void;
     /** S5.9, D-S5-22: fills the middle precedence layer `capability.ts` resolves — below the
      *  consumer's own `interactions`, above the library's per-kind table. `defaults` answers only
      *  the kinds it names; an omitted gesture still falls through to the library table for `kind`.
@@ -135,7 +137,7 @@ export interface PluginContextOf<TGantt = unknown, TDataset = Dataset> {
      *  own `callRenderer` gives `bar`/`cell`, issue #137 F14). `tooltips()` is this method's first
      *  caller, so a feature that owns a renderer point reads the same resolution the render backend
      *  would, without reaching `view/renderer-registry.ts` directly (D-S5-5). */
-    resolveTooltip(entryId: EntryId): ElementDescription | undefined;
+    resolveTooltipContent(entryId: EntryId): ElementDescription | undefined;
     /** D-S5-13: every Grid column marked `tooltip: true`, resolved against this Gantt's current
      *  `gridColumns`/`fields` — header text and `entry`'s formatted value for each. `tooltips()`'s
      *  default body appends these after name/dates; a consumer building its own tooltip content reads

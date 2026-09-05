@@ -55,7 +55,7 @@ function defaultContent(
  *  shows the entry's name and dates. `focus: 'none'` (D-S5-9) — the pointer path never steals focus,
  *  and the keyboard path is `role="img"`'s own accessible label (`FrameBar.a11yLabel`, S5.11) rather
  *  than this popup. Content resolves through the `tooltip` renderer point (S5.4) via
- *  `ctx.view.resolveTooltip`, so a consumer's `tooltipRenderer` replaces the body with no change to
+ *  `ctx.view.resolveTooltipContent`, so a consumer's `tooltipRenderer` replaces the body with no change to
  *  the show/hide behaviour. */
 export function tooltips(options: TooltipsOptions = {}): GanttPlugin {
   const delayMs = options.delayMs ?? DEFAULT_DELAY_MS;
@@ -99,7 +99,7 @@ export function tooltips(options: TooltipsOptions = {}): GanttPlugin {
         const entry = ctx.dataset.entries.get(entryId);
         if (entry === undefined) return;
         const content =
-          ctx.view.resolveTooltip(entryId) ??
+          ctx.view.resolveTooltipContent(entryId) ??
           defaultContent(
             entry,
             ctx.dataset.timeZone,

@@ -365,7 +365,7 @@ export function inlineEditing(options: InlineEditingOptions = {}): GanttPlugin {
           ctx.dataset.entries.update(id, { [field]: value });
         },
         announceEntryEdit: (payload) => {
-          ctx.interaction.emitEntryEdit(payload);
+          ctx.interaction.announceEntryEdit(payload);
         },
         requestCommit: () => {
           closeSession('commit');
@@ -491,7 +491,7 @@ export function inlineEditing(options: InlineEditingOptions = {}): GanttPlugin {
         const requestId = ++openRequestId;
         const currentValue = ctx.dataset.entries.fieldValue(entry.id, field.key);
         const payload: EntryFieldEdit = { entry, field: field.key, from: currentValue, to: currentValue };
-        const result = ctx.interaction.emitBeforeEntryEdit(payload);
+        const result = ctx.interaction.proposeEntryEdit(payload);
         const openNow = (): void => {
           if (date) openDate(entry, field, cell, row);
           else openGeneric(entry, field, cell, row);

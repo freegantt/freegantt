@@ -170,6 +170,8 @@ S3 data-gesture payloads (D-S3-22): `beforeEntryMove`/`entryMove` carry `Propose
 
 `beforeEntryEdit`/`entryEdit` (S5.8, D-S5-19) carry `EntryFieldEdit` — `entry`, `field` (a `FieldKey`), `from`, `to` (both `unknown`: a Field's stored type is open). `beforeEntryEdit` fires **before `inlineEditing()`'s built-in editor opens**, not before the write, so `from`/`to` are both the entry's current stored value at that point — nothing has been typed yet. `entryEdit` fires after the commit, `to` the value actually written. `beforeEntryEdit` joins `beforeEntryMove`/`beforeEntryResize` as the third handler that may return `Promise<void | false>` (D-S3-17) — the async veto is what lets a consumer `await myDialog.open(entry)` before deciding whether to suppress the built-in editor (the sample below).
 
+**A plugin raises this one pair itself, through two verbs that differ.** `ctx.interaction.proposeEntryEdit(payload)` asks: it raises `beforeEntryEdit` and hands back what the handlers answered — `true`/`undefined`, `false`, or an unsettled `Promise`. The caller must read that answer. `ctx.interaction.announceEntryEdit(payload)` tells: it raises `entryEdit` after the commit and returns `void`. One verb per job, so a plugin author sees from the name whether a decision comes back. (`emit*` said neither, and is retired.) Every other `before*` event stays core's own to raise, so no plugin can forge `selectionChange` or any event core owns.
+
 ```ts
 gantt.on('beforeEntryMove', ({ entry, start, end }) => {
   if (start < mobilization) { toast('Too early'); return false; }   // veto
@@ -453,6 +455,16 @@ safe.
 
 One shared mechanism implements all of this — see **Registration table** in `CONTEXT.md`. A seam that
 writes its own stack-and-restore bookkeeping is a bug, not a variation.
+
+**One module declares the whole context.** `view/plugin-ports.ts` types every member in the group a
+plugin reads it in (`ctx.commands`, `ctx.interaction.*`, `ctx.view.*`, `ctx.layout.*`).
+`api/gantt.ts` adds `dataset` and `gantt`, and nothing else. Adding a seam is therefore one edit in
+one file. A member declared in the wrong group does not compile.
+
+**A read seam is not a registration.** `ctx.view.resolveTooltipContent(entryId)` returns an
+`ElementDescription` — the tooltip's *body*, which `tooltips()` then mounts. It pairs with
+`ctx.view.resolveTooltipColumns(entry)` and `ctx.view.isColumnEditable(field)`. None of the three is
+gated: a plugin reads them for as long as it runs, not only while `setup` runs.
 
 ---
 

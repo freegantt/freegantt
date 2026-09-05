@@ -1,7 +1,7 @@
 # Fix plan — S5 extensibility branch review
 
 **Source review:** [`2026-09-04-s5-extensibility-branch.html`](./2026-09-04-s5-extensibility-branch.html) — FreeGantt, 2026-09-04, branch `s5-start` against `main`, steps S5.0–S5.9 landed.
-**Slice:** S5 ([`plans/s5-extensibility-and-editing/README.md`](../s5-extensibility-and-editing/README.md)) · **Status:** open — R1 landed; R2–R7 open.
+**Slice:** S5 ([`plans/s5-extensibility-and-editing/README.md`](../s5-extensibility-and-editing/README.md)) · **Status:** open — R1 and R2 landed; R3–R7 open.
 **Gate state at review time:** every gate passed. Each finding below is a quality, design or API-shape call. No tool catches them.
 
 > ## Delete the review when this plan closes
@@ -136,28 +136,39 @@ Files: `src/extensions/features/inline-editing.ts`, `src/extensions/features/dat
 
 Files: `src/view/gantt-shell.ts`, new `src/view/plugin-ports.ts`, `src/api/gantt.ts`, `src/api/plugin.ts`.
 
-- [ ] **A2 — lift the port factory out of the constructor.** Move the ~200-line closure to
+- [x] **A2 — lift the port factory out of the constructor.** Move the ~200-line closure to
       `view/plugin-ports.ts` as `buildPluginPorts(deps, pluginId)`.
       Take the shell's collaborators through a ports interface.
       Follow the idiom `core-commands.ts` and `column-chrome.ts` already set on this branch.
-- [ ] **A2 — collapse the six transcriptions.** Six ports repeat the same six lines:
+      The deps interface is `GanttShellPorts`; `GanttShell#shellPorts()` builds it, the same way
+      `#coreCommandPorts()`/`#columnChromePorts()` already build theirs. `gantt-shell.ts` lost
+      214 lines (1,823 → 1,609); `api/gantt.ts` lost 24.
+- [x] **A2 — collapse the six transcriptions.** Six ports repeat the same six lines:
       assert the gate, register, invalidate, build the disposer, add it to `disposables`, return it.
       Write one internal helper. A new seam then becomes a declaration.
-- [ ] **A1 + P1 — declare the ports grouped.** `PluginContextPorts` gains the shape a plugin sees:
+      `registerWhileOpen(register, refresh?)` is that helper, and it covers seven seams, not six —
+      `registerKeybinding` had the same shape. Only `refresh` is a real difference. The
+      `gate.guard` / `gate.assertOpen()` split was accidental, so the helper asserts for all seven
+      and `RegistrationGate.guard` is deleted (it had no other caller and no test).
+- [x] **A1 + P1 — declare the ports grouped.** `PluginContextPorts` gains the shape a plugin sees:
       `{ commands, interaction: {…}, view: {…}, layout: {…} }`.
       Eleven doc comments that only name a path can go. The type carries the path now.
-- [ ] **A1 — delete the middle man.** `buildPluginContext` collapses to
+- [x] **A1 — delete the middle man.** `buildPluginContext` collapses to
       `(parts) => ({ dataset, gantt: this, ...parts })`.
       `api/gantt.ts` binds only the two things it alone has.
-- [ ] **A2 test.** Test `buildPluginPorts` against its ports interface, with no mounted Gantt.
+- [x] **A2 test.** Test `buildPluginPorts` against its ports interface, with no mounted Gantt.
       The gate, the invalidate call and the disposal all become directly testable.
-- [ ] **N2 — rename the two emit verbs.** `emitBeforeEntryEdit` becomes `proposeEntryEdit`.
+      `src/view/plugin-ports.test.ts`, 31 tests, no container and no dataset.
+- [x] **N2 — rename the two emit verbs.** `emitBeforeEntryEdit` becomes `proposeEntryEdit`.
       `emitEntryEdit` becomes `announceEntryEdit`. One asks and takes a veto. One tells.
       `Veto` and `Propose` are already in `CONTEXT.md`. Update `plans/02` §3 and the callers.
-- [ ] **N3 — rename `resolveTooltip`.** It returns an `ElementDescription`, which is the body.
+- [x] **N3 — rename `resolveTooltip`.** It returns an `ElementDescription`, which is the body.
       `resolveTooltipContent` pairs with the existing `resolveTooltipColumns`.
-- [ ] Update `plans/01` §10 and `plans/02` §4 for the grouped port shape and the two renames.
-- [ ] Run `pnpm api-report` and commit the `etc/` change.
+      `RendererRegistry.resolveTooltip` keeps its name: it resolves the point, and R5's P6 folds it.
+- [x] Update `plans/01` §10 and `plans/02` §4 for the grouped port shape and the two renames.
+      `CONTEXT.md` gains **Plugin ports** and **Propose / Announce**.
+- [x] Run `pnpm api-report` and commit the `etc/` change.
+      The report moved by exactly the three renamed members.
 
 **Verify:** `pnpm gate`, `pnpm api-report`. The harness plugin pages still install every demo plugin.
 
