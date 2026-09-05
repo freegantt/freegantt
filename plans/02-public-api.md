@@ -45,6 +45,10 @@ const dataset = new Dataset<{ team: string }, { cost: number }>({
     { key: 'cost', type: 'money' },
     { key: 'team' },
   ],
+
+  // Dataset plugins (S5.10, D-S5-24) — an unordered set: installation resolves setup order from each
+  // plugin's own `requires`, never from this array's order.
+  plugins: [entryDependencies(), scheduling()],
 });
 
 // ── View: binds dataset to DOM ──────────────────────────────────
@@ -102,6 +106,8 @@ dataset.canUndo; dataset.canRedo;
 Single mutations outside an explicit transaction are auto-wrapped in one — convenience without a second code path (D-S2-8). Each mutator validates against its own in-progress write set before staging anything, so a rejected call leaves the store untouched and a stack trace points at the call that made the bad edit, not at a transaction's closing brace.
 
 `transaction()` returns the body's own return value, not a `ChangeSet` — `dataset.on('change')` is the only channel a committed changeset travels on (§3). A nested `transaction()` call runs its body against the already-open transaction and returns that body's value without committing a second time; only the outermost call commits. A veto (`beforeChange` returning `false`, §3) makes `transaction()` throw `MutationCancelledError` carrying the refused changeset, rather than returning at all.
+
+`dataset.plugins` is **read-only**, unlike `gantt.plugins`. A Dataset plugin may declare a Field, and a Field must exist before the first Rollup walks (D-S5-4) — adding one later would mean re-rolling the whole dataset under a Field the Document never had. So a Dataset installs its plugins once, in its constructor, and a consumer who wants a different plugin set builds a Dataset with it (`Dataset.fromJSON` takes the same `plugins` for that reason: a Document stores a plugin's rows, never its behaviour). A Gantt has no such moment — its plugins register paint and gesture seams that are re-resolved on the next frame — so `gantt.plugins = [...]` stays assignable. Uninstalling a Dataset plugin is `dataset.destroy()`, which releases every installed plugin in reverse setup order.
 
 `autoGroup` is data behavior, so it lives on `Dataset` (not `Gantt`): the promotion runs inside the same transaction as the edit that caused it — one changeset, one undo step. It only promotes; turning a group back into an entry is always an explicit edit (`01` §2.5).
 

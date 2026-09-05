@@ -30,6 +30,7 @@ import { prependChangeSet, prependLogLine } from './change-log.js';
 import { logEverything } from './plugins/log-everything.js';
 import { selectionShortcuts } from './plugins/selection-shortcuts.js';
 import { openDemoPopup, popupDemo } from './plugins/popup-demo.js';
+import { lockEntries } from './plugins/lock-entries.js';
 
 // S5.8, D-S5-19: Name, Start and Budget are editable (double-click, or Enter on the selected row's
 // first editable column); End and Duration stay read-only (Duration is `compute`-sourced and has no
@@ -48,10 +49,16 @@ const GRID_WITHOUT_BUDGET: readonly GridColumnInput[] = [
   { field: 'duration', align: 'start' },
 ];
 
+// S5.10, D-S5-24: one Dataset plugin owns every lock on this page — the checkbox below and the
+// right-click Lock/Unlock items both write its store, so the page keeps no lock state of its own.
+// `Dataset.plugins` is read-only, so it is installed here, at construction.
+const locks = lockEntries();
+
 const dataset = new Dataset<{ cost?: number; team?: string }, { cost: number; team?: string }>({
   entries: demoTreeEntryInputs,
   timeZone: 'UTC',
   ...demoFieldOptions,
+  plugins: [locks],
 });
 
 // S3 direct manipulation demo (editing.html's own `mobilization` date line): a hard boundary a
@@ -320,21 +327,20 @@ costBtn.addEventListener('click', () => {
   });
 });
 
-// D-S2-25: while checked, refuse any changeset touching the dataset's current first entry — the
-// veto stays visible on the same page as everything else, not walled off on data.html alone.
+// D-S2-25 / S5.10: the checkbox locks the dataset's current first entry through the same plugin the
+// right-click menu uses. Locking is a real dataset write — it commits, it logs like every other
+// change, and Ctrl+Z unlocks (#156). The refusal itself is the plugin's own `beforeChange`.
 function firstEntryId(): string | undefined {
   return dataset.entries.all[0]?.id;
 }
 
-dataset.on('beforeChange', ({ changeSet }: DatasetEventMap['beforeChange']) => {
-  if (!lockCheckbox.checked) return undefined;
-  const lockedId = firstEntryId();
-  const touchesLocked =
-    changeSet.updated.some((u) => u.id === lockedId) ||
-    changeSet.removed.some((r) => r.entity.id === lockedId);
-  if (!touchesLocked) return undefined;
-  prependLogLine(log, `entries · ${lockedId} · refused (locked)`);
-  return false;
+locks.onRefusal((id) => prependLogLine(log, `entries · ${id} · refused (locked)`));
+
+lockCheckbox.addEventListener('change', () => {
+  const id = firstEntryId();
+  if (id === undefined) return;
+  if (lockCheckbox.checked) locks.lock(id);
+  else locks.unlock(id);
 });
 
 exportBtn.addEventListener('click', () => {
@@ -482,17 +488,7 @@ renderersToggle.dispatchEvent(new Event('change'));
 // grid row (context-menu.ts resolves both the same way, through `ctx.view.dom.targetUnder`).
 // Right-clicking empty timeline or an unpopulated grid stretch leaves `ctx.entry` undefined, so
 // these three never appear there — background right-clicks stay on "Collapse all"/"Expand all".
-const lockedEntryIds = new Set<string>();
 const ENTRY_CONTEXT_COMMAND_IDS = ['demo.deleteEntry', 'demo.lockEntry', 'demo.unlockEntry'];
-
-dataset.on('beforeChange', ({ changeSet }: DatasetEventMap['beforeChange']) => {
-  const touchesLocked =
-    changeSet.updated.some((u) => lockedEntryIds.has(u.id)) ||
-    changeSet.removed.some((r) => lockedEntryIds.has(r.entity.id));
-  if (!touchesLocked) return undefined;
-  prependLogLine(log, 'entries · refused (locked, right-click menu)');
-  return false;
-});
 
 function entryContextActions(): GanttPlugin {
   return {
@@ -511,20 +507,20 @@ function entryContextActions(): GanttPlugin {
       ctx.commands.register({
         id: 'demo.lockEntry',
         label: 'Lock',
-        when: (cmdCtx) => cmdCtx.entry !== undefined && !lockedEntryIds.has(cmdCtx.entry.id),
+        when: (cmdCtx) => cmdCtx.entry !== undefined && !locks.isLocked(cmdCtx.entry.id),
         run: (cmdCtx) => {
           if (cmdCtx.entry === undefined) return;
-          lockedEntryIds.add(cmdCtx.entry.id);
+          locks.lock(cmdCtx.entry.id);
           prependLogLine(log, `entries · ${cmdCtx.entry.id} · locked (right-click menu)`);
         },
       });
       ctx.commands.register({
         id: 'demo.unlockEntry',
         label: 'Unlock',
-        when: (cmdCtx) => cmdCtx.entry !== undefined && lockedEntryIds.has(cmdCtx.entry.id),
+        when: (cmdCtx) => cmdCtx.entry !== undefined && locks.isLocked(cmdCtx.entry.id),
         run: (cmdCtx) => {
           if (cmdCtx.entry === undefined) return;
-          lockedEntryIds.delete(cmdCtx.entry.id);
+          locks.unlock(cmdCtx.entry.id);
           prependLogLine(log, `entries · ${cmdCtx.entry.id} · unlocked (right-click menu)`);
         },
       });

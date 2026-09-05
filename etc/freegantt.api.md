@@ -234,13 +234,14 @@ export class Dataset<TMeta = unknown, TFields extends Record<string, unknown> = 
     // (undocumented)
     get dateOnlyEnd(): DateOnlyEndRule;
     destroy(): void;
+    get editExtender(): EditExtender;
     // (undocumented)
     get entries(): EntryStore<TMeta, TFields>;
     field(key: FieldKey): Field | undefined;
     get fields(): {
         readonly all: readonly Field[];
     };
-    static fromJSON<TMeta = unknown, TFields extends Record<string, unknown> = Record<string, unknown>>(doc: DatasetDocument<TMeta>, options?: Pick<DatasetOptions, 'fields' | 'fieldTypes' | 'aggregators'>): Dataset<TMeta, TFields>;
+    static fromJSON<TMeta = unknown, TFields extends Record<string, unknown> = Record<string, unknown>>(doc: DatasetDocument<TMeta>, options?: Pick<DatasetOptions<TMeta, TFields>, 'fields' | 'fieldTypes' | 'aggregators' | 'plugins'>): Dataset<TMeta, TFields>;
     get hierarchy(): DatasetHierarchy;
     set hierarchy(value: DatasetHierarchy);
     isRollUpKind(kind: EntryKind): boolean;
@@ -429,6 +430,9 @@ export type DecorationLayer = 'underBars' | 'overBars';
 
 // @public (undocumented)
 export type DecorationProvider = (ctx: DecorationContext) => readonly DecorationInput[];
+
+// @public
+export function diffMs(a: Instant, b: Instant): number;
 
 // @public
 export type DismissTrigger = 'escape' | 'outsidePointer' | 'scroll' | 'blur';

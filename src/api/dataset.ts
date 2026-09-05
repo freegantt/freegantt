@@ -5,6 +5,7 @@
 import type {
   Aggregator,
   ChangeSet,
+  EditExtender,
   DatasetDocument,
   DatasetEventMap,
   DateOnlyEndRule,
@@ -237,6 +238,15 @@ export class Dataset<TMeta = unknown, TFields extends Record<string, unknown> = 
     return this.#state.isRollUpKind(kind);
   }
 
+  /** The extension hook's current occupant (D4, D-S2-6): every installed plugin's wrapper, composed
+   *  (D-S5-23), or the identity function when nothing claimed it. Expert surface, not an app author's
+   *  (`plans/02`, "two callers, two surfaces") — a Gantt reads it to ghost an extender's extra edits
+   *  during a drag (D-S3-18), and never writes through it. A commit runs the same occupant again, for
+   *  real, inside the transaction. */
+  get editExtender(): EditExtender {
+    return this.#state.editExtender;
+  }
+
   /** Call: `layout.computeFrame({ datasetRevision: dataset.datasetRevision })`. */
   get datasetRevision(): number {
     return this.#state.datasetRevision;
@@ -303,10 +313,15 @@ export class Dataset<TMeta = unknown, TFields extends Record<string, unknown> = 
 
   /** Whole-document read. Constructs a fresh Dataset through the public constructor, so the Rollup
    *  runs on read. The Document carries Field data keys; `options` supplies functions (D-S4-15).
-   *  Unknown top-level keys are dropped; `meta` is carried as-is. */
+   *  Unknown top-level keys are dropped; `meta` is carried as-is.
+   *
+   *  `plugins` is supplied the same way and for the same reason: a Document stores a plugin's rows,
+   *  never its behaviour, so an application that reads a document back re-installs the same plugin
+   *  list it constructed with. Rows of a plugin this list omits are kept and written back untouched
+   *  (D-S5-24). */
   static fromJSON<TMeta = unknown, TFields extends Record<string, unknown> = Record<string, unknown>>(
     doc: DatasetDocument<TMeta>,
-    options?: Pick<DatasetOptions, 'fields' | 'fieldTypes' | 'aggregators'>,
+    options?: Pick<DatasetOptions<TMeta, TFields>, 'fields' | 'fieldTypes' | 'aggregators' | 'plugins'>,
   ): Dataset<TMeta, TFields> {
     // Trusted, unchecked TMeta cast — see the class-level note above. Narrowed to `entries`, the
     // one field `readDocument`'s result actually needs it for: every other DatasetOptions member
@@ -315,6 +330,7 @@ export class Dataset<TMeta = unknown, TFields extends Record<string, unknown> = 
     const dataset = new Dataset<TMeta, TFields>({
       ...read,
       entries: read.entries as readonly EntryInput<TMeta>[],
+      ...(options?.plugins !== undefined ? { plugins: options.plugins } : {}),
     });
     warnIfRollUpsWereCorrected(doc, dataset);
     return dataset;

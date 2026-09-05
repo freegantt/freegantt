@@ -321,12 +321,11 @@ export interface GanttShellOptions {
    * DOM-free `view/`. Defaults to `createDomBackend()`. */
   backend?: RenderBackend<HTMLElement>;
   /** S3.6, D-S3-18, P1: an installed extension hook, read for **preview only** — ghosts its extras in
-   *  the rAF-coalesced drag preview. There is no public way to install one in S3. `GanttOptions` has
-   *  no such field, and `api/gantt.ts` never passes this. Only a test constructing `GanttShell`
-   *  directly can, the same shape `commitEntryEdits` already uses. The real hook still runs again,
-   *  for real, inside `data/transaction.ts`'s own commit. It is the same `EditExtender` function
-   *  when a caller passes the identical reference to both. This option never writes anything
-   *  itself. */
+   *  the rAF-coalesced drag preview. `api/gantt.ts` passes the bound Dataset's own occupant here
+   *  (S5.10), which is the identity function until a Dataset plugin composes onto it (D-S5-23); a
+   *  test constructing `GanttShell` directly passes its own, the same shape `commitEntryEdits` already
+   *  uses. The real hook still runs again, for real, inside `data/transaction.ts`'s own commit. This
+   *  option never writes anything itself. */
   editExtender?: EditExtender;
   /** Internal (D-S4-24). One registry per Gantt, seeded with span/group/milestone. Tests inject a
    *  replacement; `GanttOptions` has no such field (public registration is S5). */

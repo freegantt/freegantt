@@ -29,8 +29,8 @@ export interface GesturePipelineDeps {
   emit: EventBus<GanttEventMap, AsyncCancelableEvent>['emit'];
   /** D-S3-18, S3.6, P1: an installed extension hook, read for **preview only** — the real hook still
    *  runs again, for real, inside `data/transaction.ts`'s own commit; this never writes anything.
-   *  `undefined` (S3's default: no public install API yet) previews no ghost extras, same as
-   *  `data/edit-extension.ts`'s `identityExtender`. */
+   *  `undefined` previews no ghost extras, same as `data/edit-extension.ts`'s `identityExtender` —
+   *  which is also what a Dataset with no plugin installed hands over (S5.10, D-S5-23). */
   extend?: EditExtender;
   /** Committed entries `extend`'s `EditRequest.entries` argument reads — a snapshot map, built only
    *  when a preview frame actually calls `extend` (an installed extender may cascade to an entry
