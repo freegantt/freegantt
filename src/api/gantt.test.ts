@@ -12,7 +12,7 @@ import {
   itemId,
   contextMenu,
 } from './index.js';
-import type { Entry, PluginContext } from './index.js';
+import type { EditExtender, Entry, PluginContext } from './index.js';
 import { sampleEntries } from '../../fixtures/sample-dataset.js';
 import { instant } from '../time/index.js';
 // [S5-A3]: the acceptance object is the harness plugin itself, not a re-implementation of its four
@@ -3917,6 +3917,104 @@ describe('a plugin column never becomes the consumer’s config (D-S5-33, #162/#
     expect(gantt.gridColumns.map((c) => (typeof c === 'string' ? c : c.field))).toEqual(['name', 'risk']);
     expect(container.querySelector('.fg-col-header[data-field="risk"]')).not.toBeNull();
 
+    gantt.destroy();
+  });
+});
+
+// #186: `api/gantt.ts` hands the drag preview an *arrow* over `dataset.editExtender`, so every drag
+// re-reads the hook's current occupant (D-S5-23). Storing the getter's result instead would pin the
+// occupant that existed when the Gantt was built, and the ghost would go silent from the moment a
+// plugin composes onto the hook. That is invisible today and wrong the moment S7 lands.
+describe('Gantt reads the Dataset’s edit hook live (#186)', () => {
+  const A_START = instant('2026-09-01T00:00:00Z');
+  const A_END = instant('2026-09-03T00:00:00Z');
+  const X_START = instant('2026-09-05T00:00:00Z');
+  const X_END = instant('2026-09-06T00:00:00Z');
+
+  /** Stands in for the S7 case: a Dataset whose hook gains an occupant after the Gantt exists.
+   *  `DatasetState.setExtender` composes exactly this way, but every public route to it shuts when
+   *  the Dataset's constructor returns (D-S5-4's registration gate), so this subclass overrides the
+   *  one public member `api/gantt.ts` reads. */
+  class LateHookDataset extends Dataset {
+    #occupant: EditExtender = () => new Map();
+
+    override get editExtender(): EditExtender {
+      return this.#occupant;
+    }
+
+    occupyHook(next: EditExtender): void {
+      this.#occupant = next;
+    }
+  }
+
+  /** Moves `x` — never grabbed — whenever a move on `a` is proposed. Absolute instants, so no
+   *  arithmetic on an `Instant` happens outside `time/` (I10). */
+  const cascadeOntoX: EditExtender = ({ proposed }) => {
+    const moved = proposed.get(entryId('a'));
+    if (!moved || moved.start === undefined) return new Map();
+    return new Map([
+      [entryId('x'), { start: instant('2026-09-08T00:00:00Z'), end: instant('2026-09-09T00:00:00Z') }],
+    ]);
+  };
+
+  function buildGantt(): { gantt: Gantt; dataset: LateHookDataset; container: HTMLElement } {
+    const container = document.createElement('div');
+    const dataset = new LateHookDataset({
+      timeZone: 'UTC',
+      entries: [
+        { id: 'a', name: 'a', start: A_START, end: A_END },
+        { id: 'x', name: 'x', start: X_START, end: X_END },
+      ],
+    });
+    return { gantt: new Gantt({ container, dataset }), dataset, container };
+  }
+
+  it('ghosts an extender that occupies the hook after construction', async () => {
+    const { gantt, dataset, container } = buildGantt();
+    // Composed after the Gantt is built — the case a stored occupant would miss.
+    dataset.occupyHook(cascadeOntoX);
+
+    const barA = container.querySelector<HTMLElement>('[data-item-id="a:0"]')!;
+    const barX = container.querySelector<HTMLElement>('[data-item-id="x:0"]')!;
+    const timeline = container.querySelector<HTMLElement>('.fg-timeline-pane')!;
+    timeline.setPointerCapture = vi.fn();
+    timeline.releasePointerCapture = vi.fn();
+    const original = document.elementFromPoint.bind(document);
+    document.elementFromPoint = (x: number, y: number) => (x === 5 && y === 5 ? barA : original(x, y));
+
+    timeline.dispatchEvent(new PointerEvent('pointerdown', { clientX: 5, clientY: 5, pointerId: 1 }));
+    timeline.dispatchEvent(new PointerEvent('pointermove', { clientX: 55, clientY: 5, pointerId: 1 }));
+    // The preview coalesces on the pipeline's own rAF, not synchronously per pointermove (D-S3-18).
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+
+    expect(barA.dataset['state']).toContain('dragging');
+    expect(barX.dataset['state'] ?? '').toContain('ghost');
+
+    timeline.dispatchEvent(new PointerEvent('pointerup', { clientX: 55, clientY: 5, pointerId: 1 }));
+    document.elementFromPoint = original;
+    gantt.destroy();
+  });
+
+  it('ghosts nothing while the hook stands empty, so the assertion above reads the occupant and not a default', async () => {
+    const { gantt, container } = buildGantt();
+
+    const barA = container.querySelector<HTMLElement>('[data-item-id="a:0"]')!;
+    const barX = container.querySelector<HTMLElement>('[data-item-id="x:0"]')!;
+    const timeline = container.querySelector<HTMLElement>('.fg-timeline-pane')!;
+    timeline.setPointerCapture = vi.fn();
+    timeline.releasePointerCapture = vi.fn();
+    const original = document.elementFromPoint.bind(document);
+    document.elementFromPoint = (x: number, y: number) => (x === 5 && y === 5 ? barA : original(x, y));
+
+    timeline.dispatchEvent(new PointerEvent('pointerdown', { clientX: 5, clientY: 5, pointerId: 1 }));
+    timeline.dispatchEvent(new PointerEvent('pointermove', { clientX: 55, clientY: 5, pointerId: 1 }));
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+
+    expect(barA.dataset['state']).toContain('dragging');
+    expect(barX.dataset['state'] ?? '').not.toContain('ghost');
+
+    timeline.dispatchEvent(new PointerEvent('pointerup', { clientX: 55, clientY: 5, pointerId: 1 }));
+    document.elementFromPoint = original;
     gantt.destroy();
   });
 });
