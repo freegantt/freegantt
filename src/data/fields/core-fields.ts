@@ -1,7 +1,7 @@
 // data/ — core Fields are ordinary declarations (D-S4-4). They always set `source` explicitly so
 // omitted-source cannot steal `start` into `meta.start`. `progress` is not declared (ADR 0008).
 
-import type { Duration, Entry, Field, Instant } from '../../model/index.js';
+import type { Duration, Entry, Field, FieldKey, Instant } from '../../model/index.js';
 import { DATE_TIME_FORMAT, formatDate, formatEndInclusive, MS } from '../../time/index.js';
 
 const byReference = (from: unknown, to: unknown): boolean => from === to;
@@ -105,3 +105,9 @@ export const CORE_FIELDS: readonly Field[] = Object.freeze([
     column: { header: 'Duration', align: 'end', width: 100 },
   },
 ]);
+
+/** Whether `key` names one of the Fields above. `data/` asks twice: the codec never writes a core
+ *  Field into a Document, and `FieldRegistry.authored` never reports one as consumer-written. */
+export function isCoreFieldKey(key: FieldKey): boolean {
+  return CORE_FIELDS.some((field) => field.key === key);
+}

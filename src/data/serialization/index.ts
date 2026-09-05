@@ -18,7 +18,9 @@ export interface DatasetDocumentSource {
   readonly timeZone: string;
   readonly dateOnlyEnd: DateOnlyEndRule;
   readonly rollUpKinds: Iterable<EntryKind>;
-  readonly fields: { readonly all: readonly Field[] };
+  /** `authored`, not `all`: a Document carries the consumer's own Field declarations only
+   *  (D-S5-33). A plugin declares its Fields again on its next install. */
+  readonly fields: { readonly authored: readonly Field[] };
   readonly entries: {
     readonly all: readonly Entry[];
     get(id: string): Entry | undefined;
@@ -49,7 +51,7 @@ function writeEntry(entry: Entry): EntryDocument {
 /** `toJSON(dataset)` — write the Dataset as a Document. Keys are declared in order; `Object.keys`
  *  over a store entity is never used. Always `schema: 3` (D-S4-16, D-S5-24). */
 export function toJSON(dataset: DatasetDocumentSource): DatasetDocument {
-  const fields = encodeFieldDocument(dataset.fields.all);
+  const fields = encodeFieldDocument(dataset.fields.authored);
   const plugins = dataset.pluginStores.toDocument();
   return {
     schema: 3,

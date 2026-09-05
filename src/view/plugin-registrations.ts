@@ -35,7 +35,7 @@ export interface PluginRegistrationPorts {
   refreshCapabilities(): void;
   /** `ColumnChrome.registerPluginColumn`. The one seam that keeps its own refresh — see
    *  `registerGridColumn` below for why it cannot move here. */
-  registerGridColumn(column: GridColumnInput): Disposer;
+  registerGridColumn(column: GridColumnInput, pluginId: PluginId): Disposer;
 }
 
 /** What a plugin may register — the narrow face of `PluginRegistrations` below, and all
@@ -46,7 +46,7 @@ export interface PluginRegistrar {
   registerDecoration(layer: DecorationLayer, provider: DecorationProvider): Disposer;
   registerItemProducer(kind: EntryKind, producer: ItemProducer): Disposer;
   registerKindDefaults(kind: EntryKind, defaults: KindDefaults): Disposer;
-  registerGridColumn(column: GridColumnInput): Disposer;
+  registerGridColumn(column: GridColumnInput, pluginId: PluginId): Disposer;
 }
 
 /** One instance per Gantt (I2), owned by `GanttShell`. Never a module-level singleton. */
@@ -121,9 +121,14 @@ export class PluginRegistrations implements PluginRegistrar {
   /** S5.9, D-S5-21. The one seam whose refresh stays with its own module. `ColumnChrome` strips the
    *  baked-in copy of an abandoned field *between* removing the registration and rebinding, so the
    *  two cannot be pulled apart (D-S5-18, #155). This entry is here so a reader finds all five
-   *  seams in one list, not so the refresh moves. */
-  registerGridColumn(column: GridColumnInput): Disposer {
-    return this.#ports.registerGridColumn(column);
+   *  seams in one list, not so the refresh moves.
+   *
+   *  `pluginId` travels with the column, for the reason `registerRenderer` already takes one. A
+   *  declaration must say who made it. Without that, the library cannot keep a plugin's column out
+   *  of what the consumer authored and saves (D-S5-33). A `PluginStore` carries its owner's id for
+   *  the same reason (D-S5-24). */
+  registerGridColumn(column: GridColumnInput, pluginId: PluginId): Disposer {
+    return this.#ports.registerGridColumn(column, pluginId);
   }
 
   /** The winning `KindDefaults` for a kind, or `undefined`. `resolveCapabilities`' third argument. */

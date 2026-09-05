@@ -3,16 +3,12 @@
 import type { Field, FieldSource, FieldType, GridColumn } from '../../model/index.js';
 import type { SerializedField } from '../../model/index.js';
 import type { DatasetStateOptions } from '../dataset-state.js';
-import { CORE_FIELDS } from '../fields/core-fields.js';
+import { isCoreFieldKey } from '../fields/core-fields.js';
 import { storedSourceOf } from '../fields/normalize-source.js';
 import { strategyFor } from '../fields/source-strategy.js';
 
 /** The code half a reader supplies. Same three keys `Dataset.fromJSON` already picks. */
 export type FromJSONOptions = Pick<DatasetStateOptions, 'fields' | 'fieldTypes' | 'aggregators'>;
-
-function isCoreFieldKey(key: string): boolean {
-  return CORE_FIELDS.some((field) => String(field.key) === key);
-}
 
 /** A `compute` source in JSON is not a schema-2 Field — drop it (D-S4-15). */
 function decodeDeclaredField(row: SerializedField): Field | undefined {
@@ -101,7 +97,7 @@ function writeColumn(column: Omit<GridColumn, 'field'>): Omit<GridColumn, 'field
 }
 
 function encodeDeclaredField(field: Field): SerializedField | undefined {
-  if (isCoreFieldKey(String(field.key))) return undefined;
+  if (isCoreFieldKey(field.key)) return undefined;
   const stored = writeStoredSource(storedSourceOf(field));
   if (stored === undefined) return undefined;
   const column = field.column === undefined ? undefined : writeColumn(field.column);

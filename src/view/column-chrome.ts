@@ -6,7 +6,7 @@
 // closes over `CoreCommandPorts` (D-S5-6's precedent) and `interaction/column-gestures.ts` closes
 // over `ColumnGestureContext` (this file's own `column-gesture-context.ts` sibling).
 
-import type { Dataset, Disposer, FieldKey, GridColumn, GridColumnInput } from '../model/index.js';
+import type { Dataset, Disposer, FieldKey, GridColumn, GridColumnInput, PluginId } from '../model/index.js';
 import type { ResolvedColumn } from '../layout/index.js';
 import { createRegistrationTable } from '../layout/index.js';
 import { readPixelProperty } from '../render/dom/pixel-property.js';
@@ -59,6 +59,18 @@ export interface ColumnChromePorts {
  *  way `createRegistrationTable` keeps its own per-registration cells (#154). */
 interface PluginColumnRegistration {
   readonly column: GridColumnInput;
+  readonly pluginId: PluginId;
+}
+
+/** One committed column and who declared it (D-S5-33, #162/#181). `declaredBy` absent means the
+ *  consumer wrote it — in `gridColumns`, or in the options this Gantt was constructed with. Present
+ *  names the plugin that registered it, which is what keeps a resized or reordered plugin column out
+ *  of `gantt.gridColumns`, out of the `gridColumnsChange` payload, and out of what the consumer
+ *  saves. Provenance travels with the declaration for the same reason a `PluginStore`'s rows sit
+ *  under their owner's id (D-S5-24): the library must be able to tell the two apart later. */
+interface ColumnDeclaration {
+  readonly column: GridColumnInput;
+  readonly declaredBy?: PluginId;
 }
 
 /** One instance per Gantt (I2), owned by `GanttShell` alongside its other view state — never shared,
@@ -66,14 +78,15 @@ interface PluginColumnRegistration {
 export class ColumnChrome {
   readonly #container: HTMLElement;
   readonly #ports: ColumnChromePorts;
-  #gridColumnInput: readonly GridColumnInput[];
+  /** Every committed column, in paint order, each carrying its declarer (D-S5-33). A commit rewrites
+   *  this whole list — a plugin column included, so a resize or a reorder of one sticks for the rest
+   *  of the session — and `authoredColumns` reads the consumer's half back out of it. */
+  #declaredColumns: readonly ColumnDeclaration[];
   /** S5.9, D-S5-21: `ctx.view.registerGridColumn` — one column per field (#147, #154), appended
-   *  after the consumer's own `gridColumnInput` by `effectiveInput()`, in registration order, never
-   *  stored into `gridColumnInput` itself (the public `gridColumns` getter stays the consumer's own
-   *  authored list; a plugin column reaches the getter only once a resize/reorder/plain assignment
-   *  commits it, the same "config beats a plugin" posture `barRenderer`/`cellRenderer` already take).
-   *  Two plugins registering the same field stack on one key: the newest registration wins, and
-   *  disposing one never disturbs the other's. */
+   *  after the consumer's own columns by `effectiveInput()`, in registration order. A duplicate field
+   *  the consumer's own list already names is dropped, the same "config beats a plugin" posture
+   *  `barRenderer`/`cellRenderer` already take. Two plugins registering the same field stack on one
+   *  key: the newest registration wins, and disposing one never disturbs the other's. */
   #pluginColumns = createRegistrationTable<FieldKey, PluginColumnRegistration>();
   /** The resolved columns in paint order, and the same columns keyed for lookup. `#adoptColumns`
    *  writes both, and it is the only writer — one assignment can never leave the map stale. */
@@ -84,48 +97,62 @@ export class ColumnChrome {
   constructor(container: HTMLElement, ports: ColumnChromePorts, initialInput: readonly GridColumnInput[]) {
     this.#container = container;
     this.#ports = ports;
-    this.#gridColumnInput = initialInput;
+    this.#declaredColumns = initialInput.map((column) => ({ column }));
   }
 
-  get gridColumnInput(): readonly GridColumnInput[] {
-    return this.#gridColumnInput;
+  /** What `gantt.gridColumns` answers: the columns the consumer authored, and only those — before
+   *  and after a resize, a reorder or any other commit (D-S5-33, #181). A plugin's column is the
+   *  plugin's declaration, so it never appears here and never reaches what the consumer saves. */
+  get authoredColumns(): readonly GridColumnInput[] {
+    return this.#declaredColumns.filter(ColumnChrome.#isAuthored).map((declaration) => declaration.column);
   }
 
-  /** S5.9, D-S5-21: the consumer's own `gridColumnInput`, plus every plugin-registered column
-   *  whose `field` it does not already name, in registration order — what actually resolves and
-   *  renders. A duplicate `field` is dropped from the plugin side: config beats a plugin.
-   *  `#pluginColumns` already holds one column per field (#154) — the newest registration on a
-   *  field wins, at that field's first-registration position — so no dedupe happens here. */
+  /** S5.9, D-S5-21: every committed column, plus every plugin-registered column whose `field` no
+   *  committed column already names, in registration order — what actually resolves and renders.
+   *  A duplicate `field` is dropped from the plugin side: config beats a plugin. `#pluginColumns`
+   *  already holds one column per field (#154) — the newest registration on a field wins, at that
+   *  field's first-registration position — so no dedupe happens here. */
   effectiveInput(): readonly GridColumnInput[] {
-    const baseKeys = new Set(this.#gridColumnInput.map(ColumnChrome.#fieldOf));
+    return this.#effectiveDeclarations().map((declaration) => declaration.column);
+  }
+
+  /** The same list `effectiveInput()` returns, each column still carrying its declarer — what a
+   *  resize and a reorder rewrite, so provenance survives the commit that follows. */
+  #effectiveDeclarations(): readonly ColumnDeclaration[] {
+    const committedKeys = new Set(this.#declaredColumns.map(ColumnChrome.#fieldOfDeclaration));
     const extras = this.#pluginColumns
       .active()
-      .map((registration) => registration.column)
-      .filter((column) => !baseKeys.has(ColumnChrome.#fieldOf(column)));
-    return [...this.#gridColumnInput, ...extras];
+      .filter((registration) => !committedKeys.has(ColumnChrome.#fieldOf(registration.column)))
+      .map((registration) => ({ column: registration.column, declaredBy: registration.pluginId }));
+    return [...this.#declaredColumns, ...extras];
   }
 
   /** S5.9, D-S5-21: `ctx.view.registerGridColumn`. Legal only while `setup` runs (D-S5-4), the same
    *  gate every other `register*` takes — enforced by the caller (`GanttShell`), not here. Returns a
    *  `Disposer` that removes it again, same lifetime a decoration provider gets. */
-  registerPluginColumn(column: GridColumnInput): Disposer {
+  registerPluginColumn(column: GridColumnInput, pluginId: PluginId): Disposer {
     const field = ColumnChrome.#fieldOf(column);
-    const registration: PluginColumnRegistration = { column };
+    const registration: PluginColumnRegistration = { column, pluginId };
     const remove = this.#pluginColumns.register(field, registration);
     this.#ports.rebindFields();
     this.#ports.requestFrame();
     return () => {
-      // A commit writes the whole of `effectiveInput()` into `#gridColumnInput` (D-S5-18: one commit
-      // sequence, one write). Plugin columns go in too. So disposal must also strip the baked-in
-      // copy, by field key. A resize rewrites the column object, so identity no longer matches once
-      // baked in. One question decides it: does any live registration still ask for this field?
-      // While one does, the field stays on screen, so the baked column — and the width the consumer
-      // committed to it — stays too, whether the plugin leaving was the winner or a loser (#155).
-      // Only the last registration on a field takes the column out with it.
+      // A commit writes the whole of `#effectiveDeclarations()` back (D-S5-18: one commit sequence,
+      // one write). Plugin columns go in too, so that a resize or a reorder of one sticks. So
+      // disposal must also strip the committed copy, by field key: a resize rewrites the column
+      // object, so identity no longer matches once committed. One question decides it: does any live
+      // registration still ask for this field? While one does, the field stays on screen, so the
+      // committed column — and the width the user gave it — stays too, whether the plugin leaving was
+      // the winner or a loser (#155). Only the last registration on a field takes the column out.
+      // A column the *consumer* authored for the same field is never touched: it is not this
+      // plugin's to remove (D-S5-33).
       remove();
       const fieldIsAbandoned = this.#pluginColumns.get(field) === undefined;
       if (fieldIsAbandoned) {
-        this.#gridColumnInput = this.#gridColumnInput.filter((c) => ColumnChrome.#fieldOf(c) !== field);
+        this.#declaredColumns = this.#declaredColumns.filter(
+          (declaration) =>
+            ColumnChrome.#isAuthored(declaration) || ColumnChrome.#fieldOfDeclaration(declaration) !== field,
+        );
       }
       this.#ports.rebindFields();
       this.#ports.requestFrame();
@@ -144,7 +171,7 @@ export class ColumnChrome {
     this.#focusedHeaderColumnKey = columnKey;
   }
 
-  /** `GanttShell#bindColumns()` resolves `gridColumnInput` against the dataset itself — one
+  /** `GanttShell#bindColumns()` resolves `effectiveInput()` against the dataset itself — one
    *  `resolveGanttFields` call already covers its own `fieldCompares`/`fieldContext` too, so this
    *  module does not repeat that resolution; it just adopts the result. */
   setResolvedColumns(columns: readonly ResolvedColumn[]): void {
@@ -239,49 +266,100 @@ export class ColumnChrome {
     this.#ports.paintColumnReorderPreview(undefined);
   }
 
-  #asGridColumns(input: readonly GridColumnInput[]): GridColumn[] {
-    return input.map((item) => (typeof item === 'string' ? { field: item } : { ...item }));
-  }
-
   static #fieldOf(item: GridColumnInput): FieldKey {
     return typeof item === 'string' ? item : item.field;
   }
 
-  /** A resize/reorder gesture reaches every column actually on screen (S5.9: `effectiveInput()`
-   *  includes a plugin-registered column), not only `gridColumnInput`'s own list. */
-  #withWidth(columnKey: FieldKey, widthPx: number): readonly GridColumnInput[] {
-    return this.#asGridColumns(this.effectiveInput()).map((column) =>
-      column.field === columnKey ? { ...column, width: widthPx } : column,
+  static #fieldOfDeclaration(declaration: ColumnDeclaration): FieldKey {
+    return ColumnChrome.#fieldOf(declaration.column);
+  }
+
+  static #isAuthored(declaration: ColumnDeclaration): boolean {
+    return declaration.declaredBy === undefined;
+  }
+
+  /** The object form of one column, so a resize can write a `width` onto it. Only the column the
+   *  gesture actually touched is widened: a bare `'name'` the consumer wrote stays a bare `'name'`
+   *  in `gridColumns` unless the user resized that very column. */
+  static #asGridColumn(item: GridColumnInput): GridColumn {
+    return typeof item === 'string' ? { field: item } : { ...item };
+  }
+
+  /** A resize/reorder gesture reaches every column actually on screen (S5.9: a plugin-registered
+   *  column included), not only the consumer's own list. */
+  #withWidth(columnKey: FieldKey, widthPx: number): readonly ColumnDeclaration[] {
+    return this.#effectiveDeclarations().map((declaration) =>
+      ColumnChrome.#fieldOfDeclaration(declaration) === columnKey
+        ? { ...declaration, column: { ...ColumnChrome.#asGridColumn(declaration.column), width: widthPx } }
+        : declaration,
     );
   }
 
-  #reordered(columnKey: FieldKey, beforeColumnKey: FieldKey | null): readonly GridColumnInput[] {
-    const columns = this.#asGridColumns(this.effectiveInput());
-    const from = columns.findIndex((column) => column.field === columnKey);
-    if (from === -1) return this.effectiveInput();
-    const [moved] = columns.splice(from, 1);
+  /** A reorder moves declarations, and rewrites none of them: the columns keep whatever form the
+   *  consumer or the plugin gave them, and their declarers travel with them. */
+  #reordered(columnKey: FieldKey, beforeColumnKey: FieldKey | null): readonly ColumnDeclaration[] {
+    const declarations = [...this.#effectiveDeclarations()];
+    const from = declarations.findIndex((d) => ColumnChrome.#fieldOfDeclaration(d) === columnKey);
+    if (from === -1) return declarations;
+    const [moved] = declarations.splice(from, 1);
     const to =
       beforeColumnKey === null
-        ? columns.length
-        : columns.findIndex((column) => column.field === beforeColumnKey);
-    columns.splice(to === -1 ? columns.length : to, 0, moved!);
-    return columns;
+        ? declarations.length
+        : declarations.findIndex((d) => ColumnChrome.#fieldOfDeclaration(d) === beforeColumnKey);
+    declarations.splice(to === -1 ? declarations.length : to, 0, moved!);
+    return declarations;
   }
 
-  /** The one commit sequence D-S5-18 asks for: a resize drag, a reorder drop, and a plain
-   *  `gantt.gridColumns = […]` assignment all resolve `nextInput` into the columns they would show and
-   *  route through here. `from`/`to` are `GridColumn`s (`toGridColumn`), not the layout-only
-   *  `ResolvedColumn` — a consumer keeps `to` in memory and passes it straight back as `gridColumns`. */
+  /** A plain `gantt.gridColumns = […]` assignment restates the consumer's whole authored list, so
+   *  every column in it is the consumer's. Plugin columns keep whatever shape a commit already gave
+   *  them and follow the authored list — the same place `effectiveInput()` puts one that has never
+   *  been committed (D-S5-21: appended after the consumer's own). */
+  #authoredThenPluginColumns(input: readonly GridColumnInput[]): readonly ColumnDeclaration[] {
+    const assigned = new Set(input.map(ColumnChrome.#fieldOf));
+    const pluginColumns = this.#declaredColumns.filter(
+      (declaration) =>
+        !ColumnChrome.#isAuthored(declaration) &&
+        !assigned.has(ColumnChrome.#fieldOfDeclaration(declaration)),
+    );
+    return [...input.map((column) => ({ column })), ...pluginColumns];
+  }
+
+  /** The `from`/`to` a `gridColumnsChange` handler reads: the resolved columns the consumer
+   *  authored, and only those (D-S5-33). `resolveColumns` maps its input one-for-one, so the two
+   *  lists line up by position and a field key is enough to pair them. */
+  static #authoredPayload(
+    declarations: readonly ColumnDeclaration[],
+    resolved: readonly ResolvedColumn[],
+  ): readonly GridColumn[] {
+    const authoredKeys = new Set(
+      declarations.filter(ColumnChrome.#isAuthored).map(ColumnChrome.#fieldOfDeclaration),
+    );
+    return resolved.filter((column) => authoredKeys.has(column.key)).map(toGridColumn);
+  }
+
+  /** The one commit sequence D-S5-18 asks for: a plain `gantt.gridColumns = […]` assignment. Every
+   *  column in `nextInput` is the consumer's own, which is what separates this entry point from the
+   *  resize and reorder ones below (D-S5-33). */
   commit(nextInput: readonly GridColumnInput[]): boolean {
+    return this.#commitDeclared(this.#authoredThenPluginColumns(nextInput));
+  }
+
+  /** Where a resize drag, a reorder drop and a plain assignment all meet (D-S5-18). `from`/`to` are
+   *  `GridColumn`s (`toGridColumn`), not the layout-only `ResolvedColumn` — a consumer keeps `to` in
+   *  memory and passes it straight back as `gridColumns` — and they carry the consumer's authored
+   *  columns alone, so that round-trip can never save a column a plugin declared (#162, #181).
+   *  Resizing a plugin column is therefore a commit whose payload shows no change: it repaints, and
+   *  the consumer's own configuration is genuinely untouched. */
+  #commitDeclared(next: readonly ColumnDeclaration[]): boolean {
     const nextResolved = resolveGanttFields(
       this.#ports.dataset(),
-      nextInput,
+      next.map((declaration) => declaration.column),
       this.#ports.columnBind(),
     ).columns;
-    const from = this.#resolvedColumns.map(toGridColumn);
-    const to = nextResolved.map(toGridColumn);
+    const from = ColumnChrome.#authoredPayload(this.#declaredColumns, this.#resolvedColumns);
+    const to = ColumnChrome.#authoredPayload(next, nextResolved);
     return this.#ports.proposeColumnsChange(from, to, () => {
-      this.#gridColumnInput = nextInput;
+      this.#declaredColumns = next;
       // A landed commit clears any live paint the drag that proposed it left behind — `render()`
       // (queued by `requestFrame()` below) repaints the real geometry anyway, but that runs on the
       // next frame, and a stale preview left in `InteractionState` would otherwise reapply itself
@@ -297,11 +375,11 @@ export class ColumnChrome {
    *  keyboard chord) restores its own preview when it did not (D-S5-18: "a veto restores the state
    *  the drag started from"). */
   commitWidth(columnKey: FieldKey, widthPx: number): boolean {
-    return this.commit(this.#withWidth(columnKey, widthPx));
+    return this.#commitDeclared(this.#withWidth(columnKey, widthPx));
   }
 
   commitReorder(columnKey: FieldKey, beforeColumnKey: FieldKey | null): boolean {
-    return this.commit(this.#reordered(columnKey, beforeColumnKey));
+    return this.#commitDeclared(this.#reordered(columnKey, beforeColumnKey));
   }
 
   /** `Shift+ArrowLeft`/`Shift+ArrowRight` (D-S5-18, D-S5-26) — the same `commitWidth` a resize
