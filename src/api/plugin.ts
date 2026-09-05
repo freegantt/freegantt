@@ -76,6 +76,14 @@ export type PluginContextOf<TGantt = unknown, TDataset = Dataset> = Omit<
   };
 };
 
+/** One installed plugin. `setup()` runs once, after the Gantt mounts.
+ *
+ *  #178: a plugin that page scope has to call back into publishes those calls **on itself**, beside
+ *  `id` and `setup`. Declare an interface extending this one, return it from the factory, and hold
+ *  what `setup()` built in a variable inside that factory call. The page then keeps the plugin
+ *  object it installed and calls it. That is the supported way to reach a plugin's own state. It is
+ *  also why no `Gantt` method hands a `PluginContext` back. One factory call is one Gantt's worth of
+ *  state, so two Gantts on one page share none of it (I2). A module-level stash shares all of it. */
 export interface GanttPluginOf<TGantt = unknown, TDataset = Dataset> {
   id: PluginId;
   /** Called once, after the Gantt mounts. Returns a `Disposer` for the plugin's own resources, or

@@ -1052,7 +1052,7 @@ export interface GanttOptionsBase {
 // @public
 export type GanttPlugin = GanttPluginOf<Gantt>;
 
-// @public (undocumented)
+// @public
 export interface GanttPluginOf<TGantt = unknown, TDataset = Dataset> {
     // (undocumented)
     id: PluginId;
