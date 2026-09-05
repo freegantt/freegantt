@@ -29,6 +29,7 @@ import type {
   GridColumnInput,
   Instant,
   InstantInput,
+  PluginId,
   RowId,
   TimeSpan,
 } from '../model/index.js';
@@ -129,7 +130,8 @@ export interface GanttOptionsBase {
    *  never names in a table. Assignment diffs by `id`: a plugin present before and after is left
    *  alone, even when the new array holds a fresh object for that `id` — same id, new object is
    *  ignored (a dev build warns; production stays silent). Reconfigure with two assignments
-   *  (remove, then add) or a distinct id. Default `[]`. */
+   *  (remove, then add) or a distinct id. Default `[]`. `gantt.installPlugin`/`uninstallPlugin`
+   *  add or drop one plugin without restating the set (D-S5-36). */
   plugins?: readonly GanttPlugin[];
 }
 
@@ -643,6 +645,30 @@ export class Gantt {
 
   set plugins(next: readonly GanttPlugin[]) {
     this.#shell.plugins = next;
+  }
+
+  /** D-S5-36. Call: `gantt.installPlugin(tooltips())`. It installs one plugin and leaves every
+   *  plugin already running alone, so a caller never restates the installed set to add to it. A
+   *  plugin whose `id` is already installed throws `DuplicatePluginIdError` — the assignment form
+   *  ignores it with a dev-mode warning, which is the silence this verb replaces. */
+  installPlugin(plugin: GanttPlugin): void {
+    this.#shell.installPlugin(plugin);
+  }
+
+  /** D-S5-36. Call: `gantt.hasPlugin('harness.logging')`. It answers whether that plugin is
+   *  installed right now — what a toggle reads before it decides which verb to call. Identity is the
+   *  `id`, so an object with an installed plugin's `id` answers `true`. */
+  hasPlugin(plugin: GanttPlugin | PluginId): boolean {
+    const id = typeof plugin === 'string' ? plugin : plugin.id;
+    return this.#shell.plugins.some((installed) => installed.id === id);
+  }
+
+  /** D-S5-36. Call: `gantt.uninstallPlugin(popup)`, or `gantt.uninstallPlugin('harness.logging')`.
+   *  It disposes that one plugin and leaves the rest running. Identity is the `id` in both forms,
+   *  the same identity the assignment form diffs by (D-S5-3). A plugin nothing installs throws
+   *  `PluginNotInstalledError`, so a misspelled id is not a silent no-op. */
+  uninstallPlugin(plugin: GanttPlugin | PluginId): void {
+    this.#shell.uninstallPlugin(typeof plugin === 'string' ? plugin : plugin.id);
   }
 
   /** S5.2, D-S5-6: the one command registry. `freegantt.*` is the core namespace — core registers

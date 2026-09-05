@@ -63,6 +63,7 @@ import type { InteractionState, RenderBackend } from '../render/backend.js';
 import {
   EntryNotFoundError,
   ContainerNotFoundError,
+  PluginNotInstalledError,
   entryId,
   entryIdOfItem,
   itemId,
@@ -76,6 +77,7 @@ import type {
   GridColumnInput,
   ItemId,
   Instant,
+  PluginId,
   RowId,
   Size,
   TimeSpan,
@@ -1485,6 +1487,21 @@ export class GanttShell {
   }
 
   set plugins(next: readonly ShellPlugin<unknown>[]) {
+    this.#pluginRuntime.install(next);
+  }
+
+  /** D-S5-36: adds one plugin to the installed set. It sets up that plugin alone and leaves every
+   *  other one untouched. An id that is already installed throws `DuplicatePluginIdError`. */
+  installPlugin(plugin: ShellPlugin<unknown>): void {
+    this.#pluginRuntime.install([...this.#pluginRuntime.plugins, plugin]);
+  }
+
+  /** D-S5-36: disposes one installed plugin, by id, and leaves every other one running. An id
+   *  nothing installs throws `PluginNotInstalledError`. */
+  uninstallPlugin(id: PluginId): void {
+    const installed = this.#pluginRuntime.plugins;
+    const next = installed.filter((plugin) => plugin.id !== id);
+    if (next.length === installed.length) throw new PluginNotInstalledError(id);
     this.#pluginRuntime.install(next);
   }
 

@@ -425,13 +425,15 @@ const toggleLoggingBtn = document.querySelector<HTMLButtonElement>('#toggle-plug
 // log writer, because each page owns its log panel.
 const writeLog = (line: string): void => prependLogLine(log, line);
 
+// #195, D-S5-36: install and uninstall name one plugin. The page never restates the installed set,
+// so a plugin installed elsewhere on this page cannot be dropped by this button.
 toggleLoggingBtn.addEventListener('click', () => {
-  const installed = gantt.plugins.some((plugin) => plugin.id === 'harness.logEverything');
+  const installed = gantt.hasPlugin('harness.logEverything');
   if (installed) {
-    gantt.plugins = gantt.plugins.filter((plugin) => plugin.id !== 'harness.logEverything');
+    gantt.uninstallPlugin('harness.logEverything');
     toggleLoggingBtn.textContent = 'Install logging plugin';
   } else {
-    gantt.plugins = [...gantt.plugins, logEverything(writeLog)];
+    gantt.installPlugin(logEverything(writeLog));
     toggleLoggingBtn.textContent = 'Remove logging plugin';
   }
 });
@@ -440,7 +442,8 @@ toggleLoggingBtn.addEventListener('click', () => {
 // how page scope reaches what the plugin built in `setup()` — it replaces a module-level stash the
 // plugin used to keep for its callers, which two Gantts on one page would have shared (I2).
 const demoPopup = popupDemo();
-gantt.plugins = [...gantt.plugins, selectionShortcuts(writeLog), demoPopup];
+gantt.installPlugin(selectionShortcuts(writeLog));
+gantt.installPlugin(demoPopup);
 
 const popupBtn = document.querySelector<HTMLButtonElement>('#open-popup-btn')!;
 popupBtn.addEventListener('click', () => {
@@ -541,15 +544,14 @@ function entryContextActions(): GanttPlugin {
 // background-only defaults for that target), or the timeline canvas for "Collapse all"/"Expand all";
 // `Shift+F10` opens the same entry menu for a selected row.
 // S5.8, D-S5-19: `inlineEditing()` joins them — double-click Name, Start or Budget to edit in place.
-gantt.plugins = [
-  ...gantt.plugins,
-  tooltips(),
+gantt.installPlugin(tooltips());
+gantt.installPlugin(
   contextMenu({
     items: ({ entry, defaults }) =>
       entry !== undefined
         ? defaults.filter((item) => 'command' in item && ENTRY_CONTEXT_COMMAND_IDS.includes(item.command))
         : defaults,
   }),
-  inlineEditing(),
-  entryContextActions(),
-];
+);
+gantt.installPlugin(inlineEditing());
+gantt.installPlugin(entryContextActions());

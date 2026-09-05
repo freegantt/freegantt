@@ -2,7 +2,9 @@ import { describe, expect, it, vi } from 'vitest';
 import { Gantt } from './gantt.js';
 import { Dataset } from './dataset.js';
 import {
+  DuplicatePluginIdError,
   EntryNotFoundError,
+  PluginNotInstalledError,
   RegistrationClosedError,
   RendererAlreadyRegisteredError,
   ScrollModel,
@@ -3661,6 +3663,106 @@ describe('Gantt.plugins (S5.1, D-S5-1/D-S5-3)', () => {
     gantt.plugins = gantt.plugins.filter((p) => p.id !== 'demo.added');
     expect(disposed).toBe(true);
     expect(gantt.plugins).toEqual([]);
+
+    gantt.destroy();
+  });
+
+  // #195, D-S5-36: adding one plugin at runtime used to mean restating the installed set —
+  // `gantt.plugins = [...gantt.plugins, x]` to add and a `filter` to remove. `harness/main.ts` wrote
+  // both, three times in one file.
+  it('installPlugin adds one plugin and leaves the running ones untouched (#195)', () => {
+    const log: string[] = [];
+    const container = document.createElement('div');
+    const gantt = makeGantt(container, [{ id: 'demo.first', setup: () => () => log.push('first disposed') }]);
+    const barBefore = container.querySelector('.fg-bar');
+
+    gantt.installPlugin({
+      id: 'demo.second',
+      setup: () => {
+        log.push('second setup');
+        return () => log.push('second disposed');
+      },
+    });
+
+    expect(gantt.plugins.map((plugin) => plugin.id)).toEqual(['demo.first', 'demo.second']);
+    expect(log).toEqual(['second setup']);
+    expect(container.querySelector('.fg-bar')).toBe(barBefore);
+
+    gantt.destroy();
+  });
+
+  it('installPlugin refuses an id that is already installed, and installs nothing (#195)', () => {
+    const container = document.createElement('div');
+    const gantt = makeGantt(container, [{ id: 'demo.only', setup: () => () => {} }]);
+
+    let secondSetupRan = false;
+    expect(() =>
+      gantt.installPlugin({
+        id: 'demo.only',
+        setup: () => {
+          secondSetupRan = true;
+        },
+      }),
+    ).toThrow(DuplicatePluginIdError);
+    expect(secondSetupRan).toBe(false);
+    expect(gantt.plugins.map((plugin) => plugin.id)).toEqual(['demo.only']);
+
+    gantt.destroy();
+  });
+
+  it('uninstallPlugin disposes the one named, by the object the caller holds (#195)', () => {
+    const log: string[] = [];
+    const container = document.createElement('div');
+    const kept: GanttPlugin = { id: 'demo.kept', setup: () => () => log.push('kept disposed') };
+    const dropped: GanttPlugin = { id: 'demo.dropped', setup: () => () => log.push('dropped disposed') };
+    const gantt = makeGantt(container, [kept, dropped]);
+
+    gantt.uninstallPlugin(dropped);
+
+    expect(log).toEqual(['dropped disposed']);
+    expect(gantt.plugins.map((plugin) => plugin.id)).toEqual(['demo.kept']);
+
+    gantt.destroy();
+  });
+
+  it('uninstallPlugin takes the id on its own, for a plugin the page no longer holds (#195)', () => {
+    let disposed = false;
+    const container = document.createElement('div');
+    const gantt = makeGantt(container, [{ id: 'demo.byId', setup: () => () => (disposed = true) }]);
+
+    gantt.uninstallPlugin('demo.byId');
+
+    expect(disposed).toBe(true);
+    expect(gantt.plugins).toEqual([]);
+
+    gantt.destroy();
+  });
+
+  it('hasPlugin answers what a toggle reads, by id or by the object the caller holds (#195)', () => {
+    const container = document.createElement('div');
+    const plugin: GanttPlugin = { id: 'demo.toggled', setup: () => () => {} };
+    const gantt = makeGantt(container, []);
+
+    expect(gantt.hasPlugin('demo.toggled')).toBe(false);
+
+    gantt.installPlugin(plugin);
+
+    expect(gantt.hasPlugin('demo.toggled')).toBe(true);
+    expect(gantt.hasPlugin(plugin)).toBe(true);
+
+    gantt.uninstallPlugin(plugin);
+
+    expect(gantt.hasPlugin(plugin)).toBe(false);
+
+    gantt.destroy();
+  });
+
+  it('uninstallPlugin throws for an id nothing installs, rather than doing nothing (#195)', () => {
+    const container = document.createElement('div');
+    const gantt = makeGantt(container, [{ id: 'demo.only', setup: () => () => {} }]);
+
+    expect(() => gantt.uninstallPlugin('demo.typo')).toThrow(PluginNotInstalledError);
+    expect(gantt.plugins.map((plugin) => plugin.id)).toEqual(['demo.only']);
 
     gantt.destroy();
   });
