@@ -31,6 +31,7 @@ const SCOPED_FILES = [
   'src/extensions/features/tooltips.ts',
   'src/render/dom/dom-contract.ts',
   'src/view/gantt-dom.ts',
+  'src/view/frame-settings.ts',
   'src/view/gantt-shell.ts',
   'src/view/plugin-ports.ts',
   'src/view/row-layer.ts',

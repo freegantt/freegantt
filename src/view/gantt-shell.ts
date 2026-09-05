@@ -7,10 +7,6 @@ import {
   ScrollModel,
   TimeScaleModel,
   Viewport,
-  DEFAULT_TICK_BOX_FLOOR_PX,
-  DEFAULT_DIAMOND_SIZE_PX,
-  DEFAULT_LANE_GAP_PX,
-  DEFAULT_ROW_SOURCE,
   createItemProducerRegistry,
   createRegistrationTable,
   isPlannedHeaderRow,
@@ -26,7 +22,6 @@ import type {
   ViewportHandle,
   ViewPreset,
   ItemProducerRegistry,
-  FieldCompare,
   BarRenderer,
   CellRenderer,
   HeaderRenderer,
@@ -81,7 +76,6 @@ import type {
   EntryEdits,
   EntryId,
   EntryKind,
-  FieldContext,
   FieldKey,
   GridColumnInput,
   ItemId,
@@ -96,6 +90,8 @@ import type { Capabilities, Interactions, KindDefaults } from './capability.js';
 import { subscribeToDatasetChanges } from './dataset-change-subscription.js';
 import type { DatasetChangeSubscription } from './dataset-change-subscription.js';
 import { FrameScheduler } from './frame-scheduler.js';
+import { FrameSettings } from './frame-settings.js';
+import type { FrameSettingsPatch, FrameSettingsPorts } from './frame-settings.js';
 import { projectAffordances } from './affordance-projection.js';
 import { GesturePipeline } from './gesture-pipeline.js';
 import type { EntryGestureContext } from './entry-gesture-context.js';
@@ -154,34 +150,11 @@ export type GridWidth = number | 'fitColumns';
 const DEFAULT_THEME: Theme = 'auto';
 const DEFAULT_A11Y_LABEL = 'Gantt';
 
-/** CSS custom property that owns row height (plans/02 §4, level 1 of the customization ladder) —
- * not a constructor option (#39). Read on construction, and again whenever the pane-size attachment
- * fires (#49, #8). `getComputedStyle` is a synchronous style read that can force a style
- * recalculation. `--fg-row-height` essentially never changes between renders in normal use. So a
- * resize is as good a signal as any to catch the rare case it does. Never an unconditional read on
- * every render(). */
-const ROW_HEIGHT_PROPERTY = '--fg-row-height';
-const DEFAULT_ROW_HEIGHT = 32;
-/** A zero-height row is not a row: only a positive value is an authored row height. */
-const ROW_HEIGHT_POLICY = { fallback: DEFAULT_ROW_HEIGHT, accepts: 'positive' } as const;
-
-const TICK_BOX_FLOOR_PROPERTY = '--fg-tick-box-floor';
-/** A zero floor would re-open thin straddles painting at the CSS box minimum. */
-const TICK_BOX_FLOOR_POLICY = { fallback: DEFAULT_TICK_BOX_FLOOR_PX, accepts: 'positive' } as const;
-
-const DIAMOND_SIZE_PROPERTY = '--fg-diamond-size';
-/** A zero size would re-open a zero-width milestone bar (bug hunt). */
-const DIAMOND_SIZE_POLICY = { fallback: DEFAULT_DIAMOND_SIZE_PX, accepts: 'positive' } as const;
-
-const LANE_GAP_PROPERTY = '--fg-lane-gap';
-/** Zero gap is authored: packed bars may sit flush. */
-const LANE_GAP_POLICY = { fallback: DEFAULT_LANE_GAP_PX, accepts: 'zeroOrMore' } as const;
-
-/** Default for `todayLineMarginTicks` below: how many of the current preset's own ticks sit between
- *  the pane's left edge and `panToToday`'s landing (S1.13 follow-up). Two ticks are enough that the
- *  today line reads as "near the start", and does not sit flush on the edge. They leave a sliver of
- *  the timeline visible to its left. */
-const DEFAULT_TODAY_LINE_MARGIN_TICKS = 2;
+/** The four `--fg-*` pixel properties, their policies and the today-line margin default all live in
+ *  `frame-settings.ts` now (#167). They are that module's own knowledge, not this shell's. The read
+ *  cadence stays here, because only this shell knows when the pane changed: on construction, and
+ *  again on every pane-size measurement (#8, #49). `getComputedStyle` is a synchronous style read
+ *  that can force a style recalculation. So it is never an unconditional read per render(). */
 
 /** Every `before*` → `*` pair `#proposeChange` runs (D-S5-6). One entry per pair, not one overload
  *  per pair. A future cancelable change adds a line here, instead of a new `#proposeChange`
@@ -434,10 +407,9 @@ export class GanttShell {
   /** This Gantt's layout pass. It keeps the row-height index alive across renders (#47) — the shell
    * states what to draw and holds no layout bookkeeping of its own. */
   #layout = new FrameLayout();
-  #rowHeight: number = DEFAULT_ROW_HEIGHT;
-  #laneGapPx: number = DEFAULT_LANE_GAP_PX;
-  #tickBoxFloorPx: number = DEFAULT_TICK_BOX_FLOOR_PX;
-  #diamondSizePx: number = DEFAULT_DIAMOND_SIZE_PX;
+  /** #167: every live setting that says what the next frame draws, and the one table saying what
+   *  each change invalidates. This shell's twelve setters below are each one call into it. */
+  #frameSettings: FrameSettings;
   #options: GanttShellOptions;
   /** Construction phase (issue #91 §9-B): bind() notifies synchronously before pane size is wired, so
    *  those calls are not real renders yet. Becomes `'live'` after the first measurement. */
@@ -448,13 +420,6 @@ export class GanttShell {
   #contentSize = { width: 0, height: 0 };
   #theme: Theme = DEFAULT_THEME;
   #a11yLabel: string = DEFAULT_A11Y_LABEL;
-  #locale: Intl.LocalesArgument | undefined;
-  #todayLine: boolean | Instant = true;
-  #dateLines: readonly DateLineSpec[] = [];
-  #todayLineMarginTicks: number = DEFAULT_TODAY_LINE_MARGIN_TICKS;
-  #fieldCompares: readonly FieldCompare[] = [];
-  #fieldContext: FieldContext | undefined;
-  #rowSource: RowSource = DEFAULT_ROW_SOURCE;
   #treeCollapse!: TreeCollapse;
   /** S5.4, D-S5-11: plugin-side renderer registrations. The consumer's own `#barRenderer`/etc. below
    *  are read live at resolve time, never stored here — see `renderer-registry.ts`'s file header. */
@@ -462,10 +427,6 @@ export class GanttShell {
   /** S5.6, D-S5-15: `ctx.view.registerDecoration`'s own record — every plugin's provider, in
    *  registration order, threaded into `#layout.computeFrame` as `LayoutInput.decorationProviders`. */
   #decorationProviders: RegisteredDecorationProvider[] = [];
-  #barRenderer: BarRenderer | RendererByKind | undefined;
-  #cellRenderer: CellRenderer | undefined;
-  #headerRenderer: HeaderRenderer | undefined;
-  #tooltipRenderer: TooltipRenderer | undefined;
   /** S5.3, D-S5-8: constructed once panes exist — see the plugin runtime's own comment just below for
    *  why. */
   #overlay: DomOverlay;
@@ -520,23 +481,17 @@ export class GanttShell {
       ...(options.overscan !== undefined ? { overscan: options.overscan } : {}),
     });
 
-    // Set before the deliberate first render below (`#frames.flush()`). These are plain field
-    // writes, not the live setters. So this first paint sees the constructor's own options, instead
-    // of the field initializers' defaults. S1.13's `dateLines` constructor option caught that bug:
-    // rendering it required this to move ahead of the flush it used to follow.
-    this.#locale = options.locale;
-    this.#todayLine = options.todayLine ?? true;
-    this.#dateLines = options.dateLines ?? [];
+    // Constructed with the options, not assigned through the live setters. So the first paint below
+    // (`#frames.flush()`) sees what the consumer asked for, and no port fires while half this shell
+    // is still undefined. S1.13's `dateLines` constructor option caught that bug: rendering it
+    // required this to move ahead of the flush it used to follow. Built before `ColumnChrome`,
+    // because `#columnBind()` reads the locale from here.
+    this.#frameSettings = new FrameSettings(this.#frameSettingsPorts(), this.#initialFrameSettings(options));
     this.#columnChrome = new ColumnChrome(
       this.#container,
       this.#columnChromePorts(),
       options.gridColumns ?? DEFAULT_GRID_COLUMNS,
     );
-    this.#rowSource = options.rowSource ?? DEFAULT_ROW_SOURCE;
-    this.#barRenderer = options.barRenderer;
-    this.#cellRenderer = options.cellRenderer;
-    this.#headerRenderer = options.headerRenderer;
-    this.#tooltipRenderer = options.tooltipRenderer;
     this.#itemProducerRegistry = options.itemProducerRegistry ?? createItemProducerRegistry();
     this.#bindColumns();
 
@@ -547,7 +502,8 @@ export class GanttShell {
       options.backend ??
       createDomBackend({
         entryById: (id) => this.#options.dataset.entries.get(id),
-        resolveBarRenderer: (kind) => this.#rendererRegistry.resolveBar(kind, this.#barRenderer),
+        resolveBarRenderer: (kind) =>
+          this.#rendererRegistry.resolveBar(kind, this.#frameSettings.barRenderer),
         // S5.4, D-S5-11: `render/dom` never receives `ResolvedColumn` (`column.format` "never
         // reaches a backend", `layout/column.ts`). So this binds it in here instead. render/dom
         // only ever calls an already-column-bound function, keyed by the same `FrameColumn.key`
@@ -569,7 +525,7 @@ export class GanttShell {
                 }),
             };
           }
-          const resolved = this.#rendererRegistry.resolve('cell', this.#cellRenderer);
+          const resolved = this.#rendererRegistry.resolve('cell', this.#frameSettings.cellRenderer);
           if (resolved === undefined) return undefined;
           const cellRenderer = resolved.renderer;
           return {
@@ -584,7 +540,7 @@ export class GanttShell {
         resolveHeaderRenderer: (columnKey) => {
           const column = this.#columnChrome.resolvedColumn(columnKey);
           if (column === undefined) return undefined;
-          const resolved = this.#rendererRegistry.resolve('header', this.#headerRenderer);
+          const resolved = this.#rendererRegistry.resolve('header', this.#frameSettings.headerRenderer);
           if (resolved === undefined) return undefined;
           const headerRenderer = resolved.renderer;
           return {
@@ -699,7 +655,7 @@ export class GanttShell {
       emit: (name, payload) => this.#events.emit(name, payload),
       ...(options.editExtender ? { extend: options.editExtender } : {}),
       allEntries: () => new Map(this.#options.dataset.entries.all.map((e) => [e.id, e])),
-      locale: () => this.#locale,
+      locale: () => this.#frameSettings.locale,
       applyGestureState: (preview, pendingItemIds, cursor) => {
         setOptional(this.#interactionState, 'preview', preview);
         setOptional(this.#interactionState, 'pendingItemIds', pendingItemIds);
@@ -814,23 +770,21 @@ export class GanttShell {
     this.#phase = 'live';
     this.#frames.flush();
 
-    this.#todayLineMarginTicks = options.todayLineMarginTicks ?? DEFAULT_TODAY_LINE_MARGIN_TICKS;
-
     if (options.theme !== undefined) this.theme = options.theme;
     else this.#applyTheme();
     this.a11yLabel = options.a11yLabel ?? DEFAULT_A11Y_LABEL;
   }
 
   get locale(): Intl.LocalesArgument | undefined {
-    return this.#locale;
+    return this.#frameSettings.locale;
   }
 
   /** Live (S1.12, D-S1.12-12): re-labels every header band and every screen-reader date with no bar
-   *  remount — it flows straight through `LayoutInput.locale` on the next render. */
+   *  remount — it flows straight through `LayoutInput.locale` on the next render. What that costs
+   *  is `frame-settings.ts`'s own table to state, not this setter's. Every live setting below reads
+   *  the same way, which is the whole point of #167. */
   set locale(l: Intl.LocalesArgument | undefined) {
-    this.#locale = l;
-    this.#bindColumns();
-    this.#frames.request();
+    this.#frameSettings.set({ locale: l });
   }
 
   get gridColumns(): readonly GridColumnInput[] {
@@ -844,52 +798,45 @@ export class GanttShell {
     this.#columnChrome.commit(columns);
   }
 
-  /** Live (S5.4, D-S5-11). Reassigning repaints every bar with no remount (I8) — the same
-   *  `#frames.request()` every other live paint-only property already uses. */
+  /** Live (S5.4, D-S5-11). Reassigning repaints every bar with no remount (I8). */
   get barRenderer(): BarRenderer | RendererByKind | undefined {
-    return this.#barRenderer;
+    return this.#frameSettings.barRenderer;
   }
 
   set barRenderer(renderer: BarRenderer | RendererByKind | undefined) {
-    this.#barRenderer = renderer;
-    this.#frames.request();
+    this.#frameSettings.set({ barRenderer: renderer });
   }
 
   get cellRenderer(): CellRenderer | undefined {
-    return this.#cellRenderer;
+    return this.#frameSettings.cellRenderer;
   }
 
   set cellRenderer(renderer: CellRenderer | undefined) {
-    this.#cellRenderer = renderer;
-    this.#frames.request();
+    this.#frameSettings.set({ cellRenderer: renderer });
   }
 
   get headerRenderer(): HeaderRenderer | undefined {
-    return this.#headerRenderer;
+    return this.#frameSettings.headerRenderer;
   }
 
   set headerRenderer(renderer: HeaderRenderer | undefined) {
-    this.#headerRenderer = renderer;
-    this.#frames.request();
+    this.#frameSettings.set({ headerRenderer: renderer });
   }
 
   get tooltipRenderer(): TooltipRenderer | undefined {
-    return this.#tooltipRenderer;
+    return this.#frameSettings.tooltipRenderer;
   }
 
   set tooltipRenderer(renderer: TooltipRenderer | undefined) {
-    this.#tooltipRenderer = renderer;
-    this.#frames.request();
+    this.#frameSettings.set({ tooltipRenderer: renderer });
   }
 
   get rowSource(): RowSource {
-    return this.#rowSource;
+    return this.#frameSettings.rowSource;
   }
 
   set rowSource(next: RowSource) {
-    this.#rowSource = next;
-    this.#layout.invalidateFrom(0);
-    this.#frames.request();
+    this.#frameSettings.set({ rowSource: next });
   }
 
   get collapsed(): readonly RowId[] {
@@ -954,32 +901,28 @@ export class GanttShell {
   }
 
   get todayLine(): boolean | Instant {
-    return this.#todayLine;
+    return this.#frameSettings.todayLine;
   }
 
   set todayLine(on: boolean | Instant) {
-    if (this.#todayLine === on) return;
-    this.#todayLine = on;
-    this.#frames.request();
+    this.#frameSettings.set({ todayLine: on });
   }
 
   get dateLines(): readonly DateLineSpec[] {
-    return this.#dateLines;
+    return this.#frameSettings.dateLines;
   }
 
   set dateLines(lines: readonly DateLineSpec[]) {
-    if (lines === this.#dateLines) return;
-    this.#dateLines = lines;
-    this.#frames.request();
+    this.#frameSettings.set({ dateLines: lines });
   }
 
   get todayLineMarginTicks(): number {
-    return this.#todayLineMarginTicks;
+    return this.#frameSettings.todayLineMarginTicks;
   }
 
   /** Live — takes effect on the next `panToToday()` call; does not itself move the scroll position. */
   set todayLineMarginTicks(ticks: number) {
-    this.#todayLineMarginTicks = ticks;
+    this.#frameSettings.set({ todayLineMarginTicks: ticks });
   }
 
   get selection(): readonly EntryId[] {
@@ -1106,8 +1049,8 @@ export class GanttShell {
       panToEnd: () => this.#viewport.scroll.panTo({ x: this.#viewport.scroll.state.max.x }),
       panRight: () => this.#panBy(this.#viewport.preset.preferredTickWidthPx, 0),
       panLeft: () => this.#panBy(-this.#viewport.preset.preferredTickWidthPx, 0),
-      panDown: () => this.#panBy(0, this.#rowHeight),
-      panUp: () => this.#panBy(0, -this.#rowHeight),
+      panDown: () => this.#panBy(0, this.#frameSettings.rowHeight),
+      panUp: () => this.#panBy(0, -this.#frameSettings.rowHeight),
       isColumnResizable: (key) => this.#columnChrome.isResizable(key),
       isColumnMovable: (key) => this.#columnChrome.isMovable(key),
       resizeColumnStep: (key, direction) => this.#columnChrome.resizeStep(key, direction),
@@ -1139,6 +1082,38 @@ export class GanttShell {
     };
   }
 
+  /** `frame-settings.ts`'s one seam back into this shell's frame loop, Field bind and layout pass
+   *  (#167). Every member is a closure, so the settings never hold a stale collaborator. None of
+   *  them runs while this shell is still under construction: `new FrameSettings(...)` writes its
+   *  initial values without touching a port. */
+  #frameSettingsPorts(): FrameSettingsPorts {
+    return {
+      requestFrame: () => this.#frames.request(),
+      rebindFields: () => this.#bindColumns(),
+      invalidateItems: () => this.#layout.invalidateFrom(0),
+      readPixelProperty: (property, policy) => readPixelProperty(this.#container, property, policy),
+    };
+  }
+
+  /** What the constructor's own options say about the next frame. An unset option is spread away
+   *  rather than assigned, because a key present with `undefined` means "clear this setting". That
+   *  is not what an omitted option asks for. */
+  #initialFrameSettings(options: GanttShellOptions): FrameSettingsPatch {
+    return {
+      locale: options.locale,
+      barRenderer: options.barRenderer,
+      cellRenderer: options.cellRenderer,
+      headerRenderer: options.headerRenderer,
+      tooltipRenderer: options.tooltipRenderer,
+      ...(options.todayLine !== undefined ? { todayLine: options.todayLine } : {}),
+      ...(options.dateLines !== undefined ? { dateLines: options.dateLines } : {}),
+      ...(options.rowSource !== undefined ? { rowSource: options.rowSource } : {}),
+      ...(options.todayLineMarginTicks !== undefined
+        ? { todayLineMarginTicks: options.todayLineMarginTicks }
+        : {}),
+    };
+  }
+
   /** `plugin-ports.ts`'s one seam back into this shell's own registries, frame loop and event bus
    *  (that file's doc explains why it needs each of these). `buildPluginPorts` never touches a shell
    *  field directly. Every member is a closure, so each one reads live state at call time. A
@@ -1153,7 +1128,8 @@ export class GanttShell {
       keymap: this.#keymap,
       registerRenderer: (point, renderer, pluginId) =>
         this.#rendererRegistry.register(point, renderer, pluginId),
-      resolveTooltipRenderer: () => this.#rendererRegistry.resolve('tooltip', this.#tooltipRenderer),
+      resolveTooltipRenderer: () =>
+        this.#rendererRegistry.resolve('tooltip', this.#frameSettings.tooltipRenderer),
       lastPaintedBar: (id) => this.#lastBarById.get(itemId(id)),
       entry: (id) => this.#options.dataset.entries.get(id),
       resolvedColumns: () => this.#columnChrome.resolvedColumns,
@@ -1397,7 +1373,7 @@ export class GanttShell {
    *  own to make. The margin is today-landing policy, not a general `Viewport` pan option, so it is
    *  applied here rather than threaded through `panToInstant` (S1.13 follow-up, candidate 2). */
   panToToday(at: Instant, align: 'start' | 'center' = 'start'): void {
-    panToTodayLine(this.#viewport, at, align, this.#todayLineMarginTicks);
+    panToTodayLine(this.#viewport, at, align, this.#frameSettings.todayLineMarginTicks);
   }
 
   /** Finds the entry's row via the bound dataset. It asks `FrameLayout` for the row's top, and
@@ -1409,14 +1385,14 @@ export class GanttShell {
   reveal(entryId: EntryId): void {
     const entry = this.#options.dataset.entries.get(entryId);
     if (entry === undefined) throw new EntryNotFoundError(entryId, 'reveal');
-    const { x, width } = barSpan(entry, this.#viewport.timeScale, this.#diamondSizePx);
+    const { x, width } = barSpan(entry, this.#viewport.timeScale, this.#frameSettings.diamondSizePx);
     let rowIndex = this.#layout.rowIndexForEntry(entryId);
     if (rowIndex < 0 && this.#treeCollapse.expandAncestorsOf(entryId)) {
       this.#frames.flush();
       rowIndex = this.#layout.rowIndexForEntry(entryId);
     }
     const y = rowIndex >= 0 ? this.#layout.rowTop(rowIndex) : this.#viewport.scroll.state.position.y;
-    this.#viewport.reveal({ x, y, width, height: this.#rowHeight });
+    this.#viewport.reveal({ x, y, width, height: this.#frameSettings.rowHeight });
   }
 
   on<K extends keyof GanttEventMap>(name: K, handler: GanttEventHandler<K>): void {
@@ -1462,11 +1438,16 @@ export class GanttShell {
       this.#columnBind(),
     );
     this.#columnChrome.setResolvedColumns(bound.columns);
-    this.#fieldCompares = bound.fieldCompares;
-    this.#fieldContext = createFieldContext(
-      { get: (key) => this.#options.dataset.field(key) },
-      this.#options.dataset.timeZone,
-    );
+    // The bind's own two outputs. They invalidate nothing on the way in (`frame-settings.ts`'s
+    // table). This bind already belongs to whatever asked for it. A repaint here would make every
+    // rebind paint twice.
+    this.#frameSettings.set({
+      fieldCompares: bound.fieldCompares,
+      fieldContext: createFieldContext(
+        { get: (key) => this.#options.dataset.field(key) },
+        this.#options.dataset.timeZone,
+      ),
+    });
     // #139/#157: the columns just changed, so the width they dictate changed with them.
     this.#sizeGridPaneToColumns();
   }
@@ -1478,7 +1459,8 @@ export class GanttShell {
       timeZone: this.#options.dataset.timeZone,
       defaultColumnWidth: this.#columnChrome.defaultWidthPx(),
     };
-    if (this.#locale !== undefined) bind.locale = this.#locale;
+    const locale = this.#frameSettings.locale;
+    if (locale !== undefined) bind.locale = locale;
     return bind;
   }
 
@@ -1556,10 +1538,7 @@ export class GanttShell {
    *  overlapped it in the first place. */
   #applyPaneMeasurement(size: Size): void {
     this.#paneBox = size;
-    this.#rowHeight = readPixelProperty(this.#container, ROW_HEIGHT_PROPERTY, ROW_HEIGHT_POLICY);
-    this.#laneGapPx = readPixelProperty(this.#container, LANE_GAP_PROPERTY, LANE_GAP_POLICY);
-    this.#tickBoxFloorPx = readPixelProperty(this.#container, TICK_BOX_FLOOR_PROPERTY, TICK_BOX_FLOOR_POLICY);
-    this.#diamondSizePx = readPixelProperty(this.#container, DIAMOND_SIZE_PROPERTY, DIAMOND_SIZE_POLICY);
+    this.#frameSettings.refreshPixelProperties();
     this.#applyRowsViewportSize();
   }
 
@@ -1577,29 +1556,24 @@ export class GanttShell {
 
   render(): void {
     const datasetRevision = this.#options.dataset.datasetRevision;
-    const frame = this.#layout.computeFrame({
-      entries: this.#options.dataset.entries.all,
-      scale: this.#viewport.timeScale,
-      preset: this.#viewport.preset,
-      visible: this.#viewport.visible,
-      overscan: this.#viewport.overscan,
-      rowHeight: this.#rowHeight,
-      laneGapPx: this.#laneGapPx,
-      tickBoxFloorPx: this.#tickBoxFloorPx,
-      diamondSizePx: this.#diamondSizePx,
-      revision: this.#revision++,
-      locale: this.#locale,
-      todayLine: this.#todayLine,
-      dateLines: this.#dateLines,
-      columns: this.#columnChrome.resolvedColumns,
-      fieldCompares: this.#fieldCompares,
-      ...(this.#fieldContext !== undefined ? { fieldContext: this.#fieldContext } : {}),
-      rows: this.#rowSource,
-      collapsed: this.#treeCollapse.ids,
-      itemProducerRegistry: this.#itemProducerRegistry,
-      decorationProviders: this.#decorationProviders,
-      ...(typeof datasetRevision === 'number' ? { datasetRevision } : {}),
-    });
+    const frame = this.#layout.computeFrame(
+      // #167: the settings half of a `LayoutInput` stands between frames and answers for itself.
+      // What this shell contributes is what changed since the last frame — the viewport's geometry,
+      // the dataset's entries, and the registries a plugin writes into.
+      this.#frameSettings.toLayoutInput({
+        entries: this.#options.dataset.entries.all,
+        scale: this.#viewport.timeScale,
+        preset: this.#viewport.preset,
+        visible: this.#viewport.visible,
+        overscan: this.#viewport.overscan,
+        revision: this.#revision++,
+        columns: this.#columnChrome.resolvedColumns,
+        collapsed: this.#treeCollapse.ids,
+        itemProducerRegistry: this.#itemProducerRegistry,
+        decorationProviders: this.#decorationProviders,
+        ...(typeof datasetRevision === 'number' ? { datasetRevision } : {}),
+      }),
+    );
     this.#backend.sync(frame);
     this.#lastBarById.clear();
     for (const bar of frame.bars) this.#lastBarById.set(bar.id, bar);
