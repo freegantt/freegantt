@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { GesturePipeline } from './gesture-pipeline.js';
 import type { GesturePipelineDeps } from './gesture-pipeline.js';
 import { entryId, itemId } from '../model/index.js';
-import type { Entry, EntryEdits, EntryId, Instant } from '../model/index.js';
+import type { Entry, EntryEdits, EntryId, ErrorReportInput, Instant } from '../model/index.js';
 import type { TimeScale, ViewPreset } from '../layout/index.js';
 
 /** `view/` may not import `time/` (I1) — a linear px<->ms fake stands in for the bound `TimeScale`;
@@ -32,9 +32,11 @@ function makeDeps(overrides: Partial<GesturePipelineDeps> = {}): {
   deps: GesturePipelineDeps;
   emitted: [string, unknown][];
   applied: unknown[];
+  reported: ErrorReportInput[];
 } {
   const emitted: [string, unknown][] = [];
   const applied: unknown[] = [];
+  const reported: ErrorReportInput[] = [];
   const entries = new Map<EntryId, Entry>();
   const deps: GesturePipelineDeps = {
     timeZone: () => 'UTC',
@@ -50,9 +52,10 @@ function makeDeps(overrides: Partial<GesturePipelineDeps> = {}): {
       return true;
     },
     applyGestureState: (preview) => applied.push(preview),
+    raiseError: (report) => reported.push(report),
     ...overrides,
   };
-  return { deps, emitted, applied };
+  return { deps, emitted, applied, reported };
 }
 
 /** Wires `entryById`/`selection` off a fixed roster, the shape most tests below want: one grabbed
@@ -282,6 +285,53 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
     expect(emitted.map(([name]) => name)).toEqual(['beforeEntryMove']);
   });
 
+  it('a vetoed drag draws nothing, throws nothing, and raises one Error report (D-S5-35)', async () => {
+    const { deps, reported, applied } = withRoster([entry('a', 100, 200)], {
+      emit: ((name: string) =>
+        name === 'beforeEntryMove' ? false : undefined) as GesturePipelineDeps['emit'],
+    });
+    const pipeline = new GesturePipeline(deps);
+    const session = pipeline.session(entryId('a'), { kind: 'move' })!;
+
+    const committed = await session.commit(50);
+
+    expect(committed).toBe(false);
+    expect(applied).toEqual([]); // nothing painted: the preview clears on the next frame, not now
+    expect(reported).toEqual([
+      {
+        code: 'entry-move-cancelled',
+        message: 'gesture: a beforeEntryMove handler refused this move',
+        severity: 'info',
+        by: 'consumer',
+        entryId: entryId('a'),
+      },
+    ]);
+  });
+
+  it('a vetoed resize names the resize event and its own code', async () => {
+    const { deps, reported } = withRoster([entry('a', 100, 200)], {
+      emit: ((name: string) =>
+        name === 'beforeEntryResize' ? false : undefined) as GesturePipelineDeps['emit'],
+    });
+    const pipeline = new GesturePipeline(deps);
+    const session = pipeline.session(entryId('a'), { kind: 'resize', edge: 'end' })!;
+
+    await session.commit(50);
+
+    expect(reported.map((report) => report.code)).toEqual(['entry-resize-cancelled']);
+    expect(reported[0]?.message).toBe('gesture: a beforeEntryResize handler refused this resize');
+  });
+
+  it('a refused commit reports nothing here — data/transaction.ts already raised it', async () => {
+    const { deps, reported } = withRoster([entry('a', 100, 200)], { commitEntryEdits: () => false });
+    const pipeline = new GesturePipeline(deps);
+    const session = pipeline.session(entryId('a'), { kind: 'move' })!;
+
+    await session.commit(50);
+
+    expect(reported).toEqual([]);
+  });
+
   it('commitEntryEdits resolving false (async veto already folded by the caller) skips the after-event', async () => {
     const { deps, emitted } = withRoster([entry('a', 100, 200)], { commitEntryEdits: () => false });
     const pipeline = new GesturePipeline(deps);
@@ -448,6 +498,24 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
 
       expect(committed).toBe(false);
       expect(commitEntryEdits).not.toHaveBeenCalled();
+    });
+
+    it('an async veto resolving false raises one Error report, the same as a sync one', async () => {
+      let resolveVeto!: (value: boolean) => void;
+      const veto = new Promise<boolean>((resolve) => {
+        resolveVeto = resolve;
+      });
+      const { deps, reported } = withRoster([entry('a', 100, 200)], {
+        emit: ((name: string) => (name === 'beforeEntryMove' ? veto : true)) as GesturePipelineDeps['emit'],
+      });
+      const pipeline = new GesturePipeline(deps);
+      const session = pipeline.session(entryId('a'), { kind: 'move' })!;
+
+      const commitPromise = session.commit(50);
+      resolveVeto(false);
+      await commitPromise;
+
+      expect(reported.map((report) => report.code)).toEqual(['entry-move-cancelled']);
     });
 
     it('[S3-A4] session().preview() calls the injected extend and previews its extra as a ghost', async () => {

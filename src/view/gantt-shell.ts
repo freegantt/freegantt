@@ -39,6 +39,7 @@ import { ContainerDom } from './gantt-dom.js';
 import { attachSplitter } from './splitter.js';
 import type { SplitterAttachment } from './splitter.js';
 import { EventBus } from './event-bus.js';
+import { createErrorRaiser } from '../data/error-reporting.js';
 import type { AsyncCancelableEvent, GanttEventHandler, GanttEventMap, GanttEvents } from './event-bus.js';
 import { PluginRuntime } from '../extensions/plugin-runtime.js';
 import type { ShellPlugin } from '../extensions/plugin-runtime.js';
@@ -78,6 +79,7 @@ import type {
   ItemId,
   Instant,
   PluginId,
+  RaiseError,
   RowId,
   Size,
   TimeSpan,
@@ -388,6 +390,10 @@ export class GanttShell {
    *  this, so N mutations in one tick become one frame. */
   #frames = new FrameScheduler(() => this.render());
   #events = new EventBus<GanttEventMap, AsyncCancelableEvent>();
+  /** S5.12, D-S5-35: this Gantt's own raise seam, over the bus above. Handed to every collaborator
+   *  that observes a refusal or a recovered fault but cannot reach the bus — the gesture pipeline,
+   *  the render backend, the plugin runtime, and each plugin's own `ctx.raiseError`. */
+  #raiseError: RaiseError = createErrorRaiser(this.#events);
   /** S5.1, D-S5-1: the plain `{ on, off }` a plugin's `ctx.events` actually is. Built once, from
    *  this shell's own `on`/`off` below. A plugin never sees the rest of this class's public surface
    *  the way handing it `this` directly would. */
@@ -673,6 +679,7 @@ export class GanttShell {
       canGesture: (capability, id) => this.#canGesture(capability, id),
       commitEntryEdits: (edits) => this.#options.wiring.commitEntryEdits?.(edits) ?? false,
       emit: (name, payload) => this.#events.emit(name, payload),
+      raiseError: this.#raiseError,
       ...(options.editExtender ? { extend: options.editExtender } : {}),
       allEntries: () => new Map(this.#options.dataset.entries.all.map((e) => [e.id, e])),
       locale: () => this.#frameSettings.locale,

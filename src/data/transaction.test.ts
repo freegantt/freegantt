@@ -3,6 +3,7 @@ import { runTransaction } from './transaction.js';
 import { DatasetState } from './dataset-state.js';
 import { fieldRowsOf } from './change-set.js';
 import { MutationCancelledError, MutationDuringNotificationError, entryId } from '../model/index.js';
+import type { ErrorReport } from '../model/index.js';
 import { toEndInstant, toInstant } from '../time/index.js';
 import type { EntryEdits, StoredEdit } from './edit-extension.js';
 
@@ -363,6 +364,33 @@ describe('runTransaction', () => {
 
     expect(changeFired).toBe(false);
     expect(state.entries.get(entryId('t1'))?.name).toBe('t1');
+  });
+
+  it('veto: the refusal also raises one Error report, carrying the MutationCancelledError (D-S5-35)', () => {
+    const state = dataset([{ id: 't1' }]);
+    const reports: ErrorReport[] = [];
+    state.on('beforeChange', () => false);
+    state.on('error', (report) => {
+      reports.push(report);
+    });
+
+    expect(() =>
+      runTransaction(
+        state,
+        (token) => state.entries.stageUpdate(token, entryId('t1'), { name: 'a' }),
+        'user',
+      ),
+    ).toThrow(MutationCancelledError);
+
+    expect(reports).toHaveLength(1);
+    const [report] = reports;
+    expect(report?.code).toBe('mutation-cancelled');
+    expect(report?.severity).toBe('info');
+    expect(report?.by).toBe('consumer');
+    expect(typeof report?.at).toBe('number');
+    const cause = report?.cause;
+    expect(cause).toBeInstanceOf(MutationCancelledError);
+    expect((cause as MutationCancelledError).changeSet.updated).toHaveLength(1);
   });
 
   it('a beforeChange handler that throws still discards the write set — not left open for the next transaction', () => {
