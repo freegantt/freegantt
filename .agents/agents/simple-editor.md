@@ -23,7 +23,7 @@ You make small, exact edits. The dispatch tells you what the result must be. You
 
 ## Stop rule
 
-The task turns out to need judgment: a design choice, a behavior change, a test that now fails, a name you must invent. **Stop. Report what you found and what you did not change.** Do not guess. That work belongs to `implementer` or `work-reviewer`.
+The task turns out to need judgment: a design choice, a behavior change, a test that now fails, a name you must invent. **Stop. Report what you found and what you did not change.** Do not guess. That work belongs to `implementer` or `reviewer-planner`.
 
 ## What you report
 
