@@ -6,7 +6,7 @@
 // until the drag threshold (or a touch long-press) is crossed. `mousedown` is only there so a
 // double-click cannot start a native text range; it writes no Gantt state.
 
-import type { EntryId, ItemId } from '../model/index.js';
+import type { EntryId } from '../model/index.js';
 import { itemId } from '../model/index.js';
 import { createPointerGesture } from './pointer-gesture.js';
 import type {
@@ -53,8 +53,6 @@ export function attachEntryGestures(
   /** Set on pointerdown when the hit is a `move`-capable bar or a `resize`-capable handle; cleared
    *  once the pointer stream for that gesture ends (commit or cancel), never read past that point. */
   let grabbedId: EntryId | undefined;
-  /** Set alongside `grabbedId` when the pointer hit a bar — which segment index `session()` uses (D-S4-30). */
-  let grabbedItemId: ItemId | undefined;
   /** Set alongside `grabbedId` only for a handle grab (S3.4) — its presence is what distinguishes a
    *  resize gesture from a move gesture everywhere below. */
   let grabbedEdge: 'start' | 'end' | undefined;
@@ -70,7 +68,7 @@ export function attachEntryGestures(
   const drag = createPointerGesture(pane, {
     start(): boolean {
       if (grabbedId === undefined) return false;
-      session = ctx.session(grabbedId, currentGesture(), grabbedItemId);
+      session = ctx.session(grabbedId, currentGesture());
       return session !== undefined;
     },
     move(e, dxPx): void {
@@ -90,14 +88,12 @@ export function attachEntryGestures(
       session = undefined;
       grabbedId = undefined;
       grabbedEdge = undefined;
-      grabbedItemId = undefined;
     },
     cancel(): void {
       session!.cancel();
       session = undefined;
       grabbedId = undefined;
       grabbedEdge = undefined;
-      grabbedItemId = undefined;
     },
   });
 
@@ -128,15 +124,12 @@ export function attachEntryGestures(
     if (entry !== undefined && bar?.edge !== undefined && ctx.can('resize', entry)) {
       grabbedId = entry.id;
       grabbedEdge = bar.edge;
-      grabbedItemId = bar.itemId;
     } else if (entry !== undefined && bar !== undefined && ctx.can('move', entry)) {
       grabbedId = entry.id;
       grabbedEdge = undefined;
-      grabbedItemId = bar.itemId;
     } else {
       grabbedId = undefined;
       grabbedEdge = undefined;
-      grabbedItemId = undefined;
     }
     drag.down(e);
   }

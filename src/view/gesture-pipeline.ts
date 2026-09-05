@@ -7,8 +7,8 @@
 
 import { cursorLabelForX, draftForMove, draftForResize, previewOffsets } from '../layout/index.js';
 import type { ItemPreview, SnapSetting, SnapUnit, TimeScale, ViewPreset } from '../layout/index.js';
-import type { Entry, EntryEdits, EntryId, ItemId, TimeSpan } from '../model/index.js';
-import { itemId, segmentIndexOfItem } from '../model/index.js';
+import type { Entry, EntryEdits, EntryId, ItemId } from '../model/index.js';
+import { itemId } from '../model/index.js';
 import { identityExtender, type EditExtender } from '../data/edit-extension.js';
 import type { EventBus } from './event-bus.js';
 import type { AsyncCancelableEvent, EntryMove, EntryResize, GanttEventMap } from './event-bus.js';
@@ -53,15 +53,6 @@ export interface GesturePipelineDeps {
   ): void;
 }
 
-/** The span `#stepPx` measures a snap unit against: the grabbed segment when one is grabbed and the
- *  entry actually has segments, the whole entry otherwise. */
-function grabbedSpanOf(anchor: Entry, segmentIndex: number | undefined): TimeSpan {
-  if (segmentIndex !== undefined && anchor.segments && anchor.segments.length > 0) {
-    return anchor.segments[segmentIndex]!;
-  }
-  return anchor;
-}
-
 /** Owns entry resolution, draft math, preview coalescing and the commit pipeline for move/resize
  *  gestures (D-GH-2, closes C1/C4). One commit-shaped fork on `gesture.kind`, isolated here instead
  *  of spread across shell state. `session()` (D-GH-1) is the only public entry point — draft/commit/
@@ -94,26 +85,22 @@ export class GesturePipeline {
    *  session closed over exactly those entries and this one `gesture` shape — `undefined` when
    *  nothing capable is grabbed, replacing the length check a caller used to make by hand against
    *  `entriesForGesture()`'s result. */
-  session(grabbed: EntryId, gesture: EntryGesture, grabbedItemId?: ItemId): EntryGestureSession | undefined {
+  session(grabbed: EntryId, gesture: EntryGesture): EntryGestureSession | undefined {
     if (this.#heldItemIds !== undefined) return undefined;
     const capability: keyof Interactions = gesture.kind === 'resize' ? 'resize' : 'move';
     const entries = this.#entriesForGesture(grabbed, capability);
     if (entries.length === 0) return undefined;
     const anchor = entries[0]!;
-    const grabbedSegmentIndex =
-      grabbedItemId !== undefined && anchor.segments !== undefined && anchor.segments.length > 0
-        ? segmentIndexOfItem(grabbedItemId)
-        : undefined;
     return {
       preview: (dxPx, options) => {
-        this.#preview(this.#draftFor(gesture, entries, dxPx, options, grabbedSegmentIndex), options?.cursorX);
+        this.#preview(this.#draftFor(gesture, entries, dxPx, options), options?.cursorX);
       },
       commit: (dxPx, options) => {
-        return this.#commit(gesture, this.#draftFor(gesture, entries, dxPx, options, grabbedSegmentIndex));
+        return this.#commit(gesture, this.#draftFor(gesture, entries, dxPx, options));
       },
       nudge: (direction, options) => {
-        const dxPx = this.#stepPx(gesture, anchor, options?.suspendSnap, grabbedSegmentIndex) * direction;
-        return this.#commit(gesture, this.#draftFor(gesture, entries, dxPx, options, grabbedSegmentIndex));
+        const dxPx = this.#stepPx(gesture, anchor, options?.suspendSnap) * direction;
+        return this.#commit(gesture, this.#draftFor(gesture, entries, dxPx, options));
       },
       cancel: () => {
         this.#preview(undefined);
@@ -161,19 +148,12 @@ export class GesturePipeline {
    *  same pixel-then-snap math a mouse drag's `commit()` already runs, instead of a second, parallel
    *  calendar-stepping path. Falls back to the preset's own tick when `suspendSnap` clears `snap` to
    *  `'none'` — a keyboard nudge always has *some* unit to size a step by, even unsnapped. */
-  #stepPx(
-    gesture: EntryGesture,
-    anchor: Entry,
-    suspendSnap: boolean | undefined,
-    segmentIndex?: number,
-  ): number {
+  #stepPx(gesture: EntryGesture, anchor: Entry, suspendSnap: boolean | undefined): number {
     const snap = this.#resolveSnap(suspendSnap);
     const preset = this.#deps.preset();
     const unit = snap === 'none' ? preset.tickUnit : snap.unit;
     const increment = snap === 'none' ? preset.tickIncrement : snap.increment;
-    const span = grabbedSpanOf(anchor, segmentIndex);
-    const anchorInstant =
-      gesture.kind === 'resize' ? (gesture.edge === 'start' ? span.start : span.end) : span.start;
+    const anchorInstant = gesture.kind === 'resize' && gesture.edge === 'end' ? anchor.end : anchor.start;
     return this.#deps.timeScale().widthForDuration({ unit, value: increment }, anchorInstant);
   }
 
@@ -182,7 +162,6 @@ export class GesturePipeline {
     entries: readonly Entry[],
     dxPx: number,
     options: DraftOptions | undefined,
-    grabbedSegmentIndex?: number,
   ): EntryEdits {
     const snap = this.#resolveSnap(options?.suspendSnap);
     const base = {
@@ -191,7 +170,6 @@ export class GesturePipeline {
       snap,
       entries,
       dxPx,
-      ...(grabbedSegmentIndex !== undefined ? { grabbedSegmentIndex } : {}),
     };
     if (gesture.kind === 'resize') {
       return draftForResize({ ...base, edge: gesture.edge });

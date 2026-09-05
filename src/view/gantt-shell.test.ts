@@ -85,6 +85,15 @@ class FakeResizeObserver {
 // view/ has no import edge to time/ (plans/01 §1) — instant() lives there. Date.parse on a
 // Z-offset string is deterministic regardless of the container machine's zone, unlike `new Date(str)`
 // on a zoneless string (#27), so this is not the thing I10 exists to ban.
+/** The x of a node's `translate(...)` — the only geometry a paint writes as a transform (#200). */
+function translateX(node: HTMLElement): number {
+  return Number(/translate\((-?[\d.]+)px/u.exec(node.style.transform)?.[1] ?? NaN);
+}
+
+function pxWidth(node: HTMLElement): number {
+  return Number(node.style.width.replace('px', ''));
+}
+
 function instant(iso: string): Instant {
   return Date.parse(iso) as Instant;
 }
@@ -777,7 +786,7 @@ describe('GanttShell hot path (S3.2, D-S3-6/D-S3-9, [S3-A3])', () => {
     }
   });
 
-  it('movableItemId/resizableItemId follow the hovered entry, gated by capability (D-S3-6/D-S3-9)', () => {
+  it('movableItemId/resizableEntryId follow the hovered entry, gated by capability (D-S3-6/D-S3-9)', () => {
     const container = document.createElement('div');
     const dataset = fakeDataset(entries);
     let hover: ((item: ItemId | undefined) => void) | undefined;
@@ -806,7 +815,7 @@ describe('GanttShell hot path (S3.2, D-S3-6/D-S3-9, [S3-A3])', () => {
     shell.destroy();
   });
 
-  it('resizableItemId falls back to the sole selected entry when nothing is hovered (D-S3-6)', () => {
+  it('resizableEntryId falls back to the sole selected entry when nothing is hovered (D-S3-6)', () => {
     const container = document.createElement('div');
     const shell = new GanttShell({ wiring: {}, container, dataset: fakeDataset(entries) });
 
@@ -817,7 +826,7 @@ describe('GanttShell hot path (S3.2, D-S3-6/D-S3-9, [S3-A3])', () => {
     shell.destroy();
   });
 
-  it('clicking one segment paints every bar of that entry, and the handles follow the picked one (#185)', () => {
+  it('clicking one segment paints every bar of that entry, and the handle pair brackets its envelope (#185, #200)', () => {
     const segmented: Entry = {
       id: entryId('seg'),
       name: 'segmented',
@@ -853,11 +862,15 @@ describe('GanttShell hot path (S3.2, D-S3-6/D-S3-9, [S3-A3])', () => {
         'selected',
       );
     }
-    // The shared handle pair is the one thing that still names a single bar: the picked one.
+    // A resize acts on the Entry's envelope (#200), so the pair straddles both bars: the start
+    // handle on the earliest bar's left edge, the end handle on the latest bar's right edge.
     const start = container.querySelector<HTMLElement>('.fg-bar-handle[data-edge="start"]')!;
+    const end = container.querySelector<HTMLElement>('.fg-bar-handle[data-edge="end"]')!;
+    const firstBar = container.querySelector<HTMLElement>(`[data-item-id="${first}"]`)!;
     const secondBar = container.querySelector<HTMLElement>(`[data-item-id="${second}"]`)!;
     expect(start.hidden).toBe(false);
-    expect(start.style.transform).toBe(secondBar.style.transform);
+    expect(start.style.transform).toBe(firstBar.style.transform);
+    expect(translateX(end)).toBeCloseTo(translateX(secondBar) + pxWidth(secondBar), 5);
 
     shell.destroy();
   });

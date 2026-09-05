@@ -86,5 +86,5 @@ export interface EntryGestureContext {
   /** Arms a gesture on the grabbed entry (+ capable co-selected entries, D-S3-19/22). Returns
    *  `undefined` when nothing capable is grabbed — replaces the length check `start()` in
    *  `entry-gestures.ts` used to make by hand against `entriesForGesture()`'s result. */
-  session(grabbed: EntryId, gesture: EntryGesture, grabbedItemId?: ItemId): EntryGestureSession | undefined;
+  session(grabbed: EntryId, gesture: EntryGesture): EntryGestureSession | undefined;
 }

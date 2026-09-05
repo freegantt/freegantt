@@ -158,6 +158,77 @@ describe('draftForResize', () => {
     });
   });
 
+  it('moves the envelope edge of a segmented entry, leaving its other Segments alone (#200)', () => {
+    // Authored out of order on purpose: the envelope edge is a comparison, never index 0.
+    const segmented: Entry = {
+      ...entry('seg', '2026-06-15T14:00:00Z', '2026-06-17T00:00:00Z'),
+      segments: [
+        { start: instant('2026-06-16T09:00:00Z'), end: instant('2026-06-17T00:00:00Z') },
+        { start: instant('2026-06-15T14:00:00Z'), end: instant('2026-06-16T00:00:00Z') },
+      ],
+    };
+
+    const grown = draftForResize({
+      zone: ZONE,
+      scale,
+      snap: 'none',
+      entries: [segmented],
+      dxPx: 30,
+      edge: 'end',
+    });
+    expect(grown.get(segmented.id)).toEqual({
+      segments: [
+        { start: instant('2026-06-16T09:00:00Z'), end: instant('2026-06-17T00:30:00Z') },
+        segmented.segments![1],
+      ],
+      start: instant('2026-06-15T14:00:00Z'),
+      end: instant('2026-06-17T00:30:00Z'),
+    });
+
+    const pulled = draftForResize({
+      zone: ZONE,
+      scale,
+      snap: 'none',
+      entries: [segmented],
+      dxPx: -30,
+      edge: 'start',
+    });
+    expect(pulled.get(segmented.id)).toEqual({
+      segments: [
+        segmented.segments![0],
+        { start: instant('2026-06-15T13:30:00Z'), end: instant('2026-06-16T00:00:00Z') },
+      ],
+      start: instant('2026-06-15T13:30:00Z'),
+      end: instant('2026-06-17T00:00:00Z'),
+    });
+  });
+
+  it('clamps a segmented entry at its own edge Segment, never inverting it (#200)', () => {
+    const segmented: Entry = {
+      ...entry('seg', '2026-06-15T14:00:00Z', '2026-06-17T00:00:00Z'),
+      segments: [
+        { start: instant('2026-06-15T14:00:00Z'), end: instant('2026-06-16T00:00:00Z') },
+        { start: instant('2026-06-16T09:00:00Z'), end: instant('2026-06-17T00:00:00Z') },
+      ],
+    };
+    const draft = draftForResize({
+      zone: ZONE,
+      scale,
+      snap: 'none',
+      entries: [segmented],
+      dxPx: -3000, // far past the latest Segment's own start
+      edge: 'end',
+    });
+    expect(draft.get(segmented.id)).toEqual({
+      segments: [
+        segmented.segments![0],
+        { start: instant('2026-06-16T09:00:00Z'), end: instant('2026-06-16T09:00:00Z') },
+      ],
+      start: instant('2026-06-15T14:00:00Z'),
+      end: instant('2026-06-16T09:00:00Z'),
+    });
+  });
+
   it('resizes every entry in a multi-selection by the same whole-unit step, rigidly', () => {
     const a = entry('a', '2026-06-15T14:00:00Z', '2026-06-15T16:00:00Z');
     const b = entry('b', '2026-06-16T09:00:00Z', '2026-06-16T12:00:00Z');
@@ -232,26 +303,22 @@ describe('draftForMove — segments (S4.10, D-S4-30)', () => {
     ],
   };
 
-  it('writes segments and the envelope when the grabbed segment moves', () => {
+  it('moves every segment by the same delta and rewrites the envelope (#200)', () => {
     const draft = draftForMove({
       zone: ZONE,
       scale,
       snap: 'none',
       entries: [segmented],
       dxPx: 30,
-      grabbedSegmentIndex: 1,
     });
     const edit = draft.get(segmented.id)!;
     expect(edit.segments).toEqual([
-      segmented.segments![0],
-      {
-        start: instant('2026-06-16T09:30:00Z'),
-        end: instant('2026-06-17T00:30:00Z'),
-      },
-      segmented.segments![2],
+      { start: instant('2026-06-15T14:30:00Z'), end: instant('2026-06-16T00:30:00Z') },
+      { start: instant('2026-06-16T09:30:00Z'), end: instant('2026-06-17T00:30:00Z') },
+      { start: instant('2026-06-17T12:30:00Z'), end: instant('2026-06-20T00:30:00Z') },
     ]);
-    expect(edit.start).toEqual(instant('2026-06-15T14:00:00Z'));
-    expect(edit.end).toEqual(instant('2026-06-20T00:00:00Z'));
+    expect(edit.start).toEqual(instant('2026-06-15T14:30:00Z'));
+    expect(edit.end).toEqual(instant('2026-06-20T00:30:00Z'));
   });
 
   it('still writes start/end only for a single-item entry', () => {
