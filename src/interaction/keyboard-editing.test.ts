@@ -52,6 +52,9 @@ function makeContext(
     },
     can: (capability, entry) => (capability === 'select' ? !incapableRows.includes(entry.id) : true),
     selectableEntriesInRowOrder: () => ORDER,
+    // #185: a row hit resolves through this seam — the fake maps one row id to the Entry of the
+    // same name, so a test that wants a multi-entry row overrides it.
+    entriesForRow: (id) => (ORDER.includes(id as unknown as EntryId) ? [id as unknown as EntryId] : []),
     setHovered: () => {},
     contentXAtPaneOffset: (offsetX) => offsetX,
     selection: {

@@ -26,6 +26,7 @@ const row: FrameRow = {
   expandable: false,
   expanded: false,
   cells: [],
+  entryIds: [],
 };
 
 function baseInput(providers: readonly RegisteredDecorationProvider[]): RunDecorationsInput {

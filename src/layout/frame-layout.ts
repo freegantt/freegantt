@@ -12,7 +12,7 @@ import { DecorationRunner } from './decorations.js';
 import type { PlannedRow, UnindexedRow } from './rows/row-source.js';
 import { resolveOpenRows, stampIndex } from './rows/resolve-rows.js';
 import { applyCollapse } from './rows/collapse.js';
-import type { ChangeSet, EntryId, RowId } from '../model/index.js';
+import type { ChangeSet, EntryId, ItemId, RowId } from '../model/index.js';
 import { DEFAULT_LANE_GAP_PX } from './lanes/pack-lanes.js';
 
 /** One Gantt's layout pass, with the row-height index kept alive between passes. One instance per
@@ -65,6 +65,20 @@ export class FrameLayout {
   /** Row that currently displays this entry, including a row collapse later hid (D4). */
   rowIdForEntry(id: EntryId): RowId | undefined {
     return this.#rowOfEntry.get(id);
+  }
+
+  /** Every Item this entry draws, in the packed order its row produced them (#185). It answers from
+   * the producer output, never from the `${entryId}:${segmentIndex}` id convention, so a plugin Kind
+   * that draws several Items from an entry with no Segments gets the same true answer. Empty when
+   * collapse hid the row, or when the entry draws nothing. */
+  itemIdsForEntry(id: EntryId): readonly ItemId[] {
+    const rowId = this.#rowOfEntry.get(id);
+    if (rowId === undefined) return [];
+    const ids: ItemId[] = [];
+    for (const item of this.#memory.packedRow(rowId).items) {
+      if (item.entryId === id) ids.push(item.id);
+    }
+    return ids;
   }
 
   /** Collapsed ancestors of this entry's row, walking `parentRowId` recorded before collapse. */
