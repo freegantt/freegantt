@@ -32,6 +32,7 @@ import { isDevMode } from '../../data/dev-mode.js';
 import {
   BAR_CLASS,
   BAR_HANDLE_CLASS,
+  BAR_TESTID,
   COLUMN_HEADER_CLASS,
   ENTRY_ID_KEY,
   FIELD_KEY,
@@ -40,7 +41,9 @@ import {
   ROW_CLASS,
   ROW_LABEL_CLASS,
   ROW_LABEL_TEXT_CLASS,
+  ROW_TESTID,
   ROW_TWISTY_CLASS,
+  TESTID_KEY,
 } from './dom-contract.js';
 
 /** A cell's renderer, already bound to its `ResolvedColumn` (render/dom never receives that type —
@@ -655,7 +658,7 @@ export function createDomBackend(options?: DomBackendOptions): RenderBackend<HTM
         const node = document.createElement('div');
         node.className = ROW_CLASS;
         node.setAttribute('role', 'listitem');
-        node.dataset['testid'] = ROW_CLASS;
+        node.dataset[TESTID_KEY] = ROW_TESTID;
         node.dataset['rowId'] = key;
         // Bug hunt (S5 fixes): what `hitTest`'s grid-row fallback resolves a click against — a
         // header row carries none, and never becomes selectable (`row.entryId === undefined` above).
@@ -770,7 +773,7 @@ export function createDomBackend(options?: DomBackendOptions): RenderBackend<HTM
         const node = document.createElement('div');
         node.className = barClassName(bar.kind);
         node.dataset[ITEM_ID_KEY] = bar.id;
-        node.dataset['testid'] = BAR_CLASS;
+        node.dataset[TESTID_KEY] = BAR_TESTID;
         node.setAttribute('role', 'img');
         return node;
       },

@@ -25,9 +25,20 @@ export const ROW_TWISTY_CLASS = 'fg-row-twisty';
 export const BAR_HANDLE_CLASS = 'fg-bar-handle';
 
 /** `dataset` keys, spelled the way `HTMLElement.dataset` reads them (camelCase). */
+export const TESTID_KEY = 'testid';
 export const ITEM_ID_KEY = 'itemId';
 export const ENTRY_ID_KEY = 'entryId';
 export const FIELD_KEY = 'field';
+
+// What an `e2e/` spec queries. A test id is a *separate* contract from the class beside it: a class
+// is ours to rename for looks, a test id is a name Playwright specs pin. Before #180 the backend
+// wrote the class into `data-testid`, so a rename here silently renamed the e2e contract and no
+// build failed. The two now carry the same string on purpose, and each moves on its own.
+
+/** `[data-testid="fg-row"]` — one Row (`e2e/large-dataset.spec.ts`, `e2e/zoom.spec.ts`). */
+export const ROW_TESTID = 'fg-row';
+/** `[data-testid="fg-bar"]` — one rendered Item. */
+export const BAR_TESTID = 'fg-bar';
 
 /** The same Field key as a CSS attribute selector name. `dataset` camelCases and a selector does
  *  not, so a reader that needs both gets both from here rather than transliterating one. */
