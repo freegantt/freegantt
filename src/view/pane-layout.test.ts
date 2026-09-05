@@ -16,7 +16,7 @@ describe('PaneLayout', () => {
     expect(container.querySelector('.fg-grid-pane')).not.toBeNull();
     expect(container.querySelector('.fg-splitter')).not.toBeNull();
     expect(container.querySelector('.fg-timeline-pane')).not.toBeNull();
-    expect(paneLayout.panes.grid).toBeInstanceOf(HTMLElement);
+    expect(paneLayout.panes.rows).toBeInstanceOf(HTMLElement);
     expect(paneLayout.panes.splitter).toBeInstanceOf(HTMLElement);
     expect(paneLayout.panes.timeline).toBeInstanceOf(HTMLElement);
 

@@ -494,7 +494,7 @@ export class GanttShell {
     // S5.3, D-S5-8: constructed right after the panes it measures, so it is ready by the time the
     // plugin runtime (just below) builds its first `PluginContext`.
     this.#overlay = new DomOverlay(this.#container, this.#panes.overlay);
-    this.#rowLayer = new DomRowLayer(this.#panes.grid);
+    this.#rowLayer = new DomRowLayer(this.#panes.rows);
     this.#dom = new ContainerDom(this.#container, this.#paneLayout, (id) =>
       this.#options.dataset.entries.get(id),
     );
@@ -593,7 +593,7 @@ export class GanttShell {
         },
       });
     this.#backend.mount({
-      grid: this.#panes.grid,
+      grid: this.#panes.rows,
       timeline: this.#panes.timeline,
       gridHeader: this.#panes.gridHeader,
     });
@@ -784,7 +784,7 @@ export class GanttShell {
     );
     this.#entryGestures = options.wiring.entryGestures?.(
       this.#panes.timeline,
-      this.#panes.grid,
+      this.#panes.rows,
       this.#container,
       gestureContext,
     );
@@ -800,11 +800,11 @@ export class GanttShell {
     // #126: the grid pane has no scroll of its own (D-S1.8-1). So this forwards its wheel input
     // into the same shared scroll the timeline pane already writes into. `anchorPane` keeps ctrl/⌘+wheel
     // zoom anchored on the timeline's time axis, since the grid pane's own x-axis isn't time.
-    this.#wheelNavigationGrid = attachWheelNavigation(this.#panes.grid, wheelNavigationCtx, {
+    this.#wheelNavigationGrid = attachWheelNavigation(this.#panes.rows, wheelNavigationCtx, {
       anchorPane: this.#panes.timeline,
       forwardPlainWheel: true,
     });
-    this.#rowTwistyAttachment = attachRowTwisty(this.#panes.grid, {
+    this.#rowTwistyAttachment = attachRowTwisty(this.#panes.rows, {
       toggleCollapse: (id) => this.toggleCollapse(id),
     });
     if (options.collapsed !== undefined) {
