@@ -905,10 +905,12 @@ export class Gantt {
     // (undocumented)
     get gridWidth(): number;
     set gridWidth(width: GridWidth);
+    hasPlugin(plugin: GanttPlugin | PluginId): boolean;
     get headerRenderer(): HeaderRenderer | undefined;
     set headerRenderer(renderer: HeaderRenderer | undefined);
     get hiddenGridColumns(): readonly FieldKey[];
     hideGridColumn(field: FieldKey): void;
+    installPlugin(plugin: GanttPlugin): void;
     get interactions(): Interactions;
     set interactions(next: Interactions);
     // (undocumented)
@@ -956,6 +958,7 @@ export class Gantt {
     toggleCollapse(id: RowId | string): void;
     get tooltipRenderer(): TooltipRenderer | undefined;
     set tooltipRenderer(renderer: TooltipRenderer | undefined);
+    uninstallPlugin(plugin: GanttPlugin | PluginId): void;
     get viewportGestures(): ViewportGestures;
     set viewportGestures(next: ViewportGestures);
     // (undocumented)
@@ -1416,6 +1419,13 @@ export type PluginDocument = Readonly<Record<string, Readonly<Record<string, unk
 
 // @public
 export type PluginId = string;
+
+// @public
+export class PluginNotInstalledError extends FreeGanttError {
+    constructor(pluginId: PluginId);
+    // (undocumented)
+    readonly pluginId: PluginId;
+}
 
 // @public
 export class PluginRequirementCycleError extends FreeGanttError {

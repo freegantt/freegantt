@@ -268,6 +268,21 @@ export class DuplicatePluginIdError extends FreeGanttError {
   }
 }
 
+/** `code: 'plugin-not-installed'` — `gantt.uninstallPlugin` named a plugin this Gantt does not have
+ *  installed (D-S5-36). The verb acts on the installed set, and it never adds to it, so a name
+ *  nothing installs is a mistake rather than a silent no-op — the same call D-S5-34 made for
+ *  `UnknownGridColumnError`. Distinct from `MissingPluginError`, which is a `requires` entry no
+ *  `plugins` list supplies. */
+export class PluginNotInstalledError extends FreeGanttError {
+  readonly pluginId: PluginId;
+
+  constructor(pluginId: PluginId) {
+    super('plugin-not-installed', `uninstallPlugin: "${pluginId}" is not installed`);
+    this.name = 'PluginNotInstalledError';
+    this.pluginId = pluginId;
+  }
+}
+
 /** `code: 'missing-plugin'` — a `DatasetPlugin` names a `requires` id that the same `plugins` list
  *  does not install (D-S5-31). Thrown at construction, naming both ids. `requires` is a check, never
  *  a supplier: a missing prerequisite is this error, not a quiet default. */

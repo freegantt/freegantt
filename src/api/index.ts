@@ -176,6 +176,7 @@ export {
   InvalidReplayOriginError,
   UnsupportedSchemaError,
   DuplicatePluginIdError,
+  PluginNotInstalledError,
   MissingPluginError,
   PluginRequirementCycleError,
   RegistrationClosedError,
