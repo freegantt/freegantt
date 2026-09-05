@@ -61,8 +61,9 @@ export interface DomEventOptions {
 
 /** What `buildPluginPorts` borrows from `GanttShell` — the registries, the frame loop and the event
  *  bus a plugin seam writes into. `GanttShell` builds one of these per Gantt, closing over its own
- *  private fields. Nothing else may implement it. This is the same named-ports idiom
- *  `CoreCommandPorts` and `ColumnChromePorts` already set. */
+ *  private fields, and every installed plugin's `buildPluginPorts` call reads that same object
+ *  (#179). Nothing else may implement it. This is the same named-ports idiom `CoreCommandPorts` and
+ *  `ColumnChromePorts` already set. */
 export interface GanttShellPorts {
   /** The plain `{ on, off }` pair a plugin sees instead of the whole shell. */
   events: GanttEvents;
