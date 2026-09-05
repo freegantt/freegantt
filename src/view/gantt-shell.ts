@@ -422,7 +422,7 @@ export class GanttShell {
   /** #157: `gridWidth = 'fitColumns'` is a standing instruction, not a one-off width, so the shell
    *  remembers it and re-measures on every rebind. `PaneLayout` holds the px it resolves to — it
    *  knows nothing about columns (its file header: structure and one number only). */
-  #gridWidthFollowsColumns: boolean;
+  #fitsColumns: boolean;
   #panes: Panes;
   #backend: RenderBackend<HTMLElement>;
   #revision = 0;
@@ -542,7 +542,7 @@ export class GanttShell {
     // #157: `'fitColumns'` names no px of its own, so the pane opens at its authored width
     // (`--fg-grid-pane-width`) and `#bindColumns` below sizes it to the columns the moment there
     // are resolved columns to measure.
-    this.#gridWidthFollowsColumns = options.gridWidth === 'fitColumns';
+    this.#fitsColumns = options.gridWidth === 'fitColumns';
     this.#paneLayout = new PaneLayout({
       container: this.#container,
       ...(typeof options.gridWidth === 'number' ? { gridWidth: options.gridWidth } : {}),
@@ -893,7 +893,7 @@ export class GanttShell {
       // was dragged to and stops following the columns. A vetoed drag changes neither.
       commitGridWidth: (px) => {
         if (this.#commitGridWidth(this.#withinSplitterBounds(px))) {
-          this.#gridWidthFollowsColumns = false;
+          this.#fitsColumns = false;
         }
       },
     });
@@ -1473,7 +1473,7 @@ export class GanttShell {
    *  Nothing floors either form — an explicit `gridWidth = 0` still collapses the pane on purpose
    *  (#127). */
   set gridWidth(width: GridWidth) {
-    this.#gridWidthFollowsColumns = width === 'fitColumns';
+    this.#fitsColumns = width === 'fitColumns';
     this.#commitGridWidth(
       width === 'fitColumns'
         ? (this.#columnsWidth() ?? this.#paneLayout.gridWidth)
@@ -1702,14 +1702,12 @@ export class GanttShell {
    *  width it has. */
   #sizeGridPaneToColumns(): void {
     const current = this.#paneLayout.gridWidth;
-    const target = this.#gridWidthFollowsColumns
-      ? (this.#columnsWidth() ?? current)
-      : this.#noWiderThanColumns(current);
+    const target = this.#fitsColumns ? (this.#columnsWidth() ?? current) : this.#noWiderThanColumns(current);
     if (target !== current) this.#commitGridWidth(target);
   }
 
   /** Returns whether the change survived `beforeGridWidthChange` — a vetoed width leaves both the
-   *  pane and the caller's own bookkeeping (#157's `#gridWidthFollowsColumns`) untouched. */
+   *  pane and the caller's own bookkeeping (#157's `#fitsColumns`) untouched. */
   #commitGridWidth(px: number): boolean {
     const from = this.#paneLayout.gridWidth;
     const to = px;
