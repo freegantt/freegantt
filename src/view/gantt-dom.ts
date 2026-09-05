@@ -26,6 +26,7 @@ import {
   ROW_LABEL_CLASS,
   ROW_LABEL_TEXT_CLASS,
 } from '../render/dom/dom-contract.js';
+import { cssEscapeAttr } from '../render/dom/css-escape.js';
 import { entryIdOfItem, itemId, itemIdFromDataset } from '../model/index.js';
 import type { Entry, EntryId, FieldKey, TargetKind } from '../model/index.js';
 import { SPLITTER_CLASS } from './pane-layout.js';
@@ -152,7 +153,7 @@ export class ContainerDom implements GanttDom {
   }
 
   cellFor(id: EntryId, field: FieldKey): HTMLElement | undefined {
-    const selector = `[${FIELD_ATTRIBUTE}="${cssEscape(String(field))}"]`;
+    const selector = `[${FIELD_ATTRIBUTE}="${cssEscapeAttr(String(field))}"]`;
     const rows = this.#container.querySelectorAll<HTMLElement>(`.${ROW_CLASS}`);
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i];
@@ -223,12 +224,4 @@ function fieldPart(field: string | undefined): { field?: FieldKey } {
 
 function freezeTarget(target: DomTarget): DomTarget {
   return Object.freeze(target);
-}
-
-/** `CSS.escape` where the environment has it. happy-dom's `Element.querySelector` runs without it,
- *  and a Field key holding a selector-special character must still find its own cell. */
-function cssEscape(value: string): string {
-  return typeof CSS !== 'undefined' && typeof CSS.escape === 'function'
-    ? CSS.escape(value)
-    : value.replace(/["\\]/g, '\\$&');
 }
