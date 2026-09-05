@@ -197,6 +197,24 @@ describe('RendererRegistry — the bar point keys on the kind (review P2)', () =
     expect(registry.resolveBar('span', undefined)).toEqual({ renderer: fallback, pluginId: pluginA });
   });
 
+  // #174: the per-kind disposer was a forward loop over one array, and a second call ran the whole
+  // loop again. It survived only because each slot release latches on its own. The store now makes
+  // the guarantee here, so a change to that release cannot quietly break re-installing a plugin.
+  it('disposing a per-kind registration twice frees nothing a later plugin claimed', () => {
+    const registry = new RendererRegistry();
+    const disposeA = registry.register('bar', { buffer, risk }, pluginA);
+    disposeA();
+
+    const laterBuffer: BarRenderer = () => ({ text: 'later' });
+    registry.register('bar', { buffer: laterBuffer }, pluginB);
+    disposeA();
+
+    expect(registry.resolveBar('buffer', undefined)).toEqual({
+      renderer: laterBuffer,
+      pluginId: pluginB,
+    });
+  });
+
   it('a consumer per-kind map still wins over every plugin kind slot (D-S5-11)', () => {
     const registry = new RendererRegistry();
     registry.register('bar', { buffer }, pluginA);
