@@ -13,6 +13,7 @@ import type {
   EntryKind,
   FieldContext,
   FieldUpdated,
+  StoreRowUpdated,
 } from '../model/index.js';
 import { MutationCancelledError, MutationDuringNotificationError } from '../model/index.js';
 import { buildCommitChangeSet, diffEdits } from './build-commit-change-set.js';
@@ -44,11 +45,23 @@ export interface TransactionalEntryStore {
   writeCommittedFieldRows(updated: readonly FieldUpdated[]): void;
 }
 
+/** What `runTransaction` reads off the plugin stores (D-S5-24) — the same three transaction steps
+ *  `TransactionalEntryStore` has, and deliberately not the concrete `PluginStores` type, for this
+ *  file's usual cycle-avoidance reason. `reserve`/`read` exist for a plugin, never for this file. */
+export interface TransactionalPluginStores {
+  beginTransaction(token: TxToken): void;
+  pendingRows(removedEntryIds: readonly EntryId[]): readonly StoreRowUpdated[];
+  endTransaction(token: TxToken, changeSet: ChangeSet | undefined): void;
+}
+
 /** What `runTransaction` needs from a Dataset's live state. Structural, not `DatasetState` itself, for
  *  the same reason as `TransactionalEntryStore` above — `dataset-state.ts` imports this file, so this
  *  file must not import `dataset-state.ts` back. */
 export interface TransactionData {
   readonly entries: TransactionalEntryStore;
+  readonly pluginStores: TransactionalPluginStores;
+  /** The hook's current occupant (D4, D-S2-6). A getter on `DatasetState`, not a fixed field, because
+   *  `ctx.edits.setExtender` composes onto it while plugins set up (D-S5-23). */
   readonly editExtender: EditExtender;
   /** 0 = no transaction open. Only `runTransaction` reads or writes this (D-S2-8's nesting rule). */
   openTransactions: number;
@@ -124,6 +137,19 @@ export function applyConstructionRollUp(data: TransactionData): void {
  * which is what "neither re-runs the extension hook" (`s2.5-undo-redo.md` §2.2) means in code — replaying
  * or inverting a recorded `ChangeSet` never goes near `data.editExtender` or `rollUpFields`.
  */
+/** Opens the write set on every store one transaction spans. Entries and plugin stores stage
+ *  together and close together, so a plugin row and an entry edit are never half-committed. */
+function beginStores(data: TransactionData, token: TxToken): void {
+  data.entries.beginTransaction(token);
+  data.pluginStores.beginTransaction(token);
+}
+
+/** Closes every store's write set, applying `changeSet` or — with `undefined` — discarding it. */
+function endStores(data: TransactionData, token: TxToken, changeSet: ChangeSet | undefined): void {
+  data.entries.endTransaction(token, changeSet);
+  data.pluginStores.endTransaction(token, changeSet);
+}
+
 export function commitChangeSet(data: TransactionData, changeSet: ChangeSet): void {
   if (data.notifying) {
     throw new MutationDuringNotificationError(
@@ -132,7 +158,7 @@ export function commitChangeSet(data: TransactionData, changeSet: ChangeSet): vo
   }
 
   const token: TxToken = {} as TxToken;
-  data.entries.beginTransaction(token);
+  beginStores(data, token);
 
   if (isDevMode()) {
     Object.freeze(changeSet.added);
@@ -146,18 +172,18 @@ export function commitChangeSet(data: TransactionData, changeSet: ChangeSet): vo
   try {
     allowed = data.bus.emit('beforeChange', { changeSet });
   } catch (error) {
-    data.entries.endTransaction(token, undefined);
+    endStores(data, token, undefined);
     throw error;
   } finally {
     data.notifying = false;
   }
 
   if (!allowed) {
-    data.entries.endTransaction(token, undefined);
+    endStores(data, token, undefined);
     throw new MutationCancelledError(changeSet);
   }
 
-  data.entries.endTransaction(token, changeSet);
+  endStores(data, token, changeSet);
 
   data.bumpDatasetRevision();
 
@@ -193,14 +219,14 @@ export function runTransaction<T>(
   const token: TxToken = {} as TxToken;
   const outermost = data.openTransactions === 0;
   data.openTransactions += 1;
-  if (outermost) data.entries.beginTransaction(token);
+  if (outermost) beginStores(data, token);
 
   let result: T;
   try {
     result = body(token);
   } catch (error) {
     data.openTransactions -= 1;
-    if (outermost) data.entries.endTransaction(token, undefined);
+    if (outermost) endStores(data, token, undefined);
     throw error;
   }
   data.openTransactions -= 1;
@@ -210,17 +236,17 @@ export function runTransaction<T>(
     const changeSet = buildCommitChangeSet(data, origin);
 
     if (!changeSet) {
-      data.entries.endTransaction(token, undefined);
+      endStores(data, token, undefined);
       return result;
     }
 
     // Discard the body's write set. `commitChangeSet` opens its own transaction to apply the folded
     // rows — a second `beginTransaction` here would wipe the overlay instead of closing it.
-    data.entries.endTransaction(token, undefined);
+    endStores(data, token, undefined);
     commitChangeSet(data, changeSet);
     return result;
   } catch (error) {
-    data.entries.endTransaction(token, undefined);
+    endStores(data, token, undefined);
     throw error;
   }
 }

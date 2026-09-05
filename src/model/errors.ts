@@ -254,6 +254,41 @@ export class DuplicatePluginIdError extends FreeGanttError {
   }
 }
 
+/** `code: 'missing-plugin'` — a `DatasetPlugin` names a `requires` id that the same `plugins` list
+ *  does not install (D-S5-31). Thrown at construction, naming both ids. `requires` is a check, never
+ *  a supplier: a missing prerequisite is this error, not a quiet default. */
+export class MissingPluginError extends FreeGanttError {
+  readonly pluginId: PluginId;
+  readonly requiredId: PluginId;
+
+  constructor(pluginId: PluginId, requiredId: PluginId) {
+    super(
+      'missing-plugin',
+      `plugins: "${pluginId}" requires "${requiredId}", which this Dataset does not install`,
+    );
+    this.name = 'MissingPluginError';
+    this.pluginId = pluginId;
+    this.requiredId = requiredId;
+  }
+}
+
+/** `code: 'plugin-requirement-cycle'` — two or more plugins require each other, so no setup order
+ *  satisfies every `requires` (D-S5-31). This is not the `PluginOrderError` D-S5-31 refuses: installation
+ *  computes the order, so a caller can no longer write a wrong one — but a cycle leaves no right one
+ *  to compute. Thrown at construction, naming every plugin in the cycle. */
+export class PluginRequirementCycleError extends FreeGanttError {
+  readonly pluginIds: readonly PluginId[];
+
+  constructor(pluginIds: readonly PluginId[]) {
+    super(
+      'plugin-requirement-cycle',
+      `plugins: ${pluginIds.map((id) => `"${id}"`).join(', ')} require each other, so no setup order works`,
+    );
+    this.name = 'PluginRequirementCycleError';
+    this.pluginIds = pluginIds;
+  }
+}
+
 /** `code: 'registration-closed'` — a `ctx.*.register*` call reached after that plugin's `setup()`
  *  already returned (D-S5-4). Registration is legal only while `setup` is running. */
 export class RegistrationClosedError extends FreeGanttError {

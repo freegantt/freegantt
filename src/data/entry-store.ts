@@ -27,7 +27,7 @@ import {
 import type { EntryStore as EntryStoreContract } from '../model/index.js';
 import { computed, signal } from './reactivity.js';
 import type { EntryEdits, StoredEdit } from './edit-extension.js';
-import type { ChangeSet, FieldUpdated } from '../model/index.js';
+import type { ChangeSet, FieldUpdated, UpdatedRow } from '../model/index.js';
 import { readEdit, readEntry } from './entry-reader.js';
 import type { EntryReadContext } from './entry-reader.js';
 import { runTransaction } from './transaction.js';
@@ -335,8 +335,11 @@ export class EntryStore implements EntryStoreContract {
     this.#writeSet = null;
   }
 
-  #applyUpdatedRows(updated: readonly FieldUpdated[]): void {
+  /** Entry rows only. A changeset also carries plugin-store rows (D-S5-24); `data/plugin-store.ts`
+   *  applies those against its own maps, from the same `endTransaction` call. */
+  #applyUpdatedRows(updated: readonly UpdatedRow[]): void {
     for (const row of updated) {
+      if (row.store !== 'entries') continue;
       const current = this.#byId.get(row.id);
       if (current) this.#byId.set(row.id, applyFieldRow(current, row.field, row.to, this.#registry));
     }

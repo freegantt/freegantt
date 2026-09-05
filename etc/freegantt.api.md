@@ -83,7 +83,7 @@ export interface ChangeSet {
     // (undocumented)
     removed: readonly EntityRemoved[];
     // (undocumented)
-    updated: readonly FieldUpdated[];
+    updated: readonly UpdatedRow[];
 }
 
 // @public (undocumented)
@@ -227,12 +227,13 @@ export interface CustomRowSource {
 
 // @public (undocumented)
 export class Dataset<TMeta = unknown, TFields extends Record<string, unknown> = Record<string, unknown>> {
-    constructor(options: DatasetOptions<TMeta>);
+    constructor(options: DatasetOptions<TMeta, TFields>);
     get canRedo(): boolean;
     get canUndo(): boolean;
     get datasetRevision(): number;
     // (undocumented)
     get dateOnlyEnd(): DateOnlyEndRule;
+    destroy(): void;
     // (undocumented)
     get entries(): EntryStore<TMeta, TFields>;
     field(key: FieldKey): Field | undefined;
@@ -247,6 +248,7 @@ export class Dataset<TMeta = unknown, TFields extends Record<string, unknown> = 
     off<K extends keyof DatasetEventMap>(name: K, handler: (payload: DatasetEventMap[K]) => void | false): void;
     // (undocumented)
     on<K extends keyof DatasetEventMap>(name: K, handler: (payload: DatasetEventMap[K]) => void | false): void;
+    get plugins(): readonly DatasetPluginOf<Dataset<TMeta, TFields>>[];
     redo(): void;
     replay(changeSet: ChangeSet): void;
     // (undocumented)
@@ -267,12 +269,19 @@ export interface DatasetDocument<TMeta = unknown> {
     // (undocumented)
     entries: readonly EntryDocument<TMeta>[];
     fields?: readonly SerializedField[];
+    plugins?: PluginDocument;
     // (undocumented)
     rollUpKinds: readonly EntryKind[];
     // (undocumented)
-    schema: 1 | 2;
+    schema: 1 | 2 | 3;
     // (undocumented)
     timeZone: string;
+}
+
+// @public
+export interface DatasetEditHook {
+    // (undocumented)
+    setExtender(wrap: ExtenderWrapper): void;
 }
 
 // @public
@@ -288,13 +297,31 @@ export interface DatasetEventMap {
 }
 
 // @public
+export interface DatasetEvents {
+    // (undocumented)
+    off<K extends keyof DatasetEventMap>(name: K, handler: (payload: DatasetEventMap[K]) => void | false): void;
+    // (undocumented)
+    on<K extends keyof DatasetEventMap>(name: K, handler: (payload: DatasetEventMap[K]) => void | false): void;
+}
+
+// @public
+export interface DatasetFieldRegistrations {
+    // (undocumented)
+    register(field: Field): void;
+    // (undocumented)
+    registerAggregator(name: AggregatorName, fn: Aggregator): void;
+    // (undocumented)
+    registerType(name: FieldTypeName, type: FieldType): void;
+}
+
+// @public
 export interface DatasetHierarchy {
     // (undocumented)
     readonly autoGroup: boolean;
 }
 
 // @public (undocumented)
-export interface DatasetOptions<TMeta = unknown> {
+export interface DatasetOptions<TMeta = unknown, TFields extends Record<string, unknown> = Record<string, unknown>> {
     aggregators?: Readonly<Record<string, Aggregator>>;
     dateOnlyEnd?: DateOnlyEndRule;
     entries: readonly EntryInput<TMeta>[];
@@ -304,8 +331,46 @@ export interface DatasetOptions<TMeta = unknown> {
     history?: {
         capacity?: number;
     };
+    plugins?: readonly DatasetPluginOf<Dataset<TMeta, TFields>>[];
     rollUpKinds?: RollUpKinds;
     timeZone?: string;
+}
+
+// @public (undocumented)
+export type DatasetPlugin<TMeta = unknown, TFields extends Record<string, unknown> = Record<string, unknown>> = DatasetPluginOf<Dataset<TMeta, TFields>>;
+
+// @public (undocumented)
+export type DatasetPluginContext<TMeta = unknown, TFields extends Record<string, unknown> = Record<string, unknown>> = DatasetPluginContextOf<Dataset<TMeta, TFields>>;
+
+// @public
+export interface DatasetPluginContextOf<TDataset> {
+    // (undocumented)
+    dataset: TDataset;
+    // (undocumented)
+    disposables: DisposableStore;
+    // (undocumented)
+    edits: DatasetEditHook;
+    // (undocumented)
+    events: DatasetEvents;
+    // (undocumented)
+    fields: DatasetFieldRegistrations;
+    // (undocumented)
+    store: DatasetStoreAccess;
+}
+
+// @public
+export interface DatasetPluginOf<TDataset> {
+    // (undocumented)
+    id: PluginId;
+    requires?: readonly PluginId[];
+    // (undocumented)
+    setup(ctx: DatasetPluginContextOf<TDataset>): Disposer | void;
+}
+
+// @public
+export interface DatasetStoreAccess {
+    read<T extends object>(pluginId: PluginId): PluginStoreView<T> | undefined;
+    reserve<T extends object>(): PluginStore<T>;
 }
 
 // @public
@@ -437,6 +502,17 @@ export interface Duration {
     unit: TimeUnit;
     // (undocumented)
     value: number;
+}
+
+// Warning: (ae-forgotten-export) The symbol "EntryEdits" needs to be exported by the entry point index.d.ts
+//
+// @public
+export type EditExtender = (request: EditRequest) => EntryEdits;
+
+// @public
+export interface EditRequest {
+    entries: ReadonlyMap<EntryId, Entry>;
+    proposed: EntryEdits;
 }
 
 // @public
@@ -609,6 +685,9 @@ export interface EntryStoreView<TMeta = unknown, TFields extends Record<string, 
 }
 
 // @public
+export type ExtenderWrapper = (next: EditExtender) => EditExtender;
+
+// @public
 export interface Field<TValue = unknown> {
     column?: Omit<GridColumn, 'field' | 'cellRenderer'>;
     // (undocumented)
@@ -646,6 +725,9 @@ export class FieldNotColumnableError extends FreeGanttError {
     // (undocumented)
     readonly key: string;
 }
+
+// @public
+export function fieldRowsOf(changeSet: ChangeSet): readonly FieldUpdated[];
 
 // @public
 export type FieldSource = {
@@ -1188,6 +1270,15 @@ export interface MenuItem {
     label?: string;
 }
 
+// @public
+export class MissingPluginError extends FreeGanttError {
+    constructor(pluginId: PluginId, requiredId: PluginId);
+    // (undocumented)
+    readonly pluginId: PluginId;
+    // (undocumented)
+    readonly requiredId: PluginId;
+}
+
 // @public (undocumented)
 export const MS: {
     readonly SECOND: 1000;
@@ -1307,13 +1398,42 @@ export interface PluginContextOf<TGantt = unknown, TDataset = Dataset> {
 }
 
 // @public
+export type PluginDocument = Readonly<Record<string, Readonly<Record<string, unknown>>>>;
+
+// @public
 export type PluginId = string;
+
+// @public
+export class PluginRequirementCycleError extends FreeGanttError {
+    constructor(pluginIds: readonly PluginId[]);
+    // (undocumented)
+    readonly pluginIds: readonly PluginId[];
+}
 
 // @public
 export class PluginSetupError extends FreeGanttError {
     constructor(pluginId: PluginId, cause: unknown);
     // (undocumented)
     readonly pluginId: PluginId;
+}
+
+// @public
+export interface PluginStore<T extends object> extends PluginStoreView<T> {
+    // (undocumented)
+    remove(id: EntryId): void;
+    // (undocumented)
+    set(id: EntryId, value: T): void;
+}
+
+// @public
+export type PluginStoreName = `plugin:${PluginId}`;
+
+// @public
+export interface PluginStoreView<T extends object> {
+    // (undocumented)
+    readonly all: ReadonlyMap<EntryId, T>;
+    // (undocumented)
+    get(id: EntryId): T | undefined;
 }
 
 // @public
@@ -1547,7 +1667,19 @@ export interface Size {
 }
 
 // @public (undocumented)
-export type StoreName = 'entries';
+export type StoreName = 'entries' | PluginStoreName;
+
+// @public
+export interface StoreRowUpdated {
+    // (undocumented)
+    from: unknown;
+    // (undocumented)
+    id: EntryId;
+    // (undocumented)
+    store: PluginStoreName;
+    // (undocumented)
+    to: unknown;
+}
 
 // @public
 export type TargetKind = 'row' | 'cell' | 'bar' | 'header' | 'splitter';
@@ -1706,6 +1838,9 @@ export class UnsupportedSchemaError extends FreeGanttError {
 export class UnsupportedUnitError extends FreeGanttError {
     constructor(message: string);
 }
+
+// @public
+export type UpdatedRow = FieldUpdated | StoreRowUpdated;
 
 // @public
 export interface ViewportGestureFlags {

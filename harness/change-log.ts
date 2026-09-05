@@ -16,7 +16,12 @@ export function prependChangeSet(log: HTMLElement, changeSet: ChangeSet): void {
   for (const { store, entity } of changeSet.removed) {
     prependLogLine(log, `${tag} ${store} · ${entity.id} · removed`);
   }
-  for (const { store, id, field, from, to } of changeSet.updated) {
-    prependLogLine(log, `${tag} ${store} · ${id} · ${field} · ${String(from)} → ${String(to)}`);
+  for (const row of changeSet.updated) {
+    // A plugin-store row carries a whole value, not a Field, so it has no `field` to name (D-S5-24).
+    const what = row.store === 'entries' ? row.field : 'row';
+    prependLogLine(
+      log,
+      `${tag} ${row.store} · ${row.id} · ${what} · ${String(row.from)} → ${String(row.to)}`,
+    );
   }
 }

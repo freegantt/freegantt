@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { DatasetState } from './dataset-state.js';
+import { fieldRowsOf } from './change-set.js';
 import { entryId } from '../model/index.js';
 import { toEndInstant, toInstant } from '../time/index.js';
 
@@ -36,7 +37,7 @@ describe('autoGroup (S4.5, [S4-A9])', () => {
     let changeCount = 0;
     state.on('change', ({ changeSet }) => {
       changeCount += 1;
-      for (const row of changeSet.updated) {
+      for (const row of fieldRowsOf(changeSet)) {
         if (row.id === entryId('p1')) rows.push({ field: String(row.field), from: row.from, to: row.to });
       }
     });
@@ -65,7 +66,7 @@ describe('autoGroup (S4.5, [S4-A9])', () => {
     ]);
     let kindRow = false;
     state.on('change', ({ changeSet }) => {
-      kindRow = changeSet.updated.some(
+      kindRow = fieldRowsOf(changeSet).some(
         (row) =>
           row.id === entryId('p1') && row.field === 'kind' && row.from === 'span' && row.to === 'group',
       );
@@ -87,7 +88,7 @@ describe('autoGroup (S4.5, [S4-A9])', () => {
     ]);
     const kinds: string[] = [];
     state.on('change', ({ changeSet }) => {
-      for (const row of changeSet.updated) {
+      for (const row of fieldRowsOf(changeSet)) {
         if (row.field === 'kind') kinds.push(`${String(row.id)}:${String(row.to)}`);
       }
     });

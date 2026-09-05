@@ -12,6 +12,7 @@ import type {
   FieldContext,
   FieldKey,
   FieldUpdated,
+  UpdatedRow,
 } from '../model/index.js';
 import type { StoredEdit } from './edit-extension.js';
 import { proposedKeysOf, overlayStoredEdit } from './fields/field-access.js';
@@ -94,15 +95,18 @@ export function diffEdit(
  *
  * An `add` and a `remove` of the same id inside one transaction cancel — the changeset describes the
  * transaction's net effect, not its intermediate steps, which is what makes undo exact and a sync
- * adapter idempotent. A cancelled id's field updates are dropped too: nothing about an entity that
- * never persisted belongs in the changeset.
+ * adapter idempotent. A cancelled id's field updates are dropped too, a plugin row's included:
+ * nothing about an entity that never persisted belongs in the changeset.
+ *
+ * `updated` holds both row kinds (D-S5-24), so a transaction whose only write is a plugin-store row
+ * is not empty and does commit (#156).
  */
 export function foldChangeSet(
   id: ChangeSetId,
   origin: ChangeOrigin,
   added: readonly EntityAdded[],
   removed: readonly EntityRemoved[],
-  updated: readonly FieldUpdated[],
+  updated: readonly UpdatedRow[],
 ): ChangeSet | undefined {
   const addedIds = new Set(added.map((entry) => entry.entity.id));
   const removedIds = new Set(removed.map((entry) => entry.entity.id));
@@ -116,6 +120,17 @@ export function foldChangeSet(
   if (foldedAdded.length === 0 && foldedRemoved.length === 0 && foldedUpdated.length === 0) return undefined;
 
   return { id, origin, added: foldedAdded, removed: foldedRemoved, updated: foldedUpdated };
+}
+
+/**
+ * Call: `fieldRowsOf(changeSet).filter((row) => row.field === 'start')`.
+ *
+ * The Field rows of a committed changeset. `ChangeSet.updated` also carries plugin-store rows since
+ * D-S5-24, and a store row holds a whole value rather than a Field, so it has no `field` to read. A
+ * consumer that only wants Field rows filters through this instead of re-deriving the `store` check.
+ */
+export function fieldRowsOf(changeSet: ChangeSet): readonly FieldUpdated[] {
+  return changeSet.updated.filter((row): row is FieldUpdated => row.store === 'entries');
 }
 
 /** Undo's recorded changeset, inverted: `added`↔`removed`, each `updated` row's `from`/`to` swapped,

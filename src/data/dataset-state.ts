@@ -17,15 +17,19 @@ import type {
   FieldKey,
   FieldType,
   Instant,
+  PluginDocument,
   RollUpKinds,
+  Disposer,
+  EditExtender,
+  ExtenderWrapper,
 } from '../model/index.js';
 import { changeSetId } from '../model/index.js';
 import { now } from '../time/index.js';
 import { EntryStore } from './entry-store.js';
 import { readEntries } from './entry-reader.js';
 import type { EntryReadContext } from './entry-reader.js';
-import type { EditExtender } from './edit-extension.js';
 import { identityExtender } from './edit-extension.js';
+import { PluginStores } from './plugin-store.js';
 import { EventBus } from './event-bus.js';
 import { applyConstructionRollUp, runTransaction } from './transaction.js';
 import { replayChangeSet } from './replay.js';
@@ -81,6 +85,18 @@ export interface DatasetStateOptions {
    *  slice from S3 to S7, so that "S3" named the scheduling slice, not today's S3 (direct
    *  manipulation, `plans/s3-direct-manipulation/README.md` §0 P1). */
   editExtender?: EditExtender;
+  /** Plugin rows a Document carried in (D-S5-24). Rows whose plugin this Dataset does not install are
+   *  kept and written back untouched — passenger data, the posture an undeclared `meta` key has. */
+  pluginRows?: PluginDocument;
+  /** Installs this Dataset's `DatasetPlugin` list and returns the disposer for the whole set. Called
+   *  at the one legal moment: after the entry store exists, so a `setup`-time store write can wrap
+   *  itself in a transaction, and before the construction Rollup, because a Field a plugin declares
+   *  must exist before the Rollup first walks (D-S5-4).
+   *
+   *  A callback, not a plugin array, because `extensions/install-dataset-plugins.ts` is where installation
+   *  lives and `data/` may not import `extensions/` (plans/01 §1). `api/dataset.ts` is the composition
+   *  root that ties the two together, the same way it already wires view/ and interaction/. */
+  installPlugins?: (state: DatasetState) => Disposer;
 }
 
 export class DatasetState implements Dataset {
@@ -92,7 +108,12 @@ export class DatasetState implements Dataset {
    *  Dataset's lifetime — not re-derived on every layout pass. Used to initialize a roll-up-kind
    *  entry's zero-length span before the Rollup gives it a real one. */
   readonly referenceDate: Instant;
-  readonly editExtender: EditExtender;
+  /** Every plugin's own per-entry rows (D-S5-24). One per Dataset, never shared (I2). */
+  readonly pluginStores: PluginStores;
+  /** The extension hook's one occupant (D4, D-S2-6). Composed, never replaced wholesale: installing a
+   *  plugin wraps whatever is already there (D-S5-23), so `data/` still holds one field and calls it
+   *  at one site. */
+  #editExtender: EditExtender;
   /** `runTransaction`'s notification channel (D-S2-5, D-S2-24). Internal only, same reasoning as
    *  `editExtender` above — `data/` is unreachable through the package's `exports` map; `on`/`off`
    *  below are the public surface. */
@@ -117,12 +138,13 @@ export class DatasetState implements Dataset {
   /** Per-instance — never a module-level counter (I2). */
   #changeSetCounter = 0;
   readonly #history: History;
+  readonly #disposePlugins: Disposer | undefined;
 
   constructor(options: DatasetStateOptions) {
     this.timeZone = options.timeZone;
     this.dateOnlyEnd = options.dateOnlyEnd ?? 'inclusive';
     this.referenceDate = options.referenceDate ?? now();
-    this.editExtender = options.editExtender ?? identityExtender;
+    this.#editExtender = options.editExtender ?? identityExtender;
     this.#rollUpKinds = resolveRollUpKinds(options.rollUpKinds);
     this.#hierarchy = resolveHierarchy(options.hierarchy);
     this.fields = new FieldRegistry({
@@ -147,6 +169,12 @@ export class DatasetState implements Dataset {
       this.fieldContext,
       this,
     );
+    this.pluginStores = new PluginStores(options.pluginRows, this);
+    // Plugins set up here and nowhere else: the entry store exists, so a `setup`-time store write
+    // wraps itself in a transaction, and the construction Rollup below has not run, so a Field a
+    // plugin declares is in the registry before the Rollup first walks (D-S5-4). History subscribes
+    // after, so installing a plugin is not itself an undoable step.
+    this.#disposePlugins = options.installPlugins?.(this);
     // `01` §2.6 / README.md D-S2-22: a roll-up-kind entry given children only through the initial
     // array gets real rolled-up values before anyone reads it, not just after the first later
     // transaction touches one of those children. `fromJSON` gets this for free, being construction
@@ -156,6 +184,23 @@ export class DatasetState implements Dataset {
     // handler exists (`s2.5-undo-redo.md` §2.1) — `canUndo` reads true inside the very `change` a
     // later-registered handler first sees.
     this.#history = new History(this, options.history);
+  }
+
+  /** Read by `data/transaction.ts` once per commit (D-S2-6). */
+  get editExtender(): EditExtender {
+    return this.#editExtender;
+  }
+
+  /** Call: `ctx.edits.setExtender((next) => (request) => merge(next(request), mine(request)))`.
+   *  Installing composes onto the current occupant rather than evicting it, so a second plugin needs
+   *  no priority machinery and `EditExtenderConflictError` never gets written (D-S5-23). */
+  setExtender(wrap: ExtenderWrapper): void {
+    this.#editExtender = wrap(this.#editExtender);
+  }
+
+  /** Releases every installed plugin, in reverse setup order. */
+  destroy(): void {
+    this.#disposePlugins?.();
   }
 
   nextChangeSetId(): ChangeSetId {

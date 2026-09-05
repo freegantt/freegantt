@@ -1,5 +1,22 @@
 export { Dataset } from './dataset.js';
-export type { DatasetOptions, DatasetHierarchy } from './dataset.js';
+export type { DatasetOptions, DatasetHierarchy, DatasetPlugin, DatasetPluginContext } from './dataset.js';
+// S5.10, D-S5-23/24/30/31: the Dataset-plugin contract. The generic shapes behind the Dataset-bound
+// aliases above, plus the vocabulary a plugin author names directly — its own store, another
+// plugin's read-only view, and the wrapper that composes onto the extension hook.
+export type {
+  DatasetPluginOf,
+  DatasetPluginContextOf,
+  DatasetEvents,
+  DatasetFieldRegistrations,
+  DatasetEditHook,
+  DatasetStoreAccess,
+  PluginStore,
+  PluginStoreView,
+  ExtenderWrapper,
+} from './dataset-plugin.js';
+// The extension hook's own two types (D4, D-S2-6): a plugin that writes an extender by hand, rather
+// than composing one inline, names these.
+export type { EditRequest, EditExtender } from '../model/index.js';
 export type { RollUpKinds } from '../model/index.js';
 export { attemptMutation } from './attempt-mutation.js';
 export type {
@@ -7,6 +24,9 @@ export type {
   ChangeSetId,
   ChangeOrigin,
   StoreName,
+  PluginStoreName,
+  StoreRowUpdated,
+  UpdatedRow,
   CoreFieldKey,
   CoreFieldValues,
   CoreFieldValue,
@@ -36,7 +56,7 @@ export type {
 // turns a recorded changeset into its undo; `Dataset.replay` writes it back. `data/change-set.js` is a
 // submodule of the `data` layer, not the `data` layer boundary itself — `api/` importing it directly
 // matches `api/dataset.ts`'s own import of `data/serialization/index.js`.
-export { invertChangeSet } from '../data/change-set.js';
+export { invertChangeSet, fieldRowsOf } from '../data/change-set.js';
 export { Gantt } from './gantt.js';
 export type {
   GanttOptions,
@@ -157,6 +177,8 @@ export {
   InvalidReplayOriginError,
   UnsupportedSchemaError,
   DuplicatePluginIdError,
+  MissingPluginError,
+  PluginRequirementCycleError,
   RegistrationClosedError,
   PluginSetupError,
   UnknownCommandError,
@@ -192,7 +214,7 @@ export type {
 // The input twins of the stored types: what a consumer writes, as opposed to what the library stores.
 // Public because a consumer that types its own entry builder needs to name them.
 export type { EntryInput, InstantInput, TimeSpanInput, DateOnlyEndRule } from '../model/index.js';
-export type { DatasetDocument, EntryDocument, SerializedField } from '../model/index.js';
+export type { DatasetDocument, EntryDocument, SerializedField, PluginDocument } from '../model/index.js';
 export type {
   RowSource,
   EntriesRowSource,
