@@ -959,12 +959,17 @@ describe('presentRefusal() (S5.8, review SP1)', () => {
     notice: ReturnType<typeof presentRefusal>;
     cell: HTMLElement;
     detached: () => number;
+    /** What `cellFor` answers from now on — the seam virtualization moves under a mounted notice. */
+    recycleCellTo: (next: HTMLElement | undefined) => void;
+    resize: () => void;
   } {
     const cell = document.createElement('div');
     cell.getBoundingClientRect = () => rectAt(40, 120, 200, 24);
     const layer = document.createElement('div');
     document.body.append(cell, layer);
     let detaches = 0;
+    let current: HTMLElement | undefined = cell;
+    const resizeListeners = new Set<() => void>();
     const ports: RefusalNoticePorts = {
       mountLayer: {
         present: (content: HTMLElement) => {
@@ -974,14 +979,29 @@ describe('presentRefusal() (S5.8, review SP1)', () => {
             content.remove();
           };
         },
-        onResize: () => () => {},
+        onResize: (callback) => {
+          resizeListeners.add(callback);
+          return () => {
+            resizeListeners.delete(callback);
+          };
+        },
         bounds: rectAt(0, 0, 0, 0),
       },
-      dom: { cellFor: () => cell },
+      dom: { cellFor: () => current },
       bindEscape: () => () => {},
     };
     const notice = presentRefusal(ports, { entryId: entryId('e1'), field: 'name' }, cell, 'timeOfDay');
-    return { notice, cell, detached: () => detaches };
+    return {
+      notice,
+      cell,
+      detached: () => detaches,
+      recycleCellTo: (next) => {
+        current = next;
+      },
+      resize: () => {
+        for (const listener of resizeListeners) listener();
+      },
+    };
   }
 
   it('mounts over the cell, in the invalid state, naming the reason', () => {
@@ -992,6 +1012,33 @@ describe('presentRefusal() (S5.8, review SP1)', () => {
     expect(notice.element.getAttribute('role')).toBe('status');
     expect(notice.element.style.transform).toBe('translate(40.00px, 120.00px)');
     expect(notice.element.style.width).toBe('200px');
+    notice.dismiss();
+  });
+
+  // #172: the notice used to hold the cell node it was raised on and reposition against that node
+  // for ever. Virtualization recycles that node onto another entry, and the notice would then follow
+  // a cell that is no longer its own. It re-asks `cellFor`, exactly as `CellEditorSession` does.
+  it('re-finds its own cell after a recycle instead of following the node it was raised on', () => {
+    const { notice, recycleCellTo, resize } = mountNotice();
+    expect(notice.element.style.transform).toBe('translate(40.00px, 120.00px)');
+
+    const reused = document.createElement('div');
+    reused.getBoundingClientRect = () => rectAt(40, 300, 200, 24);
+    recycleCellTo(reused);
+    resize();
+
+    expect(notice.element.style.transform).toBe('translate(40.00px, 300.00px)');
+    notice.dismiss();
+  });
+
+  it('stays where it is when its cell has left the frame entirely', () => {
+    const { notice, recycleCellTo, resize } = mountNotice();
+    recycleCellTo(undefined);
+    resize();
+
+    // The same answer `CellEditorSession.reposition()` gives: no cell, no move. The next scroll or
+    // pointer press is what takes the notice down.
+    expect(notice.element.style.transform).toBe('translate(40.00px, 120.00px)');
     notice.dismiss();
   });
 
