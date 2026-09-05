@@ -2,7 +2,7 @@
 // Full grid/timeline/viewport split lands in S1. No view code reads/writes scroll except through the
 // bound ScrollModel (I12).
 export { GanttShell } from './gantt-shell.js';
-export type { GanttShellOptions, Theme, GridWidth, Detachable } from './gantt-shell.js';
+export type { GanttShellOptions, GanttShellWiring, Theme, GridWidth, Detachable } from './gantt-shell.js';
 export type {
   GanttEventMap,
   GanttEventHandler,

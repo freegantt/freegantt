@@ -78,8 +78,8 @@ function clearStyles(): void {
 describe('ensureBaseStyles', () => {
   it('injects exactly one <style> for two Gantt instances constructed in one document', () => {
     clearStyles();
-    const a = new GanttShell({ container: makeContainer(), dataset: fakeDataset(entries) });
-    const b = new GanttShell({ container: makeContainer(), dataset: fakeDataset(entries) });
+    const a = new GanttShell({ wiring: {}, container: makeContainer(), dataset: fakeDataset(entries) });
+    const b = new GanttShell({ wiring: {}, container: makeContainer(), dataset: fakeDataset(entries) });
     expect(document.head.querySelectorAll('style[data-freegantt-styles]')).toHaveLength(1);
     a.destroy();
     b.destroy();
@@ -128,7 +128,7 @@ describe('ensureBaseStyles', () => {
     clearStyles();
     const container = makeContainer();
     container.style.setProperty('--fg-bar-fill', 'rgb(1, 2, 3)');
-    const shell = new GanttShell({ container, dataset: fakeDataset(entries) });
+    const shell = new GanttShell({ wiring: {}, container, dataset: fakeDataset(entries) });
     const bar = container.querySelector('.fg-bar');
     expect(bar).not.toBeNull();
     expect(getComputedStyle(bar as Element).backgroundColor).toBe('rgb(1, 2, 3)');
@@ -153,7 +153,7 @@ describe('ensureBaseStyles', () => {
   it('dark theme paints bar labels in warm ink so they read on the light blue fill', () => {
     clearStyles();
     const container = makeContainer();
-    const shell = new GanttShell({ container, dataset: fakeDataset(entries), theme: 'dark' });
+    const shell = new GanttShell({ wiring: {}, container, dataset: fakeDataset(entries), theme: 'dark' });
     const bar = container.querySelector('.fg-bar');
     expect(bar).not.toBeNull();
     expect(getComputedStyle(bar as Element).color).toBe('#1A1815');

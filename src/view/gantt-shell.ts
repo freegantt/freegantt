@@ -197,6 +197,54 @@ interface ProposableChange {
  *  `GanttEventMap` key too, which is what lets the payload come from `GanttEventMap` alone. */
 type ProposableBefore = keyof ProposableChange & keyof GanttEventMap;
 
+/** What `api/gantt.ts` hands the shell across the layer boundary (review P5). Every seam here is a
+ *  collaborator `view/` may not construct for itself: `interaction/` sits above `view/`, and so do
+ *  the api `Dataset` and the public `Gantt` façade (D-S5-5). `api/gantt.ts` supplies all seven on
+ *  every real Gantt.
+ *
+ *  Each member stays optional, and one member alone says why: a test drives the shell with no wiring
+ *  at all, and it says so once by writing `wiring: {}`. It never has to omit seven separate keys and
+ *  hope a reader sees the pattern. A shell built with an empty wiring runs with no pointer gestures,
+ *  no keyboard editing, no column gestures, no data write, no plugins and no clock. */
+export interface GanttShellWiring {
+  /** Injected, not defaulted here — see the `AttachEntryGestures` comment above. `view/` cannot
+   *  import `interaction/` to supply its own default. */
+  entryGestures?: AttachEntryGestures;
+  /** Injected, same reason as `entryGestures`. */
+  keyboardEditing?: AttachKeyboardEditing;
+  /** Injected, same reason as `entryGestures`. */
+  columnGestures?: AttachColumnGestures;
+  /** S3.3, D-S3-16: how a committed gesture draft reaches the store. `model/dataset.ts`'s `Dataset`
+   *  (this shell's own `dataset` option) has no `transaction()` — "a view never opens a
+   *  transaction". So `api/gantt.ts`, which holds the full `api/Dataset` the model interface narrows
+   *  away, supplies this instead. It answers `false` for a sync veto and for a
+   *  `MutationCancelledError` from `beforeChange`. The shell never sees the exception either way. */
+  commitEntryEdits?: (edits: EntryEdits) => boolean;
+  /** S5.1, D-S5-1: fills the api-level pieces of a plugin's `PluginContext`. `view/` cannot type
+   *  those without reaching past its own boundary (D-S5-5). They are the full api `Dataset`
+   *  (`model/dataset.ts`'s narrow interface hides `.transaction()`, the same reason
+   *  `commitEntryEdits` exists) and the public `Gantt` façade, which does not exist yet when this
+   *  constructor runs. It returns `unknown` because `api/gantt.ts` binds the concrete
+   *  `PluginContext` type. That file alone may import both `Gantt` and this generic contract without
+   *  closing an import cycle (`api/plugin.ts`'s file header). */
+  buildPluginContext?: (parts: PluginContextPorts) => unknown;
+  /** S5.2, D-S5-6: fills the api-level pieces of a `CommandContext`, for the same reason
+   *  `buildPluginContext` fills `PluginContext`'s. The full api `Dataset` (with `undo`/`redo`) and
+   *  the public `Gantt` façade are both api-level, and `view/` may name neither type (D-S5-5's
+   *  mirror on the `view/` side). The shell calls it fresh on every command invocation, never
+   *  cached, so a command always reads the invocation's current selection. `target`'s shape (S5.7,
+   *  D-S5-26) is a structural subtype of api-level `CommandTarget`. `view/` may not name that type
+   *  either, but a narrower object literal reaches it fine, because `api/gantt.ts` only widens. */
+  buildCommandContext?: (parts: {
+    entry?: Entry;
+    target?: { kind: 'header'; columnKey: FieldKey };
+  }) => unknown;
+  /** S5.2: `freegantt.panToToday`'s own clock read. `view/` may not call `time/`'s `now()` itself
+   *  (I10). `api/gantt.ts` supplies `now` from `time/index.js`, the same function
+   *  `Gantt.panToToday` already reads for the identical reason. */
+  now?: () => Instant;
+}
+
 export interface GanttShellOptions {
   /** Element or CSS selector (plans/02 §2); a selector that matches nothing throws (#38). */
   container: HTMLElement | string;
@@ -270,23 +318,6 @@ export interface GanttShellOptions {
    * mounts real elements regardless of which backend paints them, so this closes the hardcoding, not
    * DOM-free `view/`. Defaults to `createDomBackend()`. */
   backend?: RenderBackend<HTMLElement>;
-  /** Injected, not defaulted here — see the `AttachEntryGestures` comment above: `view/` cannot
-   * import `interaction/` to supply its own default. `api/gantt.ts` always passes
-   * `attachEntryGestures`; omitted only by tests exercising the shell with no pointer wiring. */
-  entryGestures?: AttachEntryGestures;
-  /** Injected, same reason as `entryGestures` above. `api/gantt.ts` always passes
-   * `attachKeyboardEditing`; omitted only by tests exercising the shell with no keyboard wiring. */
-  keyboardEditing?: AttachKeyboardEditing;
-  /** Injected, same reason as `entryGestures` above. `api/gantt.ts` always passes
-   * `attachColumnGestures`; omitted only by tests exercising the shell with no column-chrome wiring. */
-  columnGestures?: AttachColumnGestures;
-  /** S3.3, D-S3-16: how a committed gesture draft actually reaches the store. `model/dataset.ts`'s
-   *  `Dataset` (this shell's own `dataset` option) deliberately has no `transaction()` — "a view
-   *  never opens a transaction" — so `api/gantt.ts`, which holds the full `api/Dataset` the model
-   *  interface narrows away, supplies this instead. Returns `false` for both a sync veto and a
-   *  `MutationCancelledError` from `beforeChange`; the shell never sees the exception either way.
-   *  Omitted only by tests exercising the shell with no data-write wiring. */
-  commitEntryEdits?: (edits: EntryEdits) => boolean;
   /** S3.6, D-S3-18, P1: an installed extension hook, read for **preview only** — ghosts its extras in
    *  the rAF-coalesced drag preview. There is no public way to install one in S3 (`GanttOptions` has
    *  no such field, `api/gantt.ts` never passes this); only a test constructing `GanttShell` directly
@@ -297,32 +328,8 @@ export interface GanttShellOptions {
   /** Internal (D-S4-24). One registry per Gantt, seeded with span/group/milestone. Tests inject a
    *  replacement; `GanttOptions` has no such field (public registration is S5). */
   itemProducerRegistry?: ItemProducerRegistry;
-  /** S5.1, D-S5-1: fills the api-level pieces of a plugin's `PluginContext` that `view/` cannot type
-   *  without reaching past its own boundary (D-S5-5) — the full api `Dataset` (`model/dataset.ts`'s
-   *  narrow interface hides `.transaction()`, same reason `commitEntryEdits` above exists) and the
-   *  public `Gantt` façade, which does not exist yet when this constructor runs. Returns `unknown`
-   *  because the concrete `PluginContext` type is bound in `api/gantt.ts`, which alone may import
-   *  both `Gantt` and this generic contract without closing an import cycle (`api/plugin.ts`'s file
-   *  header). `api/gantt.ts` always supplies this; omitted only by tests exercising the shell with no
-   *  plugins. */
-  buildPluginContext?: (parts: PluginContextPorts) => unknown;
-  /** S5.2, D-S5-6: fills the api-level pieces of a `CommandContext` for the same reason
-   *  `buildPluginContext` above fills `PluginContext`'s — the full api `Dataset` (with `undo`/`redo`)
-   *  and the public `Gantt` façade are both api-level, and `view/` may not name either type
-   *  (D-S5-5's mirror on the `view/` side). Called fresh on every command invocation, never cached,
-   *  so a command always reads the invocation's current selection. `api/gantt.ts` always supplies
-   *  this; omitted only by tests exercising the shell with no commands. `target`'s shape (S5.7,
-   *  D-S5-26) is a structural subtype of api-level `CommandTarget` — `view/` may not name that type
-   *  either, but a narrower object literal reaches it fine since `api/gantt.ts` only widens. */
-  buildCommandContext?: (parts: {
-    entry?: Entry;
-    target?: { kind: 'header'; columnKey: FieldKey };
-  }) => unknown;
-  /** S5.2: `freegantt.panToToday`'s own clock read. `view/` may not call `time/`'s `now()` itself
-   *  (I10) — `api/gantt.ts` supplies `now` from `time/index.js`, the same function `Gantt.panToToday`
-   *  already reads for the identical reason. Omitted only by tests exercising the shell with no
-   *  commands. */
-  now?: () => Instant;
+  /** The layer boundary, as one member (review P5). `api/gantt.ts` supplies every seam in it. */
+  wiring: GanttShellWiring;
 }
 
 /** `exactOptionalPropertyTypes` treats `obj.key = undefined` as a type error when `key` is declared
@@ -600,7 +607,7 @@ export class GanttShell {
     // the time any `setup()` reads it.
     this.#pluginRuntime = new PluginRuntime<unknown>((pluginId) => {
       const { ports, gate } = buildPluginPorts(this.#shellPorts(), pluginId);
-      const context = (options.buildPluginContext ?? (() => ({})))(ports);
+      const context = (options.wiring.buildPluginContext ?? (() => ({})))(ports);
       return { context, disposables: ports.disposables, registrationGate: gate };
     });
 
@@ -680,7 +687,7 @@ export class GanttShell {
       selection: () => this.#selection,
       entryById: (id) => this.#options.dataset.entries.get(id),
       canGesture: (capability, id) => this.#canGesture(capability, id),
-      commitEntryEdits: (edits) => this.#options.commitEntryEdits?.(edits) ?? false,
+      commitEntryEdits: (edits) => this.#options.wiring.commitEntryEdits?.(edits) ?? false,
       emit: (name, payload) => this.#events.emit(name, payload),
       ...(options.editExtender ? { extend: options.editExtender } : {}),
       allEntries: () => new Map(this.#options.dataset.entries.all.map((e) => [e.id, e])),
@@ -763,18 +770,18 @@ export class GanttShell {
       cancelColumnReorder: () => this.#columnChrome.cancelReorder(),
       setFocusedColumn: (columnKey) => this.#columnChrome.setFocusedColumn(columnKey),
     };
-    this.#columnGestures = options.columnGestures?.(
+    this.#columnGestures = options.wiring.columnGestures?.(
       this.#panes.gridHeader,
       this.#container,
       columnGestureContext,
     );
-    this.#entryGestures = options.entryGestures?.(
+    this.#entryGestures = options.wiring.entryGestures?.(
       this.#panes.timeline,
       this.#panes.grid,
       this.#container,
       gestureContext,
     );
-    this.#keyboardEditing = options.keyboardEditing?.(this.#container, gestureContext);
+    this.#keyboardEditing = options.wiring.keyboardEditing?.(this.#container, gestureContext);
     const wheelNavigationCtx: WheelNavigationContext = {
       wheelZoomEnabled: () => this.#resolvedViewportGestures.wheelZoom,
       wheelPanEnabled: () => this.#resolvedViewportGestures.wheelPan,
@@ -1046,8 +1053,8 @@ export class GanttShell {
    *  `undefined` when nothing is selected (the doc's "the focused row, or none"). `target` fills in
    *  for a focused header cell (S5.7, D-S5-26, issue #137 F6) — the rest of `CommandTarget`'s kinds
    *  are still S5.11's own job. `api/gantt.ts`'s injected `buildCommandContext` fills `dataset`/`gantt`
-   *  — `view/` may not name either type (D-S5-5's mirror). Omitted `buildCommandContext` (a test with
-   *  no commands wiring) makes every command's context an empty object; fine, since no core command
+   *  — `view/` may not name either type (D-S5-5's mirror). A `wiring` with no `buildCommandContext`
+   *  (a test that drives the shell alone) makes every command's context an empty object; fine, since no core command
    *  reads `ctx.dataset`/`ctx.gantt` without first checking `ctx.entry`/`ctx.target`, and no such test
    *  runs a command that needs them. */
   #buildCommandContext(): CommandContext<unknown> {
@@ -1057,7 +1064,7 @@ export class GanttShell {
     // `view/` may not name `CommandContextOf`'s api-level fields (`dataset: Dataset`, `gantt`) —
     // D-S5-5's mirror — so this cast trusts `api/gantt.ts`'s injected `buildCommandContext` to fill
     // them, the same trust `buildPluginContext` above already gets for `PluginContext`.
-    return (this.#options.buildCommandContext ?? (() => ({})))({
+    return (this.#options.wiring.buildCommandContext ?? (() => ({})))({
       ...(entry !== undefined ? { entry } : {}),
       ...(columnKey !== undefined ? { target: { kind: 'header' as const, columnKey } } : {}),
     }) as CommandContext<unknown>;
@@ -1077,7 +1084,7 @@ export class GanttShell {
       zoomIn: () => this.zoomIn(),
       zoomOut: () => this.zoomOut(),
       panToToday: () => {
-        const now = this.#options.now;
+        const now = this.#options.wiring.now;
         if (now !== undefined) this.panToToday(now());
       },
       selectAll: () => this.#proposeSelection(this.#selectableEntriesInRowOrder()),
