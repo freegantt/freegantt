@@ -317,7 +317,9 @@ export class Gantt {
     this.#shell.gridColumns = columns;
   }
 
-  /** Live (S5.4, D-S5-11/12). Assigning repaints every bar with no remount (I8). */
+  /** Live (S5.4, D-S5-11/12). Assigning repaints every bar with no remount (I8). A `RendererByKind`
+   *  map is a value, not a mutable object (#187): mutate the map you already assigned, assign it
+   *  again, and nothing repaints. Assign a copy — `{ ...map, milestone: paint }`, `plans/02` §2. */
   get barRenderer(): BarRenderer | RendererByKind | undefined {
     return this.#shell.barRenderer;
   }
@@ -353,7 +355,8 @@ export class Gantt {
     this.#shell.tooltipRenderer = renderer;
   }
 
-  /** Live (S4.6, D-S4-21). Assigning re-resolves rows with no remount. */
+  /** Live (S4.6, D-S4-21). Assigning re-resolves rows with no remount. The config object is a value
+   *  (#187): assign a copy after a change, not the object already held. */
   get rowSource(): RowSource {
     return this.#shell.rowSource;
   }

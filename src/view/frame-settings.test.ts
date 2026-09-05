@@ -15,7 +15,7 @@ import {
   DEFAULT_TICK_BOX_FLOOR_PX,
   createItemProducerRegistry,
 } from '../layout/index.js';
-import type { RowSource, TimeScale, ViewPreset } from '../layout/index.js';
+import type { BarRenderer, RowSource, TimeScale, ViewPreset } from '../layout/index.js';
 
 /** Records the ports in call order, so a test asserts the whole answer and not one half of it. */
 function recordingPorts(pixels: Record<string, number> = {}): {
@@ -92,6 +92,29 @@ describe('FrameSettings — the invalidation table', () => {
     const { settings, calls } = settingsWith({ rowSource, locale: 'de-DE' });
     settings.set({ rowSource, locale: 'de-DE' });
     expect(calls).toEqual([]);
+  });
+
+  // #187: the identity check above covers object-valued settings too, and that is a deliberate
+  // contract, not a side effect. A consumer who mutates the object they already handed over and
+  // assigns it again gets nothing. `plans/02` §2 states the rule and names the copy that asks for
+  // the repaint. These two cases are what would fail if the check ever grew an object exemption.
+  it('mutating a held object and assigning it back invalidates nothing (#187)', () => {
+    const paintSpan: BarRenderer = () => undefined;
+    const paintMilestone: BarRenderer = () => undefined;
+    const byKind: Record<string, BarRenderer> = { span: paintSpan };
+    const { settings, calls } = settingsWith({ barRenderer: byKind });
+    byKind['milestone'] = paintMilestone;
+    settings.set({ barRenderer: byKind });
+    expect(calls).toEqual([]);
+  });
+
+  it('a copy of that object carries the same mutation and does invalidate (#187)', () => {
+    const paintSpan: BarRenderer = () => undefined;
+    const paintMilestone: BarRenderer = () => undefined;
+    const byKind: Record<string, BarRenderer> = { span: paintSpan };
+    const { settings, calls } = settingsWith({ barRenderer: byKind });
+    settings.set({ barRenderer: { ...byKind, milestone: paintMilestone } });
+    expect(calls).toEqual(['requestFrame']);
   });
 
   it('two settings in one patch ask for one repaint, not two', () => {
