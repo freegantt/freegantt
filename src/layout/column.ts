@@ -7,9 +7,13 @@ export type { ColumnAlign } from '../model/index.js';
 /** Paint description for one Grid column. `format` stays on `ResolvedColumn` and never reaches a
  *  backend. `resizable`/`movable` do reach a backend (S5.7, D-S5-18) — they paint the resizer grip's
  *  visibility and the header cell's cursor, so they travel the same path `width`/`flex` already take
- *  from `ResolvedColumn` down through `columnsForFrame` (`layout/frame.ts`). */
+ *  from `ResolvedColumn` down through `columnsForFrame` (`layout/frame.ts`).
+ *
+ *  `field` names the column, everywhere a column is named (D-S5-37, #194): a Field has a `key`, and
+ *  a Grid column carries the `field` it shows. `render/dom` then uses that value as its own keyed
+ *  paint key, which is a different job and keeps its own word. */
 export interface FrameColumn {
-  key: FieldKey;
+  field: FieldKey;
   header: string;
   width?: number;
   flex?: number;

@@ -93,7 +93,7 @@ export class ColumnChrome {
    *  writes both, and it is the only writer — one assignment can never leave the map stale. */
   #resolvedColumns: readonly ResolvedColumn[] = [];
   #columnByKey: ReadonlyMap<string, ResolvedColumn> = new Map();
-  #focusedHeaderColumnKey: FieldKey | undefined;
+  #focusedHeaderField: FieldKey | undefined;
 
   constructor(container: HTMLElement, ports: ColumnChromePorts, initialInput: readonly GridColumnInput[]) {
     this.#container = container;
@@ -174,12 +174,12 @@ export class ColumnChrome {
     return this.#resolvedColumns;
   }
 
-  get focusedHeaderColumnKey(): FieldKey | undefined {
-    return this.#focusedHeaderColumnKey;
+  get focusedHeaderField(): FieldKey | undefined {
+    return this.#focusedHeaderField;
   }
 
   setFocusedColumn(columnKey: FieldKey | undefined): void {
-    this.#focusedHeaderColumnKey = columnKey;
+    this.#focusedHeaderField = columnKey;
   }
 
   /** `GanttShell#bindColumns()` resolves `effectiveInput()` against the dataset itself — one
@@ -197,10 +197,10 @@ export class ColumnChrome {
 
   #adoptColumns(columns: readonly ResolvedColumn[]): void {
     this.#resolvedColumns = columns;
-    this.#columnByKey = new Map(columns.map((column) => [String(column.key), column]));
+    this.#columnByKey = new Map(columns.map((column) => [String(column.field), column]));
   }
 
-  /** `false` for a key `gridColumns` no longer resolves (B3: a stale `#focusedHeaderColumnKey` from
+  /** `false` for a key `gridColumns` no longer resolves (B3: a stale `#focusedHeaderField` from
    *  before a `gridColumns` change must not still enable a resize chord); `resizable` unset on a
    *  resolved column still defaults `true` (D-S5-18). */
   isResizable(columnKey: FieldKey): boolean {
@@ -371,7 +371,7 @@ export class ColumnChrome {
     declarations: readonly ColumnDeclaration[],
     resolved: readonly ResolvedColumn[],
   ): readonly GridColumn[] {
-    const resolvedByKey = new Map(resolved.map((column) => [column.key, column]));
+    const resolvedByKey = new Map(resolved.map((column) => [column.field, column]));
     return declarations.filter(ColumnChrome.#isAuthored).map((declaration) => {
       const painted = resolvedByKey.get(ColumnChrome.#fieldOfDeclaration(declaration));
       return painted === undefined ? ColumnChrome.#asGridColumn(declaration.column) : toGridColumn(painted);
@@ -447,7 +447,7 @@ export class ColumnChrome {
    *  `when` guard takes for the opposite edge (there, gated in `core-commands.ts`; here, because the
    *  index math has nowhere left to point). */
   moveStep(columnKey: FieldKey, direction: 1 | -1): void {
-    const keys = this.#resolvedColumns.map((column) => column.key);
+    const keys = this.#resolvedColumns.map((column) => column.field);
     const i = keys.indexOf(columnKey);
     const j = i + direction;
     if (i === -1 || j < 0 || j >= keys.length) return;

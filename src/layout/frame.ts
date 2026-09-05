@@ -243,7 +243,7 @@ function cellsForRow(
 function columnsForFrame(columns: readonly ResolvedColumn[] | undefined): readonly FrameColumn[] {
   if (columns === undefined) return [];
   return columns.map((column) => {
-    const painted: FrameColumn = { key: column.key, header: column.header, align: column.align };
+    const painted: FrameColumn = { field: column.field, header: column.header, align: column.align };
     if (column.width !== undefined) painted.width = column.width;
     if (column.flex !== undefined) painted.flex = column.flex;
     if (column.resizable !== undefined) painted.resizable = column.resizable;

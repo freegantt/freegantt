@@ -44,7 +44,7 @@ function columnFrom(
   const defaults = field.column;
   if (defaults === undefined) throw new FieldNotColumnableError(String(field.key));
   const column: Omit<ResolvedColumn, 'format'> = {
-    key: field.key,
+    field: field.key,
     header: input.header ?? defaults.header ?? String(field.key),
     align: input.align ?? defaults.align ?? 'start',
     // S5.7, D-S5-18: default `true`, same merge order (this Gantt's own column, then the Field's
@@ -79,11 +79,11 @@ function columnFrom(
 }
 
 /** S5.7, D-S5-18: `GridColumnsChange`'s payload shape — the public `GridColumn`, not the layout-only
- *  `ResolvedColumn` (`format` is a render-time closure with no public type of its own, and never
- *  reaches a consumer). `key` becomes `field`; everything else a consumer might have authored rides
- *  straight through. */
+ *  `ResolvedColumn`. It drops `format`, a render-time closure with no public type of its own that
+ *  never reaches a consumer. Everything else a consumer might have authored rides straight through,
+ *  under the name it was authored with (D-S5-37, #194). */
 export function toGridColumn(column: ResolvedColumn): GridColumn {
-  const out: GridColumn = { field: column.key, header: column.header, align: column.align };
+  const out: GridColumn = { field: column.field, header: column.header, align: column.align };
   if (column.width !== undefined) out.width = column.width;
   if (column.flex !== undefined) out.flex = column.flex;
   if (column.cellRenderer !== undefined) out.cellRenderer = column.cellRenderer;

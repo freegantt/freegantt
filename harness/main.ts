@@ -469,7 +469,7 @@ const demoBarRenderer: RendererByKind = {
   milestone: () => ({ class: { 'demo-milestone': true }, style: { '--fg-bar-fill': '#7b2cbf' } }),
 };
 const demoCellRenderer: CellRenderer = ({ column, value, fieldValue }) =>
-  column.key === 'cost' && typeof fieldValue === 'number' && fieldValue > BUDGET_THRESHOLD
+  column.field === 'cost' && typeof fieldValue === 'number' && fieldValue > BUDGET_THRESHOLD
     ? { class: { 'demo-over-budget': true }, text: value }
     : undefined;
 // Bug hunt (S5 fixes): headerRenderer had a live setter with nothing painting it — this demo is the

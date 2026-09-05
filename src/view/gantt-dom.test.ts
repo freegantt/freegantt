@@ -58,8 +58,8 @@ function paintOneGantt(): { dom: ContainerDom; container: HTMLElement; destroy()
       revision: 0,
       itemProducerRegistry: createItemProducerRegistry(),
       columns: [
-        { key: 'name', header: 'Name', align: 'start', format: (entry) => entry.name },
-        { key: 'cost', header: 'Budget', align: 'end', width: 90, format: () => '$500' },
+        { field: 'name', header: 'Name', align: 'start', format: (entry) => entry.name },
+        { field: 'cost', header: 'Budget', align: 'end', width: 90, format: () => '$500' },
       ],
     }),
   );

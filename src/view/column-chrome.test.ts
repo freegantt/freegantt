@@ -17,7 +17,7 @@ function makePorts(overrides: Partial<ColumnChromePorts> = {}): ColumnChromePort
 }
 
 function makeResolved(overrides: Partial<ResolvedColumn> = {}): ResolvedColumn {
-  return { key: 'cost', header: 'Cost', align: 'start', format: () => '', ...overrides };
+  return { field: 'cost', header: 'Cost', align: 'start', format: () => '', ...overrides };
 }
 
 describe('ColumnChrome.isResizable/isMovable (bug hunt B3)', () => {
@@ -40,9 +40,9 @@ describe('ColumnChrome.isResizable/isMovable (bug hunt B3)', () => {
   it('a key gridColumns no longer resolves is not capable, not the unset default (B3)', () => {
     const chrome = new ColumnChrome(document.createElement('div'), makePorts(), ['cost']);
     chrome.setResolvedColumns([makeResolved()]);
-    // `gridColumns` dropped "cost" — the stale `#focusedHeaderColumnKey` a prior click set must not
+    // `gridColumns` dropped "cost" — the stale `#focusedHeaderField` a prior click set must not
     // still enable `Shift+Arrow` for a column no longer on the grid.
-    chrome.setResolvedColumns([makeResolved({ key: 'start', header: 'Start' })]);
+    chrome.setResolvedColumns([makeResolved({ field: 'start', header: 'Start' })]);
 
     expect(chrome.isResizable('cost')).toBe(false);
     expect(chrome.isMovable('cost')).toBe(false);

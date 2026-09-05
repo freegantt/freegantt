@@ -161,8 +161,7 @@ export interface CommandRegistryOf<TGantt = unknown, TDataset = Dataset> {
 
 // @public
 export interface CommandTarget {
-    // (undocumented)
-    columnKey?: FieldKey;
+    field?: FieldKey;
     // (undocumented)
     kind: TargetKind;
     // (undocumented)
@@ -820,11 +819,11 @@ export interface FrameColumn {
     // (undocumented)
     align: ColumnAlign;
     // (undocumented)
+    field: FieldKey;
+    // (undocumented)
     flex?: number;
     // (undocumented)
     header: string;
-    // (undocumented)
-    key: FieldKey;
     // (undocumented)
     movable?: boolean;
     // (undocumented)

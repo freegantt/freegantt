@@ -48,7 +48,7 @@ describe('resolveColumns (D-S4-12)', () => {
   it("a string takes the Field's column defaults", () => {
     const columns = resolveColumns(['cost'], costRegistry(), { timeZone: zone, locale });
     expect(columns).toHaveLength(1);
-    expect(columns[0]?.key).toBe('cost');
+    expect(columns[0]?.field).toBe('cost');
     expect(columns[0]?.header).toBe('Cost');
     expect(columns[0]?.width).toBe(90);
     expect(columns[0]?.align).toBe('end');
@@ -238,7 +238,7 @@ describe('resolveGanttFields (D-S4-13)', () => {
       ['name'],
       { timeZone: zone, locale },
     );
-    expect(bound.columns.map((column) => column.key)).toEqual(['name']);
+    expect(bound.columns.map((column) => column.field)).toEqual(['name']);
     expect(bound.fieldCompares.some((compare) => compare.key === 'cost')).toBe(true);
   });
 });
@@ -249,7 +249,7 @@ describe('a hidden column resolves, then leaves the result (D-S5-34, #184)', () 
       timeZone: zone,
       locale,
     });
-    expect(columns.map((column) => column.key)).toEqual(['name']);
+    expect(columns.map((column) => column.field)).toEqual(['name']);
   });
 
   it('a hidden column is still checked, so a misspelled field reports where it is declared', () => {
@@ -263,6 +263,6 @@ describe('a hidden column resolves, then leaves the result (D-S5-34, #184)', () 
       timeZone: zone,
       locale,
     });
-    expect(columns.map((column) => column.key)).toEqual(['name', 'cost']);
+    expect(columns.map((column) => column.field)).toEqual(['name', 'cost']);
   });
 });
