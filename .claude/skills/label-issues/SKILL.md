@@ -43,9 +43,22 @@ Comment on the issue in the same step. Give the reader two things:
 - **The commits.** Name each commit that carries the work, by hash.
 - **A summary.** A few lines on what you did. Say what changed and why it changed.
 
+Work that landed through a merge names **both** the commits that did the work and the merge that
+carried them to the trunk. A reader who has only the merge cannot see what each step did; a reader
+who has only the branch commits cannot tell whether the work reached the trunk.
+
+Write the body to a file and pass it. A summary that fits in `--body` is too short to carry the
+commits and what changed.
+
 ```bash
-gh issue comment <number> --body "Landed in <hash>. <summary>"
+gh issue comment <number> --body-file <path>
 ```
+
+Use a **quoted** heredoc — `<<'EOF'` — to build that file. Your summary holds backticks and `$`, and
+an unquoted delimiter runs them as shell.
+
+You are responsible for this comment even when a subagent applied the label. Read the issue after the
+work merges. An issue that carries `fixed needs review` and no summary tells the reviewer nothing.
 
 ## 5. Name a new label
 
