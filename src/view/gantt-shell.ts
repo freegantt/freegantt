@@ -455,8 +455,11 @@ export class GanttShell {
       () => this.#paneLayout.rowLayerBounds(),
       this.#containerResize,
     );
-    this.#dom = new ContainerDom(this.#container, this.#paneLayout, (id) =>
-      this.#options.dataset.entries.get(id),
+    this.#dom = new ContainerDom(
+      this.#container,
+      this.#paneLayout,
+      (id) => this.#options.dataset.entries.get(id),
+      (id) => this.#layout.itemIdsForEntry(id),
     );
 
     const hasOwnOptions =
