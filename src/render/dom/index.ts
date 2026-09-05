@@ -322,8 +322,12 @@ export function createDomBackend(options?: DomBackendOptions): RenderBackend<HTM
   /** The Selection this backend last painted (#185) — Entry ids, the same list the shell wrote.
    *  `applyState` diffs against it, and both remount paths (`syncRows`, `syncBars`) restamp a
    *  freshly-created node from it. `paintedSelected` above is its bar-side reading, and is derived
-   *  from `itemIdsByEntryId` rather than authored. */
+   *  from `itemIdsByEntryId` and `paintedPicks` rather than authored. */
   let paintedSelectedEntryIds: ReadonlySet<EntryId> = new Set();
+  /** How wide each selected Entry's paint last ran (#185): the bar the pointer picked from it, or no
+   *  entry at all when the whole Entry paints. Keyed by Entry, so a picked bar the viewport culled
+   *  still narrows its Entry — the pick outlives the node. */
+  let paintedPicks: ReadonlyMap<EntryId, ItemId> = new Map();
   /** What the last `applyState` call stamped `data-state~="selected"` on (D-S3-6/D-S3-7's own
    *  diff-and-touch posture, applied to rows) — `syncRows` below is the only other writer, and only
    *  for a row it just created. */
@@ -594,12 +598,29 @@ export function createDomBackend(options?: DomBackendOptions): RenderBackend<HTM
     for (const id of mounted) into.add(id);
   }
 
-  /** The bars every one of these Entries has mounted (#185) — the Entry-keyed Selection read as the
-   *  Items that paint. */
-  function mountedBarsOf(entryIds: ReadonlySet<EntryId>): Set<ItemId> {
+  /** The bars this selected Entry paints (#185): the one bar the pointer picked from it, or every
+   *  bar it drew when the pointer picked none. A pick names a bar the viewport may have culled — the
+   *  paint is still that bar alone, and the Entry's other bars stay unpainted. */
+  function addPaintedBars(into: Set<ItemId>, entryId: EntryId, picks: ReadonlyMap<EntryId, ItemId>): void {
+    const picked = picks.get(entryId);
+    if (picked !== undefined) into.add(picked);
+    else addMountedBars(into, entryId);
+  }
+
+  /** The bars the whole Selection paints (#185) — every selected Entry read through the rule above. */
+  function paintedBarsOf(entryIds: ReadonlySet<EntryId>, picks: ReadonlyMap<EntryId, ItemId>): Set<ItemId> {
     const ids = new Set<ItemId>();
-    entryIds.forEach((entryId) => addMountedBars(ids, entryId));
+    entryIds.forEach((entryId) => addPaintedBars(ids, entryId, picks));
     return ids;
+  }
+
+  /** Does a bar mounting right now come back painted (#185)? Its Entry must be selected, and the
+   *  pointer must have picked either nothing from that Entry (the whole Entry paints) or this very
+   *  bar. */
+  function paintsSelected(bar: FrameBar): boolean {
+    if (!paintedSelectedEntryIds.has(bar.entryId)) return false;
+    const picked = paintedPicks.get(bar.entryId);
+    return picked === undefined || picked === bar.id;
   }
 
   /** Bug hunt (S5 fixes): `.fg-row`'s own selection paint — one token, same shape as `paintDataState`
@@ -871,7 +892,7 @@ export function createDomBackend(options?: DomBackendOptions): RenderBackend<HTM
         // up. `syncRows` has had this line since the last bug hunt; bars never did, so a remounted
         // bar came back unpainted. `paintedSelected` gains it too, or the next `applyState` call
         // would see a spurious diff and repaint a node that is already correct.
-        if (paintedSelectedEntryIds.has(bar.entryId)) {
+        if (paintsSelected(bar)) {
           node.dataset['state'] = 'selected';
           paintedSelected = new Set(paintedSelected).add(bar.id);
         }
@@ -1044,17 +1065,23 @@ export function createDomBackend(options?: DomBackendOptions): RenderBackend<HTM
       // changed. No frame recompute, no node creation — `barLayerCache` already holds every mounted
       // bar's node from the last sync().
       const nextSelectedEntryIds = new Set(state.selectedEntryIds ?? []);
-      const nextSelected = mountedBarsOf(nextSelectedEntryIds);
+      const nextPicks = state.pickedItemIdByEntryId ?? new Map<EntryId, ItemId>();
+      const nextSelected = paintedBarsOf(nextSelectedEntryIds, nextPicks);
       const nextHovered = state.hoveredItemId;
       const nextPending = new Set(state.pendingItemIds ?? []);
       const changed = new Set<ItemId>();
       // #185: the selection diff runs over Entries, then touches that Entry's bars. It is O(Entries
-      // whose selection flipped), never a scan of every mounted bar (I5).
+      // whose selection or pick flipped), never a scan of every mounted bar (I5). An Entry whose
+      // pick moved from one bar to another repaints both, so all of its bars go in.
       paintedSelectedEntryIds.forEach((id) => {
-        if (!nextSelectedEntryIds.has(id)) addMountedBars(changed, id);
+        if (!nextSelectedEntryIds.has(id) || nextPicks.get(id) !== paintedPicks.get(id)) {
+          addMountedBars(changed, id);
+        }
       });
       nextSelectedEntryIds.forEach((id) => {
-        if (!paintedSelectedEntryIds.has(id)) addMountedBars(changed, id);
+        if (!paintedSelectedEntryIds.has(id) || nextPicks.get(id) !== paintedPicks.get(id)) {
+          addMountedBars(changed, id);
+        }
       });
       paintedPending.forEach((id) => {
         if (!nextPending.has(id)) changed.add(id);
@@ -1089,6 +1116,7 @@ export function createDomBackend(options?: DomBackendOptions): RenderBackend<HTM
       });
       changedRows.forEach((rowId) => paintRowState(rowId, nextSelectedRows.has(rowId)));
       paintedSelectedEntryIds = nextSelectedEntryIds;
+      paintedPicks = nextPicks;
       paintedSelectedRows = nextSelectedRows;
 
       // D-S3-8: the shared handle pair follows `resizableEntryId`, positioned off the committed
@@ -1174,6 +1202,7 @@ export function createDomBackend(options?: DomBackendOptions): RenderBackend<HTM
       paintedDragging = new Set();
       paintedGhost = new Set();
       paintedSelectedEntryIds = new Set();
+      paintedPicks = new Map();
       paintedSelectedRows = new Set();
       rowEntryIds.clear();
       lastHeaderColumnKeys = [];
