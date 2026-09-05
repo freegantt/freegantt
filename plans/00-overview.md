@@ -85,7 +85,7 @@ flowchart LR
 | S3 → S4 | Every data gesture is cancelable `before*` → one transaction → after (`[S3-A1]`); Escape restores (`[S3-A2]`); hover allocates nothing (`[S3-A3]`); extender extras ghost (`[S3-A4]`); capabilities gate pointer and keyboard (`[S3-A5]`); undo reverts user edit + extras (`[S3-A6]`); viewport gestures write nothing (`[S3-A7]`); Cursor line during drag (`[S3-A8]`). Identity extender is enough; no scheduling plugin. |
 | S4 → S5 | Field registry live; tree and grouped row sources; pack-mode row heights; item identity deterministic. |
 | S5 → S6 | A non-trivial feature exists as a plugin using only the public plugin API (dogfooding proof). |
-| S6 → S7 | Performance budgets met in CI on reference hardware; linked-scroll demo works x, y, and both. |
+| S6 → S7 | Performance budgets met in CI on reference hardware; linked-scroll demo works x, y, and both. **Extender composition is public and law-tested (#197):** `mergeEntryEdits` is exported, no example composes with a `Map` spread, and two extenders that write one entry keep both writes. S7 is the first slice with a second occupant on the hook (D-S5-23, D-S5-30/D-S5-31), so it must not be the slice that discovers this. |
 | S7 → 1.0 | Golden scheduling fixtures pass, including a 5,000-link chain with no recursion-depth failure; cycles reported with member ids; the first-party plugin uses only the public plugin contract. |
 
 ## 5. Deferred, with seams reserved
