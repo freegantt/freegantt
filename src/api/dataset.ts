@@ -141,7 +141,9 @@ export class Dataset<TMeta = unknown, TFields extends Record<string, unknown> = 
         fields: {
           register: (field) => {
             gate.assertOpen();
-            state.fields.register(field);
+            // D-S5-33: the registry records `pluginId` as the declarer, and that is what keeps this
+            // Field out of the Document. A plugin declares its own Fields again on every install.
+            state.fields.register(field, pluginId);
           },
           registerType: (name, type) => {
             gate.assertOpen();

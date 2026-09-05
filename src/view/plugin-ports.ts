@@ -15,6 +15,7 @@ import type {
   EntryId,
   EntryKind,
   FieldKey,
+  GridColumn,
   GridColumnInput,
   KeyChord,
   PluginId,
@@ -42,6 +43,7 @@ import type { GanttEvents, EntryFieldEdit } from './event-bus.js';
 import { buildElement } from '../render/dom/element-description.js';
 import type { MountLayer } from './mount-layer.js';
 import type { DomTarget, GanttDom } from './gantt-dom.js';
+import { toGridColumn } from './grid-columns.js';
 
 /** What `ctx.view.onDomEvent` hands a plugin: the browser event, plus what the node it landed on
  *  stands for (review A4). `target` is `undefined` when the event landed inside this Gantt, but on
@@ -266,6 +268,11 @@ export interface PluginContextPorts {
      *  reads the same list, instead of re-resolving columns itself (D-S5-5: `view/grid-columns.ts`
      *  stays out of reach). Empty when no column is marked `tooltip: true`. */
     resolveTooltipColumns(entry: Entry): readonly TooltipColumn[];
+    /** Every Grid column this Gantt paints right now, in paint order. The consumer's own columns and
+     *  every plugin's are both here, each with its Field defaults already merged. `gantt.gridColumns` answers a
+     *  different question: what the *consumer* authored (D-S5-33). A plugin that walks the grid wants
+     *  this one. Call: `for (const column of ctx.view.resolvedColumns())`. */
+    resolvedColumns(): readonly GridColumn[];
     /** S5.8, D-S5-19: whether the currently resolved Grid column for `field` allows inline editing.
      *  That is `GridColumn.editable` merged with the Field's own `column.editable` default. It is
      *  the same resolution the grid pane itself paints from (`ColumnChrome`). `undefined` when
@@ -286,7 +293,13 @@ export interface PluginContextPorts {
      *  only while `setup` runs (D-S5-4); removed automatically when this plugin is disposed. When two
      *  plugins register the same field, the newest registration wins, and disposing one plugin never
      *  disturbs the other plugin's registration. The returned `Disposer` removes the column sooner —
-     *  what a plugin showing its column in one mode only calls (#155). */
+     *  what a plugin showing its column in one mode only calls (#155).
+     *
+     *  The column is this plugin's declaration, and it stays that way (D-S5-33, #181). It never joins
+     *  `gantt.gridColumns`, and it never joins a `gridColumnsChange` payload. A resize or a reorder
+     *  of it commits and repaints, and still changes neither. So a consumer who saves `gridColumns`
+     *  saves their own columns only. Declare the column again on the next install: a Document carries
+     *  no plugin declaration to restore it from. */
     registerGridColumn(column: GridColumnInput): Disposer;
   };
   /** S5.9, D-S5-22: the pure layout side of the four-seam kind contract — what shape a
@@ -415,10 +428,12 @@ export function buildPluginPorts(
           .map((column) => ({ header: column.header, value: column.format(entry) })),
       registerDecoration: (layer, provider) =>
         registerWhileOpen(() => shell.registrations.registerDecoration(layer, provider)),
+      resolvedColumns: () => shell.resolvedColumns().map(toGridColumn),
       // S5.8, D-S5-19: `field` names the currently *resolved* column, not the raw `GridColumnInput[]`
       // a consumer's own `gridColumns` getter returns.
       isColumnEditable: (field) => shell.resolvedColumn(field)?.editable,
-      registerGridColumn: (column) => registerWhileOpen(() => shell.registrations.registerGridColumn(column)),
+      registerGridColumn: (column) =>
+        registerWhileOpen(() => shell.registrations.registerGridColumn(column, pluginId)),
     },
     layout: {
       registerItemProducer: (kind, producer) =>

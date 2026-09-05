@@ -92,7 +92,7 @@ describe('PluginRegistrations — what each seam invalidates', () => {
   it('a Grid column asks for nothing here — `ColumnChrome` owns that seam’s own refresh', () => {
     const { registrations, counts, columns } = harness();
 
-    const dispose = registrations.registerGridColumn('cost');
+    const dispose = registrations.registerGridColumn('cost', 'acme/costs');
     expect(columns).toEqual(['cost']);
     expect(counts).toMatchObject({ frames: 0, items: 0, capabilities: 0 });
 

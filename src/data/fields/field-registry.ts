@@ -6,8 +6,13 @@
 // a Field must exist before the first Rollup (D-S5-4), which is also why `Dataset.plugins` is
 // read-only where `Gantt.plugins` is not. `extensions/install-dataset-plugins.ts` closes each plugin's
 // registration gate the moment its `setup()` returns, so a later call is `RegistrationClosedError`.
+//
+// Every declaration records who made it (D-S5-33): the library, the consumer, or one named plugin.
+// `all` answers what this Dataset resolves against; `authored` answers what the consumer wrote, which
+// is the only half `toJSON` writes. A plugin re-declares its own Fields the next time it is installed,
+// so a Document that carried them would author a Field with no plugin behind it.
 
-import type { Aggregator, Field, FieldKey, FieldSource, FieldType } from '../../model/index.js';
+import type { Aggregator, Field, FieldKey, FieldSource, FieldType, PluginId } from '../../model/index.js';
 import {
   DuplicateFieldKeyError,
   DuplicateFieldSourceError,
@@ -15,7 +20,7 @@ import {
   UnknownFieldTypeError,
 } from '../../model/index.js';
 import { SHIPPED_AGGREGATORS } from './aggregators.js';
-import { CORE_FIELDS } from './core-fields.js';
+import { CORE_FIELDS, isCoreFieldKey } from './core-fields.js';
 import { storedSourceOf } from './normalize-source.js';
 
 export interface ResolvedField extends Field {
@@ -45,6 +50,9 @@ function mergeField(field: Field, bundle: FieldType | undefined): ResolvedField 
 export class FieldRegistry {
   readonly #resolved: ResolvedField[] = [];
   readonly #byKey = new Map<string, ResolvedField>();
+  /** D-S5-33: the plugin that declared each plugin-declared key. A key absent here came from the
+   *  library (a core Field) or from the consumer's own `fields` option. */
+  readonly #declaringPlugin = new Map<string, PluginId>();
   readonly #metaSlots = new Map<string, string>();
   readonly #aggregators: Record<string, Aggregator>;
   readonly #fieldTypes: Record<string, FieldType>;
@@ -64,15 +72,28 @@ export class FieldRegistry {
     return this.#resolved;
   }
 
+  /** Call: `encodeFieldDocument(dataset.fields.authored)`. The Fields the consumer wrote, in
+   *  declaration order — core Fields and every plugin-declared Field left out (D-S5-33). This is what
+   *  a Document carries: a plugin declares its own Fields again on its next install, so writing them
+   *  here would author a Field the reading application has nothing behind. The plugin's *values* are
+   *  not affected — those sit in `Entry.meta`, which round-trips whether the Field is declared or not. */
+  get authored(): readonly ResolvedField[] {
+    return this.#resolved.filter(
+      (field) => !isCoreFieldKey(field.key) && !this.#declaringPlugin.has(String(field.key)),
+    );
+  }
+
   get aggregators(): Readonly<Record<string, Aggregator>> {
     return this.#aggregators;
   }
 
-  /** Call: `ctx.fields.register({ key: 'locked', rollUp: 'none' })`. Same rules a constructor-time
-   *  declaration obeys — a duplicate key, an unknown Field type, an unknown Aggregator and a taken
-   *  `meta` slot each throw the error they already throw at construction. */
-  register(field: Field): void {
+  /** Call: `ctx.fields.register({ key: 'locked', rollUp: 'none' }, 'acme/locks')`. Same rules a
+   *  constructor-time declaration obeys — a duplicate key, an unknown Field type, an unknown
+   *  Aggregator and a taken `meta` slot each throw the error they already throw at construction.
+   *  `declaredBy` is the calling plugin's own id, so this Field stays out of `authored` (D-S5-33). */
+  register(field: Field, declaredBy: PluginId): void {
     this.#add(field, true);
+    this.#declaringPlugin.set(String(field.key), declaredBy);
   }
 
   /** Call: `ctx.fields.registerType('money', { rollUp: 'sum' })`. Register a type before the Field
@@ -93,7 +114,7 @@ export class FieldRegistry {
   #add(field: Field, fromConsumer: boolean): void {
     const key = String(field.key);
     if (this.#byKey.has(key)) throw new DuplicateFieldKeyError(key);
-    if (fromConsumer && CORE_FIELDS.some((core) => core.key === field.key)) {
+    if (fromConsumer && isCoreFieldKey(field.key)) {
       throw new DuplicateFieldKeyError(key);
     }
     if (field.type !== undefined && this.#fieldTypes[field.type] === undefined) {

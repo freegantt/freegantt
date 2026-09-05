@@ -538,6 +538,19 @@ _Avoid_: Treating this as settled — the plugin system (`GanttPlugin`/`DatasetP
 What `view/plugin-ports.ts` builds for one installed plugin (`buildPluginPorts(shellPorts, pluginId)`): the grouped `PluginContext` members `GanttShell` owns, plus that plugin's own `RegistrationGate` and `DisposableStore`. `GanttShellPorts` is the seam back — the registries, the frame loop and the event bus the ports write into — the same named-ports idiom `CoreCommandPorts` and `ColumnChromePorts` already set. `registerWhileOpen` is the one gated shape inside it: it asserts the gate, registers, invalidates, files the `Disposer` with the plugin's store, and returns it. A new seam names what registers and what must run again; it transcribes nothing.
 _Avoid_: PluginContextPorts as a _flat_ bag (retired 2026-09-04 — a flat list made `api/gantt.ts` re-group every member by hand, so a seam cost three edits in three layers)
 
+**Declarer** (and **authored**):
+Who made a declaration: the library, the consumer, or one named plugin (D-S5-33, issues #162/#181).
+Every `register*` that declares a Field (`ctx.fields.register`) or a Grid column
+(`ctx.view.registerGridColumn`) records the calling plugin's id. **Authored** is the consumer's half
+of that answer, and it is what the consumer's own surfaces report: `gantt.gridColumns` and both halves
+of a `gridColumnsChange` payload carry the columns the consumer wrote, before and after a resize or a
+reorder; `toJSON` writes the Fields the consumer declared. A plugin's declaration is code, and the
+plugin makes it again on its next install, so a Document never carries one. A `PluginStore`'s rows go
+the other way on purpose: they are data the plugin cannot rebuild, so the Document keeps them under
+their owner's id as passenger data (D-S5-24). Data outlives its plugin; a declaration does not.
+_Avoid_: Owner (a `PluginStore` has an owner, which is who may _write_ it; a declarer is who _made_
+one declaration), provenance as a public word (it names the rule, not an API member)
+
 **Propose / Announce**:
 The two verbs a plugin uses to raise the one event pair it owns (`ctx.interaction.proposeEntryEdit`, `ctx.interaction.announceEntryEdit`). **Propose** asks, and the answer is a Veto: `true`/`undefined`, `false`, or an unsettled `Promise` (D-S3-17). The caller must read it. **Announce** tells, after the commit, and returns `void`. `GanttShell#proposeChange` uses Propose in the same sense for every cancelable Gantt-state change.
 _Avoid_: Emit (retired on the plugin surface 2026-09-04 — "emit" says a thing went out, and says nothing about whether a decision comes back; `EventBus.emit` keeps the word for the bus's own mechanism)

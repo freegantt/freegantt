@@ -2014,7 +2014,7 @@ describe('Gantt plugin kind registrations (S5.9, D-S5-21/D-S5-22)', () => {
     gantt.destroy();
   });
 
-  it('a resize commit bakes a plugin column in, but disposing the plugin still removes it', async () => {
+  it('a resize commit keeps a plugin column, and disposing the plugin still removes it', async () => {
     const container = document.createElement('div');
     const dataset = new Dataset({
       timeZone: 'UTC',
@@ -2038,9 +2038,9 @@ describe('Gantt plugin kind registrations (S5.9, D-S5-21/D-S5-22)', () => {
     });
     await new Promise((resolve) => requestAnimationFrame(resolve));
 
-    // A resize drag on the plugin's own grip: `commitWidth`'s `nextInput` comes from
-    // `effectiveInput()` (base + plugin columns), so this bakes "risk" straight into
-    // `#gridColumnInput` — the same seam `api/plugin.ts`'s disposal promise has to reach through.
+    // A resize drag on the plugin's own grip: `commitWidth` rewrites every column on screen, so the
+    // commit stores "risk" as a plugin-declared column of its own (D-S5-33) — the same seam
+    // `api/plugin.ts`'s disposal promise has to reach through.
     const grip = container.querySelector<HTMLElement>(
       '.fg-col-header[data-field="risk"] .fg-column-resizer',
     )!;
@@ -2061,8 +2061,8 @@ describe('Gantt plugin kind registrations (S5.9, D-S5-21/D-S5-22)', () => {
 
     gantt.plugins = [];
     await new Promise((resolve) => requestAnimationFrame(resolve));
-    // Without the fix, the resized "risk" column survives in `#gridColumnInput` even though the
-    // plugin that registered it is gone.
+    // Without the fix, the resized "risk" column survives the commit even though the plugin that
+    // registered it is gone.
     expect(container.querySelector('[data-field="risk"]')).toBeNull();
 
     gantt.destroy();
@@ -3771,6 +3771,151 @@ describe('plugin registrations live exactly as long as their plugin (#155)', () 
     gantt.plugins = [];
     await new Promise((resolve) => requestAnimationFrame(resolve));
     expect(container.querySelector('.fg-col-header[data-field="risk"]')).toBeNull();
+
+    gantt.destroy();
+  });
+});
+
+describe('a plugin column never becomes the consumer’s config (D-S5-33, #162/#181)', () => {
+  const riskDataset = () =>
+    new Dataset({
+      timeZone: 'UTC',
+      fieldTypes: { risk: { rollUp: 'max', column: { header: 'Risk' } } },
+      fields: [{ key: 'risk', type: 'risk' }],
+      entries: [{ ...sampleEntries[0]!, meta: { risk: 'high' } }],
+    });
+
+  const riskColumnPlugin = {
+    id: 'demo.riskColumn',
+    setup(ctx: PluginContext) {
+      ctx.view.registerGridColumn({ field: 'risk' });
+      return () => {};
+    },
+  };
+
+  /** One resize drag on a header's grip, start to finish — the gesture #181's t2 describes. */
+  const dragColumnEdge = (container: HTMLElement, field: string, toClientX: number): void => {
+    const grip = container.querySelector<HTMLElement>(
+      `.fg-col-header[data-field="${field}"] .fg-column-resizer`,
+    )!;
+    const headerPane = container.querySelector<HTMLElement>('.fg-grid-header')!;
+    headerPane.setPointerCapture = vi.fn();
+    headerPane.releasePointerCapture = vi.fn();
+    grip.dispatchEvent(
+      new PointerEvent('pointerdown', { clientX: 100, clientY: 0, pointerId: 1, bubbles: true }),
+    );
+    headerPane.dispatchEvent(
+      new PointerEvent('pointermove', { clientX: toClientX, clientY: 0, pointerId: 1, bubbles: true }),
+    );
+    grip.dispatchEvent(
+      new PointerEvent('pointerup', { clientX: toClientX, clientY: 0, pointerId: 1, bubbles: true }),
+    );
+  };
+
+  it('a resize of a consumer column leaves the plugin column out of the getter, the payload and the save', async () => {
+    const container = document.createElement('div');
+    const gantt = new Gantt({
+      container,
+      dataset: riskDataset(),
+      gridColumns: ['name', 'start'],
+      plugins: [riskColumnPlugin],
+    });
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+
+    // t1 of #181's table: the plugin's column paints, and the getter is still the consumer's own.
+    expect(container.querySelector('.fg-col-header[data-field="risk"]')).not.toBeNull();
+    expect(gantt.gridColumns).toEqual(['name', 'start']);
+
+    // t2: the user drags a column edge. Before the fix this baked "risk" into the consumer's list.
+    let saved: string[] = [];
+    gantt.on('gridColumnsChange', ({ to }) => {
+      saved = to.map((column) => String(column.field));
+    });
+    dragColumnEdge(container, 'name', 260);
+
+    // t3/t4: the getter, the payload and the documented save round-trip all stay the consumer's own.
+    expect(gantt.gridColumns.map((c) => (typeof c === 'string' ? c : c.field))).toEqual(['name', 'start']);
+    expect(saved).toEqual(['name', 'start']);
+    // The drag still did its job: the consumer's own column carries the width it committed.
+    const nameColumn = gantt.gridColumns[0]!;
+    expect(typeof nameColumn === 'string' ? undefined : nameColumn.width).toBeGreaterThan(100);
+    // And the plugin's column still paints.
+    expect(container.querySelector('.fg-col-header[data-field="risk"]')).not.toBeNull();
+
+    gantt.destroy();
+  });
+
+  it('a resize of the plugin’s own column changes nothing the consumer authored', async () => {
+    const container = document.createElement('div');
+    const gantt = new Gantt({
+      container,
+      dataset: riskDataset(),
+      gridColumns: ['name'],
+      plugins: [riskColumnPlugin],
+    });
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+
+    const payloads: { from: string[]; to: string[] }[] = [];
+    gantt.on('gridColumnsChange', ({ from, to }) => {
+      payloads.push({
+        from: from.map((column) => String(column.field)),
+        to: to.map((column) => String(column.field)),
+      });
+    });
+    dragColumnEdge(container, 'risk', 300);
+
+    // The pair still fires, so a `beforeGridColumnsChange` veto still reaches this gesture. What it
+    // reports is the truth: the consumer's own configuration did not change.
+    expect(payloads).toEqual([{ from: ['name'], to: ['name'] }]);
+    expect(gantt.gridColumns).toEqual(['name']);
+    // The width the user gave the plugin's column sticks for the session all the same.
+    const riskHeader = container.querySelector<HTMLElement>('.fg-col-header[data-field="risk"]')!;
+    expect(riskHeader).not.toBeNull();
+
+    gantt.destroy();
+  });
+
+  it('a plain gridColumns assignment after a commit keeps the plugin column painting, and out of the list', async () => {
+    const container = document.createElement('div');
+    const gantt = new Gantt({
+      container,
+      dataset: riskDataset(),
+      gridColumns: ['name', 'start'],
+      plugins: [riskColumnPlugin],
+    });
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+
+    dragColumnEdge(container, 'name', 260);
+    gantt.gridColumns = ['name'];
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+
+    expect(gantt.gridColumns).toEqual(['name']);
+    const painted = Array.from(container.querySelectorAll('.fg-col-header')).map((cell) =>
+      cell.getAttribute('data-field'),
+    );
+    expect(painted).toEqual(['name', 'risk']);
+
+    gantt.destroy();
+  });
+
+  it('disposing the plugin after a commit leaves a same-field column the consumer authored alone', async () => {
+    const container = document.createElement('div');
+    const gantt = new Gantt({
+      container,
+      dataset: riskDataset(),
+      // The consumer names "risk" themselves: config beats a plugin, so this column is the
+      // consumer's, and the plugin leaving must not take it away (D-S5-33).
+      gridColumns: ['name', 'risk'],
+      plugins: [riskColumnPlugin],
+    });
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+
+    dragColumnEdge(container, 'risk', 300);
+    gantt.plugins = [];
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+
+    expect(gantt.gridColumns.map((c) => (typeof c === 'string' ? c : c.field))).toEqual(['name', 'risk']);
+    expect(container.querySelector('.fg-col-header[data-field="risk"]')).not.toBeNull();
 
     gantt.destroy();
   });

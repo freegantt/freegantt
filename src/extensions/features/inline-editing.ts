@@ -699,8 +699,11 @@ export function inlineEditing(options: InlineEditingOptions = {}): GanttPlugin {
         if (entryId === undefined) return;
         const entry = ctx.dataset.entries.get(entryId);
         if (entry === undefined) return;
-        for (const column of ctx.gantt.gridColumns) {
-          const fieldKey = typeof column === 'string' ? column : column.field;
+        // `ctx.view.resolvedColumns()`, not `ctx.gantt.gridColumns`: the second answers what the
+        // consumer authored, so it leaves out every column a plugin registered (D-S5-33). `Enter`
+        // opens the first editable column on screen, whoever declared it.
+        for (const column of ctx.view.resolvedColumns()) {
+          const fieldKey = column.field;
           if (ctx.view.isColumnEditable(fieldKey) !== true) continue;
           const cell = ctx.view.dom.cellFor(entryId, fieldKey);
           if (cell === undefined) continue;

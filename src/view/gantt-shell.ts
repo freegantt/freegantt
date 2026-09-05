@@ -796,8 +796,13 @@ export class GanttShell {
     this.#frameSettings.set({ locale: l });
   }
 
+  /** The columns the consumer authored, and only those (D-S5-33, #181). A plugin's registered column
+   *  renders. It stays out of this list, because it is the plugin's declaration and not this Gantt's
+   *  configuration. A resize or a reorder does not change that. So the documented save round-trip
+   *  (`gantt.on('gridColumnsChange', ({ to }) => save(to.map((c) => c.field)))`) never persists a
+   *  column whose plugin the next load leaves out. */
   get gridColumns(): readonly GridColumnInput[] {
-    return this.#columnChrome.gridColumnInput;
+    return this.#columnChrome.authoredColumns;
   }
 
   /** A plain reconfiguration still runs the same cancelable commit sequence a resize drag or a
@@ -1160,7 +1165,7 @@ export class GanttShell {
       requestFrame: () => this.#frames.request(),
       invalidateItems: () => this.#layout.invalidateFrom(0),
       refreshCapabilities: () => this.#refreshCapabilities(),
-      registerGridColumn: (column) => this.#columnChrome.registerPluginColumn(column),
+      registerGridColumn: (column, pluginId) => this.#columnChrome.registerPluginColumn(column, pluginId),
     };
   }
 

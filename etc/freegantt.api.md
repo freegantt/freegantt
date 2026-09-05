@@ -1399,6 +1399,7 @@ export interface PluginContextPorts {
         registerRenderer<P extends RendererPoint>(point: P, renderer: RendererFor<P>): Disposer;
         resolveTooltipContent(entryId: EntryId): ElementDescription | undefined;
         resolveTooltipColumns(entry: Entry): readonly TooltipColumn[];
+        resolvedColumns(): readonly GridColumn[];
         isColumnEditable(field: FieldKey): boolean | undefined;
         registerDecoration(layer: DecorationLayer, provider: DecorationProvider): Disposer;
         registerGridColumn(column: GridColumnInput): Disposer;

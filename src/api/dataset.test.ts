@@ -735,3 +735,51 @@ describe('Dataset plugins (S5.10)', () => {
     expect(reopened.toJSON().plugins).toEqual({ 'demo.lock': { t1: { locked: true } } });
   });
 });
+
+describe('a plugin’s declared Field is the plugin’s, not the document’s (D-S5-33, #162)', () => {
+  /** The S5.10 shape: a plugin declares a Field, and entries carry its values in `meta`. */
+  const declaresRisk: DatasetPlugin = {
+    id: 'demo.risk',
+    setup(ctx) {
+      ctx.fields.register({ key: 'risk', rollUp: 'none' });
+    },
+  };
+
+  const withRisk = (): Dataset =>
+    new Dataset({
+      timeZone: 'UTC',
+      entries: [oneEntry({ meta: { risk: 'high' } })],
+      fields: [{ key: 'note' }],
+      plugins: [declaresRisk],
+    });
+
+  it('writes the consumer’s Fields into the Document and leaves the plugin’s out', () => {
+    const doc = withRisk().toJSON();
+
+    expect(doc.fields?.map((field) => String(field.key))).toEqual(['note']);
+  });
+
+  it('keeps the plugin’s values, which live in meta and never needed the declaration', () => {
+    const doc = withRisk().toJSON();
+
+    expect(doc.entries[0]?.meta).toEqual({ risk: 'high' });
+  });
+
+  it('authors no orphan Field when the reading application leaves the plugin out', () => {
+    const reloaded = Dataset.fromJSON(withRisk().toJSON());
+
+    expect(reloaded.field('risk')).toBeUndefined();
+    expect(reloaded.field('note')).toBeDefined();
+    // The plugin's data is still there, opaque, waiting for the plugin to come back.
+    expect(reloaded.entries.get('t1')?.meta).toEqual({ risk: 'high' });
+  });
+
+  it('re-declares cleanly when the reading application installs the same plugin again', () => {
+    const reloaded = Dataset.fromJSON(withRisk().toJSON(), { plugins: [declaresRisk] });
+
+    // A Document that carried the plugin's own declaration would collide with it here, and the
+    // whole read would throw DuplicateFieldKeyError.
+    expect(reloaded.field('risk')).toBeDefined();
+    expect(reloaded.entries.fieldValue('t1', 'risk')).toBe('high');
+  });
+});
