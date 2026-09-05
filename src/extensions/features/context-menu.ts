@@ -107,9 +107,9 @@ export function contextMenu(options: ContextMenuOptions = {}): GanttPlugin {
         // the Selection replaces the Selection with what you clicked, before the menu opens.
         // Without it the command acts on Entries the user cannot see highlighted. A consumer that
         // cancels `beforeSelectionChange` keeps its Selection; the command still acts on what the
-        // user clicked, because that is what the menu offered. When the click landed inside the
-        // Selection (or the Selection landed inside the click, #212), `entryIds` is already the
-        // current Selection, so this assignment is a no-op — nothing is silently widened.
+        // user clicked, because that is what the menu offered. The click can land inside the
+        // Selection, or the Selection can land inside the click (#212). Either way `entryIds` is
+        // already the current Selection, so this assignment is a no-op and widens nothing.
         if (clicked.length > 0) ctx.gantt.selectedIds = entryIds;
         const commandCtx: CommandContext = {
           dataset: ctx.dataset,
