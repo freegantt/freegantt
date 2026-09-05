@@ -81,7 +81,7 @@ import type {
 } from '../model/index.js';
 import type { EditExtender } from '../data/edit-extension.js';
 import { resolveCapabilities } from './capability.js';
-import type { Capabilities, Interactions } from './capability.js';
+import type { CapabilityRule, Capabilities, Interactions } from './capability.js';
 import { subscribeToDatasetChanges } from './dataset-change-subscription.js';
 import type { DatasetChangeSubscription } from './dataset-change-subscription.js';
 import { FrameScheduler } from './frame-scheduler.js';
@@ -1001,6 +1001,23 @@ export class GanttShell {
    *  resolved affordance ids off the current hover and selection. A stricter rule takes effect
    *  without waiting for the next pointer move. */
   set interactions(next: Interactions) {
+    this.#interactions = next;
+    this.#refreshCapabilities();
+  }
+
+  /** D-S5-35: writes one gesture's rule and leaves every other rule standing. It replaces the value
+   *  it holds with a copy, so the object a consumer assigned is never mutated (`plans/02` §2). */
+  setCapabilityRule(capability: keyof Interactions, rule: CapabilityRule): void {
+    this.#interactions = { ...this.#interactions, [capability]: rule };
+    this.#refreshCapabilities();
+  }
+
+  /** D-S5-35: drops this Gantt's own rule for one gesture. A plugin's kind defaults and the library
+   *  table answer that gesture again. Clearing a gesture that carries no rule changes nothing. */
+  clearCapabilityRule(capability: keyof Interactions): void {
+    if (this.#interactions[capability] === undefined) return;
+    const next = { ...this.#interactions };
+    delete next[capability];
     this.#interactions = next;
     this.#refreshCapabilities();
   }

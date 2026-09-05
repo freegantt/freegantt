@@ -276,6 +276,7 @@ Full prose lives in the step file that implements each decision.
 | D-S5-29 | The API reference renders the existing API report — no new dependency | S5.12 |
 | D-S5-30 | `PluginStore` gets a read-only cross-plugin view, `store.read()` | S5.10 |
 | D-S5-31 | `requires` orders setup; the `plugins` array's own order never matters | S5.10 |
+| D-S5-35 | One gesture's rule is written by a verb, not by restating `interactions` | S5.9 |
 
 ---
 
