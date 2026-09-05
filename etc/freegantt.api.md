@@ -837,7 +837,7 @@ export interface FrameRow {
     cells: readonly string[];
     // (undocumented)
     depth: number;
-    entryId?: EntryId;
+    entryIds: readonly EntryId[];
     // (undocumented)
     expandable: boolean;
     // (undocumented)

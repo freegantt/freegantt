@@ -450,7 +450,7 @@ _Avoid_: snap unit for the stated setting (that is the resolved value), grid, ma
 
 **Selection**:
 The set of Entry ids a `Gantt` currently highlights — never Item ids, since "this Segment is selected but its siblings are not" means nothing yet (S3, D-S3-10). Per-Gantt, not per-Dataset: two Gantts bound to one Dataset can select differently. Written on pointerup, never pointerdown, and not at all when the gesture armed into a drag. The event pair keeps the concept word (`beforeSelectionChange`/`selectionChange`); the two public getters name the two readings of it, and the suffix is the only difference between them (#113): `Gantt.selectedIds` is the ids (loose in, branded out, live, writable), and `Gantt.selectedEntries` re-reads the bound Dataset for each id in `selectedIds`, in order, on every access — skipping an id the store no longer has (e.g. after a `remove`) rather than throwing. Internal holders of the id list keep the concept word (`GanttShell#selection`), because no second reading exists there to tell apart.
-_Avoid_: highlight (paint detail, not the authored concept), `Gantt.selection` / `Gantt.selectionEntries` (retired in #113 — a public name with no axis word left the reader to learn from the types which side was ids), `selectedItemIds` unqualified (that is `InteractionState`'s paint-side mirror, Item-keyed, never the public word)
+_Avoid_: highlight (paint detail, not the authored concept), `Gantt.selection` / `Gantt.selectionEntries` (retired in #113 — a public name with no axis word left the reader to learn from the types which side was ids), `selectedItemIds` (retired in #185 — paint keyed by Item made an Entry with Segments paint one bar of the several it drew; `InteractionState.selectedEntryIds` carries the same Entry ids the public word does)
 
 **EntryGesture**:
 The kind of data edit a drag is making — `{ kind: 'move' }` or `{ kind: 'resize', edge }` — the shape `interaction/entry-gesture-context.ts`'s `EntryGestureContext` carries through `draftFor`/`commit`. Distinct from the pointer machine itself (`createPointerGesture`, `pointer-gesture.ts`), which knows nothing about entries, drafts, or kinds — only threshold, capture, Escape, and long-press over plain `start`/`move`/`commit`/`cancel` callbacks.
@@ -469,8 +469,12 @@ One keyboard step of a selected entry, sized to one resolved snap unit, committe
 _Avoid_: Step (that is Tick stepping), keyboard drag
 
 **Interaction state**:
-The one long-lived, mutable per-Gantt object `RenderBackend.applyState` diffs against (`hoveredItemId`, `selectedItemIds`, `resizableItemId`, `movableItemId`, `preview`, `pendingItemIds`, `cursorX`, `cursorLabel`). Hot path: class toggles and transforms only, no frame rebuild (I5, D-S3-6).
-_Avoid_: Selection (that is the public `Gantt.selectedIds` Entry-id set; this is the paint-side mirror)
+The one long-lived, mutable per-Gantt object `RenderBackend.applyState` diffs against (`hoveredItemId`, `selectedEntryIds`, `pickedItemId`, `resizableItemId`, `movableItemId`, `preview`, `pendingItemIds`, `cursorX`, `cursorLabel`). `selectedEntryIds` is the Selection itself, and a backend resolves which bars those Entries drew from the frame it synced (#185 — the retired `selectedItemIds` made the shell guess that). Hot path: class toggles and transforms only, no frame rebuild (I5, D-S3-6).
+_Avoid_: Selection as this object's own word (the Selection is the public `Gantt.selectedIds` Entry-id set, which this object carries; the rest of it is paint)
+
+**Picked Item**:
+The one Item the pointer last picked — the bar a click landed on (`InteractionState.pickedItemId`, #185). It is an input to the shared resize-handle pair, never a paint of its own: the handles park on the picked bar while nothing is hovered. It clears once the Selection drops the Entry that drew it. A grid-row click picks no Item, so a segmented Entry selected from the grid shows no handles until a bar is hovered.
+_Avoid_: focused Item ("focused" is DOM focus in `extensions/focus-trap.ts` and the focused row in `context-menu.ts`), hit Item (a hover is a hit too — `hitTest` answers both)
 
 ### Theming and accessibility
 
@@ -617,10 +621,6 @@ _Avoid_: Tooltip, Menu (both are one consumer of this shared primitive, not the 
 Why a Popup closed _itself_: `'escape' | 'outsidePointer' | 'scroll' | 'blur'`. `PopupOptions.dismissOn` names which ones apply; `PopupOptions.onDismiss(trigger)` tells the owner which one fired, after the close. A `close()` the owner called is not a dismissal and never fires it — the owner already knows. Added in 2026-09-04's review (C3): without it an owner either leaked its listeners or polled `isOpen` on every click in the page, and `createPopup` is public, so every third-party plugin inherited that choice.
 _Avoid_: Close reason, dismissal cause (the type is `DismissTrigger` — one name)
 
-**Refusal notice**:
-What a cell mounts when it will not open an editor and owes the user a reason (`inlineEditing()`, S5.8). It is the same `.fg-cell-editor` wrapper the editor itself mounts, in the same Row layer (#158), carrying `data-state="invalid"`, `data-reason="<key>"`, the reason as its text and the same words as its `title`. It mounts no control, takes no focus, and sets `pointer-events: none`, so the next double-click reaches the cell below it. Five things clear it: the next pointer press in this Gantt, Escape, a scroll, a Dataset change, and the next open. `inline-editing.ts`'s `REFUSAL_TEXT` holds every message, so no call site spells one. Which refusals speak and which stay silent is one seven-row table in [`s5.8-inline-editing.md`](plans/s5-extensibility-and-editing/s5.8-inline-editing.md) §1, under one rule: a cell that offers no editor refuses in silence, and a cell that offers one and cannot open it here names the reason. Added in 2026-09-04's review (SP1): four different refusals all looked like a dead double-click.
-_Avoid_: Error (nothing is broken — the cell is stating a rule), warning, tooltip (a Tooltip is a hover affordance built on Popup; a refusal notice answers one action and is not a Popup at all)
-
 **DisposableStore**:
 The `extensions/disposables.ts` collection of cleanup callbacks a `PluginRuntime` or a Popup accumulates and frees together with one `disposeAll()` call; latches after disposal (cannot be reused — a fresh instance replaces it instead, e.g. `Popup.close()`). Deliberately reuses "Store" outside `data/`'s own sense (a normalized entity collection like `Dataset.entries`) — spec-mandated name (S5.1); the two senses do not overlap in any one file, so no rename is planned.
 _Avoid_: Confusing with `data/`'s Store sense — see above
@@ -628,6 +628,24 @@ _Avoid_: Confusing with `data/`'s Store sense — see above
 **ElementDescription**:
 The plain, DOM-free data shape (`layout/` — `render/dom/element-description.ts`'s `buildElement` is its one-shot build function, S5.3/D-S5-10) describing a node's tag, attrs/class/style, and text-or-`html`-or-keyed-children content. The one seam `extensions/` has into the reconciler, since it may not import `render/dom` itself (D-S5-5): a Popup or a plugin builds one and hands it to `ctx.view.renderElement()`. Raw `html` is explicit opt-in only (I13); `text` is always `textContent`.
 _Avoid_: Vnode, template (both imply a framework-shaped diffing/compilation step this plain data shape does not have)
+
+### Errors
+
+**Refusal**:
+The library saying no on purpose — a `beforeChange` veto, a capability that resolved false, a value a Field cannot read back, a gesture a plugin declined. A Refusal is the library working correctly, so it reports at `severity: 'info'` and is never a Fault. Core is the only thing that can observe one: `transaction.ts` throws `MutationCancelledError` after `beforeChange` returns false, and a plugin's own handler ran beside the vetoing one and never learns the outcome (ADR 0009).
+_Avoid_: Error (the concept is not an error, even though it travels on the `error` event — see Severity), rejection, denial, failure (nothing failed)
+
+**Error report**:
+One `ErrorReport` — what the `error` event carries on both the Dataset and the Gantt: `at`, `code`, `message`, `severity`, `by`, and the optional `entryId`, `field` and `cause`. It is a notification record, never something a consumer catches — the thrown class is `FreeGanttError`, a different thing with a near-identical name. Core raises reports and retains none: there is no `gantt.errors` array, because the cap, the overflow rule and the dedupe are the consumer's policy (ADR 0009). `by` names who refused — `'core'`, `'consumer'`, or a `PluginId` — because `origin` and `source` are both already spoken for.
+_Avoid_: Problem, diagnostic (Diagnostic is the scheduling engine's own word — see above), log entry (nothing is logged), GanttError (one letter from `FreeGanttError`, which is the class you catch)
+
+**Severity**:
+How bad an Error report is: `'info'` — a Refusal, so nothing is broken; `'warning'` — degraded but recovered, such as a renderer that threw and fell back to the default output, or a Document key dropped on read; `'error'` — something broke and nothing caught it. Three levels rather than a `'refusal' | 'fault'` pair, because those are two different things and not two levels, and a field named `severity` whose values are not severities would cover two concepts with one word. Telemetry routes on `severity !== 'info'`; a toast styles on all three.
+_Avoid_: Level, kind (Kind classifies an Entry — `EntryKind`, `TargetKind`, `RollUpKinds` all claim it), category, `'fault'` as a stored value (it is the shape of `'warning'` and `'error'`, not a level of its own)
+
+**Refusal notice**:
+What a cell mounts when it will not open an editor and owes the user a reason (`inlineEditing()`, S5.8). It is the same `.fg-cell-editor` wrapper the editor itself mounts, in the same Row layer (#158), carrying `data-state="invalid"`, `data-reason="<key>"`, the reason as its text and the same words as its `title`. It mounts no control, takes no focus, and sets `pointer-events: none`, so the next double-click reaches the cell below it. Five things clear it: the next pointer press in this Gantt, Escape, a scroll, a Dataset change, and the next open. `inline-editing.ts`'s `REFUSAL_TEXT` holds every message, so no call site spells one. Which refusals speak and which stay silent is one seven-row table in [`s5.8-inline-editing.md`](plans/s5-extensibility-and-editing/s5.8-inline-editing.md) §1, under one rule: a cell that offers no editor refuses in silence, and a cell that offers one and cannot open it here names the reason. Added in 2026-09-04's review (SP1): four different refusals all looked like a dead double-click.
+_Avoid_: Error for the notice itself (nothing is broken — the cell is stating a rule), warning, tooltip (a Tooltip is a hover affordance built on Popup; a refusal notice answers one action and is not a Popup at all). A Refusal does travel on the `error` event, at `severity: 'info'` — the payload carries the distinction this line protects (ADR 0009).
 
 ### Process
 

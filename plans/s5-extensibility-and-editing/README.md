@@ -2,7 +2,7 @@
 
 **Slice:** S5 (`plans/03` §S5) · **Position:** after S4, before S6 · **Status:** in progress — S5.0–S5.10 done, the 2026-09-04 branch review is closed, S5.11 next
 **Form:** the same settled-spec form as [`plans/s4-hierarchy-and-rows/README.md`](../s4-hierarchy-and-rows/README.md) — this file is the tracker and the shared context; each step file holds the decisions it implements and its TODO boxes.
-**Tick as you go:** When you finish a TODO item, tick its box in that step file. Tick it in the same change as the code. Do not wait for S5.12 or the slice gate.
+**Tick as you go:** When you finish a TODO item, tick its box in that step file. Tick it in the same change as the code. Do not wait for S5.13 or the slice gate.
 **Governed by:** `plans/00` D3/D4/D5/D11/D12, `plans/01` §2.5/§2.6/§8/§9/§10, `plans/02` §3/§4/§4.1/§4.2/§7, ADR [0002](../../docs/adr/0002-scheduling-is-a-plugin-not-a-core-layer.md), ADR [0005](../../docs/adr/0005-fields-are-declared-and-grid-columns-reference-them.md).
 **Builds on:** S2's extension hook (`data/edit-extension.ts`, D-S2-6), S3's capability resolver and gesture pipeline, S4's Field registry, Grid columns and `ItemProducer` seam.
 **Review fixes — closed 2026-09-04:** [`plans/reviews/2026-09-04-s5-extensibility-fixes.md`](../reviews/2026-09-04-s5-extensibility-fixes.md) records what the branch review asked and what landed. All seven slices R1–R7 are done, so the review HTML is deleted. R2 lifted the plugin ports into `view/plugin-ports.ts` before S5.10, which is what that step builds on.
@@ -48,8 +48,8 @@ Q2 needs the user's sign-off before S5.10 starts; it rewords a locked decision. 
 Each story names the step that owns it. Acceptance boxes live in the step files.
 
 - **U1.** (consumer) I write `plugins: [tooltips(), contextMenu({ items })]`. Both features appear. I imported exactly what I use. → S5.1, S5.5
-- **U2.** (consumer) I ship a Gantt with no plugins. My bundle contains no tooltip, menu or editor code. → S5.1, S5.12
-- **U3.** (plugin author) I write a weekend-shading plugin against the published types alone. I never import a path inside `freegantt/`. → S5.6, S5.12
+- **U2.** (consumer) I ship a Gantt with no plugins. My bundle contains no tooltip, menu or editor code. → S5.1, S5.13
+- **U3.** (plugin author) I write a weekend-shading plugin against the published types alone. I never import a path inside `freegantt/`. → S5.6, S5.13
 - **U4.** (plugin author) My plugin adds a command, a keybinding and a context-menu item for it. One command id serves all three. → S5.2, S5.5
 - **U5.** (consumer) I hover a bar and read a tooltip. I press Escape and it goes away. Focus never left my bar. → S5.3, S5.5
 - **U6.** (consumer) I pass `barRenderer: { milestone: …, '*': … }`. My milestone draws my way; everything else keeps the library's look. → S5.4
@@ -59,7 +59,7 @@ Each story names the step that owns it. Acceptance boxes live in the step files.
 - **U10.** (consumer) I declare a `'buffer'` kind in one plugin: shape, renderer, capabilities and menu items. I edited no library file. → S5.9
 - **U11.** (plugin author) I install a `DatasetPlugin` that locks an entry. Dragging its neighbour ghosts the locked bar and the drop is refused. → S5.10
 - **U12.** (keyboard user) I reach every row, cell, bar and command with the keyboard alone. Screen-reader labels name dates. → S5.11
-- **U13.** (reviewer) I run `pnpm gate` on `.slice` = `S5` and read six lines, each naming an acceptance box from `plans/03`, each backed by a test that ran. → S5.12
+- **U13.** (reviewer) I run `pnpm gate` on `.slice` = `S5` and read six lines, each naming an acceptance box from `plans/03`, each backed by a test that ran. → S5.13
 - **U14.** (consumer) I set `gantt.plugins = [...gantt.plugins, myPlugin()]` at runtime. Nothing remounts. → S5.1
 
 ---
@@ -126,7 +126,8 @@ Thirteen steps, in order. S5.0 is the blocking pre-step: the grill on issue #111
 | S5.9 | [`s5.9-plugin-registrations.md`](./s5.9-plugin-registrations.md) | a consumer-defined kind, whole, from one plugin |
 | S5.10 | [`s5.10-dataset-plugins.md`](./s5.10-dataset-plugins.md) | the lock plugin ghosts a second bar in the harness |
 | S5.11 | [`s5.11-a11y-completion.md`](./s5.11-a11y-completion.md) | roving tabindex, keyboard parity, axe green in CI |
-| S5.12 | [`s5.12-gallery-and-gate.md`](./s5.12-gallery-and-gate.md) | the example gallery, the tree-shaking budget, gate green |
+| S5.12 | [`s5.12-error-reporting.md`](./s5.12-error-reporting.md) | one `error` event, one feed, no log core owns |
+| S5.13 | [`s5.13-gallery-and-gate.md`](./s5.13-gallery-and-gate.md) | the example gallery, the tree-shaking budget, gate green |
 
 ---
 
@@ -141,7 +142,7 @@ Thirteen steps, in order. S5.0 is the blocking pre-step: the grill on issue #111
 | `[S5-A3]` | A consumer-defined kind (renderer + capabilities + `when` menu items, registered by config or plugin) works with zero core edits | S5.9 | `api/gantt.test.ts`, `layout/items/produce-items.test.ts`, `view/capability.test.ts` |
 | `[S5-A4]` | Every S3 pointer capability has a keyboard path; axe reports no violations on harness pages | S5.11 | `view/keyboard-navigation.test.ts`, `e2e/a11y.spec.ts` |
 | `[S5-A5]` | A consumer replaces the entry editor through `beforeEntryEdit` (harness demo) | S5.8 | `extensions/features/inline-editing.test.ts`, `e2e/editing.spec.ts` |
-| `[S5-A6]` | Unused features are absent from a consumer bundle (tree-shaking test in CI) | S5.12 | `size-limit` budgets + a string probe over the built bundle |
+| `[S5-A6]` | Unused features are absent from a consumer bundle (tree-shaking test in CI) | S5.13 | `size-limit` budgets + a string probe over the built bundle |
 
 **Gate S5 → S6** (`plans/00` §4): a non-trivial feature exists as a plugin using only the public plugin API. `[S5-A1]` and `[S5-A2]` together discharge it — `[S5-A1]` proves the built-ins took no back door, `[S5-A2]` proves an outside author can do the same.
 
@@ -272,8 +273,11 @@ Full prose lives in the step file that implements each decision.
 | D-S5-25 | The grid pane carries the `treegrid` pattern; the timeline is a labelled region | S5.11 |
 | D-S5-26 | Every pointer gesture has a chord over the same command | S5.11 |
 | D-S5-27 | Axe runs on every harness page in CI | S5.11 |
-| D-S5-28 | The tree-shaking budget is a probe plus a size limit | S5.12 |
-| D-S5-29 | The API reference renders the existing API report — no new dependency | S5.12 |
+| D-S5-28 | The tree-shaking budget is a probe plus a size limit | S5.13 |
+| D-S5-29 | The API reference renders the existing API report — no new dependency | S5.13 |
+| D-S5-35 | Core raises an Error report; the consumer retains it | S5.12 |
+| D-S5-36 | `severity` is `error`/`warning`/`info`, so a Refusal is not a Fault | S5.12 |
+| D-S5-37 | `watchAllErrors` gives one feed over two emitters | S5.12 |
 | D-S5-30 | `PluginStore` gets a read-only cross-plugin view, `store.read()` | S5.10 |
 | D-S5-31 | `requires` orders setup; the `plugins` array's own order never matters | S5.10 |
 | D-S5-35 | One gesture's rule is written by a verb, not by restating `interactions` | S5.9 |
@@ -297,7 +301,7 @@ Read these before you touch `src/`.
 8. **`interaction/` still never imports `scheduling/`.** S5 adds no scheduling anything. `Interactions.linkCreate` stays off the type until S7 (I11).
 9. **Review `harness/main.ts` on every commit**, changed or not (CLAUDE.md). This slice's harness pages are also the example gallery, so a workaround there is doubly visible.
 10. **Run the full check sequence** after each step: `pnpm vitest run`, `tsc --noEmit`, `eslint src harness`, `depcruise`, `node scripts/guard-red-test.mjs`, `pnpm api-report`.
-11. **`.slice` bumps only at S5.12** — not before the gate is green.
+11. **`.slice` bumps only at S5.13** — not before the gate is green.
 12. **Every new public key must work on the day it appears** (I11). `editable`, `resizable`, `movable` join `GridColumn` in the step that honours them, not in S5.1.
 
 ---
@@ -389,7 +393,7 @@ The wording change to locked **D4** (`plans/00`), `CLAUDE.md`, `plans/01` §7, `
 
 ## 12. Spec edits
 
-Landed in the step that proves each one, except the batch at S5.12. Full list in [`s5.12-gallery-and-gate.md`](./s5.12-gallery-and-gate.md) §4. The six that change settled text rather than adding to it:
+Landed in the step that proves each one, except the batch at S5.13. Full list in [`s5.13-gallery-and-gate.md`](./s5.13-gallery-and-gate.md) §4. The six that change settled text rather than adding to it:
 
 1. `plans/03` §S5 — the six acceptance boxes gain ids `[S5-A1]`–`[S5-A6]` and a tracker pointer. **Landed with this spec.**
 2. `plans/01` §10 and `plans/02` §2 — `features: { … }` becomes `plugins: [ … ]` (Q3, D-S5-2).

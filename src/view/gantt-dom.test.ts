@@ -7,7 +7,7 @@
 // `ContainerDom` to read it back. A rename in `render/dom/dom-contract.ts` keeps this green; a
 // rename at one paint site only does not.
 import { describe, expect, it } from 'vitest';
-import { computeFrame, createItemProducerRegistry } from '../layout/index.js';
+import { FrameLayout, createItemProducerRegistry } from '../layout/index.js';
 import type { TimeScale, ViewPreset } from '../layout/index.js';
 import { createDomBackend } from '../render/dom/index.js';
 import { ContainerDom } from './gantt-dom.js';
@@ -34,11 +34,14 @@ const preset: ViewPreset = {
 };
 
 const entries = sampleEntries.slice(0, 2);
-const entryById = (id: EntryId): Entry | undefined => entries.find((entry) => entry.id === id);
 
 /** One mounted Gantt's worth of DOM: a `PaneLayout` for the panes and the splitter, and a real
  *  `render/dom` backend painting into its surfaces. */
-function paintOneGantt(): { dom: ContainerDom; container: HTMLElement; destroy(): void } {
+function paintOneGantt(painted: readonly Entry[] = entries): {
+  dom: ContainerDom;
+  container: HTMLElement;
+  destroy(): void;
+} {
   const container = document.createElement('div');
   document.body.append(container);
   const paneLayout = new PaneLayout({ container });
@@ -48,9 +51,11 @@ function paintOneGantt(): { dom: ContainerDom; container: HTMLElement; destroy()
     gridHeader: paneLayout.panes.gridHeader,
     timeline: paneLayout.panes.timeline,
   });
+  // The real `FrameLayout`, because `barFor` asks it which Items an entry draws (#185).
+  const layout = new FrameLayout();
   backend.sync(
-    computeFrame({
-      entries,
+    layout.computeFrame({
+      entries: painted,
       scale,
       preset,
       visible: { x: 0, y: 0, width: 200, height: 200 },
@@ -64,7 +69,12 @@ function paintOneGantt(): { dom: ContainerDom; container: HTMLElement; destroy()
     }),
   );
   return {
-    dom: new ContainerDom(container, paneLayout, entryById),
+    dom: new ContainerDom(
+      container,
+      paneLayout,
+      (id) => painted.find((entry) => entry.id === id),
+      (id) => layout.itemIdsForEntry(id),
+    ),
     container,
     destroy: () => {
       backend.destroy();
@@ -170,6 +180,26 @@ describe('ContainerDom — finding an element from an id', () => {
 
     expect(bar).toBe(gantt.container.querySelectorAll('[data-item-id]')[1]);
     expect(gantt.dom.barFor('no-such-entry' as EntryId)).toBeUndefined();
+    gantt.destroy();
+  });
+
+  it('barFor anchors on the first bar the frame mounted, not on segment 0 (#185)', () => {
+    const segmented: Entry = {
+      ...entries[0]!,
+      segments: [
+        { start: entries[0]!.start, end: entries[0]!.end },
+        { start: entries[0]!.start, end: entries[0]!.end },
+      ],
+    };
+    const gantt = paintOneGantt([segmented]);
+
+    // Virtualization culled the entry's first Segment; the second one is still on screen.
+    const first = gantt.container.querySelector<HTMLElement>('[data-item-id]')!;
+    first.remove();
+
+    const bar = gantt.dom.barFor(segmented.id);
+    expect(bar).toBe(gantt.container.querySelector('[data-item-id]'));
+    expect(bar?.dataset['itemId']).not.toBe(first.dataset['itemId']);
     gantt.destroy();
   });
 

@@ -4,6 +4,7 @@ export {
   rowId,
   itemId,
   itemIdFromDataset,
+  rowIdFromDataset,
   entryIdFromDataset,
   entryIdOfItem,
   segmentIndexOfItem,

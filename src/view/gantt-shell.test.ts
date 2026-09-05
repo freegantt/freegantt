@@ -817,7 +817,7 @@ describe('GanttShell hot path (S3.2, D-S3-6/D-S3-9, [S3-A3])', () => {
     shell.destroy();
   });
 
-  it('clicking a later segment paints that bar, not segment 0', () => {
+  it('clicking one segment paints every bar of that entry, and the handles follow the picked one (#185)', () => {
     const segmented: Entry = {
       id: entryId('seg'),
       name: 'segmented',
@@ -830,13 +830,13 @@ describe('GanttShell hot path (S3.2, D-S3-6/D-S3-9, [S3-A3])', () => {
       ],
     };
     const container = document.createElement('div');
-    let propose: ((next: readonly EntryId[], items?: readonly ItemId[]) => void) | undefined;
+    let propose: ((next: readonly EntryId[], pickedItemId?: ItemId) => void) | undefined;
     const shell = new GanttShell({
       container,
       dataset: fakeDataset([segmented]),
       wiring: {
         entryGestures: (_pane, _rowLayer, _host, ctx) => {
-          propose = (next, items) => ctx.selection.propose(next, items);
+          propose = (next, picked) => ctx.selection.propose(next, picked);
           return { detach() {} };
         },
       },
@@ -844,14 +844,53 @@ describe('GanttShell hot path (S3.2, D-S3-6/D-S3-9, [S3-A3])', () => {
 
     const first = itemId(segmented.id, 0);
     const second = itemId(segmented.id, 1);
-    propose?.([segmented.id], [second]);
+    propose?.([segmented.id], second);
 
-    expect(container.querySelector(`[data-item-id="${second}"]`)?.getAttribute('data-state')).toContain(
-      'selected',
-    );
-    expect(
-      container.querySelector(`[data-item-id="${first}"]`)?.getAttribute('data-state') ?? '',
-    ).not.toContain('selected');
+    // The Selection is the Entry, so both of its bars carry the token — "this Segment is selected
+    // but its sibling is not" means nothing (D-S3-10).
+    for (const item of [first, second]) {
+      expect(container.querySelector(`[data-item-id="${item}"]`)?.getAttribute('data-state')).toContain(
+        'selected',
+      );
+    }
+    // The shared handle pair is the one thing that still names a single bar: the picked one.
+    const start = container.querySelector<HTMLElement>('.fg-bar-handle[data-edge="start"]')!;
+    const secondBar = container.querySelector<HTMLElement>(`[data-item-id="${second}"]`)!;
+    expect(start.hidden).toBe(false);
+    expect(start.style.transform).toBe(secondBar.style.transform);
+
+    shell.destroy();
+  });
+
+  it('entriesForRow answers every selectable Entry a packed row owns (#185)', () => {
+    const owned: Entry[] = [
+      { id: entryId('one'), name: 'one', start: rangeStart, end: rangeEnd, kind: 'span' },
+      { id: entryId('two'), name: 'two', start: rangeStart, end: rangeEnd, kind: 'span' },
+      { id: entryId('three'), name: 'three', start: rangeStart, end: rangeEnd, kind: 'span' },
+    ];
+    const container = document.createElement('div');
+    let ctx: EntryGestureContext | undefined;
+    const shell = new GanttShell({
+      container,
+      dataset: fakeDataset(owned),
+      rowSource: {
+        source: 'custom',
+        resolve: () => [{ id: 'packed', entryIds: owned.map((entry) => String(entry.id)) }],
+      },
+      // The middle Entry refuses `select`, so the row keeps the other two (I14: one resolution).
+      interactions: { select: (entry) => entry.id !== owned[1]!.id },
+      wiring: {
+        entryGestures: (_pane, _rowLayer, _host, gestureCtx) => {
+          ctx = gestureCtx;
+          return { detach() {} };
+        },
+      },
+    });
+
+    const row = container.querySelector<HTMLElement>('.fg-row')!;
+    expect(ctx!.entriesForRow(rowId(row.dataset['rowId']!))).toEqual([owned[0]!.id, owned[2]!.id]);
+    // A row id no frame carries answers nothing, rather than throwing.
+    expect(ctx!.entriesForRow(rowId('absent'))).toEqual([]);
 
     shell.destroy();
   });
