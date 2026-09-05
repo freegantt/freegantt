@@ -706,13 +706,17 @@ export function createDomBackend(options?: DomBackendOptions): RenderBackend<HTM
 
   /** Each row owns a nested keyed list of cells (one per configured column), the same "keyed list
    * inside a keyed list" pattern `syncHeader` uses for ticks inside bands. Split out from `syncRows`
-   * because it needs its own per-row layer lookup and its own prune pass. */
-  function cellItemsForRow(row: FrameRow, columns: readonly FrameColumn[]): readonly CellItem[] {
+   * because it needs its own per-row layer lookup and its own prune pass.
+   *
+   * `renderers` is resolved once per frame by the caller, never here (#175) — see below. */
+  function cellItemsForRow(
+    row: FrameRow,
+    columns: readonly FrameColumn[],
+    renderers: readonly (ResolvedRenderer<BoundCellRenderer> | undefined)[],
+  ): readonly CellItem[] {
     const entry = row.entryId !== undefined ? entryById(row.entryId) : undefined;
     return cellItemsFor(row.cells, columns, row.expandable, row.expanded).map((item, i) => {
-      const column = columns[i];
-      if (column === undefined) return item;
-      const resolved = resolveCellRenderer(String(column.key));
+      const resolved = renderers[i];
       if (resolved === undefined) return item;
       const content = callRenderer('cell', resolved, {
         ...(entry !== undefined ? { entry } : {}),
@@ -724,10 +728,16 @@ export function createDomBackend(options?: DomBackendOptions): RenderBackend<HTM
   }
 
   function syncCellsForEachRow(rows: readonly FrameRow[], columns: readonly FrameColumn[]): void {
+    // #175: which renderer paints a cell depends on the column alone, never on the row. Resolving
+    // inside the per-cell map asked the same question once per painted cell, and each answer is a
+    // fresh object holding a fresh closure (`view/gantt-shell.ts`'s `resolveCellRenderer`). Frames
+    // fire on scroll, so that was two allocations per cell per scrolled frame. `plans/01` §8: the
+    // hot path allocates nothing. One resolve per column per frame answers every row.
+    const renderers = columns.map((column) => resolveCellRenderer(column.key));
     rows.forEach((row) => {
       const rowNode = rowLayer.node(row.id);
       if (!rowNode) return;
-      rowCellLayers.layerFor(row.id).sync(rowNode, cellItemsForRow(row, columns), cellSpec);
+      rowCellLayers.layerFor(row.id).sync(rowNode, cellItemsForRow(row, columns, renderers), cellSpec);
     });
 
     rowCellLayers.prune(new Set(rows.map((row) => row.id)));
@@ -748,7 +758,7 @@ export function createDomBackend(options?: DomBackendOptions): RenderBackend<HTM
       if (column.flex !== undefined) item.flex = column.flex;
       if (column.resizable !== undefined) item.resizable = column.resizable;
       if (column.movable !== undefined) item.movable = column.movable;
-      const resolved = resolveHeaderRenderer(String(column.key));
+      const resolved = resolveHeaderRenderer(column.key);
       if (resolved !== undefined) {
         const content = callRenderer('header', resolved, undefined);
         if (content !== undefined) item.content = content;
