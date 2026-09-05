@@ -210,7 +210,10 @@ export interface GanttShellWiring {
    *  cached, so a command always reads the invocation's current selection. `target`'s shape (S5.7,
    *  D-S5-26) is a structural subtype of api-level `CommandTarget`. `view/` may not name that type
    *  either, but a narrower object literal reaches it fine, because `api/gantt.ts` only widens. */
-  buildCommandContext?: (parts: { entry?: Entry; target?: { kind: 'header'; field: FieldKey } }) => unknown;
+  buildCommandContext?: (parts: {
+    entry?: Entry;
+    target?: { kind: 'header'; field: FieldKey; entryIds: readonly EntryId[] };
+  }) => unknown;
   /** S5.2: `freegantt.panToToday`'s own clock read. `view/` may not call `time/`'s `now()` itself
    *  (I10). `api/gantt.ts` supplies `now` from `time/index.js`, the same function
    *  `Gantt.panToToday` already reads for the identical reason. */
@@ -466,6 +469,7 @@ export class GanttShell {
       this.#paneLayout,
       (id) => this.#options.dataset.entries.get(id),
       (id) => this.#layout.itemIdsForEntry(id),
+      (id) => this.#layout.entryIdsForRow(id),
     );
 
     const hasOwnOptions =
@@ -1108,7 +1112,8 @@ export class GanttShell {
     // them. `buildPluginContext` above already gets the same trust for `PluginContext`.
     return (this.#options.wiring.buildCommandContext ?? (() => ({})))({
       ...(entry !== undefined ? { entry } : {}),
-      ...(field !== undefined ? { target: { kind: 'header' as const, field } } : {}),
+      // #199: a header cell stands for no Entry, and `CommandTarget.entryIds` is never absent.
+      ...(field !== undefined ? { target: { kind: 'header' as const, field, entryIds: [] } } : {}),
     }) as CommandContext<unknown>;
   }
 
