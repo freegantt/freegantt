@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 import { Gantt } from '../../api/gantt.js';
 import { Dataset } from '../../api/dataset.js';
-import type { EntryFieldEdit, EntryInput, GridColumnInput } from '../../api/index.js';
+import type { Entry, EntryFieldEdit, EntryInput, GridColumnInput } from '../../api/index.js';
 import { EntryNotFoundError, entryId, instant } from '../../api/index.js';
 import { contextMenu } from './context-menu.js';
-import { CellEditorSession, inlineEditing, presentRefusal } from './inline-editing.js';
+import { CellEditing, CellEditorSession, inlineEditing, presentRefusal } from './inline-editing.js';
 import type {
   CellEditorControl,
   CellEditorPorts,
@@ -817,6 +817,142 @@ describe('CellEditorSession (S5.8, review A5/C2b)', () => {
   });
 });
 
+// #169: the state used to be three `setup()` closure mutables, and the stale-veto race could only be
+// reached through a choreographed double-click sequence. It is an object now, so these drive every
+// transition by direct call, with no mounted Gantt at all.
+describe('CellEditing (S5.8, #169)', () => {
+  function makeEditing(overrides: Partial<CellEditorPorts> = {}): {
+    editing: CellEditing;
+    cellA: HTMLElement;
+    cellB: HTMLElement;
+    layer: HTMLElement;
+  } {
+    const layer = document.createElement('div');
+    const cells = new Map<string, HTMLElement>();
+    for (const field of ['name', 'cost']) {
+      const cell = document.createElement('div');
+      cell.dataset['field'] = field;
+      cells.set(field, cell);
+      document.body.append(cell);
+    }
+    document.body.append(layer);
+    const entry = { id: entryId('e1'), name: 'Task One', kind: 'span' } as unknown as Entry;
+    const ports: CellEditorPorts = {
+      mountLayer: {
+        present: (content: HTMLElement) => {
+          layer.append(content);
+          return () => content.remove();
+        },
+        onResize: () => () => {},
+        bounds: rectAt(0, 0, 0, 0),
+      },
+      dom: { cellFor: (_id, field) => cells.get(String(field)) },
+      bindEscape: () => () => {},
+      entryById: () => entry,
+      storedValue: () => 'Task One',
+      writeValue: () => {},
+      announceEntryEdit: () => {},
+      requestCommit: () => {},
+      requestRevert: () => {},
+      ...overrides,
+    };
+    return { editing: new CellEditing(ports), cellA: cells.get('name')!, cellB: cells.get('cost')!, layer };
+  }
+
+  function control(): CellEditorControl {
+    return {
+      element: document.createElement('input'),
+      read: () => ({ ok: true, value: 'x' }),
+      bindCommitTriggers: () => () => {},
+    };
+  }
+
+  it('a stale open attempt mounts nothing over the newer one', () => {
+    const { editing, cellA, cellB, layer } = makeEditing();
+
+    // Two double-clicks, both waiting on an async `beforeEntryEdit`. The second answer lands first.
+    const first = editing.beginOpen({ entryId: entryId('e1'), field: 'name' }, cellA);
+    const second = editing.beginOpen({ entryId: entryId('e1'), field: 'cost' }, cellB);
+    second.mount(control());
+    const opened = editing.editor;
+    first.mount(control());
+
+    expect(editing.editor).toBe(opened);
+    expect(editing.editor!.field).toBe('cost');
+    expect(layer.querySelectorAll('.fg-cell-editor')).toHaveLength(1);
+    editing.clear();
+  });
+
+  it('a stale open attempt shows no refusal over the newer one', () => {
+    const { editing, cellA, cellB } = makeEditing();
+
+    const first = editing.beginOpen({ entryId: entryId('e1'), field: 'name' }, cellA);
+    const second = editing.beginOpen({ entryId: entryId('e1'), field: 'cost' }, cellB);
+    second.mount(control());
+    first.refuse('noDateValue');
+
+    expect(editing.notice).toBeUndefined();
+    expect(editing.editor).toBeDefined();
+    editing.clear();
+  });
+
+  it('onAnchorLost() closes an editor whose Entry left the Dataset (issue #137 F10)', () => {
+    const { editing, cellA } = makeEditing({ entryById: () => undefined });
+    editing.beginOpen({ entryId: entryId('e1'), field: 'name' }, cellA).mount(control());
+
+    editing.onAnchorLost();
+
+    expect(editing.editor).toBeUndefined();
+  });
+
+  it('onAnchorLost() closes an editor whose cell left the frame (issue #137 F1)', () => {
+    const { editing, cellA } = makeEditing({ dom: { cellFor: () => undefined } });
+    editing.beginOpen({ entryId: entryId('e1'), field: 'name' }, cellA).mount(control());
+
+    editing.onAnchorLost();
+
+    expect(editing.editor).toBeUndefined();
+  });
+
+  it('onAnchorLost() leaves an editor whose anchor is still there', () => {
+    const { editing, cellA } = makeEditing();
+    editing.beginOpen({ entryId: entryId('e1'), field: 'name' }, cellA).mount(control());
+
+    editing.onAnchorLost();
+
+    expect(editing.editor).toBeDefined();
+    editing.clear();
+  });
+
+  it('a refused commit keeps its editor while the second cell names why — the one legal pair', () => {
+    const { editing, cellA, cellB } = makeEditing();
+    editing
+      .beginOpen({ entryId: entryId('e1'), field: 'name' }, cellA)
+      .mount({ ...control(), read: () => ({ ok: false }) });
+
+    expect(editing.commit()).toBe(false);
+    editing.refuse({ entryId: entryId('e1'), field: 'cost' }, cellB, 'unsavedValue');
+
+    expect(editing.editor).toBeDefined();
+    expect(editing.notice!.element.dataset['reason']).toBe('unsavedValue');
+    editing.clear();
+  });
+
+  it('clear() takes both down and writes nothing', () => {
+    const writes: unknown[] = [];
+    const { editing, cellA, cellB, layer } = makeEditing({ writeValue: (...args) => writes.push(args) });
+    editing.beginOpen({ entryId: entryId('e1'), field: 'name' }, cellA).mount(control());
+    editing.refuse({ entryId: entryId('e1'), field: 'cost' }, cellB, 'unsavedValue');
+
+    editing.clear();
+
+    expect(editing.editor).toBeUndefined();
+    expect(editing.notice).toBeUndefined();
+    expect(layer.querySelectorAll('.fg-cell-editor')).toHaveLength(0);
+    expect(writes).toHaveLength(0);
+  });
+});
+
 // Review SP1: the notice is an object of its own, so these run it with no mounted Gantt at all.
 describe('presentRefusal() (S5.8, review SP1)', () => {
   function mountNotice(): {
@@ -844,7 +980,7 @@ describe('presentRefusal() (S5.8, review SP1)', () => {
       dom: { cellFor: () => cell },
       bindEscape: () => () => {},
     };
-    const notice = presentRefusal(ports, cell, 'timeOfDay');
+    const notice = presentRefusal(ports, { entryId: entryId('e1'), field: 'name' }, cell, 'timeOfDay');
     return { notice, cell, detached: () => detaches };
   }
 
