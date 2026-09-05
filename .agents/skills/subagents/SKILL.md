@@ -11,6 +11,8 @@ You coordinate. The subagent does the work and holds the details. Two things dec
 
 Quick or simple work stays in your own session. Read the file, make the edit, run the check — do it yourself. Dispatch only when the job actually needs it: it is large enough to risk your context, it splits into parts that run in parallel, or the user explicitly asked for an agent or a subagent. "This has a few steps" is not, by itself, a reason to dispatch.
 
+**You are the coordinator by default.** Splitting a job into tasks, routing each to an agent, and merging the results is work the current session does itself. Spawn a `work-coordinator` subagent only when the user explicitly asks for one — never as your default way to run a multi-part job.
+
 ## Pick the agent
 
 | The job | Agent | Model |
@@ -19,7 +21,7 @@ Quick or simple work stays in your own session. Read the file, make the edit, ru
 | Plan new work — implementation strategy, design, task breakdown — before code exists | `reviewer-planner` | best Opus, high effort |
 | Code changes, tests, refactors, investigations that end in a change | `implementer` | the default (Sonnet, medium effort) |
 | Mechanical rename, typo, dead link, stale path — no judgment left in it | `simple-editor` | Haiku |
-| Split a large job, dispatch its parts, merge the results | `work-coordinator` | best Opus, medium effort |
+| Split a large job, dispatch its parts, merge the results | you, the current session — `work-coordinator` only if the user explicitly asks for it | best Opus, medium effort |
 | Broad read-only search across many files, when you want the conclusion only | `Explore` | — |
 
 Each agent names its model by alias (`opus`, `sonnet`, `haiku`), so every dispatch gets the current release of that tier.
