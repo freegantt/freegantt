@@ -35,6 +35,10 @@ export interface PaneLayoutOptions {
   minGridWidth?: number;
 }
 
+/** One of a Gantt's two panes, by name. The same two keys `paneBounds` answers with, so "which pane
+ *  is this in?" and "where is that pane?" speak one vocabulary. Public through `GanttDom`. */
+export type PaneName = 'grid' | 'timeline';
+
 export interface Panes {
   /** The Row layer (`.fg-rows`): row labels and Grid cells. No *vertical* scrollbar — it follows
    *  the scroll owner by transform (D-S1.8-1). The grid pane around it is a real horizontal
@@ -185,11 +189,20 @@ export class PaneLayout {
   /** `GanttDom.paneBounds` (S5.3, D-S5-8, issue #137 F8): the grid pane's own client rect,
    *  alongside the timeline pane's. The pane's box is the fixed one. A frame that anchors to it
    *  must not read the Row layer, which the per-frame transform has already moved. */
-  paneBounds(): { grid: DOMRect; timeline: DOMRect } {
+  paneBounds(): Record<PaneName, DOMRect> {
     return {
       grid: this.#gridPane.getBoundingClientRect(),
       timeline: this.panes.timeline.getBoundingClientRect(),
     };
+  }
+
+  /** `GanttDom.paneOf` (#177): which pane holds `node`, by element identity. `paneBounds` answers
+   *  the same question by geometry, which is the right tool for placing a box and the wrong one for
+   *  "whose scroll was that". A node outside both panes answers `undefined`. */
+  paneOf(node: Node): PaneName | undefined {
+    if (this.#gridPane.contains(node)) return 'grid';
+    if (this.panes.timeline.contains(node)) return 'timeline';
+    return undefined;
   }
 
   /** `ctx.view.rowLayer.bounds` (#158, #168): the Row layer's own client rect, transform and all.

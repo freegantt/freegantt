@@ -8,7 +8,7 @@ import type { Disposer, ElementDescription } from '../model/index.js';
 // `../api/plugin.js` directly, not the `api/index.js` barrel: `api/index.ts` re-exports
 // `createPopup` from this very file (D-S5-8's "a third party reaches the same primitive we do"), and
 // importing the barrel back would close that edge into a cycle (no-circular).
-import type { GanttDom, MountLayer } from '../api/plugin.js';
+import type { DomEventHandler, DomEventOptions, GanttDom, MountLayer, PaneName } from '../api/plugin.js';
 import { activateFocusTrap } from './focus-trap.js';
 import type { FocusTrap } from './focus-trap.js';
 import { DisposableStore } from './disposables.js';
@@ -33,7 +33,18 @@ export interface PopupSurface {
   overlay: MountLayer;
   /** Builds the popup body from `options.content` — `ctx.view.renderElement` (D-S5-10). */
   renderElement(description: ElementDescription): HTMLElement;
-  dom: Pick<GanttDom, 'bounds' | 'paneBounds'>;
+  dom: Pick<GanttDom, 'bounds' | 'paneBounds' | 'paneOf'>;
+  /** One `document` listener, scoped to this Gantt (review A4). The scroll dismissal listens here
+   *  (#177), which is what leaves `outsidePointer` below as the single unscoped listener
+   *  `plans/01` §10 grants.
+   *
+   *  Declared as a property, not a method: `open()` hands this seam to one dismiss row, and the
+   *  implementation behind it is a closure that never reads `this`. */
+  readonly onDomEvent: <K extends keyof DocumentEventMap>(
+    type: K,
+    handler: DomEventHandler<K>,
+    options?: DomEventOptions,
+  ) => Disposer;
 }
 
 /** A client rect, or an element to read one from. */
@@ -70,8 +81,6 @@ export interface Popup {
 function anchorRect(anchor: Anchor): DOMRect {
   return anchor instanceof HTMLElement ? anchor.getBoundingClientRect() : anchor;
 }
-
-type PaneName = 'grid' | 'timeline';
 
 /** Which of the two panes `rect` sits in — geometric, not a class-name sniff, since neither `Anchor`
  *  nor a scroll event's target is guaranteed to carry one (D-S5-8: "bounds remains the outer clamp
@@ -147,7 +156,8 @@ function clamp(side: PopupPlacement, box: Box, size: { width: number; height: nu
 interface DismissContext {
   readonly node: HTMLElement;
   readonly options: PopupOptions;
-  readonly dom: Pick<GanttDom, 'paneBounds'>;
+  readonly dom: PopupSurface['dom'];
+  readonly onDomEvent: PopupSurface['onDomEvent'];
   readonly keymap: KeyHandlerRegistrar;
   dismiss(trigger: DismissTrigger): void;
 }
@@ -155,9 +165,10 @@ interface DismissContext {
 /** One row per `DismissTrigger`. A row starts its own listener and hands back its own removal, so a
  *  fifth trigger is a fifth row here — not a fifth `if` block inside `open()`.
  *
- *  Two rows listen on `document` on purpose, and neither may move to `ctx.view.onDomEvent`:
- *  `outsidePointer` exists to hear a pointer *outside* this Gantt, which that seam filters away, and
- *  `scroll` scopes itself geometrically by pane rect instead. */
+ *  One row listens on `document` on purpose, and it may not move to `ctx.view.onDomEvent`:
+ *  `outsidePointer` exists to hear a pointer the popup does *not* own, and that seam filters an
+ *  event to this Gantt, which is a different question. `plans/01` §10 grants that exception in the
+ *  singular, and `scroll` gave it back in #177. */
 const DISMISS_LISTENERS: Readonly<Record<DismissTrigger, (ctx: DismissContext) => Disposer>> = Object.freeze({
   // `stopPropagation` here, not in `Keymap.resolve` itself: only this dismissal needs "never seen
   // past this popup" (the same guarantee the old document-capture listener gave). Scoping it to the
@@ -188,26 +199,35 @@ const DISMISS_LISTENERS: Readonly<Record<DismissTrigger, (ctx: DismissContext) =
     return () => document.removeEventListener('pointerdown', onPointerDown, true);
   },
 
-  // Scroll does not bubble — only its own target fires it — so this listens on the capture phase of
-  // `document` to hear every pane's own scroll. It scopes to the anchor's own pane (D-S5-9): a popup
-  // anchored in the timeline pane stays open while the grid pane scrolls, and the other way round.
+  // Scroll does not bubble — only its own target fires it — so this listens on the capture phase.
+  // It scopes to the anchor's own pane (D-S5-9): a popup anchored in the timeline pane stays open
+  // while the grid pane scrolls, and the other way round.
+  //
+  // "Whose scroll was that" is an ownership question, so `paneOf` answers it by element identity
+  // (#177). It used to be asked as geometry, which cost two `getBoundingClientRect` calls plus the
+  // target's own, on every scroll anywhere in the document. Placement below still asks by geometry,
+  // because "where do I clamp this box" genuinely is geometry.
+  //
   // An anchor sitting in neither pane (a toolbar button, say) has no pane to scope to, so any scroll
-  // dismisses it — the same fallback `paneRectFor` gives the outer `bounds` clamp.
+  // of this Gantt dismisses it — the same fallback `paneRectFor` gives the outer `bounds` clamp.
   scroll: (ctx) => {
-    const anchorPane = paneNameFor(anchorRect(ctx.options.anchor), ctx.dom.paneBounds);
-    const onScroll = (event: Event): void => {
-      const target = event.target;
-      if (anchorPane === undefined) {
-        ctx.dismiss('scroll');
-        return;
-      }
-      if (!(target instanceof Element)) return;
-      if (paneNameFor(target.getBoundingClientRect(), ctx.dom.paneBounds) === anchorPane) {
-        ctx.dismiss('scroll');
-      }
-    };
-    document.addEventListener('scroll', onScroll, true);
-    return () => document.removeEventListener('scroll', onScroll, true);
+    // An `HTMLElement` anchor knows which pane holds it. A bare `DOMRect` anchor has no node, so
+    // geometry stays the only answer available for that one.
+    const anchor = ctx.options.anchor;
+    const anchorPane =
+      anchor instanceof HTMLElement ? ctx.dom.paneOf(anchor) : paneNameFor(anchor, ctx.dom.paneBounds);
+    return ctx.onDomEvent(
+      'scroll',
+      (event) => {
+        if (anchorPane === undefined) {
+          ctx.dismiss('scroll');
+          return;
+        }
+        const target = event.target;
+        if (target instanceof Node && ctx.dom.paneOf(target) === anchorPane) ctx.dismiss('scroll');
+      },
+      { capture: true },
+    );
   },
 
   blur: (ctx) => {
@@ -296,7 +316,14 @@ export function createPopup(view: PopupSurface, keymap: KeyHandlerRegistrar): Po
 
       // A trigger named twice arms once: `new Set` keeps `dismissOn` a set of triggers, which is
       // what `includes` already made it.
-      const dismissContext: DismissContext = { node, options, dom, keymap, dismiss };
+      const dismissContext: DismissContext = {
+        node,
+        options,
+        dom,
+        onDomEvent: view.onDomEvent,
+        keymap,
+        dismiss,
+      };
       for (const trigger of new Set(options.dismissOn ?? DEFAULT_DISMISS_ON)) {
         disposables.add(DISMISS_LISTENERS[trigger](dismissContext));
       }

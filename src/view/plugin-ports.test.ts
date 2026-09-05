@@ -46,6 +46,7 @@ function makeDom(container: HTMLElement): GanttShellPorts['dom'] {
     cellText: () => '',
     bounds: new DOMRect(),
     paneBounds: { grid: new DOMRect(), timeline: new DOMRect() },
+    paneOf: () => undefined,
   };
 }
 

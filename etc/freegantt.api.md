@@ -972,10 +972,8 @@ export interface GanttDom {
     cellFor(id: EntryId, field: FieldKey): HTMLElement | undefined;
     cellText(cell: HTMLElement): string;
     owns(node: Node): boolean;
-    readonly paneBounds: {
-        grid: DOMRect;
-        timeline: DOMRect;
-    };
+    readonly paneBounds: Record<PaneName, DOMRect>;
+    paneOf(node: Node): PaneName | undefined;
     targetUnder(node: Node): DomTarget | undefined;
 }
 
@@ -1325,6 +1323,9 @@ export interface NavigationChange {
 export function now(): Instant;
 
 // @public
+export type PaneName = 'grid' | 'timeline';
+
+// @public
 export class ParentCycleError extends FreeGanttError {
     constructor(entryId: EntryId);
 }
@@ -1478,7 +1479,8 @@ export type PopupPlacement = 'top' | 'bottom' | 'start' | 'end';
 // @public
 export interface PopupSurface {
     // (undocumented)
-    dom: Pick<GanttDom, 'bounds' | 'paneBounds'>;
+    dom: Pick<GanttDom, 'bounds' | 'paneBounds' | 'paneOf'>;
+    readonly onDomEvent: <K extends keyof DocumentEventMap>(type: K, handler: DomEventHandler<K>, options?: DomEventOptions) => Disposer;
     // (undocumented)
     overlay: MountLayer;
     renderElement(description: ElementDescription): HTMLElement;

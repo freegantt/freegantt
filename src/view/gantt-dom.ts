@@ -35,7 +35,7 @@ import { cssEscapeAttr } from '../render/dom/css-escape.js';
 import { entryIdOfItem, itemId, itemIdFromDataset } from '../model/index.js';
 import type { Entry, EntryId, FieldKey, TargetKind } from '../model/index.js';
 import { SPLITTER_CLASS } from './pane-layout.js';
-import type { PaneLayout } from './pane-layout.js';
+import type { PaneLayout, PaneName } from './pane-layout.js';
 
 /** What one node in a Gantt's own DOM stands for. `kind` is `model/`'s `TargetKind`, the same five
  *  words `CommandTarget` already uses. One vocabulary, so a plugin that resolves a right-click and
@@ -85,7 +85,16 @@ export interface GanttDom {
    *  panes, so `bounds` alone cannot flip a popup at a pane edge. Placement flips and clamps against
    *  the anchor's own pane rect instead. `bounds` stays the outer clamp for a popup whose anchor
    *  sits in neither pane (a toolbar button, say). */
-  readonly paneBounds: { grid: DOMRect; timeline: DOMRect };
+  readonly paneBounds: Record<PaneName, DOMRect>;
+  /** Which pane holds `node`, or `undefined` when it is in neither — a node outside this Gantt, or
+   *  inside it but over the overlay layer. It answers by element identity, so it is a `contains`
+   *  check and costs no layout (#177).
+   *
+   *  Use it for an ownership question: whose scroll was that, which pane did the user act in. Use
+   *  `paneBounds` for a geometric one: where do I place and clamp a box. Asking geometry about
+   *  ownership forces two `getBoundingClientRect` calls per event. That is what `Popup`'s own scroll
+   *  dismissal used to do, on every scroll in the document. */
+  paneOf(node: Node): PaneName | undefined;
 }
 
 /** Ordered by nothing: `Element.closest` answers with the *nearest* ancestor that matches any of
@@ -162,8 +171,12 @@ export class ContainerDom implements GanttDom {
     return this.#paneLayout.bounds();
   }
 
-  get paneBounds(): { grid: DOMRect; timeline: DOMRect } {
+  get paneBounds(): Record<PaneName, DOMRect> {
     return this.#paneLayout.paneBounds();
+  }
+
+  paneOf(node: Node): PaneName | undefined {
+    return this.#paneLayout.paneOf(node);
   }
 
   /** Frozen, because plugin code reads this object and the memo keeps it. A caller that wrote to it

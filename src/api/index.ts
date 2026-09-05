@@ -104,7 +104,7 @@ export type { CapabilityRule, Interactions, KindDefaults } from '../view/index.j
 export type { MountLayer } from '../view/index.js';
 // Review N1/A3: the plugin-to-DOM seam. `ctx.view.dom` carries `GanttDom`; `targetUnder` answers
 // with a `DomTarget`; `onDomEvent` takes a `DomEventHandler` and `DomEventOptions`.
-export type { GanttDom, DomTarget, DomEventHandler, DomEventOptions } from '../view/index.js';
+export type { GanttDom, DomTarget, PaneName, DomEventHandler, DomEventOptions } from '../view/index.js';
 // S5.3, D-S5-8: the anchoring/flipping/clamping/dismissal primitive tooltips, the context menu and
 // the cell editor (S5.5+) all build on. C3 (`plans/reviews/2026-09-02-s5-start-fixes.md`) folded its
 // Escape dismissal into the shared keymap (D-S5-9's "the innermost popup wins" needs the same
