@@ -4,9 +4,19 @@ import type { DatasetEventMap } from '../src/api/index.js';
 import type { TimeUnit } from '../src/model/index.js';
 import { demoEntryInputs } from '../fixtures/demo-dataset.js';
 import { mountTimelineToolbar } from './timeline-toolbar.js';
-import { prependChangeSet } from './change-log.js';
+import { prependChangeSet, prependLogLine } from './change-log.js';
+import { lockEntries } from './plugins/lock-entries.js';
 
-const dataset = new Dataset({ entries: demoEntryInputs, timeZone: 'UTC' });
+// S5.10 visible acceptance (s5.10-dataset-plugins.md §4): a Dataset plugin the page installs through
+// the public API alone. Check the box to lock one entry; drag its neighbour and the locked bar ghosts
+// alongside it — the plugin's extender wrote its dates too — then the drop is refused.
+// `entry-15` sits beside `entry-14` in the fixture's own window around today, so both bars are on
+// screen when the page opens and a reader sees the ghost without panning first. The box starts
+// unchecked, so this page's other demos drag against an empty lock store, cascading nothing.
+const LOCKABLE_ENTRY_ID = 'entry-15';
+const locks = lockEntries();
+
+const dataset = new Dataset({ entries: demoEntryInputs, timeZone: 'UTC', plugins: [locks] });
 const mobilization = now();
 
 const gantt = new Gantt({
@@ -27,6 +37,7 @@ const selectionReadout = document.querySelector<HTMLParagraphElement>('#selectio
 const log = document.querySelector<HTMLDivElement>('#log')!;
 const toast = document.querySelector<HTMLDivElement>('#toast')!;
 const snapUnitSelect = document.querySelector<HTMLSelectElement>('#snap-unit')!;
+const lockEntryCheckbox = document.querySelector<HTMLInputElement>('#lock-entry')!;
 
 function renderSelection(): void {
   const ids = gantt.selectedIds;
@@ -71,6 +82,19 @@ holdDrop.addEventListener('change', () => {
   releaseHold(true);
   releaseHold = undefined;
   hideToast();
+});
+
+// Locking is a real dataset write: it commits, it logs like every other change, and Ctrl+Z lifts
+// it (#156) — which is what a plugin store buys over a `Set` on the page (D-S5-24).
+lockEntryCheckbox.addEventListener('change', () => {
+  attemptMutation(() =>
+    lockEntryCheckbox.checked ? locks.lock(LOCKABLE_ENTRY_ID) : locks.unlock(LOCKABLE_ENTRY_ID),
+  );
+});
+
+locks.onRefusal((id) => {
+  showToast(`Refused — ${id} is locked`);
+  prependLogLine(log, `entries · ${id} · refused (locked)`);
 });
 
 dataset.on('change', ({ changeSet }: DatasetEventMap['change']) => {

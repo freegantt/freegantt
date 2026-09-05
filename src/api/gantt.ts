@@ -204,6 +204,11 @@ export class Gantt {
       // Review P5: one member holds every seam that crosses the layer boundary. `view/` may not
       // import `interaction/`, and it may not name the api `Dataset` or the public `Gantt` façade
       // (D-S5-5), so this file supplies all seven.
+      // S5.10, D-S5-23/D-S3-18: the drag preview ghosts whatever the installed extension hook would
+      // add. Read live off the Dataset — every plugin composes onto that one occupant, so this stays
+      // the identity function for a Dataset with no plugin installed. Preview only: the commit runs
+      // the same occupant again, for real, inside the transaction.
+      editExtender: (request) => options.dataset.editExtender(request),
       wiring: {
         entryGestures: attachEntryGestures,
         keyboardEditing: attachKeyboardEditing,

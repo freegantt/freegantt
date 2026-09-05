@@ -43,7 +43,7 @@ Comment a seam with the question it answers, not the mechanism it uses. A reader
 - No module-level singletons anywhere; two Gantt instances on one page must be fully independent.
 
 **Scheduling** (`plans/01` §7 — first-party default plugin, not mandatory core, see ADR 0002; **slice S7**):
-- Occupies the extension hook (D4) exclusively when installed; when nothing is installed, none of this runs.
+- The extension hook (D4) has one occupant at a time, and this plugin is one candidate occupant with no special claim on it (D-S5-23). Installing composes: a plugin wraps the current occupant, so a second plugin adds to the first's writes. When nothing is installed, none of this runs.
 - `schedule()` is pure and deterministic; never mutates input; policy never overwrites a user-proposed field.
 - Propagation is a worklist loop — no recursion, ever (5,000-link chain fixture guards this).
 - Conflicts become diagnostics; the engine never silently rewrites what the user asked for.

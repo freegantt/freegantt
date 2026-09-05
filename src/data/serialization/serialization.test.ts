@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { DatasetState } from '../dataset-state.js';
 import { toJSON, readDocument, warnIfRollUpsWereCorrected } from './index.js';
-import { FreeGanttError, UnsupportedSchemaError } from '../../model/index.js';
+import { entryId, FreeGanttError, UnsupportedSchemaError } from '../../model/index.js';
 import type { DatasetDocument } from '../../model/index.js';
 import type { EntryInput } from '../../model/index.js';
 
@@ -277,5 +277,70 @@ describe('[S2-A2] toJSON / fromJSON', () => {
     const restored = fromJSON(toJSON(dataset));
     expect(restored.canUndo).toBe(false);
     expect(restored.canRedo).toBe(false);
+  });
+});
+
+// D-S5-24: plugin rows serialize under `plugins: { [id]: … }` at `schema: 3`. A Document an
+// application reads without installing that plugin keeps the rows untouched — passenger data, the
+// posture an undeclared `meta` key already has.
+describe('plugin rows (schema: 3, D-S5-24)', () => {
+  function withLockedT1(): DatasetState {
+    const dataset = new DatasetState({ timeZone: 'UTC', entries: [span('t1'), span('t2')] });
+    dataset.pluginStores.reserve<{ locked: true }>('demo.lock').set(entryId('t1'), { locked: true });
+    return dataset;
+  }
+
+  it('writes the plugins key and round-trips it byte-stably', () => {
+    const dataset = withLockedT1();
+    const doc = toJSON(dataset);
+    expect(doc.schema).toBe(3);
+    expect(doc.plugins).toEqual({ 'demo.lock': { t1: { locked: true } } });
+    roundTrip(dataset);
+  });
+
+  it('omits the plugins key when no plugin holds a row', () => {
+    const doc = toJSON(new DatasetState({ timeZone: 'UTC', entries: [span('t1')] }));
+    expect('plugins' in doc).toBe(false);
+  });
+
+  it('carries the rows of a plugin this Dataset never installs', () => {
+    const doc = toJSON(withLockedT1());
+    // A second application reads the same Document with no plugin installed at all.
+    const passenger = fromJSON(doc);
+    expect(passenger.pluginStores.read('demo.lock')).toBeUndefined();
+    expect(JSON.stringify(toJSON(passenger))).toBe(JSON.stringify(doc));
+  });
+
+  it('hands the rows back to the plugin that reserves the store on the reading side', () => {
+    const doc = toJSON(withLockedT1());
+    const reopened = fromJSON(doc);
+    const lock = reopened.pluginStores.reserve<{ locked: true }>('demo.lock');
+    expect(lock.get(entryId('t1'))).toEqual({ locked: true });
+    expect(lock.get(entryId('t2'))).toBeUndefined();
+  });
+
+  it('reads a schema 2 document, which carries no plugin rows, and writes it back at schema 3', () => {
+    const older: DatasetDocument = {
+      schema: 2,
+      timeZone: 'UTC',
+      dateOnlyEnd: 'inclusive',
+      rollUpKinds: ['group'],
+      entries: [{ id: 't1', name: 't1', start: '2026-09-01T00:00:00.000Z', end: '2026-09-11T00:00:00.000Z' }],
+    };
+    const written = toJSON(fromJSON(older));
+    expect(written.schema).toBe(3);
+    expect('plugins' in written).toBe(false);
+  });
+
+  it('ignores a plugins key on a schema 1 document — that schema has no such key', () => {
+    const mislabelled = {
+      schema: 1 as const,
+      timeZone: 'UTC',
+      dateOnlyEnd: 'inclusive' as const,
+      rollUpKinds: ['group'],
+      plugins: { 'demo.lock': { t1: { locked: true } } },
+      entries: [{ id: 't1', name: 't1', start: '2026-09-01T00:00:00.000Z', end: '2026-09-11T00:00:00.000Z' }],
+    };
+    expect('plugins' in toJSON(fromJSON(mislabelled))).toBe(false);
   });
 });

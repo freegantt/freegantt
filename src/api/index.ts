@@ -279,13 +279,16 @@ export { wholeEntryItem } from '../layout/index.js';
 // Time helpers a caller needs: `instant` for a pinned `TimeSpan`, `now` for "this Instant",
 // `addMs`/`MS` to shift one by a duration (S2.7 harness-review — `harness/data.ts`'s move-by-a-day
 // buttons had no public way to do this and were hand-rolling `entry.start + 86400000`; the Add-entry
-// button then used `instant(Date.now())` the same way). Named preset constants and `resolvePreset`
-// stay internal — resolving a `PresetRef` is core's job.
+// button then used `instant(Date.now())` the same way). `diffMs` is `addMs`'s pair, added in S5.10
+// for the same reason: `harness/plugins/lock-entries.ts` reads how far a proposed edit moved an
+// entry, and subtracting two `Instant`s by hand is exactly the arithmetic I10 exists to stop.
+// Named preset constants and `resolvePreset` stay internal — resolving a `PresetRef` is core's job.
 export {
   presets,
   instant,
   now,
   addMs,
+  diffMs,
   MS,
   formatDate,
   formatEndInclusive,

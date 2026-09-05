@@ -1,6 +1,6 @@
 # S5 — Extensibility, editing surfaces, a11y completion
 
-**Slice:** S5 (`plans/03` §S5) · **Position:** after S4, before S6 · **Status:** in progress — S5.0–S5.9 done, the 2026-09-04 branch review is closed, S5.10 next (dataset plugins)
+**Slice:** S5 (`plans/03` §S5) · **Position:** after S4, before S6 · **Status:** in progress — S5.0–S5.10 done, the 2026-09-04 branch review is closed, S5.11 next
 **Form:** the same settled-spec form as [`plans/s4-hierarchy-and-rows/README.md`](../s4-hierarchy-and-rows/README.md) — this file is the tracker and the shared context; each step file holds the decisions it implements and its TODO boxes.
 **Tick as you go:** When you finish a TODO item, tick its box in that step file. Tick it in the same change as the code. Do not wait for S5.12 or the slice gate.
 **Governed by:** `plans/00` D3/D4/D5/D11/D12, `plans/01` §2.5/§2.6/§8/§9/§10, `plans/02` §3/§4/§4.1/§4.2/§7, ADR [0002](../../docs/adr/0002-scheduling-is-a-plugin-not-a-core-layer.md), ADR [0005](../../docs/adr/0005-fields-are-declared-and-grid-columns-reference-them.md).
@@ -267,7 +267,7 @@ Full prose lives in the step file that implements each decision.
 | D-S5-20 | The `dateInput` seam, with no picker dependency | S5.8 |
 | D-S5-21 | A Field registers on the Dataset side; its column on the Gantt side | S5.9 |
 | D-S5-22 | One kind, four seams, one plugin, zero core edits | S5.9 |
-| D-S5-23 | `setExtender` composes over the current occupant (needs sign-off) | S5.10 |
+| D-S5-23 | `setExtender` composes over the current occupant | S5.10 |
 | D-S5-24 | `PluginStore` holds per-plugin per-entry data, never `Entry.meta` | S5.10 |
 | D-S5-25 | The grid pane carries the `treegrid` pattern; the timeline is a labelled region | S5.11 |
 | D-S5-26 | Every pointer gesture has a chord over the same command | S5.11 |
@@ -369,7 +369,7 @@ Read these before you touch `src/`.
 
 `plans/s2-data-core/OPEN-QUESTIONS.md` OQ8 closes on reading (b): the hook has one occupant at a time, and a scheduling plugin is one candidate occupant with no special claim on it. `EditExtenderConflictError` is never written.
 
-The wording change to locked **D4** (`plans/00`), `CLAUDE.md`, `plans/01` §7, `plans/03` §S3 and ADR 0002 lands in **S5.10**, beside the code that makes it true — not before. Until then those documents still say "exclusively", and this line is the record that they are due an edit.
+The wording change to locked **D4** (`plans/00`), `CLAUDE.md`, `plans/01` §7, `plans/03` §S3 and ADR 0002 **landed in S5.10 (2026-09-04)**, beside the code that makes it true, and OQ8 is closed against it.
 
 ---
 
@@ -380,7 +380,7 @@ Landed in the step that proves each one, except the batch at S5.12. Full list in
 1. `plans/03` §S5 — the six acceptance boxes gain ids `[S5-A1]`–`[S5-A6]` and a tracker pointer. **Landed with this spec.**
 2. `plans/01` §10 and `plans/02` §2 — `features: { … }` becomes `plugins: [ … ]` (Q3, D-S5-2).
 3. `plans/01` §10 — `registerItemEmitter` becomes `registerItemProducer`; `data.registerField` moves to the Dataset plugin context (Q4, Q16).
-4. `plans/00` D4, `CLAUDE.md`, `plans/01` §7, `plans/03` §S3, ADR 0002 — exclusivity is arity, not ownership (Q2, answered; the edit lands in S5.10).
+4. `plans/00` D4, `CLAUDE.md`, `plans/01` §7, `plans/03` §S3, ADR 0002 — exclusivity is arity, not ownership (Q2, answered). **Landed in S5.10**, with OQ8 closed and `plans/03` §S2's `StoreName` note marked satisfied.
 5. `src/view/capability.ts` — the comment says `edit` waits for S5; this slice is S5, so the key ships with the editor (S5.8).
 7. The 2026-09-04 review's own edits, landed in slices R1–R6 (fix plan §4): `emitBeforeEntryEdit`/`emitEntryEdit` become `proposeEntryEdit`/`announceEntryEdit`; `resolveTooltip` becomes `resolveTooltipContent`; `PluginContextPorts` is declared in the grouped shape a plugin sees; `Overlay` keeps `{ present, render }` and the DOM questions move to `ctx.view.dom`; `PopupOptions` gains `onDismiss`; the per-kind bar renderer composes across plugins on a slot key; `CellRendererContext` and `ColumnCellRendererContext` gain `fieldValue`; `setup()` may return `void`; `wholeEntryItem` is public. `CONTEXT.md` gained **Shell wiring** and **Refusal notice**.
 6. `CONTEXT.md` — the **Dependency** and **Scheduling plugin** entries, plus a new **`entryDependencies()`** entry: `Dependency` is owned by `entryDependencies()`, not the scheduling plugin, which `requires` and reads it (S5.0 grill, issue #111; Q18, Q19). **Landed with this spec.**

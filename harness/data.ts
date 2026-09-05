@@ -3,7 +3,8 @@
 // `dataset.entries.add/update/remove`, and a changeset log built from each `ChangeSet`, never a
 // re-read (D-S2-17). Rename/move/remove target `gantt.selectedIds` (S3.1), not a parallel entry picker.
 // The lock checkbox is D-S2-25's `beforeChange` veto, made visible: the bar does
-// not move and `attemptMutation` returns `false` instead of throwing.
+// not move and `attemptMutation` returns `false` instead of throwing. S5.10 moved the veto itself
+// into a Dataset plugin (`plugins/lock-entries.ts`), so the flag lives in that plugin's own store.
 //
 // S2.5 (plans/s2-data-core/s2.5-undo-redo.md §5) adds the undo/redo buttons, `disabled` bound to
 // `dataset.canUndo`/`canRedo`, and the log line's origin tag — a reader watches a cascade go away in
@@ -18,6 +19,7 @@ import { Dataset, Gantt, MS, attemptMutation, addMs, now } from '../src/api/inde
 import type { DatasetDocument, DatasetEventMap } from '../src/api/index.js';
 import { mountTimelineToolbar } from './timeline-toolbar.js';
 import { prependChangeSet, prependLogLine } from './change-log.js';
+import { lockEntries } from './plugins/lock-entries.js';
 
 declare global {
   interface Window {
@@ -51,10 +53,17 @@ const ROLLUP_TREE = [
   },
 ];
 
+// S5.10, D-S5-24: the lock checkbox writes this plugin's own store instead of the page keeping a
+// flag of its own, and the plugin's `beforeChange` is what refuses the write. `Dataset.plugins` is
+// read-only, so every Dataset this page builds — including the imported one below — installs a
+// fresh one at construction.
+let locks = lockEntries();
+
 let dataset = new Dataset<{ cost: number }, { cost: number }>({
   entries: ROLLUP_TREE,
   timeZone: 'UTC',
   ...COST_FIELDS,
+  plugins: [locks],
 });
 let gantt = new Gantt({ container: '#gantt', dataset });
 window.__dataset = dataset;
@@ -132,27 +141,23 @@ function onChange({ changeSet }: DatasetEventMap['change']): void {
   refreshHistoryButtons();
 }
 
-// D-S2-25: while the checkbox is on, refuse any changeset touching the current first entry. Four
-// lines, and it makes the veto visible on the same page as everything else.
-function onBeforeChange({ changeSet }: DatasetEventMap['beforeChange']): void | false {
-  if (!lockCheckbox.checked) return undefined;
-  const lockedId = firstEntryId();
-  const touchesLocked =
-    changeSet.updated.some((u) => u.id === lockedId) ||
-    changeSet.removed.some((r) => r.entity.id === lockedId);
-  if (!touchesLocked) return undefined;
-  logLine(`entries · ${lockedId} · refused (locked)`);
-  return false;
-}
-
 function bindGantt(): void {
   gantt.on('selectionChange', syncSelectionUi);
 }
 
 function bindDataset(): void {
   dataset.on('change', onChange);
-  dataset.on('beforeChange', onBeforeChange);
+  locks.onRefusal((id) => logLine(`entries · ${id} · refused (locked)`));
 }
+
+// D-S2-25, made visible: checking the box locks the current first entry, and the plugin refuses
+// every later changeset that touches it. The lock itself is a dataset write, so it logs like any
+// other change and one undo lifts it (#156).
+lockCheckbox.addEventListener('change', () => {
+  const id = firstEntryId();
+  if (id === undefined) return;
+  attemptMutation(() => (lockCheckbox.checked ? locks.lock(id) : locks.unlock(id)));
+});
 
 bindDataset();
 bindGantt();
@@ -226,7 +231,9 @@ exportBtn.addEventListener('click', () => {
 importBtn.addEventListener('click', () => {
   try {
     const doc = JSON.parse(documentJson.value) as DatasetDocument<{ cost: number }>;
-    dataset = Dataset.fromJSON<{ cost: number }, { cost: number }>(doc, COST_FIELDS);
+    locks = lockEntries();
+    dataset = Dataset.fromJSON<{ cost: number }, { cost: number }>(doc, { ...COST_FIELDS, plugins: [locks] });
+    lockCheckbox.checked = false;
     window.__dataset = dataset;
     gantt.destroy();
     gantt = new Gantt({ container: '#gantt', dataset });

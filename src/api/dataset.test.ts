@@ -8,9 +8,12 @@ import {
   invertChangeSet,
   InvalidReplayOriginError,
   EntryNotFoundError,
+  MissingPluginError,
+  MutationCancelledError,
+  RegistrationClosedError,
   UnknownFieldError,
 } from './index.js';
-import type { ChangeSet, Duration, Entry, EntryInput } from './index.js';
+import type { ChangeSet, DatasetPlugin, Duration, Entry, EntryInput } from './index.js';
 
 const utc = (iso: string): number => Date.parse(iso);
 
@@ -575,5 +578,160 @@ describe('Dataset generics (#123)', () => {
       // @ts-expect-error — undeclared key
       dataset.entries.update('t1', { bogus: 1 });
     }
+  });
+});
+
+// S5.10, D-S5-23/24/30/31: `DatasetOptions.plugins` is the public way in. Each case below writes a
+// plugin the way an application author writes one — a factory returning `{ id, setup }`.
+describe('Dataset plugins (S5.10)', () => {
+  interface LockRow {
+    readonly locked: true;
+  }
+
+  /** Locks one entry: its own store row says which, and `beforeChange` refuses any commit that
+   *  touches it — the same shape harness/plugins/lock-entries.ts ships (D-S5-24's refusal note). */
+  function lockEntries(ids: readonly string[]): DatasetPlugin {
+    return {
+      id: 'demo.lock',
+      setup(ctx) {
+        const store = ctx.store.reserve<LockRow>();
+        for (const id of ids) store.set(entryId(id), { locked: true });
+        ctx.events.on('beforeChange', ({ changeSet }) =>
+          fieldRowsOf(changeSet).some((row) => store.get(row.id) !== undefined) ? false : undefined,
+        );
+      },
+    };
+  }
+
+  it('installs the plugins the options list, and reports them read-only', () => {
+    const plugin = lockEntries([]);
+    const dataset = new Dataset({ timeZone: 'UTC', entries: [oneEntry()], plugins: [plugin] });
+    expect(dataset.plugins).toEqual([plugin]);
+  });
+
+  it('seeds a store during setup, before any consumer handler or history exists', () => {
+    const dataset = new Dataset({ timeZone: 'UTC', entries: [oneEntry()], plugins: [lockEntries(['t1'])] });
+    expect(dataset.canUndo).toBe(false);
+    expect(dataset.toJSON().plugins).toEqual({ 'demo.lock': { t1: { locked: true } } });
+  });
+
+  it('refuses an edit to a locked entry through beforeChange (D-S5-24)', () => {
+    const dataset = new Dataset({ timeZone: 'UTC', entries: [oneEntry()], plugins: [lockEntries(['t1'])] });
+    expect(() => dataset.entries.update('t1', { name: 'Renamed' })).toThrow(MutationCancelledError);
+    expect(first(dataset).name).toBe('Design');
+  });
+
+  it('keeps two Datasets independent under one plugin id (I2)', () => {
+    const locked = new Dataset({ timeZone: 'UTC', entries: [oneEntry()], plugins: [lockEntries(['t1'])] });
+    const open = new Dataset({ timeZone: 'UTC', entries: [oneEntry()], plugins: [lockEntries([])] });
+
+    expect(() => locked.entries.update('t1', { name: 'Renamed' })).toThrow(MutationCancelledError);
+    expect(open.entries.update('t1', { name: 'Renamed' }).name).toBe('Renamed');
+    expect(open.toJSON().plugins).toBeUndefined();
+  });
+
+  it('throws RegistrationClosedError when a plugin registers a Field after setup returned', () => {
+    let registerLate = (): void => undefined;
+    const late: DatasetPlugin = {
+      id: 'demo.late',
+      setup(ctx) {
+        registerLate = () => ctx.fields.register({ key: 'cost' });
+      },
+    };
+    new Dataset({ timeZone: 'UTC', entries: [oneEntry()], plugins: [late] });
+    expect(registerLate).toThrow(RegistrationClosedError);
+  });
+
+  it('has a Field a plugin declares in the registry before the first Rollup walks (D-S5-4)', () => {
+    const declaresCost: DatasetPlugin = {
+      id: 'demo.cost',
+      setup(ctx) {
+        ctx.fields.registerType('money', { rollUp: 'sum' });
+        ctx.fields.register({ key: 'cost', type: 'money' });
+      },
+    };
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      entries: [
+        { id: 'p1', name: 'Sitework', kind: 'group', start: '2026-09-01', end: '2026-09-02' },
+        oneEntry({ id: 't1', parentId: 'p1', meta: { cost: 500 } }),
+      ],
+      plugins: [declaresCost],
+    });
+    expect(dataset.field('cost')?.type).toBe('money');
+    expect(dataset.entries.fieldValue('p1', 'cost')).toBe(500);
+  });
+
+  it('sets up in requires order, whichever order the array writes (D-S5-31)', () => {
+    const order: string[] = [];
+    const base: DatasetPlugin = {
+      id: 'demo.base',
+      setup(ctx) {
+        order.push('base');
+        ctx.store.reserve<{ note: string }>().set(entryId('t1'), { note: 'from base' });
+      },
+    };
+    const reader: DatasetPlugin = {
+      id: 'demo.reader',
+      requires: ['demo.base'],
+      setup(ctx) {
+        order.push('reader');
+        // The store its prerequisite reserved is already there to read (D-S5-30).
+        seen = ctx.store.read<{ note: string }>('demo.base')?.get(entryId('t1'))?.note;
+      },
+    };
+    let seen: string | undefined;
+
+    new Dataset({ timeZone: 'UTC', entries: [oneEntry()], plugins: [reader, base] });
+    expect(order).toEqual(['base', 'reader']);
+    expect(seen).toBe('from base');
+  });
+
+  it('throws MissingPluginError naming both ids when a prerequisite is absent', () => {
+    const orphan: DatasetPlugin = { id: 'demo.reader', requires: ['demo.base'], setup: () => undefined };
+    expect(() => new Dataset({ timeZone: 'UTC', entries: [oneEntry()], plugins: [orphan] })).toThrow(
+      MissingPluginError,
+    );
+  });
+
+  it('composes the extension hook in that same order, rather than evicting it (D-S5-23)', () => {
+    const cascadesTo = (id: string, to: string): DatasetPlugin => ({
+      id,
+      ...(id === 'demo.second' ? { requires: ['demo.first'] } : {}),
+      setup(ctx) {
+        ctx.edits.setExtender(
+          (next) => (request) => new Map([...next(request), [entryId(to), { name: to }]]),
+        );
+      },
+    });
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      entries: [oneEntry(), oneEntry({ id: 'a' }), oneEntry({ id: 'b' })],
+      plugins: [cascadesTo('demo.second', 'b'), cascadesTo('demo.first', 'a')],
+    });
+
+    dataset.entries.update('t1', { name: 'Renamed' });
+    // Both wrappers ran: the second added to the first output instead of replacing it.
+    expect(dataset.entries.get('a')?.name).toBe('a');
+    expect(dataset.entries.get('b')?.name).toBe('b');
+  });
+
+  it('releases every plugin on destroy()', () => {
+    const released: string[] = [];
+    const noisy: DatasetPlugin = {
+      id: 'demo.noisy',
+      setup: () => () => released.push('demo.noisy'),
+    };
+    const dataset = new Dataset({ timeZone: 'UTC', entries: [oneEntry()], plugins: [noisy] });
+    dataset.destroy();
+    expect(released).toEqual(['demo.noisy']);
+  });
+
+  it('carries plugin rows through a public toJSON/fromJSON round trip', () => {
+    const dataset = new Dataset({ timeZone: 'UTC', entries: [oneEntry()], plugins: [lockEntries(['t1'])] });
+    const reopened = Dataset.fromJSON(dataset.toJSON());
+    // No plugin installed on the reading side, so nothing refuses the write — and the rows survive.
+    expect(reopened.entries.update('t1', { name: 'Renamed' }).name).toBe('Renamed');
+    expect(reopened.toJSON().plugins).toEqual({ 'demo.lock': { t1: { locked: true } } });
   });
 });
