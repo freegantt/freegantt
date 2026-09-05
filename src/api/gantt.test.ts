@@ -2148,8 +2148,8 @@ describe('Gantt plugin kind registrations (S5.9, D-S5-21/D-S5-22)', () => {
     });
     await new Promise((resolve) => requestAnimationFrame(resolve));
 
-    // A resize drag on B's own grip (B is the winner) bakes "risk" straight into
-    // `#gridColumnInput` at width 200 — the same seam `api/plugin.ts`'s disposal promise reaches.
+    // A resize drag on B's own grip (B is the winner) commits "risk" as a plugin-declared column at
+    // width 200 (D-S5-33) — the same seam `api/plugin.ts`'s disposal promise reaches.
     const grip = container.querySelector<HTMLElement>(
       '.fg-col-header[data-field="risk"] .fg-column-resizer',
     )!;
