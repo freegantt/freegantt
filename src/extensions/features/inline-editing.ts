@@ -42,6 +42,7 @@ import type {
   FieldKey,
   Instant,
 } from '../../model/index.js';
+import { DisposableStore } from '../disposables.js';
 import { activateFocusTrap } from '../focus-trap.js';
 import type { FocusTrap } from '../focus-trap.js';
 import { createDefaultDateInput } from './date-input.js';
@@ -189,7 +190,9 @@ export class CellEditorSession {
   readonly #ports: CellEditorPorts;
   readonly #control: CellEditorControl;
   readonly #wrapper: HTMLElement;
-  readonly #detachers: Disposer[] = [];
+  /** Every trigger `mount()` binds, freed in reverse on `#close()`. The same store a plugin gets on
+   *  `ctx.disposables`, so the list latches and a second close costs nothing. */
+  readonly #bindings = new DisposableStore();
   #unmount: Disposer | undefined;
   #focusTrap: FocusTrap | undefined;
   /** `#close()` alone writes this, and `commit()`/`revert()` read it. It records this one session's
@@ -220,9 +223,9 @@ export class CellEditorSession {
     this.#open = true;
     this.#unmount = this.#ports.rowLayer.present(this.#wrapper);
     this.#positionOver(cell);
-    this.#detachers.push(this.#ports.onResize(() => this.reposition()));
-    this.#detachers.push(this.#ports.bindEscape(() => this.#ports.requestRevert()));
-    this.#detachers.push(this.#control.bindCommitTriggers(() => this.#ports.requestCommit()));
+    this.#bindings.add(this.#ports.onResize(() => this.reposition()));
+    this.#bindings.add(this.#ports.bindEscape(() => this.#ports.requestRevert()));
+    this.#bindings.add(this.#control.bindCommitTriggers(() => this.#ports.requestCommit()));
     this.#wrapper.addEventListener('focusout', this.#onFocusOut);
     this.#focusTrap = activateFocusTrap(this.#wrapper);
     this.#control.element.focus();
@@ -311,12 +314,12 @@ export class CellEditorSession {
   }
 
   /** Detaches the listeners first. The focus restore the trap runs can otherwise fire a `focusout`
-   *  commit into a half-closed editor. Runs once. */
+   *  commit into a half-closed editor. Runs once. The unmount is last, so the editor leaves the DOM
+   *  only after every trigger on it is gone. */
   #close(): void {
     if (!this.#open) return;
     this.#open = false;
-    for (let i = this.#detachers.length - 1; i >= 0; i--) this.#detachers[i]!();
-    this.#detachers.length = 0;
+    this.#bindings.disposeAll();
     this.#wrapper.removeEventListener('focusout', this.#onFocusOut);
     this.#control.onClosed?.();
     this.#focusTrap?.deactivate();
@@ -377,19 +380,16 @@ export function presentRefusal(
   paintRefusal(element);
   positionOver(element, cell, ports.dom.rowLayerBounds);
 
-  const unmount = ports.rowLayer.present(element);
-  const detachers: Disposer[] = [ports.onResize(() => positionOver(element, cell, ports.dom.rowLayerBounds))];
-  let open = true;
+  // One store, freed in reverse and exactly once — the latch a hand-rolled `open` flag used to
+  // spell here (#174). The unmount goes in first, so it runs last.
+  const mounted = new DisposableStore();
+  mounted.add(ports.rowLayer.present(element));
+  mounted.add(ports.onResize(() => positionOver(element, cell, ports.dom.rowLayerBounds)));
   const notice: RefusalNotice = {
     element,
-    dismiss(): void {
-      if (!open) return;
-      open = false;
-      for (let i = detachers.length - 1; i >= 0; i--) detachers[i]!();
-      unmount();
-    },
+    dismiss: () => mounted.disposeAll(),
   };
-  detachers.push(ports.bindEscape(() => notice.dismiss()));
+  mounted.add(ports.bindEscape(() => notice.dismiss()));
   return notice;
 }
 

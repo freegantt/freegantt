@@ -7,6 +7,7 @@
 import { RendererAlreadyRegisteredError } from '../model/index.js';
 import type { Disposer, PluginId } from '../model/index.js';
 import { createRegistrationTable } from '../layout/registration-table.js';
+import { DisposableStore } from '../extensions/disposables.js';
 import type {
   BarRenderer,
   CellRenderer,
@@ -46,12 +47,6 @@ function pickByKind(map: RendererByKind, kind: string): BarRenderer | undefined 
  *  exact kind, then `'*'`, then "nothing" (the caller's own default). */
 function forKind(renderer: BarRenderer | RendererByKind, kind: string): BarRenderer | undefined {
   return typeof renderer === 'function' ? renderer : pickByKind(renderer, kind);
-}
-
-function disposeAll(disposers: readonly Disposer[]): Disposer {
-  return () => {
-    for (const dispose of disposers) dispose();
-  };
 }
 
 interface Registration {
@@ -130,9 +125,14 @@ export class RendererRegistry {
     const claims = Object.entries(byKind).map(([kind, renderer]) => [barSlot(kind), renderer] as const);
     this.#refuseIfTaken('bar', pluginId);
     for (const [slot] of claims) this.#refuseIfTaken(slot, pluginId);
-    return disposeAll(
-      claims.map(([slot, renderer]) => this.#registrations.register(slot, { renderer, pluginId })),
-    );
+    // One `Disposer` frees every slot this one call claimed. `DisposableStore` is the reverse-order,
+    // latching version of the forward loop that stood here (#174). The loop ran a second time on a
+    // second call, and it relied on each slot release being idempotent on its own.
+    const claimed = new DisposableStore();
+    for (const [slot, renderer] of claims) {
+      claimed.add(this.#registrations.register(slot, { renderer, pluginId }));
+    }
+    return () => claimed.disposeAll();
   }
 
   /** A whole-point `bar` function answers every kind, so it collides with any per-kind slot a plugin
