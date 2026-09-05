@@ -102,3 +102,83 @@ conflict here shows up in the second merge.
 (unowned and unresolved), and every file on the `s5-errors` agent's list — `model/errors.ts`,
 `data/transaction.ts`, `view/gesture-pipeline.ts`, `view/entry-gesture-context.ts`, `view/styles.ts`,
 `extensions/plugin-runtime.ts`, `extensions/features/inline-editing.ts`, `harness/editing.ts`.
+
+---
+
+# Second half — #199 reopened: the Selection decides, and #205 with it
+
+**Owner:** the `s5-rightclick` agent · **Branch:** `s5-rightclick` · **Base:** `s5-start`
+
+The first half above stands. `DomTarget.entryIds` and `FrameLayout.entryIdsForRow` are what this
+builds on; nothing from `4293277` or `3a11c6b` is reverted.
+
+## The rule the repo owner restated
+
+> A right-click acts on the Selection when the thing you clicked is part of it. It acts on the thing
+> you clicked when it is not.
+
+| You do this | The command acts on | Before |
+| --- | --- | --- |
+| Right-click a row in the Grid pane that is not selected | every Entry that row owns | correct |
+| Right-click one bar on a row that owns several, not selected | that one bar's Entry | correct |
+| Select several bars, then right-click one of them | every Entry in the Selection | **wrong** |
+
+## Where the rule lives, and why there
+
+`extensions/features/context-menu.ts`. `DomTarget` states a DOM fact — a bar names its Entry, a row
+names its Entries — and it keeps doing exactly that. This is a command-layer rule, and `openAt` is
+the one place that holds both the clicked target and `ctx.gantt.selectedIds`. The layer rules agree:
+`extensions/` reaches the Selection through the public `Gantt` and imports nothing new (D-S5-5).
+
+`commandTargetOf` no longer copies `entryIds` across. It takes the resolved set as its second
+argument, so the one function that decides — `clickLandsInSelection` — has one call site.
+
+## Inferred, not stated
+
+**A right-click outside the Selection replaces the Selection with what you clicked**, before the menu
+opens. Without it the command acts on Entries the user cannot see highlighted. It assigns
+`gantt.selectedIds`, so it runs the same cancelable `beforeSelectionChange` an assignment runs. A
+consumer that cancels keeps its Selection, and the command still acts on what the user clicked —
+that is what the menu offered.
+
+## The empty case
+
+A header cell, the splitter and a grouping header row stand for no Entry. They are part of nothing,
+so they never inherit the Selection and never replace it. `clickLandsInSelection` answers `false` for
+an empty set, which is the whole of that rule.
+
+## #205 needed no new seam
+
+The keyboard path resolves the bar of `selectedIds[0]`, and that bar is part of the Selection. So the
+same rule answers with the whole Selection, and `GanttDom` needs no `rowFor(id)`. The bar stays the
+popup's **anchor**, because a popup needs a box on screen. That leaves #205's second, smaller point
+open: on a multi-Entry row the popup opens over one bar, and `kind` reads `'bar'` where a right-click
+on the grid row reads `'row'`.
+
+## Boxes
+
+- [x] `clickLandsInSelection` decides what a right-click acts on (`context-menu.ts`)
+- [x] `commandTargetOf` takes the resolved set instead of copying `DomTarget.entryIds`
+- [x] A right-click outside the Selection replaces the Selection first
+- [x] The keyboard path (`Shift+F10`, the Menu key) runs the same rule — #205
+- [x] A test per table row, plus the keyboard case, the Selection replacement, and the header cell
+- [x] `api/command.ts` says what `CommandTarget.entryIds` now is
+- [ ] `plans/02-public-api.md` and `CONTEXT.md` say it too
+- [ ] The harness acts on `ctx.target.entryIds`, so the demo menu shows the rule it ships
+- [ ] `pnpm verify` green (104 guard / 595 node / 841 dom), `pnpm test:e2e` 70/70
+
+## Mutation checks
+
+Every new test was reddened by breaking its own subject, then restored.
+
+| Break | Red |
+| --- | --- |
+| `clickLandsInSelection` returns `false` | the selected-bar case, and the `Shift+F10` case |
+| `clickLandsInSelection` drops its empty guard | the header-cell case |
+| the Selection replacement line removed | the Selection-replacement case |
+| `clickLandsInSelection` returns `true` | the row case, the one-bar case, the "exactly one" case, and two more |
+
+## Do not touch
+
+`etc/freegantt.api.md` (generated; the coordinator regenerates it at merge — the shape did not change
+here, only the doc comments). `plans/00-overview.md`. Every file in a sibling worktree.

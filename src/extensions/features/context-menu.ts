@@ -13,7 +13,7 @@ import { createPopup } from '../popup.js';
 import type { Anchor, Popup } from '../popup.js';
 import type { Command, CommandContext, CommandTarget, GanttPlugin, PluginContext } from '../../api/gantt.js';
 import type { DomTarget } from '../../api/plugin.js';
-import type { Entry } from '../../model/index.js';
+import type { Entry, EntryId } from '../../model/index.js';
 import { DisposableStore } from '../disposables.js';
 import { buildMenu, menuItemUnder, menuItemsIn, resolveMenuEntries } from './menu-view.js';
 import type { MenuEntry } from './menu-view.js';
@@ -31,15 +31,34 @@ export interface ContextMenuOptions {
  *  the rest across. A command's `when` can now read "on a header cell" from a right-click, which the
  *  menu never filled in before.
  *
- *  #199: a right-click on a row acts on every Entry the row owns. A left-click on that row already
- *  selects every one of them (#185). The set arrives resolved, so the menu neither picks a winner
- *  nor asks the row what it holds. */
-function commandTargetOf(target: DomTarget): CommandTarget {
+ *  `entryIds` is the one member the menu does not copy. `DomTarget.entryIds` states a DOM fact:
+ *  what the node stands for. The command acts on what `clickLandsInSelection` decides (#199), so
+ *  the caller resolves that set first and hands it in. */
+function commandTargetOf(target: DomTarget, entryIds: readonly EntryId[]): CommandTarget {
   return {
     kind: target.kind,
-    entryIds: target.entryIds,
+    entryIds,
     ...(target.field !== undefined ? { field: target.field } : {}),
   };
+}
+
+/** Whether a right-click on `clicked` landed inside the Selection. The rule (#199):
+ *
+ *  > A right-click acts on the Selection when the thing you clicked is part of it.
+ *  > It acts on the thing you clicked when it is not.
+ *
+ *  A row you have not selected is not part of the Selection, so the command acts on every Entry the
+ *  row owns. A bar inside a multi-bar Selection is part of it, so the command acts on the whole
+ *  Selection. A bar outside the Selection is not part of it, so the command acts on that one Entry.
+ *
+ *  A node stands inside the Selection only when **every** Entry it names is selected. Take a row
+ *  that owns three Entries, of which the user selected two. That row is not the thing the user
+ *  selected, so a right-click on it acts on the row.
+ *
+ *  A node that stands for no Entry — a header cell, the splitter, a grouping header row — is part
+ *  of nothing. It never takes the Selection with it, and an empty `clicked` says so. */
+function clickLandsInSelection(clicked: readonly EntryId[], selected: readonly EntryId[]): boolean {
+  return clicked.length > 0 && clicked.every((id) => selected.includes(id));
 }
 
 /** D-S5-13: right-click, or `Shift+F10`/the Menu key, opens a menu of the commands whose `when`
@@ -97,11 +116,22 @@ export function contextMenu(options: ContextMenuOptions = {}): GanttPlugin {
       const openAt = (anchor: Anchor, target: DomTarget | undefined): void => {
         closeMenu();
         const entry = target?.entry;
+        // #199, and the one place the Selection and the clicked node meet. `DomTarget` states a DOM
+        // fact and must keep doing that, so the rule lives here, in the command layer.
+        const clicked = target?.entryIds ?? [];
+        const landedInSelection = clickLandsInSelection(clicked, ctx.gantt.selectedIds);
+        // Inferred from standard right-click behaviour, not stated on #199: a right-click outside
+        // the Selection replaces the Selection with what you clicked, before the menu opens.
+        // Without it the command acts on Entries the user cannot see highlighted. A consumer that
+        // cancels `beforeSelectionChange` keeps its Selection; the command still acts on what the
+        // user clicked, because that is what the menu offered.
+        if (!landedInSelection && clicked.length > 0) ctx.gantt.selectedIds = clicked;
+        const entryIds = landedInSelection ? ctx.gantt.selectedIds : clicked;
         const commandCtx: CommandContext = {
           dataset: ctx.dataset,
           gantt: ctx.gantt,
           ...(entry !== undefined ? { entry } : {}),
-          ...(target !== undefined ? { target: commandTargetOf(target) } : {}),
+          ...(target !== undefined ? { target: commandTargetOf(target, entryIds) } : {}),
         };
         const available = ctx.commands.available(commandCtx);
         const defaults: MenuEntry[] = available.map((command) => ({
@@ -166,6 +196,11 @@ export function contextMenu(options: ContextMenuOptions = {}): GanttPlugin {
         openAt(new DOMRect(event.clientX, event.clientY, 0, 0), target);
       });
 
+      /** #205, and the same rule the pointer path runs. The Selection is what the keyboard landed
+       *  on. So `openAt` answers with the whole Selection, not with `selectedIds[0]` alone
+       *  (D-S5-14 — one action, two ways in). The bar of the first selected Entry stays the
+       *  popup's anchor. A popup needs a box on screen, and `GanttDom` has no row node for an
+       *  Entry. */
       const openAtFocusedRow = (): void => {
         const selectedId = ctx.gantt.selectedIds[0];
         const entry = selectedId !== undefined ? ctx.dataset.entries.get(selectedId) : undefined;
