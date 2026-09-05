@@ -1,0 +1,199 @@
+// #170: the invalidation matrix for the five plugin registration seams, in one place. Before this
+// file the answers lived in `buildPluginPorts`, one layer away from the registration itself, and the
+// decoration seam's own lifetime was hand-written in a closure inside `GanttShell`.
+//
+// Two questions per seam. What runs again when a plugin registers, and what runs again when it
+// disposes (#155 — the registration that wins after a disposal has to be shown too).
+
+import { describe, expect, it } from 'vitest';
+import { PluginRegistrations } from './plugin-registrations.js';
+import type { PluginRegistrationPorts } from './plugin-registrations.js';
+import { createItemProducerRegistry } from '../layout/index.js';
+import type { Disposer, GridColumnInput, PluginId } from '../model/index.js';
+
+const PLUGIN: PluginId = 'demo.plugin';
+
+interface Harness {
+  registrations: PluginRegistrations;
+  counts: { frames: number; items: number; capabilities: number };
+  /** Every Grid column `ColumnChrome` was asked for, in order — that seam is a delegation. */
+  columns: GridColumnInput[];
+}
+
+function harness(): Harness {
+  const counts = { frames: 0, items: 0, capabilities: 0 };
+  const columns: GridColumnInput[] = [];
+  const ports: PluginRegistrationPorts = {
+    requestFrame: () => {
+      counts.frames += 1;
+    },
+    invalidateItems: () => {
+      counts.items += 1;
+    },
+    refreshCapabilities: () => {
+      counts.capabilities += 1;
+    },
+    registerGridColumn: (column): Disposer => {
+      columns.push(column);
+      return () => {
+        const index = columns.indexOf(column);
+        if (index >= 0) columns.splice(index, 1);
+      };
+    },
+  };
+  return {
+    registrations: new PluginRegistrations(ports, createItemProducerRegistry()),
+    counts,
+    columns,
+  };
+}
+
+describe('PluginRegistrations — what each seam invalidates', () => {
+  it('a renderer claim repaints on the way in and on the way out', () => {
+    const { registrations, counts } = harness();
+
+    const dispose = registrations.registerRenderer('cell', () => ({ text: '' }), PLUGIN);
+    expect(counts).toMatchObject({ frames: 1, items: 0, capabilities: 0 });
+
+    dispose();
+    expect(counts.frames).toBe(2);
+  });
+
+  it('a decoration provider repaints on both edges', () => {
+    const { registrations, counts } = harness();
+
+    const dispose = registrations.registerDecoration('underBars', () => []);
+    expect(counts).toMatchObject({ frames: 1, items: 0, capabilities: 0 });
+
+    dispose();
+    expect(counts.frames).toBe(2);
+  });
+
+  it('an Item producer re-produces every row on both edges', () => {
+    const { registrations, counts } = harness();
+
+    const dispose = registrations.registerItemProducer('buffer', () => []);
+    expect(counts).toMatchObject({ items: 1, frames: 1, capabilities: 0 });
+
+    dispose();
+    expect(counts).toMatchObject({ items: 2, frames: 2 });
+  });
+
+  it('kind defaults re-resolve capabilities on both edges, and paint nothing themselves', () => {
+    const { registrations, counts } = harness();
+
+    const dispose = registrations.registerKindDefaults('buffer', {});
+    expect(counts).toMatchObject({ capabilities: 1, frames: 0, items: 0 });
+
+    dispose();
+    expect(counts).toMatchObject({ capabilities: 2, frames: 0 });
+  });
+
+  it('a Grid column asks for nothing here — `ColumnChrome` owns that seam’s own refresh', () => {
+    const { registrations, counts, columns } = harness();
+
+    const dispose = registrations.registerGridColumn('cost');
+    expect(columns).toEqual(['cost']);
+    expect(counts).toMatchObject({ frames: 0, items: 0, capabilities: 0 });
+
+    dispose();
+    expect(columns).toEqual([]);
+  });
+});
+
+describe('PluginRegistrations — the tables it reads back', () => {
+  it('answers the winning KindDefaults for a kind, and undefined for a kind nobody claimed', () => {
+    const { registrations } = harness();
+    const defaults = { move: false };
+
+    registrations.registerKindDefaults('buffer', defaults);
+
+    expect(registrations.kindDefaultsFor('buffer')).toBe(defaults);
+    expect(registrations.kindDefaultsFor('risk')).toBeUndefined();
+  });
+
+  it('a second plugin on one kind wins, and disposing it restores the first (#154)', () => {
+    const { registrations } = harness();
+    const first = { move: false };
+    const second = { move: true };
+
+    registrations.registerKindDefaults('buffer', first);
+    const disposeSecond = registrations.registerKindDefaults('buffer', second);
+    expect(registrations.kindDefaultsFor('buffer')).toBe(second);
+
+    disposeSecond();
+    expect(registrations.kindDefaultsFor('buffer')).toBe(first);
+  });
+
+  it('every decoration provider paints, in registration order — not only the newest', () => {
+    const { registrations } = harness();
+    const first = (): [] => [];
+    const second = (): [] => [];
+
+    registrations.registerDecoration('underBars', first);
+    registrations.registerDecoration('overBars', second);
+
+    expect(registrations.decorationProviders()).toEqual([
+      { layer: 'underBars', provider: first },
+      { layer: 'overBars', provider: second },
+    ]);
+  });
+
+  it('a decoration disposer removes exactly its own provider, in any order (#155)', () => {
+    const { registrations } = harness();
+    const first = (): [] => [];
+    const second = (): [] => [];
+    const third = (): [] => [];
+
+    registrations.registerDecoration('underBars', first);
+    const disposeSecond = registrations.registerDecoration('underBars', second);
+    registrations.registerDecoration('underBars', third);
+
+    disposeSecond();
+    expect(registrations.decorationProviders().map((p) => p.provider)).toEqual([first, third]);
+  });
+
+  it('two plugins registering the same provider on the same layer stay two registrations', () => {
+    const { registrations } = harness();
+    const shared = (): [] => [];
+
+    const disposeFirst = registrations.registerDecoration('underBars', shared);
+    registrations.registerDecoration('underBars', shared);
+    expect(registrations.decorationProviders()).toHaveLength(2);
+
+    disposeFirst();
+    expect(registrations.decorationProviders()).toHaveLength(1);
+  });
+
+  it('calling a decoration disposer twice is safe', () => {
+    const { registrations, counts } = harness();
+
+    const dispose = registrations.registerDecoration('underBars', () => []);
+    dispose();
+    dispose();
+
+    expect(registrations.decorationProviders()).toEqual([]);
+    expect(counts.frames).toBe(3);
+  });
+
+  it('two Gantts share no registrations (I2)', () => {
+    const first = harness();
+    const second = harness();
+
+    first.registrations.registerDecoration('underBars', () => []);
+
+    expect(first.registrations.decorationProviders()).toHaveLength(1);
+    expect(second.registrations.decorationProviders()).toHaveLength(0);
+    expect(second.counts.frames).toBe(0);
+  });
+
+  it('a refused renderer claim asks for no repaint — nothing changed to show', () => {
+    const { registrations, counts } = harness();
+
+    registrations.registerRenderer('cell', () => ({ text: '' }), PLUGIN);
+    expect(counts.frames).toBe(1);
+
+    expect(() => registrations.registerRenderer('cell', () => ({ text: '' }), 'other.plugin')).toThrow();
+    expect(counts.frames).toBe(1);
+  });
+});

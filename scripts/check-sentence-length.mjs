@@ -34,6 +34,7 @@ const SCOPED_FILES = [
   'src/view/frame-settings.ts',
   'src/view/gantt-shell.ts',
   'src/view/plugin-ports.ts',
+  'src/view/plugin-registrations.ts',
   'src/view/row-layer.ts',
 ];
 

@@ -35,6 +35,7 @@ import { RegistrationGate } from '../extensions/plugin-runtime.js';
 import type { CommandRegistryOf } from '../extensions/commands.js';
 import type { KeyBinding, KeyEventLike, KeyHandlerRegistrar } from '../extensions/keymap.js';
 import { isDevMode } from '../data/dev-mode.js';
+import type { PluginRegistrar } from './plugin-registrations.js';
 import type { KindDefaults } from './capability.js';
 import type { GanttEvents, EntryFieldEdit } from './event-bus.js';
 import type { Overlay } from './overlay.js';
@@ -78,8 +79,8 @@ export interface GanttShellPorts {
   keymap: KeyHandlerRegistrar & {
     register(binding: KeyBinding<unknown>): Disposer;
   };
-  /** D-S5-11. `pluginId` is what frees the point again when this plugin goes (#155). */
-  registerRenderer<P extends RendererPoint>(point: P, renderer: RendererFor<P>, pluginId: PluginId): Disposer;
+  /** The five seams a plugin registers into, each already carrying the refresh it owes (#170). */
+  registrations: PluginRegistrar;
   /** D-S5-11's precedence, already merged with the consumer's own live `tooltipRenderer`. */
   resolveTooltipRenderer(): ResolvedRenderer<TooltipRenderer> | undefined;
   /** The entry's bar in the last painted frame. A hover plugin works from the DOM after the render
@@ -91,26 +92,12 @@ export interface GanttShellPorts {
   /** One of those columns, by Field key. `ColumnChrome` answers from its own index, so this never
    *  scans the list (review A6). */
   resolvedColumn(field: FieldKey): ResolvedColumn | undefined;
-  /** S5.6, D-S5-15. The returned `Disposer` removes exactly this provider. */
-  addDecorationProvider(layer: DecorationLayer, provider: DecorationProvider): Disposer;
-  /** D-S4-24. One registry per Gantt, seeded with span/group/milestone. */
-  itemProducers: { register(kind: EntryKind, producer: ItemProducer): Disposer };
-  /** S5.9, D-S5-22. The middle precedence layer `resolveCapabilities` reads. */
-  kindDefaults: { register(kind: EntryKind, defaults: KindDefaults): Disposer };
-  /** S5.9, D-S5-21. `ColumnChrome` owns the rebind and the repaint on both edges of this one. */
-  registerGridColumn(column: GridColumnInput): Disposer;
   /** I14's one capability resolution, asked for the `edit` gesture. */
   canEdit(entry: Entry): boolean;
   /** Raises `beforeEntryEdit` on this Gantt's own bus and hands back what the handlers answered. */
   proposeEntryEdit(payload: EntryFieldEdit): boolean | Promise<boolean>;
   /** Raises `entryEdit` on this Gantt's own bus. */
   announceEntryEdit(payload: EntryFieldEdit): void;
-  /** Queues one frame (B10, D-S2-15). */
-  requestFrame(): void;
-  /** Drops the per-row item cache, so every row produces its items again on the next render. */
-  invalidateItems(): void;
-  /** Re-resolves every entry's capabilities after a `KindDefaults` registration changes. */
-  refreshCapabilities(): void;
 }
 
 /** What `GanttShell` hands to `options.buildPluginContext` so it can build one plugin's
@@ -204,18 +191,13 @@ export function buildPluginPorts(
   // afterward throws `RegistrationClosedError`.
   const gate = new RegistrationGate(pluginId);
 
-  /** The one shape every gated `register*` takes. A new seam is a declaration, not a transcription:
-   *  name what registers, and name what must run again because the registration changed. `refresh`
-   *  runs on both edges — on the way in, and on the way out. The registration that wins after
-   *  disposal must paint too (#155). */
-  const registerWhileOpen = (register: () => Disposer, refresh?: () => void): Disposer => {
+  /** The one shape every gated `register*` takes. It refuses the call once `setup()` has returned.
+   *  It then holds the disposer, so uninstalling the plugin retracts the registration even when the
+   *  plugin never calls it. What a registration invalidates is `plugin-registrations.ts`'s answer,
+   *  given with the disposer it returns (#170). This function no longer knows a frame exists. */
+  const registerWhileOpen = (register: () => Disposer): Disposer => {
     gate.assertOpen();
-    const remove = register();
-    refresh?.();
-    const dispose = (): void => {
-      remove();
-      refresh?.();
-    };
+    const dispose = register();
     disposables.add(dispose);
     return dispose;
   };
@@ -240,16 +222,6 @@ export function buildPluginPorts(
     const remove = (): void => document.removeEventListener(type, listener, capture);
     disposables.add(remove);
     return remove;
-  };
-
-  /** A renderer or a decoration claim changes what every painted cell, bar or header shows. Nothing
-   *  else marks the frame dirty for it (#155). */
-  const repaint = (): void => shell.requestFrame();
-  /** `FrameLayout`'s per-row item cache forgets a row on a dataset, row-count or metrics change
-   *  only. A producer registration is none of those, so ask every row to produce its items again. */
-  const reproduceItems = (): void => {
-    shell.invalidateItems();
-    shell.requestFrame();
   };
 
   const commands: CommandRegistryOf<unknown> = {
@@ -295,10 +267,7 @@ export function buildPluginPorts(
       proposeEntryEdit: (payload) => shell.proposeEntryEdit(payload),
       announceEntryEdit: (payload) => shell.announceEntryEdit(payload),
       registerKindDefaults: (kind, defaults) =>
-        registerWhileOpen(
-          () => shell.kindDefaults.register(kind, defaults),
-          () => shell.refreshCapabilities(),
-        ),
+        registerWhileOpen(() => shell.registrations.registerKindDefaults(kind, defaults)),
     },
     view: {
       overlay: shell.overlay,
@@ -306,7 +275,7 @@ export function buildPluginPorts(
       dom: shell.dom,
       onDomEvent: listenWhileInstalled,
       registerRenderer: (point, renderer) =>
-        registerWhileOpen(() => shell.registerRenderer(point, renderer, pluginId), repaint),
+        registerWhileOpen(() => shell.registrations.registerRenderer(point, renderer, pluginId)),
       resolveTooltipContent,
       // D-S5-13: `tooltips()`'s default body appends every column marked `tooltip: true`. That is
       // the same resolved list the grid itself paints from, so a column's header and format stay in
@@ -317,15 +286,15 @@ export function buildPluginPorts(
           .filter((column) => column.tooltip === true)
           .map((column) => ({ header: column.header, value: column.format(entry) })),
       registerDecoration: (layer, provider) =>
-        registerWhileOpen(() => shell.addDecorationProvider(layer, provider), repaint),
+        registerWhileOpen(() => shell.registrations.registerDecoration(layer, provider)),
       // S5.8, D-S5-19: `field` names the currently *resolved* column, not the raw `GridColumnInput[]`
       // a consumer's own `gridColumns` getter returns.
       isColumnEditable: (field) => shell.resolvedColumn(field)?.editable,
-      registerGridColumn: (column) => registerWhileOpen(() => shell.registerGridColumn(column)),
+      registerGridColumn: (column) => registerWhileOpen(() => shell.registrations.registerGridColumn(column)),
     },
     layout: {
       registerItemProducer: (kind, producer) =>
-        registerWhileOpen(() => shell.itemProducers.register(kind, producer), reproduceItems),
+        registerWhileOpen(() => shell.registrations.registerItemProducer(kind, producer)),
     },
   };
 

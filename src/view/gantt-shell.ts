@@ -8,7 +8,6 @@ import {
   TimeScaleModel,
   Viewport,
   createItemProducerRegistry,
-  createRegistrationTable,
   isPlannedHeaderRow,
   gridContentWidth,
   totalColumnWidth,
@@ -28,9 +27,7 @@ import type {
   TooltipRenderer,
   RendererByKind,
   FrameBar,
-  RegisteredDecorationProvider,
 } from '../layout/index.js';
-import { RendererRegistry } from './renderer-registry.js';
 
 import { createDomBackend } from '../render/dom/index.js';
 import { readPixelProperty } from '../render/dom/pixel-property.js';
@@ -75,7 +72,6 @@ import type {
   Entry,
   EntryEdits,
   EntryId,
-  EntryKind,
   FieldKey,
   GridColumnInput,
   ItemId,
@@ -86,10 +82,12 @@ import type {
 } from '../model/index.js';
 import type { EditExtender } from '../data/edit-extension.js';
 import { resolveCapabilities } from './capability.js';
-import type { Capabilities, Interactions, KindDefaults } from './capability.js';
+import type { Capabilities, Interactions } from './capability.js';
 import { subscribeToDatasetChanges } from './dataset-change-subscription.js';
 import type { DatasetChangeSubscription } from './dataset-change-subscription.js';
 import { FrameScheduler } from './frame-scheduler.js';
+import { PluginRegistrations } from './plugin-registrations.js';
+import type { PluginRegistrationPorts } from './plugin-registrations.js';
 import { FrameSettings } from './frame-settings.js';
 import type { FrameSettingsPatch, FrameSettingsPorts } from './frame-settings.js';
 import { projectAffordances } from './affordance-projection.js';
@@ -366,12 +364,6 @@ export class GanttShell {
   #viewportGestures: ViewportGestures = {};
   #resolvedViewportGestures = resolveViewportGestures(undefined);
   #capabilities: Capabilities;
-  /** S5.9, D-S5-22: `ctx.interaction.registerKindDefaults` — the middle precedence layer
-   *  `resolveCapabilities` reads between the consumer's own `interactions` and the library table.
-   *  A second plugin registering the same kind overrides the first while both stay installed.
-   *  Disposing one registration never disturbs another plugin's live registration on the same
-   *  kind, in any disposal order (#146). */
-  #kindDefaults = createRegistrationTable<EntryKind, KindDefaults>();
   /** The raw hit under the pointer, reported by `EntrySelectionContext.setHovered` — undefined on
    *  pointerleave or when nothing is wired (no `entryGestures` attachment). */
   #hoveredItemId: ItemId | undefined;
@@ -384,7 +376,9 @@ export class GanttShell {
   /** D-GH-2: owns draft math, preview rAF coalescing and the commit pipeline for a move/resize
    *  gesture. Built once, from this shell's own primitives, right after `#capabilities` below. */
   #gesturePipeline!: GesturePipeline;
-  #itemProducerRegistry!: ItemProducerRegistry;
+  /** #170: the five seams a plugin registers into, each carrying the refresh it owes. Renderers,
+   *  decorations, Item producers, per-kind capability defaults and Grid columns. */
+  #registrations!: PluginRegistrations;
   /** The single rAF owner (B10, D-S2-15): every render request past construction goes through
    *  this, so N mutations in one tick become one frame. */
   #frames = new FrameScheduler(() => this.render());
@@ -421,12 +415,6 @@ export class GanttShell {
   #theme: Theme = DEFAULT_THEME;
   #a11yLabel: string = DEFAULT_A11Y_LABEL;
   #treeCollapse!: TreeCollapse;
-  /** S5.4, D-S5-11: plugin-side renderer registrations. The consumer's own `#barRenderer`/etc. below
-   *  are read live at resolve time, never stored here — see `renderer-registry.ts`'s file header. */
-  #rendererRegistry = new RendererRegistry();
-  /** S5.6, D-S5-15: `ctx.view.registerDecoration`'s own record — every plugin's provider, in
-   *  registration order, threaded into `#layout.computeFrame` as `LayoutInput.decorationProviders`. */
-  #decorationProviders: RegisteredDecorationProvider[] = [];
   /** S5.3, D-S5-8: constructed once panes exist — see the plugin runtime's own comment just below for
    *  why. */
   #overlay: DomOverlay;
@@ -492,7 +480,10 @@ export class GanttShell {
       this.#columnChromePorts(),
       options.gridColumns ?? DEFAULT_GRID_COLUMNS,
     );
-    this.#itemProducerRegistry = options.itemProducerRegistry ?? createItemProducerRegistry();
+    this.#registrations = new PluginRegistrations(
+      this.#pluginRegistrationPorts(),
+      options.itemProducerRegistry ?? createItemProducerRegistry(),
+    );
     this.#bindColumns();
 
     // Mount before binding (#22). The render target exists by the time the binding's own onChange
@@ -503,7 +494,7 @@ export class GanttShell {
       createDomBackend({
         entryById: (id) => this.#options.dataset.entries.get(id),
         resolveBarRenderer: (kind) =>
-          this.#rendererRegistry.resolveBar(kind, this.#frameSettings.barRenderer),
+          this.#registrations.renderers.resolveBar(kind, this.#frameSettings.barRenderer),
         // S5.4, D-S5-11: `render/dom` never receives `ResolvedColumn` (`column.format` "never
         // reaches a backend", `layout/column.ts`). So this binds it in here instead. render/dom
         // only ever calls an already-column-bound function, keyed by the same `FrameColumn.key`
@@ -525,7 +516,7 @@ export class GanttShell {
                 }),
             };
           }
-          const resolved = this.#rendererRegistry.resolve('cell', this.#frameSettings.cellRenderer);
+          const resolved = this.#registrations.renderers.resolve('cell', this.#frameSettings.cellRenderer);
           if (resolved === undefined) return undefined;
           const cellRenderer = resolved.renderer;
           return {
@@ -540,7 +531,10 @@ export class GanttShell {
         resolveHeaderRenderer: (columnKey) => {
           const column = this.#columnChrome.resolvedColumn(columnKey);
           if (column === undefined) return undefined;
-          const resolved = this.#rendererRegistry.resolve('header', this.#frameSettings.headerRenderer);
+          const resolved = this.#registrations.renderers.resolve(
+            'header',
+            this.#frameSettings.headerRenderer,
+          );
           if (resolved === undefined) return undefined;
           const headerRenderer = resolved.renderer;
           return {
@@ -976,7 +970,7 @@ export class GanttShell {
     return resolveCapabilities(
       this.#interactions,
       (kind) => this.#options.dataset.isRollUpKind(kind),
-      (kind) => this.#kindDefaults.get(kind),
+      (kind) => this.#registrations.kindDefaultsFor(kind),
     );
   }
 
@@ -1126,33 +1120,31 @@ export class GanttShell {
       dom: this.#dom,
       commands: this.#commandRegistry,
       keymap: this.#keymap,
-      registerRenderer: (point, renderer, pluginId) =>
-        this.#rendererRegistry.register(point, renderer, pluginId),
+      registrations: this.#registrations,
       resolveTooltipRenderer: () =>
-        this.#rendererRegistry.resolve('tooltip', this.#frameSettings.tooltipRenderer),
+        this.#registrations.renderers.resolve('tooltip', this.#frameSettings.tooltipRenderer),
       lastPaintedBar: (id) => this.#lastBarById.get(itemId(id)),
       entry: (id) => this.#options.dataset.entries.get(id),
       resolvedColumns: () => this.#columnChrome.resolvedColumns,
       resolvedColumn: (field) => this.#columnChrome.resolvedColumn(field),
-      addDecorationProvider: (layer, provider) => {
-        const registered: RegisteredDecorationProvider = { layer, provider };
-        this.#decorationProviders.push(registered);
-        return () => {
-          const index = this.#decorationProviders.indexOf(registered);
-          if (index >= 0) this.#decorationProviders.splice(index, 1);
-        };
-      },
-      itemProducers: this.#itemProducerRegistry,
-      kindDefaults: this.#kindDefaults,
-      registerGridColumn: (column) => this.#columnChrome.registerPluginColumn(column),
       canEdit: (entry) => this.#capabilities.can('edit', entry),
       proposeEntryEdit: (payload) => this.#events.emit('beforeEntryEdit', payload),
       announceEntryEdit: (payload) => {
         this.#events.emit('entryEdit', payload);
       },
+    };
+  }
+
+  /** `plugin-registrations.ts`'s one seam back into this shell (#170). Every member is a pass that
+   *  has to run again once a registration changes what the Gantt shows. `registerGridColumn` is the
+   *  one delegation: `ColumnChrome` keeps that seam's own refresh, for the reason its own method
+   *  states. */
+  #pluginRegistrationPorts(): PluginRegistrationPorts {
+    return {
       requestFrame: () => this.#frames.request(),
       invalidateItems: () => this.#layout.invalidateFrom(0),
       refreshCapabilities: () => this.#refreshCapabilities(),
+      registerGridColumn: (column) => this.#columnChrome.registerPluginColumn(column),
     };
   }
 
@@ -1569,8 +1561,8 @@ export class GanttShell {
         revision: this.#revision++,
         columns: this.#columnChrome.resolvedColumns,
         collapsed: this.#treeCollapse.ids,
-        itemProducerRegistry: this.#itemProducerRegistry,
-        decorationProviders: this.#decorationProviders,
+        itemProducerRegistry: this.#registrations.itemProducers,
+        decorationProviders: this.#registrations.decorationProviders(),
         ...(typeof datasetRevision === 'number' ? { datasetRevision } : {}),
       }),
     );
