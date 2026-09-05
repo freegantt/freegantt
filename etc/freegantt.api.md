@@ -1366,15 +1366,23 @@ export type PlannedRowKind = 'entry' | 'header';
 export type PluginContext = PluginContextOf<Gantt>;
 
 // @public
-export interface PluginContextOf<TGantt = unknown, TDataset = Dataset> {
-    commands: CommandRegistryOf<TGantt, TDataset>;
+export type PluginContextOf<TGantt = unknown, TDataset = Dataset> = Omit<PluginContextPorts, 'commands' | 'interaction'> & {
     dataset: TDataset;
+    gantt: TGantt;
+    commands: CommandRegistryOf<TGantt, TDataset>;
+    interaction: Omit<PluginContextPorts['interaction'], 'registerKeybinding'> & {
+        registerKeybinding(binding: KeyBindingOf<TGantt>): Disposer;
+    };
+};
+
+// @public
+export interface PluginContextPorts {
+    commands: CommandRegistryOf<unknown>;
     disposables: DisposableStore;
     events: GanttEvents;
-    gantt: TGantt;
     // (undocumented)
     interaction: {
-        registerKeybinding(binding: KeyBindingOf<TGantt>): Disposer;
+        registerKeybinding(binding: KeyBindingOf<unknown>): Disposer;
         registerKeyHandler(chord: KeyChord, handler: (event: KeyEventLike) => void, options?: {
             captureInEditable?: boolean;
         }): () => void;

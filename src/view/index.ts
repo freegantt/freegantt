@@ -23,7 +23,7 @@ export type { CapabilityRule, Interactions, KindDefaults } from './capability.js
 export type { Overlay, OverlayHandle } from './overlay.js';
 export type { RowLayer } from './row-layer.js';
 export type { GanttDom, DomTarget } from './gantt-dom.js';
-export type { DomEventHandler, DomEventOptions } from './plugin-ports.js';
+export type { DomEventHandler, DomEventOptions, PluginContextPorts } from './plugin-ports.js';
 export type { ViewportGestures, ViewportGestureFlags } from './viewport-gestures.js';
 export type {
   DraftOptions,

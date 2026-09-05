@@ -5,6 +5,10 @@ import type { CommandContext } from './commands.js';
 import type { CommandRegistry } from './commands.js';
 
 export type KeyBinding<TGantt = unknown> = KeyBindingOf<TGantt>;
+// #166: `view/plugin-ports.ts` names the public symbol itself, not this file's alias of it. That
+// type is public now, and api-extractor prints a second, private name for an alias it cannot reach
+// from the entry point. `view/` may not import `api/` (I1), so the re-export travels through here.
+export type { KeyBindingOf };
 
 interface NormalizedChord {
   key: string;
