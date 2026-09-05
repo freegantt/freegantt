@@ -29,6 +29,12 @@ const preset: ViewPreset = {
 };
 const itemProducerRegistry = createItemProducerRegistry();
 
+/** One Entry, drawn as `count` bars — the multi-Item shape a Segmented Entry has (#185). Each
+ *  Segment spans the whole Entry, so a fixed row still packs them onto one line. */
+function segmentsOf(entry: (typeof sampleEntries)[number], count: number) {
+  return Array.from({ length: count }, () => ({ start: entry.start, end: entry.end }));
+}
+
 function mountSurfaces(): { grid: HTMLElement; timeline: HTMLElement } {
   const grid = document.createElement('div');
   const timeline = document.createElement('div');
@@ -694,11 +700,11 @@ describe('render/dom backend', () => {
     const nodeA = timeline.querySelector<HTMLElement>(`[data-item-id="${a!.id}"]`)!;
     const nodeB = timeline.querySelector<HTMLElement>(`[data-item-id="${b!.id}"]`)!;
 
-    backend.applyState({ hoveredItemId: a!.id, selectedItemIds: [a!.id, b!.id] });
+    backend.applyState({ hoveredItemId: a!.id, selectedEntryIds: [a!.entryId, b!.entryId] });
     expect(nodeA.dataset['state']).toBe('hovered selected');
     expect(nodeB.dataset['state']).toBe('selected');
 
-    backend.applyState({ selectedItemIds: [b!.id] });
+    backend.applyState({ selectedEntryIds: [b!.entryId] });
     expect(nodeA.dataset['state']).toBe('');
     expect(nodeB.dataset['state']).toBe('selected');
 
@@ -708,7 +714,7 @@ describe('render/dom backend', () => {
   });
 
   // Bug hunt (S5 fixes, "grid row highlight and row click"): applyState paints .fg-row the same way
-  // it paints .fg-bar — same InteractionState.selectedItemIds, projected onto the row's own entryId.
+  // it paints .fg-bar — one Entry-keyed Selection, read against the Entries each row owns (#185).
   it('applyState paints data-state~="selected" on the row matching a selected bar, and clears it', () => {
     const backend = createDomBackend();
     const { grid, timeline } = mountSurfaces();
@@ -728,16 +734,118 @@ describe('render/dom backend', () => {
     const rowA = grid.querySelector<HTMLElement>(`[data-row-id="${a!.rowId}"]`)!;
     const rowB = grid.querySelector<HTMLElement>(`[data-row-id="${b!.rowId}"]`)!;
 
-    backend.applyState({ selectedItemIds: [a!.id] });
+    backend.applyState({ selectedEntryIds: [a!.entryId] });
     expect(rowA.dataset['state']).toBe('selected');
     expect(rowB.dataset['state']).toBeUndefined();
 
-    backend.applyState({ selectedItemIds: [b!.id] });
+    backend.applyState({ selectedEntryIds: [b!.entryId] });
     expect(rowA.dataset['state']).toBe('');
     expect(rowB.dataset['state']).toBe('selected');
 
-    backend.applyState({ selectedItemIds: [] });
+    backend.applyState({ selectedEntryIds: [] });
     expect(rowB.dataset['state']).toBe('');
+
+    backend.destroy();
+    grid.remove();
+    timeline.remove();
+  });
+
+  it('paints every mounted bar of a selected entry, not only its first (#185)', () => {
+    const backend = createDomBackend();
+    const { grid, timeline } = mountSurfaces();
+    backend.mount({ grid, timeline });
+
+    const segmented = { ...sampleEntries[0]!, segments: segmentsOf(sampleEntries[0]!, 3) };
+    const frame = computeFrame({
+      entries: [segmented],
+      scale,
+      preset,
+      visible: { x: 0, y: 0, width: 0, height: 0 },
+      rowHeight: 32,
+      revision: 0,
+      itemProducerRegistry,
+    });
+    backend.sync(frame);
+    expect(frame.bars).toHaveLength(3);
+
+    backend.applyState({ selectedEntryIds: [segmented.id] });
+    for (const bar of frame.bars) {
+      const node = timeline.querySelector<HTMLElement>(`[data-item-id="${bar.id}"]`)!;
+      expect(node.dataset['state']).toBe('selected');
+    }
+
+    backend.applyState({ selectedEntryIds: [] });
+    for (const bar of frame.bars) {
+      const node = timeline.querySelector<HTMLElement>(`[data-item-id="${bar.id}"]`)!;
+      expect(node.dataset['state']).toBe('');
+    }
+
+    backend.destroy();
+    grid.remove();
+    timeline.remove();
+  });
+
+  it('a bar that mounts into a live selection is stamped at create time (#185)', () => {
+    const backend = createDomBackend();
+    const { grid, timeline } = mountSurfaces();
+    backend.mount({ grid, timeline });
+
+    const frame = computeFrame({
+      entries: sampleEntries.slice(0, 1),
+      scale,
+      preset,
+      visible: { x: 0, y: 0, width: 0, height: 0 },
+      rowHeight: 32,
+      revision: 0,
+      itemProducerRegistry,
+    });
+    backend.sync(frame);
+    backend.applyState({ selectedEntryIds: [frame.bars[0]!.entryId] });
+    backend.sync({ ...frame, bars: [] }); // the horizontal cull drops the bar
+
+    backend.sync(frame); // and a scroll back mounts it again
+    const bar = timeline.querySelector<HTMLElement>(`[data-item-id="${frame.bars[0]!.id}"]`)!;
+    expect(bar.dataset['state']).toBe('selected');
+
+    // The restamp also joined the painted set, so the next call sees no diff and rewrites nothing.
+    const before = bar.dataset['state'];
+    backend.applyState({ selectedEntryIds: [frame.bars[0]!.entryId] });
+    expect(bar.dataset['state']).toBe(before);
+
+    backend.destroy();
+    grid.remove();
+    timeline.remove();
+  });
+
+  it('a hover repaint touches only the bars whose token set changed (I5, #185)', () => {
+    const backend = createDomBackend();
+    const { grid, timeline } = mountSurfaces();
+    backend.mount({ grid, timeline });
+
+    const segmented = { ...sampleEntries[0]!, segments: segmentsOf(sampleEntries[0]!, 3) };
+    const frame = computeFrame({
+      entries: [segmented],
+      scale,
+      preset,
+      visible: { x: 0, y: 0, width: 0, height: 0 },
+      rowHeight: 32,
+      revision: 0,
+      itemProducerRegistry,
+    });
+    backend.sync(frame);
+    backend.applyState({ selectedEntryIds: [segmented.id] });
+
+    // Counting attribute writes is the only observation of "touched" — the tokens themselves say
+    // nothing about how many nodes the diff wrote.
+    const observer = new MutationObserver(() => {});
+    observer.observe(timeline, { subtree: true, attributes: true, attributeFilter: ['data-state'] });
+
+    const hovered = frame.bars[1]!.id;
+    backend.applyState({ selectedEntryIds: [segmented.id], hoveredItemId: hovered });
+    const touched = observer.takeRecords().map((record) => (record.target as HTMLElement).dataset['itemId']);
+    observer.disconnect();
+
+    expect(touched).toEqual([hovered]);
 
     backend.destroy();
     grid.remove();
@@ -759,7 +867,7 @@ describe('render/dom backend', () => {
       itemProducerRegistry,
     });
     backend.sync(frame);
-    backend.applyState({ selectedItemIds: [frame.bars[0]!.id] });
+    backend.applyState({ selectedEntryIds: [frame.bars[0]!.entryId] });
     backend.sync({ ...frame, rows: [], rowCount: 0 }); // simulate virtualization dropping the row
 
     backend.sync(frame); // and remounting it later

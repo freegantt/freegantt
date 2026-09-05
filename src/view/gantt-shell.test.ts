@@ -817,7 +817,7 @@ describe('GanttShell hot path (S3.2, D-S3-6/D-S3-9, [S3-A3])', () => {
     shell.destroy();
   });
 
-  it('clicking a later segment paints that bar, not segment 0', () => {
+  it('clicking one segment paints every bar of that entry, and the handles follow the picked one (#185)', () => {
     const segmented: Entry = {
       id: entryId('seg'),
       name: 'segmented',
@@ -846,12 +846,18 @@ describe('GanttShell hot path (S3.2, D-S3-6/D-S3-9, [S3-A3])', () => {
     const second = itemId(segmented.id, 1);
     propose?.([segmented.id], second);
 
-    expect(container.querySelector(`[data-item-id="${second}"]`)?.getAttribute('data-state')).toContain(
-      'selected',
-    );
-    expect(
-      container.querySelector(`[data-item-id="${first}"]`)?.getAttribute('data-state') ?? '',
-    ).not.toContain('selected');
+    // The Selection is the Entry, so both of its bars carry the token — "this Segment is selected
+    // but its sibling is not" means nothing (D-S3-10).
+    for (const item of [first, second]) {
+      expect(container.querySelector(`[data-item-id="${item}"]`)?.getAttribute('data-state')).toContain(
+        'selected',
+      );
+    }
+    // The shared handle pair is the one thing that still names a single bar: the picked one.
+    const start = container.querySelector<HTMLElement>('.fg-bar-handle[data-edge="start"]')!;
+    const secondBar = container.querySelector<HTMLElement>(`[data-item-id="${second}"]`)!;
+    expect(start.hidden).toBe(false);
+    expect(start.style.transform).toBe(secondBar.style.transform);
 
     shell.destroy();
   });

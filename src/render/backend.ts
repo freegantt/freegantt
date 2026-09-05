@@ -1,11 +1,14 @@
 // render/ backend contract (plans/01 §8.1). Shared by dom and null backends; DOM types are structural only —
 // this file itself never touches document/window.
 
-import type { GeometryFrame, ItemId, ItemPreview, ClientPoint } from '../layout/index.js';
+import type { EntryId, GeometryFrame, ItemId, ItemPreview, ClientPoint } from '../layout/index.js';
 
 export interface InteractionState {
   hoveredItemId?: ItemId;
-  selectedItemIds?: readonly ItemId[];
+  /** The Selection itself (#185): the Entry ids `Gantt.selectedIds` holds. A backend paints every
+   *  bar of a selected Entry, and it reads which bars those are from the frame it synced — an
+   *  Entry's Items are the layout's answer, never a string built from an Entry id. */
+  selectedEntryIds?: readonly EntryId[];
   /** The one Item the pointer last picked (#185) — the bar a click landed on. It is an input to the
    *  handle resolution below, never a paint of its own: the handles park on the picked bar while
    *  nothing is hovered. Undefined once the selection drops the picked Item's Entry. */

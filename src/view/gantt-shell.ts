@@ -954,29 +954,29 @@ export class GanttShell {
     const entriesEqual = from.length === next.length && from.every((id, i) => id === next[i]);
     if (entriesEqual && pickedItemId !== undefined) {
       if (this.#interactionState.pickedItemId === pickedItemId) return;
-      this.#paintSelection(next, pickedItemId);
+      this.#writePickedItem(next, pickedItemId);
       this.#refreshAffordances();
       return;
     }
     if (entriesEqual) return;
     this.#proposeChange('beforeSelectionChange', 'selectionChange', { from, to: next }, () => {
       this.#selection = next;
-      this.#paintSelection(next, pickedItemId);
+      // #185: the Selection goes to the backend as it is. Which bars paint is the backend's own
+      // question, answered from the frame it synced — the shell names no Item here.
+      this.#interactionState.selectedEntryIds = next;
+      this.#writePickedItem(next, pickedItemId);
       this.#refreshAffordances();
     });
   }
 
-  /** The two Item-keyed halves of a selection, written together (#185). `selectedItemIds` is the
-   *  paint. `pickedItemId` is the bar the pointer landed on, and it survives only while the new
-   *  selection still holds the entry that drew it. */
-  #paintSelection(next: readonly EntryId[], pickedItemId: ItemId | undefined): void {
+  /** The bar the pointer landed on (#185). It survives only while the new selection still holds the
+   *  entry that drew it — the handle pair must never sit on a deselected bar. */
+  #writePickedItem(next: readonly EntryId[], pickedItemId: ItemId | undefined): void {
     const picked = pickedItemId ?? this.#interactionState.pickedItemId;
     const kept =
       picked !== undefined && next.some((id) => this.#layout.itemIdsForEntry(id).includes(picked))
         ? picked
         : undefined;
-    this.#interactionState.selectedItemIds =
-      pickedItemId !== undefined ? [pickedItemId] : next.map((id) => itemId(id));
     setOptional(this.#interactionState, 'pickedItemId', kept);
   }
 
