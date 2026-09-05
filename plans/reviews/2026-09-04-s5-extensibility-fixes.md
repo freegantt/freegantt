@@ -218,6 +218,10 @@ Files: `src/extensions/features/inline-editing.ts`, its tests, `plans/s5-extensi
       parseValue test already does.
 - [ ] **SP2 — split the two half-ticks.** `s5.8-inline-editing.md` lines 104–105 claim a named reason
       that did not land. Split each box. Tick the half that shipped. Untick the half that did not.
+- [ ] **Carried from R1.** C2's fix makes an editor holding a rejected value refuse to yield.
+      A double-click on another cell now does nothing until the user fixes the value or presses Escape.
+      That is the intended behaviour. It is also a second silent refusal, which is SP1's own subject.
+      Make this refusal legible with the same mechanism.
 - [ ] Note the a11y consequence for S5.11: a silent no-op announces nothing to a screen reader.
       Add one line to [`s5.11-a11y-completion.md`](../s5-extensibility-and-editing/s5.11-a11y-completion.md).
 
@@ -280,6 +284,8 @@ Files: `src/view/renderer-registry.ts`, `src/layout/items/produce-items.ts`, `sr
       repeats in `move`, `commit` and `cancel`.
       Use two small strategy objects and one grabbed reference.
       `registerColumnStepCommand` in `core-commands.ts` already uses that shape.
+- [ ] **Carried from R1.** `entryIdOfRow` in `inline-editing.ts` hand-casts `id as EntryId`.
+      `model/ids.ts` already exports `entryIdFromDataset` for that DOM-to-brand boundary. One line.
 - [ ] **A6 — name the seed.** `openGeneric` seeds `input.value` from a four-arm nested ternary.
       A named `seedText(field, raw, cell)` reads as a sentence.
 - [ ] **A6 — table the popup dismiss triggers.** `createPopup`'s `open()` runs ~70 lines of four inline
