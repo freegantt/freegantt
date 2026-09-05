@@ -87,10 +87,10 @@ Paint is already correct. The gesture side is the whole job.
    §2 rule exceptionless across a ctrl-click multi-selection. The envelope is rewritten in the same `StoredEdit`
    (a `start`/`end` write on a segmented entry is refused — see the **Segment** glossary entry).
 2. **`src/view/gesture-pipeline.ts`** — `session()` currently asks the grabbed Item for a Segment
-   index only when `gesture.kind === 'resize'`. It must ask for a **move** too, and only when the
-   Selection holds exactly one Entry. Take the pick from the same source the paint reads.
-3. **Resize handles** — `resizableEntryId` parks the pair on the envelope. When the sole selected
-   Entry has a pick, the pair brackets **that bar**. Keep the envelope behaviour for the no-pick case.
+   index only when `gesture.kind === 'resize'`. It must ask for a **move** too, per-Entry. Take the
+   pick from the same source the paint reads.
+3. **Resize handles** — `resizableEntryId` parks the pair on the envelope. When the Entry it names
+   has a pick, the pair brackets **that bar**. Keep the envelope behaviour for the no-pick case.
 4. **`e2e/hierarchy.spec.ts`** — `d32fc37` renamed `'a segment drag moves one bar and Undo restores
    it'` into its opposite. Restore the original assertion and **keep** the whole-entry test for the
    row-click case. Both behaviours ship; both get a test.
