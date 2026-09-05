@@ -75,7 +75,10 @@ export class ColumnChrome {
    *  Two plugins registering the same field stack on one key: the newest registration wins, and
    *  disposing one never disturbs the other's. */
   #pluginColumns = createRegistrationTable<FieldKey, PluginColumnRegistration>();
+  /** The resolved columns in paint order, and the same columns keyed for lookup. `#adoptColumns`
+   *  writes both, and it is the only writer — one assignment can never leave the map stale. */
   #resolvedColumns: readonly ResolvedColumn[] = [];
+  #columnByKey: ReadonlyMap<string, ResolvedColumn> = new Map();
   #focusedHeaderColumnKey: FieldKey | undefined;
 
   constructor(container: HTMLElement, ports: ColumnChromePorts, initialInput: readonly GridColumnInput[]) {
@@ -145,11 +148,18 @@ export class ColumnChrome {
    *  `resolveGanttFields` call already covers its own `fieldCompares`/`fieldContext` too, so this
    *  module does not repeat that resolution; it just adopts the result. */
   setResolvedColumns(columns: readonly ResolvedColumn[]): void {
-    this.#resolvedColumns = columns;
+    this.#adoptColumns(columns);
   }
 
+  /** A frame asks for a column once per painted cell and once per painted header, so the lookup is
+   *  a map read, not a scan. Without it the render pass costs O(rows x columns x columns). */
   resolvedColumn(columnKey: FieldKey): ResolvedColumn | undefined {
-    return this.#resolvedColumns.find((column) => column.key === columnKey);
+    return this.#columnByKey.get(String(columnKey));
+  }
+
+  #adoptColumns(columns: readonly ResolvedColumn[]): void {
+    this.#resolvedColumns = columns;
+    this.#columnByKey = new Map(columns.map((column) => [String(column.key), column]));
   }
 
   /** `false` for a key `gridColumns` no longer resolves (B3: a stale `#focusedHeaderColumnKey` from

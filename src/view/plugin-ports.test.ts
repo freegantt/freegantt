@@ -81,6 +81,7 @@ function makeHarness(overrides: Partial<GanttShellPorts> = {}): Harness {
     lastPaintedBar: () => makeBar(),
     entry: (id) => makeEntry(id),
     resolvedColumns: () => [],
+    resolvedColumn: (field) => shell.resolvedColumns().find((column) => column.key === field),
     addDecorationProvider: (layer) => registry.add(`decoration:${layer}`),
     itemProducers: { register: (kind) => registry.add(`producer:${kind}`) },
     kindDefaults: { register: (kind) => registry.add(`defaults:${kind}`) },
