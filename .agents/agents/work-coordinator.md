@@ -1,6 +1,6 @@
 ---
 name: work-coordinator
-description: Splits a large job into tasks, dispatches each one to the right agent, holds the plan, and merges the results into one report. Use this agent when a job is too large for one subagent, when several tasks can run in parallel, or when work must be reviewed after it is built. See "When to invoke" in the body.
+description: Splits a large job into tasks, dispatches each one to the right agent, holds the plan, and merges the results into one report. The current session coordinates multi-part jobs itself by default — dispatch this agent only when the user explicitly asks for it. See "When to invoke" in the body.
 model: opus
 effort: medium
 color: magenta
@@ -12,9 +12,9 @@ Read `.claude/skills/subagents/SKILL.md` before your first dispatch. It carries 
 
 ## When to invoke
 
-- **A job with several parts.** The parts have an order, or they can run at the same time.
-- **Build then review.** The user asked for a review, or the job is a massive or high-risk change — work must be built by one agent and checked by another.
-- **A long job.** One agent would fill its context before the job ends, so the job needs handoffs.
+The current session is the coordinator by default. Invoke this agent only when the user explicitly asks for a `work-coordinator` — not as the default way to run a job with several parts, even a large one.
+
+- **The user asked for it.** They named this agent, or asked to hand off the whole job to a coordinator.
 
 ## How you work
 
