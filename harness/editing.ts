@@ -1,5 +1,5 @@
 import './harness-nav.ts';
-import { Gantt, Dataset, attemptMutation, now } from '../src/api/index.js';
+import { Gantt, Dataset, attemptMutation, now, watchAllErrors } from '../src/api/index.js';
 import type { DatasetEventMap } from '../src/api/index.js';
 import type { TimeUnit } from '../src/model/index.js';
 import { demoEntryInputs } from '../fixtures/demo-dataset.js';
@@ -58,6 +58,18 @@ function hideToast(): void {
   toast.hidden = true;
   toast.textContent = '';
 }
+
+// S5.12, D-S5-37: one subscription over both emitters. Every refusal and every recovered fault the
+// Dataset or the Gantt observes arrives here, and the page decides what to keep. Retention is the
+// page's policy, so core keeps nothing: there is no `gantt.errors` to read.
+//
+// This page already toasts the reason it knows for the two refusals it causes on purpose — the
+// mobilization veto and the lock. So the toast here is for a Fault, which is the one thing nothing
+// else on the page explains. `severity !== 'info'` is the same split telemetry routes on.
+watchAllErrors([dataset, gantt], (report) => {
+  prependLogLine(log, `error · ${report.severity} · ${report.by} · ${report.code}`);
+  if (report.severity !== 'info') showToast(report.message);
+});
 
 let releaseHold: ((allow: boolean) => void) | undefined;
 
