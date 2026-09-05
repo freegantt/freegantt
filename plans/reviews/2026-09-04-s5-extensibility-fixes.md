@@ -1,7 +1,7 @@
 # Fix plan — S5 extensibility branch review
 
 **Source review:** [`2026-09-04-s5-extensibility-branch.html`](./2026-09-04-s5-extensibility-branch.html) — FreeGantt, 2026-09-04, branch `s5-start` against `main`, steps S5.0–S5.9 landed.
-**Slice:** S5 ([`plans/s5-extensibility-and-editing/README.md`](../s5-extensibility-and-editing/README.md)) · **Status:** open — R1–R6 landed; R7 open.
+**Slice:** S5 ([`plans/s5-extensibility-and-editing/README.md`](../s5-extensibility-and-editing/README.md)) · **Status:** closed 2026-09-04 — R1–R7 all landed. The review HTML is deleted; this file is the record.
 **Gate state at review time:** every gate passed. Each finding below is a quality, design or API-shape call. No tool catches them.
 
 > ## Delete the review when this plan closes
@@ -409,13 +409,29 @@ Files: `src/view/renderer-registry.ts`, `src/layout/items/produce-items.ts`, `sr
 
 ### R7 — Close out
 
-- [ ] Re-read every box above. Every one is ticked, or moved to §6 with a reason.
-- [ ] Run the full gate: `pnpm gate`, `pnpm api-report`, `pnpm test:e2e`.
-- [ ] Review `harness/main.ts` once more. It must hold no library-rule breach and no re-derivation.
-- [ ] Update the S5 README status line and §12 spec edits with what these slices changed.
-- [ ] **Delete `plans/reviews/2026-09-04-s5-extensibility-branch.html`.** Do it in the same commit as the
-      last fix. Keep this plan file.
-- [ ] Confirm S5.10 can start. R2 landed, so a new dataset-plugin seam is one edit.
+- [x] Re-read every box above. Every one is ticked. §6 keeps the two recorded-not-fixed findings.
+      One measured residue, recorded rather than hidden: ST1's own detector reads zero sentences
+      over the 25-word ceiling; an independent detector reads 14, twelve of them at exactly 26
+      words. The two disagree only on how they count a code span — `` `RenderBackend<HTMLElement>` ``
+      is one token to a reader and three to a naive splitter. The pass cut 186 sentences to 14 by
+      the stricter count. The remaining 14 keep their facts, so no further trimming was made.
+- [x] Run the full gate. `pnpm verify` exits 0 — 92 guard, 519 node, 667 dom tests, plus format,
+      typecheck, lint, boundaries (269 modules), vendor-names, disables, build and api-report.
+      `pnpm gate` prints the S4 → S5 list green. `pnpm test:e2e` is 63/63.
+- [x] Review `harness/main.ts` once more. It is 553 lines, down from 616 after H1.
+      No `new Date()`, `Date.now()` or magic time constant. No `.fg-*` selector and no `data-*` read.
+      No `rowHeight`, `overscan`, `pxPerMs` or hand-built `TimeScaleModel`. The demo plugins come
+      from `harness/plugins/`. One fix made here: a placeholder `D-S4-...` citation now names
+      ADR 0005, which is where the compute-source rule actually lives. No new API gap to record.
+- [x] Update the S5 README status line and §12 spec edits. The status line records the review as
+      closed; §12 gained a row listing every public change slices R1–R6 made.
+- [x] **Delete `plans/reviews/2026-09-04-s5-extensibility-branch.html`.** Done in this commit.
+      This plan file stays as the record of what the review asked and what landed.
+- [x] Confirm S5.10 can start. R2 landed `view/plugin-ports.ts`, so a new seam is a declaration in
+      one file: add the member to its group in `PluginContextPorts`, implement it in the `ports`
+      literal, and lend any shell state through `GanttShellPorts`. `api/gantt.ts` needs no edit —
+      it spreads. R3 added `view.dom` and `view.onDomEvent` through exactly that path, which is the
+      working proof.
 
 ---
 

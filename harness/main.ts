@@ -33,7 +33,7 @@ import { openDemoPopup, popupDemo } from './plugins/popup-demo.js';
 
 // S5.8, D-S5-19: Name, Start and Budget are editable (double-click, or Enter on the selected row's
 // first editable column); End and Duration stay read-only (Duration is `compute`-sourced and has no
-// stored home to write back to — D-S4-... the Rollup would overwrite an edit on the next commit).
+// stored home to write back to — ADR 0005: the Rollup would overwrite an edit on the next commit).
 const GRID_WITH_BUDGET: readonly GridColumnInput[] = [
   { field: 'name', editable: true },
   { field: 'start', editable: true },
