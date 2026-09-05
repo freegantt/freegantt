@@ -41,17 +41,18 @@ import type { Overlay } from './overlay.js';
 import type { DomTarget, GanttDom } from './gantt-dom.js';
 
 /** What `ctx.view.onDomEvent` hands a plugin: the browser event, plus what the node it landed on
- *  stands for (review A4). `target` is `undefined` when the event landed inside this Gantt but on
- *  none of the five things `targetUnder` names — a pane's own padding, an empty stretch of
- *  timeline. An event outside this Gantt never reaches the handler at all. */
+ *  stands for (review A4). `target` is `undefined` when the event landed inside this Gantt, but on
+ *  none of the five things `targetUnder` names. A pane's own padding and an empty stretch of
+ *  timeline are two such places. An event outside this Gantt never reaches the handler at all. */
 export type DomEventHandler<K extends keyof DocumentEventMap> = (
   event: DocumentEventMap[K],
   target: DomTarget | undefined,
 ) => void;
 
-/** `capture: true` listens on the capture phase, for an event that does not bubble (`scroll`) or a
- *  handler that must run before the page's own (`keydown`). The removal uses the same flag, which is
- *  the pairing every hand-written listener had to remember for itself. */
+/** `capture: true` listens on the capture phase. Use it for an event that does not bubble
+ *  (`scroll`). Use it also for a handler that must run before the page's own (`keydown`). The
+ *  removal uses the same flag, which is the pairing every hand-written listener had to remember for
+ *  itself. */
 export interface DomEventOptions {
   capture?: boolean;
 }
@@ -65,8 +66,8 @@ export interface GanttShellPorts {
   events: GanttEvents;
   /** S5.3, D-S5-8. One layer per Gantt, alive as long as the plugin is. */
   overlay: Overlay;
-  /** Review N1/A3. One resolver per Gantt: it owns every `.fg-*` class and `data-*` key a plugin
-   *  used to retype, and it is what scopes `onDomEvent` to this Gantt (I2). */
+  /** Review N1/A3. One resolver per Gantt. It owns every `.fg-*` class and `data-*` key a plugin
+   *  used to retype, and it scopes `onDomEvent` to this Gantt (I2). */
   dom: GanttDom;
   /** D-S5-6. The one registry per Gantt. `register` takes the gate here; `run`/`available` do not. */
   commands: CommandRegistryOf<unknown>;
@@ -292,8 +293,9 @@ export function buildPluginPorts(
       registerRenderer: (point, renderer) =>
         registerWhileOpen(() => shell.registerRenderer(point, renderer, pluginId), repaint),
       resolveTooltipContent,
-      // D-S5-13: `tooltips()`'s default body appends every column marked `tooltip: true` — the same
-      // resolved list the grid itself paints from, so a column's header and format stay in one place.
+      // D-S5-13: `tooltips()`'s default body appends every column marked `tooltip: true`. That is
+      // the same resolved list the grid itself paints from, so a column's header and format stay in
+      // one place.
       resolveTooltipColumns: (entry) =>
         shell
           .resolvedColumns()

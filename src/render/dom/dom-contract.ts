@@ -1,7 +1,7 @@
 // render/dom/ — the class names and data attributes this backend writes on nodes another layer
 // reads back (review A3). Before this file the same eight strings were retyped in `extensions/`,
 // so a rename here broke every plugin with a green build. Nothing outside `render/dom` may retype
-// them now: `view/gantt-dom.ts` resolves a node to a `DomTarget` from these constants alone, and
+// them now. `view/gantt-dom.ts` resolves a node to a `DomTarget` from these constants alone.
 // `src/view/gantt-dom.test.ts` renders a real frame and asserts this backend still emits them.
 //
 // A class listed here is a contract. A class this backend paints for looks alone (`.fg-bars`,

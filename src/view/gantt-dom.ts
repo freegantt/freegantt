@@ -1,17 +1,17 @@
 // view/ — this Gantt's own rendered DOM, as a read surface (review N1/A3). One seam answers the
-// three questions a feature plugin asks of a node: is it mine, what is it, and where is the element
-// for this entry.
+// three questions a feature plugin asks of a node. Is this node mine? What is it? Where is the
+// element for this entry?
 //
-// Why it exists. `extensions/` may not import `render/` (D-S5-5), so before this file the contract
-// between them was eight retyped `.fg-*` selectors and three `data-*` keys inside plugin code.
+// Why it exists. `extensions/` may not import `render/` (D-S5-5). Before this file, plugin code
+// retyped the contract between them: eight `.fg-*` selectors and three `data-*` keys.
 // Nothing versioned them and nothing tested them, so renaming a class in `render/dom` broke every
-// plugin with a green build. Every one of those strings now comes from `render/dom/dom-contract.ts`
-// (and `pane-layout.ts`'s own `SPLITTER_CLASS`), and `gantt-dom.test.ts` renders a real frame and
+// plugin with a green build. Every one of those strings now comes from `render/dom/dom-contract.ts`,
+// and from `pane-layout.ts`'s own `SPLITTER_CLASS`. `gantt-dom.test.ts` renders a real frame and
 // asserts this resolver still reads what those backends emit.
 //
 // Why it is not on `Overlay`. `Overlay` is the mount layer — `present` and `render`. `contains`,
-// `bounds`, `paneBounds` and `elementForEntry` were never overlay work: they answer for the whole
-// container, and two of them return timeline nodes that are not in the overlay at all. One word for
+// `bounds`, `paneBounds` and `elementForEntry` were never overlay work. They answer for the whole
+// container, and two of them return timeline nodes that sit outside the overlay. One word for
 // two concepts is the #7 failure, so the concepts split rather than the word being renamed.
 
 import {
@@ -32,11 +32,11 @@ import { SPLITTER_CLASS } from './pane-layout.js';
 import type { PaneLayout } from './pane-layout.js';
 
 /** What one node in a Gantt's own DOM stands for. `kind` is `model/`'s `TargetKind`, the same five
- *  words `CommandTarget` already uses — one vocabulary, so a plugin that resolves a right-click and
+ *  words `CommandTarget` already uses. One vocabulary, so a plugin that resolves a right-click and
  *  a command that filters on `when` say the same thing.
  *
- *  `entry` is filled for `'bar'`, `'row'` and `'cell'`, and left out when the row stands for no
- *  Entry (a grouping header row) or the Entry is gone from the Dataset. `field` is filled for
+ *  `entry` is filled for `'bar'`, `'row'` and `'cell'`. It is left out when the row stands for no
+ *  Entry (a grouping header row), or when the Entry is gone from the Dataset. `field` is filled for
  *  `'cell'` and `'header'`. */
 export interface DomTarget {
   kind: TargetKind;
@@ -58,8 +58,8 @@ export interface GanttDom {
    *  `undefined` when `node` is outside this Gantt, or inside it but on none of those (an empty
    *  stretch of timeline, a pane's own padding).
    *
-   *  Hot path: the resolved object is memoized on the element it came from, so a pointer that stays
-   *  over one bar resolves to the same frozen object every time and allocates nothing. */
+   *  Hot path: this seam memoizes the resolved object on the element it came from. A pointer that
+   *  stays over one bar resolves to the same frozen object every time, and allocates nothing. */
   targetUnder(node: Node): DomTarget | undefined;
   /** The rendered bar for `id`'s primary segment (segment 0). `undefined` when that entry has no bar
    *  in the current frame — scrolled out of the virtualized viewport, or no bar at all. */
@@ -76,15 +76,15 @@ export interface GanttDom {
    *  entirely. */
   readonly bounds: DOMRect;
   /** The grid pane's and timeline pane's own client rects (issue #137 F8). The container spans both
-   *  panes, so `bounds` alone cannot flip a popup at a pane edge — placement flips and clamps against
-   *  the anchor's own pane rect; `bounds` stays the outer clamp for a popup whose anchor is in
-   *  neither pane (a toolbar button, say). */
+   *  panes, so `bounds` alone cannot flip a popup at a pane edge. Placement flips and clamps against
+   *  the anchor's own pane rect instead. `bounds` stays the outer clamp for a popup whose anchor
+   *  sits in neither pane (a toolbar button, say). */
   readonly paneBounds: { grid: DOMRect; timeline: DOMRect };
 }
 
 /** Ordered by nothing: `Element.closest` answers with the *nearest* ancestor that matches any of
- *  these, so DOM depth decides. A cell is inside a row, so a cell wins over its row; a bar is in the
- *  bar layer and is inside no row at all. */
+ *  these, so DOM depth decides. A cell is inside a row, so a cell wins over its row. A bar sits in
+ *  the bar layer, and is inside no row at all. */
 const TARGET_SELECTOR = `.${BAR_CLASS}, .${ROW_LABEL_CLASS}, .${ROW_CELL_CLASS}, .${COLUMN_HEADER_CLASS}, .${SPLITTER_CLASS}, .${ROW_CLASS}`;
 
 /** `GanttDom` over one Container (`ContainerNotFoundError`'s own word — the element a consumer hands
@@ -94,8 +94,8 @@ export class ContainerDom implements GanttDom {
   readonly #paneLayout: PaneLayout;
   readonly #entryById: (id: EntryId) => Entry | undefined;
   /** One-slot memo, so a pointer resting on one node allocates no target per event. The three
-   *  stamps go stale together with the node: virtualization recycles a row node under a new entry,
-   *  and the stamps say so before the cached object is handed back. */
+   *  stamps go stale together with the node. Virtualization recycles a row node under a new entry,
+   *  and the stamps say so before this seam hands the cached object back. */
   #memoElement: Element | undefined;
   #memoItemId: string | undefined;
   #memoEntryId: string | undefined;
@@ -171,8 +171,8 @@ export class ContainerDom implements GanttDom {
     return this.#paneLayout.paneBounds();
   }
 
-  /** Frozen, because it is handed to plugin code and it is cached: a caller that wrote to it would
-   *  poison every later reader of the same node. */
+  /** Frozen, because plugin code reads this object and the memo keeps it. A caller that wrote to it
+   *  would poison every later reader of the same node. */
   #resolve(element: HTMLElement, itemIdAttr: string | undefined, fieldAttr: string | undefined): DomTarget {
     if (element.classList.contains(BAR_CLASS)) {
       const id = itemIdFromDataset(itemIdAttr);
