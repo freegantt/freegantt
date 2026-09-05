@@ -166,6 +166,7 @@ export {
   UnknownGridColumnError,
   DuplicateFieldKeyError,
   DuplicateFieldSourceError,
+  InvalidFieldSourceError,
   UnknownAggregatorError,
   AggregatorFailedError,
   UnknownFieldTypeError,
