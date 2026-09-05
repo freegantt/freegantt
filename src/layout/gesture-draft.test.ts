@@ -514,6 +514,44 @@ describe('draftForMove/draftForResize — picked Segment (#211, D-S4-30)', () =>
       { start: instant('2026-06-17T00:00:00Z'), end: instant('2026-06-18T00:30:00Z') },
     ]);
   });
+
+  it('move: an out-of-range picked index degrades to whole-Entry move, not a no-op', () => {
+    // The picked index survives a selection change even after `segments` shrinks
+    // (`pickedItemIdByEntryId` is only rebuilt on a selection change) — index 5 now names
+    // nothing on this three-Segment Entry. That must fall back to moving every Segment, not
+    // silently move nothing.
+    const draft = draftForMove({
+      zone: ZONE,
+      scale,
+      snap: 'none',
+      entries: [segmented],
+      dxPx: 30,
+      pickedSegmentIndexByEntryId: new Map([[segmented.id, 5]]),
+    });
+    expect(draft.get(segmented.id)?.segments).toEqual([
+      { start: instant('2026-06-15T14:30:00Z'), end: instant('2026-06-16T00:30:00Z') },
+      { start: instant('2026-06-16T09:30:00Z'), end: instant('2026-06-17T00:30:00Z') },
+      { start: instant('2026-06-17T12:30:00Z'), end: instant('2026-06-20T00:30:00Z') },
+    ]);
+  });
+
+  it('resize: an out-of-range picked index degrades to the envelope edge, not a no-op', () => {
+    const draft = draftForResize({
+      zone: ZONE,
+      scale,
+      snap: 'none',
+      entries: [segmented],
+      dxPx: 30,
+      edge: 'end',
+      pickedSegmentIndexByEntryId: new Map([[segmented.id, 5]]),
+    });
+    // No valid pick, so the envelope edge (the latest Segment's end, index 2) moves.
+    expect(draft.get(segmented.id)?.segments).toEqual([
+      segmented.segments![0],
+      segmented.segments![1],
+      { start: instant('2026-06-17T12:00:00Z'), end: instant('2026-06-20T00:30:00Z') },
+    ]);
+  });
 });
 
 describe('previewOffsets — segments (S4.10)', () => {

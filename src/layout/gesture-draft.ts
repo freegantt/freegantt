@@ -133,13 +133,23 @@ function envelopeEdgeInstant(entry: Entry, edge: 'start' | 'end'): Instant {
   return edge === 'start' ? envelope.start : envelope.end;
 }
 
+/** Resolves a caller-supplied pick to a Segment index this Entry actually has, else `undefined`
+ *  (no pick). A pick naming an Entry that has since lost that Segment — its `segments` array
+ *  shrank while the pick stayed put — degrades to the no-pick, whole-Entry/envelope behaviour
+ *  instead of silently matching nothing (#211). */
+function resolvePick(entry: Entry, segmentIndex: number | undefined): number | undefined {
+  if (segmentIndex === undefined || !hasSegments(entry)) return undefined;
+  return entry.segments[segmentIndex] ? segmentIndex : undefined;
+}
+
 /** The instant a gesture anchors or drags for one Entry: the picked Segment's own edge when the
  *  pointer picked one (#211, D-S4-30), else the envelope edge above. `segmentIndex` is `undefined`
  *  for an unsegmented entry too, so both fall through to the same envelope reading. */
 function entryEdgeInstant(entry: Entry, edge: 'start' | 'end', segmentIndex: number | undefined): Instant {
-  if (segmentIndex !== undefined && hasSegments(entry)) {
-    const segment = entry.segments[segmentIndex];
-    if (segment) return edge === 'start' ? segment.start : segment.end;
+  const index = resolvePick(entry, segmentIndex);
+  if (index !== undefined && hasSegments(entry)) {
+    const segment = entry.segments[index]!;
+    return edge === 'start' ? segment.start : segment.end;
   }
   return envelopeEdgeInstant(entry, edge);
 }
@@ -174,8 +184,9 @@ function moveEdit(entry: Entry, deltaMs: number, segmentIndex: number | undefine
   if (!hasSegments(entry)) {
     return { start: addMs(entry.start, deltaMs), end: addMs(entry.end, deltaMs) };
   }
+  const pick = resolvePick(entry, segmentIndex);
   const segments = entry.segments.map((segment, index) =>
-    segmentIndex !== undefined && index !== segmentIndex
+    pick !== undefined && index !== pick
       ? segment
       : { start: addMs(segment.start, deltaMs), end: addMs(segment.end, deltaMs) },
   );
@@ -197,8 +208,9 @@ function stepMoveEdit(
       end: stepBy(zone, entry.end, unit, amount),
     };
   }
+  const pick = resolvePick(entry, segmentIndex);
   const segments = entry.segments.map((segment, index) =>
-    segmentIndex !== undefined && index !== segmentIndex
+    pick !== undefined && index !== pick
       ? segment
       : {
           start: stepBy(zone, segment.start, unit, amount),
@@ -219,7 +231,7 @@ function resizeEdit(
   if (!hasSegments(entry)) {
     return clampedEdgeEdit(entry, edge, moved);
   }
-  const index = segmentIndex ?? segmentIndexAtEnvelopeEdge(entry.segments, edge);
+  const index = resolvePick(entry, segmentIndex) ?? segmentIndexAtEnvelopeEdge(entry.segments, edge);
   const segments = entry.segments.map((segment, i) => {
     if (i !== index) return segment;
     if (edge === 'start') {

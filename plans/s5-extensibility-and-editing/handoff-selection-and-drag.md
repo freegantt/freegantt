@@ -28,7 +28,7 @@ New shapes to know: `FrameRow.entryIds` is plural, `HitResult` is `BarHit | RowH
 
 #185 made the second half visible. The Selection said the whole Entry was selected, and a drag moved one Segment of it.
 
-**The repo owner decided: what you selected is what moves.** A drag steps every Segment by one delta and rewrites the envelope. A resize drags the Entry's envelope edge. **A gesture on one Segment alone is not offered here** — not hidden behind a modifier or a capability, simply not this decision's shape. Moving one Segment stays reachable through `entries.update(id, { segments })`. (#211 later reopened exactly this and restored it, gated on the pointer's own pick — see the superseding note above.)
+**The repo owner decided: what you selected is what moves.** A drag steps every Segment by one delta and rewrites the envelope. A resize drags the Entry's envelope edge. **Segment-level drag is dropped**, not hidden behind a modifier or a capability. Moving one Segment stays reachable through `entries.update(id, { segments })`.
 
 D-S4-30 is amended to say so. Its old text said the opposite in so many words.
 
