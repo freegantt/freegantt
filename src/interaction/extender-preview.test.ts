@@ -160,6 +160,38 @@ describe('[S3-A4] extender preview', () => {
     shell.destroy();
   });
 
+  // #167: the trap the S5.10 author flagged. `api/gantt.ts` passes an *arrow*
+  // (`(request) => options.dataset.editExtender(request)`), never the function the Dataset holds at
+  // construction. A Dataset plugin composes onto that hook later (D-S5-23, S5.10), so anything that
+  // stored the arrow's result would silently ghost nothing from that moment on. That is invisible
+  // today and wrong the moment S7's scheduling plugin installs after the Gantt is built.
+  it('reads the Dataset’s occupant live, so a plugin installed after the Gantt still ghosts', async () => {
+    // The arrow closes over `built`, and is only ever called from a later drag. So it reads whatever
+    // occupies the Dataset's hook at that moment, which is the whole point.
+    const built: ReturnType<typeof buildShell> = buildShell({
+      editExtender: (request) => built.state.editExtender(request),
+    });
+    // Composed after the shell already exists — exactly what `Gantt.plugins = [...]` does later.
+    built.state.setExtender(() => makeCascadeExtender());
+
+    const { shell, container, timeline } = built;
+    const barA = container.querySelector<HTMLElement>('[data-item-id="a:0"]')!;
+    const barX = container.querySelector<HTMLElement>('[data-item-id="x:0"]')!;
+    stubPointerCapture(timeline);
+    const restore = stubElementFromPoint({ x: 5, y: 5, el: barA });
+
+    timeline.dispatchEvent(new PointerEvent('pointerdown', { clientX: 5, clientY: 5, pointerId: 1 }));
+    timeline.dispatchEvent(new PointerEvent('pointermove', { clientX: 55, clientY: 5, pointerId: 1 }));
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+
+    expect(barA.dataset['state']).toContain('dragging');
+    expect(barX.dataset['state']).toContain('ghost');
+
+    timeline.dispatchEvent(new PointerEvent('pointerup', { clientX: 55, clientY: 5, pointerId: 1 }));
+    restore();
+    shell.destroy();
+  });
+
   it('no editExtender (P1 default, identity) previews the caller’s own drag with no ghost', async () => {
     const { shell, container, timeline } = buildShell();
     const barA = container.querySelector<HTMLElement>('[data-item-id="a:0"]')!;

@@ -231,6 +231,10 @@ _Avoid_: Layout cache, frame builder (it computes the pass; the cache is how, no
 What one `computeFrame` pass remembers when `FrameLayout` calls it again — today the `RowHeightIndex` and per-row lane-pack results. Passed as the optional second argument to `computeFrame`; not public (D-S4-19).
 _Avoid_: Frame cache as a consumer term (internal lifetime object only)
 
+**Frame settings**:
+The `view/` object holding every live setting that says what one Gantt's next frame draws (`view/frame-settings.ts`) — locale, today line, date lines, row source, the four renderer slots, and the four px sizes read from `--fg-*` custom properties. It owns the one invalidation table: what a changed setting costs is a row there, not a rule each `GanttShell` setter re-derives (#167). `toLayoutInput` is where these meet what a frame contributes fresh (entries, scale, viewport geometry, registries). DOM-free — pixels arrive through an injected reader — so the table is a Node unit test.
+_Avoid_: Frame plan (Row plan is `resolveRows`'s output, and ADR 0004 retired "Plan"; one word, two meanings is #7), Frame options (options are what a constructor takes; these stay live for the Gantt's life)
+
 **Gantt**:
 The public entry point and a whole mounted instance: one `Gantt` wraps one `container` element, one Dataset, and everything needed to render and interact with it. This is the sense used everywhere the specs discuss the product as a whole — D9's "multi-Gantt sync", I2's "two Gantt instances coexist independently", a consumer page that mounts "two Gantts". A `Gantt` _is_ the class; it is also the name of the concept, so `new Gantt(...)` and "a Gantt" mean the same thing.
 _Avoid_: Chart (see #7 — "chart" used to name both this and `GanttShell`, ambiguously, and is retired from the codebase entirely)
