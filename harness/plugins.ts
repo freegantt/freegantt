@@ -1,10 +1,13 @@
 import './harness-nav.ts';
-import { Gantt, Dataset, createPopup, entryId, contextMenu } from '../src/api/index.js';
-import type { GanttPlugin, GanttDom, Popup, RendererByKind, CellRenderer } from '../src/api/index.js';
+import { Gantt, Dataset, entryId, contextMenu } from '../src/api/index.js';
+import type { RendererByKind, CellRenderer } from '../src/api/index.js';
 import { sampleEntries } from '../fixtures/sample-dataset.js';
 import { weekendShading } from './plugins/weekend-shading.js';
 import { bufferKind } from './plugins/buffer-kind.js';
 import { riskKind } from './plugins/risk-kind.js';
+import { logEverything } from './plugins/log-everything.js';
+import { selectionShortcuts } from './plugins/selection-shortcuts.js';
+import { openDemoPopup, popupDemo } from './plugins/popup-demo.js';
 
 // S5.4's visible-acceptance box (s5.4-renderers.md §4, D-S5-10/11/12): a milestone diamond and a
 // red over-budget cost cell, painted through `barRenderer`/`cellRenderer` alone — no bespoke
@@ -47,83 +50,21 @@ function writeLog(line: string): void {
   log.prepend(entry);
 }
 
-// The two-line logging plugin the S5.1 acceptance box asks for (README §3, D-S5-1): a value the
-// harness imports, installed and removed live through `gantt.plugins` — no private import, no
-// remount.
-function logEverything(): GanttPlugin {
-  return {
-    id: 'harness.logEverything',
-    setup(ctx) {
-      const onSelectionChange = (): void =>
-        writeLog(`selectionChange: ${ctx.gantt.selectedIds.length} selected`);
-      ctx.events.on('selectionChange', onSelectionChange);
-      writeLog('logEverything: installed');
-      return () => {
-        ctx.events.off('selectionChange', onSelectionChange);
-        writeLog('logEverything: disposed');
-      };
-    },
-  };
-}
-
 toggleBtn.addEventListener('click', () => {
   const installed = gantt.plugins.some((plugin) => plugin.id === 'harness.logEverything');
   if (installed) {
     gantt.plugins = gantt.plugins.filter((plugin) => plugin.id !== 'harness.logEverything');
     toggleBtn.textContent = 'Install logging plugin';
   } else {
-    gantt.plugins = [...gantt.plugins, logEverything()];
+    gantt.plugins = [...gantt.plugins, logEverything(writeLog)];
     toggleBtn.textContent = 'Remove logging plugin';
   }
 });
 
-// S5.2, D-S5-6/D-S5-7: a plugin registers its own command and binds a chord to it — `Mod+K` clears
-// the selection, through the same `ctx.commands.register`/`ctx.interaction.registerKeybinding` seam
-// every built-in feature uses (no back door). Installed from the start, alongside `logEverything`.
-function selectionShortcuts(): GanttPlugin {
-  return {
-    id: 'harness.selectionShortcuts',
-    setup(ctx) {
-      ctx.commands.register({
-        id: 'demo.clearSelection',
-        label: 'Clear selection (demo)',
-        run: () => {
-          ctx.gantt.selectedIds = [];
-          writeLog('demo.clearSelection: selection cleared (Mod+K)');
-        },
-      });
-      ctx.interaction.registerKeybinding({ chord: 'Mod+K', command: 'demo.clearSelection' });
-      // No disposer: `ctx.disposables` already retracts the command and the keybinding (review P4).
-    },
-  };
-}
-
-gantt.plugins = [...gantt.plugins, selectionShortcuts()];
-
-// S5.3, D-S5-8: a plugin's `setup()` is the only place `ctx.view` reaches this scope, so the demo
-// stashes it once and the button below reads it. It keeps `ctx.view.dom` beside the `Popup`, because
-// finding an entry's bar is the library's job: `ctx.view.dom.barFor(id)` replaces the raw
-// `#gantt .fg-bar[data-item-id="…"]` selector this file used to write (review H2, N1).
-let popupDemoView: { popup: Popup; dom: GanttDom } | undefined;
-function popupDemo(): GanttPlugin {
-  return {
-    id: 'harness.popupDemo',
-    setup(ctx) {
-      // C3, plans/reviews/2026-09-02-s5-start-fixes.md: `createPopup`'s Escape dismissal folds into
-      // the shared keymap now, so a plugin hands over `ctx.interaction.registerKeyHandler` (the one
-      // bound method it has, not a full `Keymap` instance) wrapped to the small structural shape
-      // `createPopup` asks for.
-      popupDemoView = {
-        popup: createPopup(ctx.view, { registerHandler: ctx.interaction.registerKeyHandler }),
-        dom: ctx.view.dom,
-      };
-      return () => {
-        popupDemoView = undefined;
-      };
-    },
-  };
-}
-gantt.plugins = [...gantt.plugins, popupDemo()];
+// S5.2/S5.3, D-S5-6/D-S5-7/D-S5-8: both demos live in `harness/plugins/`, beside `weekendShading()`
+// and the two kind plugins, so this page and `main.ts` install one copy each instead of holding two
+// (review H1). Both are written against 'freegantt' alone, like every other file in that directory.
+gantt.plugins = [...gantt.plugins, selectionShortcuts(writeLog), popupDemo()];
 
 const popupBtn = document.querySelector<HTMLButtonElement>('#open-popup-btn')!;
 popupBtn.addEventListener('click', () => {
@@ -132,18 +73,7 @@ popupBtn.addEventListener('click', () => {
     writeLog('popup demo: select a bar first');
     return;
   }
-  const anchor = popupDemoView?.dom.barFor(selected);
-  if (!anchor || !popupDemoView) return;
-  popupDemoView.popup.open({
-    anchor,
-    placement: 'end',
-    dismissOn: ['escape', 'outsidePointer', 'scroll'],
-    content: {
-      style: { padding: '6px 10px', font: 'inherit' },
-      text: `Entry: ${selected}`,
-    },
-  });
-  writeLog(`popup demo: opened on ${selected}`);
+  if (openDemoPopup(selected)) writeLog(`popup demo: opened on ${selected}`);
 });
 
 // S5.4, D-S5-10/11/12: `barRenderer`/`cellRenderer` are `GanttOptions.*` — the consumer's own,
