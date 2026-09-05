@@ -676,11 +676,8 @@ export class GanttShell {
     // D-S3-13: one `EntryGestureContext`, shared by the pointer attachment and the keyboard one.
     // Both drive the same `#gesturePipeline.session()`, so there is no value in building two.
     const gestureContext: EntryGestureContext = {
-      hitTest: (at) => {
-        const hit = this.#backend.hitTest(at);
-        if (!hit) return undefined;
-        return hit.edge !== undefined ? { itemId: hit.itemId, edge: hit.edge } : { itemId: hit.itemId };
-      },
+      hitTest: (at) => this.#backend.hitTest(at) ?? undefined,
+      entriesForRow: (id) => this.#selectableEntriesOfRow(id),
       entryFor: (item) => this.#entryFor(item),
       can: (capability, entry) => this.#capabilities.can(capability, entry),
       selectableEntriesInRowOrder: () => this.#selectableEntriesInRowOrder(),
@@ -900,6 +897,15 @@ export class GanttShell {
     apply();
     this.#events.emit(after, change);
     return true;
+  }
+
+  /** #185: which Entries a row click selects. The row plan owns the relation and `#capabilities`
+   *  owns the answer, so `interaction/` asks one question instead of looking either one up. An Entry
+   *  that refuses `select` is skipped; it never blocks the rest of the row. */
+  #selectableEntriesOfRow(id: RowId): readonly EntryId[] {
+    const row = this.#layout.plannedRows().find((planned) => planned.id === id);
+    if (row === undefined || isPlannedHeaderRow(row)) return [];
+    return row.entryIds.filter((entryId) => this.#canGesture('select', entryId));
   }
 
   #selectableEntriesInRowOrder(): readonly EntryId[] {

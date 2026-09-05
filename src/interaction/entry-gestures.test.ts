@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { attachEntryGestures } from './entry-gestures.js';
 import type { DraftOptions, EntryGestureContext, EntryGesture } from '../view/index.js';
-import { entryId, entryIdOfItem, itemId } from '../model/index.js';
+import { entryId, entryIdOfItem, itemId, rowId } from '../model/index.js';
 import type { Entry, EntryEdits, EntryId, Instant, ItemId } from '../model/index.js';
 
 const A = entryId('a');
@@ -63,13 +63,17 @@ function makeContext(overrides: Partial<EntryGestureContext> & SessionOverrides 
   const commits: [EntryGesture, EntryEdits][] = [];
 
   const ctx: EntryGestureContext = {
-    hitTest: (at) => (at.x >= 0 && at.x < ORDER.length ? { itemId: itemId(ORDER[at.x]!) } : undefined),
+    hitTest: (at) =>
+      at.x >= 0 && at.x < ORDER.length ? { kind: 'bar', itemId: itemId(ORDER[at.x]!) } : undefined,
     entryFor: (item: ItemId) => {
       const id = entryIdOfItem(item);
       return ORDER.includes(id) ? entryFor(id) : undefined;
     },
     can: () => true,
     selectableEntriesInRowOrder: () => ORDER,
+    // #185: a row hit resolves through this seam — the fake maps one row id to the Entry of the
+    // same name, so a test that wants a multi-entry row overrides it.
+    entriesForRow: (id) => (ORDER.includes(id as unknown as EntryId) ? [id as unknown as EntryId] : []),
     setHovered: () => {},
     contentXAtPaneOffset: (offsetX) => offsetX,
     session: (grabbed, gesture) => {
@@ -302,6 +306,101 @@ describe('attachEntryGestures — grid row click', () => {
     expect(proposals.at(-1)).toEqual([]);
   });
 
+  // #185: a row that owns several Entries selects all of them. `hitTest` reports the row, and
+  // `entriesForRow` answers which Entries it owns — no Item id is invented anywhere on this path.
+  const PACKED = rowId('packed');
+
+  function packedRowContext(overrides: Partial<EntryGestureContext> = {}) {
+    // x = 0 is the packed row; x = 1 is A's own bar, so a test can select off the timeline too.
+    return makeContext({
+      hitTest: (at) => {
+        if (at.x === 0) return { kind: 'row', rowId: PACKED };
+        return at.x === 1 ? { kind: 'bar', itemId: itemId(A) } : undefined;
+      },
+      entriesForRow: (id) => (id === PACKED ? [A, B] : []),
+      ...overrides,
+    });
+  }
+
+  it('a row click selects every Entry the row owns (#185)', () => {
+    const pane = document.createElement('div');
+    const container = document.createElement('div');
+    const rowLayer = document.createElement('div');
+    const { ctx, proposals, proposedPickedItemIds } = packedRowContext();
+    attachEntryGestures(pane, rowLayer, container, ctx);
+
+    rowLayer.dispatchEvent(up(0));
+    expect(proposals.at(-1)).toEqual([A, B]);
+    // A row click picks no bar, so the shared handle pair has nothing to park on.
+    expect(proposedPickedItemIds.at(-1)).toBeUndefined();
+  });
+
+  it('ctrl-click toggles a multi-entry row as a unit (#185)', () => {
+    const pane = document.createElement('div');
+    const container = document.createElement('div');
+    const rowLayer = document.createElement('div');
+    const { ctx, proposals } = packedRowContext();
+    attachEntryGestures(pane, rowLayer, container, ctx);
+
+    rowLayer.dispatchEvent(up(0, { ctrlKey: true }));
+    expect(proposals.at(-1)).toEqual([A, B]);
+
+    // Every member is selected now, so the same chord removes the whole row.
+    rowLayer.dispatchEvent(up(0, { ctrlKey: true }));
+    expect(proposals.at(-1)).toEqual([]);
+  });
+
+  it('ctrl-click adds the missing members when only some of the row is selected (#185)', () => {
+    const pane = document.createElement('div');
+    const container = document.createElement('div');
+    const rowLayer = document.createElement('div');
+    const { ctx, proposals } = packedRowContext();
+    attachEntryGestures(pane, rowLayer, container, ctx);
+
+    pane.dispatchEvent(up(1)); // select A off its own bar
+    rowLayer.dispatchEvent(up(0, { ctrlKey: true }));
+    expect(proposals.at(-1)).toEqual([A, B]);
+  });
+
+  it('shift-click ranges to the last Entry the row owns (#185)', () => {
+    const pane = document.createElement('div');
+    const container = document.createElement('div');
+    const rowLayer = document.createElement('div');
+    const { ctx, proposals } = makeContext({
+      hitTest: (at) => (at.x === 0 ? { kind: 'bar', itemId: itemId(A) } : { kind: 'row', rowId: PACKED }),
+      entriesForRow: (id) => (id === PACKED ? [B, C] : []),
+    });
+    attachEntryGestures(pane, rowLayer, container, ctx);
+
+    pane.dispatchEvent(up(0)); // anchor = A
+    rowLayer.dispatchEvent(up(1, { shiftKey: true })); // range ends on C, the row's last Entry
+    expect(proposals.at(-1)).toEqual([A, B, C]);
+  });
+
+  it('a row Entry that refuses select is skipped, and never blocks the rest (#185)', () => {
+    const pane = document.createElement('div');
+    const container = document.createElement('div');
+    const rowLayer = document.createElement('div');
+    // `entriesForRow` resolves the capability (I14), so an incapable Entry never reaches this file.
+    const { ctx, proposals } = packedRowContext({ entriesForRow: () => [B] });
+    attachEntryGestures(pane, rowLayer, container, ctx);
+
+    rowLayer.dispatchEvent(up(0));
+    expect(proposals.at(-1)).toEqual([B]);
+  });
+
+  it('a row that owns nothing selectable writes nothing and clears nothing (#185)', () => {
+    const pane = document.createElement('div');
+    const container = document.createElement('div');
+    const rowLayer = document.createElement('div');
+    const { ctx, proposals } = packedRowContext({ entriesForRow: () => [] });
+    attachEntryGestures(pane, rowLayer, container, ctx);
+
+    pane.dispatchEvent(up(1)); // select A off its own bar
+    rowLayer.dispatchEvent(up(0)); // a header row: it owns no Entry
+    expect(proposals).toEqual([[A]]);
+  });
+
   it('a grid-row pointerup never arms move/resize — no session() call, no drag', () => {
     const pane = document.createElement('div');
     const container = document.createElement('div');
@@ -458,7 +557,7 @@ describe('attachEntryGestures — resize (S3.4)', () => {
     const rowLayer = document.createElement('div');
     const capabilities: ('move' | 'resize')[] = [];
     const { ctx, proposals, commits } = makeContext({
-      hitTest: () => ({ itemId: itemId(A), edge: 'end' }),
+      hitTest: () => ({ kind: 'bar' as const, itemId: itemId(A), edge: 'end' }),
       can: (capability) => capability === 'resize' || capability === 'select',
       entriesForGesture: (grabbed, capability) => {
         capabilities.push(capability);
@@ -484,7 +583,10 @@ describe('attachEntryGestures — resize (S3.4)', () => {
     const rowLayer = document.createElement('div');
     const commit = vi.fn(() => Promise.resolve(true));
     const { ctx, proposals } = makeContext({
-      hitTest: (at) => (at.x === 0 ? { itemId: itemId(A), edge: 'start' } : { itemId: itemId(ORDER[at.x]!) }),
+      hitTest: (at) =>
+        at.x === 0
+          ? { kind: 'bar' as const, itemId: itemId(A), edge: 'start' }
+          : { kind: 'bar' as const, itemId: itemId(ORDER[at.x]!) },
       can: (capability) => capability === 'select', // resize refused (e.g. milestone)
       commit,
     });
@@ -516,7 +618,7 @@ describe('attachEntryGestures — segments and visible row order (S4.10)', () =>
       ],
     };
     const { ctx } = makeContext({
-      hitTest: () => ({ itemId: middle }),
+      hitTest: () => ({ kind: 'bar' as const, itemId: middle }),
       entryFor: (item) => (item === middle ? segmented : entryFor(entryIdOfItem(item))),
       session: (grabbed, gesture, grabbedItemId) => {
         grabbedItems.push(grabbedItemId);
@@ -542,7 +644,7 @@ describe('attachEntryGestures — segments and visible row order (S4.10)', () =>
     const rowLayer = document.createElement('div');
     const middle = itemId(A, 1);
     const { ctx, proposals, proposedPickedItemIds } = makeContext({
-      hitTest: () => ({ itemId: middle }),
+      hitTest: () => ({ kind: 'bar' as const, itemId: middle }),
     });
     attachEntryGestures(pane, rowLayer, container, ctx);
 

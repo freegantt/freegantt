@@ -9,7 +9,13 @@
 import type { EntryId, ItemId } from '../model/index.js';
 import { itemId } from '../model/index.js';
 import { createPointerGesture } from './pointer-gesture.js';
-import type { Detachable, EntryGestureContext, EntryGesture, EntryGestureSession } from '../view/index.js';
+import type {
+  Detachable,
+  EntryGestureContext,
+  EntryGesture,
+  EntryGestureSession,
+  EntryHit,
+} from '../view/index.js';
 
 export type { EntryGestureContext, EntryGesture, DraftOptions, EntryHit } from '../view/index.js';
 
@@ -95,11 +101,13 @@ export function attachEntryGestures(
     },
   });
 
-  function selectRange(to: EntryId): readonly EntryId[] {
+  /** The range from the shift-anchor to `to`'s last member (#185). A row that owns several Entries
+   *  ends the range on its last one; a bar hit passes a list of one, exactly as before. */
+  function selectRange(to: readonly EntryId[]): readonly EntryId[] {
     const order = ctx.selectableEntriesInRowOrder();
     const fromIndex = anchor !== undefined ? order.indexOf(anchor) : -1;
-    const toIndex = order.indexOf(to);
-    if (fromIndex === -1 || toIndex === -1) return [to].filter((id) => canSelect(id));
+    const toIndex = order.indexOf(to[to.length - 1]!);
+    if (fromIndex === -1 || toIndex === -1) return to;
     const [lo, hi] = fromIndex <= toIndex ? [fromIndex, toIndex] : [toIndex, fromIndex];
     return order.slice(lo, hi + 1).filter((id) => canSelect(id));
   }
@@ -113,16 +121,18 @@ export function attachEntryGestures(
   }
 
   function onPointerDown(e: PointerEvent): void {
+    // A drag only ever starts on a bar: a row hit arms nothing (D-S3-10's grid-row clause).
     const hit = ctx.hitTest({ x: e.clientX, y: e.clientY });
-    const entry = hit !== undefined ? ctx.entryFor(hit.itemId) : undefined;
-    if (entry !== undefined && hit?.edge !== undefined && ctx.can('resize', entry)) {
+    const bar = hit?.kind === 'bar' ? hit : undefined;
+    const entry = bar !== undefined ? ctx.entryFor(bar.itemId) : undefined;
+    if (entry !== undefined && bar?.edge !== undefined && ctx.can('resize', entry)) {
       grabbedId = entry.id;
-      grabbedEdge = hit.edge;
-      grabbedItemId = hit.itemId;
-    } else if (entry !== undefined && hit !== undefined && ctx.can('move', entry)) {
+      grabbedEdge = bar.edge;
+      grabbedItemId = bar.itemId;
+    } else if (entry !== undefined && bar !== undefined && ctx.can('move', entry)) {
       grabbedId = entry.id;
       grabbedEdge = undefined;
-      grabbedItemId = hit.itemId;
+      grabbedItemId = bar.itemId;
     } else {
       grabbedId = undefined;
       grabbedEdge = undefined;
@@ -137,49 +147,65 @@ export function attachEntryGestures(
    *  row, padding, a twisty — `render/dom`'s `hitTest` already returns no hit for those) never does. */
   function selectFromHit(
     e: Pick<PointerEvent, 'shiftKey' | 'ctrlKey' | 'metaKey'>,
-    hit: ReturnType<EntryGestureContext['hitTest']>,
+    hit: EntryHit | undefined,
     clearOnMiss: boolean,
   ): void {
-    if (hit === undefined) {
-      // A grid miss (`clearOnMiss = false`, see the doc comment above) leaves the shift-anchor alone
-      // too — only a genuine miss-clears-everything surface (the timeline) drops it here.
+    // A grid miss (`clearOnMiss = false`, see the doc comment above) leaves the shift-anchor alone
+    // too — only a genuine miss-clears-everything surface (the timeline) drops it here.
+    if (hit === undefined || missesEveryEntry(hit)) {
       if (clearOnMiss) {
         anchor = undefined;
         if (ctx.selection.get().length > 0) ctx.selection.propose([]);
       }
       return;
     }
-    const entry = ctx.entryFor(hit.itemId);
 
-    if (entry === undefined) {
-      if (clearOnMiss) {
-        anchor = undefined;
-        if (ctx.selection.get().length > 0) ctx.selection.propose([]);
-      }
-      return;
-    }
-    const hitItemId = hit.itemId;
+    // #185: one hit resolves to a list of Entries — one for a bar, every selectable one the row
+    // owns for a row. The rules below then run over the list as a unit. An empty list means the hit
+    // landed on something no gesture may select, which writes nothing and clears nothing.
+    const targets = selectableEntriesOf(hit);
+    if (targets.length === 0) return;
 
     if (e.shiftKey) {
-      const next = selectRange(entry.id);
+      const next = selectRange(targets);
       if (next.length > 0) ctx.selection.propose(next);
       return;
     }
 
-    if (!ctx.can('select', entry)) return;
+    anchor = targets[0];
 
     if (e.ctrlKey || e.metaKey) {
-      anchor = entry.id;
-      const current = ctx.selection.get();
-      const next = current.includes(entry.id)
-        ? current.filter((id) => id !== entry.id)
-        : [...current, entry.id];
-      ctx.selection.propose(next);
+      ctx.selection.propose(toggled(targets));
       return;
     }
 
-    anchor = entry.id;
-    ctx.selection.propose([entry.id], hitItemId);
+    ctx.selection.propose(targets, hit.kind === 'bar' ? hit.itemId : undefined);
+  }
+
+  /** True when the hit stands for nothing the Dataset still holds — a stale Item id, which is the
+   *  same "nothing there" a miss reports. A row that exists but owns nothing selectable is not this:
+   *  the pointer did land on a row, so an empty timeline's clear must not fire for it. */
+  function missesEveryEntry(hit: EntryHit): boolean {
+    return hit.kind === 'bar' && ctx.entryFor(hit.itemId) === undefined;
+  }
+
+  /** The Entries this hit selects (#185): the bar's own Entry when it may be selected, or every
+   *  selectable Entry the row owns. `entriesForRow` resolves the capability, so both branches
+   *  answer with ids a `select` already allowed. */
+  function selectableEntriesOf(hit: EntryHit): readonly EntryId[] {
+    if (hit.kind === 'row') return ctx.entriesForRow(hit.rowId);
+    const entry = ctx.entryFor(hit.itemId);
+    return entry !== undefined && ctx.can('select', entry) ? [entry.id] : [];
+  }
+
+  /** Ctrl/⌘ moves the whole list at once: it removes the list when every member is already
+   *  selected, else it adds the members that are missing (#185). */
+  function toggled(targets: readonly EntryId[]): readonly EntryId[] {
+    const current = ctx.selection.get();
+    if (targets.every((id) => current.includes(id))) {
+      return current.filter((id) => !targets.includes(id));
+    }
+    return [...current, ...targets.filter((id) => !current.includes(id))];
   }
 
   function onPointerUp(e: PointerEvent): void {
@@ -217,7 +243,8 @@ export function attachEntryGestures(
    *  independent listeners racing each other. */
   function onPointerMove(e: PointerEvent): void {
     drag.move(e);
-    ctx.setHovered(ctx.hitTest({ x: e.clientX, y: e.clientY })?.itemId);
+    const hit = ctx.hitTest({ x: e.clientX, y: e.clientY });
+    ctx.setHovered(hit?.kind === 'bar' ? hit.itemId : undefined);
   }
 
   function onPointerLeave(): void {
