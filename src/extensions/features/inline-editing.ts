@@ -72,16 +72,16 @@ function entryIdOfRow(row: HTMLElement): EntryId | undefined {
   return id === undefined ? undefined : (id as EntryId);
 }
 
-/** The DOM home of `entryId`'s `field` cell, scoped to this Gantt's own container — `undefined` when
- *  the row is not in the current virtualized frame (nothing to anchor a keyboard-opened editor to).
- *  `CSS.escape` guards an id/field containing a quote or other selector-special character. */
-function findCell(container: HTMLElement, entryId: EntryId, field: FieldKey): HTMLElement | undefined {
-  const row = container.querySelector<HTMLElement>(`.fg-row[data-entry-id="${CSS.escape(entryId)}"]`);
-  if (!row) return undefined;
+/** The `field` cell inside `row`, and only while `row` still paints `entryId` — virtualization
+ *  recycles a row node onto another entry, and that node's cells then belong to that entry, not to
+ *  this session. `undefined` says "nothing here to anchor to", never "here is the wrong cell".
+ *  `CSS.escape` guards a field name containing a quote or other selector-special character. */
+function cellInRow(row: HTMLElement, entryId: EntryId, field: FieldKey): HTMLElement | undefined {
+  if (entryIdOfRow(row) !== entryId) return undefined;
   return row.querySelector<HTMLElement>(`[data-field="${CSS.escape(String(field))}"]`) ?? undefined;
 }
 
-/** Same lookup as `findCell`, but for a keyboard opener with no DOM node to start from (`onDblClick`
+/** The same lookup for a keyboard opener with no DOM node to start from (`onDblClick`
  *  scopes through `ctx.view.overlay.contains(event.target)` instead) — `entryId` alone is not enough
  *  to scope by when two Gantts share entry ids (I2), so this walks every `.fg-row` match in the
  *  document and keeps the one this Gantt's own overlay actually contains. */
@@ -129,6 +129,8 @@ interface OpenSession {
   focusTrap: FocusTrap;
   detachOverlay: () => void;
   detachListeners: () => void;
+  /** Puts the editor back over its own cell after the cell moves (a scroll, a reflow). */
+  reposition(): void;
   /** Guards a native `change` and a `keydown` Enter both firing for one commit (`date-input.ts`'s
    *  own `onCommit` fires both), and a commit racing a revert. */
   settled: boolean;
@@ -189,9 +191,15 @@ export function inlineEditing(options: InlineEditingOptions = {}): GanttPlugin {
       }
       ctx.dataset.on('change', onDatasetChange);
 
+      /** #158: the editor lives in the `Overlay`, not inside the scrolling pane, so a scroll moves the
+       *  cell out from under it. A refused edit is the case that shows this — that editor stays open
+       *  by contract (#137 F5) and so is still on screen to drift, while a committed one is already
+       *  torn down. Anchorage first: a row scrolled out of the frame has no cell to follow. */
       function onScroll(): void {
         const current = session;
-        if (current && !stillAnchored(current)) closeSession('revert');
+        if (!current) return;
+        if (!stillAnchored(current)) closeSession('revert');
+        else current.reposition();
       }
       document.addEventListener('scroll', onScroll, true);
 
@@ -280,13 +288,14 @@ export function inlineEditing(options: InlineEditingOptions = {}): GanttPlugin {
       ): void {
         const handle = ctx.view.overlay.present(wrapper);
         position(wrapper, cell);
-        // A resize can also come with a reflow (a column width change, say) that moves the cell —
-        // re-found from `row` each time, not the closed-over `cell`, in case virtualization recycled
-        // it (`stillAnchored`'s own check runs first on scroll, so `row` is still this entry's own).
-        const detachResize = ctx.view.overlay.onResize(() => {
-          const cell = findCell(row, entryId, field);
-          if (cell) position(wrapper, cell);
-        });
+        // The cell is re-found from `row` on every move, never the closed-over `cell`: virtualization
+        // may have recycled that node onto another entry, and `cellInRow` returns nothing when it did.
+        function reposition(): void {
+          const current = cellInRow(row, entryId, field);
+          if (current) position(wrapper, current);
+        }
+        // A resize can also come with a reflow (a column width change, say) that moves the cell.
+        const detachResize = ctx.view.overlay.onResize(reposition);
 
         const detachEscape = ctx.interaction.registerKeyHandler(
           'Escape',
@@ -319,6 +328,7 @@ export function inlineEditing(options: InlineEditingOptions = {}): GanttPlugin {
           wrapper,
           focusTrap,
           detachOverlay: () => handle.detach(),
+          reposition,
           detachListeners: () => {
             detachResize();
             detachEscape();
