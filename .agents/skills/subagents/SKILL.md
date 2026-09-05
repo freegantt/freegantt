@@ -7,6 +7,10 @@ description: Dispatch work to a subagent — pick the right agent for the job, w
 
 You coordinate. The subagent does the work and holds the details. Two things decide whether that works: **which agent you pick**, and **what you put in the dispatch**.
 
+## Dispatch is not the default
+
+Quick or simple work stays in your own session. Read the file, make the edit, run the check — do it yourself. Dispatch only when the job actually needs it: it is large enough to risk your context, it splits into parts that run in parallel, or the user explicitly asked for an agent or a subagent. "This has a few steps" is not, by itself, a reason to dispatch.
+
 ## Pick the agent
 
 | The job | Agent | Model |
