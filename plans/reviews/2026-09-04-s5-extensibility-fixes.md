@@ -346,13 +346,20 @@ Files: `src/view/renderer-registry.ts`, `src/layout/items/produce-items.ts`, `sr
       all seven under one comment. `CONTEXT.md` gains **Shell wiring**. The three real test seams
       (`backend`, `itemProducerRegistry`, `editExtender`) stay where they are: `api/gantt.ts` does
       not supply them, so they are not wiring.
-- [ ] **H1 — move the three demo plugins.** Note from R3: `popupDemo()` must carry its
+- [x] **H1 — move the three demo plugins.** Note from R3: `popupDemo()` must carry its
       `popupDemoView: { popup, dom }` stash with it — one stash, not two. Note from R5:
       `selectionShortcuts()` no longer returns an empty disposer, but `logEverything()` and
       `popupDemo()` own real ones and keep them.
       `logEverything()`, `selectionShortcuts()` and `popupDemo()`
       are copied character-for-character into `harness/main.ts` and `harness/plugins.ts`.
       `harness/plugins/` already holds `weekend-shading.ts` and `buffer-kind.ts`. Put them beside those.
+      They are `log-everything.ts`, `selection-shortcuts.ts` and `popup-demo.ts` now, and each
+      imports `'freegantt'` alone, the same third-party posture the three files beside them take.
+      Not character-for-character after all: the two copies logged through different functions
+      (`writeLog` vs `prependLogLine(log, …)`), so `logEverything` and `selectionShortcuts` take a
+      `WriteLog` and each page passes its own. `popup-demo.ts` holds the one stash and exports
+      `openDemoPopup(entry)` beside the plugin, so neither page rebuilds the open call either.
+      `main.ts` lost 63 lines and `plugins.ts` 70.
 - [x] **A6 — index the resolved columns.** `gantt-shell.ts` runs
       `resolvedColumns.find(…)` once per visible cell, so column lookup is O(rows × columns²) per frame.
       Build a `Map<string, ResolvedColumn>` in `ColumnChrome.setResolvedColumns`.
