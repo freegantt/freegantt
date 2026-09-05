@@ -100,10 +100,10 @@ function lookupOf(dataset: Pick<Dataset, 'field'>): FieldLookup {
 
 /** Call: `resolveColumns(gantt.gridColumns, { get: (key) => dataset.field(key) }, { timeZone, locale })`.
  *  What comes back is what the Gantt paints. A column that declares `hidden: true` (D-S5-34) stays
- *  out of the result, and out of everything downstream that reads it — the frame, the pane width,
- *  `ctx.view.resolvedColumns()`, and the resize and reorder gestures. It is still resolved first, so
- *  a misspelled field or a Field with no `column` throws where the column is declared. A mistake
- *  that waited for the column to be shown would report the wrong moment. */
+ *  out of the result. It therefore stays out of everything downstream — the frame, the pane width,
+ *  `ctx.view.resolvedColumns()`, and the two column gestures. It is still resolved first, so a
+ *  misspelled field or a Field with no `column` throws where the column is declared. A mistake that
+ *  waited for the column to be shown would report the wrong moment. */
 export function resolveColumns(
   gridColumns: readonly GridColumnInput[],
   lookup: FieldLookup,

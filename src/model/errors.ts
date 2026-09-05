@@ -199,7 +199,7 @@ export class FieldNotColumnableError extends FreeGanttError {
 
 /** `code: 'unknown-grid-column'` — `gantt.hideGridColumn` or `gantt.showGridColumn` named a field
  *  that no declared column carries (D-S5-34). Both verbs act on a column this Gantt already
- *  declares; neither one adds a column, so a name nothing declares is a mistake and says so. A
+ *  declares. Neither one adds a column, so a name nothing declares is a mistake and says so. A
  *  hidden column stays declared, so `showGridColumn` always reaches what `hideGridColumn` hid. */
 export class UnknownGridColumnError extends FreeGanttError {
   readonly field: string;

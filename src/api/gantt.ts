@@ -323,11 +323,11 @@ export class Gantt {
     return this.#shell.hiddenGridColumns;
   }
 
-  /** D-S5-34. Call: `gantt.hideGridColumn('cost')`. Takes one column off the screen and leaves every
-   *  other column, its width and the order untouched — no restatement of `gridColumns`, and nothing
-   *  for the caller to splice back later. The hidden column stays in `gridColumns` as
-   *  `{ field, hidden: true }`, so a saved list restores it hidden. Raises the same cancelable
-   *  `beforeGridColumnsChange`/`gridColumnsChange` pair a resize raises. Throws
+  /** D-S5-34. Call: `gantt.hideGridColumn('cost')`. It takes one column off the screen. It leaves
+   *  every other column alone, with the width and the order the user gave them. The caller restates
+   *  no list and splices nothing back later. The hidden column stays in `gridColumns` as
+   *  `{ field, hidden: true }`, so a saved list restores it hidden. It raises the same cancelable
+   *  `beforeGridColumnsChange`/`gridColumnsChange` pair a resize raises. It throws
    *  `UnknownGridColumnError` when no declared column names the field. */
   hideGridColumn(field: FieldKey): void {
     this.#shell.hideGridColumn(field);
