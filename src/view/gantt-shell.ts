@@ -110,8 +110,8 @@ import { createFieldContext } from '../data/fields/field-access.js';
 import { isDevMode } from '../data/dev-mode.js';
 
 /** One `{ detach() }` for every inject slot. `view/` may not import `interaction/` (plans/01 §1:
- *  `INT --> VIEW`, not the reverse), so the shell takes pointer and keyboard attachments by
- *  injection — the same DI shape `GanttShellOptions.backend` already uses. `api/gantt.ts` (which
+ *  `INT --> VIEW`, not the reverse). So the shell takes pointer and keyboard attachments by
+ *  injection. That is the same DI shape `GanttShellOptions.backend` already uses. `api/gantt.ts` (which
  *  does import `interaction/`, `API --> INT`) supplies `attachEntryGestures` /
  *  `attachKeyboardEditing`. `interaction/` returns this type; there is no per-slot mirror.
  *  `EntryGestureContext` itself lives in `./entry-gesture-context.js` (D-GH-1, C5). */
@@ -125,10 +125,10 @@ export type AttachEntryGestures = (
   ctx: EntryGestureContext,
 ) => Detachable;
 
-/** S3.5, D-S3-13: same DI shape as `AttachEntryGestures` just above, and the same `ctx` instance —
+/** S3.5, D-S3-13: same DI shape as `AttachEntryGestures` just above, and the same `ctx` instance.
  *  `interaction/keyboard-editing.ts`'s `attachKeyboardEditing` needs `session()`/`selection`/
- *  `selectableEntriesInRowOrder`/`entryFor`/`can` only, not `hitTest`/`setHovered`, but there is no value in a second,
- *  narrower context type for one caller. */
+ *  `selectableEntriesInRowOrder`/`entryFor`/`can` only, not `hitTest`/`setHovered`. But a second,
+ *  narrower context type for one caller has no value. */
 export type AttachKeyboardEditing = (container: HTMLElement, ctx: EntryGestureContext) => Detachable;
 
 /** S5.7, D-S5-18: same DI shape again — `interaction/column-gestures.ts`'s `attachColumnGestures`
@@ -144,9 +144,9 @@ export type AttachColumnGestures = (
  * `prefers-color-scheme` (no `data-fg-theme` attribute written), `'light'`/`'dark'` pin it. */
 export type Theme = 'auto' | 'light' | 'dark';
 
-/** #157: how wide the grid pane sits. A number is px. `'fitColumns'` is a standing instruction —
- *  the pane sits exactly on its columns' own right edge (`totalColumnWidth`, `layout/column.ts`) and
- *  re-measures every time the columns change, so a consumer never restates a width the library
+/** #157: how wide the grid pane sits. A number is px. `'fitColumns'` is a standing instruction.
+ *  The pane sits exactly on its columns' own right edge (`totalColumnWidth`, `layout/column.ts`),
+ *  and re-measures every time the columns change. A consumer never restates a width the library
  *  already computes. It is not a value a consumer reads back: `gridWidth`'s getter answers in px,
  *  because "how wide is the pane" is a question about pixels. */
 export type GridWidth = number | 'fitColumns';
@@ -154,10 +154,10 @@ const DEFAULT_THEME: Theme = 'auto';
 const DEFAULT_A11Y_LABEL = 'Gantt';
 
 /** CSS custom property that owns row height (plans/02 §4, level 1 of the customization ladder) —
- * not a constructor option (#39). Read on construction and again whenever the pane-size attachment
- * fires (#49, #8): getComputedStyle is a synchronous style read that can force a style
- * recalculation, and `--fg-row-height` essentially never changes between renders in normal use, so a
- * resize is as good a signal as any to catch the rare case it does — never an unconditional read on
+ * not a constructor option (#39). Read on construction, and again whenever the pane-size attachment
+ * fires (#49, #8). `getComputedStyle` is a synchronous style read that can force a style
+ * recalculation. `--fg-row-height` essentially never changes between renders in normal use. So a
+ * resize is as good a signal as any to catch the rare case it does. Never an unconditional read on
  * every render(). */
 const ROW_HEIGHT_PROPERTY = '--fg-row-height';
 const DEFAULT_ROW_HEIGHT = 32;
@@ -177,14 +177,14 @@ const LANE_GAP_PROPERTY = '--fg-lane-gap';
 const LANE_GAP_POLICY = { fallback: DEFAULT_LANE_GAP_PX, accepts: 'zeroOrMore' } as const;
 
 /** Default for `todayLineMarginTicks` below: how many of the current preset's own ticks sit between
- *  the pane's left edge and `panToToday`'s landing (S1.13 follow-up) — enough that the today line
- *  reads as "near the start" without sitting flush on the edge, leaving a sliver of the timeline
- *  visible to its left. */
+ *  the pane's left edge and `panToToday`'s landing (S1.13 follow-up). Two ticks are enough that the
+ *  today line reads as "near the start", and does not sit flush on the edge. They leave a sliver of
+ *  the timeline visible to its left. */
 const DEFAULT_TODAY_LINE_MARGIN_TICKS = 2;
 
-/** Every `before*` → `*` pair `#proposeChange` runs (D-S5-6): one entry per pair, not one overload
- *  per pair — a future cancelable change adds a line here instead of a new `#proposeChange`
- *  overload. Names only: each name's payload is `GanttEventMap`'s own, never restated here, so a
+/** Every `before*` → `*` pair `#proposeChange` runs (D-S5-6). One entry per pair, not one overload
+ *  per pair. A future cancelable change adds a line here, instead of a new `#proposeChange`
+ *  overload. Names only: each name's payload is `GanttEventMap`'s own, never restated here. A
  *  `GanttEventMap` edit that this map does not match fails to compile at the call site (#144). */
 interface ProposableChange {
   beforeCollapseChange: 'collapseChange';
@@ -198,14 +198,15 @@ interface ProposableChange {
 type ProposableBefore = keyof ProposableChange & keyof GanttEventMap;
 
 /** What `api/gantt.ts` hands the shell across the layer boundary (review P5). Every seam here is a
- *  collaborator `view/` may not construct for itself: `interaction/` sits above `view/`, and so do
+ *  collaborator `view/` may not construct for itself. `interaction/` sits above `view/`, and so do
  *  the api `Dataset` and the public `Gantt` façade (D-S5-5). `api/gantt.ts` supplies all seven on
  *  every real Gantt.
  *
- *  Each member stays optional, and one member alone says why: a test drives the shell with no wiring
- *  at all, and it says so once by writing `wiring: {}`. It never has to omit seven separate keys and
- *  hope a reader sees the pattern. A shell built with an empty wiring runs with no pointer gestures,
- *  no keyboard editing, no column gestures, no data write, no plugins and no clock. */
+ *  Each member stays optional, and one member alone says why. A test drives the shell with no
+ *  wiring at all, and says so once by writing `wiring: {}`. It never has to omit seven separate keys
+ *  and hope a reader sees the pattern. A shell built with an empty wiring runs with no pointer
+ *  gestures and no keyboard editing. It runs with no column gestures, no data write, no plugins and
+ *  no clock either. */
 export interface GanttShellWiring {
   /** Injected, not defaulted here — see the `AttachEntryGestures` comment above. `view/` cannot
    *  import `interaction/` to supply its own default. */
@@ -221,17 +222,17 @@ export interface GanttShellWiring {
    *  `MutationCancelledError` from `beforeChange`. The shell never sees the exception either way. */
   commitEntryEdits?: (edits: EntryEdits) => boolean;
   /** S5.1, D-S5-1: fills the api-level pieces of a plugin's `PluginContext`. `view/` cannot type
-   *  those without reaching past its own boundary (D-S5-5). They are the full api `Dataset`
-   *  (`model/dataset.ts`'s narrow interface hides `.transaction()`, the same reason
-   *  `commitEntryEdits` exists) and the public `Gantt` façade, which does not exist yet when this
-   *  constructor runs. It returns `unknown` because `api/gantt.ts` binds the concrete
+   *  those without reaching past its own boundary (D-S5-5). They are the full api `Dataset` and the
+   *  public `Gantt` façade. `model/dataset.ts`'s narrow interface hides `.transaction()`, the same
+   *  reason `commitEntryEdits` exists. The `Gantt` façade does not exist yet when this constructor
+   *  runs. It returns `unknown` because `api/gantt.ts` binds the concrete
    *  `PluginContext` type. That file alone may import both `Gantt` and this generic contract without
    *  closing an import cycle (`api/plugin.ts`'s file header). */
   buildPluginContext?: (parts: PluginContextPorts) => unknown;
   /** S5.2, D-S5-6: fills the api-level pieces of a `CommandContext`, for the same reason
    *  `buildPluginContext` fills `PluginContext`'s. The full api `Dataset` (with `undo`/`redo`) and
-   *  the public `Gantt` façade are both api-level, and `view/` may name neither type (D-S5-5's
-   *  mirror on the `view/` side). The shell calls it fresh on every command invocation, never
+   *  the public `Gantt` façade are both api-level. `view/` may name neither type (D-S5-5's mirror on
+   *  the `view/` side). The shell calls it fresh on every command invocation, never
    *  cached, so a command always reads the invocation's current selection. `target`'s shape (S5.7,
    *  D-S5-26) is a structural subtype of api-level `CommandTarget`. `view/` may not name that type
    *  either, but a narrower object literal reaches it fine, because `api/gantt.ts` only widens. */
@@ -251,7 +252,7 @@ export interface GanttShellOptions {
   dataset: Dataset;
   /** Bound viewport object (D9) — pass the same instance to two Gantt instances to x-sync them.
    * Constructs a private default when omitted (plans/01 §8.2: "single-Gantt usage never sees the
-   * concept"); the default resolves its zone, span and fit from this shell's binding, so it needs
+   * concept"). The default resolves its zone, span and fit from this shell's binding, so it needs
    * no arguments. */
   scale?: TimeScaleModel;
   /** Bound scroll object (D9) — pass the same instance to two Gantt instances to scroll-sync them.
@@ -265,8 +266,8 @@ export interface GanttShellOptions {
    *  one narrow column, so a drag cannot take the pane to nothing by accident. It bounds the drag
    *  only: an explicit `gridWidth = 0` still collapses the grid pane on purpose. */
   minGridWidth?: number;
-  /** Build the private default `TimeScaleModel` only (D-S1.9-9) — a no-op, with a dev-mode warning,
-   * when `scale` is also supplied: the shared model already carries its own options. */
+  /** Build the private default `TimeScaleModel` only (D-S1.9-9). It is a no-op, with a dev-mode
+   * warning, when `scale` is also supplied. The shared model already carries its own options. */
   preset?: PresetRef;
   range?: 'fitDataset' | TimeSpan;
   fit?: TimeScaleFit;
@@ -305,25 +306,26 @@ export interface GanttShellOptions {
   /** Live (S5.4, D-S5-11). Gantt-wide; a per-column `GridColumn.cellRenderer` (S5.7) wins over this
    *  for its own column. */
   cellRenderer?: CellRenderer;
-  /** Live (S5.4, D-S5-11). Not painted until a later step consumes it (S5.7's grid header chrome) —
-   *  the resolution slot exists now so a plugin's `registerRenderer('header', …)` has somewhere to
-   *  register into and this option is honest about not being a no-op forever. */
+  /** Live (S5.4, D-S5-11). Not painted until a later step consumes it (S5.7's grid header chrome).
+   *  The resolution slot exists now, so a plugin's `registerRenderer('header', …)` has somewhere to
+   *  register into. It also keeps this option honest about not being a no-op forever. */
   headerRenderer?: HeaderRenderer;
   /** Live (S5.4, D-S5-11). Replaces a tooltip's body (S5.5's `tooltips()` feature reads this). */
   tooltipRenderer?: TooltipRenderer;
-  /** Expert knob, not on `GanttOptions` (plans/02 "two callers, two surfaces") — a test naming its
-   * own `RenderBackend<HTMLElement>` in place of the DOM one (§9-I: the seam had two implementations
-   * and one hardcoded call site, so nothing could reach the other short of mocking the module).
+  /** Expert knob, not on `GanttOptions` (plans/02 "two callers, two surfaces"). A test names its
+   * own `RenderBackend<HTMLElement>` in place of the DOM one. §9-I: the seam had two implementations
+   * and one hardcoded call site. Nothing could reach the other short of mocking the module.
    * Still `RenderBackend<HTMLElement>`, not the null backend's `RenderBackend<void>` — `PaneLayout`
    * mounts real elements regardless of which backend paints them, so this closes the hardcoding, not
    * DOM-free `view/`. Defaults to `createDomBackend()`. */
   backend?: RenderBackend<HTMLElement>;
   /** S3.6, D-S3-18, P1: an installed extension hook, read for **preview only** — ghosts its extras in
-   *  the rAF-coalesced drag preview. There is no public way to install one in S3 (`GanttOptions` has
-   *  no such field, `api/gantt.ts` never passes this); only a test constructing `GanttShell` directly
-   *  (the same shape `commitEntryEdits` already uses) can. The real hook — same `EditExtender`
-   *  function, if a caller passes the identical reference to both — still runs again, for real, inside
-   *  `data/transaction.ts`'s own commit; this option never writes anything itself. */
+   *  the rAF-coalesced drag preview. There is no public way to install one in S3. `GanttOptions` has
+   *  no such field, and `api/gantt.ts` never passes this. Only a test constructing `GanttShell`
+   *  directly can, the same shape `commitEntryEdits` already uses. The real hook still runs again,
+   *  for real, inside `data/transaction.ts`'s own commit. It is the same `EditExtender` function
+   *  when a caller passes the identical reference to both. This option never writes anything
+   *  itself. */
   editExtender?: EditExtender;
   /** Internal (D-S4-24). One registry per Gantt, seeded with span/group/milestone. Tests inject a
    *  replacement; `GanttOptions` has no such field (public registration is S5). */
@@ -333,7 +335,7 @@ export interface GanttShellOptions {
 }
 
 /** `exactOptionalPropertyTypes` treats `obj.key = undefined` as a type error when `key` is declared
- *  `T | undefined` rather than `T?` on the read side (`InteractionState`'s own shape) — the honest
+ *  `T | undefined` rather than `T?` on the read side (`InteractionState`'s own shape). The honest
  *  "unset" is `delete`, not an assignment. One helper rather than an `if`/`delete` pair at each of
  *  `#refreshAffordances`'s three call sites. */
 function setOptional<T, K extends keyof T>(target: T, key: K, value: T[K] | undefined): void {
@@ -364,8 +366,8 @@ export class GanttShell {
   #viewportHandle: ViewportHandle;
   #scrollAttachment: ScrollAttachment;
   #paneSizeAttachment: PaneSizeAttachment;
-  /** The timeline pane's last measured box, kept raw: the header height it has to be reduced by
-   *  changes on its own signal (a preset with a different band count), not on a pane resize. */
+  /** The timeline pane's last measured box, kept raw. The header height it has to be reduced by
+   *  changes on its own signal — a preset with a different band count, not a pane resize. */
   #paneBox: Size = { width: 0, height: 0 };
   #splitterAttachment: SplitterAttachment;
   #datasetChanges: DatasetChangeSubscription;
@@ -379,9 +381,9 @@ export class GanttShell {
   #wheelNavigation: WheelNavigationAttachment | undefined;
   #wheelNavigationGrid: WheelNavigationAttachment | undefined;
   #rowTwistyAttachment: RowTwistyAttachment;
-  /** D-S3-6: one long-lived, mutable per-Gantt object — `applyState` diffs against what it painted
-   *  last, so writing into this and calling `#backend.applyState` allocates nothing per hover/select
-   *  step (I5). Never rebuilt per call. */
+  /** D-S3-6: one long-lived, mutable per-Gantt object. `applyState` diffs against what it painted
+   *  last. So writing into this and calling `#backend.applyState` allocates nothing per hover or
+   *  select step (I5). Never rebuilt per call. */
   #interactionState: InteractionState = {};
   #selection: readonly EntryId[] = [];
   /** S3.2, D-S3-9: resolved once, re-resolved only when `interactions` is reassigned — never per
@@ -392,36 +394,36 @@ export class GanttShell {
   #capabilities: Capabilities;
   /** S5.9, D-S5-22: `ctx.interaction.registerKindDefaults` — the middle precedence layer
    *  `resolveCapabilities` reads between the consumer's own `interactions` and the library table.
-   *  A second plugin registering the same kind overrides the first while both stay installed;
-   *  disposing one registration never disturbs another plugin's live registration on the same
+   *  A second plugin registering the same kind overrides the first while both stay installed.
+   *  Disposing one registration never disturbs another plugin's live registration on the same
    *  kind, in any disposal order (#146). */
   #kindDefaults = createRegistrationTable<EntryKind, KindDefaults>();
   /** The raw hit under the pointer, reported by `EntrySelectionContext.setHovered` — undefined on
    *  pointerleave or when nothing is wired (no `entryGestures` attachment). */
   #hoveredItemId: ItemId | undefined;
   /** S5.5 (API gap, `s5.5-tooltips-and-context-menu.md` §5): the last-rendered frame's bars, indexed
-   *  by item id — `resolveTooltip`'s only reader, so a hover plugin working from the DOM after the
-   *  fact can still build a real `TooltipRendererContext` (a bar's `x`/`y`/`width`/`height`/`flags`
-   *  are not reachable from a DOM element alone). Rebuilt once per `render()`, not on the hover path
+   *  by item id. `resolveTooltip` is its only reader. So a hover plugin working from the DOM after
+   *  the fact can still build a real `TooltipRendererContext`. A bar's `x`/`y`/`width`/`height`/
+   *  `flags` are not reachable from a DOM element alone. Rebuilt once per `render()`, not on the hover path
    *  itself — same cost `#backend.sync(frame)` already pays iterating `frame.bars`. */
   #lastBarById = new Map<ItemId, FrameBar>();
   /** D-GH-2: owns draft math, preview rAF coalescing and the commit pipeline for a move/resize
-   *  gesture — built once, from this shell's own primitives, right after `#capabilities` below. */
+   *  gesture. Built once, from this shell's own primitives, right after `#capabilities` below. */
   #gesturePipeline!: GesturePipeline;
   #itemProducerRegistry!: ItemProducerRegistry;
   /** The single rAF owner (B10, D-S2-15): every render request past construction goes through
    *  this, so N mutations in one tick become one frame. */
   #frames = new FrameScheduler(() => this.render());
   #events = new EventBus<GanttEventMap, AsyncCancelableEvent>();
-  /** S5.1, D-S5-1: the plain `{ on, off }` a plugin's `ctx.events` actually is — built once, from
-   *  this shell's own `on`/`off` below, so a plugin never sees the rest of this class's public
-   *  surface the way handing it `this` directly would. */
+  /** S5.1, D-S5-1: the plain `{ on, off }` a plugin's `ctx.events` actually is. Built once, from
+   *  this shell's own `on`/`off` below. A plugin never sees the rest of this class's public surface
+   *  the way handing it `this` directly would. */
   #pluginEvents: GanttEvents = {
     on: (name, handler) => this.on(name, handler),
     off: (name, handler) => this.off(name, handler),
   };
   #pluginRuntime!: PluginRuntime<unknown>;
-  /** S5.2, D-S5-6/D-S5-7: one registry and one keymap per Gantt (I2) — core commands and core
+  /** S5.2, D-S5-6/D-S5-7: one registry and one keymap per Gantt (I2). Core commands and core
    *  bindings register here first, so a plugin's own registration always wins (D-S5-7). */
   #commandRegistry!: CommandRegistry<unknown>;
   #keymap!: Keymap<unknown>;
@@ -476,8 +478,8 @@ export class GanttShell {
     // S1.10, D-S1.10-8: must exist before PaneLayout builds the classed elements the stylesheet
     // targets, or there's a one-frame flash of unstyled content.
     ensureBaseStyles(this.#container.ownerDocument);
-    // #157: `'fitColumns'` names no px of its own, so the pane opens at its authored width
-    // (`--fg-grid-pane-width`) and `#bindColumns` below sizes it to the columns the moment there
+    // #157: `'fitColumns'` names no px of its own. So the pane opens at its authored width
+    // (`--fg-grid-pane-width`). `#bindColumns` below then sizes it to the columns, the moment there
     // are resolved columns to measure.
     this.#gridWidthFollowsColumns = options.gridWidth === 'fitColumns';
     this.#paneLayout = new PaneLayout({
@@ -513,10 +515,10 @@ export class GanttShell {
       ...(options.overscan !== undefined ? { overscan: options.overscan } : {}),
     });
 
-    // Set before the deliberate first render below (`#frames.flush()`) — plain field writes, not
-    // the live setters, so this first paint sees the constructor's own options instead of the
-    // field initializers' defaults (a bug caught by S1.13's `dateLines` constructor option:
-    // rendering it required this to move ahead of the flush it used to follow).
+    // Set before the deliberate first render below (`#frames.flush()`). These are plain field
+    // writes, not the live setters. So this first paint sees the constructor's own options, instead
+    // of the field initializers' defaults. S1.13's `dateLines` constructor option caught that bug:
+    // rendering it required this to move ahead of the flush it used to follow.
     this.#locale = options.locale;
     this.#todayLine = options.todayLine ?? true;
     this.#dateLines = options.dateLines ?? [];
@@ -533,23 +535,23 @@ export class GanttShell {
     this.#itemProducerRegistry = options.itemProducerRegistry ?? createItemProducerRegistry();
     this.#bindColumns();
 
-    // Mount before binding (#22): the render target exists by the time the binding's own onChange
-    // — which IS this shell's first render — fires, so there is no construction-order exception to
-    // document and no separate explicit render() call after bind().
+    // Mount before binding (#22). The render target exists by the time the binding's own onChange
+    // fires, and that onChange IS this shell's first render. So there is no construction-order
+    // exception to document, and no separate explicit render() call after bind().
     this.#backend =
       options.backend ??
       createDomBackend({
         entryById: (id) => this.#options.dataset.entries.get(id),
         resolveBarRenderer: (kind) => this.#rendererRegistry.resolveBar(kind, this.#barRenderer),
         // S5.4, D-S5-11: `render/dom` never receives `ResolvedColumn` (`column.format` "never
-        // reaches a backend", `layout/column.ts`) — bind it in here instead, so render/dom only
-        // ever calls an already-column-bound function keyed by the same `FrameColumn.key` string
-        // it already threads through `CellItem.key`.
+        // reaches a backend", `layout/column.ts`). So this binds it in here instead. render/dom
+        // only ever calls an already-column-bound function, keyed by the same `FrameColumn.key`
+        // string it already threads through `CellItem.key`.
         resolveCellRenderer: (columnKey) => {
           const column = this.#columnChrome.resolvedColumn(columnKey);
           if (column === undefined) return undefined;
           // S5.7, D-S5-17: a per-column `cellRenderer` (this Gantt's own `gridColumns`) beats the
-          // Gantt-wide one for that column — no `pluginId`, since a `GridColumn` only ever arrives
+          // Gantt-wide one for that column. No `pluginId`, since a `GridColumn` only ever arrives
           // from the consumer's own config until S5.9's `registerGridColumn` exists.
           if (column.cellRenderer !== undefined) {
             const columnCellRenderer = column.cellRenderer;
@@ -571,8 +573,8 @@ export class GanttShell {
             ...(resolved.pluginId !== undefined ? { pluginId: resolved.pluginId } : {}),
           };
         },
-        // S5.4, D-S5-11: same bind-in-here posture as `resolveCellRenderer` just above — a
-        // `GridColumn` has no per-column `headerRenderer` slot (`layout/column.ts`), so this only
+        // S5.4, D-S5-11: same bind-in-here posture as `resolveCellRenderer` just above. A
+        // `GridColumn` has no per-column `headerRenderer` slot (`layout/column.ts`). So this only
         // ever resolves the Gantt-wide/plugin one, bound to its column.
         resolveHeaderRenderer: (columnKey) => {
           const column = this.#columnChrome.resolvedColumn(columnKey);
@@ -592,19 +594,19 @@ export class GanttShell {
       gridHeader: this.#panes.gridHeader,
     });
 
-    // S5.2, D-S5-6: built before the plugin runtime — core commands register into this during this
-    // same constructor, and a plugin's own `ctx.commands`/`ctx.interaction.registerKeybinding` (below)
+    // S5.2, D-S5-6: built before the plugin runtime. Core commands register into this during this
+    // same constructor. A plugin's own `ctx.commands`/`ctx.interaction.registerKeybinding` (below)
     // close over it too. `#buildCommandContext` is called fresh per invocation (never cached), so a
     // command always reads the current selection.
     this.#commandRegistry = new CommandRegistry<unknown>(() => this.#buildCommandContext());
     this.#keymap = new Keymap<unknown>(this.#commandRegistry, () => this.#buildCommandContext());
 
-    // S5.1, D-S5-1: constructed once panes exist — a plugin's disposer may still need its overlay
+    // S5.1, D-S5-1: constructed once panes exist. A plugin's disposer may still need its overlay
     // node (a later step's `ctx.view.overlay`), so this must outlive them either way. `destroy()`
     // disposes it first, before any pane teardown, for the same reason. No plugin is actually set up
-    // yet: `Gantt.plugins`'s live setter runs `#pluginRuntime.install(...)` only once `api/gantt.ts` has
-    // finished assigning its own `#shell` field, so `buildPluginContext`'s `gantt` value is real by
-    // the time any `setup()` reads it.
+    // yet. `Gantt.plugins`'s live setter runs `#pluginRuntime.install(...)` only once `api/gantt.ts`
+    // has finished assigning its own `#shell` field. So `buildPluginContext`'s `gantt` value is real
+    // by the time any `setup()` reads it.
     this.#pluginRuntime = new PluginRuntime<unknown>((pluginId) => {
       const { ports, gate } = buildPluginPorts(this.#shellPorts(), pluginId);
       const context = (options.wiring.buildPluginContext ?? (() => ({})))(ports);
@@ -629,9 +631,9 @@ export class GanttShell {
       },
     );
     // The whole of this shell's dependency on data change (D-S2-20): push the fresh snapshot into
-    // the bound viewport and request a frame — the changeset mechanism's own fan-out, not a second
-    // reactivity path (#33's `setEntries()` warning is against a *public* one; see dataset-change-
-    // subscription.ts).
+    // the bound viewport, and request a frame. That is the changeset mechanism's own fan-out, not a
+    // second reactivity path. #33's `setEntries()` warning is against a *public* one (see
+    // dataset-change-subscription.ts).
     this.#datasetChanges = subscribeToDatasetChanges(options.dataset, (changeSet) => {
       this.#layout.invalidateForChange(changeSet);
       this.#bindColumns();
@@ -639,14 +641,15 @@ export class GanttShell {
       this.#frames.request();
     });
     // Synchronous first measurement: a real ResizeObserver's own first callback is queued, not
-    // immediate, so the first paint cannot wait for it. attachPaneSize below takes over from here —
-    // every measurement after this one, live, for as long as the shell lives (S1.7b, #8).
+    // immediate, so the first paint cannot wait for it. The `attachPaneSize` call below takes over
+    // from here. It takes every measurement after this one, live, for as long as the shell lives
+    // (S1.7b, #8).
     this.#applyPaneMeasurement(this.#paneLayout.measureTimelinePane());
     this.#paneSizeAttachment = attachPaneSize(this.#panes.timeline, (size) =>
       this.#applyPaneMeasurement(size),
     );
-    // #127/#139: the splitter proposes a raw px delta; both bounds apply here, on the way in, so a
-    // drag can reach neither below `minGridWidth` nor past the last column's edge, while a direct
+    // #127/#139: the splitter proposes a raw px delta, and both bounds apply here, on the way in.
+    // So a drag can reach neither below `minGridWidth` nor past the last column's edge. A direct
     // `gridWidth` write still says what it means.
     this.#splitterAttachment = attachSplitter(this.#panes.splitter, {
       readGridWidth: () => this.#paneLayout.gridWidth,
@@ -722,11 +725,11 @@ export class GanttShell {
       tryTreeArrow: (direction) => this.#treeCollapse.handleArrow(direction),
       expandAllRows: () => this.expandAll(),
     };
-    // S5.2, D-S5-6/D-S5-7: core commands, then the keymap listener — attached ahead of
-    // `entryGestures`/`keyboardEditing`/`keyboardNavigation` below, so every plugin binding and every
-    // core command gets first refusal on a key event before this shell's own pointer-editing and
-    // pan/page/home/end handling ever sees it (an unmatched chord is left untouched either way — the
-    // resolver never calls `preventDefault()` on a miss).
+    // S5.2, D-S5-6/D-S5-7: core commands first, then the keymap listener. Both attach ahead of
+    // `entryGestures`/`keyboardEditing`/`keyboardNavigation` below. So every plugin binding and
+    // every core command gets first refusal on a key event. This shell's own pointer-editing and
+    // pan/page/home/end handling only sees it after that. An unmatched chord is left untouched
+    // either way: the resolver never calls `preventDefault()` on a miss.
     this.#registerCoreCommands();
     this.#keymapListener = (event: KeyboardEvent) => {
       if (this.#keymap.resolve(event)) {
@@ -736,9 +739,9 @@ export class GanttShell {
     this.#container.addEventListener('keydown', this.#keymapListener);
     // Document-level capture-phase fallback (issue #137 F1,
     // `plans/reviews/2026-09-03-s5-start-fixes-qc.md`): the bubble listener above only ever sees a
-    // key event whose target sits inside `#container`. A popup opened from an outside trigger (a
-    // toolbar button in the consumer's own page, say) has no path into that listener at all, so its Escape
-    // dismissal would never fire. Routing through the same `#keymap.resolve()` — not a second,
+    // key event whose target sits inside `#container`. A popup opened from an outside trigger has
+    // no path into that listener at all — a toolbar button in the consumer's own page, say. So its
+    // Escape dismissal would never fire. Routing through the same `#keymap.resolve()` — not a second,
     // independent listener — keeps one newest-first resolution order instead of reintroducing the
     // bespoke document-capture stack C3 removed. Skipped whenever the target is already inside
     // `#container`, so an in-container key event is resolved exactly once, by the bubble listener.
@@ -753,10 +756,10 @@ export class GanttShell {
 
     // S5.7, D-S5-18: same DI shape as `entryGestures`/`keyboardEditing` below — `view/` cannot import
     // `interaction/`, so `api/gantt.ts` supplies `attachColumnGestures`. Attached *before*
-    // `entryGestures`: both listen for `keydown` on this same `#container`, and an Escape that
-    // cancels a column drag must reach `column-gestures.ts`'s own handler — which swallows it via
-    // `stopImmediatePropagation()` — ahead of `entry-gestures.ts`'s handler, or the column drag's
-    // Escape would also clear the entry selection as an unrelated side effect.
+    // `entryGestures`. Both listen for `keydown` on this same `#container`. An Escape that cancels a
+    // column drag must reach `column-gestures.ts`'s own handler ahead of `entry-gestures.ts`'s
+    // handler. That handler swallows it, through `stopImmediatePropagation()`. In the other order,
+    // the column drag's Escape would also clear the entry selection as an unrelated side effect.
     const columnGestureContext: ColumnGestureContext = {
       isResizable: (columnKey) => this.#columnChrome.isResizable(columnKey),
       isMovable: (columnKey) => this.#columnChrome.isMovable(columnKey),
@@ -790,8 +793,8 @@ export class GanttShell {
       panBy: (dx, dy) => this.#panBy(dx, dy),
     };
     this.#wheelNavigation = attachWheelNavigation(this.#panes.timeline, wheelNavigationCtx);
-    // #126: the grid pane has no scroll of its own (D-S1.8-1) — forward its wheel input into the
-    // same shared scroll the timeline pane already writes into. `anchorPane` keeps ctrl/⌘+wheel
+    // #126: the grid pane has no scroll of its own (D-S1.8-1). So this forwards its wheel input
+    // into the same shared scroll the timeline pane already writes into. `anchorPane` keeps ctrl/⌘+wheel
     // zoom anchored on the timeline's time axis, since the grid pane's own x-axis isn't time.
     this.#wheelNavigationGrid = attachWheelNavigation(this.#panes.grid, wheelNavigationCtx, {
       anchorPane: this.#panes.timeline,
@@ -830,8 +833,8 @@ export class GanttShell {
   }
 
   /** A plain reconfiguration still runs the same cancelable commit sequence a resize drag or a
-   *  reorder drop runs (S5.7, D-S5-18) — one write path, one place the veto lives, same posture
-   *  `set gridWidth` above already takes for the splitter. */
+   *  reorder drop runs (S5.7, D-S5-18). One write path, one place the veto lives. `set gridWidth`
+   *  above already takes the same posture for the splitter. */
   set gridColumns(columns: readonly GridColumnInput[]) {
     this.#columnChrome.commit(columns);
   }
@@ -913,10 +916,10 @@ export class GanttShell {
   }
 
   /** One `before*` → apply → `*` sequence, for every cancelable Gantt-state change (D-S5-6):
-   *  collapse, selection, grid width, grid columns. `ProposableChange` pairs each `before*` name with
-   *  its `*` counterpart — adding a new pair (a future S5.8 event, say) is one line there, not a new
-   *  overload here. `change` is the intersection of both events' payloads, so both `emit` calls
-   *  typecheck with no cast: a mismatched pair stops compiling instead of drifting silently (#144). */
+   *  collapse, selection, grid width, grid columns. `ProposableChange` pairs each `before*` name
+   *  with its `*` counterpart. A new pair is one line there, not a new overload here — a future
+   *  S5.8 event, say. `change` is the intersection of both events' payloads, so both `emit` calls
+   *  typecheck with no cast. A mismatched pair stops compiling instead of drifting silently (#144). */
   #proposeChange<B extends ProposableBefore, A extends ProposableChange[B] & keyof GanttEventMap>(
     before: B,
     after: A,
@@ -1010,16 +1013,16 @@ export class GanttShell {
     return this.#interactions;
   }
 
-  /** Live (S3, D-S3-9): re-resolves the capability table immediately, then re-derives the two
-   *  resolved affordance ids off the current hover/selection so a stricter rule takes effect without
-   *  waiting for the next pointer move. */
+  /** Live (S3, D-S3-9): re-resolves the capability table immediately. It then re-derives the two
+   *  resolved affordance ids off the current hover and selection. A stricter rule takes effect
+   *  without waiting for the next pointer move. */
   set interactions(next: Interactions) {
     this.#interactions = next;
     this.#refreshCapabilities();
   }
 
-  /** S5.9, D-S5-22: the one place `resolveCapabilities` is called — the constructor, `set
-   *  interactions`, and `registerKindDefaults`'s own gate all re-derive from here rather than
+  /** S5.9, D-S5-22: the one place `resolveCapabilities` is called. The constructor, `set
+   *  interactions`, and `registerKindDefaults`'s own gate all re-derive from here, rather than
    *  repeating the three-argument call. */
   #resolveCapabilities(): Capabilities {
     return resolveCapabilities(
@@ -1030,8 +1033,8 @@ export class GanttShell {
   }
 
   /** `set interactions` and `registerKindDefaults`'s register/dispose pair both change an input
-   *  `#resolveCapabilities` reads, so both re-resolve the capability table and re-derive the
-   *  affordance ids the same way (#154) — written once here instead of three times. The
+   *  `#resolveCapabilities` reads. So both re-resolve the capability table and re-derive the
+   *  affordance ids the same way (#154). This method writes that once, instead of three times. The
    *  constructor's own first resolve (above) runs before `#refreshAffordances` has anything to
    *  refresh, so it calls `#resolveCapabilities()` directly and skips this. */
   #refreshCapabilities(): void {
@@ -1054,16 +1057,16 @@ export class GanttShell {
    *  for a focused header cell (S5.7, D-S5-26, issue #137 F6) — the rest of `CommandTarget`'s kinds
    *  are still S5.11's own job. `api/gantt.ts`'s injected `buildCommandContext` fills `dataset`/`gantt`
    *  — `view/` may not name either type (D-S5-5's mirror). A `wiring` with no `buildCommandContext`
-   *  (a test that drives the shell alone) makes every command's context an empty object; fine, since no core command
-   *  reads `ctx.dataset`/`ctx.gantt` without first checking `ctx.entry`/`ctx.target`, and no such test
-   *  runs a command that needs them. */
+   *  makes every command's context an empty object — a test that drives the shell alone. That is
+   *  fine. No core command reads `ctx.dataset`/`ctx.gantt` without first checking
+   *  `ctx.entry`/`ctx.target`, and no such test runs a command that needs them. */
   #buildCommandContext(): CommandContext<unknown> {
     const id = this.#selection[0];
     const entry = id !== undefined ? this.#options.dataset.entries.get(id) : undefined;
     const columnKey = this.#columnChrome.focusedHeaderColumnKey;
-    // `view/` may not name `CommandContextOf`'s api-level fields (`dataset: Dataset`, `gantt`) —
-    // D-S5-5's mirror — so this cast trusts `api/gantt.ts`'s injected `buildCommandContext` to fill
-    // them, the same trust `buildPluginContext` above already gets for `PluginContext`.
+    // `view/` may not name `CommandContextOf`'s api-level fields (`dataset: Dataset`, `gantt`),
+    // D-S5-5's mirror. So this cast trusts `api/gantt.ts`'s injected `buildCommandContext` to fill
+    // them. `buildPluginContext` above already gets the same trust for `PluginContext`.
     return (this.#options.wiring.buildCommandContext ?? (() => ({})))({
       ...(entry !== undefined ? { entry } : {}),
       ...(columnKey !== undefined ? { target: { kind: 'header' as const, columnKey } } : {}),
@@ -1107,9 +1110,10 @@ export class GanttShell {
     };
   }
 
-  /** `ColumnChrome`'s one seam back into this shell's shared machinery (`column-chrome.ts`'s own doc
-   *  explains why it needs each of these): the same `#proposeChange`/`#interactionState`/`#frames`
-   *  every other cancelable Gantt-state change already goes through. Built once, in the constructor,
+  /** `ColumnChrome`'s one seam back into this shell's shared machinery. `column-chrome.ts`'s own
+   *  doc explains why it needs each of these. They are the same
+   *  `#proposeChange`/`#interactionState`/`#frames` every other cancelable Gantt-state change
+   *  already goes through. Built once, in the constructor,
    *  before `#backend`/`#frames` exist — every method here is a closure, called only later. */
   #columnChromePorts(): ColumnChromePorts {
     return {
@@ -1132,7 +1136,7 @@ export class GanttShell {
 
   /** `plugin-ports.ts`'s one seam back into this shell's own registries, frame loop and event bus
    *  (that file's doc explains why it needs each of these). `buildPluginPorts` never touches a shell
-   *  field directly. Every member is a closure, so each one reads live state at call time — a
+   *  field directly. Every member is a closure, so each one reads live state at call time. A
    *  reassigned `#capabilities` or a fresh `#lastBarById` reaches the plugin that holds the port. */
   #shellPorts(): GanttShellPorts {
     return {
@@ -1188,7 +1192,7 @@ export class GanttShell {
     bind('ArrowLeft', 'freegantt.panLeft');
     bind('ArrowDown', 'freegantt.panDown');
     bind('ArrowUp', 'freegantt.panUp');
-    // S5.7, D-S5-18/D-S5-26: scoped to a focused header cell by the command's own `when` above — a
+    // S5.7, D-S5-18/D-S5-26: scoped to a focused header cell by the command's own `when` above. A
     // plain `ArrowLeft`/`ArrowRight` (pan, bound above) never conflicts with the modified chords here.
     bind('Shift+ArrowRight', 'freegantt.resizeColumnWider');
     bind('Shift+ArrowLeft', 'freegantt.resizeColumnNarrower');
@@ -1202,7 +1206,7 @@ export class GanttShell {
   }
 
   /** D-S3-9's one resolution, shared by the pointer path (`canSelect` above), the keyboard path
-   *  (S3.5) and the affordance ids below — never asked twice for the same gesture (I14). */
+   *  (S3.5) and the affordance ids below. Never asked twice for the same gesture (I14). */
   #canGesture(capability: keyof Interactions, id: EntryId): boolean {
     const entry = this.#options.dataset.entries.get(id);
     return entry !== undefined && this.#capabilities.can(capability, entry);
@@ -1236,8 +1240,8 @@ export class GanttShell {
   }
 
   /** Review H3: `CellRendererContext.fieldValue`. `entries.fieldValue` is the one read that answers
-   *  an `entry`-, `meta`- or `compute`-sourced Field alike (ADR 0005), and it shares the memo
-   *  `column.format` already uses — so a renderer branching on a number never parses `value` back.
+   *  an `entry`-, `meta`- or `compute`-sourced Field alike (ADR 0005). It shares the memo
+   *  `column.format` already uses, so a renderer branching on a number never parses `value` back.
    *  A row with no Entry (a grouping header, a custom row) has no Field value to read. */
   #fieldValueForCell(entry: Entry | undefined, key: FieldKey): unknown {
     if (entry === undefined) return undefined;
@@ -1279,9 +1283,9 @@ export class GanttShell {
   }
 
   /** A plain reconfiguration (`plans/02` "Reconfiguration is just assignment") still runs the same
-   *  cancelable commit sequence a splitter drag runs — one write path, one place the veto lives.
-   *  #139 caps a px width at the columns' own edge: a width past the last column would only be dead
-   *  space, so the change that fires carries the width the pane can actually use. `'fitColumns'`
+   *  cancelable commit sequence a splitter drag runs. One write path, one place the veto lives.
+   *  #139 caps a px width at the columns' own edge. A width past the last column would only be dead
+   *  space. So the change that fires carries the width the pane can actually use. `'fitColumns'`
    *  (#157) puts the pane exactly on that edge and keeps it there through every later rebind.
    *  Nothing floors either form — an explicit `gridWidth = 0` still collapses the pane on purpose
    *  (#127). */
@@ -1299,8 +1303,8 @@ export class GanttShell {
   }
 
   /** Live (#127). Raising the floor above the current `gridWidth` lifts it through
-   *  `#commitGridWidth` — the same cancelable commit sequence a splitter drag runs, so a veto
-   *  leaves `gridWidth` exactly where it was. */
+   *  `#commitGridWidth`, the same cancelable commit sequence a splitter drag runs. So a veto leaves
+   *  `gridWidth` exactly where it was. */
   set minGridWidth(px: number) {
     this.#paneLayout.minGridWidth = px;
     const lifted = this.#aboveMinGridWidth(this.#paneLayout.gridWidth);
@@ -1381,8 +1385,8 @@ export class GanttShell {
   }
 
   /** `panToInstant(at, align)`, plus `todayLineMarginTicks`' worth of left margin at
-   *  `align: 'start'` — the one place this shell decides where "today" lands, so every caller
-   *  (`Gantt.panToToday()`, a consumer's own load-time call) resolves it the same way. `at` is
+   *  `align: 'start'`. This is the one place this shell decides where "today" lands. So every
+   *  caller resolves it the same way — `Gantt.panToToday()`, a consumer's own load-time call. `at` is
    *  `now()`, read by the caller — `view/` may not import `time/` (I1) and has no clock read of its
    *  own to make. The margin is today-landing policy, not a general `Viewport` pan option, so it is
    *  applied here rather than threaded through `panToInstant` (S1.13 follow-up, candidate 2). */
@@ -1390,9 +1394,10 @@ export class GanttShell {
     panToTodayLine(this.#viewport, at, align, this.#todayLineMarginTicks);
   }
 
-  /** Finds the entry's row via the bound dataset, asks `FrameLayout` for its top and `barSpan` for
-   * its x/width off the bound `TimeScale` — the same formula `computeFrame` builds bars from, so the
-   * two can never drift apart — and hands the resulting `Rect` to `Viewport.reveal` (S1.9, D-S1.9-6).
+  /** Finds the entry's row via the bound dataset. It asks `FrameLayout` for the row's top, and
+   * `barSpan` for its x/width off the bound `TimeScale`. That is the same formula `computeFrame`
+   * builds bars from, so the two can never drift apart. It then hands the resulting `Rect` to
+   * `Viewport.reveal` (S1.9, D-S1.9-6).
    * Throws `EntryNotFoundError` for an id the dataset has no entry for. A collapsed ancestor expands
    * so the row exists. A still-hidden row (filter) keeps the current y — it does not jump to 0. */
   reveal(entryId: EntryId): void {
@@ -1416,8 +1421,8 @@ export class GanttShell {
     this.#events.off(name, handler);
   }
 
-  /** Live (D-S5-3): assignment diffs by `id` against what is already installed — a plugin present in
-   *  both lists is left alone, only the difference is set up or disposed. `api/gantt.ts` is the only
+  /** Live (D-S5-3): assignment diffs by `id` against what is already installed. A plugin present in
+   *  both lists is left alone. Only the difference is set up or disposed. `api/gantt.ts` is the only
    *  caller with a `Gantt` façade to hand `setup()`, so it alone writes here. */
   get plugins(): readonly ShellPlugin<unknown>[] {
     return this.#pluginRuntime.plugins;
@@ -1472,8 +1477,9 @@ export class GanttShell {
   }
 
   /** The one place `minGridWidth` is applied (#127). The floor bounds what a splitter drag can
-   *  reach, and lifts the width when the floor itself rises — nothing else consults it, so an
-   *  explicit `gridWidth = 0` collapses the pane and a vetoed change rolls back to its own width. */
+   *  reach, and lifts the width when the floor itself rises. Nothing else consults it. So an
+   *  explicit `gridWidth = 0` collapses the pane, and a vetoed change rolls back to its own
+   *  width. */
   #aboveMinGridWidth(px: number): number {
     return Math.max(this.#paneLayout.minGridWidth, px);
   }
@@ -1482,17 +1488,17 @@ export class GanttShell {
    *  option, a live `gantt.gridWidth = px`, or a splitter drag. There is nothing to show past the
    *  last column's right edge, so a wider pane is dead space, not a wider view. Narrower is always
    *  legal: the columns then overflow and the pane scrolls to reach them (#126). A flex column
-   *  names no edge — it fills whatever room it is given, which is the point of asking to flex — so
-   *  a column set holding one has no ceiling at all. */
+   *  names no edge. It fills whatever room it is given, which is the point of asking to flex. So a
+   *  column set holding one has no ceiling at all. */
   #noWiderThanColumns(px: number): number {
     const lastColumnEdge = this.#columnsWidth();
     return lastColumnEdge === undefined ? px : Math.min(lastColumnEdge, px);
   }
 
-  /** Where the last column's right edge falls, in px — the width `'fitColumns'` asks for and the
-   *  ceiling `#noWiderThanColumns` applies, which are the same fact read for two purposes.
-   *  `undefined` when a `flex` column is in the set: it has no width until the pane lays it out, so
-   *  the columns name no edge at all (#139). */
+  /** Where the last column's right edge falls, in px. It is the width `'fitColumns'` asks for, and
+   *  the ceiling `#noWiderThanColumns` applies. Those are the same fact read for two purposes.
+   *  `undefined` when a `flex` column is in the set. That column has no width until the pane lays it
+   *  out, so the columns name no edge at all (#139). */
   #columnsWidth(): number | undefined {
     return totalColumnWidth(this.#columnChrome.resolvedColumns);
   }
@@ -1504,11 +1510,11 @@ export class GanttShell {
     return this.#aboveMinGridWidth(this.#noWiderThanColumns(px));
   }
 
-  /** The columns just moved — one is resized, one is hidden, a plugin registered one — so the pane
+  /** The columns just moved — one is resized, one is hidden, a plugin registered one. So the pane
    *  answers to them again, through the same cancelable commit sequence a splitter drag runs. A
    *  pane already the right width is left alone, which is most rebinds.
    *
-   *  `'fitColumns'` (#157) sits the pane *on* the columns' edge, in both directions: it widens with
+   *  `'fitColumns'` (#157) sits the pane *on* the columns' edge, in both directions. It widens with
    *  a widened set as readily as it comes in with a narrowed one. Any other width only gets #139's
    *  ceiling — never wider than the columns, narrower whenever the consumer said so. A set holding
    *  a `flex` column names no edge, so neither form has anything to follow and the pane keeps the
@@ -1539,9 +1545,9 @@ export class GanttShell {
     );
   }
 
-  /** One measurement, pushed to everything it feeds (#8, #49): `--fg-row-height`, `--fg-tick-box-floor`,
-   *  and the pane size all change for the same reason — the timeline pane was just resized — so they
-   *  are re-read on the same signal instead of going stale. `size` is the timeline pane's own client
+  /** One measurement, pushed to everything it feeds (#8, #49). `--fg-row-height`,
+   *  `--fg-tick-box-floor` and the pane size all change for one reason: a resize of the timeline
+   *  pane. So one signal re-reads them all, and none of them goes stale. `size` is the timeline pane's own client
    *  box; no gutter to subtract (S1.8, D-S1.8-2) — the grid pane's width never overlapped it in the
    *  first place. */
   #applyPaneMeasurement(size: Size): void {
@@ -1553,10 +1559,10 @@ export class GanttShell {
     this.#applyRowsViewportSize();
   }
 
-  /** The rows' own viewport is the pane box minus the header: the timeline pane's header sticks to
-   *  the pane's top and covers that band of rows for the whole scroll, and the grid pane's rows clip
+  /** The rows' own viewport is the pane box minus the header. The timeline pane's header sticks to
+   *  the pane's top, and covers that band of rows for the whole scroll. The grid pane's rows clip
    *  below its spacer for the same reason. Reporting the full pane box left the scroll model one
-   *  header short of the true extent, so the last row could never scroll fully into view. */
+   *  header short of the true extent. The last row could then never scroll fully into view. */
   #applyRowsViewportSize(): void {
     const headerHeight = this.#paneLayout.measureHeaderHeight();
     this.#viewportHandle.setPaneSize({
@@ -1593,10 +1599,10 @@ export class GanttShell {
     this.#backend.sync(frame);
     this.#lastBarById.clear();
     for (const bar of frame.bars) this.#lastBarById.set(bar.id, bar);
-    // D-S1.12-9: the grid pane's spacer mirrors the header's own band count, so both panes resolve
-    // their header height from the same `--fg-band-height` expression and cannot drift.
+    // D-S1.12-9: the grid pane's spacer mirrors the header's own band count. So both panes resolve
+    // their header height from the same `--fg-band-height` expression, and cannot drift.
     // A changed band stack is a changed header height, and the rows' viewport is the pane box minus
-    // that — so the viewport is re-derived here rather than waiting for the next pane resize.
+    // that. So this re-derives the viewport here, rather than waiting for the next pane resize.
     if (this.#paneLayout.setHeaderBandCount(frame.header.bands.length)) this.#applyRowsViewportSize();
     this.#contentSize = { width: frame.contentWidth, height: frame.contentHeight };
     this.#viewportHandle.setContentSize(this.#contentSize);
@@ -1611,7 +1617,7 @@ export class GanttShell {
 
   destroy(): void {
     if (this.#destroyed) return;
-    // S5.1, D-S5-3: plugins first — a disposer may still need its overlay node or another pane-owned
+    // S5.1, D-S5-3: plugins first. A disposer may still need its overlay node or another pane-owned
     // resource, so it must run before any pane below is torn down.
     this.#pluginRuntime.disposeAll();
     this.#overlay.destroy();
