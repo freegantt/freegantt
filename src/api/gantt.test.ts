@@ -7,12 +7,13 @@ import {
   RendererAlreadyRegisteredError,
   ScrollModel,
   UnknownCommandError,
+  UnknownGridColumnError,
   TimeScaleModel,
   entryId,
   itemId,
   contextMenu,
 } from './index.js';
-import type { Entry, PluginContext } from './index.js';
+import type { Entry, GanttPlugin, GridColumnInput, PluginContext } from './index.js';
 import { sampleEntries } from '../../fixtures/sample-dataset.js';
 import { instant } from '../time/index.js';
 // [S5-A3]: the acceptance object is the harness plugin itself, not a re-implementation of its four
@@ -3776,6 +3777,25 @@ describe('plugin registrations live exactly as long as their plugin (#155)', () 
   });
 });
 
+/** One resize drag on a header's grip, start to finish — the gesture #181's t2 describes. */
+const dragColumnEdge = (container: HTMLElement, field: string, toClientX: number): void => {
+  const grip = container.querySelector<HTMLElement>(
+    `.fg-col-header[data-field="${field}"] .fg-column-resizer`,
+  )!;
+  const headerPane = container.querySelector<HTMLElement>('.fg-grid-header')!;
+  headerPane.setPointerCapture = vi.fn();
+  headerPane.releasePointerCapture = vi.fn();
+  grip.dispatchEvent(
+    new PointerEvent('pointerdown', { clientX: 100, clientY: 0, pointerId: 1, bubbles: true }),
+  );
+  headerPane.dispatchEvent(
+    new PointerEvent('pointermove', { clientX: toClientX, clientY: 0, pointerId: 1, bubbles: true }),
+  );
+  grip.dispatchEvent(
+    new PointerEvent('pointerup', { clientX: toClientX, clientY: 0, pointerId: 1, bubbles: true }),
+  );
+};
+
 describe('a plugin column never becomes the consumer’s config (D-S5-33, #162/#181)', () => {
   const riskDataset = () =>
     new Dataset({
@@ -3791,25 +3811,6 @@ describe('a plugin column never becomes the consumer’s config (D-S5-33, #162/#
       ctx.view.registerGridColumn({ field: 'risk' });
       return () => {};
     },
-  };
-
-  /** One resize drag on a header's grip, start to finish — the gesture #181's t2 describes. */
-  const dragColumnEdge = (container: HTMLElement, field: string, toClientX: number): void => {
-    const grip = container.querySelector<HTMLElement>(
-      `.fg-col-header[data-field="${field}"] .fg-column-resizer`,
-    )!;
-    const headerPane = container.querySelector<HTMLElement>('.fg-grid-header')!;
-    headerPane.setPointerCapture = vi.fn();
-    headerPane.releasePointerCapture = vi.fn();
-    grip.dispatchEvent(
-      new PointerEvent('pointerdown', { clientX: 100, clientY: 0, pointerId: 1, bubbles: true }),
-    );
-    headerPane.dispatchEvent(
-      new PointerEvent('pointermove', { clientX: toClientX, clientY: 0, pointerId: 1, bubbles: true }),
-    );
-    grip.dispatchEvent(
-      new PointerEvent('pointerup', { clientX: toClientX, clientY: 0, pointerId: 1, bubbles: true }),
-    );
   };
 
   it('a resize of a consumer column leaves the plugin column out of the getter, the payload and the save', async () => {
@@ -3916,6 +3917,168 @@ describe('a plugin column never becomes the consumer’s config (D-S5-33, #162/#
 
     expect(gantt.gridColumns.map((c) => (typeof c === 'string' ? c : c.field))).toEqual(['name', 'risk']);
     expect(container.querySelector('.fg-col-header[data-field="risk"]')).not.toBeNull();
+
+    gantt.destroy();
+  });
+});
+
+describe('a hidden grid column keeps its width and its place (S5.7, D-S5-34, #184)', () => {
+  const threeColumnGantt = (container: HTMLElement, plugins: GanttPlugin[] = []): Gantt =>
+    new Gantt({
+      container,
+      dataset: new Dataset({ timeZone: 'UTC', entries: sampleEntries }),
+      gridColumns: ['name', 'start', 'end'],
+      plugins,
+    });
+
+  const fieldOf = (column: GridColumnInput): string =>
+    typeof column === 'string' ? column : String(column.field);
+
+  const paintedFields = (container: HTMLElement): string[] =>
+    Array.from(container.querySelectorAll<HTMLElement>('.fg-col-header')).map(
+      (cell) => cell.dataset['field'] ?? '',
+    );
+
+  it('hiding takes the column off the screen and leaves the width and the order the user set', async () => {
+    const container = document.createElement('div');
+    const gantt = threeColumnGantt(container);
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+
+    // The user resizes the middle column. That width is the thing a wholesale reassignment loses.
+    dragColumnEdge(container, 'start', 260);
+    const resized = gantt.gridColumns[1]!;
+    const userWidth = typeof resized === 'string' ? undefined : resized.width;
+    expect(userWidth).toBeGreaterThan(100);
+
+    gantt.hideGridColumn('start');
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+
+    expect(paintedFields(container)).toEqual(['name', 'end']);
+    expect(gantt.hiddenGridColumns).toEqual(['start']);
+    // Still declared, still second, still carrying the width the user gave it.
+    expect(gantt.gridColumns.map(fieldOf)).toEqual(['name', 'start', 'end']);
+    expect(gantt.gridColumns[1]).toEqual({ field: 'start', width: userWidth, hidden: true });
+
+    gantt.showGridColumn('start');
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+
+    expect(paintedFields(container)).toEqual(['name', 'start', 'end']);
+    expect(gantt.hiddenGridColumns).toEqual([]);
+    // Showing removes the key rather than writing `hidden: false`, so the list reads as authored.
+    expect(gantt.gridColumns[1]).toEqual({ field: 'start', width: userWidth });
+
+    gantt.destroy();
+  });
+
+  it('the saved list restores a hidden column hidden, in its own place', async () => {
+    const first = document.createElement('div');
+    const gantt = threeColumnGantt(first);
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+
+    let saved: readonly GridColumnInput[] = [];
+    gantt.on('gridColumnsChange', ({ to }) => {
+      saved = to;
+    });
+    gantt.hideGridColumn('start');
+    gantt.destroy();
+
+    // The documented round-trip: keep `to`, hand it back to the next Gantt.
+    expect(saved.map(fieldOf)).toEqual(['name', 'start', 'end']);
+    const second = document.createElement('div');
+    const reloaded = new Gantt({
+      container: second,
+      dataset: new Dataset({ timeZone: 'UTC', entries: sampleEntries }),
+      gridColumns: saved,
+    });
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+
+    expect(paintedFields(second)).toEqual(['name', 'end']);
+    expect(reloaded.hiddenGridColumns).toEqual(['start']);
+    reloaded.showGridColumn('start');
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    expect(paintedFields(second)).toEqual(['name', 'start', 'end']);
+
+    reloaded.destroy();
+  });
+
+  it('hiding a plugin’s own column never reaches the consumer’s configuration (D-S5-33)', async () => {
+    const container = document.createElement('div');
+    const endColumnPlugin: GanttPlugin = {
+      id: 'demo.endColumn',
+      setup(ctx: PluginContext) {
+        ctx.view.registerGridColumn({ field: 'end' });
+        return () => {};
+      },
+    };
+    const gantt = new Gantt({
+      container,
+      dataset: new Dataset({ timeZone: 'UTC', entries: sampleEntries }),
+      gridColumns: ['name', 'start'],
+      plugins: [endColumnPlugin],
+    });
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    expect(paintedFields(container)).toEqual(['name', 'start', 'end']);
+
+    const payloads: { from: string[]; to: string[] }[] = [];
+    gantt.on('gridColumnsChange', ({ from, to }) => {
+      payloads.push({ from: from.map((c) => String(c.field)), to: to.map((c) => String(c.field)) });
+    });
+    gantt.hideGridColumn('end');
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+
+    // It leaves the screen, and it stays the plugin's: nothing the consumer would save learns of it.
+    expect(paintedFields(container)).toEqual(['name', 'start']);
+    expect(gantt.gridColumns).toEqual(['name', 'start']);
+    expect(gantt.hiddenGridColumns).toEqual([]);
+    expect(payloads).toEqual([{ from: ['name', 'start'], to: ['name', 'start'] }]);
+
+    gantt.destroy();
+  });
+
+  it('a hidden column leaves ctx.view.resolvedColumns() — that seam answers what paints', async () => {
+    const container = document.createElement('div');
+    let seen: PluginContext | undefined;
+    const gantt = threeColumnGantt(container, [
+      {
+        id: 'demo.reader',
+        setup(ctx: PluginContext) {
+          seen = ctx;
+          return () => {};
+        },
+      },
+    ]);
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    expect(seen!.view.resolvedColumns().map((c) => String(c.field))).toEqual(['name', 'start', 'end']);
+
+    gantt.hideGridColumn('start');
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    expect(seen!.view.resolvedColumns().map((c) => String(c.field))).toEqual(['name', 'end']);
+
+    gantt.destroy();
+  });
+
+  it('hiding runs the cancelable pair a resize runs, so a veto keeps the column on screen', async () => {
+    const container = document.createElement('div');
+    const gantt = threeColumnGantt(container);
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+
+    gantt.on('beforeGridColumnsChange', () => false);
+    gantt.hideGridColumn('start');
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+
+    expect(paintedFields(container)).toEqual(['name', 'start', 'end']);
+    expect(gantt.hiddenGridColumns).toEqual([]);
+
+    gantt.destroy();
+  });
+
+  it('a field no column declares is a mistake, not a silent no-op', async () => {
+    const container = document.createElement('div');
+    const gantt = threeColumnGantt(container);
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+
+    expect(() => gantt.hideGridColumn('nope')).toThrow(UnknownGridColumnError);
+    expect(() => gantt.showGridColumn('nope')).toThrow(UnknownGridColumnError);
 
     gantt.destroy();
   });

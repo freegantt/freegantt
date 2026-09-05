@@ -282,7 +282,7 @@ interface Field<TValue = unknown> {
   equals?(a: TValue | undefined, b: TValue | undefined): boolean;   // default Object.is
   compare?(a: TValue | undefined, b: TValue | undefined): number;   // sort; default is the stored value
   formatValue?(value: TValue | undefined, ctx: FormatContext): string;   // text for a cell; DOM-free; locale only here
-  column?: Omit<GridColumn, 'field'>;               // presentation defaults, declared once with the field
+  column?: Omit<GridColumn, 'field' | 'hidden'>;    // presentation defaults, declared once with the field; which columns show is the Gantt's question
 }
 
 /** Presentation only. Never carries an aggregate — see the rules below. */
@@ -291,6 +291,7 @@ interface GridColumn {
   header?: string;
   width?: number; flex?: number;
   align?: 'start' | 'end' | 'center';
+  hidden?: boolean;                                 // S5, D-S5-34: declared and not painted; keeps its width and its place
   // cellRenderer and editable arrive in S5, on the Gantt column, when code honours them (I11).
 }
 

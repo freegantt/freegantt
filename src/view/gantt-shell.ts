@@ -812,6 +812,28 @@ export class GanttShell {
     this.#columnChrome.commit(columns);
   }
 
+  /** S5.7, D-S5-34: which of this Gantt's own columns are hidden, by field key. Read it to label a
+   *  column chooser. A plugin's column is the plugin's declaration, so this getter reports the
+   *  consumer's hidden columns only — the same rule `gridColumns` above follows. */
+  get hiddenGridColumns(): readonly FieldKey[] {
+    return this.#columnChrome.hiddenColumns;
+  }
+
+  /** S5.7, D-S5-34: takes one column off the screen and leaves the other columns alone. The hidden
+   *  column keeps its width and its position, so `showGridColumn` puts it back where it was. Runs
+   *  the cancelable commit sequence a resize drag runs, so it raises
+   *  `beforeGridColumnsChange`/`gridColumnsChange` and a handler can refuse it. Throws
+   *  `UnknownGridColumnError` when no declared column names the field. */
+  hideGridColumn(field: FieldKey): void {
+    this.#columnChrome.commitHidden(field, true);
+  }
+
+  /** S5.7, D-S5-34: the twin of `hideGridColumn`. Puts a hidden column back at its own place in the
+   *  order, with the width it had. */
+  showGridColumn(field: FieldKey): void {
+    this.#columnChrome.commitHidden(field, false);
+  }
+
   /** Live (S5.4, D-S5-11). Reassigning repaints every bar with no remount (I8). */
   get barRenderer(): BarRenderer | RendererByKind | undefined {
     return this.#frameSettings.barRenderer;

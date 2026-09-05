@@ -24,6 +24,7 @@ import type {
   Entry,
   EntryEdits,
   EntryId,
+  FieldKey,
   GridColumnInput,
   Instant,
   InstantInput,
@@ -314,6 +315,28 @@ export class Gantt {
 
   set gridColumns(columns: readonly GridColumnInput[]) {
     this.#shell.gridColumns = columns;
+  }
+
+  /** D-S5-34: which columns are hidden, by field key — what a column chooser reads to draw its own
+   *  checkboxes. Reports the columns this Gantt was configured with, never a plugin's own. */
+  get hiddenGridColumns(): readonly FieldKey[] {
+    return this.#shell.hiddenGridColumns;
+  }
+
+  /** D-S5-34. Call: `gantt.hideGridColumn('cost')`. Takes one column off the screen and leaves every
+   *  other column, its width and the order untouched — no restatement of `gridColumns`, and nothing
+   *  for the caller to splice back later. The hidden column stays in `gridColumns` as
+   *  `{ field, hidden: true }`, so a saved list restores it hidden. Raises the same cancelable
+   *  `beforeGridColumnsChange`/`gridColumnsChange` pair a resize raises. Throws
+   *  `UnknownGridColumnError` when no declared column names the field. */
+  hideGridColumn(field: FieldKey): void {
+    this.#shell.hideGridColumn(field);
+  }
+
+  /** D-S5-34. Call: `gantt.showGridColumn('cost')`. Puts a hidden column back where it was, with the
+   *  width it had. Showing a column that is already on screen changes nothing. */
+  showGridColumn(field: FieldKey): void {
+    this.#shell.showGridColumn(field);
   }
 
   /** Live (S5.4, D-S5-11/12). Assigning repaints every bar with no remount (I8). */

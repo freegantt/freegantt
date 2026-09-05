@@ -74,6 +74,7 @@ export {
   ParentCycleError,
   SegmentsOutOfSyncError,
   UnknownFieldError,
+  UnknownGridColumnError,
   DuplicateFieldKeyError,
   DuplicateFieldSourceError,
   UnknownAggregatorError,

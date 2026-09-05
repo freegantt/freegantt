@@ -84,6 +84,12 @@ export interface GridColumn {
   resizable?: boolean;
   /** Default `true`. A pinned column refuses the reorder drag and the move chord. */
   movable?: boolean;
+  /** D-S5-34. `true` keeps this column declared but off the screen. The column holds its place in
+   *  `gridColumns`, its `width`, and its position in the order, so showing it again puts it back
+   *  where it was. It leaves the grid, `ctx.view.resolvedColumns()`, and the resize and reorder
+   *  gestures. Default `false`. `gantt.hideGridColumn(field)` writes this key without a restatement
+   *  of the whole list. */
+  hidden?: boolean;
   /** D-S5-13 — `true` adds this column's header and formatted value to the default bar tooltip.
    *  Default `false`. */
   tooltip?: boolean;
@@ -135,8 +141,10 @@ export interface Field<TValue = unknown> {
    *  with `beforeEntryEdit` and mount your own control. */
   inputType?: 'text' | 'number' | 'email' | 'tel' | 'url';
   /** D-S5-17: `cellRenderer` sits on the Gantt's `GridColumn`, never here — `data/` never holds a
-   *  renderer, so this default set excludes it. */
-  column?: Omit<GridColumn, 'field' | 'cellRenderer'>;
+   *  renderer, so this default set excludes it. `hidden` is excluded for a different reason
+   *  (D-S5-34): a Field default of `hidden: true` would make a Gantt that names the column show
+   *  nothing. Which columns a view shows is the Gantt's question, never the Field's. */
+  column?: Omit<GridColumn, 'field' | 'cellRenderer' | 'hidden'>;
 }
 
 /** A `Field` with `key` and `source` omitted — one bundle applied by name to many Fields. */

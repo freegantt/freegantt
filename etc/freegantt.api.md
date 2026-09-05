@@ -693,7 +693,7 @@ export type ExtenderWrapper = (next: EditExtender) => EditExtender;
 
 // @public
 export interface Field<TValue = unknown> {
-    column?: Omit<GridColumn, 'field' | 'cellRenderer'>;
+    column?: Omit<GridColumn, 'field' | 'cellRenderer' | 'hidden'>;
     // (undocumented)
     compare?(a: TValue | undefined, b: TValue | undefined): number;
     // (undocumented)
@@ -906,6 +906,8 @@ export class Gantt {
     set gridWidth(width: GridWidth);
     get headerRenderer(): HeaderRenderer | undefined;
     set headerRenderer(renderer: HeaderRenderer | undefined);
+    get hiddenGridColumns(): readonly FieldKey[];
+    hideGridColumn(field: FieldKey): void;
     get interactions(): Interactions;
     set interactions(next: Interactions);
     // (undocumented)
@@ -937,6 +939,7 @@ export class Gantt {
     get selectedEntries(): readonly Entry[];
     get selectedIds(): readonly EntryId[];
     set selectedIds(ids: readonly (EntryId | string)[]);
+    showGridColumn(field: FieldKey): void;
     // (undocumented)
     get theme(): Theme;
     set theme(value: Theme);
@@ -1084,6 +1087,7 @@ export interface GridColumn {
     flex?: number;
     // (undocumented)
     header?: string;
+    hidden?: boolean;
     movable?: boolean;
     resizable?: boolean;
     tooltip?: boolean;
@@ -1658,7 +1662,7 @@ export type SerializedField = {
         key: string;
     };
     rollUp?: AggregatorName;
-    column?: Omit<GridColumn, 'field'>;
+    column?: Omit<GridColumn, 'field' | 'hidden'>;
 };
 
 // @public (undocumented)
@@ -1824,6 +1828,13 @@ export class UnknownFieldTypeError extends FreeGanttError {
     constructor(typeName: string);
     // (undocumented)
     readonly typeName: string;
+}
+
+// @public
+export class UnknownGridColumnError extends FreeGanttError {
+    constructor(field: string);
+    // (undocumented)
+    readonly field: string;
 }
 
 // @public
