@@ -574,7 +574,7 @@ describe('attachEntryGestures — hover (S3.2)', () => {
 const DRAG_THRESHOLD_PX = 4;
 
 describe('attachEntryGestures — move (S3.3)', () => {
-  it('[S3-A1] a drag past the threshold previews, then commits on pointerup and never touches selection', () => {
+  it('[S3-A1] a drag past the threshold previews, then commits on pointerup and touches selection no further', () => {
     const pane = document.createElement('div');
     mockPointerCapture(pane);
     const container = document.createElement('div');
@@ -585,6 +585,11 @@ describe('attachEntryGestures — move (S3.3)', () => {
         new Map(entries.map((e) => [e.id, { start: toInstant(dxPx), end: toInstant(dxPx) }])),
     });
     attachEntryGestures(pane, rowLayer, container, ctx);
+    // A is already the Selection, with no pick — the drag below grabs the bar it already names, so
+    // the pointerdown-arm write (#211) has nothing to do. `proposals` is reset after seeding so the
+    // assertion below is about what the drag itself proposes, not this setup step.
+    ctx.selection.propose([A]);
+    proposals.length = 0;
 
     pane.dispatchEvent(down(0));
     pane.dispatchEvent(move(0 + DRAG_THRESHOLD_PX + 1));
@@ -594,7 +599,71 @@ describe('attachEntryGestures — move (S3.3)', () => {
     expect(previews.at(-1)).toBeUndefined(); // cleared on commit
     expect(commits).toHaveLength(1);
     expect(commits[0]![0]).toEqual({ kind: 'move' });
-    expect(proposals).toEqual([]); // a drag never also proposes a selection change
+    expect(proposals).toEqual([]); // a drag on an already-selected, already-picked bar proposes nothing
+  });
+
+  it('[#211, D-S4-30] a drag on a bar not in the Selection proposes it, with that bar as the pick, once armed', () => {
+    const pane = document.createElement('div');
+    mockPointerCapture(pane);
+    const container = document.createElement('div');
+    const rowLayer = document.createElement('div');
+    const { ctx, proposals, proposedPickedItemIds, commits } = makeContext({
+      can: (capability) => capability === 'move' || capability === 'select',
+    });
+    attachEntryGestures(pane, rowLayer, container, ctx);
+
+    // Nothing is selected. A press-then-drag on A's bar must pick up A, with that bar as its pick,
+    // the moment the drag arms — not deferred to pointerup, and not left unset for the whole gesture.
+    pane.dispatchEvent(down(0));
+    expect(proposals).toEqual([]); // still nothing on pointerdown alone, threshold not yet crossed
+    pane.dispatchEvent(move(0 + DRAG_THRESHOLD_PX + 1)); // crosses the threshold — the drag arms here
+    expect(proposals).toEqual([[A]]);
+    expect(proposedPickedItemIds).toEqual([itemId(A)]);
+
+    pane.dispatchEvent(up(0 + DRAG_THRESHOLD_PX + 5));
+    expect(commits).toHaveLength(1);
+    expect(proposals).toEqual([[A]]); // pointerup after a drag proposes nothing further
+  });
+
+  it('[#211] a drag on a bar already in a multi-Entry Selection does not re-propose it', () => {
+    const pane = document.createElement('div');
+    mockPointerCapture(pane);
+    const container = document.createElement('div');
+    const rowLayer = document.createElement('div');
+    const { ctx, proposals } = makeContext({
+      can: (capability) => capability === 'move' || capability === 'select',
+    });
+    attachEntryGestures(pane, rowLayer, container, ctx);
+    ctx.selection.propose([A, B]);
+    proposals.length = 0;
+
+    pane.dispatchEvent(down(0)); // grabs A, already part of the Selection
+    pane.dispatchEvent(move(0 + DRAG_THRESHOLD_PX + 1));
+
+    expect(proposals).toEqual([]); // A is already selected — the rigid multi-Entry drag applies as-is
+  });
+
+  it('[#211] a resize-handle grab never proposes a Selection change on arm', () => {
+    const pane = document.createElement('div');
+    mockPointerCapture(pane);
+    const container = document.createElement('div');
+    const rowLayer = document.createElement('div');
+    const { ctx, proposals } = makeContext({
+      can: (capability) => capability === 'resize' || capability === 'select',
+      hitTest: (at) =>
+        at.x >= 0 && at.x < ORDER.length
+          ? { kind: 'bar', itemId: itemId(ORDER[at.x]!), edge: 'end' }
+          : undefined,
+    });
+    attachEntryGestures(pane, rowLayer, container, ctx);
+
+    // Nothing is selected, yet a resize-handle grab on A's bar arms fine — `resizableEntryId` already
+    // resolves off hover, not the Selection, so this grab names no new Entry (#211 scopes the
+    // pointerdown-arm write to a move grab only).
+    pane.dispatchEvent(down(0));
+    pane.dispatchEvent(move(0 + DRAG_THRESHOLD_PX + 1));
+
+    expect(proposals).toEqual([]);
   });
 
   it('[S3-A2] Escape mid-drag clears the preview and commits nothing', () => {

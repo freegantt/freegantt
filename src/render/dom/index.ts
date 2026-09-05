@@ -374,6 +374,18 @@ export function createDomBackend(options?: DomBackendOptions): RenderBackend<HTM
     return envelopeBarsOfEntry(id);
   }
 
+  /** Same two bars, or both undefined — the identity check `applyState`'s handle repaint needs
+   *  (#211). A pick can arrive while `resizableEntryId` names the same Entry it already did (a click
+   *  on an already-hovered bar), so gating the repaint on Entry identity alone would leave the pair
+   *  glued to its pre-pick bars while the draft it grabs has already moved. */
+  function sameBars(
+    a: { start: ItemId; end: ItemId } | undefined,
+    b: { start: ItemId; end: ItemId } | undefined,
+  ): boolean {
+    if (a === undefined || b === undefined) return a === b;
+    return a.start === b.start && a.end === b.end;
+  }
+
   /** Moves the shared handle pair onto `bars`' own committed geometry, or parks both (D-S3-8) when
    *  it is undefined. Each handle reads its own bar, so a packed Entry whose Segments sit in two
    *  lanes still gets each handle on the right row (#200). `hidden` is a DOM property write, not
@@ -1130,10 +1142,13 @@ export function createDomBackend(options?: DomBackendOptions): RenderBackend<HTM
       paintedSelectedRows = nextSelectedRows;
 
       // D-S3-8: the shared handle pair follows `resizableEntryId`, positioned off the committed
-      // geometry `syncBars` already recorded — never a per-item computation of its own.
+      // geometry `syncBars` already recorded — never a per-item computation of its own. #211: a pick
+      // can arrive with `resizableEntryId` unchanged (a click on the already-hovered bar), so the
+      // repaint gate also has to catch a pair whose own bars moved, not only a changed Entry.
       const nextResizable = state.resizableEntryId;
-      if (nextResizable !== paintedResizable) {
-        paintResizeHandles(resizeHandleBarsOfEntry(nextResizable));
+      const nextHandleBars = resizeHandleBarsOfEntry(nextResizable);
+      if (nextResizable !== paintedResizable || !sameBars(nextHandleBars, paintedHandleBars)) {
+        paintResizeHandles(nextHandleBars);
         paintedResizable = nextResizable;
       }
 

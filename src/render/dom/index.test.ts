@@ -1234,6 +1234,64 @@ describe('render/dom backend', () => {
     timeline.remove();
   });
 
+  it('moves the handle pair onto a bar picked after it already brackets the envelope (#211)', () => {
+    // A hover shows the envelope pair with no pick; a click on one of the two bars then sets a pick
+    // for the same, still-hovered Entry — `resizableEntryId` never changes, so the repaint gate must
+    // not key off Entry identity alone, or the pair would stay glued to the envelope (the exact bug
+    // spec-211-gesture-units.md §7's harness scenario calls out).
+    const backend = createDomBackend();
+    const { grid, timeline } = mountSurfaces();
+    backend.mount({ grid, timeline });
+
+    const base = sampleEntries[0]!;
+    const later = sampleEntries[4]!;
+    const spreadScale: TimeScale = {
+      ...scale,
+      xForInstant: (at) => Number(at) - Number(base.start),
+    };
+    const segmented = {
+      ...base,
+      end: later.end,
+      segments: [
+        { start: base.start, end: base.end },
+        { start: later.start, end: later.end },
+      ],
+    };
+    const frame = computeFrame({
+      entries: [segmented],
+      scale: spreadScale,
+      preset,
+      visible: { x: 0, y: 0, width: 0, height: 0 },
+      rowHeight: 32,
+      revision: 0,
+      itemProducerRegistry,
+    });
+    backend.sync(frame);
+    const [first, last] = frame.bars;
+    expect(frame.bars).toHaveLength(2);
+
+    // Step 1: hover only — no pick recorded anywhere. The pair brackets the envelope.
+    backend.applyState({ resizableEntryId: segmented.id, pickedItemIdByEntryId: new Map() });
+    const start = timeline.querySelector<HTMLElement>('.fg-bar-handle[data-edge="start"]')!;
+    const end = timeline.querySelector<HTMLElement>('.fg-bar-handle[data-edge="end"]')!;
+    expect(start.style.transform).toBe(`translate(${first!.x}px, ${first!.y}px)`);
+    expect(end.style.transform).toBe(`translate(${last!.x + last!.width}px, ${last!.y}px)`);
+
+    // Step 2: a click on the earliest bar sets its pick. `resizableEntryId` names the same Entry as
+    // before — only the pick changed — and the pair must still move onto that one bar.
+    backend.applyState({
+      resizableEntryId: segmented.id,
+      pickedItemIdByEntryId: new Map([[segmented.id, first!.id]]),
+    });
+    expect(start.style.transform).toBe(`translate(${first!.x}px, ${first!.y}px)`);
+    expect(end.style.transform).toBe(`translate(${first!.x + first!.width}px, ${first!.y}px)`);
+    expect(end.style.transform).not.toBe(`translate(${last!.x + last!.width}px, ${last!.y}px)`);
+
+    backend.destroy();
+    grid.remove();
+    timeline.remove();
+  });
+
   it('hitTest never reports an edge for a parked (hidden) handle pair', () => {
     const backend = createDomBackend();
     const { grid, timeline } = mountSurfaces();
