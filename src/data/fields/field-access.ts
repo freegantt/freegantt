@@ -27,13 +27,43 @@ function isOptionalEntryKey(key: string): key is 'parentId' | 'segments' | 'meta
   return key === 'parentId' || key === 'segments' || key === 'meta';
 }
 
-export function mergeStoredEdits(base: StoredEdit | undefined, extra: StoredEdit): StoredEdit {
-  const merged: StoredEdit = { ...base, ...extra };
-  const keys = new Set([...proposedKeysOf(base), ...proposedKeysOf(extra)]);
-  return withProposedKeys(merged, keys);
+/** Which Field keys an edit claims to write. An edit that carries `proposedKeys` states them; a raw
+ *  storage patch states them by the keys it holds, which is how `diffEdit` already reads one. */
+function keysWrittenBy(edit: StoredEdit | undefined): readonly string[] {
+  if (edit === undefined) return [];
+  if (edit.proposedKeys !== undefined) return [...edit.proposedKeys];
+  return Object.keys(edit);
 }
 
-/** Merges two edit maps. Object spread is not a legal merge — proposed keys would drop. */
+/**
+ * Merges two storage-shaped edits. Object spread alone is not a legal merge: `proposedKeys` is how a
+ * `meta`-sourced Field write is recognized, and the later edit's set replaces the earlier one's.
+ *
+ * The two edits may state their writes differently — one through `proposedKeys`, one through the keys
+ * it holds. When either states `proposedKeys`, the merged edit does too, and the raw side contributes
+ * the keys it holds, so `diffEdit` still emits a row for every write. When neither does, the merged
+ * edit stays on the raw path, where an undeclared key survives.
+ */
+export function mergeStoredEdits(base: StoredEdit | undefined, extra: StoredEdit): StoredEdit {
+  const merged: StoredEdit = { ...base, ...extra };
+  if (base?.proposedKeys === undefined && extra.proposedKeys === undefined) {
+    return withProposedKeys(merged, []);
+  }
+  return withProposedKeys(merged, new Set([...keysWrittenBy(base), ...keysWrittenBy(extra)]));
+}
+
+/**
+ * Merges two sets of extra writes, keyed by Entry — the composition an `ExtenderWrapper` needs
+ * (D-S5-23).
+ *
+ * ```ts
+ * ctx.edits.setExtender((next) => (request) => mergeEntryEdits(next(request), mine(request)));
+ * ```
+ *
+ * Object spread and `new Map([...a, ...b])` are not legal merges: two extenders that write the same
+ * Entry lose the earlier `StoredEdit` outright, and lose its `proposedKeys` with it (#197). `extra`
+ * wins per Field key; the proposed keys of both survive.
+ */
 export function mergeEntryEdits(base: EntryEdits, extra: EntryEdits): EntryEdits {
   if (extra.size === 0) return base;
   const merged = new Map<EntryId, StoredEdit>(base);
