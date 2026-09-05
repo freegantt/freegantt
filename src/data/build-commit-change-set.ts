@@ -14,11 +14,12 @@ import type {
   EntryKind,
   FieldContext,
   FieldUpdated,
+  StoredEdit,
   StoreRowUpdated,
 } from '../model/index.js';
 import { diffEdit, foldChangeSet } from './change-set.js';
 import type { EditExtender, EntryEdits } from './edit-extension.js';
-import { mergeEntryEdits, overlayStoredEdit } from './fields/field-access.js';
+import { mergeEntryEdits, overlayStoredEdit, proposedKeysOf } from './fields/field-access.js';
 import type { FieldRegistry } from './fields/field-registry.js';
 import { promoteNewParents } from './hierarchy.js';
 import { rollUpFields } from './rollup.js';
@@ -62,13 +63,22 @@ export function diffEdits(
   return updated;
 }
 
+/** Which Fields an edit writes, however it states them: a storage key it holds, or a proposed key.
+ *  `proposedKeys` is bookkeeping on the edit, never a Field, so it is not one of them (#197). */
+function fieldsWrittenBy(edit: StoredEdit): ReadonlySet<string> {
+  const keys = new Set<string>(proposedKeysOf(edit));
+  for (const key of Object.keys(edit)) if (key !== 'proposedKeys') keys.add(key);
+  return keys;
+}
+
 function guardExtensionHookDoesNotOverwriteBody(proposed: EntryEdits, extenderEdits: EntryEdits): void {
   if (!isDevMode()) return;
   for (const [id, edit] of extenderEdits) {
     const bodyEdit = proposed.get(id);
     if (!bodyEdit) continue;
-    for (const field of Object.keys(edit)) {
-      if (field in bodyEdit) {
+    const bodyFields = fieldsWrittenBy(bodyEdit);
+    for (const field of fieldsWrittenBy(edit)) {
+      if (bodyFields.has(field)) {
         throw new Error(
           `buildCommitChangeSet: the extension hook proposed field "${field}" on entry "${String(id)}", ` +
             'which the transaction body already proposed (I4)',

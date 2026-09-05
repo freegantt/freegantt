@@ -24,18 +24,28 @@ S7 is the first slice with a second occupant on the hook (`scheduling()` compose
 `entryDependencies()`, D-S5-30/D-S5-31), and a cascade that moves an entry is the colliding case. Fix
 the seam before the first real consumer stands on it.
 
-- [ ] `mergeEntryEdits` reaches the public surface — decide *where* first: it is a plugin-author tool,
-      and CLAUDE.md's "two callers, two surfaces" says an app author must never meet it
-- [ ] Run the `naming` skill on the exported name. Write the plugin author's call site down and read
-      it in English. `merge` alone is almost certainly too generic for this codebase (#7's lesson)
-- [ ] Every doc example that composes with a `Map` spread now uses the exported function —
+- [x] `mergeEntryEdits` reaches the public surface — decide *where* first: it is a plugin-author tool,
+      and CLAUDE.md's "two callers, two surfaces" says an app author must never meet it.
+      **Where:** `src/api/dataset-plugin.ts`, beside `DatasetEditHook` — the contract that hands a
+      plugin the occupant it has to merge with — and one re-export line in `src/api/index.ts`
+- [x] Run the `naming` skill on the exported name. Write the plugin author's call site down and read
+      it in English. `merge` alone is almost certainly too generic for this codebase (#7's lesson).
+      **Kept `mergeEntryEdits`:** `EntryEdits` is the glossary term (`CONTEXT.md`), the call site
+      reads true, and a search for `merge` alone finds three other things
+- [x] Every doc example that composes with a `Map` spread now uses the exported function —
       `src/model/plugin.ts`, `src/data/dataset-state.ts`, and any `plans/` example
-- [ ] **The law test:** two extenders that write the **same** entry keep both writes, and both
+- [x] **The law test:** two extenders that write the **same** entry keep both writes, and both
       `proposedKeys` survive. Mutation-check it — break the merge, confirm red, restore
       (handoff-post-163 §5)
-- [ ] A second test pins that the Rollup does not overwrite a `meta`-sourced value a plugin proposed
-      through a composed extender
-- [ ] `plans/03-slices.md:270` updated to say the prerequisite is met
+- [x] ~~A second test pins that the Rollup does not overwrite a `meta`-sourced value a plugin proposed
+      through a composed extender~~ **The box was wrong.** `plans/s4-hierarchy-and-rows/s4.2-rollup.md`
+      §"Precedence is unchanged" states the opposite, and it is D-S2-22: *the Rollup yields to a Field
+      the body proposed, and wins over one the extension hook proposed.* A test pinning the box as
+      written would pin the reverse of a locked decision. The real Rollup damage the broken merge did
+      is that the Rollup reads effective **child** values from the merged edits, so a dropped write
+      made a parent roll up from a stale child. That is what the second test pins now, on a
+      `meta`-sourced Field, in `src/api/dataset.test.ts`
+- [x] `plans/03-slices.md:270` updated to say the prerequisite is met
 
 **Do not touch `plans/00-overview.md`.** Its S6 → S7 gate row holds an uncommitted line on this exact
 subject, by an unidentified author, and the repo owner has been asked who owns it (#197). Leave it.

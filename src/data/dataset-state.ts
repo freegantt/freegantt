@@ -191,7 +191,7 @@ export class DatasetState implements Dataset {
     return this.#editExtender;
   }
 
-  /** Call: `ctx.edits.setExtender((next) => (request) => merge(next(request), mine(request)))`.
+  /** Call: `ctx.edits.setExtender((next) => (request) => mergeEntryEdits(next(request), mine(request)))`.
    *  Installing composes onto the current occupant rather than evicting it, so a second plugin needs
    *  no priority machinery and `EditExtenderConflictError` never gets written (D-S5-23). */
   setExtender(wrap: ExtenderWrapper): void {
