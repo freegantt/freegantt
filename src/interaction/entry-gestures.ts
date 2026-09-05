@@ -7,7 +7,6 @@
 // double-click cannot start a native text range; it writes no Gantt state.
 
 import type { EntryId } from '../model/index.js';
-import { itemId } from '../model/index.js';
 import { createPointerGesture } from './pointer-gesture.js';
 import type {
   Detachable,
@@ -105,15 +104,9 @@ export function attachEntryGestures(
     const toIndex = order.indexOf(to[to.length - 1]!);
     if (fromIndex === -1 || toIndex === -1) return to;
     const [lo, hi] = fromIndex <= toIndex ? [fromIndex, toIndex] : [toIndex, fromIndex];
-    return order.slice(lo, hi + 1).filter((id) => canSelect(id));
-  }
-
-  /** `entryFor` takes an `ItemId`; the selection half of this file works in `EntryId` (row order,
-   *  anchor, proposals) — `itemId(id)` bridges the one call site that needs both (S1 §2.4: segment 0
-   *  of an entry with no segments yet is the whole bar). */
-  function canSelect(id: EntryId): boolean {
-    const entry = ctx.entryFor(itemId(id));
-    return entry !== undefined && ctx.can('select', entry);
+    // #198: no second capability call here. `selectableEntriesInRowOrder()` already dropped every
+    // Entry that refuses `select`, and the capability resolves once, in the shell (I14).
+    return order.slice(lo, hi + 1);
   }
 
   function onPointerDown(e: PointerEvent): void {
