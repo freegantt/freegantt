@@ -163,9 +163,9 @@ on the grid row reads `'row'`.
 - [x] The keyboard path (`Shift+F10`, the Menu key) runs the same rule — #205
 - [x] A test per table row, plus the keyboard case, the Selection replacement, and the header cell
 - [x] `api/command.ts` says what `CommandTarget.entryIds` now is
-- [ ] `plans/02-public-api.md` and `CONTEXT.md` say it too
-- [ ] The harness acts on `ctx.target.entryIds`, so the demo menu shows the rule it ships
-- [ ] `pnpm verify` green (104 guard / 595 node / 841 dom), `pnpm test:e2e` 70/70
+- [x] `plans/02-public-api.md` and `CONTEXT.md` say it too
+- [x] The harness acts on `ctx.target.entryIds`, so the demo menu shows the rule it ships
+- [x] `pnpm verify` green (104 guard / 595 node / 841 dom), `pnpm test:e2e` 70/70
 
 ## Mutation checks
 

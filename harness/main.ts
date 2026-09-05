@@ -11,7 +11,9 @@ import {
   inlineEditing,
 } from '../src/api/index.js';
 import type {
+  CommandContext,
   Entry,
+  EntryId,
   FieldContext,
   GridColumnInput,
   RowSource,
@@ -497,7 +499,19 @@ renderersToggle.dispatchEvent(new Event('change'));
 // grid row (context-menu.ts resolves both the same way, through `ctx.view.dom.targetUnder`).
 // Right-clicking empty timeline or an unpopulated grid stretch leaves `ctx.entry` undefined, so
 // these three never appear there — background right-clicks stay on "Collapse all"/"Expand all".
+//
+// #199: `when` asks about `ctx.entry`, the one Entry the menu is *about*. `run` acts on
+// `ctx.target.entryIds`, everything the right-click acts on — the whole Selection when the bar you
+// right-clicked is part of it, every Entry of the row when it is not.
 const ENTRY_CONTEXT_COMMAND_IDS = ['demo.deleteEntry', 'demo.lockEntry', 'demo.unlockEntry'];
+
+/** Which Entries a menu command acts on. `entry` is the fallback for an invocation that carries no
+ *  target at all — `gantt.commands.run(id)` from page scope. */
+function actedOnIds(cmdCtx: CommandContext): readonly EntryId[] {
+  const ids = cmdCtx.target?.entryIds ?? [];
+  if (ids.length > 0) return ids;
+  return cmdCtx.entry !== undefined ? [cmdCtx.entry.id] : [];
+}
 
 function entryContextActions(): GanttPlugin {
   return {
@@ -508,9 +522,7 @@ function entryContextActions(): GanttPlugin {
         label: 'Delete',
         when: (cmdCtx) => cmdCtx.entry !== undefined,
         run: (cmdCtx) => {
-          const entry = cmdCtx.entry;
-          if (entry === undefined) return;
-          attemptMutation(() => ctx.dataset.entries.remove(entry.id));
+          for (const id of actedOnIds(cmdCtx)) attemptMutation(() => ctx.dataset.entries.remove(id));
         },
       });
       ctx.commands.register({
@@ -518,9 +530,10 @@ function entryContextActions(): GanttPlugin {
         label: 'Lock',
         when: (cmdCtx) => cmdCtx.entry !== undefined && !locks.isLocked(cmdCtx.entry.id),
         run: (cmdCtx) => {
-          if (cmdCtx.entry === undefined) return;
-          locks.lock(cmdCtx.entry.id);
-          prependLogLine(log, `entries · ${cmdCtx.entry.id} · locked (right-click menu)`);
+          for (const id of actedOnIds(cmdCtx)) {
+            locks.lock(id);
+            prependLogLine(log, `entries · ${id} · locked (right-click menu)`);
+          }
         },
       });
       ctx.commands.register({
@@ -528,9 +541,10 @@ function entryContextActions(): GanttPlugin {
         label: 'Unlock',
         when: (cmdCtx) => cmdCtx.entry !== undefined && locks.isLocked(cmdCtx.entry.id),
         run: (cmdCtx) => {
-          if (cmdCtx.entry === undefined) return;
-          locks.unlock(cmdCtx.entry.id);
-          prependLogLine(log, `entries · ${cmdCtx.entry.id} · unlocked (right-click menu)`);
+          for (const id of actedOnIds(cmdCtx)) {
+            locks.unlock(id);
+            prependLogLine(log, `entries · ${id} · unlocked (right-click menu)`);
+          }
         },
       });
       // No disposer: `ctx.disposables` already retracts all three commands (review P4).
