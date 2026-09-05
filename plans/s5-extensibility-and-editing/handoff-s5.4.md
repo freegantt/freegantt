@@ -10,7 +10,9 @@ All TODO boxes in [`s5.3-overlay-and-popup.md`](./s5.3-overlay-and-popup.md) are
 - `etc/freegantt.api.md` regenerated and diffed in — `Overlay`, `OverlayHandle`, `ElementDescription` now `@public`.
 - Live in `harness/plugins.html`: "Open popup on selected bar" button opens a `.fg-popup` anchored to the selected bar, flips at the pane edge, and closes on Escape. Screenshot-verified.
 
-One naming deviation from the spec, intentional and already commented in the code: the spec's file name was `view/overlay-host.ts` / type `OverlayHost`; the shipped file is `view/overlay.ts` / type `Overlay` (`DomOverlay` implementation). Same shape, same job — just a shorter name, consistent with how `api/plugin.ts` and `api/index.ts` already re-export it as `Overlay`. Don't rename it back.
+One naming deviation from the spec, intentional at the time: the spec's file name was `view/overlay-host.ts` / type `OverlayHost`. S5.3 shipped `view/overlay.ts` / type `Overlay`, with a `DomOverlay` implementation.
+
+> **Superseded by #168 — do not act on the paragraph above, or on the names in the checklist above it.** #168 deleted `src/view/overlay.ts` and `src/view/row-layer.ts`. One file replaced both: `src/view/mount-layer.ts`. It declares one interface, `MountLayer`, and one implementation, `DomMountLayer`. A Gantt builds two instances of it, reached as `ctx.view.overlay` and `ctx.view.rowLayer`. The difference is the instance, never the interface — read that file's own header for why. `present()` returns a plain `Disposer`, so `OverlayHandle` is gone too. Do not restore `Overlay`, `DomOverlay`, `OverlayHandle` or a second interface beside `MountLayer`.
 
 Nothing left uncommitted from S5.3 except the working tree diff itself (this session did not commit — check with the user before committing, per CLAUDE.md workflow).
 
