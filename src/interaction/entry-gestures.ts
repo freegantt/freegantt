@@ -18,8 +18,27 @@ import type {
 
 export type { EntryGestureContext, EntryGesture, DraftOptions, EntryHit } from '../view/index.js';
 
+/** Is this button event the primary (left-click, touch, pen) one? A right-click and a middle-click
+ *  are not (#199/#205). Only a primary button may pick, replace, toggle, or range the Selection. A
+ *  right-click instead reaches `context-menu.ts`'s `contextmenu` handler with whatever Selection it
+ *  landed on. */
+function isPrimaryButton(e: Pick<PointerEvent, 'button'>): boolean {
+  return e.button === 0;
+}
+
+/** Is this button event a right-click? A right-click still triggers the empty-timeline clear
+ *  (#199/#205 follow-up, `plans/02` D-S3-10 amendment). A background right-click opens a menu. A
+ *  surviving highlight would misstate what the menu acts on. A middle-click opens no menu, so it
+ *  does not clear. */
+function isRightClick(e: Pick<PointerEvent, 'button'>): boolean {
+  return e.button === 2;
+}
+
 /** Pointer semantics (D-S3-10): plain click replaces, ctrl/⌘-click toggles, shift-click extends over
- *  `selectableEntriesInRowOrder()`, a click on empty timeline clears, Escape clears. A click on an incapable bar leaves
+ *  `selectableEntriesInRowOrder()`, a click on empty timeline clears, Escape clears. A right-click is
+ *  a click for the clearing rule too (#199/#205 follow-up): it clears the same empty timeline, but it
+ *  never picks, replaces, toggles, or ranges — a right-click that lands on a bar or a row leaves the
+ *  Selection for `context-menu.ts` to read as-is. A click on an incapable bar leaves
  *  the selection untouched (it is not an empty-timeline clear); ctrl/⌘-click on one is a no-op;
  *  shift-click omits incapable entries from the range and writes nothing if that empties the range.
  *
@@ -38,6 +57,7 @@ export type { EntryGestureContext, EntryGesture, DraftOptions, EntryHit } from '
  *  pointerup listener — a row click selects with the same rules as a bar click (plain/ctrl/shift),
  *  but it never arms move or resize (`ctx.hitTest`'s grid-row fallback never grabs `pane`'s own drag
  *  machinery) and a miss on the grid never clears (only an empty *timeline* click does). */
+
 export function attachEntryGestures(
   pane: HTMLElement,
   rowLayer: HTMLElement,
@@ -110,6 +130,9 @@ export function attachEntryGestures(
   }
 
   function onPointerDown(e: PointerEvent): void {
+    // #199/#205 (mouse path): a right-button pointerdown arms no gesture, so a right-click never
+    // steals the pointer stream from a later primary-button drag.
+    if (!isPrimaryButton(e)) return;
     // A drag only ever starts on a bar: a row hit arms nothing (D-S3-10's grid-row clause).
     const hit = ctx.hitTest({ x: e.clientX, y: e.clientY });
     const bar = hit?.kind === 'bar' ? hit : undefined;
@@ -132,19 +155,23 @@ export function attachEntryGestures(
    *  the two surfaces differ: an empty timeline click clears the selection; a grid miss (a header
    *  row, padding, a twisty — `render/dom`'s `hitTest` already returns no hit for those) never does. */
   function selectFromHit(
-    e: Pick<PointerEvent, 'shiftKey' | 'ctrlKey' | 'metaKey'>,
+    e: Pick<PointerEvent, 'shiftKey' | 'ctrlKey' | 'metaKey' | 'button'>,
     hit: EntryHit | undefined,
     clearOnMiss: boolean,
   ): void {
     // A grid miss (`clearOnMiss = false`, see the doc comment above) leaves the shift-anchor alone
-    // too — only a genuine miss-clears-everything surface (the timeline) drops it here.
+    // too — only a genuine miss-clears-everything surface (the timeline) drops it here. A middle-click
+    // (or any other non-clearing button) never clears either — see `isPrimaryButton`/`isRightClick`.
     if (hit === undefined || missesEveryEntry(hit)) {
-      if (clearOnMiss) {
+      if (clearOnMiss && (isPrimaryButton(e) || isRightClick(e))) {
         anchor = undefined;
         if (ctx.selection.get().length > 0) ctx.selection.propose([]);
       }
       return;
     }
+
+    // Past the miss check, only a primary button may pick, replace, toggle, or range (`isPrimaryButton`).
+    if (!isPrimaryButton(e)) return;
 
     // #185: one hit resolves to a list of Entries — one for a bar, every selectable one the row
     // owns for a row. The rules below then run over the list as a unit. An empty list means the hit
@@ -201,6 +228,7 @@ export function attachEntryGestures(
 
   function onPointerUp(e: PointerEvent): void {
     if (drag.up(e)) return; // was a drag — commit/cancel already ran inside pointer-gesture's callbacks
+    // Every button reaches `selectFromHit`; the button and clearOnMiss checks live inside it.
     selectFromHit(e, ctx.hitTest({ x: e.clientX, y: e.clientY }), true);
   }
 
@@ -208,6 +236,7 @@ export function attachEntryGestures(
    *  is armed only from a timeline `pointerdown`, `onPointerDown` below), so a row click can only
    *  ever be a click, never the start of a drag. */
   function onRowLayerPointerUp(e: PointerEvent): void {
+    // The button check lives inside `selectFromHit` (its clearOnMiss=false leaves it a no-op on miss).
     selectFromHit(e, ctx.hitTest({ x: e.clientX, y: e.clientY }), false);
   }
 

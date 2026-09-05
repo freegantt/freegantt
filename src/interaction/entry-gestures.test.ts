@@ -165,6 +165,79 @@ describe('attachEntryGestures — selection (S3.1)', () => {
     expect(proposals.at(-1)).toEqual([A, B, C]);
   });
 
+  it('a right-click on a bar inside a multi-bar Selection leaves the Selection intact (#199/#205)', () => {
+    const pane = document.createElement('div');
+    const container = document.createElement('div');
+    const rowLayer = document.createElement('div');
+    const { ctx, proposals, proposedPickedItemIds } = makeContext();
+    attachEntryGestures(pane, rowLayer, container, ctx);
+
+    pane.dispatchEvent(up(0)); // anchor = A
+    pane.dispatchEvent(up(1, { shiftKey: true })); // range A..B
+    expect(proposals).toEqual([[A], [A, B]]);
+    expect(proposedPickedItemIds).toEqual([itemId(A), undefined]);
+
+    pane.dispatchEvent(down(1, { button: 2 }));
+    pane.dispatchEvent(up(1, { button: 2 })); // right-click on B, part of the Selection
+    // Unchanged — context-menu.ts decides what happens next. No propose call ran at all, so this
+    // also catches a regression that keeps the same ids but rewrites the picked item id (#185/#200).
+    expect(proposals).toEqual([[A], [A, B]]);
+    expect(proposedPickedItemIds).toEqual([itemId(A), undefined]);
+  });
+
+  it('a right-click on an unselected bar writes nothing at the interaction layer (#199/#205)', () => {
+    const pane = document.createElement('div');
+    const container = document.createElement('div');
+    const rowLayer = document.createElement('div');
+    const { ctx, proposals } = makeContext();
+    attachEntryGestures(pane, rowLayer, container, ctx);
+
+    pane.dispatchEvent(up(0)); // select A
+    pane.dispatchEvent(down(1, { button: 2 }));
+    pane.dispatchEvent(up(1, { button: 2 })); // right-click on B, never selected
+    expect(proposals).toEqual([[A]]); // context-menu.ts decides what B's right-click acts on, not this layer
+  });
+
+  it('a right-click on empty timeline clears a multi-bar Selection (#199/#205 follow-up)', () => {
+    const pane = document.createElement('div');
+    const container = document.createElement('div');
+    const rowLayer = document.createElement('div');
+    const { ctx, proposals } = makeContext();
+    attachEntryGestures(pane, rowLayer, container, ctx);
+
+    pane.dispatchEvent(up(0)); // anchor = A
+    pane.dispatchEvent(up(1, { shiftKey: true })); // range A..B
+    expect(proposals.at(-1)).toEqual([A, B]);
+
+    pane.dispatchEvent(down(99, { button: 2 }));
+    pane.dispatchEvent(up(99, { button: 2 })); // right-click on empty timeline
+    expect(proposals.at(-1)).toEqual([]); // a right-click is a click for the clearing rule (D-S3-10)
+  });
+
+  it('a middle-click on empty timeline does not clear the selection (#199/#205, B9)', () => {
+    const pane = document.createElement('div');
+    const container = document.createElement('div');
+    const rowLayer = document.createElement('div');
+    const { ctx, proposals } = makeContext();
+    attachEntryGestures(pane, rowLayer, container, ctx);
+
+    pane.dispatchEvent(up(0)); // select A
+    pane.dispatchEvent(down(99, { button: 1 }));
+    pane.dispatchEvent(up(99, { button: 1 })); // middle-click on empty timeline — opens no menu
+    expect(proposals).toEqual([[A]]); // only a primary or a right-click may clear
+  });
+
+  it('a touch tap on a bar selects it, the same as a primary-button click', () => {
+    const pane = document.createElement('div');
+    const container = document.createElement('div');
+    const rowLayer = document.createElement('div');
+    const { ctx, proposals } = makeContext();
+    attachEntryGestures(pane, rowLayer, container, ctx);
+
+    pane.dispatchEvent(up(0, { pointerType: 'touch' }));
+    expect(proposals).toEqual([[A]]);
+  });
+
   it('shift-click omits incapable entries from the range; an empty result writes nothing', () => {
     const pane = document.createElement('div');
     const container = document.createElement('div');
@@ -271,6 +344,25 @@ describe('attachEntryGestures — grid row click', () => {
     expect(proposals.at(-1)).toEqual([A, B, C]);
   });
 
+  it('a right-click on a selected grid row leaves the Selection intact (#199/#205)', () => {
+    const pane = document.createElement('div');
+    const container = document.createElement('div');
+    const rowLayer = document.createElement('div');
+    const { ctx, proposals, proposedPickedItemIds } = makeContext();
+    attachEntryGestures(pane, rowLayer, container, ctx);
+
+    rowLayer.dispatchEvent(up(0)); // anchor = A
+    rowLayer.dispatchEvent(up(1, { shiftKey: true })); // range A..B
+    expect(proposals).toEqual([[A], [A, B]]);
+    expect(proposedPickedItemIds).toEqual([itemId(A), undefined]);
+
+    rowLayer.dispatchEvent(up(0, { button: 2 })); // right-click on A, part of the Selection
+    // Unchanged. Pinning both arrays also catches a regression that keeps the same ids but rewrites
+    // the picked item id (#185/#200).
+    expect(proposals).toEqual([[A], [A, B]]);
+    expect(proposedPickedItemIds).toEqual([itemId(A), undefined]);
+  });
+
   it('a miss on the grid pane does not clear the selection', () => {
     const pane = document.createElement('div');
     const container = document.createElement('div');
@@ -280,6 +372,19 @@ describe('attachEntryGestures — grid row click', () => {
 
     pane.dispatchEvent(up(0)); // select A off the timeline
     rowLayer.dispatchEvent(up(99)); // grid miss — header row, padding, a twisty
+    expect(proposals).toEqual([[A]]);
+    expect(ctx.selection.get()).toEqual([A]);
+  });
+
+  it('a right-click miss on the grid pane does not clear the selection', () => {
+    const pane = document.createElement('div');
+    const container = document.createElement('div');
+    const rowLayer = document.createElement('div');
+    const { ctx, proposals } = makeContext();
+    attachEntryGestures(pane, rowLayer, container, ctx);
+
+    pane.dispatchEvent(up(0)); // select A off the timeline
+    rowLayer.dispatchEvent(up(99, { button: 2 })); // right-click grid miss — header row, padding, a twisty
     expect(proposals).toEqual([[A]]);
     expect(ctx.selection.get()).toEqual([A]);
   });
