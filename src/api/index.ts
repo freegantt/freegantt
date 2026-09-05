@@ -21,6 +21,22 @@ export { mergeEntryEdits } from './dataset-plugin.js';
 export type { EditRequest, EditExtender } from '../model/index.js';
 export type { RollUpKinds } from '../model/index.js';
 export { attemptMutation } from './attempt-mutation.js';
+// S5.12, D-S5-37: one handler over the Dataset's `error` feed and the Gantt's, de-duplicated by
+// emitter identity. Beside `attemptMutation` because it is the same kind of helper — the boilerplate
+// a common consumer job needs, written once.
+export { watchAllErrors } from './watch-all-errors.js';
+export type { ErrorFeed } from './watch-all-errors.js';
+// The Error report itself (D-S5-35). A notification record a consumer subscribes to, never something
+// they catch — `FreeGanttError` above is the class you catch.
+export type {
+  ErrorReport,
+  ErrorReportInput,
+  ErrorCode,
+  ErrorSeverity,
+  ErrorReporter,
+  RaiseError,
+  PluginErrorReport,
+} from '../model/index.js';
 export type {
   ChangeSet,
   ChangeSetId,

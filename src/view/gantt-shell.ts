@@ -39,6 +39,7 @@ import { ContainerDom } from './gantt-dom.js';
 import { attachSplitter } from './splitter.js';
 import type { SplitterAttachment } from './splitter.js';
 import { EventBus } from './event-bus.js';
+import { createErrorRaiser } from '../data/error-reporting.js';
 import type { AsyncCancelableEvent, GanttEventHandler, GanttEventMap, GanttEvents } from './event-bus.js';
 import { PluginRuntime } from '../extensions/plugin-runtime.js';
 import type { ShellPlugin } from '../extensions/plugin-runtime.js';
@@ -78,6 +79,7 @@ import type {
   ItemId,
   Instant,
   PluginId,
+  RaiseError,
   RowId,
   Size,
   TimeSpan,
@@ -104,7 +106,6 @@ import { buildPluginPorts } from './plugin-ports.js';
 import type { GanttShellPorts, PluginContextParts } from './plugin-ports.js';
 import { TreeCollapse } from './tree-collapse.js';
 import { createFieldContext } from '../data/fields/field-access.js';
-import { isDevMode } from '../data/dev-mode.js';
 
 /** One `{ detach() }` for every inject slot. `view/` may not import `interaction/` (plans/01 §1:
  *  `INT --> VIEW`, not the reverse). So the shell takes pointer and keyboard attachments by
@@ -391,6 +392,10 @@ export class GanttShell {
    *  this, so N mutations in one tick become one frame. */
   #frames = new FrameScheduler(() => this.render());
   #events = new EventBus<GanttEventMap, AsyncCancelableEvent>();
+  /** S5.12, D-S5-35: this Gantt's own raise seam, over the bus above. Every collaborator that
+   *  observes a refusal or a recovered fault takes it. That is the gesture pipeline, the render
+   *  backend, the plugin runtime, and each plugin's own `ctx.raiseError`. */
+  #raiseError: RaiseError = createErrorRaiser(this.#events);
   /** S5.1, D-S5-1: the plain `{ on, off }` a plugin's `ctx.events` actually is. Built once, from
    *  this shell's own `on`/`off` below. A plugin never sees the rest of this class's public surface
    *  the way handing it `this` directly would. */
@@ -474,10 +479,17 @@ export class GanttShell {
 
     const hasOwnOptions =
       options.preset !== undefined || options.range !== undefined || options.fit !== undefined;
-    if (options.scale && hasOwnOptions && isDevMode()) {
-      console.warn(
-        "FreeGantt: GanttOptions.preset/range/fit are ignored when 'scale' is also supplied. " +
-          'The shared TimeScaleModel already carries its own options — set preset/range/fit on it directly.',
+    if (options.scale && hasOwnOptions) {
+      // S5.12, D-S5-36: no longer behind `isDevMode()`, which resolved to `false` in every consumer's
+      // build and deleted this line from the shipped library. The `console.warn` is now the fallback
+      // for an unsubscribed consumer. Nobody can subscribe this early: the shell is still in its own
+      // constructor. So this always prints in practice, which is the behaviour a misconfigured
+      // `scale` deserves.
+      const message =
+        "GanttOptions.preset/range/fit are ignored when 'scale' is also supplied. " +
+        'The shared TimeScaleModel already carries its own options — set preset/range/fit on it directly.';
+      this.#raiseError({ code: 'scale-options-ignored', message, severity: 'warning', by: 'core' }, () =>
+        console.warn(`FreeGantt: ${message}`),
       );
     }
     this.#viewport = new Viewport({
@@ -516,6 +528,7 @@ export class GanttShell {
       options.backend ??
       createDomBackend({
         entryById: (id) => this.#options.dataset.entries.get(id),
+        raiseError: this.#raiseError,
         resolveBarRenderer: (kind) =>
           this.#registrations.renderers.resolveBar(kind, this.#frameSettings.barRenderer),
         // S5.4, D-S5-11: `render/dom` never receives `ResolvedColumn` (`column.format` "never
@@ -594,7 +607,7 @@ export class GanttShell {
       const { parts, gate } = buildPluginPorts(shellPorts, pluginId);
       const context = (options.wiring.buildPluginContext ?? (() => ({})))(parts);
       return { context, disposables: parts.disposables, registrationGate: gate };
-    });
+    }, this.#raiseError);
 
     // The timeline pane is the single native scroller (D-D, D-S1.8-1); the grid pane follows it by
     // transform, in render/dom's sync(). Constructed before either bind (Viewport's fan-in,
@@ -677,6 +690,7 @@ export class GanttShell {
       canGesture: (capability, id) => this.#canGesture(capability, id),
       commitEntryEdits: (edits) => this.#options.wiring.commitEntryEdits?.(edits) ?? false,
       emit: (name, payload) => this.#events.emit(name, payload),
+      raiseError: this.#raiseError,
       ...(options.editExtender ? { extend: options.editExtender } : {}),
       allEntries: () => new Map(this.#options.dataset.entries.all.map((e) => [e.id, e])),
       locale: () => this.#frameSettings.locale,
@@ -1218,6 +1232,7 @@ export class GanttShell {
   #shellPorts(): GanttShellPorts {
     return {
       events: this.#pluginEvents,
+      raiseError: this.#raiseError,
       overlay: this.#overlay,
       rowLayer: this.#rowLayer,
       dom: this.#dom,

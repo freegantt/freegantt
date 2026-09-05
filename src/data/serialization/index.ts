@@ -3,11 +3,10 @@
 // only api/dataset.ts imports it (serialization-is-removable, D-S2-23). Delete this directory and
 // the data core does not notice a document format exists.
 
-import type { DateOnlyEndRule, Entry, EntryKind, Field } from '../../model/index.js';
+import type { DateOnlyEndRule, Entry, EntryKind, Field, RaiseError } from '../../model/index.js';
 import type { DatasetDocument, EntryDocument, PluginDocument } from '../../model/index.js';
 import { instant, toISO } from '../../time/index.js';
 import { encodeFieldDocument } from './field-document.js';
-import { isDevMode } from '../dev-mode.js';
 
 export { readDocument, readers } from './read.js';
 export type { DatasetDocumentRead, FromJSONOptions } from './read.js';
@@ -65,12 +64,17 @@ export function toJSON(dataset: DatasetDocumentSource): DatasetDocument {
 }
 
 /** A document whose stored roll-up values disagree with its children is corrected by construction
- *  (D-S2-22). In dev mode, name the entry so the rewrite is not silent. */
-export function warnIfRollUpsWereCorrected(
+ *  (D-S2-22). Names every entry it rewrote, so the correction is never silent.
+ *
+ *  S5.12, D-S5-36: this used to return early unless `isDevMode()`. That flag is resolved when *this
+ *  repo* builds `dist/`, so the whole pass was dead-code-eliminated out of every consumer's build and
+ *  no consumer has ever seen one of these lines. It now reports every correction, and the
+ *  `console.warn` behind each report fires only when nothing is subscribed to `error`. */
+export function reportCorrectedRollUps(
   doc: DatasetDocument,
   dataset: Pick<DatasetDocumentSource, 'rollUpKinds' | 'entries'>,
+  raiseError: RaiseError,
 ): void {
-  if (!isDevMode()) return;
   const kinds = new Set(dataset.rollUpKinds);
   for (const row of doc.entries) {
     const kind = row.kind ?? 'span';
@@ -78,8 +82,16 @@ export function warnIfRollUpsWereCorrected(
     const stored = dataset.entries.get(row.id);
     if (stored === undefined) continue;
     if (instant(row.start) === stored.start && instant(row.end) === stored.end) continue;
-    console.warn(
-      `FreeGantt: fromJSON corrected the rolled-up span of entry "${row.id}" to match its children`,
+    const message = `fromJSON corrected the rolled-up span of entry "${row.id}" to match its children`;
+    raiseError(
+      {
+        code: 'rollup-corrected',
+        message,
+        severity: 'warning',
+        by: 'core',
+        entryId: stored.id,
+      },
+      () => console.warn(`FreeGantt: ${message}`),
     );
   }
 }

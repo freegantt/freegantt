@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import { DatasetState } from '../dataset-state.js';
-import { toJSON, readDocument, warnIfRollUpsWereCorrected } from './index.js';
+import { toJSON, readDocument, reportCorrectedRollUps } from './index.js';
+import { createErrorRaiser } from '../error-reporting.js';
+import type { ErrorReport } from '../../model/index.js';
 import { entryId, FreeGanttError, UnsupportedSchemaError } from '../../model/index.js';
 import type { DatasetDocument } from '../../model/index.js';
 import type { EntryInput } from '../../model/index.js';
@@ -17,7 +19,7 @@ function span(id: string, overrides: Partial<EntryInput> = {}): EntryInput {
 
 function fromJSON(doc: DatasetDocument): DatasetState {
   const state = new DatasetState(readDocument(doc));
-  warnIfRollUpsWereCorrected(doc, state);
+  reportCorrectedRollUps(doc, state, createErrorRaiser(state.bus));
   return state;
 }
 
@@ -236,6 +238,54 @@ describe('[S2-A2] toJSON / fromJSON', () => {
     };
     fromJSON(doc);
     expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  it('a corrected roll-up raises at warning, and the console line is the unsubscribed fallback (D-S5-36)', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const disagreeing: DatasetDocument = {
+      schema: 1,
+      timeZone: 'UTC',
+      dateOnlyEnd: 'inclusive',
+      rollUpKinds: ['group'],
+      entries: [
+        {
+          id: 'p1',
+          kind: 'group',
+          name: 'Sitework',
+          start: '2020-01-01T00:00:00.000Z',
+          end: '2020-01-02T00:00:00.000Z',
+        },
+        {
+          id: 't1',
+          parentId: 'p1',
+          name: 'Groundwork',
+          start: '2026-09-01T00:00:00.000Z',
+          end: '2026-09-11T00:00:00.000Z',
+        },
+      ],
+    };
+
+    // No subscriber: the console line fires, exactly as it did before this seam existed.
+    const unwatched = new DatasetState(readDocument(disagreeing));
+    reportCorrectedRollUps(disagreeing, unwatched, createErrorRaiser(unwatched.bus));
+    expect(warn).toHaveBeenCalledTimes(1);
+
+    // One subscriber: the console stays silent and the consumer gets the whole report.
+    warn.mockClear();
+    const watched = new DatasetState(readDocument(disagreeing));
+    const reports: ErrorReport[] = [];
+    watched.on('error', (report) => {
+      reports.push(report);
+    });
+    reportCorrectedRollUps(disagreeing, watched, createErrorRaiser(watched.bus));
+
+    expect(warn).not.toHaveBeenCalled();
+    expect(reports).toHaveLength(1);
+    expect(reports[0]?.code).toBe('rollup-corrected');
+    expect(reports[0]?.severity).toBe('warning');
+    expect(reports[0]?.by).toBe('core');
+    expect(reports[0]?.entryId).toBe(entryId('p1'));
     warn.mockRestore();
   });
 

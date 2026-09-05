@@ -1,13 +1,20 @@
 import { describe, expect, it, vi } from 'vitest';
 import { Gantt } from '../../api/gantt.js';
 import { Dataset } from '../../api/dataset.js';
-import type { Entry, EntryFieldEdit, EntryInput, GridColumnInput } from '../../api/index.js';
+import type {
+  Entry,
+  EntryFieldEdit,
+  EntryInput,
+  GridColumnInput,
+  PluginErrorReport,
+} from '../../api/index.js';
 import { EntryNotFoundError, entryId, instant } from '../../api/index.js';
 import { contextMenu } from './context-menu.js';
 import { CellEditing, CellEditorSession, inlineEditing, presentRefusal } from './inline-editing.js';
 import type {
   CellEditorControl,
   CellEditorPorts,
+  CellEditorRefusal,
   CellEditorValue,
   InlineEditingOptions,
   RefusalNoticePorts,
@@ -248,7 +255,7 @@ describe('inlineEditing() (S5.8, D-S5-19/D-S5-20)', () => {
     dblclick(cellFor(container, 'root', 'start'));
     const notice = refusal(container)!;
     expect(notice).not.toBeNull();
-    expect(notice.dataset['reason']).toBe('derivedValue');
+    expect(notice.dataset['reason']).toBe('derived-value');
     expect(notice.textContent).toContain('comes from the rows below it');
     expect(notice.title).toBe(notice.textContent);
     expect(container.querySelector('.fg-cell-editor-control')).toBeNull();
@@ -261,7 +268,7 @@ describe('inlineEditing() (S5.8, D-S5-19/D-S5-20)', () => {
     dblclick(cellFor(container, 'e1', 'cost'));
     const notice = refusal(container)!;
     expect(notice).not.toBeNull();
-    expect(notice.dataset['reason']).toBe('noParseValue');
+    expect(notice.dataset['reason']).toBe('no-parse-value');
     expect(notice.textContent).toContain('has no parseValue');
     expect(container.querySelector('.fg-cell-editor-control')).toBeNull();
     gantt.destroy();
@@ -334,7 +341,7 @@ describe('inlineEditing() (S5.8, D-S5-19/D-S5-20)', () => {
     dblclick(cellFor(container, 'e2', 'start'));
     const notice = refusal(container)!;
     expect(notice).not.toBeNull();
-    expect(notice.dataset['reason']).toBe('timeOfDay');
+    expect(notice.dataset['reason']).toBe('time-of-day');
     expect(notice.textContent).toBe(
       'this field carries a time of day; the default date editor cannot show it',
     );
@@ -352,7 +359,7 @@ describe('inlineEditing() (S5.8, D-S5-19/D-S5-20)', () => {
     // that rule into the stylesheet, so `styles.test.ts` asserts the declaration and this asserts
     // the two attributes the rule keys on.
     expect(notice.dataset['state']).toBe('invalid');
-    expect(notice.dataset['reason']).toBe('noParseValue');
+    expect(notice.dataset['reason']).toBe('no-parse-value');
 
     cell.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, cancelable: true }));
     expect(refusal(container)).toBeNull();
@@ -648,7 +655,7 @@ describe('inlineEditing() (S5.8, D-S5-19/D-S5-20)', () => {
 
     const notice = refusal(container)!;
     expect(notice).not.toBeNull();
-    expect(notice.dataset['reason']).toBe('unsavedValue');
+    expect(notice.dataset['reason']).toBe('unsaved-value');
     expect(notice.textContent).toContain('did not save');
 
     gantt.destroy();
@@ -735,6 +742,7 @@ describe('CellEditorSession (S5.8, review A5/C2b)', () => {
       announceEntryEdit: () => {},
       requestCommit: () => {},
       requestRevert: () => {},
+      raiseError: () => {},
       ...overrides,
     };
     const session = new CellEditorSession(ports, { entryId: entryId('e1'), field: 'name' }, control);
@@ -829,6 +837,7 @@ describe('CellEditing (S5.8, #169)', () => {
     cellA: HTMLElement;
     cellB: HTMLElement;
     layer: HTMLElement;
+    reported: PluginErrorReport[];
   } {
     const layer = document.createElement('div');
     const cells = new Map<string, HTMLElement>();
@@ -840,6 +849,7 @@ describe('CellEditing (S5.8, #169)', () => {
     }
     document.body.append(layer);
     const entry = { id: entryId('e1'), name: 'Task One', kind: 'span' } as unknown as Entry;
+    const reported: PluginErrorReport[] = [];
     const ports: CellEditorPorts = {
       mountLayer: {
         present: (content: HTMLElement) => {
@@ -857,9 +867,16 @@ describe('CellEditing (S5.8, #169)', () => {
       announceEntryEdit: () => {},
       requestCommit: () => {},
       requestRevert: () => {},
+      raiseError: (report) => reported.push(report),
       ...overrides,
     };
-    return { editing: new CellEditing(ports), cellA: cells.get('name')!, cellB: cells.get('cost')!, layer };
+    return {
+      editing: new CellEditing(ports),
+      cellA: cells.get('name')!,
+      cellB: cells.get('cost')!,
+      layer,
+      reported,
+    };
   }
 
   function control(): CellEditorControl {
@@ -892,7 +909,7 @@ describe('CellEditing (S5.8, #169)', () => {
     const first = editing.beginOpen({ entryId: entryId('e1'), field: 'name' }, cellA);
     const second = editing.beginOpen({ entryId: entryId('e1'), field: 'cost' }, cellB);
     second.mount(control());
-    first.refuse('noDateValue');
+    first.refuse('no-date-value');
 
     expect(editing.notice).toBeUndefined();
     expect(editing.editor).toBeDefined();
@@ -934,18 +951,43 @@ describe('CellEditing (S5.8, #169)', () => {
       .mount({ ...control(), read: () => ({ ok: false }) });
 
     expect(editing.commit()).toBe(false);
-    editing.refuse({ entryId: entryId('e1'), field: 'cost' }, cellB, 'unsavedValue');
+    editing.refuse({ entryId: entryId('e1'), field: 'cost' }, cellB, 'unsaved-value');
 
     expect(editing.editor).toBeDefined();
-    expect(editing.notice!.element.dataset['reason']).toBe('unsavedValue');
+    expect(editing.notice!.element.dataset['reason']).toBe('unsaved-value');
     editing.clear();
+  });
+
+  it('every refusal raises one report whose code is the notice own data-reason (D-S5-35)', () => {
+    const reasons: CellEditorRefusal[] = [
+      'derived-value',
+      'no-parse-value',
+      'no-date-value',
+      'time-of-day',
+      'unsaved-value',
+    ];
+
+    for (const reason of reasons) {
+      const { editing, cellA, reported } = makeEditing();
+      editing.refuse({ entryId: entryId('e1'), field: 'cost' }, cellA, reason);
+
+      expect(reported).toHaveLength(1);
+      expect(reported[0]?.code).toBe(editing.notice!.element.dataset['reason']);
+      expect(reported[0]?.code).toBe(reason);
+      expect(reported[0]?.severity).toBe('info');
+      expect(reported[0]?.entryId).toBe(entryId('e1'));
+      expect(reported[0]?.field).toBe('cost');
+      // The report and the notice read the user the same words.
+      expect(reported[0]?.message).toBe(editing.notice!.element.textContent);
+      editing.clear();
+    }
   });
 
   it('clear() takes both down and writes nothing', () => {
     const writes: unknown[] = [];
     const { editing, cellA, cellB, layer } = makeEditing({ writeValue: (...args) => writes.push(args) });
     editing.beginOpen({ entryId: entryId('e1'), field: 'name' }, cellA).mount(control());
-    editing.refuse({ entryId: entryId('e1'), field: 'cost' }, cellB, 'unsavedValue');
+    editing.refuse({ entryId: entryId('e1'), field: 'cost' }, cellB, 'unsaved-value');
 
     editing.clear();
 
@@ -993,7 +1035,7 @@ describe('presentRefusal() (S5.8, review SP1)', () => {
       dom: { cellFor: () => current },
       bindEscape: () => () => {},
     };
-    const notice = presentRefusal(ports, { entryId: entryId('e1'), field: 'name' }, cell, 'timeOfDay');
+    const notice = presentRefusal(ports, { entryId: entryId('e1'), field: 'name' }, cell, 'time-of-day');
     return {
       notice,
       cell,
@@ -1011,7 +1053,7 @@ describe('presentRefusal() (S5.8, review SP1)', () => {
     const { notice } = mountNotice();
     expect(notice.element.className).toBe('fg-cell-editor');
     expect(notice.element.dataset['state']).toBe('invalid');
-    expect(notice.element.dataset['reason']).toBe('timeOfDay');
+    expect(notice.element.dataset['reason']).toBe('time-of-day');
     expect(notice.element.getAttribute('role')).toBe('status');
     expect(notice.element.style.transform).toBe('translate(40.00px, 120.00px)');
     expect(notice.element.style.width).toBe('200px');
