@@ -1,6 +1,6 @@
 import './harness-nav.ts';
-import { Gantt, Dataset, createPopup, itemId, entryId, contextMenu } from '../src/api/index.js';
-import type { GanttPlugin, Popup, RendererByKind, CellRenderer } from '../src/api/index.js';
+import { Gantt, Dataset, createPopup, entryId, contextMenu } from '../src/api/index.js';
+import type { GanttPlugin, GanttDom, Popup, RendererByKind, CellRenderer } from '../src/api/index.js';
 import { sampleEntries } from '../fixtures/sample-dataset.js';
 import { weekendShading } from './plugins/weekend-shading.js';
 import { bufferKind } from './plugins/buffer-kind.js';
@@ -97,9 +97,11 @@ function selectionShortcuts(): GanttPlugin {
 
 gantt.plugins = [...gantt.plugins, selectionShortcuts()];
 
-// S5.3, D-S5-8: a plugin's `setup()` is the only place `ctx.view.overlay` reaches this scope — stash
-// it once, live for the plugin's whole lifetime, so the button below can build a `Popup` from it.
-let overlayPopup: Popup | undefined;
+// S5.3, D-S5-8: a plugin's `setup()` is the only place `ctx.view` reaches this scope, so the demo
+// stashes it once and the button below reads it. It keeps `ctx.view.dom` beside the `Popup`, because
+// finding an entry's bar is the library's job: `ctx.view.dom.barFor(id)` replaces the raw
+// `#gantt .fg-bar[data-item-id="…"]` selector this file used to write (review H2, N1).
+let popupDemoView: { popup: Popup; dom: GanttDom } | undefined;
 function popupDemo(): GanttPlugin {
   return {
     id: 'harness.popupDemo',
@@ -108,9 +110,12 @@ function popupDemo(): GanttPlugin {
       // the shared keymap now, so a plugin hands over `ctx.interaction.registerKeyHandler` (the one
       // bound method it has, not a full `Keymap` instance) wrapped to the small structural shape
       // `createPopup` asks for.
-      overlayPopup = createPopup(ctx.view.overlay, { registerHandler: ctx.interaction.registerKeyHandler });
+      popupDemoView = {
+        popup: createPopup(ctx.view, { registerHandler: ctx.interaction.registerKeyHandler }),
+        dom: ctx.view.dom,
+      };
       return () => {
-        overlayPopup = undefined;
+        popupDemoView = undefined;
       };
     },
   };
@@ -124,9 +129,9 @@ popupBtn.addEventListener('click', () => {
     writeLog('popup demo: select a bar first');
     return;
   }
-  const anchor = document.querySelector<HTMLElement>(`#gantt .fg-bar[data-item-id="${itemId(selected)}"]`);
-  if (!anchor || !overlayPopup) return;
-  overlayPopup.open({
+  const anchor = popupDemoView?.dom.barFor(selected);
+  if (!anchor || !popupDemoView) return;
+  popupDemoView.popup.open({
     anchor,
     placement: 'end',
     dismissOn: ['escape', 'outsidePointer', 'scroll'],

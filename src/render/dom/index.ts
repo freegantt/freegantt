@@ -29,6 +29,19 @@ import { KeyedLayer, NestedKeyedLayers } from './sync-keyed.js';
 import { applyElementDescription } from './element-description.js';
 import { cssEscapeAttr } from './css-escape.js';
 import { isDevMode } from '../../data/dev-mode.js';
+import {
+  BAR_CLASS,
+  BAR_HANDLE_CLASS,
+  COLUMN_HEADER_CLASS,
+  ENTRY_ID_KEY,
+  FIELD_KEY,
+  ITEM_ID_KEY,
+  ROW_CELL_CLASS,
+  ROW_CLASS,
+  ROW_LABEL_CLASS,
+  ROW_LABEL_TEXT_CLASS,
+  ROW_TWISTY_CLASS,
+} from './dom-contract.js';
 
 /** A cell's renderer, already bound to its `ResolvedColumn` (render/dom never receives that type —
  *  `column.format` "stays on `ResolvedColumn` and never reaches a backend", `layout/column.ts`) and
@@ -148,7 +161,7 @@ function rowParity(index: number): RowParity {
 
 function barClassName(kind: string): string {
   const shape = BAR_SHAPE_CLASS[kind];
-  return shape === undefined ? 'fg-bar' : `fg-bar ${shape}`;
+  return shape === undefined ? BAR_CLASS : `${BAR_CLASS} ${shape}`;
 }
 /** What the shared handle pair (D-S3-8) needs to place itself over a committed bar — a narrower slice
  *  than `BarGeom`, which also carries paint fields the handles don't read. */
@@ -568,20 +581,20 @@ export function createDomBackend(options?: DomBackendOptions): RenderBackend<HTM
     key: (cell: CellItem) => cell.key,
     create: (_cell: CellItem, key: string): HTMLElement => {
       const node = document.createElement('div');
-      node.dataset['field'] = key;
+      node.dataset[FIELD_KEY] = key;
       const twisty = document.createElement('button');
       twisty.type = 'button';
-      twisty.className = 'fg-row-twisty';
+      twisty.className = ROW_TWISTY_CLASS;
       twisty.hidden = true;
       twisty.setAttribute('aria-label', 'Toggle row');
       const label = document.createElement('span');
-      label.className = 'fg-row-label-text';
+      label.className = ROW_LABEL_TEXT_CLASS;
       node.append(twisty, label);
       return node;
     },
     toGeom: (cell: CellItem): CellGeom => cellGeom(cell),
     patch: (node: HTMLElement, geom: CellGeom): void => {
-      node.className = geom.first ? 'fg-row-label' : 'fg-row-cell';
+      node.className = geom.first ? ROW_LABEL_CLASS : ROW_CELL_CLASS;
       paintColumnBox(node, geom);
       const twisty = node.firstElementChild as HTMLButtonElement;
       const label = node.lastElementChild as HTMLElement;
@@ -596,8 +609,8 @@ export function createDomBackend(options?: DomBackendOptions): RenderBackend<HTM
     key: (cell: CellItem) => cell.key,
     create: (_cell: CellItem, key: string): HTMLElement => {
       const node = document.createElement('div');
-      node.className = 'fg-col-header';
-      node.dataset['field'] = key;
+      node.className = COLUMN_HEADER_CLASS;
+      node.dataset[FIELD_KEY] = key;
       // S5.7, D-S5-18/D-S5-26: no `tabIndex` — D-S1.10-5 keeps the container the one honest tab stop
       // until S5.11's roving pattern lands. A plain click still sets this cell "focused" for
       // `Alt+Arrow`/`Shift+Arrow` (`interaction/column-gestures.ts`'s pointerup fallback), the same way
@@ -640,13 +653,13 @@ export function createDomBackend(options?: DomBackendOptions): RenderBackend<HTM
       key: (row) => row.id,
       create: (row, key) => {
         const node = document.createElement('div');
-        node.className = 'fg-row';
+        node.className = ROW_CLASS;
         node.setAttribute('role', 'listitem');
-        node.dataset['testid'] = 'fg-row';
+        node.dataset['testid'] = ROW_CLASS;
         node.dataset['rowId'] = key;
         // Bug hunt (S5 fixes): what `hitTest`'s grid-row fallback resolves a click against — a
         // header row carries none, and never becomes selectable (`row.entryId === undefined` above).
-        if (row.entryId !== undefined) node.dataset['entryId'] = row.entryId;
+        if (row.entryId !== undefined) node.dataset[ENTRY_ID_KEY] = row.entryId;
         // Bug hunt (S5 fixes): virtualization can create this node well after the selection that
         // ought to paint it — a remounted row must not wait for the next selection change to catch
         // up (D-S5's own "restamp on remount" fix). `paintedSelectedRows` (applyState's own diff
@@ -756,8 +769,8 @@ export function createDomBackend(options?: DomBackendOptions): RenderBackend<HTM
       create: (bar) => {
         const node = document.createElement('div');
         node.className = barClassName(bar.kind);
-        node.dataset['itemId'] = bar.id;
-        node.dataset['testid'] = 'fg-bar';
+        node.dataset[ITEM_ID_KEY] = bar.id;
+        node.dataset['testid'] = BAR_CLASS;
         node.setAttribute('role', 'img');
         return node;
       },
@@ -846,11 +859,11 @@ export function createDomBackend(options?: DomBackendOptions): RenderBackend<HTM
       contentSizer.setAttribute('aria-hidden', 'true');
       contentSizer.className = 'fg-content-sizer';
       startHandle = document.createElement('div');
-      startHandle.className = 'fg-bar-handle';
+      startHandle.className = BAR_HANDLE_CLASS;
       startHandle.dataset['edge'] = 'start';
       startHandle.hidden = true;
       endHandle = document.createElement('div');
-      endHandle.className = 'fg-bar-handle';
+      endHandle.className = BAR_HANDLE_CLASS;
       endHandle.dataset['edge'] = 'end';
       endHandle.hidden = true;
       // The handle pair's `transform` (paintResizeHandles) uses the same geometry as a bar's own
@@ -1003,24 +1016,24 @@ export function createDomBackend(options?: DomBackendOptions): RenderBackend<HTM
       // S3.4, D-S3-4: the shared handle pair sits above the bar layer in paint order, so a hit on a
       // handle is checked first — `paintedResizable` is the one entry the handle pair currently
       // belongs to (D-S3-8), a parked (hidden) handle is never returned by elementFromPoint.
-      const handle = el instanceof Element ? el.closest<HTMLElement>('.fg-bar-handle') : null;
+      const handle = el instanceof Element ? el.closest<HTMLElement>(`.${BAR_HANDLE_CLASS}`) : null;
       if (handle && paintedResizable !== undefined) {
         const edge = handle.dataset['edge'];
         if (edge === 'start' || edge === 'end') return { itemId: paintedResizable, edge };
       }
-      const bar = el instanceof Element ? el.closest<HTMLElement>('.fg-bar') : null;
+      const bar = el instanceof Element ? el.closest<HTMLElement>(`.${BAR_CLASS}`) : null;
       if (bar && barLayer.contains(bar)) {
-        const id = itemIdFromDataset(bar.dataset['itemId']);
+        const id = itemIdFromDataset(bar.dataset[ITEM_ID_KEY]);
         return id ? { itemId: id } : null;
       }
       // Bug hunt (S5 fixes, "grid row highlight and row click"): a miss on the bar layer falls
       // through to the grid pane — a row click selects the row's primary entry the same way a bar
       // click selects the bar's. A twisty click is not a row hit at all: collapse stays on the
       // twisty, never selection, and a miss there still counts as a genuine grid miss (no clear).
-      if (el instanceof Element && el.closest('.fg-row-twisty')) return null;
-      const row = el instanceof Element ? el.closest<HTMLElement>('.fg-row') : null;
+      if (el instanceof Element && el.closest(`.${ROW_TWISTY_CLASS}`)) return null;
+      const row = el instanceof Element ? el.closest<HTMLElement>(`.${ROW_CLASS}`) : null;
       if (row && gridLayer?.contains(row)) {
-        const entryId = row.dataset['entryId'];
+        const entryId = row.dataset[ENTRY_ID_KEY];
         if (entryId) return { itemId: itemId(entryId as EntryId, 0) };
       }
       return null;

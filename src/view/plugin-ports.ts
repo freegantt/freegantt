@@ -38,6 +38,23 @@ import { isDevMode } from '../data/dev-mode.js';
 import type { KindDefaults } from './capability.js';
 import type { GanttEvents, EntryFieldEdit } from './event-bus.js';
 import type { Overlay } from './overlay.js';
+import type { DomTarget, GanttDom } from './gantt-dom.js';
+
+/** What `ctx.view.onDomEvent` hands a plugin: the browser event, plus what the node it landed on
+ *  stands for (review A4). `target` is `undefined` when the event landed inside this Gantt but on
+ *  none of the five things `targetUnder` names — a pane's own padding, an empty stretch of
+ *  timeline. An event outside this Gantt never reaches the handler at all. */
+export type DomEventHandler<K extends keyof DocumentEventMap> = (
+  event: DocumentEventMap[K],
+  target: DomTarget | undefined,
+) => void;
+
+/** `capture: true` listens on the capture phase, for an event that does not bubble (`scroll`) or a
+ *  handler that must run before the page's own (`keydown`). The removal uses the same flag, which is
+ *  the pairing every hand-written listener had to remember for itself. */
+export interface DomEventOptions {
+  capture?: boolean;
+}
 
 /** What `buildPluginPorts` borrows from `GanttShell` — the registries, the frame loop and the event
  *  bus a plugin seam writes into. `GanttShell` builds one of these per Gantt, closing over its own
@@ -48,6 +65,9 @@ export interface GanttShellPorts {
   events: GanttEvents;
   /** S5.3, D-S5-8. One layer per Gantt, alive as long as the plugin is. */
   overlay: Overlay;
+  /** Review N1/A3. One resolver per Gantt: it owns every `.fg-*` class and `data-*` key a plugin
+   *  used to retype, and it is what scopes `onDomEvent` to this Gantt (I2). */
+  dom: GanttDom;
   /** D-S5-6. The one registry per Gantt. `register` takes the gate here; `run`/`available` do not. */
   commands: CommandRegistryOf<unknown>;
   /** D-S5-7. The one keymap per Gantt. */
@@ -121,6 +141,16 @@ export interface PluginContextPorts {
   };
   view: {
     overlay: Overlay;
+    /** Review N1/A3. This Gantt's own rendered DOM, as questions. */
+    dom: GanttDom;
+    /** Review A4. Listens on `document`, keeps only what this Gantt owns, and hands the handler the
+     *  resolved target. Registers its own removal in `disposables`, capture flag included. Not
+     *  gated: a plugin opens and closes a listener for as long as it runs. */
+    onDomEvent<K extends keyof DocumentEventMap>(
+      type: K,
+      handler: DomEventHandler<K>,
+      options?: DomEventOptions,
+    ): Disposer;
     /** S5.4, D-S5-11. */
     registerRenderer<P extends RendererPoint>(point: P, renderer: RendererFor<P>): Disposer;
     /** S5.5 (API gap, `s5.5-tooltips-and-context-menu.md` §5). Not gated by `RegistrationGate`: a
@@ -170,6 +200,28 @@ export function buildPluginPorts(
     };
     disposables.add(dispose);
     return dispose;
+  };
+
+  /** Review A4: the one shape every document-level plugin listener takes. It answers "is this mine?"
+   *  once, from `shell.dom.owns`, so no plugin writes that guard again — and one of the twelve
+   *  hand-written listeners had forgotten to. It remembers the capture flag on both edges, which is
+   *  the other half a hand-written pair got wrong. Not gated by `RegistrationGate`: `contextMenu()`
+   *  attaches and detaches per open menu, the same lifetime `registerKeyHandler` already has. */
+  const listenWhileInstalled = <K extends keyof DocumentEventMap>(
+    type: K,
+    handler: DomEventHandler<K>,
+    options?: DomEventOptions,
+  ): Disposer => {
+    const capture = options?.capture ?? false;
+    const listener = (event: Event): void => {
+      const node = event.target;
+      if (!(node instanceof Node) || !shell.dom.owns(node)) return;
+      handler(event as DocumentEventMap[K], shell.dom.targetUnder(node));
+    };
+    document.addEventListener(type, listener, capture);
+    const remove = (): void => document.removeEventListener(type, listener, capture);
+    disposables.add(remove);
+    return remove;
   };
 
   /** A renderer or a decoration claim changes what every painted cell, bar or header shows. Nothing
@@ -232,6 +284,8 @@ export function buildPluginPorts(
     },
     view: {
       overlay: shell.overlay,
+      dom: shell.dom,
+      onDomEvent: listenWhileInstalled,
       registerRenderer: (point, renderer) =>
         registerWhileOpen(() => shell.registerRenderer(point, renderer, pluginId), repaint),
       resolveTooltipContent,

@@ -3,15 +3,20 @@
 // gate this step proves (`[S5-A1]`). Every import below names its own narrow source file, never the
 // `api/index.ts` barrel (which re-exports `contextMenu` itself, D-S5-13) — the same reason
 // `extensions/popup.ts` imports `api/plugin.ts` directly instead of that barrel (no-circular).
+//
+// Review A3/A4: this file names no `.fg-*` class and no `data-*` key of the rendered Gantt. It asks
+// `ctx.view.dom` what a node is, and `ctx.view.onDomEvent` scopes every document listener to this
+// Gantt. Review C3: a dismissed menu detaches its own listeners through `Popup.onDismiss`, so
+// nothing polls `popup.isOpen` on every click in the page.
 
 import { createPopup } from '../popup.js';
 import type { Anchor, Popup } from '../popup.js';
-import type { Command, GanttPlugin, PluginContext, CommandContext } from '../../api/gantt.js';
-import { entryIdFromDataset, entryIdOfItem, itemIdFromDataset } from '../../model/index.js';
+import type { Command, CommandContext, CommandTarget, GanttPlugin, PluginContext } from '../../api/gantt.js';
+import type { DomTarget } from '../../api/plugin.js';
 import type { Entry } from '../../model/index.js';
-import { buildMenu, resolveMenuEntries } from './menu-view.js';
+import { DisposableStore } from '../disposables.js';
+import { buildMenu, menuItemUnder, menuItemsIn, resolveMenuEntries } from './menu-view.js';
 import type { MenuEntry } from './menu-view.js';
-import { barUnder, rowUnder } from './bar-under.js';
 
 export type { MenuItem, MenuEntry } from './menu-view.js';
 
@@ -19,6 +24,17 @@ export interface ContextMenuOptions {
   /** Returns the final entry list; `defaults` is `commands.available(ctx)` mapped to items, in
    *  registration order. Append, remove, reorder or replace — the returned array is what renders. */
   items?(ctx: { entry?: Entry; defaults: readonly MenuEntry[] }): readonly MenuEntry[];
+}
+
+/** The resolved DOM target as a `CommandContext.target`. Both name the same five `TargetKind` words,
+ *  so this drops the element a command has no use for and keeps the rest. A command's `when` can now
+ *  read "on a header cell" from a right-click, which the menu never filled in before. */
+function commandTargetOf(target: DomTarget): CommandTarget {
+  return {
+    kind: target.kind,
+    ...(target.entry !== undefined ? { rowId: target.entry.id } : {}),
+    ...(target.field !== undefined ? { columnKey: target.field } : {}),
+  };
 }
 
 /** D-S5-13: right-click, or `Shift+F10`/the Menu key, opens a menu of the commands whose `when`
@@ -31,12 +47,14 @@ export function contextMenu(options: ContextMenuOptions = {}): GanttPlugin {
   return {
     id: 'freegantt.contextMenu',
     setup(ctx: PluginContext) {
-      const popup: Popup = createPopup(ctx.view.overlay, {
+      const popup: Popup = createPopup(ctx.view, {
         registerHandler: (chord, handler, handlerOptions) =>
           ctx.interaction.registerKeyHandler(chord, handler, handlerOptions),
       });
-      let onDocumentClick: ((event: MouseEvent) => void) | undefined;
-      let onDocumentKeydown: ((event: KeyboardEvent) => void) | undefined;
+      /** The listeners one open menu needs. They live exactly as long as that menu. Reassigned on
+       *  every close, because `DisposableStore.disposeAll()` latches: a spent store fires every
+       *  later `add` at once, which is the same trap `createPopup`'s own store avoids this way. */
+      let menuListeners = new DisposableStore();
       // B2: the menu lists commands resolved for the right-clicked (or focused-row) target — `run()`
       // below must invoke that same command against that same context, not against whatever
       // `ctx.commands`'s own `#buildCommandContext` would rebuild from the current selection
@@ -44,29 +62,38 @@ export function contextMenu(options: ContextMenuOptions = {}): GanttPlugin {
       // (`api/command.ts`), so this needs no wider access than `available()` already returned.
       let openCommands: { readonly available: readonly Command[]; readonly ctx: CommandContext } | undefined;
 
-      const detachMenuListeners = (): void => {
-        if (onDocumentClick !== undefined) {
-          document.removeEventListener('click', onDocumentClick);
-          onDocumentClick = undefined;
-        }
-        if (onDocumentKeydown !== undefined) {
-          document.removeEventListener('keydown', onDocumentKeydown, true);
-          onDocumentKeydown = undefined;
-        }
+      /** What the menu forgets when it goes, however it went. */
+      const forgetOpenMenu = (): void => {
+        menuListeners.disposeAll();
+        menuListeners = new DisposableStore();
+        openCommands = undefined;
       };
 
       const closeMenu = (): void => {
-        detachMenuListeners();
-        openCommands = undefined;
+        forgetOpenMenu();
         popup.close();
       };
 
-      const openAt = (anchor: Anchor, entry: Entry | undefined): void => {
+      const runMenuItem = (commandId: string | null): void => {
+        const commands = openCommands;
         closeMenu();
+        if (commandId === null || commands === undefined) return;
+        // B2: run the command found in *this menu's own* `available` list, against *this menu's
+        // own* `commandCtx` (the right-clicked bar, or the focused row) — not
+        // `ctx.commands.run(commandId)`, which would rebuild context from the current selection and
+        // silently no-op when that selection is not the entry the menu was opened for.
+        const command = commands.available.find((c) => c.id === commandId);
+        command?.run(commands.ctx);
+      };
+
+      const openAt = (anchor: Anchor, target: DomTarget | undefined): void => {
+        closeMenu();
+        const entry = target?.entry;
         const commandCtx: CommandContext = {
           dataset: ctx.dataset,
           gantt: ctx.gantt,
           ...(entry !== undefined ? { entry } : {}),
+          ...(target !== undefined ? { target: commandTargetOf(target) } : {}),
         };
         const available = ctx.commands.available(commandCtx);
         const defaults: MenuEntry[] = available.map((command) => ({
@@ -79,103 +106,72 @@ export function contextMenu(options: ContextMenuOptions = {}): GanttPlugin {
         const resolved = resolveMenuEntries(entries, available);
         openCommands = { available, ctx: commandCtx };
 
-        popup.open({ anchor, placement: 'bottom', focus: 'trap', content: buildMenu(resolved) });
+        popup.open({
+          anchor,
+          placement: 'bottom',
+          focus: 'trap',
+          content: buildMenu(resolved),
+          // Review C3: Escape, an outside pointer or a scroll dismisses the popup itself. This is
+          // how the plugin hears about it, so the two listeners below go at the same moment.
+          onDismiss: forgetOpenMenu,
+        });
 
-        // Popup dismisses itself (Escape, an outside pointer, scroll) with no callback out (a real
-        // gap this step found no need to close: every listener below guards on `popup.isOpen`, so a
-        // stray fire after a self-dismiss is a harmless no-op until the next `openAt`'s own
-        // `closeMenu()` sweeps it, or this plugin is disposed).
-        onDocumentClick = (event) => {
-          if (!popup.isOpen) return;
-          const target = event.target;
-          // B1 was incomplete here: this listener is document-wide (menu items live outside
-          // `ctx.view.overlay`'s DOM subtree once presented, same as `onContextMenu`'s own reasoning
-          // below), so a click on a *different* Gantt's open menu item must not run a command against
-          // this Gantt's `openCommands`. Scope the same way `onContextMenu` already does.
-          if (!(target instanceof Node) || !ctx.view.overlay.contains(target)) return;
-          const button = target instanceof Element ? target.closest<HTMLElement>('.fg-menu-item') : null;
-          if (button === null) return;
-          const commandId = button.getAttribute('data-command');
-          const commands = openCommands;
-          closeMenu();
-          if (commandId === null || commands === undefined) return;
-          // B2: run the command found in *this menu's own* `available` list, against *this menu's
-          // own* `commandCtx` (the right-clicked bar, or the focused row) — not
-          // `ctx.commands.run(commandId)`, which would rebuild context from the current selection and
-          // silently no-op when that selection is not the entry the menu was opened for.
-          const command = commands.available.find((c) => c.id === commandId);
-          command?.run(commands.ctx);
-        };
-        onDocumentKeydown = (event) => {
-          if (!popup.isOpen) return;
-          if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
-          // Scoped to this Gantt's own overlay for the same reason `onDocumentClick` is above — a
-          // document-wide query would also walk a second open Gantt's menu items (I2: `contains` is
-          // the one seam this plugin has to ask "is this mine?", same as `onContextMenu`).
-          const items = Array.from(document.querySelectorAll<HTMLElement>('.fg-menu-item')).filter((item) =>
-            ctx.view.overlay.contains(item),
-          );
-          if (items.length === 0) return;
-          event.preventDefault();
-          const active = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-          const activeIndex = active !== null ? items.indexOf(active) : -1;
-          const nextIndex =
-            event.key === 'ArrowDown'
-              ? (activeIndex + 1) % items.length
-              : (activeIndex - 1 + items.length) % items.length;
-          items[nextIndex]?.focus();
-        };
-        document.addEventListener('click', onDocumentClick);
-        document.addEventListener('keydown', onDocumentKeydown, true);
+        // A click runs the item's command. `onDomEvent` keeps this to nodes inside this Gantt's own
+        // container, so a click on a *second* Gantt's open menu never runs a command against this
+        // Gantt's `openCommands` (I2, bug hunt B1).
+        menuListeners.add(
+          ctx.view.onDomEvent('click', (event) => {
+            const item = menuItemUnder(event.target);
+            if (item === undefined) return;
+            runMenuItem(item.getAttribute('data-command'));
+          }),
+        );
+        // Arrow keys move between the items of the one menu the focus is in.
+        menuListeners.add(
+          ctx.view.onDomEvent(
+            'keydown',
+            (event) => {
+              if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+              const items = menuItemsIn(event.target);
+              if (items.length === 0) return;
+              event.preventDefault();
+              const active = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+              const activeIndex = active !== null ? items.indexOf(active) : -1;
+              const nextIndex =
+                event.key === 'ArrowDown'
+                  ? (activeIndex + 1) % items.length
+                  : (activeIndex - 1 + items.length) % items.length;
+              items[nextIndex]?.focus();
+            },
+            { capture: true },
+          ),
+        );
       };
 
-      const entryForBar = (bar: HTMLElement): Entry | undefined => {
-        const itemId = itemIdFromDataset(bar.dataset['itemId']);
-        if (itemId === undefined) return undefined;
-        return ctx.dataset.entries.get(entryIdOfItem(itemId));
-      };
-
-      const entryForRow = (row: HTMLElement): Entry | undefined => {
-        const entryId = entryIdFromDataset(row.dataset['entryId']);
-        if (entryId === undefined) return undefined;
-        return ctx.dataset.entries.get(entryId);
-      };
-
-      // A right-click resolves the same entry a click on that entry's bar *or* its grid row would —
-      // parity with `render/dom/index.ts`'s own `hitTest` grid-row fallback (bar first, row second).
-      const entryUnder = (node: Node): Entry | undefined => {
-        const bar = barUnder(node);
-        if (bar !== undefined) return entryForBar(bar);
-        const row = rowUnder(node);
-        return row !== undefined ? entryForRow(row) : undefined;
-      };
-
-      const onContextMenu = (event: MouseEvent): void => {
-        // B1: this Gantt's menu owns only right-clicks that land inside its own container — a click
-        // on page chrome, a second widget, or a second Gantt must reach the browser's own menu (or
-        // that other Gantt's) untouched. `document`-level is still the right level: the header pane,
-        // grid pane and timeline pane are separate elements, and none of the built-in row/cell/bar DOM
-        // is a boundary a plugin may name (D-S5-5) — `overlay.contains` is the one seam this plugin
-        // has to ask "is this mine?" (I2).
-        if (!(event.target instanceof Node) || !ctx.view.overlay.contains(event.target)) return;
+      // B1: this Gantt's menu owns only right-clicks that land inside its own container. A click on
+      // page chrome, a second widget, or a second Gantt reaches the browser's own menu (or that
+      // other Gantt's) untouched — `ctx.view.onDomEvent` is that scope, and the target it resolves
+      // names the same entry for a bar, a grid cell or a row alike (parity with `render/dom`'s own
+      // `hitTest` grid-row fallback).
+      ctx.view.onDomEvent('contextmenu', (event, target) => {
         event.preventDefault();
-        openAt(new DOMRect(event.clientX, event.clientY, 0, 0), entryUnder(event.target));
-      };
-      document.addEventListener('contextmenu', onContextMenu);
+        openAt(new DOMRect(event.clientX, event.clientY, 0, 0), target);
+      });
 
       const openAtFocusedRow = (): void => {
         const selectedId = ctx.gantt.selectedIds[0];
         const entry = selectedId !== undefined ? ctx.dataset.entries.get(selectedId) : undefined;
-        const anchorEl = entry !== undefined ? ctx.view.overlay.elementForEntry(entry.id) : undefined;
-        const timeline = ctx.view.overlay.paneBounds.timeline;
-        const anchor = anchorEl ?? new DOMRect(timeline.left, timeline.top, 0, 0);
-        openAt(anchor, entry);
+        const bar = entry !== undefined ? ctx.view.dom.barFor(entry.id) : undefined;
+        const timeline = ctx.view.dom.paneBounds.timeline;
+        const anchor = bar ?? new DOMRect(timeline.left, timeline.top, 0, 0);
+        openAt(anchor, bar !== undefined ? ctx.view.dom.targetUnder(bar) : undefined);
       };
       const disposeShiftF10 = ctx.interaction.registerKeyHandler('Shift+F10', () => openAtFocusedRow());
       const disposeMenuKey = ctx.interaction.registerKeyHandler('ContextMenu', () => openAtFocusedRow());
 
+      // The `contextmenu` listener removes itself through `ctx.disposables`, which runs ahead of this
+      // disposer (S5.1, D-S5-3).
       return () => {
-        document.removeEventListener('contextmenu', onContextMenu);
         disposeShiftF10();
         disposeMenuKey();
         closeMenu();

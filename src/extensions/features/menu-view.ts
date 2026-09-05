@@ -14,6 +14,26 @@ export interface MenuItem {
 }
 export type MenuEntry = MenuItem | { separator: true };
 
+/** The two classes this file writes, and the two readers below are the only ones that read them
+ *  back. `context-menu.ts` names neither: a menu's own shape is this file's business (review A3 —
+ *  a plugin stops retyping selectors, and that includes its own). */
+const MENU_CLASS = 'fg-menu';
+const MENU_ITEM_CLASS = 'fg-menu-item';
+
+/** The menu item at or above `node`, or `undefined` when the click missed one (a separator, the
+ *  menu's own padding). */
+export function menuItemUnder(node: EventTarget | null): HTMLElement | undefined {
+  return (node instanceof Element ? node.closest<HTMLElement>(`.${MENU_ITEM_CLASS}`) : null) ?? undefined;
+}
+
+/** Every item of the one menu that holds `node`, in paint order — what arrow-key navigation moves
+ *  between. Scoped by the menu itself, so a second open menu elsewhere on the page contributes
+ *  nothing (I2). Empty when `node` is in no menu. */
+export function menuItemsIn(node: EventTarget | null): readonly HTMLElement[] {
+  const menu = node instanceof Element ? node.closest<HTMLElement>(`.${MENU_CLASS}`) : null;
+  return menu === null ? [] : Array.from(menu.querySelectorAll<HTMLElement>(`.${MENU_ITEM_CLASS}`));
+}
+
 /** A `MenuEntry` with `label` resolved (never `undefined`) — `resolveMenuEntries`'s own output, and
  *  `buildMenu`'s input, so the render step never re-derives label precedence. */
 export type ResolvedMenuEntry = (MenuItem & { label: string }) | { separator: true };
@@ -56,7 +76,7 @@ export function resolveMenuEntries(
 export function buildMenu(entries: readonly ResolvedMenuEntry[]): ElementDescription {
   return {
     tag: 'div',
-    class: { 'fg-menu': true },
+    class: { [MENU_CLASS]: true },
     attrs: { role: 'menu' },
     children: entries.map((entry, index) =>
       isSeparator(entry)
@@ -69,7 +89,7 @@ export function buildMenu(entries: readonly ResolvedMenuEntry[]): ElementDescrip
         : {
             key: `item-${index}`,
             tag: 'button',
-            class: { 'fg-menu-item': true },
+            class: { [MENU_ITEM_CLASS]: true },
             attrs: { type: 'button', role: 'menuitem', 'data-command': entry.command },
             text: entry.label,
           },

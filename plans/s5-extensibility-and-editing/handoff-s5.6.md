@@ -12,7 +12,8 @@ ticked. Verified this session:
   built-ins present (`[S5-A1]`, the dogfood gate).
 - `pnpm lint`, `pnpm guards` — clean.
 - `pnpm build && pnpm api-report` — `etc/freegantt.api.md` regenerated and committed (the two new
-  factories, their option types, `Overlay.elementForEntry`, `PluginContextOf.view.resolveTooltipContent`).
+  factories, their option types, `Overlay.elementForEntry` (`ctx.view.dom.barFor` since review N1),
+  `PluginContextOf.view.resolveTooltipContent`).
 - `harness/main.ts` (the flagship demo, `index.html`) installs both plugins from the start.
   Screenshot/interaction-verified in a real Chromium session: hovering a bar shows a tooltip with
   its name and dates; right-clicking a bar opens a real menu built from `commands.available(ctx)`,
@@ -31,7 +32,8 @@ ticked. Verified this session:
    `EntryId`. `undefined` covers three cases alike: no renderer registered at either level, the
    entry has no bar in the current frame (scrolled out), or the renderer threw (dev-mode logged,
    same fallback `render/dom/index.ts`'s own `callRenderer` gives `bar`/`cell`).
-2. **`Overlay.elementForEntry(id: EntryId): HTMLElement | undefined`** (`view/overlay.ts`).
+2. **`Overlay.elementForEntry(id: EntryId): HTMLElement | undefined`** (`view/overlay.ts`; review N1
+   moved it to `ctx.view.dom.barFor(id)` in `view/gantt-dom.ts`).
    `contextMenu()`'s keyboard opener (`Shift+F10`) has no pointer event to read a target's DOM
    position from — it needs the *focused row*'s bar element to anchor a `Popup` at. `DomOverlay`
    implements this by scanning its own container for `[data-item-id]` matching the entry's segment-0

@@ -466,6 +466,43 @@ one file. A member declared in the wrong group does not compile.
 `ctx.view.resolveTooltipColumns(entry)` and `ctx.view.isColumnEditable(field)`. None of the three is
 gated: a plugin reads them for as long as it runs, not only while `setup` runs.
 
+### 4.5 The plugin-to-DOM seam: `ctx.view.dom` and `ctx.view.onDomEvent`
+
+A plugin never writes a `.fg-*` selector or a `data-*` key of the rendered Gantt. It asks
+`ctx.view.dom` instead:
+
+```ts
+ctx.view.onDomEvent('dblclick', (event, target) => {
+  if (target?.kind !== 'cell') return;
+  openEditor(target.entry, target.field, target.element);
+});
+
+const bar = ctx.view.dom.barFor(entryId);       // this entry's bar in the current frame
+const cell = ctx.view.dom.cellFor(entryId, 'cost');
+```
+
+- **`targetUnder(node)` answers `{ kind, element, entry?, field? }`.** `kind` is `TargetKind` —
+  `'row' | 'cell' | 'bar' | 'header' | 'splitter'`, the same union `CommandTarget.kind` uses. One
+  vocabulary, so a resolved right-click fills a `CommandContext.target` with no translation table.
+  `undefined` means the node is outside this Gantt, or inside it and on none of the five.
+- **`owns(node)` is the one answer to "is this event mine?"** (I2). `onDomEvent` asks it for every
+  listener, so no plugin writes that guard again.
+- **`onDomEvent(type, handler, options?)` listens on `document`, filtered to this Gantt.** It hands
+  the handler the resolved target and files its own removal — with the capture flag it added — in
+  `ctx.disposables`. The returned `Disposer` removes it sooner, for a listener a plugin attaches per
+  open popup.
+- **`bounds` and `paneBounds` are the rects a popup places against**, and `cellText(cell)` is the
+  string the grid already painted. `Overlay` keeps only `present`, `render` and `onResize` — the
+  mount layer, and nothing else.
+- **`createPopup(ctx.view, keymap)`** takes the whole view surface now, because a `Popup` needs the
+  overlay to mount in and `ctx.view.dom` to place against.
+
+**`PopupOptions.onDismiss(trigger)`** tells a popup's owner that the popup closed *itself* —
+`'escape' | 'outsidePointer' | 'scroll' | 'blur'`. It runs after the close, so `isOpen` reads
+`false` inside it. `close()` called by the owner never fires it. Without this an owner had two
+choices, and `contextMenu()` took the worse one: leave two `document` listeners attached and poll
+`isOpen` on every click and keystroke in the page.
+
 ---
 
 ## 5. Shared axes and scroll (multi-Gantt, D9)

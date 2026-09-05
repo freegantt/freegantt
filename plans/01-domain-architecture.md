@@ -738,7 +738,13 @@ interface PluginContext {
     resolveTooltipContent(entryId: EntryId): ElementDescription | undefined;   // the body, not a tooltip
     resolveTooltipColumns(entry: Entry): readonly TooltipColumn[];
     isColumnEditable(field: FieldKey): boolean | undefined;
-    overlay: Overlay;               // positioned DOM (popups, tooltips) with anchoring/flipping
+    overlay: Overlay;               // the mount layer: present(node), render(description), onResize
+    dom: GanttDom;                  // this Gantt's own DOM, as questions — see below
+    onDomEvent<K extends keyof DocumentEventMap>(   // one document listener, scoped to this Gantt
+      type: K,
+      handler: (event: DocumentEventMap[K], target: DomTarget | undefined) => void,
+      options?: { capture?: boolean },
+    ): Disposer;
   };
   data: {
     registerField(field: Field): void;   // §2.6 — a plugin's field rolls up like a core one
@@ -758,8 +764,36 @@ interface PluginContext {
 }
 ```
 
+`ctx.view.dom` is the whole plugin-to-DOM contract (review N1/A3):
+
+```ts
+interface GanttDom {
+  owns(node: Node): boolean;                        // is this event mine? (I2)
+  targetUnder(node: Node): DomTarget | undefined;   // { kind, element, entry?, field? }
+  barFor(id: EntryId): HTMLElement | undefined;
+  cellFor(id: EntryId, field: FieldKey): HTMLElement | undefined;
+  cellText(cell: HTMLElement): string;
+  readonly bounds: DOMRect;                                       // the container's rect
+  readonly paneBounds: { grid: DOMRect; timeline: DOMRect };      // each pane's own rect
+}
+```
+
 Rules:
 
+- **One seam answers "is this node mine, and what is it?"** `extensions/` may not import `render/`,
+  so a class name crossing that boundary is a contract. `render/dom/dom-contract.ts` declares every
+  such class and `data-*` key; `view/gantt-dom.ts` is the only reader; `view/gantt-dom.test.ts`
+  paints a real frame and asserts the two still agree. A plugin names none of them.
+- **`DomTarget.kind` is `model/`'s `TargetKind`** — the same five words `CommandTarget.kind` uses.
+  One vocabulary for "what did this land on", so a resolved right-click fills a `CommandContext`
+  directly.
+- **A document listener is scoped, or it is a bug.** `ctx.view.onDomEvent` filters to this Gantt,
+  hands the handler the resolved target, and files its own removal (capture flag included) in
+  `ctx.disposables`. A plugin that must hear events *outside* its Gantt — a dismiss-on-outside-pointer
+  — is the one exception, and `extensions/popup.ts` is the only place that takes it.
+- **`Overlay` is the mount layer, and says so.** `present`, `render`, `onResize`. Geometry and
+  identity moved to `ctx.view.dom` (review N1): `overlay.elementForEntry(id)` returned a timeline bar
+  that was never in the overlay, which is the #7 failure of one word covering two concepts.
 - **One module declares the groups.** `view/plugin-ports.ts` types every member a plugin sees, in the group a plugin reads it in, and `buildPluginPorts(shellPorts, pluginId)` builds one set per installed plugin. `api/gantt.ts` adds `dataset` and `gantt` — the two api-level members `view/` may not name (D-S5-5) — and nothing else. So a new seam is one edit in one file, and a member declared in the wrong group does not compile.
 - **One gated shape, once.** `registerWhileOpen` in that same file asserts the gate, registers, invalidates, builds the `Disposer`, and files it with the plugin's own `DisposableStore`. A new `register*` names what registers and what must run again. It transcribes nothing.
 - **A verb says whether an answer comes back.** `propose*` asks, and the caller must read the Veto. `announce*` tells, and returns `void`. `emit*` said neither, so it is retired from the plugin surface.

@@ -7,10 +7,9 @@
 import { createPopup } from '../popup.js';
 import type { Popup, PopupPlacement } from '../popup.js';
 import type { GanttPlugin, PluginContext } from '../../api/gantt.js';
-import { entryIdOfItem, itemIdFromDataset } from '../../model/index.js';
+import type { DomTarget } from '../../api/plugin.js';
 import type { ElementDescription, Entry, TooltipColumn } from '../../model/index.js';
 import { formatDate, formatEndInclusive } from '../../api/time-facade.js';
-import { barUnder } from './bar-under.js';
 
 export interface TooltipsOptions {
   /** Milliseconds of hover before the tooltip opens. Default `400`. */
@@ -64,21 +63,12 @@ export function tooltips(options: TooltipsOptions = {}): GanttPlugin {
   return {
     id: 'freegantt.tooltips',
     setup(ctx: PluginContext) {
-      const popup: Popup = createPopup(ctx.view.overlay, {
+      const popup: Popup = createPopup(ctx.view, {
         registerHandler: (chord, handler, handlerOptions) =>
           ctx.interaction.registerKeyHandler(chord, handler, handlerOptions),
       });
       let timer: ReturnType<typeof setTimeout> | undefined;
-      let openBar: HTMLElement | undefined;
-
-      // B1: these listeners are `document`-level (the pointer/focus target may be a descendant node
-      // the plugin never touched), so `.fg-bar` alone is not enough to tell "this Gantt's own bar"
-      // from a second Gantt's — two Datasets sharing an entry id would otherwise open Gantt A's
-      // tooltip anchored on Gantt B's bar (I2). `overlay.contains` is the seam that tells them apart.
-      const barInThisGantt = (node: Node): HTMLElement | undefined => {
-        const bar = barUnder(node);
-        return bar !== undefined && ctx.view.overlay.contains(bar) ? bar : undefined;
-      };
+      let openTarget: DomTarget | undefined;
 
       const clearTimer = (): void => {
         if (timer === undefined) return;
@@ -88,65 +78,62 @@ export function tooltips(options: TooltipsOptions = {}): GanttPlugin {
 
       const close = (): void => {
         clearTimer();
-        openBar = undefined;
+        openTarget = undefined;
         popup.close();
       };
 
-      const openFor = (bar: HTMLElement): void => {
-        const itemId = itemIdFromDataset(bar.dataset['itemId']);
-        if (itemId === undefined) return;
-        const entryId = entryIdOfItem(itemId);
-        const entry = ctx.dataset.entries.get(entryId);
+      const openFor = (target: DomTarget): void => {
+        const entry = target.entry;
         if (entry === undefined) return;
         const content =
-          ctx.view.resolveTooltipContent(entryId) ??
+          ctx.view.resolveTooltipContent(entry.id) ??
           defaultContent(
             entry,
             ctx.dataset.timeZone,
             ctx.gantt.locale,
             ctx.view.resolveTooltipColumns(entry),
           );
-        openBar = bar;
-        popup.open({ anchor: bar, placement, focus: 'none', content });
+        openTarget = target;
+        popup.open({ anchor: target.element, placement, focus: 'none', content });
       };
 
-      const onPointerOver = (event: PointerEvent): void => {
-        const bar = event.target instanceof Node ? barInThisGantt(event.target) : undefined;
-        if (bar === undefined || bar === openBar) return;
+      /** A tooltip belongs to a bar, so every other resolved target is a miss. `ctx.view.onDomEvent`
+       *  has already answered "is this Gantt mine?" (I2, bug hunt B1), which a hand-written
+       *  `.fg-bar` walk could not: two Datasets sharing an entry id used to open Gantt A's tooltip
+       *  anchored on Gantt B's bar. */
+      const barTarget = (target: DomTarget | undefined): DomTarget | undefined =>
+        target?.kind === 'bar' ? target : undefined;
+
+      ctx.view.onDomEvent('pointerover', (_event, resolved) => {
+        const target = barTarget(resolved);
+        if (target === undefined || target.element === openTarget?.element) return;
         clearTimer();
-        timer = setTimeout(() => openFor(bar), delayMs);
-      };
-      const onPointerOut = (event: PointerEvent): void => {
-        const bar = event.target instanceof Node ? barInThisGantt(event.target) : undefined;
-        if (bar === undefined) return;
-        const to = event.relatedTarget instanceof Node ? barUnder(event.relatedTarget) : undefined;
-        if (to === bar) return;
+        timer = setTimeout(() => openFor(target), delayMs);
+      });
+      ctx.view.onDomEvent('pointerout', (event, resolved) => {
+        const target = barTarget(resolved);
+        if (target === undefined) return;
+        // Moving within one bar is not leaving it. `relatedTarget` is where the pointer went, and it
+        // may be a descendant of the same bar node.
+        const to =
+          event.relatedTarget instanceof Node ? ctx.view.dom.targetUnder(event.relatedTarget) : undefined;
+        if (to?.element === target.element) return;
         close();
-      };
-      const onFocusIn = (event: FocusEvent): void => {
-        const bar = event.target instanceof Node ? barInThisGantt(event.target) : undefined;
-        if (bar === undefined) return;
+      });
+      ctx.view.onDomEvent('focusin', (_event, resolved) => {
+        const target = barTarget(resolved);
+        if (target === undefined) return;
         clearTimer();
-        openFor(bar);
-      };
-      const onFocusOut = (event: FocusEvent): void => {
-        const bar = event.target instanceof Node ? barInThisGantt(event.target) : undefined;
-        if (bar === undefined) return;
+        openFor(target);
+      });
+      ctx.view.onDomEvent('focusout', (_event, resolved) => {
+        if (barTarget(resolved) === undefined) return;
         close();
-      };
+      });
 
-      document.addEventListener('pointerover', onPointerOver);
-      document.addEventListener('pointerout', onPointerOut);
-      document.addEventListener('focusin', onFocusIn);
-      document.addEventListener('focusout', onFocusOut);
-
-      return () => {
-        document.removeEventListener('pointerover', onPointerOver);
-        document.removeEventListener('pointerout', onPointerOut);
-        document.removeEventListener('focusin', onFocusIn);
-        document.removeEventListener('focusout', onFocusOut);
-        close();
-      };
+      // The four listeners above remove themselves through `ctx.disposables`, which runs before this
+      // disposer (S5.1, D-S5-3). Only the open popup is left to close.
+      return close;
     },
   };
 }

@@ -13,7 +13,7 @@ const gantt = new Gantt({
   container: '#gantt',
   dataset,
   todayLine: false,
-  dateLines: [{ placeAt: mobilization, label: 'Mobilization', className: 'fg-mobilization-line' }],
+  dateLines: [{ placeAt: mobilization, label: 'Mobilization', className: 'demo-mobilization-line' }],
 });
 gantt.panToToday();
 

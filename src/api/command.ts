@@ -8,7 +8,7 @@
 // writing against `Gantt` names the bound `Command`/`CommandContext`/`CommandRegistry`/`KeyBinding`;
 // code that parameterizes over its own Gantt type names the `*Of` forms declared here.
 
-import type { Disposer, Entry, EntryId, FieldKey, KeyChord } from '../model/index.js';
+import type { Disposer, Entry, EntryId, FieldKey, KeyChord, TargetKind } from '../model/index.js';
 import type { Dataset } from './dataset.js';
 
 /** What focus a chord or a right-click landed on (issue #137 F6) — S5.7's and S5.11's chord scoping
@@ -16,7 +16,7 @@ import type { Dataset } from './dataset.js';
  *  `CommandContext` to read a `when` against. Filled by the keymap resolver from view state; a menu
  *  or `run(id)` invocation with no meaningful target for this kind leaves it `undefined`. */
 export interface CommandTarget {
-  kind: 'row' | 'cell' | 'bar' | 'header' | 'splitter';
+  kind: TargetKind;
   rowId?: EntryId;
   columnKey?: FieldKey;
 }

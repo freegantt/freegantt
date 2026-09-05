@@ -533,12 +533,28 @@ The `extensions/keymap.ts` class that resolves a `KeyboardEvent` against every r
 _Avoid_: Key handler (that names one registered entry, not the resolver that owns all of them)
 
 **Overlay**:
-The `view/overlay.ts` seam (`DomOverlay`, S5.3, D-S5-8): one absolutely positioned layer over the Gantt's Container, owning its own stacking order and lifetime. Knows nothing about tooltips, menus, or Popup's own placement math — it only presents an `HTMLElement`, renders an `ElementDescription` into a live node, and reports `bounds`/`paneBounds` for a Popup to clamp against. `PluginContext.view.overlay` hands a third-party plugin the exact same seam a built-in Popup is built over.
-_Avoid_: Layer (too generic — Overlay is this one specific layer, not the render/dom layer stack)
+The `view/overlay.ts` seam (`DomOverlay`, S5.3, D-S5-8): one absolutely positioned layer over the Gantt's Container, owning its own stacking order and lifetime. It is the **mount layer** and nothing else — it presents an `HTMLElement`, renders an `ElementDescription` into a live node, and notifies on a container resize. `PluginContext.view.overlay` hands a third-party plugin the exact same seam a built-in Popup is built over. Geometry and identity are the Gantt DOM's, not the Overlay's: `bounds`, `paneBounds`, `contains` and `elementForEntry` moved to `ctx.view.dom` in 2026-09-04's review (N1), because `overlay.elementForEntry(id)` returned a timeline bar that was never in the overlay — one word covering two concepts, the #7 failure.
+_Avoid_: Layer (too generic — Overlay is this one specific layer, not the render/dom layer stack); reading `Overlay` as "everything positioned about the Gantt" (that is the Gantt DOM)
+
+**Gantt DOM**:
+This Gantt's own rendered DOM, read as questions (`view/gantt-dom.ts`'s `GanttDom`, `ContainerDom`; public as `ctx.view.dom`). Three of them: `owns(node)` — is this event mine (I2); `targetUnder(node)` — what is this node; `barFor(id)` / `cellFor(id, field)` — where is this entry's element. It also carries `bounds`, `paneBounds` and `cellText(cell)`. It exists because `extensions/` may not import `render/` (D-S5-5), so every class name crossing that boundary is a contract: `render/dom/dom-contract.ts` declares them, `view/gantt-dom.ts` is the only reader, and `view/gantt-dom.test.ts` paints a real frame and asserts the two still agree. Before it, a plugin retyped eight `.fg-*` selectors and three `data-*` keys, and a rename broke every plugin with a green build.
+_Avoid_: Overlay (that is the mount layer only — see above), DOM helper, selectors
+
+**DOM target**:
+What one node in a Gantt's own DOM stands for — `{ kind, element, entry?, field? }`, returned by `ctx.view.dom.targetUnder(node)`. `kind` is `model/`'s **TargetKind** (`'row' | 'cell' | 'bar' | 'header' | 'splitter'`), the same union `CommandTarget.kind` uses: one vocabulary for "what did this land on", so a resolved right-click fills a `CommandContext.target` with no translation. The object is frozen and memoized on the element it came from, so a pointer resting on one bar allocates nothing (I5).
+_Avoid_: HitResult (that is `render/backend.ts`'s own point-based answer, `{ itemId, edge? }` — a different question), a second `*Target` union
+
+**Scoped DOM listener**:
+`ctx.view.onDomEvent(type, handler, options?)` — one `document` listener, kept to the events this Gantt owns, handing the handler the resolved DOM target and filing its own removal (capture flag included) in `ctx.disposables`. Added in 2026-09-04's review (A4): eleven hand-written `document` listeners each wrote the "is this my Gantt?" guard themselves, and `inlineEditing()`'s `scroll` listener had no guard at all. A listener that must hear events _outside_ its Gantt — a dismiss-on-outside-pointer — is the one exception, and `extensions/popup.ts` is the only place that takes it.
+_Avoid_: `on`/`off` (those name the Gantt event bus — a different mechanism with a different vocabulary)
 
 **Popup**:
-The `extensions/popup.ts` anchoring/flipping/clamping/dismissal primitive (S5.3, D-S5-8/D-S5-9) built on Overlay alone. One implementation serves the tooltip, the context menu and the cell editor. `open()` while already open replaces the current popup (closes it first). Dismisses on Escape (folded into the shared Keymap, C3), an outside pointer, a scroll of the anchor's own pane, or blur, per its `dismissOn` option.
+The `extensions/popup.ts` anchoring/flipping/clamping/dismissal primitive (S5.3, D-S5-8/D-S5-9) built on `ctx.view` alone — the Overlay it mounts in, plus the Gantt DOM's rects it places against. One implementation serves the tooltip, the context menu and the cell editor. `open()` while already open replaces the current popup (closes it first). Dismisses on Escape (folded into the shared Keymap, C3), an outside pointer, a scroll of the anchor's own pane, or blur, per its `dismissOn` option.
 _Avoid_: Tooltip, Menu (both are one consumer of this shared primitive, not the primitive itself)
+
+**Dismiss trigger**:
+Why a Popup closed _itself_: `'escape' | 'outsidePointer' | 'scroll' | 'blur'`. `PopupOptions.dismissOn` names which ones apply; `PopupOptions.onDismiss(trigger)` tells the owner which one fired, after the close. A `close()` the owner called is not a dismissal and never fires it — the owner already knows. Added in 2026-09-04's review (C3): without it an owner either leaked its listeners or polled `isOpen` on every click in the page, and `createPopup` is public, so every third-party plugin inherited that choice.
+_Avoid_: Close reason, dismissal cause (the type is `DismissTrigger` — one name)
 
 **DisposableStore**:
 The `extensions/disposables.ts` collection of cleanup callbacks a `PluginRuntime` or a Popup accumulates and frees together with one `disposeAll()` call; latches after disposal (cannot be reused — a fresh instance replaces it instead, e.g. `Popup.close()`). Deliberately reuses "Store" outside `data/`'s own sense (a normalized entity collection like `Dataset.entries`) — spec-mandated name (S5.1); the two senses do not overlap in any one file, so no rename is planned.

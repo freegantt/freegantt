@@ -4,7 +4,6 @@ import {
   Dataset,
   attemptMutation,
   createPopup,
-  itemId,
   now,
   addMs,
   MS,
@@ -23,6 +22,7 @@ import type {
   DatasetEventMap,
   GanttPlugin,
   Popup,
+  GanttDom,
   RendererByKind,
   CellRenderer,
   HeaderRenderer,
@@ -66,7 +66,7 @@ const gantt = new Gantt({
   // goes below. The number this replaces was hand-tuned to one column set.
   gridWidth: 'fitColumns',
   rowSource: { source: 'entries', tree: true },
-  dateLines: [{ placeAt: mobilization, label: 'Mobilization', className: 'fg-mobilization-line' }],
+  dateLines: [{ placeAt: mobilization, label: 'Mobilization', className: 'demo-mobilization-line' }],
 });
 gantt.panToToday();
 
@@ -460,15 +460,25 @@ function selectionShortcuts(): GanttPlugin {
 
 gantt.plugins = [...gantt.plugins, selectionShortcuts()];
 
-// S5.3, D-S5-8: a plugin's `setup()` is the only place `ctx.view.overlay` reaches this scope.
-let overlayPopup: Popup | undefined;
+// S5.3, D-S5-8: a plugin's `setup()` is the only place `ctx.view` reaches this scope, so the demo
+// stashes it once and the button below reads it. It keeps `ctx.view.dom` beside the `Popup`, because
+// finding an entry's bar is the library's job: `ctx.view.dom.barFor(id)` replaces the raw
+// `#gantt .fg-bar[data-item-id="…"]` selector this file used to write (review H2, N1).
+let popupDemoView: { popup: Popup; dom: GanttDom } | undefined;
 function popupDemo(): GanttPlugin {
   return {
     id: 'harness.popupDemo',
     setup(ctx) {
-      overlayPopup = createPopup(ctx.view.overlay, { registerHandler: ctx.interaction.registerKeyHandler });
+      // C3, plans/reviews/2026-09-02-s5-start-fixes.md: `createPopup`'s Escape dismissal folds into
+      // the shared keymap now, so a plugin hands over `ctx.interaction.registerKeyHandler` (the one
+      // bound method it has, not a full `Keymap` instance) wrapped to the small structural shape
+      // `createPopup` asks for.
+      popupDemoView = {
+        popup: createPopup(ctx.view, { registerHandler: ctx.interaction.registerKeyHandler }),
+        dom: ctx.view.dom,
+      };
       return () => {
-        overlayPopup = undefined;
+        popupDemoView = undefined;
       };
     },
   };
@@ -482,9 +492,9 @@ popupBtn.addEventListener('click', () => {
     prependLogLine(log, 'popup demo: select a bar first');
     return;
   }
-  const anchor = document.querySelector<HTMLElement>(`#gantt .fg-bar[data-item-id="${itemId(selected)}"]`);
-  if (!anchor || !overlayPopup) return;
-  overlayPopup.open({
+  const anchor = popupDemoView?.dom.barFor(selected);
+  if (!anchor || !popupDemoView) return;
+  popupDemoView.popup.open({
     anchor,
     placement: 'end',
     dismissOn: ['escape', 'outsidePointer', 'scroll'],
@@ -534,7 +544,7 @@ renderersToggle.addEventListener('change', () => {
 renderersToggle.dispatchEvent(new Event('change'));
 
 // S5.5, D-S5-13/14: demo commands that only show up for an entry — the right-clicked bar, or its
-// grid row (context-menu.ts resolves both the same way, bar-under.ts's `barUnder`/`rowUnder`).
+// grid row (context-menu.ts resolves both the same way, through `ctx.view.dom.targetUnder`).
 // Right-clicking empty timeline or an unpopulated grid stretch leaves `ctx.entry` undefined, so
 // these three never appear there — background right-clicks stay on "Collapse all"/"Expand all".
 const lockedEntryIds = new Set<string>();

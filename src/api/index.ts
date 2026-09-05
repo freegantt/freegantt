@@ -56,6 +56,9 @@ export type {
 // the same `*Of` pairing `api/command.ts`'s and `api/plugin.ts`'s file headers describe.
 export type { GanttPluginOf, PluginContextOf } from './plugin.js';
 export type { CommandOf, CommandContextOf, CommandRegistryOf, KeyBindingOf } from './command.js';
+// One vocabulary for "what did this land on", shared by `CommandTarget.kind` and `DomTarget.kind`
+// (review A3).
+export type { TargetKind } from '../model/index.js';
 export type { Theme, GridWidth, ViewportGestures, ViewportGestureFlags } from '../view/index.js';
 export type {
   GanttEventMap,
@@ -78,6 +81,9 @@ export type { CapabilityRule, Interactions, KindDefaults } from '../view/index.j
 // S5.3, D-S5-8: `PluginContext.view.overlay`'s own type — a plugin builds a `Popup` (or its own
 // primitive) against this alone, never against `view/` or `render/` directly.
 export type { Overlay, OverlayHandle } from '../view/index.js';
+// Review N1/A3: the plugin-to-DOM seam. `ctx.view.dom` carries `GanttDom`; `targetUnder` answers
+// with a `DomTarget`; `onDomEvent` takes a `DomEventHandler` and `DomEventOptions`.
+export type { GanttDom, DomTarget, DomEventHandler, DomEventOptions } from '../view/index.js';
 // S5.3, D-S5-8: the anchoring/flipping/clamping/dismissal primitive tooltips, the context menu and
 // the cell editor (S5.5+) all build on. C3 (`plans/reviews/2026-09-02-s5-start-fixes.md`) folded its
 // Escape dismissal into the shared keymap (D-S5-9's "the innermost popup wins" needs the same
@@ -86,7 +92,14 @@ export type { Overlay, OverlayHandle } from '../view/index.js';
 // already had: `{ registerHandler: ctx.interaction.registerKeyHandler }`.
 export { createPopup } from '../extensions/popup.js';
 export type { KeyHandlerRegistrar, KeyEventLike } from '../extensions/keymap.js';
-export type { Popup, PopupOptions, PopupPlacement, DismissTrigger, Anchor } from '../extensions/popup.js';
+export type {
+  Popup,
+  PopupOptions,
+  PopupPlacement,
+  PopupSurface,
+  DismissTrigger,
+  Anchor,
+} from '../extensions/popup.js';
 // S5.5, D-S5-13/14: the two shipped built-ins — values a consumer imports (`plugins: [tooltips(),
 // contextMenu({ items })]`), never names in a config table (Q3, README §0). Both live in
 // `src/extensions/features/`, confined to this same public surface by the `extensions-public-only`

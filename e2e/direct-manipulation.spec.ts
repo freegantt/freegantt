@@ -40,7 +40,7 @@ async function dragBy(
 test('[S3-A8] a pointer drag paints the Cursor line, then parks it on pointerup', async ({ page }) => {
   await gotoEditing(page);
 
-  const lineBox = await page.locator('#gantt .fg-date-line.fg-mobilization-line').boundingBox();
+  const lineBox = await page.locator('#gantt .fg-date-line.demo-mobilization-line').boundingBox();
   expect(lineBox).not.toBeNull();
   const bar = await barRightOf(page, lineBox!.x);
 
@@ -59,7 +59,7 @@ test('[S3-A8] a pointer drag paints the Cursor line, then parks it on pointerup'
 test('[S3-A8] drag then Ctrl+Z restores the bar to its pre-gesture position', async ({ page }) => {
   await gotoEditing(page);
 
-  const lineBox = await page.locator('#gantt .fg-date-line.fg-mobilization-line').boundingBox();
+  const lineBox = await page.locator('#gantt .fg-date-line.demo-mobilization-line').boundingBox();
   expect(lineBox).not.toBeNull();
 
   const bar = await barRightOf(page, lineBox!.x);
@@ -92,7 +92,7 @@ test('[S3-A8] dropping a bar before the mobilization line shows the veto toast',
   await gotoEditing(page);
   await page.selectOption('#snap-unit', 'none');
 
-  const line = page.locator('#gantt .fg-date-line.fg-mobilization-line');
+  const line = page.locator('#gantt .fg-date-line.demo-mobilization-line');
   await expect(line).toBeVisible();
   const lineBox = await line.boundingBox();
   expect(lineBox).not.toBeNull();
@@ -112,7 +112,7 @@ test('[S3-A8] a held drop paints pending until Hold drop is unchecked', async ({
   await page.selectOption('#snap-unit', 'none');
   await page.locator('#hold-drop').check();
 
-  const lineBox = await page.locator('#gantt .fg-date-line.fg-mobilization-line').boundingBox();
+  const lineBox = await page.locator('#gantt .fg-date-line.demo-mobilization-line').boundingBox();
   expect(lineBox).not.toBeNull();
   const bar = await barRightOf(page, lineBox!.x);
   const before = await bar.boundingBox();

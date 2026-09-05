@@ -7,6 +7,7 @@ import type { Disposer, Entry, EntryId, PluginId } from '../model/index.js';
 import type { FrameBar, ResolvedColumn, TooltipRenderer } from '../layout/index.js';
 import { buildPluginPorts } from './plugin-ports.js';
 import type { GanttShellPorts, PluginContextPorts } from './plugin-ports.js';
+import type { DomTarget } from './gantt-dom.js';
 
 const PLUGIN: PluginId = 'demo.plugin';
 
@@ -30,6 +31,23 @@ interface Harness {
   shell: GanttShellPorts;
   registry: ReturnType<typeof makeRegistry>;
   counts: { frames: number; items: number; capabilities: number };
+  /** The node this fake Gantt owns. `onDomEvent` must answer for it and for nothing else. */
+  container: HTMLElement;
+}
+
+/** A `GanttDom` over one plain element. It answers `owns` truthfully, which is the whole of what
+ *  `onDomEvent`'s scoping needs, and resolves every owned node to one `'row'` target. */
+function makeDom(container: HTMLElement): GanttShellPorts['dom'] {
+  const target: DomTarget = { kind: 'row', element: container };
+  return {
+    owns: (node) => container.contains(node),
+    targetUnder: (node) => (container.contains(node) ? target : undefined),
+    barFor: () => undefined,
+    cellFor: () => undefined,
+    cellText: () => '',
+    bounds: new DOMRect(),
+    paneBounds: { grid: new DOMRect(), timeline: new DOMRect() },
+  };
 }
 
 function makeEntry(id: string): Entry {
@@ -43,9 +61,12 @@ function makeBar(): FrameBar {
 function makeHarness(overrides: Partial<GanttShellPorts> = {}): Harness {
   const registry = makeRegistry();
   const counts = { frames: 0, items: 0, capabilities: 0 };
+  const container = document.createElement('div');
+  document.body.append(container);
   const shell: GanttShellPorts = {
     events: { on: vi.fn(), off: vi.fn() },
     overlay: { present: vi.fn() } as unknown as GanttShellPorts['overlay'],
+    dom: makeDom(container),
     commands: {
       register: (command) => registry.add(`command:${command.id}`),
       run: vi.fn(),
@@ -79,7 +100,7 @@ function makeHarness(overrides: Partial<GanttShellPorts> = {}): Harness {
     ...overrides,
   };
   const { ports, gate } = buildPluginPorts(shell, PLUGIN);
-  return { ports, close: () => gate.close(), shell, registry, counts };
+  return { ports, close: () => gate.close(), shell, registry, counts, container };
 }
 
 /** Every seam that is legal only while `setup` runs (D-S5-4), named once. */
@@ -300,5 +321,64 @@ describe('buildPluginPorts — the resolved-column reads (S5.8, D-S5-13)', () =>
 
     expect(harness.ports.view.isColumnEditable('cost')).toBe(true);
     expect(harness.ports.view.isColumnEditable('name')).toBeUndefined();
+  });
+});
+
+describe('buildPluginPorts — onDomEvent, one scoped document listener (review A4)', () => {
+  it('answers for a node this Gantt owns, and hands over the resolved target', () => {
+    const harness = makeHarness();
+    const seen: string[] = [];
+
+    harness.ports.view.onDomEvent('click', (_event, target) => seen.push(target?.kind ?? 'none'));
+    harness.container.dispatchEvent(new Event('click', { bubbles: true }));
+
+    expect(seen).toEqual(['row']);
+  });
+
+  it("stays silent for another Gantt's node, so two plugins on one page never cross (I2)", () => {
+    // The failure this closes: every plugin used to write its own "is this mine?" guard by hand, and
+    // one of the twelve had none at all (bug hunt B1). Two independent port sets, one document.
+    const first = makeHarness();
+    const second = makeHarness();
+    const firstSaw: string[] = [];
+    const secondSaw: string[] = [];
+
+    first.ports.view.onDomEvent('click', () => firstSaw.push('click'));
+    second.ports.view.onDomEvent('click', () => secondSaw.push('click'));
+    second.container.dispatchEvent(new Event('click', { bubbles: true }));
+
+    expect(firstSaw).toEqual([]);
+    expect(secondSaw).toEqual(['click']);
+  });
+
+  it('removes the listener with the capture flag it added, on the returned disposer', () => {
+    const harness = makeHarness();
+    const seen: string[] = [];
+
+    const remove = harness.ports.view.onDomEvent('scroll', () => seen.push('scroll'), { capture: true });
+    harness.container.dispatchEvent(new Event('scroll'));
+    expect(seen).toHaveLength(1);
+
+    remove();
+    harness.container.dispatchEvent(new Event('scroll'));
+    expect(seen).toHaveLength(1);
+  });
+
+  it('removes the listener when the plugin disposes, without the plugin remembering to', () => {
+    const harness = makeHarness();
+    const seen: string[] = [];
+
+    harness.ports.view.onDomEvent('click', () => seen.push('click'));
+    harness.ports.disposables.disposeAll();
+    harness.container.dispatchEvent(new Event('click', { bubbles: true }));
+
+    expect(seen).toEqual([]);
+  });
+
+  it('stays open after setup returns — a menu attaches its listeners per open (D-S5-4)', () => {
+    const harness = makeHarness();
+    harness.close();
+
+    expect(() => harness.ports.view.onDomEvent('click', () => {})).not.toThrow();
   });
 });
