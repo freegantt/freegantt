@@ -1144,8 +1144,8 @@ export class GanttShell {
   /** S5.2, D-S5-6: the live `CommandContext` builder. `entry` is the first selected entry, or
    *  `undefined` when nothing is selected (the doc's "the focused row, or none"). `target` fills in
    *  for a focused header cell (S5.7, D-S5-26, issue #137 F6), or, failing that, for the Selection
-   *  itself (#212) — a keyboard chord has no right-clicked node to reconcile against the Selection,
-   *  so it names the Selection directly and `when`/`run` read `ctx.target.entryIds` exactly as a
+   *  itself (#212). A keyboard chord has no right-clicked node to reconcile against the Selection.
+   *  So it names the Selection directly, and `when`/`run` read `ctx.target.entryIds` exactly as a
    *  mouse invocation does. `api/gantt.ts`'s injected `buildCommandContext` fills `dataset`/`gantt`
    *  — `view/` may not name either type (D-S5-5's mirror). A `wiring` with no `buildCommandContext`
    *  makes every command's context an empty object — a test that drives the shell alone. That is
