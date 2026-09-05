@@ -10,10 +10,11 @@ import {
   EntryNotFoundError,
   MissingPluginError,
   MutationCancelledError,
+  PluginSetupError,
   RegistrationClosedError,
   UnknownFieldError,
 } from './index.js';
-import type { ChangeSet, DatasetPlugin, Duration, Entry, EntryInput } from './index.js';
+import type { ChangeSet, DatasetDocument, DatasetPlugin, Duration, Entry, EntryInput } from './index.js';
 
 const utc = (iso: string): number => Date.parse(iso);
 
@@ -781,5 +782,27 @@ describe('a plugin’s declared Field is the plugin’s, not the document’s (D
     // whole read would throw DuplicateFieldKeyError.
     expect(reloaded.field('risk')).toBeDefined();
     expect(reloaded.entries.fieldValue('t1', 'risk')).toBe('high');
+  });
+
+  /** What a Document written before D-S5-33 holds: the plugin's declaration beside the consumer's.
+   *  A consumer declaring `risk` themselves writes the same bytes, which is why no migration can
+   *  tell the two apart, and why such a Document is unsupported (#192). */
+  const preD533Document = (): DatasetDocument =>
+    new Dataset({
+      timeZone: 'UTC',
+      entries: [oneEntry({ meta: { risk: 'high' } })],
+      fields: [{ key: 'note' }, { key: 'risk', rollUp: 'none' }],
+    }).toJSON();
+
+  // #192: the two readings of such a Document, pinned as the documented answer rather than repaired.
+  // `data/serialization/read.ts` states why no migration exists.
+  it('throws on a pre-D-S5-33 Document read with the plugin that declares the same key (#192)', () => {
+    expect(() => Dataset.fromJSON(preD533Document(), { plugins: [declaresRisk] })).toThrow(PluginSetupError);
+  });
+
+  it('re-authors that row as the consumer’s when the plugin is left out (#192)', () => {
+    const reloaded = Dataset.fromJSON(preD533Document());
+
+    expect(reloaded.toJSON().fields?.map((field) => String(field.key))).toEqual(['note', 'risk']);
   });
 });

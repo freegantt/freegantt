@@ -2,6 +2,20 @@
 // version; this build writes `schema: 3` and reads `1`, `2` and `3`. An unknown schema throws
 // `UnsupportedSchemaError`. Keys the reader does not know are dropped: top level belongs to the
 // schema, `meta` is the consumer's namespace.
+//
+// #192 — a `schema: 3` Document written before D-S5-33 is not supported. Such a Document can carry a
+// plugin's own Field declaration, because the writer only narrowed later. A `SerializedField` row
+// says nothing about who declared it, so this reader reads that row as the consumer's own. Read with
+// the plugin installed, the plugin's `ctx.fields.register` collides and `Dataset.fromJSON` throws
+// `PluginSetupError` wrapping `DuplicateFieldKeyError`. Read without it, the row is re-authored and
+// `toJSON` writes it again.
+//
+// That stands, and no migration exists. A repair would drop a declaration the reading application
+// cannot back. A consumer's own declaration of that key writes the same bytes as the plugin's, so
+// the repair would discard a live, supported declaration as well. It would trade a real case for a
+// document that cannot exist: this project has never shipped, and only this build writes `schema: 3`.
+// The throw names the plugin and the key, so the answer is one edit to the document.
+// `src/api/dataset.test.ts` pins both readings.
 
 import type {
   Aggregator,
