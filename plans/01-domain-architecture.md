@@ -777,6 +777,7 @@ interface GanttDom {
   cellText(cell: HTMLElement): string;
   readonly bounds: DOMRect;                                       // the container's rect
   readonly paneBounds: { grid: DOMRect; timeline: DOMRect };      // each pane's own rect
+  paneOf(node: Node): PaneName | undefined;                       // #177: which pane holds it, by identity
 }
 ```
 
@@ -802,7 +803,12 @@ Rules:
 - **A document listener is scoped, or it is a bug.** `ctx.view.onDomEvent` filters to this Gantt,
   hands the handler the resolved target, and files its own removal (capture flag included) in
   `ctx.disposables`. A plugin that must hear events *outside* its Gantt — a dismiss-on-outside-pointer
-  — is the one exception, and `extensions/popup.ts` is the only place that takes it.
+  — is the one exception, and `extensions/popup.ts` is the only place that takes it. It took it twice
+  until #177: the scroll dismissal stayed unscoped because it asked "whose pane scrolled?" as
+  geometry. `paneOf` answers that by identity, so the listener moved onto `onDomEvent`.
+- **Identity questions go to `paneOf`, geometric ones to `paneBounds`.** "Whose scroll was that" and
+  "which pane did the user act in" are about ownership, so they are a `contains` check that costs no
+  layout. "Where do I place and clamp this box" is geometry, and reads the rects.
 - **One mount shape, two instances (#168).** `MountLayer` answers "where do I mount, and how do I
   stay put": `present`, `onResize`, `bounds`. Identity and whole-Gantt geometry stay on
   `ctx.view.dom` (review N1): `overlay.elementForEntry(id)` returned a timeline bar that was never in

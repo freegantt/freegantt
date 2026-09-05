@@ -20,12 +20,19 @@ function makeKeymap(): Keymap<unknown> {
  *  `renderElement` mirrors `render/dom/element-description.ts`'s own text-only behaviour, enough for
  *  these tests' content. The layer's `bounds` is the container box, the same relation a real
  *  `.fg-overlay` has to its Gantt. */
-function fakeAnchor(options: {
-  bounds: DOMRect;
-  grid: DOMRect;
-  timeline: DOMRect;
-}): PopupSurface & { container: HTMLElement; resizeListeners: Set<() => void> } {
+function fakeAnchor(options: { bounds: DOMRect; grid: DOMRect; timeline: DOMRect }): PopupSurface & {
+  container: HTMLElement;
+  gridPane: HTMLElement;
+  timelinePane: HTMLElement;
+  resizeListeners: Set<() => void>;
+} {
   const container = document.createElement('div');
+  // #177: two real pane elements, because the scroll dismissal asks which pane owns a node rather
+  // than measuring its rect. The popup mounts in `container` itself, outside both panes, the same
+  // relation the real overlay layer has to the real panes.
+  const gridPane = document.createElement('div');
+  const timelinePane = document.createElement('div');
+  container.append(gridPane, timelinePane);
   document.body.append(container);
   const resizeListeners = new Set<() => void>();
   const dom = {
@@ -35,8 +42,26 @@ function fakeAnchor(options: {
     get paneBounds() {
       return { grid: options.grid, timeline: options.timeline };
     },
+    paneOf: (node: Node) => {
+      if (gridPane.contains(node)) return 'grid' as const;
+      if (timelinePane.contains(node)) return 'timeline' as const;
+      return undefined;
+    },
   };
   return {
+    gridPane,
+    timelinePane,
+    // The real seam filters every document listener to this Gantt (review A4), so the fake does too.
+    onDomEvent: (type, handler, listenerOptions) => {
+      const capture = listenerOptions?.capture ?? false;
+      const listener = (event: Event): void => {
+        const node = event.target;
+        if (!(node instanceof Node) || !container.contains(node)) return;
+        handler(event as DocumentEventMap[typeof type], undefined);
+      };
+      document.addEventListener(type, listener, capture);
+      return () => document.removeEventListener(type, listener, capture);
+    },
     container,
     resizeListeners,
     dom,
@@ -252,29 +277,61 @@ describe('Popup', () => {
     expect(triggers).toEqual(['outsidePointer']);
   });
 
-  it("a scroll inside the anchor's own pane closes the popup", () => {
+  // #177: the anchor is a real element now, so which pane owns it is a `contains` check rather than
+  // a rect comparison. A `DOMRect` anchor keeps the geometric answer, and its own test is below.
+  function popupAnchoredInTimeline(): {
+    popup: ReturnType<typeof createPopup>;
+    view: ReturnType<typeof fakeAnchor>;
+  } {
     const view = fakeAnchor({
       bounds: rect({ right: 1000, bottom: 500 }),
       grid: rect({ right: 160, bottom: 500 }),
       timeline: rect({ left: 160, right: 1000, bottom: 500 }),
     });
     withFixedPopupSize(view, { width: 100, height: 40 });
+    const bar = document.createElement('div');
+    bar.getBoundingClientRect = () => rect({ left: 300, top: 100, right: 340, bottom: 120 });
+    view.timelinePane.append(bar);
     const popup = createPopup(view, makeKeymap());
-    // Anchored inside the timeline pane (left: 160..1000).
-    popup.open({ anchor: rect({ left: 300, top: 100, right: 340, bottom: 120 }), content: { text: 'x' } });
+    popup.open({ anchor: bar, content: { text: 'x' } });
+    return { popup, view };
+  }
 
-    // The scroll's own target sits inside the same (timeline) pane — happy-dom does no layout, so
-    // its rect is stubbed directly, the same way `withFixedPopupSize` stubs `offsetWidth`.
-    const timelineScroller = document.createElement('div');
-    document.body.append(timelineScroller);
-    Object.defineProperty(timelineScroller, 'getBoundingClientRect', {
-      value: () => rect({ left: 160, top: 0, right: 1000, bottom: 500 }),
-    });
-    timelineScroller.dispatchEvent(new Event('scroll', { bubbles: false }));
+  it("a scroll inside the anchor's own pane closes the popup", () => {
+    const { popup, view } = popupAnchoredInTimeline();
+
+    const scroller = document.createElement('div');
+    view.timelinePane.append(scroller);
+    scroller.dispatchEvent(new Event('scroll', { bubbles: false }));
+
     expect(popup.isOpen).toBe(false);
   });
 
   it('a scroll in an unrelated pane does not close the popup', () => {
+    const { popup, view } = popupAnchoredInTimeline();
+
+    const scroller = document.createElement('div');
+    view.gridPane.append(scroller);
+    scroller.dispatchEvent(new Event('scroll', { bubbles: false }));
+
+    expect(popup.isOpen).toBe(true);
+  });
+
+  // The listener is scoped to this Gantt now (review A4), so a second Gantt's scroll cannot reach it
+  // and neither can the page's own. That is what gives `plans/01` §10 its exception back in the
+  // singular: `outsidePointer` is the one document listener left.
+  it('a scroll outside this Gantt leaves the popup alone (I2)', () => {
+    const { popup } = popupAnchoredInTimeline();
+
+    const elsewhere = document.createElement('div');
+    document.body.append(elsewhere);
+    elsewhere.dispatchEvent(new Event('scroll', { bubbles: false }));
+
+    expect(popup.isOpen).toBe(true);
+    elsewhere.remove();
+  });
+
+  it('a rect anchor in neither pane dismisses on any scroll of this Gantt', () => {
     const view = fakeAnchor({
       bounds: rect({ right: 1000, bottom: 500 }),
       grid: rect({ right: 160, bottom: 500 }),
@@ -282,18 +339,14 @@ describe('Popup', () => {
     });
     withFixedPopupSize(view, { width: 100, height: 40 });
     const popup = createPopup(view, makeKeymap());
-    // Anchored inside the timeline pane (left: 160..1000).
-    popup.open({ anchor: rect({ left: 300, top: 100, right: 340, bottom: 120 }), content: { text: 'x' } });
+    // A toolbar button, say: below both panes, so `paneRectFor` clamps to the outer `bounds` too.
+    popup.open({ anchor: rect({ left: 10, top: 600, right: 60, bottom: 620 }), content: { text: 'x' } });
 
-    // The scroll's own target sits in the grid pane instead — geometrically unrelated to the
-    // anchor's own (timeline) pane, so the popup stays open.
-    const gridScroller = document.createElement('div');
-    document.body.append(gridScroller);
-    Object.defineProperty(gridScroller, 'getBoundingClientRect', {
-      value: () => rect({ left: 0, top: 0, right: 160, bottom: 500 }),
-    });
-    gridScroller.dispatchEvent(new Event('scroll', { bubbles: false }));
-    expect(popup.isOpen).toBe(true);
+    const scroller = document.createElement('div');
+    view.gridPane.append(scroller);
+    scroller.dispatchEvent(new Event('scroll', { bubbles: false }));
+
+    expect(popup.isOpen).toBe(false);
   });
 
   it('focus: "trap" cycles Tab inside and restores focus on close; focus: "none" never moves it', () => {

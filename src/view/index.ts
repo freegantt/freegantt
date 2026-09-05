@@ -22,6 +22,8 @@ export type {
 export type { CapabilityRule, Interactions, KindDefaults } from './capability.js';
 export type { MountLayer } from './mount-layer.js';
 export type { GanttDom, DomTarget } from './gantt-dom.js';
+// #177: `GanttDom.paneOf` answers with it, and `pane-layout.ts` is where the panes themselves live.
+export type { PaneName } from './pane-layout.js';
 export type { DomEventHandler, DomEventOptions, PluginContextPorts } from './plugin-ports.js';
 export type { ViewportGestures, ViewportGestureFlags } from './viewport-gestures.js';
 export type {

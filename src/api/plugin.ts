@@ -11,7 +11,16 @@
 import type { Disposer, PluginId } from '../model/index.js';
 import type { Dataset } from './dataset.js';
 import type { KeyEventLike } from '../extensions/keymap.js';
-import type { DomTarget, EntryFieldEdit, GanttDom, MountLayer, PluginContextPorts } from '../view/index.js';
+import type {
+  DomEventHandler,
+  DomEventOptions,
+  DomTarget,
+  EntryFieldEdit,
+  GanttDom,
+  MountLayer,
+  PaneName,
+  PluginContextPorts,
+} from '../view/index.js';
 import type { CommandRegistryOf, KeyBindingOf } from './command.js';
 
 // Re-exported for the same reason `MountLayer` is, just below: a plugin author typing a
@@ -28,7 +37,7 @@ export type { EntryFieldEdit };
 // barrel. That barrel re-exports `createPopup` from `extensions/popup.ts`. Importing the barrel
 // back would close that edge into a cycle (`no-circular`). `GanttDom` travels with it: a `Popup`
 // clamps against `bounds`/`paneBounds`, which review N1 moved off the mount layer.
-export type { GanttDom, DomTarget, MountLayer };
+export type { GanttDom, DomTarget, PaneName, MountLayer, DomEventHandler, DomEventOptions };
 
 // #166: re-exported because `PluginContextOf` below is a projection of it, and `etc/freegantt.api.md`
 // must keep showing the plugin surface member by member. It is the I11 contract for that surface, and
