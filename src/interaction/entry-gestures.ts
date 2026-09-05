@@ -29,13 +29,13 @@ export type { EntryGestureContext, EntryGesture, DraftOptions, EntryHit } from '
  *  arms the same drag machinery with a `{ kind: 'resize', edge }` gesture instead — one pointer
  *  stream, one state machine, only the grabbed gesture shape differs.
  *
- *  Grid row click (bug hunt, "grid row highlight and row click"): `gridPane` gets its own, narrower
+ *  Grid row click (bug hunt, "grid row highlight and row click"): `rowLayer` gets its own, narrower
  *  pointerup listener — a row click selects with the same rules as a bar click (plain/ctrl/shift),
  *  but it never arms move or resize (`ctx.hitTest`'s grid-row fallback never grabs `pane`'s own drag
  *  machinery) and a miss on the grid never clears (only an empty *timeline* click does). */
 export function attachEntryGestures(
   pane: HTMLElement,
-  gridPane: HTMLElement,
+  rowLayer: HTMLElement,
   container: HTMLElement,
   ctx: EntryGestureContext,
 ): Detachable {
@@ -190,7 +190,7 @@ export function attachEntryGestures(
   /** The grid pane's own pointerup — never fed through `drag` (D-S3-19/22's move/resize machinery
    *  is armed only from a timeline `pointerdown`, `onPointerDown` below), so a row click can only
    *  ever be a click, never the start of a drag. */
-  function onGridPointerUp(e: PointerEvent): void {
+  function onRowLayerPointerUp(e: PointerEvent): void {
     selectFromHit(e, ctx.hitTest({ x: e.clientX, y: e.clientY }), false);
   }
 
@@ -235,7 +235,7 @@ export function attachEntryGestures(
   pane.addEventListener('pointermove', onPointerMove);
   pane.addEventListener('pointerleave', onPointerLeave);
   pane.addEventListener('pointercancel', onPointerCancel);
-  gridPane.addEventListener('pointerup', onGridPointerUp);
+  rowLayer.addEventListener('pointerup', onRowLayerPointerUp);
   container.addEventListener('keydown', onKeyDown);
   container.addEventListener('mousedown', onMouseDown);
   container.addEventListener('selectstart', onSelectStart);
@@ -248,7 +248,7 @@ export function attachEntryGestures(
       pane.removeEventListener('pointermove', onPointerMove);
       pane.removeEventListener('pointerleave', onPointerLeave);
       pane.removeEventListener('pointercancel', onPointerCancel);
-      gridPane.removeEventListener('pointerup', onGridPointerUp);
+      rowLayer.removeEventListener('pointerup', onRowLayerPointerUp);
       container.removeEventListener('keydown', onKeyDown);
       container.removeEventListener('mousedown', onMouseDown);
       container.removeEventListener('selectstart', onSelectStart);
