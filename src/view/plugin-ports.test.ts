@@ -270,6 +270,9 @@ describe('buildPluginPorts — resolveTooltipContent (S5.5)', () => {
 
     expect(reported).toHaveLength(1);
     expect(reported[0]?.code).toBe('renderer-failed');
+    // One code, one severity: this renderer fell back to the default content, exactly as
+    // `render/dom`'s does, and CONTEXT.md's Severity entry calls that recovery a `warning`.
+    expect(reported[0]?.severity).toBe('warning');
     expect(reported[0]?.by).toBe('core');
     expect(errorSpy).not.toHaveBeenCalled();
     errorSpy.mockRestore();

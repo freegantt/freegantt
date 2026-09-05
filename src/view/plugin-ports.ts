@@ -430,7 +430,7 @@ export function buildPluginPorts(
         {
           code: 'renderer-failed',
           message,
-          severity: 'error',
+          severity: 'warning',
           by: resolved.pluginId ?? 'core',
           cause: error,
         },
