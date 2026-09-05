@@ -9,7 +9,17 @@ import { describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { BAR_TESTID, ROW_TESTID, TESTID_KEY } from './dom-contract.js';
+import {
+  BAR_TESTID,
+  ENTRY_ID_ATTRIBUTE,
+  ENTRY_ID_KEY,
+  FIELD_ATTRIBUTE,
+  FIELD_KEY,
+  ITEM_ID_ATTRIBUTE,
+  ITEM_ID_KEY,
+  ROW_TESTID,
+  TESTID_KEY,
+} from './dom-contract.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const e2eDir = path.join(root, 'e2e');
@@ -44,4 +54,23 @@ describe('the e2e test-id contract', () => {
     expect(queried.size).toBeGreaterThan(0);
     for (const id of queried) expect([...declared]).toContain(id);
   });
+});
+
+// The question: does the selector name still spell the same attribute the `dataset` key writes?
+// Each key now has two spellings, and `gantt-dom.ts` looks a node up by the selector one (#176).
+// A `dataset` write and a `querySelector` that disagree would find nothing, in silence.
+describe('the selector spelling of each dataset key', () => {
+  const pairs: ReadonlyArray<readonly [string, string]> = [
+    [ENTRY_ID_KEY, ENTRY_ID_ATTRIBUTE],
+    [ITEM_ID_KEY, ITEM_ID_ATTRIBUTE],
+    [FIELD_KEY, FIELD_ATTRIBUTE],
+  ];
+
+  for (const [key, attribute] of pairs) {
+    it(`matches for ${attribute}`, () => {
+      const node = document.createElement('div');
+      node.dataset[key] = 'x';
+      expect(node.matches(`[${attribute}='x']`)).toBe(true);
+    });
+  }
 });

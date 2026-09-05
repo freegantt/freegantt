@@ -40,6 +40,13 @@ export const ROW_TESTID = 'fg-row';
 /** `[data-testid="fg-bar"]` — one rendered Item. */
 export const BAR_TESTID = 'fg-bar';
 
-/** The same Field key as a CSS attribute selector name. `dataset` camelCases and a selector does
- *  not, so a reader that needs both gets both from here rather than transliterating one. */
+// The same three keys as CSS attribute selector names. `dataset` camelCases and a selector does
+// not, so a reader that needs both gets both from here rather than transliterating one. A lookup
+// by id is one `querySelector` over these, never a scan of every row or every bar (#176).
+
+/** The Field key, as a selector name — `[data-field="start"]`. */
 export const FIELD_ATTRIBUTE = 'data-field';
+/** The Entry id a Row stands for, as a selector name — `[data-entry-id="e1"]`. */
+export const ENTRY_ID_ATTRIBUTE = 'data-entry-id';
+/** The Item id a bar stands for, as a selector name — `[data-item-id="e1:0"]`. */
+export const ITEM_ID_ATTRIBUTE = 'data-item-id';

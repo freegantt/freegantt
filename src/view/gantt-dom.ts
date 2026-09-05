@@ -17,9 +17,11 @@
 import {
   BAR_CLASS,
   COLUMN_HEADER_CLASS,
+  ENTRY_ID_ATTRIBUTE,
   ENTRY_ID_KEY,
   FIELD_ATTRIBUTE,
   FIELD_KEY,
+  ITEM_ID_ATTRIBUTE,
   ITEM_ID_KEY,
   ROW_CELL_CLASS,
   ROW_CLASS,
@@ -143,25 +145,14 @@ export class ContainerDom implements GanttDom {
   }
 
   barFor(id: EntryId): HTMLElement | undefined {
-    const want = itemId(id, 0);
-    const bars = this.#container.querySelectorAll<HTMLElement>(`.${BAR_CLASS}`);
-    for (let i = 0; i < bars.length; i++) {
-      const bar = bars[i];
-      if (bar?.dataset[ITEM_ID_KEY] === want) return bar;
-    }
-    return undefined;
+    const want = attributeIs(ITEM_ID_ATTRIBUTE, itemId(id, 0));
+    return this.#container.querySelector<HTMLElement>(`.${BAR_CLASS}${want}`) ?? undefined;
   }
 
   cellFor(id: EntryId, field: FieldKey): HTMLElement | undefined {
-    const selector = `[${FIELD_ATTRIBUTE}="${cssEscapeAttr(String(field))}"]`;
-    const rows = this.#container.querySelectorAll<HTMLElement>(`.${ROW_CLASS}`);
-    for (let i = 0; i < rows.length; i++) {
-      const row = rows[i];
-      if (row === undefined || row.dataset[ENTRY_ID_KEY] !== id) continue;
-      const cell = row.querySelector<HTMLElement>(selector);
-      if (cell !== null) return cell;
-    }
-    return undefined;
+    const row = `.${ROW_CLASS}${attributeIs(ENTRY_ID_ATTRIBUTE, id)}`;
+    const cell = attributeIs(FIELD_ATTRIBUTE, field);
+    return this.#container.querySelector<HTMLElement>(`${row} ${cell}`) ?? undefined;
   }
 
   cellText(cell: HTMLElement): string {
@@ -212,6 +203,14 @@ export class ContainerDom implements GanttDom {
     const raw = row.dataset[ENTRY_ID_KEY];
     return raw === undefined ? undefined : this.#entryById(raw as EntryId);
   }
+}
+
+/** One `[name="value"]` selector clause, with the value escaped for the quoted string it sits in.
+ *  Both id lookups above are one `querySelector` over these, because the CSS engine already indexes
+ *  attributes. A scan of every row costs O(rows) of DOM work, and `cellFor` answers "is my editor
+ *  still anchored?" on every scroll while an editor is open (#176). */
+function attributeIs(name: string, value: string): string {
+  return `[${name}="${cssEscapeAttr(value)}"]`;
 }
 
 function entryPart(entry: Entry | undefined): { entry?: Entry } {
