@@ -445,7 +445,7 @@ _Avoid_: min-width (that is Tick width's `minTickWidthPx`), sticky min width, ST
 
 **Selection**:
 The set of Entry ids a `Gantt` currently highlights — never Item ids, since "this Segment is selected but its siblings are not" means nothing yet (S3, D-S3-10). Per-Gantt, not per-Dataset: two Gantts bound to one Dataset can select differently. Written on pointerup, never pointerdown, and not at all when the gesture armed into a drag. The event pair keeps the concept word (`beforeSelectionChange`/`selectionChange`); the two public getters name the two readings of it, and the suffix is the only difference between them (#113): `Gantt.selectedIds` is the ids (loose in, branded out, live, writable), and `Gantt.selectedEntries` re-reads the bound Dataset for each id in `selectedIds`, in order, on every access — skipping an id the store no longer has (e.g. after a `remove`) rather than throwing. Internal holders of the id list keep the concept word (`GanttShell#selection`), because no second reading exists there to tell apart.
-_Avoid_: highlight (paint detail, not the authored concept), `Gantt.selection` / `Gantt.selectionEntries` (retired in #113 — a public name with no axis word left the reader to learn from the types which side was ids), `selectedItemIds` unqualified (that is `InteractionState`'s paint-side mirror, Item-keyed, never the public word)
+_Avoid_: highlight (paint detail, not the authored concept), `Gantt.selection` / `Gantt.selectionEntries` (retired in #113 — a public name with no axis word left the reader to learn from the types which side was ids), `selectedItemIds` (retired in #185 — paint keyed by Item made an Entry with Segments paint one bar of the several it drew; `InteractionState.selectedEntryIds` carries the same Entry ids the public word does)
 
 **EntryGesture**:
 The kind of data edit a drag is making — `{ kind: 'move' }` or `{ kind: 'resize', edge }` — the shape `interaction/entry-gesture-context.ts`'s `EntryGestureContext` carries through `draftFor`/`commit`. Distinct from the pointer machine itself (`createPointerGesture`, `pointer-gesture.ts`), which knows nothing about entries, drafts, or kinds — only threshold, capture, Escape, and long-press over plain `start`/`move`/`commit`/`cancel` callbacks.
@@ -464,8 +464,12 @@ One keyboard step of a selected entry, sized to one resolved snap unit, committe
 _Avoid_: Step (that is Tick stepping), keyboard drag
 
 **Interaction state**:
-The one long-lived, mutable per-Gantt object `RenderBackend.applyState` diffs against (`hoveredItemId`, `selectedItemIds`, `resizableItemId`, `movableItemId`, `preview`, `pendingItemIds`, `cursorX`, `cursorLabel`). Hot path: class toggles and transforms only, no frame rebuild (I5, D-S3-6).
-_Avoid_: Selection (that is the public `Gantt.selectedIds` Entry-id set; this is the paint-side mirror)
+The one long-lived, mutable per-Gantt object `RenderBackend.applyState` diffs against (`hoveredItemId`, `selectedEntryIds`, `pickedItemId`, `resizableItemId`, `movableItemId`, `preview`, `pendingItemIds`, `cursorX`, `cursorLabel`). `selectedEntryIds` is the Selection itself, and a backend resolves which bars those Entries drew from the frame it synced (#185 — the retired `selectedItemIds` made the shell guess that). Hot path: class toggles and transforms only, no frame rebuild (I5, D-S3-6).
+_Avoid_: Selection as this object's own word (the Selection is the public `Gantt.selectedIds` Entry-id set, which this object carries; the rest of it is paint)
+
+**Picked Item**:
+The one Item the pointer last picked — the bar a click landed on (`InteractionState.pickedItemId`, #185). It is an input to the shared resize-handle pair, never a paint of its own: the handles park on the picked bar while nothing is hovered. It clears once the Selection drops the Entry that drew it. A grid-row click picks no Item, so a segmented Entry selected from the grid shows no handles until a bar is hovered.
+_Avoid_: focused Item ("focused" is DOM focus in `extensions/focus-trap.ts` and the focused row in `context-menu.ts`), hit Item (a hover is a hit too — `hitTest` answers both)
 
 ### Theming and accessibility
 

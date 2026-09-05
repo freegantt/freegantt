@@ -31,6 +31,13 @@ export function itemIdFromDataset(value: string | undefined): ItemId | undefined
   return value === undefined ? undefined : (value as ItemId);
 }
 
+/** Call: `rowIdFromDataset(row.dataset['rowId'])` — the DOM→brand trust boundary for a `.fg-row`
+ *  node's `data-row-id` attribute (`render/dom/index.ts` is what writes it). `undefined` in,
+ *  `undefined` out, mirroring `itemIdFromDataset`. */
+export function rowIdFromDataset(value: string | undefined): RowId | undefined {
+  return value === undefined ? undefined : (value as RowId);
+}
+
 /** Call: `entryIdFromDataset(row.dataset['entryId'])` — the DOM→brand trust boundary for a `.fg-row`
  *  node's `data-entry-id` attribute (`render/dom/index.ts` is what writes it). `undefined` in,
  *  `undefined` out, mirroring `itemIdFromDataset`. */

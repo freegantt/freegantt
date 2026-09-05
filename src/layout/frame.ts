@@ -379,9 +379,8 @@ export function placeFrame(
       expanded: planned.expanded,
       ...(planned.matched !== undefined ? { matched: planned.matched } : {}),
       cells: cellsForRow(planned, input.columns, entryById),
-      ...(!isPlannedHeaderRow(planned) && planned.entryIds[0] !== undefined
-        ? { entryId: planned.entryIds[0] }
-        : {}),
+      // A header row stands for no Entry (D-S4-23), so it owns none and never becomes selectable.
+      entryIds: isPlannedHeaderRow(planned) ? [] : planned.entryIds,
     });
 
     for (const item of items) {

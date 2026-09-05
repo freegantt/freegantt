@@ -455,8 +455,11 @@ export class GanttShell {
       () => this.#paneLayout.rowLayerBounds(),
       this.#containerResize,
     );
-    this.#dom = new ContainerDom(this.#container, this.#paneLayout, (id) =>
-      this.#options.dataset.entries.get(id),
+    this.#dom = new ContainerDom(
+      this.#container,
+      this.#paneLayout,
+      (id) => this.#options.dataset.entries.get(id),
+      (id) => this.#layout.itemIdsForEntry(id),
     );
 
     const hasOwnOptions =
@@ -676,11 +679,8 @@ export class GanttShell {
     // D-S3-13: one `EntryGestureContext`, shared by the pointer attachment and the keyboard one.
     // Both drive the same `#gesturePipeline.session()`, so there is no value in building two.
     const gestureContext: EntryGestureContext = {
-      hitTest: (at) => {
-        const hit = this.#backend.hitTest(at);
-        if (!hit) return undefined;
-        return hit.edge !== undefined ? { itemId: hit.itemId, edge: hit.edge } : { itemId: hit.itemId };
-      },
+      hitTest: (at) => this.#backend.hitTest(at) ?? undefined,
+      entriesForRow: (id) => this.#selectableEntriesOfRow(id),
       entryFor: (item) => this.#entryFor(item),
       can: (capability, entry) => this.#capabilities.can(capability, entry),
       selectableEntriesInRowOrder: () => this.#selectableEntriesInRowOrder(),
@@ -924,6 +924,15 @@ export class GanttShell {
     return true;
   }
 
+  /** #185: which Entries a row click selects. The row plan owns the relation and `#capabilities`
+   *  owns the answer, so `interaction/` asks one question instead of looking either one up. An Entry
+   *  that refuses `select` is skipped; it never blocks the rest of the row. */
+  #selectableEntriesOfRow(id: RowId): readonly EntryId[] {
+    const row = this.#layout.plannedRows().find((planned) => planned.id === id);
+    if (row === undefined || isPlannedHeaderRow(row)) return [];
+    return row.entryIds.filter((entryId) => this.#canGesture('select', entryId));
+  }
+
   #selectableEntriesInRowOrder(): readonly EntryId[] {
     const out: EntryId[] = [];
     for (const row of this.#layout.plannedRows()) {
@@ -971,26 +980,35 @@ export class GanttShell {
     this.#proposeSelection(ids.map((id) => entryId(id)));
   }
 
-  #proposeSelection(next: readonly EntryId[], selectedItemIds?: readonly ItemId[]): void {
+  #proposeSelection(next: readonly EntryId[], pickedItemId?: ItemId): void {
     const from = this.#selection;
     const entriesEqual = from.length === next.length && from.every((id, i) => id === next[i]);
-    if (entriesEqual && selectedItemIds !== undefined) {
-      const current = this.#interactionState.selectedItemIds;
-      const itemsEqual =
-        current !== undefined &&
-        current.length === selectedItemIds.length &&
-        current.every((id, i) => id === selectedItemIds[i]!);
-      if (itemsEqual) return;
-      this.#interactionState.selectedItemIds = selectedItemIds;
+    if (entriesEqual && pickedItemId !== undefined) {
+      if (this.#interactionState.pickedItemId === pickedItemId) return;
+      this.#writePickedItem(next, pickedItemId);
       this.#refreshAffordances();
       return;
     }
     if (entriesEqual) return;
     this.#proposeChange('beforeSelectionChange', 'selectionChange', { from, to: next }, () => {
       this.#selection = next;
-      this.#interactionState.selectedItemIds = selectedItemIds ?? next.map((id) => itemId(id));
+      // #185: the Selection goes to the backend as it is. Which bars paint is the backend's own
+      // question, answered from the frame it synced — the shell names no Item here.
+      this.#interactionState.selectedEntryIds = next;
+      this.#writePickedItem(next, pickedItemId);
       this.#refreshAffordances();
     });
+  }
+
+  /** The bar the pointer landed on (#185). It survives only while the new selection still holds the
+   *  entry that drew it — the handle pair must never sit on a deselected bar. */
+  #writePickedItem(next: readonly EntryId[], pickedItemId: ItemId | undefined): void {
+    const picked = pickedItemId ?? this.#interactionState.pickedItemId;
+    const kept =
+      picked !== undefined && next.some((id) => this.#layout.itemIdsForEntry(id).includes(picked))
+        ? picked
+        : undefined;
+    setOptional(this.#interactionState, 'pickedItemId', kept);
   }
 
   get interactions(): Interactions {
@@ -1243,7 +1261,8 @@ export class GanttShell {
     const ids = projectAffordances({
       hoveredItemId: this.#hoveredItemId,
       selection: this.#selection,
-      selectedItemIds: this.#interactionState.selectedItemIds,
+      pickedItemId: this.#interactionState.pickedItemId,
+      itemIdsForEntry: (id) => this.#layout.itemIdsForEntry(id),
       canGesture: (capability, id) => this.#canGesture(capability, id),
     });
     setOptional(this.#interactionState, 'hoveredItemId', ids.hoveredItemId);
