@@ -949,26 +949,35 @@ export class GanttShell {
     this.#proposeSelection(ids.map((id) => entryId(id)));
   }
 
-  #proposeSelection(next: readonly EntryId[], selectedItemIds?: readonly ItemId[]): void {
+  #proposeSelection(next: readonly EntryId[], pickedItemId?: ItemId): void {
     const from = this.#selection;
     const entriesEqual = from.length === next.length && from.every((id, i) => id === next[i]);
-    if (entriesEqual && selectedItemIds !== undefined) {
-      const current = this.#interactionState.selectedItemIds;
-      const itemsEqual =
-        current !== undefined &&
-        current.length === selectedItemIds.length &&
-        current.every((id, i) => id === selectedItemIds[i]!);
-      if (itemsEqual) return;
-      this.#interactionState.selectedItemIds = selectedItemIds;
+    if (entriesEqual && pickedItemId !== undefined) {
+      if (this.#interactionState.pickedItemId === pickedItemId) return;
+      this.#paintSelection(next, pickedItemId);
       this.#refreshAffordances();
       return;
     }
     if (entriesEqual) return;
     this.#proposeChange('beforeSelectionChange', 'selectionChange', { from, to: next }, () => {
       this.#selection = next;
-      this.#interactionState.selectedItemIds = selectedItemIds ?? next.map((id) => itemId(id));
+      this.#paintSelection(next, pickedItemId);
       this.#refreshAffordances();
     });
+  }
+
+  /** The two Item-keyed halves of a selection, written together (#185). `selectedItemIds` is the
+   *  paint. `pickedItemId` is the bar the pointer landed on, and it survives only while the new
+   *  selection still holds the entry that drew it. */
+  #paintSelection(next: readonly EntryId[], pickedItemId: ItemId | undefined): void {
+    const picked = pickedItemId ?? this.#interactionState.pickedItemId;
+    const kept =
+      picked !== undefined && next.some((id) => this.#layout.itemIdsForEntry(id).includes(picked))
+        ? picked
+        : undefined;
+    this.#interactionState.selectedItemIds =
+      pickedItemId !== undefined ? [pickedItemId] : next.map((id) => itemId(id));
+    setOptional(this.#interactionState, 'pickedItemId', kept);
   }
 
   get interactions(): Interactions {
@@ -1221,7 +1230,8 @@ export class GanttShell {
     const ids = projectAffordances({
       hoveredItemId: this.#hoveredItemId,
       selection: this.#selection,
-      selectedItemIds: this.#interactionState.selectedItemIds,
+      pickedItemId: this.#interactionState.pickedItemId,
+      itemIdsForEntry: (id) => this.#layout.itemIdsForEntry(id),
       canGesture: (capability, id) => this.#canGesture(capability, id),
     });
     setOptional(this.#interactionState, 'hoveredItemId', ids.hoveredItemId);

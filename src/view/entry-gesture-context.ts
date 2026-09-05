@@ -63,9 +63,9 @@ export interface EntryGestureContext {
   selectableEntriesInRowOrder(): readonly EntryId[];
   selection: {
     get(): readonly EntryId[];
-    /** `selectedItemIds` is paint: which Items show the selected token. Omit it to paint
-     *  segment 0 of each entry. A click on a later segment of the same row passes the hit Item. */
-    propose(next: readonly EntryId[], selectedItemIds?: readonly ItemId[]): void;
+    /** `pickedItemId` is the one bar the pointer landed on (#185) — where the shared resize-handle
+     *  pair parks while nothing is hovered. Omit it when no pointer picked a bar. */
+    propose(next: readonly EntryId[], pickedItemId?: ItemId): void;
   };
   /** S3.2 (D-S3-6): the item id under the pointer, or undefined on pointerleave. */
   setHovered(itemId: ItemId | undefined): void;

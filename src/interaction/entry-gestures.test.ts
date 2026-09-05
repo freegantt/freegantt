@@ -45,7 +45,7 @@ interface SessionOverrides {
 function makeContext(overrides: Partial<EntryGestureContext> & SessionOverrides = {}): {
   ctx: EntryGestureContext;
   proposals: (readonly EntryId[])[];
-  proposalItemIds: (readonly ItemId[] | undefined)[];
+  proposedPickedItemIds: (ItemId | undefined)[];
   previews: (EntryEdits | undefined)[];
   commits: [EntryGesture, EntryEdits][];
 } {
@@ -58,7 +58,7 @@ function makeContext(overrides: Partial<EntryGestureContext> & SessionOverrides 
 
   let selection: readonly EntryId[] = [];
   const proposals: (readonly EntryId[])[] = [];
-  const proposalItemIds: (readonly ItemId[] | undefined)[] = [];
+  const proposedPickedItemIds: (ItemId | undefined)[] = [];
   const previews: (EntryEdits | undefined)[] = [];
   const commits: [EntryGesture, EntryEdits][] = [];
 
@@ -99,15 +99,15 @@ function makeContext(overrides: Partial<EntryGestureContext> & SessionOverrides 
     },
     selection: {
       get: () => selection,
-      propose: (next, itemIds) => {
+      propose: (next, pickedItemId) => {
         selection = next;
         proposals.push(next);
-        proposalItemIds.push(itemIds);
+        proposedPickedItemIds.push(pickedItemId);
       },
     },
     ...ctxOverrides,
   };
-  return { ctx, proposals, proposalItemIds, previews, commits };
+  return { ctx, proposals, proposedPickedItemIds, previews, commits };
 }
 
 function mockPointerCapture(el: HTMLElement): void {
@@ -536,12 +536,12 @@ describe('attachEntryGestures — segments and visible row order (S4.10)', () =>
     expect(grabbedItems).toEqual([middle]);
   });
 
-  it('plain click proposes the touched segment item id, not only segment 0', () => {
+  it('plain click proposes the picked segment item id, not only segment 0', () => {
     const pane = document.createElement('div');
     const container = document.createElement('div');
     const rowLayer = document.createElement('div');
     const middle = itemId(A, 1);
-    const { ctx, proposals, proposalItemIds } = makeContext({
+    const { ctx, proposals, proposedPickedItemIds } = makeContext({
       hitTest: () => ({ itemId: middle }),
     });
     attachEntryGestures(pane, rowLayer, container, ctx);
@@ -549,7 +549,7 @@ describe('attachEntryGestures — segments and visible row order (S4.10)', () =>
     pane.dispatchEvent(up(1000)); // hit resolves to segment 1 of A
 
     expect(proposals).toEqual([[A]]);
-    expect(proposalItemIds[proposalItemIds.length - 1]).toEqual([middle]);
+    expect(proposedPickedItemIds[proposedPickedItemIds.length - 1]).toBe(middle);
   });
 
   it('shift-click ranges over selectableEntriesInRowOrder, skipping rows not shown', () => {

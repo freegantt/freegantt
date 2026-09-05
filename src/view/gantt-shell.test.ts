@@ -830,13 +830,13 @@ describe('GanttShell hot path (S3.2, D-S3-6/D-S3-9, [S3-A3])', () => {
       ],
     };
     const container = document.createElement('div');
-    let propose: ((next: readonly EntryId[], items?: readonly ItemId[]) => void) | undefined;
+    let propose: ((next: readonly EntryId[], pickedItemId?: ItemId) => void) | undefined;
     const shell = new GanttShell({
       container,
       dataset: fakeDataset([segmented]),
       wiring: {
         entryGestures: (_pane, _rowLayer, _host, ctx) => {
-          propose = (next, items) => ctx.selection.propose(next, items);
+          propose = (next, picked) => ctx.selection.propose(next, picked);
           return { detach() {} };
         },
       },
@@ -844,7 +844,7 @@ describe('GanttShell hot path (S3.2, D-S3-6/D-S3-9, [S3-A3])', () => {
 
     const first = itemId(segmented.id, 0);
     const second = itemId(segmented.id, 1);
-    propose?.([segmented.id], [second]);
+    propose?.([segmented.id], second);
 
     expect(container.querySelector(`[data-item-id="${second}"]`)?.getAttribute('data-state')).toContain(
       'selected',

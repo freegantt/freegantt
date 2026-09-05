@@ -179,7 +179,7 @@ export function attachEntryGestures(
     }
 
     anchor = entry.id;
-    ctx.selection.propose([entry.id], [hitItemId]);
+    ctx.selection.propose([entry.id], hitItemId);
   }
 
   function onPointerUp(e: PointerEvent): void {
