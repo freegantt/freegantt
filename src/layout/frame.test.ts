@@ -41,6 +41,42 @@ describe('computeFrame', () => {
     expect(frame.rows[1]?.top).toBe(32);
   });
 
+  it('carries every Entry a custom row owns, not only the first (#185)', () => {
+    const owned = sampleEntries.slice(0, 3);
+    const frame = computeFrame({
+      entries: owned,
+      scale,
+      preset,
+      visible,
+      rowHeight: 32,
+      revision: 0,
+      itemProducerRegistry,
+      rows: {
+        source: 'custom',
+        resolve: () => [{ id: 'packed', entryIds: owned.map((entry) => String(entry.id)) }],
+      },
+    });
+
+    expect(frame.rows).toHaveLength(1);
+    expect(frame.rows[0]?.entryIds).toEqual(owned.map((entry) => entry.id));
+  });
+
+  it('a header row owns no Entry, so it is never selectable (D-S4-23, #185)', () => {
+    const frame = computeFrame({
+      entries: sampleEntries.slice(0, 4),
+      scale,
+      preset,
+      visible,
+      rowHeight: 32,
+      revision: 0,
+      itemProducerRegistry,
+      rows: { source: 'group', groupBy: (entry) => entry.kind },
+    });
+
+    const header = frame.rows.find((row) => row.kind === 'header');
+    expect(header?.entryIds).toEqual([]);
+  });
+
   it('carries the total dataset row count, not the windowed one (D-S1.10-5/7)', () => {
     const frame = computeFrame({
       entries: sampleEntries,

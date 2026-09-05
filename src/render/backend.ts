@@ -1,11 +1,18 @@
 // render/ backend contract (plans/01 §8.1). Shared by dom and null backends; DOM types are structural only —
 // this file itself never touches document/window.
 
-import type { GeometryFrame, ItemId, ItemPreview, ClientPoint } from '../layout/index.js';
+import type { EntryId, GeometryFrame, ItemId, ItemPreview, ClientPoint, RowId } from '../layout/index.js';
 
 export interface InteractionState {
   hoveredItemId?: ItemId;
-  selectedItemIds?: readonly ItemId[];
+  /** The Selection itself (#185): the Entry ids `Gantt.selectedIds` holds. A backend paints every
+   *  bar of a selected Entry, and it reads which bars those are from the frame it synced — an
+   *  Entry's Items are the layout's answer, never a string built from an Entry id. */
+  selectedEntryIds?: readonly EntryId[];
+  /** The one Item the pointer last picked (#185) — the bar a click landed on. It is an input to the
+   *  handle resolution below, never a paint of its own: the handles park on the picked bar while
+   *  nothing is hovered. Undefined once the selection drops the picked Item's Entry. */
+  pickedItemId?: ItemId;
   /** The one item the shared handle pair sits on (S3, D-S3-6/D-S3-8): the hovered bar, else the
    *  single selected one — and only when its `resize` capability resolved true. Undefined parks the
    *  handles. */
@@ -36,11 +43,21 @@ export interface InteractionState {
   columnReorderPreview?: { columnKey: string; offsetPx: number; beforeColumnKey: string | null };
 }
 
-export interface HitResult {
+/** What `hitTest` found: a bar in the timeline pane, or a row in the grid pane (#185). A row hit
+ *  names the row, and the row is what owns Entries — a backend never invents an Item id for it. */
+export type HitResult = BarHit | RowHit;
+
+export interface BarHit {
+  kind: 'bar';
   itemId: ItemId;
   /** S3.4, D-S3-4: set when the hit landed on a resize handle rather than the bar body — which edge
    *  a resize gesture should grab. Sourced from the handle's own `data-edge` attribute (D-S3-8). */
   edge?: 'start' | 'end';
+}
+
+export interface RowHit {
+  kind: 'row';
+  rowId: RowId;
 }
 
 /** The two paint surfaces a backend mounts into (S1.8, D-S1.8-1): the grid pane's row layer, and the

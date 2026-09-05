@@ -32,8 +32,8 @@ import {
   ROW_LABEL_TEXT_CLASS,
 } from '../render/dom/dom-contract.js';
 import { cssEscapeAttr } from '../render/dom/css-escape.js';
-import { entryIdOfItem, itemId, itemIdFromDataset } from '../model/index.js';
-import type { Entry, EntryId, FieldKey, TargetKind } from '../model/index.js';
+import { entryIdOfItem, itemIdFromDataset } from '../model/index.js';
+import type { Entry, EntryId, FieldKey, ItemId, TargetKind } from '../model/index.js';
 import { SPLITTER_CLASS } from './pane-layout.js';
 import type { PaneLayout, PaneName } from './pane-layout.js';
 
@@ -67,8 +67,10 @@ export interface GanttDom {
    *  Hot path: this seam memoizes the resolved object on the element it came from. A pointer that
    *  stays over one bar resolves to the same frozen object every time, and allocates nothing. */
   targetUnder(node: Node): DomTarget | undefined;
-  /** The rendered bar for `id`'s primary segment (segment 0). `undefined` when that entry has no bar
-   *  in the current frame — scrolled out of the virtualized viewport, or no bar at all. */
+  /** The first bar of `id` that the current frame has mounted. A popup or a tooltip anchors on it.
+   *  It asks the layout which Items the entry draws (#185). So an entry whose first Segment is
+   *  scrolled off still anchors on a Segment that is on screen. `undefined` when the entry has no
+   *  bar in the current frame at all. */
   barFor(id: EntryId): HTMLElement | undefined;
   /** The rendered grid cell for one entry and one Field. `undefined` when that row is not in the
    *  current frame, or the Gantt shows no column for `field`. It is also the one answer to "is my
@@ -108,6 +110,9 @@ export class ContainerDom implements GanttDom {
   readonly #container: HTMLElement;
   readonly #paneLayout: PaneLayout;
   readonly #entryById: (id: EntryId) => Entry | undefined;
+  /** Which Items one entry draws — `FrameLayout.itemIdsForEntry`, the layout's own answer (#185).
+   *  `barFor` walks it in order and stops at the first Item the frame actually mounted. */
+  readonly #itemIdsForEntry: (id: EntryId) => readonly ItemId[];
   /** One-slot memo, so a pointer resting on one node allocates no target per event. The three
    *  stamps go stale together with the node. Virtualization recycles a row node under a new entry,
    *  and the stamps say so before this seam hands the cached object back. */
@@ -117,10 +122,16 @@ export class ContainerDom implements GanttDom {
   #memoField: string | undefined;
   #memoTarget: DomTarget | undefined;
 
-  constructor(container: HTMLElement, paneLayout: PaneLayout, entryById: (id: EntryId) => Entry | undefined) {
+  constructor(
+    container: HTMLElement,
+    paneLayout: PaneLayout,
+    entryById: (id: EntryId) => Entry | undefined,
+    itemIdsForEntry: (id: EntryId) => readonly ItemId[],
+  ) {
     this.#container = container;
     this.#paneLayout = paneLayout;
     this.#entryById = entryById;
+    this.#itemIdsForEntry = itemIdsForEntry;
   }
 
   owns(node: Node): boolean {
@@ -153,8 +164,13 @@ export class ContainerDom implements GanttDom {
   }
 
   barFor(id: EntryId): HTMLElement | undefined {
-    const want = attributeIs(ITEM_ID_ATTRIBUTE, itemId(id, 0));
-    return this.#container.querySelector<HTMLElement>(`.${BAR_CLASS}${want}`) ?? undefined;
+    for (const item of this.#itemIdsForEntry(id)) {
+      const bar = this.#container.querySelector<HTMLElement>(
+        `.${BAR_CLASS}${attributeIs(ITEM_ID_ATTRIBUTE, item)}`,
+      );
+      if (bar !== null) return bar;
+    }
+    return undefined;
   }
 
   cellFor(id: EntryId, field: FieldKey): HTMLElement | undefined {
