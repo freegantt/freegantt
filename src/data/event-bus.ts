@@ -44,6 +44,14 @@ export class EventBus<TEvents, TAsyncKeys extends keyof TEvents = never> {
       ?.delete(handler as (payload: TEvents[keyof TEvents]) => SyncVeto | Promise<SyncVeto>);
   }
 
+  /** Whether anything is listening to `name`. `emit` answers a veto, not a delivery, so a caller
+   *  that must know whether a report reached anyone asks here — ADR 0009's console fallback fires
+   *  only when the answer is `false`. */
+  hasHandler<K extends keyof TEvents>(name: K): boolean {
+    const handlers = this.#handlers.get(name);
+    return handlers !== undefined && handlers.size > 0;
+  }
+
   /** Every handler runs (a sync veto from one handler does not skip the rest). Returns
    *  `false`/`true` synchronously when no handler returned a `Promise`. When one did, the overall
    *  result waits on **all** of them (D-S3-17) — a synchronous `false` still vetoes, but it does not

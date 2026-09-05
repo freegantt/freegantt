@@ -7,6 +7,7 @@ import type { ChangeSetId, EntryId } from './ids.js';
 import type { Entry } from './entry.js';
 import type { FieldKey } from './field.js';
 import type { PluginId } from './plugin.js';
+import type { ErrorReport } from './error-report.js';
 
 export type { CoreFieldKey, FieldKey } from './field.js';
 
@@ -63,4 +64,9 @@ export interface ChangeSet {
 export interface DatasetEventMap {
   beforeChange: { changeSet: ChangeSet };
   change: { changeSet: ChangeSet };
+  /** S5.12, D-S5-35: every refusal and every recovered fault a Dataset observes. Sync only, and no
+   *  `before*` pair — a report states what already happened, so there is nothing to veto. The payload
+   *  is the `ErrorReport` itself, not a wrapper: `dataset.on('error', (report) => …)` is the whole
+   *  call. `api/watch-all-errors.ts` folds this feed and the Gantt's into one subscription. */
+  error: ErrorReport;
 }
