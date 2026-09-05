@@ -53,8 +53,8 @@
           </div>
           <div class="rounded-lg border border-amber-200 bg-amber-50 p-4">
             <div class="text-xs uppercase tracking-wider text-amber-700">Findings</div>
-            <div class="text-2xl font-semibold text-amber-900 mt-1">4 + 6 + 10</div>
-            <div class="text-xs text-amber-700 mt-1">hard · deepening · quality</div>
+            <div class="text-2xl font-semibold text-amber-900 mt-1">4 + 6 + 10 + 1</div>
+            <div class="text-xs text-amber-700 mt-1">hard · deepening · quality · API trap</div>
           </div>
         </div>
 
@@ -885,6 +885,183 @@ flowchart LR
         </div>
       </section>
 
+      <!-- ══════════════════════════ SECOND PASS ══════════════════════════ -->
+      <section class="space-y-6">
+        <div class="flex items-baseline gap-3">
+          <h2 class="font-serif text-3xl">Second pass</h2>
+          <span class="text-sm text-slate-500">read from a consumer's and a plugin author's seat</span>
+        </div>
+        <p class="text-sm text-slate-600 max-w-3xl">
+          A re-read of the public surface as an app author meets it, rather than as the diff presents
+          it. One API trap, one idea confirmed as correctly rejected, and one piece of house style
+          worth copying.
+        </p>
+
+        <!-- S1 -->
+        <article class="rounded-lg border border-amber-300 bg-white overflow-hidden">
+          <div class="bg-amber-50 px-5 py-3 border-b border-amber-200 flex flex-wrap items-center gap-3">
+            <span class="font-mono text-xs bg-amber-600 text-white px-2 py-0.5 rounded">S1</span>
+            <h3 class="font-semibold"><code class="font-mono">gantt.gridColumns</code> changes meaning after the user's first column drag</h3>
+            <span class="ml-auto text-xs uppercase tracking-wider text-amber-700">API trap</span>
+          </div>
+          <div class="p-5 space-y-4 text-sm">
+            <div class="font-mono text-xs text-slate-500">
+              src/view/column-chrome.ts:94–105, 111–130, 280–294 · src/view/gantt-shell.ts:836
+            </div>
+            <p>The behaviour is deliberate and the comment at
+              <code class="font-mono">column-chrome.ts:70</code> states it exactly: plugin columns are
+              appended by <code class="font-mono">effectiveInput()</code>, never stored, and
+              <em>"a plugin column reaches the getter only once a resize/reorder/plain assignment
+              commits it"</em>. But follow what that means for the consumer:</p>
+            <div class="rounded-lg border border-slate-200 overflow-hidden">
+              <div class="grid grid-cols-[auto_1fr] text-xs font-mono">
+                <div class="bg-stone-100 px-3 py-2 text-slate-500 border-b border-slate-200">t0</div>
+                <div class="px-3 py-2 border-b border-slate-200">
+                  <code>gantt.gridColumns</code> → the 3 columns the consumer authored
+                </div>
+                <div class="bg-stone-100 px-3 py-2 text-slate-500 border-b border-slate-200">t1</div>
+                <div class="px-3 py-2 border-b border-slate-200 text-slate-600">
+                  a plugin installs and registers <code>'risk'</code> — getter unchanged, correctly
+                </div>
+                <div class="bg-stone-100 px-3 py-2 text-slate-500 border-b border-slate-200">t2</div>
+                <div class="px-3 py-2 border-b border-slate-200 text-amber-700">
+                  the user drags <em>any</em> column edge → commit bakes <code>effectiveInput()</code> in
+                </div>
+                <div class="bg-stone-100 px-3 py-2 text-slate-500 border-b border-slate-200">t3</div>
+                <div class="px-3 py-2 border-b border-slate-200 text-red-700">
+                  <code>gantt.gridColumns</code> → 4 columns. One the consumer never authored.
+                </div>
+                <div class="bg-stone-100 px-3 py-2 text-slate-500">t4</div>
+                <div class="px-3 py-2 text-red-700">
+                  <code>gantt.on('gridColumnsChange', ({ to }) =&gt; save(to.map((c) =&gt; c.field)))</code>
+                  persists it
+                </div>
+              </div>
+            </div>
+            <p>On the next load, without that plugin, the saved config authors a column for a field
+              with nothing behind it. The round-trip in that last line is the documented pattern
+              (<code class="font-mono">plans/s5-extensibility-and-editing/handoff-s5.7-in-progress.md:58</code>),
+              and it is the natural thing an app author writes.</p>
+            <div class="rounded bg-slate-100 border border-slate-200 p-3 text-slate-700">
+              <span class="font-semibold">This was predicted.</span> The S5.9 review wrote:
+              <em>"The unfriendly part is silent: <code class="font-mono">gantt.gridColumns</code> can
+              grow a field the consumer never assigned, with no event that says 'a plugin column was
+              adopted'. If adoption stays, raise <code class="font-mono">gridColumnsChange</code> with
+              a <code class="font-mono">from</code> that the consumer actually authored, and say so on
+              <code class="font-mono">registerGridColumn</code>."</em> It is still open at HEAD:
+              <code class="font-mono">registerPluginColumn</code> calls
+              <code class="font-mono">rebindFields()</code> and
+              <code class="font-mono">requestFrame()</code> and raises no event pair at all.
+            </div>
+            <p class="text-slate-600"><span class="font-semibold">Fix, cheapest first.</span> Mark a
+              baked plugin column so the getter and the event payload can tell the two apart — the
+              consumer then saves what they authored and the library re-adopts the rest. Failing
+              that, do what the S5.9 review asked: say it on
+              <code class="font-mono">registerGridColumn</code>'s own doc, and give the event a
+              <code class="font-mono">from</code> the consumer recognises. Either way this is a
+              <code class="font-mono">src/</code> fix, and CLAUDE.md's rule applies — the gap is real
+              whether or not a lint fires.</p>
+          </div>
+        </article>
+
+        <!-- S2 -->
+        <article class="rounded-lg border border-slate-200 bg-white overflow-hidden">
+          <div class="bg-stone-100 px-5 py-3 border-b border-slate-200 flex flex-wrap items-center gap-3">
+            <span class="font-mono text-xs bg-slate-500 text-white px-2 py-0.5 rounded">S2</span>
+            <h3 class="font-semibold">A <code class="font-mono">registerKind()</code> shorthand — checked, and correctly rejected</h3>
+            <span class="ml-auto text-xs uppercase tracking-wider text-slate-500">recorded, not raised</span>
+          </div>
+          <div class="p-5 space-y-3 text-sm">
+            <p>Defining one Kind takes four calls on four different groups, and the kind string is
+              repeated four times. CLAUDE.md says "Common case is a shorthand; the long form is
+              expert", so this pass tested whether
+              <code class="font-mono">ctx.registerKind(kind, { items, bar, defaults, commands })</code>
+              is owed. It is not. The S5.9 review already ruled on it:
+              <em>"Do <strong>not</strong> add
+              <code class="font-mono">registerKind({ producer, renderer, defaults, commands })</code>.
+              D-S5-22 wants four seams so a plugin can fill one. The call sites already read as
+              English."</em></p>
+            <p>Confirmed against the real call sites.
+              <code class="font-mono">harness/plugins/buffer-kind.ts</code> and
+              <code class="font-mono">risk-kind.ts</code> are four lines of registration, each
+              answering the question written above it. A plugin that only wants a renderer writes one
+              of the four and nothing else — which a bundled shorthand would tax.</p>
+            <p class="text-slate-600">Recorded here so a third review does not re-raise it a third time.</p>
+          </div>
+        </article>
+
+        <!-- S3 -->
+        <article class="rounded-lg border border-emerald-200 bg-white overflow-hidden">
+          <div class="bg-emerald-50 px-5 py-3 border-b border-emerald-200 flex flex-wrap items-center gap-3">
+            <span class="font-mono text-xs bg-emerald-600 text-white px-2 py-0.5 rounded">S3</span>
+            <h3 class="font-semibold">The demo plugins are the branch's best self-documentation — make it the house style</h3>
+            <span class="ml-auto text-xs uppercase tracking-wider text-emerald-700">pattern to copy</span>
+          </div>
+          <div class="p-5 space-y-3 text-sm">
+            <p><code class="font-mono">harness/plugins/buffer-kind.ts</code> and
+              <code class="font-mono">risk-kind.ts</code> label each registration with the question it
+              answers — "What shape does it draw?", "How does it look?", "What can you do to it?",
+              "What actions does it offer?" — so the four seams read as one story rather than four
+              API calls. It is the clearest code on the branch and it cost four comments.</p>
+            <p>The contrast is <code class="font-mono">src/view/gantt-shell.ts</code>, where the same
+              information is spread across ~50 fields and ~35 setter pairs and every comment explains
+              a mechanism rather than a question. Candidate 2 is what closes that gap structurally;
+              this pattern is what closes it in prose meanwhile.</p>
+            <p class="text-slate-600">Two caveats already filed against these files:
+              <a href="#" class="underline decoration-slate-400">Q8</a> (the module-level
+              <code class="font-mono">demoView</code> stash in
+              <code class="font-mono">popup-demo.ts</code>) and H1's comment-length rule, which the
+              demo files themselves pass.</p>
+          </div>
+        </article>
+
+        <!-- ball of mud -->
+        <div class="rounded-lg border border-slate-200 bg-white p-6 space-y-4">
+          <h3 class="font-semibold text-lg">Ball-of-mud check</h3>
+          <p class="text-sm text-slate-600">One question per module: how many unrelated reasons does
+            it have to change?</p>
+          <div class="space-y-2">
+            <div>
+              <div class="flex items-baseline justify-between text-sm">
+                <span class="font-mono">view/gantt-shell.ts</span>
+                <span class="text-red-700 font-semibold">7 reasons · 1,646 lines</span>
+              </div>
+              <div class="h-3 bg-stone-100 rounded overflow-hidden mt-1"><div class="h-full bg-red-500" style="width:100%"></div></div>
+              <div class="text-xs text-slate-500 mt-1">composition root · config store · render loop · event bus · plugin host · capability resolver · keymap wiring</div>
+            </div>
+            <div>
+              <div class="flex items-baseline justify-between text-sm">
+                <span class="font-mono">extensions/features/inline-editing.ts</span>
+                <span class="text-amber-700 font-semibold">3 reasons · 683 lines</span>
+              </div>
+              <div class="h-3 bg-stone-100 rounded overflow-hidden mt-1"><div class="h-full bg-amber-500" style="width:44%"></div></div>
+              <div class="text-xs text-slate-500 mt-1">session lifecycle · refusal policy and wording · open/close coordination (candidate 4 splits the third out)</div>
+            </div>
+            <div>
+              <div class="flex items-baseline justify-between text-sm">
+                <span class="font-mono">view/column-chrome.ts</span>
+                <span class="text-slate-600 font-semibold">2 reasons · 329 lines</span>
+              </div>
+              <div class="h-3 bg-stone-100 rounded overflow-hidden mt-1"><div class="h-full bg-slate-400" style="width:24%"></div></div>
+              <div class="text-xs text-slate-500 mt-1">column resolution and the commit sequence — wide, but cohesive</div>
+            </div>
+            <div>
+              <div class="flex items-baseline justify-between text-sm">
+                <span class="font-mono">view/plugin-ports.ts · view/gantt-dom.ts · layout/registration-table.ts</span>
+                <span class="text-emerald-700 font-semibold">1 reason each</span>
+              </div>
+              <div class="h-3 bg-stone-100 rounded overflow-hidden mt-1"><div class="h-full bg-emerald-500" style="width:9%"></div></div>
+              <div class="text-xs text-slate-500 mt-1">deep modules: narrow interface, real implementation behind it. This is what the branch added.</div>
+            </div>
+          </div>
+          <p class="text-sm text-slate-700 pt-2 border-t border-slate-200">
+            <span class="font-semibold">Verdict.</span> The branch moved the codebase away from a ball
+            of mud, not toward one: every module it <em>added</em> has one reason to change. The risk
+            is unchanged and concentrated in one file, and candidate 2 is the cheapest cut into it.
+          </p>
+        </div>
+      </section>
+
       <!-- ══════════════════════════ TOP REC ══════════════════════════ -->
       <section id="top-recommendation">
         <div class="rounded-xl deep text-white p-8 space-y-4">
@@ -913,8 +1090,9 @@ flowchart LR
             </div>
           </div>
           <p class="text-slate-400 text-sm pt-2 border-t border-slate-700">
-            Candidates 3 and 4 are worth doing but not urgent — re-measure after 2 lands. Candidate 6 is recorded as
-            checked-and-rejected, so it does not get re-raised.
+            Candidates 3 and 4 are worth doing but not urgent — re-measure after 2 lands. Candidates 6 and S2 are
+            recorded as checked-and-rejected, so they do not get re-raised. <span class="text-amber-300">S1 is the one
+            finding here that can reach a shipped consumer’s saved config, so file it as an issue even if it waits.</span>
           </p>
         </div>
       </section>
