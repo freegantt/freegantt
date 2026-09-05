@@ -7,7 +7,7 @@ import { createTimeScale, dayPreset } from '../time/index.js';
 import * as packLanes from './lanes/pack-lanes.js';
 import * as resolveRowsMod from './rows/resolve-rows.js';
 import type { Entry } from '../model/index.js';
-import { changeSetId, entryId } from '../model/index.js';
+import { changeSetId, entryId, itemId } from '../model/index.js';
 import type { ChangeSet } from '../model/index.js';
 import type { LayoutInput } from './frame.js';
 import { PrefixSumHeightIndex } from './row-height-index.js';
@@ -109,6 +109,51 @@ describe('FrameLayout', () => {
     for (const [index, row] of frame.rows.entries()) {
       expect(layout.rowTop(index)).toBe(row.top);
     }
+  });
+
+  it('itemIdsForEntry answers every bar a segmented entry draws (#185)', () => {
+    const layout = new FrameLayout();
+    const segmented = overlappingEntry(sampleEntries[0]!, 3);
+    const frame = layout.computeFrame(input({ entries: [segmented] }));
+
+    expect(layout.itemIdsForEntry(segmented.id)).toEqual(frame.bars.map((bar) => bar.id));
+    expect(layout.itemIdsForEntry(segmented.id)).toHaveLength(3);
+  });
+
+  it('itemIdsForEntry answers a plugin Kind that draws its own Items (#185)', () => {
+    // A producer is free to name its Items — nothing here parses `${entryId}:${segmentIndex}`.
+    const kind = 'twin';
+    const registry = createItemProducerRegistry();
+    registry.register(kind, (entry) => [
+      {
+        id: itemId(entry.id, 7),
+        entryId: entry.id,
+        kind,
+        label: entry.name,
+        start: entry.start,
+        end: entry.end,
+      },
+      {
+        id: itemId(entry.id, 9),
+        entryId: entry.id,
+        kind,
+        label: entry.name,
+        start: entry.start,
+        end: entry.end,
+      },
+    ]);
+    const entry: Entry = { ...sampleEntries[0]!, kind };
+    const layout = new FrameLayout();
+    layout.computeFrame(input({ entries: [entry], itemProducerRegistry: registry }));
+
+    expect(layout.itemIdsForEntry(entry.id)).toEqual([itemId(entry.id, 7), itemId(entry.id, 9)]);
+  });
+
+  it('itemIdsForEntry answers empty for an entry no row carries (#185)', () => {
+    const layout = new FrameLayout();
+    layout.computeFrame(input({ entries: [sampleEntries[0]!] }));
+
+    expect(layout.itemIdsForEntry(sampleEntries[1]!.id)).toEqual([]);
   });
 });
 

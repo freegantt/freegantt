@@ -463,8 +463,12 @@ One keyboard step of a selected entry, sized to one resolved snap unit, committe
 _Avoid_: Step (that is Tick stepping), keyboard drag
 
 **Interaction state**:
-The one long-lived, mutable per-Gantt object `RenderBackend.applyState` diffs against (`hoveredItemId`, `selectedItemIds`, `resizableItemId`, `movableItemId`, `preview`, `pendingItemIds`, `cursorX`, `cursorLabel`). Hot path: class toggles and transforms only, no frame rebuild (I5, D-S3-6).
+The one long-lived, mutable per-Gantt object `RenderBackend.applyState` diffs against (`hoveredItemId`, `selectedItemIds`, `pickedItemId`, `resizableItemId`, `movableItemId`, `preview`, `pendingItemIds`, `cursorX`, `cursorLabel`). Hot path: class toggles and transforms only, no frame rebuild (I5, D-S3-6).
 _Avoid_: Selection (that is the public `Gantt.selectedIds` Entry-id set; this is the paint-side mirror)
+
+**Picked Item**:
+The one Item the pointer last picked — the bar a click landed on (`InteractionState.pickedItemId`, #185). It is an input to the shared resize-handle pair, never a paint of its own: the handles park on the picked bar while nothing is hovered. It clears once the Selection drops the Entry that drew it. A grid-row click picks no Item, so a segmented Entry selected from the grid shows no handles until a bar is hovered.
+_Avoid_: focused Item ("focused" is DOM focus in `extensions/focus-trap.ts` and the focused row in `context-menu.ts`), hit Item (a hover is a hit too — `hitTest` answers both)
 
 ### Theming and accessibility
 

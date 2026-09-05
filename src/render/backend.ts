@@ -6,6 +6,10 @@ import type { GeometryFrame, ItemId, ItemPreview, ClientPoint } from '../layout/
 export interface InteractionState {
   hoveredItemId?: ItemId;
   selectedItemIds?: readonly ItemId[];
+  /** The one Item the pointer last picked (#185) — the bar a click landed on. It is an input to the
+   *  handle resolution below, never a paint of its own: the handles park on the picked bar while
+   *  nothing is hovered. Undefined once the selection drops the picked Item's Entry. */
+  pickedItemId?: ItemId;
   /** The one item the shared handle pair sits on (S3, D-S3-6/D-S3-8): the hovered bar, else the
    *  single selected one — and only when its `resize` capability resolved true. Undefined parks the
    *  handles. */
