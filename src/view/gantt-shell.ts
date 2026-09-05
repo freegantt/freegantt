@@ -17,6 +17,7 @@ import type {
   Overscan,
   PresetRef,
   RowSource,
+  SnapSetting,
   TimeScaleFit,
   ViewportHandle,
   ViewPreset,
@@ -260,6 +261,9 @@ export interface GanttShellOptions {
   /** Live (S3, D-S3-9). Per-gesture, boolean or per-entry predicate, over the per-kind default table
    *  (`view/capability.ts`). Default `{}`: every gesture resolves off the default table alone. */
   interactions?: Interactions;
+  /** Live (D-S3-24). What a drag snaps to on this Gantt, over the showing preset's own `snap`.
+   *  Omitted, the preset decides. */
+  snap?: SnapSetting;
   /** Live (S3.7, D-S3-14). Wheel zoom/pan and keyboard pan. Default `{}`: every viewport gesture
    *  is on. `false` turns them all off. The imperative `zoomBy`/`panToDate` surface does not
    *  consult this. */
@@ -360,6 +364,9 @@ export class GanttShell {
   /** S3.2, D-S3-9: resolved once, re-resolved only when `interactions` is reassigned — never per
    *  hover step. `#refreshAffordances` reads it, it never calls `resolveCapabilities` itself. */
   #interactions: Interactions = {};
+  /** D-S3-24: this Gantt's own snap, or `undefined` while the showing preset decides. It changes no
+   *  paint, so it is a plain field and not a frame setting. */
+  #snap: SnapSetting | undefined;
   #viewportGestures: ViewportGestures = {};
   #resolvedViewportGestures = resolveViewportGestures(undefined);
   #capabilities: Capabilities;
@@ -635,6 +642,7 @@ export class GanttShell {
       },
     });
     this.#interactions = options.interactions ?? {};
+    this.#snap = options.snap;
     this.#viewportGestures = options.viewportGestures ?? {};
     this.#resolvedViewportGestures = resolveViewportGestures(this.#viewportGestures);
     this.#capabilities = this.#resolveCapabilities();
@@ -657,6 +665,7 @@ export class GanttShell {
       timeZone: () => this.#options.dataset.timeZone,
       timeScale: () => this.#viewport.timeScale,
       preset: () => this.#viewport.preset,
+      snap: () => this.snap,
       selection: () => this.#selection,
       entryById: (id) => this.#options.dataset.entries.get(id),
       canGesture: (capability, id) => this.#canGesture(capability, id),
@@ -1041,6 +1050,19 @@ export class GanttShell {
   #refreshCapabilities(): void {
     this.#capabilities = this.#resolveCapabilities();
     this.#refreshAffordances();
+  }
+
+  /** D-S3-24: what a drag snaps to right now — this Gantt's own setting when it states one, else
+   *  the showing preset's, else `'tick'`. A gesture resolves `'tick'` against the preset it is
+   *  measuring. */
+  get snap(): SnapSetting {
+    return this.#snap ?? this.#viewport.preset.snap ?? 'tick';
+  }
+
+  /** Live (D-S3-24). The next drag reads it; nothing repaints. `undefined` hands the answer back to
+   *  the showing preset. */
+  set snap(next: SnapSetting | undefined) {
+    this.#snap = next;
   }
 
   get viewportGestures(): ViewportGestures {

@@ -443,6 +443,10 @@ _Avoid_: min-width (that is Tick width's `minTickWidthPx`), sticky min width, ST
 
 ### Direct manipulation
 
+**Snap**:
+The calendar grid a drag and a keyboard Nudge write onto: a named unit and increment (`{ unit: 'day', increment: 2 }`), `'tick'` for one Tick of the showing ViewPreset, or `'none'` for raw pixel placement. `SnapSetting` is what a caller states — on one preset (`ViewPreset.snap`) or on one Gantt (`gantt.snap`, which wins and survives a zoom, D-S3-24). `SnapUnit` is what one gesture resolved that to, with `'tick'` already read as the showing preset's own Tick and Alt already read as `'none'` (D-S3-12). The live preview always tracks the pointer unsnapped; Snap applies to the value written on commit.
+_Avoid_: snap unit for the stated setting (that is the resolved value), grid, magnet
+
 **Selection**:
 The set of Entry ids a `Gantt` currently highlights — never Item ids, since "this Segment is selected but its siblings are not" means nothing yet (S3, D-S3-10). Per-Gantt, not per-Dataset: two Gantts bound to one Dataset can select differently. Written on pointerup, never pointerdown, and not at all when the gesture armed into a drag. The event pair keeps the concept word (`beforeSelectionChange`/`selectionChange`); the two public getters name the two readings of it, and the suffix is the only difference between them (#113): `Gantt.selectedIds` is the ids (loose in, branded out, live, writable), and `Gantt.selectedEntries` re-reads the bound Dataset for each id in `selectedIds`, in order, on every access — skipping an id the store no longer has (e.g. after a `remove`) rather than throwing. Internal holders of the id list keep the concept word (`GanttShell#selection`), because no second reading exists there to tell apart.
 _Avoid_: highlight (paint detail, not the authored concept), `Gantt.selection` / `Gantt.selectionEntries` (retired in #113 — a public name with no axis word left the reader to learn from the types which side was ids), `selectedItemIds` unqualified (that is `InteractionState`'s paint-side mirror, Item-keyed, never the public word)

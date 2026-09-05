@@ -103,6 +103,7 @@ export type {
   TimeScale,
   ViewPreset,
   ViewPresetHeader,
+  SnapSetting,
   Tick,
   HeaderFormat,
   DateFormat,

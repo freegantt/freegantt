@@ -170,14 +170,15 @@ syncSelectionUi();
 const snapUnitSelect = document.querySelector<HTMLSelectElement>('#snap-unit')!;
 const snapIncrementInput = document.querySelector<HTMLInputElement>('#snap-increment')!;
 
+// #195, D-S3-24: the page states the snap and nothing else. Round-tripping the resolved preset
+// through `gantt.preset` built a one-off copy of a shipped preset, which the next zoom threw away.
 function applySnapChoice(): void {
   const unit = snapUnitSelect.value;
   snapIncrementInput.disabled = unit === 'tick' || unit === 'none';
-  const snap =
+  gantt.snap =
     unit === 'tick' || unit === 'none'
       ? unit
       : { unit: unit as TimeUnit, increment: Math.max(1, Number(snapIncrementInput.value) || 1) };
-  gantt.preset = { ...gantt.preset, snap };
 }
 
 snapUnitSelect.addEventListener('change', applySnapChoice);

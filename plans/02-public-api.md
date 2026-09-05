@@ -123,6 +123,7 @@ Single mutations outside an explicit transaction are auto-wrapped in one — con
 gantt.preset = 'dayAndWeek';
 gantt.rowSource = { source: 'group', groupBy: (entry, fields) => fields?.read<string>(entry, 'team') ?? 'unassigned' };
 gantt.gridColumns = [...gantt.gridColumns, 'cost'];
+gantt.snap = { unit: 'day', increment: 2 };   // D-S3-24 — this Gantt's own snap, over the showing preset's
 gantt.gridWidth = 220;                  // S1.8 — same cancelable commit sequence a splitter drag runs
 gantt.gridWidth = 'fitColumns';         // #157 — as wide as the columns, and stays that way
 gantt.minGridWidth = 80;                // #127 — floor the Splitter drag clamps gridWidth to (default 40)

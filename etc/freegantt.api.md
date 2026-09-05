@@ -942,6 +942,8 @@ export class Gantt {
     set selectedIds(ids: readonly (EntryId | string)[]);
     setCapabilityRule(capability: keyof Interactions, rule: CapabilityRule): void;
     showGridColumn(field: FieldKey): void;
+    get snap(): SnapSetting;
+    set snap(next: SnapSetting | undefined);
     // (undocumented)
     get theme(): Theme;
     set theme(value: Theme);
@@ -1043,6 +1045,7 @@ export interface GanttOptionsBase {
     rowSource?: RowSource;
     scroll?: ScrollModel;
     selectedIds?: readonly (EntryId | string)[];
+    snap?: SnapSetting;
     theme?: Theme;
     todayLine?: boolean | InstantInput;
     todayLineMarginTicks?: number;
@@ -1674,6 +1677,9 @@ export interface Size {
     readonly width: number;
 }
 
+// @public
+export type SnapSetting = TickStep | 'tick' | 'none';
+
 // @public (undocumented)
 export type StoreName = 'entries' | PluginStoreName;
 
@@ -1875,11 +1881,7 @@ export interface ViewPreset {
     id: string;
     minTickWidthPx?: number;
     preferredTickWidthPx: number;
-    // (undocumented)
-    snap?: {
-        unit: TimeUnit;
-        increment: number;
-    } | 'tick' | 'none';
+    snap?: SnapSetting;
     // (undocumented)
     tickIncrement: number;
     // (undocumented)
