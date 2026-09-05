@@ -9,9 +9,9 @@ import type { Interactions } from './capability.js';
 export interface AffordanceInputs {
   hoveredItemId: ItemId | undefined;
   selection: readonly EntryId[];
-  /** The Item the pointer last picked (#185). The sole-selection handle fallback sits on it while it
-   *  still belongs to the selected entry. */
-  pickedItemId: ItemId | undefined;
+  /** The bar the pointer picked from each selected Entry (#185). The sole-selection handle fallback
+   *  waits until this names the selected Entry. */
+  pickedItemIdByEntryId: ReadonlyMap<EntryId, ItemId>;
   /** Every Item one entry draws in the current frame (`FrameLayout.itemIdsForEntry`). The fallback
    *  asks it instead of building an Item id out of an entry id. */
   itemIdsForEntry: (id: EntryId) => readonly ItemId[];
@@ -31,7 +31,7 @@ export interface AffordanceIds {
  *  wins over the selection fallback. Only when nothing is hovered does the single selected entry, if
  *  there is exactly one, get a turn. */
 export function projectAffordances(inputs: AffordanceInputs): AffordanceIds {
-  const { hoveredItemId, selection, pickedItemId, itemIdsForEntry, canGesture } = inputs;
+  const { hoveredItemId, selection, pickedItemIdByEntryId, itemIdsForEntry, canGesture } = inputs;
   const hoveredEntryId = hoveredItemId !== undefined ? entryIdOfItem(hoveredItemId) : undefined;
 
   const out: AffordanceIds = {};
@@ -45,7 +45,7 @@ export function projectAffordances(inputs: AffordanceInputs): AffordanceIds {
     hoveredItemId,
     hoveredEntryId,
     selection,
-    pickedItemId,
+    pickedItemIdByEntryId,
     itemIdsForEntry,
     canGesture,
   });
@@ -61,18 +61,18 @@ function resolveResizableEntryId(inputs: {
   hoveredItemId: ItemId | undefined;
   hoveredEntryId: EntryId | undefined;
   selection: readonly EntryId[];
-  pickedItemId: ItemId | undefined;
+  pickedItemIdByEntryId: ReadonlyMap<EntryId, ItemId>;
   itemIdsForEntry: (id: EntryId) => readonly ItemId[];
   canGesture: (capability: keyof Interactions, id: EntryId) => boolean;
 }): EntryId | undefined {
-  const { hoveredItemId, hoveredEntryId, selection, pickedItemId, itemIdsForEntry, canGesture } = inputs;
+  const { hoveredItemId, hoveredEntryId, selection, pickedItemIdByEntryId, itemIdsForEntry, canGesture } =
+    inputs;
   if (hoveredItemId !== undefined) {
     return hoveredEntryId !== undefined && canGesture('resize', hoveredEntryId) ? hoveredEntryId : undefined;
   }
   if (selection.length !== 1) return undefined;
   const soleId = selection[0]!;
   if (!canGesture('resize', soleId)) return undefined;
-  const drawn = itemIdsForEntry(soleId);
-  if (pickedItemId !== undefined && drawn.includes(pickedItemId)) return soleId;
-  return drawn.length === 1 ? soleId : undefined;
+  if (pickedItemIdByEntryId.has(soleId)) return soleId;
+  return itemIdsForEntry(soleId).length === 1 ? soleId : undefined;
 }

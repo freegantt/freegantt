@@ -158,8 +158,13 @@ export function attachEntryGestures(
     // landed on something no gesture may select, which writes nothing and clears nothing.
     const targets = selectableEntriesOf(hit);
     if (targets.length === 0) return;
+    // #185: the bar the pointer landed on, so the paint can narrow to it. A row hit names a row, not
+    // a bar, and its Entries paint whole.
+    const picked = hit.kind === 'bar' ? hit.itemId : undefined;
 
     if (e.shiftKey) {
+      // A range spans whole Entries, so it picks no bar: narrowing the one bar the range ended on
+      // while its neighbours paint whole would read as two kinds of selection at once.
       const next = selectRange(targets);
       if (next.length > 0) ctx.selection.propose(next);
       return;
@@ -168,11 +173,11 @@ export function attachEntryGestures(
     anchor = targets[0];
 
     if (e.ctrlKey || e.metaKey) {
-      ctx.selection.propose(toggled(targets));
+      ctx.selection.propose(toggled(targets), picked);
       return;
     }
 
-    ctx.selection.propose(targets, hit.kind === 'bar' ? hit.itemId : undefined);
+    ctx.selection.propose(targets, picked);
   }
 
   /** True when the hit stands for nothing the Dataset still holds — a stale Item id, which is the
