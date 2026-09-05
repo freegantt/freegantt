@@ -1,7 +1,7 @@
 # Fix plan — S5 extensibility branch review
 
 **Source review:** [`2026-09-04-s5-extensibility-branch.html`](./2026-09-04-s5-extensibility-branch.html) — FreeGantt, 2026-09-04, branch `s5-start` against `main`, steps S5.0–S5.9 landed.
-**Slice:** S5 ([`plans/s5-extensibility-and-editing/README.md`](../s5-extensibility-and-editing/README.md)) · **Status:** open — R1, R2, R3 and R4 landed; R5–R7 open.
+**Slice:** S5 ([`plans/s5-extensibility-and-editing/README.md`](../s5-extensibility-and-editing/README.md)) · **Status:** open — R1–R6 landed; R7 open.
 **Gate state at review time:** every gate passed. Each finding below is a quality, design or API-shape call. No tool catches them.
 
 > ## Delete the review when this plan closes
@@ -334,11 +334,20 @@ Files: `src/view/renderer-registry.ts`, `src/layout/items/produce-items.ts`, `sr
       `dom-contract.ts`, eleven in `gantt-dom.ts`, five in `plugin-ports.ts` and eight in
       `context-menu.ts`. Every decision id, issue number, invariant and "what broke without it"
       survives, including B1's two-Gantt scope and B2's rebuilt-context no-op.
-- [ ] **ST1 — the comment pass.** This is the branch's one hard standards breach.
+- [x] **ST1 — the comment pass.** This is the branch's one hard standards breach.
       `CLAUDE.md` allows 20 words for an instruction and 25 for a description. One instruction per sentence.
       Split the long sentences in `src/api/plugin.ts`, `src/extensions/features/*.ts` and
       `src/view/gantt-shell.ts`. Keep every design rationale. Only the sentence shape changes.
       Do this pass **after** R2 and R3, so you do not reformat comments those slices delete.
+      174 sentences over the 25-word ceiling became **zero**, across all fourteen files in scope:
+      `gantt-shell.ts` 73, `api/plugin.ts` 28, `inline-editing.ts` 25, `gantt-dom.ts` 11,
+      `context-menu.ts` 8, `date-input.ts` 7, `plugin-ports.ts` 5, `menu-view.ts` 3, `tooltips.ts` 3,
+      `dom-contract.ts` 1, and 11 across the four `.test.ts` files.
+      Sentence shape only: a code-stripping diff of all fourteen files reports no code change, and a
+      token count says every decision id, issue number, invariant and review tag survives unchanged.
+      One content fix rode along, called out in its own commit body: `api/plugin.ts` carried two
+      stacked `/** */` blocks over `PluginContextOf`, and only the second reached tooling. They are
+      one block now. `pnpm api-report` is unmoved — the report holds signatures, not doc prose.
 - [x] **P5 — group `GanttShellOptions`' wiring.** Thirty-four members mix configuration, layer wiring
       and test seams. Seven members carry the same "omitted only by tests" comment.
       Add one required `wiring` member holding the seven always-supplied seams.
