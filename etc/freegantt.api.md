@@ -164,7 +164,7 @@ export interface CommandTarget {
     // (undocumented)
     columnKey?: FieldKey;
     // (undocumented)
-    kind: 'row' | 'cell' | 'bar' | 'header' | 'splitter';
+    kind: TargetKind;
     // (undocumented)
     rowId?: EntryId;
 }
@@ -197,7 +197,7 @@ export interface CoreFieldValues extends Omit<Entry, 'id'> {
 }
 
 // @public
-export function createPopup(overlay: Overlay, keymap: KeyHandlerRegistrar): Popup;
+export function createPopup(view: PopupSurface, keymap: KeyHandlerRegistrar): Popup;
 
 // @public
 export interface CustomRow {
@@ -365,7 +365,7 @@ export type DecorationLayer = 'underBars' | 'overBars';
 // @public (undocumented)
 export type DecorationProvider = (ctx: DecorationContext) => readonly DecorationInput[];
 
-// @public (undocumented)
+// @public
 export type DismissTrigger = 'escape' | 'outsidePointer' | 'scroll' | 'blur';
 
 // @public
@@ -377,6 +377,26 @@ export class DisposableStore {
 
 // @public
 export type Disposer = () => void;
+
+// @public
+export type DomEventHandler<K extends keyof DocumentEventMap> = (event: DocumentEventMap[K], target: DomTarget | undefined) => void;
+
+// @public
+export interface DomEventOptions {
+    // (undocumented)
+    capture?: boolean;
+}
+
+// @public
+export interface DomTarget {
+    element: HTMLElement;
+    // (undocumented)
+    entry?: Entry;
+    // (undocumented)
+    field?: FieldKey;
+    // (undocumented)
+    kind: TargetKind;
+}
 
 // @public
 export class DuplicateEntryIdError extends FreeGanttError {
@@ -860,6 +880,20 @@ export class Gantt {
 }
 
 // @public
+export interface GanttDom {
+    barFor(id: EntryId): HTMLElement | undefined;
+    readonly bounds: DOMRect;
+    cellFor(id: EntryId, field: FieldKey): HTMLElement | undefined;
+    cellText(cell: HTMLElement): string;
+    owns(node: Node): boolean;
+    readonly paneBounds: {
+        grid: DOMRect;
+        timeline: DOMRect;
+    };
+    targetUnder(node: Node): DomTarget | undefined;
+}
+
+// @public
 export type GanttEventHandler<K extends keyof GanttEventMap> = (payload: GanttEventMap[K]) => void | false | (K extends AsyncCancelableEvent ? Promise<void | false> : never);
 
 // @public
@@ -1190,14 +1224,7 @@ export function now(): Instant;
 
 // @public (undocumented)
 export interface Overlay {
-    readonly bounds: DOMRect;
-    contains(node: Node): boolean;
-    elementForEntry(id: EntryId): HTMLElement | undefined;
     onResize(callback: () => void): () => void;
-    readonly paneBounds: {
-        grid: DOMRect;
-        timeline: DOMRect;
-    };
     present(content: HTMLElement): OverlayHandle;
     render(description: ElementDescription): HTMLElement;
 }
@@ -1266,6 +1293,8 @@ export interface PluginContextOf<TGantt = unknown, TDataset = Dataset> {
     // (undocumented)
     view: {
         overlay: Overlay;
+        dom: GanttDom;
+        onDomEvent<K extends keyof DocumentEventMap>(type: K, handler: DomEventHandler<K>, options?: DomEventOptions): Disposer;
         registerRenderer<P extends RendererPoint>(point: P, renderer: RendererFor<P>): Disposer;
         resolveTooltipContent(entryId: EntryId): ElementDescription | undefined;
         resolveTooltipColumns(entry: Entry): readonly TooltipColumn[];
@@ -1310,11 +1339,20 @@ export interface PopupOptions {
     content: ElementDescription;
     dismissOn?: readonly DismissTrigger[];
     focus?: 'trap' | 'none';
+    onDismiss?: (trigger: DismissTrigger) => void;
     placement?: PopupPlacement;
 }
 
 // @public (undocumented)
 export type PopupPlacement = 'top' | 'bottom' | 'start' | 'end';
+
+// @public
+export interface PopupSurface {
+    // (undocumented)
+    dom: Pick<GanttDom, 'bounds' | 'paneBounds'>;
+    // (undocumented)
+    overlay: Pick<Overlay, 'present' | 'render' | 'onResize'>;
+}
 
 // @public
 export type PresetRef = ShippedPresetId | ViewPreset;
@@ -1503,6 +1541,9 @@ export interface Size {
 
 // @public (undocumented)
 export type StoreName = 'entries';
+
+// @public
+export type TargetKind = 'row' | 'cell' | 'bar' | 'header' | 'splitter';
 
 // @public
 export type Theme = 'auto' | 'light' | 'dark';

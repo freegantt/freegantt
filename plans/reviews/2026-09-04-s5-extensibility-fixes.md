@@ -1,7 +1,7 @@
 # Fix plan — S5 extensibility branch review
 
 **Source review:** [`2026-09-04-s5-extensibility-branch.html`](./2026-09-04-s5-extensibility-branch.html) — FreeGantt, 2026-09-04, branch `s5-start` against `main`, steps S5.0–S5.9 landed.
-**Slice:** S5 ([`plans/s5-extensibility-and-editing/README.md`](../s5-extensibility-and-editing/README.md)) · **Status:** open — R1 and R2 landed; R3–R7 open.
+**Slice:** S5 ([`plans/s5-extensibility-and-editing/README.md`](../s5-extensibility-and-editing/README.md)) · **Status:** open — R1, R2 and R3 landed; R4–R7 open.
 **Gate state at review time:** every gate passed. Each finding below is a quality, design or API-shape call. No tool catches them.
 
 > ## Delete the review when this plan closes
@@ -182,34 +182,56 @@ and `contextMenu()` holds no `isOpen` poll.
 Files: `src/view/overlay.ts`, `src/view/plugin-ports.ts`, `src/extensions/features/*.ts`,
 `src/extensions/popup.ts`, `src/api/plugin.ts`, `harness/main.ts`, `harness/plugins.ts`.
 
-- [ ] **N1 — split `Overlay`, do not rename it.** Keep `Overlay` as `{ present, render }`.
-      That is the mount layer, and the name is then honest.
-      Move `contains`, `elementForEntry`, `bounds` and `paneBounds` to a second member, `ctx.view.dom`.
-- [ ] **A3 — add the resolver.** `ctx.view.dom` gains `targetUnder(node)`.
-      It returns `{ entry?, field?, kind } | undefined`.
-      Reuse `render/dom`'s own `hitTest` walk. Reuse `CommandTarget`'s vocabulary:
-      `'row' | 'cell' | 'bar' | 'header' | 'splitter'`.
-      Add `owns(node)` and `barFor(entryId)` so the call sites read as questions.
-- [ ] **A3 — delete the string literals.** `tooltips()`, `contextMenu()` and `inlineEditing()` stop
-      naming `.fg-*` classes and `data-*` keys. `bar-under.ts` folds into the new seam.
-      `stillAnchored` and `overlay.contains` become one answer, not two.
-- [ ] **A3 test.** Assert `render/dom` still emits what `targetUnder` reads.
-      That test is the versioned contract the review says is missing today.
-- [ ] **A4 — add `ctx.view.onDomEvent(type, handler, opts)`.** It listens on `document`.
-      It filters to this Gantt. It registers its own removal in `ctx.disposables`.
-      The handler receives the resolved target, not a raw node.
-- [ ] **A4 — convert the twelve listeners.** Twelve add/remove pairs and four hand-written guards go.
-      Add a two-Gantt test: one Gantt's plugin must not answer the other Gantt's events (I2).
-- [ ] **C3 — `PopupOptions` gains `onDismiss?: (trigger: DismissTrigger) => void`.**
-      A self-dismiss then tells its owner. `createPopup` is public, so every plugin author gets this.
-- [ ] **C3 — drop `contextMenu()`'s `isOpen` polls.** Detach the document listeners on dismiss.
-- [ ] **H2 — the harness stops guessing.** Both popup demos use `ctx.view.dom.barFor(entryId)`.
-      Delete the `#gantt .fg-bar[data-item-id="…"]` selector from `harness/main.ts` and `harness/plugins.ts`.
-- [ ] Update `CONTEXT.md` with `ctx.view.dom`, `targetUnder` and `DismissTrigger`.
+- [x] **N1 — split `Overlay`, do not rename it.** `Overlay` keeps `present`, `render` and `onResize`.
+      `contains`, `elementForEntry`, `bounds` and `paneBounds` moved to `ctx.view.dom`
+      (`view/gantt-dom.ts`'s `GanttDom`, built per Gantt by `ContainerDom`). `contains` reads
+      `owns(node)` there and `elementForEntry` reads `barFor(id)` — both were false sentences on an
+      overlay. `createPopup(ctx.view, keymap)` takes the whole view surface now, because a popup
+      mounts in one member and places against the other.
+- [x] **A3 — add the resolver.** `ctx.view.dom.targetUnder(node)` answers
+      `{ kind, element, entry?, field? }`. `kind` is `model/`'s new `TargetKind`, which
+      `CommandTarget.kind` now names too — one union, not two spellings of five words. `owns(node)`,
+      `barFor(id)` and `cellFor(id, field)` sit beside it, plus `cellText(cell)` for the string the
+      grid already painted. `contextMenu()` fills `CommandContext.target` from the resolved target,
+      which it never filled before.
+- [x] **A3 — delete the string literals.** `render/dom/dom-contract.ts` declares every class and
+      `data-*` key that crosses the layer boundary, and `render/dom/index.ts` paints from it.
+      `bar-under.ts` is deleted. `tooltips()`, `contextMenu()` and `inlineEditing()` read no `.fg-*`
+      selector and no `data-*` key of the rendered Gantt. `stillAnchored()` is
+      `dom.cellFor(entryId, field) !== undefined`, so "is this mine?" has one answer.
+      A plugin's own classes (`.fg-tooltip`, `.fg-menu`, `.fg-cell-editor`, `.fg-popup`) stay — they
+      are what the plugin *writes*, styled by `view/styles.ts`, not what it reads back.
+- [x] **A3 test.** `src/view/gantt-dom.test.ts` paints a real frame through `createDomBackend` into a
+      real `PaneLayout`, then asserts `targetUnder` still resolves each of the five kinds, and that
+      `barFor`/`cellFor` stay inside their own Gantt.
+- [x] **A4 — add `ctx.view.onDomEvent(type, handler, opts)`.** It listens on `document`, keeps only
+      what `dom.owns` answers for, hands the handler the resolved target, and files its own removal —
+      capture flag included — in `ctx.disposables`.
+- [x] **A4 — convert the twelve listeners.** Eleven, not twelve: `extensions/` held eleven
+      `document.addEventListener` calls, and the review counted one twice. Nine converted (four in
+      `tooltips()`, three in `contextMenu()`, two in `inlineEditing()`). `extensions/popup.ts` keeps
+      its two: a dismiss-on-outside-pointer listener exists to hear events *outside* this Gantt, so
+      scoping it would break it. `inlineEditing()`'s `scroll` listener was the one with no guard at
+      all. `plugin-ports.test.ts` adds the two-Gantt test (I2).
+- [x] **C3 — `PopupOptions` gains `onDismiss?: (trigger: DismissTrigger) => void`.**
+      It runs after the close, so `isOpen` reads `false` inside it. An owner's own `close()` never
+      fires it.
+- [x] **C3 — drop `contextMenu()`'s `isOpen` polls.** The two listeners live in a per-menu
+      `DisposableStore` that `onDismiss` empties. A test spies on `document.removeEventListener` and
+      asserts both come off on an Escape dismissal.
+- [x] **H2 — the harness stops guessing.** Both popup demos stash `{ popup, dom }` out of `setup()`
+      and call `ctx.view.dom.barFor(selected)`. Two harness-owned classes squatting the library's
+      prefix went with them: `fg-mobilization-line` and `fg-toolbar` are `demo-*` now.
+- [x] Update `CONTEXT.md` with `ctx.view.dom`, `targetUnder` and `DismissTrigger`.
       Update `plans/01` §10 and `plans/02` §4. Run `pnpm api-report`.
+      `CONTEXT.md` gains **Gantt DOM**, **DOM target**, **Scoped DOM listener** and **Dismiss
+      trigger**, and rewrites **Overlay** and **Popup**. `plans/02` gains §4.5.
 
 **Verify:** `pnpm gate`, `pnpm test:e2e`. Then `grep -rn "fg-" src/extensions harness --include=*.ts`
-returns nothing outside tests.
+returns only classes a plugin *writes* (`.fg-popup`, `.fg-tooltip*`, `.fg-menu*`, `.fg-cell-editor*`,
+each named once, in the file that writes it), the public `--fg-bar-fill` custom property the harness
+sets, and comments. No plugin and no harness page *reads* a `.fg-*` selector or a `data-*` key of the
+rendered Gantt. That read side was the finding; the write side is a plugin's own output.
 
 ---
 

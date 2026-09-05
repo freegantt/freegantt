@@ -22,6 +22,11 @@ const SPLITTER_WIDTH_POLICY = { fallback: 4, accepts: 'positive' } as const;
  *  accident. A consumer who wants the old no-floor behaviour passes `minGridWidth: 0`. */
 const DEFAULT_MIN_GRID_WIDTH = 40;
 
+/** The one class this layout writes that another layer reads back — `view/gantt-dom.ts` resolves a
+ *  node over it to a `'splitter'` target, the same way `render/dom/dom-contract.ts` declares the
+ *  classes that backend emits (review A3). */
+export const SPLITTER_CLASS = 'fg-splitter';
+
 export interface PaneLayoutOptions {
   container: HTMLElement;
   /** Initial grid pane width in px. Default: `--fg-grid-pane-width`, fallback 160. */
@@ -109,7 +114,7 @@ export class PaneLayout {
     this.#gridPane.append(this.#spacer, rowClip);
 
     const splitter = document.createElement('div');
-    splitter.className = 'fg-splitter';
+    splitter.className = SPLITTER_CLASS;
     splitter.style.width = `${splitterWidth}px`;
 
     const timelinePane = document.createElement('div');
@@ -171,13 +176,13 @@ export class PaneLayout {
     return this.#spacer.offsetHeight;
   }
 
-  /** `Overlay.bounds` (S5.3, D-S5-8): the container's own client rect, the outer clamp a popup
+  /** `GanttDom.bounds` (S5.3, D-S5-8): the container's own client rect, the outer clamp a popup
    *  anchored outside both panes still clamps to. */
   bounds(): DOMRect {
     return this.#container.getBoundingClientRect();
   }
 
-  /** `Overlay.paneBounds` (S5.3, D-S5-8, issue #137 F8): the grid pane's own client rect — not
+  /** `GanttDom.paneBounds` (S5.3, D-S5-8, issue #137 F8): the grid pane's own client rect — not
    *  `panes.grid`, which is the row layer moved by transform every frame and would report a stale or
    *  scrolled-away box — alongside the timeline pane's. */
   paneBounds(): { grid: DOMRect; timeline: DOMRect } {

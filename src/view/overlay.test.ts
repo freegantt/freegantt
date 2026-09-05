@@ -8,10 +8,6 @@ function el(): HTMLElement {
   return node;
 }
 
-function rect(partial: Partial<DOMRect>): DOMRect {
-  return { top: 0, left: 0, right: 0, bottom: 0, width: 0, height: 0, x: 0, y: 0, toJSON() {}, ...partial };
-}
-
 // happy-dom does no layout (pane-size-attachment.test.ts's own reasoning) — this fake mirrors that
 // file's ResizeObserverCtor test seam so DomOverlay's own onResize can be driven synchronously.
 type ResizeObserverCallback = ConstructorParameters<typeof ResizeObserver>[0];
@@ -38,7 +34,7 @@ describe('DomOverlay', () => {
   it('present() mounts above both panes and the handle removes the node', () => {
     const container = el();
     const paneLayout = new PaneLayout({ container });
-    const overlay = new DomOverlay(container, paneLayout.panes.overlay, paneLayout);
+    const overlay = new DomOverlay(container, paneLayout.panes.overlay);
 
     const node = document.createElement('div');
     const handle = overlay.present(node);
@@ -54,7 +50,7 @@ describe('DomOverlay', () => {
   it('destroy() clears the layer', () => {
     const container = el();
     const paneLayout = new PaneLayout({ container });
-    const overlay = new DomOverlay(container, paneLayout.panes.overlay, paneLayout);
+    const overlay = new DomOverlay(container, paneLayout.panes.overlay);
     overlay.present(document.createElement('div'));
 
     paneLayout.destroy();
@@ -62,25 +58,10 @@ describe('DomOverlay', () => {
     overlay.destroy();
   });
 
-  it('paneBounds reports the grid and timeline pane rects independently (issue #137 F8)', () => {
-    const container = el();
-    const paneLayout = new PaneLayout({ container });
-    const overlay = new DomOverlay(container, paneLayout.panes.overlay, paneLayout);
-
-    const gridPane = container.querySelector<HTMLElement>('.fg-grid-pane')!;
-    gridPane.getBoundingClientRect = () =>
-      rect({ left: 0, right: 160, top: 0, bottom: 400, width: 160, height: 400 });
-    paneLayout.panes.timeline.getBoundingClientRect = () =>
-      rect({ left: 160, right: 960, top: 0, bottom: 400, width: 800, height: 400 });
-
-    expect(overlay.paneBounds.grid.right).toBe(160);
-    expect(overlay.paneBounds.timeline.left).toBe(160);
-  });
-
   it('render() builds a live node from an ElementDescription through the reconciler (I13)', () => {
     const container = el();
     const paneLayout = new PaneLayout({ container });
-    const overlay = new DomOverlay(container, paneLayout.panes.overlay, paneLayout);
+    const overlay = new DomOverlay(container, paneLayout.panes.overlay);
 
     const node = overlay.render({ text: '<script>alert(1)</script>' });
     expect(node.textContent).toBe('<script>alert(1)</script>');
@@ -94,7 +75,6 @@ describe('DomOverlay', () => {
     const overlay = new DomOverlay(
       container,
       paneLayout.panes.overlay,
-      paneLayout,
       FakeResizeObserver as unknown as typeof ResizeObserver,
     );
 

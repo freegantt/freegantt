@@ -26,7 +26,7 @@ export function mountTimelineToolbar(options: TimelineToolbarOptions): void {
   const { gantt, container, showFit = false, showLocale = false, showTodayLineToggle = false } = options;
 
   const bar = document.createElement('div');
-  bar.className = 'fg-toolbar';
+  bar.className = 'demo-toolbar';
 
   const zoomOutBtn = document.createElement('button');
   zoomOutBtn.type = 'button';

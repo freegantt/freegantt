@@ -42,6 +42,7 @@ import { readPixelProperty } from '../render/dom/pixel-property.js';
 import { PaneLayout } from './pane-layout.js';
 import type { Panes } from './pane-layout.js';
 import { DomOverlay } from './overlay.js';
+import { ContainerDom } from './gantt-dom.js';
 import { attachSplitter } from './splitter.js';
 import type { SplitterAttachment } from './splitter.js';
 import { EventBus } from './event-bus.js';
@@ -458,6 +459,9 @@ export class GanttShell {
   /** S5.3, D-S5-8: constructed once panes exist — see the plugin runtime's own comment just below for
    *  why. */
   #overlay: DomOverlay;
+  /** Review N1/A3: this Gantt's own rendered DOM, as questions a plugin asks through `ctx.view.dom`.
+   *  Constructed beside the overlay, and for the same reason. */
+  #dom: ContainerDom;
 
   constructor(options: GanttShellOptions) {
     this.#options = options;
@@ -477,7 +481,10 @@ export class GanttShell {
     this.#panes = this.#paneLayout.panes;
     // S5.3, D-S5-8: constructed right after the panes it measures, so it is ready by the time the
     // plugin runtime (just below) builds its first `PluginContext`.
-    this.#overlay = new DomOverlay(this.#container, this.#panes.overlay, this.#paneLayout);
+    this.#overlay = new DomOverlay(this.#container, this.#panes.overlay);
+    this.#dom = new ContainerDom(this.#container, this.#paneLayout, (id) =>
+      this.#options.dataset.entries.get(id),
+    );
 
     const hasOwnOptions =
       options.preset !== undefined || options.range !== undefined || options.fit !== undefined;
@@ -1122,6 +1129,7 @@ export class GanttShell {
     return {
       events: this.#pluginEvents,
       overlay: this.#overlay,
+      dom: this.#dom,
       commands: this.#commandRegistry,
       keymap: this.#keymap,
       registerRenderer: (point, renderer, pluginId) =>

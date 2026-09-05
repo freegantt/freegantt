@@ -600,9 +600,12 @@ describe('CellEditorSession (S5.8, review A5/C2b)', () => {
             },
           };
         },
-        bounds: rectAt(0, 0, 0, 0),
         onResize: () => () => {},
       },
+      // Review A3: the session asks one seam where its cell is now, so the fake answers with the
+      // cell this test built — while that cell is still in the document. A real Gantt answers from
+      // the current frame, and stops answering once virtualization takes the row away.
+      dom: { bounds: rectAt(0, 0, 0, 0), cellFor: () => (cell.isConnected ? cell : undefined) },
       bindEscape: () => () => {},
       entryById: () => entry,
       storedValue: () => 'Task One',
@@ -612,7 +615,7 @@ describe('CellEditorSession (S5.8, review A5/C2b)', () => {
       requestRevert: () => {},
       ...overrides,
     };
-    const session = new CellEditorSession(ports, { entryId: entryId('e1'), field: 'name', row }, control);
+    const session = new CellEditorSession(ports, { entryId: entryId('e1'), field: 'name' }, control);
     session.mount(cell);
     return { session, row, cell };
   }
@@ -685,7 +688,7 @@ describe('CellEditorSession (S5.8, review A5/C2b)', () => {
     expect(writes).toEqual(['Renamed']);
   });
 
-  it('stillAnchored() goes false once the row leaves the frame', () => {
+  it('stillAnchored() goes false once the cell leaves the frame (review A3: one answer, not two)', () => {
     const { session, row } = mountSession();
     expect(session.stillAnchored()).toBe(true);
 

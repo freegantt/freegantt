@@ -2,16 +2,18 @@
 // absolutely positioned element over the container, its stacking order and its lifetime. It knows
 // nothing about tooltips, menus or Popup's own placement math — that stays in `extensions/popup.ts`,
 // which builds the same thing a third party would, over this seam alone.
+//
+// Review N1: this is the mount layer, and nothing else. `contains`, `bounds`, `paneBounds` and
+// `elementForEntry` moved to `view/gantt-dom.ts`. They answer for the whole container, and two of
+// them return timeline nodes that never sit in the overlay. `overlay.elementForEntry(id)` read as a
+// false sentence, which is the #7 failure. The word stays; the second concept left.
 
 import { buildElement } from '../render/dom/element-description.js';
 import type { ElementDescription } from '../layout/index.js';
-import type { PaneLayout } from './pane-layout.js';
-import { itemId } from '../model/index.js';
-import type { EntryId } from '../model/index.js';
 
 export interface OverlayHandle {
-  /** Removes the presented content and frees nothing else — the overlay's own layer, bounds and resize
-   *  subscription all outlive any one presentation. */
+  /** Removes the presented content and frees nothing else — the overlay's own layer and resize
+   *  subscription both outlive any one presentation. */
   detach(): void;
 }
 
@@ -22,30 +24,10 @@ export interface Overlay {
    *  `extensions/` has to the reconciler (D-S5-5: it may not import `render/dom` itself). Never
    *  `innerHTML`d except the description's own explicit `html` opt-in (I13). */
   render(description: ElementDescription): HTMLElement;
-  /** The container's own client rect — the outer clamp, so a popup never spills past the Gantt
-   *  entirely. */
-  readonly bounds: DOMRect;
-  /**
-   * The grid pane's and timeline pane's own client rects (issue #137 F8). The container spans both
-   * panes, so `bounds` alone cannot flip a popup at a pane edge — placement flips and clamps against
-   * the anchor's own pane rect; `bounds` remains the outer clamp for a popup whose anchor is not
-   * inside either pane (a toolbar button, say).
-   */
-  readonly paneBounds: { grid: DOMRect; timeline: DOMRect };
-  /** Notifies on every container resize the overlay observes (issue #137 F9) — an open `Popup` rereads
-   *  `bounds`/`paneBounds` and repositions itself. Returns an unsubscribe function. */
+  /** Notifies on every container resize the overlay observes (issue #137 F9). An open `Popup`
+   *  rereads `ctx.view.dom`'s `bounds`/`paneBounds` and repositions itself. Returns an unsubscribe
+   *  function. */
   onResize(callback: () => void): () => void;
-  /** S5.5 (API gap, `s5.5-tooltips-and-context-menu.md` §5): the rendered bar element for `id`'s
-   *  primary segment (segment 0), scoped to this Gantt's own container (I2: never reaches past it) —
-   *  `undefined` when that entry has no bar in the current frame (scrolled out of the virtualized
-   *  viewport, or the entry has no bar at all). `contextMenu()`'s keyboard opener uses this to anchor
-   *  at "the focused row" (D-S5-13) with no pointer event to read a target from. */
-  elementForEntry(id: EntryId): HTMLElement | undefined;
-  /** I2: whether `node` sits inside this Gantt's own container. The seam a document-level listener
-   *  (`contextMenu()`'s `contextmenu`, `tooltips()`'s `pointerover`/`focusin`) needs to tell "this
-   *  Gantt's own bar" from "some other widget, or a second Gantt, that happens to share the page" —
-   *  closing the gap two independent Gantts otherwise fall into (bug hunt B1). */
-  contains(node: Node): boolean;
 }
 
 /** Test seam, the same shape `attachPaneSize`'s own `ResizeObserverCtor` parameter already uses:
@@ -54,7 +36,6 @@ export interface Overlay {
 export class DomOverlay implements Overlay {
   #container: HTMLElement;
   #layer: HTMLElement;
-  #paneLayout: PaneLayout;
   #resizeListeners = new Set<() => void>();
   #observer: ResizeObserver | undefined;
   #ResizeObserverCtor: typeof ResizeObserver;
@@ -62,12 +43,10 @@ export class DomOverlay implements Overlay {
   constructor(
     container: HTMLElement,
     layer: HTMLElement,
-    paneLayout: PaneLayout,
     ResizeObserverCtor: typeof ResizeObserver = ResizeObserver,
   ) {
     this.#container = container;
     this.#layer = layer;
-    this.#paneLayout = paneLayout;
     this.#ResizeObserverCtor = ResizeObserverCtor;
   }
 
@@ -82,14 +61,6 @@ export class DomOverlay implements Overlay {
 
   render(description: ElementDescription): HTMLElement {
     return buildElement(description);
-  }
-
-  get bounds(): DOMRect {
-    return this.#paneLayout.bounds();
-  }
-
-  get paneBounds(): { grid: DOMRect; timeline: DOMRect } {
-    return this.#paneLayout.paneBounds();
   }
 
   /** Observes lazily — only while at least one `Popup` is actually open. A Gantt that never opens
@@ -110,16 +81,6 @@ export class DomOverlay implements Overlay {
         this.#observer = undefined;
       }
     };
-  }
-
-  elementForEntry(id: EntryId): HTMLElement | undefined {
-    const want = itemId(id, 0);
-    const bars = Array.from(this.#container.querySelectorAll<HTMLElement>('[data-item-id]'));
-    return bars.find((bar) => bar.dataset['itemId'] === want);
-  }
-
-  contains(node: Node): boolean {
-    return this.#container.contains(node);
   }
 
   /** `GanttShell.destroy()`'s own call — stops observing; the layer itself is torn down with the

@@ -1,13 +1,14 @@
 // extensions/ — the anchoring, flipping, clamping and dismissal primitive (S5.3, D-S5-8/D-S5-9). One
 // implementation serves the tooltip, the context menu and the cell editor (S5.5+) — three positioners
-// would be three sets of edge-case bugs. Built on `Overlay` alone (`ctx.view.overlay`), the same
-// seam a third-party plugin reaches — no back door into `view/` or `render/` (D-S5-5).
+// would be three sets of edge-case bugs. Built on `ctx.view` alone — the overlay layer it mounts in
+// and the rects `ctx.view.dom` measures — the same seam a third-party plugin reaches, with no back
+// door into `view/` or `render/` (D-S5-5).
 
 import type { ElementDescription } from '../model/index.js';
 // `../api/plugin.js` directly, not the `api/index.js` barrel: `api/index.ts` re-exports
 // `createPopup` from this very file (D-S5-8's "a third party reaches the same primitive we do"), and
 // importing the barrel back would close that edge into a cycle (no-circular).
-import type { Overlay, OverlayHandle } from '../api/plugin.js';
+import type { GanttDom, Overlay, OverlayHandle } from '../api/plugin.js';
 import { activateFocusTrap } from './focus-trap.js';
 import type { FocusTrap } from './focus-trap.js';
 import { DisposableStore } from './disposables.js';
@@ -16,11 +17,21 @@ import { DisposableStore } from './disposables.js';
 // `plans/reviews/2026-09-02-s5-start-fixes.md`). The narrow structural type, not the concrete
 // `Keymap` class: a third-party plugin has no `Keymap` instance, only the one bound method
 // `ctx.interaction.registerKeyHandler` gives it, so requiring the whole class here would make
-// `createPopup` uncallable from `ctx.view.overlay` alone (D-S5-8).
+// `createPopup` uncallable from `ctx.view` alone (D-S5-8).
 import type { KeyHandlerRegistrar } from './keymap.js';
 
 export type PopupPlacement = 'top' | 'bottom' | 'start' | 'end';
+/** Why a popup closed itself. `close()` called by the owner is not one of these — the owner already
+ *  knows. */
 export type DismissTrigger = 'escape' | 'outsidePointer' | 'scroll' | 'blur';
+
+/** The two view seams a `Popup` needs: the layer it mounts in, and the rects it places against
+ *  (review N1 moved `bounds`/`paneBounds` off `Overlay` onto `GanttDom`). A plugin passes
+ *  `ctx.view`; the narrow `Pick`s keep a test's fake to what this file actually reads. */
+export interface PopupSurface {
+  overlay: Pick<Overlay, 'present' | 'render' | 'onResize'>;
+  dom: Pick<GanttDom, 'bounds' | 'paneBounds'>;
+}
 
 /** A client rect, or an element to read one from. */
 export type Anchor = DOMRect | HTMLElement;
@@ -38,6 +49,11 @@ export interface PopupOptions {
   /** Default `['escape', 'outsidePointer', 'scroll']`. */
   dismissOn?: readonly DismissTrigger[];
   content: ElementDescription;
+  /** Review C3: the popup closed itself, and this says why. It runs after the popup is already
+   *  closed, so `isOpen` reads `false` inside it. An owner detaches its own listeners here instead
+   *  of guarding every one of them on `isOpen` for the rest of the page's life. `close()` called by
+   *  the owner never fires this — the owner already knows. */
+  onDismiss?: (trigger: DismissTrigger) => void;
 }
 
 export interface Popup {
@@ -57,7 +73,7 @@ type PaneName = 'grid' | 'timeline';
 /** Which of the two panes `rect` sits in — geometric, not a class-name sniff, since neither `Anchor`
  *  nor a scroll event's target is guaranteed to carry one (D-S5-8: "bounds remains the outer clamp
  *  for a popup whose anchor is not inside either pane"). `undefined` means neither pane. */
-function paneNameFor(rect: DOMRect, paneBounds: Overlay['paneBounds']): PaneName | undefined {
+function paneNameFor(rect: DOMRect, paneBounds: GanttDom['paneBounds']): PaneName | undefined {
   const cx = rect.left + rect.width / 2;
   const cy = rect.top + rect.height / 2;
   const inside = (r: DOMRect): boolean => cx >= r.left && cx <= r.right && cy >= r.top && cy <= r.bottom;
@@ -68,7 +84,7 @@ function paneNameFor(rect: DOMRect, paneBounds: Overlay['paneBounds']): PaneName
 
 /** Which of the two pane rects `anchor` sits in — falls back to the outer `bounds` clamp when
  *  `anchor` sits in neither pane. */
-function paneRectFor(rect: DOMRect, paneBounds: Overlay['paneBounds'], bounds: DOMRect): DOMRect {
+function paneRectFor(rect: DOMRect, paneBounds: GanttDom['paneBounds'], bounds: DOMRect): DOMRect {
   const name = paneNameFor(rect, paneBounds);
   return name ? paneBounds[name] : bounds;
 }
@@ -121,14 +137,15 @@ function clamp(side: PopupPlacement, box: Box, size: { width: number; height: nu
   return { ...box, top: Math.min(Math.max(box.top, pane.top), maxTop) };
 }
 
-/** `Popup`'s one implementation (D-S5-8). `overlay` and `keymap` are the only things this reaches
+/** `Popup`'s one implementation (D-S5-8). `view` and `keymap` are the only things this reaches
  *  past plain DOM APIs. Escape folds into `keymap` (C3, `plans/reviews/2026-09-02-s5-start-fixes.md`)
  *  instead of a bespoke document-capture listener + per-`Overlay` `WeakMap` LIFO stack: `Keymap`
  *  already resolves newest-registration-first (D-S5-7), so a popup registering its Escape handler on
  *  `open()` and unregistering it on `close()` gets "innermost open thing wins" (D-S5-9) for free, and
  *  the shared `isEditableTarget` gate (S5.2, issue #137 F7) restores the IME-composition rule this
  *  primitive was missing — a lone document listener with no gate closed a popup mid-IME-cancel too. */
-export function createPopup(overlay: Overlay, keymap: KeyHandlerRegistrar): Popup {
+export function createPopup(view: PopupSurface, keymap: KeyHandlerRegistrar): Popup {
+  const { overlay, dom } = view;
   let wrapper: HTMLElement | undefined;
   let handle: OverlayHandle | undefined;
   let focusTrap: FocusTrap | undefined;
@@ -150,11 +167,19 @@ export function createPopup(overlay: Overlay, keymap: KeyHandlerRegistrar): Popu
     currentOptions = undefined;
   };
 
+  /** Review C3: the popup closed itself, so it says so. Reading `onDismiss` before `close()` matters
+   *  — `close()` drops `currentOptions`, and the callback belongs to the popup that just closed. */
+  const dismiss = (trigger: DismissTrigger): void => {
+    const onDismiss = currentOptions?.onDismiss;
+    close();
+    onDismiss?.(trigger);
+  };
+
   const reposition = (): void => {
     if (!wrapper || !currentOptions) return;
     const anchor = anchorRect(currentOptions.anchor);
     const size = { width: wrapper.offsetWidth, height: wrapper.offsetHeight };
-    const pane = paneRectFor(anchor, overlay.paneBounds, overlay.bounds);
+    const pane = paneRectFor(anchor, dom.paneBounds, dom.bounds);
     const requested = currentOptions.placement ?? 'bottom';
     let box = placeAt(requested, anchor, size);
     let side = requested;
@@ -167,7 +192,8 @@ export function createPopup(overlay: Overlay, keymap: KeyHandlerRegistrar): Popu
       }
     }
     box = clamp(side, box, size, pane);
-    wrapper.style.transform = `translate(${(box.left - overlay.bounds.left).toFixed(2)}px, ${(box.top - overlay.bounds.top).toFixed(2)}px)`;
+    const origin = dom.bounds;
+    wrapper.style.transform = `translate(${(box.left - origin.left).toFixed(2)}px, ${(box.top - origin.top).toFixed(2)}px)`;
   };
 
   return {
@@ -195,7 +221,7 @@ export function createPopup(overlay: Overlay, keymap: KeyHandlerRegistrar): Popu
             'Escape',
             (event) => {
               event.stopPropagation();
-              close();
+              dismiss('escape');
             },
             { captureInEditable: true },
           ),
@@ -207,7 +233,7 @@ export function createPopup(overlay: Overlay, keymap: KeyHandlerRegistrar): Popu
           if (!(target instanceof Node)) return;
           if (wrapper?.contains(target)) return;
           if (options.anchor instanceof HTMLElement && options.anchor.contains(target)) return;
-          close();
+          dismiss('outsidePointer');
         };
         document.addEventListener('pointerdown', onPointerDown, true);
         disposables.add(() => document.removeEventListener('pointerdown', onPointerDown, true));
@@ -218,15 +244,15 @@ export function createPopup(overlay: Overlay, keymap: KeyHandlerRegistrar): Popu
         // popup anchored in the timeline pane stays open while the grid pane scrolls, and vice versa.
         // An anchor sitting in neither pane (a toolbar button, say) has no pane to scope to, so any
         // scroll still dismisses it — the same fallback `paneRectFor` gives the outer `bounds` clamp.
-        const anchorPane = paneNameFor(anchorRect(options.anchor), overlay.paneBounds);
+        const anchorPane = paneNameFor(anchorRect(options.anchor), dom.paneBounds);
         const onScroll = (event: Event): void => {
           const target = event.target;
           if (anchorPane === undefined) {
-            close();
+            dismiss('scroll');
             return;
           }
           if (!(target instanceof Element)) return;
-          if (paneNameFor(target.getBoundingClientRect(), overlay.paneBounds) === anchorPane) close();
+          if (paneNameFor(target.getBoundingClientRect(), dom.paneBounds) === anchorPane) dismiss('scroll');
         };
         document.addEventListener('scroll', onScroll, true);
         disposables.add(() => document.removeEventListener('scroll', onScroll, true));
@@ -235,7 +261,7 @@ export function createPopup(overlay: Overlay, keymap: KeyHandlerRegistrar): Popu
         const onFocusOut = (event: FocusEvent): void => {
           const next = event.relatedTarget;
           if (next instanceof Node && wrapper?.contains(next)) return;
-          close();
+          dismiss('blur');
         };
         node.addEventListener('focusout', onFocusOut);
         disposables.add(() => node.removeEventListener('focusout', onFocusOut));

@@ -12,7 +12,16 @@ import type { Disposer, KeyChord, PluginId } from '../model/index.js';
 import type { Dataset } from './dataset.js';
 import type { DisposableStore } from '../extensions/disposables.js';
 import type { KeyEventLike } from '../extensions/keymap.js';
-import type { EntryFieldEdit, GanttEvents, Overlay, OverlayHandle } from '../view/index.js';
+import type {
+  DomEventHandler,
+  DomEventOptions,
+  DomTarget,
+  EntryFieldEdit,
+  GanttDom,
+  GanttEvents,
+  Overlay,
+  OverlayHandle,
+} from '../view/index.js';
 import type { CommandRegistryOf, KeyBindingOf } from './command.js';
 import type { RendererPoint, RendererFor } from '../layout/index.js';
 import type { DecorationLayer, DecorationProvider } from '../layout/index.js';
@@ -40,8 +49,9 @@ export type { EntryFieldEdit };
 
 // Re-exported so `extensions/popup.ts` can import this file directly instead of the `api/index.js`
 // barrel (which itself re-exports `createPopup` from `extensions/popup.ts` — importing the barrel
-// back would close that edge into a cycle, `no-circular`).
-export type { Overlay, OverlayHandle };
+// back would close that edge into a cycle, `no-circular`). `GanttDom` travels with them: a `Popup`
+// clamps against `bounds`/`paneBounds`, which review N1 moved off `Overlay`.
+export type { GanttDom, DomTarget, Overlay, OverlayHandle };
 
 /** What a plugin's `setup()` receives, once, after the Gantt mounts. S5.1 ships `dataset`,
  *  `gantt`, `events` and `disposables` only — every other member (`commands`, `view`, `layout`,
@@ -118,6 +128,31 @@ export interface PluginContextOf<TGantt = unknown, TDataset = Dataset> {
      *  not gated by `RegistrationGate` (D-S5-4 only gates one-shot `register*` calls; presenting and
      *  dismissing overlay content happens for as long as the plugin runs). */
     overlay: Overlay;
+    /** Review N1/A3: this Gantt's own rendered DOM, as three questions — `owns(node)`,
+     *  `targetUnder(node)`, and `barFor(id)`/`cellFor(id, field)`. It is the whole plugin-to-DOM
+     *  contract. `extensions/` may not import `render/` (D-S5-5), so before this seam every plugin
+     *  retyped `.fg-bar`, `.fg-row`, `data-item-id` and five more by hand: nothing versioned them,
+     *  nothing tested them, and renaming a class broke every plugin with a green build.
+     *
+     *  `targetUnder` returns `{ kind, element, entry?, field? }`. `kind` is `TargetKind`, the same
+     *  five words `CommandTarget` uses, so one vocabulary covers a resolved right-click and a
+     *  command's own `when`. Live for the plugin's whole lifetime, not gated by `RegistrationGate`. */
+    dom: GanttDom;
+    /** Review A4: one scoped `document` listener. It filters to this Gantt (I2), it hands the
+     *  handler the resolved `DomTarget` instead of a raw node, and it registers its own removal in
+     *  `ctx.disposables` — capture flag included, which a hand-written `removeEventListener` has to
+     *  match by hand. Call: `ctx.view.onDomEvent('dblclick', (event, target) => { … })`. The
+     *  returned `Disposer` removes it sooner, for a listener a plugin attaches per open popup.
+     *
+     *  Two Gantts on one page never answer each other's events, which is what a hand-written guard
+     *  kept getting wrong (bug hunt B1). A listener that must hear events *outside* this Gantt — a
+     *  dismiss-on-outside-pointer, say — is the one case this is wrong for; `extensions/popup.ts`
+     *  keeps its own unscoped listener for exactly that. */
+    onDomEvent<K extends keyof DocumentEventMap>(
+      type: K,
+      handler: DomEventHandler<K>,
+      options?: DomEventOptions,
+    ): Disposer;
     /** S5.4, D-S5-11: claims one of the four renderer points — `bar`, `cell`, `header`, `tooltip`.
      *  One slot per point: a consumer's own `GanttOptions.*Renderer` always wins over this (a
      *  consumer that wants a plugin's renderer to win removes its own instead); two plugins claiming

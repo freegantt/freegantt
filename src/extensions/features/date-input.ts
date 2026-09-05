@@ -49,7 +49,6 @@ function pad(value: number, width: number): string {
 export function createDefaultDateInput(time: ZoneDateMath): DateInput {
   const input = document.createElement('input');
   input.type = 'date';
-  input.className = 'fg-cell-editor-control';
 
   return {
     element: input,

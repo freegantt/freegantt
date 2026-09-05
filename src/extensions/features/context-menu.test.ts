@@ -139,6 +139,39 @@ describe('contextMenu() (S5.5, D-S5-13/14)', () => {
     container.remove();
   });
 
+  it('a self-dismissal detaches the menu listeners, so nothing polls isOpen afterwards (review C3)', () => {
+    // Before `PopupOptions.onDismiss`, Escape closed the popup and left this plugin's `click` and
+    // `keydown` listeners on `document` until the next open or plugin disposal — guarded only by an
+    // `isOpen` read on every click and keystroke in the page.
+    const added: string[] = [];
+    const removed: string[] = [];
+    type Listen = (type: string, listener: EventListener, options?: boolean) => void;
+    const realAdd = document.addEventListener.bind(document) as Listen;
+    const realRemove = document.removeEventListener.bind(document) as Listen;
+    document.addEventListener = ((type: string, listener: EventListener, options?: boolean): void => {
+      added.push(type);
+      realAdd(type, listener, options);
+    }) as Document['addEventListener'];
+    document.removeEventListener = ((type: string, listener: EventListener, options?: boolean): void => {
+      removed.push(type);
+      realRemove(type, listener, options);
+    }) as Document['removeEventListener'];
+
+    const { container, gantt } = makeGantt();
+    rightClick(bars(container)[0]!);
+    expect(added.filter((type) => type === 'click')).toHaveLength(1);
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+
+    expect(removed.filter((type) => type === 'click')).toHaveLength(1);
+    expect(removed.filter((type) => type === 'keydown')).toHaveLength(1);
+
+    document.addEventListener = realAdd as Document['addEventListener'];
+    document.removeEventListener = realRemove as Document['removeEventListener'];
+    gantt.destroy();
+    container.remove();
+  });
+
   it('right-click outside the container does not open the menu or cancel the browser default (B1)', () => {
     const { container, gantt } = makeGantt();
     const outside = document.createElement('div');
