@@ -4258,6 +4258,61 @@ describe('a plugin column never becomes the consumer’s config (D-S5-33, #162/#
 
     gantt.destroy();
   });
+
+  // #189, D-S5-38: the plugin owns its own column's geometry, the way the consumer owns theirs. The
+  // library reports the width and persists it for nobody. This is that path, end to end, through the
+  // public plugin surface alone: hear the commit, read your own column, register it back next time.
+  it('a plugin carries its own column width across a reload, with no library-side store (#189)', async () => {
+    let savedWidth: number | undefined;
+    let readMyColumn: (() => number | undefined) | undefined;
+
+    const riskColumnThatRemembers = (width?: number): GanttPlugin => ({
+      id: 'demo.riskColumn',
+      setup(ctx) {
+        ctx.view.registerGridColumn({ field: 'risk', ...(width !== undefined ? { width } : {}) });
+        const myWidth = (): number | undefined =>
+          ctx.view.resolvedColumns().find((column) => column.field === 'risk')?.width;
+        readMyColumn = myWidth;
+        // The pair fires for every commit, a resize of this plugin's own column included. Its
+        // payload truthfully reports no change to the consumer's columns (D-S5-33), so the plugin
+        // reads its own column rather than the payload.
+        ctx.events.on('gridColumnsChange', () => {
+          savedWidth = myWidth();
+        });
+        return () => {};
+      },
+    });
+
+    const first = document.createElement('div');
+    const gantt = new Gantt({
+      container: first,
+      dataset: riskDataset(),
+      gridColumns: ['name'],
+      plugins: [riskColumnThatRemembers()],
+    });
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+
+    dragColumnEdge(first, 'risk', 300);
+
+    expect(savedWidth).toBeGreaterThan(100);
+    // Nothing the consumer saves carries it — that is D-S5-33 working, not a regression.
+    expect(gantt.gridColumns).toEqual(['name']);
+    gantt.destroy();
+
+    // The next load: the plugin declares the column again, with the width it kept.
+    const second = document.createElement('div');
+    const reloaded = new Gantt({
+      container: second,
+      dataset: riskDataset(),
+      gridColumns: ['name'],
+      plugins: [riskColumnThatRemembers(savedWidth)],
+    });
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+
+    expect(readMyColumn?.()).toBe(savedWidth);
+
+    reloaded.destroy();
+  });
 });
 
 describe('a hidden grid column keeps its width and its place (S5.7, D-S5-34, #184)', () => {
