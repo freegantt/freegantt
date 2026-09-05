@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { GesturePipeline } from './gesture-pipeline.js';
 import type { GesturePipelineDeps } from './gesture-pipeline.js';
 import { entryId, itemId } from '../model/index.js';
-import type { Entry, EntryId, Instant } from '../model/index.js';
+import type { Entry, EntryEdits, EntryId, Instant } from '../model/index.js';
 import type { TimeScale, ViewPreset } from '../layout/index.js';
 
 /** `view/` may not import `time/` (I1) — a linear px<->ms fake stands in for the bound `TimeScale`;
@@ -137,6 +137,41 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
     const preview = applied.at(-1) as readonly { dx: number; dWidth: number }[];
     expect(preview[0]?.dx).toBe(0);
     expect(preview[0]?.dWidth).toBe(50);
+  });
+
+  it('moves every bar of a segmented entry, whichever bar the pointer grabbed (#200)', async () => {
+    const segmented: Entry = {
+      ...entry('seg', 0, 300),
+      segments: [
+        { start: 0 as Instant, end: 100 as Instant },
+        { start: 200 as Instant, end: 300 as Instant },
+      ],
+    };
+    const committed: EntryEdits[] = [];
+    const { deps, applied } = withRoster([segmented], {
+      commitEntryEdits: (edits) => {
+        committed.push(edits);
+        return true;
+      },
+    });
+    const pipeline = new GesturePipeline(deps);
+    // The grabbed Item is the second Segment; the Selection names the Entry, so both Segments step.
+    const session = pipeline.session(segmented.id, { kind: 'move' }, itemId(segmented.id, 1))!;
+
+    session.preview(40);
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    const preview = applied.at(-1) as readonly { itemId: string; dx: number }[];
+    expect(preview.map((p) => p.dx)).toEqual([40, 40]);
+
+    await session.commit(40);
+    expect(committed[0]?.get(segmented.id)).toEqual({
+      segments: [
+        { start: 40, end: 140 },
+        { start: 240, end: 340 },
+      ],
+      start: 40,
+      end: 340,
+    });
   });
 
   it('a milestone grab is refused through canGesture, not a kind check in the pipeline', () => {

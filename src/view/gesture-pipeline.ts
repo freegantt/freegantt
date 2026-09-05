@@ -96,8 +96,13 @@ export class GesturePipeline {
     const entries = this.#entriesForGesture(grabbed, capability);
     if (entries.length === 0) return undefined;
     const anchor = entries[0]!;
+    // Which Segment does the gesture act on? A move acts on none — it moves the whole Entry the
+    // Selection names (#200) — so only a resize still asks the grabbed Item (D-S4-30).
     const grabbedSegmentIndex =
-      grabbedItemId !== undefined && anchor.segments !== undefined && anchor.segments.length > 0
+      gesture.kind === 'resize' &&
+      grabbedItemId !== undefined &&
+      anchor.segments !== undefined &&
+      anchor.segments.length > 0
         ? segmentIndexOfItem(grabbedItemId)
         : undefined;
     return {
@@ -186,10 +191,13 @@ export class GesturePipeline {
       snap,
       entries,
       dxPx,
-      ...(grabbedSegmentIndex !== undefined ? { grabbedSegmentIndex } : {}),
     };
     if (gesture.kind === 'resize') {
-      return draftForResize({ ...base, edge: gesture.edge });
+      return draftForResize({
+        ...base,
+        edge: gesture.edge,
+        ...(grabbedSegmentIndex !== undefined ? { grabbedSegmentIndex } : {}),
+      });
     }
     return draftForMove(base);
   }
