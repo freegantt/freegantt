@@ -361,6 +361,16 @@ Read these before you touch `src/`.
 | Column groups (a header spanning two columns) | not scheduled | A real ask; no consumer yet |
 | Async command results and a progress affordance | not scheduled | A real ask; commands stay sync in S5 |
 
+### API gaps the `harness/main.ts` review found and did not close here
+
+CLAUDE.md asks for a read of `harness/main.ts` on every commit. What it exposed during S5 is recorded here, never tidied away in the harness. #184 closed one of the three below in `src/`; the other two are filed and open.
+
+| Gap | Where it shows | State |
+|---|---|---|
+| No way to hide one Grid column, so the page declared its column list twice and a toggle discarded the widths and the order the user had set (#184) | `GRID_WITH_BUDGET` / `GRID_WITHOUT_BUDGET`, plus a `budgetVisible` flag | **Closed** by D-S5-34: `GridColumn.hidden`, `gantt.hideGridColumn` / `showGridColumn` / `hiddenGridColumns`. The harness now declares one list |
+| One resolved column carries two public names: a renderer context hands a consumer `column.key`, and every other surface names the same column `field` (#194) | `demoCellRenderer` reads `column.key === 'cost'`, six lines from `{ field: 'cost' }` | Open. One name per concept (CLAUDE.md); `toGridColumn` exists only because the two halves disagree |
+| Three more whole-object setters need the read-modify-write #184 removed from `gridColumns` (#195) | `gantt.interactions = { resize: false }`, `gantt.preset = { ...gantt.preset, snap }`, `gantt.plugins = [...gantt.plugins, x]` | Open. `interactions` is the sharp one: a page that had set another rule loses it with no error and no event |
+
 ---
 
 ## 11. Settled by the user
