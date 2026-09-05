@@ -307,6 +307,51 @@ describe('runTransaction', () => {
     ).toThrow(/I4/);
   });
 
+  // #197: `proposedKeys` is bookkeeping on a `StoredEdit`, not a Field. The body edit always carries
+  // it, so comparing raw object keys made I4 refuse any extender edit that carried one — which every
+  // extender composed with `mergeEntryEdits` now does.
+  it('I4 reads proposedKeys as the Fields proposed, not as a Field named "proposedKeys"', () => {
+    const state = new DatasetState({
+      entries: [{ id: 't1', name: 't1', start: 0, end: 1 }],
+      timeZone: 'UTC',
+      fieldTypes: { money: { rollUp: 'sum' } },
+      fields: [{ key: 'cost', type: 'money' }],
+      editExtender: (): EntryEdits =>
+        new Map<ReturnType<typeof entryId>, StoredEdit>([
+          [entryId('t1'), { meta: { cost: 500 }, proposedKeys: new Set(['cost']) }],
+        ]),
+    });
+
+    runTransaction(state, (token) => state.entries.stageUpdate(token, entryId('t1'), { name: 'a' }), 'user');
+
+    expect(state.entries.get(entryId('t1'))?.meta).toEqual({ cost: 500 });
+  });
+
+  it('I4 still fires when body and extender propose the same meta-sourced Field', () => {
+    const state = new DatasetState({
+      entries: [{ id: 't1', name: 't1', start: 0, end: 1 }],
+      timeZone: 'UTC',
+      fieldTypes: { money: { rollUp: 'sum' } },
+      fields: [{ key: 'cost', type: 'money' }],
+      editExtender: (): EntryEdits =>
+        new Map<ReturnType<typeof entryId>, StoredEdit>([
+          [entryId('t1'), { meta: { cost: 500 }, proposedKeys: new Set(['cost']) }],
+        ]),
+    });
+
+    expect(() =>
+      runTransaction(
+        state,
+        (token) =>
+          state.entries.stageUpdate(token, entryId('t1'), {
+            meta: { cost: 1 },
+            proposedKeys: new Set(['cost']),
+          }),
+        'user',
+      ),
+    ).toThrow(/I4/);
+  });
+
   it('the changeset is frozen in dev mode — a beforeChange handler cannot edit it', () => {
     const state = dataset([{ id: 't1' }]);
     let sawFrozen = false;

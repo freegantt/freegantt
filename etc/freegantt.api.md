@@ -1292,6 +1292,9 @@ export interface MenuItem {
 }
 
 // @public
+export function mergeEntryEdits(base: EntryEdits, extra: EntryEdits): EntryEdits;
+
+// @public
 export class MissingPluginError extends FreeGanttError {
     constructor(pluginId: PluginId, requiredId: PluginId);
     // (undocumented)
