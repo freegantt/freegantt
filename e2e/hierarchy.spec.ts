@@ -212,6 +212,44 @@ test('a segment drag moves one bar and Undo restores it', async ({ page }) => {
     .toBeLessThan(2);
 });
 
+test('a press-and-drag with nothing selected picks up the grabbed bar alone (#211, D-S4-30)', async ({
+  page,
+}) => {
+  await gotoHierarchy(page);
+  await page.evaluate(() => {
+    window.__gantt.preset = { ...window.__gantt.preset, snap: 'none' };
+  });
+  await showSegmentedSpan(page);
+
+  const entryId = await entryWithSegments(page);
+  const bars = barsForEntry(page, entryId);
+  const bar = bars.nth(1);
+  const sibling = bars.first();
+  await expect(bar).toBeVisible();
+  const before = await bar.boundingBox();
+  const siblingBefore = await sibling.boundingBox();
+  expect(before).not.toBeNull();
+  expect(siblingBefore).not.toBeNull();
+
+  // Nothing is selected here — no prior click. A press-then-drag on the middle bar still picks up
+  // only that Segment: the drag arms into the Selection with that bar as its pick before it previews
+  // anything, so it never falls back to moving every Segment of an empty or stale Selection.
+  await dragBarBy(page, bar, 120);
+
+  await expect
+    .poll(async () => {
+      const after = await bar.boundingBox();
+      return after !== null && Math.abs(after.x - before!.x) > 8;
+    })
+    .toBe(true);
+
+  const siblingAfter = await sibling.boundingBox();
+  expect(siblingAfter).not.toBeNull();
+  expect(Math.abs(siblingAfter!.x - siblingBefore!.x)).toBeLessThan(2);
+
+  expect(await page.evaluate(() => window.__gantt.selectedIds)).toEqual([entryId]);
+});
+
 test('a row click paints and moves every bar of the entry, and one Undo restores them all', async ({
   page,
 }) => {
@@ -310,6 +348,65 @@ test('the handle pair brackets the whole entry and the start handle grows its fi
     .toBeGreaterThan(8);
 
   // Only the earliest Segment grew: the latest one sits exactly where it did.
+  const lastAfter = (await last.boundingBox())!;
+  expect(Math.abs(lastAfter.x - lastBefore.x)).toBeLessThan(2);
+  expect(Math.abs(lastAfter.width - lastBefore.width)).toBeLessThan(2);
+});
+
+test('clicking a bar narrows the handle pair to it, and a resize writes only that Segment (#211)', async ({
+  page,
+}) => {
+  await gotoHierarchy(page);
+  await page.evaluate(() => {
+    window.__gantt.preset = { ...window.__gantt.preset, snap: 'none' };
+  });
+  await showSegmentedSpan(page);
+
+  const entryId = await entryWithSegments(page);
+  const bars = barsForEntry(page, entryId);
+  const first = bars.first();
+  const last = bars.nth(2);
+
+  // #211: a click names the bar the pointer landed on — that bar is the pick, and the handle pair
+  // narrows to it alone, never the envelope. The three Segments overlap at this zoom, so the click
+  // goes through the mouse directly — a locator `click()` refuses to act while a sibling bar of the
+  // same Entry sits over the target's own centre.
+  const firstBox = (await first.boundingBox())!;
+  await page.mouse.click(firstBox.x + Math.min(firstBox.width / 2, 20), firstBox.y + firstBox.height / 2);
+
+  const startHandle = page.locator('#gantt .fg-bar-handle[data-edge="start"]');
+  const endHandle = page.locator('#gantt .fg-bar-handle[data-edge="end"]');
+  await expect(startHandle).toBeVisible();
+  await expect(endHandle).toBeVisible();
+
+  const lastBefore = (await last.boundingBox())!;
+  await expect
+    .poll(async () => {
+      const box = await endHandle.boundingBox();
+      return box === null ? null : Math.abs(box.x + box.width / 2 - (lastBefore.x + lastBefore.width));
+    })
+    .toBeGreaterThan(6); // the end handle sits on the picked (first) bar, not the envelope's last bar
+
+  const startBox = (await startHandle.boundingBox())!;
+  const endBox = (await endHandle.boundingBox())!;
+  expect(Math.abs(startBox.x + startBox.width / 2 - firstBox.x)).toBeLessThan(6);
+  expect(Math.abs(endBox.x + endBox.width / 2 - (firstBox.x + firstBox.width))).toBeLessThan(6);
+
+  // Drag the end handle: it grows the picked (first) Segment, and the latest Segment stays put.
+  const grabX = endBox.x + endBox.width / 2;
+  const grabY = endBox.y + endBox.height / 2;
+  await page.mouse.move(grabX, grabY);
+  await page.mouse.down();
+  await page.mouse.move(grabX + 60, grabY, { steps: 8 });
+  await page.mouse.up();
+
+  await expect
+    .poll(async () => {
+      const firstAfter = await first.boundingBox();
+      return firstAfter !== null && firstAfter.width - firstBox.width;
+    })
+    .toBeGreaterThan(8);
+
   const lastAfter = (await last.boundingBox())!;
   expect(Math.abs(lastAfter.x - lastBefore.x)).toBeLessThan(2);
   expect(Math.abs(lastAfter.width - lastBefore.width)).toBeLessThan(2);

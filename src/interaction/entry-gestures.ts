@@ -1,12 +1,16 @@
 // interaction/ — the one pointer stream over the bar layer (plans/01 §9, `plans/03` §S3). A
-// pointerdown that becomes a drag never also changes the selection — every pointerup that
-// `createPointerGesture.up()` reports as a drag skips the click/selection path below entirely.
+// pointerdown that becomes a drag never runs the click/selection path below — every pointerup that
+// `createPointerGesture.up()` reports as a drag skips `selectFromHit` entirely.
 //
-// Never writes on pointerdown (plans/01 §9) — arming a drag previews nothing but its own hover state
-// until the drag threshold (or a touch long-press) is crossed. `mousedown` is only there so a
-// double-click cannot start a native text range; it writes no Gantt state.
+// Writes on pointerdown only once (#211, D-S4-30): when a move drag actually arms (the threshold is
+// crossed) on a bar whose Entry is not already in the Selection, `drag`'s own `start()` proposes the
+// Selection right there, so the pick a picked-Segment drag reads is never stale relative to what it
+// grabbed — see the decision table's "grabbed bar not in the Selection" row in
+// `plans/s5-extensibility-and-editing/spec-211-gesture-units.md` §4. A gesture that never crosses the
+// threshold (a plain click) still resolves through `selectFromHit` on pointerup, unchanged; `mousedown`
+// itself still writes nothing — it exists only so a double-click cannot start a native text range.
 
-import type { EntryId } from '../model/index.js';
+import type { EntryId, ItemId } from '../model/index.js';
 import { createPointerGesture } from './pointer-gesture.js';
 import type {
   Detachable,
@@ -57,7 +61,6 @@ function isRightClick(e: Pick<PointerEvent, 'button'>): boolean {
  *  pointerup listener — a row click selects with the same rules as a bar click (plain/ctrl/shift),
  *  but it never arms move or resize (`ctx.hitTest`'s grid-row fallback never grabs `pane`'s own drag
  *  machinery) and a miss on the grid never clears (only an empty *timeline* click does). */
-
 export function attachEntryGestures(
   pane: HTMLElement,
   rowLayer: HTMLElement,
@@ -75,6 +78,9 @@ export function attachEntryGestures(
   /** Set alongside `grabbedId` only for a handle grab (S3.4) — its presence is what distinguishes a
    *  resize gesture from a move gesture everywhere below. */
   let grabbedEdge: 'start' | 'end' | undefined;
+  /** The bar the pointer actually landed on, set alongside `grabbedId` for a move grab only (#211).
+   *  `drag`'s `start()` reads it once, to name the pick if this grab turns out to arm the Selection. */
+  let grabbedItemId: ItemId | undefined;
   /** D-GH-1: what `ctx.session()` armed for this drag — replaces `armedEntries` (`session` already
    *  closes over the capable entries and the grabbed `EntryGesture` shape). Defined only between a
    *  successful `start()` and the matching `commit`/`cancel`. */
@@ -87,6 +93,16 @@ export function attachEntryGestures(
   const drag = createPointerGesture(pane, {
     start(): boolean {
       if (grabbedId === undefined) return false;
+      // #211, D-S4-30: a move drag that just armed on a bar whose Entry the Selection does not
+      // already hold picks up that Entry, with that bar as its pick, before asking for the session —
+      // so the draft `session()` builds reads the same pick this write just made, and the drag moves
+      // only the grabbed Segment rather than every Segment of whatever was selected before (or
+      // nothing at all). A resize grab is left alone: `resizableEntryId` already resolves off hover,
+      // not the Selection, so a handle grab names no new Entry here.
+      if (grabbedEdge === undefined && !ctx.selection.get().includes(grabbedId)) {
+        anchor = grabbedId;
+        ctx.selection.propose([grabbedId], grabbedItemId);
+      }
       session = ctx.session(grabbedId, currentGesture());
       return session !== undefined;
     },
@@ -107,12 +123,14 @@ export function attachEntryGestures(
       session = undefined;
       grabbedId = undefined;
       grabbedEdge = undefined;
+      grabbedItemId = undefined;
     },
     cancel(): void {
       session!.cancel();
       session = undefined;
       grabbedId = undefined;
       grabbedEdge = undefined;
+      grabbedItemId = undefined;
     },
   });
 
@@ -140,12 +158,15 @@ export function attachEntryGestures(
     if (entry !== undefined && bar?.edge !== undefined && ctx.can('resize', entry)) {
       grabbedId = entry.id;
       grabbedEdge = bar.edge;
+      grabbedItemId = undefined;
     } else if (entry !== undefined && bar !== undefined && ctx.can('move', entry)) {
       grabbedId = entry.id;
       grabbedEdge = undefined;
+      grabbedItemId = bar.itemId;
     } else {
       grabbedId = undefined;
       grabbedEdge = undefined;
+      grabbedItemId = undefined;
     }
     drag.down(e);
   }
