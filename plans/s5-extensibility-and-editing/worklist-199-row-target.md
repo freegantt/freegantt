@@ -31,10 +31,10 @@ is that the target type cannot carry the others.
 - [x] `DomTarget.entry` grows to carry every Entry the row owns (`src/view/gantt-dom.ts:52`) — the
       seam that has to grow first
 - [x] `ContainerDom.#resolve` and `#entryOfRow` answer with all of them (`gantt-dom.ts:213`, `:226`)
-- [ ] `CommandTarget` renamed and re-shaped (`src/api/command.ts:20`) — see **Naming** below
-- [ ] `commandTargetOf` maps the new shape (`src/extensions/features/context-menu.ts:32`)
-- [ ] A test pins that a right-click on a row owning three Entries reaches three
-- [ ] A test pins that a command wanting exactly one can still say so
+- [x] `CommandTarget` renamed and re-shaped (`src/api/command.ts:20`) — see **Naming** below
+- [x] `commandTargetOf` maps the new shape (`src/extensions/features/context-menu.ts:32`)
+- [x] A test pins that a right-click on a row owning three Entries reaches three
+- [x] A test pins that a command wanting exactly one can still say so
 - [ ] `plans/02-public-api.md` records the new `CommandTarget`
 - [ ] `pnpm verify` green, `pnpm test:e2e` green
 

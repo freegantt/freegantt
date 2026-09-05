@@ -17,7 +17,15 @@ import type { Dataset } from './dataset.js';
  *  or `run(id)` invocation with no meaningful target for this kind leaves it `undefined`. */
 export interface CommandTarget {
   kind: TargetKind;
-  rowId?: EntryId;
+  /** Every Entry this landed on, in row order — the same word and the same set `DomTarget.entryIds`
+   *  carries, copied straight across (#199). A Row may own several Entries, and a click on the row
+   *  selects all of them (#185), so a command invoked from that row acts on all of them:
+   *  `run: (ctx) => ctx.target?.entryIds.forEach(lock)`. A command that wants exactly one says so —
+   *  `when: (ctx) => ctx.target?.entryIds.length === 1` — and reads `ctx.entry` for it.
+   *
+   *  Empty for a `'header'` or `'splitter'` target, and for a grouping header row. Never
+   *  `undefined`, so a `when` counts it with no fallback. */
+  entryIds: readonly EntryId[];
   /** Which Grid column this landed on, for a `'header'` or `'cell'` target. `field` names a column
    *  everywhere a column is named (D-S5-37, #194) — the same word `DomTarget.field`,
    *  `GridColumn.field` and a renderer's `ctx.column.field` already use. */
@@ -36,7 +44,10 @@ export interface CommandContextOf<TGantt = unknown, TDataset = Dataset> {
   dataset: TDataset;
   /** The public Gantt, for reading live config and calling public methods. */
   gantt: TGantt;
-  /** The entry the invocation targeted: the right-clicked bar, the focused row, or none. */
+  /** The one Entry the invocation is *about*: the right-clicked bar, or the subject of the row the
+   *  right-click landed in — the Entry whose Fields that row's cells show. A row that owns several
+   *  names them all in `target.entryIds`; this stays the one. `undefined` when the invocation
+   *  landed on no Entry at all. */
   entry?: Entry;
   target?: CommandTarget;
 }
