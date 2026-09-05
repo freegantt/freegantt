@@ -250,7 +250,12 @@ export class FrameSettings {
 
   /** Live reconfiguration, for one setting or several. A value identical to the one already held
    *  invalidates nothing, so assigning what is already set never costs a frame. Every other key runs
-   *  its own row of `INVALIDATION`, and the strongest answer among them wins. */
+   *  its own row of `INVALIDATION`, and the strongest answer among them wins.
+   *
+   *  Identity is the whole test, and object-valued settings get no exemption (#187). A caller who
+   *  mutates the object they already gave, and assigns that same object again, gets no frame. A
+   *  config value is a value: `plans/02` §2 states that rule and names the copy that asks for the
+   *  repaint. An exemption would put a second rule beside the table above, per setting. */
   set(patch: FrameSettingsPatch): void {
     this.#invalidate(this.#write(patch));
   }
