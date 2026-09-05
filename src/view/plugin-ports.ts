@@ -7,6 +7,10 @@
 // The ports are declared in the groups a plugin reads them in. `api/gantt.ts` therefore spreads this
 // object straight into a `PluginContext` and adds only `dataset` and `gantt` — the two api-level
 // members `view/` may not name (D-S5-5). A member that lands in the wrong group no longer compiles.
+//
+// #191: `PluginContextParts` below carries `TGantt`/`TDataset`, so the two members that bind them
+// are declared once, here, with the rest. `api/plugin.ts` then binds both and adds `dataset`/`gantt`.
+// `view/` still names neither type: they arrive as type arguments and stay unbound in this file.
 
 import type {
   Disposer,
@@ -116,30 +120,37 @@ export interface GanttShellPorts {
  *  made of.
  *
  *  #166: this is **the** member list for the plugin surface. `api/plugin.ts`'s public
- *  `PluginContextOf` is a projection of it — it adds `dataset`/`gantt` and re-types the three
- *  members that are genuinely generic over `TGantt`/`TDataset`. It used to be a hand-typed copy of
- *  all twenty-five, doc comments included, with nothing checking the copy. So the doc a plugin
- *  author reads lives here now, beside the one declaration.
+ *  `PluginContextOf` is `PluginContextParts<TGantt, TDataset>` plus `dataset` and `gantt`, and
+ *  nothing else. It used to be a hand-typed copy of all twenty-five, doc comments included, with
+ *  nothing checking the copy. So the doc a plugin author reads lives here now, beside the one
+ *  declaration.
+ *
+ *  #191: `TGantt`/`TDataset` are what `commands` and `registerKeybinding` bind. `api/plugin.ts`
+ *  bound them instead. So this interface published two members that were wrong for every consumer,
+ *  and `PluginContextOf` had to `Omit` both back out. Both arguments default to `unknown`. A caller
+ *  that binds neither — `buildPluginPorts` below is the only one — reads the two members unbound.
  *
  *  #155: every `register*` here returns a `Disposer` that removes exactly its own registration. The
  *  plugin's own `DisposableStore` already holds a copy, so a plugin that never calls it still
  *  disposes cleanly on uninstall. The return value is what lets a plugin retract a registration
  *  while it is still installed — a column it shows in one mode only. Calling it twice is safe. */
-export interface PluginContextParts {
+export interface PluginContextParts<TGantt = unknown, TDataset = unknown> {
   /** `on`/`off` over `GanttEventMap`, including the cancelable `before*` pairs. */
   events: GanttEvents;
   /** This plugin's own cleanup list — add a listener or a timer here instead of closing over it by
    *  hand in the returned `Disposer`. Disposed in reverse order, ahead of that returned `Disposer`. */
   disposables: DisposableStore;
-  /** `api/gantt.ts` binds the two type arguments; here the registry is the unbound one. See
-   *  `PluginContextOf.commands` for what a plugin author reads. */
-  commands: CommandRegistryOf<unknown>;
+  /** S5.2, D-S5-6: the one command registry. `register` here is legal only while `setup` runs
+   *  (D-S5-4). `run`/`available` work any time, including after this plugin's own setup returns.
+   *  A command this plugin registers lives exactly as long as the plugin. Uninstalling restores
+   *  whatever the id held before. For an overridden core command that is core's own (#155). */
+  commands: CommandRegistryOf<TGantt, TDataset>;
   interaction: {
     /** S5.2, D-S5-7: adds one `KeyBinding`. Legal only while `setup` runs (D-S5-4) — removed
      *  automatically when this plugin is disposed, the same lifetime every other `register*` gets.
      *  The returned `Disposer` removes it sooner, for a plugin that binds a chord only in one mode
      *  (#155). Ignoring the return value is the common case. */
-    registerKeybinding(binding: KeyBindingOf<unknown>): Disposer;
+    registerKeybinding(binding: KeyBindingOf<TGantt, TDataset>): Disposer;
     /** C3, `plans/reviews/2026-09-02-s5-start-fixes.md`: binds `chord` straight to `handler`,
      *  through the same keymap `registerKeybinding` uses. It serves a caller with no `Command` to
      *  run. A plugin that builds its own `Popup` (over `view.overlay` below) is that caller. Its
