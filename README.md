@@ -482,6 +482,36 @@ pnpm verify     # format/typecheck/lint/boundaries/guards/unit tests/vendor-name
 pnpm test:e2e   # Playwright smoke test against the harness
 ```
 
+### `isDevMode()` is a library-build flag, not a consumer's
+
+`src/data/dev-mode.ts` reads `import.meta.env.DEV`. Vite resolves that constant when **this repo**
+builds `dist/`, not when a consumer builds their app. It bakes to `false`, and Rollup then drops
+every `if (isDevMode())` branch from the shipped bundle.
+
+The built output shows it. `src/render/dom/index.ts:81`'s "falling back to the default output"
+message sits behind the guard and appears **zero** times in `dist/api/index.js`. The two disposer
+`console.error` calls that carry no guard both survive. Three `console.` calls reach the bundle in
+total.
+
+So `isDevMode()` is true in exactly one place: this repo's own harness, running from source through
+`pnpm dev`. It is a **library-development** flag. It is not a consumer-environment flag, and a
+consumer's own dev server never turns it on.
+
+Two consequences for anyone adding a call site:
+
+- Use it for an assertion that helps **us** develop the library. That is what the existing sites
+  read as.
+- Never use it to give a consumer different behaviour in their dev and their production. One `dist/`
+  serves everyone, and their mode is invisible when we build it. `docs/adr/0009` records the three
+  mechanisms that _can_ see a consumer's mode, and why this project rejects all three.
+
+**Not yet audited:** thirteen further `isDevMode()` call sites exist in `src/` — `data/transaction.ts`,
+`data/build-commit-change-set.ts`, `data/serialization/`, `extensions/plugin-runtime.ts`,
+`view/plugin-ports.ts` and `view/gantt-shell.ts`. Each is dead-code-eliminated from `dist/` the same
+way. The ones read so far are genuine library-development assertions, which is the correct use. None
+has been checked against the question "was this written expecting a _consumer's_ dev build to reach
+it?" Parked here until it gets its own issue.
+
 The dev harness (`harness/`) is the library's first consumer. Open `http://localhost:5173` after
 `pnpm dev` — the main page demos tree rows, grid columns, field rollups, live `rowSource` switching,
 selection, and timeline controls. `harness/data.html` demos transactions and undo. Every slice adds
