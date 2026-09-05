@@ -121,7 +121,7 @@ export interface Detachable {
 }
 export type AttachEntryGestures = (
   pane: HTMLElement,
-  gridPane: HTMLElement,
+  rowLayer: HTMLElement,
   container: HTMLElement,
   ctx: EntryGestureContext,
 ) => Detachable;

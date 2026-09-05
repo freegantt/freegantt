@@ -12,7 +12,7 @@
 | Column lists and Field compares | `view/grid-columns.ts` — call `resolveGanttFields(dataset, gridColumns, bind)` |
 | Collapse set | `view/collapse-state.ts` — owned by `TreeCollapse` |
 | Tree collapse (keyboard, collapse-all, ancestor expand) | `view/tree-collapse.ts` — call `this.#treeCollapse.handleArrow('right')`, `expandAncestorsOf(entryId)`, `gantt.collapseAll()` / `gantt.expandAll()` |
-| Twisty click | `view/attach-row-twisty.ts` — call `attachRowTwisty(panes.grid, { toggleCollapse })` |
+| Twisty click | `view/attach-row-twisty.ts` — call `attachRowTwisty(panes.rows, { toggleCollapse })` |
 | Gesture commit math | `view/gesture-pipeline.ts` |
 | Dataset `change` subscription | `view/dataset-change-subscription.ts` |
 
