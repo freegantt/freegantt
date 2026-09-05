@@ -44,7 +44,7 @@ function paintOneGantt(): { dom: ContainerDom; container: HTMLElement; destroy()
   const paneLayout = new PaneLayout({ container });
   const backend = createDomBackend();
   backend.mount({
-    grid: paneLayout.panes.grid,
+    grid: paneLayout.panes.rows,
     gridHeader: paneLayout.panes.gridHeader,
     timeline: paneLayout.panes.timeline,
   });

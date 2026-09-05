@@ -12,7 +12,7 @@ describe('DomRowLayer (#158)', () => {
   it('present() mounts beside the rows, and the disposer removes the node', () => {
     const container = mountContainer();
     const paneLayout = new PaneLayout({ container });
-    const rowLayer = new DomRowLayer(paneLayout.panes.grid);
+    const rowLayer = new DomRowLayer(paneLayout.panes.rows);
 
     const editor = document.createElement('div');
     const unmount = rowLayer.present(editor);

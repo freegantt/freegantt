@@ -4,7 +4,7 @@
 // (GanttShell, D-S1.8-3).
 //
 // The timeline pane is the only *vertical* scroller (D-D, D-S1.8-1): the grid pane has none of its
-// own — its row layer is what `RenderSurfaces.grid` mounts into, and follows the timeline pane's
+// own — its Row layer is what `RenderSurfaces.grid` mounts into, and follows the timeline pane's
 // vertical scroll by one transform per frame instead of a second real scrollbar (render/dom/index.ts).
 // Horizontally the grid pane is its own, independent native scroller (D-S1.8-13, #126) — its content
 // only widens past `gridWidth` when fixed-width columns overflow it, unsynced with the timeline's
@@ -36,10 +36,10 @@ export interface PaneLayoutOptions {
 }
 
 export interface Panes {
-  /** The grid pane's row layer. Row labels and Grid cells. No *vertical* scrollbar — it follows
-   *  the scroll owner by transform (D-S1.8-1). The grid pane itself is a real horizontal
+  /** The Row layer (`.fg-rows`): row labels and Grid cells. No *vertical* scrollbar — it follows
+   *  the scroll owner by transform (D-S1.8-1). The grid pane around it is a real horizontal
    *  scroller when its content overflows (D-S1.8-13, #126). */
-  readonly grid: HTMLElement;
+  readonly rows: HTMLElement;
   /** Column headers, overlaid on the grid spacer so they match the timeline header height. */
   readonly gridHeader: HTMLElement;
   /** The single native scroller: header bands, bars, links, decorations. */
@@ -129,7 +129,7 @@ export class PaneLayout {
 
     this.#container.append(this.#gridPane, splitter, timelinePane, overlay);
 
-    this.panes = { grid: rowLayer, gridHeader: headerRow, splitter, timeline: timelinePane, overlay };
+    this.panes = { rows: rowLayer, gridHeader: headerRow, splitter, timeline: timelinePane, overlay };
   }
 
   get gridWidth(): number {
@@ -182,9 +182,9 @@ export class PaneLayout {
     return this.#container.getBoundingClientRect();
   }
 
-  /** `GanttDom.paneBounds` (S5.3, D-S5-8, issue #137 F8): the grid pane's own client rect — not
-   *  `panes.grid`, which is the row layer moved by transform every frame and would report a stale or
-   *  scrolled-away box — alongside the timeline pane's. */
+  /** `GanttDom.paneBounds` (S5.3, D-S5-8, issue #137 F8): the grid pane's own client rect,
+   *  alongside the timeline pane's. The pane's box is the fixed one. A frame that anchors to it
+   *  must not read the Row layer, which the per-frame transform has already moved. */
   paneBounds(): { grid: DOMRect; timeline: DOMRect } {
     return {
       grid: this.#gridPane.getBoundingClientRect(),
@@ -192,12 +192,11 @@ export class PaneLayout {
     };
   }
 
-  /** `GanttDom.rowLayerBounds` (#158): the row layer's own client rect — the frame content mounted beside
-   *  the rows positions itself in. Unlike `paneBounds().grid` this one *is* `panes.grid`, transform
-   *  and all: a sibling of the rows rides that same transform, so the box it must measure against is
-   *  the moved one, not the pane's fixed box. */
+  /** `GanttDom.rowLayerBounds` (#158): the Row layer's own client rect, transform and all — the box
+   *  frame content mounted beside the rows positions itself in. A sibling of the rows rides that
+   *  same transform, so it must measure against the moved box, not the pane's fixed one. */
   rowLayerBounds(): DOMRect {
-    return this.panes.grid.getBoundingClientRect();
+    return this.panes.rows.getBoundingClientRect();
   }
 
   /** D-S1.12-9: the grid pane's spacer renders one empty `.fg-band` per header band, so both panes
