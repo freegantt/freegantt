@@ -158,14 +158,14 @@ describe('registerCoreCommands (S5.2, D-S5-6)', () => {
 });
 
 describe('column commands — Alt/Shift+Arrow over a focused header cell (S5.7, D-S5-18/D-S5-26)', () => {
-  function makeHeaderRegistry(columnKey?: string): {
+  function makeHeaderRegistry(field?: string): {
     registry: CommandRegistry<unknown>;
     ctx: CommandContext<unknown>;
   } {
     const ctx = {
       dataset: {} as CommandContext<unknown>['dataset'],
       gantt: {},
-      ...(columnKey !== undefined ? { target: { kind: 'header' as const, columnKey } } : {}),
+      ...(field !== undefined ? { target: { kind: 'header' as const, field } } : {}),
     } as CommandContext<unknown>;
     return { registry: new CommandRegistry<unknown>(() => ctx), ctx };
   }

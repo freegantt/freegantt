@@ -210,10 +210,7 @@ export interface GanttShellWiring {
    *  cached, so a command always reads the invocation's current selection. `target`'s shape (S5.7,
    *  D-S5-26) is a structural subtype of api-level `CommandTarget`. `view/` may not name that type
    *  either, but a narrower object literal reaches it fine, because `api/gantt.ts` only widens. */
-  buildCommandContext?: (parts: {
-    entry?: Entry;
-    target?: { kind: 'header'; columnKey: FieldKey };
-  }) => unknown;
+  buildCommandContext?: (parts: { entry?: Entry; target?: { kind: 'header'; field: FieldKey } }) => unknown;
   /** S5.2: `freegantt.panToToday`'s own clock read. `view/` may not call `time/`'s `now()` itself
    *  (I10). `api/gantt.ts` supplies `now` from `time/index.js`, the same function
    *  `Gantt.panToToday` already reads for the identical reason. */
@@ -516,7 +513,7 @@ export class GanttShell {
           this.#registrations.renderers.resolveBar(kind, this.#frameSettings.barRenderer),
         // S5.4, D-S5-11: `render/dom` never receives `ResolvedColumn` (`column.format` "never
         // reaches a backend", `layout/column.ts`). So this binds it in here instead. render/dom
-        // only ever calls an already-column-bound function, keyed by the same `FrameColumn.key`
+        // only ever calls an already-column-bound function, keyed by the same `FrameColumn.field`
         // string it already threads through `CellItem.key`.
         resolveCellRenderer: (columnKey) => {
           const column = this.#columnChrome.resolvedColumn(columnKey);
@@ -531,7 +528,7 @@ export class GanttShell {
                 columnCellRenderer({
                   ...(ctx.entry !== undefined ? { entry: ctx.entry } : {}),
                   value: ctx.value,
-                  fieldValue: this.#fieldValueForCell(ctx.entry, column.key),
+                  fieldValue: this.#fieldValueForCell(ctx.entry, column.field),
                 }),
             };
           }
@@ -540,7 +537,7 @@ export class GanttShell {
           const cellRenderer = resolved.renderer;
           return {
             renderer: (ctx) =>
-              cellRenderer({ ...ctx, column, fieldValue: this.#fieldValueForCell(ctx.entry, column.key) }),
+              cellRenderer({ ...ctx, column, fieldValue: this.#fieldValueForCell(ctx.entry, column.field) }),
             ...(resolved.pluginId !== undefined ? { pluginId: resolved.pluginId } : {}),
           };
         },
@@ -1088,13 +1085,13 @@ export class GanttShell {
   #buildCommandContext(): CommandContext<unknown> {
     const id = this.#selection[0];
     const entry = id !== undefined ? this.#options.dataset.entries.get(id) : undefined;
-    const columnKey = this.#columnChrome.focusedHeaderColumnKey;
+    const field = this.#columnChrome.focusedHeaderField;
     // `view/` may not name `CommandContextOf`'s api-level fields (`dataset: Dataset`, `gantt`),
     // D-S5-5's mirror. So this cast trusts `api/gantt.ts`'s injected `buildCommandContext` to fill
     // them. `buildPluginContext` above already gets the same trust for `PluginContext`.
     return (this.#options.wiring.buildCommandContext ?? (() => ({})))({
       ...(entry !== undefined ? { entry } : {}),
-      ...(columnKey !== undefined ? { target: { kind: 'header' as const, columnKey } } : {}),
+      ...(field !== undefined ? { target: { kind: 'header' as const, field } } : {}),
     }) as CommandContext<unknown>;
   }
 

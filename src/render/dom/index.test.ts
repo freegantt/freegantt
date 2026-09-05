@@ -79,7 +79,7 @@ describe('render/dom backend', () => {
       rowHeight: 32,
       revision: 0,
       itemProducerRegistry,
-      columns: [{ key: 'name', header: 'Name', align: 'start', format: (e) => e.name }],
+      columns: [{ field: 'name', header: 'Name', align: 'start', format: (e) => e.name }],
     });
     backend.sync(frame);
 
@@ -221,7 +221,7 @@ describe('render/dom backend', () => {
         rowHeight: 32,
         revision: 0,
         itemProducerRegistry,
-        columns: [{ key: 'name', header: 'Name', align: 'start', format: (e) => e.name }],
+        columns: [{ field: 'name', header: 'Name', align: 'start', format: (e) => e.name }],
       }),
     );
 
@@ -273,10 +273,10 @@ describe('render/dom backend', () => {
       revision: 0,
       itemProducerRegistry,
       columns: [
-        { key: 'name', header: 'Name', align: 'start', format: (e) => e.name },
-        { key: 'start', header: 'Start', align: 'start', width: 80, format: () => 'Sep 1' },
-        { key: 'duration', header: 'Duration', align: 'end', flex: 2, format: () => '2 d' },
-        { key: 'cost', header: 'Budget', align: 'end', width: 90, format: () => '$500' },
+        { field: 'name', header: 'Name', align: 'start', format: (e) => e.name },
+        { field: 'start', header: 'Start', align: 'start', width: 80, format: () => 'Sep 1' },
+        { field: 'duration', header: 'Duration', align: 'end', flex: 2, format: () => '2 d' },
+        { field: 'cost', header: 'Budget', align: 'end', width: 90, format: () => '$500' },
       ],
     });
     backend.sync(base);
@@ -296,7 +296,7 @@ describe('render/dom backend', () => {
 
     backend.sync({
       ...base,
-      columns: base.columns.filter((c) => c.key !== 'cost'),
+      columns: base.columns.filter((c) => c.field !== 'cost'),
       rows: base.rows.map((r) => ({ ...r, cells: r.cells.slice(0, 3) })),
     });
     expect(row.querySelector('[data-field="cost"]')).toBeNull();
@@ -321,8 +321,8 @@ describe('render/dom backend', () => {
       revision: 0,
       itemProducerRegistry,
       columns: [
-        { key: 'name', header: 'Name', align: 'start', format: (e) => e.name },
-        { key: 'duration', header: 'Duration', align: 'end', flex: 2, format: () => '2 d' },
+        { field: 'name', header: 'Name', align: 'start', format: (e) => e.name },
+        { field: 'duration', header: 'Duration', align: 'end', flex: 2, format: () => '2 d' },
       ],
     });
     backend.sync(base);
@@ -369,8 +369,8 @@ describe('render/dom backend', () => {
       revision: 0,
       itemProducerRegistry,
       columns: [
-        { key: 'name', header: 'Name', align: 'start', format: (e) => e.name },
-        { key: 'duration', header: 'Duration', align: 'end', format: () => '2 d' },
+        { field: 'name', header: 'Name', align: 'start', format: (e) => e.name },
+        { field: 'duration', header: 'Duration', align: 'end', format: () => '2 d' },
       ],
     });
     backend.sync(base);
@@ -1045,7 +1045,7 @@ describe('render/dom backend', () => {
       revision: 0,
       itemProducerRegistry,
       rows: { source: 'entries', tree: true },
-      columns: [{ key: 'name', header: 'Name', align: 'start', format: (e) => e.name }],
+      columns: [{ field: 'name', header: 'Name', align: 'start', format: (e) => e.name }],
     });
     backend.sync(frame);
 
@@ -1250,7 +1250,7 @@ describe('render/dom backend', () => {
       rowHeight: 32,
       revision: 0,
       itemProducerRegistry,
-      columns: [{ key: 'name', header: 'Name', align: 'start', format: (e) => e.name }],
+      columns: [{ field: 'name', header: 'Name', align: 'start', format: (e) => e.name }],
     });
     backend.sync(frame);
 
@@ -1287,8 +1287,8 @@ describe('render/dom backend', () => {
       revision: 0,
       itemProducerRegistry,
       columns: [
-        { key: 'name', header: 'Name', align: 'start', format: (e) => e.name },
-        { key: 'start', header: 'Start', align: 'start', format: (e) => String(e.start) },
+        { field: 'name', header: 'Name', align: 'start', format: (e) => e.name },
+        { field: 'start', header: 'Start', align: 'start', format: (e) => String(e.start) },
       ],
     });
     backend.sync(frame);
@@ -1324,7 +1324,7 @@ describe('render/dom backend', () => {
       rowHeight: 32,
       revision: 0,
       itemProducerRegistry,
-      columns: [{ key: 'name', header: 'Name', align: 'start', format: (e) => e.name }],
+      columns: [{ field: 'name', header: 'Name', align: 'start', format: (e) => e.name }],
     });
     backend.sync(frame);
 
@@ -1435,8 +1435,8 @@ describe('render/dom backend', () => {
       revision: 0,
       itemProducerRegistry,
       columns: [
-        { key: 'name', header: 'Name', align: 'start', format: (e) => e.name },
-        { key: 'cost', header: 'Cost', align: 'end', format: () => '500' },
+        { field: 'name', header: 'Name', align: 'start', format: (e) => e.name },
+        { field: 'cost', header: 'Cost', align: 'end', format: () => '500' },
       ],
     });
     backend.sync(frame);

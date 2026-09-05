@@ -33,7 +33,7 @@ function commandTargetOf(target: DomTarget): CommandTarget {
   return {
     kind: target.kind,
     ...(target.entry !== undefined ? { rowId: target.entry.id } : {}),
-    ...(target.field !== undefined ? { columnKey: target.field } : {}),
+    ...(target.field !== undefined ? { field: target.field } : {}),
   };
 }
 

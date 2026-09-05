@@ -167,9 +167,9 @@ export function registerCoreCommands(
   // header cell (`ctx.target.kind === 'header'`) and gated on the same `resizable`/`movable` a
   // pointer drag already refuses (`interaction/column-gestures.ts`). Both run the same
   // `#commitColumnWidth`/`#commitColumnReorder` a pointer drag's commit runs.
-  const columnKey = (ctx: unknown): FieldKey | undefined => {
+  const focusedHeaderField = (ctx: unknown): FieldKey | undefined => {
     const target = asCtx(ctx).target;
-    return target?.kind === 'header' ? target.columnKey : undefined;
+    return target?.kind === 'header' ? target.field : undefined;
   };
   /** One shape for all four column chords: differ only in id/label, which capability gates them
    *  (`resizable` vs `movable`), and which step they run. */
@@ -183,11 +183,11 @@ export function registerCoreCommands(
       id,
       label,
       when: (ctx) => {
-        const key = columnKey(ctx);
+        const key = focusedHeaderField(ctx);
         return key !== undefined && capable(key);
       },
       run: (ctx) => {
-        const key = columnKey(ctx);
+        const key = focusedHeaderField(ctx);
         if (key !== undefined) step(key);
       },
     });

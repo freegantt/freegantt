@@ -18,7 +18,10 @@ import type { Dataset } from './dataset.js';
 export interface CommandTarget {
   kind: TargetKind;
   rowId?: EntryId;
-  columnKey?: FieldKey;
+  /** Which Grid column this landed on, for a `'header'` or `'cell'` target. `field` names a column
+   *  everywhere a column is named (D-S5-37, #194) — the same word `DomTarget.field`,
+   *  `GridColumn.field` and a renderer's `ctx.column.field` already use. */
+  field?: FieldKey;
 }
 
 /** What a `Command`'s `when`/`run` receives, once per invocation — a menu click, a chord, or

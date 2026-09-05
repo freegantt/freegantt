@@ -290,7 +290,7 @@ S5.8 Parts (D-S5-19): `.fg-cell-editor`, `.fg-cell-editor-control` (`inlineEditi
 
 A cell renderer reads its cell two ways. `value` is the string the library painted, through the
 Field's own `formatValue`. `fieldValue` is the same Field value before formatting — what
-`dataset.entries.fieldValue(id, column.key)` answers, for an `entry`-, `meta`- or `compute`-sourced
+`dataset.entries.fieldValue(id, column.field)` answers, for an `entry`-, `meta`- or `compute`-sourced
 Field alike. A renderer that paints text reads `value`; one that branches on magnitude reads
 `fieldValue`, and never parses the library's own output back with a regex. Reaching into
 `entry.meta` is not the alternative: a `compute`-sourced Field has no stored home (ADR 0005).

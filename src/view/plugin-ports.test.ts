@@ -95,7 +95,7 @@ function makeHarness(overrides: Partial<GanttShellPorts> = {}): Harness {
     lastPaintedBar: () => makeBar(),
     entry: (id) => makeEntry(id),
     resolvedColumns: () => [],
-    resolvedColumn: (field) => shell.resolvedColumns().find((column) => column.key === field),
+    resolvedColumn: (field) => shell.resolvedColumns().find((column) => column.field === field),
     canEdit: () => true,
     proposeEntryEdit: () => true,
     announceEntryEdit: vi.fn(),
@@ -253,7 +253,7 @@ describe('buildPluginPorts — resolveTooltipContent (S5.5)', () => {
 
 describe('buildPluginPorts — the resolved-column reads (S5.8, D-S5-13)', () => {
   const column = (overrides: Partial<ResolvedColumn>): ResolvedColumn => ({
-    key: 'cost',
+    field: 'cost',
     header: 'Cost',
     align: 'start',
     format: () => '12',
@@ -262,7 +262,7 @@ describe('buildPluginPorts — the resolved-column reads (S5.8, D-S5-13)', () =>
 
   it('resolveTooltipColumns keeps only the columns marked `tooltip: true`', () => {
     const harness = makeHarness({
-      resolvedColumns: () => [column({ tooltip: true }), column({ key: 'name', header: 'Name' })],
+      resolvedColumns: () => [column({ tooltip: true }), column({ field: 'name', header: 'Name' })],
     });
 
     expect(harness.parts.view.resolveTooltipColumns(makeEntry('a'))).toEqual([

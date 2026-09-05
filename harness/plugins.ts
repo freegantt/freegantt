@@ -106,7 +106,7 @@ const demoBarRenderer: RendererByKind = {
   risk: () => ({ class: { 'demo-risk-bar': true } }),
 };
 const demoCellRenderer: CellRenderer = ({ column, value, fieldValue }) =>
-  column.key === 'cost' && typeof fieldValue === 'number' && fieldValue > BUDGET_THRESHOLD
+  column.field === 'cost' && typeof fieldValue === 'number' && fieldValue > BUDGET_THRESHOLD
     ? { class: { 'demo-over-budget': true }, text: value }
     : undefined;
 

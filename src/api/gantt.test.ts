@@ -1385,7 +1385,7 @@ describe('Gantt gridColumns (S4.3, D-S4-12, [S4-A1] column half)', () => {
       dataset,
       gridColumns: ['name', 'cost'],
       cellRenderer: ({ column, value, fieldValue }) => {
-        if (column.key === 'cost') seen.push({ value, fieldValue });
+        if (column.field === 'cost') seen.push({ value, fieldValue });
         return undefined;
       },
     });
@@ -1544,14 +1544,50 @@ describe('Gantt gridColumnsChange — one commit sequence (S5.7, D-S5-18)', () =
 
     expect(before).toHaveLength(1);
     expect(after).toHaveLength(1);
-    // Resolved columns: the public GridColumn shape (`.field`), not the layout-only ResolvedColumn
-    // (`.key`) — a consumer keeps `to` and passes it straight back as `gridColumns`.
+    // Resolved columns arrive as the public `GridColumn` shape — a consumer keeps `to` and passes it
+    // straight back as `gridColumns`. `format` is the one thing dropped (#194, D-S5-37).
     expect(before[0]!.from).toEqual([expect.objectContaining({ field: 'name' })]);
     expect(before[0]!.to).toEqual([
       expect.objectContaining({ field: 'name' }),
       expect.objectContaining({ field: 'start' }),
     ]);
     expect(after[0]).toEqual(before[0]);
+
+    gantt.destroy();
+  });
+
+  // #194, D-S5-37: a renderer context used to hand a consumer `column.key` while every other
+  // surface named the same column `field`, so one page spelled one column two ways.
+  it('one column, one name: a renderer, the change payload and gridColumns all say `field` (#194)', () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({ entries: sampleEntries.slice(0, 1), timeZone: 'UTC' });
+    const cellColumns: string[] = [];
+    const headerColumns: string[] = [];
+    const payloads: { field: string }[][] = [];
+    const gantt = new Gantt({
+      container,
+      dataset,
+      gridColumns: ['name', { field: 'start' }],
+      cellRenderer: ({ column }) => {
+        cellColumns.push(String(column.field));
+        return undefined;
+      },
+      headerRenderer: ({ column }) => {
+        headerColumns.push(String(column.field));
+        return undefined;
+      },
+    });
+    gantt.on('gridColumnsChange', ({ to }) => {
+      payloads.push(to.map((column) => ({ field: String(column.field) })));
+    });
+
+    gantt.hideGridColumn('start');
+
+    expect(cellColumns).toContain('start');
+    expect(headerColumns).toContain('start');
+    // D-S5-34: a hidden consumer column stays in the payload, so a saved list restores it hidden.
+    expect(payloads[0]).toEqual([{ field: 'name' }, { field: 'start' }]);
+    expect(gantt.gridColumns).toEqual(['name', { field: 'start', hidden: true }]);
 
     gantt.destroy();
   });

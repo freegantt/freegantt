@@ -128,13 +128,13 @@ describe('computeFrame', () => {
       itemProducerRegistry,
       columns: [
         {
-          key: 'name',
+          field: 'name',
           header: 'Name',
           align: 'start',
           format: (entry) => nameField.formatValue(entry.name),
         },
         {
-          key: 'kind',
+          field: 'kind',
           header: 'Kind',
           align: 'start',
           format: (entry) => kindField.formatValue(entry.kind),
@@ -157,12 +157,12 @@ describe('computeFrame', () => {
       revision: 0,
       itemProducerRegistry,
       columns: [
-        { key: 'name', header: 'Name', align: 'start', format: (entry) => entry.name },
-        { key: 'kind', header: 'Kind', align: 'start', format: (entry) => entry.kind },
+        { field: 'name', header: 'Name', align: 'start', format: (entry) => entry.name },
+        { field: 'kind', header: 'Kind', align: 'start', format: (entry) => entry.kind },
       ],
     });
     expect(frame.rows[0]?.cells).toEqual([sampleEntries[0]?.name, sampleEntries[0]?.kind]);
-    expect(frame.columns.map((c) => c.key)).toEqual(['name', 'kind']);
+    expect(frame.columns.map((c) => c.field)).toEqual(['name', 'kind']);
   });
 
   it('culls rows outside the vertical window (#20), with overscan disabled', () => {

@@ -48,7 +48,7 @@ import {
 
 /** A cell's renderer, already bound to its `ResolvedColumn` (render/dom never receives that type —
  *  `column.format` "stays on `ResolvedColumn` and never reaches a backend", `layout/column.ts`) and
- *  keyed by `GanttShell` per `FrameColumn.key` (S5.4, D-S5-11). */
+ *  keyed by `GanttShell` per `FrameColumn.field` (S5.4, D-S5-11). */
 type BoundCellRenderer = (ctx: {
   entry?: Entry;
   row: FrameRow;
@@ -189,7 +189,7 @@ function cellItemsFor(
   return cells.map((text, i) => {
     const column = columns[i];
     const item: CellItem = {
-      key: column !== undefined ? String(column.key) : String(i),
+      key: column !== undefined ? String(column.field) : String(i),
       text,
       first: i === 0,
       align: column?.align ?? 'start',
@@ -733,7 +733,7 @@ export function createDomBackend(options?: DomBackendOptions): RenderBackend<HTM
     // fresh object holding a fresh closure (`view/gantt-shell.ts`'s `resolveCellRenderer`). Frames
     // fire on scroll, so that was two allocations per cell per scrolled frame. `plans/01` §8: the
     // hot path allocates nothing. One resolve per column per frame answers every row.
-    const renderers = columns.map((column) => resolveCellRenderer(column.key));
+    const renderers = columns.map((column) => resolveCellRenderer(column.field));
     rows.forEach((row) => {
       const rowNode = rowLayer.node(row.id);
       if (!rowNode) return;
@@ -747,7 +747,7 @@ export function createDomBackend(options?: DomBackendOptions): RenderBackend<HTM
     if (!gridHeaderLayer) return;
     const items: CellItem[] = columns.map((column, i) => {
       const item: CellItem = {
-        key: String(column.key),
+        key: String(column.field),
         text: column.header,
         first: i === 0,
         align: column.align,
@@ -758,7 +758,7 @@ export function createDomBackend(options?: DomBackendOptions): RenderBackend<HTM
       if (column.flex !== undefined) item.flex = column.flex;
       if (column.resizable !== undefined) item.resizable = column.resizable;
       if (column.movable !== undefined) item.movable = column.movable;
-      const resolved = resolveHeaderRenderer(column.key);
+      const resolved = resolveHeaderRenderer(column.field);
       if (resolved !== undefined) {
         const content = callRenderer('header', resolved, undefined);
         if (content !== undefined) item.content = content;
