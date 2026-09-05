@@ -1175,6 +1175,15 @@ export interface Interactions {
 }
 
 // @public
+export class InvalidFieldSourceError extends FreeGanttError {
+    constructor(key: string, received: unknown);
+    // (undocumented)
+    readonly key: string;
+    // (undocumented)
+    readonly received: unknown;
+}
+
+// @public
 export class InvalidInstantError extends FreeGanttError {
     constructor(message: string);
 }

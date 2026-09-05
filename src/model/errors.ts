@@ -121,6 +121,34 @@ export class DuplicateFieldKeyError extends FreeGanttError {
   }
 }
 
+/** `code: 'invalid-field-source'` — a `Field.source` that names no known source (#196). TypeScript
+ *  refuses the shape, so this reaches a JS caller: `source: 'meta'` where `{ from: 'meta' }` was
+ *  meant, or a `from` outside `'entry' | 'meta' | 'compute'`. `ctx.fields.register(field)` is public
+ *  surface (D-S5-21), so a plugin author writing plain JS is a supported caller and gets a
+ *  `FreeGanttError` like every other library fault, not a bare `TypeError`.
+ *
+ *  The message says what the caller wrote, inline: `model/` may declare no helper function of its
+ *  own (types-only carve-out), and this is the one thing the reader needs to see the typo. */
+export class InvalidFieldSourceError extends FreeGanttError {
+  readonly key: string;
+  readonly received: unknown;
+
+  constructor(key: string, received: unknown) {
+    super(
+      'invalid-field-source',
+      `fields: "${key}" declares an invalid source — expected { from: 'entry' | 'meta' | 'compute' }, got ` +
+        (typeof received === 'object' && received !== null
+          ? `{ from: ${String((received as { from?: unknown }).from)} }`
+          : typeof received === 'string'
+            ? `the string "${received}"`
+            : String(received)),
+    );
+    this.name = 'InvalidFieldSourceError';
+    this.key = key;
+    this.received = received;
+  }
+}
+
 /** `code: 'duplicate-field-source'` — two Fields resolve to the same `{ from: 'meta', key }` (D-S4-5). */
 export class DuplicateFieldSourceError extends FreeGanttError {
   readonly metaKey: string;
