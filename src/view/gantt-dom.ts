@@ -43,9 +43,9 @@ import type { PaneLayout, PaneName } from './pane-layout.js';
  *  a command that filters on `when` say the same thing.
  *
  *  It answers two different questions about Entries, because a Row may own several of them (#185,
- *  #199). `entry` is the node's **subject** — the one Entry whose Fields this node's content shows,
- *  which is what a tooltip describes and what the cell editor anchors on. `entryIds` is everything
- *  the node stands for, which is what an action on the node acts on. For a bar the two agree. For a
+ *  #199). `entry` is the node's **subject** — the one Entry whose Fields this node's content shows.
+ *  A tooltip describes that Entry, and the cell editor anchors on it. `entryIds` is everything the
+ *  node stands for, which is what an action on the node acts on. For a bar the two agree. For a
  *  row, and for a cell of that row, `entry` is the row's first Entry and `entryIds` is all of them.
  *
  *  `entry` is left out when the row stands for no Entry (a grouping header row), or when the Entry
