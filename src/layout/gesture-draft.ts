@@ -62,48 +62,37 @@ export function draftForMove(input: DraftInput): EntryEdits {
 }
 
 /** A resize draft: one edge of every grabbed entry moves by the same snapped/stepped calendar delta
- *  as `entries[0]`'s own grabbed edge (D-S3-19), the opposite edge held fixed. Zero-length clamp: the
- *  dragged edge never crosses the fixed one — an inverted span is refused right here, in the layout
- *  layer, before it ever reaches a changeset (D-S3-4). */
-export function draftForResize(
-  input: DraftInput & {
-    edge: 'start' | 'end';
-    /** When the anchor entry has multiple segments, the grabbed segment index (D-S4-30). */
-    grabbedSegmentIndex?: number;
-  },
-): EntryEdits {
-  const { zone, scale, snap, entries, dxPx, edge, grabbedSegmentIndex } = input;
+ *  as `entries[0]`'s own grabbed edge (D-S3-19), the opposite edge held fixed. The edge is the
+ *  **envelope** edge, on a segmented entry too — the Selection names an Entry, so the `start` handle
+ *  moves the earliest Segment's start and the `end` handle moves the latest Segment's end, and every
+ *  other Segment stays where it is (#200). Zero-length clamp: the dragged edge never crosses the
+ *  fixed one — an inverted span is refused right here, in the layout layer, before it ever reaches a
+ *  changeset (D-S3-4). */
+export function draftForResize(input: DraftInput & { edge: 'start' | 'end' }): EntryEdits {
+  const { zone, scale, snap, entries, dxPx, edge } = input;
   const anchor = entries[0];
   if (!anchor) return new Map();
 
-  const anchorInstant = segmentAnchorInstant(anchor, grabbedSegmentIndex, edge);
+  const anchorInstant = envelopeEdgeInstant(anchor, edge);
   const anchorX = scale.xForInstant(anchorInstant);
   const rawCandidate = scale.instantForX(anchorX + dxPx);
   const snappedCandidate = snapInstant(zone, rawCandidate, snap);
 
   const edits = new Map<EntryId, StoredEdit>();
 
-  function place(entry: Entry, moved: Instant, segmentIndex: number | undefined): void {
-    edits.set(entry.id, resizeEdit(entry, edge, moved, segmentIndex));
-  }
-
   if (snap === 'none') {
     const deltaMs = diffMs(snappedCandidate, anchorInstant);
-    for (let i = 0; i < entries.length; i++) {
-      const entry = entries[i]!;
-      const segmentIndex = i === 0 ? grabbedSegmentIndex : undefined;
-      const current = segmentEdgeInstant(entry, segmentIndex, edge);
-      place(entry, addMs(current, deltaMs), segmentIndex);
+    for (const entry of entries) {
+      const current = envelopeEdgeInstant(entry, edge);
+      edits.set(entry.id, resizeEdit(entry, edge, addMs(current, deltaMs)));
     }
     return edits;
   }
 
   const steps = stepsBetween(zone, snap.unit, snap.increment, anchorInstant, snappedCandidate);
-  for (let i = 0; i < entries.length; i++) {
-    const entry = entries[i]!;
-    const segmentIndex = i === 0 ? grabbedSegmentIndex : undefined;
-    const current = segmentEdgeInstant(entry, segmentIndex, edge);
-    place(entry, stepBy(zone, current, snap.unit, steps * snap.increment), segmentIndex);
+  for (const entry of entries) {
+    const current = envelopeEdgeInstant(entry, edge);
+    edits.set(entry.id, resizeEdit(entry, edge, stepBy(zone, current, snap.unit, steps * snap.increment)));
   }
   return edits;
 }
@@ -112,21 +101,27 @@ function hasSegments(entry: Entry): entry is Entry & { segments: readonly TimeSp
   return entry.segments !== undefined && entry.segments.length > 0;
 }
 
-function segmentAnchorInstant(
-  entry: Entry,
-  segmentIndex: number | undefined,
-  edge: 'start' | 'end' = 'start',
-): Instant {
-  if (!hasSegments(entry)) {
-    return edge === 'start' ? entry.start : entry.end;
-  }
-  const index = segmentIndex ?? 0;
-  const segment = entry.segments[index] ?? entry.segments[0]!;
-  return edge === 'start' ? segment.start : segment.end;
+/** The instant a resize drags — the edge the handle paints on (#200). A segmented entry reads its
+ *  own Segments rather than its stored `start`/`end`: an entry authored with a date-only `end` gets
+ *  an envelope a whole day past its latest Segment, and the drag must anchor where the handle sits,
+ *  not a day to its right. */
+function envelopeEdgeInstant(entry: Entry, edge: 'start' | 'end'): Instant {
+  if (!hasSegments(entry)) return edge === 'start' ? entry.start : entry.end;
+  const envelope = envelopeOfSegments(entry.segments);
+  return edge === 'start' ? envelope.start : envelope.end;
 }
 
-function segmentEdgeInstant(entry: Entry, segmentIndex: number | undefined, edge: 'start' | 'end'): Instant {
-  return segmentAnchorInstant(entry, segmentIndex, edge);
+/** Which Segment holds the envelope edge — the earliest `start` or the latest `end`, the same two
+ *  edges `envelopeOfSegments` reports. Segments are authored in any order, so the answer is a
+ *  comparison, never index 0 (#200). */
+function segmentIndexAtEnvelopeEdge(segments: readonly TimeSpan[], edge: 'start' | 'end'): number {
+  let found = 0;
+  for (let i = 1; i < segments.length; i++) {
+    const segment = segments[i]!;
+    const best = segments[found]!;
+    if (edge === 'start' ? segment.start < best.start : segment.end > best.end) found = i;
+  }
+  return found;
 }
 
 function envelopeOfSegments(segments: readonly TimeSpan[]): { start: Instant; end: Instant } {
@@ -165,16 +160,11 @@ function stepMoveEdit(zone: string, entry: Entry, unit: TimeUnit, amount: number
   return { segments, ...envelopeOfSegments(segments) };
 }
 
-function resizeEdit(
-  entry: Entry,
-  edge: 'start' | 'end',
-  moved: Instant,
-  segmentIndex: number | undefined,
-): StoredEdit {
+function resizeEdit(entry: Entry, edge: 'start' | 'end', moved: Instant): StoredEdit {
   if (!hasSegments(entry)) {
     return clampedEdgeEdit(entry, edge, moved);
   }
-  const index = segmentIndex ?? 0;
+  const index = segmentIndexAtEnvelopeEdge(entry.segments, edge);
   const segments = entry.segments.map((segment, i) => {
     if (i !== index) return segment;
     if (edge === 'start') {

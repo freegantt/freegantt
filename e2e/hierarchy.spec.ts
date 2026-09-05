@@ -204,6 +204,68 @@ test('a drag moves every bar of the entry and one Undo restores them all', async
     .toBeLessThan(2);
 });
 
+test('the handle pair brackets the whole entry and the start handle grows its first bar', async ({
+  page,
+}) => {
+  await gotoHierarchy(page);
+  await page.evaluate(() => {
+    window.__gantt.preset = { ...window.__gantt.preset, snap: 'none' };
+  });
+  await showSegmentedSpan(page);
+
+  const entryId = await entryWithSegments(page);
+  const bars = barsForEntry(page, entryId);
+  const first = bars.first();
+  const last = bars.nth(2);
+  // Click one bar to select the Entry: the handle pair then stays put while the pointer travels to
+  // it. The three Segments overlap, so the click goes through the mouse — `click()` refuses to act
+  // while a sibling bar of the same Entry sits over the target's own centre.
+  const clickBox = (await last.boundingBox())!;
+  await page.mouse.click(clickBox.x + clickBox.width / 2, clickBox.y + clickBox.height / 2);
+
+  // The entry is wider than the pane, so its earliest bar starts left of the pane's own edge. Pan
+  // right-to-left until that bar — and the start handle on it — sits inside the pane.
+  await timelinePane(page).evaluate((el) => {
+    el.scrollLeft -= 400;
+    el.dispatchEvent(new Event('scroll'));
+  });
+  await expect.poll(async () => (await bars.first().boundingBox())!.x).toBeGreaterThan(600);
+
+  const startHandle = page.locator('#gantt .fg-bar-handle[data-edge="start"]');
+  const endHandle = page.locator('#gantt .fg-bar-handle[data-edge="end"]');
+  await expect(startHandle).toBeVisible();
+  await expect(endHandle).toBeVisible();
+
+  // #200: a resize acts on the Entry's envelope, so the pair straddles all three bars — it never
+  // sits on the hovered bar alone.
+  const firstBefore = (await first.boundingBox())!;
+  const lastBefore = (await last.boundingBox())!;
+  const startBox = (await startHandle.boundingBox())!;
+  const endBox = (await endHandle.boundingBox())!;
+  expect(Math.abs(startBox.x + startBox.width / 2 - firstBefore.x)).toBeLessThan(6);
+  expect(Math.abs(endBox.x + endBox.width / 2 - (lastBefore.x + lastBefore.width))).toBeLessThan(6);
+
+  // Drag the start handle back: it moves the earliest Segment's start, nothing else.
+  const grabX = startBox.x + startBox.width / 2;
+  const grabY = startBox.y + startBox.height / 2;
+  await page.mouse.move(grabX, grabY);
+  await page.mouse.down();
+  await page.mouse.move(grabX - 60, grabY, { steps: 8 });
+  await page.mouse.up();
+
+  await expect
+    .poll(async () => {
+      const firstAfter = await first.boundingBox();
+      return firstAfter !== null && firstAfter.width - firstBefore.width;
+    })
+    .toBeGreaterThan(8);
+
+  // Only the earliest Segment grew: the latest one sits exactly where it did.
+  const lastAfter = (await last.boundingBox())!;
+  expect(Math.abs(lastAfter.x - lastBefore.x)).toBeLessThan(2);
+  expect(Math.abs(lastAfter.width - lastBefore.width)).toBeLessThan(2);
+});
+
 test('ArrowRight expands and ArrowLeft collapses; focus stays on the Gantt', async ({ page }) => {
   await gotoHierarchy(page);
 
