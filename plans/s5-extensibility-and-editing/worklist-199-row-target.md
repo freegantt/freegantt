@@ -35,7 +35,8 @@ is that the target type cannot carry the others.
 - [x] `commandTargetOf` maps the new shape (`src/extensions/features/context-menu.ts:32`)
 - [x] A test pins that a right-click on a row owning three Entries reaches three
 - [x] A test pins that a command wanting exactly one can still say so
-- [ ] `plans/02-public-api.md` records the new `CommandTarget`
+- [x] `plans/02-public-api.md` records the new `CommandTarget` (and `CONTEXT.md`'s **DOM target**
+      entry, which quoted the old shape too)
 - [ ] `pnpm verify` green, `pnpm test:e2e` green
 
 ## Naming, which is half the work
