@@ -139,6 +139,30 @@ describe('PluginRegistrations — the tables it reads back', () => {
     ]);
   });
 
+  // #188: `computeFrame` reads this list on every frame, and frames fire on scroll. So the walk of
+  // the table runs on a registration change, and the frames between two changes read one instance.
+  it('hands out the same list on two reads, so a frame allocates none of it (#188)', () => {
+    const { registrations } = harness();
+    registrations.registerDecoration('underBars', () => []);
+
+    expect(registrations.decorationProviders()).toBe(registrations.decorationProviders());
+  });
+
+  it('hands out a new list after a registration, and after a disposal (#188)', () => {
+    const { registrations } = harness();
+    const before = registrations.decorationProviders();
+
+    const dispose = registrations.registerDecoration('underBars', () => []);
+    const afterRegister = registrations.decorationProviders();
+    expect(afterRegister).not.toBe(before);
+    expect(afterRegister).toHaveLength(1);
+
+    dispose();
+    const afterDispose = registrations.decorationProviders();
+    expect(afterDispose).not.toBe(afterRegister);
+    expect(afterDispose).toEqual([]);
+  });
+
   it('a decoration disposer removes exactly its own provider, in any order (#155)', () => {
     const { registrations } = harness();
     const first = (): [] => [];
