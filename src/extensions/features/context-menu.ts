@@ -26,13 +26,18 @@ export interface ContextMenuOptions {
   items?(ctx: { entry?: Entry; defaults: readonly MenuEntry[] }): readonly MenuEntry[];
 }
 
-/** The resolved DOM target as a `CommandContext.target`. Both name the same five `TargetKind` words,
- *  so this drops the element a command has no use for and keeps the rest. A command's `when` can now
- *  read "on a header cell" from a right-click, which the menu never filled in before. */
+/** The resolved DOM target as a `CommandContext.target`. Both name the same five `TargetKind` words
+ *  and the same `entryIds`/`field`, so this drops the element a command has no use for and copies
+ *  the rest across. A command's `when` can now read "on a header cell" from a right-click, which the
+ *  menu never filled in before.
+ *
+ *  #199: a right-click on a row acts on every Entry the row owns, because a left-click on that row
+ *  already selects every one of them (#185). The set arrives resolved, so the menu neither picks a
+ *  winner nor asks the row what it holds. */
 function commandTargetOf(target: DomTarget): CommandTarget {
   return {
     kind: target.kind,
-    ...(target.entry !== undefined ? { rowId: target.entry.id } : {}),
+    entryIds: target.entryIds,
     ...(target.field !== undefined ? { field: target.field } : {}),
   };
 }

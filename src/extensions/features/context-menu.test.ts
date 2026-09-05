@@ -15,6 +15,35 @@ function makeGantt(options?: ContextMenuOptions): { container: HTMLElement; gant
   return { container, gantt };
 }
 
+/** One Row that owns three Entries. Only a `{ source: 'custom' }` resolver builds one, which is why
+ *  #199's defect was invisible until #185 made a click on that row select all three. */
+function makeGanttWithThreeOnOneRow(): { container: HTMLElement; gantt: Gantt } {
+  const container = document.createElement('div');
+  document.body.append(container);
+  const dataset = new Dataset({ entries: threeEntries, timeZone: 'UTC' });
+  const gantt = new Gantt({
+    container,
+    dataset,
+    rowSource: {
+      source: 'custom',
+      resolve: ({ entries }) => [{ id: 'lane-1', entryIds: entries.map((entry) => entry.id) }],
+    },
+    plugins: [contextMenu()],
+  });
+  return { container, gantt };
+}
+
+const threeEntries = sampleEntries.slice(0, 3);
+
+function commandIds(container: HTMLElement): (string | null)[] {
+  return menuItems(container).map((el) => el.getAttribute('data-command'));
+}
+
+function clickMenuItem(container: HTMLElement, command: string): void {
+  const item = menuItems(container).find((el) => el.getAttribute('data-command') === command);
+  item!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+}
+
 function bars(container: HTMLElement): HTMLElement[] {
   return Array.from(container.querySelectorAll<HTMLElement>('.fg-bar'));
 }
@@ -37,6 +66,46 @@ describe('contextMenu() (S5.5, D-S5-13/14)', () => {
     rightClick(bars(container)[0]!);
     expect(container.querySelector('.fg-menu')).not.toBeNull();
     expect(menuItems(container).length).toBeGreaterThan(0);
+
+    gantt.destroy();
+    container.remove();
+  });
+
+  it('a right-click on a row that owns three Entries reaches all three (#199)', () => {
+    const { container, gantt } = makeGanttWithThreeOnOneRow();
+    let reached: readonly string[] | undefined;
+    gantt.commands.register({
+      id: 'demo.lockRow',
+      label: 'Lock the row',
+      run: (ctx) => (reached = ctx.target?.entryIds),
+    });
+
+    rightClick(container.querySelector<HTMLElement>('.fg-row')!);
+    clickMenuItem(container, 'demo.lockRow');
+
+    // The menu now says what the selection says: a click on this row selects all three (#185).
+    expect(reached).toEqual(threeEntries.map((entry) => entry.id));
+
+    gantt.destroy();
+    container.remove();
+  });
+
+  it('a command that wants exactly one Entry can still say so (#199)', () => {
+    const { container, gantt } = makeGanttWithThreeOnOneRow();
+    gantt.commands.register({
+      id: 'demo.renameOne',
+      label: 'Rename',
+      when: (ctx) => ctx.target?.entryIds.length === 1,
+      run: () => {},
+    });
+
+    // The row owns three, so the command declines and never reaches the menu.
+    rightClick(container.querySelector<HTMLElement>('.fg-row')!);
+    expect(commandIds(container)).not.toContain('demo.renameOne');
+
+    // A bar draws one Entry, so the same command offers itself there.
+    rightClick(bars(container)[0]!);
+    expect(commandIds(container)).toContain('demo.renameOne');
 
     gantt.destroy();
     container.remove();
