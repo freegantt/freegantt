@@ -75,6 +75,41 @@ rewrites.
 Every worklist box is ticked **in the commit that earns it**, never in a batch at the end, so
 `git log` and the worklist cannot disagree about what is done.
 
+## 5.1 What #201 turned out to be, before wave 2 starts
+
+Investigated on request. The cast the issue names is the small half.
+
+`TimeUnit` (`src/model/time.ts:6`) is a plain string-literal union, not a brand, and
+`SUPPORTED_TIME_UNITS` (`src/time/zone.ts:160`) already exists — derived from the same `UNITS` table
+that `stepBy` and `startOf` dispatch through, so the two can never disagree. The validator the issue
+asks for is a few lines over a set that is already the single source of truth. It is simply not
+exported.
+
+**The defect is one line below, and it is not in the issue.** `snapInstant` (`src/time/snap.ts:19`)
+walks forward from the unit floor until it passes the cursor. With `increment: 0`, `stepBy` returns
+the same instant, so the loop never advances:
+
+```ts
+gantt.snap = { unit: 'day', increment: 0 };  // accepted, stored, no error
+```
+
+`set snap` (`src/view/gantt-shell.ts:1080`) stores the value raw and validates nothing. The next drag
+then freezes the tab. `stepsBetween` (`src/time/snap.ts:36`) has the same shape and the same hole, and
+a negative increment walks backwards forever.
+
+**Measured, not reasoned.** A vitest case calling `snapInstant('UTC', at, { unit: 'day', increment: 0 })`
+did not fail. It hung the worker until an external 120-second timeout killed the process. Vitest's own
+three-second test timeout could not interrupt it, because a synchronous loop yields nothing to
+interrupt. The same file's other cases return in 3ms.
+
+`harness/main.ts:181` already writes `Math.max(1, ...)` around that increment. Our own first consumer
+had worked around it, which is exactly what CLAUDE.md's stop rule now forbids.
+
+So #201 ships three things, not one: the widened setter (shape A), the predicate (shape B), and a
+positive-integer guard rejected at the setter so the throw names the assignment and not a drag two
+seconds later. Both loops in `src/time/snap.ts` get a guard, because `time/` is reachable from
+`layout/` and must not trust its caller. The issue is relabelled `bug`.
+
 ## 6. Open with the repo owner
 
 | Question | Blocks | Asked on |
