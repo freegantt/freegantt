@@ -8,7 +8,7 @@ import type { Disposer, ElementDescription } from '../model/index.js';
 // `../api/plugin.js` directly, not the `api/index.js` barrel: `api/index.ts` re-exports
 // `createPopup` from this very file (D-S5-8's "a third party reaches the same primitive we do"), and
 // importing the barrel back would close that edge into a cycle (no-circular).
-import type { GanttDom, Overlay, OverlayHandle } from '../api/plugin.js';
+import type { GanttDom, MountLayer } from '../api/plugin.js';
 import { activateFocusTrap } from './focus-trap.js';
 import type { FocusTrap } from './focus-trap.js';
 import { DisposableStore } from './disposables.js';
@@ -25,11 +25,14 @@ export type PopupPlacement = 'top' | 'bottom' | 'start' | 'end';
  *  knows. */
 export type DismissTrigger = 'escape' | 'outsidePointer' | 'scroll' | 'blur';
 
-/** The two view seams a `Popup` needs: the layer it mounts in, and the rects it places against
- *  (review N1 moved `bounds`/`paneBounds` off `Overlay` onto `GanttDom`). A plugin passes
- *  `ctx.view`; the narrow `Pick`s keep a test's fake to what this file actually reads. */
+/** The three view seams a `Popup` needs: the layer it mounts in, the reconciler that builds its
+ *  content, and the rects it places against (review N1 moved `bounds`/`paneBounds` off the mount
+ *  layer onto `GanttDom`). A plugin passes `ctx.view`; the narrow `Pick`s keep a test's fake to what
+ *  this file actually reads. */
 export interface PopupSurface {
-  overlay: Pick<Overlay, 'present' | 'render' | 'onResize'>;
+  overlay: MountLayer;
+  /** Builds the popup body from `options.content` — `ctx.view.renderElement` (D-S5-10). */
+  renderElement(description: ElementDescription): HTMLElement;
   dom: Pick<GanttDom, 'bounds' | 'paneBounds'>;
 }
 
@@ -220,7 +223,7 @@ const DISMISS_LISTENERS: Readonly<Record<DismissTrigger, (ctx: DismissContext) =
 
 /** `Popup`'s one implementation (D-S5-8). `view` and `keymap` are the only things this reaches
  *  past plain DOM APIs. Escape folds into `keymap` (C3, `plans/reviews/2026-09-02-s5-start-fixes.md`)
- *  instead of a bespoke document-capture listener + per-`Overlay` `WeakMap` LIFO stack: `Keymap`
+ *  instead of a bespoke document-capture listener + per-layer `WeakMap` LIFO stack: `Keymap`
  *  already resolves newest-registration-first (D-S5-7), so a popup registering its Escape handler on
  *  `open()` and unregistering it on `close()` gets "innermost open thing wins" (D-S5-9) for free, and
  *  the shared `isEditableTarget` gate (S5.2, issue #137 F7) restores the IME-composition rule this
@@ -228,7 +231,7 @@ const DISMISS_LISTENERS: Readonly<Record<DismissTrigger, (ctx: DismissContext) =
 export function createPopup(view: PopupSurface, keymap: KeyHandlerRegistrar): Popup {
   const { overlay, dom } = view;
   let wrapper: HTMLElement | undefined;
-  let handle: OverlayHandle | undefined;
+  let unmount: Disposer | undefined;
   let focusTrap: FocusTrap | undefined;
   let disposables = new DisposableStore();
   let currentOptions: PopupOptions | undefined;
@@ -242,8 +245,8 @@ export function createPopup(view: PopupSurface, keymap: KeyHandlerRegistrar): Po
     disposables = new DisposableStore();
     focusTrap?.deactivate();
     focusTrap = undefined;
-    handle?.detach();
-    handle = undefined;
+    unmount?.();
+    unmount = undefined;
     wrapper = undefined;
     currentOptions = undefined;
   };
@@ -273,7 +276,10 @@ export function createPopup(view: PopupSurface, keymap: KeyHandlerRegistrar): Po
       }
     }
     box = clamp(side, box, size, pane);
-    const origin = dom.bounds;
+    // Two different boxes on purpose (#168). `pane` above is the region the popup must stay inside.
+    // `overlay.bounds` is the frame it is mounted in, so it is the origin its own transform counts
+    // from — the layer you mounted into is the layer you position against.
+    const origin = overlay.bounds;
     wrapper.style.transform = `translate(${(box.left - origin.left).toFixed(2)}px, ${(box.top - origin.top).toFixed(2)}px)`;
   };
 
@@ -283,9 +289,9 @@ export function createPopup(view: PopupSurface, keymap: KeyHandlerRegistrar): Po
       currentOptions = options;
       const node = document.createElement('div');
       node.className = 'fg-popup';
-      node.append(overlay.render(options.content));
+      node.append(view.renderElement(options.content));
       wrapper = node;
-      handle = overlay.present(node);
+      unmount = overlay.present(node);
       reposition();
 
       // A trigger named twice arms once: `new Set` keeps `dismissOn` a set of triggers, which is

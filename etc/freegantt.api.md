@@ -976,7 +976,6 @@ export interface GanttDom {
         grid: DOMRect;
         timeline: DOMRect;
     };
-    readonly rowLayerBounds: DOMRect;
     targetUnder(node: Node): DomTarget | undefined;
 }
 
@@ -1283,6 +1282,13 @@ export class MissingPluginError extends FreeGanttError {
     readonly requiredId: PluginId;
 }
 
+// @public
+export interface MountLayer {
+    readonly bounds: DOMRect;
+    onResize(callback: () => void): Disposer;
+    present(content: HTMLElement): Disposer;
+}
+
 // @public (undocumented)
 export const MS: {
     readonly SECOND: 1000;
@@ -1317,18 +1323,6 @@ export interface NavigationChange {
 
 // @public (undocumented)
 export function now(): Instant;
-
-// @public (undocumented)
-export interface Overlay {
-    onResize(callback: () => void): () => void;
-    present(content: HTMLElement): OverlayHandle;
-    render(description: ElementDescription): HTMLElement;
-}
-
-// @public (undocumented)
-export interface OverlayHandle {
-    detach(): void;
-}
 
 // @public
 export class ParentCycleError extends FreeGanttError {
@@ -1396,8 +1390,9 @@ export interface PluginContextPorts {
     };
     // (undocumented)
     view: {
-        overlay: Overlay;
-        rowLayer: RowLayer;
+        overlay: MountLayer;
+        rowLayer: MountLayer;
+        renderElement(description: ElementDescription): HTMLElement;
         dom: GanttDom;
         onDomEvent<K extends keyof DocumentEventMap>(type: K, handler: DomEventHandler<K>, options?: DomEventOptions): Disposer;
         registerRenderer<P extends RendererPoint>(point: P, renderer: RendererFor<P>): Disposer;
@@ -1485,7 +1480,8 @@ export interface PopupSurface {
     // (undocumented)
     dom: Pick<GanttDom, 'bounds' | 'paneBounds'>;
     // (undocumented)
-    overlay: Pick<Overlay, 'present' | 'render' | 'onResize'>;
+    overlay: MountLayer;
+    renderElement(description: ElementDescription): HTMLElement;
 }
 
 // @public
@@ -1578,11 +1574,6 @@ export type RowHeightMode = 'fixed' | 'pack';
 export type RowId = string & {
     readonly __brand: 'RowId';
 };
-
-// @public (undocumented)
-export interface RowLayer {
-    present(content: HTMLElement): Disposer;
-}
 
 // @public (undocumented)
 export interface RowSort {

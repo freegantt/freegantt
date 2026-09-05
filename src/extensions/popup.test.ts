@@ -2,7 +2,6 @@ import { describe, expect, it, vi } from 'vitest';
 import { createPopup } from './popup.js';
 import { Keymap } from './keymap.js';
 import { CommandRegistry } from './commands.js';
-import type { OverlayHandle } from '../api/index.js';
 import type { DismissTrigger, PopupSurface } from './popup.js';
 
 function rect(partial: Partial<DOMRect>): DOMRect {
@@ -18,8 +17,9 @@ function makeKeymap(): Keymap<unknown> {
 
 /** A minimal `ctx.view` fake — the same seam a third-party plugin gets (D-S5-8) — so `Popup` can be
  *  driven with no `PaneLayout`/DOM measurement at all. `present` mounts into a plain container;
- *  `render` mirrors `render/dom/element-description.ts`'s own text-only behaviour, enough for these
- *  tests' content. */
+ *  `renderElement` mirrors `render/dom/element-description.ts`'s own text-only behaviour, enough for
+ *  these tests' content. The layer's `bounds` is the container box, the same relation a real
+ *  `.fg-overlay` has to its Gantt. */
 function fakeAnchor(options: {
   bounds: DOMRect;
   grid: DOMRect;
@@ -40,19 +40,24 @@ function fakeAnchor(options: {
     container,
     resizeListeners,
     dom,
+    renderElement(description) {
+      const node = document.createElement(description.tag ?? 'div');
+      if (description.text !== undefined) node.textContent = description.text;
+      return node;
+    },
     overlay: {
-      present(content: HTMLElement): OverlayHandle {
+      present(content: HTMLElement) {
         container.append(content);
-        return { detach: () => content.remove() };
-      },
-      render(description) {
-        const node = document.createElement(description.tag ?? 'div');
-        if (description.text !== undefined) node.textContent = description.text;
-        return node;
+        return () => content.remove();
       },
       onResize(callback: () => void) {
         resizeListeners.add(callback);
-        return () => resizeListeners.delete(callback);
+        return () => {
+          resizeListeners.delete(callback);
+        };
+      },
+      get bounds() {
+        return options.bounds;
       },
     },
   };

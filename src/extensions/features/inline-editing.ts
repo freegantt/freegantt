@@ -12,7 +12,7 @@
 // `Popup` stays the right primitive for declarative content, a tooltip or a menu. This file owns a
 // live control end-to-end instead.
 //
-// It mounts through `ctx.view.rowLayer`, not the `Overlay` a popup uses (#158). A tooltip and a menu
+// It mounts through `ctx.view.rowLayer`, not the `overlay` a popup uses (#158). A tooltip and a menu
 // *dismiss* on a scroll; an open editor must *follow* its cell. The row layer is the element the
 // pane's own scroll already moves. That is one transform per frame for the vertical axis (D-S1.8-1),
 // and native horizontal scrolling of the pane around it (D-S1.8-13). A sibling of the rows therefore
@@ -30,7 +30,7 @@
 // answers whether it closed, so no flag records that twice.
 
 import type { GanttPlugin, PluginContext } from '../../api/gantt.js';
-import type { EntryFieldEdit, GanttDom, Overlay, RowLayer } from '../../api/plugin.js';
+import type { EntryFieldEdit, GanttDom, MountLayer } from '../../api/plugin.js';
 import { EntryNotFoundError, MutationCancelledError } from '../../model/index.js';
 import type {
   CoreFieldValue,
@@ -151,16 +151,14 @@ export interface EditedCell {
  *  plain objects, so a session runs with no mounted Gantt. */
 export interface CellEditorPorts {
   /** The layer the editor mounts into (#158): the grid's own row layer, which the pane's scroll
-   *  already moves. That is what makes an open editor follow its cell with no scroll listener. */
-  readonly rowLayer: RowLayer;
-  /** The container resize the editor repositions on — a reflow (a column width change, say) moves a
-   *  cell without any scroll. The `Overlay` owns the one `ResizeObserver` per Gantt (issue #137 F9),
-   *  so this borrows it rather than starting a second. */
-  readonly onResize: Overlay['onResize'];
-  /** Where the edited cell is now (`cellFor`), and the rect the wrapper's transform is relative to
-   *  (`rowLayerBounds`). One seam answers both, so "is my editor still anchored?" and "where do I
-   *  move it?" are one question with one answer (review A3). */
-  readonly dom: Pick<GanttDom, 'rowLayerBounds' | 'cellFor'>;
+   *  already moves. That is what makes an open editor follow its cell with no scroll listener.
+   *
+   *  It answers all three of "where do I mount", "what box do I position in" (`bounds`) and "when
+   *  must I move" (`onResize`). Before #168 those came from two different objects. */
+  readonly mountLayer: MountLayer;
+  /** Where the edited cell is now. It is the one answer to "is my editor still anchored?" — a
+   *  recycled row stops answering for the entry it used to hold. */
+  readonly dom: Pick<GanttDom, 'cellFor'>;
   /** Binds Escape for as long as this editor is open. The plugin routes it through the shared
    *  Keymap, so the newest handler wins (D-S5-9). */
   bindEscape(onEscape: () => void): Disposer;
@@ -221,9 +219,9 @@ export class CellEditorSession {
   /** Presents the editor over `cell`, binds every trigger, and moves focus into the control. */
   mount(cell: HTMLElement): void {
     this.#open = true;
-    this.#unmount = this.#ports.rowLayer.present(this.#wrapper);
+    this.#unmount = this.#ports.mountLayer.present(this.#wrapper);
     this.#positionOver(cell);
-    this.#bindings.add(this.#ports.onResize(() => this.reposition()));
+    this.#bindings.add(this.#ports.mountLayer.onResize(() => this.reposition()));
     this.#bindings.add(this.#ports.bindEscape(() => this.#ports.requestRevert()));
     this.#bindings.add(this.#control.bindCommitTriggers(() => this.#ports.requestCommit()));
     this.#wrapper.addEventListener('focusout', this.#onFocusOut);
@@ -303,7 +301,7 @@ export class CellEditorSession {
   };
 
   #positionOver(cell: HTMLElement): void {
-    positionOver(this.#wrapper, cell, this.#ports.dom.rowLayerBounds);
+    positionOver(this.#wrapper, cell, this.#ports.mountLayer.bounds);
   }
 
   /** The one "this did not save" signal (D-S5-19). The editor stays open, the state names the
@@ -355,7 +353,7 @@ export interface RefusalNotice {
 
 /** What a refusal notice borrows: the same three members a `CellEditorSession` borrows, for the
  *  same three jobs. A test drives a notice with no mounted Gantt. */
-export type RefusalNoticePorts = Pick<CellEditorPorts, 'rowLayer' | 'onResize' | 'dom' | 'bindEscape'>;
+export type RefusalNoticePorts = Pick<CellEditorPorts, 'mountLayer' | 'dom' | 'bindEscape'>;
 
 /** Puts the refusal where the user acted: over the cell, in the same `data-state="invalid"` a refused
  *  commit already uses (D-S5-19, issue #137 F11/F12). It is a notice, not an editor. It mounts no
@@ -378,13 +376,13 @@ export function presentRefusal(
   element.title = text;
   element.setAttribute('role', 'status');
   paintRefusal(element);
-  positionOver(element, cell, ports.dom.rowLayerBounds);
+  positionOver(element, cell, ports.mountLayer.bounds);
 
   // One store, freed in reverse and exactly once — the latch a hand-rolled `open` flag used to
   // spell here (#174). The unmount goes in first, so it runs last.
   const mounted = new DisposableStore();
-  mounted.add(ports.rowLayer.present(element));
-  mounted.add(ports.onResize(() => positionOver(element, cell, ports.dom.rowLayerBounds)));
+  mounted.add(ports.mountLayer.present(element));
+  mounted.add(ports.mountLayer.onResize(() => positionOver(element, cell, ports.mountLayer.bounds)));
   const notice: RefusalNotice = {
     element,
     dismiss: () => mounted.disposeAll(),
@@ -438,10 +436,7 @@ export function inlineEditing(options: InlineEditingOptions = {}): GanttPlugin {
       }
 
       const ports: CellEditorPorts = {
-        rowLayer: ctx.view.rowLayer,
-        // Wrapped, not handed over: `onResize` reads the overlay's own listener set, so it must be
-        // called on the overlay.
-        onResize: (callback) => ctx.view.overlay.onResize(callback),
+        mountLayer: ctx.view.rowLayer,
         dom: ctx.view.dom,
         bindEscape: (onEscape) =>
           ctx.interaction.registerKeyHandler(

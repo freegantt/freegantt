@@ -33,9 +33,9 @@ const SCOPED_FILES = [
   'src/view/gantt-dom.ts',
   'src/view/frame-settings.ts',
   'src/view/gantt-shell.ts',
+  'src/view/mount-layer.ts',
   'src/view/plugin-ports.ts',
   'src/view/plugin-registrations.ts',
-  'src/view/row-layer.ts',
 ];
 
 /** A description may run to 25 words (CLAUDE.md). An instruction may run to 20. No rule tells one

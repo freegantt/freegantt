@@ -9,10 +9,13 @@
 // and from `pane-layout.ts`'s own `SPLITTER_CLASS`. `gantt-dom.test.ts` renders a real frame and
 // asserts this resolver still reads what those backends emit.
 //
-// Why it is not on `Overlay`. `Overlay` is the mount layer — `present` and `render`. `contains`,
-// `bounds`, `paneBounds` and `elementForEntry` were never overlay work. They answer for the whole
-// container, and two of them return timeline nodes that sit outside the overlay. One word for
-// two concepts is the #7 failure, so the concepts split rather than the word being renamed.
+// Why it is not on a mount layer. A `MountLayer` answers "where do I mount, and how do I stay put"
+// (#168). `contains`, `bounds`, `paneBounds` and `elementForEntry` were never that work. They answer
+// for the whole container, and two of them return timeline nodes that sit in no layer at all. One
+// word for two concepts is the #7 failure, so the concepts split rather than the word being renamed.
+//
+// A layer's own rect left with it. `rowLayerBounds` sat here until #168 and now reads
+// `ctx.view.rowLayer.bounds` — the box belongs to the layer it describes.
 
 import {
   BAR_CLASS,
@@ -83,10 +86,6 @@ export interface GanttDom {
    *  the anchor's own pane rect instead. `bounds` stays the outer clamp for a popup whose anchor
    *  sits in neither pane (a toolbar button, say). */
   readonly paneBounds: { grid: DOMRect; timeline: DOMRect };
-  /** The grid row layer's own client rect — the frame content mounted through `ctx.view.rowLayer`
-   *  positions in (#158). Unlike `paneBounds.grid`, this box moves with the rows. A sibling of the
-   *  rows rides the same transform, so the box it measures against must be the moved one. */
-  readonly rowLayerBounds: DOMRect;
 }
 
 /** Ordered by nothing: `Element.closest` answers with the *nearest* ancestor that matches any of
@@ -165,10 +164,6 @@ export class ContainerDom implements GanttDom {
 
   get paneBounds(): { grid: DOMRect; timeline: DOMRect } {
     return this.#paneLayout.paneBounds();
-  }
-
-  get rowLayerBounds(): DOMRect {
-    return this.#paneLayout.rowLayerBounds();
   }
 
   /** Frozen, because plugin code reads this object and the memo keeps it. A caller that wrote to it

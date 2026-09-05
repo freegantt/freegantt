@@ -46,8 +46,12 @@ function makeDom(container: HTMLElement): GanttShellPorts['dom'] {
     cellText: () => '',
     bounds: new DOMRect(),
     paneBounds: { grid: new DOMRect(), timeline: new DOMRect() },
-    rowLayerBounds: new DOMRect(),
   };
+}
+
+/** #168: one shape serves both layers, so one fake does too. */
+function fakeMountLayer(): GanttShellPorts['overlay'] {
+  return { present: vi.fn(), onResize: vi.fn(), bounds: new DOMRect() };
 }
 
 function makeEntry(id: string): Entry {
@@ -64,8 +68,8 @@ function makeHarness(overrides: Partial<GanttShellPorts> = {}): Harness {
   document.body.append(container);
   const shell: GanttShellPorts = {
     events: { on: vi.fn(), off: vi.fn() },
-    overlay: { present: vi.fn() } as unknown as GanttShellPorts['overlay'],
-    rowLayer: { present: vi.fn() },
+    overlay: fakeMountLayer(),
+    rowLayer: fakeMountLayer(),
     dom: makeDom(container),
     commands: {
       register: (command) => registry.add(`command:${command.id}`),
@@ -198,6 +202,18 @@ describe('buildPluginPorts — disposal (#155)', () => {
 
     expect(first.registry.live).toEqual([]);
     expect(second.registry.live).toEqual(['decoration:underBars']);
+  });
+});
+
+// #168: the reconciler seam left the overlay and now sits beside the two mount layers. It is still
+// the one way `extensions/` reaches `render/dom` (D-S5-5), and it still refuses raw HTML (I13).
+describe('buildPluginPorts — renderElement (S5.3, D-S5-10)', () => {
+  it('builds a live node from an ElementDescription, and never as HTML', () => {
+    const { ports } = makeHarness();
+    const node = ports.view.renderElement({ text: '<script>alert(1)</script>' });
+
+    expect(node.textContent).toBe('<script>alert(1)</script>');
+    expect(node.querySelector('script')).toBeNull();
   });
 });
 

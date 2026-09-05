@@ -11,32 +11,24 @@
 import type { Disposer, PluginId } from '../model/index.js';
 import type { Dataset } from './dataset.js';
 import type { KeyEventLike } from '../extensions/keymap.js';
-import type {
-  DomTarget,
-  EntryFieldEdit,
-  GanttDom,
-  Overlay,
-  OverlayHandle,
-  PluginContextPorts,
-  RowLayer,
-} from '../view/index.js';
+import type { DomTarget, EntryFieldEdit, GanttDom, MountLayer, PluginContextPorts } from '../view/index.js';
 import type { CommandRegistryOf, KeyBindingOf } from './command.js';
 
-// Re-exported for the same reason `Overlay`/`OverlayHandle` are, just below: a plugin author typing
-// a `registerKeyHandler` callback names this.
+// Re-exported for the same reason `MountLayer` is, just below: a plugin author typing a
+// `registerKeyHandler` callback names this.
 export type { KeyEventLike };
 
 // Re-exported so `extensions/features/inline-editing.ts` can import this file directly, not the
 // `api/index.js` barrel. That barrel re-exports `inlineEditing` from that very file. Importing the
-// barrel back would close that edge into a cycle (`no-circular`). `Overlay`/`OverlayHandle` just
-// below are re-exported here rather than from `view/` for the same reason.
+// barrel back would close that edge into a cycle (`no-circular`). `MountLayer` just below is
+// re-exported here rather than from `view/` for the same reason.
 export type { EntryFieldEdit };
 
 // Re-exported so `extensions/popup.ts` can import this file directly, not the `api/index.js`
 // barrel. That barrel re-exports `createPopup` from `extensions/popup.ts`. Importing the barrel
-// back would close that edge into a cycle (`no-circular`). `GanttDom` travels with them: a `Popup`
-// clamps against `bounds`/`paneBounds`, which review N1 moved off `Overlay`.
-export type { GanttDom, DomTarget, Overlay, OverlayHandle, RowLayer };
+// back would close that edge into a cycle (`no-circular`). `GanttDom` travels with it: a `Popup`
+// clamps against `bounds`/`paneBounds`, which review N1 moved off the mount layer.
+export type { GanttDom, DomTarget, MountLayer };
 
 // #166: re-exported because `PluginContextOf` below is a projection of it, and `etc/freegantt.api.md`
 // must keep showing the plugin surface member by member. It is the I11 contract for that surface, and

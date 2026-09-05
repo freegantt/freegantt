@@ -738,8 +738,9 @@ interface PluginContext {
     resolveTooltipContent(entryId: EntryId): ElementDescription | undefined;   // the body, not a tooltip
     resolveTooltipColumns(entry: Entry): readonly TooltipColumn[];
     isColumnEditable(field: FieldKey): boolean | undefined;
-    overlay: Overlay;               // the mount layer that escapes the pane: present(node), render(description), onResize
-    rowLayer: RowLayer;             // #158: the mount layer that travels with the rows: present(node)
+    overlay: MountLayer;            // #168: the mount layer that escapes the pane
+    rowLayer: MountLayer;           // #158: the mount layer that travels with the rows
+    renderElement(d: ElementDescription): HTMLElement;   // D-S5-10: the one seam extensions/ has to the reconciler
     dom: GanttDom;                  // this Gantt's own DOM, as questions — see below
     onDomEvent<K extends keyof DocumentEventMap>(   // one document listener, scoped to this Gantt
       type: K,
@@ -776,7 +777,16 @@ interface GanttDom {
   cellText(cell: HTMLElement): string;
   readonly bounds: DOMRect;                                       // the container's rect
   readonly paneBounds: { grid: DOMRect; timeline: DOMRect };      // each pane's own rect
-  readonly rowLayerBounds: DOMRect;                               // #158: the row layer's own rect, after the scroll transform
+}
+```
+
+Both mount layers are one shape (#168):
+
+```ts
+interface MountLayer {
+  present(content: HTMLElement): Disposer;    // mount here; the Disposer un-mounts
+  onResize(callback: () => void): Disposer;   // the container resized, so re-place your content
+  readonly bounds: DOMRect;                   // this layer's own rect — the frame content sits in
 }
 ```
 
@@ -793,15 +803,17 @@ Rules:
   hands the handler the resolved target, and files its own removal (capture flag included) in
   `ctx.disposables`. A plugin that must hear events *outside* its Gantt — a dismiss-on-outside-pointer
   — is the one exception, and `extensions/popup.ts` is the only place that takes it.
-- **`Overlay` is the mount layer, and says so.** `present`, `render`, `onResize`. Geometry and
-  identity moved to `ctx.view.dom` (review N1): `overlay.elementForEntry(id)` returned a timeline bar
-  that was never in the overlay, which is the #7 failure of one word covering two concepts.
-- **Two mount layers, and the scroll decides which (#158).** `ctx.view.rowLayer.present(node)` mounts
-  beside the rows, inside the pane. The scroll that moves the rows moves that node in the same frame,
-  so nothing repositions it from a scroll listener. The Cell editor and its refusal notice mount here,
-  and they position once against `ctx.view.dom.rowLayerBounds`. `ctx.view.overlay` stays the layer for
-  content that must escape the pane box — a tooltip and a menu, which dismiss on a scroll rather than
-  follow it.
+- **One mount shape, two instances (#168).** `MountLayer` answers "where do I mount, and how do I
+  stay put": `present`, `onResize`, `bounds`. Identity and whole-Gantt geometry stay on
+  `ctx.view.dom` (review N1): `overlay.elementForEntry(id)` returned a timeline bar that was never in
+  the overlay, which is the #7 failure of one word covering two concepts. A layer's *own* rect is
+  the exception, and it lives on the layer it describes.
+- **The scroll decides which layer (#158).** `ctx.view.rowLayer.present(node)` mounts beside the
+  rows, inside the pane. The scroll that moves the rows moves that node in the same frame, so nothing
+  repositions it from a scroll listener. The Cell editor and its refusal notice mount here, and they
+  position once against `ctx.view.rowLayer.bounds`. `ctx.view.overlay` stays the layer for content
+  that must escape the pane box — a tooltip and a menu, which dismiss on a scroll rather than follow
+  it. Reposition-on-resize belongs to whatever you mounted into, so both layers carry `onResize`.
 - **One module declares the groups.** `view/plugin-ports.ts` types every member a plugin sees, in the group a plugin reads it in, and `buildPluginPorts(shellPorts, pluginId)` builds one set per installed plugin. `api/gantt.ts` adds `dataset` and `gantt` — the two api-level members `view/` may not name (D-S5-5) — and nothing else. So a new seam is one edit in one file, and a member declared in the wrong group does not compile.
 - **One gated shape, once.** `registerWhileOpen` in that same file asserts the gate, registers, invalidates, builds the `Disposer`, and files it with the plugin's own `DisposableStore`. A new `register*` names what registers and what must run again. It transcribes nothing.
 - **A verb says whether an answer comes back.** `propose*` asks, and the caller must read the Veto. `announce*` tells, and returns `void`. `emit*` said neither, so it is retired from the plugin surface.
