@@ -13,10 +13,12 @@ export interface InteractionState {
    *  handle resolution below, never a paint of its own: the handles park on the picked bar while
    *  nothing is hovered. Undefined once the selection drops the picked Item's Entry. */
   pickedItemId?: ItemId;
-  /** The one item the shared handle pair sits on (S3, D-S3-6/D-S3-8): the hovered bar, else the
-   *  single selected one — and only when its `resize` capability resolved true. Undefined parks the
-   *  handles. */
-  resizableItemId?: ItemId;
+  /** The Entry the shared handle pair brackets (S3, D-S3-6/D-S3-8): the hovered bar's Entry, else
+   *  the single selected one — and only when its `resize` capability resolved true. Undefined parks
+   *  the handles. A resize acts on the Entry's envelope (#200), so the pair straddles every bar the
+   *  Entry drew: the `start` handle on the earliest bar, the `end` handle on the latest. A backend
+   *  reads those bars off the frame it synced, the same way `selectedEntryIds` paints. */
+  resizableEntryId?: EntryId;
   /** The hovered bar, and only when its `move` capability resolved true — what gets `cursor: grab`
    *  (S3, D-S3-6). */
   movableItemId?: ItemId;

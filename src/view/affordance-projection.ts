@@ -21,7 +21,10 @@ export interface AffordanceInputs {
 export interface AffordanceIds {
   hoveredItemId?: ItemId;
   movableItemId?: ItemId;
-  resizableItemId?: ItemId;
+  /** The Entry the handle pair brackets (#200) — the pair sits on that Entry's envelope, so the two
+   *  handles can land on two different bars. Which bars those are is the backend's own reading of
+   *  the frame it synced, the same way the Selection paints (#185). */
+  resizableEntryId?: EntryId;
 }
 
 /** D-S3-6: the hovered bar decides when there is one — even a hover that resolves to "no handles"
@@ -38,7 +41,7 @@ export function projectAffordances(inputs: AffordanceInputs): AffordanceIds {
     out.movableItemId = hoveredItemId;
   }
 
-  const resizableItemId = resolveResizableItemId({
+  const resizableEntryId = resolveResizableEntryId({
     hoveredItemId,
     hoveredEntryId,
     selection,
@@ -46,30 +49,30 @@ export function projectAffordances(inputs: AffordanceInputs): AffordanceIds {
     itemIdsForEntry,
     canGesture,
   });
-  if (resizableItemId !== undefined) out.resizableItemId = resizableItemId;
+  if (resizableEntryId !== undefined) out.resizableEntryId = resizableEntryId;
   return out;
 }
 
-/** The handle pair sits on one bar, so the fallback needs one Item, not the selection's whole paint
- *  (#185). With nothing hovered and one entry selected it takes the picked Item when that entry
- *  drew it. Otherwise it takes the entry's own Item, and only when the entry draws exactly one — a
- *  segmented entry selected from the grid has no single bar to hold the handles, so it gets none. */
-function resolveResizableItemId(inputs: {
+/** Which Entry does the handle pair bracket? The hovered bar's Entry when a bar is hovered. With
+ *  nothing hovered, the single selected Entry — but only once the pointer has picked one of its bars
+ *  (#185), or when it draws exactly one bar. A segmented Entry selected from the grid pane has had
+ *  no bar picked, so it gets no handles until the pointer visits one. */
+function resolveResizableEntryId(inputs: {
   hoveredItemId: ItemId | undefined;
   hoveredEntryId: EntryId | undefined;
   selection: readonly EntryId[];
   pickedItemId: ItemId | undefined;
   itemIdsForEntry: (id: EntryId) => readonly ItemId[];
   canGesture: (capability: keyof Interactions, id: EntryId) => boolean;
-}): ItemId | undefined {
+}): EntryId | undefined {
   const { hoveredItemId, hoveredEntryId, selection, pickedItemId, itemIdsForEntry, canGesture } = inputs;
   if (hoveredItemId !== undefined) {
-    return hoveredEntryId !== undefined && canGesture('resize', hoveredEntryId) ? hoveredItemId : undefined;
+    return hoveredEntryId !== undefined && canGesture('resize', hoveredEntryId) ? hoveredEntryId : undefined;
   }
   if (selection.length !== 1) return undefined;
   const soleId = selection[0]!;
   if (!canGesture('resize', soleId)) return undefined;
   const drawn = itemIdsForEntry(soleId);
-  if (pickedItemId !== undefined && drawn.includes(pickedItemId)) return pickedItemId;
-  return drawn.length === 1 ? drawn[0] : undefined;
+  if (pickedItemId !== undefined && drawn.includes(pickedItemId)) return soleId;
+  return drawn.length === 1 ? soleId : undefined;
 }

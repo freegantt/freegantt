@@ -282,7 +282,12 @@ export function createDomBackend(options?: DomBackendOptions): RenderBackend<HTM
   // whose token set actually changed — O(changed items), not O(bars) (I5, [S3-A3]).
   let paintedHovered: ItemId | undefined;
   let paintedSelected: ReadonlySet<ItemId> = new Set();
-  let paintedResizable: ItemId | undefined;
+  /** The Entry the handle pair currently brackets (#200) — Entry-keyed, like the Selection it sits
+   *  beside, because the pair straddles every bar that Entry drew. */
+  let paintedResizable: EntryId | undefined;
+  /** The two bars `paintResizeHandles` last put the handles on. `hitTest` reads it, so a grab on a
+   *  handle names the bar under the pointer instead of an Item id built from an Entry id (#185). */
+  let paintedHandleBars: { start: ItemId; end: ItemId } | undefined;
   let paintedMovable: ItemId | undefined;
   /** S3.5, D-S3-17: bars an unsettled `beforeEntryMove`/`beforeEntryResize` Promise is holding. */
   let paintedPending: ReadonlySet<ItemId> = new Set();
@@ -316,21 +321,47 @@ export function createDomBackend(options?: DomBackendOptions): RenderBackend<HTM
    *  paint step ever builds an Item id out of an Entry id. `syncBars` is the only writer. */
   const itemIdsByEntryId = new Map<EntryId, ItemId[]>();
 
-  /** Moves the shared handle pair onto `geom`, or parks both (D-S3-8) when it is undefined. `hidden`
-   *  is a DOM property write, not `.style` — the base stylesheet owns `[hidden] { display: none }`. */
-  function paintResizeHandles(geom: HandleGeom | undefined): void {
+  /** The two bars the handle pair sits on: the Entry's leftmost mounted bar and its rightmost one
+   *  (#200). A resize acts on the Entry's envelope, so a segmented Entry hands its `start` handle to
+   *  one bar and its `end` handle to another; an Entry that drew one bar names it twice, exactly as
+   *  before. Undefined when the Entry has no mounted bar to hold either handle. */
+  function envelopeBarsOfEntry(id: EntryId | undefined): { start: ItemId; end: ItemId } | undefined {
+    if (id === undefined) return undefined;
+    const mounted = itemIdsByEntryId.get(id);
+    if (mounted === undefined || mounted.length === 0) return undefined;
+    let start = mounted[0]!;
+    let end = start;
+    for (const item of mounted) {
+      const geom = barGeomByItemId.get(item);
+      if (geom === undefined) continue;
+      if (geom.x < barGeomByItemId.get(start)!.x) start = item;
+      const endGeom = barGeomByItemId.get(end)!;
+      if (geom.x + geom.width > endGeom.x + endGeom.width) end = item;
+    }
+    return { start, end };
+  }
+
+  /** Moves the shared handle pair onto `bars`' own committed geometry, or parks both (D-S3-8) when
+   *  it is undefined. Each handle reads its own bar, so a packed Entry whose Segments sit in two
+   *  lanes still gets each handle on the right row (#200). `hidden` is a DOM property write, not
+   *  `.style` — the base stylesheet owns `[hidden] { display: none }`. */
+  function paintResizeHandles(bars: { start: ItemId; end: ItemId } | undefined): void {
     if (!startHandle || !endHandle) return;
-    if (!geom) {
+    const startGeom = bars === undefined ? undefined : barGeomByItemId.get(bars.start);
+    const endGeom = bars === undefined ? undefined : barGeomByItemId.get(bars.end);
+    if (!startGeom || !endGeom) {
       startHandle.hidden = true;
       endHandle.hidden = true;
+      paintedHandleBars = undefined;
       return;
     }
     startHandle.hidden = false;
     endHandle.hidden = false;
-    startHandle.style.transform = `translate(${geom.x}px, ${geom.y}px)`;
-    startHandle.style.height = `${geom.height}px`;
-    endHandle.style.transform = `translate(${geom.x + geom.width}px, ${geom.y}px)`;
-    endHandle.style.height = `${geom.height}px`;
+    startHandle.style.transform = `translate(${startGeom.x}px, ${startGeom.y}px)`;
+    startHandle.style.height = `${startGeom.height}px`;
+    endHandle.style.transform = `translate(${endGeom.x + endGeom.width}px, ${endGeom.y}px)`;
+    endHandle.style.height = `${endGeom.height}px`;
+    paintedHandleBars = bars;
   }
 
   /** S3.8, D-S3-15: parks the Cursor line when `x` is undefined; otherwise translates the stroke
@@ -952,12 +983,12 @@ export function createDomBackend(options?: DomBackendOptions): RenderBackend<HTM
       syncRowBands(frame.rows, frame.contentWidth, frame.visible.width);
       syncBars(frame.bars);
       // A resize commit repaints the resized bar with new geometry through this same `sync()`, but
-      // `applyState`'s handle repaint is gated on `resizableItemId` actually changing — it stays the
-      // same item across a commit whenever the bar is still hovered or is the sole selection, so that
-      // gate alone left the handle pair glued to its pre-commit position. The handle pair's geometry
-      // has to track `syncBars` every frame, the same way a bar's own transform does, not just on
-      // identity change.
-      if (paintedResizable !== undefined) paintResizeHandles(barGeomByItemId.get(paintedResizable));
+      // `applyState`'s handle repaint is gated on `resizableEntryId` actually changing — it stays the
+      // same Entry across a commit whenever the bar is still hovered or is the sole selection, so
+      // that gate alone left the handle pair glued to its pre-commit position. The handle pair's
+      // geometry has to track `syncBars` every frame, the same way a bar's own transform does, not
+      // just on identity change.
+      if (paintedResizable !== undefined) paintResizeHandles(envelopeBarsOfEntry(paintedResizable));
       dateLines?.sync(frame.decorations, frame.contentHeight, frame.visible.height);
       decorations?.sync(
         frame.underBars,
@@ -1036,11 +1067,11 @@ export function createDomBackend(options?: DomBackendOptions): RenderBackend<HTM
       paintedSelectedEntryIds = nextSelectedEntryIds;
       paintedSelectedRows = nextSelectedRows;
 
-      // D-S3-8: the shared handle pair follows `resizableItemId`, positioned off the committed
+      // D-S3-8: the shared handle pair follows `resizableEntryId`, positioned off the committed
       // geometry `syncBars` already recorded — never a per-item computation of its own.
-      const nextResizable = state.resizableItemId;
+      const nextResizable = state.resizableEntryId;
       if (nextResizable !== paintedResizable) {
-        paintResizeHandles(nextResizable !== undefined ? barGeomByItemId.get(nextResizable) : undefined);
+        paintResizeHandles(envelopeBarsOfEntry(nextResizable));
         paintedResizable = nextResizable;
       }
 
@@ -1064,12 +1095,14 @@ export function createDomBackend(options?: DomBackendOptions): RenderBackend<HTM
       if (!barLayer) return null;
       const el = document.elementFromPoint(at.x, at.y);
       // S3.4, D-S3-4: the shared handle pair sits above the bar layer in paint order, so a hit on a
-      // handle is checked first — `paintedResizable` is the one entry the handle pair currently
-      // belongs to (D-S3-8), a parked (hidden) handle is never returned by elementFromPoint.
+      // handle is checked first — `paintedHandleBars` names the bar each handle sits on (D-S3-8,
+      // #200), a parked (hidden) handle is never returned by elementFromPoint.
       const handle = el instanceof Element ? el.closest<HTMLElement>(`.${BAR_HANDLE_CLASS}`) : null;
-      if (handle && paintedResizable !== undefined) {
+      if (handle && paintedHandleBars !== undefined) {
         const edge = handle.dataset['edge'];
-        if (edge === 'start' || edge === 'end') return { kind: 'bar', itemId: paintedResizable, edge };
+        if (edge === 'start' || edge === 'end') {
+          return { kind: 'bar', itemId: paintedHandleBars[edge], edge };
+        }
       }
       const bar = el instanceof Element ? el.closest<HTMLElement>(`.${BAR_CLASS}`) : null;
       if (bar && barLayer.contains(bar)) {
@@ -1111,6 +1144,7 @@ export function createDomBackend(options?: DomBackendOptions): RenderBackend<HTM
       paintedSelected = new Set();
       paintedPending = new Set();
       paintedResizable = undefined;
+      paintedHandleBars = undefined;
       paintedMovable = undefined;
       paintedPreview = new Set();
       paintedDragging = new Set();

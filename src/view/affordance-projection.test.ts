@@ -27,7 +27,7 @@ describe('projectAffordances (D-S3-6)', () => {
     expect(result.hoveredItemId).toBe(ITEM_A);
     expect(result.movableItemId).toBe(ITEM_A);
     // A is hovered but not resize-capable, and B is selected but not hovered — hover still wins.
-    expect(result.resizableItemId).toBeUndefined();
+    expect(result.resizableEntryId).toBeUndefined();
   });
 
   it('selection fallback only at exactly one selected entry', () => {
@@ -38,7 +38,7 @@ describe('projectAffordances (D-S3-6)', () => {
       itemIdsForEntry: oneBarEach,
       canGesture: () => true,
     });
-    expect(oneSelected.resizableItemId).toBe(ITEM_A);
+    expect(oneSelected.resizableEntryId).toBe(A);
 
     const twoSelected = projectAffordances({
       hoveredItemId: undefined,
@@ -47,7 +47,7 @@ describe('projectAffordances (D-S3-6)', () => {
       itemIdsForEntry: oneBarEach,
       canGesture: () => true,
     });
-    expect(twoSelected.resizableItemId).toBeUndefined();
+    expect(twoSelected.resizableEntryId).toBeUndefined();
 
     const noneSelected = projectAffordances({
       hoveredItemId: undefined,
@@ -56,7 +56,7 @@ describe('projectAffordances (D-S3-6)', () => {
       itemIdsForEntry: oneBarEach,
       canGesture: () => true,
     });
-    expect(noneSelected.resizableItemId).toBeUndefined();
+    expect(noneSelected.resizableEntryId).toBeUndefined();
   });
 
   it('an incapable hover resolves movable/resizable to undefined', () => {
@@ -69,7 +69,7 @@ describe('projectAffordances (D-S3-6)', () => {
     });
     expect(result.hoveredItemId).toBe(ITEM_A);
     expect(result.movableItemId).toBeUndefined();
-    expect(result.resizableItemId).toBeUndefined();
+    expect(result.resizableEntryId).toBeUndefined();
   });
 
   it('an incapable sole selection resolves resizable to undefined', () => {
@@ -80,7 +80,7 @@ describe('projectAffordances (D-S3-6)', () => {
       itemIdsForEntry: oneBarEach,
       canGesture: () => false,
     });
-    expect(result.resizableItemId).toBeUndefined();
+    expect(result.resizableEntryId).toBeUndefined();
   });
 
   it('no hover and no selection resolves every id to undefined', () => {
@@ -93,10 +93,10 @@ describe('projectAffordances (D-S3-6)', () => {
     });
     expect(result.hoveredItemId).toBeUndefined();
     expect(result.movableItemId).toBeUndefined();
-    expect(result.resizableItemId).toBeUndefined();
+    expect(result.resizableEntryId).toBeUndefined();
   });
 
-  it('the handles follow the picked bar, not only segment 0 (#185)', () => {
+  it('a picked bar hands the handles to its own Entry, whichever Segment it drew (#185, #200)', () => {
     const segments = [itemId(A, 0), itemId(A, 1), itemId(A, 2)];
     const result = projectAffordances({
       hoveredItemId: undefined,
@@ -105,7 +105,22 @@ describe('projectAffordances (D-S3-6)', () => {
       itemIdsForEntry: () => segments,
       canGesture: () => true,
     });
-    expect(result.resizableItemId).toBe(segments[1]);
+    // The pair brackets the Entry's envelope, so the answer is the Entry, not the picked bar (#200).
+    expect(result.resizableEntryId).toBe(A);
+  });
+
+  it('hovering one Segment hands the handles to its Entry (#200)', () => {
+    const result = projectAffordances({
+      hoveredItemId: itemId(A, 2),
+      selection: [],
+      pickedItemId: undefined,
+      itemIdsForEntry: () => [itemId(A, 0), itemId(A, 1), itemId(A, 2)],
+      canGesture: () => true,
+    });
+    // The hovered bar still carries the hover and move paint; the handle pair answers per Entry.
+    expect(result.hoveredItemId).toBe(itemId(A, 2));
+    expect(result.movableItemId).toBe(itemId(A, 2));
+    expect(result.resizableEntryId).toBe(A);
   });
 
   it('a segmented entry selected from the grid parks the handles (#185)', () => {
@@ -117,7 +132,7 @@ describe('projectAffordances (D-S3-6)', () => {
       canGesture: () => true,
     });
     // Two bars, no pointer pick: no single bar owns the shared handle pair.
-    expect(result.resizableItemId).toBeUndefined();
+    expect(result.resizableEntryId).toBeUndefined();
   });
 
   it('a picked bar of another entry never holds the handles (#185)', () => {
@@ -128,6 +143,6 @@ describe('projectAffordances (D-S3-6)', () => {
       itemIdsForEntry: oneBarEach,
       canGesture: () => true,
     });
-    expect(result.resizableItemId).toBe(ITEM_A);
+    expect(result.resizableEntryId).toBe(A);
   });
 });
