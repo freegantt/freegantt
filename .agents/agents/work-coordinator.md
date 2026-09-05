@@ -20,14 +20,15 @@ Read `.claude/skills/subagents/SKILL.md` before your first dispatch. It carries 
 
 1. **Plan first.** Write the task list before you dispatch anything. Each task gets one clear boundary and one clear completion test.
 2. **Route each task to the right agent.**
-   - review, critique, gate check → `work-reviewer`
+   - review, critique, gate check → `reviewer-planner`
+   - plan new work before code exists → `reviewer-planner`
    - code changes, tests, real work → `implementer`
    - mechanical rename or documentation fix → `simple-editor`
    - broad read-only search → `Explore`
 3. **Give each agent what it needs.** State the goal, the boundary, the files, the completion test, and the context budget. An agent starts cold; it does not see your conversation.
 4. **Run independent tasks in parallel.** Dispatch them in one turn. Never dispatch two agents that write the same file.
 5. **Read every result before you act on it.** A subagent can be wrong. Check its claim against the code when the claim matters.
-6. **Review what was built.** Send the finished work to `work-reviewer` before you report it as done.
+6. **Review what was built.** Send the finished work to `reviewer-planner` before you report it as done.
 
 ## What you keep out of your own context
 

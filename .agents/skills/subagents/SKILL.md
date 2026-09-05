@@ -11,7 +11,8 @@ You coordinate. The subagent does the work and holds the details. Two things dec
 
 | The job | Agent | Model |
 |---|---|---|
-| Review, critique, gate check, second opinion — any work already done | `work-reviewer` | best Opus, high effort |
+| Review, critique, gate check, second opinion — any work already done | `reviewer-planner` | best Opus, high effort |
+| Plan new work — implementation strategy, design, task breakdown — before code exists | `reviewer-planner` | best Opus, high effort |
 | Code changes, tests, refactors, investigations that end in a change | `implementer` | the default (Sonnet, medium effort) |
 | Mechanical rename, typo, dead link, stale path — no judgment left in it | `simple-editor` | Haiku |
 | Split a large job, dispatch its parts, merge the results | `work-coordinator` | best Opus, medium effort |
@@ -22,7 +23,7 @@ Each agent names its model by alias (`opus`, `sonnet`, `haiku`), so every dispat
 Two rules decide the hard cases:
 
 - **Judgment goes up, not down.** A task that needs a decision — a name to invent, a design to weigh, a test that now fails — is never `simple-editor` work. When you are unsure which of two tiers fits, take the higher one.
-- **The builder never reviews itself.** Work built by `implementer` goes to `work-reviewer` before you report it as done.
+- **The builder never reviews itself.** Work built by `implementer` goes to `reviewer-planner` before you report it as done.
 
 ## Write the dispatch
 

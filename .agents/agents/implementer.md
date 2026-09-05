@@ -1,6 +1,6 @@
 ---
 name: implementer
-description: Does the ordinary build work — writes code, changes code, adds tests, runs the suite, fixes what it breaks, and reports what it did. Use this agent for any task that changes behavior or needs judgment about how to change it. Do not use it for a review (use work-reviewer) or for a mechanical rename (use simple-editor). See "When to invoke" in the body.
+description: Does the ordinary build work — writes code, changes code, adds tests, runs the suite, fixes what it breaks, and reports what it did. Use this agent for any task that changes behavior or needs judgment about how to change it. Do not use it for a review or a plan (use reviewer-planner) or for a mechanical rename (use simple-editor). See "When to invoke" in the body.
 model: sonnet
 effort: medium
 color: green
