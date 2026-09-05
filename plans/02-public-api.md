@@ -603,9 +603,21 @@ gantt.commands.register({
 });
 ```
 
-- **`entryIds: readonly EntryId[]`** is every Entry the invocation landed on, in row order. A
-  right-click on a row acts on all of them, because a left-click on that row already selects all of
-  them. The set arrives resolved, so no command asks the row what it holds.
+- **`entryIds: readonly EntryId[]`** is every Entry the invocation acts on. It is the same word
+  `DomTarget.entryIds` uses, and not always the same set. A `DomTarget` states a DOM fact: what the
+  node stands for. A `CommandTarget` states what the command acts on.
+- **The right-click rule (#199).** *A right-click acts on the Selection when the thing you clicked
+  is part of it. It acts on the thing you clicked when it is not.* So a right-click on an unselected
+  grid row names every Entry that row owns; a right-click on one bar of a multi-bar row names that
+  one Entry; and a right-click on one of three selected bars names all three. A node stands inside
+  the Selection only when every Entry it names is selected. A node that stands for no Entry — a
+  header cell, the splitter, a grouping header row — is part of nothing.
+- **A right-click outside the Selection replaces the Selection with what you clicked**, before the
+  menu opens. It runs the same cancelable `beforeSelectionChange` an assignment runs. Otherwise the
+  command acts on Entries the user cannot see highlighted.
+- **The keyboard runs the same rule** (D-S5-14, #205). `Shift+F10` and the Menu key open the menu
+  for the Selection, so three selected bars reach one menu that acts on three. The bar of the first
+  selected Entry stays the popup's anchor, because a popup needs a box on screen.
 - **A command that wants exactly one Entry says so**: `when: (ctx) => ctx.target?.entryIds.length
   === 1`, and reads `ctx.entry` for it. `ctx.entry` is the subject, never the set.
 - `kind` and `field` are the same two words `DomTarget` uses. There is no `rowId`: a row's identity

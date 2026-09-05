@@ -17,11 +17,16 @@ import type { Dataset } from './dataset.js';
  *  or `run(id)` invocation with no meaningful target for this kind leaves it `undefined`. */
 export interface CommandTarget {
   kind: TargetKind;
-  /** Every Entry this landed on, in row order — the same word and the same set `DomTarget.entryIds`
-   *  carries, copied straight across (#199). A Row may own several Entries, and a click on the row
-   *  selects all of them (#185), so a command invoked from that row acts on all of them:
+  /** Every Entry this invocation acts on, and the whole set a command runs over:
    *  `run: (ctx) => ctx.target?.entryIds.forEach(lock)`. A command that wants exactly one says so —
    *  `when: (ctx) => ctx.target?.entryIds.length === 1` — and reads `ctx.entry` for it.
+   *
+   *  It is the same word `DomTarget.entryIds` uses, but not always the same set (#199). A
+   *  `DomTarget` states a DOM fact: what the node stands for. This states what the command acts on,
+   *  and a right-click decides that from the Selection — the Selection when the thing you clicked
+   *  is part of it, and the thing you clicked when it is not. So a right-click on one of three
+   *  selected bars names three, and a right-click on an unselected row names every Entry that row
+   *  owns.
    *
    *  Empty for a `'header'` or `'splitter'` target, and for a grouping header row. Never
    *  `undefined`, so a `when` counts it with no fallback. */
