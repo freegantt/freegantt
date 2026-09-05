@@ -234,6 +234,7 @@ export class Gantt {
         },
         view: {
           overlay: parts.overlay,
+          rowLayer: parts.rowLayer,
           registerRenderer: parts.registerRenderer,
           resolveTooltip: parts.resolveTooltip,
           resolveTooltipColumns: parts.resolveTooltipColumns,

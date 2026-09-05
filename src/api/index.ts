@@ -78,6 +78,9 @@ export type { CapabilityRule, Interactions, KindDefaults } from '../view/index.j
 // S5.3, D-S5-8: `PluginContext.view.overlay`'s own type — a plugin builds a `Popup` (or its own
 // primitive) against this alone, never against `view/` or `render/` directly.
 export type { Overlay, OverlayHandle } from '../view/index.js';
+// #158: `PluginContext.view.rowLayer`'s own type — the mount seam for content that must scroll with
+// the rows instead of floating over them (the cell editor).
+export type { RowLayer } from '../view/index.js';
 // S5.3, D-S5-8: the anchoring/flipping/clamping/dismissal primitive tooltips, the context menu and
 // the cell editor (S5.5+) all build on. C3 (`plans/reviews/2026-09-02-s5-start-fixes.md`) folded its
 // Escape dismissal into the shared keymap (D-S5-9's "the innermost popup wins" needs the same

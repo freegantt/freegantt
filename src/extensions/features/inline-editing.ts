@@ -8,16 +8,25 @@
 // popup.ts`): `Popup`'s `content` is a static `ElementDescription`, rendered once through the
 // reconciler with no way to hand the caller back a live, listener-attachable node — exactly what an
 // editable `<input>` needs. `Popup` stays the right primitive for declarative content (a tooltip, a
-// menu); this file owns a live control end-to-end instead, mounted through the same `Overlay` layer
-// (`ctx.view.overlay.present`) so it never becomes a child of a recycled grid-row/cell node (those
-// are `render/dom`'s own reconciled DOM — writing into one directly would corrupt its own patch
-// assumptions, e.g. `cellSpec.patch`'s `node.lastElementChild` reads).
+// menu); this file owns a live control end-to-end instead.
+//
+// It mounts through `ctx.view.rowLayer` (#158), not the `Overlay` a popup uses. A tooltip and a menu
+// *dismiss* on scroll; an open editor must *follow* its cell, and the row layer is the element the
+// pane's own scroll already moves — one transform per frame for the vertical axis (D-S1.8-1), native
+// horizontal scrolling of the pane around it (D-S1.8-13). A sibling of the rows therefore travels
+// with them, in the same frame, with no scroll listener re-measuring anything: repositioning an
+// overlay from a `scroll` event runs a frame behind the paint it is chasing, which reads as jitter.
+// The clip is a bonus — `.fg-rows-clip` keeps the editor inside the pane instead of over the
+// timeline. Beside the rows, never inside one: a row and its cells are `render/dom`'s own reconciled
+// DOM, and writing into those corrupts its patch assumptions (`cellSpec.patch`'s
+// `node.lastElementChild` reads); `syncKeyed` leaves a foreign sibling of the rows alone.
 
 import type { GanttPlugin, PluginContext } from '../../api/gantt.js';
 import type { EntryFieldEdit, Overlay } from '../../api/plugin.js';
 import { EntryNotFoundError, MutationCancelledError } from '../../model/index.js';
 import type {
   CoreFieldValue,
+  Disposer,
   Entry,
   EntryId,
   Field,
@@ -127,10 +136,9 @@ interface OpenSession {
   row: HTMLElement;
   wrapper: HTMLElement;
   focusTrap: FocusTrap;
-  detachOverlay: () => void;
+  /** Removes the editor from the row layer. */
+  unmount: Disposer;
   detachListeners: () => void;
-  /** Puts the editor back over its own cell after the cell moves (a scroll, a reflow). */
-  reposition(): void;
   /** Guards a native `change` and a `keydown` Enter both firing for one commit (`date-input.ts`'s
    *  own `onCommit` fires both), and a commit racing a revert. */
   settled: boolean;
@@ -163,15 +171,16 @@ export function inlineEditing(options: InlineEditingOptions = {}): GanttPlugin {
       function teardown(current: OpenSession): void {
         current.detachListeners();
         current.focusTrap.deactivate();
-        current.detachOverlay();
+        current.unmount();
         session = undefined;
       }
 
-      /** Positions `wrapper` over `cell`'s own rect — no flip/clamp (unlike `Popup`): a cell editor
-       *  always sits exactly where the cell already is. */
+      /** Places `wrapper` over `cell` in the row layer's own coordinates — no flip/clamp (unlike
+       *  `Popup`): a cell editor always sits exactly where the cell already is. Both boxes move
+       *  together from here on, so this runs on a real move (a reflow), never on a scroll. */
       function position(wrapper: HTMLElement, cell: HTMLElement): void {
         const rect = cell.getBoundingClientRect();
-        const bounds = ctx.view.overlay.bounds;
+        const bounds = ctx.view.rowLayer.bounds;
         wrapper.style.transform = `translate(${(rect.left - bounds.left).toFixed(2)}px, ${(rect.top - bounds.top).toFixed(2)}px)`;
         wrapper.style.width = `${rect.width}px`;
         wrapper.style.height = `${rect.height}px`;
@@ -191,15 +200,12 @@ export function inlineEditing(options: InlineEditingOptions = {}): GanttPlugin {
       }
       ctx.dataset.on('change', onDatasetChange);
 
-      /** #158: the editor lives in the `Overlay`, not inside the scrolling pane, so a scroll moves the
-       *  cell out from under it. A refused edit is the case that shows this — that editor stays open
-       *  by contract (#137 F5) and so is still on screen to drift, while a committed one is already
-       *  torn down. Anchorage first: a row scrolled out of the frame has no cell to follow. */
+      /** The editor rides the row layer's own scroll (#158), so a scroll never repositions anything.
+       *  It still ends the session when the anchor leaves: virtualization recycles the row node onto
+       *  another entry, and an editor over another entry's row would write to the wrong place. */
       function onScroll(): void {
         const current = session;
-        if (!current) return;
-        if (!stillAnchored(current)) closeSession('revert');
-        else current.reposition();
+        if (current && !stillAnchored(current)) closeSession('revert');
       }
       document.addEventListener('scroll', onScroll, true);
 
@@ -286,7 +292,7 @@ export function inlineEditing(options: InlineEditingOptions = {}): GanttPlugin {
           onClosed?: () => void;
         },
       ): void {
-        const handle = ctx.view.overlay.present(wrapper);
+        const unmount = ctx.view.rowLayer.present(wrapper);
         position(wrapper, cell);
         // The cell is re-found from `row` on every move, never the closed-over `cell`: virtualization
         // may have recycled that node onto another entry, and `cellInRow` returns nothing when it did.
@@ -327,8 +333,7 @@ export function inlineEditing(options: InlineEditingOptions = {}): GanttPlugin {
           row,
           wrapper,
           focusTrap,
-          detachOverlay: () => handle.detach(),
-          reposition,
+          unmount,
           detachListeners: () => {
             detachResize();
             detachEscape();

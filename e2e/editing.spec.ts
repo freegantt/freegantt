@@ -63,3 +63,36 @@ test('a consumer replaces the editor through beforeEntryEdit (U8)', async ({ pag
   await expect(page.locator('#gantt .fg-cell-editor')).toHaveCount(0);
   await expect(cell).toHaveText('Renamed via prompt');
 });
+
+// #158: an open editor must stay glued to its own cell while the pane scrolls. It mounts in the grid
+// row layer (`ctx.view.rowLayer`), the element the pane's scroll already moves, so the browser
+// carries both boxes in one frame — the earlier overlay mount had to chase the cell from a `scroll`
+// listener, which lands a frame late and reads as jitter. jsdom cannot show that: this needs a real
+// scroll in a real browser. A vetoed edit is what keeps an editor open long enough to scroll at all
+// (#137 F5) — the harness has no veto, so an untouched editor left open serves the same purpose.
+test('an open editor stays over its cell while the pane scrolls (#158)', async ({ page }) => {
+  await page.goto('/');
+  const cell = page.locator('#gantt .fg-row [data-field="name"]').first();
+  await expect(cell).toBeVisible();
+  await cell.click(); // settle the #selection-readout reflow before the real double-click
+
+  await cell.dblclick();
+  const editor = page.locator('#gantt .fg-cell-editor');
+  await expect(editor).toBeVisible();
+
+  const offsetToCell = async (): Promise<{ x: number; y: number }> => {
+    const [a, b] = [await editor.boundingBox(), await cell.boundingBox()];
+    return { x: Math.round(a!.x - b!.x), y: Math.round(a!.y - b!.y) };
+  };
+  expect(await offsetToCell()).toEqual({ x: 0, y: 0 });
+
+  const timelinePane = page.locator('.fg-timeline-pane');
+  await timelinePane.evaluate((el) => {
+    el.scrollTop = 60;
+  });
+  await expect.poll(async () => timelinePane.evaluate((el) => el.scrollTop)).toBeGreaterThan(0);
+
+  // Still open, still exactly over its own cell — which has itself moved up with the scroll.
+  await expect(editor).toHaveCount(1);
+  expect(await offsetToCell()).toEqual({ x: 0, y: 0 });
+});

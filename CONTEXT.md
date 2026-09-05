@@ -259,6 +259,10 @@ _Avoid_: Resizer, drag handle (both describe the affordance, not the domain conc
 The Grid pane's width in px — the one number `PaneLayout` owns and the one thing a Splitter drag changes. Public as `gantt.gridWidth`, with the cancelable `beforeGridWidthChange`/`gridWidthChange` pair (S1.8). Spelled two ways on purpose: `gridWidth` in code, where the object it hangs off disambiguates, but `--fg-grid-pane-width` as a CSS custom property, where there is no object to disambiguate and "grid width" alone would read as gridline spacing among other tick/gridline tokens. Both spellings name the same number.
 _Avoid_: Grid pane width in code (too long once `gantt.` already says "grid pane"), gutter width (gutter is retired — see Grid pane)
 
+**Row layer**:
+The element the Grid pane's rows live in (`.fg-rows`, `PaneLayout.panes.grid`), and the `view/row-layer.ts` seam over it (`DomRowLayer`, `PluginContext.view.rowLayer`, #158). The Grid pane owns no vertical scrollbar, so this layer follows the Timeline pane's native scroll by one `translateY` per frame (D-S1.8-1) while the pane scrolls horizontally around it (D-S1.8-13). Content presented here therefore travels with the rows on both axes, in the same frame, with no scroll listener of its own — which is the whole difference from Overlay, and why the Cell editor mounts here and a Popup does not. Beside the rows, never inside one: a row and its cells are `render/dom`'s reconciled DOM.
+_Avoid_: Row container, Scroll layer (the layer is not the scroller — the Timeline pane is)
+
 **Render surface**:
 One of the two DOM elements (`grid`, `timeline`) a `RenderBackend.mount()` receives (`render/backend.ts`'s `RenderSurfaces<TSurface>`, S1.8). `render/dom` puts the row layer in the grid surface and the header/bar/sizer layers in the timeline surface; `render/null` ignores both. Replaces the pre-S1.8 single-container `mount()`, which reserved the row-label gutter inside the paint layer itself.
 _Avoid_: Mount target, Container (Container is the Gantt's own DOM anchor — a different, higher-level concept a Render surface is carved out of)
@@ -528,8 +532,12 @@ _Avoid_: Key handler (that names one registered entry, not the resolver that own
 The `view/overlay.ts` seam (`DomOverlay`, S5.3, D-S5-8): one absolutely positioned layer over the Gantt's Container, owning its own stacking order and lifetime. Knows nothing about tooltips, menus, or Popup's own placement math — it only presents an `HTMLElement`, renders an `ElementDescription` into a live node, and reports `bounds`/`paneBounds` for a Popup to clamp against. `PluginContext.view.overlay` hands a third-party plugin the exact same seam a built-in Popup is built over.
 _Avoid_: Layer (too generic — Overlay is this one specific layer, not the render/dom layer stack)
 
+**Cell editor**:
+The in-place editing control `inlineEditing()` opens over one Grid cell (S5.8, D-S5-19/D-S5-20, `.fg-cell-editor`). One open at a time. Not a Popup: it owns a live `<input>` end to end, mounts in the Row layer so the pane's scroll carries it (#158), and stays open in an invalid state when a commit is refused instead of dismissing (#137 F5).
+_Avoid_: Inline editor (names the feature — `inlineEditing()` — not the one control it opens), Field editor (a Field is what a value is; this edits one cell of one entry)
+
 **Popup**:
-The `extensions/popup.ts` anchoring/flipping/clamping/dismissal primitive (S5.3, D-S5-8/D-S5-9) built on Overlay alone. One implementation serves the tooltip, the context menu and the cell editor. `open()` while already open replaces the current popup (closes it first). Dismisses on Escape (folded into the shared Keymap, C3), an outside pointer, a scroll of the anchor's own pane, or blur, per its `dismissOn` option.
+The `extensions/popup.ts` anchoring/flipping/clamping/dismissal primitive (S5.3, D-S5-8/D-S5-9) built on Overlay alone. One implementation serves the tooltip and the context menu. The Cell editor is deliberately not one of its consumers: it needs a live, listener-attachable control rather than a static `ElementDescription`, and it must follow a scroll rather than dismiss on one (#158), so it owns its own control and mounts in the Row layer. `open()` while already open replaces the current popup (closes it first). Dismisses on Escape (folded into the shared Keymap, C3), an outside pointer, a scroll of the anchor's own pane, or blur, per its `dismissOn` option.
 _Avoid_: Tooltip, Menu (both are one consumer of this shared primitive, not the primitive itself)
 
 **DisposableStore**:

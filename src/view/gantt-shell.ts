@@ -49,6 +49,8 @@ import { PaneLayout } from './pane-layout.js';
 import type { Panes } from './pane-layout.js';
 import { DomOverlay } from './overlay.js';
 import type { Overlay } from './overlay.js';
+import { DomRowLayer } from './row-layer.js';
+import type { RowLayer } from './row-layer.js';
 import { attachSplitter } from './splitter.js';
 import type { SplitterAttachment } from './splitter.js';
 import { EventBus } from './event-bus.js';
@@ -232,6 +234,8 @@ export interface PluginContextPorts {
     options?: { captureInEditable?: boolean },
   ) => () => void;
   overlay: Overlay;
+  /** #158: `ctx.view.rowLayer`. Not gated by `RegistrationGate`, same posture as `overlay`. */
+  rowLayer: RowLayer;
   /** S5.4, D-S5-11: `ctx.view.registerRenderer`. Legal only while `setup` runs (D-S5-4), the same
    *  gate `registerKeybinding` above already takes. */
   registerRenderer: <P extends RendererPoint>(point: P, renderer: RendererFor<P>) => Disposer;
@@ -532,6 +536,7 @@ export class GanttShell {
   /** S5.3, D-S5-8: constructed once panes exist — see the plugin runtime's own comment just below for
    *  why. */
   #overlay: DomOverlay;
+  #rowLayer: DomRowLayer;
 
   constructor(options: GanttShellOptions) {
     this.#options = options;
@@ -552,6 +557,7 @@ export class GanttShell {
     // S5.3, D-S5-8: constructed right after the panes it measures, so it is ready by the time the
     // plugin runtime (just below) builds its first `PluginContext`.
     this.#overlay = new DomOverlay(this.#container, this.#panes.overlay, this.#paneLayout);
+    this.#rowLayer = new DomRowLayer(this.#panes.grid, this.#paneLayout);
 
     const hasOwnOptions =
       options.preset !== undefined || options.range !== undefined || options.fit !== undefined;
@@ -832,6 +838,7 @@ export class GanttShell {
         registerKeybinding,
         registerKeyHandler,
         overlay: this.#overlay,
+        rowLayer: this.#rowLayer,
         registerRenderer,
         resolveTooltip,
         resolveTooltipColumns,

@@ -1266,6 +1266,7 @@ export interface PluginContextOf<TGantt = unknown, TDataset = Dataset> {
     // (undocumented)
     view: {
         overlay: Overlay;
+        rowLayer: RowLayer;
         registerRenderer<P extends RendererPoint>(point: P, renderer: RendererFor<P>): Disposer;
         resolveTooltip(entryId: EntryId): ElementDescription | undefined;
         resolveTooltipColumns(entry: Entry): readonly TooltipColumn[];
@@ -1406,6 +1407,12 @@ export type RowHeightMode = 'fixed' | 'pack';
 export type RowId = string & {
     readonly __brand: 'RowId';
 };
+
+// @public (undocumented)
+export interface RowLayer {
+    readonly bounds: DOMRect;
+    present(content: HTMLElement): Disposer;
+}
 
 // @public (undocumented)
 export interface RowSort {
