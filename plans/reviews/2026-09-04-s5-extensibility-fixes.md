@@ -81,6 +81,7 @@ R2 lives in `view/` and `api/`. They do not touch the same files.
 | P4 | Every plugin ends with `return () => {};` | ergonomics | R5 |
 | P6 | Three of `RendererRegistry`'s four resolvers only forward | middle man | R5 |
 | H3 | A cell renderer can only see the formatted string | API gap | R5 |
+| P2b | `RendererAlreadyRegisteredError.point` cannot name a kind | naming, found in R5 | R5 |
 | A6 | Four cheap wins | quality | R6 |
 | H1 | Three demo plugins are copied between two harness pages | duplication | R6 |
 | ST1 | Comment prose has drifted past the ASD-STE100 rule | **hard** standard | R6 |
@@ -280,25 +281,37 @@ Files: `src/extensions/features/inline-editing.ts`, its tests, `plans/s5-extensi
 Files: `src/view/renderer-registry.ts`, `src/layout/items/produce-items.ts`, `src/layout/renderer.ts`,
 `src/extensions/plugin-runtime.ts`, `src/api/plugin.ts`, `harness/plugins/`.
 
-- [ ] **P2 — key the per-kind bar form on the kind.** Today `registerRenderer('bar', …)` claims one
-      global slot, so a second kind-defining plugin throws.
-      Key the per-kind map form on `bar:${kind}` in the registration table that is already there.
-      Keep the whole-point claim (a function, not a map) exclusive, as it is today.
-      `cell`, `header` and `tooltip` keep one slot per point: they have no key to merge on.
-- [ ] **P2 test.** Install two plugins. One registers `'buffer'`. One registers `'risk'`.
-      Both must install. Both must paint. Disposing one must leave the other.
-      This is user story U10, tested for two plugins instead of one.
-- [ ] **P3 — export `wholeEntryItem`.** It is pure and DOM-free and holds no internals.
-      The common item producer then reads `(entry) => [wholeEntryItem(entry)]`.
-      It also removes the one place a plugin can get the `itemId(entry.id, 0)` convention wrong.
-- [ ] **P4 — `setup(ctx): Disposer | void`.** `PluginRuntime.install` gains one `?.()`.
-      Three demo plugins then drop their empty `return () => {};`.
-- [ ] **P6 — one `resolve<P extends RendererPoint>(point, consumer)`.** It replaces `resolveCell`,
-      `resolveHeader` and `resolveTooltip`. `resolveBar` stays: it does the per-kind pass.
-- [ ] **H3 — `CellRendererContext` gains `rawValue: unknown`.** It sits beside `value: string`.
-      The Field registry already produced it. A renderer then branches on the number.
-      `harness/plugins.ts`'s `overBudget` regex goes away.
-- [ ] Update `plans/02` §4, `CONTEXT.md` and `pnpm api-report`.
+- [x] **P2 — key the per-kind bar form on the kind.** `RendererRegistry` keys the shared
+      registration table on a **slot** now: `'cell'`/`'header'`/`'tooltip'`/`'bar'` for a whole-point
+      claim, `bar:${kind}` for each kind of a per-kind map. The whole-point form (a function) stays
+      exclusive — it answers every kind, so it refuses, and is refused by, any per-kind claim.
+      `RegistrationTable` gained `keys()` for that one check.
+      `RendererAlreadyRegisteredError.point` is `slot` now: it names `bar:buffer`, not `bar`.
+- [x] **P2 test.** `renderer-registry.test.ts` gains eight tests (both kinds resolve, either
+      disposal order, same-kind collision, atomic refusal, both exclusivity directions, `'*'`
+      beside a second plugin's kind, consumer precedence). `api/gantt.test.ts` adds the paint half:
+      `bufferKind()` and the new `riskKind()` install together, both bars carry their own class, and
+      dropping either one leaves the other painting.
+- [x] **P3 — export `wholeEntryItem`.** Public shape is `wholeEntryItem(entry)`, one argument.
+      The private `(entry, end)` form read false at its milestone call site, so the internal builder
+      is `entryItem(entry, segmentIndex, start, end)` and every producer goes through it.
+      `bufferKind()` and `riskKind()` both read `(entry) => [wholeEntryItem(entry)]`.
+- [x] **P4 — `setup(ctx): Disposer | void`.** `PluginRuntime.install` calls `ownDispose?.()`.
+      Five demo plugins dropped their empty `return () => {};` (three on `harness/plugins.ts` and
+      `harness/plugins/`, two on `harness/main.ts`).
+- [x] **P6 — one `resolve<P extends RendererPoint>(point, consumer)`.** The parameter is
+      `Exclude<RendererPoint, 'bar'>`, so `resolve('bar', …)` cannot compile past the kind it needs.
+      `resolveBar` stays.
+- [x] **H3 — `CellRendererContext` gains the Field value beside `value: string`.** It is
+      `fieldValue`, not `rawValue`: the glossary already names this read
+      (`dataset.entries.fieldValue`), and `raw*` is on two CONTEXT.md avoid lists.
+      `ColumnCellRendererContext` gains the same member, so both cell renderers read one vocabulary.
+      `GanttShell` fills it from `dataset.entries.fieldValue`, which shares the memo `column.format`
+      already uses. The `overBudget` regex is gone from `harness/plugins.ts` and `harness/main.ts`.
+- [x] Update `plans/02` §4, `CONTEXT.md` and `pnpm api-report`. Also `plans/s5.4-renderers.md`
+      (D-S5-11 amendment), `plans/s5.9-plugin-registrations.md` and `src/api/plugin.ts`'s own docs.
+      `CONTEXT.md` gains **Renderer slot** and rewrites **GanttPlugin**, **Item producer** and
+      **Grid column**.
 
 **Verify:** `pnpm gate`. Then install two kind-defining plugins on `harness/plugins.html`.
 
@@ -365,7 +378,7 @@ Files: `src/view/renderer-registry.ts`, `src/layout/items/produce-items.ts`, `sr
 | A silent refusal announces nothing | R4 | `s5.11-a11y-completion.md` |
 | The per-kind bar renderer composes across plugins | R5 | D-S5-11 note, `s5.9-plugin-registrations.md` |
 | `wholeEntryItem` is public; `setup` may return `void` | R5 | `plans/02` §4 |
-| `CellRendererContext.rawValue` | R5 | `plans/02` §4 |
+| `CellRendererContext.fieldValue` (named after the naming test, not `rawValue`) | R5 | `plans/02` §4 |
 
 ---
 

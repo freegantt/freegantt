@@ -551,14 +551,16 @@ export class GanttShell {
                 columnCellRenderer({
                   ...(ctx.entry !== undefined ? { entry: ctx.entry } : {}),
                   value: ctx.value,
+                  fieldValue: this.#fieldValueForCell(ctx.entry, column.key),
                 }),
             };
           }
-          const resolved = this.#rendererRegistry.resolveCell(this.#cellRenderer);
+          const resolved = this.#rendererRegistry.resolve('cell', this.#cellRenderer);
           if (resolved === undefined) return undefined;
           const cellRenderer = resolved.renderer;
           return {
-            renderer: (ctx) => cellRenderer({ ...ctx, column }),
+            renderer: (ctx) =>
+              cellRenderer({ ...ctx, column, fieldValue: this.#fieldValueForCell(ctx.entry, column.key) }),
             ...(resolved.pluginId !== undefined ? { pluginId: resolved.pluginId } : {}),
           };
         },
@@ -568,7 +570,7 @@ export class GanttShell {
         resolveHeaderRenderer: (columnKey) => {
           const column = this.#columnChrome.resolvedColumns.find((c) => String(c.key) === columnKey);
           if (column === undefined) return undefined;
-          const resolved = this.#rendererRegistry.resolveHeader(this.#headerRenderer);
+          const resolved = this.#rendererRegistry.resolve('header', this.#headerRenderer);
           if (resolved === undefined) return undefined;
           const headerRenderer = resolved.renderer;
           return {
@@ -1134,7 +1136,7 @@ export class GanttShell {
       keymap: this.#keymap,
       registerRenderer: (point, renderer, pluginId) =>
         this.#rendererRegistry.register(point, renderer, pluginId),
-      resolveTooltipRenderer: () => this.#rendererRegistry.resolveTooltip(this.#tooltipRenderer),
+      resolveTooltipRenderer: () => this.#rendererRegistry.resolve('tooltip', this.#tooltipRenderer),
       lastPaintedBar: (id) => this.#lastBarById.get(itemId(id)),
       entry: (id) => this.#options.dataset.entries.get(id),
       resolvedColumns: () => this.#columnChrome.resolvedColumns,
@@ -1223,6 +1225,15 @@ export class GanttShell {
 
   #entryFor(item: ItemId): Entry | undefined {
     return this.#options.dataset.entries.get(entryIdOfItem(item));
+  }
+
+  /** Review H3: `CellRendererContext.fieldValue`. `entries.fieldValue` is the one read that answers
+   *  an `entry`-, `meta`- or `compute`-sourced Field alike (ADR 0005), and it shares the memo
+   *  `column.format` already uses — so a renderer branching on a number never parses `value` back.
+   *  A row with no Entry (a grouping header, a custom row) has no Field value to read. */
+  #fieldValueForCell(entry: Entry | undefined, key: FieldKey): unknown {
+    if (entry === undefined) return undefined;
+    return this.#options.dataset.entries.fieldValue(entry.id, key);
   }
 
   get theme(): Theme {

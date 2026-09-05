@@ -453,7 +453,7 @@ function selectionShortcuts(): GanttPlugin {
         },
       });
       ctx.interaction.registerKeybinding({ chord: 'Mod+K', command: 'demo.clearSelection' });
-      return () => {};
+      // No disposer: `ctx.disposables` already retracts the command and the keybinding (review P4).
     },
   };
 }
@@ -509,17 +509,15 @@ popupBtn.addEventListener('click', () => {
 // dataset rather than adding renderer-only fixture data. `fg-bar-diamond`'s own shape is structural,
 // from `entry.kind` alone (D-S4-24), outside a renderer's bounded scope (I13) — the demo renderer
 // recolors it via the `--fg-bar-fill` custom property its own `::before` already reads.
+// The cell renderer branches on `ctx.fieldValue`, the `cost` Field's own value (review H3), and
+// paints `ctx.value`, the string the library formatted from it.
 const BUDGET_THRESHOLD = 5000;
-function overBudget(formatted: string): boolean {
-  const amount = Number(formatted.replace(/[^0-9.-]/g, ''));
-  return Number.isFinite(amount) && amount > BUDGET_THRESHOLD;
-}
 
 const demoBarRenderer: RendererByKind = {
   milestone: () => ({ class: { 'demo-milestone': true }, style: { '--fg-bar-fill': '#7b2cbf' } }),
 };
-const demoCellRenderer: CellRenderer = ({ column, value }) =>
-  column.key === 'cost' && overBudget(value)
+const demoCellRenderer: CellRenderer = ({ column, value, fieldValue }) =>
+  column.key === 'cost' && typeof fieldValue === 'number' && fieldValue > BUDGET_THRESHOLD
     ? { class: { 'demo-over-budget': true }, text: value }
     : undefined;
 // Bug hunt (S5 fixes): headerRenderer had a live setter with nothing painting it — this demo is the
@@ -593,7 +591,7 @@ function entryContextActions(): GanttPlugin {
           prependLogLine(log, `entries · ${cmdCtx.entry.id} · unlocked (right-click menu)`);
         },
       });
-      return () => {};
+      // No disposer: `ctx.disposables` already retracts all three commands (review P4).
     },
   };
 }

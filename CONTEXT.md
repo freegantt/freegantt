@@ -186,7 +186,7 @@ A derived, renderable piece of geometry produced from an Entry for one Segment o
 _Avoid_: Bar (an Item is what a bar renders; "bar" is a rendering detail, not the identity)
 
 **Item producer**:
-The per-Kind seam that turns one Entry into its Item(s) for a row (`ItemProducer`). Shipped occupants cover `'span'`, `'group'`, and `'milestone'`; a plugin adds one for a consumer-defined kind via `ctx.layout.registerItemProducer` (S5.9, D-S5-22).
+The per-Kind seam that turns one Entry into its Item(s) for a row (`ItemProducer`). Shipped occupants cover `'span'`, `'group'`, and `'milestone'`; a plugin adds one for a consumer-defined kind via `ctx.layout.registerItemProducer` (S5.9, D-S5-22). `wholeEntryItem(entry)` is the public helper for the common case — one Item over the entry's whole span — so a producer reads `(entry) => [wholeEntryItem(entry)]` and no plugin restates the `${entryId}:${segmentIndex}` id convention (review P3).
 _Avoid_: Item emitter (retired name — `registerItemEmitter` was renamed to `registerItemProducer`, Q16)
 
 **Lane**:
@@ -206,7 +206,7 @@ The bottom-up pass in the commit path that derives a parent's value for a Field 
 _Avoid_: Group rollup (the pass is not tied to the `'group'` Kind, nor to spans — it is per Field, over any rolling-up Kind), rollup pass (says "when," not "what"), aggregation (Aggregator is the function; Rollup is the pass)
 
 **Grid column**:
-One vertical slice of the grid pane. A Grid column names a Field that declared `column` and carries presentation only — header, width, alignment, cell renderer, editability. A Field with no `column` key is data only: it rolls up and appears in the changeset, and `gridColumns` may not name it. Grid columns belong to the Gantt (`gridColumns`), because which of the columnable Fields this view shows, and in what order, is a view question. Aggregation never lives on a Grid column: a stored value must not depend on whether a column is visible, and the Rollup has already run before any Gantt is built. Default `gridColumns` is `['name']`; naming a Field does not add it to the grid by itself.
+One vertical slice of the grid pane. A Grid column names a Field that declared `column` and carries presentation only — header, width, alignment, cell renderer, editability. A Field with no `column` key is data only: it rolls up and appears in the changeset, and `gridColumns` may not name it. Grid columns belong to the Gantt (`gridColumns`), because which of the columnable Fields this view shows, and in what order, is a view question. Aggregation never lives on a Grid column: a stored value must not depend on whether a column is visible, and the Rollup has already run before any Gantt is built. Default `gridColumns` is `['name']`; naming a Field does not add it to the grid by itself. A cell renderer receives both readings of one cell: `value`, the string the library painted, and `fieldValue`, the same Field value before formatting (review H3) — so a renderer branches on the number and never parses its own output back.
 _Avoid_: Column on its own (says nothing about which side it is on), Field (a Grid column names one, it is not one), cell (a cell is one Grid column's value on one Row)
 
 **GeometryFrame**:
@@ -500,8 +500,22 @@ _Avoid_: Registry (a Registry is a named seam a plugin registers _into_ — `Com
 `RendererRegistry`, `ItemProducerRegistry`; the table is the mechanism each of them holds), Map,
 Stack (one key holds a stack; the table holds many)
 
+**Renderer slot**:
+What one `ctx.view.registerRenderer` call claims, and the key `RendererRegistry` refuses a second
+claim on. A `cell`, `header` or `tooltip` registration claims its whole point: those three have no
+key to merge on. The `bar` point's per-kind map (D-S5-12) claims one slot **per kind** — `bar:buffer`
+— so a plugin that defines one kind and a plugin that defines another both install (review P2). Two
+plugins that name the same kind still collide, and `RendererAlreadyRegisteredError.slot` names what
+collided. The whole-point form (`registerRenderer('bar', fn)`) stays exclusive: one function answers
+every kind, so it refuses, and is refused by, any per-kind claim.
+_Avoid_: Renderer point as a synonym (a point is `bar`/`cell`/`header`/`tooltip`; a slot is what one
+registration holds, and the `bar` point holds many)
+
 **GanttPlugin**:
-The public extension contract: an `id` plus a `setup(ctx)` that returns a disposer. Built-in features (tooltips, context menu, editors) are themselves GanttPlugins using the same `PluginContext` a third party would use — no back-door capabilities reserved for first-party code.
+The public extension contract: an `id` plus a `setup(ctx)` that returns a `Disposer`, or nothing.
+A plugin returns one only for a resource it owns itself — a timer, a socket, a subscription of its
+own. Every `register*` and every `onDomEvent` already files its removal in `ctx.disposables`, so
+most plugins return nothing at all (review P4). Built-in features (tooltips, context menu, editors) are themselves GanttPlugins using the same `PluginContext` a third party would use — no back-door capabilities reserved for first-party code.
 _Avoid_: Extension (Extensions is the name of the source layer that runs plugins; GanttPlugin is the unit within it)
 
 **PluginContext**:

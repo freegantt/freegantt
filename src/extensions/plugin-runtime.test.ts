@@ -32,6 +32,25 @@ function plugin(
 }
 
 describe('PluginRuntime', () => {
+  it('installs and disposes a plugin whose setup returns nothing (review P4)', () => {
+    const log: string[] = [];
+    const runtime = makeRuntime(log);
+    const quiet: ShellPlugin<TestContext> = {
+      id: 'quiet',
+      setup(ctx) {
+        // Every registration a real plugin makes is already filed here, so it owns no resource of
+        // its own and writes no disposer.
+        ctx.disposables.add(() => log.push('registration retracted'));
+      },
+    };
+
+    runtime.install([quiet]);
+    expect(runtime.plugins.map((installed) => installed.id)).toEqual(['quiet']);
+
+    runtime.install([]);
+    expect(log).toEqual(['registration retracted']);
+  });
+
   it('runs setup once per plugin, in list order', () => {
     const log: string[] = [];
     const runtime = makeRuntime(log);

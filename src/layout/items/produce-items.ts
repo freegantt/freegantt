@@ -19,15 +19,26 @@ export interface Item {
 
 export type ItemProducer = (entry: Entry) => readonly Item[];
 
-function wholeEntryItem(entry: Entry, end: Instant): Item {
+/** The one place the `${entryId}:${segmentIndex}` id convention is written. Every producer below
+ *  builds its Items here, so no producer restates it. */
+function entryItem(entry: Entry, segmentIndex: number, start: Instant, end: Instant): Item {
   return {
-    id: itemId(entry.id, 0),
+    id: itemId(entry.id, segmentIndex),
     entryId: entry.id,
     kind: entry.kind,
     label: entry.name,
-    start: entry.start,
+    start,
     end,
   };
+}
+
+/** One Item covering the entry's whole span — what almost every `ItemProducer` returns, and the
+ *  common case a plugin author writes (review P3): `ctx.layout.registerItemProducer(MY_KIND,
+ *  (entry) => [wholeEntryItem(entry)])`. Public because the alternative is eight hand-written
+ *  lines that must get the Item id convention right from documentation alone. Pure and DOM-free,
+ *  like every other `layout/` function. */
+export function wholeEntryItem(entry: Entry): Item {
+  return entryItem(entry, 0, entry.start, entry.end);
 }
 
 export interface ItemProducerRegistry {
@@ -45,26 +56,20 @@ export interface ItemProducerRegistry {
 function produceSpanItems(entry: Entry): readonly Item[] {
   const segments = entry.segments;
   if (segments !== undefined && segments.length > 0) {
-    return segments.map((segment, index) => ({
-      id: itemId(entry.id, index),
-      entryId: entry.id,
-      kind: entry.kind,
-      label: entry.name,
-      start: segment.start,
-      end: segment.end,
-    }));
+    return segments.map((segment, index) => entryItem(entry, index, segment.start, segment.end));
   }
-  return [wholeEntryItem(entry, entry.end)];
+  return [wholeEntryItem(entry)];
 }
 
 // render/ draws the bracket off data-kind (D-S4-24).
 function produceGroupItems(entry: Entry): readonly Item[] {
-  return [wholeEntryItem(entry, entry.end)];
+  return [wholeEntryItem(entry)];
 }
 
-// render/ draws the diamond off data-kind (D-S4-24).
+// render/ draws the diamond off data-kind (D-S4-24). A milestone marks one instant, so its Item
+// ends where it starts.
 function produceMilestoneItems(entry: Entry): readonly Item[] {
-  return [wholeEntryItem(entry, entry.start)];
+  return [entryItem(entry, 0, entry.start, entry.start)];
 }
 
 /** `Object.entries` types a value as `ItemProducer | undefined` under `noUncheckedIndexedAccess` —

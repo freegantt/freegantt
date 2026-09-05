@@ -3,7 +3,28 @@ import { emptyGroupDataset } from '../../../fixtures/empty-group-dataset.js';
 import { entryId, itemId, rowId } from '../../model/index.js';
 import type { Entry, EntryId, Instant } from '../../model/index.js';
 import type { PlannedRow } from '../rows/row-source.js';
-import { createItemProducerRegistry, produceItemsForRow } from './produce-items.js';
+import { createItemProducerRegistry, produceItemsForRow, wholeEntryItem } from './produce-items.js';
+
+describe('wholeEntryItem (review P3)', () => {
+  it('covers the entry span and owns the Item id convention, so a plugin producer never restates it', () => {
+    const t1 = spanEntry('t1', { name: 'Load test', kind: 'buffer' });
+    expect(wholeEntryItem(t1)).toEqual({
+      id: itemId(t1.id, 0),
+      entryId: t1.id,
+      kind: 'buffer',
+      label: 'Load test',
+      start: t1.start,
+      end: t1.end,
+    });
+  });
+
+  it('is what a registered producer returns: `(entry) => [wholeEntryItem(entry)]`', () => {
+    const t1 = spanEntry('t1', { kind: 'buffer' });
+    const registry = createItemProducerRegistry();
+    registry.register('buffer', (entry) => [wholeEntryItem(entry)]);
+    expect(produceItemsForRow(planned([t1.id]), entryByIdFor([t1]), registry)).toEqual([wholeEntryItem(t1)]);
+  });
+});
 
 function asInstant(ms: number): Instant {
   return ms as Instant;

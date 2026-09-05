@@ -247,6 +247,9 @@ export type {
 // author naming `ItemProducer` explicitly, the same reason `BarRenderer`/`DecorationProvider` above
 // are exported rather than left to structural inference.
 export type { Item, ItemProducer } from '../layout/index.js';
+// Review P3: the common producer, so `(entry) => [wholeEntryItem(entry)]` replaces eight hand-written
+// lines — and the Item id convention has one owner instead of one copy per plugin.
+export { wholeEntryItem } from '../layout/index.js';
 
 // Time helpers a caller needs: `instant` for a pinned `TimeSpan`, `now` for "this Instant",
 // `addMs`/`MS` to shift one by a duration (S2.7 harness-review — `harness/data.ts`'s move-by-a-day

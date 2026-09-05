@@ -22,7 +22,7 @@ export function weekendShading(): GanttPlugin {
             class: 'demo-weekend-band',
           })),
       );
-      return () => {};
+      // No disposer: `ctx.disposables` already retracts the registration (review P4).
     },
   };
 }

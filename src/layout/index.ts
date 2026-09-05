@@ -12,7 +12,7 @@ export { pickDefined } from './pick-defined.js';
 // helpers are pure id-string math with no model runtime behind them, re-exported here the same way
 // `ColumnAlign` crosses this same boundary (#54).
 export { itemId, itemIdFromDataset, entryIdOfItem } from '../model/index.js';
-export { createItemProducerRegistry } from './items/produce-items.js';
+export { createItemProducerRegistry, wholeEntryItem } from './items/produce-items.js';
 export type { Item, ItemProducer, ItemProducerRegistry } from './items/produce-items.js';
 export { createRegistrationTable } from './registration-table.js';
 export type { RegistrationTable } from './registration-table.js';

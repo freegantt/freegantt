@@ -259,6 +259,13 @@ S5.5 Parts (D-S5-13/14, both mounted inside S5.3's `.fg-popup`): `.fg-tooltip`, 
 
 S5.8 Parts (D-S5-19): `.fg-cell-editor`, `.fg-cell-editor-control` (`inlineEditing()`) — mounted through the overlay layer directly, not inside `.fg-popup` (the cell editor has no flip/clamp; it always sits at the cell's own rect). State attribute `data-state="invalid"` on `.fg-cell-editor` marks a failed `parseValue`, a `beforeChange` veto, or the default `dateInput`'s non-midnight refusal (issue #137 F11/F12).
 
+A cell renderer reads its cell two ways. `value` is the string the library painted, through the
+Field's own `formatValue`. `fieldValue` is the same Field value before formatting — what
+`dataset.entries.fieldValue(id, column.key)` answers, for an `entry`-, `meta`- or `compute`-sourced
+Field alike. A renderer that paints text reads `value`; one that branches on magnitude reads
+`fieldValue`, and never parses the library's own output back with a regex. Reaching into
+`entry.meta` is not the alternative: a `compute`-sourced Field has no stored home (ADR 0005).
+
 Renderers return **plain serializable element descriptions** (tag/class/style/text/children), applied by the engine's reconciler — never live DOM nodes (nodes are recycled by virtualization) and never framework components in core (D5). Text by default; HTML by explicit opt-in only. `class` is `Readonly<Record<string, boolean>>` everywhere on `ElementDescription`, including its `children` (S5.4, D-S5-10) — this sample used a bare string until issue #137 F15 caught that it did not typecheck against its own referenced type.
 
 ```ts
@@ -437,7 +444,7 @@ app author installing two plugins meets one rule rather than one rule per seam.
 
 | Seam shape | Two plugins claim the same thing | Seams |
 |---|---|---|
-| **A single paint slot** | **Throws** `RendererAlreadyRegisteredError`, naming both plugin ids. Two plugins painting one point is an authoring mistake, and silence would make it look like the second plugin did nothing. | `view.registerRenderer` |
+| **A single paint slot** | **Throws** `RendererAlreadyRegisteredError`, naming the slot and both plugin ids. Two plugins painting one slot is an authoring mistake, and silence would make it look like the second plugin did nothing. | `view.registerRenderer` |
 | **Keyed by an identifier** | **The newest registration wins**, and the one it covered is still there. | `commands.register`, `interaction.registerKindDefaults`, `view.registerGridColumn`, `layout.registerItemProducer` |
 | **Additive, no key** | No collision to have — every registration runs. | `view.registerDecoration`, `interaction.registerKeybinding` (newest-first at resolve time) |
 
@@ -452,6 +459,27 @@ earlier installation left behind.
 teardown already holds a copy. A plugin that shows a column, a key binding or a decoration in one
 mode only calls it to retract that registration while the plugin keeps running. Calling it twice is
 safe.
+
+**A paint slot is not always a whole point.** `cell`, `header` and `tooltip` are: one plugin claims
+each, because a cell belongs to a column and a header to a band, so neither has a key to merge on.
+The `bar` point already takes a per-kind map (D-S5-12), and that map **is** the key. So
+`registerRenderer('bar', { buffer: … })` claims `bar:buffer` alone. A plugin that defines one kind
+and a plugin that defines another both install, and both paint. Two plugins that name the same kind
+still throw. The whole-point form, `registerRenderer('bar', fn)`, stays exclusive: one function
+answers every kind, so it refuses, and is refused by, any per-kind claim. A consumer's own
+`barRenderer` still wins over every plugin slot (D-S5-11), and a registered `'*'` still answers every
+kind the exact slots miss.
+
+**A plugin's `setup(ctx)` returns a `Disposer`, or nothing.** Every `register*` and every
+`onDomEvent` files its own removal in `ctx.disposables`, so a plugin that owns no timer, socket or
+subscription of its own has nothing left to return. `return () => {};` was ceremony, and to a
+newcomer it read as if something were missing.
+
+**`wholeEntryItem(entry)` is public.** It returns one Item covering the entry's whole span, which is
+what almost every item producer wants: `ctx.layout.registerItemProducer(kind, (entry) =>
+[wholeEntryItem(entry)])`. It is pure and DOM-free, and it is the one owner of the
+`${entryId}:${segmentIndex}` Item id convention — the one thing a plugin could otherwise get wrong
+from documentation alone.
 
 One shared mechanism implements all of this — see **Registration table** in `CONTEXT.md`. A seam that
 writes its own stack-and-restore bookkeeping is a bug, not a variation.
