@@ -12,7 +12,7 @@ import type {
   ViewportGestures,
 } from '../view/index.js';
 import { ScrollModel, TimeScaleModel, pickDefined } from '../layout/index.js';
-import type { PresetRef, TimeScaleFit, ViewPreset, RowSource } from '../layout/index.js';
+import type { PresetRef, SnapSetting, TimeScaleFit, ViewPreset, RowSource } from '../layout/index.js';
 import type { DateLineSpec } from '../layout/index.js';
 import type {
   BarRenderer,
@@ -101,6 +101,10 @@ export interface GanttOptionsBase {
    *  table. Default `{}`: every gesture resolves off the default table alone. Assignment replaces
    *  the whole config; `gantt.setCapabilityRule`/`clearCapabilityRule` write one gesture (D-S5-35). */
   interactions?: Interactions;
+  /** Live (D-S3-24). What a drag and a keyboard nudge snap to: `{ unit, increment }`, `'tick'` for
+   *  one tick of whatever preset is showing, or `'none'`. Omitted, the showing preset's own `snap`
+   *  decides — which is `'tick'` for every shipped preset. */
+  snap?: SnapSetting;
   /** Live (S3.7, D-S3-14). Wheel zoom, shift+wheel pan, and keyboard pan. Default `{}`: every
    *  viewport gesture is on. `false` turns them all off. Does not gate `zoomBy` / `panToDate`. */
   viewportGestures?: ViewportGestures;
@@ -191,6 +195,7 @@ export class Gantt {
         'locale',
         'todayLineMarginTicks',
         'interactions',
+        'snap',
         'viewportGestures',
         'gridColumns',
         'rowSource',
@@ -424,6 +429,21 @@ export class Gantt {
 
   set preset(ref: PresetRef) {
     this.#shell.preset = ref;
+  }
+
+  /** D-S3-24. What a drag snaps to right now: this Gantt's own setting when it states one, else the
+   *  showing preset's, else `'tick'`. A gesture resolves `'tick'` against the preset it measures, so
+   *  the answer follows a zoom without the caller writing anything. */
+  get snap(): SnapSetting {
+    return this.#shell.snap;
+  }
+
+  /** Live (D-S3-24). Call: `gantt.snap = { unit: 'day', increment: 2 }`. It states the snap for this
+   *  Gantt, over whatever preset is showing, and it survives a zoom. `undefined` hands the answer
+   *  back to the preset. The old spelling — `gantt.preset = { ...gantt.preset, snap }` — built a
+   *  one-off copy of a shipped preset, and the next `zoomIn()` threw the snap away with it. */
+  set snap(next: SnapSetting | undefined) {
+    this.#shell.snap = next;
   }
 
   /** Getter returns the resolved `TimeSpan` — matching how `Dataset` reads `EntryInput` once at

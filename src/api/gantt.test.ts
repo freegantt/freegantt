@@ -9,6 +9,7 @@ import {
   UnknownCommandError,
   UnknownGridColumnError,
   TimeScaleModel,
+  MS,
   entryId,
   itemId,
   contextMenu,
@@ -235,6 +236,97 @@ describe('Gantt preset/range/fit/zoomTo/zoomBy/reveal (S1.9)', () => {
   // `GanttOptions` (issue #84, finding #3) — see `gantt-shell.test.ts` for the runtime warning
   // GanttShell itself still carries for a caller who bypasses that type (there is none through
   // the public `Gantt` constructor).
+});
+
+// #195, D-S3-24: before `gantt.snap` existed, changing the snap alone meant
+// `gantt.preset = { ...gantt.preset, snap }` — a one-off copy of a shipped preset, thrown away by
+// the next zoom. The harness wrote that, which is how this was found.
+describe('Gantt.snap (D-S3-24, #195)', () => {
+  it('reads the showing preset when this Gantt states nothing, and no shipped preset states one', () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
+    const gantt = new Gantt({ container, dataset });
+
+    expect(gantt.snap).toBe('tick');
+
+    gantt.destroy();
+  });
+
+  it('takes a constructor option and reads it back', () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
+    const gantt = new Gantt({ container, dataset, snap: 'none' });
+
+    expect(gantt.snap).toBe('none');
+
+    gantt.destroy();
+  });
+
+  it('survives a zoom, which the preset copy it replaces did not', () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
+    const gantt = new Gantt({ container, dataset, preset: 'dayAndWeek' });
+
+    gantt.snap = { unit: 'day', increment: 2 };
+    gantt.zoomOut();
+
+    expect(gantt.preset.id).not.toBe('dayAndWeek');
+    expect(gantt.snap).toEqual({ unit: 'day', increment: 2 });
+
+    gantt.destroy();
+  });
+
+  it('undefined hands the answer back to the preset', () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
+    const gantt = new Gantt({ container, dataset, snap: 'none' });
+
+    gantt.snap = undefined;
+
+    expect(gantt.snap).toBe('tick');
+
+    gantt.destroy();
+  });
+
+  it('is per Gantt, even when two Gantts share one axis (D9)', () => {
+    const scale = new TimeScaleModel({ preset: 'dayAndWeek' });
+    const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
+    const ganttA = new Gantt({ container: document.createElement('div'), dataset, scale });
+    const ganttB = new Gantt({ container: document.createElement('div'), dataset, scale });
+
+    ganttA.snap = 'none';
+
+    expect(ganttA.snap).toBe('none');
+    expect(ganttB.snap).toBe('tick');
+
+    ganttA.destroy();
+    ganttB.destroy();
+  });
+
+  it('a real drag commits on the boundary this Gantt snaps to', () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
+    const gantt = new Gantt({ container, dataset, snap: { unit: 'day', increment: 1 } });
+
+    const bar = container.querySelector<HTMLElement>('.fg-bar')!;
+    const timeline = container.querySelector<HTMLElement>('.fg-timeline-pane')!;
+    timeline.setPointerCapture = vi.fn();
+    timeline.releasePointerCapture = vi.fn();
+    const original = document.elementFromPoint.bind(document);
+    document.elementFromPoint = (x: number, y: number) => (x === 5 && y === 5 ? bar : original(x, y));
+
+    const id = entryId(sampleEntries[0]!.id);
+    timeline.dispatchEvent(new PointerEvent('pointerdown', { clientX: 5, clientY: 5, pointerId: 1 }));
+    timeline.dispatchEvent(new PointerEvent('pointermove', { clientX: 5005, clientY: 5, pointerId: 1 }));
+    timeline.dispatchEvent(new PointerEvent('pointerup', { clientX: 5005, clientY: 5, pointerId: 1 }));
+
+    // The dataset's zone is UTC, so a whole-day boundary is a whole number of days from the epoch.
+    const moved = dataset.entries.get(id)!;
+    expect(Number(moved.start) % MS.DAY).toBe(0);
+
+    document.elementFromPoint = original;
+    gantt.destroy();
+  });
 });
 
 describe('Gantt.panToDate / panToToday (S1.12, D-S1.12-8)', () => {

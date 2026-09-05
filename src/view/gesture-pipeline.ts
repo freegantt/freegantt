@@ -6,7 +6,7 @@
 // "Host" is a retired word, D-S1.11-6/#64, for smuggling two concepts under one name.)
 
 import { cursorLabelForX, draftForMove, draftForResize, previewOffsets } from '../layout/index.js';
-import type { ItemPreview, SnapUnit, TimeScale, ViewPreset } from '../layout/index.js';
+import type { ItemPreview, SnapSetting, SnapUnit, TimeScale, ViewPreset } from '../layout/index.js';
 import type { Entry, EntryEdits, EntryId, ItemId, TimeSpan } from '../model/index.js';
 import { itemId, segmentIndexOfItem } from '../model/index.js';
 import { identityExtender, type EditExtender } from '../data/edit-extension.js';
@@ -20,6 +20,10 @@ export interface GesturePipelineDeps {
   timeZone(): string;
   timeScale(): TimeScale;
   preset(): ViewPreset;
+  /** D-S3-24: what this Gantt snaps to — `GanttShell` has already resolved its own `snap` over the
+   *  showing preset's. `'tick'` still arrives unresolved: only a gesture knows which preset is
+   *  measuring it. */
+  snap(): SnapSetting;
   selection(): readonly EntryId[];
   entryById(id: EntryId): Entry | undefined;
   /** One resolution (I14, D-S3-9) — `GanttShell#canGesture`, the same answer the pointer-selection
@@ -138,14 +142,15 @@ export class GesturePipeline {
     return entries;
   }
 
-  /** D-S3-12: an unset/`'tick'` `ViewPreset.snap` resolves to the current preset's own tick unit;
-   *  Alt (`suspendSnap`) always wins and falls back to raw millisecond placement. */
+  /** D-S3-12: a `'tick'` snap resolves to the current preset's own tick unit; Alt (`suspendSnap`)
+   *  always wins and falls back to raw millisecond placement. D-S3-24: which setting arrives here —
+   *  the Gantt's own or the showing preset's — is `GanttShell`'s answer, not this file's. */
   #resolveSnap(suspendSnap: boolean | undefined): SnapUnit {
-    const preset = this.#deps.preset();
     if (suspendSnap) return 'none';
-    const snap = preset.snap ?? 'tick';
+    const snap = this.#deps.snap();
     if (snap === 'none') return 'none';
     if (snap === 'tick') {
+      const preset = this.#deps.preset();
       return { unit: preset.tickUnit, increment: preset.tickIncrement };
     }
     return snap;

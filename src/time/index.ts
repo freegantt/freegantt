@@ -37,6 +37,7 @@ export type {
   ViewPreset,
   ViewPresetHeader,
   TickStep,
+  SnapSetting,
   Tick,
   HeaderFormat,
   DateFormat,

@@ -6,7 +6,7 @@ import type { Entry, EntryId, Instant } from '../model/index.js';
 import type { TimeScale, ViewPreset } from '../layout/index.js';
 
 /** `view/` may not import `time/` (I1) — a linear px<->ms fake stands in for the bound `TimeScale`;
- *  paired with `snap: 'none'` (the default preset below) this is exactly what
+ *  paired with `snap: () => 'none'` (the default dep below) this is exactly what
  *  `draftForMove`/`draftForResize` read (`scale.xForInstant`/`scale.instantForX`), so the real
  *  `layout/gesture-draft.ts` math still runs unmocked. */
 const linearScale: TimeScale = {
@@ -20,7 +20,9 @@ const linearScale: TimeScale = {
   contentWidth: 1000,
 };
 
-const noneSnapPreset = { snap: 'none' } as unknown as ViewPreset;
+/** D-S3-24: the pipeline asks `deps.snap()` what a drag snaps to, so a fake preset carries no snap
+ *  of its own. This one stands in wherever only the tick unit is unused. */
+const barePreset = {} as unknown as ViewPreset;
 
 function entry(id: string, start: number, end: number): Entry {
   return { id: entryId(id), kind: 'span', name: id, start: start as Instant, end: end as Instant };
@@ -37,7 +39,8 @@ function makeDeps(overrides: Partial<GesturePipelineDeps> = {}): {
   const deps: GesturePipelineDeps = {
     timeZone: () => 'UTC',
     timeScale: () => linearScale,
-    preset: () => noneSnapPreset,
+    preset: () => barePreset,
+    snap: () => 'none',
     selection: () => [],
     entryById: (id) => entries.get(id),
     canGesture: () => true,
@@ -269,18 +272,19 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
 
   describe('nudge() (S3.5, D-S3-13)', () => {
     /** `tickPreset`/`tickScale` pair a 5-minute tick with a fixed 5-minute px width, so a `direction:
-     *  1` nudge is unambiguously "one tick forward" — `linearScale`/`noneSnapPreset` above stub
+     *  1` nudge is unambiguously "one tick forward" — `linearScale`/`barePreset` above stub
      *  `widthForDuration` to 0, which would make every nudge a no-op. 300_000 (not one of I10's
      *  banned literals: 60_000/3_600_000/86_400_000/604_800_000) is 5 real minutes in ms — this file
      *  is `view/`, which may not import `time/` (view-boundary), so the expected deltas below have to
      *  be spelled out as a literal rather than computed via a `time/` helper. */
     const FIVE_MIN_MS = 300_000;
-    const tickPreset = { snap: 'tick', tickUnit: 'minute', tickIncrement: 5 } as unknown as ViewPreset;
+    const tickPreset = { tickUnit: 'minute', tickIncrement: 5 } as unknown as ViewPreset;
     const tickScale: TimeScale = { ...linearScale, widthForDuration: () => FIVE_MIN_MS };
 
     it('moves the anchor entry forward one tick on direction: 1', async () => {
       const { deps, emitted } = withRoster([entry('a', 600_000, 900_000)], {
         preset: () => tickPreset,
+        snap: () => 'tick',
         timeScale: () => tickScale,
       });
       const pipeline = new GesturePipeline(deps);
@@ -296,6 +300,7 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
     it('moves the anchor entry backward one tick on direction: -1', async () => {
       const { deps, emitted } = withRoster([entry('a', 1_200_000, 1_500_000)], {
         preset: () => tickPreset,
+        snap: () => 'tick',
         timeScale: () => tickScale,
       });
       const pipeline = new GesturePipeline(deps);
@@ -310,6 +315,7 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
     it('resizes the grabbed edge one tick for a resize gesture', async () => {
       const { deps, emitted } = withRoster([entry('a', 600_000, 900_000)], {
         preset: () => tickPreset,
+        snap: () => 'tick',
         timeScale: () => tickScale,
       });
       const pipeline = new GesturePipeline(deps);
@@ -327,6 +333,7 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
       // grid; suspendSnap must not.
       const { deps, emitted } = withRoster([entry('a', 150_000, 450_000)], {
         preset: () => tickPreset,
+        snap: () => 'tick',
         timeScale: () => tickScale,
       });
       const pipeline = new GesturePipeline(deps);
