@@ -797,7 +797,7 @@ export class Gantt {
     set gridColumns(columns: readonly GridColumnInput[]);
     // (undocumented)
     get gridWidth(): number;
-    set gridWidth(px: number);
+    set gridWidth(width: GridWidth);
     get headerRenderer(): HeaderRenderer | undefined;
     set headerRenderer(renderer: HeaderRenderer | undefined);
     get interactions(): Interactions;
@@ -911,7 +911,7 @@ export interface GanttOptionsBase {
     dataset: Dataset;
     dateLines?: readonly DateLineInput[];
     gridColumns?: readonly GridColumnInput[];
-    gridWidth?: number;
+    gridWidth?: GridWidth;
     headerRenderer?: HeaderRenderer;
     interactions?: Interactions;
     locale?: Intl.LocalesArgument;
@@ -983,6 +983,9 @@ export interface GridColumnsChange {
     // (undocumented)
     readonly to: readonly GridColumn[];
 }
+
+// @public
+export type GridWidth = number | 'fitColumns';
 
 // @public (undocumented)
 export interface GridWidthChange {

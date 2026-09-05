@@ -60,11 +60,9 @@
         /* Level-1 theming (plans/02 §4): row height is a CSS custom property the library reads,
            not a restated constructor default (#39). */
         --fg-row-height: 32px;
-        /* Grid pane width; PaneLayout owns applying this to the grid pane and its row layer so
-           they share one coordinate frame with the timeline pane (S1.8, D-S1.8-1/D-S1.8-2) — this
-           harness no longer restates it as raw CSS. Renamed from --fg-row-label-width: the gutter
-           is a pane width now, not a backend reservation. */
-        --fg-grid-pane-width: 720px;
+        /* No --fg-grid-pane-width here any more (#157): this harness asked for 720px against
+           columns that end at 700, a number hand-tuned to one column set. It now says what it
+           meant — `gridWidth: 'fitColumns'` in main.ts — and the library computes the px. */
         border: 1px solid var(--page-border);
         /* No overflow/position rule here any more (S1.8): PaneLayout builds the grid pane / splitter
            / timeline pane structure inline, and the timeline pane is the library's own native

@@ -5,6 +5,7 @@ import { GanttShell } from '../view/index.js';
 import type {
   GanttEventHandler,
   GanttEventMap,
+  GridWidth,
   Interactions,
   Theme,
   ViewportGestures,
@@ -61,8 +62,11 @@ export interface GanttOptionsBase {
    * Independent of `scale`/`preset`/`range`/`fit`: a Gantt may share its scroll position, its axis,
    * both, or neither. */
   scroll?: ScrollModel;
-  /** Initial grid pane width in px (S1.8). Default: `--fg-grid-pane-width`, fallback 160. */
-  gridWidth?: number;
+  /** Live. The grid pane's width in px (S1.8), or `'fitColumns'` (#157) to sit it on its columns'
+   *  own right edge and keep it there as the columns change. Reads back in px either way. Default:
+   *  `--fg-grid-pane-width`, fallback 160. Never wider than the columns (#139); a splitter drag
+   *  turns `'fitColumns'` back into the width it was dragged to. */
+  gridWidth?: GridWidth;
   /** Live (#127). The floor a splitter drag clamps `gridWidth` to. Default `40` — wide enough for
    *  one narrow column, so a drag cannot take the pane to nothing by accident. It bounds the drag
    *  only: an explicit `gridWidth = 0` still collapses the grid pane on purpose. */
@@ -300,8 +304,10 @@ export class Gantt {
     return this.#shell.gridWidth;
   }
 
-  set gridWidth(px: number) {
-    this.#shell.gridWidth = px;
+  /** Live. `'fitColumns'` stands until something else sets a width — a later assignment, or a
+   *  splitter drag (#157). */
+  set gridWidth(width: GridWidth) {
+    this.#shell.gridWidth = width;
   }
 
   get minGridWidth(): number {
