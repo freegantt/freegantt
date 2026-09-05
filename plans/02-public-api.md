@@ -257,7 +257,7 @@ S3 Parts: `.fg-bar-handle` (shared resize-handle pair), `.fg-cursor-line`, `.fg-
 
 S5.5 Parts (D-S5-13/14, both mounted inside S5.3's `.fg-popup`): `.fg-tooltip`, `.fg-tooltip-title`, `.fg-tooltip-dates` (`tooltips()`); `.fg-menu`, `.fg-menu-item`, `.fg-menu-separator` (`contextMenu()`).
 
-S5.8 Parts (D-S5-19): `.fg-cell-editor`, `.fg-cell-editor-control` (`inlineEditing()`) — mounted through the overlay layer directly, not inside `.fg-popup` (the cell editor has no flip/clamp; it always sits at the cell's own rect). State attribute `data-state="invalid"` on `.fg-cell-editor` marks a failed `parseValue`, a `beforeChange` veto, or the default `dateInput`'s non-midnight refusal (issue #137 F11/F12).
+S5.8 Parts (D-S5-19): `.fg-cell-editor`, `.fg-cell-editor-control` (`inlineEditing()`) — mounted through the row layer (`ctx.view.rowLayer`) directly, not inside `.fg-popup` (the cell editor has no flip/clamp; it always sits at the cell's own rect). #158 moved this mount out of the Overlay: the row layer travels with the rows on both axes, so the editor stays on its cell through a scroll with no scroll listener. State attribute `data-state="invalid"` on `.fg-cell-editor` marks a failed `parseValue`, a `beforeChange` veto, or the default `dateInput`'s non-midnight refusal (issue #137 F11/F12).
 
 A cell renderer reads its cell two ways. `value` is the string the library painted, through the
 Field's own `formatValue`. `fieldValue` is the same Field value before formatting — what
