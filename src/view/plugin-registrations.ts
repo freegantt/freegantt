@@ -75,6 +75,11 @@ export class PluginRegistrations implements PluginRegistrar {
   #decorations = createRegistrationTable<number, RegisteredDecorationProvider>();
   #nextDecorationKey = 0;
 
+  /** The list `decorationProviders()` hands out, held between registration changes (#188). Every
+   *  frame reads that list, and frames fire on scroll, so the hot path must allocate nothing
+   *  (`plans/01` §8). `registerDecoration` is the only writer, and it drops this on both edges. */
+  #activeDecorations: readonly RegisteredDecorationProvider[] | undefined;
+
   constructor(ports: PluginRegistrationPorts, itemProducers: ItemProducerRegistry) {
     this.#ports = ports;
     this.itemProducers = itemProducers;
@@ -91,10 +96,18 @@ export class PluginRegistrations implements PluginRegistrar {
     return this.#withRepaint(() => this.renderers.register(point, renderer, pluginId));
   }
 
-  /** S5.6, D-S5-15. Same repaint, same both-edges reason as a renderer claim. */
+  /** S5.6, D-S5-15. Same repaint, same both-edges reason as a renderer claim. The held provider
+   *  list goes with that repaint: the two edges that change what paints are the two that make it
+   *  stale (#188). */
   registerDecoration(layer: DecorationLayer, provider: DecorationProvider): Disposer {
     const key = this.#nextDecorationKey++;
-    return this.#withRepaint(() => this.#decorations.register(key, { layer, provider }));
+    return this.#onBothEdges(
+      () => this.#decorations.register(key, { layer, provider }),
+      () => {
+        this.#activeDecorations = undefined;
+        this.#ports.requestFrame();
+      },
+    );
   }
 
   /** D-S5-22. `FrameLayout`'s per-row Item cache forgets a row on a dataset, row-count or metrics
@@ -136,9 +149,12 @@ export class PluginRegistrations implements PluginRegistrar {
     return this.#kindDefaults.get(kind);
   }
 
-  /** Every live provider, in registration order — `LayoutInput.decorationProviders`. */
+  /** Every live provider, in registration order — `LayoutInput.decorationProviders`. One walk of the
+   *  table per registration change, not one per frame (#188). The caller reads the list and never
+   *  writes it, which is why one instance may serve every frame between two changes. */
   decorationProviders(): readonly RegisteredDecorationProvider[] {
-    return this.#decorations.active();
+    this.#activeDecorations ??= this.#decorations.active();
+    return this.#activeDecorations;
   }
 
   #withRepaint(register: () => Disposer): Disposer {

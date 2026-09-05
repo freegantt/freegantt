@@ -130,6 +130,15 @@ gantt.minGridWidth = 80;                // #127 — floor the Splitter drag clam
 
 Every config key is a live property. Setting one triggers exactly the invalidation it needs (a preset change rebuilds the axis; a row-source change re-resolves rows) — never a full remount.
 
+**A config value is a value, not a mutable object (#187).** Assignment compares against what the property already holds, by identity. So a mutation of the object you already handed over, followed by an assignment of that same object, changes nothing and paints nothing. Assign a copy to ask for the repaint:
+
+```ts
+gantt.barRenderer = { ...gantt.barRenderer, milestone: paintMilestone };   // repaints
+gantt.rowSource = { ...gantt.rowSource, groupBy: byTeam };                 // re-resolves rows
+```
+
+One rule covers every config key, object-valued ones included. A per-key exemption would put the rule back in each setter, which is what `frame-settings.ts`'s one invalidation table exists to prevent. It also keeps a repeated assignment of an unchanged value off the frame path.
+
 
 ### 2.1 What a consumer writes, and what the library stores
 
