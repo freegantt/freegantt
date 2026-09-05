@@ -213,7 +213,9 @@ export interface GanttShellWiring {
    *  either, but a narrower object literal reaches it fine, because `api/gantt.ts` only widens. */
   buildCommandContext?: (parts: {
     entry?: Entry;
-    target?: { kind: 'header'; field: FieldKey; entryIds: readonly EntryId[] };
+    target?:
+      | { kind: 'header'; field: FieldKey; entryIds: readonly EntryId[] }
+      | { kind: 'bar'; entryIds: readonly EntryId[] };
   }) => unknown;
   /** S5.2: `freegantt.panToToday`'s own clock read. `view/` may not call `time/`'s `now()` itself
    *  (I10). `api/gantt.ts` supplies `now` from `time/index.js`, the same function
@@ -1141,23 +1143,32 @@ export class GanttShell {
 
   /** S5.2, D-S5-6: the live `CommandContext` builder. `entry` is the first selected entry, or
    *  `undefined` when nothing is selected (the doc's "the focused row, or none"). `target` fills in
-   *  for a focused header cell (S5.7, D-S5-26, issue #137 F6) — the rest of `CommandTarget`'s kinds
-   *  are still S5.11's own job. `api/gantt.ts`'s injected `buildCommandContext` fills `dataset`/`gantt`
+   *  for a focused header cell (S5.7, D-S5-26, issue #137 F6), or, failing that, for the Selection
+   *  itself (#212) — a keyboard chord has no right-clicked node to reconcile against the Selection,
+   *  so it names the Selection directly and `when`/`run` read `ctx.target.entryIds` exactly as a
+   *  mouse invocation does. `api/gantt.ts`'s injected `buildCommandContext` fills `dataset`/`gantt`
    *  — `view/` may not name either type (D-S5-5's mirror). A `wiring` with no `buildCommandContext`
    *  makes every command's context an empty object — a test that drives the shell alone. That is
    *  fine. No core command reads `ctx.dataset`/`ctx.gantt` without first checking
    *  `ctx.entry`/`ctx.target`, and no such test runs a command that needs them. */
   #buildCommandContext(): CommandContext<unknown> {
-    const id = this.#selection[0];
+    const selection = this.#selection;
+    const id = selection[0];
     const entry = id !== undefined ? this.#options.dataset.entries.get(id) : undefined;
     const field = this.#columnChrome.focusedHeaderField;
+    // #199: a header cell stands for no Entry, and `CommandTarget.entryIds` is never absent.
+    const target =
+      field !== undefined
+        ? { kind: 'header' as const, field, entryIds: [] }
+        : selection.length > 0
+          ? { kind: 'bar' as const, entryIds: selection }
+          : undefined;
     // `view/` may not name `CommandContextOf`'s api-level fields (`dataset: Dataset`, `gantt`),
     // D-S5-5's mirror. So this cast trusts `api/gantt.ts`'s injected `buildCommandContext` to fill
     // them. `buildPluginContext` above already gets the same trust for `PluginContext`.
     return (this.#options.wiring.buildCommandContext ?? (() => ({})))({
       ...(entry !== undefined ? { entry } : {}),
-      // #199: a header cell stands for no Entry, and `CommandTarget.entryIds` is never absent.
-      ...(field !== undefined ? { target: { kind: 'header' as const, field, entryIds: [] } } : {}),
+      ...(target !== undefined ? { target } : {}),
     }) as CommandContext<unknown>;
   }
 

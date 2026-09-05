@@ -12,6 +12,7 @@
 import { createPopup } from '../popup.js';
 import type { Anchor, Popup } from '../popup.js';
 import type { Command, CommandContext, CommandTarget, GanttPlugin, PluginContext } from '../../api/gantt.js';
+import { resolveActedOnEntryIds } from '../../api/command.js';
 import type { DomTarget } from '../../api/plugin.js';
 import type { Entry, EntryId } from '../../model/index.js';
 import { DisposableStore } from '../disposables.js';
@@ -40,25 +41,6 @@ function commandTargetOf(target: DomTarget, entryIds: readonly EntryId[]): Comma
     entryIds,
     ...(target.field !== undefined ? { field: target.field } : {}),
   };
-}
-
-/** Whether a right-click on `clicked` landed inside the Selection. The rule (#199):
- *
- *  > A right-click acts on the Selection when the thing you clicked is part of it.
- *  > It acts on the thing you clicked when it is not.
- *
- *  A row you have not selected is not part of the Selection, so the command acts on every Entry the
- *  row owns. A bar inside a multi-bar Selection is part of it, so the command acts on the whole
- *  Selection. A bar outside the Selection is not part of it, so the command acts on that one Entry.
- *
- *  A node stands inside the Selection only when **every** Entry it names is selected. Take a row
- *  that owns three Entries, of which the user selected two. That row is not the thing the user
- *  selected, so a right-click on it acts on the row.
- *
- *  A node that stands for no Entry — a header cell, the splitter, a grouping header row — is part
- *  of nothing. It never takes the Selection with it, and an empty `clicked` says so. */
-function clickLandsInSelection(clicked: readonly EntryId[], selected: readonly EntryId[]): boolean {
-  return clicked.length > 0 && clicked.every((id) => selected.includes(id));
 }
 
 /** D-S5-13: right-click, or `Shift+F10`/the Menu key, opens a menu of the commands whose `when`
@@ -116,17 +98,19 @@ export function contextMenu(options: ContextMenuOptions = {}): GanttPlugin {
       const openAt = (anchor: Anchor, target: DomTarget | undefined): void => {
         closeMenu();
         const entry = target?.entry;
-        // #199, and the one place the Selection and the clicked node meet. `DomTarget` states a DOM
-        // fact and must keep doing that, so the rule lives here, in the command layer.
+        // #199/#212, and the one place the Selection and the clicked node meet. `DomTarget` states
+        // a DOM fact and must keep doing that, so the rule lives in `resolveActedOnEntryIds`
+        // instead, in the command layer.
         const clicked = target?.entryIds ?? [];
-        const landedInSelection = clickLandsInSelection(clicked, ctx.gantt.selectedIds);
+        const entryIds = resolveActedOnEntryIds(clicked, ctx.gantt.selectedIds);
         // Inferred from standard right-click behaviour, not stated on #199: a right-click outside
         // the Selection replaces the Selection with what you clicked, before the menu opens.
         // Without it the command acts on Entries the user cannot see highlighted. A consumer that
         // cancels `beforeSelectionChange` keeps its Selection; the command still acts on what the
-        // user clicked, because that is what the menu offered.
-        if (!landedInSelection && clicked.length > 0) ctx.gantt.selectedIds = clicked;
-        const entryIds = landedInSelection ? ctx.gantt.selectedIds : clicked;
+        // user clicked, because that is what the menu offered. When the click landed inside the
+        // Selection (or the Selection landed inside the click, #212), `entryIds` is already the
+        // current Selection, so this assignment is a no-op — nothing is silently widened.
+        if (clicked.length > 0) ctx.gantt.selectedIds = entryIds;
         const commandCtx: CommandContext = {
           dataset: ctx.dataset,
           gantt: ctx.gantt,

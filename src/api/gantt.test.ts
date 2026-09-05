@@ -3862,6 +3862,30 @@ describe('Gantt.commands (S5.2, D-S5-6/D-S5-7)', () => {
     gantt.destroy();
   });
 
+  it('a command invoked with no right-click reads the Selection off ctx.target, not just ctx.entry (#212)', () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({ entries: sampleEntries.slice(0, 3), timeZone: 'UTC' });
+    const gantt = new Gantt({ container, dataset });
+    const [a, b] = dataset.entries.all;
+    gantt.selectedIds = [a!.id, b!.id];
+
+    let reached: readonly string[] | undefined;
+    gantt.commands.register({
+      id: 'demo.reachedSelection',
+      label: 'Reached',
+      run: (ctx) => (reached = ctx.target?.entryIds),
+    });
+
+    // `run(id)` takes the same path a keyboard chord does — `GanttShell#buildCommandContext` — so a
+    // command that reads `ctx.target.entryIds` sees the whole Selection here too, not only
+    // `ctx.entry` (the first selected Entry alone).
+    gantt.commands.run('demo.reachedSelection');
+
+    expect(reached).toEqual([a!.id, b!.id]);
+
+    gantt.destroy();
+  });
+
   it('a plugin binding on ArrowRight wins over core only while its when passes', () => {
     const container = document.createElement('div');
     const dataset = new Dataset({ entries: sampleEntries.slice(0, 2), timeZone: 'UTC' });
