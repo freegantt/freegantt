@@ -7,7 +7,7 @@ import { bufferKind } from './plugins/buffer-kind.js';
 import { riskKind } from './plugins/risk-kind.js';
 import { logEverything } from './plugins/log-everything.js';
 import { selectionShortcuts } from './plugins/selection-shortcuts.js';
-import { openDemoPopup, popupDemo } from './plugins/popup-demo.js';
+import { popupDemo } from './plugins/popup-demo.js';
 
 // S5.4's visible-acceptance box (s5.4-renderers.md §4, D-S5-10/11/12): a milestone diamond and a
 // red over-budget cost cell, painted through `barRenderer`/`cellRenderer` alone — no bespoke
@@ -64,7 +64,11 @@ toggleBtn.addEventListener('click', () => {
 // S5.2/S5.3, D-S5-6/D-S5-7/D-S5-8: both demos live in `harness/plugins/`, beside `weekendShading()`
 // and the two kind plugins, so this page and `main.ts` install one copy each instead of holding two
 // (review H1). Both are written against 'freegantt' alone, like every other file in that directory.
-gantt.plugins = [...gantt.plugins, selectionShortcuts(writeLog), popupDemo()];
+// #178: the page keeps the plugin object, the same way it keeps `lockEntries()`'s. That handle is
+// how page scope reaches what the plugin built in `setup()` — it replaces a module-level stash the
+// plugin used to keep for its callers, which two Gantts on one page would have shared (I2).
+const demoPopup = popupDemo();
+gantt.plugins = [...gantt.plugins, selectionShortcuts(writeLog), demoPopup];
 
 const popupBtn = document.querySelector<HTMLButtonElement>('#open-popup-btn')!;
 popupBtn.addEventListener('click', () => {
@@ -73,7 +77,7 @@ popupBtn.addEventListener('click', () => {
     writeLog('popup demo: select a bar first');
     return;
   }
-  if (openDemoPopup(selected)) writeLog(`popup demo: opened on ${selected}`);
+  if (demoPopup.openOn(selected)) writeLog(`popup demo: opened on ${selected}`);
 });
 
 // S5.4, D-S5-10/11/12: `barRenderer`/`cellRenderer` are `GanttOptions.*` — the consumer's own,

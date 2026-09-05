@@ -29,7 +29,7 @@ import { mountTimelineToolbar } from './timeline-toolbar.js';
 import { prependChangeSet, prependLogLine } from './change-log.js';
 import { logEverything } from './plugins/log-everything.js';
 import { selectionShortcuts } from './plugins/selection-shortcuts.js';
-import { openDemoPopup, popupDemo } from './plugins/popup-demo.js';
+import { popupDemo } from './plugins/popup-demo.js';
 import { lockEntries } from './plugins/lock-entries.js';
 
 // S5.8, D-S5-19: Name, Start and Budget are editable (double-click, or Enter on the selected row's
@@ -434,7 +434,11 @@ toggleLoggingBtn.addEventListener('click', () => {
   }
 });
 
-gantt.plugins = [...gantt.plugins, selectionShortcuts(writeLog), popupDemo()];
+// #178: the page keeps the plugin object, the same way it keeps `lockEntries()`'s. That handle is
+// how page scope reaches what the plugin built in `setup()` — it replaces a module-level stash the
+// plugin used to keep for its callers, which two Gantts on one page would have shared (I2).
+const demoPopup = popupDemo();
+gantt.plugins = [...gantt.plugins, selectionShortcuts(writeLog), demoPopup];
 
 const popupBtn = document.querySelector<HTMLButtonElement>('#open-popup-btn')!;
 popupBtn.addEventListener('click', () => {
@@ -443,7 +447,7 @@ popupBtn.addEventListener('click', () => {
     writeLog('popup demo: select a bar first');
     return;
   }
-  if (openDemoPopup(selected)) writeLog(`popup demo: opened on ${selected}`);
+  if (demoPopup.openOn(selected)) writeLog(`popup demo: opened on ${selected}`);
 });
 
 // S5.4, D-S5-10/11/12: `barRenderer`/`cellRenderer` as plain `GanttOptions.*` — no plugin needed.
