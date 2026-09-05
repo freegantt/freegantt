@@ -85,11 +85,18 @@ shell (I14).
 `harness/` is the library's first consumer and a gallery page, so it teaches whatever it shows. It
 shows the call form that #195's `installPlugin`/`uninstallPlugin`/`hasPlugin` (D-S5-36) replaced.
 
-- [ ] Every install in `harness/plugins.ts` uses the verb form
-- [ ] Judge per line: a **batch** install is fair long form and may stay. Do not mechanically rewrite
-      what is already the clearer call
-- [ ] Read the file as a consumer afterwards. Anything left that re-derives what the library computes
-      is a new API gap — file it against S5, do not tidy it away (CLAUDE.md)
+- [x] Every install in `harness/plugins.ts` uses the verb form. No `gantt.plugins` read or assignment
+      is left in the file
+- [x] Judge per line: a **batch** install is fair long form and may stay. Do not mechanically rewrite
+      what is already the clearer call. **No line qualified.** Every one of them read
+      `[...gantt.plugins, x]` or `gantt.plugins.filter(...)` — an append or a removal stated by
+      restating the whole installed set, which is the re-derivation the verbs replace. A fair batch
+      is an array a caller *owns*, like `plugins: [locks]` at construction. There is none here
+- [x] Read the file as a consumer afterwards. Anything left that re-derives what the library computes
+      is a new API gap — file it against S5, do not tidy it away (CLAUDE.md). **Filed #208:**
+      `EntryInput` carries no declared Field value, so line 35 authors `cost` through the raw storage
+      key (`meta: { cost: 1500 }`) while `entries.update(id, { cost })` takes the Field by name. The
+      line stays as it is
 
 ---
 
