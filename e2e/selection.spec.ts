@@ -49,6 +49,35 @@ async function rowWithSeveralBars(page: import('@playwright/test').Page): Promis
   return entryId!;
 }
 
+/** A bar of one Entry the pointer can really land on: scrolled into view, and the topmost element
+ *  at its own click point. Segments can overlap, so the second check earns its keep. */
+async function pickableBarOf(page: import('@playwright/test').Page, entryId: string) {
+  const bars = page.locator(`#gantt .fg-bar[data-item-id^="${entryId}:"]`);
+  const count = await bars.count();
+  for (let index = 0; index < count; index++) {
+    const bar = bars.nth(index);
+    await bar.scrollIntoViewIfNeeded();
+    const landsOnIt = await bar.evaluate((el) => {
+      const rect = el.getBoundingClientRect();
+      const x = Math.min(rect.left + 12, rect.right - 2);
+      const at = document.elementFromPoint(x, rect.top + rect.height / 2);
+      return at !== null && el.contains(at);
+    });
+    if (landsOnIt) return bar;
+  }
+  throw new Error(`no bar of ${entryId} is under the pointer`);
+}
+
+/** Which bars of one Entry carry the `selected` token right now, by Item id. */
+async function selectedBarIds(page: import('@playwright/test').Page, entryId: string): Promise<string[]> {
+  return page.evaluate((id) => {
+    const bars = document.querySelectorAll<HTMLElement>(`#gantt .fg-bar[data-item-id^="${id}:"]`);
+    return Array.from(bars)
+      .filter((bar) => (bar.dataset['state'] ?? '').split(' ').includes('selected'))
+      .map((bar) => bar.dataset['itemId'] ?? '');
+  }, entryId);
+}
+
 /** `data-state` is a token list — the assertion asks for the token, never for the whole string. */
 async function barStates(page: import('@playwright/test').Page, entryId: string): Promise<string[]> {
   return page.evaluate((id) => {
@@ -67,6 +96,33 @@ test('a grid-row click paints every bar of that row (#185)', async ({ page }) =>
   // the row instead of selecting it.
   await row.locator('.fg-row-cell').first().click();
 
+  await expect
+    .poll(async () =>
+      (await barStates(page, entryId)).every((state) => state.split(' ').includes('selected')),
+    )
+    .toBe(true);
+});
+
+test('a bar click paints that bar alone; the grid row still paints them all (#185)', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
+
+  const entryId = await rowWithSeveralBars(page);
+  const bar = await pickableBarOf(page, entryId);
+  const itemId = (await bar.getAttribute('data-item-id'))!;
+  const box = await bar.boundingBox();
+  expect(box).not.toBeNull();
+  await bar.click({ position: { x: 12, y: box!.height / 2 } });
+
+  // The pointer named one bar of a row that draws several, so the paint runs that far only.
+  await expect.poll(async () => selectedBarIds(page, entryId)).toEqual([itemId]);
+  // The Entry is still what is selected, and its row says so — the picked bar only says how much of
+  // the Entry paints.
+  const row = page.locator(`#gantt .fg-row[data-entry-id="${entryId}"]`);
+  await expect(row).toHaveAttribute('data-state', /\bselected\b/);
+
+  // A click in the grid pane names a row, not a bar, so the whole Entry paints again.
+  await row.locator('.fg-row-cell').first().click();
   await expect
     .poll(async () =>
       (await barStates(page, entryId)).every((state) => state.split(' ').includes('selected')),

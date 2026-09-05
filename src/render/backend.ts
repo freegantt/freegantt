@@ -5,14 +5,18 @@ import type { EntryId, GeometryFrame, ItemId, ItemPreview, ClientPoint, RowId } 
 
 export interface InteractionState {
   hoveredItemId?: ItemId;
-  /** The Selection itself (#185): the Entry ids `Gantt.selectedIds` holds. A backend paints every
-   *  bar of a selected Entry, and it reads which bars those are from the frame it synced — an
-   *  Entry's Items are the layout's answer, never a string built from an Entry id. */
+  /** The Selection itself (#185): the Entry ids `Gantt.selectedIds` holds. A backend reads which
+   *  bars a selected Entry drew from the frame it synced — an Entry's Items are the layout's answer,
+   *  never a string built from an Entry id. Which of those bars paint is `pickedItemIdByEntryId`
+   *  below. */
   selectedEntryIds?: readonly EntryId[];
-  /** The one Item the pointer last picked (#185) — the bar a click landed on. It is an input to the
-   *  handle resolution below, never a paint of its own: the handles park on the picked bar while
-   *  nothing is hovered. Undefined once the selection drops the picked Item's Entry. */
-  pickedItemId?: ItemId;
+  /** The bar the pointer picked from a selected Entry, keyed by that Entry (#185) — at most one per
+   *  Entry, because a click lands on one bar. It says how wide that Entry's Selection paint runs: an
+   *  Entry named here paints only the bar it names, and an Entry absent from it paints every bar it
+   *  drew. A grid-row click, a keyboard select and `gantt.selectedIds = [...]` name no bar, so they
+   *  paint whole Entries. It is also what tells a segmented sole selection to show its handles. An
+   *  Entry drops out the moment the Selection stops holding it. */
+  pickedItemIdByEntryId?: ReadonlyMap<EntryId, ItemId>;
   /** The Entry the shared handle pair brackets (S3, D-S3-6/D-S3-8): the hovered bar's Entry, else
    *  the single selected one — and only when its `resize` capability resolved true. Undefined parks
    *  the handles. A resize acts on the Entry's envelope (#200), so the pair straddles every bar the

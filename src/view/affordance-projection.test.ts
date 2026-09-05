@@ -19,7 +19,7 @@ describe('projectAffordances (D-S3-6)', () => {
     const result = projectAffordances({
       hoveredItemId: ITEM_A,
       selection: [B],
-      pickedItemId: undefined,
+      pickedItemIdByEntryId: new Map(),
       itemIdsForEntry: oneBarEach,
       canGesture: (capability, id) => capability === 'move' && id === A,
     });
@@ -34,7 +34,7 @@ describe('projectAffordances (D-S3-6)', () => {
     const oneSelected = projectAffordances({
       hoveredItemId: undefined,
       selection: [A],
-      pickedItemId: undefined,
+      pickedItemIdByEntryId: new Map(),
       itemIdsForEntry: oneBarEach,
       canGesture: () => true,
     });
@@ -43,7 +43,7 @@ describe('projectAffordances (D-S3-6)', () => {
     const twoSelected = projectAffordances({
       hoveredItemId: undefined,
       selection: [A, B],
-      pickedItemId: undefined,
+      pickedItemIdByEntryId: new Map(),
       itemIdsForEntry: oneBarEach,
       canGesture: () => true,
     });
@@ -52,7 +52,7 @@ describe('projectAffordances (D-S3-6)', () => {
     const noneSelected = projectAffordances({
       hoveredItemId: undefined,
       selection: [],
-      pickedItemId: undefined,
+      pickedItemIdByEntryId: new Map(),
       itemIdsForEntry: oneBarEach,
       canGesture: () => true,
     });
@@ -63,7 +63,7 @@ describe('projectAffordances (D-S3-6)', () => {
     const result = projectAffordances({
       hoveredItemId: ITEM_A,
       selection: [],
-      pickedItemId: undefined,
+      pickedItemIdByEntryId: new Map(),
       itemIdsForEntry: oneBarEach,
       canGesture: () => false,
     });
@@ -76,7 +76,7 @@ describe('projectAffordances (D-S3-6)', () => {
     const result = projectAffordances({
       hoveredItemId: undefined,
       selection: [A],
-      pickedItemId: undefined,
+      pickedItemIdByEntryId: new Map(),
       itemIdsForEntry: oneBarEach,
       canGesture: () => false,
     });
@@ -87,7 +87,7 @@ describe('projectAffordances (D-S3-6)', () => {
     const result = projectAffordances({
       hoveredItemId: undefined,
       selection: [],
-      pickedItemId: undefined,
+      pickedItemIdByEntryId: new Map(),
       itemIdsForEntry: oneBarEach,
       canGesture: () => true,
     });
@@ -101,7 +101,7 @@ describe('projectAffordances (D-S3-6)', () => {
     const result = projectAffordances({
       hoveredItemId: undefined,
       selection: [A],
-      pickedItemId: segments[1],
+      pickedItemIdByEntryId: new Map([[A, segments[1]!]]),
       itemIdsForEntry: () => segments,
       canGesture: () => true,
     });
@@ -113,7 +113,7 @@ describe('projectAffordances (D-S3-6)', () => {
     const result = projectAffordances({
       hoveredItemId: itemId(A, 2),
       selection: [],
-      pickedItemId: undefined,
+      pickedItemIdByEntryId: new Map(),
       itemIdsForEntry: () => [itemId(A, 0), itemId(A, 1), itemId(A, 2)],
       canGesture: () => true,
     });
@@ -127,7 +127,7 @@ describe('projectAffordances (D-S3-6)', () => {
     const result = projectAffordances({
       hoveredItemId: undefined,
       selection: [A],
-      pickedItemId: undefined,
+      pickedItemIdByEntryId: new Map(),
       itemIdsForEntry: () => [itemId(A, 0), itemId(A, 1)],
       canGesture: () => true,
     });
@@ -135,14 +135,16 @@ describe('projectAffordances (D-S3-6)', () => {
     expect(result.resizableEntryId).toBeUndefined();
   });
 
-  it('a picked bar of another entry never holds the handles (#185)', () => {
+  it('a pick on another entry leaves a segmented sole selection parked (#185)', () => {
     const result = projectAffordances({
       hoveredItemId: undefined,
       selection: [A],
-      pickedItemId: ITEM_B,
-      itemIdsForEntry: oneBarEach,
+      pickedItemIdByEntryId: new Map([[B, ITEM_B]]),
+      itemIdsForEntry: () => [itemId(A, 0), itemId(A, 1)],
       canGesture: () => true,
     });
-    expect(result.resizableEntryId).toBe(A);
+    // The map is keyed by Entry, so a pick on B says nothing about A — and A drew two bars, so no
+    // single bar owns the pair.
+    expect(result.resizableEntryId).toBeUndefined();
   });
 });

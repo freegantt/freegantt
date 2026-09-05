@@ -70,8 +70,10 @@ export interface EntryGestureContext {
   entriesForRow(rowId: RowId): readonly EntryId[];
   selection: {
     get(): readonly EntryId[];
-    /** `pickedItemId` is the one bar the pointer landed on (#185) — where the shared resize-handle
-     *  pair parks while nothing is hovered. Omit it when no pointer picked a bar. */
+    /** `pickedItemId` is the one bar the pointer landed on (#185). It narrows that Entry's paint to
+     *  the bar the pointer named, and it is where the shared resize-handle pair parks while nothing
+     *  is hovered. Omit it when no pointer picked a bar — a grid-row click, a keyboard select and a
+     *  clear all leave every selected Entry painting each bar it drew. */
     propose(next: readonly EntryId[], pickedItemId?: ItemId): void;
   };
   /** S3.2 (D-S3-6): the item id under the pointer, or undefined on pointerleave. */

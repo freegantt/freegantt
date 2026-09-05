@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createDomBackend } from './index.js';
 import { computeFrame, createItemProducerRegistry } from '../../layout/index.js';
-import type { BarRenderer, TimeScale, ViewPreset } from '../../layout/index.js';
+import type { BarRenderer, ItemId, TimeScale, ViewPreset } from '../../layout/index.js';
 import { sampleEntries } from '../../../fixtures/sample-dataset.js';
 
 function entryLookup(id: string): (typeof sampleEntries)[number] | undefined {
@@ -779,6 +779,92 @@ describe('render/dom backend', () => {
       const node = timeline.querySelector<HTMLElement>(`[data-item-id="${bar.id}"]`)!;
       expect(node.dataset['state']).toBe('');
     }
+
+    backend.destroy();
+    grid.remove();
+    timeline.remove();
+  });
+
+  it('a picked bar paints alone, and the Entry paints whole again once the pick clears (#185)', () => {
+    const backend = createDomBackend();
+    const { grid, timeline } = mountSurfaces();
+    backend.mount({ grid, timeline });
+
+    const segmented = { ...sampleEntries[0]!, segments: segmentsOf(sampleEntries[0]!, 3) };
+    const frame = computeFrame({
+      entries: [segmented],
+      scale,
+      preset,
+      visible: { x: 0, y: 0, width: 0, height: 0 },
+      rowHeight: 32,
+      revision: 0,
+      itemProducerRegistry,
+    });
+    backend.sync(frame);
+    const stateOf = (id: ItemId): string =>
+      timeline.querySelector<HTMLElement>(`[data-item-id="${id}"]`)!.dataset['state'] ?? '';
+    const picked = frame.bars[1]!.id;
+
+    backend.applyState({
+      selectedEntryIds: [segmented.id],
+      pickedItemIdByEntryId: new Map([[segmented.id, picked]]),
+    });
+    expect(frame.bars.map((bar) => stateOf(bar.id))).toEqual(['', 'selected', '']);
+
+    // The pointer moved to another bar of the same Entry: both ends of the move repaint.
+    const repicked = frame.bars[2]!.id;
+    backend.applyState({
+      selectedEntryIds: [segmented.id],
+      pickedItemIdByEntryId: new Map([[segmented.id, repicked]]),
+    });
+    expect(frame.bars.map((bar) => stateOf(bar.id))).toEqual(['', '', 'selected']);
+
+    // A grid-row click on the same Entry picks no bar, so the whole Entry paints again.
+    backend.applyState({ selectedEntryIds: [segmented.id] });
+    expect(frame.bars.map((bar) => stateOf(bar.id))).toEqual(['selected', 'selected', 'selected']);
+
+    backend.destroy();
+    grid.remove();
+    timeline.remove();
+  });
+
+  it('a picked bar comes back painted after a remount, and its siblings do not (#185)', () => {
+    const backend = createDomBackend();
+    const { grid, timeline } = mountSurfaces();
+    backend.mount({ grid, timeline });
+
+    const segmented = { ...sampleEntries[0]!, segments: segmentsOf(sampleEntries[0]!, 3) };
+    const frame = computeFrame({
+      entries: [segmented],
+      scale,
+      preset,
+      visible: { x: 0, y: 0, width: 0, height: 0 },
+      rowHeight: 32,
+      revision: 0,
+      itemProducerRegistry,
+    });
+    backend.sync(frame);
+    const picked = frame.bars[1]!.id;
+    backend.applyState({
+      selectedEntryIds: [segmented.id],
+      pickedItemIdByEntryId: new Map([[segmented.id, picked]]),
+    });
+
+    backend.sync({ ...frame, bars: [] }); // the horizontal cull drops every bar of the row
+    backend.sync(frame); // and a scroll back mounts them again
+
+    // The pick is keyed by Entry, so it outlived the node it names: the picked bar comes back
+    // painted and its siblings stay clear.
+    const stateOf = (id: ItemId): string =>
+      timeline.querySelector<HTMLElement>(`[data-item-id="${id}"]`)!.dataset['state'] ?? '';
+    expect(frame.bars.map((bar) => stateOf(bar.id))).toEqual(['', 'selected', '']);
+
+    // The restamp also joined the painted set, so the next call sees no diff and rewrites nothing.
+    backend.applyState({
+      selectedEntryIds: [segmented.id],
+      pickedItemIdByEntryId: new Map([[segmented.id, picked]]),
+    });
+    expect(frame.bars.map((bar) => stateOf(bar.id))).toEqual(['', 'selected', '']);
 
     backend.destroy();
     grid.remove();
