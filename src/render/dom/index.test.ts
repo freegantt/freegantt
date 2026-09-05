@@ -1185,6 +1185,55 @@ describe('render/dom backend', () => {
     timeline.remove();
   });
 
+  it('brackets the picked bar alone when the sole selected Entry has a pick (#211, D-S4-30)', () => {
+    const backend = createDomBackend();
+    const { grid, timeline } = mountSurfaces();
+    backend.mount({ grid, timeline });
+
+    const base = sampleEntries[0]!;
+    const later = sampleEntries[4]!;
+    const spreadScale: TimeScale = {
+      ...scale,
+      xForInstant: (at) => Number(at) - Number(base.start),
+    };
+    const segmented = {
+      ...base,
+      end: later.end,
+      segments: [
+        { start: base.start, end: base.end },
+        { start: later.start, end: later.end },
+      ],
+    };
+    const frame = computeFrame({
+      entries: [segmented],
+      scale: spreadScale,
+      preset,
+      visible: { x: 0, y: 0, width: 0, height: 0 },
+      rowHeight: 32,
+      revision: 0,
+      itemProducerRegistry,
+    });
+    backend.sync(frame);
+    const [first, last] = frame.bars;
+    expect(frame.bars).toHaveLength(2);
+
+    // The pointer picked the earlier bar — both handles bracket it alone, never the envelope's
+    // latest bar, because a resize on a picked Segment writes only that Segment's edge (#211).
+    backend.applyState({
+      resizableEntryId: segmented.id,
+      pickedItemIdByEntryId: new Map([[segmented.id, first!.id]]),
+    });
+    const start = timeline.querySelector<HTMLElement>('.fg-bar-handle[data-edge="start"]')!;
+    const end = timeline.querySelector<HTMLElement>('.fg-bar-handle[data-edge="end"]')!;
+    expect(start.style.transform).toBe(`translate(${first!.x}px, ${first!.y}px)`);
+    expect(end.style.transform).toBe(`translate(${first!.x + first!.width}px, ${first!.y}px)`);
+    expect(end.style.transform).not.toBe(`translate(${last!.x + last!.width}px, ${last!.y}px)`);
+
+    backend.destroy();
+    grid.remove();
+    timeline.remove();
+  });
+
   it('hitTest never reports an edge for a parked (hidden) handle pair', () => {
     const backend = createDomBackend();
     const { grid, timeline } = mountSurfaces();

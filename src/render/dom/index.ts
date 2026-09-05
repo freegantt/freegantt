@@ -364,6 +364,16 @@ export function createDomBackend(options?: DomBackendOptions): RenderBackend<HTM
     return { start, end };
   }
 
+  /** The two bars the handle pair sits on for `id`, reading the same pick paint already narrowed to
+   *  (#211): a picked bar gets both handles, since a resize on it writes only that Segment's edge; an
+   *  Entry with no pick falls back to the envelope pair above. */
+  function resizeHandleBarsOfEntry(id: EntryId | undefined): { start: ItemId; end: ItemId } | undefined {
+    if (id === undefined) return undefined;
+    const picked = paintedPicks.get(id);
+    if (picked !== undefined && barGeomByItemId.has(picked)) return { start: picked, end: picked };
+    return envelopeBarsOfEntry(id);
+  }
+
   /** Moves the shared handle pair onto `bars`' own committed geometry, or parks both (D-S3-8) when
    *  it is undefined. Each handle reads its own bar, so a packed Entry whose Segments sit in two
    *  lanes still gets each handle on the right row (#200). `hidden` is a DOM property write, not
@@ -1033,7 +1043,7 @@ export function createDomBackend(options?: DomBackendOptions): RenderBackend<HTM
       // that gate alone left the handle pair glued to its pre-commit position. The handle pair's
       // geometry has to track `syncBars` every frame, the same way a bar's own transform does, not
       // just on identity change.
-      if (paintedResizable !== undefined) paintResizeHandles(envelopeBarsOfEntry(paintedResizable));
+      if (paintedResizable !== undefined) paintResizeHandles(resizeHandleBarsOfEntry(paintedResizable));
       dateLines?.sync(frame.decorations, frame.contentHeight, frame.visible.height);
       decorations?.sync(
         frame.underBars,
@@ -1123,7 +1133,7 @@ export function createDomBackend(options?: DomBackendOptions): RenderBackend<HTM
       // geometry `syncBars` already recorded — never a per-item computation of its own.
       const nextResizable = state.resizableEntryId;
       if (nextResizable !== paintedResizable) {
-        paintResizeHandles(envelopeBarsOfEntry(nextResizable));
+        paintResizeHandles(resizeHandleBarsOfEntry(nextResizable));
         paintedResizable = nextResizable;
       }
 

@@ -167,7 +167,54 @@ test('pack mode grows a packed row and shifts the rows below', async ({ page }) 
     .toBe(true);
 });
 
-test('a drag moves every bar of the entry and one Undo restores them all', async ({ page }) => {
+test('a segment drag moves one bar and Undo restores it', async ({ page }) => {
+  await gotoHierarchy(page);
+  await page.evaluate(() => {
+    window.__gantt.preset = { ...window.__gantt.preset, snap: 'none' };
+  });
+  await showSegmentedSpan(page);
+
+  const entryId = await entryWithSegments(page);
+  const bars = barsForEntry(page, entryId);
+  const bar = bars.nth(1);
+  const sibling = bars.first();
+  await expect(bar).toBeVisible();
+  const before = await bar.boundingBox();
+  const siblingBefore = await sibling.boundingBox();
+  expect(before).not.toBeNull();
+  expect(siblingBefore).not.toBeNull();
+
+  // #211: a click names the bar the pointer landed on — that bar is the pick, and only a pick's own
+  // Segment moves on the drag that follows. The three Segments overlap at this zoom, so the click
+  // goes through the mouse directly — a locator `click()` refuses to act while a sibling bar of the
+  // same Entry sits over the target's own centre.
+  await page.mouse.click(before!.x + Math.min(before!.width / 2, 20), before!.y + before!.height / 2);
+  await dragBarBy(page, bar, 120);
+
+  await expect
+    .poll(async () => {
+      const after = await bar.boundingBox();
+      return after !== null && Math.abs(after.x - before!.x) > 8;
+    })
+    .toBe(true);
+
+  const siblingAfter = await sibling.boundingBox();
+  expect(siblingAfter).not.toBeNull();
+  expect(Math.abs(siblingAfter!.x - siblingBefore!.x)).toBeLessThan(2);
+
+  await page.click('#undo-btn');
+
+  await expect
+    .poll(async () => {
+      const restored = await bar.boundingBox();
+      return restored !== null && Math.abs(restored.x - before!.x);
+    })
+    .toBeLessThan(2);
+});
+
+test('a row click paints and moves every bar of the entry, and one Undo restores them all', async ({
+  page,
+}) => {
   await gotoHierarchy(page);
   await page.evaluate(() => {
     window.__gantt.preset = { ...window.__gantt.preset, snap: 'none' };
@@ -180,7 +227,10 @@ test('a drag moves every bar of the entry and one Undo restores them all', async
   expect(await bars.count()).toBe(3);
   const before = await barLefts(bars);
 
-  // #200: the grabbed bar is the middle Segment, and the Selection owns the drag — all three step.
+  // #211: a grid-row click selects the whole Entry with no pick — every Segment paints selected, so
+  // the drag that follows steps every Segment by the same delta (D-S3-19).
+  const row = page.locator(`#gantt .fg-row[data-entry-id="${entryId}"]`);
+  await row.locator('.fg-row-cell').first().click();
   await dragBarBy(page, bars.nth(1), 120);
 
   await expect
@@ -217,11 +267,11 @@ test('the handle pair brackets the whole entry and the start handle grows its fi
   const bars = barsForEntry(page, entryId);
   const first = bars.first();
   const last = bars.nth(2);
-  // Click one bar to select the Entry: the handle pair then stays put while the pointer travels to
-  // it. The three Segments overlap, so the click goes through the mouse — `click()` refuses to act
-  // while a sibling bar of the same Entry sits over the target's own centre.
-  const clickBox = (await last.boundingBox())!;
-  await page.mouse.click(clickBox.x + clickBox.width / 2, clickBox.y + clickBox.height / 2);
+  // #211: hovering the bar shows the handle pair with no pick recorded for the Entry, so the pair
+  // brackets the envelope — a click here would instead pick this one bar and narrow the pair to it
+  // alone (see the picked-bar unit coverage in render/dom/index.test.ts).
+  const hoverBox = (await last.boundingBox())!;
+  await page.mouse.move(hoverBox.x + hoverBox.width / 2, hoverBox.y + hoverBox.height / 2);
 
   // The entry is wider than the pane, so its earliest bar starts left of the pane's own edge. Pan
   // right-to-left until that bar — and the start handle on it — sits inside the pane.
@@ -236,8 +286,7 @@ test('the handle pair brackets the whole entry and the start handle grows its fi
   await expect(startHandle).toBeVisible();
   await expect(endHandle).toBeVisible();
 
-  // #200: a resize acts on the Entry's envelope, so the pair straddles all three bars — it never
-  // sits on the hovered bar alone.
+  // #211: with no pick, a resize acts on the Entry's envelope, so the pair straddles all three bars.
   const firstBefore = (await first.boundingBox())!;
   const lastBefore = (await last.boundingBox())!;
   const startBox = (await startHandle.boundingBox())!;

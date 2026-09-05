@@ -31,18 +31,24 @@ export interface DraftInput {
   entries: readonly Entry[];
   /** Horizontal pointer travel since the gesture armed, in content px (D-S3-11: vertical is ignored). */
   dxPx: number;
+  /** The Segment index the pointer picked for each Entry that has one — the same reading
+   *  `pickedItemIdByEntryId` gives paint (#185), resolved to an index (#211, D-S4-30). Picks are
+   *  per-Entry: a ctrl-click multi-selection can pick a different bar on each Entry, so this is a map,
+   *  not one index for the whole gesture. An Entry absent from the map has no pick and moves or
+   *  resizes whole — every Segment for a move, the envelope edge for a resize. */
+  pickedSegmentIndexByEntryId?: ReadonlyMap<EntryId, number>;
 }
 
 /** A move draft: `{ start, end }` for every grabbed entry, snapped and stepped as one rigid group
- *  (D-S3-3, D-S3-19). A segmented entry moves every Segment by that same delta and rewrites its
- *  envelope — the Selection names an Entry, so a drag moves the whole Entry (#200, D-S4-30).
- *  Empty when `input.entries` is empty — a gesture with nothing capable to move. */
+ *  (D-S3-3, D-S3-19). What paints selected is what moves (#211): an Entry with a pick moves that one
+ *  Segment and rewrites the envelope around it; an Entry with no pick moves every Segment and the
+ *  envelope together. Empty when `input.entries` is empty — a gesture with nothing capable to move. */
 export function draftForMove(input: DraftInput): EntryEdits {
-  const { zone, scale, snap, entries, dxPx } = input;
+  const { zone, scale, snap, entries, dxPx, pickedSegmentIndexByEntryId } = input;
   const anchor = entries[0];
   if (!anchor) return new Map();
 
-  const anchorInstant = envelopeEdgeInstant(anchor, 'start');
+  const anchorInstant = entryEdgeInstant(anchor, 'start', pickedSegmentIndexByEntryId?.get(anchor.id));
   const anchorX = scale.xForInstant(anchorInstant);
   const rawCandidate = scale.instantForX(anchorX + dxPx);
   const snappedCandidate = snapInstant(zone, rawCandidate, snap);
@@ -50,30 +56,41 @@ export function draftForMove(input: DraftInput): EntryEdits {
   const edits = new Map<EntryId, StoredEdit>();
   if (snap === 'none') {
     const deltaMs = diffMs(snappedCandidate, anchorInstant);
-    for (const entry of entries) edits.set(entry.id, moveEdit(entry, deltaMs));
+    for (const entry of entries) {
+      edits.set(entry.id, moveEdit(entry, deltaMs, pickedSegmentIndexByEntryId?.get(entry.id)));
+    }
     return edits;
   }
 
   const steps = stepsBetween(zone, snap.unit, snap.increment, anchorInstant, snappedCandidate);
   for (const entry of entries) {
-    edits.set(entry.id, stepMoveEdit(zone, entry, snap.unit, steps * snap.increment));
+    edits.set(
+      entry.id,
+      stepMoveEdit(
+        zone,
+        entry,
+        snap.unit,
+        steps * snap.increment,
+        pickedSegmentIndexByEntryId?.get(entry.id),
+      ),
+    );
   }
   return edits;
 }
 
 /** A resize draft: one edge of every grabbed entry moves by the same snapped/stepped calendar delta
- *  as `entries[0]`'s own grabbed edge (D-S3-19), the opposite edge held fixed. The edge is the
- *  **envelope** edge, on a segmented entry too — the Selection names an Entry, so the `start` handle
- *  moves the earliest Segment's start and the `end` handle moves the latest Segment's end, and every
- *  other Segment stays where it is (#200). Zero-length clamp: the dragged edge never crosses the
- *  fixed one — an inverted span is refused right here, in the layout layer, before it ever reaches a
- *  changeset (D-S3-4). */
+ *  as `entries[0]`'s own grabbed edge (D-S3-19), the opposite edge held fixed. What paints selected is
+ *  what the handles bracket (#211): an Entry with a pick drags that Segment's own edge; an Entry with
+ *  no pick drags its **envelope** edge — the `start` handle moves the earliest Segment's start, the
+ *  `end` handle moves the latest Segment's end, and every other Segment stays where it is. Zero-length
+ *  clamp: the dragged edge never crosses the fixed one — an inverted span is refused right here, in
+ *  the layout layer, before it ever reaches a changeset (D-S3-4). */
 export function draftForResize(input: DraftInput & { edge: 'start' | 'end' }): EntryEdits {
-  const { zone, scale, snap, entries, dxPx, edge } = input;
+  const { zone, scale, snap, entries, dxPx, edge, pickedSegmentIndexByEntryId } = input;
   const anchor = entries[0];
   if (!anchor) return new Map();
 
-  const anchorInstant = envelopeEdgeInstant(anchor, edge);
+  const anchorInstant = entryEdgeInstant(anchor, edge, pickedSegmentIndexByEntryId?.get(anchor.id));
   const anchorX = scale.xForInstant(anchorInstant);
   const rawCandidate = scale.instantForX(anchorX + dxPx);
   const snappedCandidate = snapInstant(zone, rawCandidate, snap);
@@ -83,16 +100,21 @@ export function draftForResize(input: DraftInput & { edge: 'start' | 'end' }): E
   if (snap === 'none') {
     const deltaMs = diffMs(snappedCandidate, anchorInstant);
     for (const entry of entries) {
-      const current = envelopeEdgeInstant(entry, edge);
-      edits.set(entry.id, resizeEdit(entry, edge, addMs(current, deltaMs)));
+      const segmentIndex = pickedSegmentIndexByEntryId?.get(entry.id);
+      const current = entryEdgeInstant(entry, edge, segmentIndex);
+      edits.set(entry.id, resizeEdit(entry, edge, addMs(current, deltaMs), segmentIndex));
     }
     return edits;
   }
 
   const steps = stepsBetween(zone, snap.unit, snap.increment, anchorInstant, snappedCandidate);
   for (const entry of entries) {
-    const current = envelopeEdgeInstant(entry, edge);
-    edits.set(entry.id, resizeEdit(entry, edge, stepBy(zone, current, snap.unit, steps * snap.increment)));
+    const segmentIndex = pickedSegmentIndexByEntryId?.get(entry.id);
+    const current = entryEdgeInstant(entry, edge, segmentIndex);
+    edits.set(
+      entry.id,
+      resizeEdit(entry, edge, stepBy(zone, current, snap.unit, steps * snap.increment), segmentIndex),
+    );
   }
   return edits;
 }
@@ -109,6 +131,17 @@ function envelopeEdgeInstant(entry: Entry, edge: 'start' | 'end'): Instant {
   if (!hasSegments(entry)) return edge === 'start' ? entry.start : entry.end;
   const envelope = envelopeOfSegments(entry.segments);
   return edge === 'start' ? envelope.start : envelope.end;
+}
+
+/** The instant a gesture anchors or drags for one Entry: the picked Segment's own edge when the
+ *  pointer picked one (#211, D-S4-30), else the envelope edge above. `segmentIndex` is `undefined`
+ *  for an unsegmented entry too, so both fall through to the same envelope reading. */
+function entryEdgeInstant(entry: Entry, edge: 'start' | 'end', segmentIndex: number | undefined): Instant {
+  if (segmentIndex !== undefined && hasSegments(entry)) {
+    const segment = entry.segments[segmentIndex];
+    if (segment) return edge === 'start' ? segment.start : segment.end;
+  }
+  return envelopeEdgeInstant(entry, edge);
 }
 
 /** Which Segment holds the envelope edge — the earliest `start` or the latest `end`, the same two
@@ -135,36 +168,58 @@ function envelopeOfSegments(segments: readonly TimeSpan[]): { start: Instant; en
   return { start, end };
 }
 
-function moveEdit(entry: Entry, deltaMs: number): StoredEdit {
+/** Moves `entry` by `deltaMs`. A pick (`segmentIndex` defined) moves that one Segment alone and
+ *  rewrites the envelope around it; no pick moves every Segment and the envelope together (#211). */
+function moveEdit(entry: Entry, deltaMs: number, segmentIndex: number | undefined): StoredEdit {
   if (!hasSegments(entry)) {
     return { start: addMs(entry.start, deltaMs), end: addMs(entry.end, deltaMs) };
   }
-  const segments = entry.segments.map((segment) => ({
-    start: addMs(segment.start, deltaMs),
-    end: addMs(segment.end, deltaMs),
-  }));
+  const segments = entry.segments.map((segment, index) =>
+    segmentIndex !== undefined && index !== segmentIndex
+      ? segment
+      : { start: addMs(segment.start, deltaMs), end: addMs(segment.end, deltaMs) },
+  );
   return { segments, ...envelopeOfSegments(segments) };
 }
 
-function stepMoveEdit(zone: string, entry: Entry, unit: TimeUnit, amount: number): StoredEdit {
+/** Same as `moveEdit`, stepped by a calendar unit instead of a millisecond delta (keyboard nudge,
+ *  D-S3-13). */
+function stepMoveEdit(
+  zone: string,
+  entry: Entry,
+  unit: TimeUnit,
+  amount: number,
+  segmentIndex: number | undefined,
+): StoredEdit {
   if (!hasSegments(entry)) {
     return {
       start: stepBy(zone, entry.start, unit, amount),
       end: stepBy(zone, entry.end, unit, amount),
     };
   }
-  const segments = entry.segments.map((segment) => ({
-    start: stepBy(zone, segment.start, unit, amount),
-    end: stepBy(zone, segment.end, unit, amount),
-  }));
+  const segments = entry.segments.map((segment, index) =>
+    segmentIndex !== undefined && index !== segmentIndex
+      ? segment
+      : {
+          start: stepBy(zone, segment.start, unit, amount),
+          end: stepBy(zone, segment.end, unit, amount),
+        },
+  );
   return { segments, ...envelopeOfSegments(segments) };
 }
 
-function resizeEdit(entry: Entry, edge: 'start' | 'end', moved: Instant): StoredEdit {
+/** Resizes `entry`'s `edge` to `moved`. A pick (`segmentIndex` defined) writes that Segment's own
+ *  edge; no pick falls back to the envelope edge's own Segment (#211). */
+function resizeEdit(
+  entry: Entry,
+  edge: 'start' | 'end',
+  moved: Instant,
+  segmentIndex: number | undefined,
+): StoredEdit {
   if (!hasSegments(entry)) {
     return clampedEdgeEdit(entry, edge, moved);
   }
-  const index = segmentIndexAtEnvelopeEdge(entry.segments, edge);
+  const index = segmentIndex ?? segmentIndexAtEnvelopeEdge(entry.segments, edge);
   const segments = entry.segments.map((segment, i) => {
     if (i !== index) return segment;
     if (edge === 'start') {

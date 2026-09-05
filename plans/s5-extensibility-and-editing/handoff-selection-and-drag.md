@@ -8,6 +8,12 @@ Read [`handoff-post-163-review.md`](./handoff-post-163-review.md) second. It car
 
 ## 1. What landed
 
+> **Superseded (#211).** The #200 subsection below — "what you selected is what moves" widened to
+> "a drag moves the whole Entry, always" — over-corrected: paint (#185) still narrows to the one bar
+> the pointer picked, and #200's drag no longer matched it. `plans/s5-extensibility-and-editing/spec-211-gesture-units.md`
+> withdraws #200's amendment to D-S4-30 and restores the pick-gated per-Segment gesture. The text
+> below is left as written, for history; it does not describe current behaviour.
+
 Two issues closed the same contradiction from opposite ends. Selection is a set of **Entry** ids (D-S3-10). Paint and gestures both used to work in **Item** ids. The two disagreed, and each disagreement showed as a different bug.
 
 ### #185 — a selected Entry paints every bar it drew (`b819a2a`)
@@ -22,7 +28,7 @@ New shapes to know: `FrameRow.entryIds` is plural, `HitResult` is `BarHit | RowH
 
 #185 made the second half visible. The Selection said the whole Entry was selected, and a drag moved one Segment of it.
 
-**The repo owner decided: what you selected is what moves.** A drag steps every Segment by one delta and rewrites the envelope. A resize drags the Entry's envelope edge. **Segment-level drag is dropped**, not hidden behind a modifier or a capability. Moving one Segment stays reachable through `entries.update(id, { segments })`.
+**The repo owner decided: what you selected is what moves.** A drag steps every Segment by one delta and rewrites the envelope. A resize drags the Entry's envelope edge. **A gesture on one Segment alone is not offered here** — not hidden behind a modifier or a capability, simply not this decision's shape. Moving one Segment stays reachable through `entries.update(id, { segments })`. (#211 later reopened exactly this and restored it, gated on the pointer's own pick — see the superseding note above.)
 
 D-S4-30 is amended to say so. Its old text said the opposite in so many words.
 

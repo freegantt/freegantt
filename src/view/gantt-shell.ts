@@ -701,6 +701,7 @@ export class GanttShell {
       snap: () => this.snap,
       selection: () => this.#selection,
       entryById: (id) => this.#options.dataset.entries.get(id),
+      pickedItemIdByEntryId: () => this.#pickedItemIdByEntryId,
       canGesture: (capability, id) => this.#canGesture(capability, id),
       commitEntryEdits: (edits) => this.#options.wiring.commitEntryEdits?.(edits) ?? false,
       emit: (name, payload) => this.#events.emit(name, payload),

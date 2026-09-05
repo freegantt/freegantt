@@ -832,7 +832,7 @@ describe('GanttShell hot path (S3.2, D-S3-6/D-S3-9, [S3-A3])', () => {
     shell.destroy();
   });
 
-  it('clicking one segment paints that bar alone, and the handle pair still brackets the envelope (#185, #200)', () => {
+  it('clicking one segment paints that bar alone; the handle pair follows the pick (#185, #211)', () => {
     const segmented: Entry = {
       id: entryId('seg'),
       name: 'segmented',
@@ -862,31 +862,37 @@ describe('GanttShell hot path (S3.2, D-S3-6/D-S3-9, [S3-A3])', () => {
     propose?.([segmented.id], second);
 
     // The pointer named one bar, so the paint runs that far and no further (#185). The Selection is
-    // still the Entry: `selectedIds` says so, and a drag on either bar moves both (#200).
+    // still the Entry: `selectedIds` says so.
     expect(stateOf(container, second)).toContain('selected');
     expect(stateOf(container, first)).not.toContain('selected');
     expect(shell.selection).toEqual([segmented.id]);
 
-    // A proposal that names no bar — a grid-row click, or `gantt.selectedIds = [...]` — widens the
-    // paint back to every bar the Entry drew, without a second `selectionChange`.
-    propose?.([segmented.id]);
-    expect(stateOf(container, first)).toContain('selected');
-    expect(stateOf(container, second)).toContain('selected');
-
-    // And picking a bar again narrows it back.
-    propose?.([segmented.id], first);
-    expect(stateOf(container, first)).toContain('selected');
-    expect(stateOf(container, second)).not.toContain('selected');
-
-    // A resize acts on the Entry's envelope (#200), so the pair straddles both bars: the start
-    // handle on the earliest bar's left edge, the end handle on the latest bar's right edge.
     const start = container.querySelector<HTMLElement>('.fg-bar-handle[data-edge="start"]')!;
     const end = container.querySelector<HTMLElement>('.fg-bar-handle[data-edge="end"]')!;
     const firstBar = container.querySelector<HTMLElement>(`[data-item-id="${first}"]`)!;
     const secondBar = container.querySelector<HTMLElement>(`[data-item-id="${second}"]`)!;
+
+    // #211: a pick (the pointer named a bar) narrows the handle pair to that one bar — a resize on a
+    // picked Segment writes only that Segment's edge.
     expect(start.hidden).toBe(false);
-    expect(start.style.transform).toBe(firstBar.style.transform);
+    expect(start.style.transform).toBe(secondBar.style.transform);
     expect(translateX(end)).toBeCloseTo(translateX(secondBar) + pxWidth(secondBar), 5);
+
+    // A proposal that names no bar — a grid-row click, or `gantt.selectedIds = [...]` — widens the
+    // paint back to every bar the Entry drew, without a second `selectionChange`. `resizableEntryId`
+    // still needs a hover once a multi-bar Entry has no pick (D-S3-6's own resize-fallback rule, S3.2),
+    // so the handle pair itself is not exercised here — see the envelope-bracket coverage in
+    // `render/dom/index.test.ts` and `e2e/hierarchy.spec.ts`.
+    propose?.([segmented.id]);
+    expect(stateOf(container, first)).toContain('selected');
+    expect(stateOf(container, second)).toContain('selected');
+
+    // And picking a bar again narrows both the paint and the handle pair back to it.
+    propose?.([segmented.id], first);
+    expect(stateOf(container, first)).toContain('selected');
+    expect(stateOf(container, second)).not.toContain('selected');
+    expect(start.style.transform).toBe(firstBar.style.transform);
+    expect(translateX(end)).toBeCloseTo(translateX(firstBar) + pxWidth(firstBar), 5);
 
     shell.destroy();
   });
