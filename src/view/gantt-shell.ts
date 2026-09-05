@@ -466,6 +466,7 @@ export class GanttShell {
       this.#paneLayout,
       (id) => this.#options.dataset.entries.get(id),
       (id) => this.#layout.itemIdsForEntry(id),
+      (id) => this.#layout.entryIdsForRow(id),
     );
 
     const hasOwnOptions =

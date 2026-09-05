@@ -28,9 +28,9 @@ is that the target type cannot carry the others.
 
 ## Boxes
 
-- [ ] `DomTarget.entry` grows to carry every Entry the row owns (`src/view/gantt-dom.ts:52`) — the
+- [x] `DomTarget.entry` grows to carry every Entry the row owns (`src/view/gantt-dom.ts:52`) — the
       seam that has to grow first
-- [ ] `ContainerDom.#resolve` and `#entryOfRow` answer with all of them (`gantt-dom.ts:213`, `:226`)
+- [x] `ContainerDom.#resolve` and `#entryOfRow` answer with all of them (`gantt-dom.ts:213`, `:226`)
 - [ ] `CommandTarget` renamed and re-shaped (`src/api/command.ts:20`) — see **Naming** below
 - [ ] `commandTargetOf` maps the new shape (`src/extensions/features/context-menu.ts:32`)
 - [ ] A test pins that a right-click on a row owning three Entries reaches three
