@@ -26,8 +26,11 @@
 // the rows alone.
 //
 // One open editor is one `CellEditorSession`. The session owns the mount, the position, the commit
-// rules and its own teardown. The plugin below owns whether an editor is open at all. `commit()`
-// answers whether it closed, so no flag records that twice.
+// rules and its own teardown. `commit()` answers whether it closed, so no flag records that twice.
+//
+// `CellEditing` owns what is mounted over a cell right now, and every transition between those
+// states (#169). `inlineEditing()` below is then wiring: it resolves the target, applies the policy,
+// asks the veto question, and delegates.
 
 import type { GanttPlugin, PluginContext } from '../../api/gantt.js';
 import type { EntryFieldEdit, GanttDom, MountLayer } from '../../api/plugin.js';
@@ -355,6 +358,14 @@ export interface RefusalNotice {
  *  same three jobs. A test drives a notice with no mounted Gantt. */
 export type RefusalNoticePorts = Pick<CellEditorPorts, 'mountLayer' | 'dom' | 'bindEscape'>;
 
+/** Follows the cell after a container resize, the same way `CellEditorSession.reposition` does, and
+ *  for the same reason (#172). It asks for the cell again rather than reusing the node the refusal
+ *  was raised on. Virtualization can recycle that node while the notice is up. */
+function repositionNotice(ports: RefusalNoticePorts, element: HTMLElement, edited: EditedCell): void {
+  const cell = ports.dom.cellFor(edited.entryId, edited.field);
+  if (cell) positionOver(element, cell, ports.mountLayer.bounds);
+}
+
 /** Puts the refusal where the user acted: over the cell, in the same `data-state="invalid"` a refused
  *  commit already uses (D-S5-19, issue #137 F11/F12). It is a notice, not an editor. It mounts no
  *  control and it takes no focus, so it never becomes a sixth thing the user must close.
@@ -363,6 +374,7 @@ export type RefusalNoticePorts = Pick<CellEditorPorts, 'mountLayer' | 'dom' | 'b
  *  real announcement, through the per-Gantt polite live region D-S5-27 adds. */
 export function presentRefusal(
   ports: RefusalNoticePorts,
+  edited: EditedCell,
   cell: HTMLElement,
   reason: CellEditorRefusal,
 ): RefusalNotice {
@@ -382,7 +394,7 @@ export function presentRefusal(
   // spell here (#174). The unmount goes in first, so it runs last.
   const mounted = new DisposableStore();
   mounted.add(ports.mountLayer.present(element));
-  mounted.add(ports.mountLayer.onResize(() => positionOver(element, cell, ports.mountLayer.bounds)));
+  mounted.add(ports.mountLayer.onResize(() => repositionNotice(ports, element, edited)));
   const notice: RefusalNotice = {
     element,
     dismiss: () => mounted.disposeAll(),
@@ -391,50 +403,124 @@ export function presentRefusal(
   return notice;
 }
 
+/** One attempt to open an editor, from the veto question to the mount (D-S5-19, #169).
+ *
+ *  `beforeEntryEdit` may answer asynchronously. So an older answer can arrive after a newer
+ *  double-click has already opened its own editor. Both calls below do nothing once a newer attempt
+ *  has begun. An older one must not mount a second, orphaned session over the newer one. It must not
+ *  overwrite the newer one's notice either. */
+export interface PendingOpen {
+  /** Opens the editor over this attempt's own cell. */
+  mount(control: CellEditorControl): void;
+  /** Names why this attempt did not open, over that same cell. */
+  refuse(reason: CellEditorRefusal): void;
+}
+
+/** What this plugin has mounted over a cell: an open editor, a refusal notice, or neither (#169).
+ *
+ *  Before this class the three fields below were `setup()` closure variables, coordinated by hand
+ *  across seven call sites. Every transition is a method here, and `inlineEditing()` below is wiring.
+ *
+ *  The two slots are separate on purpose. A commit the Field refuses keeps its own editor open. It
+ *  also names the cell the user must fix first. So an editor plus a notice is the one legal pair
+ *  (review C2 with review SP1). Every other pairing is not: opening replaces, the next action
+ *  clears. */
+export class CellEditing {
+  readonly #ports: CellEditorPorts;
+  #editor: CellEditorSession | undefined;
+  #notice: RefusalNotice | undefined;
+  /** Bumped by `beginOpen`. It is the whole of the stale-veto guard — see `PendingOpen`. */
+  #openCount = 0;
+
+  constructor(ports: CellEditorPorts) {
+    this.#ports = ports;
+  }
+
+  /** The open editor, or `undefined`. A test reads this; the plugin does not need it. */
+  get editor(): CellEditorSession | undefined {
+    return this.#editor;
+  }
+
+  /** The notice showing now, or `undefined`. A test reads this; the plugin does not need it. */
+  get notice(): RefusalNotice | undefined {
+    return this.#notice;
+  }
+
+  /** Writes what the open editor holds, and answers whether nothing is open now. It answers `false`
+   *  when the Field refuses the value, or `beforeChange` vetoes it. The editor stays open then, and
+   *  the caller must not open a second one over it (review C2). */
+  commit(): boolean {
+    const editor = this.#editor;
+    if (editor === undefined) return true;
+    const closed = editor.commit();
+    if (closed) this.#editor = undefined;
+    return closed;
+  }
+
+  /** Closes the open editor and writes nothing — Escape's answer. It always closes. */
+  revert(): void {
+    this.#editor?.revert();
+    this.#editor = undefined;
+  }
+
+  /** A notice answers one action, so the user's next action clears it. An open editor is not an
+   *  answer to one action, so it stays. */
+  dismissNotice(): void {
+    this.#notice?.dismiss();
+    this.#notice = undefined;
+  }
+
+  /** The frame moved under whatever is mounted, so the anchors are worth re-checking. An editor
+   *  closes without writing when its anchor is gone. An anchor goes away two ways: the Entry left
+   *  the Dataset (issue #137 F10), or the cell left the current frame (issue #137 F1). */
+  onAnchorLost(): void {
+    this.dismissNotice();
+    const editor = this.#editor;
+    if (editor === undefined) return;
+    const entryGone = this.#ports.entryById(editor.entryId) === undefined;
+    if (entryGone || !editor.stillAnchored()) this.revert();
+  }
+
+  /** Everything goes, and nothing is written — the plugin's own disposer. */
+  clear(): void {
+    this.dismissNotice();
+    this.revert();
+  }
+
+  /** Names why this cell did not open, over the cell the user acted on. It replaces whatever notice
+   *  was showing, so two never stack. */
+  refuse(edited: EditedCell, cell: HTMLElement, reason: CellEditorRefusal): void {
+    this.dismissNotice();
+    this.#notice = presentRefusal(this.#ports, edited, cell, reason);
+  }
+
+  /** Starts one attempt to open `edited`. Every later call cancels this one — see `PendingOpen`. */
+  beginOpen(edited: EditedCell, cell: HTMLElement): PendingOpen {
+    const attempt = ++this.#openCount;
+    const isCurrent = (): boolean => attempt === this.#openCount;
+    return {
+      mount: (control) => {
+        if (isCurrent()) this.#mount(edited, cell, control);
+      },
+      refuse: (reason) => {
+        if (isCurrent()) this.refuse(edited, cell, reason);
+      },
+    };
+  }
+
+  #mount(edited: EditedCell, cell: HTMLElement, control: CellEditorControl): void {
+    const opened = new CellEditorSession(this.#ports, edited, control);
+    opened.mount(cell);
+    this.#editor = opened;
+  }
+}
+
 /** D-S5-19/D-S5-20: a cost cell edits in place, in one transaction, and a consumer replaces the whole
  *  editor through `beforeEntryEdit` (`[S5-A5]`). Call: `new Gantt({ plugins: [inlineEditing()] })`. */
 export function inlineEditing(options: InlineEditingOptions = {}): GanttPlugin {
   return {
     id: 'freegantt.inlineEditing',
     setup(ctx: PluginContext) {
-      let session: CellEditorSession | undefined;
-      let notice: RefusalNotice | undefined;
-      // Bumped on every `openFor` call, and captured locally by that call's own async veto
-      // continuation. A stale continuation is an *older* `openFor` whose `beforeEntryEdit` promise
-      // resolves after a *newer* `openFor` has already run. It checks this counter before mounting.
-      // So it cannot mount a second, orphaned session over the newer one, with no teardown of
-      // either.
-      let openRequestId = 0;
-
-      /** Closes whatever is open, and answers whether it closed. A commit declines on an unreadable
-       *  value, and on a `beforeChange` veto. The editor stays open then, and the caller must not
-       *  open a second one over it (review C2). A revert always closes. */
-      function closeSession(action: 'commit' | 'revert'): boolean {
-        const current = session;
-        if (!current) return true;
-        if (action === 'revert') {
-          current.revert();
-          session = undefined;
-          return true;
-        }
-        const closed = current.commit();
-        if (closed) session = undefined;
-        return closed;
-      }
-
-      /** The one place a refusal becomes something the user can see (review SP1). Every refusal of a
-       *  cell that *does* offer an editor goes through here, so no two of them look alike. */
-      function refuse(cell: HTMLElement, reason: CellEditorRefusal): void {
-        dismissRefusal();
-        notice = presentRefusal(ports, cell, reason);
-      }
-
-      /** A notice answers one action, so the next action clears it. */
-      function dismissRefusal(): void {
-        notice?.dismiss();
-        notice = undefined;
-      }
-
       const ports: CellEditorPorts = {
         mountLayer: ctx.view.rowLayer,
         dom: ctx.view.dom,
@@ -456,43 +542,36 @@ export function inlineEditing(options: InlineEditingOptions = {}): GanttPlugin {
           ctx.interaction.announceEntryEdit(payload);
         },
         requestCommit: () => {
-          closeSession('commit');
+          editing.commit();
         },
         requestRevert: () => {
-          closeSession('revert');
+          editing.revert();
         },
       };
 
+      // #169: every mutable this plugin used to hold lives here now, with one method per transition.
+      // The two `requestCommit`/`requestRevert` ports above read it after it is built, never before.
+      const editing = new CellEditing(ports);
+
+      /** Issue #137 F1/F10: the anchor cell disappears — removed from the Dataset, or virtualized
+       *  out of frame — so an open editor closes without committing. `CellEditing.onAnchorLost`
+       *  asks both questions. */
       function onDatasetChange(): void {
-        dismissRefusal();
-        const current = session;
-        if (current && !ctx.dataset.entries.has(current.entryId)) closeSession('revert');
+        editing.onAnchorLost();
       }
       ctx.dataset.on('change', onDatasetChange);
 
-      /** Issue #137 F1: the anchor cell disappears (removed, or virtualized out of frame) — close
-       *  without committing. Checked on every scroll of this Gantt's own panes, and on every Dataset
-       *  change just above. Capture phase, because `scroll` does not bubble. Review A4: this
-       *  listener was the one of the twelve with no "is this my Gantt?" guard at all. A scroll in a
-       *  second Gantt used to reach it. `ctx.view.onDomEvent` answers that once, for every plugin. */
-      ctx.view.onDomEvent(
-        'scroll',
-        () => {
-          // The notice does not follow a scroll — it answers one action, and the scroll is the next
-          // action. The editor follows its own cell instead, until that cell leaves the frame.
-          dismissRefusal();
-          const current = session;
-          if (current && !current.stillAnchored()) closeSession('revert');
-        },
-        { capture: true },
-      );
+      // Checked on every scroll of this Gantt's own panes. Capture phase, because `scroll` does not
+      // bubble. Review A4: this listener was the one of the twelve with no "is this my Gantt?" guard
+      // at all. A scroll in a second Gantt used to reach it. `ctx.view.onDomEvent` answers that once,
+      // for every plugin. The editor itself needs no help here: the row layer carries it with its
+      // cell (#158), until that cell leaves the frame.
+      ctx.view.onDomEvent('scroll', () => editing.onAnchorLost(), { capture: true });
 
       // A pointer press anywhere in this Gantt is the user's next action, so it clears the notice.
       // `pointerdown` runs before the `dblclick` below, so a second double-click on a refused cell
       // clears the old notice and then presents the new one.
-      ctx.view.onDomEvent('pointerdown', () => {
-        dismissRefusal();
-      });
+      ctx.view.onDomEvent('pointerdown', () => editing.dismissNotice());
 
       /** The text a generic editor opens with. A Field that declares `parseValue` owns both
        *  directions of its own text. So the seed is the string the grid already painted. The user
@@ -505,43 +584,39 @@ export function inlineEditing(options: InlineEditingOptions = {}): GanttPlugin {
         return '';
       }
 
-      function openGeneric(entry: Entry, field: Field, cell: HTMLElement): void {
+      function openGeneric(pending: PendingOpen, entry: Entry, field: Field, cell: HTMLElement): void {
         const fieldValue = ctx.dataset.entries.fieldValue(entry.id, field.key);
         const input = document.createElement('input');
         input.type = field.inputType ?? 'text';
         input.value = seedText(field, fieldValue, cell);
 
-        mountSession(
-          cell,
-          { entryId: entry.id, field: field.key },
-          {
-            element: input,
-            read: (): CellEditorValue => {
-              if (field.parseValue !== undefined) {
-                const value = field.parseValue(input.value, fieldContextFor(ctx));
-                return value === undefined ? { ok: false } : { ok: true, value };
-              }
-              return { ok: true, value: input.value };
-            },
-            bindCommitTriggers: (fire) => {
-              const onKeydown = (event: KeyboardEvent): void => {
-                if (event.key === 'Enter') fire();
-              };
-              input.addEventListener('keydown', onKeydown);
-              return () => input.removeEventListener('keydown', onKeydown);
-            },
+        pending.mount({
+          element: input,
+          read: (): CellEditorValue => {
+            if (field.parseValue !== undefined) {
+              const value = field.parseValue(input.value, fieldContextFor(ctx));
+              return value === undefined ? { ok: false } : { ok: true, value };
+            }
+            return { ok: true, value: input.value };
           },
-        );
+          bindCommitTriggers: (fire) => {
+            const onKeydown = (event: KeyboardEvent): void => {
+              if (event.key === 'Enter') fire();
+            };
+            input.addEventListener('keydown', onKeydown);
+            return () => input.removeEventListener('keydown', onKeydown);
+          },
+        });
       }
 
-      function openDate(entry: Entry, field: Field, cell: HTMLElement): void {
+      function openDate(pending: PendingOpen, entry: Entry, field: Field): void {
         // `isDateField` already vouched for this Field's type; `fieldValue` types core keys only,
         // so a consumer-declared date Field reads back as `unknown` without this.
         const raw = ctx.dataset.entries.fieldValue(entry.id, field.key) as Instant | undefined;
         if (raw === undefined) {
           // A date control needs a date to seed. Nothing here is broken, so the cell says so rather
           // than looking like a dead double-click (review SP1).
-          refuse(cell, 'noDateValue');
+          pending.refuse('noDateValue');
           return;
         }
         const factory = options.dateInput;
@@ -554,39 +629,30 @@ export function inlineEditing(options: InlineEditingOptions = {}): GanttPlugin {
           // unchanged Enter. So this refuses to open the *default* editor, rather than lose data. A
           // consumer's own `dateInput` factory (a `datetime-local` control, say) owns this instead.
           if (ctx.dataset.time.startOfDay(raw) !== raw) {
-            refuse(cell, 'timeOfDay');
+            pending.refuse('timeOfDay');
             return;
           }
           dateInput = createDefaultDateInput(ctx.dataset.time);
         }
         dateInput.write(raw);
 
-        mountSession(
-          cell,
-          { entryId: entry.id, field: field.key },
-          {
-            element: dateInput.element,
-            read: (): CellEditorValue => {
-              const value = dateInput.read();
-              return value === undefined ? { ok: false } : { ok: true, value };
-            },
-            bindCommitTriggers: (fire) => dateInput.onCommit(fire),
-            onClosed: () => dateInput.destroy(),
+        pending.mount({
+          element: dateInput.element,
+          read: (): CellEditorValue => {
+            const value = dateInput.read();
+            return value === undefined ? { ok: false } : { ok: true, value };
           },
-        );
-      }
-
-      function mountSession(cell: HTMLElement, edited: EditedCell, control: CellEditorControl): void {
-        const opened = new CellEditorSession(ports, edited, control);
-        opened.mount(cell);
-        session = opened;
+          bindCommitTriggers: (fire) => dateInput.onCommit(fire),
+          onClosed: () => dateInput.destroy(),
+        });
       }
 
       /** D-S5-19: the veto question fires *before the editor opens*, not before the write. A
        *  consumer's `beforeEntryEdit` handler opens its own dialog, and returns `false` to suppress
        *  the built-in editor entirely (U8). */
       function openFor(entry: Entry, field: Field, cell: HTMLElement): void {
-        dismissRefusal();
+        const edited: EditedCell = { entryId: entry.id, field: field.key };
+        editing.dismissNotice();
         // The next two refusals stay silent by decision (`s5.8-inline-editing.md` §1, "Which
         // refusals speak"). Neither cell offers an editor at all. I14 already hides the
         // affordance from the same resolution that refuses the gesture, so there is nothing to
@@ -595,38 +661,35 @@ export function inlineEditing(options: InlineEditingOptions = {}): GanttPlugin {
         if (!ctx.interaction.canEdit(entry)) return;
         if (ctx.view.isColumnEditable(field.key) !== true) return;
         if (ctx.dataset.isRollUpKind(entry.kind) && field.rollUp !== undefined) {
-          refuse(cell, 'derivedValue');
+          editing.refuse(edited, cell, 'derivedValue');
           return;
         }
         const date = isDateField(field);
         if (!date && !canOpenGeneric(field)) {
-          refuse(cell, 'noParseValue');
+          editing.refuse(edited, cell, 'noParseValue');
           return;
         }
 
         // An open editor whose value the Field refuses declines to close. A second editor mounted
         // over it would orphan the first one, its listeners and its focus trap included (review C2).
         // The refusal lands on the cell the user asked for, and names the cell they must fix first.
-        if (!closeSession('commit')) {
-          refuse(cell, 'unsavedValue');
+        if (!editing.commit()) {
+          editing.refuse(edited, cell, 'unsavedValue');
           return;
         }
 
-        const requestId = ++openRequestId;
+        const pending = editing.beginOpen(edited, cell);
         const currentValue = ctx.dataset.entries.fieldValue(entry.id, field.key);
         const payload: EntryFieldEdit = { entry, field: field.key, from: currentValue, to: currentValue };
         const result = ctx.interaction.proposeEntryEdit(payload);
         const openNow = (): void => {
-          if (date) openDate(entry, field, cell);
-          else openGeneric(entry, field, cell);
+          if (date) openDate(pending, entry, field);
+          else openGeneric(pending, entry, field, cell);
         };
         if (result === false) return;
         if (result instanceof Promise) {
           void result.then((allowed) => {
-            // A newer `openFor` ran while this veto was pending. That call has already closed
-            // whatever was open, and may have mounted its own session. This stale request must not
-            // mount a second one over it (see `openRequestId`'s own doc comment).
-            if (allowed !== false && requestId === openRequestId) openNow();
+            if (allowed !== false) openNow();
           });
           return;
         }
@@ -668,8 +731,7 @@ export function inlineEditing(options: InlineEditingOptions = {}): GanttPlugin {
       // The two `onDomEvent` listeners above remove themselves through `ctx.disposables`, which
       // runs ahead of this disposer (S5.1, D-S5-3).
       return () => {
-        dismissRefusal();
-        closeSession('revert');
+        editing.clear();
         ctx.dataset.off('change', onDatasetChange);
         disposeEnter();
       };
