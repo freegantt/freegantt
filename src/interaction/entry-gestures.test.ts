@@ -70,7 +70,10 @@ function makeContext(overrides: Partial<EntryGestureContext> & SessionOverrides 
       return ORDER.includes(id) ? entryFor(id) : undefined;
     },
     can: () => true,
-    selectableEntriesInRowOrder: () => ORDER,
+    // #198: the shell resolves the `select` capability once and hands `interaction/` a list that is
+    // already filtered (I14). The fake answers the same question, so `selectRange` needs no second
+    // resolution of its own.
+    selectableEntriesInRowOrder: () => ORDER.filter((id) => ctx.can('select', entryFor(id))),
     // #185: a row hit resolves through this seam — the fake maps one row id to the Entry of the
     // same name, so a test that wants a multi-entry row overrides it.
     entriesForRow: (id) => (ORDER.includes(id as unknown as EntryId) ? [id as unknown as EntryId] : []),
