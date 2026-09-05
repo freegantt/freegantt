@@ -321,6 +321,13 @@ Files: `src/view/renderer-registry.ts`, `src/layout/items/produce-items.ts`, `sr
 
 **Ends with:** the branch reads as ASD-STE100, and the harness holds one copy of each demo plugin.
 
+- [ ] **Carried from R4.** `CONTEXT.md` needs the glossary entry for **refusal notice** — the
+      `.fg-cell-editor` wrapper that mounts with `data-state="invalid"` and `data-reason` to say why
+      a cell will not open an editor. R4 defined the term in `s5.8-inline-editing.md` §1 because
+      `CONTEXT.md` was outside its owned files. Promote it, and link the seven-row table.
+- [ ] **Carried from R3.** ST1's comment pass now covers three files R3 added or reworked:
+      `src/render/dom/dom-contract.ts`, `src/view/gantt-dom.ts`, and the new blocks in
+      `src/view/plugin-ports.ts` and `src/extensions/features/context-menu.ts`.
 - [ ] **ST1 — the comment pass.** This is the branch's one hard standards breach.
       `CLAUDE.md` allows 20 words for an instruction and 25 for a description. One instruction per sentence.
       Split the long sentences in `src/api/plugin.ts`, `src/extensions/features/*.ts` and
@@ -330,7 +337,11 @@ Files: `src/view/renderer-registry.ts`, `src/layout/items/produce-items.ts`, `sr
       and test seams. Seven members carry the same "omitted only by tests" comment.
       Add one required `wiring` member holding the seven always-supplied seams.
       A test then names `wiring` once instead of omitting seven keys. Seven comments go.
-- [ ] **H1 — move the three demo plugins.** `logEverything()`, `selectionShortcuts()` and `popupDemo()`
+- [ ] **H1 — move the three demo plugins.** Note from R3: `popupDemo()` must carry its
+      `popupDemoView: { popup, dom }` stash with it — one stash, not two. Note from R5:
+      `selectionShortcuts()` no longer returns an empty disposer, but `logEverything()` and
+      `popupDemo()` own real ones and keep them.
+      `logEverything()`, `selectionShortcuts()` and `popupDemo()`
       are copied character-for-character into `harness/main.ts` and `harness/plugins.ts`.
       `harness/plugins/` already holds `weekend-shading.ts` and `buffer-kind.ts`. Put them beside those.
 - [ ] **A6 — index the resolved columns.** `gantt-shell.ts` runs
@@ -341,8 +352,9 @@ Files: `src/view/renderer-registry.ts`, `src/layout/items/produce-items.ts`, `sr
       repeats in `move`, `commit` and `cancel`.
       Use two small strategy objects and one grabbed reference.
       `registerColumnStepCommand` in `core-commands.ts` already uses that shape.
-- [ ] **Carried from R1.** `entryIdOfRow` in `inline-editing.ts` hand-casts `id as EntryId`.
-      `model/ids.ts` already exports `entryIdFromDataset` for that DOM-to-brand boundary. One line.
+- [x] **Carried from R1.** `entryIdOfRow` in `inline-editing.ts` hand-cast `id as EntryId`.
+      R3 closed this as a side effect: `ctx.view.dom.cellFor(id, field)` replaced the walk, so the
+      function and its cast are both gone. Verified — the file names neither symbol now.
 - [ ] **A6 — name the seed.** `openGeneric` seeds `input.value` from a four-arm nested ternary.
       A named `seedText(field, raw, cell)` reads as a sentence.
 - [ ] **A6 — table the popup dismiss triggers.** `createPopup`'s `open()` runs ~70 lines of four inline
