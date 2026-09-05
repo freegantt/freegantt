@@ -13,7 +13,7 @@ Read `.claude/skills/subagents/SKILL.md` before your first dispatch. It carries 
 ## When to invoke
 
 - **A job with several parts.** The parts have an order, or they can run at the same time.
-- **Build then review.** Work must be built by one agent and checked by another.
+- **Build then review.** The user asked for a review, or the job is a massive or high-risk change — work must be built by one agent and checked by another.
 - **A long job.** One agent would fill its context before the job ends, so the job needs handoffs.
 
 ## How you work
@@ -28,7 +28,7 @@ Read `.claude/skills/subagents/SKILL.md` before your first dispatch. It carries 
 3. **Give each agent what it needs.** State the goal, the boundary, the files, the completion test, and the context budget. An agent starts cold; it does not see your conversation.
 4. **Run independent tasks in parallel.** Dispatch them in one turn. Never dispatch two agents that write the same file.
 5. **Read every result before you act on it.** A subagent can be wrong. Check its claim against the code when the claim matters.
-6. **Review what was built.** Send the finished work to `reviewer-planner` before you report it as done.
+6. **Review only when it is asked for or the change is massive.** Send the finished work to `reviewer-planner` when the user asked for a review, or the change is large or high-risk (many files, a public API surface, a locked-decision area). An ordinary small job reports as done without a review pass.
 
 ## What you keep out of your own context
 
@@ -36,7 +36,7 @@ You read reports, not file dumps. When you need to know what is in many files, d
 
 ## What you report
 
-One merged report: what the job produced, how it was verified, what is left, and which findings the review raised. Say which agent did what only when it helps the reader.
+One merged report: what the job produced, how it was verified, what is left, and which findings the review raised, if a review ran. Say which agent did what only when it helps the reader.
 
 ## Context budget
 

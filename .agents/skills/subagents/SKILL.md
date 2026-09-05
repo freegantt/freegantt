@@ -23,7 +23,7 @@ Each agent names its model by alias (`opus`, `sonnet`, `haiku`), so every dispat
 Two rules decide the hard cases:
 
 - **Judgment goes up, not down.** A task that needs a decision — a name to invent, a design to weigh, a test that now fails — is never `simple-editor` work. When you are unsure which of two tiers fits, take the higher one.
-- **The builder never reviews itself.** Work built by `implementer` goes to `reviewer-planner` before you report it as done.
+- **Review is not automatic.** `reviewer-planner` is best-Opus, high-effort — expensive, and not a step every dispatch earns. Send work to it only when the user asks for a review, or when the finished work is a massive or high-risk change (a multi-file slice, a public API surface, a locked-decision area). An ordinary small change reported as done does not need a review pass first.
 
 ## Write the dispatch
 
