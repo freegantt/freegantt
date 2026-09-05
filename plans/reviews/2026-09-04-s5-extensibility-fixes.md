@@ -1,7 +1,7 @@
 # Fix plan — S5 extensibility branch review
 
 **Source review:** [`2026-09-04-s5-extensibility-branch.html`](./2026-09-04-s5-extensibility-branch.html) — FreeGantt, 2026-09-04, branch `s5-start` against `main`, steps S5.0–S5.9 landed.
-**Slice:** S5 ([`plans/s5-extensibility-and-editing/README.md`](../s5-extensibility-and-editing/README.md)) · **Status:** open — R1, R2 and R3 landed; R4–R7 open.
+**Slice:** S5 ([`plans/s5-extensibility-and-editing/README.md`](../s5-extensibility-and-editing/README.md)) · **Status:** open — R1, R2, R3 and R4 landed; R5–R7 open.
 **Gate state at review time:** every gate passed. Each finding below is a quality, design or API-shape call. No tool catches them.
 
 > ## Delete the review when this plan closes
@@ -241,22 +241,33 @@ rendered Gantt. That read side was the finding; the write side is a plugin's own
 
 Files: `src/extensions/features/inline-editing.ts`, its tests, `plans/s5-extensibility-and-editing/s5.8-inline-editing.md`.
 
-- [ ] **SP1 — mount the invalid state on the two open-time paths.** Today both paths take a bare `return`.
-      `openDate` refuses a non-midnight instant. `openFor` refuses a field with no `parseValue`.
-      Both must mount the wrapper with `data-state="invalid"` and the named reason the spec quotes.
-- [ ] **SP1 — keep the two "not editable" paths silent, or state them too.** Decide once and write it down.
-      A column that is not editable and a rolled-up kind are a different answer from "this editor cannot show it".
-- [ ] **SP1 tests.** Replace the two `querySelector('.fg-cell-editor') === null` assertions.
-      Assert `.fg-cell-editor[data-state="invalid"]` and the reason text, the way the neighbouring
-      parseValue test already does.
-- [ ] **SP2 — split the two half-ticks.** `s5.8-inline-editing.md` lines 104–105 claim a named reason
-      that did not land. Split each box. Tick the half that shipped. Untick the half that did not.
-- [ ] **Carried from R1.** C2's fix makes an editor holding a rejected value refuse to yield.
-      A double-click on another cell now does nothing until the user fixes the value or presses Escape.
-      That is the intended behaviour. It is also a second silent refusal, which is SP1's own subject.
-      Make this refusal legible with the same mechanism.
-- [ ] Note the a11y consequence for S5.11: a silent no-op announces nothing to a screen reader.
-      Add one line to [`s5.11-a11y-completion.md`](../s5-extensibility-and-editing/s5.11-a11y-completion.md).
+- [x] **SP1 — mount the invalid state on the two open-time paths.** Both mount a **refusal notice** now:
+      the same `.fg-cell-editor` wrapper, on the same Overlay layer, with `data-state="invalid"`,
+      `data-reason="<key>"`, the reason as its text and the same words as its `title`.
+      `inline-editing.ts`'s `REFUSAL_TEXT` holds every message, so no call site spells one.
+      A date Field with no stored date was a third silent `return` in `openDate`; it names
+      `noDateValue` now.
+- [x] **SP1 — keep the two "not editable" paths silent, or state them too.** Decided and written down in
+      `s5.8-inline-editing.md` §1, "Which refusals speak, and which stay silent", as a seven-row table.
+      The rule: a cell that offers no editor refuses in silence; a cell that offers one, and cannot open
+      it here, names the reason. So `edit: false` and a non-`editable` column stay **silent** (I14 already
+      hides the affordance), and the rolled-up kind **speaks** — its column does declare `editable`, so
+      the cell does offer an editor. `s5.8` §1 already asked for that one.
+- [x] **SP1 tests.** Both replaced, plus the rolled-up one, which asserted the same null.
+      Nine tests fail against the pre-R4 source and pass after it: the three named refusals, the
+      pointer-through and three clear-the-notice tests, and two `presentRefusal` tests that run the
+      notice with no mounted Gantt. The two silent paths keep their null assertion, and now assert
+      no notice either — the decision above is tested, not only written down.
+- [x] **SP2 — split the two half-ticks.** Three, not two: "Rolled-up cells refuse editing with a stated
+      reason" carried the same half-tick. Each box keeps the half that shipped at S5.8. One new box holds
+      the "names its reason" half for all three, and says it landed in R4.
+- [x] **Carried from R1.** The notice lands on the cell the user asked for, naming `unsavedValue`:
+      "another cell still holds a value that did not save; fix it or press Escape".
+      The open editor keeps its own `data-state="invalid"`, so the two nodes read as one story.
+- [x] Note the a11y consequence for S5.11: a silent no-op announces nothing to a screen reader.
+      `s5.11-a11y-completion.md` gains a paragraph under "Live announcements" and one TODO box.
+      The notice carries `role="status"`, which is all a plugin can say on its own node.
+      S5.11 still owes the reason to the per-Gantt polite live region.
 
 **Verify:** `pnpm test:dom`. Then double-click a date cell with a time of day in `harness/editing.html`.
 

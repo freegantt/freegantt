@@ -4,12 +4,13 @@ import { Dataset } from '../../api/dataset.js';
 import type { EntryFieldEdit, EntryInput, GridColumnInput } from '../../api/index.js';
 import { EntryNotFoundError, entryId, instant } from '../../api/index.js';
 import { contextMenu } from './context-menu.js';
-import { CellEditorSession, inlineEditing } from './inline-editing.js';
+import { CellEditorSession, inlineEditing, presentRefusal } from './inline-editing.js';
 import type {
   CellEditorControl,
   CellEditorPorts,
   CellEditorValue,
   InlineEditingOptions,
+  RefusalNoticePorts,
 } from './inline-editing.js';
 
 // happy-dom does no layout, so a real ResizeObserver never fires. This is the same fake seam
@@ -142,6 +143,13 @@ function input(container: HTMLElement): HTMLInputElement {
   return container.querySelector<HTMLInputElement>('.fg-cell-editor-control')!;
 }
 
+/** The refusal notice a cell mounts when it offers an editor that cannot open here (review SP1).
+ *  It carries the same `.fg-cell-editor[data-state="invalid"]` a refused commit does, plus the
+ *  machine-readable `data-reason` whose text the user reads. */
+function refusal(container: HTMLElement): HTMLElement | null {
+  return container.querySelector<HTMLElement>('.fg-cell-editor[data-state="invalid"][data-reason]');
+}
+
 function enter(el: HTMLElement): void {
   el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
 }
@@ -206,10 +214,13 @@ describe('inlineEditing() (S5.8, D-S5-19/D-S5-20)', () => {
     container.remove();
   });
 
-  it('a non-editable column never opens (default false)', () => {
+  // The two silent refusals, by decision (`s5.8-inline-editing.md` §1, "Which refusals speak").
+  // Neither cell offers an editor at all, so nothing mounts — no editor, and no notice either.
+  it('a non-editable column never opens, and says nothing (default false)', () => {
     const { container, gantt } = makeGantt();
     dblclick(cellFor(container, 'e1', 'end'));
     expect(container.querySelector('.fg-cell-editor')).toBeNull();
+    expect(refusal(container)).toBeNull();
     gantt.destroy();
     container.remove();
   });
@@ -227,22 +238,32 @@ describe('inlineEditing() (S5.8, D-S5-19/D-S5-20)', () => {
     });
     dblclick(cellFor(container, 'e1', 'name'));
     expect(container.querySelector('.fg-cell-editor')).toBeNull();
+    expect(refusal(container)).toBeNull();
     gantt.destroy();
     container.remove();
   });
 
-  it('a rolled-up parent cell (start on a group entry) refuses to open', () => {
+  it('a rolled-up parent cell refuses with the invalid state and a named reason (review SP1)', () => {
     const { container, gantt } = makeGantt();
     dblclick(cellFor(container, 'root', 'start'));
-    expect(container.querySelector('.fg-cell-editor')).toBeNull();
+    const notice = refusal(container)!;
+    expect(notice).not.toBeNull();
+    expect(notice.dataset['reason']).toBe('derivedValue');
+    expect(notice.textContent).toContain('comes from the rows below it');
+    expect(notice.title).toBe(notice.textContent);
+    expect(container.querySelector('.fg-cell-editor-control')).toBeNull();
     gantt.destroy();
     container.remove();
   });
 
-  it('a money field with no parseValue refuses to open (issue #137 F12)', () => {
+  it('a money field with no parseValue refuses with a named reason (issue #137 F12, review SP1)', () => {
     const { container, gantt } = makeGantt();
     dblclick(cellFor(container, 'e1', 'cost'));
-    expect(container.querySelector('.fg-cell-editor')).toBeNull();
+    const notice = refusal(container)!;
+    expect(notice).not.toBeNull();
+    expect(notice.dataset['reason']).toBe('noParseValue');
+    expect(notice.textContent).toContain('has no parseValue');
+    expect(container.querySelector('.fg-cell-editor-control')).toBeNull();
     gantt.destroy();
     container.remove();
   });
@@ -308,10 +329,52 @@ describe('inlineEditing() (S5.8, D-S5-19/D-S5-20)', () => {
     container.remove();
   });
 
-  it('a non-midnight instant refuses the default date editor (issue #137 F11)', () => {
+  it('a non-midnight instant refuses the default date editor with a named reason (issue #137 F11)', () => {
     const { container, gantt } = makeGantt();
     dblclick(cellFor(container, 'e2', 'start'));
-    expect(container.querySelector('.fg-cell-editor')).toBeNull();
+    const notice = refusal(container)!;
+    expect(notice).not.toBeNull();
+    expect(notice.dataset['reason']).toBe('timeOfDay');
+    expect(notice.textContent).toBe(
+      'this field carries a time of day; the default date editor cannot show it',
+    );
+    expect(container.querySelector('.fg-cell-editor-control')).toBeNull();
+    gantt.destroy();
+    container.remove();
+  });
+
+  it('the notice lets the pointer through, and the next pointer press clears it', () => {
+    const { container, gantt } = makeGantt();
+    const cell = cellFor(container, 'e1', 'cost');
+    dblclick(cell);
+    const notice = refusal(container)!;
+    // It sits over the cell, so it must never swallow the click that retries the cell.
+    expect(notice.style.pointerEvents).toBe('none');
+
+    cell.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, cancelable: true }));
+    expect(refusal(container)).toBeNull();
+
+    gantt.destroy();
+    container.remove();
+  });
+
+  it('Escape dismisses the notice', () => {
+    const { container, gantt } = makeGantt();
+    dblclick(cellFor(container, 'e1', 'cost'));
+    expect(refusal(container)).not.toBeNull();
+    escape(container);
+    expect(refusal(container)).toBeNull();
+    gantt.destroy();
+    container.remove();
+  });
+
+  it('opening a real editor clears a notice left by an earlier refusal', () => {
+    const { container, gantt } = makeGantt();
+    dblclick(cellFor(container, 'e1', 'cost'));
+    expect(refusal(container)).not.toBeNull();
+    dblclick(cellFor(container, 'e1', 'name'));
+    expect(refusal(container)).toBeNull();
+    expect(input(container).value).toBe('Task One');
     gantt.destroy();
     container.remove();
   });
@@ -521,11 +584,25 @@ describe('inlineEditing() (S5.8, D-S5-19/D-S5-20)', () => {
     el.value = 'not a number'; // budgetMoney's parseValue refuses this
     dblclick(cellFor(container, 'e1', 'name'));
 
-    const editors = container.querySelectorAll('.fg-cell-editor');
-    expect(editors).toHaveLength(1);
-    expect(editors[0]!.getAttribute('data-state')).toBe('invalid');
-    expect(input(container).value).toBe('not a number'); // still the budget editor
+    // Exactly one live control — the budget editor, still holding the value it refused.
+    expect(container.querySelectorAll('.fg-cell-editor-control')).toHaveLength(1);
+    expect(input(container).value).toBe('not a number');
     expect(dataset.entries.get('e1')!.meta?.budget).toBe(500);
+
+    gantt.destroy();
+    container.remove();
+  });
+
+  it('a refused commit says why the second cell did not open (review SP1, carried from R1)', () => {
+    const { container, gantt } = makeGantt();
+    dblclick(cellFor(container, 'e1', 'budget'));
+    input(container).value = 'not a number';
+    dblclick(cellFor(container, 'e1', 'name'));
+
+    const notice = refusal(container)!;
+    expect(notice).not.toBeNull();
+    expect(notice.dataset['reason']).toBe('unsavedValue');
+    expect(notice.textContent).toContain('did not save');
 
     gantt.destroy();
     container.remove();
@@ -695,5 +772,57 @@ describe('CellEditorSession (S5.8, review A5/C2b)', () => {
     row.remove();
 
     expect(session.stillAnchored()).toBe(false);
+  });
+});
+
+// Review SP1: the notice is an object of its own, so these run it with no mounted Gantt at all.
+describe('presentRefusal() (S5.8, review SP1)', () => {
+  function mountNotice(): {
+    notice: ReturnType<typeof presentRefusal>;
+    cell: HTMLElement;
+    detached: () => number;
+  } {
+    const cell = document.createElement('div');
+    cell.getBoundingClientRect = () => rectAt(40, 120, 200, 24);
+    const layer = document.createElement('div');
+    document.body.append(cell, layer);
+    let detaches = 0;
+    const ports: RefusalNoticePorts = {
+      overlay: {
+        present: (content) => {
+          layer.append(content);
+          return {
+            detach: () => {
+              detaches++;
+              content.remove();
+            },
+          };
+        },
+        onResize: () => () => {},
+      },
+      dom: { bounds: rectAt(0, 0, 0, 0), cellFor: () => cell },
+      bindEscape: () => () => {},
+    };
+    const notice = presentRefusal(ports, cell, 'timeOfDay');
+    return { notice, cell, detached: () => detaches };
+  }
+
+  it('mounts over the cell, in the invalid state, naming the reason', () => {
+    const { notice } = mountNotice();
+    expect(notice.element.className).toBe('fg-cell-editor');
+    expect(notice.element.dataset['state']).toBe('invalid');
+    expect(notice.element.dataset['reason']).toBe('timeOfDay');
+    expect(notice.element.getAttribute('role')).toBe('status');
+    expect(notice.element.style.transform).toBe('translate(40.00px, 120.00px)');
+    expect(notice.element.style.width).toBe('200px');
+    notice.dismiss();
+  });
+
+  it('dismisses once, however many times it is asked', () => {
+    const { notice, detached } = mountNotice();
+    notice.dismiss();
+    notice.dismiss();
+    expect(detached()).toBe(1);
+    expect(notice.element.isConnected).toBe(false);
   });
 });
