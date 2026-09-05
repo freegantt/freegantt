@@ -562,8 +562,13 @@ export class GanttShell {
     // yet. `Gantt.plugins`'s live setter runs `#pluginRuntime.install(...)` only once `api/gantt.ts`
     // has finished assigning its own `#shell` field. So `buildPluginContext`'s `gantt` value is real
     // by the time any `setup()` reads it.
+    // #179: one ports object for this Gantt's whole life, which is what `GanttShellPorts`' own doc
+    // has always said. Every member is either a field already assigned above, or a closure that
+    // reads live state at call time. So nothing in it goes stale between two installs, and a page
+    // that installs six plugins no longer allocates six copies of it.
+    const shellPorts = this.#shellPorts();
     this.#pluginRuntime = new PluginRuntime<unknown>((pluginId) => {
-      const { ports, gate } = buildPluginPorts(this.#shellPorts(), pluginId);
+      const { ports, gate } = buildPluginPorts(shellPorts, pluginId);
       const context = (options.wiring.buildPluginContext ?? (() => ({})))(ports);
       return { context, disposables: ports.disposables, registrationGate: gate };
     });
@@ -1110,8 +1115,9 @@ export class GanttShell {
 
   /** `plugin-ports.ts`'s one seam back into this shell's own registries, frame loop and event bus
    *  (that file's doc explains why it needs each of these). `buildPluginPorts` never touches a shell
-   *  field directly. Every member is a closure, so each one reads live state at call time. A
-   *  reassigned `#capabilities` or a fresh `#lastBarById` reaches the plugin that holds the port. */
+   *  field directly. Called once, in the constructor (#179). Every member that is not a field is a
+   *  closure, so each one reads live state at call time. A reassigned `#capabilities` or a fresh
+   *  `#lastBarById` reaches every plugin that holds the port. */
   #shellPorts(): GanttShellPorts {
     return {
       events: this.#pluginEvents,
