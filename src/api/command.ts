@@ -21,12 +21,14 @@ export interface CommandTarget {
    *  `run: (ctx) => ctx.target?.entryIds.forEach(lock)`. A command that wants exactly one says so —
    *  `when: (ctx) => ctx.target?.entryIds.length === 1` — and reads `ctx.entry` for it.
    *
-   *  It is the same word `DomTarget.entryIds` uses, but not always the same set (#199). A
+   *  It is the same word `DomTarget.entryIds` uses, but not always the same set (#199, #212). A
    *  `DomTarget` states a DOM fact: what the node stands for. This states what the command acts on,
-   *  and a right-click decides that from the Selection — the Selection when the thing you clicked
-   *  is part of it, and the thing you clicked when it is not. So a right-click on one of three
-   *  selected bars names three, and a right-click on an unselected row names every Entry that row
-   *  owns.
+   *  resolved from the Selection by `resolveActedOnEntryIds` below — the Selection when the thing
+   *  you clicked shares it (either one holds the other), and the thing you clicked when it does
+   *  not. So a right-click on one of three selected bars names three, a right-click on an unselected
+   *  row names every Entry that row owns, and a right-click on a row that owns a lone selected bar
+   *  plus others names only that one bar — the narrower thing the user already picked, left alone
+   *  (#212).
    *
    *  Empty for a `'header'` or `'splitter'` target, and for a grouping header row. Never
    *  `undefined`, so a `when` counts it with no fallback. */
@@ -35,6 +37,29 @@ export interface CommandTarget {
    *  everywhere a column is named (D-S5-37, #194) — the same word `DomTarget.field`,
    *  `GridColumn.field` and a renderer's `ctx.column.field` already use. */
   field?: FieldKey;
+}
+
+/** #212's single owner of "given what was right-clicked and the Selection, what does the command act
+ *  on?" — `targetUnder` (`view/gantt-dom.ts`) already owns the sibling question, "what does this
+ *  node stand for"; this is the one place its answer meets the Selection.
+ *  `extensions/features/context-menu.ts` is the only caller: a keyboard chord has no separate
+ *  "clicked" thing to reconcile with the Selection, so `view/gantt-shell.ts`'s
+ *  `#buildCommandContext` fills `target.entryIds` straight from the Selection, and a consumer's
+ *  command `run` reads `ctx.target?.entryIds` either way (S5.2's contract) — never re-deriving it.
+ *
+ *  `clicked` either holds the Selection or is held by it — a bar inside a multi-bar Selection, or a
+ *  row that owns a lone selected bar plus others — the command acts on the Selection, unchanged
+ *  (#212: a right-click never silently widens what the user picked). Anywhere else — nothing
+ *  selected, or `clicked` shares no such relation with the Selection — the command acts on
+ *  `clicked` itself, so a right-click on an unselected row still acts on every Entry that row owns. */
+export function resolveActedOnEntryIds(
+  clicked: readonly EntryId[],
+  selected: readonly EntryId[],
+): readonly EntryId[] {
+  if (clicked.length === 0) return clicked;
+  const clickedIsInSelection = clicked.every((id) => selected.includes(id));
+  const selectionIsInClicked = selected.length > 0 && selected.every((id) => clicked.includes(id));
+  return clickedIsInSelection || selectionIsInClicked ? selected : clicked;
 }
 
 /** What a `Command`'s `when`/`run` receives, once per invocation — a menu click, a chord, or

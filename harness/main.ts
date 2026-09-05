@@ -11,9 +11,7 @@ import {
   inlineEditing,
 } from '../src/api/index.js';
 import type {
-  CommandContext,
   Entry,
-  EntryId,
   FieldContext,
   GridColumnInput,
   RowSource,
@@ -500,18 +498,12 @@ renderersToggle.dispatchEvent(new Event('change'));
 // Right-clicking empty timeline or an unpopulated grid stretch leaves `ctx.entry` undefined, so
 // these three never appear there — background right-clicks stay on "Collapse all"/"Expand all".
 //
-// #199: `when` asks about `ctx.entry`, the one Entry the menu is *about*. `run` acts on
-// `ctx.target.entryIds`, everything the right-click acts on — the whole Selection when the bar you
-// right-clicked is part of it, every Entry of the row when it is not.
+// #199/#212: `when` and `run` both read `ctx.target.entryIds` — the library resolves it once, the
+// same way on the mouse and the keyboard path (`resolveActedOnEntryIds`, `api/command.ts`), so a
+// command's label and its action can no longer disagree about which Entries it covers. `ctx.entry`
+// stays the one Entry the menu is *about* — `items` below still reads it to decide whether this is
+// the entry-only menu or the background one.
 const ENTRY_CONTEXT_COMMAND_IDS = ['demo.deleteEntry', 'demo.lockEntry', 'demo.unlockEntry'];
-
-/** Which Entries a menu command acts on. `entry` is the fallback for an invocation that carries no
- *  target at all — `gantt.commands.run(id)` from page scope. */
-function actedOnIds(cmdCtx: CommandContext): readonly EntryId[] {
-  const ids = cmdCtx.target?.entryIds ?? [];
-  if (ids.length > 0) return ids;
-  return cmdCtx.entry !== undefined ? [cmdCtx.entry.id] : [];
-}
 
 function entryContextActions(): GanttPlugin {
   return {
@@ -520,17 +512,22 @@ function entryContextActions(): GanttPlugin {
       ctx.commands.register({
         id: 'demo.deleteEntry',
         label: 'Delete',
-        when: (cmdCtx) => cmdCtx.entry !== undefined,
+        when: (cmdCtx) => (cmdCtx.target?.entryIds.length ?? 0) > 0,
         run: (cmdCtx) => {
-          for (const id of actedOnIds(cmdCtx)) attemptMutation(() => ctx.dataset.entries.remove(id));
+          for (const id of cmdCtx.target?.entryIds ?? [])
+            attemptMutation(() => ctx.dataset.entries.remove(id));
         },
       });
       ctx.commands.register({
         id: 'demo.lockEntry',
         label: 'Lock',
-        when: (cmdCtx) => cmdCtx.entry !== undefined && !locks.isLocked(cmdCtx.entry.id),
+        // #212's second symptom: offer "Lock" exactly when the acted-on set has something left to
+        // lock, and lock only those — an already-locked Entry in the same set is left alone rather
+        // than re-locked for no reason.
+        when: (cmdCtx) => (cmdCtx.target?.entryIds ?? []).some((id) => !locks.isLocked(id)),
         run: (cmdCtx) => {
-          for (const id of actedOnIds(cmdCtx)) {
+          for (const id of cmdCtx.target?.entryIds ?? []) {
+            if (locks.isLocked(id)) continue;
             locks.lock(id);
             prependLogLine(log, `entries · ${id} · locked (right-click menu)`);
           }
@@ -539,9 +536,10 @@ function entryContextActions(): GanttPlugin {
       ctx.commands.register({
         id: 'demo.unlockEntry',
         label: 'Unlock',
-        when: (cmdCtx) => cmdCtx.entry !== undefined && locks.isLocked(cmdCtx.entry.id),
+        when: (cmdCtx) => (cmdCtx.target?.entryIds ?? []).some((id) => locks.isLocked(id)),
         run: (cmdCtx) => {
-          for (const id of actedOnIds(cmdCtx)) {
+          for (const id of cmdCtx.target?.entryIds ?? []) {
+            if (!locks.isLocked(id)) continue;
             locks.unlock(id);
             prependLogLine(log, `entries · ${id} · unlocked (right-click menu)`);
           }

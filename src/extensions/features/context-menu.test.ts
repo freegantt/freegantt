@@ -103,10 +103,11 @@ describe('contextMenu() (S5.5, D-S5-13/14)', () => {
     rightClick(bars(container)[0]!);
     expect(commandIds(container)).toContain('demo.renameOne');
 
-    // The row owns three, so the command declines and never reaches the menu. The bar above is one
-    // of the three, so the row is not inside the Selection that right-click left behind.
+    // The row owns three, but the Selection (the one bar above) is entirely inside what the row
+    // names, so #212 keeps the narrower Selection rather than widening to the row: the command
+    // still sees one Entry and still offers itself.
     rightClick(container.querySelector<HTMLElement>('.fg-row')!);
-    expect(commandIds(container)).not.toContain('demo.renameOne');
+    expect(commandIds(container)).toContain('demo.renameOne');
 
     gantt.destroy();
     container.remove();
@@ -125,6 +126,28 @@ describe('contextMenu() (S5.5, D-S5-13/14)', () => {
     clickMenuItem(container, 'demo.reached');
 
     expect(reached).toEqual([threeEntries[1]!.id]);
+
+    gantt.destroy();
+    container.remove();
+  });
+
+  it('a right-click on a multi-Entry row widens neither the Selection nor the acted-on set (#212)', () => {
+    const { container, gantt } = makeGanttWithThreeOnOneRow();
+    gantt.selectedIds = [threeEntries[0]!.id];
+    let reached: readonly string[] | undefined;
+    gantt.commands.register({
+      id: 'demo.reached',
+      label: 'Reached',
+      run: (ctx) => (reached = ctx.target?.entryIds),
+    });
+
+    // The row owns all three Entries, but the Selection (Entry 0 alone) sits entirely inside what
+    // the row names. #212: this must act on the narrower Selection, not silently grow it to the row.
+    rightClick(container.querySelector<HTMLElement>('.fg-row')!);
+    clickMenuItem(container, 'demo.reached');
+
+    expect(reached).toEqual([threeEntries[0]!.id]);
+    expect(gantt.selectedIds).toEqual([threeEntries[0]!.id]);
 
     gantt.destroy();
     container.remove();
