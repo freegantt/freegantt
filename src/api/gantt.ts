@@ -136,8 +136,8 @@ export interface GanttOptionsBase {
 }
 
 /** Two ways to set the axis, made mutually exclusive at the type level (issue #84 — the prior shape
- * accepted both and silently ignored `preset`/`range`/`fit` in favor of `scale`, with a dev-mode-only
- * warning). Sharing an axis and building a private one from `preset`/`range`/`fit` are not two knobs
+ * accepted both and silently ignored `preset`/`range`/`fit` in favor of `scale`, with only a warning
+ * to say so). Sharing an axis and building a private one from `preset`/`range`/`fit` are not two knobs
  * for the same job; a caller states one or the other. */
 export type GanttScaleOptions =
   | {
@@ -650,7 +650,7 @@ export class Gantt {
   /** D-S5-36. Call: `gantt.installPlugin(tooltips())`. It installs one plugin and leaves every
    *  plugin already running alone, so a caller never restates the installed set to add to it. A
    *  plugin whose `id` is already installed throws `DuplicatePluginIdError` — the assignment form
-   *  ignores it with a dev-mode warning, which is the silence this verb replaces. */
+   *  ignores it and reports `plugin-reconfigure-dropped`, which is the silence this verb replaces. */
   installPlugin(plugin: GanttPlugin): void {
     this.#shell.installPlugin(plugin);
   }
