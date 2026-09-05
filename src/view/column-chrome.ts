@@ -7,12 +7,13 @@
 // over `ColumnGestureContext` (this file's own `column-gesture-context.ts` sibling).
 
 import type { Dataset, Disposer, FieldKey, GridColumn, GridColumnInput, PluginId } from '../model/index.js';
+import { UnknownGridColumnError } from '../model/index.js';
 import type { ResolvedColumn } from '../layout/index.js';
 import { createRegistrationTable } from '../layout/index.js';
 import { readPixelProperty } from '../render/dom/pixel-property.js';
 import { cssEscapeAttr } from '../render/dom/css-escape.js';
 import type { ColumnReorderPreview } from './column-gesture-context.js';
-import { DEFAULT_COLUMN_WIDTH_PX, resolveGanttFields, toGridColumn } from './grid-columns.js';
+import { DEFAULT_COLUMN_WIDTH_PX, isHidden, resolveGanttFields, toGridColumn } from './grid-columns.js';
 import type { ResolveColumnsBind } from './grid-columns.js';
 
 const MIN_COLUMN_WIDTH_PROPERTY = '--fg-column-min-width';
@@ -105,6 +106,16 @@ export class ColumnChrome {
    *  plugin's declaration, so it never appears here and never reaches what the consumer saves. */
   get authoredColumns(): readonly GridColumnInput[] {
     return this.#declaredColumns.filter(ColumnChrome.#isAuthored).map((declaration) => declaration.column);
+  }
+
+  /** D-S5-34: which of the consumer's own columns are hidden right now, by field key. The consumer's
+   *  declarations only, the same rule `authoredColumns` above follows (D-S5-33). A plugin's column
+   *  the consumer hid stays hidden and stays the plugin's, so it is absent here for the same reason a
+   *  resize of one shows no change in a `gridColumnsChange` payload. */
+  get hiddenColumns(): readonly FieldKey[] {
+    return this.#declaredColumns
+      .filter((declaration) => ColumnChrome.#isAuthored(declaration) && isHidden(declaration.column))
+      .map(ColumnChrome.#fieldOfDeclaration);
   }
 
   /** S5.9, D-S5-21: every committed column, plus every plugin-registered column whose `field` no
@@ -310,6 +321,32 @@ export class ColumnChrome {
     return declarations;
   }
 
+  /** D-S5-34. Hiding rewrites one declaration and moves none of them, so the column keeps its width
+   *  and its place in the order while it is off the screen. Showing removes the key again rather
+   *  than writing `hidden: false`, so a column the consumer wrote as a bare `'name'` reads back as a
+   *  bare `'name'` — the same care a resize already takes to rewrite only what it touched (#181). */
+  static #withHiddenFlag(column: GridColumnInput, hidden: boolean): GridColumnInput {
+    if (typeof column === 'string') return hidden ? { field: column, hidden: true } : column;
+    if (hidden) return { ...column, hidden: true };
+    const { hidden: _wasHidden, ...shown } = column;
+    return shown;
+  }
+
+  /** A field no declaration carries is a mistake, not a silent no-op: neither verb adds a column, so
+   *  there is nothing for either to act on. A hidden column stays declared, which is what lets
+   *  `showColumn` always reach what `hideColumn` hid. */
+  #withHidden(columnKey: FieldKey, hidden: boolean): readonly ColumnDeclaration[] {
+    const declarations = this.#effectiveDeclarations();
+    const names = (declaration: ColumnDeclaration): boolean =>
+      ColumnChrome.#fieldOfDeclaration(declaration) === columnKey;
+    if (!declarations.some(names)) throw new UnknownGridColumnError(String(columnKey));
+    return declarations.map((declaration) =>
+      names(declaration)
+        ? { ...declaration, column: ColumnChrome.#withHiddenFlag(declaration.column, hidden) }
+        : declaration,
+    );
+  }
+
   /** A plain `gantt.gridColumns = […]` assignment restates the consumer's whole authored list, so
    *  every column in it is the consumer's. Plugin columns keep whatever shape a commit already gave
    *  them and follow the authored list — the same place `effectiveInput()` puts one that has never
@@ -324,17 +361,21 @@ export class ColumnChrome {
     return [...input.map((column) => ({ column })), ...pluginColumns];
   }
 
-  /** The `from`/`to` a `gridColumnsChange` handler reads: the resolved columns the consumer
-   *  authored, and only those (D-S5-33). `resolveColumns` maps its input one-for-one, so the two
-   *  lists line up by position and a field key is enough to pair them. */
+  /** The `from`/`to` a `gridColumnsChange` handler reads: the columns the consumer authored, and
+   *  only those (D-S5-33), each paired with what it resolved to. A hidden column resolves to
+   *  nothing (D-S5-34), so it reports its declaration instead — which already carries `hidden: true`
+   *  and whatever width a resize wrote onto it. That keeps the documented save round-trip whole: a
+   *  consumer who stores `to` and assigns it back later gets the hidden column back, still hidden,
+   *  still in its place. Dropping it here would turn "hidden" into "gone" on the next load. */
   static #authoredPayload(
     declarations: readonly ColumnDeclaration[],
     resolved: readonly ResolvedColumn[],
   ): readonly GridColumn[] {
-    const authoredKeys = new Set(
-      declarations.filter(ColumnChrome.#isAuthored).map(ColumnChrome.#fieldOfDeclaration),
-    );
-    return resolved.filter((column) => authoredKeys.has(column.key)).map(toGridColumn);
+    const resolvedByKey = new Map(resolved.map((column) => [column.key, column]));
+    return declarations.filter(ColumnChrome.#isAuthored).map((declaration) => {
+      const painted = resolvedByKey.get(ColumnChrome.#fieldOfDeclaration(declaration));
+      return painted === undefined ? ColumnChrome.#asGridColumn(declaration.column) : toGridColumn(painted);
+    });
   }
 
   /** The one commit sequence D-S5-18 asks for: a plain `gantt.gridColumns = […]` assignment. Every
@@ -380,6 +421,15 @@ export class ColumnChrome {
 
   commitReorder(columnKey: FieldKey, beforeColumnKey: FieldKey | null): boolean {
     return this.#commitDeclared(this.#reordered(columnKey, beforeColumnKey));
+  }
+
+  /** D-S5-34: `gantt.hideGridColumn(field)` and `gantt.showGridColumn(field)` land here, through the
+   *  same commit sequence a resize drag and a reorder drop use. So a hide is cancelable by the
+   *  `beforeGridColumnsChange` handler that already guards every other column change, and no second
+   *  event pair exists for a consumer to learn. Hiding an already hidden column changes nothing,
+   *  which is the same answer `gantt.gridColumns = sameList` gives. */
+  commitHidden(columnKey: FieldKey, hidden: boolean): boolean {
+    return this.#commitDeclared(this.#withHidden(columnKey, hidden));
   }
 
   /** `Shift+ArrowLeft`/`Shift+ArrowRight` (D-S5-18, D-S5-26) — the same `commitWidth` a resize

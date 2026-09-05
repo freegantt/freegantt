@@ -27,7 +27,7 @@ export type SerializedField = {
   type?: FieldTypeName;
   source: { from: 'entry'; field: CoreFieldKey } | { from: 'meta'; key: string };
   rollUp?: AggregatorName;
-  column?: Omit<GridColumn, 'field'>;
+  column?: Omit<GridColumn, 'field' | 'hidden'>;
 };
 
 /** Every plugin's own per-entry rows, keyed first by `PluginId` and then by `EntryId` (D-S5-24).

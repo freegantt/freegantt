@@ -98,7 +98,12 @@ function lookupOf(dataset: Pick<Dataset, 'field'>): FieldLookup {
   return { get: (key) => dataset.field(key) };
 }
 
-/** Call: `resolveColumns(gantt.gridColumns, { get: (key) => dataset.field(key) }, { timeZone, locale })`. */
+/** Call: `resolveColumns(gantt.gridColumns, { get: (key) => dataset.field(key) }, { timeZone, locale })`.
+ *  What comes back is what the Gantt paints. A column that declares `hidden: true` (D-S5-34) stays
+ *  out of the result, and out of everything downstream that reads it — the frame, the pane width,
+ *  `ctx.view.resolvedColumns()`, and the resize and reorder gestures. It is still resolved first, so
+ *  a misspelled field or a Field with no `column` throws where the column is declared. A mistake
+ *  that waited for the column to be shown would report the wrong moment. */
 export function resolveColumns(
   gridColumns: readonly GridColumnInput[],
   lookup: FieldLookup,
@@ -109,20 +114,28 @@ export function resolveColumns(
   const formatCtx: FormatContext = { ...fieldCtx, locale };
   const defaultWidthPx = bind.defaultColumnWidth ?? DEFAULT_COLUMN_WIDTH_PX;
 
-  return gridColumns.map((item) => {
+  return gridColumns.flatMap((item) => {
     const key = typeof item === 'string' ? item : item.field;
     const field = lookup.get(key);
     if (field === undefined) throw new UnknownFieldError(String(key));
     const column = columnFrom(item, field, defaultWidthPx);
-    return {
-      ...column,
-      format: (entry: Entry) => {
-        const value = formatCtx.read(entry, field.key);
-        if (field.formatValue) return field.formatValue(value, formatCtx);
-        return stringifyPrimitive(value);
+    if (isHidden(item)) return [];
+    return [
+      {
+        ...column,
+        format: (entry: Entry) => {
+          const value = formatCtx.read(entry, field.key);
+          if (field.formatValue) return field.formatValue(value, formatCtx);
+          return stringifyPrimitive(value);
+        },
       },
-    };
+    ];
   });
+}
+
+/** D-S5-34. A bare field key is never hidden — only the object form carries the key. */
+export function isHidden(item: GridColumnInput): boolean {
+  return typeof item !== 'string' && item.hidden === true;
 }
 
 /** Call: `resolveFieldCompares(lookup, fields, { timeZone, locale })` — every declared Field, not the Grid. */

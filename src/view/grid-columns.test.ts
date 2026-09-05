@@ -242,3 +242,27 @@ describe('resolveGanttFields (D-S4-13)', () => {
     expect(bound.fieldCompares.some((compare) => compare.key === 'cost')).toBe(true);
   });
 });
+
+describe('a hidden column resolves, then leaves the result (D-S5-34, #184)', () => {
+  it('what comes back is what the Gantt paints', () => {
+    const columns = resolveColumns(['name', { field: 'cost', hidden: true }], costRegistry(), {
+      timeZone: zone,
+      locale,
+    });
+    expect(columns.map((column) => column.key)).toEqual(['name']);
+  });
+
+  it('a hidden column is still checked, so a misspelled field reports where it is declared', () => {
+    expect(() =>
+      resolveColumns([{ field: 'nope', hidden: true }], costRegistry(), { timeZone: zone, locale }),
+    ).toThrow(UnknownFieldError);
+  });
+
+  it('hidden: false paints, and a bare field key is never hidden', () => {
+    const columns = resolveColumns(['name', { field: 'cost', hidden: false }], costRegistry(), {
+      timeZone: zone,
+      locale,
+    });
+    expect(columns.map((column) => column.key)).toEqual(['name', 'cost']);
+  });
+});

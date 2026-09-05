@@ -197,6 +197,20 @@ export class FieldNotColumnableError extends FreeGanttError {
   }
 }
 
+/** `code: 'unknown-grid-column'` — `gantt.hideGridColumn` or `gantt.showGridColumn` named a field
+ *  that no declared column carries (D-S5-34). Both verbs act on a column this Gantt already
+ *  declares; neither one adds a column, so a name nothing declares is a mistake and says so. A
+ *  hidden column stays declared, so `showGridColumn` always reaches what `hideGridColumn` hid. */
+export class UnknownGridColumnError extends FreeGanttError {
+  readonly field: string;
+
+  constructor(field: string) {
+    super('unknown-grid-column', `gridColumns: no column names the field "${field}"`);
+    this.name = 'UnknownGridColumnError';
+    this.field = field;
+  }
+}
+
 /** `code: 'mutation-during-notification'` — a mutator called while `beforeChange` or `change` handlers
  * are running (D-S2-9, D-S2-25). The write set is discarded; nothing about the notification in
  * progress is affected. */

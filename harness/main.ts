@@ -35,18 +35,12 @@ import { lockEntries } from './plugins/lock-entries.js';
 // S5.8, D-S5-19: Name, Start and Budget are editable (double-click, or Enter on the selected row's
 // first editable column); End and Duration stay read-only (Duration is `compute`-sourced and has no
 // stored home to write back to — ADR 0005: the Rollup would overwrite an edit on the next commit).
-const GRID_WITH_BUDGET: readonly GridColumnInput[] = [
+const GRID_COLUMNS: readonly GridColumnInput[] = [
   { field: 'name', editable: true },
   { field: 'start', editable: true },
   'end',
   { field: 'duration', align: 'start' },
   { field: 'cost', header: 'Budget', editable: true },
-];
-const GRID_WITHOUT_BUDGET: readonly GridColumnInput[] = [
-  { field: 'name', editable: true },
-  { field: 'start', editable: true },
-  'end',
-  { field: 'duration', align: 'start' },
 ];
 
 // S5.10, D-S5-24: one Dataset plugin owns every lock on this page — the checkbox below and the
@@ -68,7 +62,7 @@ const mobilization = now();
 const gantt = new Gantt({
   container: '#gantt',
   dataset,
-  gridColumns: GRID_WITH_BUDGET,
+  gridColumns: GRID_COLUMNS,
   // #157: the pane is as wide as its columns, and stays that way when the budget column comes and
   // goes below. The number this replaces was hand-tuned to one column set.
   gridWidth: 'fitColumns',
@@ -190,11 +184,14 @@ snapUnitSelect.addEventListener('change', applySnapChoice);
 snapIncrementInput.addEventListener('change', applySnapChoice);
 applySnapChoice();
 
-let budgetVisible = true;
+// S5.7, D-S5-34: the page keeps no copy of which columns show. One list above declares the
+// columns; `hideGridColumn` takes one off the screen and leaves the widths and the order the user
+// set on the other four alone, and `hiddenGridColumns` says which are off right now.
 toggleBudgetBtn.addEventListener('click', () => {
-  budgetVisible = !budgetVisible;
-  gantt.gridColumns = budgetVisible ? GRID_WITH_BUDGET : GRID_WITHOUT_BUDGET;
-  toggleBudgetBtn.textContent = budgetVisible ? 'Hide Budget' : 'Show Budget';
+  const wasHidden = gantt.hiddenGridColumns.includes('cost');
+  if (wasHidden) gantt.showGridColumn('cost');
+  else gantt.hideGridColumn('cost');
+  toggleBudgetBtn.textContent = wasHidden ? 'Hide Budget' : 'Show Budget';
 });
 
 reparentBtn.addEventListener('click', () => {
