@@ -23,7 +23,7 @@
 **Verification note.** Every finding below was re-read against `HEAD` before this plan was written.
 All confirmed. Counts checked: `gantt-shell.ts` is 1,774 lines, `inline-editing.ts` is 458 lines,
 `extensions/` holds 12 `document.addEventListener` calls, `GanttShellOptions` holds 34 members with
-seven "omitted only by tests" comments, and `PluginContextPorts` holds 11 group-naming doc comments.
+seven "omitted only by tests" comments, and `PluginContextParts` holds 11 group-naming doc comments.
 
 ---
 
@@ -151,7 +151,7 @@ Files: `src/view/gantt-shell.ts`, new `src/view/plugin-ports.ts`, `src/api/gantt
       `registerKeybinding` had the same shape. Only `refresh` is a real difference. The
       `gate.guard` / `gate.assertOpen()` split was accidental, so the helper asserts for all seven
       and `RegistrationGate.guard` is deleted (it had no other caller and no test).
-- [x] **A1 + P1 — declare the ports grouped.** `PluginContextPorts` gains the shape a plugin sees:
+- [x] **A1 + P1 — declare the ports grouped.** `PluginContextParts` gains the shape a plugin sees:
       `{ commands, interaction: {…}, view: {…}, layout: {…} }`.
       Eleven doc comments that only name a path can go. The type carries the path now.
 - [x] **A1 — delete the middle man.** `buildPluginContext` collapses to
@@ -428,7 +428,7 @@ Files: `src/view/renderer-registry.ts`, `src/layout/items/produce-items.ts`, `sr
 - [x] **Delete `plans/reviews/2026-09-04-s5-extensibility-branch.html`.** Done in this commit.
       This plan file stays as the record of what the review asked and what landed.
 - [x] Confirm S5.10 can start. R2 landed `view/plugin-ports.ts`, so a new seam is a declaration in
-      one file: add the member to its group in `PluginContextPorts`, implement it in the `ports`
+      one file: add the member to its group in `PluginContextParts`, implement it in the `parts`
       literal, and lend any shell state through `GanttShellPorts`. `api/gantt.ts` needs no edit —
       it spreads. R3 added `view.dom` and `view.onDomEvent` through exactly that path, which is the
       working proof.

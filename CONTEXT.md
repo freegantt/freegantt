@@ -535,8 +535,13 @@ The object `setup(ctx)` receives — a GanttPlugin's entire world: dataset acces
 _Avoid_: Treating this as settled — the plugin system (`GanttPlugin`/`DatasetPlugin`/`PluginContext`) is still design work in progress; the shape, and possibly this name, may change before it lands
 
 **Plugin ports**:
-What `view/plugin-ports.ts` builds for one installed plugin (`buildPluginPorts(shellPorts, pluginId)`): the grouped `PluginContext` members `GanttShell` owns, plus that plugin's own `RegistrationGate` and `DisposableStore`. `GanttShellPorts` is the seam back — the registries, the frame loop and the event bus the ports write into — the same named-ports idiom `CoreCommandPorts` and `ColumnChromePorts` already set. `registerWhileOpen` is the one gated shape inside it: it asserts the gate, registers, invalidates, files the `Disposer` with the plugin's store, and returns it. A new seam names what registers and what must run again; it transcribes nothing.
-_Avoid_: PluginContextPorts as a _flat_ bag (retired 2026-09-04 — a flat list made `api/gantt.ts` re-group every member by hand, so a seam cost three edits in three layers)
+What `view/plugin-ports.ts` builds for one installed plugin (`buildPluginPorts(shellPorts, pluginId)`): the grouped `PluginContext` members `GanttShell` owns — the **`PluginContextParts`** — plus that plugin's own `RegistrationGate` and `DisposableStore`. `GanttShellPorts` is the seam back — the registries, the frame loop and the event bus the ports write into — the same named-ports idiom `CoreCommandPorts` and `ColumnChromePorts` already set. `registerWhileOpen` is the one gated shape inside it: it asserts the gate, registers, invalidates, files the `Disposer` with the plugin's store, and returns it. A new seam names what registers and what must run again; it transcribes nothing.
+_Avoid_: `PluginContextPorts` (renamed 2026-09-05, issue #183 — `api/index.ts` exports that member
+list so `etc/freegantt.api.md` keeps the plugin surface member by member (#166), which put the one
+public `*Ports` name on the surface. Every other `*Ports` here names one collaborator's seam back into
+its owner and stays private; the plugin's own context is not that. `Parts` names the pieces a
+composite is made of, the way `PlainParts` already does); a flat bag (retired 2026-09-04 — a flat list
+made `api/gantt.ts` re-group every member by hand, so a seam cost three edits in three layers)
 
 **Declarer** (and **authored**):
 Who made a declaration: the library, the consumer, or one named plugin (D-S5-33, issues #162/#181).

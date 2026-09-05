@@ -98,7 +98,7 @@ import type { ResolveColumnsBind } from './grid-columns.js';
 import { ColumnChrome } from './column-chrome.js';
 import type { ColumnChromePorts } from './column-chrome.js';
 import { buildPluginPorts } from './plugin-ports.js';
-import type { GanttShellPorts, PluginContextPorts } from './plugin-ports.js';
+import type { GanttShellPorts, PluginContextParts } from './plugin-ports.js';
 import { TreeCollapse } from './tree-collapse.js';
 import { createFieldContext } from '../data/fields/field-access.js';
 import { isDevMode } from '../data/dev-mode.js';
@@ -199,7 +199,7 @@ export interface GanttShellWiring {
    *  runs. It returns `unknown` because `api/gantt.ts` binds the concrete
    *  `PluginContext` type. That file alone may import both `Gantt` and this generic contract without
    *  closing an import cycle (`api/plugin.ts`'s file header). */
-  buildPluginContext?: (parts: PluginContextPorts) => unknown;
+  buildPluginContext?: (parts: PluginContextParts) => unknown;
   /** S5.2, D-S5-6: fills the api-level pieces of a `CommandContext`, for the same reason
    *  `buildPluginContext` fills `PluginContext`'s. The full api `Dataset` (with `undo`/`redo`) and
    *  the public `Gantt` façade are both api-level. `view/` may name neither type (D-S5-5's mirror on
@@ -578,9 +578,9 @@ export class GanttShell {
     // that installs six plugins no longer allocates six copies of it.
     const shellPorts = this.#shellPorts();
     this.#pluginRuntime = new PluginRuntime<unknown>((pluginId) => {
-      const { ports, gate } = buildPluginPorts(shellPorts, pluginId);
-      const context = (options.wiring.buildPluginContext ?? (() => ({})))(ports);
-      return { context, disposables: ports.disposables, registrationGate: gate };
+      const { parts, gate } = buildPluginPorts(shellPorts, pluginId);
+      const context = (options.wiring.buildPluginContext ?? (() => ({})))(parts);
+      return { context, disposables: parts.disposables, registrationGate: gate };
     });
 
     // The timeline pane is the single native scroller (D-D, D-S1.8-1); the grid pane follows it by

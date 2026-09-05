@@ -19,7 +19,7 @@ import type {
   GanttDom,
   MountLayer,
   PaneName,
-  PluginContextPorts,
+  PluginContextParts,
 } from '../view/index.js';
 import type { CommandRegistryOf, KeyBindingOf } from './command.js';
 
@@ -41,13 +41,16 @@ export type { GanttDom, DomTarget, PaneName, MountLayer, DomEventHandler, DomEve
 
 // #166: re-exported because `PluginContextOf` below is a projection of it, and `etc/freegantt.api.md`
 // must keep showing the plugin surface member by member. It is the I11 contract for that surface, and
-// a report that only printed `Omit<PluginContextPorts, …>` would no longer notice a member coming or
+// a report that only printed `Omit<PluginContextParts, …>` would no longer notice a member coming or
 // going. A plugin author never names this type: they name `PluginContext`, or `PluginContextOf`.
-export type { PluginContextPorts };
+// #183: it was `PluginContextPorts` until this export made it public. "Ports" names the seam a
+// collaborator calls back through, which this is not, and every other `*Ports` here stays private.
+// `Parts` says what it is — the pieces `PluginContext` is made of — the way `PlainParts` already does.
+export type { PluginContextParts };
 
 /** What a plugin's `setup()` receives, once, after the Gantt mounts.
  *
- *  #166: a projection of `PluginContextPorts`, not a copy of it. That interface (`view/plugin-ports.ts`)
+ *  #166: a projection of `PluginContextParts`, not a copy of it. That interface (`view/plugin-ports.ts`)
  *  is the one member list, and carries the doc for every member. This adds the two api-level members
  *  `view/` may not name, and re-types the two that are genuinely generic over `TGantt`/`TDataset`.
  *  A new plugin capability is one edit there, and it reaches a plugin author with no edit here.
@@ -58,7 +61,7 @@ export type { PluginContextPorts };
  *  `ctx.dataset` throughout `setup()`. A plugin that binds neither type argument sees the exact
  *  surface it always has (#141 item #9). */
 export type PluginContextOf<TGantt = unknown, TDataset = Dataset> = Omit<
-  PluginContextPorts,
+  PluginContextParts,
   'commands' | 'interaction'
 > & {
   /** The public Dataset. No privileged access, no second surface. */
@@ -70,9 +73,9 @@ export type PluginContextOf<TGantt = unknown, TDataset = Dataset> = Omit<
    *  A command this plugin registers lives exactly as long as the plugin. Uninstalling restores
    *  whatever the id held before. For an overridden core command that is core's own (#155). */
   commands: CommandRegistryOf<TGantt, TDataset>;
-  interaction: Omit<PluginContextPorts['interaction'], 'registerKeybinding'> & {
+  interaction: Omit<PluginContextParts['interaction'], 'registerKeybinding'> & {
     /** The one `interaction` member that binds `TGantt`: a `KeyBinding`'s own `when` reads a
-     *  `CommandContextOf<TGantt, TDataset>`. See `PluginContextPorts` for what it does. */
+     *  `CommandContextOf<TGantt, TDataset>`. See `PluginContextParts` for what it does. */
     registerKeybinding(binding: KeyBindingOf<TGantt>): Disposer;
   };
 };
