@@ -690,8 +690,7 @@ export class GanttShell {
       },
       setHovered: (item) => this.#setHovered(item),
       contentXAtPaneOffset: (offsetX) => offsetX + this.#viewport.scroll.state.position.x,
-      session: (grabbed, gesture, grabbedItemId) =>
-        this.#gesturePipeline.session(grabbed, gesture, grabbedItemId),
+      session: (grabbed, gesture) => this.#gesturePipeline.session(grabbed, gesture),
       tryTreeArrow: (direction) => this.#treeCollapse.handleArrow(direction),
       expandAllRows: () => this.expandAll(),
     };
@@ -1253,7 +1252,7 @@ export class GanttShell {
     this.#refreshAffordances();
   }
 
-  /** D-S3-6: resolves `hoveredItemId`/`movableItemId`/`resizableItemId` from the current hover and
+  /** D-S3-6: resolves `hoveredItemId`/`movableItemId`/`resizableEntryId` from the current hover and
    *  selection, writes them into the one long-lived `InteractionState`, and applies. Called whenever
    *  any of the three inputs change — never per pointer move beyond that (I5). `exactOptionalPropertyTypes`
    *  makes "clear" a `delete`, not an `= undefined` assignment (`#setOptional` below). */
@@ -1267,7 +1266,7 @@ export class GanttShell {
     });
     setOptional(this.#interactionState, 'hoveredItemId', ids.hoveredItemId);
     setOptional(this.#interactionState, 'movableItemId', ids.movableItemId);
-    setOptional(this.#interactionState, 'resizableItemId', ids.resizableItemId);
+    setOptional(this.#interactionState, 'resizableEntryId', ids.resizableEntryId);
     this.#backend.applyState(this.#interactionState);
   }
 

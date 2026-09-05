@@ -155,8 +155,8 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
       },
     });
     const pipeline = new GesturePipeline(deps);
-    // The grabbed Item is the second Segment; the Selection names the Entry, so both Segments step.
-    const session = pipeline.session(segmented.id, { kind: 'move' }, itemId(segmented.id, 1))!;
+    // Whichever bar the pointer grabbed, the Selection names the Entry, so both Segments step.
+    const session = pipeline.session(segmented.id, { kind: 'move' })!;
 
     session.preview(40);
     await new Promise((resolve) => requestAnimationFrame(resolve));

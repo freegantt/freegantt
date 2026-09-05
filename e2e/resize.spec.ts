@@ -76,12 +76,12 @@ test('dragging the end handle resizes the bar', async ({ page }) => {
 
 // Regression: after a resize commit, the resized entry commonly stays both hovered (the pointer is
 // still sitting over it) and selected. `GanttShell#refreshAffordances` only repaints the handle pair
-// when `resizableItemId`'s identity changes — it stays the same item across the commit in that case,
+// when `resizableEntryId`'s identity changes — it stays the same Entry across the commit in that case,
 // so the gate alone left the handle pair glued to its pre-commit position while the bar itself
 // repainted at its new, wider geometry. A second resize attempt at the bar's new visible edge then
 // hit nothing, because the real (invisible) handle was still sitting at the old edge. Fix: the
 // handle pair's geometry now tracks `syncBars` every frame in `render/dom/index.ts`'s `sync()`, the
-// same way a bar's own transform does, not just on `resizableItemId` identity change.
+// same way a bar's own transform does, not just on `resizableEntryId` identity change.
 test('a second resize at the bar edge still works after the entry stays selected from the first', async ({
   page,
 }) => {

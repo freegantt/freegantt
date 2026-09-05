@@ -974,7 +974,7 @@ describe('render/dom backend', () => {
     timeline.remove();
   });
 
-  it('parks the shared handle pair when resizableItemId is undefined and moves them onto the committed bar when it is set (D-S3-8)', () => {
+  it('parks the shared handle pair when resizableEntryId is undefined and moves them onto the committed bar when it is set (D-S3-8)', () => {
     const backend = createDomBackend();
     const { grid, timeline } = mountSurfaces();
     backend.mount({ grid, timeline });
@@ -995,7 +995,7 @@ describe('render/dom backend', () => {
     expect(start.hidden).toBe(true);
     expect(end.hidden).toBe(true);
 
-    backend.applyState({ resizableItemId: a!.id });
+    backend.applyState({ resizableEntryId: a!.entryId });
     expect(start.hidden).toBe(false);
     expect(end.hidden).toBe(false);
     expect(start.style.transform).toBe(`translate(${a!.x}px, ${a!.y}px)`);
@@ -1011,7 +1011,7 @@ describe('render/dom backend', () => {
     timeline.remove();
   });
 
-  it('hitTest reports the edge of a resize handle, resolved against resizableItemId (S3.4, D-S3-4)', () => {
+  it('hitTest reports the edge of a resize handle, resolved against resizableEntryId (S3.4, D-S3-4)', () => {
     const backend = createDomBackend();
     const { grid, timeline } = mountSurfaces();
     backend.mount({ grid, timeline });
@@ -1026,7 +1026,7 @@ describe('render/dom backend', () => {
       itemProducerRegistry,
     });
     backend.sync(frame);
-    backend.applyState({ resizableItemId: frame.bars[0]!.id });
+    backend.applyState({ resizableEntryId: frame.bars[0]!.entryId });
 
     const end = timeline.querySelector<HTMLElement>('.fg-bar-handle[data-edge="end"]')!;
     const original = document.elementFromPoint.bind(document);
@@ -1037,6 +1037,61 @@ describe('render/dom backend', () => {
       itemId: frame.bars[0]!.id,
       edge: 'end',
     });
+
+    document.elementFromPoint = original;
+    backend.destroy();
+    grid.remove();
+    timeline.remove();
+  });
+
+  it('brackets a segmented entry: one handle per envelope bar, and hitTest names that bar (#200)', () => {
+    const backend = createDomBackend();
+    const { grid, timeline } = mountSurfaces();
+    backend.mount({ grid, timeline });
+
+    // The fake scale above parks every instant at x = 0, so this one spreads the two Segments out —
+    // the handle pair has to tell the leftmost bar from the rightmost one. One px per ms keeps the
+    // arithmetic out of the test (I10): the scale reports a difference, it never builds a duration.
+    const base = sampleEntries[0]!;
+    const later = sampleEntries[4]!;
+    const spreadScale: TimeScale = {
+      ...scale,
+      xForInstant: (at) => Number(at) - Number(base.start),
+    };
+    const segmented = {
+      ...base,
+      end: later.end,
+      segments: [
+        { start: base.start, end: base.end },
+        { start: later.start, end: later.end },
+      ],
+    };
+    const frame = computeFrame({
+      entries: [segmented],
+      scale: spreadScale,
+      preset,
+      visible: { x: 0, y: 0, width: 0, height: 0 },
+      rowHeight: 32,
+      revision: 0,
+      itemProducerRegistry,
+    });
+    backend.sync(frame);
+    const [first, last] = frame.bars;
+    expect(frame.bars).toHaveLength(2);
+
+    backend.applyState({ resizableEntryId: segmented.id });
+    const start = timeline.querySelector<HTMLElement>('.fg-bar-handle[data-edge="start"]')!;
+    const end = timeline.querySelector<HTMLElement>('.fg-bar-handle[data-edge="end"]')!;
+    expect(start.style.transform).toBe(`translate(${first!.x}px, ${first!.y}px)`);
+    expect(end.style.transform).toBe(`translate(${last!.x + last!.width}px, ${last!.y}px)`);
+
+    const original = document.elementFromPoint.bind(document);
+    document.elementFromPoint = (x: number, y: number) =>
+      x === 5 && y === 5 ? start : x === 6 && y === 6 ? end : original(x, y);
+
+    // Each handle grabs the bar it sits on, so a resize arms the Entry through a real Item id.
+    expect(backend.hitTest(point(5, 5))).toEqual({ kind: 'bar', itemId: first!.id, edge: 'start' });
+    expect(backend.hitTest(point(6, 6))).toEqual({ kind: 'bar', itemId: last!.id, edge: 'end' });
 
     document.elementFromPoint = original;
     backend.destroy();
@@ -1059,7 +1114,7 @@ describe('render/dom backend', () => {
       itemProducerRegistry,
     });
     backend.sync(frame);
-    // resizableItemId never set — handles stay hidden.
+    // resizableEntryId never set — handles stay hidden.
 
     const bar = timeline.querySelector<HTMLElement>('.fg-bar')!;
     const original = document.elementFromPoint.bind(document);

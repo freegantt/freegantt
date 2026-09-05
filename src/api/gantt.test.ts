@@ -2776,7 +2776,7 @@ describe('Gantt entryResize (S3.4, [S3-A1] resize half)', () => {
     const timeline = container.querySelector<HTMLElement>('.fg-timeline-pane')!;
     stubPointerCapture(timeline);
     const original = document.elementFromPoint.bind(document);
-    // Hover the bar first (D-S3-6): resizableItemId only resolves once something is hovered or
+    // Hover the bar first (D-S3-6): resizableEntryId only resolves once something is hovered or
     // singly selected, and only then does the handle pair stop being `hidden`.
     document.elementFromPoint = (x: number, y: number) => (x === 5 && y === 5 ? bar : original(x, y));
     timeline.dispatchEvent(new PointerEvent('pointermove', { clientX: 5, clientY: 5 }));

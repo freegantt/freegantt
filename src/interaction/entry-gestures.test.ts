@@ -602,13 +602,13 @@ describe('attachEntryGestures — resize (S3.4)', () => {
 });
 
 describe('attachEntryGestures — segments and visible row order (S4.10)', () => {
-  it('[S4-A4] passes the grabbed item id into session when a segment bar is armed', () => {
+  it('[S4-A4] arms the Entry when a Segment bar is grabbed, never the Segment (#200)', () => {
     const pane = document.createElement('div');
     const container = document.createElement('div');
     const rowLayer = document.createElement('div');
     mockPointerCapture(pane);
     const middle = itemId(A, 1);
-    const grabbedItems: (ItemId | undefined)[] = [];
+    const grabbedIds: EntryId[] = [];
     const segmented: Entry = {
       ...entryFor(A),
       segments: [
@@ -620,8 +620,8 @@ describe('attachEntryGestures — segments and visible row order (S4.10)', () =>
     const { ctx } = makeContext({
       hitTest: () => ({ kind: 'bar' as const, itemId: middle }),
       entryFor: (item) => (item === middle ? segmented : entryFor(entryIdOfItem(item))),
-      session: (grabbed, gesture, grabbedItemId) => {
-        grabbedItems.push(grabbedItemId);
+      session: (grabbed) => {
+        grabbedIds.push(grabbed);
         return {
           preview: () => {},
           commit: () => Promise.resolve(true),
@@ -635,7 +635,8 @@ describe('attachEntryGestures — segments and visible row order (S4.10)', () =>
     pane.dispatchEvent(down(0));
     pane.dispatchEvent(move(DRAG_THRESHOLD_PX + 1));
 
-    expect(grabbedItems).toEqual([middle]);
+    // The grabbed bar is the middle Segment; what arms is the Entry the Selection names.
+    expect(grabbedIds).toEqual([A]);
   });
 
   it('plain click proposes the picked segment item id, not only segment 0', () => {
