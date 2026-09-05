@@ -31,18 +31,18 @@ export interface DraftInput {
   entries: readonly Entry[];
   /** Horizontal pointer travel since the gesture armed, in content px (D-S3-11: vertical is ignored). */
   dxPx: number;
-  /** When the anchor entry has multiple segments, the grabbed segment index (D-S4-30). */
-  grabbedSegmentIndex?: number;
 }
 
 /** A move draft: `{ start, end }` for every grabbed entry, snapped and stepped as one rigid group
- *  (D-S3-3, D-S3-19). Empty when `input.entries` is empty — a gesture with nothing capable to move. */
+ *  (D-S3-3, D-S3-19). A segmented entry moves every Segment by that same delta and rewrites its
+ *  envelope — the Selection names an Entry, so a drag moves the whole Entry (#200, D-S4-30).
+ *  Empty when `input.entries` is empty — a gesture with nothing capable to move. */
 export function draftForMove(input: DraftInput): EntryEdits {
-  const { zone, scale, snap, entries, dxPx, grabbedSegmentIndex } = input;
+  const { zone, scale, snap, entries, dxPx } = input;
   const anchor = entries[0];
   if (!anchor) return new Map();
 
-  const anchorInstant = segmentAnchorInstant(anchor, grabbedSegmentIndex);
+  const anchorInstant = anchor.start;
   const anchorX = scale.xForInstant(anchorInstant);
   const rawCandidate = scale.instantForX(anchorX + dxPx);
   const snappedCandidate = snapInstant(zone, rawCandidate, snap);
@@ -50,19 +50,13 @@ export function draftForMove(input: DraftInput): EntryEdits {
   const edits = new Map<EntryId, StoredEdit>();
   if (snap === 'none') {
     const deltaMs = diffMs(snappedCandidate, anchorInstant);
-    for (let i = 0; i < entries.length; i++) {
-      const entry = entries[i]!;
-      const segmentIndex = i === 0 ? grabbedSegmentIndex : undefined;
-      edits.set(entry.id, moveEdit(entry, deltaMs, segmentIndex));
-    }
+    for (const entry of entries) edits.set(entry.id, moveEdit(entry, deltaMs));
     return edits;
   }
 
   const steps = stepsBetween(zone, snap.unit, snap.increment, anchorInstant, snappedCandidate);
-  for (let i = 0; i < entries.length; i++) {
-    const entry = entries[i]!;
-    const segmentIndex = i === 0 ? grabbedSegmentIndex : undefined;
-    edits.set(entry.id, stepMoveEdit(zone, entry, snap.unit, steps * snap.increment, segmentIndex));
+  for (const entry of entries) {
+    edits.set(entry.id, stepMoveEdit(zone, entry, snap.unit, steps * snap.increment));
   }
   return edits;
 }
@@ -71,7 +65,13 @@ export function draftForMove(input: DraftInput): EntryEdits {
  *  as `entries[0]`'s own grabbed edge (D-S3-19), the opposite edge held fixed. Zero-length clamp: the
  *  dragged edge never crosses the fixed one — an inverted span is refused right here, in the layout
  *  layer, before it ever reaches a changeset (D-S3-4). */
-export function draftForResize(input: DraftInput & { edge: 'start' | 'end' }): EntryEdits {
+export function draftForResize(
+  input: DraftInput & {
+    edge: 'start' | 'end';
+    /** When the anchor entry has multiple segments, the grabbed segment index (D-S4-30). */
+    grabbedSegmentIndex?: number;
+  },
+): EntryEdits {
   const { zone, scale, snap, entries, dxPx, edge, grabbedSegmentIndex } = input;
   const anchor = entries[0];
   if (!anchor) return new Map();
@@ -140,39 +140,28 @@ function envelopeOfSegments(segments: readonly TimeSpan[]): { start: Instant; en
   return { start, end };
 }
 
-function moveEdit(entry: Entry, deltaMs: number, segmentIndex: number | undefined): StoredEdit {
+function moveEdit(entry: Entry, deltaMs: number): StoredEdit {
   if (!hasSegments(entry)) {
     return { start: addMs(entry.start, deltaMs), end: addMs(entry.end, deltaMs) };
   }
-  const segments = entry.segments.map((segment, index) =>
-    segmentIndex !== undefined && index !== segmentIndex
-      ? segment
-      : { start: addMs(segment.start, deltaMs), end: addMs(segment.end, deltaMs) },
-  );
+  const segments = entry.segments.map((segment) => ({
+    start: addMs(segment.start, deltaMs),
+    end: addMs(segment.end, deltaMs),
+  }));
   return { segments, ...envelopeOfSegments(segments) };
 }
 
-function stepMoveEdit(
-  zone: string,
-  entry: Entry,
-  unit: TimeUnit,
-  amount: number,
-  segmentIndex: number | undefined,
-): StoredEdit {
+function stepMoveEdit(zone: string, entry: Entry, unit: TimeUnit, amount: number): StoredEdit {
   if (!hasSegments(entry)) {
     return {
       start: stepBy(zone, entry.start, unit, amount),
       end: stepBy(zone, entry.end, unit, amount),
     };
   }
-  const segments = entry.segments.map((segment, index) =>
-    segmentIndex !== undefined && index !== segmentIndex
-      ? segment
-      : {
-          start: stepBy(zone, segment.start, unit, amount),
-          end: stepBy(zone, segment.end, unit, amount),
-        },
-  );
+  const segments = entry.segments.map((segment) => ({
+    start: stepBy(zone, segment.start, unit, amount),
+    end: stepBy(zone, segment.end, unit, amount),
+  }));
   return { segments, ...envelopeOfSegments(segments) };
 }
 

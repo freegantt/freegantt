@@ -232,26 +232,22 @@ describe('draftForMove — segments (S4.10, D-S4-30)', () => {
     ],
   };
 
-  it('writes segments and the envelope when the grabbed segment moves', () => {
+  it('moves every segment by the same delta and rewrites the envelope (#200)', () => {
     const draft = draftForMove({
       zone: ZONE,
       scale,
       snap: 'none',
       entries: [segmented],
       dxPx: 30,
-      grabbedSegmentIndex: 1,
     });
     const edit = draft.get(segmented.id)!;
     expect(edit.segments).toEqual([
-      segmented.segments![0],
-      {
-        start: instant('2026-06-16T09:30:00Z'),
-        end: instant('2026-06-17T00:30:00Z'),
-      },
-      segmented.segments![2],
+      { start: instant('2026-06-15T14:30:00Z'), end: instant('2026-06-16T00:30:00Z') },
+      { start: instant('2026-06-16T09:30:00Z'), end: instant('2026-06-17T00:30:00Z') },
+      { start: instant('2026-06-17T12:30:00Z'), end: instant('2026-06-20T00:30:00Z') },
     ]);
-    expect(edit.start).toEqual(instant('2026-06-15T14:00:00Z'));
-    expect(edit.end).toEqual(instant('2026-06-20T00:00:00Z'));
+    expect(edit.start).toEqual(instant('2026-06-15T14:30:00Z'));
+    expect(edit.end).toEqual(instant('2026-06-20T00:30:00Z'));
   });
 
   it('still writes start/end only for a single-item entry', () => {

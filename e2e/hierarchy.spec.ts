@@ -42,6 +42,19 @@ function barsForEntry(page: import('@playwright/test').Page, entryId: string) {
   return page.locator(`#gantt .fg-bar[data-item-id^="${entryId}:"]`);
 }
 
+/** The left edge of every bar the locator matches, in DOM order — what a rigid drag shifts by one
+ *  and the same delta (#200). */
+async function barLefts(bars: import('@playwright/test').Locator): Promise<number[]> {
+  const count = await bars.count();
+  const lefts: number[] = [];
+  for (let index = 0; index < count; index++) {
+    const box = await bars.nth(index).boundingBox();
+    expect(box).not.toBeNull();
+    lefts.push(box!.x);
+  }
+  return lefts;
+}
+
 async function showSegmentedSpan(page: import('@playwright/test').Page): Promise<void> {
   await page.evaluate(() => {
     const entry = window.__dataset.entries.all.find(
@@ -154,7 +167,7 @@ test('pack mode grows a packed row and shifts the rows below', async ({ page }) 
     .toBe(true);
 });
 
-test('a segment drag moves one bar and Undo restores it', async ({ page }) => {
+test('a drag moves every bar of the entry and one Undo restores them all', async ({ page }) => {
   await gotoHierarchy(page);
   await page.evaluate(() => {
     window.__gantt.preset = { ...window.__gantt.preset, snap: 'none' };
@@ -163,33 +176,30 @@ test('a segment drag moves one bar and Undo restores it', async ({ page }) => {
 
   const entryId = await entryWithSegments(page);
   const bars = barsForEntry(page, entryId);
-  const bar = bars.nth(1);
-  const sibling = bars.first();
-  await expect(bar).toBeVisible();
-  const before = await bar.boundingBox();
-  const siblingBefore = await sibling.boundingBox();
-  expect(before).not.toBeNull();
-  expect(siblingBefore).not.toBeNull();
+  await expect(bars.nth(1)).toBeVisible();
+  expect(await bars.count()).toBe(3);
+  const before = await barLefts(bars);
 
-  await dragBarBy(page, bar, 120);
+  // #200: the grabbed bar is the middle Segment, and the Selection owns the drag — all three step.
+  await dragBarBy(page, bars.nth(1), 120);
 
   await expect
     .poll(async () => {
-      const after = await bar.boundingBox();
-      return after !== null && Math.abs(after.x - before!.x) > 8;
+      const after = await barLefts(bars);
+      return after.every((x, index) => Math.abs(x - before[index]!) > 8);
     })
     .toBe(true);
 
-  const siblingAfter = await sibling.boundingBox();
-  expect(siblingAfter).not.toBeNull();
-  expect(Math.abs(siblingAfter!.x - siblingBefore!.x)).toBeLessThan(2);
+  const moved = await barLefts(bars);
+  const deltas = moved.map((x, index) => x - before[index]!);
+  expect(Math.max(...deltas) - Math.min(...deltas)).toBeLessThan(2);
 
   await page.click('#undo-btn');
 
   await expect
     .poll(async () => {
-      const restored = await bar.boundingBox();
-      return restored !== null && Math.abs(restored.x - before!.x);
+      const restored = await barLefts(bars);
+      return Math.max(...restored.map((x, index) => Math.abs(x - before[index]!)));
     })
     .toBeLessThan(2);
 });
