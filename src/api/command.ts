@@ -112,8 +112,10 @@ export interface CommandRegistryOf<TGantt = unknown, TDataset = Dataset> {
    *  undoes itself when that plugin is uninstalled (D-S5-7). */
   register(command: CommandOf<TGantt, TDataset>): Disposer;
   run(id: string): void;
-  /** Commands whose `when` passes for this context, in registration order. */
-  available(ctx: CommandContextOf<TGantt, TDataset>): readonly CommandOf<TGantt, TDataset>[];
+  /** Commands whose `when` passes for this context, in registration order. #160: `ctx` is optional —
+   *  omit it and the registry builds the same live context `run(id)` already builds internally, so a
+   *  caller never hand-assembles one just to answer "what can run right now?". */
+  available(ctx?: CommandContextOf<TGantt, TDataset>): readonly CommandOf<TGantt, TDataset>[];
 }
 
 /** D-S5-7: newest-first resolution — the last registration gets first refusal, and a decline falls

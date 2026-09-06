@@ -279,14 +279,23 @@ ${DARK_COLOR_TOKENS}
 .fg-cell-editor-control { width: 100%; height: 100%; box-sizing: border-box; font: inherit; padding-inline: var(--fg-cell-padding-inline, 8px); border: 1px solid var(--fg-selection-color); border-radius: 3px; outline: none; background: var(--fg-pane-bg); color: var(--fg-row-label-color); box-shadow: 0 0 0 3px color-mix(in oklab, var(--fg-selection-color) 20%, transparent); }
 /* Invalid swaps the whole ring, not only the border colour, so the state is legible at a glance and
    not just to a reader comparing two 1px lines. */
-.fg-cell-editor[data-state='invalid'] .fg-cell-editor-control { border-color: var(--fg-warn); box-shadow: 0 0 0 3px color-mix(in oklab, var(--fg-warn) 22%, transparent); }
-/* The Refusal notice (#171): a .fg-cell-editor carrying a reason and no control. data-reason is what
-   tells it from a refused editor, which is invalid but does hold one. pointer-events: none is
-   load-bearing — the notice sits over the cell, and the next double-click must reach the cell.
+.fg-cell-editor[data-state='invalid'] .fg-cell-editor-control { border-color: var(--fg-warn); box-shadow: 0 0 0 3px color-mix(in oklab, var(--fg-warn) 22%, transparent); padding-inline-end: 22px; }
+/* #160, D-S5-47: the invalid editor's own discard button, laid over the control's own end edge —
+   .fg-cell-editor already establishes the positioning context. It comes after the control in the
+   markup, so it paints on top with no z-index. Not a .fg-cell-editor-control, so the rule above never
+   reaches it. */
+.fg-cell-editor-discard { position: absolute; top: 50%; right: 2px; transform: translateY(-50%); width: 18px; height: 18px; padding: 0; border: none; border-radius: 3px; background: none; font: inherit; line-height: 1; color: var(--fg-warn); cursor: pointer; }
+.fg-cell-editor-discard:hover, .fg-cell-editor-discard:focus-visible { background: color-mix(in oklab, var(--fg-warn) 18%, transparent); outline: none; }
+/* The Refusal notice (#171): a .fg-cell-editor carrying a reason and no control. #160, D-S5-47 put
+   data-reason on a refused *commit*'s own wrapper too, and that wrapper does hold a control (plus the
+   discard button above) — :not(:has(...)) is what still tells the two apart, now that data-reason
+   alone no longer does. pointer-events: none is load-bearing on the notice — it sits over the cell,
+   and the next double-click must reach the cell; an invalid editor keeps pointer-events: auto from the
+   base rule, so its own control and discard button both stay clickable.
    S5.12, D-S5-40: data-reason now holds the kebab-case Error report code. This rule matches the
    attribute and never one of its values, so the rename reaches no selector here. A consumer styling
    one reason writes [data-reason='derived-value'], which is also the code they read off the report. */
-.fg-cell-editor[data-state='invalid'][data-reason] { pointer-events: none; display: flex; align-items: center; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font: inherit; padding-inline: var(--fg-cell-padding-inline, 8px); border: 1px solid var(--fg-warn); background: var(--fg-pane-bg); color: var(--fg-warn); }
+.fg-cell-editor[data-state='invalid'][data-reason]:not(:has(.fg-cell-editor-control)) { pointer-events: none; display: flex; align-items: center; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font: inherit; padding-inline: var(--fg-cell-padding-inline, 8px); border: 1px solid var(--fg-warn); background: var(--fg-pane-bg); color: var(--fg-warn); }
 `.trim();
 
 /** Injects the library's base stylesheet into `doc` exactly once. Safe to call from every Gantt

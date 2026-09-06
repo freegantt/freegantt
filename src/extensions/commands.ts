@@ -76,8 +76,10 @@ export class CommandRegistry<TGantt = unknown> implements CommandRegistryOf<TGan
   }
 
   /** One command per id — the winning registration — in first-registration order, which is the
-   *  catalog order a menu reads (`available`'s own doc on `CommandRegistryOf`). */
-  available(ctx: CommandContextOf<TGantt>): readonly CommandOf<TGantt>[] {
-    return this.#commands.active().filter((command) => command.when === undefined || command.when(ctx));
+   *  catalog order a menu reads (`available`'s own doc on `CommandRegistryOf`). #160: an omitted `ctx`
+   *  builds the same live context `run(id)` already builds internally. */
+  available(ctx?: CommandContextOf<TGantt>): readonly CommandOf<TGantt>[] {
+    const resolved = ctx ?? this.#buildContext();
+    return this.#commands.active().filter((command) => command.when === undefined || command.when(resolved));
   }
 }

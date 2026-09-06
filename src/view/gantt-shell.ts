@@ -1278,6 +1278,9 @@ export class GanttShell {
       isColumnMovable: (key) => this.#columnChrome.isMovable(key),
       resizeColumnStep: (key, direction) => this.#columnChrome.resizeStep(key, direction),
       moveColumnStep: (key, direction) => this.#columnChrome.moveStep(key, direction),
+      // The shell owns no Cell editor, so it answers nothing here. `inlineEditing()` registers the
+      // real discard over this one while it is installed (#160, D-S5-47).
+      discardCellEdit: () => {},
     };
   }
 

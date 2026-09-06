@@ -161,7 +161,7 @@ export type CommandRegistry = CommandRegistryOf<Gantt>;
 
 // @public
 export interface CommandRegistryOf<TGantt = unknown, TDataset = Dataset> {
-    available(ctx: CommandContextOf<TGantt, TDataset>): readonly CommandOf<TGantt, TDataset>[];
+    available(ctx?: CommandContextOf<TGantt, TDataset>): readonly CommandOf<TGantt, TDataset>[];
     register(command: CommandOf<TGantt, TDataset>): Disposer;
     // (undocumented)
     run(id: string): void;

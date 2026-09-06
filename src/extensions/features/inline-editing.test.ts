@@ -164,9 +164,13 @@ function input(container: HTMLElement): HTMLInputElement {
 
 /** The refusal notice a cell mounts when it offers an editor that cannot open here (review SP1).
  *  It carries the same `.fg-cell-editor[data-state="invalid"]` a refused commit does, plus the
- *  machine-readable `data-reason` whose text the user reads. */
+ *  machine-readable `data-reason` whose text the user reads. #160, D-S5-47 put `data-reason` on a
+ *  refused *commit*'s own wrapper too, and that wrapper does hold a control — `:not(:has(...))` is
+ *  what still tells a notice from an invalid editor, the same distinction `view/styles.ts` draws. */
 function refusal(container: HTMLElement): HTMLElement | null {
-  return container.querySelector<HTMLElement>('.fg-cell-editor[data-state="invalid"][data-reason]');
+  return container.querySelector<HTMLElement>(
+    '.fg-cell-editor[data-state="invalid"][data-reason]:not(:has(.fg-cell-editor-control))',
+  );
 }
 
 function enter(el: HTMLElement): void {
@@ -204,7 +208,7 @@ describe('inlineEditing() (S5.8, D-S5-19/D-S5-20)', () => {
     container.remove();
   });
 
-  it('Escape reverts and writes nothing', () => {
+  it('Escape discards the edit and writes nothing (#160, D-S5-47)', () => {
     const { container, gantt, dataset } = makeGantt();
     const onChange = vi.fn();
     dataset.on('change', onChange);
@@ -548,6 +552,172 @@ describe('inlineEditing() (S5.8, D-S5-19/D-S5-20)', () => {
     container.remove();
   });
 
+  // #160, D-S5-47: the invalid editor's own exit, for a pointer user who does not know Escape.
+  describe('the invalid editor has a visible exit (#160, D-S5-47)', () => {
+    function discardButton(container: HTMLElement): HTMLButtonElement | null {
+      return container.querySelector<HTMLButtonElement>('.fg-cell-editor-discard');
+    }
+
+    it('a valid open editor shows no discard button, and a successful commit never grows one', () => {
+      const { container, gantt, dataset } = makeGantt();
+      dblclick(cellFor(container, 'e1', 'name'));
+      expect(discardButton(container)).toBeNull();
+
+      const el = input(container);
+      el.value = 'Renamed';
+      enter(el);
+
+      expect(dataset.entries.get('e1')!.name).toBe('Renamed');
+      expect(container.querySelector('.fg-cell-editor')).toBeNull();
+      gantt.destroy();
+      container.remove();
+    });
+
+    it('a beforeChange veto shows the discard button, naming the reason on the wrapper', () => {
+      const { container, gantt, dataset } = makeGantt();
+      dataset.on('beforeChange', () => false);
+      dblclick(cellFor(container, 'e1', 'name'));
+      const el = input(container);
+      el.value = 'Vetoed';
+      enter(el);
+
+      const button = discardButton(container)!;
+      expect(button).not.toBeNull();
+      expect(button.getAttribute('aria-label')).toBe('Discard edit');
+      expect(button.textContent).toBe('×');
+      const wrapper = container.querySelector<HTMLElement>('.fg-cell-editor[data-state="invalid"]')!;
+      expect(wrapper.dataset['reason']).toBe('refused-write');
+
+      gantt.destroy();
+      container.remove();
+    });
+
+    it('an invalid parseValue result names unreadable-value, and shows the discard button', () => {
+      const { container, gantt } = makeGantt();
+      dblclick(cellFor(container, 'e1', 'budget'));
+      const el = input(container);
+      el.value = 'not a number';
+      enter(el);
+
+      const wrapper = container.querySelector<HTMLElement>('.fg-cell-editor[data-state="invalid"]')!;
+      expect(wrapper.dataset['reason']).toBe('unreadable-value');
+      expect(discardButton(container)).not.toBeNull();
+
+      gantt.destroy();
+      container.remove();
+    });
+
+    it('clicking the discard button closes the editor and writes nothing', () => {
+      const { container, gantt, dataset } = makeGantt();
+      dataset.on('beforeChange', () => false);
+      dblclick(cellFor(container, 'e1', 'name'));
+      input(container).value = 'Vetoed';
+      enter(input(container));
+
+      discardButton(container)!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+      expect(container.querySelector('.fg-cell-editor')).toBeNull();
+      expect(dataset.entries.get('e1')!.name).toBe('Task One');
+      gantt.destroy();
+      container.remove();
+    });
+
+    it("gantt.commands.run('freegantt.discardCellEdit') closes the editor and writes nothing", () => {
+      const { container, gantt, dataset } = makeGantt();
+      dataset.on('beforeChange', () => false);
+      dblclick(cellFor(container, 'e1', 'name'));
+      input(container).value = 'Vetoed';
+      enter(input(container));
+      expect(container.querySelector('.fg-cell-editor')).not.toBeNull();
+
+      gantt.commands.run('freegantt.discardCellEdit');
+
+      expect(container.querySelector('.fg-cell-editor')).toBeNull();
+      expect(dataset.entries.get('e1')!.name).toBe('Task One');
+      gantt.destroy();
+      container.remove();
+    });
+
+    it("the command's when declines with no editor open, and run() is then a silent no-op", () => {
+      const { container, gantt, dataset } = makeGantt();
+      expect(container.querySelector('.fg-cell-editor')).toBeNull();
+
+      expect(() => gantt.commands.run('freegantt.discardCellEdit')).not.toThrow();
+      expect(gantt.commands.available().map((c) => c.id)).not.toContain('freegantt.discardCellEdit');
+      expect(dataset.entries.get('e1')!.name).toBe('Task One');
+      gantt.destroy();
+      container.remove();
+    });
+
+    it('blur while invalid does not re-commit and does not pull focus back (Q4)', () => {
+      const { container, gantt, dataset } = makeGantt();
+      dataset.on('beforeChange', () => false);
+      dblclick(cellFor(container, 'e1', 'name'));
+      const el = input(container);
+      el.value = 'Vetoed';
+      enter(el);
+      expect(container.querySelector('.fg-cell-editor[data-state="invalid"]')).not.toBeNull();
+
+      // A second `#markInvalid()` call would call `el.focus()` again — the trap this issue closes.
+      const focusSpy = vi.spyOn(el, 'focus');
+      el.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
+
+      expect(focusSpy).not.toHaveBeenCalled();
+      expect(container.querySelector('.fg-cell-editor[data-state="invalid"]')).not.toBeNull();
+      expect(dataset.entries.get('e1')!.name).toBe('Task One');
+
+      gantt.destroy();
+      container.remove();
+    });
+
+    it("the discard button joins the invalid editor's focus cycle (Q6)", () => {
+      const { container, gantt } = makeGantt();
+      dblclick(cellFor(container, 'e1', 'budget'));
+      const el = input(container);
+      el.value = 'not a number';
+      enter(el);
+      const button = discardButton(container)!;
+
+      // `activateFocusTrap` only ever moves focus by explicit call, on the wrap-around edges — a
+      // plain forward Tab from the control relies on the browser's own tab order, which this test
+      // environment does not simulate. Both wraps below are the trap's own JS, and both prove the
+      // button is a second stop in the cycle rather than the pre-#160 single-item loop.
+      el.focus();
+      el.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true, cancelable: true }),
+      );
+      expect(document.activeElement).toBe(button);
+
+      button.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true }));
+      expect(document.activeElement).toBe(el);
+
+      gantt.destroy();
+      container.remove();
+    });
+
+    it('a second cell double-clicked over an invalid editor still raises unsaved-value (C2 unbroken)', () => {
+      const { container, gantt, dataset } = makeGantt();
+      dataset.on('beforeChange', () => false);
+      dblclick(cellFor(container, 'e1', 'name'));
+      input(container).value = 'Vetoed';
+      enter(input(container));
+
+      dblclick(cellFor(container, 'e1', 'budget'));
+
+      const notice = refusal(container)!;
+      expect(notice).not.toBeNull();
+      expect(notice.dataset['reason']).toBe('unsaved-value');
+      // The first editor is still there, still invalid: opening a second cell never orphaned it.
+      expect(
+        container.querySelector('.fg-cell-editor[data-state="invalid"] .fg-cell-editor-control'),
+      ).not.toBeNull();
+      expect(dataset.entries.get('e1')!.name).toBe('Task One');
+
+      gantt.destroy();
+      container.remove();
+    });
+  });
+
   it('#158: the editor mounts in the grid row layer, so a scroll carries it with its cell', () => {
     const { container, gantt, dataset } = makeGantt();
     dataset.on('beforeChange', () => false);
@@ -800,7 +970,8 @@ describe('CellEditorSession (S5.8, review A5/C2b)', () => {
       writeValue: () => {},
       announceEntryEdit: () => {},
       requestCommit: () => {},
-      requestRevert: () => {},
+      requestDiscard: () => {},
+      runDiscardCommand: () => {},
       raiseError: () => {},
       ...overrides,
     };
@@ -852,7 +1023,7 @@ describe('CellEditorSession (S5.8, review A5/C2b)', () => {
     expect(session.element.dataset['state']).toBe('invalid');
     expect(session.element.isConnected).toBe(true);
 
-    session.revert();
+    session.discard();
     expect(session.element.isConnected).toBe(false);
   });
 
@@ -925,7 +1096,8 @@ describe('CellEditing (S5.8, #169)', () => {
       writeValue: () => {},
       announceEntryEdit: () => {},
       requestCommit: () => {},
-      requestRevert: () => {},
+      requestDiscard: () => {},
+      runDiscardCommand: () => {},
       raiseError: (report) => reported.push(report),
       ...overrides,
     };
