@@ -7,7 +7,7 @@
 
 import { placeFrame } from './frame.js';
 import type { GeometryFrame, LayoutInput } from './frame.js';
-import { FrameMemory } from './frame-memory.js';
+import { FrameMemory, NO_SEGMENT_IDS } from './frame-memory.js';
 import { DecorationRunner } from './decorations.js';
 import type { PlannedRow, UnindexedRow } from './rows/row-source.js';
 import { resolveOpenRows, stampIndex } from './rows/resolve-rows.js';
@@ -172,6 +172,3 @@ export class FrameLayout {
 
 /** Shared, so a row that owns nothing costs no allocation on the pointer path (I5). */
 const NO_ENTRY_IDS: readonly EntryId[] = Object.freeze([]);
-
-/** Shared for the same reason — a node that stands for no Segment allocates nothing (#212, I5). */
-const NO_SEGMENT_IDS: readonly SegmentId[] = Object.freeze([]);
