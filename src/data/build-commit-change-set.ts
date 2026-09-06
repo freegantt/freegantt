@@ -18,7 +18,7 @@ import type {
   StoreRowUpdated,
 } from '../model/index.js';
 import { diffEdit, foldChangeSet } from './change-set.js';
-import type { EditExtender, EntryEdits } from './edit-extension.js';
+import type { EditExtender, StoredEdits } from './edit-extension.js';
 import { reconcileExtenderEdits } from './entry-reader.js';
 import { buildEffectiveEntries } from './entry-tree.js';
 import { mergeEntryEdits, overlayStoredEdit, proposedKeysOf } from './fields/field-access.js';
@@ -33,7 +33,7 @@ export interface CommitChangeSetEntryStore {
   committedById(): ReadonlyMap<EntryId, Entry>;
   pendingAdded(): readonly EntityAdded[];
   pendingRemoved(): readonly EntityRemoved[];
-  pendingEdits(): EntryEdits;
+  pendingEdits(): StoredEdits;
 }
 
 /** Staged plugin-store state the commit pipeline reads — mirrors `TransactionalPluginStores` without
@@ -56,7 +56,7 @@ export interface CommitChangeSetInput {
 
 export function diffEdits(
   byId: ReadonlyMap<EntryId, Entry>,
-  edits: EntryEdits,
+  edits: StoredEdits,
   fields: FieldRegistry,
   ctx: FieldContext,
 ): FieldUpdated[] {
@@ -85,7 +85,7 @@ function fieldsWrittenBy(edit: StoredEdit): ReadonlySet<string> {
   return keys;
 }
 
-function guardExtensionHookDoesNotOverwriteBody(proposed: EntryEdits, extenderEdits: EntryEdits): void {
+function guardExtensionHookDoesNotOverwriteBody(proposed: StoredEdits, extenderEdits: StoredEdits): void {
   if (!isDevMode()) return;
   for (const [id, edit] of extenderEdits) {
     const bodyEdit = proposed.get(id);

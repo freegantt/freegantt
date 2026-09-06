@@ -102,6 +102,10 @@ export type StoredEdit = Partial<Omit<Entry, 'id'>> & {
   readonly proposedKeys?: ReadonlySet<string>;
 };
 
+/** A map of `StoredEdit`s, keyed by the `EntryId` each one targets — what `EditRequest.proposed`
+ *  carries, and what `entries.pendingEdits()` and a Draft (`layout/gesture-draft.ts`) hold. */
+export type StoredEdits = ReadonlyMap<EntryId, StoredEdit>;
+
 export type EntryEdits = ReadonlyMap<EntryId, StoredEdit>;
 
 /** What the extension hook reads (D4, D-S2-6). It carries the same three members on a preview call
@@ -112,8 +116,10 @@ export interface EditRequest {
    *  delta (what moved, and by how much). Unlike `entryAfterEdits` below, this never reflects this
    *  transaction's own body edits (D-S5-45). */
   entries: ReadonlyMap<EntryId, Entry>;
-  /** What the caller asked to change. */
-  proposed: EntryEdits;
+  /** What the caller asked to change — storage-shaped and complete, the same as `entries` above
+   *  (`plans/02`, "core fills zone math"): a cascade compares it against `entries` with no
+   *  normalizing step of its own. */
+  proposed: StoredEdits;
   /** `id` as this transaction's own body edits leave it: committed state overlaid with `proposed`
    *  (and, at commit, this transaction's own adds). `undefined` when `id` names no entry there either.
    *  `entries.get(id)` is the wrong read for judging an in-flight edit against current shape — it

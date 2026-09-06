@@ -18,7 +18,7 @@ import type {
 import { MutationCancelledError, MutationDuringNotificationError } from '../model/index.js';
 import { buildCommitChangeSet, diffEdits } from './build-commit-change-set.js';
 import { raiseErrorOn } from './error-reporting.js';
-import type { EditExtender, EntryEdits } from './edit-extension.js';
+import type { EditExtender, StoredEdits } from './edit-extension.js';
 import type { EventBus } from './event-bus.js';
 import { promoteNewParents } from './hierarchy.js';
 import { rollUpFields } from './rollup.js';
@@ -40,7 +40,7 @@ export interface TransactionalEntryStore {
   beginTransaction(token: TxToken): void;
   pendingAdded(): readonly { store: 'entries'; entity: Entry }[];
   pendingRemoved(): readonly { store: 'entries'; entity: Entry }[];
-  pendingEdits(): EntryEdits;
+  pendingEdits(): StoredEdits;
   endTransaction(token: TxToken, changeSet: ChangeSet | undefined): void;
   /** Writes Field rows into committed entries with no `beforeChange`/`change` and no history. */
   writeCommittedFieldRows(updated: readonly FieldUpdated[]): void;

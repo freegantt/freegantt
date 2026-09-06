@@ -76,7 +76,6 @@ import type {
   ChangeSet,
   Dataset,
   Entry,
-  EntryEdits,
   EntryId,
   FieldKey,
   GridColumnInput,
@@ -87,6 +86,7 @@ import type {
   RowId,
   SegmentId,
   Size,
+  StoredEdits,
   TimeSpan,
 } from '../model/index.js';
 import { segmentIdsDroppedBy } from '../data/change-set.js';
@@ -201,7 +201,7 @@ export interface GanttShellWiring {
    *  transaction". So `api/gantt.ts`, which holds the full `api/Dataset` the model interface narrows
    *  away, supplies this instead. It answers `false` for a sync veto and for a
    *  `MutationCancelledError` from `beforeChange`. The shell never sees the exception either way. */
-  commitEntryEdits?: (edits: EntryEdits) => boolean;
+  commitEntryEdits?: (edits: StoredEdits) => boolean;
   /** S5.1, D-S5-1: fills the api-level pieces of a plugin's `PluginContext`. `view/` cannot type
    *  those without reaching past its own boundary (D-S5-5). They are the full api `Dataset` and the
    *  public `Gantt` façade. `model/dataset.ts`'s narrow interface hides `.transaction()`, the same

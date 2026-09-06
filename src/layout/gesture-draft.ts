@@ -1,17 +1,17 @@
 // layout/ — the pure gesture math a drag needs (plans/s3-direct-manipulation/s3.3-drag-move.md
-// D-S3-4). `interaction/` performs no arithmetic of its own — it receives a `Draft` (an `EntryEdits`,
+// D-S3-4). `interaction/` performs no arithmetic of its own — it receives a `Draft` (a `StoredEdits`,
 // D-S3-2) from `GesturePipeline.session()` (`#draftFor`), which calls `draftForMove` here.
 // Every date computation goes through `time/` (I10); this file never touches an Instant except by
 // calling one of those functions.
 
 import type {
   Entry,
-  EntryEdits,
   EntryId,
   Instant,
   ItemId,
   SegmentId,
   StoredEdit,
+  StoredEdits,
   TimeUnit,
 } from '../model/index.js';
 import { itemId } from '../model/index.js';
@@ -50,7 +50,7 @@ export interface DraftInput {
  *  (D-S3-3, D-S3-19). What paints selected is what moves (#211, #212): an Entry moves the Segments
  *  the Selection holds, and rewrites the envelope around them. A Selection that holds every Segment
  *  moves the whole Entry. Empty when `input.entries` is empty — a gesture with nothing to move. */
-export function draftForMove(input: DraftInput): EntryEdits {
+export function draftForMove(input: DraftInput): StoredEdits {
   const { zone, scale, snap, entries, dxPx, selectedSegmentIds } = input;
   const anchor = entries[0];
   if (!anchor) return new Map();
@@ -90,7 +90,7 @@ export function draftForMove(input: DraftInput): EntryEdits {
  *  is what the handles bracket (#211, #212). A resize reaches only the one selected Segment that
  *  holds the dragged edge: the `start` handle moves the earliest selected Segment's start, the `end`
  *  handle moves the latest selected Segment's end, and every sibling stays where it is. */
-export function draftForResize(input: DraftInput & { edge: 'start' | 'end' }): EntryEdits {
+export function draftForResize(input: DraftInput & { edge: 'start' | 'end' }): StoredEdits {
   const { zone, scale, snap, entries, dxPx, edge, selectedSegmentIds } = input;
   const anchor = entries[0];
   if (!anchor) return new Map();
@@ -241,9 +241,9 @@ export interface ItemPreview {
 
 export interface PreviewOffsetsInput {
   /** The caller's own draft. */
-  proposed: EntryEdits;
+  proposed: StoredEdits;
   /** Extension-hook extras layered on top (S3.6). Empty until then. */
-  extra: EntryEdits;
+  extra: StoredEdits;
   /** Committed entries `proposed`/`extra` are diffed against — one lookup per row, not a dataset scan. */
   entries: readonly Entry[];
   scale: TimeScale;

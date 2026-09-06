@@ -28,7 +28,7 @@ import type {
   TimeSpan,
 } from '../model/index.js';
 import { addMs, diffMs, envelopeOfSegments, toEndInstant, toInstant } from '../time/index.js';
-import type { EntryEdits, StoredEdit } from './edit-extension.js';
+import type { StoredEdit, StoredEdits } from './edit-extension.js';
 import { withProposedKeys, writeDeclaredMetaFields } from './fields/field-access.js';
 import type { FieldRegistry } from './fields/field-registry.js';
 
@@ -321,7 +321,10 @@ export function moveEntryTo(entry: Entry, start: Instant): StoredEdit {
  * An id `entries` does not carry — nothing this caller knows the current Segments of — passes its edit
  * through unreconciled; there is nothing to reconcile against.
  */
-export function reconcileExtenderEdits(entries: ReadonlyMap<EntryId, Entry>, edits: EntryEdits): EntryEdits {
+export function reconcileExtenderEdits(
+  entries: ReadonlyMap<EntryId, Entry>,
+  edits: StoredEdits,
+): StoredEdits {
   let changed = false;
   const reconciled = new Map<EntryId, StoredEdit>();
   for (const [id, edit] of edits) {
@@ -343,8 +346,8 @@ export function reconcileExtenderEdits(entries: ReadonlyMap<EntryId, Entry>, edi
  */
 export function reconcileExtenderEditsForPreview(
   entries: ReadonlyMap<EntryId, Entry>,
-  edits: EntryEdits,
-): EntryEdits {
+  edits: StoredEdits,
+): StoredEdits {
   let changed = false;
   const reconciled = new Map<EntryId, StoredEdit>();
   for (const [id, edit] of edits) {

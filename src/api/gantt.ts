@@ -23,7 +23,6 @@ import type {
 } from '../layout/index.js';
 import type {
   Entry,
-  EntryEdits,
   EntryId,
   FieldKey,
   GridColumnInput,
@@ -32,6 +31,7 @@ import type {
   PluginId,
   RowId,
   SegmentId,
+  StoredEdits,
   TimeSpan,
 } from '../model/index.js';
 import { attemptMutation } from './attempt-mutation.js';
@@ -229,7 +229,7 @@ export class Gantt {
         // S3.3, D-S3-16: `GanttShell`'s own `dataset` option is `model/`'s narrow `Dataset`
         // interface ("a view never opens a transaction"). This class holds the full `api/Dataset`,
         // so a committed gesture draft reaches the store through here, not through the shell.
-        commitEntryEdits: (edits: EntryEdits) =>
+        commitEntryEdits: (edits: StoredEdits) =>
           attemptMutation(() => {
             options.dataset.transaction(() => {
               for (const [id, edit] of edits) options.dataset.entries.update(id, edit);

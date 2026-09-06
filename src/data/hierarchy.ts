@@ -3,19 +3,19 @@
 // `data/transaction.ts` (construction path) name it (`autogroup-is-removable`); delete this file and
 // autoGroup never runs — the consumer must set Kind themselves (D-S4-18).
 
-import type { DatasetHierarchy, Entry, EntryEdits, EntryId, StoredEdit } from '../model/index.js';
+import type { DatasetHierarchy, Entry, EntryId, StoredEdit, StoredEdits } from '../model/index.js';
 import { buildEffectiveEntries, childCountByParent } from './entry-tree.js';
 
-const EMPTY_EDITS: EntryEdits = Object.freeze(new Map());
+const EMPTY_EDITS: StoredEdits = Object.freeze(new Map());
 
 /** Adds, removes and overlays the commit path has not written yet. Construction omits this. */
 export interface PendingHierarchy {
   readonly added: readonly Entry[];
   readonly removed: readonly Entry[];
-  readonly edits: EntryEdits;
+  readonly edits: StoredEdits;
 }
 
-function kindIsProposed(edits: EntryEdits, id: EntryId): boolean {
+function kindIsProposed(edits: StoredEdits, id: EntryId): boolean {
   const edit = edits.get(id);
   return edit !== undefined && 'kind' in edit;
 }
@@ -29,7 +29,7 @@ export function promoteNewParents(
   entries: ReadonlyMap<EntryId, Entry>,
   proposed: PendingHierarchy | undefined,
   hierarchy: DatasetHierarchy,
-): EntryEdits {
+): StoredEdits {
   if (!hierarchy.autoGroup) return EMPTY_EDITS;
 
   const effective =

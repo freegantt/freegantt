@@ -528,7 +528,7 @@ export type EditExtender = (request: EditRequest) => EntryEdits;
 export interface EditRequest {
     entries: ReadonlyMap<EntryId, Entry>;
     entryAfterEdits(id: EntryId): Entry | undefined;
-    proposed: EntryEdits;
+    proposed: StoredEdits;
 }
 
 // @public
@@ -1823,6 +1823,9 @@ export type SnapSetting = TickStep | 'tick' | 'none';
 export type StoredEdit = Partial<Omit<Entry, 'id'>> & {
     readonly proposedKeys?: ReadonlySet<string>;
 };
+
+// @public
+export type StoredEdits = ReadonlyMap<EntryId, StoredEdit>;
 
 // @public (undocumented)
 export type StoreName = 'entries' | PluginStoreName;
