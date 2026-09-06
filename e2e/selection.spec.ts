@@ -272,5 +272,5 @@ test('a right-click keeps a multi-bar Selection when it lands inside it, and cle
   // A right-click on an empty timeline point still clears the Selection (#199/#205 follow-up).
   const empty = await emptyTimelinePoint(page);
   await page.mouse.click(empty.x, empty.y, { button: 'right' });
-  await expect(readout).toHaveText('Selection: (none)');
+  await expect(readout).toHaveText('No selection');
 });
