@@ -2,10 +2,11 @@
 // DatasetState the way a consumer would reach them (`dataset.entries.add(...)`), not through the
 // TxToken-gated staging methods `transaction.test.ts` uses directly.
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { DatasetState } from './dataset-state.js';
 import { fieldRowsOf } from './change-set.js';
 import { identityExtender } from './edit-extension.js';
+import * as fieldAccess from './fields/field-access.js';
 import {
   DuplicateEntryIdError,
   DuplicateSegmentIdError,
@@ -485,6 +486,114 @@ describe('entryIdOfSegment / entryIdsOfSegments (#212, ADR 0010, fix plan R4)', 
       entryId('b'),
       entryId('a'),
     ]);
+  });
+});
+
+describe('Segment→Entry index review fixes (#212, 2026-09-05 review)', () => {
+  it('B2: a remove-then-re-add of one EntryId in one transaction forgets the replaced object’s Segments', () => {
+    const state = dataset([{ id: 't9', segments: [{ id: 'old', start: 0, end: 1 }] }]);
+
+    state.transaction(() => {
+      state.entries.remove('t9');
+      state.entries.add({
+        id: 't9',
+        name: 't9',
+        start: 0,
+        end: 1,
+        segments: [{ id: 'new', start: 0, end: 1 }],
+      });
+    });
+
+    expect(state.entries.entryIdOfSegment('old')).toBeUndefined();
+    expect(state.entries.entryIdOfSegment('new')).toBe(entryId('t9'));
+    expect(() => state.entries.removeSegments(['old'])).toThrow(SegmentNotFoundError);
+  });
+
+  it('B3: a Segment handed from one Entry to another in one transaction resolves to the new owner, regardless of edit order', () => {
+    const state = dataset([
+      { id: 'a', segments: [{ id: 'sg1', start: 0, end: 1 }] },
+      { id: 'b', segments: [{ id: 'sg3', start: 0, end: 1 }] },
+    ]);
+
+    state.transaction(() => {
+      state.entries.update('b', { name: 'b2' }); // 'b' enters the edits map first
+      state.entries.update('a', { segments: [{ id: 'sg2', start: 0, end: 1 }] }); // 'a' frees sg1
+      state.entries.update('b', {
+        segments: [
+          { id: 'sg3', start: 0, end: 1 },
+          { id: 'sg1', start: 0, end: 1 },
+        ],
+      }); // 'b' takes sg1
+    });
+
+    expect(state.entries.entryIdOfSegment('sg1')).toBe(entryId('b'));
+    expect(state.entries.entryIdOfSegment('sg2')).toBe(entryId('a'));
+  });
+
+  it('B4: replacing an Entry wholesale and reusing its old SegmentId on a different Entry, in one transaction, does not throw', () => {
+    const state = dataset([{ id: 'a', segments: [{ id: 'sg1', start: 0, end: 1 }] }]);
+
+    expect(() => {
+      state.transaction(() => {
+        state.entries.remove('a');
+        state.entries.add({
+          id: 'a',
+          name: 'a',
+          start: 0,
+          end: 1,
+          segments: [{ id: 'sgX', start: 0, end: 1 }],
+        });
+        state.entries.add({
+          id: 'b',
+          name: 'b',
+          start: 0,
+          end: 1,
+          segments: [{ id: 'sg1', start: 0, end: 1 }],
+        });
+      });
+    }).not.toThrow();
+
+    expect(state.entries.entryIdOfSegment('sgX')).toBe(entryId('a'));
+    expect(state.entries.entryIdOfSegment('sg1')).toBe(entryId('b'));
+  });
+
+  /** A multi-select Delete: one Segment removed from every Entry of `entryCount`, all in one
+   *  transaction — the shape a `removeSegments` call takes from a keyboard delete on a large
+   *  selection. Returns how many times `overlayStoredEdit` ran rebuilding an overlay Entry, the
+   *  cost the old `#liveSegmentOwner` paid once per already-edited id for every Segment id it
+   *  checked (quadratic in `entryCount`). */
+  function overlayCallsForMultiSegmentDelete(entryCount: number): number {
+    const overlaySpy = vi.spyOn(fieldAccess, 'overlayStoredEdit');
+    const state = dataset(
+      Array.from({ length: entryCount }, (_, index) => ({
+        id: `e${index}`,
+        start: 0,
+        end: 2,
+        segments: [
+          { id: `e${index}-a`, start: 0, end: 1 },
+          { id: `e${index}-b`, start: 1, end: 2 },
+        ],
+      })),
+    );
+    overlaySpy.mockClear();
+
+    state.entries.removeSegments(Array.from({ length: entryCount }, (_, index) => `e${index}-a`));
+
+    const calls = overlaySpy.mock.calls.length;
+    overlaySpy.mockRestore();
+    return calls;
+  }
+
+  it("S1: checking a transaction's Segment ids for uniqueness scales with entryCount, not entryCount²", () => {
+    const small = overlayCallsForMultiSegmentDelete(100);
+    const large = overlayCallsForMultiSegmentDelete(400);
+
+    // The fix reads Segment ownership straight off `WriteSet.segmentOwner` — one map lookup per
+    // id — so a 4x larger transaction costs at most a small multiple more overlay rebuilds, the
+    // ones `get()`/`readEdit` already pay once per Entry regardless of this fix. Before the fix,
+    // the same 4x grew the call count roughly 16x (quadratic): each Entry's uniqueness check
+    // rebuilt an overlay for every id already staged ahead of it.
+    expect(large).toBeLessThan(small * 4 + 50);
   });
 });
 
