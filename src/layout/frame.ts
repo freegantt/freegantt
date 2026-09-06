@@ -80,7 +80,11 @@ export function barSpan(
   const floorMultiplier = KIND_SPAN_FLOOR_MULTIPLIER[entry.kind];
   const kindFloor = floorMultiplier === undefined ? 0 : diamondSizePx * floorMultiplier;
   const floor = Math.max(kindFloor, minBarWidthPx);
-  if (width < floor) return { x: x - floor / 2, width: floor, minimumSpan: true };
+  // Centred on the span's own midpoint, so a floored bar keeps the instant it points at. A zero-width
+  // bar (a milestone, or a `start === end` span) has its start for a midpoint, so this reads as the
+  // milestone rule it grew out of; a 5px bar the floor widens to 12px keeps its own centre instead of
+  // sliding left onto its start.
+  if (width < floor) return { x: x - (floor - width) / 2, width: floor, minimumSpan: true };
   return { x, width, minimumSpan: false };
 }
 
