@@ -67,10 +67,11 @@ export function attachEntryGestures(
   container: HTMLElement,
   ctx: EntryGestureContext,
 ): Detachable {
-  /** Last plain- or ctrl-clicked capable entry — shift-click's range end. Cleared on an empty-click
-   *  or Escape clear, so a shift-click right after either one degenerates to selecting just its
-   *  target (there is no prior anchor to range from). */
-  let anchor: EntryId | undefined;
+  /** Last plain- or ctrl-clicked capable Segment — shift-click's range end (#212, ADR 0010). The
+   *  Selection holds Segments, so the anchor names one too. Cleared on an empty-click or Escape
+   *  clear, so a shift-click right after either one degenerates to selecting just its target (there
+   *  is no prior anchor to range from). */
+  let anchor: SegmentId | undefined;
 
   /** Set on pointerdown when the hit is a `move`-capable bar or a `resize`-capable handle; cleared
    *  once the pointer stream for that gesture ends (commit or cancel), never read past that point. */
@@ -103,7 +104,7 @@ export function attachEntryGestures(
         const grabbedSegments = ctx.segmentsForItem(grabbedItemId);
         const selected = ctx.selection.get();
         if (!grabbedSegments.some((id) => selected.includes(id))) {
-          anchor = grabbedId;
+          anchor = grabbedSegments[0];
           ctx.selection.propose(grabbedSegments);
         }
       }
@@ -138,16 +139,22 @@ export function attachEntryGestures(
     },
   });
 
-  /** The range from the shift-anchor to `to`'s last member (#185). A row that owns several Entries
-   *  ends the range on its last one; a bar hit passes a list of one, exactly as before. */
-  function selectRange(to: readonly EntryId[]): readonly EntryId[] {
-    const order = ctx.selectableEntriesInRowOrder();
+  /** The range from the shift-anchor to `to`'s last member (#212, ADR 0010). The Selection holds
+   *  Segments, so the range steps over Segments in the order the panes draw them: row by row, and
+   *  inside a row the order that row's Entries draw their own Segments. A row click names every
+   *  Segment the row owns, so that row's last Segment ends the range.
+   *
+   *  It ranges over Segments rather than whole rows so that a shift-click selects what the pointer
+   *  crossed. Ranging over rows selected every Segment of every row the range touched, including
+   *  the ones before the anchor and after the target inside those two end rows. */
+  function selectRange(to: readonly SegmentId[]): readonly SegmentId[] {
+    const order = ctx.selectableSegmentsInRowOrder();
     const fromIndex = anchor !== undefined ? order.indexOf(anchor) : -1;
     const toIndex = order.indexOf(to[to.length - 1]!);
     if (fromIndex === -1 || toIndex === -1) return to;
     const [lo, hi] = fromIndex <= toIndex ? [fromIndex, toIndex] : [toIndex, fromIndex];
-    // No capability filter here: `selectableEntriesInRowOrder()` is already capability-filtered, and
-    // the capability resolves once, in the shell (I14).
+    // No capability filter here: `selectableSegmentsInRowOrder()` is already capability-filtered,
+    // and the capability resolves once, in the shell (I14).
     return order.slice(lo, hi + 1);
   }
 
@@ -206,15 +213,12 @@ export function attachEntryGestures(
     if (targets.length === 0) return;
 
     if (e.shiftKey) {
-      // A range spans whole rows, so it selects every Segment of every Entry it covers: narrowing
-      // the one bar the range ended on while its neighbours light whole would read as two kinds of
-      // selection at once.
-      const next = ctx.segmentsOfEntries(selectRange(selectableEntriesOf(hit)));
+      const next = selectRange(targets);
       if (next.length > 0) ctx.selection.propose(next);
       return;
     }
 
-    anchor = selectableEntriesOf(hit)[0];
+    anchor = targets[0];
 
     if (e.ctrlKey || e.metaKey) {
       ctx.selection.propose(toggled(targets));
@@ -238,14 +242,6 @@ export function attachEntryGestures(
     if (hit.kind === 'row') return ctx.segmentsOfEntries(ctx.entriesForRow(hit.rowId));
     const entry = ctx.entryFor(hit.itemId);
     return entry !== undefined && ctx.can('select', entry) ? ctx.segmentsForItem(hit.itemId) : [];
-  }
-
-  /** The Entries this hit stands for (#185) — the shift-anchor and the shift-range both step over
-   *  whole rows, so they name Entries even though the Selection holds Segments. */
-  function selectableEntriesOf(hit: EntryHit): readonly EntryId[] {
-    if (hit.kind === 'row') return ctx.entriesForRow(hit.rowId);
-    const entry = ctx.entryFor(hit.itemId);
-    return entry !== undefined && ctx.can('select', entry) ? [entry.id] : [];
   }
 
   /** Ctrl/⌘ moves the whole list at once: it removes the list when every member is already

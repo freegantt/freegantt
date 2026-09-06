@@ -62,8 +62,12 @@ export interface EntryGestureContext {
   entryFor(itemId: ItemId): Entry | undefined;
   /** One resolution (I14, D-S3-9) — `view/capability.ts`'s answer for `entry` on `capability`. */
   can(capability: keyof Interactions, entry: Entry): boolean;
-  /** The selectable entries in resolved row order — shift-click ranges over this list (D-S4-32). */
+  /** The selectable entries in resolved row order — a keyboard row step walks this list (D-S4-32). */
   selectableEntriesInRowOrder(): readonly EntryId[];
+  /** Every selectable Segment in the order the panes draw it (#212, ADR 0010) — row by row, and
+   *  inside a row the order that row's Entries draw their own Segments. Shift-click ranges over
+   *  this list, because the Selection holds Segments and a range must name the same unit. */
+  selectableSegmentsInRowOrder(): readonly SegmentId[];
   /** The selectable Entries one row owns, in the row's own order (#185). A row click selects all of
    *  them. Empty for a header row, and for a row whose every Entry refuses `select` — the capability
    *  is resolved here, once (I14), so `interaction/` still performs no lookups of its own. */

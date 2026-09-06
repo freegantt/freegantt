@@ -110,12 +110,18 @@ function workstreamOf(id: string): string | undefined {
   return undefined;
 }
 
-function overlappingSegments(start: InstantInput, end: InstantInput) {
+/** Three Segments of one Entry, each separated by a gap. They do not overlap, so the pointer can
+ *  land on every one of them: a Segment drawn under another cannot be picked (#215), and a row has
+ *  no lane rule to draw overlapping Segments apart yet (#217). Until those close, an overlapping
+ *  demo fixture makes ctrl-click multi-select look broken — both clicks reach the same top Segment,
+ *  and the second one toggles the first back off. */
+function separateSegments(start: InstantInput) {
   const startMs = instant(start);
+  const day = (count: number) => addMs(startMs, count * MS.DAY);
   return [
-    { start: startMs, end: addMs(startMs, 4 * MS.DAY) },
-    { start: addMs(startMs, MS.DAY), end: addMs(startMs, 5 * MS.DAY) },
-    { start: addMs(startMs, 2 * MS.DAY), end: instant(end) },
+    { start: day(0), end: day(2) },
+    { start: day(3), end: day(5) },
+    { start: day(6), end: day(9) },
   ];
 }
 
@@ -180,8 +186,11 @@ export const demoTreeEntryInputs: EntryInput<DemoMeta>[] = [
     if (entry.end !== undefined) next.end = entry.end;
     if (parentId !== undefined) next.parentId = parentId;
     if (id === 'entry-4') next.kind = 'milestone';
-    if (id === 'entry-16' && entry.start !== undefined && entry.end !== undefined) {
-      next.segments = overlappingSegments(entry.start, entry.end);
+    if (id === 'entry-16' && entry.start !== undefined) {
+      // The Entry's own span must cover every Segment it draws, so `end` moves out to the last
+      // Segment's end rather than keeping the 3-day span `sample-dataset.ts` authored.
+      next.segments = separateSegments(entry.start);
+      next.end = next.segments[next.segments.length - 1]!.end;
     }
     if (Object.keys(meta).length > 0) next.meta = meta;
     return next;

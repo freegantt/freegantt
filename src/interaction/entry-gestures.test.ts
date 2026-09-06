@@ -85,6 +85,11 @@ function makeContext(overrides: Partial<EntryGestureContext> & SessionOverrides 
     // The fake answers the same question, so a test that makes an Entry incapable drops it from the
     // order rather than expecting `interaction/` to filter a second time.
     selectableEntriesInRowOrder: () => ORDER.filter((id) => ctx.can('select', entryFor(id))),
+    // #212: the same row walk, one step further down — every selectable Entry's own Segments, in
+    // the order the panes draw them. Shift-click ranges over this, so a test that makes an Entry
+    // incapable drops its Segments from the range too.
+    selectableSegmentsInRowOrder: () =>
+      ctx.segmentsOfEntries(ORDER.filter((id) => ctx.can('select', entryFor(id)))),
     // #185: a row hit resolves through this seam — the fake maps one row id to the Entry of the
     // same name, so a test that wants a multi-entry row overrides it.
     entriesForRow: (id) => (ORDER.includes(id as unknown as EntryId) ? [id as unknown as EntryId] : []),

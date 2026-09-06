@@ -2905,23 +2905,42 @@ describe('Gantt selection over Segments (ADR 0010, #212)', () => {
     container.remove();
   });
 
-  it('a shift-range over rows collects every Segment those rows own', () => {
-    const { container, gantt } = makeSegmentedGantt();
+  /** Shift-ranges from the `plain` row to `segmentId`, and reports what ends up selected. */
+  function shiftRangeFromPlainTo(container: HTMLElement, segmentId: string): void {
     const plainBar = container.querySelector<HTMLElement>('.fg-bar[data-item-id="plain:0"]')!;
-
     clickTimelineOn(container, plainBar);
     const original = document.elementFromPoint.bind(document);
-    const splitBar = container.querySelector<HTMLElement>('.fg-bar[data-segment-id="split-a"]')!;
-    document.elementFromPoint = (x: number, y: number) => (x === 5 && y === 5 ? splitBar : original(x, y));
+    const target = container.querySelector<HTMLElement>(`.fg-bar[data-segment-id="${segmentId}"]`)!;
+    document.elementFromPoint = (x: number, y: number) => (x === 5 && y === 5 ? target : original(x, y));
     container
       .querySelector<HTMLElement>('.fg-timeline-pane')!
       .dispatchEvent(new PointerEvent('pointerup', { clientX: 5, clientY: 5, shiftKey: true }));
     document.elementFromPoint = original;
+  }
 
-    // A range spans whole rows, so the segmented Entry contributes both of its Segments.
+  it('a shift-range ends on the Segment it landed on, not the end of that row', () => {
+    const { container, gantt } = makeSegmentedGantt();
+
+    shiftRangeFromPlainTo(container, 'split-a');
+
+    // The Selection holds Segments, so the range steps over Segments. `split-b` draws after
+    // `split-a` in the same row, so the range stops before it.
+    expect(gantt.selectedSegmentIds).toContain('split-a');
+    expect(gantt.selectedSegmentIds).not.toContain('split-b');
     expect(gantt.selectedEntryIds).toEqual(['plain', 'split']);
+
+    gantt.destroy();
+    container.remove();
+  });
+
+  it('a shift-range that reaches the last Segment of a row takes the whole row', () => {
+    const { container, gantt } = makeSegmentedGantt();
+
+    shiftRangeFromPlainTo(container, 'split-b');
+
     expect(gantt.selectedSegmentIds).toContain('split-a');
     expect(gantt.selectedSegmentIds).toContain('split-b');
+    expect(gantt.selectedEntryIds).toEqual(['plain', 'split']);
 
     gantt.destroy();
     container.remove();
