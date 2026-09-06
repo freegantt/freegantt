@@ -5,7 +5,7 @@
 **Also carries:** [#216](https://github.com/Pawel-IT/FreeGantt/issues/216) Q3, on the coordinator's
 instruction of 2026-09-06. Q1 ("is a gesture a Command?") is settled **no** and this plan does not
 reopen it.
-**Slice:** S5 · **Branch base:** `s5-start` at `f4c7492` · **Status:** planned, not started.
+**Slice:** S5 · **Branch base:** `s5-start` at `f4c7492` · **Status:** R0 landed. R1 is next.
 **Gate state at plan time:** every gate green at `f4c7492`. Every finding below is invisible to CI.
 
 > ## This is a plan, not a review
@@ -195,16 +195,18 @@ Already pinned, verified at `f4c7492` — do not rewrite these, they are your ne
 
 Write these, because nothing pins them today:
 
-- [ ] **A row that owns several Entries paints selected from its *second* Entry's Segment.**
+- [x] **A row that owns several Entries paints selected from its *second* Entry's Segment.**
   `src/render/dom/index.test.ts:852` covers a row with one Entry only. R5 rewrites this exact code
   path, and a one-Entry row cannot tell the two readings apart. Use a custom row source, the same
   shape `src/layout/frame-layout.test.ts:198` builds.
-- [ ] **A grouping header row stands for no Segment, on both paths.** Assert
+- [x] **A grouping header row stands for no Segment, on both paths.** Assert
   `FrameLayout.segmentIdsForRow(headerRowId)` is empty and the frame's own `FrameRow` for that row
   reports no Entry. A grouping header carries `entryIds: []` (`src/layout/rows/group-source.ts:35`),
   so this passes today. R5 must not change it.
-- [ ] **`freegantt.selectNextSegment` and `freegantt.selectPreviousSegment` step within a row and
-  clamp at both ends.** Confirmed at `f4c7492`: no test drives them. `src/view/core-commands.test.ts:25-26`
+- [x] **`freegantt.selectNextSegment` and `freegantt.selectPreviousSegment` step within a row and
+  clamp at both ends.** `src/api/gantt.test.ts:2963` already drives `#stepSegmentSelection` through
+  the `Mod+Arrow` chord, and pins the high-end clamp. It never runs the two commands themselves, and
+  it covers neither the low-end clamp nor a row that draws one bar. `src/view/core-commands.test.ts:25-26`
   stubs both ports with `vi.fn()`, so the registration is covered and the behaviour is not.
   `#stepSegmentSelection` (`src/view/gantt-shell.ts:1112`) moves in R4, so pin it first.
 

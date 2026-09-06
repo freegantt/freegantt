@@ -884,6 +884,42 @@ describe('render/dom backend', () => {
     timeline.remove();
   });
 
+  // #230 R0: a one-Entry row cannot tell "reads row.entryIds[0]" apart from "reads every entryId the
+  // row owns". A custom row that puts two Entries on one lane can, so this pins the second reading.
+  it('a row that owns several Entries paints selected from its second Entry’s Segment (#230 R0)', () => {
+    const [entryA, entryB] = sampleEntries.slice(0, 2);
+    const backend = paintingBackend([entryA!, entryB!]);
+    const { grid, timeline } = mountSurfaces();
+    backend.mount({ grid, timeline });
+
+    const oneRowForBoth = {
+      source: 'custom' as const,
+      resolve: () => [{ id: 'lane-1', entryIds: [entryA!.id, entryB!.id] }],
+    };
+    const frame = computeFrame({
+      entries: [entryA!, entryB!],
+      scale,
+      preset,
+      visible: { x: 0, y: 0, width: 0, height: 0 },
+      rowHeight: 32,
+      revision: 0,
+      itemProducerRegistry,
+      rows: oneRowForBoth,
+    });
+    backend.sync(frame);
+    const row = grid.querySelector<HTMLElement>('[data-row-id="lane-1"]')!;
+
+    backend.applyState({ selectedSegmentIds: [entryB!.segments[0]!.id] });
+    expect(row.dataset['state']).toBe('selected');
+
+    backend.applyState({ selectedSegmentIds: [] });
+    expect(row.dataset['state']).toBe('');
+
+    backend.destroy();
+    grid.remove();
+    timeline.remove();
+  });
+
   it('paints every mounted bar of a selected entry, not only its first (#185)', () => {
     const backend = paintingBackend();
     const { grid, timeline } = mountSurfaces();
