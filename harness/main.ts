@@ -29,6 +29,7 @@ import { logEverything } from './plugins/log-everything.js';
 import { selectionShortcuts } from './plugins/selection-shortcuts.js';
 import { popupDemo } from './plugins/popup-demo.js';
 import { lockEntries } from './plugins/lock-entries.js';
+import { weekendShading } from './plugins/weekend-shading.js';
 
 // S5.8, D-S5-19: Name, Start and Budget are editable (double-click, or Enter on the selected row's
 // first editable column); End and Duration stay read-only (Duration is `compute`-sourced and has no
@@ -427,6 +428,23 @@ renderersToggle.addEventListener('change', () => {
   }
 });
 renderersToggle.dispatchEvent(new Event('change'));
+
+// S5.6, D-S5-15/D-S5-16, [S5-A2]: weekendShading() is written against the public surface alone
+// ('freegantt', harness/plugins/weekend-shading.ts) — no core edit, no private import. Installed
+// from the start; the checkbox removes it live through the same `uninstallPlugin` verb every
+// other plugin toggle on this page already uses (I8: no remount).
+gantt.installPlugin(weekendShading());
+
+const weekendToggle = document.querySelector<HTMLInputElement>('#weekend-shading-toggle')!;
+weekendToggle.addEventListener('change', () => {
+  if (weekendToggle.checked) {
+    gantt.installPlugin(weekendShading());
+    writeLog('weekendShading: installed');
+  } else {
+    gantt.uninstallPlugin('demo.weekendShading');
+    writeLog('weekendShading: removed');
+  }
+});
 
 // Which commands does an entry menu show? — Delete, Lock and Unlock, the same three for the
 // right-clicked bar, its grid row, or `Shift+F10` on a selected row (context-menu.ts and the
