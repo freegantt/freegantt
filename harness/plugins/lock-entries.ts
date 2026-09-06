@@ -2,7 +2,7 @@
 // package's own public entry, never a path inside 'freegantt/src' (S5.6, [S5-A2]). This is the
 // gate box's whole point — the plugin only compiles because the public surface is enough.
 
-import { addMs, diffMs, entryId, fieldRowsOf, mergeEntryEdits } from 'freegantt';
+import { addMs, diffMs, entryId, fieldRowsOf, mergeEntryEdits, moveEntryTo } from 'freegantt';
 import type { DatasetPlugin, EditRequest, EntryEdit, EntryId, PluginStore } from 'freegantt';
 
 /** What the store holds per locked entry. One key today; a real plugin's row grows without ever
@@ -32,7 +32,9 @@ export interface LockEntriesPlugin extends DatasetPlugin {
  * Two seams, two jobs (D-S5-24's refusal note):
  * - the **extension hook** adds a cascade edit for every locked entry, on every call — a preview call
  *   and the real commit call carry the same `EditRequest`, so an extender can never tell them apart
- *   and must never refuse. This is what makes the locked bar ghost alongside the dragged one.
+ *   and must never refuse. This is what makes the locked bar ghost alongside the dragged one. The
+ *   cascade is a `moveEntryTo` edit, which is the one shape that holds for an Entry of any Segment
+ *   count (#241) — copy that call, not an envelope.
  * - **`beforeChange`** refuses the commit, once, on the finished changeset. Returning `false` throws
  *   `MutationCancelledError` — the ordinary veto every gesture already handles: no write, no undo
  *   entry, no new error type.
@@ -65,7 +67,11 @@ export function lockEntries(initiallyLocked: readonly string[] = []): LockEntrie
           if (request.proposed.has(id)) continue;
           const entry = request.entries.get(id);
           if (entry === undefined) continue;
-          mine.set(id, { start: addMs(entry.start, moved), end: addMs(entry.end, moved) });
+          // `moveEntryTo`, never `{ start, end }` (D-S5-50). An Entry may draw several Segments, and
+          // then an envelope alone names none of them, so core refuses that write rather than guess
+          // which one to move (`SegmentsOutOfSyncError`, `'ambiguous'`, D-S5-44). This says the whole
+          // Entry translates rigidly, one Segment at a time, and lets core derive the envelope back.
+          mine.set(id, moveEntryTo(entry, addMs(entry.start, moved)));
         }
         // `mergeEntryEdits`, never a `Map` spread: another plugin may already have written one of
         // these entries, and a spread drops that write (#197).

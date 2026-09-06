@@ -1,7 +1,7 @@
 import './harness-nav.ts';
 import { Gantt, Dataset, attemptMutation, now, watchAllErrors, isTimeUnit } from '../src/api/index.js';
 import type { DatasetEventMap } from '../src/api/index.js';
-import { demoEntryInputs } from '../fixtures/demo-dataset.js';
+import { demoEntryInputs, separateSegments } from '../fixtures/demo-dataset.js';
 import { mountTimelineToolbar } from './timeline-toolbar.js';
 import { prependChangeSet, prependLogLine } from './change-log.js';
 import { lockEntries } from './plugins/lock-entries.js';
@@ -15,7 +15,18 @@ import { lockEntries } from './plugins/lock-entries.js';
 const LOCKABLE_ENTRY_ID = 'entry-15';
 const locks = lockEntries();
 
-const dataset = new Dataset({ entries: demoEntryInputs, timeZone: 'UTC', plugins: [locks] });
+// #241: the locked Entry draws three Segments on purpose. A cascade that wrote `{ start, end }`
+// would refuse here — an envelope names no Segment to move, so core has nothing to translate
+// (`SegmentsOutOfSyncError`, `'ambiguous'`, D-S5-44) — and the demo would teach the shape the
+// library rejects. So the page locks the hard case, and `lock-entries.ts` answers it with
+// `moveEntryTo`. All three bars ghost together when `entry-14` drags.
+const lockDemoEntryInputs = demoEntryInputs.map((entry) =>
+  entry.id === LOCKABLE_ENTRY_ID && entry.start !== undefined
+    ? { ...entry, segments: separateSegments(entry.start) }
+    : entry,
+);
+
+const dataset = new Dataset({ entries: lockDemoEntryInputs, timeZone: 'UTC', plugins: [locks] });
 const mobilization = now();
 
 const gantt = new Gantt({
