@@ -177,6 +177,8 @@ export interface CommandTarget extends ActedOn {
 // @public
 export class ContainerNotFoundError extends FreeGanttError {
     constructor(container: string);
+    // (undocumented)
+    readonly container: string;
 }
 
 // @public
@@ -478,6 +480,8 @@ export interface DomTarget {
 // @public
 export class DuplicateEntryIdError extends FreeGanttError {
     constructor(entryId: EntryId);
+    // (undocumented)
+    readonly entryId: EntryId;
 }
 
 // @public
@@ -511,6 +515,10 @@ export class DuplicateRowIdError extends FreeGanttError {
 // @public
 export class DuplicateSegmentIdError extends FreeGanttError {
     constructor(segmentId: SegmentId, operation: string);
+    // (undocumented)
+    readonly operation: string;
+    // (undocumented)
+    readonly segmentId: SegmentId;
 }
 
 // @public (undocumented)
@@ -552,7 +560,11 @@ export interface ElementDescription {
 
 // @public
 export class EmptySegmentsError extends FreeGanttError {
-    constructor(entryId: EntryId);
+    constructor(entryId: EntryId, operation: string);
+    // (undocumented)
+    readonly entryId: EntryId;
+    // (undocumented)
+    readonly operation: string;
 }
 
 // @public (undocumented)
@@ -676,6 +688,10 @@ export type EntryMove = EntryGestureEvent;
 // @public
 export class EntryNotFoundError extends FreeGanttError {
     constructor(entryId: EntryId, operation: string);
+    // (undocumented)
+    readonly entryId: EntryId;
+    // (undocumented)
+    readonly operation: string;
 }
 
 // @public
@@ -1249,17 +1265,27 @@ export class InvalidFieldSourceError extends FreeGanttError {
 
 // @public
 export class InvalidInstantError extends FreeGanttError {
-    constructor(message: string);
+    constructor(message: string, value?: unknown);
+    // (undocumented)
+    readonly value: unknown;
 }
 
 // @public
 export class InvalidPresetError extends FreeGanttError {
-    constructor(message: string);
+    constructor(presetId: string, minTickWidthPx: number, preferredTickWidthPx: number);
+    // (undocumented)
+    readonly minTickWidthPx: number;
+    // (undocumented)
+    readonly preferredTickWidthPx: number;
+    // (undocumented)
+    readonly presetId: string;
 }
 
 // @public
 export class InvalidReplayOriginError extends FreeGanttError {
     constructor(origin: string);
+    // (undocumented)
+    readonly origin: string;
 }
 
 // @public
@@ -1276,7 +1302,15 @@ export function invertChangeSet(changeSet: ChangeSet): ChangeSet;
 
 // @public
 export class InvertedSpanError extends FreeGanttError {
-    constructor(message: string);
+    constructor(entryId: EntryId, span: TimeSpan, operation: string, segmentId?: SegmentId);
+    // (undocumented)
+    readonly entryId: EntryId;
+    // (undocumented)
+    readonly operation: string;
+    // (undocumented)
+    readonly segmentId?: SegmentId;
+    // (undocumented)
+    readonly span: TimeSpan;
 }
 
 // @public
@@ -1412,7 +1446,9 @@ export class MutationCancelledError extends FreeGanttError {
 
 // @public
 export class MutationDuringNotificationError extends FreeGanttError {
-    constructor(message: string);
+    constructor(operation: string);
+    // (undocumented)
+    readonly operation: string;
 }
 
 // @public
@@ -1436,6 +1472,8 @@ export type PaneName = 'grid' | 'timeline';
 // @public
 export class ParentCycleError extends FreeGanttError {
     constructor(entryId: EntryId);
+    // (undocumented)
+    readonly entryId: EntryId;
 }
 
 // @public
@@ -1676,7 +1714,11 @@ export interface ResolvedColumn extends FrameColumn {
 
 // @public
 export class RevealTargetNotFoundError extends FreeGanttError {
-    constructor(id: string, operation: string);
+    constructor(targetId: string, operation: string);
+    // (undocumented)
+    readonly operation: string;
+    // (undocumented)
+    readonly targetId: string;
 }
 
 // @public
@@ -1776,11 +1818,21 @@ export interface SegmentInput extends TimeSpanInput {
 // @public
 export class SegmentNotFoundError extends FreeGanttError {
     constructor(segmentId: SegmentId, operation: string);
+    // (undocumented)
+    readonly operation: string;
+    // (undocumented)
+    readonly segmentId: SegmentId;
 }
 
 // @public
 export class SegmentsOutOfSyncError extends FreeGanttError {
-    constructor(entryId: EntryId, reason: 'ambiguous' | 'conflicting');
+    constructor(entryId: EntryId, reason: 'ambiguous' | 'conflicting', operation: string);
+    // (undocumented)
+    readonly entryId: EntryId;
+    // (undocumented)
+    readonly operation: string;
+    // (undocumented)
+    readonly reason: 'ambiguous' | 'conflicting';
 }
 
 // @public
@@ -1972,7 +2024,11 @@ export class UnknownCommandError extends FreeGanttError {
 
 // @public
 export class UnknownFieldError extends FreeGanttError {
-    constructor(field: string);
+    constructor(field: string, operation: string);
+    // (undocumented)
+    readonly field: string;
+    // (undocumented)
+    readonly operation: string;
 }
 
 // @public
@@ -1991,7 +2047,11 @@ export class UnknownGridColumnError extends FreeGanttError {
 
 // @public
 export class UnknownPresetError extends FreeGanttError {
-    constructor(id: string);
+    constructor(presetId: string, available: readonly string[]);
+    // (undocumented)
+    readonly available: readonly string[];
+    // (undocumented)
+    readonly presetId: string;
 }
 
 // @public
@@ -2005,7 +2065,9 @@ export class UnsupportedSchemaError extends FreeGanttError {
 
 // @public
 export class UnsupportedUnitError extends FreeGanttError {
-    constructor(message: string);
+    constructor(unit: string, operation: string);
+    // (undocumented)
+    readonly unit: string;
 }
 
 // @public

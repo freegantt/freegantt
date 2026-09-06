@@ -30,7 +30,7 @@ describe('SOURCE_STRATEGY (A4)', () => {
 
       expect(declareStringSource).toThrow(InvalidFieldSourceError);
       expect(declareStringSource).toThrow(/"cost"/);
-      expect(declareStringSource).toThrow(/got the string "meta"/);
+      expect(declareStringSource).toThrow(/the source of "cost" is the string "meta"/);
     });
 
     it('catches as a FreeGanttError, with the code and the field on it', () => {
@@ -47,7 +47,7 @@ describe('SOURCE_STRATEGY (A4)', () => {
 
     it('refuses a `from` outside the three declared sources', () => {
       expect(() => storedSourceOf({ key: 'cost', source: { from: 'entries' } } as unknown as Field)).toThrow(
-        /got \{ from: entries \}/,
+        /the source of "cost" is \{ from: entries \}/,
       );
     });
 

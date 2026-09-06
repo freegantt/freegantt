@@ -1188,7 +1188,7 @@ export class GanttShell {
   set snap(next: SnapSetting | undefined) {
     if (next !== undefined && next !== 'tick' && next !== 'none') {
       if (!isTimeUnit(next.unit)) {
-        throw new UnsupportedUnitError(`snap: "${String(next.unit)}" is not a supported time unit`);
+        throw new UnsupportedUnitError(String(next.unit), 'gantt.snap');
       }
       if (!Number.isInteger(next.increment) || next.increment <= 0) {
         throw new InvalidSnapIncrementError(next.unit, next.increment);

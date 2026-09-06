@@ -154,9 +154,7 @@ function endStores(data: TransactionData, token: TxToken, changeSet: ChangeSet |
 
 export function commitChangeSet(data: TransactionData, changeSet: ChangeSet): void {
   if (data.notifying) {
-    throw new MutationDuringNotificationError(
-      'commitChangeSet: cannot commit while beforeChange/change handlers are running',
-    );
+    throw new MutationDuringNotificationError('commitChangeSet');
   }
 
   const token: TxToken = {} as TxToken;
@@ -227,9 +225,7 @@ export function runTransaction<T>(
   origin: ChangeOrigin,
 ): T {
   if (data.notifying) {
-    throw new MutationDuringNotificationError(
-      'transaction: cannot start a transaction while beforeChange/change handlers are running',
-    );
+    throw new MutationDuringNotificationError('dataset.transaction');
   }
 
   const token: TxToken = {} as TxToken;

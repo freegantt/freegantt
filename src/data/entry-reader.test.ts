@@ -149,7 +149,7 @@ describe('readEdit (S4.10, D-S4-30)', () => {
       ],
       context,
     );
-    expect(() => readEdit({ start: '2026-09-02' }, context, segmented!, registry)).toThrow(
+    expect(() => readEdit({ start: '2026-09-02' }, context, segmented!, registry, 'entries.update')).toThrow(
       SegmentsOutOfSyncError,
     );
   });
@@ -160,7 +160,7 @@ describe('readEdit (S4.10, D-S4-30)', () => {
       [{ id: 'seg', name: 'Seg', start: '2026-09-01', end: '2026-09-05' }],
       context,
     );
-    const edit = readEdit({ start: '2026-09-02' }, context, single!, registry);
+    const edit = readEdit({ start: '2026-09-02' }, context, single!, registry, 'entries.update');
     expect(edit.start).toBe(utc('2026-09-02T00:00:00Z'));
     expect(edit.segments).toHaveLength(1);
   });
@@ -173,7 +173,9 @@ describe('readEdit (S4.10, D-S4-30)', () => {
       [{ id: 'seg', name: 'Seg', start: '2026-09-01', end: '2026-09-05' }],
       context,
     );
-    expect(() => readEdit({ start: '2026-09-10' }, context, single!, registry)).toThrow(InvertedSpanError);
+    expect(() => readEdit({ start: '2026-09-10' }, context, single!, registry, 'entries.update')).toThrow(
+      InvertedSpanError,
+    );
   });
 
   it('refuses update(id, { end }) when the new end would sit before the entry starts', () => {
@@ -182,7 +184,9 @@ describe('readEdit (S4.10, D-S4-30)', () => {
       [{ id: 'seg', name: 'Seg', start: '2026-09-05', end: '2026-09-10' }],
       context,
     );
-    expect(() => readEdit({ end: '2026-09-01' }, context, single!, registry)).toThrow(InvertedSpanError);
+    expect(() => readEdit({ end: '2026-09-01' }, context, single!, registry, 'entries.update')).toThrow(
+      InvertedSpanError,
+    );
   });
 
   it('refuses update(id, { segments }) naming a Segment whose end sits before its start', () => {
@@ -192,7 +196,13 @@ describe('readEdit (S4.10, D-S4-30)', () => {
       context,
     );
     expect(() =>
-      readEdit({ segments: [{ start: '2026-09-05', end: '2026-09-01' }] }, context, single!, registry),
+      readEdit(
+        { segments: [{ start: '2026-09-05', end: '2026-09-01' }] },
+        context,
+        single!,
+        registry,
+        'entries.update',
+      ),
     ).toThrow(InvertedSpanError);
   });
 
@@ -204,7 +214,7 @@ describe('readEdit (S4.10, D-S4-30)', () => {
       [{ id: 'seg', name: 'Seg', start: '2026-09-01T09:00:00Z', end: '2026-09-05T09:00:00Z' }],
       context,
     );
-    const edit = readEdit({ end: '2026-09-01T09:00:00Z' }, context, single!, registry);
+    const edit = readEdit({ end: '2026-09-01T09:00:00Z' }, context, single!, registry, 'entries.update');
     expect(edit.start).toBe(edit.end);
   });
 
@@ -218,7 +228,7 @@ describe('readEdit (S4.10, D-S4-30)', () => {
     );
     let caught: unknown;
     try {
-      readEdit({ segments: [] }, context, single!, registry);
+      readEdit({ segments: [] }, context, single!, registry, 'entries.update');
     } catch (error) {
       caught = error;
     }
@@ -248,6 +258,7 @@ describe('readEdit (S4.10, D-S4-30)', () => {
         context,
         entry!,
         registry,
+        'entries.update',
       ),
     ).toThrow(SegmentsOutOfSyncError);
   });
@@ -268,6 +279,7 @@ describe('readEdit (S4.10, D-S4-30)', () => {
       context,
       entry!,
       registry,
+      'entries.update',
     );
     expect(edit.start).toBe(0);
     expect(edit.end).toBe(20);
@@ -313,6 +325,7 @@ describe('reconcileExtenderEdits reads the effective, not the stale, entry (find
       context,
       entry,
       registry,
+      'entries.update',
     );
     const effective = buildEffectiveEntries(committed, [], [], new Map([[id!, bodyEdit]]));
 
@@ -351,6 +364,7 @@ describe('reconcileExtenderEdits reads the effective, not the stale, entry (find
       context2,
       single!,
       registry,
+      'entries.update',
     );
     const effective = buildEffectiveEntries(committed, [], [], new Map([[single!.id, bodyEdit]]));
     const [effectiveEntry] = effective.values();
@@ -555,6 +569,7 @@ describe('moveEntryTo writes segments and lets core derive the envelope (D-S5-50
       context,
       entry,
       registry,
+      'entries.update',
     );
 
     expect(stored.start).toBe(utc('2026-01-03T00:00:00Z'));
@@ -573,7 +588,7 @@ describe('moveEntryTo writes segments and lets core derive the envelope (D-S5-50
       new Map([[entry.id, moveEntryTo(entry, instant(utc('2026-01-03T00:00:00Z')), 'UTC')]]),
       new Map([[entry.id, { end: laterEnd }]]),
     );
-    expect(() => readEdit(afterTheChange.get(entry.id)!, context, entry, registry)).toThrow(
+    expect(() => readEdit(afterTheChange.get(entry.id)!, context, entry, registry, 'entries.update')).toThrow(
       SegmentsOutOfSyncError,
     );
 
@@ -591,9 +606,9 @@ describe('moveEntryTo writes segments and lets core derive the envelope (D-S5-50
       ]),
       new Map([[entry.id, { end: laterEnd }]]),
     );
-    expect(() => readEdit(beforeTheChange.get(entry.id)!, context, entry, registry)).toThrow(
-      SegmentsOutOfSyncError,
-    );
+    expect(() =>
+      readEdit(beforeTheChange.get(entry.id)!, context, entry, registry, 'entries.update'),
+    ).toThrow(SegmentsOutOfSyncError);
   });
 
   // What the change actually buys. `ExtenderWrapper`'s own idiom composes this move *over* the
@@ -619,7 +634,7 @@ describe('moveEntryTo writes segments and lets core derive the envelope (D-S5-50
         ],
       ]),
     );
-    const lost = readEdit(withStatedEnvelope.get(entry.id)!, context, entry, registry);
+    const lost = readEdit(withStatedEnvelope.get(entry.id)!, context, entry, registry, 'entries.update');
     expect(lost.end).toBe(utc('2026-01-07T00:00:00Z'));
     expect(lost.end).not.toBe(utc('2026-02-01T00:00:00Z'));
 
@@ -630,6 +645,147 @@ describe('moveEntryTo writes segments and lets core derive the envelope (D-S5-50
       new Map([[entry.id, moveEntryTo(entry, instant(utc('2026-01-03T00:00:00Z')), 'UTC')]]),
     );
     expect(refused.get(entry.id)!.end).toBe(utc('2026-02-01T00:00:00Z'));
-    expect(() => readEdit(refused.get(entry.id)!, context, entry, registry)).toThrow(SegmentsOutOfSyncError);
+    expect(() => readEdit(refused.get(entry.id)!, context, entry, registry, 'entries.update')).toThrow(
+      SegmentsOutOfSyncError,
+    );
+  });
+});
+
+// #237 / s5-231 review F4. The error used to take a bare string, and the string was wrong four ways:
+// it named `entries.update` to a cascade that never called it, it named the Entry while iterating
+// Segments, it could report an id minted a line earlier, and it exposed nothing to catch on.
+describe('InvertedSpanError names the caller, the ids the consumer wrote, and both instants', () => {
+  function invertedSpanErrorFrom(run: () => unknown): InvertedSpanError {
+    try {
+      run();
+    } catch (error) {
+      if (error instanceof InvertedSpanError) return error;
+      throw error;
+    }
+    throw new Error('expected an InvertedSpanError');
+  }
+
+  it('names the entry the consumer wrote, not only the segment id ingest minted', () => {
+    const error = invertedSpanErrorFrom(() =>
+      readEntries(
+        [
+          {
+            id: 't1',
+            name: 'Design',
+            start: '2026-01-01',
+            end: '2026-01-10',
+            segments: [
+              { start: instant(utc('2026-01-09T00:00:00Z')), end: instant(utc('2026-01-02T00:00:00Z')) },
+            ],
+          },
+        ],
+        createContext(),
+      ),
+    );
+
+    expect(error.entryId).toBe(entryId('t1'));
+    expect(error.message).toContain('"t1"');
+    // The Segment named no id, so its id was minted a line earlier. It is still reported — the
+    // Entry id is what makes the message searchable.
+    expect(error.segmentId).toBe(segmentId('minted-1'));
+    expect(error.span).toEqual({
+      start: utc('2026-01-09T00:00:00Z'),
+      end: utc('2026-01-02T00:00:00Z'),
+    });
+    expect(error.message).toContain(String(utc('2026-01-09T00:00:00Z')));
+    expect(error.message).toContain(String(utc('2026-01-02T00:00:00Z')));
+  });
+
+  it('names no segment when the entry, not a segment, carries the inverted span', () => {
+    const error = invertedSpanErrorFrom(() =>
+      readEntries([{ id: 't1', name: 'Design', start: '2026-01-10', end: '2026-01-01' }], createContext()),
+    );
+
+    expect(error.segmentId).toBeUndefined();
+    expect(error.message).toContain('"t1"');
+  });
+
+  it('names entries.update for an update, and the edit extender for a cascade', () => {
+    const context = createContext();
+    const [entry] = readEntries(
+      [{ id: 't1', name: 'Design', start: '2026-01-01', end: '2026-01-05' }],
+      context,
+    );
+    const inverting = { start: instant(utc('2026-06-01T00:00:00Z')) };
+
+    const fromUpdate = invertedSpanErrorFrom(() =>
+      readEdit(inverting, context, entry!, registry, 'entries.update'),
+    );
+    expect(fromUpdate.operation).toBe('entries.update');
+
+    const fromCascade = invertedSpanErrorFrom(() =>
+      reconcileExtenderEdits(new Map([[entry!.id, entry!]]), new Map([[entry!.id, inverting]])),
+    );
+    expect(fromCascade.operation).toBe('edit extender');
+    // The plugin author is not sent to a call they never made (#239).
+    expect(fromCascade.message).not.toContain('entries.update');
+  });
+
+  // D-S5-46, and it is load-bearing: a rollUpKinds entry with no dates gets a zero-length span until
+  // the Rollup runs, and `gesture-draft.ts`'s resize clamp produces one as its way of refusing an
+  // inversion. Tidying `<` into `<=` in `reconcileEnvelope` breaks both at once.
+  it('leaves a zero-length span legal', () => {
+    const context = createContext();
+    const [entry] = readEntries(
+      [{ id: 't1', name: 'Design', start: '2026-01-01', end: '2026-01-05' }],
+      context,
+    );
+    const zeroLength = instant(entry!.start);
+
+    const stored = readEdit({ end: zeroLength }, context, entry!, registry, 'entries.update');
+    expect(stored.start).toBe(stored.end);
+  });
+});
+
+describe('a refusal names the caller that reached it, not one door of two (#239, #237)', () => {
+  function twoSegments(context: EntryReadContext): Entry {
+    const [entry] = readEntries(
+      [
+        {
+          id: 't1',
+          name: 'Design',
+          start: '2026-01-01',
+          end: '2026-01-09',
+          segments: [
+            { start: '2026-01-01', end: '2026-01-05' },
+            { start: '2026-01-06', end: '2026-01-10' },
+          ],
+        },
+      ],
+      context,
+    );
+    return entry!;
+  }
+
+  it('names the edit extender when a cascade writes an ambiguous envelope', () => {
+    const context = createContext();
+    const entry = twoSegments(context);
+    let thrown: SegmentsOutOfSyncError | undefined;
+    try {
+      reconcileExtenderEdits(
+        new Map([[entry.id, entry]]),
+        new Map([[entry.id, { start: instant(utc('2026-02-01T00:00:00Z')) }]]),
+      );
+    } catch (error) {
+      thrown = error as SegmentsOutOfSyncError;
+    }
+
+    expect(thrown?.operation).toBe('edit extender');
+    expect(thrown?.reason).toBe('ambiguous');
+    expect(thrown?.message).not.toContain('entries.update');
+  });
+
+  it('names entries.update when the same refusal comes through an update', () => {
+    const context = createContext();
+    const entry = twoSegments(context);
+
+    expect(() => readEdit({ segments: [] }, context, entry, registry, 'entries.update')).toThrow(
+      /^entries\.update: /,
+    );
   });
 });

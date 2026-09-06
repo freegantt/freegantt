@@ -167,9 +167,7 @@ export function isTimeUnit(value: string): value is TimeUnit {
 }
 
 function unsupportedUnit(unit: TimeUnit): UnsupportedUnitError {
-  return new UnsupportedUnitError(
-    `time: unsupported unit "${unit}" — only ${[...SUPPORTED_TIME_UNITS].join(', ')} step today`,
-  );
+  return new UnsupportedUnitError(unit, 'time');
 }
 
 export function stepBy(zone: string, i: Instant, unit: TimeUnit, increment: number): Instant {
