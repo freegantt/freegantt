@@ -241,7 +241,7 @@ describe('[S2-A2] toJSON / fromJSON', () => {
     warn.mockRestore();
   });
 
-  it('a corrected roll-up raises at warning, and the console line is the unsubscribed fallback (D-S5-36)', () => {
+  it('a corrected roll-up raises at warning, and the console line is the unsubscribed fallback (D-S5-41)', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     const disagreeing: DatasetDocument = {
       schema: 1,

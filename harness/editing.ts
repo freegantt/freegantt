@@ -59,7 +59,7 @@ function hideToast(): void {
   toast.textContent = '';
 }
 
-// S5.12, D-S5-37: one subscription over both emitters. Every refusal and every recovered fault the
+// S5.12, D-S5-42: one subscription over both emitters. Every refusal and every recovered fault the
 // Dataset or the Gantt observes arrives here, and the page decides what to keep. Retention is the
 // page's policy, so core keeps nothing: there is no `gantt.errors` to read.
 //

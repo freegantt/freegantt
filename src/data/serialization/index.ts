@@ -66,7 +66,7 @@ export function toJSON(dataset: DatasetDocumentSource): DatasetDocument {
 /** A document whose stored roll-up values disagree with its children is corrected by construction
  *  (D-S2-22). Names every entry it rewrote, so the correction is never silent.
  *
- *  S5.12, D-S5-36: this used to return early unless `isDevMode()`. That flag is resolved when *this
+ *  S5.12, D-S5-41: this used to return early unless `isDevMode()`. That flag is resolved when *this
  *  repo* builds `dist/`, so the whole pass was dead-code-eliminated out of every consumer's build and
  *  no consumer has ever seen one of these lines. It now reports every correction, and the
  *  `console.warn` behind each report fires only when nothing is subscribed to `error`. */

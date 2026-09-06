@@ -182,12 +182,12 @@ export function commitChangeSet(data: TransactionData, changeSet: ChangeSet): vo
   if (!allowed) {
     endStores(data, token, undefined);
     const refusal = new MutationCancelledError(changeSet);
-    // S5.12, D-S5-35: the refusal is reported as well as thrown. A `beforeChange` handler that ran
+    // S5.12, D-S5-40: the refusal is reported as well as thrown. A `beforeChange` handler that ran
     // beside the vetoing one never learns the outcome, and `attemptMutation` swallows the throw — so
     // the throw alone reaches nobody who needs to show the user what happened.
     // `by` is `'consumer'`: the bus knows a registered handler returned `false`, never which one, and
     // core itself refuses nothing here. `severity` is `'info'` because a Refusal is the library
-    // working correctly (D-S5-36). No `fallback`: this site printed nothing before and stays silent.
+    // working correctly (D-S5-41). No `fallback`: this site printed nothing before and stays silent.
     raiseErrorOn(data.bus, {
       code: 'mutation-cancelled',
       message: refusal.message,

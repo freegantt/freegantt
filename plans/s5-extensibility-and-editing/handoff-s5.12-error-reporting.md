@@ -11,7 +11,7 @@ file says what landed, what is left, and what must not be re-opened.
 | Where | What |
 |---|---|
 | [`docs/adr/0009-…`](../../docs/adr/0009-core-raises-an-error-report-the-consumer-retains-it.md) | The decision: core raises, the consumer retains. Four rejected alternatives with reasons. |
-| [`s5.12-error-reporting.md`](./s5.12-error-reporting.md) | The step: D-S5-35/36/37, the payload, the seven console sites and their severities, files, tests, TODO boxes. |
+| [`s5.12-error-reporting.md`](./s5.12-error-reporting.md) | The step: D-S5-40/41/42, the payload, the seven console sites and their severities, files, tests, TODO boxes. |
 | `CONTEXT.md` | New **Errors** section — **Refusal**, **Error report**, **Severity**. **Refusal notice** moved into it; its `_Avoid_: Error` line amended. |
 | `README.md` §Development | `isDevMode()` is a library-build flag, not a consumer's. Evidence and the rule for new call sites. |
 | Issue #159 | Rewritten: retitled, stale claim struck, every original open question answered. `needs grill` removed. |
