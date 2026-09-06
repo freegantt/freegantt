@@ -40,6 +40,7 @@ import {
   ITEM_ID_KEY,
   ROW_CELL_CLASS,
   ROW_CLASS,
+  ROW_ID_KEY,
   ROW_LABEL_CLASS,
   ROW_LABEL_TEXT_CLASS,
   ROW_TESTID,
@@ -789,7 +790,7 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
         node.className = ROW_CLASS;
         node.setAttribute('role', 'listitem');
         node.dataset[TESTID_KEY] = ROW_TESTID;
-        node.dataset['rowId'] = key;
+        node.dataset[ROW_ID_KEY] = key;
         // The Entry this row's cells describe (#185) — the row's subject, not the set it owns. A
         // header row describes none, so it carries no `data-entry-id` at all.
         const subject = row.entryIds[0];
@@ -1019,7 +1020,7 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
         node.setAttribute('aria-hidden', 'true');
         // The row this band paints — the same `data-row-id` the grid pane's own `.fg-row` carries,
         // so a viewer (or a test) can line the two panes up row by row.
-        node.dataset['rowId'] = key;
+        node.dataset[ROW_ID_KEY] = key;
         return node;
       },
       toGeom: (row) => ({ top: row.top, height: row.height, parity: rowParity(row.index) }),
@@ -1242,7 +1243,7 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
       if (el instanceof Element && el.closest(`.${ROW_TWISTY_CLASS}`)) return null;
       const row = el instanceof Element ? el.closest<HTMLElement>(`.${ROW_CLASS}`) : null;
       if (row && gridLayer?.contains(row)) {
-        const id = rowIdFromDataset(row.dataset['rowId']);
+        const id = rowIdFromDataset(row.dataset[ROW_ID_KEY]);
         // A header row carries no Entry, so it is never selectable — `entriesForRow` answers none.
         if (id !== undefined) return { kind: 'row', rowId: id };
       }
