@@ -108,9 +108,9 @@ envelope start= 2026-01-01  end= 2026-01-05
 segment  start= 2026-03-01  end= 2026-03-09      CONSISTENT? false
 ```
 
-- [ ] One function owns "the envelope of these Segments". Every write path calls it, ingest included.
-- [ ] `toJSON` can no longer write an Entry whose envelope disagrees with its Segments.
-- [ ] A property test over arbitrary Segment sets, in the style `plans/01` §11 expects.
+- [x] One function owns "the envelope of these Segments". Every write path calls it, ingest included.
+- [x] `toJSON` can no longer write an Entry whose envelope disagrees with its Segments.
+- [x] A property test over arbitrary Segment sets, in the style `plans/01` §11 expects.
 
 **Visible at the end:** a round trip through `toJSON`/`fromJSON` cannot produce a stale envelope.
 

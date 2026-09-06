@@ -10,13 +10,20 @@ import type {
   EntryId,
   Instant,
   ItemId,
-  Segment,
   SegmentId,
   StoredEdit,
   TimeUnit,
 } from '../model/index.js';
 import { itemId } from '../model/index.js';
-import { addMs, diffMs, formatDate, stepBy, snapInstant, stepsBetween } from '../time/index.js';
+import {
+  addMs,
+  diffMs,
+  envelopeOfSegments,
+  formatDate,
+  stepBy,
+  snapInstant,
+  stepsBetween,
+} from '../time/index.js';
 import type { SnapUnit } from '../time/index.js';
 import type { TimeScale } from '../time/index.js';
 
@@ -162,17 +169,6 @@ function segmentIndexAtEnvelopeEdge(entry: Entry, indexes: readonly number[], ed
     if (edge === 'start' ? segment.start < best.start : segment.end > best.end) found = index;
   }
   return found;
-}
-
-function envelopeOfSegments(segments: readonly Segment[]): { start: Instant; end: Instant } {
-  let start = segments[0]!.start;
-  let end = segments[0]!.end;
-  for (let i = 1; i < segments.length; i++) {
-    const segment = segments[i]!;
-    if (segment.start < start) start = segment.start;
-    if (segment.end > end) end = segment.end;
-  }
-  return { start, end };
 }
 
 /** Moves the reached Segments of `entry` by `deltaMs` and rewrites the envelope around them. Every

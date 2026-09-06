@@ -45,19 +45,6 @@ import {
 } from './fields/field-access.js';
 import { FieldRegistry } from './fields/field-registry.js';
 
-/** The envelope over `segments`: the earliest start and the latest end. `segments` must not be
- *  empty — an Entry with no Segment left is removed instead of asked for its envelope. */
-function envelopeOf(segments: readonly Segment[]): { start: number; end: number } {
-  const first = segments[0]!;
-  let start: number = first.start;
-  let end: number = first.end;
-  for (const segment of segments) {
-    if (segment.start < start) start = segment.start;
-    if (segment.end > end) end = segment.end;
-  }
-  return { start, end };
-}
-
 /** Writes `field` on a copy of `current`. `value === undefined` omits the key instead of setting it —
  *  an undo of an optional field's first edit must return the Entry to not having the key at all
  *  (entry construction's "no key the input never had" rule, `exactOptionalPropertyTypes`), not to
@@ -290,8 +277,9 @@ export class EntryStore implements EntryStoreContract {
 
   /** Removes `removedIds` from one Entry's Segments. Removing the last one removes the Entry itself,
    *  in the same transaction — an Entry never survives as an empty record (#212). Otherwise the
-   *  remaining Segments and their recomputed envelope go through `update`, the normal edit path, so
-   *  the changeset reports `segments`, `start` and `end` the same way any other edit would. */
+   *  remaining Segments go through `update`, the normal edit path, which recomputes the envelope
+   *  around them itself (#212, finding 4: `readEdit` is the one owner) — this call names no `start`
+   *  or `end` of its own, so there is nothing here that could disagree with them. */
   #removeSegmentsFrom(id: EntryId, removedIds: ReadonlySet<SegmentId>): void {
     const entry = this.get(id)!;
     const remaining = entry.segments.filter((segment) => !removedIds.has(segment.id));
@@ -299,8 +287,7 @@ export class EntryStore implements EntryStoreContract {
       this.remove(id);
       return;
     }
-    const envelope = envelopeOf(remaining);
-    this.update(id, { segments: remaining, start: envelope.start, end: envelope.end });
+    this.update(id, { segments: remaining });
   }
 
   #mutate<T>(body: (token: TxToken) => T): T {
