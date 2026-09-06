@@ -130,12 +130,16 @@ dataset.on('change', ({ changeSet }: DatasetEventMap['change']) => {
   refreshHistoryButtons();
 });
 
+// The page runs the library's own commands rather than calling `dataset.undo()` itself, so the
+// buttons and a future default chord are one implementation, not two that can drift or double-fire
+// (D-S5-26). The `window` listener below is the page's stand-in until a default keymap ships; it
+// goes when one does.
 function undo(): void {
-  attemptMutation(() => dataset.undo());
+  attemptMutation(() => gantt.commands.run('freegantt.undo'));
 }
 
 function redo(): void {
-  attemptMutation(() => dataset.redo());
+  attemptMutation(() => gantt.commands.run('freegantt.redo'));
 }
 
 undoBtn.addEventListener('click', undo);
@@ -153,14 +157,16 @@ lockResize.addEventListener('change', () => {
   gantt.interactions = lockResize.checked ? { resize: false } : {};
 });
 
+// `gantt.snap =`, never `gantt.preset = { ...gantt.preset, snap }`: the old spelling built a one-off
+// copy of a shipped preset, and the next `zoomIn()` threw the snap away with it (`api/gantt.ts`).
 function applySnapChoice(): void {
   const unit = snapUnitSelect.value;
   if (unit === 'tick' || unit === 'none') {
-    gantt.preset = { ...gantt.preset, snap: unit };
+    gantt.snap = unit;
     return;
   }
   if (!isTimeUnit(unit)) return;
-  gantt.preset = { ...gantt.preset, snap: { unit, increment: 1 } };
+  gantt.snap = { unit, increment: 1 };
 }
 
 snapUnitSelect.addEventListener('change', applySnapChoice);
