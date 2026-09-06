@@ -795,4 +795,28 @@ describe('GesturePipeline hot path (review finding 9, I5)', () => {
 
     expect(selectedSegmentIds).toHaveBeenCalledTimes(1);
   });
+
+  it('never copies the dataset on a preview frame when no extension hook is installed', async () => {
+    // The default `identityExtender` writes nothing, so a frame has nothing to reconcile and must
+    // read no entry at all. Copying the roster to build "effective" entries first made every frame
+    // cost the whole dataset — invisible on a 3-row fixture, O(dataset) on D2's 10k target.
+    const roster = new Map([[entryId('a'), entry('a', 0, 100)]]);
+    let walks = 0;
+    const walk = roster[Symbol.iterator].bind(roster);
+    roster[Symbol.iterator] = () => {
+      walks += 1;
+      return walk();
+    };
+
+    const { deps } = withRoster([entry('a', 0, 100)], { allEntries: () => roster });
+    const pipeline = new GesturePipeline(deps);
+    const session = pipeline.session(entryId('a'), { kind: 'move' })!;
+
+    session.preview(10);
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    session.preview(20);
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+
+    expect(walks).toBe(0);
+  });
 });

@@ -19,6 +19,25 @@ export function buildEffectiveEntries(
   return map;
 }
 
+/** The entries `ids` names, as this transaction's body leaves them. Builds one entry per named id
+ *  instead of copying the whole dataset, because the drag preview runs this on every frame and the
+ *  hot path allocates only what it uses (I5). `buildEffectiveEntries` above stays the commit path's
+ *  form: a commit must also apply `added` and `removed`, which a per-id read cannot see. */
+export function effectiveEntriesFor(
+  committed: ReadonlyMap<EntryId, Entry>,
+  proposed: EntryEdits,
+  ids: Iterable<EntryId>,
+): ReadonlyMap<EntryId, Entry> {
+  const map = new Map<EntryId, Entry>();
+  for (const id of ids) {
+    const current = committed.get(id);
+    if (current === undefined) continue;
+    const edit = proposed.get(id);
+    map.set(id, edit === undefined ? current : overlayStoredEdit(current, edit));
+  }
+  return map;
+}
+
 export function childIdsByParent(entries: ReadonlyMap<EntryId, Entry>): Map<EntryId, EntryId[]> {
   const byParent = new Map<EntryId, EntryId[]>();
   for (const entry of entries.values()) {
