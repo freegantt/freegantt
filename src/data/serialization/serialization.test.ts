@@ -55,7 +55,7 @@ describe('[S2-A2] toJSON / fromJSON', () => {
     expect(present?.parentId).toBe('p1');
     expect(present?.kind).toBe('milestone');
     expect(present?.segments).toEqual([
-      { start: '2026-09-01T00:00:00.000Z', end: '2026-09-02T00:00:00.000Z' },
+      { id: 'sg1', start: '2026-09-01T00:00:00.000Z', end: '2026-09-02T00:00:00.000Z' },
     ]);
     expect(present?.meta).toEqual({ team: 'A' });
     roundTrip(withAll);
@@ -71,6 +71,27 @@ describe('[S2-A2] toJSON / fromJSON', () => {
     expect(bare && 'parentId' in bare).toBe(false);
     expect(bare && 'segments' in bare).toBe(false);
     expect(bare && 'meta' in bare).toBe(false);
+  });
+
+  it('round-trips a plain entry and a multi-segment entry byte-stable at schema: 4', () => {
+    const dataset = new DatasetState({
+      timeZone: 'UTC',
+      entries: [
+        span('plain'),
+        span('multi', {
+          segments: [
+            { id: 'first-half', start: '2026-09-01T00:00:00.000Z', end: '2026-09-06T00:00:00.000Z' },
+            { id: 'second-half', start: '2026-09-06T00:00:00.000Z', end: '2026-09-11T00:00:00.000Z' },
+          ],
+        }),
+      ],
+    });
+    const first = toJSON(dataset);
+    expect(first.schema).toBe(4);
+    const multiRow = first.entries.find((row) => row.id === 'multi');
+    expect(multiRow?.segments?.map((segment) => segment.id)).toEqual(['first-half', 'second-half']);
+    const second = toJSON(fromJSON(first));
+    expect(second).toEqual(first);
   });
 
   it('preserves meta nested objects, arrays, and key order by reference', () => {
@@ -302,7 +323,7 @@ describe('[S2-A2] toJSON / fromJSON', () => {
 
   it('throws UnsupportedSchemaError for a schema this build does not read', () => {
     const doc = {
-      schema: 4,
+      schema: 5,
       timeZone: 'UTC',
       dateOnlyEnd: 'inclusive',
       rollUpKinds: [],
@@ -315,8 +336,8 @@ describe('[S2-A2] toJSON / fromJSON', () => {
       expect(error).toBeInstanceOf(UnsupportedSchemaError);
       if (error instanceof UnsupportedSchemaError) {
         expect(error.code).toBe('unsupported-schema');
-        expect(error.schema).toBe(4);
-        expect(error.supported).toEqual([1, 2, 3]);
+        expect(error.schema).toBe(5);
+        expect(error.supported).toEqual([1, 2, 3, 4]);
       }
     }
   });
@@ -343,7 +364,7 @@ describe('plugin rows (schema: 3, D-S5-24)', () => {
   it('writes the plugins key and round-trips it byte-stably', () => {
     const dataset = withLockedT1();
     const doc = toJSON(dataset);
-    expect(doc.schema).toBe(3);
+    expect(doc.schema).toBe(4);
     expect(doc.plugins).toEqual({ 'demo.lock': { t1: { locked: true } } });
     roundTrip(dataset);
   });
@@ -378,7 +399,7 @@ describe('plugin rows (schema: 3, D-S5-24)', () => {
       entries: [{ id: 't1', name: 't1', start: '2026-09-01T00:00:00.000Z', end: '2026-09-11T00:00:00.000Z' }],
     };
     const written = toJSON(fromJSON(older));
-    expect(written.schema).toBe(3);
+    expect(written.schema).toBe(4);
     expect('plugins' in written).toBe(false);
   });
 

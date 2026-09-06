@@ -5,11 +5,20 @@ import type { DatasetBinding } from './viewport.js';
 import { TimeScaleModel } from './time-scale-model.js';
 import { ScrollModel } from './scroll-model.js';
 import { diffMs, instant } from '../../time/index.js';
-import { entryId } from '../../model/index.js';
+import { entryId, segmentId } from '../../model/index.js';
 import type { Entry } from '../../model/index.js';
 
 function entry(id: string, start: string, end: string): Entry {
-  return { id: entryId(id), name: id, start: instant(start), end: instant(end), kind: 'span' };
+  const startInstant = instant(start);
+  const endInstant = instant(end);
+  return {
+    id: entryId(id),
+    name: id,
+    start: startInstant,
+    end: endInstant,
+    kind: 'span',
+    segments: [{ id: segmentId(`${id}-1`), start: startInstant, end: endInstant }],
+  };
 }
 
 const dataset: DatasetBinding = {

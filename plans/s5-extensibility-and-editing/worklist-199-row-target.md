@@ -1,5 +1,10 @@
 # Worklist — #199, a row target names one Entry and must name all of them
 
+> **Note (#212, ADR 0010).** This worklist predates the Selection's move to `SegmentId`. Every
+> `gantt.selectedIds`/`selectedEntryIds` mention below records what shipped at the time. The current
+> names are `Gantt.selectedSegmentIds` (the Selection) and `Gantt.selectedEntryIds` (derived).
+> `CommandTarget.entryIds`, `DomTarget.entryIds`, and the row-target rule are unchanged by #212.
+
 **Owner:** the `s5-row-target` agent · **Branch:** `s5-row-target` · **Base:** `s5-start`
 
 Tick each box **in the commit that earns it**, not at the end. A box and its code land together, so
@@ -78,7 +83,7 @@ Why not the other candidates:
 
 `entryIds` is the word the row plan already uses — `PlannedRow.entryIds`, `CustomRow.entryIds`,
 `FrameRow.entryIds` — and the word #185 chose for the same set on the interaction side
-(`selectedEntryIds`). One word, one concept, five surfaces.
+(`selectedEntryIds`, renamed `selectedSegmentIds` in #212). One word, one concept, five surfaces.
 
 `entry` stays, and its doc now says what it is: the **subject**, the one Entry whose Fields the
 node's content shows. Two members, because a row target answers two different questions.
@@ -127,7 +132,8 @@ builds on; nothing from `4293277` or `3a11c6b` is reverted.
 
 `extensions/features/context-menu.ts`. `DomTarget` states a DOM fact — a bar names its Entry, a row
 names its Entries — and it keeps doing exactly that. This is a command-layer rule, and `openAt` is
-the one place that holds both the clicked target and `ctx.gantt.selectedIds`. The layer rules agree:
+the one place that holds both the clicked target and `ctx.gantt.selectedIds` (renamed
+`selectedSegmentIds` in #212). The layer rules agree:
 `extensions/` reaches the Selection through the public `Gantt` and imports nothing new (D-S5-5).
 
 `commandTargetOf` no longer copies `entryIds` across. It takes the resolved set as its second
@@ -137,7 +143,8 @@ argument, so the one function that decides — `clickLandsInSelection` — has o
 
 **A right-click outside the Selection replaces the Selection with what you clicked**, before the menu
 opens. Without it the command acts on Entries the user cannot see highlighted. It assigns
-`gantt.selectedIds`, so it runs the same cancelable `beforeSelectionChange` an assignment runs. A
+`gantt.selectedIds` (renamed `selectedSegmentIds` in #212), so it runs the same cancelable
+`beforeSelectionChange` an assignment runs. A
 consumer that cancels keeps its Selection, and the command still acts on what the user clicked —
 that is what the menu offered.
 
@@ -149,7 +156,8 @@ an empty set, which is the whole of that rule.
 
 ## #205 needed no new seam
 
-The keyboard path resolves the bar of `selectedIds[0]`, and that bar is part of the Selection. So the
+The keyboard path resolves the bar of `selectedIds[0]` (`selectedSegmentIds[0]` from #212), and that
+bar is part of the Selection. So the
 same rule answers with the whole Selection, and `GanttDom` needs no `rowFor(id)`. The bar stays the
 popup's **anchor**, because a popup needs a box on screen. That leaves #205's second, smaller point
 open: on a multi-Entry row the popup opens over one bar, and `kind` reads `'bar'` where a right-click

@@ -145,7 +145,7 @@ function logLine(text: string): void {
 }
 
 function renderSelection(): void {
-  const ids = gantt.selectedIds;
+  const ids = gantt.selectedEntryIds;
   selectionReadout.textContent = ids.length === 0 ? 'Selection: (none)' : `Selection: ${ids.join(', ')}`;
 }
 

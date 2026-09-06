@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { diffEdit, foldChangeSet, invertChangeSet } from './change-set.js';
-import { changeSetId, entryId } from '../model/index.js';
+import { changeSetId, entryId, segmentId } from '../model/index.js';
 import type { Entry, EntryId, Instant } from '../model/index.js';
 import type { StoredEdit } from './edit-extension.js';
 import { createFieldContext, withProposedKeys, writeField } from './fields/field-access.js';
@@ -17,6 +17,7 @@ function entry(id: string, meta?: unknown): Entry {
     start: 0 as Entry['start'],
     end: 1 as Entry['end'],
     kind: 'span',
+    segments: [{ id: segmentId(`${id}-seg`), start: 0 as Entry['start'], end: 1 as Entry['end'] }],
   };
   if (meta !== undefined) item.meta = meta;
   return item;

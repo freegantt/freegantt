@@ -15,7 +15,12 @@ export interface EntryDocument<TMeta = unknown> {
   name: string;
   start: string;
   end: string;
-  segments?: readonly { start: string; end: string }[];
+  /** Written at `schema: 4` and above, and only by an Entry whose Segments say something its
+   *  envelope does not — several of them, or one that does not span it. Every id round-trips, so a
+   *  Document a consumer holds Segment ids against reads back naming the same stretches (#212). An
+   *  Entry that authored none is written without the key, exactly as before, and reads back with one
+   *  Segment over `[start, end)`. */
+  segments?: readonly { id: string; start: string; end: string }[];
   /** Consumer-owned. Carried by reference, never walked field by field (D-S2-12). */
   meta?: TMeta;
 }
@@ -36,10 +41,10 @@ export type SerializedField = {
 export type PluginDocument = Readonly<Record<string, Readonly<Record<string, unknown>>>>;
 
 /** The whole-document half of D7. Key order is a contract: `schema`, `timeZone`, `dateOnlyEnd`,
- *  `rollUpKinds`, `fields`, `plugins`, `entries`. This build writes `schema: 3` and still reads
- *  `schema: 1` and `2` (D-S4-16, D-S5-24). */
+ *  `rollUpKinds`, `fields`, `plugins`, `entries`. This build writes `schema: 4` and still reads
+ *  `schema: 1`, `2` and `3` (D-S4-16, D-S5-24, #212). */
 export interface DatasetDocument<TMeta = unknown> {
-  schema: 1 | 2 | 3;
+  schema: 1 | 2 | 3 | 4;
   timeZone: string;
   dateOnlyEnd: DateOnlyEndRule;
   rollUpKinds: readonly EntryKind[];

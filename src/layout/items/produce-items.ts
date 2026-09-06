@@ -3,7 +3,7 @@
 // and an agent learn one name. Header rows (`kind: 'header'`) produce no Items.
 
 import { itemId } from '../../model/index.js';
-import type { Disposer, Entry, EntryId, EntryKind, ItemId, Instant } from '../../model/index.js';
+import type { Disposer, Entry, EntryId, EntryKind, ItemId, Instant, SegmentId } from '../../model/index.js';
 import type { PlannedRow } from '../rows/row-source.js';
 import { isPlannedHeaderRow } from '../rows/row-source.js';
 import { createRegistrationTable } from '../registration-table.js';
@@ -15,14 +15,25 @@ export interface Item {
   label: string;
   start: Instant;
   end: Instant;
+  /** The one Segment this Item draws (#212, ADR 0010) — set only when the Item stands for a real
+   *  Segment of the Entry, never for an Item that draws the Entry's whole span (`wholeEntryItem`). */
+  segmentId?: SegmentId;
 }
 
 export type ItemProducer = (entry: Entry) => readonly Item[];
 
 /** The one place the `${entryId}:${segmentIndex}` id convention is written. Every producer below
- *  builds its Items here, so no producer restates it. */
-function entryItem(entry: Entry, segmentIndex: number, start: Instant, end: Instant): Item {
-  return {
+ *  builds its Items here, so no producer restates it. `segmentId` is the caller's own Segment, not
+ *  re-derived from `segmentIndex` — a caller with no Segment in hand (a milestone instant, a whole
+ *  Entry) simply omits it. */
+function entryItem(
+  entry: Entry,
+  segmentIndex: number,
+  start: Instant,
+  end: Instant,
+  segmentId?: SegmentId,
+): Item {
+  const item: Item = {
     id: itemId(entry.id, segmentIndex),
     entryId: entry.id,
     kind: entry.kind,
@@ -30,6 +41,8 @@ function entryItem(entry: Entry, segmentIndex: number, start: Instant, end: Inst
     start,
     end,
   };
+  if (segmentId !== undefined) item.segmentId = segmentId;
+  return item;
 }
 
 /** One Item covering the entry's whole span — what almost every `ItemProducer` returns, and the
@@ -56,7 +69,7 @@ export interface ItemProducerRegistry {
 function produceSpanItems(entry: Entry): readonly Item[] {
   const segments = entry.segments;
   if (segments !== undefined && segments.length > 0) {
-    return segments.map((segment, index) => entryItem(entry, index, segment.start, segment.end));
+    return segments.map((segment, index) => entryItem(entry, index, segment.start, segment.end, segment.id));
   }
   return [wholeEntryItem(entry)];
 }

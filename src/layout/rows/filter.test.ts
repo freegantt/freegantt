@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { entryId, rowId } from '../../model/index.js';
+import { entryId, rowId, segmentId } from '../../model/index.js';
 import type { CoreFieldValue, Entry, FieldContext, FieldKey, Instant } from '../../model/index.js';
 import { applyFilter } from './filter.js';
 import { resolveEntriesSource } from './entries-source.js';
@@ -12,12 +12,15 @@ function entry(
   id: string,
   opts?: { parentId?: string; team?: string; start?: number; cost?: number },
 ): Entry {
+  const start = instant(opts?.start ?? 0);
+  const end = instant((opts?.start ?? 0) + 1);
   const row: Entry = {
     id: entryId(id),
     name: id,
-    start: instant(opts?.start ?? 0),
-    end: instant((opts?.start ?? 0) + 1),
+    start,
+    end,
     kind: 'span',
+    segments: [{ id: segmentId(`${id}-1`), start, end }],
   };
   if (opts?.parentId !== undefined) row.parentId = entryId(opts.parentId);
   if (opts?.team !== undefined || opts?.cost !== undefined) {

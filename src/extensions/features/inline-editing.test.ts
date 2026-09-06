@@ -373,6 +373,27 @@ describe('inlineEditing() (S5.8, D-S5-19/D-S5-20)', () => {
     container.remove();
   });
 
+  it('a one-segment entry edits its start cell, and its lone segment moves too (#212)', () => {
+    // The guard above refuses an envelope write only when an entry draws several segments. One
+    // segment is the envelope's own drawing, so it moves with the envelope. `e1` authors no
+    // segments, so ingest filled one over `[start, end)`, and this proves that one still tracks.
+    const { container, gantt, dataset } = makeGantt();
+    const before = dataset.entries.get('e1')!.segments[0]!.id;
+    dblclick(cellFor(container, 'e1', 'start'));
+    const el = input(container);
+    el.value = '2026-01-02';
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+
+    const after = dataset.entries.get('e1')!;
+    expect(refusal(container)).toBeNull();
+    expect(after.segments).toHaveLength(1);
+    expect(after.segments[0]!.start).toBe(instant('2026-01-02T00:00:00Z'));
+    expect(after.segments[0]!.start).toBe(after.start);
+    expect(after.segments[0]!.id).toBe(before);
+    gantt.destroy();
+    container.remove();
+  });
+
   it('a non-midnight instant refuses the default date editor with a named reason (issue #137 F11)', () => {
     const { container, gantt } = makeGantt();
     dblclick(cellFor(container, 'e2', 'start'));
@@ -603,11 +624,12 @@ describe('inlineEditing() (S5.8, D-S5-19/D-S5-20)', () => {
     // containerA is appended to document.body first. An unscoped document-wide lookup by entry id
     // would find *its* row first, whichever Gantt's own Enter handler actually fired. So B's own
     // handler firing must still resolve to B's own row.
-    const { container: containerA, gantt: ganttA } = makeGantt();
-    const { container: containerB, gantt: ganttB } = makeGantt();
+    const { container: containerA, gantt: ganttA, dataset: datasetA } = makeGantt();
+    const { container: containerB, gantt: ganttB, dataset: datasetB } = makeGantt();
 
-    ganttA.selectedIds = ['e1'];
-    ganttB.selectedIds = ['e1'];
+    // #212: the Selection holds Segments, so each Gantt selects the Segment its own Entry draws.
+    ganttA.selectedSegmentIds = datasetA.entries.get('e1')!.segments.map((segment) => segment.id);
+    ganttB.selectedSegmentIds = datasetB.entries.get('e1')!.segments.map((segment) => segment.id);
 
     enter(containerB);
     expect(containerB.querySelector('.fg-cell-editor')).not.toBeNull();

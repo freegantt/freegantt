@@ -1,5 +1,5 @@
 // data/ — Document reader (D-S2-12, D-S4-15, D-S4-16, D-S5-24). A `readers` map keyed by schema
-// version; this build writes `schema: 3` and reads `1`, `2` and `3`. An unknown schema throws
+// version; this build writes `schema: 4` and reads `1`, `2`, `3` and `4`. An unknown schema throws
 // `UnsupportedSchemaError`. Keys the reader does not know are dropped: top level belongs to the
 // schema, `meta` is the consumer's namespace.
 //
@@ -73,6 +73,8 @@ function readEntryDocument(row: EntryDocument): EntryInput {
     ...(row.segments !== undefined
       ? {
           segments: row.segments.map((segment) => ({
+            // Absent below `schema: 4`, where a Segment had no id to write; ingest mints one (#212).
+            ...(segment.id !== undefined ? { id: segment.id } : {}),
             start: readInstant(segment.start),
             end: readInstant(segment.end),
           })),
@@ -109,11 +111,16 @@ function readSchema2(doc: DatasetDocument): SchemaRead {
  *  `readDocument` picks the `plugins` key up separately, the same way it picks up `fields`. */
 const readSchema3: Reader = readSchema2;
 
+/** `schema: 4` adds an id to each written Segment (#212). `readEntryDocument` carries an id when the
+ *  row has one, so the earlier schemas read through the same function and mint theirs at ingest. */
+const readSchema4: Reader = readSchema2;
+
 /** The migration seam. A second schema is a map addition, not a rewrite (`plans/02` §6). */
 export const readers: Record<number, Reader> = Object.freeze({
   1: readSchema1,
   2: readSchema2,
   3: readSchema3,
+  4: readSchema4,
 });
 
 export function readDocument(doc: DatasetDocument, options?: FromJSONOptions): DatasetDocumentRead {

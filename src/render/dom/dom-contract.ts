@@ -27,6 +27,11 @@ export const BAR_HANDLE_CLASS = 'fg-bar-handle';
 /** `dataset` keys, spelled the way `HTMLElement.dataset` reads them (camelCase). */
 export const TESTID_KEY = 'testid';
 export const ITEM_ID_KEY = 'itemId';
+/** The one Segment a `.fg-bar` draws *right now* (#212, ADR 0010). Absent on a bar that draws the
+ *  Entry's whole span — a group, a milestone, or a plugin's own kind. It is a per-frame fact and the
+ *  bar reconciler's `patch` rewrites it, because a removed Segment renumbers the bars and a node
+ *  survives that. A reader that needs the Segments a bar *stands for* asks the layout instead. */
+export const SEGMENT_ID_KEY = 'segmentId';
 /** The Row this node is — the row's own identity, which `view/gantt-dom.ts` asks the layout about to
  *  learn every Entry the row owns (#199). `ENTRY_ID_KEY` below is a different question. */
 export const ROW_ID_KEY = 'rowId';
@@ -53,3 +58,5 @@ export const FIELD_ATTRIBUTE = 'data-field';
 export const ENTRY_ID_ATTRIBUTE = 'data-entry-id';
 /** The Item id a bar stands for, as a selector name — `[data-item-id="e1:0"]`. */
 export const ITEM_ID_ATTRIBUTE = 'data-item-id';
+/** The Segment id a bar stands for, as a selector name — `[data-segment-id="sg1"]`. */
+export const SEGMENT_ID_ATTRIBUTE = 'data-segment-id';

@@ -51,6 +51,17 @@ describe('new Dataset()', () => {
     expect(first(chicago).start).toBe(utc('2026-09-01T05:00:00Z'));
   });
 
+  it('gives an entry authored without segments one Segment, with a minted id (#212)', () => {
+    const dataset = new Dataset({ timeZone: 'UTC', entries: [oneEntry()] });
+    expect(dataset.entries.get('t1')?.segments).toHaveLength(1);
+  });
+
+  it('mints Segment ids from a per-instance counter — two Datasets never collide (I2)', () => {
+    const one = new Dataset({ timeZone: 'UTC', entries: [oneEntry({ id: 't1' })] });
+    const two = new Dataset({ timeZone: 'UTC', entries: [oneEntry({ id: 't1' })] });
+    expect(one.entries.get('t1')?.segments[0]?.id).toBe(two.entries.get('t1')?.segments[0]?.id);
+  });
+
   // A `Date` input is exercised in time/input.test.ts instead: I10 bans `new Date()` outside time/,
   // and that is the layer that actually reads one.
   it('takes epoch milliseconds and an already-branded Instant unchanged', () => {
@@ -106,7 +117,8 @@ describe('new Dataset()', () => {
         }),
       ],
     });
-    expect(first(dataset).segments).toEqual([
+    // A Segment carries an id (#212), which this test is not about — compare spans only.
+    expect(first(dataset).segments.map(({ start, end }) => ({ start, end }))).toEqual([
       { start: utc('2026-09-01T00:00:00Z'), end: utc('2026-09-03T00:00:00Z') },
       { start: utc('2026-09-05T00:00:00Z'), end: utc('2026-09-09T00:00:00Z') },
     ]);
@@ -121,7 +133,10 @@ describe('new Dataset()', () => {
     expect(entry.kind).toBe('milestone');
     expect(entry.meta).toEqual({ team: 'A' });
     // exactOptionalPropertyTypes: an absent key must not become a key holding undefined.
-    expect(Object.keys(entry).sort()).toEqual(['end', 'id', 'kind', 'meta', 'start', 'name'].sort());
+    // `segments` is always present (#212): every Entry stores at least one Segment.
+    expect(Object.keys(entry).sort()).toEqual(
+      ['end', 'id', 'kind', 'meta', 'segments', 'start', 'name'].sort(),
+    );
   });
 
   it('does not mutate the entries the consumer handed it', () => {
@@ -419,7 +434,9 @@ describe('Dataset fields (S4.1)', () => {
     const fields = fieldRowsOf(changes[0]!)
       .map((row) => row.field)
       .sort();
-    expect(fields).toEqual(['cost', 'start']);
+    // `t1` draws one Segment, so a `start` write moves that Segment with the envelope and the
+    // changeset carries the row (#212). Still one transaction, still one changeset.
+    expect(fields).toEqual(['cost', 'segments', 'start']);
     expect(changes[0]?.updated).toContainEqual(
       expect.objectContaining({ field: 'cost', from: 400, to: 500 }),
     );

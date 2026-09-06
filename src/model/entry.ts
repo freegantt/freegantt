@@ -1,10 +1,25 @@
 // model/ is types + brand/id helpers only — zero runtime beyond this, zero dependencies (plans/01 §1.1).
 
-import type { EntryId } from './ids.js';
+import type { EntryId, SegmentId } from './ids.js';
 import type { Instant, InstantInput, TimeSpan, TimeSpanInput } from './time.js';
 
 /** Open classification — see plans/01 §2.5. Shipped kinds ship; consumers add their own. */
 export type EntryKind = 'span' | 'group' | 'milestone' | (string & {});
+
+/** One dated stretch of an Entry, and the unit the Selection holds (#212, ADR 0010). Interrupted
+ * work stores several; an Entry that never mentioned one stores a single Segment over its own span,
+ * filled at ingest, so every Entry reads the same way and no caller carries a "no segments" branch.
+ * A Segment carries an id because a Selection, an undo and a `removeSegments` call all have to name
+ * the same stretch after its siblings move — see `SegmentId`. */
+export interface Segment extends TimeSpan {
+  id: SegmentId;
+}
+
+/** What a consumer writes for one Segment. The id is theirs to name and optional: an omitted id is
+ * minted at ingest from the Dataset's own counter. `Segment` is itself a valid `SegmentInput`. */
+export interface SegmentInput extends TimeSpanInput {
+  id?: string;
+}
 
 export interface Entry<TMeta = unknown> {
   id: EntryId;
@@ -16,8 +31,10 @@ export interface Entry<TMeta = unknown> {
   start: Instant;
   /** Exclusive — see plans/01 §5. */
   end: Instant;
-  /** Interrupted work — renders as multiple bars on one row. */
-  segments?: readonly TimeSpan[];
+  /** Every stretch this Entry draws, never empty (#212). Interrupted work stores several bars on one
+   * row; everything else stores the single Segment ingest filled in over `[start, end)`. `start` and
+   * `end` stay the envelope over all of them. */
+  segments: readonly Segment[];
   /** Consumer-owned, typed via generic. */
   meta?: TMeta;
 }
@@ -46,8 +63,9 @@ export interface EntryInput<TMeta = unknown> {
   start?: InstantInput;
   /** Exclusive — see plans/01 §5 and `DateOnlyEndRule`. See `start` for when this may be omitted. */
   end?: InstantInput;
-  /** Interrupted work — renders as multiple bars on one row. */
-  segments?: readonly TimeSpanInput[];
+  /** Interrupted work — renders as multiple bars on one row. Omit it and ingest fills one Segment
+   * over `[start, end)`, so a stored `Entry` always has at least one. */
+  segments?: readonly SegmentInput[];
   /** Consumer-owned, typed via generic. */
   meta?: TMeta;
 }

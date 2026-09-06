@@ -1,9 +1,10 @@
-// view/ — the core command catalog (S5.2, D-S5-6). Split out of GanttShell so the nineteen
-// commands are reviewable as a table, not interleaved with shell construction. `GanttShell` is the
+// view/ — the core command catalog (S5.2, D-S5-6). Split out of GanttShell so the commands are
+// reviewable as a table, not interleaved with shell construction. `GanttShell` is the
 // only caller: it builds a `CoreCommandPorts` closing over its own private state and hands it here
 // with its own `CommandRegistry` — this file never touches a shell field directly.
 
 import type { EntryId, FieldKey } from '../model/index.js';
+import { MutationCancelledError } from '../model/index.js';
 import type { Command, CommandContext } from '../extensions/commands.js';
 
 /** The shell verbs the core catalog calls — pan, zoom, select, collapse/expand. Undo/redo read
@@ -25,6 +26,9 @@ export interface CoreCommandPorts {
   hasSelection(): boolean;
   keyboardPanEnabled(): boolean;
   nothingSelected(): boolean;
+  /** #212, ADR 0010: moves the Selection to the next or previous Segment of the row it sits on. */
+  selectNextSegment(): void;
+  selectPreviousSegment(): void;
   pageDown(): void;
   pageUp(): void;
   panToStart(): void;
@@ -40,7 +44,7 @@ export interface CoreCommandPorts {
   moveColumnStep(key: FieldKey, direction: 1 | -1): void;
 }
 
-/** D-S5-6: the nineteen commands every consumer already has as a public method or default
+/** D-S5-6: the twenty-one commands every consumer already has as a public method or default
  *  keybinding, named under the `freegantt.*` namespace. Registered before any plugin, so a plugin
  *  can override any of them (D-S5-7). Mechanical extraction from `GanttShell`'s old
  *  `#registerCoreCommands`/`#registerNavigationCommands` — ids, labels, and `when` clauses are
@@ -100,6 +104,41 @@ export function registerCoreCommands(
     label: 'Clear selection',
     when: () => ports.hasSelection(),
     run: () => ports.clearSelection(),
+  });
+  // #212, ADR 0010: the Selection holds Segments, so a row that draws several bars needs a keyboard
+  // way to move between them. Both step within one row and clamp at its ends, so neither ever leaves
+  // the row the user is on.
+  register({
+    id: 'freegantt.selectNextSegment',
+    label: 'Select next segment',
+    when: () => ports.hasSelection(),
+    run: () => ports.selectNextSegment(),
+  });
+  register({
+    id: 'freegantt.selectPreviousSegment',
+    label: 'Select previous segment',
+    when: () => ports.hasSelection(),
+    run: () => ports.selectPreviousSegment(),
+  });
+  // #212, ADR 0010: the right-click menu and the `Delete` key run this one command. Both read
+  // `ctx.target.segmentIds` and call `removeSegments` — a grid-row Delete needs no special case,
+  // because removing an Entry's last Segment already removes the Entry, in the same transaction.
+  // A `beforeChange` handler may refuse the removal. That refusal is a normal outcome, not a fault,
+  // so it stops here instead of reaching `CommandRegistry.run` uncaught (the same swallow `api/`'s
+  // `attemptMutation` does; `view/` cannot import `api/`, so this repeats that one line inline).
+  register({
+    id: 'freegantt.deleteSelection',
+    label: 'Delete',
+    when: (ctx) => (asCtx(ctx).target?.segmentIds?.length ?? 0) > 0,
+    run: (ctx) => {
+      const segmentIds = asCtx(ctx).target?.segmentIds;
+      if (segmentIds === undefined || segmentIds.length === 0) return;
+      try {
+        asCtx(ctx).dataset?.entries.removeSegments(segmentIds);
+      } catch (error) {
+        if (!(error instanceof MutationCancelledError)) throw error;
+      }
+    },
   });
   register({
     id: 'freegantt.undo',

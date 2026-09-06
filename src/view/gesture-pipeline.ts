@@ -7,8 +7,8 @@
 
 import { cursorLabelForX, draftForMove, draftForResize, previewOffsets } from '../layout/index.js';
 import type { ItemPreview, SnapSetting, SnapUnit, TimeScale, ViewPreset } from '../layout/index.js';
-import type { Entry, EntryEdits, EntryId, ErrorCode, ItemId, RaiseError } from '../model/index.js';
-import { itemId, segmentIndexOfItem } from '../model/index.js';
+import type { Entry, EntryEdits, EntryId, ErrorCode, ItemId, RaiseError, SegmentId } from '../model/index.js';
+import { itemId } from '../model/index.js';
 import { identityExtender, type EditExtender } from '../data/edit-extension.js';
 import type { EventBus } from './event-bus.js';
 import type { AsyncCancelableEvent, EntryMove, EntryResize, GanttEventMap } from './event-bus.js';
@@ -24,12 +24,13 @@ export interface GesturePipelineDeps {
    *  showing preset's. `'tick'` still arrives unresolved: only a gesture knows which preset is
    *  measuring it. */
   snap(): SnapSetting;
-  selection(): readonly EntryId[];
+  /** The Selection (#212, ADR 0010) — the same Segment ids `render/dom` paints from. A draft reads
+   *  it, so a gesture acts on exactly the bars that paint selected, never more. */
+  selectedSegmentIds(): readonly SegmentId[];
+  /** The Entries those Segments belong to, deduped, in row order — one projection, resolved by the
+   *  shell, so this file never turns a Segment into an Entry itself. */
+  selectedEntryIds(): readonly EntryId[];
   entryById(id: EntryId): Entry | undefined;
-  /** The bar the pointer picked from each selected Entry (#185) — the same reading `render/dom`
-   *  paints from. #211: a move or resize draft reads it too, so a gesture acts on exactly the bars
-   *  that paint selected, never more. */
-  pickedItemIdByEntryId(): ReadonlyMap<EntryId, ItemId>;
   /** One resolution (I14, D-S3-9) — `GanttShell#canGesture`, the same answer the pointer-selection
    *  path and the affordance ids resolve through, never re-derived here. */
   canGesture(capability: keyof Interactions, id: EntryId): boolean;
@@ -126,7 +127,7 @@ export class GesturePipeline {
   /** D-S3-19: just the grabbed entry when it is not part of a multi-entry selection; else every
    *  *capable* selected entry, grabbed first (D-S3-22) — an incapable one is skipped, not blocking. */
   #entriesForGesture(grabbedId: EntryId, capability: keyof Interactions): readonly Entry[] {
-    const selection = this.#deps.selection();
+    const selection = this.#deps.selectedEntryIds();
     const inMultiSelection = selection.includes(grabbedId) && selection.length > 1;
     const candidateIds = inMultiSelection ? selection : [grabbedId];
     const entries: Entry[] = [];
@@ -185,25 +186,12 @@ export class GesturePipeline {
       snap,
       entries,
       dxPx,
-      pickedSegmentIndexByEntryId: this.#pickedSegmentIndexByEntryId(entries),
+      selectedSegmentIds: new Set(this.#deps.selectedSegmentIds()),
     };
     if (gesture.kind === 'resize') {
       return draftForResize({ ...base, edge: gesture.edge });
     }
     return draftForMove(base);
-  }
-
-  /** #211, D-S4-30: resolves each gestured Entry's own pick — the same `pickedItemIdByEntryId`
-   *  paint already narrows to — into the Segment index `layout/gesture-draft.ts` needs. An Entry with
-   *  no pick is left out of the map, so it moves or resizes whole. */
-  #pickedSegmentIndexByEntryId(entries: readonly Entry[]): ReadonlyMap<EntryId, number> {
-    const picks = this.#deps.pickedItemIdByEntryId();
-    const out = new Map<EntryId, number>();
-    for (const entry of entries) {
-      const picked = picks.get(entry.id);
-      if (picked !== undefined) out.set(entry.id, segmentIndexOfItem(picked));
-    }
-    return out;
   }
 
   /** `beforeEntryMove`/`beforeEntryResize` → one commit → `entryMove`/`entryResize` (D-S3-16,

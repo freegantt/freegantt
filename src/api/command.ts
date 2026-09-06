@@ -8,31 +8,36 @@
 // writing against `Gantt` names the bound `Command`/`CommandContext`/`CommandRegistry`/`KeyBinding`;
 // code that parameterizes over its own Gantt type names the `*Of` forms declared here.
 
-import type { Disposer, Entry, EntryId, FieldKey, KeyChord, TargetKind } from '../model/index.js';
+import type { Disposer, Entry, EntryId, FieldKey, KeyChord, SegmentId, TargetKind } from '../model/index.js';
 import type { Dataset } from './dataset.js';
+
+/** What one invocation acts on (ADR 0010, issue #212) — the two readings of one set. `entryIds` is a
+ *  projection of `segmentIds`: the Entries those Segments belong to, deduped, in row order. Both are
+ *  always present, so a command reads whichever one it needs and the two can never disagree. No
+ *  command declares its reach: Delete reads `segmentIds`, and Lock reads `entryIds`, because a lock
+ *  is a property of the record and not of one drawing of it. */
+export interface ActedOn {
+  segmentIds: readonly SegmentId[];
+  entryIds: readonly EntryId[];
+}
 
 /** What focus a chord or a right-click landed on (issue #137 F6) — S5.7's and S5.11's chord scoping
  *  ("on a focused header cell", "on a selected bar", "on the splitter") has nothing else in
  *  `CommandContext` to read a `when` against. Filled by the keymap resolver from view state; a menu
- *  or `run(id)` invocation with no meaningful target for this kind leaves it `undefined`. */
-export interface CommandTarget {
+ *  or `run(id)` invocation with no meaningful target for this kind leaves it `undefined`.
+ *
+ *  It carries the same `entryIds` word `DomTarget` uses, but not always the same set (#199, #212). A
+ *  `DomTarget` states a DOM fact: what the node stands for. This states what the command acts on,
+ *  resolved from the Selection by `resolveActedOn` below — the Selection when the thing you clicked
+ *  shares it (either one holds the other), and the thing you clicked when it does not. So a
+ *  right-click on one of three selected bars names three, a right-click on an unselected row names
+ *  every Segment that row owns, and a right-click on a row that owns a lone selected bar plus others
+ *  names only that one bar — the narrower thing the user already picked, left alone (#212).
+ *
+ *  Both id sets are empty for a `'header'` or `'splitter'` target, and for a grouping header row.
+ *  Neither is ever `undefined`, so a `when` counts them with no fallback. */
+export interface CommandTarget extends ActedOn {
   kind: TargetKind;
-  /** Every Entry this invocation acts on, and the whole set a command runs over:
-   *  `run: (ctx) => ctx.target?.entryIds.forEach(lock)`. A command that wants exactly one says so —
-   *  `when: (ctx) => ctx.target?.entryIds.length === 1` — and reads `ctx.entry` for it.
-   *
-   *  It is the same word `DomTarget.entryIds` uses, but not always the same set (#199, #212). A
-   *  `DomTarget` states a DOM fact: what the node stands for. This states what the command acts on,
-   *  resolved from the Selection by `resolveActedOnEntryIds` below — the Selection when the thing
-   *  you clicked shares it (either one holds the other), and the thing you clicked when it does
-   *  not. So a right-click on one of three selected bars names three, a right-click on an unselected
-   *  row names every Entry that row owns, and a right-click on a row that owns a lone selected bar
-   *  plus others names only that one bar — the narrower thing the user already picked, left alone
-   *  (#212).
-   *
-   *  Empty for a `'header'` or `'splitter'` target, and for a grouping header row. Never
-   *  `undefined`, so a `when` counts it with no fallback. */
-  entryIds: readonly EntryId[];
   /** Which Grid column this landed on, for a `'header'` or `'cell'` target. `field` names a column
    *  everywhere a column is named (D-S5-37, #194) — the same word `DomTarget.field`,
    *  `GridColumn.field` and a renderer's `ctx.column.field` already use. */
@@ -44,21 +49,24 @@ export interface CommandTarget {
  *  node stand for"; this is the one place its answer meets the Selection.
  *  `extensions/features/context-menu.ts` is the only caller: a keyboard chord has no separate
  *  "clicked" thing to reconcile with the Selection, so `view/gantt-shell.ts`'s
- *  `#buildCommandContext` fills `target.entryIds` straight from the Selection, and a consumer's
- *  command `run` reads `ctx.target?.entryIds` either way (S5.2's contract) — never re-deriving it.
+ *  `#buildCommandContext` fills both id sets straight from the Selection, and a consumer's command
+ *  `run` reads `ctx.target?.segmentIds` or `ctx.target?.entryIds` either way (S5.2's contract) —
+ *  never re-deriving either one.
+ *
+ *  Each side arrives with both readings already paired, so this never turns a Segment into an Entry
+ *  itself: a `DomTarget` carries the clicked pair, and the `Gantt` carries the selected pair.
  *
  *  `clicked` either holds the Selection or is held by it — a bar inside a multi-bar Selection, or a
  *  row that owns a lone selected bar plus others — the command acts on the Selection, unchanged
  *  (#212: a right-click never silently widens what the user picked). Anywhere else — nothing
  *  selected, or `clicked` shares no such relation with the Selection — the command acts on
- *  `clicked` itself, so a right-click on an unselected row still acts on every Entry that row owns. */
-export function resolveActedOnEntryIds(
-  clicked: readonly EntryId[],
-  selected: readonly EntryId[],
-): readonly EntryId[] {
-  if (clicked.length === 0) return clicked;
-  const clickedIsInSelection = clicked.every((id) => selected.includes(id));
-  const selectionIsInClicked = selected.length > 0 && selected.every((id) => clicked.includes(id));
+ *  `clicked` itself, so a right-click on an unselected row still acts on every Segment that row
+ *  owns. */
+export function resolveActedOn(clicked: ActedOn, selected: ActedOn): ActedOn {
+  if (clicked.segmentIds.length === 0) return clicked;
+  const clickedIsInSelection = clicked.segmentIds.every((id) => selected.segmentIds.includes(id));
+  const selectionIsInClicked =
+    selected.segmentIds.length > 0 && selected.segmentIds.every((id) => clicked.segmentIds.includes(id));
   return clickedIsInSelection || selectionIsInClicked ? selected : clicked;
 }
 

@@ -3,6 +3,7 @@ import { createDomBackend } from './index.js';
 import { computeFrame, createItemProducerRegistry } from '../../layout/index.js';
 import type { BarRenderer, ErrorReportInput, ItemId, TimeScale, ViewPreset } from '../../layout/index.js';
 import { sampleEntries } from '../../../fixtures/sample-dataset.js';
+import { segmentId } from '../../layout/index.js';
 
 function entryLookup(id: string): (typeof sampleEntries)[number] | undefined {
   return sampleEntries.find((e) => e.id === id);
@@ -32,7 +33,24 @@ const itemProducerRegistry = createItemProducerRegistry();
 /** One Entry, drawn as `count` bars — the multi-Item shape a Segmented Entry has (#185). Each
  *  Segment spans the whole Entry, so a fixed row still packs them onto one line. */
 function segmentsOf(entry: (typeof sampleEntries)[number], count: number) {
-  return Array.from({ length: count }, () => ({ start: entry.start, end: entry.end }));
+  return Array.from({ length: count }, (_, index) => ({
+    id: segmentId(`${entry.id}-${index}`),
+    start: entry.start,
+    end: entry.end,
+  }));
+}
+
+/** A backend that can answer "which Segments does this Entry own" for a roster of its own (#212).
+ *  A row paints from that answer, and so does a bar that draws an Entry's whole span. `entries`
+ *  defaults to none — `DomBackendOptions.entryById` is mandatory, so every backend built by this
+ *  file names its Entry lookup explicitly, even a test that never asks it a question. */
+function paintingBackend(entries: readonly (typeof sampleEntries)[number][] = []) {
+  return createDomBackend({
+    entryById: (id) => entries.find((entry) => entry.id === id),
+    resolveBarRenderer: () => undefined,
+    resolveCellRenderer: () => undefined,
+    resolveHeaderRenderer: () => undefined,
+  });
 }
 
 function mountSurfaces(): { grid: HTMLElement; timeline: HTMLElement } {
@@ -44,7 +62,7 @@ function mountSurfaces(): { grid: HTMLElement; timeline: HTMLElement } {
 
 describe('render/dom backend', () => {
   it('finds the item under a point via event delegation, not a materialized hit index (#31)', () => {
-    const backend = createDomBackend();
+    const backend = paintingBackend();
     const { grid, timeline } = mountSurfaces();
     backend.mount({ grid, timeline });
 
@@ -73,7 +91,7 @@ describe('render/dom backend', () => {
   });
 
   it('renders rows and labels bars with the entry name, not its id (#26)', () => {
-    const backend = createDomBackend();
+    const backend = paintingBackend();
     const { grid, timeline } = mountSurfaces();
     backend.mount({ grid, timeline });
 
@@ -96,7 +114,7 @@ describe('render/dom backend', () => {
   });
 
   it('puts row labels in the grid surface and ticks/bars/the sizer in the timeline surface, with no gutter offset (S1.8, D-S1.8-2)', () => {
-    const backend = createDomBackend();
+    const backend = paintingBackend();
     const { grid, timeline } = mountSurfaces();
     backend.mount({ grid, timeline });
 
@@ -124,7 +142,7 @@ describe('render/dom backend', () => {
   });
 
   it("writes the grid row layer's own translateY(-visible.y) each frame (D-S1.8-1)", () => {
-    const backend = createDomBackend();
+    const backend = paintingBackend();
     const { grid, timeline } = mountSurfaces();
     backend.mount({ grid, timeline });
 
@@ -145,7 +163,7 @@ describe('render/dom backend', () => {
   });
 
   it('reconciles header ticks through the same keyed pattern as bars (#19)', () => {
-    const backend = createDomBackend();
+    const backend = paintingBackend();
     const { grid, timeline } = mountSurfaces();
     backend.mount({ grid, timeline });
 
@@ -168,7 +186,7 @@ describe('render/dom backend', () => {
   });
 
   it("renders data-flag from a bar's BarFlags keys, generated not hand-mapped (S1.10, D-S1.10-2, U7)", () => {
-    const backend = createDomBackend();
+    const backend = paintingBackend();
     const { grid, timeline } = mountSurfaces();
     backend.mount({ grid, timeline });
 
@@ -192,7 +210,7 @@ describe('render/dom backend', () => {
   });
 
   it('renders a third, hypothetical BarFlags key with no render/dom change (drives the generated path, U7)', () => {
-    const backend = createDomBackend();
+    const backend = paintingBackend();
     const { grid, timeline } = mountSurfaces();
     backend.mount({ grid, timeline });
 
@@ -214,7 +232,7 @@ describe('render/dom backend', () => {
   });
 
   it('gives .fg-row one .fg-row-label child carrying the row label text (D-S1.10-7)', () => {
-    const backend = createDomBackend();
+    const backend = paintingBackend();
     const { grid, timeline } = mountSurfaces();
     backend.mount({ grid, timeline });
 
@@ -239,7 +257,7 @@ describe('render/dom backend', () => {
   });
 
   it('renders one .fg-row-cell per configured column, in column order, on top of the .fg-row-label first cell (#81)', () => {
-    const backend = createDomBackend();
+    const backend = paintingBackend();
     const { grid, timeline } = mountSurfaces();
     backend.mount({ grid, timeline });
 
@@ -264,7 +282,7 @@ describe('render/dom backend', () => {
   });
 
   it('four columns paint four cells; widths and alignment apply; a removed column prunes its node', () => {
-    const backend = createDomBackend();
+    const backend = paintingBackend();
     const { grid, timeline } = mountSurfaces();
     const gridHeader = document.createElement('div');
     document.body.append(gridHeader);
@@ -312,7 +330,7 @@ describe('render/dom backend', () => {
   });
 
   it('clearing a column-resize preview restores the header cell and every body cell to their committed geometry, not left mid-drag (D-S5-18)', () => {
-    const backend = createDomBackend();
+    const backend = paintingBackend();
     const { grid, timeline } = mountSurfaces();
     const gridHeader = document.createElement('div');
     document.body.append(gridHeader);
@@ -360,7 +378,7 @@ describe('render/dom backend', () => {
   });
 
   it('a reorder preview moves the grabbed header cell and paints the drop edge; clearing parks both (D-S5-18, #140)', () => {
-    const backend = createDomBackend();
+    const backend = paintingBackend();
     const { grid, timeline } = mountSurfaces();
     const gridHeader = document.createElement('div');
     document.body.append(gridHeader);
@@ -410,7 +428,7 @@ describe('render/dom backend', () => {
   });
 
   it("stamps .fg-row's aria-posinset/aria-setsize from the frame's absolute row index and total row count, not the windowed count (D-S1.10-5)", () => {
-    const backend = createDomBackend();
+    const backend = paintingBackend();
     const { grid, timeline } = mountSurfaces();
     backend.mount({ grid, timeline });
 
@@ -435,7 +453,7 @@ describe('render/dom backend', () => {
   });
 
   it('stripes both panes from the absolute row index, so a scrolled window keeps the same rows odd', () => {
-    const backend = createDomBackend();
+    const backend = paintingBackend();
     const { grid, timeline } = mountSurfaces();
     backend.mount({ grid, timeline });
 
@@ -466,7 +484,7 @@ describe('render/dom backend', () => {
   });
 
   it("gives each timeline row band its row's own top and height (I9: both panes, one geometry)", () => {
-    const backend = createDomBackend();
+    const backend = paintingBackend();
     const { grid, timeline } = mountSurfaces();
     backend.mount({ grid, timeline });
 
@@ -491,7 +509,7 @@ describe('render/dom backend', () => {
   });
 
   it('gives .fg-bar role="img" and its a11yLabel, not role="gridcell" (D-S1.10-5, revised)', () => {
-    const backend = createDomBackend();
+    const backend = paintingBackend();
     const { grid, timeline } = mountSurfaces();
     backend.mount({ grid, timeline });
 
@@ -513,7 +531,7 @@ describe('render/dom backend', () => {
   });
 
   it('gives .fg-row role="listitem" and data-testid/data-row-id, .fg-bar data-testid alongside data-item-id (U6)', () => {
-    const backend = createDomBackend();
+    const backend = paintingBackend();
     const { grid, timeline } = mountSurfaces();
     backend.mount({ grid, timeline });
 
@@ -539,8 +557,124 @@ describe('render/dom backend', () => {
     backend.destroy();
   });
 
+  it('gives a Segment bar data-segment-id; a group or milestone bar carries none (#212)', () => {
+    const backend = paintingBackend();
+    const { grid, timeline } = mountSurfaces();
+    backend.mount({ grid, timeline });
+
+    const base = sampleEntries[0]!;
+    const segmented = { ...base, segments: segmentsOf(base, 2) };
+    const grouped = { ...sampleEntries[1]!, kind: 'group' };
+    const milestone = { ...sampleEntries[2]!, kind: 'milestone' };
+    const frame = computeFrame({
+      entries: [segmented, grouped, milestone],
+      scale,
+      preset,
+      visible: { x: 0, y: 0, width: 0, height: 0 },
+      rowHeight: 32,
+      revision: 0,
+      itemProducerRegistry,
+    });
+    backend.sync(frame);
+
+    const bars = Array.from(timeline.querySelectorAll<HTMLElement>('.fg-bar'));
+    const segmentBars = bars.filter((node) => node.dataset['itemId']?.startsWith(`${segmented.id}:`));
+    expect(segmentBars).toHaveLength(2);
+    expect(segmentBars.map((node) => node.dataset['segmentId'])).toEqual(
+      segmented.segments.map((segment) => segment.id),
+    );
+
+    const groupBar = bars.find((node) => node.dataset['itemId'] === `${grouped.id}:0`)!;
+    const milestoneBar = bars.find((node) => node.dataset['itemId'] === `${milestone.id}:0`)!;
+    expect(groupBar.dataset['segmentId']).toBeUndefined();
+    expect(milestoneBar.dataset['segmentId']).toBeUndefined();
+    backend.destroy();
+  });
+
+  it('a bar node restamps data-segment-id when a removed Segment renumbers the bars (#212)', () => {
+    const base = sampleEntries[0]!;
+    const three = { ...base, segments: segmentsOf(base, 3) };
+    const two = { ...base, segments: three.segments.slice(1) };
+    let painted: (typeof sampleEntries)[number] = three;
+    const backend = createDomBackend({
+      entryById: (id) => (id === base.id ? painted : undefined),
+      resolveBarRenderer: () => undefined,
+      resolveCellRenderer: () => undefined,
+      resolveHeaderRenderer: () => undefined,
+    });
+    const { grid, timeline } = mountSurfaces();
+    backend.mount({ grid, timeline });
+    const paint = () =>
+      backend.sync(
+        computeFrame({
+          entries: [painted],
+          scale,
+          preset,
+          visible: { x: 0, y: 0, width: 0, height: 0 },
+          rowHeight: 32,
+          revision: 0,
+          itemProducerRegistry,
+        }),
+      );
+
+    paint();
+    const first = timeline.querySelector<HTMLElement>('.fg-bar')!;
+    expect(first.dataset['segmentId']).toBe(three.segments[0]!.id);
+
+    // The consumer drops the first Segment. The bar keys are `${entryId}:${segmentIndex}`, so
+    // `e:0` and `e:1` both survive and the reconciler reuses their nodes. Each one now draws its
+    // former neighbour, and the stamp has to follow.
+    painted = two;
+    paint();
+
+    const bars = Array.from(timeline.querySelectorAll<HTMLElement>('.fg-bar'));
+    expect(bars[0]).toBe(first);
+    expect(bars.map((node) => node.dataset['segmentId'])).toEqual(two.segments.map((segment) => segment.id));
+    backend.destroy();
+  });
+
+  it('a bar that stops drawing a Segment loses its data-segment-id (#212)', () => {
+    const base = sampleEntries[0]!;
+    const segmented = { ...base, segments: segmentsOf(base, 1) };
+    // Same Entry id and same bar key, drawn as a milestone the second time — one whole-span bar,
+    // which draws no single Segment. The reused node must drop the stamp, not keep a stale one.
+    const milestone = { ...segmented, kind: 'milestone' };
+    let painted: (typeof sampleEntries)[number] = segmented;
+    const backend = createDomBackend({
+      entryById: (id) => (id === base.id ? painted : undefined),
+      resolveBarRenderer: () => undefined,
+      resolveCellRenderer: () => undefined,
+      resolveHeaderRenderer: () => undefined,
+    });
+    const { grid, timeline } = mountSurfaces();
+    backend.mount({ grid, timeline });
+    const paint = () =>
+      backend.sync(
+        computeFrame({
+          entries: [painted],
+          scale,
+          preset,
+          visible: { x: 0, y: 0, width: 0, height: 0 },
+          rowHeight: 32,
+          revision: 0,
+          itemProducerRegistry,
+        }),
+      );
+
+    paint();
+    const bar = timeline.querySelector<HTMLElement>('.fg-bar')!;
+    expect(bar.dataset['segmentId']).toBe(segmented.segments[0]!.id);
+
+    painted = milestone;
+    paint();
+
+    expect(timeline.querySelector('.fg-bar')).toBe(bar);
+    expect(bar.dataset['segmentId']).toBeUndefined();
+    backend.destroy();
+  });
+
   it('spans the today line the full row content height, not just the visible pane (header readability follow-up)', () => {
-    const backend = createDomBackend();
+    const backend = paintingBackend();
     const { grid, timeline } = mountSurfaces();
     backend.mount({ grid, timeline });
 
@@ -576,7 +710,7 @@ describe('render/dom backend', () => {
   });
 
   it('paints each Date line as a keyed node and drops nodes that leave the frame', () => {
-    const backend = createDomBackend();
+    const backend = paintingBackend();
     const { grid, timeline } = mountSurfaces();
     backend.mount({ grid, timeline });
 
@@ -617,7 +751,7 @@ describe('render/dom backend', () => {
   });
 
   it('composes a Date line className onto the base class, on both the stroke and the Date line label', () => {
-    const backend = createDomBackend();
+    const backend = paintingBackend();
     const { grid, timeline } = mountSurfaces();
     backend.mount({ grid, timeline });
 
@@ -648,7 +782,7 @@ describe('render/dom backend', () => {
   });
 
   it('marks the Today line wrapper with data-flag=today and leaves authored Date lines unmarked (U5)', () => {
-    const backend = createDomBackend();
+    const backend = paintingBackend();
     const { grid, timeline } = mountSurfaces();
     backend.mount({ grid, timeline });
 
@@ -682,7 +816,7 @@ describe('render/dom backend', () => {
   // D-S3-6/D-S3-7, [S3-A3]: applyState paints the fixed data-state projection, touching only the
   // bars whose token set actually changed.
   it('applyState paints hovered/selected data-state tokens and clears them on the next call', () => {
-    const backend = createDomBackend();
+    const backend = paintingBackend();
     const { grid, timeline } = mountSurfaces();
     backend.mount({ grid, timeline });
 
@@ -700,11 +834,11 @@ describe('render/dom backend', () => {
     const nodeA = timeline.querySelector<HTMLElement>(`[data-item-id="${a!.id}"]`)!;
     const nodeB = timeline.querySelector<HTMLElement>(`[data-item-id="${b!.id}"]`)!;
 
-    backend.applyState({ hoveredItemId: a!.id, selectedEntryIds: [a!.entryId, b!.entryId] });
+    backend.applyState({ hoveredItemId: a!.id, selectedSegmentIds: [a!.segmentId!, b!.segmentId!] });
     expect(nodeA.dataset['state']).toBe('hovered selected');
     expect(nodeB.dataset['state']).toBe('selected');
 
-    backend.applyState({ selectedEntryIds: [b!.entryId] });
+    backend.applyState({ selectedSegmentIds: [b!.segmentId!] });
     expect(nodeA.dataset['state']).toBe('');
     expect(nodeB.dataset['state']).toBe('selected');
 
@@ -714,9 +848,9 @@ describe('render/dom backend', () => {
   });
 
   // Bug hunt (S5 fixes, "grid row highlight and row click"): applyState paints .fg-row the same way
-  // it paints .fg-bar — one Entry-keyed Selection, read against the Entries each row owns (#185).
+  // it paints .fg-bar — one Segment-keyed Selection, read against the Entries each row owns (#212).
   it('applyState paints data-state~="selected" on the row matching a selected bar, and clears it', () => {
-    const backend = createDomBackend();
+    const backend = paintingBackend(sampleEntries.slice(0, 2));
     const { grid, timeline } = mountSurfaces();
     backend.mount({ grid, timeline });
 
@@ -734,15 +868,15 @@ describe('render/dom backend', () => {
     const rowA = grid.querySelector<HTMLElement>(`[data-row-id="${a!.rowId}"]`)!;
     const rowB = grid.querySelector<HTMLElement>(`[data-row-id="${b!.rowId}"]`)!;
 
-    backend.applyState({ selectedEntryIds: [a!.entryId] });
+    backend.applyState({ selectedSegmentIds: [a!.segmentId!] });
     expect(rowA.dataset['state']).toBe('selected');
     expect(rowB.dataset['state']).toBeUndefined();
 
-    backend.applyState({ selectedEntryIds: [b!.entryId] });
+    backend.applyState({ selectedSegmentIds: [b!.segmentId!] });
     expect(rowA.dataset['state']).toBe('');
     expect(rowB.dataset['state']).toBe('selected');
 
-    backend.applyState({ selectedEntryIds: [] });
+    backend.applyState({ selectedSegmentIds: [] });
     expect(rowB.dataset['state']).toBe('');
 
     backend.destroy();
@@ -751,7 +885,7 @@ describe('render/dom backend', () => {
   });
 
   it('paints every mounted bar of a selected entry, not only its first (#185)', () => {
-    const backend = createDomBackend();
+    const backend = paintingBackend();
     const { grid, timeline } = mountSurfaces();
     backend.mount({ grid, timeline });
 
@@ -768,13 +902,13 @@ describe('render/dom backend', () => {
     backend.sync(frame);
     expect(frame.bars).toHaveLength(3);
 
-    backend.applyState({ selectedEntryIds: [segmented.id] });
+    backend.applyState({ selectedSegmentIds: frame.bars.map((bar) => bar.segmentId!) });
     for (const bar of frame.bars) {
       const node = timeline.querySelector<HTMLElement>(`[data-item-id="${bar.id}"]`)!;
       expect(node.dataset['state']).toBe('selected');
     }
 
-    backend.applyState({ selectedEntryIds: [] });
+    backend.applyState({ selectedSegmentIds: [] });
     for (const bar of frame.bars) {
       const node = timeline.querySelector<HTMLElement>(`[data-item-id="${bar.id}"]`)!;
       expect(node.dataset['state']).toBe('');
@@ -785,8 +919,41 @@ describe('render/dom backend', () => {
     timeline.remove();
   });
 
-  it('a picked bar paints alone, and the Entry paints whole again once the pick clears (#185)', () => {
-    const backend = createDomBackend();
+  it('a bar that draws an Entry whole paints when any Segment of that Entry is selected (#212)', () => {
+    // A group and a milestone draw one bar for the whole Entry, so that bar carries no
+    // `data-segment-id`. It still has to light up when the Selection names a Segment of its Entry.
+    const group = { ...sampleEntries[0]!, kind: 'group' as const };
+    const backend = paintingBackend([group]);
+    const { grid, timeline } = mountSurfaces();
+    backend.mount({ grid, timeline });
+
+    const frame = computeFrame({
+      entries: [group],
+      scale,
+      preset,
+      visible: { x: 0, y: 0, width: 0, height: 0 },
+      rowHeight: 32,
+      revision: 0,
+      itemProducerRegistry,
+    });
+    backend.sync(frame);
+    expect(frame.bars).toHaveLength(1);
+    expect(frame.bars[0]!.segmentId).toBeUndefined();
+    const node = timeline.querySelector<HTMLElement>(`[data-item-id="${frame.bars[0]!.id}"]`)!;
+
+    backend.applyState({ selectedSegmentIds: [group.segments[0]!.id] });
+    expect(node.dataset['state']).toBe('selected');
+
+    backend.applyState({ selectedSegmentIds: [] });
+    expect(node.dataset['state']).toBe('');
+
+    backend.destroy();
+    grid.remove();
+    timeline.remove();
+  });
+
+  it('one selected bar paints alone, and the Entry paints whole when every Segment is in (#212)', () => {
+    const backend = paintingBackend();
     const { grid, timeline } = mountSurfaces();
     backend.mount({ grid, timeline });
 
@@ -803,24 +970,15 @@ describe('render/dom backend', () => {
     backend.sync(frame);
     const stateOf = (id: ItemId): string =>
       timeline.querySelector<HTMLElement>(`[data-item-id="${id}"]`)!.dataset['state'] ?? '';
-    const picked = frame.bars[1]!.id;
-
-    backend.applyState({
-      selectedEntryIds: [segmented.id],
-      pickedItemIdByEntryId: new Map([[segmented.id, picked]]),
-    });
+    backend.applyState({ selectedSegmentIds: [frame.bars[1]!.segmentId!] });
     expect(frame.bars.map((bar) => stateOf(bar.id))).toEqual(['', 'selected', '']);
 
     // The pointer moved to another bar of the same Entry: both ends of the move repaint.
-    const repicked = frame.bars[2]!.id;
-    backend.applyState({
-      selectedEntryIds: [segmented.id],
-      pickedItemIdByEntryId: new Map([[segmented.id, repicked]]),
-    });
+    backend.applyState({ selectedSegmentIds: [frame.bars[2]!.segmentId!] });
     expect(frame.bars.map((bar) => stateOf(bar.id))).toEqual(['', '', 'selected']);
 
-    // A grid-row click on the same Entry picks no bar, so the whole Entry paints again.
-    backend.applyState({ selectedEntryIds: [segmented.id] });
+    // A grid-row click selects every Segment of the Entry, so every bar it drew paints again.
+    backend.applyState({ selectedSegmentIds: frame.bars.map((bar) => bar.segmentId!) });
     expect(frame.bars.map((bar) => stateOf(bar.id))).toEqual(['selected', 'selected', 'selected']);
 
     backend.destroy();
@@ -828,8 +986,8 @@ describe('render/dom backend', () => {
     timeline.remove();
   });
 
-  it('a picked bar comes back painted after a remount, and its siblings do not (#185)', () => {
-    const backend = createDomBackend();
+  it('a selected bar comes back painted after a remount, and its siblings do not (#185, #212)', () => {
+    const backend = paintingBackend();
     const { grid, timeline } = mountSurfaces();
     backend.mount({ grid, timeline });
 
@@ -844,26 +1002,20 @@ describe('render/dom backend', () => {
       itemProducerRegistry,
     });
     backend.sync(frame);
-    const picked = frame.bars[1]!.id;
-    backend.applyState({
-      selectedEntryIds: [segmented.id],
-      pickedItemIdByEntryId: new Map([[segmented.id, picked]]),
-    });
+    const selected = frame.bars[1]!.segmentId!;
+    backend.applyState({ selectedSegmentIds: [selected] });
 
     backend.sync({ ...frame, bars: [] }); // the horizontal cull drops every bar of the row
     backend.sync(frame); // and a scroll back mounts them again
 
-    // The pick is keyed by Entry, so it outlived the node it names: the picked bar comes back
-    // painted and its siblings stay clear.
+    // The Selection is keyed by Segment, so it outlived the node that drew it: the selected bar
+    // comes back painted and its siblings stay clear.
     const stateOf = (id: ItemId): string =>
       timeline.querySelector<HTMLElement>(`[data-item-id="${id}"]`)!.dataset['state'] ?? '';
     expect(frame.bars.map((bar) => stateOf(bar.id))).toEqual(['', 'selected', '']);
 
     // The restamp also joined the painted set, so the next call sees no diff and rewrites nothing.
-    backend.applyState({
-      selectedEntryIds: [segmented.id],
-      pickedItemIdByEntryId: new Map([[segmented.id, picked]]),
-    });
+    backend.applyState({ selectedSegmentIds: [selected] });
     expect(frame.bars.map((bar) => stateOf(bar.id))).toEqual(['', 'selected', '']);
 
     backend.destroy();
@@ -872,7 +1024,7 @@ describe('render/dom backend', () => {
   });
 
   it('a bar that mounts into a live selection is stamped at create time (#185)', () => {
-    const backend = createDomBackend();
+    const backend = paintingBackend();
     const { grid, timeline } = mountSurfaces();
     backend.mount({ grid, timeline });
 
@@ -886,7 +1038,7 @@ describe('render/dom backend', () => {
       itemProducerRegistry,
     });
     backend.sync(frame);
-    backend.applyState({ selectedEntryIds: [frame.bars[0]!.entryId] });
+    backend.applyState({ selectedSegmentIds: [frame.bars[0]!.segmentId!] });
     backend.sync({ ...frame, bars: [] }); // the horizontal cull drops the bar
 
     backend.sync(frame); // and a scroll back mounts it again
@@ -895,7 +1047,7 @@ describe('render/dom backend', () => {
 
     // The restamp also joined the painted set, so the next call sees no diff and rewrites nothing.
     const before = bar.dataset['state'];
-    backend.applyState({ selectedEntryIds: [frame.bars[0]!.entryId] });
+    backend.applyState({ selectedSegmentIds: [frame.bars[0]!.segmentId!] });
     expect(bar.dataset['state']).toBe(before);
 
     backend.destroy();
@@ -904,7 +1056,7 @@ describe('render/dom backend', () => {
   });
 
   it('a hover repaint touches only the bars whose token set changed (I5, #185)', () => {
-    const backend = createDomBackend();
+    const backend = paintingBackend();
     const { grid, timeline } = mountSurfaces();
     backend.mount({ grid, timeline });
 
@@ -919,7 +1071,8 @@ describe('render/dom backend', () => {
       itemProducerRegistry,
     });
     backend.sync(frame);
-    backend.applyState({ selectedEntryIds: [segmented.id] });
+    const everySegment = frame.bars.map((bar) => bar.segmentId!);
+    backend.applyState({ selectedSegmentIds: everySegment });
 
     // Counting attribute writes is the only observation of "touched" — the tokens themselves say
     // nothing about how many nodes the diff wrote.
@@ -927,7 +1080,7 @@ describe('render/dom backend', () => {
     observer.observe(timeline, { subtree: true, attributes: true, attributeFilter: ['data-state'] });
 
     const hovered = frame.bars[1]!.id;
-    backend.applyState({ selectedEntryIds: [segmented.id], hoveredItemId: hovered });
+    backend.applyState({ selectedSegmentIds: everySegment, hoveredItemId: hovered });
     const touched = observer.takeRecords().map((record) => (record.target as HTMLElement).dataset['itemId']);
     observer.disconnect();
 
@@ -939,7 +1092,7 @@ describe('render/dom backend', () => {
   });
 
   it('a freshly-mounted row is stamped from the current selection at create time, not the next applyState', () => {
-    const backend = createDomBackend();
+    const backend = paintingBackend(sampleEntries.slice(0, 1));
     const { grid, timeline } = mountSurfaces();
     backend.mount({ grid, timeline });
 
@@ -953,7 +1106,7 @@ describe('render/dom backend', () => {
       itemProducerRegistry,
     });
     backend.sync(frame);
-    backend.applyState({ selectedEntryIds: [frame.bars[0]!.entryId] });
+    backend.applyState({ selectedSegmentIds: [frame.bars[0]!.segmentId!] });
     backend.sync({ ...frame, rows: [], rowCount: 0 }); // simulate virtualization dropping the row
 
     backend.sync(frame); // and remounting it later
@@ -968,7 +1121,7 @@ describe('render/dom backend', () => {
   // Bug hunt (S5 fixes): hitTest's grid-row fallback — a click that misses the bar layer resolves
   // against the grid pane's own .fg-row. It names the row (#185), never an Item id of its own.
   it('hitTest resolves a grid-row miss on the bar layer to that row (#185)', () => {
-    const backend = createDomBackend();
+    const backend = paintingBackend();
     const { grid, timeline } = mountSurfaces();
     backend.mount({ grid, timeline });
 
@@ -995,7 +1148,7 @@ describe('render/dom backend', () => {
   });
 
   it('hitTest reports no hit for a twisty click — collapse stays on the twisty, never selection', () => {
-    const backend = createDomBackend();
+    const backend = paintingBackend();
     const { grid, timeline } = mountSurfaces();
     backend.mount({ grid, timeline });
 
@@ -1024,7 +1177,7 @@ describe('render/dom backend', () => {
   // S3.6, D-S3-18, U7: ItemPreview.extra distinguishes the caller's own gesture ('dragging') from an
   // installed extension hook's cascade ('ghost') — two entries offset in the same preview frame.
   it('applyState paints dragging/ghost data-state tokens off ItemPreview.extra and clears them once the preview drops', () => {
-    const backend = createDomBackend();
+    const backend = paintingBackend();
     const { grid, timeline } = mountSurfaces();
     backend.mount({ grid, timeline });
 
@@ -1061,7 +1214,7 @@ describe('render/dom backend', () => {
   });
 
   it('parks the shared handle pair when resizableEntryId is undefined and moves them onto the committed bar when it is set (D-S3-8)', () => {
-    const backend = createDomBackend();
+    const backend = paintingBackend();
     const { grid, timeline } = mountSurfaces();
     backend.mount({ grid, timeline });
 
@@ -1098,7 +1251,7 @@ describe('render/dom backend', () => {
   });
 
   it('hitTest reports the edge of a resize handle, resolved against resizableEntryId (S3.4, D-S3-4)', () => {
-    const backend = createDomBackend();
+    const backend = paintingBackend();
     const { grid, timeline } = mountSurfaces();
     backend.mount({ grid, timeline });
 
@@ -1131,7 +1284,7 @@ describe('render/dom backend', () => {
   });
 
   it('brackets a segmented entry: one handle per envelope bar, and hitTest names that bar (#200)', () => {
-    const backend = createDomBackend();
+    const backend = paintingBackend();
     const { grid, timeline } = mountSurfaces();
     backend.mount({ grid, timeline });
 
@@ -1148,8 +1301,8 @@ describe('render/dom backend', () => {
       ...base,
       end: later.end,
       segments: [
-        { start: base.start, end: base.end },
-        { start: later.start, end: later.end },
+        { id: segmentId(`${base.id}-0`), start: base.start, end: base.end },
+        { id: segmentId(`${base.id}-1`), start: later.start, end: later.end },
       ],
     };
     const frame = computeFrame({
@@ -1186,7 +1339,7 @@ describe('render/dom backend', () => {
   });
 
   it('brackets the picked bar alone when the sole selected Entry has a pick (#211, D-S4-30)', () => {
-    const backend = createDomBackend();
+    const backend = paintingBackend();
     const { grid, timeline } = mountSurfaces();
     backend.mount({ grid, timeline });
 
@@ -1200,8 +1353,8 @@ describe('render/dom backend', () => {
       ...base,
       end: later.end,
       segments: [
-        { start: base.start, end: base.end },
-        { start: later.start, end: later.end },
+        { id: segmentId(`${base.id}-0`), start: base.start, end: base.end },
+        { id: segmentId(`${base.id}-1`), start: later.start, end: later.end },
       ],
     };
     const frame = computeFrame({
@@ -1217,11 +1370,11 @@ describe('render/dom backend', () => {
     const [first, last] = frame.bars;
     expect(frame.bars).toHaveLength(2);
 
-    // The pointer picked the earlier bar — both handles bracket it alone, never the envelope's
-    // latest bar, because a resize on a picked Segment writes only that Segment's edge (#211).
+    // The pointer selected the earlier bar — both handles bracket it alone, never the envelope's
+    // latest bar, because a resize on one selected Segment writes only that Segment's edge (#212).
     backend.applyState({
       resizableEntryId: segmented.id,
-      pickedItemIdByEntryId: new Map([[segmented.id, first!.id]]),
+      selectedSegmentIds: [first!.segmentId!],
     });
     const start = timeline.querySelector<HTMLElement>('.fg-bar-handle[data-edge="start"]')!;
     const end = timeline.querySelector<HTMLElement>('.fg-bar-handle[data-edge="end"]')!;
@@ -1234,12 +1387,12 @@ describe('render/dom backend', () => {
     timeline.remove();
   });
 
-  it('moves the handle pair onto a bar picked after it already brackets the envelope (#211)', () => {
-    // A hover shows the envelope pair with no pick; a click on one of the two bars then sets a pick
-    // for the same, still-hovered Entry — `resizableEntryId` never changes, so the repaint gate must
-    // not key off Entry identity alone, or the pair would stay glued to the envelope (the exact bug
-    // spec-211-gesture-units.md §7's harness scenario calls out).
-    const backend = createDomBackend();
+  it('moves the handle pair onto a bar selected after it already brackets the envelope (#211)', () => {
+    // A hover shows the envelope pair with nothing selected; a click on one of the two bars then
+    // selects it, for the same, still-hovered Entry — `resizableEntryId` never changes, so the
+    // repaint gate must not key off Entry identity alone, or the pair would stay glued to the
+    // envelope (the exact bug spec-211-gesture-units.md §7's harness scenario calls out).
+    const backend = paintingBackend();
     const { grid, timeline } = mountSurfaces();
     backend.mount({ grid, timeline });
 
@@ -1253,8 +1406,8 @@ describe('render/dom backend', () => {
       ...base,
       end: later.end,
       segments: [
-        { start: base.start, end: base.end },
-        { start: later.start, end: later.end },
+        { id: segmentId(`${base.id}-0`), start: base.start, end: base.end },
+        { id: segmentId(`${base.id}-1`), start: later.start, end: later.end },
       ],
     };
     const frame = computeFrame({
@@ -1270,18 +1423,18 @@ describe('render/dom backend', () => {
     const [first, last] = frame.bars;
     expect(frame.bars).toHaveLength(2);
 
-    // Step 1: hover only — no pick recorded anywhere. The pair brackets the envelope.
-    backend.applyState({ resizableEntryId: segmented.id, pickedItemIdByEntryId: new Map() });
+    // Step 1: hover only — nothing selected anywhere. The pair brackets the envelope.
+    backend.applyState({ resizableEntryId: segmented.id, selectedSegmentIds: [] });
     const start = timeline.querySelector<HTMLElement>('.fg-bar-handle[data-edge="start"]')!;
     const end = timeline.querySelector<HTMLElement>('.fg-bar-handle[data-edge="end"]')!;
     expect(start.style.transform).toBe(`translate(${first!.x}px, ${first!.y}px)`);
     expect(end.style.transform).toBe(`translate(${last!.x + last!.width}px, ${last!.y}px)`);
 
-    // Step 2: a click on the earliest bar sets its pick. `resizableEntryId` names the same Entry as
-    // before — only the pick changed — and the pair must still move onto that one bar.
+    // Step 2: a click on the earliest bar selects it. `resizableEntryId` names the same Entry as
+    // before — only the Selection changed — and the pair must still move onto that one bar.
     backend.applyState({
       resizableEntryId: segmented.id,
-      pickedItemIdByEntryId: new Map([[segmented.id, first!.id]]),
+      selectedSegmentIds: [first!.segmentId!],
     });
     expect(start.style.transform).toBe(`translate(${first!.x}px, ${first!.y}px)`);
     expect(end.style.transform).toBe(`translate(${first!.x + first!.width}px, ${first!.y}px)`);
@@ -1293,7 +1446,7 @@ describe('render/dom backend', () => {
   });
 
   it('hitTest never reports an edge for a parked (hidden) handle pair', () => {
-    const backend = createDomBackend();
+    const backend = paintingBackend();
     const { grid, timeline } = mountSurfaces();
     backend.mount({ grid, timeline });
 
@@ -1322,7 +1475,7 @@ describe('render/dom backend', () => {
   });
 
   it("sets data-movable on movableItemId's bar and clears it when the id moves elsewhere (D-S3-6)", () => {
-    const backend = createDomBackend();
+    const backend = paintingBackend();
     const { grid, timeline } = mountSurfaces();
     backend.mount({ grid, timeline });
 
@@ -1354,7 +1507,7 @@ describe('render/dom backend', () => {
   });
 
   it('applyState paints the Cursor line singleton at cursorX and parks it when cursorX drops (D-S3-15)', () => {
-    const backend = createDomBackend();
+    const backend = paintingBackend();
     const { grid, timeline } = mountSurfaces();
     backend.mount({ grid, timeline });
 
@@ -1390,7 +1543,7 @@ describe('render/dom backend', () => {
   });
 
   it('indents from depth, puts aria-expanded on the twisty, and omits a twisty on a leaf (S4.6)', () => {
-    const backend = createDomBackend();
+    const backend = paintingBackend();
     const { grid, timeline } = mountSurfaces();
     backend.mount({ grid, timeline });
 
@@ -1429,7 +1582,7 @@ describe('render/dom backend', () => {
   });
 
   it('[S4-A4] paints N bars on one row for N segments', () => {
-    const backend = createDomBackend();
+    const backend = paintingBackend();
     const { grid, timeline } = mountSurfaces();
     backend.mount({ grid, timeline });
     const entry = sampleEntries[0]!;
@@ -1438,9 +1591,9 @@ describe('render/dom backend', () => {
         {
           ...entry,
           segments: [
-            { start: entry.start, end: entry.end },
-            { start: entry.start, end: entry.end },
-            { start: entry.start, end: entry.end },
+            { id: segmentId(`${entry.id}-0`), start: entry.start, end: entry.end },
+            { id: segmentId(`${entry.id}-1`), start: entry.start, end: entry.end },
+            { id: segmentId(`${entry.id}-2`), start: entry.start, end: entry.end },
           ],
         },
       ],
@@ -1463,7 +1616,7 @@ describe('render/dom backend', () => {
   });
 
   it('applies bracket and diamond classes off data-kind', () => {
-    const backend = createDomBackend();
+    const backend = paintingBackend();
     const { grid, timeline } = mountSurfaces();
     backend.mount({ grid, timeline });
     const [span, groupSeed, mileSeed] = sampleEntries;
@@ -1741,7 +1894,7 @@ describe('render/dom backend', () => {
   // S5.6, D-S5-15: an underBars decoration paints below the bar layer, an overBars one above it —
   // DOM order alone gives the stacking, so this asserts document position, not a z-index.
   it('paints an underBars decoration below the bar layer and an overBars one above it', () => {
-    const backend = createDomBackend();
+    const backend = paintingBackend();
     const { grid, timeline } = mountSurfaces();
     backend.mount({ grid, timeline });
 
@@ -1786,7 +1939,7 @@ describe('render/dom backend', () => {
   });
 
   it("resolves a rowStripe against the row it paints, at that row's top/height", () => {
-    const backend = createDomBackend();
+    const backend = paintingBackend();
     const { grid, timeline } = mountSurfaces();
     backend.mount({ grid, timeline });
 

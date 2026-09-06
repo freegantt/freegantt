@@ -3,6 +3,14 @@
 **Written:** 2026-09-05 · **Branch:** `s5-start` · **Decides:** the unit question five issues asked
 separately · **Supersedes:** the #200 amendment to D-S4-30
 
+> **Superseded in one clause (#212, `docs/adr/0010-the-selection-holds-segments-not-entries.md`).**
+> §3's "D-S3-10 stands" and "the Picked Item stands" are withdrawn: the Selection is now a set of
+> `SegmentId`, and the Picked Item is deleted. The behaviour this document decides — what paints as
+> selected is what moves, table and all — is unchanged; only the mechanism is. Where the pick used
+> to say how much of a gesture reaches, the Selection now says so directly, because it holds
+> Segments. §4's table stays the record of every case; read "picked" there as "the Selection holds
+> that one Segment" and "no pick" as "the Selection holds every Segment of the Entry".
+
 Read `CLAUDE.md` first. It overrides your defaults.
 
 ## 1. Why this document exists
@@ -37,39 +45,42 @@ you expect it to apply to."*
 
 ## 3. What stays
 
-- **D-S3-10 stands.** The Selection is a set of **Entry** ids. Nothing here reopens it.
+- **D-S3-10 is withdrawn (#212).** The Selection is a set of **Segment** ids, not Entry ids — see the
+  superseded banner above.
 - **D-S3-19 stands.** A multi-Entry drag moves every selected Entry as one rigid group.
 - **#185's two real fixes stand.** A remounted bar repaints, and a row that owns several Entries
   reaches all of them.
-- **#199 and #205 stand.** A row target names every Entry the row owns; a right-click inside the
-  Selection acts on the Selection.
-- **The Picked Item stands.** `InteractionState.pickedItemIdByEntryId` already carries "the one bar
-  the pointer named, per Entry", and `render/dom` already narrows paint to it. **No new state is
-  needed.** This spec makes the gesture side read what the paint side already reads.
+- **#199 and #205 stand.** A row target names every Segment of every Entry the row owns; a
+  right-click inside the Selection acts on the Selection.
+- **The Picked Item is deleted (#212).** The Selection now carries the Segment the pointer picked
+  directly, so no separate `pickedItemIdByEntryId` state is needed to say how much of a gesture
+  reaches. This spec's gesture side still reads exactly what the paint side reads — the paint side
+  is just the Selection now, with nothing extra alongside it.
 
 ## 4. The decision table
 
-A selected Entry is **picked** when `pickedItemIdByEntryId` names one of its bars. Picks are
-per-Entry: a plain click leaves exactly one, a ctrl-click adds one per toggled Entry, and a
-row click, a shift-range, a keyboard select and `gantt.selectedIds = [...]` name no bar at all.
+An Entry is **picked** when the Selection holds exactly one of its Segments — one Segment named
+directly, the same set a plain click or a ctrl-click writes. A row click, a shift-range, a keyboard
+select and `gantt.selectedSegmentIds = [...]` can put **every** Segment of an Entry in the Selection
+at once; that Entry then has **no pick**, in the sense the table below uses the word.
 
 | Gesture | Selection state | Acts on |
 | --- | --- | --- |
-| Click a bar | — | Selection becomes that bar's Entry; **that bar is the pick** |
-| Click a grid row | — | Selection becomes every Entry the row owns; **no pick** |
-| Ctrl/⌘-click a bar | — | toggles that Entry; **that bar becomes that Entry's pick** (picks are per-Entry) |
-| Shift-click | — | ranges over whole Entries; **clears the pick** |
+| Click a bar | — | Selection becomes that bar's Segment; **that Entry is picked** |
+| Click a grid row | — | Selection becomes every Segment of every Entry the row owns; **no pick** |
+| Ctrl/⌘-click a bar | — | toggles that Segment; **that Entry becomes picked on that Segment** (per-Entry) |
+| Shift-click | — | ranges over whole rows' Segments; **clears the pick** |
 | Click empty timeline | — | clears the Selection |
 | **Move drag** | one Entry, picked | **that Segment only** — writes `segments`, envelope follows |
 | **Move drag** | one Entry, no pick | every Segment + the envelope |
 | **Move drag** | several Entries | one rigid group (D-S3-19). Each selected Entry contributes **its own picked Segment** if it has a pick, and **every Segment** if it does not |
-| **Move drag** | grabbed bar not in the Selection | Selection first becomes that Entry with that pick, then row 1 above applies |
+| **Move drag** | grabbed bar not in the Selection | Selection first becomes that Entry's Segment, then row 1 above applies |
 | **Resize** | one Entry, picked | handles sit on **the picked bar**; writes that Segment's edge |
 | **Resize** | one Entry, no pick | handles bracket the envelope: `start` on the earliest bar, `end` on the latest |
 | **Resize** | several Entries | same delta on each Entry's picked Segment edge if it has a pick, else its envelope edge (D-S3-19) |
 | **Keyboard nudge** | any | moves exactly what a drag in the same state would move |
 | **Right-click / Shift+F10 inside the Selection** | — | the menu acts on the whole Selection; the Selection does not change |
-| **Right-click outside the Selection** | — | Selection becomes that bar's Entry with that pick, then the menu acts on it |
+| **Right-click outside the Selection** | — | Selection becomes that bar's Segment, then the menu acts on it |
 | **Right-click empty timeline** | — | clears, then a background menu |
 
 Read the three move rows aloud as a user: *"I clicked one bar, so one bar moves. I clicked the row,
@@ -95,9 +106,10 @@ Paint is already correct. The gesture side is the whole job.
    it'` into its opposite. Restore the original assertion and **keep** the whole-entry test for the
    row-click case. Both behaviours ship; both get a test.
 5. **Docs that currently state the deleted behaviour as law:**
-   - `CONTEXT.md` **Segment** — "It is never a unit of selection and never a unit of a gesture (#200)"
-     is now false for gestures. A Segment is still never a unit of *selection*; it **is** the unit of
-     a gesture when the pointer picked it. Rewrite that sentence, keep the selection half.
+   - `CONTEXT.md` **Segment** — the #200 wording called a Segment "drawing only, not a selection or a
+     gesture unit". That is now false for gestures. A Segment was still not a selection unit at this
+     spec's time of writing (#212 later reverses that half too); it **is** the unit of a gesture when
+     the pointer picked it. Rewrite that sentence, keep the selection half as it stood then.
    - `plans/s4-hierarchy-and-rows/README.md:234` and `:278` — the D-S4-30 row and the behaviour row.
    - `plans/s4-hierarchy-and-rows/s4.10-tree-and-lane-interaction.md:8` and `:102` — "Segment-level
      drag is dropped" is reversed.

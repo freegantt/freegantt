@@ -1,20 +1,27 @@
 import { describe, expect, it, vi } from 'vitest';
 import { attachKeyboardEditing } from './keyboard-editing.js';
 import type { EntryGesture, EntryGestureContext, EntryGestureSession } from '../view/index.js';
-import { entryId, entryIdOfItem } from '../model/index.js';
-import type { Entry, EntryId, Instant, ItemId } from '../model/index.js';
+import { entryId, entryIdOfItem, segmentId } from '../model/index.js';
+import type { Entry, EntryId, Instant, ItemId, SegmentId } from '../model/index.js';
 
 const A = entryId('a');
 const B = entryId('b');
 const C = entryId('c');
 const ORDER: readonly EntryId[] = [A, B, C];
 
+/** The fake's own Segment naming (#212): Entry `a` draws one Segment, `a-0`. */
+function segmentOf(id: EntryId): SegmentId {
+  return segmentId(`${id}-0`);
+}
+
 function toInstant(ms: number): Instant {
   return ms as unknown as Instant;
 }
 
 function entryFor(id: EntryId): Entry {
-  return { id, kind: 'span', name: id, start: toInstant(0), end: toInstant(1) };
+  const start = toInstant(0);
+  const end = toInstant(1);
+  return { id, kind: 'span', name: id, start, end, segments: [{ id: segmentOf(id), start, end }] };
 }
 
 function key(type: 'keydown', props: Partial<KeyboardEventInit> = {}): KeyboardEvent {
@@ -34,13 +41,13 @@ function makeContext(
   options: ContextOptions = {},
 ): {
   ctx: EntryGestureContext;
-  proposals: (readonly EntryId[])[];
+  proposals: (readonly SegmentId[])[];
   sessions: [EntryId, EntryGesture][];
   nudges: [1 | -1, boolean | undefined][];
 } {
   const { incapableRows = [], refuseSession = [] } = options;
-  let selection: readonly EntryId[] = selectionInit;
-  const proposals: (readonly EntryId[])[] = [];
+  let selection: readonly SegmentId[] = selectionInit.map(segmentOf);
+  const proposals: (readonly SegmentId[])[] = [];
   const sessions: [EntryId, EntryGesture][] = [];
   const nudges: [1 | -1, boolean | undefined][] = [];
 
@@ -57,8 +64,11 @@ function makeContext(
     entriesForRow: (id) => (ORDER.includes(id as unknown as EntryId) ? [id as unknown as EntryId] : []),
     setHovered: () => {},
     contentXAtPaneOffset: (offsetX) => offsetX,
+    segmentsOfEntries: (ids) => ids.map(segmentOf),
+    segmentsForItem: (item) => [segmentOf(entryIdOfItem(item))],
     selection: {
       get: () => selection,
+      entryIds: () => ORDER.filter((id) => selection.includes(segmentOf(id))),
       propose: (next) => {
         selection = next;
         proposals.push(next);
@@ -152,7 +162,7 @@ describe('attachKeyboardEditing (S3.5, D-S3-13)', () => {
 
     container.dispatchEvent(key('keydown', { key: 'ArrowDown' }));
 
-    expect(proposals).toEqual([[C]]);
+    expect(proposals).toEqual([[segmentOf(C)]]);
   });
 
   it('ArrowUp moves the selection to the previous select-capable row', () => {
@@ -162,7 +172,7 @@ describe('attachKeyboardEditing (S3.5, D-S3-13)', () => {
 
     container.dispatchEvent(key('keydown', { key: 'ArrowUp' }));
 
-    expect(proposals).toEqual([[B]]);
+    expect(proposals).toEqual([[segmentOf(B)]]);
   });
 
   it('ArrowUp at the top row leaves the selection untouched — no capable neighbour that way', () => {

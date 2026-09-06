@@ -1,6 +1,11 @@
 // model/ is types + brand/id helpers only — zero runtime beyond this, zero dependencies (plans/01 §1.1).
 
 export type EntryId = string & { readonly __brand: 'EntryId' };
+/** Identity of one Segment, stable for as long as the Segment lives — the Selection holds these
+ *  (#212, ADR 0010). An index would renumber on every removal: delete the middle Segment of three
+ *  and a Selection holding index 2 lights the wrong bar, and the undo that restores it repeats the
+ *  mistake. */
+export type SegmentId = string & { readonly __brand: 'SegmentId' };
 export type RowId = string & { readonly __brand: 'RowId' };
 export type ItemId = string & { readonly __brand: 'ItemId' };
 export type ChangeSetId = string & { readonly __brand: 'ChangeSetId' };
@@ -9,8 +14,19 @@ export function entryId(value: string): EntryId {
   return value as EntryId;
 }
 
+export function segmentId(value: string): SegmentId {
+  return value as SegmentId;
+}
+
 export function rowId(value: string): RowId {
   return value as RowId;
+}
+
+/** Minted from a Dataset's own per-instance counter (never module-level state, I2) — the posture
+ * `changeSetId` takes, for the same reason: identity two writers never need to agree on. A Segment
+ * a consumer authored with an id of its own keeps that id; this fills the ones nobody named. */
+export function mintedSegmentId(counter: number): SegmentId {
+  return `sg${counter}` as SegmentId;
 }
 
 /** Minted from a Dataset's own per-instance counter (never module-level state, I2) — not a sync

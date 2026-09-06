@@ -351,16 +351,22 @@ and so on without remounting.
 ### Selection (S3)
 
 Selection is **Gantt state**, not **Dataset** state — two `Gantt` instances on one `Dataset` can
-hold different selections. The library exposes the same selection two ways. The suffix says which
-one you get: ids or `Entry` records.
+hold different selections. The Selection holds Segments, not Entries. The library exposes it three
+ways, and the suffix says which one you get: segment ids, entry ids, or `Entry` records.
 
-| Getter                  | Type                 | Writable                      | What it is                                        |
-| ----------------------- | -------------------- | ----------------------------- | ------------------------------------------------- |
-| `gantt.selectedIds`     | `readonly EntryId[]` | yes (`gantt.selectedIds = …`) | Which entry ids are selected                      |
-| `gantt.selectedEntries` | `readonly Entry[]`   | no                            | The bound dataset's `Entry` records for those ids |
+| Getter                     | Type                   | Writable                             | What it is                                                        |
+| -------------------------- | ---------------------- | ------------------------------------ | ----------------------------------------------------------------- |
+| `gantt.selectedSegmentIds` | `readonly SegmentId[]` | yes (`gantt.selectedSegmentIds = …`) | Which Segment ids are selected                                    |
+| `gantt.selectedEntryIds`   | `readonly EntryId[]`   | no                                   | The Entry each selected Segment belongs to, deduped, in row order |
+| `gantt.selectedEntries`    | `readonly Entry[]`     | no                                   | The bound dataset's `Entry` records for those ids                 |
 
-Use **`selectedIds`** when you only need ids, or when you want to **set** the selection (click
-parity: assignment runs `beforeSelectionChange` → `selectionChange` and opens no transaction).
+A click in the grid pane selects every Segment of every Entry the row owns. A click on a bar in the timeline
+selects only the Segment under the pointer. `selectedEntryIds` and `selectedEntries` cover both
+cases without asking a reader to track which Segments made up the click.
+
+Assign **`selectedSegmentIds`** to **set** the selection (click parity: assignment runs
+`beforeSelectionChange` → `selectionChange` and opens no transaction). Read **`selectedEntryIds`**
+when you only need which records are involved, not which Segments.
 
 Use **`selectedEntries`** when you need entry **fields** — `name`, `start`, `end`, and so on — for
 a toolbar, bulk rename, or any "act on the selected rows" control:
@@ -381,9 +387,10 @@ renameBtn.addEventListener('click', () => {
 ```
 
 `selectedEntries` re-reads the store on every access, so field edits show up without a selection
-change. It keeps `selectedIds` order and **skips** ids that no longer exist — for example after
-`dataset.entries.remove` left a stale id in `selectedIds`. To change which entries are selected,
-assign `selectedIds`; `selectedEntries` is read-only.
+change. It keeps Selection order and **skips** ids that no longer exist — for example after
+`dataset.entries.remove` left a stale Segment behind in `selectedSegmentIds`. To change which
+entries are selected, assign `selectedSegmentIds`; `selectedEntryIds` and `selectedEntries` are
+read-only.
 
 `selectionDataset` was not used: **`Dataset`** is already the name of the entry store (`new
 Dataset({ … })`), so a getter named `selectionDataset` reads like a second `Dataset` instance rather

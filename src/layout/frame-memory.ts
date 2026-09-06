@@ -94,6 +94,13 @@ export class FrameMemory {
     return packed;
   }
 
+  /** Call: `memory.entry(item.entryId)` — the Entry this memory produced Items from (#212). It is
+   *  the Entry of the last `sync`, not of the live Dataset, so an answer built from it describes the
+   *  frame on screen. `undefined` when the last frame did not hold that Entry. */
+  entry(id: EntryId): Entry | undefined {
+    return this.#entryById.get(id);
+  }
+
   forgetPacked(rowId: string): void {
     this.#packed.delete(rowId);
   }

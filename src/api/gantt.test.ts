@@ -16,9 +16,23 @@ import {
   itemId,
   contextMenu,
 } from './index.js';
-import type { EditExtender, Entry, GanttPlugin, GridColumnInput, PluginContext } from './index.js';
+import type {
+  EditExtender,
+  Entry,
+  GanttDom,
+  GanttPlugin,
+  GridColumnInput,
+  PluginContext,
+  SegmentId,
+} from './index.js';
 import { sampleEntries } from '../../fixtures/sample-dataset.js';
 import { instant } from '../time/index.js';
+
+/** The Segments these sample Entries draw (#212, ADR 0010). The Selection holds Segments, so a test
+ *  that means "select these Entries" names every Segment they drew — the set a grid-row click writes. */
+function segmentsOf(...ids: readonly string[]): readonly SegmentId[] {
+  return ids.flatMap((id) => sampleEntries.find((entry) => entry.id === id)!.segments.map((s) => s.id));
+}
 // [S5-A3]: the acceptance object is the harness plugin itself, not a re-implementation of its four
 // seams — a regression in bufferKind() must fail this test (issue #153).
 import { bufferKind } from '../../harness/plugins/buffer-kind.js';
@@ -193,6 +207,100 @@ describe('Gantt preset/range/fit/zoomTo/zoomBy/reveal (S1.9)', () => {
     expect((caught as EntryNotFoundError).code).toBe('entry-not-found');
 
     gantt.destroy();
+  });
+
+  it('reveal(segmentId) reveals that one Segment, not the Entry envelope (ADR 0010, #212)', () => {
+    // Three Segments on one Entry: `split-a` sits on-screen, `split-b` sits off-screen at a
+    // moderate distance, and `split-c` sits far off-screen and sets the envelope's own end. Each
+    // reveal target below reads a different geometry, so each expects a different scroll.
+    FakeResizeObserver.instances = [];
+    vi.stubGlobal('ResizeObserver', FakeResizeObserver);
+
+    try {
+      const container = document.createElement('div');
+      const scroll = new ScrollModel();
+      const dataset = new Dataset({
+        entries: [
+          {
+            id: 'split',
+            name: 'Split',
+            start: '2026-09-01',
+            end: '2026-11-05',
+            segments: [
+              { id: 'split-a', start: '2026-09-01', end: '2026-09-03' },
+              { id: 'split-b', start: '2026-09-20', end: '2026-09-23' },
+              { id: 'split-c', start: '2026-11-01', end: '2026-11-05' },
+            ],
+          },
+        ],
+        timeZone: 'UTC',
+        // Exact instants, not "through that day" — keeps the geometry in this test arithmetic
+        // (`dateOnlyEnd`'s default `'inclusive'` would add a day to every bare end date).
+        dateOnlyEnd: 'exclusive',
+      });
+      const gantt = new Gantt({ container, dataset, fit: 'preset', preset: 'day', scroll });
+      FakeResizeObserver.instances[0]!.fire({ width: 300, height: 100 });
+
+      const split = dataset.entries.get('split')!;
+      const segmentId = (id: string): SegmentId => split.segments.find((s) => s.id === id)!.id;
+
+      gantt.reveal(segmentId('split-a'));
+      expect(scroll.state.position.x).toBe(0);
+
+      // Each of the next two reveals starts over from x 0, so "nearest edge" never has an already
+      // off-screen far edge to snap back to — the two results are independently comparable.
+      gantt.reveal(segmentId('split-b'));
+      const afterB = scroll.state.position.x;
+      expect(afterB).toBeGreaterThan(0);
+
+      scroll.panTo({ x: 0 });
+      gantt.reveal(entryId('split'));
+      expect(scroll.state.position.x).toBeGreaterThan(afterB);
+
+      gantt.destroy();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('reveal resolves a colliding id as an Entry first — the stated precedence (ADR 0010, #212)', () => {
+    // `EntryId` "x" is on-screen; a different Entry, "y", owns a Segment also named "x" and sitting
+    // far off-screen. The two ids collide, and the doc comment states the Entry reading wins — this
+    // pins that rule: revealing "x" must not scroll to "y"'s off-screen Segment.
+    FakeResizeObserver.instances = [];
+    vi.stubGlobal('ResizeObserver', FakeResizeObserver);
+
+    try {
+      const container = document.createElement('div');
+      const scroll = new ScrollModel();
+      const dataset = new Dataset({
+        entries: [
+          { id: 'x', name: 'EntryX', start: '2026-09-01', end: '2026-09-03' },
+          {
+            id: 'y',
+            name: 'EntryY',
+            start: '2026-11-01',
+            end: '2026-11-05',
+            segments: [{ id: 'x', start: '2026-11-01', end: '2026-11-05' }],
+          },
+        ],
+        timeZone: 'UTC',
+        dateOnlyEnd: 'exclusive',
+      });
+      const gantt = new Gantt({ container, dataset, fit: 'preset', preset: 'day', scroll });
+      FakeResizeObserver.instances[0]!.fire({ width: 300, height: 100 });
+
+      const collidingId = dataset.entries.get('y')!.segments[0]!.id;
+      gantt.reveal(collidingId);
+
+      // Entry "x" sits at the dataset's own start and is already on-screen — a no-op. Reading the
+      // id as "y"'s Segment instead would scroll far to the right.
+      expect(scroll.state.position.x).toBe(0);
+
+      gantt.destroy();
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it('U7: shared scale+scroll, zoomBy on one Gantt is observed on the other live DOM', async () => {
@@ -2591,26 +2699,28 @@ describe('Gantt plugin kind registrations (S5.9, D-S5-21/D-S5-22)', () => {
 });
 
 describe('Gantt selection (S3.1, D-S3-10, [S3-A1])', () => {
-  it('gantt.selectedIds = [id] is live and loose in, branded out', () => {
+  it('gantt.selectedSegmentIds = [id] is live and loose in, branded out', () => {
     const container = document.createElement('div');
     const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
     const gantt = new Gantt({ container, dataset });
 
-    gantt.selectedIds = [sampleEntries[0]!.id];
-    expect(gantt.selectedIds).toEqual([entryId(sampleEntries[0]!.id)]);
+    gantt.selectedSegmentIds = segmentsOf(sampleEntries[0]!.id);
+    expect(gantt.selectedSegmentIds).toEqual(segmentsOf(sampleEntries[0]!.id));
+    expect(gantt.selectedEntryIds).toEqual([entryId(sampleEntries[0]!.id)]);
 
     gantt.destroy();
   });
 
-  it('selectedEntries resolves selectedIds through the bound dataset, in order', () => {
+  it('selectedEntries resolves the Selection through the bound dataset, in row order', () => {
     const container = document.createElement('div');
     const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
     const gantt = new Gantt({ container, dataset });
 
-    gantt.selectedIds = [sampleEntries[1]!.id, sampleEntries[0]!.id];
+    // #212: the Selection is proposed in click order, and both readings come back in row order.
+    gantt.selectedSegmentIds = segmentsOf(sampleEntries[1]!.id, sampleEntries[0]!.id);
     expect(gantt.selectedEntries).toEqual([
-      dataset.entries.get(sampleEntries[1]!.id),
       dataset.entries.get(sampleEntries[0]!.id),
+      dataset.entries.get(sampleEntries[1]!.id),
     ]);
 
     gantt.destroy();
@@ -2620,7 +2730,7 @@ describe('Gantt selection (S3.1, D-S3-10, [S3-A1])', () => {
     const container = document.createElement('div');
     const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
     const gantt = new Gantt({ container, dataset });
-    gantt.selectedIds = [sampleEntries[0]!.id, sampleEntries[1]!.id];
+    gantt.selectedSegmentIds = segmentsOf(sampleEntries[0]!.id, sampleEntries[1]!.id);
 
     dataset.entries.remove(sampleEntries[1]!.id);
     expect(gantt.selectedEntries).toEqual([dataset.entries.get(sampleEntries[0]!.id)]);
@@ -2649,10 +2759,10 @@ describe('Gantt selection (S3.1, D-S3-10, [S3-A1])', () => {
       datasetChanges.push(c);
     });
 
-    gantt.selectedIds = [sampleEntries[0]!.id];
+    gantt.selectedSegmentIds = segmentsOf(sampleEntries[0]!.id);
 
-    expect(before).toEqual([{ from: [], to: [entryId(sampleEntries[0]!.id)] }]);
-    expect(after).toEqual([{ from: [], to: [entryId(sampleEntries[0]!.id)] }]);
+    expect(before).toEqual([{ from: [], to: segmentsOf(sampleEntries[0]!.id) }]);
+    expect(after).toEqual([{ from: [], to: segmentsOf(sampleEntries[0]!.id) }]);
     expect(datasetChanges).toEqual([]);
 
     gantt.destroy();
@@ -2662,12 +2772,12 @@ describe('Gantt selection (S3.1, D-S3-10, [S3-A1])', () => {
     const container = document.createElement('div');
     const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
     const gantt = new Gantt({ container, dataset });
-    gantt.selectedIds = [sampleEntries[0]!.id];
+    gantt.selectedSegmentIds = segmentsOf(sampleEntries[0]!.id);
 
     gantt.on('beforeSelectionChange', () => false);
-    gantt.selectedIds = [sampleEntries[1]!.id];
+    gantt.selectedSegmentIds = segmentsOf(sampleEntries[1]!.id);
 
-    expect(gantt.selectedIds).toEqual([entryId(sampleEntries[0]!.id)]);
+    expect(gantt.selectedSegmentIds).toEqual(segmentsOf(sampleEntries[0]!.id));
 
     gantt.destroy();
   });
@@ -2676,13 +2786,13 @@ describe('Gantt selection (S3.1, D-S3-10, [S3-A1])', () => {
     const container = document.createElement('div');
     const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
     const gantt = new Gantt({ container, dataset });
-    gantt.selectedIds = [sampleEntries[0]!.id];
+    gantt.selectedSegmentIds = segmentsOf(sampleEntries[0]!.id);
 
     const after: unknown[] = [];
     gantt.on('selectionChange', (p) => {
       after.push(p);
     });
-    gantt.selectedIds = [sampleEntries[0]!.id];
+    gantt.selectedSegmentIds = segmentsOf(sampleEntries[0]!.id);
 
     expect(after).toEqual([]);
 
@@ -2701,7 +2811,7 @@ describe('Gantt selection (S3.1, D-S3-10, [S3-A1])', () => {
     const timeline = container.querySelector<HTMLElement>('.fg-timeline-pane')!;
     timeline.dispatchEvent(new PointerEvent('pointerup', { clientX: 5, clientY: 5 }));
 
-    expect(gantt.selectedIds).toEqual([entryId(sampleEntries[0]!.id)]);
+    expect(gantt.selectedEntryIds).toEqual([entryId(sampleEntries[0]!.id)]);
     expect(bar.dataset['state']).toBe('selected');
 
     document.elementFromPoint = original;
@@ -2709,6 +2819,305 @@ describe('Gantt selection (S3.1, D-S3-10, [S3-A1])', () => {
   });
 });
 
+/** One plain Entry and one that draws two bars — the smallest dataset that tells "the Segment the
+ *  pointer named" from "every Segment the row owns". Module-scoped: the Delete-key describe block
+ *  below shares this fixture with the Segment-selection tests, rather than re-declaring it. */
+const SEGMENTED_ENTRIES = [
+  { id: 'plain', name: 'Plain', start: '2026-09-01', end: '2026-09-03' },
+  {
+    id: 'split',
+    name: 'Split',
+    start: '2026-09-01',
+    end: '2026-09-09',
+    segments: [
+      { id: 'split-a', start: '2026-09-01', end: '2026-09-03' },
+      { id: 'split-b', start: '2026-09-05', end: '2026-09-09' },
+    ],
+  },
+];
+
+function makeSegmentedGantt(): { container: HTMLElement; gantt: Gantt; dataset: Dataset } {
+  const container = document.createElement('div');
+  document.body.append(container);
+  const dataset = new Dataset({ entries: SEGMENTED_ENTRIES, timeZone: 'UTC' });
+  return { container, gantt: new Gantt({ container, dataset }), dataset };
+}
+
+describe('Gantt selection over Segments (ADR 0010, #212)', () => {
+  /** Points `elementFromPoint` at one node, the way every other pointer test in this file does. */
+  function clickTimelineOn(container: HTMLElement, node: HTMLElement): void {
+    const original = document.elementFromPoint.bind(document);
+    document.elementFromPoint = (x: number, y: number) => (x === 5 && y === 5 ? node : original(x, y));
+    container
+      .querySelector<HTMLElement>('.fg-timeline-pane')!
+      .dispatchEvent(new PointerEvent('pointerup', { clientX: 5, clientY: 5 }));
+    document.elementFromPoint = original;
+  }
+
+  it('a timeline click selects the one Segment the bar drew', () => {
+    const { container, gantt } = makeSegmentedGantt();
+    const second = container.querySelector<HTMLElement>('.fg-bar[data-segment-id="split-b"]')!;
+
+    clickTimelineOn(container, second);
+
+    expect(gantt.selectedSegmentIds).toEqual(['split-b']);
+    expect(gantt.selectedEntryIds).toEqual(['split']);
+    const first = container.querySelector<HTMLElement>('.fg-bar[data-segment-id="split-a"]')!;
+    expect(second.dataset['state']).toBe('selected');
+    expect(first.dataset['state'] ?? '').toBe('');
+
+    gantt.destroy();
+    container.remove();
+  });
+
+  it('a grid-pane click selects every Segment of the row', () => {
+    const { container, gantt } = makeSegmentedGantt();
+    const row = container.querySelector<HTMLElement>('.fg-row[data-entry-id="split"]')!;
+    const original = document.elementFromPoint.bind(document);
+    document.elementFromPoint = (x: number, y: number) => (x === 5 && y === 5 ? row : original(x, y));
+
+    row.dispatchEvent(new PointerEvent('pointerup', { clientX: 5, clientY: 5, bubbles: true }));
+    document.elementFromPoint = original;
+
+    expect(gantt.selectedSegmentIds).toEqual(['split-a', 'split-b']);
+    expect(gantt.selectedEntryIds).toEqual(['split']);
+
+    gantt.destroy();
+    container.remove();
+  });
+
+  it('ctrl-click collects Segments across two Entries', () => {
+    const { container, gantt } = makeSegmentedGantt();
+    const plain = container.querySelector<HTMLElement>('.fg-bar[data-item-id="plain:0"]')!;
+
+    clickTimelineOn(container, container.querySelector<HTMLElement>('.fg-bar[data-segment-id="split-a"]')!);
+    const original = document.elementFromPoint.bind(document);
+    document.elementFromPoint = (x: number, y: number) => (x === 5 && y === 5 ? plain : original(x, y));
+    container
+      .querySelector<HTMLElement>('.fg-timeline-pane')!
+      .dispatchEvent(new PointerEvent('pointerup', { clientX: 5, clientY: 5, ctrlKey: true }));
+    document.elementFromPoint = original;
+
+    expect(gantt.selectedSegmentIds).toHaveLength(2);
+    expect(gantt.selectedEntryIds).toEqual(['plain', 'split']);
+
+    gantt.destroy();
+    container.remove();
+  });
+
+  it('a shift-range over rows collects every Segment those rows own', () => {
+    const { container, gantt } = makeSegmentedGantt();
+    const plainBar = container.querySelector<HTMLElement>('.fg-bar[data-item-id="plain:0"]')!;
+
+    clickTimelineOn(container, plainBar);
+    const original = document.elementFromPoint.bind(document);
+    const splitBar = container.querySelector<HTMLElement>('.fg-bar[data-segment-id="split-a"]')!;
+    document.elementFromPoint = (x: number, y: number) => (x === 5 && y === 5 ? splitBar : original(x, y));
+    container
+      .querySelector<HTMLElement>('.fg-timeline-pane')!
+      .dispatchEvent(new PointerEvent('pointerup', { clientX: 5, clientY: 5, shiftKey: true }));
+    document.elementFromPoint = original;
+
+    // A range spans whole rows, so the segmented Entry contributes both of its Segments.
+    expect(gantt.selectedEntryIds).toEqual(['plain', 'split']);
+    expect(gantt.selectedSegmentIds).toContain('split-a');
+    expect(gantt.selectedSegmentIds).toContain('split-b');
+
+    gantt.destroy();
+    container.remove();
+  });
+
+  it('selectedEntryIds dedupes two Segments of one Entry into one Entry, in row order', () => {
+    const { container, gantt } = makeSegmentedGantt();
+
+    // Proposed out of row order, and with two Segments of the same Entry.
+    gantt.selectedSegmentIds = ['split-b', 'split-a'];
+
+    expect(gantt.selectedEntryIds).toEqual(['split']);
+    expect(gantt.selectedEntries.map((entry) => entry.id)).toEqual(['split']);
+
+    gantt.destroy();
+    container.remove();
+  });
+
+  it('Mod+Arrow steps the Selection between the Segments of one row', () => {
+    const { container, gantt } = makeSegmentedGantt();
+    gantt.selectedSegmentIds = ['split-a'];
+
+    const step = (key: string): void => {
+      container.dispatchEvent(new KeyboardEvent('keydown', { key, ctrlKey: true, bubbles: true }));
+    };
+
+    step('ArrowRight');
+    expect(gantt.selectedSegmentIds).toEqual(['split-b']);
+
+    // The row has no third Segment, so the chord clamps rather than leaving the row.
+    step('ArrowRight');
+    expect(gantt.selectedSegmentIds).toEqual(['split-b']);
+
+    step('ArrowLeft');
+    expect(gantt.selectedSegmentIds).toEqual(['split-a']);
+
+    gantt.destroy();
+    container.remove();
+  });
+
+  it('a Segment the Dataset dropped never reaches a plugin through targetUnder (#212)', async () => {
+    // The surface a plugin author actually meets. A right-click Delete reads `segmentIds` off this
+    // target and hands them to `removeSegments`, which throws on an id the Dataset no longer holds.
+    const container = document.createElement('div');
+    document.body.append(container);
+    const dataset = new Dataset({ entries: SEGMENTED_ENTRIES, timeZone: 'UTC' });
+    let dom: GanttDom | undefined;
+    const grabDom: GanttPlugin = {
+      id: 'test.grabDom',
+      setup: (ctx) => {
+        dom = ctx.view.dom;
+      },
+    };
+    const gantt = new Gantt({ container, dataset, plugins: [grabDom] });
+    const firstBar = container.querySelector<HTMLElement>('.fg-bar[data-item-id="split:0"]')!;
+    // Read it once while `split-a` is still there, so the pointer memo holds that answer too.
+    expect(dom!.targetUnder(firstBar)?.segmentIds).toEqual(['split-a']);
+
+    dataset.entries.removeSegments(['split-a']);
+    // `targetUnder` describes the frame on screen, so the answer moves when the next frame paints.
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+
+    // The bar key is `split:0` either way, so the node survives and now draws `split-b`.
+    const survivor = container.querySelector<HTMLElement>('.fg-bar[data-item-id="split:0"]')!;
+    expect(survivor).toBe(firstBar);
+    const reported = dom!.targetUnder(survivor)!.segmentIds;
+    expect(reported).toEqual(['split-b']);
+    // The contract, stated as the caller uses it: every id this names is one the Dataset still holds.
+    expect(() => dataset.entries.removeSegments([...reported])).not.toThrow();
+
+    gantt.destroy();
+    container.remove();
+  });
+
+  it('a Mod+Arrow step never also nudges the entry it reselected', () => {
+    const { container, gantt } = makeSegmentedGantt();
+    gantt.selectedSegmentIds = ['split-a'];
+    const moves: unknown[] = [];
+    gantt.on('entryMove', (payload) => {
+      moves.push(payload);
+    });
+
+    container.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'ArrowRight', ctrlKey: true, bubbles: true }),
+    );
+
+    expect(moves).toEqual([]);
+
+    gantt.destroy();
+    container.remove();
+  });
+});
+
+describe('Gantt Delete key (ADR 0010, #212)', () => {
+  const pressDelete = (container: HTMLElement): void => {
+    container.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete', bubbles: true }));
+  };
+
+  it('Delete removes the selected Segment, leaving the Entry with its remaining ones', () => {
+    const { container, gantt, dataset } = makeSegmentedGantt();
+    gantt.selectedSegmentIds = ['split-a'];
+
+    pressDelete(container);
+
+    const split = dataset.entries.get('split');
+    expect(split?.segments.map((s) => s.id)).toEqual(['split-b']);
+
+    gantt.destroy();
+    container.remove();
+  });
+
+  it("deleting an Entry's last Segment removes the Entry, and one undo restores both", () => {
+    const { container, gantt, dataset } = makeSegmentedGantt();
+    // "plain" draws a single Segment ingest filled in — its row's Delete needs no special case
+    // (ADR 0010): removing that one Segment removes the Entry with it, same transaction.
+    const plainSegmentIds = dataset.entries.get('plain')!.segments.map((s) => s.id);
+    gantt.selectedSegmentIds = plainSegmentIds;
+
+    pressDelete(container);
+
+    expect(dataset.entries.get('plain')).toBeUndefined();
+
+    dataset.undo();
+
+    const restored = dataset.entries.get('plain');
+    expect(restored).toBeDefined();
+    expect(restored?.segments.map((s) => s.id)).toEqual(plainSegmentIds);
+
+    gantt.destroy();
+    container.remove();
+  });
+
+  it('the Delete key and gantt.commands.run() invoke the one registered command (D-S5-14)', () => {
+    // The context menu's own item click also reaches `command.run(ctx)` with no second `run` of its
+    // own (`extensions/features/context-menu.ts`) — this pins that the chord and a direct
+    // `commands.run(id)` call, the menu's own mechanism, land on that same registered command and
+    // produce the identical mutation, not two implementations that could drift apart.
+    const viaKey = makeSegmentedGantt();
+    viaKey.gantt.selectedSegmentIds = ['split-a'];
+    pressDelete(viaKey.container);
+    const afterKey = viaKey.dataset.entries.get('split')?.segments.map((s) => s.id);
+
+    const viaCommand = makeSegmentedGantt();
+    viaCommand.gantt.selectedSegmentIds = ['split-a'];
+    viaCommand.gantt.commands.run('freegantt.deleteSelection');
+    const afterCommand = viaCommand.dataset.entries.get('split')?.segments.map((s) => s.id);
+
+    expect(afterKey).toEqual(afterCommand);
+
+    viaKey.gantt.destroy();
+    viaKey.container.remove();
+    viaCommand.gantt.destroy();
+    viaCommand.container.remove();
+  });
+
+  it('Delete does nothing while the keydown target is editable (issue #137 F7)', () => {
+    const { container, gantt, dataset } = makeSegmentedGantt();
+    gantt.selectedSegmentIds = ['split-a'];
+
+    const input = document.createElement('input');
+    container.append(input);
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete', bubbles: true }));
+
+    expect(dataset.entries.get('split')?.segments.map((s) => s.id)).toEqual(['split-a', 'split-b']);
+
+    gantt.destroy();
+    container.remove();
+  });
+
+  it('nothing selected: Delete has no target and removes nothing', () => {
+    const { container, gantt, dataset } = makeSegmentedGantt();
+    gantt.selectedSegmentIds = [];
+
+    pressDelete(container);
+
+    expect(dataset.entries.get('split')?.segments.map((s) => s.id)).toEqual(['split-a', 'split-b']);
+    expect(dataset.entries.get('plain')).toBeDefined();
+
+    gantt.destroy();
+    container.remove();
+  });
+
+  it('a beforeChange refusal is a no-op: no error escapes, and the Entry survives', () => {
+    // A cancel is a normal outcome, not a fault (`api/attemptMutation`'s own rule). `view/` cannot
+    // import `api/`, so `freegantt.deleteSelection` repeats that one swallow inline — this pins it.
+    const { container, gantt, dataset } = makeSegmentedGantt();
+    gantt.selectedSegmentIds = ['split-a'];
+    dataset.on('beforeChange', () => false);
+
+    expect(() => pressDelete(container)).not.toThrow();
+    expect(dataset.entries.get('split')?.segments.map((s) => s.id)).toEqual(['split-a', 'split-b']);
+
+    gantt.destroy();
+    container.remove();
+  });
+});
 describe('Gantt interactions / capability hot path (S3.2, D-S3-9, [S3-A3]/[S3-A5])', () => {
   it('a resize-incapable entry renders no handle on hover ([S3-A5])', () => {
     const container = document.createElement('div');
@@ -2751,13 +3160,13 @@ describe('Gantt interactions / capability hot path (S3.2, D-S3-9, [S3-A3]/[S3-A5
     gantt.destroy();
   });
 
-  it('gantt.selectedIds = [id] still accepts a select-incapable id — the setter does not consult can("select") (D-S3-9)', () => {
+  it('gantt.selectedSegmentIds still accepts a select-incapable Entry — the setter does not consult can("select") (D-S3-9)', () => {
     const container = document.createElement('div');
     const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
     const gantt = new Gantt({ container, dataset, interactions: { select: false } });
 
-    gantt.selectedIds = [sampleEntries[0]!.id];
-    expect(gantt.selectedIds).toEqual([entryId(sampleEntries[0]!.id)]);
+    gantt.selectedSegmentIds = segmentsOf(sampleEntries[0]!.id);
+    expect(gantt.selectedEntryIds).toEqual([entryId(sampleEntries[0]!.id)]);
 
     gantt.destroy();
   });
@@ -2773,7 +3182,7 @@ describe('Gantt interactions / capability hot path (S3.2, D-S3-9, [S3-A3]/[S3-A5
     const timeline = container.querySelector<HTMLElement>('.fg-timeline-pane')!;
     timeline.dispatchEvent(new PointerEvent('pointerup', { clientX: 5, clientY: 5 }));
 
-    expect(gantt.selectedIds).toEqual([]);
+    expect(gantt.selectedSegmentIds).toEqual([]);
 
     document.elementFromPoint = original;
     gantt.destroy();
@@ -3141,7 +3550,7 @@ describe('Gantt keyboard nudge (S3.5, [S3-A1] keyboard half, D-S3-13)', () => {
 
     const id = entryId(sampleEntries[0]!.id);
     const before = dataset.entries.get(id)!;
-    gantt.selectedIds = [id];
+    gantt.selectedSegmentIds = segmentsOf(id);
 
     const beforeEvents: unknown[] = [];
     const afterEvents: unknown[] = [];
@@ -3195,7 +3604,7 @@ describe('Gantt keyboard nudge (S3.5, [S3-A1] keyboard half, D-S3-13)', () => {
 
     const id = entryId(sampleEntries[0]!.id);
     const before = dataset.entries.get(id)!;
-    gantt.selectedIds = [id];
+    gantt.selectedSegmentIds = segmentsOf(id);
 
     const afterEvents: { edge: string }[] = [];
     gantt.on('entryResize', (p) => {
@@ -3222,7 +3631,7 @@ describe('Gantt keyboard nudge (S3.5, [S3-A1] keyboard half, D-S3-13)', () => {
 
     const firstId = entryId(sampleEntries[0]!.id);
     const secondId = entryId(sampleEntries[1]!.id);
-    gantt.selectedIds = [firstId];
+    gantt.selectedSegmentIds = segmentsOf(firstId);
 
     const datasetChanges: unknown[] = [];
     dataset.on('change', (c) => {
@@ -3231,7 +3640,7 @@ describe('Gantt keyboard nudge (S3.5, [S3-A1] keyboard half, D-S3-13)', () => {
 
     container.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
 
-    expect(gantt.selectedIds).toEqual([secondId]);
+    expect(gantt.selectedEntryIds).toEqual([secondId]);
     expect(datasetChanges).toEqual([]);
 
     gantt.destroy();
@@ -3867,7 +4276,7 @@ describe('Gantt.commands (S5.2, D-S5-6/D-S5-7)', () => {
     const dataset = new Dataset({ entries: sampleEntries.slice(0, 3), timeZone: 'UTC' });
     const gantt = new Gantt({ container, dataset });
     const [a, b] = dataset.entries.all;
-    gantt.selectedIds = [a!.id, b!.id];
+    gantt.selectedSegmentIds = segmentsOf(a!.id, b!.id);
 
     let reached: readonly string[] | undefined;
     gantt.commands.register({
@@ -4085,7 +4494,7 @@ describe('plugin registrations live exactly as long as their plugin (#155)', () 
     // D-S5-7: while the plugin is installed, its override wins — core's own select-all never runs.
     gantt.commands.run('freegantt.selectAll');
     expect(hijacked).toBe(1);
-    expect(gantt.selectedIds).toEqual([]);
+    expect(gantt.selectedSegmentIds).toEqual([]);
 
     gantt.plugins = [];
     await new Promise((resolve) => requestAnimationFrame(resolve));
@@ -4093,7 +4502,7 @@ describe('plugin registrations live exactly as long as their plugin (#155)', () 
     // Core's own select-all answers the id again — the override went out with its plugin.
     gantt.commands.run('freegantt.selectAll');
     expect(hijacked).toBe(1);
-    expect(gantt.selectedIds).toEqual([sampleEntries[0]!.id]);
+    expect(gantt.selectedEntryIds).toEqual([sampleEntries[0]!.id]);
     expect(() => gantt.commands.run('demo.own')).toThrow(UnknownCommandError);
 
     gantt.destroy();
@@ -4595,6 +5004,75 @@ describe('Gantt reads the Dataset’s edit hook live (#186)', () => {
 
     timeline.dispatchEvent(new PointerEvent('pointerup', { clientX: 55, clientY: 5, pointerId: 1 }));
     document.elementFromPoint = original;
+    gantt.destroy();
+  });
+});
+
+describe('the Selection follows the Dataset when a Segment goes away (#212, ADR 0010)', () => {
+  function ganttOverTwoSegments(): { gantt: Gantt; dataset: Dataset } {
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      entries: [
+        {
+          id: 'e1',
+          name: 'Framing',
+          start: '2026-01-01',
+          end: '2026-01-07',
+          segments: [
+            { id: 's1', start: '2026-01-01', end: '2026-01-03' },
+            { id: 's2', start: '2026-01-05', end: '2026-01-07' },
+          ],
+        },
+      ],
+    });
+    return { gantt: new Gantt({ container, dataset }), dataset };
+  }
+
+  it('drops a selected Segment the Dataset removed, and keeps the rest', () => {
+    const { gantt, dataset } = ganttOverTwoSegments();
+    gantt.selectedSegmentIds = ['s1', 's2'];
+    dataset.entries.removeSegments(['s1']);
+    expect(gantt.selectedSegmentIds).toEqual(['s2']);
+    gantt.destroy();
+  });
+
+  it('reports the drop as one selectionChange, with no cancelable before pair', () => {
+    const { gantt, dataset } = ganttOverTwoSegments();
+    gantt.selectedSegmentIds = ['s1', 's2'];
+    const changes: { from: readonly string[]; to: readonly string[] }[] = [];
+    const vetoes = vi.fn((): false => false);
+    gantt.on('selectionChange', (e) => {
+      changes.push({ from: [...e.from], to: [...e.to] });
+    });
+    gantt.on('beforeSelectionChange', vetoes);
+    dataset.entries.removeSegments(['s1']);
+    expect(changes).toEqual([{ from: ['s1', 's2'], to: ['s2'] }]);
+    // A veto cannot bring back a Segment the Dataset no longer holds, so it is never asked.
+    expect(vetoes).not.toHaveBeenCalled();
+    expect(gantt.selectedSegmentIds).toEqual(['s2']);
+    gantt.destroy();
+  });
+
+  it('never hands a dead SegmentId to a mutation, so a second Delete is a no-op', () => {
+    const { gantt, dataset } = ganttOverTwoSegments();
+    gantt.selectedSegmentIds = ['s1'];
+    gantt.commands.run('freegantt.deleteSelection');
+    expect(dataset.entries.get('e1')!.segments.map((s) => s.id)).toEqual(['s2']);
+    expect(gantt.selectedSegmentIds).toEqual([]);
+    // Before #212 closed this, the Selection still held the removed `s1` and this second run threw
+    // `SegmentNotFoundError` out of a keystroke.
+    expect(() => gantt.commands.run('freegantt.deleteSelection')).not.toThrow();
+    gantt.destroy();
+  });
+
+  it('drops the Segments of an Entry the Dataset removed outright', () => {
+    const { gantt, dataset } = ganttOverTwoSegments();
+    gantt.selectedSegmentIds = ['s1', 's2'];
+    dataset.entries.remove('e1');
+    expect(gantt.selectedSegmentIds).toEqual([]);
+    expect(gantt.selectedEntryIds).toEqual([]);
     gantt.destroy();
   });
 });

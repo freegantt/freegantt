@@ -2,7 +2,7 @@
 // (plans/01 §1.1, D-S1.7-8). A public error type is part of the API surface (only api/ and model/
 // types are public), so it lives where the rest of the public surface lives.
 
-import type { EntryId } from './ids.js';
+import type { EntryId, SegmentId } from './ids.js';
 import type { ChangeSet } from './change-set.js';
 import type { PluginId } from './plugin.js';
 
@@ -71,6 +71,16 @@ export class EntryNotFoundError extends FreeGanttError {
   }
 }
 
+/** `code: 'segment-not-found'` — an id `entries.removeSegments()` is given that names no Segment on
+ *  any Entry. This matches `EntryNotFoundError`'s posture for `entries.remove`: the call throws
+ *  before it stages anything, and the transaction discards whatever it staged for other ids. */
+export class SegmentNotFoundError extends FreeGanttError {
+  constructor(segmentId: SegmentId, operation: string) {
+    super('segment-not-found', `${operation}: no segment with id "${segmentId}"`);
+    this.name = 'SegmentNotFoundError';
+  }
+}
+
 /** `code: 'duplicate-entry-id'` — `entries.add()` given an id already in the store (S2.3 §1.3). */
 export class DuplicateEntryIdError extends FreeGanttError {
   constructor(entryId: EntryId) {
@@ -88,13 +98,15 @@ export class ParentCycleError extends FreeGanttError {
   }
 }
 
-/** `code: 'segments-out-of-sync'` — a `start`/`end` write on an entry that stores `segments` (D-S4-30).
- *  Write `segments` instead; the envelope updates in the same transaction. */
+/** `code: 'segments-out-of-sync'` — a `start`/`end` write, naming no Segments, on an entry that draws
+ *  several of them (D-S4-30, narrowed by #212). The envelope spans the Segments, so moving it alone
+ *  says nothing about which stretch moved. Write `segments` instead; the envelope updates in the same
+ *  transaction. An Entry that draws one Segment takes the write — that Segment moves with it. */
 export class SegmentsOutOfSyncError extends FreeGanttError {
   constructor(entryId: EntryId) {
     super(
       'segments-out-of-sync',
-      `entries.update: "${entryId}" has segments — write segments, not start/end alone`,
+      `entries.update: "${entryId}" draws several segments — write segments, not start/end alone`,
     );
     this.name = 'SegmentsOutOfSyncError';
   }

@@ -11,8 +11,10 @@ import {
   EntryNotFoundError,
   InvalidInstantError,
   ParentCycleError,
+  SegmentNotFoundError,
   UnknownFieldError,
   entryId,
+  segmentId,
 } from '../model/index.js';
 import type { ChangeSet, EntryInput } from '../model/index.js';
 import { toEndInstant, toInstant } from '../time/index.js';
@@ -86,6 +88,24 @@ describe('entries.update', () => {
     expect(seen).toHaveLength(1); // the no-op update commits nothing, so no second changeset
   });
 
+  it('an envelope write on a one-segment entry moves that segment, and the changeset says so', () => {
+    // A one-Segment Entry draws its own envelope, so `start` alone moves both. The changeset must
+    // carry the segments row: the store applies rows, so a write nobody names never lands (#212).
+    const state = dataset([{ id: 't1', name: 'Framing', start: '2026-01-01', end: '2026-01-05' }]);
+    const before = state.entries.get('t1')!.segments[0]!.id;
+    const seen = changeSets(state);
+
+    state.entries.update('t1', { start: '2026-01-02' });
+
+    const after = state.entries.get('t1')!;
+    expect(after.segments).toHaveLength(1);
+    expect(after.segments[0]!.start).toBe(after.start);
+    expect(after.segments[0]!.id).toBe(before);
+    expect(seen).toHaveLength(1);
+    const fields = seen[0]!.updated.flatMap((row) => ('field' in row ? [String(row.field)] : []));
+    expect(fields).toContain('segments');
+  });
+
   it("loose dates on update resolve through the dataset zone the way construction's do", () => {
     const fromConstruction = dataset([{ id: 't1', start: '2026-09-08', end: '2026-09-09' }]);
     const fromUpdate = dataset([{ id: 't1' }]);
@@ -142,6 +162,94 @@ describe('entries.remove', () => {
   it('an unknown id throws EntryNotFoundError', () => {
     const state = dataset();
     expect(() => state.entries.remove('missing')).toThrow(EntryNotFoundError);
+  });
+});
+
+describe('entries.removeSegments (#212, ADR 0010)', () => {
+  it('removes one Segment of three, leaves the Entry, and recomputes the envelope over the two that remain', () => {
+    const state = dataset([
+      {
+        id: 't1',
+        start: 0,
+        end: 30,
+        segments: [
+          { id: 'sg1', start: 0, end: 10 },
+          { id: 'sg2', start: 10, end: 20 },
+          { id: 'sg3', start: 20, end: 30 },
+        ],
+      },
+    ]);
+
+    state.entries.removeSegments(['sg2']);
+
+    const entry = state.entries.get('t1');
+    expect(entry?.id).toBe(entryId('t1'));
+    expect(entry?.segments.map((segment) => segment.id)).toEqual([segmentId('sg1'), segmentId('sg3')]);
+    expect(entry?.start).toBe(toInstant('UTC', 0));
+    expect(entry?.end).toBe(toInstant('UTC', 30));
+  });
+
+  it('removes Segments of two different Entries in one call, and the result is one changeset', () => {
+    const state = dataset([
+      {
+        id: 't1',
+        start: 0,
+        end: 20,
+        segments: [
+          { id: 'a1', start: 0, end: 10 },
+          { id: 'a2', start: 10, end: 20 },
+        ],
+      },
+      {
+        id: 't2',
+        start: 0,
+        end: 20,
+        segments: [
+          { id: 'b1', start: 0, end: 10 },
+          { id: 'b2', start: 10, end: 20 },
+        ],
+      },
+    ]);
+    const seen = changeSets(state);
+
+    state.entries.removeSegments(['a2', 'b2']);
+
+    expect(seen).toHaveLength(1);
+    expect(state.entries.get('t1')?.segments.map((segment) => segment.id)).toEqual([segmentId('a1')]);
+    expect(state.entries.get('t2')?.segments.map((segment) => segment.id)).toEqual([segmentId('b1')]);
+  });
+
+  it("removing an Entry's last Segment removes the Entry", () => {
+    const state = dataset([
+      { id: 't1', start: 0, end: 10, segments: [{ id: 'sole', start: 0, end: 10 }] },
+      { id: 'other' },
+    ]);
+
+    state.entries.removeSegments(['sole']);
+
+    expect(state.entries.has('t1')).toBe(false);
+    expect(state.entries.has('other')).toBe(true);
+  });
+
+  it('undo after a last-Segment removal restores the Entry and its Segment with the same ids', () => {
+    const state = dataset([{ id: 't1', start: 0, end: 10, segments: [{ id: 'sole', start: 0, end: 10 }] }]);
+
+    state.entries.removeSegments(['sole']);
+    state.undo();
+
+    const restored = state.entries.get('t1');
+    expect(restored?.id).toBe(entryId('t1'));
+    expect(restored?.segments.map((segment) => segment.id)).toEqual([segmentId('sole')]);
+  });
+
+  it('an unknown segment id throws SegmentNotFoundError, and stages nothing', () => {
+    const state = dataset([{ id: 't1', start: 0, end: 20, segments: [{ id: 'a1', start: 0, end: 20 }] }]);
+    const seen = changeSets(state);
+
+    expect(() => state.entries.removeSegments(['missing'])).toThrow(SegmentNotFoundError);
+
+    expect(seen).toHaveLength(0);
+    expect(state.entries.get('t1')?.segments).toHaveLength(1);
   });
 });
 

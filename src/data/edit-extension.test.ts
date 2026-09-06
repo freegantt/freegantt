@@ -1,13 +1,20 @@
 import { describe, expect, it } from 'vitest';
 import { identityExtender } from './edit-extension.js';
 import { DatasetState } from './dataset-state.js';
-import { entryId } from '../model/index.js';
+import { entryId, segmentId } from '../model/index.js';
 import type { Entry, EntryId } from '../model/index.js';
 import { mergeEntryEdits, proposedKeysOf } from './fields/field-access.js';
 import type { EditExtender, EntryEdits, StoredEdit } from './edit-extension.js';
 
 function entry(id: string): Entry {
-  return { id: entryId(id), name: id, start: 0 as Entry['start'], end: 1 as Entry['end'], kind: 'span' };
+  return {
+    id: entryId(id),
+    name: id,
+    start: 0 as Entry['start'],
+    end: 1 as Entry['end'],
+    kind: 'span',
+    segments: [{ id: segmentId(`${id}-seg`), start: 0 as Entry['start'], end: 1 as Entry['end'] }],
+  };
 }
 
 describe('identityExtender', () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { entryId } from '../../model/index.js';
+import { entryId, segmentId } from '../../model/index.js';
 import type { Entry, StoredEdit } from '../../model/index.js';
 import {
   createFieldContext,
@@ -22,6 +22,7 @@ const span = (meta?: unknown): Entry => {
     kind: 'span',
     start: 0 as Entry['start'],
     end: 1 as Entry['end'],
+    segments: [{ id: segmentId('t1-seg'), start: 0 as Entry['start'], end: 1 as Entry['end'] }],
   };
   if (meta !== undefined) entry.meta = meta;
   return entry;

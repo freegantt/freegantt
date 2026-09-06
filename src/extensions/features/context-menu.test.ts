@@ -4,6 +4,7 @@ import { Dataset } from '../../api/dataset.js';
 import { sampleEntries } from '../../../fixtures/sample-dataset.js';
 import { contextMenu } from './context-menu.js';
 import type { ContextMenuOptions } from './context-menu.js';
+import type { SegmentId } from '../../model/index.js';
 
 // `container` must be attached to `document.body` — `contextMenu()` listens at the document level,
 // and a bubbling event never reaches document from a detached tree.
@@ -34,6 +35,12 @@ function makeGanttWithThreeOnOneRow(): { container: HTMLElement; gantt: Gantt } 
 }
 
 const threeEntries = sampleEntries.slice(0, 3);
+
+/** The Segments these Entries draw (#212, ADR 0010) — the Selection holds Segments, so a test that
+ *  means "select these Entries" names every Segment they drew. */
+function segmentsOf(...entries: readonly (typeof sampleEntries)[number][]): readonly SegmentId[] {
+  return entries.flatMap((entry) => entry.segments.map((segment) => segment.id));
+}
 
 function commandIds(container: HTMLElement): (string | null)[] {
   return menuItems(container).map((el) => el.getAttribute('data-command'));
@@ -133,7 +140,7 @@ describe('contextMenu() (S5.5, D-S5-13/14)', () => {
 
   it('a right-click on a multi-Entry row widens neither the Selection nor the acted-on set (#212)', () => {
     const { container, gantt } = makeGanttWithThreeOnOneRow();
-    gantt.selectedIds = [threeEntries[0]!.id];
+    gantt.selectedSegmentIds = segmentsOf(threeEntries[0]!);
     let reached: readonly string[] | undefined;
     gantt.commands.register({
       id: 'demo.reached',
@@ -147,7 +154,7 @@ describe('contextMenu() (S5.5, D-S5-13/14)', () => {
     clickMenuItem(container, 'demo.reached');
 
     expect(reached).toEqual([threeEntries[0]!.id]);
-    expect(gantt.selectedIds).toEqual([threeEntries[0]!.id]);
+    expect(gantt.selectedEntryIds).toEqual([threeEntries[0]!.id]);
 
     gantt.destroy();
     container.remove();
@@ -161,7 +168,7 @@ describe('contextMenu() (S5.5, D-S5-13/14)', () => {
       label: 'Reached',
       run: (ctx) => (reached = ctx.target?.entryIds),
     });
-    gantt.selectedIds = threeEntries.map((entry) => entry.id);
+    gantt.selectedSegmentIds = segmentsOf(...threeEntries);
 
     rightClick(bars(container)[1]!);
     clickMenuItem(container, 'demo.reached');
@@ -175,11 +182,11 @@ describe('contextMenu() (S5.5, D-S5-13/14)', () => {
 
   it('a right-click outside the Selection replaces the Selection with what you clicked (#199)', () => {
     const { container, gantt } = makeGanttWithThreeOnOneRow();
-    gantt.selectedIds = [threeEntries[0]!.id];
+    gantt.selectedSegmentIds = segmentsOf(threeEntries[0]!);
 
     rightClick(bars(container)[2]!);
 
-    expect(gantt.selectedIds).toEqual([threeEntries[2]!.id]);
+    expect(gantt.selectedEntryIds).toEqual([threeEntries[2]!.id]);
 
     gantt.destroy();
     container.remove();
@@ -193,7 +200,7 @@ describe('contextMenu() (S5.5, D-S5-13/14)', () => {
       label: 'Reached',
       run: (ctx) => (reached = ctx.target?.entryIds),
     });
-    gantt.selectedIds = [threeEntries[0]!.id];
+    gantt.selectedSegmentIds = segmentsOf(threeEntries[0]!);
 
     rightClick(container.querySelector<HTMLElement>('.fg-col-header')!);
     clickMenuItem(container, 'demo.reached');
@@ -201,7 +208,7 @@ describe('contextMenu() (S5.5, D-S5-13/14)', () => {
     // A header cell stands for no Entry, so it is part of nothing: the Selection stays, and the
     // command does not inherit it.
     expect(reached).toEqual([]);
-    expect(gantt.selectedIds).toEqual([threeEntries[0]!.id]);
+    expect(gantt.selectedEntryIds).toEqual([threeEntries[0]!.id]);
 
     gantt.destroy();
     container.remove();
@@ -215,14 +222,14 @@ describe('contextMenu() (S5.5, D-S5-13/14)', () => {
       label: 'Reached',
       run: (ctx) => (reached = ctx.target?.entryIds),
     });
-    gantt.selectedIds = threeEntries.map((entry) => entry.id);
+    gantt.selectedSegmentIds = segmentsOf(...threeEntries);
 
     container.dispatchEvent(
       new KeyboardEvent('keydown', { key: 'F10', shiftKey: true, bubbles: true, cancelable: true }),
     );
     clickMenuItem(container, 'demo.reached');
 
-    // The keyboard path resolves through the bar of `selectedIds[0]`, and that bar is part of the
+    // The keyboard path resolves through the bar of the first selected Entry, and that bar is part of the
     // Selection, so it names the same three a right-click on any of them names.
     expect(reached).toEqual(threeEntries.map((entry) => entry.id));
 
@@ -244,7 +251,7 @@ describe('contextMenu() (S5.5, D-S5-13/14)', () => {
 
   it('Shift+F10 opens at the focused row (the current selection, D-S5-6 precedent)', () => {
     const { container, gantt } = makeGantt();
-    gantt.selectedIds = [sampleEntries[0]!.id];
+    gantt.selectedSegmentIds = segmentsOf(sampleEntries[0]!);
 
     container.dispatchEvent(
       new KeyboardEvent('keydown', { key: 'F10', shiftKey: true, bubbles: true, cancelable: true }),
@@ -294,7 +301,7 @@ describe('contextMenu() (S5.5, D-S5-13/14)', () => {
 
   it('Enter/click runs the command and closes the menu', () => {
     const { container, gantt } = makeGantt();
-    gantt.selectedIds = [sampleEntries[0]!.id];
+    gantt.selectedSegmentIds = segmentsOf(sampleEntries[0]!);
     let ran = false;
     gantt.commands.register({ id: 'demo.run', label: 'Run me', run: () => (ran = true) });
 
@@ -455,7 +462,7 @@ describe('contextMenu() (S5.5, D-S5-13/14)', () => {
     const { container, gantt } = makeGantt();
     // Selection is empty; right-clicking a bar must still run a command whose `when` needs `ctx.entry`
     // against *that* bar's entry, not against `#buildCommandContext`'s own (empty) selection.
-    expect(gantt.selectedIds).toEqual([]);
+    expect(gantt.selectedSegmentIds).toEqual([]);
     let ranFor: string | undefined;
     gantt.commands.register({
       id: 'demo.needsEntry',

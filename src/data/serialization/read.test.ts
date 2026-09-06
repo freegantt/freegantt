@@ -114,7 +114,7 @@ describe('readDocument (S4.4, D-S4-16)', () => {
 
   it('throws UnsupportedSchemaError for a schema this build does not read', () => {
     const doc = {
-      schema: 4,
+      schema: 5,
       timeZone: 'UTC',
       dateOnlyEnd: 'inclusive' as const,
       rollUpKinds: [],
@@ -126,10 +126,24 @@ describe('readDocument (S4.4, D-S4-16)', () => {
     } catch (error) {
       expect(error).toBeInstanceOf(UnsupportedSchemaError);
       if (error instanceof UnsupportedSchemaError) {
-        expect(error.schema).toBe(4);
-        expect(error.supported).toEqual([1, 2, 3]);
+        expect(error.schema).toBe(5);
+        expect(error.supported).toEqual([1, 2, 3, 4]);
       }
     }
+  });
+
+  it('mints a Segment id for a schema: 3 Entry, which stores no ids of its own (#212)', () => {
+    const doc = {
+      schema: 3,
+      timeZone: 'UTC',
+      dateOnlyEnd: 'inclusive' as const,
+      rollUpKinds: [],
+      entries: [span('t1')],
+    };
+    const read = readDocument(doc as unknown as DatasetDocument);
+    const restored = new DatasetState(read);
+    expect(restored.entries.get('t1')?.segments).toHaveLength(1);
+    expect(restored.entries.get('t1')?.segments[0]?.id).toBeDefined();
   });
 });
 

@@ -247,7 +247,7 @@ test('a press-and-drag with nothing selected picks up the grabbed bar alone (#21
   expect(siblingAfter).not.toBeNull();
   expect(Math.abs(siblingAfter!.x - siblingBefore!.x)).toBeLessThan(2);
 
-  expect(await page.evaluate(() => window.__gantt.selectedIds)).toEqual([entryId]);
+  expect(await page.evaluate(() => window.__gantt.selectedEntryIds)).toEqual([entryId]);
 });
 
 test('a row click paints and moves every bar of the entry, and one Undo restores them all', async ({

@@ -3,7 +3,7 @@ import { FrameMemory } from './frame-memory.js';
 import { createItemProducerRegistry } from './items/produce-items.js';
 import { sampleEntries } from '../../fixtures/sample-dataset.js';
 import * as packLanes from './lanes/pack-lanes.js';
-import { rowId } from '../model/index.js';
+import { rowId, segmentId } from '../model/index.js';
 import type { PlannedRow } from './rows/row-source.js';
 
 function packPlan(entries = sampleEntries): readonly PlannedRow[] {
@@ -36,7 +36,14 @@ describe('FrameMemory (A2)', () => {
     });
     expect(memory.heightOfRow(0)).toBe(32);
 
-    const three = { ...one, segments: [one, one, one].map((span) => ({ start: span.start, end: span.end })) };
+    const three = {
+      ...one,
+      segments: [one, one, one].map((span, index) => ({
+        id: segmentId(`${one.id}-${index}`),
+        start: span.start,
+        end: span.end,
+      })),
+    };
     memory.sync({
       plan,
       rowHeight: 32,

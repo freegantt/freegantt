@@ -2,7 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { runTransaction } from './transaction.js';
 import { DatasetState } from './dataset-state.js';
 import { fieldRowsOf } from './change-set.js';
-import { MutationCancelledError, MutationDuringNotificationError, entryId } from '../model/index.js';
+import {
+  MutationCancelledError,
+  MutationDuringNotificationError,
+  entryId,
+  segmentId,
+} from '../model/index.js';
 import type { ErrorReport } from '../model/index.js';
 import { toEndInstant, toInstant } from '../time/index.js';
 import type { EntryEdits, StoredEdit } from './edit-extension.js';
@@ -96,6 +101,7 @@ describe('runTransaction', () => {
           start: 0 as never,
           end: 1 as never,
           kind: 'span',
+          segments: [{ id: segmentId('t9-seg'), start: 0 as never, end: 1 as never }],
         });
         state.entries.stageRemove(token, entryId('t9'));
       },
@@ -123,6 +129,7 @@ describe('runTransaction', () => {
           start: 0 as never,
           end: 1 as never,
           kind: 'span',
+          segments: [{ id: segmentId('t1-reborn-seg'), start: 0 as never, end: 1 as never }],
         });
       },
       'user',
@@ -194,6 +201,7 @@ describe('runTransaction', () => {
           start: 0 as never,
           end: 1 as never,
           kind: 'span',
+          segments: [{ id: segmentId('child-seg'), start: 0 as never, end: 1 as never }],
         });
         sizeDuring = state.entries.size;
         childDuring = state.entries.childrenOf(entryId('root')).map((e) => e.id);

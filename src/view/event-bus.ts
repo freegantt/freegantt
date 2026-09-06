@@ -7,7 +7,15 @@
 // there rather than owning a second copy.
 
 import type { TimeScaleFit } from '../layout/index.js';
-import type { Entry, EntryId, ErrorReport, FieldKey, GridColumn, Instant } from '../model/index.js';
+import type {
+  Entry,
+  EntryId,
+  ErrorReport,
+  FieldKey,
+  GridColumn,
+  Instant,
+  SegmentId,
+} from '../model/index.js';
 import type { CollapseChange } from './collapse-state.js';
 
 export type { CollapseChange };
@@ -37,11 +45,12 @@ export interface GridColumnsChange {
   readonly to: readonly GridColumn[];
 }
 
-/** S3, D-S3-10/D-S3-22. Fires on the Gantt, never the Dataset — selection is Gantt state, so two
- *  Gantt instances bound to one Dataset can hold different selections. */
+/** S3, D-S3-10/D-S3-22; ADR 0010, #212. Fires on the Gantt, never the Dataset — selection is Gantt
+ *  state, so two Gantt instances bound to one Dataset can hold different selections. It carries
+ *  Segment ids, because the Selection holds Segments. */
 export interface SelectionChange {
-  readonly from: readonly EntryId[];
-  readonly to: readonly EntryId[];
+  readonly from: readonly SegmentId[];
+  readonly to: readonly SegmentId[];
 }
 
 /** S5.8, D-S5-19: what `beforeEntryEdit`/`entryEdit` carry — named `EntryFieldEdit`, not `EntryEdit`

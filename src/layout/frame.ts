@@ -10,6 +10,7 @@ import type {
   Rect,
   TimeUnit,
   FieldContext,
+  SegmentId,
 } from '../model/index.js';
 import { segmentIndexOfItem } from '../model/index.js';
 import type { TimeScale, ViewPreset } from '../time/index.js';
@@ -88,6 +89,10 @@ export interface FrameBar {
   entryId: EntryId;
   rowId: RowId;
   kind: EntryKind;
+  /** The one Segment this bar draws (#212, ADR 0010), carried straight through from the Item that
+   *  produced it. Absent for a bar that draws the Entry's whole span (a group, a milestone, or a
+   *  plugin's own kind) — that bar stands for no single Segment. */
+  segmentId?: SegmentId;
   /** The entry's name — what a backend renders as the bar's label (#26). */
   label: string;
   x: number;
@@ -103,7 +108,7 @@ export interface FrameBar {
   a11yLabel: string;
 }
 
-/** One segment of an SVG-style path, used by link geometry (§4). */
+/** One straight part of an SVG-style path, used by link geometry (§4). */
 export type PathCommand =
   | { cmd: 'M'; x: number; y: number }
   | { cmd: 'L'; x: number; y: number }
@@ -387,7 +392,7 @@ export function placeFrame(
       const { x, width } = barSpan(item, scale, diamondSizePx);
       if (!intersectsHorizontally(x, width)) continue;
       const lane = packing.laneByItem.get(item.id) ?? 0;
-      bars.push({
+      const bar: FrameBar = {
         id: item.id,
         entryId: item.entryId,
         rowId: planned.id,
@@ -400,7 +405,9 @@ export function placeFrame(
         lane,
         flags: {},
         a11yLabel: barA11yLabel(item, parts.get(item.entryId) ?? 1, scale, locale),
-      });
+      };
+      if (item.segmentId !== undefined) bar.segmentId = item.segmentId;
+      bars.push(bar);
     }
   }
 
