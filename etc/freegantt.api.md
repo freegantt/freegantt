@@ -863,6 +863,7 @@ export interface FrameBar {
     label: string;
     // (undocumented)
     lane: number;
+    minimumSpan: boolean;
     // (undocumented)
     rowId: RowId;
     segmentId?: SegmentId;

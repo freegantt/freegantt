@@ -154,7 +154,7 @@ export type GridWidth = number | 'fitColumns';
 const DEFAULT_THEME: Theme = 'auto';
 const DEFAULT_A11Y_LABEL = 'Gantt';
 
-/** The four `--fg-*` pixel properties, their policies and the today-line margin default all live in
+/** The five `--fg-*` pixel properties, their policies and the today-line margin default all live in
  *  `frame-settings.ts` now (#167). They are that module's own knowledge, not this shell's. The read
  *  cadence stays here, because only this shell knows when the pane changed: on construction, and
  *  again on every pane-size measurement (#8, #49). `getComputedStyle` is a synchronous style read
@@ -1624,6 +1624,7 @@ export class GanttShell {
       { start, end, kind: kindSource.kind },
       this.#viewport.timeScale,
       this.#frameSettings.diamondSizePx,
+      this.#frameSettings.minBarWidthPx,
     );
     let rowIndex = this.#layout.rowIndexForEntry(ownerId);
     if (rowIndex < 0 && this.#treeCollapse.expandAncestorsOf(ownerId)) {
