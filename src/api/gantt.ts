@@ -58,11 +58,17 @@ export interface DateLineInput {
   className?: string;
 }
 
-export interface GanttOptionsBase {
+export interface GanttOptionsBase<
+  TMeta = unknown,
+  TFields extends Record<string, unknown> = Record<string, unknown>,
+> {
   /** Element or CSS selector (plans/02 §2) — resolved by GanttShell; a selector matching nothing
    * throws (#38). */
   container: HTMLElement | string;
-  dataset: Dataset;
+  /** The Dataset this Gantt reads and writes, for its whole life. It binds `TMeta`/`TFields`:
+   *  a Gantt built on a `Dataset<{ team: string }, { cost: number }>` hands that same typed
+   *  Dataset back from `gantt.dataset`, so a page never carries the pair by hand (#226). */
+  dataset: Dataset<TMeta, TFields>;
   /** Bound scroll object (D9) — pass the same instance to two Gantt instances to scroll-sync them.
    * Independent of `scale`/`preset`/`range`/`fit`: a Gantt may share its scroll position, its axis,
    * both, or neither. */
@@ -134,7 +140,7 @@ export interface GanttOptionsBase {
    *  ignored (a dev build warns; production stays silent). Reconfigure with two assignments
    *  (remove, then add) or a distinct id. Default `[]`. `gantt.installPlugin`/`uninstallPlugin`
    *  add or drop one plugin without restating the set (D-S5-36). */
-  plugins?: readonly GanttPlugin[];
+  plugins?: readonly GanttPlugin<TMeta, TFields>[];
 }
 
 /** Two ways to set the axis, made mutually exclusive at the type level (issue #84 — the prior shape
@@ -159,32 +165,56 @@ export type GanttScaleOptions =
       fit?: TimeScaleFit;
     };
 
-export type GanttOptions = GanttOptionsBase & GanttScaleOptions;
+export type GanttOptions<
+  TMeta = unknown,
+  TFields extends Record<string, unknown> = Record<string, unknown>,
+> = GanttOptionsBase<TMeta, TFields> & GanttScaleOptions;
 
 /** S5.1, D-S5-1: `GanttPlugin`/`PluginContext` bound to this class — see `api/plugin.ts`'s file
  *  header for why the generic form lives there and the binding happens here. This is the type a
  *  plugin author actually sees: `api/index.ts` re-exports these bound names alongside the generic
  *  `GanttPluginOf`/`PluginContextOf` shapes. */
-export type GanttPlugin = GanttPluginOf<Gantt>;
-export type PluginContext = PluginContextOf<Gantt>;
+export type GanttPlugin<
+  TMeta = unknown,
+  TFields extends Record<string, unknown> = Record<string, unknown>,
+> = GanttPluginOf<Gantt<TMeta, TFields>, Dataset<TMeta, TFields>>;
+export type PluginContext<
+  TMeta = unknown,
+  TFields extends Record<string, unknown> = Record<string, unknown>,
+> = PluginContextOf<Gantt<TMeta, TFields>, Dataset<TMeta, TFields>>;
 
 /** S5.2, D-S5-6: `Command`/`CommandContext`/`CommandRegistry`/`KeyBinding` bound to this class — see
  *  `api/command.ts`'s file header for why the generic form lives there and the binding happens here.
  *  This is the shape a plugin author, or a `gantt.commands`/`gantt.commands.run(id)` caller, actually
  *  sees; `api/index.ts` re-exports these bound names alongside the generic `*Of` shapes. */
-export type Command = CommandOf<Gantt>;
-export type CommandContext = CommandContextOf<Gantt>;
-export type CommandRegistry = CommandRegistryOf<Gantt>;
-export type KeyBinding = KeyBindingOf<Gantt>;
+export type Command<
+  TMeta = unknown,
+  TFields extends Record<string, unknown> = Record<string, unknown>,
+> = CommandOf<Gantt<TMeta, TFields>, Dataset<TMeta, TFields>>;
+export type CommandContext<
+  TMeta = unknown,
+  TFields extends Record<string, unknown> = Record<string, unknown>,
+> = CommandContextOf<Gantt<TMeta, TFields>, Dataset<TMeta, TFields>>;
+export type CommandRegistry<
+  TMeta = unknown,
+  TFields extends Record<string, unknown> = Record<string, unknown>,
+> = CommandRegistryOf<Gantt<TMeta, TFields>, Dataset<TMeta, TFields>>;
+export type KeyBinding<
+  TMeta = unknown,
+  TFields extends Record<string, unknown> = Record<string, unknown>,
+> = KeyBindingOf<Gantt<TMeta, TFields>, Dataset<TMeta, TFields>>;
 export type { ActedOn, CommandTarget };
 
-export class Gantt {
+export class Gantt<TMeta = unknown, TFields extends Record<string, unknown> = Record<string, unknown>> {
   #shell: GanttShell;
-  #dataset: Dataset;
+  #dataset: Dataset<TMeta, TFields>;
   #destroyed = false;
 
-  constructor(options: GanttOptions) {
+  constructor(options: GanttOptions<TMeta, TFields>) {
     this.#dataset = options.dataset;
+    // The same Dataset, read at the erased width `view/` and `interaction/` work in — see
+    // `commitEntryEdits` below, its one reader.
+    const store: Dataset = options.dataset;
     this.#shell = new GanttShell({
       container: options.container,
       dataset: options.dataset,
@@ -229,10 +259,14 @@ export class Gantt {
         // S3.3, D-S3-16: `GanttShell`'s own `dataset` option is `model/`'s narrow `Dataset`
         // interface ("a view never opens a transaction"). This class holds the full `api/Dataset`,
         // so a committed gesture draft reaches the store through here, not through the shell.
+        // `store`, not `options.dataset`: a gesture draft is built in `view/`, which is permanently
+        // monomorphic and carries `meta: unknown` (`api/dataset.ts`'s class note). So this write is
+        // core writing back its own erased shape, and it says so by widening the Dataset once rather
+        // than casting every edit into the caller's declared `TMeta`/`TFields`.
         commitEntryEdits: (edits: StoredEdits) =>
           attemptMutation(() => {
-            options.dataset.transaction(() => {
-              for (const [id, edit] of edits) options.dataset.entries.update(id, edit);
+            store.transaction(() => {
+              for (const [id, edit] of edits) store.entries.update(id, edit);
             });
           }),
         // S5.1, D-S5-1: this file binds the two members it alone has. `dataset` is the full
@@ -242,12 +276,12 @@ export class Gantt {
         // already rely on that same ordering. Every other member arrives already grouped from
         // `view/plugin-ports.ts`, which owns the group a plugin reads it in. So a new seam is one
         // edit there, and a member in the wrong group no longer compiles.
-        buildPluginContext: (parts): PluginContext => ({
+        buildPluginContext: (parts): PluginContext<TMeta, TFields> => ({
           dataset: options.dataset,
           gantt: this,
           ...parts,
         }),
-        buildCommandContext: (parts): CommandContext => ({
+        buildCommandContext: (parts): CommandContext<TMeta, TFields> => ({
           dataset: options.dataset,
           gantt: this,
           ...parts,
@@ -285,6 +319,20 @@ export class Gantt {
       if (line.className !== undefined) spec.className = line.className;
       return spec;
     });
+  }
+
+  /** The Dataset this Gantt was built on (#226). Call: `gantt.dataset.canUndo`, or
+   *  `gantt.dataset.on('change', …)`. It carries the consumer's own `TMeta`/`TFields`, so a helper
+   *  that needs both objects takes the Gantt alone — `mountGanttToolbar({ gantt, container })` —
+   *  instead of taking the pair and trusting the caller to keep it matched.
+   *
+   *  Read-only on purpose. A Gantt binds its Dataset once, at construction: the shell seeds its
+   *  viewport from those entries, subscribes to that Dataset's `change`, and hands it to every
+   *  plugin and command context. Swapping it is a new capability — teardown and rebind of all of
+   *  that — not a getter's mirror, so it stays out until something asks for it. Build a second
+   *  Gantt instead. */
+  get dataset(): Dataset<TMeta, TFields> {
+    return this.#dataset;
   }
 
   get theme(): Theme {
@@ -650,11 +698,11 @@ export class Gantt {
   }
 
   /** Live (S5.1, D-S5-1, D-S5-3). See `GanttOptions.plugins`. */
-  get plugins(): readonly GanttPlugin[] {
+  get plugins(): readonly GanttPlugin<TMeta, TFields>[] {
     return this.#shell.plugins;
   }
 
-  set plugins(next: readonly GanttPlugin[]) {
+  set plugins(next: readonly GanttPlugin<TMeta, TFields>[]) {
     this.#shell.plugins = next;
   }
 
@@ -662,14 +710,14 @@ export class Gantt {
    *  plugin already running alone, so a caller never restates the installed set to add to it. A
    *  plugin whose `id` is already installed throws `DuplicatePluginIdError` — the assignment form
    *  ignores it and reports `plugin-reconfigure-dropped`, which is the silence this verb replaces. */
-  installPlugin(plugin: GanttPlugin): void {
+  installPlugin(plugin: GanttPlugin<TMeta, TFields>): void {
     this.#shell.installPlugin(plugin);
   }
 
   /** D-S5-36. Call: `gantt.hasPlugin('harness.logging')`. It answers whether that plugin is
    *  installed right now — what a toggle reads before it decides which verb to call. Identity is the
    *  `id`, so an object with an installed plugin's `id` answers `true`. */
-  hasPlugin(plugin: GanttPlugin | PluginId): boolean {
+  hasPlugin(plugin: GanttPlugin<TMeta, TFields> | PluginId): boolean {
     const id = typeof plugin === 'string' ? plugin : plugin.id;
     return this.#shell.plugins.some((installed) => installed.id === id);
   }
@@ -678,7 +726,7 @@ export class Gantt {
    *  It disposes that one plugin and leaves the rest running. Identity is the `id` in both forms,
    *  the same identity the assignment form diffs by (D-S5-3). A plugin nothing installs throws
    *  `PluginNotInstalledError`, so a misspelled id is not a silent no-op. */
-  uninstallPlugin(plugin: GanttPlugin | PluginId): void {
+  uninstallPlugin(plugin: GanttPlugin<TMeta, TFields> | PluginId): void {
     this.#shell.uninstallPlugin(typeof plugin === 'string' ? plugin : plugin.id);
   }
 
@@ -687,7 +735,7 @@ export class Gantt {
    *  before any plugin, so a plugin's own registration always wins for a shared id (D-S5-7).
    *  `run(id)` silently no-ops when the command's `when` declines, the same posture as a disabled
    *  menu item. Read-only — `register` lives on the registry itself. */
-  get commands(): CommandRegistry {
+  get commands(): CommandRegistry<TMeta, TFields> {
     return this.#shell.commands;
   }
 
