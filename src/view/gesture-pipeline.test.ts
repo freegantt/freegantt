@@ -632,16 +632,16 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
       expect(reported.map((report) => report.code)).toEqual(['entry-move-cancelled']);
     });
 
-    it('[S3-A4] session().preview() calls the injected extend and previews its extra as a ghost', async () => {
+    it('[S3-A4] session().preview() calls the injected extraEditsFor and previews its extra as a ghost', async () => {
       const a = entry('a', 100, 200);
       const x = entry('x', 300, 400);
       const requests: unknown[] = [];
-      const extend: GesturePipelineDeps['extend'] = (request) => {
+      const extraEditsFor: GesturePipelineDeps['extraEditsFor'] = (request) => {
         requests.push(request);
         return new Map([[x.id, { start: 350 as unknown as Instant, end: 450 as unknown as Instant }]]);
       };
       const { deps, applied } = withRoster([a, x], {
-        extend,
+        extraEditsFor,
         allEntries: () =>
           new Map([
             [a.id, a],
@@ -690,20 +690,20 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
           [a.id, a],
           [x.id, x],
         ]);
-      const extend: GesturePipelineDeps['extend'] = () =>
+      const extraEditsFor: GesturePipelineDeps['extraEditsFor'] = () =>
         new Map([[x.id, { start: 350 as unknown as Instant }]]);
       const commitEntryEdits = vi.fn((draft: EntryEdits) => {
         // Mirrors what `data/build-commit-change-set.ts` runs for real, at commit, against the real
-        // Dataset: the extend hook's cascade goes through `reconcileExtenderEdits` — the same function
+        // Dataset: the extraEditsFor hook's cascade goes through `reconcileExtenderEdits` — the same function
         // the preview above calls a skip-on-refusal wrapper of — and this one does not skip.
         const entries = allEntries();
         reconcileExtenderEdits(
           entries,
-          extend({ entries, proposed: draft, entryAfterEdits: (id) => entries.get(id) }),
+          extraEditsFor({ entries, proposed: draft, entryAfterEdits: (id) => entries.get(id) }),
         );
         return true;
       });
-      const { deps, applied } = withRoster([a, x], { extend, allEntries, commitEntryEdits });
+      const { deps, applied } = withRoster([a, x], { extraEditsFor, allEntries, commitEntryEdits });
       const pipeline = new GesturePipeline(deps);
       const session = pipeline.session(a.id, { kind: 'move' })!;
 
@@ -718,7 +718,7 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
       expect(commitEntryEdits).toHaveBeenCalledTimes(1);
     });
 
-    it('[S3-A4] no extend (identity, P1 default) previews only the caller’s own draft, no ghost', async () => {
+    it('[S3-A4] no extraEditsFor (identity, P1 default) previews only the caller’s own draft, no ghost', async () => {
       const a = entry('a', 100, 200);
       const { deps, applied } = withRoster([a]);
       const pipeline = new GesturePipeline(deps);
@@ -735,10 +735,10 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
     it('[S3-A4] cancel() clears the ghost along with the caller’s own preview', async () => {
       const a = entry('a', 100, 200);
       const x = entry('x', 300, 400);
-      const extend: GesturePipelineDeps['extend'] = () =>
+      const extraEditsFor: GesturePipelineDeps['extraEditsFor'] = () =>
         new Map([[x.id, { start: 350 as unknown as Instant, end: 450 as unknown as Instant }]]);
       const { deps, applied } = withRoster([a, x], {
-        extend,
+        extraEditsFor,
         allEntries: () =>
           new Map([
             [a.id, a],
@@ -845,12 +845,12 @@ describe('GesturePipeline hot path (review finding 9, I5)', () => {
     };
 
     let sawStart: Instant | undefined;
-    const extend: GesturePipelineDeps['extend'] = (request) => {
+    const extraEditsFor: GesturePipelineDeps['extraEditsFor'] = (request) => {
       sawStart = request.entryAfterEdits(entryId('a'))?.start;
       return new Map();
     };
 
-    const { deps } = withRoster([entry('a', 0, 100)], { extend, allEntries: () => roster });
+    const { deps } = withRoster([entry('a', 0, 100)], { extraEditsFor, allEntries: () => roster });
     const pipeline = new GesturePipeline(deps);
     const session = pipeline.session(entryId('a'), { kind: 'move' })!;
 

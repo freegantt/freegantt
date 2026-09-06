@@ -5,10 +5,11 @@
 import type {
   Aggregator,
   ChangeSet,
-  EditExtender,
   DatasetDocument,
   DatasetEventMap,
   DateOnlyEndRule,
+  EditRequest,
+  EntryEdits,
   EntryInput,
   EntryKind,
   EntryStore as EntryStoreContract,
@@ -241,13 +242,15 @@ export class Dataset<TMeta = unknown, TFields extends Record<string, unknown> = 
     return this.#state.isRollUpKind(kind);
   }
 
-  /** The extension hook's current occupant (D4, D-S2-6): every installed plugin's wrapper, composed
-   *  (D-S5-23), or the identity function when nothing claimed it. Expert surface, not an app author's
-   *  (`plans/02`, "two callers, two surfaces") — a Gantt reads it to ghost an extender's extra edits
-   *  during a drag (D-S3-18), and never writes through it. A commit runs the same occupant again, for
-   *  real, inside the transaction. */
-  get editExtender(): EditExtender {
-    return this.#state.editExtender;
+  /** Calls the extension hook's current occupant — every installed plugin's wrapper, composed
+   *  (D-S5-23), or the identity function when nothing claimed it — and hands back what it wrote.
+   *  Expert surface, not an app author's (`plans/02`, "two callers, two surfaces"): a Gantt calls this
+   *  to ghost an extender's extra edits during a drag (D-S3-18), and never writes through it. A commit
+   *  calls the same occupant again, for real, inside the transaction. A method, not a getter (#209
+   *  Q5): the old `editExtender` getter handed over the occupant itself, so a caller that stored its
+   *  result instead of re-reading it live would ghost a plugin composed on after (#186). */
+  extraEditsFor(request: EditRequest): EntryEdits {
+    return this.#state.extraEditsFor(request);
   }
 
   /** Call: `layout.computeFrame({ datasetRevision: dataset.datasetRevision })`. */
