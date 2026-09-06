@@ -3033,6 +3033,38 @@ describe('Gantt selection over Segments (ADR 0010, #212)', () => {
     gantt.destroy();
     container.remove();
   });
+
+  // #230 R0: the Mod+Arrow test above drives the chord, not the two commands it binds, and it never
+  // presses the low-end clamp or a one-Segment row. This pins both commands directly, both clamps.
+  it('freegantt.selectNextSegment/selectPreviousSegment step within a row and clamp at both ends', () => {
+    const { container, gantt, dataset } = makeSegmentedGantt();
+    gantt.selectedSegmentIds = ['split-a'];
+
+    // Already at the row's first Segment: stepping back clamps rather than leaving the row.
+    gantt.commands.run('freegantt.selectPreviousSegment');
+    expect(gantt.selectedSegmentIds).toEqual(['split-a']);
+
+    gantt.commands.run('freegantt.selectNextSegment');
+    expect(gantt.selectedSegmentIds).toEqual(['split-b']);
+
+    // Already at the row's last Segment: stepping forward clamps too.
+    gantt.commands.run('freegantt.selectNextSegment');
+    expect(gantt.selectedSegmentIds).toEqual(['split-b']);
+
+    gantt.commands.run('freegantt.selectPreviousSegment');
+    expect(gantt.selectedSegmentIds).toEqual(['split-a']);
+
+    // A row that draws one bar (the 'plain' entry) has nowhere to step, either direction.
+    const onlySegment = dataset.entries.segmentIdsOfEntries(['plain']);
+    gantt.selectedSegmentIds = onlySegment;
+    gantt.commands.run('freegantt.selectNextSegment');
+    expect(gantt.selectedSegmentIds).toEqual(onlySegment);
+    gantt.commands.run('freegantt.selectPreviousSegment');
+    expect(gantt.selectedSegmentIds).toEqual(onlySegment);
+
+    gantt.destroy();
+    container.remove();
+  });
 });
 
 describe('Gantt Delete key (ADR 0010, #212)', () => {

@@ -210,6 +210,21 @@ describe('FrameLayout', () => {
     );
     expect(layout.segmentIdsForRow(rowId('no-such-row'))).toEqual([]);
   });
+
+  it('a grouping header row stands for no Segment, on both paths (#230 R0)', () => {
+    const layout = new FrameLayout();
+    const frame = layout.computeFrame(
+      input({
+        entries: sampleEntries.slice(0, 4),
+        rows: { source: 'group', groupBy: (entry) => entry.kind },
+      }),
+    );
+
+    const header = frame.rows.find((row) => row.kind === 'header');
+    expect(header).toBeDefined();
+    expect(header!.entryIds).toEqual([]);
+    expect(layout.segmentIdsForRow(header!.id)).toEqual([]);
+  });
 });
 
 describe('FrameLayout pack mode (S4.8, [S4-A5])', () => {
