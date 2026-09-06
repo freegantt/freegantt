@@ -1,0 +1,370 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Branch review — s5-start, last 24 hours (2026-09-06)</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script type="module">
+  import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+  mermaid.initialize({ startOnLoad: true, theme: "neutral", securityLevel: "loose" });
+</script>
+<style>
+  .seam { stroke-dasharray: 4 4; }
+  .deep { background: linear-gradient(135deg, #0f172a, #1e293b); }
+  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+</style>
+</head>
+<body class="bg-stone-50 text-slate-900 font-sans">
+<main class="max-w-5xl mx-auto px-6 py-12 space-y-12">
+
+<!-- ============ HEADER ============ -->
+<header class="space-y-4">
+  <h1 class="text-3xl font-serif font-bold">Branch review — <span class="mono text-xl align-middle bg-slate-800 text-white px-2 py-1 rounded">s5-start</span></h1>
+  <p class="text-sm text-slate-600">
+    Window <span class="mono">8c4662d~1..HEAD</span> · 83 commits · 2026-09-05 17:12 → 2026-09-06 16:08 MDT ·
+    172 files · <span class="text-emerald-700">+12,540</span> / <span class="text-red-700">−2,349</span>
+  </p>
+  <div class="flex gap-6 text-xs text-slate-500 uppercase tracking-wider">
+    <span><span class="inline-block w-3 h-3 border border-slate-400 bg-white align-middle"></span> module</span>
+    <span><span class="inline-block w-4 border-t-2 border-dashed border-slate-400 align-middle"></span> seam</span>
+    <span><span class="inline-block w-4 border-t-2 border-red-500 align-middle"></span> leak</span>
+    <span><span class="inline-block w-3 h-3 deep align-middle rounded-sm"></span> deep module</span>
+  </div>
+  <div class="grid grid-cols-5 gap-3 text-center text-sm">
+    <div class="rounded-lg bg-white border border-slate-200 p-3"><div class="text-2xl font-bold text-emerald-700">0</div><div class="text-xs text-slate-500 uppercase tracking-wider">hard violations</div></div>
+    <div class="rounded-lg bg-white border border-slate-200 p-3"><div class="text-2xl font-bold">8</div><div class="text-xs text-slate-500 uppercase tracking-wider">standards calls</div></div>
+    <div class="rounded-lg bg-white border border-slate-200 p-3"><div class="text-2xl font-bold text-amber-600">4</div><div class="text-xs text-slate-500 uppercase tracking-wider">spec gaps</div></div>
+    <div class="rounded-lg bg-white border border-slate-200 p-3"><div class="text-2xl font-bold">12</div><div class="text-xs text-slate-500 uppercase tracking-wider">simplicity calls</div></div>
+    <div class="rounded-lg bg-white border border-slate-200 p-3"><div class="text-2xl font-bold text-red-600">7</div><div class="text-xs text-slate-500 uppercase tracking-wider">harness API gaps</div></div>
+  </div>
+</header>
+
+<!-- ============ AXIS SUMMARIES ============ -->
+<section class="space-y-6">
+  <h2 class="text-2xl font-serif font-bold">Four axes, one window</h2>
+  <p class="text-sm text-slate-600">Review scope: the last 24 hours on <span class="mono">s5-start</span> — the Segment-selection window (ADR 0010 / #212), the write-shape work (#209 C1–C4), entry-from-Segment (#230), snap / inverted-span / discard (#231), command ids (#236), error messages (#237), unstated-edit merge (#238), and <span class="mono">moveEntryTo</span> (#239). Priority per the brief: the consumer and plugin interface must stay easy to use, understand, and extend.</p>
+
+  <!-- Standards -->
+  <div class="rounded-xl border border-slate-200 bg-white p-6 space-y-3">
+    <h3 class="font-bold text-lg">Standards <span class="text-sm font-normal text-slate-500">— naming test, AGENTS.md rules, Fowler smells · 0 hard, 8 judgement calls</span></h3>
+    <p class="text-xs text-slate-500">Worst: the veto swallow is copied, and the copy says why it must exist — a layering fact asking for a seam (candidate 2).</p>
+    <table class="w-full text-sm"><tbody class="divide-y divide-slate-100">
+      <tr><td class="py-2 pr-3 mono text-xs whitespace-nowrap">view/core-commands.ts:139</td><td>Duplicated the one-line <span class="mono">MutationCancelledError</span> swallow; comment admits "view/ cannot import api/". Judgement call. → candidate 2.</td></tr>
+      <tr><td class="py-2 pr-3 mono text-xs">extensions/features/inline-editing.ts:85</td><td><span class="mono">writesSegmentEnvelope</span> re-derives "which keys move the envelope" that data/ owns; comment admits "one owner would be better". Judgement call; also an API gap (core should answer the question).</td></tr>
+      <tr><td class="py-2 pr-3 mono text-xs">data/entry-reader.ts:360</td><td><span class="mono">moveEntryTo</span> and layout/gesture-draft's <span class="mono">moveEdit</span> compute the same Segment translate — locked layering, so cross-reference, don't merge. Judgement call.</td></tr>
+      <tr><td class="py-2 pr-3 mono text-xs">view/affordance-projection.ts:15–19</td><td>Data clump: <span class="mono">soleSelectedEntryId</span> + <span class="mono">selectedSegmentCountOfSoleEntry</span> travel with an untyped invariant ("meaningless when the first is undefined"). One object <span class="mono">{ id, segmentCount } | undefined</span>.</td></tr>
+      <tr><td class="py-2 pr-3 mono text-xs">api/command.ts:107</td><td><span class="mono">resolveActedOn</span> scans with <span class="mono">.every(id => selected.includes(id))</span> — O(n·m) per right-click. Named <span class="mono">Set</span>s already exist nearby.</td></tr>
+      <tr><td class="py-2 pr-3 mono text-xs">extensions/features/context-menu.ts:105</td><td>Assignment justified by a comment chain, not by a type or a contract line. State the invariant as <span class="mono">resolveActedOn</span>'s return contract.</td></tr>
+      <tr><td class="py-2 pr-3 mono text-xs">extensions/features/inline-editing.ts:159</td><td><span class="mono">CellEditorCommitRefusal</span> — "Commit" is the glossary's transaction-moment word (ADR 0006); the veto word is the codebase's word for a refused write. Soft naming miss.</td></tr>
+      <tr><td class="py-2 pr-3 mono text-xs">data/fields/source-strategy.ts:52</td><td><span class="mono">statesProposedKeys(edit)</span> reads as "if states proposed keys" — a third-person verb fighting the codebase's <span class="mono">is*/has*</span> predicates.</td></tr>
+    </tbody></table>
+    <p class="text-xs text-slate-500">Clean: no time-arithmetic or clock reads outside <span class="mono">time/</span>; no kind-switch chains outside seams; new public names (<span class="mono">ActedOn</span>, <span class="mono">BuiltInCommandId</span>, <span class="mono">StoredEdit(s)</span>, <span class="mono">Segment*</span>, <span class="mono">removeSegments</span>) pass the naming test and none collide with CONTEXT.md <em>Avoid</em> lists except the Commit miss above.</p>
+  </div>
+
+  <!-- Spec -->
+  <div class="rounded-xl border border-slate-200 bg-white p-6 space-y-3">
+    <h3 class="font-bold text-lg">Spec <span class="text-sm font-normal text-slate-500">— nine workstreams vs their sources · 7 landed, 1 partial, 2 scope creeps</span></h3>
+    <p class="text-xs text-slate-500">Landed as specified: ADR 0010 Segment selection · #209 C1–C4 write shape · #230 R0–R2 (incl. the [#230-14] source-of-truth test) · #231 F1–F3 · #236 · #238 · s5.11/s5.12 records.</p>
+    <table class="w-full text-sm"><tbody class="divide-y divide-slate-100">
+      <tr class="bg-red-50"><td class="py-2 pr-3 mono text-xs whitespace-nowrap align-top">HIGH</td><td class="py-2 pr-3"><strong>D-S5-50's record contradicts the code it governs.</strong> <span class="mono">6eb6da1</span> changed <span class="mono">moveEntryTo</span> to <span class="mono">(entry: Entry, start: Instant)</span> — core keeps the zone math — but four records still teach the old <span class="mono">(entry, start, timeZone)</span> call: s5.10:159–162 and :135, s5 README:298, CONTEXT.md:56, docs/edit-extension-flow.md:42. A plugin author following the glossary gets a compile error. The reversal may be right; the record was not corrected with it.</td></tr>
+      <tr class="bg-amber-50"><td class="py-2 pr-3 mono text-xs align-top">MEDIUM</td><td class="py-2 pr-3"><strong>#237 is partial (known, tracked).</strong> <span class="mono">src/time/input.ts:31</span> still bakes <span class="mono">toInstant()</span> — a name the consumer never called — into <span class="mono">InvalidInstantError</span> on every way in, and that class stays free-form-message shaped with a bolted-on <span class="mono">value</span>. Lane D's handoff names both as its largest remaining item; deliberate deferral, but the workstream is not done.</td></tr>
+      <tr><td class="py-2 pr-3 mono text-xs align-top">MEDIUM-LOW</td><td class="py-2 pr-3">Scope creep: <span class="mono">e6c2fe1</span> redesigns 117 lines of shipped palette (cool ground, shadows, rings) that no workstream asked for; only the selection red→violet half is #212-adjacent.</td></tr>
+      <tr><td class="py-2 pr-3 mono text-xs align-top">LOW</td><td class="py-2 pr-3">Scope creep: <span class="mono">ed6d282</span> adds weekend shading with a live toggle to the index demo — S5.13-adjacent, not asked by any window spec.</td></tr>
+    </tbody></table>
+  </div>
+
+  <!-- Simplicity -->
+  <div class="rounded-xl border border-slate-200 bg-white p-6 space-y-3">
+    <h3 class="font-bold text-lg">Simplicity &amp; SOLID <span class="text-sm font-normal text-slate-500">— deep modules, deletion test, over-abstraction · 2 hard, 10 judgement calls</span></h3>
+    <p class="text-xs text-slate-500">Worst: dead conditionals a reader hunts through, and a reconciliation loop that must be fixed twice.</p>
+    <table class="w-full text-sm"><tbody class="divide-y divide-slate-100">
+      <tr class="bg-red-50"><td class="py-2 pr-3 mono text-xs whitespace-nowrap align-top">HARD</td><td class="py-2 pr-3"><strong>Dead conditionals, both branches identical.</strong> <span class="mono">view/gesture-pipeline.ts:246</span> and :257 — <span class="mono">cond ? emit(...) : emit(...)</span>. Delete both forks; emit once.</td></tr>
+      <tr class="bg-red-50"><td class="py-2 pr-3 mono text-xs align-top">HARD</td><td class="py-2 pr-3"><strong>Twin functions differing only in a try/catch.</strong> <span class="mono">data/entry-reader.ts:388</span> <span class="mono">reconcileExtenderEdits</span> vs :411 <span class="mono">...ForPreview</span> — the same 15-line loop twice; a reconciliation fix is a two-file fix. → candidate 1.</td></tr>
+      <tr><td class="py-2 pr-3 mono text-xs">api/command.ts:22</td><td>Open/Closed: <span class="mono">BuiltInCommandId</span> lives in three places (union, 27 registrations, test list) held in sync only by a test. → candidate 6.</td></tr>
+      <tr><td class="py-2 pr-3 mono text-xs">api · view · extensions</td><td>Dependency inversion: the veto rule smeared across three layers. → candidate 2.</td></tr>
+      <tr><td class="py-2 pr-3 mono text-xs">data/entry-store.ts:79, :314; data/change-set.ts:150</td><td>The before/after Segment-diff rule hand-rolled three times. → candidate 4.</td></tr>
+      <tr><td class="py-2 pr-3 mono text-xs">data/entry-reader.ts:5</td><td>Divergent change: the header says "maps fields and nothing else"; the file now owns the envelope invariant, both reconcilers, and <span class="mono">moveEntryTo</span> — 512 lines, four reasons to change. → candidate 1.</td></tr>
+      <tr><td class="py-2 pr-3 mono text-xs">data/edit-extension.ts:35</td><td><span class="mono">mergeEntryEdits</span> and <span class="mono">mergeStoredEditsByEntry</span> (fields/field-access.ts:66) repeat one map-merge loop; only the per-entry merge differs. One generic over <span class="mono">mergeOne</span>.</td></tr>
+      <tr><td class="py-2 pr-3 mono text-xs">view/gantt-shell.ts:716</td><td>Hot-path allocation: <span class="mono">allEntries: () => new Map(...)</span> copies the whole dataset every preview frame — against I5. → candidate 3.</td></tr>
+      <tr><td class="py-2 pr-3 mono text-xs">api/command.ts:61 · view/entry-gesture-context.ts</td><td>Vocabulary split: one clump (entryIds + segmentIds), two shapes — <span class="mono">ActedOn</span> here, two methods there. → candidate 5.</td></tr>
+      <tr><td class="py-2 pr-3 mono text-xs">api/gantt.ts:647</td><td>Comment drift: <span class="mono">reveal()</span> documents <span class="mono">EntryNotFoundError</span>; the shell throws <span class="mono">RevealTargetNotFoundError</span> (gantt-shell.ts:1631). Fix the comment.</td></tr>
+      <tr class="bg-emerald-50"><td class="py-2 pr-3 mono text-xs align-top">PASS</td><td class="py-2 pr-3">Deletion test passes on core-commands.ts, affordance-projection.ts, frame-settings.ts, build-commit-change-set.ts — deleting any makes its complexity reappear across N callers. <span class="mono">CoreCommandPorts</span> is wide but single-implementer, single-job. <span class="mono">StoredEdit</span> vs <span class="mono">EntryEdit</span> checked as a suspected shallow mirror — the read shape is load-bearing at the hook (I10, loose-in/complete-out); no move.</td></tr>
+    </tbody></table>
+    <p class="text-xs text-slate-500">Method note: no <span class="mono">/simplify</span> skill is installed in this repo or user scope; this axis was run directly against the same brief (simplicity, over-abstraction, SOLID, deep modules).</p>
+  </div>
+
+  <!-- Consumer / plugin API + harness -->
+  <div class="rounded-xl border border-slate-200 bg-white p-6 space-y-3">
+    <h3 class="font-bold text-lg">Consumer &amp; plugin interface + the Stop rule <span class="text-sm font-normal text-slate-500">— harness/ as first consumer · 7 gaps, 4 surface calls</span></h3>
+    <p class="text-xs text-slate-500">Worst: the toolbar needs a second paired argument only because <span class="mono">Gantt</span> publishes no <span class="mono">dataset</span> getter (#226) — a gap every embedder pays for.</p>
+    <table class="w-full text-sm"><tbody class="divide-y divide-slate-100">
+      <tr class="bg-red-50"><td class="py-2 pr-3 mono text-xs whitespace-nowrap align-top">GAP</td><td class="py-2 pr-3"><span class="mono">harness/gantt-toolbar.ts:23</span> — the comment admits it: "Gantt publishes no dataset getter, so the page passes the same instance it constructed the Gantt with." Close in src/: <span class="mono">gantt.dataset</span> (issue #226 already asks).</td></tr>
+      <tr class="bg-red-50"><td class="py-2 pr-3 mono text-xs align-top">GAP</td><td class="py-2 pr-3"><span class="mono">harness/editing.ts:143–147</span> — the snap picker still writes the retired spelling <span class="mono">gantt.preset = { ...gantt.preset, snap }</span>; api/gantt.ts:447 says that spelling "threw the snap away with the next zoomIn()" and ships <span class="mono">gantt.snap =</span> instead. The API already closed this; the harness is stale. Fix the harness, no library change.</td></tr>
+      <tr><td class="py-2 pr-3 mono text-xs">harness/editing.ts:117–134</td><td>Hand-built undo/redo buttons + a window-level Ctrl+Z listener re-implement <span class="mono">freegantt.undo</span>/<span class="mono">freegantt.redo</span>. No default chord ships yet (verified), so no double-fire today — but the harness must route through <span class="mono">gantt.commands.run()</span> so a future default keymap cannot double-fire.</td></tr>
+      <tr><td class="py-2 pr-3 mono text-xs">harness/gantt-toolbar.ts:42</td><td><span class="mono">PRESET_LABELS</span> hand-maps every shipped preset id to a display word — <span class="mono">ViewPreset</span> (time/scale.ts:48) carries no <span class="mono">label</span>. A preset picker needs no map.</td></tr>
+      <tr><td class="py-2 pr-3 mono text-xs">harness/gantt-toolbar.ts:56, :213</td><td><span class="mono">SNAP_CHOICES</span> re-derives the shipped snap vocabulary ('tick', 'none', unit+increment 1) by hand. Export the shipped snap settings with labels, mirroring <span class="mono">ZOOM_PRESETS</span> and <span class="mono">UnknownPresetError.available</span>.</td></tr>
+      <tr><td class="py-2 pr-3 mono text-xs">harness/gantt-toolbar.ts:203</td><td>Theme takes two writes: the library sets <span class="mono">data-fg-theme</span> on its container while the page must set <span class="mono">data-theme</span> on <span class="mono">&lt;html&gt;</span>. One <span class="mono">themeChange</span> signal (or a host-attribute option) so the page follows one signal.</td></tr>
+      <tr><td class="py-2 pr-3 mono text-xs">harness/docs/*.html</td><td>Not generated — hand-maintained pages re-deriving src/ structure ("updated 2026-09-06" tags); only etc/freegantt.api.md is build output. Keep them out of any "always regenerates" claim. Not an API gap.</td></tr>
+      <tr><td class="py-2 pr-3 mono text-xs">etc/freegantt.api.md</td><td>Surface call: two edit-map vocabularies at one seam — extenders produce <span class="mono">EntryEdits</span>, <span class="mono">extraEditsFor()</span> returns <span class="mono">StoredEdits</span>. Validated as load-bearing (read shape at the hook), but the plugin author still learns both; the docs must teach the one sentence that separates them.</td></tr>
+      <tr><td class="py-2 pr-3 mono text-xs">etc/freegantt.api.md</td><td>Surface call: every new error class carries an <span class="mono">operation: string</span> field — internal provenance a catching consumer cannot branch on. Fold it into the message, or keep it and document it as the provenance word; pick one story.</td></tr>
+      <tr><td class="py-2 pr-3 mono text-xs">data/entry-reader.ts:360</td><td>Surface call: <span class="mono">moveEntryTo(entry, start): EntryEdit</span> reads like a mutating act but is a pure edit-builder. Consider a name that says "compute the edit" (e.g. <span class="mono">moveEntryEdit</span>); if kept, the glossary must carry it with the builder meaning.</td></tr>
+      <tr><td class="py-2 pr-3 mono text-xs">etc/freegantt.api.md</td><td>Surface call: <span class="mono">ActedOn</span> is new public vocabulary with no CONTEXT.md entry (naming check 1). The doc comment is excellent; the glossary entry is missing.</td></tr>
+      <tr class="bg-emerald-50"><td class="py-2 pr-3 mono text-xs align-top">KEPT</td><td class="py-2 pr-3">Judged and kept as good interface: <span class="mono">dataset.entries.removeSegments(['s1'])</span> · <span class="mono">gantt.reveal(segId)</span> (one verb, two target kinds) · <span class="mono">gantt.commands.run('freegantt.undo')</span> · verb-first id pairs (<span class="mono">entryIdOfSegment</span>, <span class="mono">segmentIdsOfEntries</span>) · loose <span class="mono">SegmentId | string</span> in, branded out · <span class="mono">UnknownPresetError.available</span>.</td></tr>
+    </tbody></table>
+  </div>
+</section>
+
+<!-- ============ ARCHITECTURE CANDIDATES ============ -->
+<section class="space-y-10">
+  <h2 class="text-2xl font-serif font-bold">Deepening opportunities</h2>
+  <p class="text-sm text-slate-600">Ranked. Two adapters justify a seam; one means hypothetical. No ADR needs revisiting — 0002, 0005, 0006, 0007, 0010 all hold under every candidate below.</p>
+
+  <!-- C1 -->
+  <article id="c1" class="rounded-xl border border-slate-200 bg-white p-6 space-y-4">
+    <div class="flex items-center gap-3">
+      <h3 class="font-bold text-lg">1 · Give the envelope its own module</h3>
+      <span class="text-xs px-2 py-1 rounded-full bg-emerald-100 text-emerald-800 font-semibold">Strong</span>
+      <span class="text-xs px-2 py-1 rounded-full bg-slate-100 text-slate-600">in-process</span>
+    </div>
+    <p class="mono text-sm text-slate-600">src/data/entry-reader.ts (512 lines) → data/envelope.ts</p>
+    <div class="grid grid-cols-2 gap-4">
+      <div class="rounded-lg border border-slate-200 bg-stone-50 p-4">
+        <div class="text-xs uppercase tracking-wider text-slate-400 mb-2">Before — one file, four jobs</div>
+        <div class="space-y-1 text-xs mono">
+          <div class="border border-slate-300 bg-white rounded px-2 py-1.5">field reading <span class="text-slate-400">· readField/writeField</span></div>
+          <div class="border border-red-400 bg-red-50 rounded px-2 py-1.5">envelope invariant <span class="text-slate-400">· reconcileEnvelope, fitSegments</span></div>
+          <div class="border border-red-400 bg-red-50 rounded px-2 py-1.5">extender reconciliation ×2 <span class="text-slate-400">· :388 / :411 twins</span></div>
+          <div class="border border-red-400 bg-red-50 rounded px-2 py-1.5">edit builder <span class="text-slate-400">· moveEntryTo</span></div>
+          <div class="text-[10px] text-slate-400 pt-1">header still claims "maps fields and nothing else"</div>
+        </div>
+      </div>
+      <div class="rounded-lg border border-slate-200 bg-stone-50 p-4">
+        <div class="text-xs uppercase tracking-wider text-slate-400 mb-2">After — deep envelope module</div>
+        <div class="space-y-1 text-xs mono">
+          <div class="border border-slate-300 bg-white rounded px-2 py-1.5">entry-reader.ts — field reading only</div>
+          <div class="deep text-white rounded px-2 py-2">envelope.ts
+            <div class="text-[10px] text-slate-300 pt-1">invariant · fit rule · moveEntryTo</div>
+            <div class="text-[10px] text-slate-300">reconcile(edits, { dropRefused })</div>
+            <div class="text-[10px] text-slate-400">commit path &amp; preview path: two adapters, one seam</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="text-sm"><strong>Problem:</strong> three concepts share one module; the preview reconciler is a hand-tracked copy of the commit reconciler. <strong>Solution:</strong> one <span class="mono">data/envelope.ts</span> owning the invariant, the fit rule, the move builder, and a single reconciler with a <span class="mono">dropRefused</span> strategy for the preview adapter.</p>
+    <ul class="text-sm list-disc pl-5 space-y-0.5">
+      <li>locality: every Segment/envelope question in one module</li>
+      <li>leverage: one reconciliation loop, two adapters</li>
+      <li>deletes the hand-tracked twin</li>
+      <li>the header stops lying</li>
+    </ul>
+  </article>
+
+  <!-- C2 -->
+  <article id="c2" class="rounded-xl border border-slate-200 bg-white p-6 space-y-4">
+    <div class="flex items-center gap-3">
+      <h3 class="font-bold text-lg">2 · One veto predicate, beside its error</h3>
+      <span class="text-xs px-2 py-1 rounded-full bg-emerald-100 text-emerald-800 font-semibold">Strong</span>
+      <span class="text-xs px-2 py-1 rounded-full bg-slate-100 text-slate-600">in-process</span>
+    </div>
+    <p class="mono text-sm text-slate-600">api/attempt-mutation.ts:12 · view/core-commands.ts:139 · extensions/features/inline-editing.ts:311 → model/errors.ts</p>
+    <div class="grid grid-cols-2 gap-4">
+      <div class="rounded-lg border border-slate-200 bg-stone-50 p-4">
+        <div class="text-xs uppercase tracking-wider text-slate-400 mb-2">Before — the rule, re-derived three times</div>
+        <div class="space-y-1 text-xs">
+          <div class="border-l-4 border-red-400 bg-white pl-2 py-1 mono">api/ — instanceof → swallow</div>
+          <div class="border-l-4 border-red-400 bg-white pl-2 py-1 mono">view/ — copy (cannot import api/)</div>
+          <div class="border-l-4 border-red-400 bg-white pl-2 py-1 mono">extensions/ — copy</div>
+          <div class="text-[10px] text-red-600 pt-1">drift in one copy = a different veto</div>
+        </div>
+      </div>
+      <div class="rounded-lg border border-slate-200 bg-stone-50 p-4">
+        <div class="text-xs uppercase tracking-wider text-slate-400 mb-2">After — one seam, model/ is everyone's leaf</div>
+        <div class="space-y-1 text-xs">
+          <div class="deep text-white rounded px-2 py-1.5 mono">model/errors.ts — isMutationCancelled(error)</div>
+          <div class="border-l-4 border-emerald-500 bg-white pl-2 py-1 mono">api/ → imports</div>
+          <div class="border-l-4 border-emerald-500 bg-white pl-2 py-1 mono">view/ → imports</div>
+          <div class="border-l-4 border-emerald-500 bg-white pl-2 py-1 mono">extensions/ → imports</div>
+        </div>
+      </div>
+    </div>
+    <p class="text-sm"><strong>Problem:</strong> "a veto is not a fault" is a rule, and the rule lives in three layers. <strong>Solution:</strong> one predicate next to <span class="mono">MutationCancelledError</span> in <span class="mono">model/</span> — legal for all three layers today, no ADR touched.</p>
+    <ul class="text-sm list-disc pl-5 space-y-0.5">
+      <li>locality: veto semantics change in one place</li>
+      <li>deletes the layering confession comment</li>
+      <li>one predicate test replaces three behaviour copies</li>
+    </ul>
+  </article>
+
+  <!-- C3 -->
+  <article id="c3" class="rounded-xl border border-slate-200 bg-white p-6 space-y-4">
+    <div class="flex items-center gap-3">
+      <h3 class="font-bold text-lg">3 · Surface the store's committed map</h3>
+      <span class="text-xs px-2 py-1 rounded-full bg-emerald-100 text-emerald-800 font-semibold">Strong</span>
+      <span class="text-xs px-2 py-1 rounded-full bg-slate-100 text-slate-600">stop-rule · I5</span>
+    </div>
+    <p class="mono text-sm text-slate-600">view/gantt-shell.ts:716 · view/gesture-pipeline.ts:397 · data/entry-store.ts:322 (committedById)</p>
+    <div class="grid grid-cols-2 gap-4">
+      <div class="rounded-lg border border-slate-200 bg-white p-3">
+        <div class="text-xs uppercase tracking-wider text-slate-400 mb-2">Before — copy per preview frame</div>
+        <pre class="mermaid text-xs">
+flowchart LR
+  GP[GesturePipeline rAF frame] --> SH[GanttShell.allEntries]
+  SH -->|"entries.all.map → new Map"| CP[(copy of dataset)]
+  CP --> GP
+  classDef leak stroke:#dc2626,stroke-width:2px;
+  class CP leak
+        </pre>
+        <div class="text-[10px] text-red-600">allocates the whole dataset per frame against I5</div>
+      </div>
+      <div class="rounded-lg border border-slate-200 bg-white p-3">
+        <div class="text-xs uppercase tracking-wider text-slate-400 mb-2">After — read the index the store holds</div>
+        <pre class="mermaid text-xs">
+flowchart LR
+  GP[GesturePipeline rAF frame] --> V["entries.byId (readonly view)"]
+  V --> ST[(EntryStore committedById)]
+  classDef deepmod fill:#0f172a,color:#fff,stroke:#0f172a;
+  class ST deepmod
+        </pre>
+        <div class="text-[10px] text-emerald-700">zero allocation; one owner of the by-id view</div>
+      </div>
+    </div>
+    <p class="text-sm"><strong>Problem:</strong> the shell re-keys the dataset every preview frame because <span class="mono">DatasetState</span> does not surface the map the store already keeps. <strong>Solution:</strong> a public readonly by-id view on <span class="mono">DatasetEntries</span>; the shell's re-keying adapter is deleted.</p>
+    <ul class="text-sm list-disc pl-5 space-y-0.5">
+      <li>I5 holds during drags with a plugin installed</li>
+      <li>leverage: every by-id reader, one view</li>
+      <li>deletion test: re-keying is the only adapter</li>
+    </ul>
+  </article>
+
+  <!-- C4 -->
+  <article id="c4" class="rounded-xl border border-slate-200 bg-white p-6 space-y-4">
+    <div class="flex items-center gap-3">
+      <h3 class="font-bold text-lg">4 · One Segment-diff helper</h3>
+      <span class="text-xs px-2 py-1 rounded-full bg-amber-100 text-amber-800 font-semibold">Worth exploring</span>
+      <span class="text-xs px-2 py-1 rounded-full bg-slate-100 text-slate-600">in-process</span>
+    </div>
+    <p class="mono text-sm text-slate-600">data/entry-store.ts:79, :314 · data/change-set.ts:150</p>
+    <div class="grid grid-cols-2 gap-4">
+      <div class="rounded-lg border border-slate-200 bg-stone-50 p-4 text-xs">
+        <div class="uppercase tracking-wider text-slate-400 mb-2">Before</div>
+        <div class="mono space-y-1">
+          <div class="border border-slate-300 bg-white rounded px-2 py-1">recordSegmentOwnership — kept = after; drop before∖after</div>
+          <div class="border border-slate-300 bg-white rounded px-2 py-1">#reindexSegments — same core, ownership guard</div>
+          <div class="border border-slate-300 bg-white rounded px-2 py-1">segmentIdsDroppedBy — same core, null-drops guard</div>
+        </div>
+      </div>
+      <div class="rounded-lg border border-slate-200 bg-stone-50 p-4 text-xs">
+        <div class="uppercase tracking-wider text-slate-400 mb-2">After</div>
+        <div class="deep text-white rounded px-2 py-2 mono">droppedSegmentIds(before, after)
+          <div class="text-[10px] text-slate-300 pt-1">guards stay at the three call sites</div>
+        </div>
+      </div>
+    </div>
+    <p class="text-sm"><strong>Problem:</strong> "kept = after ids; drop what before holds" hand-rolled three times with differing guards. <strong>Solution:</strong> the core rule as one helper in <span class="mono">data/</span>; guards stay local. Small radius, real seam (three adapters).</p>
+  </article>
+
+  <!-- C5 -->
+  <article id="c5" class="rounded-xl border border-slate-200 bg-white p-6 space-y-4">
+    <div class="flex items-center gap-3">
+      <h3 class="font-bold text-lg">5 · One shape for "the two readings of one set"</h3>
+      <span class="text-xs px-2 py-1 rounded-full bg-amber-100 text-amber-800 font-semibold">Worth exploring</span>
+      <span class="text-xs px-2 py-1 rounded-full bg-slate-100 text-slate-600">public surface</span>
+    </div>
+    <p class="mono text-sm text-slate-600">api/command.ts:61 · view/gantt-dom.ts:47 (DomTarget) · view/entry-gesture-context.ts</p>
+    <div class="grid grid-cols-2 gap-4">
+      <div class="rounded-lg border border-slate-200 bg-stone-50 p-4 text-xs mono">
+        <div class="uppercase tracking-wider text-slate-400 mb-2 font-sans">Before — one clump, three spellings</div>
+        <div class="border border-slate-300 bg-white rounded px-2 py-1 mb-1">ActedOn { entryIds, segmentIds }</div>
+        <div class="border border-slate-300 bg-white rounded px-2 py-1 mb-1 pl-4">CommandTarget extends ActedOn + field, kind</div>
+        <div class="border border-red-300 bg-red-50 rounded px-2 py-1 pl-4">DomTarget restates entryIds + segmentIds + field, kind</div>
+        <div class="border border-red-300 bg-red-50 rounded px-2 py-1 mt-1">entry-gesture-context: entriesForRow() + segmentsOfEntries()</div>
+      </div>
+      <div class="rounded-lg border border-slate-200 bg-stone-50 p-4 text-xs mono">
+        <div class="uppercase tracking-wider text-slate-400 mb-2 font-sans">After</div>
+        <div class="deep text-white rounded px-2 py-2 mb-1">ActedOn { entryIds, segmentIds }
+          <div class="text-[10px] text-slate-300">glossary entry added (naming check 1)</div>
+        </div>
+        <div class="border border-slate-300 bg-white rounded px-2 py-1 pl-4 mb-1">CommandTarget extends ActedOn + field, kind</div>
+        <div class="border border-slate-300 bg-white rounded px-2 py-1 pl-4 mb-1">DomTarget extends ActedOn + element, entry</div>
+        <div class="border border-slate-300 bg-white rounded px-2 py-1">gesture context returns ActedOn</div>
+      </div>
+    </div>
+    <p class="text-sm"><strong>Problem:</strong> the entryIds/segmentIds pair is one concept with three spellings; disagreement is only a matter of time. <strong>Solution:</strong> <span class="mono">DomTarget extends ActedOn</span>, the gesture context returns one, and CONTEXT.md names <span class="mono">ActedOn</span> (ADR 0010 vocabulary, one home).</p>
+    <ul class="text-sm list-disc pl-5 space-y-0.5">
+      <li>one name per concept across ctx.target and DOM targets</li>
+      <li>resolveActedOn reads DomTargets directly</li>
+    </ul>
+  </article>
+
+  <!-- C6 -->
+  <article id="c6" class="rounded-xl border border-slate-200 bg-white p-6 space-y-4">
+    <div class="flex items-center gap-3">
+      <h3 class="font-bold text-lg">6 · BuiltInCommandId from one table</h3>
+      <span class="text-xs px-2 py-1 rounded-full bg-amber-100 text-amber-800 font-semibold">Worth exploring</span>
+      <span class="text-xs px-2 py-1 rounded-full bg-slate-100 text-slate-600">public surface</span>
+    </div>
+    <p class="mono text-sm text-slate-600">api/command.ts:22 · view/core-commands.ts:60–271 · api/command.test.ts:56</p>
+    <div class="grid grid-cols-2 gap-4 items-center">
+      <div class="rounded-lg border border-slate-200 bg-stone-50 p-4 text-xs">
+        <div class="uppercase tracking-wider text-slate-400 mb-2">Before — 3 edits per new command</div>
+        <div class="mono space-y-1">
+          <div class="border border-slate-300 bg-white rounded px-2 py-1">union: 27 literals</div>
+          <div class="border border-slate-300 bg-white rounded px-2 py-1">27 registrations</div>
+          <div class="border border-slate-300 bg-white rounded px-2 py-1">EVERY_BUILT_IN_ID list</div>
+        </div>
+        <div class="text-[10px] text-slate-400 pt-1">held in sync only by a test</div>
+      </div>
+      <div class="rounded-lg border border-slate-200 bg-stone-50 p-4 text-xs">
+        <div class="uppercase tracking-wider text-slate-400 mb-2">After — 1 edit</div>
+        <div class="deep text-white rounded px-2 py-2 mono">BUILT_IN_COMMAND_IDS as const
+          <div class="text-[10px] text-slate-300 pt-1">union derives · test derives · registrations stay literal</div>
+        </div>
+        <div class="text-[10px] text-emerald-700 pt-1">two sync-checks deleted</div>
+      </div>
+    </div>
+    <p class="text-sm"><strong>Solution:</strong> one <span class="mono">as const</span> table in <span class="mono">api/command.ts</span>; the public union and the test derive from it. Open/Closed: a new command costs one edit, not three.</p>
+  </article>
+
+  <!-- C7 -->
+  <article id="c7" class="rounded-xl border border-slate-200 bg-white p-6 space-y-4">
+    <div class="flex items-center gap-3">
+      <h3 class="font-bold text-lg">7 · Close the harness gaps in src/</h3>
+      <span class="text-xs px-2 py-1 rounded-full bg-amber-100 text-amber-800 font-semibold">Worth exploring</span>
+      <span class="text-xs px-2 py-1 rounded-full bg-red-100 text-red-700 font-semibold">Stop rule</span>
+    </div>
+    <p class="mono text-sm text-slate-600">harness/gantt-toolbar.ts · harness/editing.ts → src/api/gantt.ts, src/time/scale.ts</p>
+    <table class="w-full text-sm"><tbody class="divide-y divide-slate-100">
+      <tr><td class="py-2 pr-3"><span class="mono text-xs">gantt.dataset</span> getter</td><td class="text-slate-600 text-xs">toolbar drops its paired second parameter (#226)</td><td class="text-right"><span class="text-xs px-2 py-0.5 rounded-full bg-slate-100">first-party-ready</span></td></tr>
+      <tr><td class="py-2 pr-3"><span class="mono text-xs">ViewPreset.label</span></td><td class="text-slate-600 text-xs">delete PRESET_LABELS hand-map</td><td class="text-right"><span class="text-xs px-2 py-0.5 rounded-full bg-slate-100">shipped presets self-describe</span></td></tr>
+      <tr><td class="py-2 pr-3"><span class="mono text-xs">shipped snap settings export</span></td><td class="text-slate-600 text-xs">delete SNAP_CHOICES re-derivation</td><td class="text-right"><span class="text-xs px-2 py-0.5 rounded-full bg-slate-100">mirrors ZOOM_PRESETS</span></td></tr>
+      <tr><td class="py-2 pr-3"><span class="mono text-xs">one theme write</span></td><td class="text-slate-600 text-xs">page follows one signal, not two attributes</td><td class="text-right"><span class="text-xs px-2 py-0.5 rounded-full bg-slate-100">themeChange or host option</span></td></tr>
+      <tr><td class="py-2 pr-3"><span class="mono text-xs">harness fix only</span></td><td class="text-slate-600 text-xs">editing.ts: gantt.snap spelling + commands.run() for undo/redo</td><td class="text-right"><span class="text-xs px-2 py-0.5 rounded-full bg-amber-100">API already closed</span></td></tr>
+    </tbody></table>
+    <p class="text-sm">Four of five need <span class="mono">src/</span> work; the fifth is a stale harness against an API that already moved. Every row is a copy the library should own — the harness is the first consumer, and its workarounds are the interface's to-do list.</p>
+  </article>
+
+  <!-- checked, no move -->
+  <div class="rounded-xl border border-emerald-200 bg-emerald-50 p-5 text-sm">
+    <span class="font-semibold">Checked, no move:</span> <span class="mono text-xs">StoredEdit</span>/<span class="mono text-xs">EntryEdit</span> duality — the read shape is load-bearing at the extension hook (I10 zone math, loose-in/complete-out), not a shallow mirror. Candidate 1 is where its twin reconcilers actually live. · <span class="mono text-xs">CoreCommandPorts</span> (30 methods) — wide interface, single implementer, single job; passes the deletion test.
+  </div>
+</section>
+
+<!-- ============ TOP RECOMMENDATION ============ -->
+<section id="top-recommendation" class="rounded-xl border-2 border-slate-800 bg-white p-8 space-y-3">
+  <div class="text-xs uppercase tracking-wider text-slate-400">Top recommendation</div>
+  <h2 class="text-2xl font-serif font-bold"><a href="#c1" class="underline decoration-slate-300">Give the envelope its own module</a> — then its two quick follows.</h2>
+  <p class="text-sm text-slate-600">Candidate 1 has the best leverage-to-radius in this window: the biggest changed file stops carrying four jobs, the preview twin — the one duplication that must track a sibling by hand — is deleted by construction, and <span class="mono">moveEntryTo</span> gets a home that matches its job. Candidates 2 and 3 are one-file fixes each; do them in the same pass (2 deletes a rule that is one drift away from a behaviour change; 3 restores I5 on the drag path). Candidates 5–7 are interface work for the next slice — 5 and 7 especially, because they are the consumer-facing half of the brief.</p>
+  <div class="grid grid-cols-3 gap-3 pt-2 text-center text-xs">
+    <div class="rounded-lg bg-stone-50 border border-slate-200 p-3"><div class="font-bold text-sm">Fix now</div><div class="text-slate-500 mt-1">Spec HIGH: correct the four D-S5-50 records to the Instant signature · delete the two dead conditionals · gantt.ts:647 comment</div></div>
+    <div class="rounded-lg bg-stone-50 border border-slate-200 p-3"><div class="font-bold text-sm">This slice</div><div class="text-slate-500 mt-1">Candidates 1, 2, 3 · the Segment-diff helper · the map-merge generic · harness stale snap/undo wiring</div></div>
+    <div class="rounded-lg bg-stone-50 border border-slate-200 p-3"><div class="font-bold text-sm">Next slice</div><div class="text-slate-500 mt-1">Candidates 5, 6, 7 · CONTEXT.md entries for ActedOn + moveEntryTo · #237's InvalidInstantError (tracked, Lane D)</div></div>
+  </div>
+</section>
+
+<footer class="text-xs text-slate-400 pt-4">
+  Method: two-axis code review (Standards + Spec, parallel sub-agents per the code-review skill) + a simplicity/SOLID axis + a consumer/plugin-interface and Stop-rule pass, then a deepening scan over the same window. Every cited file:line re-verified by the coordinator before publication. Working-tree changes (styles.ts bar-opacity, generated-looking harness/docs pages) were outside the committed window and excluded. Generated 2026-09-06 · pass 1 of the s5-start 24-hour review.
+</footer>
+
+</main>
+</body>
+</html>
