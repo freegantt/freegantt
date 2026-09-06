@@ -128,7 +128,7 @@ A batch of proposed field changes, keyed by Entry: `ReadonlyMap<EntryId, EntryEd
 _Avoid_: Patch, FieldPatch (retired 2026-08-27 — `data/` diffs an `EntryEdits` against the store into `FieldUpdated` rows itself, rather than asking every producer of edits to compute a diff)
 
 **EditRequest**:
-What a transaction hands the extension hook, once per transaction: the current entries plus the caller's proposed edits (`{ entries, proposed }`). `entries` is a `Map`, keyed by `EntryId`, not an array — `EntryStore` already keeps one internally.
+What a transaction hands the extension hook, once per transaction: the current entries, the caller's proposed edits, and a lookup for post-body state (`{ entries, proposed, entryAfterEdits }`). `entries` is a `Map`, keyed by `EntryId`, not an array — `EntryStore` already keeps one internally — and it stays the pre-transaction snapshot, so a cascade can still read it to compute a delta. `entryAfterEdits(id)` answers what `id` looks like once this transaction's own body edits land, which is the state a cascade is actually reconciled against (D-S5-45); it is a per-id lookup, not a second map, because the drag preview calls it every rAF frame and must not copy the dataset to answer it (I5).
 
 **EditExtender**:
 The function type that may occupy the extension hook: `(request: EditRequest) => EntryEdits`. Returns extra writes only — the same shape the caller's own edit takes, not a wrapped or partial record of it. `data/` holds exactly one, calls it once per transaction, and defaults to `identityExtender`, which returns an empty `EntryEdits`.

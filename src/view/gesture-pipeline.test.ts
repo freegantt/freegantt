@@ -696,7 +696,11 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
         // Mirrors what `data/build-commit-change-set.ts` runs for real, at commit, against the real
         // Dataset: the extend hook's cascade goes through `reconcileExtenderEdits` — the same function
         // the preview above calls a skip-on-refusal wrapper of — and this one does not skip.
-        reconcileExtenderEdits(allEntries(), extend({ entries: allEntries(), proposed: draft }));
+        const entries = allEntries();
+        reconcileExtenderEdits(
+          entries,
+          extend({ entries, proposed: draft, entryAfterEdits: (id) => entries.get(id) }),
+        );
         return true;
       });
       const { deps, applied } = withRoster([a, x], { extend, allEntries, commitEntryEdits });
@@ -826,5 +830,34 @@ describe('GesturePipeline hot path (review finding 9, I5)', () => {
     await new Promise((resolve) => requestAnimationFrame(resolve));
 
     expect(walks).toBe(0);
+  });
+
+  it('answers entryAfterEdits with one .get, never a dataset walk, even when the hook writes nothing', async () => {
+    // D-S5-45: the hook can read `entryAfterEdits` on every frame to see this transaction's own body
+    // edit — that read must cost one lookup, not a copy of the roster, whether or not the hook goes on
+    // to write anything (the "writes nothing" half of this idea is `never copies the dataset` above).
+    const roster = new Map([[entryId('a'), entry('a', 0, 100)]]);
+    let walks = 0;
+    const walk = roster[Symbol.iterator].bind(roster);
+    roster[Symbol.iterator] = () => {
+      walks += 1;
+      return walk();
+    };
+
+    let sawStart: Instant | undefined;
+    const extend: GesturePipelineDeps['extend'] = (request) => {
+      sawStart = request.entryAfterEdits(entryId('a'))?.start;
+      return new Map();
+    };
+
+    const { deps } = withRoster([entry('a', 0, 100)], { extend, allEntries: () => roster });
+    const pipeline = new GesturePipeline(deps);
+    const session = pipeline.session(entryId('a'), { kind: 'move' })!;
+
+    session.preview(10);
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+
+    expect(walks).toBe(0);
+    expect(sawStart).not.toBe(0 as unknown as Instant);
   });
 });

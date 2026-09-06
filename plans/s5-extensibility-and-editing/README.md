@@ -292,6 +292,7 @@ Full prose lives in the step file that implements each decision.
 | D-S5-38 | A plugin owns its own column's geometry; the library stores it for nobody | S5.9 |
 | D-S5-39 | Focus scope decides what a chord means; the narrower binding wins | S5.11 |
 | D-S5-44 | An `EditExtender`'s cascade owes the envelope invariant a refusal, not a computed answer | S5.10 |
+| D-S5-45 | `EditRequest.entryAfterEdits(id)` reads the state the hook is judged against | S5.10 |
 
 > **Three ids used to be used twice; fixed 2026-09-05 (Q22).** D-S5-35, D-S5-36 and D-S5-37 each
 > named an S5.12 decision **and** an S5.9/S5.1/S5.7 one — the error-reporting trio was minted by a

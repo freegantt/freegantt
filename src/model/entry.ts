@@ -99,14 +99,24 @@ export type StoredEdit = Partial<Omit<Entry, 'id'>> & {
 
 export type EntryEdits = ReadonlyMap<EntryId, StoredEdit>;
 
-/** What the extension hook reads (D4, D-S2-6). It carries the same two members on a preview call and
- *  on the real commit call, which is why an extender can never refuse a write — see D-S5-24's
+/** What the extension hook reads (D4, D-S2-6). It carries the same three members on a preview call
+ *  and on the real commit call, which is why an extender can never refuse a write — see D-S5-24's
  *  refusal note: a lock plugin vetoes in `beforeChange`, never here. */
 export interface EditRequest {
-  /** Current store snapshot, before this transaction's edits. */
+  /** Current store snapshot, before this transaction's edits — what a cascade reads to compute a
+   *  delta (what moved, and by how much). Unlike `entryAfterEdits` below, this never reflects this
+   *  transaction's own body edits (D-S5-45). */
   entries: ReadonlyMap<EntryId, Entry>;
   /** What the caller asked to change. */
   proposed: EntryEdits;
+  /** `id` as this transaction's own body edits leave it: committed state overlaid with `proposed`
+   *  (and, at commit, this transaction's own adds). `undefined` when `id` names no entry there either.
+   *  `entries.get(id)` is the wrong read for judging an in-flight edit against current shape — it
+   *  still shows an Entry's Segments as they were before this transaction rewrote them, so a cascade
+   *  reasoning from it can propose a write core then refuses against the shape it actually has
+   *  (D-S5-45). A per-id lookup, not a second map on this object: the drag preview calls this every
+   *  rAF frame and must not copy the dataset to answer it (I5). */
+  entryAfterEdits(id: EntryId): Entry | undefined;
 }
 
 /** Extra writes only; an empty map means no cascade. Lives in `model/` (not `data/`) so
