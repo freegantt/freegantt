@@ -54,6 +54,34 @@ Put the budget in the prompt you send, in these words:
 > progress update and in your final report. When you pass 250k, stop at the
 > next clean point and write a handoff instead of starting new work.
 
+An agent that is close to full reports late, or not at all. So you watch it too.
+
+## Watch it yourself
+
+**Every dispatch starts a watcher.** A subagent runs while your turn is blocked, so
+asking it to self-report is the half you do not control. The other half is a
+background watcher that reads its transcript and wakes you.
+
+Start the watcher and dispatch in **one turn** — the watcher first, in the same
+message as the `Agent` call:
+
+```
+Bash(run_in_background: true):
+  .agents/skills/subagents/watch-agent-context.sh
+```
+
+It polls every subagent this session spawns, and exits when one passes 250k or when
+they all finish. A background command that exits re-invokes you, so its exit *is* the
+alert — you get it mid-flight, not after the report lands.
+
+Read the line it prints:
+
+- **An agent passed 250k** — send that agent a message: stop at the next clean point
+  and write a handoff. Do not wait for it to notice.
+- **They all finished under budget** — nothing to do. The watcher stopped on its own.
+
+One watcher covers a whole wave. Dispatch three agents in one turn, start one watcher.
+
 ## Wind down
 
 The clean point is the end of the current file, test, or command — not the end of the task. Then the subagent writes a handoff that carries:
