@@ -10,7 +10,7 @@ import type { ItemPreview, SnapSetting, SnapUnit, TimeScale, ViewPreset } from '
 import type { Entry, EntryEdits, EntryId, ErrorCode, ItemId, RaiseError, SegmentId } from '../model/index.js';
 import { itemId } from '../model/index.js';
 import { identityExtender, type EditExtender } from '../data/edit-extension.js';
-import { reconcileExtenderEdits } from '../data/entry-reader.js';
+import { reconcileExtenderEditsForPreview } from '../data/entry-reader.js';
 import { effectiveEntriesFor } from '../data/entry-tree.js';
 import type { EventBus } from './event-bus.js';
 import type { AsyncCancelableEvent, EntryMove, EntryResize, GanttEventMap } from './event-bus.js';
@@ -367,16 +367,21 @@ export class GesturePipeline {
    *
    *  The raw hook result is reconciled the same way `data/build-commit-change-set.ts` reconciles it
    *  at commit, against the same effective state (committed entries overlaid with this draft) — so a
-   *  drag previews exactly what it commits (#212 R2 fix-plan review, D-S5-43). Before this, the
-   *  preview painted the hook's raw, unreconciled edit — a plugin cascading `start` alone onto a
-   *  several-Segment Entry could preview one span and then commit a different one. */
+   *  drag previews exactly what it commits (#212 R2 fix-plan review). Before this, the preview
+   *  painted the hook's raw, unreconciled edit — a plugin cascading `start` alone onto a
+   *  several-Segment Entry could preview one span and then commit a different one.
+   *
+   *  This runs inside a rAF callback with nothing to catch a throw, and the reconciliation a several-
+   *  Segment envelope-only cascade owes is a refusal (`SegmentsOutOfSyncError`, D-S5-44) — so this
+   *  calls `reconcileExtenderEditsForPreview`, not `reconcileExtenderEdits`: a refused edit paints no
+   *  ghost for that Entry this frame, and the commit path still throws the same edit for real. */
   #extraFor(draft: EntryEdits): EntryEdits {
     const entries = this.#deps.allEntries?.() ?? new Map<EntryId, Entry>();
     const raw = (this.#deps.extend ?? identityExtender)({ entries, proposed: draft });
     // No hook installed is the default, and it writes nothing — so the frame reconciles nothing and
     // allocates nothing (I5). A hook that did write costs one entry per id it named, never a copy of
-    // the dataset: `reconcileExtenderEdits` reads only the ids its own edits name.
+    // the dataset: `reconcileExtenderEditsForPreview` reads only the ids its own edits name.
     if (raw.size === 0) return raw;
-    return reconcileExtenderEdits(effectiveEntriesFor(entries, draft, raw.keys()), raw);
+    return reconcileExtenderEditsForPreview(effectiveEntriesFor(entries, draft, raw.keys()), raw);
   }
 }
