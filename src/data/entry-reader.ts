@@ -174,9 +174,12 @@ export interface EnvelopeReconciliation {
  * An edit that names both `segments` and an envelope the Segments do not produce is refused too
  * (`'conflicting'`) rather than picking a winner (finding S3).
  *
- * `readEdit` below calls this for `entries.update()`. A consumer can be asked to send a clearer edit;
- * an `EditExtender`'s cascade cannot, so it does not call this function for its own several-Segment,
- * envelope-only case — `reconcileExtenderEnvelope` below is that seam's own answer (D-S5-43).
+ * `readEdit` below calls this for `entries.update()`, and `reconcileExtenderEdits` below calls it for
+ * an `EditExtender`'s cascade — the same function, the same refusal, for both callers (D-S5-44). A
+ * plugin's cascade cannot be asked to send a clearer edit the way `entries.update()`'s caller can,
+ * but it has an author, and this refusal is how that author is told at dev time to write `segments`
+ * instead — a caller-identity split, a computed answer for the extender and a refusal for
+ * `entries.update()`, was tried and rejected (D-S5-44).
  */
 export function reconcileEnvelope(entry: Entry, stored: StoredEdit): EnvelopeReconciliation {
   const writesEnvelope = stored.start !== undefined || stored.end !== undefined;
@@ -217,9 +220,9 @@ export function reconcileEnvelope(entry: Entry, stored: StoredEdit): EnvelopeRec
  *  then whichever Segment still misses an edge widens to reach it — the earliest-starting Segment to
  *  `target.start`, the latest-ending one to `target.end` (`rollup.ts`'s own rule for a rolled-up
  *  parent, #212 R2 fix-plan review, finding B1). One Segment plays both roles when there is only one.
- *  Returns `segments` unchanged when every Segment already fits. Shared by the Rollup and by
- *  `reconcileExtenderEnvelope` below, so both compute one answer to "how do these Segments fit a new
- *  span" the same way. */
+ *  Returns `segments` unchanged when every Segment already fits. This is the Rollup's own rule for
+ *  a rolled-up parent's envelope, not one an `EditExtender`'s cascade can reach for (D-S5-44): a
+ *  cascade owes the same refusal `reconcileEnvelope` above enforces, not a computed fit. */
 export function fitSegmentsToEnvelope(segments: readonly Segment[], target: TimeSpan): readonly Segment[] {
   if (segments.length === 0) return segments;
   const { start: targetStart, end: targetEnd } = target;
@@ -259,78 +262,44 @@ export function fitSegmentsToEnvelope(segments: readonly Segment[], target: Time
   return changed ? next : segments;
 }
 
-/** Moves every Segment by `deltaMs`, keeping each Segment's own id and its own length. This is a
- *  rigid-group move, the same shift a whole-Entry drag already performs (`layout/gesture-draft.ts`'s
- *  `moveEdit`). Returns `segments` unchanged when `deltaMs` is zero. */
-function translateSegments(segments: readonly Segment[], deltaMs: number): readonly Segment[] {
-  if (deltaMs === 0) return segments;
-  return segments.map((segment) => ({
+/**
+ * The move a plugin's cascade is honest about (D-S5-44): every Segment of `entry`, translated rigidly
+ * by `start - entry.start`, each keeping its own `SegmentId` and its own length. This is what a
+ * several-Segment envelope-only write cannot say — `reconcileEnvelope` refuses that write because
+ * `start`/`end` alone name no Segment to move — so a plugin author reaches for `moveEntryTo` instead
+ * of hand-rolling the same rigid translate `layout/gesture-draft.ts`'s own `moveEdit` computes for a
+ * whole-Entry drag. `layout/` and `data/` may not import each other (§1), so that is a second,
+ * private copy of this same rule, not a shared function — `moveEdit` also moves only the gesture's own
+ * selected Segments, never every Segment of the Entry, which this always does.
+ *
+ * A public export (`api/dataset-plugin.ts`, `api/index.ts`), for the same reason `mergeEntryEdits` is:
+ * it takes and returns storage-shaped values only an extender produces, so it is a plugin-author tool,
+ * not an app-author one.
+ */
+export function moveEntryTo(entry: Entry, start: Instant): StoredEdit {
+  const deltaMs = diffMs(start, entry.start);
+  const segments = entry.segments.map((segment) => ({
     ...segment,
     start: addMs(segment.start, deltaMs),
     end: addMs(segment.end, deltaMs),
   }));
+  return { segments, ...envelopeOfSegments(segments) };
 }
 
 /**
- * The `EditExtender` seam's own answer to a several-Segment, envelope-only write — the case
- * `reconcileEnvelope` refuses for a consumer, because a plugin's cascade cannot be asked to send a
- * clearer edit the way `entries.update()` can (#212 R2 fix-plan review, posture decision D-S5-43).
- *
- * Every other shape an extender's `StoredEdit` can take — naming `segments` itself, or writing the
- * envelope against an Entry with one Segment — owes the same proof a consumer's edit does, so those
- * cases still go through `reconcileEnvelope` unchanged, `'conflicting'` refusal included.
- *
- * The several-Segment, envelope-only case gets a computed answer instead of a refusal: every Segment
- * translates by the written delta, the rigid-group move a whole-Entry drag already performs. A write
- * that names both `start` and `end` with a duration that disagrees with the Entry's own current span
- * cannot satisfy both edges with one delta — no single shift moves both a different distance — so that
- * one case falls back to `fitSegmentsToEnvelope`, the Rollup's own clamp-and-widen rule, instead.
- */
-export function reconcileExtenderEnvelope(entry: Entry, stored: StoredEdit): StoredEdit {
-  const writesEnvelope = stored.start !== undefined || stored.end !== undefined;
-  if (!writesEnvelope || stored.segments !== undefined || soleSegmentOf(entry) !== undefined) {
-    return reconcileEnvelope(entry, stored).edit;
-  }
-
-  const bothEdgesGiven = stored.start !== undefined && stored.end !== undefined;
-
-  // An inverted envelope names no span to fit into. `fitSegmentsToEnvelope` would clamp every
-  // Segment onto both edges at once, so every Segment of the Entry collapses onto the same inverted
-  // stretch and every authored extent goes, with no error raised. This seam refuses instead, which
-  // is what this write met before the seam computed answers at all. `'ambiguous'` already carries
-  // the guidance a plugin author needs here: write `segments`, not `start`/`end` alone.
-  if (bothEdgesGiven && stored.end! < stored.start!) {
-    throw new SegmentsOutOfSyncError(entry.id, 'ambiguous');
-  }
-
-  const durationChanged =
-    bothEdgesGiven && diffMs(stored.end!, stored.start!) !== diffMs(entry.end, entry.start);
-
-  if (durationChanged) {
-    const segments = fitSegmentsToEnvelope(entry.segments, { start: stored.start!, end: stored.end! });
-    return { ...stored, segments, start: stored.start!, end: stored.end! };
-  }
-
-  // One edge names the move; the other rides along by the same delta, keeping the Entry's duration —
-  // a translate, not a resize (D-S5-43). `bothEdgesGiven` with a matching duration reaches here too,
-  // and either edge's delta agrees with the other's by construction.
-  const deltaMs =
-    stored.start !== undefined ? diffMs(stored.start, entry.start) : diffMs(stored.end!, entry.end);
-  const segments = translateSegments(entry.segments, deltaMs);
-  return {
-    ...stored,
-    segments,
-    start: addMs(entry.start, deltaMs),
-    end: addMs(entry.end, deltaMs),
-  };
-}
-
-/**
- * The map version of `reconcileExtenderEnvelope`: every edit an `EditExtender` returned, reconciled
- * against the Entry it targets. One function, called from both the commit path
+ * Every edit an `EditExtender` returned, reconciled against the Entry it targets — `reconcileEnvelope`
+ * itself, called once per edit. One function, called from both the commit path
  * (`build-commit-change-set.ts`) and the drag preview (`view/gesture-pipeline.ts`), so a gesture
  * previews exactly what it commits (#212 R2 fix-plan review — the preview path used to call the
  * extender with no reconciliation at all, so a drag could preview one span and commit a different one).
+ *
+ * A plugin's cascade owes the same envelope invariant a consumer's `entries.update()` does (D-S5-44):
+ * an envelope-only write against a several-Segment Entry is refused (`SegmentsOutOfSyncError`,
+ * `'ambiguous'`) here exactly as it is there — a dev-time throw is how a plugin author is told to
+ * cascade `segments` instead. `#extraFor` in `view/gesture-pipeline.ts` is the caller that must not
+ * let that throw reach a rAF callback with nothing to catch it; it drops the offending edit before
+ * calling this function's preview counterpart, `reconcileExtenderEditsForPreview` below.
+ *
  * An id `entries` does not carry — nothing this caller knows the current Segments of — passes its edit
  * through unreconciled; there is nothing to reconcile against.
  */
@@ -339,9 +308,37 @@ export function reconcileExtenderEdits(entries: ReadonlyMap<EntryId, Entry>, edi
   const reconciled = new Map<EntryId, StoredEdit>();
   for (const [id, edit] of edits) {
     const entry = entries.get(id);
-    const next = entry ? reconcileExtenderEnvelope(entry, edit) : edit;
+    const next = entry ? reconcileEnvelope(entry, edit).edit : edit;
     if (next !== edit) changed = true;
     reconciled.set(id, next);
+  }
+  return changed ? reconciled : edits;
+}
+
+/**
+ * `reconcileExtenderEdits`'s own call for a preview frame (`view/gesture-pipeline.ts`'s `#extraFor`,
+ * inside a rAF callback with nothing to catch a throw). A refusal there must not break the drag on
+ * screen, so this drops the offending edit instead of reconciling it — that Entry paints no ghost for
+ * this frame — and leaves every other edit reconciled as `reconcileExtenderEdits` would. The commit
+ * path still calls `reconcileExtenderEdits` and still throws: the refusal is real, and dropping it
+ * from a preview is not the same as dropping it from the write itself.
+ */
+export function reconcileExtenderEditsForPreview(
+  entries: ReadonlyMap<EntryId, Entry>,
+  edits: EntryEdits,
+): EntryEdits {
+  let changed = false;
+  const reconciled = new Map<EntryId, StoredEdit>();
+  for (const [id, edit] of edits) {
+    const entry = entries.get(id);
+    try {
+      const next = entry ? reconcileEnvelope(entry, edit).edit : edit;
+      if (next !== edit) changed = true;
+      reconciled.set(id, next);
+    } catch (error) {
+      if (!(error instanceof SegmentsOutOfSyncError)) throw error;
+      changed = true;
+    }
   }
   return changed ? reconciled : edits;
 }
