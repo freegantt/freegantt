@@ -18,10 +18,12 @@ Mark an item done in the same commit that closes it. A line that is not marked d
 | #238 | unstated-edit merge | `[x]` | — |
 | #239 | `moveEntryTo` names `segments`, core derives the envelope (D-S5-50) | `[x]` | `6eb6da1` |
 | #241 | the lock demo cascades with `moveEntryTo` | `[x]` | `49bf022` |
-| #210 | a `before*` veto says why, and its words reach the report | `[x]` | `c7bcb38` |
-| #234 | a refused cell commit reports, and says what is unsaved | `[x]` | `fbd2e47` |
-| #237 | a bad date names the call the consumer made | `[x]` | `62c5690` |
+| #210 | a `before*` veto says why, and its words reach the report | `[x]` | `c7bcb38` · closed |
+| #234 | a refused cell commit reports, and says what is unsaved | `[x]` | `fbd2e47` · closed |
+| #237 | a bad date names the call the consumer made | `[x]` | `62c5690` · closed, remainder is #242 |
 | #232 | duplicate changeset rows behind the I4 false positive (D-S5-49) | `[~]` | Lane F |
+| #242 | `InvalidInstantError` stays message-shaped — split it, or document the exception | `[?]` | filed from #237 |
+| — | `lock-entries.ts` still returns a bare `false` instead of `refuse(...)` | `[ ]` | one line, from #210 |
 | #230 | entry-from-Segment refactor — R3, R4, R5 | `[ ]` | R0–R2 landed |
 | #240 | drag-resize inverted span | `[ ]` | — |
 | #142 | a locked field cannot be dragged or resized (D-S5-48) | `[ ]` | ruled, implementable |
