@@ -1,0 +1,457 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Architecture review — s5-231: snap validation, inverted spans, the discard affordance, #209 C1/C2</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      code { font-size: 0.86em; }
+      th { font-weight: 600; }
+    </style>
+  </head>
+  <body class="bg-stone-50 text-slate-900 font-sans antialiased">
+    <main class="max-w-5xl mx-auto px-6 py-12 space-y-12">
+
+      <!-- ═══════════════ HEADER ═══════════════ -->
+      <header class="space-y-6">
+        <div class="flex flex-wrap items-baseline gap-x-4 gap-y-1">
+          <h1 class="font-serif text-4xl tracking-tight">FreeGantt — branch review</h1>
+          <span class="text-sm text-slate-500 font-mono">2026-09-06</span>
+        </div>
+        <p class="text-slate-600 max-w-3xl">
+          Branch <code class="font-mono">s5-231</code>, eight commits since
+          <code class="font-mono">c26009e</code>: <code>ROW_ID_KEY</code> (#207), snap validation
+          (#201), the inverted-span refusal (#143), the invalid-editor discard affordance (#160), and
+          #209's first three steps (I4 fix, C1, C2). 43 files, +857 / −179.
+        </p>
+
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div class="rounded-lg border border-emerald-200 bg-emerald-50 p-4">
+            <div class="text-xs uppercase tracking-wider text-emerald-700">Gate</div>
+            <div class="text-2xl font-semibold text-emerald-900 mt-1">green</div>
+            <div class="text-xs text-emerald-700 mt-1 font-mono">typecheck · boundaries · tests</div>
+          </div>
+          <div class="rounded-lg border border-slate-200 bg-white p-4">
+            <div class="text-xs uppercase tracking-wider text-slate-500">Tests</div>
+            <div class="text-2xl font-semibold mt-1">1,619</div>
+            <div class="text-xs text-slate-500 mt-1 font-mono">692 node · 927 dom</div>
+          </div>
+          <div class="rounded-lg border border-slate-200 bg-white p-4">
+            <div class="text-xs uppercase tracking-wider text-slate-500">Boundaries</div>
+            <div class="text-2xl font-semibold mt-1">291</div>
+            <div class="text-xs text-slate-500 mt-1 font-mono">modules, 0 violations</div>
+          </div>
+          <div class="rounded-lg border border-amber-200 bg-amber-50 p-4">
+            <div class="text-xs uppercase tracking-wider text-amber-700">Findings</div>
+            <div class="text-2xl font-semibold text-amber-900 mt-1">7</div>
+            <div class="text-xs text-amber-700 mt-1 font-mono">2 high · 3 medium · 2 low</div>
+          </div>
+        </div>
+
+        <div class="rounded-lg border border-slate-300 bg-white p-5 text-sm text-slate-700 space-y-2">
+          <p><strong>Scope note.</strong> #209 is deliberately incomplete — C3 and C4 are unbuilt by
+          ruling, and a fresh agent takes them next. Nothing below reports C3, C4 or their docs as
+          missing. Decision records D-S5-46 (#143) and D-S5-47 (#160) already sit on
+          <code>s5-start</code>. <code>DatasetState</code>'s internal <code>editExtender</code>
+          getter was kept on purpose.</p>
+          <p><strong>No source was changed.</strong> This branch is unmodified apart from this file.
+          Every finding names a fix but applies none.</p>
+        </div>
+      </header>
+
+      <!-- ═══════════════ WHAT LANDED WELL ═══════════════ -->
+      <section class="space-y-4">
+        <h2 class="font-serif text-2xl tracking-tight border-b border-slate-300 pb-2">What landed well</h2>
+        <ul class="space-y-2 text-slate-700 text-sm list-disc pl-5">
+          <li><strong>#207 is exactly right and complete.</strong> <code>src/render/dom/index.ts</code>
+            and <code>src/render/dom/row-twisty.ts</code> now both read <code>ROW_ID_KEY</code> from
+            <code>dom-contract.js</code>; a grep for <code>'rowId'</code> in <code>render/</code>
+            returns nothing. One name for one concept, which is the rule.</li>
+          <li><strong><code>isTimeUnit</code> is a good public name.</strong> The call site reads in
+            English — <code>if (!isTimeUnit(unit)) return;</code> — and it narrows, so it deletes the
+            <code>as TimeUnit</code> cast in two harness files rather than hiding it.
+            <code>src/time/zone.ts:162-166</code>.</li>
+          <li><strong><code>assertAdvances</code> answers the question its seam poses.</strong>
+            <code>src/time/snap.ts:9-13</code> explains <em>why</em> <code>time/</code> re-checks what
+            the setter already checked (a custom <code>ViewPreset</code>'s tick reaches the loop
+            without passing through it) rather than describing the check. That is the shape CLAUDE.md
+            asks for.</li>
+          <li><strong><code>revert</code> → <code>discard</code> is a real naming improvement.</strong>
+            "Revert" implies restoring a prior value; the editor drops the edit and writes nothing.
+            <code>editing.discard()</code> reads correctly.</li>
+          <li><strong><code>editExtender</code> → <code>extraEditsFor</code> (#209 Q5) is right.</strong>
+            <code>dataset.extraEditsFor(request)</code> reads aloud, and a method cannot be stored the
+            way the old getter's result could — which is what the #186 test was guarding by hand.</li>
+          <li><strong><code>gantt.commands.available()</code> with no argument.</strong> A caller
+            asking "what can run right now?" no longer hand-assembles a context. Small, and squarely
+            in the "app authors never meet an expert knob to get the default behaviour" rule.</li>
+          <li><strong>The <code>#143</code> tests pin the boundary, not just the throw.</strong> Each
+            refusal test has a zero-length-span sibling proving <code>start === end</code> stays
+            legal. That is the pair the ruling asked for.</li>
+        </ul>
+      </section>
+
+      <!-- ═══════════════ FINDINGS ═══════════════ -->
+      <section class="space-y-6">
+        <h2 class="font-serif text-2xl tracking-tight border-b border-slate-300 pb-2">Findings</h2>
+
+        <!-- F1 -->
+        <article class="rounded-lg border border-red-300 bg-white p-6 space-y-3">
+          <div class="flex items-baseline gap-3 flex-wrap">
+            <span class="text-xs font-mono uppercase tracking-wider bg-red-100 text-red-800 px-2 py-0.5 rounded">High</span>
+            <h3 class="font-serif text-xl">F1 — <code>data-reason</code> now carries two vocabularies, and the documented consumer-styling selector silently changed meaning</h3>
+          </div>
+          <p class="text-sm text-slate-700"><strong>Where.</strong>
+            <code>src/extensions/features/inline-editing.ts:367</code> (invalid editor stamps
+            <code>data-reason</code>), <code>:444</code> (refusal notice stamps it),
+            <code>:143-148</code> (<code>CellEditorCommitRefusal</code>), <code>:127-133</code>
+            (<code>REFUSAL_TEXT</code>), <code>:430</code> (stale doc);
+            <code>src/view/styles.ts:298</code>;
+            <code>src/extensions/features/inline-editing.test.ts:145-149</code>.</p>
+          <p class="text-sm text-slate-700"><strong>What.</strong> Before this branch,
+            <code>data-reason</code> meant one thing: a key of <code>REFUSAL_TEXT</code>, which is
+            also the kebab-case <code>code</code> of the Error report the plugin raises, and which
+            always has user-visible words. #160 stamps the same attribute with
+            <code>CellEditorCommitRefusal</code> — <code>'unreadable-value'</code> and
+            <code>'refused-write'</code> — which have no <code>REFUSAL_TEXT</code> entry, raise no
+            report, and carry no words. One attribute, two disjoint vocabularies. CLAUDE.md's first
+            hard rule is one meaning per word.</p>
+          <p class="text-sm text-slate-700"><strong>Concrete failure.</strong>
+            <code>inline-editing.ts:429-430</code> still tells a consumer that
+            <code>view/styles.ts</code> styles
+            <code>.fg-cell-editor[data-state='invalid'][data-reason]</code> "so a consumer stylesheet
+            can still win". It no longer does — <code>styles.ts:298</code> is now
+            <code>…[data-reason]:not(:has(.fg-cell-editor-control))</code>. A consumer who followed
+            that documented advice and wrote the old selector now paints the <em>live editor</em>
+            with the notice's <code>pointer-events: none</code>, and the invalid editor becomes
+            unclickable — including its new discard button. The stale sentence is the one that
+            invited the mistake.</p>
+          <p class="text-sm text-slate-700"><strong>Smell.</strong> The test helper at
+            <code>inline-editing.test.ts:145-149</code> had to learn the identical
+            <code>:not(:has(…))</code> trick. When a stylesheet and a test both need the same
+            structural workaround to tell two things apart, the two things want different names, not
+            a cleverer selector.</p>
+          <p class="text-sm text-slate-700"><strong>Fix I would apply</strong> (not applied): give the
+            notice its own class — <code>fg-cell-notice</code> — and keep
+            <code>.fg-cell-editor</code> for things that hold a control. Both
+            <code>:not(:has(…))</code> sites and the stale doc sentence then delete themselves. If
+            the shared class must stay, stamp the commit refusal on a second attribute
+            (<code>data-commit-refusal</code>) so <code>data-reason</code> keeps answering exactly
+            one question.</p>
+        </article>
+
+        <!-- F2 -->
+        <article class="rounded-lg border border-red-300 bg-white p-6 space-y-3">
+          <div class="flex items-baseline gap-3 flex-wrap">
+            <span class="text-xs font-mono uppercase tracking-wider bg-red-100 text-red-800 px-2 py-0.5 rounded">High</span>
+            <h3 class="font-serif text-xl">F2 — Escape and the discard button take two different roads to one job, and the comment claims otherwise</h3>
+          </div>
+          <p class="text-sm text-slate-700"><strong>Where.</strong>
+            <code>src/extensions/features/inline-editing.ts:274</code> (Escape),
+            <code>:386-387</code> (button), <code>:212-221</code> (the two ports),
+            <code>:597-603</code> (Escape's registration).</p>
+          <p class="text-sm text-slate-700"><strong>What.</strong> Escape binds
+            <code>bindEscape(() =&gt; this.#ports.requestDiscard())</code>, which calls
+            <code>editing.discard()</code> directly. The discard button binds
+            <code>runDiscardCommand()</code>, which calls
+            <code>ctx.commands.run('freegantt.discardCellEdit')</code>. Two ports
+            (<code>requestDiscard</code>, <code>runDiscardCommand</code>) for one job — the second
+            rule where one would do.</p>
+          <p class="text-sm text-slate-700"><strong>Concrete failure.</strong>
+            <code>:386-387</code> states "The command, not the method (D-S5-26): a consumer who
+            overrides <code>freegantt.discardCellEdit</code> changes what this button does too." That
+            is true of the button and false of Escape. A consumer who overrides the command to also
+            clear their own side-panel form gets the override on click and not on Escape — two
+            behaviours from one gesture pair, with nothing in the API saying so. <code>:213-216</code>
+            compounds it by calling <code>requestDiscard</code> "the same 'one implementation, two
+            entry points' shape" — the shapes are not the same.</p>
+          <p class="text-sm text-slate-700"><strong>Fix I would apply</strong> (not applied): bind
+            Escape through the command too, and delete <code>requestDiscard</code>. One port,
+            <code>runDiscardCommand</code>, becomes the only road, D-S5-26's principle becomes true
+            rather than claimed, and the comment stops needing a caveat. The one thing to check first
+            is whether Escape must still close a <em>valid</em> editor when the command's
+            <code>when</code> declines — it should not, since <code>when</code> is
+            <code>editing.editor !== undefined</code>, which covers both.</p>
+        </article>
+
+        <!-- F3 -->
+        <article class="rounded-lg border border-amber-300 bg-white p-6 space-y-3">
+          <div class="flex items-baseline gap-3 flex-wrap">
+            <span class="text-xs font-mono uppercase tracking-wider bg-amber-100 text-amber-800 px-2 py-0.5 rounded">Medium</span>
+            <h3 class="font-serif text-xl">F3 — the placeholder command's <code>run</code> is unreachable, and it costs a port, an implementation and a test</h3>
+          </div>
+          <p class="text-sm text-slate-700"><strong>Where.</strong>
+            <code>src/view/core-commands.ts:150-156</code> (the registration),
+            <code>:45-49</code> (the port), <code>src/view/gantt-shell.ts:1281-1283</code> (the
+            implementation), <code>src/view/core-commands.test.ts:162-169</code> (the test),
+            <code>src/extensions/commands.ts:63</code> (why it cannot fire).</p>
+          <p class="text-sm text-slate-700"><strong>What.</strong> The placeholder registers
+            <code>when: () =&gt; false</code> and <code>run: () =&gt; ports.discardCellEdit()</code>.
+            <code>CommandRegistry.run</code> returns before <code>command.run(ctx)</code> whenever
+            <code>when</code> declines, and this <code>when</code> is a constant. So
+            <code>ports.discardCellEdit</code> can never be called. The test at
+            <code>core-commands.test.ts:162-169</code> asserts exactly that — it proves the port is
+            dead rather than proving behaviour.</p>
+          <p class="text-sm text-slate-700"><strong>Why it matters.</strong> Four artifacts across
+            three files exist to service a call site that cannot be reached, and
+            <code>CoreCommandPorts</code> grows a member every future reader must trace before
+            learning it does nothing. The placeholder's real purpose is sound — without it,
+            <code>gantt.commands.run('freegantt.discardCellEdit')</code> throws
+            <code>UnknownCommandError</code> on a Gantt with no <code>inlineEditing()</code>. Only the
+            plumbing is surplus.</p>
+          <p class="text-sm text-slate-700"><strong>Fix I would apply</strong> (not applied):
+            <code>run: () =&gt; {}</code> inline at <code>core-commands.ts:155</code>, and delete the
+            port, the shell implementation and the port half of the test. Keep the registration and
+            the "the plugin overrides this" comment — those carry the design. The test's first
+            assertion (the id never appears in <code>available()</code>) is worth keeping; the second
+            (the port was not called) goes with the port.</p>
+        </article>
+
+        <!-- F4 -->
+        <article class="rounded-lg border border-amber-300 bg-white p-6 space-y-3">
+          <div class="flex items-baseline gap-3 flex-wrap">
+            <span class="text-xs font-mono uppercase tracking-wider bg-amber-100 text-amber-800 px-2 py-0.5 rounded">Medium</span>
+            <h3 class="font-serif text-xl">F4 — <code>InvertedSpanError</code> names the wrong caller, names an id its author never wrote, and carries nothing a program can read</h3>
+          </div>
+          <p class="text-sm text-slate-700"><strong>Where.</strong>
+            <code>src/model/errors.ts:186-191</code> (the class);
+            <code>src/data/entry-reader.ts:61</code>, <code>:129</code>, <code>:218</code> (the three
+            throw sites); <code>src/data/entry-reader.test.ts:479-493</code> (proof of the wrong
+            caller).</p>
+          <p class="text-sm text-slate-700"><strong>Four separate faults, one error:</strong></p>
+          <ol class="text-sm text-slate-700 list-decimal pl-6 space-y-2">
+            <li><strong>Wrong caller.</strong> <code>entry-reader.ts:218</code> says
+              <code>entries.update: "t1" would end before it starts</code>. It is thrown from
+              <code>reconcileEnvelope</code>, which <code>reconcileExtenderEdits</code> also calls —
+              the branch's own test "refuses an inverted cascade against a sole-Segment Entry" proves
+              it. A plugin author whose <code>EditExtender</code> cascade is wrong is told
+              <code>entries.update</code> failed, a call they never made, and will look in the wrong
+              place.</li>
+            <li><strong>Wrong subject.</strong> The same line sits inside
+              <code>for (const segment of next.segments)</code> yet names the <em>entry</em>. Its
+              sibling at <code>:61</code> names the <em>segment</em>. One fault, two spellings, and
+              neither names both halves.</li>
+            <li><strong>An id the author has never seen.</strong> <code>:61</code> reports
+              <code>segment.id</code>, which for a segment written without an <code>id</code> is
+              whatever <code>context.mintSegmentId()</code> just minted. Feed it
+              <code>{ id: 't1', segments: [{ start: '2026-09-05', end: '2026-09-01' }] }</code> and
+              the message names a synthetic id and omits <code>t1</code> — the one identifier the
+              consumer wrote and can search for.</li>
+            <li><strong>No values, and no members.</strong> The owner's rule (#237, plus the addition
+              this session) is that an error says what distinguishes, not just that something is
+              wrong. No <code>InvertedSpanError</code> message states the two instants.
+              <code>InvalidSnapIncrementError</code>, landed in this same branch at
+              <code>errors.ts:35-48</code>, does the opposite and does it well: it prints the offending
+              value <em>and</em> exposes <code>.unit</code>/<code>.increment</code> as members.
+              <code>InvertedSpanError</code> takes a bare <code>message: string</code> and carries
+              nothing, so <code>catch (e) { if (e instanceof InvertedSpanError) highlight(e.entryId) }</code>
+              is impossible. Two errors born in one branch, two shapes.</li>
+          </ol>
+          <p class="text-sm text-slate-700"><strong>Concrete failure.</strong> A consumer bulk-loading
+            500 rows whose date parsing shifted a timezone gets
+            <code>entries: "t1" would end before it starts</code> — no start, no end, no way to see
+            that the two are one hour apart in the wrong direction, and no <code>.entryId</code> to
+            drive a row highlight.</p>
+          <p class="text-sm text-slate-700"><strong>Fix I would apply</strong> (not applied): make the
+            constructor structural, on the pattern <code>InvalidSnapIncrementError</code> already sets
+            in the same file — <code>constructor(entryId, span, segmentId?)</code> — build the message
+            from those (naming both the entry and, when it applies, the segment, and printing both
+            instants), and expose them as readonly members. Then drop the caller name from the text,
+            or pass it, so a cascade is not told it was an <code>entries.update</code>.</p>
+        </article>
+
+        <!-- F5 -->
+        <article class="rounded-lg border border-amber-300 bg-white p-6 space-y-3">
+          <div class="flex items-baseline gap-3 flex-wrap">
+            <span class="text-xs font-mono uppercase tracking-wider bg-amber-100 text-amber-800 px-2 py-0.5 rounded">Medium</span>
+            <h3 class="font-serif text-xl">F5 — snap has two doors, only one is validated, and the harness picker #201 rewrote uses the other</h3>
+          </div>
+          <p class="text-sm text-slate-700"><strong>Where.</strong>
+            <code>src/view/gantt-shell.ts:1188-1197</code> (the guard);
+            <code>src/api/gantt.ts:445-448</code> (the doc that calls the other door obsolete);
+            <code>harness/editing.ts:141-147</code>; <code>harness/gantt-toolbar.ts:217-220, 245</code>.</p>
+          <p class="text-sm text-slate-700"><strong>What.</strong> #201's promise, in its own words at
+            <code>errors.ts:29-32</code>, is that "the mistake names the assignment rather than the
+            drag two gestures later". That holds for <code>gantt.snap = …</code> and not for
+            <code>gantt.preset = { …gantt.preset, snap }</code>, which reaches
+            <code>#viewport.preset.snap</code> unchecked. The <code>time/</code> guard
+            (<code>snap.ts:15-19</code>) still stops the hang, so this is not a freeze — it is the
+            deferred-error experience #201 set out to delete, surviving on the second door.</p>
+          <p class="text-sm text-slate-700"><strong>Concrete failure, in this repo.</strong>
+            <code>harness/editing.ts:141-147</code> — the function #201 rewrote — sets snap through
+            <code>gantt.preset</code>. <code>src/api/gantt.ts:447-448</code> documents that exact
+            spelling as "the old spelling" which "built a one-off copy of a shipped preset, and the
+            next <code>zoomIn()</code> threw the snap away with it." So in
+            <code>harness/editing.html</code>: pick Snap = day, zoom, and the choice is gone. The
+            other harness picker, <code>harness/gantt-toolbar.ts:245</code>, uses
+            <code>gantt.snap</code>. Two harness pickers, two doors, one of them the door the library
+            documents as wrong — and CLAUDE.md makes reviewing the harness a standing duty precisely
+            to catch this.</p>
+          <p class="text-sm text-slate-700"><strong>Second-order.</strong> The two pickers also
+            disagree on what an unrecognised value does: <code>editing.ts:145</code> returns and
+            silently changes nothing; <code>gantt-toolbar.ts:218</code> silently substitutes
+            <code>'tick'</code>. Both are guards over a <code>&lt;select&gt;</code> whose options the
+            harness itself writes, so neither can fire — but they are two policies for one job in
+            code the library holds up as its worked example.</p>
+          <p class="text-sm text-slate-700"><strong>Fix I would apply</strong> (not applied): move
+            <code>harness/editing.ts</code>'s <code>applySnapChoice</code> to
+            <code>gantt.snap = …</code>, matching <code>gantt-toolbar.ts</code>. Separately, decide
+            whether <code>set preset</code> should validate a concrete <code>snap</code> the same way
+            <code>set snap</code> does — I lean yes, since a <code>ViewPreset</code> is public input
+            and CLAUDE.md says input is loose on every way in, with the library doing the
+            validating.</p>
+        </article>
+
+        <!-- F6 -->
+        <article class="rounded-lg border border-sky-300 bg-white p-6 space-y-3">
+          <div class="flex items-baseline gap-3 flex-wrap">
+            <span class="text-xs font-mono uppercase tracking-wider bg-sky-100 text-sky-800 px-2 py-0.5 rounded">Low — transitional</span>
+            <h3 class="font-serif text-xl">F6 — the published API now has two names for one type, and the newer one has no doc</h3>
+          </div>
+          <p class="text-sm text-slate-700"><strong>Where.</strong>
+            <code>src/model/entry.ts:105-110</code>; <code>etc/freegantt.api.md</code> (the
+            <code>EntryEdits</code>, <code>StoredEdits</code>, <code>Dataset.extraEditsFor</code> and
+            <code>EditRequest.proposed</code> entries).</p>
+          <p class="text-sm text-slate-700"><strong>What.</strong> The report exports
+            <code>StoredEdits</code> as <code>@public</code> with a doc comment, and
+            <code>EntryEdits</code> as <code>@public (undocumented)</code>. Both resolve to
+            <code>ReadonlyMap&lt;EntryId, StoredEdit&gt;</code>. They meet in one signature pair —
+            <code>extraEditsFor(request: EditRequest): EntryEdits</code> beside
+            <code>EditRequest.proposed: StoredEdits</code> — where an app author has no way to learn
+            that they are the same thing, or which one to write.</p>
+          <p class="text-sm text-slate-700"><strong>Why it is still worth saying.</strong> This is C1
+            scaffolding and C3 flips <code>EntryEdits</code> to the loose write shape, per the #209
+            handoff. It is reported only because it is on the <em>published</em> report today: if this
+            branch merged as-is, the surface ships a silent alias. Nothing to do beyond landing C3 —
+            but C3 must land before this reaches a consumer.</p>
+        </article>
+
+        <!-- F7 -->
+        <article class="rounded-lg border border-sky-300 bg-white p-6 space-y-3">
+          <div class="flex items-baseline gap-3 flex-wrap">
+            <span class="text-xs font-mono uppercase tracking-wider bg-sky-100 text-sky-800 px-2 py-0.5 rounded">Low — unsure</span>
+            <h3 class="font-serif text-xl">F7 — <code>available(ctx?)</code> writes a contract only one implementation can honour</h3>
+          </div>
+          <p class="text-sm text-slate-700"><strong>Where.</strong>
+            <code>src/api/command.ts:115-118</code>; <code>src/extensions/commands.ts:78-83</code>.</p>
+          <p class="text-sm text-slate-700"><strong>What.</strong> The interface doc says omitting
+            <code>ctx</code> makes "the registry build the same live context <code>run(id)</code>
+            already builds internally." That is true of <code>CommandRegistry</code>, which holds a
+            <code>#buildContext</code> the constructor was given. <code>CommandRegistryOf</code> is
+            public, so anyone else implementing it must invent a context builder to satisfy a clause
+            written from one implementation's internals.</p>
+          <p class="text-sm text-slate-700"><strong>Marked unsure.</strong> The app-author win is
+            real and I would not trade it away. Whether <code>CommandRegistryOf</code> is meant as an
+            implementable contract or only as the shape of the thing core hands out decides whether
+            this matters at all, and I could not settle that from the code. Owner's call.</p>
+        </article>
+      </section>
+
+      <!-- ═══════════════ NAMING ═══════════════ -->
+      <section class="space-y-4">
+        <h2 class="font-serif text-2xl tracking-tight border-b border-slate-300 pb-2">Naming verdicts</h2>
+        <p class="text-sm text-slate-600">Each name read aloud at its real call site, per CLAUDE.md.</p>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm border-collapse">
+            <thead>
+              <tr class="border-b-2 border-slate-300 text-left">
+                <th class="py-2 pr-4">Name</th>
+                <th class="py-2 pr-4">Read aloud</th>
+                <th class="py-2 pr-4">Verdict</th>
+              </tr>
+            </thead>
+            <tbody class="align-top">
+              <tr class="border-b border-slate-200">
+                <td class="py-2 pr-4 font-mono text-xs">isTimeUnit</td>
+                <td class="py-2 pr-4">"is <code>value</code> a time unit"</td>
+                <td class="py-2 pr-4 text-emerald-800">Keep. Narrows, so it deletes casts instead of hiding them.</td>
+              </tr>
+              <tr class="border-b border-slate-200">
+                <td class="py-2 pr-4 font-mono text-xs">extraEditsFor</td>
+                <td class="py-2 pr-4">"dataset, extra edits for this request"</td>
+                <td class="py-2 pr-4 text-emerald-800">Keep. Names the job, not the pipeline, and consistent with <code>commands.available()</code>'s noun-phrase precedent. Reads slightly worse as an options field (<code>new GanttShell({ extraEditsFor: … })</code>) but not badly.</td>
+              </tr>
+              <tr class="border-b border-slate-200">
+                <td class="py-2 pr-4 font-mono text-xs">discard</td>
+                <td class="py-2 pr-4">"editing, discard"</td>
+                <td class="py-2 pr-4 text-emerald-800">Keep, and better than <code>revert</code>: nothing is restored, the edit is dropped.</td>
+              </tr>
+              <tr class="border-b border-slate-200">
+                <td class="py-2 pr-4 font-mono text-xs">InvalidSnapIncrementError</td>
+                <td class="py-2 pr-4">—</td>
+                <td class="py-2 pr-4 text-emerald-800">Keep. Specific, and the message prints the value that distinguishes.</td>
+              </tr>
+              <tr class="border-b border-slate-200">
+                <td class="py-2 pr-4 font-mono text-xs">InvertedSpanError</td>
+                <td class="py-2 pr-4">—</td>
+                <td class="py-2 pr-4 text-amber-800">Name is right; the constructor is not (F4).</td>
+              </tr>
+              <tr class="border-b border-slate-200">
+                <td class="py-2 pr-4 font-mono text-xs">runDiscardCommand</td>
+                <td class="py-2 pr-4">"ports, run discard command"</td>
+                <td class="py-2 pr-4 text-red-800">Reject. Names the <em>pipe</em> — the command registry — not the job. CLAUDE.md: name the job, not the pipeline. The name disappears with the fix in F2; if the two ports must stay, <code>discardEdit</code> is the job's name.</td>
+              </tr>
+              <tr class="border-b border-slate-200">
+                <td class="py-2 pr-4 font-mono text-xs">CellEditorCommitRefusal</td>
+                <td class="py-2 pr-4">—</td>
+                <td class="py-2 pr-4 text-amber-800">Reads fine on its own. The problem is that it and <code>CellEditorRefusal</code> share one DOM attribute (F1) — two types over one word.</td>
+              </tr>
+              <tr class="border-b border-slate-200">
+                <td class="py-2 pr-4 font-mono text-xs">StoredEdits</td>
+                <td class="py-2 pr-4">—</td>
+                <td class="py-2 pr-4 text-emerald-800">Keep. Plural of <code>StoredEdit</code>, and it says which side of the write shape it is.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ═══════════════ ACCEPTED / NOT FINDINGS ═══════════════ -->
+      <section class="space-y-4">
+        <h2 class="font-serif text-2xl tracking-tight border-b border-slate-300 pb-2">Looked at, not reported as faults</h2>
+        <ul class="space-y-2 text-slate-700 text-sm list-disc pl-5">
+          <li><strong><code>DatasetState</code> keeps both <code>editExtender</code> and
+            <code>extraEditsFor</code></strong> (<code>src/data/dataset-state.ts:204-218</code>). Kept
+            on purpose; two <code>data/</code> tests assert on the occupant's identity and composition
+            order, which a call-through method cannot answer. So C2's "one door" is one and a half
+            internally, and exactly one publicly, which is what Q5 asked for. Worth revisiting at C3
+            only if a cheaper identity seam appears — not now.</li>
+          <li><strong>Harness deletions.</strong> The <code>as TimeUnit</code> casts removed from
+            <code>harness/editing.ts</code> and <code>harness/gantt-toolbar.ts</code> are the stop
+            rule working as designed: the cast was the evidence, <code>isTimeUnit</code> is the
+            library closing the gap. Correct.</li>
+          <li><strong>The I4 <code>meta</code> fix</strong>
+            (<code>src/data/build-commit-change-set.ts:68-79</code>). The narrow shape — skip
+            <code>meta</code> only when the edit <em>states</em> <code>proposedKeys</code> — is the
+            right one, and the comment explains why the wider version is wrong. The handoff records
+            that the wider version was tried and broke two tests. No complaint.</li>
+          <li><strong><code>#onFocusOut</code>'s invalid early-return</strong>
+            (<code>inline-editing.ts:347-355</code>) and the <code>pointerdown</code>
+            <code>preventDefault</code> (<code>:383-385</code>). Both comments answer the question the
+            seam poses rather than describing the mechanism. This is the house style working.</li>
+          <li><strong>#209 C3/C4, and the D-S5-46/D-S5-47 records.</strong> Out of scope by ruling.</li>
+        </ul>
+      </section>
+
+      <!-- ═══════════════ SUMMARY ═══════════════ -->
+      <section class="space-y-4">
+        <h2 class="font-serif text-2xl tracking-tight border-b border-slate-300 pb-2">If you fix three things</h2>
+        <ol class="space-y-2 text-slate-700 text-sm list-decimal pl-5">
+          <li><strong>F1</strong> — split the notice off <code>data-reason</code> / <code>.fg-cell-editor</code>. It is the only finding here that silently breaks a seam the library documented to consumers, and it is the one that will be expensive to retract.</li>
+          <li><strong>F4</strong> — give <code>InvertedSpanError</code> the structural constructor <code>InvalidSnapIncrementError</code> already models one file over. Cheap now, a breaking change later.</li>
+          <li><strong>F2</strong> — one road for discard. It deletes a port, makes D-S5-26's stated principle true, and removes a comment that currently misleads.</li>
+        </ol>
+        <p class="text-sm text-slate-600">F3 and F5 are small and safe. F5's harness half in
+          particular is a two-line change that the harness-review duty should have caught inside
+          #201.</p>
+      </section>
+
+      <footer class="pt-6 border-t border-slate-300 text-xs text-slate-500 font-mono">
+        Report only — no source changed on this branch. Reviewed
+        <code>c26009e..cae7e75</code> against <code>CLAUDE.md</code>, <code>plans/01</code> §§1, 5, 6, 8
+        and <code>plans/02</code>.
+      </footer>
+    </main>
+  </body>
+</html>
