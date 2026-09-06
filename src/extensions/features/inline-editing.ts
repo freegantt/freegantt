@@ -132,7 +132,7 @@ const REFUSAL_TEXT = {
 /** Why the editor refused a cell that does offer one. The key is the machine-readable half — it goes
  *  on the notice's own `data-reason` — and `REFUSAL_TEXT` holds the half the user reads.
  *
- *  S5.12, D-S5-35: the keys are kebab-case because each one is also the `code` of the Error report
+ *  S5.12, D-S5-40: the keys are kebab-case because each one is also the `code` of the Error report
  *  this plugin raises. One refusal must not have two spellings, and kebab is the better value for a
  *  DOM attribute anyway. */
 export type CellEditorRefusal = keyof typeof REFUSAL_TEXT;
@@ -201,7 +201,7 @@ export interface CellEditorPorts {
    *  place alone knows whether an editor is open. */
   requestCommit(): void;
   requestRevert(): void;
-  /** S5.12, D-S5-35: reports one refusal on the Gantt's `error` event. A consumer can then toast it,
+  /** S5.12, D-S5-40: reports one refusal on the Gantt's `error` event. A consumer can then toast it,
    *  rather than rely on a notice the user may not look at. `ctx.raiseError` fills `by` with this
    *  plugin's id. */
   raiseError(report: PluginErrorReport): void;
@@ -502,7 +502,7 @@ export class CellEditing {
     this.dismissNotice();
     this.#notice = presentRefusal(this.#ports, edited, cell, reason);
     // The notice and the report say the same thing, in the same words, under the same name: the
-    // notice's `data-reason` is this `code` (D-S5-35). `severity: 'info'` — the library said no on
+    // notice's `data-reason` is this `code` (D-S5-40). `severity: 'info'` — the library said no on
     // purpose and nothing is broken.
     this.#ports.raiseError({
       code: reason,

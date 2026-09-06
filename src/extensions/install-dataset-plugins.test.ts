@@ -135,7 +135,7 @@ describe('installDatasetPlugins', () => {
     expect(log).toEqual(['setup a', 'registration retracted', 'dispose a']);
   });
 
-  it('a throwing disposer raises one report and disposal continues (D-S5-35)', () => {
+  it('a throwing disposer raises one report and disposal continues (D-S5-40)', () => {
     const log: string[] = [];
     const reported: ErrorReportInput[] = [];
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});

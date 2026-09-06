@@ -79,7 +79,7 @@ export interface GanttShellPorts {
   overlay: MountLayer;
   /** #158. The grid's own row layer, alive as long as the plugin is. */
   rowLayer: MountLayer;
-  /** S5.12, D-S5-35: this Gantt's raise seam, over its own `error` bus. `buildPluginPorts` binds
+  /** S5.12, D-S5-40: this Gantt's raise seam, over its own `error` bus. `buildPluginPorts` binds
    *  each plugin's `by` onto it below, so a plugin never names itself. */
   raiseError: RaiseError;
   /** Review N1/A3. One resolver per Gantt. It owns every `.fg-*` class and `data-*` key a plugin
@@ -141,7 +141,7 @@ export interface GanttShellPorts {
 export interface PluginContextParts<TGantt = unknown, TDataset = unknown> {
   /** `on`/`off` over `GanttEventMap`, including the cancelable `before*` pairs. */
   events: GanttEvents;
-  /** S5.12, D-S5-35: raises one Error report on this Gantt's `error` event. `by` is filled with this
+  /** S5.12, D-S5-40: raises one Error report on this Gantt's `error` event. `by` is filled with this
    *  plugin's own id, so a subscriber can always tell which plugin spoke. Use `severity: 'info'` for
    *  a Refusal the plugin made on purpose, `'warning'` for something it recovered from, `'error'` for
    *  something it did not. */
@@ -421,7 +421,7 @@ export function buildPluginPorts(
     try {
       return resolved.renderer({ entry, item: bar });
     } catch (error) {
-      // S5.12, D-S5-36: report first; the `console.error` behind it is the fallback for a consumer
+      // S5.12, D-S5-41: report first; the `console.error` behind it is the fallback for a consumer
       // with nothing subscribed to `error`. It left `isDevMode()` for the reason that guard's own
       // audit gives — the branch was dead-code-eliminated out of every consumer's build.
       const plugin = resolved.pluginId !== undefined ? ` from plugin "${resolved.pluginId}"` : '';

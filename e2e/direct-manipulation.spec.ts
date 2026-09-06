@@ -105,7 +105,7 @@ test('[S3-A8] dropping a bar before the mobilization line shows the veto toast',
 
   await expect(page.locator('#toast')).toBeVisible();
   await expect(page.locator('#toast')).toContainText('Too early');
-  // S5.12, D-S5-35: the same veto also reaches the page's one `watchAllErrors` subscription, which
+  // S5.12, D-S5-40: the same veto also reaches the page's one `watchAllErrors` subscription, which
   // logs every report the Dataset or the Gantt raises. `plans/02` §3's "a vetoed gesture is silent"
   // stays true of the UI above; it reports as well.
   await expect(page.locator('#log')).toContainText('error · info · consumer · entry-move-cancelled');

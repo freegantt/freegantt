@@ -257,7 +257,7 @@ describe('PluginRuntime', () => {
     warnSpy.mockRestore();
   });
 
-  it('a dropped reconfigure raises at warning, no longer gated by the build (D-S5-36)', () => {
+  it('a dropped reconfigure raises at warning, no longer gated by the build (D-S5-41)', () => {
     const log: string[] = [];
     const reported: ErrorReportInput[] = [];
     const runtime = makeRuntime(log, (report) => reported.push(report));

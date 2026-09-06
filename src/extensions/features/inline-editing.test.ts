@@ -995,7 +995,7 @@ describe('CellEditing (S5.8, #169)', () => {
     editing.clear();
   });
 
-  it('every refusal raises one report whose code is the notice own data-reason (D-S5-35)', () => {
+  it('every refusal raises one report whose code is the notice own data-reason (D-S5-40)', () => {
     const reasons: CellEditorRefusal[] = [
       'derived-value',
       'no-parse-value',

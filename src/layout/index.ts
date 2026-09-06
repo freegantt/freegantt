@@ -67,7 +67,7 @@ export type {
 // ElementDescription joins them the same way (S5.3, D-S5-10): render/dom/element-description.ts
 // builds DOM from it and may not import model/ directly.
 export type { ItemId, RowId, EntryId, ClientPoint, ElementDescription, Entry } from '../model/index.js';
-// S5.12, D-S5-35: `render/` may import `layout/` and nothing else (plans/01 §1), so the raise seam
+// S5.12, D-S5-40: `render/` may import `layout/` and nothing else (plans/01 §1), so the raise seam
 // reaches `render/dom` the same way `ElementDescription` and `Entry` above already do — a backend
 // that recovers from a throwing renderer must be able to report it.
 export type { RaiseError, ErrorReportInput } from '../model/index.js';
