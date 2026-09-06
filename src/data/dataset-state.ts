@@ -27,7 +27,7 @@ import type {
 import { changeSetId, mintedSegmentId } from '../model/index.js';
 import { now } from '../time/index.js';
 import { EntryStore } from './entry-store.js';
-import { readEntries } from './entry-reader.js';
+import { authoredSegmentIdsOf, readEntries } from './entry-reader.js';
 import type { EntryReadContext } from './entry-reader.js';
 import { identityExtender } from './edit-extension.js';
 import { PluginStores } from './plugin-store.js';
@@ -140,6 +140,13 @@ export class DatasetState implements Dataset {
   #changeSetCounter = 0;
   /** Per-instance for the same reason (#212) — the id a Segment nobody named gets. */
   #segmentCounter = 0;
+  /** Every `SegmentId` this construction's own `entries` input already named, reserved before the
+   *  first mint (#212) — the counter and an authored id share one format (`sg${n}`), so a document
+   *  round trip can otherwise hand a minted id to the same number an authored one already claimed. */
+  readonly #reservedSegmentIds: ReadonlySet<SegmentId>;
+  /** `false` until `this.entries` is assigned — `#segmentIdTaken` cannot read the store before it
+   *  exists, which is exactly the window `#reservedSegmentIds` covers on its own. */
+  #entryStoreReady = false;
   readonly #history: History;
   readonly #disposePlugins: Disposer | undefined;
 
@@ -159,6 +166,7 @@ export class DatasetState implements Dataset {
       cache: this.computedCache,
       datasetRevision: this.#datasetRevision,
     }));
+    this.#reservedSegmentIds = authoredSegmentIdsOf(options.entries);
     this.#entryContext = {
       timeZone: this.timeZone,
       dateOnlyEnd: this.dateOnlyEnd,
@@ -173,6 +181,7 @@ export class DatasetState implements Dataset {
       this.fieldContext,
       this,
     );
+    this.#entryStoreReady = true;
     this.pluginStores = new PluginStores(options.pluginRows, this);
     // Plugins set up here and nowhere else: the entry store exists, so a `setup`-time store write
     // wraps itself in a transaction, and the construction Rollup below has not run, so a Field a
@@ -208,8 +217,22 @@ export class DatasetState implements Dataset {
   }
 
   #nextSegmentId(): SegmentId {
-    this.#segmentCounter += 1;
-    return mintedSegmentId(this.#segmentCounter);
+    let candidate: SegmentId;
+    do {
+      this.#segmentCounter += 1;
+      candidate = mintedSegmentId(this.#segmentCounter);
+    } while (this.#segmentIdTaken(candidate));
+    return candidate;
+  }
+
+  /** `id` already names a Segment — reserved by this construction's own input, or already on an
+   *  Entry the store holds (#212). A minted id and an authored one share one counter format
+   *  (`sg${n}`), so skipping a taken candidate is what keeps a document round trip from handing the
+   *  two the same number. */
+  #segmentIdTaken(id: SegmentId): boolean {
+    if (this.#reservedSegmentIds.has(id)) return true;
+    if (!this.#entryStoreReady) return false;
+    return this.entries.all.some((entry) => entry.segments.some((segment) => segment.id === id));
   }
 
   nextChangeSetId(): ChangeSetId {

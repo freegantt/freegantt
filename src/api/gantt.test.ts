@@ -3160,7 +3160,13 @@ describe('Gantt interactions / capability hot path (S3.2, D-S3-9, [S3-A3]/[S3-A5
   it('a group entry (rollUpKinds) gets neither the grab cursor nor a handle', () => {
     const container = document.createElement('div');
     const dataset = new Dataset({
-      entries: [{ id: 'g1', kind: 'group', name: 'Group' }, ...sampleEntries],
+      // The group's own Segment gets an explicit id: sampleEntries is a separately-minted list, and
+      // an unnamed Segment here would mint from this Dataset's own counter, which starts at 'sg1'
+      // too and collides with sampleEntries[0]'s (#212).
+      entries: [
+        { id: 'g1', kind: 'group', name: 'Group', segments: [{ id: 'g1-seg', start: 0, end: 0 }] },
+        ...sampleEntries,
+      ],
       timeZone: 'UTC',
     });
     const gantt = new Gantt({ container, dataset });
@@ -3296,7 +3302,13 @@ describe('Gantt interactions / capability hot path (S3.2, D-S3-9, [S3-A3]/[S3-A5
   it('clearCapabilityRule restores the per-kind table, which `true` would not (#195)', () => {
     const container = document.createElement('div');
     const dataset = new Dataset({
-      entries: [{ id: 'g1', kind: 'group', name: 'Group' }, ...sampleEntries],
+      // The group's own Segment gets an explicit id: sampleEntries is a separately-minted list, and
+      // an unnamed Segment here would mint from this Dataset's own counter, which starts at 'sg1'
+      // too and collides with sampleEntries[0]'s (#212).
+      entries: [
+        { id: 'g1', kind: 'group', name: 'Group', segments: [{ id: 'g1-seg', start: 0, end: 0 }] },
+        ...sampleEntries,
+      ],
       timeZone: 'UTC',
     });
     const gantt = new Gantt({ container, dataset });
@@ -4015,13 +4027,16 @@ describe('Gantt pack-mode scroll (S4.8, [S4-A5])', () => {
     const scroll = new ScrollModel();
     const dataset = new Dataset({
       timeZone: 'UTC',
+      // Explicit, distinct ids: sampleEntries already carries minted ids ('sg1'..'sgN'), and an
+      // unnamed Segment here would mint from this Dataset's own counter, which starts over at 'sg1'
+      // too and collides with another entry's (#212).
       entries: sampleEntries.map((entry, i) =>
         i === 0
           ? {
               ...entry,
               segments: [
-                { start: entry.start, end: entry.end },
-                { start: entry.start, end: entry.end },
+                { id: 'i0-a', start: entry.start, end: entry.end },
+                { id: 'i0-b', start: entry.start, end: entry.end },
               ],
             }
           : entry,

@@ -89,6 +89,17 @@ export class DuplicateEntryIdError extends FreeGanttError {
   }
 }
 
+/** `code: 'duplicate-segment-id'` — two Segments in the store share one `SegmentId`: authored twice
+ *  in the same `segments` array, authored on two different Entries, or authored on construction
+ *  (#212, ADR 0010). A `SegmentId` is the Selection's identity, so a duplicate is rejected the same
+ *  way a duplicate `EntryId` is — before anything stages. */
+export class DuplicateSegmentIdError extends FreeGanttError {
+  constructor(segmentId: SegmentId) {
+    super('duplicate-segment-id', `entries: a segment with id "${segmentId}" already exists`);
+    this.name = 'DuplicateSegmentIdError';
+  }
+}
+
 /** `code: 'parent-cycle'` — a `parentId` edit that would make an entry its own ancestor, self-parenting
  * included (S2.3 §1.3). */
 export class ParentCycleError extends FreeGanttError {

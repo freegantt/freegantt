@@ -77,6 +77,7 @@ export {
   EntryNotFoundError,
   SegmentNotFoundError,
   DuplicateEntryIdError,
+  DuplicateSegmentIdError,
   ParentCycleError,
   SegmentsOutOfSyncError,
   UnknownFieldError,

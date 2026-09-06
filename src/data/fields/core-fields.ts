@@ -6,12 +6,16 @@ import { DATE_TIME_FORMAT, formatDate, formatEndInclusive, MS } from '../../time
 
 const byReference = (from: unknown, to: unknown): boolean => from === to;
 
+// Segment identity is part of the value (#212, ADR 0010): an id-only write — the same start and end,
+// a different `SegmentId` — must reach the changeset, or the Selection silently loses what it holds.
 const segmentsEqual = (from: unknown, to: unknown): boolean => {
   const a = from as Entry['segments'];
   const b = to as Entry['segments'];
   if (a === b) return true;
   if (a === undefined || b === undefined || a.length !== b.length) return false;
-  return a.every((span, index) => span.start === b[index]?.start && span.end === b[index]?.end);
+  return a.every(
+    (span, index) => span.id === b[index]?.id && span.start === b[index]?.start && span.end === b[index]?.end,
+  );
 };
 
 /** Stringifies a primitive Field value for display; anything else (undefined, object) renders empty. */

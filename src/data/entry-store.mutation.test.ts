@@ -8,6 +8,7 @@ import { fieldRowsOf } from './change-set.js';
 import { identityExtender } from './edit-extension.js';
 import {
   DuplicateEntryIdError,
+  DuplicateSegmentIdError,
   EntryNotFoundError,
   InvalidInstantError,
   ParentCycleError,
@@ -250,6 +251,67 @@ describe('entries.removeSegments (#212, ADR 0010)', () => {
 
     expect(seen).toHaveLength(0);
     expect(state.entries.get('t1')?.segments).toHaveLength(1);
+  });
+});
+
+describe('Segment identity (#212, ADR 0010, fix plan R1)', () => {
+  it('two Entries authoring the same SegmentId at construction throw DuplicateSegmentIdError', () => {
+    expect(() =>
+      dataset([
+        { id: 'a', segments: [{ id: 'sg1', start: 0, end: 1 }] },
+        { id: 'b', segments: [{ id: 'sg1', start: 0, end: 1 }] },
+      ]),
+    ).toThrow(DuplicateSegmentIdError);
+  });
+
+  it('entries.add with a SegmentId another Entry already draws throws, and stages nothing', () => {
+    const state = dataset([{ id: 'a', segments: [{ id: 'sg1', start: 0, end: 1 }] }]);
+
+    expect(() =>
+      state.entries.add({
+        id: 'b',
+        name: 'b',
+        start: 0,
+        end: 1,
+        segments: [{ id: 'sg1', start: 0, end: 1 }],
+      }),
+    ).toThrow(DuplicateSegmentIdError);
+    expect(state.entries.has('b')).toBe(false);
+  });
+
+  it('entries.update with a SegmentId another Entry already draws throws, and leaves the store unchanged', () => {
+    const state = dataset([
+      { id: 'a', segments: [{ id: 'sg1', start: 0, end: 1 }] },
+      { id: 'b', segments: [{ id: 'sg2', start: 0, end: 1 }] },
+    ]);
+
+    expect(() => state.entries.update('b', { segments: [{ id: 'sg1', start: 0, end: 1 }] })).toThrow(
+      DuplicateSegmentIdError,
+    );
+    expect(state.entries.get('b')?.segments.map((segment) => segment.id)).toEqual([segmentId('sg2')]);
+  });
+
+  it('a move (entries.update naming no id) keeps the Segment id — positional match, not a new mint', () => {
+    const state = dataset([{ id: 't1', start: 0, end: 10, segments: [{ id: 'sole', start: 0, end: 10 }] }]);
+
+    const moved = state.entries.update('t1', { segments: [{ start: 5, end: 15 }] });
+
+    expect(moved.segments).toHaveLength(1);
+    expect(moved.segments[0]!.id).toBe(segmentId('sole'));
+    expect(moved.segments[0]!.start).toBe(toInstant('UTC', 5));
+  });
+
+  it('an id-only write reaches the changeset and is undoable — segmentsEqual compares id', () => {
+    const state = dataset([{ id: 't1', segments: [{ id: 'sg1', start: 0, end: 10 }] }]);
+    const seen = changeSets(state);
+
+    state.entries.update('t1', { segments: [{ id: 'renamed', start: 0, end: 10 }] });
+
+    expect(seen).toHaveLength(1);
+    expect(state.entries.get('t1')?.segments.map((segment) => segment.id)).toEqual([segmentId('renamed')]);
+
+    state.undo();
+    expect(state.entries.get('t1')?.segments.map((segment) => segment.id)).toEqual([segmentId('sg1')]);
   });
 });
 

@@ -620,6 +620,14 @@ gantt.commands.register({
 });
 ```
 
+- **`dataset.entries.update(id, { segments })` is how a consumer moves one Segment** (#212, ADR
+  0010, fix plan R1). A Segment named by position and no `id` keeps the `SegmentId` already at that
+  position — a move, not a replacement — the same way `entries.update(id, { start })` moves an
+  Entry's own envelope. Naming an `id` replaces the id at that position instead; a position past the
+  Entry's current Segment count mints a fresh id, the same as an added Segment on `entries.add`. Two
+  Segments never share one `SegmentId` — on the same Entry, on two different Entries, or authored
+  twice in one construction-time `entries` list — and a write that would create that collision
+  throws `DuplicateSegmentIdError` (`code: 'duplicate-segment-id'`) before anything stages.
 - **`segmentIds: readonly SegmentId[]`** is every Segment the invocation acts on. **`entryIds:
   readonly EntryId[]`** is a projection of `segmentIds` — the Entries those Segments belong to,
   deduped, in row order. `entryIds` is the same word `DomTarget.entryIds` uses, and not always the

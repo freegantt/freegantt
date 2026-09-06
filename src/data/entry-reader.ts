@@ -5,7 +5,13 @@
 // zone, and what a date-only `end` means against half-open storage — belongs to `time/input.ts`
 // (I10); anything resembling date math here is a bug.
 
-import { entryId, InvalidInstantError, SegmentsOutOfSyncError, segmentId } from '../model/index.js';
+import {
+  entryId,
+  DuplicateSegmentIdError,
+  InvalidInstantError,
+  SegmentsOutOfSyncError,
+  segmentId,
+} from '../model/index.js';
 import type {
   DateOnlyEndRule,
   Entry,
@@ -39,9 +45,12 @@ export interface EntryReadContext {
   mintSegmentId(): SegmentId;
 }
 
-function readSegment(input: SegmentInput, context: EntryReadContext): Segment {
+/** `existing` is the Segment presently at this position, when `entries.update` is moving one it
+ *  already drew (S2.3 §1.1, #212). An input that names no `id` keeps `existing`'s id — a move, not a
+ *  replacement — and mints only when there is no Segment at that position to keep the id of. */
+function readSegment(input: SegmentInput, context: EntryReadContext, existing?: Segment): Segment {
   return {
-    id: input.id === undefined ? context.mintSegmentId() : segmentId(input.id),
+    id: input.id === undefined ? (existing?.id ?? context.mintSegmentId()) : segmentId(input.id),
     start: toInstant(context.timeZone, input.start),
     end: toEndInstant(context.timeZone, input.end, context.dateOnlyEnd),
   };
@@ -104,8 +113,36 @@ function readEntrySpan(input: EntryInput, kind: EntryKind, context: EntryReadCon
   };
 }
 
+/** Every `SegmentId` a consumer named explicitly, anywhere in a construction-time `entries:
+ *  EntryInput[]` list — read before any Segment mints (#212). `DatasetState` reserves these first, so
+ *  an id ingest mints for one Entry never lands on an id another Entry in the same list authored. */
+export function authoredSegmentIdsOf(inputs: readonly EntryInput[]): ReadonlySet<SegmentId> {
+  const ids = new Set<SegmentId>();
+  for (const input of inputs) {
+    for (const segment of input.segments ?? []) {
+      if (segment.id !== undefined) ids.add(segmentId(segment.id));
+    }
+  }
+  return ids;
+}
+
+/** No two Segments in a construction-time `entries: EntryInput[]` list share one `SegmentId` — the
+ *  same rule `entries.add`/`entries.update` enforce against the live store (#212, ADR 0010). Checked
+ *  once over the whole list, so an authored duplicate never reaches the store in the first place. */
+function assertNoDuplicateSegmentIds(entries: readonly Entry[]): void {
+  const seen = new Set<SegmentId>();
+  for (const entry of entries) {
+    for (const segment of entry.segments) {
+      if (seen.has(segment.id)) throw new DuplicateSegmentIdError(segment.id);
+      seen.add(segment.id);
+    }
+  }
+}
+
 export function readEntries(inputs: readonly EntryInput[], context: EntryReadContext): readonly Entry[] {
-  return inputs.map((input) => readEntry(input, context));
+  const entries = inputs.map((input) => readEntry(input, context));
+  assertNoDuplicateSegmentIds(entries);
+  return entries;
 }
 
 /** Reads an `entries.update()` edit into `StoredEdit` (S2.3 §1.1) — every present core date field
@@ -135,7 +172,13 @@ export function readEdit(
   if (edit.start !== undefined) stored.start = toInstant(context.timeZone, edit.start);
   if (edit.end !== undefined) stored.end = toEndInstant(context.timeZone, edit.end, context.dateOnlyEnd);
   if (edit.segments !== undefined) {
-    stored.segments = edit.segments.map((segment) => readSegment(segment, context));
+    // Positional match (#212): the Segment at index `i` that names no `id` of its own keeps the id
+    // of the Entry's current Segment at that index — this is how `dataset.entries.update(id, {
+    // segments })` moves a Segment, per `CONTEXT.md`. An index beyond the Entry's current count has
+    // no counterpart to keep, so it mints a fresh id, the same as an added Segment on `entries.add`.
+    stored.segments = edit.segments.map((segment, index) =>
+      readSegment(segment, context, entry.segments[index]),
+    );
   } else if (writesEnvelope && sole !== undefined) {
     // The bar a one-Segment Entry draws is its envelope, so both move or the bar stays where the
     // envelope no longer is. The Segment keeps its id: this is the same stretch, moved.
