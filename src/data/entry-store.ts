@@ -320,7 +320,7 @@ export class EntryStore implements EntryStoreContract {
         this.#assertParentValid(id, entryId(input.parentId), 'entries.add');
       }
       const entry = readEntry(input, this.#context);
-      this.#assertSegmentIdsUnique(entry.segments, id);
+      this.#assertSegmentIdsUnique(entry.segments, id, 'entries.add');
       this.stageAdd(token, entry);
       return this.get(id)!;
     });
@@ -338,7 +338,9 @@ export class EntryStore implements EntryStoreContract {
       }
       const current = this.get(key)!;
       const stored = readEdit(edit, this.#context, current, this.#registry);
-      if (stored.segments !== undefined) this.#assertSegmentIdsUnique(stored.segments, key);
+      if (stored.segments !== undefined) {
+        this.#assertSegmentIdsUnique(stored.segments, key, 'entries.update');
+      }
       this.stageUpdate(token, key, stored);
       return this.get(key)!;
     });
@@ -395,7 +397,7 @@ export class EntryStore implements EntryStoreContract {
     const entry = this.get(id)!;
     const remaining = entry.segments.filter((segment) => !removedIds.has(segment.id));
     if (remaining.length === 0) {
-      this.#promoteChildrenOf(token, id, entry.parentId);
+      this.#reparentChildrenOf(token, id, entry.parentId);
       this.stageRemove(token, id);
       return;
     }
@@ -406,7 +408,7 @@ export class EntryStore implements EntryStoreContract {
    *  — before `id` is staged for removal (#212, fix plan R3). A grandchild's `parentId` already
    *  names its own (surviving) parent, so re-parenting the direct children carries the rest of the
    *  subtree with them; nothing below the direct children needs to move. */
-  #promoteChildrenOf(token: TxToken, id: EntryId, parentId: EntryId | undefined): void {
+  #reparentChildrenOf(token: TxToken, id: EntryId, parentId: EntryId | undefined): void {
     for (const child of this.childrenOf(id)) {
       const edit: StoredEdit = {};
       // Deliberate exactOptionalPropertyTypes escape, same posture as `source-strategy.ts`'s meta
@@ -453,16 +455,16 @@ export class EntryStore implements EntryStoreContract {
    *  itself, and not against any other Entry's Segments — including one this same transaction has
    *  already staged, from `#segmentOwnerInWriteSet` (finding 6, S1) rather than a second walk of every Entry.
    *  Checked before `stageAdd`/`stageUpdate`, so a duplicate stages nothing. */
-  #assertSegmentIdsUnique(segments: readonly Segment[], ownerId: EntryId): void {
+  #assertSegmentIdsUnique(segments: readonly Segment[], ownerId: EntryId, operation: string): void {
     const ownIds = new Set<SegmentId>();
     for (const segment of segments) {
-      if (ownIds.has(segment.id)) throw new DuplicateSegmentIdError(segment.id);
+      if (ownIds.has(segment.id)) throw new DuplicateSegmentIdError(segment.id, operation);
       ownIds.add(segment.id);
     }
     for (const id of ownIds) {
       const existingOwner = this.#segmentOwnerInWriteSet(id);
       if (existingOwner !== undefined && existingOwner !== ownerId) {
-        throw new DuplicateSegmentIdError(id);
+        throw new DuplicateSegmentIdError(id, operation);
       }
     }
   }

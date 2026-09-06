@@ -92,10 +92,12 @@ export class DuplicateEntryIdError extends FreeGanttError {
 /** `code: 'duplicate-segment-id'` — two Segments in the store share one `SegmentId`: authored twice
  *  in the same `segments` array, authored on two different Entries, or authored on construction
  *  (#212, ADR 0010). A `SegmentId` is the Selection's identity, so a duplicate is rejected the same
- *  way a duplicate `EntryId` is — before anything stages. */
+ *  way a duplicate `EntryId` is — before anything stages. `operation` names which of the three
+ *  throwing calls it was (`entries.add`, `entries.update`, or `construction`), the same way
+ *  `EntryNotFoundError`/`SegmentNotFoundError` name theirs. */
 export class DuplicateSegmentIdError extends FreeGanttError {
-  constructor(segmentId: SegmentId) {
-    super('duplicate-segment-id', `entries: a segment with id "${segmentId}" already exists`);
+  constructor(segmentId: SegmentId, operation: string) {
+    super('duplicate-segment-id', `${operation}: a segment with id "${segmentId}" already exists`);
     this.name = 'DuplicateSegmentIdError';
   }
 }

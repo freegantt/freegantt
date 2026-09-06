@@ -95,6 +95,12 @@ F3  update('a', { segments: [{ id: 'renamed', start, end }] })
 
 **Visible at the end:** a consumer moves a Segment, and it stays selected.
 
+**Caveat, recorded 2026-09-06.** "Rejected" above means every mutating call a consumer writes:
+`entries.add`, `entries.update`, construction. `dataset.replay(changeSet)` is the one door this
+plan never gated, and D-S2-14 says it stays that way on purpose — `replay` applies undo/redo rows
+with no validation. `CONTEXT.md` and `plans/02` now say so where they state the rejection, so a
+reader does not take "unrepresentable" as "unrepresentable on every path in".
+
 ### R2 — one owner computes the envelope
 
 Finding 4. Three bodies compute the envelope. Neither ingest nor a plain `update({ segments })` is one
@@ -143,7 +149,7 @@ Entry's descendants is neither documented nor tested, and `Delete` is now a defa
 Finding 6. Nine bodies across four layers ask this question. Six of them scan the whole dataset.
 
 - [x] `data/` owns and publishes the index. It is maintained on write, not rebuilt per read.
-- [x] `#groupSegmentsByOwner` uses it. So does `reveal` (finding 18) and the R5 work.
+- [x] `#groupSegmentsByOwner` uses it. So does `reveal` (finding 18). The R5 work has not started; it is not yet a consumer.
 - [x] Delete the re-derivations the index replaces. Count them in the commit message.
 
 **Visible at the end:** `git grep` for a full-dataset Segment scan returns the index and nothing else.
@@ -163,6 +169,14 @@ zero allocation.
 ### R6 — the public surface keeps its promises
 
 Findings 10, 11, 12, 13, and the spec sentence for 19.
+
+**Note, recorded 2026-09-06 (landed since this table's boxes were unticked, see R1's `d142557`).**
+A shift-range now steps over **Segments** in draw order, not over rows. The anchor is a
+`SegmentId`. `EntryGestureContext` gained `selectableSegmentsInRowOrder()`. `selectableEntriesOf`
+is **deleted**. `selectableEntriesInRowOrder()` survives, for the keyboard row step only.
+Re-read the "publish a way to select an Entry" box below against this before writing it: an
+Entry-level select is now the odd one out next to a Segment-ranging shift-click, not the norm the
+box's own wording assumes.
 
 - [ ] Publish a way to select an Entry. `GanttShell.#segmentIdsOfEntries` is already that function. Three test files hand-roll it today. Run the `naming` skill on the call site before choosing the name.
 - [ ] Export `SegmentNotFoundError`. A consumer cannot `instanceof` an error a public method throws, and every other error is exported.
@@ -216,6 +230,6 @@ Findings 10, 11, 12, 13, and the spec sentence for 19.
 | **15** — `GanttShell` changes for selection reasons too. Six of eight new members are the Segment↔Entry projection. | The review is honest that extracting them is a divergent-change cut, not a depth win. That is a real reason to think before cutting. File it with 14. |
 | **16** — `ContainerDomPorts` is flat; six of eight members are one collaborator's questions. | Same refactor as 14 and 15. Splitting the port bag before that refactor settles would be churn. |
 | **17** — two names for one concept: `segmentIdsAnItemStandsFor` against `FrameLayout.segmentIdsForItem`. The call site passes a `FrameBar`, not an `Item`. | A genuine naming finding. It is a rename, and it should ride with the 14/15/16 refactor that decides where the function lives. Run the `naming` skill then, not twice. |
-| **18** — `reveal()` scans every Segment and reports `EntryNotFoundError`. | The wrong error type is a real API bug, but the scan is what R4's index fixes. Fold the error-type fix into R4 if it is cheap there; otherwise file it. |
+| **18** — `reveal()` scans every Segment and reports `EntryNotFoundError`. | The scan is fixed: R4's index removed it. The error type is not. R4 declined the error-type fix, reasoning that `reveal`'s id is untyped at runtime (branding is erased), so the intended type cannot be known and `EntryNotFoundError` is as good a guess as any. That reasoning is unsound: `reveal` itself calls `entryId(id)` on the very same id — forging an `EntryId` brand onto a value that, by its own argument, may be a `SegmentId` — and then reports `code: 'entry-not-found'`. `plans/02` already promises a consumer "`reveal(segmentId)` … does not throw this". `reveal`'s parameter type is `EntryId \| SegmentId`, so the honest error names the union, not one half of it. Declined for R4; the fix belongs with R6's already-planned "export `SegmentNotFoundError`" item — a `SegmentNotFoundError` export gives `reveal` a union-honest error to throw. Filed as a follow-up, not implemented here. |
 
 Move any finding you decide not to fix into this table. Give the reason. Then §R7's delete is honest.
