@@ -149,8 +149,8 @@ renameBtn.addEventListener('click', () => {
   });
 });
 
-// `freegantt.deleteSelection` already swallows a refused `beforeChange` itself (core-commands.ts),
-// so this button needs no `attemptMutation` wrapper around it.
+// Why no `attemptMutation` wrapper here? A refused command is silent, not thrown (`plans/02` §3),
+// and §4.1 says a `beforeChange` veto leaves the Selection untouched. The contract is public.
 removeBtn.addEventListener('click', () => {
   gantt.commands.run('freegantt.deleteSelection');
 });
