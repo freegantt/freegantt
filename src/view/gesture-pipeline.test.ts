@@ -414,12 +414,30 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
     expect(reported).toEqual([
       {
         code: 'entry-move-cancelled',
-        message: 'gesture: a beforeEntryMove handler refused this move',
+        message: 'Nothing was saved. A beforeEntryMove handler refused this move.',
         severity: 'info',
         by: 'consumer',
         entryId: entryId('a'),
       },
     ]);
+  });
+
+  it('a vetoed drag reports the words the handler refused with (#210)', async () => {
+    const { deps, reported } = withRoster([entry('a', 100, 200)], {
+      emit: ((name: string, payload: { refuse(reason: string): false }) =>
+        name === 'beforeEntryMove'
+          ? payload.refuse('The drop is before mobilization.')
+          : undefined) as unknown as GesturePipelineDeps['emit'],
+    });
+    const pipeline = new GesturePipeline(deps);
+    const session = pipeline.session(entryId('a'), { kind: 'move' })!;
+
+    await session.commit(50);
+
+    expect(reported[0]?.reason).toBe('The drop is before mobilization.');
+    expect(reported[0]?.message).toBe(
+      'Nothing was saved. A beforeEntryMove handler refused this move and said: "The drop is before mobilization.".',
+    );
   });
 
   it('a vetoed resize names the resize event and its own code', async () => {
@@ -433,7 +451,7 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
     await session.commit(50);
 
     expect(reported.map((report) => report.code)).toEqual(['entry-resize-cancelled']);
-    expect(reported[0]?.message).toBe('gesture: a beforeEntryResize handler refused this resize');
+    expect(reported[0]?.message).toBe('Nothing was saved. A beforeEntryResize handler refused this resize.');
   });
 
   it('a refused commit reports nothing here — data/transaction.ts already raised it', async () => {

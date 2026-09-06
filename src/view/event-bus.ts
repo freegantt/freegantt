@@ -14,13 +14,14 @@ import type {
   FieldKey,
   GridColumn,
   Instant,
+  Refusable,
   SegmentId,
 } from '../model/index.js';
 import type { CollapseChange } from './collapse-state.js';
 
 export type { CollapseChange };
 
-export { EventBus } from '../data/event-bus.js';
+export { EventBus, RefusalNote } from '../data/event-bus.js';
 
 export interface GridWidthChange {
   readonly from: number;
@@ -118,12 +119,15 @@ export interface GanttEventMap {
   beforeCollapseChange: CollapseChange;
   collapseChange: CollapseChange;
   /** S3.3, D-S3-16. Sync or async veto (D-S3-17): returning `false` or a Promise that settles
-   *  `false` commits nothing. A returned Promise holds the commit-draft ghost until it settles. */
-  beforeEntryMove: EntryMove;
+   *  `false` commits nothing. A returned Promise holds the commit-draft ghost until it settles.
+   *  `Refusable` on the `before*` half only (#210): `return move.refuse('…')` says why, and the
+   *  words reach the `entry-move-cancelled` report core raises for the veto. */
+  beforeEntryMove: EntryMove & Refusable;
   entryMove: EntryMove;
   /** S3.4, D-S3-22. Sync or async veto (D-S3-17): returning `false` or a Promise that settles
-   *  `false` commits nothing. A returned Promise holds the commit-draft ghost until it settles. */
-  beforeEntryResize: EntryResize;
+   *  `false` commits nothing. A returned Promise holds the commit-draft ghost until it settles.
+   *  `Refusable` on the `before*` half only (#210), the same as `beforeEntryMove`. */
+  beforeEntryResize: EntryResize & Refusable;
   entryResize: EntryResize;
   /** S5.7, D-S5-18. Sync veto: returning `false` leaves `gridColumns` (and whatever was live-painted
    *  during the drag that proposed this change) untouched. */

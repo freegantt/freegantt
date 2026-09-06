@@ -7,7 +7,7 @@ import type { ChangeSetId, EntryId } from './ids.js';
 import type { Entry } from './entry.js';
 import type { FieldKey } from './field.js';
 import type { PluginId } from './plugin.js';
-import type { ErrorReport } from './error-report.js';
+import type { ErrorReport, Refusable } from './error-report.js';
 
 export type { CoreFieldKey, FieldKey } from './field.js';
 
@@ -58,11 +58,13 @@ export interface ChangeSet {
 }
 
 /** `beforeChange`/`change` share one payload (D-S2-5, D-S2-25): a `false` return from a `beforeChange`
- *  handler vetoes the whole changeset; `change` handler return values are ignored. Public event
+ *  handler vetoes the whole changeset; `change` handler return values are ignored. Only the
+ *  `before*` half is `Refusable` — `refuse(reason)` puts the vetoing handler's own words on the
+ *  report core raises for it (#210), and there is nothing to refuse once the change has landed. Public event
  *  vocabulary (plans/02 §3), so it lives in `model/` beside `ChangeSet` — the same reason `ChangeSet`
  *  itself moved here (§2.1's deviation note). */
 export interface DatasetEventMap {
-  beforeChange: { changeSet: ChangeSet };
+  beforeChange: Refusable & { changeSet: ChangeSet };
   change: { changeSet: ChangeSet };
   /** S5.12, D-S5-40: every refusal and every recovered fault a Dataset observes. Sync only, and no
    *  `before*` pair — a report states what already happened, so there is nothing to veto. The payload

@@ -20,6 +20,7 @@ import { buildCommitChangeSet, diffEdits } from './build-commit-change-set.js';
 import { raiseErrorOn } from './error-reporting.js';
 import type { EditRequest, StoredEdits } from './edit-extension.js';
 import type { EventBus } from './event-bus.js';
+import { RefusalNote } from './event-bus.js';
 import { promoteNewParents } from './hierarchy.js';
 import { rollUpFields } from './rollup.js';
 import type { FieldRegistry } from './fields/field-registry.js';
@@ -168,9 +169,12 @@ export function commitChangeSet(data: TransactionData, changeSet: ChangeSet): vo
   }
 
   data.notifying = true;
+  // #210: `refuse(reason)` is the one way a vetoing handler says why. The note collects the words;
+  // the bus still answers the same boolean it always did.
+  const note = new RefusalNote();
   let allowed: boolean;
   try {
-    allowed = data.bus.emit('beforeChange', { changeSet });
+    allowed = data.bus.emit('beforeChange', { changeSet, refuse: note.refuse });
   } catch (error) {
     endStores(data, token, undefined);
     throw error;
@@ -180,18 +184,22 @@ export function commitChangeSet(data: TransactionData, changeSet: ChangeSet): vo
 
   if (!allowed) {
     endStores(data, token, undefined);
-    const refusal = new MutationCancelledError(changeSet);
+    const refusal = new MutationCancelledError(changeSet, note.reason);
     // S5.12, D-S5-40: the refusal is reported as well as thrown. A `beforeChange` handler that ran
     // beside the vetoing one never learns the outcome, and `attemptMutation` swallows the throw — so
     // the throw alone reaches nobody who needs to show the user what happened.
     // `by` is `'consumer'`: the bus knows a registered handler returned `false`, never which one, and
     // core itself refuses nothing here. `severity` is `'info'` because a Refusal is the library
     // working correctly (D-S5-41). No `fallback`: this site printed nothing before and stays silent.
+    // `reason` is the handler's own words (#210): the message quotes them for a console, and the
+    // member carries them unframed for a consumer who wants to show only those. `changeSet` is not
+    // copied onto the report — `cause` already holds the error that carries it.
     raiseErrorOn(data.bus, {
       code: 'mutation-cancelled',
       message: refusal.message,
       severity: 'info',
       by: 'consumer',
+      ...(note.reason === undefined ? {} : { reason: note.reason }),
       cause: refusal,
     });
     throw refusal;
