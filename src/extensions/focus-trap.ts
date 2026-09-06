@@ -15,18 +15,23 @@ export interface FocusTrap {
 
 /** Moves focus to `root`'s first focusable descendant (or `root` itself, given a `tabindex="-1"`, if
  *  it has none), keeps Tab/Shift+Tab cycling inside it, and restores the element that was focused
- *  when this was activated. */
+ *  when this was activated.
+ *
+ *  Activation and deactivation focus with `preventScroll`, because neither is a user action: the
+ *  user opened a popup, and did not ask any pane to scroll. An unrequested scroll here reaches
+ *  `Popup`'s own `dismissOn: 'scroll'` and closes the popup that just opened (#228). Tab cycling
+ *  below keeps the default scroll, because there the user did ask for the next item. */
 export function activateFocusTrap(root: HTMLElement): FocusTrap {
   const previouslyFocused = root.ownerDocument.activeElement as HTMLElement | null;
 
   const focusFirst = (): void => {
     const [first] = focusableIn(root);
     if (first) {
-      first.focus();
+      first.focus({ preventScroll: true });
       return;
     }
     root.setAttribute('tabindex', '-1');
-    root.focus();
+    root.focus({ preventScroll: true });
   };
   focusFirst();
 
@@ -53,7 +58,7 @@ export function activateFocusTrap(root: HTMLElement): FocusTrap {
   return {
     deactivate(): void {
       root.removeEventListener('keydown', onKeydown);
-      previouslyFocused?.focus();
+      previouslyFocused?.focus({ preventScroll: true });
     },
   };
 }
