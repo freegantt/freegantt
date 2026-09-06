@@ -293,6 +293,16 @@ export function reconcileExtenderEnvelope(entry: Entry, stored: StoredEdit): Sto
   }
 
   const bothEdgesGiven = stored.start !== undefined && stored.end !== undefined;
+
+  // An inverted envelope names no span to fit into. `fitSegmentsToEnvelope` would clamp every
+  // Segment onto both edges at once, so every Segment of the Entry collapses onto the same inverted
+  // stretch and every authored extent goes, with no error raised. This seam refuses instead, which
+  // is what this write met before the seam computed answers at all. `'ambiguous'` already carries
+  // the guidance a plugin author needs here: write `segments`, not `start`/`end` alone.
+  if (bothEdgesGiven && stored.end! < stored.start!) {
+    throw new SegmentsOutOfSyncError(entry.id, 'ambiguous');
+  }
+
   const durationChanged =
     bothEdgesGiven && diffMs(stored.end!, stored.start!) !== diffMs(entry.end, entry.start);
 
