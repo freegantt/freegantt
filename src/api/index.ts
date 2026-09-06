@@ -179,6 +179,7 @@ export {
   InvalidPresetError,
   EntryNotFoundError,
   DuplicateEntryIdError,
+  DuplicateSegmentIdError,
   ParentCycleError,
   SegmentsOutOfSyncError,
   UnknownFieldError,

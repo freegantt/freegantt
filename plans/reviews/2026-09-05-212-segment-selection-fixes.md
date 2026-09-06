@@ -88,10 +88,10 @@ F3  update('a', { segments: [{ id: 'renamed', start, end }] })
     changeset rows= 0   segments now= ['sg1']      (the write vanished)
 ```
 
-- [ ] A duplicate `SegmentId` is rejected. Decide where: at ingest, at mint, or both. `DuplicateEntryIdError` is the precedent for the error name and the posture.
-- [ ] An `update` that supplies no `id` for a Segment no longer mints a new one. Decide the rule and write it down: positional match, or required id. `CONTEXT.md` names this call as how a consumer moves a Segment, so whatever the rule is, that entry must state it.
-- [ ] `segmentsEqual` compares `id`. An id-only write reaches the changeset and is undoable.
-- [ ] Tests at the `data/` layer for all three. Each test must fail on `c305e3a`.
+- [x] A duplicate `SegmentId` is rejected. Decide where: at ingest, at mint, or both. `DuplicateEntryIdError` is the precedent for the error name and the posture.
+- [x] An `update` that supplies no `id` for a Segment no longer mints a new one. Decide the rule and write it down: positional match, or required id. `CONTEXT.md` names this call as how a consumer moves a Segment, so whatever the rule is, that entry must state it.
+- [x] `segmentsEqual` compares `id`. An id-only write reaches the changeset and is undoable.
+- [x] Tests at the `data/` layer for all three. Each test must fail on `c305e3a`.
 
 **Visible at the end:** a consumer moves a Segment, and it stays selected.
 

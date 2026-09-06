@@ -23,6 +23,7 @@ import {
   entryId,
   segmentId,
   DuplicateEntryIdError,
+  DuplicateSegmentIdError,
   EntryNotFoundError,
   ParentCycleError,
   SegmentNotFoundError,
@@ -219,6 +220,7 @@ export class EntryStore implements EntryStoreContract {
         this.#assertParentValid(id, entryId(input.parentId), 'entries.add');
       }
       const entry = readEntry(input, this.#context);
+      this.#assertSegmentIdsUnique(entry.segments, id);
       this.stageAdd(token, entry);
       return this.get(id)!;
     });
@@ -235,7 +237,9 @@ export class EntryStore implements EntryStoreContract {
         this.#assertParentValid(key, entryId(edit.parentId), 'entries.update');
       }
       const current = this.get(key)!;
-      this.stageUpdate(token, key, readEdit(edit, this.#context, current, this.#registry));
+      const stored = readEdit(edit, this.#context, current, this.#registry);
+      if (stored.segments !== undefined) this.#assertSegmentIdsUnique(stored.segments, key);
+      this.stageUpdate(token, key, stored);
       return this.get(key)!;
     });
   }
@@ -329,6 +333,45 @@ export class EntryStore implements EntryStoreContract {
       if (current === id) throw new ParentCycleError(id);
       current = this.get(current)?.parentId;
     }
+  }
+
+  /** No two Segments in the store share one `SegmentId` (#212, ADR 0010): not within `segments`
+   *  itself, and not against any other Entry's Segments — including one this same transaction has
+   *  already staged, the same read-your-own-writes posture `#assertParentValid` takes. Checked
+   *  before `stageAdd`/`stageUpdate`, so a duplicate stages nothing. */
+  #assertSegmentIdsUnique(segments: readonly Segment[], ownerId: EntryId): void {
+    const ownIds = new Set<SegmentId>();
+    for (const segment of segments) {
+      if (ownIds.has(segment.id)) throw new DuplicateSegmentIdError(segment.id);
+      ownIds.add(segment.id);
+    }
+    for (const entry of this.#liveEntries()) {
+      if (entry.id === ownerId) continue;
+      for (const segment of entry.segments) {
+        if (ownIds.has(segment.id)) throw new DuplicateSegmentIdError(segment.id);
+      }
+    }
+  }
+
+  /** Every Entry as this transaction currently sees it: committed Entries with a staged edit
+   *  overlaid, staged removals dropped, staged adds included — the same view `get`/`has` give one id
+   *  at a time. Committed-only `all` cannot answer "does any other Entry already draw this Segment"
+   *  for a Segment this transaction added earlier, so validation reads this instead. */
+  #liveEntries(): readonly Entry[] {
+    if (!this.#writeSet) return this.all;
+    const writeSet = this.#writeSet;
+    const seen = new Set<EntryId>();
+    const result: Entry[] = [];
+    for (const id of this.#byId.keys()) {
+      if (writeSet.removed.has(id)) continue;
+      seen.add(id);
+      result.push(this.get(id)!);
+    }
+    for (const id of writeSet.added.keys()) {
+      if (seen.has(id)) continue;
+      result.push(this.get(id)!);
+    }
+    return result;
   }
 
   // ---- TxToken-gated: only data/transaction.ts holds a token (docs/02 §3.6) ----

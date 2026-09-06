@@ -508,6 +508,11 @@ export class DuplicateRowIdError extends FreeGanttError {
     readonly rowId: string;
 }
 
+// @public
+export class DuplicateSegmentIdError extends FreeGanttError {
+    constructor(segmentId: SegmentId);
+}
+
 // @public (undocumented)
 export interface Duration {
     // (undocumented)
