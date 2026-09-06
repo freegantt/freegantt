@@ -8,7 +8,7 @@ import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 import { DatasetState } from './dataset-state.js';
 import type { EntryInput, SegmentInput } from '../model/index.js';
-import { instant } from '../time/index.js';
+import { envelopeOfSegments, instant } from '../time/index.js';
 
 /** A calendar day in January 2026, far enough from the month edge that `day + length` never rolls
  *  over — the fixture only needs distinct, orderable dates, not real calendar arithmetic. The `Z`
@@ -101,6 +101,41 @@ describe('the envelope has one owner (#212, finding 4)', () => {
           state.entries.removeSegments([...dropped].map((i) => segments[i]!.id!));
           const remaining = segments.filter((_segment, i) => !dropped.has(i));
           assertEnvelopeMatches(state, 'a', remaining);
+        },
+      ),
+    );
+  });
+
+  // #212 R2 fix-plan review, finding B1 remainder: a roll-up-kind parent drawing exactly one Segment
+  // widens that Segment to its rolled-up span, but a parent drawing several had no such pairing and
+  // could publish an envelope its own Segments disagreed with. `widenSegmentsToEnvelope`
+  // (`data/rollup.ts`) closes this by widening whichever Segment draws each edge — the earliest
+  // `start`, the latest `end` — instead of picking one Segment to own the whole rewrite.
+  it('a several-Segment roll-up-kind parent still matches its own envelope after the Rollup moves it', () => {
+    fc.assert(
+      fc.property(
+        fc.array(segmentSpecArb, { minLength: 2, maxLength: 4 }),
+        segmentSpecArb,
+        (parentSpecs, childSpec) => {
+          const parentSegments = parentSpecs.map((spec, i) => segmentInput(`p${i}`, spec.day, spec.length));
+          const state = new DatasetState({
+            timeZone: 'UTC',
+            entries: [
+              { id: 'p', name: 'P', kind: 'group', segments: parentSegments },
+              {
+                id: 'c',
+                name: 'C',
+                parentId: 'p',
+                start: isoDay(childSpec.day),
+                end: isoDay(childSpec.day + childSpec.length),
+              },
+            ],
+          });
+
+          const parent = state.entries.get('p')!;
+          const envelope = envelopeOfSegments(parent.segments);
+          expect(parent.start).toBe(envelope.start);
+          expect(parent.end).toBe(envelope.end);
         },
       ),
     );

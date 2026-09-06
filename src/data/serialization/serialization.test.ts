@@ -67,6 +67,40 @@ describe('[S2-A2] toJSON / fromJSON', () => {
     expect(p1.end).toBe(rolledUp.end);
   });
 
+  // #212 R2 fix-plan review, finding B1 remainder: B1's own fix only paired a rolled-up envelope onto
+  // a group's Segment when it drew exactly one. A group drawing several had no such pairing, so
+  // `toJSON` could still publish a group whose Segments disagreed with its rolled-up `start`/`end` —
+  // this is that second case, closed by `widenSegmentsToEnvelope` (`data/rollup.ts`).
+  it('a rolled-up group drawing several Segments still matches them, and survives toJSON round-tripped', () => {
+    const dataset = new DatasetState({
+      timeZone: 'UTC',
+      entries: [
+        {
+          id: 'p1',
+          name: 'p1',
+          kind: 'group',
+          segments: [
+            { id: 'ps1', start: '2026-05-01T00:00:00.000Z', end: '2026-05-05T00:00:00.000Z' },
+            { id: 'ps2', start: '2026-05-10T00:00:00.000Z', end: '2026-05-15T00:00:00.000Z' },
+          ],
+        },
+        span('c1', { parentId: 'p1', start: '2026-01-01T00:00:00.000Z', end: '2026-01-10T00:00:00.000Z' }),
+      ],
+    });
+
+    const rolledUp = dataset.entries.get('p1')!;
+    expect(rolledUp.start).toBe(instant('2026-01-01T00:00:00.000Z'));
+    expect(rolledUp.end).toBe(instant('2026-01-10T00:00:00.000Z'));
+    // Neither authored Segment falls anywhere near the rolled-up span any more, so both clamp onto
+    // it: the earliest-starting one supplies the new `start`, the latest-ending one the new `end`.
+    expect(rolledUp.segments).toEqual([
+      { id: 'ps1', start: rolledUp.start, end: rolledUp.end },
+      { id: 'ps2', start: rolledUp.end, end: rolledUp.end },
+    ]);
+
+    roundTrip(dataset);
+  });
+
   it('writes every optional field when present, and omits them when absent', () => {
     const withAll = new DatasetState({
       timeZone: 'UTC',

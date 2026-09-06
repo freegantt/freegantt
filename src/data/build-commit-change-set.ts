@@ -19,6 +19,7 @@ import type {
 } from '../model/index.js';
 import { diffEdit, foldChangeSet } from './change-set.js';
 import type { EditExtender, EntryEdits } from './edit-extension.js';
+import { reconcileEnvelope } from './entry-reader.js';
 import { mergeEntryEdits, overlayStoredEdit, proposedKeysOf } from './fields/field-access.js';
 import type { FieldRegistry } from './fields/field-registry.js';
 import { promoteNewParents } from './hierarchy.js';
@@ -71,6 +72,25 @@ function fieldsWrittenBy(edit: StoredEdit): ReadonlySet<string> {
   return keys;
 }
 
+/**
+ * The envelope invariant binds a plugin's cascade the same way it binds a consumer's edit (#212 R2
+ * fix-plan review): `reconcileEnvelope` (`entry-reader.ts`) is the one function both call, so an
+ * `EditExtender` that writes `start`/`end` straight through gets it read back off the Entry's
+ * Segments — or paired onto its one Segment — exactly as `entries.update()` does, instead of
+ * reaching `diffEdit` unreconciled and letting `toJSON` publish the disagreement.
+ */
+function reconcileExtenderEnvelopes(entries: ReadonlyMap<EntryId, Entry>, edits: EntryEdits): EntryEdits {
+  let changed = false;
+  const reconciled = new Map<EntryId, StoredEdit>();
+  for (const [id, edit] of edits) {
+    const entry = entries.get(id);
+    const next = entry ? reconcileEnvelope(entry, edit) : edit;
+    if (next !== edit) changed = true;
+    reconciled.set(id, next);
+  }
+  return changed ? reconciled : edits;
+}
+
 function guardExtensionHookDoesNotOverwriteBody(proposed: EntryEdits, extenderEdits: EntryEdits): void {
   if (!isDevMode()) return;
   for (const [id, edit] of extenderEdits) {
@@ -110,7 +130,7 @@ export function buildCommitChangeSet(
 
   const bodyUpdated = diffEdits(byId, proposed, data.fields, data.fieldContext);
 
-  const extenderEdits = data.editExtender({ entries: byId, proposed });
+  const extenderEdits = reconcileExtenderEnvelopes(byId, data.editExtender({ entries: byId, proposed }));
   guardExtensionHookDoesNotOverwriteBody(proposed, extenderEdits);
   const extenderUpdated = diffEdits(byId, extenderEdits, data.fields, data.fieldContext);
 

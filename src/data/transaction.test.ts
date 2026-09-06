@@ -5,6 +5,7 @@ import { fieldRowsOf } from './change-set.js';
 import {
   MutationCancelledError,
   MutationDuringNotificationError,
+  SegmentsOutOfSyncError,
   entryId,
   segmentId,
 } from '../model/index.js';
@@ -621,5 +622,64 @@ describe('runTransaction', () => {
     expect(parent.kind).toBe('group');
     expect(parent.start).toBe(toInstant('UTC', '2026-03-01'));
     expect(parent.end).toBe(toEndInstant('UTC', '2026-03-05', 'inclusive'));
+  });
+});
+
+// #212 R2 fix-plan review, finding B1 remainder: the envelope invariant binds an `EditExtender`'s
+// `StoredEdit` exactly as it binds `entries.update()` — a plugin cascade is not a second, looser door
+// onto `start`/`end`.
+describe('the EditExtender seam owes the envelope invariant too (#212 R2 fix-plan review)', () => {
+  it("pairs a plugin's direct start/end write onto the Entry's one Segment, the same as entries.update()", () => {
+    const state = new DatasetState({
+      entries: [{ id: 't1', name: 't1', start: '2026-01-01', end: '2026-01-02' }],
+      timeZone: 'UTC',
+      editExtender: (): EntryEdits =>
+        new Map<ReturnType<typeof entryId>, StoredEdit>([
+          [
+            entryId('t1'),
+            {
+              start: toInstant('UTC', '2026-02-01'),
+              end: toEndInstant('UTC', '2026-02-05', 'inclusive'),
+            },
+          ],
+        ]),
+    });
+
+    runTransaction(state, (token) => state.entries.stageUpdate(token, entryId('t1'), { name: 'a' }), 'user');
+
+    const entry = state.entries.get(entryId('t1'))!;
+    expect(entry.start).toBe(toInstant('UTC', '2026-02-01'));
+    expect(entry.end).toBe(toEndInstant('UTC', '2026-02-05', 'inclusive'));
+    expect(entry.segments).toEqual([{ id: entry.segments[0]!.id, start: entry.start, end: entry.end }]);
+  });
+
+  it('refuses a plugin write of start alone against a several-Segment Entry, same as entries.update()', () => {
+    const state = new DatasetState({
+      entries: [
+        {
+          id: 't1',
+          name: 't1',
+          start: '2026-01-01',
+          end: '2026-01-10',
+          segments: [
+            { id: 'sg1', start: '2026-01-01', end: '2026-01-05' },
+            { id: 'sg2', start: '2026-01-05', end: '2026-01-10' },
+          ],
+        },
+      ],
+      timeZone: 'UTC',
+      editExtender: (): EntryEdits =>
+        new Map<ReturnType<typeof entryId>, StoredEdit>([
+          [entryId('t1'), { start: toInstant('UTC', '2026-02-01') }],
+        ]),
+    });
+
+    expect(() =>
+      runTransaction(
+        state,
+        (token) => state.entries.stageUpdate(token, entryId('t1'), { name: 'a' }),
+        'user',
+      ),
+    ).toThrow(SegmentsOutOfSyncError);
   });
 });
