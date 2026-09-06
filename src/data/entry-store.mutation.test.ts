@@ -243,6 +243,61 @@ describe('entries.removeSegments (#212, ADR 0010)', () => {
     expect(restored?.segments.map((segment) => segment.id)).toEqual([segmentId('sole')]);
   });
 
+  describe("a last-Segment removal never takes the removed Entry's descendants with it (#212, R3)", () => {
+    it('promotes a direct child to the root when the removed Entry had no parent itself', () => {
+      const state = dataset([
+        { id: 'ps', start: 0, end: 10, segments: [{ id: 'sole', start: 0, end: 10 }] },
+        { id: 'child', parentId: 'ps' },
+      ]);
+      const seen = changeSets(state);
+
+      state.entries.removeSegments(['sole']);
+
+      expect(state.entries.has('ps')).toBe(false);
+      expect(state.entries.has('child')).toBe(true);
+      expect(state.entries.get('child')?.parentId).toBeUndefined();
+      expect(seen).toHaveLength(1);
+      expect(seen[0]?.updated).toContainEqual(
+        expect.objectContaining({
+          id: entryId('child'),
+          field: 'parentId',
+          from: entryId('ps'),
+          to: undefined,
+        }),
+      );
+    });
+
+    it("promotes a direct child to the removed Entry's own parent, leaving the rest of the subtree in place", () => {
+      const state = dataset([
+        { id: 'gp' },
+        { id: 'ps', parentId: 'gp', start: 0, end: 10, segments: [{ id: 'sole', start: 0, end: 10 }] },
+        { id: 'child', parentId: 'ps' },
+        { id: 'grandchild', parentId: 'child' },
+      ]);
+
+      state.entries.removeSegments(['sole']);
+
+      expect(state.entries.has('ps')).toBe(false);
+      expect(state.entries.get('child')?.parentId).toBe(entryId('gp'));
+      expect(state.entries.get('grandchild')?.parentId).toBe(entryId('child'));
+      expect(state.entries.size).toBe(3);
+    });
+
+    it("undo restores the removed Entry, its Segment id, and the promoted child's original parentId", () => {
+      const state = dataset([
+        { id: 'ps', start: 0, end: 10, segments: [{ id: 'sole', start: 0, end: 10 }] },
+        { id: 'child', parentId: 'ps' },
+      ]);
+
+      state.entries.removeSegments(['sole']);
+      state.undo();
+
+      expect(state.entries.has('ps')).toBe(true);
+      expect(state.entries.get('ps')?.segments.map((segment) => segment.id)).toEqual([segmentId('sole')]);
+      expect(state.entries.get('child')?.parentId).toBe(entryId('ps'));
+    });
+  });
+
   it('an unknown segment id throws SegmentNotFoundError, and stages nothing', () => {
     const state = dataset([{ id: 't1', start: 0, end: 20, segments: [{ id: 'a1', start: 0, end: 20 }] }]);
     const seen = changeSets(state);

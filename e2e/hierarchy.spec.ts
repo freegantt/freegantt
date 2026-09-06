@@ -443,3 +443,23 @@ test('ArrowRight expands and ArrowLeft collapses; focus stays on the Gantt', asy
   await expect(twisty).toHaveAttribute('aria-expanded', 'false');
   await expect(ganttRoot).toBeFocused();
 });
+
+test("Delete on a parent's last Segment removes the parent alone; its child survives and reparents (#212, fix plan R3)", async ({
+  page,
+}) => {
+  await gotoHierarchy(page);
+
+  // `task-alpha-1` draws one Segment (its whole span) and owns `deep-leaf` as a child (fixtures/
+  // hierarchy-dataset.ts). Deleting it must not take `deep-leaf` down with it (#212, finding 5).
+  const before = await page.evaluate(() => String(window.__dataset.entries.get('deep-leaf')?.parentId));
+  expect(before).toBe('task-alpha-1');
+
+  const bar = page.locator('#gantt .fg-bar[data-item-id^="task-alpha-1:"]').first();
+  await bar.click();
+  await page.keyboard.press('Delete');
+
+  await expect.poll(() => page.evaluate(() => window.__dataset.entries.has('task-alpha-1'))).toBe(false);
+  await expect(page.locator('#gantt .fg-row[data-entry-id="deep-leaf"]')).toBeVisible();
+  const after = await page.evaluate(() => String(window.__dataset.entries.get('deep-leaf')?.parentId));
+  expect(after).toBe('phase-a');
+});
