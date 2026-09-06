@@ -70,6 +70,7 @@ export type {
 export {
   FreeGanttError,
   UnsupportedUnitError,
+  InvalidSnapIncrementError,
   ContainerNotFoundError,
   InvalidInstantError,
   UnknownPresetError,

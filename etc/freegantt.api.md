@@ -1261,7 +1261,19 @@ export class InvalidReplayOriginError extends FreeGanttError {
 }
 
 // @public
+export class InvalidSnapIncrementError extends FreeGanttError {
+    constructor(unit: TimeUnit, increment: number);
+    // (undocumented)
+    readonly increment: number;
+    // (undocumented)
+    readonly unit: TimeUnit;
+}
+
+// @public
 export function invertChangeSet(changeSet: ChangeSet): ChangeSet;
+
+// @public
+export function isTimeUnit(value: string): value is TimeUnit;
 
 // @public (undocumented)
 export interface Item {

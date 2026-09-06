@@ -159,6 +159,13 @@ const UNITS: Record<TimeUnit, UnitOps> = Object.freeze({
 
 export const SUPPORTED_TIME_UNITS = Object.freeze(new Set<TimeUnit>(Object.keys(UNITS) as TimeUnit[]));
 
+/** Call: `isTimeUnit(value)` — true when `value` names a unit `time/` can step by. The public,
+ *  narrowing form of `SUPPORTED_TIME_UNITS`, for a consumer validating a raw string (a `<select>`'s
+ *  value, a saved preference) before it reaches `gantt.snap` or a `ViewPreset` (#201). */
+export function isTimeUnit(value: string): value is TimeUnit {
+  return SUPPORTED_TIME_UNITS.has(value as TimeUnit);
+}
+
 function unsupportedUnit(unit: TimeUnit): UnsupportedUnitError {
   return new UnsupportedUnitError(
     `time: unsupported unit "${unit}" — only ${[...SUPPORTED_TIME_UNITS].join(', ')} step today`,

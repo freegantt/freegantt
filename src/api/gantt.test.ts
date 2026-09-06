@@ -10,6 +10,8 @@ import {
   ScrollModel,
   UnknownCommandError,
   UnknownGridColumnError,
+  UnsupportedUnitError,
+  InvalidSnapIncrementError,
   TimeScaleModel,
   MS,
   entryId,
@@ -24,6 +26,7 @@ import type {
   GridColumnInput,
   PluginContext,
   SegmentId,
+  TimeUnit,
 } from './index.js';
 import { sampleEntries } from '../../fixtures/sample-dataset.js';
 import { instant } from '../time/index.js';
@@ -389,6 +392,47 @@ describe('Gantt.snap (D-S3-24, #195)', () => {
     gantt.snap = undefined;
 
     expect(gantt.snap).toBe('tick');
+
+    gantt.destroy();
+  });
+
+  // #201: a bad unit or a non-advancing increment used to store raw and throw two gestures later,
+  // inside the drag that first called snapInstant/stepsBetween. The setter now catches both at
+  // assignment.
+  it('rejects a unit outside the supported set, and leaves the prior snap in place', () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
+    const gantt = new Gantt({ container, dataset, snap: 'none' });
+
+    expect(() => {
+      gantt.snap = { unit: 'fortnight' as TimeUnit, increment: 1 };
+    }).toThrow(UnsupportedUnitError);
+    expect(gantt.snap).toBe('none');
+
+    gantt.destroy();
+  });
+
+  it.each([0, -1, 1.5])('rejects a non-positive-integer increment (%s)', (increment) => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
+    const gantt = new Gantt({ container, dataset, snap: 'none' });
+
+    expect(() => {
+      gantt.snap = { unit: 'day', increment };
+    }).toThrow(InvalidSnapIncrementError);
+    expect(gantt.snap).toBe('none');
+
+    gantt.destroy();
+  });
+
+  it('accepts a positive-integer increment on a supported unit', () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
+    const gantt = new Gantt({ container, dataset });
+
+    gantt.snap = { unit: 'day', increment: 2 };
+
+    expect(gantt.snap).toEqual({ unit: 'day', increment: 2 });
 
     gantt.destroy();
   });

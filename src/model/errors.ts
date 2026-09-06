@@ -5,6 +5,7 @@
 import type { EntryId, SegmentId } from './ids.js';
 import type { ChangeSet } from './change-set.js';
 import type { PluginId } from './plugin.js';
+import type { TimeUnit } from './time.js';
 
 export class FreeGanttError extends Error {
   readonly code: string;
@@ -21,6 +22,28 @@ export class UnsupportedUnitError extends FreeGanttError {
   constructor(message: string) {
     super('unsupported-unit', message);
     this.name = 'UnsupportedUnitError';
+  }
+}
+
+/** `code: 'invalid-snap-increment'` — a snap `{ unit, increment }` whose `increment` is not a
+ *  positive integer. `time/`'s stepping loops (`snapInstant`, `stepsBetween`) walk forward or
+ *  backward one `increment` at a time until they pass the target; a `0` never advances and a negative
+ *  value walks away from it, so either one loops forever (#201). Thrown by `Gantt.snap`'s setter, so
+ *  the mistake names the assignment rather than the drag two gestures later, and again inside
+ *  `time/` itself, because a custom `ViewPreset`'s own tick reaches the same loop without passing
+ *  through that setter. */
+export class InvalidSnapIncrementError extends FreeGanttError {
+  readonly unit: TimeUnit;
+  readonly increment: number;
+
+  constructor(unit: TimeUnit, increment: number) {
+    super(
+      'invalid-snap-increment',
+      `snap: increment must be a positive integer, got ${increment} for unit "${unit}"`,
+    );
+    this.name = 'InvalidSnapIncrementError';
+    this.unit = unit;
+    this.increment = increment;
   }
 }
 
