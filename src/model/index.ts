@@ -22,6 +22,7 @@ export type {
   EntryInput,
   EntryEdit,
   StoredEdit,
+  StoredEdits,
   EntryEdits,
   EditRequest,
   EditExtender,

@@ -7,7 +7,15 @@
 
 import { cursorLabelForX, draftForMove, draftForResize, previewOffsets } from '../layout/index.js';
 import type { ItemPreview, SnapSetting, SnapUnit, TimeScale, ViewPreset } from '../layout/index.js';
-import type { Entry, EntryEdits, EntryId, ErrorCode, ItemId, RaiseError, SegmentId } from '../model/index.js';
+import type {
+  Entry,
+  EntryId,
+  ErrorCode,
+  ItemId,
+  RaiseError,
+  SegmentId,
+  StoredEdits,
+} from '../model/index.js';
 import { itemId } from '../model/index.js';
 import { identityExtender, type EditExtender } from '../data/edit-extension.js';
 import { reconcileExtenderEditsForPreview } from '../data/entry-reader.js';
@@ -36,7 +44,7 @@ export interface GesturePipelineDeps {
   /** One resolution (I14, D-S3-9) — `GanttShell#canGesture`, the same answer the pointer-selection
    *  path and the affordance ids resolve through, never re-derived here. */
   canGesture(capability: keyof Interactions, id: EntryId): boolean;
-  commitEntryEdits(edits: EntryEdits): boolean;
+  commitEntryEdits(edits: StoredEdits): boolean;
   emit: EventBus<GanttEventMap, AsyncCancelableEvent>['emit'];
   /** S5.12, D-S5-40: a vetoed gesture still draws nothing and still throws nothing, and now it also
    *  reports. `plans/02` §3's "a vetoed gesture is silent" stays true of the *UI*. */
@@ -79,7 +87,7 @@ export class GesturePipeline {
   #deps: GesturePipelineDeps;
   /** D-S3-18: the most recent in-flight draft a drag has proposed, applied on the next animation
    *  frame rather than synchronously on every pointermove — one paint per frame, not one per event. */
-  #scheduledDraft: EntryEdits | undefined;
+  #scheduledDraft: StoredEdits | undefined;
   #previewFrame: FrameScheduler;
   /** D-S3-17: set for the duration of an unsettled `beforeEntryMove`/`beforeEntryResize` Promise;
    *  `session()` refuses to arm a new gesture while this is defined (the arm lock). Paint uses the
@@ -186,7 +194,7 @@ export class GesturePipeline {
     dxPx: number,
     options: DraftOptions | undefined,
     selectedSegmentIds: ReadonlySet<SegmentId>,
-  ): EntryEdits {
+  ): StoredEdits {
     const snap = this.#resolveSnap(options?.suspendSnap);
     const base = {
       zone: this.#deps.timeZone(),
@@ -207,7 +215,7 @@ export class GesturePipeline {
    *  `commitEntryEdits` does the actual write and folds a sync veto and a `MutationCancelledError`
    *  into one `false`. A `before*` handler that returns a Promise instead of resolving synchronously
    *  holds the **commit draft** as preview and marks the bars `pending` until it settles (D-S3-17). */
-  #commit(gesture: EntryGesture, draft: EntryEdits): Promise<boolean> {
+  #commit(gesture: EntryGesture, draft: StoredEdits): Promise<boolean> {
     this.#scheduledCursorX = undefined;
     if (draft.size === 0) return Promise.resolve(false);
     const spans = [...draft].flatMap(([id, edit]) =>
@@ -254,7 +262,7 @@ export class GesturePipeline {
    *  settle — `false` clears the hold and writes nothing. */
   #settle(
     result: boolean | Promise<boolean>,
-    draft: EntryEdits,
+    draft: StoredEdits,
     itemIds: readonly ItemId[],
     refusal: GestureRefusal,
     finish: () => boolean,
@@ -299,7 +307,7 @@ export class GesturePipeline {
    *  the last unsnapped pointer preview, not the stored origin) and arm-locks `session()` until
    *  `result` settles. Paint is one immediate `applyGestureState`, not a rAF-cleared preview plus a
    *  separate pending write. */
-  #awaitVeto(result: Promise<boolean>, itemIds: readonly ItemId[], draft: EntryEdits): Promise<boolean> {
+  #awaitVeto(result: Promise<boolean>, itemIds: readonly ItemId[], draft: StoredEdits): Promise<boolean> {
     this.#heldItemIds = itemIds;
     this.#scheduledDraft = draft;
     this.#previewFrame.flush();
@@ -317,7 +325,7 @@ export class GesturePipeline {
 
   /** D-S3-18: coalesces on the pipeline's own rAF — a drag's every pointermove replaces the scheduled
    *  draft, but only the last one before the next frame is ever painted. */
-  #preview(draft: EntryEdits | undefined, cursorX?: number): void {
+  #preview(draft: StoredEdits | undefined, cursorX?: number): void {
     this.#scheduledDraft = draft;
     this.#scheduledCursorX = draft === undefined ? undefined : cursorX;
     this.#previewFrame.request();
@@ -337,7 +345,7 @@ export class GesturePipeline {
     };
   }
 
-  #computePreview(draft: EntryEdits | undefined): readonly ItemPreview[] | undefined {
+  #computePreview(draft: StoredEdits | undefined): readonly ItemPreview[] | undefined {
     if (!draft || draft.size === 0) return undefined;
     const extra = this.#extraFor(draft);
     const entries: Entry[] = [];
@@ -375,7 +383,7 @@ export class GesturePipeline {
    *  Segment envelope-only cascade owes is a refusal (`SegmentsOutOfSyncError`, D-S5-44) — so this
    *  calls `reconcileExtenderEditsForPreview`, not `reconcileExtenderEdits`: a refused edit paints no
    *  ghost for that Entry this frame, and the commit path still throws the same edit for real. */
-  #extraFor(draft: EntryEdits): EntryEdits {
+  #extraFor(draft: StoredEdits): StoredEdits {
     const entries = this.#deps.allEntries?.() ?? new Map<EntryId, Entry>();
     const raw = (this.#deps.extend ?? identityExtender)({
       entries,

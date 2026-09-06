@@ -31,7 +31,7 @@ import {
 } from '../model/index.js';
 import type { EntryStore as EntryStoreContract } from '../model/index.js';
 import { computed, signal } from './reactivity.js';
-import type { EntryEdits, StoredEdit } from './edit-extension.js';
+import type { StoredEdit, StoredEdits } from './edit-extension.js';
 import type { ChangeSet, FieldUpdated, UpdatedRow } from '../model/index.js';
 import { readEdit, readEntry } from './entry-reader.js';
 import type { EntryReadContext } from './entry-reader.js';
@@ -546,7 +546,7 @@ export class EntryStore implements EntryStoreContract {
     return result;
   }
 
-  pendingEdits(): EntryEdits {
+  pendingEdits(): StoredEdits {
     return this.#writeSet?.edits ?? new Map();
   }
 

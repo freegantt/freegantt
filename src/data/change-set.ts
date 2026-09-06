@@ -39,8 +39,9 @@ function pushRow(
 /**
  * Every `FieldUpdated` row an `edit` produces against the entry's current stored values, per D-S2-7's
  * equality table — a field set back to its original value is not recorded. Shared by both producers of
- * an edit in one transaction: the body's own `proposed` edits, and an extender's returned `EntryEdits`.
- * `edit` is `StoredEdit` — every field already carries a storage-shaped value. An `id` absent from
+ * an edit in one transaction: the body's own `proposed` edits, and the extension hook's own
+ * `StoredEdits`. `edit` is `StoredEdit` — every field already carries a storage-shaped value. An `id`
+ * absent from
  * `entries` yields no rows — nothing to diff against.
  *
  * A declared-key write (`{ cost: 500 }`) emits one row keyed `cost`, never a `meta` row. A whole-`meta`
