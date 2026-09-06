@@ -58,7 +58,10 @@ function readInstant(value: string): Instant {
   try {
     return instant(value);
   } catch {
-    throw new InvalidInstantError(`fromJSON(): "${value}" is not a stored date this library can read`);
+    throw new InvalidInstantError(
+      `fromJSON: the stored date "${value}" is not one this library can read. Export the document again from the build that wrote it.`,
+      value,
+    );
   }
 }
 

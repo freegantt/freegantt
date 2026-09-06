@@ -186,7 +186,7 @@ export class EntryStore implements EntryStoreContract {
     field: K,
   ): FieldValue<Record<string, unknown>, K> | undefined {
     const key = String(field);
-    if (!this.#registry.has(key)) throw new UnknownFieldError(key);
+    if (!this.#registry.has(key)) throw new UnknownFieldError(key, 'entries.fieldValue');
     const entry = this.get(id);
     if (!entry) throw new EntryNotFoundError(entryId(id), 'entries.fieldValue');
     return this.#fieldContext.read(entry, field) as FieldValue<Record<string, unknown>, K> | undefined;
@@ -337,7 +337,7 @@ export class EntryStore implements EntryStoreContract {
       if (input.parentId !== undefined) {
         this.#assertParentValid(id, entryId(input.parentId), 'entries.add');
       }
-      const entry = readEntry(input, this.#context);
+      const entry = readEntry(input, this.#context, 'entries.add');
       this.#assertSegmentIdsUnique(entry.segments, id, 'entries.add');
       this.stageAdd(token, entry);
       return this.get(id)!;
@@ -349,13 +349,13 @@ export class EntryStore implements EntryStoreContract {
       const key = entryId(id);
       if (!this.has(key)) throw new EntryNotFoundError(key, 'entries.update');
       for (const field of Object.keys(edit)) {
-        if (!this.#registry.has(field)) throw new UnknownFieldError(field);
+        if (!this.#registry.has(field)) throw new UnknownFieldError(field, 'entries.update');
       }
       if (edit.parentId !== undefined) {
         this.#assertParentValid(key, entryId(edit.parentId), 'entries.update');
       }
       const current = this.get(key)!;
-      const stored = readEdit(edit, this.#context, current, this.#registry);
+      const stored = readEdit(edit, this.#context, current, this.#registry, 'entries.update');
       if (stored.segments !== undefined) {
         this.#assertSegmentIdsUnique(stored.segments, key, 'entries.update');
       }

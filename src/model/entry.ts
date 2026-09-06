@@ -84,18 +84,24 @@ export type EntryEdit<
   TFields extends Record<string, unknown> = Record<string, unknown>,
 > = Partial<Omit<EntryInput<TMeta>, 'id'>> & Partial<TFields>;
 
-/** What the store already holds: a storage-shaped edit, with every field read through `time/` (an
- *  `Instant`, not a loose `InstantInput`). Two callers meet it, and they meet it differently
- *  (`plans/02`, two callers two surfaces). An **app author** reads one and never builds one — write
- *  an `EntryEdit`, the same object `entries.update()` takes. A **plugin author** builds them: an
- *  `moveEntryTo` builds the one case that is easy to get wrong. Core builds these on the way in — the
- *  extension hook's writes included (#209) — and `diffEdit` compares one against `entries`.
+/** The **read** shape: an edit core has already read, with every date an `Instant` rather than a loose
+ *  `InstantInput`. `EntryEdit` above is the **write** shape (`plans/02`, one write shape). Nobody
+ *  outside core builds a `StoredEdit`, and two callers read one differently (`plans/02`, two callers
+ *  two surfaces):
  *
- *  `EntryEdit` above is the input-shaped edit a caller writes (`plans/02`, one write shape). Every
- *  `StoredEdit` is a legal `EntryEdit` — an `Instant` is an `InstantInput` — and the reverse is not,
- *  which is what makes a missing normalization a compile error rather than a wrong write. This type sits
- *  in `model/` (moved from `data/edit-extension.ts` in S3.3, D-S3-4) so `layout/gesture-draft.ts` can
- *  build one without reaching into `data/`.
+ *  - An **app author** never meets it at all. They write an `EntryEdit` to `entries.update()`.
+ *  - A **plugin author** reads one off `EditRequest.proposed`, and writes `EntryEdit`s back (#209).
+ *    `moveEntryTo` builds one of those for them (D-S5-50).
+ *
+ *  Core builds these on the way in — the extension hook's writes included, at one door
+ *  (`DatasetState.extraEditsFor` → `readEdits`) — and `diffEdit` compares one against `entries`.
+ *
+ *  Every `StoredEdit` is a legal `EntryEdit` — an `Instant` is an `InstantInput` — and the reverse is
+ *  not. That asymmetry is the enforcement: a missing normalization is a compile error rather than a
+ *  wrong write, and no `as` belongs on the hook boundary. This type sits in `model/` (moved from
+ *  `data/edit-extension.ts` in S3.3, D-S3-4) so `layout/gesture-draft.ts` can build one without
+ *  reaching into `data/`. It is public surface (#209 ruling): a plugin author who factors a helper
+ *  over `request.proposed` has to name it.
  *
  *  `proposedKeys` carries the Field keys the caller proposed. It is part of the edit, not a side
  *  channel — spread keeps it, and overlay never copies it onto an Entry. */
