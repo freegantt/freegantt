@@ -100,7 +100,14 @@ export type {
 // against `Gantt` names the bound forms; code parameterizing over its own Gantt type names these —
 // the same `*Of` pairing `api/command.ts`'s and `api/plugin.ts`'s file headers describe.
 export type { GanttPluginOf, PluginContextOf, PluginContextParts } from './plugin.js';
-export type { CommandOf, CommandContextOf, CommandRegistryOf, KeyBindingOf } from './command.js';
+export type {
+  BuiltInCommandId,
+  CommandId,
+  CommandOf,
+  CommandContextOf,
+  CommandRegistryOf,
+  KeyBindingOf,
+} from './command.js';
 // One vocabulary for "what did this land on", shared by `CommandTarget.kind` and `DomTarget.kind`
 // (review A3).
 export type { TargetKind } from '../model/index.js';

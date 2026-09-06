@@ -163,15 +163,16 @@ function input(container: HTMLElement): HTMLInputElement {
 }
 
 /** The refusal notice a cell mounts when it offers an editor that cannot open here (review SP1).
- *  It carries the same `.fg-cell-editor[data-state="invalid"]` a refused commit does, plus the
- *  machine-readable `data-reason` whose text the user reads. #160, D-S5-47 put `data-reason` on a
- *  refused *commit*'s own wrapper too, and that wrapper does hold a control — `:not(:has(...))` is
- *  what still tells a notice from an invalid editor, the same distinction `view/styles.ts` draws. */
+ *  It carries its own class and the machine-readable `data-reason` whose text the user reads. The
+ *  class alone tells a notice from a refused *commit*'s own editor, which also carries `data-reason`
+ *  (#160, D-S5-47) — the same one selector `view/styles.ts` writes (#231 F1). */
 function refusal(container: HTMLElement): HTMLElement | null {
-  return container.querySelector<HTMLElement>(
-    '.fg-cell-editor[data-state="invalid"][data-reason]:not(:has(.fg-cell-editor-control))',
-  );
+  return container.querySelector<HTMLElement>(NOTICE_SELECTOR);
 }
+
+/** The selector `view/styles.ts` ships for the notice, and the one this plugin documents. It is one
+ *  string here because one test asserts it reaches no live editor. */
+const NOTICE_SELECTOR = '.fg-cell-notice[data-reason]';
 
 function enter(el: HTMLElement): void {
   el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
@@ -419,12 +420,42 @@ describe('inlineEditing() (S5.8, D-S5-19/D-S5-20)', () => {
     const notice = refusal(container)!;
     // It sits over the cell, so it must never swallow the click that retries the cell. #171 moved
     // that rule into the stylesheet, so `styles.test.ts` asserts the declaration and this asserts
-    // the two attributes the rule keys on.
-    expect(notice.dataset['state']).toBe('invalid');
+    // what the rule keys on.
+    expect(notice.className).toBe('fg-cell-notice');
     expect(notice.dataset['reason']).toBe('no-parse-value');
 
     cell.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, cancelable: true }));
     expect(refusal(container)).toBeNull();
+
+    gantt.destroy();
+    container.remove();
+  });
+
+  // #231 F1: the notice's selector is published (`plans/02` §S5.8 Parts), so a consumer writes it by
+  // hand. While a notice and a refused editor shared one class, that hand-written selector matched
+  // the live editor too, and the notice's own `pointer-events: none` put the editor's control and its
+  // discard button out of reach. Two classes are what stop it, so this asserts the two never cross.
+  it('the published notice selector reaches no live editor, and the editor selector reaches no notice', () => {
+    const { container, gantt, dataset } = makeGantt();
+    dataset.on('beforeChange', () => false);
+
+    dblclick(cellFor(container, 'e1', 'cost'));
+    const notice = refusal(container)!;
+    expect(notice).not.toBeNull();
+    expect(notice.matches('.fg-cell-editor')).toBe(false);
+
+    dblclick(cellFor(container, 'e1', 'name'));
+    const el = input(container);
+    el.value = 'Vetoed';
+    enter(el);
+    const editor = container.querySelector<HTMLElement>('.fg-cell-editor[data-state="invalid"]')!;
+
+    // The editor is refused and carries its own `data-reason`, and it still stays outside every
+    // selector written for the notice.
+    expect(editor.dataset['reason']).toBe('refused-write');
+    expect(editor.matches(NOTICE_SELECTOR)).toBe(false);
+    expect(container.querySelectorAll(NOTICE_SELECTOR)).toHaveLength(0);
+    expect(editor.querySelector('.fg-cell-editor-discard')).not.toBeNull();
 
     gantt.destroy();
     container.remove();
@@ -634,6 +665,35 @@ describe('inlineEditing() (S5.8, D-S5-19/D-S5-20)', () => {
 
       expect(container.querySelector('.fg-cell-editor')).toBeNull();
       expect(dataset.entries.get('e1')!.name).toBe('Task One');
+      gantt.destroy();
+      container.remove();
+    });
+
+    // #231 F2: one command behind both entry points. Escape used to call the plugin's own method and
+    // skip the registry, so a consumer's override changed the button and left the keyboard alone.
+    it('an overridden freegantt.discardCellEdit answers Escape and the discard button alike', () => {
+      const { container, gantt, dataset } = makeGantt();
+      const ran: string[] = [];
+      gantt.commands.register({
+        id: 'freegantt.discardCellEdit',
+        label: 'Discard edit',
+        run: () => ran.push('override'),
+      });
+
+      // Escape over a valid editor: the override runs, and it alone decides the editor stays open.
+      dblclick(cellFor(container, 'e1', 'name'));
+      escape(input(container));
+      expect(ran).toEqual(['override']);
+      expect(container.querySelector('.fg-cell-editor')).not.toBeNull();
+
+      // The invalid editor's own button: the same override, the same answer.
+      dataset.on('beforeChange', () => false);
+      input(container).value = 'Vetoed';
+      enter(input(container));
+      discardButton(container)!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      expect(ran).toEqual(['override', 'override']);
+      expect(container.querySelector('.fg-cell-editor')).not.toBeNull();
+
       gantt.destroy();
       container.remove();
     });
@@ -971,7 +1031,6 @@ describe('CellEditorSession (S5.8, review A5/C2b)', () => {
       announceEntryEdit: () => {},
       requestCommit: () => {},
       requestDiscard: () => {},
-      runDiscardCommand: () => {},
       raiseError: () => {},
       ...overrides,
     };
@@ -1097,7 +1156,6 @@ describe('CellEditing (S5.8, #169)', () => {
       announceEntryEdit: () => {},
       requestCommit: () => {},
       requestDiscard: () => {},
-      runDiscardCommand: () => {},
       raiseError: (report) => reported.push(report),
       ...overrides,
     };
@@ -1281,10 +1339,9 @@ describe('presentRefusal() (S5.8, review SP1)', () => {
     };
   }
 
-  it('mounts over the cell, in the invalid state, naming the reason', () => {
+  it('mounts over the cell under its own class, naming the reason', () => {
     const { notice } = mountNotice();
-    expect(notice.element.className).toBe('fg-cell-editor');
-    expect(notice.element.dataset['state']).toBe('invalid');
+    expect(notice.element.className).toBe('fg-cell-notice');
     expect(notice.element.dataset['reason']).toBe('time-of-day');
     expect(notice.element.getAttribute('role')).toBe('status');
     expect(notice.element.style.transform).toBe('translate(40.00px, 120.00px)');

@@ -61,6 +61,9 @@ export interface BarRendererContext {
 }
 
 // @public
+export type BuiltInCommandId = 'freegantt.collapseAll' | 'freegantt.expandAll' | 'freegantt.collapseRow' | 'freegantt.expandRow' | 'freegantt.zoomIn' | 'freegantt.zoomOut' | 'freegantt.panToToday' | 'freegantt.panToStart' | 'freegantt.panToEnd' | 'freegantt.panRight' | 'freegantt.panLeft' | 'freegantt.panDown' | 'freegantt.panUp' | 'freegantt.pageDown' | 'freegantt.pageUp' | 'freegantt.selectAll' | 'freegantt.clearSelection' | 'freegantt.selectNextSegment' | 'freegantt.selectPreviousSegment' | 'freegantt.deleteSelection' | 'freegantt.discardCellEdit' | 'freegantt.undo' | 'freegantt.redo' | 'freegantt.resizeColumnWider' | 'freegantt.resizeColumnNarrower' | 'freegantt.moveColumnRight' | 'freegantt.moveColumnLeft';
+
+// @public
 export type CapabilityRule = boolean | ((entry: Entry) => boolean);
 
 // @public (undocumented)
@@ -147,9 +150,12 @@ export interface CommandContextOf<TGantt = unknown, TDataset = Dataset> {
 }
 
 // @public
+export type CommandId = BuiltInCommandId | (string & {});
+
+// @public
 export interface CommandOf<TGantt = unknown, TDataset = Dataset> {
     // (undocumented)
-    id: string;
+    id: CommandId;
     label: string;
     // (undocumented)
     run(ctx: CommandContextOf<TGantt, TDataset>): void;
@@ -164,7 +170,7 @@ export interface CommandRegistryOf<TGantt = unknown, TDataset = Dataset> {
     available(ctx?: CommandContextOf<TGantt, TDataset>): readonly CommandOf<TGantt, TDataset>[];
     register(command: CommandOf<TGantt, TDataset>): Disposer;
     // (undocumented)
-    run(id: string): void;
+    run(id: CommandId): void;
 }
 
 // @public
@@ -1322,7 +1328,7 @@ export interface KeyBindingOf<TGantt = unknown, TDataset = Dataset> {
     // (undocumented)
     chord: KeyChord;
     // (undocumented)
-    command: string;
+    command: CommandId;
     when?(ctx: CommandContextOf<TGantt, TDataset>): boolean;
 }
 
