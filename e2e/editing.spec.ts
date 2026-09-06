@@ -98,7 +98,7 @@ test('an open editor stays over its cell while the pane scrolls (#158)', async (
 });
 
 // Review R4/SP1: a cell that offers an editor but cannot open one here names the reason, in a notice
-// mounted over the cell (`data-state="invalid"`, `data-reason`). Two of its properties need a real
+// mounted over the cell (`.fg-cell-notice`, `data-reason`). Two of its properties need a real
 // browser, because happy-dom measures no layout. First, the notice must be pointer-transparent: the
 // next double-click has to reach the cell underneath it, or the grid soft-locks. `elementFromPoint`
 // over the cell's own centre is that assertion — a real hit test, which is the one thing a layout
@@ -117,7 +117,7 @@ test('a refused cell names the reason, and the notice lets the next click throug
   await rolledUp.click(); // settle the #selection-readout reflow before the real double-click
 
   await rolledUp.dblclick();
-  const notice = page.locator('#gantt .fg-cell-editor[data-state="invalid"][data-reason]');
+  const notice = page.locator('#gantt .fg-cell-notice[data-reason]');
   await expect(notice).toHaveAttribute('data-reason', 'derived-value');
   await expect(notice).toContainText('comes from the rows below it');
   await expect(page.locator('#gantt .fg-cell-editor-control')).toHaveCount(0);
@@ -133,7 +133,7 @@ test('a refused cell names the reason, and the notice lets the next click throug
     ({ x, y }) => {
       const node = document.elementFromPoint(x, y);
       return {
-        isNotice: node?.closest('.fg-cell-editor') !== null,
+        isNotice: node?.closest('.fg-cell-notice') !== null,
         isCell: node?.closest('[data-field="cost"]') !== null,
       };
     },

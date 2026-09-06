@@ -111,11 +111,17 @@ function fieldContextFor(ctx: PluginContext): FieldContext {
   };
 }
 
-/** The three classes this plugin writes, and `view/styles.ts` styles. The session dresses the
- *  wrapper and the control, so no control factory has to remember to. */
+/** The four classes this plugin writes, and `view/styles.ts` styles. The session dresses the
+ *  wrapper and the control, so no control factory has to remember to.
+ *
+ *  An editor holds a control the user types into. A notice holds words the user reads and takes no
+ *  pointer. They are two things, so they carry two class names (#231 F1). One class told them apart
+ *  only through `:not(:has(.fg-cell-editor-control))`. The stylesheet spelled that trick, and a test
+ *  spelled it again. A consumer who copied the documented editor selector reached the notice too. */
 const EDITOR_CLASS = 'fg-cell-editor';
 const EDITOR_CONTROL_CLASS = 'fg-cell-editor-control';
 const EDITOR_DISCARD_CLASS = 'fg-cell-editor-discard';
+const NOTICE_CLASS = 'fg-cell-notice';
 
 /** Every refusal the user can see, with the words the user reads. One table, because the wording is
  *  user-visible and belongs in one place. The four `return` sites below decide *which* refusal
@@ -142,10 +148,14 @@ const REFUSAL_TEXT = {
 export type CellEditorRefusal = keyof typeof REFUSAL_TEXT;
 
 /** Why a *commit* left the editor invalid (#160, D-S5-47): the control read no value back
- *  (`unreadable-value`), or a `beforeChange` handler vetoed the write (`refused-write`). The wrapper's
- *  `data-reason` names the fault so a future reader can style or announce it. #234 owns the words for
- *  that reason. This issue ships the naming mechanism, not the vocabulary. Neither key has a
- *  `REFUSAL_TEXT` entry yet. */
+ *  (`unreadable-value`), or a `beforeChange` handler vetoed the write (`refused-write`). The open
+ *  editor's own `data-reason` names the fault so a future reader can style or announce it. #234 owns
+ *  the words for that reason. This issue ships the naming mechanism, not the vocabulary. Neither key
+ *  has a `REFUSAL_TEXT` entry yet.
+ *
+ *  These keys and `CellEditorRefusal`'s stay apart because the elements do (#231 F1). An editor is a
+ *  `.fg-cell-editor` and a notice is a `.fg-cell-notice`. The class alone answers which vocabulary a
+ *  `data-reason` speaks. */
 export type CellEditorCommitRefusal = 'unreadable-value' | 'refused-write';
 
 /** Puts `element` exactly over `cell`'s own rect — no flip and no clamp, unlike `Popup`. An editor
@@ -422,13 +432,15 @@ function repositionNotice(ports: RefusalNoticePorts, element: HTMLElement, edite
   if (cell) positionOver(element, cell, ports.mountLayer.bounds);
 }
 
-/** Puts the refusal where the user acted: over the cell, in the same `data-state="invalid"` a refused
- *  commit already uses (D-S5-19, issue #137 F11/F12). It is a notice, not an editor. It mounts no
- *  control and it takes no focus, so it never becomes a sixth thing the user must close.
+/** Puts the refusal where the user acted: over the cell (D-S5-19, issue #137 F11/F12). It is a
+ *  notice, not an editor. It mounts no control and it takes no focus, so it never becomes a sixth
+ *  thing the user must close. That is why it carries its own class and not `.fg-cell-editor`
+ *  (#231 F1). A selector for the notice must never reach a live editor. The notice's own
+ *  `pointer-events: none` would put that editor's control and discard button out of reach.
  *
- *  It paints nothing of its own (#171). `view/styles.ts` styles
- *  `.fg-cell-editor[data-state='invalid'][data-reason]`, so a consumer stylesheet can still win. An
- *  inline declaration would outrank one, which is the opposite of what level-1 tokens are for.
+ *  It paints nothing of its own (#171). `view/styles.ts` styles `.fg-cell-notice[data-reason]`, so a
+ *  consumer stylesheet can still win. An inline declaration would outrank one, which is the opposite
+ *  of what level-1 tokens are for.
  *
  *  `role="status"` is the strongest thing a plugin can say on its own node today. S5.11 owes the
  *  real announcement, through the per-Gantt polite live region D-S5-27 adds. */
@@ -439,8 +451,7 @@ export function presentRefusal(
   reason: CellEditorRefusal,
 ): RefusalNotice {
   const element = document.createElement('div');
-  element.className = EDITOR_CLASS;
-  element.dataset['state'] = 'invalid';
+  element.className = NOTICE_CLASS;
   element.dataset['reason'] = reason;
   const text = REFUSAL_TEXT[reason];
   element.textContent = text;

@@ -157,13 +157,12 @@ describe('ensureBaseStyles', () => {
 
   // #171: the Refusal notice used to write eleven inline declarations over this sheet, so a consumer
   // stylesheet could not reach it and the two token fallbacks were pinned to the light theme.
+  // #231 F1: it selects on its own class, so no consumer copying this selector can reach an editor.
   it('styles the refusal notice from the sheet, on published tokens with no light-theme fallback', () => {
     clearStyles();
     ensureBaseStyles(document);
     const css = document.head.querySelector('style[data-freegantt-styles]')?.textContent ?? '';
-    const rule = css
-      .split('\n')
-      .find((line) => line.startsWith(".fg-cell-editor[data-state='invalid'][data-reason]"));
+    const rule = css.split('\n').find((line) => line.startsWith('.fg-cell-notice {'));
 
     expect(rule).toBeDefined();
     // Load-bearing: the notice sits over the cell, and the next double-click must reach the cell.
