@@ -68,21 +68,36 @@ test('weekend bands appear, follow a pan, and a checkbox removes the plugin live
 // S5.10 visible acceptance (s5.10-dataset-plugins.md §4, D-S5-23/24): harness/editing.html installs
 // lockEntries() — harness/plugins/lock-entries.ts, written against the public 'freegantt' entry
 // alone — and its checkbox locks entry-15 through the plugin's own store. Two seams, one demo: the
-// extension hook ghosts the locked bar while a neighbour drags, and `beforeChange` refuses the drop.
-test('a locked bar ghosts alongside a dragged neighbour, and the drop is refused', async ({ page }) => {
+// extension hook ghosts the locked bars while a neighbour drags, and `beforeChange` refuses the drop.
+//
+// #241: the locked Entry draws several Segments there, so this covers the cascade shape the library
+// refuses for an envelope-only write (`SegmentsOutOfSyncError`, `'ambiguous'`, D-S5-44). Every bar
+// the Entry draws has to ghost, and by the same distance — that is what `moveEntryTo`'s rigid
+// translate promises and what a `{ start, end }` cascade cannot say. The count is read off the page,
+// never asserted as a number, so a fixture edit cannot make this test quietly weaker.
+test('every bar of a locked Entry ghosts alongside a dragged neighbour, and the drop is refused', async ({
+  page,
+}) => {
   await page.goto('/editing.html');
   await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
 
   await page.locator('#lock-entry').check();
 
   const dragged = page.locator('#gantt .fg-bar[data-item-id^="entry-14:"]').first();
-  const locked = page.locator('#gantt .fg-bar[data-item-id^="entry-15:"]').first();
+  const lockedBars = page.locator('#gantt .fg-bar[data-item-id^="entry-15:"]');
   await expect(dragged).toBeVisible();
-  await expect(locked).toBeVisible();
+  // More than one bar from one Entry is the whole point of the case; one bar would pass with the
+  // envelope-only cascade this test exists to rule out.
+  expect(await lockedBars.count()).toBeGreaterThan(1);
+
+  const leftEdges = async (): Promise<number[]> => {
+    const boxes = await Promise.all((await lockedBars.all()).map((bar) => bar.boundingBox()));
+    return boxes.map((box) => box?.x ?? Number.NaN);
+  };
 
   const draggedBefore = await dragged.boundingBox();
-  const lockedBefore = await locked.boundingBox();
-  if (!draggedBefore || !lockedBefore) throw new Error('missing bounding box');
+  const lockedBefore = await leftEdges();
+  if (!draggedBefore) throw new Error('missing bounding box');
 
   await page.mouse.move(draggedBefore.x + Math.min(draggedBefore.width / 2, 20), draggedBefore.y + 6);
   await page.mouse.down();
@@ -90,18 +105,21 @@ test('a locked bar ghosts alongside a dragged neighbour, and the drop is refused
     steps: 8,
   });
 
-  // The preview is rAF-coalesced, so poll rather than read once: the locked bar moves too, because
-  // the plugin's extender wrote its dates into the same draft.
-  await expect
-    .poll(async () => (await locked.boundingBox())?.x ?? lockedBefore.x)
-    .toBeGreaterThan(lockedBefore.x + 8);
+  // The preview is rAF-coalesced, so poll rather than read once: every locked bar moves, because the
+  // plugin's extender wrote the whole Entry's Segments into the same draft. The 8px floor clears
+  // sub-pixel rounding on a bar that has not moved at all; the drag itself is 120px.
+  await expect.poll(async () => (await leftEdges()).every((x, i) => x > lockedBefore[i]! + 8)).toBe(true);
+  // Rigid, not stretched: one shared offset for every Segment, so the gaps between the bars survive
+  // the ghost. `moveEntryTo` promises this; an envelope write could not even name the Segments.
+  const offsets = (await leftEdges()).map((x, i) => Math.round(x - lockedBefore[i]!));
+  expect(new Set(offsets).size).toBe(1);
 
   await page.mouse.up();
 
-  // The drop is refused, so both bars land back where they started and the page logs the refusal.
+  // The drop is refused, so every bar lands back where it started and the page logs the refusal.
   // A store-only commit repaints on the next frame (#161), so every post-commit read polls.
   await expect(page.locator('#toast')).toContainText('entry-15 is locked');
-  await expect.poll(async () => (await locked.boundingBox())?.x).toBe(lockedBefore.x);
+  await expect.poll(leftEdges).toEqual(lockedBefore);
   await expect.poll(async () => (await dragged.boundingBox())?.x).toBe(draggedBefore.x);
   await expect(page.locator('#log')).toContainText('refused (locked)');
 });

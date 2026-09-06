@@ -115,7 +115,10 @@ function workstreamOf(id: string): string | undefined {
  *  no lane rule to draw overlapping Segments apart yet (#217). Until those close, an overlapping
  *  demo fixture makes ctrl-click multi-select look broken — both clicks reach the same top Segment,
  *  and the second one toggles the first back off. */
-function separateSegments(start: InstantInput) {
+/** Three separate Segments across ten days from `start` — one Entry that draws three bars (ADR 0010,
+ *  #212). Exported because two demos need a several-Segment Entry: the tree page draws one, and
+ *  `editing.ts` locks one, which is the case an envelope-only cascade refuses (#241). */
+export function separateSegments(start: InstantInput) {
   const startMs = instant(start);
   const day = (count: number) => addMs(startMs, count * MS.DAY);
   return [
