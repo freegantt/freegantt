@@ -50,28 +50,59 @@ export interface EntryReadContext {
   mintSegmentId(): SegmentId;
 }
 
+/** Which Entry a write targets, and which call wrote it — what an error message needs to name the
+ *  caller's own door and the id the caller wrote (#237). `operation` is a plain call name:
+ *  `entries.add`, `entries.update`, `construction`, or `edit extender`. */
+interface EditOrigin {
+  readonly entryId: EntryId;
+  readonly operation: string;
+}
+
+/** The name a plugin author knows their own write by. `reconcileEnvelope` and `readEdit` serve both
+ *  `entries.update()` and an `EditExtender` cascade (D-S5-44), and a message that named the wrong one
+ *  sent the reader to a call they never made (#239). */
+const EXTENDER_OPERATION = 'edit extender';
+
+/** A Segment's own span, without its id — what an error reports, so `InvertedSpanError.span` stays a
+ *  `TimeSpan` rather than leaking the Segment it came from. */
+function spanOf(segment: { start: Instant; end: Instant }): TimeSpan {
+  return { start: segment.start, end: segment.end };
+}
+
 /** `existing` is the Segment presently at this position, when `entries.update` is moving one it
  *  already drew (S2.3 §1.1, #212). An input that names no `id` keeps `existing`'s id — a move, not a
  *  replacement — and mints only when there is no Segment at that position to keep the id of. */
-function readSegment(input: SegmentInput, context: EntryReadContext, existing?: Segment): Segment {
+function readSegment(
+  input: SegmentInput,
+  context: EntryReadContext,
+  owner: EditOrigin,
+  existing?: Segment,
+): Segment {
   const segment: Segment = {
     id: input.id === undefined ? (existing?.id ?? context.mintSegmentId()) : segmentId(input.id),
     start: toInstant(context.timeZone, input.start),
     end: toEndInstant(context.timeZone, input.end, context.dateOnlyEnd),
   };
   if (segment.end < segment.start) {
-    throw new InvertedSpanError(`entries: segment "${segment.id}" would end before it starts`);
+    // The Entry id comes from `owner`, not from the Segment alone: a Segment written with no `id` of
+    // its own carries an id that was minted a line ago, which the consumer has never seen (#237, F4).
+    throw new InvertedSpanError(owner.entryId, spanOf(segment), owner.operation, segment.id);
   }
   return segment;
 }
 
 /** Every stored Entry has at least one Segment (#212), so nothing downstream carries a "this one
  * draws no Segment" branch. An Entry that named none stores its own envelope as its one Segment. */
-function readSegments(input: EntryInput, span: TimeSpan, context: EntryReadContext): readonly Segment[] {
+function readSegments(
+  input: EntryInput,
+  span: TimeSpan,
+  context: EntryReadContext,
+  owner: EditOrigin,
+): readonly Segment[] {
   if (input.segments === undefined || input.segments.length === 0) {
     return [{ id: context.mintSegmentId(), start: span.start, end: span.end }];
   }
-  return input.segments.map((segment) => readSegment(segment, context));
+  return input.segments.map((segment) => readSegment(segment, context, owner));
 }
 
 /** The one Segment an Entry draws, or `undefined` when it draws several — the question
@@ -89,10 +120,11 @@ function soleSegmentOf(entry: Entry): Segment | undefined {
  * finding 4): an Entry that names Segments overrunning its own authored span used to keep that
  * stale span forever, because ingest was not one of the places that computed the envelope.
  * `envelopeOfSegments` is the one function every write path — this one included — calls instead. */
-export function readEntry(input: EntryInput, context: EntryReadContext): Entry {
+export function readEntry(input: EntryInput, context: EntryReadContext, operation: string): Entry {
   const kind = input.kind ?? 'span';
-  const span = readEntrySpan(input, kind, context);
-  const segments = readSegments(input, span, context);
+  const owner: EditOrigin = { entryId: entryId(input.id), operation };
+  const span = readEntrySpan(input, kind, context, owner);
+  const segments = readSegments(input, span, context, owner);
   const envelope = envelopeOfSegments(segments);
   const entry: Entry = {
     id: entryId(input.id),
@@ -111,24 +143,33 @@ export function readEntry(input: EntryInput, context: EntryReadContext): Entry {
  * that omits both gets a zero-length span at the reference date, which the rollup overwrites on the
  * first commit that gives it children. Omitting only one, on any kind, is `InvalidInstantError` — a
  * half-specified span is not a span the rollup or a non-deriving kind can make sense of. */
-function readEntrySpan(input: EntryInput, kind: EntryKind, context: EntryReadContext): TimeSpan {
+function readEntrySpan(
+  input: EntryInput,
+  kind: EntryKind,
+  context: EntryReadContext,
+  owner: EditOrigin,
+): TimeSpan {
   if (input.start === undefined && input.end === undefined) {
     if (context.rollUpKinds.has(kind)) {
       return { start: context.referenceDate, end: context.referenceDate };
     }
     throw new InvalidInstantError(
-      `entries: "${input.id}" has kind "${kind}", which does not derive its span — start and end are required`,
+      `${owner.operation}: "${input.id}" is of kind "${kind}", which does not work out its own dates. Write both a start and an end.`,
+      kind,
     );
   }
   if (input.start === undefined || input.end === undefined) {
-    throw new InvalidInstantError(`entries: "${input.id}" must set both start and end, or neither`);
+    throw new InvalidInstantError(
+      `${owner.operation}: "${input.id}" writes only one of start and end. Write both, or write neither.`,
+      input.start ?? input.end,
+    );
   }
   const span: TimeSpan = {
     start: toInstant(context.timeZone, input.start),
     end: toEndInstant(context.timeZone, input.end, context.dateOnlyEnd),
   };
   if (span.end < span.start) {
-    throw new InvertedSpanError(`entries: "${input.id}" would end before it starts`);
+    throw new InvertedSpanError(owner.entryId, span, owner.operation);
   }
   return span;
 }
@@ -159,8 +200,12 @@ function assertNoDuplicateSegmentIds(entries: readonly Entry[]): void {
   }
 }
 
-export function readEntries(inputs: readonly EntryInput[], context: EntryReadContext): readonly Entry[] {
-  const entries = inputs.map((input) => readEntry(input, context));
+export function readEntries(
+  inputs: readonly EntryInput[],
+  context: EntryReadContext,
+  operation = 'construction',
+): readonly Entry[] {
+  const entries = inputs.map((input) => readEntry(input, context, operation));
   assertNoDuplicateSegmentIds(entries);
   return entries;
 }
@@ -192,11 +237,15 @@ export interface EnvelopeReconciliation {
  * instead — a caller-identity split, a computed answer for the extender and a refusal for
  * `entries.update()`, was tried and rejected (D-S5-44).
  */
-export function reconcileEnvelope(entry: Entry, stored: StoredEdit): EnvelopeReconciliation {
+export function reconcileEnvelope(
+  entry: Entry,
+  stored: StoredEdit,
+  operation: string,
+): EnvelopeReconciliation {
   const writesEnvelope = stored.start !== undefined || stored.end !== undefined;
   const sole = soleSegmentOf(entry);
   if (writesEnvelope && stored.segments === undefined && sole === undefined) {
-    throw new SegmentsOutOfSyncError(entry.id, 'ambiguous');
+    throw new SegmentsOutOfSyncError(entry.id, 'ambiguous', operation);
   }
 
   const before = new Set(Object.keys(stored));
@@ -217,16 +266,16 @@ export function reconcileEnvelope(entry: Entry, stored: StoredEdit): EnvelopeRec
     // write. `start === end` still passes — that Segment is empty, not inverted.
     for (const segment of next.segments) {
       if (segment.end < segment.start) {
-        throw new InvertedSpanError(`entries.update: "${entry.id}" would end before it starts`);
+        throw new InvertedSpanError(entry.id, spanOf(segment), operation, segment.id);
       }
     }
     const envelope = envelopeOfSegments(next.segments);
     if (stored.segments !== undefined) {
       if (stored.start !== undefined && stored.start !== envelope.start) {
-        throw new SegmentsOutOfSyncError(entry.id, 'conflicting');
+        throw new SegmentsOutOfSyncError(entry.id, 'conflicting', operation);
       }
       if (stored.end !== undefined && stored.end !== envelope.end) {
-        throw new SegmentsOutOfSyncError(entry.id, 'conflicting');
+        throw new SegmentsOutOfSyncError(entry.id, 'conflicting', operation);
       }
     }
     next = { ...next, start: envelope.start, end: envelope.end };
@@ -343,7 +392,7 @@ export function reconcileExtenderEdits(
   const reconciled = new Map<EntryId, StoredEdit>();
   for (const [id, edit] of edits) {
     const entry = entries.get(id);
-    const next = entry ? reconcileEnvelope(entry, edit).edit : edit;
+    const next = entry ? reconcileEnvelope(entry, edit, EXTENDER_OPERATION).edit : edit;
     if (next !== edit) changed = true;
     reconciled.set(id, next);
   }
@@ -367,7 +416,7 @@ export function reconcileExtenderEditsForPreview(
   for (const [id, edit] of edits) {
     const entry = entries.get(id);
     try {
-      const next = entry ? reconcileEnvelope(entry, edit).edit : edit;
+      const next = entry ? reconcileEnvelope(entry, edit, EXTENDER_OPERATION).edit : edit;
       if (next !== edit) changed = true;
       reconciled.set(id, next);
     } catch (error) {
@@ -386,6 +435,7 @@ export function readEdit(
   context: EntryReadContext,
   entry: Entry,
   registry: FieldRegistry,
+  operation: string,
 ): StoredEdit {
   let stored: StoredEdit = {};
   // Which Fields this edit writes. The caller's own keys start the set, and a Field core
@@ -400,13 +450,13 @@ export function readEdit(
     // Every stored Entry keeps at least one Segment (#212); an update cannot write it down to zero
     // the way `entries.add({ segments: [] })` can mint one — there is no whole-span input here to
     // mint it from, only the Segment ids already on the Entry, which this write would silently drop.
-    if (edit.segments.length === 0) throw new EmptySegmentsError(entry.id);
+    if (edit.segments.length === 0) throw new EmptySegmentsError(entry.id, operation);
     // Positional match (#212): the Segment at index `i` that names no `id` of its own keeps the id
     // of the Entry's current Segment at that index — this is how `dataset.entries.update(id, {
     // segments })` moves a Segment, per `CONTEXT.md`. An index beyond the Entry's current count has
     // no counterpart to keep, so it mints a fresh id, the same as an added Segment on `entries.add`.
     stored.segments = edit.segments.map((segment, index) =>
-      readSegment(segment, context, entry.segments[index]),
+      readSegment(segment, context, { entryId: entry.id, operation }, entry.segments[index]),
     );
   }
 
@@ -415,7 +465,7 @@ export function readEdit(
   // `reconcileEnvelope` reports which keys it added (`segments` paired on, or `start`/`end` read
   // back), and those are proposed the same way the caller's own keys are — neither is policy, so both
   // count as stated (#212 R2 fix-plan review, finding D).
-  const reconciled = reconcileEnvelope(entry, stored);
+  const reconciled = reconcileEnvelope(entry, stored, operation);
   stored = reconciled.edit;
   for (const key of reconciled.addedKeys) proposed.add(key);
 
@@ -453,9 +503,9 @@ export function readEdits(
     const entry = entryFor(id);
     if (entry === undefined) continue;
     for (const key of Object.keys(edit)) {
-      if (!registry.has(key)) throw new UnknownFieldError(key);
+      if (!registry.has(key)) throw new UnknownFieldError(key, EXTENDER_OPERATION);
     }
-    stored.set(id, readEdit(edit, context, entry, registry));
+    stored.set(id, readEdit(edit, context, entry, registry, EXTENDER_OPERATION));
   }
   return stored;
 }

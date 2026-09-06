@@ -117,7 +117,7 @@ export function resolveColumns(
   return gridColumns.flatMap((item) => {
     const key = typeof item === 'string' ? item : item.field;
     const field = lookup.get(key);
-    if (field === undefined) throw new UnknownFieldError(String(key));
+    if (field === undefined) throw new UnknownFieldError(String(key), 'gridColumns');
     const column = columnFrom(item, field, defaultWidthPx);
     if (isHidden(item)) return [];
     return [

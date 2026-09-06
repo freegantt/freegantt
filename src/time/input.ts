@@ -26,7 +26,9 @@ function isDateOnly(input: InstantInput): boolean {
 }
 
 function invalid(input: InstantInput, reason: string): InvalidInstantError {
-  return new InvalidInstantError(`toInstant(): ${JSON.stringify(input)} ${reason}`);
+  // The value is a member as well as a sentence: a bulk loader catches this and names the row it
+  // came from, instead of parsing our wording (#237).
+  return new InvalidInstantError(`toInstant(): ${JSON.stringify(input)} ${reason}`, input);
 }
 
 /**
