@@ -3,7 +3,7 @@
 // gate box's whole point — the plugin only compiles because the public surface is enough.
 
 import { addMs, diffMs, entryId, fieldRowsOf, mergeEntryEdits } from 'freegantt';
-import type { DatasetPlugin, EditRequest, EntryId, Instant, PluginStore } from 'freegantt';
+import type { DatasetPlugin, EditRequest, EntryEdit, EntryId, PluginStore } from 'freegantt';
 
 /** What the store holds per locked entry. One key today; a real plugin's row grows without ever
  *  colliding with the application's own `meta` — that is what a store is for (ADR 0002, D-S5-24). */
@@ -58,7 +58,9 @@ export function lockEntries(initiallyLocked: readonly string[] = []): LockEntrie
       ctx.edits.setExtender((next) => (request) => {
         const moved = movedBy(request);
         if (moved === undefined) return next(request);
-        const mine = new Map<EntryId, { start: Instant; end: Instant }>();
+        // `EntryEdit` is the write shape — the same object `dataset.entries.update(id, edit)` takes
+        // (#209). A cascade names it; it never states a storage shape of its own.
+        const mine = new Map<EntryId, EntryEdit>();
         for (const [id] of lockedRows()) {
           if (request.proposed.has(id)) continue;
           const entry = request.entries.get(id);
