@@ -11,6 +11,48 @@
 import type { Disposer, Entry, EntryId, FieldKey, KeyChord, SegmentId, TargetKind } from '../model/index.js';
 import type { Dataset } from './dataset.js';
 
+/** Every command id the library itself registers (#236). One place names them, so
+ *  `gantt.commands.run('freegantt.discardCellEdit')` autocompletes and a typo is a compile error
+ *  rather than a runtime `UnknownCommandError`.
+ *
+ *  It is `BuiltInCommandId` and not `CommandId`, because a plugin's own id is a command id too
+ *  (#7's lesson: one name for two concepts stalls a reader). `CommandId` below is the open one.
+ *
+ *  `view/core-commands.ts` registers all of these, and its own test holds the two lists together. */
+export type BuiltInCommandId =
+  | 'freegantt.collapseAll'
+  | 'freegantt.expandAll'
+  | 'freegantt.collapseRow'
+  | 'freegantt.expandRow'
+  | 'freegantt.zoomIn'
+  | 'freegantt.zoomOut'
+  | 'freegantt.panToToday'
+  | 'freegantt.panToStart'
+  | 'freegantt.panToEnd'
+  | 'freegantt.panRight'
+  | 'freegantt.panLeft'
+  | 'freegantt.panDown'
+  | 'freegantt.panUp'
+  | 'freegantt.pageDown'
+  | 'freegantt.pageUp'
+  | 'freegantt.selectAll'
+  | 'freegantt.clearSelection'
+  | 'freegantt.selectNextSegment'
+  | 'freegantt.selectPreviousSegment'
+  | 'freegantt.deleteSelection'
+  | 'freegantt.discardCellEdit'
+  | 'freegantt.undo'
+  | 'freegantt.redo'
+  | 'freegantt.resizeColumnWider'
+  | 'freegantt.resizeColumnNarrower'
+  | 'freegantt.moveColumnRight'
+  | 'freegantt.moveColumnLeft';
+
+/** Any command id: one the library ships, or one a plugin registers. The `string & {}` half keeps a
+ *  consumer's own id legal and still lets an editor suggest the built-in ones — the same open shape
+ *  `FieldKey` keeps over `CoreFieldKey`. */
+export type CommandId = BuiltInCommandId | (string & {});
+
 /** What one invocation acts on (ADR 0010, issue #212) — the two readings of one set. `entryIds` is a
  *  projection of `segmentIds`: the Entries those Segments belong to, deduped, in row order. Both are
  *  always present, so a command reads whichever one it needs and the two can never disagree. No
@@ -94,7 +136,7 @@ export interface CommandContextOf<TGantt = unknown, TDataset = Dataset> {
  *  invocation path in S5 is argument-less (issue #137 G); see the step file for why a generic here
  *  would be type-unsound at the registry boundary. */
 export interface CommandOf<TGantt = unknown, TDataset = Dataset> {
-  id: string;
+  id: CommandId;
   /** Menu text; also the a11y name. */
   label: string;
   /** Static availability. Absent means always available. */
@@ -111,7 +153,7 @@ export interface CommandRegistryOf<TGantt = unknown, TDataset = Dataset> {
    *  the command underneath then answers again, which is how a plugin's override of a core command
    *  undoes itself when that plugin is uninstalled (D-S5-7). */
   register(command: CommandOf<TGantt, TDataset>): Disposer;
-  run(id: string): void;
+  run(id: CommandId): void;
   /** Commands whose `when` passes for this context, in registration order. #160: `ctx` is optional —
    *  omit it and the registry builds the same live context `run(id)` already builds internally, so a
    *  caller never hand-assembles one just to answer "what can run right now?". */
@@ -122,7 +164,7 @@ export interface CommandRegistryOf<TGantt = unknown, TDataset = Dataset> {
  *  through to an older binding. `Mod` means `⌘` on Apple platforms and `Ctrl` elsewhere. */
 export interface KeyBindingOf<TGantt = unknown, TDataset = Dataset> {
   chord: KeyChord;
-  command: string;
+  command: CommandId;
   /** Extra condition beyond the command's own `when`. */
   when?(ctx: CommandContextOf<TGantt, TDataset>): boolean;
   /** Fire even while the event's target is editable or mid-IME-composition. Default `false`

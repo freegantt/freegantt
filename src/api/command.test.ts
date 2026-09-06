@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { entryId, segmentId } from '../model/index.js';
+import { registerCoreCommands } from '../view/core-commands.js';
+import type { CoreCommandPorts } from '../view/core-commands.js';
 import { resolveActedOn } from './command.js';
-import type { ActedOn } from './command.js';
+import type { ActedOn, BuiltInCommandId } from './command.js';
 
 const A = segmentId('a');
 const B = segmentId('b');
@@ -42,5 +44,49 @@ describe('resolveActedOn() (#212)', () => {
     const resolved = resolveActedOn(actedOn(A), actedOn(A, B));
     expect(resolved.segmentIds).toEqual([A, B]);
     expect(resolved.entryIds).toEqual([entryId('a'), entryId('b')]);
+  });
+});
+
+/** #236: the union an app author types against, spelled out once as data. The `Record` makes the
+ *  compiler ask for every member, and the test below asks the core catalog for the same set. So an
+ *  id added to `core-commands.ts` alone fails here, and a union member nothing registers fails too.
+ *
+ *  The ports are never called: registration only closes over them. */
+const EVERY_BUILT_IN_ID: Record<BuiltInCommandId, true> = {
+  'freegantt.collapseAll': true,
+  'freegantt.expandAll': true,
+  'freegantt.collapseRow': true,
+  'freegantt.expandRow': true,
+  'freegantt.zoomIn': true,
+  'freegantt.zoomOut': true,
+  'freegantt.panToToday': true,
+  'freegantt.panToStart': true,
+  'freegantt.panToEnd': true,
+  'freegantt.panRight': true,
+  'freegantt.panLeft': true,
+  'freegantt.panDown': true,
+  'freegantt.panUp': true,
+  'freegantt.pageDown': true,
+  'freegantt.pageUp': true,
+  'freegantt.selectAll': true,
+  'freegantt.clearSelection': true,
+  'freegantt.selectNextSegment': true,
+  'freegantt.selectPreviousSegment': true,
+  'freegantt.deleteSelection': true,
+  'freegantt.discardCellEdit': true,
+  'freegantt.undo': true,
+  'freegantt.redo': true,
+  'freegantt.resizeColumnWider': true,
+  'freegantt.resizeColumnNarrower': true,
+  'freegantt.moveColumnRight': true,
+  'freegantt.moveColumnLeft': true,
+};
+
+describe('BuiltInCommandId (#236)', () => {
+  it('names exactly the ids the core catalog registers', () => {
+    const registered: string[] = [];
+    registerCoreCommands({ register: (command) => void registered.push(command.id) }, {} as CoreCommandPorts);
+
+    expect(registered.sort()).toEqual(Object.keys(EVERY_BUILT_IN_ID).sort());
   });
 });
