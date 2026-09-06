@@ -1371,6 +1371,11 @@ export interface MountLayer {
     present(content: HTMLElement): Disposer;
 }
 
+// Warning: (ae-forgotten-export) The symbol "StoredEdit" needs to be exported by the entry point index.d.ts
+//
+// @public
+export function moveEntryTo(entry: Entry, start: Instant): StoredEdit;
+
 // @public (undocumented)
 export const MS: {
     readonly SECOND: 1000;
