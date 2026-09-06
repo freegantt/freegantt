@@ -11,17 +11,14 @@
 // published property, because those are configuration, not commands.
 //
 // The strip carries no state of its own. Enabled-ness and current values are read back off the
-// `Gantt` and the `Dataset` in `refresh()`, which the library's own events drive. A toolbar that
+// `Gantt` and its `Dataset` in `refresh()`, which the library's own events drive. A toolbar that
 // cached "can undo" would be a second source of truth for something the Dataset already answers.
 
-import type { Dataset, Gantt, PresetRef, SnapSetting, Theme } from '../src/api/index.js';
+import type { Gantt, PresetRef, SnapSetting, Theme } from '../src/api/index.js';
 import { isTimeUnit } from '../src/api/index.js';
 
 export interface GanttToolbarOptions {
   gantt: Gantt;
-  /** Drives the undo/redo pair. `Gantt` publishes no `dataset` getter, so the page passes the same
-   *  instance it constructed the `Gantt` with. */
-  dataset: Dataset;
   container: HTMLElement;
   /** Include the snap picker. Default `true`. */
   showSnap?: boolean;
@@ -128,7 +125,10 @@ function option(value: string, label: string): HTMLOptionElement {
 /** Builds the toolbar and binds it to the `Gantt`. Every button runs a registered command; the
  *  pickers write published properties. */
 export function mountGanttToolbar(options: GanttToolbarOptions): void {
-  const { gantt, dataset, container, showSnap = true, showTheme = true } = options;
+  const { gantt, container, showSnap = true, showTheme = true } = options;
+  // #226: the Dataset comes off the Gantt that already holds it, so the page cannot hand this
+  // toolbar a Gantt and a Dataset that do not belong to each other.
+  const dataset = gantt.dataset;
 
   const bar = document.createElement('div');
   bar.className = 'toolbar';

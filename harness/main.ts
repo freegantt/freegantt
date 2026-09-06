@@ -75,14 +75,14 @@ gantt.panToToday();
 // this page declares its own fields, so the cast stands in for that one shared declaration. Every
 // e2e read of it (`segments`, `start`, `end`, `id`) sits on `Entry`, outside either page's fields.
 // The double cast through `unknown` is evidence, not a shortcut: `Dataset<TFields>` gives no common
-// type two differently-fielded instances both satisfy, so no single cast bridges them. Recorded on
-// #226, which already asks the same generic-parameter question for a `Gantt.dataset` getter.
+// type two differently-fielded instances both satisfy, so no single cast bridges them. #226's
+// `gantt.dataset` getter does not close it, and was not expected to: the mismatch is between two
+// harness pages' declared field shapes, not between a Gantt and the Dataset it holds.
 window.__dataset = dataset as unknown as typeof window.__dataset;
 window.__gantt = gantt;
 
 mountGanttToolbar({
   gantt,
-  dataset,
   container: document.querySelector<HTMLDivElement>('#toolbar')!,
 });
 

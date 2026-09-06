@@ -125,6 +125,64 @@ describe('Gantt', () => {
   });
 });
 
+describe('Gantt.dataset (#226)', () => {
+  it('hands back the very Dataset it was constructed with', () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
+    const gantt = new Gantt({ container, dataset });
+
+    expect(gantt.dataset).toBe(dataset);
+
+    gantt.destroy();
+  });
+
+  it('two Gantts on one page each hand back their own Dataset (I2)', () => {
+    const datasetA = new Dataset({ entries: sampleEntries.slice(0, 5), timeZone: 'UTC' });
+    const datasetB = new Dataset({ entries: sampleEntries.slice(0, 2), timeZone: 'UTC' });
+    const ganttA = new Gantt({ container: document.createElement('div'), dataset: datasetA });
+    const ganttB = new Gantt({ container: document.createElement('div'), dataset: datasetB });
+
+    expect(ganttA.dataset).toBe(datasetA);
+    expect(ganttB.dataset).toBe(datasetB);
+
+    ganttA.destroy();
+    ganttB.destroy();
+  });
+
+  it("keeps the consumer's declared Field types, so a helper needs no cast", () => {
+    // The point of the getter: `gantt.dataset` is the caller's own `Dataset<TMeta, TFields>`, not a
+    // widened one. A widened return would push every consumer helper back to the cast the getter
+    // exists to retire. This reads `cost` as a `number` with no annotation of its own.
+    const container = document.createElement('div');
+    const dataset = new Dataset<{ cost?: number }, { cost: number }>({
+      entries: [{ id: 'a', name: 'A', start: '2026-01-01', end: '2026-01-03', meta: { cost: 42 } }],
+      timeZone: 'UTC',
+      fields: [{ key: 'cost' }],
+    });
+    const gantt = new Gantt({ container, dataset });
+
+    const cost: number | undefined = gantt.dataset.entries.fieldValue('a', 'cost');
+    expect(cost).toBe(42);
+    // And the write half: `cost` is a declared key on this Dataset, so it is legal here.
+    gantt.dataset.entries.update('a', { cost: 43 });
+    expect(gantt.dataset.entries.fieldValue('a', 'cost')).toBe(43);
+
+    gantt.destroy();
+  });
+
+  it('reads live undo state, the pair the toolbar drives its buttons from', () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
+    const gantt = new Gantt({ container, dataset });
+
+    expect(gantt.dataset.canUndo).toBe(false);
+    dataset.entries.update(sampleEntries[0]!.id, { name: 'renamed' });
+    expect(gantt.dataset.canUndo).toBe(true);
+
+    gantt.destroy();
+  });
+});
+
 describe('Gantt preset/range/fit/zoomTo/zoomBy/reveal (S1.9)', () => {
   it('[S1-A3] a preset switch redraws the axis but keeps bar DOM identity (I8)', async () => {
     // Regression coverage for a measured pane under the default 'pane' fit: pxPerMs there

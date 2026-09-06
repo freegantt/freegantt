@@ -135,10 +135,10 @@ export interface ColumnCellRendererContext {
 }
 
 // @public
-export type Command = CommandOf<Gantt>;
+export type Command<TMeta = unknown, TFields extends Record<string, unknown> = Record<string, unknown>> = CommandOf<Gantt<TMeta, TFields>, Dataset<TMeta, TFields>>;
 
 // @public (undocumented)
-export type CommandContext = CommandContextOf<Gantt>;
+export type CommandContext<TMeta = unknown, TFields extends Record<string, unknown> = Record<string, unknown>> = CommandContextOf<Gantt<TMeta, TFields>, Dataset<TMeta, TFields>>;
 
 // @public
 export interface CommandContextOf<TGantt = unknown, TDataset = Dataset> {
@@ -163,7 +163,7 @@ export interface CommandOf<TGantt = unknown, TDataset = Dataset> {
 }
 
 // @public (undocumented)
-export type CommandRegistry = CommandRegistryOf<Gantt>;
+export type CommandRegistry<TMeta = unknown, TFields extends Record<string, unknown> = Record<string, unknown>> = CommandRegistryOf<Gantt<TMeta, TFields>, Dataset<TMeta, TFields>>;
 
 // @public
 export interface CommandRegistryOf<TGantt = unknown, TDataset = Dataset> {
@@ -950,8 +950,8 @@ export class FreeGanttError extends Error {
 }
 
 // @public (undocumented)
-export class Gantt {
-    constructor(options: GanttOptions);
+export class Gantt<TMeta = unknown, TFields extends Record<string, unknown> = Record<string, unknown>> {
+    constructor(options: GanttOptions<TMeta, TFields>);
     // (undocumented)
     get a11yLabel(): string;
     set a11yLabel(value: string);
@@ -971,7 +971,8 @@ export class Gantt {
     // (undocumented)
     get collapsed(): readonly RowId[];
     set collapsed(ids: readonly (RowId | string)[]);
-    get commands(): CommandRegistry;
+    get commands(): CommandRegistry<TMeta, TFields>;
+    get dataset(): Dataset<TMeta, TFields>;
     get dateLines(): readonly DateLineInput[];
     set dateLines(lines: readonly DateLineInput[]);
     // (undocumented)
@@ -989,12 +990,12 @@ export class Gantt {
     // (undocumented)
     get gridWidth(): number;
     set gridWidth(width: GridWidth);
-    hasPlugin(plugin: GanttPlugin | PluginId): boolean;
+    hasPlugin(plugin: GanttPlugin<TMeta, TFields> | PluginId): boolean;
     get headerRenderer(): HeaderRenderer | undefined;
     set headerRenderer(renderer: HeaderRenderer | undefined);
     get hiddenGridColumns(): readonly FieldKey[];
     hideGridColumn(field: FieldKey): void;
-    installPlugin(plugin: GanttPlugin): void;
+    installPlugin(plugin: GanttPlugin<TMeta, TFields>): void;
     get interactions(): Interactions;
     set interactions(next: Interactions);
     // (undocumented)
@@ -1009,8 +1010,8 @@ export class Gantt {
     on<K extends keyof GanttEventMap>(name: K, handler: GanttEventHandler<K>): void;
     panToDate(date: InstantInput, align?: 'start' | 'center'): void;
     panToToday(align?: 'start' | 'center'): void;
-    get plugins(): readonly GanttPlugin[];
-    set plugins(next: readonly GanttPlugin[]);
+    get plugins(): readonly GanttPlugin<TMeta, TFields>[];
+    set plugins(next: readonly GanttPlugin<TMeta, TFields>[]);
     // (undocumented)
     get preset(): ViewPreset;
     set preset(ref: PresetRef);
@@ -1042,7 +1043,7 @@ export class Gantt {
     toggleCollapse(id: RowId | string): void;
     get tooltipRenderer(): TooltipRenderer | undefined;
     set tooltipRenderer(renderer: TooltipRenderer | undefined);
-    uninstallPlugin(plugin: GanttPlugin | PluginId): void;
+    uninstallPlugin(plugin: GanttPlugin<TMeta, TFields> | PluginId): void;
     get viewportGestures(): ViewportGestures;
     set viewportGestures(next: ViewportGestures);
     // (undocumented)
@@ -1111,17 +1112,16 @@ export interface GanttEvents {
 }
 
 // @public (undocumented)
-export type GanttOptions = GanttOptionsBase & GanttScaleOptions;
+export type GanttOptions<TMeta = unknown, TFields extends Record<string, unknown> = Record<string, unknown>> = GanttOptionsBase<TMeta, TFields> & GanttScaleOptions;
 
 // @public (undocumented)
-export interface GanttOptionsBase {
+export interface GanttOptionsBase<TMeta = unknown, TFields extends Record<string, unknown> = Record<string, unknown>> {
     a11yLabel?: string;
     barRenderer?: BarRenderer | RendererByKind;
     cellRenderer?: CellRenderer;
     collapsed?: readonly (RowId | string)[];
     container: HTMLElement | string;
-    // (undocumented)
-    dataset: Dataset;
+    dataset: Dataset<TMeta, TFields>;
     dateLines?: readonly DateLineInput[];
     gridColumns?: readonly GridColumnInput[];
     gridWidth?: GridWidth;
@@ -1129,7 +1129,7 @@ export interface GanttOptionsBase {
     interactions?: Interactions;
     locale?: Intl.LocalesArgument;
     minGridWidth?: number;
-    plugins?: readonly GanttPlugin[];
+    plugins?: readonly GanttPlugin<TMeta, TFields>[];
     rowSource?: RowSource;
     scroll?: ScrollModel;
     selectedSegmentIds?: readonly (SegmentId | string)[];
@@ -1143,7 +1143,7 @@ export interface GanttOptionsBase {
 }
 
 // @public
-export type GanttPlugin = GanttPluginOf<Gantt>;
+export type GanttPlugin<TMeta = unknown, TFields extends Record<string, unknown> = Record<string, unknown>> = GanttPluginOf<Gantt<TMeta, TFields>, Dataset<TMeta, TFields>>;
 
 // @public
 export interface GanttPluginOf<TGantt = unknown, TDataset = Dataset> {
@@ -1354,7 +1354,7 @@ export function itemIdFromDataset(value: string | undefined): ItemId | undefined
 export type ItemProducer = (entry: Entry) => readonly Item[];
 
 // @public (undocumented)
-export type KeyBinding = KeyBindingOf<Gantt>;
+export type KeyBinding<TMeta = unknown, TFields extends Record<string, unknown> = Record<string, unknown>> = KeyBindingOf<Gantt<TMeta, TFields>, Dataset<TMeta, TFields>>;
 
 // @public
 export interface KeyBindingOf<TGantt = unknown, TDataset = Dataset> {
@@ -1510,7 +1510,7 @@ export interface PlainParts {
 export type PlannedRowKind = 'entry' | 'header';
 
 // @public (undocumented)
-export type PluginContext = PluginContextOf<Gantt>;
+export type PluginContext<TMeta = unknown, TFields extends Record<string, unknown> = Record<string, unknown>> = PluginContextOf<Gantt<TMeta, TFields>, Dataset<TMeta, TFields>>;
 
 // @public
 export type PluginContextOf<TGantt = unknown, TDataset = Dataset> = PluginContextParts<TGantt, TDataset> & {
