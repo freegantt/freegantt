@@ -12,6 +12,7 @@ import type { PixelPropertyPolicy } from '../render/dom/pixel-property.js';
 import {
   DEFAULT_DIAMOND_SIZE_PX,
   DEFAULT_LANE_GAP_PX,
+  DEFAULT_MIN_BAR_WIDTH_PX,
   DEFAULT_TICK_BOX_FLOOR_PX,
   createItemProducerRegistry,
 } from '../layout/index.js';
@@ -150,20 +151,28 @@ describe('FrameSettings — the invalidation table', () => {
 });
 
 describe('FrameSettings — the pixel properties', () => {
-  it('reads all four properties, and asks for no frame of its own', () => {
+  it('reads all five properties, and asks for no frame of its own', () => {
     const { ports, calls, reads } = recordingPorts({
       '--fg-row-height': 48,
       '--fg-lane-gap': 6,
       '--fg-tick-box-floor': 3,
       '--fg-diamond-size': 14,
+      '--fg-bar-min-width': 16,
     });
     const settings = new FrameSettings(ports);
     settings.refreshPixelProperties();
 
-    expect(reads).toEqual(['--fg-row-height', '--fg-lane-gap', '--fg-tick-box-floor', '--fg-diamond-size']);
+    expect(reads).toEqual([
+      '--fg-row-height',
+      '--fg-lane-gap',
+      '--fg-tick-box-floor',
+      '--fg-diamond-size',
+      '--fg-bar-min-width',
+    ]);
     expect(calls).toEqual([]);
     expect(settings.rowHeight).toBe(48);
     expect(settings.diamondSizePx).toBe(14);
+    expect(settings.minBarWidthPx).toBe(16);
   });
 
   it('starts on the library defaults, before anything is measured', () => {
@@ -171,6 +180,7 @@ describe('FrameSettings — the pixel properties', () => {
     const settings = new FrameSettings(ports);
     expect(settings.rowHeight).toBe(DEFAULT_ROW_HEIGHT);
     expect(settings.diamondSizePx).toBe(DEFAULT_DIAMOND_SIZE_PX);
+    expect(settings.minBarWidthPx).toBe(DEFAULT_MIN_BAR_WIDTH_PX);
     expect(settings.todayLineMarginTicks).toBe(DEFAULT_TODAY_LINE_MARGIN_TICKS);
   });
 
@@ -183,6 +193,7 @@ describe('FrameSettings — the pixel properties', () => {
     expect(input.laneGapPx).toBe(DEFAULT_LANE_GAP_PX);
     expect(input.tickBoxFloorPx).toBe(DEFAULT_TICK_BOX_FLOOR_PX);
     expect(input.diamondSizePx).toBe(DEFAULT_DIAMOND_SIZE_PX);
+    expect(input.minBarWidthPx).toBe(DEFAULT_MIN_BAR_WIDTH_PX);
   });
 });
 

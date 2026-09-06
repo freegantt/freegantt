@@ -557,6 +557,44 @@ describe('render/dom backend', () => {
     backend.destroy();
   });
 
+  it('stamps data-span="minimum" on a floored bar only — a zero-width span and a milestone both carry it, an ordinary bar does not', () => {
+    const backend = paintingBackend();
+    const { grid, timeline } = mountSurfaces();
+    backend.mount({ grid, timeline });
+
+    // `scale` above stubs `xForInstant` flat to 0, so every bar would come out zero-width and this
+    // test could not tell an ordinary bar from a floored one. One real px-per-ms scale here instead.
+    const realScale: TimeScale = { ...scale, xForInstant: (instant) => instant, pxPerMs: 1 };
+    const ordinary = sampleEntries[0]!;
+    // An Item's span comes from its Segment, not the Entry's own start/end (`produce-items.ts`), so
+    // the Segment needs the same zero-width edit the Entry gets — an Entry-only edit here would
+    // leave the old, full-width Segment still drawing the bar.
+    const zeroWidth = {
+      ...sampleEntries[1]!,
+      end: sampleEntries[1]!.start,
+      segments: [
+        { id: segmentId('zero-width-0'), start: sampleEntries[1]!.start, end: sampleEntries[1]!.start },
+      ],
+    };
+    const milestone = { ...sampleEntries[2]!, kind: 'milestone', end: sampleEntries[2]!.start };
+    const frame = computeFrame({
+      entries: [ordinary, zeroWidth, milestone],
+      scale: realScale,
+      preset,
+      visible: { x: 0, y: 0, width: 0, height: 0 },
+      rowHeight: 32,
+      revision: 0,
+      itemProducerRegistry,
+    });
+    backend.sync(frame);
+
+    const nodeFor = (id: string) => timeline.querySelector<HTMLElement>(`[data-item-id="${id}"]`)!;
+    expect(nodeFor(`${ordinary.id}:0`).dataset['span']).toBeUndefined();
+    expect(nodeFor(`${zeroWidth.id}:0`).dataset['span']).toBe('minimum');
+    expect(nodeFor(`${milestone.id}:0`).dataset['span']).toBe('minimum');
+    backend.destroy();
+  });
+
   it('gives a Segment bar data-segment-id; a group or milestone bar carries none (#212)', () => {
     const backend = paintingBackend();
     const { grid, timeline } = mountSurfaces();

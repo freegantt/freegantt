@@ -43,6 +43,15 @@ export const DEFAULT_TICK_BOX_FLOOR_PX = 9;
  *  and its selection outline hanging off the left edge). */
 export const DEFAULT_DIAMOND_SIZE_PX = 10;
 
+/** Shipped bar min width (CONTEXT.md) — `--fg-bar-min-width` fallback, in px. Every kind's painted
+ *  span floors here at minimum, even a `span` a caller (or a drag) has driven to zero width: a bar
+ *  narrower than this is both invisible and too thin to grab back by its resize handle, which sits
+ *  on an 8px hit box straddling each edge (`.fg-bar-handle`, `view/styles.ts`) — 12px leaves the two
+ *  handles a 4px gap instead of overlapping. Not a multiplier of `DEFAULT_DIAMOND_SIZE_PX`: the two
+ *  floors answer different questions (room for a diamond glyph vs. room for a resize handle) and
+ *  must be free to move apart. */
+export const DEFAULT_MIN_BAR_WIDTH_PX = 12;
+
 /** An entry's horizontal extent in content pixels, at the bound `TimeScale` (S1.9). The one formula
  * both `computeFrame` and `GanttShell.reveal` need — extracted so the two can never drift apart
  * (they briefly did: `reveal` had its own copy missing the zero-duration/inverted-entry clamp).
@@ -50,11 +59,12 @@ export const DEFAULT_DIAMOND_SIZE_PX = 10;
  * A milestone Item/Entry is authored zero-width (`start === end`) — that stays true; nothing here
  * invents a duration. Painting a zero-width box still leaves the diamond glyph and its selection
  * outline with nowhere to sit, so a milestone's *painted* span is floored to the diamond's
- * axis-aligned bounding box (`diamondSizePx * √2`) and centred on the instant. Every other kind keeps
- * its true `[x, x + width)` span. */
+ * axis-aligned bounding box (`diamondSizePx * √2`) and centred on the instant. Every other kind still
+ * floors at `minBarWidthPx` — the two floors are just `max`'d together, so milestone's own (larger,
+ * at the shipped default) floor never shrinks. */
 /** Kind → painted-span floor, as a multiplier of `diamondSizePx` (a min-width lookup, not
- *  `if (kind === 'milestone')` — plans/01 §2.5). Only `milestone` floors its span today; every other
- *  kind falls through to its true `[x, x + width)` extent. */
+ *  `if (kind === 'milestone')` — plans/01 §2.5). Only `milestone` adds its own floor on top of
+ *  `minBarWidthPx`; every other kind floors at `minBarWidthPx` alone. */
 const KIND_SPAN_FLOOR_MULTIPLIER: Readonly<Partial<Record<EntryKind, number>>> = Object.freeze({
   milestone: Math.SQRT2,
 });
@@ -63,15 +73,15 @@ export function barSpan(
   entry: Pick<Entry, 'start' | 'end' | 'kind'>,
   scale: TimeScale,
   diamondSizePx: number = DEFAULT_DIAMOND_SIZE_PX,
-): { x: number; width: number } {
+  minBarWidthPx: number = DEFAULT_MIN_BAR_WIDTH_PX,
+): { x: number; width: number; minimumSpan: boolean } {
   const x = scale.xForInstant(entry.start);
   const width = Math.max(0, scale.xForInstant(entry.end) - x);
   const floorMultiplier = KIND_SPAN_FLOOR_MULTIPLIER[entry.kind];
-  if (floorMultiplier !== undefined) {
-    const floor = diamondSizePx * floorMultiplier;
-    if (width < floor) return { x: x - floor / 2, width: floor };
-  }
-  return { x, width };
+  const kindFloor = floorMultiplier === undefined ? 0 : diamondSizePx * floorMultiplier;
+  const floor = Math.max(kindFloor, minBarWidthPx);
+  if (width < floor) return { x: x - floor / 2, width: floor, minimumSpan: true };
+  return { x, width, minimumSpan: false };
 }
 
 export interface BarFlags {
@@ -101,6 +111,12 @@ export interface FrameBar {
   height: number;
   lane: number;
   flags: BarFlags;
+  /** `true` when `barSpan` widened this bar's true `[x, x + width)` extent to reach a floor —
+   *  `minBarWidthPx`, or a milestone's own larger diamond floor on top of it. States a fact about
+   *  the paint, not a judgement on the kind: a milestone carries it exactly like any other floored
+   *  bar (plans/01 §2.5 bans a kind check here), and a consumer tells the two apart by pairing this
+   *  with `kind`. `render/` stamps it as `data-span="minimum"` (`02` §4). */
+  minimumSpan: boolean;
   /** What a screen reader announces: `${entry.name}, ${formatDate(zone, start)} – ${formatEndInclusive(zone, end)}`.
    * Library-derived text, not consumer render output — same precedent as `label` (plans/01 §4: "no user
    * render output in the frame"). Composed here because it needs the dataset zone and inclusive-end
@@ -210,6 +226,11 @@ export interface LayoutInput {
    *  Drives a milestone bar's painted-span floor (`barSpan`). View reads `--fg-diamond-size` and
    *  passes it; layout never restates the stylesheet. */
   diamondSizePx?: number;
+  /** Minimum painted bar width in px (CONTEXT.md). Default `DEFAULT_MIN_BAR_WIDTH_PX`. Drives every
+   *  kind's painted-span floor (`barSpan`), `max`'d against a milestone's own diamond floor so the
+   *  larger of the two always wins. View reads `--fg-bar-min-width` and passes it; layout never
+   *  restates the stylesheet. */
+  minBarWidthPx?: number;
   /** Visible Grid columns. Omitted or empty → no cells. The Gantt default `['name']` lives in view/. */
   columns?: readonly ResolvedColumn[];
   /** Which rows to draw. Omitted → `{ source: 'entries', tree: false }` (S1's flat list). */
@@ -330,6 +351,7 @@ export function placeFrame(
   const index = mem.heights;
   const tickBoxFloorPx = input.tickBoxFloorPx ?? DEFAULT_TICK_BOX_FLOOR_PX;
   const diamondSizePx = input.diamondSizePx ?? DEFAULT_DIAMOND_SIZE_PX;
+  const minBarWidthPx = input.minBarWidthPx ?? DEFAULT_MIN_BAR_WIDTH_PX;
   const verticalRows = input.overscan?.verticalRows ?? DEFAULT_OVERSCAN.verticalRows;
   const horizontalPx = input.overscan?.horizontalPx ?? DEFAULT_OVERSCAN.horizontalPx;
 
@@ -389,7 +411,7 @@ export function placeFrame(
     });
 
     for (const item of items) {
-      const { x, width } = barSpan(item, scale, diamondSizePx);
+      const { x, width, minimumSpan } = barSpan(item, scale, diamondSizePx, minBarWidthPx);
       if (!intersectsHorizontally(x, width)) continue;
       const lane = packing.laneByItem.get(item.id) ?? 0;
       const bar: FrameBar = {
@@ -404,6 +426,7 @@ export function placeFrame(
         height: rowHeight,
         lane,
         flags: {},
+        minimumSpan,
         a11yLabel: barA11yLabel(item, parts.get(item.entryId) ?? 1, scale, locale),
       };
       if (item.segmentId !== undefined) bar.segmentId = item.segmentId;

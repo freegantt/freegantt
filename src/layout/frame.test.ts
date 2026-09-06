@@ -1,5 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
-import { computeFrame, placeFrame, resolveLayoutRows, barSpan, DEFAULT_DIAMOND_SIZE_PX } from './frame.js';
+import {
+  computeFrame,
+  placeFrame,
+  resolveLayoutRows,
+  barSpan,
+  DEFAULT_DIAMOND_SIZE_PX,
+  DEFAULT_MIN_BAR_WIDTH_PX,
+} from './frame.js';
 import { FrameMemory } from './frame-memory.js';
 import { PrefixSumHeightIndex } from './row-height-index.js';
 import { DEFAULT_LANE_GAP_PX } from './lanes/pack-lanes.js';
@@ -831,10 +838,9 @@ describe('barSpan — milestone floor (bug hunt: milestone highlight box)', () =
     expect(x + width / 2).toBe(scale.xForInstant(milestone.start));
   });
 
-  it('never floors a non-milestone kind, even at zero width', () => {
-    const zeroWidthSpan: Entry = { ...sampleEntries[0]!, end: sampleEntries[0]!.start };
-    const { width } = barSpan(zeroWidthSpan, scale);
-    expect(width).toBe(0);
+  it('stamps minimumSpan on a floored milestone bar', () => {
+    const { minimumSpan } = barSpan(milestone, scale);
+    expect(minimumSpan).toBe(true);
   });
 
   it("computeFrame's bar and GanttShell.reveal's span agree on the same floored box", () => {
@@ -851,5 +857,37 @@ describe('barSpan — milestone floor (bug hunt: milestone highlight box)', () =
     const revealSpan = barSpan(milestone, scale);
     expect(bar.width).toBe(revealSpan.width);
     expect(bar.x).toBe(revealSpan.x);
+  });
+});
+
+describe('barSpan — a minimum painted bar width (#212 follow-up: a zero-width bar is unclickable)', () => {
+  it('floors a zero-width, non-milestone kind at minBarWidthPx and stamps minimumSpan', () => {
+    const zeroWidthSpan: Entry = { ...sampleEntries[0]!, end: sampleEntries[0]!.start };
+    const { x, width, minimumSpan } = barSpan(zeroWidthSpan, scale);
+    expect(width).toBe(DEFAULT_MIN_BAR_WIDTH_PX);
+    expect(minimumSpan).toBe(true);
+    expect(x + width / 2).toBe(scale.xForInstant(zeroWidthSpan.start));
+  });
+
+  it('never shrinks a milestone floor below its own diamond bounding box', () => {
+    const milestone: Entry = { ...sampleEntries[0]!, kind: 'milestone', end: sampleEntries[0]!.start };
+    // A tiny minBarWidthPx must not shrink the milestone floor below diamondSizePx * √2.
+    const { width } = barSpan(milestone, scale, DEFAULT_DIAMOND_SIZE_PX, 1);
+    expect(width).toBe(DEFAULT_DIAMOND_SIZE_PX * Math.SQRT2);
+  });
+
+  it('widens minBarWidthPx past a milestone floor too small for it', () => {
+    const milestone: Entry = { ...sampleEntries[0]!, kind: 'milestone', end: sampleEntries[0]!.start };
+    const { width } = barSpan(milestone, scale, 1, 40);
+    expect(width).toBe(40);
+  });
+
+  it('leaves an ordinary bar wide enough already unfloored, with no minimumSpan stamp', () => {
+    const wideSpan: Entry = sampleEntries[0]!;
+    const { x, width, minimumSpan } = barSpan(wideSpan, scale);
+    expect(width).toBe(scale.xForInstant(wideSpan.end) - scale.xForInstant(wideSpan.start));
+    expect(width).toBeGreaterThan(DEFAULT_MIN_BAR_WIDTH_PX);
+    expect(x).toBe(scale.xForInstant(wideSpan.start));
+    expect(minimumSpan).toBe(false);
   });
 });

@@ -12,6 +12,7 @@
 import {
   DEFAULT_DIAMOND_SIZE_PX,
   DEFAULT_LANE_GAP_PX,
+  DEFAULT_MIN_BAR_WIDTH_PX,
   DEFAULT_ROW_SOURCE,
   DEFAULT_TICK_BOX_FLOOR_PX,
 } from '../layout/index.js';
@@ -48,16 +49,22 @@ const LANE_GAP_PROPERTY = '--fg-lane-gap';
 /** Zero gap is authored: packed bars may sit flush. */
 const LANE_GAP_POLICY = { fallback: DEFAULT_LANE_GAP_PX, accepts: 'zeroOrMore' } as const;
 
-/** The four px sizes a Gantt reads off its own Container's CSS, not off a constructor option. They
- *  are not settings: nothing writes one, and `refreshPixelProperties` re-reads all four together. */
+const MIN_BAR_WIDTH_PROPERTY = '--fg-bar-min-width';
+/** Zero is authored. A consumer who wants a zero-width span to paint opted out of the floor on
+ *  purpose. `DIAMOND_SIZE_POLICY` differs: a zero milestone glyph is never useful. */
+const MIN_BAR_WIDTH_POLICY = { fallback: DEFAULT_MIN_BAR_WIDTH_PX, accepts: 'zeroOrMore' } as const;
+
+/** The five px sizes a Gantt reads off its own Container's CSS, not off a constructor option. They
+ *  are not settings: nothing writes one, and `refreshPixelProperties` re-reads all five together. */
 interface PixelMetrics {
   rowHeight: number;
   laneGapPx: number;
   tickBoxFloorPx: number;
   diamondSizePx: number;
+  minBarWidthPx: number;
 }
 
-/** The four `--fg-*` properties this Gantt measures itself against. Each row carries the rule that
+/** The five `--fg-*` properties this Gantt measures itself against. Each row carries the rule that
  *  decides whether an authored value is usable, and the metric it answers.
  *  `refreshPixelProperties` below is the whole reader: one loop, no per-property code. */
 interface PixelPropertyRead {
@@ -71,6 +78,7 @@ const PIXEL_PROPERTIES: readonly PixelPropertyRead[] = Object.freeze([
   { property: LANE_GAP_PROPERTY, policy: LANE_GAP_POLICY, metric: 'laneGapPx' },
   { property: TICK_BOX_FLOOR_PROPERTY, policy: TICK_BOX_FLOOR_POLICY, metric: 'tickBoxFloorPx' },
   { property: DIAMOND_SIZE_PROPERTY, policy: DIAMOND_SIZE_POLICY, metric: 'diamondSizePx' },
+  { property: MIN_BAR_WIDTH_PROPERTY, policy: MIN_BAR_WIDTH_POLICY, metric: 'minBarWidthPx' },
 ]);
 
 /** Default for `todayLineMarginTicks`: how many of the current preset's own ticks sit between the
@@ -172,6 +180,7 @@ type SettingLayoutInputKey =
   | 'laneGapPx'
   | 'tickBoxFloorPx'
   | 'diamondSizePx'
+  | 'minBarWidthPx'
   | 'locale'
   | 'todayLine'
   | 'dateLines'
@@ -193,6 +202,7 @@ export class FrameSettings {
     laneGapPx: DEFAULT_LANE_GAP_PX,
     tickBoxFloorPx: DEFAULT_TICK_BOX_FLOOR_PX,
     diamondSizePx: DEFAULT_DIAMOND_SIZE_PX,
+    minBarWidthPx: DEFAULT_MIN_BAR_WIDTH_PX,
   };
 
   /** `initial` is written straight into the values, with no port call. A Gantt under construction
@@ -248,6 +258,11 @@ export class FrameSettings {
     return this.#metrics.diamondSizePx;
   }
 
+  /** Minimum painted bar width in px, from `--fg-bar-min-width` — every kind's painted-span floor. */
+  get minBarWidthPx(): number {
+    return this.#metrics.minBarWidthPx;
+  }
+
   /** Live reconfiguration, for one setting or several. A value identical to the one already held
    *  invalidates nothing, so assigning what is already set never costs a frame. Every other key runs
    *  its own row of `INVALIDATION`, and the strongest answer among them wins.
@@ -278,6 +293,7 @@ export class FrameSettings {
       laneGapPx: this.#metrics.laneGapPx,
       tickBoxFloorPx: this.#metrics.tickBoxFloorPx,
       diamondSizePx: this.#metrics.diamondSizePx,
+      minBarWidthPx: this.#metrics.minBarWidthPx,
       todayLine: this.#values.todayLine,
       dateLines: this.#values.dateLines,
       rows: this.#values.rowSource,

@@ -166,7 +166,10 @@ type RowBandGeom = {
   height: number;
   parity: RowParity;
 };
-type BarGeom = Pick<FrameBar, 'kind' | 'label' | 'x' | 'y' | 'width' | 'height' | 'flags' | 'a11yLabel'> & {
+type BarGeom = Pick<
+  FrameBar,
+  'kind' | 'label' | 'x' | 'y' | 'width' | 'height' | 'flags' | 'a11yLabel' | 'minimumSpan'
+> & {
   /** S5.4, D-S5-11: a resolved `barRenderer`'s output for this one bar — undefined keeps `label`. */
   content?: ElementDescription;
   /** #212: the Segment this bar draws right now, or nothing for a whole-span bar. It is a per-frame
@@ -970,6 +973,7 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
           height: bar.height,
           flags: bar.flags,
           a11yLabel: bar.a11yLabel,
+          minimumSpan: bar.minimumSpan,
           // #212: the geom carries the Segment, so `shallowEqual` sees a Segment change and patches.
           // The key stays present and may hold `undefined`, which keeps the key count stable.
           segmentId: bar.segmentId,
@@ -984,6 +988,11 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
         // goes. The node survives and draws its neighbour, so a stamp written once at creation lies.
         if (geom.segmentId === undefined) delete node.dataset[SEGMENT_ID_KEY];
         else node.dataset[SEGMENT_ID_KEY] = geom.segmentId;
+        // States a fact about the paint, not a judgement on the kind (plans/01 §2.5) — a milestone
+        // carries it exactly like any other bar `barSpan` floored. Pair with `data-kind` to tell a
+        // floored milestone from a floored span.
+        if (geom.minimumSpan) node.dataset['span'] = 'minimum';
+        else delete node.dataset['span'];
         node.dataset['flag'] = flagTokens(geom.flags);
         node.setAttribute('aria-label', geom.a11yLabel);
         node.style.transform = `translate(${geom.x}px, ${geom.y}px)`;
