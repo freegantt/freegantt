@@ -56,8 +56,8 @@ Each row was re-checked against the code before it was accepted. A row marked
 | candidate 2 — one `isMutationCancelled` predicate in `model/`, replacing three copies | real | `[ ]` |
 | candidate 3 — `gantt-shell.ts` `allEntries` copies the whole dataset per preview frame (I5) | real | `[ ]` |
 | candidate 4 — one Segment-diff helper for three hand-rolled copies | real, small | `[ ]` |
-| harness `editing.ts` writes the retired `gantt.preset = { ...gantt.preset, snap }` spelling | real; harness-only, the API already moved to `gantt.snap` | `[ ]` |
-| harness `editing.ts` hand-rolls undo/redo instead of `commands.run()` | real; no default chord ships yet, so no double-fire today | `[ ]` |
+| harness `editing.ts` writes the retired `gantt.preset = { ...gantt.preset, snap }` spelling | real; harness-only, the API already moved to `gantt.snap` | `[x]` |
+| harness `editing.ts` hand-rolls undo/redo instead of `commands.run()` | real; no default chord ships yet, so no double-fire today | `[x]` |
 
 ### Next slice
 
