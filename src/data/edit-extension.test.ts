@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { identityExtender } from './edit-extension.js';
 import { DatasetState } from './dataset-state.js';
+import { runTransaction } from './transaction.js';
 import { entryId, segmentId } from '../model/index.js';
 import type { Entry, EntryId } from '../model/index.js';
 import { mergeEntryEdits, proposedKeysOf } from './fields/field-access.js';
@@ -119,5 +120,64 @@ describe('composing two extenders that write one Entry (#197)', () => {
     const shiftsFurther: EditExtender = () => new Map([[target, { start: 99 as Entry['start'] }]]);
     expect(composed(movesTarget, shiftsFurther).get(target)?.start).toBe(99);
     expect(composed(movesTarget, shiftsFurther).get(target)?.end).toBe(20);
+  });
+});
+
+// #238: the law at depth three. Two extenders on one Entry obeyed it; a third dropped both earlier
+// plugins' writes, because a merge of two edits that state no `proposedKeys` used to stamp an empty
+// set, and an empty set reads as "the author stated nothing at all" nowhere — `keysWrittenBy` falls
+// back to the raw keys only when `proposedKeys` is absent. The third merge then carried `[]` as the
+// base's stated keys, `diffEdit` took its authored branch, and only the last plugin got a row.
+//
+// The fixture writes `name`, `kind` and `parentId` — non-date Fields on purpose. Date Fields
+// (`start`/`end`) on one Entry hit the envelope-companion collision in `readEdit` (#232), which is a
+// different defect. A `meta` write as the last plugin would mask this one through `diffEdit`'s
+// `authored.has('meta')` escape, so none of the three uses `meta` either.
+describe('composing three extenders that write one Entry (#238)', () => {
+  const target = entryId('t2');
+
+  /** One wrapper, exactly as `api/dataset-plugin.ts` documents composition. */
+  function writes(edit: StoredEdit): (next: EditExtender) => EditExtender {
+    return (next) => (call) => mergeEntryEdits(next(call), new Map([[target, edit]]));
+  }
+
+  function datasetWithThreePlugins(): DatasetState {
+    const state = new DatasetState({
+      entries: [
+        { id: 't1', name: 't1', start: 0, end: 10 },
+        { id: 't2', name: 't2', start: 0, end: 10 },
+      ],
+      timeZone: 'UTC',
+    });
+    state.setExtender(writes({ name: 'A' }));
+    state.setExtender(writes({ kind: 'milestone' }));
+    state.setExtender(writes({ parentId: entryId('t1') }));
+    return state;
+  }
+
+  it('lands every plugin write in the store, not the last one alone', () => {
+    const state = datasetWithThreePlugins();
+    runTransaction(state, (token) => state.entries.stageUpdate(token, entryId('t1'), { name: 'a' }), 'user');
+
+    const committed = state.entries.get(target);
+    expect(committed?.name).toBe('A');
+    expect(committed?.kind).toBe('milestone');
+    expect(committed?.parentId).toBe(entryId('t1'));
+  });
+
+  it('emits a changeset row for every plugin write, so undo restores all three', () => {
+    const state = datasetWithThreePlugins();
+    let captured: readonly { id: EntryId; field: string }[] = [];
+    state.on('change', ({ changeSet }) => {
+      captured = changeSet.updated as readonly { id: EntryId; field: string }[];
+    });
+
+    runTransaction(state, (token) => state.entries.stageUpdate(token, entryId('t1'), { name: 'a' }), 'user');
+
+    const onTarget = captured
+      .filter((row) => row.id === target)
+      .map((row) => row.field)
+      .sort();
+    expect(onTarget).toEqual(['kind', 'name', 'parentId']);
   });
 });

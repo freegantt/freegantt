@@ -21,7 +21,12 @@ import { diffEdit, foldChangeSet } from './change-set.js';
 import type { EditRequest, EntryEdits, StoredEdits } from './edit-extension.js';
 import { reconcileExtenderEdits } from './entry-reader.js';
 import { buildEffectiveEntries } from './entry-tree.js';
-import { mergeEntryEdits, overlayStoredEdit, proposedKeysOf } from './fields/field-access.js';
+import {
+  mergeEntryEdits,
+  overlayStoredEdit,
+  proposedKeysOf,
+  statesProposedKeys,
+} from './fields/field-access.js';
 import type { FieldRegistry } from './fields/field-registry.js';
 import { promoteNewParents } from './hierarchy.js';
 import { rollUpFields } from './rollup.js';
@@ -75,11 +80,11 @@ export function diffEdits(
  *  edit with no stated `proposedKeys` still needs the raw `meta` key, because nothing else names what
  *  it wrote. */
 function fieldsWrittenBy(edit: StoredEdit): ReadonlySet<string> {
-  const statesProposedKeys = edit.proposedKeys !== undefined;
+  const states = statesProposedKeys(edit);
   const keys = new Set<string>(proposedKeysOf(edit));
   for (const key of Object.keys(edit)) {
     if (key === 'proposedKeys') continue;
-    if (statesProposedKeys && key === 'meta') continue;
+    if (states && key === 'meta') continue;
     keys.add(key);
   }
   return keys;

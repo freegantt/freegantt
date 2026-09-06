@@ -17,7 +17,7 @@ import type {
   UpdatedRow,
 } from '../model/index.js';
 import type { StoredEdit } from './edit-extension.js';
-import { proposedKeysOf, overlayStoredEdit } from './fields/field-access.js';
+import { proposedKeysOf, overlayStoredEdit, statesProposedKeys } from './fields/field-access.js';
 import type { FieldRegistry } from './fields/field-registry.js';
 
 function pushRow(
@@ -59,6 +59,9 @@ export function diffEdit(
 
   const next = overlayStoredEdit(current, edit);
   const authored = proposedKeysOf(edit);
+  // An edit that states nothing is read by the keys it holds; an edit that states the empty set
+  // writes no Field. Reading absence off `authored.size` collapsed the two (#238).
+  const states = statesProposedKeys(edit);
   const rows: FieldUpdated[] = [];
   const seen = new Set<string>();
 
@@ -66,10 +69,10 @@ export function diffEdit(
     pushRow(rows, seen, id, field, from, to, registry);
   };
 
-  const wroteMeta = authored.has('meta') || (authored.size === 0 && 'meta' in edit);
+  const wroteMeta = authored.has('meta') || (!states && 'meta' in edit);
   if (wroteMeta) emit('meta', current.meta, next.meta);
 
-  if (authored.size > 0) {
+  if (states) {
     for (const field of registry.all) {
       if (field.key === 'meta') continue;
       if (!authored.has(String(field.key)) && !authored.has('meta')) continue;

@@ -16,12 +16,12 @@ import type {
 } from '../../model/index.js';
 import { diffMs } from '../../time/index.js';
 import { CORE_FIELDS } from './core-fields.js';
-import { strategyFor, withProposedKeys, proposedKeysOf } from './source-strategy.js';
+import { strategyFor, withProposedKeys, proposedKeysOf, statesProposedKeys } from './source-strategy.js';
 import type { FieldReadMemo } from './source-strategy.js';
 import type { FieldRegistry, ResolvedField } from './field-registry.js';
 
 export type { FieldLookup, FieldReadMemo };
-export { withProposedKeys, proposedKeysOf };
+export { withProposedKeys, proposedKeysOf, statesProposedKeys };
 
 function isOptionalEntryKey(key: string): key is 'parentId' | 'segments' | 'meta' {
   return key === 'parentId' || key === 'segments' || key === 'meta';
@@ -31,7 +31,7 @@ function isOptionalEntryKey(key: string): key is 'parentId' | 'segments' | 'meta
  *  storage patch states them by the keys it holds, which is how `diffEdit` already reads one. */
 function keysWrittenBy(edit: StoredEdit | undefined): readonly string[] {
   if (edit === undefined) return [];
-  if (edit.proposedKeys !== undefined) return [...edit.proposedKeys];
+  if (statesProposedKeys(edit)) return [...proposedKeysOf(edit)];
   return Object.keys(edit);
 }
 
@@ -42,12 +42,14 @@ function keysWrittenBy(edit: StoredEdit | undefined): readonly string[] {
  * The two edits may state their writes differently — one through `proposedKeys`, one through the keys
  * it holds. When either states `proposedKeys`, the merged edit does too, and the raw side contributes
  * the keys it holds, so `diffEdit` still emits a row for every write. When neither does, the merged
- * edit stays on the raw path, where an undeclared key survives.
+ * edit stays on the raw path, where an undeclared key survives — it is returned *unstamped*, because
+ * absent and empty are two different statements (#238). A stamped empty set says "this edit writes no
+ * Field", so a third merge read the first two plugins' writes as nothing and dropped them.
  */
 export function mergeStoredEdits(base: StoredEdit | undefined, extra: StoredEdit): StoredEdit {
   const merged: StoredEdit = { ...base, ...extra };
-  if (base?.proposedKeys === undefined && extra.proposedKeys === undefined) {
-    return withProposedKeys(merged, []);
+  if (!statesProposedKeys(base) && !statesProposedKeys(extra)) {
+    return merged;
   }
   return withProposedKeys(merged, new Set([...keysWrittenBy(base), ...keysWrittenBy(extra)]));
 }
