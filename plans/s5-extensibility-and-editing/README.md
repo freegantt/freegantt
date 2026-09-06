@@ -1,6 +1,6 @@
 # S5 — Extensibility, editing surfaces, a11y completion
 
-**Slice:** S5 (`plans/03` §S5) · **Position:** after S4, before S6 · **Status:** in progress — S5.0–S5.10 done, the 2026-09-04 branch review is closed, S5.11 next
+**Slice:** S5 (`plans/03` §S5) · **Position:** after S4, before S6 · **Status:** in progress — S5.0–S5.10 and S5.12 done, the 2026-09-04 branch review is closed. **S5.11 is next and is blocked on Q21 and Q22** (§0 below; the step file leads with them). Its keyboard design is settled — D-S5-39 and a rewritten D-S5-26 — and §0.3's own three questions are closed. S5.12 ran ahead of S5.11 because the three-handoff plan dispatched it in wave 1; that turned out to help, because S5.11's live region now rides S5.12's `error` event.
 **Form:** the same settled-spec form as [`plans/s4-hierarchy-and-rows/README.md`](../s4-hierarchy-and-rows/README.md) — this file is the tracker and the shared context; each step file holds the decisions it implements and its TODO boxes.
 **Tick as you go:** When you finish a TODO item, tick its box in that step file. Tick it in the same change as the code. Do not wait for S5.13 or the slice gate.
 **Governed by:** `plans/00` D3/D4/D5/D11/D12, `plans/01` §2.5/§2.6/§8/§9/§10, `plans/02` §3/§4/§4.1/§4.2/§7, ADR [0002](../../docs/adr/0002-scheduling-is-a-plugin-not-a-core-layer.md), ADR [0005](../../docs/adr/0005-fields-are-declared-and-grid-columns-reference-them.md).
@@ -17,7 +17,9 @@
 
 ## 0. Scope calls — proposed
 
-Q2 needs the user's sign-off before S5.10 starts; it rewords a locked decision. Everything else is settled by this spec. The S5.0 grill on issue #111 may add rows here before S5.1 starts.
+Q2 needed the user's sign-off before S5.10 started; it reworded a locked decision. It is answered, and S5.10 shipped it.
+
+**Open now: Q21 and Q22, and both block S5.11.** Everything else in this table is settled.
 
 | # | Question | Answer |
 |---|---|---|
@@ -34,6 +36,9 @@ Q2 needs the user's sign-off before S5.10 starts; it rewords a locked decision. 
 | **Q11** | Is the inline editor core or a plugin? | **A plugin** (`inlineEditing()`), like tooltips and the context menu. `plans/01` §10 already names editors as a dogfood case. It also makes `[S5-A6]` honest: a read-only Gantt ships no editor code. §S5.8, D-S5-19. |
 | **Q12** | How does a date cell edit without a date-picker dependency? | **A `dateInput` seam.** The default is `<input type="date">`, read and written through the dataset's zone. A consumer passes its own factory. `plans/04` §1 budgets two runtime dependencies and a picker is not one of them. §S5.8, D-S5-20. |
 | **Q13** | Which pane carries the grid a11y pattern? | **The grid pane is the `treegrid`/`grid`.** The timeline pane stays a labelled region of focusable bars, and roving focus keeps the two in step. `aria-owns` across two scrollers was considered and rejected: it is fragile under virtualization, where the owned node may not exist. §S5.11, D-S5-25. |
+| **Q20** | One chord meant three things. Which wins? | **Whichever the focus scope names.** `TargetKind` (`'row' \| 'cell' \| 'bar' \| 'header' \| 'splitter'`) already exists and a command's `when` already reads it; S5.7 shipped the first scoped chord without naming the pattern. So a chord is scoped, the narrower binding wins by registration order, and one keystroke can mean three things safely. The cost is that the grid pane's plain arrows must move focus, so eight default pan bindings move to `Alt+Arrow` and to focus movement. §S5.11, D-S5-39. |
+| **Q21** | Does `Mod+ArrowLeft` / `Mod+ArrowRight` step the pick along a row? | **Open — blocks S5.11.** The arrows are spent (plain nudges, `Shift` resizes, `Alt` nudges finely) and `Home`/`End` reach only a row's outer two bars, so a row drawing five Segments cannot reach the middle three from the keyboard. `Mod+Arrow` is free in every scope and reads as *move, do not act*. The pattern's own alternative, `Tab` within a row, is correct on paper and wrong here: a packed row can draw forty items, and forty presses to leave a pane breaks the two-tab-stop promise D-S5-39 makes. Nothing surveyed has Segments, so nothing surveyed answers it. The third option is to ship no chord and record per-Segment keyboard gesture as a named `[S5-A4]` exception. §S5.11, D-S5-26. |
+| **Q22** | Do the S5.12 decision ids renumber to D-S5-40/41/42? | **Open — blocks S5.11.** D-S5-35, D-S5-36 and D-S5-37 each name one S5.12 decision and one S5.9/S5.1/S5.7 decision; the S5.12 trio was minted by a session working in isolation. About 35 comments in `src/` cite one of the six, and `api/gantt.ts` and `view/gantt-shell.ts` each cite **both** senses of D-S5-35, so a reader following the id cannot land on the right one. S5.11 adds D-S5-39 and writes more such comments, so answering after that step is a second sweep over the same files. The work is mechanical either way. |
 | **Q14** | Does a third-party plugin get zone-aware date math? | **Yes — `dataset.time`, a zone-bound façade.** A weekend-shading plugin cannot import `time/` (the exports map seals it), so without this the gate box `[S5-A2]` is unreachable. `PlainParts` gains `dayOfWeek`. §S5.6, D-S5-16. |
 | **Q15** | Does `StoreName` widen this slice? | **Yes, with a shipped occupant.** `PluginStore` gives a `DatasetPlugin` reserved per-entry data (ADR 0002: not `Entry.meta`, to stop host/plugin collisions). The harness lock plugin is its first occupant, so the mechanism ships with a user, not as decoration (I11). S7's `Dependency` store is the second. §S5.10, D-S5-24. |
 | **Q16** | Does `registerItemEmitter` keep that name? | **No — `registerItemProducer`.** S4 named the seam `ItemProducer` and the call `produceItemsForRow`. `plans/01` §10 still says emitter; one concept keeps one name (CLAUDE.md, #7). §S5.9, D-S5-22. |
@@ -140,7 +145,7 @@ Thirteen steps, in order. S5.0 is the blocking pre-step: the grill on issue #111
 | `[S5-A1]` | Context menu and tooltips are plugins with zero private imports (lint-proven — the dogfood gate) | S5.5 | `.dependency-cruiser.cjs` rule + `scripts/guard-red-test.mjs`, `extensions/features/*.test.ts` |
 | `[S5-A2]` | A harness-only third-party-style plugin (weekend shading) is written against the public contract only | S5.6 | `harness/plugins/weekend-shading.ts`, `e2e/plugins.spec.ts` |
 | `[S5-A3]` | A consumer-defined kind (renderer + capabilities + `when` menu items, registered by config or plugin) works with zero core edits | S5.9 | `api/gantt.test.ts`, `layout/items/produce-items.test.ts`, `view/capability.test.ts` |
-| `[S5-A4]` | Every S3 pointer capability has a keyboard path; axe reports no violations on harness pages | S5.11 | `view/keyboard-navigation.test.ts`, `e2e/a11y.spec.ts` |
+| `[S5-A4]` | Every S3 pointer capability has a keyboard path; axe reports no violations on harness pages | S5.11 | `view/roving-focus.test.ts`, `e2e/a11y.spec.ts` |
 | `[S5-A5]` | A consumer replaces the entry editor through `beforeEntryEdit` (harness demo) | S5.8 | `extensions/features/inline-editing.test.ts`, `e2e/editing.spec.ts` |
 | `[S5-A6]` | Unused features are absent from a consumer bundle (tree-shaking test in CI) | S5.13 | `size-limit` budgets + a string probe over the built bundle |
 
@@ -271,7 +276,7 @@ Full prose lives in the step file that implements each decision.
 | D-S5-23 | `setExtender` composes over the current occupant | S5.10 |
 | D-S5-24 | `PluginStore` holds per-plugin per-entry data, never `Entry.meta` | S5.10 |
 | D-S5-25 | The grid pane carries the `treegrid` pattern; the timeline is a labelled region | S5.11 |
-| D-S5-26 | Every pointer gesture has a chord over the same command | S5.11 |
+| D-S5-26 | The chord map: the grid pane's arrows move focus, the timeline pane's arrows edit | S5.11 |
 | D-S5-27 | Axe runs on every harness page in CI | S5.11 |
 | D-S5-28 | The tree-shaking budget is a probe plus a size limit | S5.13 |
 | D-S5-29 | The API reference renders the existing API report — no new dependency | S5.13 |
@@ -284,6 +289,13 @@ Full prose lives in the step file that implements each decision.
 | D-S5-36 | One plugin is installed by a verb, not by restating the set | S5.1 |
 | D-S5-37 | A column is named by its `field`, everywhere a column is named | S5.7 |
 | D-S5-38 | A plugin owns its own column's geometry; the library stores it for nobody | S5.9 |
+| D-S5-39 | Focus scope decides what a chord means; the narrower binding wins | S5.11 |
+
+> **Three ids are used twice.** D-S5-35, D-S5-36 and D-S5-37 each name one decision here and a
+> different one above — the S5.12 trio was minted by a session working in isolation from S5.9/S5.1/S5.7.
+> About 35 comments in `src/` cite one of the six, and `api/gantt.ts` and `view/gantt-shell.ts` each
+> cite **both** senses of D-S5-35, so a reader following the id has no way to land on the right one.
+> Renumbering the S5.12 trio to D-S5-40/41/42 is mechanical and is not done yet.
 
 ---
 
@@ -349,7 +361,7 @@ Read these before you touch `src/`.
 | Decorations and time | `layout/decorations.test.ts`, `time/zone.test.ts`, `api/dataset.test.ts` |
 | Grid chrome | `view/grid-columns.test.ts`, `interaction/column-gestures.test.ts` (dom) |
 | Dataset plugins | `data/edit-extension.test.ts`, `data/plugin-store.test.ts`, `api/dataset.test.ts` |
-| A11y | `view/keyboard-navigation.test.ts`, `render/dom/index.test.ts` (dom), `e2e/a11y.spec.ts` |
+| A11y | `view/roving-focus.test.ts`, `render/dom/index.test.ts` (dom), `e2e/a11y.spec.ts` |
 | Integration | `api/gantt.test.ts`, `api/dataset.test.ts` |
 | E2E | `e2e/plugins.spec.ts`, `e2e/editing.spec.ts`, `e2e/a11y.spec.ts` |
 | Guard | `.dependency-cruiser.cjs` `extensions-public-only` rule; `scripts/guard-red-test.mjs` gains the matching red test; `size-limit` budgets |
