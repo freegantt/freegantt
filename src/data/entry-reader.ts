@@ -141,7 +141,7 @@ function assertNoDuplicateSegmentIds(entries: readonly Entry[]): void {
   const seen = new Set<SegmentId>();
   for (const entry of entries) {
     for (const segment of entry.segments) {
-      if (seen.has(segment.id)) throw new DuplicateSegmentIdError(segment.id);
+      if (seen.has(segment.id)) throw new DuplicateSegmentIdError(segment.id, 'construction');
       seen.add(segment.id);
     }
   }

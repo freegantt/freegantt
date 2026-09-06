@@ -103,6 +103,40 @@ dataset.undo();  dataset.redo();
 dataset.canUndo; dataset.canRedo;
 ```
 
+- **`dataset.entries.update(id, { segments })` is how a consumer moves one Segment** (#212, ADR
+  0010, fix plan R1). A Segment named by position and no `id` keeps the `SegmentId` already at that
+  position — a move, not a replacement — the same way `entries.update(id, { start })` moves an
+  Entry's own envelope. Naming an `id` replaces the id at that position instead; a position past the
+  Entry's current Segment count mints a fresh id, the same as an added Segment on `entries.add`. Two
+  Segments never share one `SegmentId` — on the same Entry, on two different Entries, or authored
+  twice in one construction-time `entries` list — and a write that would create that collision
+  throws `DuplicateSegmentIdError` (`code: 'duplicate-segment-id'`) before anything stages — on
+  every mutating call a consumer writes. `dataset.replay(changeSet)` is the one exception: it
+  applies undo/redo rows with no validation, by design (D-S2-14, §2), so a duplicate id stays
+  representable through that one door.
+  `segments: []` throws `EmptySegmentsError` (`code: 'empty-segments'`): every stored Entry keeps at
+  least one Segment, and an update has no whole-span input to mint a replacement from the way
+  `entries.add({ segments: [] })` does — so it refuses rather than silently dropping the Segment ids
+  already there (#212 fix-plan review, finding S2). A `start`/`end` written in the same edit as
+  `segments` must agree with that write's own envelope — `envelopeOfSegments` over the Segments named
+  — or the edit throws `SegmentsOutOfSyncError` (`code: 'segments-out-of-sync'`): the caller cannot
+  propose one span through `start`/`end` and a different one through `segments` and have the library
+  silently pick a winner (#212 fix-plan review, finding S3). Naming `segments` alone, with neither
+  `start` nor `end`, keeps its documented silent derivation: the Entry's own span reads back off the
+  Segments just written.
+- **`dataset.entries.removeSegments(ids)` removes Segments in one transaction and one changeset**,
+  across several Entries when the ids name several (ADR 0010). Removing an Entry's last Segment
+  removes the Entry too, in the same transaction. **It never removes that Entry's descendants**
+  (#212, ADR 0010, fix plan R3): each direct child re-parents to the removed Entry's own parent, or
+  to the root when it had none. `entries.remove(id)` is the separate, deliberate call that takes a
+  whole subtree; `removeSegments` never does, even when its last Segment happens to be the Entry's
+  own. One undo step restores the Entry, its Segment, and every promoted child's `parentId`.
+- **`dataset.entries.entryIdOfSegment(id)`** answers the Entry that draws a given Segment, or
+  `undefined` when no Entry does (ADR 0010, #212). **`entryIdsOfSegments(ids)`** answers every Entry
+  named by at least one id in `ids`, deduped, in the order first named — the projection a Selection
+  runs to turn its Segments into the Entries they belong to. Both read the Segment→Entry index
+  `data/` maintains on write, so neither call scans the dataset.
+
 Single mutations outside an explicit transaction are auto-wrapped in one — convenience without a second code path (D-S2-8). Each mutator validates against its own in-progress write set before staging anything, so a rejected call leaves the store untouched and a stack trace points at the call that made the bad edit, not at a transaction's closing brace.
 
 `transaction()` returns the body's own return value, not a `ChangeSet` — `dataset.on('change')` is the only channel a committed changeset travels on (§3). A nested `transaction()` call runs its body against the already-open transaction and returns that body's value without committing a second time; only the outermost call commits. A veto (`beforeChange` returning `false`, §3) makes `transaction()` throw `MutationCancelledError` carrying the refused changeset, rather than returning at all.
@@ -620,31 +654,6 @@ gantt.commands.register({
 });
 ```
 
-- **`dataset.entries.update(id, { segments })` is how a consumer moves one Segment** (#212, ADR
-  0010, fix plan R1). A Segment named by position and no `id` keeps the `SegmentId` already at that
-  position — a move, not a replacement — the same way `entries.update(id, { start })` moves an
-  Entry's own envelope. Naming an `id` replaces the id at that position instead; a position past the
-  Entry's current Segment count mints a fresh id, the same as an added Segment on `entries.add`. Two
-  Segments never share one `SegmentId` — on the same Entry, on two different Entries, or authored
-  twice in one construction-time `entries` list — and a write that would create that collision
-  throws `DuplicateSegmentIdError` (`code: 'duplicate-segment-id'`) before anything stages.
-  `segments: []` throws `EmptySegmentsError` (`code: 'empty-segments'`): every stored Entry keeps at
-  least one Segment, and an update has no whole-span input to mint a replacement from the way
-  `entries.add({ segments: [] })` does — so it refuses rather than silently dropping the Segment ids
-  already there (#212 fix-plan review, finding S2). A `start`/`end` written in the same edit as
-  `segments` must agree with that write's own envelope — `envelopeOfSegments` over the Segments named
-  — or the edit throws `SegmentsOutOfSyncError` (`code: 'segments-out-of-sync'`): the caller cannot
-  propose one span through `start`/`end` and a different one through `segments` and have the library
-  silently pick a winner (#212 fix-plan review, finding S3). Naming `segments` alone, with neither
-  `start` nor `end`, keeps its documented silent derivation: the Entry's own span reads back off the
-  Segments just written.
-- **`dataset.entries.removeSegments(ids)` removes Segments in one transaction and one changeset**,
-  across several Entries when the ids name several (ADR 0010). Removing an Entry's last Segment
-  removes the Entry too, in the same transaction. **It never removes that Entry's descendants**
-  (#212, ADR 0010, fix plan R3): each direct child re-parents to the removed Entry's own parent, or
-  to the root when it had none. `entries.remove(id)` is the separate, deliberate call that takes a
-  whole subtree; `removeSegments` never does, even when its last Segment happens to be the Entry's
-  own. One undo step restores the Entry, its Segment, and every promoted child's `parentId`.
 - **`segmentIds: readonly SegmentId[]`** is every Segment the invocation acts on. **`entryIds:
   readonly EntryId[]`** is a projection of `segmentIds` — the Entries those Segments belong to,
   deduped, in row order. `entryIds` is the same word `DomTarget.entryIds` uses, and not always the
@@ -727,7 +736,7 @@ This build writes `schema: 2` (`rollUpKinds`, `fields`). `schema: 1` still reads
 
 - **Dev-mode invariant warnings**: dependency cycle detected (with member ids), config set on destroyed instance, non-deterministic item identity, renderer returned a live node, and (S1.9) `GanttOptions.scale` supplied alongside any of `preset`/`range`/`zoom` — "FreeGantt: GanttOptions.preset/range/zoom are ignored when 'scale' is also supplied. The shared TimeScaleModel already carries its own intent — set preset/range/zoom on it directly." The shared `scale` always wins; the constructor keys are never merged into it (D-S1.9-9).
 - **Stable test hooks**: `data-testid` on every part so consumers can write E2E tests against the Gantt without brittle selectors. Shipped at S1.10 (D-S1.10-5/§3.5, U6): `[data-testid="fg-row"]` (with `data-row-id`) and `[data-testid="fg-bar"]` (alongside the existing `data-item-id`) — the selectors S1.11's e2e boxes select on.
-- **Errors are typed and actionable**: `FreeGanttError` subclasses with codes, never bare strings; validation failures name the entity and field. `ContainerNotFoundError` (`code: 'container-not-found'`, S1.8) is thrown when a string `container` selector matches nothing. `UnknownPresetError` (`code: 'unknown-preset'`, S1.9) is thrown by `resolvePreset` for a `PresetRef` string outside the shipped set. `EntryNotFoundError` (`code: 'entry-not-found'`) is thrown by `reveal(entryId)` (S1.9; `reveal(segmentId)` reveals a Segment and does not throw this), `entries.fieldValue`, and by `entries.update`/`entries.remove`/a bad `parentId` (S2.3) for an id the Dataset has no entry for — its message names the call that failed. `DuplicateEntryIdError` (`code: 'duplicate-entry-id'`, S2.3) is thrown by `entries.add` given an id already in the store. `DuplicateSegmentIdError` (`code: 'duplicate-segment-id'`, #212) is thrown by a Segment write that would make two Segments share one `SegmentId`. `SegmentsOutOfSyncError` (`code: 'segments-out-of-sync'`, #212) is thrown by `entries.update` two ways: naming `start`/`end` with no `segments` on an Entry that draws several (`'ambiguous'` — moving the envelope alone says nothing about which Segment moved), or naming both in one edit with disagreeing spans (`'conflicting'` — the #212 fix-plan review, finding S3). `EmptySegmentsError` (`code: 'empty-segments'`, #212 fix-plan review, finding S2) is thrown by `entries.update(id, { segments: [] })` — every stored Entry keeps at least one Segment, and an update has no whole-span input to mint a replacement from. `ParentCycleError` (`code: 'parent-cycle'`, S2.3) is thrown by a `parentId` edit that would make an entry its own ancestor, self-parenting included. `UnknownFieldError` (`code: 'unknown-field'`, S2.3) is thrown by `entries.update` or `entries.fieldValue` given a key that names no field — the Field registry is the legal set. `DuplicateFieldKeyError` (`code: 'duplicate-field-key'`, S4.1) is thrown when two Field declarations share a key. `DuplicateFieldSourceError` (`code: 'duplicate-field-source'`, S4.1) is thrown when two Fields claim the same `meta` key. `InvalidFieldSourceError` (`code: 'invalid-field-source'`, #196) is thrown when a `Field.source` names no known source — `source: 'meta'` where `{ from: 'meta' }` was meant. TypeScript refuses that shape, so this is for a JS caller; `ctx.fields.register` is public surface, and a library fault must be a `FreeGanttError` even there. `UnknownAggregatorError` (`code: 'unknown-aggregator'`, S4.1) is thrown when a Field names an Aggregator that is not registered. `UnknownFieldTypeError` (`code: 'unknown-field-type'`, S4.1) is thrown when a Field names a `type` with no matching `fieldTypes` entry. `FieldNotColumnableError` (`code: 'field-not-columnable'`, S4.3) is thrown when `gridColumns` names a Field that declared no `column`. `UnknownGridColumnError` (`code: 'unknown-grid-column'`, S5.7) is thrown by `hideGridColumn`/`showGridColumn` given a field no declared column carries. `DuplicateRowIdError` (`code: 'duplicate-row-id'`, S4.6) is thrown by a `{ source: 'custom' }` resolver that returns the same `id` twice. `UnsupportedSchemaError` (`code: 'unsupported-schema'`, S2.6) is thrown by `Dataset.fromJSON` for a `schema` this build has no reader for — the message names the version it found and the versions it reads.
+- **Errors are typed and actionable**: `FreeGanttError` subclasses with codes, never bare strings; validation failures name the entity and field. `ContainerNotFoundError` (`code: 'container-not-found'`, S1.8) is thrown when a string `container` selector matches nothing. `UnknownPresetError` (`code: 'unknown-preset'`, S1.9) is thrown by `resolvePreset` for a `PresetRef` string outside the shipped set. `EntryNotFoundError` (`code: 'entry-not-found'`) is thrown by `reveal(entryId)` (S1.9; `reveal(segmentId)` reveals a Segment and does not throw this), `entries.fieldValue`, and by `entries.update`/`entries.remove`/a bad `parentId` (S2.3) for an id the Dataset has no entry for — its message names the call that failed. `DuplicateEntryIdError` (`code: 'duplicate-entry-id'`, S2.3) is thrown by `entries.add` given an id already in the store. `DuplicateSegmentIdError` (`code: 'duplicate-segment-id'`, #212) is thrown by a Segment write that would make two Segments share one `SegmentId` — construction, `entries.add`, or `entries.update`; its message names which. `SegmentsOutOfSyncError` (`code: 'segments-out-of-sync'`, #212) is thrown by `entries.update` two ways: naming `start`/`end` with no `segments` on an Entry that draws several (`'ambiguous'` — moving the envelope alone says nothing about which Segment moved), or naming both in one edit with disagreeing spans (`'conflicting'` — the #212 fix-plan review, finding S3). `EmptySegmentsError` (`code: 'empty-segments'`, #212 fix-plan review, finding S2) is thrown by `entries.update(id, { segments: [] })` — every stored Entry keeps at least one Segment, and an update has no whole-span input to mint a replacement from. `ParentCycleError` (`code: 'parent-cycle'`, S2.3) is thrown by a `parentId` edit that would make an entry its own ancestor, self-parenting included. `UnknownFieldError` (`code: 'unknown-field'`, S2.3) is thrown by `entries.update` or `entries.fieldValue` given a key that names no field — the Field registry is the legal set. `DuplicateFieldKeyError` (`code: 'duplicate-field-key'`, S4.1) is thrown when two Field declarations share a key. `DuplicateFieldSourceError` (`code: 'duplicate-field-source'`, S4.1) is thrown when two Fields claim the same `meta` key. `InvalidFieldSourceError` (`code: 'invalid-field-source'`, #196) is thrown when a `Field.source` names no known source — `source: 'meta'` where `{ from: 'meta' }` was meant. TypeScript refuses that shape, so this is for a JS caller; `ctx.fields.register` is public surface, and a library fault must be a `FreeGanttError` even there. `UnknownAggregatorError` (`code: 'unknown-aggregator'`, S4.1) is thrown when a Field names an Aggregator that is not registered. `UnknownFieldTypeError` (`code: 'unknown-field-type'`, S4.1) is thrown when a Field names a `type` with no matching `fieldTypes` entry. `FieldNotColumnableError` (`code: 'field-not-columnable'`, S4.3) is thrown when `gridColumns` names a Field that declared no `column`. `UnknownGridColumnError` (`code: 'unknown-grid-column'`, S5.7) is thrown by `hideGridColumn`/`showGridColumn` given a field no declared column carries. `DuplicateRowIdError` (`code: 'duplicate-row-id'`, S4.6) is thrown by a `{ source: 'custom' }` resolver that returns the same `id` twice. `UnsupportedSchemaError` (`code: 'unsupported-schema'`, S2.6) is thrown by `Dataset.fromJSON` for a `schema` this build has no reader for — the message names the version it found and the versions it reads.
 - **Docs site with live, editable examples** grows with the slices (the harness pages are its seed) — budgeted as a deliverable, not an afterthought.
 - **Semver honesty**: internal modules are not importable (enforced by the `exports` map), so semver only governs surfaces we actually promise.
 

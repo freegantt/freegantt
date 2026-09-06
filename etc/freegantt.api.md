@@ -510,7 +510,7 @@ export class DuplicateRowIdError extends FreeGanttError {
 
 // @public
 export class DuplicateSegmentIdError extends FreeGanttError {
-    constructor(segmentId: SegmentId);
+    constructor(segmentId: SegmentId, operation: string);
 }
 
 // @public (undocumented)
