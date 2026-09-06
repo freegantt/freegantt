@@ -4,7 +4,7 @@ import type { EntryReadContext } from './entry-reader.js';
 import { buildEffectiveEntries } from './entry-tree.js';
 import { entryId, EmptySegmentsError, segmentId, SegmentsOutOfSyncError } from '../model/index.js';
 import type { Entry, EntryInput } from '../model/index.js';
-import { addMs, diffMs, instant } from '../time/index.js';
+import { addMs, instant } from '../time/index.js';
 import type { StoredEdit } from './edit-extension.js';
 import { FieldRegistry } from './fields/field-registry.js';
 
@@ -242,7 +242,7 @@ describe('reconcileExtenderEdits reads the effective, not the stale, entry (find
     expect(reconciledEdit.end).toBe(entry.end);
   });
 
-  it('translates every body-split Segment (1→2), not the stale one-Segment committed state', () => {
+  it('refuses an envelope-only cascade against a body-split Segment (1→2), not the stale one-Segment committed state', () => {
     const context2 = createContext();
     const [single] = readEntries(
       [{ id: 'seg', name: 'Seg', start: '2026-01-01', end: '2026-01-05' }],
@@ -250,7 +250,8 @@ describe('reconcileExtenderEdits reads the effective, not the stale, entry (find
     );
     const committed = new Map([[single!.id, single!]]);
     // The body's own edit splits the one Segment into two — reconciling against `committed` alone
-    // would still see one Segment and pair the envelope onto it directly, the wrong Segment count.
+    // would still see one Segment and pair the envelope onto it directly, silently succeeding on the
+    // wrong Segment count instead of catching that this write is now ambiguous.
     const bodyEdit = readEdit(
       {
         segments: [
@@ -265,21 +266,9 @@ describe('reconcileExtenderEdits reads the effective, not the stale, entry (find
     const effective = buildEffectiveEntries(committed, [], [], new Map([[single!.id, bodyEdit]]));
     const [effectiveEntry] = effective.values();
 
-    const deltaMs = 5;
-    const extenderEdits = new Map([[single!.id, { start: addMs(effectiveEntry!.start, deltaMs) }]]);
-    const reconciled = reconcileExtenderEdits(effective, extenderEdits);
+    const extenderEdits = new Map([[single!.id, { start: addMs(effectiveEntry!.start, 5) }]]);
 
-    const reconciledEdit = reconciled.get(single!.id)!;
-    expect(reconciledEdit.segments).toHaveLength(2);
-    expect(reconciledEdit.start).toBe(addMs(effectiveEntry!.start, deltaMs));
-    // Every Segment the body just split carries the extender's delta, keeping its own length.
-    for (const [index, segment] of effectiveEntry!.segments.entries()) {
-      expect(reconciledEdit.segments![index]).toEqual({
-        id: segment.id,
-        start: addMs(segment.start, deltaMs),
-        end: addMs(segment.end, deltaMs),
-      });
-    }
+    expect(() => reconcileExtenderEdits(effective, extenderEdits)).toThrow(SegmentsOutOfSyncError);
   });
 });
 
@@ -302,10 +291,13 @@ describe('fitSegmentsToEnvelope (#212 R2 fix-plan review, finding B1)', () => {
   });
 });
 
-// #212 R2 fix-plan review, posture decision D-S5-43: the previous posture refused this write
-// (`SegmentsOutOfSyncError('ambiguous')`); the current one computes an answer instead.
-describe('reconcileExtenderEnvelope via reconcileExtenderEdits (D-S5-43)', () => {
-  it('translates every Segment by one delta when only start is written on a several-Segment Entry', () => {
+// #212 R2 fix-plan review, unified at D-S5-44: a caller-identity split — a computed answer for the
+// `EditExtender` seam, a refusal for `entries.update()` — was tried and rejected.
+// `reconcileExtenderEdits` now calls `reconcileEnvelope` for every edit, so a plugin's cascade owes
+// the same envelope invariant a consumer's edit does, refusal included: no looser door onto
+// `start`/`end` for one caller than the other.
+describe('reconcileExtenderEdits refuses what reconcileEnvelope refuses (D-S5-44)', () => {
+  it('refuses a several-Segment envelope-only write naming only start, same as entries.update()', () => {
     const context = createContext();
     const [entry] = readEntries(
       [
@@ -323,24 +315,14 @@ describe('reconcileExtenderEnvelope via reconcileExtenderEdits (D-S5-43)', () =>
       context,
     );
     const entries = new Map([[entry!.id, entry!]]);
-    const deltaMs = -diffMs(entry!.start, instant(0)) + 100; // an arbitrary, easy-to-check shift
-    const newStart = addMs(entry!.start, deltaMs);
+    const newStart = instant(utc('2026-02-01T00:00:00Z'));
 
-    const reconciled = reconcileExtenderEdits(entries, new Map([[entry!.id, { start: newStart }]]));
-    const edit = reconciled.get(entry!.id)!;
-
-    expect(edit.start).toBe(newStart);
-    expect(edit.end).toBe(addMs(entry!.end, deltaMs));
-    for (const [index, segment] of entry!.segments.entries()) {
-      expect(edit.segments![index]).toEqual({
-        id: segment.id,
-        start: addMs(segment.start, deltaMs),
-        end: addMs(segment.end, deltaMs),
-      });
-    }
+    expect(() => reconcileExtenderEdits(entries, new Map([[entry!.id, { start: newStart }]]))).toThrow(
+      SegmentsOutOfSyncError,
+    );
   });
 
-  it('falls back to fitSegmentsToEnvelope when start and end together imply a different duration', () => {
+  it('refuses a several-Segment envelope-only write naming both start and end', () => {
     const context = createContext();
     const [entry] = readEntries(
       [
@@ -361,24 +343,12 @@ describe('reconcileExtenderEnvelope via reconcileExtenderEdits (D-S5-43)', () =>
     const newStart = instant(utc('2026-01-03T00:00:00Z'));
     const newEnd = instant(utc('2026-01-04T00:00:00Z'));
 
-    const reconciled = reconcileExtenderEdits(
-      entries,
-      new Map([[entry!.id, { start: newStart, end: newEnd }]]),
-    );
-    const edit = reconciled.get(entry!.id)!;
-
-    expect(edit.start).toBe(newStart);
-    expect(edit.end).toBe(newEnd);
-    for (const segment of edit.segments!) {
-      expect(segment.start).toBeGreaterThanOrEqual(newStart);
-      expect(segment.end).toBeLessThanOrEqual(newEnd);
-    }
+    expect(() =>
+      reconcileExtenderEdits(entries, new Map([[entry!.id, { start: newStart, end: newEnd }]])),
+    ).toThrow(SegmentsOutOfSyncError);
   });
 
-  it('refuses an inverted envelope instead of collapsing every Segment onto it', () => {
-    // `fitSegmentsToEnvelope` clamps each edge into `[start, end)`. An inverted target clamps both
-    // edges of every Segment onto the same pair, so all three Segments below came back as the same
-    // inverted stretch and every authored extent was lost, with nothing raised.
+  it('refuses an inverted envelope too — nothing about it makes a several-Segment write computable', () => {
     const context = createContext();
     const [entry] = readEntries(
       [
