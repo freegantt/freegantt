@@ -34,7 +34,7 @@
 
 import type { GanttPlugin, PluginContext } from '../../api/gantt.js';
 import type { EntryFieldEdit, GanttDom, MountLayer } from '../../api/plugin.js';
-import { EntryNotFoundError, MutationCancelledError } from '../../model/index.js';
+import { EntryNotFoundError, MutationCancelledError, UnreadableCellValueError } from '../../model/index.js';
 import type {
   CoreFieldValue,
   Disposer,
@@ -147,16 +147,27 @@ const REFUSAL_TEXT = {
  *  DOM attribute anyway. */
 export type CellEditorRefusal = keyof typeof REFUSAL_TEXT;
 
-/** Why a *commit* left the editor invalid (#160, D-S5-47): the control read no value back
- *  (`unreadable-value`), or a `beforeChange` handler vetoed the write (`refused-write`). The open
- *  editor's own `data-reason` names the fault so a future reader can style or announce it. #234 owns
- *  the words for that reason. This issue ships the naming mechanism, not the vocabulary. Neither key
- *  has a `REFUSAL_TEXT` entry yet.
+/** Every commit refusal, with the words the user reads (#234). A second table from `REFUSAL_TEXT`,
+ *  because the two vocabularies sit on two elements (#231 F1). These words belong to an open
+ *  `.fg-cell-editor`; those belong to a `.fg-cell-notice`. The class alone answers which vocabulary
+ *  a `data-reason` speaks.
  *
- *  These keys and `CellEditorRefusal`'s stay apart because the elements do (#231 F1). An editor is a
- *  `.fg-cell-editor` and a notice is a `.fg-cell-notice`. The class alone answers which vocabulary a
- *  `data-reason` speaks. */
-export type CellEditorCommitRefusal = 'unreadable-value' | 'refused-write';
+ *  Both sentences speak about **editor state** — what is unsaved, and what to do next — and never
+ *  about why a write was refused. Core already reports that (`mutation-cancelled`,
+ *  `data/transaction.ts`), and a vetoed cell commit raises both reports on one feed. Two reports are
+ *  right here, because they are different facts at two layers; two copies of one sentence are not. */
+const COMMIT_REFUSAL_TEXT = {
+  'unreadable-value': 'this editor cannot read a value from the text; correct it, or discard the edit',
+  'refused-write': 'this editor still holds a value that did not save; correct it, or discard the edit',
+} as const;
+
+/** Why a *commit* left the editor invalid (#160, D-S5-47): the control read no value back
+ *  (`unreadable-value`), or a `beforeChange` handler vetoed the write (`refused-write`).
+ *
+ *  The key is the machine-readable half. It goes on the open editor's own `data-reason`, and it is
+ *  also the `code` of the Error report the editor raises (#234, D-S5-40). `COMMIT_REFUSAL_TEXT`
+ *  holds the half the user reads. One refusal, one spelling. */
+export type CellEditorCommitRefusal = keyof typeof COMMIT_REFUSAL_TEXT;
 
 /** Puts `element` exactly over `cell`'s own rect — no flip and no clamp, unlike `Popup`. An editor
  *  and a refusal notice both sit exactly where the cell already is, so both position through this.
@@ -169,8 +180,12 @@ function positionOver(element: HTMLElement, cell: HTMLElement, bounds: DOMRect):
 }
 
 /** What the user typed, read back through the control's own rules. `ok: false` means the control
- *  makes no value from what is there now — a `parseValue` that refused, or an empty date. */
-export type CellEditorValue = { ok: true; value: unknown } | { ok: false };
+ *  makes no value from what is there now — a `parseValue` that refused, or an empty date.
+ *
+ *  A failed read carries the `text` it failed on, so the `unreadable-value` report can hand a
+ *  consumer what the user actually typed (#234). It is optional because a control need not keep text
+ *  at all. A date control reads a date or nothing, and has no string to give. */
+export type CellEditorValue = { ok: true; value: unknown } | { ok: false; text?: string };
 
 /** The live control one session drives: a plain `<input>` (`openGeneric`) or a `DateInput`
  *  (`openDate`). The control owns the value and the "the user is done" triggers. The session owns
@@ -301,7 +316,10 @@ export class CellEditorSession {
     }
     const value = this.#control.read();
     if (!value.ok) {
-      this.#markInvalid('unreadable-value');
+      this.#markInvalid(
+        'unreadable-value',
+        new UnreadableCellValueError(this.entryId, this.field, value.text),
+      );
       return false;
     }
     const from = this.#ports.storedValue(this.entryId, this.field);
@@ -309,7 +327,9 @@ export class CellEditorSession {
       this.#ports.writeValue(this.entryId, this.field, value.value);
     } catch (error) {
       if (error instanceof MutationCancelledError) {
-        this.#markInvalid('refused-write');
+        // The same error core's own `mutation-cancelled` report carries. Two reports, one cause: the
+        // consumer reads the refused `ChangeSet` off either one (#234).
+        this.#markInvalid('refused-write', error);
         return false;
       }
       if (error instanceof EntryNotFoundError) {
@@ -370,12 +390,29 @@ export class CellEditorSession {
   /** The one "this did not save" signal (D-S5-19). The editor stays open, the state and reason name
    *  the refusal, and focus goes back to the control. #160, D-S5-47 adds the discard button — the
    *  invalid state's only affordance, because a valid editor already has Enter, click-away and
-   *  Escape. */
-  #markInvalid(reason: CellEditorCommitRefusal): void {
+   *  Escape.
+   *
+   *  It also reports (#234, D-S5-40). Until now a commit refusal told the screen and nothing else.
+   *  A consumer who logged every refusal kept a partial log, with nothing to say so.
+   *  `severity: 'info'`, because a Refusal is the library working correctly (D-S5-41). The report
+   *  reads the same words the user reads, so one refusal has one spelling everywhere.
+   *
+   *  A cell is often narrower than the sentence, so the words are the hover text too. That is the
+   *  same reason the notice sets its own `title`. */
+  #markInvalid(reason: CellEditorCommitRefusal, cause: unknown): void {
     this.#wrapper.dataset['state'] = 'invalid';
     this.#wrapper.dataset['reason'] = reason;
+    this.#wrapper.title = COMMIT_REFUSAL_TEXT[reason];
     this.#ensureDiscardButton();
     this.#control.element.focus();
+    this.#ports.raiseError({
+      code: reason,
+      message: COMMIT_REFUSAL_TEXT[reason],
+      severity: 'info',
+      entryId: this.entryId,
+      field: this.field,
+      cause,
+    });
   }
 
   /** Idempotent: a second refused commit on the same editor must not append a second button. Placed
@@ -690,7 +727,7 @@ export function inlineEditing(options: InlineEditingOptions = {}): GanttPlugin {
           read: (): CellEditorValue => {
             if (field.parseValue !== undefined) {
               const value = field.parseValue(input.value, fieldContextFor(ctx));
-              return value === undefined ? { ok: false } : { ok: true, value };
+              return value === undefined ? { ok: false, text: input.value } : { ok: true, value };
             }
             return { ok: true, value: input.value };
           },

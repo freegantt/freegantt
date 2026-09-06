@@ -214,6 +214,7 @@ export {
   DuplicateRowIdError,
   MutationDuringNotificationError,
   MutationCancelledError,
+  UnreadableCellValueError,
   InvalidReplayOriginError,
   UnsupportedSchemaError,
   DuplicatePluginIdError,
