@@ -1,7 +1,7 @@
 # Fix plan — the Selection holds Segments (#212) branch review
 
-**Source review:** [`2026-09-05-selection-holds-segments.html`](./2026-09-05-selection-holds-segments.html) — FreeGantt, 2026-09-05, branch `s5-212` against `s5-start`, commits `830800d..c305e3a`.
-**Slice:** S5 ([`plans/s5-extensibility-and-editing/README.md`](../s5-extensibility-and-editing/README.md)) · **Status:** open — R1–R7 outstanding. **This plan blocks S5.11.**
+**Source review:** `2026-09-05-selection-holds-segments.html` (deleted; see the note above §0) — FreeGantt, 2026-09-05, branch `s5-212` against `s5-start`, commits `830800d..c305e3a`.
+**Slice:** S5 ([`plans/s5-extensibility-and-editing/README.md`](../s5-extensibility-and-editing/README.md)) · **Status:** closed 2026-09-06 — R1–R7 all landed.
 **Gate state at review time:** every gate passed. `typecheck`, `lint`, `boundaries`, `guards`, `test:node` (621), `test:dom` (901), `sentence-length`, `vendor-names`, `api-report`, and the pre-push e2e run (76) are all green at `c305e3a`. Every finding below is invisible to CI.
 
 > ## Delete the review when this plan closes
@@ -188,13 +188,13 @@ box's own wording assumes.
 
 ### R7 — close out
 
-- [ ] Finding 20: delete the eslint allowlist entry `segmentIdFromDataset`. No such function exists in `src/`.
-- [ ] Finding 21: delete the dead `segments !== undefined` checks in `gesture-draft.ts:264` and `e2e/selection.spec.ts`. Making the field required was supposed to remove these.
-- [ ] Finding 22: record the `window.__dataset` double cast as the `Dataset<TFields>` variance question it is. Do not tidy it — the cast is evidence. Remove the `attemptMutation` wrapper around a command that already swallows the veto.
-- [ ] Finding 23: file the `Popup` defect as its own issue. `Popup.open()` must place focus before it arms `dismissOn: 'scroll'`, and `focusFirst()` needs `preventScroll`. The e2e helper's workaround comment stays until that issue closes, because it is honest about what it is.
-- [ ] File the §6 findings as issues.
-- [ ] Delete `plans/reviews/2026-09-05-selection-holds-segments.html` in this commit.
-- [ ] Update this file's Status line to closed, and clear the blocking line in the S5 README.
+- [x] Finding 20: delete the eslint allowlist entry `segmentIdFromDataset`. No such function exists in `src/`. **Landed:** confirmed by grep against `src/`, then deleted from `eslint/rules/model-is-types-only.cjs`'s `IDENTITY_CAST_HELPERS`.
+- [x] Finding 21: delete the dead `segments !== undefined` checks in `gesture-draft.ts:264` and `e2e/selection.spec.ts`. Making the field required was supposed to remove these. **Landed:** `Entry.segments` is `readonly Segment[]`, never optional, so `original.segments !== undefined` in `src/layout/gesture-draft.ts` and `candidate.segments !== undefined` (plus a now-needless `entry.segments!` assertion) in `e2e/selection.spec.ts`'s `showSegmentedSpan` were both dead. Deleted both; `edit.segments !== undefined` in `gesture-draft.ts` stays, because `StoredEdit` is a `Partial` and that check is live.
+- [x] Finding 22: record the `window.__dataset` double cast as the `Dataset<TFields>` variance question it is. Do not tidy it — the cast is evidence. Remove the `attemptMutation` wrapper around a command that already swallows the veto. **Landed:** checked #226 first — it already asks the same generic-parameter question for a `Gantt.dataset` getter, so the cast is recorded there as a comment (not a new issue) plus a one-line pointer added at the cast site in `harness/main.ts`. Removed the `attemptMutation` wrapper around `gantt.commands.run('freegantt.deleteSelection')`; `core-commands.ts`'s own comment already says that command swallows `MutationCancelledError` itself.
+- [x] Finding 23: file the `Popup` defect as its own issue. `Popup.open()` must place focus before it arms `dismissOn: 'scroll'`, and `focusFirst()` needs `preventScroll`. The e2e helper's workaround comment stays until that issue closes, because it is honest about what it is. **Landed:** already filed as #228 (verified via `gh issue view 228`, still open) — no duplicate filed. `pickableBarOf`'s workaround comment in `e2e/selection.spec.ts` is unchanged.
+- [x] File the §6 findings as issues. **Landed:** finding 18 was already #227 and R6 fixed it — not refiled. §6 is explicit that findings 14, 15, 16 and 17 are one refactor, so filed as one issue, #230, with the four findings as its sections. Added to #229, the parent issue, as a comment naming where it sits in the order of work.
+- [x] Delete `plans/reviews/2026-09-05-selection-holds-segments.html` in this commit.
+- [x] Update this file's Status line to closed, and clear the blocking line in the S5 README.
 
 ---
 
