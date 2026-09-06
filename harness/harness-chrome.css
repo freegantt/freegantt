@@ -730,6 +730,12 @@ nav.harness-site-nav a[aria-current='page'] {
   border-left-width: 2px;
 }
 
+/* S5.6, [S5-A2]: weekendShading()'s own band class (D-S5-15 — the library never invents one).
+   Painted below .fg-bars through ctx.view.registerDecoration. */
+.demo-weekend-band {
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
+}
+
 /* ---------------------------------------------------------------- motion */
 
 @media (prefers-reduced-motion: reduce) {
