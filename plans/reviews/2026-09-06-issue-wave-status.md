@@ -42,9 +42,9 @@ Each row was re-checked against the code before it was accepted. A row marked
 
 | Finding | Verdict | State |
 |---|---|---|
-| HIGH — four records still teach `moveEntryTo(entry, start, timeZone)` | real; the code takes `(entry, start)` | `[ ]` |
-| dead conditionals, `view/gesture-pipeline.ts` — both forks identical | real; proved by removing them and by a reverse mismatch test that still fails to typecheck | `[ ]` |
-| `api/gantt.ts` `reveal()` doc names `EntryNotFoundError`; the shell throws `RevealTargetNotFoundError` | real | `[ ]` |
+| HIGH — four records still teach `moveEntryTo(entry, start, timeZone)` | real; the code takes `(entry, start)` | `[x]` |
+| dead conditionals, `view/gesture-pipeline.ts` — both forks identical | real; proved by removing them and by a reverse mismatch test that still fails to typecheck | `[x]` |
+| `api/gantt.ts` `reveal()` doc names `EntryNotFoundError`; the shell throws `RevealTargetNotFoundError` | real | `[x]` |
 
 ### This slice
 

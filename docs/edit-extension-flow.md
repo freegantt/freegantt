@@ -39,7 +39,7 @@ therefore never resolves a date, never states `proposedKeys`, and never computes
 
 - Two plugins on one Entry — `mergeEntryEdits(next(request), mine(request))`, never a `Map` spread or
   an object spread. A spread drops the earlier plugin's write outright (#197, #238).
-- A whole-Entry move — `moveEntryTo(entry, start, dataset.timeZone)`. An envelope-only write against
+- A whole-Entry move — `moveEntryTo(entry, start)`. An envelope-only write against
   an Entry that draws several Segments is refused (`SegmentsOutOfSyncError`, D-S5-44), because
   `start`/`end` alone name no Segment to move. `moveEntryTo` returns every Segment translated rigidly,
   each keeping its own `SegmentId`, and it names `segments` and nothing else — core derives the
