@@ -628,8 +628,8 @@ describe('inlineEditing() (S5.8, D-S5-19/D-S5-20)', () => {
     const { container: containerB, gantt: ganttB, dataset: datasetB } = makeGantt();
 
     // #212: the Selection holds Segments, so each Gantt selects the Segment its own Entry draws.
-    ganttA.selectedSegmentIds = datasetA.entries.get('e1')!.segments.map((segment) => segment.id);
-    ganttB.selectedSegmentIds = datasetB.entries.get('e1')!.segments.map((segment) => segment.id);
+    ganttA.selectedSegmentIds = datasetA.entries.segmentIdsOfEntries(['e1']);
+    ganttB.selectedSegmentIds = datasetB.entries.segmentIdsOfEntries(['e1']);
 
     enter(containerB);
     expect(containerB.querySelector('.fg-cell-editor')).not.toBeNull();

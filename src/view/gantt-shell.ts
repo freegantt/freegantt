@@ -62,10 +62,9 @@ import type { ViewportGestures } from './viewport-gestures.js';
 import { ensureBaseStyles } from './styles.js';
 import type { InteractionState, RenderBackend } from '../render/backend.js';
 import {
-  EntryNotFoundError,
+  RevealTargetNotFoundError,
   ContainerNotFoundError,
   PluginNotInstalledError,
-  entryId,
   entryIdOfItem,
   itemId,
   segmentId,
@@ -688,7 +687,8 @@ export class GanttShell {
       entry: (id) => this.#options.dataset.entries.get(id),
       canSelect: (id) => this.#canGesture('select', id),
       selected: () => this.selectedEntryIds[0],
-      proposeSelection: (ids) => this.#proposeSelection(this.#segmentIdsOfEntries(ids)),
+      proposeSelection: (ids) =>
+        this.#proposeSelection(this.#options.dataset.entries.segmentIdsOfEntries(ids)),
       confirm: (change) =>
         this.#proposeChange('beforeCollapseChange', 'collapseChange', change, () => {
           this.#layout.invalidateFrom(0);
@@ -729,7 +729,7 @@ export class GanttShell {
       can: (capability, entry) => this.#capabilities.can(capability, entry),
       selectableEntriesInRowOrder: () => this.#selectableEntriesInRowOrder(),
       selectableSegmentsInRowOrder: () => this.#selectableSegmentsInRowOrder(),
-      segmentsOfEntries: (ids) => this.#segmentIdsOfEntries(ids),
+      segmentsOfEntries: (ids) => this.#options.dataset.entries.segmentIdsOfEntries(ids),
       segmentsForItem: (item) => this.#layout.segmentIdsForItem(item),
       selection: {
         get: () => this.#selection,
@@ -996,7 +996,7 @@ export class GanttShell {
    *  reuses the row walk the keyboard step already uses, so a shift-range and a row step cannot
    *  disagree about which Entry comes first. */
   #selectableSegmentsInRowOrder(): readonly SegmentId[] {
-    return this.#segmentIdsOfEntries(this.#selectableEntriesInRowOrder());
+    return this.#options.dataset.entries.segmentIdsOfEntries(this.#selectableEntriesInRowOrder());
   }
 
   get todayLine(): boolean | Instant {
@@ -1038,11 +1038,20 @@ export class GanttShell {
   /** The Entries the Selection's Segments belong to, deduped, in row order (#212, ADR 0010). It is
    *  one projection. The public getter, the affordance ids, the gesture pipeline and every command
    *  context read it. So no two of them can disagree about what is selected. An Entry a collapse hid
-   *  keeps its place in Dataset order behind the rows that are showing. */
+   *  keeps its place behind the rows that are showing. `Array.prototype.sort` is stable, and two
+   *  Entries with no row rank compare equal, so both fall back to the order `entryIdsOfSegments`
+   *  gave them. (Finding 13: a naive `rank ?? Infinity` subtraction gives `Infinity - Infinity`,
+   *  which is `NaN` — not the equal-comparison a stable sort needs.) */
   get selectedEntryIds(): readonly EntryId[] {
     const rank = this.#rowRankByEntryId();
     const ids = this.#options.dataset.entries.entryIdsOfSegments(this.#selection);
-    return [...ids].sort((a, b) => (rank.get(a) ?? Infinity) - (rank.get(b) ?? Infinity));
+    return [...ids].sort((a, b) => {
+      const rankA = rank.get(a);
+      const rankB = rank.get(b);
+      if (rankA === undefined) return rankB === undefined ? 0 : 1;
+      if (rankB === undefined) return -1;
+      return rankA - rankB;
+    });
   }
 
   /** Where each Entry sits in the resolved row order. It is built once per projection. So ordering
@@ -1053,21 +1062,6 @@ export class GanttShell {
       for (const id of row.entryIds) if (!rank.has(id)) rank.set(id, rank.size);
     }
     return rank;
-  }
-
-  /** Every Segment of these Entries, in the order given (#212) — what a row click, a shift-range and
-   *  a keyboard select all select. An Entry the Dataset no longer holds contributes none.
-   *
-   *  It is not the Item table `DomTarget.segmentIds` fills. This one takes an arbitrary, already
-   *  capability-filtered list of Entries; that one takes one Item and the layout answers it. */
-  #segmentIdsOfEntries(ids: readonly EntryId[]): readonly SegmentId[] {
-    const segmentIds: SegmentId[] = [];
-    for (const id of ids) {
-      const entry = this.#options.dataset.entries.get(id);
-      if (entry === undefined) continue;
-      for (const segment of entry.segments) segmentIds.push(segment.id);
-    }
-    return segmentIds;
   }
 
   /** The Selection's sole Entry, and its Segment count (#212, findings 6-7): O(selection) (I5). */
@@ -1120,7 +1114,7 @@ export class GanttShell {
     if (selected === undefined) return;
     const rowId = this.#layout.rowIdForEntry(selected);
     if (rowId === undefined) return;
-    const segmentIds = this.#segmentIdsOfEntries(this.#selectableEntriesOfRow(rowId));
+    const segmentIds = this.#options.dataset.entries.segmentIdsOfEntries(this.#selectableEntriesOfRow(rowId));
     const current = segmentIds.findIndex((id) => this.#selection.includes(id));
     const next = segmentIds[current + direction];
     if (current === -1 || next === undefined) return;
@@ -1249,7 +1243,10 @@ export class GanttShell {
         const now = this.#options.wiring.now;
         if (now !== undefined) this.panToToday(now());
       },
-      selectAll: () => this.#proposeSelection(this.#segmentIdsOfEntries(this.#selectableEntriesInRowOrder())),
+      selectAll: () =>
+        this.#proposeSelection(
+          this.#options.dataset.entries.segmentIdsOfEntries(this.#selectableEntriesInRowOrder()),
+        ),
       clearSelection: () => this.#proposeSelection([]),
       hasSelection: () => this.#selection.length > 0,
       keyboardPanEnabled: () => this.#resolvedViewportGestures.keyboardPan,
@@ -1607,9 +1604,10 @@ export class GanttShell {
    *  for the target's x/width off the bound `TimeScale`. That is the same formula `computeFrame`
    *  builds bars from, so the two can never drift apart. It then hands the resulting `Rect` to
    *  `Viewport.reveal` (S1.9, D-S1.9-6).
-   *  Throws `EntryNotFoundError` for an id the dataset reads as neither an Entry nor a Segment. A
-   *  collapsed ancestor expands so the row exists. A still-hidden row (filter) keeps the current y —
-   *  it does not jump to 0. */
+   *  Throws `RevealTargetNotFoundError` for an id the dataset reads as neither an Entry nor a
+   *  Segment (#227). `id`'s own type stays a union here: once neither reading resolves, nothing
+   *  says which one the caller meant. A collapsed ancestor expands so the row exists. A
+   *  still-hidden row (filter) keeps the current y — it does not jump to 0. */
   reveal(id: EntryId | SegmentId): void {
     const entries = this.#options.dataset.entries;
     const entry = entries.get(id);
@@ -1617,7 +1615,7 @@ export class GanttShell {
     const ownerId = entries.entryIdOfSegment(id);
     const owner = ownerId === undefined ? undefined : entries.get(ownerId);
     const segment = owner?.segments.find((candidate) => candidate.id === id);
-    if (owner === undefined || segment === undefined) throw new EntryNotFoundError(entryId(id), 'reveal');
+    if (owner === undefined || segment === undefined) throw new RevealTargetNotFoundError(id, 'reveal');
     return this.#revealSpan(owner.id, owner, segment.start, segment.end);
   }
 

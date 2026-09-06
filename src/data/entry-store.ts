@@ -251,6 +251,20 @@ export class EntryStore implements EntryStoreContract {
     return result;
   }
 
+  /** Call: `dataset.entries.segmentIdsOfEntries(ids)`. Every Segment id these Entries draw, in the
+   *  order given, each Entry's own Segments in Entry order (ADR 0010, #212, finding 10) — the pair
+   *  to `entryIdsOfSegments`, and what a row click, a shift-range, a keyboard select, and the
+   *  published way to select an Entry all read. An id no Entry currently draws contributes nothing. */
+  segmentIdsOfEntries(ids: readonly (EntryId | string)[]): readonly SegmentId[] {
+    const result: SegmentId[] = [];
+    for (const id of ids) {
+      const entry = this.get(id);
+      if (entry === undefined) continue;
+      for (const segment of entry.segments) result.push(segment.id);
+    }
+    return result;
+  }
+
   /** `entryIdOfSegment` inside an open transaction: one lookup at the write set's own
    *  `segmentOwner` map (finding S1, #212), the pair to `#childrenOfWriteSet`'s overlay for
    *  `childrenOf` — never a rebuild of an overlay Entry per Segment id, and never a pass over the

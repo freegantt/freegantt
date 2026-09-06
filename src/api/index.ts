@@ -178,6 +178,8 @@ export {
   UnknownPresetError,
   InvalidPresetError,
   EntryNotFoundError,
+  SegmentNotFoundError,
+  RevealTargetNotFoundError,
   DuplicateEntryIdError,
   DuplicateSegmentIdError,
   ParentCycleError,

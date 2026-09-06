@@ -487,6 +487,25 @@ describe('entryIdOfSegment / entryIdsOfSegments (#212, ADR 0010, fix plan R4)', 
       entryId('a'),
     ]);
   });
+
+  it('segmentIdsOfEntries names every Segment of each Entry, in Entry order, and skips an id nothing owns (#212, fix plan R6)', () => {
+    const state = dataset([
+      {
+        id: 'a',
+        segments: [
+          { id: 'sg1', start: 0, end: 1 },
+          { id: 'sg2', start: 0, end: 1 },
+        ],
+      },
+      { id: 'b', segments: [{ id: 'sg3', start: 0, end: 1 }] },
+    ]);
+
+    expect(state.entries.segmentIdsOfEntries(['b', 'missing', 'a'])).toEqual([
+      segmentId('sg3'),
+      segmentId('sg1'),
+      segmentId('sg2'),
+    ]);
+  });
 });
 
 describe('Segment→Entry index review fixes (#212, 2026-09-05 review)', () => {
