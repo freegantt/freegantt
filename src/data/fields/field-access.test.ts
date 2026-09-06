@@ -9,6 +9,7 @@ import {
   overlayStoredEdit,
   proposedKeysOf,
   readField,
+  statesProposedKeys,
   withProposedKeys,
   writeField,
   writeOntoEntry,
@@ -110,6 +111,27 @@ describe('readField / writeField (D-S4-2)', () => {
     expect(proposedKeysOf(merged).size).toBe(0);
     expect(merged.name).toBe('a');
     expect(merged.end).toBe(9);
+  });
+
+  // #238: the merged edit must stay *unstated*, not state the empty set. A third merge asks whether
+  // the base states its keys; a stamped empty set answered "it writes nothing", and the first two
+  // plugins' writes were dropped there.
+  it('mergeStoredEdits states nothing when neither side does, so a third merge still reads raw keys', () => {
+    const first = mergeStoredEdits({ name: 'a' }, { kind: 'milestone' });
+    expect(statesProposedKeys(first)).toBe(false);
+
+    const second = mergeStoredEdits(first, { parentId: entryId('p') });
+    expect(statesProposedKeys(second)).toBe(false);
+    expect(second.name).toBe('a');
+    expect(second.kind).toBe('milestone');
+    expect(second.parentId).toBe(entryId('p'));
+  });
+
+  it('statesProposedKeys tells an edit that stated the empty set from one that stated nothing', () => {
+    expect(statesProposedKeys({ name: 'a' })).toBe(false);
+    expect(statesProposedKeys(withProposedKeys({ name: 'a' }, []))).toBe(true);
+    expect(statesProposedKeys(undefined)).toBe(false);
+    expect(proposedKeysOf({ name: 'a' }).size).toBe(proposedKeysOf(withProposedKeys({}, [])).size);
   });
 });
 
