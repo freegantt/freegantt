@@ -16,7 +16,7 @@ import {
   SegmentsOutOfSyncError,
 } from '../model/index.js';
 import type { Entry, EntryInput } from '../model/index.js';
-import { addMs, instant } from '../time/index.js';
+import { addMs, instant, toInstant } from '../time/index.js';
 import { mergeEntryEdits } from './edit-extension.js';
 import type { StoredEdit } from './edit-extension.js';
 import { FieldRegistry } from './fields/field-registry.js';
@@ -536,14 +536,14 @@ describe('moveEntryTo writes segments and lets core derive the envelope (D-S5-50
 
   it('names segments and nothing else', () => {
     const entry = twoSegmentEntry(createContext());
-    const edit = moveEntryTo(entry, instant(utc('2026-01-03T00:00:00Z')), 'UTC');
+    const edit = moveEntryTo(entry, instant(utc('2026-01-03T00:00:00Z')));
     expect(Object.keys(edit)).toEqual(['segments']);
   });
 
   it('translates every Segment rigidly, each keeping its own id and its own length', () => {
     const context = createContext();
     const entry = twoSegmentEntry(context);
-    const edit = moveEntryTo(entry, instant(utc('2026-01-03T00:00:00Z')), 'UTC');
+    const edit = moveEntryTo(entry, instant(utc('2026-01-03T00:00:00Z')));
 
     expect(edit.segments).toEqual([
       { id: entry.segments[0]!.id, start: utc('2026-01-03T00:00:00Z'), end: utc('2026-01-08T00:00:00Z') },
@@ -551,12 +551,13 @@ describe('moveEntryTo writes segments and lets core derive the envelope (D-S5-50
     ]);
   });
 
-  it('reads a loose start through the zone it is given, the way entries.update() does', () => {
+  it('takes an Instant, so a caller holding a loose date reads it through the zone first', () => {
     const context = createContext();
     const entry = twoSegmentEntry(context);
-    // 'America/New_York' puts the start of 2026-01-03 five hours after the UTC one, and the whole
-    // Entry moves by that much more.
-    const edit = moveEntryTo(entry, '2026-01-03', 'America/New_York');
+    // The zone stays the caller's to apply, because `moveEntryTo` builds an edit and is not a way in
+    // (D-S5-50). 'America/New_York' puts the start of 2026-01-03 five hours after the UTC one, and
+    // the whole Entry moves by that much more.
+    const edit = moveEntryTo(entry, toInstant('America/New_York', '2026-01-03'));
 
     expect(edit.segments?.[0]?.start).toBe(utc('2026-01-03T05:00:00Z'));
   });
@@ -565,7 +566,7 @@ describe('moveEntryTo writes segments and lets core derive the envelope (D-S5-50
     const context = createContext();
     const entry = twoSegmentEntry(context);
     const stored = readEdit(
-      moveEntryTo(entry, instant(utc('2026-01-03T00:00:00Z')), 'UTC'),
+      moveEntryTo(entry, instant(utc('2026-01-03T00:00:00Z'))),
       context,
       entry,
       registry,
@@ -585,7 +586,7 @@ describe('moveEntryTo writes segments and lets core derive the envelope (D-S5-50
     const laterEnd = instant(utc('2026-02-01T00:00:00Z'));
 
     const afterTheChange = mergeEntryEdits(
-      new Map([[entry.id, moveEntryTo(entry, instant(utc('2026-01-03T00:00:00Z')), 'UTC')]]),
+      new Map([[entry.id, moveEntryTo(entry, instant(utc('2026-01-03T00:00:00Z')))]]),
       new Map([[entry.id, { end: laterEnd }]]),
     );
     expect(() => readEdit(afterTheChange.get(entry.id)!, context, entry, registry, 'entries.update')).toThrow(
@@ -642,7 +643,7 @@ describe('moveEntryTo writes segments and lets core derive the envelope (D-S5-50
     // and is refused rather than dropped.
     const refused = mergeEntryEdits(
       earlierPlugin,
-      new Map([[entry.id, moveEntryTo(entry, instant(utc('2026-01-03T00:00:00Z')), 'UTC')]]),
+      new Map([[entry.id, moveEntryTo(entry, instant(utc('2026-01-03T00:00:00Z')))]]),
     );
     expect(refused.get(entry.id)!.end).toBe(utc('2026-02-01T00:00:00Z'));
     expect(() => readEdit(refused.get(entry.id)!, context, entry, registry, 'entries.update')).toThrow(
