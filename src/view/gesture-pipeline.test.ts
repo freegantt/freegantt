@@ -1,9 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 import { GesturePipeline } from './gesture-pipeline.js';
 import type { GesturePipelineDeps } from './gesture-pipeline.js';
-import { entryId, itemId, segmentId } from '../model/index.js';
+import { SegmentsOutOfSyncError, entryId, itemId, segmentId } from '../model/index.js';
 import type { Entry, EntryEdits, EntryId, ErrorReportInput, Instant } from '../model/index.js';
 import type { TimeScale, ViewPreset } from '../layout/index.js';
+import { reconcileExtenderEdits } from '../data/entry-reader.js';
 
 /** `view/` may not import `time/` (I1) — a linear px<->ms fake stands in for the bound `TimeScale`;
  *  paired with `snap: () => 'none'` (the default dep below) this is exactly what
@@ -663,13 +664,15 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
       expect(ghost.dx).toBe(50); // x0 300 -> x1 350
     });
 
-    // #212 R2 fix-plan review, finding B/D-S5-43: the preview used to paint the extend hook's raw,
-    // unreconciled edit — a `start`-alone write on a several-Segment Entry painted one whole-Entry
-    // ghost bar, but the commit path reconciled the same edit into per-Segment translated positions.
-    // A drag could preview one shape and commit a different one. Now both paths call
-    // `reconcileExtenderEdits` against the same effective state, so the ghost already shows the
-    // per-Segment translate the commit will produce.
-    it('[S3-A4] the ghost preview reconciles a several-Segment cascade, the same shape the commit computes', async () => {
+    // #212 R2 fix-plan review, unified to one refusal at D-S5-44: a `start`-alone cascade against a
+    // several-Segment Entry is refused (`SegmentsOutOfSyncError`, `'ambiguous'`) exactly as it is from
+    // `entries.update()`. This reconciliation runs inside the pipeline's own rAF callback, with
+    // nothing to catch a throw, so the preview must not let it through: `#extraFor` calls
+    // `reconcileExtenderEditsForPreview`, which drops the refused edit instead of throwing — that
+    // Entry paints no ghost for this frame, and the frame still paints the entry the caller drags.
+    // The commit path calls `reconcileExtenderEdits` (no drop) against the same effective state, and
+    // it throws for real.
+    it('[S3-A4] a several-Segment envelope-only cascade paints no ghost for it, and the commit path still throws', async () => {
       const a = entry('a', 100, 200);
       const x: Entry = {
         id: entryId('x'),
@@ -682,28 +685,33 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
           { id: segmentId('x-2'), start: 400 as Instant, end: 500 as Instant },
         ],
       };
+      const allEntries = () =>
+        new Map([
+          [a.id, a],
+          [x.id, x],
+        ]);
       const extend: GesturePipelineDeps['extend'] = () =>
         new Map([[x.id, { start: 350 as unknown as Instant }]]);
-      const { deps, applied } = withRoster([a, x], {
-        extend,
-        allEntries: () =>
-          new Map([
-            [a.id, a],
-            [x.id, x],
-          ]),
+      const commitEntryEdits = vi.fn((draft: EntryEdits) => {
+        // Mirrors what `data/build-commit-change-set.ts` runs for real, at commit, against the real
+        // Dataset: the extend hook's cascade goes through `reconcileExtenderEdits` — the same function
+        // the preview above calls a skip-on-refusal wrapper of — and this one does not skip.
+        reconcileExtenderEdits(allEntries(), extend({ entries: allEntries(), proposed: draft }));
+        return true;
       });
+      const { deps, applied } = withRoster([a, x], { extend, allEntries, commitEntryEdits });
       const pipeline = new GesturePipeline(deps);
       const session = pipeline.session(a.id, { kind: 'move' })!;
 
       session.preview(50);
       await new Promise((resolve) => requestAnimationFrame(resolve));
 
-      const preview = applied.at(-1) as readonly { itemId: string; dx: number; extra: boolean }[];
-      // A whole-Entry ghost (one `itemId(x.id)`) would mean the raw, unreconciled edit painted —
-      // the reconciled edit carries `segments`, so this previews one ghost bar per Segment instead.
-      const ghosts = preview.filter((p) => p.extra);
-      expect(ghosts).toHaveLength(2);
-      expect(ghosts.every((ghost) => ghost.dx === 50)).toBe(true); // the delta both Segments translate by
+      const preview = applied.at(-1) as readonly { itemId: string; extra: boolean }[];
+      expect(preview.some((p) => p.extra)).toBe(false); // no ghost painted for the refused cascade
+      expect(preview.some((p) => p.itemId === itemId(a.id))).toBe(true); // the frame still paints the drag
+
+      expect(() => session.commit(50)).toThrow(SegmentsOutOfSyncError);
+      expect(commitEntryEdits).toHaveBeenCalledTimes(1);
     });
 
     it('[S3-A4] no extend (identity, P1 default) previews only the caller’s own draft, no ghost', async () => {
