@@ -109,17 +109,36 @@ export class ParentCycleError extends FreeGanttError {
   }
 }
 
-/** `code: 'segments-out-of-sync'` — a `start`/`end` write, naming no Segments, on an entry that draws
- *  several of them (D-S4-30, narrowed by #212). The envelope spans the Segments, so moving it alone
- *  says nothing about which stretch moved. Write `segments` instead; the envelope updates in the same
- *  transaction. An Entry that draws one Segment takes the write — that Segment moves with it. */
+/** `code: 'segments-out-of-sync'` — a `start`/`end` write and the entry's Segments disagree, either
+ *  way (D-S4-30, narrowed by #212; widened by the #212 fix-plan review, finding S3):
+ *  - `'ambiguous'`: the write names `start`/`end` and no Segments, on an entry that draws several.
+ *    The envelope spans the Segments, so moving it alone says nothing about which stretch moved.
+ *  - `'conflicting'`: the write names both `start`/`end` and `segments`, and the segments' own
+ *    envelope is not the `start`/`end` named alongside them — one edit cannot mean both.
+ *  An entry that draws one Segment never sees either: that Segment *is* the envelope, so the write
+ *  updates it in the same transaction and the two halves can only agree. */
 export class SegmentsOutOfSyncError extends FreeGanttError {
-  constructor(entryId: EntryId) {
+  constructor(entryId: EntryId, reason: 'ambiguous' | 'conflicting') {
     super(
       'segments-out-of-sync',
-      `entries.update: "${entryId}" draws several segments — write segments, not start/end alone`,
+      reason === 'ambiguous'
+        ? `entries.update: "${entryId}" draws several segments — write segments, not start/end alone`
+        : `entries.update: "${entryId}" wrote start/end that disagrees with the segments in the same edit`,
     );
     this.name = 'SegmentsOutOfSyncError';
+  }
+}
+
+/** `code: 'empty-segments'` — `entries.update(id, { segments: [] })`: every stored Entry keeps at
+ *  least one Segment (#212), so an update cannot empty the list out from under it. `entries.add`
+ *  reads `segments: []` differently and mints one Segment over the entry's own span (S2.3 §1.1) —
+ *  there, `[]` means "the caller named none", and ingest has a whole span to fall back on. An update
+ *  has no such span to invent one from without silently discarding the Segment ids already there, so
+ *  it refuses instead. */
+export class EmptySegmentsError extends FreeGanttError {
+  constructor(entryId: EntryId) {
+    super('empty-segments', `entries.update: "${entryId}" cannot write an empty segments array`);
+    this.name = 'EmptySegmentsError';
   }
 }
 

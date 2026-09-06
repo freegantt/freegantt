@@ -1,6 +1,6 @@
 // time/ owns all zone-aware date arithmetic and is the only place Date/Date.now/magic time constants are allowed (I10).
 
-import type { Instant, Segment, TimeSpan } from '../model/index.js';
+import type { Instant, TimeSpan } from '../model/index.js';
 
 const MS_PER_SECOND = 1000;
 const MS_PER_MINUTE = MS_PER_SECOND * 60;
@@ -49,24 +49,20 @@ export const MS = {
   DAY: MS_PER_DAY,
 } as const;
 
-/** The one function that answers "what span do these Segments draw" (#212, finding 4) — the earliest
- *  `start` and the latest `end` among them. `data/` calls it at ingest and on every `entries.update`
- *  that touches `segments`, and `layout/` calls it while dragging, so an Entry's own `start`/`end`
- *  can never disagree with its Segments no matter which write path set them. Lives here, not in
- *  `data/` or `layout/`, because neither of those layers may import the other (`01` §1) and `time/`
- *  is the one layer both already reach through. A plain numeric comparison, not date arithmetic —
- *  `time/` still owns adding to or diffing an `Instant` (I10); this only orders two of them. Never
- *  called with an empty list: every stored Entry keeps at least one Segment. */
-export function envelopeOfSegments(segments: readonly Segment[]): TimeSpan {
-  const first = segments[0];
+/** What span do these `TimeSpan`s cover together? The earliest start and the latest end. An Entry's
+ *  `start`/`end` is this over its Segments (ADR 0010). Never called with an empty list: every stored
+ *  Entry keeps at least one Segment (a programming-error assertion, not a consumer-facing check —
+ *  callers that take input from a consumer validate before this runs). */
+export function envelopeOfSegments(spans: readonly TimeSpan[]): TimeSpan {
+  const first = spans[0];
   if (!first) {
-    throw new Error('envelopeOfSegments: called with no Segments — every stored Entry keeps at least one');
+    throw new Error('envelopeOfSegments: called with no TimeSpans — every stored Entry keeps at least one');
   }
   let start: Instant = first.start;
   let end: Instant = first.end;
-  for (const segment of segments) {
-    if (segment.start < start) start = segment.start;
-    if (segment.end > end) end = segment.end;
+  for (const span of spans) {
+    if (span.start < start) start = span.start;
+    if (span.end > end) end = span.end;
   }
   return { start, end };
 }

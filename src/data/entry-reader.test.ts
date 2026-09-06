@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { readEntries, readEdit } from './entry-reader.js';
 import type { EntryReadContext } from './entry-reader.js';
-import { entryId, segmentId, SegmentsOutOfSyncError } from '../model/index.js';
+import { entryId, EmptySegmentsError, segmentId, SegmentsOutOfSyncError } from '../model/index.js';
 import type { EntryInput } from '../model/index.js';
 import { instant } from '../time/index.js';
 import { FieldRegistry } from './fields/field-registry.js';
@@ -117,5 +117,70 @@ describe('readEdit (S4.10, D-S4-30)', () => {
     const edit = readEdit({ start: '2026-09-02' }, context, single!, registry);
     expect(edit.start).toBe(utc('2026-09-02T00:00:00Z'));
     expect(edit.segments).toHaveLength(1);
+  });
+
+  // #212 fix-plan review, finding S2: `update(id, { segments: [] })` used to reach `time/`'s
+  // internal "no Segments" assertion as a bare `Error`, with no `code` and no `FreeGanttError`.
+  it('throws a typed EmptySegmentsError, not a bare Error, when segments is written empty', () => {
+    const context = createContext();
+    const [single] = readEntries(
+      [{ id: 'seg', name: 'Seg', start: '2026-09-01', end: '2026-09-05' }],
+      context,
+    );
+    let caught: unknown;
+    try {
+      readEdit({ segments: [] }, context, single!, registry);
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(EmptySegmentsError);
+    expect((caught as EmptySegmentsError).code).toBe('empty-segments');
+  });
+
+  // #212 fix-plan review, finding S3: a `start`/`end` written alongside `segments` whose own
+  // envelope disagreed used to lose silently — the caller's values vanished, with `proposed`
+  // claiming the caller wrote what `envelopeOfSegments` derived instead.
+  it('throws SegmentsOutOfSyncError when a written start/end disagrees with the written segments', () => {
+    const context = createContext();
+    const [entry] = readEntries(
+      [{ id: 'seg', name: 'Seg', start: '2026-09-01', end: '2026-09-05' }],
+      context,
+    );
+    expect(() =>
+      readEdit(
+        {
+          start: 100,
+          end: 200,
+          segments: [
+            { start: 0, end: 10 },
+            { start: 10, end: 20 },
+          ],
+        },
+        context,
+        entry!,
+        registry,
+      ),
+    ).toThrow(SegmentsOutOfSyncError);
+  });
+
+  it('derives start/end from segments silently when the caller names neither', () => {
+    const context = createContext();
+    const [entry] = readEntries(
+      [{ id: 'seg', name: 'Seg', start: '2026-09-01', end: '2026-09-05' }],
+      context,
+    );
+    const edit = readEdit(
+      {
+        segments: [
+          { start: 0, end: 10 },
+          { start: 10, end: 20 },
+        ],
+      },
+      context,
+      entry!,
+      registry,
+    );
+    expect(edit.start).toBe(0);
+    expect(edit.end).toBe(20);
   });
 });
