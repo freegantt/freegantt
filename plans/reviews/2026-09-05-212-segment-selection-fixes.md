@@ -188,7 +188,9 @@ Findings 10, 11, 12, 13, and the spec sentence for 19.
 
 ## 5. What each slice must not do
 
-- Do not re-litigate the settled decisions. `CommandTarget` carries both id sets, `ActedOn` is approved, `Item.id` keeps its convention, `selectedIds` retires with no shim, the demo fixture stays overlapping.
+- Do not re-litigate the settled decisions. `CommandTarget` carries both id sets, `ActedOn` is approved, `Item.id` keeps its convention, `selectedIds` retires with no shim.
+- ~~The demo fixture stays overlapping.~~ **Reversed by the user, 2026-09-05.** `fixtures/demo-dataset.ts` drew entry-16's three Segments over each other, covering 75% of the first with the second. Both clicks of a ctrl-click then reached the same top Segment, and the second toggled the first back off, so multi-select looked broken to anyone driving the demo. The Segments are separated now.
+  This costs the generic demo its #215/#217 repro, because an overlap is what makes a covered Segment unreachable in the first place. The repro is not lost: `fixtures/hierarchy-dataset.ts` still authors three deliberately overlapping Segments, `harness/hierarchy.html` draws them, and `e2e/hierarchy.spec.ts` exercises them. Keep that fixture overlapping — it is now the only place either issue can be seen.
 - Do not tidy `harness/` to hide an API gap. Close the gap in `src/`, then the harness follows.
 - Do not grow `view/gantt-shell.ts`. It is 1,882 lines and 116 members. Every slice here shrinks it or leaves it alone.
 - Do not add a runtime dependency. `plans/04` §1 budgets two, both confined.
