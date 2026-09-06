@@ -401,7 +401,7 @@ Selection and belong on any consumer's cheat sheet:
 |---|---|---|
 | `Delete` | `freegantt.deleteSelection` | Removes the Selection's Segments (`dataset.entries.removeSegments`), across every Entry the Selection touches, in one transaction. A `beforeChange` veto leaves the Selection untouched. |
 | `Mod+ArrowRight` / `Mod+ArrowLeft` | `freegantt.selectNextSegment` / `selectPreviousSegment` | Steps the Selection between the Segments of the row it already sits on (#212, ADR 0010, issue #218). A row that draws one bar has nowhere to step, so the chord writes nothing; it clamps at both ends. |
-| `Escape` | `freegantt.discardCellEdit` | Closes an open Cell editor and writes nothing (`inlineEditing()`, D-S5-47, issue #160). The editor's own discard button, shown in the invalid state, runs this same command, so overriding the command changes the button. A Gantt with no `inlineEditing()` answers the id with an inert registration and holds no editor code. |
+| `Escape` | `freegantt.discardCellEdit` | Closes an open Cell editor and writes nothing (`inlineEditing()`, D-S5-47, issue #160). Escape runs the command itself, and so does the editor's own discard button, shown in the invalid state — one road, so overriding the command changes both (#231 F2). A Gantt with no `inlineEditing()` answers the id with an inert registration and holds no editor code. |
 
 **Division of labor:** capabilities answer the *static* question ("groups don't resize"); `before*` events answer the *contextual* one ("not before mobilization"). Use the shallowest one that fits.
 

@@ -221,15 +221,14 @@ export interface CellEditorPorts {
   /** The session asks its owner to close it. The owner decides, and drops its own reference, so one
    *  place alone knows whether an editor is open. */
   requestCommit(): void;
-  /** Closes the open editor and writes nothing (#160, D-S5-47). Escape's answer, bound straight
-   *  through the keymap — the same "one implementation, two entry points" shape `runDiscardCommand`
-   *  below gives the pointer affordance. */
+  /** The session asks its owner to close it and write nothing (#160, D-S5-47). Escape asks, and so
+   *  does the invalid editor's discard button.
+   *
+   *  D-S5-26 puts one command behind both, so this runs `freegantt.discardCellEdit` rather than
+   *  `CellEditing.discard()`. A consumer who overrides that command changes the keyboard and the
+   *  pointer together (#231 F2). Escape used to skip the command and reach the method, so an
+   *  override changed the button alone. */
   requestDiscard(): void;
-  /** Runs `freegantt.discardCellEdit` on the command registry (#160, D-S5-47). The invalid editor's
-   *  discard button calls this, not `requestDiscard` directly. D-S5-26 puts one command behind both
-   *  the keyboard and the pointer path. A consumer who overrides the command changes what the button
-   *  does too. */
-  runDiscardCommand(): void;
   /** S5.12, D-S5-40: reports one refusal on the Gantt's `error` event. A consumer can then toast it,
    *  rather than rely on a notice the user may not look at. `ctx.raiseError` fills `by` with this
    *  plugin's id. */
@@ -394,8 +393,8 @@ export class CellEditorSession {
     // first, with a null relatedTarget, which would run one more doomed commit before the click lands.
     button.addEventListener('pointerdown', (event) => event.preventDefault());
     // The command, not the method (D-S5-26): a consumer who overrides `freegantt.discardCellEdit`
-    // changes what this button does too.
-    button.addEventListener('click', () => this.#ports.runDiscardCommand());
+    // changes what this button does too. Escape takes the same one road (#231 F2).
+    button.addEventListener('click', () => this.#ports.requestDiscard());
     this.#wrapper.append(button);
     this.#discardButton = button;
   }
@@ -626,9 +625,6 @@ export function inlineEditing(options: InlineEditingOptions = {}): GanttPlugin {
           editing.commit();
         },
         requestDiscard: () => {
-          editing.discard();
-        },
-        runDiscardCommand: () => {
           ctx.commands.run('freegantt.discardCellEdit');
         },
         raiseError: (report) => {
@@ -637,8 +633,7 @@ export function inlineEditing(options: InlineEditingOptions = {}): GanttPlugin {
       };
 
       // #169: every mutable this plugin used to hold lives here now, with one method per transition.
-      // The `requestCommit`/`requestDiscard`/`runDiscardCommand` ports above read it after it is
-      // built, never before.
+      // The `requestCommit`/`requestDiscard` ports above read it after it is built, never before.
       const editing = new CellEditing(ports);
 
       // #160, D-S5-47, Q2/Q5: the public way to close an invalid editor with no keyboard and no
