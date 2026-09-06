@@ -4,6 +4,7 @@ import { createFieldContext, writeField } from './field-access.js';
 import {
   DuplicateFieldKeyError,
   DuplicateFieldSourceError,
+  segmentId,
   UnknownAggregatorError,
   UnknownFieldTypeError,
 } from '../../model/index.js';
@@ -48,6 +49,7 @@ describe('D-S4-35 omitted source', () => {
       kind: 'span' as const,
       start: 0 as never,
       end: 1 as never,
+      segments: [{ id: segmentId('t1-seg'), start: 0 as never, end: 1 as never }],
       meta: { cost: 500 },
     };
     expect(ctx(registry).read(entry, 'cost')).toBe(500);
@@ -64,6 +66,7 @@ describe('D-S4-35 omitted source', () => {
       kind: 'span' as const,
       start: 0 as never,
       end: 1 as never,
+      segments: [{ id: segmentId('t1-seg'), start: 0 as never, end: 1 as never }],
       meta: { budget: 1, cost: 2 },
     };
     expect(ctx(registry).read(entry, 'cost')).toBe(1);
@@ -114,6 +117,7 @@ describe('D-S4-35 omitted source', () => {
       kind: 'span' as const,
       start: 0 as never,
       end: 1 as never,
+      segments: [{ id: segmentId('t1-seg'), start: 0 as never, end: 1 as never }],
     };
     const cost = registry.get('cost')!;
     const written = writeField({}, entry, cost, 500);

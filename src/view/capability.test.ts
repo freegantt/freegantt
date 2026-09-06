@@ -1,15 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import { resolveCapabilities } from './capability.js';
 import type { Entry } from '../model/index.js';
-import { entryId } from '../model/index.js';
+import { entryId, segmentId } from '../model/index.js';
 
 function entry(overrides: Partial<Entry> = {}): Entry {
+  const start = 0 as Entry['start'];
+  const end = 1 as Entry['end'];
   return {
     id: entryId('e1'),
     kind: 'span',
     name: 'e1',
-    start: 0 as Entry['start'],
-    end: 1 as Entry['end'],
+    start,
+    end,
+    segments: [{ id: segmentId('e1-1'), start, end }],
     ...overrides,
   };
 }

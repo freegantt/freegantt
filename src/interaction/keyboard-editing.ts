@@ -24,7 +24,9 @@ function moveSelectionRow(ctx: EntryGestureContext, current: EntryId, direction:
   while (index >= 0 && index < order.length) {
     const candidate = order[index]!;
     if (canSelect(ctx, candidate)) {
-      ctx.selection.propose([candidate]);
+      // #212: a row step names an Entry, and the Selection holds Segments, so it selects every
+      // Segment that Entry draws — the same set a grid-row click writes.
+      ctx.selection.propose(ctx.segmentsOfEntries([candidate]));
       return;
     }
     index += direction;
@@ -36,8 +38,12 @@ function moveSelectionRow(ctx: EntryGestureContext, current: EntryId, direction:
  *  pointer grab on an incapable bar. */
 export function attachKeyboardEditing(container: HTMLElement, ctx: EntryGestureContext): Detachable {
   function onKeyDown(e: KeyboardEvent): void {
-    const grabbed = ctx.selection.get()[0];
+    const grabbed = ctx.selection.entryIds()[0];
     if (grabbed === undefined) return; // D-S3-13: nothing selected — S3.7 owns the pan bindings
+
+    // #212: `Mod+Arrow` steps the Selection between the Segments of one row, and the keymap owns it
+    // (`freegantt.selectNextSegment`). A nudge never reads a chord the keymap already answered.
+    if (e.ctrlKey || e.metaKey) return;
 
     if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
       e.preventDefault();

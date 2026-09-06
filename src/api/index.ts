@@ -87,6 +87,7 @@ export type {
   CommandContext,
   CommandRegistry,
   CommandTarget,
+  ActedOn,
   KeyBinding,
 } from './gantt.js';
 // The generic shapes behind the Gantt-bound aliases above (S5.1/S5.2). A plugin author writing
@@ -221,6 +222,8 @@ export type {
   Entry,
   EntryKind,
   EntryId,
+  Segment,
+  SegmentId,
   RowId,
   ItemId,
   Instant,
@@ -232,7 +235,13 @@ export type {
 } from '../model/index.js';
 // The input twins of the stored types: what a consumer writes, as opposed to what the library stores.
 // Public because a consumer that types its own entry builder needs to name them.
-export type { EntryInput, InstantInput, TimeSpanInput, DateOnlyEndRule } from '../model/index.js';
+export type {
+  EntryInput,
+  SegmentInput,
+  InstantInput,
+  TimeSpanInput,
+  DateOnlyEndRule,
+} from '../model/index.js';
 export type { DatasetDocument, EntryDocument, SerializedField, PluginDocument } from '../model/index.js';
 export type {
   RowSource,

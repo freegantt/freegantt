@@ -28,9 +28,22 @@ export interface DatasetDocumentSource {
   readonly pluginStores: { toDocument(): PluginDocument | undefined };
 }
 
+/** Every Entry stores Segments since #212, and most store the single one ingest filled in over
+ *  `[start, end)`. Writing that one back would say twice what `start` and `end` already say, so this
+ *  omits it — the reader fills it in again, and an ordinary Document keeps the bytes it had. An Entry
+ *  whose Segments say something the envelope does not writes them all, ids included. */
 function writeSegments(entry: Entry): EntryDocument['segments'] {
-  if (entry.segments === undefined) return undefined;
-  return entry.segments.map((segment) => ({ start: toISO(segment.start), end: toISO(segment.end) }));
+  if (drawsItsEnvelope(entry)) return undefined;
+  return entry.segments.map((segment) => ({
+    id: segment.id,
+    start: toISO(segment.start),
+    end: toISO(segment.end),
+  }));
+}
+
+function drawsItsEnvelope(entry: Entry): boolean {
+  const sole = entry.segments.length === 1 ? entry.segments[0] : undefined;
+  return sole !== undefined && sole.start === entry.start && sole.end === entry.end;
 }
 
 function writeEntry(entry: Entry): EntryDocument {
@@ -48,12 +61,12 @@ function writeEntry(entry: Entry): EntryDocument {
 }
 
 /** `toJSON(dataset)` — write the Dataset as a Document. Keys are declared in order; `Object.keys`
- *  over a store entity is never used. Always `schema: 3` (D-S4-16, D-S5-24). */
+ *  over a store entity is never used. Always `schema: 4` (D-S4-16, D-S5-24, #212). */
 export function toJSON(dataset: DatasetDocumentSource): DatasetDocument {
   const fields = encodeFieldDocument(dataset.fields.authored);
   const plugins = dataset.pluginStores.toDocument();
   return {
-    schema: 3,
+    schema: 4,
     timeZone: dataset.timeZone,
     dateOnlyEnd: dataset.dateOnlyEnd,
     rollUpKinds: Array.from(dataset.rollUpKinds),

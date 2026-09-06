@@ -5,7 +5,7 @@
 // zone, and what a date-only `end` means against half-open storage — belongs to `time/input.ts`
 // (I10); anything resembling date math here is a bug.
 
-import { entryId, InvalidInstantError, SegmentsOutOfSyncError } from '../model/index.js';
+import { entryId, InvalidInstantError, SegmentsOutOfSyncError, segmentId } from '../model/index.js';
 import type {
   DateOnlyEndRule,
   Entry,
@@ -13,8 +13,10 @@ import type {
   EntryInput,
   EntryKind,
   Instant,
+  Segment,
+  SegmentId,
+  SegmentInput,
   TimeSpan,
-  TimeSpanInput,
 } from '../model/index.js';
 import { toEndInstant, toInstant } from '../time/index.js';
 import type { StoredEdit } from './edit-extension.js';
@@ -32,13 +34,32 @@ export interface EntryReadContext {
   /** Kinds whose rolling-up Fields the Rollup derives from children (`01` §2.5, default `['group']`)
    * — an entry of one of these kinds may omit `start`/`end`. */
   rollUpKinds: ReadonlySet<EntryKind>;
+  /** Call: `context.mintSegmentId()` — the id a Segment nobody named gets, from the owning Dataset's
+   * own counter (I2, #212). */
+  mintSegmentId(): SegmentId;
 }
 
-function readSpan(span: TimeSpanInput, context: EntryReadContext): TimeSpan {
+function readSegment(input: SegmentInput, context: EntryReadContext): Segment {
   return {
-    start: toInstant(context.timeZone, span.start),
-    end: toEndInstant(context.timeZone, span.end, context.dateOnlyEnd),
+    id: input.id === undefined ? context.mintSegmentId() : segmentId(input.id),
+    start: toInstant(context.timeZone, input.start),
+    end: toEndInstant(context.timeZone, input.end, context.dateOnlyEnd),
   };
+}
+
+/** Every stored Entry has at least one Segment (#212), so nothing downstream carries a "this one
+ * draws no Segment" branch. An Entry that named none stores its own envelope as its one Segment. */
+function readSegments(input: EntryInput, span: TimeSpan, context: EntryReadContext): readonly Segment[] {
+  if (input.segments === undefined || input.segments.length === 0) {
+    return [{ id: context.mintSegmentId(), start: span.start, end: span.end }];
+  }
+  return input.segments.map((segment) => readSegment(segment, context));
+}
+
+/** The one Segment an Entry draws, or `undefined` when it draws several — the question
+ * `segments-out-of-sync` and a plain `start` edit both ask (#212). */
+function soleSegmentOf(entry: Entry): Segment | undefined {
+  return entry.segments.length === 1 ? entry.segments[0] : undefined;
 }
 
 /** Optional fields are copied only when present: `exactOptionalPropertyTypes` makes an explicit
@@ -54,11 +75,9 @@ export function readEntry(input: EntryInput, context: EntryReadContext): Entry {
     start: span.start,
     end: span.end,
     kind,
+    segments: readSegments(input, span, context),
   };
   if (input.parentId !== undefined) entry.parentId = entryId(input.parentId);
-  if (input.segments !== undefined) {
-    entry.segments = input.segments.map((s) => readSpan(s, context));
-  }
   if (input.meta !== undefined) entry.meta = input.meta;
   return entry;
 }
@@ -99,19 +118,32 @@ export function readEdit(
   registry: FieldRegistry,
 ): StoredEdit {
   let stored: StoredEdit = {};
+  // Which Fields this edit writes. The caller's own keys start the set, and a Field core
+  // derives below joins it. A key nobody states never reaches the changeset (#212).
+  const proposed = new Set<string>(Object.keys(edit));
   if (edit.parentId !== undefined) stored.parentId = entryId(edit.parentId);
   if (edit.kind !== undefined) stored.kind = edit.kind;
   if (edit.name !== undefined) stored.name = edit.name;
-  if (edit.start !== undefined || edit.end !== undefined) {
-    if (entry.segments !== undefined && entry.segments.length > 0 && edit.segments === undefined) {
-      throw new SegmentsOutOfSyncError(entry.id);
-    }
+  const writesEnvelope = edit.start !== undefined || edit.end !== undefined;
+  const sole = soleSegmentOf(entry);
+  // Every Entry stores Segments now (#212), so the refusal narrows to the case that still has no
+  // answer: several Segments and an envelope write naming none of them says nothing about which
+  // stretch moved. One Segment is the envelope's own drawing, and moves with it below.
+  if (writesEnvelope && edit.segments === undefined && sole === undefined) {
+    throw new SegmentsOutOfSyncError(entry.id);
   }
   if (edit.start !== undefined) stored.start = toInstant(context.timeZone, edit.start);
   if (edit.end !== undefined) stored.end = toEndInstant(context.timeZone, edit.end, context.dateOnlyEnd);
-  if (edit.segments !== undefined) stored.segments = edit.segments.map((s) => readSpan(s, context));
+  if (edit.segments !== undefined) {
+    stored.segments = edit.segments.map((segment) => readSegment(segment, context));
+  } else if (writesEnvelope && sole !== undefined) {
+    // The bar a one-Segment Entry draws is its envelope, so both move or the bar stays where the
+    // envelope no longer is. The Segment keeps its id: this is the same stretch, moved.
+    stored.segments = [{ id: sole.id, start: stored.start ?? entry.start, end: stored.end ?? entry.end }];
+    proposed.add('segments');
+  }
   if (edit.meta !== undefined) stored.meta = edit.meta;
 
   stored = writeDeclaredMetaFields(stored, entry, edit, registry);
-  return withProposedKeys(stored, Object.keys(edit));
+  return withProposedKeys(stored, proposed);
 }

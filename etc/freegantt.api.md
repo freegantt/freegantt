@@ -4,6 +4,14 @@
 
 ```ts
 
+// @public
+export interface ActedOn {
+    // (undocumented)
+    entryIds: readonly EntryId[];
+    // (undocumented)
+    segmentIds: readonly SegmentId[];
+}
+
 // @public (undocumented)
 export function addMs(i: Instant, ms: number): Instant;
 
@@ -160,8 +168,7 @@ export interface CommandRegistryOf<TGantt = unknown, TDataset = Dataset> {
 }
 
 // @public
-export interface CommandTarget {
-    entryIds: readonly EntryId[];
+export interface CommandTarget extends ActedOn {
     field?: FieldKey;
     // (undocumented)
     kind: TargetKind;
@@ -272,7 +279,7 @@ export interface DatasetDocument<TMeta = unknown> {
     // (undocumented)
     rollUpKinds: readonly EntryKind[];
     // (undocumented)
-    schema: 1 | 2 | 3;
+    schema: 1 | 2 | 3 | 4;
     // (undocumented)
     timeZone: string;
 }
@@ -465,6 +472,7 @@ export interface DomTarget {
     field?: FieldKey;
     // (undocumented)
     kind: TargetKind;
+    segmentIds: readonly SegmentId[];
 }
 
 // @public
@@ -572,7 +580,7 @@ export interface Entry<TMeta = unknown> {
     // (undocumented)
     name: string;
     parentId?: EntryId;
-    segments?: readonly TimeSpan[];
+    segments: readonly Segment[];
     // (undocumented)
     start: Instant;
 }
@@ -589,8 +597,8 @@ export interface EntryDocument<TMeta = unknown> {
     name: string;
     // (undocumented)
     parentId?: string;
-    // (undocumented)
     segments?: readonly {
+        id: string;
         start: string;
         end: string;
     }[];
@@ -643,7 +651,7 @@ export interface EntryInput<TMeta = unknown> {
     // (undocumented)
     name: string;
     parentId?: string;
-    segments?: readonly TimeSpanInput[];
+    segments?: readonly SegmentInput[];
     start?: InstantInput;
 }
 
@@ -670,6 +678,7 @@ export interface EntryStore<TMeta = unknown, TFields extends Record<string, unkn
     add(input: EntryInput<TMeta>): Entry<TMeta>;
     // (undocumented)
     remove(id: EntryId | string): void;
+    removeSegments(ids: readonly (SegmentId | string)[]): void;
     // (undocumented)
     update(id: EntryId | string, edit: EntryEdit<TMeta, TFields>): Entry<TMeta>;
 }
@@ -842,6 +851,7 @@ export interface FrameBar {
     lane: number;
     // (undocumented)
     rowId: RowId;
+    segmentId?: SegmentId;
     // (undocumented)
     width: number;
     // (undocumented)
@@ -970,13 +980,13 @@ export class Gantt {
         start: InstantInput;
         end: InstantInput;
     });
-    // (undocumented)
-    reveal(entryId: EntryId): void;
+    reveal(id: EntryId | SegmentId): void;
     get rowSource(): RowSource;
     set rowSource(next: RowSource);
     get selectedEntries(): readonly Entry[];
-    get selectedIds(): readonly EntryId[];
-    set selectedIds(ids: readonly (EntryId | string)[]);
+    get selectedEntryIds(): readonly EntryId[];
+    get selectedSegmentIds(): readonly SegmentId[];
+    set selectedSegmentIds(ids: readonly (SegmentId | string)[]);
     setCapabilityRule(capability: keyof Interactions, rule: CapabilityRule): void;
     showGridColumn(field: FieldKey): void;
     get snap(): SnapSetting;
@@ -1083,7 +1093,7 @@ export interface GanttOptionsBase {
     plugins?: readonly GanttPlugin[];
     rowSource?: RowSource;
     scroll?: ScrollModel;
-    selectedIds?: readonly (EntryId | string)[];
+    selectedSegmentIds?: readonly (SegmentId | string)[];
     snap?: SnapSetting;
     theme?: Theme;
     todayLine?: boolean | InstantInput;
@@ -1250,6 +1260,7 @@ export interface Item {
     kind: EntryKind;
     // (undocumented)
     label: string;
+    segmentId?: SegmentId;
     // (undocumented)
     start: Instant;
 }
@@ -1701,7 +1712,24 @@ export interface ScrollState {
 }
 
 // @public
+export interface Segment extends TimeSpan {
+    // (undocumented)
+    id: SegmentId;
+}
+
+// @public
+export type SegmentId = string & {
+    readonly __brand: 'SegmentId';
+};
+
+// @public
 export function segmentIndexOfItem(id: ItemId): number;
+
+// @public
+export interface SegmentInput extends TimeSpanInput {
+    // (undocumented)
+    id?: string;
+}
 
 // @public
 export class SegmentsOutOfSyncError extends FreeGanttError {
@@ -1711,9 +1739,9 @@ export class SegmentsOutOfSyncError extends FreeGanttError {
 // @public
 export interface SelectionChange {
     // (undocumented)
-    readonly from: readonly EntryId[];
+    readonly from: readonly SegmentId[];
     // (undocumented)
-    readonly to: readonly EntryId[];
+    readonly to: readonly SegmentId[];
 }
 
 // @public

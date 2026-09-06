@@ -11,8 +11,11 @@ export { pickDefined } from './pick-defined.js';
 // `render/dom` never imports `model/` directly (render-boundary, plans/01 §1) — these two id
 // helpers are pure id-string math with no model runtime behind them, re-exported here the same way
 // `ColumnAlign` crosses this same boundary (#54).
-export { itemId, itemIdFromDataset, rowIdFromDataset, entryIdOfItem } from '../model/index.js';
+export { itemId, itemIdFromDataset, rowIdFromDataset, entryIdOfItem, segmentId } from '../model/index.js';
 export { createItemProducerRegistry, wholeEntryItem } from './items/produce-items.js';
+// #212, ADR 0010: the one answer to "which Segments does this Item stand for". `render/dom` files a
+// mounted bar under it, and `view/gantt-dom.ts` reaches it through `FrameLayout.segmentIdsForItem`.
+export { segmentIdsAnItemStandsFor } from './items/segment-ids-an-item-stands-for.js';
 export type { Item, ItemProducer, ItemProducerRegistry } from './items/produce-items.js';
 export { createRegistrationTable } from './registration-table.js';
 export type { RegistrationTable } from './registration-table.js';
@@ -66,7 +69,15 @@ export type {
 // ItemId/RowId rather than a bare string — render already receives both via GeometryFrame (#35).
 // ElementDescription joins them the same way (S5.3, D-S5-10): render/dom/element-description.ts
 // builds DOM from it and may not import model/ directly.
-export type { ItemId, RowId, EntryId, ClientPoint, ElementDescription, Entry } from '../model/index.js';
+export type {
+  ItemId,
+  RowId,
+  EntryId,
+  SegmentId,
+  ClientPoint,
+  ElementDescription,
+  Entry,
+} from '../model/index.js';
 // S5.12, D-S5-35: `render/` may import `layout/` and nothing else (plans/01 §1), so the raise seam
 // reaches `render/dom` the same way `ElementDescription` and `Entry` above already do — a backend
 // that recovers from a throwing renderer must be able to report it.

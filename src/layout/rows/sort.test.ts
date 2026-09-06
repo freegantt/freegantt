@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { entryId, rowId, UnknownFieldError } from '../../model/index.js';
+import { entryId, rowId, segmentId, UnknownFieldError } from '../../model/index.js';
 import type { Duration, Entry, Instant } from '../../model/index.js';
 import type { FieldCompare } from '../column.js';
 import { resolveEntriesSource } from './entries-source.js';
@@ -10,13 +10,15 @@ function instant(n: number): Instant {
 }
 
 function entry(id: string, opts?: { parentId?: string; start?: number; end?: number; cost?: number }): Entry {
-  const start = opts?.start ?? 0;
+  const start = instant(opts?.start ?? 0);
+  const end = instant(opts?.end ?? (opts?.start ?? 0) + 1);
   const row: Entry = {
     id: entryId(id),
     name: id,
-    start: instant(start),
-    end: instant(opts?.end ?? start + 1),
+    start,
+    end,
     kind: 'span',
+    segments: [{ id: segmentId(`${id}-1`), start, end }],
   };
   if (opts?.parentId !== undefined) row.parentId = entryId(opts.parentId);
   if (opts?.cost !== undefined) row.meta = { cost: opts.cost };

@@ -2,8 +2,16 @@ import { describe, expect, it, vi } from 'vitest';
 import { GanttShell } from './gantt-shell.js';
 import type { GanttShellOptions } from './gantt-shell.js';
 import { FrameLayout, ScrollModel, TimeScaleModel } from '../layout/index.js';
-import { entryId, rowId, itemId, EntryNotFoundError, ContainerNotFoundError } from '../model/index.js';
-import type { Entry, EntryId, Instant, ItemId } from '../model/index.js';
+import {
+  entryId,
+  rowId,
+  itemId,
+  mintedSegmentId,
+  segmentId,
+  EntryNotFoundError,
+  ContainerNotFoundError,
+} from '../model/index.js';
+import type { Entry, Instant, ItemId, SegmentId } from '../model/index.js';
 import { DatasetState, EntryStore } from '../data/index.js';
 import { CORE_FIELDS } from '../data/fields/core-fields.js';
 import { createDomBackend } from '../render/dom/index.js';
@@ -13,7 +21,14 @@ import type { EntryGestureContext } from './entry-gesture-context.js';
 // [S2-A3]: counts `RenderBackend.sync` calls, one test's own instance (§9-I's `GanttShellOptions.backend`
 // injection point) rather than a module-wide mock every other test in this file would otherwise pay for.
 function countingDomBackend(calls: { count: number }): RenderBackend<HTMLElement> {
-  const backend = createDomBackend();
+  // This backend only counts `sync` calls, so it paints nothing that needs an Entry. It still states
+  // every option, because the factory refuses to guess one (#212).
+  const backend = createDomBackend({
+    entryById: () => undefined,
+    resolveBarRenderer: () => undefined,
+    resolveCellRenderer: () => undefined,
+    resolveHeaderRenderer: () => undefined,
+  });
   return {
     ...backend,
     sync: (frame) => {
@@ -27,11 +42,13 @@ function countingDomBackend(calls: { count: number }): RenderBackend<HTMLElement
 // backs these fixtures the same way a `Dataset` would, with no test-only fake to keep in sync.
 // `referenceDate` is a bare epoch-ms cast, not `time/`'s `instant()` — view/ may not import time/ (I1).
 function fakeDataset(entries: readonly Entry[]): GanttShellOptions['dataset'] {
+  let mintedSegmentCounter = 0;
   const context = {
     timeZone,
     dateOnlyEnd: 'inclusive' as const,
     referenceDate: 0 as Instant,
     rollUpKinds: new Set(['group']),
+    mintSegmentId: () => mintedSegmentId(++mintedSegmentCounter),
   };
   // No changes ever land on this store, so on/off are stubs — none of these tests mutate the
   // dataset, so no handler this file registers is ever called.
@@ -114,17 +131,23 @@ const entries: Entry[] = [
     start: rangeStart,
     end: instant('2026-09-03T00:00:00Z'),
     kind: 'span',
+    segments: [{ id: segmentId('t1-1'), start: rangeStart, end: instant('2026-09-03T00:00:00Z') }],
   },
 ];
 
 function tallEntries(count: number): Entry[] {
-  return Array.from({ length: count }, (_, i) => ({
-    id: entryId(`e${i}`),
-    name: `Entry ${i}`,
-    start: rangeStart,
-    end: instant('2026-09-03T00:00:00Z'),
-    kind: 'span',
-  }));
+  return Array.from({ length: count }, (_, i) => {
+    const start = rangeStart;
+    const end = instant('2026-09-03T00:00:00Z');
+    return {
+      id: entryId(`e${i}`),
+      name: `Entry ${i}`,
+      start,
+      end,
+      kind: 'span' as const,
+      segments: [{ id: segmentId(`e${i}-1`), start, end }],
+    };
+  });
 }
 
 describe('GanttShell header band', () => {
@@ -163,6 +186,7 @@ describe('GanttShell header band', () => {
         start: rangeStart,
         end: instant('2026-09-20T00:00:00Z'),
         kind: 'span',
+        segments: [{ id: segmentId('w1-1'), start: rangeStart, end: instant('2026-09-20T00:00:00Z') }],
       },
     ];
     const shellB = new GanttShell({
@@ -448,13 +472,18 @@ describe('pane-size attachment (S1.7b, #8)', () => {
       const scale = new TimeScaleModel(); // range: 'fitDataset' — pxPerMs depends on paneWidth
       const scroll = new ScrollModel();
       const container = document.createElement('div');
-      const tall = Array.from({ length: 50 }, (_, i) => ({
-        id: entryId(`e${i}`),
-        name: `Entry ${i}`,
-        start: rangeStart,
-        end: instant('2026-09-03T00:00:00Z'),
-        kind: 'span',
-      }));
+      const tall = Array.from({ length: 50 }, (_, i) => {
+        const start = rangeStart;
+        const end = instant('2026-09-03T00:00:00Z');
+        return {
+          id: entryId(`e${i}`),
+          name: `Entry ${i}`,
+          start,
+          end,
+          kind: 'span' as const,
+          segments: [{ id: segmentId(`e${i}-1`), start, end }],
+        };
+      });
       const shell = new GanttShell({ wiring: {}, container, dataset: fakeDataset(tall), scale, scroll });
 
       // Exactly one observer for this one Gantt.
@@ -591,6 +620,7 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
         kind: 'span',
         start: rangeStart,
         end: instant('2026-09-03T00:00:00Z'),
+        segments: [{ id: segmentId('p-1'), start: rangeStart, end: instant('2026-09-03T00:00:00Z') }],
       };
       const child: Entry = {
         id: entryId('c'),
@@ -599,6 +629,7 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
         parentId: entryId('p'),
         start: rangeStart,
         end: instant('2026-09-03T00:00:00Z'),
+        segments: [{ id: segmentId('c-1'), start: rangeStart, end: instant('2026-09-03T00:00:00Z') }],
       };
       const shell = new GanttShell({
         wiring: {},
@@ -633,6 +664,7 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
         kind: 'span',
         start: rangeStart,
         end: instant('2026-09-03T00:00:00Z'),
+        segments: [{ id: segmentId('a-1'), start: rangeStart, end: instant('2026-09-03T00:00:00Z') }],
         meta: { team: 'red' },
       };
       const shell = new GanttShell({
@@ -825,14 +857,14 @@ describe('GanttShell hot path (S3.2, D-S3-6/D-S3-9, [S3-A3])', () => {
     const container = document.createElement('div');
     const shell = new GanttShell({ wiring: {}, container, dataset: fakeDataset(entries) });
 
-    shell.selection = [entries[0]!.id];
+    shell.selection = [segmentId('t1-1')];
     const start = container.querySelector<HTMLElement>('.fg-bar-handle[data-edge="start"]')!;
     expect(start.hidden).toBe(false);
 
     shell.destroy();
   });
 
-  it('clicking one segment paints that bar alone; the handle pair follows the pick (#185, #211)', () => {
+  it('clicking one segment paints that bar alone; the handle pair follows it (#185, #211, #212)', () => {
     const segmented: Entry = {
       id: entryId('seg'),
       name: 'segmented',
@@ -840,18 +872,22 @@ describe('GanttShell hot path (S3.2, D-S3-6/D-S3-9, [S3-A3])', () => {
       end: instant('2026-09-05T00:00:00Z'),
       kind: 'span',
       segments: [
-        { start: rangeStart, end: instant('2026-09-02T00:00:00Z') },
-        { start: instant('2026-09-03T00:00:00Z'), end: instant('2026-09-04T00:00:00Z') },
+        { id: segmentId('seg-1'), start: rangeStart, end: instant('2026-09-02T00:00:00Z') },
+        {
+          id: segmentId('seg-2'),
+          start: instant('2026-09-03T00:00:00Z'),
+          end: instant('2026-09-04T00:00:00Z'),
+        },
       ],
     };
     const container = document.createElement('div');
-    let propose: ((next: readonly EntryId[], pickedItemId?: ItemId) => void) | undefined;
+    let propose: ((next: readonly SegmentId[]) => void) | undefined;
     const shell = new GanttShell({
       container,
       dataset: fakeDataset([segmented]),
       wiring: {
         entryGestures: (_pane, _rowLayer, _host, ctx) => {
-          propose = (next, picked) => ctx.selection.propose(next, picked);
+          propose = (next) => ctx.selection.propose(next);
           return { detach() {} };
         },
       },
@@ -859,36 +895,36 @@ describe('GanttShell hot path (S3.2, D-S3-6/D-S3-9, [S3-A3])', () => {
 
     const first = itemId(segmented.id, 0);
     const second = itemId(segmented.id, 1);
-    propose?.([segmented.id], second);
+    propose?.([segmentId('seg-2')]);
 
-    // The pointer named one bar, so the paint runs that far and no further (#185). The Selection is
-    // still the Entry: `selectedIds` says so.
+    // The pointer named one bar, so the Selection holds that one Segment and the paint runs that far
+    // and no further (#212). `selectedEntryIds` still reads the record behind it.
     expect(stateOf(container, second)).toContain('selected');
     expect(stateOf(container, first)).not.toContain('selected');
-    expect(shell.selection).toEqual([segmented.id]);
+    expect(shell.selection).toEqual([segmentId('seg-2')]);
+    expect(shell.selectedEntryIds).toEqual([segmented.id]);
 
     const start = container.querySelector<HTMLElement>('.fg-bar-handle[data-edge="start"]')!;
     const end = container.querySelector<HTMLElement>('.fg-bar-handle[data-edge="end"]')!;
     const firstBar = container.querySelector<HTMLElement>(`[data-item-id="${first}"]`)!;
     const secondBar = container.querySelector<HTMLElement>(`[data-item-id="${second}"]`)!;
 
-    // #211: a pick (the pointer named a bar) narrows the handle pair to that one bar — a resize on a
-    // picked Segment writes only that Segment's edge.
+    // #211/#212: one selected Segment narrows the handle pair to that one bar — a resize on it
+    // writes only that Segment's edge.
     expect(start.hidden).toBe(false);
     expect(start.style.transform).toBe(secondBar.style.transform);
     expect(translateX(end)).toBeCloseTo(translateX(secondBar) + pxWidth(secondBar), 5);
 
-    // A proposal that names no bar — a grid-row click, or `gantt.selectedIds = [...]` — widens the
-    // paint back to every bar the Entry drew, without a second `selectionChange`. `resizableEntryId`
-    // still needs a hover once a multi-bar Entry has no pick (D-S3-6's own resize-fallback rule, S3.2),
-    // so the handle pair itself is not exercised here — see the envelope-bracket coverage in
-    // `render/dom/index.test.ts` and `e2e/hierarchy.spec.ts`.
-    propose?.([segmented.id]);
+    // A grid-row click, or `gantt.selectedSegmentIds = [...]`, selects every Segment of the Entry, so
+    // the paint widens back to every bar it drew. `resizableEntryId` still needs a hover once a
+    // multi-bar Entry has no single selected Segment (D-S3-6's own resize-fallback rule, S3.2), so
+    // the handle pair itself is not exercised there — see `render/dom/index.test.ts`.
+    propose?.([segmentId('seg-1'), segmentId('seg-2')]);
     expect(stateOf(container, first)).toContain('selected');
     expect(stateOf(container, second)).toContain('selected');
 
-    // And picking a bar again narrows both the paint and the handle pair back to it.
-    propose?.([segmented.id], first);
+    // And selecting one bar again narrows both the paint and the handle pair back to it.
+    propose?.([segmentId('seg-1')]);
     expect(stateOf(container, first)).toContain('selected');
     expect(stateOf(container, second)).not.toContain('selected');
     expect(start.style.transform).toBe(firstBar.style.transform);
@@ -899,9 +935,30 @@ describe('GanttShell hot path (S3.2, D-S3-6/D-S3-9, [S3-A3])', () => {
 
   it('entriesForRow answers every selectable Entry a packed row owns (#185)', () => {
     const owned: Entry[] = [
-      { id: entryId('one'), name: 'one', start: rangeStart, end: rangeEnd, kind: 'span' },
-      { id: entryId('two'), name: 'two', start: rangeStart, end: rangeEnd, kind: 'span' },
-      { id: entryId('three'), name: 'three', start: rangeStart, end: rangeEnd, kind: 'span' },
+      {
+        id: entryId('one'),
+        name: 'one',
+        start: rangeStart,
+        end: rangeEnd,
+        kind: 'span',
+        segments: [{ id: segmentId('one-1'), start: rangeStart, end: rangeEnd }],
+      },
+      {
+        id: entryId('two'),
+        name: 'two',
+        start: rangeStart,
+        end: rangeEnd,
+        kind: 'span',
+        segments: [{ id: segmentId('two-1'), start: rangeStart, end: rangeEnd }],
+      },
+      {
+        id: entryId('three'),
+        name: 'three',
+        start: rangeStart,
+        end: rangeEnd,
+        kind: 'span',
+        segments: [{ id: segmentId('three-1'), start: rangeStart, end: rangeEnd }],
+      },
     ];
     const container = document.createElement('div');
     let ctx: EntryGestureContext | undefined;
@@ -939,6 +996,7 @@ describe('GanttShell tree keyboard (D1)', () => {
       kind: 'span',
       start: rangeStart,
       end: instant('2026-09-03T00:00:00Z'),
+      segments: [{ id: segmentId('p-1'), start: rangeStart, end: instant('2026-09-03T00:00:00Z') }],
     };
     const child: Entry = {
       id: entryId('c'),
@@ -947,6 +1005,7 @@ describe('GanttShell tree keyboard (D1)', () => {
       parentId: parent.id,
       start: rangeStart,
       end: instant('2026-09-03T00:00:00Z'),
+      segments: [{ id: segmentId('c-1'), start: rangeStart, end: instant('2026-09-03T00:00:00Z') }],
     };
     const container = document.createElement('div');
     let ctx: EntryGestureContext | undefined;
@@ -961,7 +1020,7 @@ describe('GanttShell tree keyboard (D1)', () => {
         },
       },
     });
-    shell.selection = [parent.id];
+    shell.selection = [segmentId('p-1')];
 
     expect(typeof ctx?.tryTreeArrow).toBe('function');
     expect(ctx!.tryTreeArrow!('right')).toBe(false);

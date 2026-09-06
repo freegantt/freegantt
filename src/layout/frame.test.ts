@@ -15,7 +15,7 @@ import {
   formatDate,
   formatEndInclusive,
 } from '../time/index.js';
-import { entryId } from '../model/index.js';
+import { entryId, segmentId } from '../model/index.js';
 import type { Entry } from '../model/index.js';
 
 const scale = createTimeScale({ timeZone: 'UTC', range: sampleEntries[0]!, pxPerMs: 1 / 1000 });
@@ -432,8 +432,8 @@ describe('computeFrame', () => {
     const entry = {
       ...sampleEntries[0]!,
       segments: [
-        { start: sampleEntries[0]!.start, end: sampleEntries[1]!.end },
-        { start: sampleEntries[1]!.end, end: sampleEntries[2]!.end },
+        { id: segmentId('part-1'), start: sampleEntries[0]!.start, end: sampleEntries[1]!.end },
+        { id: segmentId('part-2'), start: sampleEntries[1]!.end, end: sampleEntries[2]!.end },
       ],
     };
     const frame = computeFrame({
@@ -449,6 +449,30 @@ describe('computeFrame', () => {
     expect(frame.bars[0]?.a11yLabel).toMatch(/, part 1 of 2, /);
     expect(frame.bars[1]?.a11yLabel).toMatch(/, part 2 of 2, /);
   });
+
+  it('carries the segmentId its Item had, for a Segment bar, and none for a whole-Entry bar (#212)', () => {
+    const entry = {
+      ...sampleEntries[0]!,
+      segments: [
+        { id: segmentId('part-1'), start: sampleEntries[0]!.start, end: sampleEntries[1]!.end },
+        { id: segmentId('part-2'), start: sampleEntries[1]!.end, end: sampleEntries[2]!.end },
+      ],
+    };
+    const grouped = { ...sampleEntries[1]!, kind: 'group' };
+    const frame = computeFrame({
+      entries: [entry, grouped],
+      scale,
+      preset,
+      visible,
+      rowHeight: 32,
+      revision: 0,
+      itemProducerRegistry,
+    });
+    const segmentedBars = frame.bars.filter((bar) => bar.entryId === entry.id);
+    expect(segmentedBars.map((bar) => bar.segmentId)).toEqual(entry.segments.map((segment) => segment.id));
+    const groupBar = frame.bars.find((bar) => bar.entryId === grouped.id);
+    expect(groupBar?.segmentId).toBeUndefined();
+  });
 });
 
 describe('computeFrame — horizontal culling', () => {
@@ -460,7 +484,16 @@ describe('computeFrame — horizontal culling', () => {
   });
 
   function entryAt(id: string, x: number, width: number): Entry {
-    return { id: entryId(id), name: id, start: instant(x), end: instant(x + width), kind: 'span' };
+    const start = instant(x);
+    const end = instant(x + width);
+    return {
+      id: entryId(id),
+      name: id,
+      start,
+      end,
+      kind: 'span',
+      segments: [{ id: segmentId(`${id}-1`), start, end }],
+    };
   }
 
   const entries: Entry[] = [
@@ -660,13 +693,18 @@ describe(
   'computeFrame — 5,000 entries (supporting test for [S1-A1], not the acceptance proof itself:' +
     ' the box says "in the DOM", proven by e2e/large-dataset.spec.ts)',
   () => {
-    const large: Entry[] = seededEntryInputs({ count: 5000 }).map((input) => ({
-      id: entryId(input.id),
-      name: input.name,
-      start: instant(input.start as Date),
-      end: instant(input.end as Date),
-      kind: 'span',
-    }));
+    const large: Entry[] = seededEntryInputs({ count: 5000 }).map((input) => {
+      const start = instant(input.start as Date);
+      const end = instant(input.end as Date);
+      return {
+        id: entryId(input.id),
+        name: input.name,
+        start,
+        end,
+        kind: 'span',
+        segments: [{ id: segmentId(`${input.id}-1`), start, end }],
+      };
+    });
     const largeScale = createTimeScale({ timeZone: 'UTC', range: large[0]!, pxPerMs: 1 / 100_000 });
 
     it('emits only windowed rows while contentHeight stays the full extent', () => {
@@ -729,9 +767,9 @@ describe('computeFrame lanes (S4.8)', () => {
   const overlapping: Entry = {
     ...sampleEntries[0]!,
     segments: [
-      { start: sampleEntries[0]!.start, end: sampleEntries[0]!.end },
-      { start: sampleEntries[0]!.start, end: sampleEntries[0]!.end },
-      { start: sampleEntries[0]!.start, end: sampleEntries[0]!.end },
+      { id: segmentId('lane-1'), start: sampleEntries[0]!.start, end: sampleEntries[0]!.end },
+      { id: segmentId('lane-2'), start: sampleEntries[0]!.start, end: sampleEntries[0]!.end },
+      { id: segmentId('lane-3'), start: sampleEntries[0]!.start, end: sampleEntries[0]!.end },
     ],
   };
 

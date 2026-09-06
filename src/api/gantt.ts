@@ -31,6 +31,7 @@ import type {
   InstantInput,
   PluginId,
   RowId,
+  SegmentId,
   TimeSpan,
 } from '../model/index.js';
 import { attemptMutation } from './attempt-mutation.js';
@@ -43,6 +44,7 @@ import type {
   CommandRegistryOf,
   KeyBindingOf,
   CommandTarget,
+  ActedOn,
 } from './command.js';
 // api/ is the composition root that reaches interaction/ in (plans/01 §1: `API --> INT`,
 // `plans/s3-direct-manipulation/README.md` §0) — `view/` cannot, so `GanttShell` takes this by
@@ -95,9 +97,9 @@ export interface GanttOptionsBase {
   /** The ordered set `zoomIn`/`zoomOut` step through, finest first (S1.12, D-S1.12-5). Live.
    *  Default: the shipped nine-rung set. */
   zoomPresets?: readonly PresetRef[];
-  /** Live (S3, D-S3-10). Entry ids, loose on the way in; assignment runs the same cancelable
-   *  sequence a click runs. Default `[]`. */
-  selectedIds?: readonly (EntryId | string)[];
+  /** Live (S3, D-S3-10; ADR 0010, #212). Segment ids, loose on the way in; assignment runs the same
+   *  cancelable sequence a click runs. Default `[]`. */
+  selectedSegmentIds?: readonly (SegmentId | string)[];
   /** Live (S3, D-S3-9). Per-gesture, boolean or per-entry predicate, over the per-kind default
    *  table. Default `{}`: every gesture resolves off the default table alone. Assignment replaces
    *  the whole config; `gantt.setCapabilityRule`/`clearCapabilityRule` write one gesture (D-S5-35). */
@@ -174,7 +176,7 @@ export type Command = CommandOf<Gantt>;
 export type CommandContext = CommandContextOf<Gantt>;
 export type CommandRegistry = CommandRegistryOf<Gantt>;
 export type KeyBinding = KeyBindingOf<Gantt>;
-export type { CommandTarget };
+export type { ActedOn, CommandTarget };
 
 export class Gantt {
   #shell: GanttShell;
@@ -254,7 +256,7 @@ export class Gantt {
       },
     });
     if (options.zoomPresets !== undefined) this.#shell.zoomPresets = options.zoomPresets;
-    if (options.selectedIds !== undefined) this.#shell.selection = options.selectedIds;
+    if (options.selectedSegmentIds !== undefined) this.#shell.selection = options.selectedSegmentIds;
     if (options.plugins !== undefined) this.#shell.plugins = options.plugins;
   }
 
@@ -519,27 +521,34 @@ export class Gantt {
     this.#shell.zoomPresets = refs;
   }
 
-  /** The Selection as ids — which entries a click, the keyboard, or an assignment selected
-   *  (D-S3-10). Loose in, branded out — the same asymmetry `dataset.entries.get/update/remove`
-   *  already ship. Live: assignment runs the same cancelable `beforeSelectionChange` →
-   *  `selectionChange` sequence a click runs. Pairs with `selectedEntries`, which reads the same
-   *  Selection as `Entry` records. */
-  get selectedIds(): readonly EntryId[] {
+  /** The Selection itself (ADR 0010, #212) — which Segments a click, the keyboard, or an assignment
+   *  selected. The pane a click lands in picks the unit: the timeline selects the Segment under the
+   *  pointer, and the grid pane selects every Segment of every Entry the row owns. Loose in, branded
+   *  out — the same asymmetry `dataset.entries.get/update/remove` already ship. Live: assignment runs
+   *  the same cancelable `beforeSelectionChange` → `selectionChange` sequence a click runs. */
+  get selectedSegmentIds(): readonly SegmentId[] {
     return this.#shell.selection;
   }
 
-  set selectedIds(ids: readonly (EntryId | string)[]) {
+  set selectedSegmentIds(ids: readonly (SegmentId | string)[]) {
     this.#shell.selection = ids;
   }
 
-  /** The Selection as records — the bound dataset's `Entry` for each id in `selectedIds`, in the
-   *  same order. Re-reads the store on every access, so field edits show up without a selection
+  /** The Selection read as records rather than drawings (ADR 0010, #212) — the Entries the selected
+   *  Segments belong to, deduped, in row order. Read-only: assign `selectedSegmentIds` to change what
+   *  is selected, because a Segment is the unit the user actually points at. */
+  get selectedEntryIds(): readonly EntryId[] {
+    return this.#shell.selectedEntryIds;
+  }
+
+  /** The Selection as records — the bound dataset's `Entry` for each id in `selectedEntryIds`, in
+   *  the same order. Re-reads the store on every access, so field edits show up without a selection
    *  change. An id that no longer exists in the store is skipped — for example after
    *  `dataset.entries.remove` left a stale id in the selection set. To change which entries are
-   *  selected, assign `selectedIds`; this getter is read-only. */
+   *  selected, assign `selectedSegmentIds`; this getter is read-only. */
   get selectedEntries(): readonly Entry[] {
     const entries: Entry[] = [];
-    for (const id of this.#shell.selection) {
+    for (const id of this.selectedEntryIds) {
       const entry = this.#dataset.entries.get(id);
       if (entry !== undefined) entries.push(entry);
     }
@@ -634,8 +643,10 @@ export class Gantt {
     this.#shell.panToToday(now(), align);
   }
 
-  reveal(entryId: EntryId): void {
-    this.#shell.reveal(entryId);
+  /** An `EntryId` reveals that Entry's whole envelope; a `SegmentId` reveals that one Segment alone.
+   *  An id the Dataset reads as neither throws `EntryNotFoundError` (ADR 0010, #212). */
+  reveal(id: EntryId | SegmentId): void {
+    this.#shell.reveal(id);
   }
 
   /** Live (S5.1, D-S5-1, D-S5-3). See `GanttOptions.plugins`. */

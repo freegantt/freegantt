@@ -16,12 +16,16 @@ import type {
   FieldContext,
   FieldKey,
   FieldValue,
+  Segment,
+  SegmentId,
 } from '../model/index.js';
 import {
   entryId,
+  segmentId,
   DuplicateEntryIdError,
   EntryNotFoundError,
   ParentCycleError,
+  SegmentNotFoundError,
   UnknownFieldError,
 } from '../model/index.js';
 import type { EntryStore as EntryStoreContract } from '../model/index.js';
@@ -39,6 +43,19 @@ import {
   writeOntoEntry,
 } from './fields/field-access.js';
 import { FieldRegistry } from './fields/field-registry.js';
+
+/** The envelope over `segments`: the earliest start and the latest end. `segments` must not be
+ *  empty — an Entry with no Segment left is removed instead of asked for its envelope. */
+function envelopeOf(segments: readonly Segment[]): { start: number; end: number } {
+  const first = segments[0]!;
+  let start: number = first.start;
+  let end: number = first.end;
+  for (const segment of segments) {
+    if (segment.start < start) start = segment.start;
+    if (segment.end > end) end = segment.end;
+  }
+  return { start, end };
+}
 
 /** Writes `field` on a copy of `current`. `value === undefined` omits the key instead of setting it —
  *  an undo of an optional field's first edit must return the Entry to not having the key at all
@@ -230,6 +247,56 @@ export class EntryStore implements EntryStoreContract {
       for (const descendantId of this.#subtreeOf(key)) this.stageRemove(token, descendantId);
       this.stageRemove(token, key);
     });
+  }
+
+  /** Removes Segments in one transaction, across several Entries when `ids` names several (#212,
+   *  ADR 0010). Reads through `update`/`remove` for each Entry it touches, so the changeset reports
+   *  the same `{from, to}` rows either call reports on its own — no second write path. */
+  removeSegments(ids: readonly (SegmentId | string)[]): void {
+    this.#mutate(() => {
+      const requested = new Set(ids.map((id) => segmentId(id)));
+      if (requested.size === 0) return;
+      for (const [ownerId, removedIds] of this.#groupSegmentsByOwner(requested)) {
+        this.#removeSegmentsFrom(ownerId, removedIds);
+      }
+    });
+  }
+
+  /** Finds which Entry draws each requested Segment, and groups the ids by that Entry. An id no
+   *  Entry draws throws `SegmentNotFoundError` before any Entry is touched — the same posture
+   *  `remove` takes on an unknown `EntryId` (S2.3 §1.3): fail before staging anything. */
+  #groupSegmentsByOwner(requested: ReadonlySet<SegmentId>): ReadonlyMap<EntryId, ReadonlySet<SegmentId>> {
+    const ownerOf = new Map<SegmentId, EntryId>();
+    for (const entry of this.all) {
+      for (const segment of entry.segments) {
+        if (requested.has(segment.id)) ownerOf.set(segment.id, entry.id);
+      }
+    }
+    for (const id of requested) {
+      if (!ownerOf.has(id)) throw new SegmentNotFoundError(id, 'entries.removeSegments');
+    }
+    const grouped = new Map<EntryId, Set<SegmentId>>();
+    for (const [foundId, ownerId] of ownerOf) {
+      const group = grouped.get(ownerId) ?? new Set<SegmentId>();
+      group.add(foundId);
+      grouped.set(ownerId, group);
+    }
+    return grouped;
+  }
+
+  /** Removes `removedIds` from one Entry's Segments. Removing the last one removes the Entry itself,
+   *  in the same transaction — an Entry never survives as an empty record (#212). Otherwise the
+   *  remaining Segments and their recomputed envelope go through `update`, the normal edit path, so
+   *  the changeset reports `segments`, `start` and `end` the same way any other edit would. */
+  #removeSegmentsFrom(id: EntryId, removedIds: ReadonlySet<SegmentId>): void {
+    const entry = this.get(id)!;
+    const remaining = entry.segments.filter((segment) => !removedIds.has(segment.id));
+    if (remaining.length === 0) {
+      this.remove(id);
+      return;
+    }
+    const envelope = envelopeOf(remaining);
+    this.update(id, { segments: remaining, start: envelope.start, end: envelope.end });
   }
 
   #mutate<T>(body: (token: TxToken) => T): T {

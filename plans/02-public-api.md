@@ -194,7 +194,7 @@ The reading itself lives in `time/` (`toInstant`, `toEndInstant`) — resolving 
 
 `minGridWidth` (#127) is a live, plain-reconfiguration property — not a gesture, so it carries no `before*`/`*Change` pair of its own. It floors what the Splitter drag can reach, and nothing else: no floor applies to a written width, so `gantt.gridWidth = 0` collapses the grid pane on purpose. (#139's ceiling is the one bound that does reach a written width — a floor guards against a user accident, which an app author is allowed past; a ceiling states a layout fact.) Default `40` — wide enough for one narrow column, so a drag cannot take the pane to nothing by accident; `minGridWidth: 0` restores an unfloored splitter. Raising `minGridWidth` above the current `gridWidth` fires `beforeGridWidthChange`/`gridWidthChange` to lift it — the same commit sequence a drag would use, so a veto leaves the width exactly where it was.
 
-`beforeCollapseChange`/`collapseChange` (S4.6, D-S4-22) carry `{ from, to }` as `RowId[]` — Gantt view state, no Dataset transaction. Fired by a twisty click, keyboard collapse/expand, and a direct `gantt.collapsed = ids` assignment. A veto restores the set the interaction started from. Collapse is per Gantt: two Gantts on one Dataset collapse independently, the same way `selectedIds` already does.
+`beforeCollapseChange`/`collapseChange` (S4.6, D-S4-22) carry `{ from, to }` as `RowId[]` — Gantt view state, no Dataset transaction. Fired by a twisty click, keyboard collapse/expand, and a direct `gantt.collapsed = ids` assignment. A veto restores the set the interaction started from. Collapse is per Gantt: two Gantts on one Dataset collapse independently, the same way `selectedSegmentIds` already does.
 
 `error` (S5.12, D-S5-35/36/37) is the one event name that lives on **both** buses, and it carries the
 same `ErrorReport` on each. That is not the "every event name exists exactly once" rule breaking. The
@@ -211,7 +211,7 @@ and `cause` — so it renders and serializes with no type test. `severity` is `'
 something it did not. Core raises and retains nothing: there is no `gantt.errors` array, because the
 cap, the overflow rule and the dedupe are the consumer's policy.
 
-S3 data-gesture payloads (D-S3-22): `beforeEntryMove`/`entryMove` carry `ProposedSpan` (`entry`, `start`, `end`) plus `entries` (grabbed first; extender extras never included). `beforeEntryResize`/`entryResize` add `edge: 'start' | 'end'`. `beforeSelectionChange`/`selectionChange` carry `{ from, to }` as `EntryId[]` — Gantt state, no Dataset transaction. `beforeEntryMove`/`beforeEntryResize` handlers may return `Promise<void | false>` (D-S3-17); every other Gantt event stays sync-only.
+S3 data-gesture payloads (D-S3-22): `beforeEntryMove`/`entryMove` carry `ProposedSpan` (`entry`, `start`, `end`) plus `entries` (grabbed first; extender extras never included). `beforeEntryResize`/`entryResize` add `edge: 'start' | 'end'`. `beforeSelectionChange`/`selectionChange` carry `{ from, to }` as `SegmentId[]` (ADR 0010, #212 — `EntryId[]` until then) — Gantt state, no Dataset transaction. `beforeEntryMove`/`beforeEntryResize` handlers may return `Promise<void | false>` (D-S3-17); every other Gantt event stays sync-only.
 
 `beforeEntryEdit`/`entryEdit` (S5.8, D-S5-19) carry `EntryFieldEdit` — `entry`, `field` (a `FieldKey`), `from`, `to` (both `unknown`: a Field's stored type is open). `beforeEntryEdit` fires **before `inlineEditing()`'s built-in editor opens**, not before the write, so `from`/`to` are both the entry's current stored value at that point — nothing has been typed yet. `entryEdit` fires after the commit, `to` the value actually written. `beforeEntryEdit` joins `beforeEntryMove`/`beforeEntryResize` as the third handler that may return `Promise<void | false>` (D-S3-17) — the async veto is what lets a consumer `await myDialog.open(entry)` before deciding whether to suppress the built-in editor (the sample below).
 
@@ -301,7 +301,7 @@ Colour defaults are sourced from an existing, unnamed palette this team maintain
 
 S3 Parts: `.fg-bar-handle` (shared resize-handle pair), `.fg-cursor-line`, `.fg-cursor-line-label`. S3 State attribute: `data-state` on `.fg-bar` (`hovered`, `selected`, `pending`, `dragging`, `ghost`) and `data-movable` (grab cursor).
 
-**D-S3-10 amendment (bug hunt, "grid row highlight and row click" — locked pre-1.0, no compat shim needed).** A click on a `.fg-row` in the grid pane is the same select as a click on that row's own bar: plain replaces, ctrl/⌘ toggles, shift ranges over `selectableEntriesInRowOrder()`. It never arms move or resize — a grid-row pointerdown never grabs `EntryGestureSession`. A click on `.fg-row-twisty` is not a row hit at all: collapse stays on the twisty, never selection. An empty *timeline* click still clears `gantt.selectedIds`, with either button — a right-click is a click for this rule (#199/#205 follow-up). A miss on the grid pane (a header row, padding, a twisty) never does — only the timeline's own empty click is "the" clearing gesture. `data-state~="selected"` paints on the matching `.fg-row` the same way it already does on `.fg-bar` — same `--fg-selection-color` Token, a background instead of an outline (`.fg-bar[data-state~="selected"]`, `.fg-row[data-state~="selected"]`). A row click selects **every** Entry the row owns (`FrameRow.entryIds`, #185); the row's cells still describe the first one. A grouping header row carries no entry and is never selectable.
+**D-S3-10 amendment (bug hunt, "grid row highlight and row click" — locked pre-1.0, no compat shim needed).** A click on a `.fg-row` in the grid pane is the same select as a click on that row's own bar: plain replaces, ctrl/⌘ toggles, shift ranges over `selectableEntriesInRowOrder()`. It never arms move or resize — a grid-row pointerdown never grabs `EntryGestureSession`. A click on `.fg-row-twisty` is not a row hit at all: collapse stays on the twisty, never selection. An empty *timeline* click still clears `gantt.selectedSegmentIds` (ADR 0010, #212 — `gantt.selectedIds` until then), with either button — a right-click is a click for this rule (#199/#205 follow-up). A miss on the grid pane (a header row, padding, a twisty) never does — only the timeline's own empty click is "the" clearing gesture. `data-state~="selected"` paints on the matching `.fg-row` the same way it already does on `.fg-bar` — same `--fg-selection-color` Token, a background instead of an outline (`.fg-bar[data-state~="selected"]`, `.fg-row[data-state~="selected"]`). A row click selects **every Segment of every Entry** the row owns (`FrameRow.entryIds`, #185; widened to Segments by ADR 0010, #212, because the grid pane's unit is the row); the row's cells still describe the first Entry. A grouping header row carries no entry and is never selectable.
 
 Three reasons support this rule. First, D-S3-10 already names the empty timeline click as "the" clearing gesture. The same pixels must not give two different answers for two different buttons. Second, common desktop file managers clear a selection on a background right-click. The background menu that opens acts on the container, and a surviving highlight would misstate the menu's scope. Third, on a bar or a row the pointer path writes nothing; `contextMenu()` decides what the Selection becomes (§4.5, the right-click rule).
 
@@ -349,7 +349,7 @@ barRenderer: {
 }
 ```
 
-**Actions.** The `interactions` config takes a boolean or a per-entry predicate for each gesture (`move`, `resize`, `linkCreate`, `select`, `edit`), layered over per-kind defaults. One resolution both hides the affordance and refuses the gesture — pointer and keyboard alike (I14) — so a non-resizable entry simply has no handles rather than handles that scold. `select` has no affordance to hide; `select: false` (or a predicate that returns false) refuses pointer and keyboard selection of that entry and skips it in a shift-range. The public `gantt.selectedIds` setter does not consult the capability — it is the programmatic path, matching `entries.update` under `move: false`. Context-menu items and commands carry a `when(entry)` clause, so a kind (or any predicate) ships its own action set.
+**Actions.** The `interactions` config takes a boolean or a per-entry predicate for each gesture (`move`, `resize`, `linkCreate`, `select`, `edit`), layered over per-kind defaults. One resolution both hides the affordance and refuses the gesture — pointer and keyboard alike (I14) — so a non-resizable entry simply has no handles rather than handles that scold. `select` has no affordance to hide; `select: false` (or a predicate that returns false) refuses pointer and keyboard selection of that entry and skips it in a shift-range. The public `gantt.selectedSegmentIds` setter does not consult the capability — it is the programmatic path, matching `entries.update` under `move: false`. Context-menu items and commands carry a `when(entry)` clause, so a kind (or any predicate) ships its own action set.
 
 **Division of labor:** capabilities answer the *static* question ("groups don't resize"); `before*` events answer the *contextual* one ("not before mobilization"). Use the shallowest one that fits.
 
@@ -497,7 +497,7 @@ gantt.on('beforeCollapseChange', ({ from, to }) => false);  // veto
 gantt.on('collapseChange', ({ to }) => saveCollapsed(to));
 ```
 
-For `{ source: 'entries' }`, a `RowId` equals the `EntryId`, so `collapse('p1')` names the parent entry. A grouping header uses a derived `RowId` from the `groupBy` value. Collapsed subtrees are absent from the row list, not merely hidden — `rowCount`, `aria-setsize`, and the scrollbar stay honest. The collapsed set survives data edits; a stale id simply matches nothing, the same way a removed entry id can linger in `selectedIds`.
+For `{ source: 'entries' }`, a `RowId` equals the `EntryId`, so `collapse('p1')` names the parent entry. A grouping header uses a derived `RowId` from the `groupBy` value. Collapsed subtrees are absent from the row list, not merely hidden — `rowCount`, `aria-setsize`, and the scrollbar stay honest. The collapsed set survives data edits; a stale id simply matches nothing, the same way a removed entry's Segments can linger in `selectedSegmentIds`.
 
 **Live reconfiguration.** Assigning `gantt.rowSource` re-resolves rows, invalidates the height index from 0, and requests one frame — no remount. Scroll survives as a pixel position, clamped against the new content height.
 
@@ -577,17 +577,18 @@ const bar = ctx.view.dom.barFor(entryId);       // this entry's bar in the curre
 const cell = ctx.view.dom.cellFor(entryId, 'cost');
 ```
 
-- **`targetUnder(node)` answers `{ kind, element, entry?, entryIds, field? }`.** `kind` is
-  `TargetKind` — `'row' | 'cell' | 'bar' | 'header' | 'splitter'`, the same union
+- **`targetUnder(node)` answers `{ kind, element, entry?, entryIds, segmentIds, field? }`.** `kind`
+  is `TargetKind` — `'row' | 'cell' | 'bar' | 'header' | 'splitter'`, the same union
   `CommandTarget.kind` uses. One vocabulary, so a resolved right-click fills a
   `CommandContext.target` with no translation table. `undefined` means the node is outside this
   Gantt, or inside it and on none of the five.
 - **A target answers two questions about Entries, because a Row may own several** (#185, #199).
   `entry` is the node's **subject**: the one Entry whose Fields the node's content shows. A tooltip
-  describes it, and the cell editor anchors on it. `entryIds` is everything the node stands for, and
-  is what an action on the node acts on. For a bar the two agree. For a row, and for every cell of
-  that row, `entry` is the row's first Entry and `entryIds` is all of them. `entryIds` is always
-  present, and empty for a header cell, for the splitter, and for a grouping header row.
+  describes it, and the cell editor anchors on it. `entryIds`, alongside `segmentIds` (ADR 0010,
+  #212), is everything the node stands for, and is what an action on the node acts on. For a bar the
+  two agree. For a row, and for every cell of that row, `entry` is the row's first Entry, and
+  `entryIds`/`segmentIds` name every Entry and Segment the row owns. Both are always present, and
+  empty for a header cell, for the splitter, and for a grouping header row.
 - **`owns(node)` is the one answer to "is this event mine?"** (I2). `onDomEvent` asks it for every
   listener, so no plugin writes that guard again.
 - **`onDomEvent(type, handler, options?)` listens on `document`, filtered to this Gantt.** It hands
@@ -600,8 +601,10 @@ const cell = ctx.view.dom.cellFor(entryId, 'cost');
 - **`createPopup(ctx.view, keymap)`** takes the whole view surface now, because a `Popup` needs the
   overlay to mount in and `ctx.view.dom` to place against.
 
-**`CommandTarget` carries the same two answers, as ids** (#199). A command's `when` and `run` read
-`ctx.target`:
+**`CommandTarget` carries what the invocation acts on, as ids: `segmentIds` and `entryIds`** (#199,
+widened by ADR 0010, #212). A command reads whichever one it needs from `ctx.target` — neither
+command declares its reach, and the two answers can never disagree, because both come from one
+resolution:
 
 ```ts
 gantt.commands.register({
@@ -609,27 +612,38 @@ gantt.commands.register({
   label: 'Lock',
   run: (ctx) => ctx.target?.entryIds.forEach((id) => locks.lock(id)),
 });
+
+gantt.commands.register({
+  id: 'app.deleteSegment',
+  label: 'Delete',
+  run: (ctx) => dataset.entries.removeSegments(ctx.target?.segmentIds ?? []),
+});
 ```
 
-- **`entryIds: readonly EntryId[]`** is every Entry the invocation acts on. It is the same word
-  `DomTarget.entryIds` uses, and not always the same set. A `DomTarget` states a DOM fact: what the
-  node stands for. A `CommandTarget` states what the command acts on.
-- **The right-click rule (#199).** *A right-click acts on the Selection when the thing you clicked
-  is part of it. It acts on the thing you clicked when it is not.* So a right-click on an unselected
-  grid row names every Entry that row owns; a right-click on one bar of a multi-bar row names that
-  one Entry; and a right-click on one of three selected bars names all three. A node stands inside
-  the Selection only when every Entry it names is selected. A node that stands for no Entry — a
-  header cell, the splitter, a grouping header row — is part of nothing.
+- **`segmentIds: readonly SegmentId[]`** is every Segment the invocation acts on. **`entryIds:
+  readonly EntryId[]`** is a projection of `segmentIds` — the Entries those Segments belong to,
+  deduped, in row order. `entryIds` is the same word `DomTarget.entryIds` uses, and not always the
+  same set. A `DomTarget` states a DOM fact: what the node stands for. A `CommandTarget` states what
+  the command acts on. Lock reads `entryIds`, because a lock is a property of the record and not of
+  one drawing of it; Delete reads `segmentIds`.
+- **The right-click rule (#199), restated over Segments (ADR 0010, #212).** *A right-click acts on
+  the Selection when the thing you clicked is part of it. It acts on the thing you clicked when it
+  is not.* So a right-click on an unselected grid row names every Segment of every Entry that row
+  owns; a right-click on one bar of a multi-bar row names that one Segment; and a right-click on one
+  of three selected bars names all three. A node stands inside the Selection only when every Segment
+  it names is selected. A node that stands for no Segment — a header cell, the splitter, a grouping
+  header row — is part of nothing.
 - **A right-click outside the Selection replaces the Selection with what you clicked**, before the
   menu opens. It runs the same cancelable `beforeSelectionChange` an assignment runs. Otherwise the
-  command acts on Entries the user cannot see highlighted.
+  command acts on Segments the user cannot see highlighted.
 - **The keyboard runs the same rule** (D-S5-14, #205). `Shift+F10` and the Menu key open the menu
   for the Selection, so three selected bars reach one menu that acts on three. The bar of the first
-  selected Entry stays the popup's anchor, because a popup needs a box on screen.
+  selected Segment stays the popup's anchor, because a popup needs a box on screen.
 - **A command that wants exactly one Entry says so**: `when: (ctx) => ctx.target?.entryIds.length
-  === 1`, and reads `ctx.entry` for it. `ctx.entry` is the subject, never the set.
+  === 1`, and reads `ctx.entry` for it. `ctx.entry` is the subject, never the set. A command that
+  wants exactly one Segment reads `ctx.target?.segmentIds.length === 1` the same way.
 - `kind` and `field` are the same two words `DomTarget` uses. There is no `rowId`: a row's identity
-  is a `RowId`, and this always named Entries.
+  is a `RowId`, and this names Segments and Entries, never rows.
 
 **`PopupOptions.onDismiss(trigger)`** tells a popup's owner that the popup closed *itself* —
 `'escape' | 'outsidePointer' | 'scroll' | 'blur'`. It runs after the close, so `isOpen` reads
@@ -688,7 +702,7 @@ This build writes `schema: 2` (`rollUpKinds`, `fields`). `schema: 1` still reads
 
 - **Dev-mode invariant warnings**: dependency cycle detected (with member ids), config set on destroyed instance, non-deterministic item identity, renderer returned a live node, and (S1.9) `GanttOptions.scale` supplied alongside any of `preset`/`range`/`zoom` — "FreeGantt: GanttOptions.preset/range/zoom are ignored when 'scale' is also supplied. The shared TimeScaleModel already carries its own intent — set preset/range/zoom on it directly." The shared `scale` always wins; the constructor keys are never merged into it (D-S1.9-9).
 - **Stable test hooks**: `data-testid` on every part so consumers can write E2E tests against the Gantt without brittle selectors. Shipped at S1.10 (D-S1.10-5/§3.5, U6): `[data-testid="fg-row"]` (with `data-row-id`) and `[data-testid="fg-bar"]` (alongside the existing `data-item-id`) — the selectors S1.11's e2e boxes select on.
-- **Errors are typed and actionable**: `FreeGanttError` subclasses with codes, never bare strings; validation failures name the entity and field. `ContainerNotFoundError` (`code: 'container-not-found'`, S1.8) is thrown when a string `container` selector matches nothing. `UnknownPresetError` (`code: 'unknown-preset'`, S1.9) is thrown by `resolvePreset` for a `PresetRef` string outside the shipped set. `EntryNotFoundError` (`code: 'entry-not-found'`) is thrown by `reveal(entryId)` (S1.9), `entries.fieldValue`, and by `entries.update`/`entries.remove`/a bad `parentId` (S2.3) for an id the Dataset has no entry for — its message names the call that failed. `DuplicateEntryIdError` (`code: 'duplicate-entry-id'`, S2.3) is thrown by `entries.add` given an id already in the store. `ParentCycleError` (`code: 'parent-cycle'`, S2.3) is thrown by a `parentId` edit that would make an entry its own ancestor, self-parenting included. `UnknownFieldError` (`code: 'unknown-field'`, S2.3) is thrown by `entries.update` or `entries.fieldValue` given a key that names no field — the Field registry is the legal set. `DuplicateFieldKeyError` (`code: 'duplicate-field-key'`, S4.1) is thrown when two Field declarations share a key. `DuplicateFieldSourceError` (`code: 'duplicate-field-source'`, S4.1) is thrown when two Fields claim the same `meta` key. `InvalidFieldSourceError` (`code: 'invalid-field-source'`, #196) is thrown when a `Field.source` names no known source — `source: 'meta'` where `{ from: 'meta' }` was meant. TypeScript refuses that shape, so this is for a JS caller; `ctx.fields.register` is public surface, and a library fault must be a `FreeGanttError` even there. `UnknownAggregatorError` (`code: 'unknown-aggregator'`, S4.1) is thrown when a Field names an Aggregator that is not registered. `UnknownFieldTypeError` (`code: 'unknown-field-type'`, S4.1) is thrown when a Field names a `type` with no matching `fieldTypes` entry. `FieldNotColumnableError` (`code: 'field-not-columnable'`, S4.3) is thrown when `gridColumns` names a Field that declared no `column`. `UnknownGridColumnError` (`code: 'unknown-grid-column'`, S5.7) is thrown by `hideGridColumn`/`showGridColumn` given a field no declared column carries. `DuplicateRowIdError` (`code: 'duplicate-row-id'`, S4.6) is thrown by a `{ source: 'custom' }` resolver that returns the same `id` twice. `UnsupportedSchemaError` (`code: 'unsupported-schema'`, S2.6) is thrown by `Dataset.fromJSON` for a `schema` this build has no reader for — the message names the version it found and the versions it reads.
+- **Errors are typed and actionable**: `FreeGanttError` subclasses with codes, never bare strings; validation failures name the entity and field. `ContainerNotFoundError` (`code: 'container-not-found'`, S1.8) is thrown when a string `container` selector matches nothing. `UnknownPresetError` (`code: 'unknown-preset'`, S1.9) is thrown by `resolvePreset` for a `PresetRef` string outside the shipped set. `EntryNotFoundError` (`code: 'entry-not-found'`) is thrown by `reveal(entryId)` (S1.9; `reveal(segmentId)` reveals a Segment and does not throw this), `entries.fieldValue`, and by `entries.update`/`entries.remove`/a bad `parentId` (S2.3) for an id the Dataset has no entry for — its message names the call that failed. `DuplicateEntryIdError` (`code: 'duplicate-entry-id'`, S2.3) is thrown by `entries.add` given an id already in the store. `ParentCycleError` (`code: 'parent-cycle'`, S2.3) is thrown by a `parentId` edit that would make an entry its own ancestor, self-parenting included. `UnknownFieldError` (`code: 'unknown-field'`, S2.3) is thrown by `entries.update` or `entries.fieldValue` given a key that names no field — the Field registry is the legal set. `DuplicateFieldKeyError` (`code: 'duplicate-field-key'`, S4.1) is thrown when two Field declarations share a key. `DuplicateFieldSourceError` (`code: 'duplicate-field-source'`, S4.1) is thrown when two Fields claim the same `meta` key. `InvalidFieldSourceError` (`code: 'invalid-field-source'`, #196) is thrown when a `Field.source` names no known source — `source: 'meta'` where `{ from: 'meta' }` was meant. TypeScript refuses that shape, so this is for a JS caller; `ctx.fields.register` is public surface, and a library fault must be a `FreeGanttError` even there. `UnknownAggregatorError` (`code: 'unknown-aggregator'`, S4.1) is thrown when a Field names an Aggregator that is not registered. `UnknownFieldTypeError` (`code: 'unknown-field-type'`, S4.1) is thrown when a Field names a `type` with no matching `fieldTypes` entry. `FieldNotColumnableError` (`code: 'field-not-columnable'`, S4.3) is thrown when `gridColumns` names a Field that declared no `column`. `UnknownGridColumnError` (`code: 'unknown-grid-column'`, S5.7) is thrown by `hideGridColumn`/`showGridColumn` given a field no declared column carries. `DuplicateRowIdError` (`code: 'duplicate-row-id'`, S4.6) is thrown by a `{ source: 'custom' }` resolver that returns the same `id` twice. `UnsupportedSchemaError` (`code: 'unsupported-schema'`, S2.6) is thrown by `Dataset.fromJSON` for a `schema` this build has no reader for — the message names the version it found and the versions it reads.
 - **Docs site with live, editable examples** grows with the slices (the harness pages are its seed) — budgeted as a deliverable, not an afterthought.
 - **Semver honesty**: internal modules are not importable (enforced by the `exports` map), so semver only governs surfaces we actually promise.
 

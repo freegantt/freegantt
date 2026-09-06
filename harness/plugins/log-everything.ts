@@ -12,7 +12,7 @@ export function logEverything(writeLog: WriteLog): GanttPlugin {
     id: 'harness.logEverything',
     setup(ctx) {
       const onSelectionChange = (): void =>
-        writeLog(`selectionChange: ${ctx.gantt.selectedIds.length} selected`);
+        writeLog(`selectionChange: ${ctx.gantt.selectedSegmentIds.length} selected`);
       ctx.events.on('selectionChange', onSelectionChange);
       writeLog('logEverything: installed');
       return () => {

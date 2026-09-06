@@ -1,27 +1,29 @@
 // render/ backend contract (plans/01 §8.1). Shared by dom and null backends; DOM types are structural only —
 // this file itself never touches document/window.
 
-import type { EntryId, GeometryFrame, ItemId, ItemPreview, ClientPoint, RowId } from '../layout/index.js';
+import type {
+  EntryId,
+  GeometryFrame,
+  ItemId,
+  ItemPreview,
+  ClientPoint,
+  RowId,
+  SegmentId,
+} from '../layout/index.js';
 
 export interface InteractionState {
   hoveredItemId?: ItemId;
-  /** The Selection itself (#185): the Entry ids `Gantt.selectedIds` holds. A backend reads which
-   *  bars a selected Entry drew from the frame it synced — an Entry's Items are the layout's answer,
-   *  never a string built from an Entry id. Which of those bars paint is `pickedItemIdByEntryId`
-   *  below. */
-  selectedEntryIds?: readonly EntryId[];
-  /** The bar the pointer picked from a selected Entry, keyed by that Entry (#185) — at most one per
-   *  Entry, because a click lands on one bar. It says how wide that Entry's Selection paint runs: an
-   *  Entry named here paints only the bar it names, and an Entry absent from it paints every bar it
-   *  drew. A grid-row click, a keyboard select and `gantt.selectedIds = [...]` name no bar, so they
-   *  paint whole Entries. It is also what tells a segmented sole selection to show its handles. An
-   *  Entry drops out the moment the Selection stops holding it. */
-  pickedItemIdByEntryId?: ReadonlyMap<EntryId, ItemId>;
+  /** The Selection itself (#212, ADR 0010): the Segment ids `Gantt.selectedSegmentIds` holds. A bar
+   *  paints selected when the Selection holds that bar's own Segment. A bar that draws an Entry's
+   *  whole span — a group, a milestone — paints selected when the Selection holds any Segment of that
+   *  Entry. Which bar drew which Segment is the frame's own answer, never a string built from an id. */
+  selectedSegmentIds?: readonly SegmentId[];
   /** The Entry the shared handle pair brackets (S3, D-S3-6/D-S3-8): the hovered bar's Entry, else
    *  the single selected one — and only when its `resize` capability resolved true. Undefined parks
    *  the handles. A resize acts on the Entry's envelope (#200), so the pair straddles every bar the
    *  Entry drew: the `start` handle on the earliest bar, the `end` handle on the latest. A backend
-   *  reads those bars off the frame it synced, the same way `selectedEntryIds` paints. */
+   *  reads those bars off the frame it synced, the same way `selectedSegmentIds` paints. The pair
+   *  narrows to one bar when the Selection holds exactly one Segment of the Entry (#212). */
   resizableEntryId?: EntryId;
   /** The hovered bar, and only when its `move` capability resolved true — what gets `cursor: grab`
    *  (S3, D-S3-6). */

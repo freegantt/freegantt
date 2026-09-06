@@ -12,7 +12,9 @@ import { DecorationRunner } from './decorations.js';
 import type { PlannedRow, UnindexedRow } from './rows/row-source.js';
 import { resolveOpenRows, stampIndex } from './rows/resolve-rows.js';
 import { applyCollapse } from './rows/collapse.js';
-import type { ChangeSet, EntryId, ItemId, RowId } from '../model/index.js';
+import { segmentIdsAnItemStandsFor } from './items/segment-ids-an-item-stands-for.js';
+import { entryIdOfItem } from '../model/index.js';
+import type { ChangeSet, EntryId, ItemId, RowId, SegmentId } from '../model/index.js';
 import { DEFAULT_LANE_GAP_PX } from './lanes/pack-lanes.js';
 
 /** One Gantt's layout pass, with the row-height index kept alive between passes. One instance per
@@ -26,12 +28,22 @@ export class FrameLayout {
   #rowOfEntry = new Map<EntryId, RowId>();
   #entryIdsOfRow = new Map<RowId, readonly EntryId[]>();
   #parentOfRow = new Map<RowId, RowId>();
+  #frameRevision = 0;
 
   get heightIndexRevision(): number {
     return this.#memory.heightIndexRevision;
   }
 
+  /** How many frames this layout has planned (#212). A reader that caches an answer taken from this
+   * layout holds this number beside it, and drops the cache once the layout has planned another
+   * frame. `view/gantt-dom.ts`'s one-slot pointer memo is that reader. A rendered node cannot report
+   * the same thing: a bar keeps its `data-item-id` while the Segment under it changes. */
+  get frameRevision(): number {
+    return this.#frameRevision;
+  }
+
   computeFrame(input: LayoutInput): GeometryFrame {
+    this.#frameRevision++;
     const open = resolveOpenRows({
       entries: input.entries,
       ...(input.rows !== undefined ? { rows: input.rows } : {}),
@@ -90,6 +102,38 @@ export class FrameLayout {
     return ids;
   }
 
+  /** Every Segment this Item stands for (#212, ADR 0010) — the one answer, which the pointer path
+   * and the gesture path both read. An Item that drew one Segment names it alone; an Item that drew
+   * the Entry's whole span names every Segment of that Entry. It answers from the producer output,
+   * the same way `itemIdsForEntry` does, so no caller reads a Segment out of the
+   * `${entryId}:${segmentIndex}` id convention or off a rendered node. Empty for an Item no current
+   * frame planned. */
+  segmentIdsForItem(id: ItemId): readonly SegmentId[] {
+    const entryId = entryIdOfItem(id);
+    const rowId = this.#rowOfEntry.get(entryId);
+    if (rowId === undefined) return NO_SEGMENT_IDS;
+    for (const item of this.#memory.packedRow(rowId).items) {
+      if (item.id === id) return segmentIdsAnItemStandsFor(item, this.#memory.entry(entryId));
+    }
+    return NO_SEGMENT_IDS;
+  }
+
+  /** Every Segment of every Entry this row owns, in row order (#199, #212) — what a click on a row
+   * or on one of its cells stands for. Unfiltered, exactly like `entryIdsForRow`: it states what the
+   * row holds, and a caller applies its own capability rule. Empty for a grouping header row, and
+   * for a `RowId` no current frame planned. */
+  segmentIdsForRow(id: RowId): readonly SegmentId[] {
+    const entryIds = this.entryIdsForRow(id);
+    if (entryIds.length === 0) return NO_SEGMENT_IDS;
+    const segmentIds: SegmentId[] = [];
+    for (const entryId of entryIds) {
+      const entry = this.#memory.entry(entryId);
+      if (entry === undefined) continue;
+      for (const segment of entry.segments) segmentIds.push(segment.id);
+    }
+    return segmentIds;
+  }
+
   /** Collapsed ancestors of this entry's row, walking `parentRowId` recorded before collapse. */
   ancestorRowIds(id: EntryId): readonly RowId[] {
     const ids: RowId[] = [];
@@ -141,3 +185,6 @@ export class FrameLayout {
 
 /** Shared, so a row that owns nothing costs no allocation on the pointer path (I5). */
 const NO_ENTRY_IDS: readonly EntryId[] = Object.freeze([]);
+
+/** Shared for the same reason — a node that stands for no Segment allocates nothing (#212, I5). */
+const NO_SEGMENT_IDS: readonly SegmentId[] = Object.freeze([]);

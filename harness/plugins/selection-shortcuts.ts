@@ -15,7 +15,7 @@ export function selectionShortcuts(writeLog: WriteLog): GanttPlugin {
         id: 'demo.clearSelection',
         label: 'Clear selection (demo)',
         run: () => {
-          ctx.gantt.selectedIds = [];
+          ctx.gantt.selectedSegmentIds = [];
           writeLog('demo.clearSelection: selection cleared (Mod+K)');
         },
       });

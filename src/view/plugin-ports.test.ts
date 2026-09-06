@@ -37,7 +37,7 @@ interface Harness {
 /** A `GanttDom` over one plain element. It answers `owns` truthfully, which is the whole of what
  *  `onDomEvent`'s scoping needs, and resolves every owned node to one `'row'` target. */
 function makeDom(container: HTMLElement): GanttShellPorts['dom'] {
-  const target: DomTarget = { kind: 'row', element: container, entryIds: [] };
+  const target: DomTarget = { kind: 'row', element: container, entryIds: [], segmentIds: [] };
   return {
     owns: (node) => container.contains(node),
     targetUnder: (node) => (container.contains(node) ? target : undefined),

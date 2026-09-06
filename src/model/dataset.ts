@@ -5,7 +5,7 @@
 
 import type { Entry, EntryEdit, EntryInput, EntryKind } from './entry.js';
 import type { Field, FieldKey, FieldValue } from './field.js';
-import type { EntryId } from './ids.js';
+import type { EntryId, SegmentId } from './ids.js';
 import type { DatasetEventMap } from './change-set.js';
 
 /** Which parent Kinds derive rolling-up Fields from their children (`01` §2.6, D-S4-6). `'none'` and
@@ -51,6 +51,10 @@ export interface EntryStore<
   add(input: EntryInput<TMeta>): Entry<TMeta>;
   update(id: EntryId | string, edit: EntryEdit<TMeta, TFields>): Entry<TMeta>;
   remove(id: EntryId | string): void;
+  /** Removes Segments in one transaction, across several Entries when `ids` names several (ADR
+   *  0010, #212). An Entry that keeps a Segment gets its envelope recomputed; an Entry whose last
+   *  Segment this removes is removed with it, in the same transaction. */
+  removeSegments(ids: readonly (SegmentId | string)[]): void;
 }
 
 /** What a Gantt (and any other `change` subscriber) holds: entries, zone, and the change bus.

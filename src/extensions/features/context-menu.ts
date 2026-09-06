@@ -11,10 +11,17 @@
 
 import { createPopup } from '../popup.js';
 import type { Anchor, Popup } from '../popup.js';
-import type { Command, CommandContext, CommandTarget, GanttPlugin, PluginContext } from '../../api/gantt.js';
-import { resolveActedOnEntryIds } from '../../api/command.js';
+import type {
+  ActedOn,
+  Command,
+  CommandContext,
+  CommandTarget,
+  GanttPlugin,
+  PluginContext,
+} from '../../api/gantt.js';
+import { resolveActedOn } from '../../api/command.js';
 import type { DomTarget } from '../../api/plugin.js';
-import type { Entry, EntryId } from '../../model/index.js';
+import type { Entry } from '../../model/index.js';
 import { DisposableStore } from '../disposables.js';
 import { buildMenu, menuItemUnder, menuItemsIn, resolveMenuEntries } from './menu-view.js';
 import type { MenuEntry } from './menu-view.js';
@@ -28,19 +35,27 @@ export interface ContextMenuOptions {
 }
 
 /** The resolved DOM target as a `CommandContext.target`. Both name the same five `TargetKind` words
- *  and the same `entryIds`/`field`. So this drops the element a command has no use for, and copies
- *  the rest across. A command's `when` can now read "on a header cell" from a right-click, which the
- *  menu never filled in before.
+ *  and the same `field`. So this drops the element a command has no use for, and copies the rest
+ *  across. A command's `when` can now read "on a header cell" from a right-click, which the menu
+ *  never filled in before.
  *
- *  `entryIds` is the one member the menu does not copy. `DomTarget.entryIds` states a DOM fact:
- *  what the node stands for. The command acts on what `clickLandsInSelection` decides (#199), so
- *  the caller resolves that set first and hands it in. */
-function commandTargetOf(target: DomTarget, entryIds: readonly EntryId[]): CommandTarget {
+ *  The two id sets are the members the menu does not copy. A `DomTarget` states a DOM fact: what the
+ *  node stands for. The command acts on what `resolveActedOn` decides (#199, #212), so the caller
+ *  resolves that pair first and hands it in. */
+function commandTargetOf(target: DomTarget, actedOn: ActedOn): CommandTarget {
   return {
     kind: target.kind,
-    entryIds,
+    segmentIds: actedOn.segmentIds,
+    entryIds: actedOn.entryIds,
     ...(target.field !== undefined ? { field: target.field } : {}),
   };
+}
+
+/** What the node the user right-clicked stands for, as the pair `resolveActedOn` compares. A node
+ *  outside every Entry — the splitter, a header cell, the empty timeline — stands for nothing. */
+function clickedActedOn(target: DomTarget | undefined): ActedOn {
+  if (target === undefined) return { segmentIds: [], entryIds: [] };
+  return { segmentIds: target.segmentIds, entryIds: target.entryIds };
 }
 
 /** D-S5-13: right-click, or `Shift+F10`/the Menu key, opens a menu of the commands whose `when`
@@ -99,23 +114,26 @@ export function contextMenu(options: ContextMenuOptions = {}): GanttPlugin {
         closeMenu();
         const entry = target?.entry;
         // #199/#212, and the one place the Selection and the clicked node meet. `DomTarget` states
-        // a DOM fact and must keep doing that, so the rule lives in `resolveActedOnEntryIds`
-        // instead, in the command layer.
-        const clicked = target?.entryIds ?? [];
-        const entryIds = resolveActedOnEntryIds(clicked, ctx.gantt.selectedIds);
+        // a DOM fact and must keep doing that, so the rule lives in `resolveActedOn` instead, in
+        // the command layer.
+        const clicked = clickedActedOn(target);
+        const actedOn = resolveActedOn(clicked, {
+          segmentIds: ctx.gantt.selectedSegmentIds,
+          entryIds: ctx.gantt.selectedEntryIds,
+        });
         // Inferred from standard right-click behaviour, not stated on #199: a right-click outside
         // the Selection replaces the Selection with what you clicked, before the menu opens.
-        // Without it the command acts on Entries the user cannot see highlighted. A consumer that
+        // Without it the command acts on Segments the user cannot see highlighted. A consumer that
         // cancels `beforeSelectionChange` keeps its Selection; the command still acts on what the
         // user clicked, because that is what the menu offered. The click can land inside the
-        // Selection, or the Selection can land inside the click (#212). Either way `entryIds` is
+        // Selection, or the Selection can land inside the click (#212). Either way `actedOn` is
         // already the current Selection, so this assignment is a no-op and widens nothing.
-        if (clicked.length > 0) ctx.gantt.selectedIds = entryIds;
+        if (clicked.segmentIds.length > 0) ctx.gantt.selectedSegmentIds = actedOn.segmentIds;
         const commandCtx: CommandContext = {
           dataset: ctx.dataset,
           gantt: ctx.gantt,
           ...(entry !== undefined ? { entry } : {}),
-          ...(target !== undefined ? { target: commandTargetOf(target, entryIds) } : {}),
+          ...(target !== undefined ? { target: commandTargetOf(target, actedOn) } : {}),
         };
         const available = ctx.commands.available(commandCtx);
         const defaults: MenuEntry[] = available.map((command) => ({
@@ -181,12 +199,12 @@ export function contextMenu(options: ContextMenuOptions = {}): GanttPlugin {
       });
 
       /** #205, and the same rule the pointer path runs. The Selection is what the keyboard landed
-       *  on. So `openAt` answers with the whole Selection, not with `selectedIds[0]` alone
+       *  on. So `openAt` answers with the whole Selection, not with its first Entry alone
        *  (D-S5-14 — one action, two ways in). The bar of the first selected Entry stays the
        *  popup's anchor. A popup needs a box on screen, and `GanttDom` has no row node for an
        *  Entry. */
       const openAtFocusedRow = (): void => {
-        const selectedId = ctx.gantt.selectedIds[0];
+        const selectedId = ctx.gantt.selectedEntryIds[0];
         const entry = selectedId !== undefined ? ctx.dataset.entries.get(selectedId) : undefined;
         const bar = entry !== undefined ? ctx.view.dom.barFor(entry.id) : undefined;
         const timeline = ctx.view.dom.paneBounds.timeline;

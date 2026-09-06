@@ -11,7 +11,7 @@ import {
 } from './grid-columns.js';
 import type { FieldLookup } from '../model/index.js';
 import type { Entry, Field, FieldKey } from '../model/index.js';
-import { entryId } from '../model/index.js';
+import { entryId, segmentId } from '../model/index.js';
 
 const zone = 'UTC';
 const locale = 'en-US';
@@ -35,12 +35,15 @@ function lookupFrom(fields: readonly Field[]): FieldLookup {
   };
 }
 
+const entryStart = 0 as Entry['start'];
+const entryEnd = 1 as Entry['end'];
 const entry: Entry = {
   id: entryId('t1'),
   name: 'Alpha',
   kind: 'span',
-  start: 0 as Entry['start'],
-  end: 1 as Entry['end'],
+  start: entryStart,
+  end: entryEnd,
+  segments: [{ id: segmentId('t1-1'), start: entryStart, end: entryEnd }],
   meta: { cost: 500 },
 };
 

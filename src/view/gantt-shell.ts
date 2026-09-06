@@ -68,6 +68,7 @@ import {
   entryId,
   entryIdOfItem,
   itemId,
+  segmentId,
 } from '../model/index.js';
 import type {
   Dataset,
@@ -81,6 +82,8 @@ import type {
   PluginId,
   RaiseError,
   RowId,
+  Segment,
+  SegmentId,
   Size,
   TimeSpan,
 } from '../model/index.js';
@@ -214,8 +217,13 @@ export interface GanttShellWiring {
   buildCommandContext?: (parts: {
     entry?: Entry;
     target?:
-      | { kind: 'header'; field: FieldKey; entryIds: readonly EntryId[] }
-      | { kind: 'bar'; entryIds: readonly EntryId[] };
+      | {
+          kind: 'header';
+          field: FieldKey;
+          entryIds: readonly EntryId[];
+          segmentIds: readonly SegmentId[];
+        }
+      | { kind: 'bar'; entryIds: readonly EntryId[]; segmentIds: readonly SegmentId[] };
   }) => unknown;
   /** S5.2: `freegantt.panToToday`'s own clock read. `view/` may not call `time/`'s `now()` itself
    *  (I10). `api/gantt.ts` supplies `now` from `time/index.js`, the same function
@@ -322,16 +330,6 @@ function setOptional<T, K extends keyof T>(target: T, key: K, value: T[K] | unde
   else target[key] = value;
 }
 
-/** Do two pick maps narrow the Selection paint the same way (#185)? It tells a repeat click on an
- *  already-selected Entry from a click that moved the pick to another of its bars. */
-function samePicks(a: ReadonlyMap<EntryId, ItemId>, b: ReadonlyMap<EntryId, ItemId>): boolean {
-  if (a.size !== b.size) return false;
-  for (const [entryId, itemId] of a) {
-    if (b.get(entryId) !== itemId) return false;
-  }
-  return true;
-}
-
 function resolveContainer(container: HTMLElement | string): HTMLElement {
   if (typeof container !== 'string') return container;
   const el = document.querySelector(container);
@@ -375,11 +373,9 @@ export class GanttShell {
    *  last. So writing into this and calling `#backend.applyState` allocates nothing per hover or
    *  select step (I5). Never rebuilt per call. */
   #interactionState: InteractionState = {};
-  #selection: readonly EntryId[] = [];
-  /** How wide each selected Entry's paint runs (#185): the bar the pointer picked from it, or no
-   *  entry at all when the whole Entry paints. `#interactionState` carries the same map to the
-   *  backend, the way `#selection` carries the Selection itself. */
-  #pickedItemIdByEntryId: ReadonlyMap<EntryId, ItemId> = new Map();
+  /** The Selection (#212, ADR 0010) — Segment ids. `#interactionState` carries the same list to the
+   *  backend, so paint and gesture read one set. */
+  #selection: readonly SegmentId[] = [];
   /** S3.2, D-S3-9: resolved once, re-resolved only when `interactions` is reassigned — never per
    *  hover step. `#refreshAffordances` reads it, it never calls `resolveCapabilities` itself. */
   #interactions: Interactions = {};
@@ -485,13 +481,16 @@ export class GanttShell {
       () => this.#paneLayout.rowLayerBounds(),
       this.#containerResize,
     );
-    this.#dom = new ContainerDom(
-      this.#container,
-      this.#paneLayout,
-      (id) => this.#options.dataset.entries.get(id),
-      (id) => this.#layout.itemIdsForEntry(id),
-      (id) => this.#layout.entryIdsForRow(id),
-    );
+    this.#dom = new ContainerDom({
+      container: this.#container,
+      paneLayout: this.#paneLayout,
+      entryById: (id) => this.#options.dataset.entries.get(id),
+      itemIdsForEntry: (id) => this.#layout.itemIdsForEntry(id),
+      entryIdsForRow: (id) => this.#layout.entryIdsForRow(id),
+      segmentIdsForItem: (id) => this.#layout.segmentIdsForItem(id),
+      segmentIdsForRow: (id) => this.#layout.segmentIdsForRow(id),
+      frameRevision: () => this.#layout.frameRevision,
+    });
 
     const hasOwnOptions =
       options.preset !== undefined || options.range !== undefined || options.fit !== undefined;
@@ -648,6 +647,7 @@ export class GanttShell {
     // dataset-change-subscription.ts).
     this.#datasetChanges = subscribeToDatasetChanges(options.dataset, (changeSet) => {
       this.#layout.invalidateForChange(changeSet);
+      this.#forgetSegmentsTheDatasetDropped();
       this.#bindColumns();
       this.#viewportHandle.setEntries(options.dataset.entries.all);
       this.#frames.request();
@@ -686,8 +686,8 @@ export class GanttShell {
       entries: () => this.#options.dataset.entries.all,
       entry: (id) => this.#options.dataset.entries.get(id),
       canSelect: (id) => this.#canGesture('select', id),
-      selected: () => this.#selection[0],
-      proposeSelection: (ids) => this.#proposeSelection(ids),
+      selected: () => this.selectedEntryIds[0],
+      proposeSelection: (ids) => this.#proposeSelection(this.#segmentIdsOfEntries(ids)),
       confirm: (change) =>
         this.#proposeChange('beforeCollapseChange', 'collapseChange', change, () => {
           this.#layout.invalidateFrom(0);
@@ -701,9 +701,9 @@ export class GanttShell {
       timeScale: () => this.#viewport.timeScale,
       preset: () => this.#viewport.preset,
       snap: () => this.snap,
-      selection: () => this.#selection,
+      selectedSegmentIds: () => this.#selection,
+      selectedEntryIds: () => this.selectedEntryIds,
       entryById: (id) => this.#options.dataset.entries.get(id),
-      pickedItemIdByEntryId: () => this.#pickedItemIdByEntryId,
       canGesture: (capability, id) => this.#canGesture(capability, id),
       commitEntryEdits: (edits) => this.#options.wiring.commitEntryEdits?.(edits) ?? false,
       emit: (name, payload) => this.#events.emit(name, payload),
@@ -727,9 +727,12 @@ export class GanttShell {
       entryFor: (item) => this.#entryFor(item),
       can: (capability, entry) => this.#capabilities.can(capability, entry),
       selectableEntriesInRowOrder: () => this.#selectableEntriesInRowOrder(),
+      segmentsOfEntries: (ids) => this.#segmentIdsOfEntries(ids),
+      segmentsForItem: (item) => this.#layout.segmentIdsForItem(item),
       selection: {
         get: () => this.#selection,
-        propose: (next, itemIds) => this.#proposeSelection(next, itemIds),
+        entryIds: () => this.selectedEntryIds,
+        propose: (next) => this.#proposeSelection(next),
       },
       setHovered: (item) => this.#setHovered(item),
       contentXAtPaneOffset: (offsetX) => offsetX + this.#viewport.scroll.state.position.x,
@@ -1012,60 +1015,116 @@ export class GanttShell {
     this.#frameSettings.set({ todayLineMarginTicks: ticks });
   }
 
-  get selection(): readonly EntryId[] {
+  /** The Selection itself (#212, ADR 0010) — Segment ids. */
+  get selection(): readonly SegmentId[] {
     return this.#selection;
   }
 
-  /** Live; runs the same cancelable sequence a click runs (D-S3-10). Loose in (`EntryId | string`),
+  /** Live; runs the same cancelable sequence a click runs (D-S3-10). Loose in (`SegmentId | string`),
    *  branded out — the same asymmetry `dataset.entries.get/update/remove` already ship. */
-  set selection(ids: readonly (EntryId | string)[]) {
-    this.#proposeSelection(ids.map((id) => entryId(id)));
+  set selection(ids: readonly (SegmentId | string)[]) {
+    this.#proposeSelection(ids.map((id) => segmentId(id)));
   }
 
-  #proposeSelection(next: readonly EntryId[], pickedItemId?: ItemId): void {
-    const from = this.#selection;
-    const picks = this.#resolvePicks(next, pickedItemId);
-    const entriesEqual = from.length === next.length && from.every((id, i) => id === next[i]);
-    if (entriesEqual) {
-      // The same Entries, picked differently (#185). A click moved to another bar of the selected
-      // Entry, or a grid-row click widened the paint back to the whole Entry. The Selection itself
-      // did not change, so no `selectionChange` fires — only the paint and the handles catch up.
-      if (samePicks(picks, this.#pickedItemIdByEntryId)) return;
-      this.#writePicks(picks);
-      this.#refreshAffordances();
-      return;
+  /** The Entries the Selection's Segments belong to, deduped, in row order (#212, ADR 0010). It is
+   *  one projection. The public getter, the affordance ids, the gesture pipeline and every command
+   *  context read it. So no two of them can disagree about what is selected. An Entry a collapse hid
+   *  keeps its place in Dataset order behind the rows that are showing. */
+  get selectedEntryIds(): readonly EntryId[] {
+    const selected = new Set(this.#selection);
+    const rank = this.#rowRankByEntryId();
+    const ids = this.#options.dataset.entries.all
+      .filter((entry) => entry.segments.some((segment) => selected.has(segment.id)))
+      .map((entry) => entry.id);
+    return ids.sort((a, b) => (rank.get(a) ?? Infinity) - (rank.get(b) ?? Infinity));
+  }
+
+  /** Where each Entry sits in the resolved row order. It is built once per projection. So ordering
+   *  the Selection costs one pass over the plan, not one search per selected Entry. */
+  #rowRankByEntryId(): ReadonlyMap<EntryId, number> {
+    const rank = new Map<EntryId, number>();
+    for (const row of this.#layout.plannedRows()) {
+      for (const id of row.entryIds) if (!rank.has(id)) rank.set(id, rank.size);
     }
+    return rank;
+  }
+
+  /** Every Segment of these Entries, in the order given (#212) — what a row click, a shift-range and
+   *  a keyboard select all select. An Entry the Dataset no longer holds contributes none.
+   *
+   *  It is not the Item table `DomTarget.segmentIds` fills. This one takes an arbitrary, already
+   *  capability-filtered list of Entries; that one takes one Item and the layout answers it. */
+  #segmentIdsOfEntries(ids: readonly EntryId[]): readonly SegmentId[] {
+    const segmentIds: SegmentId[] = [];
+    for (const id of ids) {
+      const entry = this.#options.dataset.entries.get(id);
+      if (entry === undefined) continue;
+      for (const segment of entry.segments) segmentIds.push(segment.id);
+    }
+    return segmentIds;
+  }
+
+  /** How many Segments of one Entry the Selection holds (#212) — what the sole-selection handle
+   *  fallback counts. */
+  #selectedSegmentCount(id: EntryId): number {
+    const entry = this.#options.dataset.entries.get(id);
+    if (entry === undefined) return 0;
+    const selected = new Set(this.#selection);
+    return entry.segments.filter((segment) => selected.has(segment.id)).length;
+  }
+
+  /** Drops the Segments the Dataset stopped holding (#212). The Selection names Segments. So a
+   *  `removeSegments` call can leave it holding an id nothing draws. An `entries.remove` that took
+   *  their Entry with them does the same. The next command hands that dead id straight to a
+   *  mutation, and `entries.removeSegments` throws `SegmentNotFoundError` out of a keystroke.
+   *
+   *  It fires `selectionChange` alone, with no cancelable `beforeSelectionChange` in front of it.
+   *  That pairing is for a change a consumer can refuse. This one reports a change the Dataset
+   *  already made. The Segment is gone either way, and a veto would restore a dead id.
+   *
+   *  `selectedEntries` takes the same posture on the read side: it skips an id the store dropped.
+   *  This is that rule applied once, where the Selection is corrected. Every reader is then spared
+   *  the re-check. */
+  #forgetSegmentsTheDatasetDropped(): void {
+    if (this.#selection.length === 0) return;
+    const live = new Set<SegmentId>();
+    for (const entry of this.#options.dataset.entries.all) {
+      for (const segment of entry.segments) live.add(segment.id);
+    }
+    const kept = this.#selection.filter((id) => live.has(id));
+    if (kept.length === this.#selection.length) return;
+    const from = this.#selection;
+    this.#selection = kept;
+    this.#interactionState.selectedSegmentIds = kept;
+    this.#refreshAffordances();
+    this.#events.emit('selectionChange', { from, to: kept });
+  }
+
+  #proposeSelection(next: readonly SegmentId[]): void {
+    const from = this.#selection;
+    if (from.length === next.length && from.every((id, i) => id === next[i])) return;
     this.#proposeChange('beforeSelectionChange', 'selectionChange', { from, to: next }, () => {
       this.#selection = next;
-      // #185: the Selection goes to the backend as it is. Which bars a selected Entry drew is the
+      // #212: the Selection goes to the backend as it is. Which bar drew a selected Segment is the
       // backend's own question, answered from the frame it synced — the shell names no Item here.
-      this.#interactionState.selectedEntryIds = next;
-      this.#writePicks(picks);
+      this.#interactionState.selectedSegmentIds = next;
       this.#refreshAffordances();
     });
   }
 
-  /** Which bar the pointer picked from each selected Entry once this proposal lands (#185). A
-   *  proposal that names a bar keeps the picks of the Entries that stay selected and adds its own.
-   *  That is how a ctrl-click on a second bar leaves the first one narrowed. A proposal that names
-   *  none drops every pick, so a grid-row click, a keyboard select and `gantt.selectedIds = [...]`
-   *  all paint whole Entries. Which Entry drew the picked bar is the layout's answer, never a parse
-   *  of the Item id. */
-  #resolvePicks(next: readonly EntryId[], pickedItemId: ItemId | undefined): ReadonlyMap<EntryId, ItemId> {
-    const picks = new Map<EntryId, ItemId>();
-    if (pickedItemId === undefined) return picks;
-    for (const id of next) {
-      const kept = this.#pickedItemIdByEntryId.get(id);
-      if (kept !== undefined) picks.set(id, kept);
-    }
-    const drewIt = next.find((id) => this.#layout.itemIdsForEntry(id).includes(pickedItemId));
-    if (drewIt !== undefined) picks.set(drewIt, pickedItemId);
-    return picks;
-  }
-
-  #writePicks(picks: ReadonlyMap<EntryId, ItemId>): void {
-    this.#pickedItemIdByEntryId = picks;
-    this.#interactionState.pickedItemIdByEntryId = picks;
+  /** #212: steps the Selection between the Segments of the row it already sits on. `Mod+ArrowRight`
+   *  and `Mod+ArrowLeft` run it. A row that draws one bar has nowhere to step, so the chord writes
+   *  nothing. It clamps at both ends, the same way the `ArrowUp`/`ArrowDown` row step does. */
+  #stepSegmentSelection(direction: 1 | -1): void {
+    const selected = this.selectedEntryIds[0];
+    if (selected === undefined) return;
+    const rowId = this.#layout.rowIdForEntry(selected);
+    if (rowId === undefined) return;
+    const segmentIds = this.#segmentIdsOfEntries(this.#selectableEntriesOfRow(rowId));
+    const current = segmentIds.findIndex((id) => this.#selection.includes(id));
+    const next = segmentIds[current + direction];
+    if (current === -1 || next === undefined) return;
+    this.#proposeSelection([next]);
   }
 
   get interactions(): Interactions {
@@ -1152,16 +1211,17 @@ export class GanttShell {
    *  fine. No core command reads `ctx.dataset`/`ctx.gantt` without first checking
    *  `ctx.entry`/`ctx.target`, and no such test runs a command that needs them. */
   #buildCommandContext(): CommandContext<unknown> {
-    const selection = this.#selection;
-    const id = selection[0];
+    const segmentIds = this.#selection;
+    const entryIds = this.selectedEntryIds;
+    const id = entryIds[0];
     const entry = id !== undefined ? this.#options.dataset.entries.get(id) : undefined;
     const field = this.#columnChrome.focusedHeaderField;
-    // #199: a header cell stands for no Entry, and `CommandTarget.entryIds` is never absent.
+    // #199/#212: a header cell stands for no Entry and no Segment, and neither set is ever absent.
     const target =
       field !== undefined
-        ? { kind: 'header' as const, field, entryIds: [] }
-        : selection.length > 0
-          ? { kind: 'bar' as const, entryIds: selection }
+        ? { kind: 'header' as const, field, entryIds: [], segmentIds: [] }
+        : segmentIds.length > 0
+          ? { kind: 'bar' as const, entryIds, segmentIds }
           : undefined;
     // `view/` may not name `CommandContextOf`'s api-level fields (`dataset: Dataset`, `gantt`),
     // D-S5-5's mirror. So this cast trusts `api/gantt.ts`'s injected `buildCommandContext` to fill
@@ -1189,11 +1249,13 @@ export class GanttShell {
         const now = this.#options.wiring.now;
         if (now !== undefined) this.panToToday(now());
       },
-      selectAll: () => this.#proposeSelection(this.#selectableEntriesInRowOrder()),
+      selectAll: () => this.#proposeSelection(this.#segmentIdsOfEntries(this.#selectableEntriesInRowOrder())),
       clearSelection: () => this.#proposeSelection([]),
       hasSelection: () => this.#selection.length > 0,
       keyboardPanEnabled: () => this.#resolvedViewportGestures.keyboardPan,
       nothingSelected: () => this.#selection.length === 0,
+      selectNextSegment: () => this.#stepSegmentSelection(1),
+      selectPreviousSegment: () => this.#stepSegmentSelection(-1),
       pageDown: () => this.#panBy(0, this.#viewport.visible.height),
       pageUp: () => this.#panBy(0, -this.#viewport.visible.height),
       panToStart: () => this.#viewport.scroll.panTo({ x: 0 }),
@@ -1331,6 +1393,15 @@ export class GanttShell {
     bind('Shift+ArrowLeft', 'freegantt.resizeColumnNarrower');
     bind('Alt+ArrowRight', 'freegantt.moveColumnRight');
     bind('Alt+ArrowLeft', 'freegantt.moveColumnLeft');
+    // #212, ADR 0010: the Selection holds Segments. So a keyboard user needs a way to move it from
+    // one bar of a row to the next. `interaction/keyboard-editing.ts` leaves a modified arrow alone,
+    // so this chord never also nudges the entry it just reselected.
+    bind('Mod+ArrowRight', 'freegantt.selectNextSegment');
+    bind('Mod+ArrowLeft', 'freegantt.selectPreviousSegment');
+    // #212, ADR 0010: the same command the right-click menu offers. `captureInEditable` stays at
+    // its default `false` — Keymap's own gate. So a cell editor's `<input>` and mid-IME composition
+    // both refuse the chord, the same way every other core binding already does.
+    bind('Delete', 'freegantt.deleteSelection');
   }
 
   #panBy(dx: number, dy: number): void {
@@ -1358,8 +1429,8 @@ export class GanttShell {
   #refreshAffordances(): void {
     const ids = projectAffordances({
       hoveredItemId: this.#hoveredItemId,
-      selection: this.#selection,
-      pickedItemIdByEntryId: this.#pickedItemIdByEntryId,
+      selectedEntryIds: this.selectedEntryIds,
+      selectedSegmentCount: (id) => this.#selectedSegmentCount(id),
       itemIdsForEntry: (id) => this.#layout.itemIdsForEntry(id),
       canGesture: (capability, id) => this.#canGesture(capability, id),
     });
@@ -1528,20 +1599,44 @@ export class GanttShell {
     panToTodayLine(this.#viewport, at, align, this.#frameSettings.todayLineMarginTicks);
   }
 
-  /** Finds the entry's row via the bound dataset. It asks `FrameLayout` for the row's top, and
-   * `barSpan` for its x/width off the bound `TimeScale`. That is the same formula `computeFrame`
-   * builds bars from, so the two can never drift apart. It then hands the resulting `Rect` to
-   * `Viewport.reveal` (S1.9, D-S1.9-6).
-   * Throws `EntryNotFoundError` for an id the dataset has no entry for. A collapsed ancestor expands
-   * so the row exists. A still-hidden row (filter) keeps the current y — it does not jump to 0. */
-  reveal(entryId: EntryId): void {
-    const entry = this.#options.dataset.entries.get(entryId);
-    if (entry === undefined) throw new EntryNotFoundError(entryId, 'reveal');
-    const { x, width } = barSpan(entry, this.#viewport.timeScale, this.#frameSettings.diamondSizePx);
-    let rowIndex = this.#layout.rowIndexForEntry(entryId);
-    if (rowIndex < 0 && this.#treeCollapse.expandAncestorsOf(entryId)) {
+  /** An id that names an Entry reveals that Entry's whole envelope. An id that instead names one of
+   *  its Segments reveals that Segment alone. When an id could be read either way, the Entry reading
+   *  wins (ADR 0010, #212).
+   *  Both readings share one geometry path: it asks `FrameLayout` for the row's top, and `barSpan`
+   *  for the target's x/width off the bound `TimeScale`. That is the same formula `computeFrame`
+   *  builds bars from, so the two can never drift apart. It then hands the resulting `Rect` to
+   *  `Viewport.reveal` (S1.9, D-S1.9-6).
+   *  Throws `EntryNotFoundError` for an id the dataset reads as neither an Entry nor a Segment. A
+   *  collapsed ancestor expands so the row exists. A still-hidden row (filter) keeps the current y —
+   *  it does not jump to 0. */
+  reveal(id: EntryId | SegmentId): void {
+    const entry = this.#options.dataset.entries.get(id);
+    if (entry !== undefined) return this.#revealSpan(entry.id, entry, entry.start, entry.end);
+    const found = this.#findSegmentOwner(id);
+    if (found === undefined) throw new EntryNotFoundError(entryId(id), 'reveal');
+    return this.#revealSpan(found.entry.id, found.entry, found.segment.start, found.segment.end);
+  }
+
+  /** Scans every Entry's Segments for `id`. The Dataset publishes no reverse index from a Segment to
+   *  its owning Entry, so this is the one place `reveal` pays for that lookup. */
+  #findSegmentOwner(id: EntryId | SegmentId): { entry: Entry; segment: Segment } | undefined {
+    for (const entry of this.#options.dataset.entries.all) {
+      const segment = entry.segments.find((candidate) => candidate.id === id);
+      if (segment !== undefined) return { entry, segment };
+    }
+    return undefined;
+  }
+
+  #revealSpan(ownerId: EntryId, kindSource: Pick<Entry, 'kind'>, start: Instant, end: Instant): void {
+    const { x, width } = barSpan(
+      { start, end, kind: kindSource.kind },
+      this.#viewport.timeScale,
+      this.#frameSettings.diamondSizePx,
+    );
+    let rowIndex = this.#layout.rowIndexForEntry(ownerId);
+    if (rowIndex < 0 && this.#treeCollapse.expandAncestorsOf(ownerId)) {
       this.#frames.flush();
-      rowIndex = this.#layout.rowIndexForEntry(entryId);
+      rowIndex = this.#layout.rowIndexForEntry(ownerId);
     }
     const y = rowIndex >= 0 ? this.#layout.rowTop(rowIndex) : this.#viewport.scroll.state.position.y;
     this.#viewport.reveal({ x, y, width, height: this.#frameSettings.rowHeight });

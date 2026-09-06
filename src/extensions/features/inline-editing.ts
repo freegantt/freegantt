@@ -74,13 +74,16 @@ function isDateField(field: Field): boolean {
  *  and throws `SegmentsOutOfSyncError` (`data/entry-reader.ts`), so an editor over this cell can only
  *  fail on commit. The cell says why instead, the same way a rolled-up parent cell does.
  *
+ *  It asks about *several* Segments only. Every Entry stores at least one since #212. The one a plain
+ *  Entry stores is its envelope's own drawing. `data/` moves that one with the envelope, so this cell
+ *  opens as it always did. Several Segments still have no answer to "which stretch did you mean?".
+ *  The cell keeps refusing, because an editor over it can only fail on commit.
+ *
  *  This names `start` and `end` by key, as `isDateField` above already does for the same two core
- *  Fields. That repeats a rule `data/` also holds. One owner would be better. The library has no
- *  public "can this Field be written on this Entry?" question yet. #212 adds a Segment-level edit.
- *  #212 is the place to close this gap — the cell then opens instead of refusing. */
+ *  Fields. That repeats a rule `data/` also holds. One owner would be better, and the library still
+ *  has no public "can this Field be written on this Entry?" question to be that owner. */
 function writesSegmentEnvelope(entry: Entry, field: Field): boolean {
-  const segments = entry.segments;
-  if (segments === undefined || segments.length === 0) return false;
+  if (entry.segments.length <= 1) return false;
   return field.key === 'start' || field.key === 'end';
 }
 
@@ -738,7 +741,7 @@ export function inlineEditing(options: InlineEditingOptions = {}): GanttPlugin {
        *  (S5.11 adds roving tabindex, D-S5-25). So this opens the first `editable` column of the
        *  selected entry. `s5.11-a11y-completion.md` supersedes that pragmatic simplification. */
       const disposeEnter = ctx.interaction.registerKeyHandler('Enter', () => {
-        const entryId = ctx.gantt.selectedIds[0];
+        const entryId = ctx.gantt.selectedEntryIds[0];
         if (entryId === undefined) return;
         const entry = ctx.dataset.entries.get(entryId);
         if (entry === undefined) return;

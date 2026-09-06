@@ -19,11 +19,12 @@ import type {
   Instant,
   PluginDocument,
   RollUpKinds,
+  SegmentId,
   Disposer,
   EditExtender,
   ExtenderWrapper,
 } from '../model/index.js';
-import { changeSetId } from '../model/index.js';
+import { changeSetId, mintedSegmentId } from '../model/index.js';
 import { now } from '../time/index.js';
 import { EntryStore } from './entry-store.js';
 import { readEntries } from './entry-reader.js';
@@ -137,6 +138,8 @@ export class DatasetState implements Dataset {
   #datasetRevision = 0;
   /** Per-instance — never a module-level counter (I2). */
   #changeSetCounter = 0;
+  /** Per-instance for the same reason (#212) — the id a Segment nobody named gets. */
+  #segmentCounter = 0;
   readonly #history: History;
   readonly #disposePlugins: Disposer | undefined;
 
@@ -161,6 +164,7 @@ export class DatasetState implements Dataset {
       dateOnlyEnd: this.dateOnlyEnd,
       referenceDate: this.referenceDate,
       rollUpKinds: this.#rollUpKinds,
+      mintSegmentId: () => this.#nextSegmentId(),
     };
     this.entries = new EntryStore(
       readEntries(options.entries, this.#entryContext),
@@ -201,6 +205,11 @@ export class DatasetState implements Dataset {
   /** Releases every installed plugin, in reverse setup order. */
   destroy(): void {
     this.#disposePlugins?.();
+  }
+
+  #nextSegmentId(): SegmentId {
+    this.#segmentCounter += 1;
+    return mintedSegmentId(this.#segmentCounter);
   }
 
   nextChangeSetId(): ChangeSetId {

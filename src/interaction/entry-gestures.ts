@@ -10,7 +10,7 @@
 // threshold (a plain click) still resolves through `selectFromHit` on pointerup, unchanged; `mousedown`
 // itself still writes nothing — it exists only so a double-click cannot start a native text range.
 
-import type { EntryId, ItemId } from '../model/index.js';
+import type { EntryId, ItemId, SegmentId } from '../model/index.js';
 import { createPointerGesture } from './pointer-gesture.js';
 import type {
   Detachable,
@@ -93,15 +93,19 @@ export function attachEntryGestures(
   const drag = createPointerGesture(pane, {
     start(): boolean {
       if (grabbedId === undefined) return false;
-      // #211, D-S4-30: a move drag that just armed on a bar whose Entry the Selection does not
-      // already hold picks up that Entry, with that bar as its pick, before asking for the session —
-      // so the draft `session()` builds reads the same pick this write just made, and the drag moves
-      // only the grabbed Segment rather than every Segment of whatever was selected before (or
-      // nothing at all). A resize grab is left alone: `resizableEntryId` already resolves off hover,
-      // not the Selection, so a handle grab names no new Entry here.
-      if (grabbedEdge === undefined && !ctx.selection.get().includes(grabbedId)) {
-        anchor = grabbedId;
-        ctx.selection.propose([grabbedId], grabbedItemId);
+      // #211/#212: a move drag that just armed on a bar the Selection does not already hold selects
+      // that bar's Segment before asking for the session — so the draft `session()` builds reads the
+      // same Selection this write just made, and the drag moves only the grabbed Segment rather than
+      // every Segment of whatever was selected before (or nothing at all). A resize grab is left
+      // alone: `resizableEntryId` resolves off hover, not the Selection, so a handle grab selects
+      // nothing here.
+      if (grabbedEdge === undefined && grabbedItemId !== undefined) {
+        const grabbedSegments = ctx.segmentsForItem(grabbedItemId);
+        const selected = ctx.selection.get();
+        if (!grabbedSegments.some((id) => selected.includes(id))) {
+          anchor = grabbedId;
+          ctx.selection.propose(grabbedSegments);
+        }
       }
       session = ctx.session(grabbedId, currentGesture());
       return session !== undefined;
@@ -194,31 +198,30 @@ export function attachEntryGestures(
     // Past the miss check, only a primary button may pick, replace, toggle, or range (`isPrimaryButton`).
     if (!isPrimaryButton(e)) return;
 
-    // #185: one hit resolves to a list of Entries — one for a bar, every selectable one the row
-    // owns for a row. The rules below then run over the list as a unit. An empty list means the hit
-    // landed on something no gesture may select, which writes nothing and clears nothing.
-    const targets = selectableEntriesOf(hit);
+    // #212: one hit resolves to a list of Segments — the pane picks the unit. A bar names its own
+    // Segment; a row names every Segment of every selectable Entry it owns. The rules below then run
+    // over the list as a unit. An empty list means the hit landed on something no gesture may
+    // select, which writes nothing and clears nothing.
+    const targets = selectableSegmentsOf(hit);
     if (targets.length === 0) return;
-    // #185: the bar the pointer landed on, so the paint can narrow to it. A row hit names a row, not
-    // a bar, and its Entries paint whole.
-    const picked = hit.kind === 'bar' ? hit.itemId : undefined;
 
     if (e.shiftKey) {
-      // A range spans whole Entries, so it picks no bar: narrowing the one bar the range ended on
-      // while its neighbours paint whole would read as two kinds of selection at once.
-      const next = selectRange(targets);
+      // A range spans whole rows, so it selects every Segment of every Entry it covers: narrowing
+      // the one bar the range ended on while its neighbours light whole would read as two kinds of
+      // selection at once.
+      const next = ctx.segmentsOfEntries(selectRange(selectableEntriesOf(hit)));
       if (next.length > 0) ctx.selection.propose(next);
       return;
     }
 
-    anchor = targets[0];
+    anchor = selectableEntriesOf(hit)[0];
 
     if (e.ctrlKey || e.metaKey) {
-      ctx.selection.propose(toggled(targets), picked);
+      ctx.selection.propose(toggled(targets));
       return;
     }
 
-    ctx.selection.propose(targets, picked);
+    ctx.selection.propose(targets);
   }
 
   /** True when the hit stands for nothing the Dataset still holds — a stale Item id, which is the
@@ -228,9 +231,17 @@ export function attachEntryGestures(
     return hit.kind === 'bar' && ctx.entryFor(hit.itemId) === undefined;
   }
 
-  /** The Entries this hit selects (#185): the bar's own Entry when it may be selected, or every
-   *  selectable Entry the row owns. `entriesForRow` resolves the capability, so both branches
-   *  answer with ids a `select` already allowed. */
+  /** The Segments this hit selects (#212, ADR 0010): the bar's own Segment when its Entry may be
+   *  selected, or every Segment of every selectable Entry the row owns. Both branches read the answer
+   *  the view already holds — `segmentsForItem` fills the same table `DomTarget.segmentIds` does. */
+  function selectableSegmentsOf(hit: EntryHit): readonly SegmentId[] {
+    if (hit.kind === 'row') return ctx.segmentsOfEntries(ctx.entriesForRow(hit.rowId));
+    const entry = ctx.entryFor(hit.itemId);
+    return entry !== undefined && ctx.can('select', entry) ? ctx.segmentsForItem(hit.itemId) : [];
+  }
+
+  /** The Entries this hit stands for (#185) — the shift-anchor and the shift-range both step over
+   *  whole rows, so they name Entries even though the Selection holds Segments. */
   function selectableEntriesOf(hit: EntryHit): readonly EntryId[] {
     if (hit.kind === 'row') return ctx.entriesForRow(hit.rowId);
     const entry = ctx.entryFor(hit.itemId);
@@ -239,7 +250,7 @@ export function attachEntryGestures(
 
   /** Ctrl/⌘ moves the whole list at once: it removes the list when every member is already
    *  selected, else it adds the members that are missing (#185). */
-  function toggled(targets: readonly EntryId[]): readonly EntryId[] {
+  function toggled(targets: readonly SegmentId[]): readonly SegmentId[] {
     const current = ctx.selection.get();
     if (targets.every((id) => current.includes(id))) {
       return current.filter((id) => !targets.includes(id));

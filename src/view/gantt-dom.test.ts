@@ -14,6 +14,7 @@ import { ContainerDom } from './gantt-dom.js';
 import { PaneLayout } from './pane-layout.js';
 import { sampleEntries } from '../../fixtures/sample-dataset.js';
 import type { Entry, EntryId } from '../model/index.js';
+import { segmentId } from '../model/index.js';
 
 const scale: TimeScale = {
   range: sampleEntries[0]!,
@@ -50,12 +51,24 @@ function paintOneGantt(
 ): {
   dom: ContainerDom;
   container: HTMLElement;
+  /** Paints a second frame over the same nodes, the way a Dataset edit does. The reconciler reuses
+   *  every node whose key survived, so this is how a test sees what a recycled node carries. */
+  repaint(next: readonly Entry[]): void;
   destroy(): void;
 } {
   const container = document.createElement('div');
   document.body.append(container);
   const paneLayout = new PaneLayout({ container });
-  const backend = createDomBackend();
+  let current = painted;
+  const entryById = (id: EntryId): Entry | undefined => current.find((entry) => entry.id === id);
+  // The backend needs its own Entry lookup: a bar that draws a whole Entry names no single Segment,
+  // so the paint asks which Segments that Entry owns (#212).
+  const backend = createDomBackend({
+    entryById,
+    resolveBarRenderer: () => undefined,
+    resolveCellRenderer: () => undefined,
+    resolveHeaderRenderer: () => undefined,
+  });
   backend.mount({
     grid: paneLayout.panes.rows,
     gridHeader: paneLayout.panes.gridHeader,
@@ -63,31 +76,43 @@ function paintOneGantt(
   });
   // The real `FrameLayout`, because `barFor` asks it which Items an entry draws (#185).
   const layout = new FrameLayout();
-  backend.sync(
-    layout.computeFrame({
-      entries: painted,
-      ...(rows !== undefined ? { rows } : {}),
-      scale,
-      preset,
-      visible: { x: 0, y: 0, width: 200, height: 200 },
-      rowHeight: 32,
-      revision: 0,
-      itemProducerRegistry: createItemProducerRegistry(),
-      columns: [
-        { field: 'name', header: 'Name', align: 'start', format: (entry) => entry.name },
-        { field: 'cost', header: 'Budget', align: 'end', width: 90, format: () => '$500' },
-      ],
-    }),
-  );
+  const itemProducerRegistry = createItemProducerRegistry();
+  const paint = (): void => {
+    backend.sync(
+      layout.computeFrame({
+        entries: current,
+        ...(rows !== undefined ? { rows } : {}),
+        scale,
+        preset,
+        visible: { x: 0, y: 0, width: 200, height: 200 },
+        rowHeight: 32,
+        revision: 0,
+        itemProducerRegistry,
+        columns: [
+          { field: 'name', header: 'Name', align: 'start', format: (entry) => entry.name },
+          { field: 'cost', header: 'Budget', align: 'end', width: 90, format: () => '$500' },
+        ],
+      }),
+    );
+  };
+  paint();
   return {
-    dom: new ContainerDom(
+    dom: new ContainerDom({
       container,
       paneLayout,
-      (id) => painted.find((entry) => entry.id === id),
-      (id) => layout.itemIdsForEntry(id),
-      (id) => layout.entryIdsForRow(id),
-    ),
+      entryById,
+      itemIdsForEntry: (id) => layout.itemIdsForEntry(id),
+      entryIdsForRow: (id) => layout.entryIdsForRow(id),
+      segmentIdsForItem: (id) => layout.segmentIdsForItem(id),
+      segmentIdsForRow: (id) => layout.segmentIdsForRow(id),
+      frameRevision: () => layout.frameRevision,
+    }),
     container,
+    repaint: (next) => {
+      current = next;
+      layout.invalidateFrom(0);
+      paint();
+    },
     destroy: () => {
       backend.destroy();
       paneLayout.destroy();
@@ -246,8 +271,8 @@ describe('ContainerDom — finding an element from an id', () => {
     const segmented: Entry = {
       ...entries[0]!,
       segments: [
-        { start: entries[0]!.start, end: entries[0]!.end },
-        { start: entries[0]!.start, end: entries[0]!.end },
+        { id: segmentId(`${entries[0]!.id}-0`), start: entries[0]!.start, end: entries[0]!.end },
+        { id: segmentId(`${entries[0]!.id}-1`), start: entries[0]!.start, end: entries[0]!.end },
       ],
     };
     const gantt = paintOneGantt([segmented]);
@@ -283,6 +308,103 @@ describe('ContainerDom — finding an element from an id', () => {
     expect(other.container.contains(other.dom.cellFor(entries[0]!.id, 'cost')!)).toBe(true);
     gantt.destroy();
     other.destroy();
+  });
+});
+
+describe('ContainerDom — the pane picks the unit (#212, ADR 0010)', () => {
+  /** Two Segments with ids a test can name, so it can say which one the pane picked. */
+  const twoSegments: Entry = {
+    ...entries[0]!,
+    segments: [
+      { id: segmentId('seg-a'), start: entries[0]!.start, end: entries[0]!.end },
+      { id: segmentId('seg-b'), start: entries[0]!.start, end: entries[0]!.end },
+    ],
+  };
+
+  it('a bar on the timeline stands for the one Segment it draws', () => {
+    const gantt = paintOneGantt([twoSegments]);
+    const bars = gantt.container.querySelectorAll<HTMLElement>('[data-item-id]');
+
+    expect(gantt.dom.targetUnder(bars[0]!)?.segmentIds).toEqual([segmentId('seg-a')]);
+    expect(gantt.dom.targetUnder(bars[1]!)?.segmentIds).toEqual([segmentId('seg-b')]);
+    gantt.destroy();
+  });
+
+  it('a whole-Entry bar names every Segment of its Entry, because it draws no single one', () => {
+    // A milestone producer emits one Item over the whole Entry, so the bar carries no
+    // `data-segment-id`. The node still stands for the Entry, and the Entry is its Segments.
+    const milestone: Entry = { ...twoSegments, kind: 'milestone' };
+    const gantt = paintOneGantt([milestone]);
+    const bar = gantt.container.querySelector<HTMLElement>('[data-item-id]')!;
+
+    expect(bar.dataset['segmentId']).toBeUndefined();
+    expect(gantt.dom.targetUnder(bar)?.segmentIds).toEqual([segmentId('seg-a'), segmentId('seg-b')]);
+    gantt.destroy();
+  });
+
+  it('a grid row stands for every Segment of every Entry it owns, in row order', () => {
+    const gantt = paintOneGantt(threeOnOneRow, oneRowForAllThree);
+    const row = gantt.container.querySelector<HTMLElement>('.fg-row')!;
+
+    const target = gantt.dom.targetUnder(row);
+    const owned = threeOnOneRow.flatMap((entry) => entry.segments.map((segment) => segment.id));
+    expect(target?.segmentIds).toEqual(owned);
+    expect(target?.entryIds).toEqual(threeOnOneRow.map((entry) => entry.id));
+    gantt.destroy();
+  });
+
+  it('a grid cell stands for the same Segments its row does', () => {
+    const gantt = paintOneGantt(threeOnOneRow, oneRowForAllThree);
+    const cell = gantt.container.querySelector<HTMLElement>('.fg-row [data-field="cost"]')!;
+    const row = gantt.container.querySelector<HTMLElement>('.fg-row')!;
+
+    expect(gantt.dom.targetUnder(cell)?.segmentIds).toEqual(gantt.dom.targetUnder(row)?.segmentIds);
+    gantt.destroy();
+  });
+
+  it('a bar names the Segment it draws now, not the one it drew before a Segment was removed (#212)', () => {
+    const threeSegments: Entry = {
+      ...entries[0]!,
+      segments: [
+        { id: segmentId('sg1'), start: entries[0]!.start, end: entries[0]!.end },
+        { id: segmentId('sg2'), start: entries[0]!.start, end: entries[0]!.end },
+        { id: segmentId('sg3'), start: entries[0]!.start, end: entries[0]!.end },
+      ],
+    };
+    const gantt = paintOneGantt([threeSegments]);
+    const first = gantt.container.querySelector<HTMLElement>('[data-item-id]')!;
+    expect(gantt.dom.targetUnder(first)?.segmentIds).toEqual([segmentId('sg1')]);
+
+    // The consumer removes the first Segment. Bar keys are `${entryId}:${segmentIndex}`, so the node
+    // survives and now draws `sg2`. Naming `sg1` here is naming a Segment the Dataset dropped, and
+    // the Delete command that reads this target would throw on it.
+    gantt.repaint([{ ...threeSegments, segments: threeSegments.segments.slice(1) }]);
+
+    expect(gantt.container.querySelector<HTMLElement>('[data-item-id]')).toBe(first);
+    expect(gantt.dom.targetUnder(first)?.segmentIds).toEqual([segmentId('sg2')]);
+    gantt.destroy();
+  });
+
+  it('targetUnder ignores a data-segment-id a caller wrote by hand (#212)', () => {
+    const gantt = paintOneGantt([twoSegments]);
+    const bar = gantt.container.querySelector<HTMLElement>('[data-item-id]')!;
+
+    // The stamp says what the bar draws. It is not the source for what the bar stands for, so
+    // rewriting it moves nothing. One layer owns the question, and the DOM is not it.
+    bar.dataset['segmentId'] = 'seg-of-another-entry';
+
+    expect(gantt.dom.targetUnder(bar)?.segmentIds).toEqual([segmentId('seg-a')]);
+    gantt.destroy();
+  });
+
+  it('a header and the splitter stand for no Segment at all', () => {
+    const gantt = paintOneGantt();
+    const header = gantt.container.querySelector<HTMLElement>('[data-field="cost"]')!;
+    const splitter = gantt.container.querySelector<HTMLElement>('.fg-splitter')!;
+
+    expect(gantt.dom.targetUnder(header)?.segmentIds).toEqual([]);
+    expect(gantt.dom.targetUnder(splitter)?.segmentIds).toEqual([]);
+    gantt.destroy();
   });
 });
 

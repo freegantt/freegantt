@@ -6,7 +6,6 @@ import type { EntryId, ItemId } from '../model/index.js';
 const A = entryId('a');
 const B = entryId('b');
 const ITEM_A = itemId(A);
-const ITEM_B = itemId(B);
 
 /** Both entries draw one bar each — the shape almost every entry has. A test that needs a segmented
  *  entry builds its own answer instead. */
@@ -18,8 +17,8 @@ describe('projectAffordances (D-S3-6)', () => {
   it('hover wins over selection, including a hover that resolves to no handles', () => {
     const result = projectAffordances({
       hoveredItemId: ITEM_A,
-      selection: [B],
-      pickedItemIdByEntryId: new Map(),
+      selectedEntryIds: [B],
+      selectedSegmentCount: () => 1,
       itemIdsForEntry: oneBarEach,
       canGesture: (capability, id) => capability === 'move' && id === A,
     });
@@ -33,8 +32,8 @@ describe('projectAffordances (D-S3-6)', () => {
   it('selection fallback only at exactly one selected entry', () => {
     const oneSelected = projectAffordances({
       hoveredItemId: undefined,
-      selection: [A],
-      pickedItemIdByEntryId: new Map(),
+      selectedEntryIds: [A],
+      selectedSegmentCount: () => 1,
       itemIdsForEntry: oneBarEach,
       canGesture: () => true,
     });
@@ -42,8 +41,8 @@ describe('projectAffordances (D-S3-6)', () => {
 
     const twoSelected = projectAffordances({
       hoveredItemId: undefined,
-      selection: [A, B],
-      pickedItemIdByEntryId: new Map(),
+      selectedEntryIds: [A, B],
+      selectedSegmentCount: () => 1,
       itemIdsForEntry: oneBarEach,
       canGesture: () => true,
     });
@@ -51,8 +50,8 @@ describe('projectAffordances (D-S3-6)', () => {
 
     const noneSelected = projectAffordances({
       hoveredItemId: undefined,
-      selection: [],
-      pickedItemIdByEntryId: new Map(),
+      selectedEntryIds: [],
+      selectedSegmentCount: () => 0,
       itemIdsForEntry: oneBarEach,
       canGesture: () => true,
     });
@@ -62,8 +61,8 @@ describe('projectAffordances (D-S3-6)', () => {
   it('an incapable hover resolves movable/resizable to undefined', () => {
     const result = projectAffordances({
       hoveredItemId: ITEM_A,
-      selection: [],
-      pickedItemIdByEntryId: new Map(),
+      selectedEntryIds: [],
+      selectedSegmentCount: () => 0,
       itemIdsForEntry: oneBarEach,
       canGesture: () => false,
     });
@@ -75,8 +74,8 @@ describe('projectAffordances (D-S3-6)', () => {
   it('an incapable sole selection resolves resizable to undefined', () => {
     const result = projectAffordances({
       hoveredItemId: undefined,
-      selection: [A],
-      pickedItemIdByEntryId: new Map(),
+      selectedEntryIds: [A],
+      selectedSegmentCount: () => 1,
       itemIdsForEntry: oneBarEach,
       canGesture: () => false,
     });
@@ -86,8 +85,8 @@ describe('projectAffordances (D-S3-6)', () => {
   it('no hover and no selection resolves every id to undefined', () => {
     const result = projectAffordances({
       hoveredItemId: undefined,
-      selection: [],
-      pickedItemIdByEntryId: new Map(),
+      selectedEntryIds: [],
+      selectedSegmentCount: () => 0,
       itemIdsForEntry: oneBarEach,
       canGesture: () => true,
     });
@@ -96,24 +95,24 @@ describe('projectAffordances (D-S3-6)', () => {
     expect(result.resizableEntryId).toBeUndefined();
   });
 
-  it('a picked bar hands the handles to its own Entry, whichever Segment it drew (#185, #200)', () => {
+  it('one selected Segment hands the handles to its own Entry, whichever bar drew it (#200, #212)', () => {
     const segments = [itemId(A, 0), itemId(A, 1), itemId(A, 2)];
     const result = projectAffordances({
       hoveredItemId: undefined,
-      selection: [A],
-      pickedItemIdByEntryId: new Map([[A, segments[1]!]]),
+      selectedEntryIds: [A],
+      selectedSegmentCount: () => 1,
       itemIdsForEntry: () => segments,
       canGesture: () => true,
     });
-    // The pair brackets the Entry's envelope, so the answer is the Entry, not the picked bar (#200).
+    // The pair brackets an Entry, so the answer is the Entry, not the selected bar (#200).
     expect(result.resizableEntryId).toBe(A);
   });
 
   it('hovering one Segment hands the handles to its Entry (#200)', () => {
     const result = projectAffordances({
       hoveredItemId: itemId(A, 2),
-      selection: [],
-      pickedItemIdByEntryId: new Map(),
+      selectedEntryIds: [],
+      selectedSegmentCount: () => 0,
       itemIdsForEntry: () => [itemId(A, 0), itemId(A, 1), itemId(A, 2)],
       canGesture: () => true,
     });
@@ -123,28 +122,27 @@ describe('projectAffordances (D-S3-6)', () => {
     expect(result.resizableEntryId).toBe(A);
   });
 
-  it('a segmented entry selected from the grid parks the handles (#185)', () => {
+  it('a segmented entry selected from the grid parks the handles (#185, #212)', () => {
     const result = projectAffordances({
       hoveredItemId: undefined,
-      selection: [A],
-      pickedItemIdByEntryId: new Map(),
+      selectedEntryIds: [A],
+      selectedSegmentCount: () => 2,
       itemIdsForEntry: () => [itemId(A, 0), itemId(A, 1)],
       canGesture: () => true,
     });
-    // Two bars, no pointer pick: no single bar owns the shared handle pair.
+    // Both Segments selected and two bars drawn: no single bar owns the shared handle pair.
     expect(result.resizableEntryId).toBeUndefined();
   });
 
-  it('a pick on another entry leaves a segmented sole selection parked (#185)', () => {
+  it('a Selection holding no Segment of the sole Entry leaves a segmented one parked (#212)', () => {
     const result = projectAffordances({
       hoveredItemId: undefined,
-      selection: [A],
-      pickedItemIdByEntryId: new Map([[B, ITEM_B]]),
+      selectedEntryIds: [A],
+      selectedSegmentCount: () => 0,
       itemIdsForEntry: () => [itemId(A, 0), itemId(A, 1)],
       canGesture: () => true,
     });
-    // The map is keyed by Entry, so a pick on B says nothing about A — and A drew two bars, so no
-    // single bar owns the pair.
+    // A drew two bars and the Selection names neither, so no single bar owns the pair.
     expect(result.resizableEntryId).toBeUndefined();
   });
 });

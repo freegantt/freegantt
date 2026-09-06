@@ -74,7 +74,7 @@ gantt.installPlugin(demoPopup);
 
 const popupBtn = document.querySelector<HTMLButtonElement>('#open-popup-btn')!;
 popupBtn.addEventListener('click', () => {
-  const selected = gantt.selectedIds[0];
+  const selected = gantt.selectedEntryIds[0];
   if (selected === undefined) {
     writeLog('popup demo: select a bar first');
     return;

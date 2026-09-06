@@ -71,6 +71,13 @@ const gantt = new Gantt({
 });
 gantt.panToToday();
 
+// A test seam only (`hierarchy.ts` writes the same two globals): it hands an e2e test the public
+// `Gantt` and `Dataset`, nothing else. `Window.__dataset` binds to `hierarchy.ts`'s field shape;
+// this page declares its own fields, so the cast stands in for that one shared declaration. Every
+// e2e read of it (`segments`, `start`, `end`, `id`) sits on `Entry`, outside either page's fields.
+window.__dataset = dataset as unknown as typeof window.__dataset;
+window.__gantt = gantt;
+
 mountTimelineToolbar({
   gantt,
   container: document.querySelector<HTMLDivElement>('#toolbar')!,
@@ -111,9 +118,16 @@ function refreshMutationButtons(): void {
   removeBtn.disabled = none;
 }
 
+// ADR 0010: the Selection holds Segments, not Entries. The readout names both — the Entries the
+// picked Segments belong to, and how many Segments are picked — so the page shows the unit the
+// ADR introduced instead of hiding it behind the Entries alone.
 function renderSelection(): void {
-  const ids = gantt.selectedIds;
-  selectionReadout.textContent = ids.length === 0 ? 'Selection: (none)' : `Selection: ${ids.join(', ')}`;
+  const entryIds = gantt.selectedEntryIds;
+  const segmentCount = gantt.selectedSegmentIds.length;
+  selectionReadout.textContent =
+    entryIds.length === 0
+      ? 'Selection: (none)'
+      : `Selection: ${entryIds.join(', ')} · ${segmentCount} segment${segmentCount === 1 ? '' : 's'}`;
 }
 
 function syncSelectionUi(): void {
@@ -147,13 +161,7 @@ renameBtn.addEventListener('click', () => {
 });
 
 removeBtn.addEventListener('click', () => {
-  const entries = gantt.selectedEntries;
-  if (entries.length === 0) return;
-  attemptMutation(() => {
-    dataset.transaction(() => {
-      for (const entry of entries) dataset.entries.remove(entry.id);
-    });
-  });
+  attemptMutation(() => gantt.commands.run('freegantt.deleteSelection'));
 });
 
 undoBtn.addEventListener('click', () => {
@@ -447,7 +455,7 @@ gantt.installPlugin(demoPopup);
 
 const popupBtn = document.querySelector<HTMLButtonElement>('#open-popup-btn')!;
 popupBtn.addEventListener('click', () => {
-  const selected = gantt.selectedIds[0];
+  const selected = gantt.selectedEntryIds[0];
   if (selected === undefined) {
     writeLog('popup demo: select a bar first');
     return;
@@ -493,31 +501,26 @@ renderersToggle.addEventListener('change', () => {
 });
 renderersToggle.dispatchEvent(new Event('change'));
 
-// S5.5, D-S5-13/14: demo commands that only show up for an entry — the right-clicked bar, or its
-// grid row (context-menu.ts resolves both the same way, through `ctx.view.dom.targetUnder`).
-// Right-clicking empty timeline or an unpopulated grid stretch leaves `ctx.entry` undefined, so
-// these three never appear there — background right-clicks stay on "Collapse all"/"Expand all".
+// Which commands does an entry menu show? — Delete, Lock and Unlock, the same three for the
+// right-clicked bar, its grid row, or `Shift+F10` on a selected row (context-menu.ts and the
+// keymap both resolve through `resolveActedOn`, `api/command.ts`). Right-clicking empty timeline
+// or an unpopulated grid stretch leaves `ctx.entry` undefined, so none of the three show there —
+// background right-clicks stay on "Collapse all"/"Expand all".
 //
-// #199/#212: `when` and `run` both read `ctx.target.entryIds` — the library resolves it once, the
-// same way on the mouse and the keyboard path (`resolveActedOnEntryIds`, `api/command.ts`), so a
-// command's label and its action can no longer disagree about which Entries it covers. `ctx.entry`
-// stays the one Entry the menu is *about* — `items` below still reads it to decide whether this is
-// the entry-only menu or the background one.
-const ENTRY_CONTEXT_COMMAND_IDS = ['demo.deleteEntry', 'demo.lockEntry', 'demo.unlockEntry'];
+// Why is one of them the library's own? — `freegantt.deleteSelection` ships with core (#212, ADR
+// 0010) and is already bound to the `Delete` key, so the page adds nothing for Delete. It reads
+// `ctx.target.segmentIds`: a grid-row Delete removes every Segment the row owns, and an Entry with
+// no Segments left is gone too, with no special case.
+//
+// What does the page still own? — Lock and Unlock, because a lock is this demo's own policy, not
+// a library concept. They read `ctx.target.entryIds`: a lock is a property of the whole record, so
+// picking one Segment of a multi-bar Entry still locks the Entry it belongs to.
+const ENTRY_CONTEXT_COMMAND_IDS = ['freegantt.deleteSelection', 'demo.lockEntry', 'demo.unlockEntry'];
 
 function entryContextActions(): GanttPlugin {
   return {
     id: 'harness.entryContextActions',
     setup(ctx) {
-      ctx.commands.register({
-        id: 'demo.deleteEntry',
-        label: 'Delete',
-        when: (cmdCtx) => (cmdCtx.target?.entryIds.length ?? 0) > 0,
-        run: (cmdCtx) => {
-          for (const id of cmdCtx.target?.entryIds ?? [])
-            attemptMutation(() => ctx.dataset.entries.remove(id));
-        },
-      });
       ctx.commands.register({
         id: 'demo.lockEntry',
         label: 'Lock',
@@ -526,11 +529,13 @@ function entryContextActions(): GanttPlugin {
         // than re-locked for no reason.
         when: (cmdCtx) => (cmdCtx.target?.entryIds ?? []).some((id) => !locks.isLocked(id)),
         run: (cmdCtx) => {
-          for (const id of cmdCtx.target?.entryIds ?? []) {
-            if (locks.isLocked(id)) continue;
-            locks.lock(id);
-            prependLogLine(log, `entries · ${id} · locked (right-click menu)`);
-          }
+          ctx.dataset.transaction(() => {
+            for (const id of cmdCtx.target?.entryIds ?? []) {
+              if (locks.isLocked(id)) continue;
+              locks.lock(id);
+              prependLogLine(log, `entries · ${id} · locked (right-click menu)`);
+            }
+          });
         },
       });
       ctx.commands.register({
@@ -538,14 +543,16 @@ function entryContextActions(): GanttPlugin {
         label: 'Unlock',
         when: (cmdCtx) => (cmdCtx.target?.entryIds ?? []).some((id) => locks.isLocked(id)),
         run: (cmdCtx) => {
-          for (const id of cmdCtx.target?.entryIds ?? []) {
-            if (!locks.isLocked(id)) continue;
-            locks.unlock(id);
-            prependLogLine(log, `entries · ${id} · unlocked (right-click menu)`);
-          }
+          ctx.dataset.transaction(() => {
+            for (const id of cmdCtx.target?.entryIds ?? []) {
+              if (!locks.isLocked(id)) continue;
+              locks.unlock(id);
+              prependLogLine(log, `entries · ${id} · unlocked (right-click menu)`);
+            }
+          });
         },
       });
-      // No disposer: `ctx.disposables` already retracts all three commands (review P4).
+      // No disposer: `ctx.disposables` already retracts both commands (review P4).
     },
   };
 }

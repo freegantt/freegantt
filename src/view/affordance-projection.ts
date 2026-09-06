@@ -8,10 +8,12 @@ import type { Interactions } from './capability.js';
 
 export interface AffordanceInputs {
   hoveredItemId: ItemId | undefined;
-  selection: readonly EntryId[];
-  /** The bar the pointer picked from each selected Entry (#185). The sole-selection handle fallback
-   *  waits until this names the selected Entry. */
-  pickedItemIdByEntryId: ReadonlyMap<EntryId, ItemId>;
+  /** The Entries the Selection's Segments belong to, deduped, in row order (#212, ADR 0010). The
+   *  handle pair brackets an Entry (#200), so the fallback below counts Entries, not Segments. */
+  selectedEntryIds: readonly EntryId[];
+  /** How many Segments of one Entry the Selection holds (#212). Exactly one means the user named one
+   *  bar, and that is when the sole-selection fallback shows its handles. */
+  selectedSegmentCount: (id: EntryId) => number;
   /** Every Item one entry draws in the current frame (`FrameLayout.itemIdsForEntry`). The fallback
    *  asks it instead of building an Item id out of an entry id. */
   itemIdsForEntry: (id: EntryId) => readonly ItemId[];
@@ -31,7 +33,7 @@ export interface AffordanceIds {
  *  wins over the selection fallback. Only when nothing is hovered does the single selected entry, if
  *  there is exactly one, get a turn. */
 export function projectAffordances(inputs: AffordanceInputs): AffordanceIds {
-  const { hoveredItemId, selection, pickedItemIdByEntryId, itemIdsForEntry, canGesture } = inputs;
+  const { hoveredItemId, selectedEntryIds, selectedSegmentCount, itemIdsForEntry, canGesture } = inputs;
   const hoveredEntryId = hoveredItemId !== undefined ? entryIdOfItem(hoveredItemId) : undefined;
 
   const out: AffordanceIds = {};
@@ -44,8 +46,8 @@ export function projectAffordances(inputs: AffordanceInputs): AffordanceIds {
   const resizableEntryId = resolveResizableEntryId({
     hoveredItemId,
     hoveredEntryId,
-    selection,
-    pickedItemIdByEntryId,
+    selectedEntryIds,
+    selectedSegmentCount,
     itemIdsForEntry,
     canGesture,
   });
@@ -54,25 +56,31 @@ export function projectAffordances(inputs: AffordanceInputs): AffordanceIds {
 }
 
 /** Which Entry does the handle pair bracket? The hovered bar's Entry when a bar is hovered. With
- *  nothing hovered, the single selected Entry — but only once the pointer has picked one of its bars
- *  (#185), or when it draws exactly one bar. A segmented Entry selected from the grid pane has had
- *  no bar picked, so it gets no handles until the pointer visits one. */
+ *  nothing hovered, the single selected Entry — but only once the Selection names one of its Segments
+ *  (#212), or when it draws exactly one bar. A segmented Entry selected from the grid pane has every
+ *  Segment in the Selection, so it gets no handles until the pointer visits one bar. */
 function resolveResizableEntryId(inputs: {
   hoveredItemId: ItemId | undefined;
   hoveredEntryId: EntryId | undefined;
-  selection: readonly EntryId[];
-  pickedItemIdByEntryId: ReadonlyMap<EntryId, ItemId>;
+  selectedEntryIds: readonly EntryId[];
+  selectedSegmentCount: (id: EntryId) => number;
   itemIdsForEntry: (id: EntryId) => readonly ItemId[];
   canGesture: (capability: keyof Interactions, id: EntryId) => boolean;
 }): EntryId | undefined {
-  const { hoveredItemId, hoveredEntryId, selection, pickedItemIdByEntryId, itemIdsForEntry, canGesture } =
-    inputs;
+  const {
+    hoveredItemId,
+    hoveredEntryId,
+    selectedEntryIds,
+    selectedSegmentCount,
+    itemIdsForEntry,
+    canGesture,
+  } = inputs;
   if (hoveredItemId !== undefined) {
     return hoveredEntryId !== undefined && canGesture('resize', hoveredEntryId) ? hoveredEntryId : undefined;
   }
-  if (selection.length !== 1) return undefined;
-  const soleId = selection[0]!;
+  if (selectedEntryIds.length !== 1) return undefined;
+  const soleId = selectedEntryIds[0]!;
   if (!canGesture('resize', soleId)) return undefined;
-  if (pickedItemIdByEntryId.has(soleId)) return soleId;
+  if (selectedSegmentCount(soleId) === 1) return soleId;
   return itemIdsForEntry(soleId).length === 1 ? soleId : undefined;
 }

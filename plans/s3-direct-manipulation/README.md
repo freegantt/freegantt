@@ -110,14 +110,15 @@ const gantt = new Gantt({
   selection: ['t1'],
 });
 gantt.on('beforeEntryMove', ({ entry, start }) => start < mobilization ? false : undefined);
-gantt.selectedIds = ['t1', 't2'];
+gantt.selectedIds = ['t1', 't2'];  // shown as it shipped at S3.1; retired in #212 —
+                                    // see gantt.selectedSegmentIds (ADR 0010)
 ```
 
 | Export | Step |
 |---|---|
 | `Gantt.interactions`, `Interactions`, `CapabilityRule` | S3.2 |
 | `Gantt.viewportGestures`, `ViewportGestures`, `ViewportGestureFlags` | S3.7 |
-| `Gantt.selectedIds`, `Gantt.selectedEntries` | S3.1 |
+| `Gantt.selectedIds`, `Gantt.selectedEntries` (`selectedIds` retired in #212 — see `Gantt.selectedSegmentIds`/`Gantt.selectedEntryIds`, ADR 0010) | S3.1 |
 | `beforeEntryMove`/`entryMove`, `beforeEntryResize`/`entryResize` | S3.3, S3.4 |
 | `beforeSelectionChange`/`selectionChange`, `SelectionChange` | S3.1 |
 | `ProposedSpan`, `EntryMove`, `EntryResize` | S3.3, S3.4 |
@@ -170,7 +171,7 @@ Full prose for each decision lives in the step file that implements it. Use this
 | D-S3-7 | `data-state` tokens | S3.1, S3.2, S3.6 |
 | D-S3-8 | Shared handle pair | S3.2 |
 | D-S3-9 | `view/capability.ts` | S3.2, S3.5 |
-| D-S3-10 | Selection on Gantt | S3.1 |
+| D-S3-10 | Selection on Gantt (superseded #212, ADR 0010 — the Selection now holds `SegmentId`, not `EntryId`) | S3.1 |
 | D-S3-11 | Horizontal drag only | S3.3 |
 | D-S3-12 | Snap / Alt | README above; impl S3.3 |
 | D-S3-13 | Keyboard map | S3.5 |
@@ -203,7 +204,7 @@ Full prose for each decision lives in the step file that implements it. Use this
 | Ten nudges need ten undo | True — coalescing needs History merge policy (§9) |
 | Two Gantts fight over selection | Selection is per-Gantt (D-S3-10) |
 | Handler expects extender cascade in move payload | User edit only; cascade is `beforeChange` on Dataset |
-| `gantt.selectedIds = ['t1']` type error | Setter accepts `EntryId \| string` |
+| `gantt.selectedSegmentIds = ['t1']` type error | Setter accepts `SegmentId \| string` (`selectedIds` retired in #212, ADR 0010) |
 
 ---
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DuplicateRowIdError, entryId, rowId } from '../../model/index.js';
+import { DuplicateRowIdError, entryId, rowId, segmentId } from '../../model/index.js';
 import type { Entry, Instant } from '../../model/index.js';
 import { resolveCustomSource } from './custom-source.js';
 
@@ -14,6 +14,7 @@ const entries: readonly Entry[] = [
     start: instant(0),
     end: instant(1),
     kind: 'span',
+    segments: [{ id: segmentId('a-1'), start: instant(0), end: instant(1) }],
   },
 ];
 

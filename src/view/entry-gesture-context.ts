@@ -5,7 +5,7 @@
 // The sole declaration (C5): `interaction/` may import `view/` (the legal edge, plans/01 §1), so this
 // type lives here once instead of being mirrored on both sides of that edge.
 
-import type { Entry, EntryId, ItemId, RowId, ClientPoint } from '../model/index.js';
+import type { Entry, EntryId, ItemId, RowId, SegmentId, ClientPoint } from '../model/index.js';
 import type { Interactions } from './capability.js';
 
 /** What kind of data gesture is in flight — `'move'` (S3.3) or `'resize'` with the grabbed edge (S3.4). */
@@ -68,13 +68,20 @@ export interface EntryGestureContext {
    *  them. Empty for a header row, and for a row whose every Entry refuses `select` — the capability
    *  is resolved here, once (I14), so `interaction/` still performs no lookups of its own. */
   entriesForRow(rowId: RowId): readonly EntryId[];
+  /** Every Segment of these Entries, in the order given (#212, ADR 0010). A grid-row click, a
+   *  shift-range and a keyboard select all name Entries and select every Segment those Entries draw. */
+  segmentsOfEntries(ids: readonly EntryId[]): readonly SegmentId[];
+  /** Every Segment this bar stands for (#212, ADR 0010) — the pane picks the unit. A bar that drew
+   *  one Segment names that Segment alone. A bar that drew an Entry's whole span (a group, a
+   *  milestone) names every Segment of that Entry. It reads the same answer `DomTarget.segmentIds`
+   *  reads — `FrameLayout.segmentIdsForItem` — so the pointer path and this one cannot disagree. */
+  segmentsForItem(item: ItemId): readonly SegmentId[];
   selection: {
-    get(): readonly EntryId[];
-    /** `pickedItemId` is the one bar the pointer landed on (#185). It narrows that Entry's paint to
-     *  the bar the pointer named, and it is where the shared resize-handle pair parks while nothing
-     *  is hovered. Omit it when no pointer picked a bar — a grid-row click, a keyboard select and a
-     *  clear all leave every selected Entry painting each bar it drew. */
-    propose(next: readonly EntryId[], pickedItemId?: ItemId): void;
+    get(): readonly SegmentId[];
+    /** The Entries the Selection's Segments belong to, deduped, in row order (#212) — the reading a
+     *  row step and a nudge need, because both act on a whole record. */
+    entryIds(): readonly EntryId[];
+    propose(next: readonly SegmentId[]): void;
   };
   /** S3.2 (D-S3-6): the item id under the pointer, or undefined on pointerleave. */
   setHovered(itemId: ItemId | undefined): void;

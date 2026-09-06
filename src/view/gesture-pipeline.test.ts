@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { GesturePipeline } from './gesture-pipeline.js';
 import type { GesturePipelineDeps } from './gesture-pipeline.js';
-import { entryId, itemId } from '../model/index.js';
+import { entryId, itemId, segmentId } from '../model/index.js';
 import type { Entry, EntryEdits, EntryId, ErrorReportInput, Instant } from '../model/index.js';
 import type { TimeScale, ViewPreset } from '../layout/index.js';
 
@@ -25,7 +25,16 @@ const linearScale: TimeScale = {
 const barePreset = {} as unknown as ViewPreset;
 
 function entry(id: string, start: number, end: number): Entry {
-  return { id: entryId(id), kind: 'span', name: id, start: start as Instant, end: end as Instant };
+  const startInstant = start as Instant;
+  const endInstant = end as Instant;
+  return {
+    id: entryId(id),
+    kind: 'span',
+    name: id,
+    start: startInstant,
+    end: endInstant,
+    segments: [{ id: segmentId(`${id}-1`), start: startInstant, end: endInstant }],
+  };
 }
 
 function makeDeps(overrides: Partial<GesturePipelineDeps> = {}): {
@@ -43,9 +52,9 @@ function makeDeps(overrides: Partial<GesturePipelineDeps> = {}): {
     timeScale: () => linearScale,
     preset: () => barePreset,
     snap: () => 'none',
-    selection: () => [],
+    selectedSegmentIds: () => [],
+    selectedEntryIds: () => [],
     entryById: (id) => entries.get(id),
-    pickedItemIdByEntryId: () => new Map(),
     canGesture: () => true,
     commitEntryEdits: () => true,
     emit: (name, payload) => {
@@ -59,7 +68,7 @@ function makeDeps(overrides: Partial<GesturePipelineDeps> = {}): {
   return { deps, emitted, applied, reported };
 }
 
-/** Wires `entryById`/`selection` off a fixed roster, the shape most tests below want: one grabbed
+/** Wires `entryById` off a fixed roster, the shape most tests below want: one grabbed
  *  entry, every capability granted, no multi-selection. */
 function withRoster(entries: readonly Entry[], overrides: Partial<GesturePipelineDeps> = {}) {
   const byId = new Map(entries.map((e) => [e.id, e]));
@@ -99,7 +108,7 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
     const c = entry('c', 200, 300);
     const checked: EntryId[] = [];
     const { deps } = withRoster([a, b, c], {
-      selection: () => [b.id, a.id, c.id],
+      selectedEntryIds: () => [b.id, a.id, c.id],
       canGesture: (_capability, id) => {
         checked.push(id);
         return id !== c.id;
@@ -117,7 +126,7 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
   it('preview() and commit() move every armed entry of a multi-selection by the same delta', async () => {
     const a = entry('a', 0, 100);
     const b = entry('b', 200, 300);
-    const { deps, applied, emitted } = withRoster([a, b], { selection: () => [a.id, b.id] });
+    const { deps, applied, emitted } = withRoster([a, b], { selectedEntryIds: () => [a.id, b.id] });
     const pipeline = new GesturePipeline(deps);
     const session = pipeline.session(a.id, { kind: 'move' })!;
 
@@ -150,8 +159,8 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
     const segmented: Entry = {
       ...entry('seg', 0, 300),
       segments: [
-        { start: 0 as Instant, end: 100 as Instant },
-        { start: 200 as Instant, end: 300 as Instant },
+        { id: segmentId('seg-a'), start: 0 as Instant, end: 100 as Instant },
+        { id: segmentId('seg-b'), start: 200 as Instant, end: 300 as Instant },
       ],
     };
     const committed: EntryEdits[] = [];
@@ -173,25 +182,25 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
     await session.commit(40);
     expect(committed[0]?.get(segmented.id)).toEqual({
       segments: [
-        { start: 40, end: 140 },
-        { start: 240, end: 340 },
+        { ...segmented.segments[0], start: 40, end: 140 },
+        { ...segmented.segments[1], start: 240, end: 340 },
       ],
       start: 40,
       end: 340,
     });
   });
 
-  it('moves only the picked bar of a segmented entry, envelope follows (#211, D-S4-30)', async () => {
+  it('moves only the selected bar of a segmented entry, envelope follows (#211, #212)', async () => {
     const segmented: Entry = {
       ...entry('seg', 0, 300),
       segments: [
-        { start: 0 as Instant, end: 100 as Instant },
-        { start: 200 as Instant, end: 300 as Instant },
+        { id: segmentId('seg-a'), start: 0 as Instant, end: 100 as Instant },
+        { id: segmentId('seg-b'), start: 200 as Instant, end: 300 as Instant },
       ],
     };
     const committed: EntryEdits[] = [];
     const { deps, applied } = withRoster([segmented], {
-      pickedItemIdByEntryId: () => new Map([[segmented.id, itemId(segmented.id, 1)]]),
+      selectedSegmentIds: () => [segmentId('seg-b')],
       commitEntryEdits: (edits) => {
         committed.push(edits);
         return true;
@@ -202,7 +211,7 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
 
     session.preview(40);
     await new Promise((resolve) => requestAnimationFrame(resolve));
-    // Both bars preview — but only the picked one (Segment 1) carries a dx; Segment 0 stays put.
+    // Both bars preview — but only the selected one (Segment 1) carries a dx; Segment 0 stays put.
     const preview = applied.at(-1) as readonly { itemId: string; dx: number }[];
     expect(preview).toEqual([
       { itemId: itemId(segmented.id, 0), dx: 0, dWidth: 0, extra: false },
@@ -211,34 +220,31 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
 
     await session.commit(40);
     expect(committed[0]?.get(segmented.id)).toEqual({
-      segments: [
-        { start: 0, end: 100 },
-        { start: 240, end: 340 },
-      ],
+      segments: [segmented.segments[0], { ...segmented.segments[1], start: 240, end: 340 }],
       start: 0,
       end: 340,
     });
   });
 
-  it('a multi-Entry drag moves each Entry’s own picked Segment, or whole with no pick (#211)', async () => {
+  it('a multi-Entry drag moves each Entry’s own selected Segment, or whole when none is (#211)', async () => {
     const picked: Entry = {
       ...entry('picked', 0, 200),
       segments: [
-        { start: 0 as Instant, end: 100 as Instant },
-        { start: 100 as Instant, end: 200 as Instant },
+        { id: segmentId('picked-a'), start: 0 as Instant, end: 100 as Instant },
+        { id: segmentId('picked-b'), start: 100 as Instant, end: 200 as Instant },
       ],
     };
     const unpicked: Entry = {
       ...entry('unpicked', 300, 500),
       segments: [
-        { start: 300 as Instant, end: 400 as Instant },
-        { start: 400 as Instant, end: 500 as Instant },
+        { id: segmentId('unpicked-a'), start: 300 as Instant, end: 400 as Instant },
+        { id: segmentId('unpicked-b'), start: 400 as Instant, end: 500 as Instant },
       ],
     };
     const committed: EntryEdits[] = [];
     const { deps } = withRoster([picked, unpicked], {
-      selection: () => [picked.id, unpicked.id],
-      pickedItemIdByEntryId: () => new Map([[picked.id, itemId(picked.id, 1)]]),
+      selectedEntryIds: () => [picked.id, unpicked.id],
+      selectedSegmentIds: () => [segmentId('picked-b')],
       commitEntryEdits: (edits) => {
         committed.push(edits);
         return true;
@@ -249,27 +255,27 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
 
     await session.commit(40);
     expect(committed[0]?.get(picked.id)?.segments).toEqual([
-      { start: 0, end: 100 },
-      { start: 140, end: 240 },
+      picked.segments[0],
+      { ...picked.segments[1], start: 140, end: 240 },
     ]);
-    // `unpicked` has no pick, so both of its Segments move by the same rigid-group delta (D-S3-19).
+    // No Segment of `unpicked` is selected, so both move by the same rigid-group delta (D-S3-19).
     expect(committed[0]?.get(unpicked.id)?.segments).toEqual([
-      { start: 340, end: 440 },
-      { start: 440, end: 540 },
+      { ...unpicked.segments[0], start: 340, end: 440 },
+      { ...unpicked.segments[1], start: 440, end: 540 },
     ]);
   });
 
-  it('a resize on a picked Segment writes only that Segment’s edge (#211, D-S4-30)', async () => {
+  it('a resize on a selected Segment writes only that Segment’s edge (#211, #212)', async () => {
     const segmented: Entry = {
       ...entry('seg', 0, 300),
       segments: [
-        { start: 0 as Instant, end: 100 as Instant },
-        { start: 200 as Instant, end: 300 as Instant },
+        { id: segmentId('seg-a'), start: 0 as Instant, end: 100 as Instant },
+        { id: segmentId('seg-b'), start: 200 as Instant, end: 300 as Instant },
       ],
     };
     const committed: EntryEdits[] = [];
     const { deps } = withRoster([segmented], {
-      pickedItemIdByEntryId: () => new Map([[segmented.id, itemId(segmented.id, 0)]]),
+      selectedSegmentIds: () => [segmentId('seg-a')],
       commitEntryEdits: (edits) => {
         committed.push(edits);
         return true;
@@ -279,12 +285,9 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
     const session = pipeline.session(segmented.id, { kind: 'resize', edge: 'end' })!;
 
     await session.commit(40);
-    // The picked Segment (0) grows; the envelope-latest Segment (1) never moves.
+    // The selected Segment (0) grows; the envelope-latest Segment (1) never moves.
     expect(committed[0]?.get(segmented.id)).toEqual({
-      segments: [
-        { start: 0, end: 140 },
-        { start: 200, end: 300 },
-      ],
+      segments: [{ ...segmented.segments[0], start: 0, end: 140 }, segmented.segments[1]],
       start: 0,
       end: 300,
     });

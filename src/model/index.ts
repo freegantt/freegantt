@@ -1,6 +1,8 @@
-export type { EntryId, RowId, ItemId, ChangeSetId } from './ids.js';
+export type { EntryId, SegmentId, RowId, ItemId, ChangeSetId } from './ids.js';
 export {
   entryId,
+  segmentId,
+  mintedSegmentId,
   rowId,
   itemId,
   itemIdFromDataset,
@@ -14,6 +16,8 @@ export type { Instant, TimeUnit, TimeSpan, Duration, PlainParts } from './time.j
 export type { InstantInput, TimeSpanInput, DateOnlyEndRule } from './time.js';
 export type {
   Entry,
+  Segment,
+  SegmentInput,
   EntryKind,
   EntryInput,
   EntryEdit,
@@ -71,6 +75,7 @@ export {
   UnknownPresetError,
   InvalidPresetError,
   EntryNotFoundError,
+  SegmentNotFoundError,
   DuplicateEntryIdError,
   ParentCycleError,
   SegmentsOutOfSyncError,

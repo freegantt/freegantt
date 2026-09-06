@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { readEntries, readEdit } from './entry-reader.js';
-import { entryId, SegmentsOutOfSyncError } from '../model/index.js';
+import type { EntryReadContext } from './entry-reader.js';
+import { entryId, segmentId, SegmentsOutOfSyncError } from '../model/index.js';
 import type { EntryInput } from '../model/index.js';
 import { instant } from '../time/index.js';
 import { FieldRegistry } from './fields/field-registry.js';
@@ -9,17 +10,22 @@ const registry = new FieldRegistry({ fields: [] });
 
 const utc = (iso: string): number => Date.parse(iso);
 
-const context = {
-  timeZone: 'UTC',
-  dateOnlyEnd: 'inclusive' as const,
-  referenceDate: instant('2026-01-01T00:00:00Z'),
-  rollUpKinds: new Set(['group']),
-};
+// Each test gets its own counter, so no test can see another test's minted ids (I2).
+function createContext(): EntryReadContext {
+  let mintedCount = 0;
+  return {
+    timeZone: 'UTC',
+    dateOnlyEnd: 'inclusive' as const,
+    referenceDate: instant('2026-01-01T00:00:00Z'),
+    rollUpKinds: new Set(['group']),
+    mintSegmentId: () => segmentId(`minted-${++mintedCount}`),
+  };
+}
 
 describe('readEntries', () => {
   it('brands a plain string id and reads a date-only end inclusively', () => {
     const input: EntryInput = { id: 't1', name: 'Design', start: '2026-09-01', end: '2026-09-08' };
-    const [entry] = readEntries([input], context);
+    const [entry] = readEntries([input], createContext());
     expect(entry?.id).toBe(entryId('t1'));
     expect(entry?.start).toBe(utc('2026-09-01T00:00:00Z'));
     // 'through the 8th' — the half-open boundary is the start of the 9th.
@@ -28,9 +34,18 @@ describe('readEntries', () => {
 
   it('leaves an optional field absent when the input never had it, but defaults kind to span', () => {
     const input: EntryInput = { id: 't1', name: 'Design', start: '2026-09-01', end: '2026-09-08' };
-    const [entry] = readEntries([input], context);
-    expect(Object.keys(entry ?? {}).sort()).toEqual(['end', 'id', 'kind', 'name', 'start'].sort());
+    const [entry] = readEntries([input], createContext());
+    expect(Object.keys(entry ?? {}).sort()).toEqual(
+      ['end', 'id', 'kind', 'name', 'segments', 'start'].sort(),
+    );
     expect(entry?.kind).toBe('span');
+  });
+
+  it('fills one segment over the full span when the input names none', () => {
+    const input: EntryInput = { id: 't1', name: 'Design', start: '2026-09-01', end: '2026-09-08' };
+    const [entry] = readEntries([input], createContext());
+    expect(entry?.segments).toHaveLength(1);
+    expect(entry?.segments[0]?.id).toBe(segmentId('minted-1'));
   });
 
   it('carries parentId, kind, segments and meta through when present', () => {
@@ -44,18 +59,35 @@ describe('readEntries', () => {
       segments: [{ start: '2026-09-01', end: '2026-09-02' }],
       meta: { team: 'A' },
     };
-    const [entry] = readEntries([input], context);
+    const [entry] = readEntries([input], createContext());
     expect(entry?.parentId).toBe(entryId('root'));
     expect(entry?.kind).toBe('milestone');
     expect(entry?.segments).toEqual([
-      { start: utc('2026-09-01T00:00:00Z'), end: utc('2026-09-03T00:00:00Z') },
+      {
+        id: segmentId('minted-1'),
+        start: utc('2026-09-01T00:00:00Z'),
+        end: utc('2026-09-03T00:00:00Z'),
+      },
     ]);
     expect(entry?.meta).toEqual({ team: 'A' });
+  });
+
+  it('keeps an authored segment id unchanged through ingest', () => {
+    const input: EntryInput = {
+      id: 'seg',
+      name: 'Seg',
+      start: '2026-09-01',
+      end: '2026-09-05',
+      segments: [{ id: 'authored-seg', start: '2026-09-01', end: '2026-09-05' }],
+    };
+    const [entry] = readEntries([input], createContext());
+    expect(entry?.segments[0]?.id).toBe(segmentId('authored-seg'));
   });
 });
 
 describe('readEdit (S4.10, D-S4-30)', () => {
-  it('throws SegmentsOutOfSyncError when start/end are written without segments on a segmented entry', () => {
+  it('throws SegmentsOutOfSyncError when start/end are written without segments on a two-segment entry', () => {
+    const context = createContext();
     const [segmented] = readEntries(
       [
         {
@@ -74,5 +106,16 @@ describe('readEdit (S4.10, D-S4-30)', () => {
     expect(() => readEdit({ start: '2026-09-02' }, context, segmented!, registry)).toThrow(
       SegmentsOutOfSyncError,
     );
+  });
+
+  it('moves the lone segment with the envelope on a one-segment entry', () => {
+    const context = createContext();
+    const [single] = readEntries(
+      [{ id: 'seg', name: 'Seg', start: '2026-09-01', end: '2026-09-05' }],
+      context,
+    );
+    const edit = readEdit({ start: '2026-09-02' }, context, single!, registry);
+    expect(edit.start).toBe(utc('2026-09-02T00:00:00Z'));
+    expect(edit.segments).toHaveLength(1);
   });
 });

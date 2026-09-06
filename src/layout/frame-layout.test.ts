@@ -7,7 +7,7 @@ import { createTimeScale, dayPreset } from '../time/index.js';
 import * as packLanes from './lanes/pack-lanes.js';
 import * as resolveRowsMod from './rows/resolve-rows.js';
 import type { Entry } from '../model/index.js';
-import { changeSetId, entryId, itemId } from '../model/index.js';
+import { changeSetId, entryId, itemId, rowId, segmentId } from '../model/index.js';
 import type { ChangeSet } from '../model/index.js';
 import type { LayoutInput } from './frame.js';
 import { PrefixSumHeightIndex } from './row-height-index.js';
@@ -49,8 +49,15 @@ function input(overrides: Partial<LayoutInput> = {}): LayoutInput {
 }
 
 function overlappingEntry(base: Entry, copies: number): Entry {
-  const span = { start: base.start, end: base.end };
-  return { ...base, segments: Array.from({ length: copies }, () => span) };
+  const { start, end } = base;
+  return {
+    ...base,
+    segments: Array.from({ length: copies }, (_, index) => ({
+      id: segmentId(`${base.id}-${index}`),
+      start,
+      end,
+    })),
+  };
 }
 
 describe('FrameLayout', () => {
@@ -154,6 +161,54 @@ describe('FrameLayout', () => {
     layout.computeFrame(input({ entries: [sampleEntries[0]!] }));
 
     expect(layout.itemIdsForEntry(sampleEntries[1]!.id)).toEqual([]);
+  });
+
+  it('segmentIdsForItem names the one Segment a Segment bar drew (#212)', () => {
+    const layout = new FrameLayout();
+    const segmented = overlappingEntry(sampleEntries[0]!, 3);
+    const frame = layout.computeFrame(input({ entries: [segmented] }));
+
+    expect(frame.bars.map((bar) => layout.segmentIdsForItem(bar.id))).toEqual(
+      segmented.segments.map((segment) => [segment.id]),
+    );
+  });
+
+  it('segmentIdsForItem names every Segment of the Entry for a group or milestone bar (#212)', () => {
+    // A milestone draws one bar over the whole Entry, so it drew no single Segment. It still stands
+    // for all of them: a click on it selects the Entry's work, whichever stretch that is.
+    const layout = new FrameLayout();
+    const milestone: Entry = { ...overlappingEntry(sampleEntries[0]!, 2), kind: 'milestone' };
+    const frame = layout.computeFrame(input({ entries: [milestone] }));
+
+    expect(frame.bars).toHaveLength(1);
+    expect(frame.bars[0]!.segmentId).toBeUndefined();
+    expect(layout.segmentIdsForItem(frame.bars[0]!.id)).toEqual(
+      milestone.segments.map((segment) => segment.id),
+    );
+  });
+
+  it('segmentIdsForItem answers empty for an Item no current frame planned (#212)', () => {
+    const layout = new FrameLayout();
+    layout.computeFrame(input({ entries: [sampleEntries[0]!] }));
+
+    expect(layout.segmentIdsForItem(itemId(sampleEntries[1]!.id, 0))).toEqual([]);
+    expect(layout.segmentIdsForItem(itemId(sampleEntries[0]!.id, 4))).toEqual([]);
+  });
+
+  it('segmentIdsForRow names every Segment of every Entry the row owns, in row order (#199, #212)', () => {
+    // Only a custom row source can put several Entries on one Row, which is the shape this answers.
+    const owned = sampleEntries.slice(0, 3).map((entry) => overlappingEntry(entry, 2));
+    const oneRowForAll: LayoutInput['rows'] = {
+      source: 'custom',
+      resolve: ({ entries }) => [{ id: 'lane-1', entryIds: entries.map((entry) => entry.id) }],
+    };
+    const layout = new FrameLayout();
+    layout.computeFrame(input({ entries: owned, rows: oneRowForAll }));
+
+    expect(layout.segmentIdsForRow(rowId('lane-1'))).toEqual(
+      owned.flatMap((entry) => entry.segments.map((segment) => segment.id)),
+    );
+    expect(layout.segmentIdsForRow(rowId('no-such-row'))).toEqual([]);
   });
 });
 
