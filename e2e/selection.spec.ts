@@ -50,21 +50,13 @@ async function rowWithSeveralBars(page: import('@playwright/test').Page): Promis
 }
 
 /** A bar of one Entry the pointer can really land on: scrolled into view, and the topmost element
- *  at its own click point. Segments can overlap, so the second check earns its keep.
- *
- *  Centered, not `scrollIntoViewIfNeeded()`: a bar already at the pane's bottom edge leaves no room
- *  below it for a right-click menu, and opening one there re-triggers a real defect (`Popup`'s
- *  `focus: 'trap'` calls the focus-trapped item's plain `.focus()` with no `preventScroll`, which
- *  can scroll the pane to keep that item visible and the popup's own `dismissOn: 'scroll'` then
- *  closes the menu it just opened — filed for `src/extensions/popup.ts`/`focus-trap.ts`, not a
- *  timing race this file can wait out). Centering the bar first sidesteps the edge case; it does
- *  not fix it. */
+ *  at its own click point. Segments can overlap, so the second check earns its keep. */
 async function pickableBarOf(page: import('@playwright/test').Page, entryId: string) {
   const bars = page.locator(`#gantt .fg-bar[data-item-id^="${entryId}:"]`);
   const count = await bars.count();
   for (let index = 0; index < count; index++) {
     const bar = bars.nth(index);
-    await bar.evaluate((el) => el.scrollIntoView({ block: 'center', inline: 'nearest' }));
+    await bar.scrollIntoViewIfNeeded();
     const landsOnIt = await bar.evaluate((el) => {
       const rect = el.getBoundingClientRect();
       const x = Math.min(rect.left + 12, rect.right - 2);
