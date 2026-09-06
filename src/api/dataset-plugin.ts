@@ -37,7 +37,8 @@ export { mergeEntryEdits } from '../data/edit-extension.js';
 // several-Segment Entry is refused (`SegmentsOutOfSyncError`), so this is how a plugin author writes
 // `segments` instead, rather than hand-rolling the same rigid translate `layout/gesture-draft.ts`'s
 // own `moveEdit` computes for a drag — beside `mergeEntryEdits`, for the same reason: an app author
-// never meets it, because it takes and returns storage-shaped values only an extender produces.
+// never meets it, because it builds one value of the `EntryEdits` map only an extender returns. It
+// names `segments` alone and lets core derive the envelope (D-S5-50, #239).
 export { moveEntryTo } from '../data/entry-reader.js';
 
 /** `beforeChange`/`change`, the two events a Dataset raises (D-S2-5, D-S2-25). Returning `false` from a

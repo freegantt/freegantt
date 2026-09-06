@@ -15,7 +15,7 @@ function comparerFor(
   fields?: FieldContext,
 ): EntryComparer {
   const fieldCompare = fieldCompares.find((compare) => compare.key === sort.field);
-  if (fieldCompare === undefined) throw new UnknownFieldError(String(sort.field));
+  if (fieldCompare === undefined) throw new UnknownFieldError(String(sort.field), 'rowSource.sort');
 
   const direction = sort.direction === 'desc' ? -1 : 1;
 

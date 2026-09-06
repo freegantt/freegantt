@@ -18,10 +18,7 @@ import type { ViewPreset } from './scale.js';
  * 32 }` until this check caught it). */
 function validatePresetTickWidths(preset: ViewPreset): void {
   if (preset.minTickWidthPx !== undefined && preset.minTickWidthPx > preset.preferredTickWidthPx) {
-    throw new InvalidPresetError(
-      `preset "${preset.id}": minTickWidthPx (${preset.minTickWidthPx}) exceeds preferredTickWidthPx ` +
-        `(${preset.preferredTickWidthPx}) — the floor would be unreachable at the preset's own preferred zoom`,
-    );
+    throw new InvalidPresetError(preset.id, preset.minTickWidthPx, preset.preferredTickWidthPx);
   }
 }
 
@@ -235,6 +232,6 @@ export function resolvePreset(ref: PresetRef): ViewPreset {
     return ref;
   }
   const preset = presets[ref];
-  if (!preset) throw new UnknownPresetError(ref);
+  if (!preset) throw new UnknownPresetError(ref, Object.keys(presets));
   return preset;
 }

@@ -1,11 +1,22 @@
 // model/'s runtime carve-out widens here: id/brand helpers and this base class, zero dependencies
 // (plans/01 §1.1, D-S1.7-8). A public error type is part of the API surface (only api/ and model/
 // types are public), so it lives where the rest of the public surface lives.
+//
+// Every message follows one rule (#237). Say what happened in one plain sentence. Then say what to
+// do in one plain sentence. Name the call the consumer made, and quote the value they wrote. List
+// the legal values when the set is small and fixed. Two rules come with it. Every error exposes the
+// values it names as readonly members, so a consumer can word their own message for their own users
+// instead of parsing ours. And no message carries a decision id, a plan section or an issue number —
+// those belong in the doc comment above the class, where they already are.
+//
+// `operation` is how the caller's own name reaches the message. An error class never asserts one:
+// `reconcileEnvelope` alone is reached by `entries.update()` and by an `EditExtender` cascade
+// (D-S5-44), so a baked-in prefix tells one of those two callers about a call it never made (#239).
 
 import type { EntryId, SegmentId } from './ids.js';
 import type { ChangeSet } from './change-set.js';
 import type { PluginId } from './plugin.js';
-import type { TimeUnit } from './time.js';
+import type { TimeSpan, TimeUnit } from './time.js';
 
 export class FreeGanttError extends Error {
   readonly code: string;
@@ -19,9 +30,15 @@ export class FreeGanttError extends Error {
 
 /** `code: 'unsupported-unit'` — a preset or a caller stepped by a unit `time/` has no stepper for. */
 export class UnsupportedUnitError extends FreeGanttError {
-  constructor(message: string) {
-    super('unsupported-unit', message);
+  readonly unit: string;
+
+  constructor(unit: string, operation: string) {
+    super(
+      'unsupported-unit',
+      `${operation}: there is no time unit called "${unit}". Use one of: millisecond, minute, hour, day, week, month, year.`,
+    );
     this.name = 'UnsupportedUnitError';
+    this.unit = unit;
   }
 }
 
@@ -39,7 +56,7 @@ export class InvalidSnapIncrementError extends FreeGanttError {
   constructor(unit: TimeUnit, increment: number) {
     super(
       'invalid-snap-increment',
-      `snap: increment must be a positive integer, got ${increment} for unit "${unit}"`,
+      `snap: the increment for the unit "${unit}" is ${increment}. Use a whole number of 1 or more.`,
     );
     this.name = 'InvalidSnapIncrementError';
     this.unit = unit;
@@ -49,27 +66,45 @@ export class InvalidSnapIncrementError extends FreeGanttError {
 
 /** `code: 'container-not-found'` — a `container` selector string that matches no element (#38). */
 export class ContainerNotFoundError extends FreeGanttError {
+  readonly container: string;
+
   constructor(container: string) {
-    super('container-not-found', `Gantt: no element matches container selector "${container}"`);
+    super(
+      'container-not-found',
+      `Gantt: no element matches the container selector "${container}". Check the selector, or pass the element itself.`,
+    );
     this.name = 'ContainerNotFoundError';
+    this.container = container;
   }
 }
 
 /** `code: 'invalid-instant'` — a consumer wrote a value on an `InstantInput` field that names no instant
- * (an unparseable string, or a calendar date that does not exist such as `'2026-02-31'`). */
+ * (an unparseable string, or a calendar date that does not exist such as `'2026-02-31'`). `value` is
+ * the thing they wrote, so a bulk loader can name the row it came from. */
 export class InvalidInstantError extends FreeGanttError {
-  constructor(message: string) {
+  readonly value: unknown;
+
+  constructor(message: string, value?: unknown) {
     super('invalid-instant', message);
     this.name = 'InvalidInstantError';
+    this.value = value;
   }
 }
 
 /** `code: 'unknown-preset'` — a `PresetRef` string outside the shipped set, from `resolvePreset`
- * (S1.9, D-S1.9-3). */
+ * (S1.9, D-S1.9-3). The shipped set is small and fixed, so the message lists it. */
 export class UnknownPresetError extends FreeGanttError {
-  constructor(id: string) {
-    super('unknown-preset', `resolvePreset: "${id}" is not a shipped preset id`);
+  readonly presetId: string;
+  readonly available: readonly string[];
+
+  constructor(presetId: string, available: readonly string[]) {
+    super(
+      'unknown-preset',
+      `gantt.preset: there is no preset called "${presetId}". The shipped presets are: ${available.join(', ')}.`,
+    );
     this.name = 'UnknownPresetError';
+    this.presetId = presetId;
+    this.available = available;
   }
 }
 
@@ -77,9 +112,20 @@ export class UnknownPresetError extends FreeGanttError {
  * `minTickWidthPx`, from `resolvePreset` (header readability follow-up). The floor would then be
  * unreachable at the preset's own intended zoom, which is never a preset author's intent. */
 export class InvalidPresetError extends FreeGanttError {
-  constructor(message: string) {
-    super('invalid-preset', message);
+  readonly presetId: string;
+  readonly minTickWidthPx: number;
+  readonly preferredTickWidthPx: number;
+
+  constructor(presetId: string, minTickWidthPx: number, preferredTickWidthPx: number) {
+    super(
+      'invalid-preset',
+      `gantt.preset: the preset "${presetId}" sets minTickWidthPx to ${minTickWidthPx} and preferredTickWidthPx to ${preferredTickWidthPx}. ` +
+        `Lower minTickWidthPx to ${preferredTickWidthPx} or less, so the preset can reach its own preferred zoom.`,
+    );
     this.name = 'InvalidPresetError';
+    this.presetId = presetId;
+    this.minTickWidthPx = minTickWidthPx;
+    this.preferredTickWidthPx = preferredTickWidthPx;
   }
 }
 
@@ -88,9 +134,17 @@ export class InvalidPresetError extends FreeGanttError {
  * missing entry — S2.3 §1.3). `operation` names the call that failed, so the message points at what
  * the caller asked for rather than a generic "not found". */
 export class EntryNotFoundError extends FreeGanttError {
+  readonly entryId: EntryId;
+  readonly operation: string;
+
   constructor(entryId: EntryId, operation: string) {
-    super('entry-not-found', `${operation}: no entry with id "${entryId}"`);
+    super(
+      'entry-not-found',
+      `${operation}: there is no entry with id "${entryId}". Check the id, or add the entry first.`,
+    );
     this.name = 'EntryNotFoundError';
+    this.entryId = entryId;
+    this.operation = operation;
   }
 }
 
@@ -98,9 +152,17 @@ export class EntryNotFoundError extends FreeGanttError {
  *  any Entry. This matches `EntryNotFoundError`'s posture for `entries.remove`: the call throws
  *  before it stages anything, and the transaction discards whatever it staged for other ids. */
 export class SegmentNotFoundError extends FreeGanttError {
+  readonly segmentId: SegmentId;
+  readonly operation: string;
+
   constructor(segmentId: SegmentId, operation: string) {
-    super('segment-not-found', `${operation}: no segment with id "${segmentId}"`);
+    super(
+      'segment-not-found',
+      `${operation}: there is no segment with id "${segmentId}". Check the id — nothing was removed.`,
+    );
     this.name = 'SegmentNotFoundError';
+    this.segmentId = segmentId;
+    this.operation = operation;
   }
 }
 
@@ -110,17 +172,31 @@ export class SegmentNotFoundError extends FreeGanttError {
  *  rather than picking `EntryNotFoundError` or `SegmentNotFoundError` and forging the id's brand to
  *  match. */
 export class RevealTargetNotFoundError extends FreeGanttError {
-  constructor(id: string, operation: string) {
-    super('reveal-target-not-found', `${operation}: no entry or segment with id "${id}"`);
+  readonly targetId: string;
+  readonly operation: string;
+
+  constructor(targetId: string, operation: string) {
+    super(
+      'reveal-target-not-found',
+      `${operation}: "${targetId}" names neither an entry nor a segment. Check the id — it must be one of the two.`,
+    );
     this.name = 'RevealTargetNotFoundError';
+    this.targetId = targetId;
+    this.operation = operation;
   }
 }
 
 /** `code: 'duplicate-entry-id'` — `entries.add()` given an id already in the store (S2.3 §1.3). */
 export class DuplicateEntryIdError extends FreeGanttError {
+  readonly entryId: EntryId;
+
   constructor(entryId: EntryId) {
-    super('duplicate-entry-id', `entries.add: an entry with id "${entryId}" already exists`);
+    super(
+      'duplicate-entry-id',
+      `entries.add: an entry with id "${entryId}" already exists. Give the new entry a different id, or call entries.update to change the one that is there.`,
+    );
     this.name = 'DuplicateEntryIdError';
+    this.entryId = entryId;
   }
 }
 
@@ -131,18 +207,32 @@ export class DuplicateEntryIdError extends FreeGanttError {
  *  throwing calls it was (`entries.add`, `entries.update`, or `construction`), the same way
  *  `EntryNotFoundError`/`SegmentNotFoundError` name theirs. */
 export class DuplicateSegmentIdError extends FreeGanttError {
+  readonly segmentId: SegmentId;
+  readonly operation: string;
+
   constructor(segmentId: SegmentId, operation: string) {
-    super('duplicate-segment-id', `${operation}: a segment with id "${segmentId}" already exists`);
+    super(
+      'duplicate-segment-id',
+      `${operation}: a segment with id "${segmentId}" already exists. Give this segment a different id, or leave its id out to move the one that is there.`,
+    );
     this.name = 'DuplicateSegmentIdError';
+    this.segmentId = segmentId;
+    this.operation = operation;
   }
 }
 
 /** `code: 'parent-cycle'` — a `parentId` edit that would make an entry its own ancestor, self-parenting
  * included (S2.3 §1.3). */
 export class ParentCycleError extends FreeGanttError {
+  readonly entryId: EntryId;
+
   constructor(entryId: EntryId) {
-    super('parent-cycle', `entries: setting "${entryId}"'s parentId would create a cycle`);
+    super(
+      'parent-cycle',
+      `entries: this parentId would make "${entryId}" its own ancestor. Pick a parent from outside the subtree of "${entryId}".`,
+    );
     this.name = 'ParentCycleError';
+    this.entryId = entryId;
   }
 }
 
@@ -153,16 +243,25 @@ export class ParentCycleError extends FreeGanttError {
  *  - `'conflicting'`: the write names both `start`/`end` and `segments`, and the segments' own
  *    envelope is not the `start`/`end` named alongside them — one edit cannot mean both.
  *  An entry that draws one Segment never sees either: that Segment *is* the envelope, so the write
- *  updates it in the same transaction and the two halves can only agree. */
+ *  updates it in the same transaction and the two halves can only agree.
+ *
+ *  `operation` comes from the caller, because `reconcileEnvelope` serves two of them (D-S5-44). */
 export class SegmentsOutOfSyncError extends FreeGanttError {
-  constructor(entryId: EntryId, reason: 'ambiguous' | 'conflicting') {
+  readonly entryId: EntryId;
+  readonly reason: 'ambiguous' | 'conflicting';
+  readonly operation: string;
+
+  constructor(entryId: EntryId, reason: 'ambiguous' | 'conflicting', operation: string) {
     super(
       'segments-out-of-sync',
       reason === 'ambiguous'
-        ? `entries.update: "${entryId}" draws several segments — write segments, not start/end alone`
-        : `entries.update: "${entryId}" wrote start/end that disagrees with the segments in the same edit`,
+        ? `${operation}: "${entryId}" draws several segments, so start and end alone do not say which one moves. Write the segments instead.`
+        : `${operation}: the start and end written for "${entryId}" do not match the segments in the same edit. Write the segments alone, and let the library work out the start and end.`,
     );
     this.name = 'SegmentsOutOfSyncError';
+    this.entryId = entryId;
+    this.reason = reason;
+    this.operation = operation;
   }
 }
 
@@ -173,29 +272,66 @@ export class SegmentsOutOfSyncError extends FreeGanttError {
  *  has no such span to invent one from without silently discarding the Segment ids already there, so
  *  it refuses instead. */
 export class EmptySegmentsError extends FreeGanttError {
-  constructor(entryId: EntryId) {
-    super('empty-segments', `entries.update: "${entryId}" cannot write an empty segments array`);
+  readonly entryId: EntryId;
+  readonly operation: string;
+
+  constructor(entryId: EntryId, operation: string) {
+    super(
+      'empty-segments',
+      `${operation}: "${entryId}" must keep at least one segment. To remove segments, call entries.removeSegments; to remove the whole entry, call entries.remove.`,
+    );
     this.name = 'EmptySegmentsError';
+    this.entryId = entryId;
+    this.operation = operation;
   }
 }
 
 /** `code: 'inverted-span'` — a span whose `end` sits before its `start`. The repo owner refused this
  *  at the mutation boundary (2026-09-06 ruling, #143): the write is rejected, not stored and rendered,
  *  and not silently collapsed. A zero-length span (`start === end`) stays legal — it is the empty
- *  half-open interval `[t, t)`, a different question from an inverted one. */
+ *  half-open interval `[t, t)`, a different question from an inverted one.
+ *
+ *  The constructor is structural for the reason `InvalidSnapIncrementError`'s is (s5-231 review, F4).
+ *  It names the Entry the consumer wrote, names the Segment as well when the fault is a Segment's
+ *  own, and prints both instants — a bulk load whose zone shifted by an hour is invisible without
+ *  them. It takes `operation` from the caller, because an `EditExtender` cascade reaches the same
+ *  check as `entries.update()` does. */
 export class InvertedSpanError extends FreeGanttError {
-  constructor(message: string) {
-    super('inverted-span', message);
+  readonly entryId: EntryId;
+  readonly span: TimeSpan;
+  readonly operation: string;
+  readonly segmentId?: SegmentId;
+
+  constructor(entryId: EntryId, span: TimeSpan, operation: string, segmentId?: SegmentId) {
+    super(
+      'inverted-span',
+      `${operation}: ` +
+        (segmentId === undefined ? `"${entryId}"` : `segment "${segmentId}" of "${entryId}"`) +
+        ` ends at ${span.end} and starts at ${span.start}, so it ends before it starts. ` +
+        `Swap the two, or fix the value that is wrong.`,
+    );
     this.name = 'InvertedSpanError';
+    this.entryId = entryId;
+    this.span = span;
+    this.operation = operation;
+    if (segmentId !== undefined) this.segmentId = segmentId;
   }
 }
 
 /** `code: 'unknown-field'` — an edit or `entries.fieldValue` naming a key that is not a declared
  *  Field. The registry is the legal set: core Fields plus the consumer's (D-S4-5, D-S2-26). */
 export class UnknownFieldError extends FreeGanttError {
-  constructor(field: string) {
-    super('unknown-field', `entries: "${field}" is not a known field`);
+  readonly field: string;
+  readonly operation: string;
+
+  constructor(field: string, operation: string) {
+    super(
+      'unknown-field',
+      `${operation}: there is no field called "${field}". Declare it in the Dataset's "fields" list, or put the value in "meta" if it needs no field.`,
+    );
     this.name = 'UnknownFieldError';
+    this.field = field;
+    this.operation = operation;
   }
 }
 
@@ -205,7 +341,10 @@ export class DuplicateFieldKeyError extends FreeGanttError {
   readonly key: string;
 
   constructor(key: string) {
-    super('duplicate-field-key', `fields: "${key}" is already declared`);
+    super(
+      'duplicate-field-key',
+      `fields: the key "${key}" is declared twice. Give one declaration a different key — the core fields are declared already.`,
+    );
     this.name = 'DuplicateFieldKeyError';
     this.key = key;
   }
@@ -226,12 +365,13 @@ export class InvalidFieldSourceError extends FreeGanttError {
   constructor(key: string, received: unknown) {
     super(
       'invalid-field-source',
-      `fields: "${key}" declares an invalid source — expected { from: 'entry' | 'meta' | 'compute' }, got ` +
+      `fields: the source of "${key}" is ` +
         (typeof received === 'object' && received !== null
           ? `{ from: ${String((received as { from?: unknown }).from)} }`
           : typeof received === 'string'
             ? `the string "${received}"`
-            : String(received)),
+            : String(received)) +
+        `. Write { from: 'entry' }, { from: 'meta', key } or { from: 'compute', read }.`,
     );
     this.name = 'InvalidFieldSourceError';
     this.key = key;
@@ -246,7 +386,7 @@ export class DuplicateFieldSourceError extends FreeGanttError {
   constructor(metaKey: string) {
     super(
       'duplicate-field-source',
-      `fields: two Fields read meta key "${metaKey}" — each Document slot belongs to one Field`,
+      `fields: two fields both read the meta key "${metaKey}". Point one of them at a different meta key — each slot in the document belongs to one field.`,
     );
     this.name = 'DuplicateFieldSourceError';
     this.metaKey = metaKey;
@@ -259,7 +399,10 @@ export class UnknownAggregatorError extends FreeGanttError {
   readonly aggregatorName: string;
 
   constructor(aggregatorName: string) {
-    super('unknown-aggregator', `fields: aggregator "${aggregatorName}" is not registered`);
+    super(
+      'unknown-aggregator',
+      `fields: there is no aggregator called "${aggregatorName}". Register it in the Dataset's "aggregators" option, or name a shipped one.`,
+    );
     this.name = 'UnknownAggregatorError';
     this.aggregatorName = aggregatorName;
   }
@@ -270,7 +413,10 @@ export class UnknownFieldTypeError extends FreeGanttError {
   readonly typeName: string;
 
   constructor(typeName: string) {
-    super('unknown-field-type', `fields: type "${typeName}" is not registered`);
+    super(
+      'unknown-field-type',
+      `fields: there is no field type called "${typeName}". Register it in the Dataset's "fieldTypes" option, or name a shipped one.`,
+    );
     this.name = 'UnknownFieldTypeError';
     this.typeName = typeName;
   }
@@ -287,12 +433,14 @@ export class AggregatorFailedError extends FreeGanttError {
     if (cause === undefined) {
       super(
         'aggregator-failed',
-        `rollup: aggregator "${aggregatorName}" failed on field "${fieldKey}" for entry "${String(entryId)}"`,
+        `rollup: the aggregator "${aggregatorName}" threw while it rolled up the field "${fieldKey}" for entry "${String(entryId)}". ` +
+          `Nothing was saved. Read the "cause" of this error, and make the aggregator handle that value.`,
       );
     } else {
       super(
         'aggregator-failed',
-        `rollup: aggregator "${aggregatorName}" failed on field "${fieldKey}" for entry "${String(entryId)}"`,
+        `rollup: the aggregator "${aggregatorName}" threw while it rolled up the field "${fieldKey}" for entry "${String(entryId)}". ` +
+          `Nothing was saved. Read the "cause" of this error, and make the aggregator handle that value.`,
         { cause },
       );
     }
@@ -309,7 +457,10 @@ export class FieldNotColumnableError extends FreeGanttError {
   readonly key: string;
 
   constructor(key: string) {
-    super('field-not-columnable', `gridColumns: "${key}" is not a Grid column candidate`);
+    super(
+      'field-not-columnable',
+      `gridColumns: the field "${key}" cannot be shown as a column. Add a "column" section to its field declaration.`,
+    );
     this.name = 'FieldNotColumnableError';
     this.key = key;
   }
@@ -323,7 +474,10 @@ export class UnknownGridColumnError extends FreeGanttError {
   readonly field: string;
 
   constructor(field: string) {
-    super('unknown-grid-column', `gridColumns: no column names the field "${field}"`);
+    super(
+      'unknown-grid-column',
+      `gridColumns: no column shows the field "${field}". Add it to the Gantt's "gridColumns" list first — hiding a column leaves it declared.`,
+    );
     this.name = 'UnknownGridColumnError';
     this.field = field;
   }
@@ -333,9 +487,15 @@ export class UnknownGridColumnError extends FreeGanttError {
  * are running (D-S2-9, D-S2-25). The write set is discarded; nothing about the notification in
  * progress is affected. */
 export class MutationDuringNotificationError extends FreeGanttError {
-  constructor(message: string) {
-    super('mutation-during-notification', message);
+  readonly operation: string;
+
+  constructor(operation: string) {
+    super(
+      'mutation-during-notification',
+      `${operation}: you cannot change the Dataset while a beforeChange or change handler runs. Nothing was saved. Make the change after the handler returns.`,
+    );
     this.name = 'MutationDuringNotificationError';
+    this.operation = operation;
   }
 }
 
@@ -347,7 +507,10 @@ export class MutationCancelledError extends FreeGanttError {
   readonly changeSet: ChangeSet;
 
   constructor(changeSet: ChangeSet) {
-    super('mutation-cancelled', 'transaction: a beforeChange handler refused this changeset');
+    super(
+      'mutation-cancelled',
+      'Nothing was saved. A beforeChange handler refused this change. Read "changeSet" on this error to see what it refused.',
+    );
     this.name = 'MutationCancelledError';
     this.changeSet = changeSet;
   }
@@ -357,9 +520,15 @@ export class MutationCancelledError extends FreeGanttError {
  * `'undo'` or `'redo'`. `'user'` is `apply`'s door (D-S2-11), not open yet
  * (`plans/s2-data-core/s2b-undo-replay-seam.md`). */
 export class InvalidReplayOriginError extends FreeGanttError {
+  readonly origin: string;
+
   constructor(origin: string) {
-    super('invalid-replay-origin', `replay: origin "${origin}" is not "undo" or "redo"`);
+    super(
+      'invalid-replay-origin',
+      `replay: the origin of this changeset is "${origin}". Set it to "undo" or "redo" — replay applies those two only.`,
+    );
     this.name = 'InvalidReplayOriginError';
+    this.origin = origin;
   }
 }
 
@@ -368,7 +537,10 @@ export class DuplicateRowIdError extends FreeGanttError {
   readonly rowId: string;
 
   constructor(rowId: string) {
-    super('duplicate-row-id', `rows: custom source returned duplicate id "${rowId}"`);
+    super(
+      'duplicate-row-id',
+      `rows: the custom row source returned the id "${rowId}" twice. Give every row it returns its own id.`,
+    );
     this.name = 'DuplicateRowIdError';
     this.rowId = rowId;
   }
@@ -380,7 +552,10 @@ export class DuplicatePluginIdError extends FreeGanttError {
   readonly pluginId: PluginId;
 
   constructor(pluginId: PluginId) {
-    super('duplicate-plugin-id', `plugins: "${pluginId}" is installed twice in one list`);
+    super(
+      'duplicate-plugin-id',
+      `plugins: "${pluginId}" appears twice in one plugins list. Remove one copy, or give the second plugin its own id.`,
+    );
     this.name = 'DuplicatePluginIdError';
     this.pluginId = pluginId;
   }
@@ -395,7 +570,10 @@ export class PluginNotInstalledError extends FreeGanttError {
   readonly pluginId: PluginId;
 
   constructor(pluginId: PluginId) {
-    super('plugin-not-installed', `uninstallPlugin: "${pluginId}" is not installed`);
+    super(
+      'plugin-not-installed',
+      `uninstallPlugin: the plugin "${pluginId}" is not installed. Check the id against gantt.plugins.`,
+    );
     this.name = 'PluginNotInstalledError';
     this.pluginId = pluginId;
   }
@@ -411,7 +589,7 @@ export class MissingPluginError extends FreeGanttError {
   constructor(pluginId: PluginId, requiredId: PluginId) {
     super(
       'missing-plugin',
-      `plugins: "${pluginId}" requires "${requiredId}", which this Dataset does not install`,
+      `plugins: "${pluginId}" requires "${requiredId}", and this plugins list does not install it. Add "${requiredId}" to the same list.`,
     );
     this.name = 'MissingPluginError';
     this.pluginId = pluginId;
@@ -429,7 +607,7 @@ export class PluginRequirementCycleError extends FreeGanttError {
   constructor(pluginIds: readonly PluginId[]) {
     super(
       'plugin-requirement-cycle',
-      `plugins: ${pluginIds.map((id) => `"${id}"`).join(', ')} require each other, so no setup order works`,
+      `plugins: ${pluginIds.map((id) => `"${id}"`).join(', ')} require each other, so no setup order works. Drop one "requires" entry to break the ring.`,
     );
     this.name = 'PluginRequirementCycleError';
     this.pluginIds = pluginIds;
@@ -444,7 +622,7 @@ export class RegistrationClosedError extends FreeGanttError {
   constructor(pluginId: PluginId) {
     super(
       'registration-closed',
-      `plugins: "${pluginId}" tried to register after setup — registration is legal during setup only`,
+      `plugins: "${pluginId}" registered something after its setup returned. Move the register call inside setup.`,
     );
     this.name = 'RegistrationClosedError';
     this.pluginId = pluginId;
@@ -457,7 +635,11 @@ export class PluginSetupError extends FreeGanttError {
   readonly pluginId: PluginId;
 
   constructor(pluginId: PluginId, cause: unknown) {
-    super('plugin-setup-failed', `plugins: "${pluginId}" threw during setup`, { cause });
+    super(
+      'plugin-setup-failed',
+      `plugins: the setup of "${pluginId}" threw, so no plugin in this batch is installed. Read the "cause" of this error.`,
+      { cause },
+    );
     this.name = 'PluginSetupError';
     this.pluginId = pluginId;
   }
@@ -477,7 +659,7 @@ export class RendererAlreadyRegisteredError extends FreeGanttError {
   constructor(slot: string, firstPluginId: PluginId, secondPluginId: PluginId) {
     super(
       'renderer-already-registered',
-      `view.registerRenderer: "${slot}" is already registered by plugin "${firstPluginId}" (attempted again by "${secondPluginId}")`,
+      `view.registerRenderer: the plugin "${firstPluginId}" already draws "${slot}", and "${secondPluginId}" asked for it too. Uninstall one of the two plugins.`,
     );
     this.name = 'RendererAlreadyRegisteredError';
     this.slot = slot;
@@ -493,7 +675,10 @@ export class UnknownCommandError extends FreeGanttError {
   readonly commandId: string;
 
   constructor(commandId: string) {
-    super('unknown-command', `commands: no command is registered with id "${commandId}"`);
+    super(
+      'unknown-command',
+      `gantt.commands.run: there is no command called "${commandId}". Check the id, or register the command first.`,
+    );
     this.name = 'UnknownCommandError';
     this.commandId = commandId;
   }
@@ -509,7 +694,7 @@ export class UnsupportedSchemaError extends FreeGanttError {
   constructor(schema: number, supported: readonly number[]) {
     super(
       'unsupported-schema',
-      `fromJSON: schema ${schema} is not readable; this build reads ${supported.join(', ')}`,
+      `fromJSON: this document says schema ${schema}, and this build reads ${supported.join(', ')}. Upgrade the library, or export the document again from the build that wrote it.`,
     );
     this.name = 'UnsupportedSchemaError';
     this.schema = schema;
