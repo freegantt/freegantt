@@ -67,6 +67,33 @@ describe('toInstant()', () => {
     expect(() => toInstant(CHICAGO, new Date('nope'))).toThrow(InvalidInstantError);
     expect(() => toInstant(CHICAGO, Number.NaN)).toThrow(InvalidInstantError);
   });
+
+  it("names the caller's own call, never toInstant (#237, #239)", () => {
+    // `toInstant` is reached from `entries.add`, an `EditExtender` cascade and more, so one baked-in
+    // prefix would send every caller but one to a call they never made.
+    expect(() => toInstant(CHICAGO, 'next tuesday', 'entries.add')).toThrow(
+      'entries.add: "next tuesday" is not a date this library reads.',
+    );
+    expect(() => toInstant(CHICAGO, '2026-02-31', 'edit extender')).toThrow(
+      'edit extender: "2026-02-31" names a date the calendar does not have.',
+    );
+  });
+
+  it('says what to do, and says nothing about a call nobody named', () => {
+    expect(() => toInstant(CHICAGO, Number.NaN)).toThrow(
+      'NaN is not a finite count of epoch milliseconds. Write an ISO date such as "2026-09-08", a count of epoch milliseconds, or a Date.',
+    );
+    // A Date that holds no time prints as itself, and the error carries the Date the caller wrote.
+    try {
+      toInstant(CHICAGO, new Date('nope'));
+      expect.unreachable();
+    } catch (error) {
+      expect((error as InvalidInstantError).message).toBe(
+        'Invalid Date is not a date this library reads. Write an ISO date such as "2026-09-08", a count of epoch milliseconds, or a Date.',
+      );
+      expect((error as InvalidInstantError).value).toBeInstanceOf(Date);
+    }
+  });
 });
 
 describe('toEndInstant()', () => {
@@ -74,6 +101,12 @@ describe('toEndInstant()', () => {
     // 'through the 8th' — the half-open boundary is the start of the 9th.
     expect(toEndInstant('UTC', '2026-09-08', 'inclusive')).toBe(utc('2026-09-09T00:00:00Z'));
     expect(toEndInstant(CHICAGO, '2026-09-08', 'inclusive')).toBe(utc('2026-09-09T05:00:00Z'));
+  });
+
+  it("passes the caller's own name through to a bad end value (#237)", () => {
+    expect(() => toEndInstant(CHICAGO, 'next tuesday', 'inclusive', 'entries.update')).toThrow(
+      'entries.update: "next tuesday" is not a date this library reads.',
+    );
   });
 
   it("reads a date-only end literally under 'exclusive'", () => {

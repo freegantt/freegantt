@@ -79,8 +79,8 @@ function readSegment(
 ): Segment {
   const segment: Segment = {
     id: input.id === undefined ? (existing?.id ?? context.mintSegmentId()) : segmentId(input.id),
-    start: toInstant(context.timeZone, input.start),
-    end: toEndInstant(context.timeZone, input.end, context.dateOnlyEnd),
+    start: toInstant(context.timeZone, input.start, owner.operation),
+    end: toEndInstant(context.timeZone, input.end, context.dateOnlyEnd, owner.operation),
   };
   if (segment.end < segment.start) {
     // The Entry id comes from `owner`, not from the Segment alone: a Segment written with no `id` of
@@ -164,8 +164,8 @@ function readEntrySpan(
     );
   }
   const span: TimeSpan = {
-    start: toInstant(context.timeZone, input.start),
-    end: toEndInstant(context.timeZone, input.end, context.dateOnlyEnd),
+    start: toInstant(context.timeZone, input.start, owner.operation),
+    end: toEndInstant(context.timeZone, input.end, context.dateOnlyEnd, owner.operation),
   };
   if (span.end < span.start) {
     throw new InvertedSpanError(owner.entryId, span, owner.operation);
@@ -445,8 +445,9 @@ export function readEdit(
   if (edit.parentId !== undefined) stored.parentId = entryId(edit.parentId);
   if (edit.kind !== undefined) stored.kind = edit.kind;
   if (edit.name !== undefined) stored.name = edit.name;
-  if (edit.start !== undefined) stored.start = toInstant(context.timeZone, edit.start);
-  if (edit.end !== undefined) stored.end = toEndInstant(context.timeZone, edit.end, context.dateOnlyEnd);
+  if (edit.start !== undefined) stored.start = toInstant(context.timeZone, edit.start, operation);
+  if (edit.end !== undefined)
+    stored.end = toEndInstant(context.timeZone, edit.end, context.dateOnlyEnd, operation);
   if (edit.segments !== undefined) {
     // Every stored Entry keeps at least one Segment (#212); an update cannot write it down to zero
     // the way `entries.add({ segments: [] })` can mint one — there is no whole-span input here to
