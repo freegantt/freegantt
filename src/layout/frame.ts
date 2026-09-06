@@ -17,7 +17,8 @@ import type { TimeScale, ViewPreset } from '../time/index.js';
 import { dedupeHeaderFormats, formatDate, formatEndInclusive, resolveDateFormat } from '../time/index.js';
 import { resolveDateLines } from './date-line.js';
 import type { DateLine, DateLineSpec } from './date-line.js';
-import { FrameMemory } from './frame-memory.js';
+import { FrameMemory, NO_SEGMENT_IDS } from './frame-memory.js';
+import type { RowMemory } from './frame-memory.js';
 import type { FrameColumn, ResolvedColumn, FieldCompare } from './column.js';
 import type { PlannedRow, RowSource } from './rows/row-source.js';
 import { isPlannedHeaderRow } from './rows/row-source.js';
@@ -25,7 +26,6 @@ import { resolveRows } from './rows/resolve-rows.js';
 import type { Item } from './items/produce-items.js';
 import type { ItemProducerRegistry } from './items/produce-items.js';
 import { DEFAULT_LANE_GAP_PX, yForLane } from './lanes/pack-lanes.js';
-import type { PackedRow } from './lanes/pack-lanes.js';
 import type { FrameRow } from './frame-row.js';
 export type { FrameRow };
 import type { RangeBand, RowStripe } from './decoration.js';
@@ -103,10 +103,19 @@ export interface FrameBar {
   entryId: EntryId;
   rowId: RowId;
   kind: EntryKind;
-  /** The one Segment this bar draws (#212, ADR 0010), carried straight through from the Item that
-   *  produced it. Absent for a bar that draws the Entry's whole span (a group, a milestone, or a
-   *  plugin's own kind) — that bar stands for no single Segment. */
+  /** The one Segment this bar **draws** (#212, ADR 0010), carried straight through from the Item
+   *  that produced it. Absent for a bar that draws the Entry's whole span (a group, a milestone, or
+   *  a plugin's own kind) — that bar draws no single Segment. */
   segmentId?: SegmentId;
+  /** Every Segment this bar **stands for** (#212, #230, ADR 0010) — the Segments that select it and
+   *  paint it. A bar that drew one Segment stands for that Segment alone, so this holds it and
+   *  `segmentId` names it. A bar that drew its Entry's whole span stands for every Segment of that
+   *  Entry, because any of them selects it, so this holds them all and `segmentId` is absent.
+   *
+   *  The frame states the fact, and a reader never derives it from an Entry of its own: the set and
+   *  the Items it describes come from one cached record of one Entry snapshot, so they cannot fall
+   *  out of step. `FrameLayout.segmentIdsForItem` answers the same fact for a lookup by id. */
+  segmentIds: readonly SegmentId[];
   /** The entry's name — what a backend renders as the bar's label (#26). */
   label: string;
   x: number;
@@ -299,7 +308,7 @@ function barA11yLabel(
   return `${item.label}, part ${segmentIndexOfItem(item.id) + 1} of ${partCount}, ${span}`;
 }
 
-function packedItemsForRow(row: PlannedRow, memory: FrameMemory): PackedRow {
+function packedItemsForRow(row: PlannedRow, memory: FrameMemory): RowMemory {
   return memory.packedRow(row.id);
 }
 
@@ -432,6 +441,9 @@ export function placeFrame(
         flags: {},
         minimumSpan,
         a11yLabel: barA11yLabel(item, parts.get(item.entryId) ?? 1, scale, locale),
+        // A reference copy of the set the memory already resolved beside this Item — no allocation
+        // per frame (I5), and no second Entry source for a reader to disagree with (#230).
+        segmentIds: packed.segmentIdsByItem.get(item.id) ?? NO_SEGMENT_IDS,
       };
       if (item.segmentId !== undefined) bar.segmentId = item.segmentId;
       bars.push(bar);

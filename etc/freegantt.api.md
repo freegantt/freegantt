@@ -868,6 +868,7 @@ export interface FrameBar {
     // (undocumented)
     rowId: RowId;
     segmentId?: SegmentId;
+    segmentIds: readonly SegmentId[];
     // (undocumented)
     width: number;
     // (undocumented)

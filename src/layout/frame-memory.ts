@@ -8,12 +8,11 @@ import { PrefixSumHeightIndex } from './row-height-index.js';
 import type { RowHeightIndex } from './row-height-index.js';
 import { createItemProducerRegistry, produceItemsForRow } from './items/produce-items.js';
 import type { Item, ItemProducerRegistry } from './items/produce-items.js';
-import { segmentIdsAnItemStandsFor } from './items/segment-ids-an-item-stands-for.js';
 import { packRow, packedRowHeight, singleLane } from './lanes/pack-lanes.js';
 import type { PackedRow } from './lanes/pack-lanes.js';
 
 /** Shared and frozen, so a row or an Item that stands for no Segment costs no allocation (I5). */
-const NO_SEGMENT_IDS: readonly SegmentId[] = Object.freeze([]);
+export const NO_SEGMENT_IDS: readonly SegmentId[] = Object.freeze([]);
 
 /** What this memory remembers about one row (#212, ADR 0010). One record, so the Items, their lanes
  *  and the Segments they stand for can never fall out of step: they are produced together, from one
@@ -138,14 +137,32 @@ export class FrameMemory {
     return segmentIds;
   }
 
-  /** The one rule — `segmentIdsAnItemStandsFor` — asked for a whole row at once, so the answer is
-   *  cached beside the Items it describes instead of recomputed per pointer event (I5). */
+  /** The one rule — "which Segments does this Item stand for" (#212, #230, ADR 0010) — asked for a
+   *  whole row at once, so the answer is cached beside the Items it describes instead of recomputed
+   *  per pointer event (I5). It is private, and it is the rule's only body: `placeFrame` copies the
+   *  answer onto `FrameBar.segmentIds` and `FrameLayout.segmentIdsForItem` reads the same map, so
+   *  no layer outside `layout/` can restate the rule against an Entry source of its own.
+   *
+   *  An Item that drew one Segment stands for that Segment alone. An Item that drew its Entry's
+   *  whole span — a group, a milestone, a plugin's own kind — stands for every Segment of that
+   *  Entry, because any of them selects it. An Item whose Entry this memory does not hold stands
+   *  for no Segment.
+   *
+   *  Which Segment an Item *draws* is the other, narrower fact, and `Item.segmentId` states it. A
+   *  resize handle and the `data-segment-id` stamp both need that one; nothing else does. */
   #segmentIdsEachItemStandsFor(items: readonly Item[]): ReadonlyMap<ItemId, readonly SegmentId[]> {
     const byItem = new Map<ItemId, readonly SegmentId[]>();
     for (const item of items) {
-      byItem.set(item.id, segmentIdsAnItemStandsFor(item, this.#entryById.get(item.entryId)));
+      byItem.set(item.id, this.#segmentIdsOneItemStandsFor(item));
     }
     return byItem;
+  }
+
+  #segmentIdsOneItemStandsFor(item: Item): readonly SegmentId[] {
+    if (item.segmentId !== undefined) return [item.segmentId];
+    const entry = this.#entryById.get(item.entryId);
+    if (entry === undefined) return NO_SEGMENT_IDS;
+    return entry.segments.map((segment) => segment.id);
   }
 
   forgetPacked(rowId: string): void {

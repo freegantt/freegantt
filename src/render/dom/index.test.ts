@@ -993,6 +993,61 @@ describe('render/dom backend', () => {
     timeline.remove();
   });
 
+  // #230 R2 [#230-14]: the frame states which Segments a bar stands for, and this paint side reads
+  // that statement. It used to derive the set from the live Dataset instead, so a caller that drove
+  // `backend.sync(frame)` with a frame older than the Dataset filed the bar under Segments the frame
+  // never drew. ADR 0010 line 99 names the layout as the source, so the frame wins.
+  it('a whole-span bar stands for the Segments the frame drew, not the live Dataset’s [#230-14]', () => {
+    const drawn = {
+      ...sampleEntries[0]!,
+      kind: 'group' as const,
+      segments: segmentsOf(sampleEntries[0]!, 2),
+    };
+    // The live roster the backend reads. It moves on after the frame is built, and never re-renders.
+    let live: (typeof sampleEntries)[number] = drawn;
+    const backend = createDomBackend({
+      entryById: (id) => (id === drawn.id ? live : undefined),
+      resolveBarRenderer: () => undefined,
+      resolveCellRenderer: () => undefined,
+      resolveHeaderRenderer: () => undefined,
+    });
+    const { grid, timeline } = mountSurfaces();
+    backend.mount({ grid, timeline });
+
+    const frame = computeFrame({
+      entries: [drawn],
+      scale,
+      preset,
+      visible: { x: 0, y: 0, width: 0, height: 0 },
+      rowHeight: 32,
+      revision: 0,
+      itemProducerRegistry,
+    });
+    expect(frame.bars).toHaveLength(1);
+    const bar = frame.bars[0]!;
+    expect(bar.segmentId).toBeUndefined();
+    expect(bar.segmentIds).toEqual(drawn.segments.map((segment) => segment.id));
+
+    // The Dataset drops both Segments this bar drew and grows a third one. Nothing renders.
+    const laterSegment = { id: segmentId(`${drawn.id}-later`), start: drawn.start, end: drawn.end };
+    live = { ...drawn, segments: [laterSegment] };
+
+    backend.sync(frame);
+    const node = timeline.querySelector<HTMLElement>(`[data-item-id="${bar.id}"]`)!;
+
+    // A Segment the frame drew still paints the bar.
+    backend.applyState({ selectedSegmentIds: [drawn.segments[0]!.id] });
+    expect(node.dataset['state']).toBe('selected');
+
+    // A Segment only the live Dataset knows about paints nothing: the frame never drew it.
+    backend.applyState({ selectedSegmentIds: [laterSegment.id] });
+    expect(node.dataset['state']).toBe('');
+
+    backend.destroy();
+    grid.remove();
+    timeline.remove();
+  });
+
   it('a bar that draws an Entry whole paints when any Segment of that Entry is selected (#212)', () => {
     // A group and a milestone draw one bar for the whole Entry, so that bar carries no
     // `data-segment-id`. It still has to light up when the Selection names a Segment of its Entry.
