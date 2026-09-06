@@ -669,6 +669,35 @@ describe('inlineEditing() (S5.8, D-S5-19/D-S5-20)', () => {
       container.remove();
     });
 
+    // #231 F2: one command behind both entry points. Escape used to call the plugin's own method and
+    // skip the registry, so a consumer's override changed the button and left the keyboard alone.
+    it('an overridden freegantt.discardCellEdit answers Escape and the discard button alike', () => {
+      const { container, gantt, dataset } = makeGantt();
+      const ran: string[] = [];
+      gantt.commands.register({
+        id: 'freegantt.discardCellEdit',
+        label: 'Discard edit',
+        run: () => ran.push('override'),
+      });
+
+      // Escape over a valid editor: the override runs, and it alone decides the editor stays open.
+      dblclick(cellFor(container, 'e1', 'name'));
+      escape(input(container));
+      expect(ran).toEqual(['override']);
+      expect(container.querySelector('.fg-cell-editor')).not.toBeNull();
+
+      // The invalid editor's own button: the same override, the same answer.
+      dataset.on('beforeChange', () => false);
+      input(container).value = 'Vetoed';
+      enter(input(container));
+      discardButton(container)!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      expect(ran).toEqual(['override', 'override']);
+      expect(container.querySelector('.fg-cell-editor')).not.toBeNull();
+
+      gantt.destroy();
+      container.remove();
+    });
+
     it("the command's when declines with no editor open, and run() is then a silent no-op", () => {
       const { container, gantt, dataset } = makeGantt();
       expect(container.querySelector('.fg-cell-editor')).toBeNull();
@@ -1002,7 +1031,6 @@ describe('CellEditorSession (S5.8, review A5/C2b)', () => {
       announceEntryEdit: () => {},
       requestCommit: () => {},
       requestDiscard: () => {},
-      runDiscardCommand: () => {},
       raiseError: () => {},
       ...overrides,
     };
@@ -1128,7 +1156,6 @@ describe('CellEditing (S5.8, #169)', () => {
       announceEntryEdit: () => {},
       requestCommit: () => {},
       requestDiscard: () => {},
-      runDiscardCommand: () => {},
       raiseError: (report) => reported.push(report),
       ...overrides,
     };
