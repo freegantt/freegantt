@@ -85,9 +85,11 @@ export type EntryEdit<
 > = Partial<Omit<EntryInput<TMeta>, 'id'>> & Partial<TFields>;
 
 /** What the store already holds: a storage-shaped edit, with every field read through `time/` (an
- *  `Instant`, not a loose `InstantInput`). You read one; you never build one — write an `EntryEdit`,
- *  the same object `entries.update()` takes. Core builds these on the way in, and `diffEdit` compares
- *  one against `entries`.
+ *  `Instant`, not a loose `InstantInput`). Two callers meet it, and they meet it differently
+ *  (`plans/02`, two callers two surfaces). An **app author** reads one and never builds one — write
+ *  an `EntryEdit`, the same object `entries.update()` takes. A **plugin author** builds them: an
+ *  `EditExtender` returns `EntryEdits`, a map of these. `moveEntryTo` builds the one case that is
+ *  easy to get wrong. Core builds these on the way in, and `diffEdit` compares one against `entries`.
  *
  *  `EntryEdit` above is the input-shaped edit a caller writes (`plans/02`, one write shape). The two
  *  coincide today only because no mutator normalizes loose input into this shape yet. This type sits
