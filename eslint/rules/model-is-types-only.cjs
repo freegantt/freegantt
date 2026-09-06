@@ -17,7 +17,6 @@ const IDENTITY_CAST_HELPERS = new Set([
   'changeSetId',
   'segmentId',
   'mintedSegmentId',
-  'segmentIdFromDataset',
 ]);
 
 /** Readers of an ItemId (D-S4-25). They parse; they are not identity casts. */

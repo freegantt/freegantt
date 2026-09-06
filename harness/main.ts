@@ -73,6 +73,9 @@ gantt.panToToday();
 // `Gantt` and `Dataset`, nothing else. `Window.__dataset` binds to `hierarchy.ts`'s field shape;
 // this page declares its own fields, so the cast stands in for that one shared declaration. Every
 // e2e read of it (`segments`, `start`, `end`, `id`) sits on `Entry`, outside either page's fields.
+// The double cast through `unknown` is evidence, not a shortcut: `Dataset<TFields>` gives no common
+// type two differently-fielded instances both satisfy, so no single cast bridges them. Recorded on
+// #226, which already asks the same generic-parameter question for a `Gantt.dataset` getter.
 window.__dataset = dataset as unknown as typeof window.__dataset;
 window.__gantt = gantt;
 
@@ -146,8 +149,10 @@ renameBtn.addEventListener('click', () => {
   });
 });
 
+// `freegantt.deleteSelection` already swallows a refused `beforeChange` itself (core-commands.ts),
+// so this button needs no `attemptMutation` wrapper around it.
 removeBtn.addEventListener('click', () => {
-  attemptMutation(() => gantt.commands.run('freegantt.deleteSelection'));
+  gantt.commands.run('freegantt.deleteSelection');
 });
 
 syncSelectionUi();

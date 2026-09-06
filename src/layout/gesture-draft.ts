@@ -257,7 +257,7 @@ export function previewOffsets(input: PreviewOffsetsInput): readonly ItemPreview
   function pushOffset(id: EntryId, edit: StoredEdit, isExtra: boolean): void {
     const original = byId.get(id);
     if (!original) return;
-    if (edit.segments !== undefined && original.segments !== undefined) {
+    if (edit.segments !== undefined) {
       for (let index = 0; index < edit.segments.length; index++) {
         const from = original.segments[index];
         const to = edit.segments[index];
