@@ -11,7 +11,7 @@ import type { Entry, EntryEdits, EntryId, ErrorCode, ItemId, RaiseError, Segment
 import { itemId } from '../model/index.js';
 import { identityExtender, type EditExtender } from '../data/edit-extension.js';
 import { reconcileExtenderEdits } from '../data/entry-reader.js';
-import { buildEffectiveEntries } from '../data/entry-tree.js';
+import { effectiveEntriesFor } from '../data/entry-tree.js';
 import type { EventBus } from './event-bus.js';
 import type { AsyncCancelableEvent, EntryMove, EntryResize, GanttEventMap } from './event-bus.js';
 import type { Interactions } from './capability.js';
@@ -373,7 +373,10 @@ export class GesturePipeline {
   #extraFor(draft: EntryEdits): EntryEdits {
     const entries = this.#deps.allEntries?.() ?? new Map<EntryId, Entry>();
     const raw = (this.#deps.extend ?? identityExtender)({ entries, proposed: draft });
-    const effective = buildEffectiveEntries(entries, [], [], draft);
-    return reconcileExtenderEdits(effective, raw);
+    // No hook installed is the default, and it writes nothing — so the frame reconciles nothing and
+    // allocates nothing (I5). A hook that did write costs one entry per id it named, never a copy of
+    // the dataset: `reconcileExtenderEdits` reads only the ids its own edits name.
+    if (raw.size === 0) return raw;
+    return reconcileExtenderEdits(effectiveEntriesFor(entries, draft, raw.keys()), raw);
   }
 }
