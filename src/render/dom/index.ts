@@ -22,7 +22,7 @@ import type {
 } from '../../layout/index.js';
 import type { ColumnAlign, FrameColumn } from '../../layout/index.js';
 import type { RenderBackend, RenderSurfaces, InteractionState, HitResult } from '../backend.js';
-import { itemIdFromDataset, rowIdFromDataset, segmentIdsAnItemStandsFor } from '../../layout/index.js';
+import { itemIdFromDataset, rowIdFromDataset } from '../../layout/index.js';
 import { attachDateLines } from './date-line.js';
 import type { DateLineAttachment } from './date-line.js';
 import { attachDecorations } from './decorations.js';
@@ -909,12 +909,13 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
     lastHeaderColumnKeys = items.map((item) => item.key);
   }
 
-  /** Files one bar under every Segment that paints it (#212). `layout/` states which Segments a bar
-   *  stands for, so this paint side never restates that rule. `segmentIdByItemId` records the other,
-   *  narrower fact — the one Segment this bar drew — which the resize-handle pair reads. */
+  /** Files one bar under every Segment that paints it (#212, #230). The frame states which Segments
+   *  a bar stands for, so this paint side reads `bar.segmentIds` and never asks an Entry of its own.
+   *  `segmentIdByItemId` records the other, narrower fact — the one Segment this bar drew — which
+   *  the resize-handle pair reads. */
   function indexBarBySegment(bar: FrameBar): void {
     if (bar.segmentId !== undefined) segmentIdByItemId.set(bar.id, bar.segmentId);
-    for (const segmentId of segmentIdsAnItemStandsFor(bar, entryById(bar.entryId))) {
+    for (const segmentId of bar.segmentIds) {
       const mounted = itemIdsBySegmentId.get(segmentId);
       if (mounted === undefined) itemIdsBySegmentId.set(segmentId, [bar.id]);
       else mounted.push(bar.id);

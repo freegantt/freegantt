@@ -247,9 +247,10 @@ Finding 14, first half. This slice adds the answer and changes no reader.
   `segmentIdsAnItemStandsFor` import at `frame-layout.ts:15`.
 - [x] Delete `FrameMemory.entry(id)` (`src/layout/frame-memory.ts:100`) once its two callers are
   gone. It is the seam that let a caller pull the frame's Entry out and apply its own rule.
-- [ ] Delete `src/layout/items/segment-ids-an-item-stands-for.ts` and its export from
+- [x] Delete `src/layout/items/segment-ids-an-item-stands-for.ts` and its export from
   `src/layout/index.ts:16-18`. **Do this only after R2**, because `render/dom` still imports it.
-  Until then, keep the file and have it delegate to nothing — see R2's own box.
+  Until then, keep the file and have it delegate to nothing — see R2's own box. *(Closed in R2, as
+  planned: the file is gone and the body is `FrameMemory`'s private rule.)*
 - [x] Add a `frame-memory.test.ts` case: two `packedRow` calls for an unchanged row return the same
   `segmentIdsByItem` reference. That is the allocation guard (I5).
 
@@ -274,25 +275,25 @@ it and the two drifting for a slice.
 
 ### R2 — the frame carries the set, and `render/dom` reads it
 
-**Not started. Every box below is open.** Finding 14, second half, and finding 17. **This is the risky slice — see §6.**
+**Landed.** Finding 14, second half, and finding 17. **This was the risky slice — see §6.**
 
-- [ ] Add `segmentIds: readonly SegmentId[]` to `FrameBar` (`src/layout/frame.ts:87`). Required, not
+- [x] Add `segmentIds: readonly SegmentId[]` to `FrameBar` (`src/layout/frame.ts:87`). Required, not
   optional. `placeFrame` is the only producer of a `FrameBar`, so a required member costs a plugin
   author nothing. Document it as "every Segment this bar stands for" and keep `segmentId` as
   "the one Segment this bar draws". Two names, two facts, and the doc says which is which.
-- [ ] Fill it in `placeFrame`'s bar loop (`src/layout/frame.ts:395-410`) from the packed row's
+- [x] Fill it in `placeFrame`'s bar loop (`src/layout/frame.ts:395-410`) from the packed row's
   `segmentIdsByItem`. It is a reference copy. Nothing allocates per frame.
-- [ ] `src/render/dom/index.ts:911` `indexBarBySegment` reads `bar.segmentIds`. Delete the
+- [x] `src/render/dom/index.ts:911` `indexBarBySegment` reads `bar.segmentIds`. Delete the
   `segmentIdsAnItemStandsFor` import at `src/render/dom/index.ts:25`.
-- [ ] Now delete `src/layout/items/segment-ids-an-item-stands-for.ts` and its `layout/index.ts`
+- [x] Now delete `src/layout/items/segment-ids-an-item-stands-for.ts` and its `layout/index.ts`
   export. `git grep segmentIdsAnItemStandsFor` must return nothing.
-- [ ] Update `CONTEXT.md`'s **Item** entry (line 194). Today it says the layout is the one answer
+- [x] Update `CONTEXT.md`'s **Item** entry (line 194). Today it says the layout is the one answer
   through `FrameLayout.segmentIdsForItem`. It must now say the frame states it
   (`FrameBar.segmentIds`), and the layout answers the same fact for a lookup by id. Keep the
   _Avoid_ line about `data-segment-id` — it is still true and still load-bearing.
-- [ ] Update `plans/01` §4's `GeometryFrame` sketch (line 409). It lists neither `segmentId` nor
+- [x] Update `plans/01` §4's `GeometryFrame` sketch (line 409). It lists neither `segmentId` nor
   `segmentIds` on a bar today, so it is already behind `frame.ts`. Add both.
-- [ ] Run `pnpm api-report`. `FrameBar` is public (`etc/freegantt.api.md:850`). Commit the churn.
+- [x] Run `pnpm api-report`. `FrameBar` is public (`etc/freegantt.api.md:850`). Commit the churn.
 
 **Behaviour note, and the one real change in this plan.** Before R2, `render/dom` resolved a
 whole-span bar's Segment set from the **live Dataset**. After R2 it resolves it from the **frame**.
@@ -305,6 +306,18 @@ It is the fix's own test, not a characterization test. Label it `[#230-14]`.
 
 **Visible at the end:** `git grep -n "entryById" src/render/dom/index.ts` returns two hits, both
 handing a consumer's renderer its Entry.
+
+**R2 landed — see the commit. One claim in this slice was the plan's, not R2's.** That "two hits"
+line is R5's end state, not R2's, and §1.5 says so itself: `entryHasSelectedSegment`
+(`src/render/dom/index.ts:657`) is the third Entry read, and R5 deletes it. After R2 the file reads
+an Entry at three call sites — `entryHasSelectedSegment` (waiting for R5), `cellItemsForRow`, and
+the bar renderer — plus the port declaration and its destructuring. The two the plan names both hand
+a consumer's own renderer its live Entry, and neither derives a Segment set. **No Segment set in
+`render/dom` comes from the Dataset any more:** `indexBarBySegment` reads `bar.segmentIds`, which is
+what finding 14's second half asked for.
+
+`git grep segmentIdsAnItemStandsFor` now returns doc history only — this file and
+`2026-09-05-212-segment-selection-fixes.md`. No source file names it.
 
 ### R3 — `ContainerDomPorts` becomes one member per collaborator
 

@@ -14,9 +14,6 @@ export { pickDefined } from './pick-defined.js';
 // `ColumnAlign` crosses this same boundary (#54).
 export { itemId, itemIdFromDataset, rowIdFromDataset, entryIdOfItem, segmentId } from '../model/index.js';
 export { createItemProducerRegistry, wholeEntryItem } from './items/produce-items.js';
-// #212, ADR 0010: the one answer to "which Segments does this Item stand for". `render/dom` files a
-// mounted bar under it, and `view/gantt-dom.ts` reaches it through `FrameLayout.segmentIdsForItem`.
-export { segmentIdsAnItemStandsFor } from './items/segment-ids-an-item-stands-for.js';
 export type { Item, ItemProducer, ItemProducerRegistry } from './items/produce-items.js';
 export { createRegistrationTable } from './registration-table.js';
 export type { RegistrationTable } from './registration-table.js';

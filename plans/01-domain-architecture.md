@@ -410,6 +410,14 @@ interface GeometryFrame {
   bars: Array<{
     id: ItemId; entryId: EntryId; rowId: RowId;
     kind: EntryKind;              // backends stamp it as data-kind — per-kind CSS with zero JS
+    /** The one Segment this bar *draws*, carried through from its Item (#212, ADR 0010). Absent on
+     *  a bar that drew its Entry's whole span — a group, a milestone, a plugin's own kind. */
+    segmentId?: SegmentId;
+    /** Every Segment this bar *stands for* — the Segments that select it and paint it (#230). One
+     *  Segment for a Segment bar; every Segment of the Entry for a whole-span bar. The frame states
+     *  it, so no reader derives it from an Entry source of its own; `FrameLayout.segmentIdsForItem`
+     *  answers the same fact for a lookup by id. */
+    segmentIds: readonly SegmentId[];
     /** The entry's name — what a backend renders as the bar's label (#26). */
     label: string;
     x: number; y: number; width: number; height: number; lane: number;
