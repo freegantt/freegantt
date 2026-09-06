@@ -19,7 +19,8 @@ import type {
 } from '../model/index.js';
 import { diffEdit, foldChangeSet } from './change-set.js';
 import type { EditExtender, EntryEdits } from './edit-extension.js';
-import { reconcileEnvelope } from './entry-reader.js';
+import { reconcileExtenderEdits } from './entry-reader.js';
+import { buildEffectiveEntries } from './entry-tree.js';
 import { mergeEntryEdits, overlayStoredEdit, proposedKeysOf } from './fields/field-access.js';
 import type { FieldRegistry } from './fields/field-registry.js';
 import { promoteNewParents } from './hierarchy.js';
@@ -72,25 +73,6 @@ function fieldsWrittenBy(edit: StoredEdit): ReadonlySet<string> {
   return keys;
 }
 
-/**
- * The envelope invariant binds a plugin's cascade the same way it binds a consumer's edit (#212 R2
- * fix-plan review): `reconcileEnvelope` (`entry-reader.ts`) is the one function both call, so an
- * `EditExtender` that writes `start`/`end` straight through gets it read back off the Entry's
- * Segments — or paired onto its one Segment — exactly as `entries.update()` does, instead of
- * reaching `diffEdit` unreconciled and letting `toJSON` publish the disagreement.
- */
-function reconcileExtenderEnvelopes(entries: ReadonlyMap<EntryId, Entry>, edits: EntryEdits): EntryEdits {
-  let changed = false;
-  const reconciled = new Map<EntryId, StoredEdit>();
-  for (const [id, edit] of edits) {
-    const entry = entries.get(id);
-    const next = entry ? reconcileEnvelope(entry, edit) : edit;
-    if (next !== edit) changed = true;
-    reconciled.set(id, next);
-  }
-  return changed ? reconciled : edits;
-}
-
 function guardExtensionHookDoesNotOverwriteBody(proposed: EntryEdits, extenderEdits: EntryEdits): void {
   if (!isDevMode()) return;
   for (const [id, edit] of extenderEdits) {
@@ -130,7 +112,17 @@ export function buildCommitChangeSet(
 
   const bodyUpdated = diffEdits(byId, proposed, data.fields, data.fieldContext);
 
-  const extenderEdits = reconcileExtenderEnvelopes(byId, data.editExtender({ entries: byId, proposed }));
+  // The extender's cascade is reconciled against the state its own edit lands on — committed entries
+  // overlaid with this transaction's body edits, plus the entries this transaction itself adds — not
+  // against `byId` alone (#212 R2 fix-plan review, finding A). `byId` is pre-transaction: an entry the
+  // body just added is absent from it, and an entry whose Segments the body just rewrote still shows
+  // its old ones there, so reconciling against `byId` would restore the envelope against Segments the
+  // commit is about to replace.
+  const effectiveForExtender = buildEffectiveEntries(byId, added, removed, proposed);
+  const extenderEdits = reconcileExtenderEdits(
+    effectiveForExtender,
+    data.editExtender({ entries: byId, proposed }),
+  );
   guardExtensionHookDoesNotOverwriteBody(proposed, extenderEdits);
   const extenderUpdated = diffEdits(byId, extenderEdits, data.fields, data.fieldContext);
 
@@ -142,11 +134,17 @@ export function buildCommitChangeSet(
   );
   const hierarchyUpdated = diffEdits(byId, hierarchyEdits, data.fields, data.fieldContext);
 
+  // An added entity folds in its own extender cascade too, not only its hierarchy promotion — an
+  // `EditExtender` that rewrites `segments` on an entity this same transaction adds must still land
+  // on the entity the changeset publishes (#212 R2 fix-plan review, finding A): the earlier code here
+  // overlaid `hierarchyEdits` alone, so a reconciled extender edit for a same-transaction add computed
+  // a correct `StoredEdit` upstream but never reached the stored entity.
+  const extraEditsForAdded = mergeEntryEdits(extenderEdits, hierarchyEdits);
   const addedEntitiesForFold =
-    hierarchyEdits.size === 0
+    extraEditsForAdded.size === 0
       ? addedEntities
       : addedEntities.map((row) => {
-          const extra = hierarchyEdits.get(row.entity.id);
+          const extra = extraEditsForAdded.get(row.entity.id);
           return extra === undefined ? row : { ...row, entity: overlayStoredEdit(row.entity, extra) };
         });
 

@@ -10,6 +10,8 @@ import type { ItemPreview, SnapSetting, SnapUnit, TimeScale, ViewPreset } from '
 import type { Entry, EntryEdits, EntryId, ErrorCode, ItemId, RaiseError, SegmentId } from '../model/index.js';
 import { itemId } from '../model/index.js';
 import { identityExtender, type EditExtender } from '../data/edit-extension.js';
+import { reconcileExtenderEdits } from '../data/entry-reader.js';
+import { buildEffectiveEntries } from '../data/entry-tree.js';
 import type { EventBus } from './event-bus.js';
 import type { AsyncCancelableEvent, EntryMove, EntryResize, GanttEventMap } from './event-bus.js';
 import type { Interactions } from './capability.js';
@@ -361,9 +363,17 @@ export class GesturePipeline {
   /** D-S3-18, S3.6: `extra = extend({ entries: committed, proposed: draft })` — the exact pseudocode
    *  the decision names, run on the pipeline's own rAF (`#preview`'s caller) rather than on every
    *  `pointermove`. No installed hook (P1's default): `identityExtender`, so `previewOffsets` paints
-   *  no ghost — behaviorally identical to before this hook existed. */
+   *  no ghost — behaviorally identical to before this hook existed.
+   *
+   *  The raw hook result is reconciled the same way `data/build-commit-change-set.ts` reconciles it
+   *  at commit, against the same effective state (committed entries overlaid with this draft) — so a
+   *  drag previews exactly what it commits (#212 R2 fix-plan review, D-S5-43). Before this, the
+   *  preview painted the hook's raw, unreconciled edit — a plugin cascading `start` alone onto a
+   *  several-Segment Entry could preview one span and then commit a different one. */
   #extraFor(draft: EntryEdits): EntryEdits {
     const entries = this.#deps.allEntries?.() ?? new Map<EntryId, Entry>();
-    return (this.#deps.extend ?? identityExtender)({ entries, proposed: draft });
+    const raw = (this.#deps.extend ?? identityExtender)({ entries, proposed: draft });
+    const effective = buildEffectiveEntries(entries, [], [], draft);
+    return reconcileExtenderEdits(effective, raw);
   }
 }

@@ -136,8 +136,10 @@ dataset.canUndo; dataset.canRedo;
   named by at least one id in `ids`, deduped, in the order first named — the projection a Selection
   runs to turn its Segments into the Entries they belong to. Both read the Segment→Entry index
   `data/` maintains on write, so neither call scans the dataset. **`segmentIdsOfEntries(ids)`** is
-  the reverse projection: every Segment id these Entries draw, each Entry's own Segments in Entry
-  order — an id no Entry currently draws contributes nothing. It is the published way to select an
+  the reverse projection: every Segment id these Entries draw, deduped, each Entry named once in the
+  order first named, and each Entry's own Segments in Entry order — an id no Entry currently draws,
+  or an Entry already named, contributes nothing (#212 R2 fix-plan review, finding E). It is the
+  published way to select an
   Entry (#212 fix-plan review, finding 10): `gantt.selectedSegmentIds =
   dataset.entries.segmentIdsOfEntries([id])`. The Selection itself stays Segment-only (ADR 0010) —
   this is a lookup a caller composes with the setter, not a second selection action alongside it.
@@ -250,7 +252,7 @@ and `cause` — so it renders and serializes with no type test. `severity` is `'
 something it did not. Core raises and retains nothing: there is no `gantt.errors` array, because the
 cap, the overflow rule and the dedupe are the consumer's policy.
 
-S3 data-gesture payloads (D-S3-22): `beforeEntryMove`/`entryMove` carry `ProposedSpan` (`entry`, `start`, `end`) plus `entries` (grabbed first; extender extras never included). `beforeEntryResize`/`entryResize` add `edge: 'start' | 'end'`. `beforeSelectionChange`/`selectionChange` carry `{ from, to }` as `SegmentId[]` (ADR 0010, #212 — `EntryId[]` until then) — Gantt state, no Dataset transaction. `beforeEntryMove`/`beforeEntryResize` handlers may return `Promise<void | false>` (D-S3-17); every other Gantt event stays sync-only. One case fires `selectionChange` with no `before*`: a Dataset write that removes a selected Entry's Segments has already committed, so the Selection can only drop the dead ids after the fact — there is nothing left to veto (#212, finding 8).
+S3 data-gesture payloads (D-S3-22): `beforeEntryMove`/`entryMove` carry `ProposedSpan` (`entry`, `start`, `end`) plus `entries` (grabbed first; extender extras never included). `beforeEntryResize`/`entryResize` add `edge: 'start' | 'end'`. `beforeSelectionChange`/`selectionChange` carry `{ from, to }` as `SegmentId[]` (ADR 0010, #212 — `EntryId[]` until then) — Gantt state, no Dataset transaction. `beforeEntryMove`/`beforeEntryResize` handlers may return `Promise<void | false>` (D-S3-17); every other Gantt event stays sync-only. One case fires `selectionChange` with no `before*`: a Dataset write that removes a selected Entry's Segments has already committed, so the Selection can only drop the dead ids after the fact — there is nothing left to veto (#212, finding 19).
 
 `beforeEntryEdit`/`entryEdit` (S5.8, D-S5-19) carry `EntryFieldEdit` — `entry`, `field` (a `FieldKey`), `from`, `to` (both `unknown`: a Field's stored type is open). `beforeEntryEdit` fires **before `inlineEditing()`'s built-in editor opens**, not before the write, so `from`/`to` are both the entry's current stored value at that point — nothing has been typed yet. `entryEdit` fires after the commit, `to` the value actually written. `beforeEntryEdit` joins `beforeEntryMove`/`beforeEntryResize` as the third handler that may return `Promise<void | false>` (D-S3-17) — the async veto is what lets a consumer `await myDialog.open(entry)` before deciding whether to suppress the built-in editor (the sample below).
 

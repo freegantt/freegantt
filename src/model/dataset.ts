@@ -45,10 +45,11 @@ export interface EntryStoreView<
   /** Every Entry named by at least one id in `ids`, deduped, in the order first named (ADR 0010,
    *  #212). Call: `dataset.entries.entryIdsOfSegments(selection)`. */
   entryIdsOfSegments(ids: readonly (SegmentId | string)[]): readonly EntryId[];
-  /** Every Segment id these Entries draw, in the order given, each Entry's own Segments in Entry
-   *  order (ADR 0010, #212, finding 10) — the pair to `entryIdsOfSegments`, and the published way
-   *  to select an Entry: `gantt.selectedSegmentIds = dataset.entries.segmentIdsOfEntries([id])`.
-   *  An id no Entry currently draws contributes nothing. Call:
+  /** Every Segment id these Entries draw, deduped, each Entry named once in the order first named,
+   *  and each Entry's own Segments in Entry order (ADR 0010, #212, finding 10) — the pair to
+   *  `entryIdsOfSegments`, which dedupes the same way, and the published way to select an Entry:
+   *  `gantt.selectedSegmentIds = dataset.entries.segmentIdsOfEntries([id])`. An id no Entry currently
+   *  draws, or an Entry already named, contributes nothing. Call:
    *  `dataset.entries.segmentIdsOfEntries(ids)`. */
   segmentIdsOfEntries(ids: readonly (EntryId | string)[]): readonly SegmentId[];
 }
