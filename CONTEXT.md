@@ -623,8 +623,12 @@ _Avoid_: `actsOn` as a per-command declaration (considered and rejected, ADR 001
 _Avoid_: `on`/`off` (those name the Gantt event bus — a different mechanism with a different vocabulary)
 
 **Cell editor**:
-The in-place editing control `inlineEditing()` opens over one Grid cell (S5.8, D-S5-19/D-S5-20; `CellEditorSession`, `.fg-cell-editor`). One open at a time. Not a Popup: it owns a live `<input>` end to end, it mounts in the Row layer so the pane's own scroll carries it (#158), and a refused commit keeps it open in the invalid state instead of dismissing it (#137 F5).
+The in-place editing control `inlineEditing()` opens over one Grid cell (S5.8, D-S5-19/D-S5-20; `CellEditorSession`, `.fg-cell-editor`). One open at a time. Not a Popup: it owns a live `<input>` end to end, it mounts in the Row layer so the pane's own scroll carries it (#158), and a refused commit keeps it open in the invalid state instead of dismissing it (#137 F5). In the invalid state the editor shows a discard button and names its reason on the wrapper, so Escape is not the only exit (D-S5-47).
 _Avoid_: Inline editor (names the feature — `inlineEditing()` — not the one control it opens), Field editor (a Field is what a value is; this edits one cell of one entry)
+
+**Discard**:
+Closing an open Cell editor and writing nothing (`inlineEditing()`, S5.8, D-S5-47). Escape discards, and so does the `freegantt.discardCellEdit` command and the button the editor shows in the invalid state. The stored value never changed, so a discard restores nothing and produces no ChangeSet, no event and no undo step.
+_Avoid_: Cancel (the library refusing a ChangeSet is a Veto — ADR 0006; the pointer machine's own `cancel` abandons a drag), Revert (that is what undo does to a value already written — see `data/`), Close (an editor closes on a commit too, which writes)
 
 **Popup**:
 The `extensions/popup.ts` anchoring/flipping/clamping/dismissal primitive (S5.3, D-S5-8/D-S5-9) built on `ctx.view` alone — the Overlay it mounts in, plus the Gantt DOM's rects it places against. One implementation serves the tooltip and the context menu. The Cell editor is deliberately not a consumer: it needs a live, listener-attachable control rather than a static Element description, and it follows a scroll rather than dismissing on one (#158). `open()` while already open replaces the current popup (closes it first). Dismisses on Escape (folded into the shared Keymap, C3), an outside pointer, a scroll of the anchor's own pane, or blur, per its `dismissOn` option.
