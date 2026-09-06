@@ -217,13 +217,13 @@ no production file touched.
 
 Finding 14, first half. This slice adds the answer and changes no reader.
 
-- [ ] Move the rule's body out of `src/layout/items/segment-ids-an-item-stands-for.ts` into
+- [x] Move the rule's body out of `src/layout/items/segment-ids-an-item-stands-for.ts` into
   `src/layout/frame-memory.ts` as a private function. Name it
   `segmentIdsEachItemStandsFor(items, entryById)`. It returns
   `ReadonlyMap<ItemId, readonly SegmentId[]>`. The call reads "the Segment ids each Item stands
   for", which is true: it answers for a whole row at once. Keep the `NO_SEGMENT_IDS` frozen
   constant, so an Item that stands for nothing still allocates nothing (I5).
-- [ ] Declare `RowMemory` in `frame-memory.ts`:
+- [x] Declare `RowMemory` in `frame-memory.ts`:
 
   ```ts
   /** What this memory remembers about one row (#212, ADR 0010). One record, so the Items, their
@@ -238,24 +238,39 @@ Finding 14, first half. This slice adds the answer and changes no reader.
 
   `FrameMemory.packedRow(id)` returns `RowMemory`. Existing callers read `.items` and `.packing`
   only, so they keep compiling untouched.
-- [ ] Fill both members inside `packedRow`, right after `produceItemsForRow`
+- [x] Fill both members inside `packedRow`, right after `produceItemsForRow`
   (`src/layout/frame-memory.ts:88`). Compute `segmentIds` from `row.entryIds` with **no header
   filter**, so it matches `FrameLayout.segmentIdsForRow`'s current answer exactly. Use `#entryById`
   for both — that is the one Entry source.
-- [ ] Point `FrameLayout.segmentIdsForItem` (`src/layout/frame-layout.ts:111`) and
+- [x] Point `FrameLayout.segmentIdsForItem` (`src/layout/frame-layout.ts:111`) and
   `segmentIdsForRow` (`:125`) at the new record. Both become O(1) map or array reads. Delete the
   `segmentIdsAnItemStandsFor` import at `frame-layout.ts:15`.
-- [ ] Delete `FrameMemory.entry(id)` (`src/layout/frame-memory.ts:100`) once its two callers are
+- [x] Delete `FrameMemory.entry(id)` (`src/layout/frame-memory.ts:100`) once its two callers are
   gone. It is the seam that let a caller pull the frame's Entry out and apply its own rule.
 - [ ] Delete `src/layout/items/segment-ids-an-item-stands-for.ts` and its export from
   `src/layout/index.ts:16-18`. **Do this only after R2**, because `render/dom` still imports it.
   Until then, keep the file and have it delegate to nothing — see R2's own box.
-- [ ] Add a `frame-memory.test.ts` case: two `packedRow` calls for an unchanged row return the same
+- [x] Add a `frame-memory.test.ts` case: two `packedRow` calls for an unchanged row return the same
   `segmentIdsByItem` reference. That is the allocation guard (I5).
 
 **Verify:** `src/layout/frame-layout.test.ts:166-212` passes unchanged. That is the point of R0.
 
 **Visible at the end:** `FrameLayout` answers both Segment questions with no Entry lookup of its own.
+
+**Landed `49bf804`, with one deliberate deviation.** `segmentIdsForRow` does **not** read
+`RowMemory.segmentIds`. `FrameMemory`'s row map is built from the post-collapse plan, while
+`FrameLayout.#entryIdsOfRow` is built from the open rows, so a row hidden under a collapsed parent
+answers `entryIdsForRow` today and would have stopped answering `segmentIdsForRow` — a silent
+narrowing, in the slice that promises to change no reader. Verified by running it before changing
+it. That accessor's own doc ties the pair together ("Unfiltered, exactly like `entryIdsForRow`"), so
+it now reads a new `FrameMemory.segmentIdsOfEntries(ids)`, which keeps them in agreement and still
+leaves no Entry rule inside `FrameLayout`. `RowMemory.segmentIds` is unchanged from this plan and
+still waits for R5, which fills `FrameRow` from it — a hidden row never reaches `placeFrame`.
+`src/layout/frame-layout.test.ts` pins the hidden-row pair.
+
+The rule keeps one body: `segment-ids-an-item-stands-for.ts` is unchanged and `frame-memory.ts`
+calls it. R2 deletes the file and inlines the body into the private function, rather than R1 copying
+it and the two drifting for a slice.
 
 ### R2 — the frame carries the set, and `render/dom` reads it
 
