@@ -5,12 +5,11 @@ import { fieldRowsOf } from './change-set.js';
 import {
   MutationCancelledError,
   MutationDuringNotificationError,
-  SegmentsOutOfSyncError,
   entryId,
   segmentId,
 } from '../model/index.js';
 import type { ErrorReport } from '../model/index.js';
-import { toEndInstant, toInstant } from '../time/index.js';
+import { addMs, diffMs, toEndInstant, toInstant } from '../time/index.js';
 import type { EntryEdits, StoredEdit } from './edit-extension.js';
 
 function dataset(entries: { id: string; parentId?: string }[] = []): DatasetState {
@@ -653,33 +652,141 @@ describe('the EditExtender seam owes the envelope invariant too (#212 R2 fix-pla
     expect(entry.segments).toEqual([{ id: entry.segments[0]!.id, start: entry.start, end: entry.end }]);
   });
 
-  it('refuses a plugin write of start alone against a several-Segment Entry, same as entries.update()', () => {
-    const state = new DatasetState({
-      entries: [
-        {
-          id: 't1',
-          name: 't1',
-          start: '2026-01-01',
-          end: '2026-01-10',
-          segments: [
-            { id: 'sg1', start: '2026-01-01', end: '2026-01-05' },
-            { id: 'sg2', start: '2026-01-05', end: '2026-01-10' },
-          ],
-        },
-      ],
-      timeZone: 'UTC',
-      editExtender: (): EntryEdits =>
-        new Map<ReturnType<typeof entryId>, StoredEdit>([
-          [entryId('t1'), { start: toInstant('UTC', '2026-02-01') }],
-        ]),
-    });
+  it(
+    'translates every Segment of a several-Segment Entry when a plugin writes start alone, ' +
+      'rather than refusing the write (#212 R2 fix-plan review, D-S5-43)',
+    () => {
+      const state = new DatasetState({
+        entries: [
+          {
+            id: 't1',
+            name: 't1',
+            start: '2026-01-01',
+            end: '2026-01-10',
+            segments: [
+              { id: 'sg1', start: '2026-01-01', end: '2026-01-05' },
+              { id: 'sg2', start: '2026-01-05', end: '2026-01-10' },
+            ],
+          },
+        ],
+        timeZone: 'UTC',
+        editExtender: (): EntryEdits =>
+          new Map<ReturnType<typeof entryId>, StoredEdit>([
+            [entryId('t1'), { start: toInstant('UTC', '2026-02-01') }],
+          ]),
+      });
 
-    expect(() =>
       runTransaction(
         state,
         (token) => state.entries.stageUpdate(token, entryId('t1'), { name: 'a' }),
         'user',
-      ),
-    ).toThrow(SegmentsOutOfSyncError);
-  });
+      );
+
+      // Every Segment shifts by the same delta the write moves `start` by, keeping its own length and
+      // id — the same rigid-group move a whole-Entry drag performs.
+      const deltaMs = diffMs(toInstant('UTC', '2026-02-01'), toInstant('UTC', '2026-01-01'));
+      const entry = state.entries.get(entryId('t1'))!;
+      expect(entry.start).toBe(toInstant('UTC', '2026-02-01'));
+      expect(entry.end).toBe(addMs(toEndInstant('UTC', '2026-01-10', 'inclusive'), deltaMs));
+      expect(entry.segments).toEqual([
+        {
+          id: segmentId('sg1'),
+          start: addMs(toInstant('UTC', '2026-01-01'), deltaMs),
+          end: addMs(toEndInstant('UTC', '2026-01-05', 'inclusive'), deltaMs),
+        },
+        {
+          id: segmentId('sg2'),
+          start: addMs(toInstant('UTC', '2026-01-05'), deltaMs),
+          end: addMs(toEndInstant('UTC', '2026-01-10', 'inclusive'), deltaMs),
+        },
+      ]);
+    },
+  );
+
+  it(
+    'fits Segments to the new span, rather than translating, when start and end together imply a ' +
+      'different duration (D-S5-43)',
+    () => {
+      const state = new DatasetState({
+        entries: [
+          {
+            id: 't1',
+            name: 't1',
+            start: '2026-01-01',
+            end: '2026-01-10',
+            segments: [
+              { id: 'sg1', start: '2026-01-01', end: '2026-01-05' },
+              { id: 'sg2', start: '2026-01-05', end: '2026-01-10' },
+            ],
+          },
+        ],
+        timeZone: 'UTC',
+        editExtender: (): EntryEdits =>
+          new Map<ReturnType<typeof entryId>, StoredEdit>([
+            [
+              entryId('t1'),
+              { start: toInstant('UTC', '2026-01-03'), end: toEndInstant('UTC', '2026-01-04', 'inclusive') },
+            ],
+          ]),
+      });
+
+      runTransaction(
+        state,
+        (token) => state.entries.stageUpdate(token, entryId('t1'), { name: 'a' }),
+        'user',
+      );
+
+      // No single shift can move `start` two days later and `end` six days earlier at once, so this
+      // falls back to `fitSegmentsToEnvelope` — the Rollup's own clamp-and-widen rule — instead.
+      const entry = state.entries.get(entryId('t1'))!;
+      expect(entry.start).toBe(toInstant('UTC', '2026-01-03'));
+      expect(entry.end).toBe(toEndInstant('UTC', '2026-01-04', 'inclusive'));
+      const envelope = { start: entry.start, end: entry.end };
+      for (const segment of entry.segments) {
+        expect(segment.start >= envelope.start && segment.start <= envelope.end).toBe(true);
+        expect(segment.end >= envelope.start && segment.end <= envelope.end).toBe(true);
+      }
+    },
+  );
+
+  it(
+    'reconciles an extender cascade against an Entry this same transaction adds, not just one ' +
+      'the store already committed (#212 R2 fix-plan review, finding A, hole 1)',
+    () => {
+      const state = new DatasetState({
+        entries: [],
+        timeZone: 'UTC',
+        editExtender: (): EntryEdits =>
+          new Map<ReturnType<typeof entryId>, StoredEdit>([
+            [entryId('t1'), { start: toInstant('UTC', '2026-02-01') }],
+          ]),
+      });
+
+      runTransaction(
+        state,
+        (token) =>
+          state.entries.stageAdd(token, {
+            id: entryId('t1'),
+            name: 't1',
+            start: 0 as never,
+            end: 1 as never,
+            kind: 'span',
+            segments: [
+              { id: segmentId('sg1'), start: 0 as never, end: 1 as never },
+              { id: segmentId('sg2'), start: 1 as never, end: 2 as never },
+            ],
+          }),
+        'user',
+      );
+
+      // Before the fix, `byId` (committed, pre-transaction state) held nothing for `t1`, so the
+      // extender's cascade reconciled against `undefined` and passed through unreconciled — and
+      // separately, `addedEntitiesForFold` only overlaid hierarchy edits, so even a correctly
+      // reconciled cascade never reached the entity the changeset published.
+      const entry = state.entries.get(entryId('t1'))!;
+      expect(entry.start).toBe(toInstant('UTC', '2026-02-01'));
+      expect(entry.segments[0]!.start).toBe(toInstant('UTC', '2026-02-01'));
+      expect(entry.segments[1]!.start).toBe(entry.segments[0]!.end);
+    },
+  );
 });

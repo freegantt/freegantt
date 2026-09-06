@@ -8,6 +8,7 @@
 import type { Entry, EntryId, EntryKind, FieldContext, FieldUpdated } from '../model/index.js';
 import { AggregatorFailedError } from '../model/index.js';
 import type { EntryEdits } from './edit-extension.js';
+import { fitSegmentsToEnvelope } from './entry-reader.js';
 import { ancestorsOf, buildEffectiveEntries, childIdsByParent, depthOf } from './entry-tree.js';
 import {
   createRollUpContext,
@@ -121,43 +122,8 @@ function widenSegmentsToEnvelope(
   const segmentsField = registry.get('segments');
   if (!segmentsField || parent.segments.length === 0) return parent;
 
-  const { start: targetStart, end: targetEnd } = parent;
-  const clamp = (value: typeof targetStart): typeof targetStart => {
-    if (value < targetStart) return targetStart;
-    if (value > targetEnd) return targetEnd;
-    return value;
-  };
-
-  let changed = false;
-  let nextSegments = parent.segments.map((segment) => {
-    const start = clamp(segment.start);
-    const end = clamp(segment.end);
-    if (start === segment.start && end === segment.end) return segment;
-    changed = true;
-    return { ...segment, start, end };
-  });
-
-  let earliestIndex = 0;
-  let latestIndex = 0;
-  for (let index = 1; index < nextSegments.length; index++) {
-    if (nextSegments[index]!.start < nextSegments[earliestIndex]!.start) earliestIndex = index;
-    if (nextSegments[index]!.end > nextSegments[latestIndex]!.end) latestIndex = index;
-  }
-
-  if (nextSegments[earliestIndex]!.start !== targetStart) {
-    nextSegments = nextSegments.map((segment, index) =>
-      index === earliestIndex ? { ...segment, start: targetStart } : segment,
-    );
-    changed = true;
-  }
-  if (nextSegments[latestIndex]!.end !== targetEnd) {
-    nextSegments = nextSegments.map((segment, index) =>
-      index === latestIndex ? { ...segment, end: targetEnd } : segment,
-    );
-    changed = true;
-  }
-
-  if (!changed) return parent;
+  const nextSegments = fitSegmentsToEnvelope(parent.segments, parent);
+  if (nextSegments === parent.segments) return parent;
 
   const from = readField(parent, segmentsField, ctx);
   updated.push({ store: 'entries', id: parentId, field: segmentsField.key, from, to: nextSegments });

@@ -506,6 +506,27 @@ describe('entryIdOfSegment / entryIdsOfSegments (#212, ADR 0010, fix plan R4)', 
       segmentId('sg2'),
     ]);
   });
+
+  // #212 R2 fix-plan review, finding E: `entryIdsOfSegments` already dedupes a repeated id; its
+  // documented pair did not, so a caller naming one Entry twice wrote duplicate ids into a Selection.
+  it('segmentIdsOfEntries dedupes a repeated Entry id, naming it once in first-named order', () => {
+    const state = dataset([
+      {
+        id: 'a',
+        segments: [
+          { id: 'sg1', start: 0, end: 1 },
+          { id: 'sg2', start: 0, end: 1 },
+        ],
+      },
+      { id: 'b', segments: [{ id: 'sg3', start: 0, end: 1 }] },
+    ]);
+
+    expect(state.entries.segmentIdsOfEntries(['a', 'b', 'a'])).toEqual([
+      segmentId('sg1'),
+      segmentId('sg2'),
+      segmentId('sg3'),
+    ]);
+  });
 });
 
 describe('Segment→Entry index review fixes (#212, 2026-09-05 review)', () => {
