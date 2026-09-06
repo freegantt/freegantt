@@ -23,7 +23,6 @@ import type {
   EntryInput,
   EntryKind,
   Instant,
-  InstantInput,
   Segment,
   SegmentId,
   SegmentInput,
@@ -352,12 +351,14 @@ export function fitSegmentsToEnvelope(segments: readonly Segment[], target: Time
  * it builds the `EntryEdits` map's value type, which only an extender produces, so it is a
  * plugin-author tool and not an app-author one.
  *
- * `start` is loose (`InstantInput`) like every other way in, and a loose date has no meaning without a
- * zone, so the Dataset's `timeZone` comes with it — `ctx.dataset.timeZone` inside a plugin's `setup`.
- * `time/`'s `toInstant` reads it, so the call obeys the zone rules `entries.update()` obeys (I10).
+ * `start` is an `Instant`, not the loose `InstantInput` every way *in* takes. This is a builder, not a
+ * way in: the way in is the extender's return, which `readEdits` normalizes. Taking a loose date here
+ * would need a zone to read it, and asking a plugin author to hand back `ctx.dataset.timeZone` — a
+ * zone core already holds — is the zone math core is supposed to fill for them (`plans/02`, "two
+ * callers, two surfaces"). A caller who holds a loose date reads it with `time/`'s own helper first.
  */
-export function moveEntryTo(entry: Entry, start: InstantInput, timeZone: string): EntryEdit {
-  const deltaMs = diffMs(toInstant(timeZone, start), entry.start);
+export function moveEntryTo(entry: Entry, start: Instant): EntryEdit {
+  const deltaMs = diffMs(start, entry.start);
   return {
     segments: entry.segments.map((segment) => ({
       id: segment.id,
