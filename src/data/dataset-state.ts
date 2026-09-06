@@ -22,6 +22,8 @@ import type {
   SegmentId,
   Disposer,
   EditExtender,
+  EditRequest,
+  EntryEdits,
   ExtenderWrapper,
 } from '../model/index.js';
 import { changeSetId, mintedSegmentId } from '../model/index.js';
@@ -199,9 +201,20 @@ export class DatasetState implements Dataset {
     this.#history = new History(this, options.history);
   }
 
-  /** Read by `data/transaction.ts` once per commit (D-S2-6). */
+  /** Read by `data/transaction.test.ts`/`edit-extension.test.ts` to assert on the occupant itself —
+   *  identity, and composition order — without calling it (D-S2-6, D-S5-23). `extraEditsFor` below is
+   *  the seam every real caller goes through instead. */
   get editExtender(): EditExtender {
     return this.#editExtender;
+  }
+
+  /** The one door onto the extension hook (D4, D-S2-6): calls the current occupant and hands back
+   *  what it returns. `data/transaction.ts`'s commit path and `api/gantt.ts`'s drag-preview wiring
+   *  both call this — one seam, not two — so `api/Dataset` never had to expose the raw occupant to
+   *  get either job done (#209 Q5, replacing the public `editExtender` getter this file used to
+   *  mirror). */
+  extraEditsFor(request: EditRequest): EntryEdits {
+    return this.#editExtender(request);
   }
 
   /** Call: `ctx.edits.setExtender((next) => (request) => mergeEntryEdits(next(request), mine(request)))`.

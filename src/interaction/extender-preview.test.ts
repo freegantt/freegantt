@@ -58,7 +58,7 @@ function stubPointerCapture(el: HTMLElement): void {
 
 /** Builds a real `GanttShell` over a real `DatasetState` — `commitEntryEdits` writes through
  *  `state.transaction()`/`state.entries.update()`, the same shape `api/gantt.ts` wires for real
- *  Gantt usage (D-S3-16). `editExtender` is a `GanttShellOptions`-only field (P1: no public install
+ *  Gantt usage (D-S3-16). `extraEditsFor` is a `GanttShellOptions`-only field (P1: no public install
  *  API in S3, so `api/gantt.ts` never passes one) — this is the "internal option" the S3.6 plan names. */
 function buildShell(overrides: Partial<GanttShellOptions> = {}): {
   shell: GanttShell;
@@ -104,7 +104,7 @@ function stubElementFromPoint(at: { x: number; y: number; el: Element }): () => 
 
 describe('[S3-A4] extender preview', () => {
   it('ghosts the extension hook’s own extra on the same preview frame as the caller’s drag', async () => {
-    const { shell, container, timeline } = buildShell({ editExtender: makeCascadeExtender() });
+    const { shell, container, timeline } = buildShell({ extraEditsFor: makeCascadeExtender() });
     const barA = container.querySelector<HTMLElement>('[data-item-id="a:0"]')!;
     const barX = container.querySelector<HTMLElement>('[data-item-id="x:0"]')!;
     function transformXOf(el: HTMLElement): number {
@@ -135,7 +135,7 @@ describe('[S3-A4] extender preview', () => {
   });
 
   it('Escape mid-drag clears the ghost and writes nothing (P1 identity contrast, [S3-A2])', async () => {
-    const { shell, container, timeline, state } = buildShell({ editExtender: makeCascadeExtender() });
+    const { shell, container, timeline, state } = buildShell({ extraEditsFor: makeCascadeExtender() });
     const barA = container.querySelector<HTMLElement>('[data-item-id="a:0"]')!;
     const barX = container.querySelector<HTMLElement>('[data-item-id="x:0"]')!;
     const xBefore = state.entries.get(entryId('x'))!;
@@ -161,7 +161,7 @@ describe('[S3-A4] extender preview', () => {
   });
 
   // #167: the trap the S5.10 author flagged. `api/gantt.ts` passes an *arrow*
-  // (`(request) => options.dataset.editExtender(request)`), never the function the Dataset holds at
+  // (`(request) => options.dataset.extraEditsFor(request)`), never the function the Dataset holds at
   // construction. A Dataset plugin composes onto that hook later (D-S5-23, S5.10), so anything that
   // stored the arrow's result would silently ghost nothing from that moment on. That is invisible
   // today and wrong the moment S7's scheduling plugin installs after the Gantt is built.
@@ -169,7 +169,7 @@ describe('[S3-A4] extender preview', () => {
     // The arrow closes over `built`, and is only ever called from a later drag. So it reads whatever
     // occupies the Dataset's hook at that moment, which is the whole point.
     const built: ReturnType<typeof buildShell> = buildShell({
-      editExtender: (request) => built.state.editExtender(request),
+      extraEditsFor: (request) => built.state.extraEditsFor(request),
     });
     // Composed after the shell already exists — exactly what `Gantt.plugins = [...]` does later.
     built.state.setExtender(() => makeCascadeExtender());
@@ -192,7 +192,7 @@ describe('[S3-A4] extender preview', () => {
     shell.destroy();
   });
 
-  it('no editExtender (P1 default, identity) previews the caller’s own drag with no ghost', async () => {
+  it('no extraEditsFor (P1 default, identity) previews the caller’s own drag with no ghost', async () => {
     const { shell, container, timeline } = buildShell();
     const barA = container.querySelector<HTMLElement>('[data-item-id="a:0"]')!;
     const barX = container.querySelector<HTMLElement>('[data-item-id="x:0"]')!;

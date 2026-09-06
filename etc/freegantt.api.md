@@ -239,9 +239,9 @@ export class Dataset<TMeta = unknown, TFields extends Record<string, unknown> = 
     // (undocumented)
     get dateOnlyEnd(): DateOnlyEndRule;
     destroy(): void;
-    get editExtender(): EditExtender;
     // (undocumented)
     get entries(): EntryStore<TMeta, TFields>;
+    extraEditsFor(request: EditRequest): EntryEdits;
     field(key: FieldKey): Field | undefined;
     get fields(): {
         readonly all: readonly Field[];

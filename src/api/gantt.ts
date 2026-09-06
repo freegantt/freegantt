@@ -221,7 +221,7 @@ export class Gantt {
       // the identity function for a Dataset with no plugin installed. Preview only: the commit runs
       // the same occupant again, for real, inside the transaction. `api/gantt.test.ts`'s "#186"
       // suite fails if this ever becomes a stored value.
-      editExtender: (request) => options.dataset.editExtender(request),
+      extraEditsFor: (request) => options.dataset.extraEditsFor(request),
       wiring: {
         entryGestures: attachEntryGestures,
         keyboardEditing: attachKeyboardEditing,

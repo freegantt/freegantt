@@ -18,7 +18,7 @@ import type {
   StoreRowUpdated,
 } from '../model/index.js';
 import { diffEdit, foldChangeSet } from './change-set.js';
-import type { EditExtender, StoredEdits } from './edit-extension.js';
+import type { EditRequest, EntryEdits, StoredEdits } from './edit-extension.js';
 import { reconcileExtenderEdits } from './entry-reader.js';
 import { buildEffectiveEntries } from './entry-tree.js';
 import { mergeEntryEdits, overlayStoredEdit, proposedKeysOf } from './fields/field-access.js';
@@ -46,7 +46,7 @@ export interface CommitChangeSetPluginStores {
 export interface CommitChangeSetInput {
   readonly entries: CommitChangeSetEntryStore;
   readonly pluginStores: CommitChangeSetPluginStores;
-  readonly editExtender: EditExtender;
+  extraEditsFor(request: EditRequest): EntryEdits;
   readonly hierarchy: DatasetHierarchy;
   readonly fields: FieldRegistry;
   readonly fieldContext: FieldContext;
@@ -136,7 +136,7 @@ export function buildCommitChangeSet(
   // reconciliation, so this costs nothing extra at commit.
   const extenderEdits = reconcileExtenderEdits(
     effectiveForExtender,
-    data.editExtender({
+    data.extraEditsFor({
       entries: byId,
       proposed,
       entryAfterEdits: (id) => effectiveForExtender.get(id),

@@ -90,7 +90,7 @@ import type {
   TimeSpan,
 } from '../model/index.js';
 import { segmentIdsDroppedBy } from '../data/change-set.js';
-import type { EditExtender } from '../data/edit-extension.js';
+import type { EditRequest, EntryEdits } from '../data/edit-extension.js';
 import { resolveCapabilities } from './capability.js';
 import type { CapabilityRule, Capabilities, Interactions } from './capability.js';
 import { subscribeToDatasetChanges } from './dataset-change-subscription.js';
@@ -310,13 +310,13 @@ export interface GanttShellOptions {
    * mounts real elements regardless of which backend paints them. So this closes the hardcoding,
    * not DOM-free `view/`. Defaults to `createDomBackend()`. */
   backend?: RenderBackend<HTMLElement>;
-  /** S3.6, D-S3-18, P1: an installed extension hook, read for **preview only** — ghosts its extras in
-   *  the rAF-coalesced drag preview. `api/gantt.ts` passes the bound Dataset's own occupant here
-   *  (S5.10). That occupant is the identity function until a Dataset plugin composes onto it
-   *  (D-S5-23). A test that constructs `GanttShell` directly passes its own, the same shape
-   *  `commitEntryEdits` already uses. The real hook still runs again, for real, inside
-   *  `data/transaction.ts`'s own commit. This option never writes anything itself. */
-  editExtender?: EditExtender;
+  /** S3.6, D-S3-18, P1: the door onto the installed extension hook, called for **preview only** —
+   *  ghosts its extras in the rAF-coalesced drag preview. `api/gantt.ts` passes the bound Dataset's
+   *  own `extraEditsFor` here (S5.10, #209 Q5). That occupant is the identity function until a
+   *  Dataset plugin composes onto it (D-S5-23). A test that constructs `GanttShell` directly passes
+   *  its own, the same shape `commitEntryEdits` already uses. The real hook still runs again, for
+   *  real, inside `data/transaction.ts`'s own commit. This option never writes anything itself. */
+  extraEditsFor?: (request: EditRequest) => EntryEdits;
   /** Internal (D-S4-24). One registry per Gantt, seeded with span/group/milestone. Tests inject a
    *  replacement; `GanttOptions` has no such field (public registration is S5). */
   itemProducerRegistry?: ItemProducerRegistry;
@@ -712,7 +712,7 @@ export class GanttShell {
       commitEntryEdits: (edits) => this.#options.wiring.commitEntryEdits?.(edits) ?? false,
       emit: (name, payload) => this.#events.emit(name, payload),
       raiseError: this.#raiseError,
-      ...(options.editExtender ? { extend: options.editExtender } : {}),
+      ...(options.extraEditsFor ? { extraEditsFor: options.extraEditsFor } : {}),
       allEntries: () => new Map(this.#options.dataset.entries.all.map((e) => [e.id, e])),
       locale: () => this.#frameSettings.locale,
       applyGestureState: (preview, pendingItemIds, cursor) => {

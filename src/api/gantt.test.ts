@@ -20,7 +20,9 @@ import {
 } from './index.js';
 import type {
   EditExtender,
+  EditRequest,
   Entry,
+  EntryEdits,
   GanttDom,
   GanttPlugin,
   GridColumnInput,
@@ -5023,8 +5025,8 @@ describe('Gantt reads the Dataset’s edit hook live (#186)', () => {
   class LateHookDataset extends Dataset {
     #occupant: EditExtender = () => new Map();
 
-    override get editExtender(): EditExtender {
-      return this.#occupant;
+    override extraEditsFor(request: EditRequest): EntryEdits {
+      return this.#occupant(request);
     }
 
     occupyHook(next: EditExtender): void {

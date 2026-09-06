@@ -17,7 +17,8 @@ import type {
   StoredEdits,
 } from '../model/index.js';
 import { itemId } from '../model/index.js';
-import { identityExtender, type EditExtender } from '../data/edit-extension.js';
+import { identityExtender } from '../data/edit-extension.js';
+import type { EditRequest, EntryEdits } from '../data/edit-extension.js';
 import { reconcileExtenderEditsForPreview } from '../data/entry-reader.js';
 import { effectiveEntriesFor, entryAfterEdits } from '../data/entry-tree.js';
 import type { EventBus } from './event-bus.js';
@@ -52,10 +53,11 @@ export interface GesturePipelineDeps {
   /** D-S3-18, S3.6, P1: an installed extension hook, read for **preview only** — the real hook still
    *  runs again, for real, inside `data/transaction.ts`'s own commit; this never writes anything.
    *  `undefined` previews no ghost extras, same as `data/edit-extension.ts`'s `identityExtender` —
-   *  which is also what a Dataset with no plugin installed hands over (S5.10, D-S5-23). */
-  extend?: EditExtender;
-  /** Committed entries `extend`'s `EditRequest.entries` argument reads — a snapshot map, built only
-   *  when a preview frame actually calls `extend` (an installed extender may cascade to an entry
+   *  which is also what a Dataset with no plugin installed hands over (S5.10, D-S5-23). Renamed from
+   *  `extend` to `extraEditsFor` at #209 Q5, alongside the seam it mirrors (`api/Dataset`'s own). */
+  extraEditsFor?: (request: EditRequest) => EntryEdits;
+  /** Committed entries `extraEditsFor`'s `EditRequest.entries` argument reads — a snapshot map, built
+   *  only when a preview frame actually calls it (an installed extender may cascade to an entry
    *  outside the caller's own draft, so `entryById` alone cannot answer it). */
   allEntries?(): ReadonlyMap<EntryId, Entry>;
   /** S3.8, D-S3-15: locale for `cursorLabelForX` — the same value header ticks already use. */
@@ -368,9 +370,9 @@ export class GesturePipeline {
     });
   }
 
-  /** D-S3-18, S3.6: `extra = extend({ entries: committed, proposed: draft })` — the exact pseudocode
-   *  the decision names, run on the pipeline's own rAF (`#preview`'s caller) rather than on every
-   *  `pointermove`. No installed hook (P1's default): `identityExtender`, so `previewOffsets` paints
+  /** D-S3-18, S3.6: `extra = extraEditsFor({ entries: committed, proposed: draft })` — the exact
+   *  pseudocode the decision names, run on the pipeline's own rAF (`#preview`'s caller) rather than on
+   *  every `pointermove`. No installed hook (P1's default): `identityExtender`, so `previewOffsets` paints
    *  no ghost — behaviorally identical to before this hook existed.
    *
    *  The raw hook result is reconciled the same way `data/build-commit-change-set.ts` reconciles it
@@ -385,7 +387,7 @@ export class GesturePipeline {
    *  ghost for that Entry this frame, and the commit path still throws the same edit for real. */
   #extraFor(draft: StoredEdits): StoredEdits {
     const entries = this.#deps.allEntries?.() ?? new Map<EntryId, Entry>();
-    const raw = (this.#deps.extend ?? identityExtender)({
+    const raw = (this.#deps.extraEditsFor ?? identityExtender)({
       entries,
       proposed: draft,
       entryAfterEdits: (id) => entryAfterEdits(entries, draft, id),
