@@ -84,15 +84,18 @@ export type EntryEdit<
   TFields extends Record<string, unknown> = Record<string, unknown>,
 > = Partial<Omit<EntryInput<TMeta>, 'id'>> & Partial<TFields>;
 
-/** Storage-shaped edit: every field already read through `time/` (an `Instant`, not a loose
- *  `InstantInput`) — what a write set holds and what `diffEdit` compares against `entries`. Distinct
- *  from `EntryEdit` above, the public input-shaped edit a caller writes (`plans/02` one write shape):
- *  the two only coincide today because no mutator normalizes loose input into this shape yet. Not
- *  public (`plans/s3-direct-manipulation/README.md`) — an internal write/gesture shape only, moved
- *  here (from `data/edit-extension.ts`) in S3.3 (D-S3-4) so `layout/gesture-draft.ts` can build one
- *  without reaching into `data/`. */
-/** Storage-shaped patch plus the Field keys the caller proposed. `proposedKeys` is part of the edit,
- *  not a side channel — spread keeps it, overlay never copies it onto an Entry. */
+/** What the store already holds: a storage-shaped edit, with every field read through `time/` (an
+ *  `Instant`, not a loose `InstantInput`). You read one; you never build one — write an `EntryEdit`,
+ *  the same object `entries.update()` takes. Core builds these on the way in, and `diffEdit` compares
+ *  one against `entries`.
+ *
+ *  `EntryEdit` above is the input-shaped edit a caller writes (`plans/02`, one write shape). The two
+ *  coincide today only because no mutator normalizes loose input into this shape yet. This type sits
+ *  in `model/` (moved from `data/edit-extension.ts` in S3.3, D-S3-4) so `layout/gesture-draft.ts` can
+ *  build one without reaching into `data/`.
+ *
+ *  `proposedKeys` carries the Field keys the caller proposed. It is part of the edit, not a side
+ *  channel — spread keeps it, and overlay never copies it onto an Entry. */
 export type StoredEdit = Partial<Omit<Entry, 'id'>> & {
   readonly proposedKeys?: ReadonlySet<string>;
 };
