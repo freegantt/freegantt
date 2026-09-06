@@ -23,6 +23,7 @@ import type {
   EntryInput,
   EntryKind,
   Instant,
+  InstantInput,
   Segment,
   SegmentId,
   SegmentInput,
@@ -291,18 +292,30 @@ export function fitSegmentsToEnvelope(segments: readonly Segment[], target: Time
  * private copy of this same rule, not a shared function — `moveEdit` also moves only the gesture's own
  * selected Segments, never every Segment of the Entry, which this always does.
  *
+ * It names `segments` and nothing else, and core derives the envelope from them (D-S5-50, #239). It
+ * used to state the envelope too, and that cost a plugin author a silent write: composing this result
+ * over an earlier plugin's `{ end }` overwrote that `end` with one these Segments produce, so the
+ * merged edit read as self-consistent and committed with the earlier write gone. Naming `segments`
+ * alone makes the same composition a refusal (`SegmentsOutOfSyncError`, `'conflicting'`) instead — the
+ * defect class #238 closed for `proposedKeys`, closed here for the envelope.
+ *
  * A public export (`api/dataset-plugin.ts`, `api/index.ts`), for the same reason `mergeEntryEdits` is:
- * it takes and returns storage-shaped values only an extender produces, so it is a plugin-author tool,
- * not an app-author one.
+ * it builds the `EntryEdits` map's value type, which only an extender produces, so it is a
+ * plugin-author tool and not an app-author one.
+ *
+ * `start` is loose (`InstantInput`) like every other way in, and a loose date has no meaning without a
+ * zone, so the Dataset's `timeZone` comes with it — `ctx.dataset.timeZone` inside a plugin's `setup`.
+ * `time/`'s `toInstant` reads it, so the call obeys the zone rules `entries.update()` obeys (I10).
  */
-export function moveEntryTo(entry: Entry, start: Instant): StoredEdit {
-  const deltaMs = diffMs(start, entry.start);
-  const segments = entry.segments.map((segment) => ({
-    ...segment,
-    start: addMs(segment.start, deltaMs),
-    end: addMs(segment.end, deltaMs),
-  }));
-  return { segments, ...envelopeOfSegments(segments) };
+export function moveEntryTo(entry: Entry, start: InstantInput, timeZone: string): EntryEdit {
+  const deltaMs = diffMs(toInstant(timeZone, start), entry.start);
+  return {
+    segments: entry.segments.map((segment) => ({
+      id: segment.id,
+      start: addMs(segment.start, deltaMs),
+      end: addMs(segment.end, deltaMs),
+    })),
+  };
 }
 
 /**

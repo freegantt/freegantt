@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { fitSegmentsToEnvelope, reconcileExtenderEdits, readEntries, readEdit } from './entry-reader.js';
+import {
+  fitSegmentsToEnvelope,
+  moveEntryTo,
+  reconcileExtenderEdits,
+  readEntries,
+  readEdit,
+} from './entry-reader.js';
 import type { EntryReadContext } from './entry-reader.js';
 import { buildEffectiveEntries } from './entry-tree.js';
 import {
@@ -11,6 +17,7 @@ import {
 } from '../model/index.js';
 import type { Entry, EntryInput } from '../model/index.js';
 import { addMs, instant } from '../time/index.js';
+import { mergeEntryEdits } from './edit-extension.js';
 import type { StoredEdit } from './edit-extension.js';
 import { FieldRegistry } from './fields/field-registry.js';
 
@@ -488,5 +495,141 @@ describe('reconcileExtenderEdits refuses what reconcileEnvelope refuses (D-S5-44
     expect(() => reconcileExtenderEdits(entries, new Map([[entry!.id, { start: invertingStart }]]))).toThrow(
       InvertedSpanError,
     );
+  });
+});
+
+describe('moveEntryTo writes segments and lets core derive the envelope (D-S5-50, #239)', () => {
+  /** Two Segments. A date-only `end` is inclusive here, so they store as `[01-01, 01-06)` and
+   *  `[01-06, 01-11)`, and the Entry's envelope is `[01-01, 01-11)`. */
+  function twoSegmentEntry(context: EntryReadContext): Entry {
+    const [entry] = readEntries(
+      [
+        {
+          id: 't1',
+          name: 'Design',
+          start: '2026-01-01',
+          end: '2026-01-09',
+          segments: [
+            { start: '2026-01-01', end: '2026-01-05' },
+            { start: '2026-01-06', end: '2026-01-10' },
+          ],
+        },
+      ],
+      context,
+    );
+    return entry!;
+  }
+
+  it('names segments and nothing else', () => {
+    const entry = twoSegmentEntry(createContext());
+    const edit = moveEntryTo(entry, instant(utc('2026-01-03T00:00:00Z')), 'UTC');
+    expect(Object.keys(edit)).toEqual(['segments']);
+  });
+
+  it('translates every Segment rigidly, each keeping its own id and its own length', () => {
+    const context = createContext();
+    const entry = twoSegmentEntry(context);
+    const edit = moveEntryTo(entry, instant(utc('2026-01-03T00:00:00Z')), 'UTC');
+
+    expect(edit.segments).toEqual([
+      { id: entry.segments[0]!.id, start: utc('2026-01-03T00:00:00Z'), end: utc('2026-01-08T00:00:00Z') },
+      { id: entry.segments[1]!.id, start: utc('2026-01-08T00:00:00Z'), end: utc('2026-01-13T00:00:00Z') },
+    ]);
+  });
+
+  it('reads a loose start through the zone it is given, the way entries.update() does', () => {
+    const context = createContext();
+    const entry = twoSegmentEntry(context);
+    // 'America/New_York' puts the start of 2026-01-03 five hours after the UTC one, and the whole
+    // Entry moves by that much more.
+    const edit = moveEntryTo(entry, '2026-01-03', 'America/New_York');
+
+    expect(edit.segments?.[0]?.start).toBe(utc('2026-01-03T05:00:00Z'));
+  });
+
+  it('lets readEdit derive the envelope, so the stored edit still states start and end', () => {
+    const context = createContext();
+    const entry = twoSegmentEntry(context);
+    const stored = readEdit(
+      moveEntryTo(entry, instant(utc('2026-01-03T00:00:00Z')), 'UTC'),
+      context,
+      entry,
+      registry,
+    );
+
+    expect(stored.start).toBe(utc('2026-01-03T00:00:00Z'));
+    expect(stored.end).toBe(utc('2026-01-13T00:00:00Z'));
+  });
+
+  // #239's premise, checked rather than trusted: the issue reads the refusal as reachable only
+  // because `moveEntryTo` stated an envelope. It is not. `reconcileEnvelope` refuses on whether the
+  // *merged* edit states `segments` at all, so a later plugin's `{ end }` is refused either way.
+  it('still refuses a later plugin merging its own end over this move — before and after alike', () => {
+    const context = createContext();
+    const entry = twoSegmentEntry(context);
+    const laterEnd = instant(utc('2026-02-01T00:00:00Z'));
+
+    const afterTheChange = mergeEntryEdits(
+      new Map([[entry.id, moveEntryTo(entry, instant(utc('2026-01-03T00:00:00Z')), 'UTC')]]),
+      new Map([[entry.id, { end: laterEnd }]]),
+    );
+    expect(() => readEdit(afterTheChange.get(entry.id)!, context, entry, registry)).toThrow(
+      SegmentsOutOfSyncError,
+    );
+
+    // The shape `moveEntryTo` used to return, merged the same way: the same refusal.
+    const beforeTheChange = mergeEntryEdits(
+      new Map([
+        [
+          entry.id,
+          {
+            segments: [{ id: 's1', start: utc('2026-01-03T00:00:00Z'), end: utc('2026-01-07T00:00:00Z') }],
+            start: utc('2026-01-03T00:00:00Z'),
+            end: utc('2026-01-07T00:00:00Z'),
+          },
+        ],
+      ]),
+      new Map([[entry.id, { end: laterEnd }]]),
+    );
+    expect(() => readEdit(beforeTheChange.get(entry.id)!, context, entry, registry)).toThrow(
+      SegmentsOutOfSyncError,
+    );
+  });
+
+  // What the change actually buys. `ExtenderWrapper`'s own idiom composes this move *over* the
+  // occupant it wraps — `mergeEntryEdits(next(request), mine(request))` — so the earlier plugin's
+  // write is the base. A stated envelope overwrote it and left a self-consistent edit, which
+  // committed with that write gone; naming `segments` alone makes it a refusal (#238's defect class).
+  it('turns a silent overwrite of an earlier plugin’s end into a refusal', () => {
+    const context = createContext();
+    const entry = twoSegmentEntry(context);
+    const earlierPlugin = new Map([[entry.id, { end: instant(utc('2026-02-01T00:00:00Z')) }]]);
+
+    // What used to happen: the envelope `moveEntryTo` stated won, and nothing said so.
+    const withStatedEnvelope = mergeEntryEdits(
+      earlierPlugin,
+      new Map([
+        [
+          entry.id,
+          {
+            segments: [{ id: 's1', start: utc('2026-01-03T00:00:00Z'), end: utc('2026-01-07T00:00:00Z') }],
+            start: utc('2026-01-03T00:00:00Z'),
+            end: utc('2026-01-07T00:00:00Z'),
+          },
+        ],
+      ]),
+    );
+    const lost = readEdit(withStatedEnvelope.get(entry.id)!, context, entry, registry);
+    expect(lost.end).toBe(utc('2026-01-07T00:00:00Z'));
+    expect(lost.end).not.toBe(utc('2026-02-01T00:00:00Z'));
+
+    // What happens now: the earlier plugin's `end` survives the merge, disagrees with the Segments,
+    // and is refused rather than dropped.
+    const refused = mergeEntryEdits(
+      earlierPlugin,
+      new Map([[entry.id, moveEntryTo(entry, instant(utc('2026-01-03T00:00:00Z')), 'UTC')]]),
+    );
+    expect(refused.get(entry.id)!.end).toBe(utc('2026-02-01T00:00:00Z'));
+    expect(() => readEdit(refused.get(entry.id)!, context, entry, registry)).toThrow(SegmentsOutOfSyncError);
   });
 });

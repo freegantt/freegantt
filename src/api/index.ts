@@ -20,10 +20,11 @@ export { mergeEntryEdits } from './dataset-plugin.js';
 // envelope-only write `data/` refuses.
 export { moveEntryTo } from './dataset-plugin.js';
 // The extension hook's own types (D4, D-S2-6): a plugin that writes an extender by hand, rather than
-// composing one inline, names these. StoredEdit is what `EditRequest.proposed` holds and what
-// `moveEntryTo` (D-S5-44) returns; StoredEdits is the map of those, and what `EditRequest.proposed`
-// itself is; EntryEdits is the map `mergeEntryEdits` (#197) takes and returns (#209 Q1: a plugin
-// author who reads `request.proposed`, or factors a helper over it, needs to name the read side too).
+// composing one inline, names these. EntryEdit is the write side — what a cascade returns, and what
+// `moveEntryTo` (D-S5-50) builds one of; EntryEdits is the map of those, which `mergeEntryEdits`
+// (#197) takes and returns. StoredEdit is the read side — what `EditRequest.proposed` holds — and
+// StoredEdits is the map of those (#209 Q1: a plugin author who reads `request.proposed`, or factors
+// a helper over it, needs to name the read side too).
 export type { EditRequest, EditExtender, EntryEdits, StoredEdit, StoredEdits } from '../model/index.js';
 export type { RollUpKinds } from '../model/index.js';
 export { attemptMutation } from './attempt-mutation.js';
