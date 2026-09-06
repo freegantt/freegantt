@@ -11,6 +11,7 @@ import {
   isPlannedHeaderRow,
   gridContentWidth,
   totalColumnWidth,
+  isTimeUnit,
 } from '../layout/index.js';
 import type {
   DateLineSpec,
@@ -65,6 +66,8 @@ import {
   RevealTargetNotFoundError,
   ContainerNotFoundError,
   PluginNotInstalledError,
+  UnsupportedUnitError,
+  InvalidSnapIncrementError,
   entryIdOfItem,
   itemId,
   segmentId,
@@ -1179,8 +1182,18 @@ export class GanttShell {
   }
 
   /** Live (D-S3-24). The next drag reads it; nothing repaints. `undefined` hands the answer back to
-   *  the showing preset. */
+   *  the showing preset. A concrete `{ unit, increment }` is checked here. A bad unit or a
+   *  non-advancing increment throws on assignment. Otherwise it would surface two gestures later,
+   *  inside a drag (#201). `isTimeUnit` lets a caller check the unit before it reaches this setter. */
   set snap(next: SnapSetting | undefined) {
+    if (next !== undefined && next !== 'tick' && next !== 'none') {
+      if (!isTimeUnit(next.unit)) {
+        throw new UnsupportedUnitError(`snap: "${String(next.unit)}" is not a supported time unit`);
+      }
+      if (!Number.isInteger(next.increment) || next.increment <= 0) {
+        throw new InvalidSnapIncrementError(next.unit, next.increment);
+      }
+    }
     this.#snap = next;
   }
 

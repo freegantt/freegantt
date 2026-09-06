@@ -13,6 +13,7 @@ import {
   stepBy,
   resolveDefaultTimeZone,
   SUPPORTED_TIME_UNITS,
+  isTimeUnit,
 } from './zone.js';
 import { UnsupportedUnitError } from '../model/index.js';
 import type { TimeUnit } from '../model/index.js';
@@ -115,6 +116,13 @@ describe('zone-aware date arithmetic', () => {
     const badUnit = 'q' as TimeUnit;
     expect(() => startOf(ZONE, instant('2026-01-01T00:00:00Z'), badUnit)).toThrow(UnsupportedUnitError);
     expect(() => stepBy(ZONE, instant('2026-01-01T00:00:00Z'), badUnit, 1)).toThrow(UnsupportedUnitError);
+  });
+
+  it('isTimeUnit accepts every unit startOf/stepBy step by, and rejects everything else (#201)', () => {
+    for (const unit of SUPPORTED_TIME_UNITS) expect(isTimeUnit(unit)).toBe(true);
+    expect(isTimeUnit('q')).toBe(false);
+    expect(isTimeUnit('')).toBe(false);
+    expect(isTimeUnit('Day')).toBe(false);
   });
 
   it('dayOfWeek is ISO (1 = Monday … 7 = Sunday) and stays correct across a southern-hemisphere DST fold', () => {

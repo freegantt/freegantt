@@ -14,7 +14,8 @@
 // `Gantt` and the `Dataset` in `refresh()`, which the library's own events drive. A toolbar that
 // cached "can undo" would be a second source of truth for something the Dataset already answers.
 
-import type { Dataset, Gantt, PresetRef, SnapSetting, Theme, TimeUnit } from '../src/api/index.js';
+import type { Dataset, Gantt, PresetRef, SnapSetting, Theme } from '../src/api/index.js';
+import { isTimeUnit } from '../src/api/index.js';
 
 export interface GanttToolbarOptions {
   gantt: Gantt;
@@ -214,7 +215,8 @@ export function mountGanttToolbar(options: GanttToolbarOptions): void {
   }
 
   function readSnapChoice(value: string): SnapSetting {
-    return value === 'tick' || value === 'none' ? value : { unit: value as TimeUnit, increment: 1 };
+    if (value === 'tick' || value === 'none') return value;
+    return isTimeUnit(value) ? { unit: value, increment: 1 } : 'tick';
   }
 
   // One place reads the live state back. Nothing here is cached; every value comes off the Gantt or

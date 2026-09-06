@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { InvalidSnapIncrementError } from '../model/index.js';
 import { instant } from './instant.js';
 import { snapInstant, stepsBetween } from './snap.js';
 
@@ -30,6 +31,16 @@ describe('snapInstant', () => {
     const at = instant('2026-06-15T18:40:00Z'); // 14:40 EDT
     expect(snapInstant(ZONE, at, { unit: 'hour', increment: 1 })).toBe(instant('2026-06-15T19:00:00Z'));
     expect(snapInstant(ZONE, at, { unit: 'hour', increment: 3 })).toBe(instant('2026-06-15T18:00:00Z'));
+  });
+
+  it('rejects a zero increment instead of looping forever (#201)', () => {
+    const at = instant('2026-06-15T14:10:00Z');
+    expect(() => snapInstant(ZONE, at, { unit: 'day', increment: 0 })).toThrow(InvalidSnapIncrementError);
+  });
+
+  it('rejects a negative increment instead of walking away from the target forever (#201)', () => {
+    const at = instant('2026-06-15T14:10:00Z');
+    expect(() => snapInstant(ZONE, at, { unit: 'day', increment: -1 })).toThrow(InvalidSnapIncrementError);
   });
 });
 
@@ -66,5 +77,17 @@ describe('stepsBetween', () => {
     const from = instant('2026-10-31T04:00:00Z'); // Oct 31 00:00 EDT
     const to = instant('2026-11-02T04:00:00Z'); // Nov 2 00:00 EST
     expect(stepsBetween(zone, 'day', 1, from, to)).toBe(2);
+  });
+
+  it('rejects a zero increment instead of never reaching the target (#201)', () => {
+    const from = instant('2026-06-15T14:00:00Z');
+    const to = instant('2026-06-18T14:00:00Z');
+    expect(() => stepsBetween(ZONE, 'day', 0, from, to)).toThrow(InvalidSnapIncrementError);
+  });
+
+  it('rejects a negative increment instead of stepping the wrong direction forever (#201)', () => {
+    const from = instant('2026-06-15T14:00:00Z');
+    const to = instant('2026-06-18T14:00:00Z');
+    expect(() => stepsBetween(ZONE, 'day', -1, from, to)).toThrow(InvalidSnapIncrementError);
   });
 });

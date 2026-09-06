@@ -1,7 +1,6 @@
 import './harness-nav.ts';
-import { Gantt, Dataset, attemptMutation, now, watchAllErrors } from '../src/api/index.js';
+import { Gantt, Dataset, attemptMutation, now, watchAllErrors, isTimeUnit } from '../src/api/index.js';
 import type { DatasetEventMap } from '../src/api/index.js';
-import type { TimeUnit } from '../src/model/index.js';
 import { demoEntryInputs } from '../fixtures/demo-dataset.js';
 import { mountTimelineToolbar } from './timeline-toolbar.js';
 import { prependChangeSet, prependLogLine } from './change-log.js';
@@ -140,8 +139,12 @@ lockResize.addEventListener('change', () => {
 
 function applySnapChoice(): void {
   const unit = snapUnitSelect.value;
-  const snap = unit === 'tick' || unit === 'none' ? unit : { unit: unit as TimeUnit, increment: 1 };
-  gantt.preset = { ...gantt.preset, snap };
+  if (unit === 'tick' || unit === 'none') {
+    gantt.preset = { ...gantt.preset, snap: unit };
+    return;
+  }
+  if (!isTimeUnit(unit)) return;
+  gantt.preset = { ...gantt.preset, snap: { unit, increment: 1 } };
 }
 
 snapUnitSelect.addEventListener('change', applySnapChoice);

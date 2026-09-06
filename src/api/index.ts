@@ -176,6 +176,7 @@ export type {
 export {
   FreeGanttError,
   UnsupportedUnitError,
+  InvalidSnapIncrementError,
   ContainerNotFoundError,
   InvalidInstantError,
   UnknownPresetError,
@@ -329,6 +330,7 @@ export {
   formatEndInclusive,
   formatWeekNumber,
   formatHour,
+  isTimeUnit,
 } from '../time/index.js';
 export type {
   ViewPreset,

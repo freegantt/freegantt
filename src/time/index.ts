@@ -15,6 +15,7 @@ export {
   weekOfYear,
   resolveDefaultTimeZone,
   SUPPORTED_TIME_UNITS,
+  isTimeUnit,
 } from './zone.js';
 export type { PlainParts } from './zone.js';
 export { createZonedTime } from './zoned-time.js';

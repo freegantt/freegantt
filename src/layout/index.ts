@@ -126,7 +126,7 @@ export type {
   PresetRef,
   ShippedPresetId,
 } from '../time/index.js';
-export { ZOOM_PRESETS } from '../time/index.js';
+export { ZOOM_PRESETS, isTimeUnit } from '../time/index.js';
 export { Viewport } from './viewport/viewport.js';
 export type { ViewportOptions, ViewportHandle, DatasetBinding } from './viewport/viewport.js';
 export { cursorLabelForX, draftForMove, draftForResize, previewOffsets } from './gesture-draft.js';
