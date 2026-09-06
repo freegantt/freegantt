@@ -12,7 +12,6 @@ import { DecorationRunner } from './decorations.js';
 import type { PlannedRow, UnindexedRow } from './rows/row-source.js';
 import { resolveOpenRows, stampIndex } from './rows/resolve-rows.js';
 import { applyCollapse } from './rows/collapse.js';
-import { segmentIdsAnItemStandsFor } from './items/segment-ids-an-item-stands-for.js';
 import { entryIdOfItem } from '../model/index.js';
 import type { ChangeSet, EntryId, ItemId, RowId, SegmentId } from '../model/index.js';
 import { DEFAULT_LANE_GAP_PX } from './lanes/pack-lanes.js';
@@ -104,18 +103,14 @@ export class FrameLayout {
 
   /** Every Segment this Item stands for (#212, ADR 0010) — the one answer, which the pointer path
    * and the gesture path both read. An Item that drew one Segment names it alone; an Item that drew
-   * the Entry's whole span names every Segment of that Entry. It answers from the producer output,
-   * the same way `itemIdsForEntry` does, so no caller reads a Segment out of the
-   * `${entryId}:${segmentIndex}` id convention or off a rendered node. Empty for an Item no current
-   * frame planned. */
+   * the Entry's whole span names every Segment of that Entry. It answers from the row memory that
+   * produced the Items, the same way `itemIdsForEntry` does, so no caller reads a Segment out of the
+   * `${entryId}:${segmentIndex}` id convention or off a rendered node, and this layout applies no
+   * Entry rule of its own (#230 R1). Empty for an Item no current frame planned. */
   segmentIdsForItem(id: ItemId): readonly SegmentId[] {
-    const entryId = entryIdOfItem(id);
-    const rowId = this.#rowOfEntry.get(entryId);
+    const rowId = this.#rowOfEntry.get(entryIdOfItem(id));
     if (rowId === undefined) return NO_SEGMENT_IDS;
-    for (const item of this.#memory.packedRow(rowId).items) {
-      if (item.id === id) return segmentIdsAnItemStandsFor(item, this.#memory.entry(entryId));
-    }
-    return NO_SEGMENT_IDS;
+    return this.#memory.packedRow(rowId).segmentIdsByItem.get(id) ?? NO_SEGMENT_IDS;
   }
 
   /** Every Segment of every Entry this row owns, in row order (#199, #212) — what a click on a row
@@ -123,15 +118,7 @@ export class FrameLayout {
    * row holds, and a caller applies its own capability rule. Empty for a grouping header row, and
    * for a `RowId` no current frame planned. */
   segmentIdsForRow(id: RowId): readonly SegmentId[] {
-    const entryIds = this.entryIdsForRow(id);
-    if (entryIds.length === 0) return NO_SEGMENT_IDS;
-    const segmentIds: SegmentId[] = [];
-    for (const entryId of entryIds) {
-      const entry = this.#memory.entry(entryId);
-      if (entry === undefined) continue;
-      for (const segment of entry.segments) segmentIds.push(segment.id);
-    }
-    return segmentIds;
+    return this.#memory.segmentIdsOfEntries(this.entryIdsForRow(id));
   }
 
   /** Collapsed ancestors of this entry's row, walking `parentRowId` recorded before collapse. */

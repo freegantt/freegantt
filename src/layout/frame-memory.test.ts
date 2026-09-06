@@ -3,7 +3,8 @@ import { FrameMemory } from './frame-memory.js';
 import { createItemProducerRegistry } from './items/produce-items.js';
 import { sampleEntries } from '../../fixtures/sample-dataset.js';
 import * as packLanes from './lanes/pack-lanes.js';
-import { rowId, segmentId } from '../model/index.js';
+import { entryId, rowId, segmentId } from '../model/index.js';
+import type { Entry } from '../model/index.js';
 import type { PlannedRow } from './rows/row-source.js';
 
 function packPlan(entries = sampleEntries): readonly PlannedRow[] {
@@ -72,5 +73,61 @@ describe('FrameMemory (A2)', () => {
     memory.packedRow(String(bind.plan[0]!.id));
     expect(spy.mock.calls.length).toBeGreaterThan(first);
     spy.mockRestore();
+  });
+});
+
+describe('FrameMemory remembers the Segment sets beside the Items (#230 R1)', () => {
+  const registry = createItemProducerRegistry();
+  const laneGap = 2;
+
+  function memoryFor(entries: readonly Entry[]): { memory: FrameMemory; rowKey: string } {
+    const plan = packPlan(entries);
+    const memory = new FrameMemory();
+    memory.sync({ plan, rowHeight: 32, laneGap, entries, registry, datasetRevision: 0 });
+    return { memory, rowKey: String(plan[0]!.id) };
+  }
+
+  it('caches segmentIdsByItem, so a repeated ask allocates nothing (I5)', () => {
+    const { memory, rowKey } = memoryFor([sampleEntries[0]!]);
+
+    expect(memory.packedRow(rowKey).segmentIdsByItem).toBe(memory.packedRow(rowKey).segmentIdsByItem);
+  });
+
+  it('names the Segments each Item stands for, keyed by that Item', () => {
+    const { memory, rowKey } = memoryFor([sampleEntries[0]!]);
+    const row = memory.packedRow(rowKey);
+
+    for (const item of row.items) {
+      expect(row.segmentIdsByItem.get(item.id)).toEqual(
+        item.segmentId === undefined ? sampleEntries[0]!.segments.map((s) => s.id) : [item.segmentId],
+      );
+    }
+  });
+
+  it("names every Segment of every Entry the row owns, in the row's order", () => {
+    const { memory, rowKey } = memoryFor([sampleEntries[0]!]);
+
+    expect(memory.packedRow(rowKey).segmentIds).toEqual(sampleEntries[0]!.segments.map((s) => s.id));
+  });
+
+  it('answers a row no frame planned with nothing, and allocates nothing to say so', () => {
+    const { memory } = memoryFor([sampleEntries[0]!]);
+
+    expect(memory.packedRow('no-such-row').segmentIds).toEqual([]);
+    expect(memory.packedRow('no-such-row')).toBe(memory.packedRow('no-other-row'));
+  });
+
+  it('segmentIdsOfEntries answers for an Entry no planned row owns — a collapsed row still asks', () => {
+    // `FrameLayout.entryIdsForRow` names the Entries of a row collapse hid, so its Segment answer
+    // must agree with it. That is why this reads the Entry map, not the planned rows.
+    const held = sampleEntries[0]!;
+    const plan = packPlan([held]);
+    const memory = new FrameMemory();
+    const other = sampleEntries[1]!;
+    memory.sync({ plan, rowHeight: 32, laneGap, entries: [held, other], registry, datasetRevision: 0 });
+
+    expect(memory.segmentIdsOfEntries([other.id])).toEqual(other.segments.map((s) => s.id));
+    expect(memory.segmentIdsOfEntries([])).toEqual([]);
+    expect(memory.segmentIdsOfEntries([entryId('never-synced')])).toEqual([]);
   });
 });

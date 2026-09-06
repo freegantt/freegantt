@@ -211,6 +211,23 @@ describe('FrameLayout', () => {
     expect(layout.segmentIdsForRow(rowId('no-such-row'))).toEqual([]);
   });
 
+  it('a row collapse hid still names its Segments, exactly as it still names its Entries (#230 R1)', () => {
+    // `segmentIdsForRow` reads the frame's Entry map, not its planned rows, for one reason: it must
+    // agree with `entryIdsForRow`, which answers for a hidden row. Reading the planned rows instead
+    // would silently narrow one of the pair and not the other.
+    const parent = overlappingEntry(sampleEntries[0]!, 2);
+    const child: Entry = { ...overlappingEntry(sampleEntries[1]!, 2), parentId: parent.id };
+    const tree: LayoutInput['rows'] = { source: 'entries', tree: true };
+    const layout = new FrameLayout();
+    layout.computeFrame(input({ entries: [parent, child], rows: tree }));
+    const childRow = layout.rowIdForEntry(child.id)!;
+
+    layout.computeFrame(input({ entries: [parent, child], rows: tree, collapsed: [parent.id] }));
+
+    expect(layout.entryIdsForRow(childRow)).toEqual([child.id]);
+    expect(layout.segmentIdsForRow(childRow)).toEqual(child.segments.map((segment) => segment.id));
+  });
+
   it('a grouping header row stands for no Segment, on both paths (#230 R0)', () => {
     const layout = new FrameLayout();
     const frame = layout.computeFrame(
