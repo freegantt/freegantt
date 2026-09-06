@@ -882,6 +882,17 @@ describe('barSpan — a minimum painted bar width (#212 follow-up: a zero-width 
     expect(width).toBe(40);
   });
 
+  it('centres a floored, non-zero-width bar on its own midpoint, not on its start', () => {
+    // 5px wide at this scale: narrow enough to floor, wide enough that a start-centred box would
+    // slide the bar 2.5px left of where it belongs.
+    const startX = scale.xForInstant(sampleEntries[0]!.start);
+    const narrowSpan: Entry = { ...sampleEntries[0]!, end: scale.instantForX(startX + 5) };
+    const { x, width, minimumSpan } = barSpan(narrowSpan, scale);
+    expect(width).toBe(DEFAULT_MIN_BAR_WIDTH_PX);
+    expect(minimumSpan).toBe(true);
+    expect(x + width / 2).toBe(startX + 2.5);
+  });
+
   it('leaves an ordinary bar wide enough already unfloored, with no minimumSpan stamp', () => {
     const wideSpan: Entry = sampleEntries[0]!;
     const { x, width, minimumSpan } = barSpan(wideSpan, scale);
