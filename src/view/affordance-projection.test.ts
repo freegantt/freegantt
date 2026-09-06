@@ -17,8 +17,8 @@ describe('projectAffordances (D-S3-6)', () => {
   it('hover wins over selection, including a hover that resolves to no handles', () => {
     const result = projectAffordances({
       hoveredItemId: ITEM_A,
-      selectedEntryIds: [B],
-      selectedSegmentCount: () => 1,
+      soleSelectedEntryId: B,
+      selectedSegmentCountOfSoleEntry: 1,
       itemIdsForEntry: oneBarEach,
       canGesture: (capability, id) => capability === 'move' && id === A,
     });
@@ -32,8 +32,8 @@ describe('projectAffordances (D-S3-6)', () => {
   it('selection fallback only at exactly one selected entry', () => {
     const oneSelected = projectAffordances({
       hoveredItemId: undefined,
-      selectedEntryIds: [A],
-      selectedSegmentCount: () => 1,
+      soleSelectedEntryId: A,
+      selectedSegmentCountOfSoleEntry: 1,
       itemIdsForEntry: oneBarEach,
       canGesture: () => true,
     });
@@ -41,8 +41,8 @@ describe('projectAffordances (D-S3-6)', () => {
 
     const twoSelected = projectAffordances({
       hoveredItemId: undefined,
-      selectedEntryIds: [A, B],
-      selectedSegmentCount: () => 1,
+      soleSelectedEntryId: undefined,
+      selectedSegmentCountOfSoleEntry: 0,
       itemIdsForEntry: oneBarEach,
       canGesture: () => true,
     });
@@ -50,8 +50,8 @@ describe('projectAffordances (D-S3-6)', () => {
 
     const noneSelected = projectAffordances({
       hoveredItemId: undefined,
-      selectedEntryIds: [],
-      selectedSegmentCount: () => 0,
+      soleSelectedEntryId: undefined,
+      selectedSegmentCountOfSoleEntry: 0,
       itemIdsForEntry: oneBarEach,
       canGesture: () => true,
     });
@@ -61,8 +61,8 @@ describe('projectAffordances (D-S3-6)', () => {
   it('an incapable hover resolves movable/resizable to undefined', () => {
     const result = projectAffordances({
       hoveredItemId: ITEM_A,
-      selectedEntryIds: [],
-      selectedSegmentCount: () => 0,
+      soleSelectedEntryId: undefined,
+      selectedSegmentCountOfSoleEntry: 0,
       itemIdsForEntry: oneBarEach,
       canGesture: () => false,
     });
@@ -74,8 +74,8 @@ describe('projectAffordances (D-S3-6)', () => {
   it('an incapable sole selection resolves resizable to undefined', () => {
     const result = projectAffordances({
       hoveredItemId: undefined,
-      selectedEntryIds: [A],
-      selectedSegmentCount: () => 1,
+      soleSelectedEntryId: A,
+      selectedSegmentCountOfSoleEntry: 1,
       itemIdsForEntry: oneBarEach,
       canGesture: () => false,
     });
@@ -85,8 +85,8 @@ describe('projectAffordances (D-S3-6)', () => {
   it('no hover and no selection resolves every id to undefined', () => {
     const result = projectAffordances({
       hoveredItemId: undefined,
-      selectedEntryIds: [],
-      selectedSegmentCount: () => 0,
+      soleSelectedEntryId: undefined,
+      selectedSegmentCountOfSoleEntry: 0,
       itemIdsForEntry: oneBarEach,
       canGesture: () => true,
     });
@@ -99,8 +99,8 @@ describe('projectAffordances (D-S3-6)', () => {
     const segments = [itemId(A, 0), itemId(A, 1), itemId(A, 2)];
     const result = projectAffordances({
       hoveredItemId: undefined,
-      selectedEntryIds: [A],
-      selectedSegmentCount: () => 1,
+      soleSelectedEntryId: A,
+      selectedSegmentCountOfSoleEntry: 1,
       itemIdsForEntry: () => segments,
       canGesture: () => true,
     });
@@ -111,8 +111,8 @@ describe('projectAffordances (D-S3-6)', () => {
   it('hovering one Segment hands the handles to its Entry (#200)', () => {
     const result = projectAffordances({
       hoveredItemId: itemId(A, 2),
-      selectedEntryIds: [],
-      selectedSegmentCount: () => 0,
+      soleSelectedEntryId: undefined,
+      selectedSegmentCountOfSoleEntry: 0,
       itemIdsForEntry: () => [itemId(A, 0), itemId(A, 1), itemId(A, 2)],
       canGesture: () => true,
     });
@@ -125,8 +125,8 @@ describe('projectAffordances (D-S3-6)', () => {
   it('a segmented entry selected from the grid parks the handles (#185, #212)', () => {
     const result = projectAffordances({
       hoveredItemId: undefined,
-      selectedEntryIds: [A],
-      selectedSegmentCount: () => 2,
+      soleSelectedEntryId: A,
+      selectedSegmentCountOfSoleEntry: 2,
       itemIdsForEntry: () => [itemId(A, 0), itemId(A, 1)],
       canGesture: () => true,
     });
@@ -137,8 +137,8 @@ describe('projectAffordances (D-S3-6)', () => {
   it('a Selection holding no Segment of the sole Entry leaves a segmented one parked (#212)', () => {
     const result = projectAffordances({
       hoveredItemId: undefined,
-      selectedEntryIds: [A],
-      selectedSegmentCount: () => 0,
+      soleSelectedEntryId: A,
+      selectedSegmentCountOfSoleEntry: 0,
       itemIdsForEntry: () => [itemId(A, 0), itemId(A, 1)],
       canGesture: () => true,
     });

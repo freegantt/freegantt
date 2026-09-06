@@ -824,6 +824,72 @@ describe('GanttShell hot path (S3.2, D-S3-6/D-S3-9, [S3-A3])', () => {
     }
   });
 
+  it('[R5-F7] hovering with a sole selection over a 1,000-entry fixture never re-ranks the row plan', () => {
+    // Review finding 7: `#refreshAffordances` used to read the public `selectedEntryIds` getter,
+    // which ranks and sorts every planned row to answer a question `projectAffordances` never asked
+    // beyond "is there exactly one, and which?" — the sole-selection fallback below is exactly the
+    // case that used to pay for it. `FrameLayout.plannedRows` is `#rowRankByEntryId`'s only caller.
+    FakeResizeObserver.instances = [];
+    vi.stubGlobal('ResizeObserver', FakeResizeObserver);
+    try {
+      const container = document.createElement('div');
+      let hover: ((item: ItemId | undefined) => void) | undefined;
+      const shell = new GanttShell({
+        container,
+        dataset: fakeDataset(tallEntries(1000)),
+        overscan: { verticalRows: 200 },
+        wiring: {
+          entryGestures: (_pane, _rowLayer, _container, ctx) => {
+            hover = (item) => ctx.setHovered(item);
+            return { detach() {} };
+          },
+        },
+      });
+      FakeResizeObserver.instances[0]!.fire({ width: 500, height: 320 }); // 10 visible rows @ 32px
+      shell.render();
+      shell.selection = [segmentId('e0-1')];
+
+      const bars = Array.from(container.querySelectorAll<HTMLElement>('.fg-bar'));
+      expect(bars.length).toBeGreaterThanOrEqual(200);
+
+      const plannedRowsSpy = vi.spyOn(FrameLayout.prototype, 'plannedRows');
+
+      for (const bar of bars) hover?.(bar.dataset['itemId'] as ItemId);
+      hover?.(undefined);
+
+      expect(plannedRowsSpy).not.toHaveBeenCalled();
+
+      plannedRowsSpy.mockRestore();
+      shell.destroy();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('[R5-F8] a commit unrelated to Segments prunes nothing and never asks the Segment→Entry index', () => {
+    // Review finding 8: `#forgetSegmentsTheDatasetDropped` used to check the whole Selection against
+    // `entries.entryIdOfSegment` on every commit, whatever the commit touched. It now reads the
+    // ChangeSet first — an edit with no removed Entry and no `segments` row asks the index nothing.
+    const dataset = new DatasetState({ entries: tallEntries(500), timeZone });
+    const container = document.createElement('div');
+    const shell = new GanttShell({ wiring: {}, container, dataset });
+    shell.selection = Array.from({ length: 500 }, (_, i) => segmentId(`e${i}-1`));
+
+    const entryIdOfSegmentSpy = vi.spyOn(EntryStore.prototype, 'entryIdOfSegment');
+    dataset.entries.update(entryId('e0'), { name: 'renamed' });
+    dataset.transaction(() => {
+      for (const entry of dataset.entries.all) {
+        dataset.entries.update(entry.id, { name: `${entry.name} (2)` });
+      }
+    });
+
+    expect(entryIdOfSegmentSpy).not.toHaveBeenCalled();
+    expect(shell.selection).toHaveLength(500);
+
+    entryIdOfSegmentSpy.mockRestore();
+    shell.destroy();
+  });
+
   it('movableItemId/resizableEntryId follow the hovered entry, gated by capability (D-S3-6/D-S3-9)', () => {
     const container = document.createElement('div');
     const dataset = fakeDataset(entries);
