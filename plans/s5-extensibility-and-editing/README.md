@@ -291,6 +291,7 @@ Full prose lives in the step file that implements each decision.
 | D-S5-37 | A column is named by its `field`, everywhere a column is named | S5.7 |
 | D-S5-38 | A plugin owns its own column's geometry; the library stores it for nobody | S5.9 |
 | D-S5-39 | Focus scope decides what a chord means; the narrower binding wins | S5.11 |
+| D-S5-44 | An `EditExtender`'s cascade owes the envelope invariant a refusal, not a computed answer | S5.10 |
 
 > **Three ids used to be used twice; fixed 2026-09-05 (Q22).** D-S5-35, D-S5-36 and D-S5-37 each
 > named an S5.12 decision **and** an S5.9/S5.1/S5.7 one — the error-reporting trio was minted by a
@@ -298,6 +299,11 @@ Full prose lives in the step file that implements each decision.
 > D-S5-35, so a reader following the id could not land on the right one. The S5.12 trio renumbered to
 > **D-S5-40/41/42** across 58 lines in 33 files; the earlier claimants keep their ids, because they
 > were first and because their `#194`/`#195` citations pin them. Every id in this table is now unique.
+
+> **D-S5-43 is skipped on purpose (2026-09-06).** A caller-identity split in `data/entry-reader.ts` —
+> a computed answer for an `EditExtender`'s cascade, a refusal for `entries.update()` — carried that
+> id in code comments only; no row was ever added here. The split is reversed at D-S5-44 below, which
+> reads as the id this decision should have had, so D-S5-43 is retired rather than reused.
 
 ---
 
