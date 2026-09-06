@@ -706,6 +706,21 @@ describe('InvertedSpanError names the caller, the ids the consumer wrote, and bo
     expect(error.message).toContain('"t1"');
   });
 
+  it('an unreadable date names the caller too, not toInstant (#237)', () => {
+    const context = createContext();
+    const [entry] = readEntries(
+      [{ id: 't1', name: 'Design', start: '2026-01-01', end: '2026-01-05' }],
+      context,
+    );
+
+    expect(() =>
+      readEntries([{ id: 't2', name: 'Build', start: 'next tuesday', end: '2026-01-05' }], context),
+    ).toThrow('construction: "next tuesday" is not a date this library reads.');
+    expect(() => readEdit({ start: 'next tuesday' }, context, entry!, registry, 'entries.update')).toThrow(
+      'entries.update: "next tuesday" is not a date this library reads.',
+    );
+  });
+
   it('names entries.update for an update, and the edit extender for a cascade', () => {
     const context = createContext();
     const [entry] = readEntries(
