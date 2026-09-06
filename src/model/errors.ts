@@ -524,6 +524,33 @@ export class MutationCancelledError extends FreeGanttError {
   }
 }
 
+/** `code: 'unreadable-value'` — the built-in cell editor's control read no value back from the text
+ * it holds, so nothing was written and the editor stayed open (#234). A `parseValue` that refused
+ * the text is the usual cause; a date control with no date in it is the other.
+ *
+ * Never thrown: the editor raises it as the `cause` of its own Error report, the way
+ * `MutationCancelledError` carries the refused `ChangeSet` for `data/transaction.ts`. It exists so
+ * that the Field key and the text the user typed reach a consumer as readonly members, rather than
+ * spliced into a message a consumer would have to parse. */
+export class UnreadableCellValueError extends FreeGanttError {
+  readonly entryId: EntryId;
+  readonly field: string;
+  /** What the control held. `undefined` when the control keeps no text of its own — a date control
+   *  reads a date or nothing, and has no string to hand over. */
+  readonly text: string | undefined;
+
+  constructor(entryId: EntryId, field: string, text: string | undefined) {
+    super(
+      'unreadable-value',
+      'The cell editor could not read a value from the text it holds. Read "text" on this error to see what the user typed, and "field" for the field they typed it into.',
+    );
+    this.name = 'UnreadableCellValueError';
+    this.entryId = entryId;
+    this.field = field;
+    this.text = text;
+  }
+}
+
 /** `code: 'invalid-replay-origin'` — `replay(changeSet)` given a changeset whose `origin` is not
  * `'undo'` or `'redo'`. `'user'` is `apply`'s door (D-S2-11), not open yet
  * (`plans/s2-data-core/s2b-undo-replay-seam.md`). */

@@ -2069,6 +2069,16 @@ export class UnknownPresetError extends FreeGanttError {
 }
 
 // @public
+export class UnreadableCellValueError extends FreeGanttError {
+    constructor(entryId: EntryId, field: string, text: string | undefined);
+    // (undocumented)
+    readonly entryId: EntryId;
+    // (undocumented)
+    readonly field: string;
+    readonly text: string | undefined;
+}
+
+// @public
 export class UnsupportedSchemaError extends FreeGanttError {
     constructor(schema: number, supported: readonly number[]);
     // (undocumented)

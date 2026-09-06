@@ -97,6 +97,7 @@ export {
   AggregatorFailedError,
   MutationDuringNotificationError,
   MutationCancelledError,
+  UnreadableCellValueError,
   InvalidReplayOriginError,
   UnsupportedSchemaError,
   DuplicatePluginIdError,

@@ -5,10 +5,17 @@ import type {
   Entry,
   EntryFieldEdit,
   EntryInput,
+  ErrorReport,
   GridColumnInput,
   PluginErrorReport,
 } from '../../api/index.js';
-import { EntryNotFoundError, entryId, instant } from '../../api/index.js';
+import {
+  EntryNotFoundError,
+  MutationCancelledError,
+  UnreadableCellValueError,
+  entryId,
+  instant,
+} from '../../api/index.js';
 import { contextMenu } from './context-menu.js';
 import { CellEditing, CellEditorSession, inlineEditing, presentRefusal } from './inline-editing.js';
 import type {
@@ -618,6 +625,92 @@ describe('inlineEditing() (S5.8, D-S5-19/D-S5-20)', () => {
       expect(button.textContent).toBe('×');
       const wrapper = container.querySelector<HTMLElement>('.fg-cell-editor[data-state="invalid"]')!;
       expect(wrapper.dataset['reason']).toBe('refused-write');
+
+      gantt.destroy();
+      container.remove();
+    });
+
+    it('a vetoed cell commit raises two reports — core says who refused, the editor says what is unsaved (#234)', () => {
+      const { container, gantt, dataset } = makeGantt();
+      const reports: ErrorReport[] = [];
+      dataset.on('error', (report) => {
+        reports.push(report);
+      });
+      gantt.on('error', (report) => {
+        reports.push(report);
+      });
+      dataset.on('beforeChange', () => false);
+
+      dblclick(cellFor(container, 'e1', 'name'));
+      const el = input(container);
+      el.value = 'Vetoed';
+      enter(el);
+
+      expect(reports.map((report) => report.code)).toEqual(['mutation-cancelled', 'refused-write']);
+      expect(reports[0]?.by).toBe('consumer');
+      expect(reports[1]?.by).toBe('freegantt.inlineEditing');
+      expect(reports[1]?.severity).toBe('info');
+      expect(reports[1]?.entryId).toBe(entryId('e1'));
+      expect(reports[1]?.field).toBe('name');
+      // The two say different things on one feed. Core's names the refusal; the editor's names the
+      // unsaved value it still holds. Neither restates the other (#234's first condition).
+      expect(reports[0]?.message).toContain('refused');
+      expect(reports[1]?.message).not.toContain('refused');
+      expect(reports[1]?.message).toBe(
+        'this editor still holds a value that did not save; correct it, or discard the edit',
+      );
+      // One cause, two reports: the refused ChangeSet is readable off either one.
+      expect(reports[1]?.cause).toBeInstanceOf(MutationCancelledError);
+      expect(reports[1]?.cause).toBe(reports[0]?.cause);
+
+      gantt.destroy();
+      container.remove();
+    });
+
+    it('a parseValue refusal reports, carrying the field and the text the user typed (#234)', () => {
+      const { container, gantt } = makeGantt();
+      const reports: ErrorReport[] = [];
+      gantt.on('error', (report) => {
+        reports.push(report);
+      });
+
+      dblclick(cellFor(container, 'e1', 'budget'));
+      const el = input(container);
+      el.value = 'not a number';
+      enter(el);
+
+      expect(reports).toHaveLength(1);
+      expect(reports[0]?.code).toBe('unreadable-value');
+      expect(reports[0]?.severity).toBe('info');
+      expect(reports[0]?.field).toBe('budget');
+      // The typed text is a member, never spliced into the message a consumer logs.
+      expect(reports[0]?.message).not.toContain('not a number');
+      const cause = reports[0]?.cause;
+      expect(cause).toBeInstanceOf(UnreadableCellValueError);
+      expect((cause as UnreadableCellValueError).text).toBe('not a number');
+      expect((cause as UnreadableCellValueError).field).toBe('budget');
+
+      gantt.destroy();
+      container.remove();
+    });
+
+    it('the invalid editor hovers the same words its report carries', () => {
+      const { container, gantt } = makeGantt();
+      const reports: ErrorReport[] = [];
+      gantt.on('error', (report) => {
+        reports.push(report);
+      });
+
+      dblclick(cellFor(container, 'e1', 'budget'));
+      const el = input(container);
+      el.value = 'not a number';
+      enter(el);
+
+      const wrapper = container.querySelector<HTMLElement>('.fg-cell-editor[data-state="invalid"]')!;
+      expect(wrapper.title).toBe(reports[0]?.message);
+      expect(wrapper.title).toBe(
+        'this editor cannot read a value from the text; correct it, or discard the edit',
+      );
 
       gantt.destroy();
       container.remove();
