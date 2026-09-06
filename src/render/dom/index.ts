@@ -69,7 +69,7 @@ type BoundHeaderRenderer = () => ElementDescription | undefined;
  *  it for free by omitting the whole options object. */
 export interface DomBackendOptions {
   entryById: (id: EntryId) => Entry | undefined;
-  /** S5.12, D-S5-35: where a renderer that threw is reported. `GanttShell` passes the raiser bound to
+  /** S5.12, D-S5-40: where a renderer that threw is reported. `GanttShell` passes the raiser bound to
    *  its own `error` bus. Omitted — a test backend built with no options — the console fallback runs
    *  every time, which is the honest answer when there is no bus for anyone to subscribe to. */
   raiseError?: RaiseError;
@@ -88,7 +88,7 @@ function callRenderer<TCtx>(
     return resolved.renderer(ctx);
   } catch (error) {
     // Issue #137 F14: one bad renderer degrades one bar or cell, never the paint pass.
-    // S5.12, D-S5-36: the report always goes out; the `console.error` behind it is a fallback that
+    // S5.12, D-S5-41: the report always goes out; the `console.error` behind it is a fallback that
     // fires only when nothing is subscribed to `error`. It is no longer behind `isDevMode()` — that
     // helper reads `import.meta.env.DEV`, which Vite resolves when *this repo* builds `dist/`, so the
     // line was dead-code-eliminated out of every consumer's build, dev and production alike.

@@ -196,7 +196,7 @@ The reading itself lives in `time/` (`toInstant`, `toEndInstant`) — resolving 
 
 `beforeCollapseChange`/`collapseChange` (S4.6, D-S4-22) carry `{ from, to }` as `RowId[]` — Gantt view state, no Dataset transaction. Fired by a twisty click, keyboard collapse/expand, and a direct `gantt.collapsed = ids` assignment. A veto restores the set the interaction started from. Collapse is per Gantt: two Gantts on one Dataset collapse independently, the same way `selectedSegmentIds` already does.
 
-`error` (S5.12, D-S5-35/36/37) is the one event name that lives on **both** buses, and it carries the
+`error` (S5.12, D-S5-40/41/42) is the one event name that lives on **both** buses, and it carries the
 same `ErrorReport` on each. That is not the "every event name exists exactly once" rule breaking. The
 rule keeps one *concept* to one name, and a report is one concept: a Dataset raises what a Dataset
 observes, a Gantt raises what a Gantt observes, and neither forwards the other's. Two Gantts on one
@@ -246,7 +246,7 @@ Rules:
 - Pointer/gesture events fire on the `Gantt` (view concern); data events fire on the `Dataset` (data concern). Every event name exists exactly once.
 - Payloads are typed, stable, and carry entities plus context — no "re-read everything" events.
 - `change` is the only path out of a commit: the view's live binding and the undo history are both ordinary subscribers to it, not privileged internals with a second, private channel. `beforeChange` may refuse a changeset but never edit one — rewriting a proposed edit is the extension hook's job, and it has exactly one owner. A vetoed programmatic call (e.g. `entries.update()`) throws `MutationCancelledError` carrying the refused changeset, because a function with a return contract cannot quietly not honour it; a vetoed gesture is silent, the way `beforeGridWidthChange` already is. **Silent in the UI, not
-unrecorded (S5.12, D-S5-35):** nothing is drawn and nothing throws, and one `ErrorReport` goes out on
+unrecorded (S5.12, D-S5-40):** nothing is drawn and nothing throws, and one `ErrorReport` goes out on
 `error` at `severity: 'info'`, so a consumer can say what happened without reading a veto they did
 not write.
 

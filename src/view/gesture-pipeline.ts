@@ -36,7 +36,7 @@ export interface GesturePipelineDeps {
   canGesture(capability: keyof Interactions, id: EntryId): boolean;
   commitEntryEdits(edits: EntryEdits): boolean;
   emit: EventBus<GanttEventMap, AsyncCancelableEvent>['emit'];
-  /** S5.12, D-S5-35: a vetoed gesture still draws nothing and still throws nothing, and now it also
+  /** S5.12, D-S5-40: a vetoed gesture still draws nothing and still throws nothing, and now it also
    *  reports. `plans/02` §3's "a vetoed gesture is silent" stays true of the *UI*. */
   raiseError: RaiseError;
   /** D-S3-18, S3.6, P1: an installed extension hook, read for **preview only** — the real hook still
@@ -273,7 +273,7 @@ export class GesturePipeline {
     });
   }
 
-  /** One report per refused gesture, sync veto and settled-`false` Promise alike (D-S5-35). A
+  /** One report per refused gesture, sync veto and settled-`false` Promise alike (D-S5-40). A
    *  refused *commit* reports from `data/transaction.ts` instead, so `commitEntryEdits` returning
    *  `false` adds nothing here — one refusal is one record. `severity: 'info'`: the library said no
    *  on purpose. No `fallback`, because this site printed nothing before and stays silent. */

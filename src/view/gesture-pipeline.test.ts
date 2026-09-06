@@ -398,7 +398,7 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
     expect(emitted.map(([name]) => name)).toEqual(['beforeEntryMove']);
   });
 
-  it('a vetoed drag draws nothing, throws nothing, and raises one Error report (D-S5-35)', async () => {
+  it('a vetoed drag draws nothing, throws nothing, and raises one Error report (D-S5-40)', async () => {
     const { deps, reported, applied } = withRoster([entry('a', 100, 200)], {
       emit: ((name: string) =>
         name === 'beforeEntryMove' ? false : undefined) as GesturePipelineDeps['emit'],

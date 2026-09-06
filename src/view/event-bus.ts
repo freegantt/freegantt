@@ -135,10 +135,10 @@ export interface GanttEventMap {
   beforeEntryEdit: EntryFieldEdit;
   /** S5.8, D-S5-19. Fires after the commit, `to` the value actually written. */
   entryEdit: EntryFieldEdit;
-  /** S5.12, D-S5-35: every refusal and every recovered fault a Gantt observes — a vetoed drag, a
+  /** S5.12, D-S5-40: every refusal and every recovered fault a Gantt observes — a vetoed drag, a
    *  renderer that threw, a plugin disposer that threw. The same name and the same payload the
    *  Dataset raises (`DatasetEventMap.error`), because a consumer knows one shape either way; the
-   *  Gantt never forwards the Dataset's own reports, so nothing arrives twice (D-S5-37). Sync only,
+   *  Gantt never forwards the Dataset's own reports, so nothing arrives twice (D-S5-42). Sync only,
    *  and no `before*` pair: a report states what already happened. */
   error: ErrorReport;
 }

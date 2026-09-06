@@ -16,6 +16,8 @@ const BANNED = [
   'frappe gantt',
   'ms project',
   'microsoft project',
+  'primavera',
+  'ganttpro',
 ];
 
 const SCAN_DIRS = ['src', 'harness', 'plans', 'docs', 'test', 'scripts'];

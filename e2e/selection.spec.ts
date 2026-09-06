@@ -129,15 +129,20 @@ async function unobstructedBars(page: import('@playwright/test').Page, count: nu
  *  public Dataset. `panToToday()` (`harness/main.ts`) otherwise leaves two of its three Segments
  *  outside the time window, so `rowWithSeveralBars` finds a row but sees only one bar in it. */
 async function showSegmentedSpan(page: import('@playwright/test').Page): Promise<void> {
-  const entryId = await page.evaluate(() => {
+  const { entryId, segmentCount } = await page.evaluate(() => {
     const entry = window.__dataset.entries.all.find(
       (candidate) => candidate.segments !== undefined && candidate.segments.length > 1,
     );
     if (entry === undefined) throw new Error('the dataset has no multi-segment entry');
     window.__gantt.zoomToSpan({ start: entry.start, end: entry.end });
-    return String(entry.id);
+    return { entryId: String(entry.id), segmentCount: entry.segments!.length };
   });
-  await expect(page.locator(`#gantt .fg-bar[data-item-id^="${entryId}:"]`).nth(1)).toBeVisible();
+  // Wait for every Segment to paint, not just the second one. A caller that counts bars right
+  // after this reads the count while a later bar is still arriving, so a "one fewer bar"
+  // assertion then sees the same count and fails.
+  await expect
+    .poll(() => page.locator(`#gantt .fg-bar[data-item-id^="${entryId}:"]`).count())
+    .toBe(segmentCount);
 }
 
 /** Opens the entry menu for `bar` and returns the menu item for `commandId`, visible and ready. */
@@ -314,7 +319,7 @@ test('a right-click keeps a multi-bar Selection when it lands inside it, and cle
   // A right-click on an empty timeline point still clears the Selection (#199/#205 follow-up).
   const empty = await emptyTimelinePoint(page);
   await page.mouse.click(empty.x, empty.y, { button: 'right' });
-  await expect(readout).toHaveText('Selection: (none)');
+  await expect(readout).toHaveText('No selection');
 });
 
 test('a right-click Delete on one bar removes that bar alone; Lock reaches the record (#212)', async ({

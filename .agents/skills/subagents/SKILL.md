@@ -43,16 +43,64 @@ A subagent starts cold. It does not see your conversation. Put these in the prom
 
 ## Context budget
 
-A subagent that fills its window loses the work it did not write down. Two marks:
+A subagent that fills its window loses the work it did not write down. Three marks:
 
-- **250k — wind down.** Stop at the next clean point and write a handoff.
+- **200k — wind down.** Stop at the next clean point and start the handoff.
+- **250k — handoff written.** The end of the landing window.
 - **300k — ceiling.** Nothing useful happens past here.
+
+The 50k between the first two marks is a **landing window**, and it is the whole
+point of the first mark. An agent told to stop still has to finish the file it is
+in, run the check it started, and write the handoff — and it writes that handoff
+with a full window's worth of detail to draw on. Cut the window and you get a
+stopped agent instead of a landed one.
 
 Put the budget in the prompt you send, in these words:
 
 > Keep your context under 300k tokens. Report your context usage with each
-> progress update and in your final report. When you pass 250k, stop at the
-> next clean point and write a handoff instead of starting new work.
+> progress update and in your final report. When you pass 200k, stop at the
+> next clean point and write a handoff instead of starting new work. You have
+> until 250k to finish that handoff, so land it properly — do not cut it short.
+
+An agent that is close to full reports late, or not at all. So you watch it too.
+
+## Watch it yourself
+
+**Every dispatch starts a watcher.** A subagent runs while your turn is blocked, so
+asking it to self-report is the half you do not control. The other half is a
+background watcher that reads its transcript and wakes you.
+
+Start the watcher and dispatch in **one turn** — the watcher first, in the same
+message as the `Agent` call:
+
+```
+Bash(run_in_background: true):
+  .agents/skills/subagents/watch-agent-context.sh
+```
+
+It polls every subagent this session spawns, and exits when one passes 200k or when
+they all finish. A background command that exits re-invokes you, so its exit *is* the
+alert — you get it mid-flight, not after the report lands.
+
+**The watcher reads transcripts. It never stops an agent** — you do that, by message,
+which is what leaves the agent room to land.
+
+Read the line it prints:
+
+- **An agent passed 200k** — send that agent a message: stop at the next clean point
+  and write a handoff. Then start the watcher again at the far mark, so you hear about
+  an agent that overruns its landing window:
+
+  ```
+  Bash(run_in_background: true):
+    WIND_DOWN=250000 .agents/skills/subagents/watch-agent-context.sh
+  ```
+
+  If that one fires too, the agent is spending the window on new work. Tell it to write
+  the handoff now and report.
+- **They all finished under budget** — nothing to do. The watcher stopped on its own.
+
+One watcher covers a whole wave. Dispatch three agents in one turn, start one watcher.
 
 ## Wind down
 
@@ -66,7 +114,7 @@ Read the handoff, then dispatch a fresh subagent with it.
 
 ## Last leg
 
-A subagent already running the final tests, lint, or QC pass finishes that pass, even past 250k — a half-run suite tells you nothing. Its completion criterion is the result reported.
+A subagent already running the final tests, lint, or QC pass finishes that pass, even past 200k — a half-run suite tells you nothing. Its completion criterion is the result reported.
 
 Watch that it lands there. When the result is in and the agent keeps working — new fixes, new files, a fresh investigation — send it a message: report the result and hand off now.
 

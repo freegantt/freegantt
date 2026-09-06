@@ -1,5 +1,5 @@
 // model/ — the Error report: what the `error` event carries on the Dataset and on the Gantt alike
-// (S5.12, D-S5-35/36/37, ADR 0009). Types only; the runtime carve-out next door in `errors.ts` does
+// (S5.12, D-S5-40/41/42, ADR 0009). Types only; the runtime carve-out next door in `errors.ts` does
 // not widen here.
 //
 // A separate file from `errors.ts` on purpose, and the split says the thing CONTEXT.md stresses:
@@ -18,7 +18,7 @@ import type { FieldKey } from './field.js';
 import type { Instant } from './time.js';
 import type { PluginId } from './plugin.js';
 
-/** How bad an Error report is (D-S5-36).
+/** How bad an Error report is (D-S5-41).
  *
  *  `'info'` — a Refusal: the library said no on purpose and nothing is broken.
  *  `'warning'` — degraded but recovered, such as a renderer that threw and fell back.
@@ -47,7 +47,7 @@ export type ErrorCode =
   | 'scale-options-ignored'
   | 'rollup-corrected'
   // The built-in cell editor's own refusals — one spelling, shared by `data-reason` and this code
-  // (D-S5-35). `by` is that plugin's id, not `'core'`.
+  // (D-S5-40). `by` is that plugin's id, not `'core'`.
   | 'derived-value'
   | 'no-parse-value'
   | 'no-date-value'
@@ -63,7 +63,7 @@ export type ErrorCode =
  *  literals in a reader's autocomplete — the same trick `ErrorCode` uses. */
 export type ErrorReporter = 'core' | 'consumer' | (PluginId & {});
 
-/** What the `error` event carries, on the Dataset and on the Gantt alike (D-S5-35).
+/** What the `error` event carries, on the Dataset and on the Gantt alike (D-S5-40).
  *
  *  Flat fields plus `cause`, not a wrapped error: every report renders and serializes with no type
  *  test, and nothing is lost — `cause` carries `MutationCancelledError.changeSet`,
@@ -97,13 +97,13 @@ export type ErrorReportInput = Omit<ErrorReport, 'at'>;
  *  and reads no clock.
  *
  *  `fallback` runs **only when nothing is subscribed to `error`**, the way an `EventEmitter`'s
- *  unhandled `'error'` is treated as unhandled (D-S5-36). It is where a site keeps the `console` line
+ *  unhandled `'error'` is treated as unhandled (D-S5-41). It is where a site keeps the `console` line
  *  it printed before this seam existed: a consumer who subscribes gets silence and full control, and
  *  a consumer who does not keeps exactly the output they have today. A refusal that was always silent
  *  passes none. */
 export type RaiseError = (report: ErrorReportInput, fallback?: () => void) => void;
 
-/** What a plugin raises through `PluginContext.raiseError` (S5.12, D-S5-35). Core fills `by` with
+/** What a plugin raises through `PluginContext.raiseError` (S5.12, D-S5-40). Core fills `by` with
  *  that plugin's own id, so `by` is a fact the runtime knows and never a claim a plugin makes about
  *  itself — the same "core fills what core knows" split `plans/02` already draws. No `fallback`
  *  either: the fallback exists to preserve a `console` line core printed before this seam, and a

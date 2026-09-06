@@ -102,7 +102,7 @@ export {
   UnknownCommandError,
   RendererAlreadyRegisteredError,
 } from './errors.js';
-// S5.12, D-S5-35: the Error report the `error` event carries on both buses, plus the raise seam
+// S5.12, D-S5-40: the Error report the `error` event carries on both buses, plus the raise seam
 // every layer that has no bus of its own is handed.
 export type {
   ErrorReport,
