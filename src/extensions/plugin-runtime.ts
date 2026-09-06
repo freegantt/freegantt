@@ -72,7 +72,7 @@ function assertNoDuplicateIds<TContext>(plugins: readonly ShellPlugin<TContext>[
 export class PluginRuntime<TContext> {
   #installed: Installed<TContext>[] = [];
   #buildContext: (pluginId: PluginId) => BuiltPluginContext<TContext>;
-  /** S5.12, D-S5-35: where a dropped reconfigure and a throwing disposer are reported. */
+  /** S5.12, D-S5-40: where a dropped reconfigure and a throwing disposer are reported. */
   #raiseError: RaiseError;
 
   constructor(buildContext: (pluginId: PluginId) => BuiltPluginContext<TContext>, raiseError: RaiseError) {
@@ -146,7 +146,7 @@ export class PluginRuntime<TContext> {
   /** Issue #137 F5: `gantt.plugins = [tooltips({ delayMs: 50 })]` after `tooltips()` is already
    *  installed matches by `id` and is silently a no-op — the new options never reach `setup()` again.
    *
-   *  S5.12, D-S5-36: this used to sit behind `isDevMode()`, which reads a flag Vite resolves when
+   *  S5.12, D-S5-41: this used to sit behind `isDevMode()`, which reads a flag Vite resolves when
    *  *this repo* builds `dist/`. The warning therefore reached nobody but our own harness. It now
    *  reports every time, and the `console.warn` behind it fires only when nothing is subscribed. */
   #reportDroppedReconfigures(
@@ -173,7 +173,7 @@ export class PluginRuntime<TContext> {
     try {
       installed.dispose();
     } catch (cause) {
-      // S5.12, D-S5-36: report first, console only when nothing is subscribed.
+      // S5.12, D-S5-41: report first, console only when nothing is subscribed.
       const message = `plugin "${installed.plugin.id}"'s disposer threw`;
       this.#raiseError(
         { code: 'disposer-failed', message, severity: 'error', by: installed.plugin.id, cause },

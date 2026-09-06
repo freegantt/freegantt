@@ -16,19 +16,19 @@ test.describe('theme (system dark)', () => {
     await expect(page.locator('#gantt')).toHaveAttribute('data-fg-theme', 'light');
     await expect
       .poll(async () => pane.evaluate((el) => getComputedStyle(el).backgroundColor))
-      .toBe('rgb(250, 250, 247)');
+      .toBe('rgb(255, 255, 255)');
     await expect
       .poll(async () => rowLabel.evaluate((el) => getComputedStyle(el).color))
-      .toBe('rgb(26, 24, 21)');
+      .toBe('rgb(22, 25, 31)');
 
     await page.getByRole('button', { name: 'Dark' }).click();
     await expect(page.locator('#gantt')).toHaveAttribute('data-fg-theme', 'dark');
     await expect
       .poll(async () => pane.evaluate((el) => getComputedStyle(el).backgroundColor))
-      .toBe('rgb(21, 22, 26)');
+      .toBe('rgb(23, 27, 34)');
     await expect
       .poll(async () => rowLabel.evaluate((el) => getComputedStyle(el).color))
-      .toBe('rgb(236, 234, 227)');
-    await expect.poll(async () => bar.evaluate((el) => getComputedStyle(el).color)).toBe('rgb(26, 24, 21)');
+      .toBe('rgb(232, 236, 243)');
+    await expect.poll(async () => bar.evaluate((el) => getComputedStyle(el).color)).toBe('rgb(16, 19, 26)');
   });
 });

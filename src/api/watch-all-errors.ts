@@ -1,4 +1,4 @@
-// api/ — one handler over every emitter that raises (S5.12, D-S5-37). An `api/` helper beside
+// api/ — one handler over every emitter that raises (S5.12, D-S5-42). An `api/` helper beside
 // `attemptMutation`, and for the same reason: a common consumer job that needs boilerplate the
 // library can write once.
 //

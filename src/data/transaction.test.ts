@@ -419,7 +419,7 @@ describe('runTransaction', () => {
     expect(state.entries.get(entryId('t1'))?.name).toBe('t1');
   });
 
-  it('veto: the refusal also raises one Error report, carrying the MutationCancelledError (D-S5-35)', () => {
+  it('veto: the refusal also raises one Error report, carrying the MutationCancelledError (D-S5-40)', () => {
     const state = dataset([{ id: 't1' }]);
     const reports: ErrorReport[] = [];
     state.on('beforeChange', () => false);

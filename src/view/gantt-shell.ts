@@ -404,7 +404,7 @@ export class GanttShell {
    *  this, so N mutations in one tick become one frame. */
   #frames = new FrameScheduler(() => this.render());
   #events = new EventBus<GanttEventMap, AsyncCancelableEvent>();
-  /** S5.12, D-S5-35: this Gantt's own raise seam, over the bus above. Every collaborator that
+  /** S5.12, D-S5-40: this Gantt's own raise seam, over the bus above. Every collaborator that
    *  observes a refusal or a recovered fault takes it. That is the gesture pipeline, the render
    *  backend, the plugin runtime, and each plugin's own `ctx.raiseError`. */
   #raiseError: RaiseError = createErrorRaiser(this.#events);
@@ -495,7 +495,7 @@ export class GanttShell {
     const hasOwnOptions =
       options.preset !== undefined || options.range !== undefined || options.fit !== undefined;
     if (options.scale && hasOwnOptions) {
-      // S5.12, D-S5-36: no longer behind `isDevMode()`, which resolved to `false` in every consumer's
+      // S5.12, D-S5-41: no longer behind `isDevMode()`, which resolved to `false` in every consumer's
       // build and deleted this line from the shipped library. The `console.warn` is now the fallback
       // for an unsubscribed consumer. Nobody can subscribe this early: the shell is still in its own
       // constructor. So this always prints in practice, which is the behaviour a misconfigured

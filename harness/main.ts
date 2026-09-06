@@ -15,8 +15,6 @@ import type {
   FieldContext,
   GridColumnInput,
   RowSource,
-  Theme,
-  TimeUnit,
   DatasetDocument,
   DatasetEventMap,
   GanttPlugin,
@@ -25,7 +23,7 @@ import type {
   HeaderRenderer,
 } from '../src/api/index.js';
 import { demoFieldOptions, demoTreeEntryInputs } from '../fixtures/demo-dataset.js';
-import { mountTimelineToolbar } from './timeline-toolbar.js';
+import { mountGanttToolbar } from './gantt-toolbar.js';
 import { prependChangeSet, prependLogLine } from './change-log.js';
 import { logEverything } from './plugins/log-everything.js';
 import { selectionShortcuts } from './plugins/selection-shortcuts.js';
@@ -78,19 +76,15 @@ gantt.panToToday();
 window.__dataset = dataset as unknown as typeof window.__dataset;
 window.__gantt = gantt;
 
-mountTimelineToolbar({
+mountGanttToolbar({
   gantt,
+  dataset,
   container: document.querySelector<HTMLDivElement>('#toolbar')!,
-  showFit: true,
-  showLocale: true,
-  showTodayLineToggle: true,
 });
 
 const nameInput = document.querySelector<HTMLInputElement>('#rename-input')!;
 const renameBtn = document.querySelector<HTMLButtonElement>('#rename-btn')!;
 const removeBtn = document.querySelector<HTMLButtonElement>('#remove-btn')!;
-const undoBtn = document.querySelector<HTMLButtonElement>('#undo-btn')!;
-const redoBtn = document.querySelector<HTMLButtonElement>('#redo-btn')!;
 const selectionReadout = document.querySelector<HTMLParagraphElement>('#selection-readout')!;
 const toggleBudgetBtn = document.querySelector<HTMLButtonElement>('#toggle-budget-btn')!;
 const reparentBtn = document.querySelector<HTMLButtonElement>('#reparent-btn')!;
@@ -98,8 +92,6 @@ const rowsSourceBtn = document.querySelector<HTMLButtonElement>('#rows-source-bt
 const packRowsBtn = document.querySelector<HTMLButtonElement>('#pack-rows-btn')!;
 const filterTeamBtn = document.querySelector<HTMLButtonElement>('#filter-team-btn')!;
 const sortNameBtn = document.querySelector<HTMLButtonElement>('#sort-name-btn')!;
-const expandAllBtn = document.querySelector<HTMLButtonElement>('#expand-all-btn')!;
-const collapseAllBtn = document.querySelector<HTMLButtonElement>('#collapse-all-btn')!;
 
 function refreshNameInput(): void {
   const entries = gantt.selectedEntries;
@@ -126,8 +118,8 @@ function renderSelection(): void {
   const segmentCount = gantt.selectedSegmentIds.length;
   selectionReadout.textContent =
     entryIds.length === 0
-      ? 'Selection: (none)'
-      : `Selection: ${entryIds.join(', ')} · ${segmentCount} segment${segmentCount === 1 ? '' : 's'}`;
+      ? 'No selection'
+      : `Selected: ${entryIds.join(', ')} · ${segmentCount} segment${segmentCount === 1 ? '' : 's'}`;
 }
 
 function syncSelectionUi(): void {
@@ -136,18 +128,12 @@ function syncSelectionUi(): void {
   renderSelection();
 }
 
-function refreshHistoryButtons(): void {
-  undoBtn.disabled = !dataset.canUndo;
-  redoBtn.disabled = !dataset.canRedo;
-}
-
 const log = document.querySelector<HTMLDivElement>('#log')!;
 
 gantt.on('selectionChange', syncSelectionUi);
 dataset.on('change', ({ changeSet }: DatasetEventMap['change']) => {
   prependChangeSet(log, changeSet);
   syncSelectionUi();
-  refreshHistoryButtons();
 });
 
 renameBtn.addEventListener('click', () => {
@@ -164,34 +150,7 @@ removeBtn.addEventListener('click', () => {
   attemptMutation(() => gantt.commands.run('freegantt.deleteSelection'));
 });
 
-undoBtn.addEventListener('click', () => {
-  attemptMutation(() => dataset.undo());
-});
-
-redoBtn.addEventListener('click', () => {
-  attemptMutation(() => dataset.redo());
-});
-
-refreshHistoryButtons();
 syncSelectionUi();
-
-const snapUnitSelect = document.querySelector<HTMLSelectElement>('#snap-unit')!;
-const snapIncrementInput = document.querySelector<HTMLInputElement>('#snap-increment')!;
-
-// #195, D-S3-24: the page states the snap and nothing else. Round-tripping the resolved preset
-// through `gantt.preset` built a one-off copy of a shipped preset, which the next zoom threw away.
-function applySnapChoice(): void {
-  const unit = snapUnitSelect.value;
-  snapIncrementInput.disabled = unit === 'tick' || unit === 'none';
-  gantt.snap =
-    unit === 'tick' || unit === 'none'
-      ? unit
-      : { unit: unit as TimeUnit, increment: Math.max(1, Number(snapIncrementInput.value) || 1) };
-}
-
-snapUnitSelect.addEventListener('change', applySnapChoice);
-snapIncrementInput.addEventListener('change', applySnapChoice);
-applySnapChoice();
 
 // S5.7, D-S5-34: the page keeps no copy of which columns show. One list above declares the
 // columns; `hideGridColumn` takes one off the screen and leaves the widths and the order the user
@@ -267,44 +226,7 @@ sortNameBtn.addEventListener('click', () => {
   applyRowSource();
 });
 
-expandAllBtn.addEventListener('click', () => {
-  gantt.expandAll();
-});
-
-collapseAllBtn.addEventListener('click', () => {
-  gantt.collapseAll();
-});
-
 applyRowSource();
-
-const THEME_STORAGE_KEY = 'freegantt-harness-theme';
-
-function isTheme(value: string | null | undefined): value is Theme {
-  return value === 'auto' || value === 'light' || value === 'dark';
-}
-
-function applyTheme(choice: Theme): void {
-  gantt.theme = choice;
-  if (choice === 'auto') {
-    document.documentElement.removeAttribute('data-theme');
-  } else {
-    document.documentElement.setAttribute('data-theme', choice);
-  }
-  localStorage.setItem(THEME_STORAGE_KEY, choice);
-  document.querySelectorAll<HTMLButtonElement>('[data-theme-choice]').forEach((button) => {
-    button.setAttribute('aria-pressed', String(button.dataset['themeChoice'] === choice));
-  });
-}
-
-const stored = localStorage.getItem(THEME_STORAGE_KEY);
-applyTheme(isTheme(stored) ? stored : 'auto');
-
-document.querySelectorAll<HTMLButtonElement>('[data-theme-choice]').forEach((button) => {
-  button.addEventListener('click', () => {
-    const choice = button.dataset['themeChoice'];
-    if (isTheme(choice)) applyTheme(choice);
-  });
-});
 
 // ---- Mutation extras (S2): add entry, set cost, lock/veto, export/import (data.ts's own demo) ----
 
@@ -484,7 +406,7 @@ const demoCellRenderer: CellRenderer = ({ column, value, fieldValue }) =>
 // harness's own manual check that the wiring fix reaches a real Gantt, not just the test suite.
 const demoHeaderRenderer: HeaderRenderer = ({ column }) => ({
   class: { 'demo-header': true },
-  text: column.header.toUpperCase(),
+  text: column.header,
 });
 
 const renderersToggle = document.querySelector<HTMLInputElement>('#renderers-toggle')!;

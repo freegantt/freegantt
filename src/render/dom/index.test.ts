@@ -1717,7 +1717,7 @@ describe('render/dom backend', () => {
     timeline.remove();
   });
 
-  it('a barRenderer that throws raises one report at warning, naming the plugin (D-S5-35)', () => {
+  it('a barRenderer that throws raises one report at warning, naming the plugin (D-S5-40)', () => {
     const reported: ErrorReportInput[] = [];
     const boom = new Error('boom');
     const backend = createDomBackend({

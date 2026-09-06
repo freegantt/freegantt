@@ -96,7 +96,7 @@ export function installDatasetPlugins<TContext>(
     try {
       entry.dispose();
     } catch (cause) {
-      // S5.12, D-S5-36: the report always goes out; the `console.error` behind it fires only when
+      // S5.12, D-S5-41: the report always goes out; the `console.error` behind it fires only when
       // nothing is subscribed to `error`, so an unsubscribed consumer keeps today's output.
       const message = `dataset plugin "${entry.id}"'s disposer threw`;
       raiseError({ code: 'disposer-failed', message, severity: 'error', by: entry.id, cause }, () =>

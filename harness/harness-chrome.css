@@ -1,0 +1,762 @@
+/* Harness page chrome — the demo pages' own design system.
+ *
+ * Scope: this file styles the PAGE around the Gantt, never the Gantt itself. The library owns
+ * everything inside `.fg-container` through its own base stylesheet (`src/view/styles.ts`); the one
+ * thing this file does reach into is the `--fg-*` token layer, which is the consumer theming seam
+ * (plans/02 §4, level-1 theming). Overriding a token is what an app author does; writing an
+ * `.fg-bar` rule here would not be.
+ *
+ * The design answers one question the old pages could not: which controls would a consumer ship,
+ * and which exist only to drive the demo? Two populations, two treatments.
+ *   - Library-grade controls fuse into the chart surface (`.workbench`), inside its border, on the
+ *     same hairline rhythm as the grid. They read as part of the instrument.
+ *   - Harness-only controls sit on the bench below (`.bench`), under a dotted tear-off rule. The
+ *     dotted rule is the one decorative gesture in the file and it carries information: nothing
+ *     under it ships.
+ *
+ * Vernacular: a Gantt chart is a production-control chart, historically ink on ruled paper. So the
+ * page is ruled, not carded — structure comes from hairlines and a shared rhythm, radii stay at
+ * control scale, and nothing floats on a soft shadow. Numbers use tabular figures because a
+ * schedule is a column of numbers that has to align.
+ */
+
+/* ---------------------------------------------------------------- tokens */
+
+:root {
+  /* Paper: cool, not cream. A warm cream ground with a clay accent is the single commonest
+     generated-page palette; this is the drawing-sheet reading instead — blue-shifted paper, ink
+     that is near-black but never neutral. */
+  --paper: #f5f7f9;
+  --surface: #ffffff;
+  --surface-sunk: #eef1f5;
+
+  --ink: #16191f;
+  --ink-2: #4a5260;
+  --ink-3: #79828f;
+
+  --rule: #dde2e9;
+  --rule-strong: #c2cad5;
+
+  /* Ink blue is the same hue family the library paints bars in, so chrome and data agree. */
+  --accent: oklch(0.52 0.14 248);
+  --accent-ink: #ffffff;
+  --accent-wash: oklch(0.52 0.14 248 / 0.09);
+
+  /* Reserved: vermilion marks time (today, boundaries), amber warns. Nothing else is coloured. */
+  --signal: #cf3b26;
+  --warn: #b4690e;
+  --warn-wash: #fdf5e6;
+
+  --focus: oklch(0.52 0.14 248);
+
+  /* One radius for controls, one for surfaces. Not one radius for everything. */
+  --radius-control: 3px;
+  --radius-surface: 5px;
+
+  --font-ui: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-code: ui-monospace, 'SF Mono', 'Cascadia Mono', Menlo, Consolas, monospace;
+
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    /* Blueprint: deep indigo-slate. A tinted near-black (#0B0B0B / #111) standing in for black is
+       template chrome; this ground is genuinely blue and the rules read against it. */
+    --paper: #11141a;
+    --surface: #171b22;
+    --surface-sunk: #0d1015;
+
+    --ink: #e8ecf3;
+    --ink-2: #a7b1c1;
+    --ink-3: #6d7889;
+
+    --rule: #262c36;
+    --rule-strong: #3a4250;
+
+    --accent: oklch(0.74 0.13 248);
+    --accent-ink: #10131a;
+    --accent-wash: oklch(0.74 0.13 248 / 0.15);
+
+    --signal: #ff6f57;
+    --warn: #e0a340;
+    --warn-wash: #2a2214;
+
+    --focus: oklch(0.78 0.13 248);
+
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme='dark'] {
+  --paper: #11141a;
+  --surface: #171b22;
+  --surface-sunk: #0d1015;
+
+  --ink: #e8ecf3;
+  --ink-2: #a7b1c1;
+  --ink-3: #6d7889;
+
+  --rule: #262c36;
+  --rule-strong: #3a4250;
+
+  --accent: oklch(0.74 0.13 248);
+  --accent-ink: #10131a;
+  --accent-wash: oklch(0.74 0.13 248 / 0.15);
+
+  --signal: #ff6f57;
+  --warn: #e0a340;
+  --warn-wash: #2a2214;
+
+  --focus: oklch(0.78 0.13 248);
+
+  color-scheme: dark;
+}
+
+/* ---------------------------------------------------------------- page */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  line-height: 1.5;
+  /* A schedule is a column of numbers. They align everywhere on the page, not only in the grid. */
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* No max-width: the axis re-fits to the window, and capping the page stops it (#8, U4). A schedule
+   uses every pixel of width it is given. */
+.page {
+  padding: 0 24px 64px;
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* ---------------------------------------------------------------- app bar */
+
+.appbar {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  min-height: 46px;
+  margin: 0 -24px 0;
+  padding: 0 24px;
+  background: color-mix(in srgb, var(--paper) 88%, transparent);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--rule);
+}
+
+.appbar-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+/* Three stacked strokes of decreasing length: a Gantt in three bars, at glyph scale. The mark is
+   the only ornament on the page and it draws the subject rather than decorating it. */
+.appbar-mark::before {
+  content: '';
+  width: 13px;
+  height: 13px;
+  background:
+    linear-gradient(var(--accent), var(--accent)) 0 1px / 13px 3px no-repeat,
+    linear-gradient(var(--accent), var(--accent)) 3px 5px / 9px 3px no-repeat,
+    linear-gradient(var(--signal), var(--signal)) 6px 9px / 5px 3px no-repeat;
+}
+
+.appbar-spacer {
+  flex: 1 1 auto;
+}
+
+/* ---------------------------------------------------------------- site nav */
+
+nav.harness-site-nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+}
+
+nav.harness-site-nav a {
+  padding: 5px 9px;
+  border-radius: var(--radius-control);
+  color: var(--ink-2);
+  font-size: 12.5px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+nav.harness-site-nav a:hover {
+  background: var(--surface-sunk);
+  color: var(--ink);
+}
+
+nav.harness-site-nav a[aria-current='page'] {
+  background: var(--accent-wash);
+  color: var(--accent);
+  font-weight: 600;
+  cursor: default;
+  pointer-events: none;
+}
+
+/* ---------------------------------------------------------------- page head */
+
+.page-head {
+  padding: 28px 0 20px;
+}
+
+.page-head h1 {
+  margin: 0;
+  font-size: 23px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+.page-head p {
+  max-width: 68ch;
+  margin: 7px 0 0;
+  color: var(--ink-2);
+  font-size: 13.5px;
+}
+
+.page-head a {
+  color: var(--accent);
+  text-decoration-color: color-mix(in srgb, var(--accent) 40%, transparent);
+  text-underline-offset: 2px;
+}
+
+/* ------------------------------------------------------- workbench (library) */
+
+/* One instrument: the toolbar sits INSIDE this border, divided from the chart by the same hairline
+   the grid rules itself with, so the strip and the chart read as one object rather than a widget
+   with a bar parked above it. */
+.workbench {
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius-surface);
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.workbench > #gantt {
+  height: min(66vh, 720px);
+  border: 0;
+  border-radius: 0;
+}
+
+/* --------------------------------------------------------------- toolbar */
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  padding: 7px 8px;
+  border-bottom: 1px solid var(--rule);
+  background: linear-gradient(var(--surface), var(--surface-sunk));
+}
+
+/* Clusters group commands that answer the same question. The hairline between them is the only
+   separator; no pill, no box. */
+.toolbar-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.toolbar-group + .toolbar-group {
+  margin-left: 5px;
+  padding-left: 7px;
+  border-left: 1px solid var(--rule);
+}
+
+.toolbar-spacer {
+  flex: 1 1 auto;
+}
+
+.toolbar button,
+.toolbar select {
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  cursor: pointer;
+}
+
+.toolbar button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 27px;
+  padding: 0 8px;
+  white-space: nowrap;
+}
+
+.toolbar button:hover:not(:disabled) {
+  background: var(--surface-sunk);
+  border-color: var(--rule);
+}
+
+.toolbar button:active:not(:disabled) {
+  background: var(--rule);
+}
+
+.toolbar button:disabled {
+  color: var(--ink-3);
+  cursor: default;
+}
+
+/* An icon button carries a glyph and no words, so it needs a square box to stay on the strip's
+   rhythm and a title/aria-label to stay legible to everything that is not the eye. */
+.toolbar button.icon {
+  width: 27px;
+  padding: 0;
+  justify-content: center;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.toolbar select {
+  height: 27px;
+  padding: 0 4px 0 6px;
+  border-color: var(--rule);
+  background: var(--surface);
+}
+
+.toolbar select:hover {
+  border-color: var(--rule-strong);
+}
+
+.toolbar-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--ink-2);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+/* The zoom cluster reads as one measure: two steppers with the current preset between them. */
+.zoom-measure {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 1px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+}
+
+.zoom-measure button.icon {
+  height: 23px;
+  width: 23px;
+  border-radius: 2px;
+}
+
+.zoom-measure select {
+  height: 23px;
+  max-width: 132px;
+  border: 0;
+  background: transparent;
+  font-size: 12px;
+}
+
+/* Segmented control: three exclusive states, so they share one box and the chosen one is filled.
+   Used for the theme; a select would hide two of three options behind a click. */
+.segmented {
+  display: inline-flex;
+  padding: 1px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+}
+
+.segmented button {
+  height: 23px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 2px;
+  color: var(--ink-2);
+  font-size: 12px;
+}
+
+.segmented button[aria-pressed='true'] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 600;
+}
+
+.segmented button[aria-pressed='true']:hover {
+  background: var(--accent);
+}
+
+/* ---------------------------------------------------------- status strip */
+
+/* Under the chart, inside the same border: what the Gantt currently holds. Reads as the
+   instrument's own readout, not as page text. */
+.statusbar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 28px;
+  padding: 0 10px;
+  border-top: 1px solid var(--rule);
+  background: var(--surface-sunk);
+  color: var(--ink-2);
+  font-size: 12px;
+}
+
+.statusbar .readout {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.statusbar .readout b {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+/* ------------------------------------------------------------ bench (harness) */
+
+/* The tear-off. Everything below this line is apparatus that drives the demo and ships to nobody.
+   Dotted because it is the one place on the page where a rule means "torn", not "ruled". */
+.bench {
+  margin-top: 34px;
+  padding-top: 22px;
+  border-top: 1px dashed var(--rule-strong);
+}
+
+.bench-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.bench-head h2 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.bench-head p {
+  margin: 0;
+  color: var(--ink-3);
+  font-size: 12.5px;
+}
+
+.bench-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(310px, 1fr));
+  gap: 1px;
+  background: var(--rule);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-surface);
+  overflow: hidden;
+}
+
+/* Panels are cells of one ruled sheet sharing hairline gutters — not separate cards each with its
+   own border, radius and shadow. */
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding: 13px 14px 15px;
+  background: var(--surface);
+}
+
+.panel:last-of-type {
+  grid-column: 1 / -1;
+}
+
+.panel > h3 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.panel > p {
+  margin: 0;
+  color: var(--ink-3);
+  font-size: 12px;
+}
+
+.panel code {
+  font-family: var(--font-code);
+  font-size: 11.5px;
+  color: var(--ink-2);
+}
+
+.control-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+}
+
+/* Bench controls are explicitly plainer than toolbar controls: outlined, square, unglamorous.
+   The difference is the point — you can tell at a glance which surface you are looking at. */
+.panel button {
+  height: 26px;
+  padding: 0 9px;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.panel button:hover:not(:disabled) {
+  border-color: var(--ink-3);
+  background: var(--surface-sunk);
+}
+
+.panel button:disabled {
+  color: var(--ink-3);
+  border-color: var(--rule);
+  cursor: default;
+}
+
+.panel input[type='text'],
+.panel input[type='number'],
+.panel select {
+  height: 26px;
+  padding: 0 7px;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 12px;
+}
+
+.panel input:disabled {
+  background: var(--surface-sunk);
+  color: var(--ink-3);
+}
+
+.panel label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink-2);
+  font-size: 12px;
+}
+
+.panel textarea {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius-control);
+  background: var(--surface-sunk);
+  color: var(--ink);
+  font-family: var(--font-code);
+  font-size: 11.5px;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+/* ---------------------------------------------------------------- notice */
+
+.notice {
+  padding: 7px 10px;
+  border: 1px solid var(--warn);
+  border-left-width: 3px;
+  border-radius: var(--radius-control);
+  background: var(--warn-wash);
+  color: var(--warn);
+  font-size: 12px;
+}
+
+/* ---------------------------------------------------------------- log */
+
+.log-panel {
+  margin-top: 22px;
+}
+
+.log-panel > summary {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 0;
+  color: var(--ink-2);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  list-style: none;
+  border-bottom: 1px solid var(--rule);
+}
+
+.log-panel > summary::-webkit-details-marker {
+  display: none;
+}
+
+.log-panel > summary::before {
+  content: '';
+  width: 0;
+  height: 0;
+  border-left: 4px solid currentColor;
+  border-top: 3.5px solid transparent;
+  border-bottom: 3.5px solid transparent;
+  transition: transform 0.12s ease;
+}
+
+.log-panel[open] > summary::before {
+  transform: rotate(90deg);
+}
+
+#log {
+  max-height: 210px;
+  margin-top: 10px;
+  padding: 9px 11px;
+  overflow-y: auto;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-control);
+  background: var(--surface-sunk);
+  color: var(--ink-2);
+  font-family: var(--font-code);
+  font-size: 11.5px;
+  line-height: 1.65;
+}
+
+#log div {
+  padding: 0;
+  white-space: pre-wrap;
+}
+
+#log div:first-child {
+  color: var(--ink);
+}
+
+/* ---------------------------------------------------------------- gantt tokens */
+
+/* Row height is a layout choice the page owns (plans/02 §4, level-1 theming). Colour is NOT set
+   here on purpose: the library ships its own palette, and a demo page that repainted it would hide
+   what a consumer actually sees on install. If the shipped palette is wrong, it is wrong in
+   `src/view/styles.ts`. */
+#gantt {
+  --fg-row-height: 30px;
+}
+
+/* Typography inside the Gantt stays harness-owned (D-S1.11-8): the library ships structure and
+   colour, the consumer ships the type. Tabular figures are the reason this matters here — the
+   grid's dates and budgets are columns that have to line up. */
+.fg-tick {
+  font-size: 11px;
+}
+
+.fg-row,
+.fg-row-label,
+.fg-row-cell {
+  font-size: 12px;
+}
+
+.fg-col-header {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+
+.fg-bar {
+  font-size: 11.5px;
+  line-height: var(--fg-row-height);
+  padding: 0 7px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.fg-date-line-label {
+  padding-left: 5px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+/* ---------------------------------------------------------------- demo renderers */
+
+/* Paint for the custom renderers the S5 demo installs. Harness-owned because the renderers are
+   harness-owned: they exist to prove `barRenderer`/`cellRenderer`/`headerRenderer` reach the DOM. */
+.demo-milestone {
+  --fg-diamond-size: 13px;
+}
+
+.demo-over-budget {
+  background: color-mix(in srgb, var(--signal) 13%, transparent);
+  color: var(--signal);
+  font-weight: 600;
+}
+
+.demo-header {
+  letter-spacing: 0.05em;
+}
+
+.demo-mobilization-line {
+  border-left-style: dashed;
+  border-left-width: 2px;
+}
+
+/* ---------------------------------------------------------------- motion */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}
+
+/* ---------------------------------------------------------------- narrow */
+
+@media (max-width: 720px) {
+  .page {
+    padding: 0 14px 48px;
+  }
+
+  .appbar {
+    margin: 0 -14px;
+    padding: 0 14px;
+    flex-wrap: wrap;
+    row-gap: 4px;
+    padding-bottom: 6px;
+  }
+
+  .workbench > #gantt {
+    height: 60vh;
+  }
+}

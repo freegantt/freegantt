@@ -278,7 +278,7 @@ describe('buildPluginPorts — resolveTooltipContent (S5.5)', () => {
     errorSpy.mockRestore();
   });
 
-  it('ctx.raiseError fills `by` with the plugin own id (D-S5-35)', () => {
+  it('ctx.raiseError fills `by` with the plugin own id (D-S5-40)', () => {
     const reported: ErrorReportInput[] = [];
     const harness = makeHarness({ raiseError: (report) => reported.push(report) });
 
