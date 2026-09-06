@@ -739,10 +739,19 @@ describe('the EditExtender seam owes the envelope invariant too (#212 R2 fix-pla
           state.entries.stageAdd(token, {
             id: entryId('t1'),
             name: 't1',
-            start: 0 as never,
-            end: 1 as never,
+            // The cascade below moves start to 2026-02-01, so the added entity's own end sits after
+            // that or the move itself would be an inverted span the #143 ruling now refuses — not the
+            // reconciliation-target bug this test is about.
+            start: toInstant('UTC', '2026-01-01'),
+            end: toInstant('UTC', '2026-03-01'),
             kind: 'span',
-            segments: [{ id: segmentId('sg1'), start: 0 as never, end: 1 as never }],
+            segments: [
+              {
+                id: segmentId('sg1'),
+                start: toInstant('UTC', '2026-01-01'),
+                end: toInstant('UTC', '2026-03-01'),
+              },
+            ],
           }),
         'user',
       );

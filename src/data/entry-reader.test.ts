@@ -2,7 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { fitSegmentsToEnvelope, reconcileExtenderEdits, readEntries, readEdit } from './entry-reader.js';
 import type { EntryReadContext } from './entry-reader.js';
 import { buildEffectiveEntries } from './entry-tree.js';
-import { entryId, EmptySegmentsError, segmentId, SegmentsOutOfSyncError } from '../model/index.js';
+import {
+  entryId,
+  EmptySegmentsError,
+  InvertedSpanError,
+  segmentId,
+  SegmentsOutOfSyncError,
+} from '../model/index.js';
 import type { Entry, EntryInput } from '../model/index.js';
 import { addMs, instant } from '../time/index.js';
 import type { StoredEdit } from './edit-extension.js';
@@ -85,6 +91,37 @@ describe('readEntries', () => {
     const [entry] = readEntries([input], createContext());
     expect(entry?.segments[0]?.id).toBe(segmentId('authored-seg'));
   });
+
+  // 2026-09-06 ruling, #143: an inverted span is refused at ingest, not stored and rendered honestly.
+  it('refuses a construction-time entry whose end sits before its start', () => {
+    const input: EntryInput = { id: 't1', name: 'Design', start: '2026-09-08', end: '2026-09-01' };
+    expect(() => readEntries([input], createContext())).toThrow(InvertedSpanError);
+  });
+
+  it('refuses a construction-time entry whose named segment is inverted', () => {
+    const input: EntryInput = {
+      id: 'seg',
+      name: 'Seg',
+      start: '2026-09-01',
+      end: '2026-09-05',
+      segments: [{ start: '2026-09-05', end: '2026-09-01' }],
+    };
+    expect(() => readEntries([input], createContext())).toThrow(InvertedSpanError);
+  });
+
+  // The zero-length span stays legal (D-S3-4, #212's rollUpKinds default) — this is the regression
+  // guard the reject ruling names alongside the refusal itself. A full timestamp, not a date-only
+  // string, keeps `toEndInstant`'s inclusive rule from bumping `end` forward a day.
+  it('still accepts a zero-length construction-time entry', () => {
+    const input: EntryInput = {
+      id: 't1',
+      name: 'Milestone',
+      start: '2026-09-01T09:00:00Z',
+      end: '2026-09-01T09:00:00Z',
+    };
+    const [entry] = readEntries([input], createContext());
+    expect(entry?.start).toBe(entry?.end);
+  });
 });
 
 describe('readEdit (S4.10, D-S4-30)', () => {
@@ -119,6 +156,49 @@ describe('readEdit (S4.10, D-S4-30)', () => {
     const edit = readEdit({ start: '2026-09-02' }, context, single!, registry);
     expect(edit.start).toBe(utc('2026-09-02T00:00:00Z'));
     expect(edit.segments).toHaveLength(1);
+  });
+
+  // 2026-09-06 ruling, #143: `update(id, { start })` on a one-Segment entry used to store an
+  // inverted span silently, through the sole-Segment pairing in `reconcileEnvelope`.
+  it('refuses update(id, { start }) when the new start would end before the entry ends', () => {
+    const context = createContext();
+    const [single] = readEntries(
+      [{ id: 'seg', name: 'Seg', start: '2026-09-01', end: '2026-09-05' }],
+      context,
+    );
+    expect(() => readEdit({ start: '2026-09-10' }, context, single!, registry)).toThrow(InvertedSpanError);
+  });
+
+  it('refuses update(id, { end }) when the new end would sit before the entry starts', () => {
+    const context = createContext();
+    const [single] = readEntries(
+      [{ id: 'seg', name: 'Seg', start: '2026-09-05', end: '2026-09-10' }],
+      context,
+    );
+    expect(() => readEdit({ end: '2026-09-01' }, context, single!, registry)).toThrow(InvertedSpanError);
+  });
+
+  it('refuses update(id, { segments }) naming a Segment whose end sits before its start', () => {
+    const context = createContext();
+    const [single] = readEntries(
+      [{ id: 'seg', name: 'Seg', start: '2026-09-01', end: '2026-09-05' }],
+      context,
+    );
+    expect(() =>
+      readEdit({ segments: [{ start: '2026-09-05', end: '2026-09-01' }] }, context, single!, registry),
+    ).toThrow(InvertedSpanError);
+  });
+
+  // The zero-length write stays legal (D-S3-4) — the regression guard the reject ruling names
+  // alongside the refusal itself, so a resize gesture's own clamp keeps working (#143).
+  it('still accepts update(id, { end }) writing a zero-length span', () => {
+    const context = createContext();
+    const [single] = readEntries(
+      [{ id: 'seg', name: 'Seg', start: '2026-09-01T09:00:00Z', end: '2026-09-05T09:00:00Z' }],
+      context,
+    );
+    const edit = readEdit({ end: '2026-09-01T09:00:00Z' }, context, single!, registry);
+    expect(edit.start).toBe(edit.end);
   });
 
   // #212 fix-plan review, finding S2: `update(id, { segments: [] })` used to reach `time/`'s
@@ -233,12 +313,14 @@ describe('reconcileExtenderEdits reads the effective, not the stale, entry (find
     // `reconcileEnvelope` already does for `entries.update()` (a resize, not a translate) — reconciling
     // against the stale, still-two-Segment `committed` state would instead have refused this write
     // with `SegmentsOutOfSyncError('ambiguous')`.
-    const extenderEdits = new Map([[id!, { start: utc('2026-02-01T00:00:00Z') } as StoredEdit]]);
+    // Stays short of the entry's own end (2026-01-11) — moving start past it would be an inverted
+    // span the #143 ruling refuses, which is not what this test is about.
+    const extenderEdits = new Map([[id!, { start: utc('2026-01-08T00:00:00Z') } as StoredEdit]]);
     const reconciled = reconcileExtenderEdits(effective, extenderEdits);
 
     const reconciledEdit = reconciled.get(id!)!;
     expect(reconciledEdit.segments).toHaveLength(1);
-    expect(reconciledEdit.start).toBe(utc('2026-02-01T00:00:00Z'));
+    expect(reconciledEdit.start).toBe(utc('2026-01-08T00:00:00Z'));
     expect(reconciledEdit.end).toBe(entry.end);
   });
 
@@ -389,5 +471,22 @@ describe('reconcileExtenderEdits refuses what reconcileEnvelope refuses (D-S5-44
     expect(edit.segments).toHaveLength(1);
     expect(edit.segments![0]!.id).toBe(entry!.segments[0]!.id);
     expect(edit.start).toBe(newStart);
+  });
+
+  // 2026-09-06 ruling, #143: an `EditExtender` cascade against a sole-Segment entry pairs the same
+  // way `entries.update()` does, so it is refused the same way too — not only the several-Segment
+  // case above.
+  it('refuses an inverted cascade against a sole-Segment Entry, same as an inverted entries.update()', () => {
+    const context = createContext();
+    const [entry] = readEntries(
+      [{ id: 'seg', name: 'Seg', start: '2026-01-01', end: '2026-01-05' }],
+      context,
+    );
+    const entries = new Map([[entry!.id, entry!]]);
+    const invertingStart = instant(utc('2026-01-10T00:00:00Z'));
+
+    expect(() => reconcileExtenderEdits(entries, new Map([[entry!.id, { start: invertingStart }]]))).toThrow(
+      InvertedSpanError,
+    );
   });
 });
