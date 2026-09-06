@@ -4,21 +4,20 @@ import { Dataset } from '../../api/dataset.js';
 import { sampleEntries } from '../../../fixtures/sample-dataset.js';
 import { contextMenu } from './context-menu.js';
 import type { ContextMenuOptions } from './context-menu.js';
-import type { SegmentId } from '../../model/index.js';
 
 // `container` must be attached to `document.body` — `contextMenu()` listens at the document level,
 // and a bubbling event never reaches document from a detached tree.
-function makeGantt(options?: ContextMenuOptions): { container: HTMLElement; gantt: Gantt } {
+function makeGantt(options?: ContextMenuOptions): { container: HTMLElement; gantt: Gantt; dataset: Dataset } {
   const container = document.createElement('div');
   document.body.append(container);
   const dataset = new Dataset({ entries: sampleEntries.slice(0, 3), timeZone: 'UTC' });
   const gantt = new Gantt({ container, dataset, plugins: [contextMenu(options)] });
-  return { container, gantt };
+  return { container, gantt, dataset };
 }
 
 /** One Row that owns three Entries. Only a `{ source: 'custom' }` resolver builds one, which is why
  *  #199's defect was invisible until #185 made a click on that row select all three. */
-function makeGanttWithThreeOnOneRow(): { container: HTMLElement; gantt: Gantt } {
+function makeGanttWithThreeOnOneRow(): { container: HTMLElement; gantt: Gantt; dataset: Dataset } {
   const container = document.createElement('div');
   document.body.append(container);
   const dataset = new Dataset({ entries: threeEntries, timeZone: 'UTC' });
@@ -31,16 +30,10 @@ function makeGanttWithThreeOnOneRow(): { container: HTMLElement; gantt: Gantt } 
     },
     plugins: [contextMenu()],
   });
-  return { container, gantt };
+  return { container, gantt, dataset };
 }
 
 const threeEntries = sampleEntries.slice(0, 3);
-
-/** The Segments these Entries draw (#212, ADR 0010) — the Selection holds Segments, so a test that
- *  means "select these Entries" names every Segment they drew. */
-function segmentsOf(...entries: readonly (typeof sampleEntries)[number][]): readonly SegmentId[] {
-  return entries.flatMap((entry) => entry.segments.map((segment) => segment.id));
-}
 
 function commandIds(container: HTMLElement): (string | null)[] {
   return menuItems(container).map((el) => el.getAttribute('data-command'));
@@ -139,8 +132,8 @@ describe('contextMenu() (S5.5, D-S5-13/14)', () => {
   });
 
   it('a right-click on a multi-Entry row widens neither the Selection nor the acted-on set (#212)', () => {
-    const { container, gantt } = makeGanttWithThreeOnOneRow();
-    gantt.selectedSegmentIds = segmentsOf(threeEntries[0]!);
+    const { container, gantt, dataset } = makeGanttWithThreeOnOneRow();
+    gantt.selectedSegmentIds = dataset.entries.segmentIdsOfEntries([threeEntries[0]!.id]);
     let reached: readonly string[] | undefined;
     gantt.commands.register({
       id: 'demo.reached',
@@ -161,14 +154,14 @@ describe('contextMenu() (S5.5, D-S5-13/14)', () => {
   });
 
   it('a right-click on a bar inside the Selection reaches the whole Selection (#199)', () => {
-    const { container, gantt } = makeGanttWithThreeOnOneRow();
+    const { container, gantt, dataset } = makeGanttWithThreeOnOneRow();
     let reached: readonly string[] | undefined;
     gantt.commands.register({
       id: 'demo.reached',
       label: 'Reached',
       run: (ctx) => (reached = ctx.target?.entryIds),
     });
-    gantt.selectedSegmentIds = segmentsOf(...threeEntries);
+    gantt.selectedSegmentIds = dataset.entries.segmentIdsOfEntries(threeEntries.map((entry) => entry.id));
 
     rightClick(bars(container)[1]!);
     clickMenuItem(container, 'demo.reached');
@@ -181,8 +174,8 @@ describe('contextMenu() (S5.5, D-S5-13/14)', () => {
   });
 
   it('a right-click outside the Selection replaces the Selection with what you clicked (#199)', () => {
-    const { container, gantt } = makeGanttWithThreeOnOneRow();
-    gantt.selectedSegmentIds = segmentsOf(threeEntries[0]!);
+    const { container, gantt, dataset } = makeGanttWithThreeOnOneRow();
+    gantt.selectedSegmentIds = dataset.entries.segmentIdsOfEntries([threeEntries[0]!.id]);
 
     rightClick(bars(container)[2]!);
 
@@ -193,14 +186,14 @@ describe('contextMenu() (S5.5, D-S5-13/14)', () => {
   });
 
   it('a right-click on a header cell leaves the Selection alone and names no Entry (#199)', () => {
-    const { container, gantt } = makeGanttWithThreeOnOneRow();
+    const { container, gantt, dataset } = makeGanttWithThreeOnOneRow();
     let reached: readonly string[] | undefined;
     gantt.commands.register({
       id: 'demo.reached',
       label: 'Reached',
       run: (ctx) => (reached = ctx.target?.entryIds),
     });
-    gantt.selectedSegmentIds = segmentsOf(threeEntries[0]!);
+    gantt.selectedSegmentIds = dataset.entries.segmentIdsOfEntries([threeEntries[0]!.id]);
 
     rightClick(container.querySelector<HTMLElement>('.fg-col-header')!);
     clickMenuItem(container, 'demo.reached');
@@ -215,14 +208,14 @@ describe('contextMenu() (S5.5, D-S5-13/14)', () => {
   });
 
   it('Shift+F10 with three bars selected reaches all three (#205, D-S5-14)', () => {
-    const { container, gantt } = makeGanttWithThreeOnOneRow();
+    const { container, gantt, dataset } = makeGanttWithThreeOnOneRow();
     let reached: readonly string[] | undefined;
     gantt.commands.register({
       id: 'demo.reached',
       label: 'Reached',
       run: (ctx) => (reached = ctx.target?.entryIds),
     });
-    gantt.selectedSegmentIds = segmentsOf(...threeEntries);
+    gantt.selectedSegmentIds = dataset.entries.segmentIdsOfEntries(threeEntries.map((entry) => entry.id));
 
     container.dispatchEvent(
       new KeyboardEvent('keydown', { key: 'F10', shiftKey: true, bubbles: true, cancelable: true }),
@@ -250,8 +243,8 @@ describe('contextMenu() (S5.5, D-S5-13/14)', () => {
   });
 
   it('Shift+F10 opens at the focused row (the current selection, D-S5-6 precedent)', () => {
-    const { container, gantt } = makeGantt();
-    gantt.selectedSegmentIds = segmentsOf(sampleEntries[0]!);
+    const { container, gantt, dataset } = makeGantt();
+    gantt.selectedSegmentIds = dataset.entries.segmentIdsOfEntries([sampleEntries[0]!.id]);
 
     container.dispatchEvent(
       new KeyboardEvent('keydown', { key: 'F10', shiftKey: true, bubbles: true, cancelable: true }),
@@ -300,8 +293,8 @@ describe('contextMenu() (S5.5, D-S5-13/14)', () => {
   });
 
   it('Enter/click runs the command and closes the menu', () => {
-    const { container, gantt } = makeGantt();
-    gantt.selectedSegmentIds = segmentsOf(sampleEntries[0]!);
+    const { container, gantt, dataset } = makeGantt();
+    gantt.selectedSegmentIds = dataset.entries.segmentIdsOfEntries([sampleEntries[0]!.id]);
     let ran = false;
     gantt.commands.register({ id: 'demo.run', label: 'Run me', run: () => (ran = true) });
 

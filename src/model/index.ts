@@ -76,6 +76,7 @@ export {
   InvalidPresetError,
   EntryNotFoundError,
   SegmentNotFoundError,
+  RevealTargetNotFoundError,
   DuplicateEntryIdError,
   DuplicateSegmentIdError,
   ParentCycleError,

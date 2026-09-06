@@ -81,6 +81,18 @@ export class SegmentNotFoundError extends FreeGanttError {
   }
 }
 
+/** `code: 'reveal-target-not-found'` — `reveal(id)` given an id the dataset reads as neither an
+ *  Entry nor a Segment (#212, ADR 0010, issue #227). `reveal` alone takes `EntryId | SegmentId`; once
+ *  neither reading resolves, nothing tells which one the caller meant, so the message names both
+ *  rather than picking `EntryNotFoundError` or `SegmentNotFoundError` and forging the id's brand to
+ *  match. */
+export class RevealTargetNotFoundError extends FreeGanttError {
+  constructor(id: string, operation: string) {
+    super('reveal-target-not-found', `${operation}: no entry or segment with id "${id}"`);
+    this.name = 'RevealTargetNotFoundError';
+  }
+}
+
 /** `code: 'duplicate-entry-id'` — `entries.add()` given an id already in the store (S2.3 §1.3). */
 export class DuplicateEntryIdError extends FreeGanttError {
   constructor(entryId: EntryId) {

@@ -8,7 +8,7 @@ import {
   itemId,
   mintedSegmentId,
   segmentId,
-  EntryNotFoundError,
+  RevealTargetNotFoundError,
   ContainerNotFoundError,
 } from '../model/index.js';
 import type { Entry, Instant, ItemId, SegmentId } from '../model/index.js';
@@ -599,7 +599,7 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
       shell.reveal(entryId('e40'));
       expect(scroll.state.position.y).toBeGreaterThan(0);
 
-      expect(() => shell.reveal(entryId('does-not-exist'))).toThrow(EntryNotFoundError);
+      expect(() => shell.reveal(entryId('does-not-exist'))).toThrow(RevealTargetNotFoundError);
 
       shell.destroy();
     } finally {
@@ -683,6 +683,64 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
       expect(shell.collapsed.map(String)).toContain('group:red');
       shell.reveal(entryId('a'));
       expect(shell.collapsed.map(String)).not.toContain('group:red');
+
+      shell.destroy();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('[R6-F13] selectedEntryIds keeps Dataset order for two Entries a collapsed ancestor hides, instead of NaN-sorting them', () => {
+    // Finding 13: `#rowRankByEntryId` gives an unplanned Entry no rank, and the old comparator read
+    // that as `Infinity`. Two unplanned Entries then subtracted `Infinity - Infinity`, which is `NaN`
+    // — a comparator result `Array.prototype.sort` does not define an order for. This fixture puts
+    // two Entries behind one collapsed ancestor so both land in the Selection with no row rank at all.
+    FakeResizeObserver.instances = [];
+    vi.stubGlobal('ResizeObserver', FakeResizeObserver);
+
+    try {
+      const container = document.createElement('div');
+      const parent: Entry = {
+        id: entryId('p'),
+        name: 'p',
+        kind: 'span',
+        start: rangeStart,
+        end: instant('2026-09-03T00:00:00Z'),
+        segments: [{ id: segmentId('p-1'), start: rangeStart, end: instant('2026-09-03T00:00:00Z') }],
+      };
+      const first: Entry = {
+        id: entryId('c1'),
+        name: 'c1',
+        kind: 'span',
+        parentId: entryId('p'),
+        start: rangeStart,
+        end: instant('2026-09-03T00:00:00Z'),
+        segments: [{ id: segmentId('c1-1'), start: rangeStart, end: instant('2026-09-03T00:00:00Z') }],
+      };
+      const second: Entry = {
+        id: entryId('c2'),
+        name: 'c2',
+        kind: 'span',
+        parentId: entryId('p'),
+        start: rangeStart,
+        end: instant('2026-09-03T00:00:00Z'),
+        segments: [{ id: segmentId('c2-1'), start: rangeStart, end: instant('2026-09-03T00:00:00Z') }],
+      };
+      const shell = new GanttShell({
+        wiring: {},
+        container,
+        dataset: fakeDataset([parent, first, second]),
+        rowSource: { source: 'entries', tree: true },
+        collapsed: [rowId('p')],
+      });
+      FakeResizeObserver.instances[0]!.fire({ width: 500, height: 100 });
+
+      // Neither Entry has a row rank, so the comparator calls them equal and the stable sort leaves
+      // them in the order `entryIdsOfSegments` names them — the Selection's own order, `c2` then `c1`
+      // — rather than throwing or silently reordering them, which a `NaN` comparator result invites.
+      shell.selection = [segmentId('c2-1'), segmentId('c1-1')];
+
+      expect(shell.selectedEntryIds).toEqual([second.id, first.id]);
 
       shell.destroy();
     } finally {

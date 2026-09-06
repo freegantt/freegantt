@@ -3,7 +3,7 @@ import { Gantt } from './gantt.js';
 import { Dataset } from './dataset.js';
 import {
   DuplicatePluginIdError,
-  EntryNotFoundError,
+  RevealTargetNotFoundError,
   PluginNotInstalledError,
   RegistrationClosedError,
   RendererAlreadyRegisteredError,
@@ -28,11 +28,6 @@ import type {
 import { sampleEntries } from '../../fixtures/sample-dataset.js';
 import { instant } from '../time/index.js';
 
-/** The Segments these sample Entries draw (#212, ADR 0010). The Selection holds Segments, so a test
- *  that means "select these Entries" names every Segment they drew — the set a grid-row click writes. */
-function segmentsOf(...ids: readonly string[]): readonly SegmentId[] {
-  return ids.flatMap((id) => sampleEntries.find((entry) => entry.id === id)!.segments.map((s) => s.id));
-}
 // [S5-A3]: the acceptance object is the harness plugin itself, not a re-implementation of its four
 // seams — a regression in bufferKind() must fail this test (issue #153).
 import { bufferKind } from '../../harness/plugins/buffer-kind.js';
@@ -193,7 +188,7 @@ describe('Gantt preset/range/fit/zoomTo/zoomBy/reveal (S1.9)', () => {
     }
   });
 
-  it('U6: reveal throws EntryNotFoundError for an id the dataset has no entry for', () => {
+  it('U6: reveal throws RevealTargetNotFoundError for an id the dataset reads as neither an Entry nor a Segment (#227)', () => {
     const container = document.createElement('div');
     const gantt = new Gantt({ container, dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }) });
 
@@ -203,8 +198,8 @@ describe('Gantt preset/range/fit/zoomTo/zoomBy/reveal (S1.9)', () => {
     } catch (error) {
       caught = error;
     }
-    expect(caught).toBeInstanceOf(EntryNotFoundError);
-    expect((caught as EntryNotFoundError).code).toBe('entry-not-found');
+    expect(caught).toBeInstanceOf(RevealTargetNotFoundError);
+    expect((caught as RevealTargetNotFoundError).code).toBe('reveal-target-not-found');
 
     gantt.destroy();
   });
@@ -2704,8 +2699,8 @@ describe('Gantt selection (S3.1, D-S3-10, [S3-A1])', () => {
     const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
     const gantt = new Gantt({ container, dataset });
 
-    gantt.selectedSegmentIds = segmentsOf(sampleEntries[0]!.id);
-    expect(gantt.selectedSegmentIds).toEqual(segmentsOf(sampleEntries[0]!.id));
+    gantt.selectedSegmentIds = dataset.entries.segmentIdsOfEntries([sampleEntries[0]!.id]);
+    expect(gantt.selectedSegmentIds).toEqual(dataset.entries.segmentIdsOfEntries([sampleEntries[0]!.id]));
     expect(gantt.selectedEntryIds).toEqual([entryId(sampleEntries[0]!.id)]);
 
     gantt.destroy();
@@ -2717,7 +2712,10 @@ describe('Gantt selection (S3.1, D-S3-10, [S3-A1])', () => {
     const gantt = new Gantt({ container, dataset });
 
     // #212: the Selection is proposed in click order, and both readings come back in row order.
-    gantt.selectedSegmentIds = segmentsOf(sampleEntries[1]!.id, sampleEntries[0]!.id);
+    gantt.selectedSegmentIds = dataset.entries.segmentIdsOfEntries([
+      sampleEntries[1]!.id,
+      sampleEntries[0]!.id,
+    ]);
     expect(gantt.selectedEntries).toEqual([
       dataset.entries.get(sampleEntries[0]!.id),
       dataset.entries.get(sampleEntries[1]!.id),
@@ -2730,7 +2728,10 @@ describe('Gantt selection (S3.1, D-S3-10, [S3-A1])', () => {
     const container = document.createElement('div');
     const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
     const gantt = new Gantt({ container, dataset });
-    gantt.selectedSegmentIds = segmentsOf(sampleEntries[0]!.id, sampleEntries[1]!.id);
+    gantt.selectedSegmentIds = dataset.entries.segmentIdsOfEntries([
+      sampleEntries[0]!.id,
+      sampleEntries[1]!.id,
+    ]);
 
     dataset.entries.remove(sampleEntries[1]!.id);
     expect(gantt.selectedEntries).toEqual([dataset.entries.get(sampleEntries[0]!.id)]);
@@ -2759,10 +2760,10 @@ describe('Gantt selection (S3.1, D-S3-10, [S3-A1])', () => {
       datasetChanges.push(c);
     });
 
-    gantt.selectedSegmentIds = segmentsOf(sampleEntries[0]!.id);
+    gantt.selectedSegmentIds = dataset.entries.segmentIdsOfEntries([sampleEntries[0]!.id]);
 
-    expect(before).toEqual([{ from: [], to: segmentsOf(sampleEntries[0]!.id) }]);
-    expect(after).toEqual([{ from: [], to: segmentsOf(sampleEntries[0]!.id) }]);
+    expect(before).toEqual([{ from: [], to: dataset.entries.segmentIdsOfEntries([sampleEntries[0]!.id]) }]);
+    expect(after).toEqual([{ from: [], to: dataset.entries.segmentIdsOfEntries([sampleEntries[0]!.id]) }]);
     expect(datasetChanges).toEqual([]);
 
     gantt.destroy();
@@ -2772,12 +2773,12 @@ describe('Gantt selection (S3.1, D-S3-10, [S3-A1])', () => {
     const container = document.createElement('div');
     const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
     const gantt = new Gantt({ container, dataset });
-    gantt.selectedSegmentIds = segmentsOf(sampleEntries[0]!.id);
+    gantt.selectedSegmentIds = dataset.entries.segmentIdsOfEntries([sampleEntries[0]!.id]);
 
     gantt.on('beforeSelectionChange', () => false);
-    gantt.selectedSegmentIds = segmentsOf(sampleEntries[1]!.id);
+    gantt.selectedSegmentIds = dataset.entries.segmentIdsOfEntries([sampleEntries[1]!.id]);
 
-    expect(gantt.selectedSegmentIds).toEqual(segmentsOf(sampleEntries[0]!.id));
+    expect(gantt.selectedSegmentIds).toEqual(dataset.entries.segmentIdsOfEntries([sampleEntries[0]!.id]));
 
     gantt.destroy();
   });
@@ -2786,13 +2787,13 @@ describe('Gantt selection (S3.1, D-S3-10, [S3-A1])', () => {
     const container = document.createElement('div');
     const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
     const gantt = new Gantt({ container, dataset });
-    gantt.selectedSegmentIds = segmentsOf(sampleEntries[0]!.id);
+    gantt.selectedSegmentIds = dataset.entries.segmentIdsOfEntries([sampleEntries[0]!.id]);
 
     const after: unknown[] = [];
     gantt.on('selectionChange', (p) => {
       after.push(p);
     });
-    gantt.selectedSegmentIds = segmentsOf(sampleEntries[0]!.id);
+    gantt.selectedSegmentIds = dataset.entries.segmentIdsOfEntries([sampleEntries[0]!.id]);
 
     expect(after).toEqual([]);
 
@@ -3184,7 +3185,7 @@ describe('Gantt interactions / capability hot path (S3.2, D-S3-9, [S3-A3]/[S3-A5
     const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
     const gantt = new Gantt({ container, dataset, interactions: { select: false } });
 
-    gantt.selectedSegmentIds = segmentsOf(sampleEntries[0]!.id);
+    gantt.selectedSegmentIds = dataset.entries.segmentIdsOfEntries([sampleEntries[0]!.id]);
     expect(gantt.selectedEntryIds).toEqual([entryId(sampleEntries[0]!.id)]);
 
     gantt.destroy();
@@ -3569,7 +3570,7 @@ describe('Gantt keyboard nudge (S3.5, [S3-A1] keyboard half, D-S3-13)', () => {
 
     const id = entryId(sampleEntries[0]!.id);
     const before = dataset.entries.get(id)!;
-    gantt.selectedSegmentIds = segmentsOf(id);
+    gantt.selectedSegmentIds = dataset.entries.segmentIdsOfEntries([id]);
 
     const beforeEvents: unknown[] = [];
     const afterEvents: unknown[] = [];
@@ -3623,7 +3624,7 @@ describe('Gantt keyboard nudge (S3.5, [S3-A1] keyboard half, D-S3-13)', () => {
 
     const id = entryId(sampleEntries[0]!.id);
     const before = dataset.entries.get(id)!;
-    gantt.selectedSegmentIds = segmentsOf(id);
+    gantt.selectedSegmentIds = dataset.entries.segmentIdsOfEntries([id]);
 
     const afterEvents: { edge: string }[] = [];
     gantt.on('entryResize', (p) => {
@@ -3650,7 +3651,7 @@ describe('Gantt keyboard nudge (S3.5, [S3-A1] keyboard half, D-S3-13)', () => {
 
     const firstId = entryId(sampleEntries[0]!.id);
     const secondId = entryId(sampleEntries[1]!.id);
-    gantt.selectedSegmentIds = segmentsOf(firstId);
+    gantt.selectedSegmentIds = dataset.entries.segmentIdsOfEntries([firstId]);
 
     const datasetChanges: unknown[] = [];
     dataset.on('change', (c) => {
@@ -4295,7 +4296,7 @@ describe('Gantt.commands (S5.2, D-S5-6/D-S5-7)', () => {
     const dataset = new Dataset({ entries: sampleEntries.slice(0, 3), timeZone: 'UTC' });
     const gantt = new Gantt({ container, dataset });
     const [a, b] = dataset.entries.all;
-    gantt.selectedSegmentIds = segmentsOf(a!.id, b!.id);
+    gantt.selectedSegmentIds = dataset.entries.segmentIdsOfEntries([a!.id, b!.id]);
 
     let reached: readonly string[] | undefined;
     gantt.commands.register({

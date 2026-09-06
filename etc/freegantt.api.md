@@ -705,6 +705,7 @@ export interface EntryStoreView<TMeta = unknown, TFields extends Record<string, 
     get(id: EntryId | string): Entry<TMeta> | undefined;
     // (undocumented)
     has(id: EntryId | string): boolean;
+    segmentIdsOfEntries(ids: readonly (EntryId | string)[]): readonly SegmentId[];
     // (undocumented)
     readonly size: number;
 }
@@ -1650,6 +1651,11 @@ export interface ResolvedColumn extends FrameColumn {
 }
 
 // @public
+export class RevealTargetNotFoundError extends FreeGanttError {
+    constructor(id: string, operation: string);
+}
+
+// @public
 export interface RollUpContext extends FieldContext {
     // (undocumented)
     readonly field: FieldKey;
@@ -1741,6 +1747,11 @@ export function segmentIndexOfItem(id: ItemId): number;
 export interface SegmentInput extends TimeSpanInput {
     // (undocumented)
     id?: string;
+}
+
+// @public
+export class SegmentNotFoundError extends FreeGanttError {
+    constructor(segmentId: SegmentId, operation: string);
 }
 
 // @public
