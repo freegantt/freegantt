@@ -692,7 +692,7 @@ export class Gantt<TMeta = unknown, TFields extends Record<string, unknown> = Re
   }
 
   /** An `EntryId` reveals that Entry's whole envelope; a `SegmentId` reveals that one Segment alone.
-   *  An id the Dataset reads as neither throws `EntryNotFoundError` (ADR 0010, #212). */
+   *  An id the Dataset reads as neither throws `RevealTargetNotFoundError` (ADR 0010, #227). */
   reveal(id: EntryId | SegmentId): void {
     this.#shell.reveal(id);
   }

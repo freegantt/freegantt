@@ -261,10 +261,7 @@ export class GesturePipeline {
             after: 'entryMove' as const,
             payload: { ...grabbed, entries: spans, refuse: note.refuse } satisfies EntryMove & Refusable,
           };
-    const before =
-      event.before === 'beforeEntryResize'
-        ? this.#deps.emit(event.before, event.payload)
-        : this.#deps.emit(event.before, event.payload);
+    const before = this.#deps.emit(event.before, event.payload);
     const refusal: GestureRefusal = {
       code: gesture.kind === 'resize' ? 'entry-resize-cancelled' : 'entry-move-cancelled',
       event: event.before,
@@ -275,8 +272,7 @@ export class GesturePipeline {
     return this.#settle(before, draft, itemIds, refusal, () => {
       const committed = this.#deps.commitEntryEdits(draft);
       if (committed) {
-        if (event.after === 'entryResize') this.#deps.emit(event.after, event.payload);
-        else this.#deps.emit(event.after, event.payload);
+        this.#deps.emit(event.after, event.payload);
       }
       return committed;
     });
