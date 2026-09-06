@@ -628,6 +628,13 @@ gantt.commands.register({
   Segments never share one `SegmentId` — on the same Entry, on two different Entries, or authored
   twice in one construction-time `entries` list — and a write that would create that collision
   throws `DuplicateSegmentIdError` (`code: 'duplicate-segment-id'`) before anything stages.
+- **`dataset.entries.removeSegments(ids)` removes Segments in one transaction and one changeset**,
+  across several Entries when the ids name several (ADR 0010). Removing an Entry's last Segment
+  removes the Entry too, in the same transaction. **It never removes that Entry's descendants**
+  (#212, ADR 0010, fix plan R3): each direct child re-parents to the removed Entry's own parent, or
+  to the root when it had none. `entries.remove(id)` is the separate, deliberate call that takes a
+  whole subtree; `removeSegments` never does, even when its last Segment happens to be the Entry's
+  own. One undo step restores the Entry, its Segment, and every promoted child's `parentId`.
 - **`segmentIds: readonly SegmentId[]`** is every Segment the invocation acts on. **`entryIds:
   readonly EntryId[]`** is a projection of `segmentIds` — the Entries those Segments belong to,
   deduped, in row order. `entryIds` is the same word `DomTarget.entryIds` uses, and not always the

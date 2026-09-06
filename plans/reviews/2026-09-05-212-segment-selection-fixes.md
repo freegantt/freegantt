@@ -123,8 +123,8 @@ Observed at `c305e3a`: `removeSegments(['ps'])` on a parent with one child left 
 Removing an Entry's last Segment removes the Entry. That is intended and documented. Removing that
 Entry's descendants is neither documented nor tested, and `Delete` is now a default key binding.
 
-- [ ] Decide the rule. Either the descendants survive and reparent, or the cascade is intended and gets documented in ADR 0010 and `CONTEXT.md`.
-- [ ] Whichever way it settles, a test pins it, and `plans/02` states it under `removeSegments`.
+- [x] Decide the rule. Either the descendants survive and reparent, or the cascade is intended and gets documented in ADR 0010 and `CONTEXT.md`.
+- [x] Whichever way it settles, a test pins it, and `plans/02` states it under `removeSegments`.
 
 **Visible at the end:** pressing `Delete` on a parent bar in the harness does what the docs say.
 

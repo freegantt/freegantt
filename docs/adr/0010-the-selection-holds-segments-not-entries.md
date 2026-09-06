@@ -55,6 +55,13 @@ The Document goes to `schema: 4`, and a reader of an older Document mints the id
 - **Key `Item.id` by `SegmentId` instead of `${entryId}:${segmentIndex}`.** Rejected here, not
   forever. `plans/02` publishes that convention to plugin authors. `Item.id` is frame identity and
   `Segment.id` is stored identity: two jobs, both kept.
+- **Let a last-Segment removal cascade to the whole subtree, matching `entries.remove(id)`
+  (#212, fix plan R3).** Rejected. `entries.remove` is a consumer naming an `EntryId` and asking to
+  delete that whole branch on purpose. `removeSegments` is a consumer naming Segments, and only
+  incidentally empties an Entry when the last one goes. `Delete` binds to `removeSegments` by
+  default, so a user pointing at one bar could delete an entire subtree with no warning and no way
+  to tell from the screen that a subtree, not one bar, was at stake. Undo recovers the mistake, but
+  recoverable is not the same as expected, and the surprise is the defect this slice closes.
 
 ## Consequences
 
@@ -69,6 +76,13 @@ The Document goes to `schema: 4`, and a reader of an older Document mints the id
   in the same transaction, so one undo step restores both with their ids unchanged. This is why a
   grid-row Delete needs no special case: the pane put every Segment of the row in the Selection, and
   the Entries went with their last Segments.
+- **That removal never takes the Entry's descendants with it** (#212, fix plan R3). Each direct
+  child re-parents to the removed Entry's own parent — or to the root, when it had none — in the
+  same transaction, before the Entry is staged for removal. `entries.remove(id)` is the deliberate
+  "delete this whole branch" call, and it still takes the subtree with it; a `Delete` keypress that
+  happens to land on an Entry's last Segment is not that request, and a default key binding must
+  never be able to make it by accident. The one undo step restores the Entry, its Segment, and every
+  promoted child's original `parentId` together.
 - **`segments-out-of-sync` narrows.** It refuses a `start`/`end` write that names no Segments only when
   the Entry draws several of them. One Segment is the envelope's own drawing, so it moves with the
   envelope, and an ordinary date cell edits as it always did.
