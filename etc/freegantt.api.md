@@ -521,8 +521,6 @@ export interface Duration {
     value: number;
 }
 
-// Warning: (ae-forgotten-export) The symbol "EntryEdits" needs to be exported by the entry point index.d.ts
-//
 // @public
 export type EditExtender = (request: EditRequest) => EntryEdits;
 
@@ -619,6 +617,9 @@ export interface EntryDocument<TMeta = unknown> {
 
 // @public
 export type EntryEdit<TMeta = unknown, TFields extends Record<string, unknown> = Record<string, unknown>> = Partial<Omit<EntryInput<TMeta>, 'id'>> & Partial<TFields>;
+
+// @public (undocumented)
+export type EntryEdits = ReadonlyMap<EntryId, StoredEdit>;
 
 // @public
 export interface EntryFieldEdit {
@@ -1390,8 +1391,6 @@ export interface MountLayer {
     present(content: HTMLElement): Disposer;
 }
 
-// Warning: (ae-forgotten-export) The symbol "StoredEdit" needs to be exported by the entry point index.d.ts
-//
 // @public
 export function moveEntryTo(entry: Entry, start: Instant): StoredEdit;
 
@@ -1819,6 +1818,11 @@ export interface Size {
 
 // @public
 export type SnapSetting = TickStep | 'tick' | 'none';
+
+// @public
+export type StoredEdit = Partial<Omit<Entry, 'id'>> & {
+    readonly proposedKeys?: ReadonlySet<string>;
+};
 
 // @public (undocumented)
 export type StoreName = 'entries' | PluginStoreName;

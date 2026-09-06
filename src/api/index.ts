@@ -19,9 +19,10 @@ export { mergeEntryEdits } from './dataset-plugin.js';
 // D-S5-44: the rigid move a plugin's cascade writes honestly, instead of a several-Segment
 // envelope-only write `data/` refuses.
 export { moveEntryTo } from './dataset-plugin.js';
-// The extension hook's own two types (D4, D-S2-6): a plugin that writes an extender by hand, rather
-// than composing one inline, names these.
-export type { EditRequest, EditExtender } from '../model/index.js';
+// The extension hook's own types (D4, D-S2-6): a plugin that writes an extender by hand, rather than
+// composing one inline, names these. StoredEdit is what `EditRequest.proposed` holds and what
+// `moveEntryTo` (D-S5-44) returns; EntryEdits is the map `mergeEntryEdits` (#197) takes and returns.
+export type { EditRequest, EditExtender, EntryEdits, StoredEdit } from '../model/index.js';
 export type { RollUpKinds } from '../model/index.js';
 export { attemptMutation } from './attempt-mutation.js';
 // S5.12, D-S5-42: one handler over the Dataset's `error` feed and the Gantt's, de-duplicated by
