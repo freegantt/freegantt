@@ -42,6 +42,11 @@ export interface CoreCommandPorts {
   isColumnMovable(key: FieldKey): boolean;
   resizeColumnStep(key: FieldKey, direction: 1 | -1): void;
   moveColumnStep(key: FieldKey, direction: 1 | -1): void;
+  /** #160, D-S5-47: the placeholder `freegantt.discardCellEdit` runs. It does nothing here — a
+   *  read-only Gantt carries no Cell editor to discard (D-S5-19). `inlineEditing()` overrides this
+   *  whole registration with the real discard for as long as it is installed (D-S5-7), and this
+   *  no-op answers again the moment it is not. */
+  discardCellEdit(): void;
 }
 
 /** D-S5-6: the twenty-one commands every consumer already has as a public method or default
@@ -139,6 +144,15 @@ export function registerCoreCommands(
         if (!(error instanceof MutationCancelledError)) throw error;
       }
     },
+  });
+  // #160, D-S5-47: registered first and inert (`when` always declines), so a Gantt with no
+  // `inlineEditing()` carries no editor code (D-S5-19). The plugin overrides this the moment it
+  // installs (D-S5-7) — Q2/Q5's real `when`/`run`, closing over its own `CellEditing`.
+  register({
+    id: 'freegantt.discardCellEdit',
+    label: 'Discard edit',
+    when: () => false,
+    run: () => ports.discardCellEdit(),
   });
   register({
     id: 'freegantt.undo',

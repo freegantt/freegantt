@@ -111,10 +111,11 @@ function fieldContextFor(ctx: PluginContext): FieldContext {
   };
 }
 
-/** The two classes this plugin writes, and `view/styles.ts` styles. The session dresses the wrapper
- *  and the control, so no control factory has to remember to. */
+/** The three classes this plugin writes, and `view/styles.ts` styles. The session dresses the
+ *  wrapper and the control, so no control factory has to remember to. */
 const EDITOR_CLASS = 'fg-cell-editor';
 const EDITOR_CONTROL_CLASS = 'fg-cell-editor-control';
+const EDITOR_DISCARD_CLASS = 'fg-cell-editor-discard';
 
 /** Every refusal the user can see, with the words the user reads. One table, because the wording is
  *  user-visible and belongs in one place. The four `return` sites below decide *which* refusal
@@ -139,6 +140,13 @@ const REFUSAL_TEXT = {
  *  this plugin raises. One refusal must not have two spellings, and kebab is the better value for a
  *  DOM attribute anyway. */
 export type CellEditorRefusal = keyof typeof REFUSAL_TEXT;
+
+/** Why a *commit* left the editor invalid (#160, D-S5-47): the control read no value back
+ *  (`unreadable-value`), or a `beforeChange` handler vetoed the write (`refused-write`). The wrapper's
+ *  `data-reason` names the fault so a future reader can style or announce it. #234 owns the words for
+ *  that reason. This issue ships the naming mechanism, not the vocabulary. Neither key has a
+ *  `REFUSAL_TEXT` entry yet. */
+export type CellEditorCommitRefusal = 'unreadable-value' | 'refused-write';
 
 /** Puts `element` exactly over `cell`'s own rect — no flip and no clamp, unlike `Popup`. An editor
  *  and a refusal notice both sit exactly where the cell already is, so both position through this.
@@ -203,7 +211,15 @@ export interface CellEditorPorts {
   /** The session asks its owner to close it. The owner decides, and drops its own reference, so one
    *  place alone knows whether an editor is open. */
   requestCommit(): void;
-  requestRevert(): void;
+  /** Closes the open editor and writes nothing (#160, D-S5-47). Escape's answer, bound straight
+   *  through the keymap — the same "one implementation, two entry points" shape `runDiscardCommand`
+   *  below gives the pointer affordance. */
+  requestDiscard(): void;
+  /** Runs `freegantt.discardCellEdit` on the command registry (#160, D-S5-47). The invalid editor's
+   *  discard button calls this, not `requestDiscard` directly. D-S5-26 puts one command behind both
+   *  the keyboard and the pointer path. A consumer who overrides the command changes what the button
+   *  does too. */
+  runDiscardCommand(): void;
   /** S5.12, D-S5-40: reports one refusal on the Gantt's `error` event. A consumer can then toast it,
    *  rather than rely on a notice the user may not look at. `ctx.raiseError` fills `by` with this
    *  plugin's id. */
@@ -225,7 +241,8 @@ export class CellEditorSession {
   readonly #bindings = new DisposableStore();
   #unmount: Disposer | undefined;
   #focusTrap: FocusTrap | undefined;
-  /** `#close()` alone writes this, and `commit()`/`revert()` read it. It records this one session's
+  #discardButton: HTMLButtonElement | undefined;
+  /** `#close()` alone writes this, and `commit()`/`discard()` read it. It records this one session's
    *  lifetime. A re-entrant close never tears the same editor down twice — a `change` handler that
    *  removes the entry while `commit()` still writes. */
   #open = false;
@@ -254,7 +271,7 @@ export class CellEditorSession {
     this.#unmount = this.#ports.mountLayer.present(this.#wrapper);
     this.#positionOver(cell);
     this.#bindings.add(this.#ports.mountLayer.onResize(() => this.reposition()));
-    this.#bindings.add(this.#ports.bindEscape(() => this.#ports.requestRevert()));
+    this.#bindings.add(this.#ports.bindEscape(() => this.#ports.requestDiscard()));
     this.#bindings.add(this.#control.bindCommitTriggers(() => this.#ports.requestCommit()));
     this.#wrapper.addEventListener('focusout', this.#onFocusOut);
     this.#focusTrap = activateFocusTrap(this.#wrapper);
@@ -275,7 +292,7 @@ export class CellEditorSession {
     }
     const value = this.#control.read();
     if (!value.ok) {
-      this.#markInvalid();
+      this.#markInvalid('unreadable-value');
       return false;
     }
     const from = this.#ports.storedValue(this.entryId, this.field);
@@ -283,7 +300,7 @@ export class CellEditorSession {
       this.#ports.writeValue(this.entryId, this.field, value.value);
     } catch (error) {
       if (error instanceof MutationCancelledError) {
-        this.#markInvalid();
+        this.#markInvalid('refused-write');
         return false;
       }
       if (error instanceof EntryNotFoundError) {
@@ -300,8 +317,9 @@ export class CellEditorSession {
     return true;
   }
 
-  /** Closes and writes nothing — Escape's answer, and the answer to an anchor that went away. */
-  revert(): void {
+  /** Closes and writes nothing — Escape's answer, the discard command's answer, and the answer to an
+   *  anchor that went away. */
+  discard(): void {
     this.#close();
   }
 
@@ -326,9 +344,13 @@ export class CellEditorSession {
     return this.#ports.dom.cellFor(this.entryId, this.field);
   }
 
+  /** #160, D-S5-47, Q4: a blur out of an already-invalid editor stays put. Re-attempting a value the
+   *  commit path already refused buys nothing, and pulling focus back is the trap this issue exists
+   *  to close. A blur out of a *valid* editor still commits, unchanged. */
   readonly #onFocusOut = (event: FocusEvent): void => {
     const next = event.relatedTarget;
     if (next instanceof Node && this.#wrapper.contains(next)) return;
+    if (this.#wrapper.dataset['state'] === 'invalid') return;
     this.#ports.requestCommit();
   };
 
@@ -336,11 +358,36 @@ export class CellEditorSession {
     positionOver(this.#wrapper, cell, this.#ports.mountLayer.bounds);
   }
 
-  /** The one "this did not save" signal (D-S5-19). The editor stays open, the state names the
-   *  refusal, and focus goes back to the control. */
-  #markInvalid(): void {
+  /** The one "this did not save" signal (D-S5-19). The editor stays open, the state and reason name
+   *  the refusal, and focus goes back to the control. #160, D-S5-47 adds the discard button — the
+   *  invalid state's only affordance, because a valid editor already has Enter, click-away and
+   *  Escape. */
+  #markInvalid(reason: CellEditorCommitRefusal): void {
     this.#wrapper.dataset['state'] = 'invalid';
+    this.#wrapper.dataset['reason'] = reason;
+    this.#ensureDiscardButton();
     this.#control.element.focus();
+  }
+
+  /** Idempotent: a second refused commit on the same editor must not append a second button. Placed
+   *  after the control so `activateFocusTrap`'s first-focusable-descendant rule still opens focus on
+   *  the control, and Tab reaches this button next (#160, D-S5-47, Q6). */
+  #ensureDiscardButton(): void {
+    if (this.#discardButton !== undefined) return;
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = EDITOR_DISCARD_CLASS;
+    button.setAttribute('aria-label', 'Discard edit');
+    button.title = 'Discard edit';
+    button.textContent = '×';
+    // Some browsers do not focus a <button> on click. Without this, the click's own focusout fires
+    // first, with a null relatedTarget, which would run one more doomed commit before the click lands.
+    button.addEventListener('pointerdown', (event) => event.preventDefault());
+    // The command, not the method (D-S5-26): a consumer who overrides `freegantt.discardCellEdit`
+    // changes what this button does too.
+    button.addEventListener('click', () => this.#ports.runDiscardCommand());
+    this.#wrapper.append(button);
+    this.#discardButton = button;
   }
 
   /** Detaches the listeners first. The focus restore the trap runs can otherwise fire a `focusout`
@@ -469,9 +516,10 @@ export class CellEditing {
     return closed;
   }
 
-  /** Closes the open editor and writes nothing — Escape's answer. It always closes. */
-  revert(): void {
-    this.#editor?.revert();
+  /** Closes the open editor and writes nothing — Escape's answer, and the discard command's answer
+   *  (#160, D-S5-47). It always closes. */
+  discard(): void {
+    this.#editor?.discard();
     this.#editor = undefined;
   }
 
@@ -490,13 +538,13 @@ export class CellEditing {
     const editor = this.#editor;
     if (editor === undefined) return;
     const entryGone = this.#ports.entryById(editor.entryId) === undefined;
-    if (entryGone || !editor.stillAnchored()) this.revert();
+    if (entryGone || !editor.stillAnchored()) this.discard();
   }
 
   /** Everything goes, and nothing is written — the plugin's own disposer. */
   clear(): void {
     this.dismissNotice();
-    this.revert();
+    this.discard();
   }
 
   /** Names why this cell did not open, over the cell the user acted on. It replaces whatever notice
@@ -566,8 +614,11 @@ export function inlineEditing(options: InlineEditingOptions = {}): GanttPlugin {
         requestCommit: () => {
           editing.commit();
         },
-        requestRevert: () => {
-          editing.revert();
+        requestDiscard: () => {
+          editing.discard();
+        },
+        runDiscardCommand: () => {
+          ctx.commands.run('freegantt.discardCellEdit');
         },
         raiseError: (report) => {
           ctx.raiseError(report);
@@ -575,8 +626,21 @@ export function inlineEditing(options: InlineEditingOptions = {}): GanttPlugin {
       };
 
       // #169: every mutable this plugin used to hold lives here now, with one method per transition.
-      // The two `requestCommit`/`requestRevert` ports above read it after it is built, never before.
+      // The `requestCommit`/`requestDiscard`/`runDiscardCommand` ports above read it after it is
+      // built, never before.
       const editing = new CellEditing(ports);
+
+      // #160, D-S5-47, Q2/Q5: the public way to close an invalid editor with no keyboard and no
+      // Escape. `core-commands.ts` registers the same id first, as an inert placeholder — a
+      // read-only Gantt with no `inlineEditing()` carries no editor code (D-S5-19). This overrides
+      // that placeholder for as long as this plugin is installed (D-S5-7). The id namespace names the
+      // command's vendor, not the layer that registered it.
+      ctx.commands.register({
+        id: 'freegantt.discardCellEdit',
+        label: 'Discard edit',
+        when: () => editing.editor !== undefined,
+        run: () => editing.discard(),
+      });
 
       /** Issue #137 F1/F10: the anchor cell disappears — removed from the Dataset, or virtualized
        *  out of frame — so an open editor closes without committing. `CellEditing.onAnchorLost`
