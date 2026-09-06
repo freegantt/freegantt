@@ -3,13 +3,16 @@
 # Exits — which wakes the coordinator — when an agent passes the wind-down mark,
 # or when every agent it watched has stopped writing.
 #
+# It reads transcripts and nothing else. It never stops an agent: the coordinator
+# does that, by message, so the agent lands on a clean point and writes a handoff.
+#
 #   watch-agent-context.sh [project-transcript-dir]
 #
-# Env: WIND_DOWN (250000) POLL (30s) IDLE (180s) MAX (7200s)
+# Env: WIND_DOWN (200000) POLL (30s) IDLE (180s) MAX (7200s)
 
 set -uo pipefail
 
-WIND_DOWN=${WIND_DOWN:-250000}
+WIND_DOWN=${WIND_DOWN:-200000}
 POLL=${POLL:-30}
 IDLE=${IDLE:-180}
 MAX=${MAX:-7200}
@@ -46,6 +49,7 @@ while :; do
       printf 'context watcher: %s is at %s tokens (wind-down %s).\n' \
         "$(label "$file")" "$tokens" "$WIND_DOWN"
       echo "Send it a message: stop at the next clean point and write a handoff."
+      echo "It has room to land. Do not stop it — let it finish the handoff."
       exit 1
     fi
 
