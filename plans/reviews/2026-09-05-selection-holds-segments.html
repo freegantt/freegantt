@@ -22,7 +22,7 @@
       <header class="space-y-4">
         <p class="text-xs uppercase tracking-widest text-slate-500">FreeGantt · branch review</p>
         <h1 class="font-serif text-4xl leading-tight">The Selection holds Segments, not Entries</h1>
-        <p class="text-sm text-slate-600 font-mono">830800d..c305e3a · branch <span class="font-semibold">s5-212</span> · 104 files, +3640 / −1315 · 2026-09-05</p>
+        <p class="text-sm text-slate-600 font-mono">Two passes · 830800d..c305e3a · branch <span class="font-semibold">s5-212</span> · 104 files, +3640 / −1315 · 2026-09-05</p>
         <div class="flex flex-wrap gap-2 text-xs">
           <span class="px-2 py-1 rounded bg-emerald-100 text-emerald-900">Strong = fix it</span>
           <span class="px-2 py-1 rounded bg-amber-100 text-amber-900">Worth exploring</span>
@@ -33,7 +33,8 @@
           <p class="text-xs uppercase tracking-wider text-slate-500">Legend</p>
           <p>Solid box = module · dashed line = seam · red arrow = leakage · thick dark box = deep module.</p>
           <p class="text-xs uppercase tracking-wider text-slate-500 pt-2">Gate status</p>
-          <p><span class="font-mono">typecheck</span>, <span class="font-mono">lint</span>, <span class="font-mono">boundaries</span> (289 modules, 1257 deps), <span class="font-mono">guards</span>, <span class="font-mono">test:node</span> (621), <span class="font-mono">test:dom</span> (901), <span class="font-mono">sentence-length</span>, <span class="font-mono">vendor-names</span>, <span class="font-mono">api-report</span> — <span class="text-emerald-700 font-semibold">all green</span>. Every finding below is invisible to CI. Findings 1–5 were reproduced by running the source directly.</p>
+          <p><span class="font-mono">typecheck</span>, <span class="font-mono">lint</span>, <span class="font-mono">boundaries</span> (289 modules, 1257 deps), <span class="font-mono">guards</span>, <span class="font-mono">test:node</span> (621), <span class="font-mono">test:dom</span> (901), <span class="font-mono">sentence-length</span>, <span class="font-mono">vendor-names</span>, <span class="font-mono">api-report</span> — <span class="text-emerald-700 font-semibold">all green</span>. Every finding below is invisible to CI. Findings 1&ndash;5 were reproduced by running the source directly.</p>
+          <p class="pt-2"><span class="font-semibold">Second pass</span> (ball-of-mud, API friendliness, self-documentation, SOLID) added findings 10, 14, 15 and 16 and merged the old finding 13 into 14. The numbering below is the order I would work in.</p>
         </div>
       </header>
 
@@ -55,17 +56,20 @@
               <tr><td class="px-3 py-2">7</td><td class="px-3 py-2"><a class="underline decoration-dotted" href="#f7"><code>selectedEntryIds</code> is an O(dataset) sorted projection on the hover path (I5)</a></td><td class="px-3 py-2 font-mono text-xs">view/</td><td class="px-3 py-2"><span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-900 text-xs">Strong</span></td><td class="px-3 py-2"><span class="px-2 py-0.5 rounded bg-rose-100 text-rose-900 text-xs">Blocking</span></td></tr>
               <tr><td class="px-3 py-2">8</td><td class="px-3 py-2"><a class="underline decoration-dotted" href="#f8"><code>#forgetSegmentsTheDatasetDropped</code> scans the whole Dataset and ignores the <code>ChangeSet</code> in its hand</a></td><td class="px-3 py-2 font-mono text-xs">view/</td><td class="px-3 py-2"><span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-900 text-xs">Strong</span></td><td class="px-3 py-2"><span class="px-2 py-0.5 rounded bg-rose-100 text-rose-900 text-xs">Blocking</span></td></tr>
               <tr><td class="px-3 py-2">9</td><td class="px-3 py-2"><a class="underline decoration-dotted" href="#f9"><code>#draftFor</code> rebuilds a Set of the whole Selection on every pointermove</a></td><td class="px-3 py-2 font-mono text-xs">view/</td><td class="px-3 py-2"><span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-900 text-xs">Strong</span></td><td class="px-3 py-2"><span class="px-2 py-0.5 rounded bg-rose-100 text-rose-900 text-xs">Blocking</span></td></tr>
-              <tr><td class="px-3 py-2">10</td><td class="px-3 py-2"><a class="underline decoration-dotted" href="#f10"><code>SegmentNotFoundError</code> is thrown by a public method and is not on the public surface</a></td><td class="px-3 py-2 font-mono text-xs">api/</td><td class="px-3 py-2"><span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-900 text-xs">Strong</span></td><td class="px-3 py-2"><span class="px-2 py-0.5 rounded bg-rose-100 text-rose-900 text-xs">Blocking</span></td></tr>
-              <tr><td class="px-3 py-2">11</td><td class="px-3 py-2"><a class="underline decoration-dotted" href="#f11"><code>plans/02</code> does not document <code>removeSegments</code>, the <code>Delete</code> binding, or <code>schema: 4</code></a></td><td class="px-3 py-2 font-mono text-xs">plans/</td><td class="px-3 py-2"><span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-900 text-xs">Strong</span></td><td class="px-3 py-2"><span class="px-2 py-0.5 rounded bg-rose-100 text-rose-900 text-xs">Blocking</span></td></tr>
-              <tr><td class="px-3 py-2">12</td><td class="px-3 py-2"><a class="underline decoration-dotted" href="#f12"><code>selectedEntryIds</code>' comparator returns <code>NaN</code> for two unplanned Entries</a></td><td class="px-3 py-2 font-mono text-xs">view/</td><td class="px-3 py-2"><span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-900 text-xs">Strong</span></td><td class="px-3 py-2"><span class="px-2 py-0.5 rounded bg-rose-100 text-rose-900 text-xs">Blocking</span></td></tr>
-              <tr><td class="px-3 py-2">13</td><td class="px-3 py-2"><a class="underline decoration-dotted" href="#f13"><code>render/dom</code> reads the live Dataset to answer a paint question</a></td><td class="px-3 py-2 font-mono text-xs">render/ layout/</td><td class="px-3 py-2"><span class="px-2 py-0.5 rounded bg-amber-100 text-amber-900 text-xs">Worth exploring</span></td><td class="px-3 py-2 text-slate-500 text-xs">non-blocking</td></tr>
-              <tr><td class="px-3 py-2">14</td><td class="px-3 py-2"><a class="underline decoration-dotted" href="#f14">Two names for one concept: <code>segmentIdsAnItemStandsFor</code> vs <code>segmentIdsForItem</code></a></td><td class="px-3 py-2 font-mono text-xs">layout/</td><td class="px-3 py-2"><span class="px-2 py-0.5 rounded bg-amber-100 text-amber-900 text-xs">Worth exploring</span></td><td class="px-3 py-2 text-slate-500 text-xs">non-blocking</td></tr>
-              <tr><td class="px-3 py-2">15</td><td class="px-3 py-2"><a class="underline decoration-dotted" href="#f15"><code>reveal()</code> scans every Entry for a Segment, and reports the wrong error type</a></td><td class="px-3 py-2 font-mono text-xs">view/</td><td class="px-3 py-2"><span class="px-2 py-0.5 rounded bg-amber-100 text-amber-900 text-xs">Worth exploring</span></td><td class="px-3 py-2 text-slate-500 text-xs">non-blocking</td></tr>
-              <tr><td class="px-3 py-2">16</td><td class="px-3 py-2"><a class="underline decoration-dotted" href="#f16"><code>selectionChange</code> with no <code>before*</code> — the argument is good, the spec does not carry it</a></td><td class="px-3 py-2 font-mono text-xs">view/ plans/</td><td class="px-3 py-2"><span class="px-2 py-0.5 rounded bg-amber-100 text-amber-900 text-xs">Worth exploring</span></td><td class="px-3 py-2 text-slate-500 text-xs">waivable with a sentence</td></tr>
-              <tr><td class="px-3 py-2">17</td><td class="px-3 py-2"><a class="underline decoration-dotted" href="#f17">Dead eslint allowlist entry <code>segmentIdFromDataset</code></a></td><td class="px-3 py-2 font-mono text-xs">eslint/</td><td class="px-3 py-2"><span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-900 text-xs">Strong</span></td><td class="px-3 py-2 text-slate-500 text-xs">nit</td></tr>
-              <tr><td class="px-3 py-2">18</td><td class="px-3 py-2"><a class="underline decoration-dotted" href="#f18">Dead <code>segments !== undefined</code> checks left over from the optional field</a></td><td class="px-3 py-2 font-mono text-xs">layout/ e2e/</td><td class="px-3 py-2"><span class="px-2 py-0.5 rounded bg-amber-100 text-amber-900 text-xs">Worth exploring</span></td><td class="px-3 py-2 text-slate-500 text-xs">nit</td></tr>
-              <tr><td class="px-3 py-2">19</td><td class="px-3 py-2"><a class="underline decoration-dotted" href="#f19">Harness: a double cast on <code>window.__dataset</code>, and a dead <code>attemptMutation</code> wrapper</a></td><td class="px-3 py-2 font-mono text-xs">harness/</td><td class="px-3 py-2"><span class="px-2 py-0.5 rounded bg-amber-100 text-amber-900 text-xs">Worth exploring</span></td><td class="px-3 py-2 text-slate-500 text-xs">nit</td></tr>
-              <tr><td class="px-3 py-2">20</td><td class="px-3 py-2"><a class="underline decoration-dotted" href="#f20">The e2e suite now works around a <code>Popup</code> defect and says so in a comment</a></td><td class="px-3 py-2 font-mono text-xs">e2e/ extensions/</td><td class="px-3 py-2"><span class="px-2 py-0.5 rounded bg-amber-100 text-amber-900 text-xs">Worth exploring</span></td><td class="px-3 py-2 text-slate-500 text-xs">nit · file an issue</td></tr>
+              <tr><td class="px-3 py-2">10</td><td class="px-3 py-2"><a class="underline decoration-dotted" href="#f10">The public surface lost &ldquo;select this Entry&rdquo; &mdash; three test files re-implement it by hand</a></td><td class="px-3 py-2 font-mono text-xs">api/</td><td class="px-3 py-2"><span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-900 text-xs">Strong</span></td><td class="px-3 py-2"><span class="px-2 py-0.5 rounded bg-rose-100 text-rose-900 text-xs">Blocking</span></td></tr>
+              <tr><td class="px-3 py-2">11</td><td class="px-3 py-2"><a class="underline decoration-dotted" href="#f11"><code>SegmentNotFoundError</code> is thrown by a public method and is not on the public surface</a></td><td class="px-3 py-2 font-mono text-xs">api/</td><td class="px-3 py-2"><span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-900 text-xs">Strong</span></td><td class="px-3 py-2"><span class="px-2 py-0.5 rounded bg-rose-100 text-rose-900 text-xs">Blocking</span></td></tr>
+              <tr><td class="px-3 py-2">12</td><td class="px-3 py-2"><a class="underline decoration-dotted" href="#f12"><code>plans/02</code> does not document <code>removeSegments</code>, the <code>Delete</code> binding, or <code>schema: 4</code></a></td><td class="px-3 py-2 font-mono text-xs">plans/</td><td class="px-3 py-2"><span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-900 text-xs">Strong</span></td><td class="px-3 py-2"><span class="px-2 py-0.5 rounded bg-rose-100 text-rose-900 text-xs">Blocking</span></td></tr>
+              <tr><td class="px-3 py-2">13</td><td class="px-3 py-2"><a class="underline decoration-dotted" href="#f13"><code>selectedEntryIds</code>&rsquo; comparator returns <code>NaN</code> for two unplanned Entries</a></td><td class="px-3 py-2 font-mono text-xs">view/</td><td class="px-3 py-2"><span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-900 text-xs">Strong</span></td><td class="px-3 py-2"><span class="px-2 py-0.5 rounded bg-rose-100 text-rose-900 text-xs">Blocking</span></td></tr>
+              <tr class="bg-indigo-50/50"><td class="px-3 py-2">14</td><td class="px-3 py-2"><a class="underline decoration-dotted" href="#f14">One rule, two Entry sources &mdash; three times (paint, pointer, pane rule)</a></td><td class="px-3 py-2 font-mono text-xs">render/ view/ interaction/ layout/</td><td class="px-3 py-2"><span class="px-2 py-0.5 rounded bg-amber-100 text-amber-900 text-xs">Worth exploring</span></td><td class="px-3 py-2 text-slate-500 text-xs">non-blocking</td></tr>
+              <tr class="bg-indigo-50/50"><td class="px-3 py-2">15</td><td class="px-3 py-2"><a class="underline decoration-dotted" href="#f15"><code>GanttShell</code> now changes for selection reasons too &mdash; 116 members, 1,882 lines</a></td><td class="px-3 py-2 font-mono text-xs">view/</td><td class="px-3 py-2"><span class="px-2 py-0.5 rounded bg-amber-100 text-amber-900 text-xs">Worth exploring</span></td><td class="px-3 py-2 text-slate-500 text-xs">non-blocking</td></tr>
+              <tr class="bg-indigo-50/50"><td class="px-3 py-2">16</td><td class="px-3 py-2"><a class="underline decoration-dotted" href="#f16"><code>ContainerDomPorts</code> is flat: six layout questions sit beside two collaborators</a></td><td class="px-3 py-2 font-mono text-xs">view/</td><td class="px-3 py-2"><span class="px-2 py-0.5 rounded bg-amber-100 text-amber-900 text-xs">Worth exploring</span></td><td class="px-3 py-2 text-slate-500 text-xs">non-blocking</td></tr>
+              <tr><td class="px-3 py-2">17</td><td class="px-3 py-2"><a class="underline decoration-dotted" href="#f17">Two names for one concept: <code>segmentIdsAnItemStandsFor</code> vs <code>segmentIdsForItem</code></a></td><td class="px-3 py-2 font-mono text-xs">layout/</td><td class="px-3 py-2"><span class="px-2 py-0.5 rounded bg-amber-100 text-amber-900 text-xs">Worth exploring</span></td><td class="px-3 py-2 text-slate-500 text-xs">non-blocking</td></tr>
+              <tr><td class="px-3 py-2">18</td><td class="px-3 py-2"><a class="underline decoration-dotted" href="#f18"><code>reveal()</code> scans every Entry for a Segment, and reports the wrong error type</a></td><td class="px-3 py-2 font-mono text-xs">view/</td><td class="px-3 py-2"><span class="px-2 py-0.5 rounded bg-amber-100 text-amber-900 text-xs">Worth exploring</span></td><td class="px-3 py-2 text-slate-500 text-xs">non-blocking</td></tr>
+              <tr><td class="px-3 py-2">19</td><td class="px-3 py-2"><a class="underline decoration-dotted" href="#f19"><code>selectionChange</code> with no <code>before*</code> &mdash; the argument is good, the spec does not carry it</a></td><td class="px-3 py-2 font-mono text-xs">view/ plans/</td><td class="px-3 py-2"><span class="px-2 py-0.5 rounded bg-amber-100 text-amber-900 text-xs">Worth exploring</span></td><td class="px-3 py-2 text-slate-500 text-xs">waivable with a sentence</td></tr>
+              <tr><td class="px-3 py-2">20</td><td class="px-3 py-2"><a class="underline decoration-dotted" href="#f20">Dead eslint allowlist entry <code>segmentIdFromDataset</code></a></td><td class="px-3 py-2 font-mono text-xs">eslint/</td><td class="px-3 py-2"><span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-900 text-xs">Strong</span></td><td class="px-3 py-2 text-slate-500 text-xs">nit</td></tr>
+              <tr><td class="px-3 py-2">21</td><td class="px-3 py-2"><a class="underline decoration-dotted" href="#f21">Dead <code>segments !== undefined</code> checks left over from the optional field</a></td><td class="px-3 py-2 font-mono text-xs">layout/ e2e/</td><td class="px-3 py-2"><span class="px-2 py-0.5 rounded bg-amber-100 text-amber-900 text-xs">Worth exploring</span></td><td class="px-3 py-2 text-slate-500 text-xs">nit</td></tr>
+              <tr><td class="px-3 py-2">22</td><td class="px-3 py-2"><a class="underline decoration-dotted" href="#f22">Harness: a double cast on <code>window.__dataset</code>, and a dead <code>attemptMutation</code> wrapper</a></td><td class="px-3 py-2 font-mono text-xs">harness/</td><td class="px-3 py-2"><span class="px-2 py-0.5 rounded bg-amber-100 text-amber-900 text-xs">Worth exploring</span></td><td class="px-3 py-2 text-slate-500 text-xs">nit</td></tr>
+              <tr><td class="px-3 py-2">23</td><td class="px-3 py-2"><a class="underline decoration-dotted" href="#f23">The e2e suite now works around a <code>Popup</code> defect and says so in a comment</a></td><td class="px-3 py-2 font-mono text-xs">e2e/ extensions/</td><td class="px-3 py-2"><span class="px-2 py-0.5 rounded bg-amber-100 text-amber-900 text-xs">Worth exploring</span></td><td class="px-3 py-2 text-slate-500 text-xs">nit · file an issue</td></tr>
             </tbody>
           </table>
         </div>
@@ -301,7 +305,7 @@ flowchart TB
         <p class="text-sm"><span class="font-semibold">Deletion test.</span> Delete the index and the complexity reappears in six callers, each with its own scan — which is where it is today. That is a "yes, concentrates".</p>
         <ul class="text-sm list-disc pl-6 space-y-1">
           <li>leverage: one interface, six call sites</li>
-          <li>locality: findings 1, 8 and 15 all land on it</li>
+          <li>locality: findings 1, 8 and 18 all land on it</li>
           <li>O(dataset) becomes O(ids) on the pointer path</li>
           <li>the shell stops accreting a store responsibility</li>
         </ul>
@@ -378,9 +382,30 @@ flowchart TB
       <section class="space-y-6">
         <h2 class="font-serif text-2xl">Surface and spec gaps</h2>
 
-        <article id="f10" class="rounded-lg border border-slate-200 bg-white p-5 space-y-2 scroll-mt-8">
+        <article id="f10" class="rounded-lg border border-rose-200 bg-rose-50 p-5 space-y-3 scroll-mt-8">
           <div class="flex items-baseline gap-3 flex-wrap">
-            <h3 class="font-serif text-xl">10 · <code>SegmentNotFoundError</code> is thrown publicly and is not public</h3>
+            <h3 class="font-serif text-xl">10 &middot; The public surface lost &ldquo;select this Entry&rdquo;</h3>
+            <span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-900 text-xs">Strong</span>
+            <span class="px-2 py-0.5 rounded bg-rose-100 text-rose-900 text-xs">Blocking</span>
+          </div>
+          <p class="font-mono text-sm text-slate-600">src/api/gantt.ts:524&ndash;540 &middot; src/view/gantt-shell.ts:1057 &middot; README.md &sect;Selection</p>
+          <p class="text-sm">This is not the retirement of <code>gantt.selectedIds</code>, which is settled and right. It is the capability that went with it. <code>selectedSegmentIds</code> is the only writable getter, and <code>selectedEntryIds</code> is read-only, so the most ordinary thing an app author does &mdash; select the row they just created &mdash; has no call.</p>
+<pre class="text-xs bg-stone-900 text-stone-100 rounded p-3 overflow-x-auto">// what an app author has to write today
+gantt.selectedSegmentIds = dataset.entries.get(id)!.segments.map((s) =&gt; s.id);
+// read it aloud: "set the selected segment ids to the ids of the segments of the entry"</pre>
+          <p class="text-sm"><span class="font-semibold">The branch already proved this.</span> Three test files hand-roll the missing call:</p>
+          <ul class="text-sm list-disc pl-6 space-y-1">
+            <li><code>src/api/gantt.test.ts:33</code> &mdash; <code>function segmentsOf(...ids)</code>, used 18 times</li>
+            <li><code>src/extensions/features/context-menu.test.ts:41</code> &mdash; the same function again, with the comment <em>&ldquo;a test that means &lsquo;select these Entries&rsquo; names every Segment they drew&rdquo;</em></li>
+            <li><code>src/extensions/features/inline-editing.test.ts:631</code> &mdash; inlined a third time</li>
+          </ul>
+          <p class="text-sm">And <code>GanttShell.#segmentIdsOfEntries</code> <em>is</em> that function, private. The library holds the answer and does not publish it. <code>CLAUDE.md</code>&rsquo;s &ldquo;two callers, two surfaces&rdquo; rule says an app author never meets an expert knob to get the default behaviour; a Segment is the expert knob here, and the row is the default.</p>
+          <p class="text-sm"><span class="font-semibold">Solution.</span> Publish the verb: <code>gantt.selectEntries(ids)</code> &mdash; &ldquo;select entries t1 and t2&rdquo; is a true sentence &mdash; running the same cancelable sequence, selecting every Segment of each Entry, exactly as a grid-row click does. It is <code>#segmentIdsOfEntries</code> plus <code>#proposeSelection</code>, both of which already exist. A settable <code>selectedEntryIds</code> is the other option, but get-then-set would not round-trip when one Segment of an Entry is selected, so the verb is the honest shape. Then add the one-line example to <code>README.md</code> &sect;Selection, which currently shows how to <em>read</em> the Selection three ways and never how to write an Entry into it.</p>
+        </article>
+
+        <article id="f11" class="rounded-lg border border-slate-200 bg-white p-5 space-y-2 scroll-mt-8">
+          <div class="flex items-baseline gap-3 flex-wrap">
+            <h3 class="font-serif text-xl">11 · <code>SegmentNotFoundError</code> is thrown publicly and is not public</h3>
             <span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-900 text-xs">Strong</span>
             <span class="px-2 py-0.5 rounded bg-rose-100 text-rose-900 text-xs">Blocking</span>
           </div>
@@ -388,9 +413,9 @@ flowchart TB
           <p class="text-sm"><code>dataset.entries.removeSegments(['nope'])</code> throws <code>SegmentNotFoundError</code>. It is exported from <code>model/index.ts</code> and stops there: <code>api/index.ts</code> re-exports <code>EntryNotFoundError</code>, <code>DuplicateEntryIdError</code>, <code>SegmentsOutOfSyncError</code> and twenty-eight others, but not this one, and <code>etc/freegantt.api.md</code> confirms it never reaches the surface. A consumer cannot <code>instanceof</code> the error a public method throws at them. Fix: export it, regenerate the report (<code>pnpm run api-report</code>), and add the sentence to <code>plans/02</code>'s "Errors are typed and actionable" list beside <code>EntryNotFoundError</code>.</p>
         </article>
 
-        <article id="f11" class="rounded-lg border border-slate-200 bg-white p-5 space-y-2 scroll-mt-8">
+        <article id="f12" class="rounded-lg border border-slate-200 bg-white p-5 space-y-2 scroll-mt-8">
           <div class="flex items-baseline gap-3 flex-wrap">
-            <h3 class="font-serif text-xl">11 · Three things this branch shipped that <code>plans/02</code> does not carry</h3>
+            <h3 class="font-serif text-xl">12 · Three things this branch shipped that <code>plans/02</code> does not carry</h3>
             <span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-900 text-xs">Strong</span>
             <span class="px-2 py-0.5 rounded bg-rose-100 text-rose-900 text-xs">Blocking</span>
           </div>
@@ -402,9 +427,9 @@ flowchart TB
           </ul>
         </article>
 
-        <article id="f12" class="rounded-lg border border-slate-200 bg-white p-5 space-y-2 scroll-mt-8">
+        <article id="f13" class="rounded-lg border border-slate-200 bg-white p-5 space-y-2 scroll-mt-8">
           <div class="flex items-baseline gap-3 flex-wrap">
-            <h3 class="font-serif text-xl">12 · The row-order comparator returns <code>NaN</code></h3>
+            <h3 class="font-serif text-xl">13 · The row-order comparator returns <code>NaN</code></h3>
             <span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-900 text-xs">Strong</span>
             <span class="px-2 py-0.5 rounded bg-rose-100 text-rose-900 text-xs">Blocking</span>
           </div>
@@ -416,9 +441,9 @@ flowchart TB
       </section>
 
       <!-- ───────────── 13 ───────────── -->
-      <article id="f13" class="space-y-4 scroll-mt-8">
+      <article id="f14" class="space-y-4 scroll-mt-8">
         <div class="flex items-baseline gap-3 flex-wrap">
-          <h2 class="font-serif text-2xl">13 · <code>render/dom</code> reads the live Dataset to answer a paint question</h2>
+          <h2 class="font-serif text-2xl">14 · One rule, two Entry sources &mdash; three times</h2>
           <span class="px-2 py-0.5 rounded bg-amber-100 text-amber-900 text-xs">Worth exploring</span>
         </div>
         <p class="font-mono text-sm text-slate-600">src/render/dom/index.ts:255–262, 656–664, 905–915 · src/layout/frame.ts:92 · src/layout/frame-memory.ts:97</p>
@@ -457,17 +482,91 @@ flowchart LR
 
         <p class="text-sm"><span class="font-semibold">Problem.</span> This branch made <code>DomBackendOptions.entryById</code> mandatory, with a comment explaining that "a backend with no way to look up an Entry cannot answer 'is this whole-span bar's Entry selected'". That is the seam moving the wrong way. <code>render/</code> used to answer every paint question from the frame it synced; it now calls the live Dataset for the row-selection paint on every <code>applyState</code>, and for the whole-span bar index on every <code>syncBars</code>. Meanwhile <code>FrameLayout.segmentIdsForItem</code> deliberately asks <code>FrameMemory.entry()</code> — the frame's Entry — because that is the whole reason <code>FrameMemory.entry()</code> was added in this same branch. One rule, two Entry sources, and <code>applyState</code> can run after a commit and before the next frame.</p>
         <p class="text-sm"><span class="font-semibold">Solution.</span> Carry the stands-for set on <code>FrameBar</code> the same way <code>segmentId</code> already rides it, and give <code>FrameRow</code> its Segment ids. <code>createDomBackend</code> then drops <code>entryById</code>, the mandatory-option comment goes with it, and the "the paint side never parses an id" rule extends to "the paint side never reads the Dataset".</p>
+        <p class="text-sm"><span class="font-semibold">And a third time, in <code>interaction/</code>.</span> ADR 0010 says the pane rule &ldquo;is a DOM fact, and <code>targetUnder</code> already owns it. Nothing downstream asks the question again.&rdquo; <code>interaction/entry-gestures.ts</code>&rsquo;s <code>selectableSegmentsOf</code> asks it again: a bar names its own Segment, a row names every Segment of every Entry it owns. Same rule, second body &mdash; and again on a different Entry source, because the row branch goes through <code>ctx.segmentsOfEntries</code> &rarr; <code>GanttShell.#segmentIdsOfEntries</code> &rarr; the <em>live</em> Dataset, while <code>DomTarget.segmentIds</code> goes through <code>FrameLayout.segmentIdsForRow</code> &rarr; the <em>frame&rsquo;s</em> Entries.</p>
+        <p class="text-sm">The two bodies do differ by one thing: the gesture path filters by the <code>select</code> capability and the DOM-target path does not. That difference is real, and it is exactly one predicate. It does not justify a second traversal on a second Entry source. Fold it: <code>DomTarget</code> keeps stating the DOM fact, and <code>interaction/</code> filters that answer rather than rebuilding it.</p>
+        <div class="rounded border-l-4 border-amber-400 bg-amber-50 p-3 text-sm text-amber-950">Three copies of &ldquo;which Segments does this stand for&rdquo;, on two different Entry sources, in a branch whose ADR says there is one. This is the finding most likely to grow into the ball of mud, because each copy is individually reasonable.</div>
         <ul class="text-sm list-disc pl-6 space-y-1">
           <li>the leak closes: <code>render/</code> reads the frame, nothing else</li>
           <li>the interface shrinks by one required option</li>
-          <li>finding 14's free function loses its second caller</li>
+          <li>finding 17's free function loses its second caller</li>
+          <li>the pane rule stops having three bodies</li>
         </ul>
       </article>
 
       <!-- ───────────── 14 ───────────── -->
-      <article id="f14" class="space-y-4 scroll-mt-8">
+      <article id="f15" class="space-y-4 scroll-mt-8">
         <div class="flex items-baseline gap-3 flex-wrap">
-          <h2 class="font-serif text-2xl">14 · Two names for one concept</h2>
+          <h2 class="font-serif text-2xl">15 &middot; <code>GanttShell</code> now changes for selection reasons too</h2>
+          <span class="px-2 py-0.5 rounded bg-amber-100 text-amber-900 text-xs">Worth exploring</span>
+        </div>
+        <p class="font-mono text-sm text-slate-600">src/view/gantt-shell.ts &mdash; 1,882 lines, 116 top-level members</p>
+        <p class="text-sm">The dispatch asked whether the shell is still accreting. It is, and this branch says so precisely: eight new members, six of them the Segment&harr;Entry projection (<code>selectedEntryIds</code>, <code>#rowRankByEntryId</code>, <code>#segmentIdsOfEntries</code>, <code>#selectedSegmentCount</code>, <code>#forgetSegmentsTheDatasetDropped</code>, <code>#findSegmentOwner</code>), plus <code>#stepSegmentSelection</code> and <code>#revealSpan</code>.</p>
+
+        <div class="grid md:grid-cols-2 gap-4">
+          <div class="rounded-lg border border-slate-200 bg-white p-4 space-y-2">
+            <p class="text-xs uppercase tracking-wider text-slate-500">Before &mdash; one module, six reasons to change</p>
+            <div class="space-y-1 text-xs font-mono">
+              <div class="border-l-4 border-slate-400 pl-2 py-1">viewport &middot; presets &middot; zoom</div>
+              <div class="border-l-4 border-slate-400 pl-2 py-1">columns &middot; grid chrome</div>
+              <div class="border-l-4 border-slate-400 pl-2 py-1">plugins &middot; commands &middot; keymap</div>
+              <div class="border-l-4 border-slate-400 pl-2 py-1">frames &middot; backend &middot; affordances</div>
+              <div class="border-l-4 border-slate-400 pl-2 py-1">collapse &middot; rows</div>
+              <div class="border-l-4 border-rose-400 pl-2 py-1 bg-rose-50">selection &middot; segment projection &middot; prune &middot; step &nbsp;&larr; new</div>
+            </div>
+          </div>
+          <div class="rounded-lg deep text-stone-100 p-4 space-y-2">
+            <p class="text-xs uppercase tracking-wider text-stone-400">After &mdash; the selection cut</p>
+            <div class="border-2 border-stone-500 rounded p-3 space-y-1 text-xs font-mono">
+              <p class="text-stone-200">view/selection-state.ts</p>
+              <p class="text-stone-500">segmentIds &middot; entryIds &middot; propose &middot; prune &middot; step &middot; segmentsOfEntries &middot; countOf</p>
+            </div>
+            <p class="text-xs text-stone-400">Shell holds <code>#selection: SelectionState</code> and delegates, the way it already holds <code>#columnChrome</code>, <code>#treeCollapse</code> and <code>#frames</code>.</p>
+          </div>
+        </div>
+
+        <p class="text-sm"><span class="font-semibold">Honest framing.</span> This is not a depth win. Apply the deletion test and the seven members go straight back to the shell &mdash; the complexity reappears in exactly one place, so the interface is not buying leverage. It is a <em>divergent change</em> cut: the shell already changes for viewport, column, plugin, frame and collapse reasons, and selection is now a sixth. The shell has taken this cut before (<code>#columnChrome</code>, <code>#treeCollapse</code>, the plugin ports lifted at the last review), and each one made the next selection-shaped change land in one file. Findings 6, 7, 8 and 13 all edit these same seven members; doing them together is the natural moment.</p>
+        <ul class="text-sm list-disc pl-6 space-y-1">
+          <li>locality: a selection change edits one file</li>
+          <li>the shell stops growing a member per Selection question</li>
+          <li>the caching of finding 7 has an obvious home</li>
+        </ul>
+      </article>
+
+      <article id="f16" class="space-y-4 scroll-mt-8">
+        <div class="flex items-baseline gap-3 flex-wrap">
+          <h2 class="font-serif text-2xl">16 &middot; <code>ContainerDomPorts</code> is flat where it should be grouped</h2>
+          <span class="px-2 py-0.5 rounded bg-amber-100 text-amber-900 text-xs">Worth exploring</span>
+        </div>
+        <p class="font-mono text-sm text-slate-600">src/view/gantt-dom.ts:132&ndash;155 &middot; src/view/gantt-shell.ts:484&ndash;493</p>
+        <p class="text-sm">The dispatch asked whether the options object is the right shape or a bag. It is a clear improvement on the five positional parameters it replaced &mdash; a reader of the call site can now see what each argument answers. It is not yet the right shape.</p>
+        <div class="grid md:grid-cols-2 gap-4">
+          <div class="rounded-lg border border-slate-200 bg-white p-4">
+            <p class="text-xs uppercase tracking-wider text-slate-500 mb-2">Before &mdash; eight members, one level</p>
+<pre class="text-xs">container          &larr; an element
+paneLayout         &larr; a collaborator
+entryById          &larr; the Dataset
+itemIdsForEntry    &#125;
+entryIdsForRow     &#125;  six questions,
+segmentIdsForItem  &#125;  all of them
+segmentIdsForRow   &#125;  the layout's
+frameRevision      &#125;</pre>
+          </div>
+          <div class="rounded-lg deep text-stone-100 p-4">
+            <p class="text-xs uppercase tracking-wider text-stone-400 mb-2">After &mdash; three collaborators</p>
+<pre class="text-xs text-stone-200">container
+paneLayout
+entryById
+layout    &larr; FrameLayout satisfies it structurally</pre>
+            <p class="text-xs text-stone-400 pt-2">A seventh layout question widens <code>layout</code>, not <code>ContainerDom</code>.</p>
+          </div>
+        </div>
+        <p class="text-sm"><span class="font-semibold">Problem.</span> Six of the eight members are one collaborator&rsquo;s questions, spelled out one function at a time. This branch added two of them and will add more: every new thing the pointer needs to know about the frame widens <code>ContainerDom</code>&rsquo;s interface, which is the definition of a shallow seam. <code>frameRevision</code> is the tell &mdash; it is not a question about the DOM at all, it is a staleness token for the memo, and grouping it under <code>layout</code> makes that legible.</p>
+        <p class="text-sm"><span class="font-semibold">Solution.</span> One <code>layout</code> member typed as the narrow query interface <code>FrameLayout</code> already satisfies structurally &mdash; the same posture <code>GanttShell</code> takes for <code>attachEntryGestures</code>. <code>ContainerDom</code> then has three collaborators, and <code>view/</code> keeps its no-import-of-<code>layout</code> discipline because the interface is declared here.</p>
+      </article>
+
+      <article id="f17" class="space-y-4 scroll-mt-8">
+        <div class="flex items-baseline gap-3 flex-wrap">
+          <h2 class="font-serif text-2xl">17 · Two names for one concept</h2>
           <span class="px-2 py-0.5 rounded bg-amber-100 text-amber-900 text-xs">Worth exploring</span>
         </div>
         <p class="font-mono text-sm text-slate-600">src/layout/items/segment-ids-an-item-stands-for.ts · src/layout/frame-layout.ts:112</p>
@@ -484,39 +583,39 @@ flowchart LR
             </tbody>
           </table>
         </div>
-        <p class="text-sm"><span class="font-semibold">Solution.</span> One name. <code>segmentIdsForItem(item, entry)</code> in <code>layout/items/segment-ids-for-item.ts</code>, with <code>FrameLayout.segmentIdsForItem(id)</code> delegating. That also brings the file name back in line with its neighbours, which are all verb phrases (<code>produce-items.ts</code>, <code>pack-lanes.ts</code>, <code>resolve-rows.ts</code>) rather than relative clauses. If finding 13 lands, the free function has one caller and the deletion test says fold it into <code>FrameLayout</code>.</p>
+        <p class="text-sm"><span class="font-semibold">Solution.</span> One name. <code>segmentIdsForItem(item, entry)</code> in <code>layout/items/segment-ids-for-item.ts</code>, with <code>FrameLayout.segmentIdsForItem(id)</code> delegating. That also brings the file name back in line with its neighbours, which are all verb phrases (<code>produce-items.ts</code>, <code>pack-lanes.ts</code>, <code>resolve-rows.ts</code>) rather than relative clauses. If finding 14 lands, the free function has one caller and the deletion test says fold it into <code>FrameLayout</code>.</p>
       </article>
 
       <!-- ───────────── 15–20 ───────────── -->
       <section class="space-y-4">
         <h2 class="font-serif text-2xl">Smaller findings</h2>
 
-        <article id="f15" class="rounded-lg border border-slate-200 bg-white p-5 space-y-2 scroll-mt-8">
-          <div class="flex items-baseline gap-3 flex-wrap"><h3 class="font-serif text-lg">15 · <code>reveal()</code> scans the Dataset and reports the wrong error</h3><span class="px-2 py-0.5 rounded bg-amber-100 text-amber-900 text-xs">Worth exploring</span></div>
+        <article id="f18" class="rounded-lg border border-slate-200 bg-white p-5 space-y-2 scroll-mt-8">
+          <div class="flex items-baseline gap-3 flex-wrap"><h3 class="font-serif text-lg">18 · <code>reveal()</code> scans the Dataset and reports the wrong error</h3><span class="px-2 py-0.5 rounded bg-amber-100 text-amber-900 text-xs">Worth exploring</span></div>
           <p class="font-mono text-xs text-slate-600">src/view/gantt-shell.ts:1602–1628</p>
           <p class="text-sm">A public method that walks every Entry and every Segment (<code>#findSegmentOwner</code>), and then reports <code>EntryNotFoundError(entryId(id), 'reveal')</code> for an id that was never read as an Entry — now that <code>SegmentNotFoundError</code> exists. Finding 6's index turns the scan into a lookup. The Entry-reading-wins ambiguity itself is documented and fine.</p>
         </article>
 
-        <article id="f16" class="rounded-lg border border-slate-200 bg-white p-5 space-y-2 scroll-mt-8">
-          <div class="flex items-baseline gap-3 flex-wrap"><h3 class="font-serif text-lg">16 · <code>selectionChange</code> with no <code>before*</code></h3><span class="px-2 py-0.5 rounded bg-amber-100 text-amber-900 text-xs">Worth exploring</span></div>
+        <article id="f19" class="rounded-lg border border-slate-200 bg-white p-5 space-y-2 scroll-mt-8">
+          <div class="flex items-baseline gap-3 flex-wrap"><h3 class="font-serif text-lg">19 · <code>selectionChange</code> with no <code>before*</code></h3><span class="px-2 py-0.5 rounded bg-amber-100 text-amber-900 text-xs">Worth exploring</span></div>
           <p class="font-mono text-xs text-slate-600">src/view/gantt-shell.ts:1071–1093 · plans/02-public-api.md</p>
           <p class="text-sm">The dispatch asked whether the code comment argues this well enough. It argues it well: "a veto would restore a dead id" is the right reason, and <code>selectedEntries</code> already takes the same posture on the read side. The outcome is correct and I would not change the code. But <code>plans/02</code> states the rule with no exception, and this is now the only place in the library that fires half a pair. This does not need an ADR — it needs one sentence in <code>plans/02</code> §4 beside the <code>beforeSelectionChange</code> line, or a bullet in ADR 0010's consequences: <em>the prune reports a change the Dataset already made, so it fires <code>selectionChange</code> alone</em>. Waivable only if that sentence lands.</p>
         </article>
 
-        <article id="f17" class="rounded-lg border border-slate-200 bg-white p-5 space-y-2 scroll-mt-8">
-          <div class="flex items-baseline gap-3 flex-wrap"><h3 class="font-serif text-lg">17 · Dead eslint allowlist entry</h3><span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-900 text-xs">Strong</span></div>
+        <article id="f20" class="rounded-lg border border-slate-200 bg-white p-5 space-y-2 scroll-mt-8">
+          <div class="flex items-baseline gap-3 flex-wrap"><h3 class="font-serif text-lg">20 · Dead eslint allowlist entry</h3><span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-900 text-xs">Strong</span></div>
           <p class="font-mono text-xs text-slate-600">eslint/rules/model-is-types-only.cjs:20</p>
           <p class="text-sm"><code>segmentIdFromDataset</code> was added to <code>IDENTITY_CAST_HELPERS</code>. No such function exists anywhere in <code>src/</code>. An allowlist entry for a function nobody wrote is a licence nobody asked for. Delete it.</p>
         </article>
 
-        <article id="f18" class="rounded-lg border border-slate-200 bg-white p-5 space-y-2 scroll-mt-8">
-          <div class="flex items-baseline gap-3 flex-wrap"><h3 class="font-serif text-lg">18 · Dead <code>segments !== undefined</code> checks</h3><span class="px-2 py-0.5 rounded bg-amber-100 text-amber-900 text-xs">Worth exploring</span></div>
+        <article id="f21" class="rounded-lg border border-slate-200 bg-white p-5 space-y-2 scroll-mt-8">
+          <div class="flex items-baseline gap-3 flex-wrap"><h3 class="font-serif text-lg">21 · Dead <code>segments !== undefined</code> checks</h3><span class="px-2 py-0.5 rounded bg-amber-100 text-amber-900 text-xs">Worth exploring</span></div>
           <p class="font-mono text-xs text-slate-600">src/layout/gesture-draft.ts:264 · e2e/selection.spec.ts (showSegmentedSpan)</p>
           <p class="text-sm"><code>Entry.segments</code> is required now. Both reads still guard against <code>undefined</code>, which tells the next reader the field is still optional and sends them looking for the case that produces it. The point of making the field required was to delete these branches.</p>
         </article>
 
-        <article id="f19" class="rounded-lg border border-slate-200 bg-white p-5 space-y-2 scroll-mt-8">
-          <div class="flex items-baseline gap-3 flex-wrap"><h3 class="font-serif text-lg">19 · Harness review (per <code>CLAUDE.md</code>, every commit)</h3><span class="px-2 py-0.5 rounded bg-amber-100 text-amber-900 text-xs">Worth exploring</span></div>
+        <article id="f22" class="rounded-lg border border-slate-200 bg-white p-5 space-y-2 scroll-mt-8">
+          <div class="flex items-baseline gap-3 flex-wrap"><h3 class="font-serif text-lg">22 · Harness review (per <code>CLAUDE.md</code>, every commit)</h3><span class="px-2 py-0.5 rounded bg-amber-100 text-amber-900 text-xs">Worth exploring</span></div>
           <p class="font-mono text-xs text-slate-600">harness/main.ts:74–80, 163</p>
           <p class="text-sm">Mostly clean, and the two new comments follow the buffer-kind/risk-kind question shape ("Which commands does an entry menu show?", "Why is one of them the library's own?"). Two things to record rather than tidy:</p>
           <ul class="text-sm list-disc pl-6 space-y-1">
@@ -525,8 +624,8 @@ flowchart LR
           </ul>
         </article>
 
-        <article id="f20" class="rounded-lg border border-slate-200 bg-white p-5 space-y-2 scroll-mt-8">
-          <div class="flex items-baseline gap-3 flex-wrap"><h3 class="font-serif text-lg">20 · The e2e suite works around a <code>Popup</code> defect, and says so</h3><span class="px-2 py-0.5 rounded bg-amber-100 text-amber-900 text-xs">Worth exploring</span></div>
+        <article id="f23" class="rounded-lg border border-slate-200 bg-white p-5 space-y-2 scroll-mt-8">
+          <div class="flex items-baseline gap-3 flex-wrap"><h3 class="font-serif text-lg">23 · The e2e suite works around a <code>Popup</code> defect, and says so</h3><span class="px-2 py-0.5 rounded bg-amber-100 text-amber-900 text-xs">Worth exploring</span></div>
           <p class="font-mono text-xs text-slate-600">e2e/selection.spec.ts (pickableBarOf) · src/extensions/popup.ts · src/extensions/focus-trap.ts</p>
           <p class="text-sm">The known, deferred defect — <code>Popup.open()</code> arms <code>dismissOn: 'scroll'</code> before <code>activateFocusTrap()</code>, and <code>focusFirst()</code> calls <code>.focus()</code> with no <code>preventScroll</code> — now has a test-side workaround: <code>pickableBarOf</code> centres the bar, and the comment ends "it does not fix it". That is the shape <code>CLAUDE.md</code>'s stop rule refuses in <code>harness/</code>, arriving in <code>e2e/</code> instead: consumer code compensating for the library, and hiding the evidence in a passing suite.</p>
           <p class="text-sm">The structural point, which is why it is here at all: <em>arming a dismiss listener and placing focus are ordered, and nothing in the seam says so.</em> <code>Popup.open()</code> should finish placing focus before it arms any <code>dismissOn</code> listener, and <code>focusFirst()</code> should pass <code>{ preventScroll: true }</code>. File it against <code>src/extensions/popup.ts</code>, and revert the e2e helper when it lands so the suite stops carrying the workaround.</p>
@@ -538,8 +637,8 @@ flowchart LR
         <p class="text-xs uppercase tracking-widest text-stone-400">Top recommendation</p>
         <h2 class="font-serif text-3xl">Give <code>data/</code> the <code>SegmentId → EntryId</code> index — <a class="underline" href="#f6">finding 6</a></h2>
         <p class="text-stone-300">The Selection changed unit and nine bodies across four layers each learned to walk Segments back to Entries. Six of them scan the whole Dataset. <code>GanttShell</code> absorbed six of them and grew a hundred lines doing it.</p>
-        <p class="text-stone-300">One index in the store that already owns the Segments collapses <code>#groupSegmentsByOwner</code>, <code>#findSegmentOwner</code>, <code>#forgetSegmentsTheDatasetDropped</code> and the scan inside <code>selectedEntryIds</code>. It gives finding 1 the uniqueness check it needs, finding 8 the cheap prune, finding 15 its lookup, and finding 7 the field it should have been reading all along. It is the one change that four other findings land on.</p>
-        <p class="text-stone-400 text-sm">Sequence: findings 1–5 first, because they are correctness in <code>data/</code> and each lands on its own. Then 6, then 7–9 on top of it. Then 10–12, which are surface and spec. 13–20 after.</p>
+        <p class="text-stone-300">One index in the store that already owns the Segments collapses <code>#groupSegmentsByOwner</code>, <code>#findSegmentOwner</code>, <code>#forgetSegmentsTheDatasetDropped</code> and the scan inside <code>selectedEntryIds</code>. It gives finding 1 the uniqueness check it needs, finding 8 the cheap prune, finding 18 its lookup, and finding 7 the field it should have been reading all along. It is the one change that four other findings land on.</p>
+        <p class="text-stone-400 text-sm">Sequence: findings 1&ndash;5 first &mdash; correctness in <code>data/</code>, each lands on its own. Then 6, then 7&ndash;9 on top of it. Then 10&ndash;13, the public surface and the spec. Then 14&ndash;16, which are one refactor if taken together. Then 17&ndash;23.</p>
       </section>
 
       <footer class="text-xs text-slate-500 pt-8 border-t border-slate-200">
