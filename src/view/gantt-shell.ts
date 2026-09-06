@@ -82,7 +82,6 @@ import type {
   PluginId,
   RaiseError,
   RowId,
-  Segment,
   SegmentId,
   Size,
   TimeSpan,
@@ -1039,12 +1038,9 @@ export class GanttShell {
    *  context read it. So no two of them can disagree about what is selected. An Entry a collapse hid
    *  keeps its place in Dataset order behind the rows that are showing. */
   get selectedEntryIds(): readonly EntryId[] {
-    const selected = new Set(this.#selection);
     const rank = this.#rowRankByEntryId();
-    const ids = this.#options.dataset.entries.all
-      .filter((entry) => entry.segments.some((segment) => selected.has(segment.id)))
-      .map((entry) => entry.id);
-    return ids.sort((a, b) => (rank.get(a) ?? Infinity) - (rank.get(b) ?? Infinity));
+    const ids = this.#options.dataset.entries.entryIdsOfSegments(this.#selection);
+    return [...ids].sort((a, b) => (rank.get(a) ?? Infinity) - (rank.get(b) ?? Infinity));
   }
 
   /** Where each Entry sits in the resolved row order. It is built once per projection. So ordering
@@ -1095,11 +1091,8 @@ export class GanttShell {
    *  the re-check. */
   #forgetSegmentsTheDatasetDropped(): void {
     if (this.#selection.length === 0) return;
-    const live = new Set<SegmentId>();
-    for (const entry of this.#options.dataset.entries.all) {
-      for (const segment of entry.segments) live.add(segment.id);
-    }
-    const kept = this.#selection.filter((id) => live.has(id));
+    const entries = this.#options.dataset.entries;
+    const kept = this.#selection.filter((id) => entries.entryIdOfSegment(id) !== undefined);
     if (kept.length === this.#selection.length) return;
     const from = this.#selection;
     this.#selection = kept;
@@ -1618,21 +1611,14 @@ export class GanttShell {
    *  collapsed ancestor expands so the row exists. A still-hidden row (filter) keeps the current y —
    *  it does not jump to 0. */
   reveal(id: EntryId | SegmentId): void {
-    const entry = this.#options.dataset.entries.get(id);
+    const entries = this.#options.dataset.entries;
+    const entry = entries.get(id);
     if (entry !== undefined) return this.#revealSpan(entry.id, entry, entry.start, entry.end);
-    const found = this.#findSegmentOwner(id);
-    if (found === undefined) throw new EntryNotFoundError(entryId(id), 'reveal');
-    return this.#revealSpan(found.entry.id, found.entry, found.segment.start, found.segment.end);
-  }
-
-  /** Scans every Entry's Segments for `id`. The Dataset publishes no reverse index from a Segment to
-   *  its owning Entry, so this is the one place `reveal` pays for that lookup. */
-  #findSegmentOwner(id: EntryId | SegmentId): { entry: Entry; segment: Segment } | undefined {
-    for (const entry of this.#options.dataset.entries.all) {
-      const segment = entry.segments.find((candidate) => candidate.id === id);
-      if (segment !== undefined) return { entry, segment };
-    }
-    return undefined;
+    const ownerId = entries.entryIdOfSegment(id);
+    const owner = ownerId === undefined ? undefined : entries.get(ownerId);
+    const segment = owner?.segments.find((candidate) => candidate.id === id);
+    if (owner === undefined || segment === undefined) throw new EntryNotFoundError(entryId(id), 'reveal');
+    return this.#revealSpan(owner.id, owner, segment.start, segment.end);
   }
 
   #revealSpan(ownerId: EntryId, kindSource: Pick<Entry, 'kind'>, start: Instant, end: Instant): void {

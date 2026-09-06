@@ -232,7 +232,7 @@ export class DatasetState implements Dataset {
   #segmentIdTaken(id: SegmentId): boolean {
     if (this.#reservedSegmentIds.has(id)) return true;
     if (!this.#entryStoreReady) return false;
-    return this.entries.all.some((entry) => entry.segments.some((segment) => segment.id === id));
+    return this.entries.entryIdOfSegment(id) !== undefined;
   }
 
   nextChangeSetId(): ChangeSetId {

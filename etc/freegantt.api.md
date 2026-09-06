@@ -693,6 +693,8 @@ export interface EntryStoreView<TMeta = unknown, TFields extends Record<string, 
     // (undocumented)
     readonly all: readonly Entry<TMeta>[];
     childrenOf(id: EntryId | string): readonly Entry<TMeta>[];
+    entryIdOfSegment(id: SegmentId | string): EntryId | undefined;
+    entryIdsOfSegments(ids: readonly (SegmentId | string)[]): readonly EntryId[];
     fieldValue<K extends FieldKey>(id: EntryId | string, field: K): FieldValue<TFields, K> | undefined;
     // (undocumented)
     get(id: EntryId | string): Entry<TMeta> | undefined;

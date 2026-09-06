@@ -370,6 +370,124 @@ describe('Segment identity (#212, ADR 0010, fix plan R1)', () => {
   });
 });
 
+describe('entryIdOfSegment / entryIdsOfSegments (#212, ADR 0010, fix plan R4)', () => {
+  it('finds the Entry a construction-time Segment belongs to, and answers undefined for an unknown id', () => {
+    const state = dataset([{ id: 't1', segments: [{ id: 'sg1', start: 0, end: 1 }] }]);
+
+    expect(state.entries.entryIdOfSegment('sg1')).toBe(entryId('t1'));
+    expect(state.entries.entryIdOfSegment('missing')).toBeUndefined();
+  });
+
+  it('follows a committed add, so a Segment minted after construction is findable too', () => {
+    const state = dataset();
+
+    const added = state.entries.add({
+      id: 't1',
+      name: 't1',
+      start: 0,
+      end: 1,
+      segments: [{ id: 'sg1', start: 0, end: 1 }],
+    });
+
+    expect(state.entries.entryIdOfSegment('sg1')).toBe(added.id);
+  });
+
+  it('follows a committed removeSegments, undo included: the index moves with the Entry, not just its ids', () => {
+    const state = dataset([
+      {
+        id: 't1',
+        start: 0,
+        end: 20,
+        segments: [
+          { id: 'a1', start: 0, end: 10 },
+          { id: 'a2', start: 10, end: 20 },
+        ],
+      },
+    ]);
+
+    state.entries.removeSegments(['a2']);
+    expect(state.entries.entryIdOfSegment('a2')).toBeUndefined();
+    expect(state.entries.entryIdOfSegment('a1')).toBe(entryId('t1'));
+
+    state.undo();
+    expect(state.entries.entryIdOfSegment('a2')).toBe(entryId('t1'));
+  });
+
+  it('follows a committed entries.remove: the removed Entry’s Segment stops resolving', () => {
+    const state = dataset([{ id: 't1', segments: [{ id: 'sg1', start: 0, end: 1 }] }]);
+
+    state.entries.remove('t1');
+
+    expect(state.entries.entryIdOfSegment('sg1')).toBeUndefined();
+  });
+
+  it('follows a Segment moved from one Entry to another by entries.update, without a stale second owner', () => {
+    const state = dataset([
+      { id: 'a', segments: [{ id: 'sg1', start: 0, end: 1 }] },
+      { id: 'b', segments: [{ id: 'sg2', start: 0, end: 1 }] },
+    ]);
+
+    state.entries.update('a', { segments: [{ id: 'sg3', start: 0, end: 1 }] });
+
+    expect(state.entries.entryIdOfSegment('sg1')).toBeUndefined();
+    expect(state.entries.entryIdOfSegment('sg3')).toBe(entryId('a'));
+    expect(state.entries.entryIdOfSegment('sg2')).toBe(entryId('b'));
+  });
+
+  it('inside an open transaction, sees its own uncommitted add before commit (read-your-own-writes)', () => {
+    const state = dataset();
+
+    state.transaction(() => {
+      state.entries.add({
+        id: 't1',
+        name: 't1',
+        start: 0,
+        end: 1,
+        segments: [{ id: 'sg1', start: 0, end: 1 }],
+      });
+      expect(state.entries.entryIdOfSegment('sg1')).toBe(entryId('t1'));
+    });
+    expect(state.entries.entryIdOfSegment('sg1')).toBe(entryId('t1'));
+  });
+
+  it('inside an open transaction, an edit that drops a Segment stops resolving it before commit, with no stale fallthrough', () => {
+    const state = dataset([{ id: 't1', segments: [{ id: 'sg1', start: 0, end: 1 }] }]);
+
+    state.transaction(() => {
+      state.entries.update('t1', { segments: [{ id: 'sg2', start: 0, end: 1 }] });
+      expect(state.entries.entryIdOfSegment('sg1')).toBeUndefined();
+      expect(state.entries.entryIdOfSegment('sg2')).toBe(entryId('t1'));
+    });
+  });
+
+  it('inside an open transaction, a removed Entry’s Segment stops resolving before commit', () => {
+    const state = dataset([{ id: 't1', segments: [{ id: 'sg1', start: 0, end: 1 }] }]);
+
+    state.transaction(() => {
+      state.entries.remove('t1');
+      expect(state.entries.entryIdOfSegment('sg1')).toBeUndefined();
+    });
+  });
+
+  it('entryIdsOfSegments dedupes to the owning Entry and skips an id nothing draws, in first-named order', () => {
+    const state = dataset([
+      {
+        id: 'a',
+        segments: [
+          { id: 'sg1', start: 0, end: 1 },
+          { id: 'sg2', start: 0, end: 1 },
+        ],
+      },
+      { id: 'b', segments: [{ id: 'sg3', start: 0, end: 1 }] },
+    ]);
+
+    expect(state.entries.entryIdsOfSegments(['sg3', 'sg1', 'missing', 'sg2'])).toEqual([
+      entryId('b'),
+      entryId('a'),
+    ]);
+  });
+});
+
 describe('parentId cycle rejection', () => {
   it('a chain (a -> b -> a) and self-parenting (a -> a) both throw, and leave the store unchanged', () => {
     const state = dataset([{ id: 'a' }, { id: 'b', parentId: 'a' }]);
