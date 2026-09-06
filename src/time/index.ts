@@ -1,4 +1,4 @@
-export { instant, now, toISO, addMs, diffMs, MS } from './instant.js';
+export { instant, now, toISO, addMs, diffMs, envelopeOfSegments, MS } from './instant.js';
 export { toInstant, toEndInstant } from './input.js';
 export {
   toPlain,

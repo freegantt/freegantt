@@ -45,7 +45,13 @@ describe('[S2-A2] toJSON / fromJSON', () => {
         span('t1', {
           parentId: 'p1',
           kind: 'milestone',
-          segments: [{ start: '2026-09-01T00:00:00.000Z', end: '2026-09-02T00:00:00.000Z' }],
+          // Two Segments, not one (#212, finding 4): a sole Segment ingest reads always becomes the
+          // Entry's own envelope, so it round-trips as the entry's plain `start`/`end` and never
+          // reaches this array. Two Segments spanning the same envelope are what still gets written.
+          segments: [
+            { start: '2026-09-01T00:00:00.000Z', end: '2026-09-06T00:00:00.000Z' },
+            { start: '2026-09-06T00:00:00.000Z', end: '2026-09-11T00:00:00.000Z' },
+          ],
           meta: { team: 'A' },
         }),
         { id: 'p1', kind: 'group', name: 'Parent' },
@@ -55,7 +61,8 @@ describe('[S2-A2] toJSON / fromJSON', () => {
     expect(present?.parentId).toBe('p1');
     expect(present?.kind).toBe('milestone');
     expect(present?.segments).toEqual([
-      { id: 'sg1', start: '2026-09-01T00:00:00.000Z', end: '2026-09-02T00:00:00.000Z' },
+      { id: 'sg1', start: '2026-09-01T00:00:00.000Z', end: '2026-09-06T00:00:00.000Z' },
+      { id: 'sg2', start: '2026-09-06T00:00:00.000Z', end: '2026-09-11T00:00:00.000Z' },
     ]);
     expect(present?.meta).toEqual({ team: 'A' });
     roundTrip(withAll);

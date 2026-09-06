@@ -186,12 +186,10 @@ export const demoTreeEntryInputs: EntryInput<DemoMeta>[] = [
     if (entry.end !== undefined) next.end = entry.end;
     if (parentId !== undefined) next.parentId = parentId;
     if (id === 'entry-4') next.kind = 'milestone';
-    if (id === 'entry-16' && entry.start !== undefined) {
-      // The Entry's own span must cover every Segment it draws, so `end` moves out to the last
-      // Segment's end rather than keeping the 3-day span `sample-dataset.ts` authored.
-      next.segments = separateSegments(entry.start);
-      next.end = next.segments[next.segments.length - 1]!.end;
-    }
+    // `next.end` stays the 3-day span `sample-dataset.ts` authored: ingest reads the Entry's own
+    // envelope from its Segments now (#212, finding 4), so a fixture never has to widen `end` by
+    // hand to cover a Segment that runs past it.
+    if (id === 'entry-16' && entry.start !== undefined) next.segments = separateSegments(entry.start);
     if (Object.keys(meta).length > 0) next.meta = meta;
     return next;
   }),

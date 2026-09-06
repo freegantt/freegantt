@@ -24,7 +24,7 @@ import type {
   SegmentInput,
   TimeSpan,
 } from '../model/index.js';
-import { toEndInstant, toInstant } from '../time/index.js';
+import { envelopeOfSegments, toEndInstant, toInstant } from '../time/index.js';
 import type { StoredEdit } from './edit-extension.js';
 import { withProposedKeys, writeDeclaredMetaFields } from './fields/field-access.js';
 import type { FieldRegistry } from './fields/field-registry.js';
@@ -74,17 +74,24 @@ function soleSegmentOf(entry: Entry): Segment | undefined {
 /** Optional fields are copied only when present: `exactOptionalPropertyTypes` makes an explicit
  * `undefined` a different thing from an absent key, and an `Entry` must not gain keys its input
  * never had. Exported for `entries.add()` (S2.3 §1.1), which reads one input the same way
- * construction reads every entry in `entries: EntryInput[]` — one function, both call sites. */
+ * construction reads every entry in `entries: EntryInput[]` — one function, both call sites.
+ *
+ * `start`/`end` are read from the Segments, not from `input.start`/`input.end` directly (#212,
+ * finding 4): an Entry that names Segments overrunning its own authored span used to keep that
+ * stale span forever, because ingest was not one of the places that computed the envelope.
+ * `envelopeOfSegments` is the one function every write path — this one included — calls instead. */
 export function readEntry(input: EntryInput, context: EntryReadContext): Entry {
   const kind = input.kind ?? 'span';
   const span = readEntrySpan(input, kind, context);
+  const segments = readSegments(input, span, context);
+  const envelope = envelopeOfSegments(segments);
   const entry: Entry = {
     id: entryId(input.id),
     name: input.name,
-    start: span.start,
-    end: span.end,
+    start: envelope.start,
+    end: envelope.end,
     kind,
-    segments: readSegments(input, span, context),
+    segments,
   };
   if (input.parentId !== undefined) entry.parentId = entryId(input.parentId);
   if (input.meta !== undefined) entry.meta = input.meta;
@@ -184,6 +191,19 @@ export function readEdit(
     // envelope no longer is. The Segment keeps its id: this is the same stretch, moved.
     stored.segments = [{ id: sole.id, start: stored.start ?? entry.start, end: stored.end ?? entry.end }];
     proposed.add('segments');
+  }
+  // The envelope has one owner (#212, finding 4, `plans/01` §6): whenever this edit changes
+  // `segments`, `start`/`end` are read back off the result, replacing whatever a caller proposed for
+  // them directly. A plain `update(id, { segments })`, naming no `start`/`end` at all, used to leave
+  // the Entry's own span stale against its new Segments — this is the one place, in either write
+  // direction, that stops that from happening. Marked proposed the same way the reverse derivation
+  // above already marks `segments`: neither is policy, so both sides of the pair count as stated.
+  if (stored.segments !== undefined) {
+    const envelope = envelopeOfSegments(stored.segments);
+    stored.start = envelope.start;
+    stored.end = envelope.end;
+    proposed.add('start');
+    proposed.add('end');
   }
   if (edit.meta !== undefined) stored.meta = edit.meta;
 
