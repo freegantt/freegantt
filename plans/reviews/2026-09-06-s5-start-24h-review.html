@@ -109,6 +109,8 @@
       <tr><td class="py-2 pr-3 mono text-xs">etc/freegantt.api.md</td><td>Surface call: every new error class carries an <span class="mono">operation: string</span> field — internal provenance a catching consumer cannot branch on. Fold it into the message, or keep it and document it as the provenance word; pick one story.</td></tr>
       <tr><td class="py-2 pr-3 mono text-xs">data/entry-reader.ts:360</td><td>Surface call: <span class="mono">moveEntryTo(entry, start): EntryEdit</span> reads like a mutating act but is a pure edit-builder. Consider a name that says "compute the edit" (e.g. <span class="mono">moveEntryEdit</span>); if kept, the glossary must carry it with the builder meaning.</td></tr>
       <tr><td class="py-2 pr-3 mono text-xs">etc/freegantt.api.md</td><td>Surface call: <span class="mono">ActedOn</span> is new public vocabulary with no CONTEXT.md entry (naming check 1). The doc comment is excellent; the glossary entry is missing.</td></tr>
+      <tr><td class="py-2 pr-3 mono text-xs">api/dataset.ts:252</td><td><em>Pass 3.</em> Surface call: <span class="mono">dataset.extraEditsFor(request)</span> is an expert knob on the consumer surface, public so <span class="mono">view/</span> can reach the hook across the seam — all three callers (<span class="mono">build-commit-change-set.ts:144</span>, <span class="mono">api/gantt.ts:224</span>, <span class="mono">api/dataset.ts:253</span>) are the library itself. "Two callers, two surfaces": document it now as the plugin-author door, and consider at S7 moving it behind the plugin context (<span class="mono">ctx.edits</span>) so an app author never meets it by accident. Already an improvement — it replaced the raw <span class="mono">editExtender</span> getter (#209 Q5).</td></tr>
+      <tr><td class="py-2 pr-3 mono text-xs">extensions/features/inline-editing.ts</td><td><em>Pass 3 watch.</em> 842 lines, +158 this window — one feature, but the Cell editor is approaching two jobs (editing + refusal UX). The notice already carries its own class (#231 F1). Watch, no move yet.</td></tr>
       <tr class="bg-emerald-50"><td class="py-2 pr-3 mono text-xs align-top">KEPT</td><td class="py-2 pr-3">Judged and kept as good interface: <span class="mono">dataset.entries.removeSegments(['s1'])</span> · <span class="mono">gantt.reveal(segId)</span> (one verb, two target kinds) · <span class="mono">gantt.commands.run('freegantt.undo')</span> · verb-first id pairs (<span class="mono">entryIdOfSegment</span>, <span class="mono">segmentIdsOfEntries</span>) · loose <span class="mono">SegmentId | string</span> in, branded out · <span class="mono">UnknownPresetError.available</span>.</td></tr>
     </tbody></table>
   </div>
@@ -343,6 +345,38 @@ flowchart LR
     <p class="text-sm">Four of five need <span class="mono">src/</span> work; the fifth is a stale harness against an API that already moved. Every row is a copy the library should own — the harness is the first consumer, and its workarounds are the interface's to-do list.</p>
   </article>
 
+  <!-- C8 -->
+  <article id="c8" class="rounded-xl border border-slate-200 bg-white p-6 space-y-4">
+    <div class="flex items-center gap-3">
+      <h3 class="font-bold text-lg">8 · Give the Selection its own module <span class="text-xs font-normal text-slate-400">(pass 3)</span></h3>
+      <span class="text-xs px-2 py-1 rounded-full bg-amber-100 text-amber-800 font-semibold">Worth exploring</span>
+      <span class="text-xs px-2 py-1 rounded-full bg-slate-100 text-slate-600">in-process</span>
+    </div>
+    <p class="mono text-sm text-slate-600">view/gantt-shell.ts — #selection (9 touchpoints: :381, :708, :738, :1032–1121, :1221, :1264–1266) · 1888 lines, 76 private fields, +326 this window</p>
+    <div class="grid grid-cols-2 gap-4">
+      <div class="rounded-lg border border-slate-200 bg-stone-50 p-4 text-xs">
+        <div class="uppercase tracking-wider text-slate-400 mb-2">Before — ADR 0010's concept lives inside the shell</div>
+        <div class="mono space-y-1">
+          <div class="border border-slate-300 bg-white rounded px-2 py-1">GanttShell — #selection set + prune-on-change + keyboard nav + affordance fill + gantt getters</div>
+          <div class="text-[10px] text-slate-400 pt-1">the shell is the file every slice lands in; selection is one more member among 76</div>
+        </div>
+      </div>
+      <div class="rounded-lg border border-slate-200 bg-stone-50 p-4 text-xs">
+        <div class="uppercase tracking-wider text-slate-400 mb-2">After — one owner of the Segment set</div>
+        <div class="deep text-white rounded px-2 py-2 mono">view/selection.ts
+          <div class="text-[10px] text-slate-300 pt-1">set + prune(dataset drop) + emit(SelectionChange) + ActedOn reading</div>
+        </div>
+        <div class="border border-slate-300 bg-white rounded px-2 py-1 mt-1 mono pl-4">shell wires it; three readers become one interface</div>
+      </div>
+    </div>
+    <p class="text-sm"><strong>Problem:</strong> the Selection is ADR 0010's runtime concept and it is smeared through the shell's private state — the shell is the attractor every slice adds to (ball-of-mud watch: 1888 lines, 76 private fields). <strong>Solution:</strong> a <span class="mono">view/selection.ts</span> owning the id set, the prune on dataset change, the <span class="mono">SelectionChange</span> emission, and the <span class="mono">ActedOn</span> reading; the shell keeps only wiring. No ADR change — this implements ADR 0010, it does not revisit it.</p>
+    <ul class="text-sm list-disc pl-5 space-y-0.5">
+      <li>locality: selection rules change in one module</li>
+      <li>leverage: gesture pipeline, affordances, keyboard nav, gantt getters — one interface</li>
+      <li>the shell stops being the default landing place</li>
+    </ul>
+  </article>
+
   <!-- checked, no move -->
   <div class="rounded-xl border border-emerald-200 bg-emerald-50 p-5 text-sm">
     <span class="font-semibold">Checked, no move:</span> <span class="mono text-xs">StoredEdit</span>/<span class="mono text-xs">EntryEdit</span> duality — the read shape is load-bearing at the extension hook (I10 zone math, loose-in/complete-out), not a shallow mirror. Candidate 1 is where its twin reconcilers actually live. · <span class="mono text-xs">CoreCommandPorts</span> (30 methods) — wide interface, single implementer, single job; passes the deletion test.
@@ -353,16 +387,17 @@ flowchart LR
 <section id="top-recommendation" class="rounded-xl border-2 border-slate-800 bg-white p-8 space-y-3">
   <div class="text-xs uppercase tracking-wider text-slate-400">Top recommendation</div>
   <h2 class="text-2xl font-serif font-bold"><a href="#c1" class="underline decoration-slate-300">Give the envelope its own module</a> — then its two quick follows.</h2>
-  <p class="text-sm text-slate-600">Candidate 1 has the best leverage-to-radius in this window: the biggest changed file stops carrying four jobs, the preview twin — the one duplication that must track a sibling by hand — is deleted by construction, and <span class="mono">moveEntryTo</span> gets a home that matches its job. Candidates 2 and 3 are one-file fixes each; do them in the same pass (2 deletes a rule that is one drift away from a behaviour change; 3 restores I5 on the drag path). Candidates 5–7 are interface work for the next slice — 5 and 7 especially, because they are the consumer-facing half of the brief.</p>
+  <p class="text-sm text-slate-600">Candidate 1 has the best leverage-to-radius in this window: the biggest changed file stops carrying four jobs, the preview twin — the one duplication that must track a sibling by hand — is deleted by construction, and <span class="mono">moveEntryTo</span> gets a home that matches its job. Candidates 2 and 3 are one-file fixes each; do them in the same pass (2 deletes a rule that is one drift away from a behaviour change; 3 restores I5 on the drag path). Candidates 5–8 are interface work for the next slice — 5, 7, and 8 especially, because they are the consumer-facing half of the brief.</p>
   <div class="grid grid-cols-3 gap-3 pt-2 text-center text-xs">
     <div class="rounded-lg bg-stone-50 border border-slate-200 p-3"><div class="font-bold text-sm">Fix now</div><div class="text-slate-500 mt-1">Spec HIGH: correct the four D-S5-50 records to the Instant signature · delete the two dead conditionals · gantt.ts:647 comment</div></div>
     <div class="rounded-lg bg-stone-50 border border-slate-200 p-3"><div class="font-bold text-sm">This slice</div><div class="text-slate-500 mt-1">Candidates 1, 2, 3 · the Segment-diff helper · the map-merge generic · harness stale snap/undo wiring</div></div>
-    <div class="rounded-lg bg-stone-50 border border-slate-200 p-3"><div class="font-bold text-sm">Next slice</div><div class="text-slate-500 mt-1">Candidates 5, 6, 7 · CONTEXT.md entries for ActedOn + moveEntryTo · #237's InvalidInstantError (tracked, Lane D)</div></div>
+    <div class="rounded-lg bg-stone-50 border border-slate-200 p-3"><div class="font-bold text-sm">Next slice</div><div class="text-slate-500 mt-1">Candidates 5, 6, 7, 8 · CONTEXT.md entries for ActedOn + moveEntryTo · extraEditsFor's surface question · #237's InvalidInstantError (tracked, Lane D)</div></div>
   </div>
 </section>
 
 <footer class="text-xs text-slate-400 pt-4">
-  Method: two-axis code review (Standards + Spec, parallel sub-agents per the code-review skill) + a simplicity/SOLID axis + a consumer/plugin-interface and Stop-rule pass, then a deepening scan over the same window. Every cited file:line re-verified by the coordinator before publication. Working-tree changes (styles.ts bar-opacity, generated-looking harness/docs pages) were outside the committed window and excluded. Generated 2026-09-06 · pass 1 of the s5-start 24-hour review.
+  <p>Method: two-axis code review (Standards + Spec, parallel sub-agents per the code-review skill) + a simplicity/SOLID axis + a consumer/plugin-interface and Stop-rule pass, then a deepening scan over the same window. Every cited file:line re-verified by the coordinator before publication. Working-tree changes (styles.ts bar-opacity, the hand-maintained harness/docs pages) were outside the committed window and excluded.</p>
+  <p class="mt-2"><strong>Pass 3 (ball of mud, interface friendliness, self-documentation):</strong> no new hard findings. The mud risks are concentrated, not spread: GanttShell is the one file acting as an attractor (candidate 8 is its pressure valve), inline-editing.ts is the one feature file drifting toward two jobs (watch row above). Interface friendliness: one expert knob found public for an internal reason (<span class="mono">extraEditsFor</span>, row above); everything else the window added to the public surface read true at its call site. Self-documentation: the seams-comments pattern holds across the window; the only rot is the two comment drifts already listed. First written and pushed as <span class="mono">e4f8324</span>; updated 2026-09-06 after pass 3.</p>
 </footer>
 
 </main>
