@@ -16,6 +16,9 @@ export type {
 } from './dataset-plugin.js';
 // #197: what that wrapper composes with — the one legal merge of two extenders' writes.
 export { mergeEntryEdits } from './dataset-plugin.js';
+// D-S5-44: the rigid move a plugin's cascade writes honestly, instead of a several-Segment
+// envelope-only write `data/` refuses.
+export { moveEntryTo } from './dataset-plugin.js';
 // The extension hook's own two types (D4, D-S2-6): a plugin that writes an extender by hand, rather
 // than composing one inline, names these.
 export type { EditRequest, EditExtender } from '../model/index.js';

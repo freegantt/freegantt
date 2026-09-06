@@ -32,6 +32,13 @@ export type { PluginStore, PluginStoreView, ExtenderWrapper };
 // app author never meets it — it takes and returns `EntryEdits`, the storage-shaped map only an
 // extender produces.
 export { mergeEntryEdits } from '../data/fields/field-access.js';
+// The move a plugin's cascade is honest about (D-S5-44): every Segment of an Entry, translated
+// rigidly to a new `start`, each keeping its own `SegmentId`. An envelope-only cascade against a
+// several-Segment Entry is refused (`SegmentsOutOfSyncError`), so this is how a plugin author writes
+// `segments` instead, rather than hand-rolling the same rigid translate `layout/gesture-draft.ts`'s
+// own `moveEdit` computes for a drag — beside `mergeEntryEdits`, for the same reason: an app author
+// never meets it, because it takes and returns storage-shaped values only an extender produces.
+export { moveEntryTo } from '../data/entry-reader.js';
 
 /** `beforeChange`/`change`, the two events a Dataset raises (D-S2-5, D-S2-25). Returning `false` from a
  *  `beforeChange` handler vetoes the whole changeset — the refusal path a lock plugin uses (D-S5-24). */
