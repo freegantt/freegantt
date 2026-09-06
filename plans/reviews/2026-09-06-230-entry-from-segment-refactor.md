@@ -78,6 +78,10 @@ two call sites only — `cellItemsForRow` (line 846) and the bar renderer (line 
 consumer's own renderer its live Entry. Neither derives a Segment set. Nothing else in `render/`
 reads an Entry.
 
+**This is the end state after R5, not after R2.** §1.5 assigns the third reader,
+`entryHasSelectedSegment`, to R5, and R5 is what deletes it. R2 reaches the half that finding 14
+asked for: no Segment *set* in `render/dom` comes from the Dataset any more. See R2's landed note.
+
 ### 1.3 Question B — one module owns the Selection and the pane rule
 
 `interaction/entry-gestures.ts:241` re-implements ADR 0010's pane rule:
