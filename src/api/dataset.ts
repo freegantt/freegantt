@@ -9,7 +9,7 @@ import type {
   DatasetEventMap,
   DateOnlyEndRule,
   EditRequest,
-  EntryEdits,
+  StoredEdits,
   EntryInput,
   EntryKind,
   EntryStore as EntryStoreContract,
@@ -249,7 +249,7 @@ export class Dataset<TMeta = unknown, TFields extends Record<string, unknown> = 
    *  calls the same occupant again, for real, inside the transaction. A method, not a getter (#209
    *  Q5): the old `editExtender` getter handed over the occupant itself, so a caller that stored its
    *  result instead of re-reading it live would ghost a plugin composed on after (#186). */
-  extraEditsFor(request: EditRequest): EntryEdits {
+  extraEditsFor(request: EditRequest): StoredEdits {
     return this.#state.extraEditsFor(request);
   }
 

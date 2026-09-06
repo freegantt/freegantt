@@ -88,11 +88,12 @@ export type EntryEdit<
  *  `Instant`, not a loose `InstantInput`). Two callers meet it, and they meet it differently
  *  (`plans/02`, two callers two surfaces). An **app author** reads one and never builds one — write
  *  an `EntryEdit`, the same object `entries.update()` takes. A **plugin author** builds them: an
- *  `EditExtender` returns `EntryEdits`, a map of these. `moveEntryTo` builds the one case that is
- *  easy to get wrong. Core builds these on the way in, and `diffEdit` compares one against `entries`.
+ *  `moveEntryTo` builds the one case that is easy to get wrong. Core builds these on the way in — the
+ *  extension hook's writes included (#209) — and `diffEdit` compares one against `entries`.
  *
- *  `EntryEdit` above is the input-shaped edit a caller writes (`plans/02`, one write shape). The two
- *  coincide today only because no mutator normalizes loose input into this shape yet. This type sits
+ *  `EntryEdit` above is the input-shaped edit a caller writes (`plans/02`, one write shape). Every
+ *  `StoredEdit` is a legal `EntryEdit` — an `Instant` is an `InstantInput` — and the reverse is not,
+ *  which is what makes a missing normalization a compile error rather than a wrong write. This type sits
  *  in `model/` (moved from `data/edit-extension.ts` in S3.3, D-S3-4) so `layout/gesture-draft.ts` can
  *  build one without reaching into `data/`.
  *
@@ -106,7 +107,12 @@ export type StoredEdit = Partial<Omit<Entry, 'id'>> & {
  *  carries, and what `entries.pendingEdits()` and a Draft (`layout/gesture-draft.ts`) hold. */
 export type StoredEdits = ReadonlyMap<EntryId, StoredEdit>;
 
-export type EntryEdits = ReadonlyMap<EntryId, StoredEdit>;
+/** What a plugin author writes: one `EntryEdit` per Entry, keyed by `EntryId` — exactly the object
+ *  `dataset.entries.update(id, edit)` takes, loose dates included (#209). An `EditExtender` returns
+ *  one, and `mergeEntryEdits` composes two. Core reads it into `StoredEdits` at the hook boundary,
+ *  through the same `readEdit` every other write goes through, so an extender never normalizes a date
+ *  and never states its own proposed keys. */
+export type EntryEdits = ReadonlyMap<EntryId, EntryEdit>;
 
 /** What the extension hook reads (D4, D-S2-6). It carries the same three members on a preview call
  *  and on the real commit call, which is why an extender can never refuse a write — see D-S5-24's
@@ -131,5 +137,10 @@ export interface EditRequest {
 }
 
 /** Extra writes only; an empty map means no cascade. Lives in `model/` (not `data/`) so
- *  `ExtenderWrapper` — the type a plugin author writes against — can name it (D-S5-23). */
+ *  `ExtenderWrapper` — the type a plugin author writes against — can name it (D-S5-23).
+ *
+ *  What it returns is read by the same rules `dataset.entries.update(id, edit)` obeys (#209): a Field
+ *  no Dataset declares is refused (`UnknownFieldError`), and an edit that moves `start`/`end` on an
+ *  Entry with several Segments without restating `segments` is refused too (`SegmentsOutOfSyncError`,
+ *  D-S5-44) — `moveEntryTo` writes that move. An id nothing in the transaction knows is skipped. */
 export type EditExtender = (request: EditRequest) => EntryEdits;

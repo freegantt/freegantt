@@ -13,6 +13,7 @@ import {
   InvertedSpanError,
   SegmentsOutOfSyncError,
   segmentId,
+  UnknownFieldError,
 } from '../model/index.js';
 import type {
   DateOnlyEndRule,
@@ -28,7 +29,7 @@ import type {
   TimeSpan,
 } from '../model/index.js';
 import { addMs, diffMs, envelopeOfSegments, toEndInstant, toInstant } from '../time/index.js';
-import type { StoredEdit, StoredEdits } from './edit-extension.js';
+import type { EntryEdits, StoredEdit, StoredEdits } from './edit-extension.js';
 import { withProposedKeys, writeDeclaredMetaFields } from './fields/field-access.js';
 import type { FieldRegistry } from './fields/field-registry.js';
 
@@ -409,4 +410,39 @@ export function readEdit(
 
   stored = writeDeclaredMetaFields(stored, entry, edit, registry);
   return withProposedKeys(stored, proposed);
+}
+
+/**
+ * Reads a whole map of `entries.update()` edits — the extension hook's writes (#209). One `readEdit`
+ * per Entry, so a plugin's cascade takes the exact road `dataset.entries.update(id, edit)` takes: the
+ * dataset's zone resolves its dates, `DateOnlyEndRule` decides what a date-only `end` means, and core
+ * derives `proposedKeys` from the edit's own keys. A plugin author writes none of that.
+ *
+ * An undeclared Field key is refused here for the same reason `update()` refuses one (#209 Q2): one
+ * rule on every way in, and a silent drop is the fault #197 existed for. `meta` stays the escape
+ * hatch for anything a Field does not declare.
+ *
+ * An id nothing knows is skipped — there is no Entry to read the edit against, and `diffEdit` emits
+ * no row for such an id either (#209 Q3, tracked as #235).
+ */
+export function readEdits(
+  edits: EntryEdits,
+  context: EntryReadContext,
+  entryFor: (id: EntryId) => Entry | undefined,
+  registry: FieldRegistry,
+): StoredEdits {
+  const stored = new Map<EntryId, StoredEdit>();
+  for (const [id, edit] of edits) {
+    // The Entry as this transaction's own body leaves it, not the pre-transaction snapshot: a cascade
+    // onto an Entry the same transaction added has no committed state to read against, and one whose
+    // Segments the body just rewrote would be read against the Segments the commit is replacing
+    // (D-S5-45, #212 R2 finding A).
+    const entry = entryFor(id);
+    if (entry === undefined) continue;
+    for (const key of Object.keys(edit)) {
+      if (!registry.has(key)) throw new UnknownFieldError(key);
+    }
+    stored.set(id, readEdit(edit, context, entry, registry));
+  }
+  return stored;
 }

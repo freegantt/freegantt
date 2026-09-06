@@ -18,11 +18,11 @@ import type {
   StoreRowUpdated,
 } from '../model/index.js';
 import { diffEdit, foldChangeSet } from './change-set.js';
-import type { EditRequest, EntryEdits, StoredEdits } from './edit-extension.js';
+import type { EditRequest, StoredEdits } from './edit-extension.js';
 import { reconcileExtenderEdits } from './entry-reader.js';
 import { buildEffectiveEntries } from './entry-tree.js';
 import {
-  mergeEntryEdits,
+  mergeStoredEditsByEntry,
   overlayStoredEdit,
   proposedKeysOf,
   statesProposedKeys,
@@ -51,7 +51,7 @@ export interface CommitChangeSetPluginStores {
 export interface CommitChangeSetInput {
   readonly entries: CommitChangeSetEntryStore;
   readonly pluginStores: CommitChangeSetPluginStores;
-  extraEditsFor(request: EditRequest): EntryEdits;
+  extraEditsFor(request: EditRequest): StoredEdits;
   readonly hierarchy: DatasetHierarchy;
   readonly fields: FieldRegistry;
   readonly fieldContext: FieldContext;
@@ -150,7 +150,7 @@ export function buildCommitChangeSet(
   guardExtensionHookDoesNotOverwriteBody(proposed, extenderEdits);
   const extenderUpdated = diffEdits(byId, extenderEdits, data.fields, data.fieldContext);
 
-  const mergedBodyAndExtender = mergeEntryEdits(proposed, extenderEdits);
+  const mergedBodyAndExtender = mergeStoredEditsByEntry(proposed, extenderEdits);
   const hierarchyEdits = promoteNewParents(
     byId,
     { added, removed, edits: mergedBodyAndExtender },
@@ -163,7 +163,7 @@ export function buildCommitChangeSet(
   // on the entity the changeset publishes (#212 R2 fix-plan review, finding A): the earlier code here
   // overlaid `hierarchyEdits` alone, so a reconciled extender edit for a same-transaction add computed
   // a correct `StoredEdit` upstream but never reached the stored entity.
-  const extraEditsForAdded = mergeEntryEdits(extenderEdits, hierarchyEdits);
+  const extraEditsForAdded = mergeStoredEditsByEntry(extenderEdits, hierarchyEdits);
   const addedEntitiesForFold =
     extraEditsForAdded.size === 0
       ? addedEntities
@@ -177,7 +177,7 @@ export function buildCommitChangeSet(
     {
       added: addedEntitiesForFold.map((row) => row.entity),
       removed,
-      edits: { body: proposed, merged: mergeEntryEdits(mergedBodyAndExtender, hierarchyEdits) },
+      edits: { body: proposed, merged: mergeStoredEditsByEntry(mergedBodyAndExtender, hierarchyEdits) },
     },
     data.fields,
     data.rollUpKinds,

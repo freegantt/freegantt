@@ -3,9 +3,10 @@ import { identityExtender } from './edit-extension.js';
 import { DatasetState } from './dataset-state.js';
 import { runTransaction } from './transaction.js';
 import { entryId, segmentId } from '../model/index.js';
-import type { Entry, EntryId } from '../model/index.js';
-import { mergeEntryEdits, proposedKeysOf } from './fields/field-access.js';
-import type { EditExtender, EntryEdits, StoredEdit } from './edit-extension.js';
+import type { Entry, EntryEdit, EntryId } from '../model/index.js';
+import { mergeEntryEdits } from './edit-extension.js';
+import { proposedKeysOf } from './fields/field-access.js';
+import type { EditExtender, EntryEdits, StoredEdit, StoredEdits } from './edit-extension.js';
 
 function entry(id: string): Entry {
   return {
@@ -34,7 +35,7 @@ describe('DatasetState.setExtender (D-S5-23)', () => {
   const requestEntries = new Map<EntryId, Entry>();
   const request = {
     entries: requestEntries,
-    proposed: new Map() as EntryEdits,
+    proposed: new Map() as StoredEdits,
     entryAfterEdits: (id: EntryId) => requestEntries.get(id),
   };
 
@@ -76,50 +77,65 @@ describe('DatasetState.setExtender (D-S5-23)', () => {
 // with a `Map` spread, and every test stayed green because each wrapper wrote a different Entry id.
 // S7 is the first slice with a second occupant on the hook, and a cascade that moves an entry is the
 // colliding case, so the merge is pinned here rather than discovered there.
+//
+// Both extenders write the loose shape now (#209 C3) — the same object `entries.update()` takes. The
+// law splits in two, and both halves are pinned below: `mergeEntryEdits` keeps every key of both
+// edits, and core derives the proposed keys once, when it reads the composed result.
 describe('composing two extenders that write one Entry (#197)', () => {
   const target = entryId('t1');
-  const requestEntries = new Map<EntryId, Entry>();
-  const request = {
-    entries: requestEntries,
-    proposed: new Map() as EntryEdits,
-    entryAfterEdits: (id: EntryId) => requestEntries.get(id),
-  };
 
-  /** Proposes a `meta`-sourced Field — `proposedKeys` is how such a write is recognized. */
-  const proposesCost: EditExtender = () =>
-    new Map([[target, { meta: { cost: 500 }, proposedKeys: new Set(['cost']) }]]);
+  function datasetWithTarget(): DatasetState {
+    return new DatasetState({
+      entries: [{ id: 't1', name: 't1', start: 0, end: 10 }],
+      timeZone: 'UTC',
+      fieldTypes: { money: { rollUp: 'sum' } },
+      fields: [{ key: 'cost', type: 'money' }],
+    });
+  }
 
-  /** Moves the same entry, the way an S7 cascade does. */
-  const movesTarget: EditExtender = () =>
-    new Map([[target, { start: 10 as Entry['start'], end: 20 as Entry['end'] }]]);
+  /** Writes a `meta`-sourced Field by its own name — the author states no `proposedKeys` any more. */
+  const proposesCost: EditExtender = () => new Map([[target, { cost: 500 }]]);
 
-  function composed(inner: EditExtender, outer: EditExtender): EntryEdits {
-    const state = new DatasetState({ entries: [], timeZone: 'UTC' });
+  /** Moves the same entry, the way an S7 cascade does — loose dates, read by core. */
+  const movesTarget: EditExtender = () => new Map([[target, { start: '2026-01-05', end: '2026-01-07' }]]);
+
+  function composed(inner: EditExtender, outer: EditExtender): { loose: EntryEdits; stored: StoredEdits } {
+    const state = datasetWithTarget();
     state.setExtender(() => inner);
     state.setExtender((next) => (call) => mergeEntryEdits(next(call), outer(call)));
-    return state.editExtender(request);
+    const entries = new Map([[target, state.entries.get(target)!]]);
+    const request = {
+      entries,
+      proposed: new Map() as StoredEdits,
+      entryAfterEdits: (id: EntryId) => entries.get(id),
+    };
+    return { loose: state.editExtender(request), stored: state.extraEditsFor(request) };
   }
 
   it('keeps both writes, whichever extender wrapped the other', () => {
-    for (const edits of [composed(proposesCost, movesTarget), composed(movesTarget, proposesCost)]) {
-      const edit = edits.get(target);
-      expect(edit?.meta).toEqual({ cost: 500 });
-      expect(edit?.start).toBe(10);
-      expect(edit?.end).toBe(20);
+    for (const { loose } of [composed(proposesCost, movesTarget), composed(movesTarget, proposesCost)]) {
+      const edit = loose.get(target);
+      expect(edit?.['cost']).toBe(500);
+      expect(edit?.start).toBe('2026-01-05');
+      expect(edit?.end).toBe('2026-01-07');
     }
   });
 
-  it('keeps every proposed key, so the meta-sourced Field is still recognized', () => {
-    for (const edits of [composed(proposesCost, movesTarget), composed(movesTarget, proposesCost)]) {
-      const keys = [...proposedKeysOf(edits.get(target))].sort();
-      expect(keys).toEqual(['cost', 'end', 'start']);
+  it('core derives every proposed key from the composed edit, so the meta-sourced Field is recognized', () => {
+    for (const { stored } of [composed(proposesCost, movesTarget), composed(movesTarget, proposesCost)]) {
+      const keys = [...proposedKeysOf(stored.get(target))].sort();
+      // `segments` rides along because `readEdit` pairs the lone Segment onto an envelope-only write
+      // and states what it added. That fold is #232's subject, not this law's.
+      expect(keys).toEqual(['cost', 'end', 'segments', 'start']);
+      expect(stored.get(target)?.meta).toEqual({ cost: 500 });
     }
   });
 
   it('the outer extender wins on a Field both wrote', () => {
-    const shiftsFurther: EditExtender = () => new Map([[target, { start: 99 as Entry['start'] }]]);
-    expect(composed(movesTarget, shiftsFurther).get(target)?.start).toBe(99);
-    expect(composed(movesTarget, shiftsFurther).get(target)?.end).toBe(20);
+    const shiftsFurther: EditExtender = () => new Map([[target, { start: '2026-01-06' }]]);
+    const { loose } = composed(movesTarget, shiftsFurther);
+    expect(loose.get(target)?.start).toBe('2026-01-06');
+    expect(loose.get(target)?.end).toBe('2026-01-07');
   });
 });
 
@@ -137,7 +153,7 @@ describe('composing three extenders that write one Entry (#238)', () => {
   const target = entryId('t2');
 
   /** One wrapper, exactly as `api/dataset-plugin.ts` documents composition. */
-  function writes(edit: StoredEdit): (next: EditExtender) => EditExtender {
+  function writes(edit: EntryEdit): (next: EditExtender) => EditExtender {
     return (next) => (call) => mergeEntryEdits(next(call), new Map([[target, edit]]));
   }
 
