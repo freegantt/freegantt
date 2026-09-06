@@ -10,6 +10,7 @@ import {
   DuplicateSegmentIdError,
   EmptySegmentsError,
   InvalidInstantError,
+  InvertedSpanError,
   SegmentsOutOfSyncError,
   segmentId,
 } from '../model/index.js';
@@ -51,11 +52,15 @@ export interface EntryReadContext {
  *  already drew (S2.3 §1.1, #212). An input that names no `id` keeps `existing`'s id — a move, not a
  *  replacement — and mints only when there is no Segment at that position to keep the id of. */
 function readSegment(input: SegmentInput, context: EntryReadContext, existing?: Segment): Segment {
-  return {
+  const segment: Segment = {
     id: input.id === undefined ? (existing?.id ?? context.mintSegmentId()) : segmentId(input.id),
     start: toInstant(context.timeZone, input.start),
     end: toEndInstant(context.timeZone, input.end, context.dateOnlyEnd),
   };
+  if (segment.end < segment.start) {
+    throw new InvertedSpanError(`entries: segment "${segment.id}" would end before it starts`);
+  }
+  return segment;
 }
 
 /** Every stored Entry has at least one Segment (#212), so nothing downstream carries a "this one
@@ -116,10 +121,14 @@ function readEntrySpan(input: EntryInput, kind: EntryKind, context: EntryReadCon
   if (input.start === undefined || input.end === undefined) {
     throw new InvalidInstantError(`entries: "${input.id}" must set both start and end, or neither`);
   }
-  return {
+  const span: TimeSpan = {
     start: toInstant(context.timeZone, input.start),
     end: toEndInstant(context.timeZone, input.end, context.dateOnlyEnd),
   };
+  if (span.end < span.start) {
+    throw new InvertedSpanError(`entries: "${input.id}" would end before it starts`);
+  }
+  return span;
 }
 
 /** Every `SegmentId` a consumer named explicitly, anywhere in a construction-time `entries:
@@ -200,6 +209,15 @@ export function reconcileEnvelope(entry: Entry, stored: StoredEdit): EnvelopeRec
   }
 
   if (next.segments !== undefined) {
+    // Refused before the envelope is even computed (2026-09-06 ruling, #143): a Segment whose `end`
+    // sits before its `start` is never legal, whether it came from the sole-Segment pairing above,
+    // an `entries.update()` caller's own `segments`, or an `EditExtender` cascade's Instant-typed
+    // write. `start === end` still passes — that Segment is empty, not inverted.
+    for (const segment of next.segments) {
+      if (segment.end < segment.start) {
+        throw new InvertedSpanError(`entries.update: "${entry.id}" would end before it starts`);
+      }
+    }
     const envelope = envelopeOfSegments(next.segments);
     if (stored.segments !== undefined) {
       if (stored.start !== undefined && stored.start !== envelope.start) {

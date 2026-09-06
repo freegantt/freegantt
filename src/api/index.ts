@@ -189,6 +189,7 @@ export {
   ParentCycleError,
   SegmentsOutOfSyncError,
   EmptySegmentsError,
+  InvertedSpanError,
   UnknownFieldError,
   UnknownGridColumnError,
   DuplicateFieldKeyError,

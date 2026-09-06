@@ -1273,6 +1273,11 @@ export class InvalidSnapIncrementError extends FreeGanttError {
 export function invertChangeSet(changeSet: ChangeSet): ChangeSet;
 
 // @public
+export class InvertedSpanError extends FreeGanttError {
+    constructor(message: string);
+}
+
+// @public
 export function isTimeUnit(value: string): value is TimeUnit;
 
 // @public (undocumented)

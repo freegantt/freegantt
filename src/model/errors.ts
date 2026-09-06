@@ -179,6 +179,17 @@ export class EmptySegmentsError extends FreeGanttError {
   }
 }
 
+/** `code: 'inverted-span'` — a span whose `end` sits before its `start`. The repo owner refused this
+ *  at the mutation boundary (2026-09-06 ruling, #143): the write is rejected, not stored and rendered,
+ *  and not silently collapsed. A zero-length span (`start === end`) stays legal — it is the empty
+ *  half-open interval `[t, t)`, a different question from an inverted one. */
+export class InvertedSpanError extends FreeGanttError {
+  constructor(message: string) {
+    super('inverted-span', message);
+    this.name = 'InvertedSpanError';
+  }
+}
+
 /** `code: 'unknown-field'` — an edit or `entries.fieldValue` naming a key that is not a declared
  *  Field. The registry is the legal set: core Fields plus the consumer's (D-S4-5, D-S2-26). */
 export class UnknownFieldError extends FreeGanttError {

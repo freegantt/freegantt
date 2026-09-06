@@ -366,9 +366,9 @@ describe('inlineEditing() (S5.8, D-S5-19/D-S5-20)', () => {
     const { container, gantt, dataset } = makeGantt();
     dblclick(cellFor(container, 'e1', 'start'));
     const el = input(container);
-    el.value = '2026-01-10';
+    el.value = '2026-01-03';
     el.dispatchEvent(new Event('change', { bubbles: true }));
-    expect(dataset.entries.get('e1')!.start).toBe(instant('2026-01-10T00:00:00Z'));
+    expect(dataset.entries.get('e1')!.start).toBe(instant('2026-01-03T00:00:00Z'));
     gantt.destroy();
     container.remove();
   });

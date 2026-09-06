@@ -69,7 +69,11 @@ describe('new Dataset()', () => {
       timeZone: 'UTC',
       entries: [
         oneEntry({ id: 'a', start: 1_000_000, end: 2_000_000 }),
-        oneEntry({ id: 'b', start: instant('2026-09-01T00:00:00Z'), end: 3_000_000 }),
+        oneEntry({
+          id: 'b',
+          start: instant('2026-09-01T00:00:00Z'),
+          end: instant('2026-09-01T00:50:00Z'),
+        }),
       ],
     });
     expect(first(dataset).start).toBe(1_000_000);
@@ -427,7 +431,7 @@ describe('Dataset fields (S4.1)', () => {
       changes.push(changeSet);
     });
 
-    const updated = dataset.entries.update('t1', { start: '2026-10-05', cost: 500 });
+    const updated = dataset.entries.update('t1', { start: '2026-09-05', cost: 500 });
 
     expect(changes).toHaveLength(1);
     expect(updated.meta).toEqual({ cost: 500 });
