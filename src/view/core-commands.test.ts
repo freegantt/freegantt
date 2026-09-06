@@ -36,7 +36,6 @@ function fakePorts(): { [K in keyof CoreCommandPorts]: ReturnType<typeof vi.fn> 
     isColumnMovable: vi.fn(() => true),
     resizeColumnStep: vi.fn(),
     moveColumnStep: vi.fn(),
-    discardCellEdit: vi.fn(),
   };
 }
 
@@ -159,14 +158,15 @@ describe('registerCoreCommands (S5.2, D-S5-6)', () => {
     expect(redo).not.toHaveBeenCalled();
   });
 
-  it("#160: the catalog's discardCellEdit placeholder never runs — inlineEditing() overrides it", () => {
+  // #160, D-S5-47: the id is registered so `run` answers on a Gantt with no `inlineEditing()`,
+  // and it is never offered, because this Gantt has no editor to discard.
+  it("#160: the catalog's discardCellEdit placeholder is never available — inlineEditing() overrides it", () => {
     const ports = fakePorts();
     const { registry, ctx } = makeRegistry();
     registerCoreCommands(registry, ports);
 
     expect(registry.available(ctx).map((command) => command.id)).not.toContain('freegantt.discardCellEdit');
-    registry.run('freegantt.discardCellEdit');
-    expect(ports.discardCellEdit).not.toHaveBeenCalled();
+    expect(() => registry.run('freegantt.discardCellEdit')).not.toThrow();
   });
 });
 
