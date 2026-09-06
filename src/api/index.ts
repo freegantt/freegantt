@@ -41,6 +41,7 @@ export type {
   ErrorCode,
   ErrorSeverity,
   ErrorReporter,
+  Refusable,
   RaiseError,
   PluginErrorReport,
 } from '../model/index.js';

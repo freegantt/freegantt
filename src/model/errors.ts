@@ -502,17 +502,25 @@ export class MutationDuringNotificationError extends FreeGanttError {
 /** `code: 'mutation-cancelled'` — a `beforeChange` handler returned `false`, refusing the whole
  * changeset (D-S2-25). Thrown by the programmatic call that triggered the transaction, carrying the
  * changeset that was refused — `entries.update()`'s contract is to return the stored entry, and if
- * nothing was stored, returning one would be a lie. */
+ * nothing was stored, returning one would be a lie.
+ *
+ * `reason` is what the vetoing handler said through `refuse(reason)` (#210), and `undefined` when it
+ * returned a bare `false`. The message quotes it verbatim: the words are prose the consumer wrote
+ * for their own user, so core frames them and never rewords them. */
 export class MutationCancelledError extends FreeGanttError {
   readonly changeSet: ChangeSet;
+  readonly reason: string | undefined;
 
-  constructor(changeSet: ChangeSet) {
+  constructor(changeSet: ChangeSet, reason?: string) {
     super(
       'mutation-cancelled',
-      'Nothing was saved. A beforeChange handler refused this change. Read "changeSet" on this error to see what it refused.',
+      reason === undefined
+        ? 'Nothing was saved. A beforeChange handler refused this change. Read "changeSet" on this error to see what it refused.'
+        : `Nothing was saved. A beforeChange handler refused this change and said: "${reason}". Read "changeSet" on this error to see what it refused.`,
     );
     this.name = 'MutationCancelledError';
     this.changeSet = changeSet;
+    this.reason = reason;
   }
 }
 

@@ -116,6 +116,7 @@ export type {
   ErrorCode,
   ErrorSeverity,
   ErrorReporter,
+  Refusable,
   RaiseError,
   PluginErrorReport,
 } from './error-report.js';

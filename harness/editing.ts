@@ -73,23 +73,28 @@ function hideToast(): void {
 // Dataset or the Gantt observes arrives here, and the page decides what to keep. Retention is the
 // page's policy, so core keeps nothing: there is no `gantt.errors` to read.
 //
-// This page already toasts the reason it knows for the two refusals it causes on purpose — the
-// mobilization veto and the lock. So the toast here is for a Fault, which is the one thing nothing
-// else on the page explains. `severity !== 'info'` is the same split telemetry routes on.
+// A Fault always toasts. A Refusal toasts when its author said why: `report.reason` is the words the
+// vetoing handler passed to `refuse` (#210), so the page shows the library's own record instead of
+// keeping a second copy of the same sentence. The mobilization veto below is that case.
+//
+// The lock plugin still announces its own refusal through `onRefusal`, because its `beforeChange`
+// handler returns a bare `false`. One `refuse(...)` there retires that callback and this page's last
+// hand-rolled refusal toast with it.
 watchAllErrors([dataset, gantt], (report) => {
   prependLogLine(log, `error · ${report.severity} · ${report.by} · ${report.code}`);
-  if (report.severity !== 'info') showToast(report.message);
+  if (report.severity !== 'info' || report.reason !== undefined) showToast(report.message);
 });
 
 let releaseHold: ((allow: boolean) => void) | undefined;
 
 gantt.on('selectionChange', renderSelection);
-gantt.on('beforeEntryMove', ({ start }) => {
+gantt.on('beforeEntryMove', ({ start, refuse }) => {
   if (start < mobilization) {
-    showToast('Too early — drop is before mobilization');
     releaseHold?.(false);
     releaseHold = undefined;
-    return false;
+    // The page says why once, here. Core carries the words to the report, and the one
+    // `watchAllErrors` subscription above toasts them (#210).
+    return refuse('Too early — the drop is before mobilization.');
   }
   hideToast();
   if (!holdDrop.checked) return undefined;

@@ -301,7 +301,7 @@ export interface DatasetEditHook {
 // @public
 export interface DatasetEventMap {
     // (undocumented)
-    beforeChange: {
+    beforeChange: Refusable & {
         changeSet: ChangeSet;
     };
     // (undocumented)
@@ -756,6 +756,7 @@ export interface ErrorReport {
     readonly entryId?: EntryId;
     readonly field?: FieldKey;
     readonly message: string;
+    readonly reason?: string;
     // (undocumented)
     readonly severity: ErrorSeverity;
 }
@@ -1079,8 +1080,8 @@ export type GanttEventHandler<K extends keyof GanttEventMap> = (payload: GanttEv
 export interface GanttEventMap {
     beforeCollapseChange: CollapseChange;
     beforeEntryEdit: EntryFieldEdit;
-    beforeEntryMove: EntryMove;
-    beforeEntryResize: EntryResize;
+    beforeEntryMove: EntryMove & Refusable;
+    beforeEntryResize: EntryResize & Refusable;
     beforeGridColumnsChange: GridColumnsChange;
     // (undocumented)
     beforeGridWidthChange: GridWidthChange;
@@ -1445,9 +1446,11 @@ export const MS: {
 
 // @public
 export class MutationCancelledError extends FreeGanttError {
-    constructor(changeSet: ChangeSet);
+    constructor(changeSet: ChangeSet, reason?: string);
     // (undocumented)
     readonly changeSet: ChangeSet;
+    // (undocumented)
+    readonly reason: string | undefined;
 }
 
 // @public
@@ -1675,6 +1678,11 @@ export interface RangeBand {
     width: number;
     // (undocumented)
     x: number;
+}
+
+// @public
+export interface Refusable {
+    readonly refuse: (reason: string) => false;
 }
 
 // @public

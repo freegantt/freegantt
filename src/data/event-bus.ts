@@ -17,6 +17,34 @@
 
 export type SyncVeto = void | false;
 
+/**
+ * The reason one `before*` emit was refused (#210).
+ *
+ * Core makes one per emit, hands `refuse` to the handlers on the payload, and reads `reason` back
+ * once the veto has settled. Two steps, because the bus answers a boolean and a boolean carries no
+ * words: `refuse` writes the words down here, and returns the same `false` the bus already
+ * understands.
+ *
+ * The first reason wins. Two handlers may both refuse one changeset, and core cannot rank their
+ * words — so it keeps the first and never joins two sentences into one message.
+ *
+ * `refuse` is an arrow property, not a method, so a handler may destructure it
+ * (`({ refuse }) => refuse('…')`) and still write here.
+ */
+export class RefusalNote {
+  #reason: string | undefined;
+
+  readonly refuse = (reason: string): false => {
+    this.#reason ??= reason;
+    return false;
+  };
+
+  /** What the first refusing handler said, or `undefined` when none said anything. */
+  get reason(): string | undefined {
+    return this.#reason;
+  }
+}
+
 export class EventBus<TEvents, TAsyncKeys extends keyof TEvents = never> {
   #handlers = new Map<
     keyof TEvents,

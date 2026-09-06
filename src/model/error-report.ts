@@ -55,6 +55,30 @@ export type ErrorCode =
   | 'unsaved-value'
   | (string & {});
 
+/** The one call a `before*` handler makes to say **why** it refuses (#210).
+ *
+ *  ```ts
+ *  gantt.on('beforeEntryMove', (move) =>
+ *    move.start < mobilization ? move.refuse('The drop is before mobilization.') : undefined,
+ *  );
+ *  ```
+ *
+ *  `refuse` returns `false`, so a handler states its reason and vetoes in one line, and `false` keeps
+ *  meaning exactly what it meant before — the words ride beside the boolean rather than replacing it.
+ *  A handler that returns a bare `false` still refuses, with no reason, exactly as it always did.
+ *
+ *  Core puts this on the `before*` payload of the three vetoes it reports (`beforeChange`,
+ *  `beforeEntryMove`, `beforeEntryResize`) and reads the words back onto `ErrorReport.reason` and the
+ *  report's `message`. The other `before*` events raise no report, so they take no reason: an event
+ *  that cannot carry the words anywhere must not ask for them.
+ *
+ *  A reason is prose a consumer wrote for their own user. Core quotes it into `message` verbatim and
+ *  never rewords it. */
+export interface Refusable {
+  /** A property, not a method: core binds it, so `({ refuse }) => refuse('…')` destructures safely. */
+  readonly refuse: (reason: string) => false;
+}
+
 /** Who refused, or who broke. `'core'` is the library itself; `'consumer'` is a handler someone
  *  registered on `beforeChange`/`before*`; a `PluginId` is the plugin that raised it.
  *
@@ -78,6 +102,11 @@ export interface ErrorReport {
   readonly message: string;
   readonly severity: ErrorSeverity;
   readonly by: ErrorReporter;
+  /** Why the refusal happened, in the words of whoever refused — a `before*` handler's own sentence,
+   *  verbatim (#210). Present only when a handler called `refuse(reason)`; a bare `false` leaves it
+   *  `undefined`. `message` quotes it too, so a console fallback prints it; this member is here so a
+   *  consumer can show their own words without core's framing around them. */
+  readonly reason?: string;
   /** The entry the report is about, when it is about one. */
   readonly entryId?: EntryId;
   /** The Field key the report is about, when it is about one. */

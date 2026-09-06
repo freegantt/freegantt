@@ -474,6 +474,72 @@ describe('runTransaction', () => {
     expect((cause as MutationCancelledError).changeSet.updated).toHaveLength(1);
   });
 
+  it('veto: a handler that calls refuse puts its own words on the report and on the error (#210)', () => {
+    const state = dataset([{ id: 't1' }]);
+    const reports: ErrorReport[] = [];
+    state.on('beforeChange', ({ refuse }) => refuse('"t1" is locked.'));
+    state.on('error', (report) => {
+      reports.push(report);
+    });
+
+    expect(() =>
+      runTransaction(
+        state,
+        (token) => state.entries.stageUpdate(token, entryId('t1'), { name: 'a' }),
+        'user',
+      ),
+    ).toThrow(MutationCancelledError);
+
+    expect(reports).toHaveLength(1);
+    expect(reports[0]?.reason).toBe('"t1" is locked.');
+    expect(reports[0]?.message).toBe(
+      'Nothing was saved. A beforeChange handler refused this change and said: ""t1" is locked.". Read "changeSet" on this error to see what it refused.',
+    );
+    expect((reports[0]?.cause as MutationCancelledError).reason).toBe('"t1" is locked.');
+  });
+
+  it('veto: a bare false still refuses, and states no reason', () => {
+    const state = dataset([{ id: 't1' }]);
+    const reports: ErrorReport[] = [];
+    state.on('beforeChange', () => false);
+    state.on('error', (report) => {
+      reports.push(report);
+    });
+
+    expect(() =>
+      runTransaction(
+        state,
+        (token) => state.entries.stageUpdate(token, entryId('t1'), { name: 'a' }),
+        'user',
+      ),
+    ).toThrow(MutationCancelledError);
+
+    expect(reports[0]?.reason).toBeUndefined();
+    expect(reports[0]?.message).toBe(
+      'Nothing was saved. A beforeChange handler refused this change. Read "changeSet" on this error to see what it refused.',
+    );
+  });
+
+  it('veto: two handlers both refuse — the first reason is kept, and the two are never joined', () => {
+    const state = dataset([{ id: 't1' }]);
+    const reports: ErrorReport[] = [];
+    state.on('beforeChange', ({ refuse }) => refuse('first'));
+    state.on('beforeChange', ({ refuse }) => refuse('second'));
+    state.on('error', (report) => {
+      reports.push(report);
+    });
+
+    expect(() =>
+      runTransaction(
+        state,
+        (token) => state.entries.stageUpdate(token, entryId('t1'), { name: 'a' }),
+        'user',
+      ),
+    ).toThrow(MutationCancelledError);
+
+    expect(reports[0]?.reason).toBe('first');
+  });
+
   it('a beforeChange handler that throws still discards the write set — not left open for the next transaction', () => {
     const state = dataset([{ id: 't1' }]);
     const explode = (): void => {

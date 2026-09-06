@@ -13,6 +13,7 @@ import type {
   ErrorCode,
   ItemId,
   RaiseError,
+  Refusable,
   SegmentId,
   StoredEdits,
 } from '../model/index.js';
@@ -21,6 +22,7 @@ import type { EditRequest } from '../data/edit-extension.js';
 import { reconcileExtenderEditsForPreview } from '../data/entry-reader.js';
 import { effectiveEntriesFor, entryAfterEdits } from '../data/entry-tree.js';
 import type { EventBus } from './event-bus.js';
+import { RefusalNote } from './event-bus.js';
 import type { AsyncCancelableEvent, EntryMove, EntryResize, GanttEventMap } from './event-bus.js';
 import type { Interactions } from './capability.js';
 import { FrameScheduler } from './frame-scheduler.js';
@@ -77,11 +79,19 @@ export interface GesturePipelineDeps {
 }
 
 /** What one refused gesture reports — built once in `#commit`, where the gesture's own event name is
- *  already in hand, and read by `#settle` on whichever of its two veto paths runs. */
+ *  already in hand, and read by `#settle` on whichever of its two veto paths runs.
+ *
+ *  `note` rather than a finished message, because the reason arrives after this is built: a sync veto
+ *  states it during the emit, an async one states it before it resolves (#210). `#reportRefusal`
+ *  reads the words at report time and frames them then. */
 interface GestureRefusal {
   code: ErrorCode;
-  message: string;
+  /** The `before*` name whose handler refused, and the gesture word — the two halves of the sentence
+   *  `#reportRefusal` writes. */
+  event: 'beforeEntryMove' | 'beforeEntryResize';
+  kind: EntryGesture['kind'];
   entryId: EntryId;
+  note: RefusalNote;
 }
 
 /** Owns entry resolution, draft math, preview coalescing and the commit pipeline for move/resize
@@ -231,17 +241,25 @@ export class GesturePipeline {
     const grabbed = spans[0];
     if (!grabbed) return Promise.resolve(false);
     const itemIds = spans.map((span) => itemId(span.entry));
+    // #210: the same note goes out on the payload and comes back in the refusal, so a handler's
+    // `refuse('…')` reaches the report core raises for its veto.
+    const note = new RefusalNote();
     const event =
       gesture.kind === 'resize'
         ? {
             before: 'beforeEntryResize' as const,
             after: 'entryResize' as const,
-            payload: { ...grabbed, entries: spans, edge: gesture.edge } satisfies EntryResize,
+            payload: {
+              ...grabbed,
+              entries: spans,
+              edge: gesture.edge,
+              refuse: note.refuse,
+            } satisfies EntryResize & Refusable,
           }
         : {
             before: 'beforeEntryMove' as const,
             after: 'entryMove' as const,
-            payload: { ...grabbed, entries: spans } satisfies EntryMove,
+            payload: { ...grabbed, entries: spans, refuse: note.refuse } satisfies EntryMove & Refusable,
           };
     const before =
       event.before === 'beforeEntryResize'
@@ -249,8 +267,10 @@ export class GesturePipeline {
         : this.#deps.emit(event.before, event.payload);
     const refusal: GestureRefusal = {
       code: gesture.kind === 'resize' ? 'entry-resize-cancelled' : 'entry-move-cancelled',
-      message: `gesture: a ${event.before} handler refused this ${gesture.kind}`,
+      event: event.before,
+      kind: gesture.kind,
       entryId: grabbed.entry,
+      note,
     };
     return this.#settle(before, draft, itemIds, refusal, () => {
       const committed = this.#deps.commitEntryEdits(draft);
@@ -299,11 +319,14 @@ export class GesturePipeline {
    *  `false` adds nothing here — one refusal is one record. `severity: 'info'`: the library said no
    *  on purpose. No `fallback`, because this site printed nothing before and stays silent. */
   #reportRefusal(refusal: GestureRefusal): void {
+    const reason = refusal.note.reason;
+    const refused = `Nothing was saved. A ${refusal.event} handler refused this ${refusal.kind}`;
     this.#deps.raiseError({
       code: refusal.code,
-      message: refusal.message,
+      message: reason === undefined ? `${refused}.` : `${refused} and said: "${reason}".`,
       severity: 'info',
       by: 'consumer',
+      ...(reason === undefined ? {} : { reason }),
       entryId: refusal.entryId,
     });
   }
