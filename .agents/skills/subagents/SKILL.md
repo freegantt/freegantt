@@ -102,6 +102,12 @@ Read the line it prints:
 
 One watcher covers a whole wave. Dispatch three agents in one turn, start one watcher.
 
+**Never run two at once.** A watcher polls every subagent this session spawned, not the one
+you just dispatched, so a second watcher watches the same agents and tells you the same thing.
+Start another only after the one you have exits. Dispatch across four turns with a watcher each,
+and one agent crossing 200k wakes you four times — four alerts, one event, and the four exit
+codes read as four failures.
+
 ## Wind down
 
 The clean point is the end of the current file, test, or command — not the end of the task. Then the subagent writes a handoff that carries:
