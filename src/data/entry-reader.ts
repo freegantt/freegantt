@@ -153,6 +153,55 @@ export function readEntries(inputs: readonly EntryInput[], context: EntryReadCon
   return entries;
 }
 
+/**
+ * The envelope invariant (ADR 0010, #212 finding 4), applied to a `StoredEdit` on its own: whenever
+ * the edit touches `segments`, or touches the envelope (`start`/`end`) without naming `segments`, the
+ * two are reconciled against each other so the result leaving this function can never disagree. One
+ * Segment is the envelope's own drawing, so an envelope-only write moves it; several Segments give no
+ * such answer, so an envelope-only write against several is refused (`SegmentsOutOfSyncError`,
+ * `'ambiguous'`) — the same refusal `CONTEXT.md`'s Segment entry states for a consumer's direct write.
+ * An edit that names both `segments` and an envelope the Segments do not produce is refused too
+ * (`'conflicting'`) rather than picking a winner (finding S3).
+ *
+ * `readEdit` below calls this for `entries.update()`, and `build-commit-change-set.ts` calls it again
+ * for the `EditExtender` seam (#212 R2 fix-plan review): a `StoredEdit` is one shape with one meaning
+ * regardless of who wrote it, so a plugin's cascade owes the same proof a consumer's edit does — a
+ * plugin write that only rewrites `start`/`end` on a several-Segment Entry, with no `segments` of its
+ * own, is exactly as unanswerable as it is from `entries.update()`.
+ */
+export function reconcileEnvelope(entry: Entry, stored: StoredEdit): StoredEdit {
+  const writesEnvelope = stored.start !== undefined || stored.end !== undefined;
+  const sole = soleSegmentOf(entry);
+  if (writesEnvelope && stored.segments === undefined && sole === undefined) {
+    throw new SegmentsOutOfSyncError(entry.id, 'ambiguous');
+  }
+
+  let next = stored;
+  if (writesEnvelope && stored.segments === undefined && sole !== undefined) {
+    // The bar a one-Segment Entry draws is its envelope, so both move or the bar stays where the
+    // envelope no longer is. The Segment keeps its id: this is the same stretch, moved.
+    next = {
+      ...stored,
+      segments: [{ id: sole.id, start: stored.start ?? entry.start, end: stored.end ?? entry.end }],
+    };
+  }
+
+  if (next.segments !== undefined) {
+    const envelope = envelopeOfSegments(next.segments);
+    if (stored.segments !== undefined) {
+      if (stored.start !== undefined && stored.start !== envelope.start) {
+        throw new SegmentsOutOfSyncError(entry.id, 'conflicting');
+      }
+      if (stored.end !== undefined && stored.end !== envelope.end) {
+        throw new SegmentsOutOfSyncError(entry.id, 'conflicting');
+      }
+    }
+    next = { ...next, start: envelope.start, end: envelope.end };
+  }
+
+  return next;
+}
+
 /** Reads an `entries.update()` edit into `StoredEdit` (S2.3 §1.1) — every present core date field
  * goes through `time/` the way `readEntry` reads a whole `Entry`. Declared Field keys fold through
  * `writeField` so the write set stays entry-shaped (D-S4-2). An update may set `start` without `end`. */
@@ -169,14 +218,6 @@ export function readEdit(
   if (edit.parentId !== undefined) stored.parentId = entryId(edit.parentId);
   if (edit.kind !== undefined) stored.kind = edit.kind;
   if (edit.name !== undefined) stored.name = edit.name;
-  const writesEnvelope = edit.start !== undefined || edit.end !== undefined;
-  const sole = soleSegmentOf(entry);
-  // Every Entry stores Segments now (#212), so the refusal narrows to the case that still has no
-  // answer: several Segments and an envelope write naming none of them says nothing about which
-  // stretch moved. One Segment is the envelope's own drawing, and moves with it below.
-  if (writesEnvelope && edit.segments === undefined && sole === undefined) {
-    throw new SegmentsOutOfSyncError(entry.id, 'ambiguous');
-  }
   if (edit.start !== undefined) stored.start = toInstant(context.timeZone, edit.start);
   if (edit.end !== undefined) stored.end = toEndInstant(context.timeZone, edit.end, context.dateOnlyEnd);
   if (edit.segments !== undefined) {
@@ -191,36 +232,19 @@ export function readEdit(
     stored.segments = edit.segments.map((segment, index) =>
       readSegment(segment, context, entry.segments[index]),
     );
-  } else if (writesEnvelope && sole !== undefined) {
-    // The bar a one-Segment Entry draws is its envelope, so both move or the bar stays where the
-    // envelope no longer is. The Segment keeps its id: this is the same stretch, moved.
-    stored.segments = [{ id: sole.id, start: stored.start ?? entry.start, end: stored.end ?? entry.end }];
-    proposed.add('segments');
   }
-  // The envelope has one owner (#212, finding 4, `plans/01` §6): whenever this edit changes
-  // `segments`, `start`/`end` are read back off the result. A plain `update(id, { segments })`,
-  // naming no `start`/`end` at all, used to leave the Entry's own span stale against its new
-  // Segments — reading it back here is what stops that. When the caller named `start`/`end` *and*
-  // `segments` in the same edit and the two disagree, that is not this silent case: the edit
-  // contradicts itself, and `SegmentsOutOfSyncError('conflicting')` refuses it rather than picking a
-  // winner (finding S3) — the reverse derivation above can never disagree with itself, so it never
-  // throws here. Marked proposed the same way the reverse derivation above already marks `segments`:
-  // neither is policy, so both sides of the pair count as stated.
-  if (stored.segments !== undefined) {
-    const envelope = envelopeOfSegments(stored.segments);
-    if (edit.segments !== undefined) {
-      if (edit.start !== undefined && stored.start !== envelope.start) {
-        throw new SegmentsOutOfSyncError(entry.id, 'conflicting');
-      }
-      if (edit.end !== undefined && stored.end !== envelope.end) {
-        throw new SegmentsOutOfSyncError(entry.id, 'conflicting');
-      }
-    }
-    stored.start = envelope.start;
-    stored.end = envelope.end;
-    proposed.add('start');
-    proposed.add('end');
+
+  // The envelope has one owner (#212, finding 4, `plans/01` §6): `reconcileEnvelope` above reads it
+  // back whenever this edit changes `segments`, and pairs a lone Segment onto an envelope-only write.
+  // Any key it adds that this edit did not already name (`segments` paired on, or `start`/`end` read
+  // back) is proposed the same way the caller's own keys are — neither is policy, so both count as
+  // stated.
+  const keysBeforeReconcile = new Set(Object.keys(stored));
+  stored = reconcileEnvelope(entry, stored);
+  for (const key of Object.keys(stored)) {
+    if (!keysBeforeReconcile.has(key)) proposed.add(key);
   }
+
   if (edit.meta !== undefined) stored.meta = edit.meta;
 
   stored = writeDeclaredMetaFields(stored, entry, edit, registry);

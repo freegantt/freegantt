@@ -115,17 +115,17 @@ segment  start= 2026-03-01  end= 2026-03-09      CONSISTENT? false
 ```
 
 - [x] One function owns "the envelope of these Segments". Every write path calls it, ingest included.
-- [ ] `toJSON` can no longer write an Entry whose envelope disagrees with its Segments. **Falsely
-  ticked at R2's own landing** (2026-09-06 review, finding B1): the Rollup wrote a rolled-up
-  `start`/`end` straight onto a roll-up-kind parent and never called `envelopeOfSegments`, so
-  `toJSON` on a `{ kind: 'group' }` with one child published exactly the disagreement this box says
-  cannot happen — and reading that document back with `rollUpKinds: []` then derived `start`/`end`
-  from the stale Segment, losing the authored span. Fixed for the common case: the Rollup
-  (`data/rollup.ts`'s `pairSegmentsWithEnvelope`) now pairs its rolled-up `start`/`end` back onto the
-  parent's own Segment when it draws exactly one. Left open, and this box stays unticked because of
-  it: a roll-up-kind parent drawing **several** Segments has no single one to pair with, and the
-  `EditExtender` (`data/edit-extension.ts`) writes `start`/`end` through `diffEdit` with no pairing
-  at all. `plans/01` §6 states this precisely; do not re-tick this box until both are closed.
+- [x] `toJSON` can no longer write an Entry whose envelope disagrees with its Segments. Closed
+  2026-09-06: the two write paths finding B1 left open now both hold the invariant. The Rollup
+  (`data/rollup.ts`'s `widenSegmentsToEnvelope`) restores it on a roll-up-kind parent drawing several
+  Segments by clamping every Segment into the newly rolled-up span and then widening whichever one
+  still misses an edge — the earliest-starting Segment to the new `start`, the latest-ending one to
+  the new `end` — rather than pairing onto a single Segment the way the one-Segment case does. The
+  `EditExtender` seam gets the same proof a consumer's `entries.update()` already had:
+  `data/entry-reader.ts`'s `reconcileEnvelope` is now the one function both call, so a plugin's
+  `StoredEdit` is paired or read back off Segments before it reaches `diffEdit`, and a direct
+  `start`/`end` write against a several-Segment Entry with none of its own Segments named is refused
+  (`SegmentsOutOfSyncError`) exactly as it is from `entries.update()`. `plans/01` §6 states both rules.
 - [x] A property test over arbitrary Segment sets, in the style `plans/01` §11 expects.
 
 **Visible at the end:** a round trip through `toJSON`/`fromJSON` cannot produce a stale envelope.

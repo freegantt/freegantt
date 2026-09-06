@@ -88,14 +88,30 @@ function parentsToRecompute(
 
 /**
  * The Rollup writes `start`/`end` straight onto a roll-up-kind parent, the way `field.rollUp: 'min'`
- * / `'max'` above does — that pass alone can leave the parent's own Segment behind, drawing the span
- * it had before this commit (#212 R2 fix-plan review, finding B1). A parent that draws exactly one
- * Segment has an unambiguous answer: that Segment *is* the parent's envelope, so it moves with it,
- * the same pairing `readEdit` already does for a direct `entries.update(id, { start })` (S4.10,
- * D-S4-30). A parent drawing several Segments has no such answer — which of them the rolled-up span
- * belongs to is not decidable here — so it is left as `readField`/`envelopeOfSegments` last wrote it.
+ * / `'max'` above does — that pass alone can leave the parent's own Segments behind, drawing the span
+ * they had before this commit (#212 R2 fix-plan review, finding B1). The envelope is the earliest
+ * `start` and the latest `end` among the Segments (ADR 0010), so restoring it happens in two steps.
+ * First, every Segment clamps into the parent's new `[start, end)` — a Segment the new span has moved
+ * past no longer belongs outside it, so it collapses to the nearest edge rather than keeping a stretch
+ * the parent no longer covers. Second, whichever Segment still does not reach an edge exactly —
+ * because every Segment already sat inside the new span, or clamping only shortened it — widens to
+ * reach that edge: the Segment with the earliest `start` moves it to the parent's new `start`, the one
+ * with the latest `end` moves it to the parent's new `end`. One Segment plays both roles when the
+ * parent draws only one, which is why this reduces to the old sole-Segment pairing in that case. A tie
+ * picks the first Segment in array order, the same determinism `entries.add`/`entries.update` already
+ * use for a positional match. This is chosen over the two other candidates the #212 R2 fix-plan review
+ * named: rejecting a several-Segment roll-up parent at ingest would make `rollUpKinds` and "how many
+ * Segments a consumer authors" interact, for no reason a consumer could predict; making the rolled-up
+ * value computed-on-read for this case only would split `start`/`end`'s `field source` (`plans/01` §6,
+ * ADR 0005) between stored and computed depending on how many Segments a parent happens to draw, which
+ * is exactly the kind of `if (kind === ...)`-shaped special case the seams exist to avoid. Widening
+ * alone — moving only the two extremal Segments, with no clamp — was tried first and rejected here: a
+ * rolled-up span can also *shrink* past an interior Segment (a child removed, or moved to a narrower
+ * range), and widening only the Segment that used to be extremal leaves the one it displaced still
+ * outside the new envelope, so the invariant this function exists to restore would fail again one
+ * Segment over.
  */
-function pairSegmentsWithEnvelope(
+function widenSegmentsToEnvelope(
   parent: Entry,
   registry: FieldRegistry,
   ctx: FieldContext,
@@ -103,12 +119,46 @@ function pairSegmentsWithEnvelope(
   updated: FieldUpdated[],
 ): Entry {
   const segmentsField = registry.get('segments');
-  if (!segmentsField || parent.segments.length !== 1) return parent;
+  if (!segmentsField || parent.segments.length === 0) return parent;
 
-  const sole = parent.segments[0]!;
-  if (sole.start === parent.start && sole.end === parent.end) return parent;
+  const { start: targetStart, end: targetEnd } = parent;
+  const clamp = (value: typeof targetStart): typeof targetStart => {
+    if (value < targetStart) return targetStart;
+    if (value > targetEnd) return targetEnd;
+    return value;
+  };
 
-  const nextSegments = [{ id: sole.id, start: parent.start, end: parent.end }];
+  let changed = false;
+  let nextSegments = parent.segments.map((segment) => {
+    const start = clamp(segment.start);
+    const end = clamp(segment.end);
+    if (start === segment.start && end === segment.end) return segment;
+    changed = true;
+    return { ...segment, start, end };
+  });
+
+  let earliestIndex = 0;
+  let latestIndex = 0;
+  for (let index = 1; index < nextSegments.length; index++) {
+    if (nextSegments[index]!.start < nextSegments[earliestIndex]!.start) earliestIndex = index;
+    if (nextSegments[index]!.end > nextSegments[latestIndex]!.end) latestIndex = index;
+  }
+
+  if (nextSegments[earliestIndex]!.start !== targetStart) {
+    nextSegments = nextSegments.map((segment, index) =>
+      index === earliestIndex ? { ...segment, start: targetStart } : segment,
+    );
+    changed = true;
+  }
+  if (nextSegments[latestIndex]!.end !== targetEnd) {
+    nextSegments = nextSegments.map((segment, index) =>
+      index === latestIndex ? { ...segment, end: targetEnd } : segment,
+    );
+    changed = true;
+  }
+
+  if (!changed) return parent;
+
   const from = readField(parent, segmentsField, ctx);
   updated.push({ store: 'entries', id: parentId, field: segmentsField.key, from, to: nextSegments });
   return writeOntoEntry(parent, segmentsField, nextSegments);
@@ -198,7 +248,7 @@ export function rollUpFields(
       effectiveParent = writeOntoEntry(effectiveParent, field, value);
     }
 
-    effectiveParent = pairSegmentsWithEnvelope(effectiveParent, registry, ctx, parentId, updated);
+    effectiveParent = widenSegmentsToEnvelope(effectiveParent, registry, ctx, parentId, updated);
     computed.set(parentId, effectiveParent);
   }
 
