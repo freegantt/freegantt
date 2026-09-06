@@ -294,6 +294,7 @@ Full prose lives in the step file that implements each decision.
 | D-S5-44 | An `EditExtender`'s cascade owes the envelope invariant a refusal, not a computed answer | S5.10 |
 | D-S5-45 | `EditRequest.entryAfterEdits(id)` reads the state the hook is judged against | S5.10 |
 | D-S5-46 | An inverted span is refused at the mutation boundary; a zero-length span stays legal | S5.10 |
+| D-S5-47 | The invalid Cell editor has a visible exit, and one command behind it | S5.8 |
 
 > **Three ids used to be used twice; fixed 2026-09-05 (Q22).** D-S5-35, D-S5-36 and D-S5-37 each
 > named an S5.12 decision **and** an S5.9/S5.1/S5.7 one — the error-reporting trio was minted by a
@@ -338,7 +339,7 @@ Read these before you touch `src/`.
 | `plugins` assignment remounts the Gantt | It does not. Same-`id` plugins are left alone; only the difference is disposed and set up (D-S5-3) |
 | A plugin registers a Field after construction | `RegistrationClosedError`. A Field must exist before the first Rollup (D-S5-4, D-S5-21) |
 | A tooltip steals focus from the bar | It cannot. A tooltip declares `focus: 'none'`; only the menu and the editor trap (D-S5-9) |
-| The editor commits per keystroke | It commits on Enter or blur, in one transaction. Escape reverts and writes nothing (D-S5-19, I6) |
+| The editor commits per keystroke | It commits on Enter or blur, in one transaction. Escape discards the edit and writes nothing (D-S5-19, D-S5-47, I6) |
 | `beforeEntryEdit` returning `false` still opens the editor | It does not, and the veto path is the same one `beforeEntryMove` uses (D-S5-19) |
 | A weekend-shading plugin computes days with `86400000` | I10 forbids it in `src/`, and a consumer has `dataset.time` instead. The harness plugin uses the façade (D-S5-16) |
 | Column reorder rewrites the Dataset | It cannot. Columns are Gantt view state; the Field registry never changes (ADR 0005, D-S5-18) |

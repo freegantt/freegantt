@@ -6,17 +6,18 @@ body is just an unexplained external link, with no actionable scope.) New
 issue plans land here as they're opened.
 
 **Open:**
-- [#160](https://github.com/Pawel-IT/FreeGantt/issues/160) — an open Cell editor whose
-  commit was refused has one exit, Escape, and nothing on screen says so. Grilled
-  2026-09-05, not implemented. The design: a discard button inside the editor's own
-  wrapper, a `freegantt.discardCellEdit` command behind it (D-S5-26's rule that a
-  pointer affordance and its command land together), and blur stops re-committing a
-  value the Field just refused. Five answers need the repo owner — see §7. Plan:
-  [160-discard-an-open-cell-editor.md](./160-discard-an-open-cell-editor.md).
 - [#130](https://github.com/Pawel-IT/FreeGantt/issues/130) — WBS. Settled as a
   first-party Dataset plugin; no code written yet. Plan: [130-wbs.md](./130-wbs.md).
 
 **Closed:**
+
+- [#160](https://github.com/Pawel-IT/FreeGantt/issues/160) — an open Cell editor whose
+  commit was refused had one exit, Escape, and nothing on screen said so. Shipped: a
+  discard button inside the editor's own wrapper, `freegantt.discardCellEdit` behind
+  it, and blur stops re-committing a value the Field just refused. The plan is
+  promoted into the step file it governs — see **D-S5-47** in
+  [../../s5-extensibility-and-editing/s5.8-inline-editing.md](../../s5-extensibility-and-editing/s5.8-inline-editing.md),
+  and the **Discard** term in `CONTEXT.md`.
 - [#157](https://github.com/Pawel-IT/FreeGantt/issues/157) — no way to say
   "size the grid pane to its columns". `gridWidth` now takes `'fitColumns'`:
   the pane sits on the columns' own edge and re-measures on every rebind, so
