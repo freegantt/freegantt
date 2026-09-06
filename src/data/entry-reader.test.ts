@@ -375,6 +375,35 @@ describe('reconcileExtenderEnvelope via reconcileExtenderEdits (D-S5-43)', () =>
     }
   });
 
+  it('refuses an inverted envelope instead of collapsing every Segment onto it', () => {
+    // `fitSegmentsToEnvelope` clamps each edge into `[start, end)`. An inverted target clamps both
+    // edges of every Segment onto the same pair, so all three Segments below came back as the same
+    // inverted stretch and every authored extent was lost, with nothing raised.
+    const context = createContext();
+    const [entry] = readEntries(
+      [
+        {
+          id: 'seg',
+          name: 'Seg',
+          start: '2026-01-01',
+          end: '2026-01-13',
+          segments: [
+            { start: '2026-01-01', end: '2026-01-04' },
+            { start: '2026-01-04', end: '2026-01-12' },
+            { start: '2026-01-12', end: '2026-01-13' },
+          ],
+        },
+      ],
+      context,
+    );
+    const entries = new Map([[entry!.id, entry!]]);
+    const inverted = new Map([
+      [entry!.id, { start: instant(utc('2026-01-10T00:00:00Z')), end: instant(utc('2026-01-05T00:00:00Z')) }],
+    ]);
+
+    expect(() => reconcileExtenderEdits(entries, inverted)).toThrow(SegmentsOutOfSyncError);
+  });
+
   it('still pairs the envelope onto the one Segment of a sole-Segment Entry, same as reconcileEnvelope', () => {
     const context = createContext();
     const [entry] = readEntries(
