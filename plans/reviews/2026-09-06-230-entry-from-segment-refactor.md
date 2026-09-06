@@ -257,7 +257,7 @@ Finding 14, first half. This slice adds the answer and changes no reader.
 
 **Visible at the end:** `FrameLayout` answers both Segment questions with no Entry lookup of its own.
 
-**Landed `49bf804`, with one deliberate deviation.** `segmentIdsForRow` does **not** read
+**R1 landed — `49bf804`, with one deliberate deviation.** `segmentIdsForRow` does **not** read
 `RowMemory.segmentIds`. `FrameMemory`'s row map is built from the post-collapse plan, while
 `FrameLayout.#entryIdsOfRow` is built from the open rows, so a row hidden under a collapsed parent
 answers `entryIdsForRow` today and would have stopped answering `segmentIdsForRow` — a silent
@@ -274,7 +274,7 @@ it and the two drifting for a slice.
 
 ### R2 — the frame carries the set, and `render/dom` reads it
 
-Finding 14, second half, and finding 17. **This is the risky slice — see §6.**
+**Not started. Every box below is open.** Finding 14, second half, and finding 17. **This is the risky slice — see §6.**
 
 - [ ] Add `segmentIds: readonly SegmentId[]` to `FrameBar` (`src/layout/frame.ts:87`). Required, not
   optional. `placeFrame` is the only producer of a `FrameBar`, so a required member costs a plugin
