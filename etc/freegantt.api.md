@@ -1393,7 +1393,7 @@ export interface MountLayer {
 }
 
 // @public
-export function moveEntryTo(entry: Entry, start: Instant): StoredEdit;
+export function moveEntryTo(entry: Entry, start: InstantInput, timeZone: string): EntryEdit;
 
 // @public (undocumented)
 export const MS: {

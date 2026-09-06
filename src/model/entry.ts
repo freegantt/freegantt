@@ -87,9 +87,9 @@ export type EntryEdit<
 /** What the store already holds: a storage-shaped edit, with every field read through `time/` (an
  *  `Instant`, not a loose `InstantInput`). Two callers meet it, and they meet it differently
  *  (`plans/02`, two callers two surfaces). An **app author** reads one and never builds one — write
- *  an `EntryEdit`, the same object `entries.update()` takes. A **plugin author** builds them: an
- *  `moveEntryTo` builds the one case that is easy to get wrong. Core builds these on the way in — the
- *  extension hook's writes included (#209) — and `diffEdit` compares one against `entries`.
+ *  an `EntryEdit`, the same object `entries.update()` takes. A **plugin author** reads one too, off
+ *  `EditRequest.proposed`, and writes `EntryEdit`s back (#209, D-S5-50). Core builds these on the way
+ *  in — the extension hook's writes included — and `diffEdit` compares one against `entries`.
  *
  *  `EntryEdit` above is the input-shaped edit a caller writes (`plans/02`, one write shape). Every
  *  `StoredEdit` is a legal `EntryEdit` — an `Instant` is an `InstantInput` — and the reverse is not,
