@@ -71,6 +71,7 @@ import {
   segmentId,
 } from '../model/index.js';
 import type {
+  ChangeSet,
   Dataset,
   Entry,
   EntryEdits,
@@ -86,6 +87,7 @@ import type {
   Size,
   TimeSpan,
 } from '../model/index.js';
+import { segmentIdsDroppedBy } from '../data/change-set.js';
 import type { EditExtender } from '../data/edit-extension.js';
 import { resolveCapabilities } from './capability.js';
 import type { CapabilityRule, Capabilities, Interactions } from './capability.js';
@@ -646,7 +648,7 @@ export class GanttShell {
     // dataset-change-subscription.ts).
     this.#datasetChanges = subscribeToDatasetChanges(options.dataset, (changeSet) => {
       this.#layout.invalidateForChange(changeSet);
-      this.#forgetSegmentsTheDatasetDropped();
+      this.#forgetSegmentsTheDatasetDropped(changeSet);
       this.#bindColumns();
       this.#viewportHandle.setEntries(options.dataset.entries.all);
       this.#frames.request();
@@ -1068,31 +1070,28 @@ export class GanttShell {
     return segmentIds;
   }
 
-  /** How many Segments of one Entry the Selection holds (#212) — what the sole-selection handle
-   *  fallback counts. */
-  #selectedSegmentCount(id: EntryId): number {
-    const entry = this.#options.dataset.entries.get(id);
-    if (entry === undefined) return 0;
-    const selected = new Set(this.#selection);
-    return entry.segments.filter((segment) => selected.has(segment.id)).length;
+  /** The Selection's sole Entry, and its Segment count (#212, findings 6-7): O(selection) (I5). */
+  #soleSelectedEntry(): { id: EntryId; segmentCount: number } | undefined {
+    const entries = this.#options.dataset.entries;
+    let soleId: EntryId | undefined;
+    let count = 0;
+    for (const id of this.#selection) {
+      const ownerId = entries.entryIdOfSegment(id);
+      if (ownerId === undefined) continue;
+      if (soleId === undefined) soleId = ownerId;
+      else if (soleId !== ownerId) return undefined;
+      count++;
+    }
+    return soleId === undefined ? undefined : { id: soleId, segmentCount: count };
   }
 
-  /** Drops the Segments the Dataset stopped holding (#212). The Selection names Segments. So a
-   *  `removeSegments` call can leave it holding an id nothing draws. An `entries.remove` that took
-   *  their Entry with them does the same. The next command hands that dead id straight to a
-   *  mutation, and `entries.removeSegments` throws `SegmentNotFoundError` out of a keystroke.
-   *
-   *  It fires `selectionChange` alone, with no cancelable `beforeSelectionChange` in front of it.
-   *  That pairing is for a change a consumer can refuse. This one reports a change the Dataset
-   *  already made. The Segment is gone either way, and a veto would restore a dead id.
-   *
-   *  `selectedEntries` takes the same posture on the read side: it skips an id the store dropped.
-   *  This is that rule applied once, where the Selection is corrected. Every reader is then spared
-   *  the re-check. */
-  #forgetSegmentsTheDatasetDropped(): void {
+  /** Drops the Segments `segmentIdsDroppedBy(changeSet)` names (#212, finding 8) — left uncorrected, a
+   *  dead id reaches a mutation and throws. Fires `selectionChange` alone; a veto would restore it. */
+  #forgetSegmentsTheDatasetDropped(changeSet: ChangeSet): void {
     if (this.#selection.length === 0) return;
-    const entries = this.#options.dataset.entries;
-    const kept = this.#selection.filter((id) => entries.entryIdOfSegment(id) !== undefined);
+    const dropped = segmentIdsDroppedBy(changeSet);
+    if (dropped.size === 0) return;
+    const kept = this.#selection.filter((id) => !dropped.has(id));
     if (kept.length === this.#selection.length) return;
     const from = this.#selection;
     this.#selection = kept;
@@ -1426,12 +1425,13 @@ export class GanttShell {
   /** D-S3-6: resolves `hoveredItemId`/`movableItemId`/`resizableEntryId` from the current hover and
    *  selection, writes them into the one long-lived `InteractionState`, and applies. Called whenever
    *  any of the three inputs change — never per pointer move beyond that (I5). `exactOptionalPropertyTypes`
-   *  makes "clear" a `delete`, not an `= undefined` assignment (`#setOptional` below). */
+   *  makes "clear" a `delete`, not an `= undefined` assignment (`#setOptional` below; finding 7). */
   #refreshAffordances(): void {
+    const sole = this.#soleSelectedEntry();
     const ids = projectAffordances({
       hoveredItemId: this.#hoveredItemId,
-      selectedEntryIds: this.selectedEntryIds,
-      selectedSegmentCount: (id) => this.#selectedSegmentCount(id),
+      soleSelectedEntryId: sole?.id,
+      selectedSegmentCountOfSoleEntry: sole?.segmentCount ?? 0,
       itemIdsForEntry: (id) => this.#layout.itemIdsForEntry(id),
       canGesture: (capability, id) => this.#canGesture(capability, id),
     });

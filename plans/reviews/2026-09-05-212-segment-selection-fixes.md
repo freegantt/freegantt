@@ -159,10 +159,10 @@ Finding 6. Nine bodies across four layers ask this question. Six of them scan th
 Findings 7, 8, 9. Invariant I5 is the standard: class toggles and transforms only, O(what changed),
 zero allocation.
 
-- [ ] `#refreshAffordances` stops building a rank map over every row and sorting `entries.all` on every hover change. `projectAffordances` reads only `.length` and `[0]`.
-- [ ] `#forgetSegmentsTheDatasetDropped` reads its `ChangeSet` instead of walking every Entry and Segment. It sits one line below `invalidateForChange(changeSet)`, which already uses it.
-- [ ] `#draftFor` stops rebuilding a Selection `Set` on every `pointermove`. The Selection cannot change mid-drag.
-- [ ] An allocation test guards each one, in the style of the existing "allocates nothing while it rests" test.
+- [x] `#refreshAffordances` stops building a rank map over every row and sorting `entries.all` on every hover change. Closed 2026-09-06: `projectAffordances` now takes `soleSelectedEntryId`/`selectedSegmentCountOfSoleEntry` — the two scalars it actually read — and `GanttShell#soleSelectedEntry` answers them with one pass over `#selection` through the Segment→Entry index (finding 6), never the row plan.
+- [x] `#forgetSegmentsTheDatasetDropped` reads its `ChangeSet` instead of walking every Entry and Segment. Closed 2026-09-06: it now derives the dropped `SegmentId`s from the `ChangeSet`'s own `removed` rows and `segments` field rows (`segmentIdsDroppedBy`), so a commit that touches neither costs nothing — no longer even one index lookup per selected id.
+- [x] `#draftFor` stops rebuilding a Selection `Set` on every `pointermove`. Closed 2026-09-06: `session()` builds the `Set` once, when the gesture arms, and closes over it for every `preview`/`commit`/`nudge` call the drag makes.
+- [x] An allocation test guards each one, in the style of the existing "allocates nothing while it rests" test. Closed 2026-09-06: `gantt-shell.test.ts` ("[R5-F7]", "[R5-F8]") and `gesture-pipeline.test.ts` ("GesturePipeline hot path"), each verified to fail on the pre-fix code.
 
 **Visible at the end:** the I5 perf job stops being `FUTURE_PLANNED` for these three paths.
 

@@ -734,3 +734,22 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
     });
   });
 });
+
+describe('GesturePipeline hot path (review finding 9, I5)', () => {
+  it('reads the Selection once per gesture, not once per preview', async () => {
+    // The Selection cannot change mid-drag (the arming grab is its last write before commit/cancel
+    // ends the gesture), so `session()` must read it exactly once — never once per `preview()`, which
+    // a rAF-coalesced drag calls on every pointermove.
+    const selectedSegmentIds = vi.fn(() => [segmentId('a-1')]);
+    const { deps } = withRoster([entry('a', 0, 100)], { selectedSegmentIds });
+    const pipeline = new GesturePipeline(deps);
+    const session = pipeline.session(entryId('a'), { kind: 'move' })!;
+
+    session.preview(10);
+    session.preview(20);
+    session.preview(30);
+    await session.commit(40);
+
+    expect(selectedSegmentIds).toHaveBeenCalledTimes(1);
+  });
+});

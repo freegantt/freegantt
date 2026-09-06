@@ -107,16 +107,21 @@ export class GesturePipeline {
     const entries = this.#entriesForGesture(grabbed, capability);
     if (entries.length === 0) return undefined;
     const anchor = entries[0]!;
+    // Review finding 9: the Selection cannot change mid-drag — the arming grab is the last write it
+    // sees before `commit`/`cancel` ends the gesture — so this `Set` is built once here, not once per
+    // rAF inside `#draftFor`. A select-all held through a drag no longer allocates a Set of every
+    // Segment in the Dataset sixty times a second.
+    const selectedSegmentIds = new Set(this.#deps.selectedSegmentIds());
     return {
       preview: (dxPx, options) => {
-        this.#preview(this.#draftFor(gesture, entries, dxPx, options), options?.cursorX);
+        this.#preview(this.#draftFor(gesture, entries, dxPx, options, selectedSegmentIds), options?.cursorX);
       },
       commit: (dxPx, options) => {
-        return this.#commit(gesture, this.#draftFor(gesture, entries, dxPx, options));
+        return this.#commit(gesture, this.#draftFor(gesture, entries, dxPx, options, selectedSegmentIds));
       },
       nudge: (direction, options) => {
         const dxPx = this.#stepPx(gesture, anchor, options?.suspendSnap) * direction;
-        return this.#commit(gesture, this.#draftFor(gesture, entries, dxPx, options));
+        return this.#commit(gesture, this.#draftFor(gesture, entries, dxPx, options, selectedSegmentIds));
       },
       cancel: () => {
         this.#preview(undefined);
@@ -178,6 +183,7 @@ export class GesturePipeline {
     entries: readonly Entry[],
     dxPx: number,
     options: DraftOptions | undefined,
+    selectedSegmentIds: ReadonlySet<SegmentId>,
   ): EntryEdits {
     const snap = this.#resolveSnap(options?.suspendSnap);
     const base = {
@@ -186,7 +192,7 @@ export class GesturePipeline {
       snap,
       entries,
       dxPx,
-      selectedSegmentIds: new Set(this.#deps.selectedSegmentIds()),
+      selectedSegmentIds,
     };
     if (gesture.kind === 'resize') {
       return draftForResize({ ...base, edge: gesture.edge });

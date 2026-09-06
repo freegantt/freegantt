@@ -8,12 +8,15 @@ import type { Interactions } from './capability.js';
 
 export interface AffordanceInputs {
   hoveredItemId: ItemId | undefined;
-  /** The Entries the Selection's Segments belong to, deduped, in row order (#212, ADR 0010). The
-   *  handle pair brackets an Entry (#200), so the fallback below counts Entries, not Segments. */
-  selectedEntryIds: readonly EntryId[];
-  /** How many Segments of one Entry the Selection holds (#212). Exactly one means the user named one
-   *  bar, and that is when the sole-selection fallback shows its handles. */
-  selectedSegmentCount: (id: EntryId) => number;
+  /** The one Entry the Selection names, when it names exactly one (#212, ADR 0010, review finding 7).
+   *  `undefined` when the Selection is empty or spans more than one Entry — either way the
+   *  sole-selection fallback below has nothing to fall back to. The handle pair brackets an Entry
+   *  (#200), so this narrows to an Entry, not a Segment count. */
+  soleSelectedEntryId: EntryId | undefined;
+  /** How many of the Selection's Segments belong to `soleSelectedEntryId`. Meaningless when that is
+   *  `undefined`. Exactly one means the user named one bar, and that is when the sole-selection
+   *  fallback shows its handles (#212). */
+  selectedSegmentCountOfSoleEntry: number;
   /** Every Item one entry draws in the current frame (`FrameLayout.itemIdsForEntry`). The fallback
    *  asks it instead of building an Item id out of an entry id. */
   itemIdsForEntry: (id: EntryId) => readonly ItemId[];
@@ -33,7 +36,8 @@ export interface AffordanceIds {
  *  wins over the selection fallback. Only when nothing is hovered does the single selected entry, if
  *  there is exactly one, get a turn. */
 export function projectAffordances(inputs: AffordanceInputs): AffordanceIds {
-  const { hoveredItemId, selectedEntryIds, selectedSegmentCount, itemIdsForEntry, canGesture } = inputs;
+  const { hoveredItemId, soleSelectedEntryId, selectedSegmentCountOfSoleEntry, itemIdsForEntry, canGesture } =
+    inputs;
   const hoveredEntryId = hoveredItemId !== undefined ? entryIdOfItem(hoveredItemId) : undefined;
 
   const out: AffordanceIds = {};
@@ -46,8 +50,8 @@ export function projectAffordances(inputs: AffordanceInputs): AffordanceIds {
   const resizableEntryId = resolveResizableEntryId({
     hoveredItemId,
     hoveredEntryId,
-    selectedEntryIds,
-    selectedSegmentCount,
+    soleSelectedEntryId,
+    selectedSegmentCountOfSoleEntry,
     itemIdsForEntry,
     canGesture,
   });
@@ -62,25 +66,24 @@ export function projectAffordances(inputs: AffordanceInputs): AffordanceIds {
 function resolveResizableEntryId(inputs: {
   hoveredItemId: ItemId | undefined;
   hoveredEntryId: EntryId | undefined;
-  selectedEntryIds: readonly EntryId[];
-  selectedSegmentCount: (id: EntryId) => number;
+  soleSelectedEntryId: EntryId | undefined;
+  selectedSegmentCountOfSoleEntry: number;
   itemIdsForEntry: (id: EntryId) => readonly ItemId[];
   canGesture: (capability: keyof Interactions, id: EntryId) => boolean;
 }): EntryId | undefined {
   const {
     hoveredItemId,
     hoveredEntryId,
-    selectedEntryIds,
-    selectedSegmentCount,
+    soleSelectedEntryId,
+    selectedSegmentCountOfSoleEntry,
     itemIdsForEntry,
     canGesture,
   } = inputs;
   if (hoveredItemId !== undefined) {
     return hoveredEntryId !== undefined && canGesture('resize', hoveredEntryId) ? hoveredEntryId : undefined;
   }
-  if (selectedEntryIds.length !== 1) return undefined;
-  const soleId = selectedEntryIds[0]!;
-  if (!canGesture('resize', soleId)) return undefined;
-  if (selectedSegmentCount(soleId) === 1) return soleId;
-  return itemIdsForEntry(soleId).length === 1 ? soleId : undefined;
+  if (soleSelectedEntryId === undefined) return undefined;
+  if (!canGesture('resize', soleSelectedEntryId)) return undefined;
+  if (selectedSegmentCountOfSoleEntry === 1) return soleSelectedEntryId;
+  return itemIdsForEntry(soleSelectedEntryId).length === 1 ? soleSelectedEntryId : undefined;
 }
