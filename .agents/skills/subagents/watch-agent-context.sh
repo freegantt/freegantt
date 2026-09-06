@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
-# Watches the context usage of subagents this session spawns.
+# Watches the context usage of every agent transcript in this project — from any session,
+# not only the one that started the watcher. With several sessions on one repo it will
+# alert on an agent that is not yours. The printed line names it; read the name.
 # Exits — which wakes the coordinator — when an agent passes the wind-down mark,
 # or when every agent it watched has stopped writing.
 #
@@ -9,6 +11,11 @@
 #   watch-agent-context.sh [project-transcript-dir]
 #
 # Env: WIND_DOWN (200000) POLL (30s) IDLE (180s) MAX (7200s)
+#
+# Exit 1 is the alert, not a failure. There is no error path here. 1 means an agent
+# crossed the mark and the coordinator must act; 0 means every agent finished under it,
+# or the watcher timed out. The harness renders 1 as "failed with exit code 1" — that
+# wording is the harness's. Read the printed line, not the code.
 
 set -uo pipefail
 

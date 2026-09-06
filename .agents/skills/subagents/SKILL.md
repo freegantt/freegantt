@@ -78,14 +78,30 @@ Bash(run_in_background: true):
   .agents/skills/subagents/watch-agent-context.sh
 ```
 
-It polls every subagent this session spawns, and exits when one passes 200k or when
+It polls every agent transcript in this **project** — from any session, not only yours —
+and exits when one passes 200k or when
 they all finish. A background command that exits re-invokes you, so its exit *is* the
 alert — you get it mid-flight, not after the report lands.
 
 **The watcher reads transcripts. It never stops an agent** — you do that, by message,
 which is what leaves the agent room to land.
 
-Read the line it prints:
+**Exit code 1 is the alert, not a failure.** The harness reports it as
+`Background command ... failed with exit code 1`. That wording is the harness's, not the
+watcher's. The watcher has no error path: it exits 1 to mean *an agent crossed the mark,
+go read the line it printed*. Treat that notification as the signal to act on. Dismiss it
+as a crash and the agent runs past its landing window with nobody telling it to stop.
+
+| Exit | Printed line | What it means |
+|---|---|---|
+| **1** | `... is at N tokens (wind-down M)` | **An agent crossed the mark. Act now.** |
+| | | The line **names the agent** — and it may belong to another session. Read the name before deciding whether it is yours. |
+| 0 | `every agent it watched finished under M tokens.` | All done under budget. Nothing to do. |
+| 0 | `stopped after Ns` | The watcher timed out (`MAX`, 7200s). It says nothing about the agents — restart it if any are still running. |
+
+Both quiet outcomes exit 0, so the printed line is what separates them. Read it.
+
+Then act on what it says:
 
 - **An agent passed 200k** — send that agent a message: stop at the next clean point
   and write a handoff. Then start the watcher again at the far mark, so you hear about
@@ -102,11 +118,25 @@ Read the line it prints:
 
 One watcher covers a whole wave. Dispatch three agents in one turn, start one watcher.
 
-**Never run two at once.** A watcher polls every subagent this session spawned, not the one
+**Never run two at once.** A watcher polls every agent transcript in the project, not the one
 you just dispatched, so a second watcher watches the same agents and tells you the same thing.
 Start another only after the one you have exits. Dispatch across four turns with a watcher each,
 and one agent crossing 200k wakes you four times — four alerts, one event, and the four exit
 codes read as four failures.
+
+**Your watcher outlives your own agent, and can alert on someone else's.** It is scoped to the
+project directory, so with several sessions working one repo it sees their agents too. This kills
+the inference that feels safest:
+
+> "My agent already finished, so this exit must be stale."
+
+That reasoning is sound only if the watcher watched your agent alone, and it does not. On
+2026-09-06 two sessions made exactly this call on the same afternoon, and one of them dismissed a
+true alert about the *other* session's agent, which then ran to 275k — past its landing window.
+Both agents landed anyway, which was luck and not process.
+
+So: read the name in the printed line. If it is not your agent, tell the session that owns it
+rather than dropping the alert.
 
 ## Wind down
 
