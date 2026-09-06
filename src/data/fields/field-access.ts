@@ -6,13 +6,13 @@ import type {
   Duration,
   Entry,
   EntryEdit,
-  EntryEdits,
   EntryId,
   FieldContext,
   FieldKey,
   FieldLookup,
   RollUpContext,
   StoredEdit,
+  StoredEdits,
 } from '../../model/index.js';
 import { diffMs } from '../../time/index.js';
 import { CORE_FIELDS } from './core-fields.js';
@@ -55,18 +55,15 @@ export function mergeStoredEdits(base: StoredEdit | undefined, extra: StoredEdit
 }
 
 /**
- * Merges two sets of extra writes, keyed by Entry — the composition an `ExtenderWrapper` needs
- * (D-S5-23).
+ * Merges two maps of storage-shaped edits, keyed by Entry — what the commit path folds the body, the
+ * hook's writes and the hierarchy's own writes together with.
  *
- * ```ts
- * ctx.edits.setExtender((next) => (request) => mergeEntryEdits(next(request), mine(request)));
- * ```
- *
- * Object spread and `new Map([...a, ...b])` are not legal merges: two extenders that write the same
- * Entry lose the earlier `StoredEdit` outright, and lose its `proposedKeys` with it (#197). `extra`
- * wins per Field key; the proposed keys of both survive.
+ * Object spread and `new Map([...a, ...b])` are not legal merges: two edits on one Entry lose the
+ * earlier `StoredEdit` outright, and lose its `proposedKeys` with it (#197). `extra` wins per Field
+ * key; the proposed keys of both survive. `mergeEntryEdits` (`data/edit-extension.ts`) is this
+ * function's loose counterpart, the one a plugin author calls.
  */
-export function mergeEntryEdits(base: EntryEdits, extra: EntryEdits): EntryEdits {
+export function mergeStoredEditsByEntry(base: StoredEdits, extra: StoredEdits): StoredEdits {
   if (extra.size === 0) return base;
   const merged = new Map<EntryId, StoredEdit>(base);
   for (const [id, edit] of extra) merged.set(id, mergeStoredEdits(merged.get(id), edit));

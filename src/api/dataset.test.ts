@@ -746,7 +746,9 @@ describe('Dataset plugins (S5.10)', () => {
       id: 'demo.cost',
       setup(ctx) {
         ctx.edits.setExtender(
-          () => () => new Map([[entryId('leaf'), { meta: { cost: 500 }, proposedKeys: new Set(['cost']) }]]),
+          // #209 C3: the plugin writes the Field by name, the same object `entries.update()` takes.
+          // Core derives `proposedKeys` from the composed result, so this plugin cannot get it wrong.
+          () => () => new Map([[entryId('leaf'), { cost: 500 }]]),
         );
       },
     };
@@ -758,9 +760,9 @@ describe('Dataset plugins (S5.10)', () => {
           (next) => (request) =>
             mergeEntryEdits(
               next(request),
-              new Map([
-                [entryId('leaf'), { start: instant(utc('2026-02-01')), end: instant(utc('2026-02-05')) }],
-              ]),
+              // Loose dates, read by core in the dataset's own zone (#209 C3) — this plugin makes no
+              // `time/` call of its own.
+              new Map([[entryId('leaf'), { start: '2026-02-01', end: '2026-02-05' }]]),
             ),
         );
       },

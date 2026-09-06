@@ -18,7 +18,7 @@ import type {
 import { MutationCancelledError, MutationDuringNotificationError } from '../model/index.js';
 import { buildCommitChangeSet, diffEdits } from './build-commit-change-set.js';
 import { raiseErrorOn } from './error-reporting.js';
-import type { EditRequest, EntryEdits, StoredEdits } from './edit-extension.js';
+import type { EditRequest, StoredEdits } from './edit-extension.js';
 import type { EventBus } from './event-bus.js';
 import { promoteNewParents } from './hierarchy.js';
 import { rollUpFields } from './rollup.js';
@@ -64,7 +64,7 @@ export interface TransactionData {
   /** The one door onto the extension hook (D4, D-S2-6): calls the current occupant and returns
    *  what it wrote. A method, not a fixed field, because `ctx.edits.setExtender` composes onto the
    *  occupant while plugins set up (D-S5-23) — this always calls whichever one is current (#209 Q5). */
-  extraEditsFor(request: EditRequest): EntryEdits;
+  extraEditsFor(request: EditRequest): StoredEdits;
   /** 0 = no transaction open. Only `runTransaction` reads or writes this (D-S2-8's nesting rule). */
   openTransactions: number;
   /** Set while `beforeChange`/`change` handlers are fanning out; a transaction started while this is

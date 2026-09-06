@@ -6,6 +6,7 @@ import {
   MutationCancelledError,
   MutationDuringNotificationError,
   SegmentsOutOfSyncError,
+  UnknownFieldError,
   entryId,
   segmentId,
 } from '../model/index.js';
@@ -319,17 +320,16 @@ describe('runTransaction', () => {
 
   // #197: `proposedKeys` is bookkeeping on a `StoredEdit`, not a Field. The body edit always carries
   // it, so comparing raw object keys made I4 refuse any extender edit that carried one — which every
-  // extender composed with `mergeEntryEdits` now does.
+  // extender composed with `mergeEntryEdits` now does. The extender states no keys of its own since
+  // #209 C3: it writes `{ cost: 500 }`, the same object `entries.update()` takes, and core derives
+  // the set. A hand-built `proposedKeys` here is now an undeclared Field key and is refused (Q2).
   it('I4 reads proposedKeys as the Fields proposed, not as a Field named "proposedKeys"', () => {
     const state = new DatasetState({
       entries: [{ id: 't1', name: 't1', start: 0, end: 1 }],
       timeZone: 'UTC',
       fieldTypes: { money: { rollUp: 'sum' } },
       fields: [{ key: 'cost', type: 'money' }],
-      editExtender: (): EntryEdits =>
-        new Map<ReturnType<typeof entryId>, StoredEdit>([
-          [entryId('t1'), { meta: { cost: 500 }, proposedKeys: new Set(['cost']) }],
-        ]),
+      editExtender: (): EntryEdits => new Map([[entryId('t1'), { cost: 500 }]]),
     });
 
     runTransaction(state, (token) => state.entries.stageUpdate(token, entryId('t1'), { name: 'a' }), 'user');
@@ -343,10 +343,7 @@ describe('runTransaction', () => {
       timeZone: 'UTC',
       fieldTypes: { money: { rollUp: 'sum' } },
       fields: [{ key: 'cost', type: 'money' }],
-      editExtender: (): EntryEdits =>
-        new Map<ReturnType<typeof entryId>, StoredEdit>([
-          [entryId('t1'), { meta: { cost: 500 }, proposedKeys: new Set(['cost']) }],
-        ]),
+      editExtender: (): EntryEdits => new Map([[entryId('t1'), { cost: 500 }]]),
     });
 
     expect(() =>
@@ -374,10 +371,7 @@ describe('runTransaction', () => {
         { key: 'cost', type: 'money' },
         { key: 'risk', type: 'money' },
       ],
-      editExtender: (): EntryEdits =>
-        new Map<ReturnType<typeof entryId>, StoredEdit>([
-          [entryId('t1'), { meta: { cost: 500 }, proposedKeys: new Set(['cost']) }],
-        ]),
+      editExtender: (): EntryEdits => new Map([[entryId('t1'), { cost: 500 }]]),
     });
 
     expect(() =>
@@ -856,4 +850,66 @@ describe('the EditExtender seam owes the envelope invariant too (#212 R2 fix-pla
       expect(sawSegmentCount).toBe(3);
     },
   );
+});
+
+// #209 C3: the extension hook writes what `update()` takes. Everything a plugin author used to have
+// to learn — a storage-shaped `Instant`, the end rule, `proposedKeys` — is core's job now, done in
+// one place (`DatasetState.extraEditsFor` -> `readEdits` -> `readEdit`), the same road every other
+// write takes.
+describe('the extension hook writes the loose shape (#209)', () => {
+  function datasetCascading(edit: Record<string, unknown>, timeZone = 'UTC'): DatasetState {
+    return new DatasetState({
+      entries: [
+        { id: 't1', name: 't1', start: '2026-01-01', end: '2026-01-02' },
+        { id: 't2', name: 't2', start: '2026-01-01', end: '2026-01-02' },
+      ],
+      timeZone,
+      fieldTypes: { money: { rollUp: 'sum' } },
+      fields: [{ key: 'cost', type: 'money' }],
+      editExtender: (): EntryEdits => new Map([[entryId('t2'), edit]]),
+    });
+  }
+
+  function renameT1(state: DatasetState): void {
+    runTransaction(state, (token) => state.entries.stageUpdate(token, entryId('t1'), { name: 'a' }), 'user');
+  }
+
+  it('reads a loose date in the dataset’s own zone, so a plugin never calls time/', () => {
+    // Both dates, because the cascade moves the whole span — a `start` past the stored `end` is an
+    // inverted span, and `readEdit` refuses one for a plugin exactly as it does for `update()`.
+    const state = datasetCascading({ start: '2026-02-01', end: '2026-02-03' }, 'America/Denver');
+    renameT1(state);
+    expect(state.entries.get(entryId('t2'))?.start).toBe(toInstant('America/Denver', '2026-02-01'));
+  });
+
+  it('reads a date-only end by the dataset’s DateOnlyEndRule, not as a raw midnight', () => {
+    const state = datasetCascading({ end: '2026-02-05' });
+    renameT1(state);
+    expect(state.entries.get(entryId('t2'))?.end).toBe(toInstant('UTC', '2026-02-06'));
+  });
+
+  it('derives the proposed keys, so a meta-sourced Field write is still recognized', () => {
+    const state = datasetCascading({ cost: 500 });
+    let rows: readonly { field: string }[] = [];
+    state.on('change', ({ changeSet }) => {
+      rows = changeSet.updated as readonly { field: string }[];
+    });
+
+    renameT1(state);
+
+    expect(state.entries.fieldValue(entryId('t2'), 'cost')).toBe(500);
+    expect(rows.some((row) => row.field === 'cost')).toBe(true);
+  });
+
+  it('refuses a Field no Dataset declares, the same way entries.update() refuses one (Q2)', () => {
+    const state = datasetCascading({ nope: 1 });
+    expect(() => renameT1(state)).toThrow(UnknownFieldError);
+  });
+
+  // The two shapes stay apart for good: `proposedKeys` is core's bookkeeping on a `StoredEdit`, and
+  // it is not a Field anybody may write — not through `update()`, and not through the hook.
+  it('proposedKeys is not writable from outside', () => {
+    const state = dataset([{ id: 't1' }]);
+    expect(() => state.entries.update(entryId('t1'), { proposedKeys: new Set() })).toThrow(UnknownFieldError);
+  });
 });

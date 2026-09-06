@@ -241,7 +241,7 @@ export class Dataset<TMeta = unknown, TFields extends Record<string, unknown> = 
     destroy(): void;
     // (undocumented)
     get entries(): EntryStore<TMeta, TFields>;
-    extraEditsFor(request: EditRequest): EntryEdits;
+    extraEditsFor(request: EditRequest): StoredEdits;
     field(key: FieldKey): Field | undefined;
     get fields(): {
         readonly all: readonly Field[];
@@ -618,8 +618,8 @@ export interface EntryDocument<TMeta = unknown> {
 // @public
 export type EntryEdit<TMeta = unknown, TFields extends Record<string, unknown> = Record<string, unknown>> = Partial<Omit<EntryInput<TMeta>, 'id'>> & Partial<TFields>;
 
-// @public (undocumented)
-export type EntryEdits = ReadonlyMap<EntryId, StoredEdit>;
+// @public
+export type EntryEdits = ReadonlyMap<EntryId, EntryEdit>;
 
 // @public
 export interface EntryFieldEdit {
