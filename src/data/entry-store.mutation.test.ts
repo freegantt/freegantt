@@ -690,7 +690,10 @@ describe('rollup (§1.5)', () => {
 
     expect(seen).toHaveLength(1);
     const parentRows = fieldRowsOf(seen[0]!).filter((row) => row.id === entryId('p1'));
-    expect(parentRows.map((row) => row.field).sort()).toEqual(['end', 'start']);
+    // `segments` rides along (#212 B1 fix): p1 draws one Segment, and the Rollup keeps it paired
+    // with the envelope it just rolled up, the same way `readEdit` pairs a direct `update(id, {
+    // start })`.
+    expect(parentRows.map((row) => row.field).sort()).toEqual(['end', 'segments', 'start']);
     const after = state.entries.get('p1')!;
     expect(after.start).not.toBe(before.start);
     expect(after.end).not.toBe(before.end);

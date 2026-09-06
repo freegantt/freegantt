@@ -6,6 +6,7 @@ import type { ErrorReport } from '../../model/index.js';
 import { entryId, FreeGanttError, UnsupportedSchemaError } from '../../model/index.js';
 import type { DatasetDocument } from '../../model/index.js';
 import type { EntryInput } from '../../model/index.js';
+import { instant } from '../../time/index.js';
 
 function span(id: string, overrides: Partial<EntryInput> = {}): EntryInput {
   return {
@@ -36,6 +37,34 @@ describe('[S2-A2] toJSON / fromJSON', () => {
       entries: [span('t1')],
     });
     roundTrip(dataset);
+  });
+
+  // #212 fix-plan review, finding B1: the Rollup wrote a rolled-up `start`/`end` straight onto the
+  // group without ever touching its Segment, so `toJSON` published an Entry whose envelope disagreed
+  // with its own Segments. Reading that document back with `rollUpKinds: []` (no Rollup to paper over
+  // it) then derived `start`/`end` from the stale Segment instead — the authored 2026 span was gone.
+  it('a rolled-up group survives toJSON -> fromJSON with rollUpKinds: [], no lost span', () => {
+    const dataset = new DatasetState({
+      timeZone: 'UTC',
+      entries: [
+        { id: 'p1', name: 'p1', kind: 'group', start: 0, end: 1 },
+        span('c1', { parentId: 'p1', start: '2026-01-01T00:00:00.000Z', end: '2026-01-10T00:00:00.000Z' }),
+      ],
+    });
+    const rolledUp = dataset.entries.get('p1')!;
+    expect(rolledUp.start).toBe(instant('2026-01-01T00:00:00.000Z'));
+    expect(rolledUp.end).toBe(instant('2026-01-10T00:00:00.000Z'));
+    // The writer keeps the group's one Segment paired with the envelope it just rolled up — no
+    // document can carry the disagreement this defect used to publish.
+    expect(rolledUp.segments).toEqual([
+      { id: rolledUp.segments[0]!.id, start: rolledUp.start, end: rolledUp.end },
+    ]);
+
+    const doc = { ...toJSON(dataset), rollUpKinds: [] };
+    const reread = new DatasetState(readDocument(doc));
+    const p1 = reread.entries.get('p1')!;
+    expect(p1.start).toBe(rolledUp.start);
+    expect(p1.end).toBe(rolledUp.end);
   });
 
   it('writes every optional field when present, and omits them when absent', () => {

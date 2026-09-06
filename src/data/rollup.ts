@@ -86,6 +86,34 @@ function parentsToRecompute(
   return filtered.sort((a, b) => depthById.get(b)! - depthById.get(a)!);
 }
 
+/**
+ * The Rollup writes `start`/`end` straight onto a roll-up-kind parent, the way `field.rollUp: 'min'`
+ * / `'max'` above does — that pass alone can leave the parent's own Segment behind, drawing the span
+ * it had before this commit (#212 R2 fix-plan review, finding B1). A parent that draws exactly one
+ * Segment has an unambiguous answer: that Segment *is* the parent's envelope, so it moves with it,
+ * the same pairing `readEdit` already does for a direct `entries.update(id, { start })` (S4.10,
+ * D-S4-30). A parent drawing several Segments has no such answer — which of them the rolled-up span
+ * belongs to is not decidable here — so it is left as `readField`/`envelopeOfSegments` last wrote it.
+ */
+function pairSegmentsWithEnvelope(
+  parent: Entry,
+  registry: FieldRegistry,
+  ctx: FieldContext,
+  parentId: EntryId,
+  updated: FieldUpdated[],
+): Entry {
+  const segmentsField = registry.get('segments');
+  if (!segmentsField || parent.segments.length !== 1) return parent;
+
+  const sole = parent.segments[0]!;
+  if (sole.start === parent.start && sole.end === parent.end) return parent;
+
+  const nextSegments = [{ id: sole.id, start: parent.start, end: parent.end }];
+  const from = readField(parent, segmentsField, ctx);
+  updated.push({ store: 'entries', id: parentId, field: segmentsField.key, from, to: nextSegments });
+  return writeOntoEntry(parent, segmentsField, nextSegments);
+}
+
 function effectiveEntry(
   id: EntryId,
   entries: ReadonlyMap<EntryId, Entry>,
@@ -170,6 +198,7 @@ export function rollUpFields(
       effectiveParent = writeOntoEntry(effectiveParent, field, value);
     }
 
+    effectiveParent = pairSegmentsWithEnvelope(effectiveParent, registry, ctx, parentId, updated);
     computed.set(parentId, effectiveParent);
   }
 

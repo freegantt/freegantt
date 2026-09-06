@@ -551,6 +551,11 @@ export interface ElementDescription {
     text?: string;
 }
 
+// @public
+export class EmptySegmentsError extends FreeGanttError {
+    constructor(entryId: EntryId);
+}
+
 // @public (undocumented)
 export interface EntityAdded {
     // (undocumented)
@@ -1740,7 +1745,7 @@ export interface SegmentInput extends TimeSpanInput {
 
 // @public
 export class SegmentsOutOfSyncError extends FreeGanttError {
-    constructor(entryId: EntryId);
+    constructor(entryId: EntryId, reason: 'ambiguous' | 'conflicting');
 }
 
 // @public

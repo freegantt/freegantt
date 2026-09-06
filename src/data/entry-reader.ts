@@ -8,6 +8,7 @@
 import {
   entryId,
   DuplicateSegmentIdError,
+  EmptySegmentsError,
   InvalidInstantError,
   SegmentsOutOfSyncError,
   segmentId,
@@ -174,11 +175,15 @@ export function readEdit(
   // answer: several Segments and an envelope write naming none of them says nothing about which
   // stretch moved. One Segment is the envelope's own drawing, and moves with it below.
   if (writesEnvelope && edit.segments === undefined && sole === undefined) {
-    throw new SegmentsOutOfSyncError(entry.id);
+    throw new SegmentsOutOfSyncError(entry.id, 'ambiguous');
   }
   if (edit.start !== undefined) stored.start = toInstant(context.timeZone, edit.start);
   if (edit.end !== undefined) stored.end = toEndInstant(context.timeZone, edit.end, context.dateOnlyEnd);
   if (edit.segments !== undefined) {
+    // Every stored Entry keeps at least one Segment (#212); an update cannot write it down to zero
+    // the way `entries.add({ segments: [] })` can mint one — there is no whole-span input here to
+    // mint it from, only the Segment ids already on the Entry, which this write would silently drop.
+    if (edit.segments.length === 0) throw new EmptySegmentsError(entry.id);
     // Positional match (#212): the Segment at index `i` that names no `id` of its own keeps the id
     // of the Entry's current Segment at that index — this is how `dataset.entries.update(id, {
     // segments })` moves a Segment, per `CONTEXT.md`. An index beyond the Entry's current count has
@@ -193,13 +198,24 @@ export function readEdit(
     proposed.add('segments');
   }
   // The envelope has one owner (#212, finding 4, `plans/01` §6): whenever this edit changes
-  // `segments`, `start`/`end` are read back off the result, replacing whatever a caller proposed for
-  // them directly. A plain `update(id, { segments })`, naming no `start`/`end` at all, used to leave
-  // the Entry's own span stale against its new Segments — this is the one place, in either write
-  // direction, that stops that from happening. Marked proposed the same way the reverse derivation
-  // above already marks `segments`: neither is policy, so both sides of the pair count as stated.
+  // `segments`, `start`/`end` are read back off the result. A plain `update(id, { segments })`,
+  // naming no `start`/`end` at all, used to leave the Entry's own span stale against its new
+  // Segments — reading it back here is what stops that. When the caller named `start`/`end` *and*
+  // `segments` in the same edit and the two disagree, that is not this silent case: the edit
+  // contradicts itself, and `SegmentsOutOfSyncError('conflicting')` refuses it rather than picking a
+  // winner (finding S3) — the reverse derivation above can never disagree with itself, so it never
+  // throws here. Marked proposed the same way the reverse derivation above already marks `segments`:
+  // neither is policy, so both sides of the pair count as stated.
   if (stored.segments !== undefined) {
     const envelope = envelopeOfSegments(stored.segments);
+    if (edit.segments !== undefined) {
+      if (edit.start !== undefined && stored.start !== envelope.start) {
+        throw new SegmentsOutOfSyncError(entry.id, 'conflicting');
+      }
+      if (edit.end !== undefined && stored.end !== envelope.end) {
+        throw new SegmentsOutOfSyncError(entry.id, 'conflicting');
+      }
+    }
     stored.start = envelope.start;
     stored.end = envelope.end;
     proposed.add('start');

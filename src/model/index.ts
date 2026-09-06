@@ -80,6 +80,7 @@ export {
   DuplicateSegmentIdError,
   ParentCycleError,
   SegmentsOutOfSyncError,
+  EmptySegmentsError,
   UnknownFieldError,
   UnknownGridColumnError,
   DuplicateFieldKeyError,
