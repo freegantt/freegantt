@@ -760,4 +760,58 @@ describe('the EditExtender seam owes the envelope invariant too (#212 R2 fix-pla
       expect(entry.segments[0]!.end).toBe(entry.end);
     },
   );
+
+  it(
+    "hands the hook `entryAfterEdits`, which sees this transaction's own body rewrite, not just " +
+      '`entries` — the pre-transaction snapshot the hook is no longer graded against alone (D-S5-45)',
+    () => {
+      let sawSegmentCount: number | undefined;
+      const state = new DatasetState({
+        entries: [
+          {
+            id: 't1',
+            name: 't1',
+            start: '2026-01-01',
+            end: '2026-01-10',
+            segments: [{ id: 'sg1', start: '2026-01-01', end: '2026-01-10' }],
+          },
+        ],
+        timeZone: 'UTC',
+        editExtender: (request): EntryEdits => {
+          // The pre-transaction snapshot still shows one Segment — this is the split the hook must not
+          // be graded against (`entries.get` alone answers the wrong question here).
+          expect(request.entries.get(entryId('t1'))?.segments).toHaveLength(1);
+          sawSegmentCount = request.entryAfterEdits(entryId('t1'))?.segments.length;
+          return new Map();
+        },
+      });
+
+      runTransaction(
+        state,
+        (token) =>
+          state.entries.stageUpdate(token, entryId('t1'), {
+            segments: [
+              {
+                id: segmentId('sg1'),
+                start: toInstant('UTC', '2026-01-01'),
+                end: toInstant('UTC', '2026-01-04'),
+              },
+              {
+                id: segmentId('sg2'),
+                start: toInstant('UTC', '2026-01-04'),
+                end: toInstant('UTC', '2026-01-07'),
+              },
+              {
+                id: segmentId('sg3'),
+                start: toInstant('UTC', '2026-01-07'),
+                end: toInstant('UTC', '2026-01-10'),
+              },
+            ],
+          }),
+        'user',
+      );
+
+      expect(sawSegmentCount).toBe(3);
+    },
+  );
 });

@@ -529,6 +529,7 @@ export type EditExtender = (request: EditRequest) => EntryEdits;
 // @public
 export interface EditRequest {
     entries: ReadonlyMap<EntryId, Entry>;
+    entryAfterEdits(id: EntryId): Entry | undefined;
     proposed: EntryEdits;
 }
 

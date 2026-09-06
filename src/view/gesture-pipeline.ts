@@ -11,7 +11,7 @@ import type { Entry, EntryEdits, EntryId, ErrorCode, ItemId, RaiseError, Segment
 import { itemId } from '../model/index.js';
 import { identityExtender, type EditExtender } from '../data/edit-extension.js';
 import { reconcileExtenderEditsForPreview } from '../data/entry-reader.js';
-import { effectiveEntriesFor } from '../data/entry-tree.js';
+import { effectiveEntriesFor, entryAfterEdits } from '../data/entry-tree.js';
 import type { EventBus } from './event-bus.js';
 import type { AsyncCancelableEvent, EntryMove, EntryResize, GanttEventMap } from './event-bus.js';
 import type { Interactions } from './capability.js';
@@ -377,7 +377,11 @@ export class GesturePipeline {
    *  ghost for that Entry this frame, and the commit path still throws the same edit for real. */
   #extraFor(draft: EntryEdits): EntryEdits {
     const entries = this.#deps.allEntries?.() ?? new Map<EntryId, Entry>();
-    const raw = (this.#deps.extend ?? identityExtender)({ entries, proposed: draft });
+    const raw = (this.#deps.extend ?? identityExtender)({
+      entries,
+      proposed: draft,
+      entryAfterEdits: (id) => entryAfterEdits(entries, draft, id),
+    });
     // No hook installed is the default, and it writes nothing — so the frame reconciles nothing and
     // allocates nothing (I5). A hook that did write costs one entry per id it named, never a copy of
     // the dataset: `reconcileExtenderEditsForPreview` reads only the ids its own edits name.

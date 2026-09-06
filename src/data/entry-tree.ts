@@ -38,6 +38,21 @@ export function effectiveEntriesFor(
   return map;
 }
 
+/** `id` as `proposed` leaves it, without allocating a map to answer it — `EditRequest.entryAfterEdits`
+ *  (D-S5-45)'s own implementation for a preview frame, where `effectiveEntriesFor` above (built for a
+ *  named few ids at once) would still allocate a one-entry `Map` on every call. `overlayStoredEdit`
+ *  itself allocates only when `id` actually has an edit pending. */
+export function entryAfterEdits(
+  committed: ReadonlyMap<EntryId, Entry>,
+  proposed: EntryEdits,
+  id: EntryId,
+): Entry | undefined {
+  const current = committed.get(id);
+  if (current === undefined) return undefined;
+  const edit = proposed.get(id);
+  return edit === undefined ? current : overlayStoredEdit(current, edit);
+}
+
 export function childIdsByParent(entries: ReadonlyMap<EntryId, Entry>): Map<EntryId, EntryId[]> {
   const byParent = new Map<EntryId, EntryId[]>();
   for (const entry of entries.values()) {

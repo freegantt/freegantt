@@ -21,7 +21,8 @@ describe('identityExtender', () => {
   it('returns an empty EntryEdits map — no cascade, ever', () => {
     const t1 = entry('t1');
     const proposed = new Map<EntryId, StoredEdit>([[t1.id, { name: 'Framing' }]]);
-    const result = identityExtender({ entries: new Map([[t1.id, t1]]), proposed });
+    const entries = new Map([[t1.id, t1]]);
+    const result = identityExtender({ entries, proposed, entryAfterEdits: (id) => entries.get(id) });
     expect(result.size).toBe(0);
   });
 });
@@ -29,7 +30,12 @@ describe('identityExtender', () => {
 // D-S5-23: installing an extender composes rather than evicting. `data/` still holds one field and
 // calls it at one site — what changes is only how a second plugin arrives.
 describe('DatasetState.setExtender (D-S5-23)', () => {
-  const request = { entries: new Map<EntryId, Entry>(), proposed: new Map() as EntryEdits };
+  const requestEntries = new Map<EntryId, Entry>();
+  const request = {
+    entries: requestEntries,
+    proposed: new Map() as EntryEdits,
+    entryAfterEdits: (id: EntryId) => requestEntries.get(id),
+  };
 
   /** One wrapper that runs the current occupant, then adds a name of its own to the result. */
   function appends(name: string): (next: EditExtender) => EditExtender {
@@ -71,7 +77,12 @@ describe('DatasetState.setExtender (D-S5-23)', () => {
 // colliding case, so the merge is pinned here rather than discovered there.
 describe('composing two extenders that write one Entry (#197)', () => {
   const target = entryId('t1');
-  const request = { entries: new Map<EntryId, Entry>(), proposed: new Map() as EntryEdits };
+  const requestEntries = new Map<EntryId, Entry>();
+  const request = {
+    entries: requestEntries,
+    proposed: new Map() as EntryEdits,
+    entryAfterEdits: (id: EntryId) => requestEntries.get(id),
+  };
 
   /** Proposes a `meta`-sourced Field — `proposedKeys` is how such a write is recognized. */
   const proposesCost: EditExtender = () =>

@@ -119,9 +119,16 @@ export function buildCommitChangeSet(
   // its old ones there, so reconciling against `byId` would restore the envelope against Segments the
   // commit is about to replace.
   const effectiveForExtender = buildEffectiveEntries(byId, added, removed, proposed);
+  // The hook is judged against `effectiveForExtender` above, so it must be able to read that same
+  // state, not just `byId` (D-S5-45) — `entryAfterEdits` is that map's own `.get`, already built for
+  // reconciliation, so this costs nothing extra at commit.
   const extenderEdits = reconcileExtenderEdits(
     effectiveForExtender,
-    data.editExtender({ entries: byId, proposed }),
+    data.editExtender({
+      entries: byId,
+      proposed,
+      entryAfterEdits: (id) => effectiveForExtender.get(id),
+    }),
   );
   guardExtensionHookDoesNotOverwriteBody(proposed, extenderEdits);
   const extenderUpdated = diffEdits(byId, extenderEdits, data.fields, data.fieldContext);
