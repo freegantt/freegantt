@@ -727,6 +727,7 @@ export class GanttShell {
       entryFor: (item) => this.#entryFor(item),
       can: (capability, entry) => this.#capabilities.can(capability, entry),
       selectableEntriesInRowOrder: () => this.#selectableEntriesInRowOrder(),
+      selectableSegmentsInRowOrder: () => this.#selectableSegmentsInRowOrder(),
       segmentsOfEntries: (ids) => this.#segmentIdsOfEntries(ids),
       segmentsForItem: (item) => this.#layout.segmentIdsForItem(item),
       selection: {
@@ -988,6 +989,13 @@ export class GanttShell {
       }
     }
     return out;
+  }
+
+  /** Row order, then each Entry's own Segment order — the order the panes draw them (#212). It
+   *  reuses the row walk the keyboard step already uses, so a shift-range and a row step cannot
+   *  disagree about which Entry comes first. */
+  #selectableSegmentsInRowOrder(): readonly SegmentId[] {
+    return this.#segmentIdsOfEntries(this.#selectableEntriesInRowOrder());
   }
 
   get todayLine(): boolean | Instant {
