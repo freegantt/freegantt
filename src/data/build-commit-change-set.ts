@@ -66,10 +66,22 @@ export function diffEdits(
 }
 
 /** Which Fields an edit writes, however it states them: a storage key it holds, or a proposed key.
- *  `proposedKeys` is bookkeeping on the edit, never a Field, so it is not one of them (#197). */
+ *  `proposedKeys` is bookkeeping on the edit, never a Field, so it is not one of them (#197).
+ *
+ *  `meta` is the *container* a meta-sourced Field writes through, never a Field in its own right. An
+ *  edit that states `proposedKeys` already names the real Field inside `meta`, so the raw loop skips
+ *  `meta` for such an edit (#209) — including it unconditionally made two different meta-sourced
+ *  Fields on one Entry intersect on "meta" and I4 refuse a transaction that writes no Field twice. An
+ *  edit with no stated `proposedKeys` still needs the raw `meta` key, because nothing else names what
+ *  it wrote. */
 function fieldsWrittenBy(edit: StoredEdit): ReadonlySet<string> {
+  const statesProposedKeys = edit.proposedKeys !== undefined;
   const keys = new Set<string>(proposedKeysOf(edit));
-  for (const key of Object.keys(edit)) if (key !== 'proposedKeys') keys.add(key);
+  for (const key of Object.keys(edit)) {
+    if (key === 'proposedKeys') continue;
+    if (statesProposedKeys && key === 'meta') continue;
+    keys.add(key);
+  }
   return keys;
 }
 
