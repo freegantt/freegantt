@@ -9,9 +9,16 @@
 //
 // Structural rules absorb every inline write pane-layout.ts/render/dom used to make (D-S1.10-6) — the
 // new `freegantt/no-inline-style-outside-geometry` lint rule leaves `transform`/`width`/`height` as the
-// only properties still legitimately written inline. Colour token defaults are D-S1.10-9's: pulled from
-// an existing, non-shipping palette this team maintains elsewhere — only the values cross over, per
-// CLAUDE.md's "vendor Gantt product names never appear in specs, docs, or code".
+// only properties still legitimately written inline.
+//
+// The colour defaults are a cool, blue-shifted drawing-sheet palette: a white chart sheet on a light
+// grey ground, and a deep indigo-slate in the dark theme. They replace the warm cream set D-S1.10-9
+// first shipped. Two reasons. The warm ground clashed with any app shell that is not also warm, and a
+// library's defaults have to sit inside somebody else's page. And the old --fg-selection-color was a
+// red within a few degrees of --fg-date-line-color, so a selected row and a date line were the same
+// paint — the selection is violet now, a hue nothing else in the sheet claims. Colour carries meaning
+// here and each meaning gets its own hue: blue is data, vermilion marks time, amber warns, violet is
+// what the user picked.
 //
 // Theme tokens live on `.fg-container`. `theme: 'light'|'dark'` writes `data-fg-theme` on that
 // container, not on `:root`. A `:root:not([data-fg-theme])` media query never sees the pin, so Light
@@ -22,49 +29,53 @@ import { DEFAULT_TICK_BOX_FLOOR_PX, DEFAULT_DIAMOND_SIZE_PX } from '../layout/in
 const MARKER_ATTR = 'data-freegantt-styles';
 
 const LIGHT_COLOR_TOKENS = `
-  --fg-pane-bg: #FAFAF7;
-  --fg-splitter-color: #E6E2D9;
-  --fg-header-bg: #F4F2EC;
+  --fg-pane-bg: #FFFFFF;
+  --fg-splitter-color: #DDE2E9;
+  --fg-header-bg: #EEF1F5;
   --fg-header-band-bg: #FFFFFF;
-  --fg-header-text: #1A1815;
-  --fg-header-subtext: #9A958B;
-  --fg-header-divider-color: #E6E2D9;
+  --fg-header-text: #16191F;
+  --fg-header-subtext: #79828F;
+  --fg-header-divider-color: #DDE2E9;
   --fg-row-even-bg: transparent;
-  --fg-row-odd-bg: rgba(26, 24, 21, 0.028);
-  --fg-row-label-color: #1A1815;
-  --fg-row-unmatched-label-color: #9A958B;
-  --fg-bar-fill: oklch(0.55 0.13 245);
+  --fg-row-odd-bg: rgba(22, 25, 31, 0.03);
+  --fg-row-label-color: #16191F;
+  --fg-row-unmatched-label-color: #79828F;
+  --fg-bar-fill: oklch(0.52 0.14 248);
   --fg-bar-label-color: #FFFFFF;
-  --fg-warn: #D97706;
-  --fg-date-line-color: #DC2626;
+  --fg-warn: #B4690E;
+  --fg-date-line-color: #CF3B26;
   /* Distinct hue from --fg-bar-fill (S3, D-S3-7): the same colour as the bar's own fill would make the
-     selection outline invisible against it. */
-  --fg-selection-color: oklch(0.55 0.19 25);
+     selection outline invisible against it. It must also stay clear of --fg-date-line-color and
+     --fg-warn, which is what the old hue-25 red failed — it landed within a few degrees of the date
+     line's own red, so a selected row and an error read as the same paint. Violet is unclaimed by
+     any other meaning in the sheet: nothing else on the chart is this hue, so it says "picked" and
+     nothing else. */
+  --fg-selection-color: oklch(0.55 0.20 305);
   --fg-popup-bg: #FFFFFF;
-  --fg-popup-border: #E6E2D9;
-  --fg-popup-shadow: 0 2px 8px rgba(26, 24, 21, 0.16);
+  --fg-popup-border: #DDE2E9;
+  --fg-popup-shadow: 0 1px 2px rgba(22, 25, 31, 0.1), 0 8px 24px -6px rgba(22, 25, 31, 0.22);
 `.trimEnd();
 
 const DARK_COLOR_TOKENS = `
-  --fg-pane-bg: #15161A;
-  --fg-splitter-color: #2B2F36;
-  --fg-header-bg: #22252B;
-  --fg-header-band-bg: #1B1D22;
-  --fg-header-text: #ECEAE3;
-  --fg-header-subtext: #6E6A62;
-  --fg-header-divider-color: #2B2F36;
+  --fg-pane-bg: #171B22;
+  --fg-splitter-color: #262C36;
+  --fg-header-bg: #12161C;
+  --fg-header-band-bg: #171B22;
+  --fg-header-text: #E8ECF3;
+  --fg-header-subtext: #6D7889;
+  --fg-header-divider-color: #262C36;
   --fg-row-even-bg: transparent;
-  --fg-row-odd-bg: rgba(255, 255, 255, 0.032);
-  --fg-row-label-color: #ECEAE3;
-  --fg-row-unmatched-label-color: #6E6A62;
-  --fg-bar-fill: oklch(0.72 0.13 245);
-  --fg-bar-label-color: #1A1815;
-  --fg-warn: #FBBF24;
-  --fg-date-line-color: #F87171;
-  --fg-selection-color: oklch(0.75 0.19 25);
-  --fg-popup-bg: #1B1D22;
-  --fg-popup-border: #2B2F36;
-  --fg-popup-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+  --fg-row-odd-bg: rgba(232, 236, 243, 0.04);
+  --fg-row-label-color: #E8ECF3;
+  --fg-row-unmatched-label-color: #6D7889;
+  --fg-bar-fill: oklch(0.74 0.13 248);
+  --fg-bar-label-color: #10131A;
+  --fg-warn: #E0A340;
+  --fg-date-line-color: #FF6F57;
+  --fg-selection-color: oklch(0.76 0.17 305);
+  --fg-popup-bg: #1B2029;
+  --fg-popup-border: #313846;
+  --fg-popup-shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px -6px rgba(0, 0, 0, 0.6);
 `.trimEnd();
 
 const BASE_STYLESHEET = `
@@ -238,23 +249,37 @@ ${DARK_COLOR_TOKENS}
    stack — no z-index needed against them). pointer-events: none so an empty overlay never blocks the
    panes underneath; a mounted .fg-popup opts back in. */
 .fg-overlay { position: absolute; inset: 0; pointer-events: none; overflow: visible; }
-.fg-popup { position: absolute; top: 0; left: 0; pointer-events: auto; background: var(--fg-popup-bg); border: 1px solid var(--fg-popup-border); box-shadow: var(--fg-popup-shadow); border-radius: 4px; }
+/* overflow: hidden so a menu item's own hover paint clips to this radius instead of squaring off
+   the first and last corners. */
+.fg-popup { position: absolute; top: 0; left: 0; pointer-events: auto; background: var(--fg-popup-bg); border: 1px solid var(--fg-popup-border); box-shadow: var(--fg-popup-shadow); border-radius: 6px; overflow: hidden; }
 /* S5.5, D-S5-13: tooltips()'s own content, mounted inside .fg-popup. */
-.fg-tooltip { padding: 6px 10px; font: inherit; max-width: 280px; }
+.fg-tooltip { padding: 7px 10px; font: inherit; line-height: 1.45; max-width: 280px; }
 .fg-tooltip-title { font-weight: 600; }
-.fg-tooltip-dates { color: var(--fg-header-subtext); font-size: 0.9em; }
+.fg-tooltip-dates { color: var(--fg-header-subtext); font-size: 0.9em; font-variant-numeric: tabular-nums; }
 /* S5.5, D-S5-14: contextMenu()'s own content, mounted inside .fg-popup. */
-.fg-menu { padding: 4px 0; min-width: 160px; }
-.fg-menu-item { display: block; width: 100%; padding: 4px 12px; border: none; background: none; text-align: start; font: inherit; color: inherit; cursor: pointer; white-space: nowrap; }
-.fg-menu-item:hover, .fg-menu-item:focus { background: var(--fg-row-odd-bg); outline: none; }
-.fg-menu-separator { height: 1px; margin: 4px 0; background: var(--fg-splitter-color); }
+.fg-menu { padding: 5px; min-width: 184px; }
+/* The item is inset from the menu's own padding box so its hover paint is a rounded row floating
+   inside the popup, not a band running edge to edge. Full-bleed hover fights the popup's radius at
+   the first and last item, which is why every considered menu insets it. */
+.fg-menu-item { display: block; width: 100%; box-sizing: border-box; padding: 5px 9px; border: none; border-radius: 4px; background: none; text-align: start; font: inherit; line-height: 1.45; color: inherit; cursor: pointer; white-space: nowrap; }
+/* --fg-row-odd-bg is a 3%-alpha zebra stripe — at that strength a hovered item was not visibly
+   hovered. The bar fill is the sheet's own "this is live data" hue, so a wash of it reads as
+   pointer feedback without introducing a colour the sheet does not already use. */
+.fg-menu-item:hover, .fg-menu-item:focus { background: color-mix(in oklab, var(--fg-bar-fill) 14%, transparent); outline: none; }
+.fg-menu-item:active { background: color-mix(in oklab, var(--fg-bar-fill) 22%, transparent); }
+.fg-menu-separator { height: 1px; margin: 5px 4px; background: var(--fg-header-divider-color); }
 /* S5.8, D-S5-19: inlineEditing()'s own control — mounted through the overlay layer directly (not
    wrapped in .fg-popup: the cell editor has no flip/clamp, it always sits at the cell's own rect,
    Popup's own file header explains why it is built differently). data-state="invalid" is a failed
    parseValue, a beforeChange veto, or the default dateInput's non-midnight refusal (issue #137 F11/F12). */
 .fg-cell-editor { position: absolute; top: 0; left: 0; pointer-events: auto; box-sizing: border-box; }
-.fg-cell-editor-control { width: 100%; height: 100%; box-sizing: border-box; font: inherit; padding-inline: var(--fg-cell-padding-inline, 8px); border: 1px solid var(--fg-selection-color); background: var(--fg-pane-bg); color: var(--fg-row-label-color); }
-.fg-cell-editor[data-state='invalid'] .fg-cell-editor-control { border-color: var(--fg-warn); }
+/* The ring is the affordance: a 1px border alone reads as a table cell, and the open editor has to
+   read as the one live control on the chart. It uses the Selection token because an open editor IS
+   the selection, expressed as a field — which is also why that token had to stop being red. */
+.fg-cell-editor-control { width: 100%; height: 100%; box-sizing: border-box; font: inherit; padding-inline: var(--fg-cell-padding-inline, 8px); border: 1px solid var(--fg-selection-color); border-radius: 3px; outline: none; background: var(--fg-pane-bg); color: var(--fg-row-label-color); box-shadow: 0 0 0 3px color-mix(in oklab, var(--fg-selection-color) 20%, transparent); }
+/* Invalid swaps the whole ring, not only the border colour, so the state is legible at a glance and
+   not just to a reader comparing two 1px lines. */
+.fg-cell-editor[data-state='invalid'] .fg-cell-editor-control { border-color: var(--fg-warn); box-shadow: 0 0 0 3px color-mix(in oklab, var(--fg-warn) 22%, transparent); }
 /* The Refusal notice (#171): a .fg-cell-editor carrying a reason and no control. data-reason is what
    tells it from a refused editor, which is invalid but does hold one. pointer-events: none is
    load-bearing — the notice sits over the cell, and the next double-click must reach the cell.
