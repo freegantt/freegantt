@@ -362,6 +362,39 @@ describe('runTransaction', () => {
     ).toThrow(/I4/);
   });
 
+  // #209: the raw loop in `fieldsWrittenBy` used to add the `meta` container key even when an edit
+  // already stated `proposedKeys`, so two different meta-sourced Fields intersected on "meta" and I4
+  // refused a transaction that writes no Field twice.
+  it('I4 does not fire when the body and the extender write two different meta-sourced Fields', () => {
+    const state = new DatasetState({
+      entries: [{ id: 't1', name: 't1', start: 0, end: 1 }],
+      timeZone: 'UTC',
+      fieldTypes: { money: { rollUp: 'sum' } },
+      fields: [
+        { key: 'cost', type: 'money' },
+        { key: 'risk', type: 'money' },
+      ],
+      editExtender: (): EntryEdits =>
+        new Map<ReturnType<typeof entryId>, StoredEdit>([
+          [entryId('t1'), { meta: { cost: 500 }, proposedKeys: new Set(['cost']) }],
+        ]),
+    });
+
+    expect(() =>
+      runTransaction(
+        state,
+        (token) =>
+          state.entries.stageUpdate(token, entryId('t1'), {
+            meta: { risk: 1 },
+            proposedKeys: new Set(['risk']),
+          }),
+        'user',
+      ),
+    ).not.toThrow();
+
+    expect(state.entries.get(entryId('t1'))?.meta).toEqual({ cost: 500, risk: 1 });
+  });
+
   it('the changeset is frozen in dev mode — a beforeChange handler cannot edit it', () => {
     const state = dataset([{ id: 't1' }]);
     let sawFrozen = false;
