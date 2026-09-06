@@ -90,7 +90,7 @@ import type {
   TimeSpan,
 } from '../model/index.js';
 import { segmentIdsDroppedBy } from '../data/change-set.js';
-import type { EditRequest, EntryEdits } from '../data/edit-extension.js';
+import type { EditRequest } from '../data/edit-extension.js';
 import { resolveCapabilities } from './capability.js';
 import type { CapabilityRule, Capabilities, Interactions } from './capability.js';
 import { subscribeToDatasetChanges } from './dataset-change-subscription.js';
@@ -316,7 +316,7 @@ export interface GanttShellOptions {
    *  Dataset plugin composes onto it (D-S5-23). A test that constructs `GanttShell` directly passes
    *  its own, the same shape `commitEntryEdits` already uses. The real hook still runs again, for
    *  real, inside `data/transaction.ts`'s own commit. This option never writes anything itself. */
-  extraEditsFor?: (request: EditRequest) => EntryEdits;
+  extraEditsFor?: (request: EditRequest) => StoredEdits;
   /** Internal (D-S4-24). One registry per Gantt, seeded with span/group/milestone. Tests inject a
    *  replacement; `GanttOptions` has no such field (public registration is S5). */
   itemProducerRegistry?: ItemProducerRegistry;

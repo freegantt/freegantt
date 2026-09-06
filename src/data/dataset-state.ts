@@ -23,13 +23,13 @@ import type {
   Disposer,
   EditExtender,
   EditRequest,
-  EntryEdits,
+  StoredEdits,
   ExtenderWrapper,
 } from '../model/index.js';
 import { changeSetId, mintedSegmentId } from '../model/index.js';
 import { now } from '../time/index.js';
 import { EntryStore } from './entry-store.js';
-import { authoredSegmentIdsOf, readEntries } from './entry-reader.js';
+import { authoredSegmentIdsOf, readEdits, readEntries } from './entry-reader.js';
 import type { EntryReadContext } from './entry-reader.js';
 import { identityExtender } from './edit-extension.js';
 import { PluginStores } from './plugin-store.js';
@@ -212,9 +212,19 @@ export class DatasetState implements Dataset {
    *  what it returns. `data/transaction.ts`'s commit path and `api/gantt.ts`'s drag-preview wiring
    *  both call this — one seam, not two — so `api/Dataset` never had to expose the raw occupant to
    *  get either job done (#209 Q5, replacing the public `editExtender` getter this file used to
-   *  mirror). */
-  extraEditsFor(request: EditRequest): EntryEdits {
-    return this.#editExtender(request);
+   *  mirror).
+   *
+   *  It is also where the hook's loose writes become storage-shaped (#209 C3): the occupant returns
+   *  `EntryEdits`, the same object `entries.update()` takes, and `readEdits` reads it through the
+   *  dataset's own zone and end rule. One door, so the commit and the drag preview normalize once and
+   *  identically — a preview that painted a raw `'2026-01-05'` would reach `scale.xForInstant`. */
+  extraEditsFor(request: EditRequest): StoredEdits {
+    return readEdits(
+      this.#editExtender(request),
+      this.#entryContext,
+      (id) => request.entryAfterEdits(id),
+      this.fields,
+    );
   }
 
   /** Call: `ctx.edits.setExtender((next) => (request) => mergeEntryEdits(next(request), mine(request)))`.

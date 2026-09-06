@@ -17,8 +17,7 @@ import type {
   StoredEdits,
 } from '../model/index.js';
 import { itemId } from '../model/index.js';
-import { identityExtender } from '../data/edit-extension.js';
-import type { EditRequest, EntryEdits } from '../data/edit-extension.js';
+import type { EditRequest } from '../data/edit-extension.js';
 import { reconcileExtenderEditsForPreview } from '../data/entry-reader.js';
 import { effectiveEntriesFor, entryAfterEdits } from '../data/entry-tree.js';
 import type { EventBus } from './event-bus.js';
@@ -26,6 +25,10 @@ import type { AsyncCancelableEvent, EntryMove, EntryResize, GanttEventMap } from
 import type { Interactions } from './capability.js';
 import { FrameScheduler } from './frame-scheduler.js';
 import type { DraftOptions, EntryGesture, EntryGestureSession } from './entry-gesture-context.js';
+
+/** No seam wired means no ghost — one frozen empty map, so a preview frame with no plugin installed
+ *  allocates nothing (I5). */
+const NO_EXTRA_EDITS: StoredEdits = Object.freeze(new Map());
 
 export interface GesturePipelineDeps {
   timeZone(): string;
@@ -55,7 +58,7 @@ export interface GesturePipelineDeps {
    *  `undefined` previews no ghost extras, same as `data/edit-extension.ts`'s `identityExtender` —
    *  which is also what a Dataset with no plugin installed hands over (S5.10, D-S5-23). Renamed from
    *  `extend` to `extraEditsFor` at #209 Q5, alongside the seam it mirrors (`api/Dataset`'s own). */
-  extraEditsFor?: (request: EditRequest) => EntryEdits;
+  extraEditsFor?: (request: EditRequest) => StoredEdits;
   /** Committed entries `extraEditsFor`'s `EditRequest.entries` argument reads — a snapshot map, built
    *  only when a preview frame actually calls it (an installed extender may cascade to an entry
    *  outside the caller's own draft, so `entryById` alone cannot answer it). */
@@ -372,8 +375,11 @@ export class GesturePipeline {
 
   /** D-S3-18, S3.6: `extra = extraEditsFor({ entries: committed, proposed: draft })` — the exact
    *  pseudocode the decision names, run on the pipeline's own rAF (`#preview`'s caller) rather than on
-   *  every `pointermove`. No installed hook (P1's default): `identityExtender`, so `previewOffsets` paints
-   *  no ghost — behaviorally identical to before this hook existed.
+   *  every `pointermove`. No wired seam (P1's default) means no ghost, which is what an unoccupied
+   *  hook writes anyway — behaviorally identical to before this hook existed. The seam hands over
+   *  storage-shaped edits, because `api/Dataset.extraEditsFor` reads the occupant's loose writes
+   *  through the dataset's own zone first (#209 C3): pixels need an `Instant`, and `layout/` may not
+   *  derive one (I10).
    *
    *  The raw hook result is reconciled the same way `data/build-commit-change-set.ts` reconciles it
    *  at commit, against the same effective state (committed entries overlaid with this draft) — so a
@@ -386,8 +392,10 @@ export class GesturePipeline {
    *  calls `reconcileExtenderEditsForPreview`, not `reconcileExtenderEdits`: a refused edit paints no
    *  ghost for that Entry this frame, and the commit path still throws the same edit for real. */
   #extraFor(draft: StoredEdits): StoredEdits {
+    const extraEditsFor = this.#deps.extraEditsFor;
+    if (extraEditsFor === undefined) return NO_EXTRA_EDITS;
     const entries = this.#deps.allEntries?.() ?? new Map<EntryId, Entry>();
-    const raw = (this.#deps.extraEditsFor ?? identityExtender)({
+    const raw = extraEditsFor({
       entries,
       proposed: draft,
       entryAfterEdits: (id) => entryAfterEdits(entries, draft, id),

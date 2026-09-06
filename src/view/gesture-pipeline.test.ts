@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { GesturePipeline } from './gesture-pipeline.js';
 import type { GesturePipelineDeps } from './gesture-pipeline.js';
 import { SegmentsOutOfSyncError, entryId, itemId, segmentId } from '../model/index.js';
-import type { Entry, EntryEdits, EntryId, ErrorReportInput, Instant } from '../model/index.js';
+import type { Entry, EntryId, ErrorReportInput, Instant, StoredEdits } from '../model/index.js';
 import type { TimeScale, ViewPreset } from '../layout/index.js';
 import { reconcileExtenderEdits } from '../data/entry-reader.js';
 
@@ -164,7 +164,7 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
         { id: segmentId('seg-b'), start: 200 as Instant, end: 300 as Instant },
       ],
     };
-    const committed: EntryEdits[] = [];
+    const committed: StoredEdits[] = [];
     const { deps, applied } = withRoster([segmented], {
       commitEntryEdits: (edits) => {
         committed.push(edits);
@@ -199,7 +199,7 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
         { id: segmentId('seg-b'), start: 200 as Instant, end: 300 as Instant },
       ],
     };
-    const committed: EntryEdits[] = [];
+    const committed: StoredEdits[] = [];
     const { deps, applied } = withRoster([segmented], {
       selectedSegmentIds: () => [segmentId('seg-b')],
       commitEntryEdits: (edits) => {
@@ -242,7 +242,7 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
         { id: segmentId('unpicked-b'), start: 400 as Instant, end: 500 as Instant },
       ],
     };
-    const committed: EntryEdits[] = [];
+    const committed: StoredEdits[] = [];
     const { deps } = withRoster([picked, unpicked], {
       selectedEntryIds: () => [picked.id, unpicked.id],
       selectedSegmentIds: () => [segmentId('picked-b')],
@@ -274,7 +274,7 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
         { id: segmentId('seg-b'), start: 200 as Instant, end: 300 as Instant },
       ],
     };
-    const committed: EntryEdits[] = [];
+    const committed: StoredEdits[] = [];
     const { deps } = withRoster([segmented], {
       selectedSegmentIds: () => [segmentId('seg-a')],
       commitEntryEdits: (edits) => {
@@ -692,7 +692,7 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
         ]);
       const extraEditsFor: GesturePipelineDeps['extraEditsFor'] = () =>
         new Map([[x.id, { start: 350 as unknown as Instant }]]);
-      const commitEntryEdits = vi.fn((draft: EntryEdits) => {
+      const commitEntryEdits = vi.fn((draft: StoredEdits) => {
         // Mirrors what `data/build-commit-change-set.ts` runs for real, at commit, against the real
         // Dataset: the extraEditsFor hook's cascade goes through `reconcileExtenderEdits` — the same function
         // the preview above calls a skip-on-refusal wrapper of — and this one does not skip.
