@@ -111,11 +111,17 @@ function fieldContextFor(ctx: PluginContext): FieldContext {
   };
 }
 
-/** The three classes this plugin writes, and `view/styles.ts` styles. The session dresses the
- *  wrapper and the control, so no control factory has to remember to. */
+/** The four classes this plugin writes, and `view/styles.ts` styles. The session dresses the
+ *  wrapper and the control, so no control factory has to remember to.
+ *
+ *  An editor holds a control the user types into. A notice holds words the user reads and takes no
+ *  pointer. They are two things, so they carry two class names (#231 F1). One class told them apart
+ *  only through `:not(:has(.fg-cell-editor-control))`. The stylesheet spelled that trick, and a test
+ *  spelled it again. A consumer who copied the documented editor selector reached the notice too. */
 const EDITOR_CLASS = 'fg-cell-editor';
 const EDITOR_CONTROL_CLASS = 'fg-cell-editor-control';
 const EDITOR_DISCARD_CLASS = 'fg-cell-editor-discard';
+const NOTICE_CLASS = 'fg-cell-notice';
 
 /** Every refusal the user can see, with the words the user reads. One table, because the wording is
  *  user-visible and belongs in one place. The four `return` sites below decide *which* refusal
@@ -142,10 +148,14 @@ const REFUSAL_TEXT = {
 export type CellEditorRefusal = keyof typeof REFUSAL_TEXT;
 
 /** Why a *commit* left the editor invalid (#160, D-S5-47): the control read no value back
- *  (`unreadable-value`), or a `beforeChange` handler vetoed the write (`refused-write`). The wrapper's
- *  `data-reason` names the fault so a future reader can style or announce it. #234 owns the words for
- *  that reason. This issue ships the naming mechanism, not the vocabulary. Neither key has a
- *  `REFUSAL_TEXT` entry yet. */
+ *  (`unreadable-value`), or a `beforeChange` handler vetoed the write (`refused-write`). The open
+ *  editor's own `data-reason` names the fault so a future reader can style or announce it. #234 owns
+ *  the words for that reason. This issue ships the naming mechanism, not the vocabulary. Neither key
+ *  has a `REFUSAL_TEXT` entry yet.
+ *
+ *  These keys and `CellEditorRefusal`'s stay apart because the elements do (#231 F1). An editor is a
+ *  `.fg-cell-editor` and a notice is a `.fg-cell-notice`. The class alone answers which vocabulary a
+ *  `data-reason` speaks. */
 export type CellEditorCommitRefusal = 'unreadable-value' | 'refused-write';
 
 /** Puts `element` exactly over `cell`'s own rect — no flip and no clamp, unlike `Popup`. An editor
@@ -211,15 +221,14 @@ export interface CellEditorPorts {
   /** The session asks its owner to close it. The owner decides, and drops its own reference, so one
    *  place alone knows whether an editor is open. */
   requestCommit(): void;
-  /** Closes the open editor and writes nothing (#160, D-S5-47). Escape's answer, bound straight
-   *  through the keymap — the same "one implementation, two entry points" shape `runDiscardCommand`
-   *  below gives the pointer affordance. */
+  /** The session asks its owner to close it and write nothing (#160, D-S5-47). Escape asks, and so
+   *  does the invalid editor's discard button.
+   *
+   *  D-S5-26 puts one command behind both, so this runs `freegantt.discardCellEdit` rather than
+   *  `CellEditing.discard()`. A consumer who overrides that command changes the keyboard and the
+   *  pointer together (#231 F2). Escape used to skip the command and reach the method, so an
+   *  override changed the button alone. */
   requestDiscard(): void;
-  /** Runs `freegantt.discardCellEdit` on the command registry (#160, D-S5-47). The invalid editor's
-   *  discard button calls this, not `requestDiscard` directly. D-S5-26 puts one command behind both
-   *  the keyboard and the pointer path. A consumer who overrides the command changes what the button
-   *  does too. */
-  runDiscardCommand(): void;
   /** S5.12, D-S5-40: reports one refusal on the Gantt's `error` event. A consumer can then toast it,
    *  rather than rely on a notice the user may not look at. `ctx.raiseError` fills `by` with this
    *  plugin's id. */
@@ -384,8 +393,8 @@ export class CellEditorSession {
     // first, with a null relatedTarget, which would run one more doomed commit before the click lands.
     button.addEventListener('pointerdown', (event) => event.preventDefault());
     // The command, not the method (D-S5-26): a consumer who overrides `freegantt.discardCellEdit`
-    // changes what this button does too.
-    button.addEventListener('click', () => this.#ports.runDiscardCommand());
+    // changes what this button does too. Escape takes the same one road (#231 F2).
+    button.addEventListener('click', () => this.#ports.requestDiscard());
     this.#wrapper.append(button);
     this.#discardButton = button;
   }
@@ -422,13 +431,15 @@ function repositionNotice(ports: RefusalNoticePorts, element: HTMLElement, edite
   if (cell) positionOver(element, cell, ports.mountLayer.bounds);
 }
 
-/** Puts the refusal where the user acted: over the cell, in the same `data-state="invalid"` a refused
- *  commit already uses (D-S5-19, issue #137 F11/F12). It is a notice, not an editor. It mounts no
- *  control and it takes no focus, so it never becomes a sixth thing the user must close.
+/** Puts the refusal where the user acted: over the cell (D-S5-19, issue #137 F11/F12). It is a
+ *  notice, not an editor. It mounts no control and it takes no focus, so it never becomes a sixth
+ *  thing the user must close. That is why it carries its own class and not `.fg-cell-editor`
+ *  (#231 F1). A selector for the notice must never reach a live editor. The notice's own
+ *  `pointer-events: none` would put that editor's control and discard button out of reach.
  *
- *  It paints nothing of its own (#171). `view/styles.ts` styles
- *  `.fg-cell-editor[data-state='invalid'][data-reason]`, so a consumer stylesheet can still win. An
- *  inline declaration would outrank one, which is the opposite of what level-1 tokens are for.
+ *  It paints nothing of its own (#171). `view/styles.ts` styles `.fg-cell-notice[data-reason]`, so a
+ *  consumer stylesheet can still win. An inline declaration would outrank one, which is the opposite
+ *  of what level-1 tokens are for.
  *
  *  `role="status"` is the strongest thing a plugin can say on its own node today. S5.11 owes the
  *  real announcement, through the per-Gantt polite live region D-S5-27 adds. */
@@ -439,8 +450,7 @@ export function presentRefusal(
   reason: CellEditorRefusal,
 ): RefusalNotice {
   const element = document.createElement('div');
-  element.className = EDITOR_CLASS;
-  element.dataset['state'] = 'invalid';
+  element.className = NOTICE_CLASS;
   element.dataset['reason'] = reason;
   const text = REFUSAL_TEXT[reason];
   element.textContent = text;
@@ -615,9 +625,6 @@ export function inlineEditing(options: InlineEditingOptions = {}): GanttPlugin {
           editing.commit();
         },
         requestDiscard: () => {
-          editing.discard();
-        },
-        runDiscardCommand: () => {
           ctx.commands.run('freegantt.discardCellEdit');
         },
         raiseError: (report) => {
@@ -626,8 +633,7 @@ export function inlineEditing(options: InlineEditingOptions = {}): GanttPlugin {
       };
 
       // #169: every mutable this plugin used to hold lives here now, with one method per transition.
-      // The `requestCommit`/`requestDiscard`/`runDiscardCommand` ports above read it after it is
-      // built, never before.
+      // The `requestCommit`/`requestDiscard` ports above read it after it is built, never before.
       const editing = new CellEditing(ports);
 
       // #160, D-S5-47, Q2/Q5: the public way to close an invalid editor with no keyboard and no

@@ -286,16 +286,17 @@ ${DARK_COLOR_TOKENS}
    reaches it. */
 .fg-cell-editor-discard { position: absolute; top: 50%; right: 2px; transform: translateY(-50%); width: 18px; height: 18px; padding: 0; border: none; border-radius: 3px; background: none; font: inherit; line-height: 1; color: var(--fg-warn); cursor: pointer; }
 .fg-cell-editor-discard:hover, .fg-cell-editor-discard:focus-visible { background: color-mix(in oklab, var(--fg-warn) 18%, transparent); outline: none; }
-/* The Refusal notice (#171): a .fg-cell-editor carrying a reason and no control. #160, D-S5-47 put
-   data-reason on a refused *commit*'s own wrapper too, and that wrapper does hold a control (plus the
-   discard button above) — :not(:has(...)) is what still tells the two apart, now that data-reason
-   alone no longer does. pointer-events: none is load-bearing on the notice — it sits over the cell,
-   and the next double-click must reach the cell; an invalid editor keeps pointer-events: auto from the
-   base rule, so its own control and discard button both stay clickable.
-   S5.12, D-S5-40: data-reason now holds the kebab-case Error report code. This rule matches the
-   attribute and never one of its values, so the rename reaches no selector here. A consumer styling
-   one reason writes [data-reason='derived-value'], which is also the code they read off the report. */
-.fg-cell-editor[data-state='invalid'][data-reason]:not(:has(.fg-cell-editor-control)) { pointer-events: none; display: flex; align-items: center; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font: inherit; padding-inline: var(--fg-cell-padding-inline, 8px); border: 1px solid var(--fg-warn); background: var(--fg-pane-bg); color: var(--fg-warn); }
+/* The Refusal notice (#171): words over the cell that could not open an editor. It is its own class
+   and not a .fg-cell-editor (#231 F1) — a refused *commit* stamps data-reason on the open editor too
+   (#160, D-S5-47), so the attribute alone stopped telling the two apart, and the :not(:has(...)) that
+   stood in here reached the wrong node the moment a consumer copied the selector by hand.
+   pointer-events: none is load-bearing — the notice sits over the cell, and the next double-click must
+   reach the cell. It is also why the split matters: an editor styled by this rule would lose its own
+   control and its discard button to the same declaration.
+   S5.12, D-S5-40: data-reason holds the kebab-case Error report code. This rule matches the attribute
+   and never one of its values, so a rename reaches no selector here. A consumer styling one reason
+   writes [data-reason='derived-value'], which is also the code they read off the report. */
+.fg-cell-notice { position: absolute; top: 0; left: 0; box-sizing: border-box; pointer-events: none; display: flex; align-items: center; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font: inherit; padding-inline: var(--fg-cell-padding-inline, 8px); border: 1px solid var(--fg-warn); background: var(--fg-pane-bg); color: var(--fg-warn); }
 `.trim();
 
 /** Injects the library's base stylesheet into `doc` exactly once. Safe to call from every Gantt
