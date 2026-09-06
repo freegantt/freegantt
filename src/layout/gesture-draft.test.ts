@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { cursorLabelForX, draftForMove, draftForResize, previewOffsets } from './gesture-draft.js';
-import type { Entry, EntryEdits, Instant, StoredEdit } from '../model/index.js';
+import type { Entry, Instant, StoredEdit, StoredEdits } from '../model/index.js';
 import { entryId, itemId, segmentId } from '../model/index.js';
 import { instant, createTimeScale, MS } from '../time/index.js';
 
@@ -711,7 +711,7 @@ describe('previewOffsets — segments (S4.10)', () => {
         },
       ],
     };
-    const proposed: EntryEdits = new Map([
+    const proposed: StoredEdits = new Map([
       [
         segmented.id,
         {

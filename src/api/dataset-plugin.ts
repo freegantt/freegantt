@@ -28,10 +28,10 @@ import type { DisposableStore } from '../extensions/disposables.js';
 // hands them over, rather than hunting for the module they are declared in.
 export type { PluginStore, PluginStoreView, ExtenderWrapper };
 // The one legal way to compose two extenders' writes (#197), here for that same reason: it belongs
-// beside `DatasetEditHook`, the contract that hands a plugin the occupant it has to merge with. An
-// app author never meets it — it takes and returns `EntryEdits`, the storage-shaped map only an
-// extender produces.
-export { mergeEntryEdits } from '../data/fields/field-access.js';
+// beside `DatasetEditHook`, the contract that hands a plugin the occupant it has to merge with. It
+// takes and returns `EntryEdits` — one `EntryEdit` per Entry, the same object `entries.update()`
+// takes (#209), so the only type a plugin author names to write a cascade is one they already know.
+export { mergeEntryEdits } from '../data/edit-extension.js';
 // The move a plugin's cascade is honest about (D-S5-44): every Segment of an Entry, translated
 // rigidly to a new `start`, each keeping its own `SegmentId`. An envelope-only cascade against a
 // several-Segment Entry is refused (`SegmentsOutOfSyncError`), so this is how a plugin author writes

@@ -19,10 +19,9 @@ import {
   contextMenu,
 } from './index.js';
 import type {
-  EditExtender,
   EditRequest,
   Entry,
-  EntryEdits,
+  StoredEdits,
   GanttDom,
   GanttPlugin,
   GridColumnInput,
@@ -5012,6 +5011,11 @@ describe('a hidden grid column keeps its width and its place (S5.7, D-S5-34, #18
 // re-reads the hook's current occupant (D-S5-23). Storing the getter's result instead would pin the
 // occupant that existed when the Gantt was built, and the ghost would go silent from the moment a
 // plugin composes onto the hook. That is invisible today and wrong the moment S7 lands.
+/** What `Dataset.extraEditsFor` returns: the hook's writes, already read through the dataset's zone
+ *  (#209 C3). The double below stands in one step further along than an `EditExtender`, which is the
+ *  member `api/gantt.ts` actually calls. */
+type ExtraEditsFor = (request: EditRequest) => StoredEdits;
+
 describe('Gantt reads the Dataset’s edit hook live (#186)', () => {
   const A_START = instant('2026-09-01T00:00:00Z');
   const A_END = instant('2026-09-03T00:00:00Z');
@@ -5023,20 +5027,20 @@ describe('Gantt reads the Dataset’s edit hook live (#186)', () => {
    *  the Dataset's constructor returns (D-S5-4's registration gate), so this subclass overrides the
    *  one public member `api/gantt.ts` reads. */
   class LateHookDataset extends Dataset {
-    #occupant: EditExtender = () => new Map();
+    #occupant: ExtraEditsFor = () => new Map();
 
-    override extraEditsFor(request: EditRequest): EntryEdits {
+    override extraEditsFor(request: EditRequest): StoredEdits {
       return this.#occupant(request);
     }
 
-    occupyHook(next: EditExtender): void {
+    occupyHook(next: ExtraEditsFor): void {
       this.#occupant = next;
     }
   }
 
   /** Moves `x` — never grabbed — whenever a move on `a` is proposed. Absolute instants, so no
    *  arithmetic on an `Instant` happens outside `time/` (I10). */
-  const cascadeOntoX: EditExtender = ({ proposed }) => {
+  const cascadeOntoX: ExtraEditsFor = ({ proposed }) => {
     const moved = proposed.get(entryId('a'));
     if (!moved || moved.start === undefined) return new Map();
     return new Map([
