@@ -39,6 +39,12 @@ export interface EntryStoreView<
    *  declares reads as the type the consumer wrote (ADR 0005). This is the far end of the
    *  `Dataset<TMeta, TFields>` generics, and where they stop. */
   fieldValue<K extends FieldKey>(id: EntryId | string, field: K): FieldValue<TFields, K> | undefined;
+  /** The Entry that draws `id`, or `undefined` when no Entry does (ADR 0010, #212). Call:
+   *  `dataset.entries.entryIdOfSegment(segmentId)`. */
+  entryIdOfSegment(id: SegmentId | string): EntryId | undefined;
+  /** Every Entry named by at least one id in `ids`, deduped, in the order first named (ADR 0010,
+   *  #212). Call: `dataset.entries.entryIdsOfSegments(selection)`. */
+  entryIdsOfSegments(ids: readonly (SegmentId | string)[]): readonly EntryId[];
 }
 
 /** The Dataset's entries, read and write — `dataset.entries.add/update/remove`. Each

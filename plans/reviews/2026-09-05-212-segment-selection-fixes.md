@@ -132,9 +132,9 @@ Entry's descendants is neither documented nor tested, and `Delete` is now a defa
 
 Finding 6. Nine bodies across four layers ask this question. Six of them scan the whole dataset.
 
-- [ ] `data/` owns and publishes the index. It is maintained on write, not rebuilt per read.
-- [ ] `#groupSegmentsByOwner` uses it. So does `reveal` (finding 18) and the R5 work.
-- [ ] Delete the re-derivations the index replaces. Count them in the commit message.
+- [x] `data/` owns and publishes the index. It is maintained on write, not rebuilt per read.
+- [x] `#groupSegmentsByOwner` uses it. So does `reveal` (finding 18) and the R5 work.
+- [x] Delete the re-derivations the index replaces. Count them in the commit message.
 
 **Visible at the end:** `git grep` for a full-dataset Segment scan returns the index and nothing else.
 
