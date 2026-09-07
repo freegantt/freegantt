@@ -71,8 +71,8 @@ Its S2, S3 and the harness snap/undo rows were already fixed by `c96bee1` and `3
 | S4 / candidate 2 — the refusal sentence is framed twice and has already drifted | real: `errors.ts` says "this change", `gesture-pipeline.ts` says "this ${kind}" | `[x]` `a173dab` — `buildRefusalReport` frames it once, and quotes the thrown error where one exists |
 | candidate 1 — one public "can this Field be written on this Entry?" answer | real; the inline editor re-derives three core rules | `[ ]` |
 | candidate 4 — bind `<TMeta, TFields>` once, `TDataset = TGantt['dataset']` | real; six aliases restate the pair | `[ ]` |
-| S5 — `CellEditorCommitRefusal` carries "Commit", the word ADR 0006 retired here | **claim doubted** — ADR 0006 reserves `Commit` for *the act*, and this refusal is at commit time. Under verification | `[~]` |
-| `CONTEXT.md`'s Refusal entry names none of the three code families | real doc gap | `[~]` in flight |
+| S5 — `CellEditorCommitRefusal` carries "Commit", the word ADR 0006 retired here | **not real.** ADR 0006 reserves `Commit` for *the act* and the path; it retires it only as a name for the change *record*. This refusal names the act. No rename | `[x]` `0eb6a64` — ADR 0006 gains the rule, so a third review cannot re-raise it |
+| `CONTEXT.md`'s Refusal entry names none of the three code families | real doc gap | `[x]` `0eb6a64` — names all three, plus `buildRefusalReport` |
 | `#markInvalid` reads `COMMIT_REFUSAL_TEXT[reason]` twice | real, small | `[ ]` |
 | S7 — comment sentences exceed the 25-word ASD-STE100 cap | real, repo-wide habit | `[ ]` |
 
