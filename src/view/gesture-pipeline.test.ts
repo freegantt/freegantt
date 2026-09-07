@@ -368,6 +368,10 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
 
     expect(committed).toBe(true);
     expect(emitted.map(([name]) => name)).toEqual(['beforeEntryMove', 'entryMove']);
+    // #210/T1-2: `Refusable` belongs to the `before*` payload alone (event-bus.ts's map types
+    // `entryMove` without it) — the after-payload must not carry a stray `refuse`.
+    expect(emitted[0]![1]).toHaveProperty('refuse');
+    expect(emitted[1]![1]).not.toHaveProperty('refuse');
   });
 
   it('commit() on a resize gesture fires beforeEntryResize/entryResize, carrying the grabbed edge', async () => {
@@ -379,6 +383,10 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
 
     expect(emitted.map(([name]) => name)).toEqual(['beforeEntryResize', 'entryResize']);
     expect((emitted[0]![1] as { edge: string }).edge).toBe('end');
+    // T1-2: `edge` stays on both resize payloads; only the before-payload carries `refuse`.
+    expect((emitted[1]![1] as { edge: string }).edge).toBe('end');
+    expect(emitted[0]![1]).toHaveProperty('refuse');
+    expect(emitted[1]![1]).not.toHaveProperty('refuse');
   });
 
   it('a sync veto (beforeEntryMove returning false) skips the write and resolves commit() false', async () => {
