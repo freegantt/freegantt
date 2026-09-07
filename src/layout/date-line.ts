@@ -6,8 +6,9 @@ import type { TimeScale } from '../time/index.js';
 
 /** One vertical marker at an Instant, in content pixels. Index-keyed by the caller, like Header
  * bands — no `id` (S1.13, D-S1.13-3). `today` marks the Today line wrapper (U5) — paint writes
- * `data-flag="today"`; authored `dateLines` entries omit it. */
-export interface DateLine {
+ * `data-flag="today"`; authored `dateLines` entries omit it. Named apart from `DateLine` (S4-1):
+ * this is screen-space paint geometry, not the resolved Date line a consumer reads back. */
+export interface DateLineDecoration {
   kind: 'dateLine';
   x: number;
   label?: string;
@@ -15,9 +16,10 @@ export interface DateLine {
   today?: true;
 }
 
-/** What a caller states to place a Date line besides the today wrapper. Layout-internal resolved
- * shape — `api/gantt.ts`'s `DateLineInput` is the loose public counterpart (S1.13, D-S1.13-2). */
-export interface DateLineSpec {
+/** What a caller states to place a Date line besides the today wrapper, resolved to an `Instant`.
+ * `api/gantt.ts` publishes this same shape as `Gantt.dateLines`'s read type (S1.13, D-S1.13-2,
+ * S4-1) — `DateLineInput` is its loose counterpart on the way in. */
+export interface DateLine {
   placeAt: Instant;
   label?: string;
   className?: string;
@@ -28,7 +30,7 @@ export interface ResolveDateLinesInput {
   /** `true`/`undefined` reads `now()` (or the test-frozen `now` below); `false` omits it; an
    *  `Instant` pins the line there with no clock read at all. Default `true`. */
   todayLine?: boolean | Instant;
-  dateLines?: readonly DateLineSpec[];
+  dateLines?: readonly DateLine[];
   /** Frozen Instant for tests, used only when `todayLine` resolves to "now" mode. */
   now?: Instant;
 }
@@ -41,9 +43,9 @@ function dateLineAt(
   scale: Pick<TimeScale, 'range' | 'xForInstant'>,
   at: Instant,
   extras: { label?: string; className?: string; today?: true } = {},
-): DateLine | undefined {
+): DateLineDecoration | undefined {
   if (!inScaleRange(scale, at)) return undefined;
-  const line: DateLine = { kind: 'dateLine', x: scale.xForInstant(at) };
+  const line: DateLineDecoration = { kind: 'dateLine', x: scale.xForInstant(at) };
   if (extras.label !== undefined) line.label = extras.label;
   if (extras.className !== undefined) line.className = extras.className;
   if (extras.today) line.today = true;
@@ -52,9 +54,9 @@ function dateLineAt(
 
 /** Turns the today wrapper and any authored Date lines into decorations in range, positionally
  * (no `id` — index-keying is `render/dom`'s job, S1.13, D-S1.13-3). */
-export function resolveDateLines(input: ResolveDateLinesInput): DateLine[] {
+export function resolveDateLines(input: ResolveDateLinesInput): DateLineDecoration[] {
   const { scale } = input;
-  const lines: DateLine[] = [];
+  const lines: DateLineDecoration[] = [];
   const todayLine = input.todayLine ?? true;
   if (todayLine !== false) {
     const at = todayLine === true ? (input.now ?? now()) : todayLine;
