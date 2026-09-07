@@ -161,6 +161,36 @@ describe('a plugin-store write on the commit path (D-S5-24)', () => {
     expect(lock.get(entryId('t1'))).toBeUndefined();
   });
 
+  it('removes an entry row from a second store, even when a staged row in another store spells the same characters', () => {
+    // `plugin:` + `tt1` and `plugin:t` + `t1` join to the same string. `pendingRows` must tell these
+    // two stores apart by structure, not by a concatenated key (R4).
+    const state = newState();
+    const short = state.pluginStores.reserve<LockRow>('');
+    const long = state.pluginStores.reserve<LockRow>('t');
+    long.set(entryId('t1'), { locked: true });
+    const committed = recordChangeSets(state);
+
+    state.transaction(() => {
+      short.set(entryId('tt1'), { locked: true });
+      state.entries.remove('t1');
+    });
+
+    expect(committed).toHaveLength(1);
+    expect(storeRowsOf(committed[0]!)).toHaveLength(0);
+    expect(committed[0]!.updated).toContainEqual({
+      store: pluginStoreName(''),
+      id: entryId('tt1'),
+      from: undefined,
+      to: { locked: true },
+    });
+    expect(committed[0]!.updated).toContainEqual({
+      store: pluginStoreName('t'),
+      id: entryId('t1'),
+      from: { locked: true },
+      to: undefined,
+    });
+  });
+
   it('reads its own staged row back inside the open transaction', () => {
     const state = newState();
     const lock = state.pluginStores.reserve<LockRow>(LOCK);
