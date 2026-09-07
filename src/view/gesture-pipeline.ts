@@ -51,8 +51,9 @@ export interface GesturePipelineDeps {
   selectedEntryIds(): readonly EntryId[];
   entryById(id: EntryId): Entry | undefined;
   /** One resolution (I14, D-S3-9) — `GanttShell#canGesture`, the same answer the pointer-selection
-   *  path and the affordance ids resolve through, never re-derived here. */
-  canGesture(capability: keyof Interactions, id: EntryId): boolean;
+   *  path and the affordance ids resolve through, never re-derived here. `edge` narrows a `'resize'`
+   *  question to one handle (#142); every other capability ignores it. */
+  canGesture(capability: keyof Interactions, id: EntryId, edge?: 'start' | 'end'): boolean;
   commitEntryEdits(edits: StoredEdits): boolean;
   emit: EventBus<GanttEventMap, AsyncCancelableEvent>['emit'];
   /** S5.12, D-S5-40: a vetoed gesture still draws nothing and still throws nothing, and now it also
@@ -135,7 +136,8 @@ export class GesturePipeline {
   session(grabbed: EntryId, gesture: EntryGesture): EntryGestureSession | undefined {
     if (this.#heldItemIds !== undefined) return undefined;
     const capability: keyof Interactions = gesture.kind === 'resize' ? 'resize' : 'move';
-    const entries = this.#entriesForGesture(grabbed, capability);
+    const edge = gesture.kind === 'resize' ? gesture.edge : undefined;
+    const entries = this.#entriesForGesture(grabbed, capability, edge);
     if (entries.length === 0) return undefined;
     const anchor = entries[0]!;
     // Review finding 9: the Selection cannot change mid-drag — the arming grab is the last write it
@@ -161,8 +163,15 @@ export class GesturePipeline {
   }
 
   /** D-S3-19: just the grabbed entry when it is not part of a multi-entry selection; else every
-   *  *capable* selected entry, grabbed first (D-S3-22) — an incapable one is skipped, not blocking. */
-  #entriesForGesture(grabbedId: EntryId, capability: keyof Interactions): readonly Entry[] {
+   *  *capable* selected entry, grabbed first (D-S3-22) — an incapable one is skipped, not blocking.
+   *  `edge` (#142) is the grabbed handle on a resize: a multi-select drag on the `end` handle pulls
+   *  in only the co-selected entries whose own `end` is capable, so a Field closed on one entry never
+   *  blocks the whole drag — it just sits out of it. */
+  #entriesForGesture(
+    grabbedId: EntryId,
+    capability: keyof Interactions,
+    edge?: 'start' | 'end',
+  ): readonly Entry[] {
     const selection = this.#deps.selectedEntryIds();
     const inMultiSelection = selection.includes(grabbedId) && selection.length > 1;
     const candidateIds = inMultiSelection ? selection : [grabbedId];
@@ -171,7 +180,7 @@ export class GesturePipeline {
     const pushCapable = (id: EntryId): void => {
       if (seen.has(id)) return;
       const entry = this.#deps.entryById(id);
-      if (entry && this.#deps.canGesture(capability, id)) {
+      if (entry && this.#deps.canGesture(capability, id, edge)) {
         entries.push(entry);
         seen.add(id);
       }

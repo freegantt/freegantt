@@ -823,6 +823,50 @@ describe('attachEntryGestures — resize (S3.4)', () => {
     expect(commit).not.toHaveBeenCalled();
     expect(proposals).toEqual([[SEG_A]]);
   });
+
+  it("asks can('resize', entry, edge) with the grabbed handle's own edge, not the other one (#142)", () => {
+    const pane = document.createElement('div');
+    mockPointerCapture(pane);
+    const container = document.createElement('div');
+    const rowLayer = document.createElement('div');
+    const asked: Array<'start' | 'end' | undefined> = [];
+    const { ctx } = makeContext({
+      hitTest: () => ({ kind: 'bar' as const, itemId: itemId(A), edge: 'start' }),
+      can: (capability, _entry, edge) => {
+        if (capability === 'resize') asked.push(edge);
+        return capability === 'select';
+      },
+    });
+    attachEntryGestures(pane, rowLayer, container, ctx);
+
+    pane.dispatchEvent(down(0));
+    pane.dispatchEvent(move(0 + DRAG_THRESHOLD_PX + 1));
+    pane.dispatchEvent(up(0));
+
+    expect(asked).toEqual(['start']);
+  });
+
+  it("a start handle refused by its own Field arms nothing, even though 'end' would allow it (#142)", () => {
+    const pane = document.createElement('div');
+    mockPointerCapture(pane);
+    const container = document.createElement('div');
+    const rowLayer = document.createElement('div');
+    const commit = vi.fn(() => Promise.resolve(true));
+    const { ctx, proposals } = makeContext({
+      hitTest: () => ({ kind: 'bar' as const, itemId: itemId(A), edge: 'start' }),
+      can: (capability, _entry, edge) =>
+        capability === 'select' || (capability === 'resize' && edge === 'end'),
+      commit,
+    });
+    attachEntryGestures(pane, rowLayer, container, ctx);
+
+    pane.dispatchEvent(down(0));
+    pane.dispatchEvent(move(0 + DRAG_THRESHOLD_PX + 1)); // start is refused: falls back to a click
+    pane.dispatchEvent(up(0));
+
+    expect(commit).not.toHaveBeenCalled();
+    expect(proposals).toEqual([[SEG_A]]);
+  });
 });
 
 describe('attachEntryGestures — segments and visible row order (S4.10)', () => {

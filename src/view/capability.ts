@@ -24,7 +24,10 @@ export interface Interactions {
 }
 
 export interface Capabilities {
-  can(capability: keyof Interactions, entry: Entry): boolean;
+  /** `edge` narrows a `'resize'` question to one handle (#142) — `defaultRule` is the only reader,
+   *  and only when nothing else has already answered the whole gesture (see below). Every other
+   *  capability ignores it. */
+  can(capability: keyof Interactions, entry: Entry, edge?: 'start' | 'end'): boolean;
 }
 
 /** S5.9, D-S5-22: `ctx.interaction.registerKindDefaults(kind, defaults)` — a plugin's per-kind
@@ -40,16 +43,28 @@ export type KindDefaults = { [K in keyof Interactions]?: boolean };
  *  Rollup-derived kind (the 'group' row) refuses `move`/`resize` because the identity extender has
  *  nothing to write its children with, so a drag would commit and immediately roll back; `milestone`
  *  refuses `resize` only — it is zero-length by construction and has no edge to drag; every other
- *  kind, shipped or consumer-defined, defaults to the ordinary 'span' row. */
+ *  kind, shipped or consumer-defined, defaults to the ordinary 'span' row.
+ *
+ *  #142: a drag on one edge writes that edge's own Field (`start` or `end`), so the last word on
+ *  whether the *default* rule allows it is that Field's own `editable` (I14 — the same answer
+ *  `inlineEditing()` already asks before it opens that Field's cell). This is the *default* row
+ *  only: an explicit `interactions.resize` or a registered `KindDefaults.resize` has already
+ *  answered by the time `resolveCapabilities` reaches here, and neither takes an edge, so a
+ *  consumer's own override always wins whole, both edges alike. */
 function defaultRule(
   capability: keyof Interactions,
   entry: Entry,
   isRollUpKind: (kind: EntryKind) => boolean,
+  edge: 'start' | 'end' | undefined,
+  fieldEditableForEdge: ((edge: 'start' | 'end') => boolean) | undefined,
 ): boolean {
   if (capability === 'select') return true;
   if (capability === 'edit') return true;
   if (isRollUpKind(entry.kind)) return false;
   if (capability === 'resize' && entry.kind === 'milestone') return false;
+  if (capability === 'resize' && edge !== undefined && fieldEditableForEdge !== undefined) {
+    return fieldEditableForEdge(edge);
+  }
   return true;
 }
 
@@ -62,14 +77,17 @@ export function resolveCapabilities(
   interactions: Interactions | undefined,
   isRollUpKind: (kind: EntryKind) => boolean,
   registeredDefaultsFor?: (kind: EntryKind) => KindDefaults | undefined,
+  /** #142: `dataset.field('start'|'end')?.editable` — read only by `defaultRule`'s `resize` row,
+   *  only when an `edge` is asked and nothing above it has already answered. */
+  fieldEditableForEdge?: (edge: 'start' | 'end') => boolean,
 ): Capabilities {
   return {
-    can(capability, entry) {
+    can(capability, entry, edge) {
       const rule = interactions?.[capability];
       if (rule !== undefined) return typeof rule === 'function' ? rule(entry) : rule;
       const registered = registeredDefaultsFor?.(entry.kind)?.[capability];
       if (registered !== undefined) return registered;
-      return defaultRule(capability, entry, isRollUpKind);
+      return defaultRule(capability, entry, isRollUpKind, edge, fieldEditableForEdge);
     },
   };
 }

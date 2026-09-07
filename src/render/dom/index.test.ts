@@ -1419,6 +1419,40 @@ describe('render/dom backend', () => {
     timeline.remove();
   });
 
+  it('hides one handle independently when resizableEdges closes it, and repaints on an edge flip alone (#142)', () => {
+    const backend = paintingBackend();
+    const { grid, timeline } = mountSurfaces();
+    backend.mount({ grid, timeline });
+
+    const frame = computeFrame({
+      entries: sampleEntries.slice(0, 2),
+      scale,
+      preset,
+      visible: { x: 0, y: 0, width: 0, height: 0 },
+      rowHeight: 32,
+      revision: 0,
+      datasetRevision: 0,
+      itemProducerRegistry,
+    });
+    backend.sync(frame);
+    const [a] = frame.bars;
+    const start = timeline.querySelector<HTMLElement>('.fg-bar-handle[data-edge="start"]')!;
+    const end = timeline.querySelector<HTMLElement>('.fg-bar-handle[data-edge="end"]')!;
+
+    backend.applyState({ resizableEntryId: a!.entryId, resizableEdges: { start: true, end: false } });
+    expect(start.hidden).toBe(false);
+    expect(end.hidden).toBe(true);
+
+    // resizableEntryId unchanged, only the edge answer flips — the gate must still repaint (#142).
+    backend.applyState({ resizableEntryId: a!.entryId, resizableEdges: { start: false, end: true } });
+    expect(start.hidden).toBe(true);
+    expect(end.hidden).toBe(false);
+
+    backend.destroy();
+    grid.remove();
+    timeline.remove();
+  });
+
   it('hitTest reports the edge of a resize handle, resolved against resizableEntryId (S3.4, D-S3-4)', () => {
     const backend = paintingBackend();
     const { grid, timeline } = mountSurfaces();

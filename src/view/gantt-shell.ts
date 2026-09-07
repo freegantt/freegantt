@@ -697,7 +697,7 @@ export class GanttShell {
       selectedSegmentIds: () => this.#segmentSelection.segmentIds,
       selectedEntryIds: () => this.selectedEntryIds,
       entryById: (id) => this.#options.dataset.entries.get(id),
-      canGesture: (capability, id) => this.#canGesture(capability, id),
+      canGesture: (capability, id, edge) => this.#canGesture(capability, id, edge),
       commitEntryEdits: (edits) => this.#options.wiring.commitEntryEdits?.(edits) ?? false,
       emit: (name, payload) => this.#events.emit(name, payload),
       raiseError: this.#raiseError,
@@ -717,7 +717,7 @@ export class GanttShell {
     const gestureContext: EntryGestureContext = {
       hitTest: (at) => this.#backend.hitTest(at) ?? undefined,
       entryFor: (item) => this.#entryFor(item),
-      can: (capability, entry) => this.#capabilities.can(capability, entry),
+      can: (capability, entry, edge) => this.#capabilities.can(capability, entry, edge),
       // #230 R4: `interaction/` asks one collaborator, not eight. `SegmentSelection` answers all of
       // it but the two projections that are not its own — the Dataset's and the frame's.
       selection: {
@@ -1067,6 +1067,7 @@ export class GanttShell {
       this.#interactions,
       (kind) => this.#options.dataset.isRollUpKind(kind),
       (kind) => this.#registrations.kindDefaultsFor(kind),
+      (edge) => this.#options.dataset.field(edge)?.editable === true,
     );
   }
 
@@ -1339,10 +1340,11 @@ export class GanttShell {
   }
 
   /** D-S3-9's one resolution, shared by the pointer path (`canSelect` above), the keyboard path
-   *  (S3.5) and the affordance ids below. Never asked twice for the same gesture (I14). */
-  #canGesture(capability: keyof Interactions, id: EntryId): boolean {
+   *  (S3.5) and the affordance ids below. Never asked twice for the same gesture (I14). `edge`
+   *  (#142) narrows a `'resize'` question to one handle; every other capability ignores it. */
+  #canGesture(capability: keyof Interactions, id: EntryId, edge?: 'start' | 'end'): boolean {
     const entry = this.#options.dataset.entries.get(id);
-    return entry !== undefined && this.#capabilities.can(capability, entry);
+    return entry !== undefined && this.#capabilities.can(capability, entry, edge);
   }
 
   #setHovered(next: ItemId | undefined): void {
@@ -1362,11 +1364,12 @@ export class GanttShell {
       soleSelectedEntryId: sole?.id,
       selectedSegmentCountOfSoleEntry: sole?.segmentCount ?? 0,
       itemIdsForEntry: (id) => this.#layout.itemIdsForEntry(id),
-      canGesture: (capability, id) => this.#canGesture(capability, id),
+      canGesture: (capability, id, edge) => this.#canGesture(capability, id, edge),
     });
     setOptional(this.#interactionState, 'hoveredItemId', ids.hoveredItemId);
     setOptional(this.#interactionState, 'movableItemId', ids.movableItemId);
     setOptional(this.#interactionState, 'resizableEntryId', ids.resizableEntryId);
+    setOptional(this.#interactionState, 'resizableEdges', ids.resizableEdges);
     this.#backend.applyState(this.#interactionState);
   }
 

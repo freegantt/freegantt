@@ -315,6 +315,10 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
   /** The Entry the handle pair currently brackets (#200) — Entry-keyed, like the Selection it sits
    *  beside, because the pair straddles every bar that Entry drew. */
   let paintedResizable: EntryId | undefined;
+  /** #142: which of the two handles `paintedResizable` last let resize — `applyState`'s repaint
+   *  gate reads this alongside `paintedResizable`/`paintedHandleBars` so a Field-driven edge flip
+   *  repaints even when the bracketed Entry and its bars have not changed. */
+  let paintedResizableEdges: { start: boolean; end: boolean } | undefined;
   /** The two bars `paintResizeHandles` last put the handles on. `hitTest` reads it, so a grab on a
    *  handle names the bar under the pointer instead of an Item id built from an Entry id (#185). */
   let paintedHandleBars: { start: ItemId; end: ItemId } | undefined;
@@ -415,26 +419,50 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
     return a.start === b.start && a.end === b.end;
   }
 
+  /** #142: the identity check `applyState`'s handle repaint needs for the per-edge answer, the same
+   *  role `sameBars` fills for which bars the pair sits on. */
+  function sameEdges(
+    a: { start: boolean; end: boolean } | undefined,
+    b: { start: boolean; end: boolean } | undefined,
+  ): boolean {
+    if (a === undefined || b === undefined) return a === b;
+    return a.start === b.start && a.end === b.end;
+  }
+
   /** Moves the shared handle pair onto `bars`' own committed geometry, or parks both (D-S3-8) when
    *  it is undefined. Each handle reads its own bar, so a packed Entry whose Segments sit in two
    *  lanes still gets each handle on the right row (#200). `hidden` is a DOM property write, not
-   *  `.style` — the base stylesheet owns `[hidden] { display: none }`. */
-  function paintResizeHandles(bars: { start: ItemId; end: ItemId } | undefined): void {
+   *  `.style` — the base stylesheet owns `[hidden] { display: none }`.
+   *
+   *  #142: `edges` hides one handle independently of the other — a Field's own `editable` can close
+   *  `end` while `start` still drags. Default both open, so a caller with nothing to say about edges
+   *  (there is none left in this file, but a future one might arrive with `bars` alone) still shows
+   *  a whole pair, matching the pre-#142 pair-only behaviour. */
+  function paintResizeHandles(
+    bars: { start: ItemId; end: ItemId } | undefined,
+    edges: { start: boolean; end: boolean } = { start: true, end: true },
+  ): void {
     if (!startHandle || !endHandle) return;
     const startGeom = bars === undefined ? undefined : barGeomByItemId.get(bars.start);
     const endGeom = bars === undefined ? undefined : barGeomByItemId.get(bars.end);
-    if (!startGeom || !endGeom) {
+    const showStart = startGeom !== undefined && edges.start;
+    const showEnd = endGeom !== undefined && edges.end;
+    if (!showStart && !showEnd) {
       startHandle.hidden = true;
       endHandle.hidden = true;
       paintedHandleBars = undefined;
       return;
     }
-    startHandle.hidden = false;
-    endHandle.hidden = false;
-    startHandle.style.transform = `translate(${startGeom.x}px, ${startGeom.y}px)`;
-    startHandle.style.height = `${startGeom.height}px`;
-    endHandle.style.transform = `translate(${endGeom.x + endGeom.width}px, ${endGeom.y}px)`;
-    endHandle.style.height = `${endGeom.height}px`;
+    startHandle.hidden = !showStart;
+    if (startGeom !== undefined && edges.start) {
+      startHandle.style.transform = `translate(${startGeom.x}px, ${startGeom.y}px)`;
+      startHandle.style.height = `${startGeom.height}px`;
+    }
+    endHandle.hidden = !showEnd;
+    if (endGeom !== undefined && edges.end) {
+      endHandle.style.transform = `translate(${endGeom.x + endGeom.width}px, ${endGeom.y}px)`;
+      endHandle.style.height = `${endGeom.height}px`;
+    }
     paintedHandleBars = bars;
   }
 
@@ -1101,7 +1129,9 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
       // that gate alone left the handle pair glued to its pre-commit position. The handle pair's
       // geometry has to track `syncBars` every frame, the same way a bar's own transform does, not
       // just on identity change.
-      if (paintedResizable !== undefined) paintResizeHandles(resizeHandleBarsOfEntry(paintedResizable));
+      if (paintedResizable !== undefined) {
+        paintResizeHandles(resizeHandleBarsOfEntry(paintedResizable), paintedResizableEdges);
+      }
       dateLines?.sync(frame.decorations, frame.contentHeight, frame.visible.height);
       decorations?.sync(
         frame.underBars,
@@ -1187,11 +1217,19 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
       // geometry `syncBars` already recorded — never a per-item computation of its own. #211: the
       // Selection can narrow with `resizableEntryId` unchanged (a click on the already-hovered bar),
       // so the repaint gate also has to catch a pair whose own bars moved, not only a changed Entry.
+      // #142: it also has to catch `resizableEdges` flipping with the Entry unchanged — a live
+      // `dataset.fields` reconfiguration can open or close an edge without touching the Selection.
       const nextResizable = state.resizableEntryId;
+      const nextEdges = state.resizableEdges;
       const nextHandleBars = resizeHandleBarsOfEntry(nextResizable);
-      if (nextResizable !== paintedResizable || !sameBars(nextHandleBars, paintedHandleBars)) {
-        paintResizeHandles(nextHandleBars);
+      if (
+        nextResizable !== paintedResizable ||
+        !sameBars(nextHandleBars, paintedHandleBars) ||
+        !sameEdges(nextEdges, paintedResizableEdges)
+      ) {
+        paintResizeHandles(nextHandleBars, nextEdges);
         paintedResizable = nextResizable;
+        paintedResizableEdges = nextEdges;
       }
 
       // D-S3-6: `cursor: grab` follows `movableItemId` via a boolean attribute, not an inline style

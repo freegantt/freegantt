@@ -95,8 +95,9 @@ export interface EntryGestureContext {
   hitTest(at: ClientPoint): EntryHit | undefined;
   /** The entry under an item id, or undefined once segments exist and an id outlives its item. */
   entryFor(itemId: ItemId): Entry | undefined;
-  /** One resolution (I14, D-S3-9) — `view/capability.ts`'s answer for `entry` on `capability`. */
-  can(capability: keyof Interactions, entry: Entry): boolean;
+  /** One resolution (I14, D-S3-9) — `view/capability.ts`'s answer for `entry` on `capability`.
+   *  `edge` narrows a `'resize'` question to one handle (#142); every other capability ignores it. */
+  can(capability: keyof Interactions, entry: Entry, edge?: 'start' | 'end'): boolean;
   /** What is selected, and what a hit would select — one collaborator, one member (#230 R4). */
   selection: SelectionForGestures;
   /** S3.2 (D-S3-6): the item id under the pointer, or undefined on pointerleave. */
