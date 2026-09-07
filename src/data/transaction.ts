@@ -19,6 +19,7 @@ import { MutationCancelledError, MutationDuringNotificationError } from '../mode
 import { buildCommitChangeSet, diffEdits } from './build-commit-change-set.js';
 import { raiseErrorOn } from './error-reporting.js';
 import type { EditRequest, StoredEdits } from './edit-extension.js';
+import type { EditsReading } from './entry-reader.js';
 import type { EventBus } from './event-bus.js';
 import { RefusalNote } from './event-bus.js';
 import { promoteNewParents } from './hierarchy.js';
@@ -42,6 +43,9 @@ export interface TransactionalEntryStore {
   pendingAdded(): readonly { store: 'entries'; entity: Entry }[];
   pendingRemoved(): readonly { store: 'entries'; entity: Entry }[];
   pendingEdits(): StoredEdits;
+  /** Which of `start`/`end`/`segments` the body itself named on each pending edit, before
+   *  reconciliation added or paired the rest (#232) — see `EntryStore.pendingAuthoredEnvelopeKeys`. */
+  pendingAuthoredEnvelopeKeys(): ReadonlyMap<EntryId, ReadonlySet<string>>;
   endTransaction(token: TxToken, changeSet: ChangeSet | undefined): void;
   /** Writes Field rows into committed entries with no `beforeChange`/`change` and no history. */
   writeCommittedFieldRows(updated: readonly FieldUpdated[]): void;
@@ -64,8 +68,15 @@ export interface TransactionData {
   readonly pluginStores: TransactionalPluginStores;
   /** The one door onto the extension hook (D4, D-S2-6): calls the current occupant and returns
    *  what it wrote. A method, not a fixed field, because `ctx.edits.setExtender` composes onto the
-   *  occupant while plugins set up (D-S5-23) — this always calls whichever one is current (#209 Q5). */
-  extraEditsFor(request: EditRequest): StoredEdits;
+   *  occupant while plugins set up (D-S5-23) — this always calls whichever one is current (#209 Q5).
+   *
+   *  Reports each Entry's authored envelope keys alongside the reconciled `StoredEdits`, because the
+   *  commit path needs to tell the hook's own `start`/`end`/`segments` write from one
+   *  `reconcileEnvelope` derived on the hook's behalf, and `StoredEdit.proposedKeys` conflates the two
+   *  (#232). `DatasetState.readExtenderEdits` is this method's one implementation; the public
+   *  `Dataset.extraEditsFor` a plugin or the drag preview calls is a separate, narrower door onto the
+   *  same occupant. */
+  readExtenderEdits(request: EditRequest): EditsReading;
   /** 0 = no transaction open. Only `runTransaction` reads or writes this (D-S2-8's nesting rule). */
   openTransactions: number;
   /** Set while `beforeChange`/`change` handlers are fanning out; a transaction started while this is

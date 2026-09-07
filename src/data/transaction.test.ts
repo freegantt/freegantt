@@ -10,7 +10,7 @@ import {
   entryId,
   segmentId,
 } from '../model/index.js';
-import type { ErrorReport } from '../model/index.js';
+import type { ChangeSet, ErrorReport } from '../model/index.js';
 import { toEndInstant, toInstant } from '../time/index.js';
 import type { EntryEdits, StoredEdit } from './edit-extension.js';
 
@@ -914,6 +914,39 @@ describe('the EditExtender seam owes the envelope invariant too (#212 R2 fix-pla
       );
 
       expect(sawSegmentCount).toBe(3);
+    },
+  );
+
+  it(
+    'a body-authored start and an EditExtender-cascaded end on a one-Segment Entry commit as one ' +
+      'row per field, not two rows for the same field with two different `to` values (#232)',
+    () => {
+      const state = new DatasetState({
+        entries: [{ id: 't1', name: 't1', start: '2026-01-01', end: '2026-03-01' }],
+        timeZone: 'UTC',
+        editExtender: (): EntryEdits => new Map([[entryId('t1'), { end: '2026-02-05' }]]),
+      });
+
+      let captured: ChangeSet | undefined;
+      state.on('change', ({ changeSet }) => {
+        captured = changeSet;
+      });
+
+      expect(() => state.entries.update('t1', { start: '2026-01-05' })).not.toThrow();
+
+      const rows = fieldRowsOf(captured!);
+      const fieldsSeen = rows.map((row) => row.field);
+      expect(new Set(fieldsSeen).size).toBe(fieldsSeen.length);
+
+      const startRow = rows.find((row) => row.field === 'start');
+      const endRow = rows.find((row) => row.field === 'end');
+      expect(startRow?.to).toBe(toInstant('UTC', '2026-01-05'));
+      expect(endRow?.to).toBe(toEndInstant('UTC', '2026-02-05', 'inclusive'));
+
+      const entry = state.entries.get(entryId('t1'))!;
+      expect(entry.start).toBe(toInstant('UTC', '2026-01-05'));
+      expect(entry.end).toBe(toEndInstant('UTC', '2026-02-05', 'inclusive'));
+      expect(entry.segments).toEqual([{ id: entry.segments[0]!.id, start: entry.start, end: entry.end }]);
     },
   );
 });
