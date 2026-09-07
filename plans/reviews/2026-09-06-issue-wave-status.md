@@ -24,9 +24,10 @@ Mark an item done in the same commit that closes it. A line that is not marked d
 | #232 | duplicate changeset rows behind the I4 false positive (D-S5-49) | `[x]` | `61ea020` · closed |
 | #242 | `InvalidInstantError` stays message-shaped — split it, or document the exception | `[?]` | filed from #237 |
 | — | `lock-entries.ts` returns `refuse(reason)`; three pages dropped their refusal callbacks | `[x]` | from #210 |
-| #230 | entry-from-Segment refactor — R3, R4, R5 | `[ ]` | R0–R2 landed |
-| #240 | drag-resize inverted span | `[ ]` | — |
-| #142 | a locked field cannot be dragged or resized (D-S5-48) | `[ ]` | ruled, implementable |
+| #230 | entry-from-Segment refactor — R3, R4, R5 | `[~]` | Lane A · R3 committed |
+| #243 | `FrameMemory` serves a stale packed cache when `datasetRevision` is omitted | `[ ]` | verified, filed `critical`; fix after #230 |
+| #240 | drag-resize inverted span | `[~]` | Lane B |
+| #142 | a locked field cannot be dragged or resized (D-S5-48) | `[ ]` | one job with candidate 1; waits for #230 |
 | #222 | toolbar — decision settled; grill brief written | `[~]` | `36a2485` |
 | #208 | Q2: `EntityAdded` row vs `FieldUpdated` row | `[?]` | Q1 settled by #209 |
 | #224 | a popup layer with exclusive groups | `[?]` | — |
