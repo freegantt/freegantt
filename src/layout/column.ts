@@ -31,9 +31,9 @@ export interface ResolvedColumn extends FrameColumn {
   cellRenderer?: ColumnCellRenderer;
   resizable?: boolean;
   movable?: boolean;
-  /** S5.8 honours this; S5.7 only carries it through resolution (I11 — appears with the code that
-   *  honours it, not before, is about behaviour, not about the field existing on the resolved shape
-   *  a later step reads). */
+  /** The Field's own `editable` (#142), carried onto the resolved column so S5.8's cell editor and
+   *  the grid pane both read one answer off one shape. `model/field.ts`'s `Field.editable` is the
+   *  only home; a Grid column carries no override of its own. */
   editable?: boolean;
   /** D-S5-13 — `true` marks this column for the default tooltip body. Not a paint concern, so it
    *  stays off `FrameColumn`. */

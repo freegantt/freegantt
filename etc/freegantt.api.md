@@ -1190,7 +1190,6 @@ export interface GridColumnBase {
     // (undocumented)
     align?: ColumnAlign;
     cellRenderer?: ColumnCellRenderer;
-    editable?: boolean;
     // (undocumented)
     field: FieldKey;
     // (undocumented)
@@ -1920,6 +1919,7 @@ export type SerializedField = {
         key: string;
     };
     rollUp?: AggregatorName;
+    editable?: boolean;
     column?: Omit<GridColumnBase, 'field' | 'hidden'> & GridColumnSizing;
 };
 

@@ -280,10 +280,11 @@ interface Field<TValue = unknown> {
   type?: FieldTypeName;                             // a bundle; the field's own keys win over it
   source?: FieldSource;                             // default: meta under this Field's key
   rollUp?: AggregatorName;                          // 'min' | 'max' | 'sum' | 'count' | 'none' | yours
+  editable?: boolean;                               // #142: one home, gates the inline cell editor and bar resize alike (I14); default false
   equals?(a: TValue | undefined, b: TValue | undefined): boolean;   // default Object.is
   compare?(a: TValue | undefined, b: TValue | undefined): number;   // sort; default is the stored value
   formatValue?(value: TValue | undefined, ctx: FormatContext): string;   // text for a cell; DOM-free; locale only here
-  column?: Omit<GridColumn, 'field' | 'hidden'>;    // presentation defaults, declared once with the field; which columns show is the Gantt's question
+  column?: Omit<GridColumn, 'field' | 'hidden' | 'editable'>;    // presentation defaults, declared once with the field; which columns show is the Gantt's question
 }
 
 /** Presentation only. Never carries an aggregate — see the rules below. */
@@ -293,7 +294,8 @@ interface GridColumn {
   width?: number; flex?: number;
   align?: 'start' | 'end' | 'center';
   hidden?: boolean;                                 // S5, D-S5-34: declared and not painted; keeps its width and its place
-  // cellRenderer and editable arrive in S5, on the Gantt column, when code honours them (I11).
+  // cellRenderer arrives in S5, on the Gantt column, when code honours it (I11).
+  // #142: editable lives on the Field only, not here — a Grid column carries no override of its own.
 }
 
 /** Registered by name, never passed inline — a name serializes, a function does not. */
