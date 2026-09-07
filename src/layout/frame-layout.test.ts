@@ -42,6 +42,9 @@ function input(overrides: Partial<LayoutInput> = {}): LayoutInput {
     visible,
     rowHeight: 32,
     revision: 0,
+    // A stable value, so repeated calls with the same `input()` object cache instead of
+    // rebuilding every read (#243) — an omitted `datasetRevision` now invalidates every call.
+    datasetRevision: 0,
     todayLine: false as const,
     itemProducerRegistry,
     ...overrides,

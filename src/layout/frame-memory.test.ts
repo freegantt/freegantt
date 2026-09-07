@@ -56,6 +56,26 @@ describe('FrameMemory (A2)', () => {
     expect(memory.heightOfRow(0)).toBe(32 * 3 + 2 * laneGap);
   });
 
+  it('an absent datasetRevision invalidates the packed cache, instead of never (#243)', () => {
+    const memory = new FrameMemory();
+    const one = sampleEntries[0]!;
+    const plan = packPlan([one]);
+    memory.sync({ plan, rowHeight: 32, laneGap, entries: [one], registry });
+    const firstSegmentId = memory.packedRow(String(plan[0]!.id)).segmentIds;
+    expect(firstSegmentId).toEqual([one.segments[0]!.id]);
+
+    const two = {
+      ...one,
+      segments: [
+        one.segments[0]!,
+        { id: segmentId(`${one.id}-1`), start: one.segments[0]!.start, end: one.segments[0]!.end },
+      ],
+    };
+    memory.sync({ plan, rowHeight: 32, laneGap, entries: [two], registry });
+
+    expect(memory.packedRow(String(plan[0]!.id)).segmentIds).toEqual(two.segments.map((s) => s.id));
+  });
+
   it('a new datasetRevision packs again without invalidateFrom', () => {
     const spy = vi.spyOn(packLanes, 'packRow');
     const memory = new FrameMemory();
