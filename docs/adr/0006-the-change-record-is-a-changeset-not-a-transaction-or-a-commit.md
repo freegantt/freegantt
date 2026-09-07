@@ -70,5 +70,6 @@ The residual stiffness is a **prose** problem, not a type problem. The undo stac
 - `CONTEXT.md`'s **ChangeSet** entry gains `Transaction` and `Commit` to its `_Avoid_` list, beside the existing `Diff, patch`, each with the one-word reason: Transaction is the scope, Commit is the act.
 - `CONTEXT.md`'s **Transaction** entry keeps defining itself as committing *as one ChangeSet*. That sentence is the distinction, and it stays.
 - `commit` remains the verb for what a transaction does, and *"the commit path"* / *"the commit sequence"* remain the names of the code paths — in `data/` and in S1.8's `GanttShell` alike.
+- A **type** may say `Commit` when it names that act or that moment, and never when it names the record. `CellEditorCommitRefusal` (`extensions/features/inline-editing.ts`) is the standing example: it answers why one commit left the cell editor invalid. This ADR reserves the word for the act; it does not retire the word. A 2026-09-06 branch review read it the second way and re-raised that name, so the rule is written here.
 - No S2 spec file changes. This ADR is the record; `plans/s2-data-core/README.md` §2 is not amended, because no decision it states has moved.
 - If a future slice does rename the payload, it supersedes this ADR rather than editing it, and it inherits the burden of answering the trap above: what happens to the verb.
