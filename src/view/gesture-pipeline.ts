@@ -32,6 +32,8 @@ import type { DraftOptions, EntryGesture, EntryGestureSession } from './entry-ge
 /** No seam wired means no ghost — one frozen empty map, so a preview frame with no plugin installed
  *  allocates nothing (I5). */
 const NO_EXTRA_EDITS: StoredEdits = Object.freeze(new Map());
+/** No supplier wired — the shape `#extraFor` reads when a shell hands over no Entry map at all. */
+const NO_ENTRIES: ReadonlyMap<EntryId, Entry> = Object.freeze(new Map<EntryId, Entry>());
 
 export interface GesturePipelineDeps {
   timeZone(): string;
@@ -62,10 +64,14 @@ export interface GesturePipelineDeps {
    *  which is also what a Dataset with no plugin installed hands over (S5.10, D-S5-23). Renamed from
    *  `extend` to `extraEditsFor` at #209 Q5, alongside the seam it mirrors (`api/Dataset`'s own). */
   extraEditsFor?: (request: EditRequest) => StoredEdits;
-  /** Committed entries `extraEditsFor`'s `EditRequest.entries` argument reads — a snapshot map, built
-   *  only when a preview frame actually calls it (an installed extender may cascade to an entry
-   *  outside the caller's own draft, so `entryById` alone cannot answer it). */
-  allEntries?(): ReadonlyMap<EntryId, Entry>;
+  /** What `extraEditsFor`'s `EditRequest.entries` reads — the *committed* Entries keyed by id, never
+   *  the in-flight draft (D-S5-45). An installed extender may cascade to an Entry outside the
+   *  caller's own draft, so `entryById` alone cannot answer it.
+   *
+   *  `#extraFor` calls this once per rAF frame for the whole length of a drag, so the supplier owes
+   *  it a cached map and not a fresh copy of the Dataset (I5). `GanttShell` keys its cache on
+   *  `datasetRevision`, which rises once per committed change. */
+  committedEntriesById?(): ReadonlyMap<EntryId, Entry>;
   /** S3.8, D-S3-15: locale for `cursorLabelForX` — the same value header ticks already use. */
   locale?(): Intl.LocalesArgument | undefined;
   /** D-S3-17/D-S3-18: one `InteractionState` write for the live or held preview and the pending-bar
@@ -411,15 +417,16 @@ export class GesturePipeline {
   #extraFor(draft: StoredEdits): StoredEdits {
     const extraEditsFor = this.#deps.extraEditsFor;
     if (extraEditsFor === undefined) return NO_EXTRA_EDITS;
-    const entries = this.#deps.allEntries?.() ?? new Map<EntryId, Entry>();
+    const entries = this.#deps.committedEntriesById?.() ?? NO_ENTRIES;
     const raw = extraEditsFor({
       entries,
       proposed: draft,
       entryAfterEdits: (id) => entryAfterEdits(entries, draft, id),
     });
     // No hook installed is the default, and it writes nothing — so the frame reconciles nothing and
-    // allocates nothing (I5). A hook that did write costs one entry per id it named, never a copy of
-    // the dataset: `reconcileExtenderEditsForPreview` reads only the ids its own edits name.
+    // allocates nothing (I5). A hook that did write costs one entry per id it named:
+    // `reconcileExtenderEditsForPreview` reads only the ids its own edits name, and `entries` above
+    // is the supplier's cached map, not a copy this frame made.
     if (raw.size === 0) return raw;
     return reconcileExtenderEditsForPreview(effectiveEntriesFor(entries, draft, raw.keys()), raw);
   }
