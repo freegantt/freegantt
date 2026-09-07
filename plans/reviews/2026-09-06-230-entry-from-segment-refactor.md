@@ -5,7 +5,7 @@
 **Also carries:** [#216](https://github.com/Pawel-IT/FreeGantt/issues/216) Q3, on the coordinator's
 instruction of 2026-09-06. Q1 ("is a gesture a Command?") is settled **no** and this plan does not
 reopen it.
-**Slice:** S5 · **Branch base:** `s5-start` at `f4c7492` · **Status:** R0-R4 landed. R5 is next.
+**Slice:** S5 · **Branch base:** `s5-start` at `f4c7492` · **Status:** R0-R5 landed.
 **Gate state at plan time:** every gate green at `f4c7492`. Every finding below is invisible to CI.
 
 > ## This is a plan, not a review
@@ -480,19 +480,33 @@ shows no `etc/freegantt.api.md` diff, confirming §9's "No — absent from the p
 Finding 14's last live-Dataset read. Optional relative to R1–R4, and it is what makes §1.2's
 `git grep` end state true.
 
-- [ ] Add `segmentIds: readonly SegmentId[]` to `FrameRow` (`src/layout/frame-row.ts` /
+- [x] Add `segmentIds: readonly SegmentId[]` to `FrameRow` (`src/layout/frame-row.ts` /
   `src/layout/frame.ts:375-389`). Fill it in `placeFrame` from the packed row's `segmentIds`,
   with the same header rule `entryIds` already uses:
   `isPlannedHeaderRow(planned) ? NO_SEGMENT_IDS : packed.segmentIds`. Reference copy, no allocation.
-- [ ] `src/render/dom/index.ts` replaces `rowEntryIds` (line 341) with `rowSegmentIds`, written at
+- [x] `src/render/dom/index.ts` replaces `rowEntryIds` (line 341) with `rowSegmentIds`, written at
   line 781, read at line 1166, cleared at line 1271. `entryHasSelectedSegment` (line 657) is
   deleted. The create-time restamp at line 799 reads `row.segmentIds` instead.
-- [ ] Run the R0 test "a row that owns several Entries paints selected from its second Entry's
+- [x] Run the R0 test "a row that owns several Entries paints selected from its second Entry's
   Segment". It must still pass.
-- [ ] Run `pnpm api-report`. `FrameRow` is public (`etc/freegantt.api.md:895`). Commit the churn.
+- [x] Run `pnpm api-report`. `FrameRow` is public (`etc/freegantt.api.md:895`). Commit the churn.
 
 **Visible at the end:** the row selection diff runs over Segment ids, and `render/dom` reads no Entry
 to decide what paints.
+
+**R5 landed, as planned.** `FrameRow` gained `segmentIds: readonly SegmentId[]`
+(`src/layout/frame-row.ts`), filled in `placeFrame` (`src/layout/frame.ts`) as a reference copy of
+the packed row's own `segmentIds` — the same `RowMemory` result `entryIds` already reads, so this
+adds no new computation and no new cache. `src/render/dom/index.ts` renamed `rowEntryIds` to
+`rowSegmentIds` (retyped to `Map<RowId, readonly SegmentId[]>`), deleted `entryHasSelectedSegment`,
+and its four call sites (fill, create-time restamp, `applyState`'s row diff, destroy/clear) now read
+`row.segmentIds` directly instead of resolving an Entry. `src/layout/decorations.test.ts` needed
+`segmentIds: []` added to its one literal `FrameRow` construction. The R0 test named above still
+passes, unchanged. `pnpm api-report` shows the expected one-line diff to `etc/freegantt.api.md`
+(`FrameRow.segmentIds` added), committed with this slice. §11's caching judgement was tested during
+this slice and came back negative, filed as #243 and recorded in §11 itself — not fixed here, and
+R5 relies on no caching beyond `packedRow`'s existing per-frame result, so #243's staleness does not
+reach `FrameRow.segmentIds` any differently than it already reaches `entryIds`.
 
 ---
 
@@ -690,3 +704,16 @@ packed rows the shell renders from, because the shell passes `datasetRevision`
 and keeps the row count stable. R1's design makes that case safe by construction — the Items and
 their Segment sets come from one cached record — but if you find a test that depends on the current,
 looser behaviour, stop and report it before you change it.
+
+**Tested during R5, and it came back negative.** A caller that omits `datasetRevision` and keeps the
+row count stable does **not** get a fresh Segment set: `FrameMemory.sync`
+(`src/layout/frame-memory.ts:80-89`) clears `#packed` only on `countChanged`, `metricsChanged`, first
+build, or `revisionChanged`, and `revisionChanged` is false whenever `datasetRevision` is
+`undefined` (the `!== undefined` guard at line 79). A direct probe — one row, stable metrics, no
+`datasetRevision`, an Entry whose Segments went from one to two — read the stale set back. Not
+reachable through the public API (`api/dataset.ts:257` always returns a number, and
+`GanttShell.render` passes it), but reachable through the type system, since both
+`model/dataset.ts:90` and `FrameMemoryBind.datasetRevision` are optional. Filed as #243, to be fixed
+after #230 lands. R5 does not fix it and adds no caching of its own on top of `packedRow`'s result —
+it reads `FrameRow.segmentIds` per computed frame, the same cache every other `FrameRow` field
+already reads through.
