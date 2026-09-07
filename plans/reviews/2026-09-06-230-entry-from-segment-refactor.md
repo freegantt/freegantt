@@ -5,7 +5,7 @@
 **Also carries:** [#216](https://github.com/Pawel-IT/FreeGantt/issues/216) Q3, on the coordinator's
 instruction of 2026-09-06. Q1 ("is a gesture a Command?") is settled **no** and this plan does not
 reopen it.
-**Slice:** S5 · **Branch base:** `s5-start` at `f4c7492` · **Status:** R0-R2 landed. R3 is next.
+**Slice:** S5 · **Branch base:** `s5-start` at `f4c7492` · **Status:** R0-R4 landed. R5 is next.
 **Gate state at plan time:** every gate green at `f4c7492`. Every finding below is invisible to CI.
 
 > ## This is a plan, not a review
@@ -409,14 +409,14 @@ Members that **stay** in the shell, and why:
 
 New member on the class, and the pane rule's new home:
 
-- [ ] `selectableSegmentsOf(hit: EntryHit): readonly SegmentId[]` — the body of
+- [x] `selectableSegmentsOf(hit: EntryHit): readonly SegmentId[]` — the body of
   `src/interaction/entry-gestures.ts:241`, moved. A row hit reads
   `#selectableEntriesOfRow(hit.rowId)` then the Dataset's `segmentIdsOfEntries`. A bar hit reads
   the layout's `segmentIdsForItem`, gated on `can('select', entry)`.
-- [ ] `EntryGestureContext` (`src/view/entry-gesture-context.ts:58`) gains
+- [x] `EntryGestureContext` (`src/view/entry-gesture-context.ts:58`) gains
   `selectableSegmentsOf(hit)` and loses `entriesForRow`. Keep `segmentsForItem` and
   `segmentsOfEntries` — §1.5 says why.
-- [ ] `src/interaction/entry-gestures.ts` deletes its local `selectableSegmentsOf` and calls
+- [x] `src/interaction/entry-gestures.ts` deletes its local `selectableSegmentsOf` and calls
   `ctx.selectableSegmentsOf(hit)` at line 212. `interaction/` then branches on `hit.kind` in two
   places only, and neither one is about Segments: `missesEveryEntry` (line 234) and
   `onPointerMove`'s hover (line 295).
@@ -438,16 +438,16 @@ shell, beside `#columnChromePorts()` at `src/view/gantt-shell.ts:1276`):
 `confirm` follows `TreeCollapse`'s own precedent (`src/view/gantt-shell.ts:692`), so the generic
 `#proposeChange` stays in the shell and the Selection never names an event map.
 
-- [ ] The class publishes `segmentIds` and `entryIds` as two getters on one object. That object is
+- [x] The class publishes `segmentIds` and `entryIds` as two getters on one object. That object is
   structurally an `ActedOn`. `#buildCommandContext` (`src/view/gantt-shell.ts:1208-1209`) reads it
   once instead of twice. **This is the #216 Q3 carry.**
-- [ ] Every call site in the shell moves to the new object: lines 690-691, 705-706, 731-737, 1113,
+- [x] Every call site in the shell moves to the new object: lines 690-691, 705-706, 731-737, 1113,
   1246-1255, 1427.
-- [ ] `src/view/gantt-shell.ts` is in the `sentence-length` scope. Every comment you move must still
+- [x] `src/view/gantt-shell.ts` is in the `sentence-length` scope. Every comment you move must still
   pass. Moving a sentence into `segment-selection.ts` takes it out of scope; that is a loss, so add
   `src/view/segment-selection.ts` to `SCOPED_FILES` in `scripts/check-sentence-length.mjs` and run
   the pass over it.
-- [ ] Count the lines. `gantt-shell.ts` is 1,874 lines at `f4c7492`. It must be smaller after R4.
+- [x] Count the lines. `gantt-shell.ts` is 1,874 lines at `f4c7492`. It must be smaller after R4.
   Put the before and after numbers in the commit message.
 
 **Naming, `SegmentSelection`.** `Selection` alone fails check 4: `lib.dom` already declares a global
@@ -460,6 +460,20 @@ all five: ADR 0010's own words are "the Selection holds Segments"; the call
 
 **Visible at the end:** `interaction/entry-gestures.ts` asks one question about Segments, and
 `gantt-shell.ts` is shorter.
+
+**R4 landed, as planned.** `src/view/segment-selection.ts` (new, 199 lines) holds `SegmentSelection`
+and its `SegmentSelectionPorts`, `SegmentSelectionRow` types; none of the three is re-exported from
+`view/index.ts` — the class is internal, matching §9's table. `gantt-shell.ts` went from 1,884 lines
+(the count at this branch's own R3 landing, not the plan's `f4c7492` baseline of 1,874 — R3 added a
+few lines of its own doc comments) to 1,796 lines after R4: net -88, even after the new
+`#segmentSelectionPorts()` builder. `entry-gesture-context.ts` and `entry-gestures.ts` moved exactly
+as §3 describes: `EntryGestureContext` lost `entriesForRow`, gained `selectableSegmentsOf(hit)`;
+`interaction/entry-gestures.ts` deleted its own copy and now calls `ctx.selectableSegmentsOf(hit)`.
+Three call sites outside `gantt-shell.ts` named `entriesForRow` in test fakes
+(`entry-gestures.test.ts`, `keyboard-editing.test.ts`, `gantt-shell.test.ts`) and moved to
+`selectableSegmentsOf` fakes/assertions too — not listed in §3's table, since it only tracks the
+shell, but the same rename applies to every `EntryGestureContext` implementer. `pnpm api-report`
+shows no `etc/freegantt.api.md` diff, confirming §9's "No — absent from the public surface."
 
 ### R5 — the row paint reads the frame too
 

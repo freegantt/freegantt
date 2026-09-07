@@ -8,7 +8,6 @@ import {
   TimeScaleModel,
   Viewport,
   createItemProducerRegistry,
-  isPlannedHeaderRow,
   gridContentWidth,
   totalColumnWidth,
   isTimeUnit,
@@ -73,7 +72,6 @@ import {
   segmentId,
 } from '../model/index.js';
 import type {
-  ChangeSet,
   Dataset,
   Entry,
   EntryId,
@@ -89,7 +87,6 @@ import type {
   StoredEdits,
   TimeSpan,
 } from '../model/index.js';
-import { segmentIdsDroppedBy } from '../data/change-set.js';
 import type { EditRequest } from '../data/edit-extension.js';
 import { resolveCapabilities } from './capability.js';
 import type { CapabilityRule, Capabilities, Interactions } from './capability.js';
@@ -111,6 +108,8 @@ import type { ColumnChromePorts } from './column-chrome.js';
 import { buildPluginPorts } from './plugin-ports.js';
 import type { GanttShellPorts, PluginContextParts } from './plugin-ports.js';
 import { TreeCollapse } from './tree-collapse.js';
+import { SegmentSelection } from './segment-selection.js';
+import type { SegmentSelectionPorts } from './segment-selection.js';
 import { createFieldContext } from '../data/fields/field-access.js';
 
 /** One `{ detach() }` for every inject slot. `view/` may not import `interaction/` (plans/01 §1:
@@ -376,9 +375,9 @@ export class GanttShell {
    *  last. So writing into this and calling `#backend.applyState` allocates nothing per hover or
    *  select step (I5). Never rebuilt per call. */
   #interactionState: InteractionState = {};
-  /** The Selection (#212, ADR 0010) — Segment ids. `#interactionState` carries the same list to the
-   *  backend, so paint and gesture read one set. */
-  #selection: readonly SegmentId[] = [];
+  /** The Selection (#212, ADR 0010, #230 R4): what is selected, and what a pointer hit would select.
+   *  Built once, right after `#capabilities` in the constructor below. */
+  #segmentSelection!: SegmentSelection;
   /** S3.2, D-S3-9: resolved once, re-resolved only when `interactions` is reassigned — never per
    *  hover step. `#refreshAffordances` reads it, it never calls `resolveCapabilities` itself. */
   #interactions: Interactions = {};
@@ -646,7 +645,7 @@ export class GanttShell {
     // dataset-change-subscription.ts).
     this.#datasetChanges = subscribeToDatasetChanges(options.dataset, (changeSet) => {
       this.#layout.invalidateForChange(changeSet);
-      this.#forgetSegmentsTheDatasetDropped(changeSet);
+      this.#segmentSelection.forgetSegmentsTheDatasetDropped(changeSet);
       this.#bindColumns();
       this.#viewportHandle.setEntries(options.dataset.entries.all);
       this.#frames.request();
@@ -680,6 +679,7 @@ export class GanttShell {
     this.#viewportGestures = options.viewportGestures ?? {};
     this.#resolvedViewportGestures = resolveViewportGestures(this.#viewportGestures);
     this.#capabilities = this.#resolveCapabilities();
+    this.#segmentSelection = new SegmentSelection(this.#segmentSelectionPorts());
     this.#treeCollapse = new TreeCollapse({
       plannedRows: () => this.#layout.plannedRows(),
       entries: () => this.#options.dataset.entries.all,
@@ -687,7 +687,7 @@ export class GanttShell {
       canSelect: (id) => this.#canGesture('select', id),
       selected: () => this.selectedEntryIds[0],
       proposeSelection: (ids) =>
-        this.#proposeSelection(this.#options.dataset.entries.segmentIdsOfEntries(ids)),
+        this.#segmentSelection.propose(this.#options.dataset.entries.segmentIdsOfEntries(ids)),
       confirm: (change) =>
         this.#proposeChange('beforeCollapseChange', 'collapseChange', change, () => {
           this.#layout.invalidateFrom(0);
@@ -701,7 +701,7 @@ export class GanttShell {
       timeScale: () => this.#viewport.timeScale,
       preset: () => this.#viewport.preset,
       snap: () => this.snap,
-      selectedSegmentIds: () => this.#selection,
+      selectedSegmentIds: () => this.#segmentSelection.segmentIds,
       selectedEntryIds: () => this.selectedEntryIds,
       entryById: (id) => this.#options.dataset.entries.get(id),
       canGesture: (capability, id) => this.#canGesture(capability, id),
@@ -723,17 +723,17 @@ export class GanttShell {
     // Both drive the same `#gesturePipeline.session()`, so there is no value in building two.
     const gestureContext: EntryGestureContext = {
       hitTest: (at) => this.#backend.hitTest(at) ?? undefined,
-      entriesForRow: (id) => this.#selectableEntriesOfRow(id),
       entryFor: (item) => this.#entryFor(item),
       can: (capability, entry) => this.#capabilities.can(capability, entry),
-      selectableEntriesInRowOrder: () => this.#selectableEntriesInRowOrder(),
-      selectableSegmentsInRowOrder: () => this.#selectableSegmentsInRowOrder(),
+      selectableEntriesInRowOrder: () => this.#segmentSelection.selectableEntriesInRowOrder(),
+      selectableSegmentsInRowOrder: () => this.#segmentSelection.selectableSegmentsInRowOrder(),
+      selectableSegmentsOf: (hit) => this.#segmentSelection.selectableSegmentsOf(hit),
       segmentsOfEntries: (ids) => this.#options.dataset.entries.segmentIdsOfEntries(ids),
       segmentsForItem: (item) => this.#layout.segmentIdsForItem(item),
       selection: {
-        get: () => this.#selection,
-        entryIds: () => this.selectedEntryIds,
-        propose: (next) => this.#proposeSelection(next),
+        get: () => this.#segmentSelection.segmentIds,
+        entryIds: () => this.#segmentSelection.entryIds,
+        propose: (next) => this.#segmentSelection.propose(next),
       },
       setHovered: (item) => this.#setHovered(item),
       contentXAtPaneOffset: (offsetX) => offsetX + this.#viewport.scroll.state.position.x,
@@ -970,34 +970,6 @@ export class GanttShell {
     return true;
   }
 
-  /** #185: which Entries a row click selects. The row plan owns the relation and `#capabilities`
-   *  owns the answer, so `interaction/` asks one question instead of looking either one up. An Entry
-   *  that refuses `select` is skipped; it never blocks the rest of the row. */
-  #selectableEntriesOfRow(id: RowId): readonly EntryId[] {
-    const row = this.#layout.plannedRows().find((planned) => planned.id === id);
-    if (row === undefined || isPlannedHeaderRow(row)) return [];
-    return row.entryIds.filter((entryId) => this.#canGesture('select', entryId));
-  }
-
-  #selectableEntriesInRowOrder(): readonly EntryId[] {
-    const out: EntryId[] = [];
-    for (const row of this.#layout.plannedRows()) {
-      if (isPlannedHeaderRow(row)) continue;
-      for (const id of row.entryIds) {
-        const entry = this.#options.dataset.entries.get(id);
-        if (entry !== undefined && this.#capabilities.can('select', entry)) out.push(id);
-      }
-    }
-    return out;
-  }
-
-  /** Row order, then each Entry's own Segment order — the order the panes draw them (#212). It
-   *  reuses the row walk the keyboard step already uses, so a shift-range and a row step cannot
-   *  disagree about which Entry comes first. */
-  #selectableSegmentsInRowOrder(): readonly SegmentId[] {
-    return this.#options.dataset.entries.segmentIdsOfEntries(this.#selectableEntriesInRowOrder());
-  }
-
   get todayLine(): boolean | Instant {
     return this.#frameSettings.todayLine;
   }
@@ -1025,99 +997,20 @@ export class GanttShell {
 
   /** The Selection itself (#212, ADR 0010) — Segment ids. */
   get selection(): readonly SegmentId[] {
-    return this.#selection;
+    return this.#segmentSelection.segmentIds;
   }
 
   /** Live; runs the same cancelable sequence a click runs (D-S3-10). Loose in (`SegmentId | string`),
    *  branded out — the same asymmetry `dataset.entries.get/update/remove` already ship. */
   set selection(ids: readonly (SegmentId | string)[]) {
-    this.#proposeSelection(ids.map((id) => segmentId(id)));
+    this.#segmentSelection.propose(ids.map((id) => segmentId(id)));
   }
 
   /** The Entries the Selection's Segments belong to, deduped, in row order (#212, ADR 0010). It is
    *  one projection. The public getter, the affordance ids, the gesture pipeline and every command
-   *  context read it. So no two of them can disagree about what is selected. An Entry a collapse hid
-   *  keeps its place behind the rows that are showing. `Array.prototype.sort` is stable, and two
-   *  Entries with no row rank compare equal, so both fall back to the order `entryIdsOfSegments`
-   *  gave them. (Finding 13: a naive `rank ?? Infinity` subtraction gives `Infinity - Infinity`,
-   *  which is `NaN` — not the equal-comparison a stable sort needs.) */
+   *  context read it. So no two of them can disagree about what is selected. */
   get selectedEntryIds(): readonly EntryId[] {
-    const rank = this.#rowRankByEntryId();
-    const ids = this.#options.dataset.entries.entryIdsOfSegments(this.#selection);
-    return [...ids].sort((a, b) => {
-      const rankA = rank.get(a);
-      const rankB = rank.get(b);
-      if (rankA === undefined) return rankB === undefined ? 0 : 1;
-      if (rankB === undefined) return -1;
-      return rankA - rankB;
-    });
-  }
-
-  /** Where each Entry sits in the resolved row order. It is built once per projection. So ordering
-   *  the Selection costs one pass over the plan, not one search per selected Entry. */
-  #rowRankByEntryId(): ReadonlyMap<EntryId, number> {
-    const rank = new Map<EntryId, number>();
-    for (const row of this.#layout.plannedRows()) {
-      for (const id of row.entryIds) if (!rank.has(id)) rank.set(id, rank.size);
-    }
-    return rank;
-  }
-
-  /** The Selection's sole Entry, and its Segment count (#212, findings 6-7): O(selection) (I5). */
-  #soleSelectedEntry(): { id: EntryId; segmentCount: number } | undefined {
-    const entries = this.#options.dataset.entries;
-    let soleId: EntryId | undefined;
-    let count = 0;
-    for (const id of this.#selection) {
-      const ownerId = entries.entryIdOfSegment(id);
-      if (ownerId === undefined) continue;
-      if (soleId === undefined) soleId = ownerId;
-      else if (soleId !== ownerId) return undefined;
-      count++;
-    }
-    return soleId === undefined ? undefined : { id: soleId, segmentCount: count };
-  }
-
-  /** Drops the Segments `segmentIdsDroppedBy(changeSet)` names (#212, finding 8) — left uncorrected, a
-   *  dead id reaches a mutation and throws. Fires `selectionChange` alone; a veto would restore it. */
-  #forgetSegmentsTheDatasetDropped(changeSet: ChangeSet): void {
-    if (this.#selection.length === 0) return;
-    const dropped = segmentIdsDroppedBy(changeSet);
-    if (dropped.size === 0) return;
-    const kept = this.#selection.filter((id) => !dropped.has(id));
-    if (kept.length === this.#selection.length) return;
-    const from = this.#selection;
-    this.#selection = kept;
-    this.#interactionState.selectedSegmentIds = kept;
-    this.#refreshAffordances();
-    this.#events.emit('selectionChange', { from, to: kept });
-  }
-
-  #proposeSelection(next: readonly SegmentId[]): void {
-    const from = this.#selection;
-    if (from.length === next.length && from.every((id, i) => id === next[i])) return;
-    this.#proposeChange('beforeSelectionChange', 'selectionChange', { from, to: next }, () => {
-      this.#selection = next;
-      // #212: the Selection goes to the backend as it is. Which bar drew a selected Segment is the
-      // backend's own question, answered from the frame it synced — the shell names no Item here.
-      this.#interactionState.selectedSegmentIds = next;
-      this.#refreshAffordances();
-    });
-  }
-
-  /** #212: steps the Selection between the Segments of the row it already sits on. `Mod+ArrowRight`
-   *  and `Mod+ArrowLeft` run it. A row that draws one bar has nowhere to step, so the chord writes
-   *  nothing. It clamps at both ends, the same way the `ArrowUp`/`ArrowDown` row step does. */
-  #stepSegmentSelection(direction: 1 | -1): void {
-    const selected = this.selectedEntryIds[0];
-    if (selected === undefined) return;
-    const rowId = this.#layout.rowIdForEntry(selected);
-    if (rowId === undefined) return;
-    const segmentIds = this.#options.dataset.entries.segmentIdsOfEntries(this.#selectableEntriesOfRow(rowId));
-    const current = segmentIds.findIndex((id) => this.#selection.includes(id));
-    const next = segmentIds[current + direction];
-    if (current === -1 || next === undefined) return;
-    this.#proposeSelection([next]);
+    return this.#segmentSelection.entryIds;
   }
 
   get interactions(): Interactions {
@@ -1147,6 +1040,28 @@ export class GanttShell {
     delete next[capability];
     this.#interactions = next;
     this.#refreshCapabilities();
+  }
+
+  /** `SegmentSelection`'s one ports object (#230 R4) — the shell's own state, behind the closures
+   *  `SegmentSelectionPorts` names. `confirm`/`announce` reuse the shell's own `#proposeChange`/
+   *  `#events`, so a Selection change is one more line in `ProposableChange`, not a second veto path.
+   *  `paint` writes the backend's own state and re-derives hover/gesture affordances from it — the
+   *  same pair every direct `#selection` write used to make by hand. */
+  #segmentSelectionPorts(): SegmentSelectionPorts {
+    return {
+      entries: () => this.#options.dataset.entries,
+      plannedRows: () => this.#layout.plannedRows(),
+      rowIdForEntry: (id) => this.#layout.rowIdForEntry(id),
+      segmentIdsForItem: (id) => this.#layout.segmentIdsForItem(id),
+      canGesture: (capability, id) => this.#canGesture(capability, id),
+      confirm: (change, apply) =>
+        this.#proposeChange('beforeSelectionChange', 'selectionChange', change, apply),
+      announce: (change) => this.#events.emit('selectionChange', change),
+      paint: (segmentIds) => {
+        this.#interactionState.selectedSegmentIds = segmentIds;
+        this.#refreshAffordances();
+      },
+    };
   }
 
   /** S5.9, D-S5-22: the one place `resolveCapabilities` is called. The constructor, `set
@@ -1214,8 +1129,8 @@ export class GanttShell {
    *  fine. No core command reads `ctx.dataset`/`ctx.gantt` without first checking
    *  `ctx.entry`/`ctx.target`, and no such test runs a command that needs them. */
   #buildCommandContext(): CommandContext<unknown> {
-    const segmentIds = this.#selection;
-    const entryIds = this.selectedEntryIds;
+    const segmentIds = this.#segmentSelection.segmentIds;
+    const entryIds = this.#segmentSelection.entryIds;
     const id = entryIds[0];
     const entry = id !== undefined ? this.#options.dataset.entries.get(id) : undefined;
     const field = this.#columnChrome.focusedHeaderField;
@@ -1252,16 +1167,13 @@ export class GanttShell {
         const now = this.#options.wiring.now;
         if (now !== undefined) this.panToToday(now());
       },
-      selectAll: () =>
-        this.#proposeSelection(
-          this.#options.dataset.entries.segmentIdsOfEntries(this.#selectableEntriesInRowOrder()),
-        ),
-      clearSelection: () => this.#proposeSelection([]),
-      hasSelection: () => this.#selection.length > 0,
+      selectAll: () => this.#segmentSelection.propose(this.#segmentSelection.selectableSegmentsInRowOrder()),
+      clearSelection: () => this.#segmentSelection.propose([]),
+      hasSelection: () => this.#segmentSelection.segmentIds.length > 0,
       keyboardPanEnabled: () => this.#resolvedViewportGestures.keyboardPan,
-      nothingSelected: () => this.#selection.length === 0,
-      selectNextSegment: () => this.#stepSegmentSelection(1),
-      selectPreviousSegment: () => this.#stepSegmentSelection(-1),
+      nothingSelected: () => this.#segmentSelection.segmentIds.length === 0,
+      selectNextSegment: () => this.#segmentSelection.step(1),
+      selectPreviousSegment: () => this.#segmentSelection.step(-1),
       pageDown: () => this.#panBy(0, this.#viewport.visible.height),
       pageUp: () => this.#panBy(0, -this.#viewport.visible.height),
       panToStart: () => this.#viewport.scroll.panTo({ x: 0 }),
@@ -1433,7 +1345,7 @@ export class GanttShell {
    *  any of the three inputs change — never per pointer move beyond that (I5). `exactOptionalPropertyTypes`
    *  makes "clear" a `delete`, not an `= undefined` assignment (`#setOptional` below; finding 7). */
   #refreshAffordances(): void {
-    const sole = this.#soleSelectedEntry();
+    const sole = this.#segmentSelection.soleEntry();
     const ids = projectAffordances({
       hoveredItemId: this.#hoveredItemId,
       soleSelectedEntryId: sole?.id,

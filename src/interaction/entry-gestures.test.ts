@@ -90,13 +90,23 @@ function makeContext(overrides: Partial<EntryGestureContext> & SessionOverrides 
     // incapable drops its Segments from the range too.
     selectableSegmentsInRowOrder: () =>
       ctx.segmentsOfEntries(ORDER.filter((id) => ctx.can('select', entryFor(id)))),
-    // #185: a row hit resolves through this seam — the fake maps one row id to the Entry of the
-    // same name, so a test that wants a multi-entry row overrides it.
-    entriesForRow: (id) => (ORDER.includes(id as unknown as EntryId) ? [id as unknown as EntryId] : []),
     // #212: the shell answers both of these from the frame and the Dataset. The fake gives every
     // Entry one Segment, and reads a bar's own Segment index out of the Item id it was handed.
     segmentsOfEntries: (ids) => ids.map((id) => segmentOf(id)),
     segmentsForItem: (item) => [segmentOf(entryIdOfItem(item), segmentIndexOfItem(item))],
+    // #185, #212, #230 R4: the pane rule — a row names every selectable Entry it owns (the fake
+    // maps one row id to the Entry of the same name, so a test that wants a multi-entry row
+    // overrides it); a bar names its own Segment when its Entry may be selected.
+    selectableSegmentsOf: (hit) => {
+      if (hit.kind === 'row') {
+        const owned = ORDER.includes(hit.rowId as unknown as EntryId)
+          ? [hit.rowId as unknown as EntryId]
+          : [];
+        return ctx.segmentsOfEntries(owned);
+      }
+      const entry = ctx.entryFor(hit.itemId);
+      return entry !== undefined && ctx.can('select', entry) ? ctx.segmentsForItem(hit.itemId) : [];
+    },
     setHovered: () => {},
     contentXAtPaneOffset: (offsetX) => offsetX,
     session: (grabbed, gesture) => {
@@ -430,18 +440,20 @@ describe('attachEntryGestures — grid row click', () => {
   });
 
   // #185: a row that owns several Entries selects all of them. `hitTest` reports the row, and
-  // `entriesForRow` answers which Entries it owns — no Item id is invented anywhere on this path.
+  // `selectableSegmentsOf` answers which Segments it owns — no Item id is invented anywhere on this path.
   const PACKED = rowId('packed');
 
-  function packedRowContext(overrides: Partial<EntryGestureContext> = {}) {
+  function packedRowContext(rowEntries: readonly EntryId[] = [A, B]) {
     // x = 0 is the packed row; x = 1 is A's own bar, so a test can select off the timeline too.
     return makeContext({
       hitTest: (at) => {
         if (at.x === 0) return { kind: 'row', rowId: PACKED };
         return at.x === 1 ? { kind: 'bar', itemId: itemId(A) } : undefined;
       },
-      entriesForRow: (id) => (id === PACKED ? [A, B] : []),
-      ...overrides,
+      selectableSegmentsOf: (hit) =>
+        hit.kind === 'row'
+          ? rowEntries.map((id) => segmentOf(id))
+          : [segmentOf(entryIdOfItem(hit.itemId), segmentIndexOfItem(hit.itemId))],
     });
   }
 
@@ -490,7 +502,10 @@ describe('attachEntryGestures — grid row click', () => {
     const rowLayer = document.createElement('div');
     const { ctx, proposals } = makeContext({
       hitTest: (at) => (at.x === 0 ? { kind: 'bar', itemId: itemId(A) } : { kind: 'row', rowId: PACKED }),
-      entriesForRow: (id) => (id === PACKED ? [B, C] : []),
+      selectableSegmentsOf: (hit) =>
+        hit.kind === 'row'
+          ? [B, C].map((id) => segmentOf(id))
+          : [segmentOf(entryIdOfItem(hit.itemId), segmentIndexOfItem(hit.itemId))],
     });
     attachEntryGestures(pane, rowLayer, container, ctx);
 
@@ -503,8 +518,8 @@ describe('attachEntryGestures — grid row click', () => {
     const pane = document.createElement('div');
     const container = document.createElement('div');
     const rowLayer = document.createElement('div');
-    // `entriesForRow` resolves the capability (I14), so an incapable Entry never reaches this file.
-    const { ctx, proposals } = packedRowContext({ entriesForRow: () => [B] });
+    // `selectableSegmentsOf` resolves the capability (I14), so an incapable Entry never reaches this file.
+    const { ctx, proposals } = packedRowContext([B]);
     attachEntryGestures(pane, rowLayer, container, ctx);
 
     rowLayer.dispatchEvent(up(0));
@@ -515,7 +530,7 @@ describe('attachEntryGestures — grid row click', () => {
     const pane = document.createElement('div');
     const container = document.createElement('div');
     const rowLayer = document.createElement('div');
-    const { ctx, proposals } = packedRowContext({ entriesForRow: () => [] });
+    const { ctx, proposals } = packedRowContext([]);
     attachEntryGestures(pane, rowLayer, container, ctx);
 
     pane.dispatchEvent(up(1)); // select A off its own bar
