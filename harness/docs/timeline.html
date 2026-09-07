@@ -19,7 +19,7 @@
         <p class="tagline">
           The timeline is a bound <code>TimeScale</code> plus a header of absolutely positioned ticks. On
           top of that sit five behaviours worth their own explanation: a density floor, sticky coarse
-          labels, format dedupe across bands, unpadded hour labels, and a today line that only draws inside
+          labels, dropped repeated granularity across bands, unpadded hour labels, and a today line that only draws inside
           the scale range.
         </p>
         <div class="updated"><span class="k">updated</span> 2026-09-06 — slice S5</div>
@@ -60,7 +60,7 @@
             >
               <title id="tl-pipe-title">Timeline header paint path</title>
               <desc id="tl-pipe-desc">
-                GanttShell.render reads Viewport and TimeScale, computeFrame dedupes formats and clamps
+                GanttShell.render reads Viewport and TimeScale, computeFrame drops repeated granularity and clamps
                 tick x, then the DOM backend writes .fg-tick transform and width.
               </desc>
               <defs>
@@ -91,7 +91,7 @@
 
               <rect class="bx hot" x="280" y="152" width="280" height="80" />
               <text class="t hotink" x="420" y="184" text-anchor="middle">computeFrame headers</text>
-              <text class="s" x="420" y="202" text-anchor="middle">dedupeHeaderFormats</text>
+              <text class="s" x="420" y="202" text-anchor="middle">dropRepeatedGranularity</text>
               <text class="s" x="420" y="216" text-anchor="middle">clamp tick.x to pane left</text>
 
               <rect class="bx dom" x="616" y="160" width="200" height="64" />
@@ -190,7 +190,7 @@
           <tr>
             <td class="mono">label</td>
             <td>
-              <code>dedupeHeaderFormats</code> strips <code>year</code>/<code>month</code> from a finer
+              <code>dropRepeatedGranularity</code> strips <code>year</code>/<code>month</code> from a finer
               band when a coarser band already states them. Then each tick’s <code>x</code> clamps to the
               pane’s left edge so a coarse label stays in view.
             </td>
@@ -312,7 +312,7 @@
           <figcaption>
             The floor measures the finest band of each zoom-ladder preset
             (<code>ZOOM_PRESETS</code>). Multi-band presets sit lower because
-            <code>dedupeHeaderFormats</code> leaves the day band as a bare number. Standalone
+            <code>dropRepeatedGranularity</code> leaves the day band as a bare number. Standalone
             <code>week</code> and <code>month</code> still ship (96&nbsp;px / 72&nbsp;px) but are not
             zoom steps.
           </figcaption>
@@ -320,14 +320,14 @@
       </section>
 
       <section id="s3">
-        <h2><span class="num">3</span>Header bands and format dedupe</h2>
+        <h2><span class="num">3</span>Header bands and dropped repeated granularity</h2>
         <p class="lede">
           A preset lists bands coarsest first. Left alone, every band carries its own full date format, so
           <code>weekAndMonth</code> would write “Sep 2026” on the month row and “Sep 1, 2026” on the week
           row — the month named twice.
         </p>
         <p>
-          <code>dedupeHeaderFormats(headers)</code> walks that list once. When an earlier band already
+          <code>dropRepeatedGranularity(headers)</code> walks that list once. When an earlier band already
           states <code>year</code> or <code>month</code>, it strips that field from later
           <code>Intl.DateTimeFormatOptions</code>. A callback format (<code>formatWeekNumber</code>,
           <code>formatHour</code>) passes through. Set <code>repeatCoarserUnits: true</code> on one band
@@ -341,10 +341,10 @@
               class="d"
               viewBox="0 0 960 280"
               role="img"
-              aria-labelledby="tl-dedupe-title tl-dedupe-desc"
+              aria-labelledby="tl-granularity-title tl-granularity-desc"
             >
-              <title id="tl-dedupe-title">weekAndMonth labels before and after dedupe</title>
-              <desc id="tl-dedupe-desc">
+              <title id="tl-granularity-title">weekAndMonth labels before and after dropping repeated granularity</title>
+              <desc id="tl-granularity-desc">
                 Two stacked headers. The left pair repeats September and 2026 on both bands. The right
                 pair keeps the month band as Sep 2026 and the week band as the day number only.
               </desc>
@@ -360,7 +360,7 @@
               <rect class="bx warn" x="328" y="80" width="112" height="36" />
               <text class="s" x="340" y="102">Sep 22, 2026</text>
 
-              <text class="t" x="500" y="28">after dedupe — what ships</text>
+              <text class="t" x="500" y="28">after — what ships</text>
               <rect class="bx pure" x="500" y="44" width="420" height="36" />
               <text class="t" x="512" y="66">Sep 2026</text>
               <rect class="bx pure" x="500" y="80" width="96" height="36" />

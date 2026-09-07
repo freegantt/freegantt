@@ -110,10 +110,10 @@ export const formatHour: HeaderFormat = (i, zone) => {
   return `${hour}:${String(minute).padStart(2, '0')}`;
 };
 
-/** Per-`headers`-array memo of `dedupeHeaderFormats`'s result (below) — the stripped
+/** Per-`headers`-array memo of `dropRepeatedGranularity`'s result (below) — the stripped
  *  `Intl.DateTimeFormatOptions` objects need one stable identity across frames, or `intlFormatter`'s
  *  own `options`-keyed cache would rebuild an `Intl.DateTimeFormat` every frame instead of once. */
-const dedupedHeaderFormats = new WeakMap<readonly ViewPresetHeader[], readonly DateFormat[]>();
+const repeatedGranularityDropped = new WeakMap<readonly ViewPresetHeader[], readonly DateFormat[]>();
 
 /** A header whose `format` states `year` or `month` shows it to the reader once, at the coarsest
  *  band that states it — a day band under a month band reads "21", not "Sep 21, 2026" (S1.12
@@ -122,9 +122,10 @@ const dedupedHeaderFormats = new WeakMap<readonly ViewPresetHeader[], readonly D
  *  strips that field from every later band's `format` — unless that band set `repeatCoarserUnits`.
  *  A callback `format` (e.g. `formatWeekNumber`) passes through untouched: only
  *  `Intl.DateTimeFormatOptions` fields are ever inspected. Memoized by `headers`' own identity
- *  (a shipped preset's frozen array, or a caller's stable custom one) — see `dedupedHeaderFormats`. */
-export function dedupeHeaderFormats(headers: readonly ViewPresetHeader[]): readonly DateFormat[] {
-  const cached = dedupedHeaderFormats.get(headers);
+ *  (a shipped preset's frozen array, or a caller's stable custom one) — see
+ *  `repeatedGranularityDropped`. */
+export function dropRepeatedGranularity(headers: readonly ViewPresetHeader[]): readonly DateFormat[] {
+  const cached = repeatedGranularityDropped.get(headers);
   if (cached) return cached;
 
   const shownByEarlierBand = new Set<'year' | 'month'>();
@@ -145,6 +146,6 @@ export function dedupeHeaderFormats(headers: readonly ViewPresetHeader[]): reado
     return effective;
   });
 
-  dedupedHeaderFormats.set(headers, formats);
+  repeatedGranularityDropped.set(headers, formats);
   return formats;
 }
