@@ -70,7 +70,7 @@ export type ColumnAlign = 'start' | 'center' | 'end';
 /** Every `GridColumn` key except its sizing. Split out so the sizing pair (`width`/`flex`) can join
  *  it as an exclusive union — here, in `Field.column` below, and in `SerializedField.column`
  *  (`model/document.ts`), each of which drops a different subset of these keys (#249). */
-export interface GridColumnFields {
+export interface GridColumnBase {
   field: FieldKey;
   header?: string;
   align?: ColumnAlign;
@@ -102,7 +102,7 @@ export type GridColumnSizing = { width?: number; flex?: never } | { width?: neve
 
 /** Presentation only. Never carries an aggregate — `data/` never holds a renderer; `toJSON` never
  *  sees one (D-S5-17). */
-export type GridColumn = GridColumnFields & GridColumnSizing;
+export type GridColumn = GridColumnBase & GridColumnSizing;
 
 /** What a consumer writes: a Field key, or a column object. */
 export type GridColumnInput = FieldKey | GridColumn;
@@ -158,9 +158,9 @@ export interface Field<TValue = unknown> {
    *  (D-S5-34): a Field default of `hidden: true` would make a Gantt that names the column show
    *  nothing. Which columns a view shows is the Gantt's question, never the Field's.
    *  `Omit<GridColumn, …>` would flatten the sizing union and let a Field default name both `width`
-   *  and `flex` (#249) — so this type is built from `GridColumnFields` directly, joined back to
+   *  and `flex` (#249) — so this type is built from `GridColumnBase` directly, joined back to
    *  `GridColumnSizing`, the same exclusive pair `GridColumn` itself carries. */
-  column?: Omit<GridColumnFields, 'field' | 'cellRenderer' | 'hidden'> & GridColumnSizing;
+  column?: Omit<GridColumnBase, 'field' | 'cellRenderer' | 'hidden'> & GridColumnSizing;
 }
 
 /** A `Field` with `key` and `source` omitted — one bundle applied by name to many Fields. */
