@@ -29,7 +29,8 @@ import type {
 import { changeSetId, mintedSegmentId } from '../model/index.js';
 import { now } from '../time/index.js';
 import { EntryStore } from './entry-store.js';
-import { authoredSegmentIdsOf, readEdits, readEntries } from './entry-reader.js';
+import { authoredSegmentIdsOf, readEdits, readEditsDetailed, readEntries } from './entry-reader.js';
+import type { EditsReading } from './entry-reader.js';
 import type { EntryReadContext } from './entry-reader.js';
 import { identityExtender } from './edit-extension.js';
 import { PluginStores } from './plugin-store.js';
@@ -209,17 +210,33 @@ export class DatasetState implements Dataset {
   }
 
   /** The one door onto the extension hook (D4, D-S2-6): calls the current occupant and hands back
-   *  what it returns. `data/transaction.ts`'s commit path and `api/gantt.ts`'s drag-preview wiring
-   *  both call this — one seam, not two — so `api/Dataset` never had to expose the raw occupant to
-   *  get either job done (#209 Q5, replacing the public `editExtender` getter this file used to
-   *  mirror).
+   *  what it returns. `api/Dataset.extraEditsFor` (the public method this mirrors) and
+   *  `api/gantt.ts`'s drag-preview wiring both call this — one seam, not two — so `api/Dataset` never
+   *  had to expose the raw occupant to get either job done (#209 Q5, replacing the public
+   *  `editExtender` getter this file used to mirror). The commit path calls `readExtenderEdits`
+   *  below instead (#232) — it needs one more fact than this method's public return shape can carry.
    *
    *  It is also where the hook's loose writes become storage-shaped (#209 C3): the occupant returns
    *  `EntryEdits`, the same object `entries.update()` takes, and `readEdits` reads it through the
-   *  dataset's own zone and end rule. One door, so the commit and the drag preview normalize once and
-   *  identically — a preview that painted a raw `'2026-01-05'` would reach `scale.xForInstant`. */
+   *  dataset's own zone and end rule. */
   extraEditsFor(request: EditRequest): StoredEdits {
     return readEdits(
+      this.#editExtender(request),
+      this.#entryContext,
+      (id) => request.entryAfterEdits(id),
+      this.fields,
+    );
+  }
+
+  /** The commit path's own door onto the extension hook (#232) — calls the occupant exactly once,
+   *  the same as `extraEditsFor` above, but also reports which of `start`/`end`/`segments` the
+   *  occupant's own loose edit named on each Entry. `buildCommitChangeSet` needs that fact to tell
+   *  the hook's authored envelope keys from the ones `reconcileEnvelope` derives on the hook's
+   *  behalf — `StoredEdit.proposedKeys` alone conflates the two (#232). Not part of the public
+   *  surface: an app author never reads an envelope key list, only the reconciled `StoredEdits`
+   *  `extraEditsFor` already gives them. */
+  readExtenderEdits(request: EditRequest): EditsReading {
+    return readEditsDetailed(
       this.#editExtender(request),
       this.#entryContext,
       (id) => request.entryAfterEdits(id),

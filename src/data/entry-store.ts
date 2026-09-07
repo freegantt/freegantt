@@ -33,7 +33,7 @@ import type { EntryStore as EntryStoreContract } from '../model/index.js';
 import { computed, signal } from './reactivity.js';
 import type { StoredEdit, StoredEdits } from './edit-extension.js';
 import type { ChangeSet, FieldUpdated, UpdatedRow } from '../model/index.js';
-import { readEdit, readEntry } from './entry-reader.js';
+import { authoredEnvelopeKeysOf, readEditDetailed, readEntry } from './entry-reader.js';
 import type { EntryReadContext } from './entry-reader.js';
 import { runTransaction } from './transaction.js';
 import type { TransactionData, TxToken } from './transaction.js';
@@ -62,6 +62,12 @@ interface WriteSet {
   added: Map<EntryId, Entry>;
   removed: Set<EntryId>;
   edits: Map<EntryId, StoredEdit>;
+  /** Which of `start`/`end`/`segments` the body itself named on each entry in `edits`, before
+   *  `reconcileEnvelope` paired or back-derived the rest (#232) — `pendingAuthoredEnvelopeKeys()`
+   *  hands this to `buildCommitChangeSet`, which needs it to tell the body's own envelope write from
+   *  one an `EditExtender` cascade adds later. Keyed the same as `edits`, and only entries with a
+   *  pending edit ever get an entry here. */
+  authoredEnvelopeKeys: Map<EntryId, ReadonlySet<string>>;
   /** `SegmentId → EntryId`, `null` when this transaction dropped the id (finding S1, #212). Kept
    *  current by `stageAdd`/`stageUpdate`/`stageRemove`, in call order, so `entryIdOfSegment` inside
    *  an open transaction is one map lookup — never a rebuild of an overlay Entry per Segment id, and
@@ -355,11 +361,12 @@ export class EntryStore implements EntryStoreContract {
         this.#assertParentValid(key, entryId(edit.parentId), 'entries.update');
       }
       const current = this.get(key)!;
-      const stored = readEdit(edit, this.#context, current, this.#registry, 'entries.update');
+      const reading = readEditDetailed(edit, this.#context, current, this.#registry, 'entries.update');
+      const stored = reading.stored;
       if (stored.segments !== undefined) {
         this.#assertSegmentIdsUnique(stored.segments, key, 'entries.update');
       }
-      this.stageUpdate(token, key, stored);
+      this.stageUpdate(token, key, stored, reading.authoredEnvelopeKeys);
       return this.get(key)!;
     });
   }
@@ -490,7 +497,13 @@ export class EntryStore implements EntryStoreContract {
   // ---- TxToken-gated: only data/transaction.ts holds a token (docs/02 §3.6) ----
 
   beginTransaction(_token: TxToken): void {
-    this.#writeSet = { added: new Map(), removed: new Set(), edits: new Map(), segmentOwner: new Map() };
+    this.#writeSet = {
+      added: new Map(),
+      removed: new Set(),
+      edits: new Map(),
+      authoredEnvelopeKeys: new Map(),
+      segmentOwner: new Map(),
+    };
   }
 
   /** A re-add of an id this same transaction already staged for removal replaces it outright — the
@@ -508,7 +521,17 @@ export class EntryStore implements EntryStoreContract {
     recordSegmentOwnership(writeSet, entry.id, replaced?.segments, entry.segments);
   }
 
-  stageUpdate(_token: TxToken, id: EntryId, edit: StoredEdit): void {
+  /** `authoredEnvelopeKeys` names which of `start`/`end`/`segments` the caller itself wrote into
+   *  `edit`, before any envelope reconciliation ran (#232) — `update()` below passes the fact
+   *  `readEditDetailed` already computed. A caller that stages a raw `StoredEdit` directly (a
+   *  same-transaction reparent, a test fixture) has done no such reconciliation, so the default —
+   *  the triad-intersection of `edit`'s own keys — is exactly that edit's authored keys too. */
+  stageUpdate(
+    _token: TxToken,
+    id: EntryId,
+    edit: StoredEdit,
+    authoredEnvelopeKeys: ReadonlySet<string> = authoredEnvelopeKeysOf(edit),
+  ): void {
     const writeSet = this.#openWriteSet();
     const before = edit.segments !== undefined ? this.get(id)?.segments : undefined;
     const staged = writeSet.added.get(id);
@@ -519,6 +542,13 @@ export class EntryStore implements EntryStoreContract {
       return;
     }
     writeSet.edits.set(id, mergeStoredEdits(writeSet.edits.get(id), edit));
+    if (authoredEnvelopeKeys.size > 0) {
+      const existing = writeSet.authoredEnvelopeKeys.get(id);
+      writeSet.authoredEnvelopeKeys.set(
+        id,
+        existing === undefined ? authoredEnvelopeKeys : new Set([...existing, ...authoredEnvelopeKeys]),
+      );
+    }
     if (edit.segments !== undefined) recordSegmentOwnership(writeSet, id, before, edit.segments);
   }
 
@@ -548,6 +578,14 @@ export class EntryStore implements EntryStoreContract {
 
   pendingEdits(): StoredEdits {
     return this.#writeSet?.edits ?? new Map();
+  }
+
+  /** The body's own authored envelope keys, by entry (#232) — `buildCommitChangeSet`'s I4 guard and
+   *  its merge with the extender's cascade both need this, and neither can recover it from
+   *  `pendingEdits()` alone: `reconcileEnvelope` folds its own added keys into the very same
+   *  `proposedKeys` the body's own keys sit in. */
+  pendingAuthoredEnvelopeKeys(): ReadonlyMap<EntryId, ReadonlySet<string>> {
+    return this.#writeSet?.authoredEnvelopeKeys ?? new Map();
   }
 
   writeCommittedFieldRows(updated: readonly FieldUpdated[]): void {

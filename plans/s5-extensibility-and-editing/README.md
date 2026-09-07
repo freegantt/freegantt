@@ -295,6 +295,7 @@ Full prose lives in the step file that implements each decision.
 | D-S5-45 | `EditRequest.entryAfterEdits(id)` reads the state the hook is judged against | S5.10 |
 | D-S5-46 | An inverted span is refused at the mutation boundary; a zero-length span stays legal | S5.10 |
 | D-S5-47 | The invalid Cell editor has a visible exit, and one command behind it | S5.8 |
+| D-S5-49 | The commit keeps the body's and the extender's authored envelope keys apart from `proposedKeys`, merges the two authors' edits once, and diffs the merge once (#232) | S5.10 |
 | D-S5-50 | `moveEntryTo` names `segments` only, takes an `Instant` `start`, and lets core derive the envelope | S5.10 |
 
 > **Three ids used to be used twice; fixed 2026-09-05 (Q22).** D-S5-35, D-S5-36 and D-S5-37 each

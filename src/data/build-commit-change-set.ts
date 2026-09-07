@@ -19,9 +19,11 @@ import type {
 } from '../model/index.js';
 import { diffEdit, foldChangeSet } from './change-set.js';
 import type { EditRequest, StoredEdits } from './edit-extension.js';
-import { reconcileExtenderEdits } from './entry-reader.js';
+import { reconcileEnvelope, reconcileExtenderEdits } from './entry-reader.js';
+import type { EditsReading } from './entry-reader.js';
 import { buildEffectiveEntries } from './entry-tree.js';
 import {
+  mergeStoredEdits,
   mergeStoredEditsByEntry,
   overlayStoredEdit,
   proposedKeysOf,
@@ -39,6 +41,9 @@ export interface CommitChangeSetEntryStore {
   pendingAdded(): readonly EntityAdded[];
   pendingRemoved(): readonly EntityRemoved[];
   pendingEdits(): StoredEdits;
+  /** Which of `start`/`end`/`segments` the body itself named on each pending edit (#232) — see
+   *  `EntryStore.pendingAuthoredEnvelopeKeys`. */
+  pendingAuthoredEnvelopeKeys(): ReadonlyMap<EntryId, ReadonlySet<string>>;
 }
 
 /** Staged plugin-store state the commit pipeline reads — mirrors `TransactionalPluginStores` without
@@ -51,7 +56,9 @@ export interface CommitChangeSetPluginStores {
 export interface CommitChangeSetInput {
   readonly entries: CommitChangeSetEntryStore;
   readonly pluginStores: CommitChangeSetPluginStores;
-  extraEditsFor(request: EditRequest): StoredEdits;
+  /** The commit path's own door onto the extension hook (#232) — see
+   *  `TransactionData.readExtenderEdits`. */
+  readExtenderEdits(request: EditRequest): EditsReading;
   readonly hierarchy: DatasetHierarchy;
   readonly fields: FieldRegistry;
   readonly fieldContext: FieldContext;
@@ -69,6 +76,17 @@ export function diffEdits(
   for (const [id, edit] of edits) updated.push(...diffEdit(byId, id, edit, fields, ctx));
   return updated;
 }
+
+/** `start`/`end`/`segments` are the only keys `reconcileEnvelope` ever derives (D-S5-44) — the same
+ *  triad `entry-reader.ts`'s own `authoredEnvelopeKeysOf` names. */
+const ENVELOPE_FIELDS: ReadonlySet<string> = Object.freeze(new Set(['start', 'end', 'segments']));
+const NO_ENVELOPE_KEYS: ReadonlySet<string> = Object.freeze(new Set<string>());
+
+/** The label a `SegmentsOutOfSyncError` names when a body author's and an extender author's own
+ *  envelope writes disagree (#232) — distinct from `entry-reader.ts`'s `EXTENDER_OPERATION`, because
+ *  this refusal is not the hook's fault alone: either author's value could be the one that surprises
+ *  a reader debugging it. */
+const SHARED_ENVELOPE_OPERATION = 'transaction body and edit extender';
 
 /** Which Fields an edit writes, however it states them: a storage key it holds, or a proposed key.
  *  `proposedKeys` is bookkeeping on the edit, never a Field, so it is not one of them (#197).
@@ -90,13 +108,41 @@ function fieldsWrittenBy(edit: StoredEdit): ReadonlySet<string> {
   return keys;
 }
 
-function guardExtensionHookDoesNotOverwriteBody(proposed: StoredEdits, extenderEdits: StoredEdits): void {
+/** Which Fields an edit's *author* stated, for the I4 guard (#232). `fieldsWrittenBy` above answers
+ *  that correctly for every Field except `start`/`end`/`segments`: `reconcileEnvelope` folds its own
+ *  derived envelope keys into the very same `proposedKeys` an author's own keys sit in, so two edits
+ *  that never named the same envelope key still read as if they had, the moment either side's write
+ *  got paired onto a sole Segment or read back from one. Only `authoredEnvelopeKeys` — captured before
+ *  `reconcileEnvelope` runs — tells the two apart. */
+function authoredFieldsWrittenBy(
+  edit: StoredEdit,
+  authoredEnvelopeKeys: ReadonlySet<string>,
+): ReadonlySet<string> {
+  const fields = new Set(fieldsWrittenBy(edit));
+  for (const field of ENVELOPE_FIELDS) fields.delete(field);
+  for (const key of authoredEnvelopeKeys) fields.add(key);
+  return fields;
+}
+
+function guardExtensionHookDoesNotOverwriteBody(
+  proposed: StoredEdits,
+  bodyAuthoredEnvelopeKeys: ReadonlyMap<EntryId, ReadonlySet<string>>,
+  extenderEdits: StoredEdits,
+  extenderAuthoredEnvelopeKeys: ReadonlyMap<EntryId, ReadonlySet<string>>,
+): void {
   if (!isDevMode()) return;
   for (const [id, edit] of extenderEdits) {
     const bodyEdit = proposed.get(id);
     if (!bodyEdit) continue;
-    const bodyFields = fieldsWrittenBy(bodyEdit);
-    for (const field of fieldsWrittenBy(edit)) {
+    const bodyFields = authoredFieldsWrittenBy(
+      bodyEdit,
+      bodyAuthoredEnvelopeKeys.get(id) ?? NO_ENVELOPE_KEYS,
+    );
+    const extenderFields = authoredFieldsWrittenBy(
+      edit,
+      extenderAuthoredEnvelopeKeys.get(id) ?? NO_ENVELOPE_KEYS,
+    );
+    for (const field of extenderFields) {
       if (bodyFields.has(field)) {
         throw new Error(
           `buildCommitChangeSet: the extension hook proposed field "${field}" on entry "${String(id)}", ` +
@@ -105,6 +151,65 @@ function guardExtensionHookDoesNotOverwriteBody(proposed: StoredEdits, extenderE
       }
     }
   }
+}
+
+/** Reconciles a body author's and an extender author's *own* envelope writes against the Entry's
+ *  pre-transaction state, once (#232) — the fallback's third part. Chaining (reconciling the
+ *  extender's cascade against the post-body state) cannot surface a genuine disagreement here: it
+ *  always judges the extender's write against an Entry that already agrees with the body, by
+ *  construction. Reconciling a patch of each side's own authored values against the entry neither
+ *  side has touched yet is what lets a body-authored `segments` and an extender-authored `start` that
+ *  disagree throw `SegmentsOutOfSyncError('conflicting', ...)` instead of one silently overwriting
+ *  the other's Segment. */
+function reconcileSharedEnvelope(
+  original: Entry,
+  bodyEdit: StoredEdit,
+  bodyAuthoredKeys: ReadonlySet<string>,
+  extenderEdit: StoredEdit,
+  extenderAuthoredKeys: ReadonlySet<string>,
+): StoredEdit {
+  const patch: Record<string, unknown> = {};
+  const bodyBag = bodyEdit as Record<string, unknown>;
+  const extenderBag = extenderEdit as Record<string, unknown>;
+  for (const key of bodyAuthoredKeys) patch[key] = bodyBag[key];
+  for (const key of extenderAuthoredKeys) patch[key] = extenderBag[key];
+  return reconcileEnvelope(original, patch, SHARED_ENVELOPE_OPERATION).edit;
+}
+
+/** Merges the body's and the extender's edits, keyed by Entry, correcting the envelope once where
+ *  both authored it (#232) — `mergeStoredEditsByEntry` alone is enough everywhere else, because only
+ *  `start`/`end`/`segments` are ever silently re-derived by reconciliation. This is the one merge the
+ *  commit path diffs, replacing the two separate diffs of `proposed` and `extenderEdits` that used to
+ *  let one field reach the `ChangeSet` twice with two different `to` values (#232). */
+function mergeBodyAndExtenderEdits(
+  byId: ReadonlyMap<EntryId, Entry>,
+  proposed: StoredEdits,
+  bodyAuthoredEnvelopeKeys: ReadonlyMap<EntryId, ReadonlySet<string>>,
+  extenderEdits: StoredEdits,
+  extenderAuthoredEnvelopeKeys: ReadonlyMap<EntryId, ReadonlySet<string>>,
+): StoredEdits {
+  if (extenderEdits.size === 0) return proposed;
+  const merged = new Map<EntryId, StoredEdit>(proposed);
+  for (const [id, extenderEdit] of extenderEdits) {
+    const bodyEdit = proposed.get(id);
+    let combined = mergeStoredEdits(bodyEdit, extenderEdit);
+    const bodyEnvelope = bodyAuthoredEnvelopeKeys.get(id) ?? NO_ENVELOPE_KEYS;
+    const extenderEnvelope = extenderAuthoredEnvelopeKeys.get(id) ?? NO_ENVELOPE_KEYS;
+    const original =
+      bodyEdit !== undefined && bodyEnvelope.size > 0 && extenderEnvelope.size > 0 ? byId.get(id) : undefined;
+    if (original !== undefined) {
+      const reconciledEnvelope = reconcileSharedEnvelope(
+        original,
+        bodyEdit!,
+        bodyEnvelope,
+        extenderEdit,
+        extenderEnvelope,
+      );
+      combined = { ...combined, ...reconciledEnvelope };
+    }
+    merged.set(id, combined);
+  }
+  return merged;
 }
 
 /**
@@ -122,12 +227,11 @@ export function buildCommitChangeSet(
 ): ChangeSet | undefined {
   const byId = data.entries.committedById();
   const proposed = data.entries.pendingEdits();
+  const bodyAuthoredEnvelopeKeys = data.entries.pendingAuthoredEnvelopeKeys();
   const addedEntities = data.entries.pendingAdded();
   const removedEntities = data.entries.pendingRemoved();
   const added = addedEntities.map((row) => row.entity);
   const removed = removedEntities.map((row) => row.entity);
-
-  const bodyUpdated = diffEdits(byId, proposed, data.fields, data.fieldContext);
 
   // The extender's cascade is reconciled against the state its own edit lands on — committed entries
   // overlaid with this transaction's body edits, plus the entries this transaction itself adds — not
@@ -138,19 +242,36 @@ export function buildCommitChangeSet(
   const effectiveForExtender = buildEffectiveEntries(byId, added, removed, proposed);
   // The hook is judged against `effectiveForExtender` above, so it must be able to read that same
   // state, not just `byId` (D-S5-45) — `entryAfterEdits` is that map's own `.get`, already built for
-  // reconciliation, so this costs nothing extra at commit.
-  const extenderEdits = reconcileExtenderEdits(
-    effectiveForExtender,
-    data.extraEditsFor({
-      entries: byId,
-      proposed,
-      entryAfterEdits: (id) => effectiveForExtender.get(id),
-    }),
+  // reconciliation, so this costs nothing extra at commit. `readExtenderEdits`, not the public
+  // `extraEditsFor`, because the guard and the merge below need the hook's authored envelope keys,
+  // which the public method's return shape has no room for (#232).
+  const extenderReading = data.readExtenderEdits({
+    entries: byId,
+    proposed,
+    entryAfterEdits: (id) => effectiveForExtender.get(id),
+  });
+  const extenderEdits = reconcileExtenderEdits(effectiveForExtender, extenderReading.stored);
+  guardExtensionHookDoesNotOverwriteBody(
+    proposed,
+    bodyAuthoredEnvelopeKeys,
+    extenderEdits,
+    extenderReading.authoredEnvelopeKeys,
   );
-  guardExtensionHookDoesNotOverwriteBody(proposed, extenderEdits);
-  const extenderUpdated = diffEdits(byId, extenderEdits, data.fields, data.fieldContext);
 
-  const mergedBodyAndExtender = mergeStoredEditsByEntry(proposed, extenderEdits);
+  // One merge of the body's and the extender's edits, reconciled once against each entry's
+  // pre-transaction state wherever both authored the envelope, and diffed once below (#232) — two
+  // separate diffs of `proposed` and `extenderEdits` used to let one field reach the `ChangeSet`
+  // twice, with two different `to` values, whenever a one-Segment entry's envelope carried both a
+  // body-authored key and an extender-authored one.
+  const mergedBodyAndExtender = mergeBodyAndExtenderEdits(
+    byId,
+    proposed,
+    bodyAuthoredEnvelopeKeys,
+    extenderEdits,
+    extenderReading.authoredEnvelopeKeys,
+  );
+  const bodyAndExtenderUpdated = diffEdits(byId, mergedBodyAndExtender, data.fields, data.fieldContext);
+
   const hierarchyEdits = promoteNewParents(
     byId,
     { added, removed, edits: mergedBodyAndExtender },
@@ -188,8 +309,7 @@ export function buildCommitChangeSet(
   const pluginRows = data.pluginStores.pendingRows(removed.map((entry) => entry.id));
 
   return foldChangeSet(data.nextChangeSetId(), origin, addedEntitiesForFold, removedEntities, [
-    ...bodyUpdated,
-    ...extenderUpdated,
+    ...bodyAndExtenderUpdated,
     ...hierarchyUpdated,
     ...rollupUpdated,
     ...pluginRows,
