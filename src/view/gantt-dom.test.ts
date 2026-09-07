@@ -87,6 +87,7 @@ function paintOneGantt(
         visible: { x: 0, y: 0, width: 200, height: 200 },
         rowHeight: 32,
         revision: 0,
+        datasetRevision: 0,
         itemProducerRegistry,
         columns: [
           { field: 'name', header: 'Name', align: 'start', format: (entry) => entry.name },

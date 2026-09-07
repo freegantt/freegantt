@@ -55,6 +55,7 @@ function perFrame(): PerFrameLayoutInput {
     preset: { id: 'day' } as unknown as ViewPreset,
     visible: { x: 0, y: 0, width: 100, height: 100 },
     revision: 7,
+    datasetRevision: 0,
     columns: [],
     itemProducerRegistry: createItemProducerRegistry(),
   };
