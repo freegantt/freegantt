@@ -259,21 +259,15 @@ export class GesturePipeline {
             before: 'beforeEntryResize' as const,
             after: 'entryResize' as const,
             afterPayload: { ...grabbed, entries: spans, edge: gesture.edge } satisfies EntryResize,
-            beforePayload: {
-              ...grabbed,
-              entries: spans,
-              edge: gesture.edge,
-              refuse: note.refuse,
-            } satisfies EntryResize & Refusable,
           }
         : {
             before: 'beforeEntryMove' as const,
             after: 'entryMove' as const,
             afterPayload: { ...grabbed, entries: spans } satisfies EntryMove,
-            beforePayload: { ...grabbed, entries: spans, refuse: note.refuse } satisfies EntryMove &
-              Refusable,
           };
-    const before = this.#deps.emit(event.before, event.beforePayload);
+    // One payload shape, spelled once. The `before*` copy adds the note; nothing removes it again.
+    const beforePayload = { ...event.afterPayload, refuse: note.refuse } satisfies Refusable;
+    const before = this.#deps.emit(event.before, beforePayload);
     const refusal: GestureRefusal = {
       code: gesture.kind === 'resize' ? 'entry-resize-cancelled' : 'entry-move-cancelled',
       event: event.before,
