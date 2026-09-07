@@ -11,7 +11,7 @@ import {
   RevealTargetNotFoundError,
   ContainerNotFoundError,
 } from '../model/index.js';
-import type { Entry, Instant, ItemId, SegmentId } from '../model/index.js';
+import type { Entry, EntryId, Instant, ItemId, SegmentId } from '../model/index.js';
 import { DatasetState, EntryStore } from '../data/index.js';
 import { CORE_FIELDS } from '../data/fields/core-fields.js';
 import { createDomBackend } from '../render/dom/index.js';
@@ -1110,6 +1110,62 @@ describe('GanttShell hot path (S3.2, D-S3-6/D-S3-9, [S3-A3])', () => {
     // A row id no frame carries answers nothing, rather than throwing.
     expect(ctx!.selection.selectableSegmentsOf({ kind: 'row', rowId: rowId('absent') })).toEqual([]);
 
+    shell.destroy();
+  });
+});
+
+// T1-6 (#246 S2-3): `#committedEntriesById` (I5) must not rebuild its map on every rAF frame of a
+// drag — only when `datasetRevision` moves. `extraEditsFor` is the one caller in this shell that asks
+// for it, so a drag preview with that hook wired is the only way to reach the cache from outside.
+describe("GanttShell's committed-entries cache (I5, #246 S2-3)", () => {
+  it('keeps one Map identity across preview frames in the same revision, and rebuilds after a commit', async () => {
+    const dataset = new DatasetState({
+      entries: [
+        { id: 't1', name: 't1', start: '2026-09-01', end: '2026-09-03' },
+        { id: 't2', name: 't2', start: '2026-09-01', end: '2026-09-03' },
+      ],
+      timeZone: 'UTC',
+    });
+    const container = document.createElement('div');
+    let ctx: EntryGestureContext | undefined;
+    const seenMaps: ReadonlyMap<EntryId, Entry>[] = [];
+    const shell = new GanttShell({
+      container,
+      dataset,
+      // Any hook at all is enough: `#extraFor` asks for `committedEntriesById()` whenever one is
+      // wired, whatever it returns (view/gesture-pipeline.ts).
+      extraEditsFor: (request) => {
+        seenMaps.push(request.entries);
+        return new Map();
+      },
+      wiring: {
+        entryGestures: (_pane, _rowLayer, _host, gestureCtx) => {
+          ctx = gestureCtx;
+          return { detach() {} };
+        },
+      },
+    });
+
+    const session = ctx!.session(entryId('t1'), { kind: 'move' })!;
+
+    session.preview(10);
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    session.preview(20);
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+
+    expect(seenMaps).toHaveLength(2);
+    expect(seenMaps[1]).toBe(seenMaps[0]); // same revision, same Map identity — no rebuild (I5)
+
+    // A commit elsewhere bumps datasetRevision, so the next preview frame reads a fresh Map.
+    dataset.entries.update('t2', { name: 't2 renamed' });
+
+    session.preview(30);
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+
+    expect(seenMaps).toHaveLength(3);
+    expect(seenMaps[2]).not.toBe(seenMaps[1]);
+
+    session.cancel();
     shell.destroy();
   });
 });
