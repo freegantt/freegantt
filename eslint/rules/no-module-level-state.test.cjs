@@ -16,6 +16,9 @@ ruleTester.run('no-module-level-state', rule, {
     'export function make() { return new Map(); }',
     'class Store { #cache = new Map(); }',
     "const TUPLE = ['a', 'b'] as const;",
+    // ADR 0007: an instance-keyed WeakMap with a stated reason is the sanctioned friend-state shape.
+    "// I2-ok: keyed by instance; one instance never sees another's entry.\nconst internals = new WeakMap();",
+    "/** I2-ok: keyed by instance; one instance never sees another's entry. */\nexport const internals = new WeakMap();",
   ],
   invalid: [
     { code: 'let cache = new Map();', errors: [{ messageId: 'letOrVar' }] },
@@ -24,6 +27,14 @@ ruleTester.run('no-module-level-state', rule, {
     {
       code: 'export const registry = Object.freeze(new Map());\nfunction add() { registry.set("a", 1); }',
       errors: [{ messageId: 'mutatedExport' }],
+    },
+    // R1 (#250): a module-level WeakMap with no stated reason must still be rejected — the shape
+    // match alone is not a key check, and was never meant to exempt every WeakMap on sight.
+    { code: 'const internals = new WeakMap();', errors: [{ messageId: 'weakMapNeedsReason' }] },
+    { code: 'export const internals = new WeakMap();', errors: [{ messageId: 'weakMapNeedsReason' }] },
+    {
+      code: '// keyed by instance, no reason tag\nconst internals = new WeakMap();',
+      errors: [{ messageId: 'weakMapNeedsReason' }],
     },
   ],
 });

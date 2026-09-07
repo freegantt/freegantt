@@ -53,7 +53,8 @@ export function buildElement(description: ElementDescription): HTMLElement {
 const KEY_ATTR = 'data-fg-key';
 
 /** What was applied last, per node — the diff base for the next call. A `WeakMap` needs no explicit
- *  cleanup: an entry disappears with the node once nothing else references either. */
+ *  cleanup: an entry disappears with the node once nothing else references either.
+ *  I2-ok: keyed by DOM node identity; an entry cannot outlive its own node or reach another Gantt. */
 const lastApplied = new WeakMap<Element, ElementDescription>();
 
 function applyClassDiff(
