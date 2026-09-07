@@ -775,7 +775,7 @@ export type ExtenderWrapper = (next: EditExtender) => EditExtender;
 
 // @public
 export interface Field<TValue = unknown> {
-    column?: Omit<GridColumnFields, 'field' | 'cellRenderer' | 'hidden'> & GridColumnSizing;
+    column?: Omit<GridColumnBase, 'field' | 'cellRenderer' | 'hidden'> & GridColumnSizing;
     // (undocumented)
     compare?(a: TValue | undefined, b: TValue | undefined): number;
     // (undocumented)
@@ -1170,10 +1170,10 @@ export type GanttScaleOptions = {
 };
 
 // @public
-export type GridColumn = GridColumnFields & GridColumnSizing;
+export type GridColumn = GridColumnBase & GridColumnSizing;
 
 // @public
-export interface GridColumnFields {
+export interface GridColumnBase {
     // (undocumented)
     align?: ColumnAlign;
     cellRenderer?: ColumnCellRenderer;
@@ -1877,7 +1877,7 @@ export type SerializedField = {
         key: string;
     };
     rollUp?: AggregatorName;
-    column?: Omit<GridColumnFields, 'field' | 'hidden'> & GridColumnSizing;
+    column?: Omit<GridColumnBase, 'field' | 'hidden'> & GridColumnSizing;
 };
 
 // @public (undocumented)

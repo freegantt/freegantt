@@ -63,7 +63,7 @@ export type {
   Aggregator,
   GridColumn,
   GridColumnInput,
-  GridColumnFields,
+  GridColumnBase,
   GridColumnSizing,
   ColumnCellRenderer,
   ColumnAlign,

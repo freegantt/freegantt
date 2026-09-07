@@ -69,7 +69,7 @@ export type {
   FieldTypeName,
   GridColumn,
   GridColumnInput,
-  GridColumnFields,
+  GridColumnBase,
   GridColumnSizing,
   ColumnAlign,
   ColumnCellRenderer,
