@@ -11,9 +11,16 @@ import type {
   Theme,
   ViewportGestures,
 } from '../view/index.js';
-import { ScrollModel, TimeScaleModel, pickDefined } from '../layout/index.js';
-import type { PresetRef, SnapSetting, TimeScaleFit, ViewPreset, RowSource } from '../layout/index.js';
-import type { DateLineSpec } from '../layout/index.js';
+import { ScrollModel, TimeScaleModel, pickDefined, resolveRowSource } from '../layout/index.js';
+import type {
+  PresetRef,
+  SnapSetting,
+  TimeScaleFit,
+  ViewPreset,
+  RowSource,
+  ResolvedRowSource,
+} from '../layout/index.js';
+import type { DateLine } from '../layout/index.js';
 import type {
   BarRenderer,
   CellRenderer,
@@ -204,11 +211,17 @@ export type KeyBinding<
   TFields extends Record<string, unknown> = Record<string, unknown>,
 > = KeyBindingOf<Gantt<TMeta, TFields>, Dataset<TMeta, TFields>>;
 export type { ActedOn, CommandTarget };
+// `dateLines`'s resolved read type (S4-1) — passed through so a caller who names `DateLine`
+// explicitly imports it beside `DateLineInput`, its loose counterpart above.
+export type { DateLine };
 
 export class Gantt<TMeta = unknown, TFields extends Record<string, unknown> = Record<string, unknown>> {
   #shell: GanttShell;
   #dataset: Dataset<TMeta, TFields>;
   #destroyed = false;
+  /** `rowSource`'s resolve cache (#248 S4-2), keyed on the authored object the setter last stored —
+   *  not on the resolved value, which is rebuilt fresh and would never compare `===` to itself. */
+  #rowSourceCache?: { authored: RowSource; resolved: ResolvedRowSource };
 
   constructor(options: GanttOptions<TMeta, TFields>) {
     this.#dataset = options.dataset;
@@ -311,10 +324,10 @@ export class Gantt<TMeta = unknown, TFields extends Record<string, unknown> = Re
   }
 
   /** `#toRange`'s counterpart for `dateLines` (S1.13, D-S1.13-2): one `toInstant` call per entry. */
-  #toDateLines(lines: readonly DateLineInput[]): readonly DateLineSpec[] {
+  #toDateLines(lines: readonly DateLineInput[]): readonly DateLine[] {
     const zone = this.#dataset.timeZone;
     return lines.map((line) => {
-      const spec: DateLineSpec = { placeAt: toInstant(zone, line.placeAt) };
+      const spec: DateLine = { placeAt: toInstant(zone, line.placeAt) };
       if (line.label !== undefined) spec.label = line.label;
       if (line.className !== undefined) spec.className = line.className;
       return spec;
@@ -438,11 +451,24 @@ export class Gantt<TMeta = unknown, TFields extends Record<string, unknown> = Re
   }
 
   /** Live (S4.6, D-S4-21). Assigning re-resolves rows with no remount. The config object is a value
-   *  (#187): assign a copy after a change, not the object already held. */
-  get rowSource(): RowSource {
-    return this.#shell.rowSource;
+   *  (#187): assign a copy after a change, not the object already held.
+   *
+   *  Reads back resolved (#248 S4-2): `heightMode`, `filterPolicy`, and `tree` (Entries sources)
+   *  come back filled, never omitted — a reader never has to know `layout/`'s own defaults. The
+   *  resolve runs here, cached against the setter's own authored object, so two reads with no write
+   *  between them stay `===` and the setter keeps assigning the plain `RowSource` the shell already
+   *  compares by identity (#187) — resolving inside that comparison would break it instead. */
+  get rowSource(): ResolvedRowSource {
+    const authored = this.#shell.rowSource;
+    if (this.#rowSourceCache === undefined || this.#rowSourceCache.authored !== authored) {
+      this.#rowSourceCache = { authored, resolved: resolveRowSource(authored) };
+    }
+    return this.#rowSourceCache.resolved;
   }
 
+  /** Loose on the way in, same as every other setter (#248 S4-2): stores the `RowSource` exactly as
+   *  authored, so the shell's own `Object.is` re-assignment check keeps comparing what the caller
+   *  actually passed. */
   set rowSource(next: RowSource) {
     this.#shell.rowSource = next;
   }
@@ -528,9 +554,9 @@ export class Gantt<TMeta = unknown, TFields extends Record<string, unknown> = Re
     this.#shell.locale = l;
   }
 
-  /** Getter returns what was resolved (S1.13, D-S1.13-4) — legal against `boolean | InstantInput`
-   *  since `Instant` is one of `InstantInput`'s member types, `range`'s own precedent. */
-  get todayLine(): boolean | InstantInput {
+  /** Getter returns what was resolved (S1.13, D-S1.13-4, S4-1) — a `boolean` passes straight
+   *  through; any other setting reads back the `Instant` it was pinned to, never the loose input. */
+  get todayLine(): boolean | Instant {
     return this.#shell.todayLine;
   }
 
@@ -540,8 +566,10 @@ export class Gantt<TMeta = unknown, TFields extends Record<string, unknown> = Re
     this.#shell.todayLine = this.#toTodayLine(on);
   }
 
-  /** Getter returns what was resolved, same precedent as `todayLine`/`range` above. */
-  get dateLines(): readonly DateLineInput[] {
+  /** Getter returns what was resolved (S4-1), same precedent as `todayLine`/`range` above: every
+   *  `placeAt` reads back an `Instant`, so `diffMs(gantt.dateLines[0].placeAt, now())` type-checks
+   *  with no re-narrowing. */
+  get dateLines(): readonly DateLine[] {
     return this.#shell.dateLines;
   }
 

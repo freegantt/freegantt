@@ -56,6 +56,47 @@ export type RowSource = EntriesRowSource | GroupRowSource | CustomRowSource;
 
 export const DEFAULT_ROW_SOURCE: EntriesRowSource = Object.freeze({ source: 'entries', tree: false });
 
+/** `filterPolicyOf`'s default (#248 S4-2) — named here, beside the type it defaults, so
+ *  `resolveRowSource` and `filterPolicyOf` share one literal instead of two. */
+export const DEFAULT_FILTER_POLICY: FilterPolicy = 'keepAncestors';
+
+/** Each resolved source extends the source a consumer authored, and narrows the keys it fills from
+ *  optional to required (#248 S4-2). A consumer who omits `heightMode`/`filterPolicy`/`tree` still
+ *  reads a value back off `gantt.rowSource`. */
+export interface ResolvedEntriesRowSource extends EntriesRowSource {
+  heightMode: RowHeightMode;
+  filterPolicy: FilterPolicy;
+  tree: boolean;
+}
+
+export interface ResolvedGroupRowSource extends GroupRowSource {
+  heightMode: RowHeightMode;
+  filterPolicy: FilterPolicy;
+}
+
+/** `'custom'` takes no `filter`/`sort`/`filterPolicy`/`tree` (D-S4-21) — only `heightMode` to fill. */
+export interface ResolvedCustomRowSource extends CustomRowSource {
+  heightMode: RowHeightMode;
+}
+
+/** What `Gantt.rowSource` reads back (#248 S4-2): every key a `RowSource` may omit, filled with the
+ *  default `layout/` already applies at consumption (`heightModeOf`, `filterPolicyOf`, the entries
+ *  source's own `tree` check) — so a consumer never has to know those defaults to read them. */
+export type ResolvedRowSource = ResolvedEntriesRowSource | ResolvedGroupRowSource | ResolvedCustomRowSource;
+
+/** Fills every key `layout/` defaults at consumption, once, so a caller reads the same answer
+ *  `layout/` would compute (#248 S4-2). `tree` mirrors `entries-source.ts`'s own check: anything but the
+ *  literal `true` resolves to `false`. */
+export function resolveRowSource(source: RowSource): ResolvedRowSource {
+  const heightMode = heightModeOf(source);
+  if (source.source === 'custom') return { ...source, heightMode };
+  const filterPolicy = source.filterPolicy ?? DEFAULT_FILTER_POLICY;
+  if (source.source === 'entries') {
+    return { ...source, heightMode, filterPolicy, tree: source.tree === true };
+  }
+  return { ...source, heightMode, filterPolicy };
+}
+
 /** Derived row classification — not `Entry.kind` (D-S4-23). */
 export type PlannedRowKind = 'entry' | 'header';
 

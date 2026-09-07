@@ -175,8 +175,10 @@ reparentBtn.addEventListener('click', () => {
   });
 });
 
-let grouped = false;
-let pack = false;
+// #248 S4-3: grouped and pack used to be local flags mirroring gantt.rowSource. Now that the
+// getter reads back resolved (S4-2), the page reads both off the Gantt instead of holding a
+// second copy. filterTeam and sortByName stay local — they are closures the Gantt cannot read
+// back, not state the library already holds.
 let filterTeam: 'core' | 'edge' | 'launch' | null = null;
 const NEXT_FILTER_TEAM: Record<'core' | 'edge' | 'launch' | 'off', 'core' | 'edge' | 'launch' | null> = {
   off: 'core',
@@ -186,25 +188,31 @@ const NEXT_FILTER_TEAM: Record<'core' | 'edge' | 'launch' | 'off', 'core' | 'edg
 };
 let sortByName = false;
 
-function applyRowSource(): void {
-  const heightMode: 'fixed' | 'pack' = pack ? 'pack' : 'fixed';
+function applyRowSource(next: { grouped: boolean; pack: boolean }): void {
+  const heightMode: 'fixed' | 'pack' = next.pack ? 'pack' : 'fixed';
   const shared = {
     heightMode,
-    ...(filterTeam !== null && !grouped
+    ...(filterTeam !== null && !next.grouped
       ? { filter: (entry: Entry, fields?: FieldContext) => fields?.read(entry, 'team') === filterTeam }
       : {}),
-    ...(sortByName && !grouped ? { sort: { field: 'name' as const } } : {}),
+    ...(sortByName && !next.grouped ? { sort: { field: 'name' as const } } : {}),
   };
-  const next: RowSource = grouped
+  const source: RowSource = next.grouped
     ? {
         source: 'group',
         groupBy: (entry: Entry, fields?: FieldContext) => String(fields?.read(entry, 'team') ?? 'unassigned'),
         ...shared,
       }
     : { source: 'entries', tree: true, ...shared };
-  gantt.rowSource = next;
+  gantt.rowSource = source;
+  refreshRowSourceUi();
+}
+
+function refreshRowSourceUi(): void {
+  const { source, heightMode } = gantt.rowSource;
+  const grouped = source === 'group';
   rowsSourceBtn.textContent = grouped ? 'Show tree' : 'Group by team';
-  packRowsBtn.textContent = pack ? 'Stack bars (fixed rows)' : 'Pack overlapping bars';
+  packRowsBtn.textContent = heightMode === 'pack' ? 'Stack bars (fixed rows)' : 'Pack overlapping bars';
   filterTeamBtn.disabled = grouped;
   sortNameBtn.disabled = grouped;
   filterTeamBtn.textContent = filterTeam === null ? 'Filter team: off' : `Filter team: ${filterTeam}`;
@@ -212,28 +220,30 @@ function applyRowSource(): void {
 }
 
 rowsSourceBtn.addEventListener('click', () => {
-  grouped = !grouped;
-  applyRowSource();
+  const { source, heightMode } = gantt.rowSource;
+  applyRowSource({ grouped: source !== 'group', pack: heightMode === 'pack' });
 });
 
 packRowsBtn.addEventListener('click', () => {
-  pack = !pack;
-  applyRowSource();
+  const { source, heightMode } = gantt.rowSource;
+  applyRowSource({ grouped: source === 'group', pack: heightMode !== 'pack' });
 });
 
 filterTeamBtn.addEventListener('click', () => {
-  if (grouped) return;
+  const { source, heightMode } = gantt.rowSource;
+  if (source === 'group') return;
   filterTeam = NEXT_FILTER_TEAM[filterTeam ?? 'off'];
-  applyRowSource();
+  applyRowSource({ grouped: false, pack: heightMode === 'pack' });
 });
 
 sortNameBtn.addEventListener('click', () => {
-  if (grouped) return;
+  const { source, heightMode } = gantt.rowSource;
+  if (source === 'group') return;
   sortByName = !sortByName;
-  applyRowSource();
+  applyRowSource({ grouped: false, pack: heightMode === 'pack' });
 });
 
-applyRowSource();
+refreshRowSourceUi();
 
 // ---- Mutation extras (S2): add entry, set cost, lock/veto, export/import (data.ts's own demo) ----
 

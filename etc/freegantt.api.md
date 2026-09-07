@@ -411,6 +411,16 @@ export type DateInputFactory = (ctx: {
 }) => DateInput;
 
 // @public
+export interface DateLine {
+    // (undocumented)
+    className?: string;
+    // (undocumented)
+    label?: string;
+    // (undocumented)
+    placeAt: Instant;
+}
+
+// @public
 export interface DateLineInput {
     // (undocumented)
     className?: string;
@@ -977,7 +987,7 @@ export class Gantt<TMeta = unknown, TFields extends Record<string, unknown> = Re
     set collapsed(ids: readonly (RowId | string)[]);
     get commands(): CommandRegistry<TMeta, TFields>;
     get dataset(): Dataset<TMeta, TFields>;
-    get dateLines(): readonly DateLineInput[];
+    get dateLines(): readonly DateLine[];
     set dateLines(lines: readonly DateLineInput[]);
     // (undocumented)
     destroy(): void;
@@ -1025,7 +1035,7 @@ export class Gantt<TMeta = unknown, TFields extends Record<string, unknown> = Re
         end: InstantInput;
     });
     reveal(id: EntryId | SegmentId): void;
-    get rowSource(): RowSource;
+    get rowSource(): ResolvedRowSource;
     set rowSource(next: RowSource);
     get selectedEntries(): readonly Entry[];
     get selectedEntryIds(): readonly EntryId[];
@@ -1038,7 +1048,7 @@ export class Gantt<TMeta = unknown, TFields extends Record<string, unknown> = Re
     // (undocumented)
     get theme(): Theme;
     set theme(value: Theme);
-    get todayLine(): boolean | InstantInput;
+    get todayLine(): boolean | Instant;
     set todayLine(on: boolean | InstantInput);
     // (undocumented)
     get todayLineMarginTicks(): number;
@@ -1728,6 +1738,33 @@ export interface ResolvedColumn extends FrameColumn {
     resizable?: boolean;
     tooltip?: boolean;
 }
+
+// @public
+export interface ResolvedCustomRowSource extends CustomRowSource {
+    // (undocumented)
+    heightMode: RowHeightMode;
+}
+
+// @public
+export interface ResolvedEntriesRowSource extends EntriesRowSource {
+    // (undocumented)
+    filterPolicy: FilterPolicy;
+    // (undocumented)
+    heightMode: RowHeightMode;
+    // (undocumented)
+    tree: boolean;
+}
+
+// @public (undocumented)
+export interface ResolvedGroupRowSource extends GroupRowSource {
+    // (undocumented)
+    filterPolicy: FilterPolicy;
+    // (undocumented)
+    heightMode: RowHeightMode;
+}
+
+// @public
+export type ResolvedRowSource = ResolvedEntriesRowSource | ResolvedGroupRowSource | ResolvedCustomRowSource;
 
 // @public
 export class RevealTargetNotFoundError extends FreeGanttError {

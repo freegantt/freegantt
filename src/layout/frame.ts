@@ -16,7 +16,7 @@ import { segmentIndexOfItem } from '../model/index.js';
 import type { TimeScale, ViewPreset } from '../time/index.js';
 import { dropRepeatedGranularity, formatDate, formatEndInclusive, resolveDateFormat } from '../time/index.js';
 import { resolveDateLines } from './date-line.js';
-import type { DateLine, DateLineSpec } from './date-line.js';
+import type { DateLine, DateLineDecoration } from './date-line.js';
 import { FrameMemory, NO_SEGMENT_IDS } from './frame-memory.js';
 import type { RowMemory } from './frame-memory.js';
 import type { FrameColumn, ResolvedColumn, FieldCompare } from './column.js';
@@ -153,7 +153,7 @@ export interface FrameLink {
   flags: LinkFlags;
 }
 
-export type FrameDecoration = DateLine | RangeBand | RowStripe;
+export type FrameDecoration = DateLineDecoration | RangeBand | RowStripe;
 
 /** One header tick, positioned and labelled — the render seam's only route for header state (#19). */
 export interface FrameHeaderTick {
@@ -231,7 +231,7 @@ export interface LayoutInput {
    *  no clock read (S1.12/S1.13, D-S1.12-14, D-S1.13-3). Default `true`. */
   todayLine?: boolean | Instant;
   /** Authored Date lines, resolved on the same path as the today wrapper (S1.13). */
-  dateLines?: readonly DateLineSpec[];
+  dateLines?: readonly DateLine[];
   /** Tick box floor in px (CONTEXT.md). Default `DEFAULT_TICK_BOX_FLOOR_PX`. View reads
    *  `--fg-tick-box-floor` and passes it; layout never restates the stylesheet. */
   tickBoxFloorPx?: number;
