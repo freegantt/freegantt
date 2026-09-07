@@ -38,6 +38,8 @@ import { ContainerResize, DomMountLayer } from './mount-layer.js';
 import { ContainerDom } from './gantt-dom.js';
 import { attachSplitter } from './splitter.js';
 import type { SplitterAttachment } from './splitter.js';
+import { GridPaneWidth } from './grid-pane-width.js';
+import type { GridPaneWidthPorts, GridWidth } from './grid-pane-width.js';
 import { EventBus } from './event-bus.js';
 import { createErrorRaiser } from '../data/error-reporting.js';
 import type { AsyncCancelableEvent, GanttEventHandler, GanttEventMap, GanttEvents } from './event-bus.js';
@@ -151,8 +153,10 @@ export type Theme = 'auto' | 'light' | 'dark';
  *  The pane sits exactly on its columns' own right edge (`totalColumnWidth`, `layout/column.ts`),
  *  and re-measures every time the columns change. A consumer never restates a width the library
  *  already computes. It is not a value a consumer reads back: `gridWidth`'s getter answers in px,
- *  because "how wide is the pane" is a question about pixels. */
-export type GridWidth = number | 'fitColumns';
+ *  because "how wide is the pane" is a question about pixels. Defined in `grid-pane-width.ts`,
+ *  which owns the rules this type describes; re-exported here so `GanttShellOptions.gridWidth`
+ *  names the same type `view/index.ts` already re-exports from this file. */
+export type { GridWidth };
 const DEFAULT_THEME: Theme = 'auto';
 const DEFAULT_A11Y_LABEL = 'Gantt';
 
@@ -344,10 +348,10 @@ function resolveContainer(container: HTMLElement | string): HTMLElement {
 export class GanttShell {
   #container: HTMLElement;
   #paneLayout: PaneLayout;
-  /** #157: `gridWidth = 'fitColumns'` is a standing instruction, not a one-off width, so the shell
-   *  remembers it and re-measures on every rebind. `PaneLayout` holds the px it resolves to — it
-   *  knows nothing about columns (its file header: structure and one number only). */
-  #fitsColumns: boolean;
+  /** The #127 floor, the #139 ceiling, and the #157 `'fitColumns'` standing instruction —
+   *  `grid-pane-width.ts`'s own file header. `PaneLayout` holds the px it resolves to; this module
+   *  knows nothing about the DOM. */
+  #gridPaneWidth!: GridPaneWidth;
   #panes: Panes;
   #backend: RenderBackend<HTMLElement>;
   #revision = 0;
@@ -467,13 +471,13 @@ export class GanttShell {
     // #157: `'fitColumns'` names no px of its own. So the pane opens at its authored width
     // (`--fg-grid-pane-width`). `#bindColumns` below then sizes it to the columns, the moment there
     // are resolved columns to measure.
-    this.#fitsColumns = options.gridWidth === 'fitColumns';
     this.#paneLayout = new PaneLayout({
       container: this.#container,
       ...(typeof options.gridWidth === 'number' ? { gridWidth: options.gridWidth } : {}),
       ...(options.minGridWidth !== undefined ? { minGridWidth: options.minGridWidth } : {}),
     });
     this.#panes = this.#paneLayout.panes;
+    this.#gridPaneWidth = new GridPaneWidth(this.#gridPaneWidthPorts(), options.gridWidth === 'fitColumns');
     // S5.3, D-S5-8: constructed right after the panes it measures, so it is ready by the time the
     // plugin runtime (just below) builds its first `PluginContext`.
     this.#containerResize = new ContainerResize(this.#container);
@@ -662,21 +666,14 @@ export class GanttShell {
     this.#paneSizeAttachment = attachPaneSize(this.#panes.timeline, (size) =>
       this.#applyPaneMeasurement(size),
     );
-    // #127/#139: the splitter proposes a raw px delta, and both bounds apply here, on the way in.
-    // So a drag can reach neither below `minGridWidth` nor past the last column's edge. A direct
-    // `gridWidth` write still says what it means.
+    // #127/#139: the splitter proposes a raw px delta, and `GridPaneWidth` applies both bounds on
+    // the way in. So a drag can reach neither below `minGridWidth` nor past the last column's edge.
     this.#splitterAttachment = attachSplitter(this.#panes.splitter, {
-      readGridWidth: () => this.#paneLayout.gridWidth,
+      readGridWidth: () => this.#gridPaneWidth.width,
       previewGridWidth: (px) => {
-        this.#paneLayout.gridWidth = this.#withinSplitterBounds(px);
+        this.#paneLayout.gridWidth = this.#gridPaneWidth.previewDrag(px);
       },
-      // #157: a completed drag is the consumer changing their mind, so the pane keeps the width it
-      // was dragged to and stops following the columns. A vetoed drag changes neither.
-      commitGridWidth: (px) => {
-        if (this.#commitGridWidth(this.#withinSplitterBounds(px))) {
-          this.#fitsColumns = false;
-        }
-      },
+      commitGridWidth: (px) => this.#gridPaneWidth.commitDrag(px),
     });
     this.#interactions = options.interactions ?? {};
     this.#snap = options.snap;
@@ -1423,38 +1420,27 @@ export class GanttShell {
   }
 
   /** Always px: the consumer asked how wide the pane is, so the getter answers in the unit the
-   *  question is about. `'fitColumns'` reads back as the width it resolved to (#157). */
+   *  question is about. `'fitColumns'` reads back as the width it resolved to (#157). Rules live in
+   *  `grid-pane-width.ts`; this shell only wires them to the container and its DOM. */
   get gridWidth(): number {
-    return this.#paneLayout.gridWidth;
+    return this.#gridPaneWidth.width;
   }
 
   /** A plain reconfiguration (`plans/02` "Reconfiguration is just assignment") still runs the same
-   *  cancelable commit sequence a splitter drag runs. One write path, one place the veto lives.
-   *  #139 caps a px width at the columns' own edge. A width past the last column would only be dead
-   *  space. So the change that fires carries the width the pane can actually use. `'fitColumns'`
-   *  (#157) puts the pane exactly on that edge and keeps it there through every later rebind.
-   *  Nothing floors either form — an explicit `gridWidth = 0` still collapses the pane on purpose
-   *  (#127). */
+   *  cancelable commit sequence a splitter drag runs — `GridPaneWidth.resize`'s own rule. */
   set gridWidth(width: GridWidth) {
-    this.#fitsColumns = width === 'fitColumns';
-    this.#commitGridWidth(
-      width === 'fitColumns'
-        ? (this.#columnsWidth() ?? this.#paneLayout.gridWidth)
-        : this.#noWiderThanColumns(width),
-    );
+    this.#gridPaneWidth.resize(width);
   }
 
   get minGridWidth(): number {
-    return this.#paneLayout.minGridWidth;
+    return this.#gridPaneWidth.floor;
   }
 
-  /** Live (#127). Raising the floor above the current `gridWidth` lifts it through
-   *  `#commitGridWidth`, the same cancelable commit sequence a splitter drag runs. So a veto leaves
-   *  `gridWidth` exactly where it was. */
+  /** Live (#127). `GridPaneWidth.setFloor`'s own rule: raising the floor above the current
+   *  `gridWidth` lifts it through the same cancelable commit sequence a splitter drag runs. So a
+   *  veto leaves `gridWidth` exactly where it was. */
   set minGridWidth(px: number) {
-    this.#paneLayout.minGridWidth = px;
-    const lifted = this.#aboveMinGridWidth(this.#paneLayout.gridWidth);
-    if (lifted !== this.#paneLayout.gridWidth) this.#commitGridWidth(lifted);
+    this.#gridPaneWidth.setFloor(px);
   }
 
   get preset(): ViewPreset {
@@ -1647,7 +1633,7 @@ export class GanttShell {
       ),
     });
     // #139/#157: the columns just changed, so the width they dictate changed with them.
-    this.#sizeGridPaneToColumns();
+    this.#gridPaneWidth.resizeToColumns();
   }
 
   #columnBind(): ResolveColumnsBind {
@@ -1662,71 +1648,33 @@ export class GanttShell {
     return bind;
   }
 
-  /** The one place `minGridWidth` is applied (#127). The floor bounds what a splitter drag can
-   *  reach, and lifts the width when the floor itself rises. Nothing else consults it. So an
-   *  explicit `gridWidth = 0` collapses the pane, and a vetoed change rolls back to its own
-   *  width. */
-  #aboveMinGridWidth(px: number): number {
-    return Math.max(this.#paneLayout.minGridWidth, px);
-  }
-
-  /** #139: the grid pane never sits wider than its own columns, whoever asked — a constructor
-   *  option, a live `gantt.gridWidth = px`, or a splitter drag. There is nothing to show past the
-   *  last column's right edge, so a wider pane is dead space, not a wider view. Narrower is always
-   *  legal: the columns then overflow and the pane scrolls to reach them (#126). A flex column
-   *  names no edge. It fills whatever room it is given, which is the point of asking to flex. So a
-   *  column set holding one has no ceiling at all. */
-  #noWiderThanColumns(px: number): number {
-    const lastColumnEdge = this.#columnsWidth();
-    return lastColumnEdge === undefined ? px : Math.min(lastColumnEdge, px);
-  }
-
-  /** Where the last column's right edge falls, in px. It is the width `'fitColumns'` asks for, and
-   *  the ceiling `#noWiderThanColumns` applies. Those are the same fact read for two purposes.
-   *  `undefined` when a `flex` column is in the set. That column has no width until the pane lays it
-   *  out, so the columns name no edge at all (#139). */
-  #columnsWidth(): number | undefined {
-    return totalColumnWidth(this.#columnChrome.resolvedColumns);
-  }
-
-  /** What a splitter drag is allowed to reach: the #127 floor under the #139 ceiling. The floor
-   *  wins when the two disagree — a pane narrower than `minGridWidth` is a collapsed pane, which is
-   *  the accident #127 closed. */
-  #withinSplitterBounds(px: number): number {
-    return this.#aboveMinGridWidth(this.#noWiderThanColumns(px));
-  }
-
-  /** The columns just moved — one is resized, one is hidden, a plugin registered one. So the pane
-   *  answers to them again, through the same cancelable commit sequence a splitter drag runs. A
-   *  pane already the right width is left alone, which is most rebinds.
-   *
-   *  `'fitColumns'` (#157) sits the pane *on* the columns' edge, in both directions. It widens with
-   *  a widened set as readily as it comes in with a narrowed one. Any other width only gets #139's
-   *  ceiling — never wider than the columns, narrower whenever the consumer said so. A set holding
-   *  a `flex` column names no edge, so neither form has anything to follow and the pane keeps the
-   *  width it has. */
-  #sizeGridPaneToColumns(): void {
-    const current = this.#paneLayout.gridWidth;
-    const target = this.#fitsColumns ? (this.#columnsWidth() ?? current) : this.#noWiderThanColumns(current);
-    if (target !== current) this.#commitGridWidth(target);
-  }
-
-  /** Returns whether the change survived `beforeGridWidthChange` — a vetoed width leaves both the
-   *  pane and the caller's own bookkeeping (#157's `#fitsColumns`) untouched. */
-  #commitGridWidth(px: number): boolean {
-    const from = this.#paneLayout.gridWidth;
-    const to = px;
-    return this.#proposeChange(
-      'beforeGridWidthChange',
-      'gridWidthChange',
-      { from, to },
-      () => {
-        this.#paneLayout.gridWidth = to;
+  /** What `GridPaneWidth` calls back into: the pane's own stored width and floor, plus the
+   *  resolved columns' own edge. `grid-pane-width.ts`'s own file header explains the rules these
+   *  five calls build. */
+  #gridPaneWidthPorts(): GridPaneWidthPorts {
+    return {
+      readWidth: () => this.#paneLayout.gridWidth,
+      readMinWidth: () => this.#paneLayout.minGridWidth,
+      writeMinWidth: (px) => {
+        this.#paneLayout.minGridWidth = px;
       },
-      () => {
-        this.#paneLayout.gridWidth = from;
+      columnsEdge: () => totalColumnWidth(this.#columnChrome.resolvedColumns),
+      commitWidth: (px) => {
+        const from = this.#paneLayout.gridWidth;
+        const to = px;
+        return this.#proposeChange(
+          'beforeGridWidthChange',
+          'gridWidthChange',
+          { from, to },
+          () => {
+            this.#paneLayout.gridWidth = to;
+          },
+          () => {
+            this.#paneLayout.gridWidth = from;
+          },
+        );
       },
-    );
+    };
   }
 
   /** One measurement, pushed to everything it feeds (#8, #49). `--fg-row-height`,
