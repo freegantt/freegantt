@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createPopup } from './popup.js';
 import { Keymap } from './keymap.js';
+import type { RegisterKeyHandler } from './keymap.js';
 import { CommandRegistry } from './commands.js';
 import type { DismissTrigger, PopupSurface } from './popup.js';
 
@@ -13,6 +14,12 @@ function rect(partial: Partial<DOMRect>): DOMRect {
 function makeKeymap(): Keymap<unknown> {
   const registry = new CommandRegistry<unknown>(() => ({}) as never);
   return new Keymap<unknown>(registry, () => ({}) as never);
+}
+
+/** `Keymap.registerHandler` is a method, not an arrow property (unlike the production wiring at
+ *  `view/plugin-ports.ts:450`), so a test that hands a `Keymap` to `createPopup` must bind it first. */
+function boundRegisterHandler(keymap: Keymap<unknown>): RegisterKeyHandler {
+  return keymap.registerHandler.bind(keymap);
 }
 
 /** A minimal `ctx.view` fake — the same seam a third-party plugin gets (D-S5-8) — so `Popup` can be
@@ -120,7 +127,7 @@ describe('Popup', () => {
       timeline: rect({ left: 160, top: 0, right: 1000, bottom: 500 }),
     });
     withFixedPopupSize(view, { width: 100, height: 40 });
-    const popup = createPopup(view, makeKeymap());
+    const popup = createPopup(view, boundRegisterHandler(makeKeymap()));
 
     expect(popup.isOpen).toBe(false);
     popup.open({ anchor: rect({ left: 300, top: 100, right: 340, bottom: 120 }), content: { text: 'hi' } });
@@ -144,7 +151,7 @@ describe('Popup', () => {
       timeline: rect({ left: 160, top: 0, right: 900, bottom: 400 }),
     });
     withFixedPopupSize(view, { width: 100, height: 40 });
-    const popup = createPopup(view, makeKeymap());
+    const popup = createPopup(view, boundRegisterHandler(makeKeymap()));
 
     // Anchored near the timeline pane's right and bottom edges, requesting 'end' (opens to the
     // right) — a 100px-wide popup does not fit before the pane's own right bound at 900, so it flips
@@ -185,7 +192,7 @@ describe('Popup', () => {
       keymap.resolve(event);
     };
     view.container.addEventListener('keydown', keymapListener);
-    const popup = createPopup(view, keymap);
+    const popup = createPopup(view, boundRegisterHandler(keymap));
     popup.open({ anchor: rect({ left: 300, top: 100, right: 340, bottom: 120 }), content: { text: 'x' } });
 
     const outerListener = vi.fn();
@@ -218,7 +225,7 @@ describe('Popup', () => {
       keymap.resolve(event);
     };
     view.container.addEventListener('keydown', keymapListener);
-    const popup = createPopup(view, keymap);
+    const popup = createPopup(view, boundRegisterHandler(keymap));
     popup.open({ anchor: rect({ left: 300, top: 100, right: 340, bottom: 120 }), content: { text: 'x' } });
 
     const input = document.createElement('input');
@@ -237,7 +244,7 @@ describe('Popup', () => {
       timeline: rect({ left: 160, right: 1000, bottom: 500 }),
     });
     withFixedPopupSize(view, { width: 100, height: 40 });
-    const popup = createPopup(view, makeKeymap());
+    const popup = createPopup(view, boundRegisterHandler(makeKeymap()));
     const anchor = document.createElement('button');
     document.body.append(anchor);
     popup.open({ anchor, content: { text: 'x' } });
@@ -258,7 +265,7 @@ describe('Popup', () => {
       timeline: rect({ left: 160, right: 1000, bottom: 500 }),
     });
     withFixedPopupSize(view, { width: 100, height: 40 });
-    const popup = createPopup(view, makeKeymap());
+    const popup = createPopup(view, boundRegisterHandler(makeKeymap()));
     const triggers: DismissTrigger[] = [];
     const anchor = document.createElement('button');
     document.body.append(anchor);
@@ -292,7 +299,7 @@ describe('Popup', () => {
     const bar = document.createElement('div');
     bar.getBoundingClientRect = () => rect({ left: 300, top: 100, right: 340, bottom: 120 });
     view.timelinePane.append(bar);
-    const popup = createPopup(view, makeKeymap());
+    const popup = createPopup(view, boundRegisterHandler(makeKeymap()));
     popup.open({ anchor: bar, content: { text: 'x' } });
     return { popup, view };
   }
@@ -338,7 +345,7 @@ describe('Popup', () => {
       timeline: rect({ left: 160, right: 1000, bottom: 500 }),
     });
     withFixedPopupSize(view, { width: 100, height: 40 });
-    const popup = createPopup(view, makeKeymap());
+    const popup = createPopup(view, boundRegisterHandler(makeKeymap()));
     // A toolbar button, say: below both panes, so `paneRectFor` clamps to the outer `bounds` too.
     popup.open({ anchor: rect({ left: 10, top: 600, right: 60, bottom: 620 }), content: { text: 'x' } });
 
@@ -363,7 +370,7 @@ describe('Popup', () => {
     // focus: 'none' (the default) never moves focus (the tooltip's own policy).
     withFixedPopupSize(view, { width: 100, height: 40 });
     const keymap = makeKeymap();
-    const tooltip = createPopup(view, keymap);
+    const tooltip = createPopup(view, boundRegisterHandler(keymap));
     tooltip.open({
       anchor: rect({ left: 300, top: 100, right: 340, bottom: 120 }),
       content: { text: 'hover text' },
@@ -372,7 +379,7 @@ describe('Popup', () => {
     tooltip.close();
 
     // focus: 'trap' moves focus into the popup's first focusable node and restores it on close.
-    const menu = createPopup(view, keymap);
+    const menu = createPopup(view, boundRegisterHandler(keymap));
     menu.open({
       anchor: rect({ left: 300, top: 100, right: 340, bottom: 120 }),
       focus: 'trap',
@@ -399,7 +406,7 @@ describe('Popup', () => {
       }),
     });
     withFixedPopupSize(view, { width: 100, height: 40 });
-    const popup = createPopup(view, makeKeymap());
+    const popup = createPopup(view, boundRegisterHandler(makeKeymap()));
     // 'bottom' fits its (vertical) placement axis either way; the pane shrink instead moves the
     // cross-axis clamp — the popup's left edge is pinned at the pane's own right bound minus its
     // width, so a narrower pane pushes it further left. The anchor (850..890) stays inside the

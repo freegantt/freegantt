@@ -21,7 +21,6 @@ import type {
   FieldKey,
   GridColumn,
   GridColumnInput,
-  KeyChord,
   PluginErrorReport,
   PluginId,
   RaiseError,
@@ -41,7 +40,12 @@ import type {
 import { DisposableStore } from '../extensions/disposables.js';
 import { RegistrationGate } from '../extensions/plugin-runtime.js';
 import type { CommandRegistryOf } from '../extensions/commands.js';
-import type { KeyBinding, KeyBindingOf, KeyEventLike, KeyHandlerRegistrar } from '../extensions/keymap.js';
+import type {
+  KeyBinding,
+  KeyBindingOf,
+  KeyHandlerRegistrar,
+  RegisterKeyHandler,
+} from '../extensions/keymap.js';
 import type { PluginRegistrar } from './plugin-registrations.js';
 import type { KindDefaults } from './capability.js';
 import type { GanttEvents, EntryFieldEdit } from './event-bus.js';
@@ -171,11 +175,7 @@ export interface PluginContextParts<TGantt = unknown, TDataset = unknown> {
      *  as the plugin does, not once at startup. This one also returns its own disposer instead of
      *  auto-removing on plugin disposal. That is because a popup adds and removes its handler on
      *  every `open()`/`close()`, not once. */
-    registerKeyHandler(
-      chord: KeyChord,
-      handler: (event: KeyEventLike) => void,
-      options?: { captureInEditable?: boolean },
-    ): () => void;
+    registerKeyHandler: RegisterKeyHandler;
     /** S5.8, D-S5-19: the `edit` capability's one resolution (I14). It is the same answer
      *  `move`/`resize` already read through `interaction/entry-gestures.ts`'s `ctx.can`. This
      *  surface exposes it because `inlineEditing()` is the first *plugin* that needs to ask it.

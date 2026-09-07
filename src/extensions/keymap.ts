@@ -87,12 +87,21 @@ export function isEditableTarget(event: Pick<KeyEventLike, 'isComposing' | 'targ
  *  `PluginContextOf.interaction.registerKeyHandler` when a third-party plugin builds its own
  *  `Popup` (that plugin has no `Keymap` instance to hand over, only the one bound method). */
 export interface KeyHandlerRegistrar {
-  registerHandler(
-    chord: string,
-    handler: (event: KeyEventLike) => void,
-    options?: { captureInEditable?: boolean },
-  ): () => void;
+  registerHandler: RegisterKeyHandler;
 }
+
+/** The one method `KeyHandlerRegistrar` exposes, named on its own — `createPopup` takes this
+ *  directly, so a caller with a bound method (`ctx.interaction.registerKeyHandler`) passes it
+ *  bare, instead of wrapping it in a one-field object.
+ *
+ *  Declared here and referenced by `KeyHandlerRegistrar`, not read back out of it: this alias is
+ *  public and the interface is not, so an indexed access would name an internal type in the public
+ *  report. One shape still keeps one name. */
+export type RegisterKeyHandler = (
+  chord: string,
+  handler: (event: KeyEventLike) => void,
+  options?: { captureInEditable?: boolean },
+) => () => void;
 
 interface CommandBinding<TGantt> {
   kind: 'command';

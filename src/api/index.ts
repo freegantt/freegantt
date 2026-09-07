@@ -38,11 +38,11 @@ export type { ErrorFeed } from './watch-all-errors.js';
 export type {
   ErrorReport,
   ErrorReportInput,
+  BuiltInErrorCode,
   ErrorCode,
   ErrorSeverity,
   ErrorReporter,
   Refusable,
-  RaiseError,
   PluginErrorReport,
 } from '../model/index.js';
 export type {
@@ -145,10 +145,10 @@ export type { GanttDom, DomTarget, PaneName, DomEventHandler, DomEventOptions } 
 // the cell editor (S5.5+) all build on. C3 (`plans/reviews/2026-09-02-s5-start-fixes.md`) folded its
 // Escape dismissal into the shared keymap (D-S5-9's "the innermost popup wins" needs the same
 // newest-first resolver core commands and plugin keybindings use) — `createPopup` now takes a
-// `KeyHandlerRegistrar` as a second argument, and a plugin author builds one from the same seam it
-// already had: `{ registerHandler: ctx.interaction.registerKeyHandler }`.
+// `RegisterKeyHandler` as a second argument, and a plugin author passes the same bound method it
+// already had: `ctx.interaction.registerKeyHandler`.
 export { createPopup } from '../extensions/popup.js';
-export type { KeyHandlerRegistrar, KeyEventLike } from '../extensions/keymap.js';
+export type { RegisterKeyHandler, KeyEventLike } from '../extensions/keymap.js';
 export type {
   Popup,
   PopupOptions,
