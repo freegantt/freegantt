@@ -60,21 +60,18 @@ export const DEFAULT_ROW_SOURCE: EntriesRowSource = Object.freeze({ source: 'ent
  *  `resolveRowSource` and `filterPolicyOf` share one literal instead of two. */
 export const DEFAULT_FILTER_POLICY: FilterPolicy = 'keepAncestors';
 
-/** `RowSourceCommon`'s two authored-optional keys, filled (#248 S4-2): a consumer who omits
- *  `heightMode`/`filterPolicy` still reads a `RowHeightMode`/`FilterPolicy` back off `gantt.rowSource`. */
-export interface ResolvedRowSourceCommon extends RowSourceCommon {
+/** Each resolved source extends the source a consumer authored, and narrows the keys it fills from
+ *  optional to required (#248 S4-2). A consumer who omits `heightMode`/`filterPolicy`/`tree` still
+ *  reads a value back off `gantt.rowSource`. */
+export interface ResolvedEntriesRowSource extends EntriesRowSource {
   heightMode: RowHeightMode;
   filterPolicy: FilterPolicy;
-}
-
-export interface ResolvedEntriesRowSource extends ResolvedRowSourceCommon {
-  source: 'entries';
   tree: boolean;
 }
 
-export interface ResolvedGroupRowSource extends ResolvedRowSourceCommon {
-  source: 'group';
-  groupBy(entry: Entry, fields?: FieldContext): string;
+export interface ResolvedGroupRowSource extends GroupRowSource {
+  heightMode: RowHeightMode;
+  filterPolicy: FilterPolicy;
 }
 
 /** `'custom'` takes no `filter`/`sort`/`filterPolicy`/`tree` (D-S4-21) — only `heightMode` to fill. */

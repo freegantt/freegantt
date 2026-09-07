@@ -1750,32 +1750,26 @@ export interface ResolvedCustomRowSource extends CustomRowSource {
     heightMode: RowHeightMode;
 }
 
-// @public (undocumented)
-export interface ResolvedEntriesRowSource extends ResolvedRowSourceCommon {
+// @public
+export interface ResolvedEntriesRowSource extends EntriesRowSource {
     // (undocumented)
-    source: 'entries';
+    filterPolicy: FilterPolicy;
+    // (undocumented)
+    heightMode: RowHeightMode;
     // (undocumented)
     tree: boolean;
 }
 
 // @public (undocumented)
-export interface ResolvedGroupRowSource extends ResolvedRowSourceCommon {
-    // (undocumented)
-    groupBy(entry: Entry, fields?: FieldContext): string;
-    // (undocumented)
-    source: 'group';
-}
-
-// @public
-export type ResolvedRowSource = ResolvedEntriesRowSource | ResolvedGroupRowSource | ResolvedCustomRowSource;
-
-// @public
-export interface ResolvedRowSourceCommon extends RowSourceCommon {
+export interface ResolvedGroupRowSource extends GroupRowSource {
     // (undocumented)
     filterPolicy: FilterPolicy;
     // (undocumented)
     heightMode: RowHeightMode;
 }
+
+// @public
+export type ResolvedRowSource = ResolvedEntriesRowSource | ResolvedGroupRowSource | ResolvedCustomRowSource;
 
 // @public
 export class RevealTargetNotFoundError extends FreeGanttError {

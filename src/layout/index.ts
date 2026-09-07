@@ -36,7 +36,6 @@ export type {
   ResolvedEntriesRowSource,
   ResolvedGroupRowSource,
   ResolvedCustomRowSource,
-  ResolvedRowSourceCommon,
 } from './rows/row-source.js';
 export { DEFAULT_ROW_SOURCE, isPlannedHeaderRow, resolveRowSource } from './rows/row-source.js';
 export { FrameLayout } from './frame-layout.js';
