@@ -73,9 +73,9 @@ export interface TransactionData {
    *  Reports each Entry's authored envelope keys alongside the reconciled `StoredEdits`, because the
    *  commit path needs to tell the hook's own `start`/`end`/`segments` write from one
    *  `reconcileEnvelope` derived on the hook's behalf, and `StoredEdit.proposedKeys` conflates the two
-   *  (#232). `DatasetState.readExtenderEdits` is this method's one implementation; the public
-   *  `Dataset.extraEditsFor` a plugin or the drag preview calls is a separate, narrower door onto the
-   *  same occupant. */
+   *  (#232). `DatasetState.readExtenderEdits` is this method's one implementation; the friend function
+   *  `extraEditsFor(dataset, request)` the drag preview calls (`api/dataset.ts`, ADR 0007) is a
+   *  separate, narrower door onto the same occupant. It is not a `Dataset` method (#250 S6-1). */
   readExtenderEdits(request: EditRequest): EditsReading;
   /** 0 = no transaction open. Only `runTransaction` reads or writes this (D-S2-8's nesting rule). */
   openTransactions: number;
