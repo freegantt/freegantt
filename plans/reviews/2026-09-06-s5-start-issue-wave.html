@@ -356,8 +356,59 @@ tsc → exactly the 5 doors to name
         <p class="text-sm mt-2">It is the only finding where core rules are re-derived outside their owner, so drift is a correctness risk, not a style nit — and the seam core already owns (the I14 capability resolver) just gains its write half. Candidate 2 is the cheapest large win; the Stop-rule gap is a one-line commit the status board already tracks.</p>
       </section>
 
+      <!-- ============ SECOND PASS ============ -->
+      <section class="space-y-3">
+        <h2 class="text-2xl font-serif font-bold border-b border-slate-300 pb-2">Second pass <span class="text-sm font-sans font-normal text-slate-500">(mud watch · API friendliness · self-documentation · SOLID)</span></h2>
+        <p class="text-sm text-slate-600">Run after first push (<span class="font-mono">821ab43</span>), against the same HEAD. No new commits landed from the wave in between. This pass reads the whole changed surface again for the four questions the first pass does not ask directly.</p>
+
+        <div class="grid md:grid-cols-2 gap-4">
+          <article class="rounded-lg border border-slate-200 bg-white p-4 space-y-2">
+            <p class="text-xs uppercase tracking-wider text-slate-500">Ball-of-mud watch</p>
+            <p class="text-sm"><span class="font-semibold">No mud forming.</span> The three big files each change for one reason: <span class="font-mono text-xs">api/gantt.ts</span> (755) is the façade, <span class="font-mono text-xs">model/errors.ts</span> (738) is the flat fault registry, <span class="font-mono text-xs">inline-editing.ts</span> (879) is one feature. Three watch items:</p>
+            <ul class="text-sm space-y-1 list-disc list-inside text-slate-700">
+              <li><span class="font-mono text-xs">inline-editing.ts</span> is the wave's largest module. Candidate 1 removes three predicates; after that, split at open/commit vs. markInvalid/report. Do not add a fourth predicate to the <span class="font-mono">openFor</span> ladder — that is the mud signal.</li>
+              <li><span class="font-mono text-xs">errors.ts</span> gains classes only for <em>catchable</em> things; this wave correctly used report codes, not new classes, for refusals. Keep that line — one class per catch, one code per report — and the registry stays flat and harmless.</li>
+              <li>The refusal <em>type</em> family now spans three layers: <span class="font-mono">RefusalNote</span> (data/), <span class="font-mono">GestureRefusal</span> (view/), <span class="font-mono">CellEditorCommitRefusal</span> (extensions/). Three different things, but CONTEXT.md's Refusal entry (line 654) names none of them — see self-documentation.</li>
+            </ul>
+          </article>
+
+          <article class="rounded-lg border border-slate-200 bg-white p-4 space-y-2">
+            <p class="text-xs uppercase tracking-wider text-slate-500">API friendliness</p>
+            <ul class="text-sm space-y-1 list-disc list-inside text-slate-700">
+              <li><span class="font-mono">refuse(reason)</span> returning <span class="font-mono">false</span> is the best call site in the wave: one line states the reason and vetoes, and a bare <span class="font-mono">false</span> keeps working. The pattern to keep.</li>
+              <li><span class="font-mono">watchAllErrors([dataset, gantt], fn)</span> takes both buses in one call — friendly; keep.</li>
+              <li><span class="font-mono">gantt.dataset</span> with the caller's own Fields (#226) removed a whole paired-parameter ritual from the toolbar. The two-callers-two-surface rule held: app authors got a getter, plugin authors keep <span class="font-mono">PluginContext</span>.</li>
+              <li>Friendliness gap (Q2, reframed): a consumer catching <span class="font-mono">UnreadableCellValueError</span> reads <span class="font-mono">.field</span> as <span class="font-mono">string</span>, while the same value on <span class="font-mono">ErrorReport.field</span> is a <span class="font-mono">FieldKey</span> they can switch on. One type import fixes it; sweep <span class="font-mono">errors.ts:324, 474, 537</span> together.</li>
+            </ul>
+          </article>
+
+          <article class="rounded-lg border border-slate-200 bg-white p-4 space-y-2">
+            <p class="text-xs uppercase tracking-wider text-slate-500">Self-documentation</p>
+            <ul class="text-sm space-y-1 list-disc list-inside text-slate-700">
+              <li><span class="font-mono text-xs">model/error-report.ts</span> is the exemplar: the header answers why <span class="font-mono">FreeGanttError</span> and <span class="font-mono">ErrorReport</span> are two files, why there is no <span class="font-mono">gantt.errors</span> array, and why <span class="font-mono">fallback</span> exists. Cite it when teaching the pattern.</li>
+              <li>Gap: CONTEXT.md's <strong>Refusal</strong> entry defines the concept but not the code family. One sentence there — <em>the note lives in data/, the view record in view/, the editor's reason union in extensions/</em> — stops the next reader from treating the three names as synonyms.</li>
+              <li><span class="font-mono">CellEditorCommitRefusal</span> (S5) still carries "Commit", the word ADR 0006 retired for write-refusals; renaming it fixes the name and the glossary gap in one move.</li>
+            </ul>
+          </article>
+
+          <article class="rounded-lg border border-slate-200 bg-white p-4 space-y-2">
+            <p class="text-xs uppercase tracking-wider text-slate-500">SOLID / extensibility</p>
+            <ul class="text-sm space-y-1 list-disc list-inside text-slate-700">
+              <li>Open/closed held: <span class="font-mono">Refusable</span> was added to existing <span class="font-mono">before*</span> payloads as a bound property; no handler changed, no subclass exists to break. That is why the lock plugin's bare <span class="font-mono">false</span> still works — and why retiring it is safe.</li>
+              <li>Single-responsibility held at the layer level: veto words flow model → data → view with each layer owning one piece (type, raise, report). Candidate 2 finishes the job by giving the sentence one framer.</li>
+              <li>Candidate 1 is the open-closed play for Field kinds: a new Field kind needs no edit to the editor's ladder once core answers "can this Field be written here?".</li>
+              <li>Dependency rule held everywhere: no scheduling imports in render/view/interaction; <span class="font-mono">error-report.ts</span> stays types-only; depcruise green (291 modules, 1284 edges) on the full gate.</li>
+            </ul>
+          </article>
+        </div>
+
+        <section class="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm">
+          <p><span class="font-semibold">Second-pass verdict:</span> the wave is solid and extensible; nothing here blocks the next lane. Priority order is unchanged — the Stop-rule one-liner, then candidate 2, then candidate 1 — with two small add-ons: the <span class="font-mono">FieldKey</span> sweep (Q2) and the CONTEXT.md Refusal-family sentence.</p>
+        </section>
+      </section>
+
       <footer class="text-xs text-slate-400 pb-8">
-        Roll-up of four parallel reviews (Standards · Spec · Simplify · Architecture) over <span class="font-mono">6eb6da1...37b5f17</span> + WIP, 2026-09-06. Reviewers ran read-only; no code changed for this report.
+        Roll-up of four parallel reviews (Standards · Spec · Simplify · Architecture) plus a second pass (mud watch · API friendliness · self-documentation · SOLID) over <span class="font-mono">6eb6da1...37b5f17</span> + WIP, 2026-09-06. Reviewers ran read-only; no code changed for this report.
       </footer>
     </main>
   </body>
