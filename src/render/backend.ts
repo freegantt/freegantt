@@ -25,6 +25,10 @@ export interface InteractionState {
    *  reads those bars off the frame it synced, the same way `selectedSegmentIds` paints. The pair
    *  narrows to one bar when the Selection holds exactly one Segment of the Entry (#212). */
   resizableEntryId?: EntryId;
+  /** #142: which of `resizableEntryId`'s two handles may resize, independently — a Field's own
+   *  `editable` can close one edge while leaving the other open. A backend hides the closed edge's
+   *  handle and leaves the other one painting. Present exactly when `resizableEntryId` is. */
+  resizableEdges?: { start: boolean; end: boolean };
   /** The hovered bar, and only when its `move` capability resolved true — what gets `cursor: grab`
    *  (S3, D-S3-6). */
   movableItemId?: ItemId;

@@ -145,4 +145,42 @@ describe('projectAffordances (D-S3-6)', () => {
     // A drew two bars and the Selection names neither, so no single bar owns the pair.
     expect(result.resizableEntryId).toBeUndefined();
   });
+
+  describe('resizableEdges (#142)', () => {
+    it('records each edge answer independently, even when only one is capable', () => {
+      const result = projectAffordances({
+        hoveredItemId: undefined,
+        soleSelectedEntryId: A,
+        selectedSegmentCountOfSoleEntry: 1,
+        itemIdsForEntry: oneBarEach,
+        canGesture: (capability, id, edge) => capability === 'resize' && edge === 'start',
+      });
+      expect(result.resizableEntryId).toBe(A);
+      expect(result.resizableEdges).toEqual({ start: true, end: false });
+    });
+
+    it('still shows the pair when only one edge answers true', () => {
+      const result = projectAffordances({
+        hoveredItemId: ITEM_A,
+        soleSelectedEntryId: undefined,
+        selectedSegmentCountOfSoleEntry: 0,
+        itemIdsForEntry: oneBarEach,
+        canGesture: (capability, id, edge) => capability === 'resize' && edge === 'end',
+      });
+      expect(result.resizableEntryId).toBe(A);
+      expect(result.resizableEdges).toEqual({ start: false, end: true });
+    });
+
+    it('parks the whole pair when neither edge answers true', () => {
+      const result = projectAffordances({
+        hoveredItemId: undefined,
+        soleSelectedEntryId: A,
+        selectedSegmentCountOfSoleEntry: 1,
+        itemIdsForEntry: oneBarEach,
+        canGesture: () => false,
+      });
+      expect(result.resizableEntryId).toBeUndefined();
+      expect(result.resizableEdges).toBeUndefined();
+    });
+  });
 });

@@ -166,7 +166,7 @@ export function attachEntryGestures(
     const hit = ctx.hitTest({ x: e.clientX, y: e.clientY });
     const bar = hit?.kind === 'bar' ? hit : undefined;
     const entry = bar !== undefined ? ctx.entryFor(bar.itemId) : undefined;
-    if (entry !== undefined && bar?.edge !== undefined && ctx.can('resize', entry)) {
+    if (entry !== undefined && bar?.edge !== undefined && ctx.can('resize', entry, bar.edge)) {
       grabbedId = entry.id;
       grabbedEdge = bar.edge;
       grabbedItemId = undefined;

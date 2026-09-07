@@ -91,16 +91,16 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
     expect(pipeline.session(entryId('missing'), { kind: 'move' })).toBeUndefined();
   });
 
-  it("asks canGesture with 'move' for a move gesture and 'resize' for a resize gesture", () => {
+  it("asks canGesture with 'move' for a move gesture and 'resize' with the grabbed edge for a resize gesture (#142)", () => {
     const canGesture = vi.fn(() => true);
     const { deps } = withRoster([entry('a', 0, 100)], { canGesture });
     const pipeline = new GesturePipeline(deps);
 
     pipeline.session(entryId('a'), { kind: 'move' });
-    expect(canGesture).toHaveBeenCalledWith('move', entryId('a'));
+    expect(canGesture).toHaveBeenCalledWith('move', entryId('a'), undefined);
 
     pipeline.session(entryId('a'), { kind: 'resize', edge: 'end' });
-    expect(canGesture).toHaveBeenCalledWith('resize', entryId('a'));
+    expect(canGesture).toHaveBeenCalledWith('resize', entryId('a'), 'end');
   });
 
   it('arms every capable entry of a multi-selection, grabbed first, and skips an incapable one', () => {
@@ -122,6 +122,30 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
     // c (checked and refused).
     expect(pipeline.session(a.id, { kind: 'move' })).toBeDefined();
     expect(checked).toEqual([a.id, b.id, c.id]);
+  });
+
+  it('a multi-select resize checks every co-selected entry against the grabbed edge only, and skips a closed one (#142)', () => {
+    const a = entry('a', 0, 100);
+    const b = entry('b', 100, 200);
+    const c = entry('c', 200, 300);
+    const checked: Array<{ id: EntryId; edge: 'start' | 'end' | undefined }> = [];
+    const { deps } = withRoster([a, b, c], {
+      selectedEntryIds: () => [b.id, a.id, c.id],
+      // c's own 'end' Field is closed; a and b stay open. A grab on a's 'end' handle should
+      // arm a and b and leave c out, without ever asking about 'start'.
+      canGesture: (_capability, id, edge) => {
+        checked.push({ id, edge });
+        return id !== c.id;
+      },
+    });
+    const pipeline = new GesturePipeline(deps);
+
+    expect(pipeline.session(a.id, { kind: 'resize', edge: 'end' })).toBeDefined();
+    expect(checked).toEqual([
+      { id: a.id, edge: 'end' },
+      { id: b.id, edge: 'end' },
+      { id: c.id, edge: 'end' },
+    ]);
   });
 
   it('preview() and commit() move every armed entry of a multi-selection by the same delta', async () => {

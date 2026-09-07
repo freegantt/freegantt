@@ -112,4 +112,50 @@ describe('resolveCapabilities', () => {
       expect(caps.can('resize', entry({ kind: 'span' }))).toBe(true);
     });
   });
+
+  describe('per-edge resize, from a Field editable answer (#142, I14)', () => {
+    it("asks fieldEditableForEdge only for the edge given, and only for 'resize'", () => {
+      const asked: Array<'start' | 'end'> = [];
+      const fieldEditableForEdge = (edge: 'start' | 'end') => {
+        asked.push(edge);
+        return edge === 'start';
+      };
+      const caps = resolveCapabilities(undefined, isNeverDerived, undefined, fieldEditableForEdge);
+      expect(caps.can('resize', entry(), 'start')).toBe(true);
+      expect(caps.can('resize', entry(), 'end')).toBe(false);
+      expect(asked).toEqual(['start', 'end']);
+      caps.can('move', entry(), 'start');
+      expect(asked).toEqual(['start', 'end']);
+    });
+
+    it('with no edge given, resize keeps its whole-gesture default and never asks fieldEditableForEdge', () => {
+      let asked = false;
+      const caps = resolveCapabilities(undefined, isNeverDerived, undefined, () => {
+        asked = true;
+        return false;
+      });
+      expect(caps.can('resize', entry({ kind: 'span' }))).toBe(true);
+      expect(asked).toBe(false);
+    });
+
+    it('an explicit interactions.resize rule wins over a closed edge — edge is ignored', () => {
+      const caps = resolveCapabilities({ resize: true }, isNeverDerived, undefined, () => false);
+      expect(caps.can('resize', entry(), 'end')).toBe(true);
+    });
+
+    it('a registered kind default wins over a closed edge — edge is ignored', () => {
+      const caps = resolveCapabilities(
+        undefined,
+        isNeverDerived,
+        (kind) => (kind === 'span' ? { resize: true } : undefined),
+        () => false,
+      );
+      expect(caps.can('resize', entry({ kind: 'span' }), 'end')).toBe(true);
+    });
+
+    it('a roll-up kind stays closed on every edge, even one fieldEditableForEdge opens', () => {
+      const caps = resolveCapabilities(undefined, isGroup, undefined, () => true);
+      expect(caps.can('resize', entry({ kind: 'group' }), 'start')).toBe(false);
+    });
+  });
 });
