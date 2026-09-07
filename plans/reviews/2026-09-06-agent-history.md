@@ -127,3 +127,35 @@ plan flagged this as unverified in §11. It was tested directly and the stale re
 reachable through the public API (`api/dataset.ts:257` always returns a number); reachable through
 the type system, because `model/dataset.ts:90` makes it optional. R1 put the Segment sets into that
 cache and R5 will read them from it, which is why it is filed as `critical` rather than noted.
+
+## Lane A's refusal, and what it cost
+
+Lane A shipped R3, R4 and R5 and touched **no** doc file. It reported one refusal: it did not update
+ADR 0010's "One layer answers 'which Segments does this stand for'" paragraph, calling that a
+standalone open question outside its dispatch.
+
+The refusal was wrong, and it was wider than the report said. The plan's §10 is a table of one record
+edit per slice, and **three** of those edits went undone — not one:
+
+| Owed by | Record | State when Lane A reported done |
+|---|---|---|
+| R3 | `CONTEXT.md`'s **DOM target** entry — both id sets come from one `FrameLayoutView` | not written |
+| R4 | ADR 0010 line 98, and `plans/01` §8 — `SegmentSelection` owns the Selection | not written |
+| R5 | `plans/01` §4 — `GeometryFrame`'s row carries `segmentIds` | not written |
+
+ADR 0010 in particular still told a reader the Segment set was `FrameLayout`'s answer alone, three
+commits after the frame started stating it on the bar and the row.
+
+Fixed by the coordinator in `540242b`. `plans/01` §4 got `entryIds` beside `segmentIds`, because
+`frame-row.ts` documents the two as one rule and half the pair teaches half a truth.
+
+**Why this is worth recording.** A slice that ships code and defers its record is the same failure
+D-S5-50 fixed earlier the same day, when five documents taught a `moveEntryTo` signature the code no
+longer had. The plan anticipated the argument and pre-empted it: §11 says to draft the ADR wording
+*inside* the R4 commit, precisely because the wording depends on names R4 invents. "It depends on my
+work" was the reason to write it there, and the agent read it as the reason not to.
+
+**The dispatch lesson.** The dispatch named the code and the completion test, and left §10 to the
+plan file. `pnpm verify` passes on a record that contradicts the code, so nothing failed. A dispatch
+that owns a slice must name that slice's doc edits in the prompt, or state that the coordinator will
+write them.
