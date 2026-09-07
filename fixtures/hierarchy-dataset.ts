@@ -102,9 +102,5 @@ export const hierarchyFieldOptions = {
   // #142: `end` keeps its demo purpose — a column closed on purpose, not by omission (the harness
   // page's own copy: "End stays read-only on purpose: a column is editable only when you say so").
   // `CORE_FIELDS.end` now defaults to editable, so this page states the override itself.
-  fields: [
-    { key: 'cost' as const, type: 'money' },
-    { key: 'team' as const },
-    { key: 'end' as const, editable: false },
-  ],
+  fields: [{ key: 'cost' as const, type: 'money' }, { key: 'team' as const }],
 } as const;

@@ -27,9 +27,9 @@ declare global {
 }
 
 // S5.8, D-S5-19: `editable` is the Field's own answer now (#142), so no column here restates it.
-// Name, Start and Cost stay open on `CORE_FIELDS`'/`hierarchyFieldOptions`'s own defaults; End is
-// worth showing refused (double-click it and nothing opens), so `hierarchyFieldOptions` states an
-// explicit `editable: false` override for it.
+// Name, Start, End and Cost stay open on `CORE_FIELDS`'/`hierarchyFieldOptions`'s own defaults.
+// End stays editable for the reason `main.ts` gives: one answer gates the cell editor and the
+// resize handle alike, and this page drags the handle pair.
 const GRID_WITH_COST: readonly GridColumnInput[] = [
   'name',
   'start',
