@@ -130,7 +130,7 @@ export interface FrameBar {
    *  bar (plans/01 §2.5 bans a kind check here), and a consumer tells the two apart by pairing this
    *  with `kind`. `render/` stamps it as `data-span="minimum"` (`02` §4). */
   minimumSpan: boolean;
-  /** What a screen reader announces: `${entry.name}, ${formatDate(zone, start)} – ${formatEndInclusive(zone, end)}`.
+  /** What a screen reader announces: `${entry.name}, ${formatDate(zone, start)} – ${formatEndInclusive(zone, span)}`.
    * Library-derived text, not consumer render output — same precedent as `label` (plans/01 §4: "no user
    * render output in the frame"). Composed here because it needs the dataset zone and inclusive-end
    * formatting, both `time/`-only (S1.10, D-S1.10-5). */
@@ -303,7 +303,7 @@ function barA11yLabel(
   scale: TimeScale,
   locale: Intl.LocalesArgument | undefined,
 ): string {
-  const span = `${formatDate(scale.timeZone, item.start, locale)} – ${formatEndInclusive(scale.timeZone, item.end, locale)}`;
+  const span = `${formatDate(scale.timeZone, item.start, locale)} – ${formatEndInclusive(scale.timeZone, item, locale)}`;
   if (partCount <= 1) return `${item.label}, ${span}`;
   return `${item.label}, part ${segmentIndexOfItem(item.id) + 1} of ${partCount}, ${span}`;
 }

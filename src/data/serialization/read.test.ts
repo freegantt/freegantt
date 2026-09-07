@@ -82,7 +82,7 @@ describe('readDocument (S4.4, D-S4-16)', () => {
     expect(cost?.source).toEqual({ from: 'meta', key: 'budget' });
     expect(cost?.rollUp).toBe('sum');
     expect(cost?.column).toEqual({ header: 'Cost' });
-    expect(cost?.formatValue?.(500, null as never)).toBe('$500');
+    expect(cost?.formatValue?.(500, null as never, null as never)).toBe('$500');
   });
 
   it('adds an option-only Field whole', () => {
