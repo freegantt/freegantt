@@ -19,6 +19,7 @@ import type {
 } from '../model/index.js';
 import { itemId } from '../model/index.js';
 import type { EditRequest } from '../data/edit-extension.js';
+import { buildRefusalReport } from '../data/error-reporting.js';
 import { reconcileExtenderEditsForPreview } from '../data/entry-reader.js';
 import { effectiveEntriesFor, entryAfterEdits } from '../data/entry-tree.js';
 import type { EventBus } from './event-bus.js';
@@ -83,13 +84,12 @@ export interface GesturePipelineDeps {
  *
  *  `note` rather than a finished message, because the reason arrives after this is built: a sync veto
  *  states it during the emit, an async one states it before it resolves (#210). `#reportRefusal`
- *  reads the words at report time and frames them then. */
+ *  hands this straight to `buildRefusalReport` (`data/error-reporting.ts`), which derives the
+ *  sentence's noun from `event` alone — that is what lets this carry no separate `kind`. */
 interface GestureRefusal {
   code: ErrorCode;
-  /** The `before*` name whose handler refused, and the gesture word — the two halves of the sentence
-   *  `#reportRefusal` writes. */
+  /** The `before*` name whose handler refused. */
   event: 'beforeEntryMove' | 'beforeEntryResize';
-  kind: EntryGesture['kind'];
   entryId: EntryId;
   note: RefusalNote;
 }
@@ -265,7 +265,6 @@ export class GesturePipeline {
     const refusal: GestureRefusal = {
       code: gesture.kind === 'resize' ? 'entry-resize-cancelled' : 'entry-move-cancelled',
       event: event.before,
-      kind: gesture.kind,
       entryId: grabbed.entry,
       note,
     };
@@ -312,19 +311,18 @@ export class GesturePipeline {
 
   /** One report per refused gesture, sync veto and settled-`false` Promise alike (D-S5-40). A
    *  refused *commit* reports from `data/transaction.ts` instead, so `commitEntryEdits` returning
-   *  `false` adds nothing here — one refusal is one record. `severity: 'info'`: the library said no
-   *  on purpose. No `fallback`, because this site printed nothing before and stays silent. */
+   *  `false` adds nothing here — one refusal is one record. `buildRefusalReport`
+   *  (`data/error-reporting.ts`) is the one place the shape is built; no `fallback` here, because
+   *  this site printed nothing before and stays silent. */
   #reportRefusal(refusal: GestureRefusal): void {
-    const reason = refusal.note.reason;
-    const refused = `Nothing was saved. A ${refusal.event} handler refused this ${refusal.kind}`;
-    this.#deps.raiseError({
-      code: refusal.code,
-      message: reason === undefined ? `${refused}.` : `${refused} and said: "${reason}".`,
-      severity: 'info',
-      by: 'consumer',
-      ...(reason === undefined ? {} : { reason }),
-      entryId: refusal.entryId,
-    });
+    this.#deps.raiseError(
+      buildRefusalReport({
+        code: refusal.code,
+        event: refusal.event,
+        note: refusal.note,
+        entryId: refusal.entryId,
+      }),
+    );
   }
 
   /** D-S3-17: only reached for a `before*` handler's unsettled Promise. Holds the commit draft (not

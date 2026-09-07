@@ -400,14 +400,15 @@ export class CellEditorSession {
    *  A cell is often narrower than the sentence, so the words are the hover text too. That is the
    *  same reason the notice sets its own `title`. */
   #markInvalid(reason: CellEditorCommitRefusal, cause: unknown): void {
+    const words = COMMIT_REFUSAL_TEXT[reason];
     this.#wrapper.dataset['state'] = 'invalid';
     this.#wrapper.dataset['reason'] = reason;
-    this.#wrapper.title = COMMIT_REFUSAL_TEXT[reason];
+    this.#wrapper.title = words;
     this.#ensureDiscardButton();
     this.#control.element.focus();
     this.#ports.raiseError({
       code: reason,
-      message: COMMIT_REFUSAL_TEXT[reason],
+      message: words,
       severity: 'info',
       entryId: this.entryId,
       field: this.field,

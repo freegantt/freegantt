@@ -17,7 +17,7 @@ import type {
 } from '../model/index.js';
 import { MutationCancelledError, MutationDuringNotificationError } from '../model/index.js';
 import { buildCommitChangeSet, diffEdits } from './build-commit-change-set.js';
-import { raiseErrorOn } from './error-reporting.js';
+import { buildRefusalReport, raiseErrorOn } from './error-reporting.js';
 import type { EditRequest, StoredEdits } from './edit-extension.js';
 import type { EditsReading } from './entry-reader.js';
 import type { EventBus } from './event-bus.js';
@@ -198,21 +198,15 @@ export function commitChangeSet(data: TransactionData, changeSet: ChangeSet): vo
     const refusal = new MutationCancelledError(changeSet, note.reason);
     // S5.12, D-S5-40: the refusal is reported as well as thrown. A `beforeChange` handler that ran
     // beside the vetoing one never learns the outcome, and `attemptMutation` swallows the throw — so
-    // the throw alone reaches nobody who needs to show the user what happened.
-    // `by` is `'consumer'`: the bus knows a registered handler returned `false`, never which one, and
-    // core itself refuses nothing here. `severity` is `'info'` because a Refusal is the library
-    // working correctly (D-S5-41). No `fallback`: this site printed nothing before and stays silent.
-    // `reason` is the handler's own words (#210): the message quotes them for a console, and the
-    // member carries them unframed for a consumer who wants to show only those. `changeSet` is not
-    // copied onto the report — `cause` already holds the error that carries it.
-    raiseErrorOn(data.bus, {
-      code: 'mutation-cancelled',
-      message: refusal.message,
-      severity: 'info',
-      by: 'consumer',
-      ...(note.reason === undefined ? {} : { reason: note.reason }),
-      cause: refusal,
-    });
+    // the throw alone reaches nobody who needs to show the user what happened. `buildRefusalReport`
+    // (`data/error-reporting.ts`) is the one place that shape is built; it reads `refusal.message`
+    // rather than rebuilding it, since `model/errors.ts` already owns that wording. No `fallback`:
+    // this site printed nothing before and stays silent. `changeSet` is not copied onto the report —
+    // `cause` already holds the error that carries it.
+    raiseErrorOn(
+      data.bus,
+      buildRefusalReport({ code: 'mutation-cancelled', event: 'beforeChange', note, cause: refusal }),
+    );
     throw refusal;
   }
 
