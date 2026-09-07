@@ -68,10 +68,6 @@ export interface EntryGestureContext {
    *  inside a row the order that row's Entries draw their own Segments. Shift-click ranges over
    *  this list, because the Selection holds Segments and a range must name the same unit. */
   selectableSegmentsInRowOrder(): readonly SegmentId[];
-  /** The selectable Entries one row owns, in the row's own order (#185). A row click selects all of
-   *  them. Empty for a header row, and for a row whose every Entry refuses `select` — the capability
-   *  is resolved here, once (I14), so `interaction/` still performs no lookups of its own. */
-  entriesForRow(rowId: RowId): readonly EntryId[];
   /** Every Segment of these Entries, in the order given (#212, ADR 0010). A grid-row click, a
    *  shift-range and a keyboard select all name Entries and select every Segment those Entries draw. */
   segmentsOfEntries(ids: readonly EntryId[]): readonly SegmentId[];
@@ -80,6 +76,10 @@ export interface EntryGestureContext {
    *  milestone) names every Segment of that Entry. It reads the same answer `DomTarget.segmentIds`
    *  reads — `FrameLayout.segmentIdsForItem` — so the pointer path and this one cannot disagree. */
   segmentsForItem(item: ItemId): readonly SegmentId[];
+  /** The Segments this hit would select (#212, ADR 0010, #230 R4) — a row names every selectable
+   *  Entry it owns; a bar names its own Segment when its Entry may be selected, else nothing.
+   *  `interaction/` asks this instead of re-deriving the pane rule from `hit.kind` itself. */
+  selectableSegmentsOf(hit: EntryHit): readonly SegmentId[];
   selection: {
     get(): readonly SegmentId[];
     /** The Entries the Selection's Segments belong to, deduped, in row order (#212) — the reading a

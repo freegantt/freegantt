@@ -1057,7 +1057,7 @@ describe('GanttShell hot path (S3.2, D-S3-6/D-S3-9, [S3-A3])', () => {
     shell.destroy();
   });
 
-  it('entriesForRow answers every selectable Entry a packed row owns (#185)', () => {
+  it('selectableSegmentsOf answers every selectable Entry a packed row owns (#185)', () => {
     const owned: Entry[] = [
       {
         id: entryId('one'),
@@ -1104,9 +1104,12 @@ describe('GanttShell hot path (S3.2, D-S3-6/D-S3-9, [S3-A3])', () => {
     });
 
     const row = container.querySelector<HTMLElement>('.fg-row')!;
-    expect(ctx!.entriesForRow(rowId(row.dataset['rowId']!))).toEqual([owned[0]!.id, owned[2]!.id]);
+    expect(ctx!.selectableSegmentsOf({ kind: 'row', rowId: rowId(row.dataset['rowId']!) })).toEqual([
+      owned[0]!.segments[0]!.id,
+      owned[2]!.segments[0]!.id,
+    ]);
     // A row id no frame carries answers nothing, rather than throwing.
-    expect(ctx!.entriesForRow(rowId('absent'))).toEqual([]);
+    expect(ctx!.selectableSegmentsOf({ kind: 'row', rowId: rowId('absent') })).toEqual([]);
 
     shell.destroy();
   });

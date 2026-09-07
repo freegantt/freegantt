@@ -209,7 +209,7 @@ export function attachEntryGestures(
     // Segment; a row names every Segment of every selectable Entry it owns. The rules below then run
     // over the list as a unit. An empty list means the hit landed on something no gesture may
     // select, which writes nothing and clears nothing.
-    const targets = selectableSegmentsOf(hit);
+    const targets = ctx.selectableSegmentsOf(hit);
     if (targets.length === 0) return;
 
     if (e.shiftKey) {
@@ -233,15 +233,6 @@ export function attachEntryGestures(
    *  the pointer did land on a row, so an empty timeline's clear must not fire for it. */
   function missesEveryEntry(hit: EntryHit): boolean {
     return hit.kind === 'bar' && ctx.entryFor(hit.itemId) === undefined;
-  }
-
-  /** The Segments this hit selects (#212, ADR 0010): the bar's own Segment when its Entry may be
-   *  selected, or every Segment of every selectable Entry the row owns. Both branches read the answer
-   *  the view already holds — `segmentsForItem` fills the same table `DomTarget.segmentIds` does. */
-  function selectableSegmentsOf(hit: EntryHit): readonly SegmentId[] {
-    if (hit.kind === 'row') return ctx.segmentsOfEntries(ctx.entriesForRow(hit.rowId));
-    const entry = ctx.entryFor(hit.itemId);
-    return entry !== undefined && ctx.can('select', entry) ? ctx.segmentsForItem(hit.itemId) : [];
   }
 
   /** Ctrl/⌘ moves the whole list at once: it removes the list when every member is already
