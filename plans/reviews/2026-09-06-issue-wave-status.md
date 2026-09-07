@@ -73,6 +73,23 @@ Its S2, S3 and the harness snap/undo rows were already fixed by `c96bee1` and `3
 | candidate 4 — bind `<TMeta, TFields>` once, `TDataset = TGantt['dataset']` | real; six aliases restate the pair | `[ ]` |
 | S5 — `CellEditorCommitRefusal` carries "Commit", the word ADR 0006 retired here | **not real.** ADR 0006 reserves `Commit` for *the act* and the path; it retires it only as a name for the change *record*. This refusal names the act. No rename | `[x]` `0eb6a64` — ADR 0006 gains the rule, so a third review cannot re-raise it |
 | `CONTEXT.md`'s Refusal entry names none of the three code families | real doc gap | `[x]` `0eb6a64` — names all three, plus `buildRefusalReport` |
+
+## Branch review of the #230 range (`d5129fe..775a5f5`), 2026-09-06
+
+Findings only, no report artifact. Every one verified against the file before it was rated.
+
+| Finding | Verdict | State |
+|---|---|---|
+| **F1** — the drag preview copies the whole Dataset per rAF frame (I5) | **real, Strong.** `gantt-shell.ts` built `new Map(entries.all.map(...))` per `#extraFor` call, and the comment below it claimed "never a copy of the dataset" | `[x]` `17b65c3` — memoized on `datasetRevision`; `allEntries` renamed `committedEntriesById` |
+| **F2** — `EntryGestureContext` is the un-collapsed twin of `ContainerDomPorts` | **real, Strong.** Six of thirteen members were the projection R4 had just given an owner. R3 fixed this exact shape one file over | `[x]` `f81c828` — one `SelectionForGestures` member; thirteen members down to nine |
+| F3 — `#selectableEntriesOfRow` linear-scans the full row plan per row click | real, Moderate. Not the hot path, so not I5, but it scales with dataset size on a user action | `[ ]` skipped, below the fix bar |
+| F4 — `SegmentSelectionPorts.confirm` promises a boolean its one caller discards | real, Moderate | `[ ]` skipped |
+| F5 — `step()` sorts the whole Selection to read one element | real, Moderate. `entryIdOfSegment(#segments[0])` is O(1), but they differ for a multi-row Selection, where `step` is already ill-defined | `[ ]` skipped — needs a behaviour decision, not a silent change |
+| F6 — `GestureRefusal` is a strict subset of `RefusalReportInit` | **not worth fixing.** The type carries the record across the async settle boundary, and its `event` is narrowed to the two gesture events — real information | `[x]` no change |
+
+Clean on review: R3's `FrameLayoutView`, R5's `rowSegmentIds`, the `buildRefusalReport`
+consolidation, `frameRevision` becoming a property rather than a closure, and `segment-selection.ts`
+being added to the sentence-length scope in the same slice that created it.
 | `#markInvalid` reads `COMMIT_REFUSAL_TEXT[reason]` twice | real, small | `[ ]` |
 | S7 — comment sentences exceed the 25-word ASD-STE100 cap | real, repo-wide habit | `[ ]` |
 
