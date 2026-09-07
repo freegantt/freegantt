@@ -5,7 +5,7 @@
 **Also carries:** [#216](https://github.com/Pawel-IT/FreeGantt/issues/216) Q3, on the coordinator's
 instruction of 2026-09-06. Q1 ("is a gesture a Command?") is settled **no** and this plan does not
 reopen it.
-**Slice:** S5 · **Branch base:** `s5-start` at `f4c7492` · **Status:** R0 landed. R1 is next.
+**Slice:** S5 · **Branch base:** `s5-start` at `f4c7492` · **Status:** R0-R2 landed. R3 is next.
 **Gate state at plan time:** every gate green at `f4c7492`. Every finding below is invisible to CI.
 
 > ## This is a plan, not a review
@@ -325,9 +325,9 @@ what finding 14's second half asked for.
 
 ### R3 — `ContainerDomPorts` becomes one member per collaborator
 
-Finding 16. Depends on nothing in R1/R2, but land it after them so the port count is final.
+**Landed.** Finding 16. Depends on nothing in R1/R2, but land it after them so the port count is final.
 
-- [ ] Export a read surface from `src/layout/frame-layout.ts`:
+- [x] Export a read surface from `src/layout/frame-layout.ts`:
 
   ```ts
   /** What a reader asks the current frame about what it drew (#185, #199, #212). `FrameLayout`
@@ -344,18 +344,18 @@ Finding 16. Depends on nothing in R1/R2, but land it after them so the port coun
 
   `FrameLayout` declares `implements FrameLayoutView`. Its `frameRevision` getter satisfies the
   `readonly` property with no change.
-- [ ] `ContainerDomPorts` (`src/view/gantt-dom.ts:135`) becomes four members:
+- [x] `ContainerDomPorts` (`src/view/gantt-dom.ts:135`) becomes four members:
   `container`, `paneLayout`, `entryById`, `layout: FrameLayoutView`. `entryById` stays its own
   member on purpose: `DomTarget.entry` is the node's **subject**, and a tooltip must read the live
   Entry, not the frame's copy.
-- [ ] `ContainerDom` reads `this.#ports.layout.segmentIdsForItem(id)`,
+- [x] `ContainerDom` reads `this.#ports.layout.segmentIdsForItem(id)`,
   `…segmentIdsForRow(id)`, `…itemIdsForEntry(id)`, `…entryIdsForRow(id)` and
   `this.#ports.layout.frameRevision`.
-- [ ] `GanttShell`'s construction (`src/view/gantt-shell.ts:484-493`) passes `layout: this.#layout`.
+- [x] `GanttShell`'s construction (`src/view/gantt-shell.ts:484-493`) passes `layout: this.#layout`.
   Five wrapper closures go. That is five lines off `gantt-shell.ts` and one adapter at a real seam.
-- [ ] `src/view/gantt-dom.test.ts:106-107` hands `layout` instead of two closures. The test already
+- [x] `src/view/gantt-dom.test.ts:106-107` hands `layout` instead of two closures. The test already
   builds a real `FrameLayout`, so it passes the instance.
-- [ ] `src/view/gantt-dom.ts` is in the `sentence-length` scope
+- [x] `src/view/gantt-dom.ts` is in the `sentence-length` scope
   (`scripts/check-sentence-length.mjs`). Keep every new comment sentence at 25 words or fewer.
 
 **Why a member and not a second port bag.** A second interface would need a name for a bag with no
@@ -366,6 +366,12 @@ delete a port bag and nothing comes back, so it does not.
 
 **Visible at the end:** `ContainerDomPorts` has four members, one per collaborator, and the shell
 passes the layout by reference.
+
+**R3 landed, as planned.** `FrameLayoutView` lives beside `FrameLayout` in `frame-layout.ts` and is
+exported (type-only) from `layout/index.ts`, but not re-exported from `api/`, so the public surface
+does not move — `pnpm api-report` shows no churn. `ContainerDomPorts` is now `container`,
+`paneLayout`, `entryById`, `layout`. `gantt-shell.ts`'s construction dropped five wrapper closures
+for one `layout: this.#layout`.
 
 ### R4 — the Selection moves out of the shell
 

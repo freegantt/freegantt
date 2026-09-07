@@ -40,9 +40,10 @@ import {
 } from '../render/dom/dom-contract.js';
 import { cssEscapeAttr } from '../render/dom/css-escape.js';
 import { entryIdOfItem, itemIdFromDataset, rowIdFromDataset } from '../model/index.js';
-import type { Entry, EntryId, FieldKey, ItemId, RowId, SegmentId, TargetKind } from '../model/index.js';
+import type { Entry, EntryId, FieldKey, RowId, SegmentId, TargetKind } from '../model/index.js';
 import { SPLITTER_CLASS } from './pane-layout.js';
 import type { PaneLayout, PaneName } from './pane-layout.js';
+import type { FrameLayoutView } from '../layout/index.js';
 
 /** What one node in a Gantt's own DOM stands for. `kind` is `model/`'s `TargetKind`, the same five
  *  words `CommandTarget` already uses. One vocabulary, so a plugin that resolves a right-click and
@@ -129,28 +130,18 @@ export interface GanttDom {
  *  the bar layer, and is inside no row at all. */
 const TARGET_SELECTOR = `.${BAR_CLASS}, .${ROW_LABEL_CLASS}, .${ROW_CELL_CLASS}, .${COLUMN_HEADER_CLASS}, .${SPLITTER_CLASS}, .${ROW_CLASS}`;
 
-/** What one `ContainerDom` reads to answer a pointer. Five of these are the layout's own questions
+/** What one `ContainerDom` reads to answer a pointer. `layout` is the frame's own questions
  *  (#185, #199, #212). A node states its own identity and nothing more. So every set a target names
  *  is asked for, never guessed off the node. */
 export interface ContainerDomPorts {
   /** The element a consumer handed `new Gantt`. Everything this seam answers is scoped to it (I2). */
   container: HTMLElement;
   paneLayout: PaneLayout;
-  /** The Entry one id names, for the node's subject — `Dataset.entries.get`. */
+  /** The Entry one id names, for the node's subject — `Dataset.entries.get`. It stays its own member,
+   *  not part of `layout`: a node's subject is the *live* Entry, not the frame's own copy. */
   entryById: (id: EntryId) => Entry | undefined;
-  /** Which Items one entry draws — `FrameLayout.itemIdsForEntry` (#185). `barFor` walks it in order
-   *  and stops at the first Item the frame actually mounted. */
-  itemIdsForEntry: (id: EntryId) => readonly ItemId[];
-  /** Which Entries one row owns — `FrameLayout.entryIdsForRow` (#199). A row node carries only its
-   *  subject in `data-entry-id`, so the set is asked for, never guessed. */
-  entryIdsForRow: (id: RowId) => readonly EntryId[];
-  /** Which Segments one bar stands for — `FrameLayout.segmentIdsForItem` (#212). */
-  segmentIdsForItem: (id: ItemId) => readonly SegmentId[];
-  /** Which Segments one row stands for — `FrameLayout.segmentIdsForRow` (#212). */
-  segmentIdsForRow: (id: RowId) => readonly SegmentId[];
-  /** How many frames the layout has planned — `FrameLayout.frameRevision` (#212). The pointer memo
-   *  reads it once per event, and drops a cached target the layout has since outgrown. */
-  frameRevision: () => number;
+  /** What the current frame drew — `FrameLayout` itself, or a test's own `FrameLayoutView` literal. */
+  layout: FrameLayoutView;
 }
 
 /** `GanttDom` over one Container (`ContainerNotFoundError`'s own word — the element a consumer hands
@@ -186,7 +177,7 @@ export class ContainerDom implements GanttDom {
     const itemIdAttr = element.dataset[ITEM_ID_KEY];
     const entryIdAttr = element.dataset[ENTRY_ID_KEY];
     const fieldAttr = element.dataset[FIELD_KEY];
-    const frameRevision = this.#ports.frameRevision();
+    const frameRevision = this.#ports.layout.frameRevision;
     if (
       this.#memoTarget !== undefined &&
       this.#memoElement === element &&
@@ -208,7 +199,7 @@ export class ContainerDom implements GanttDom {
   }
 
   barFor(id: EntryId): HTMLElement | undefined {
-    for (const item of this.#ports.itemIdsForEntry(id)) {
+    for (const item of this.#ports.layout.itemIdsForEntry(id)) {
       const bar = this.#ports.container.querySelector<HTMLElement>(
         `.${BAR_CLASS}${attributeIs(ITEM_ID_ATTRIBUTE, item)}`,
       );
@@ -252,7 +243,7 @@ export class ContainerDom implements GanttDom {
         kind: 'bar',
         element,
         entryIds: entry === undefined ? NO_ENTRY_IDS : [entry.id],
-        segmentIds: id === undefined ? NO_SEGMENT_IDS : this.#ports.segmentIdsForItem(id),
+        segmentIds: id === undefined ? NO_SEGMENT_IDS : this.#ports.layout.segmentIdsForItem(id),
         ...entryPart(entry),
       });
     }
@@ -301,12 +292,12 @@ export class ContainerDom implements GanttDom {
 
   /** Every Entry this row owns. The layout answers, because the row node carries its subject only. */
   #entryIdsOfRow(id: RowId | undefined): readonly EntryId[] {
-    return id === undefined ? NO_ENTRY_IDS : this.#ports.entryIdsForRow(id);
+    return id === undefined ? NO_ENTRY_IDS : this.#ports.layout.entryIdsForRow(id);
   }
 
   /** Every Segment this row stands for. The layout answers this one too, for the same reason. */
   #segmentIdsOfRow(id: RowId | undefined): readonly SegmentId[] {
-    return id === undefined ? NO_SEGMENT_IDS : this.#ports.segmentIdsForRow(id);
+    return id === undefined ? NO_SEGMENT_IDS : this.#ports.layout.segmentIdsForRow(id);
   }
 }
 

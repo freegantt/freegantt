@@ -488,11 +488,7 @@ export class GanttShell {
       container: this.#container,
       paneLayout: this.#paneLayout,
       entryById: (id) => this.#options.dataset.entries.get(id),
-      itemIdsForEntry: (id) => this.#layout.itemIdsForEntry(id),
-      entryIdsForRow: (id) => this.#layout.entryIdsForRow(id),
-      segmentIdsForItem: (id) => this.#layout.segmentIdsForItem(id),
-      segmentIdsForRow: (id) => this.#layout.segmentIdsForRow(id),
-      frameRevision: () => this.#layout.frameRevision,
+      layout: this.#layout,
     });
 
     const hasOwnOptions =
