@@ -101,11 +101,7 @@ function paintOneGantt(
       container,
       paneLayout,
       entryById,
-      itemIdsForEntry: (id) => layout.itemIdsForEntry(id),
-      entryIdsForRow: (id) => layout.entryIdsForRow(id),
-      segmentIdsForItem: (id) => layout.segmentIdsForItem(id),
-      segmentIdsForRow: (id) => layout.segmentIdsForRow(id),
-      frameRevision: () => layout.frameRevision,
+      layout,
     }),
     container,
     repaint: (next) => {

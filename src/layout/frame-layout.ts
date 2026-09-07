@@ -16,9 +16,20 @@ import { entryIdOfItem } from '../model/index.js';
 import type { ChangeSet, EntryId, ItemId, RowId, SegmentId } from '../model/index.js';
 import { DEFAULT_LANE_GAP_PX } from './lanes/pack-lanes.js';
 
+/** What a reader asks the current frame about what it drew (#185, #199, #212). `FrameLayout`
+ *  satisfies it; a test hands a literal. It is the read half of `FrameLayout`, the same split
+ *  `EntryStoreView` makes over `EntryStore`. */
+export interface FrameLayoutView {
+  itemIdsForEntry(id: EntryId): readonly ItemId[];
+  entryIdsForRow(id: RowId): readonly EntryId[];
+  segmentIdsForItem(id: ItemId): readonly SegmentId[];
+  segmentIdsForRow(id: RowId): readonly SegmentId[];
+  readonly frameRevision: number;
+}
+
 /** One Gantt's layout pass, with the row-height index kept alive between passes. One instance per
  * Gantt: the cached index describes that Gantt's rows, and nothing about it is shareable. */
-export class FrameLayout {
+export class FrameLayout implements FrameLayoutView {
   #memory = new FrameMemory();
   /** D-S5-15: registered decoration providers' own memory, kept alive the same way `#memory` is —
    *  `run()` recomputes only when the window actually changed since the last `computeFrame` call. */
