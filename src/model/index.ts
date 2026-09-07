@@ -114,6 +114,7 @@ export {
 export type {
   ErrorReport,
   ErrorReportInput,
+  BuiltInErrorCode,
   ErrorCode,
   ErrorSeverity,
   ErrorReporter,

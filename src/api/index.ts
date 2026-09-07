@@ -38,6 +38,7 @@ export type { ErrorFeed } from './watch-all-errors.js';
 export type {
   ErrorReport,
   ErrorReportInput,
+  BuiltInErrorCode,
   ErrorCode,
   ErrorSeverity,
   ErrorReporter,
