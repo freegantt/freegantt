@@ -155,11 +155,7 @@ export const demoFieldOptions = {
   // #142: `end` keeps its demo intent — `harness/index.html`'s own copy names only "Name, Start or
   // Budget" as editable. `CORE_FIELDS.end` now defaults to editable, so this page states the
   // override itself, the same way `hierarchy-dataset.ts` does.
-  fields: [
-    { key: 'cost' as const, type: 'money' },
-    { key: 'team' as const },
-    { key: 'end' as const, editable: false },
-  ],
+  fields: [{ key: 'cost' as const, type: 'money' }, { key: 'team' as const }],
 } as const;
 
 /** Root spans that sit beside Program — not in the nested work tree. */
