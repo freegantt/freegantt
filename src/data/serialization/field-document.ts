@@ -1,6 +1,6 @@
 // data/ — Field data half of the Document (D-S4-15). readDocument and toJSON call this codec.
 
-import type { Field, FieldSource, FieldType, GridColumn } from '../../model/index.js';
+import type { Field, FieldSource, FieldType } from '../../model/index.js';
 import type { SerializedField } from '../../model/index.js';
 import type { DatasetStateOptions } from '../dataset-state.js';
 import { isCoreFieldKey } from '../fields/core-fields.js';
@@ -87,13 +87,16 @@ function writeStoredSource(source: FieldSource): SerializedField['source'] | und
   return strategyFor(source).serialize(source);
 }
 
-function writeColumn(column: Omit<GridColumn, 'field'>): Omit<GridColumn, 'field'> {
-  return {
+function writeColumn(column: NonNullable<Field['column']>): NonNullable<Field['column']> {
+  const shared = {
     ...(column.header !== undefined ? { header: column.header } : {}),
-    ...(column.width !== undefined ? { width: column.width } : {}),
-    ...(column.flex !== undefined ? { flex: column.flex } : {}),
     ...(column.align !== undefined ? { align: column.align } : {}),
   };
+  // `GridColumn`'s sizing pair is exclusive (#249): one literal per branch, not a spread that could
+  // carry both `width` and `flex` — an `Omit<GridColumn, …>` param here once flattened that pair away.
+  if (column.width !== undefined) return { ...shared, width: column.width };
+  if (column.flex !== undefined) return { ...shared, flex: column.flex };
+  return shared;
 }
 
 function encodeDeclaredField(field: Field): SerializedField | undefined {
