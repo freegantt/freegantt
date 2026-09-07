@@ -18,7 +18,7 @@ import type {
   RowSource,
   UnindexedRow,
 } from './row-source.js';
-import { DEFAULT_ROW_SOURCE } from './row-source.js';
+import { DEFAULT_FILTER_POLICY, DEFAULT_ROW_SOURCE } from './row-source.js';
 
 export type { PlannedRow, RowFilter, RowPassInput, RowSort, FilterPolicy } from './row-source.js';
 export { DEFAULT_ROW_SOURCE };
@@ -64,7 +64,7 @@ export function resolveOpenRows(input: {
 }
 
 function filterPolicyOf(source: Exclude<RowSource, CustomRowSource>): FilterPolicy {
-  return source.filterPolicy ?? 'keepAncestors';
+  return source.filterPolicy ?? DEFAULT_FILTER_POLICY;
 }
 
 /** Call: `resolveRows({ entries, rows: gantt.rowSource, collapsed })`. */

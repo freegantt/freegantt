@@ -1032,7 +1032,7 @@ export class Gantt<TMeta = unknown, TFields extends Record<string, unknown> = Re
         end: InstantInput;
     });
     reveal(id: EntryId | SegmentId): void;
-    get rowSource(): RowSource;
+    get rowSource(): ResolvedRowSource;
     set rowSource(next: RowSource);
     get selectedEntries(): readonly Entry[];
     get selectedEntryIds(): readonly EntryId[];
@@ -1742,6 +1742,39 @@ export interface ResolvedColumn extends FrameColumn {
     // (undocumented)
     resizable?: boolean;
     tooltip?: boolean;
+}
+
+// @public
+export interface ResolvedCustomRowSource extends CustomRowSource {
+    // (undocumented)
+    heightMode: RowHeightMode;
+}
+
+// @public (undocumented)
+export interface ResolvedEntriesRowSource extends ResolvedRowSourceCommon {
+    // (undocumented)
+    source: 'entries';
+    // (undocumented)
+    tree: boolean;
+}
+
+// @public (undocumented)
+export interface ResolvedGroupRowSource extends ResolvedRowSourceCommon {
+    // (undocumented)
+    groupBy(entry: Entry, fields?: FieldContext): string;
+    // (undocumented)
+    source: 'group';
+}
+
+// @public
+export type ResolvedRowSource = ResolvedEntriesRowSource | ResolvedGroupRowSource | ResolvedCustomRowSource;
+
+// @public
+export interface ResolvedRowSourceCommon extends RowSourceCommon {
+    // (undocumented)
+    filterPolicy: FilterPolicy;
+    // (undocumented)
+    heightMode: RowHeightMode;
 }
 
 // @public
