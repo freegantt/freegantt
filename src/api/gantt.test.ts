@@ -3432,10 +3432,45 @@ describe('Gantt interactions / capability hot path (S3.2, D-S3-9, [S3-A3]/[S3-A5
   it('clearCapabilityRule restores the per-kind table, which `true` would not (#195)', () => {
     const container = document.createElement('div');
     const dataset = new Dataset({
-      entries: [{ id: 'g1', kind: 'group', name: 'Group' }, ...sampleEntries],
+      entries: [
+        { id: 'm1', kind: 'milestone', name: 'Ship', start: '2026-09-01', end: '2026-09-01' },
+        ...sampleEntries,
+      ],
       timeZone: 'UTC',
     });
     const gantt = new Gantt({ container, dataset });
+
+    const milestoneBar = container.querySelector<HTMLElement>('[data-kind="milestone"]')!;
+    const timeline = container.querySelector<HTMLElement>('.fg-timeline-pane')!;
+    const original = document.elementFromPoint.bind(document);
+    document.elementFromPoint = () => milestoneBar;
+    timeline.dispatchEvent(new PointerEvent('pointermove', { clientX: 5, clientY: 5 }));
+
+    // A milestone refuses resize by default — it is zero-length, so it has no edge to drag — and
+    // `true` overrides that default. Its `start` and `end` are ordinary stored values, so nothing
+    // else stands in the way once the gesture is offered (#256).
+    gantt.setCapabilityRule('resize', true);
+    expect(container.querySelector<HTMLElement>('.fg-bar-handle[data-edge="start"]')!.hidden).toBe(false);
+
+    gantt.clearCapabilityRule('resize');
+    expect(container.querySelector<HTMLElement>('.fg-bar-handle[data-edge="start"]')!.hidden).toBe(true);
+    expect(gantt.interactions).toEqual({});
+
+    document.elementFromPoint = original;
+    gantt.destroy();
+  });
+
+  it('interactions.resize offers the gesture and still cannot write a derived date (#256)', () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({
+      entries: [{ id: 'g1', kind: 'group', name: 'Group' }, ...sampleEntries],
+      timeZone: 'UTC',
+    });
+    // `resize: true` says which entries offer the gesture. It does not say whether the values that
+    // gesture writes may change — a roll-up parent's `start` and `end` come from its children, and
+    // `canWrite` is the one place that answers so (#256). Before this, `true` opened the handles and
+    // the drag committed a write the Rollup pass immediately took back.
+    const gantt = new Gantt({ container, dataset, interactions: { resize: true } });
 
     const groupBar = container.querySelector<HTMLElement>('[data-kind="group"]')!;
     const timeline = container.querySelector<HTMLElement>('.fg-timeline-pane')!;
@@ -3443,13 +3478,8 @@ describe('Gantt interactions / capability hot path (S3.2, D-S3-9, [S3-A3]/[S3-A5
     document.elementFromPoint = () => groupBar;
     timeline.dispatchEvent(new PointerEvent('pointermove', { clientX: 5, clientY: 5 }));
 
-    // A rolled-up parent refuses resize by default, and `true` overrides that default.
-    gantt.setCapabilityRule('resize', true);
-    expect(container.querySelector<HTMLElement>('.fg-bar-handle[data-edge="start"]')!.hidden).toBe(false);
-
-    gantt.clearCapabilityRule('resize');
     expect(container.querySelector<HTMLElement>('.fg-bar-handle[data-edge="start"]')!.hidden).toBe(true);
-    expect(gantt.interactions).toEqual({});
+    expect(container.querySelector<HTMLElement>('.fg-bar-handle[data-edge="end"]')!.hidden).toBe(true);
 
     document.elementFromPoint = original;
     gantt.destroy();

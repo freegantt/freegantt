@@ -25,7 +25,7 @@ import { effectiveEntriesFor, entryAfterEdits } from '../data/entry-tree.js';
 import type { EventBus } from './event-bus.js';
 import { RefusalNote } from './event-bus.js';
 import type { AsyncCancelableEvent, EntryMove, EntryResize, GanttEventMap } from './event-bus.js';
-import type { Interactions } from './capability.js';
+import type { GestureCapability } from './capability.js';
 import { FrameScheduler } from './frame-scheduler.js';
 import type { DraftOptions, EntryGesture, EntryGestureSession } from './entry-gesture-context.js';
 
@@ -53,7 +53,7 @@ export interface GesturePipelineDeps {
   /** One resolution (I14, D-S3-9) — `GanttShell#canGesture`, the same answer the pointer-selection
    *  path and the affordance ids resolve through, never re-derived here. `edge` narrows a `'resize'`
    *  question to one handle (#142); every other capability ignores it. */
-  canGesture(capability: keyof Interactions, id: EntryId, edge?: 'start' | 'end'): boolean;
+  canGesture(capability: GestureCapability, id: EntryId, edge?: 'start' | 'end'): boolean;
   commitEntryEdits(edits: StoredEdits): boolean;
   emit: EventBus<GanttEventMap, AsyncCancelableEvent>['emit'];
   /** S5.12, D-S5-40: a vetoed gesture still draws nothing and still throws nothing, and now it also
@@ -135,7 +135,7 @@ export class GesturePipeline {
    *  `entriesForGesture()`'s result. */
   session(grabbed: EntryId, gesture: EntryGesture): EntryGestureSession | undefined {
     if (this.#heldItemIds !== undefined) return undefined;
-    const capability: keyof Interactions = gesture.kind === 'resize' ? 'resize' : 'move';
+    const capability: GestureCapability = gesture.kind === 'resize' ? 'resize' : 'move';
     const edge = gesture.kind === 'resize' ? gesture.edge : undefined;
     const entries = this.#entriesForGesture(grabbed, capability, edge);
     if (entries.length === 0) return undefined;
@@ -169,7 +169,7 @@ export class GesturePipeline {
    *  blocks the whole drag — it just sits out of it. */
   #entriesForGesture(
     grabbedId: EntryId,
-    capability: keyof Interactions,
+    capability: GestureCapability,
     edge?: 'start' | 'end',
   ): readonly Entry[] {
     const selection = this.#deps.selectedEntryIds();

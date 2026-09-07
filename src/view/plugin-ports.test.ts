@@ -96,7 +96,7 @@ function makeHarness(overrides: Partial<GanttShellPorts> = {}): Harness {
     entry: (id) => makeEntry(id),
     resolvedColumns: () => [],
     resolvedColumn: (field) => shell.resolvedColumns().find((column) => column.field === field),
-    canEdit: () => true,
+    canWrite: () => ({ ok: true }),
     proposeEntryEdit: () => true,
     announceEntryEdit: vi.fn(),
     // S5.12: no bus behind the fake, so every report falls through to the site's own console line —
@@ -143,7 +143,7 @@ describe('buildPluginPorts — the D-S5-4 gate', () => {
     harness.close();
 
     expect(() => harness.parts.interaction.registerKeyHandler('Escape', () => {})).not.toThrow();
-    expect(harness.parts.interaction.canEdit(makeEntry('a'))).toBe(true);
+    expect(harness.parts.interaction.canWrite(makeEntry('a'), 'name')).toEqual({ ok: true });
     expect(harness.parts.view.resolveTooltipContent('a' as EntryId)).toBeUndefined();
     expect(harness.parts.view.resolveTooltipColumns(makeEntry('a'))).toEqual([]);
   });
@@ -309,11 +309,19 @@ describe('buildPluginPorts — the resolved-column reads (S5.8, D-S5-13)', () =>
     ]);
   });
 
-  it('isColumnEditable answers undefined for a field no resolved column names', () => {
-    const harness = makeHarness({ resolvedColumns: () => [column({ editable: true })] });
+  // #256 retired `isColumnEditable`: "may this cell's value change" is one question now, and
+  // `ctx.interaction.canWrite` is the one port that answers it — for the grid pane and for the bar's
+  // own handles alike. `capability.test.ts` pins the answer itself.
+  it("canWrite reaches the shell's own capability resolution, verdict and all", () => {
+    const harness = makeHarness({
+      canWrite: (_entry, field) => (field === 'end' ? { ok: false, reason: 'derived-value' } : { ok: true }),
+    });
 
-    expect(harness.parts.view.isColumnEditable('cost')).toBe(true);
-    expect(harness.parts.view.isColumnEditable('name')).toBeUndefined();
+    expect(harness.parts.interaction.canWrite(makeEntry('a'), 'start')).toEqual({ ok: true });
+    expect(harness.parts.interaction.canWrite(makeEntry('a'), 'end')).toEqual({
+      ok: false,
+      reason: 'derived-value',
+    });
   });
 });
 

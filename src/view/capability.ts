@@ -1,14 +1,28 @@
-// view/ — capabilities resolve once, here, over a per-kind default table (S3, D-S3-9). `interaction/`
-// asks the same `can()` this file resolves (D-S3-5), and `render/dom` never asks it at all — the
-// affordance ids `GanttShell` writes into `InteractionState` (D-S3-6/D-S3-8) are this resolution's
-// only output on the paint side, so the same answer that hides a handle is the one that refuses the
-// gesture (I14).
+// view/ — capabilities resolve once, here. `interaction/` asks the same `can()` this file resolves
+// (D-S3-5), and `render/dom` never asks it at all — the affordance ids `GanttShell` writes into
+// `InteractionState` (D-S3-6/D-S3-8) are this resolution's only output on the paint side, so the
+// same answer that hides a handle is the one that refuses the gesture (I14).
+//
+// #256: a write's unit is the cell — one Entry, one Field, which is the changeset's own shape. So
+// `canWrite` is the primitive here, and every gesture that writes a value is a conjunction over the
+// cells it writes. Before this, "may this value change" was answered at three units that could not
+// meet: per Field (`Field.editable`), per Entry (`Interactions.edit`), and per cell (a rule the cell
+// editor kept to itself). A bar move wrote `start` and `end` without asking either Field.
 
-import type { Entry, EntryKind } from '../model/index.js';
+import type { Entry, EntryKind, Field, FieldKey } from '../model/index.js';
 
 /** A boolean pins every entry the same way; a predicate lets a consumer vary the answer per entry
  *  (U4: `interactions: { resize: e => e.kind !== 'group' }`). */
 export type CapabilityRule = boolean | ((entry: Entry) => boolean);
+
+/** #256: the write rule takes the cell, because a write names one. Call:
+ *  `interactions: { edit: (entry, field) => entry.id !== 'locked' || field !== 'end' }`. A boolean
+ *  pins every cell the same way. */
+export type WriteRule = boolean | ((entry: Entry, field: FieldKey) => boolean);
+
+/** The gestures that arm and paint. A write is not one of them — it is what a gesture, a cell
+ *  editor, or a keyboard nudge asks permission to do, and `canWrite` answers that. */
+export type GestureCapability = 'move' | 'resize' | 'select';
 
 /** Live (S3/S5, D-S3-9). `linkCreate` stays off this type until S7 (I11: no unimplemented public
  *  key). */
@@ -16,78 +30,146 @@ export interface Interactions {
   move?: CapabilityRule;
   resize?: CapabilityRule;
   select?: CapabilityRule;
-  /** S5.8, D-S5-19. Defaults `true` for every kind, including a roll-up kind — unlike `move`/
-   *  `resize`, a roll-up parent's own name/team/etc. cells are ordinary stored values; only its
-   *  *rolling-up* Fields (`start`/`end`, a consumer's own `rollUp` field) are derived, and
-   *  `inlineEditing()` refuses those per-cell, by asking the Field, not by asking the kind. */
-  edit?: CapabilityRule;
+  /** #256, S5.8, D-S5-19: the consumer's own answer to "may this cell's value change" — the one
+   *  override above `Field.editable`, and the only per-entry axis that key has. It gates the inline
+   *  cell editor, the bar's resize handles, and the bar move alike, because all three write a cell
+   *  (I14). `Field.editable` states which Fields are writable at all; this states which of them are
+   *  writable *here*. */
+  edit?: WriteRule;
 }
 
+/** Why a write is refused, when the refusal is worth words. A cell whose refusal carries no reason
+ *  already shows it — no handle painted, no editor offered — so the cell editor stays silent for it
+ *  (`s5.8-inline-editing.md` §1, "Which refusals speak"). One spelling, shared with
+ *  `model/error-report.ts`'s `BuiltInErrorCode` and the cell editor's own `REFUSAL_TEXT`. */
+export type WriteRefusalReason = 'derived-value';
+
+/** May this cell's value change, and if not, is the refusal worth explaining? */
+export type WriteVerdict =
+  { readonly ok: true } | { readonly ok: false; readonly reason?: WriteRefusalReason };
+
+// One verdict object per answer, frozen and shared: `canWrite` sits behind hover affordance
+// resolution, and a verdict allocated per hover would be an allocation the hot path does not need
+// (I5). The same shape `gesture-pipeline.ts`'s own `NO_EXTRA_EDITS` uses — a frozen constant, not a
+// singleton holding state (no module-level singletons, plans/01 §6).
+const WRITABLE: WriteVerdict = Object.freeze({ ok: true });
+const NOT_WRITABLE: WriteVerdict = Object.freeze({ ok: false });
+const DERIVED: WriteVerdict = Object.freeze({ ok: false, reason: 'derived-value' as const });
+
 export interface Capabilities {
-  /** `edge` narrows a `'resize'` question to one handle (#142) — `defaultRule` is the only reader,
-   *  and only when nothing else has already answered the whole gesture (see below). Every other
-   *  capability ignores it. */
-  can(capability: keyof Interactions, entry: Entry, edge?: 'start' | 'end'): boolean;
+  /** `edge` narrows a `'resize'` question to one handle (#142). With no edge, `'resize'` asks
+   *  whether *either* handle may resize. Every other capability ignores it. */
+  can(capability: GestureCapability, entry: Entry, edge?: 'start' | 'end'): boolean;
+  /** #256: the one answer to "may this Field's value change on this Entry", asked by every writer —
+   *  the cell editor, the resize drag, the move drag, the keyboard nudge. */
+  canWrite(entry: Entry, field: FieldKey): WriteVerdict;
 }
 
 /** S5.9, D-S5-22: `ctx.interaction.registerKindDefaults(kind, defaults)` — a plugin's per-kind
- *  answer, one level below a consumer's own `interactions` and one level above the library table
- *  below. Same gesture keys as `Interactions`, but a plain boolean only (no predicate) — the
- *  registering plugin does not see a per-entry `entry`, only the `kind` it registered against.
- *  Mapped from `Interactions` (#148) so a future gesture key (S7's `linkCreate`) cannot land on
- *  one interface and be forgotten on the other. */
+ *  answer, one level below a consumer's own `interactions` and one level above the library rules
+ *  below. Same keys as `Interactions`, but a plain boolean only (no predicate) — the registering
+ *  plugin does not see a per-entry `entry`, and for `edit` it does not see a per-cell `field`
+ *  either. Mapped from `Interactions` (#148) so a future gesture key (S7's `linkCreate`) cannot land
+ *  on one interface and be forgotten on the other. */
 export type KindDefaults = { [K in keyof Interactions]?: boolean };
 
-/** The per-kind default table (D-S3-9), read when `interactions` says nothing for that gesture:
- *  `select` always defaults true — I14's hide half is a vacant no-op for it (D-S3-9/D-S3-10); a
- *  Rollup-derived kind (the 'group' row) refuses `move`/`resize` because the identity extender has
- *  nothing to write its children with, so a drag would commit and immediately roll back; `milestone`
- *  refuses `resize` only — it is zero-length by construction and has no edge to drag; every other
- *  kind, shipped or consumer-defined, defaults to the ordinary 'span' row.
+/** What one Gantt's capability resolution reads. An object, not four positional arguments: the
+ *  Field lookup joined a list that already read badly at the call site. */
+export interface CapabilityInputs {
+  interactions?: Interactions | undefined;
+  /** From the bound `Dataset` — `GanttShell` passes `dataset.isRollUpKind` straight through, never
+   *  `rollUpKinds` itself (S3, D-S3-9). */
+  isRollUpKind: (kind: EntryKind) => boolean;
+  /** From the bound `Dataset` — `dataset.field`. The library write rule reads three keys off it:
+   *  `source`, `rollUp` and `editable`. */
+  fieldFor: (key: FieldKey) => Field | undefined;
+  /** S5.9, D-S5-22. */
+  registeredDefaultsFor?: ((kind: EntryKind) => KindDefaults | undefined) | undefined;
+}
+
+/** The library's own last word on a cell, read when neither the consumer nor a plugin says anything.
  *
- *  #142: a drag on one edge writes that edge's own Field (`start` or `end`), so the last word on
- *  whether the *default* rule allows it is that Field's own `editable` (I14 — the same answer
- *  `inlineEditing()` already asks before it opens that Field's cell). This is the *default* row
- *  only: an explicit `interactions.resize` or a registered `KindDefaults.resize` has already
- *  answered by the time `resolveCapabilities` reaches here, and neither takes an edge, so a
- *  consumer's own override always wins whole, both edges alike. */
-function defaultRule(
-  capability: keyof Interactions,
+ *  A `compute`-sourced Field is computed on read and owns no stored home (ADR 0005), so there is
+ *  nothing to write — `duration` needs no `editable: false` to say so. A roll-up parent's rolling-up
+ *  Field is written by the Rollup pass off its children, so a user write there would commit and be
+ *  overwritten; that refusal is worth words, and it is the same one the cell editor has always
+ *  shown. Everything else is the Field's own `editable`, which defaults to `false`. */
+function libraryWriteRule(
   entry: Entry,
+  field: Field | undefined,
   isRollUpKind: (kind: EntryKind) => boolean,
-  edge: 'start' | 'end' | undefined,
-  fieldEditableForEdge: ((edge: 'start' | 'end') => boolean) | undefined,
-): boolean {
-  if (capability === 'select') return true;
-  if (capability === 'edit') return true;
-  if (isRollUpKind(entry.kind)) return false;
+): WriteVerdict {
+  if (field === undefined) return NOT_WRITABLE;
+  if (field.source?.from === 'compute') return NOT_WRITABLE;
+  if (isRollUpKind(entry.kind) && field.rollUp !== undefined) return DERIVED;
+  return field.editable === true ? WRITABLE : NOT_WRITABLE;
+}
+
+/** Does this gesture mean anything for this Entry, before anyone asks what it would write? A
+ *  milestone is zero-length by construction, so it has no edge to drag. `select` writes nothing, so
+ *  it is always offered — I14's hide half is a vacant no-op for it (D-S3-9/D-S3-10). Every other
+ *  kind, shipped or consumer-defined, is offered every gesture, and `canWrite` below decides whether
+ *  it can carry one out.
+ *
+ *  A roll-up kind is *not* named here, and does not need to be: its `start` and `end` both roll up,
+ *  so `canWrite` already closes both edges, which closes move and resize alike. */
+function gestureIsOffered(capability: GestureCapability, entry: Entry): boolean {
   if (capability === 'resize' && entry.kind === 'milestone') return false;
-  if (capability === 'resize' && edge !== undefined && fieldEditableForEdge !== undefined) {
-    return fieldEditableForEdge(edge);
-  }
   return true;
 }
 
-/** `isRollUpKind` comes from the bound `Dataset` (S3, D-S3-9) — `GanttShell` passes
- *  `dataset.isRollUpKind` straight through, never `rollUpKinds` itself. `registeredDefaultsFor`
- *  (S5.9, D-S5-22) is the middle layer: the consumer's own `interactions` still wins over it, and
- *  it still wins over the library table, precedence stated once, here — `defaultRule` never sees a
- *  registered plugin default, so an unregistered kind still falls to its own row untouched. */
-export function resolveCapabilities(
-  interactions: Interactions | undefined,
-  isRollUpKind: (kind: EntryKind) => boolean,
-  registeredDefaultsFor?: (kind: EntryKind) => KindDefaults | undefined,
-  /** #142: `dataset.field('start'|'end')?.editable` — read only by `defaultRule`'s `resize` row,
-   *  only when an `edge` is asked and nothing above it has already answered. */
-  fieldEditableForEdge?: (edge: 'start' | 'end') => boolean,
-): Capabilities {
+/** Which cells a gesture writes. `move` shifts the whole bar, so it writes both dates and needs both
+ *  (this is the hole #256 opened: a locked `start` hid its handle and a move rewrote it anyway).
+ *  `resize` writes the dragged edge's own Field. `select` writes nothing. */
+function gestureCanWriteWhatItNeeds(
+  capability: GestureCapability,
+  entry: Entry,
+  edge: 'start' | 'end' | undefined,
+  canWrite: (entry: Entry, field: FieldKey) => WriteVerdict,
+): boolean {
+  if (capability === 'select') return true;
+  if (capability === 'move') return canWrite(entry, 'start').ok && canWrite(entry, 'end').ok;
+  if (edge !== undefined) return canWrite(entry, edge).ok;
+  return canWrite(entry, 'start').ok || canWrite(entry, 'end').ok;
+}
+
+/** Precedence, stated once, here: the consumer's own `interactions` wins over a plugin's registered
+ *  per-kind default, which wins over the library rules above. It is the same ladder for a gesture and
+ *  for a write.
+ *
+ *  A gesture is the conjunction of the two questions, never a substitute for either: `interactions`
+ *  and a plugin default answer *whether the gesture is offered*, and `canWrite` answers *whether the
+ *  values it writes may change*. So `interactions: { resize: true }` opens the handle on a kind the
+ *  library would have closed, and still cannot write a Field the consumer declared `editable: false`
+ *  — to open that, open the Field, or answer `interactions.edit` for the cell. One home for "may this
+ *  value change" is the whole point (#256). */
+export function resolveCapabilities(inputs: CapabilityInputs): Capabilities {
+  const { interactions, isRollUpKind, fieldFor, registeredDefaultsFor } = inputs;
+
+  const canWrite = (entry: Entry, field: FieldKey): WriteVerdict => {
+    const rule = interactions?.edit;
+    if (rule !== undefined) {
+      const allowed = typeof rule === 'function' ? rule(entry, field) : rule;
+      return allowed ? WRITABLE : NOT_WRITABLE;
+    }
+    const registered = registeredDefaultsFor?.(entry.kind)?.edit;
+    if (registered !== undefined) return registered ? WRITABLE : NOT_WRITABLE;
+    return libraryWriteRule(entry, fieldFor(field), isRollUpKind);
+  };
+
+  const isOffered = (capability: GestureCapability, entry: Entry): boolean => {
+    const rule = interactions?.[capability];
+    if (rule !== undefined) return typeof rule === 'function' ? rule(entry) : rule;
+    const registered = registeredDefaultsFor?.(entry.kind)?.[capability];
+    if (registered !== undefined) return registered;
+    return gestureIsOffered(capability, entry);
+  };
+
   return {
     can(capability, entry, edge) {
-      const rule = interactions?.[capability];
-      if (rule !== undefined) return typeof rule === 'function' ? rule(entry) : rule;
-      const registered = registeredDefaultsFor?.(entry.kind)?.[capability];
-      if (registered !== undefined) return registered;
-      return defaultRule(capability, entry, isRollUpKind, edge, fieldEditableForEdge);
+      if (!isOffered(capability, entry)) return false;
+      return gestureCanWriteWhatItNeeds(capability, entry, edge, canWrite);
     },
+    canWrite,
   };
 }

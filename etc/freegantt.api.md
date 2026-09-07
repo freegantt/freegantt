@@ -1041,7 +1041,7 @@ export class Gantt<TMeta = unknown, TFields extends Record<string, unknown> = Re
     get selectedEntryIds(): readonly EntryId[];
     get selectedSegmentIds(): readonly SegmentId[];
     set selectedSegmentIds(ids: readonly (SegmentId | string)[]);
-    setCapabilityRule(capability: keyof Interactions, rule: CapabilityRule): void;
+    setCapabilityRule<K extends keyof Interactions>(capability: K, rule: NonNullable<Interactions[K]>): void;
     showGridColumn(field: FieldKey): void;
     get snap(): SnapSetting;
     set snap(next: SnapSetting | undefined);
@@ -1183,6 +1183,9 @@ export type GanttScaleOptions = {
 };
 
 // @public
+export type GestureCapability = 'move' | 'resize' | 'select';
+
+// @public
 export type GridColumn = GridColumnBase & GridColumnSizing;
 
 // @public
@@ -1283,7 +1286,7 @@ export type InstantInput = Instant | Date | number | string;
 
 // @public
 export interface Interactions {
-    edit?: CapabilityRule;
+    edit?: WriteRule;
     // (undocumented)
     move?: CapabilityRule;
     // (undocumented)
@@ -1553,7 +1556,7 @@ export interface PluginContextParts<TGantt = unknown, TDataset = unknown> {
     interaction: {
         registerKeybinding(binding: KeyBindingOf<TGantt, TDataset>): Disposer;
         registerKeyHandler: RegisterKeyHandler;
-        canEdit(entry: Entry): boolean;
+        canWrite(entry: Entry, field: FieldKey): WriteVerdict;
         proposeEntryEdit(payload: EntryFieldEdit): boolean | Promise<boolean>;
         announceEntryEdit(payload: EntryFieldEdit): void;
         registerKindDefaults(kind: EntryKind, defaults: KindDefaults): Disposer;
@@ -1573,7 +1576,6 @@ export interface PluginContextParts<TGantt = unknown, TDataset = unknown> {
         resolveTooltipContent(entryId: EntryId): ElementDescription | undefined;
         resolveTooltipColumns(entry: Entry): readonly TooltipColumn[];
         resolvedColumns(): readonly GridColumn[];
-        isColumnEditable(field: FieldKey): boolean | undefined;
         registerDecoration(layer: DecorationLayer, provider: DecorationProvider): Disposer;
         registerGridColumn(column: GridColumnInput): Disposer;
     };
@@ -1739,7 +1741,6 @@ export type RendererPoint = 'bar' | 'cell' | 'header' | 'tooltip';
 export interface ResolvedColumn extends FrameColumn {
     // (undocumented)
     cellRenderer?: ColumnCellRenderer;
-    editable?: boolean;
     // (undocumented)
     format(entry: Entry): string;
     // (undocumented)
@@ -2185,6 +2186,20 @@ export function watchAllErrors(feeds: readonly ErrorFeed[], handler: (report: Er
 
 // @public
 export function wholeEntryItem(entry: Entry): Item;
+
+// @public
+export type WriteRefusalReason = 'derived-value';
+
+// @public
+export type WriteRule = boolean | ((entry: Entry, field: FieldKey) => boolean);
+
+// @public
+export type WriteVerdict = {
+    readonly ok: true;
+} | {
+    readonly ok: false;
+    readonly reason?: WriteRefusalReason;
+};
 
 // @public
 export interface ZonedTime {

@@ -134,7 +134,17 @@ export type {
   EntryFieldEdit,
 } from '../view/index.js';
 // S3, D-S3-9: `Gantt.interactions`'s own type and the per-gesture rule shape (`view/capability.ts`).
-export type { CapabilityRule, Interactions, KindDefaults } from '../view/index.js';
+// #256: `WriteRule` is the shape of `interactions.edit`, which answers one cell rather than one
+// entry, and `WriteVerdict` is what `ctx.interaction.canWrite` hands a plugin back.
+export type {
+  CapabilityRule,
+  GestureCapability,
+  Interactions,
+  KindDefaults,
+  WriteRefusalReason,
+  WriteRule,
+  WriteVerdict,
+} from '../view/index.js';
 // #168 (S5.3, D-S5-8; #158): the type of both `PluginContext.view.overlay` and
 // `PluginContext.view.rowLayer`. One mount shape, two instances — a plugin builds a `Popup` (or its
 // own primitive) against this alone, never against `view/` or `render/` directly.

@@ -4,7 +4,7 @@
 
 import { entryIdOfItem } from '../model/index.js';
 import type { EntryId, ItemId } from '../model/index.js';
-import type { Interactions } from './capability.js';
+import type { GestureCapability } from './capability.js';
 
 export interface AffordanceInputs {
   hoveredItemId: ItemId | undefined;
@@ -20,7 +20,7 @@ export interface AffordanceInputs {
   /** Every Item one entry draws in the current frame (`FrameLayout.itemIdsForEntry`). The fallback
    *  asks it instead of building an Item id out of an entry id. */
   itemIdsForEntry: (id: EntryId) => readonly ItemId[];
-  canGesture: (capability: keyof Interactions, id: EntryId, edge?: 'start' | 'end') => boolean;
+  canGesture: (capability: GestureCapability, id: EntryId, edge?: 'start' | 'end') => boolean;
 }
 
 export interface AffordanceIds {
@@ -71,7 +71,7 @@ export function projectAffordances(inputs: AffordanceInputs): AffordanceIds {
  *  is the "no handles at all" case every caller below already treats as a miss. */
 function resolveEdges(
   id: EntryId,
-  canGesture: (capability: keyof Interactions, id: EntryId, edge?: 'start' | 'end') => boolean,
+  canGesture: (capability: GestureCapability, id: EntryId, edge?: 'start' | 'end') => boolean,
 ): { start: boolean; end: boolean } | undefined {
   const start = canGesture('resize', id, 'start');
   const end = canGesture('resize', id, 'end');
@@ -89,7 +89,7 @@ function resolveResizableEntry(inputs: {
   soleSelectedEntryId: EntryId | undefined;
   selectedSegmentCountOfSoleEntry: number;
   itemIdsForEntry: (id: EntryId) => readonly ItemId[];
-  canGesture: (capability: keyof Interactions, id: EntryId, edge?: 'start' | 'end') => boolean;
+  canGesture: (capability: GestureCapability, id: EntryId, edge?: 'start' | 'end') => boolean;
 }): { entryId: EntryId; edges: { start: boolean; end: boolean } } | undefined {
   const {
     hoveredItemId,
