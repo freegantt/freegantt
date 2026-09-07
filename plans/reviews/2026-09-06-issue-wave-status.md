@@ -21,7 +21,7 @@ Mark an item done in the same commit that closes it. A line that is not marked d
 | #210 | a `before*` veto says why, and its words reach the report | `[x]` | `c7bcb38` · closed |
 | #234 | a refused cell commit reports, and says what is unsaved | `[x]` | `fbd2e47` · closed |
 | #237 | a bad date names the call the consumer made | `[x]` | `62c5690` · closed, remainder is #242 |
-| #232 | duplicate changeset rows behind the I4 false positive (D-S5-49) | `[~]` | Lane F |
+| #232 | duplicate changeset rows behind the I4 false positive (D-S5-49) | `[x]` | `61ea020` · closed |
 | #242 | `InvalidInstantError` stays message-shaped — split it, or document the exception | `[?]` | filed from #237 |
 | — | `lock-entries.ts` returns `refuse(reason)`; three pages dropped their refusal callbacks | `[x]` | from #210 |
 | #230 | entry-from-Segment refactor — R3, R4, R5 | `[ ]` | R0–R2 landed |
