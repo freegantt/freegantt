@@ -60,6 +60,27 @@ describe('PluginStores.reserve', () => {
     expect(other.get(entryId('t1'))).toBeUndefined();
     expect(lock.get(entryId('t1'))).toEqual({ locked: true });
   });
+
+  // A3 (#247 S3-3): `get`/`set`/`remove` accept a plain string, like `dataset.entries.get` does —
+  // an app author never brands an id by hand to call a plugin store.
+  it('accepts a plain string id everywhere a branded EntryId works, on the owner handle and the read-only view', () => {
+    const state = newState();
+    const lock = state.pluginStores.reserve<LockRow>(LOCK);
+
+    lock.set('t1', { locked: true });
+    lock.set(entryId('t2'), { locked: true });
+    expect(lock.get('t1')).toEqual({ locked: true });
+    expect(lock.get(entryId('t1'))).toEqual({ locked: true });
+    expect(lock.get('t2')).toEqual({ locked: true });
+
+    const view = state.pluginStores.read<LockRow>(LOCK);
+    expect(view?.get('t1')).toEqual({ locked: true });
+    expect(view?.get(entryId('t2'))).toEqual({ locked: true });
+
+    lock.remove('t1');
+    expect(lock.get('t1')).toBeUndefined();
+    expect(view?.get('t1')).toBeUndefined();
+  });
 });
 
 describe('PluginStores.read (D-S5-30)', () => {
