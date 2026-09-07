@@ -86,12 +86,12 @@ Findings only, no report artifact. Every one verified against the file before it
 | F4 — `SegmentSelectionPorts.confirm` promises a boolean its one caller discards | real, Moderate | `[ ]` skipped |
 | F5 — `step()` sorts the whole Selection to read one element | real, Moderate. `entryIdOfSegment(#segments[0])` is O(1), but they differ for a multi-row Selection, where `step` is already ill-defined | `[ ]` skipped — needs a behaviour decision, not a silent change |
 | F6 — `GestureRefusal` is a strict subset of `RefusalReportInit` | **not worth fixing.** The type carries the record across the async settle boundary, and its `event` is narrowed to the two gesture events — real information | `[x]` no change |
+| `#markInvalid` reads `COMMIT_REFUSAL_TEXT[reason]` twice | real, small | `[ ]` |
+| S7 — comment sentences exceed the 25-word ASD-STE100 cap | real, repo-wide habit | `[ ]` |
 
 Clean on review: R3's `FrameLayoutView`, R5's `rowSegmentIds`, the `buildRefusalReport`
 consolidation, `frameRevision` becoming a property rather than a closure, and `segment-selection.ts`
 being added to the sentence-length scope in the same slice that created it.
-| `#markInvalid` reads `COMMIT_REFUSAL_TEXT[reason]` twice | real, small | `[ ]` |
-| S7 — comment sentences exceed the 25-word ASD-STE100 cap | real, repo-wide habit | `[ ]` |
 
 ### Next slice
 
@@ -100,9 +100,9 @@ being added to the sentence-length scope in the same slice that created it.
 | candidate 5 — `DomTarget` and the gesture context return one `ActedOn` | `[ ]` |
 | candidate 6 — `BuiltInCommandId` derives from one `as const` table | `[ ]` |
 | candidate 7 — close the remaining harness gaps in `src/` (`ViewPreset.label`, shipped snap settings, one theme write) | `[ ]` |
-| candidate 8 — give the Selection its own `view/selection.ts` | `[ ]` |
+| candidate 8 — give the Selection its own `view/selection.ts` | `[x]` `e7048ec` — landed as `src/view/segment-selection.ts` |
 | `CONTEXT.md` entries for `ActedOn` and `moveEntryTo` | `[ ]` |
-| `extraEditsFor`'s surface question — document it as the plugin-author door, revisit at S7 | `[?]` |
+| `extraEditsFor`'s surface question | `[x]` settled, not yet landed: #250's S6-1 moves the method off the public `Dataset` class entirely, behind ADR 0007's friend-function pattern. It does not become a documented plugin-author door. |
 
 ### Not accepted
 
