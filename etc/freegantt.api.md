@@ -734,8 +734,10 @@ export interface EntryStoreView<TMeta = unknown, TFields extends Record<string, 
     readonly size: number;
 }
 
+// Warning: (ae-forgotten-export) The symbol "BuiltInErrorCode" needs to be exported by the entry point index.d.ts
+//
 // @public
-export type ErrorCode = 'mutation-cancelled' | 'entry-move-cancelled' | 'entry-resize-cancelled' | 'renderer-failed' | 'disposer-failed' | 'plugin-reconfigure-dropped' | 'scale-options-ignored' | 'rollup-corrected' | 'derived-value' | 'no-parse-value' | 'no-date-value' | 'time-of-day' | 'unsaved-value' | (string & {});
+export type ErrorCode = BuiltInErrorCode | (string & {});
 
 // @public
 export interface ErrorFeed {

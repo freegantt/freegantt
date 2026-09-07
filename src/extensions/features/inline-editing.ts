@@ -130,7 +130,10 @@ const NOTICE_CLASS = 'fg-cell-notice';
  *  `s5.8-inline-editing.md` §1 states once which refusals speak and which stay silent. A cell that
  *  offers no editor at all refuses silently. A cell that offers one but cannot open it here names
  *  the reason. */
-const REFUSAL_TEXT = {
+// Exported for `error-code-drift.test.ts` (#247 S3-4) alone — never through `api/index.ts`. That
+// test is what keeps `model/error-report.ts`'s `BuiltInErrorCode` honest against these two tables,
+// because `model/` may not import `extensions/` to check the other way (I11).
+export const REFUSAL_TEXT = {
   'derived-value': 'this value comes from the rows below it; edit a child row instead',
   'no-parse-value': 'this field has no parseValue; the default editor cannot read the text back',
   'no-date-value': 'this field holds no date yet; the default date editor needs one',
@@ -156,7 +159,8 @@ export type CellEditorRefusal = keyof typeof REFUSAL_TEXT;
  *  about why a write was refused. Core already reports that (`mutation-cancelled`,
  *  `data/transaction.ts`), and a vetoed cell commit raises both reports on one feed. Two reports are
  *  right here, because they are different facts at two layers; two copies of one sentence are not. */
-const COMMIT_REFUSAL_TEXT = {
+// See the note beside `REFUSAL_TEXT` above — exported for the same one test, and for no other reason.
+export const COMMIT_REFUSAL_TEXT = {
   'unreadable-value': 'this editor cannot read a value from the text; correct it, or discard the edit',
   'refused-write': 'this editor still holds a value that did not save; correct it, or discard the edit',
 } as const;
