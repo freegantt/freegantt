@@ -10,6 +10,10 @@ function makePane(options: { width: number; minWidth?: number; columnsWidth?: nu
   pane: GridPaneWidthPorts;
   commits: Array<{ from: number; to: number }>;
   vetoing: { on: boolean };
+  /** Mirrors `GanttShell`'s own `previewGridWidth` callback: it writes the pane's stored width
+   *  directly, with no event and no veto. Lets a test paint a live preview before it commits, the
+   *  same order a real drag runs in. */
+  paintWidth: (px: number) => void;
 } {
   let width = options.width;
   let minWidth = options.minWidth ?? 40;
@@ -30,7 +34,14 @@ function makePane(options: { width: number; minWidth?: number; columnsWidth?: nu
       return true;
     },
   };
-  return { pane, commits, vetoing };
+  return {
+    pane,
+    commits,
+    vetoing,
+    paintWidth: (px) => {
+      width = px;
+    },
+  };
 }
 
 describe('GridPaneWidth (#252 S8-1)', () => {
@@ -209,15 +220,21 @@ describe('GridPaneWidth (#252 S8-1)', () => {
     it('a vetoed drag rolls back to whatever the live preview already painted, not the drag start', () => {
       // Pins the surprise probed against GanttShell at #252 S8-1: the preview writes straight
       // through with no veto (`previewDrag` is "no event, no commit"), so by the time a vetoed
-      // commit rolls back, `readWidth()` already answers with the preview's own value.
-      const { pane } = makePane({ width: 200, minWidth: 120, veto: true });
+      // commit rolls back, the pane's stored width already answers with the preview's own value,
+      // not the drag's starting width (200 here). `paintWidth` stands in for the caller applying
+      // the preview to `paneLayout.gridWidth`, the way `GanttShell`'s own callback does.
+      const { pane, commits, paintWidth } = makePane({ width: 200, minWidth: 120, veto: true });
       const gridPaneWidth = new GridPaneWidth(pane, false);
 
       const previewed = gridPaneWidth.previewDrag(-500);
-      pane.readWidth = () => previewed; // the caller applies the preview directly, as the splitter port does
+      paintWidth(previewed);
       gridPaneWidth.commitDrag(previewed);
 
       expect(previewed).toBe(120);
+      // The veto's rollback target is the commit's own `from` — the preview it already painted,
+      // not the drag's starting 200. A `from: 200` here would mean the veto restored the wrong
+      // width.
+      expect(commits).toEqual([{ from: 120, to: 120 }]);
       expect(gridPaneWidth.width).toBe(120);
     });
   });
