@@ -74,7 +74,8 @@ function sameScrollState(a: ScrollState, b: ScrollState): boolean {
 
 /** Per-instance state `bindScroll` needs but which is not on the published type (issue #84,
  *  ADR 0007): `bind`/`unbind` are not class methods, so there is nothing for a caller holding a
- *  `ScrollModel` reference to call. `view/` is the only importer of `bindScroll`. */
+ *  `ScrollModel` reference to call. `view/` is the only importer of `bindScroll`.
+ *  I2-ok: keyed by ScrollModel instance; one instance's entry never reaches another's. */
 const internals = new WeakMap<ScrollModel, { state: BoundValue<MutableBinding, ScrollState> }>();
 
 export class ScrollModel {

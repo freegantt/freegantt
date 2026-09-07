@@ -252,7 +252,6 @@ export class Dataset<TMeta = unknown, TFields extends Record<string, unknown> = 
     destroy(): void;
     // (undocumented)
     get entries(): EntryStore<TMeta, TFields>;
-    extraEditsFor(request: EditRequest): StoredEdits;
     field(key: FieldKey): Field | undefined;
     get fields(): {
         readonly all: readonly Field[];

@@ -43,7 +43,7 @@ import type {
 } from '../model/index.js';
 import { attemptMutation } from './attempt-mutation.js';
 import { now, toInstant } from '../time/index.js';
-import type { Dataset } from './dataset.js';
+import { extraEditsFor, type Dataset } from './dataset.js';
 import type { GanttPluginOf, PluginContextOf } from './plugin.js';
 import type {
   CommandOf,
@@ -262,9 +262,11 @@ export class Gantt<TMeta = unknown, TFields extends Record<string, unknown> = Re
       // S5.10, D-S5-23/D-S3-18: the drag preview ghosts whatever the installed extension hook would
       // add. Read live off the Dataset — every plugin composes onto that one occupant, so this stays
       // the identity function for a Dataset with no plugin installed. Preview only: the commit runs
-      // the same occupant again, for real, inside the transaction. `api/gantt.test.ts`'s "#186"
-      // suite fails if this ever becomes a stored value.
-      extraEditsFor: (request) => options.dataset.extraEditsFor(request),
+      // the same occupant again, for real, inside the transaction.
+      // `interaction/extender-preview.test.ts`'s "#167" case fails if this ever becomes a stored
+      // value — it composes a second occupant after the shell exists, which no public route allows,
+      // so `api/gantt.test.ts`'s "#186" suite cannot reach that case and does not claim to.
+      extraEditsFor: (request) => extraEditsFor(options.dataset, request),
       wiring: {
         entryGestures: attachEntryGestures,
         keyboardEditing: attachKeyboardEditing,
