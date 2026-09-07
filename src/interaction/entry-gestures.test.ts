@@ -1,6 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 import { attachEntryGestures } from './entry-gestures.js';
-import type { DraftOptions, EntryGestureContext, EntryGesture } from '../view/index.js';
+import type {
+  DraftOptions,
+  EntryGestureContext,
+  EntryGesture,
+  EntryHit,
+  SelectionForGestures,
+} from '../view/index.js';
 import { entryId, entryIdOfItem, itemId, rowId, segmentId, segmentIndexOfItem } from '../model/index.js';
 import type { Entry, EntryEdits, EntryId, Instant, ItemId, SegmentId } from '../model/index.js';
 
@@ -54,7 +60,12 @@ interface SessionOverrides {
 
 /** `hitTest` reads a fake `data-hit-x` position map instead of real layout — this suite is about
  *  pointer semantics (D-S3-10), not hit-testing, which `render/dom/index.test.ts` already covers. */
-function makeContext(overrides: Partial<EntryGestureContext> & SessionOverrides = {}): {
+/** Overrides merge one level into `selection`, not over it: a test that replaces
+ *  `selectableSegmentsOf` keeps the other seven answers the fake already gives (#230 R4). */
+type ContextOverrides = Partial<Omit<EntryGestureContext, 'selection'>> &
+  SessionOverrides & { selection?: Partial<SelectionForGestures> };
+
+function makeContext(overrides: ContextOverrides = {}): {
   ctx: EntryGestureContext;
   proposals: (readonly SegmentId[])[];
   previews: (EntryEdits | undefined)[];
@@ -64,6 +75,7 @@ function makeContext(overrides: Partial<EntryGestureContext> & SessionOverrides 
     entriesForGesture = (grabbed) => [entryFor(grabbed)],
     draftFor = () => new Map(),
     commit = () => Promise.resolve(true),
+    selection: selectionOverrides,
     ...ctxOverrides
   } = overrides;
 
@@ -82,31 +94,6 @@ function makeContext(overrides: Partial<EntryGestureContext> & SessionOverrides 
     can: () => true,
     // #198: the shell filters this list by the `select` capability before `interaction/` ever sees it
     // (`gantt-shell.ts#selectableEntriesInRowOrder`), and the capability resolves there once (I14).
-    // The fake answers the same question, so a test that makes an Entry incapable drops it from the
-    // order rather than expecting `interaction/` to filter a second time.
-    selectableEntriesInRowOrder: () => ORDER.filter((id) => ctx.can('select', entryFor(id))),
-    // #212: the same row walk, one step further down — every selectable Entry's own Segments, in
-    // the order the panes draw them. Shift-click ranges over this, so a test that makes an Entry
-    // incapable drops its Segments from the range too.
-    selectableSegmentsInRowOrder: () =>
-      ctx.segmentsOfEntries(ORDER.filter((id) => ctx.can('select', entryFor(id)))),
-    // #212: the shell answers both of these from the frame and the Dataset. The fake gives every
-    // Entry one Segment, and reads a bar's own Segment index out of the Item id it was handed.
-    segmentsOfEntries: (ids) => ids.map((id) => segmentOf(id)),
-    segmentsForItem: (item) => [segmentOf(entryIdOfItem(item), segmentIndexOfItem(item))],
-    // #185, #212, #230 R4: the pane rule — a row names every selectable Entry it owns (the fake
-    // maps one row id to the Entry of the same name, so a test that wants a multi-entry row
-    // overrides it); a bar names its own Segment when its Entry may be selected.
-    selectableSegmentsOf: (hit) => {
-      if (hit.kind === 'row') {
-        const owned = ORDER.includes(hit.rowId as unknown as EntryId)
-          ? [hit.rowId as unknown as EntryId]
-          : [];
-        return ctx.segmentsOfEntries(owned);
-      }
-      const entry = ctx.entryFor(hit.itemId);
-      return entry !== undefined && ctx.can('select', entry) ? ctx.segmentsForItem(hit.itemId) : [];
-    },
     setHovered: () => {},
     contentXAtPaneOffset: (offsetX) => offsetX,
     session: (grabbed, gesture) => {
@@ -135,16 +122,44 @@ function makeContext(overrides: Partial<EntryGestureContext> & SessionOverrides 
       };
     },
     selection: {
-      get: () => selection,
+      segmentIds: () => selection,
       // The fake names every Segment after its Entry, so the projection reads the prefix back.
       entryIds: () => ORDER.filter((id) => selection.some((seg) => String(seg).startsWith(`${id}-`))),
       propose: (next) => {
         selection = next;
         proposals.push(next);
       },
+      // The fake answers the same question, so a test that makes an Entry incapable drops it from
+      // the order rather than expecting `interaction/` to filter a second time.
+      selectableEntriesInRowOrder: () => ORDER.filter((id) => ctx.can('select', entryFor(id))),
+      // #212: the same row walk, one step further down — every selectable Entry's own Segments, in
+      // the order the panes draw them. Shift-click ranges over this, so a test that makes an Entry
+      // incapable drops its Segments from the range too.
+      selectableSegmentsInRowOrder: () =>
+        ctx.selection.segmentIdsOfEntries(ORDER.filter((id) => ctx.can('select', entryFor(id)))),
+      // #212: the shell answers both of these from the frame and the Dataset. The fake gives every
+      // Entry one Segment, and reads a bar's own Segment index out of the Item id it was handed.
+      segmentIdsOfEntries: (ids) => ids.map((id) => segmentOf(id)),
+      segmentIdsForItem: (item) => [segmentOf(entryIdOfItem(item), segmentIndexOfItem(item))],
+      // #185, #212, #230 R4: the pane rule — a row names every selectable Entry it owns (the fake
+      // maps one row id to the Entry of the same name, so a test that wants a multi-entry row
+      // overrides it); a bar names its own Segment when its Entry may be selected.
+      selectableSegmentsOf: (hit) => {
+        if (hit.kind === 'row') {
+          const owned = ORDER.includes(hit.rowId as unknown as EntryId)
+            ? [hit.rowId as unknown as EntryId]
+            : [];
+          return ctx.selection.segmentIdsOfEntries(owned);
+        }
+        const entry = ctx.entryFor(hit.itemId);
+        return entry !== undefined && ctx.can('select', entry)
+          ? ctx.selection.segmentIdsForItem(hit.itemId)
+          : [];
+      },
     },
     ...ctxOverrides,
   };
+  Object.assign(ctx.selection, selectionOverrides);
   return { ctx, proposals, previews, commits };
 }
 
@@ -397,7 +412,7 @@ describe('attachEntryGestures — grid row click', () => {
     pane.dispatchEvent(up(0)); // select A off the timeline
     rowLayer.dispatchEvent(up(99)); // grid miss — header row, padding, a twisty
     expect(proposals).toEqual([[SEG_A]]);
-    expect(ctx.selection.get()).toEqual([SEG_A]);
+    expect(ctx.selection.segmentIds()).toEqual([SEG_A]);
   });
 
   it('a right-click miss on the grid pane does not clear the selection', () => {
@@ -410,7 +425,7 @@ describe('attachEntryGestures — grid row click', () => {
     pane.dispatchEvent(up(0)); // select A off the timeline
     rowLayer.dispatchEvent(up(99, { button: 2 })); // right-click grid miss — header row, padding, a twisty
     expect(proposals).toEqual([[SEG_A]]);
-    expect(ctx.selection.get()).toEqual([SEG_A]);
+    expect(ctx.selection.segmentIds()).toEqual([SEG_A]);
   });
 
   it('a grid miss does not drop the shift-anchor — a later shift-click still ranges from it', () => {
@@ -450,10 +465,12 @@ describe('attachEntryGestures — grid row click', () => {
         if (at.x === 0) return { kind: 'row', rowId: PACKED };
         return at.x === 1 ? { kind: 'bar', itemId: itemId(A) } : undefined;
       },
-      selectableSegmentsOf: (hit) =>
-        hit.kind === 'row'
-          ? rowEntries.map((id) => segmentOf(id))
-          : [segmentOf(entryIdOfItem(hit.itemId), segmentIndexOfItem(hit.itemId))],
+      selection: {
+        selectableSegmentsOf: (hit: EntryHit) =>
+          hit.kind === 'row'
+            ? rowEntries.map((id) => segmentOf(id))
+            : [segmentOf(entryIdOfItem(hit.itemId), segmentIndexOfItem(hit.itemId))],
+      },
     });
   }
 
@@ -502,10 +519,12 @@ describe('attachEntryGestures — grid row click', () => {
     const rowLayer = document.createElement('div');
     const { ctx, proposals } = makeContext({
       hitTest: (at) => (at.x === 0 ? { kind: 'bar', itemId: itemId(A) } : { kind: 'row', rowId: PACKED }),
-      selectableSegmentsOf: (hit) =>
-        hit.kind === 'row'
-          ? [B, C].map((id) => segmentOf(id))
-          : [segmentOf(entryIdOfItem(hit.itemId), segmentIndexOfItem(hit.itemId))],
+      selection: {
+        selectableSegmentsOf: (hit: EntryHit) =>
+          hit.kind === 'row'
+            ? [B, C].map((id) => segmentOf(id))
+            : [segmentOf(entryIdOfItem(hit.itemId), segmentIndexOfItem(hit.itemId))],
+      },
     });
     attachEntryGestures(pane, rowLayer, container, ctx);
 
@@ -864,7 +883,7 @@ describe('attachEntryGestures — segments and visible row order (S4.10)', () =>
     const container = document.createElement('div');
     const rowLayer = document.createElement('div');
     const visible: readonly EntryId[] = [B, C];
-    const { ctx, proposals } = makeContext({ selectableEntriesInRowOrder: () => visible });
+    const { ctx, proposals } = makeContext({ selection: { selectableEntriesInRowOrder: () => visible } });
     attachEntryGestures(pane, rowLayer, container, ctx);
 
     pane.dispatchEvent(up(1)); // select B

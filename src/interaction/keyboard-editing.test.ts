@@ -58,17 +58,17 @@ function makeContext(
       return ORDER.includes(id) ? entryFor(id) : undefined;
     },
     can: (capability, entry) => (capability === 'select' ? !incapableRows.includes(entry.id) : true),
-    selectableEntriesInRowOrder: () => ORDER,
-    selectableSegmentsInRowOrder: () => ORDER.flatMap((id) => ctx.segmentsOfEntries([id])),
-    // `hitTest` always misses in this fake (this file drives keyboard chords, never a pointer hit),
-    // so `selectableSegmentsOf` never runs — it exists only to satisfy the interface.
-    selectableSegmentsOf: () => [],
     setHovered: () => {},
     contentXAtPaneOffset: (offsetX) => offsetX,
-    segmentsOfEntries: (ids) => ids.map(segmentOf),
-    segmentsForItem: (item) => [segmentOf(entryIdOfItem(item))],
     selection: {
-      get: () => selection,
+      selectableEntriesInRowOrder: () => ORDER,
+      selectableSegmentsInRowOrder: () => ORDER.flatMap((id) => ctx.selection.segmentIdsOfEntries([id])),
+      // `hitTest` always misses in this fake (this file drives keyboard chords, never a pointer
+      // hit), so `selectableSegmentsOf` never runs — it exists only to satisfy the interface.
+      selectableSegmentsOf: () => [],
+      segmentIdsOfEntries: (ids) => ids.map(segmentOf),
+      segmentIdsForItem: (item) => [segmentOf(entryIdOfItem(item))],
+      segmentIds: () => selection,
       entryIds: () => ORDER.filter((id) => selection.includes(segmentOf(id))),
       propose: (next) => {
         selection = next;

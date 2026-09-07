@@ -19,14 +19,14 @@ function canSelect(ctx: EntryGestureContext, id: EntryId): boolean {
  *  "incapable rows are skipped, not blocking" shape `entry-gestures.ts`'s shift-click range already
  *  uses. */
 function moveSelectionRow(ctx: EntryGestureContext, current: EntryId, direction: 1 | -1): void {
-  const order = ctx.selectableEntriesInRowOrder();
+  const order = ctx.selection.selectableEntriesInRowOrder();
   let index = order.indexOf(current) + direction;
   while (index >= 0 && index < order.length) {
     const candidate = order[index]!;
     if (canSelect(ctx, candidate)) {
       // #212: a row step names an Entry, and the Selection holds Segments, so it selects every
       // Segment that Entry draws — the same set a grid-row click writes.
-      ctx.selection.propose(ctx.segmentsOfEntries([candidate]));
+      ctx.selection.propose(ctx.selection.segmentIdsOfEntries([candidate]));
       return;
     }
     index += direction;
