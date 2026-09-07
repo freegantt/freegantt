@@ -660,7 +660,7 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
       };
       const { deps, applied } = withRoster([a, x], {
         extraEditsFor,
-        allEntries: () =>
+        committedEntriesById: () =>
           new Map([
             [a.id, a],
             [x.id, x],
@@ -703,7 +703,7 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
           { id: segmentId('x-2'), start: 400 as Instant, end: 500 as Instant },
         ],
       };
-      const allEntries = () =>
+      const committedEntriesById = () =>
         new Map([
           [a.id, a],
           [x.id, x],
@@ -714,14 +714,14 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
         // Mirrors what `data/build-commit-change-set.ts` runs for real, at commit, against the real
         // Dataset: the extraEditsFor hook's cascade goes through `reconcileExtenderEdits` — the same function
         // the preview above calls a skip-on-refusal wrapper of — and this one does not skip.
-        const entries = allEntries();
+        const entries = committedEntriesById();
         reconcileExtenderEdits(
           entries,
           extraEditsFor({ entries, proposed: draft, entryAfterEdits: (id) => entries.get(id) }),
         );
         return true;
       });
-      const { deps, applied } = withRoster([a, x], { extraEditsFor, allEntries, commitEntryEdits });
+      const { deps, applied } = withRoster([a, x], { extraEditsFor, committedEntriesById, commitEntryEdits });
       const pipeline = new GesturePipeline(deps);
       const session = pipeline.session(a.id, { kind: 'move' })!;
 
@@ -757,7 +757,7 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
         new Map([[x.id, { start: 350 as unknown as Instant, end: 450 as unknown as Instant }]]);
       const { deps, applied } = withRoster([a, x], {
         extraEditsFor,
-        allEntries: () =>
+        committedEntriesById: () =>
           new Map([
             [a.id, a],
             [x.id, x],
@@ -838,7 +838,7 @@ describe('GesturePipeline hot path (review finding 9, I5)', () => {
       return walk();
     };
 
-    const { deps } = withRoster([entry('a', 0, 100)], { allEntries: () => roster });
+    const { deps } = withRoster([entry('a', 0, 100)], { committedEntriesById: () => roster });
     const pipeline = new GesturePipeline(deps);
     const session = pipeline.session(entryId('a'), { kind: 'move' })!;
 
@@ -868,7 +868,7 @@ describe('GesturePipeline hot path (review finding 9, I5)', () => {
       return new Map();
     };
 
-    const { deps } = withRoster([entry('a', 0, 100)], { extraEditsFor, allEntries: () => roster });
+    const { deps } = withRoster([entry('a', 0, 100)], { extraEditsFor, committedEntriesById: () => roster });
     const pipeline = new GesturePipeline(deps);
     const session = pipeline.session(entryId('a'), { kind: 'move' })!;
 
