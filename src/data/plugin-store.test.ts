@@ -3,7 +3,14 @@ import { DatasetState } from './dataset-state.js';
 import { PluginStores, pluginStoreName } from './plugin-store.js';
 import { fieldRowsOf } from './change-set.js';
 import { entryId } from '../model/index.js';
-import type { ChangeSet, DatasetEventMap, EntryId, PluginId, PluginStore } from '../model/index.js';
+import type {
+  ChangeSet,
+  DatasetEventMap,
+  EntryId,
+  PluginId,
+  PluginStore,
+  PluginStoreName,
+} from '../model/index.js';
 
 const LOCK: PluginId = 'demo.lock';
 const LOCK_STORE = pluginStoreName(LOCK);
@@ -30,8 +37,12 @@ function recordChangeSets(state: DatasetState): ChangeSet[] {
   return committed;
 }
 
-function storeRowsOf(changeSet: ChangeSet): readonly { id: EntryId; from: unknown; to: unknown }[] {
-  return changeSet.updated.filter((row) => row.store === LOCK_STORE);
+/** The rows one plugin store contributed to a changeset. Defaults to the lock store most tests use. */
+function storeRowsOf(
+  changeSet: ChangeSet,
+  store: PluginStoreName = LOCK_STORE,
+): readonly { store: unknown; id: EntryId; from: unknown; to: unknown }[] {
+  return changeSet.updated.filter((row) => row.store === store);
 }
 
 describe('PluginStores.reserve', () => {
@@ -176,19 +187,13 @@ describe('a plugin-store write on the commit path (D-S5-24)', () => {
     });
 
     expect(committed).toHaveLength(1);
-    expect(storeRowsOf(committed[0]!)).toHaveLength(0);
-    expect(committed[0]!.updated).toContainEqual({
-      store: pluginStoreName(''),
-      id: entryId('tt1'),
-      from: undefined,
-      to: { locked: true },
-    });
-    expect(committed[0]!.updated).toContainEqual({
-      store: pluginStoreName('t'),
-      id: entryId('t1'),
-      from: { locked: true },
-      to: undefined,
-    });
+    // Each store keeps its own row. A concatenated key would have merged or dropped one of them.
+    expect(storeRowsOf(committed[0]!, pluginStoreName(''))).toEqual([
+      { store: pluginStoreName(''), id: entryId('tt1'), from: undefined, to: { locked: true } },
+    ]);
+    expect(storeRowsOf(committed[0]!, pluginStoreName('t'))).toEqual([
+      { store: pluginStoreName('t'), id: entryId('t1'), from: { locked: true }, to: undefined },
+    ]);
   });
 
   it('reads its own staged row back inside the open transaction', () => {

@@ -64,7 +64,7 @@ function buildPorts(
     rowIdForEntry: options.rowIdForEntry ?? (() => undefined),
     segmentIdsForItem: options.segmentIdsForItem ?? (() => []),
     canGesture: options.canGesture ?? (() => true),
-    confirm: (change, apply) => {
+    confirm: (_change, apply) => {
       apply();
       return true;
     },
@@ -84,8 +84,8 @@ describe('SegmentSelection ordering (#212, ADR 0010)', () => {
     const e2 = entry('e2', ['e2-1']);
     const store = entryStoreOf([e1, e2]);
     const rows: SegmentSelectionRow[] = [
-      { id: rowId('r1'), kind: 'entry' as const, entryIds: [e2.id] },
-      { id: rowId('r2'), kind: 'entry' as const, entryIds: [e1.id] },
+      { id: rowId('r1'), kind: 'entry', entryIds: [e2.id] },
+      { id: rowId('r2'), kind: 'entry', entryIds: [e1.id] },
     ];
     const { ports } = buildPorts(store, { rows });
     const selection = new SegmentSelection(ports);
@@ -102,7 +102,7 @@ describe('SegmentSelection ordering (#212, ADR 0010)', () => {
     const e3 = entry('e3', ['e3-1']);
     const store = entryStoreOf([e1, e2, e3]);
     // Only e1 is in the row plan (e2, e3 are collapsed behind it, say) — both keep the selection order.
-    const rows: SegmentSelectionRow[] = [{ id: rowId('r1'), kind: 'entry' as const, entryIds: [e1.id] }];
+    const rows: SegmentSelectionRow[] = [{ id: rowId('r1'), kind: 'entry', entryIds: [e1.id] }];
     const { ports } = buildPorts(store, { rows });
     const selection = new SegmentSelection(ports);
 
@@ -117,9 +117,7 @@ describe('SegmentSelection.selectableSegmentsOf, both hit kinds (#212, ADR 0010)
     const e1 = entry('e1', ['e1-1', 'e1-2']);
     const e2 = entry('e2', ['e2-1']);
     const store = entryStoreOf([e1, e2]);
-    const rows: SegmentSelectionRow[] = [
-      { id: rowId('packed'), kind: 'entry' as const, entryIds: [e1.id, e2.id] },
-    ];
+    const rows: SegmentSelectionRow[] = [{ id: rowId('packed'), kind: 'entry', entryIds: [e1.id, e2.id] }];
     const { ports } = buildPorts(store, { rows });
     const selection = new SegmentSelection(ports);
 
@@ -134,9 +132,7 @@ describe('SegmentSelection.selectableSegmentsOf, both hit kinds (#212, ADR 0010)
     const e1 = entry('e1', ['e1-1']);
     const e2 = entry('e2', ['e2-1']);
     const store = entryStoreOf([e1, e2]);
-    const rows: SegmentSelectionRow[] = [
-      { id: rowId('packed'), kind: 'entry' as const, entryIds: [e1.id, e2.id] },
-    ];
+    const rows: SegmentSelectionRow[] = [{ id: rowId('packed'), kind: 'entry', entryIds: [e1.id, e2.id] }];
     const { ports } = buildPorts(store, { rows, canGesture: (_c, id) => id !== e2.id });
     const selection = new SegmentSelection(ports);
 
@@ -147,7 +143,7 @@ describe('SegmentSelection.selectableSegmentsOf, both hit kinds (#212, ADR 0010)
 
   it('a header row hit names nothing — a header row owns no Entry', () => {
     const store = entryStoreOf([]);
-    const rows: SegmentSelectionRow[] = [{ id: rowId('h1'), kind: 'header' as const, entryIds: [] }];
+    const rows: SegmentSelectionRow[] = [{ id: rowId('h1'), kind: 'header', entryIds: [] }];
     const { ports } = buildPorts(store, { rows });
     const selection = new SegmentSelection(ports);
 
@@ -180,9 +176,9 @@ describe('SegmentSelection with mixed ownership across rows (#212, finding 10)',
     const e3 = entry('e3', ['e3-1']);
     const store = entryStoreOf([e1, e2, e3]);
     const rows: SegmentSelectionRow[] = [
-      { id: rowId('r1'), kind: 'header' as const, entryIds: [] },
-      { id: rowId('r2'), kind: 'entry' as const, entryIds: [e2.id, e3.id] },
-      { id: rowId('r3'), kind: 'entry' as const, entryIds: [e1.id] },
+      { id: rowId('r1'), kind: 'header', entryIds: [] },
+      { id: rowId('r2'), kind: 'entry', entryIds: [e2.id, e3.id] },
+      { id: rowId('r3'), kind: 'entry', entryIds: [e1.id] },
     ];
     const { ports } = buildPorts(store, { rows });
     const selection = new SegmentSelection(ports);
@@ -201,7 +197,7 @@ describe('SegmentSelection.step (#212)', () => {
   it('steps to the next Segment of the same Entry on the row it sits on', () => {
     const e1 = entry('e1', ['e1-1', 'e1-2', 'e1-3']);
     const store = entryStoreOf([e1]);
-    const rows: SegmentSelectionRow[] = [{ id: rowId('r1'), kind: 'entry' as const, entryIds: [e1.id] }];
+    const rows: SegmentSelectionRow[] = [{ id: rowId('r1'), kind: 'entry', entryIds: [e1.id] }];
     const { ports } = buildPorts(store, { rows, rowIdForEntry: () => rowId('r1') });
     const selection = new SegmentSelection(ports);
     selection.propose([segmentId('e1-1')]);
@@ -223,7 +219,7 @@ describe('SegmentSelection.step (#212)', () => {
   it('does nothing when nothing is selected, or the row has nowhere to step', () => {
     const e1 = entry('e1', ['e1-1']);
     const store = entryStoreOf([e1]);
-    const rows: SegmentSelectionRow[] = [{ id: rowId('r1'), kind: 'entry' as const, entryIds: [e1.id] }];
+    const rows: SegmentSelectionRow[] = [{ id: rowId('r1'), kind: 'entry', entryIds: [e1.id] }];
     const { ports } = buildPorts(store, { rows, rowIdForEntry: () => rowId('r1') });
     const selection = new SegmentSelection(ports);
 
