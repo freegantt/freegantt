@@ -17,7 +17,6 @@ export interface LockEntriesPlugin extends DatasetPlugin {
   isLocked(id: string): boolean;
   lock(id: string): void;
   unlock(id: string): void;
-  onRefusal(handle: (id: string) => void): void;
 }
 
 /**
@@ -44,7 +43,6 @@ export interface LockEntriesPlugin extends DatasetPlugin {
  */
 export function lockEntries(initiallyLocked: readonly string[] = []): LockEntriesPlugin {
   let store: PluginStore<LockRow> | undefined;
-  let announceRefusal: ((id: string) => void) | undefined;
 
   const lockedRows = (): ReadonlyMap<EntryId, LockRow> => store?.all ?? new Map();
 
@@ -79,13 +77,14 @@ export function lockEntries(initiallyLocked: readonly string[] = []): LockEntrie
       });
 
       // What refuses the drop? The finished changeset, once, at commit — never the extender above.
-      ctx.events.on('beforeChange', ({ changeSet }) => {
+      // Why does the refusal say the entry id? `refuse(reason)` puts the plugin's own words on the
+      // report core raises (#210), so the page needs no callback of its own to tell a user why.
+      ctx.events.on('beforeChange', ({ changeSet, refuse }) => {
         const refused = fieldRowsOf(changeSet).find((row) => lockedRows().has(row.id));
         const removed = changeSet.removed.find((row) => lockedRows().has(row.entity.id));
         const id = refused?.id ?? removed?.entity.id;
         if (id === undefined) return undefined;
-        announceRefusal?.(id);
-        return false;
+        return refuse(`${String(id)} is locked`);
       });
     },
 
@@ -100,11 +99,6 @@ export function lockEntries(initiallyLocked: readonly string[] = []): LockEntrie
 
     unlock(id) {
       store?.remove(entryId(id));
-    },
-
-    /** Called with the entry id whose lock refused a commit — the page logs it. */
-    onRefusal(handle) {
-      announceRefusal = handle;
     },
   };
 }

@@ -13,6 +13,7 @@
 // `reconcileEnvelope` alone is reached by `entries.update()` and by an `EditExtender` cascade
 // (D-S5-44), so a baked-in prefix tells one of those two callers about a call it never made (#239).
 
+import type { FieldKey } from './field.js';
 import type { EntryId, SegmentId } from './ids.js';
 import type { ChangeSet } from './change-set.js';
 import type { PluginId } from './plugin.js';
@@ -321,10 +322,10 @@ export class InvertedSpanError extends FreeGanttError {
 /** `code: 'unknown-field'` — an edit or `entries.fieldValue` naming a key that is not a declared
  *  Field. The registry is the legal set: core Fields plus the consumer's (D-S4-5, D-S2-26). */
 export class UnknownFieldError extends FreeGanttError {
-  readonly field: string;
+  readonly field: FieldKey;
   readonly operation: string;
 
-  constructor(field: string, operation: string) {
+  constructor(field: FieldKey, operation: string) {
     super(
       'unknown-field',
       `${operation}: there is no field called "${field}". Declare it in the Dataset's "fields" list, or put the value in "meta" if it needs no field.`,
@@ -425,11 +426,11 @@ export class UnknownFieldTypeError extends FreeGanttError {
 /** `code: 'aggregator-failed'` — a consumer Aggregator threw during the Rollup (D-S4-9). The
  *  transaction rolls back; nothing commits and no history entry is pushed. */
 export class AggregatorFailedError extends FreeGanttError {
-  readonly fieldKey: string;
+  readonly fieldKey: FieldKey;
   readonly aggregatorName: string;
   readonly entryId: EntryId;
 
-  constructor(fieldKey: string, aggregatorName: string, entryId: EntryId, cause?: unknown) {
+  constructor(fieldKey: FieldKey, aggregatorName: string, entryId: EntryId, cause?: unknown) {
     if (cause === undefined) {
       super(
         'aggregator-failed',
@@ -471,9 +472,9 @@ export class FieldNotColumnableError extends FreeGanttError {
  *  declares. Neither one adds a column, so a name nothing declares is a mistake and says so. A
  *  hidden column stays declared, so `showGridColumn` always reaches what `hideGridColumn` hid. */
 export class UnknownGridColumnError extends FreeGanttError {
-  readonly field: string;
+  readonly field: FieldKey;
 
-  constructor(field: string) {
+  constructor(field: FieldKey) {
     super(
       'unknown-grid-column',
       `gridColumns: no column shows the field "${field}". Add it to the Gantt's "gridColumns" list first — hiding a column leaves it declared.`,
@@ -534,12 +535,12 @@ export class MutationCancelledError extends FreeGanttError {
  * spliced into a message a consumer would have to parse. */
 export class UnreadableCellValueError extends FreeGanttError {
   readonly entryId: EntryId;
-  readonly field: string;
+  readonly field: FieldKey;
   /** What the control held. `undefined` when the control keeps no text of its own — a date control
    *  reads a date or nothing, and has no string to hand over. */
   readonly text: string | undefined;
 
-  constructor(entryId: EntryId, field: string, text: string | undefined) {
+  constructor(entryId: EntryId, field: FieldKey, text: string | undefined) {
     super(
       'unreadable-value',
       'The cell editor could not read a value from the text it holds. Read "text" on this error to see what the user typed, and "field" for the field they typed it into.',

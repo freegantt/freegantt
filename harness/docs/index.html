@@ -111,7 +111,7 @@ pnpm build          # production build of the same pages into dist-harness/</cod
               The plugin runtime: renderers by kind, weekend shading, extra kinds, commands, and a popup
               demo. Driven by <code>harness/plugins.ts</code>.
             </td>
-            <td><a href="./classes.html">Class map</a> §4</td>
+            <td><a href="./plugins.html">Plugin lifecycle</a></td>
           </tr>
         </table>
 
@@ -270,6 +270,15 @@ gantt.on('beforeEntryMove', () =&gt; false); // every mutating interaction has a
             <p>
               How the header, density floor, sticky tick labels, and today line paint. Includes a pipeline
               graph and a density chart of the shipped presets.
+            </p>
+          </article>
+          <article class="card">
+            <h5><a href="./plugins.html">Plugin lifecycle</a></h5>
+            <p class="path">plugins.html</p>
+            <p>
+              What <code>installPlugin</code> and <code>uninstallPlugin</code> do, when the registration
+              gate is open, how <code>install()</code> diffs a plugin list by id, and how a Dataset plugin's
+              setup order resolves from <code>requires</code>.
             </p>
           </article>
           <article class="card">
