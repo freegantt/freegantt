@@ -408,6 +408,16 @@ export type DateInputFactory = (ctx: {
 }) => DateInput;
 
 // @public
+export interface DateLine {
+    // (undocumented)
+    className?: string;
+    // (undocumented)
+    label?: string;
+    // (undocumented)
+    placeAt: Instant;
+}
+
+// @public
 export interface DateLineInput {
     // (undocumented)
     className?: string;
@@ -974,7 +984,7 @@ export class Gantt<TMeta = unknown, TFields extends Record<string, unknown> = Re
     set collapsed(ids: readonly (RowId | string)[]);
     get commands(): CommandRegistry<TMeta, TFields>;
     get dataset(): Dataset<TMeta, TFields>;
-    get dateLines(): readonly DateLineInput[];
+    get dateLines(): readonly DateLine[];
     set dateLines(lines: readonly DateLineInput[]);
     // (undocumented)
     destroy(): void;
@@ -1035,7 +1045,7 @@ export class Gantt<TMeta = unknown, TFields extends Record<string, unknown> = Re
     // (undocumented)
     get theme(): Theme;
     set theme(value: Theme);
-    get todayLine(): boolean | InstantInput;
+    get todayLine(): boolean | Instant;
     set todayLine(on: boolean | InstantInput);
     // (undocumented)
     get todayLineMarginTicks(): number;

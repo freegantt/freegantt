@@ -13,7 +13,7 @@ import type {
 } from '../view/index.js';
 import { ScrollModel, TimeScaleModel, pickDefined } from '../layout/index.js';
 import type { PresetRef, SnapSetting, TimeScaleFit, ViewPreset, RowSource } from '../layout/index.js';
-import type { DateLineSpec } from '../layout/index.js';
+import type { DateLine } from '../layout/index.js';
 import type {
   BarRenderer,
   CellRenderer,
@@ -204,6 +204,9 @@ export type KeyBinding<
   TFields extends Record<string, unknown> = Record<string, unknown>,
 > = KeyBindingOf<Gantt<TMeta, TFields>, Dataset<TMeta, TFields>>;
 export type { ActedOn, CommandTarget };
+// `dateLines`'s resolved read type (S4-1) — passed through so a caller who names `DateLine`
+// explicitly imports it beside `DateLineInput`, its loose counterpart above.
+export type { DateLine };
 
 export class Gantt<TMeta = unknown, TFields extends Record<string, unknown> = Record<string, unknown>> {
   #shell: GanttShell;
@@ -311,10 +314,10 @@ export class Gantt<TMeta = unknown, TFields extends Record<string, unknown> = Re
   }
 
   /** `#toRange`'s counterpart for `dateLines` (S1.13, D-S1.13-2): one `toInstant` call per entry. */
-  #toDateLines(lines: readonly DateLineInput[]): readonly DateLineSpec[] {
+  #toDateLines(lines: readonly DateLineInput[]): readonly DateLine[] {
     const zone = this.#dataset.timeZone;
     return lines.map((line) => {
-      const spec: DateLineSpec = { placeAt: toInstant(zone, line.placeAt) };
+      const spec: DateLine = { placeAt: toInstant(zone, line.placeAt) };
       if (line.label !== undefined) spec.label = line.label;
       if (line.className !== undefined) spec.className = line.className;
       return spec;
@@ -528,9 +531,9 @@ export class Gantt<TMeta = unknown, TFields extends Record<string, unknown> = Re
     this.#shell.locale = l;
   }
 
-  /** Getter returns what was resolved (S1.13, D-S1.13-4) — legal against `boolean | InstantInput`
-   *  since `Instant` is one of `InstantInput`'s member types, `range`'s own precedent. */
-  get todayLine(): boolean | InstantInput {
+  /** Getter returns what was resolved (S1.13, D-S1.13-4, S4-1) — a `boolean` passes straight
+   *  through; any other setting reads back the `Instant` it was pinned to, never the loose input. */
+  get todayLine(): boolean | Instant {
     return this.#shell.todayLine;
   }
 
@@ -540,8 +543,10 @@ export class Gantt<TMeta = unknown, TFields extends Record<string, unknown> = Re
     this.#shell.todayLine = this.#toTodayLine(on);
   }
 
-  /** Getter returns what was resolved, same precedent as `todayLine`/`range` above. */
-  get dateLines(): readonly DateLineInput[] {
+  /** Getter returns what was resolved (S4-1), same precedent as `todayLine`/`range` above: every
+   *  `placeAt` reads back an `Instant`, so `diffMs(gantt.dateLines[0].placeAt, now())` type-checks
+   *  with no re-narrowing. */
+  get dateLines(): readonly DateLine[] {
     return this.#shell.dateLines;
   }
 

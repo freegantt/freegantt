@@ -1,22 +1,22 @@
 // render/dom — Date line paint. Geometry lives in layout/date-line.ts (S1.13).
 
-import type { DateLine, FrameDecoration } from '../../layout/index.js';
+import type { DateLineDecoration, FrameDecoration } from '../../layout/index.js';
 import { KeyedLayer } from './sync-keyed.js';
 
 type DateLineGeom = { x: number; height: number; className: string; today: boolean };
 type DateLineLabelGeom = { x: number; label: string; className: string };
-type LabelledDateLine = { line: DateLine; index: number };
+type LabelledDateLine = { line: DateLineDecoration; index: number };
 
 export interface DateLineAttachment {
   sync(decorations: readonly FrameDecoration[], contentHeight: number, paneHeight: number): void;
   destroy(): void;
 }
 
-function dateLinesOf(decorations: readonly FrameDecoration[]): DateLine[] {
-  return decorations.filter((d): d is DateLine => d.kind === 'dateLine');
+function dateLinesOf(decorations: readonly FrameDecoration[]): DateLineDecoration[] {
+  return decorations.filter((d): d is DateLineDecoration => d.kind === 'dateLine');
 }
 
-function labelledDateLines(lines: readonly DateLine[]): LabelledDateLine[] {
+function labelledDateLines(lines: readonly DateLineDecoration[]): LabelledDateLine[] {
   const labelled: LabelledDateLine[] = [];
   for (let index = 0; index < lines.length; index++) {
     const line = lines[index]!;
@@ -46,7 +46,7 @@ export function attachDateLines(timelineHost: HTMLElement, headerLayer: HTMLElem
   const labelLayer = createHiddenDiv();
   headerLayer.append(labelLayer);
 
-  const strokes = new KeyedLayer<DateLine, number, DateLineGeom>();
+  const strokes = new KeyedLayer<DateLineDecoration, number, DateLineGeom>();
   const labels = new KeyedLayer<LabelledDateLine, number, DateLineLabelGeom>();
 
   return {

@@ -13,7 +13,7 @@ import {
   isTimeUnit,
 } from '../layout/index.js';
 import type {
-  DateLineSpec,
+  DateLine,
   Overscan,
   PresetRef,
   RowSource,
@@ -270,7 +270,7 @@ export interface GanttShellOptions {
   /** Live (S1.12/S1.13, D-S1.12-14, D-S1.13-4). Default `true`. */
   todayLine?: boolean | Instant;
   /** Live (S1.13, D-S1.13-4). Default `[]`. */
-  dateLines?: readonly DateLineSpec[];
+  dateLines?: readonly DateLine[];
   /** Live. See `GanttOptions.todayLineMarginTicks`. Default `DEFAULT_TODAY_LINE_MARGIN_TICKS`. */
   todayLineMarginTicks?: number;
   /** Live (S3, D-S3-9). Per-gesture, boolean or per-entry predicate, over the per-kind default table
@@ -984,11 +984,11 @@ export class GanttShell {
     this.#frameSettings.set({ todayLine: on });
   }
 
-  get dateLines(): readonly DateLineSpec[] {
+  get dateLines(): readonly DateLine[] {
     return this.#frameSettings.dateLines;
   }
 
-  set dateLines(lines: readonly DateLineSpec[]) {
+  set dateLines(lines: readonly DateLine[]) {
     this.#frameSettings.set({ dateLines: lines });
   }
 

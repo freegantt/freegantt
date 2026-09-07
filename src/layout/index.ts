@@ -38,7 +38,7 @@ export { FrameLayout } from './frame-layout.js';
 export type { FrameLayoutView } from './frame-layout.js';
 export { FrameMemory } from './frame-memory.js';
 export { resolveDateLines } from './date-line.js';
-export type { DateLine, DateLineSpec, ResolveDateLinesInput } from './date-line.js';
+export type { DateLine, DateLineDecoration, ResolveDateLinesInput } from './date-line.js';
 export type {
   GeometryFrame,
   FrameRow,

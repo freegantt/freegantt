@@ -19,7 +19,7 @@ import {
 import type {
   BarRenderer,
   CellRenderer,
-  DateLineSpec,
+  DateLine,
   FieldCompare,
   HeaderRenderer,
   LayoutInput,
@@ -112,7 +112,7 @@ export interface FrameSettingsPorts {
 interface FrameSettingsValues {
   locale: Intl.LocalesArgument | undefined;
   todayLine: boolean | Instant;
-  dateLines: readonly DateLineSpec[];
+  dateLines: readonly DateLine[];
   todayLineMarginTicks: number;
   rowSource: RowSource;
   barRenderer: BarRenderer | RendererByKind | undefined;
@@ -220,7 +220,7 @@ export class FrameSettings {
     return this.#values.todayLine;
   }
 
-  get dateLines(): readonly DateLineSpec[] {
+  get dateLines(): readonly DateLine[] {
     return this.#values.dateLines;
   }
 
