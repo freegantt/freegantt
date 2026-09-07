@@ -64,6 +64,9 @@ export interface BarRendererContext {
 export type BuiltInCommandId = 'freegantt.collapseAll' | 'freegantt.expandAll' | 'freegantt.collapseRow' | 'freegantt.expandRow' | 'freegantt.zoomIn' | 'freegantt.zoomOut' | 'freegantt.panToToday' | 'freegantt.panToStart' | 'freegantt.panToEnd' | 'freegantt.panRight' | 'freegantt.panLeft' | 'freegantt.panDown' | 'freegantt.panUp' | 'freegantt.pageDown' | 'freegantt.pageUp' | 'freegantt.selectAll' | 'freegantt.clearSelection' | 'freegantt.selectNextSegment' | 'freegantt.selectPreviousSegment' | 'freegantt.deleteSelection' | 'freegantt.discardCellEdit' | 'freegantt.undo' | 'freegantt.redo' | 'freegantt.resizeColumnWider' | 'freegantt.resizeColumnNarrower' | 'freegantt.moveColumnRight' | 'freegantt.moveColumnLeft';
 
 // @public
+export type BuiltInErrorCode = 'mutation-cancelled' | 'entry-move-cancelled' | 'entry-resize-cancelled' | 'renderer-failed' | 'disposer-failed' | 'plugin-reconfigure-dropped' | 'scale-options-ignored' | 'rollup-corrected' | 'derived-value' | 'no-parse-value' | 'no-date-value' | 'time-of-day' | 'unsaved-value' | 'segmented-entry' | 'unreadable-value' | 'refused-write';
+
+// @public
 export type CapabilityRule = boolean | ((entry: Entry) => boolean);
 
 // @public (undocumented)
@@ -734,8 +737,6 @@ export interface EntryStoreView<TMeta = unknown, TFields extends Record<string, 
     readonly size: number;
 }
 
-// Warning: (ae-forgotten-export) The symbol "BuiltInErrorCode" needs to be exported by the entry point index.d.ts
-//
 // @public
 export type ErrorCode = BuiltInErrorCode | (string & {});
 
@@ -1674,10 +1675,10 @@ export interface Refusable {
     readonly refuse: (reason: string) => false;
 }
 
-// Warning: (ae-forgotten-export) The symbol "KeyHandlerRegistrar" needs to be exported by the entry point index.d.ts
-//
 // @public
-export type RegisterKeyHandler = KeyHandlerRegistrar['registerHandler'];
+export type RegisterKeyHandler = (chord: string, handler: (event: KeyEventLike) => void, options?: {
+    captureInEditable?: boolean;
+}) => () => void;
 
 // @public
 export class RegistrationClosedError extends FreeGanttError {
